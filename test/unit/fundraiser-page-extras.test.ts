@@ -79,7 +79,7 @@ describe("on the day", () => {
     const doc = draw(page({ eventDate: "2026-10-02" }));
     const banner = doc.querySelector(".fr-today");
     expect(banner).not.toBeNull();
-    expect(banner?.querySelector("h2")?.textContent).toBe("Today's the day! Good luck, Robin");
+    expect(banner?.querySelector("h2")?.textContent).toBe("Today's the day! Good luck, Robin!");
     expect(banner?.hasAttribute("data-copy-scope")).toBe(true);
     expect(banner?.querySelector("[data-copy-link]")?.getAttribute("data-copy-link")).toBe(PAGE_URL);
     expect(banner?.querySelector(".fr-share__facebook")?.getAttribute("href")).toContain(encodeURIComponent(PAGE_URL));

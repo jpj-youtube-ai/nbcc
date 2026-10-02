@@ -42,7 +42,7 @@ describe("the news updates migration", () => {
   const cols = (table?.args[1] ?? {}) as Record<string, Col>;
   const opts = (table?.args[2] ?? {}) as { constraints?: { check?: string | string[] }; comment?: string };
 
-  it("sorts last, above everything on main and the 080 another open task uses", () => {
+  it("sorts last, above everything on main (the highest there is TASK-505's 080)", () => {
     const all = readdirSync(resolve(ROOT, "migrations")).filter((f) => f.endsWith(".js")).sort();
     expect(all[all.length - 1]).toBe(NAME);
     expect(NAME > "1791200000080").toBe(true);

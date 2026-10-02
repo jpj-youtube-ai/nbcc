@@ -52,5 +52,5 @@ Feature: Fundraiser pages: countdown, on the day, and news updates (TASK-506)
     Then the page shows "12</span> days to go"
     Given "Countdown Dash (bdd-fr)" is dated 0 days from today
     When a visitor opens the page for "Countdown Dash (bdd-fr)"
-    Then the page shows "Today's the day! Good luck, Robin"
+    Then the page shows "Today's the day! Good luck, Robin!"
     And the page does not show "days to go"

@@ -45,7 +45,7 @@ import { sendNewsDecisionEmail } from "../fundraising/send";
 // bearer token. Every photo is served with its checked type and nosniff, so it can only ever be read
 // as the picture it is. A photo arrives shrunk in the browser first, like a staff upload; the body
 // parser for the post allows a little over 2 MB of picture as base64, and is only reached with a
-// session cookie (newsBodyGuard), so nobody else can make the server read a big body.
+// session cookie the shape of one of ours (newsBodyGuard); the session itself is checked after.
 //
 // Approving or not using an update emails the organiser ("Your news update is live", "About your
 // news update"), after the decision has committed, best effort. Hiding one does not. Request and
@@ -58,13 +58,15 @@ export const NEWS_POST_PATH = "/api/fundraise/manage/fundraisers/:id/news";
 export const NEWS_JSON_BODY_LIMIT = "4mb";
 
 /**
- * Before the bigger body parser on the post: no session cookie, no reading the body. The session
- * itself is checked properly by the route.
+ * Before the bigger body parser on the post: no body is read unless the request carries a session
+ * cookie the shape of one of ours (the same shape the private area's sessionIdOf accepts: at most
+ * 100 letters, digits, underscores and hyphens). This only checks the shape, without the database;
+ * whether the session is real is checked by the route, after the body is read.
  */
 export function newsBodyGuard(req: Request, res: Response, next: NextFunction): void {
   if (req.method !== "POST") return next();
   const id = readCookie(req.headers.cookie, SESSION_COOKIE);
-  if (!id) {
+  if (!id || id.length > 100 || !/^[A-Za-z0-9_-]+$/.test(id)) {
     res.status(401).json({ error: "Please sign in again." });
     return;
   }

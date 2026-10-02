@@ -8052,7 +8052,7 @@ actor `admin:<email>` and the words for History ("Posters: sent (by post)").
 `fundraiser_requests`: one row per fundraiser and kind (unique), cleared with its fundraiser: the
 step, how many went and came back, posted or dropped off, the dates sent or out, back and done, who
 handled it, who is going, a note, a note on what came back, the link to the post, and when and by
-whom it was last changed. It is in the nightly backup's table count (65).
+whom it was last changed. It is in the nightly backup's table count (66).
 
 ### Where it lives, and tests
 
@@ -8077,7 +8077,7 @@ the fundraising master list.
 
 **The countdown and the day itself.** While the fundraiser's date is still to come, a pill under the
 date in the intro says how many days to go: "12 days to go", or "Tomorrow!" the day before. On the
-date, a festive banner takes its place: "Today's the day! Good luck, Robin", with the page's own
+date, a festive banner takes its place: "Today's the day! Good luck, Robin!", with the page's own
 share links (Copy the link, Facebook, WhatsApp), as the day is when a share helps most. After the
 date there is nothing (the finished and thank you states already say what there is to say), and
 nothing once the fundraiser is finished. The days are UK days (`Europe/London`), counted on the
@@ -8130,7 +8130,7 @@ its first bytes must match the type it claims, so nothing else can be served as 
 | `POST /api/admin/fundraisers/:id/news/:updateId/approve` \| `/reject` \| `/hide` \| `/show` | fundraising edit | reject: `{ reason? }` (up to 500) | `{ update }`; `409` already decided; `404` not there |
 
 The post's body (a photo as base64) is read with a 4 MB limit on that path only, and only when the
-request carries a session cookie. The news router is mounted before the private area's, whose
+request carries a session cookie the shape of one of ours (the session itself is checked after). The news router is mounted before the private area's, whose
 retired link route (`GET /api/fundraise/manage/:token`) would otherwise take "news".
 
 ### Data (`migrations/1791200000100_fundraiser-updates.js`, additive only)
@@ -8139,7 +8139,7 @@ retired link route (`GET /api/fundraise/manage/:token`) would otherwise take "ne
 (`photo_id` uuid, its type, bytes and size, all or none), `status` (`pending` by default, then
 `approved`, `rejected` or `hidden`), when it was posted, who decided and when, and the internal
 reason. Indexed by fundraiser, newest first, and by those waiting. In the nightly backup's table
-count (65).
+count (66).
 
 ### Where it lives, and tests
 

@@ -426,3 +426,27 @@ describe("how the app mounts it", () => {
     expect(at("app.use(fundraiserNewsRouter);")).toBeLessThan(at("app.use(fundraiseRouter);"));
   });
 });
+
+describe("the guard in front of the bigger body parser", () => {
+  // Called directly: over HTTP the route's own session check would refuse these anyway, later.
+  function guard(cookie: string | undefined, method = "POST") {
+    let status = 0;
+    const next = vi.fn();
+    const res = { status: (c: number) => ((status = c), res), json: () => res };
+    newsBodyGuard({ method, headers: cookie ? { cookie } : {} } as never, res as never, next);
+    return { status, next };
+  }
+
+  it("lets through only a cookie the shape of one of ours", () => {
+    expect(guard("nbcc_fr_session=abcDEF123_-").next).toHaveBeenCalled();
+    for (const bad of [undefined, "other=1", "nbcc_fr_session=not%20ours!", "nbcc_fr_session=a.b", `nbcc_fr_session=${"a".repeat(101)}`]) {
+      const g = guard(bad);
+      expect(g.next).not.toHaveBeenCalled();
+      expect(g.status).toBe(401);
+    }
+  });
+
+  it("leaves anything but a POST alone", () => {
+    expect(guard(undefined, "GET").next).toHaveBeenCalled();
+  });
+});

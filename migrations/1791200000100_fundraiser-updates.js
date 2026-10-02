@@ -13,7 +13,7 @@
 //                        the fundraiser it belongs to.
 //
 // Additive only: one new table, so a code rollback is safe (golden rule 2). Numbered 1791200000100,
-// above 1791200000070 (the highest on main) and the 1791200000080 another open task uses.
+// above 1791200000080 (TASK-505, the highest on main).
 
 exports.shorthands = undefined;
 

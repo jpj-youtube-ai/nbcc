@@ -115,7 +115,7 @@ describe("a fundraiser's page with its extras", () => {
 
   it("wishes them luck on the day", async () => {
     state.fundraisers = [record({ eventDate: londonToday(new Date()) })];
-    expect((await page()).html).toContain("Today's the day! Good luck, Robin");
+    expect((await page()).html).toContain("Today's the day! Good luck, Robin!");
   });
 
   it("shows the approved news, newest first, and a photo at its public address", async () => {

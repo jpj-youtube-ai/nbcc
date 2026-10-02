@@ -648,7 +648,7 @@ function renderCountdown(p: PublicPage, now: Date, pageUrl: string): string {
   return (
     '<div class="fr-today" data-copy-scope>' +
     STAR +
-    `<h2 class="fr-today__title">Today's the day! Good luck${first ? `, ${escapeHtml(first)}` : "!"}</h2>` +
+    `<h2 class="fr-today__title">Today's the day! Good luck${first ? `, ${escapeHtml(first)}!` : "!"}</h2>` +
     `<p>Cheer ${first ? escapeHtml(first) : "them"} on: a share today goes a long way.</p>` +
     shareLinks(p, pageUrl) +
     '<p class="fr-share__status" role="status" aria-live="polite" data-copy-status></p>' +

@@ -10842,6 +10842,7 @@
   var AN_CHANNELS = {
     newsletter: "Newsletter",
     email: "Email",
+    qr: "QR code",
     search: "Search",
     social: "Social",
     other_websites: "Other websites",
@@ -11300,6 +11301,8 @@
     function clicks(r) { return r.clicks; }
     anBars("anChannels", c.channels, function (r) { return esc(AN_CHANNELS[r.channel] || r.channel); }, visits, { share: true });
     anBars("anWebsites", c.otherWebsites, function (r) { return esc(r.source); }, visits);
+    // TASK-492: QR code scans, by the page whose code it was (named by the server).
+    anBars("anQrCodes", c.qrCodes, function (r) { return esc(r.label); }, visits);
     anBars("anNewsletters", c.newsletters, function (r) { return esc(r.label); }, visits);
     anBars("anCities", c.cities, function (r) {
       return esc(r.city) + (r.region ? '<span class="an-row-sub">' + esc(r.region) + "</span>" : "");

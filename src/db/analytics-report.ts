@@ -7,6 +7,8 @@
 // donations, and analytics is never allowed more than its share (src/routes/pulse.ts).
 import { pool } from "./pool";
 import { getCollecting } from "./analytics";
+import { labelQrScans } from "../site/qr";
+import { SITE_PAGES } from "../site/pages";
 import {
   countriesFrom,
   fillDays,
@@ -152,6 +154,7 @@ async function panels(p: Period): Promise<Panels> {
     daily: await daily(p),
     channels: await visitsBy<Panels["channels"][number]>(p, "channel", "true"),
     otherWebsites: await visitsBy<Panels["otherWebsites"][number]>(p, "source", "channel = 'other_websites' AND source IS NOT NULL"),
+    qrCodes: labelQrScans(await visitsBy<{ campaign: string | null; visits: number }>(p, "campaign", "channel = 'qr'"), SITE_PAGES),
     newsletters: labelNewsletters(campaigns, await newsletterSubjects(newsletterIds(campaigns))),
     cities: await visitorsBy<Panels["cities"][number]>(p, "city, region, country", "city IS NOT NULL"),
     countries: countriesFrom(await visitorsBy<{ country: string; visitors: number }>(p, "upper(country) AS country", "country IS NOT NULL", 300)),

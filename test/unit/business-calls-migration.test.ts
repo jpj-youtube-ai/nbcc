@@ -30,9 +30,11 @@ function record(fn: "up" | "down"): Call[] {
 }
 
 describe("the business supporter calls migration", () => {
-  it("sorts last, so production never sees it run out of order", () => {
+  // It sorted last when it shipped; later migrations sort after it (TASK-492 is the next), so this
+  // now checks it still sorts after the one that was highest before it.
+  it("sorts after every migration that was on main before it, so production never saw it out of order", () => {
     const all = readdirSync(resolve(ROOT, "migrations")).filter((f) => f.endsWith(".js")).sort();
-    expect(all[all.length - 1]).toBe(FILE);
+    expect(all.indexOf(FILE)).toBeGreaterThan(all.indexOf("1791000000003_ball-transfer-invoices.js"));
   });
 
   it("adds a nullable phone to the fulfilment record", () => {

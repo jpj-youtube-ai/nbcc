@@ -60,6 +60,21 @@ export function qrRows(
   });
 }
 
+/**
+ * Admin > Analytics counts scans by the tag each code carries (its campaign); staff read them as
+ * page names. A tag not in the page list (a code made for another address) shows as that address.
+ */
+export function labelQrScans(
+  rows: readonly { campaign: string | null; visits: number }[],
+  pages: readonly SitePage[],
+): { label: string; visits: number }[] {
+  const titles = new Map(qrRows(pages, { ballOpen: true, eventsOn: true }).map((r) => [qrSlug(r.path), r.title]));
+  return rows.map((r) => ({
+    label: r.campaign === null ? "Not named" : (titles.get(r.campaign) ?? `/${r.campaign}`),
+    visits: r.visits,
+  }));
+}
+
 // Black on white with the standard four-module margin, and error correction M (15%): the most
 // reliable to scan in print, from a poster across a room or a leaflet in poor light.
 const DRAW = { errorCorrectionLevel: "M" as const, margin: 4, color: { dark: "#000000", light: "#ffffff" } };

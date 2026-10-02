@@ -41,6 +41,8 @@ export type Panels = {
   daily: Daily;
   channels: { channel: Channel; visits: number }[];
   otherWebsites: { source: string; visits: number }[];
+  /** TASK-492: QR code scans, by the page whose code it was. */
+  qrCodes: { label: string; visits: number }[];
   newsletters: NewsletterRow[];
   cities: { city: string; region: string | null; country: string | null; visitors: number }[];
   countries: { country: string; name: string; visitors: number }[];

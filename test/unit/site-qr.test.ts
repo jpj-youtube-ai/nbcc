@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import sharp from "sharp";
 import jsQR from "jsqr";
-import { qrSlug, qrLink, qrPath, qrRows, drawQr } from "../../src/site/qr";
+import { qrSlug, qrLink, qrPath, qrRows, drawQr, labelQrScans } from "../../src/site/qr";
 import { SITE_PAGES, type SitePage } from "../../src/site/pages";
 
 // Reads a code back the way a phone would: the image's pixels, decoded.
@@ -67,6 +67,28 @@ describe("a typed address", () => {
     }
     expect(qrPath(undefined)).toBeNull();
     expect(qrPath(42)).toBeNull();
+  });
+});
+
+// Admin > Analytics lists scans by the tag each code carries; staff read them as page names.
+describe("naming the codes that were scanned", () => {
+  it("gives each tag its page's name, and keeps a tag it does not know as the address", () => {
+    expect(
+      labelQrScans(
+        [
+          { campaign: "ball-terms", visits: 3 },
+          { campaign: "home", visits: 2 },
+          { campaign: "give", visits: 1 },
+          { campaign: null, visits: 1 },
+        ],
+        SITE_PAGES,
+      ),
+    ).toEqual([
+      { label: "Ticket terms", visits: 3 },
+      { label: "Home", visits: 2 },
+      { label: "/give", visits: 1 },
+      { label: "Not named", visits: 1 },
+    ]);
   });
 });
 

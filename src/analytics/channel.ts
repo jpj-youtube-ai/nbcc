@@ -3,7 +3,7 @@
 //
 // Only the referring website's HOST is ever kept, never its full address.
 
-export type Channel = "newsletter" | "email" | "search" | "social" | "other_websites" | "direct";
+export type Channel = "newsletter" | "email" | "qr" | "search" | "social" | "other_websites" | "direct";
 
 export type Arrival = { channel: Channel; source: string | null; campaign: string | null };
 
@@ -97,6 +97,8 @@ export function classifyArrival(input: {
   }
   // 2. Any other email of ours.
   if (medium === "email") return { channel: "email", source: null, campaign };
+  // TASK-492: a scan of one of the admin's QR codes (src/site/qr.ts), with the page's code named.
+  if (medium === "qr") return { channel: "qr", source: null, campaign };
   // 3. Any other utm_source decides.
   if (source) {
     const search = findBySource(SEARCH, source);

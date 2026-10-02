@@ -2,6 +2,7 @@ import type { PoolClient } from "pg";
 import { pool } from "./pool";
 import { insertAudit } from "./donations";
 import {
+  hasPage,
   meter,
   slugify,
   RESERVED_SLUGS,
@@ -58,14 +59,15 @@ const COLUMNS = {
 } as const;
 type PatchField = keyof typeof COLUMNS;
 
-const SELECT = `
-  SELECT f.id, f.slug, f.path, f.kind, f.title, f.description,
+const RECORD_COLUMNS = `f.id, f.slug, f.path, f.kind, f.title, f.description,
          to_char(f.event_date, 'YYYY-MM-DD') AS event_date,
          to_char(f.start_time, 'HH24:MI') AS start_time,
          f.venue, f.town, f.target_pence, f.public, f.status,
          f.organiser_name, f.organiser_email, f.organiser_phone, f.social_link, f.social_ok,
          f.wants, f.post_address, f.newsletter_ok, f.image_src, f.declined_reason,
-         f.created_at, f.approved_at, f.approved_by, f.updated_at, f.updated_by
+         f.created_at, f.approved_at, f.approved_by, f.updated_at, f.updated_by`;
+const SELECT = `
+  SELECT ${RECORD_COLUMNS}
     FROM fundraisers f`;
 
 // Online: paid gifts less refunds. Cash: what staff recorded as paid in. Summed per fundraiser.
@@ -445,23 +447,34 @@ export async function moveFundraiser(
   move: "approve" | "decline" | "finish",
   actor: string,
   reason: string | null = null,
-): Promise<{ before: FundraiserRecord; after: FundraiserRecord }> {
+): Promise<{ before: FundraiserRecord; after: FundraiserRecord; livePending: boolean }> {
   return inTransaction(async (client) => {
     const before = await lockFundraiser(client, id);
     if (!ALLOWED_FROM[move].includes(before.status)) throw new FundraiserError("bad_status");
+    let livePending = false;
     if (move === "approve") {
+      // TASK-497: a page holder approved while fundraising is off waits for "Your page is live",
+      // sent when an admin switches it on. The switch is read under a share lock, so an approval and
+      // a switch on at the same moment cannot both miss each other: whichever commits second sees
+      // the first, and the email goes exactly once (now, or at the switch).
+      const settings = await client.query<{ page_on: boolean }>("SELECT page_on FROM fundraising_settings WHERE id = 1 FOR SHARE");
+      const pageOn = settings.rows[0]?.page_on ?? false;
+      livePending = !pageOn && hasPage({ ...before, status: "approved" });
       await client.query(
         `UPDATE fundraisers SET status = 'approved', approved_at = now(), approved_by = $1, declined_reason = NULL,
-                updated_at = now(), updated_by = $1 WHERE id = $2`,
-        [actor, id],
+                live_email_pending = $2, updated_at = now(), updated_by = $1 WHERE id = $3`,
+        [actor, livePending, id],
       );
     } else if (move === "decline") {
       await client.query(
-        `UPDATE fundraisers SET status = 'declined', declined_reason = $1, updated_at = now(), updated_by = $2 WHERE id = $3`,
+        `UPDATE fundraisers SET status = 'declined', declined_reason = $1, live_email_pending = false, updated_at = now(), updated_by = $2 WHERE id = $3`,
         [reason, actor, id],
       );
     } else {
-      await client.query(`UPDATE fundraisers SET status = 'finished', updated_at = now(), updated_by = $1 WHERE id = $2`, [actor, id]);
+      await client.query(
+        `UPDATE fundraisers SET status = 'finished', live_email_pending = false, updated_at = now(), updated_by = $1 WHERE id = $2`,
+        [actor, id],
+      );
     }
     const action = { approve: "fundraiser.approved", decline: "fundraiser.declined", finish: "fundraiser.finished" }[move];
     await insertAudit(client, {
@@ -469,10 +482,49 @@ export async function moveFundraiser(
       action,
       entity: "fundraiser",
       entityId: id,
-      data: { slug: before.slug, wasStatus: before.status, ...(move === "decline" ? { reason } : {}) },
+      data: {
+        slug: before.slug,
+        wasStatus: before.status,
+        ...(move === "decline" ? { reason } : {}),
+        ...(livePending ? { liveEmailWaiting: true } : {}),
+      },
     });
-    return { before, after: await reread(client, id) };
+    return { before, after: await reread(client, id), livePending };
   });
+}
+
+// An approved page holder still waiting for "Your page is live".
+const WAITING_LIVE = "live_email_pending AND status = 'approved' AND public AND path = 'raising'";
+
+/**
+ * Claim ONE approved page holder still waiting for "Your page is live", past `afterId`, clearing its
+ * mark in the same statement. One at a time, so a restart in the middle of a run loses at most the
+ * one in flight; SKIP LOCKED, so two runs at once never take the same row. A failed send marks it
+ * again (markLiveEmailWaiting), and looking only past the last id tried keeps a run from looping on it.
+ */
+export async function claimNextWaitingLiveEmail(afterId: number): Promise<FundraiserRecord | null> {
+  const r = await pool.query(
+    `UPDATE fundraisers f SET live_email_pending = false
+      WHERE f.id = (
+        SELECT id FROM fundraisers
+         WHERE ${WAITING_LIVE} AND id > $1
+         ORDER BY id LIMIT 1 FOR UPDATE SKIP LOCKED
+      )
+      RETURNING ${RECORD_COLUMNS}`,
+    [afterId],
+  );
+  return r.rows[0] ? toRecord(r.rows[0]) : null;
+}
+
+/** How many approved page holders are waiting for "Your page is live". */
+export async function countWaitingLiveEmails(): Promise<number> {
+  const r = await pool.query<{ n: string }>(`SELECT count(*) AS n FROM fundraisers WHERE ${WAITING_LIVE}`);
+  return Number(r.rows[0]?.n ?? 0);
+}
+
+/** Mark one approved fundraiser as waiting for its live email again, after a send that failed. */
+export async function markLiveEmailWaiting(id: number): Promise<void> {
+  await pool.query("UPDATE fundraisers SET live_email_pending = true WHERE id = $1 AND status = 'approved'", [id]);
 }
 
 // --- changes from the organiser ------------------------------------------------------------------

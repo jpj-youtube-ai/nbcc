@@ -19,11 +19,12 @@ import {
   setMessageHidden,
   wallRows,
   fundraisingIsOn,
+  countWaitingLiveEmails,
   FundraiserError,
 } from "../db/fundraisers";
 import { insertEventImage } from "../db/events";
 import { validateUpload } from "../newsletter/image-validation";
-import { sendApprovedEmail, fundraiserPageUrl } from "../fundraising/send";
+import { sendApprovedEmail, sendEditDecisionEmail, sendWaitingLiveEmails, fundraiserPageUrl } from "../fundraising/send";
 
 // TASK-493: the admin API behind Admin > Fundraising. Section "fundraising": admins and editors
 // edit by default, viewers look (src/admin/permissions.ts).
@@ -48,6 +49,12 @@ import { sendApprovedEmail, fundraiserPageUrl } from "../fundraising/send";
 // public, so it is a launch decision: admins only, read live from the database, like the Events
 // switch. Every write records who did it in audit_log, in the same transaction (src/db/fundraisers.ts).
 // Request and response shapes: README.md, "Community fundraising".
+//
+// TASK-497, the emails: approving emails the organiser at once, except a page holder approved while
+// fundraising is off, who is marked as waiting and sent "Your page is live" when an admin switches
+// it on (in the background, after the answer). Approving or rejecting a waiting change emails the
+// organiser too. Every email goes after its write has committed, best effort: a failed send is
+// logged and never fails the answer.
 
 export const adminFundraisingRouter = Router();
 
@@ -104,6 +111,16 @@ function failed(res: Response, what: string, err: unknown): Response {
   return res.status(500).json(UNAVAILABLE);
 }
 
+// Run an email step after the write it follows has committed. Whatever happens to it, the write
+// stands and the answer is the write's.
+async function bestEffort(what: string, send: () => Promise<unknown>): Promise<void> {
+  try {
+    await send();
+  } catch (err) {
+    console.error(`admin fundraising ${what} email failed:`, err instanceof Error ? err.message : err);
+  }
+}
+
 function forAdmin(f: FundraiserRecord) {
   return { ...f, kindLabel: KIND_LABELS[f.kind], pageUrl: hasPage(f) ? fundraiserPageUrl(f.slug) : null };
 }
@@ -112,10 +129,19 @@ function forAdmin(f: FundraiserRecord) {
 
 export async function getAdminFundraisingSettings(req: Request, res: Response): Promise<Response | void> {
   if (!(await authorizeSection(req, res, "fundraising", "view"))) return;
+  let settings;
   try {
-    return res.status(200).json(await getFundraisingSettings());
+    settings = await getFundraisingSettings();
   } catch (err) {
     return failed(res, "settings read", err);
+  }
+  // How many page holders are waiting for "Your page is live", for the question before switching
+  // on. Only a nicety: if it cannot be counted the screen says it without a number.
+  try {
+    return res.status(200).json({ ...settings, liveEmailsWaiting: await countWaitingLiveEmails() });
+  } catch (err) {
+    console.error("admin fundraising waiting count failed:", err instanceof Error ? err.message : err);
+    return res.status(200).json(settings);
   }
 }
 
@@ -126,11 +152,19 @@ export async function patchAdminFundraisingSettings(req: Request, res: Response)
   if (!claims) return;
   const parsed = settingsSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: "Say whether fundraising should be on or off" });
+  let settings;
   try {
-    return res.status(200).json(await setFundraisingOn(parsed.data.pageOn, actorOf(claims)));
+    settings = await setFundraisingOn(parsed.data.pageOn, actorOf(claims));
   } catch (err) {
     return failed(res, "switch", err);
   }
+  res.status(200).json(settings);
+  // Switched on: everyone approved while it was off hears their page is live. In the background,
+  // after the answer, so the admin is not kept waiting on a run of emails; sendWaitingLiveEmails
+  // claims one at a time, stops if fundraising is switched off again, and never throws, and this
+  // catches anything that slips past it anyway.
+  if (settings.pageOn) void bestEffort("live", sendWaitingLiveEmails);
+  return res;
 }
 
 // --- reading -------------------------------------------------------------------------------------
@@ -217,9 +251,10 @@ function moveHandler(move: "approve" | "decline" | "finish") {
       reason = parsed.data.reason ? parsed.data.reason : null;
     }
     try {
-      const { after } = await moveFundraiser(got[0], move, actorOf(claims), reason);
-      // After the approval has committed, best effort: it stands whether or not the email goes.
-      if (move === "approve") await sendApprovedEmail(after, await fundraisingIsOn());
+      const { after, livePending } = await moveFundraiser(got[0], move, actorOf(claims), reason);
+      // After the approval has committed, best effort: it stands whether or not the email goes. A
+      // page holder approved while fundraising is off waits for the switch instead (livePending).
+      if (move === "approve" && !livePending) await bestEffort("approved", () => sendApprovedEmail(after));
       return res.status(200).json({ fundraiser: forAdmin(after) });
     } catch (err) {
       return failed(res, move, err);
@@ -237,11 +272,17 @@ function editDecision(approve: boolean) {
     if (!claims) return;
     const got = ids(req, res, "id", "editId");
     if (!got) return;
+    let after: FundraiserRecord;
     try {
-      return res.status(200).json({ fundraiser: forAdmin(await decideEdit(got[0], got[1], approve, actorOf(claims))) });
+      after = await decideEdit(got[0], got[1], approve, actorOf(claims));
     } catch (err) {
       return failed(res, approve ? "edit approve" : "edit reject", err);
     }
+    // "Your update is live" or "About your update", after the decision has committed.
+    await bestEffort(approve ? "update live" : "about your update", async () =>
+      sendEditDecisionEmail(after, approve, await fundraisingIsOn()),
+    );
+    return res.status(200).json({ fundraiser: forAdmin(after) });
   };
 }
 

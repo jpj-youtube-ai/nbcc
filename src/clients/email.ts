@@ -552,6 +552,16 @@ export async function sendFundraiseManage(name: string, message: FundraiseEmailM
   await sendVerbatim("fundraiseManage", name, message);
 }
 
+// TASK-497: to the organiser when staff approve ("Your update is live") or reject ("About your
+// update") a change they asked for.
+export async function sendFundraiseEditApproved(name: string, message: FundraiseEmailMessage): Promise<void> {
+  await sendVerbatim("fundraiseEditApproved", name, message);
+}
+
+export async function sendFundraiseEditRejected(name: string, message: FundraiseEmailMessage): Promise<void> {
+  await sendVerbatim("fundraiseEditRejected", name, message);
+}
+
 // --- Backup alerts (TASK-423) ---------------------------------------------------------------
 // An operational notice to ADMIN_NOTIFICATION_EMAIL when the nightly backup fails, refuses to
 // ship, or reaches only one of its two destinations.

@@ -7109,7 +7109,10 @@ is listed, every page is a 404, and manage links do nothing, until an admin swit
 
 `fundraising_settings` (the switch), `fundraisers`, `fundraiser_edits` (changes waiting for staff),
 `fundraiser_manage_tokens` (only `token_hash`, the sha256 of the emailed token), `fundraiser_cash`
-(paid in by hand). On `donations`: `fundraiser_id`, `supporter_message`, `show_name`,
+(paid in by hand). `fundraisers.live_email_pending` (TASK-497, boolean, default false) marks a page
+holder approved while fundraising is off, waiting for "Your page is live"; its migration
+(`1791200000020_fundraiser-live-email-pending.js`) also marks any page holder already approved, if
+fundraising has never been switched on. On `donations`: `fundraiser_id`, `supporter_message`, `show_name`,
 `show_amount` and `message_hidden`, all nullable or defaulted, so existing gifts are untouched.
 
 **Raised** = paid online gifts on the page, less any refund, plus cash staff recorded. The
@@ -7233,16 +7236,16 @@ transaction, with the actor `admin:<email>`.
 
 | Route | Body | Answer |
 |---|---|---|
-| `GET /api/admin/fundraising/settings` | | `{ pageOn, updatedAt, updatedBy }` |
-| `PATCH /api/admin/fundraising/settings` (admins only) | `{ pageOn: boolean }` | the same |
+| `GET /api/admin/fundraising/settings` | | `{ pageOn, updatedAt, updatedBy, liveEmailsWaiting }`; `liveEmailsWaiting` (TASK-497) is how many page holders wait for "Your page is live", left out if it cannot be counted |
+| `PATCH /api/admin/fundraising/settings` (admins only) | `{ pageOn: boolean }` | `{ pageOn, updatedAt, updatedBy }`; switching on then sends "Your page is live" to every approved page holder still waiting, in the background (see Emails) |
 | `GET /api/admin/fundraisers` | | `{ pageOn, fundraisers: [Fundraiser + meter + editWaiting] }`, newest first |
 | `GET /api/admin/fundraisers/:id` | | `{ fundraiser, meter, waitingEdit, editWaiting, edits, cash, wall }` |
 | `PATCH /api/admin/fundraisers/:id` | any of the sign up fields, plus `slug` and `imageSrc` | `{ fundraiser }`; `409` if the slug is taken |
-| `POST /api/admin/fundraisers/:id/approve` | | `{ fundraiser }`; emails the organiser (see below); from New or Declined |
+| `POST /api/admin/fundraisers/:id/approve` | | `{ fundraiser }`; emails the organiser, or marks a page holder as waiting while fundraising is off (see below); from New or Declined |
 | `POST /api/admin/fundraisers/:id/decline` | `{ reason? }` (internal, up to 500) | `{ fundraiser }`; from New or Approved; no email |
 | `POST /api/admin/fundraisers/:id/finish` | | `{ fundraiser }`; from Approved |
-| `POST /api/admin/fundraisers/:id/edits/:editId/approve` | | `{ fundraiser }` with the change applied; `409` "This change has been replaced; look again" if the organiser saved a newer one |
-| `POST /api/admin/fundraisers/:id/edits/:editId/reject` | | `{ fundraiser }`; `409` if already dealt with or replaced |
+| `POST /api/admin/fundraisers/:id/edits/:editId/approve` | | `{ fundraiser }` with the change applied, and "Your update is live" (or "saved") to the organiser; `409` "This change has been replaced; look again" if the organiser saved a newer one |
+| `POST /api/admin/fundraisers/:id/edits/:editId/reject` | | `{ fundraiser }`, and "About your update" to the organiser; `409` if already dealt with or replaced |
 | `POST /api/admin/fundraisers/:id/cash` | `{ amountPence, paidInOn, note? }` | `201 { cash }` |
 | `DELETE /api/admin/fundraisers/:id/cash/:cashId` | | `{ removed }` |
 | `POST /api/admin/fundraisers/:id/wall/:donationId/hide` and `/show` | | `{ donationId, hidden }` |
@@ -7309,14 +7312,39 @@ status chips and Business supporters' rows that open in place.
 ### Emails
 
 All from and replying to `events@nbcc.scot` (`BALL_FROM_EMAIL`), in NBCC's usual shell, each its own
-kind on the Email audit:
+kind on the Email audit. Built in `src/fundraising/emails.ts`, sent by `src/fundraising/send.ts`.
 
-| Kind | To | When |
-|---|---|---|
-| `fundraiseThanks` | the address typed in the form | they sign up: a fixed thank you, we'll be in touch, with none of their words |
-| `fundraiseStaff` | `events@` (Reply-To the organiser) | they sign up: everything they told us and asked for. Staff only, so its links are never tagged |
-| `fundraiseApproved` | the organiser | approved: their page link (raising money and public), "approved, your page will appear when our fundraising pages open" while fundraising is switched off, or "you're on our list" |
-| `fundraiseManage` | the organiser | they ask for a manage link |
+TASK-497 gave them the wording Jaimie signed off on 2026-10-02: warmer, with a signed close (a
+friendly line above "NBCC Team", `signOff` in `src/email/brand.ts`) and then a **"Got any
+questions?"** box with "Call us" (01292 811 015, a `tel:` link) and "Email us" (the events inbox, a
+`mailto:` link) side by side, equally prominent (`questionsBox`). The staff summary has the sign off
+("Go team!") but no box. The plain text part of each carries the same words, the questions (phone
+and email) and the sign off. Plain English, no dashes, every stored value escaped.
+
+| Kind | To | When | Says |
+|---|---|---|---|
+| `fundraiseThanks` | the address typed in the form | they sign up | "Thank you, you've made our day!", what happens next. Greets "Hi there <first name>," only with a safe first name (`safeFirstName`: put together first (NFC), then the first word, Latin letters only, accents included, with apostrophes or hyphens inside, at most 20 characters; another script, a lookalike or an invisible letter is refused), otherwise "Hi there,". No other typed words, since anyone can type any address |
+| `fundraiseStaff` | `events@` (Reply-To the organiser) | they sign up | "Exciting news: a new fundraiser!", everything they told us and asked for, Next steps. Staff only, so its links are never tagged |
+| `fundraiseApproved` | the organiser | approved with a page (raising money and public) while fundraising is on, or at the switch on (below) | "Your page is live!", the page link and three things to do today |
+| `fundraiseApproved` | the organiser | approved with no page (private, or an event) | "You're on our list!" |
+| `fundraiseManage` | the organiser | they ask for a manage link | the 24 hour link (replaced by the sign in code in a later part of stage 1b) |
+| `fundraiseEditApproved` | the organiser | staff approve their waiting change | "Your update is live!" with the page link while their page is up (raising money, public, approved and fundraising on); otherwise "Your update is saved!", with no page link |
+| `fundraiseEditRejected` | the organiser | staff reject their waiting change | "About your update": not used yet, we'll give you a ring; "your page is still live" only while it is up, otherwise "everything stays just as it was" |
+
+**Approved while fundraising is off.** The old "you're approved, your page will appear when our pages
+open" email is retired. A page holder approved while fundraising is off gets no email then: the
+approval marks them `live_email_pending` (reading the switch under a share lock, so an approval and a
+switch on at the same moment cannot miss each other). When an admin switches fundraising on, the
+switch is saved and the admin answered first; then, in the background, `sendWaitingLiveEmails`
+claims ONE waiting page holder at a time (`FOR UPDATE SKIP LOCKED`, clearing its mark in the same
+statement, so a restart part way loses at most the one in flight and a second switch on emails
+nobody twice), reads the switch again before each, and stops if fundraising has been switched off
+meanwhile. A send that fails is logged and that fundraiser marked as waiting again, for the next
+switch on; nothing about the emails can fail the switch. Declining or finishing clears the mark.
+Admin > Fundraising says all this in its questions: approving a page holder while fundraising is off
+says nothing is emailed yet, switching on says "Your page is live" goes to the waiting fundraisers
+(with how many), and rejecting a change says the organiser is emailed a short, kind note.
+Every email goes after its write has committed, best effort: a failed send never fails the answer.
 
 ### For the page builders
 
@@ -7341,7 +7369,11 @@ Unit: `fundraising-model`, `fundraising-manage-token`, `fundraising-emails`, `fu
 `fundraising-migration`, `whats-new-fundraising`, `newsletter-self-signup`, `fundraising-send`, `fundraising-qr`, plus the permission, backfill, backup, email kind
 and tracked link tests. BDD: `features/fundraising.feature` (approval and the switch, a gift raising
 the meter and joining the wall, cash, hiding a message, a gift for an unapproved fundraiser, a
-manage change waiting for staff, who may do what).
+manage change waiting for staff, who may do what; TASK-497: a page approved while fundraising is off
+hears it is live at the switch on, and the emails about an approved or rejected change). TASK-497
+unit tests: `fundraising-emails` (the approved words, the safe first name, the questions box and
+sign off in both parts), `fundraising-send`, `fundraisers-db`, `admin-fundraising-routes`,
+`fundraiser-live-email-migration`, `admin-email-kinds`.
 
 ## Community fundraising, the public pages (TASK-494)
 

@@ -96,7 +96,11 @@ let wallRows: Record<number, Wall[]> = {};
 let waiting: Record<number, Rec | null> = {};
 let historyRows: Record<number, unknown[]> = {};
 let online: Record<number, number> = {};
-let settings = { pageOn: false, updatedAt: null as string | null, updatedBy: null as string | null };
+let settings: { pageOn: boolean; updatedAt: string | null; updatedBy: string | null; liveEmailsWaiting?: number } = {
+  pageOn: false,
+  updatedAt: null,
+  updatedBy: null,
+};
 let perms: PermissionMap = effectivePermissions({ role: "admin", permissions: null });
 let role = "admin";
 let failures: Record<string, { status: number; body: unknown }> = {};
@@ -143,7 +147,7 @@ function respond(url: string, init?: { method?: string; body?: string }) {
     if (method === "PATCH") {
       settings = { pageOn: body.pageOn, updatedAt: "2026-10-02T09:00:00.000Z", updatedBy: "admin:fern@example.com" };
     }
-    return j(settings);
+    return j({ ...settings }); // a copy, as a real response is: later changes must not leak in
   }
   if (path === "/api/admin/fundraisers" && method === "GET") {
     return j({
@@ -343,6 +347,59 @@ describe("the switch", () => {
     expect(el("frSwitch").classList.contains("is-on")).toBe(true);
     expect(text(el("frSwitchWho"))).toContain("fern@example.com");
     expect(text(el("frSwitchStatus"))).toMatch(/now on/i);
+  });
+
+  // TASK-497: switching on emails "Your page is live" to everyone approved while it was off.
+  it("says switching on emails everyone waiting, with how many when the server says", async () => {
+    settings.liveEmailsWaiting = 3;
+    await openFundraising();
+    el("frSwitchBtn").click();
+    await settle();
+    expect(confirmed[0]).toContain("“Your page is live” goes by email to the 3 fundraisers approved while it was off.");
+  });
+
+  it("says it in the singular for one, and not at all for nobody", async () => {
+    settings.liveEmailsWaiting = 1;
+    await openFundraising();
+    confirmAnswer = false;
+    el("frSwitchBtn").click();
+    await settle();
+    expect(confirmed[0]).toContain("goes by email to the 1 fundraiser approved while it was off.");
+    settings.liveEmailsWaiting = 0;
+    navLink().click();
+    await settle();
+    el("frSwitchBtn").click();
+    await settle();
+    expect(confirmed[1]).not.toContain("Your page is live");
+  });
+
+  it("asks the server for the count when the switch is pressed, not when the screen opened", async () => {
+    // Approvals made after the screen opened (while it is off) add to the waiting list.
+    settings.liveEmailsWaiting = 0;
+    await openFundraising();
+    settings.liveEmailsWaiting = 2;
+    confirmAnswer = false;
+    el("frSwitchBtn").click();
+    await settle();
+    expect(confirmed[0]).toContain("goes by email to the 2 fundraisers approved while it was off.");
+  });
+
+  it("still asks, without a number, when the count cannot be read", async () => {
+    await openFundraising();
+    failures["GET /api/admin/fundraising/settings"] = { status: 500, body: { error: "Admin is temporarily unavailable" } };
+    confirmAnswer = false;
+    el("frSwitchBtn").click();
+    await settle();
+    expect(confirmed[0]).toMatch(/switch fundraising on/i);
+    expect(confirmed[0]).toContain("goes by email to everyone approved while it was off.");
+  });
+
+  it("says it without a number when the server gives none", async () => {
+    await openFundraising();
+    confirmAnswer = false;
+    el("frSwitchBtn").click();
+    await settle();
+    expect(confirmed[0]).toContain("“Your page is live” goes by email to everyone approved while it was off.");
   });
 
   it("does nothing when the admin says no to the question", async () => {
@@ -570,13 +627,17 @@ describe("approving, declining and finishing", () => {
     await openRow(1);
     (q('[data-fraction="approve"]') as HTMLElement).click();
     await settle();
-    expect(confirmed[0]).toMatch(/will appear when fundraising is switched on/);
-    // The server sends the email after the approval, best effort, so the screen does not claim it went.
-    expect(text(el("frDetailStatus"))).toBe("Approved. An email to the organiser is on its way.");
+    // TASK-497: a page holder approved while fundraising is off is sent nothing yet.
+    expect(confirmed[0]).toContain("Nothing is emailed yet:");
+    expect(confirmed[0]).toContain("“Your page is live” by email automatically when fundraising is switched on.");
+    expect(confirmed[0]).not.toMatch(/straight away/);
+    expect(text(el("frDetailStatus"))).toBe("Approved. The organiser is emailed “Your page is live” when fundraising is switched on.");
     await openRow(2);
     (q('[data-fraction="approve"]') as HTMLElement).click();
     await settle();
-    expect(confirmed[1]).toMatch(/a short note to say they are on our list/);
+    expect(confirmed[1]).toMatch(/straight away: a short note to say they are on our list/);
+    // The server sends the email after the approval, best effort, so the screen does not claim it went.
+    expect(text(el("frDetailStatus"))).toBe("Approved. An email to the organiser is on its way.");
     settings.pageOn = true;
     navLink().click();
     await settle();
@@ -806,6 +867,7 @@ describe("a change waiting for staff", () => {
     (q('[data-fredit="approve"]') as HTMLElement).click();
     await settle();
     expect(confirmed[0]).toMatch(/approve this change/i);
+    expect(confirmed[0]).toMatch(/the organiser is emailed to say so/);
     expect(sent("POST", "/api/admin/fundraisers/1/edits/7/approve")).toHaveLength(1);
     expect(q("#frChange")).toBeNull();
     expect(text(detail())).toContain("Now with reindeer.");
@@ -817,6 +879,8 @@ describe("a change waiting for staff", () => {
     await openRow(1);
     (q('[data-fredit="reject"]') as HTMLElement).click();
     await settle();
+    // TASK-497: the organiser now gets "About your update".
+    expect(confirmed[0]).toBe("Reject this change? The page stays as it is, and the organiser is emailed a short, kind note to say we will be in touch.");
     expect(sent("POST", "/api/admin/fundraisers/1/edits/7/reject")).toHaveLength(1);
     expect(q("#frChange")).toBeNull();
     expect(text(detail())).not.toContain("Now with reindeer.");

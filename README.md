@@ -7276,12 +7276,20 @@ status chips and Business supporters' rows that open in place.
   it is a web address; their requests and consents; a photo uploaded through
   `POST /api/admin/fundraiser-images` and saved as `imageSrc`; the meter (raised, online, cash, an
   accessible progress bar held at 100); cash paid in (add in pounds, with the date and a note;
-  remove after a question); every field staff may change, sending only what changed, with each
-  message from the server under its own box; the supporter wall with the giver's full name, how it
+  remove after a question; a comma only between thousands, so "12,50" is questioned rather than
+  read as £1,250); every field staff may change (the name, kind, path, description, date, time,
+  place, target, public, web address, the organiser's name, email, phone and social link, whether
+  NBCC may post about it, what they would like and where to post it), sending only what differs
+  from the live version, with each message from the server under its own box; the supporter wall with the giver's full name, how it
   shows, Hide and Show (10, then "Show all"); and History in plain words (10, then "Show all").
 - **Safety**: every stored string is escaped; a `401` signs you out as everywhere else; anything
-  that fails to load says it could not load, never that there is nothing. A second press while a
-  change is on its way sends nothing; typing survives a redraw, and so does keyboard focus.
+  that fails to load says it could not load, never that there is nothing. One change at a time:
+  from the press until the sign up has been read again its buttons rest and its status line says
+  what is happening, so a second press sends nothing; added cash empties the form. A message
+  belongs to the sign up it is about and never shows under another. Only the boxes someone typed
+  in survive a redraw, and approving an organiser's change forgets them, so Save cannot put old
+  words back over it. Keyboard focus survives a redraw too. Approving says the organiser's email
+  is on its way, as the server sends it after the approval, best effort.
 - **Tests**: `test/unit/admin-fundraising-page.test.ts` (the jsdom admin harness, invented data):
   the menu for each role, the switch, the list and its pills and chips, approve, decline and finish,
   editing and its field messages, the photo, the waiting change, cash and the meter, the wall,

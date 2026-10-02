@@ -102,6 +102,16 @@ let role = "admin";
 let failures: Record<string, { status: number; body: unknown }> = {};
 let calls: { method: string; path: string; body: unknown }[] = [];
 let whatsNewAreas: unknown[] = [];
+// A gate holds one answer back until the test releases it: "METHOD /path" -> a promise.
+let gates: Record<string, Promise<unknown>> = {};
+function gate(key: string) {
+  let release!: () => void;
+  gates[key] = new Promise<void>((r) => (release = r));
+  return () => {
+    delete gates[key];
+    release();
+  };
+}
 
 function meterFor(f: Rec) {
   const cash = (cashRows[f.id] || []).reduce((s, c) => s + Number(c.amountPence), 0);
@@ -259,6 +269,7 @@ beforeEach(() => {
   failures = {};
   calls = [];
   whatsNewAreas = [];
+  gates = {};
   confirmAnswer = true;
   confirmed = [];
   window.sessionStorage.clear();
@@ -272,8 +283,11 @@ beforeEach(() => {
   window.prompt = () => "";
   window.alert = () => undefined;
   (window as unknown as { formatReceived: (s: string) => string }).formatReceived = (s) => String(s);
-  (globalThis as unknown as { fetch: unknown }).fetch = (url: unknown, init?: unknown) =>
-    Promise.resolve(respond(String(url), init as { method?: string; body?: string }));
+  (globalThis as unknown as { fetch: unknown }).fetch = (url: unknown, init?: unknown) => {
+    const i = init as { method?: string; body?: string } | undefined;
+    const held = gates[(i?.method || "GET").toUpperCase() + " " + String(url).split("?")[0]];
+    return held ? held.then(() => respond(String(url), i)) : Promise.resolve(respond(String(url), i));
+  };
   // eslint-disable-next-line no-eval
   (0, eval)(appSrc);
 });
@@ -557,7 +571,8 @@ describe("approving, declining and finishing", () => {
     (q('[data-fraction="approve"]') as HTMLElement).click();
     await settle();
     expect(confirmed[0]).toMatch(/will appear when fundraising is switched on/);
-    expect(text(el("frDetailStatus"))).toBe("Approved, and the organiser has been emailed.");
+    // The server sends the email after the approval, best effort, so the screen does not claim it went.
+    expect(text(el("frDetailStatus"))).toBe("Approved. An email to the organiser is on its way.");
     await openRow(2);
     (q('[data-fraction="approve"]') as HTMLElement).click();
     await settle();
@@ -569,7 +584,7 @@ describe("approving, declining and finishing", () => {
     (q('[data-fraction="approve"]') as HTMLElement).click();
     await settle();
     expect(confirmed[2]).toMatch(/their page link, and the page goes on the website/);
-    expect(text(el("frDetailStatus"))).toBe("Approved, and the organiser has been emailed their page link.");
+    expect(text(el("frDetailStatus"))).toBe("Approved. An email with their page link is on its way to the organiser.");
   });
 
   it("sends nothing when the question is answered no", async () => {
@@ -1026,6 +1041,232 @@ describe("History", () => {
     await openFundraising();
     await openRow(1);
     expect(text(el("frHistory"))).toMatch(/could not load/i);
+  });
+});
+
+// ---- from the review of #617 ----
+
+describe("one change at a time", () => {
+  it("keeps Add resting until the sign up has been read again, then empties the form", async () => {
+    records = [fundraiser(1, { status: "approved" })];
+    await openFundraising();
+    await openRow(1);
+    const release = gate("GET /api/admin/fundraisers/1");
+    setValue('#frCashForm [name="amount"]', "5");
+    setValue('#frCashForm [name="note"]', "Tin at the library");
+    submit("#frCashForm");
+    // Said at once, not after the answer.
+    expect(text(el("frCashStatus"))).toBe("Adding…");
+    await settle();
+    // The POST has answered; the sign up is still being read again.
+    expect(sent("POST", "/api/admin/fundraisers/1/cash")).toHaveLength(1);
+    expect((q('#frCashForm button[type="submit"]') as HTMLButtonElement).disabled).toBe(true);
+    submit("#frCashForm");
+    await settle();
+    expect(sent("POST", "/api/admin/fundraisers/1/cash")).toHaveLength(1);
+    release();
+    await settle();
+    expect((q('#frCashForm [name="amount"]') as HTMLInputElement).value).toBe("");
+    expect((q('#frCashForm [name="note"]') as HTMLInputElement).value).toBe("");
+    expect((q('#frCashForm button[type="submit"]') as HTMLButtonElement).disabled).toBe(false);
+    expect(text(el("frCashStatus"))).toMatch(/£5 added/);
+  });
+
+  it("shows Saving at once while the details are on their way", async () => {
+    records = [fundraiser(1)];
+    await openFundraising();
+    await openRow(1);
+    const release = gate("PATCH /api/admin/fundraisers/1");
+    setValue('#frEditForm [name="title"]', "Test Dash Renamed");
+    submit("#frEditForm");
+    expect(text(el("frEditStatus"))).toBe("Saving…");
+    release();
+    await settle();
+    expect(text(el("frEditStatus"))).toBe("Saved.");
+  });
+
+  it("blocks a second photo while the first is uploading, and keeps an upload's error in view", async () => {
+    records = [fundraiser(1)];
+    await openFundraising();
+    await openRow(1);
+    const release = gate("POST /api/admin/fundraiser-images");
+    const choose = () => {
+      const input = el("frPhotoInput") as HTMLInputElement;
+      Object.defineProperty(input, "files", { value: [new File([new Uint8Array([1])], "a.png", { type: "image/png" })], configurable: true });
+      input.dispatchEvent(new Event("change", { bubbles: true }));
+    };
+    choose();
+    for (let i = 0; i < 3; i++) await settle();
+    choose();
+    for (let i = 0; i < 3; i++) await settle();
+    release();
+    for (let i = 0; i < 4; i++) await settle();
+    expect(sent("POST", "/api/admin/fundraiser-images")).toHaveLength(1);
+    failures["POST /api/admin/fundraiser-images"] = { status: 413, body: { error: "That picture is too big (2 MB at most)" } };
+    choose();
+    for (let i = 0; i < 4; i++) await settle();
+    expect(text(el("frPhotoStatus"))).toBe("That picture is too big (2 MB at most)");
+    expect(el("frPhotoStatus").classList.contains("is-error")).toBe(true);
+  });
+
+  it("drops a message that arrives after another sign up was opened", async () => {
+    records = [fundraiser(1), fundraiser(2)];
+    await openFundraising();
+    await openRow(1);
+    const release = gate("PATCH /api/admin/fundraisers/1");
+    setValue('#frEditForm [name="title"]', "Test Dash Renamed");
+    submit("#frEditForm");
+    await openRow(2);
+    release();
+    await settle();
+    expect(detail()!.getAttribute("data-frdetail")).toBe("2");
+    expect(text(el("frEditStatus"))).toBe("");
+    expect(text(el("frDetailStatus"))).toBe("");
+  });
+});
+
+describe("a typed change never undoes an approved one", () => {
+  it("forgets what was typed once a change is approved, and saves only what is typed after", async () => {
+    records = [fundraiser(1, { status: "approved" })];
+    waiting = { 1: { id: 7, changes: { description: "Now with reindeer." }, status: "waiting", createdAt: "2026-10-01T10:00:00.000Z" } };
+    await openFundraising();
+    await openRow(1);
+    setValue('#frEditForm [name="town"]', "Othertown");
+    (q('[data-fredit="approve"]') as HTMLElement).click();
+    await settle();
+    expect((q('#frEditForm [name="description"]') as HTMLTextAreaElement).value).toBe("Now with reindeer.");
+    expect((q('#frEditForm [name="town"]') as HTMLInputElement).value).toBe("Testtown");
+    setValue('#frEditForm [name="title"]', "Test Dash Renamed");
+    submit("#frEditForm");
+    await settle();
+    expect(sent("PATCH", "/api/admin/fundraisers/1")[0].body).toEqual({ title: "Test Dash Renamed" });
+  });
+
+  it("keeps a typed box through another redraw, and only that box", async () => {
+    records = [fundraiser(1, { status: "approved" })];
+    wallRows = { 1: [gift(1)] };
+    await openFundraising();
+    await openRow(1);
+    setValue('#frEditForm [name="venue"]', "The Old Mill");
+    (q('[data-frhide="501"]') as HTMLElement).click();
+    await settle();
+    expect((q('#frEditForm [name="venue"]') as HTMLInputElement).value).toBe("The Old Mill");
+    submit("#frEditForm");
+    await settle();
+    expect(sent("PATCH", "/api/admin/fundraisers/1")[0].body).toEqual({ venue: "The Old Mill" });
+  });
+});
+
+describe("every detail staff may change", () => {
+  it("holds the organiser's details, their requests and their choices", async () => {
+    records = [fundraiser(1)];
+    await openFundraising();
+    await openRow(1);
+    const form = el("frEditForm");
+    const value = (n: string) => (form.querySelector(`[name="${n}"]`) as HTMLInputElement).value;
+    const ticked = (n: string) => (form.querySelector(`[name="${n}"]`) as HTMLInputElement).checked;
+    expect(value("path")).toBe("raising");
+    expect(value("name")).toBe("Robin Example");
+    expect(value("email")).toBe("robin@example.com");
+    expect(value("phone")).toBe("+44 (0)7700 900123");
+    expect(value("socialLink")).toBe("https://www.facebook.com/example-dash");
+    expect(value("postAddress")).toBe("1 Example Road\nTesttown");
+    expect(value("leaflets")).toBe("50");
+    expect(value("buckets")).toBe("2");
+    expect(ticked("shoutOut")).toBe(true);
+    expect(ticked("attend")).toBe(false);
+    expect(ticked("socialOk")).toBe(true);
+    expect(ticked("public")).toBe(true);
+  });
+
+  it("sends the organiser's details, and all of what they asked for when part of it changes", async () => {
+    records = [fundraiser(1)];
+    await openFundraising();
+    await openRow(1);
+    setValue('#frEditForm [name="phone"]', "01632 960123");
+    setValue('#frEditForm [name="buckets"]', "3");
+    const attend = q('#frEditForm [name="attend"]') as HTMLInputElement;
+    attend.checked = true;
+    attend.dispatchEvent(new Event("change", { bubbles: true }));
+    const social = q('#frEditForm [name="socialOk"]') as HTMLInputElement;
+    social.checked = false;
+    social.dispatchEvent(new Event("change", { bubbles: true }));
+    setValue('#frEditForm [name="path"]', "event");
+    submit("#frEditForm");
+    await settle();
+    expect(sent("PATCH", "/api/admin/fundraisers/1")[0].body).toEqual({
+      path: "event",
+      phone: "01632 960123",
+      socialOk: false,
+      wants: { leaflets: 50, buckets: 3, shoutOut: true, attend: true },
+    });
+  });
+
+  it("catches a count that is not a whole number before sending", async () => {
+    records = [fundraiser(1)];
+    await openFundraising();
+    await openRow(1);
+    setValue('#frEditForm [name="leaflets"]', "lots");
+    submit("#frEditForm");
+    await settle();
+    expect(sent("PATCH", "/api/admin/fundraisers/1")).toHaveLength(0);
+    expect(text(q('[data-frerr="wants.leaflets"]'))).toMatch(/whole number/i);
+  });
+
+  it("puts the server's messages under the organiser's boxes", async () => {
+    records = [fundraiser(1)];
+    failures["PATCH /api/admin/fundraisers/1"] = {
+      status: 400,
+      body: {
+        error: "Some of it needs another look",
+        fields: {
+          phone: "That does not look like a phone number.",
+          email: "Please check your email address.",
+          "wants.buckets": "We can lend up to 20 buckets or tins.",
+          socialLink: "Paste the full link, starting https://",
+        },
+      },
+    };
+    await openFundraising();
+    await openRow(1);
+    setValue('#frEditForm [name="phone"]', "abc");
+    submit("#frEditForm");
+    await settle();
+    expect(text(q('[data-frerr="phone"]'))).toBe("That does not look like a phone number.");
+    expect(text(q('[data-frerr="email"]'))).toBe("Please check your email address.");
+    expect(text(q('[data-frerr="wants.buckets"]'))).toBe("We can lend up to 20 buckets or tins.");
+    expect(text(q('[data-frerr="socialLink"]'))).toBe("Paste the full link, starting https://");
+    const buckets = q('#frEditForm [name="buckets"]') as HTMLInputElement;
+    expect(buckets.getAttribute("aria-invalid")).toBe("true");
+    expect(document.getElementById(buckets.getAttribute("aria-describedby")!)).toBe(q('[data-frerr="wants.buckets"]'));
+  });
+});
+
+describe("pounds typed with commas", () => {
+  it("takes a comma between thousands", async () => {
+    records = [fundraiser(1, { status: "approved" })];
+    await openFundraising();
+    await openRow(1);
+    setValue('#frCashForm [name="amount"]', "£1,250.50");
+    submit("#frCashForm");
+    await settle();
+    expect(sent("POST", "/api/admin/fundraisers/1/cash")[0].body).toMatchObject({ amountPence: 125050 });
+  });
+
+  it("asks for a full stop rather than reading 12,50 as £1,250", async () => {
+    records = [fundraiser(1, { status: "approved" })];
+    await openFundraising();
+    await openRow(1);
+    setValue('#frCashForm [name="amount"]', "12,50");
+    submit("#frCashForm");
+    await settle();
+    expect(sent("POST", "/api/admin/fundraisers/1/cash")).toHaveLength(0);
+    expect(text(q('[data-frerr="amountPence"]'))).toBe("Use a full stop for the pence, like 12.50.");
+    setValue('#frEditForm [name="target"]', "250,50");
+    submit("#frEditForm");
+    await settle();
+    expect(sent("PATCH", "/api/admin/fundraisers/1")).toHaveLength(0);
+    expect(text(q('[data-frerr="targetPence"]'))).toBe("Use a full stop for the pence, like 250.50.");
   });
 });
 

@@ -8826,7 +8826,7 @@
   var frHistoryRows = null; // null loading, false failed, else the rows
   var frMore = {}; // list, wall, history -> showing everything
   var frNotice = {}; // detail, edit, cash, photo -> { msg, error }: said once after an action
-  var frEditDraft = null; // what is typed in the edit form, so a redraw never throws it away
+  var frEditDraft = null; // the edit form's boxes someone typed in (name -> value), so a redraw keeps them
   var frEditErrors = {};
   var frCashDraft = null;
   var frCashErrors = {};
@@ -8846,12 +8846,21 @@
     var n = Number(pence);
     return n % 100 === 0 ? String(n / 100) : (n / 100).toFixed(2);
   }
-  // "12.50", "£1,250" or "250" -> pence; "" -> null; anything else -> NaN.
+  // "12.50", "£1,250", "1,250.50" or "250" -> pence; "" -> null; anything else -> NaN. A comma only
+  // counts between thousands: "12,50" is how some write twelve pounds fifty, and reading it as
+  // £1,250 would put a hundred times the money on the meter.
   function frParsePounds(value) {
-    var s = String(value || "").replace(/[£,\s]/g, "");
+    var s = String(value || "").replace(/[£\s]/g, "");
     if (s === "") return null;
+    if (/^\d{1,3}(,\d{3})+(\.\d{1,2})?$/.test(s)) s = s.replace(/,/g, "");
     if (!/^\d+(\.\d{1,2})?$/.test(s)) return NaN;
     return Math.round(parseFloat(s) * 100);
+  }
+  // What to say when frParsePounds could not read it; example is whole pounds, like "12".
+  function frPoundsMessage(value, example) {
+    return /,\d{1,2}$/.test(String(value || "").trim())
+      ? "Use a full stop for the pence, like " + example + ".50."
+      : "Give the amount in pounds, like " + example + ".50.";
   }
   function frWho(actor) {
     var a = String(actor || "");
@@ -8874,11 +8883,25 @@
   function frPathWords(path) {
     return path === "event" ? "Holding an event" : "Raising money";
   }
-  function frSay(key, msg, error) {
-    frNotice[key] = { msg: msg, error: !!error };
+  // A message belongs to the sign up it is about (id), and only shows while that one is open.
+  function frSay(key, msg, error, id) {
+    frNotice[key] = { msg: msg, error: !!error, id: id === undefined ? frOpenId : id };
+  }
+  function frNoticeFor(key) {
+    var n = frNotice[key];
+    return n && n.id === frOpenId ? n : { msg: "", error: false };
+  }
+  var FR_NOTICE_IDS = { detail: "frDetailStatus", edit: "frEditStatus", cash: "frCashStatus", photo: "frPhotoStatus" };
+  // Says it now, in place, without a redraw: "Adding…" has to show while the request is out.
+  function frPaintNotice(key) {
+    var line = el(FR_NOTICE_IDS[key]);
+    if (!line) return;
+    var n = frNoticeFor(key);
+    line.textContent = n.msg;
+    line.className = "ty-status fr-status-line" + (n.error ? " is-error" : n.msg ? " is-ok" : "");
   }
   function frNoticeHtml(key, id) {
-    var n = frNotice[key] || { msg: "", error: false };
+    var n = frNoticeFor(key);
     return '<p class="ty-status fr-status-line' + (n.error ? " is-error" : n.msg ? " is-ok" : "") + '" id="' + id +
       '" role="status" aria-live="polite">' + H.escapeHtml(n.msg) + "</p>";
   }
@@ -9123,6 +9146,7 @@
       (showAll ? "" : '<div class="fr-more-row">' + frMoreButton("list", FR_LIST_FIRST, rows.length) + "</div>");
     nlFitBoxes(Array.prototype.slice.call(wrap.querySelectorAll("textarea.fr-input")));
     frPaintHistory();
+    frRestDetail();
     frRestoreFocus(wrap);
   }
 
@@ -9340,12 +9364,17 @@
     );
   }
 
+  // The server names a field inside another with a dot ("wants.buckets"), which is no good in an id.
+  function frErrId(key) {
+    return "frErr-" + String(key).replace(/[^A-Za-z0-9]/g, "-");
+  }
   function frFieldError(errors, key) {
     var msg = errors[key];
-    return '<p class="fr-err" id="frErr-' + key + '" data-frerr="' + key + '"' + (msg ? "" : " hidden") + ">" + H.escapeHtml(msg || "") + "</p>";
+    return '<p class="fr-err" id="' + frErrId(key) + '" data-frerr="' + H.escapeHtml(key) + '"' + (msg ? "" : " hidden") + ">" +
+      H.escapeHtml(msg || "") + "</p>";
   }
   function frInvalid(errors, key) {
-    return errors[key] ? ' aria-invalid="true" aria-describedby="frErr-' + key + '"' : "";
+    return errors[key] ? ' aria-invalid="true" aria-describedby="' + frErrId(key) + '"' : "";
   }
 
   function frCashPanel(rows, write) {
@@ -9383,44 +9412,80 @@
     );
   }
 
+  // Every field staff may change (adminPatchSchema in src/fundraising/model.ts), as the form shows
+  // them. Strings throughout, so what is typed compares straight with what is live.
   function frEditValues(f) {
+    var w = f.wants || {};
     return {
-      title: f.title || "", kind: f.kind || "other", description: f.description || "", eventDate: f.eventDate || "",
-      startTime: f.startTime ? String(f.startTime).slice(0, 5) : "", venue: f.venue || "", town: f.town || "",
-      target: frPounds(f.targetPence), public: !!f.public, slug: f.slug || "",
+      title: f.title || "", kind: f.kind || "other", path: f.path || "raising", description: f.description || "",
+      eventDate: f.eventDate || "", startTime: f.startTime ? String(f.startTime).slice(0, 5) : "", venue: f.venue || "",
+      town: f.town || "", target: frPounds(f.targetPence), public: !!f.public, slug: f.slug || "",
+      name: f.name || "", email: f.email || "", phone: f.phone || "", socialLink: f.socialLink || "", socialOk: !!f.socialOk,
+      postAddress: f.postAddress || "", leaflets: String(Number(w.leaflets) || 0), buckets: String(Number(w.buckets) || 0),
+      shoutOut: !!w.shoutOut, attend: !!w.attend,
     };
   }
+  var FR_TEXT_FIELDS = ["title", "kind", "path", "description", "venue", "town", "slug", "name", "email", "phone", "socialLink", "postAddress"];
 
   function frEditForm(f) {
-    var v = frEditDraft || frEditValues(f);
+    // What is live, with only the boxes someone has typed in laid over it (frEditDraft).
+    var v = frEditValues(f);
+    var draft = frEditDraft || {};
+    Object.keys(draft).forEach(function (k) { if (Object.prototype.hasOwnProperty.call(v, k)) v[k] = draft[k]; });
     var e = frEditErrors;
-    function text(name, key, label, type, attrs, hint) {
+    function box(name, key, label, type, attrs, hint) {
       // A hint goes under its box, so the boxes in a row of fields stay level with each other.
       return '<div class="fr-field"><label class="fx-call-label" for="frf-' + name + '">' + H.escapeHtml(label) + "</label>" +
         '<input class="fx-call-input" id="frf-' + name + '" name="' + name + '" type="' + type + '" ' + (attrs || "") +
         ' value="' + H.escapeHtml(v[name]) + '"' + frInvalid(e, key) + ">" + frFieldError(e, key) +
         (hint ? '<span class="fr-field-hint">' + H.escapeHtml(hint) + "</span>" : "") + "</div>";
     }
-    var kinds = FR_KINDS.map(function (k) {
-      return '<option value="' + k[0] + '"' + (v.kind === k[0] ? " selected" : "") + ">" + H.escapeHtml(k[1]) + "</option>";
-    }).join("");
+    function area(name, key, label, rows, max) {
+      return '<div class="fr-field fr-field--wide"><label class="fx-call-label" for="frf-' + name + '">' + H.escapeHtml(label) + "</label>" +
+        '<textarea class="fx-call-input fr-input" id="frf-' + name + '" name="' + name + '" rows="' + rows + '" maxlength="' + max + '"' +
+        frInvalid(e, key) + ">" + H.escapeHtml(v[name]) + "</textarea>" + frFieldError(e, key) + "</div>";
+    }
+    function pick(name, label, options) {
+      return '<div class="fr-field"><label class="fx-call-label" for="frf-' + name + '">' + H.escapeHtml(label) + "</label>" +
+        '<select class="fx-call-input" id="frf-' + name + '" name="' + name + '"' + frInvalid(e, name) + ">" +
+        options.map(function (o) {
+          return '<option value="' + o[0] + '"' + (v[name] === o[0] ? " selected" : "") + ">" + H.escapeHtml(o[1]) + "</option>";
+        }).join("") + "</select>" + frFieldError(e, name) + "</div>";
+    }
+    function tick(name, key, label) {
+      return '<div class="fr-field fr-field--wide"><label class="fr-check"><input type="checkbox" id="frf-' + name + '" name="' + name + '"' +
+        (v[name] ? " checked" : "") + frInvalid(e, key) + "> " + H.escapeHtml(label) + "</label>" + frFieldError(e, key) + "</div>";
+    }
+    function head(words) {
+      return '<p class="fr-form-head">' + H.escapeHtml(words) + "</p>";
+    }
     return (
       '<p class="fx-help">Changes here go straight onto the website. Only what you change is saved, and it is recorded in History.</p>' +
       '<form class="fx-call-form fr-form" id="frEditForm" novalidate>' +
-        text("title", "title", "Name for it", "text", 'maxlength="100" autocomplete="off"') +
-        '<div class="fr-field"><label class="fx-call-label" for="frf-kind">Kind</label>' +
-          '<select class="fx-call-input" id="frf-kind" name="kind"' + frInvalid(e, "kind") + ">" + kinds + "</select>" + frFieldError(e, "kind") + "</div>" +
-        '<div class="fr-field fr-field--wide"><label class="fx-call-label" for="frf-description">About it</label>' +
-          '<textarea class="fx-call-input fr-input" id="frf-description" name="description" rows="4" maxlength="1000"' + frInvalid(e, "description") + ">" +
-          H.escapeHtml(v.description) + "</textarea>" + frFieldError(e, "description") + "</div>" +
-        text("eventDate", "eventDate", "Date (optional)", "date", "") +
-        text("startTime", "startTime", "Start time (optional)", "time", "") +
-        text("venue", "venue", "Venue (optional)", "text", 'maxlength="120" autocomplete="off"') +
-        text("town", "town", "Town (optional)", "text", 'maxlength="80" autocomplete="off"') +
-        text("target", "targetPence", "Target in pounds (optional)", "text", 'inputmode="decimal" autocomplete="off"', "From £10 to £100,000. Leave it empty for no target.") +
-        text("slug", "slug", "Web address", "text", 'maxlength="60" autocomplete="off" spellcheck="false"', "The end of nbcc.scot/fundraise/ in small letters and numbers, with a hyphen between words.") +
-        '<div class="fr-field fr-field--wide"><label class="fr-check"><input type="checkbox" name="public"' + (v.public ? " checked" : "") +
-          frInvalid(e, "public") + "> Show it on our website</label>" + frFieldError(e, "public") + "</div>" +
+        head("The fundraiser") +
+        box("title", "title", "Name for it", "text", 'maxlength="100" autocomplete="off"') +
+        pick("kind", "Kind", FR_KINDS) +
+        pick("path", "They are", [["raising", "Raising money"], ["event", "Holding an event"]]) +
+        area("description", "description", "About it", 4, 1000) +
+        box("eventDate", "eventDate", "Date (optional)", "date", "") +
+        box("startTime", "startTime", "Start time (optional)", "time", "") +
+        box("venue", "venue", "Venue (optional)", "text", 'maxlength="120" autocomplete="off"') +
+        box("town", "town", "Town (optional)", "text", 'maxlength="80" autocomplete="off"') +
+        box("target", "targetPence", "Target in pounds (optional)", "text", 'inputmode="decimal" autocomplete="off"', "From £10 to £100,000. Leave it empty for no target.") +
+        box("slug", "slug", "Web address", "text", 'maxlength="60" autocomplete="off" spellcheck="false"', "The end of nbcc.scot/fundraise/ in small letters and numbers, with a hyphen between words.") +
+        tick("public", "public", "Show it on our website") +
+        head("The organiser") +
+        box("name", "name", "Name", "text", 'maxlength="100" autocomplete="off"') +
+        box("email", "email", "Email", "email", 'maxlength="254" autocomplete="off" spellcheck="false"') +
+        box("phone", "phone", "Phone", "tel", 'maxlength="20" autocomplete="off"') +
+        box("socialLink", "socialLink", "Facebook or Instagram link (optional)", "url", 'maxlength="300" autocomplete="off" spellcheck="false"') +
+        tick("socialOk", "socialOk", "They are happy for NBCC to post about it on social media") +
+        head("What they would like") +
+        box("leaflets", "wants.leaflets", "Leaflets or posters", "text", 'inputmode="numeric" autocomplete="off"', "How many. 0 for none, up to 1,000.") +
+        box("buckets", "wants.buckets", "Buckets or tins to borrow", "text", 'inputmode="numeric" autocomplete="off"', "How many. 0 for none, up to 20.") +
+        tick("shoutOut", "wants.shoutOut", "A social media shout out") +
+        tick("attend", "wants.attend", "Someone from NBCC to come along") +
+        area("postAddress", "postAddress", "Where to post leaflets or a bucket (optional)", 3, 500) +
         '<div class="fx-call-row fr-field--wide"><button class="admin-btn admin-btn--small" type="submit">Save the changes</button></div>' +
         frNoticeHtml("edit", "frEditStatus") +
       "</form>"
@@ -9503,46 +9568,69 @@
   // Every write: { ok, status, body }, so a refusal's own words (and a form's field messages) reach
   // the person. A 401 has already gone back to sign in, inside authFetch.
   function frSend(method, path, body) {
-    frSetBusy(true);
     return authFetch(path, {
       method: method,
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body || {}),
-    })
-      .then(function (res) {
-        return res.json().catch(function () { return {}; }).then(function (b) {
-          return { ok: res.ok, status: res.status, body: b || {} };
-        });
-      })
-      .then(
-        function (r) {
-          frSetBusy(false);
-          return r;
-        },
-        function (err) {
-          frSetBusy(false);
-          throw err;
-        }
-      );
+    }).then(function (res) {
+      return res.json().catch(function () { return {}; }).then(function (b) {
+        return { ok: res.ok, status: res.status, body: b || {} };
+      });
+    });
   }
   function frSetBusy(on) {
     frBusy = on;
     var view = el("view-fundraising");
     if (view) view.setAttribute("aria-busy", on ? "true" : "false");
+    if (on) frRestDetail();
+  }
+  // While a change is on its way, every button and the photo picker in the open sign up rest, so a
+  // second press cannot send it twice. frRenderList calls this too, as a redraw makes them afresh.
+  function frRestDetail() {
+    var wrap = el("frList");
+    if (!wrap || !frBusy) return;
+    Array.prototype.forEach.call(wrap.querySelectorAll("[data-frdetail] button, #frPhotoInput"), function (b) {
+      b.disabled = true;
+    });
   }
   function frRefusal(r, fallback) {
     return r.status < 500 && r.body && typeof r.body.error === "string" && r.body.error ? r.body.error : fallback;
   }
-  function frFailed(key) {
-    return function (err) {
-      if (err && err.message === "unauthorized") return;
-      frSay(key, "That did not work. Please try again.", true);
-      frRenderList();
-    };
-  }
 
   function frOpenRecord() {
     return frDetail && frDetail.fundraiser;
+  }
+
+  // One change at a time, from the press to the redraw after it. Busy holds until the sign up has
+  // been read again, not only until the server answers, because until then the old form (with the
+  // amount still in it) is on screen and would send the same thing again. Each message belongs to
+  // the sign up it was about, so a late answer never lands under another one opened meanwhile.
+  //   key   which status line speaks (detail, edit, cash, photo)
+  //   doing what it says at once ("Adding…"), or null for nothing
+  //   work  given { id, open(), say(msg, isError) }; returns a promise
+  function frRun(key, doing, work) {
+    if (frBusy) return;
+    var id = frOpenId;
+    var run = {
+      id: id,
+      open: function () { return frOpenId === id; },
+      say: function (msg, isError) { frSay(key, msg, isError, id); },
+    };
+    if (doing) {
+      run.say(doing, false);
+      frPaintNotice(key);
+    }
+    frSetBusy(true);
+    return Promise.resolve()
+      .then(function () { return work(run); })
+      .catch(function (err) {
+        if (err && err.message === "unauthorized") return;
+        run.say("That did not work. Please try again.", true);
+      })
+      .then(function () {
+        frSetBusy(false);
+        frRenderList();
+      });
   }
 
   function frMove(move) {
@@ -9550,10 +9638,11 @@
     var f = frOpenRecord();
     if (!f) return;
     var hasPage = f.path === "raising" && f.public;
+    var pageOn = !!(frSettings && frSettings.pageOn);
     var question = {
       approve: "Approve " + f.title + "? We email " + f.name + " straight away: " +
         (!hasPage ? "a short note to say they are on our list."
-          : frSettings && frSettings.pageOn ? "their page link, and the page goes on the website."
+          : pageOn ? "their page link, and the page goes on the website."
           : "a note that their page will appear when fundraising is switched on."),
       decline: "Decline " + f.title + "?" + (f.status === "approved" ? " It comes off the website straight away." : "") +
         " They are not emailed, so tell them yourself if you need to.",
@@ -9565,25 +9654,25 @@
       var reason = String(frReasonDraft || "").trim();
       if (reason) body.reason = reason;
     }
-    frSay("detail", "Saving…", false);
-    frSend("POST", "/api/admin/fundraisers/" + f.id + "/" + move, body)
-      .then(function (r) {
+    frRun("detail", "Saving…", function (run) {
+      return frSend("POST", "/api/admin/fundraisers/" + f.id + "/" + move, body).then(function (r) {
         if (!r.ok) {
-          frSay("detail", frRefusal(r, "That did not work. Please try again."), true);
+          run.say(frRefusal(r, "That did not work. Please try again."), true);
           return frReload();
         }
-        frReasonDraft = "";
-        frSay("detail", {
-          // While fundraising is off the email says their page will appear when it opens, not the link.
-          approve: hasPage && frSettings && frSettings.pageOn
-            ? "Approved, and the organiser has been emailed their page link."
-            : "Approved, and the organiser has been emailed.",
+        if (run.open()) frReasonDraft = "";
+        // The server sends the email after the approval has saved, best effort, so this says it is
+        // on its way rather than that it arrived. While fundraising is off it carries no page link.
+        run.say({
+          approve: hasPage && pageOn
+            ? "Approved. An email with their page link is on its way to the organiser."
+            : "Approved. An email to the organiser is on its way.",
           decline: "Declined.",
           finish: "Marked finished.",
         }[move], false);
         return frReload();
-      })
-      .catch(frFailed("detail"));
+      });
+    });
   }
 
   function frDecideEdit(btn) {
@@ -9596,28 +9685,32 @@
       ? "Approve this change? It goes on the website straight away."
       : "Reject this change? The page stays as it is, and the organiser is not emailed.";
     if (!window.confirm(question)) return;
-    frSend("POST", "/api/admin/fundraisers/" + f.id + "/edits/" + encodeURIComponent(editId) + "/" + (approve ? "approve" : "reject"))
-      .then(function (r) {
-        // A 409 means the change was dealt with, or replaced by a newer one, while this was open:
-        // the reload shows whatever is waiting now, with the server's words above it.
-        if (!r.ok) frSay("detail", frRefusal(r, "That did not work. Please try again."), true);
-        else frSay("detail", approve ? "Change approved. It is on the website now." : "Change rejected. The page stays as it was.", false);
-        return frReload();
-      })
-      .catch(frFailed("detail"));
+    frRun("detail", "Saving…", function (run) {
+      return frSend("POST", "/api/admin/fundraisers/" + f.id + "/edits/" + encodeURIComponent(editId) + "/" + (approve ? "approve" : "reject"))
+        .then(function (r) {
+          // A 409 means the change was dealt with, or replaced by a newer one, while this was open:
+          // the reload shows whatever is waiting now, with the server's words above it.
+          if (!r.ok) run.say(frRefusal(r, "That did not work. Please try again."), true);
+          else {
+            // What was typed in the edit form was typed against the old version. Kept, it would show
+            // the old words and Save would send them back over the change just approved.
+            if (approve && run.open()) {
+              frEditDraft = null;
+              frEditErrors = {};
+            }
+            run.say(approve ? "Change approved. It is on the website now." : "Change rejected. The page stays as it was.", false);
+          }
+          return frReload();
+        });
+    });
   }
 
   function frReadEditForm(form) {
-    function val(n) {
-      var i = form.querySelector('[name="' + n + '"]');
-      return i ? String(i.value || "") : "";
-    }
-    var pub = form.querySelector('[name="public"]');
-    return {
-      title: val("title"), kind: val("kind"), description: val("description"), eventDate: val("eventDate"),
-      startTime: val("startTime"), venue: val("venue"), town: val("town"), target: val("target"),
-      public: !!(pub && pub.checked), slug: val("slug"),
-    };
+    var out = {};
+    Array.prototype.forEach.call(form.querySelectorAll("[name]"), function (i) {
+      out[i.name] = i.type === "checkbox" ? !!i.checked : String(i.value || "");
+    });
+    return out;
   }
 
   function frSaveEdit(form) {
@@ -9625,24 +9718,39 @@
     var f = frOpenRecord();
     if (!f) return;
     var typed = frReadEditForm(form);
-    frEditDraft = typed;
     var live = frEditValues(f);
     var patch = {};
-    ["title", "kind", "description", "venue", "town", "slug"].forEach(function (k) {
-      if (typed[k] !== live[k]) patch[k] = typed[k];
+    var errors = {};
+    // Only what differs from the live version is sent.
+    FR_TEXT_FIELDS.forEach(function (k) {
+      if (typed[k] !== undefined && typed[k] !== live[k]) patch[k] = typed[k];
     });
     ["eventDate", "startTime"].forEach(function (k) {
-      if (typed[k] !== live[k]) patch[k] = typed[k] === "" ? null : typed[k];
+      if (typed[k] !== undefined && typed[k] !== live[k]) patch[k] = typed[k] === "" ? null : typed[k];
     });
-    if (typed.public !== live.public) patch.public = typed.public;
+    ["public", "socialOk"].forEach(function (k) {
+      if (typed[k] !== undefined && typed[k] !== live[k]) patch[k] = typed[k];
+    });
     var target = frParsePounds(typed.target);
-    if (typeof target === "number" && isNaN(target)) {
-      frEditErrors = { targetPence: "Give the target in pounds, like 250 or 250.50." };
+    if (typeof target === "number" && isNaN(target)) errors.targetPence = frPoundsMessage(typed.target, "250");
+    else if (target !== (f.targetPence === undefined ? null : f.targetPence)) patch.targetPence = target;
+    var counts = {};
+    [["leaflets", "50"], ["buckets", "2"]].forEach(function (c) {
+      var raw = String(typed[c[0]] === undefined ? live[c[0]] : typed[c[0]]).trim();
+      if (!/^\d+$/.test(raw)) errors["wants." + c[0]] = "Give a whole number, like " + c[1] + ", or 0 for none.";
+      else counts[c[0]] = Number(raw);
+    });
+    if (Object.keys(errors).length) {
+      frEditErrors = errors;
       frSay("edit", "Some of it needs another look", true);
       frRenderList();
       return;
     }
-    if (target !== (f.targetPence === undefined ? null : f.targetPence)) patch.targetPence = target;
+    var wants = { leaflets: counts.leaflets, buckets: counts.buckets, shoutOut: !!typed.shoutOut, attend: !!typed.attend };
+    if (String(wants.leaflets) !== live.leaflets || String(wants.buckets) !== live.buckets ||
+        wants.shoutOut !== live.shoutOut || wants.attend !== live.attend) {
+      patch.wants = wants; // the server takes what they would like as a whole
+    }
     if (!Object.keys(patch).length) {
       frEditErrors = {};
       frSay("edit", "Nothing has changed, so there is nothing to save.", false);
@@ -9650,21 +9758,24 @@
       return;
     }
     frEditErrors = {};
-    frSay("edit", "Saving…", false);
-    frSend("PATCH", "/api/admin/fundraisers/" + f.id, patch)
-      .then(function (r) {
+    frRun("edit", "Saving…", function (run) {
+      return frSend("PATCH", "/api/admin/fundraisers/" + f.id, patch).then(function (r) {
         if (!r.ok) {
-          if (r.status === 400 && r.body && r.body.fields) frEditErrors = r.body.fields;
-          else if (r.status === 409) frEditErrors = { slug: frRefusal(r, "Another fundraiser already uses that web address") };
-          frSay("edit", frRefusal(r, "That did not save. Please try again."), true);
-          frRenderList();
+          if (run.open()) {
+            if (r.status === 400 && r.body && r.body.fields) frEditErrors = r.body.fields;
+            else if (r.status === 409) frEditErrors = { slug: frRefusal(r, "Another fundraiser already uses that web address") };
+          }
+          run.say(frRefusal(r, "That did not save. Please try again."), true);
           return;
         }
-        frEditDraft = null;
-        frSay("edit", "Saved.", false);
+        if (run.open()) {
+          frEditDraft = null;
+          frEditErrors = {};
+        }
+        run.say("Saved.", false);
         return frReload();
-      })
-      .catch(frFailed("edit"));
+      });
+    });
   }
 
   function frAddCash(form) {
@@ -9678,27 +9789,26 @@
     frCashDraft = { amount: val("amount"), paidInOn: val("paidInOn"), note: val("note") };
     var pence = frParsePounds(frCashDraft.amount);
     if (pence === null || isNaN(pence) || pence < 1) {
-      frCashErrors = { amountPence: "Give the amount in pounds, like 12.50." };
+      frCashErrors = { amountPence: frPoundsMessage(frCashDraft.amount, "12") };
       frSay("cash", "", false);
       frRenderList();
       return;
     }
     frCashErrors = {};
-    frSay("cash", "Adding…", false);
     var body = { amountPence: pence, paidInOn: frCashDraft.paidInOn, note: frCashDraft.note.trim() };
-    frSend("POST", "/api/admin/fundraisers/" + f.id + "/cash", body)
-      .then(function (r) {
+    frRun("cash", "Adding…", function (run) {
+      return frSend("POST", "/api/admin/fundraisers/" + f.id + "/cash", body).then(function (r) {
         if (!r.ok) {
-          if (r.status === 400 && r.body && r.body.fields) frCashErrors = r.body.fields;
-          frSay("cash", frRefusal(r, "That was not added. Please try again."), true);
-          frRenderList();
+          if (run.open() && r.status === 400 && r.body && r.body.fields) frCashErrors = r.body.fields;
+          run.say(frRefusal(r, "That was not added. Please try again."), true);
           return;
         }
-        frCashDraft = null;
-        frSay("cash", frMoney(pence) + " added. The meter now counts it.", false);
+        // Added: the form empties, so the same amount is not sitting there ready to go twice.
+        if (run.open()) frCashDraft = null;
+        run.say(frMoney(pence) + " added. The meter now counts it.", false);
         return frReload();
-      })
-      .catch(frFailed("cash"));
+      });
+    });
   }
 
   function frRemoveCash(cashId) {
@@ -9708,24 +9818,25 @@
     var row = (frDetail.cash || []).filter(function (c) { return String(c.id) === String(cashId); })[0];
     if (!row) return;
     if (!window.confirm("Remove " + frMoney(row.amountPence) + " paid in on " + H.fmtDate(row.paidInOn) + "? The meter comes down by the same.")) return;
-    frSend("DELETE", "/api/admin/fundraisers/" + f.id + "/cash/" + encodeURIComponent(cashId))
-      .then(function (r) {
-        frSay("cash", r.ok ? frMoney(row.amountPence) + " removed." : frRefusal(r, "That was not removed. Please try again."), !r.ok);
+    frRun("cash", "Removing…", function (run) {
+      return frSend("DELETE", "/api/admin/fundraisers/" + f.id + "/cash/" + encodeURIComponent(cashId)).then(function (r) {
+        run.say(r.ok ? frMoney(row.amountPence) + " removed." : frRefusal(r, "That was not removed. Please try again."), !r.ok);
         return frReload();
-      })
-      .catch(frFailed("cash"));
+      });
+    });
   }
 
   function frWallChoice(donationId, hide) {
     if (frBusy) return;
     var f = frOpenRecord();
     if (!f) return;
-    frSend("POST", "/api/admin/fundraisers/" + f.id + "/wall/" + encodeURIComponent(donationId) + "/" + (hide ? "hide" : "show"))
-      .then(function (r) {
-        if (!r.ok) frSay("detail", frRefusal(r, "That did not work. Please try again."), true);
-        return frReload();
-      })
-      .catch(frFailed("detail"));
+    frRun("detail", null, function (run) {
+      return frSend("POST", "/api/admin/fundraisers/" + f.id + "/wall/" + encodeURIComponent(donationId) + "/" + (hide ? "hide" : "show"))
+        .then(function (r) {
+          if (!r.ok) run.say(frRefusal(r, "That did not work. Please try again."), true);
+          return frReload();
+        });
+    });
   }
 
   function frUploadPhoto(input) {
@@ -9733,15 +9844,33 @@
     var f = frOpenRecord();
     var file = input.files && input.files[0];
     if (!f || !file) return;
-    var status = el("frPhotoStatus");
-    evUpload(file, status, function (src) {
-      frSend("PATCH", "/api/admin/fundraisers/" + f.id, { imageSrc: src })
-        .then(function (r) {
-          frSay("photo", r.ok ? "Uploaded. It is the photo on its page now." : frRefusal(r, "The photo did not save. Please try again."), !r.ok);
-          return frReload();
-        })
-        .catch(frFailed("photo"));
-    }, "/api/admin/fundraiser-images");
+    frRun("photo", "Uploading…", function (run) {
+      return new Promise(function (finish) {
+        // evUpload writes its progress into this; what it says is kept in frNotice instead, so the
+        // redraw after an upload cannot throw the message away.
+        var sink = doc.createElement("p");
+        evUpload(
+          file,
+          sink,
+          function (src) {
+            frSend("PATCH", "/api/admin/fundraisers/" + f.id, { imageSrc: src })
+              .then(function (r) {
+                run.say(r.ok ? "Uploaded. It is the photo on its page now." : frRefusal(r, "The photo did not save. Please try again."), !r.ok);
+                return frReload();
+              })
+              .then(finish, function (err) {
+                if (!(err && err.message === "unauthorized")) run.say("The photo did not save. Please try again.", true);
+                finish();
+              });
+          },
+          "/api/admin/fundraiser-images",
+          function (message) {
+            if (message) run.say(message, true);
+            finish();
+          }
+        );
+      });
+    });
   }
 
   function frWire() {
@@ -9796,8 +9925,11 @@
       var t = e.target;
       if (!t || !t.closest) return;
       if (t.id === "frDeclineReason") frReasonDraft = t.value;
-      var editForm = t.closest("#frEditForm");
-      if (editForm) frEditDraft = frReadEditForm(editForm);
+      // Only the boxes typed in are kept: the rest always show what is live now.
+      if (t.closest("#frEditForm") && t.name) {
+        frEditDraft = frEditDraft || {};
+        frEditDraft[t.name] = t.type === "checkbox" ? !!t.checked : String(t.value || "");
+      }
       var cashForm = t.closest("#frCashForm");
       if (cashForm) {
         frCashDraft = {
@@ -11280,11 +11412,13 @@
   // ---- pictures ----
   // TASK-495: url is where the picture goes; Admin > Fundraising sends its photos to its own upload,
   // gated on fundraising rather than events. Events pictures go where they always have.
-  function evUpload(file, statusEl, done, url) {
+  // failed (optional, TASK-495) hears every way it can end without a picture, with what was said.
+  function evUpload(file, statusEl, done, url, failed) {
     if (!file) return;
     if (!/^image\//.test(file.type)) {
       statusEl.className = "ty-status is-error";
       statusEl.textContent = "That file is not a picture. Try a JPG or PNG.";
+      if (failed) failed(statusEl.textContent);
       return;
     }
     statusEl.className = "ty-status";
@@ -11302,6 +11436,7 @@
           if (r.status !== 201) {
             statusEl.className = "ty-status is-error";
             statusEl.textContent = r.body.error || nlUploadHttpMessage(r.status);
+            if (failed) failed(statusEl.textContent);
             return;
           }
           statusEl.className = "ty-status is-ok";
@@ -11309,9 +11444,13 @@
           done(r.body.src);
         })
         .catch(function (err) {
-          if (err && err.message === "unauthorized") return;
+          if (err && err.message === "unauthorized") {
+            if (failed) failed("");
+            return;
+          }
           statusEl.className = "ty-status is-error";
           statusEl.textContent = "Upload failed. Please try again.";
+          if (failed) failed(statusEl.textContent);
         });
     }
     // Shrunk in the browser first, exactly as a newsletter picture is (TASK-300): phone photos are

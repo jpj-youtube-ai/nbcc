@@ -2635,6 +2635,9 @@ textarea.fx-call-input{min-height:88px;line-height:1.5;resize:vertical;field-siz
   border-top: 1px solid var(--line);
 }
 #view-fundraising .fr-field { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+/* A heading for each part of the edit form: the fundraiser, the organiser, what they would like. */
+#view-fundraising .fr-form-head { grid-column: 1 / -1; margin: 10px 0 0; font-weight: 700; font-size: 0.92rem; color: var(--maroon); }
+#view-fundraising .fr-form-head:first-child { margin-top: 0; }
 #view-fundraising .fr-field--wide,
 #view-fundraising .fr-form > .fr-status-line { grid-column: 1 / -1; }
 #view-fundraising .fr-form .fx-call-input[aria-invalid="true"] { border-color: var(--crimson); }

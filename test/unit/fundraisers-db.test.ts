@@ -124,7 +124,7 @@ describe("an organiser saving a change while one is waiting", () => {
       if (sql.startsWith("SELECT id, changes, status")) return { rows: [{ id: 4, changes: { targetPence: 75000 }, status: "waiting", created_at: "2026-10-02T12:00:00Z" }] };
       return { rows: [] };
     });
-    const edit = await requestEdit(9, { targetPence: 75000 }, "hash");
+    const edit = await requestEdit(9, { targetPence: 75000 }, "sam@example.com");
     expect(edit.id).toBe(4);
     const sqls = calls.map(([s]) => s);
     expect(sqls.some((s) => /UPDATE fundraiser_edits SET status = 'replaced'/.test(s))).toBe(true);

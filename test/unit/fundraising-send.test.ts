@@ -8,7 +8,8 @@ const mail = vi.hoisted(() => ({
   sendFundraiseThanks: vi.fn(),
   sendFundraiseStaff: vi.fn(),
   sendFundraiseApproved: vi.fn(),
-  sendFundraiseManage: vi.fn(),
+  sendFundraiseCode: vi.fn(),
+  sendFundraiseFinishedStaff: vi.fn(),
   sendFundraiseEditApproved: vi.fn(),
   sendFundraiseEditRejected: vi.fn(),
 }));
@@ -19,7 +20,15 @@ vi.mock("../../src/config", () => ({
   config: { NODE_ENV: "test", PORTAL_BASE_URL: "https://nbcc.test", BALL_FROM_EMAIL: "events@nbcc.test" },
 }));
 
-import { sendSignUpEmails, sendApprovedEmail, sendWaitingLiveEmails, sendEditDecisionEmail } from "../../src/fundraising/send";
+import {
+  sendSignUpEmails,
+  sendApprovedEmail,
+  sendWaitingLiveEmails,
+  sendEditDecisionEmail,
+  sendSignInCodeEmail,
+  sendFinishedStaffEmail,
+  manageUrl,
+} from "../../src/fundraising/send";
 import type { FundraiserRecord } from "../../src/fundraising/model";
 
 const SPAM = "Cheap watches at spam.example, click now";
@@ -189,4 +198,46 @@ describe("after staff decide a change", () => {
     mail.sendFundraiseEditRejected.mockRejectedValue(new Error("SES is down"));
     await expect(sendEditDecisionEmail(record(), false, true)).resolves.toBe(false);
   });
+});
+
+// TASK-501: the sign in code (email 8) to the address asked for, and the note to the events inbox
+// when an organiser presses "I've finished".
+describe("the sign in code", () => {
+  it("goes to the email asked for, from and replying to the events inbox, with the code", async () => {
+    await sendSignInCodeEmail("sam@example.com", "Sam Example", "482915");
+    const [name, sent] = mail.sendFundraiseCode.mock.calls[0];
+    expect(name).toBe("Sam Example");
+    expect(sent).toMatchObject({ email: "sam@example.com", from: "events@nbcc.test", replyTo: "events@nbcc.test" });
+    expect(sent.subject).toBe("Your NBCC sign in code: 482 915");
+    expect(sent.text).toContain("Hi Sam,");
+  });
+
+  it("never throws, and never logs the code", async () => {
+    mail.sendFundraiseCode.mockRejectedValue(new Error("SES is down"));
+    const quiet = vi.spyOn(console, "error").mockImplementation(() => {});
+    await expect(sendSignInCodeEmail("sam@example.com", "Sam Example", "482915")).resolves.toBeUndefined();
+    expect(quiet.mock.calls.flat().map(String).join(" ")).not.toContain("482915");
+    quiet.mockRestore();
+  });
+});
+
+describe("I've finished, to the events inbox", () => {
+  it("goes to the events inbox, replying to the organiser", async () => {
+    await sendFinishedStaffEmail(record({ name: "Sam Example", title: "Sam's Walk" }), 12550);
+    const [, sent] = mail.sendFundraiseFinishedStaff.mock.calls[0];
+    expect(sent).toMatchObject({ email: "events@nbcc.test", from: "events@nbcc.test", replyTo: "victim@example.com" });
+    expect(sent.text).toContain("£125.50");
+    expect(sent.text).toContain("https://nbcc.test/admin");
+  });
+
+  it("never throws", async () => {
+    mail.sendFundraiseFinishedStaff.mockRejectedValue(new Error("SES is down"));
+    const quiet = vi.spyOn(console, "error").mockImplementation(() => {});
+    await expect(sendFinishedStaffEmail(record(), 0)).resolves.toBeUndefined();
+    quiet.mockRestore();
+  });
+});
+
+describe("the private area's address", () => {
+  it("is on the public site", () => expect(manageUrl()).toBe("https://nbcc.test/fundraise/manage"));
 });

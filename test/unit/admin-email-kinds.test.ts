@@ -25,9 +25,23 @@ describe("the names of email kinds on the Email audit", () => {
   });
 });
 
-// TASK-493: the four community fundraising emails each have a kind of their own, and a name.
+// TASK-493: the community fundraising emails each have a kind of their own, and a name.
 describe("the fundraising email kinds", () => {
-  it.each(["fundraiseThanks", "fundraiseStaff", "fundraiseApproved", "fundraiseManage"])("sends and names %s", (kind) => {
+  it.each(["fundraiseThanks", "fundraiseStaff", "fundraiseApproved"])("sends and names %s", (kind) => {
+    expect(sent).toContain(kind);
+    expect(labelled).toContain(kind);
+  });
+
+  // TASK-501: the 24 hour link is no longer sent, but the rows already in the log keep their name.
+  it("still names the retired manage link", () => {
+    expect(sent).not.toContain("fundraiseManage");
+    expect(labelled).toContain("fundraiseManage");
+  });
+});
+
+// TASK-501: the sign in code (email 8) and the note to events@ when an organiser has finished.
+describe("the fundraising private area email kinds", () => {
+  it.each(["fundraiseCode", "fundraiseFinishedStaff"])("sends and names %s", (kind) => {
     expect(sent).toContain(kind);
     expect(labelled).toContain(kind);
   });

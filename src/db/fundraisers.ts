@@ -101,7 +101,7 @@ const RECORD_COLUMNS = `f.id, f.slug, f.path, f.kind, f.title, f.description,
          f.post_line1, f.post_line2, f.post_town, f.post_postcode, f.card_line,
          to_char(f.end_time, 'HH24:MI') AS end_time,
          f.time_tbc, f.venue_address, f.venue_postcode, f.access, f.price, f.booking, f.ticket_url,
-         f.age_limit, f.dress_code, f.included, f.credit_name`;
+         f.age_limit, f.dress_code, f.included, f.credit_name, f.finished_requested_at`;
 const SELECT = `
   SELECT ${RECORD_COLUMNS}
     FROM fundraisers f`;
@@ -177,6 +177,7 @@ export function toRecord(r: Row): FundraiserRecord {
     dressCode: textOrNull(r.dress_code),
     included: textOrNull(r.included),
     creditName: textOrNull(r.credit_name),
+    finishedRequestedAt: iso(r.finished_requested_at),
   };
 }
 
@@ -391,7 +392,7 @@ export async function getBySlug(slug: string): Promise<(FundraiserRecord & { met
 export async function wallRows(fundraiserId: number): Promise<WallSourceRow[]> {
   const r = await pool.query(
     `SELECT d.id, dn.full_name, dn.anonymous, d.show_name, d.show_amount, d.amount_pence,
-            d.refunded_amount_pence, d.supporter_message, d.message_hidden, d.created_at
+            d.refunded_amount_pence, d.supporter_message, d.message_hidden, d.created_at, d.paid_in_by_organiser
        FROM donations d JOIN donors dn ON dn.id = d.donor_id
       WHERE d.fundraiser_id = $1 AND d.payment_status = 'paid'
       ORDER BY d.created_at DESC, d.id DESC
@@ -409,6 +410,7 @@ export async function wallRows(fundraiserId: number): Promise<WallSourceRow[]> {
     message: (row.supporter_message as string | null) ?? null,
     hidden: Boolean(row.message_hidden),
     createdAt: iso(row.created_at) as string,
+    paidIn: Boolean(row.paid_in_by_organiser),
   }));
 }
 
@@ -597,11 +599,25 @@ export async function markLiveEmailWaiting(id: number): Promise<void> {
 
 // --- changes from the organiser ------------------------------------------------------------------
 
-/** Store an organiser's change as waiting. A change of theirs already waiting is marked replaced. */
-export async function requestEdit(fundraiserId: number, changes: FundraiserEdit, tokenHash: string): Promise<EditRow> {
+const sameEmail = (a: string, b: string) => a.trim().toLowerCase() === b.trim().toLowerCase();
+
+// TASK-501: under the row's lock, the fundraiser must be the signed in organiser's own. Someone
+// else's reads as not there at all, so the answer never says whose it is.
+async function lockOwn(client: PoolClient, fundraiserId: number, email: string): Promise<FundraiserRecord> {
+  const f = await lockFundraiser(client, fundraiserId);
+  if (!sameEmail(f.email, email)) throw new FundraiserError("not_found");
+  if (f.status !== "approved") throw new FundraiserError("bad_status");
+  return f;
+}
+
+/**
+ * Store an organiser's change as waiting. A change of theirs already waiting is marked replaced.
+ * TASK-501: sent from the private area by the signed in organiser (`email`), and only for their own
+ * approved fundraiser.
+ */
+export async function requestEdit(fundraiserId: number, changes: FundraiserEdit, email: string): Promise<EditRow> {
   return inTransaction(async (client) => {
-    const f = await lockFundraiser(client, fundraiserId);
-    if (f.status !== "approved") throw new FundraiserError("bad_status");
+    await lockOwn(client, fundraiserId, email);
     const waiting = await client.query<{ id: number }>(
       "SELECT id FROM fundraiser_edits WHERE fundraiser_id = $1 AND status = 'waiting' FOR UPDATE",
       [fundraiserId],
@@ -616,13 +632,12 @@ export async function requestEdit(fundraiserId: number, changes: FundraiserEdit,
       [fundraiserId, JSON.stringify(changes)],
     );
     const editId = Number(ins.rows[0].id);
-    await client.query("UPDATE fundraiser_manage_tokens SET used_at = COALESCE(used_at, now()) WHERE token_hash = $1", [tokenHash]);
     await insertAudit(client, {
       actor: "organiser",
       action: "fundraiser.edit_requested",
       entity: "fundraiser",
       entityId: fundraiserId,
-      data: { editId, fields: Object.keys(changes), replaced: waiting.rows.map((r) => Number(r.id)) },
+      data: { editId, fields: Object.keys(changes), replaced: waiting.rows.map((r) => Number(r.id)), via: "private area" },
     });
     const r = await client.query(
       "SELECT id, changes, status, created_at, decided_at, decided_by FROM fundraiser_edits WHERE id = $1",
@@ -746,7 +761,49 @@ export async function setMessageHidden(fundraiserId: number, donationId: number,
   });
 }
 
-// --- manage links --------------------------------------------------------------------------------
+// --- "I've finished" (TASK-501) -----------------------------------------------------------------
+
+/**
+ * The organiser pressed "I've finished" in their private area. It records when (the first press is
+ * kept) and finishes nothing: staff do that. `first` says whether this press was the first, so staff
+ * are emailed once.
+ */
+export async function markFinishedRequested(
+  fundraiserId: number,
+  email: string,
+): Promise<{ record: FundraiserRecord; first: boolean }> {
+  return inTransaction(async (client) => {
+    const before = await lockOwn(client, fundraiserId, email);
+    const first = !before.finishedRequestedAt;
+    await client.query(
+      "UPDATE fundraisers SET finished_requested_at = COALESCE(finished_requested_at, now()) WHERE id = $1",
+      [fundraiserId],
+    );
+    if (first) {
+      await insertAudit(client, {
+        actor: "organiser",
+        action: "fundraiser.finish_requested",
+        entity: "fundraiser",
+        entityId: fundraiserId,
+        data: { slug: before.slug },
+      });
+    }
+    return { record: await reread(client, fundraiserId), first };
+  });
+}
+
+// --- the private area (TASK-501) ----------------------------------------------------------------
+
+/** Every approved fundraiser of this organiser's, newest first, with its meter. */
+export async function listForOrganiser(email: string): Promise<Array<FundraiserRecord & { meter: Meter; editWaiting: boolean }>> {
+  const r = await pool.query(
+    `${WITH_SUMS} WHERE lower(f.organiser_email) = lower($1) AND f.status = 'approved' ORDER BY f.created_at DESC, f.id DESC LIMIT 20`,
+    [email],
+  );
+  return r.rows.map((row) => ({ ...toRecord(row), meter: meterOf(row), editWaiting: Boolean(row.edit_waiting) }));
+}
+
+// --- organisers by email (the private area's sign in code, TASK-501) -----------------------------
 
 export async function findApprovedByEmail(email: string): Promise<FundraiserRecord[]> {
   const r = await pool.query(
@@ -754,31 +811,6 @@ export async function findApprovedByEmail(email: string): Promise<FundraiserReco
     [email],
   );
   return r.rows.map(toRecord);
-}
-
-export async function storeManageToken(record: { tokenHash: string; fundraiserId: number; expiresAt: Date }): Promise<void> {
-  await inTransaction(async (client) => {
-    await client.query(
-      "INSERT INTO fundraiser_manage_tokens (token_hash, fundraiser_id, expires_at) VALUES ($1, $2, $3)",
-      [record.tokenHash, record.fundraiserId, record.expiresAt],
-    );
-    await insertAudit(client, {
-      actor: "organiser",
-      action: "fundraiser.manage_link_sent",
-      entity: "fundraiser",
-      entityId: record.fundraiserId,
-      data: { expiresAt: record.expiresAt.toISOString() },
-    });
-  });
-}
-
-export async function findManageToken(tokenHash: string): Promise<{ fundraiserId: number; expiresAt: Date } | null> {
-  const r = await pool.query<{ fundraiser_id: number; expires_at: Date }>(
-    "SELECT fundraiser_id, expires_at FROM fundraiser_manage_tokens WHERE token_hash = $1",
-    [tokenHash],
-  );
-  const row = r.rows[0];
-  return row ? { fundraiserId: Number(row.fundraiser_id), expiresAt: new Date(row.expires_at) } : null;
 }
 
 export async function waitingEditFor(fundraiserId: number): Promise<EditRow | null> {
@@ -792,6 +824,8 @@ export interface FundraiserGift {
   message: string | null;
   showName: boolean;
   showAmount: boolean;
+  /** TASK-501: money the organiser collected and paid in from their private area. */
+  paidIn?: boolean;
 }
 
 /**
@@ -819,13 +853,21 @@ export async function linkFundraiserGift(
     });
     return false;
   }
-  await client.query(
-    "UPDATE donations SET fundraiser_id = $1, supporter_message = $2, show_name = $3, show_amount = $4 WHERE id = $5",
-    [gift.fundraiserId, gift.message, gift.showName, gift.showAmount, donationId],
-  );
+  if (gift.paidIn) {
+    // TASK-501: on the meter like any gift; never on the wall, so no message and nothing shown.
+    await client.query(
+      "UPDATE donations SET fundraiser_id = $1, supporter_message = $2, show_name = $3, show_amount = $4, paid_in_by_organiser = $5 WHERE id = $6",
+      [gift.fundraiserId, null, false, false, true, donationId],
+    );
+  } else {
+    await client.query(
+      "UPDATE donations SET fundraiser_id = $1, supporter_message = $2, show_name = $3, show_amount = $4 WHERE id = $5",
+      [gift.fundraiserId, gift.message, gift.showName, gift.showAmount, donationId],
+    );
+  }
   await insertAudit(client, {
     actor: "stripe",
-    action: "fundraiser.gift_received",
+    action: gift.paidIn ? "fundraiser.paid_in" : "fundraiser.gift_received",
     entity: "fundraiser",
     entityId: gift.fundraiserId,
     data: { eventId, donationId },

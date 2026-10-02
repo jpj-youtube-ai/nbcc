@@ -372,9 +372,35 @@ export const signUpSchema = z
 
 export type SignUp = z.infer<typeof signUpSchema>;
 
-// --- an organiser's change (POST /api/fundraise/manage/:token) ------------------------------------
+// --- an organiser's change, from the private area (TASK-501) -------------------------------------
 
-export const EDITABLE_FIELDS = ["description", "targetPence", "eventDate", "startTime", "venue", "town", "socialLink"] as const;
+// TASK-501: everything an organiser could ask to change before, plus the event details TASK-499
+// added (in the sign up's shapes). Every change still waits for staff (fundraiser_edits).
+export const EVENT_ONLY_FIELDS = [
+  "cardLine",
+  "endTime",
+  "timeTbc",
+  "venueAddress",
+  "venuePostcode",
+  "access",
+  "price",
+  "booking",
+  "ticketUrl",
+  "ageLimit",
+  "dressCode",
+  "included",
+] as const;
+
+export const EDITABLE_FIELDS = [
+  "description",
+  "targetPence",
+  "eventDate",
+  "startTime",
+  "venue",
+  "town",
+  "socialLink",
+  ...EVENT_ONLY_FIELDS,
+] as const;
 export type EditableField = (typeof EDITABLE_FIELDS)[number];
 
 export const editSchema = z
@@ -386,11 +412,68 @@ export const editSchema = z
     venue: optionalText(120).optional(),
     town: optionalText(80).optional(),
     socialLink: optionalWebLink.optional(),
+    cardLine: cardLine.optional(),
+    endTime: optionalTime.optional(),
+    timeTbc: z.boolean().optional(),
+    venueAddress: nullableText(300).optional(),
+    venuePostcode: optionalPostcode.optional(),
+    access: accessList.optional(),
+    price: nullableText(60).optional(),
+    booking: optionalBooking.optional(),
+    ticketUrl: optionalTicketLink.optional(),
+    ageLimit: nullableText(60).optional(),
+    dressCode: nullableText(60).optional(),
+    included: nullableText(300).optional(),
   })
   .strict()
   .refine((b) => Object.keys(b).length > 0, { message: "There is nothing to change." });
 
 export type FundraiserEdit = z.infer<typeof editSchema>;
+
+export const TICKET_LINK_NEEDED = "Paste the link to where the tickets are sold, starting https://";
+export const TICKET_LINK_ONLY_AWAY = "A ticket link is only for tickets sold on another website.";
+
+/**
+ * TASK-501: an organiser's change checked as it would land: what is stored, with the change on
+ * top. The sign up's cross checks, so a change to one field can never leave another wrong: the
+ * finish after the start (finishTimeProblem), a ticket link only (and always) for tickets sold on
+ * another website, and what an event's card cannot do without. A field an event card needs is only
+ * held to that when it is the one being changed, so a sign up from before the event questions is
+ * never refused for an answer it was never asked. Event details are refused for a page raising
+ * money, and a target for an event. Returns the change to store (a ticket link that no longer
+ * applies is cleared with it) and any field messages.
+ */
+export function checkOrganiserEdit(
+  stored: FundraiserRecord,
+  change: FundraiserEdit,
+): { change: FundraiserEdit; fields: Record<string, string> } {
+  const fields: Record<string, string> = {};
+  const c = change as Record<string, unknown>;
+  const has = (k: string) => Object.prototype.hasOwnProperty.call(c, k) && c[k] !== undefined;
+  const out: FundraiserEdit = { ...change };
+
+  if (stored.path !== "event") {
+    for (const k of EVENT_ONLY_FIELDS) if (has(k)) fields[k] = "This is only for events.";
+  } else {
+    if (has("targetPence") && change.targetPence !== null) fields.targetPence = "An event does not have a target.";
+    if (has("eventDate") && !change.eventDate) fields.eventDate = "Tell us the date of your event.";
+    if (has("cardLine") && !change.cardLine) fields.cardLine = "Add a line for the front of the card.";
+    if (has("venue") && !change.venue) fields.venue = "Tell us the venue.";
+    if (has("booking") && !change.booking) fields.booking = "Tell us how people get in.";
+    const booking = has("booking") ? change.booking : stored.booking;
+    const ticket = has("ticketUrl") ? change.ticketUrl : stored.ticketUrl;
+    if (booking === "away") {
+      if (!ticket && (has("booking") || has("ticketUrl"))) fields.ticketUrl = TICKET_LINK_NEEDED;
+    } else if (has("ticketUrl") && change.ticketUrl) {
+      fields.ticketUrl = TICKET_LINK_ONLY_AWAY;
+    } else if (has("booking") && stored.ticketUrl) {
+      out.ticketUrl = null;
+    }
+  }
+  const clash = finishTimeProblem(stored, c);
+  if (clash && !fields[clash]) fields[clash] = FINISH_BEFORE_START;
+  return { change: out, fields };
+}
 
 // --- a staff edit (PATCH /api/admin/fundraisers/:id) ----------------------------------------------
 
@@ -525,6 +608,8 @@ export interface WallSourceRow {
   message: string | null;
   hidden: boolean;
   createdAt: string;
+  /** TASK-501: money the organiser collected and paid in. On the meter, never on the wall. */
+  paidIn?: boolean;
 }
 
 export interface WallEntry {
@@ -540,11 +625,12 @@ const REDACTED_NAME = "redacted";
 
 /**
  * The public wall: newest first. Staff hiding a message hides only the message: the gift stays,
- * under the same name and amount rules. A gift refunded in full never shows.
+ * under the same name and amount rules. A gift refunded in full never shows, and nor does money the
+ * organiser paid in (TASK-501): that is theirs to collect, not a supporter's gift.
  */
 export function wallEntries(rows: WallSourceRow[]): WallEntry[] {
   return rows
-    .filter((r) => giftNetPence(r.amountPence, r.refundedPence) > 0)
+    .filter((r) => !r.paidIn && giftNetPence(r.amountPence, r.refundedPence) > 0)
     .sort((a, b) => (a.createdAt < b.createdAt ? 1 : a.createdAt > b.createdAt ? -1 : b.donationId - a.donationId))
     .map((r) => ({
       name: r.showName && !r.anonymous && r.fullName.trim().toLowerCase() !== REDACTED_NAME ? shortName(r.fullName) : "Anonymous",
@@ -605,6 +691,8 @@ export interface FundraiserRecord {
   dressCode: string | null;
   included: string | null;
   creditName: string | null;
+  /** TASK-501: when the organiser pressed "I've finished" (it finishes nothing by itself). */
+  finishedRequestedAt?: string | null;
 }
 
 /** The event answers a card shows. All of them are meant for the public; none is private. */

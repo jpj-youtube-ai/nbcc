@@ -505,6 +505,74 @@ export async function fundraiserReturnPage(fundraiserId: number | undefined): Pr
   }
 }
 
+// --- TASK-501: an organiser paying in what they collected ----------------------------------------
+
+export const PAY_IN_MIN_PENCE = 100; // £1
+export const PAY_IN_MAX_PENCE = 1_000_000; // £10,000
+
+/**
+ * What the private area's "Pay in what you collected" may send. Only the amount and whether to
+ * cover the card fee: no Gift Aid (it is not their own gift), no name or message for the wall.
+ * Anything else sent is dropped.
+ */
+export const payInSchema = z.object({
+  amountPence: z
+    .number({ invalid_type_error: "Give the amount in pounds, like 25.50." })
+    .int("Give the amount in pounds and pence, like 25.50.")
+    .min(PAY_IN_MIN_PENCE, "You can pay in from £1.")
+    .max(PAY_IN_MAX_PENCE, "You can pay in up to £10,000 at a time. For more, please email events@nbcc.scot."),
+  coverFee: z.boolean().optional(),
+});
+
+/**
+ * The Stripe session for an organiser paying in (TASK-501). The SAME session a gift on a
+ * fundraiser's page makes (buildSessionParams), with Gift Aid off, their name off the wall, no
+ * message and no newsletter, plus one more key the webhook reads: paidInByOrganiser. It is only
+ * ever stamped here, by the server, for a signed in organiser's own fundraiser; the public checkout
+ * never stamps it, whatever it is sent. It comes back to the private area, never to the page.
+ */
+export function buildPayInSessionParams(
+  input: { fundraiserId: number; amountPence: number; coverFee: boolean; name: string; email: string; manageUrl: string },
+  cardFee: CardFeeRate = DEFAULT_CARD_FEE,
+): StripeNS.Checkout.SessionCreateParams {
+  const body: CheckoutBody = {
+    mode: "once",
+    plan: null,
+    amount: input.amountPence,
+    giftAid: false,
+    coverFee: input.coverFee,
+    uiMode: "hosted",
+    donorType: "individual",
+    fullName: input.name,
+    email: input.email,
+    emailConsent: false,
+    anonymous: true,
+    fundraiserId: input.fundraiserId,
+    supporterMessage: "",
+    showName: false,
+    showAmount: false,
+  };
+  const params = buildSessionParams(body, cardFee, null);
+  const manage = input.manageUrl.replace(/\/+$/, "");
+  return {
+    ...params,
+    metadata: { ...params.metadata, paidInByOrganiser: "true" },
+    success_url: `${manage}?paid=1`,
+    cancel_url: manage,
+  };
+}
+
+/** The rate NBCC is charged, or the default when it cannot be read (as the donate page does). */
+export async function currentCardFee(): Promise<CardFeeRate> {
+  try {
+    const { getCardFeeRate } = await import("../db/ball");
+    return await getCardFeeRate();
+  } catch (err) {
+    console.error("card fee rate read failed, using default:", err instanceof Error ? err.message : err);
+    return DEFAULT_CARD_FEE;
+  }
+}
+
 export async function postCheckoutSession(req: Request, res: Response): Promise<Response> {
   const parsed = checkoutBodySchema.safeParse(req.body);
   if (!parsed.success) {

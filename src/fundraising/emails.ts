@@ -7,6 +7,7 @@ import {
   bodyList,
   note,
   button,
+  codeBox,
   signOff,
   signOffText,
   questionsBox,
@@ -24,7 +25,9 @@ import { ACCESS_LABELS, BOOKING_LABELS, KIND_LABELS, shortName, type SignUp } fr
 //   staff           to the events inbox: everything they told us, and the next steps
 //   approved        to the organiser: "your page is live" (raising money and public, sent once
 //                   fundraising is on), or "you're on our list" for anyone else
-//   manage          to the organiser: the 24 hour link to change their page
+//   sign in code    to the organiser: the 6 digit code for their private area (TASK-501, email 8;
+//                   it replaced the 24 hour link to change their page)
+//   finished staff  to the events inbox: the organiser pressed "I've finished" (TASK-501)
 //   edit approved   to the organiser: "your update is live" (or "saved", with no live page)
 //   edit rejected   to the organiser: "about your update", we'll give you a ring
 //
@@ -315,29 +318,64 @@ export function buildApprovedEmail(
   return toOrganiser(`You're on our list: ${f.title}`, body, text, "You’re a star. Thank you,");
 }
 
-// --- the manage link ------------------------------------------------------------------------------
+// --- the sign in code (TASK-501, email 8) ---------------------------------------------------------
 
-// Retired in a later part of stage 1b by the sign in code; until then it wears the same close.
-export function buildManageLinkEmail(f: { name: string; title: string }, link: string): BuiltEmail {
-  const hi = `Hi ${firstName(f.name)},`;
-  const body =
-    EYEBROW +
-    heading("Change your fundraising page") +
-    bodyP(escapeHtml(hi)) +
-    bodyP(`Here is your link to change <b>${escapeHtml(f.title)}</b>. It works for 24 hours. We check every change before it shows on your page.`) +
-    button(link, "Change my page") +
-    note("If you did not ask for this, you can ignore it. Nothing changes unless you use the link.");
-  const text = [
-    hi,
-    "",
-    `Here is your link to change ${f.title}. It works for 24 hours. We check every change before it`,
-    "shows on your page.",
-    "",
-    link,
-    "",
-    "If you did not ask for this, you can ignore it. Nothing changes unless you use the link.",
+/**
+ * The code for the private area, in the words Jaimie approved. Like the thanks for signing up, it
+ * carries nothing typed but a safe first name (the address it goes to is whatever was typed into
+ * the box), and no link: the code is typed in on the page it was asked for from.
+ */
+export function buildSignInCodeEmail(typedName: string | null | undefined, code: string): BuiltEmail {
+  const first = safeFirstName(typedName);
+  const hi = first ? `Hi ${first},` : "Hi there,";
+  const intro = "Here’s your code to open your private fundraising area. It works for 10 minutes.";
+  const inside =
+    "Inside you’ll find your QR code, your latest gifts and messages, and everything you need to update your page or pay in what you’ve collected.";
+  const small = "Didn’t ask for this? No problem, just ignore this email. Nobody can get in without the code.";
+  const body = EYEBROW + heading("Here’s your code") + bodyP(escapeHtml(hi)) + bodyP(intro) + codeBox(code) + bodyP(inside) + note(small);
+  const text = [hi, "", intro, "", `Your code: ${code}`, "", inside, "", small];
+  return toOrganiser(`Your NBCC sign in code: ${code.slice(0, 3)} ${code.slice(3)}`, body, text, "Happy fundraising!");
+}
+
+// --- "I've finished", to the events inbox (TASK-501) ---------------------------------------------
+
+/** For the team only: an organiser pressed "I've finished". It finishes nothing by itself. */
+export function buildFinishedStaffEmail(
+  f: { id: number; name: string; title: string; email: string; raisedPence: number },
+  o: { adminUrl: string },
+): BuiltEmail {
+  const first = firstName(f.name);
+  const raised = pounds(f.raisedPence);
+  const steps = [
+    `Give ${first} a ring to say thank you, and to check any cash or sponsor money is on its way.`,
+    "When everything is in, press Mark finished in Admin > Fundraising.",
+    `Replying to this email replies to ${first}.`,
   ];
-  return toOrganiser(`Your link to change ${f.title}`, body, text, "Happy fundraising!");
+  const line = "Go team!";
+  const body =
+    eyebrow("For the team") +
+    heading("A fundraiser says they’ve finished") +
+    bodyP(`<b>${escapeHtml(f.name)}</b> says <b>${escapeHtml(f.title)}</b> has finished. It has raised <b>${escapeHtml(raised)}</b> so far.`) +
+    bodyP("Nothing has changed on the website: it stays as it is until someone marks it finished.") +
+    subheading("Next steps") +
+    bodyList(steps.map(escapeHtml)) +
+    button(o.adminUrl, "Open the admin") +
+    signOff(line);
+  const text = [
+    "A FUNDRAISER SAYS THEY’VE FINISHED",
+    "",
+    `${f.name} says ${f.title} has finished. It has raised ${raised} so far.`,
+    "",
+    "Nothing has changed on the website: it stays as it is until someone marks it finished.",
+    "",
+    "NEXT STEPS",
+    ...bulleted(steps),
+    "",
+    `Open the admin: ${o.adminUrl}`,
+    "",
+    signOffText(line),
+  ].join("\n");
+  return { subject: `${f.title} says they've finished`, html: shell(body), text };
 }
 
 // --- a change, approved or rejected ---------------------------------------------------------------

@@ -1,9 +1,10 @@
 import { config } from "../config";
 import {
   sendFundraiseApproved,
+  sendFundraiseCode,
   sendFundraiseEditApproved,
   sendFundraiseEditRejected,
-  sendFundraiseManage,
+  sendFundraiseFinishedStaff,
   sendFundraiseStaff,
   sendFundraiseThanks,
 } from "../clients/email";
@@ -12,12 +13,12 @@ import {
   buildApprovedEmail,
   buildEditApprovedEmail,
   buildEditRejectedEmail,
-  buildManageLinkEmail,
+  buildFinishedStaffEmail,
+  buildSignInCodeEmail,
   buildSignUpStaffEmail,
   buildSignUpThanksEmail,
 } from "./emails";
 import { hasPage, type FundraiserRecord } from "./model";
-import { manageLink } from "./manage-token";
 
 // TASK-493: sending the fundraising emails. TASK-497 adds "Your page is live" held until the switch
 // goes on (sendWaitingLiveEmails) and the two emails about a change. Each is best effort and runs after its write has
@@ -36,6 +37,11 @@ function logFailure(what: string, err: unknown): void {
 
 export function fundraiserPageUrl(slug: string): string {
   return `${base()}/fundraise/${slug}`;
+}
+
+/** The private area (TASK-501), where an organiser signs in with a code. */
+export function manageUrl(): string {
+  return `${base()}/fundraise/manage`;
 }
 
 /** Thank the organiser, and tell the events inbox, after a sign up. */
@@ -138,12 +144,26 @@ export async function sendEditDecisionEmail(f: FundraiserRecord, approved: boole
   }
 }
 
-/** The 24 hour link to change their page. The caller has stored the token's hash. */
-export async function sendManageLinkEmail(f: FundraiserRecord, token: string): Promise<void> {
+/**
+ * TASK-501: the sign in code for the private area (email 8), to the email it was asked for. The
+ * caller has stored only its keyed hash. Greeted by a safe first name from `name`, the newest of
+ * their fundraisers. Never throws, and a failure is logged without the code.
+ */
+export async function sendSignInCodeEmail(email: string, name: string, code: string): Promise<void> {
   try {
-    const mail = buildManageLinkEmail(f, manageLink(base(), token));
-    await sendFundraiseManage(f.name, { email: f.email, from: config.BALL_FROM_EMAIL, replyTo: config.BALL_FROM_EMAIL, ...mail });
+    const mail = buildSignInCodeEmail(name, code);
+    await sendFundraiseCode(name, { email, from: config.BALL_FROM_EMAIL, replyTo: config.BALL_FROM_EMAIL, ...mail });
   } catch (err) {
-    logFailure("manage link", err);
+    logFailure("sign in code", err);
+  }
+}
+
+/** TASK-501: the organiser pressed "I've finished". To the events inbox, replying to them. */
+export async function sendFinishedStaffEmail(f: FundraiserRecord, raisedPence: number): Promise<void> {
+  try {
+    const mail = buildFinishedStaffEmail({ ...f, raisedPence }, { adminUrl: `${base()}/admin` });
+    await sendFundraiseFinishedStaff(f.name, { email: config.BALL_FROM_EMAIL, from: config.BALL_FROM_EMAIL, replyTo: f.email, ...mail });
+  } catch (err) {
+    logFailure("finished (to the events inbox)", err);
   }
 }

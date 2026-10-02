@@ -2,7 +2,7 @@ const { Given, When, Then, Before, After } = require("@cucumber/cucumber");
 const assert = require("node:assert/strict");
 const { Pool } = require("pg");
 const Stripe = require("stripe");
-const { createHash, randomBytes, scryptSync } = require("node:crypto");
+const { randomBytes, scryptSync } = require("node:crypto");
 
 // Steps for fundraising.feature (TASK-493). Talks to the public and admin APIs over HTTP like the
 // other @db features, arranges fundraisers directly in the database where a scenario only needs one
@@ -107,6 +107,9 @@ async function clean() {
   await pool.query("DELETE FROM stripe_webhook_events WHERE id LIKE 'evt_fr_bdd_%'");
   // Edits, manage links and cash go with their fundraiser (ON DELETE CASCADE).
   await pool.query("DELETE FROM fundraisers WHERE title LIKE $1", [MARK]);
+  // TASK-501: the private area's codes and sessions, by the organisers' invented addresses.
+  await pool.query("DELETE FROM fundraiser_sign_in_codes WHERE email LIKE $1", [STAFF]);
+  await pool.query("DELETE FROM fundraiser_sessions WHERE email LIKE $1", [STAFF]);
   await pool.query("DELETE FROM users WHERE email LIKE $1", [STAFF]);
   await pool.query("DELETE FROM list_subscribers WHERE email LIKE $1", [STAFF]);
   await setSwitch(false);
@@ -162,15 +165,6 @@ Given("a fundraiser {string} that is still new", async function (title) {
 
 Given("a fundraiser {string} that is still new, organised by {string}", async function (title, email) {
   await insertFundraiser({ title, status: "new", email });
-});
-
-Given("the organiser of {string} holds a manage link", async function (title) {
-  const f = await fundraiser(title);
-  this.frToken = randomBytes(32).toString("base64url");
-  await pool.query(
-    "INSERT INTO fundraiser_manage_tokens (token_hash, fundraiser_id, expires_at) VALUES ($1, $2, now() + interval '1 day')",
-    [createHash("sha256").update(this.frToken).digest("hex"), f.id],
-  );
 });
 
 // ---- the public side ----
@@ -387,24 +381,7 @@ Then("the donation paid as {string} belongs to no fundraiser and carries no mess
   assert.equal(r.rows[0].supporter_message, null);
 });
 
-// ---- managing by link ----
-
-When("the organiser asks for a manage link for {string}", async function (email) {
-  await call(this, "POST", "/api/fundraise/manage/request", { email });
-});
-
-Then("{string} has a manage link stored only as a hash", async function (title) {
-  const f = await fundraiser(title);
-  const r = await pool.query("SELECT token_hash, expires_at FROM fundraiser_manage_tokens WHERE fundraiser_id = $1", [f.id]);
-  assert.ok(r.rows.length > 0, "no manage link stored");
-  assert.match(r.rows[0].token_hash, /^[0-9a-f]{64}$/);
-  const hours = (new Date(r.rows[0].expires_at).getTime() - Date.now()) / 3600000;
-  assert.ok(hours > 23 && hours <= 24, `link lasts ${hours} hours`);
-});
-
-When("the organiser changes the target of {string} to {int} pence by their link", async function (_title, target) {
-  await call(this, "POST", `/api/fundraise/manage/${this.frToken}`, { targetPence: target });
-});
+// The private area's steps (TASK-501) are in fundraising-private.steps.js.
 
 // ---- the admin side ----
 

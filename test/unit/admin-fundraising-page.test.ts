@@ -1643,3 +1643,87 @@ describe("the new answers from the sign up form", () => {
     expect(q("#frEditForm")).toBeNull();
   });
 });
+
+// ---- TASK-501: the private area's side of the admin ----
+
+describe("what the organiser's private area adds", () => {
+  it("marks a fundraiser whose organiser says they have finished", async () => {
+    records = [
+      fundraiser(1, { status: "approved", finishedRequestedAt: "2026-10-02T09:00:00.000Z" }),
+      fundraiser(2, { status: "approved" }),
+    ];
+    await openFundraising();
+    expect(text(row(1)!.querySelector(".fr-finished-pill"))).toBe("Says they've finished");
+    expect(row(2)!.querySelector(".fr-finished-pill")).toBeNull();
+    await openRow(1);
+    expect(text(detail())).toContain("Says they've finished");
+    expect(text(detail())).toContain("02/10/2026");
+  });
+
+  it("drops the pill once staff mark it finished", async () => {
+    records = [fundraiser(1, { status: "finished", finishedRequestedAt: "2026-10-02T09:00:00.000Z" })];
+    await openFundraising();
+    expect(row(1)!.querySelector(".fr-finished-pill")).toBeNull();
+  });
+
+  it("shows the QR code itself, beside the link to download it", async () => {
+    records = [fundraiser(1, { status: "approved", pageUrl: "https://nbcc.scot/fundraise/test-dash-1" })];
+    await openFundraising();
+    await openRow(1);
+    const img = q("#frList img.fr-qr-preview") as HTMLImageElement;
+    expect(img.getAttribute("src")).toBe("/fundraise/test-dash-1/qr.svg");
+    expect(img.getAttribute("alt")).toBe("QR code for Test Dash 1");
+    expect((el("frQrLink") as HTMLAnchorElement).getAttribute("href")).toBe("/fundraise/test-dash-1/qr.svg");
+  });
+
+  it("shows an event's details in a waiting change, in words", async () => {
+    records = [fundraiser(1, { status: "approved", path: "event", endTime: "22:00", booking: "door", access: [], timeTbc: false })];
+    waiting = {
+      1: {
+        id: 8,
+        changes: { endTime: "23:00", booking: "away", ticketUrl: "https://tickets.example.com/x", access: ["step free entry", "a hearing loop"], timeTbc: true, price: "£6" },
+        status: "waiting",
+        createdAt: "2026-10-01T10:00:00.000Z",
+      },
+    };
+    await openFundraising();
+    await openRow(1);
+    const t = text(el("frChange"));
+    expect(t).toContain("Finish time");
+    expect(t).toContain("23:00");
+    expect(t).toContain("Tickets are sold on another website");
+    expect(t).toContain("Pay on the door, no booking needed");
+    expect(t).toContain("Step free entry, Hearing loop");
+    expect(t).toContain("Time still to be confirmed");
+    expect(t).toContain("Yes");
+    expect(t).toContain("https://tickets.example.com/x");
+    expect(t).toContain("£6");
+  });
+
+  it("marks money the organiser paid in on the wall, with nothing to hide", async () => {
+    records = [fundraiser(1, { status: "approved" })];
+    wallRows = { 1: [gift(1), gift(2, { paidIn: true, message: null, showName: false, showAmount: false, shortName: "Anonymous" })] };
+    await openFundraising();
+    await openRow(1);
+    const paid = q('[data-frwall="502"]') as HTMLElement;
+    expect(text(paid.querySelector(".fr-paidin-pill"))).toBe("Paid in by the organiser");
+    expect(paid.querySelector("[data-frhide]")).toBeNull();
+    expect(q('[data-frwall="501"] .fr-paidin-pill')).toBeNull();
+  });
+
+  it("names the new things in History", async () => {
+    records = [fundraiser(1, { status: "approved" })];
+    historyRows = {
+      1: [
+        { id: 1, actor: "organiser", action: "fundraiser.finish_requested", data: {}, createdAt: "2026-10-02T09:00:00.000Z" },
+        { id: 2, actor: "stripe", action: "fundraiser.paid_in", data: {}, createdAt: "2026-10-02T10:00:00.000Z" },
+      ],
+    };
+    await openFundraising();
+    await openRow(1);
+    await settle();
+    const h = text(el("frHistory"));
+    expect(h).toContain("The organiser said they have finished");
+    expect(h).toContain("The organiser paid in money they collected");
+  });
+});

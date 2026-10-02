@@ -426,6 +426,7 @@ export async function sendConfirmation(email: DonationConfirmationEmail | null):
       mode: email.mode,
       reference: email.reference,
       donationDate: email.donationDate,
+      paidIn: email.paidIn,
     });
     await sendDonationConfirmation({
       email: email.email,
@@ -553,7 +554,9 @@ async function handleCheckoutCompleted(
   // THIS transaction, but only when it names an approved fundraiser. Sessions without a fundraiserId
   // (every donate page gift) skip this entirely, so their writes are exactly what they were.
   const fundraiserGift = fundraiserGiftFromCheckoutSession(event.data.object);
-  if (fundraiserGift) await linkFundraiserGift(client, donationId, fundraiserGift, event.id);
+  const linkedToFundraiser = fundraiserGift ? await linkFundraiserGift(client, donationId, fundraiserGift, event.id) : false;
+  // TASK-501: money an organiser paid in is thanked as paid in, not as a gift of their own.
+  const paidIn = linkedToFundraiser && Boolean(fundraiserGift?.paidIn);
 
   // Business-supporter fulfilment (TASK-206): a BUSINESS MONTHLY gift at/above the £10/month minimum
   // — an incorporated company, or a partnership/sole trader donating under a business name — earns a
@@ -645,7 +648,7 @@ async function handleCheckoutCompleted(
     action: "donation.created",
     email: companyRow
       ? null
-      : confirmationEmailFor(donor, donation, { reference: donationReference(donationId), donationDate }),
+      : confirmationEmailFor(donor, donation, { reference: donationReference(donationId), donationDate, ...(paidIn ? { paidIn } : {}) }),
     receipt,
     businessInvite,
   };

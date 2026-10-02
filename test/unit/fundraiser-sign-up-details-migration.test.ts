@@ -61,11 +61,10 @@ describe("the sign up details migration", () => {
   const columns = adds[0].args[1] as Record<string, { type: string; notNull?: boolean; default?: unknown }>;
 
   // Nothing production has already run may sort after it: it comes after TASK-492's QR channel
-  // (1791200000030), the highest on main before it, and is last for now.
+  // (1791200000030), the highest on main before it. (It was last until TASK-501 added its own.)
   it("sorts after everything production had already run, so production never sees it out of order", () => {
     const all = readdirSync(resolve(ROOT, "migrations")).filter((f) => f.endsWith(".js")).sort();
     expect(all.indexOf(NAME)).toBeGreaterThan(all.indexOf("1791200000030_analytics-qr-channel.js"));
-    expect(all[all.length - 1]).toBe(NAME);
   });
 
   it("adds the new columns to fundraisers, each nullable or with a default", () => {

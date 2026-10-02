@@ -7,19 +7,16 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 const db = vi.hoisted(() => ({
   createFundraiser: vi.fn(),
   findApprovedByEmail: vi.fn(),
-  findManageToken: vi.fn(),
   fundraisingIsOn: vi.fn(),
   getBySlug: vi.fn(),
   getFundraiser: vi.fn(),
   listApprovedPublic: vi.fn(),
   requestEdit: vi.fn(),
-  storeManageToken: vi.fn(),
   waitingEditFor: vi.fn(),
   wallRows: vi.fn(),
 }));
 const send = vi.hoisted(() => ({
   sendSignUpEmails: vi.fn(),
-  sendManageLinkEmail: vi.fn(),
   fundraiserPageUrl: (slug: string) => `https://nbcc.test/fundraise/${slug}`,
 }));
 const newsletter = vi.hoisted(() => ({ subscribeSelf: vi.fn() }));
@@ -47,12 +44,7 @@ import {
   getFundraiseCaptcha,
   getFundraisers,
   getFundraiserPage,
-  postManageRequest,
-  getManage,
-  postManage,
-  MANAGE_REQUEST_MESSAGE,
 } from "../../src/routes/fundraise";
-import { hashManageToken } from "../../src/fundraising/manage-token";
 import { meter, type FundraiserRecord } from "../../src/fundraising/model";
 
 type MockRes = { statusCode: number; body: unknown; status: (c: number) => MockRes; json: (b: unknown) => MockRes };
@@ -132,7 +124,6 @@ const record = (over: Partial<FundraiserRecord> = {}): FundraiserRecord & { mete
 beforeEach(() => {
   for (const fn of Object.values(db)) fn.mockReset();
   send.sendSignUpEmails.mockReset();
-  send.sendManageLinkEmail.mockReset();
   newsletter.subscribeSelf.mockReset().mockResolvedValue("added");
   captcha.enabled = false;
   captcha.verdict = { outcome: "passed" };
@@ -252,97 +243,7 @@ describe("a fundraiser's page", () => {
   });
 });
 
-describe("asking for a manage link", () => {
-  it("emails a link to each approved fundraiser for that email, storing only its hash", async () => {
-    db.findApprovedByEmail.mockResolvedValue([record()]);
-    const res = await run(postManageRequest, { body: { email: "Sam@Example.com" } });
-    expect(res.body).toEqual({ message: MANAGE_REQUEST_MESSAGE });
-    expect(db.findApprovedByEmail).toHaveBeenCalledWith("sam@example.com");
-    const stored = db.storeManageToken.mock.calls[0][0];
-    const token = send.sendManageLinkEmail.mock.calls[0][1];
-    expect(stored.tokenHash).toBe(hashManageToken(token));
-    expect(stored.fundraiserId).toBe(9);
-  });
-
-  it("gives the same answer when nobody matches, and sends nothing", async () => {
-    db.findApprovedByEmail.mockResolvedValue([]);
-    const res = await run(postManageRequest, { body: { email: "nobody@example.com" } });
-    expect(res.body).toEqual({ message: MANAGE_REQUEST_MESSAGE });
-    expect(send.sendManageLinkEmail).not.toHaveBeenCalled();
-  });
-
-  it("gives the same answer over the limit, without looking", async () => {
-    db.findApprovedByEmail.mockResolvedValue([]);
-    for (let i = 0; i < 3; i++) await run(postManageRequest, { body: { email: "limit@example.com" } });
-    db.findApprovedByEmail.mockClear();
-    const res = await run(postManageRequest, { body: { email: "limit@example.com" } });
-    expect(res.body).toEqual({ message: MANAGE_REQUEST_MESSAGE });
-    expect(db.findApprovedByEmail).not.toHaveBeenCalled();
-  });
-});
-
-describe("using a manage link", () => {
-  const token = "an-invented-manage-token";
-  beforeEach(() => {
-    db.findManageToken.mockResolvedValue({ fundraiserId: 9, expiresAt: new Date(Date.now() + 3600_000) });
-    db.getFundraiser.mockResolvedValue(record());
-    db.waitingEditFor.mockResolvedValue(null);
-  });
-
-  it("opens what the organiser may change", async () => {
-    const res = await run(getManage, { params: { token } });
-    expect(res.statusCode).toBe(200);
-    expect(db.findManageToken).toHaveBeenCalledWith(hashManageToken(token));
-    expect(res.body).toMatchObject({
-      fundraiser: { id: 9, title: "Sam's Sponsored Walk", pageUrl: "https://nbcc.test/fundraise/sams-sponsored-walk" },
-      waitingEdit: null,
-    });
-    const editable = (res.body as { fundraiser: { editable: Record<string, unknown> } }).fundraiser.editable;
-    expect(Object.keys(editable).sort()).toEqual(["description", "eventDate", "socialLink", "startTime", "targetPence", "town", "venue"]);
-  });
-
-  it("is a 404 for a link that matches nothing, and a 410 for one that has run out", async () => {
-    db.findManageToken.mockResolvedValueOnce(null);
-    expect((await run(getManage, { params: { token } })).statusCode).toBe(404);
-    db.findManageToken.mockResolvedValueOnce({ fundraiserId: 9, expiresAt: new Date(Date.now() - 1000) });
-    expect((await run(getManage, { params: { token } })).statusCode).toBe(410);
-  });
-
-  it("is a 410 once the fundraiser has finished", async () => {
-    db.getFundraiser.mockResolvedValue(record({ status: "finished" }));
-    expect((await run(getManage, { params: { token } })).statusCode).toBe(410);
-  });
-
-  it("sends a change to wait for staff", async () => {
-    db.requestEdit.mockResolvedValue({ id: 3, changes: { targetPence: 30000 }, status: "waiting", createdAt: "2026-10-02T12:00:00.000Z" });
-    const res = await run(postManage, { params: { token }, body: { targetPence: 30000 } });
-    expect(res.statusCode).toBe(202);
-    expect(res.body).toEqual({ status: "waiting", edit: { id: 3, changes: { targetPence: 30000 }, createdAt: "2026-10-02T12:00:00.000Z" } });
-    expect(db.requestEdit).toHaveBeenCalledWith(9, { targetPence: 30000 }, hashManageToken(token));
-  });
-
-  // Review fix: a new start is checked against the finish time staff hold, so it never lands
-  // before it.
-  it("refuses a start past the finish time held for it, naming the start", async () => {
-    db.getFundraiser.mockResolvedValue(record({ path: "event", startTime: "10:00", endTime: "12:00" } as Partial<FundraiserRecord>));
-    const res = await run(postManage, { params: { token }, body: { startTime: "13:00" } });
-    expect(res.statusCode).toBe(400);
-    expect((res.body as { fields: Record<string, string> }).fields).toEqual({ startTime: "The finish time is before the start." });
-    expect(db.requestEdit).not.toHaveBeenCalled();
-  });
-
-  it("takes a new start when there is no finish time, as on every sign up from before", async () => {
-    db.requestEdit.mockResolvedValue({ id: 4, changes: { startTime: "13:00" }, status: "waiting", createdAt: "2026-10-02T12:00:00.000Z" });
-    const res = await run(postManage, { params: { token }, body: { startTime: "13:00" } });
-    expect(res.statusCode).toBe(202);
-  });
-
-  it("refuses a change to anything an organiser may not change", async () => {
-    const res = await run(postManage, { params: { token }, body: { title: "Something else" } });
-    expect(res.statusCode).toBe(400);
-    expect(db.requestEdit).not.toHaveBeenCalled();
-  });
-});
+// The private area (TASK-501) replaced the 24 hour manage links: test/unit/fundraise-private-routes.test.ts.
 
 // TASK-493: the newsletter tick box on the sign up subscribes the organiser exactly as the footer
 // form does (src/newsletter/self-signup.ts); an unticked box changes nothing.

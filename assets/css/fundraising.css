@@ -318,10 +318,14 @@ fieldset.is-invalid .fr-option { border-color: var(--crimson); }
 .fr-share__url { margin: 14px 0 0; font-size: 0.92rem; color: var(--slate-soft); overflow-wrap: anywhere; }
 .fr-share__status { margin: 6px 0 0; font-weight: 600; color: var(--holly); min-height: 1.5em; }
 
-/* the QR code */
-.fr-qr__code { width: min(240px, 100%); margin: 4px 0 16px; padding: 10px; border: 1px solid var(--line); border-radius: 14px; background: var(--white); }
-.fr-qr__code svg { display: block; width: 100%; height: auto; }
+/* the QR code: shown in the organiser's private area since TASK-501, no longer on the public page */
+.fr-qr__code { width: min(200px, 100%); margin: 4px 0 12px; padding: 10px; border: 1px solid var(--line); border-radius: 14px; background: var(--white); }
+.fr-qr__code img, .fr-qr__code svg { display: block; width: 100%; height: auto; }
 .fr-qr__download { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; font-weight: 600; text-underline-offset: 3px; }
+
+/* TASK-501: the quiet line at the foot of a fundraiser's page, for its organiser */
+.fr-owner { margin: 0 0 clamp(28px, 4vw, 40px); text-align: center; font-size: 0.875rem; color: var(--slate-soft); }
+.fr-owner a { color: inherit; text-underline-offset: 3px; }
 
 /* A button that is busy sending says so in words; this makes it look it too. */
 .fr-form .btn:disabled, .fr-give-form .btn:disabled { opacity: 0.75; cursor: progress; transform: none; }
@@ -353,6 +357,40 @@ fieldset.is-invalid .fr-option { border-color: var(--crimson); }
   line-height: 1.6;
 }
 .fr-waiting strong { display: block; color: var(--holly-dark); }
+/* TASK-501: the private area. Signed out, the email box then the code box; signed in, one card per
+   fundraiser. Everything wraps and the page grows; nothing scrolls inside a box. */
+.fr-code-input { max-width: 12ch; font-size: 1.4rem; letter-spacing: 0.2em; font-variant-numeric: tabular-nums; }
+.fr-code-links { display: flex; flex-wrap: wrap; gap: 4px 20px; margin: 18px 0 0; }
+.fr-link-btn {
+  min-height: 44px;
+  padding: 8px 0;
+  border: 0;
+  background: none;
+  color: var(--maroon);
+  font: inherit;
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+.fr-link-btn:focus-visible { outline: 3px solid var(--holly); outline-offset: 2px; }
+.fr-area { display: grid; gap: clamp(22px, 3vw, 30px); }
+.fr-area__top { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px 18px; }
+.fr-area__who { margin: 0; color: var(--slate-soft); }
+.fr-area__list { display: grid; gap: clamp(22px, 3vw, 30px); }
+.fr-area > .form-status:empty { display: none; }
+.fr-mine h2 { overflow-wrap: anywhere; }
+.fr-mine__status { margin: 10px 0 0; font-weight: 600; color: var(--holly-dark); }
+.fr-mine__page { margin: 6px 0 0; }
+.fr-mine__page a { font-weight: 600; text-underline-offset: 3px; }
+.fr-mine .fr-waiting { margin: 18px 0 0; }
+.fr-mine__part { margin-top: clamp(26px, 4vw, 34px); padding-top: clamp(20px, 3vw, 26px); border-top: 1px solid var(--line); }
+.fr-mine__part h3 { margin: 0 0 8px; font-size: clamp(1.2rem, 1.1rem + 0.5vw, 1.45rem); color: var(--maroon); }
+.fr-mine__part > p { margin: 0 0 14px; }
+.fr-mine__raised { font-family: var(--font-head); font-size: 1.35rem; font-weight: 800; color: var(--maroon); font-variant-numeric: lining-nums tabular-nums; }
+.fr-mine .fr-thanks-panel { margin: 0 0 18px; }
+.fr-mine .fr-thanks-panel h4 { margin: 0; font-size: 1.15rem; color: var(--holly-dark); }
+.fr-mine__done { margin: 12px 0 0; padding: 14px 16px; border-radius: 12px; background: var(--holly-soft); color: var(--holly-dark); font-weight: 600; }
 .fr-form__title { font-size: clamp(1.5rem, 1.25rem + 1vw, 1.95rem); color: var(--maroon); margin-bottom: 6px; overflow-wrap: anywhere; }
 .fr-form__lead { margin: 0 0 18px; }
 .fr-form__lead a { font-weight: 600; }

@@ -3,7 +3,8 @@ Feature: Community fundraising, the core (TASK-493)
   People sign up at /fundraise to raise money or hold an event for NBCC. Staff approve every one
   before anything about it is public, and nothing shows at all while fundraising is switched off.
   A fundraiser's page has a meter (paid online gifts plus cash paid in) and a supporter wall staff
-  can tidy. Organisers change their page by an emailed link, and every change waits for staff.
+  can tidy. Organisers ask for changes from their private area, signed in with an emailed code
+  (TASK-501, fundraising-private.feature), and every change waits for staff.
 
   Scenario: a sign up shows only once it is approved, and only while fundraising is on
     Given fundraising is switched on
@@ -59,12 +60,13 @@ Feature: Community fundraising, the core (TASK-493)
     Given fundraising is switched on
     And a fundraising staff member "e3.fr.bdd@example.com" with role "editor"
     And an approved fundraiser "Kim's Quiz (bdd-fr)" raising 50000 pence, organised by "kim.fr.bdd@example.com"
-    When the organiser asks for a manage link for "kim.fr.bdd@example.com"
+    When the organiser asks for a sign in code for "kim.fr.bdd@example.com"
     Then the fundraising answer is 200
-    And the organiser of "Kim's Quiz (bdd-fr)" was sent a "fundraiseManage" email
-    And "Kim's Quiz (bdd-fr)" has a manage link stored only as a hash
-    Given the organiser of "Kim's Quiz (bdd-fr)" holds a manage link
-    When the organiser changes the target of "Kim's Quiz (bdd-fr)" to 75000 pence by their link
+    And the organiser of "Kim's Quiz (bdd-fr)" is soon sent a "fundraiseCode" email
+    And a sign in code for "kim.fr.bdd@example.com" is stored only as a hash
+    When "kim.fr.bdd@example.com" signs in with the code from their email
+    Then the fundraising answer is 200
+    When the organiser changes the target of "Kim's Quiz (bdd-fr)" to 75000 pence in their private area
     Then the fundraising answer is 202
     And the page for "Kim's Quiz (bdd-fr)" shows 0 pence raised of 50000
     When "e3.fr.bdd@example.com" approves the waiting change to "Kim's Quiz (bdd-fr)"
@@ -110,8 +112,8 @@ Feature: Community fundraising, the core (TASK-493)
     Given fundraising is switched on
     And a fundraising staff member "e6.fr.bdd@example.com" with role "editor"
     And an approved fundraiser "Pat's Swim (bdd-fr)" raising 50000 pence, organised by "pat.fr.bdd@example.com"
-    And the organiser of "Pat's Swim (bdd-fr)" holds a manage link
-    When the organiser changes the target of "Pat's Swim (bdd-fr)" to 75000 pence by their link
+    And the organiser of "Pat's Swim (bdd-fr)" is signed in to their private area
+    When the organiser changes the target of "Pat's Swim (bdd-fr)" to 75000 pence in their private area
     Then the fundraising answer is 202
     When "e6.fr.bdd@example.com" rejects the waiting change to "Pat's Swim (bdd-fr)"
     Then the fundraising answer is 200

@@ -5,9 +5,8 @@ import { captchaEnabled, captchaSiteKey, verifyCaptcha } from "../clients/turnst
 import { londonToday } from "../events/model";
 import {
   EDITABLE_FIELDS,
+  checkOrganiserEdit,
   editSchema,
-  FINISH_BEFORE_START,
-  finishTimeProblem,
   hasPage,
   isListed,
   publicCard,
@@ -15,30 +14,41 @@ import {
   signUpSchema,
   wallEntries,
   type FundraiserRecord,
+  type Meter,
 } from "../fundraising/model";
 import {
-  hashManageToken,
-  issueManageToken,
-  newManageToken,
-  verifyManageToken,
-  ManageTokenError,
-} from "../fundraising/manage-token";
+  SESSION_COOKIE,
+  SESSION_TTL_MS,
+  SIGN_IN_CODE_TTL_MS,
+  MAX_CODE_ATTEMPTS,
+  codeVerdict,
+  hashSessionId,
+  hashSignInCode,
+  newSessionId,
+  newSignInCode,
+  readCode,
+  sentFromOurOwnPage,
+  sessionCookieOptions,
+} from "../fundraising/sign-in";
 import {
   createFundraiser,
   findApprovedByEmail,
-  findManageToken,
   fundraisingIsOn,
   getBySlug,
   getFundraiser,
   listApprovedPublic,
+  listForOrganiser,
+  markFinishedRequested,
   requestEdit,
-  storeManageToken,
   waitingEditFor,
   wallRows,
   FundraiserError,
 } from "../db/fundraisers";
-import { sendManageLinkEmail, sendSignUpEmails, fundraiserPageUrl } from "../fundraising/send";
+import { countCodeTry, createSession, deleteSession, deleteSignInCode, findSession, saveSignInCode } from "../db/fundraiser-sign-in";
+import { sendFinishedStaffEmail, sendSignInCodeEmail, sendSignUpEmails, fundraiserPageUrl, manageUrl } from "../fundraising/send";
 import { subscribeSelf } from "../newsletter/self-signup";
+import { readCookie } from "../ball/gate";
+import { config } from "../config";
 
 // TASK-493: the public side of community fundraising. Everything here is OFF while the fundraising
 // switch is off (Admin > Fundraising, admins only): sign ups are refused and nothing is listed.
@@ -47,9 +57,16 @@ import { subscribeSelf } from "../newsletter/self-signup";
 //   GET  /api/fundraise/captcha             the Turnstile site key for the form, or null
 //   GET  /api/fundraisers                   approved public fundraisers for Get involved, with meters
 //   GET  /api/fundraisers/:slug             one fundraiser's page: meter, wall, what giving needs
-//   POST /api/fundraise/manage/request      { email }: always the same answer; emails a 24 hour link
-//   GET  /api/fundraise/manage/:token       what the organiser may change, and any change waiting
-//   POST /api/fundraise/manage/:token       send a change; it waits for staff before it shows
+//
+// TASK-501, the private area at /fundraise/manage, signed in with an emailed code:
+//   POST /api/fundraise/manage/request      { email }: always the same answer; emails a 6 digit code
+//   POST /api/fundraise/manage/sign-in      { email, code }: a right code starts a 2 hour session
+//   GET  /api/fundraise/manage/me           the signed in organiser's fundraisers
+//   POST /api/fundraise/manage/fundraisers/:id/edit      a change; it waits for staff
+//   POST /api/fundraise/manage/fundraisers/:id/finished  "I've finished": tells staff
+//   POST /api/fundraise/manage/fundraisers/:id/pay-in    { amountPence, coverFee }: a Stripe checkout
+//   POST /api/fundraise/manage/sign-out     ends the session
+//   GET|POST /api/fundraise/manage/:token   the retired 24 hour links: 410, ask for a code
 //
 // The request and response shapes are documented in README.md, "Community fundraising".
 
@@ -144,77 +161,159 @@ export async function getFundraiserPage(req: Request, res: Response): Promise<Re
   }
 }
 
-// --- managing a page by emailed link ---------------------------------------------------------------
+// --- the private area (TASK-501) ------------------------------------------------------------------
+//
+// Security, in short (src/fundraising/sign-in.ts has the detail):
+//   - asking for a code always gets the same answer, sent before any work is done, so neither the
+//     words nor the time taken say whether an email is signed up;
+//   - a code is 6 random digits, kept as a keyed hash, works for 10 minutes and allows 5 tries,
+//     counted in the database before the compare; requests are limited per email and per address,
+//     and so are tries;
+//   - a right code starts a NEW random session (any session the browser had is ended), in an http
+//     only, SameSite Lax cookie, Secure in production, scoped to /api/fundraise/manage, for 2 hours;
+//   - every change is a POST, refused unless it comes from our own page (Sec-Fetch-Site or Origin);
+//   - an organiser only ever reaches fundraisers whose organiser email is the signed in one, and
+//     anyone else's reads as not there;
+//   - codes and session ids are never logged.
 
-const requestSchema = z.object({ email: z.string().trim().email() });
+const requestSchema = z.object({ email: z.string().trim().email().max(254) });
+const signInSchema = z.object({ email: z.string().trim().email().max(254), code: z.unknown() });
+
+// Asking for a code: 3 in 15 minutes and 10 a day for one email; 20 in 15 minutes from one address.
 const emailLimiter = createRateLimiter({ max: 3, windowMs: 15 * 60_000 });
+const emailDayLimiter = createRateLimiter({ max: 10, windowMs: 24 * 60 * 60_000 });
 const ipLimiter = createRateLimiter({ max: 20, windowMs: 15 * 60_000 });
-const tokenLimiter = createRateLimiter({ max: 60, windowMs: 15 * 60_000 });
+// Trying a code: 10 in 15 minutes for one email, 30 from one address. With 5 tries a code and the
+// limits on asking, a run of guesses at one email's codes has about a one in twenty thousand chance
+// a day, at most.
+const signInEmailLimiter = createRateLimiter({ max: 10, windowMs: 15 * 60_000 });
+const signInIpLimiter = createRateLimiter({ max: 30, windowMs: 15 * 60_000 });
+// Opening a Stripe checkout to pay in: 10 in 15 minutes for one signed in organiser.
+const payInLimiter = createRateLimiter({ max: 10, windowMs: 15 * 60_000 });
 
 export const MANAGE_REQUEST_MESSAGE =
-  "If that email belongs to an approved fundraiser, we have sent a link to change it. It works for 24 hours.";
+  "If that email belongs to an approved fundraiser, we have sent a sign in code to it. It works for 10 minutes.";
+export const WRONG_CODE_MESSAGE = "That code does not work. Check it, or ask for a new one.";
+const TOO_MANY = { error: "Too many tries. Please wait a few minutes and try again." };
+const NOT_OURS = { error: "Please use the form on our website." };
+const SIGN_IN_AGAIN = { error: "Please sign in again." };
+const NOT_FOUND = { error: "Not found" };
+const NO_LONGER = { error: "This fundraiser can no longer be changed online. Please email events@nbcc.scot." };
 
-export async function postManageRequest(req: Request, res: Response): Promise<Response> {
+type Headers = Record<string, string | string[] | undefined>;
+const header = (req: Request, name: string): string | undefined => {
+  const v = (req.headers as Headers)[name];
+  return Array.isArray(v) ? v[0] : v;
+};
+
+/** Refuse a POST that another website's page sent (the second lock after SameSite). */
+function fromOurOwnPage(req: Request, res: Response): boolean {
+  const ok = sentFromOurOwnPage({ secFetchSite: header(req, "sec-fetch-site"), origin: header(req, "origin") }, header(req, "host") ?? "");
+  if (!ok) res.status(403).json(NOT_OURS);
+  return ok;
+}
+
+/** The session id from the cookie, if it looks like one of ours. */
+function sessionIdOf(req: Request): string | null {
+  const id = readCookie(header(req, "cookie"), SESSION_COOKIE);
+  return id && id.length <= 100 && /^[A-Za-z0-9_-]+$/.test(id) ? id : null;
+}
+
+type Session = { email: string; sessionHash: string };
+
+/** The signed in organiser, or an answer for why not (404 while fundraising is off, 401). */
+async function signedIn(req: Request, res: Response): Promise<Session | null> {
+  if (!(await fundraisingIsOn())) {
+    res.status(404).json(NOT_FOUND);
+    return null;
+  }
+  const id = sessionIdOf(req);
+  const sessionHash = id ? hashSessionId(id) : null;
+  const found = sessionHash ? await findSession(sessionHash) : null;
+  if (!found || !sessionHash) {
+    res.status(401).json(SIGN_IN_AGAIN);
+    return null;
+  }
+  return { email: found.email.toLowerCase(), sessionHash };
+}
+
+type Owned = FundraiserRecord & { meter: Meter };
+
+/** The organiser's own approved fundraiser, or an answer: someone else's reads as not there. */
+async function ownFundraiser(req: Request, res: Response, s: Session): Promise<Owned | null> {
+  const raw = String(req.params.id ?? "");
+  const id = /^[1-9]\d{0,9}$/.test(raw) ? Number(raw) : NaN;
+  const f = Number.isSafeInteger(id) && id <= 2147483647 ? await getFundraiser(id) : null;
+  if (!f || f.email.trim().toLowerCase() !== s.email) {
+    res.status(404).json(NOT_FOUND);
+    return null;
+  }
+  if (f.status !== "approved") {
+    res.status(410).json(NO_LONGER);
+    return null;
+  }
+  return f;
+}
+
+export async function postManageRequest(req: Request, res: Response): Promise<Response | void> {
+  if (!fromOurOwnPage(req, res)) return;
   const parsed = requestSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: "Please give a valid email address" });
   const email = parsed.data.email.toLowerCase();
   const now = Date.now();
-  // Both limits are counted every time, so a limited email still uses up its IP's allowance.
-  const emailOk = emailLimiter.allow(email, now);
-  const ipOk = ipLimiter.allow(req.ip ?? "unknown", now);
-  if (emailOk && ipOk) {
-    try {
-      if (await fundraisingIsOn()) {
-        for (const f of await findApprovedByEmail(email)) {
-          const token = newManageToken();
-          await storeManageToken(issueManageToken({ token, fundraiserId: f.id, now: new Date() }));
-          await sendManageLinkEmail(f, token);
-        }
-      }
-    } catch (err) {
-      console.error("fundraise manage request failed:", err instanceof Error ? err.message : err);
-    }
+  // Every limit is counted every time, so a limited email still uses up its address's allowance.
+  const allowed = [emailLimiter.allow(email, now), emailDayLimiter.allow(email, now), ipLimiter.allow(req.ip ?? "unknown", now)].every(
+    Boolean,
+  );
+  // Always the same answer, and given BEFORE looking: match or not, limited or not, switched on or
+  // not, so neither the words nor the time it takes tell anyone who is signed up.
+  res.status(200).json({ message: MANAGE_REQUEST_MESSAGE });
+  if (!allowed) return;
+  try {
+    if (!(await fundraisingIsOn())) return;
+    const mine = await findApprovedByEmail(email);
+    if (mine.length === 0) return;
+    const code = newSignInCode();
+    await saveSignInCode(email, hashSignInCode(email, code, config.ADMIN_SESSION_SECRET), new Date(Date.now() + SIGN_IN_CODE_TTL_MS));
+    // One code for the email, whichever of their fundraisers; greeted by the newest one's name.
+    await sendSignInCodeEmail(email, mine[0].name, code);
+  } catch (err) {
+    console.error("fundraise sign in code request failed:", err instanceof Error ? err.message : err);
   }
-  // Always the same answer: match or not, limited or not, so it never tells anyone who is signed up.
-  return res.status(200).json({ message: MANAGE_REQUEST_MESSAGE });
 }
 
-type Opened = { fundraiser: FundraiserRecord; tokenHash: string };
-
-// Open a manage link, or answer for it: 404 unknown, 410 expired or no longer changeable.
-async function openLink(req: Request, res: Response): Promise<Opened | null> {
-  if (!tokenLimiter.allow(req.ip ?? "unknown", Date.now())) {
-    res.status(429).json({ error: "Too many tries. Please try again shortly." });
-    return null;
-  }
-  if (!(await fundraisingIsOn())) {
-    res.status(404).json({ error: "This link is not valid" });
-    return null;
-  }
-  const token = String(req.params.token ?? "");
-  const tokenHash = hashManageToken(token);
+export async function postManageSignIn(req: Request, res: Response): Promise<Response | void> {
+  if (!fromOurOwnPage(req, res)) return;
+  const parsed = signInSchema.safeParse(req.body);
+  const code = parsed.success ? readCode(parsed.data.code) : null;
+  if (!parsed.success || !code) return res.status(400).json({ error: "Please put in your email address and the 6 digit code." });
+  const email = parsed.data.email.toLowerCase();
+  const now = Date.now();
+  const emailOk = signInEmailLimiter.allow(email, now);
+  const ipOk = signInIpLimiter.allow(req.ip ?? "unknown", now);
+  if (!emailOk || !ipOk) return res.status(429).json(TOO_MANY);
   try {
-    const { fundraiserId } = verifyManageToken(token.length > 0 && token.length <= 100 ? await findManageToken(tokenHash) : null, new Date());
-    const f = await getFundraiser(fundraiserId);
-    if (!f) {
-      res.status(404).json({ error: "This link is not valid" });
-      return null;
+    if (!(await fundraisingIsOn())) return res.status(404).json(NOT_FOUND);
+    // The try is counted before the code is compared (countCodeTry), so tries sent at once each use
+    // one up. Every refusal is the same answer. A code whose tries are all used is forgotten.
+    const row = await countCodeTry(email);
+    const verdict = codeVerdict(row, email, code, config.ADMIN_SESSION_SECRET, new Date());
+    if (verdict !== "ok") {
+      if (verdict === "dead" || verdict === "expired" || (row && row.attempts >= MAX_CODE_ATTEMPTS)) await deleteSignInCode(email);
+      return res.status(401).json({ error: WRONG_CODE_MESSAGE });
     }
-    if (f.status !== "approved") {
-      res.status(410).json({ error: "This fundraiser can no longer be changed online. Please email events@nbcc.scot." });
-      return null;
-    }
-    return { fundraiser: f, tokenHash };
+    await deleteSignInCode(email); // one use only
+    if ((await listForOrganiser(email)).length === 0) return res.status(401).json({ error: WRONG_CODE_MESSAGE });
+    // A NEW session, always: one the browser already holds (perhaps planted by someone else) is ended.
+    const old = sessionIdOf(req);
+    if (old) await deleteSession(hashSessionId(old));
+    const id = newSessionId();
+    await createSession(hashSessionId(id), email, new Date(Date.now() + SESSION_TTL_MS));
+    res.cookie(SESSION_COOKIE, id, sessionCookieOptions(config.NODE_ENV === "production"));
+    return res.status(200).json({ status: "signed_in" });
   } catch (err) {
-    if (err instanceof ManageTokenError) {
-      if (err.reason === "expired") {
-        res.status(410).json({ error: "This link has run out. Ask for a new one: links work for 24 hours." });
-      } else {
-        res.status(404).json({ error: "This link is not valid" });
-      }
-      return null;
-    }
-    throw err;
+    console.error("fundraise sign in failed:", err instanceof Error ? err.message : err);
+    return res.status(500).json({ error: "We could not sign you in just now. Please try again in a few minutes." });
   }
 }
 
@@ -224,59 +323,162 @@ function editableOf(f: FundraiserRecord) {
   return out;
 }
 
-export async function getManage(req: Request, res: Response): Promise<Response | void> {
+export async function getManageSession(req: Request, res: Response): Promise<Response | void> {
   try {
-    const opened = await openLink(req, res);
-    if (!opened) return;
-    const f = opened.fundraiser;
-    const waiting = await waitingEditFor(f.id);
-    return res.status(200).json({
-      fundraiser: {
-        id: f.id,
-        slug: f.slug,
-        title: f.title,
-        path: f.path,
-        pageUrl: hasPage(f) ? fundraiserPageUrl(f.slug) : null,
-        editable: editableOf(f),
-      },
-      waitingEdit: waiting ? { id: waiting.id, changes: waiting.changes, createdAt: waiting.createdAt } : null,
-    });
+    const s = await signedIn(req, res);
+    if (!s) return;
+    const mine = await listForOrganiser(s.email);
+    const fundraisers = await Promise.all(
+      mine.map(async (f) => {
+        const [waiting, rows] = await Promise.all([waitingEditFor(f.id), wallRows(f.id)]);
+        const page = hasPage(f);
+        return {
+          id: f.id,
+          slug: f.slug,
+          title: f.title,
+          path: f.path,
+          status: f.status,
+          public: f.public,
+          pageUrl: page ? fundraiserPageUrl(f.slug) : null,
+          // The QR code is the page's, so only a page has one (it is no longer on the page itself).
+          qrUrl: page ? `/fundraise/${f.slug}/qr.svg` : null,
+          meter: f.meter,
+          editable: editableOf(f),
+          waitingEdit: waiting ? { id: waiting.id, changes: waiting.changes, createdAt: waiting.createdAt } : null,
+          // As the wall shows them: a name or Anonymous, the amount unless hidden, the message unless
+          // staff hid it. Never a giver's email, full name or anything else about them.
+          gifts: wallEntries(rows),
+          finishedRequestedAt: f.finishedRequestedAt ?? null,
+        };
+      }),
+    );
+    // Private: never kept by a browser or anything in between.
+    res.setHeader("Cache-Control", "no-store");
+    return res.status(200).json({ fundraisers });
   } catch (err) {
-    console.error("fundraise manage read failed:", err instanceof Error ? err.message : err);
+    console.error("fundraise private area read failed:", err instanceof Error ? err.message : err);
     return res.status(500).json({ error: "This page is temporarily unavailable" });
   }
 }
 
-export async function postManage(req: Request, res: Response): Promise<Response | void> {
+export async function postManageEdit(req: Request, res: Response): Promise<Response | void> {
   try {
-    const opened = await openLink(req, res);
-    if (!opened) return;
+    if (!fromOurOwnPage(req, res)) return;
+    const s = await signedIn(req, res);
+    if (!s) return;
+    const f = await ownFundraiser(req, res, s);
+    if (!f) return;
     const parsed = editSchema.safeParse(req.body);
     if (!parsed.success) {
       return res.status(400).json({ error: "Some of your changes need another look", fields: fieldErrors(parsed.error.issues) });
     }
-    // A new start is checked against the finish time staff hold (TASK-499 review), so the finish
-    // never ends up before it. Approving it checks again, against the row as it is then.
-    const clash = finishTimeProblem(opened.fundraiser, parsed.data);
-    if (clash) {
-      return res.status(400).json({ error: "Some of your changes need another look", fields: { [clash]: FINISH_BEFORE_START } });
+    // Checked as it would land: what is stored with the change on top (finish after start, the
+    // ticket link, what an event card needs). Approving it checks the times again, against the row
+    // as it is then.
+    const checked = checkOrganiserEdit(f, parsed.data);
+    if (Object.keys(checked.fields).length > 0) {
+      return res.status(400).json({ error: "Some of your changes need another look", fields: checked.fields });
     }
-    const edit = await requestEdit(opened.fundraiser.id, parsed.data, opened.tokenHash);
+    const edit = await requestEdit(f.id, checked.change, s.email);
     return res.status(202).json({ status: "waiting", edit: { id: edit.id, changes: edit.changes, createdAt: edit.createdAt } });
   } catch (err) {
-    if (err instanceof FundraiserError && err.reason === "bad_status") {
-      return res.status(410).json({ error: "This fundraiser can no longer be changed online. Please email events@nbcc.scot." });
-    }
-    console.error("fundraise manage save failed:", err instanceof Error ? err.message : err);
-    return res.status(500).json({ error: "We could not save your changes right now. Please try again later." });
+    if (err instanceof FundraiserError && err.reason === "bad_status") return res.status(410).json(NO_LONGER);
+    if (err instanceof FundraiserError && err.reason === "not_found") return res.status(404).json(NOT_FOUND);
+    console.error("fundraise private area change failed:", err instanceof Error ? err.message : err);
+    return res.status(500).json({ error: "We could not send your changes right now. Please try again later." });
   }
+}
+
+export async function postManageFinished(req: Request, res: Response): Promise<Response | void> {
+  try {
+    if (!fromOurOwnPage(req, res)) return;
+    const s = await signedIn(req, res);
+    if (!s) return;
+    const f = await ownFundraiser(req, res, s);
+    if (!f) return;
+    const { record, first } = await markFinishedRequested(f.id, s.email);
+    // Staff hear once, however many times it is pressed. Best effort: it is recorded either way.
+    if (first) await sendFinishedStaffEmail(record, f.meter.raisedPence);
+    return res.status(200).json({ status: "thanks", finishedRequestedAt: record.finishedRequestedAt ?? null });
+  } catch (err) {
+    if (err instanceof FundraiserError && err.reason === "bad_status") return res.status(410).json(NO_LONGER);
+    if (err instanceof FundraiserError && err.reason === "not_found") return res.status(404).json(NOT_FOUND);
+    console.error("fundraise finished request failed:", err instanceof Error ? err.message : err);
+    return res.status(500).json({ error: "We could not send that just now. Please try again in a few minutes." });
+  }
+}
+
+export async function postManagePayIn(req: Request, res: Response): Promise<Response | void> {
+  if (!fromOurOwnPage(req, res)) return;
+  let s: Session | null;
+  let f: Owned | null;
+  try {
+    s = await signedIn(req, res);
+    if (!s) return;
+    f = await ownFundraiser(req, res, s);
+    if (!f) return;
+  } catch (err) {
+    console.error("fundraise pay in read failed:", err instanceof Error ? err.message : err);
+    return res.status(500).json({ error: "We could not start your payment just now. Please try again in a few minutes." });
+  }
+  // Loaded here, not at the top, so this router stays import safe for tests that never touch Stripe.
+  const { buildPayInSessionParams, currentCardFee, payInSchema } = await import("./api");
+  const parsed = payInSchema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: "Please check the amount", fields: fieldErrors(parsed.error.issues) });
+  if (!payInLimiter.allow(s.email, Date.now())) return res.status(429).json(TOO_MANY);
+  try {
+    const { stripe } = await import("../clients/stripe");
+    const params = buildPayInSessionParams(
+      {
+        fundraiserId: f.id,
+        amountPence: parsed.data.amountPence,
+        coverFee: parsed.data.coverFee === true,
+        name: f.name,
+        email: f.email,
+        manageUrl: manageUrl(),
+      },
+      await currentCardFee(),
+    );
+    const session = await stripe.checkout.sessions.create(params);
+    return res.status(200).json({ url: session.url });
+  } catch (err) {
+    console.error("fundraise pay in checkout failed:", err instanceof Error ? err.message : err);
+    return res.status(502).json({ error: "Card payments are not working just now. Please try again in a few minutes." });
+  }
+}
+
+export async function postManageSignOut(req: Request, res: Response): Promise<Response | void> {
+  if (!fromOurOwnPage(req, res)) return;
+  try {
+    const id = sessionIdOf(req);
+    if (id) await deleteSession(hashSessionId(id));
+  } catch (err) {
+    console.error("fundraise sign out failed:", err instanceof Error ? err.message : err);
+  }
+  const { httpOnly, secure, sameSite, path } = sessionCookieOptions(config.NODE_ENV === "production");
+  res.clearCookie(SESSION_COOKIE, { httpOnly, secure, sameSite, path });
+  return res.status(200).json({ status: "signed_out" });
+}
+
+/**
+ * The 24 hour links (TASK-494) are retired: no new ones are sent, and one already in an inbox no
+ * longer opens anything. The page tells them to ask for a sign in code instead.
+ */
+export function retiredManageLink(_req: Request, res: Response): Response {
+  return res.status(410).json({ error: "Links are no longer used. Put in your email address and we will send you a sign in code." });
 }
 
 fundraiseRouter.post("/api/fundraise", postFundraise);
 fundraiseRouter.get("/api/fundraise/captcha", getFundraiseCaptcha);
 fundraiseRouter.get("/api/fundraisers", getFundraisers);
 fundraiseRouter.get("/api/fundraisers/:slug", getFundraiserPage);
-// Registered before /:token so "request" is never read as a token.
+// The named routes go before /:token, so "request", "me" and the rest are never read as a link.
 fundraiseRouter.post("/api/fundraise/manage/request", postManageRequest);
-fundraiseRouter.get("/api/fundraise/manage/:token", getManage);
-fundraiseRouter.post("/api/fundraise/manage/:token", postManage);
+fundraiseRouter.post("/api/fundraise/manage/sign-in", postManageSignIn);
+fundraiseRouter.get("/api/fundraise/manage/me", getManageSession);
+fundraiseRouter.post("/api/fundraise/manage/sign-out", postManageSignOut);
+fundraiseRouter.post("/api/fundraise/manage/fundraisers/:id/edit", postManageEdit);
+fundraiseRouter.post("/api/fundraise/manage/fundraisers/:id/finished", postManageFinished);
+fundraiseRouter.post("/api/fundraise/manage/fundraisers/:id/pay-in", postManagePayIn);
+fundraiseRouter.get("/api/fundraise/manage/:token", retiredManageLink);
+fundraiseRouter.post("/api/fundraise/manage/:token", retiredManageLink);

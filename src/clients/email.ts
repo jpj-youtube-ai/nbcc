@@ -85,13 +85,16 @@ async function sendAndLog(
   name: string | null,
   original: SesMessage,
   links: LinkTags | null = linkTagsForKind(kind),
+  // TASK-501: what the log row says the subject was, when the real one carries a secret (the
+  // fundraising sign in code is in its subject line, and codes are never logged).
+  logSubject?: string,
 ): Promise<void> {
   const msg = links ? withTrackedLinks(original, links) : original;
   // One audit row per person the message went to: almost always just `to`, but the Festive Ball
   // ticket report (TASK-464) is one message to a small group, and the log lists each of them.
   const everyone = [msg.to, ...(msg.alsoTo ?? [])];
   const logEach = async (error: string | null, messageId: string | null = null) => {
-    for (const to of everyone) await logAttempt(kind, to, name, msg.subject, error, messageId);
+    for (const to of everyone) await logAttempt(kind, to, name, logSubject ?? msg.subject, error, messageId);
   };
   if (useStub) {
     await logEach(null);
@@ -370,6 +373,7 @@ async function sendVerbatim(
     html: string;
     text?: string;
   },
+  logSubject?: string,
 ): Promise<void> {
   await sendAndLog(kind, name, {
     to: message.email,
@@ -380,7 +384,7 @@ async function sendVerbatim(
     html: message.html,
     text: message.text,
     configurationSet: config.SES_TRANSACTIONAL_CONFIGURATION_SET || undefined,
-  });
+  }, linkTagsForKind(kind), logSubject);
 }
 
 export async function sendThankYou(message: ThankYouLetterEmail): Promise<void> {
@@ -547,9 +551,18 @@ export async function sendFundraiseApproved(name: string, message: FundraiseEmai
   await sendVerbatim("fundraiseApproved", name, message);
 }
 
-// Carries a 24 hour manage link; the token is a ?token= query word, which link tagging leaves alone.
-export async function sendFundraiseManage(name: string, message: FundraiseEmailMessage): Promise<void> {
-  await sendVerbatim("fundraiseManage", name, message);
+// TASK-501: the sign in code for the private area (email 8). It replaced the 24 hour manage link
+// ("fundraiseManage", still named on the Email audit for the rows already there). The code is in
+// the subject line, so the log keeps a subject without it.
+export const FUNDRAISE_CODE_LOG_SUBJECT = "Your NBCC sign in code";
+
+export async function sendFundraiseCode(name: string, message: FundraiseEmailMessage): Promise<void> {
+  await sendVerbatim("fundraiseCode", name, message, FUNDRAISE_CODE_LOG_SUBJECT);
+}
+
+// TASK-501: to events@ when an organiser presses "I've finished". Staff only, so never tagged.
+export async function sendFundraiseFinishedStaff(name: string, message: FundraiseEmailMessage): Promise<void> {
+  await sendVerbatim("fundraiseFinishedStaff", name, message);
 }
 
 // TASK-497: to the organiser when staff approve ("Your update is live") or reject ("About your

@@ -158,3 +158,20 @@ describe("the sign up form", () => {
     expect(text(link!.parentElement)).toContain("New to fundraising?");
   });
 });
+
+// TASK-501: the private area is signed in with an emailed code now, not a link we email.
+describe("paying in, on the help page", () => {
+  const section = text($("#paying-in"));
+
+  it("no longer talks about a link we email", () => {
+    expect(html).not.toMatch(/using the link we email you/i);
+    expect(section).not.toMatch(/link we email/i);
+  });
+
+  it("says how to sign in to the private area with a code", () => {
+    expect(section).toContain(
+      "Cash and sponsor money can be paid in by card from your private area. Go to nbcc.scot/fundraise/manage, put in your email address, and we will email you a code to sign in.",
+    );
+    expect($('#paying-in a[href="/fundraise/manage"]')).not.toBeNull();
+  });
+});

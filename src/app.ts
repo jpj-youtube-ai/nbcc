@@ -26,6 +26,7 @@ import { tickerRouter } from "./routes/ticker";
 import { ballRouter } from "./routes/ball";
 import { ballTransferRouter } from "./routes/ball-transfer";
 import { adminBallTransferRouter } from "./routes/admin-ball-transfer";
+import { adminQrRouter } from "./routes/admin-qr";
 import { createSiteRouter } from "./routes/site";
 
 export function createApp() {
@@ -91,6 +92,8 @@ export function createApp() {
   app.use(adminStoriesImportRouter);
   // The New pills in the admin, per person (TASK-478).
   app.use(adminWhatsNewRouter);
+  // QR codes for every page of the site, in the admin (TASK-492).
+  app.use(adminQrRouter);
   app.use(healthRouter);
   // Public newsletter unsubscribe (TASK-161/REQ-069). Must be mounted before the site
   // catch-all router below, otherwise its wildcard route would shadow /unsubscribe/:token.

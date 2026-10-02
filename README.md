@@ -7139,7 +7139,7 @@ is listed, every page is a 404, and manage links do nothing, until an admin swit
 | Public API | `src/routes/fundraise.ts` |
 | Admin API | `src/routes/admin-fundraising.ts` |
 | Checkout and webhook additions | `src/routes/api.ts`, `src/db/stripe-webhook-model.ts`, `src/db/stripe-webhook.ts` |
-| Tables | `migrations/1791200000000_fundraising.js`; access backfill `1791200000001_permissions-fundraising.js`; newsletter source `1791200000002_newsletter-source-fundraise.js`; the address boxes and event questions (TASK-499) `1791200000030_fundraiser-sign-up-details.js` |
+| Tables | `migrations/1791200000000_fundraising.js`; access backfill `1791200000001_permissions-fundraising.js`; newsletter source `1791200000002_newsletter-source-fundraise.js`; the address boxes and event questions (TASK-499) `1791200000040_fundraiser-sign-up-details.js` |
 
 ### Data
 
@@ -7151,7 +7151,7 @@ holder approved while fundraising is off, waiting for "Your page is live"; its m
 fundraising has never been switched on. On `donations`: `fundraiser_id`, `supporter_message`, `show_name`,
 `show_amount` and `message_hidden`, all nullable or defaulted, so existing gifts are untouched.
 
-**The sign up details (TASK-499, `1791200000030_fundraiser-sign-up-details.js`).** New columns on
+**The sign up details (TASK-499, `1791200000040_fundraiser-sign-up-details.js`).** New columns on
 `fundraisers`, every one nullable or defaulted, so a sign up made before reads as "not answered":
 
 - where to post things, in separate boxes: `post_line1`, `post_line2`, `post_town`, `post_postcode`
@@ -7338,7 +7338,12 @@ declinedReason, createdAt, approvedAt, approvedBy, updatedAt, updatedBy, pageUrl
 `postLine1, postLine2, postTown, postPostcode, cardLine, endTime, timeTbc, venueAddress,
 venuePostcode, access, price, booking, ticketUrl, ageLimit, dressCode, included, creditName`.
 `PATCH` takes any of them, each checked on its own as the sign up checks it (a postcode, an https
-ticket link, a finish after a start given in the same change); `booking: ""` clears the answer. `edits` are
+ticket link); `booking: ""` clears the answer. A change to either time is checked, under the row's
+lock, against the other time as stored, so the finish never ends up at or before the start: a staff
+`PATCH` that would do it is a `400` naming the time changed ("The finish time is before the start."),
+an organiser's change that would do it is refused when they send it (`400`) and again if it is
+approved later (`409`, nothing written; it can still be rejected). A sign up with no finish time,
+as every one from before TASK-499 has, is never refused. `edits` are
 `{ id, changes, status (waiting | approved | rejected | replaced), createdAt, decidedAt, decidedBy }`, the
 waiting one first. `cash` rows are `{ id, amountPence, paidInOn, note, createdBy, createdAt }`.
 `wall` rows (hidden ones included) are `{ donationId, fullName, shortName, anonymous, showName,

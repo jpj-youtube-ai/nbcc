@@ -87,6 +87,7 @@ import {
   claimNextWaitingLiveEmail,
   countWaitingLiveEmails,
   markLiveEmailWaiting,
+  patchFundraiser,
   FundraiserError,
 } from "../../src/db/fundraisers";
 
@@ -397,5 +398,58 @@ describe("the sign up details (TASK-499)", () => {
     expect(got.params).toContainEqual(["step free entry"]);
     expect(got.params).toContain("https://tickets.example.com/q");
     expect(got.params).toContain("EX1 1EX");
+  });
+});
+
+// Review fix: a staff change or an approved organiser change can never leave the finish before the
+// start: each is checked against the row as it is, under its lock, and nothing is written if not.
+describe("a change that would put the finish before the start", () => {
+  const timed = (over: Record<string, unknown> = {}) => fundraiserRow({ path: "event", start_time: "10:00", end_time: "12:00", ...over });
+  const lockAnd = (row: Record<string, unknown>, extra: Answer = () => undefined) =>
+    useClient((sql, params) => {
+      if (sql.includes("FOR UPDATE") && sql.includes("FROM fundraisers f")) return { rows: [row] };
+      return extra(sql, params);
+    });
+
+  it("refuses a staff change of only the start, past the stored finish, naming the start", async () => {
+    const calls = lockAnd(timed());
+    await expect(patchFundraiser(9, { startTime: "13:00" }, "admin:kim@example.com")).rejects.toMatchObject({
+      reason: "bad_times",
+      field: "startTime",
+    });
+    expect(calls.some(([sql]) => sql.startsWith("UPDATE fundraisers"))).toBe(false);
+    expect(calls.map(([sql]) => sql)).toContain("ROLLBACK");
+  });
+
+  it("refuses a staff change of only the finish, before the stored start, naming the finish", async () => {
+    lockAnd(timed());
+    await expect(patchFundraiser(9, { endTime: "09:30" }, "admin:kim@example.com")).rejects.toMatchObject({
+      reason: "bad_times",
+      field: "endTime",
+    });
+  });
+
+  it("saves a start change on a sign up with no finish time, as every old one is", async () => {
+    const calls = lockAnd(timed({ end_time: null }), (sql) => (sql.includes("FROM fundraisers f WHERE f.id = $1") ? { rows: [timed({ end_time: null })] } : undefined));
+    await patchFundraiser(9, { startTime: "23:00" }, "admin:kim@example.com");
+    expect(calls.some(([sql]) => sql.startsWith("UPDATE fundraisers SET start_time = $1"))).toBe(true);
+  });
+
+  it("refuses to approve an organiser's new start that is past the stored finish", async () => {
+    const calls = lockAnd(timed(), (sql) =>
+      sql.startsWith("SELECT changes, status FROM fundraiser_edits") ? { rows: [{ changes: { startTime: "12:30" }, status: "waiting" }] } : undefined,
+    );
+    await expect(decideEdit(9, 3, true, "admin:kim@example.com")).rejects.toMatchObject({ reason: "bad_times", field: "startTime" });
+    expect(calls.some(([sql]) => sql.startsWith("UPDATE fundraisers") || sql.startsWith("UPDATE fundraiser_edits"))).toBe(false);
+  });
+
+  it("still lets staff reject that change", async () => {
+    const calls = lockAnd(timed(), (sql) => {
+      if (sql.startsWith("SELECT changes, status FROM fundraiser_edits")) return { rows: [{ changes: { startTime: "12:30" }, status: "waiting" }] };
+      if (sql.includes("FROM fundraisers f WHERE f.id = $1")) return { rows: [timed()] };
+      return undefined;
+    });
+    await decideEdit(9, 3, false, "admin:kim@example.com");
+    expect(calls.some(([sql]) => sql.startsWith("UPDATE fundraiser_edits SET status"))).toBe(true);
   });
 });

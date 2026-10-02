@@ -7,7 +7,7 @@ import { renderCard, renderEventsPage } from "../../src/events/render";
 import { fundraiserEventRecord, renderGetInvolvedPage } from "../../src/fundraising/render";
 import type { PublicCard } from "../../src/fundraising/model";
 import { SEED_EVENTS } from "./helpers/events-seed";
-import { nbccCases, OLD_BOOKING_LINE, OLD_COMMUNITY, RAISING, TEMPLATE, TODAY } from "./helpers/card-golden-cases";
+import { lf, nbccCases, OLD_BOOKING_LINE, OLD_COMMUNITY, RAISING, TEMPLATE, TODAY } from "./helpers/card-golden-cases";
 
 // TASK-499, the card fix. A "holding an event" sign up's card on Get involved is drawn from the
 // answers to the new event questions: the line for the front, the finish time, the full address, the
@@ -25,6 +25,12 @@ const frag = (html: string) => new DOMParser().parseFromString(`<!doctype html><
 describe("NBCC's own events are drawn exactly as before", () => {
   it.each(nbccCases())("the card %s", (name, ev) => {
     expect(renderCard(ev)).toBe(GOLDEN[`card:${name}`]);
+  });
+
+  it("reads the template the same whichever line endings the checkout has", () => {
+    expect(TEMPLATE).not.toContain("\r");
+    expect(lf(TEMPLATE.replace(/\n/g, "\r\n"))).toBe(TEMPLATE);
+    expect(sha(renderEventsPage(lf(TEMPLATE.replace(/\n/g, "\r\n")), SEED_EVENTS))).toBe(GOLDEN["page:events"]);
   });
 
   it("the whole events page", () => {

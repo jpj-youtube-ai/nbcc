@@ -91,7 +91,10 @@ export const OLD_COMMUNITY = {
   },
 };
 
-export const TEMPLATE = readFileSync(resolve(ROOT, "events.html"), "utf8");
+// Line endings normalised: a Windows checkout (core.autocrlf) has CRLF where CI has LF, and the page
+// hashes below must be the same on both.
+export const lf = (text: string) => text.replace(/\r\n/g, "\n");
+export const TEMPLATE = lf(readFileSync(resolve(ROOT, "events.html"), "utf8"));
 export const TODAY = "2026-10-02";
 
 // The words an old community card had, and should never have had: it may well be ticketed.

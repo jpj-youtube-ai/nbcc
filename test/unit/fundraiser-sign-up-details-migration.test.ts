@@ -10,7 +10,7 @@ import { BOOKINGS } from "../../src/fundraising/model";
 // a code rollback is safe (golden rule 2). Checked against a fake pgm, without a database.
 
 const ROOT = resolve(__dirname, "../..");
-const NAME = "1791200000030_fundraiser-sign-up-details.js";
+const NAME = "1791200000040_fundraiser-sign-up-details.js";
 const migration = createRequire(import.meta.url)(resolve(ROOT, "migrations", NAME)) as {
   up: (pgm: unknown) => void;
   down: (pgm: unknown) => void;
@@ -60,11 +60,12 @@ describe("the sign up details migration", () => {
   const adds = calls.filter((c) => c.op === "addColumns");
   const columns = adds[0].args[1] as Record<string, { type: string; notNull?: boolean; default?: unknown }>;
 
-  // What matters is that nothing production has already run sorts after it; later work rightly
-  // comes after. So: it follows 1791200000020, the highest on main before it.
+  // Nothing production has already run may sort after it: it comes after TASK-492's QR channel
+  // (1791200000030), the highest on main before it, and is last for now.
   it("sorts after everything production had already run, so production never sees it out of order", () => {
     const all = readdirSync(resolve(ROOT, "migrations")).filter((f) => f.endsWith(".js")).sort();
-    expect(all.indexOf(NAME)).toBe(all.indexOf("1791200000020_fundraiser-live-email-pending.js") + 1);
+    expect(all.indexOf(NAME)).toBeGreaterThan(all.indexOf("1791200000030_analytics-qr-channel.js"));
+    expect(all[all.length - 1]).toBe(NAME);
   });
 
   it("adds the new columns to fundraisers, each nullable or with a default", () => {

@@ -109,7 +109,7 @@ export const BOOKING_LABELS: Record<FundraiserBooking, string> = {
   free: "Free, just come along",
 };
 
-/** "ka65ee" -> "KA1 1AA": upper case, one space before the last three. Check it is valid first. */
+/** "ka11aa" -> "KA1 1AA": upper case, one space before the last three. Check it is valid first. */
 export function normalisePostcode(value: string): string {
   const compact = value.replace(/\s+/g, "").toUpperCase();
   return `${compact.slice(0, -3)} ${compact.slice(-3)}`;
@@ -243,10 +243,28 @@ const cardLine = z
   .transform((v) => (v === "" ? null : v));
 
 // The finish time, when both are given, has to be after the start (the events editor's words).
+export const FINISH_BEFORE_START = "The finish time is before the start.";
+
 function finishAfterStart(b: { startTime?: string | null; endTime?: string | null }, ctx: z.RefinementCtx) {
   if (b.startTime && b.endTime && b.endTime <= b.startTime) {
-    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["endTime"], message: "The finish time is before the start." });
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["endTime"], message: FINISH_BEFORE_START });
   }
+}
+
+type Times = { startTime?: string | null; endTime?: string | null };
+
+/**
+ * A change to one of the times, checked against the other as it is stored: would the finish end up
+ * at or before the start? Returns the time to name (the one that was changed; the finish when both
+ * were), or null when all is well. A sign up with no finish time, as every one from before TASK-499
+ * is, is never refused. Used under the row's lock for staff changes and for approving an organiser's.
+ */
+export function finishTimeProblem(stored: Times, change: Record<string, unknown>): "startTime" | "endTime" | null {
+  const has = (k: "startTime" | "endTime") => Object.prototype.hasOwnProperty.call(change, k) && change[k] !== undefined;
+  const start = has("startTime") ? (change.startTime as string | null) : stored.startTime ?? null;
+  const end = has("endTime") ? (change.endTime as string | null) : stored.endTime ?? null;
+  if (!start || !end || end > start) return null;
+  return has("endTime") ? "endTime" : has("startTime") ? "startTime" : null;
 }
 
 

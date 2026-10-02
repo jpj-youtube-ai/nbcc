@@ -321,6 +321,22 @@ describe("using a manage link", () => {
     expect(db.requestEdit).toHaveBeenCalledWith(9, { targetPence: 30000 }, hashManageToken(token));
   });
 
+  // Review fix: a new start is checked against the finish time staff hold, so it never lands
+  // before it.
+  it("refuses a start past the finish time held for it, naming the start", async () => {
+    db.getFundraiser.mockResolvedValue(record({ path: "event", startTime: "10:00", endTime: "12:00" } as Partial<FundraiserRecord>));
+    const res = await run(postManage, { params: { token }, body: { startTime: "13:00" } });
+    expect(res.statusCode).toBe(400);
+    expect((res.body as { fields: Record<string, string> }).fields).toEqual({ startTime: "The finish time is before the start." });
+    expect(db.requestEdit).not.toHaveBeenCalled();
+  });
+
+  it("takes a new start when there is no finish time, as on every sign up from before", async () => {
+    db.requestEdit.mockResolvedValue({ id: 4, changes: { startTime: "13:00" }, status: "waiting", createdAt: "2026-10-02T12:00:00.000Z" });
+    const res = await run(postManage, { params: { token }, body: { startTime: "13:00" } });
+    expect(res.statusCode).toBe(202);
+  });
+
   it("refuses a change to anything an organiser may not change", async () => {
     const res = await run(postManage, { params: { token }, body: { title: "Something else" } });
     expect(res.statusCode).toBe(400);

@@ -4,6 +4,7 @@ import { insertAudit } from "./donations";
 import { ACCESS } from "../events/model";
 import {
   BOOKINGS,
+  finishTimeProblem,
   hasPage,
   meter,
   slugify,
@@ -21,13 +22,24 @@ import {
 // writes its audit_log row in the SAME transaction, against entity "fundraiser" and the
 // fundraiser's id, so the admin's History for a fundraiser is one query.
 
-export type FundraiserErrorReason = "not_found" | "bad_status" | "slug_taken" | "not_waiting" | "replaced";
+export type FundraiserErrorReason = "not_found" | "bad_status" | "slug_taken" | "not_waiting" | "replaced" | "bad_times";
 
 export class FundraiserError extends Error {
-  constructor(public readonly reason: FundraiserErrorReason) {
+  constructor(
+    public readonly reason: FundraiserErrorReason,
+    /** For bad_times: the time the change would leave wrong (startTime or endTime). */
+    public readonly field?: string,
+  ) {
     super(`fundraiser: ${reason}`);
     this.name = "FundraiserError";
   }
+}
+
+// A change of one time is checked against the other as the row holds it (TASK-499 review), so the
+// finish never ends up before the start. Run under the row's lock, before anything is written.
+function checkTimes(before: FundraiserRecord, change: Record<string, unknown>): void {
+  const field = finishTimeProblem(before, change);
+  if (field) throw new FundraiserError("bad_times", field);
 }
 
 export interface FundraisingSettings {
@@ -478,6 +490,7 @@ export async function fundraiserHistory(fundraiserId: number): Promise<HistoryRo
 export async function patchFundraiser(id: number, patch: AdminPatch, actor: string): Promise<FundraiserRecord> {
   return inTransaction(async (client) => {
     const before = await lockFundraiser(client, id);
+    checkTimes(before, patch);
     const changed = await applyPatch(client, id, patch, actor);
     await insertAudit(client, {
       actor,
@@ -635,7 +648,7 @@ export async function decideEdit(
   actor: string,
 ): Promise<FundraiserRecord> {
   return inTransaction(async (client) => {
-    await lockFundraiser(client, fundraiserId);
+    const live = await lockFundraiser(client, fundraiserId);
     const r = await client.query<{ changes: FundraiserEdit; status: string }>(
       "SELECT changes, status FROM fundraiser_edits WHERE id = $1 AND fundraiser_id = $2 FOR UPDATE",
       [editId, fundraiserId],
@@ -645,6 +658,7 @@ export async function decideEdit(
     if (edit.status === "replaced") throw new FundraiserError("replaced");
     if (edit.status !== "waiting") throw new FundraiserError("not_waiting");
     let changed: string[] = [];
+    if (approve) checkTimes(live, (edit.changes ?? {}) as Record<string, unknown>);
     if (approve) changed = await applyPatch(client, fundraiserId, edit.changes as Partial<Record<PatchField, unknown>>, actor);
     await client.query(
       "UPDATE fundraiser_edits SET status = $1, decided_at = now(), decided_by = $2 WHERE id = $3",

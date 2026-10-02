@@ -6,6 +6,8 @@ import { londonToday } from "../events/model";
 import {
   EDITABLE_FIELDS,
   editSchema,
+  FINISH_BEFORE_START,
+  finishTimeProblem,
   hasPage,
   isListed,
   publicCard,
@@ -252,6 +254,12 @@ export async function postManage(req: Request, res: Response): Promise<Response 
     const parsed = editSchema.safeParse(req.body);
     if (!parsed.success) {
       return res.status(400).json({ error: "Some of your changes need another look", fields: fieldErrors(parsed.error.issues) });
+    }
+    // A new start is checked against the finish time staff hold (TASK-499 review), so the finish
+    // never ends up before it. Approving it checks again, against the row as it is then.
+    const clash = finishTimeProblem(opened.fundraiser, parsed.data);
+    if (clash) {
+      return res.status(400).json({ error: "Some of your changes need another look", fields: { [clash]: FINISH_BEFORE_START } });
     }
     const edit = await requestEdit(opened.fundraiser.id, parsed.data, opened.tokenHash);
     return res.status(202).json({ status: "waiting", edit: { id: edit.id, changes: edit.changes, createdAt: edit.createdAt } });

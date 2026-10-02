@@ -11,6 +11,8 @@ import {
   ACCESS_LABELS,
   BOOKING_LABELS,
   CARD_LINE_MAX,
+  FINISH_BEFORE_START,
+  finishTimeProblem,
   type FundraiserRecord,
 } from "../../src/fundraising/model";
 import { ACCESS } from "../../src/events/model";
@@ -402,5 +404,40 @@ describe("what the public sees of the new answers", () => {
 
   it("never credits a raising money page to anyone but the organiser", () => {
     expect(publicCard(record({ path: "raising" }), m).organisedBy).toBe("Robin T.");
+  });
+});
+
+// Review fix: a change to one time is checked against the other time as it is stored, so a finish
+// can never end up before the start, whichever of the two is changed.
+describe("a change to one of the times, against the times stored", () => {
+  const stored = { startTime: "10:00", endTime: "12:00" };
+
+  it("refuses a start moved past the stored finish, naming the start", () => {
+    expect(finishTimeProblem(stored, { startTime: "13:00" })).toBe("startTime");
+    expect(finishTimeProblem(stored, { startTime: "12:00" })).toBe("startTime");
+  });
+
+  it("refuses a finish moved before the stored start, naming the finish", () => {
+    expect(finishTimeProblem(stored, { endTime: "09:00" })).toBe("endTime");
+  });
+
+  it("names the finish when both change and disagree", () => {
+    expect(finishTimeProblem(stored, { startTime: "15:00", endTime: "14:00" })).toBe("endTime");
+  });
+
+  it("takes changes that keep the finish after the start, or clear one of them", () => {
+    expect(finishTimeProblem(stored, { startTime: "11:00" })).toBeNull();
+    expect(finishTimeProblem(stored, { endTime: "23:00" })).toBeNull();
+    expect(finishTimeProblem(stored, { endTime: null })).toBeNull();
+    expect(finishTimeProblem(stored, { startTime: null, endTime: "09:00" })).toBeNull();
+    expect(finishTimeProblem(stored, { price: "Free" })).toBeNull();
+  });
+
+  it("leaves a sign up with no finish time alone, as every one from before has", () => {
+    expect(finishTimeProblem({ startTime: "10:00", endTime: null }, { startTime: "23:30" })).toBeNull();
+  });
+
+  it("says it in the events editor's words", () => {
+    expect(FINISH_BEFORE_START).toBe("The finish time is before the start.");
   });
 });

@@ -32,7 +32,10 @@ const { getUserAuthRowMock, sendApprovedEmail, sendWaitingLiveEmails, sendEditDe
 
 vi.mock("../../src/db/fundraisers", () => {
   class FundraiserError extends Error {
-    constructor(public readonly reason: string) {
+    constructor(
+      public readonly reason: string,
+      public readonly field?: string,
+    ) {
       super(reason);
     }
   }
@@ -460,5 +463,30 @@ describe("changing the new answers", () => {
       access: ["a hearing loop"],
       postLine1: "1 Example Road",
     });
+  });
+});
+
+// Review fix: the finish time can never end up before the start through a change of one of them.
+describe("a change that would put the finish before the start", () => {
+  it("names the start when staff move only the start past the stored finish", async () => {
+    db.patchFundraiser.mockRejectedValue(new FundraiserError("bad_times", "startTime"));
+    const res = await run(routes.patchAdminFundraiser, { params: P, token: tokenFor("editor"), body: { startTime: "13:00" } });
+    expect(res.statusCode).toBe(400);
+    expect(res.body).toEqual({ error: "Some of it needs another look", fields: { startTime: "The finish time is before the start." } });
+  });
+
+  it("names the finish when staff move only the finish before the stored start", async () => {
+    db.patchFundraiser.mockRejectedValue(new FundraiserError("bad_times", "endTime"));
+    const res = await run(routes.patchAdminFundraiser, { params: P, token: tokenFor("editor"), body: { endTime: "09:00" } });
+    expect(res.statusCode).toBe(400);
+    expect(res.body).toEqual({ error: "Some of it needs another look", fields: { endTime: "The finish time is before the start." } });
+  });
+
+  it("says why an organiser's change cannot be approved, and emails nobody", async () => {
+    db.decideEdit.mockRejectedValue(new FundraiserError("bad_times", "startTime"));
+    const res = await run(routes.postApproveEdit, { params: { id: "9", editId: "3" }, token: tokenFor("editor") });
+    expect(res.statusCode).toBe(409);
+    expect(res.body).toEqual({ error: "This change would put the finish time before the start. Change the finish time first, or reject it." });
+    expect(sendEditDecisionEmail).not.toHaveBeenCalled();
   });
 });

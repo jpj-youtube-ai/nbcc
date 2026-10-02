@@ -160,6 +160,10 @@ Given("a fundraiser {string} that is still new", async function (title) {
   await insertFundraiser({ title, status: "new" });
 });
 
+Given("a fundraiser {string} that is still new, organised by {string}", async function (title, email) {
+  await insertFundraiser({ title, status: "new", email });
+});
+
 Given("the organiser of {string} holds a manage link", async function (title) {
   const f = await fundraiser(title);
   this.frToken = randomBytes(32).toString("base64url");
@@ -241,6 +245,26 @@ Then("the organiser of {string} was sent a {string} email", async function (titl
     [title, kind],
   );
   assert.ok(r.rows.length > 0, `no ${kind} email to the organiser of ${title}`);
+});
+
+// TASK-497: approved while fundraising is off, so nothing yet.
+Then("the organiser of {string} was not sent a {string} email", async function (title, kind) {
+  const r = await pool.query(
+    `SELECT 1 FROM email_log e JOIN fundraisers f ON lower(f.organiser_email) = lower(e.recipient)
+      WHERE f.title = $1 AND e.kind = $2 AND e.created_at > now() - interval '10 minutes'`,
+    [title, kind],
+  );
+  assert.equal(r.rows.length, 0, `a ${kind} email went to the organiser of ${title}`);
+});
+
+Then("{string} is waiting for its live email", async function (title) {
+  const r = await pool.query("SELECT live_email_pending FROM fundraisers WHERE title = $1 ORDER BY id DESC LIMIT 1", [title]);
+  assert.equal(r.rows[0].live_email_pending, true);
+});
+
+Then("{string} is not waiting for its live email", async function (title) {
+  const r = await pool.query("SELECT live_email_pending FROM fundraisers WHERE title = $1 ORDER BY id DESC LIMIT 1", [title]);
+  assert.equal(r.rows[0].live_email_pending, false);
 });
 
 Then("a {string} email went to the events inbox about {string}", async function (kind, title) {
@@ -395,6 +419,13 @@ When("{string} approves the waiting change to {string}", async function (email, 
   const e = await pool.query("SELECT id FROM fundraiser_edits WHERE fundraiser_id = $1 AND status = 'waiting'", [f.id]);
   assert.ok(e.rows[0], "no change is waiting");
   await adminCall(this, email, "POST", `/api/admin/fundraisers/${f.id}/edits/${e.rows[0].id}/approve`);
+});
+
+When("{string} rejects the waiting change to {string}", async function (email, title) {
+  const f = await fundraiser(title);
+  const e = await pool.query("SELECT id FROM fundraiser_edits WHERE fundraiser_id = $1 AND status = 'waiting'", [f.id]);
+  assert.ok(e.rows[0], "no change is waiting");
+  await adminCall(this, email, "POST", `/api/admin/fundraisers/${f.id}/edits/${e.rows[0].id}/reject`);
 });
 
 Then(

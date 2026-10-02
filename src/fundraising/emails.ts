@@ -1,17 +1,37 @@
-import { emailShell, heading, eyebrow, bodyP, note, button } from "../email/brand";
+import {
+  emailShell,
+  heading,
+  subheading,
+  eyebrow,
+  bodyP,
+  bodyList,
+  note,
+  button,
+  signOff,
+  signOffText,
+  questionsBox,
+  questionsText,
+} from "../email/brand";
 import { FOOTER_TEXT, POSTAL_ADDRESS } from "../legal/registration";
 import { KIND_LABELS, shortName, type SignUp } from "./model";
 
 // TASK-493: the community fundraising emails, built here and sent by src/fundraising/send.ts.
+// TASK-497: reworded to the words Jaimie signed off on 2026-10-02 (warmer, a signed close, and a
+// "Got any questions?" box with the phone and the events inbox side by side).
 // Pure: no pool, no config, no clock, so each is unit tested (test/unit/fundraising-emails.test.ts).
 //
-//   thanks     to the organiser when they sign up: thank you, we'll be in touch
-//   staff      to the events inbox: everything they told us, and what they would like
-//   approved   to the organiser: their page link, or for anyone else "you're on our list"
-//   manage     to the organiser: the 24 hour link to change their page
+//   thanks          to the organiser when they sign up: thank you, here is what happens next
+//   staff           to the events inbox: everything they told us, and the next steps
+//   approved        to the organiser: "your page is live" (raising money and public, sent once
+//                   fundraising is on), or "you're on our list" for anyone else
+//   manage          to the organiser: the 24 hour link to change their page
+//   edit approved   to the organiser: "your update is live"
+//   edit rejected   to the organiser: "about your update", we'll give you a ring
 //
 // They wear NBCC's usual shell with the events inbox as the contact, because a fundraiser's
-// questions belong with the events team, not the giving queue. Plain friendly English, no dashes.
+// questions belong with the events team, not the giving queue. Every email to an organiser ends
+// with its sign off, then the questions box; the staff summary signs off but has no box. Plain
+// friendly English, no dashes, and every stored value escaped.
 
 export const FUNDRAISING_EMAIL = "events@nbcc.scot";
 
@@ -38,35 +58,65 @@ export function pounds(pence: number): string {
 const shell = (body: string) =>
   emailShell(body, { contactEmail: FUNDRAISING_EMAIL, registration: true, postalAddress: POSTAL_ADDRESS });
 
-const TEXT_FOOTER = `Any questions? Reply to this email, or write to ${FUNDRAISING_EMAIL}.
+const EYEBROW = eyebrow("Fundraising for NBCC");
 
-${FOOTER_TEXT}`;
+/** An email to an organiser: the body, the sign off, then the questions box, in both parts. */
+function toOrganiser(subject: string, bodyHtml: string, textLines: string[], line: string): BuiltEmail {
+  const html = shell(bodyHtml + signOff(line) + questionsBox(FUNDRAISING_EMAIL));
+  const text = [...textLines, "", signOffText(line), "", questionsText(FUNDRAISING_EMAIL), "", FOOTER_TEXT].join("\n");
+  return { subject, html, text };
+}
+
+// Numbered steps in a plain text part.
+const numbered = (items: string[]): string[] => items.map((item, i) => `${i + 1}. ${item}`);
+const bulleted = (items: string[]): string[] => items.map((item) => `* ${item}`);
 
 // --- thanks for signing up ------------------------------------------------------------------------
 
-// Fixed words only: anyone can type any address into the public form, so this email carries
-// nothing they typed (no name, title or description). Otherwise the form would send any words, from
-// NBCC's own domain, to anyone. Everything they told us goes to the events inbox instead.
-export function buildSignUpThanksEmail(): BuiltEmail {
-  const hi = "Hello,";
+const MAX_FIRST_NAME = 20;
+// One word of letters (any alphabet), with an apostrophe or hyphen only BETWEEN letters: O'Neill,
+// Anne-Marie. No digits, dots, slashes, @ or markup, so it can never be a link or a tag.
+const NAME_WORD = /^\p{L}+(?:['’-]\p{L}+)*$/u;
+
+/**
+ * The first name from the sign up form, if it is safe to put in an email to the address they typed:
+ * the first word only, letters (with apostrophes or hyphens inside it), at most 20 characters, first
+ * letter capitalised. Anything else is null, and the email says "Hi there," instead.
+ */
+export function safeFirstName(typed: string | null | undefined): string | null {
+  const word = String(typed ?? "").trim().split(/\s+/)[0] ?? "";
+  if (word.length === 0 || word.length > MAX_FIRST_NAME || !NAME_WORD.test(word)) return null;
+  return word.charAt(0).toUpperCase() + word.slice(1);
+}
+
+const THANKS_STEPS = [
+  "Someone from our team will look at what you’ve sent us.",
+  "We’ll be in touch within a few days, usually with a quick, friendly call, to say hello and talk through your plans.",
+  "Once we’ve spoken, we’ll get you set up with everything you need.",
+];
+
+// Fixed words, bar one plain first name: anyone can type any address into the public form, so this
+// email carries nothing else they typed (no title, description, or the rest of their name).
+// Otherwise the form would send any words, from NBCC's own domain, to anyone. The first name is
+// only ever one word of letters, at most 20 (safeFirstName), so it cannot carry a link or a
+// message; anything else falls back to "Hi there,". Everything they told us goes to the events
+// inbox instead.
+export function buildSignUpThanksEmail(typedName?: string | null): BuiltEmail {
+  const first = safeFirstName(typedName);
+  const hi = first ? `Hi there ${first},` : "Hi there,";
+  const intro =
+    "We’re so excited that you want to raise money for NBCC. Every pound you raise helps the families we support, all year round, and we can’t wait to cheer you on.";
+  const small = "Nothing goes on our website until we’ve spoken. If this wasn’t you, don’t worry, you can ignore this email.";
   const body =
-    eyebrow("Fundraising for NBCC") +
-    heading("Thank you for signing up") +
-    bodyP(hi) +
-    bodyP("Thank you for wanting to raise money for NBCC. It means a great deal to the families we help.") +
-    bodyP("Someone from our team will look at what you sent and be in touch soon, usually within a few days. Nothing goes on our website until we have spoken. If this was not you, you can ignore this email.") +
-    note(`Any questions in the meantime? Just reply to this email, or write to ${FUNDRAISING_EMAIL}.`);
-  const text = [
-    hi,
-    "",
-    "Thank you for wanting to raise money for NBCC. It means a great deal to the families we help.",
-    "",
-    "Someone from our team will look at what you sent and be in touch soon, usually within a few days.",
-    "Nothing goes on our website until we have spoken. If this was not you, you can ignore this email.",
-    "",
-    TEXT_FOOTER,
-  ].join("\n");
-  return { subject: "Thank you for fundraising for NBCC", html: shell(body), text };
+    EYEBROW +
+    heading("Thank you, you’ve made our day!") +
+    bodyP(escapeHtml(hi)) +
+    bodyP(intro) +
+    subheading("What happens next") +
+    bodyList(THANKS_STEPS, true) +
+    note(small);
+  const text = [hi, "", intro, "", "WHAT HAPPENS NEXT", ...numbered(THANKS_STEPS), "", small];
+  return toOrganiser("Thank you for fundraising for NBCC!", body, text, "Thanks so much,");
 }
 
 // --- the summary to the events inbox --------------------------------------------------------------
@@ -100,8 +150,10 @@ function staffFacts(f: SignUp & { id: number }): Array<[string, string]> {
   return facts;
 }
 
+// For the team only, so no questions box: they are the people the questions go to.
 export function buildSignUpStaffEmail(f: SignUp & { id: number }, o: { adminUrl: string }): BuiltEmail {
   const facts = staffFacts(f);
+  const first = firstName(f.name);
   const rows = facts
     .map(
       ([label, value]) =>
@@ -109,115 +161,117 @@ export function buildSignUpStaffEmail(f: SignUp & { id: number }, o: { adminUrl:
         `<td style="padding:6px 0;vertical-align:top;font-size:14px">${escapeHtml(value)}</td></tr>`,
     )
     .join("");
+  const steps = [
+    `Give ${first} a ring within a few days to say hello.`,
+    "Approve or decline in Admin > Fundraising.",
+    `Replying to this email replies to ${first}.`,
+  ];
+  const line = "Go team!";
   const body =
     eyebrow("For the team") +
-    heading("A new fundraiser has signed up") +
-    bodyP(`${escapeHtml(f.name)} has signed up <b>${escapeHtml(f.title)}</b>. Nothing is public until someone approves it in the admin, under Fundraising.`) +
+    heading("Exciting news: a new fundraiser!") +
+    bodyP(`<b>${escapeHtml(f.name)}</b> has signed up <b>${escapeHtml(f.title)}</b>. Nothing is public until someone approves it.`) +
     `<table role="presentation" cellpadding="0" cellspacing="0" style="border-collapse:collapse;margin:0 0 16px">${rows}</table>` +
+    subheading("Next steps") +
+    bodyList(steps.map(escapeHtml)) +
     button(o.adminUrl, "Open the admin") +
-    note(`Replying to this email replies to ${escapeHtml(f.name)}.`);
+    signOff(line);
   const text = [
-    "A NEW FUNDRAISER HAS SIGNED UP",
+    "EXCITING NEWS: A NEW FUNDRAISER!",
     "",
-    `${f.name} has signed up ${f.title}. Nothing is public until someone approves it in the admin,`,
-    "under Fundraising.",
+    `${f.name} has signed up ${f.title}. Nothing is public until someone approves it.`,
     "",
     ...facts.map(([label, value]) => (value ? `${label}: ${value}` : label)),
     "",
+    "NEXT STEPS",
+    ...bulleted(steps),
+    "",
     `Open the admin: ${o.adminUrl}`,
     "",
-    `Replying to this email replies to ${f.name}.`,
+    signOffText(line),
   ].join("\n");
   return { subject: `New fundraiser: ${f.title}`, html: shell(body), text };
 }
 
 // --- approved -------------------------------------------------------------------------------------
 
+/**
+ * "Your page is live" when they have a page to link to, otherwise "you're on our list". A page
+ * holder approved while fundraising is switched off gets nothing yet: they are marked as waiting,
+ * and this goes to them when an admin switches fundraising on (src/fundraising/send.ts).
+ */
 export function buildApprovedEmail(
   f: { name: string; title: string },
-  o: { pageUrl: string | null; manageUrl: string | null; pagesOpen?: boolean },
+  o: { pageUrl: string | null; manageUrl: string | null },
 ): BuiltEmail {
   const hi = `Hi ${firstName(f.name)},`;
   const title = escapeHtml(f.title);
-  // Approved while fundraising is still switched off: a page link would be a 404, so say when.
-  if (o.pagesOpen === false) {
-    const body =
-      eyebrow("Fundraising for NBCC") +
-      heading("You're approved") +
-      bodyP(escapeHtml(hi)) +
-      bodyP(`Good news: <b>${title}</b> is approved. Your page will appear when our fundraising pages open, and we will be in touch about anything you asked us for.`) +
-      note(`Thank you. Any questions, just reply to this email or write to ${FUNDRAISING_EMAIL}.`);
-    const text = [
-      hi,
-      "",
-      `Good news: ${f.title} is approved. Your page will appear when our fundraising pages open, and`,
-      "we will be in touch about anything you asked us for.",
-      "",
-      "Thank you.",
-      "",
-      TEXT_FOOTER,
-    ].join("\n");
-    return { subject: `You're approved: ${f.title}`, html: shell(body), text };
-  }
   if (o.pageUrl) {
-    const manage = o.manageUrl
-      ? `To change your description, target, date or place, go to ${escapeHtml(o.manageUrl)} and we will email you a link. We check every change before it shows.`
-      : "";
+    const steps: Array<[string, string]> = [
+      ["Share your page", " on Facebook, WhatsApp and by email. Most gifts come from people you know."],
+      ["Make the first gift yourself", " if you can. Pages that start with a gift tend to raise more."],
+      ["Print your QR code", " from your private area, for posters, buckets and the office fridge."],
+    ];
+    const gifts =
+      "Every gift comes straight to NBCC, with Gift Aid on top when your supporters are UK taxpayers, and every message lands on your supporter wall.";
+    const area = "is where you update your page, find your QR code and pay in any cash you collect. We send you a code to get in, so there are no passwords to remember.";
+    // The approved words, with "Your private area" linked to it where there is an address for it.
+    const areaHtml = o.manageUrl
+      ? `<a href="${escapeHtml(o.manageUrl)}" style="color:inherit">Your private area</a> ${area}`
+      : `Your private area ${area}`;
     const body =
-      eyebrow("Fundraising for NBCC") +
-      heading("Your page is live") +
+      EYEBROW +
+      heading("Your page is live!") +
       bodyP(escapeHtml(hi)) +
-      bodyP(`Good news: <b>${title}</b> is approved and your page is live. Share it with everyone you know. Every gift on it comes straight to NBCC, and shows on your meter.`) +
-      button(o.pageUrl, "See your page") +
-      bodyP(`Your page also has its own QR code, ready to print on posters and leaflets.`) +
-      (manage ? note(manage) : "") +
-      note(`Thank you. Any questions, just reply to this email or write to ${FUNDRAISING_EMAIL}.`);
+      bodyP(`Brilliant news: <b>${title}</b> is approved and your very own NBCC fundraising page is live. We can’t wait to watch your meter fill up!`) +
+      button(o.pageUrl, "See my page") +
+      subheading("Three things to do today") +
+      bodyList(steps.map(([lead, rest]) => `<b>${lead}</b>${rest}`), true) +
+      bodyP(gifts) +
+      note(areaHtml);
     const text = [
       hi,
       "",
-      `Good news: ${f.title} is approved and your page is live. Share it with everyone you know.`,
-      "Every gift on it comes straight to NBCC, and shows on your meter.",
+      `Brilliant news: ${f.title} is approved and your very own NBCC fundraising page is live. We can’t wait to watch your meter fill up!`,
       "",
-      `Your page: ${o.pageUrl}`,
+      `See my page: ${o.pageUrl}`,
       "",
-      "Your page also has its own QR code, ready to print on posters and leaflets.",
-      ...(o.manageUrl
-        ? [
-            "",
-            `To change your description, target, date or place, go to ${o.manageUrl}`,
-            "and we will email you a link. We check every change before it shows.",
-          ]
-        : []),
+      "THREE THINGS TO DO TODAY",
+      ...numbered(steps.map(([lead, rest]) => lead + rest)),
       "",
-      "Thank you.",
+      gifts,
       "",
-      TEXT_FOOTER,
-    ].join("\n");
-    return { subject: `Your fundraising page is live: ${f.title}`, html: shell(body), text };
+      `Your private area ${area}`,
+      ...(o.manageUrl ? [`Your private area: ${o.manageUrl}`] : []),
+    ];
+    return toOrganiser(`Your fundraising page is live: ${f.title}`, body, text, "Cheering you on all the way,");
   }
+  const thanks = "It’s all approved, and you’re officially part of the NBCC family.";
+  const where = "If you asked us to show it, you’ll find it on our Get involved page at";
+  const after = "We’ll be in touch about anything you asked us for.";
   const body =
-    eyebrow("Fundraising for NBCC") +
-    heading("You're on our list") +
+    EYEBROW +
+    heading("You’re on our list!") +
     bodyP(escapeHtml(hi)) +
-    bodyP(`Thank you. We have approved <b>${title}</b> and you're on our list. Someone from our team will be in touch about anything you asked us for.`) +
-    note(`Any questions, just reply to this email or write to ${FUNDRAISING_EMAIL}.`);
+    bodyP(`Thank you so much for doing <b>${title}</b> for NBCC. ${thanks}`) +
+    bodyP(`${where} <b>nbcc.scot/get-involved</b>. ${after}`);
   const text = [
     hi,
     "",
-    `Thank you. We have approved ${f.title} and you're on our list. Someone from our team will be`,
-    "in touch about anything you asked us for.",
+    `Thank you so much for doing ${f.title} for NBCC. ${thanks}`,
     "",
-    TEXT_FOOTER,
-  ].join("\n");
-  return { subject: `You're on our list: ${f.title}`, html: shell(body), text };
+    `${where} nbcc.scot/get-involved. ${after}`,
+  ];
+  return toOrganiser(`You're on our list: ${f.title}`, body, text, "You’re a star. Thank you,");
 }
 
 // --- the manage link ------------------------------------------------------------------------------
 
+// Retired in a later part of stage 1b by the sign in code; until then it wears the same close.
 export function buildManageLinkEmail(f: { name: string; title: string }, link: string): BuiltEmail {
   const hi = `Hi ${firstName(f.name)},`;
   const body =
-    eyebrow("Fundraising for NBCC") +
+    EYEBROW +
     heading("Change your fundraising page") +
     bodyP(escapeHtml(hi)) +
     bodyP(`Here is your link to change <b>${escapeHtml(f.title)}</b>. It works for 24 hours. We check every change before it shows on your page.`) +
@@ -232,8 +286,42 @@ export function buildManageLinkEmail(f: { name: string; title: string }, link: s
     link,
     "",
     "If you did not ask for this, you can ignore it. Nothing changes unless you use the link.",
+  ];
+  return toOrganiser(`Your link to change ${f.title}`, body, text, "Happy fundraising!");
+}
+
+// --- a change, approved or rejected ---------------------------------------------------------------
+
+/** Staff approved a change the organiser asked for. The page link and the nudge to share only when there is a page. */
+export function buildEditApprovedEmail(f: { name: string; title: string }, o: { pageUrl: string | null }): BuiltEmail {
+  const hi = `Hi ${firstName(f.name)},`;
+  const share = "Why not share it again so everyone sees what’s new? A fresh share often brings in a few more gifts.";
+  const body =
+    EYEBROW +
+    heading("Your update is live!") +
+    bodyP(escapeHtml(hi)) +
+    bodyP(`Good news: we’ve checked your changes to <b>${escapeHtml(f.title)}</b> and they’re now on your page.`) +
+    (o.pageUrl ? bodyP(share) + button(o.pageUrl, "See my page") : "");
+  const text = [
+    hi,
     "",
-    TEXT_FOOTER,
-  ].join("\n");
-  return { subject: `Your link to change ${f.title}`, html: shell(body), text };
+    `Good news: we’ve checked your changes to ${f.title} and they’re now on your page.`,
+    ...(o.pageUrl ? ["", share, "", `See my page: ${o.pageUrl}`] : []),
+  ];
+  return toOrganiser(`Your update is live: ${f.title}`, body, text, "Thanks so much,");
+}
+
+/** Staff rejected a change the organiser asked for: nothing to worry about, we'll ring. */
+export function buildEditRejectedEmail(f: { name: string; title: string }): BuiltEmail {
+  const hi = `Hi ${firstName(f.name)},`;
+  const held = "We haven’t put this change on your page just yet, and someone from our team will give you a quick ring to talk it through.";
+  const calm = "Nothing to worry about: your page is still live, just as it was, and gifts are still coming in.";
+  const body =
+    EYEBROW +
+    heading("About your update") +
+    bodyP(escapeHtml(hi)) +
+    bodyP(`Thank you for updating <b>${escapeHtml(f.title)}</b>. ${held}`) +
+    bodyP(calm);
+  const text = [hi, "", `Thank you for updating ${f.title}. ${held}`, "", calm];
+  return toOrganiser(`About your update to ${f.title}`, body, text, "Speak soon,");
 }

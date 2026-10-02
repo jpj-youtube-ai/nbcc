@@ -2589,6 +2589,8 @@
     // TASK-493: community fundraising.
     ["fundraiseThanks", "Fundraiser sign up thanks"], ["fundraiseStaff", "Fundraiser sign up (to events@)"],
     ["fundraiseApproved", "Fundraiser approved"], ["fundraiseManage", "Fundraiser manage link"],
+    // TASK-497: a change the organiser asked for, approved or rejected by staff.
+    ["fundraiseEditApproved", "Fundraiser update live"], ["fundraiseEditRejected", "Fundraiser update held back"],
   ];
   function emailKindLabel(kind) {
     for (var i = 0; i < EMAIL_KINDS.length; i++) if (EMAIL_KINDS[i][0] === kind) return EMAIL_KINDS[i][1];

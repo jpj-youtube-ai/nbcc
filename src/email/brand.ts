@@ -150,3 +150,48 @@ export const codeBox = (code: unknown): string =>
 /** A cream card for the facts a reader comes back to find: a reference, a date, a total. */
 export const card = (innerRows: string): string =>
   `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;background:#FFFDFA;border:1px solid ${TAN_SOFT};border-radius:10px;margin:0 0 20px">${innerRows}</table>`;
+
+/** A numbered (ordered) or bulleted list of body copy, e.g. "What happens next". Items are HTML. */
+export const bodyList = (itemsHtml: string[], ordered = false): string => {
+  const tag = ordered ? "ol" : "ul";
+  const items = itemsHtml.map((item) => `<li style="margin:0 0 4px">${item}</li>`).join("");
+  return `<${tag} style="margin:0 0 14px;padding-left:22px;color:${SLATE};font-family:${BODY_FONT};font-size:14px;line-height:1.7">${items}</${tag}>`;
+};
+
+// --- the signed close and the questions box (TASK-497) --------------------------------------
+// Added for the fundraising emails Jaimie signed off on 2026-10-02: a friendly line above
+// "NBCC Team", then a box offering a call and an email side by side, equally prominent. Both are
+// additive; emailShell is unchanged, so no other email moves.
+
+/** The friendly closing line, then "NBCC Team" large in the serif maroon. */
+export const signOff = (line: string): string =>
+  `<p style="margin:22px 0 0;font-family:${BODY_FONT};font-size:14px;color:${SLATE};line-height:1.6">${esc(line)}<br>` +
+  `<span style="font-family:${HEAD};font-size:20px;font-weight:800;color:${MAROON}">NBCC Team</span></p>`;
+
+/** The sign off in a plain text part. */
+export const signOffText = (line: string): string => `${line}\nNBCC Team`;
+
+export const QUESTIONS_HEADING = "Got any questions?";
+export const QUESTIONS_LINE = "We’d love to hear from you. Give us a ring or drop us a line, whichever suits you.";
+
+// One of the two equal tiles. A table cell, because a mail client's idea of a flex box is none at
+// all. The value wraps rather than overflows, so a long address still fits a phone.
+const questionsTile = (label: string, href: string, value: string): string =>
+  `<td width="50%" style="padding:4px;text-align:center;vertical-align:top"><div style="background:${CREAM};border-radius:10px;padding:12px 8px">` +
+  `<div style="font-family:${BODY_FONT};font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:${SLATE_SOFT};font-weight:700">${label}</div>` +
+  `<div style="font-family:${BODY_FONT};font-size:18px;font-weight:800;color:${MAROON};margin-top:2px;overflow-wrap:anywhere;word-break:break-word">` +
+  `<a href="${esc(href)}" style="color:${MAROON};text-decoration:none">${esc(value)}</a></div></div></td>`;
+
+/** "Got any questions?": a tan panel with a call tile and an email tile side by side. */
+export const questionsBox = (contactEmail: string): string =>
+  `<div style="background:${TAN_SOFT};border-radius:12px;padding:18px 20px;margin:24px 0 8px;text-align:center">` +
+  `<p style="margin:0 0 4px;font-family:${HEAD};font-size:19px;font-weight:800;color:${MAROON}">${QUESTIONS_HEADING}</p>` +
+  `<p style="margin:0 0 12px;font-family:${BODY_FONT};font-size:13px;color:${SLATE}">${QUESTIONS_LINE}</p>` +
+  `<table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>` +
+  questionsTile("Call us", PHONE_HREF, PHONE_DISPLAY) +
+  questionsTile("Email us", `mailto:${contactEmail}`, contactEmail) +
+  `</tr></table></div>`;
+
+/** The questions box in a plain text part: the same words, the number and the address. */
+export const questionsText = (contactEmail: string): string =>
+  [QUESTIONS_HEADING, QUESTIONS_LINE, `Call us: ${PHONE_DISPLAY}`, `Email us: ${contactEmail}`].join("\n");

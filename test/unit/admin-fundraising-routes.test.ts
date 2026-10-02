@@ -21,9 +21,11 @@ const db = vi.hoisted(() => ({
   wallRows: vi.fn(),
   fundraisingIsOn: vi.fn(),
 }));
-const { getUserAuthRowMock, sendApprovedEmail, insertEventImage } = vi.hoisted(() => ({
+const { getUserAuthRowMock, sendApprovedEmail, sendWaitingLiveEmails, sendEditDecisionEmail, insertEventImage } = vi.hoisted(() => ({
   getUserAuthRowMock: vi.fn(),
   sendApprovedEmail: vi.fn(),
+  sendWaitingLiveEmails: vi.fn(),
+  sendEditDecisionEmail: vi.fn(),
   insertEventImage: vi.fn(),
 }));
 
@@ -37,6 +39,8 @@ vi.mock("../../src/db/fundraisers", () => {
 });
 vi.mock("../../src/fundraising/send", () => ({
   sendApprovedEmail,
+  sendWaitingLiveEmails,
+  sendEditDecisionEmail,
   fundraiserPageUrl: (slug: string) => `https://nbcc.test/fundraise/${slug}`,
 }));
 vi.mock("../../src/db/events", () => ({ insertEventImage }));
@@ -125,7 +129,9 @@ const record = (over: Partial<FundraiserRecord> = {}): FundraiserRecord => ({
 beforeEach(() => {
   for (const fn of Object.values(db)) fn.mockReset();
   getUserAuthRowMock.mockReset();
-  sendApprovedEmail.mockReset();
+  sendApprovedEmail.mockReset().mockResolvedValue(true);
+  sendWaitingLiveEmails.mockReset().mockResolvedValue({ sent: 0, failed: 0 });
+  sendEditDecisionEmail.mockReset().mockResolvedValue(true);
   insertEventImage.mockReset();
   db.getFundraisingSettings.mockResolvedValue({ pageOn: false, updatedAt: null, updatedBy: null });
   db.listAllFundraisers.mockResolvedValue([]);
@@ -192,20 +198,29 @@ describe("who may do what", () => {
 describe("approving and the rest", () => {
   it("approves, and then emails the organiser", async () => {
     const after = record({ status: "approved" });
-    db.moveFundraiser.mockResolvedValue({ before: record({ status: "new" }), after });
+    db.moveFundraiser.mockResolvedValue({ before: record({ status: "new" }), after, livePending: false });
     const res = await run(routes.postApproveFundraiser, { params: P, token: tokenFor("editor") });
     expect(res.statusCode).toBe(200);
     expect(db.moveFundraiser).toHaveBeenCalledWith(9, "approve", `admin:${EMAIL}`, null);
-    expect(sendApprovedEmail).toHaveBeenCalledWith(after, true);
+    expect(sendApprovedEmail).toHaveBeenCalledWith(after);
     expect((res.body as { fundraiser: { pageUrl: string } }).fundraiser.pageUrl).toBe("https://nbcc.test/fundraise/sams-sponsored-walk");
   });
 
-  it("approves while fundraising is off, emailing that the page will appear when the pages open", async () => {
-    db.fundraisingIsOn.mockResolvedValue(false);
+  // TASK-497: the "you're approved, your page will appear" email is retired. A page holder
+  // approved while fundraising is off is marked as waiting (in moveFundraiser's transaction) and
+  // emailed "Your page is live" at the switch on.
+  it("approves a page holder while fundraising is off, marked as waiting, and emails nothing yet", async () => {
     const after = record({ status: "approved" });
-    db.moveFundraiser.mockResolvedValue({ before: record({ status: "new" }), after });
-    await run(routes.postApproveFundraiser, { params: P, token: tokenFor("editor") });
-    expect(sendApprovedEmail).toHaveBeenCalledWith(after, false);
+    db.moveFundraiser.mockResolvedValue({ before: record({ status: "new" }), after, livePending: true });
+    const res = await run(routes.postApproveFundraiser, { params: P, token: tokenFor("editor") });
+    expect(res.statusCode).toBe(200);
+    expect(sendApprovedEmail).not.toHaveBeenCalled();
+  });
+
+  it("still approves when the email throws", async () => {
+    db.moveFundraiser.mockResolvedValue({ before: record({ status: "new" }), after: record({ status: "approved" }), livePending: false });
+    sendApprovedEmail.mockRejectedValue(new Error("SES is down"));
+    expect((await run(routes.postApproveFundraiser, { params: P, token: tokenFor("editor") })).statusCode).toBe(200);
   });
 
   it("declines with a reason kept for staff, and emails nobody", async () => {
@@ -261,5 +276,69 @@ describe("approving and the rest", () => {
     const body = res.body as { wall: Array<{ hidden: boolean; shortName: string }>; waitingEdit: { id: number } };
     expect(body.wall[0]).toMatchObject({ donationId: 55, hidden: true, shortName: "Alex E.", fullName: "Alex Example" });
     expect(body.waitingEdit.id).toBe(3);
+  });
+});
+
+describe("switching fundraising on (TASK-497)", () => {
+  const on = { pageOn: true, updatedAt: "2026-10-02T12:00:00.000Z", updatedBy: `admin:${EMAIL}` };
+
+  it("sends Your page is live to everyone approved while it was off", async () => {
+    db.setFundraisingOn.mockResolvedValue(on);
+    sendWaitingLiveEmails.mockResolvedValue({ sent: 2, failed: 0 });
+    const res = await run(routes.patchAdminFundraisingSettings, { token: tokenFor("admin"), body: { pageOn: true } });
+    expect(res.statusCode).toBe(200);
+    expect(res.body).toEqual(on);
+    expect(sendWaitingLiveEmails).toHaveBeenCalledTimes(1);
+    // Only once the switch has been saved.
+    expect(db.setFundraisingOn.mock.invocationCallOrder[0]).toBeLessThan(sendWaitingLiveEmails.mock.invocationCallOrder[0]);
+  });
+
+  it("sends nothing when switching it off", async () => {
+    db.setFundraisingOn.mockResolvedValue({ ...on, pageOn: false });
+    expect((await run(routes.patchAdminFundraisingSettings, { token: tokenFor("admin"), body: { pageOn: false } })).statusCode).toBe(200);
+    expect(sendWaitingLiveEmails).not.toHaveBeenCalled();
+  });
+
+  it("still switches on when the emails fail", async () => {
+    db.setFundraisingOn.mockResolvedValue(on);
+    sendWaitingLiveEmails.mockRejectedValue(new Error("database went away"));
+    const res = await run(routes.patchAdminFundraisingSettings, { token: tokenFor("admin"), body: { pageOn: true } });
+    expect(res.statusCode).toBe(200);
+    expect(res.body).toEqual(on);
+  });
+
+  it("sends nothing when the switch could not be saved", async () => {
+    db.setFundraisingOn.mockRejectedValue(new Error("database went away"));
+    expect((await run(routes.patchAdminFundraisingSettings, { token: tokenFor("admin"), body: { pageOn: true } })).statusCode).toBe(500);
+    expect(sendWaitingLiveEmails).not.toHaveBeenCalled();
+  });
+});
+
+describe("deciding a change emails the organiser (TASK-497)", () => {
+  const E = { id: "9", editId: "3" };
+
+  it.each([
+    ["approving", routes.postApproveEdit, true],
+    ["rejecting", routes.postRejectEdit, false],
+  ] as const)("%s a change tells the organiser, with whether the pages are open", async (_what, handler, approve) => {
+    const after = record();
+    db.decideEdit.mockResolvedValue(after);
+    db.fundraisingIsOn.mockResolvedValue(false);
+    const res = await run(handler, { params: E, token: tokenFor("editor") });
+    expect(res.statusCode).toBe(200);
+    expect(db.decideEdit).toHaveBeenCalledWith(9, 3, approve, `admin:${EMAIL}`);
+    expect(sendEditDecisionEmail).toHaveBeenCalledWith(after, approve, false);
+  });
+
+  it.each([routes.postApproveEdit, routes.postRejectEdit])("still decides when the email throws", async (handler) => {
+    db.decideEdit.mockResolvedValue(record());
+    sendEditDecisionEmail.mockRejectedValue(new Error("SES is down"));
+    expect((await run(handler, { params: E, token: tokenFor("editor") })).statusCode).toBe(200);
+  });
+
+  it("emails nobody when the change could not be decided", async () => {
+    db.decideEdit.mockRejectedValue(new FundraiserError("not_waiting"));
+    expect((await run(routes.postRejectEdit, { params: E, token: tokenFor("editor") })).statusCode).toBe(409);
+    expect(sendEditDecisionEmail).not.toHaveBeenCalled();
   });
 });

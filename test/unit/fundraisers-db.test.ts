@@ -79,7 +79,15 @@ describe("reading a row", () => {
 // ---- transactions, with a fake client that answers by statement ----
 
 import { pool } from "../../src/db/pool";
-import { requestEdit, decideEdit, createFundraiser, FundraiserError } from "../../src/db/fundraisers";
+import {
+  requestEdit,
+  decideEdit,
+  createFundraiser,
+  moveFundraiser,
+  claimWaitingLiveEmails,
+  markLiveEmailWaiting,
+  FundraiserError,
+} from "../../src/db/fundraisers";
 
 const fundraiserRow = (over: Record<string, unknown> = {}) => ({
   id: 9, slug: "sams-walk", path: "raising", kind: "run_walk", title: "Sam's Walk", description: "", event_date: null,
@@ -179,5 +187,75 @@ describe("two sign ups with the same name at the same moment", () => {
         socialOk: false, wants: { leaflets: 0, buckets: 0, shoutOut: false, attend: false }, postAddress: null, newsletterOk: false,
       }),
     ).rejects.toMatchObject({ code: "23514" });
+  });
+});
+
+// TASK-497: a page holder approved while fundraising is off waits for "Your page is live", which
+// goes when an admin switches fundraising on.
+describe("approving while fundraising is switched off", () => {
+  function approving(over: Record<string, unknown>, pageOn: boolean) {
+    return useClient((sql) => {
+      if (sql.includes("FROM fundraisers f WHERE f.id = $1 FOR UPDATE")) return { rows: [fundraiserRow({ status: "new", ...over })] };
+      if (sql.startsWith("SELECT page_on FROM fundraising_settings")) return { rows: [{ page_on: pageOn }] };
+      if (sql.includes("FROM fundraisers f WHERE f.id = $1")) return { rows: [fundraiserRow({ status: "approved", ...over })] };
+      return { rows: [] };
+    });
+  }
+  const approveSql = (calls: Array<[string, unknown[]]>) => calls.find(([s]) => s.includes("SET status = 'approved'"));
+
+  it("marks someone who would have a public page as waiting for the live email, reading the switch under a lock", async () => {
+    const calls = approving({}, false);
+    const out = await moveFundraiser(9, "approve", "admin:kim@example.com");
+    expect(out.livePending).toBe(true);
+    expect(calls.some(([s]) => /SELECT page_on FROM fundraising_settings WHERE id = 1 FOR SHARE/.test(s))).toBe(true);
+    const [sql, params] = approveSql(calls) as [string, unknown[]];
+    expect(sql).toContain("live_email_pending = $2");
+    expect(params).toEqual(["admin:kim@example.com", true, 9]);
+  });
+
+  it("does not mark them while fundraising is on: they are emailed straight away", async () => {
+    const calls = approving({}, true);
+    expect((await moveFundraiser(9, "approve", "admin:kim@example.com")).livePending).toBe(false);
+    expect((approveSql(calls) as [string, unknown[]])[1]).toEqual(["admin:kim@example.com", false, 9]);
+  });
+
+  it.each([
+    ["a private sign up", { public: false }],
+    ["an event", { path: "event" }],
+  ])("does not mark %s, who has no page and is told they are on our list now", async (_what, over) => {
+    approving(over, false);
+    expect((await moveFundraiser(9, "approve", "admin:kim@example.com")).livePending).toBe(false);
+  });
+
+  it.each(["decline", "finish"] as const)("clears the mark on %s, so a switch on never tells them their page is live", async (move) => {
+    const calls = useClient((sql) => {
+      if (sql.includes("FROM fundraisers f WHERE f.id = $1 FOR UPDATE")) return { rows: [fundraiserRow({ status: "approved" })] };
+      if (sql.includes("FROM fundraisers f WHERE f.id = $1")) return { rows: [fundraiserRow({ status: move === "decline" ? "declined" : "finished" })] };
+      return { rows: [] };
+    });
+    const out = await moveFundraiser(9, move, "admin:kim@example.com");
+    expect(out.livePending).toBe(false);
+    expect(calls.find(([s]) => s.startsWith("UPDATE fundraisers SET status"))?.[0]).toContain("live_email_pending = false");
+  });
+});
+
+describe("switching fundraising on, for the people waiting", () => {
+  it("claims every approved page holder still waiting, clearing the mark as it reads them", async () => {
+    (pool.query as unknown as ReturnType<typeof vi.fn>).mockResolvedValueOnce({ rows: [fundraiserRow({ id: 9 }), fundraiserRow({ id: 10, slug: "b" })] });
+    const got = await claimWaitingLiveEmails();
+    expect(got.map((f) => f.id)).toEqual([9, 10]);
+    const sql = String((pool.query as unknown as ReturnType<typeof vi.fn>).mock.calls.at(-1)?.[0]);
+    expect(sql).toMatch(/UPDATE fundraisers f SET live_email_pending = false/);
+    expect(sql).toMatch(/WHERE f.live_email_pending AND f.status = 'approved' AND f.public AND f.path = 'raising'/);
+    expect(sql).toMatch(/RETURNING/);
+  });
+
+  it("can mark one as waiting again, when its email did not go", async () => {
+    (pool.query as unknown as ReturnType<typeof vi.fn>).mockResolvedValueOnce({ rows: [] });
+    await markLiveEmailWaiting(9);
+    expect((pool.query as unknown as ReturnType<typeof vi.fn>).mock.calls.at(-1)).toEqual([
+      "UPDATE fundraisers SET live_email_pending = true WHERE id = $1 AND status = 'approved'",
+      [9],
+    ]);
   });
 });

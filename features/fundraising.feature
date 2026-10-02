@@ -70,6 +70,7 @@ Feature: Community fundraising, the core (TASK-493)
     When "e3.fr.bdd@example.com" approves the waiting change to "Kim's Quiz (bdd-fr)"
     Then the fundraising answer is 200
     And the page for "Kim's Quiz (bdd-fr)" shows 0 pence raised of 75000
+    And the organiser of "Kim's Quiz (bdd-fr)" was sent a "fundraiseEditApproved" email
 
   Scenario: who may do what in Admin > Fundraising
     Given fundraising is switched off
@@ -88,3 +89,31 @@ Feature: Community fundraising, the core (TASK-493)
     When "a4.fr.bdd@example.com" switches fundraising on
     Then the fundraising answer is 200
     And fundraising is on
+
+  # TASK-497: the "you're approved, your page will appear" email is retired. A page holder approved
+  # while fundraising is off waits, and hears their page is live when an admin switches it on.
+  Scenario: a page approved while fundraising is off hears it is live when fundraising is switched on
+    Given fundraising is switched off
+    And a fundraising staff member "a5.fr.bdd@example.com" with role "admin"
+    And a fundraiser "Lee's Bake Off (bdd-fr)" that is still new, organised by "lee.fr.bdd@example.com"
+    When "a5.fr.bdd@example.com" approves "Lee's Bake Off (bdd-fr)"
+    Then the fundraising answer is 200
+    And the organiser of "Lee's Bake Off (bdd-fr)" was not sent a "fundraiseApproved" email
+    And "Lee's Bake Off (bdd-fr)" is waiting for its live email
+    When "a5.fr.bdd@example.com" switches fundraising on
+    Then the fundraising answer is 200
+    And the organiser of "Lee's Bake Off (bdd-fr)" was sent a "fundraiseApproved" email
+    And "Lee's Bake Off (bdd-fr)" is not waiting for its live email
+
+  # TASK-497: a change staff hold back is not applied, and the organiser is told we will ring.
+  Scenario: an organiser hears when staff reject their change
+    Given fundraising is switched on
+    And a fundraising staff member "e6.fr.bdd@example.com" with role "editor"
+    And an approved fundraiser "Pat's Swim (bdd-fr)" raising 50000 pence, organised by "pat.fr.bdd@example.com"
+    And the organiser of "Pat's Swim (bdd-fr)" holds a manage link
+    When the organiser changes the target of "Pat's Swim (bdd-fr)" to 75000 pence by their link
+    Then the fundraising answer is 202
+    When "e6.fr.bdd@example.com" rejects the waiting change to "Pat's Swim (bdd-fr)"
+    Then the fundraising answer is 200
+    And the organiser of "Pat's Swim (bdd-fr)" was sent a "fundraiseEditRejected" email
+    And the page for "Pat's Swim (bdd-fr)" shows 0 pence raised of 50000

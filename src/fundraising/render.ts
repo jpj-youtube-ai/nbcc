@@ -397,7 +397,7 @@ function renderGiveForm(p: PublicPage): string {
     '<div class="give-field fr-own">' +
     `<label class="give-custom-label" for="frOwnAmount">Or choose your own amount, ${min} or more</label>` +
     '<div class="give-custom-field"><span class="give-custom-currency" aria-hidden="true">£</span>' +
-    `<input class="give-custom-input" id="frOwnAmount" name="frOwnAmount" type="number" inputmode="decimal" min="${p.giving.minimumPence / 100}" step="0.01" placeholder="Other amount" />` +
+    `<input class="give-custom-input" id="frOwnAmount" name="frOwnAmount" type="number" inputmode="decimal" min="${p.giving.minimumPence / 100}" step="0.01" placeholder="Amount" />` +
     "</div></div>" +
     "</fieldset></div>" +
     // 2. who

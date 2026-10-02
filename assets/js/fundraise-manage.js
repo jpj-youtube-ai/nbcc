@@ -42,6 +42,22 @@
     }
   })();
 
+  // A text box grows with what is typed, so nothing ever scrolls inside it (Jaimie's rule). CSS
+  // field-sizing does this where the browser supports it; this does it everywhere else.
+  function growTextareas(root) {
+    Array.prototype.forEach.call(root.querySelectorAll("textarea"), function (t) {
+      function grow() {
+        if (!t.scrollHeight) return;
+        t.style.height = "auto";
+        t.style.height = t.scrollHeight + 4 + "px";
+        t.style.overflowY = "hidden";
+      }
+      t.addEventListener("input", grow);
+      t.__frGrow = grow;
+      grow();
+    });
+  }
+
   function initManage(doc, win) {
     var requestPanel = doc.querySelector("[data-manage-request]");
     var editPanel = doc.querySelector("[data-manage-edit]");
@@ -58,6 +74,7 @@
     var editSummary = doc.querySelector("[data-edit-error]");
     var editSubmit = doc.querySelector("[data-edit-submit]");
     var approved = null;
+    if (editForm) growTextareas(editForm);
 
     function el(id) {
       return doc.getElementById(id);
@@ -173,6 +190,9 @@
       if (pageLink) pageLink.hidden = !f.pageUrl;
       if (pageUrl && f.pageUrl) pageUrl.setAttribute("href", f.pageUrl);
       setWaiting(w);
+      Array.prototype.forEach.call(editForm ? editForm.querySelectorAll("textarea") : [], function (t) {
+        if (t.__frGrow) t.__frGrow();
+      });
     }
 
     function setWaiting(w) {
@@ -191,8 +211,8 @@
       .then(readJson)
       .then(function (r) {
         if (r.status === 200 && r.data.fundraiser) {
-          fill(r.data);
           showOnly(editPanel);
+          fill(r.data);
           return;
         }
         if (r.status === 404) return backToRequest(MSG.notFound);

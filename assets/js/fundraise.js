@@ -53,6 +53,22 @@
     newsletterOk: "newsletterOk",
   };
 
+  // A text box grows with what is typed, so nothing ever scrolls inside it (Jaimie's rule). CSS
+  // field-sizing does this where the browser supports it; this does it everywhere else.
+  function growTextareas(root) {
+    Array.prototype.forEach.call(root.querySelectorAll("textarea"), function (t) {
+      function grow() {
+        if (!t.scrollHeight) return;
+        t.style.height = "auto";
+        t.style.height = t.scrollHeight + 4 + "px";
+        t.style.overflowY = "hidden";
+      }
+      t.addEventListener("input", grow);
+      t.__frGrow = grow;
+      grow();
+    });
+  }
+
   function initFundraiseForm(doc, win) {
     var form = doc.getElementById("fundraiseForm");
     var openPanel = doc.querySelector("[data-fundraise-open]");
@@ -360,6 +376,7 @@
         });
     });
 
+    growTextareas(form);
     return { payload: payload };
   }
 

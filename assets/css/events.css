@@ -523,7 +523,8 @@
    panel. The meter on a fundraiser's card is in fundraising.css.
    ================================================================= */
 
-/* ---------- the hero's button ---------- */
+/* ---------- the hero ---------- */
+.events-intro h1 { text-wrap: balance; }
 .gi-hero-cta { margin: 26px 0 0; }
 
 /* ---------- the chips: All, Events, Fundraisers ---------- */

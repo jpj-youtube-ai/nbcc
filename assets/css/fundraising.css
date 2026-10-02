@@ -1,0 +1,328 @@
+/* =================================================================
+   COMMUNITY FUNDRAISING (TASK-494): the meter, a fundraiser's page,
+   the sign up form and the manage page.
+
+   Loaded only by those pages and by Get involved (for the meter on a
+   fundraiser's card), never by donate.html: the shared bundle is on an
+   enforced first paint budget. Everything here is built from the shared
+   tokens in styles.css and reuses the donate page's give form classes
+   (.give-question, .give-field, .giftaid, .give-check...) so a gift on a
+   fundraiser's page looks and feels like the donate page.
+
+   The house rules hold here too: nothing scrolls inside a box (content
+   wraps and the page grows), every control is at least 44px to tap,
+   focus is always visible, and motion stops for anyone who asks.
+   ================================================================= */
+
+/* ---------- the meter ---------- */
+.fr-meter { display: grid; gap: 8px; }
+.fr-meter__figures {
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0 0.4em;
+  font-size: 1rem;
+  color: var(--slate);
+}
+.fr-meter__raised {
+  font-family: var(--font-head);
+  font-size: 1.6rem;
+  font-weight: 800;
+  line-height: 1.1;
+  color: var(--maroon);
+  font-variant-numeric: lining-nums tabular-nums;
+}
+.fr-meter__target { color: var(--slate-soft); }
+.fr-meter__bar {
+  position: relative;
+  height: 14px;
+  border-radius: var(--radius-pill);
+  background: var(--tan-soft);
+  box-shadow: inset 0 0 0 1px var(--line);
+  overflow: hidden; /* clips the fill to the rounded track; nothing to scroll */
+}
+.fr-meter__fill {
+  display: block;
+  height: 100%;
+  min-width: 0;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--holly), color-mix(in srgb, var(--holly) 78%, var(--cream)));
+}
+.fr-meter.is-over .fr-meter__fill { background: var(--holly); }
+.fr-meter__percent { margin: 0; font-size: 0.92rem; font-weight: 600; color: var(--holly); }
+.fr-meter--large .fr-meter__raised { font-size: clamp(2.2rem, 1.8rem + 1.6vw, 2.9rem); }
+.fr-meter--large .fr-meter__figures { font-size: 1.08rem; }
+.fr-meter--large .fr-meter__bar { height: 20px; }
+.fr-meter--large .fr-meter__percent { font-size: 1rem; }
+@media (prefers-reduced-motion: no-preference) {
+  .fr-meter__fill { animation: fr-fill 0.9s cubic-bezier(0.25, 1, 0.5, 1) both; transform-origin: left center; }
+}
+@keyframes fr-fill { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+
+/* ---------- shared pieces ---------- */
+.fr-intro .intro-hero h1 { overflow-wrap: anywhere; text-wrap: balance; }
+.fr-narrow { max-width: 860px; }
+.fr-fieldset { border: 0; margin: 0; padding: 0; min-width: 0; }
+.fr-sublegend {
+  display: block;
+  margin: 0 0 10px;
+  padding: 0;
+  font-weight: 600;
+  font-size: 0.95rem;
+  color: var(--slate);
+}
+.fr-row { display: grid; gap: 0 16px; }
+@media (min-width: 640px) { .fr-row { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); } }
+.fr-panel { padding: clamp(24px, 4vw, 40px); }
+.fr-panel h2 { font-size: clamp(1.6rem, 1.3rem + 1.2vw, 2.1rem); color: var(--maroon); text-wrap: balance; }
+.fr-panel > p { margin-top: 14px; }
+.fr-noscript, .fr-problem {
+  margin: 0 0 18px;
+  padding: 14px 16px;
+  border: 1px solid var(--maroon);
+  border-radius: 12px;
+  background: var(--tan-soft);
+  color: var(--maroon);
+  font-weight: 600;
+}
+.fr-aside-link { margin: 20px 0 0; font-size: 0.98rem; color: var(--slate-soft); }
+.fr-aside-link a { font-weight: 600; }
+.fr-loading { text-align: center; font-weight: 600; color: var(--slate-soft); }
+/* A text box grows with what is typed, never scrolls inside itself (Jaimie's rule). field-sizing
+   does it where the browser can; the page scripts grow the box everywhere else. */
+textarea.give-field-input { min-height: 0; }
+.fr-form textarea, .fr-give-form textarea { field-sizing: content; min-height: 6.5em; resize: none; }
+
+/* Forms that sit inside a card already: no second card around them. */
+.fr-give-form, .fr-form--plain { background: none; border: 0; border-radius: 0; box-shadow: none; padding: 0; }
+.fr-form, .fr-give-form { counter-reset: gq; }
+.fr-form .form-error-summary + .give-question, .fr-give-form .form-error-summary + .give-question { border-top: 0; padding-top: 6px; }
+.fr-form .form-error-summary + .give-question::before, .fr-give-form .form-error-summary + .give-question::before { top: 2px; }
+.fr-form .give-cta-row, .fr-give-form .give-cta-row { margin-top: 28px; }
+
+/* ---------- choice cards (the two paths, public or not, the kinds) ---------- */
+.fr-options { display: grid; gap: 12px; }
+@media (min-width: 640px) {
+  .fr-options { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+}
+.fr-options--grid { gap: 10px; }
+.fr-option {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  margin: 0;
+  padding: 16px 18px;
+  min-height: 56px;
+  border: 1.6px solid var(--line);
+  border-radius: 14px;
+  background: var(--cream);
+  font-weight: 400;
+  font-size: 1rem;
+  color: var(--slate);
+  cursor: pointer;
+  transition: border-color 0.18s, background-color 0.18s;
+}
+.fr-option:hover { border-color: var(--crimson); }
+.fr-option input { width: 22px; height: 22px; flex: none; margin: 2px 0 0; padding: 0; accent-color: var(--holly); }
+.fr-option strong { display: block; font-weight: 600; color: var(--maroon); font-size: 1.05rem; }
+.fr-option small { display: block; margin-top: 4px; font-size: 0.92rem; line-height: 1.5; color: var(--slate-soft); }
+.fr-option:has(input:checked) { border-color: var(--holly); background: var(--holly-soft); }
+.fr-option:has(input:focus-visible) { outline: 3px solid var(--holly); outline-offset: 3px; }
+.fr-option--small { align-items: center; padding: 12px 16px; }
+.fr-option--small span { font-weight: 600; color: var(--maroon); }
+fieldset.is-invalid .fr-option { border-color: var(--crimson); }
+.fr-kinds { margin: 4px 0 18px; }
+
+/* ---------- the sign up's target and counts ---------- */
+.fr-target .give-custom-field { max-width: 320px; }
+.fr-target .give-custom-label { font-size: 1.15rem; }
+.fr-count { max-width: 160px; }
+.fr-captcha { margin: 24px 0 0; max-width: 100%; }
+
+/* ---------- thank you ---------- */
+.fr-thanks:focus { outline: none; }
+.fr-thanks:focus-visible { outline: 3px solid var(--holly); outline-offset: 4px; }
+.fr-thanks .rule { margin-inline: 0; }
+.fr-steps { margin: 18px 0 24px; padding: 0; list-style: none; counter-reset: frstep; display: grid; gap: 14px; }
+.fr-steps li { position: relative; padding-left: 46px; line-height: 1.55; counter-increment: frstep; text-wrap: pretty; }
+.fr-steps li::before {
+  content: counter(frstep);
+  position: absolute;
+  left: 0;
+  top: -2px;
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: var(--holly-soft);
+  color: var(--holly-dark);
+  font-family: var(--font-head);
+  font-weight: 800;
+}
+
+/* ---------- a fundraiser's page ---------- */
+.fr-facts {
+  list-style: none;
+  margin: 22px auto 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 10px 26px;
+  font-size: 1.02rem;
+  color: var(--slate);
+}
+.fr-facts li { display: inline-flex; align-items: flex-start; gap: 8px; text-align: left; }
+.fr-facts svg { flex: none; margin-top: 4px; color: var(--crimson); }
+
+.fr-layout {
+  display: grid;
+  gap: clamp(22px, 3vw, 34px);
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-areas: "summary" "main" "extras";
+}
+@media (min-width: 980px) {
+  .fr-layout {
+    grid-template-columns: minmax(0, 1.65fr) minmax(0, 1fr);
+    grid-template-areas: "main summary" "main extras";
+    grid-template-rows: auto 1fr;
+    align-items: start;
+  }
+}
+.fr-summary { grid-area: summary; padding: clamp(22px, 3.4vw, 32px); display: grid; gap: 22px; }
+.fr-summary__give { justify-content: center; width: 100%; font-size: 1.08rem; padding: 16px 24px; }
+.fr-main { grid-area: main; display: grid; gap: clamp(28px, 4vw, 44px); min-width: 0; }
+.fr-extras { grid-area: extras; display: grid; gap: clamp(22px, 3vw, 30px); align-content: start; }
+
+.fr-photo { margin: 0; border-radius: var(--radius-lg); overflow: hidden; box-shadow: var(--shadow); background: var(--tint); }
+.fr-photo img { width: 100%; height: auto; max-height: 560px; object-fit: cover; }
+
+.fr-story h2, .fr-wall h2, .fr-card h2 { font-size: clamp(1.5rem, 1.25rem + 1vw, 1.95rem); color: var(--maroon); margin-bottom: 14px; }
+.fr-story p { font-size: 1.08rem; line-height: 1.75; max-width: 66ch; overflow-wrap: anywhere; text-wrap: pretty; }
+
+.fr-card { padding: clamp(22px, 3vw, 28px); }
+.fr-card > p { color: var(--slate-soft); font-size: 0.98rem; margin-bottom: 14px; }
+
+/* the give form: the donate page's card, one column */
+.fr-give { scroll-margin-top: calc(var(--nav-h) + 1rem); }
+.fr-give:focus { outline: none; }
+.fr-give-card .give-main { padding: clamp(22px, 4vw, 40px); }
+.fr-give-card .give-step-title { font-size: clamp(1.45rem, 1.2rem + 1vw, 1.85rem); overflow-wrap: anywhere; }
+.fr-amounts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin: 0 0 18px; }
+@media (min-width: 560px) { .fr-amounts { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+.fr-amount { position: relative; display: block; margin: 0; cursor: pointer; }
+.fr-amount input { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; opacity: 0; cursor: pointer; }
+.fr-amount__face {
+  display: grid;
+  place-items: center;
+  min-height: 72px;
+  border: 1.6px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--cream);
+  font-family: var(--font-head);
+  font-size: 1.6rem;
+  font-weight: 800;
+  color: var(--crimson);
+  font-variant-numeric: lining-nums tabular-nums;
+  transition: border-color 0.18s, background-color 0.18s, transform 0.15s;
+}
+.fr-amount:hover .fr-amount__face { border-color: var(--tan); }
+.fr-amount input:checked + .fr-amount__face { border-color: var(--holly); background: var(--holly-soft); color: var(--holly-dark); box-shadow: var(--shadow-sm); }
+.fr-amount input:focus-visible + .fr-amount__face { outline: 3px solid var(--holly); outline-offset: 3px; }
+.fr-amount:active .fr-amount__face { transform: translateY(1px); }
+.fr-own { margin: 0; }
+.fr-own .give-custom-field { max-width: 360px; }
+.fr-choice { margin-top: 6px; }
+.fr-choice .give-donor-option { min-height: 48px; }
+.fr-message { resize: vertical; }
+.fr-declaration { margin-top: 18px; padding: 18px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--card); }
+
+/* the supporter wall: a list that grows the page, never a box that scrolls */
+.fr-wall__count { color: var(--slate-soft); margin: -4px 0 16px; }
+.fr-wall__list { list-style: none; margin: 0; padding: 0; display: grid; gap: 12px; }
+.fr-wall__item {
+  padding: 16px 18px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--card);
+  box-shadow: var(--shadow-sm);
+}
+.fr-wall__item:focus { outline: none; }
+.fr-wall__item:focus-visible { outline: 3px solid var(--holly); outline-offset: 3px; }
+.fr-wall__head { margin: 0; display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 4px 14px; }
+.fr-wall__who { font-weight: 600; font-size: 1.05rem; color: var(--maroon); overflow-wrap: anywhere; }
+.fr-wall__amount { font-family: var(--font-head); font-weight: 800; font-size: 1.15rem; color: var(--holly); font-variant-numeric: lining-nums tabular-nums; }
+.fr-wall__msg { margin: 6px 0 0; font-size: 1rem; line-height: 1.6; overflow-wrap: anywhere; text-wrap: pretty; }
+.fr-wall__when { margin: 6px 0 0; font-size: 0.86rem; color: var(--slate-soft); }
+.fr-wall__empty { padding: 18px 20px; border: 1.6px dashed var(--line); border-radius: var(--radius); text-align: center; color: var(--slate-soft); }
+.fr-wall__more {
+  display: block;
+  width: 100%;
+  min-height: 52px;
+  margin-top: 14px;
+  padding: 12px 20px;
+  border: 1.6px solid var(--line);
+  border-radius: var(--radius-pill);
+  background: var(--card);
+  color: var(--maroon);
+  font-family: var(--font-body);
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: border-color 0.2s;
+}
+.fr-wall__more:hover { border-color: var(--maroon); }
+
+/* sharing */
+.fr-share__links { display: flex; flex-wrap: wrap; gap: 10px; }
+.fr-share__btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 48px;
+  padding: 10px 18px;
+  border: 1.6px solid var(--line);
+  border-radius: var(--radius-pill);
+  background: var(--cream);
+  color: var(--maroon);
+  font-family: var(--font-body);
+  font-size: 0.98rem;
+  font-weight: 600;
+  text-decoration: none;
+  cursor: pointer;
+  transition: border-color 0.2s, background-color 0.2s;
+}
+.fr-share__btn:hover { border-color: var(--maroon); background: var(--card); }
+.fr-share__btn:active { transform: translateY(1px); }
+.fr-share__btn svg { flex: none; color: var(--crimson); }
+.fr-share__url { margin: 14px 0 0; font-size: 0.92rem; color: var(--slate-soft); overflow-wrap: anywhere; }
+.fr-share__status { margin: 6px 0 0; font-weight: 600; color: var(--holly); min-height: 1.5em; }
+
+/* the QR code */
+.fr-qr__code { width: min(240px, 100%); margin: 4px 0 16px; padding: 10px; border: 1px solid var(--line); border-radius: 14px; background: var(--white); }
+.fr-qr__code svg { display: block; width: 100%; height: auto; }
+.fr-qr__download { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; font-weight: 600; text-underline-offset: 3px; }
+
+/* ---------- the manage page ---------- */
+.fr-waiting {
+  margin: 0 0 22px;
+  padding: 16px 18px;
+  border: 1.6px solid var(--holly);
+  border-radius: var(--radius);
+  background: var(--holly-soft);
+  color: var(--slate);
+  line-height: 1.6;
+}
+.fr-waiting strong { display: block; color: var(--holly-dark); }
+.fr-form__title { font-size: clamp(1.5rem, 1.25rem + 1vw, 1.95rem); color: var(--maroon); margin-bottom: 6px; overflow-wrap: anywhere; }
+.fr-form__lead { margin: 0 0 18px; }
+.fr-form__lead a { font-weight: 600; }
+
+/* ---------- motion off ---------- */
+@media (prefers-reduced-motion: reduce) {
+  .fr-option, .fr-amount__face, .fr-share__btn, .fr-wall__more { transition: none; }
+  .fr-amount:active .fr-amount__face, .fr-share__btn:active { transform: none; }
+}

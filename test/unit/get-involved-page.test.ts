@@ -125,3 +125,20 @@ describe("the styles", () => {
     expect(eventsCss).toMatch(/\.ev-card--fundraiser \.ev-face\s*\{[^}]*cursor:\s*auto/);
   });
 });
+
+describe("the fundraising pages' styles", () => {
+  const css = readFileSync(resolve(ROOT, "assets/css/fundraising.css"), "utf8").replace(/\/\*[\s\S]*?\*\//g, "");
+
+  it("never scroll inside a box", () => {
+    expect(css).not.toMatch(/overflow(-[xy])?\s*:\s*(auto|scroll)/);
+  });
+
+  it("let a text box grow with what is typed rather than scroll", () => {
+    expect(css).toMatch(/textarea[^{]*\{[^}]*field-sizing:\s*content/);
+  });
+
+  it("stop the meter and the presses moving for anyone who asks", () => {
+    expect(css).toMatch(/prefers-reduced-motion:\s*no-preference[\s\S]*fr-meter__fill/);
+    expect(css).toMatch(/prefers-reduced-motion:\s*reduce/);
+  });
+});

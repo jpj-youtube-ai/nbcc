@@ -422,6 +422,9 @@ fieldset.is-invalid .fr-option { border-color: var(--crimson); }
 .fr-mine__part { margin-top: clamp(26px, 4vw, 34px); padding-top: clamp(20px, 3vw, 26px); border-top: 1px solid var(--line); }
 .fr-mine__part h3 { margin: 0 0 8px; font-size: clamp(1.2rem, 1.1rem + 0.5vw, 1.45rem); color: var(--maroon); }
 .fr-mine__part > p { margin: 0 0 14px; }
+/* TASK-505: what they asked us for, a line each. */
+.fr-mine__requests { margin: 0; padding-left: 1.2em; display: grid; gap: 6px; overflow-wrap: anywhere; }
+.fr-mine__requests a { font-weight: 600; text-underline-offset: 3px; }
 .fr-mine__raised { font-family: var(--font-head); font-size: 1.35rem; font-weight: 800; color: var(--maroon); font-variant-numeric: lining-nums tabular-nums; }
 .fr-mine .fr-thanks-panel { margin: 0 0 18px; }
 .fr-mine .fr-thanks-panel h4 { margin: 0; font-size: 1.15rem; color: var(--holly-dark); }

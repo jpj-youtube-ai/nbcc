@@ -33,6 +33,8 @@ const send = vi.hoisted(() => ({
   manageUrl: () => "https://nbcc.test/fundraise/manage",
 }));
 const stripeMock = vi.hoisted(() => ({ create: vi.fn() }));
+// TASK-505: the requests staff have acted on, read for one fundraiser at a time.
+const requestsDb = vi.hoisted(() => ({ listRequestRowsFor: vi.fn() }));
 
 vi.mock("../../src/db/fundraisers", async () => {
   class FundraiserError extends Error {
@@ -43,6 +45,7 @@ vi.mock("../../src/db/fundraisers", async () => {
   return { ...db, FundraiserError };
 });
 vi.mock("../../src/db/fundraiser-sign-in", () => signIn);
+vi.mock("../../src/db/fundraising-requests", () => requestsDb);
 vi.mock("../../src/fundraising/send", () => send);
 vi.mock("../../src/newsletter/self-signup", () => ({ subscribeSelf: vi.fn() }));
 vi.mock("../../src/clients/turnstile", () => ({ captchaEnabled: () => false, captchaSiteKey: () => null, verifyCaptcha: vi.fn() }));
@@ -150,6 +153,7 @@ beforeEach(() => {
   db.fundraisingIsOn.mockResolvedValue(true);
   db.waitingEditFor.mockResolvedValue(null);
   db.wallRows.mockResolvedValue([]);
+  requestsDb.listRequestRowsFor.mockReset().mockResolvedValue([]);
   signIn.findSession.mockImplementation(async (hash: string) =>
     hash === hashSessionId(SESSION_ID) ? { email: "sam@example.com", expiresAt: new Date(Date.now() + 3600_000) } : null,
   );
@@ -376,6 +380,65 @@ describe("the private area", () => {
     db.fundraisingIsOn.mockResolvedValue(false);
     expect((await run(getManageSession, { cookie: SAM })).statusCode).toBe(404);
   });
+
+  // TASK-505: where each thing they asked for is up to, in words, read only.
+  it("says where each thing they asked for is up to, and never a staff note or name", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-12-07T10:00:00Z"));
+    try {
+      db.listForOrganiser.mockResolvedValue([
+        record({
+          eventDate: "2026-12-12",
+          socialOk: true,
+          wants: { posterCount: 10, leafletCount: 0, bucketCount: 2, tinCount: 0, leaflets: 0, buckets: 0, shoutOut: true, attend: false },
+        }),
+      ]);
+      const base = { quantityBack: null, backOn: null, doneOn: null, going: null, backNote: null, link: null, updatedAt: null, updatedBy: "admin:fern@example.com" };
+      requestsDb.listRequestRowsFor.mockResolvedValue([
+        { ...base, fundraiserId: 9, kind: "posters", status: "sent", quantity: 10, how: "post", sentOn: "2026-12-03", handledBy: "Fern Staff", note: "Kept two back" },
+        { ...base, fundraiserId: 9, kind: "buckets", status: "with_them", quantity: 2, how: null, sentOn: "2026-12-05", handledBy: "Fern Staff", note: null },
+      ]);
+      const res = await run(getManageSession, { cookie: SAM });
+      expect(res.statusCode).toBe(200);
+      expect(requestsDb.listRequestRowsFor).toHaveBeenCalledWith(9);
+      expect((res.body as { fundraisers: Array<{ requests: unknown }> }).fundraisers[0].requests).toEqual([
+        { label: "Posters", words: "sent on 3 Dec" },
+        { label: "Collection buckets", words: "with you, please bring them back by 26 Dec" },
+        { label: "Social media shout out", words: "coming soon" },
+      ]);
+      const all = JSON.stringify(res.body);
+      expect(all).not.toContain("Fern");
+      expect(all).not.toContain("Kept two back");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("leaves out a request still at its first step on a finished fundraiser (made before requests were tracked)", async () => {
+    db.listForOrganiser.mockResolvedValue([
+      record({
+        status: "finished",
+        wants: { posterCount: 10, leafletCount: 0, bucketCount: 0, tinCount: 0, leaflets: 0, buckets: 0, shoutOut: false, attend: false },
+      }),
+    ]);
+    const res = await run(getManageSession, { cookie: SAM });
+    expect((res.body as { fundraisers: Array<{ requests: unknown }> }).fundraisers[0].requests).toEqual([]);
+  });
+
+  it("gives an empty list when they asked for nothing", async () => {
+    db.listForOrganiser.mockResolvedValue([record()]);
+    const res = await run(getManageSession, { cookie: SAM });
+    expect((res.body as { fundraisers: Array<{ requests: unknown }> }).fundraisers[0].requests).toEqual([]);
+  });
+
+  it("still opens, without the requests, when they cannot be read", async () => {
+    db.listForOrganiser.mockResolvedValue([record()]);
+    requestsDb.listRequestRowsFor.mockRejectedValue(new Error("db down"));
+    vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const res = await run(getManageSession, { cookie: SAM });
+    expect(res.statusCode).toBe(200);
+    expect((res.body as { fundraisers: Array<{ requests: unknown }> }).fundraisers[0].requests).toBeNull();
+  });
 });
 
 describe("two organisers", () => {
@@ -412,6 +475,8 @@ describe("two organisers", () => {
     const res = await run(getManageSession, { cookie: KIM });
     expect(db.listForOrganiser).toHaveBeenCalledWith("kim@example.com");
     expect((res.body as { fundraisers: Array<{ id: number }> }).fundraisers.map((f) => f.id)).toEqual([11]);
+    // TASK-505: and only their own requests.
+    expect(requestsDb.listRequestRowsFor.mock.calls).toEqual([[11]]);
   });
 });
 

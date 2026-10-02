@@ -8982,6 +8982,12 @@
   // The same rule the server checks addresses by (zod's), as the ticket report's card has it.
   var FR_EMAIL = /^(?!\.)(?!.*\.\.)([A-Z0-9_'+\-\.]*)[A-Z0-9_+-]@([A-Z0-9][A-Z0-9\-]*\.)+[A-Z]{2,}$/i;
   var FR_CALL_WORDS = { before: "The call a week before", after: "The call a week after" };
+  // TASK-505: the Requests part of each sign up (src/routes/admin-fundraising-requests.ts).
+  var frReq = null; // GET /api/admin/fundraising/requests: { today, requests, toDo, notBack, totals }
+  var frReqState = "loading"; // loading, failed or ok
+  var frReqForm = null; // { kind, action }: the one small form open, if any
+  var frReqDraft = {}; // what was typed in it, so a redraw keeps it
+  var frReqErrors = {}; // the server's words for a box in it
 
   function frCanWrite() {
     return canEdit("fundraising");
@@ -9044,6 +9050,8 @@
     detail: "frDetailStatus", edit: "frEditStatus", cash: "frCashStatus", photo: "frPhotoStatus",
     // TASK-503
     call: "frCallStatus", list: "frListStatus",
+    // TASK-505
+    req: "frReqStatus",
   };
   // Says it now, in place, without a redraw: "Adding…" has to show while the request is out.
   function frPaintNotice(key) {
@@ -9073,6 +9081,8 @@
     frRenderInvitePanel();
     frLoadTeam();
     frLoadSummary();
+    // TASK-505: the requests, likewise on their own.
+    frLoadRequests();
   }
 
   function frLoadSettings() {
@@ -9148,7 +9158,7 @@
   // TASK-503: and the team's tools, whose calls and prompts the list shows.
   function frReload() {
     var id = frOpenId;
-    return Promise.all([frLoadList(), id != null ? frLoadDetail(id) : null, frLoadTeam()]);
+    return Promise.all([frLoadList(), id != null ? frLoadDetail(id) : null, frLoadTeam(), frLoadRequests()]);
   }
 
   // ---- the switch ----
@@ -9239,6 +9249,11 @@
     // TASK-503: how many have a call due today.
     var calls = doc.querySelector('[data-frcount="calls"]');
     if (calls) calls.textContent = list.filter(frCallDue).length;
+    // TASK-505: how many have requests to do, and how many have buckets or tins out.
+    var toDo = doc.querySelector('[data-frcount="requests"]');
+    if (toDo) toDo.textContent = list.filter(frReqToDo).length;
+    var notBack = doc.querySelector('[data-frcount="notback"]');
+    if (notBack) notBack.textContent = list.filter(frReqNotBack).length;
   }
 
   function frRaisedCell(f) {
@@ -9261,6 +9276,9 @@
       (frCallDue(f) ? '<span class="admin-pill is-call-due fx-call-pill">Time to call</span>' : "") +
       (frPrompt(f) ? '<span class="admin-pill admin-pill--pending fr-offlist-pill">Take off Get involved?</span>' : "") +
       (f.offListAt && f.status === "approved" ? '<span class="admin-pill fr-offlist-done">Off Get involved</span>' : "") +
+      // TASK-505: something they asked for still to send or do; buckets or tins due back.
+      (frReqToDo(f) ? '<span class="admin-pill admin-pill--pending fr-requests-pill">Requests to do</span>' : "") +
+      (frReqDueBack(f) ? '<span class="admin-pill is-call-due fr-dueback-pill">Due back</span>' : "") +
       rowNewPill("fundraising", f.createdAt);
     return (
       '<tr class="fx-summary' + (open ? " is-open" : "") + '" data-frtoggle="' + f.id +
@@ -9319,11 +9337,18 @@
       wrap.innerHTML = '<p class="fx-empty fr-empty">Nobody has signed up yet. Sign ups from the Fundraise for us form arrive here, with a New pill.</p>';
       return;
     }
-    var rows = all.filter(function (f) { return !frFilter || (frFilter === "calls" ? frCallDue(f) : f.status === frFilter); });
+    var rows = all.filter(function (f) {
+      if (!frFilter) return true;
+      if (frFilter === "calls") return frCallDue(f);
+      // TASK-505
+      if (frFilter === "requests") return frReqToDo(f);
+      if (frFilter === "notback") return frReqNotBack(f);
+      return f.status === frFilter;
+    });
     if (!rows.length) {
       var none = {
         new: "No new sign ups are waiting.", approved: "None approved yet.", declined: "None declined.", finished: "None finished yet.",
-        calls: "No calls due.",
+        calls: "No calls due.", requests: "No requests to do.", notback: "No buckets or tins are out.",
       };
       wrap.innerHTML = '<p class="fx-empty fr-empty">' + H.escapeHtml(none[frFilter] || "None here.") + "</p>";
       return;
@@ -9357,6 +9382,7 @@
     frCashErrors = {};
     frReasonDraft = "";
     frCallDraft = "";
+    frReqClear();
     frRenderList();
     if (frOpenId != null) frLoadDetail(frOpenId);
   }
@@ -9378,6 +9404,7 @@
         frOffListSection(f, write) +
         frCallsSection(f, write) +
         (frDetail.waitingEdit ? '<section class="fx-panel fx-panel--wide fr-change-panel"><h4>Changes to check</h4>' + frChangePanel(f, frDetail.waitingEdit, write) + "</section>" : "") +
+        frRequestsSection(f, write) +
         '<section class="fx-panel"><h4>What they told us</h4>' + frAboutPanel(f) + "</section>" +
         '<section class="fx-panel"><h4>The organiser</h4>' + frContactPanel(f) + "</section>" +
         '<section class="fx-panel"><h4>What they would like</h4>' + frWantsPanel(f) + "</section>" +
@@ -9881,6 +9908,8 @@
     "fundraiser.called": "Called",
     "fundraiser.taken_off_list": "Taken off Get involved",
     "fundraiser.put_back_on_list": "Put back on Get involved",
+    // TASK-505: the requests.
+    "fundraiser.request_updated": "A request updated",
   };
 
   function frPaintHistory() {
@@ -9906,6 +9935,7 @@
         if (h.action === "fundraiser.cash_added") what = "Cash added: " + frMoney(data.amountPence);
         if (h.action === "fundraiser.cash_removed" && data.amountPence) what = "Cash removed: " + frMoney(data.amountPence);
         if (h.action === "fundraiser.called") what = data.which === "after" ? "Called, a week after its date" : "Called, a week before its date";
+        if (h.action === "fundraiser.request_updated" && typeof data.words === "string" && data.words) what = data.words;
         var said = h.action === "fundraiser.declined" ? data.reason : h.action === "fundraiser.called" ? data.note : "";
         var note = said ? '<span class="fx-hist-note">' + H.escapeHtml(said) + "</span>" : "";
         return '<li><span class="fx-hist-what">' + H.escapeHtml(what) + "</span>" +
@@ -10276,6 +10306,10 @@
       if (callBtn) return frRecordCall(callBtn.getAttribute("data-frcall"));
       var listBtn = t.closest("[data-frlist]");
       if (listBtn) return frSetList(listBtn.getAttribute("data-frlist") === "off");
+      // TASK-505: the Requests part.
+      var reqBtn = t.closest("[data-frreqact]");
+      if (reqBtn) return frReqAct(reqBtn.getAttribute("data-frreqkind"), reqBtn.getAttribute("data-frreqact"));
+      if (t.closest("[data-frreqcancel]")) return frReqCancel();
       var resend = t.closest("[data-frinviteresend]");
       if (resend) return frResendInvite(resend.getAttribute("data-frinviteresend"));
       var removeInvite = t.closest("[data-frinviteremove]");
@@ -10300,6 +10334,9 @@
       } else if (form.id === "frInviteForm") {
         e.preventDefault();
         frSendInvite();
+      } else if (form.id === "frReqForm") {
+        e.preventDefault();
+        frReqSubmit(form);
       }
     });
     // What is typed is kept as it is typed, so a redraw (another action, a reload) never loses it.
@@ -10308,6 +10345,8 @@
       if (!t || !t.closest) return;
       if (t.id === "frDeclineReason") frReasonDraft = t.value;
       if (t.id === "frCallNote") frCallDraft = t.value;
+      // TASK-505: the open request's form; of the radios, the one chosen.
+      if (t.closest("#frReqForm") && t.name && (t.type !== "radio" || t.checked)) frReqDraft[t.name] = String(t.value || "");
       // Only the boxes typed in are kept: the rest always show what is live now.
       if (t.closest("#frEditForm") && t.name) {
         frEditDraft = frEditDraft || {};
@@ -10506,6 +10545,309 @@
       return frSend("POST", "/api/admin/fundraisers/" + f.id + (off ? "/off-list" : "/on-list")).then(function (r) {
         if (!r.ok) run.say(frRefusal(r, "That did not work. Please try again."), true);
         else run.say(off ? "Taken off Get involved. Its page still works." : "Back on Get involved.", false);
+        return frReload();
+      });
+    });
+  }
+
+  // ---- Requests (TASK-505) ----
+  // What the organiser asked for on the form, tracked to done: posters and leaflets sent, buckets
+  // and tins out and back, a shout out done, someone arranged to come along. The server works out
+  // where each is up to and what can be done next (src/fundraising/requests.ts); this only says it,
+  // and sends what staff enter, with the step they saw so a second press changes nothing. Every
+  // stored string is escaped. Nothing scrolls inside: the small form grows the page.
+  var FR_REQ_FLOW = {
+    printed: ["to_send", "sent"], lent: ["to_send", "with_them", "back"],
+    shout_out: ["to_do", "done"], attend: ["to_arrange", "arranged", "done"],
+  };
+  var FR_REQ_LABELS = {
+    to_send: "To send", sent: "Sent", with_them: "With them", back: "Back",
+    to_do: "To do", done: "Done", to_arrange: "To arrange", arranged: "Arranged",
+  };
+  var FR_REQ_BUTTONS = {
+    send: "Mark as sent", out: "Mark as with them", back: "Mark as back", done: "Mark as done",
+    arrange: "Mark as arranged", count: "Change the count", undo: "Undo",
+  };
+
+  function frLoadRequests() {
+    return authFetch("/api/admin/fundraising/requests")
+      .then(okJson)
+      .then(function (d) {
+        var ok = !!(d && d.requests && typeof d.requests === "object" && d.toDo && d.notBack);
+        frReq = ok ? d : null;
+        frReqState = ok ? "ok" : "failed";
+        frRenderList();
+      })
+      .catch(function (err) {
+        if (err && err.message === "unauthorized") return;
+        frReq = null;
+        frReqState = "failed";
+        frRenderList();
+      });
+  }
+
+  function frReqsOf(f) {
+    var list = frReq && frReq.requests ? frReq.requests[f.id] : null;
+    return Array.isArray(list) ? list : [];
+  }
+  function frReqView(f, kind) {
+    return frReqsOf(f).filter(function (v) { return v.kind === kind; })[0] || null;
+  }
+  function frReqToDo(f) {
+    return !!(frReq && frReq.toDo && frReq.toDo[f.id]);
+  }
+  function frReqNotBack(f) {
+    return !!(frReq && frReq.notBack && frReq.notBack[f.id]);
+  }
+  function frReqDueBack(f) {
+    return frReqsOf(f).some(function (v) { return v.dueBack === true; });
+  }
+  // Did they ask for anything? Read from the sign up itself, for when the requests could not load.
+  function frAskedAnything(f) {
+    var w = f.wants || {};
+    return ["posterCount", "leafletCount", "bucketCount", "tinCount", "leaflets", "buckets"].some(function (k) {
+      return Number(w[k]) > 0;
+    }) || !!w.shoutOut || !!w.attend;
+  }
+  // The first name of whoever is signed in, to fill in "who"; they can change it.
+  function frReqMe() {
+    if (!frTeam || !Array.isArray(frTeam.signers)) return "";
+    var me = frTeam.signers.filter(function (s) { return String(s.id) === String(frTeam.me); })[0];
+    return me ? String(me.firstName || "") : "";
+  }
+  function frReqToday() {
+    return (frReq && frReq.today) || evToday();
+  }
+  function frCap(s) {
+    return s.charAt(0).toUpperCase() + s.slice(1);
+  }
+
+  function frRequestsSection(f, write) {
+    var body;
+    if (frReqState !== "ok") {
+      if (!frAskedAnything(f)) return "";
+      body = frReqState === "loading"
+        ? '<p class="admin-loading">Loading…</p>'
+        : '<p class="fx-empty">The requests could not load just now.</p>';
+    } else {
+      var list = frReqsOf(f);
+      if (!list.length) return "";
+      body = '<p class="fx-help">What they asked for on the form, and where each one is up to.</p>' +
+        '<ul class="fr-req-list">' + list.map(function (v) { return frReqItemHtml(f, v, write); }).join("") + "</ul>";
+    }
+    return '<section class="fx-panel fx-panel--wide fr-requests-panel" data-frrequests><h4>Requests</h4>' + body +
+      frNoticeHtml("req", "frReqStatus") + "</section>";
+  }
+
+  function frReqStateHtml(v) {
+    if (v.noPermission && v.status === "to_do") return '<span class="fx-state fx-state--todo">Asked, but no permission to post yet: ask them</span>';
+    var tone = v.outstanding ? "todo" : v.status === "with_them" || v.status === "arranged" ? (v.dueBack ? "todo" : "waiting") : "done";
+    return '<span class="fx-state fx-state--' + tone + '">' + H.escapeHtml(v.statusLabel || FR_REQ_LABELS[v.status] || "") + "</span>";
+  }
+
+  // What has been recorded so far, a line each, in words.
+  function frReqFacts(v) {
+    var facts = [];
+    var by = function (who) { return who ? ", by " + who : ""; };
+    var day = function (d) { return d ? H.fmtDate(d) : "a day not given"; };
+    var many = function (n) { return n !== null && n !== undefined ? n + " " : ""; };
+    if (v.noPermission && v.status === "to_do") {
+      facts.push("They did not tick that we can post about it on NBCC’s social media. Once they say yes, tick it under Change the details.");
+    }
+    if (v.group === "printed" && v.status === "sent") {
+      facts.push(frCap(many(v.quantity) + (v.how === "dropped_off" ? "dropped off" : "posted") + " on " + day(v.sentOn) + by(v.handledBy)));
+    }
+    if (v.group === "lent" && v.status !== "to_send") facts.push(frCap(many(v.quantity) + "went out on " + day(v.sentOn) + by(v.handledBy)));
+    if (v.group === "lent" && v.status === "back") {
+      var out = v.quantity !== null && v.quantity !== undefined ? v.quantity : v.asked;
+      facts.push((v.quantityBack !== null && v.quantityBack !== undefined ? v.quantityBack + " of " + out + " came back" : "Came back") + " on " + day(v.backOn));
+    }
+    if (v.dueOn && v.status !== "back") facts.push("Due back on " + H.fmtDate(v.dueOn));
+    if (v.group === "shout_out" && v.status === "done") facts.push("Posted on " + day(v.doneOn) + by(v.handledBy));
+    if (v.group === "attend" && v.going) facts.push("Going: " + v.going);
+    if (v.group === "attend" && v.status === "done") facts.push("Came along on " + day(v.doneOn));
+    var lines = facts.map(function (s) { return "<li>" + H.escapeHtml(s) + "</li>"; });
+    if (v.note) lines.push('<li class="fr-req-note">' + H.escapeHtml("Note: " + v.note) + "</li>");
+    if (v.backNote) lines.push('<li class="fr-req-note">' + H.escapeHtml("On what came back: " + v.backNote) + "</li>");
+    if (v.link && frIsWebLink(v.link)) {
+      lines.push('<li>The post: <a class="fx-tel" href="' + H.escapeHtml(v.link) + '" target="_blank" rel="noopener noreferrer">' +
+        H.escapeHtml(v.link) + "</a></li>");
+    }
+    return lines.length ? '<ul class="fr-req-facts">' + lines.join("") + "</ul>" : "";
+  }
+
+  function frReqItemHtml(f, v, write) {
+    var kind = H.escapeHtml(v.kind);
+    var asked = typeof v.asked === "number" && v.asked > 0 ? '<span class="fr-req-asked">' + v.asked + " asked for</span>" : "";
+    var head = '<div class="fr-req-head"><span class="fr-req-label">' + H.escapeHtml(v.label) + "</span>" + asked + frReqStateHtml(v) +
+      (v.dueBack ? '<span class="admin-pill is-call-due fr-dueback-pill">Due back</span>' : "") + "</div>";
+    var open = write && frReqForm && frReqForm.kind === v.kind;
+    var actions = "";
+    if (open) {
+      actions = frReqFormHtml(f, v, frReqForm.action);
+    } else if (write && Array.isArray(v.actions) && v.actions.length) {
+      actions = '<div class="fx-call-row fr-req-actions">' + v.actions.filter(function (a) { return FR_REQ_BUTTONS[a]; }).map(function (a) {
+        var quiet = a === "undo" || a === "count" ? " fr-btn-quiet" : "";
+        return '<button class="admin-btn admin-btn--small' + quiet + '" type="button" data-frreqkind="' + kind + '" data-frreqact="' + a + '">' +
+          FR_REQ_BUTTONS[a] + "</button>";
+      }).join("") + "</div>";
+    }
+    return '<li class="fr-req" data-frreq="' + kind + '">' + head + frReqFacts(v) + actions + "</li>";
+  }
+
+  // The small form for one step: only the boxes that step needs, filled in where we can.
+  function frReqFormHtml(f, v, action) {
+    var today = frReqToday();
+    var d = frReqDraft;
+    var e = frReqErrors;
+    var val = function (name, start) {
+      if (Object.prototype.hasOwnProperty.call(d, name)) return d[name];
+      return start === null || start === undefined ? "" : String(start);
+    };
+    var err = function (name) {
+      var msg = e[name];
+      return '<p class="fr-err" id="frReqErr-' + name + '" data-frreqerr="' + name + '"' + (msg ? "" : " hidden") + ">" + H.escapeHtml(msg || "") + "</p>";
+    };
+    var bad = function (name) { return e[name] ? ' aria-invalid="true" aria-describedby="frReqErr-' + name + '"' : ""; };
+    var field = function (name, label, input, wide) {
+      return '<div class="fr-field' + (wide ? " fr-field--wide" : "") + '"><label class="fx-call-label" for="frReq-' + name + '">' + H.escapeHtml(label) +
+        "</label>" + input + err(name) + "</div>";
+    };
+    var dateBox = function (label, start) {
+      return field("on", label, '<input class="fx-call-input" id="frReq-on" name="on" type="date" max="' + H.escapeHtml(today) + '" value="' +
+        H.escapeHtml(val("on", start)) + '"' + bad("on") + ">");
+    };
+    var countBox = function (label, start, max) {
+      return field("quantity", label, '<input class="fx-call-input" id="frReq-quantity" name="quantity" type="number" inputmode="numeric" min="' +
+        (action === "back" ? 0 : 1) + '" max="' + max + '" step="1" value="' + H.escapeHtml(val("quantity", start)) + '"' + bad("quantity") + ">");
+    };
+    var textBox = function (name, label, start, max) {
+      return field(name, label, '<input class="fx-call-input" id="frReq-' + name + '" name="' + name + '" type="text" maxlength="' + max +
+        '" autocomplete="off" value="' + H.escapeHtml(val(name, start)) + '"' + bad(name) + ">");
+    };
+    var noteBox = function (label) {
+      return field("note", label, '<textarea class="fx-call-input fr-input" id="frReq-note" name="note" rows="2" maxlength="500"' + bad("note") + ">" +
+        H.escapeHtml(val("note", "")) + "</textarea>", true);
+    };
+    var boxes = "";
+    if (action === "send") {
+      var how = val("how", "");
+      boxes =
+        dateBox("Date sent", today) +
+        '<fieldset class="fr-field fr-field--wide fr-checks-group"><legend class="fx-call-label">How they went</legend>' +
+          '<div class="fr-checks-row">' +
+            '<label class="fr-check"><input type="radio" name="how" value="post"' + (how === "post" ? " checked" : "") + "> By post</label>" +
+            '<label class="fr-check"><input type="radio" name="how" value="dropped_off"' + (how === "dropped_off" ? " checked" : "") + "> Dropped off</label>" +
+          "</div>" + err("how") + "</fieldset>" +
+        textBox("by", "Who sent them", frReqMe(), 100) +
+        countBox("How many were sent", v.asked, 1000) +
+        noteBox("Note (optional)");
+    } else if (action === "out") {
+      boxes = dateBox("Date they went out", today) + countBox("How many went out", v.asked, 20) +
+        textBox("by", "Who handled it", frReqMe(), 100) + noteBox("Note (optional)");
+    } else if (action === "back") {
+      boxes = dateBox("Date they came back", today) +
+        countBox("How many came back", v.quantity !== null && v.quantity !== undefined ? v.quantity : v.asked, 20) +
+        noteBox("Note on the money inside, or any missing (optional)");
+    } else if (action === "done" && v.group === "shout_out") {
+      boxes = dateBox("Date it was posted", today) + textBox("by", "Who posted it", frReqMe(), 100) +
+        textBox("link", "Link to the post (optional)", "", 500);
+    } else if (action === "done") {
+      boxes = dateBox("Date someone came along", f.eventDate && f.eventDate <= today ? f.eventDate : today);
+    } else if (action === "arrange") {
+      boxes = textBox("going", "Who is going", "", 200) + noteBox("Note (optional)");
+    } else if (action === "count") {
+      boxes = countBox("How many were actually sent", v.quantity, 1000);
+    }
+    return (
+      '<form class="fx-call-form fr-form fr-req-form" id="frReqForm" data-frreqfor="' + H.escapeHtml(v.kind) + '" novalidate>' +
+        '<p class="fr-form-head">' + H.escapeHtml(v.label + ": " + FR_REQ_BUTTONS[action].toLowerCase()) + "</p>" +
+        boxes +
+        '<div class="fx-call-row fr-field--wide"><button class="admin-btn admin-btn--small" type="submit">Save</button>' +
+          '<button class="fr-link-btn" type="button" data-frreqcancel>Cancel</button></div>' +
+      "</form>"
+    );
+  }
+
+  function frReqClear() {
+    frReqForm = null;
+    frReqDraft = {};
+    frReqErrors = {};
+  }
+
+  function frReqCancel() {
+    if (frBusy) return;
+    frReqClear();
+    frRenderList();
+  }
+
+  function frReqAct(kind, action) {
+    if (frBusy) return;
+    var f = frOpenRecord();
+    var v = f && frReqView(f, kind);
+    if (!v || !Array.isArray(v.actions) || v.actions.indexOf(action) < 0) return;
+    if (action === "undo") return frReqUndo(f, v);
+    frReqClear();
+    frReqForm = { kind: kind, action: action };
+    frSay("req", "", false);
+    frRenderList();
+    var first = doc.querySelector("#frReqForm input, #frReqForm textarea");
+    if (first && first.focus) first.focus({ preventScroll: true });
+  }
+
+  function frReqUndo(f, v) {
+    var steps = FR_REQ_FLOW[v.group] || [];
+    var prev = steps[steps.indexOf(v.status) - 1];
+    if (!prev) return;
+    if (!window.confirm("Undo " + v.label + "? It goes back from " + FR_REQ_LABELS[v.status] + " to " + FR_REQ_LABELS[prev] +
+      ", and what was entered for that step is cleared.")) return;
+    frReqSend(f, v, { action: "undo", from: v.status });
+  }
+
+  function frReqSubmit(form) {
+    if (frBusy || !frReqForm) return;
+    var f = frOpenRecord();
+    var v = f && frReqView(f, frReqForm.kind);
+    if (!v) return;
+    var action = frReqForm.action;
+    var box = function (name) { return form.querySelector('[name="' + name + '"]'); };
+    var read = function (name) { var x = box(name); return x ? String(x.value || "").trim() : ""; };
+    var body = { action: action, from: v.status };
+    if (box("on")) body.on = read("on");
+    if (action === "send") {
+      var how = form.querySelector('[name="how"]:checked');
+      if (!how) {
+        frSay("req", "Say whether it was posted or dropped off.", true);
+        frPaintNotice("req");
+        return;
+      }
+      body.how = how.value;
+    }
+    if (box("by")) body.by = read("by");
+    if (box("going")) body.going = read("going");
+    if (box("quantity")) body.quantity = read("quantity") === "" ? null : Number(read("quantity"));
+    if (read("note")) body.note = read("note");
+    if (read("link")) body.link = read("link");
+    frReqSend(f, v, body);
+  }
+
+  function frReqSend(f, v, body) {
+    frRun("req", "Saving…", function (run) {
+      return frSend("POST", "/api/admin/fundraisers/" + f.id + "/requests/" + encodeURIComponent(v.kind), body).then(function (r) {
+        if (r.ok) {
+          if (run.open()) frReqClear();
+          var words = r.body && typeof r.body.words === "string" && r.body.words ? r.body.words + "." : "";
+          run.say(body.action === "undo" ? words || "Undone." : "Saved." + (words ? " " + words : ""), false);
+          return frReload();
+        }
+        if (r.status === 400 && r.body && r.body.fields && typeof r.body.fields === "object") {
+          if (run.open()) frReqErrors = r.body.fields;
+          run.say(frRefusal(r, "Some of it needs another look."), true);
+          return;
+        }
+        // Someone else moved it on, or it is no longer there: show how it stands now.
+        if (run.open()) frReqClear();
+        run.say(frRefusal(r, "That was not saved. Please try again."), true);
         return frReload();
       });
     });

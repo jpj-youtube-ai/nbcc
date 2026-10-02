@@ -50,6 +50,8 @@ import { sendFinishedStaffEmail, sendSignInCodeEmail, sendSignUpEmails, fundrais
 import { subscribeSelf } from "../newsletter/self-signup";
 import { useInvite } from "./fundraise-invite";
 import { readCookie } from "../ball/gate";
+import { listRequestRowsFor } from "../db/fundraising-requests";
+import { organiserRequestLines, parseWants, requestViews, type OrganiserRequestLine } from "../fundraising/requests";
 import { config } from "../config";
 
 // TASK-493: the public side of community fundraising. Everything here is OFF while the fundraising
@@ -439,14 +441,30 @@ function editableOf(f: FundraiserRecord) {
   return out;
 }
 
+// TASK-505: one of their own fundraisers' requests, as the organiser reads them. Best effort: a
+// failure here leaves the rest of their private area working.
+async function theirRequests(
+  f: Pick<Parameters<typeof requestViews>[0], "socialOk" | "eventDate" | "status"> & { id: number; wants?: unknown },
+  today: string,
+): Promise<OrganiserRequestLine[] | null> {
+  try {
+    const rows = await listRequestRowsFor(f.id);
+    return organiserRequestLines(requestViews({ ...f, wants: parseWants(f.wants) }, rows, today), today, f);
+  } catch (err) {
+    console.error("fundraise private area requests read failed:", err instanceof Error ? err.message : err);
+    return null;
+  }
+}
+
 export async function getManageSession(req: Request, res: Response): Promise<Response | void> {
   try {
     const s = await signedIn(req, res);
     if (!s) return;
     const mine = await listForOrganiser(s.email);
+    const today = londonToday(new Date());
     const fundraisers = await Promise.all(
       mine.map(async (f) => {
-        const [waiting, rows] = await Promise.all([waitingEditFor(f.id), wallRows(f.id)]);
+        const [waiting, rows, requests] = await Promise.all([waitingEditFor(f.id), wallRows(f.id), theirRequests(f, today)]);
         // TASK-502: a finished one keeps its public page (and so its QR code) for good.
         const page = hasPage(f);
         return {
@@ -466,6 +484,9 @@ export async function getManageSession(req: Request, res: Response): Promise<Res
           // staff hid it. Never a giver's email, full name or anything else about them.
           gifts: wallEntries(rows),
           finishedRequestedAt: f.finishedRequestedAt ?? null,
+          // TASK-505: where each thing they asked for is up to, in words only (never a staff note
+          // or name); null when it could not be read, so the rest still shows.
+          requests,
         };
       }),
     );

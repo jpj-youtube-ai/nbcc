@@ -8,6 +8,7 @@ import { adminUsersRouter } from "./routes/admin-users";
 import { adminEventsRouter } from "./routes/admin-events";
 import { adminFundraisingRouter } from "./routes/admin-fundraising";
 import { adminFundraisingTeamRouter } from "./routes/admin-fundraising-team";
+import { adminFundraisingRequestsRouter } from "./routes/admin-fundraising-requests";
 import { fundraiseInviteRouter } from "./routes/fundraise-invite";
 import { fundraiseRouter } from "./routes/fundraise";
 import { adminBallReportRouter } from "./routes/admin-ball-report";
@@ -96,6 +97,9 @@ export function createApp() {
   // the sign up form's invite lookup.
   app.use(adminFundraisingTeamRouter);
   app.use(fundraiseInviteRouter);
+  // TASK-505: what organisers asked us for (posters, leaflets, buckets and tins, shout outs, someone
+  // to come along), tracked to done.
+  app.use(adminFundraisingRequestsRouter);
   // The Festive Ball ticket report, set up from the Events page (TASK-464).
   app.use(adminBallReportRouter);
   // Admin > Analytics (TASK-482): the numbers and the collecting switch.

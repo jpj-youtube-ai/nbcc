@@ -316,4 +316,20 @@ describe("what the summary reads", () => {
     expect(cashSql).toMatch(/created_at >= \$1/);
     expect(cashSql).not.toMatch(/paid_in_on >=/);
   });
+
+  // TASK-505: the requests staff have acted on, so the summary counts only what is still to do.
+  it("reads the requests staff have acted on", async () => {
+    query.mockImplementation(async (sql: string) => {
+      if (/FROM fundraiser_requests/.test(sql)) {
+        return {
+          rows: [
+            { fundraiser_id: 1, kind: "buckets", status: "with_them", quantity: 2, quantity_back: null, how: null, sent_on: "2026-12-01", back_on: null, done_on: null, handled_by: "Fern", going: null, note: null, back_note: null, link: null, updated_at: new Date("2026-12-01T10:00:00Z"), updated_by: "admin:fern@example.com" },
+          ],
+        };
+      }
+      return { rows: [] };
+    });
+    const i = await readSummaryInputs(new Date("2026-12-07T08:00:00Z"));
+    expect(i.requests).toEqual([expect.objectContaining({ fundraiserId: 1, kind: "buckets", status: "with_them", quantity: 2, sentOn: "2026-12-01" })]);
+  });
 });

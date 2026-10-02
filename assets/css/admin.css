@@ -2606,6 +2606,19 @@ textarea.fx-call-input{min-height:88px;line-height:1.5;resize:vertical;field-siz
 /* What they asked for, as a short list. */
 #view-fundraising .fr-wants { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 4px; font-size: 0.88rem; color: var(--slate); }
 
+/* TASK-505: the Requests part. A request a row, where it is up to beside its name, what has been
+   recorded under it, and the small form for the next step opening below. It grows the page. */
+#view-fundraising .fr-req-list { list-style: none; margin: 10px 0 0; padding: 0; display: flex; flex-direction: column; }
+#view-fundraising .fr-req { min-width: 0; padding: 12px 0; border-bottom: 1px solid var(--line); }
+#view-fundraising .fr-req:last-child { border-bottom: 0; }
+#view-fundraising .fr-req-head { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; }
+#view-fundraising .fr-req-label { font-weight: 600; font-size: 0.92rem; color: var(--slate); }
+#view-fundraising .fr-req-asked { font-size: 0.82rem; color: var(--slate-soft); }
+#view-fundraising .fr-req-facts { list-style: none; margin: 6px 0 0; padding: 0; display: flex; flex-direction: column; gap: 3px; font-size: 0.86rem; color: var(--slate); overflow-wrap: anywhere; }
+#view-fundraising .fr-req-note { white-space: pre-line; }
+#view-fundraising .fr-req-actions { margin-top: 10px; }
+#view-fundraising .fr-req-form { margin-top: 10px; }
+
 /* The photo, never wider than its panel. */
 #view-fundraising .fr-photo { display: block; max-width: 100%; height: auto; max-height: 260px; border-radius: 12px; border: 1px solid var(--line); }
 #view-fundraising .fr-file { margin-top: 8px; max-width: 100%; font-size: 0.85rem; }

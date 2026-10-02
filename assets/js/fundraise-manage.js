@@ -393,6 +393,7 @@
       var giftsPart = q("[data-f-gifts-part]");
       if (giftsPart) giftsPart.hidden = !f.pageUrl && !(f.gifts && f.gifts.length);
       setWaiting(card, f.waitingEdit);
+      fillRequests(card, f.requests);
 
       // Which details apply: a target for a page raising money, the event details for an event.
       Array.prototype.forEach.call(card.querySelectorAll("[data-event-only]"), function (n) {
@@ -415,6 +416,34 @@
       wireFinished(card, f);
       growTextareas(card);
       return card;
+    }
+
+    // TASK-505: what they asked us for, and where each is up to, in words. Read only. Only a full
+    // https address becomes a link (a shout out's post); everything else is text.
+    function fillRequests(card, requests) {
+      var part = card.querySelector("[data-f-requests]");
+      var ul = card.querySelector("[data-f-requests-list]");
+      if (!part || !ul) return;
+      var list = Array.isArray(requests) ? requests : [];
+      part.hidden = list.length === 0;
+      var d = card.ownerDocument;
+      list.forEach(function (r) {
+        var li = d.createElement("li");
+        var label = d.createElement("strong");
+        label.textContent = String((r && r.label) || "") + ":";
+        li.appendChild(label);
+        li.appendChild(d.createTextNode(" " + String((r && r.words) || "")));
+        if (r && typeof r.link === "string" && /^https:\/\/[^\s"'<>]+$/i.test(r.link)) {
+          li.appendChild(d.createTextNode(". "));
+          var a = d.createElement("a");
+          a.setAttribute("href", r.link);
+          a.setAttribute("target", "_blank");
+          a.setAttribute("rel", "noopener noreferrer");
+          a.textContent = "See the post";
+          li.appendChild(a);
+        }
+        ul.appendChild(li);
+      });
     }
 
     function fillGifts(card, gifts) {

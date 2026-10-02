@@ -551,7 +551,8 @@ describe("nothing else on the screen moves", () => {
   it("keeps the switch, the filters and the list as they were", async () => {
     await openFundraising();
     expect(text(el("frSwitchState"))).toMatch(/^Yes\./);
-    expect(qa("[data-frfilter]").map((b) => b.getAttribute("data-frfilter"))).toEqual(["", "new", "approved", "declined", "finished", "calls"]);
+    // TASK-505 added Requests to do and Buckets not back, after Calls due.
+    expect(qa("[data-frfilter]").map((b) => b.getAttribute("data-frfilter"))).toEqual(["", "new", "approved", "declined", "finished", "calls", "requests", "notback"]);
     expect(qa("#frList tr.fx-summary")).toHaveLength(3);
   });
 });

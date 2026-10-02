@@ -367,7 +367,9 @@ function organiserWords(v: RequestView, today: string): string {
       return "we're getting them ready";
     case "shout_out":
       if (v.status === "done") return `posted on ${shortDate(v.doneOn ?? today)}`;
-      return v.noPermission ? "we can only post about it with your permission. Get in touch if you'd like one" : "coming soon";
+      return v.noPermission
+        ? "we just need your OK to post about you. Reply to any of our emails or give us a ring and we'll sort it."
+        : "coming soon";
     case "attend":
       if (v.status === "arranged") return "arranged, we look forward to seeing you";
       if (v.status === "done") return "thank you for having us";
@@ -375,10 +377,24 @@ function organiserWords(v: RequestView, today: string): string {
   }
 }
 
-/** Where each request is up to, in words for the organiser. Staff notes and names never go in. */
-export function organiserRequestLines(views: RequestView[], today: string): OrganiserRequestLine[] {
-  return views.map((v) => {
-    const line: OrganiserRequestLine = { label: v.label, words: organiserWords(v, today) };
+/**
+ * Where each request is up to, in words for the organiser. Staff notes and names never go in.
+ *
+ * A request still at its first step is shown only while the fundraiser is still to come (the rule
+ * the admin's Requests to do pill and the Monday summary use). There is no backfill, so one asked
+ * for before requests were tracked sits at its first step for good: on a fundraiser past its date,
+ * finished or declined, "we're getting them ready" would be wrong. Anything staff have moved on is
+ * always shown, so buckets still with them are always asked for back.
+ */
+export function organiserRequestLines(
+  views: RequestView[],
+  today: string,
+  f: Pick<RequestSubject, "status" | "eventDate">,
+): OrganiserRequestLine[] {
+  const toCome = stillToCome(f, today);
+  return views.filter((v) => toCome || v.status !== FLOW[v.group][0]).map((v) => {
+    const label = v.group === "shout_out" && v.noPermission && v.status === "to_do" ? "A shout out on our social media" : v.label;
+    const line: OrganiserRequestLine = { label, words: organiserWords(v, today) };
     if (v.group === "shout_out" && v.status === "done" && isHttps(v.link)) line.link = v.link;
     return line;
   });

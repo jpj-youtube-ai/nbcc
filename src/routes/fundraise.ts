@@ -449,7 +449,7 @@ async function theirRequests(
 ): Promise<OrganiserRequestLine[] | null> {
   try {
     const rows = await listRequestRowsFor(f.id);
-    return organiserRequestLines(requestViews({ ...f, wants: parseWants(f.wants) }, rows, today), today);
+    return organiserRequestLines(requestViews({ ...f, wants: parseWants(f.wants) }, rows, today), today, f);
   } catch (err) {
     console.error("fundraise private area requests read failed:", err instanceof Error ? err.message : err);
     return null;

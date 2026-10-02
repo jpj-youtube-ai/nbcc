@@ -223,6 +223,7 @@ describe("the organiser's own view", () => {
         TODAY,
       ),
       TODAY,
+      f,
     );
     expect(lines).toEqual([
       { label: "Posters", words: "sent on 3 Dec" },
@@ -237,29 +238,54 @@ describe("the organiser's own view", () => {
     for (const secret of ["Fern", "Inside only", "dented", "Rowan", "banner"]) expect(all).not.toContain(secret);
   });
 
-  it("says what is still to come, and asks for them back once they are due", () => {
-    const f = subject({ posterCount: 10, bucketCount: 1, shoutOut: true, attend: true }, { eventDate: "2026-11-20" });
-    const lines = organiserRequestLines(requestViews(f, [row("buckets", { status: "with_them", quantity: 1, sentOn: "2026-11-10" })], TODAY), TODAY);
-    expect(lines).toEqual([
+  it("says what is still to come, for a fundraiser still to come", () => {
+    const f = subject({ posterCount: 10, bucketCount: 1, shoutOut: true, attend: true });
+    expect(organiserRequestLines(requestViews(f, [], TODAY), TODAY, f)).toEqual([
       { label: "Posters", words: "we're getting them ready" },
-      { label: "Collection buckets", words: "with you, please bring them back as soon as you can" },
+      { label: "Collection buckets", words: "we're getting them ready" },
       { label: "Social media shout out", words: "coming soon" },
       { label: "Someone from NBCC to come along", words: "we're working on it and will be in touch" },
     ]);
   });
 
-  it("explains a shout out we have no permission for, and uses the old words for an old combined ask", () => {
+  // Review fix I1: there is no backfill, so a request made before staff could track them sits at its
+  // first step for good. For a fundraiser past its date, finished or declined, saying "we're getting
+  // them ready" would be wrong (the posters went weeks ago), so a first step is not shown. Anything
+  // staff have moved on always is, and buckets still with them are always asked for back.
+  it("leaves out anything still at its first step once the fundraiser is past, finished or declined", () => {
+    const wants = { posterCount: 10, bucketCount: 1, shoutOut: true, attend: true };
+    const past = subject(wants, { eventDate: "2026-11-20" });
+    const out = [row("buckets", { status: "with_them", quantity: 1, sentOn: "2026-11-10" })];
+    expect(organiserRequestLines(requestViews(past, out, TODAY), TODAY, past)).toEqual([
+      { label: "Collection buckets", words: "with you, please bring them back as soon as you can" },
+    ]);
+    for (const status of ["finished", "declined"] as const) {
+      const done = subject(wants, { status });
+      expect(organiserRequestLines(requestViews(done, [], TODAY), TODAY, done)).toEqual([]);
+      const sent = [row("posters", { status: "sent", how: "post", sentOn: "2026-12-03" })];
+      expect(organiserRequestLines(requestViews(done, sent, TODAY), TODAY, done)).toEqual([{ label: "Posters", words: "sent on 3 Dec" }]);
+    }
+    // On its own date it is still to come; with no date it always is.
+    for (const f of [subject(wants, { eventDate: TODAY }), subject(wants, { eventDate: null })]) {
+      expect(organiserRequestLines(requestViews(f, [], TODAY), TODAY, f)).toHaveLength(4);
+    }
+  });
+
+  it("asks for their OK when they wanted a shout out without saying we could post, and uses the old words for an old combined ask", () => {
     const f = subject({ leaflets: 5, buckets: 1, shoutOut: true }, { socialOk: false });
-    expect(organiserRequestLines(requestViews(f, [], TODAY), TODAY)).toEqual([
+    expect(organiserRequestLines(requestViews(f, [], TODAY), TODAY, f)).toEqual([
       { label: "Leaflets or posters", words: "we're getting them ready" },
       { label: "Buckets or tins", words: "we're getting them ready" },
-      { label: "Social media shout out", words: "we can only post about it with your permission. Get in touch if you'd like one" },
+      {
+        label: "A shout out on our social media",
+        words: "we just need your OK to post about you. Reply to any of our emails or give us a ring and we'll sort it.",
+      },
     ]);
   });
 
   it("never gives a link that is not a web address", () => {
     const f = subject({ shoutOut: true });
-    const [line] = organiserRequestLines(requestViews(f, [row("shout_out", { status: "done", doneOn: "2026-12-02", link: "javascript:alert(1)" })], TODAY), TODAY);
+    const [line] = organiserRequestLines(requestViews(f, [row("shout_out", { status: "done", doneOn: "2026-12-02", link: "javascript:alert(1)" })], TODAY), TODAY, f);
     expect(line).toEqual({ label: "Social media shout out", words: "posted on 2 Dec" });
   });
 });

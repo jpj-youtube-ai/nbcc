@@ -414,6 +414,17 @@ describe("the private area", () => {
     }
   });
 
+  it("leaves out a request still at its first step on a finished fundraiser (made before requests were tracked)", async () => {
+    db.listForOrganiser.mockResolvedValue([
+      record({
+        status: "finished",
+        wants: { posterCount: 10, leafletCount: 0, bucketCount: 0, tinCount: 0, leaflets: 0, buckets: 0, shoutOut: false, attend: false },
+      }),
+    ]);
+    const res = await run(getManageSession, { cookie: SAM });
+    expect((res.body as { fundraisers: Array<{ requests: unknown }> }).fundraisers[0].requests).toEqual([]);
+  });
+
   it("gives an empty list when they asked for nothing", async () => {
     db.listForOrganiser.mockResolvedValue([record()]);
     const res = await run(getManageSession, { cookie: SAM });

@@ -10640,7 +10640,7 @@
   }
 
   function frReqStateHtml(v) {
-    if (v.noPermission && v.status === "to_do") return '<span class="fx-state fx-state--waiting">No permission to post</span>';
+    if (v.noPermission && v.status === "to_do") return '<span class="fx-state fx-state--todo">Asked, but no permission to post yet: ask them</span>';
     var tone = v.outstanding ? "todo" : v.status === "with_them" || v.status === "arranged" ? (v.dueBack ? "todo" : "waiting") : "done";
     return '<span class="fx-state fx-state--' + tone + '">' + H.escapeHtml(v.statusLabel || FR_REQ_LABELS[v.status] || "") + "</span>";
   }
@@ -10652,7 +10652,7 @@
     var day = function (d) { return d ? H.fmtDate(d) : "a day not given"; };
     var many = function (n) { return n !== null && n !== undefined ? n + " " : ""; };
     if (v.noPermission && v.status === "to_do") {
-      facts.push("They did not tick that we can post about it on NBCC’s social media, so there is nothing to do.");
+      facts.push("They did not tick that we can post about it on NBCC’s social media. Once they say yes, tick it under Change the details.");
     }
     if (v.group === "printed" && v.status === "sent") {
       facts.push(frCap(many(v.quantity) + (v.how === "dropped_off" ? "dropped off" : "posted") + " on " + day(v.sentOn) + by(v.handledBy)));

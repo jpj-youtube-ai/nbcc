@@ -348,7 +348,7 @@ describe("requests tracked to done", () => {
       "1 change to check",
       "Leaflets (50) and leaflets or posters (3) to post",
       "1 collection tin and 1 bucket or tin to send",
-      "Buckets or tins not back yet: 3 (1 due back)",
+      "3 buckets or tins still out (1 due back)",
       "2 calls due",
       "1 invite not taken up after a week: Alex, invited by Fern",
       "1 fundraiser 4 weeks past its date: take it off Get involved?",
@@ -359,7 +359,12 @@ describe("requests tracked to done", () => {
   it("says how many are not back without a due count when none is due yet", () => {
     const later = summaryCounts({ ...tracked, requests: tracked.requests!.filter((r) => r.kind !== "buckets_or_tins") });
     expect(later.notBackDue).toBe(0);
-    expect(summaryLines(later).waiting).toContain("Buckets or tins not back yet: 2");
+    expect(summaryLines(later).waiting).toContain("2 buckets or tins still out, none due back yet");
+  });
+
+  it("says one bucket or tin still out in the singular", () => {
+    const one = summaryCounts({ ...tracked, requests: tracked.requests!.filter((r) => r.kind === "buckets_or_tins") });
+    expect(summaryLines(one).waiting).toContain("1 bucket or tin still out (1 due back)");
   });
 
   it("leaves the count as it was for sign ups nobody has acted on yet", () => {

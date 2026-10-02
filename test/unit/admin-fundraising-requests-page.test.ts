@@ -322,7 +322,7 @@ describe("the Requests part of a sign up", () => {
     expect(q("[data-frrequests]")).toBeNull();
   });
 
-  it("shows each request and where it is up to, with Due back and No permission to post", async () => {
+  it("shows each request and where it is up to, with Due back, and a shout out still needing their permission", async () => {
     await openFundraising();
     await openRow(1);
     expect(text(q("[data-frrequests] h4"))).toBe("Requests");
@@ -332,7 +332,8 @@ describe("the Requests part of a sign up", () => {
     expect(text(item("buckets"))).toContain("With them");
     expect(text(item("buckets"))).toContain("2 went out on 20/11/2026, by Fern");
     expect(text(item("buckets"))).toContain("Due back on 26/12/2026");
-    expect(text(item("shout_out"))).toContain("No permission to post");
+    expect(text(item("shout_out"))).toContain("Asked, but no permission to post yet: ask them");
+    expect(text(item("shout_out"))).not.toContain("nothing to do");
     expect(item("shout_out")!.querySelector("button")).toBeNull();
   });
 

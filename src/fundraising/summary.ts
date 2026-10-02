@@ -287,7 +287,11 @@ export function summaryLines(c: SummaryCounts): SummaryLines {
   ].filter(Boolean);
   if (sent.length) waiting.push(`${andList(sent)} to send`);
   // TASK-505
-  if (c.notBack) waiting.push(`Buckets or tins not back yet: ${c.notBack}` + (c.notBackDue ? ` (${c.notBackDue} due back)` : ""));
+  if (c.notBack) {
+    waiting.push(
+      `${plural(c.notBack, "bucket or tin", "buckets or tins")} still out` + (c.notBackDue ? ` (${c.notBackDue} due back)` : ", none due back yet"),
+    );
+  }
   if (c.shoutOuts) waiting.push(plural(c.shoutOuts, "social media shout out", "social media shout outs"));
   if (c.attend.length) {
     const dates = c.attend.filter((d): d is string => !!d).map(dayMonth);

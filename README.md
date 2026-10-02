@@ -7920,7 +7920,7 @@ email 11 (`fundraiseSummary`), one email to each address, from and replying to t
 - **Waiting on us**: sign ups to approve, changes to check, posters, leaflets, buckets and tins to
   send (the split requests and the old combined ones), shout outs, requests for someone to come
   along (since TASK-505 only those not yet marked sent, done or arranged, and a shout out only with
-  their permission to post; plus "Buckets or tins not back yet: N (M due back)", each one due back
+  their permission to post; plus "N buckets or tins still out (M due back)", or "..., none due back yet", each one due back
   counting as a thing waiting: see **Community fundraising, requests tracked to done**), calls due, invites not taken up after a week (with who invited them; not those whose link
   has expired), fundraisers four
   weeks past their date still on Get involved, and those who say they have finished;
@@ -7994,7 +7994,7 @@ question (what was entered for that step is cleared, and History keeps it):
 |---|---|---|
 | Posters, leaflets (and the old leaflets or posters) | To send, then Sent | the date, by post or dropped off, who, how many (starting at how many they asked for), a note. **Change the count** fixes how many actually went |
 | Collection buckets and tins (and the old buckets or tins) | To send, With them, then Back | out: the date, how many, who, a note; back: the date, how many came back (no more than went out, not before they went out), a note on the money inside or any missing |
-| A social media shout out | To do, then Done | the date, who, a link to the post (https only). Only with their permission (`socialOk`): without it the request says **No permission to post** and has nothing to do |
+| A social media shout out | To do, then Done | the date, who, a link to the post (https only). Only with their permission (`socialOk`): without it the request says **Asked, but no permission to post yet: ask them**, with no button and not counted as waiting (once they say yes, tick it under Change the details) |
 | Someone to come along | To arrange, Arranged, then Done | who is going and a note; then the date they came along |
 
 Dates are UK calendar days and none may be still to come. Buckets and tins are **due back** two
@@ -8012,15 +8012,20 @@ date, as the Monday summary has always counted) with anything still at its first
 filters: **Requests to do** and **Buckets not back** (every sign up with buckets or tins out, due
 or not, whatever its status). A viewer sees all of it, without the buttons.
 
-**The Monday summary** counts only what is still to send or do, and adds "Buckets or tins not back
-yet: N (M due back)" (N and M are buckets and tins, as many as went out). Each request with buckets
-or tins due back counts as one thing waiting.
+**The Monday summary** counts only what is still to send or do, and adds "N buckets or tins still
+out (M due back)", or "N buckets or tins still out, none due back yet" (N and M are buckets and tins,
+as many as went out). Each request with buckets or tins due back counts as one thing waiting.
 
 **The organiser's private area** (`/fundraise/manage`) shows **What you asked us for**, read only,
 a line each in words: "Posters: sent on 3 Dec", "Leaflets: dropped off on 4 Dec", "Collection
 buckets: with you, please bring them back by 26 Dec" (or "as soon as you can" once due), "back with
 us on 5 Dec. Thank you!", "Social media shout out: posted on 2 Dec" with a link to the post,
-"Someone from NBCC to come along: arranged, we look forward to seeing you". Never a staff note, who
+"Someone from NBCC to come along: arranged, we look forward to seeing you". A shout out asked for
+without their permission says "A shout out on our social media: we just need your OK to post about
+you. Reply to any of our emails or give us a ring and we'll sort it." Something still at its first
+step shows only while the fundraiser is still to come (new or approved, not past its date): there
+is no backfill, so one asked for before requests were tracked would otherwise say "we're getting
+them ready" for good. Anything staff have moved on always shows. Never a staff note, who
 handled it or who is going. Only their own fundraisers' requests are read; if they cannot be read,
 the rest of the page still shows (`requests: null`).
 

@@ -8,6 +8,7 @@ import {
   thankableGifts,
   recipientVerdict,
   forOrganiser,
+  giftNoLongerThankable,
   type ThanksRow,
 } from "../../src/fundraising/thanks";
 import type { WallSourceRow } from "../../src/fundraising/model";
@@ -146,27 +147,49 @@ describe("what the organiser is told about a thank you", () => {
 });
 
 describe("who NBCC may email", () => {
-  // As NBCC's own thank you letters: only a giver whose thank you consent is on. It is written from
-  // the newsletter tick box when they give, and turned off by "Stop all emails" in the preference
-  // centre, which cannot be told apart from never ticking it, so off always means no.
-  const giver = { email: "alex@example.com", emailConsent: true, thankyouConsent: true };
+  // Jaimie's decision (2026-10-02): every giver picked, as the give form promises "to send your
+  // receipt and a thank you", EXCEPT anyone who has opted out. The opt out is by address, so it
+  // covers every donor row with that address. Thank you consent (the newsletter tick box) no longer
+  // decides it.
+  const giver = { email: "alex@example.com" };
 
-  it("emails a giver who has an address and whose thank you consent is on", () => {
-    expect(recipientVerdict(giver, false)).toEqual({ send: true });
-    expect(recipientVerdict({ ...giver, emailConsent: false }, false)).toEqual({ send: true });
+  it("emails a giver with an address who has not opted out, whatever the newsletter box said", () => {
+    expect(recipientVerdict(giver, false, false)).toEqual({ send: true });
   });
 
   it("skips a giver with no address", () => {
-    expect(recipientVerdict({ ...giver, email: null }, false)).toEqual({ send: false, reason: "no_email" });
-    expect(recipientVerdict({ ...giver, email: "  " }, false)).toEqual({ send: false, reason: "no_email" });
+    expect(recipientVerdict({ email: null }, false, false)).toEqual({ send: false, reason: "no_email" });
+    expect(recipientVerdict({ email: "  " }, false, false)).toEqual({ send: false, reason: "no_email" });
   });
 
   it("skips an address on the suppression list (a bounce, a complaint or stopped by staff)", () => {
-    expect(recipientVerdict(giver, true)).toEqual({ send: false, reason: "suppressed" });
+    expect(recipientVerdict(giver, true, false)).toEqual({ send: false, reason: "suppressed" });
   });
 
-  it("skips a giver whose thank you consent is off: turned off, stopped everything, or never given", () => {
-    expect(recipientVerdict({ ...giver, thankyouConsent: false }, false)).toEqual({ send: false, reason: "opted_out" });
-    expect(recipientVerdict({ ...giver, emailConsent: false, thankyouConsent: false }, false)).toEqual({ send: false, reason: "opted_out" });
+  it("skips an address that has opted out (Stop all emails, or thank yous turned off)", () => {
+    expect(recipientVerdict(giver, false, true)).toEqual({ send: false, reason: "opted_out" });
+  });
+});
+
+describe("the gift, checked again at the moment of sending", () => {
+  const ok = { paymentStatus: "paid", amountPence: 2000, refundedPence: 0, paidIn: false, fundraiserStatus: "approved" };
+
+  it("sends for a paid gift on a fundraiser that is approved or finished", () => {
+    expect(giftNoLongerThankable(ok)).toBeNull();
+    expect(giftNoLongerThankable({ ...ok, fundraiserStatus: "finished" })).toBeNull();
+    expect(giftNoLongerThankable({ ...ok, refundedPence: 500 })).toBeNull();
+  });
+
+  it("skips a gift refunded in full, or no longer paid, since it was picked", () => {
+    expect(giftNoLongerThankable({ ...ok, refundedPence: 2000 })).toBe("refunded");
+    expect(giftNoLongerThankable({ ...ok, paymentStatus: "refunded" })).toBe("refunded");
+  });
+
+  it("skips money the organiser paid in", () => {
+    expect(giftNoLongerThankable({ ...ok, paidIn: true })).toBe("paid_in");
+  });
+
+  it("skips a fundraiser that is no longer approved or finished", () => {
+    expect(giftNoLongerThankable({ ...ok, fundraiserStatus: "declined" })).toBe("not_running");
   });
 });

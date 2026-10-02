@@ -11,7 +11,8 @@
 //   - a short message (600 characters at most), and Send for checking, to
 //     POST /api/fundraise/manage/fundraisers/:id/thanks, where it waits for staff;
 //   - the thank yous sent so far, each saying where it is up to ("Waiting for us to check", "Sent to
-//     3 supporters", "Not sent").
+//     3 supporters", "Not sent");
+//   - once every gift has been thanked, no form: "Everyone has been thanked".
 // NBCC emails each thank you, so no address is ever shown here or sent here. Kept apart from
 // fundraise-manage.js so each can change without the other.
 //
@@ -174,6 +175,17 @@
         return b.checked;
       });
     }
+    // Every gift thanked: the form goes, and the part says so. What they were last told stays in view.
+    function everyoneThanked(part, form, lastWords) {
+      if (openBoxes(part).length > 0) return false;
+      form.hidden = true;
+      var done = part.querySelector("[data-thanks-everyone]");
+      if (done) done.hidden = false;
+      var said = part.querySelector("[data-thanks-done-status]");
+      if (said && lastWords) said.textContent = lastWords;
+      return true;
+    }
+
     function showPicked(part) {
       var n = picked(part).length;
       var line = part.querySelector("[data-thanks-picked]");
@@ -238,6 +250,7 @@
         form.hidden = true;
         return;
       }
+      if (everyoneThanked(part, form, "")) return;
       part.querySelector("[data-thanks-all]").addEventListener("click", function () {
         openBoxes(part).forEach(function (b) {
           b.checked = true;
@@ -343,7 +356,9 @@
               box.value = "";
               counted();
               box.style.height = "";
-              return say(status, MSG.thanks + (Number(r.data.alreadyThanked) > 0 ? MSG.some : ""), "success");
+              var words = MSG.thanks + (Number(r.data.alreadyThanked) > 0 ? MSG.some : "");
+              if (everyoneThanked(part, form, words)) return say(status, "", null);
+              return say(status, words, "success");
             }
             if (r.status === 400 && r.data.fields) {
               say(status, "", null);

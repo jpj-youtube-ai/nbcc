@@ -9963,7 +9963,7 @@
         var said = h.action === "fundraiser.declined" || h.action === "fundraiser.news_rejected" ? data.reason : h.action === "fundraiser.called" ? data.note : "";
         var note = said ? '<span class="fx-hist-note">' + H.escapeHtml(said) + "</span>" : "";
         return '<li><span class="fx-hist-what">' + H.escapeHtml(what) + "</span>" +
-          '<span class="fx-hist-who">' + H.escapeHtml(H.fmtDate(h.createdAt) + " · " + frWho(h.actor)) + "</span>" + note + "</li>";
+          '<span class="fx-hist-who">' + H.escapeHtml(H.fmtDate(h.createdAt) + " · " + frThanksWho(h)) + "</span>" + note + "</li>"; // TASK-507: frThanksWho
       }).join("") + "</ul>" + frMoreButton("history", FR_HISTORY_FIRST, frHistoryRows.length);
   }
 
@@ -11278,6 +11278,11 @@
       return "Thank you emails done: " + (Number(data.sent) || 0) + " sent, " + not + " not sent";
     }
     return String(action || "");
+  }
+
+  // Who did it, in History: the sender's own step reads "Sent automatically", not "system".
+  function frThanksWho(h) {
+    return String(h.action).indexOf("fundraiser.thanks_") === 0 && h.actor === "system" ? "Sent automatically" : frWho(h.actor);
   }
 
   function frThanksWire(view) {

@@ -221,7 +221,8 @@ describe("thanking supporters, in each card", () => {
     type($<HTMLTextAreaElement>("textarea[name=message]", part(7)!), "  Thanks everyone!  ");
     await submit(7);
     expect(posts()).toEqual([{ url: "/api/fundraise/manage/fundraisers/7/thanks", method: "POST", body: { message: "Thanks everyone!", donationIds: [41, 42] } }]);
-    expect(text($("[data-thanks-status]", part(7)!))).toBe("Thank you. We will check it soon, then email it to the supporters you picked.");
+    // Those were the last gifts to thank, so the words move to the line that stays in view.
+    expect(text($("[data-thanks-done-status]", part(7)!))).toBe("Thank you. We will check it soon, then email it to the supporters you picked.");
     expect(boxes(7).map((b) => [b.checked, b.disabled])).toEqual([
       [false, true],
       [false, true],
@@ -276,6 +277,33 @@ describe("thanking supporters, in each card", () => {
       "Sent to 1 supporter",
     ]);
     expect(text($$("[data-thanks-list] li", part(7)!)[1])).toContain("for 1 gift");
+  });
+
+  it("hides the form and says so when every gift has been thanked", async () => {
+    reset();
+    (THANKS.fundraisers[0] as { gifts: unknown[] }).gifts = [gift(41, { thanked: true }), gift(42, { thanked: true })];
+    await load();
+    expect($("form[data-thanks-form]", part(7)!).hidden).toBe(true);
+    const done = $("[data-thanks-everyone]", part(7)!);
+    expect(done.hidden).toBe(false);
+    expect(text(done)).toBe("Everyone has been thanked. Thank you for saying thank you!");
+    // The gifts and the thank yous so far still show.
+    expect(boxes(7).length).toBe(2);
+    expect($$("[data-thanks-list] li", part(7)!).length).toBe(2);
+  });
+
+  it("switches to Everyone has been thanked once the last gifts are sent for checking", async () => {
+    reset();
+    (THANKS.fundraisers[0] as { gifts: unknown[] }).gifts = [gift(41), gift(43, { thanked: true })];
+    await load();
+    expect($("[data-thanks-everyone]", part(7)!).hidden).toBe(true);
+    tick(boxes(7)[0]);
+    type($<HTMLTextAreaElement>("textarea[name=message]", part(7)!), "Thanks");
+    await submit(7);
+    expect($("form[data-thanks-form]", part(7)!).hidden).toBe(true);
+    expect($("[data-thanks-everyone]", part(7)!).hidden).toBe(false);
+    // What they were told stays in view.
+    expect(text($("[data-thanks-done-status]", part(7)!))).toBe("Thank you. We will check it soon, then email it to the supporters you picked.");
   });
 
   it("asks to sign in again when the session has ended", async () => {

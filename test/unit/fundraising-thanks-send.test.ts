@@ -1,9 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 // TASK-507: sending the thank yous staff approved, in the background, one gift at a time. Each gift
-// is claimed before its email; a giver with no address, on the suppression list, or who turned thank
-// you emails off is skipped (and why is recorded for staff); a failed send is recorded and the run
-// goes on; nothing ever throws. The database and the email client are mocked. Every name and address
+// is claimed before its email; a giver with no address, on the suppression list, or who has opted
+// out is skipped, as is a gift no longer thankable (refunded, paid in, fundraiser not running), and
+// why is recorded for staff; a failed send is recorded and the run goes on; nothing ever throws. The database and the email client are mocked. Every name and address
 // here is invented.
 
 const db = vi.hoisted(() => ({
@@ -13,12 +13,14 @@ const db = vi.hoisted(() => ({
   failStaleSending: vi.fn(),
   undeliveredDoneThanks: vi.fn(),
 }));
-const { suppressedAmong, sendFundraiseSupporterThanks } = vi.hoisted(() => ({
+const { suppressedAmong, optedOutAmong, sendFundraiseSupporterThanks } = vi.hoisted(() => ({
   suppressedAmong: vi.fn(),
+  optedOutAmong: vi.fn(),
   sendFundraiseSupporterThanks: vi.fn(),
 }));
 vi.mock("../../src/db/fundraiser-thanks", () => db);
 vi.mock("../../src/db/email-suppressions", () => ({ suppressedAmong }));
+vi.mock("../../src/db/email-opt-outs", () => ({ optedOutAmong }));
 vi.mock("../../src/clients/email", () => ({ sendFundraiseSupporterThanks }));
 vi.mock("../../src/config", () => ({ config: { BALL_FROM_EMAIL: "events@nbcc.test", NODE_ENV: "test" } }));
 
@@ -35,9 +37,12 @@ const queued = (over: Partial<QueuedThanksGift> = {}): QueuedThanksGift => ({
   organiserName: "Sam Sample",
   donorName: "Alex Example",
   email: "alex@example.com",
-  emailConsent: true,
-  thankyouConsent: true,
   alreadySent: false,
+  paymentStatus: "paid",
+  amountPence: 2000,
+  refundedPence: 0,
+  paidIn: false,
+  fundraiserStatus: "approved",
   ...over,
 });
 
@@ -53,6 +58,7 @@ beforeEach(() => {
   db.finishThanksGift.mockResolvedValue(undefined);
   db.markThanksDeliveredIfDone.mockResolvedValue(false);
   suppressedAmong.mockReset().mockResolvedValue(new Set());
+  optedOutAmong.mockReset().mockResolvedValue(new Set());
   sendFundraiseSupporterThanks.mockReset().mockResolvedValue(undefined);
   vi.spyOn(console, "error").mockImplementation(() => undefined);
   vi.spyOn(console, "warn").mockImplementation(() => undefined);
@@ -87,11 +93,38 @@ describe("sending the approved thank yous", () => {
     expect(db.finishThanksGift).toHaveBeenCalledWith(70, "skipped", "suppressed");
   });
 
-  it("skips a giver with no address, and one whose thank you consent is off", async () => {
-    queue(queued({ id: 71, email: null }), queued({ id: 72, emailConsent: false, thankyouConsent: false }));
-    expect(await sendQueuedThanks()).toEqual({ sent: 0, skipped: 2, failed: 0 });
+  it("skips a giver with no address", async () => {
+    queue(queued({ id: 71, email: null }));
+    expect(await sendQueuedThanks()).toEqual({ sent: 0, skipped: 1, failed: 0 });
     expect(db.finishThanksGift).toHaveBeenCalledWith(71, "skipped", "no_email");
+    expect(sendFundraiseSupporterThanks).not.toHaveBeenCalled();
+  });
+
+  it("checks the opt out list at send time, by address, and skips an address on it", async () => {
+    optedOutAmong.mockResolvedValue(new Set(["alex@example.com"]));
+    queue(queued({ id: 72, email: "Alex@Example.com" }));
+    expect(await sendQueuedThanks()).toEqual({ sent: 0, skipped: 1, failed: 0 });
+    expect(optedOutAmong).toHaveBeenCalledWith(["Alex@Example.com"]);
     expect(db.finishThanksGift).toHaveBeenCalledWith(72, "skipped", "opted_out");
+    expect(sendFundraiseSupporterThanks).not.toHaveBeenCalled();
+  });
+
+  it("treats an opt out list it cannot read as a reason not to send", async () => {
+    optedOutAmong.mockRejectedValue(new Error("db down"));
+    queue(queued());
+    expect(await sendQueuedThanks()).toEqual({ sent: 0, skipped: 0, failed: 1 });
+    expect(sendFundraiseSupporterThanks).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    [{ refundedPence: 2000 }, "refunded"],
+    [{ paymentStatus: "refunded" }, "refunded"],
+    [{ paidIn: true }, "paid_in"],
+    [{ fundraiserStatus: "declined" }, "not_running"],
+  ])("skips a gift no longer thankable when its turn comes: %j", async (over, reason) => {
+    queue(queued({ id: 73, ...(over as Partial<QueuedThanksGift>) }));
+    expect(await sendQueuedThanks()).toEqual({ sent: 0, skipped: 1, failed: 0 });
+    expect(db.finishThanksGift).toHaveBeenCalledWith(73, "skipped", reason);
     expect(sendFundraiseSupporterThanks).not.toHaveBeenCalled();
   });
 

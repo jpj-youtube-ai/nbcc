@@ -1,6 +1,7 @@
-const { When, Then, Before } = require("@cucumber/cucumber");
+const { When, Then, Before, After } = require("@cucumber/cucumber");
 const assert = require("node:assert/strict");
 const { Pool } = require("pg");
+const { createHmac } = require("node:crypto");
 const Stripe = require("stripe");
 
 // Steps for fundraising-thanks.feature (TASK-507). The fundraisers, the switch, the staff
@@ -20,9 +21,20 @@ const KIND = "fundraiseSupporterThanks";
 const WEBHOOK_SECRET = process.env.STRIPE_WEBHOOK_SECRET || "whsec_dummy";
 const stripe = new Stripe("sk_test_bdd"); // unused key: generateTestHeaderString is pure HMAC
 
-Before({ tags: "@fundraising-thanks" }, function () {
+const SECRET = process.env.ADMIN_SESSION_SECRET || "ci-admin-session-secret";
+const OPT_OUTS = "%thanks.fr.bdd@example.com";
+
+// The opt outs this feature records, by its invented addresses. (Test data only: in the app an opt
+// out is lifted by a tombstone, never deleted.)
+async function cleanOptOuts() {
+  await pool.query("DELETE FROM email_opt_outs WHERE email LIKE $1", [OPT_OUTS]);
+}
+
+Before({ tags: "@fundraising-thanks" }, async function () {
   this.frThanksSince = new Date(Date.now() - 1000);
+  await cleanOptOuts();
 });
+After({ tags: "@fundraising-thanks" }, cleanOptOuts);
 
 async function login(email) {
   const res = await fetch(`${BASE_URL}/api/admin/login`, {
@@ -196,6 +208,26 @@ async function thanksEmailsTo(world, email) {
 Then("no thank you email has gone to {string}", async function (email) {
   await pause(300);
   assert.deepEqual(await thanksEmailsTo(this, email), []);
+});
+
+// The real preference centre, reached as from a newsletter's link: a donor token signed exactly as
+// src/donors/unsubscribe-token.ts signs it, with the ADMIN_SESSION_SECRET pr.yml gives the app.
+When("{string} presses Stop all emails in the preference centre", async function (email) {
+  const d = await pool.query("SELECT id FROM donors WHERE lower(email) = lower($1) ORDER BY id DESC LIMIT 1", [email]);
+  assert.ok(d.rows[0], `no donor with ${email}`);
+  const body = String(d.rows[0].id);
+  const token = `${body}.${createHmac("sha256", SECRET).update(body).digest("base64url")}`;
+  const res = await fetch(`${BASE_URL}/preferences/${token}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: "all=off",
+  });
+  assert.equal(res.status, 200, await res.text());
+});
+
+Then("{string} is on the opt out list", async function (email) {
+  const r = await pool.query("SELECT kind, source FROM email_opt_outs WHERE email = lower($1) AND removed_at IS NULL", [email]);
+  assert.deepEqual(r.rows, [{ kind: "all", source: "preferences" }]);
 });
 
 Then("a thank you email soon goes to {string}", { timeout: 20000 }, async function (email) {

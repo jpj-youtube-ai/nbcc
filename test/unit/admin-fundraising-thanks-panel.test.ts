@@ -435,5 +435,8 @@ describe("Thank yous to check", () => {
     expect(h).toContain("Thank you emails done: 1 sent, 1 not sent");
     expect(h).toContain("Thank you not sent: Too long");
     expect(h).toContain("Thank you approved and sent");
+    // Done by the sender, not a person: said in words, never "system".
+    expect(h).toContain("Sent automatically");
+    expect(h).not.toMatch(/\bsystem\b/);
   });
 });

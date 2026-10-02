@@ -260,10 +260,17 @@ export interface QueuedThanksGift {
   organiserName: string;
   donorName: string;
   email: string | null;
-  emailConsent: boolean;
-  thankyouConsent: boolean;
-  /** This thank you has already gone to the same address, for another of their gifts. */
+  /**
+   * This thank you has already gone to the same address for another of their gifts, or is going now
+   * from an earlier claim (a lower id), so two senders never email one person twice.
+   */
   alreadySent: boolean;
+  /** The gift and its fundraiser as they are now, to check it can still be thanked. */
+  paymentStatus: string;
+  amountPence: number;
+  refundedPence: number;
+  paidIn: boolean;
+  fundraiserStatus: string;
 }
 
 /** Claim the next queued gift (it becomes "sending"), or null when there is none. */
@@ -276,16 +283,16 @@ export async function claimNextQueuedThanksGift(): Promise<QueuedThanksGift | nu
   const c = claimed.rows[0] as Row | undefined;
   if (!c) return null;
   const r = await pool.query(
-    `SELECT t.id AS thanks_id, t.fundraiser_id, t.message, f.title, f.organiser_name, dn.full_name, dn.email,
-            dn.email_consent, dn.thankyou_consent,
+    `SELECT t.id AS thanks_id, t.fundraiser_id, t.message, f.title, f.organiser_name, f.status AS fundraiser_status,
+            dn.full_name, dn.email, d.payment_status, d.amount_pence, d.refunded_amount_pence, d.paid_in_by_organiser,
             EXISTS (SELECT 1 FROM fundraiser_thank_gifts g2
                       JOIN donations d2 ON d2.id = g2.donation_id JOIN donors dn2 ON dn2.id = d2.donor_id
-                     WHERE g2.thanks_id = t.id AND g2.outcome = 'sent' AND dn.email IS NOT NULL
-                       AND lower(dn2.email) = lower(dn.email)) AS already_sent
+                     WHERE g2.thanks_id = t.id AND (g2.outcome = 'sent' OR (g2.outcome = 'sending' AND g2.id < $3))
+                       AND dn.email IS NOT NULL AND lower(trim(dn2.email)) = lower(trim(dn.email))) AS already_sent
        FROM fundraiser_thanks t JOIN fundraisers f ON f.id = t.fundraiser_id
        JOIN donations d ON d.id = $2 JOIN donors dn ON dn.id = d.donor_id
       WHERE t.id = $1`,
-    [c.thanks_id, c.donation_id],
+    [c.thanks_id, c.donation_id, c.id],
   );
   const row = r.rows[0] as Row | undefined;
   return {
@@ -298,14 +305,19 @@ export async function claimNextQueuedThanksGift(): Promise<QueuedThanksGift | nu
     organiserName: row ? String(row.organiser_name ?? "") : "",
     donorName: row ? String(row.full_name ?? "") : "",
     email: row && row.email != null ? String(row.email) : null,
-    emailConsent: row ? Boolean(row.email_consent) : false,
-    thankyouConsent: row ? Boolean(row.thankyou_consent) : false,
     alreadySent: row ? Boolean(row.already_sent) : false,
+    // A gift no longer there reads as refunded, so it is skipped rather than sent.
+    paymentStatus: row ? String(row.payment_status) : "missing",
+    amountPence: row ? Number(row.amount_pence) : 0,
+    refundedPence: row ? Number(row.refunded_amount_pence ?? 0) : 0,
+    paidIn: row ? Boolean(row.paid_in_by_organiser) : false,
+    fundraiserStatus: row ? String(row.fundraiser_status) : "missing",
   };
 }
 
 /** What happened to one claimed gift's email. */
 export async function finishThanksGift(id: number, outcome: "sent" | "skipped" | "failed", reason: SkipReason | null = null): Promise<void> {
+  // (skip_reason's allowed values were widened by 1791200000120 for refunded, paid_in, not_running.)
   await pool.query(
     `UPDATE fundraiser_thank_gifts SET outcome = $2, skip_reason = $3, updated_at = now(),
             sent_at = CASE WHEN $2 = 'sent' THEN now() END

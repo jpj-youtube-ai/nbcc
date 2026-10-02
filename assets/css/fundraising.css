@@ -440,6 +440,7 @@ fieldset.is-invalid .fr-option { border-color: var(--crimson); }
 .fr-thanks__picked { color: var(--holly-dark); font-weight: 600; }
 .fr-thanks__picked:empty { display: none; }
 .fr-thanks__pick-msg { margin: 0 0 8px; }
+.fr-thanks__done-status:empty { display: none; }
 .fr-thanks__gifts { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
 .fr-thanks__gift { border: 1px solid var(--line); border-radius: var(--radius); background: var(--card); }
 .fr-thanks__gift:has(input:checked) { border-color: var(--holly); background: var(--holly-soft); }

@@ -8198,12 +8198,17 @@ the reason), and "Thank you emails done: N sent, M not sent".
 
 **Sending.** Approving answers staff straight away, then sends in the background
 (`src/fundraising/thanks-send.ts`), one gift at a time: each is claimed (`FOR UPDATE SKIP LOCKED`)
-before its email, so two runs never take the same one. Before each email the giver is checked at
-that moment, and skipped (with the reason kept for staff) when they have no address, when the
-address is on the suppression list (a hard bounce, a spam complaint, or stopped by staff; the same
-`suppressedAmong` the newsletter uses; a list that cannot be read means no email), or when their
-thank you consent is off (`donors.thankyou_consent`, exactly as NBCC's own thank you letters). One person whose
-several gifts were picked gets the thank you once. A failed send is recorded and the run goes on;
+before its email, so two runs never take the same one. Before each email the gift is checked again
+(skipped as `refunded` if refunded in full or no longer paid, `paid_in` if it is money the organiser
+paid in, `not_running` if its fundraiser is no longer approved or finished), then the giver, by
+address, at that moment. Jaimie's decision (2026-10-02): every giver picked is emailed, as the give
+form promises "to send your receipt and a thank you", **except** an address with none
+(`no_email`), an address on the suppression list (`suppressed`: a hard bounce, a spam complaint, or
+stopped by staff; the same `suppressedAmong` the newsletter uses), or an address that has opted out
+(`opted_out`: on `email_opt_outs`, below). A list that cannot be read means no email. The newsletter
+tick box (`thankyou_consent`) does not decide it. One person whose several gifts were picked gets the
+thank you once (`duplicate`), even with two senders at work: an earlier claim for the same address
+still sending counts as sent. A failed send is recorded and the run goes on;
 nothing throws. A gift left "sending" for 15 minutes (a restart part way) is marked failed rather
 than sent twice; gifts left queued (or sending, or a thank you left unmarked) are picked up the next
 time anyone opens Admin > Fundraising. When the last gift of a thank you is dealt with, it is marked
@@ -8248,10 +8253,41 @@ Every step writes `audit_log` against the fundraiser: `fundraiser.thanks_posted`
 `pending`, `approved` or `rejected`, who decided and when, a reason kept for staff, and when the last
 of its emails was dealt with. `fundraiser_thank_gifts`: one row per gift it picked, cleared with the
 thank you or the gift: `waiting`, `queued`, `sending`, `sent`, `skipped` (with `no_email`,
-`suppressed`, `opted_out` or `duplicate`), `failed` or `cancelled`, and when it was sent. A unique
-index on the gift (except where cancelled) holds "thanked at most once". No email address is ever
-stored: it is read from the giver's donor row at the moment of sending. Numbered 110, above main's
-080 and the 100 another open task uses. Both are in the nightly backup's table count (67).
+`suppressed`, `opted_out`, `duplicate`, and since 120 `refunded`, `paid_in` or `not_running`),
+`failed` or `cancelled`, and when it was sent. A unique index on the gift (except where cancelled)
+holds "thanked at most once". No email address is ever stored: it is read from the giver's donor row
+at the moment of sending. Numbered 110, above main's 080 and the 100 another open task uses.
+
+`migrations/1791200000120_email-opt-outs.js`: `email_opt_outs`, one live row per lower cased address
+that asked us to stop (`kind` `all` for Stop all emails, `thank_you` for thank yous turned off;
+`source` `preferences` or `backfill`), lifted by a tombstone (`removed_at`, `removed_by`), never
+deleted. It also widens the gifts' skip reasons. All three tables are in the nightly backup's table
+count (68).
+
+### The opt out list, and the backfill
+
+The preference centre (`src/routes/preferences.ts`, `postPreferences`) now writes the opt out list as
+well as everything it did before: **Stop all emails** always adds the address (kind `all`), donor row
+or not; turning thank yous off adds it (kind `thank_you`); turning thank yous back on lifts it.
+`src/db/email-opt-outs.ts` (`addOptOut`, `liftOptOut`, `optedOutAmong`). A new gift with the box
+ticked does not lift it: only the preference centre does.
+
+**What could be found for people who pressed Stop all emails before this.** Nothing direct. The
+preference centre wrote no `audit_log` row and kept no history: it set `email_consent` and
+`thankyou_consent` false on every donor row for the address (a plain update) and tombstoned its list
+memberships. Both flags false is also how a giver who never ticked the newsletter box looks, so the
+flags alone cannot tell the two apart; the newsletter unsubscribe events (`newsletter_email_events`)
+record newsletter unsubscribes only, and `email_log` records sends, not choices.
+
+**The rule used (conservative).** The preference centre can only be reached from a link in a
+newsletter or the list welcome email. So the migration backfills as opted out (kind `all`, source
+`backfill`) every donor address with `thankyou_consent` false on some row that could have reached
+it: some row for it has `email_consent` true (thank yous off with the newsletter kept, which only the
+preference centre does), it was sent a newsletter (`newsletter_sends`), it has a newsletter
+unsubscribe or complaint event, it is on any list (live or tombstoned), or it was on file when a
+newsletter went out before each recipient was recorded. Some who never asked to stop are counted as
+opted out (a thank you they do not get); never the other way round. A giver whose address no
+newsletter, welcome or list ever reached could not have opened the preference centre, so is emailed.
 
 ### Where it lives, and tests
 
@@ -8264,20 +8300,18 @@ route would read "thanks" as a link). Screens: the `frThanks` block of `assets/j
 `assets/js/fundraise-thanks.js` and the `<template data-thanks-pattern>` in `fundraise-manage.html`,
 styles beside `.fr-form__lead` in `assets/css/fundraising.css`. Unit tests: `fundraising-thanks`,
 `fundraising-thanks-email` (email 20, exactly), `fundraiser-thanks-db`, `fundraiser-thanks-migration`,
-`fundraising-thanks-send` (one at a time, suppression, consent, never throws), `fundraiser-thanks-routes` (only
+`fundraising-thanks-send` (one at a time, suppression, opt outs, the gift checked again, never throws), `fundraiser-thanks-routes` (only
 the owner, only their own gifts, the limits, staff permissions, sending after the answer),
 `fundraising-summary-thanks`, `fundraise-thanks-page` and `admin-fundraising-thanks-panel` (jsdom),
-`admin-email-kinds` and `backup-plan`. BDD: `features/fundraising-thanks.feature` (an organiser
-thanks two givers, staff approve, the giver who ticked the newsletter box is emailed and the one who
-did not is not, the organiser sees "Sent to 1 supporter" and never either address; a gift on someone
-else's fundraiser cannot be picked).
+`email-opt-outs-db`, `email-opt-outs-migration`, `preferences-opt-out`, `admin-email-kinds` and
+`backup-plan`. BDD: `features/fundraising-thanks.feature` (an organiser thanks three givers, one of
+whom pressed Stop all emails in the real preference centre; staff approve; the two who did not opt
+out are emailed, ticked newsletter box or not, the third is not; the organiser sees "Sent to 2
+supporters" and never an address; a gift on someone else's fundraiser cannot be picked).
 
-**Who is emailed, and why so few may be.** The donor's thank you consent is written from the give
-form's newsletter tick box (unticked by default), and "Stop all emails" in the preference centre
-turns it off; nothing stored tells those two apart. So, as NBCC's own thank you letters do, only a
-giver whose thank you consent is on is emailed: a giver who did not tick the newsletter box is
-skipped (staff see "Thank you emails are off for them"; the organiser only sees the count). Emailing
-those givers too would need an explicit record of who chose to stop, which is a decision for later.
+In the private area, once every gift has been thanked the form goes and the part says "Everyone has
+been thanked. Thank you for saying thank you!". In History, the sender's own step reads "Sent
+automatically".
 
 ## A QR code encoder for fundraiser pages (TASK-493)
 
@@ -8320,16 +8354,16 @@ lives in; the Drive copy is not immutable.
 
 ### There are THREE databases, not one
 
-This is the trap this feature was built around. `DATABASE_URL` holds 64 tables
+This is the trap this feature was built around. `DATABASE_URL` holds 65 tables
 (42 when this was built; the Events page added three in TASK-453, the Festive Ball ticket
 report one in TASK-464, the admin's New pills one, `admin_seen`, in TASK-478, site analytics
 four in TASK-479, the business supporter call log in TASK-491, community fundraising five
 in TASK-493, the private area's sign in codes and sessions two in TASK-501, the invites and
-calls two in TASK-503, the requests one in TASK-505, and the thank yous to supporters two in
-TASK-507),
+calls two in TASK-503, the requests one in TASK-505, and the thank yous to supporters and the
+address level opt out list three in TASK-507),
 but `STORIES_DATABASE_URL` and `CONTACT_DATABASE_URL` are separate databases
 (deliberately, so the public story and contact forms can never reach donor
-data). A `pg_dump $DATABASE_URL` captures 64 of **67** tables and silently
+data). A `pg_dump $DATABASE_URL` captures 65 of **68** tables and silently
 drops every My Story submission (and, since TASK-475, the fingerprints in
 `erased_stories` that keep erased stories from coming back) and every contact
 enquiry, while producing a
@@ -9214,7 +9248,9 @@ stopped *everything*. Now a person can choose.
   the confirmation — it is what you can do next, never a gate in front of leaving. RFC 8058 one-click
   (which Gmail and Apple Mail fire automatically) is untouched and still instant. "Stop all emails"
   is its own submit button, so the way out stays one click; a preference centre that makes leaving
-  harder than it was is a dark pattern and a PECR problem.
+  harder than it was is a dark pattern and a PECR problem. Since TASK-507 it also records the address
+  on `email_opt_outs` (and turning thank yous off does too; turning them on lifts it), which a
+  fundraiser's thank you to its givers respects: see **Thank your supporters (TASK-507)**.
 - **Donor consent is split.** `email_consent` keeps its exact meaning for the newsletter;
   `thankyou_consent` (new) gates thank-you letters, so a donor can stop one and keep the other. The
   migration backfills `thankyou_consent = email_consent` rather than defaulting everyone to true —

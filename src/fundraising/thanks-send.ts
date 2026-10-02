@@ -1,6 +1,7 @@
 import { config } from "../config";
 import { sendFundraiseSupporterThanks } from "../clients/email";
 import { suppressedAmong } from "../db/email-suppressions";
+import { optedOutAmong } from "../db/email-opt-outs";
 import {
   claimNextQueuedThanksGift,
   failStaleSending,
@@ -10,7 +11,7 @@ import {
   type QueuedThanksGift,
 } from "../db/fundraiser-thanks";
 import { buildSupporterThanksEmail } from "./thanks-email";
-import { recipientVerdict, type SkipReason } from "./thanks";
+import { giftNoLongerThankable, recipientVerdict, type SkipReason } from "./thanks";
 
 // TASK-507: sending the thank yous staff approved (email 20), in the background after the admin has
 // their answer, like TASK-497's emails at the switch on (sendWaitingLiveEmails in ./send.ts).
@@ -18,10 +19,12 @@ import { recipientVerdict, type SkipReason } from "./thanks";
 //   - One gift at a time: each is claimed (made "sending") just before its email, so two runs never
 //     take the same one, and a restart part way loses at most the one in flight (marked failed at
 //     the next run, never sent twice).
-//   - Before each email, the giver is checked as the newsletter checks: the suppression list at send
-//     time (hard bounces, spam complaints, stopped by staff), an address at all, and whether they
-//     turned thank you emails off. A list that cannot be read means no email. One person whose
-//     several gifts were picked gets this thank you once.
+//   - Before each email, the gift is checked again (not refunded in full, not money the organiser
+//     paid in, its fundraiser still approved or finished), then the giver, by address, at that
+//     moment: an address at all, the suppression list (hard bounces, spam complaints, stopped by
+//     staff), and the opt out list (Stop all emails, or thank yous turned off). A list that cannot be
+//     read means no email. One person whose several gifts were picked gets this thank you once, even
+//     with two senders at work (an earlier claim for the same address counts as sent).
 //   - From and Reply-To are the events inbox (config.BALL_FROM_EMAIL), so a reply goes to NBCC, never
 //     to the organiser; nothing about the giver goes back to them.
 //   - A failed send is recorded and the run goes on. Nothing here ever throws: everything is logged.
@@ -40,18 +43,24 @@ function logFailure(what: string, err: unknown): void {
 }
 
 async function decide(g: QueuedThanksGift): Promise<{ send: true } | { send: false; reason: SkipReason } | null> {
+  const gone = giftNoLongerThankable(g);
+  if (gone) return { send: false, reason: gone };
   if (g.alreadySent) return { send: false, reason: "duplicate" };
   let suppressed = false;
+  let optedOut = false;
   if (g.email && g.email.trim() !== "") {
+    const address = g.email.trim().toLowerCase();
     try {
-      suppressed = (await suppressedAmong([g.email])).has(g.email.trim().toLowerCase());
+      const [blocked, stopped] = await Promise.all([suppressedAmong([g.email]), optedOutAmong([g.email])]);
+      suppressed = blocked.has(address);
+      optedOut = stopped.has(address);
     } catch (err) {
       // Cannot tell whether we may email them: then we do not.
-      logFailure("suppression check failed", err);
+      logFailure("suppression or opt out check failed", err);
       return null;
     }
   }
-  return recipientVerdict(g, suppressed);
+  return recipientVerdict(g, suppressed, optedOut);
 }
 
 async function sendOne(g: QueuedThanksGift, tally: Tally): Promise<void> {

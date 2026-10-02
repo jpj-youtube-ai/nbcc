@@ -112,30 +112,52 @@ export function forOrganiser(t: ThanksRow) {
 
 // --- who NBCC may email -----------------------------------------------------------------------------
 
-export type SkipReason = "no_email" | "suppressed" | "opted_out" | "duplicate";
+export type SkipReason = "no_email" | "suppressed" | "opted_out" | "duplicate" | "refunded" | "paid_in" | "not_running";
 
 /** Why a giver was not emailed, for staff only. */
 export const SKIP_WORDS: Record<SkipReason, string> = {
   no_email: "No email address",
   suppressed: "On the do not email list (a bounce, a complaint, or stopped by staff)",
-  opted_out: "Thank you emails are off for them",
+  opted_out: "Asked us to stop emailing them",
   duplicate: "Already sent this thank you for another gift",
+  refunded: "The gift was refunded",
+  paid_in: "Money the organiser paid in",
+  not_running: "The fundraiser is no longer approved",
 };
 
 /**
- * Whether NBCC may email this giver the thank you. Not when there is no address; not when the address
- * is on the suppression list (a hard bounce, a spam complaint, or stopped by staff), checked at send
- * time as the newsletter does; and not when their thank you consent is off, exactly as NBCC's own
- * thank you letters (src/db/thank-you.ts). That consent is written from the newsletter tick box when
- * someone gives, and "Stop all emails" in the preference centre turns it off; the two cannot be told
- * apart, so off always means no email.
+ * Whether NBCC may email this giver the thank you (Jaimie's decision, 2026-10-02): every giver
+ * picked, as the give form promises "to send your receipt and a thank you", EXCEPT an address with
+ * none, an address on the suppression list (a hard bounce, a spam complaint, or stopped by staff),
+ * or an address that has opted out (email_opt_outs: Stop all emails, or thank yous turned off). Both
+ * lists are by address, so they cover every donor row with it. The newsletter tick box (thank you
+ * consent) does not decide it.
  */
 export function recipientVerdict(
-  giver: { email: string | null; emailConsent: boolean; thankyouConsent: boolean },
+  giver: { email: string | null },
   suppressed: boolean,
+  optedOut: boolean,
 ): { send: true } | { send: false; reason: SkipReason } {
   if (!giver.email || giver.email.trim() === "") return { send: false, reason: "no_email" };
   if (suppressed) return { send: false, reason: "suppressed" };
-  if (!giver.thankyouConsent) return { send: false, reason: "opted_out" };
+  if (optedOut) return { send: false, reason: "opted_out" };
   return { send: true };
+}
+
+/**
+ * The gift and its fundraiser as they are when its email's turn comes, which may be after it was
+ * picked: null when it can still be thanked, or why not. Refunded in full (or no longer paid), money
+ * the organiser paid in, or a fundraiser no longer approved or finished.
+ */
+export function giftNoLongerThankable(g: {
+  paymentStatus: string;
+  amountPence: number;
+  refundedPence: number;
+  paidIn: boolean;
+  fundraiserStatus: string;
+}): "refunded" | "paid_in" | "not_running" | null {
+  if (g.paidIn) return "paid_in";
+  if (g.paymentStatus !== "paid" || giftNetPence(g.amountPence, g.refundedPence) <= 0) return "refunded";
+  if (g.fundraiserStatus !== "approved" && g.fundraiserStatus !== "finished") return "not_running";
+  return null;
 }

@@ -240,9 +240,12 @@ describe("sending, one at a time", () => {
           organiser_name: "Sam Sample",
           full_name: "Alex Example",
           email: "alex@example.com",
-          email_consent: false,
-          thankyou_consent: false,
           already_sent: false,
+          payment_status: "paid",
+          amount_pence: 2000,
+          refunded_amount_pence: 0,
+          paid_in_by_organiser: false,
+          fundraiser_status: "approved",
         },
       ],
     });
@@ -259,10 +262,24 @@ describe("sending, one at a time", () => {
       organiserName: "Sam Sample",
       donorName: "Alex Example",
       email: "alex@example.com",
-      emailConsent: false,
-      thankyouConsent: false,
       alreadySent: false,
+      paymentStatus: "paid",
+      amountPence: 2000,
+      refundedPence: 0,
+      paidIn: false,
+      fundraiserStatus: "approved",
     });
+    // The gift as it is now, and the fundraiser's status, so a gift refunded since is not thanked.
+    expect(query.mock.calls[1][0]).toMatch(/f\.status AS fundraiser_status/);
+    expect(query.mock.calls[1][0]).toMatch(/d\.refunded_amount_pence/);
+  });
+
+  it("counts one already being sent to the same address (an earlier claim) as sent, so two senders never email one person twice", async () => {
+    query.mockResolvedValueOnce({ rows: [{ id: 70, thanks_id: 3, donation_id: 41 }] }).mockResolvedValueOnce({ rows: [] });
+    await claimNextQueuedThanksGift();
+    const sql = query.mock.calls[1][0];
+    expect(sql).toMatch(/g2\.outcome = 'sent' OR \(g2\.outcome = 'sending' AND g2\.id < \$3\)/);
+    expect(query.mock.calls[1][1]).toEqual([3, 41, 70]);
   });
 
   it("has nothing to claim when nothing is queued", async () => {

@@ -393,7 +393,10 @@ function eventPageLiveEmail(f: { title: string }, hi: string, pageUrl: string, m
   const steps: Array<[string, string]> = [
     ["Share your event page", " on Facebook, WhatsApp and by email, so people know when and where to come."],
     ["Put up your posters", " from your private area. Each one has a QR code that takes people straight to your page."],
-    ["On the day, point people to your page", " so anyone who would like to give can do it there, in a minute, on their phone."],
+    [
+      "On the day, point people to your page",
+      " if they’d like to give a little extra. Entry money is separate: collect it as usual and pay it in afterwards from your private area. Gift Aid can’t go on entry or ticket money.",
+    ],
   ];
   const gifts =
     "Every gift made on your page comes straight to NBCC, with Gift Aid on top when your supporters are UK taxpayers, and helps us bring comfort, dignity and joy to children, young people and vulnerable adults across South West Scotland.";

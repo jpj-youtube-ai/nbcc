@@ -289,6 +289,18 @@ describe("signed in", () => {
     expect($("[data-f-gifts-part]", card(8)).hidden).toBe(true);
   });
 
+  // Jaimie, 2026-10-03: an event's pay in box speaks of entry money too, and that Gift Aid cannot go on it.
+  it("tells an event's organiser what to pay in, and that Gift Aid can't be added to it", async () => {
+    await load("", signedIn(raising(), event()));
+    const words = (id: number) =>
+      [...card(id).querySelectorAll<HTMLElement>("[data-f-payin-intro], [data-f-payin-event]")].filter((e) => !e.hidden).map((e) => e.textContent).join(" ");
+    expect(words(8)).toBe(
+      "Collected entry money, raffle money or cash gifts at your event? Pay NBCC’s share in here by card and it goes onto your event’s total. Gift Aid can’t be added to money paid in.",
+    );
+    expect(words(7)).toContain("Collected cash or sponsor money?");
+    expect(words(7)).not.toContain("entry money");
+  });
+
   it("asks a page raising money for a target, and an event for its event details", async () => {
     await load("", signedIn(raising(), event()));
     expect($("[data-raising-only]", card(7)).hidden).toBe(false);

@@ -181,7 +181,7 @@ function renderPageLink(ev: CardRecord, booking: string): string {
   if (!ev.pageHref) return "";
   return (
     (booking ? "" : '<div class="ev-book-gap"></div>') +
-    `<a class="btn btn-ghost ev-book ev-book--page" href="${escapeHtml(ev.pageHref)}">See the event page and give` +
+    `<a class="btn btn-ghost ev-book ev-book--page" href="${escapeHtml(ev.pageHref)}">See the event page` +
     `<span class="sr-only">: ${escapeHtml(ev.name)}</span></a>`
   );
 }

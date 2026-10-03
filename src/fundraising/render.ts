@@ -15,6 +15,7 @@ import { SINGLE_DONATION_WORDING } from "../declarations/wording";
 import type { Meter, PublicCard, PublicPage, WallEntry } from "./model";
 import { countdownFor, type NewsEntry } from "./news";
 import { safeFirstName } from "./emails";
+import { entryLine } from "./entry";
 
 // TASK-494: the public fundraising pages, drawn on the server.
 //
@@ -543,6 +544,42 @@ const sharer = (p: PublicCard) => (isEvent(p) ? "this event" : firstName(p));
 /** Whose wall: "Robin's wall", or "the wall". */
 const wallOf = (p: PublicCard & { teamName?: string | null }) => (isEvent(p) ? "the wall" : `${whose(p)} wall`);
 
+/**
+ * Jaimie, 2026-10-03: the line under an event's "Make a donation", by how people get in. Giving on
+ * an event's page is a donation, never a ticket, and Gift Aid must never go on entry or ticket money.
+ */
+function eventGiveSub(p: PublicPage): string {
+  const counts = "Every gift here counts towards this event's total.";
+  if (p.booking === "free") return "Entry is free, so giving is entirely up to you. Every gift here goes to NBCC and counts towards this event's total.";
+  const notTicket = "This is a donation to NBCC, not a ticket.";
+  if (p.booking === "door") return `${notTicket} Entry is paid on the door on the night. ${counts}`;
+  if (p.booking === "away") {
+    const seller = p.ticketUrl
+      ? `<a href="${escapeHtml(p.ticketUrl)}" target="_blank" rel="noopener">the seller's website<span class="sr-only">, opens in a new tab</span></a>`
+      : "the seller's website";
+    return `${notTicket} To get in, please get your ticket from ${seller}. ${counts}`;
+  }
+  return `${notTicket} ${counts}`;
+}
+
+/** Event pages: how to get in, directly above "Make a donation"; nothing when it was never asked. */
+function renderEntryLine(p: PublicPage): string {
+  const line = entryLine(p);
+  if (!line) return "";
+  const seller = line.url
+    ? `<a href="${escapeHtml(line.url)}" target="_blank" rel="noopener">${escapeHtml(line.seller)}<span class="sr-only">, opens in a new tab</span></a>`
+    : "";
+  return `<p class="fr-summary__entry">${escapeHtml(line.lead)}${seller}</p>`;
+}
+
+/** After giving on an event's page: a reminder that it was a donation, not a ticket. Free events need none. */
+function eventThanksNote(p: PublicPage): string {
+  if (!isEvent(p) || p.booking === "free") return "";
+  const clause =
+    p.booking === "door" ? ", so please still pay on the door as usual" : p.booking === "away" ? ", so please still get your ticket as usual" : "";
+  return `<p class="fr-thanks__entry">Just so you know, this was a donation rather than a ticket${clause}.</p>`;
+}
+
 /** In memory (./memory-render.ts): the give form's heading and line in its own words. */
 export interface GiveWords {
   heading: string;
@@ -568,8 +605,10 @@ export function renderGiveForm(p: PublicPage, words?: GiveWords): string {
         (event
           ? `<p class="give-step-sub">Your donation goes to NBCC and still counts towards this event's total.${SHARE_NOTE(p)}</p>`
           : `<p class="give-step-sub">Your donation goes to NBCC and still counts towards ${whose(p)} total${p.teamName ? "" : ` for ${escapeHtml(p.title)}`}.${SHARE_NOTE(p)}</p>`)
-      : `<h2 class="give-step-title" id="fr-give-heading">Give to ${escapeHtml(p.title)}</h2>` +
-        `<p class="give-step-sub">Your donation goes to NBCC and counts towards ${event ? "this event's" : whose(p)} total.${SHARE_NOTE(p)}</p>`) +
+      : event
+        ? '<h2 class="give-step-title" id="fr-give-heading">Make a donation</h2>' + `<p class="give-step-sub">${eventGiveSub(p)}${SHARE_NOTE(p)}</p>`
+        : `<h2 class="give-step-title" id="fr-give-heading">Give to ${escapeHtml(p.title)}</h2>` +
+          `<p class="give-step-sub">Your donation goes to NBCC and counts towards ${whose(p)} total.${SHARE_NOTE(p)}</p>`) +
     // Shipped hidden: without JavaScript the browser would send it as a web address, names and all.
     '<p class="fr-noscript" data-nojs>Giving on this page needs JavaScript switched on. You can still donate on our <a href="/donate">donate page</a>.</p>' +
     `<form id="frGiveForm" class="fr-give-form" data-fundraiser-id="${p.giving.fundraiserId}" data-minimum-pence="${p.giving.minimumPence}" novalidate hidden data-needs-js>` +
@@ -606,9 +645,12 @@ export function renderGiveForm(p: PublicPage, words?: GiveWords): string {
     // 3. Gift Aid, the donate page's callout and declaration, one off wording
     '<div class="give-question">' +
     '<div class="giftaid">' +
-    '<div class="giftaid-head"><strong class="giftaid-headline" data-giftaid-headline>Make your donation worth 25% more</strong>' +
+    '<div class="giftaid-head">' +
+    // An event's headline never echoes the amount: it can match the entry price (fundraiser.js).
+    `<strong class="giftaid-headline" data-giftaid-headline${event ? " data-giftaid-fixed" : ""}>Make your donation worth 25% more</strong>` +
     '<span class="giftaid-logo" aria-hidden="true">gift aid it</span></div>' +
     '<p class="giftaid-intro">If you are a UK taxpayer, NBCC can turn every £1 you give into £1.25 on eligible donations, at no cost to you. That is 25% more for the people NBCC helps.</p>' +
+    (event ? '<p class="giftaid-intro giftaid-entry">Gift Aid is only for donations, never for entry or ticket money.</p>' : "") +
     '<div class="giftaid-check-row">' +
     '<input class="giftaid-check" id="frGiftAid" name="frGiftAid" type="checkbox" />' +
     '<label class="giftaid-label" for="frGiftAid"><strong>Yes, add Gift Aid. I am a UK taxpayer.</strong>' +
@@ -719,6 +761,7 @@ function renderThanks(p: PublicPage, pageUrl: string, thanks: NonNullable<Fundra
     '<div class="fr-thanks-panel" data-thanks-panel data-copy-scope tabindex="-1">' +
     `<h2>Thank you for supporting ${escapeHtml(p.title)}.</h2>` +
     lead +
+    eventThanksNote(p) +
     (thanks.sessionId && !thanks.added ? renderWallStep(p, thanks.sessionId) : "") +
     `<p>Could you share the page too? Every share helps ${sharer(p)} reach more people.</p>` +
     shareLinks(p, pageUrl) +
@@ -850,8 +893,10 @@ export function renderFundraiserPage(template: string, p: PublicPage, opts: Fund
     '<div class="card card-lg fr-summary">' +
     '<h2 class="sr-only">Money raised so far</h2>' +
     renderMeter(p.meter, { large: true }) +
+    (event ? '<p class="fr-meter__paidin">Includes money the organiser has paid in.</p>' : "") +
     renderSplit(p) +
-    `<a class="btn btn-primary fr-summary__give" href="#give">${p.finished ? "You can still give" : event ? "Give to this event" : "Give to this fundraiser"}</a>` +
+    (event && !p.finished ? renderEntryLine(p) : "") +
+    `<a class="btn btn-primary fr-summary__give" href="#give">${p.finished ? "You can still give" : event ? "Make a donation" : "Give to this fundraiser"}</a>` +
     (opts.team?.summaryHtml ?? "") +
     "</div>" +
     '<div class="fr-main">' +

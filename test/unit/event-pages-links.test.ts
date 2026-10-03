@@ -146,7 +146,10 @@ describe("the approved email for an event", () => {
     const t = eventMail().text;
     expect(t).toContain("Share your event page");
     expect(t).toContain("Put up your posters");
-    expect(t).toContain("On the day, point people to your page");
+    expect(t).toContain(
+      "On the day, point people to your page if they’d like to give a little extra. Entry money is separate: collect it as usual and pay it in afterwards from your private area. Gift Aid can’t go on entry or ticket money.",
+    );
+    expect(t).not.toContain("so anyone who would like to give can do it there");
     expect(t).toContain("Just reply to this email.");
     expect(t).toContain("children, young people and vulnerable adults");
   });
@@ -182,5 +185,32 @@ describe("an event shared with another cause, in print", () => {
       expect(html).toContain("The Exampleton Lifeboat");
       expect(html).toContain("nbcc.test/event/eqn");
     }
+  });
+});
+
+// Jaimie, 2026-10-03: giving is a donation, not a ticket. An event's poster asks people to scan for
+// the details as well as to give, and says how to get in; a fundraiser's poster is unchanged.
+describe("an event's poster: the details, and how to get in", () => {
+  const poster = (over: Partial<FundraiserRecord> = {}) =>
+    buildMaterial("poster", { ...event(over), meter: meter({ onlinePence: 0, cashPence: 0, targetPence: null }) }, "staff");
+
+  it("asks people to scan for the details, and to give", () => {
+    expect(poster()).toContain("Scan for the details, and to give");
+    expect(poster()).not.toContain("Scan to give");
+  });
+
+  it("says how to get in, by how people get in", () => {
+    expect(poster({ booking: "door", price: "£5" })).toContain('<div class="p-entry">Entry: £5, paid on the door</div>');
+    expect(poster({ booking: "away", ticketUrl: "https://tickets.example.com/eqn", price: null })).toContain(
+      '<div class="p-entry">Tickets: from tickets.example.com</div>',
+    );
+    expect(poster({ booking: "free" })).toContain('<div class="p-entry">Entry: free</div>');
+    expect(poster({ booking: null })).not.toContain("p-entry\">");
+  });
+
+  it("is unchanged for a fundraiser raising money", () => {
+    const html = poster({ path: "raising", slug: "rsd", booking: null });
+    expect(html).toContain("Scan to give");
+    expect(html).not.toContain('<div class="p-entry">');
   });
 });

@@ -685,3 +685,64 @@ describe("your materials, round two", () => {
     expect($("[data-f-print-closed]", card(7)).hidden).toBe(false);
   });
 });
+
+// TASK-512, after Jaimie's look: every material opens from a proper button (an outline button,
+// not underlined text), each saying it opens in a new tab; and the "Need something else?" note is a
+// soft, fully bordered box rather than a coloured stripe down one side.
+describe("your materials, as buttons", () => {
+  const at = (id: number, piece: string) => `/api/fundraise/manage/fundraisers/${id}/materials/${piece}`;
+  const materials = (id: number) => ({
+    poster: at(id, "poster"),
+    posterA3: at(id, "poster-a3"),
+    leaflet: at(id, "leaflet"),
+    social: at(id, "social"),
+    sponsorForm: at(id, "sponsor-form"),
+    certificate: at(id, "certificate"),
+    qrPng: "/fundraise/robins-santa-dash/qr.png",
+  });
+  const words: Record<string, string> = {
+    poster: "Open A4 poster",
+    posterA3: "Open A3 poster",
+    leaflet: "Open A5 leaflet",
+    social: "Open pictures to share",
+    sponsorForm: "Open sponsor form",
+    certificate: "Open certificate",
+    logos: "Open our logos",
+  };
+
+  it("opens every material from an outline button, in a new tab, and says so", async () => {
+    await load("", signedIn(raising({ status: "finished", materials: materials(7), print: { canAsk: false, posters: null, leaflets: null } })));
+    for (const [key, label] of Object.entries(words)) {
+      const a = $<HTMLAnchorElement>(`[data-f-mat="${key}"] a`, card(7));
+      expect(a.classList.contains("btn"), key).toBe(true);
+      expect(a.classList.contains("btn-ghost"), key).toBe(true);
+      expect(a.getAttribute("target"), key).toBe("_blank");
+      expect(a.getAttribute("rel"), key).toContain("noopener");
+      expect(a.textContent?.replace(/\s+/g, " ").trim(), key).toBe(`${label} (opens in a new tab)`);
+      expect($(".sr-only", a).textContent?.trim(), key).toBe("(opens in a new tab)");
+    }
+  });
+
+  it("keeps Ask us to print these as each card's main button", async () => {
+    await load("", signedIn(raising({ materials: materials(7), print: { canAsk: true, posters: null, leaflets: null } })));
+    const go = $<HTMLButtonElement>('form[data-f-print="posters"] button[type=submit]', card(7));
+    expect(go.classList.contains("btn")).toBe(true);
+    expect(go.classList.contains("btn-ghost")).toBe(false);
+  });
+});
+
+describe("the Need something else note's style", () => {
+  const css = readFileSync(resolve(ROOT, "assets/css/fundraising.css"), "utf8");
+  it("is a fully bordered, tinted box with no stripe down one side", () => {
+    const rules = [...css.matchAll(/\.fr-ask-us\s*\{([^}]*)\}/g)].map((m) => m[1]).join(";");
+    expect(rules).toMatch(/border:\s*1\.6px solid/);
+    expect(rules).toMatch(/background:\s*var\(--tint\)/);
+    expect(rules).not.toMatch(/border-left/);
+  });
+
+  it("the materials buttons are at least 44px tall and wrap on a phone", () => {
+    const rule = /(?:^|\n)\.fr-mat-btn\s*\{([^}]*)\}/.exec(css)?.[1] ?? "";
+    expect(rule).toMatch(/min-height:\s*44px/);
+    expect(rule).toMatch(/white-space:\s*normal/);
+  });
+});

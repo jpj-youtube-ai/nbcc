@@ -231,8 +231,8 @@ const BASE_CSS = `
   .page{margin:18px auto;box-shadow:0 12px 40px rgba(60,20,20,.22);overflow:hidden;position:relative}
   .portrait{width:210mm;height:297mm}
   .landscape{width:297mm;height:210mm}
-  .ask-us{max-width:640px;margin:16px auto 0;padding:12px 18px;background:#fff;border:1px solid var(--line);border-left:4px solid var(--crimson);
-    border-radius:10px;font-size:.9rem;line-height:1.55;color:var(--slate)}
+  .ask-us{max-width:640px;margin:16px auto 0;padding:12px 18px;background:#F3EEE3;border:1.6px solid var(--line);
+    border-radius:12px;font-size:.9rem;line-height:1.55;color:var(--slate)}
   .ask-us a{color:var(--maroon);font-weight:600}
   @media (max-width:700px){.ask-us{margin:12px 12px 0}}
   @media print{

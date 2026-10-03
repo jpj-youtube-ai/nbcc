@@ -709,7 +709,7 @@ fieldset.is-invalid .fr-option { border-color: var(--crimson); }
 /* ---------- "Your materials", round two (TASK-512): the posters and the leaflet, each with "Ask us
    to print these"; how to ask us for anything else ---------- */
 .fr-materials li.fr-mat-print { grid-column: 1 / -1; gap: 6px; padding: 12px 14px; }
-.fr-mat-print__pieces { display: flex; flex-wrap: wrap; gap: 4px 22px; }
+.fr-mat-print__pieces { display: flex; flex-wrap: wrap; gap: 8px 10px; margin-top: 2px; }
 .fr-mat-print__pieces span { font-size: inherit; color: inherit; }
 .fr-mat-print__pieces span[hidden] { display: none; }
 .fr-materials .fr-mat-print__about { font-size: 0.85rem; color: var(--slate-soft); }
@@ -725,5 +725,13 @@ fieldset.is-invalid .fr-option { border-color: var(--crimson); }
 .fr-print .form-status:empty { margin: 0 0 6px; }
 .fr-print-closed[hidden] { display: none; }
 .fr-print-closed { margin: 10px 0 0; font-size: 0.92rem; }
-.fr-ask-us { margin: 12px 0 0; padding: 10px 14px; border-left: 4px solid var(--crimson); background: var(--white); border-radius: 0 10px 10px 0; font-size: 0.92rem; line-height: 1.55; }
+.fr-ask-us { margin: 14px 0 0; padding: 14px 16px; border: 1.6px solid var(--line); background: var(--tint); border-radius: var(--radius); font-size: 0.92rem; line-height: 1.6; color: var(--slate); }
 .fr-ask-us a { font-weight: 600; }
+
+/* TASK-512, after Jaimie's look: each material opens from an outline button, not underlined text.
+   44px tall at least, and the words wrap on a narrow phone rather than overflow. */
+.fr-mat__name { font-family: var(--font-head); font-weight: 700; color: var(--maroon); font-size: 1.05rem; line-height: 1.3; }
+.fr-materials li { gap: 6px; justify-content: flex-start; }
+.fr-materials a.fr-mat-btn { font-weight: 600; text-decoration: none; }
+.fr-mat-btn { min-height: 44px; padding: 9px 18px; font-size: 0.95rem; line-height: 1.3; white-space: normal; text-align: left; max-width: 100%; align-self: flex-start; }
+.fr-mat-print__pieces .fr-mat-btn { align-self: auto; }

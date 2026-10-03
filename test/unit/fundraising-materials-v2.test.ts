@@ -296,3 +296,24 @@ describe("each piece's QR code scans", () => {
     }
   });
 });
+
+describe("the note on every materials page", () => {
+  it("is a fully bordered box, with no coloured stripe down one side", () => {
+    const html = renderPoster(facts(), ASSETS, "a4");
+    const rule = /\.ask-us\{([^}]*)\}/.exec(html)?.[1] ?? "";
+    expect(rule).toMatch(/border:1\.6px solid/);
+    expect(rule).not.toMatch(/border-left/);
+  });
+});
+
+describe("the page address in words", () => {
+  // Whatever the page is called NOW: a short initials address (TASK-511) prints as it is.
+  it("is the fundraiser's current address on every piece", () => {
+    const f = record({ slug: "ssd" });
+    const d = materialFacts(f, f.meter, { pageUrl: "https://nbcc.test/fundraise/ssd", getInvolvedUrl: INVOLVED });
+    for (const size of ["a5", "a4", "a3"] as const) expect(renderPoster(d, ASSETS, size)).toContain("or visit nbcc.test/fundraise/ssd<");
+    const json = /<script type="application\/json" id="socialData">([\s\S]*?)<\/script>/.exec(renderSocial(d, ASSETS, ""))?.[1] ?? "";
+    expect(JSON.parse(json).linkWords).toBe("nbcc.test/fundraise/ssd");
+    expect(renderEverything(d, ASSETS, { date: "1 January 2027", script: "" }).split("or visit nbcc.test/fundraise/ssd<").length - 1).toBe(3);
+  });
+});

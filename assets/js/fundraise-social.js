@@ -229,7 +229,8 @@
   /* The address in a cream pill, its top at y, centred on cx. Returns its height. */
   function drawPill(ctx, data, cx, y, maxWidth, size) {
     var words = data.linkWords || "nbcc.scot";
-    var pf = fit(ctx, words, "600 {s}px " + BODY, maxWidth - 90, 1, size, Math.round(size * 0.6));
+    // Shrinks as far as it must so the whole address fits, however long the page's address is.
+    var pf = fit(ctx, words, "600 {s}px " + BODY, maxWidth - 90, 1, size, 14);
     ctx.font = "600 " + pf.size + "px " + BODY;
     var text = pf.lines[0] || words;
     var pw = Math.min(maxWidth, ctx.measureText(text).width + 90);

@@ -299,3 +299,20 @@ describe("Ask us to print these", () => {
     expect(results.slice(10)).toEqual([429, 429]);
   });
 });
+
+describe("the page address in words, as served", () => {
+  // TASK-512: drawn from the fundraiser's CURRENT address, so a short initials address (TASK-511)
+  // or one staff changed prints as it is now, on every piece.
+  it("is the current address on each poster size, the pictures and the everything page", async () => {
+    state.fundraisers = [record({ slug: "ssd" })];
+    for (const piece of ["poster", "poster-a3", "leaflet"]) {
+      const html = await (await fetch(`${base}/api/fundraise/manage/fundraisers/12/materials/${piece}`, { headers: { cookie: `nbcc_fr_session=${SAM}` } })).text();
+      expect(html, piece).toContain("or visit nbcc.test/fundraise/ssd<");
+      expect(html, piece).not.toContain("sams-santa-dash");
+    }
+    const social = await (await fetch(`${base}/api/fundraise/manage/fundraisers/12/materials/social`, { headers: { cookie: `nbcc_fr_session=${SAM}` } })).text();
+    expect(social).toContain('"linkWords":"nbcc.test/fundraise/ssd"');
+    const all = await (await staffGet("/api/admin/fundraisers/12/materials/everything", staffToken({ fundraising: "view" }))).text();
+    expect(all.split("or visit nbcc.test/fundraise/ssd<").length - 1).toBe(3);
+  });
+});

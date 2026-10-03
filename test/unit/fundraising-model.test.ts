@@ -85,7 +85,7 @@ describe("the sign up form", () => {
 
   // Fundraising categories: every one on offer to start with (src/fundraising/categories.ts).
   it.each(STARTING_CATEGORIES.map((c) => c.key))("knows the kind %s, with a name for people", (kind) => {
-    // TASK-511: Something else says what, in a few words.
+    // TASK-511: Other says what, in a few words.
     expect(signUpSchema.safeParse(signUp({ kind, kindOther: "A sponsored silence" })).success).toBe(true);
     expect(categoryLabel(kind)).toMatch(/^[A-Z]/);
   });

@@ -184,7 +184,7 @@ function staffFacts(f: StaffSummary): Array<[string, string]> {
   const time = f.startTime && f.endTime ? `${f.startTime} to ${f.endTime}` : f.startTime;
   const when = [f.eventDate, time].filter(Boolean).join(" at ") + (f.timeTbc ? ", the time is still to be confirmed" : "");
   const where = [f.venue, f.town].filter(Boolean).join(", ");
-  // TASK-511: Something else, in their words.
+  // TASK-511: Other (once Something else), in their words.
   const kind = kindLabelOf(f) + (f.kind === OTHER_KIND && f.kindOther ? `: ${f.kindOther}` : "");
   const facts: Array<[string, string]> = [
     ["What", f.path === "raising" ? "Raising money" : "Holding an event"],

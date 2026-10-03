@@ -8185,16 +8185,20 @@ waiting down; a second press changes nothing; Undo goes back one step).
 
 The sign up form's "What are you doing to raise money?" (or "What kind of event is it?") is a list of
 **categories**, each naming one thing, never "this or that", and named as a plain noun so it reads
-well on a card ("Santa dash", not "A Santa dash"). The form shows them **A to Z, with Something else
-last** (its box for what it is, in their words, is unchanged). To start with:
+well on a card ("Santa dash", not "A Santa dash"). The form shows them **A to Z, with Other last** (once
+called "Something else"; its box, "What is it?", for what it is in their words, is unchanged). At
+two columns the list reads **down the left column, then down the right**, with Other at the bottom
+right: the grid flows by column (`.fr-options--columns`), with half as many rows as categories,
+rounded up, set by the server (`--rows`, `kindRows` in `src/fundraising/render.ts`). The page order,
+and so the tab order, stays A to Z; on a phone it is one column. To start with:
 
 Bake sale, Birthday, Coffee morning, Party, Quiz, Run, Santa dash, School collection, Walk, Workplace
-collection, and Something else.
+collection, and Other.
 
 **Admins add more** in Admin > Fundraising, on the **Categories** card: type a name and Add to the
 form, and it is on the sign up form at once, in its place A to Z. They can **rename** one (the new
 name shows everywhere, on sign ups already made too) and **hide** one from the form (and put it back);
-Something else is always on the form. Nothing is ever deleted, so every sign up keeps its category
+Other is always on the form. Nothing is ever deleted, so every sign up keeps its category
 and its name. Each change is in `audit_log` (`fundraising.category_added`,
 `fundraising.category_changed`, entity `fundraising_category`, the key in its data). Editors and
 viewers do not see the card; the sign up editor's Category list (anyone with Fundraising) offers
@@ -8205,7 +8209,7 @@ until someone changes it.
 or school collection" (keys `run_walk`, `bake_sale`, `quiz_party`, `collection`) are no longer
 offered. Sign ups that chose one keep it, shown by that name on the card, the page, the staff email
 and the admin, until staff change it to a new one. Santa dash (`santa_dash`), Birthday
-(`birthday`) and Something else (`other`) mean what they always did, so they keep their keys; a
+(`birthday`) and Other (`other`) mean what they always did, so they keep their keys; a
 bake sale on its own is `bake_sale_2`, as `bake_sale` was the old pair.
 
 **Keys.** `fundraisers.kind` holds a category's key: small letters, digits and underscores, made from
@@ -8227,9 +8231,9 @@ refusing it. Every name shown with a sign up is read with its row, so a rename s
 
 | Route | Who | Body | Answer |
 |---|---|---|---|
-| `GET /api/admin/fundraising/categories` | Fundraising view | | `{ categories: [{ key, label, active, createdAt, createdBy, retiredAt, used }] }`, A to Z, Something else last; `used` is how many sign ups have it |
+| `GET /api/admin/fundraising/categories` | Fundraising view | | `{ categories: [{ key, label, active, createdAt, createdBy, retiredAt, used }] }`, A to Z, Other last; `used` is how many sign ups have it |
 | `POST /api/admin/fundraising/categories` | an admin | `{ label }` (2 to 40, letters and numbers) | `201 { category }`; `409` when a category (hidden or not) has that name |
-| `PATCH /api/admin/fundraising/categories/:key` | an admin | `{ label?, active? }` | `200 { category }`; `409` for hiding Something else or a name taken; `404` |
+| `PATCH /api/admin/fundraising/categories/:key` | an admin | `{ label?, active? }` | `200 { category }`; `409` for hiding Other or a name taken; `404` |
 
 `GET /fundraise` draws the form's categories from the list (between `<!-- kinds -->` and
 `<!-- /kinds -->` in `fundraise.html`, which holds the starting list for when the database cannot
@@ -8295,9 +8299,9 @@ server's messages follow the path too (`kindMissing`, `kindOtherMissing` in
   `organiser_name` is still filled as "first last" for everything that reads it. A sign up from
   before keeps its one name. In the admin a new one shows and edits both parts, and changing either
   changes the whole name with it (`organiserNameFor`); an old one shows and edits its one name.
-- "Something else" asks what, in up to 80 characters, worded for the path, required when chosen
-  (`kind_other`; dropped for any other kind). Shown in the staff email and the admin as
-  "Something else: A sponsored silence".
+- "Other" (called "Something else" until the fundraising categories) asks "What is it?", in up to 80
+  characters, worded for the path, required when chosen (`kind_other`; dropped for any other kind).
+  Shown in the staff email and the admin as "Other: A sponsored silence".
 - **Social media** is a step of its own: their Instagram and their Facebook (optional), "Can we post
   about it on NBCC's social media?" and "Would you like a shout out from us?". A handle (`@name` or
   `name`) or a link, with or without https, from the app or the website, is tidied to one full link

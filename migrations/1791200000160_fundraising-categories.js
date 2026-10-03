@@ -9,10 +9,10 @@
 //                            category always has a name.
 //
 // Seeded with the new list (one category each: Bake sale, Birthday, Coffee morning, Party, Quiz, Run,
-// Santa dash, School collection, Walk, Workplace collection, and Something else) and the old "this or
-// that" ones (Run or walk, Bake sale or coffee morning, Quiz or party, Workplace or school collection),
+// Santa dash, School collection, Walk, Workplace collection, and Other, once called "Something
+// else") and the old "this or that" ones (Run or walk, Bake sale or coffee morning, Quiz or party, Workplace or school collection),
 // kept but no longer offered: the sign ups that chose one keep it, and its name, until staff change
-// it. Santa dash, Birthday and Something else mean what they always did, so they keep their keys.
+// it. Santa dash, Birthday and Other (Something else) mean what they always did, so they keep their keys.
 // The list matches src/fundraising/categories.ts (checked by test/unit/fundraising-categories-migration.test.ts).
 //
 // fundraisers.kind: the hard coded check from 1791200000000 (fundraisers_kind_check, named there by
@@ -39,7 +39,7 @@ const SEED = [
   { key: "school_collection", label: "School collection", active: true },
   { key: "walk", label: "Walk", active: true },
   { key: "workplace_collection", label: "Workplace collection", active: true },
-  { key: "other", label: "Something else", active: true },
+  { key: "other", label: "Other", active: true },
   { key: "run_walk", label: "Run or walk", active: false },
   { key: "bake_sale", label: "Bake sale or coffee morning", active: false },
   { key: "quiz_party", label: "Quiz or party", active: false },

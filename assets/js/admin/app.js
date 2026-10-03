@@ -9008,12 +9008,12 @@
   // Every stored string is escaped on the way in. Nothing scrolls inside a box: the list shows 25,
   // the wall and History 10, and "Show all" grows the page.
   // The categories as they start (src/fundraising/categories.ts), for when the list from the server
-  // (frCats, GET /api/admin/fundraising/categories) has not come: A to Z, Something else last, then
+  // (frCats, GET /api/admin/fundraising/categories) has not come: A to Z, Other last, then
   // the old "this or that" ones, no longer offered, so an old sign up's still has its name.
   var FR_KINDS = [
     ["bake_sale_2", "Bake sale"], ["birthday", "Birthday"], ["coffee_morning", "Coffee morning"], ["party", "Party"],
     ["quiz", "Quiz"], ["run", "Run"], ["santa_dash", "Santa dash"], ["school_collection", "School collection"],
-    ["walk", "Walk"], ["workplace_collection", "Workplace collection"], ["other", "Something else"],
+    ["walk", "Walk"], ["workplace_collection", "Workplace collection"], ["other", "Other"],
   ];
   var FR_OLD_KINDS = [
     ["run_walk", "Run or walk"], ["bake_sale", "Bake sale or coffee morning"], ["quiz_party", "Quiz or party"],
@@ -9697,7 +9697,7 @@
 
   function frAboutPanel(f) {
     var kind = f.kindLabel || frCatLabel(f.kind);
-    // TASK-511: Something else, in their words.
+    // TASK-511: Other, in their words.
     if (f.kind === "other" && f.kindOther) kind += ": " + f.kindOther;
     var where = [f.venue, f.town].filter(Boolean).join(", ");
     return (
@@ -9978,8 +9978,8 @@
         head("The fundraiser") +
         box("title", "title", "Name for it", "text", 'maxlength="100" autocomplete="off"') +
         pick("kind", "Category", frKindOptions(f.kind)) +
-        // TASK-511 review: always there, shown as soon as Something else is chosen (keepTyping).
-        box("kindOther", "kindOther", "What it is, in their words (optional)", "text", 'maxlength="80" autocomplete="off"', "For Something else. Up to 80 characters.")
+        // TASK-511 review: always there, shown as soon as Other is chosen (keepTyping).
+        box("kindOther", "kindOther", "What it is, in their words (optional)", "text", 'maxlength="80" autocomplete="off"', "For Other. Up to 80 characters.")
           .replace('<div class="fr-field">', '<div class="fr-field" data-frkindother' + (v.kind === "other" || v.kindOther ? "" : " hidden") + ">") +
         pick("path", "They are", [["raising", "Raising money"], ["event", "Holding an event"]]) +
         area("description", "description", "About it", 4, 1000) +
@@ -10611,7 +10611,7 @@
       if (t.closest("#frEditForm") && t.name) {
         frEditDraft = frEditDraft || {};
         frEditDraft[t.name] = t.type === "checkbox" ? !!t.checked : String(t.value || "");
-        // TASK-511 review: what Something else is, as soon as it is chosen.
+        // TASK-511 review: what Other is, as soon as it is chosen.
         if (t.name === "kind") {
           var other = t.closest("#frEditForm").querySelector("[data-frkindother]");
           var said = other && other.querySelector("input");
@@ -11794,7 +11794,7 @@
 
   // ---- Categories (admins; the list itself for everyone who can see Fundraising) ----
   // What people choose from on the sign up form (src/fundraising/categories.ts). The server keeps the
-  // order (A to Z, Something else last) and every one ever made: none is deleted, so a sign up's
+  // order (A to Z, Other last) and every one ever made: none is deleted, so a sign up's
   // category always has its name. Admins add, rename, hide and put back; each is in audit_log.
   var frCats = null; // GET /api/admin/fundraising/categories: [{ key, label, active, used }]
   var frCatsFailed = false;
@@ -11814,7 +11814,7 @@
     var c = frCatFind(key);
     if (c) return c.label;
     var words = String(key || "").replace(/_\d+$/, "").replace(/_/g, " ").trim();
-    return words ? words.charAt(0).toUpperCase() + words.slice(1) : "Something else";
+    return words ? words.charAt(0).toUpperCase() + words.slice(1) : "Other";
   }
   // The sign up editor's choices: every category on the form, and the sign up's own if it is an old
   // one, so it shows as it is until someone changes it.

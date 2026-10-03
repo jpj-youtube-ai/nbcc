@@ -146,7 +146,7 @@ describe("one question after another", () => {
     expect($("#fundraiseForm").textContent).not.toMatch(/event or fundrais|fundraiser or event|event\/|\/event/i);
   });
 
-  it("asks what Something else is, only when it is chosen", () => {
+  it("asks what Other is, only when it is chosen", () => {
     tick("pathEvent");
     expect($("[data-kind-other]").hidden).toBe(true);
     expect($("#kindOther").required).toBe(false);
@@ -374,7 +374,7 @@ describe("Instagram and Facebook, checked before sending", () => {
 });
 
 describe("sending", () => {
-  it("sends the split name, Something else, both links, every yes or no, and QR codes", async () => {
+  it("sends the split name, Other, both links, every yes or no, and QR codes", async () => {
     load();
     fill("raising");
     await submit();
@@ -402,7 +402,7 @@ describe("sending", () => {
     expect(sent().wants.qrCount).toBe(0);
   });
 
-  it("sends Something else's words only when it is chosen", async () => {
+  it("sends Other's words only when it is chosen", async () => {
     load();
     fill("raising");
     tick("kind-birthday");

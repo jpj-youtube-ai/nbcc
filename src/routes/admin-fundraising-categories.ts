@@ -28,7 +28,7 @@ function failed(res: Response, what: string, err: unknown): Response {
       case "label_taken":
         return res.status(409).json({ error: "There is already a category called that. If it is hidden, bring it back instead." });
       case "other_always_on":
-        return res.status(409).json({ error: "Something else is always on the form, so it cannot be hidden." });
+        return res.status(409).json({ error: "Other is always on the form, so it cannot be hidden." });
     }
   }
   console.error(`admin fundraising categories ${what} failed:`, err instanceof Error ? err.message : err);

@@ -25,7 +25,7 @@ beforeEach(() => rememberCategories(BUILT_IN_CATEGORIES));
 const labels = (list: Category[]) => list.map((c) => c.label);
 
 describe("the starting list", () => {
-  it("is one category each, A to Z, with Something else last", () => {
+  it("is one category each, A to Z, with Other last", () => {
     expect(labels(formCategories())).toEqual([
       "Bake sale",
       "Birthday",
@@ -37,7 +37,7 @@ describe("the starting list", () => {
       "School collection",
       "Walk",
       "Workplace collection",
-      "Something else",
+      "Other",
     ]);
   });
 
@@ -50,8 +50,8 @@ describe("the starting list", () => {
     }
   });
 
-  it("keeps Something else under its old key, so its text box still works", () => {
-    expect(formCategories().at(-1)).toMatchObject({ key: OTHER_KIND, label: "Something else" });
+  it("keeps Other under its old key, so its text box still works", () => {
+    expect(formCategories().at(-1)).toMatchObject({ key: OTHER_KIND, label: "Other" });
     expect(OTHER_KIND).toBe("other");
   });
 
@@ -97,14 +97,14 @@ describe("a category's name", () => {
     expect(categoryLabel("run_walk")).toBe("Run or walk");
     expect(categoryLabel("bake_sale_2")).toBe("Bake sale");
     expect(categoryLabel("sponsored_silence")).toBe("Sponsored silence");
-    expect(categoryLabel("")).toBe("Something else");
+    expect(categoryLabel("")).toBe("Other");
   });
 });
 
 describe("the order", () => {
-  it("is A to Z whatever the case or the order they came in, with Something else last", () => {
+  it("is A to Z whatever the case or the order they came in, with Other last", () => {
     const list: Category[] = [
-      { key: "other", label: "Something else", active: true },
+      { key: "other", label: "Other", active: true },
       { key: "zumba", label: "zumba class", active: true },
       { key: "abseil", label: "Abseil", active: true },
       { key: "matches", label: "Matched giving", active: true },
@@ -116,7 +116,7 @@ describe("the order", () => {
     rememberCategories([...BUILT_IN_CATEGORIES, { key: "sponsored_silence", label: "Sponsored silence", active: true }]);
     const shown = labels(formCategories());
     expect(shown.indexOf("Sponsored silence")).toBe(shown.indexOf("School collection") + 1);
-    expect(shown.at(-1)).toBe("Something else");
+    expect(shown.at(-1)).toBe("Other");
   });
 
   it("leaves a hidden category off the form", () => {

@@ -108,14 +108,14 @@ let role = "admin";
 let failures: Record<string, { status: number; body: unknown }> = {};
 let calls: { method: string; path: string; body: unknown }[] = [];
 let whatsNewAreas: unknown[] = [];
-// Fundraising categories: the list the server keeps, A to Z with Something else last.
+// Fundraising categories: the list the server keeps, A to Z with Other last.
 type Cat = { key: string; label: string; active: boolean; used: number };
 let cats: Cat[] | null = null;
 function startingCats(): Cat[] {
   return [
     ["bake_sale_2", "Bake sale"], ["birthday", "Birthday"], ["coffee_morning", "Coffee morning"], ["party", "Party"], ["quiz", "Quiz"],
     ["run", "Run"], ["santa_dash", "Santa dash"], ["school_collection", "School collection"], ["walk", "Walk"],
-    ["workplace_collection", "Workplace collection"], ["other", "Something else"],
+    ["workplace_collection", "Workplace collection"], ["other", "Other"],
   ].map(([key, label]) => ({ key, label, active: true, used: key === "santa_dash" ? 2 : 0 }))
     .concat([{ key: "run_walk", label: "Run or walk", active: false, used: 1 }]);
 }
@@ -909,7 +909,7 @@ describe("a sign up from the form's second round", () => {
   const roundTwo = (over: Record<string, unknown> = {}) =>
     fundraiser(1, {
       kind: "other",
-      kindLabel: "Something else",
+      kindLabel: "Other",
       kindOther: "A sponsored silence",
       name: "Robin Example",
       firstName: "Robin",
@@ -926,14 +926,14 @@ describe("a sign up from the form's second round", () => {
       ...over,
     });
 
-  it("shows the first name and surname, Something else in their words, each link, and printed QR codes", async () => {
+  it("shows the first name and surname, Other in their words, each link, and printed QR codes", async () => {
     records = [roundTwo()];
     await openFundraising();
     await openRow(1);
     const d = text(detail());
     expect(d).toMatch(/First name\s*Robin/);
     expect(d).toMatch(/Surname\s*Example/);
-    expect(d).toContain("Something else: A sponsored silence");
+    expect(d).toContain("Other: A sponsored silence");
     expect(d).toMatch(/Facebook\s*Not given/);
     expect(q('#frList a[href="https://www.instagram.com/robin.quiet"]')).not.toBeNull();
     expect(d).not.toContain("Facebook or Instagram");
@@ -941,7 +941,7 @@ describe("a sign up from the form's second round", () => {
     expect(d).toContain("A social media shout out, but they have not said we can post about it yet");
   });
 
-  it("edits the two parts of the name, the two links, Something else and QR codes, never the single name box", async () => {
+  it("edits the two parts of the name, the two links, Other and QR codes, never the single name box", async () => {
     records = [roundTwo()];
     await openFundraising();
     await openRow(1);
@@ -985,7 +985,7 @@ describe("a sign up from the form's second round", () => {
   });
 
   // Review fixes.
-  it("shows the box for what it is as soon as Something else is chosen", async () => {
+  it("shows the box for what it is as soon as Other is chosen", async () => {
     records = [roundTwo({ kind: "santa_dash", kindLabel: "A Santa dash", kindOther: null })];
     await openFundraising();
     await openRow(1);
@@ -2082,18 +2082,18 @@ describe("materials, round two", () => {
 describe("the Categories card", () => {
   const items = (id: string) => qa(`#${id} li`).map((li) => text(li.querySelector(".fr-people-who")));
 
-  it("lists what the sign up form offers, A to Z with Something else last, and the ones not on it", async () => {
+  it("lists what the sign up form offers, A to Z with Other last, and the ones not on it", async () => {
     cats = startingCats();
     await openFundraising();
     expect(el("frCats").hidden).toBe(false);
     expect(items("frCatsList").map((t) => t.replace(/ (No sign ups yet|\d+ sign ups?)$/, ""))).toEqual([
       "Bake sale", "Birthday", "Coffee morning", "Party", "Quiz", "Run", "Santa dash", "School collection", "Walk",
-      "Workplace collection", "Something else",
+      "Workplace collection", "Other",
     ]);
     expect(text(el("frCatsList"))).toContain("Santa dash 2 sign ups");
     expect(el("frCatsHidden").hidden).toBe(false);
     expect(items("frCatsHidden")).toEqual(["Run or walk 1 sign up"]);
-    // Something else is always on the form: it has no button to hide it.
+    // Other is always on the form: it has no button to hide it.
     expect(q('[data-frcathide="other"]')).toBeNull();
     expect(q('[data-frcatshow="run_walk"]')).not.toBeNull();
   });
@@ -2191,7 +2191,7 @@ describe("a sign up's category in the editor", () => {
     expect(options[0]).toBe("Run or walk (no longer on the form)");
     expect(options.slice(1)).toEqual([
       "Bake sale", "Birthday", "Coffee morning", "Party", "Quiz", "Run", "Santa dash", "School collection", "Walk",
-      "Workplace collection", "Something else",
+      "Workplace collection", "Other",
     ]);
     expect(select.value).toBe("run_walk");
     expect(text(detail())).toContain("CategoryRun or walk");

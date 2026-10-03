@@ -1,7 +1,7 @@
 @fundraising @categories @events @db
 Feature: Fundraising categories: one each, A to Z, and staff can add more
   The sign up form asks what someone is doing, or what kind of event it is, from a list of categories
-  that each name one thing, shown A to Z with Something else last. Admins can add a category in
+  that each name one thing, shown A to Z with Other last. Admins can add a category in
   Admin > Fundraising, and it is on the form at once, in its place. The old "this or that"
   categories are no longer offered, but the sign ups that chose one keep it, and its name. Every
   name and address here is invented.
@@ -11,7 +11,7 @@ Feature: Fundraising categories: one each, A to Z, and staff can add more
     And a fundraising staff member "a1.cat.fr.bdd@example.com" with role "admin"
     When "a1.cat.fr.bdd@example.com" adds the fundraising category "Sponsored silence"
     Then the category answer is 201
-    And the sign up form offers its categories A to Z, with Something else last
+    And the sign up form offers its categories A to Z, with Other last
     And the sign up form offers "Sponsored silence" between "School collection" and "Walk"
     And adding the category "Sponsored silence" is in audit_log by "admin:a1.cat.fr.bdd@example.com"
     When someone signs up "Sam's Silent Day (bdd-fr)" in the category "Sponsored silence"

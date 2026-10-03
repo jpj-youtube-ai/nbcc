@@ -53,7 +53,7 @@ function toCategory(r: Row): Category {
 
 const COLUMNS = "key, label, active, created_at, created_by, retired_at";
 
-/** Every category, A to Z with Something else last, and how many sign ups have each. */
+/** Every category, A to Z with Other last, and how many sign ups have each. */
 export async function listCategories(): Promise<Category[]> {
   const r = await pool.query(
     `SELECT c.key, c.label, c.active, c.created_at, c.created_by, c.retired_at,
@@ -141,7 +141,7 @@ export async function addCategory(label: string, actor: string): Promise<Categor
 
 /**
  * Rename a category, or take it off the form (active false) or put it back. Never deletes: the sign
- * ups that have it keep it, under its name. Something else is always on the form.
+ * ups that have it keep it, under its name. Other is always on the form.
  */
 export async function updateCategory(key: string, change: { label?: string; active?: boolean }, actor: string): Promise<Category> {
   const after = await inTransaction(async (client) => {

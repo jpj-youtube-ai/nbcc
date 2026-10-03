@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import { buildSignUpStaffEmail, type StaffSummary } from "../../src/fundraising/emails";
 
 // TASK-511: the email to the events inbox about a new sign up carries every new answer: the name in
-// two parts, what Something else is, Instagram and Facebook on their own lines, printed QR codes,
+// two parts, what Other is, Instagram and Facebook on their own lines, printed QR codes,
 // and a shout out asked for without permission to post, said plainly. Every name is invented.
 
 const base: StaffSummary = {
@@ -51,8 +51,8 @@ const base: StaffSummary = {
 const mail = buildSignUpStaffEmail(base, { adminUrl: "https://nbcc.scot/admin" });
 
 describe("the email to the events inbox, round two", () => {
-  it("says what Something else is, in their words", () => {
-    expect(mail.text).toContain("Kind: Something else: A sponsored silence");
+  it("says what Other is, in their words", () => {
+    expect(mail.text).toContain("Kind: Other: A sponsored silence");
   });
 
   it("gives the first name and the surname", () => {

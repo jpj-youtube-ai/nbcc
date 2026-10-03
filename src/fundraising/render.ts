@@ -758,9 +758,15 @@ export function renderFundraiserPage(template: string, p: PublicPage, opts: Fund
 // The category radios sit between these, so the server can draw them from the database's list.
 const KINDS_BLOCK = /<!-- kinds -->[\s\S]*?<!-- \/kinds -->/;
 const INDENT = "\n                    ";
+const KINDS_ROWS = /data-kind-options style="--rows: \d+"/;
+
+/** The rows the categories take at two columns, read down each column: half the list, rounded up. */
+export function kindRows(count: number): number {
+  return Math.max(1, Math.ceil(count / 2));
+}
 
 /**
- * The category radios, in the order given (formCategories: A to Z, Something else last). The first
+ * The category radios, in the order given (formCategories: A to Z, Other last). The first
  * carries the form's "choose one" messages, worded for each path (fundraise.js swaps them in).
  * fundraise.html is written with exactly this for the starting list (a unit test holds them together).
  */
@@ -791,7 +797,10 @@ export function renderFundraiseSignUp(
 ): string {
   const page =
     categories && categories.length > 0
-      ? template.replace(KINDS_BLOCK, () => `<!-- kinds -->${INDENT}${kindOptionsHtml(categories)}${INDENT}<!-- /kinds -->`)
+      ? template
+          .replace(KINDS_BLOCK, () => `<!-- kinds -->${INDENT}${kindOptionsHtml(categories)}${INDENT}<!-- /kinds -->`)
+          // At two columns the list reads down the left column, then the right: half as many rows.
+          .replace(KINDS_ROWS, () => `data-kind-options style="--rows: ${kindRows(categories.length)}"`)
       : template;
   if (open) return page;
   return page

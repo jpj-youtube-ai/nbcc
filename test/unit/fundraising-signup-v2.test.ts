@@ -10,7 +10,7 @@ import {
   type FundraiserRecord,
 } from "../../src/fundraising/model";
 
-// TASK-511: the sign up form, round two. The name in two boxes, "Something else" said in their own
+// TASK-511: the sign up form, round two. The name in two boxes, "Other" said in their own
 // words, Instagram and Facebook in boxes of their own, printed QR codes, and every yes or no answered
 // on purpose: nothing is chosen for them, so a missing answer is asked for, never taken as No. The
 // newsletter stays an unticked box they tick to opt in. Every name and handle here is invented.
@@ -88,7 +88,7 @@ describe("what kind, in words that follow what they chose", () => {
     }
   });
 
-  it("asks what Something else is, in up to 80 characters, worded for their path", () => {
+  it("asks what Other is, in up to 80 characters, worded for their path", () => {
     expect(fields(signUp({ kind: "other" })).kindOther).toBe("Tell us what you are doing, in a few words.");
     expect(fields(signUp({ path: "event", kind: "other", cardLine: "x", booking: "free", venue: "Hall" })).kindOther).toBe(
       "Tell us what kind of event it is, in a few words.",
@@ -97,7 +97,7 @@ describe("what kind, in words that follow what they chose", () => {
     expect(ok(signUp({ kind: "other", kindOther: "  A sponsored silence  " })).kindOther).toBe("A sponsored silence");
   });
 
-  it("keeps what Something else is only when they chose it", () => {
+  it("keeps what Other is only when they chose it", () => {
     expect(ok(signUp({ kind: "santa_dash", kindOther: "A sponsored silence" })).kindOther).toBeNull();
   });
 });
@@ -179,7 +179,7 @@ describe("printed QR codes", () => {
 });
 
 describe("staff changes to the new answers", () => {
-  it("take the split name, what Something else is, the two links and QR codes", () => {
+  it("take the split name, what Other is, the two links and QR codes", () => {
     const r = adminPatchSchema.safeParse({
       firstName: "Robin",
       lastName: "Quill",

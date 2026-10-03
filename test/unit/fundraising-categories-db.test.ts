@@ -63,8 +63,8 @@ beforeEach(() => {
 });
 
 describe("reading the list", () => {
-  it("is every category, A to Z with Something else last, with how many sign ups have each", async () => {
-    query.mockResolvedValue({ rows: [row("other", "Something else"), row("walk", "Walk", true, 3), row("run_walk", "Run or walk", false, 2)] });
+  it("is every category, A to Z with Other last, with how many sign ups have each", async () => {
+    query.mockResolvedValue({ rows: [row("other", "Other"), row("walk", "Walk", true, 3), row("run_walk", "Run or walk", false, 2)] });
     const list = await listCategories();
     expect(list.map((c) => c.key)).toEqual(["run_walk", "walk", "other"]);
     expect(list[0]).toMatchObject({ label: "Run or walk", active: false, used: 2, retiredAt: "2026-10-03T09:00:00.000Z" });
@@ -182,9 +182,9 @@ describe("changing a category", () => {
     expect(update?.[0]).not.toMatch(/DELETE/);
   });
 
-  it("never hides Something else", async () => {
+  it("never hides Other", async () => {
     useClient((sql) => {
-      if (sql.startsWith("SELECT key, label, active FROM fundraising_categories WHERE key")) return { rows: [row("other", "Something else")] };
+      if (sql.startsWith("SELECT key, label, active FROM fundraising_categories WHERE key")) return { rows: [row("other", "Other")] };
       return undefined;
     });
     await expect(updateCategory("other", { active: false }, "admin:kim@example.com")).rejects.toMatchObject({ reason: "other_always_on" });

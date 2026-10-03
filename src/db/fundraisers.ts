@@ -388,7 +388,7 @@ async function insertSignUp(client: PoolClient, s: SignUp, slug: string): Promis
       s.name, s.email, s.phone, s.socialLink, s.socialOk, JSON.stringify(s.wants), s.newsletterOk,
       s.postLine1, s.postLine2, s.postTown, s.postPostcode, s.cardLine, s.endTime, s.timeTbc, s.venueAddress,
       s.venuePostcode, s.access, s.price, s.booking, s.ticketUrl, s.ageLimit, s.dressCode, s.included, s.creditName,
-      // TASK-511: the name in two parts (name above is the whole), Something else, and the two links.
+      // TASK-511: the name in two parts (name above is the whole), Other, and the two links.
       s.firstName ?? null, s.lastName ?? null, s.kindOther ?? null, s.instagram ?? null, s.facebook ?? null,
     ],
   );

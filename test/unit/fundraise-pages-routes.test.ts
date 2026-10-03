@@ -209,7 +209,7 @@ describe("the sign up page", () => {
     expect(html).toMatch(/data-fundraise-open>/);
   });
 
-  it("offers the categories as the database has them, A to Z, Something else last", async () => {
+  it("offers the categories as the database has them, A to Z, Other last", async () => {
     const html = await (await get("/fundraise")).text();
     const names = [...html.matchAll(/name="kind" type="radio" value="([a-z0-9_]+)"/g)].map((m) => m[1]);
     expect(names).toEqual([

@@ -5,7 +5,7 @@ import { resolve } from "node:path";
 import { kindOptionsHtml, renderFundraiseSignUp } from "../../src/fundraising/render";
 import { BUILT_IN_CATEGORIES, formCategories, rememberCategories, type Category } from "../../src/fundraising/categories";
 
-// Fundraising categories on the sign up form: one each, A to Z, Something else last, drawn from the
+// Fundraising categories on the sign up form: one each, A to Z, Other last, drawn from the
 // list in the database, so a category an admin adds is there at once. The first one carries the
 // form's "choose one" messages. Every name here is invented.
 
@@ -21,7 +21,7 @@ function radios(html: string) {
 const labelOf = (input: HTMLInputElement) => (input.closest("label")?.textContent ?? "").trim();
 
 describe("the categories on the sign up form", () => {
-  it("are one each, A to Z, with Something else last, as the page is written", () => {
+  it("are one each, A to Z, with Other last, as the page is written", () => {
     expect(radios(template).map(labelOf)).toEqual([
       "Bake sale",
       "Birthday",
@@ -33,7 +33,7 @@ describe("the categories on the sign up form", () => {
       "School collection",
       "Walk",
       "Workplace collection",
-      "Something else",
+      "Other",
     ]);
   });
 
@@ -54,7 +54,7 @@ describe("the categories on the sign up form", () => {
     expect(names.indexOf("Sponsored silence")).toBe(names.indexOf("School collection") + 1);
     expect(names).not.toContain("Zumba");
     expect(names).not.toContain("Run or walk");
-    expect(names.at(-1)).toBe("Something else");
+    expect(names.at(-1)).toBe("Other");
     expect(shown.find((r) => r.value === "sponsored_silence")?.id).toBe("kind-sponsored_silence");
   });
 
@@ -67,13 +67,53 @@ describe("the categories on the sign up form", () => {
   });
 
   it("writes a staff typed name as words, never as markup", () => {
-    const list: Category[] = [{ key: "pies", label: "Pie & <b>mash</b>", active: true }, { key: "other", label: "Something else", active: true }];
+    const list: Category[] = [{ key: "pies", label: "Pie & <b>mash</b>", active: true }, { key: "other", label: "Other", active: true }];
     const html = renderFundraiseSignUp(template, true, list);
     expect(html).toContain("Pie &amp; &lt;b&gt;mash&lt;/b&gt;");
-    expect(radios(html).map(labelOf)).toEqual(["Pie & <b>mash</b>", "Something else"]);
+    expect(radios(html).map(labelOf)).toEqual(["Pie & <b>mash</b>", "Other"]);
   });
 
   it("keeps the page as written when no list is given", () => {
     expect(renderFundraiseSignUp(template, true)).toBe(template);
+  });
+});
+
+// Jaimie (PR #637): at two columns the list reads A to Z DOWN the left column, then down the right,
+// with Other the very last (bottom right). The grid flows by column, with as many rows as half the
+// list, rounded up, set by the server. The page's order (and so the tab order) stays A to Z; on a
+// phone it is one column, A to Z.
+describe("the categories at two columns", () => {
+  const grid = (html: string) => new DOMParser().parseFromString(html, "text/html").querySelector<HTMLElement>("[data-kind-options]")!;
+  const cats = (n: number): Category[] => [
+    ...Array.from({ length: n - 1 }, (_, i) => ({ key: `c${String(i).padStart(2, "0")}`, label: `Cat ${String(i).padStart(2, "0")}`, active: true })),
+    { key: "other", label: "Other", active: true },
+  ];
+
+  it("has half as many rows as categories, rounded up, as the page is written", () => {
+    const g = grid(template);
+    expect(g.classList.contains("fr-options--columns")).toBe(true);
+    expect(g.style.getPropertyValue("--rows").trim()).toBe(String(Math.ceil(formCategories().length / 2)));
+  });
+
+  it.each([[11, 6], [12, 6], [13, 7], [1, 1]])("with %i categories has %i rows", (n, rows) => {
+    const g = grid(renderFundraiseSignUp(template, true, cats(n)));
+    expect(g.style.getPropertyValue("--rows").trim()).toBe(String(rows));
+    expect(radios(renderFundraiseSignUp(template, true, cats(n))).at(-1)?.value).toBe("other");
+  });
+
+  it("flows down the columns only at two columns, never on a phone", () => {
+    const css = readFileSync(resolve(ROOT, "assets/css/fundraising.css"), "utf8");
+    const wide = css.match(/@media \(min-width: 640px\) \{[^}]*\.fr-options--columns \{([^}]*)\}/);
+    expect(wide?.[1]).toMatch(/grid-auto-flow:\s*column/);
+    expect(wide?.[1]).toMatch(/grid-template-rows:\s*repeat\(var\(--rows[^)]*\),\s*auto\)/);
+    // Outside the two column rule, nothing flows by column.
+    expect(css.replace(/@media \(min-width: 640px\) \{[^}]*\.fr-options--columns \{[^}]*\}\s*\}/g, "")).not.toMatch(/fr-options--columns[^}]*grid-auto-flow/);
+  });
+});
+
+describe("the box for Other", () => {
+  it("asks 'What is it?' until they say whether they are raising money or holding an event", () => {
+    const d = new DOMParser().parseFromString(template, "text/html");
+    expect(d.querySelector("label[for=kindOther] > span")?.textContent).toBe("What is it?");
   });
 });

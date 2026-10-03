@@ -91,10 +91,10 @@ Then("there is no fundraising category {string}", async function (label) {
   assert.equal(r.rows.length, 0);
 });
 
-Then("the sign up form offers its categories A to Z, with Something else last", async function () {
+Then("the sign up form offers its categories A to Z, with Other last", async function () {
   const labels = await formLabels();
   assert.ok(labels.length > 2, `the form offers ${JSON.stringify(labels)}`);
-  assert.equal(labels[labels.length - 1], "Something else");
+  assert.equal(labels[labels.length - 1], "Other");
   const rest = labels.slice(0, -1);
   const sorted = [...rest].sort((a, b) => a.localeCompare(b, "en-GB", { sensitivity: "base" }));
   assert.deepEqual(rest, sorted);

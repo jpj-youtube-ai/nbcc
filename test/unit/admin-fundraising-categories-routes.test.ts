@@ -76,7 +76,7 @@ const cat = (key: string, label: string, active = true) => ({ key, label, active
 beforeEach(() => {
   for (const fn of Object.values(db)) fn.mockReset();
   getUserAuthRowMock.mockReset();
-  db.listCategories.mockResolvedValue([cat("quiz", "Quiz"), cat("run_walk", "Run or walk", false), cat("other", "Something else")]);
+  db.listCategories.mockResolvedValue([cat("quiz", "Quiz"), cat("run_walk", "Run or walk", false), cat("other", "Other")]);
   db.addCategory.mockImplementation(async (label: string) => cat("sponsored_silence", label));
   db.updateCategory.mockImplementation(async (key: string, change: { label?: string; active?: boolean }) => ({ ...cat(key, change.label ?? "Quiz"), active: change.active ?? true }));
 });
@@ -162,11 +162,11 @@ describe("an admin changing a category", () => {
     expect(db.updateCategory).not.toHaveBeenCalled();
   });
 
-  it("never hides Something else", async () => {
+  it("never hides Other", async () => {
     db.updateCategory.mockRejectedValue(new CategoryError("other_always_on"));
     const res = await run(routes.patchAdminCategory, { params: { key: "other" }, body: { active: false }, token: tokenFor("admin") });
     expect(res.statusCode).toBe(409);
-    expect((res.body as { error: string }).error).toBe("Something else is always on the form, so it cannot be hidden.");
+    expect((res.body as { error: string }).error).toBe("Other is always on the form, so it cannot be hidden.");
   });
 
   it("says when it is not there", async () => {

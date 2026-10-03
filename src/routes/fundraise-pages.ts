@@ -203,7 +203,7 @@ export function addFundraisePageRoutes(router: Router, siteRoot: string, deps: F
         import("../db/fundraising-categories"),
         import("../fundraising/categories"),
       ]);
-      // The categories on offer, A to Z, Something else last, as the database has them (kept for a
+      // The categories on offer, A to Z, Other last, as the database has them (kept for a
       // minute; the starting list if it cannot be read).
       const categories = formCategories(await loadCategories());
       const html = renderFundraiseSignUp(readFileSync(signUpFile, "utf8"), await fundraisingOn(), categories);

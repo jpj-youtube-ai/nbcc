@@ -17,7 +17,7 @@
 // taken away. Each new question is said in a polite live region for screen readers, focus stays
 // where they are, and "Show all the questions at once" (or pressing Send) shows every one. The words
 // of each question follow the answer to the first (data-say-raising, data-say-event). Without this
-// script every question is in the page as it is. The name is in two boxes, Something else says what,
+// script every question is in the page as it is. The name is in two boxes, Other says what,
 // social media is a step of its own, every yes or no is a pair of choices with nothing chosen, and
 // someone raising money can ask for printed QR codes.
 //
@@ -227,7 +227,7 @@
       if (eventTimes) eventTimes.hidden = !event;
     }
 
-    // --- TASK-511: what Something else is, only when it is chosen -------------------------------
+    // --- TASK-511: what Other is, only when it is chosen -------------------------------
     var kindOtherField = form.querySelector("[data-kind-other]");
     function applyKind() {
       var other = radio("kind") === "other";

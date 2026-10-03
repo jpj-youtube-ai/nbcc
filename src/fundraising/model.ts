@@ -42,7 +42,7 @@ export const MAX_BUCKETS = 20;
 export const MAX_QR_CODES = 200;
 /** TASK-511: the first name and the surname, each. */
 export const NAME_PART_MAX = 50;
-/** TASK-511: what "Something else" is, in their words. */
+/** TASK-511: what "Other" (once "Something else") is, in their words. */
 export const KIND_OTHER_MAX = 80;
 /** The line for the front of an event's card: one or two sentences, as the events editor asks. */
 export const CARD_LINE_MAX = 140;
@@ -921,7 +921,7 @@ export interface FundraiserRecord {
   // and its one social link (socialLink).
   firstName?: string | null;
   lastName?: string | null;
-  /** What "Something else" is, in their words. */
+  /** What "Other" is, in their words. */
   kindOther?: string | null;
   /** Their Instagram and Facebook, each a full https link. */
   instagram?: string | null;

@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 // Fundraising categories: what someone is doing to raise money, or what kind of event it is. One
-// category each, shown A to Z on the sign up form with Something else last, and admins can add more,
+// category each, shown A to Z on the sign up form with Other last, and admins can add more,
 // rename them, and hide them from the form (Admin > Fundraising, Categories).
 //
 // The list lives in the fundraising_categories table (migrations/1791200000160). fundraisers.kind
@@ -28,7 +28,8 @@ export interface Category {
   used?: number;
 }
 
-/** Something else: always on the form, always last, with a box for what it is in their words. */
+/** Other: always on the form, always last, with a box for what it is in their words. Once called
+ * "Other"; the key is unchanged. */
 export const OTHER_KIND = "other";
 
 /** A key: small letters, digits and underscores, starting with a letter. Never shown to anyone. */
@@ -49,7 +50,7 @@ export const STARTING_CATEGORIES: readonly Category[] = [
   { key: "school_collection", label: "School collection", active: true },
   { key: "walk", label: "Walk", active: true },
   { key: "workplace_collection", label: "Workplace collection", active: true },
-  { key: OTHER_KIND, label: "Something else", active: true },
+  { key: OTHER_KIND, label: "Other", active: true },
 ];
 
 /**
@@ -77,7 +78,7 @@ export const KIND_SPLITS: Readonly<Record<string, readonly string[]>> = {
 
 const collator = new Intl.Collator("en-GB", { sensitivity: "base", numeric: true });
 
-/** A to Z by name, whatever the case, with Something else always last. A new list; the old is untouched. */
+/** A to Z by name, whatever the case, with Other always last. A new list; the old is untouched. */
 export function sortCategories<T extends Pick<Category, "key" | "label">>(list: readonly T[]): T[] {
   return [...list].sort((a, b) => {
     if (a.key === OTHER_KIND || b.key === OTHER_KIND) return a.key === OTHER_KIND ? (b.key === OTHER_KIND ? 0 : 1) : -1;
@@ -94,12 +95,12 @@ export function rememberCategories(list: readonly Category[]): void {
   known = new Map(list.map((c) => [c.key, c]));
 }
 
-/** Every category as last read, A to Z, Something else last. */
+/** Every category as last read, A to Z, Other last. */
 export function knownCategories(): Category[] {
   return sortCategories([...known.values()]);
 }
 
-/** What the sign up form offers: the categories on offer, A to Z, Something else last. */
+/** What the sign up form offers: the categories on offer, A to Z, Other last. */
 export function formCategories(list: readonly Category[] = [...known.values()]): Category[] {
   return sortCategories(list.filter((c) => c.active));
 }
@@ -120,7 +121,7 @@ export function categoryLabel(key: string | null | undefined): string {
   const label = known.get(k)?.label ?? BUILT_IN_LABELS.get(k);
   if (label) return label;
   const words = k.replace(/_\d+$/, "").replace(/_/g, " ").trim();
-  return words ? words.charAt(0).toUpperCase() + words.slice(1) : "Something else";
+  return words ? words.charAt(0).toUpperCase() + words.slice(1) : "Other";
 }
 
 /**

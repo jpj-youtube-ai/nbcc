@@ -68,12 +68,26 @@ export interface Greeted {
  * (it starts with "The", or it is the name their event is credited to), which gets "Hi there,".
  */
 export function organiserGreeting(f: Greeted): string {
+  const first = organiserFirstName(f);
+  return first ? `Hi ${first},` : "Hi there,";
+}
+
+/** A title is no one's first name: the word after it is ("Dr Sam Example"). */
+const TITLE = /^(mr|mrs|ms|miss|dr|rev|sir|cllr)\.?$/i;
+
+/**
+ * The organiser's first name, for a greeting or a subject line ("One week to go, Sam!"), or null when
+ * there is none to use: a group's or a business's name, or only a title. Every email that names the
+ * organiser asks this, so none says "Hi The,".
+ */
+export function organiserFirstName(f: Greeted): string | null {
   const same = (a: string, b: string) => a.trim().toLowerCase() === b.trim().toLowerCase();
   const given = (f.firstName ?? "").trim();
   const group = !given && Boolean(f.creditName) && same(f.name, f.creditName as string);
-  const source = given || (group ? "" : f.name.trim());
-  const first = source ? firstName(source) : "";
-  return first && !same(first, "the") ? `Hi ${first},` : "Hi there,";
+  const words = (given || (group ? "" : f.name)).trim().split(/\s+/).filter(Boolean);
+  const word = TITLE.test(words[0] ?? "") ? words[1] : words[0];
+  if (!word || same(word, "the") || TITLE.test(word)) return null;
+  return firstName(word);
 }
 
 /** £500, £12.50, £100,000. */

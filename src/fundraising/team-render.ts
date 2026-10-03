@@ -30,6 +30,8 @@ export interface TeamExtras {
   summaryHtml: string;
   mainHtml: string;
   factsHtml?: string;
+  /** How many are on the team: the give box only points to "The team" when there is someone there. */
+  memberCount?: number;
 }
 
 const LINK_ICON =
@@ -67,6 +69,7 @@ export function renderTeamExtras(t: TeamExtrasInput): TeamExtras {
       '<p class="fr-share__status" role="status" aria-live="polite" data-copy-status></p>' +
       "</div>";
   return {
+    memberCount: count,
     summaryHtml: t.finished ? "" : `<a class="btn btn-ghost fr-summary__join" href="${escapeHtml(joinPath)}">Join this team</a>`,
     mainHtml:
       '<section class="fr-team" aria-labelledby="fr-team-heading">' +

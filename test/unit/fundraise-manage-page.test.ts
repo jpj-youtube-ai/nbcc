@@ -784,14 +784,22 @@ describe("paying in on a page shared with another cause", () => {
   it("says to pay in only NBCC's share, by its percentage, and where the rest goes", async () => {
     await load("", signedIn(raising({ sharesWithOther: true, split: SPLIT })));
     expect(line(7).hidden).toBe(false);
-    expect(line(7).textContent).toBe("Only pay in NBCC’s share (60%). Kilmarnock Food Larder’s share goes to them from you.");
+    expect(line(7).textContent).toBe("Only pay in NBCC’s share (60%). The share for Kilmarnock Food Larder goes to them from you.");
     // In the pay in form itself, above the amount, so it is read before paying.
     expect(line(7).closest("form[data-f-payin]")).not.toBeNull();
   });
 
-  it("gives a cause whose name ends in s just the apostrophe", async () => {
-    await load("", signedIn(raising({ sharesWithOther: true, split: { nbccSharePercent: 50, otherCauseName: "Exampleton Friends" } })));
-    expect(line(7).textContent).toBe("Only pay in NBCC’s share (50%). Exampleton Friends’ share goes to them from you.");
+  // Review: no possessive of the other cause's name.
+  it("never makes a possessive of the other cause's name", async () => {
+    await load("", signedIn(raising({ sharesWithOther: true, split: { nbccSharePercent: 50, otherCauseName: "Exampleton Friends Ltd." } })));
+    expect(line(7).textContent).toBe("Only pay in NBCC’s share (50%). The share for Exampleton Friends Ltd. goes to them from you.");
+  });
+
+  // Review: a page in memory of someone is untouched by this change.
+  it("says nothing on a shared page in memory of someone", async () => {
+    await load("", signedIn(raising({ sharesWithOther: true, split: SPLIT, memory: { name: "Alex Example", dates: null, showTarget: false } })));
+    expect(line(7).hidden).toBe(true);
+    expect(line(7).textContent).toBe("");
   });
 
   it("says nothing on a page that is not shared", async () => {

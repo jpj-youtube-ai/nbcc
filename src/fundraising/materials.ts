@@ -402,7 +402,7 @@ export function posterLogoMm(
   if (d.splitStatement) mm -= size === "a5" ? 12 : 6;
   // Clarity audit: "Gifts made on the NBCC page all go to NBCC." after the statement can take the
   // foot a line further (measured in headless Chromium at A5, A4 and A3, worst case).
-  const note = posterSplitNote(d) ? SPLIT_NOTE_LOGO_MM : 0;
+  const note = posterSplitNote(d) ? (size === "a5" ? SPLIT_NOTE_LOGO_A5_MM : SPLIT_NOTE_LOGO_MM) : 0;
   mm -= note;
   // Event clarity review: an event's entry line under the target ("Entry: £5, paid on the door"), and
   // a second line when it is long enough to wrap. The logo gives way to it, below its usual least too,
@@ -412,14 +412,35 @@ export function posterLogoMm(
 }
 
 /**
- * What the words after the split statement take from the logo. They can take the foot a line further;
- * the room made for the split already holds that at every size, so this only keeps a little in hand.
+ * What the words after the split statement take from the logo. On A4 and A3 they can take the foot a
+ * line further (3.8mm on the design, measured); on the leaflet the room made for the split already
+ * holds most of that.
  */
-const SPLIT_NOTE_LOGO_MM = 2;
+const SPLIT_NOTE_LOGO_MM = 4;
+const SPLIT_NOTE_LOGO_A5_MM = 2;
+
+/** The least the logo is ever drawn: the page gives it up, down to this, before anything else moves. */
+const LOGO_LEAST_MM = 10;
+
+/**
+ * Review (PR #655): the QR code's size on the A4 design, in millimetres. 66mm, and a little smaller
+ * only where even the smallest logo would not leave room for the longest name and line: a shared
+ * event, an event whose way in takes two lines, and on the leaflet (whose foot is set bigger, so it is
+ * legible on A5) anything shared or with a way in. The least is 48mm on the design: about 34mm across
+ * on A5, which still scans well. Measured over a grid in headless Chromium at A5 and A4.
+ */
+export function posterQrMm(d: Partial<Pick<MaterialFacts, "splitStatement" | "entry">>, size: PosterSize = "a4"): number {
+  const split = Boolean(d.splitStatement);
+  const entry = Boolean(d.entry);
+  const entryWraps = entry && (d.entry as string).length > ENTRY_WRAPS_AT;
+  if (size === "a5") return 66 - (split ? 8 : 0) - (entry ? (entryWraps ? 10 : 4) : 0);
+  return 66 - (split && entry ? 8 : entryWraps ? 4 : 0);
+}
 
 /** The words after a poster's split statement: only where there is an NBCC page to give on. */
-function posterSplitNote(d: Partial<Pick<MaterialFacts, "splitStatement" | "linkKind">>): string | null {
-  return d.splitStatement && d.linkKind === "page" ? ALL_TO_NBCC : null;
+function posterSplitNote(d: Partial<Pick<MaterialFacts, "splitStatement" | "linkKind" | "memory">>): string | null {
+  // A piece in memory of someone is as it was.
+  return d.splitStatement && d.linkKind === "page" && !d.memory ? ALL_TO_NBCC : null;
 }
 
 /** The least the poster's logo goes to when there is a split statement to fit in too. */
@@ -457,11 +478,10 @@ const SIZE_CSS = (Object.keys(POSTER_SIZES) as PosterSize[])
   )
   .join("\n  ");
 
-// Review fix: with a split, the pledge in the foot is one smaller line, and on the leaflet the QR code
-// is a little smaller (58mm on the design, still about 41mm across on A5), so the worst case fits.
+// Review fix: with a split, the pledge in the foot is one smaller line. (The QR code's own size, a
+// little smaller on a shared leaflet, is posterQrMm's.)
 const SPLIT_POSTER_CSS = `
-  .has-split .p-foot .pledge{font-size:11pt;line-height:1.25}
-  .size-a5.has-split .p-qr svg{width:58mm;height:58mm}`;
+  .has-split .p-foot .pledge{font-size:11pt;line-height:1.25}`;
 
 // In memory: the page's quieter colours. Cream and tan, maroon only for the name, no gold frame and
 // no crimson; the foot in soft tan with the charity statement in slate.
@@ -485,7 +505,9 @@ const MEMORY_POSTER_CSS = `
 
 /** The poster's rules, with each paper size's own logo height for these facts. */
 function posterCss(d: MaterialFacts): string {
-  const logos = (Object.keys(POSTER_SIZES) as PosterSize[]).map((s) => `.size-${s} .p-logo{height:${posterLogoMm(d, s)}mm}`).join("");
+  const logos = (Object.keys(POSTER_SIZES) as PosterSize[])
+    .map((s) => `.size-${s} .p-logo{height:${posterLogoMm(d, s)}mm}.size-${s} .p-qr svg{width:${posterQrMm(d, s)}mm;height:${posterQrMm(d, s)}mm}`)
+    .join("");
   return `${posterCssFor(posterLogoMm(d))}${SPLIT_POSTER_CSS}${d.memory ? MEMORY_POSTER_CSS : ""}
   ${logos}`;
 }
@@ -498,7 +520,8 @@ function posterCssFor(logoMm: number): string {
   .p-body{flex:1;display:flex;flex-direction:column;align-items:center;text-align:center;padding:9mm 14mm 6mm;min-height:0;position:relative;
     background:radial-gradient(120% 70% at 50% 0%,#fffdf8 0%,var(--cream) 70%)}
   .p-body::before{content:"";position:absolute;inset:4mm 4mm 3mm;border:1px solid var(--gold);border-radius:2mm;pointer-events:none;opacity:.7}
-  .p-logo{height:${logoMm}mm;width:auto;display:block}
+  .p-body>*{flex-shrink:0}
+  .p-logo{height:${logoMm}mm;width:auto;display:block;flex:0 1 auto;min-height:${LOGO_LEAST_MM}mm;object-fit:contain}
   .p-eyebrow{display:flex;align-items:center;gap:4mm;margin-top:2mm;font-weight:600;letter-spacing:.24em;text-transform:uppercase;
     color:var(--crimson);font-size:11pt;padding-left:.24em}
   .p-eyebrow::before,.p-eyebrow::after{content:"";width:14mm;height:1px;background:var(--gold)}
@@ -511,7 +534,7 @@ function posterCssFor(logoMm: number): string {
   .p-target{margin-top:4mm;background:var(--tan-soft);color:var(--maroon);border-radius:999px;padding:2mm 8mm;font-size:13pt;font-weight:600}
   .p-target b{font-family:var(--head);font-weight:800;font-size:15pt}
   .p-entry{margin-top:3mm;color:var(--maroon);font-size:12.5pt;font-weight:600;overflow-wrap:anywhere;max-width:160mm}
-  .p-scan{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:0;margin-top:4mm}
+  .p-scan{flex:1 0 auto;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:0;margin-top:4mm}
   .p-qr{background:#fff;border-radius:4mm;padding:3mm;box-shadow:0 0 0 1px var(--line),0 3mm 8mm -4mm rgba(92,15,24,.35)}
   .p-qr svg{display:block;width:66mm;height:66mm}
   .p-scan-words{font-family:var(--head);font-weight:700;color:var(--maroon);font-size:17pt;margin-top:3mm}
@@ -523,6 +546,18 @@ function posterCssFor(logoMm: number): string {
   .p-foot .legal{line-height:1.4;opacity:.9;margin:1.5mm auto 0;max-width:182mm}
   .p-foot .legal.split{opacity:1;font-weight:600}
   ${SIZE_CSS}`;
+}
+
+/**
+ * Review (PR #655): the size of "or visit <address>" under the QR code. Pages are given short
+ * addresses (30 characters at most), which fit a line at 12pt; staff can set one of up to 60, which
+ * wrapped onto more lines and pushed the address out of the frame. A long one is drawn smaller, so it
+ * is always one line (measured in headless Chromium with wide letters).
+ */
+export function posterAddressPt(linkWords: string | null): number {
+  const n = linkWords?.length ?? 0;
+  if (n <= 52) return 12;
+  return n <= 66 ? 10 : 8.4;
 }
 
 /** The split statement, when what is raised is shared with another cause; nothing when it is not. */
@@ -550,7 +585,7 @@ function posterPage(d: MaterialFacts, a: MaterialAssets, size: PosterSize): stri
     qr && d.linkWords
       ? `<div class="p-qr">${qrSvg(qr, { title: `QR code for ${headline}` })}</div>
         <div class="p-scan-words">${scanWords}</div>
-        <div class="p-address">or visit ${escapeHtml(d.linkWords)}</div>`
+        <div class="p-address" style="font-size:${posterAddressPt(d.linkWords)}pt">or visit ${escapeHtml(d.linkWords)}</div>`
       : `<p class="p-noqr">Find out more about NBCC<br>at <b>nbcc.scot</b></p>`;
   const target = d.targetPence
     ? memory
@@ -721,7 +756,8 @@ const SPONSOR_CSS = `
   .sf-split{margin-top:2mm;font-size:8pt;line-height:1.35;font-weight:600;color:var(--maroon)}
   .sf-decl{margin-top:3mm;background:var(--tan-soft);border-left:3px solid var(--crimson);border-radius:0 2mm 2mm 0;padding:2.2mm 4mm;font-size:7.8pt;line-height:1.45}
   .sf-remember{margin-top:1.6mm;font-size:8pt;font-weight:600;color:var(--maroon)}
-  .sf-head .sf-online{margin-top:1.2mm;font-size:8pt;line-height:1.35;color:var(--slate);max-width:150mm}
+  .sf-head .sf-online{margin-top:1.2mm;font-size:8pt;line-height:1.35;color:var(--slate);overflow-wrap:anywhere;max-width:165mm}
+  .sf-head .sf-online.is-long{font-size:7pt}
   .sf-table{width:100%;border-collapse:collapse;margin-top:2.5mm;table-layout:fixed;font-size:8pt}
   .sf-table th{background:var(--maroon);color:var(--cream);font-weight:600;text-align:left;padding:1.4mm 2mm;vertical-align:bottom;line-height:1.25;border:1px solid var(--maroon)}
   .sf-table th small{display:block;font-weight:400;font-size:6.8pt;opacity:.9}
@@ -754,18 +790,28 @@ function sponsorRows(from: number, count: number): string {
  * with a long event name (it wraps in its box); with a split, fewer on each page for its lines (below),
  * so the foot and the charity statement always fit the paper.
  */
-export function sponsorRowCounts(d: (Pick<MaterialFacts, "title" | "splitStatement"> & Partial<Pick<MaterialFacts, "otherCauseName">>) | null): [number, number] {
+export function sponsorRowCounts(
+  d: (Pick<MaterialFacts, "title" | "splitStatement"> & Partial<Pick<MaterialFacts, "otherCauseName" | "linkKind" | "linkWords" | "memory">>) | null,
+): [number, number] {
   const longName = d && d.title.length > 60 ? 1 : 0;
   if (!d?.splitStatement) return [12 - longName, 11];
-  // Clarity audit: the split's lines end with the Gift Aid line, so they are always two lines, and
-  // page 1 gives up two rows for them. One more when the event's name is long (it wraps in its box) or
-  // the other cause's name is (it wraps "In aid of"). Measured in headless Chromium, worst case.
+  // Clarity audit: the split's lines end with the Gift Aid line, which takes them onto a second line
+  // (never a third, even with the longest name), and page 1 gives up two rows for them. One more when
+  // the event's name is long (it wraps in its box) or the other cause's name is (it wraps "In aid
+  // of"). Measured in headless Chromium, worst case.
   const longCause = (d.otherCauseName ?? "").length > SPONSOR_CAUSE_WRAPS_AT ? 1 : 0;
-  return [10 - Math.max(longName, longCause), 10];
+  // Review: a long page address takes the heading's line onto a third line, which page 2 has no room for.
+  const longAddress = sponsorOnlineLine(d) && (d.linkWords ?? "").length > SPONSOR_ADDRESS_LONG_AT ? 1 : 0;
+  return [10 - Math.max(longName, longCause), 10 - longAddress];
 }
 
-/** A cause's name longer than this may wrap "In aid of" on the sponsor form (it does from about 45). */
-const SPONSOR_CAUSE_WRAPS_AT = 30;
+/**
+ * A cause's name longer than this may wrap "In aid of" on the sponsor form: it does from about 45
+ * characters in ordinary letters, and from 39 in the widest (capital Ws and Ms), as measured.
+ */
+const SPONSOR_CAUSE_WRAPS_AT = 38;
+/** A page address longer than this is drawn smaller in the sponsor form's heading (pages are given 30 characters at most; staff can set 60). */
+const SPONSOR_ADDRESS_LONG_AT = 52;
 
 /**
  * Clarity audit: a sponsor who gives on the page and also signs the paper form is counted twice, and
@@ -798,7 +844,8 @@ function sponsorPages(d: MaterialFacts | null, a: MaterialAssets): string {
       <img src="${a.logo}" alt="Night Before Christmas Campaign">
       <div class="t"><h1>${heading}</h1><div class="sub">Sponsorship and Gift Aid declaration</div>${memory}${
         // Beside the logo, which is taller than the heading: it takes no room from the rows.
-        online ? `<div class="sf-online">${escapeHtml(online)}</div>` : ""
+        // A long address (staff can set one of up to 60 characters) is drawn smaller, to stay on two lines.
+        online ? `<div class="sf-online${(d?.linkWords ?? "").length > SPONSOR_ADDRESS_LONG_AT ? " is-long" : ""}">${escapeHtml(online)}</div>` : ""
       }</div>
       <div class="charity"><b>${CHARITY_NAME} (NBCC)</b><br>Scottish Charity ${CHARITY_NUMBER}<br>nbcc.scot &middot; events@nbcc.scot</div>
     </div>`;

@@ -4,6 +4,7 @@ import { resolve } from "node:path";
 import { JSDOM } from "jsdom";
 import { fundraiserEventRecord, renderFundraiserCard, renderFundraiserPage, type FundraiserPageOptions } from "../../src/fundraising/render";
 import { renderMemoryPage } from "../../src/fundraising/memory-render";
+import { renderTeamExtras } from "../../src/fundraising/team-render";
 import { renderCard } from "../../src/events/render";
 import { ALL_TO_NBCC, meter, publicCard, type FundraiserRecord, type PublicPage } from "../../src/fundraising/model";
 
@@ -51,7 +52,7 @@ const TEAM = { teamName: "Exampleton Juniors", title: "Exampleton Juniors", orga
 describe("shared with another cause: the give box", () => {
   it("says every gift on the page is NBCC's, and who to ask about the other cause", () => {
     expect(giveLines(doc(page({ split: SPLIT })))).toContain(
-      "Everything you give on this page goes to NBCC. Robin is collecting Kilmarnock Food Larder's share separately, so if you'd like to support Kilmarnock Food Larder too, please ask Robin how.",
+      "Everything you give on this page goes to NBCC. Robin is collecting the share for Kilmarnock Food Larder separately, so if you'd like to support them too, please ask Robin how.",
     );
   });
 
@@ -60,28 +61,31 @@ describe("shared with another cause: the give box", () => {
   });
 
   it("says it on a finished page too", () => {
-    expect(giveLines(doc(page({ split: SPLIT, finished: true }))).join(" ")).toContain("Robin is collecting Kilmarnock Food Larder's share separately");
+    expect(giveLines(doc(page({ split: SPLIT, finished: true }))).join(" ")).toContain("Robin is collecting the share for Kilmarnock Food Larder separately");
   });
 
   it("names the team on a team page", () => {
     expect(giveLines(doc(page({ ...TEAM, split: SPLIT })))).toContain(
-      "Everything you give on this page goes to NBCC. Exampleton Juniors is collecting Kilmarnock Food Larder's share separately, so if you'd like to support Kilmarnock Food Larder too, please ask Exampleton Juniors how.",
+      "Everything you give on this page goes to NBCC. Exampleton Juniors is collecting the share for Kilmarnock Food Larder separately, so if you'd like to support them too, please ask Exampleton Juniors how.",
     );
   });
 
   it("says \"the organiser\" when the organiser's name is a group's, not a person's", () => {
     for (const organisedBy of ["The R.", "Anonymous", "4th E."]) {
       expect(giveLines(doc(page({ split: SPLIT, organisedBy })))).toContain(
-        "Everything you give on this page goes to NBCC. The organiser is collecting Kilmarnock Food Larder's share separately, so if you'd like to support Kilmarnock Food Larder too, please ask the organiser how.",
+        "Everything you give on this page goes to NBCC. The organiser is collecting the share for Kilmarnock Food Larder separately, so if you'd like to support them too, please ask the organiser how.",
       );
     }
   });
 
-  it("gives a cause whose name ends in s just the apostrophe, and escapes what was typed", () => {
+  // Review: no possessive of the other cause's name, which reads badly after "Ltd." or a name ending in s.
+  it("never makes a possessive of the other cause's name, and escapes what was typed", () => {
     const html = renderFundraiserPage(template, page({ split: { ...SPLIT, otherCauseName: "Kids & Co <Pals>" } }), OPTS);
-    expect(html).toContain("Robin is collecting Kids &amp; Co &lt;Pals&gt;&#39;s share separately");
+    expect(html).toContain("Robin is collecting the share for Kids &amp; Co &lt;Pals&gt; separately");
     expect(html).not.toContain("<Pals>");
-    expect(giveLines(doc(page({ split: { ...SPLIT, otherCauseName: "Exampleton Friends" } }))).join(" ")).toContain("Exampleton Friends' share separately");
+    const friends = giveLines(doc(page({ split: { ...SPLIT, otherCauseName: "Exampleton Friends Ltd." } }))).join(" ");
+    expect(friends).toContain("the share for Exampleton Friends Ltd. separately, so if you'd like to support them too");
+    expect(friends).not.toMatch(/Ltd\.'|Friends'/);
   });
 
   it("says nothing of it when the page is not shared", () => {
@@ -102,7 +106,12 @@ describe("online or on paper: the give box", () => {
 
   it("tells a sponsor already on the paper form to hand the money over instead", () => {
     expect(giveLines(doc(page()))).toContain(PAPER);
-    expect(giveLines(doc(page({ finished: true })))).toContain(PAPER);
+  });
+
+  // Review: a finished page stays as it was. Its sponsor forms are in, so there is nothing to count twice.
+  it("is not on a finished page", () => {
+    expect(giveLines(doc(page({ finished: true })))).toEqual(["Your donation goes to NBCC and still counts towards Robin's total for Robin's Santa Dash."]);
+    expect(renderFundraiserPage(template, page({ ...TEAM, finished: true }), OPTS)).not.toContain("paper sponsor form");
   });
 
   it("speaks of the team on a team page", () => {
@@ -130,13 +139,48 @@ describe("online or on paper: the give box", () => {
     const memory = page({ memory: { name: "Alex Example", dates: null, showTarget: false } as PublicPage["memory"] });
     expect(renderMemoryPage(template, memory, OPTS)).not.toContain("paper sponsor form");
   });
+
+  // Review: a page in memory of someone, shared with another cause, keeps the words it had.
+  it("leaves a shared page in memory of someone exactly as it was", () => {
+    const memory = page({ split: SPLIT, memory: { name: "Alex Example", dates: null, showTarget: false } as PublicPage["memory"] });
+    const html = renderMemoryPage(template, memory, OPTS);
+    expect(html).toContain("Everything given on this page goes to NBCC, as NBCC");
+    expect(html).not.toContain("is collecting the share for");
+    expect(html).not.toContain(ALL_TO_NBCC);
+  });
 });
 
 describe("teams: the give box and the meter", () => {
   it("a team page says a gift counts towards the team, and where to sponsor one person", () => {
-    expect(giveLines(doc(page(TEAM)))[0]).toBe(
+    expect(giveLines(doc(page(TEAM), { team: { memberCount: 2 } }))[0]).toBe(
       "Your donation goes to NBCC and counts towards the team's total. To sponsor one person, give on their own page: you'll find everyone under The team.",
     );
+  });
+
+  // Review: with nobody on the team yet there is no one to find under The team.
+  it("a team with no members yet stops at the team's total", () => {
+    for (const team of [undefined, { memberCount: 0 }]) {
+      expect(giveLines(doc(page(TEAM), { team }))[0]).toBe("Your donation goes to NBCC and counts towards the team's total.");
+    }
+  });
+
+  it("the team's own parts say how many members it has", () => {
+    const extras = (members: number) =>
+      renderTeamExtras({
+        slug: "ej", title: "Exampleton Juniors", organisedBy: "Robin Q.", finished: false, joinUrl: "https://nbcc.test/fundraise/ej/join",
+        members: Array.from({ length: members }, (_, i) => ({ name: `Member ${i}.`, url: `/fundraise/m${i}`, photoSrc: null, meter: meter({ onlinePence: 0, cashPence: 0, targetPence: null }) })),
+      });
+    expect(extras(0).memberCount).toBe(0);
+    expect(extras(3).memberCount).toBe(3);
+  });
+
+  // Review: where the page says "the organiser" below, the line above must not use the raw first word.
+  it("speaks of this page's total when the organiser's first word is no one's first name", () => {
+    for (const organisedBy of ["The R.", "Anonymous", "4th E."]) {
+      expect(giveLines(doc(page({ organisedBy })))[0]).toBe("Your donation goes to NBCC and counts towards this page's total.");
+      expect(giveLines(doc(page({ organisedBy }), MEMBER))[0]).toBe("Your donation goes to NBCC and counts towards this page's total, and the team's total too.");
+      expect(giveLines(doc(page({ organisedBy, finished: true })))[0]).toBe("Your donation goes to NBCC and still counts towards this page's total.");
+    }
   });
 
   it("a member page says a gift counts towards theirs and the team's", () => {
@@ -175,6 +219,15 @@ describe("shared with another cause: the cards on Get involved", () => {
     const html = renderFundraiserCard(publicCard(record({ path: "raising", targetPence: 50000 }), m));
     expect(html).toContain(`<p class="fr-card__split">${STATEMENT}</p><p class="fr-card__split fr-card__split-note">${ALL_TO_NBCC}</p>`);
     expect(renderFundraiserCard(publicCard(record({ path: "raising", ...plain }), m))).not.toContain(ALL_TO_NBCC);
+  });
+
+  // Review: a page in memory of someone is untouched by this change.
+  it("a card in memory of someone, shared, keeps just the statement", () => {
+    const memory = record({ path: "raising", inMemory: true, memoryName: "Alex Example" } as Partial<FundraiserRecord>);
+    const html = renderFundraiserCard(publicCard(memory, m));
+    expect(html).toContain("In memory of Alex Example");
+    expect(html).toContain(`<p class="fr-card__split">${STATEMENT}</p>`);
+    expect(html).not.toContain(ALL_TO_NBCC);
   });
 
   it("an event's card says it after the statement", () => {

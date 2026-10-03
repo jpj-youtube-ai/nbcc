@@ -140,6 +140,8 @@ describe("a team page speaks of the team, not its organiser", () => {
       pageUrl: "https://nbcc.scot/fundraise/ej",
       now: new Date("2026-10-20T10:00:00Z"),
       thanks: { message: false },
+      // Two people on the team, so the give box can point to them under The team.
+      team: { memberCount: 2 },
     });
 
   // Clarity audit (Jaimie, 2026-10-03): a gift on a team page counts towards the team, and to sponsor

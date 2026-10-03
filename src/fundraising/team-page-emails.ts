@@ -18,7 +18,7 @@ import {
 import { FOOTER_TEXT, POSTAL_ADDRESS } from "../legal/registration";
 import { dateParts } from "../events/render";
 import { categoryLabel, OTHER_KIND } from "./categories";
-import { FUNDRAISING_EMAIL, pounds, safeFirstName, type BuiltEmail } from "./emails";
+import { FUNDRAISING_EMAIL, organiserGreeting, pounds, safeFirstName, type BuiltEmail, type Greeted } from "./emails";
 import { shortName } from "./model";
 import { forwardMessage } from "./teams";
 
@@ -91,10 +91,10 @@ export function teamEventWords(t: TeamWords): string {
 // --- your team page is live ---------------------------------------------------------------------
 
 export function buildTeamLiveEmail(
-  t: TeamWords & { name: string },
+  t: TeamWords & Greeted,
   o: { pageUrl: string | null; manageUrl: string; joinUrl: string; invited: number },
 ): BuiltEmail {
-  const hi = `Hi ${firstName(t.name)},`;
+  const hi = organiserGreeting(t);
   const title = escapeHtml(t.title);
   // A team kept off the website has no page to link to: it is approved, and the join link still works.
   const page = o.pageUrl;
@@ -205,8 +205,8 @@ export function buildTeamInviteReminderEmail(o: InviteWords): BuiltEmail {
 
 // --- the nudges to the team organiser -----------------------------------------------------------
 
-export function buildTeamNudgeEmail(n: 1 | 2, o: { name: string; title: string; pageUrl: string; joinUrl: string }): BuiltEmail {
-  const hi = `Hi ${firstName(o.name)},`;
+export function buildTeamNudgeEmail(n: 1 | 2, o: Greeted & { title: string; pageUrl: string; joinUrl: string }): BuiltEmail {
+  const hi = organiserGreeting(o);
   const message = forwardMessage(o, o.joinUrl);
   const lead =
     n === 1

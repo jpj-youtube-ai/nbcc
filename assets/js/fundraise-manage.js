@@ -443,13 +443,12 @@
         aidLine.hidden = !showAid;
       }
       // Clarity audit: shared with another cause, only NBCC's share is paid in here. An event's pay in
-      // box says so in its own words (below).
+      // box says so in its own words (below); a page in memory of someone is as it was.
       var shareLine = q("[data-f-payin-share]");
       if (shareLine) {
-        var split = !event && f.split && f.split.nbccSharePercent && f.split.otherCauseName ? f.split : null;
-        var other = split ? String(split.otherCauseName) : "";
+        var split = !event && !f.memory && f.split && f.split.nbccSharePercent && f.split.otherCauseName ? f.split : null;
         shareLine.textContent = split
-          ? "Only pay in NBCC\u2019s share (" + split.nbccSharePercent + "%). " + other + (/s$/i.test(other) ? "\u2019" : "\u2019s") + " share goes to them from you."
+          ? "Only pay in NBCC\u2019s share (" + split.nbccSharePercent + "%). The share for " + String(split.otherCauseName) + " goes to them from you."
           : "";
         shareLine.hidden = !split;
       }

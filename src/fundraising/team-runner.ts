@@ -140,7 +140,7 @@ export async function runTeamEmails(now = new Date(), deps: TeamRunDeps = realTe
       continue;
     }
     try {
-      const mail = buildTeamNudgeEmail(n, { name: team.name, title: team.title, pageUrl: `${base()}/fundraise/${team.slug}`, joinUrl: joinUrl(base(), team.slug) });
+      const mail = buildTeamNudgeEmail(n, { name: team.name, firstName: team.firstName, creditName: team.creditName, title: team.title, pageUrl: `${base()}/fundraise/${team.slug}`, joinUrl: joinUrl(base(), team.slug) });
       await deps.send("fundraiseTeamNudge", team.name, { ...from(team.email), ...mail });
       out.nudges += 1;
     } catch (err) {

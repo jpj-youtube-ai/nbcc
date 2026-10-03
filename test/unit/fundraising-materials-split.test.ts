@@ -143,8 +143,8 @@ describe("room on the poster", () => {
   it("gives the logo up a little, so the split statement fits without moving the QR code", () => {
     const shared = facts();
     const plain = facts({ sharesWithOther: false, nbccSharePercent: null, otherCauseName: null });
-    // 6mm for the statement, and 2mm for "Gifts made on the NBCC page all go to NBCC." after it.
-    expect(posterLogoMm(shared)).toBe(posterLogoMm(plain) - 8);
+    // 6mm for the statement, and 4mm for "Gifts made on the NBCC page all go to NBCC." after it.
+    expect(posterLogoMm(shared)).toBe(posterLogoMm(plain) - 10);
   });
 });
 
@@ -173,8 +173,8 @@ describe("the worst case still fits", () => {
 
   it("lets the poster's logo go smaller than its usual least when there is a split, most of all on the leaflet", () => {
     expect(posterLogoMm(plainWorst(), "a4")).toBe(40);
-    expect(posterLogoMm(worst(), "a4")).toBe(32);
-    expect(posterLogoMm(worst(), "a3")).toBe(32);
+    expect(posterLogoMm(worst(), "a4")).toBe(30);
+    expect(posterLogoMm(worst(), "a3")).toBe(30);
     expect(posterLogoMm(worst(), "a5")).toBe(26);
     expect(posterLogoMm(worst(), "a5")).toBeLessThan(38);
     // A short poster with a split still has a big logo.
@@ -184,8 +184,8 @@ describe("the worst case still fits", () => {
   it("draws each poster size's logo at its own height, and a slightly smaller QR code on a shared leaflet", () => {
     const html = renderEverything(worst({ status: "approved" }), ASSETS, { date: "x", script: "" });
     expect(html).toContain(".size-a5 .p-logo{height:26mm}");
-    expect(html).toContain(".size-a4 .p-logo{height:32mm}");
-    expect(html).toMatch(/\.size-a5\.has-split \.p-qr svg\{width:58mm;height:58mm\}/);
+    expect(html).toContain(".size-a4 .p-logo{height:30mm}");
+    expect(html).toContain(".size-a5 .p-qr svg{width:58mm;height:58mm}");
     expect(renderPoster(worst(), ASSETS, "a5")).toContain('class="page size-a5 poster has-split"');
     expect(renderPoster(plainWorst(), ASSETS, "a5")).toContain('class="page size-a5 poster"');
   });
@@ -210,9 +210,9 @@ describe("the worst case still fits", () => {
   });
 
   it("makes room for an event's entry line, with a split", () => {
-    expect(posterLogoMm(worst(DOOR), "a4")).toBe(24);
+    expect(posterLogoMm(worst(DOOR), "a4")).toBe(22);
     expect(posterLogoMm(worst(DOOR), "a5")).toBe(18);
-    expect(posterLogoMm(worst(AWAY), "a3")).toBe(18);
+    expect(posterLogoMm(worst(AWAY), "a3")).toBe(16);
     expect(posterLogoMm(worst(AWAY), "a5")).toBe(12);
   });
 

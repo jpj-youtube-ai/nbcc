@@ -145,7 +145,7 @@ export async function sendTeamApproved(
   }
   try {
     const mail = buildTeamLiveEmail(
-      { ...teamWords(team), name: team.name },
+      { ...teamWords(team), name: team.name, firstName: team.firstName, creditName: team.creditName },
       {
         pageUrl: hasPage(team) ? `${base()}/fundraise/${team.slug}` : null,
         manageUrl: `${base()}/fundraise/manage`,

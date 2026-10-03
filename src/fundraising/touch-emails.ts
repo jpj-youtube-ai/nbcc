@@ -14,8 +14,8 @@ import {
   questionsText,
 } from "../email/brand";
 import { FOOTER_TEXT, POSTAL_ADDRESS } from "../legal/registration";
-import { FUNDRAISING_EMAIL, pounds, type BuiltEmail } from "./emails";
-import { pagePath, shortName, type FundraiserRecord, type Meter } from "./model";
+import { FUNDRAISING_EMAIL, organiserFirstName, organiserGreeting, pounds, type BuiltEmail } from "./emails";
+import { pagePath, type FundraiserRecord, type Meter } from "./model";
 import type { TouchKind } from "./touch-rules";
 
 // TASK-515: the automatic emails to an organiser, built here and sent by ./touch-runner.ts.
@@ -49,6 +49,9 @@ export interface TouchUrls {
 
 export interface TouchEmailData {
   name: string;
+  /** The first name they gave on the form, and the name an event is credited to (organiserFirstName). */
+  firstName?: string | null;
+  creditName?: string | null;
   title: string;
   raisedPence: number;
   targetPence: number | null;
@@ -57,8 +60,6 @@ export interface TouchEmailData {
 
 const escapeHtml = (s: string): string =>
   s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
-
-const firstName = (name: string): string => shortName(name).split(" ")[0];
 
 const shell = (body: string) => emailShell(body, { contactEmail: FUNDRAISING_EMAIL, registration: true, postalAddress: POSTAL_ADDRESS });
 
@@ -90,10 +91,19 @@ export function touchUrls(base: string, f: { id: number; slug: string; path?: Fu
 
 /** What the emails need from a stored fundraiser and its meter. Raised never counts Gift Aid. */
 export function touchEmailData(
-  f: Pick<FundraiserRecord, "id" | "slug" | "name" | "title" | "targetPence"> & Partial<Pick<FundraiserRecord, "path">> & { meter: Pick<Meter, "raisedPence"> },
+  f: Pick<FundraiserRecord, "id" | "slug" | "name" | "title" | "targetPence"> &
+    Partial<Pick<FundraiserRecord, "path" | "firstName" | "creditName">> & { meter: Pick<Meter, "raisedPence"> },
   base: string,
 ): TouchEmailData {
-  return { name: f.name, title: f.title, raisedPence: f.meter.raisedPence, targetPence: f.targetPence, urls: touchUrls(base, f) };
+  return {
+    name: f.name,
+    firstName: f.firstName ?? null,
+    creditName: f.creditName ?? null,
+    title: f.title,
+    raisedPence: f.meter.raisedPence,
+    targetPence: f.targetPence,
+    urls: touchUrls(base, f),
+  };
 }
 
 // What each email shows in the admin's preview before anything is sent: invented, like the
@@ -120,7 +130,8 @@ export function sampleTouchData(kind: TouchKind, base: string): TouchEmailData {
   };
 }
 
-type Builder = (d: TouchEmailData, hi: string, t: string, first: string) => BuiltEmail;
+// `first` is null for a group or a business: the greeting is then "Hi there," and a subject drops the name.
+type Builder = (d: TouchEmailData, hi: string, t: string, first: string | null) => BuiltEmail;
 
 const BUILDERS: Record<TouchKind, Builder> = {
   // 12, approved.
@@ -216,7 +227,7 @@ const BUILDERS: Record<TouchKind, Builder> = {
       button(d.urls.manage, "Open my private area") +
       bodyP(`<b>Top tip:</b> ${tip}`);
     const text = [hi, "", `${d.title} ${away}`, "", `Open my private area: ${d.urls.manage}`, "", `Top tip: ${tip}`];
-    return toOrganiser(`One week to go, ${first}!`, body, text, "Good luck, you’ve got this!");
+    return toOrganiser(first ? `One week to go, ${first}!` : "One week to go!", body, text, "Good luck, you’ve got this!");
   },
 
   // 16, approved. With nothing in yet, the total is left out rather than cheering £0.
@@ -323,7 +334,7 @@ const BUILDERS: Record<TouchKind, Builder> = {
       "",
       `Top tip: ${tip}`,
     ];
-    return toOrganiser(`Need a hand, ${first}?`, body, text, "Cheering you on,");
+    return toOrganiser(first ? `Need a hand, ${first}?` : "Need a hand?", body, text, "Cheering you on,");
   },
 
   // NEW WORDING, for Jaimie to sign off: once, when they are on track for their target.
@@ -354,12 +365,11 @@ const BUILDERS: Record<TouchKind, Builder> = {
       "",
       `See my page: ${d.urls.page}`,
     ];
-    return toOrganiser(`You're doing great, ${first}!`, body, text, "Keep up the brilliant work,");
+    return toOrganiser(first ? `You're doing great, ${first}!` : "You're doing great!", body, text, "Keep up the brilliant work,");
   },
 };
 
 /** One automatic email, ready to send. */
 export function buildTouchEmail(kind: TouchKind, d: TouchEmailData): BuiltEmail {
-  const first = firstName(d.name);
-  return BUILDERS[kind](d, `Hi ${first},`, escapeHtml(d.title), first);
+  return BUILDERS[kind](d, organiserGreeting(d), escapeHtml(d.title), organiserFirstName(d));
 }

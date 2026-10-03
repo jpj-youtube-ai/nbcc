@@ -190,7 +190,8 @@ export function renderFundraiserCard(c: PublicCard, today?: string): string {
     (c.description ? `<p class="ev-tldr">${escapeHtml(shorten(c.description, 150))}</p>` : "") +
     renderMeter(c.meter) +
     // Jaimie, 2026-10-03: shared with another cause, the statement beside the way in.
-    (c.split ? `<p class="fr-card__split">${escapeHtml(c.split.statement)}</p><p class="fr-card__split fr-card__split-note">${ALL_TO_NBCC}</p>` : "") +
+    // Clarity audit: and that gifts on the page are all NBCC's. A card in memory of someone is as it was.
+    (c.split ? `<p class="fr-card__split">${escapeHtml(c.split.statement)}</p>${memory ? "" : `<p class="fr-card__split fr-card__split-note">${ALL_TO_NBCC}</p>`}` : "") +
     '<div class="ev-book-gap"></div>' +
     `<a class="btn btn-primary fr-card__go" href="${href}">See the page and give<span class="sr-only">: ${escapeHtml(c.title)}</span></a>` +
     "</div></article></div></li>"
@@ -557,6 +558,12 @@ function askWho(p: PublicPage): string {
   return first ?? "the organiser";
 }
 const possessive = (name: string): string => `${name}${/s$/i.test(name) ? "'" : "'s"}`;
+/**
+ * Whose total a gift counts towards: "Robin's", "Exampleton Juniors'", or "this page's" when the
+ * organiser's first word is no one's first name, so one give box never says both "The's" and "the
+ * organiser". Escaped.
+ */
+const totalOf = (p: PublicPage): string => (askWho(p) === "the organiser" ? "this page's" : whose(p));
 const sentenceStart = (words: string): string => words.charAt(0).toUpperCase() + words.slice(1);
 
 function shareLine(p: PublicPage): string {
@@ -564,15 +571,16 @@ function shareLine(p: PublicPage): string {
   const who = escapeHtml(askWho(p));
   const other = p.split.otherCauseName;
   return (
+    // No possessive of the other cause's name: it reads badly after "Ltd." or a name ending in s.
     `<p class="give-step-sub fr-give-share">Everything you give on this page goes to NBCC. ${sentenceStart(who)} is collecting ` +
-    `${escapeHtml(possessive(other))} share separately, so if you'd like to support ${escapeHtml(other)} too, please ask ${who} how.</p>`
+    `the share for ${escapeHtml(other)} separately, so if you'd like to support them too, please ask ${who} how.</p>`
   );
 }
 
 /**
  * Clarity audit: a sponsor already on the paper sponsor form who also gives online is counted twice,
- * and Gift Aid could be claimed twice. Only on a page raising money (never an event's, never one in
- * memory of someone, which have their own words).
+ * and Gift Aid could be claimed twice. Only on a page raising money that is still going (never an
+ * event's, never one in memory of someone, which have their own words; a finished page is as it was).
  */
 function paperLine(p: PublicPage): string {
   if (p.teamName) {
@@ -582,10 +590,20 @@ function paperLine(p: PublicPage): string {
   return `<p class="give-step-sub fr-give-paper">Giving here is sponsoring ${who}. Already on ${escapeHtml(possessive(askWho(p)))} paper sponsor form? Then please just hand ${who} the money, so it isn't counted twice.</p>`;
 }
 
+/** What the give box needs to know of a team: a member page still on its team, or a team's member count. */
+export interface GiveTeam {
+  member?: boolean;
+  members?: number;
+}
+
 /** Clarity audit: whose total a gift counts towards, on a team page and on a team member's page. */
-function countsTowards(p: PublicPage, onTeam: boolean): string {
-  if (p.teamName) return "Your donation goes to NBCC and counts towards the team's total. To sponsor one person, give on their own page: you'll find everyone under The team.";
-  return `Your donation goes to NBCC and counts towards ${whose(p)} total${onTeam ? ", and the team's total too" : ""}.`;
+function countsTowards(p: PublicPage, team: GiveTeam): string {
+  if (p.teamName) {
+    // With nobody on the team yet, there is no one to find under The team.
+    const one = team.members ? " To sponsor one person, give on their own page: you'll find everyone under The team." : "";
+    return `Your donation goes to NBCC and counts towards the team's total.${one}`;
+  }
+  return `Your donation goes to NBCC and counts towards ${totalOf(p)} total${team.member ? ", and the team's total too" : ""}.`;
 }
 /** Jaimie, 2026-10-03 (event clarity): an event's give box says it as a line of its own instead. */
 const EVENT_SHARE_LINE = (p: PublicPage): string => (p.split ? '<p class="give-step-sub fr-give-share">Everything you give on this page goes to NBCC.</p>' : "");
@@ -650,7 +668,7 @@ export interface GiveWords {
 }
 
 /** impact: what gifts could do (./impact-render.ts); none unless the page's own renderer passes it. */
-export function renderGiveForm(p: PublicPage, words?: GiveWords, impact: ImpactParts = NO_IMPACT, onTeam = false): string {
+export function renderGiveForm(p: PublicPage, words?: GiveWords, impact: ImpactParts = NO_IMPACT, team: GiveTeam = {}): string {
   const event = isEvent(p);
   const presets = PRESETS_PENCE.map(
     (pence) =>
@@ -668,11 +686,11 @@ export function renderGiveForm(p: PublicPage, words?: GiveWords, impact: ImpactP
       ? '<h2 class="give-step-title" id="fr-give-heading">You can still give</h2>' +
         (event
           ? `<p class="give-step-sub">Your donation goes to NBCC and still counts towards this event's total.</p>${EVENT_SHARE_LINE(p)}`
-          : `<p class="give-step-sub">Your donation goes to NBCC and still counts towards ${whose(p)} total${p.teamName ? "" : ` for ${escapeHtml(p.title)}`}.</p>${shareLine(p)}${paperLine(p)}`)
+          : `<p class="give-step-sub">Your donation goes to NBCC and still counts towards ${totalOf(p)} total${p.teamName || askWho(p) === "the organiser" ? "" : ` for ${escapeHtml(p.title)}`}.</p>${shareLine(p)}`)
       : event
         ? '<h2 class="give-step-title" id="fr-give-heading">Make a donation</h2>' + `<p class="give-step-sub">${eventGiveSub(p)}</p>${EVENT_SHARE_LINE(p)}`
         : `<h2 class="give-step-title" id="fr-give-heading">Give to ${escapeHtml(p.title)}</h2>` +
-          `<p class="give-step-sub">${countsTowards(p, onTeam)}</p>${shareLine(p)}${paperLine(p)}`) +
+          `<p class="give-step-sub">${countsTowards(p, team)}</p>${shareLine(p)}${paperLine(p)}`) +
     // Shipped hidden: without JavaScript the browser would send it as a web address, names and all.
     '<p class="fr-noscript" data-nojs>Giving on this page needs JavaScript switched on. You can still donate on our <a href="/donate">donate page</a>.</p>' +
     `<form id="frGiveForm" class="fr-give-form" data-fundraiser-id="${p.giving.fundraiserId}" data-minimum-pence="${p.giving.minimumPence}"${impact.formAttr} novalidate hidden data-needs-js>` +
@@ -779,7 +797,7 @@ export interface FundraiserPageOptions {
    * Team pages (src/fundraising/team-render.ts): a team's "Join this team" under the give button and
    * its members after the story; a member page's team under its facts. Nothing for any other page.
    */
-  team?: { summaryHtml?: string; mainHtml?: string; factsHtml?: string };
+  team?: { summaryHtml?: string; mainHtml?: string; factsHtml?: string; memberCount?: number };
   /**
    * What gifts could do (src/fundraising/impact-render.ts): the examples switched on, for the lines
    * under the give amounts and the meter. None (a page in memory of someone): no lines at all.
@@ -990,7 +1008,7 @@ export function renderFundraiserPage(template: string, p: PublicPage, opts: Fund
     (opts.team?.mainHtml ?? "") +
     renderNews(p) +
     // A member page still on its team is the one handed the team's line for under its facts.
-    renderGiveForm(p, undefined, impact, Boolean(opts.team?.factsHtml)) +
+    renderGiveForm(p, undefined, impact, { member: Boolean(opts.team?.factsHtml), members: opts.team?.memberCount }) +
     renderWall(p, opts.now) +
     "</div>" +
     `<div class="fr-extras">${renderShare(p, opts.pageUrl)}</div>`;

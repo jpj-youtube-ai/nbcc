@@ -4,7 +4,7 @@ import { isValidUkPostcode } from "../declarations/fields";
 import { containsBlockedWord } from "../donors/display-name-filter";
 import type { NewsEntry } from "./news";
 import { facebookLink, instagramLink, type SocialResult } from "./social";
-import { categoryLabel, isActiveCategory, isKnownCategory, isMemoryCategory, OTHER_KIND } from "./categories";
+import { categoryLabel, isActiveCategory, isKnownCategory, isMemoryCategory, isSportyCategory, OTHER_KIND } from "./categories";
 import { CHARITY_NAME, OSCR_NUMBER } from "../legal/registration";
 import {
   checkPaths,
@@ -20,6 +20,8 @@ import {
   ATTEND_WHEN_SOMETHING_ON,
   DATE_OR_TBC_MISSING,
   MEMORY_GIVING_MISSING,
+  SPORTING_KIND_MISMATCH,
+  isOldForm,
   type EmployerMatch,
 } from "./signup-tidy";
 import { checkMemory, isInMemory, memoryDay, memoryFields, memoryMeter, memoryOf, publicMemory, titleFor, titleOptional, type MemorySetupBy, type PublicMemory } from "./in-memory";
@@ -515,8 +517,14 @@ export const signUpSchema = z
     checkMemory(b, missing);
     // The sign up tidy: in memory of someone is its own path, asked only what fits it.
     const memory = b.path === "raising" && b.inMemory === true;
+    // A form left open from before the sign up tidy still sends the old shape (no formVersion). It is
+    // never refused for a question it could not show: the address (unless something is to be posted,
+    // as it always asked), the split tick, and the in memory ways of giving. Staff ring them anyway.
+    const old = isOldForm(b);
     if (!memory && !b.description) missing("description", "Tell us a little about it.");
-    if (memory) {
+    if (memory && old) {
+      if (!isActiveCategory(b.kind) || isMemoryCategory(b.kind)) missing("kind", isKnownCategory(b.kind) ? KIND_GONE : kindMissing(b.path));
+    } else if (memory) {
       if (!isActiveCategory(b.kind) || !(isMemoryCategory(b.kind) || b.kind === OTHER_KIND)) missing("kind", MEMORY_GIVING_MISSING);
     } else if (!isActiveCategory(b.kind) || isMemoryCategory(b.kind)) {
       missing("kind", isKnownCategory(b.kind) && !isMemoryCategory(b.kind) ? KIND_GONE : kindMissing(b.path));
@@ -546,12 +554,16 @@ export const signUpSchema = z
     // The sign up tidy: every new sign up gives an address for the welcome pack. In memory of
     // someone there is no welcome pack, so only something to be posted needs one, as before.
     // Event pages have a QR code now, so an event may ask for printed ones too.
-    if (!memory || wantsPosted({ ...b.wants, shoutOut: false, attend: false })) {
+    if ((!memory && !old) || wantsPosted({ ...b.wants, shoutOut: false, attend: false })) {
       if (!b.postLine1) missing("postLine1", ADDRESS_LINE1_MISSING);
       if (!b.postTown) missing("postTown", ADDRESS_TOWN_MISSING);
       if (!b.postPostcode) missing("postPostcode", ADDRESS_POSTCODE_MISSING);
     }
-    checkWelcomePack(b, missing);
+    checkWelcomePack({ ...b, splitConfirmed: old && b.sharesWithOther === true ? true : b.splitConfirmed }, missing);
+    // A sporting answer and the category agree: a Yes takes a sporting category, a No any other.
+    if (!old && !memory && b.path === "raising" && typeof b.isSporting === "boolean" && isActiveCategory(b.kind) && b.kind !== OTHER_KIND) {
+      if (isSportyCategory(b.kind) !== b.isSporting) missing("kind", SPORTING_KIND_MISMATCH);
+    }
   })
   .transform((b) => {
     // Holding an event is listed as an event: it has no page and no meter in stage 1, so no target.
@@ -566,7 +578,7 @@ export const signUpSchema = z
       attend: !memory && b.wants.attend === true,
     };
     // The welcome pack's address is always kept; in memory, only when something is to be posted.
-    const posted = wantsPosted(wanted) || !memory;
+    const posted = wantsPosted(wanted) || (!memory && !isOldForm(b));
     // "Shall we list it on our Get involved page?": every new sign up gets a page (public), and a No
     // keeps it off the list. A page cached from before sends only public, read as it always was. A
     // team is always listed, so the team can find it.
@@ -710,8 +722,9 @@ export function checkOrganiserEdit(
   if (stored.path !== "event") {
     for (const k of EVENT_ONLY_FIELDS) if (has(k)) fields[k] = "This is only for events.";
   } else {
-    if (has("targetPence") && change.targetPence !== null) fields.targetPence = "An event does not have a target.";
-    if (has("eventDate") && !change.eventDate) fields.eventDate = "Tell us the date of your event.";
+    // The sign up tidy: an event may give an amount it hopes to raise, and its date may be empty
+    // while it is "Not decided yet", as the sign up form takes it.
+    if (has("eventDate") && !change.eventDate && stored.dateTbc !== true) fields.eventDate = "Tell us the date of your event.";
     if (has("cardLine") && !change.cardLine) fields.cardLine = "Add a line for the front of the card.";
     if (has("venue") && !change.venue) fields.venue = "Tell us the venue.";
     if (has("booking") && !change.booking) fields.booking = "Tell us how people get in.";
@@ -1242,10 +1255,12 @@ export function publicCard(f: FundraiserRecord, m: Meter): PublicCard {
     kindLabel: kindLabelOf(f),
     title: f.title,
     description: f.description,
-    eventDate: f.eventDate,
-    startTime: f.startTime,
-    venue: f.venue,
-    town: f.town,
+    // In memory of someone: the day and place are the funeral's or service's, asked only so we can
+    // get things there in time. They never reach the public.
+    eventDate: isInMemory(f) ? null : f.eventDate,
+    startTime: isInMemory(f) ? null : f.startTime,
+    venue: isInMemory(f) ? "" : f.venue,
+    town: isInMemory(f) ? "" : f.town,
     imageSrc: f.imageSrc,
     // An event may be credited to the name they gave (their group or business); a page never is.
     // The sign up tidy: a funeral director for the family, a child, or a business, school or group.

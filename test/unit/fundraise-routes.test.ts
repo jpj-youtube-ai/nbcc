@@ -176,6 +176,19 @@ describe("signing up", () => {
     expect(db.createFundraiser).not.toHaveBeenCalled();
   });
 
+  // The sign up tidy (after review): the trap box is no longer called "company" (autofill fills that
+  // in for real people); the old name still counts, for a page left open. Hits are only counted.
+  it("pretends the same for the trap box under its new name, and logs only a count", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    const res = await run(postFundraise, { body: signUp({ nbccCheck: "anything", email: "bot@example.com" }) });
+    expect(res.statusCode).toBe(200);
+    expect(db.createFundraiser).not.toHaveBeenCalled();
+    expect(warn).toHaveBeenCalledTimes(1);
+    expect(String(warn.mock.calls[0].join(" "))).toMatch(/fundraise sign up: trap box filled in, \d+ so far/);
+    expect(String(warn.mock.calls[0].join(" "))).not.toContain("bot@example.com");
+    warn.mockRestore();
+  });
+
   it("limits each address to five sign ups in ten minutes", async () => {
     db.createFundraiser.mockResolvedValue(record({ status: "new" }));
     for (let i = 0; i < 5; i++) expect((await run(postFundraise, { body: signUp(), ip: "10.9.9.9" })).statusCode).toBe(200);

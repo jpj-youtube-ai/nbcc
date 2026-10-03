@@ -349,6 +349,24 @@ describe("the manage page", () => {
   });
 });
 
+// The sign up tidy (after review): "only people you send the link to" is kept out of search engines.
+describe("a page kept off Get involved", () => {
+  it("asks search engines not to index it, in the header and in the page", async () => {
+    state.fundraisers = [record({ offListAt: "2026-10-03T09:00:00.000Z", offListBy: "organiser" })];
+    const res = await get("/fundraise/robins-santa-dash");
+    expect(res.status).toBe(200);
+    expect(res.headers.get("x-robots-tag")).toBe("noindex");
+    expect(await res.text()).toContain('<meta name="robots" content="noindex" />');
+  });
+
+  it("leaves a listed page to be found", async () => {
+    state.fundraisers = [record()];
+    const res = await get("/fundraise/robins-santa-dash");
+    expect(res.headers.get("x-robots-tag")).toBeNull();
+    expect(await res.text()).not.toContain('<meta name="robots" content="noindex" />');
+  });
+});
+
 // The sign up tidy: the private page to choose a T-shirt size, from the email staff send.
 describe("the T-shirt size page", () => {
   it("is served, never indexed or cached, and never taken for a fundraiser", async () => {

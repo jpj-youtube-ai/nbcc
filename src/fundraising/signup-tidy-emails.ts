@@ -1,7 +1,7 @@
 import { bodyP, button, emailShell, eyebrow, heading, note, questionsBox, questionsText, signOff, signOffText } from "../email/brand";
 import { FOOTER_TEXT, POSTAL_ADDRESS } from "../legal/registration";
 import { FUNDRAISING_EMAIL, safeFirstName, type BuiltEmail } from "./emails";
-import { EMPLOYER_MATCH_LABELS, TSHIRT_LINK_DAYS, tshirtLabel, type EmployerMatch } from "./signup-tidy";
+import { EMPLOYER_MATCH_LABELS, TSHIRT_LINK_DAYS, firstWord, tshirtLabel, type EmployerMatch } from "./signup-tidy";
 
 // The sign up tidy's emails (Jaimie and the appropriateness audit, 2026-10-03). Draft wording, for
 // Jaimie to approve. From and replying to the events inbox (src/fundraising/send.ts).
@@ -69,15 +69,16 @@ export function greetGuardian<T extends { html: string; text?: string }>(
   f: { name: string; firstName?: string | null; guardianFirstName?: string | null },
 ): T {
   const guardian = safeFirstName(f.guardianFirstName);
-  if (!guardian) return mail;
-  const child = String(f.firstName ?? f.name ?? "").trim().split(/\s+/)[0] ?? "";
-  if (!child) return mail;
-  const from = `Hi ${child},`;
+  const child = firstWord(f.firstName ?? f.name);
+  if (!guardian || !child) return mail;
+  // The greeting is built here from what is stored, and takes the place of the email's own opening
+  // "Hi ...," whatever name and capitals that used.
   const to = `Hi ${guardian}, this is about ${child}'s page.`;
+  const opening = /Hi [^,<\n]{1,60},/;
   return {
     ...mail,
-    html: mail.html.replace(escapeHtml(from), escapeHtml(to)),
-    ...(mail.text === undefined ? {} : { text: mail.text.replace(from, to) }),
+    html: mail.html.replace(opening, () => escapeHtml(to)),
+    ...(mail.text === undefined ? {} : { text: mail.text.replace(opening, () => to) }),
   };
 }
 

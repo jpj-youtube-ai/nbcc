@@ -130,6 +130,11 @@ export function memoryCategories(list: readonly Category[] = [...known.values()]
   return sortCategories(list.filter((c) => c.active && (c.memoryOnly || c.key === OTHER_KIND)));
 }
 
+/** Is this a sporting category (offered for a Yes to "Is it a sporting event?")? */
+export function isSportyCategory(key: unknown): boolean {
+  return typeof key === "string" && known.get(key)?.sporty === true;
+}
+
 /** Is this one of the in memory ways of giving? */
 export function isMemoryCategory(key: unknown): boolean {
   return typeof key === "string" && known.get(key)?.memoryOnly === true;

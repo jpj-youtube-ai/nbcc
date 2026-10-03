@@ -63,7 +63,9 @@ describe("the sign up tidy migration", () => {
     const { calls, pgm } = fakePgm();
     migration.up(pgm);
     const sql = calls.filter((c) => c.op === "sql").map((c) => String(c.args[0])).join("\n");
-    for (const c of MEMORY_CATEGORIES) expect(sql).toContain(`('${c.key}', '${c.label}', true, false, true, 'migration')`);
+    for (const c of MEMORY_CATEGORIES) expect(sql).toContain(`SELECT '${c.key}', '${c.label}', true, false, true, 'migration'`);
+    // Never one whose name an admin has already used (the names are unique, whatever the case).
+    expect(sql).toMatch(/WHERE NOT EXISTS \(SELECT 1 FROM fundraising_categories WHERE lower\(label\) = lower\('Donations instead of flowers'\)\)/);
     expect(sql).toMatch(/ON CONFLICT \(key\) DO NOTHING/);
   });
 

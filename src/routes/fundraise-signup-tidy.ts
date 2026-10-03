@@ -31,6 +31,7 @@ export const fundraiseSignupTidyRouter = Router();
 
 const UNAVAILABLE = { error: "Admin is temporarily unavailable" };
 const GONE = { error: "That link has expired or has already been used. Please email events@nbcc.scot or call 01292 811 015, and we'll sort your size." };
+const NOT_FOR_THIS = "Sport and the T-shirt are only for someone raising money on a page of their own: not an event, a page in memory of someone, or a team member's page.";
 const NOT_OURS = { error: "Please use the form on our website." };
 
 const LIMIT = { max: 30, windowMs: 15 * 60_000 };
@@ -78,6 +79,7 @@ export async function putWelcomePack(req: Request, res: Response): Promise<Respo
     return res.status(200).json({ fundraiser: await setWelcomePack(id, parsed.data, actorOf(claims)) });
   } catch (err) {
     if (reasonOf(err) === "not_found") return res.status(404).json({ error: "That sign up is not there" });
+    if (reasonOf(err) === "not_sporting") return res.status(409).json({ error: NOT_FOR_THIS });
     console.error("fundraiser welcome pack change failed:", err instanceof Error ? err.message : err);
     return res.status(500).json(UNAVAILABLE);
   }
@@ -96,7 +98,7 @@ export async function postTshirtAsk(req: Request, res: Response): Promise<Respon
   } catch (err) {
     const reason = reasonOf(err);
     if (reason === "not_found") return res.status(404).json({ error: "That sign up is not there" });
-    if (reason === "not_sporting") return res.status(409).json({ error: "Set Sporting event to Yes first, and save." });
+    if (reason === "not_sporting") return res.status(409).json({ error: `Set Sporting event to Yes first, and save. ${NOT_FOR_THIS}` });
     if (reason === "has_size") return res.status(409).json({ error: "They already have a T-shirt size." });
     console.error("fundraiser T-shirt ask failed:", err instanceof Error ? err.message : err);
     return res.status(500).json(UNAVAILABLE);

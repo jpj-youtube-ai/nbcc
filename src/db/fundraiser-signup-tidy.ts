@@ -60,6 +60,11 @@ export async function saveSignUpExtras(client: PoolClient, id: number, s: SignUp
   );
 }
 
+/** Sport and the T-shirt are for a page of someone's own raising money: never an event, in memory, or a team member's. */
+function sportApplies(f: FundraiserRecord): boolean {
+  return f.path === "raising" && f.inMemory !== true && !f.teamId;
+}
+
 async function lock(client: PoolClient, id: number): Promise<FundraiserRecord> {
   const found = await client.query(`${FUNDRAISER_SELECT} WHERE f.id = $1 FOR UPDATE`, [id]);
   if (!found.rows[0]) throw new FundraiserError("not_found");
@@ -74,6 +79,7 @@ async function reread(client: PoolClient, id: number): Promise<FundraiserRecord>
 export async function setWelcomePack(id: number, change: WelcomePackChange, actor: string): Promise<FundraiserRecord> {
   return inTransaction(async (client) => {
     const before = await lock(client, id);
+    if (!sportApplies(before)) throw new FundraiserError("not_sporting");
     await client.query("UPDATE fundraisers SET is_sporting = $1, tshirt_size = $2, updated_at = now(), updated_by = $3 WHERE id = $4", [
       change.isSporting,
       change.tshirtSize,
@@ -98,14 +104,14 @@ export async function setWelcomePack(id: number, change: WelcomePackChange, acto
 export async function saveTshirtLink(id: number, tokenHash: string, actor: string): Promise<FundraiserRecord> {
   return inTransaction(async (client) => {
     const before = await lock(client, id);
-    if (before.isSporting !== true) throw new FundraiserError("not_sporting");
+    if (before.isSporting !== true || !sportApplies(before)) throw new FundraiserError("not_sporting");
     if (before.tshirtSize) throw new FundraiserError("has_size");
     await client.query("UPDATE fundraisers SET tshirt_token_hash = $1, tshirt_asked_at = now(), tshirt_asked_by = $2 WHERE id = $3", [
       tokenHash,
       actor,
       id,
     ]);
-    await insertAudit(client, { actor, action: "fundraiser.tshirt_asked", entity: "fundraiser", entityId: id, data: { to: before.email } });
+    await insertAudit(client, { actor, action: "fundraiser.tshirt_asked", entity: "fundraiser", entityId: id, data: {} });
     return reread(client, id);
   });
 }

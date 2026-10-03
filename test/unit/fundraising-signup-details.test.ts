@@ -133,8 +133,8 @@ describe("what they would like posted", () => {
   // The sign up tidy (Jaimie, 2026-10-03): every new sign up gives an address for the welcome pack,
   // so it is asked for, and kept, even when nothing else is to be posted.
   it("asks for the address, and keeps it, even when nothing is to be posted", () => {
-    expect(Object.keys(issuesOf(posted({ shoutOut: true }, NO_ADDRESS))).sort()).toEqual(["postLine1", "postPostcode", "postTown"]);
-    const r = posted({ shoutOut: true }, ADDRESS);
+    expect(Object.keys(issuesOf(posted({ shoutOut: true }, { ...NO_ADDRESS, formVersion: 2 }))).sort()).toEqual(["postLine1", "postPostcode", "postTown"]);
+    const r = posted({ shoutOut: true }, { ...ADDRESS, formVersion: 2 });
     expect(r.success).toBe(true);
     if (!r.success) return;
     expect([r.data.postLine1, r.data.postLine2, r.data.postTown, r.data.postPostcode]).toEqual(["1 Example Road", null, "Exampleton", "EX1 1EX"]);

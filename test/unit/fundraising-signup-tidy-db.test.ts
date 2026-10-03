@@ -193,3 +193,21 @@ describe("the private link to choose a T-shirt size", () => {
     expect(await chooseTshirtSize("e".repeat(64), "adult_xl", new Date("2026-10-10T09:00:00Z"))).toBe(false);
   });
 });
+
+describe("sport and the T-shirt, only for a page of someone's own raising money", () => {
+  it.each([
+    ["an event", { path: "event" }],
+    ["a page in memory of someone", { in_memory: true }],
+    ["a team member's page", { team_id: 4 }],
+  ])("refuses %s", async (_w, over) => {
+    useClient((sql) => (sql.includes("FOR UPDATE") ? { rows: [fundraiserRow({ is_sporting: true, ...over })] } : { rows: [] }));
+    await expect(setWelcomePack(9, { isSporting: true, tshirtSize: null }, "admin:kim@nbcc.test")).rejects.toMatchObject({ reason: "not_sporting" });
+    await expect(saveTshirtLink(9, "f".repeat(64), "admin:kim@nbcc.test")).rejects.toMatchObject({ reason: "not_sporting" });
+  });
+
+  it("never writes the organiser's email into audit_log when asking for a size", async () => {
+    const calls = useClient((sql) => (sql.includes("FROM fundraisers f") ? { rows: [fundraiserRow({ is_sporting: true })] } : { rows: [] }));
+    await saveTshirtLink(9, "a".repeat(64), "admin:kim@nbcc.test");
+    expect(audits(calls)[0]).not.toContain("sam@example.com");
+  });
+});

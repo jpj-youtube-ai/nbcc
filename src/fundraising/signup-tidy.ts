@@ -210,7 +210,24 @@ export function checkGuardian(
   return { guardianFirstName: name, guardianConsent: b.guardianConsent === true };
 }
 
+/** The hidden box a person never sees was filled in: under its name now ("nbccCheck"), or its old one. */
+export function trapFilled(body: unknown): boolean {
+  const b = (body && typeof body === "object" ? body : {}) as Record<string, unknown>;
+  return ["nbccCheck", "company"].some((k) => typeof b[k] === "string" && (b[k] as string).trim() !== "");
+}
+
+export const SPORTING_KIND_MISMATCH = "Please choose one from the list.";
+
+/**
+ * The form as rebuilt by the sign up tidy says so (formVersion 2). Anything else is a page left open
+ * from before the deploy, sending the old shape: it is taken by the old rules for what it never asked.
+ */
+export function isOldForm(b: { formVersion?: unknown }): boolean {
+  return b.formVersion !== 2;
+}
+
 export const pathFields = {
+  formVersion: z.unknown(),
   dateTbc: z.unknown(),
   childFundraiser: z.unknown(),
   childFirstName: z.unknown(),
@@ -294,6 +311,12 @@ export function pathsOf(b: PathIn): PathStored {
   };
 }
 
+/** "Jack" from "jack sample": the first word, with a capital. */
+export function firstWord(name: string): string {
+  const w = String(name ?? "").trim().split(/\s+/)[0] ?? "";
+  return w ? w.charAt(0).toUpperCase() + w.slice(1).toLowerCase() : "";
+}
+
 /**
  * Who the page and card say organised it. An event keeps the name it is credited to; then a funeral
  * director "for the family", a child's first name (with their business, school or group if there is
@@ -309,10 +332,14 @@ export function organisedByFor(f: {
   memoryDirectorBusiness?: string | null;
   childFirstName?: string | null;
   orgName?: string | null;
+  firstName?: string | null;
+  guardianFirstName?: string | null;
 }): string | null {
   if (f.path === "event" && f.creditName) return f.creditName;
   if (f.inMemory === true && f.memorySetupBy === "funeral_director" && f.memoryDirectorBusiness) return `${f.memoryDirectorBusiness}, for the family`;
   if (f.childFirstName) return f.orgName ? `${f.childFirstName}, with ${f.orgName}` : f.childFirstName;
+  // A team member page for someone under 18: their first name only, never the surname's first letter.
+  if (f.guardianFirstName) return firstWord(f.firstName ?? f.name);
   if (f.orgName) return f.orgName;
   return null;
 }

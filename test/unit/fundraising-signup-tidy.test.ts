@@ -28,6 +28,8 @@ import { checkJoin, memberSignUp } from "../../src/fundraising/teams";
 const ADDRESS = { postLine1: "1 Example Road", postLine2: "", postTown: "Exampleton", postPostcode: "ex1 1ex" };
 
 const signUp = (over: Record<string, unknown> = {}) => ({
+  // The form as the sign up tidy rebuilt it says so; a page left open from before does not.
+  formVersion: 2,
   path: "raising",
   kind: "santa_dash",
   title: "Robin's Santa Dash",
@@ -102,7 +104,7 @@ describe("the address for the welcome pack", () => {
     });
   });
 
-  it("is needed from an old page that never sends the boxes at all", () => {
+  it("is needed when the new form never sends the boxes at all", () => {
     const body = signUp() as Record<string, unknown>;
     for (const k of Object.keys(ADDRESS)) delete body[k];
     expect(Object.keys(fields(body)).sort()).toEqual(["postLine1", "postPostcode", "postTown"]);
@@ -133,7 +135,7 @@ describe("the address for the welcome pack", () => {
 
 describe("is it a sporting event?", () => {
   it("keeps a No, with no t-shirt", () => {
-    const s = ok(signUp({ isSporting: false, tshirtSize: "adult_m" }));
+    const s = ok(signUp({ kind: "quiz", isSporting: false, tshirtSize: "adult_m" }));
     expect(s.isSporting).toBe(false);
     expect(s.tshirtSize).toBeNull();
   });

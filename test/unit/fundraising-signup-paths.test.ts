@@ -23,6 +23,7 @@ const ADDRESS = { postLine1: "1 Example Road", postLine2: "", postTown: "Example
 const WANTS = { posterCount: 0, leafletCount: 0, bucketCount: 0, tinCount: 0, qrCount: 0, shoutOut: false, attend: false };
 
 const signUp = (over: Record<string, unknown> = {}) => ({
+  formVersion: 2,
   path: "raising",
   kind: "quiz",
   title: "Robin's Quiz",

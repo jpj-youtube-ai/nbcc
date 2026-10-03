@@ -5,7 +5,7 @@ import { addDays } from "./follow-up";
 import { profilePhotoSrc } from "./pictures";
 import { dayCount } from "./call-prompts";
 import { memoryMeter } from "./in-memory";
-import { checkGuardian } from "./signup-tidy";
+import { checkGuardian, firstWord } from "./signup-tidy";
 import {
   NAME_PART_MAX,
   OVER_18_MISSING,
@@ -360,6 +360,7 @@ export interface TeamMemberRow {
   slug: string;
   name: string;
   firstName?: string | null;
+  guardianFirstName?: string | null;
   status: FundraiserRecord["status"];
   public: boolean;
   path: FundraiserRecord["path"];
@@ -395,7 +396,8 @@ export function teamMemberList(rows: TeamMemberRow[], photos: ReadonlyMap<number
     .sort(byName)
     .map((r) => {
       const photoId = photos.get(r.id);
-      return { name: shortName(r.name), url: `/fundraise/${r.slug}`, meter: memoryMeter(r, r.meter), photoSrc: photoId ? profilePhotoSrc(photoId) : null };
+      // A member under 18 (their parent or guardian joined for them): first name only.
+      return { name: r.guardianFirstName ? firstWord(r.firstName ?? r.name) : shortName(r.name), url: `/fundraise/${r.slug}`, meter: memoryMeter(r, r.meter), photoSrc: photoId ? profilePhotoSrc(photoId) : null };
     });
 }
 

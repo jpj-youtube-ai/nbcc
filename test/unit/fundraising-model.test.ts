@@ -52,7 +52,7 @@ const signUp = (over: Record<string, unknown> = {}) => ({
 
 describe("the sign up form", () => {
   it("accepts a full raising money sign up and tidies it", () => {
-    const r = signUpSchema.safeParse(signUp());
+    const r = signUpSchema.safeParse(signUp({ formVersion: 2 }));
     expect(r.success).toBe(true);
     if (!r.success) return;
     expect(r.data).toMatchObject({
@@ -122,13 +122,15 @@ describe("the sign up form", () => {
   it("asks for an address, with or without leaflets or buckets", () => {
     const wants = { leaflets: 20, buckets: 1, shoutOut: false, attend: false };
     const noAddress = { postLine1: "", postTown: "", postPostcode: "" };
+    // The new form says so (formVersion 2); a page left open from before is only asked when posting.
     const without = signUpSchema.safeParse(signUp({ wants, ...noAddress }));
     expect(without.success).toBe(false);
     if (!without.success) expect(without.error.issues.map((i) => i.path[0])).toEqual(["postLine1", "postTown", "postPostcode"]);
     const address = { postLine1: "1 Example Street", postTown: "Exampleton", postPostcode: "EX1 1EX" };
     expect(signUpSchema.safeParse(signUp({ wants, ...address })).success).toBe(true);
-    const nothingPosted = signUpSchema.safeParse(signUp(noAddress));
+    const nothingPosted = signUpSchema.safeParse(signUp({ ...noAddress, formVersion: 2 }));
     expect(nothingPosted.success).toBe(false);
+    expect(signUpSchema.safeParse(signUp(noAddress)).success).toBe(true);
     if (!nothingPosted.success) expect(nothingPosted.error.issues.map((i) => i.path[0])).toEqual(["postLine1", "postTown", "postPostcode"]);
   });
 

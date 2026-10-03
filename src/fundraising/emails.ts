@@ -288,8 +288,13 @@ function staffFacts(f: StaffSummary): Array<[string, string]> {
     ...social,
     ["We can post about it", f.socialOk ? "Yes" : "No"],
     ...requestFacts(f.wants),
-    ["A social media shout out", shoutOut],
-    ["Someone from NBCC to come along", f.wants.attend ? "Yes please" : "No"],
+    // In memory of someone, neither is asked.
+    ...(f.inMemory === true
+      ? []
+      : ([
+          ["A social media shout out", shoutOut],
+          ["Someone from NBCC to come along", f.wants.attend ? "Yes please" : "No"],
+        ] as Array<[string, string]>)),
   );
   // The sign up tidy: who it is for, sport and the T-shirt, Get involved, and when to call.
   facts.push(...tidyStaffFacts(f));

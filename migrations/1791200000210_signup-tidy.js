@@ -122,10 +122,14 @@ exports.up = (pgm) => {
   pgm.sql(`UPDATE fundraising_categories
      SET sporty = true
    WHERE lower(key) IN (${list(SPORTY_KEYS)}) OR lower(label) IN (${list(SPORTY_LABELS)})`);
-  const rows = MEMORY_SEED.map((c) => `(${quote(c.key)}, ${quote(c.label)}, true, false, true, 'migration')`).join(",\n    ");
-  pgm.sql(`INSERT INTO fundraising_categories (key, label, active, sporty, memory_only, created_by) VALUES
-    ${rows}
+  // One at a time, and only where neither its key nor its name (whatever the case: the names are
+  // unique) is already there, so a category an admin added with the same name never stops the run.
+  for (const c of MEMORY_SEED) {
+    pgm.sql(`INSERT INTO fundraising_categories (key, label, active, sporty, memory_only, created_by)
+    SELECT ${quote(c.key)}, ${quote(c.label)}, true, false, true, 'migration'
+     WHERE NOT EXISTS (SELECT 1 FROM fundraising_categories WHERE lower(label) = lower(${quote(c.label)}))
   ON CONFLICT (key) DO NOTHING`);
+  }
 
   pgm.addColumns("fundraisers", {
     is_sporting: { type: "boolean" },

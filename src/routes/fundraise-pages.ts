@@ -485,7 +485,12 @@ ${title}`, () => qrSvg(url, { title, size: 1024 })));
         organiserPhotoSrc: f.inMemory ? null : await organiserPhotoFor(f.id),
       });
       if (!withSession) fresh(res);
-      res.type("html").send(await deps.decorate(html, req.headers.cookie));
+      // The sign up tidy (after review): a page kept off Get involved ("only people you send the
+      // link to", or taken off by staff) is not for search engines either: header and meta.
+      const unlisted = Boolean(f.offListAt);
+      if (unlisted && !withSession) res.setHeader("X-Robots-Tag", "noindex");
+      const out = unlisted ? html.replace("</head>", '    <meta name="robots" content="noindex" />\n  </head>') : html;
+      res.type("html").send(await deps.decorate(out, req.headers.cookie));
     } catch (err) {
       console.error("fundraiser page failed:", err instanceof Error ? err.message : err);
       next();

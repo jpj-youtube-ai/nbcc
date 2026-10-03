@@ -93,6 +93,10 @@ export interface SummaryInputs {
   prompts?: PromptCounts;
   /** In memory: messages givers left on in memory pages that staff have still to check. */
   messagesToCheck?: number;
+  /** Sponsor pledges still unpaid two weeks after their event (src/pledges/model.ts). */
+  pledgesUnpaid?: number;
+  /** Sponsor pledges paid twice (or paid online after cash) that nobody has checked yet. */
+  pledgesPaidTwice?: number;
 }
 
 export interface Materials {
@@ -150,6 +154,10 @@ export interface SummaryCounts {
   /** In memory: messages to check, and pages a year on for staff to decide whether to get in touch. */
   messagesToCheck: number;
   memoryYearOn: number;
+  /** Sponsor pledges still unpaid two weeks after their event. */
+  pledgesUnpaid: number;
+  /** Sponsor pledges paid twice, to check and refund. */
+  pledgesPaidTwice: number;
   /** Every thing in "Waiting on us", added up. */
   waiting: number;
 }
@@ -251,6 +259,8 @@ export function summaryCounts(i: SummaryInputs): SummaryCounts {
   // In memory (Jaimie, 2026-10-03): no automatic anniversary email, a reminder here instead.
   const messagesToCheck = whole(i.messagesToCheck);
   const memoryYearOn = i.fundraisers.filter((f) => memoryYearOnDue(f, today)).length;
+  const pledgesUnpaid = whole(i.pledgesUnpaid);
+  const pledgesPaidTwice = whole(i.pledgesPaidTwice);
 
   return {
     week,
@@ -291,7 +301,11 @@ export function summaryCounts(i: SummaryInputs): SummaryCounts {
     teamsNobodyJoined,
     messagesToCheck,
     memoryYearOn,
+    pledgesUnpaid,
+    pledgesPaidTwice,
     waiting:
+      pledgesPaidTwice +
+      pledgesUnpaid +
       messagesToCheck +
       memoryYearOn +
       toApprove +
@@ -417,6 +431,9 @@ export function summaryLines(c: SummaryCounts): SummaryLines {
         c.invitesNotTaken.map((i) => `${i.name}, invited by ${i.signedBy}`).join("; "),
     );
   }
+  // Sponsor pledges: promises still not paid a fortnight after the event.
+  if (c.pledgesPaidTwice) waiting.push(`${plural(c.pledgesPaidTwice, "pledge", "pledges")} paid twice: check and refund`);
+  if (c.pledgesUnpaid) waiting.push(`${plural(c.pledgesUnpaid, "pledge", "pledges")} unpaid 2 weeks after the event`);
   if (c.pastDate) {
     waiting.push(
       c.pastDate === 1

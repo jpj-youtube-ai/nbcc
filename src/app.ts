@@ -25,6 +25,7 @@ import { fundraiseMaterialsRouter } from "./routes/fundraise-materials";
 import { fundraiseMemoryRouter } from "./routes/fundraise-memory";
 import { eventTicketsRouter } from "./routes/event-tickets";
 import { adminEventTicketsRouter } from "./routes/admin-event-tickets";
+import { pledgesRouter } from "./routes/pledges";
 import { adminBallReportRouter } from "./routes/admin-ball-report";
 import { adminAnalyticsRouter } from "./routes/admin-analytics";
 import { adminStoriesImportRouter, STORIES_IMPORT_BODY_LIMIT, STORIES_IMPORT_PATH } from "./routes/admin-stories-import";
@@ -128,6 +129,10 @@ export function createApp() {
   // In memory pages (Jaimie, 2026-10-03): envelopes, message checks and the year on reminder. Before
   // fundraiseMaterialsRouter, whose /materials/:piece would read "envelopes" as a piece it does not know.
   app.use(fundraiseMemoryRouter);
+  // Sponsor pledges ("Sponsor now, pay after"): a sponsor pledging, the organiser's list, and staff's.
+  // Before fundraiseRouter, whose retired link route (GET /api/fundraise/manage/:token) would
+  // otherwise take "pledges". Its pay and cancel pages are on the site router (src/routes/site.ts).
+  app.use(pledgesRouter);
   app.use(fundraiseRouter);
   app.use(adminFundraisingRouter);
   // Fundraising categories: the list the sign up form offers, A to Z; admins add, rename and hide them.

@@ -14,6 +14,8 @@
     <!-- Event tickets: the Event tickets card in Fundraising, its own script and styles. -->
     <link rel="stylesheet" href="/assets/css/admin-event-tickets.css" />
     <script defer src="/assets/js/admin/event-tickets.js"></script>
+    <!-- Sponsor pledges: its own card in Admin > Fundraising, kept apart from app.js. -->
+    <script defer src="/assets/js/admin/pledges.js"></script>
     <!-- app.js is a classic script; bridge the ES-module gmail-reply.js helpers onto window
          so app.js (Contact form tab) can call them (2026-07-10 contact-inbox spec, Task 8). -->
     <script type="module">
@@ -1551,6 +1553,35 @@
                 <p class="fr-card-intro">Events where NBCC sells the tickets, soonest first. Nothing goes on sale until you approve each kind of ticket here, and the event itself is approved and public. Ticket money is shown apart from gifts and never has Gift Aid. An organiser can only ask for a refund: an admin makes it here, and it goes back to the buyer&rsquo;s card.</p>
                 <div id="etAdminList"><p class="admin-loading">Loading&hellip;</p></div>
                 <p class="ty-status" id="etAdminStatus" role="status" aria-live="polite"></p>
+              </section>
+
+              <!-- Sponsor pledges ("Sponsor now, pay after"): every fundraiser's pledges with the sponsor's
+                   email for staff, send the pay link, cancel, and the two emails to sponsors, read and
+                   approved here before any is sent. Drawn by assets/js/admin/pledges.js. Folded, with the
+                   totals in its bar. The email preview grows to the email's height; nothing scrolls inside. -->
+              <section class="fr-card fr-card--fold" id="frPledges" aria-labelledby="frPledgesHead" hidden>
+                <details class="fr-fold" id="frPledgesFold">
+                  <summary class="fr-fold-bar">
+                    <span class="admin-subhead fr-fold-title" id="frPledgesHead">Sponsor pledges</span>
+                    <span class="fr-summary-state" id="frPledgesState" aria-live="polite">Checking&hellip;</span>
+                  </summary>
+                  <div class="fr-fold-body">
+                    <p class="fr-card-intro">People who chose &ldquo;Sponsor now, pay after&rdquo; on a fundraiser&rsquo;s page. A pledge is a promise, not money: it never counts on the meter until it is paid. A pledge only counts once its sponsor confirms it by email. Each sponsor is emailed a link to pay the day after the event, and one reminder a week later. Unpaid pledges lose their name and email 90 days after the pay link.</p>
+                    <div class="fr-pledges-list" id="frPledgesList"></div>
+                    <div id="frPledgesTools" hidden>
+                      <div class="fx-call-row"><button class="admin-btn admin-btn--small fr-btn-quiet" type="button" id="frPledgesSendAll">Send new pay links to everyone unpaid</button></div>
+                      <p class="fr-field-hint">Only needed if the links we already emailed have stopped working. It sends one new link to each sponsor who has had one and hasn&rsquo;t paid, under the same rules as the daily emails.</p>
+                    </div>
+                    <h4 class="fr-card-subhead">The two emails to sponsors</h4>
+                    <p class="fr-touch-due" id="frPledgesEmailsState"></p>
+                    <div class="admin-segmented fr-touch-kinds" id="frPledgesKinds" role="group" aria-label="Which pledge email to read"></div>
+                    <div class="fr-touch-meta" id="frPledgesMeta"></div>
+                    <div class="fr-touch-preview-wrap" id="frPledgesPreviewWrap">
+                      <iframe id="frPledgesPreview" class="fr-touch-preview" title="The pledge email, as the sponsor would see it" sandbox="allow-same-origin" scrolling="no"></iframe>
+                    </div>
+                    <p class="ty-status" id="frPledgesStatus" role="status" aria-live="polite"></p>
+                  </div>
+                </details>
               </section>
 
               <div class="fr-bar">

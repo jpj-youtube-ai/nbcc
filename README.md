@@ -1340,6 +1340,10 @@ hosted-Checkout redirect stays the default fallback and no-JS safety net.
 | `GET /api/fundraise/manage/pictures`, `POST /api/fundraise/manage/fundraisers/:id/pictures`, `GET /api/fundraise/manage/pictures/:pictureId/photo` | **implemented** | Profile pictures (the organiser's main photo and round photo of themselves: theirs with where each is up to; a new one is made again on the server, nothing from the camera kept, and waits for staff, ten a day; their own picture. See **Community fundraising, profile pictures**) |
 | `GET /media/fundraiser-profile/:photoId` | **implemented** | Profile pictures (public; an approved round photo on a page that is up, otherwise 404) |
 | `GET /api/admin/fundraising/pictures-waiting`, `GET /api/admin/fundraisers/:id/pictures`, `.../pictures/:pictureId/photo`, `POST .../pictures/:pictureId/approve` \| `decline` \| `remove` | **implemented** | Profile pictures (staff check the photos organisers send: fundraising view to look, edit to decide; audited) |
+| `POST /api/fundraisers/:slug/pledges` | **implemented** | Sponsor pledges (public; "Sponsor now, pay after" on a sponsorship fundraiser's page: a promise, never money, and unconfirmed until the sponsor confirms by email. See **Sponsor pledges**) |
+| `GET` \| `POST /pledge/confirm`, `/pledge/pay`, `/pledge/cancel` | **implemented** | Sponsor pledges (the sponsor, by the signed link in an email: confirm the pledge, pay it through Stripe Checkout, or cancel it quietly. Each link only asks; a button does the thing) |
+| `GET /api/fundraise/manage/pledges`, `POST /api/fundraise/manage/fundraisers/:id/pledges/:pledgeId/cash` \| `hide` | **implemented** | Sponsor pledges (the signed in organiser: confirmed pledges by name, never emails; "Paid me in cash"; hide one from their page) |
+| `GET /api/admin/fundraising/pledges`, `.../pledges/preview/:key`, `POST` \| `DELETE .../pledges/approvals/:key`, `POST .../pledges/send-pay-links`, `POST /api/admin/pledges/:id/send-pay-link` \| `cancel` \| `message` \| `checked` | **implemented** | Sponsor pledges (staff with fundraising: view to look, edit to act, admin to approve the two emails' wording and to send new pay links to everyone unpaid) |
 | `GET /api/fundraise/manage/fundraisers/:id/materials/:piece` | **implemented** | TASK-504 (the signed in organiser's poster, pictures to share, sponsor form or certificate, as a whole print page; only their own, approved or finished, and the certificate once finished; anyone else's is a 404, no session a `401` page, and a 404 while fundraising is off. See **Community fundraising, materials**) |
 | `GET /api/admin/fundraisers/:id/materials/:piece` | **implemented** | TASK-504 (the same pages for staff with fundraising: view, for any approved or finished fundraiser whether or not fundraising is on; the certificate as a marked preview before it is finished) |
 | `GET /api/admin/fundraisers/:id/materials/everything` | **implemented** | TASK-512 (Download everything: every printed piece on one print page, each on its own paper size, plus every picture to share as a zip made in the browser; staff with fundraising: view; approved or finished; the certificate only once finished. See **Community fundraising, materials round two**) |
@@ -10008,6 +10012,256 @@ says to shred or bin it after the event.
 
 Tests: `test/unit/event-tickets-*.test.ts`, `admin-event-tickets-*.test.ts`,
 `stripe-webhook-tickets.test.ts`; BDD `features/event-tickets.feature`.
+## Sponsor pledges: "Sponsor now, pay after" (Jaimie, 2026-10-03)
+
+On a sponsorship fundraiser's page, next to "give now", a sponsor can **pledge**: promise an amount
+today and pay it after the event. A pledge is a **promise, never money**: it is shown apart from the
+money raised ("£35 pledged by 4 sponsors, to be paid after Saturday 5 December 2026") and does not
+count on the meter or towards the target until it is paid. The paper sponsor form stays, and the page
+says so ("Already on Robin's paper sponsor form? You don't need to pledge here as well.").
+
+Built as its own module with a few small hooks in shared files (listed below), so it can change
+without touching the rest of fundraising.
+
+### Who can pledge, and where
+
+- **Pages that take pledges:** a public, approved page raising money, including a team **member's**
+  page, until its date has gone or staff mark it finished (`canPledge`). **Never** an event page
+  (events are not sponsorship), a page in memory of someone, or a team's own page.
+- **The form:** amount (£2 to £1,000; above that: "For a pledge over £1,000, please call us on
+  01292 811 015."), first name, surname, email, an optional message, show my name or stay anonymous,
+  show the amount or not, and Gift Aid with the home address when ticked. The names and the message
+  are checked against the blocked word list. A hidden honeypot field, per address and per email
+  limits, the same origin check and Turnstile, as on the sign up form. In production the form is
+  **closed** if Turnstile is not set up (config already refuses to boot production without its keys;
+  this is the second lock). No payment page opens and nothing is paid.
+
+### Confirm by email
+
+A pledge counts for nothing until its sponsor confirms it. When someone pledges they are sent **one**
+email, "Please confirm your £10 pledge", with one button. The page says "Nearly done: we've emailed
+you a link to confirm your pledge."
+
+- The button opens `/pledge/confirm?t=<token>`, which only **asks**; pressing Confirm there (a POST)
+  is what confirms it, so a mail scanner opening the link confirms nothing.
+- Only a **confirmed** pledge (`open`) is on the page, on the wall, in the "£X pledged" line, in the
+  organiser's list, and later emailed the pay link. An `unconfirmed` one is shown nowhere (staff see
+  it as "Waiting for the sponsor to confirm by email").
+- An unconfirmed pledge is **never emailed again** and is **deleted after 7 days**, with the log row
+  of its email.
+- The confirm email is **not** one of the automatic emails: it goes whatever the Automatic emails
+  switch says and its wording is not approval gated, because pledging has to work from day one. It
+  still respects the suppression and opt out lists (an address on either gets no email, and the
+  pledge simply lapses). The form answers the same either way, so nobody learns who is on a list.
+- It carries fixed words, one safe first name and the approved page's title: nothing else a stranger
+  typed (no surname, no message).
+
+### On the page
+
+Confirmed pledges have their own "Pledges" section after Supporters ("Alex E. pledged £10"), under
+the same name, amount and message rules as a gift. Staff can hide a message; the **organiser can
+hide a pledge from their page** (it stays a pledge, its sponsor is still asked to pay, and the events
+inbox is told).
+
+### Gift Aid: declared now, for a payment made later
+
+The sponsor makes the declaration **with the pledge**. Beside the tick box: "Yes, add Gift Aid when I
+pay. I am a UK taxpayer. This gift is my own money." Its wording (version
+`nbcc-pledge-single-2026-10`) names the amount and says it is for when they pay:
+
+> I want to Gift Aid my donation of £10 when I pay it, to the Night Before Christmas Campaign. I am a
+> UK taxpayer and understand that if I pay less Income Tax and/or Capital Gains Tax than the amount
+> of Gift Aid claimed on all my donations in that tax year it is my responsibility to pay any
+> difference.
+
+The second sentence is HMRC's liability sentence exactly as on an online gift
+(`src/declarations/wording.ts`). The pledge keeps the exact words, their version and when they were
+agreed (`ga_wording_snapshot`, `ga_wording_version`, `ga_declared_at`). **Nothing is claimed until
+the pledge is paid**: only then is there a donation at all.
+
+When the pledge is paid, the pay page shows Gift Aid ticked with who is paying beside it ("Keep Gift
+Aid on my donation. I am Alex and this is my own money. I am still a UK taxpayer.", the declaration,
+the day it was made, and "If someone else is paying, please untick this."). The donation's
+declaration row is then written by the ordinary webhook:
+
+- paying **exactly** what was pledged: the pledge's own declaration, word for word;
+- paying **more** (they may give more, never less): the standard single donation declaration, which
+  the pay page shows and they confirm by paying;
+- Gift Aid can never be added at payment if it was not declared with the pledge;
+- a **second** payment for a pledge already paid carries **no** Gift Aid and writes no declaration:
+  one declaration covers one donation.
+
+**The declaration date survives.** The `declarations` row is created when the donation is (its
+`created_at` is the payment). The day the declaration was actually made is kept in
+`sponsor_pledge_declarations` (pledge, donation, declaration, `declared_at`, the pledge's wording and
+version): plain numbers with no foreign keys, so it outlives the pledge and the fundraiser. The
+checkout also stamps it on the Stripe session (`metadata.pledgeDeclaredAt`), which is what is kept if
+the pledge itself has gone by the time the payment lands. It is in the pledge's `pledge.paid`
+History row too. **For the accountant:** this relies on HMRC allowing a declaration to be made before
+the donation it covers; please confirm the wording, the "own money" line, and that
+`sponsor_pledge_declarations` is the right evidence for a claim audit.
+
+### After the event: the pay link, one reminder, then nothing
+
+Two emails to the sponsor, from and replying to the events inbox (`src/pledges/emails.ts`):
+
+| Kind (email log) | When | Subject |
+|---|---|---|
+| `pledge_pay` (`fundraisePledgePay`) | the day after the fundraiser's date; with no date, the morning after staff mark it finished | "Robin finished Robin's Santa Dash! Here's your link to pay your £10 pledge" |
+| `pledge_reminder` (`fundraisePledgeReminder`) | once, a week after the pay link, if still unpaid | "A reminder: your £10 pledge for Robin's Santa Dash" |
+
+Both say why the sponsor is getting the email and carry a link to say "I can't pay this after all".
+They are **automatic emails**, sent by the daily 8am task (`runPledgeEmails`,
+`src/pledges/runner.ts`) only when every guard says yes:
+
+- the **Automatic emails** switch in Admin > Fundraising is on, and fundraising is on;
+- the email's **wording is approved** by an admin. Both keys (`pledge_pay`, `pledge_reminder`) ship
+  **unapproved**, in the same `touch_wording_approvals` table as the automatic emails to organisers.
+  One waiting is skipped and not claimed, so it still goes once approved while it is due;
+- the address is on neither the suppression list nor the opt out list (a list that cannot be read
+  means no email);
+- each email is **claimed on the pledge before it is sent**, so neither ever goes twice; a failed
+  send gives the claim back for another day, and a claim with no send behind it after an hour (the
+  task died part way) is stale and may be claimed again.
+
+The pay email can still go up to 60 days after it was due (a missed run, or wording waiting); the
+reminder up to 3 weeks after it was due.
+
+**Staff sending the pay link by hand** (Admin > Fundraising > Sponsor pledges) obeys **every** rule
+above except the daily task's time window: the pledge is open, its page still has pledges on it, the
+link is **due** (never early: "Their link goes the day after the event. To send it early, mark the
+fundraiser finished first."), the switch and fundraising are on, the wording is approved and the
+address is not stopped. A send holds the pledge for ten minutes so two presses never send it twice.
+`pay_email_sent_at` stays the **first** send (resends are counted in `pay_email_last_sent_at` and
+`pay_email_resends`), so the reminder and the 90 day clocks never restart.
+
+### The links, and what breaks them
+
+Each emailed link is `<pledge id>.<hmac>`, signed with `ADMIN_SESSION_SECRET` over a label for its
+purpose, the id and a per pledge nonce (`src/pledges/token.ts`): `pledge.v1` for pay and cancel,
+`pledge.confirm.v1` for confirm, so a confirm link can never pay or cancel, and none can be guessed
+from a pledge number. The nonce is changed when a pledge is paid, cancelled, or put back from "paid in
+cash", so the links already sent for it stop working.
+
+**Rotating `ADMIN_SESSION_SECRET` makes every pay, cancel and confirm link already emailed stop
+working.** After rotating it, an admin presses **"Send new pay links to everyone unpaid"** in
+Admin > Fundraising > Sponsor pledges: one new link to each open pledge that has already had one,
+under the same rules as sending one by hand. (Unconfirmed pledges whose confirm link broke simply
+lapse after 7 days; the sponsor can pledge again.)
+
+### Paying
+
+`/pledge/pay?t=<token>` is a plain form that works without JavaScript: the amount is filled in and
+may be raised, never lowered. It goes on to Stripe Checkout (card, Apple Pay and Google Pay only, so
+a pledge is paid or it is not; the session closes after 31 minutes). The session is the **same one a
+gift on the page makes** (`buildSessionParams`) plus `metadata.pledgeId`, so the one webhook records
+the donation, links it to the fundraiser (meter and wall), writes the declaration and sends the
+receipt as for any gift, and in the same transaction marks the pledge paid (`settlePledge`, behind a
+savepoint: an error marking the pledge never rolls back the donation).
+
+**Nobody pays twice by accident.** The pledge remembers the checkout it last opened
+(`checkout_session_id`); opening another (a second tab, the email opened twice) closes the earlier
+one first (`stripe.checkout.sessions.expire`). A checkout is never started for a pledge that is paid,
+cancelled or marked as paid in cash. If a second payment lands anyway, or one marked as cash is then
+paid online, the pledge is **flagged**: it shows in the admin card ("Paid twice: check the payments
+and refund the extra one", with "Mark as checked"), in the Monday summary ("N pledges paid twice:
+check and refund"), and the events inbox is emailed (`fundraisePledgeStaff`).
+
+**"I can't pay this after all"** is `/pledge/cancel?t=<token>`. Opening it only asks; a button
+(`POST /pledge/cancel`) cancels the pledge quietly. A cancelled pledge gets no more emails.
+
+### The organiser and staff
+
+- **Private area** (`assets/js/fundraise-pledges.js`): each confirmed sponsor by name (**never** an
+  email), the amount, and paid / not yet / cancelled, with the totals ("£35 pledged, £25 paid"; a
+  refunded payment counts in neither). No cash is handled online; if a sponsor pays the organiser in
+  cash, the organiser presses "Paid me in cash" (and can undo it). That pledge gets no pay email, is
+  part of the cash they pay in, and its home address is dropped at once: cash has no Gift Aid online,
+  and the page says to use the paper sponsor form for it. "Hide from my page" takes a pledge off
+  the page.
+- **Admin > Fundraising > Sponsor pledges** (`assets/js/admin/pledges.js`, its own file beside
+  `app.js`): every fundraiser's pledges with the sponsor's email, send or resend the pay link, cancel
+  a pledge, hide a message, mark one paid twice as checked, new pay links for everyone unpaid
+  (admins), and the two automatic emails rendered to read and approve.
+- **Monday summary:** "N pledges unpaid 2 weeks after the event" and "N pledges paid twice: check and
+  refund", under Waiting on us.
+
+### Privacy and retention
+
+The form says: "We keep your details until your pledge is paid, or for 90 days after we ask." The
+daily task (`runPledgeRetention`, whatever the switches say):
+
+- **deletes** a pledge nobody confirmed, 7 days after it was made;
+- **anonymises** an unpaid pledge (name, email, message, home address removed; the amount and state
+  kept; an open one becomes `expired`) 90 days after its pay email. Never emailed: 90 days after the
+  day it was due, or after it was cancelled or marked paid in cash; with nothing to count from, a
+  year after it was made;
+- a **paid** pledge drops its home address at once (the declaration has it) and its email 90 days
+  after it was paid; its name stays, as on the donation.
+
+Each takes the **email log** rows for that sponsor's pledge emails with it
+(`eraseEmailLogFor(email, kinds)`), and the pledge emails are logged with **no name** in the first
+place. There is no donor erasure flow in the app yet (erasure today is per story and per contact
+enquiry); when one lands it must also clear `sponsor_pledges` for that address, as it must
+`email_log`.
+
+### Routes
+
+| Route | Who | Body | Answer |
+|---|---|---|---|
+| `POST /api/fundraisers/:slug/pledges` | anyone, from our own page | `{ amountPence, firstName, surname, email, message?, showName, showAmount, giftAid, house?, address?, postcode?, nonUk?, company, captchaToken }` | `201 { status: "pledged", confirm: true, amountPence }` (the confirm email is on its way); `400` with `fields`; `409` when the page takes no pledges; `404` while fundraising is off; `503` in production without the spam check |
+| `GET /pledge/confirm?t=` | the sponsor | | asks; confirms nothing |
+| `POST /pledge/confirm` | the sponsor | form: `t` | confirms the pledge |
+| `GET /pledge/pay?t=` | the sponsor | | the pay page, or a notice (paid, cancelled, paid in cash, link no longer works); never kept or indexed |
+| `POST /pledge/pay` | the sponsor | form: `t`, `amount`, `giftAid?`, `coverFee?` | `303` to Stripe Checkout; the form again with what was wrong (`400`, less than was pledged) |
+| `GET /pledge/cancel?t=` | the sponsor | | asks; cancels nothing |
+| `POST /pledge/cancel` | the sponsor | form: `t` | cancels the pledge |
+| `GET /api/fundraise/manage/pledges` | the signed in organiser | | `{ fundraisers: [{ id, takesPledges, totals, pledges: [{ id, name, amountPence, paidAmountPence, status, statusWords, giftAid, createdAt, canMarkCash, canUnmarkCash, hidden, canHide }] }] }`, confirmed pledges only |
+| `POST /api/fundraise/manage/fundraisers/:id/pledges/:pledgeId/cash` | the signed in organiser | `{ paid: true \| false }` | `{ pledge }`; `409` when it can no longer change |
+| `POST /api/fundraise/manage/fundraisers/:id/pledges/:pledgeId/hide` | the signed in organiser | `{ hidden: true \| false }` | `{ pledge }`; the events inbox is told |
+| `GET /api/admin/fundraising/pledges` | fundraising view | | `{ today, fundraisers, totals, unpaidTwoWeeks, paidTwice, emails: { on, kinds } }`, with sponsor emails |
+| `GET /api/admin/fundraising/pledges/preview/:key` | fundraising view | | one email rendered for an invented example, and its approval |
+| `POST` \| `DELETE /api/admin/fundraising/pledges/approvals/:key` | admin | | approve or withdraw a wording |
+| `POST /api/admin/fundraising/pledges/send-pay-links` | admin | | `{ sent, skipped, failed, stopped }`; `409` when the rules say none may go |
+| `POST /api/admin/pledges/:id/send-pay-link` | fundraising edit | | `{ status: "sent" }`; `409` with why not (early, switched off, waiting for sign off, stopped address, sent in the last 10 minutes) |
+| `POST /api/admin/pledges/:id/cancel` | fundraising edit | | `{ status: "cancelled" }` |
+| `POST /api/admin/pledges/:id/message` | fundraising edit | `{ hidden }` | `{ status }` |
+| `POST /api/admin/pledges/:id/checked` | fundraising edit | | `{ status: "checked" }` for one paid twice |
+
+### Data (`migrations/1791200000220_sponsor-pledges.js`, additive only)
+
+`sponsor_pledges`: fundraiser (cleared with it); `first_name`, `surname`, `email`, `message` (all
+nullable, so they can be removed); `amount_pence` (£2 to £1,000); `show_name`, `show_amount`,
+`message_hidden`, `hidden_at` / `hidden_by`; `gift_aid` with `ga_house`, `ga_address`, `ga_postcode`,
+`ga_non_uk`, `ga_wording_version`, `ga_wording_snapshot`, `ga_declared_at`; `status` (`unconfirmed`,
+`open`, `paid`, `cash`, `cancelled`, `expired`); `confirm_email_sent_at`, `confirmed_at`;
+`token_nonce`; when each email was claimed and sent, `pay_email_last_sent_at`, `pay_email_resends`;
+`checkout_session_id`; `paid_at`, `paid_amount_pence`, `donation_id`, `declaration_id`;
+`double_paid_at` and who checked it; who marked cash or cancelled, and when; `anonymised_at`.
+
+`sponsor_pledge_declarations`: `pledge_id`, `donation_id`, `declaration_id` (plain numbers, no
+foreign keys), `declared_at`, `wording_version`, `wording_snapshot`: when the declaration made with a
+pledge was made, kept where deleting the pledge or its fundraiser cannot reach it.
+
+Every change writes an `audit_log` row (entity `sponsor_pledge`), never with a name or an address.
+Numbered 220, after the 215 event tickets adds. Both tables are in the nightly backup's table
+count (86).
+
+### Where it lives, and tests
+
+- `src/pledges/model.ts` (the rules, pure), `token.ts`, `emails.ts`, `render.ts`, `checkout.ts`,
+  `runner.ts`; `src/db/pledges.ts`; `src/routes/pledges.ts`; `pledge.html`;
+  `assets/js/fundraiser-pledge.js`, `fundraise-pledges.js`, `admin/pledges.js`; `assets/css/pledges.css`.
+- **Hooks in shared files:** `src/fundraising/render.ts` (three places the page takes the pledge
+  extras), `src/routes/fundraise-pages.ts` (asks for them), `src/db/stripe-webhook.ts` (the Gift Aid
+  check on a second payment, marking the pledge paid behind a savepoint, and telling the events inbox
+  after commit), `src/app.ts` and `src/routes/site.ts` (the routers), `src/clients/email.ts`,
+  `src/email/tracked-links.ts`, `src/db/email-log.ts` (`eraseEmailLogFor` takes kinds) and the
+  admin's email kinds, `src/scripts/send-reminders.ts` (the daily passes),
+  `src/fundraising/summary.ts` and `src/db/fundraising-team.ts` (the Monday lines), `fundraiser.html`,
+  `fundraise-manage.html`, `admin.html`, `Dockerfile`. `test/unit/sponsor-pledges-wiring.test.ts`
+  reads the source for each, so one lost in a merge is caught.
+- Unit tests: `test/unit/sponsor-pledges-*.test.ts`. BDD: `features/sponsor-pledges.feature`.
 
 ## A QR code encoder for fundraiser pages (TASK-493)
 
@@ -10065,7 +10319,7 @@ for event tickets: the ticket types, each event's limit and sales switch, the or
 lines (with buyers' names, emails and phones), the refunds and the refund requests),
 but `STORIES_DATABASE_URL` and `CONTACT_DATABASE_URL` are separate databases
 (deliberately, so the public story and contact forms can never reach donor
-data). A `pg_dump $DATABASE_URL` captures 81 of **84** tables and silently
+data). A `pg_dump $DATABASE_URL` captures 83 of **86** tables and silently
 drops every My Story submission (and, since TASK-475, the fingerprints in
 `erased_stories` that keep erased stories from coming back) and every contact
 enquiry, while producing a

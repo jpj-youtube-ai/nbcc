@@ -1,0 +1,77 @@
+/* Sponsor pledges ("Sponsor now, pay after"; Jaimie, 2026-10-03). Its own stylesheet, loaded by a
+   fundraiser's page, the private area and the pay page, on top of styles.css and fundraising.css:
+   it only adds what those do not have, in the same tokens (maroon, holly, cream, the warm hairline).
+   A pledge is a promise, so it is drawn quieter than money: outlined, never the filled crimson of
+   "give now", and its amounts in maroon, not the holly of money raised. Nothing here scrolls inside
+   a box: lists grow the page. */
+
+/* --- on a fundraiser's page: the second option, and what is pledged ------------------------------ */
+.fr-summary__pledge { justify-content: center; width: 100%; margin-top: -8px; }
+.fr-pledged {
+  margin: 0;
+  padding: 12px 14px;
+  border: 1.6px dashed var(--line);
+  border-radius: var(--radius);
+  background: var(--cream);
+  font-size: 0.98rem;
+  line-height: 1.5;
+  color: var(--slate);
+  overflow-wrap: anywhere;
+  text-wrap: pretty;
+}
+.fr-pledged__sum { font-family: var(--font-head); font-weight: 800; font-size: 1.15rem; color: var(--maroon); font-variant-numeric: lining-nums tabular-nums; }
+.fr-pledged__note { display: block; margin-top: 2px; font-size: 0.88rem; color: var(--slate-soft); }
+
+/* --- the pledge form: the give form's own card, with the three ways kept apart ------------------- */
+.fr-pledge .fr-give-card { border: 1.6px dashed var(--line); box-shadow: var(--shadow-sm); }
+.fr-pledge__ways { list-style: none; margin: 14px 0 0; padding: 0; display: grid; gap: 8px; }
+.fr-pledge__ways li {
+  padding: 10px 14px;
+  border-left: 3px solid var(--holly);
+  border-radius: 8px;
+  background: var(--holly-soft);
+  color: var(--holly-dark);
+  font-size: 0.98rem;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+.fr-pledge__ways a { color: inherit; font-weight: 600; text-underline-offset: 3px; }
+.fr-pledge-form { margin-top: 18px; }
+.fr-pledge-form .form-status:empty { display: none; }
+.fr-pledge__done { margin-top: 18px; }
+.fr-pledge__done-title { margin: 0; font-size: clamp(1.25rem, 1.1rem + 0.7vw, 1.55rem); color: var(--holly-dark); overflow-wrap: anywhere; text-wrap: balance; }
+
+/* --- the pledges, after the supporter wall -------------------------------------------------------- */
+.fr-pledges__item { border-style: dashed; box-shadow: none; background: var(--cream); }
+.fr-pledges__amount { color: var(--maroon); font-size: 1.02rem; }
+
+/* --- the organiser's private area ------------------------------------------------------------------ */
+.fr-pledges__totals { margin: 0 0 14px; }
+.fr-pledges__list { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+.fr-pledges__row { padding: 14px 16px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--card); }
+.fr-pledges__row.is-paid { border-color: color-mix(in srgb, var(--holly) 35%, var(--line)); background: var(--holly-soft); }
+.fr-pledges__row.is-cancelled, .fr-pledges__row.is-expired { background: var(--cream); color: var(--slate-soft); }
+.fr-pledges__row.is-cancelled .fr-wall__who, .fr-pledges__row.is-expired .fr-wall__who,
+.fr-pledges__row.is-cancelled .fr-wall__amount, .fr-pledges__row.is-expired .fr-wall__amount { color: var(--slate-soft); }
+.fr-pledges__row .fr-wall__amount { color: var(--maroon); }
+.fr-pledges__row.is-paid .fr-wall__amount { color: var(--holly); }
+.fr-pledges__state { margin: 4px 0 0; font-weight: 600; color: var(--maroon); }
+.fr-pledges__row.is-paid .fr-pledges__state, .fr-pledges__row.is-cash .fr-pledges__state { color: var(--holly-dark); }
+.fr-pledges__row.is-cancelled .fr-pledges__state, .fr-pledges__row.is-expired .fr-pledges__state { color: var(--slate-soft); }
+.fr-pledges__cash { margin: 6px 18px 0 0; min-height: 44px; }
+.fr-pledges__hidden { margin: 4px 0 0; font-size: 0.9rem; font-weight: 600; color: var(--slate-soft); }
+.fr-pledges__cash-note { margin: 16px 0 0; padding: 12px 16px; border-left: 3px solid var(--tan); border-radius: 8px; background: var(--tan-soft); font-size: 0.95rem; line-height: 1.55; overflow-wrap: anywhere; }
+[data-pledges-part] .form-status:empty { display: none; }
+
+/* --- the pay and cancel pages -------------------------------------------------------------------- */
+.pl-panel { display: grid; gap: 14px; }
+.pl-panel > p { margin: 0; }
+.pl-pay, .pl-cancel, .pl-confirm { display: grid; gap: 18px; }
+.pl-pay .give-question { margin: 0; }
+.pl-pay .give-check { min-height: 44px; align-items: flex-start; }
+.pl-pay__giftaid { padding: 14px 16px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--holly-soft); }
+.pl-pay__giftaid .give-check-text { font-weight: 400; }
+.pl-pay__statement { display: block; margin: 8px 0; font-size: 0.9rem; line-height: 1.55; color: var(--slate); font-style: italic; }
+.pl-aside { font-size: 0.95rem; line-height: 1.55; color: var(--slate-soft); overflow-wrap: anywhere; }
+.pl-aside a { color: var(--maroon); font-weight: 600; text-underline-offset: 3px; }
+.pl-notice p { font-size: 1.05rem; line-height: 1.65; }

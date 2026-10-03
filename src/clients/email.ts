@@ -651,6 +651,34 @@ export async function sendFundraiseTouch(kind: FundraiseTouchKind, name: string,
   }
 }
 
+// Sponsor pledges (Jaimie, 2026-10-03): the two emails to a sponsor who pledged on a fundraiser's
+// page, each its own kind. Built by src/pledges/emails.ts and sent by src/pledges/runner.ts, from and
+// replying to the events inbox, only while the Automatic emails switch is on and their wording is
+// approved. Their links carry a signed token (?t=), which the link tagging leaves alone.
+// "pledge_confirm" is the one email sent when someone pledges ("Please confirm your £10 pledge"): it
+// is what makes a pledge count at all, so it goes whatever the Automatic emails switch says.
+// The log keeps NO name for any of them: an unpaid pledge's details are removed after 90 days, and
+// its log rows with them (eraseEmailLogFor, by PLEDGE_EMAIL_LOG_KINDS in src/pledges/model.ts), so
+// the sponsor's name is never written there at all.
+export type FundraisePledgeKind = "pledge_confirm" | "pledge_pay" | "pledge_reminder";
+
+export async function sendFundraisePledge(kind: FundraisePledgeKind, message: FundraiseEmailMessage): Promise<void> {
+  switch (kind) {
+    case "pledge_confirm":
+      return sendVerbatim("fundraisePledgeConfirm", null, message);
+    case "pledge_pay":
+      return sendVerbatim("fundraisePledgePay", null, message);
+    case "pledge_reminder":
+      return sendVerbatim("fundraisePledgeReminder", null, message);
+  }
+}
+
+// Sponsor pledges: a note to the events inbox (a pledge paid twice to check and refund, a pledge an
+// organiser hid from their page). Staff only, so its links are never tagged.
+export async function sendFundraisePledgeStaff(message: FundraiseEmailMessage): Promise<void> {
+  await sendVerbatim("fundraisePledgeStaff", null, message);
+}
+
 // Team pages (Jaimie, 2026-10-03): the team emails, each its own kind so they can be told apart in
 // the email audit and a bounce report. Built by src/fundraising/team-page-emails.ts and sent by
 // src/fundraising/team-send.ts and team-runner.ts, from and replying to the events inbox. The two

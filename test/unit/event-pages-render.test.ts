@@ -202,7 +202,7 @@ describe("an event credited to a group or a business", () => {
   it("speaks of the event's total and the event's wall", () => {
     const d = render(page({ organisedBy: "The Red Lion" }));
     expect(d.querySelector(".give-step-sub")?.textContent).toBe(
-      "This is a donation to NBCC, not a ticket. Entry is paid on the door on the night. Every gift here counts towards this event's total.",
+      "This is a donation to NBCC, not a ticket. Entry is paid on the door on the day. Every gift here counts towards this event's total.",
     );
     expect(d.querySelector(".fr-share p")?.textContent).toBe("Every share helps this event reach more people.");
     const step = thanksPage(page({ organisedBy: "The Red Lion" }), { message: false, sessionId: "cs_test_abc" });
@@ -251,7 +251,7 @@ describe("an event shared with another cause", () => {
   it("says in the give box, as a line of its own, that everything given on the page goes to NBCC", () => {
     const d = render(page({ split: SPLIT }));
     expect(d.querySelector(".give-step-sub")?.textContent).toBe(
-      "This is a donation to NBCC, not a ticket. Entry is paid on the door on the night. Every gift here counts towards this event's total.",
+      "This is a donation to NBCC, not a ticket. Entry is paid on the door on the day. Every gift here counts towards this event's total.",
     );
     expect(d.querySelector(".fr-give .fr-give-share")?.textContent).toBe("Everything you give on this page goes to NBCC.");
     expect(render(page({ split: SPLIT, finished: true })).querySelector(".fr-give .fr-give-share")?.textContent).toBe(
@@ -312,7 +312,7 @@ describe("an event's page: giving is a donation, not a ticket", () => {
 
   it("says under the heading that it is not a ticket, by how people get in", () => {
     expect(sub(page())).toBe(
-      "This is a donation to NBCC, not a ticket. Entry is paid on the door on the night. Every gift here counts towards this event's total.",
+      "This is a donation to NBCC, not a ticket. Entry is paid on the door on the day. Every gift here counts towards this event's total.",
     );
     expect(sub(page(AWAY))).toBe(
       "This is a donation to NBCC, not a ticket. To get in, please get your ticket from the seller's website, opens in a new tab. Every gift here counts towards this event's total.",
@@ -322,6 +322,7 @@ describe("an event's page: giving is a donation, not a ticket", () => {
       "This is a donation to NBCC, not a ticket. To get in, please get your ticket from the seller's website. Every gift here counts towards this event's total.",
     );
     expect(render(page({ booking: "away", ticketUrl: null })).querySelector(".give-step-sub a")).toBeNull();
+    expect(render(page({ booking: "away", ticketUrl: "http://tickets.example.com/eqn" })).querySelector(".give-step-sub a")).toBeNull();
     expect(sub(page({ booking: "free" }))).toBe(
       "Entry is free, so giving is entirely up to you. Every gift here goes to NBCC and counts towards this event's total.",
     );
@@ -349,5 +350,27 @@ describe("an event's page: giving is a donation, not a ticket", () => {
     expect(thanksText(page(AWAY))).toContain("Just so you know, this was a donation rather than a ticket, so please still get your ticket as usual.");
     expect(thanksText(page({ booking: null }))).toContain("Just so you know, this was a donation rather than a ticket.");
     expect(thanksText(page({ booking: "free" }))).not.toContain("rather than a ticket");
+  });
+});
+
+// Event clarity review: once an event has finished, or its day has passed, there is no door to pay
+// on or ticket to get, so the reminder after giving keeps only that it was a donation.
+describe("the reminder after giving, once the event is over", () => {
+  const thanksText = (p: PublicPage, now = NOW) =>
+    parse(renderFundraiserPage(TEMPLATE, p, { pageUrl: PAGE_URL, now, thanks: { message: false } })).querySelector(".fr-thanks-panel")
+      ?.textContent ?? "";
+  const PLAIN = "Just so you know, this was a donation rather than a ticket.";
+
+  it("drops the pay on the door or get your ticket clause for a finished event", () => {
+    expect(thanksText(page({ finished: true }))).toContain(PLAIN);
+    expect(thanksText(page({ finished: true, booking: "away", ticketUrl: "https://tickets.example.com/eqn" }))).toContain(PLAIN);
+  });
+
+  it("drops it once the event's day has passed", () => {
+    expect(thanksText(page(), new Date(Date.UTC(2026, 11, 6, 12)))).toContain(PLAIN);
+  });
+
+  it("keeps it on the day itself", () => {
+    expect(thanksText(page(), new Date(Date.UTC(2026, 11, 5, 12)))).toContain("so please still pay on the door as usual.");
   });
 });

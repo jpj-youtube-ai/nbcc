@@ -376,7 +376,7 @@ function posterTitleSize(title: string): string {
  * everything still fits: 66mm for a short name and line. Never below 38mm (it was 34mm before round two).
  */
 export function posterLogoMm(
-  d: Pick<MaterialFacts, "title" | "line" | "when" | "where" | "targetPence"> & Partial<Pick<MaterialFacts, "splitStatement" | "memory">>,
+  d: Pick<MaterialFacts, "title" | "line" | "when" | "where" | "targetPence"> & Partial<Pick<MaterialFacts, "splitStatement" | "memory" | "entry">>,
   size: PosterSize = "a4",
 ): number {
   const t = (d.memory ? `In memory of ${d.memory.name}` : d.title).length;
@@ -394,11 +394,20 @@ export function posterLogoMm(
   // bigger on the design (so they print at 7pt or more: statementPt), so it takes more room there.
   // With a split the logo may go below its usual least, so the worst case still fits the paper.
   if (d.splitStatement) mm -= size === "a5" ? 12 : 6;
-  return Math.max(d.splitStatement ? SPLIT_LOGO_MIN_MM : 38, mm);
+  // Event clarity review: an event's entry line under the target ("Entry: £5, paid on the door"), and
+  // a second line when it is long enough to wrap. The logo gives way to it, below its usual least too,
+  // so the address and QR code stay inside the frame (measured in headless Chromium at A5, A4 and A3).
+  const entry = d.entry ? ENTRY_LOGO_MM + (d.entry.length > ENTRY_WRAPS_AT ? ENTRY_WRAP_LOGO_MM : 0) : 0;
+  return Math.max((d.splitStatement ? SPLIT_LOGO_MIN_MM : 38) - entry, mm - entry);
 }
 
 /** The least the poster's logo goes to when there is a split statement to fit in too. */
 export const SPLIT_LOGO_MIN_MM = 26;
+
+/** What an event's entry line takes from the logo, and a second line when it is longer than this. */
+const ENTRY_LOGO_MM = 8;
+const ENTRY_WRAP_LOGO_MM = 6;
+const ENTRY_WRAPS_AT = 45;
 
 // Each paper's scale from A4: its width over 210mm, so the design fills it edge to edge.
 const SCALE: Record<PosterSize, string> = { a5: "0.70476", a4: "1", a3: "1.41428" };

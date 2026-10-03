@@ -13,6 +13,7 @@ import {
   publicCard,
   publicPage,
   signUpSchema,
+  splitStatement,
   wallEntries,
   wallMessageSchema,
   type FundraiserRecord,
@@ -552,6 +553,8 @@ export async function getManageSession(req: Request, res: Response): Promise<Res
           meter: f.meter,
           editable: editableOf(f),
           linkBoxes: linkBoxesOf(f),
+          // Event clarity: a shared one's pay in box asks for NBCC's share; never the other cause's name.
+          sharesWithOther: splitStatement(f) !== null,
           waitingEdit: waiting ? { id: waiting.id, changes: waiting.changes, createdAt: waiting.createdAt } : null,
           // As the wall shows them: a name or Anonymous, the amount unless hidden, the message unless
           // staff hid it. Never a giver's email, full name or anything else about them.

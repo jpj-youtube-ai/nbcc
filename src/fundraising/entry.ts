@@ -17,29 +17,44 @@ export interface EntryLine {
   lead: string;
   /** For tickets: the seller's website as people would read it ("tickets.example.com"); "" otherwise. */
   seller: string;
-  /** For tickets: the seller's link, when we have one; null otherwise. */
+  /** For tickets: the seller's https link, when we have one; null otherwise. */
   url: string | null;
 }
 
-/** The seller's website as people read it: its host, without the www. */
-export function sellerName(url: string | null | undefined): string {
-  if (!url) return "";
+/** The seller's link, only when it is a real https address: never anything else in a link. */
+export function safeTicketUrl(url: string | null | undefined): string | null {
+  if (!url) return null;
   try {
-    return new URL(url).hostname.replace(/^www\./i, "");
+    const u = new URL(url);
+    return u.protocol === "https:" && u.hostname ? url : null;
   } catch {
-    return "";
+    return null;
   }
 }
 
+/** The seller's website as people read it: its host, without the www. "" for no https link. */
+export function sellerName(url: string | null | undefined): string {
+  const safe = safeTicketUrl(url);
+  return safe ? new URL(safe).hostname.replace(/^www\./i, "") : "";
+}
+
+/** A price that is only the word free ("Free", "free."): said as "free". */
+const JUST_FREE = /^free[.!]?$/i;
+
 /** How people get in, in a few words, or null when the event was never asked. */
 export function entryLine(f: EntryFacts): EntryLine | null {
-  const price = (f.price ?? "").trim();
-  if (f.booking === "door") return { lead: price ? `Entry: ${price}, paid on the door` : "Entry: paid on the door", seller: "", url: null };
+  const typed = (f.price ?? "").trim();
+  const price = JUST_FREE.test(typed) ? "free" : typed;
   if (f.booking === "free") return { lead: "Entry: free", seller: "", url: null };
+  if (f.booking === "door") {
+    // Never "Free, paid on the door", or "on the door" twice: a price that says either stands alone.
+    if (!price) return { lead: "Entry: paid on the door", seller: "", url: null };
+    return { lead: /\bfree\b|\bdoor\b/i.test(price) ? `Entry: ${price}` : `Entry: ${price}, paid on the door`, seller: "", url: null };
+  }
   if (f.booking === "away") {
-    const seller = sellerName(f.ticketUrl);
+    const url = safeTicketUrl(f.ticketUrl);
     const from = price ? `Tickets: ${price}, from ` : "Tickets: from ";
-    return seller && f.ticketUrl ? { lead: from, seller, url: f.ticketUrl } : { lead: `${from}another website`, seller: "", url: null };
+    return url ? { lead: from, seller: sellerName(url), url } : { lead: `${from}another website`, seller: "", url: null };
   }
   return null;
 }

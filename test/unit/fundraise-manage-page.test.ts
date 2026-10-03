@@ -295,10 +295,17 @@ describe("signed in", () => {
     const words = (id: number) =>
       [...card(id).querySelectorAll<HTMLElement>("[data-f-payin-intro], [data-f-payin-event]")].filter((e) => !e.hidden).map((e) => e.textContent).join(" ");
     expect(words(8)).toBe(
-      "Collected entry money, raffle money or cash gifts at your event? Pay NBCC’s share in here by card and it goes onto your event’s total. Gift Aid can’t be added to money paid in. You can also pay in by bank transfer, or drop it in to us: just get in touch.",
+      "Collected entry money, raffle money or cash gifts at your event? Pay it in here by card and it goes onto your event’s total. Gift Aid can’t be added to money paid in. You can also pay in by bank transfer, or drop it in to us: just get in touch.",
     );
     expect(words(7)).toContain("Collected cash or sponsor money?");
     expect(words(7)).not.toContain("entry money");
+  });
+
+  it("asks an event shared with another cause to pay in NBCC's share", async () => {
+    await load("", signedIn(event({ sharesWithOther: true })));
+    const text = [...card(8).querySelectorAll<HTMLElement>("[data-f-payin-event]")].map((e) => e.textContent).join(" ");
+    expect(text).toContain("Pay NBCC’s share in here by card and it goes onto your event’s total.");
+    expect(text).not.toContain("Pay it in here by card");
   });
 
   it("asks a page raising money for a target, and an event for its event details", async () => {

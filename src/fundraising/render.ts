@@ -1,5 +1,5 @@
 import type { EventRecord } from "../events/model";
-import { sortForPage } from "../events/model";
+import { londonToday, sortForPage } from "../events/model";
 import {
   type CardRecord,
   DECK_MARKER,
@@ -15,7 +15,7 @@ import { SINGLE_DONATION_WORDING } from "../declarations/wording";
 import type { Meter, PublicCard, PublicPage, WallEntry } from "./model";
 import { countdownFor, type NewsEntry } from "./news";
 import { safeFirstName } from "./emails";
-import { entryLine } from "./entry";
+import { entryLine, safeTicketUrl } from "./entry";
 
 // TASK-494: the public fundraising pages, drawn on the server.
 //
@@ -554,10 +554,11 @@ function eventGiveSub(p: PublicPage): string {
   const counts = "Every gift here counts towards this event's total.";
   if (p.booking === "free") return "Entry is free, so giving is entirely up to you. Every gift here goes to NBCC and counts towards this event's total.";
   const notTicket = "This is a donation to NBCC, not a ticket.";
-  if (p.booking === "door") return `${notTicket} Entry is paid on the door on the night. ${counts}`;
+  if (p.booking === "door") return `${notTicket} Entry is paid on the door on the day. ${counts}`;
   if (p.booking === "away") {
-    const seller = p.ticketUrl
-      ? `<a href="${escapeHtml(p.ticketUrl)}" target="_blank" rel="noopener">the seller's website<span class="sr-only">, opens in a new tab</span></a>`
+    const url = safeTicketUrl(p.ticketUrl);
+    const seller = url
+      ? `<a href="${escapeHtml(url)}" target="_blank" rel="noopener">the seller's website<span class="sr-only">, opens in a new tab</span></a>`
       : "the seller's website";
     return `${notTicket} To get in, please get your ticket from ${seller}. ${counts}`;
   }
@@ -575,10 +576,13 @@ function renderEntryLine(p: PublicPage): string {
 }
 
 /** After giving on an event's page: a reminder that it was a donation, not a ticket. Free events need none. */
-function eventThanksNote(p: PublicPage): string {
+function eventThanksNote(p: PublicPage, now: Date): string {
   if (!isEvent(p) || p.booking === "free") return "";
-  const clause =
-    p.booking === "door" ? ", so please still pay on the door as usual" : p.booking === "away" ? ", so please still get your ticket as usual" : "";
+  // Once it has finished or its day has passed, there is no door to pay on or ticket to get.
+  const over = p.finished || (p.eventDate ? p.eventDate < londonToday(now) : false);
+  const clause = over
+    ? ""
+    : p.booking === "door" ? ", so please still pay on the door as usual" : p.booking === "away" ? ", so please still get your ticket as usual" : "";
   return `<p class="fr-thanks__entry">Just so you know, this was a donation rather than a ticket${clause}.</p>`;
 }
 
@@ -755,7 +759,7 @@ function renderWallStep(p: PublicPage, sessionId: string): string {
 }
 
 /** The thank you a giver sees on coming back from paying, with the share links. */
-function renderThanks(p: PublicPage, pageUrl: string, thanks: NonNullable<FundraiserPageOptions["thanks"]>): string {
+function renderThanks(p: PublicPage, pageUrl: string, thanks: NonNullable<FundraiserPageOptions["thanks"]>, now: Date): string {
   const lead = thanks.added
     ? `<p>We have added that to ${wallOf(p)}. <a href="#fr-wall-heading">See the wall</a></p>`
     : `<p>${thanks.message ? "Your message will appear on the wall shortly. " : ""}Your donation will show on the meter shortly.</p>`;
@@ -763,7 +767,7 @@ function renderThanks(p: PublicPage, pageUrl: string, thanks: NonNullable<Fundra
     '<div class="fr-thanks-panel" data-thanks-panel data-copy-scope tabindex="-1">' +
     `<h2>Thank you for supporting ${escapeHtml(p.title)}.</h2>` +
     lead +
-    eventThanksNote(p) +
+    eventThanksNote(p, now) +
     (thanks.sessionId && !thanks.added ? renderWallStep(p, thanks.sessionId) : "") +
     `<p>Could you share the page too? Every share helps ${sharer(p)} reach more people.</p>` +
     shareLinks(p, pageUrl) +
@@ -890,7 +894,7 @@ export function renderFundraiserPage(template: string, p: PublicPage, opts: Fund
     (opts.team?.factsHtml ?? "") +
     renderCountdown(p, opts.now, opts.pageUrl) +
     (p.finished ? renderFinished(p) : "") +
-    (opts.thanks ? renderThanks(p, opts.pageUrl, opts.thanks) : "");
+    (opts.thanks ? renderThanks(p, opts.pageUrl, opts.thanks, opts.now) : "");
   const body =
     '<div class="card card-lg fr-summary">' +
     '<h2 class="sr-only">Money raised so far</h2>' +

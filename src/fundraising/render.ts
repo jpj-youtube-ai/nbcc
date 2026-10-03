@@ -530,6 +530,8 @@ const whose = (p: PublicCard & { teamName?: string | null }) => {
 // Jaimie, 2026-10-03: shared with another cause. Money given on the page is NBCC's share; the
 // statement the 2009 regulations ask for sits beside the Give button (renderSplit).
 const SHARE_NOTE = (p: PublicPage): string => (p.split ? " Everything given on this page goes to NBCC, as NBCC's share." : "");
+/** Jaimie, 2026-10-03 (event clarity): an event's give box says it as a line of its own instead. */
+const EVENT_SHARE_LINE = (p: PublicPage): string => (p.split ? '<p class="give-step-sub fr-give-share">Everything you give on this page goes to NBCC.</p>' : "");
 
 /** The split statement, beside the Give button; nothing when it is not shared. */
 function renderSplit(p: PublicPage): string {
@@ -603,10 +605,10 @@ export function renderGiveForm(p: PublicPage, words?: GiveWords): string {
       : p.finished
       ? '<h2 class="give-step-title" id="fr-give-heading">You can still give</h2>' +
         (event
-          ? `<p class="give-step-sub">Your donation goes to NBCC and still counts towards this event's total.${SHARE_NOTE(p)}</p>`
+          ? `<p class="give-step-sub">Your donation goes to NBCC and still counts towards this event's total.</p>${EVENT_SHARE_LINE(p)}`
           : `<p class="give-step-sub">Your donation goes to NBCC and still counts towards ${whose(p)} total${p.teamName ? "" : ` for ${escapeHtml(p.title)}`}.${SHARE_NOTE(p)}</p>`)
       : event
-        ? '<h2 class="give-step-title" id="fr-give-heading">Make a donation</h2>' + `<p class="give-step-sub">${eventGiveSub(p)}${SHARE_NOTE(p)}</p>`
+        ? '<h2 class="give-step-title" id="fr-give-heading">Make a donation</h2>' + `<p class="give-step-sub">${eventGiveSub(p)}</p>${EVENT_SHARE_LINE(p)}`
         : `<h2 class="give-step-title" id="fr-give-heading">Give to ${escapeHtml(p.title)}</h2>` +
           `<p class="give-step-sub">Your donation goes to NBCC and counts towards ${whose(p)} total.${SHARE_NOTE(p)}</p>`) +
     // Shipped hidden: without JavaScript the browser would send it as a web address, names and all.

@@ -246,10 +246,18 @@ describe("an event shared with another cause", () => {
     expect(renderFundraiserPage(TEMPLATE, page({ split: SPLIT }), { pageUrl: PAGE_URL, now: NOW })).not.toContain("<Lifeboat>");
   });
 
-  it("says in the give intro that everything given on the page is NBCC's share", () => {
-    expect(render(page({ split: SPLIT })).querySelector(".give-step-sub")?.textContent).toBe(
-      "This is a donation to NBCC, not a ticket. Entry is paid on the door on the night. Every gift here counts towards this event's total. Everything given on this page goes to NBCC, as NBCC's share.",
+  // Jaimie, 2026-10-03 (event clarity): the give box says, as a line of its own, that everything
+  // given on the page goes to NBCC (in place of the fundraiser's "as NBCC's share" sentence).
+  it("says in the give box, as a line of its own, that everything given on the page goes to NBCC", () => {
+    const d = render(page({ split: SPLIT }));
+    expect(d.querySelector(".give-step-sub")?.textContent).toBe(
+      "This is a donation to NBCC, not a ticket. Entry is paid on the door on the night. Every gift here counts towards this event's total.",
     );
+    expect(d.querySelector(".fr-give .fr-give-share")?.textContent).toBe("Everything you give on this page goes to NBCC.");
+    expect(render(page({ split: SPLIT, finished: true })).querySelector(".fr-give .fr-give-share")?.textContent).toBe(
+      "Everything you give on this page goes to NBCC.",
+    );
+    expect(render(page()).querySelector(".fr-give-share")).toBeNull();
     expect(render(page()).querySelector(".give-step-sub")?.textContent).not.toContain("NBCC's share");
   });
 

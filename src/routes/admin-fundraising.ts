@@ -111,6 +111,10 @@ function ids(req: Request, res: Response, ...names: string[]): number[] | null {
   return out;
 }
 
+// Event tickets: NBCC never sells the tickets of an event that shares with another cause.
+export const TICKETS_SHARED = "This event shares what it raises with another cause, so NBCC can't sell its tickets.";
+export const TICKETS_NO_SPLIT = "NBCC sells this event's tickets, so it can't share with another cause.";
+
 // One place that turns the database's refusals into answers a volunteer can act on.
 function failed(res: Response, what: string, err: unknown): Response {
   if (err instanceof FundraiserError) {
@@ -127,6 +131,11 @@ function failed(res: Response, what: string, err: unknown): Response {
         return res.status(409).json({ error: TEAM_PATH });
       case "not_waiting":
         return res.status(409).json({ error: "That change has already been dealt with" });
+      case "tickets_shared":
+        // Event tickets: all the ticket money must come to NBCC.
+        return res.status(409).json({ error: TICKETS_SHARED, fields: { booking: TICKETS_SHARED } });
+      case "tickets_no_split":
+        return res.status(409).json({ error: TICKETS_NO_SPLIT });
       case "replaced":
         return res.status(409).json({ error: "This change has been replaced; look again" });
       case "needs_short_name":

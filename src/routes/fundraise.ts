@@ -63,6 +63,7 @@ import { loadCategories } from "../db/fundraising-categories";
 import { KEY_PATTERN, isActiveCategory } from "../fundraising/categories";
 import { checkTeamSignUp } from "../fundraising/teams";
 import { trapFilled } from "../fundraising/signup-tidy";
+import { checkTicketSignUp } from "../tickets/model";
 import { familyGifts, isInMemory, publicMemory } from "../fundraising/in-memory";
 
 /** In memory: the private area's gifts list, in the wall's shape, with no amounts. */
@@ -150,13 +151,17 @@ export async function postFundraise(req: Request, res: Response): Promise<Respon
   // Team pages: "Just me, or a team?" and the people added, checked beside the rest, so every
   // problem is named at once.
   const team = checkTeamSignUp(req.body);
-  if (!parsed.success || !team.team) {
-    const fields = { ...(parsed.success ? {} : fieldErrors(parsed.error.issues)), ...team.fields };
+  // Event tickets: "NBCC sells the tickets for me" and the ticket types proposed, likewise beside it.
+  const tickets = checkTicketSignUp(req.body);
+  if (!parsed.success || !team.team || Object.keys(tickets.fields).length > 0) {
+    const fields = { ...(parsed.success ? {} : fieldErrors(parsed.error.issues)), ...team.fields, ...tickets.fields };
     return res.status(400).json({ error: "Some of the form needs another look", fields });
   }
   const asTeam = team.team.isTeam ? team.team : null;
+  const ticketPlan = tickets.plan;
   try {
     // A team is marked a team, and the people added are HELD, in the sign up's own transaction.
+    // Event tickets: the ticket types are stored PROPOSED in it too, for staff to approve.
     const record = await createFundraiser(
       parsed.data,
       asTeam
@@ -165,7 +170,12 @@ export async function postFundraise(req: Request, res: Response): Promise<Respon
             await markTeam(client, id, asTeam.shareMode);
             await insertHeldInvites(client, id, asTeam.members);
           }
-        : undefined,
+        : ticketPlan
+          ? async (client, id) => {
+              const { insertSignUpTickets } = await import("../db/event-tickets");
+              await insertSignUpTickets(client, id, ticketPlan, parsed.data.email);
+            }
+          : undefined,
     );
     // TASK-503: made from a staff invite's link? Mark the invite used and linked. Best effort.
     await useInvite(req.body?.invite, record.id);

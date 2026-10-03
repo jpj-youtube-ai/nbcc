@@ -525,7 +525,7 @@ describe("the event questions", () => {
       "Tickets are sold on another website",
       "Pay on the door, no booking needed",
       "Free, just come along",
-      "Want NBCC to sell the tickets for you? Tell us in the description and we’ll be in touch.",
+      "NBCC sells the tickets for me",
       "Age limit",
       "Dress code",
       "What’s included",

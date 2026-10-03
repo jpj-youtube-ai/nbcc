@@ -19,6 +19,7 @@ import { entryLine, safeTicketUrl } from "./entry";
 import { NONE as NO_IMPACT, impactParts, type ImpactParts } from "./impact-render";
 import type { ImpactExample } from "../impact/examples";
 import { avatarHtml, isProfilePhotoSrc } from "./pictures";
+import { NBCC_FACT_HTML, nbccCardBooking } from "../tickets/render";
 
 // TASK-494: the public fundraising pages, drawn on the server.
 //
@@ -224,6 +225,8 @@ function fullAddress(c: PublicCard): string {
  */
 function bookingFor(c: PublicCard): Pick<CardRecord, "bookingHow" | "bookingUrl" | "bookingLabel" | "bookingNote" | "bookingSolo"> {
   const none = { bookingHow: "none" as const, bookingUrl: "", bookingLabel: "", bookingNote: "" };
+  // Event tickets: NBCC sells them, on the event's own page.
+  if (c.booking === "nbcc") return nbccCardBooking(c.url);
   if (c.booking === "away" && c.ticketUrl) {
     return { bookingHow: "away", bookingUrl: c.ticketUrl, bookingLabel: "Book tickets", bookingNote: "Tickets are sold on another website" };
   }
@@ -415,7 +418,10 @@ function renderEventFacts(p: PublicPage, photo?: string | null): string {
   if (where) items.push(`<li>${ICON.pin}<span><span class="sr-only">Where: </span>${escapeHtml(where)}</span></li>`);
   if (p.price) items.push(`<li>${ICON.ticket}<span><span class="sr-only">Cost: </span>${escapeHtml(p.price)}</span></li>`);
   const getIn = bookingFor(p);
-  if (getIn.bookingHow === "away") {
+  if (p.booking === "nbcc") {
+    // Event tickets: sold here, in the page's own Get tickets section.
+    items.push(`<li>${ICON.ticket}<span>${NBCC_FACT_HTML}</span></li>`);
+  } else if (getIn.bookingHow === "away") {
     items.push(
       `<li>${ICON.ticket}<span>${escapeHtml(getIn.bookingNote)}. ` +
         `<a href="${escapeHtml(getIn.bookingUrl)}" target="_blank" rel="noopener">Get tickets<span class="sr-only">, opens in a new tab</span></a></span></li>`,
@@ -809,6 +815,11 @@ export interface FundraiserPageOptions {
    * remembered instead.
    */
   organiserPhotoSrc?: string | null;
+  /**
+   * Event tickets (src/tickets/page.ts): the thank you after buying at the top, the ticket money
+   * beside the gifts in the summary, and the Get tickets section, apart from and above the give form.
+   */
+  tickets?: { introHtml?: string; summaryHtml?: string; mainHtml?: string };
 }
 
 /**
@@ -983,7 +994,8 @@ export function renderFundraiserPage(template: string, p: PublicPage, opts: Fund
     (opts.team?.factsHtml ?? "") +
     renderCountdown(p, opts.now, opts.pageUrl) +
     (p.finished ? renderFinished(p) : "") +
-    (opts.thanks ? renderThanks(p, opts.pageUrl, opts.thanks, opts.now) : "");
+    (opts.thanks ? renderThanks(p, opts.pageUrl, opts.thanks, opts.now) : "") +
+    (opts.tickets?.introHtml ?? ""); // event tickets
   const body =
     '<div class="card card-lg fr-summary">' +
     '<h2 class="sr-only">Money raised so far</h2>' +
@@ -992,6 +1004,7 @@ export function renderFundraiserPage(template: string, p: PublicPage, opts: Fund
     (p.teamName ? '<p class="fr-meter__paidin">Includes everything the team members have raised.</p>' : "") +
     impact.afterMeter +
     renderSplit(p) +
+    (opts.tickets?.summaryHtml ?? "") + // event tickets
     (event && !p.finished ? renderEntryLine(p) : "") +
     `<a class="btn btn-primary fr-summary__give" href="#give">${p.finished ? "You can still give" : event ? "Make a donation" : "Give to this fundraiser"}</a>` +
     (opts.team?.summaryHtml ?? "") +
@@ -1007,6 +1020,7 @@ export function renderFundraiserPage(template: string, p: PublicPage, opts: Fund
     "</section>" +
     (opts.team?.mainHtml ?? "") +
     renderNews(p) +
+    (opts.tickets?.mainHtml ?? "") + // event tickets: its own section, never inside the give form
     // A member page still on its team is the one handed the team's line for under its facts.
     renderGiveForm(p, undefined, impact, { member: Boolean(opts.team?.factsHtml), members: opts.team?.memberCount }) +
     renderWall(p, opts.now) +

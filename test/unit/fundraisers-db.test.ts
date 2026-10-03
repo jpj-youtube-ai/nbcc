@@ -339,7 +339,8 @@ describe("the sign up details (TASK-499)", () => {
   });
 
   it("never reads a way in or an access tick the code does not know", () => {
-    const r = toRecord(fundraiserRow({ booking: "nbcc", access: ["a lift", "accessible toilets"] }));
+    const r = toRecord(fundraiserRow({ booking: "by_post", access: ["a lift", "accessible toilets"] }));
+    expect(toRecord(fundraiserRow({ booking: "nbcc" })).booking).toBe("nbcc"); // event tickets
     expect(r.booking).toBeNull();
     expect(r.access).toEqual(["accessible toilets"]);
   });

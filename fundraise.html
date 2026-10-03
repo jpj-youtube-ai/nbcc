@@ -25,11 +25,13 @@
     <!-- Community fundraising (TASK-494) has its OWN stylesheet and scripts rather than growing the
          shared bundle, which donate.html's page weight budget counts. -->
     <link rel="stylesheet" href="/assets/css/fundraising.css" />
+    <link rel="stylesheet" href="/assets/css/event-tickets.css" />
     <link rel="preload" href="/assets/fonts/playfair-var.woff2" as="font" type="font/woff2" crossorigin />
     <link rel="preload" href="/assets/fonts/poppins-400.woff2" as="font" type="font/woff2" crossorigin />
     <script defer src="/assets/js/main.js"></script>
     <script defer src="/assets/js/social-handles.js"></script>
     <script defer src="/assets/js/fundraise-steps.js"></script>
+    <script defer src="/assets/js/event-tickets-editor.js"></script>
     <script defer src="/assets/js/fundraise.js"></script>
     <script defer src="/assets/js/pulse.js"></script>
   </head>
@@ -406,13 +408,44 @@
                       <label class="fr-option fr-option--small" for="booking-door"><input id="booking-door" name="booking" type="radio" value="door" required aria-required="true" /><span>Pay on the door, no booking needed</span></label>
                       <label class="fr-option fr-option--small" for="booking-free"><input id="booking-free" name="booking" type="radio" value="free" required aria-required="true" /><span>Free, just come along</span></label>
                       <label class="fr-option fr-option--small" for="booking-donations"><input id="booking-donations" name="booking" type="radio" value="donations" required aria-required="true" /><span>Free entry, donations welcome</span></label>
+                      <!-- Event tickets: NBCC sells them (src/tickets/model.ts). -->
+                      <label class="fr-option fr-option--small" for="booking-nbcc"><input id="booking-nbcc" name="booking" type="radio" value="nbcc" required aria-required="true" /><span>NBCC sells the tickets for me</span></label>
                     </div>
                     <div class="give-field" data-ticket-field hidden>
                       <label for="ticketUrl">The link to buy tickets <span class="give-req" aria-hidden="true">*</span></label>
                       <input class="give-field-input" id="ticketUrl" name="ticketUrl" type="url" maxlength="500" inputmode="url" autocomplete="off" placeholder="https://..." required aria-required="true" aria-describedby="ticketUrlHelp" pattern="https://[^\s]+" data-invalid-message="Almost! Just paste the full web address, starting https://" />
                       <p class="give-field-help" id="ticketUrlHelp">Paste the full web address, starting https://</p>
                     </div>
-                    <p class="give-field-help fr-ticket-note">Want NBCC to sell the tickets for you? Tell us in the description and we&rsquo;ll be in touch.</p>
+                    <!-- Event tickets: the kinds of ticket, drawn and read by assets/js/event-tickets-editor.js,
+                         shown only when NBCC sells the tickets. Staff approve every ticket before it goes on sale. -->
+                    <div class="et-signup" data-nbcc-tickets hidden>
+                      <div class="et-help">
+                        <p>Choose this only if all the ticket money is going to NBCC. If you&rsquo;re sharing ticket money with another cause or keeping some for costs, sell them your own way and pay NBCC its share afterwards.</p>
+                        <p>If you have costs, like the hall, talk to us: we can repay agreed costs against receipts.</p>
+                      </div>
+                      <p class="fr-sublegend">Your tickets</p>
+                      <p class="give-field-help fr-sublegend-help">Add each kind of ticket and its price, up to &pound;500. A ticket can be free (put 0) if people still need to book, so you know the numbers. We check them before they go on sale, and people get them on your event&rsquo;s page.</p>
+                      <div class="et-rows" data-et-rows></div>
+                      <p><button class="fr-link-btn" type="button" data-et-add>Add another kind of ticket</button></p>
+                      <div class="give-field">
+                        <label for="ticketLimit">The most tickets to sell in all <span class="give-optional">(optional)</span></label>
+                        <input class="give-field-input" id="ticketLimit" name="ticketLimit" type="number" inputmode="numeric" min="1" max="5000" step="1" autocomplete="off" aria-describedby="ticketLimitHelp" data-invalid-message="Almost! Just put a whole number, or leave it empty for no limit." data-et-limit />
+                        <p class="give-field-help" id="ticketLimitHelp">Like the number the hall holds. Leave it empty for no limit. We say Sold out when it is reached.</p>
+                      </div>
+                      <fieldset class="fr-fieldset fr-subgroup" id="ticketCloseGroup">
+                        <legend class="fr-sublegend">When should ticket sales close?</legend>
+                        <div class="fr-options fr-options--stack">
+                          <label class="fr-option fr-option--small" for="ticketClose-start"><input id="ticketClose-start" name="ticketClose" type="radio" value="start" checked data-et-close /><span>When the event starts</span></label>
+                          <label class="fr-option fr-option--small" for="ticketClose-day_before"><input id="ticketClose-day_before" name="ticketClose" type="radio" value="day_before" data-et-close /><span>The day before (midnight)</span></label>
+                          <label class="fr-option fr-option--small" for="ticketClose-custom"><input id="ticketClose-custom" name="ticketClose" type="radio" value="custom" data-et-close /><span>A date and time I choose</span></label>
+                        </div>
+                        <div class="give-field" data-et-close-at-field hidden>
+                          <label for="ticketCloseAt">Close ticket sales on</label>
+                          <input class="give-field-input" id="ticketCloseAt" name="ticketCloseAt" type="datetime-local" autocomplete="off" aria-describedby="ticketCloseAtHelp" data-et-close-at />
+                          <p class="give-field-help" id="ticketCloseAtHelp">Before the event starts. Handy if you need final numbers for the caterer.</p>
+                        </div>
+                      </fieldset>
+                    </div>
                   </fieldset>
                   <div class="fr-row">
                     <div class="give-field">

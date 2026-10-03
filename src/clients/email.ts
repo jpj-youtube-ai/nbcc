@@ -687,6 +687,29 @@ export async function sendFundraiseTeam(kind: FundraiseTeamKind, name: string | 
   }
 }
 
+// Event tickets (Jaimie, points 23 and 24): NBCC selling an event's tickets. Each its own kind, so
+// they can be told apart in the email audit and a bounce report. Built by src/tickets/emails.ts and
+// sent by src/tickets/send.ts, from and replying to the events inbox. The two to the events inbox
+// are staff only (never link tagged).
+export type EventTicketsKind = "eventTickets" | "eventTicketsRefund" | "eventTicketsRefundAsked" | "eventTicketsToApprove" | "eventTicketsToCheck" | "eventTicketsCancelled";
+
+export async function sendEventTickets(kind: EventTicketsKind, name: string | null, message: FundraiseEmailMessage): Promise<void> {
+  switch (kind) {
+    case "eventTickets":
+      return sendVerbatim("eventTickets", name, message);
+    case "eventTicketsRefund":
+      return sendVerbatim("eventTicketsRefund", name, message);
+    case "eventTicketsRefundAsked":
+      return sendVerbatim("eventTicketsRefundAsked", name, message);
+    case "eventTicketsToApprove":
+      return sendVerbatim("eventTicketsToApprove", name, message);
+    case "eventTicketsToCheck":
+      return sendVerbatim("eventTicketsToCheck", name, message);
+    case "eventTicketsCancelled":
+      return sendVerbatim("eventTicketsCancelled", name, message);
+  }
+}
+
 // --- Backup alerts (TASK-423) ---------------------------------------------------------------
 // An operational notice to ADMIN_NOTIFICATION_EMAIL when the nightly backup fails, refuses to
 // ship, or reaches only one of its two destinations.

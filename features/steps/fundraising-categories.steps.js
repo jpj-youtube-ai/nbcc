@@ -58,6 +58,8 @@ async function formLabels() {
 
 async function putBack() {
   // Sign ups first: a category in use can never be deleted.
+  // Event tickets: an order never goes with its event (ON DELETE RESTRICT), so any go first.
+  await pool.query("DELETE FROM event_ticket_orders WHERE fundraiser_id IN (SELECT id FROM fundraisers WHERE title LIKE $1)", [MARK]);
   await pool.query("DELETE FROM fundraisers WHERE title LIKE $1", [MARK]);
   await pool.query("DELETE FROM fundraising_categories WHERE created_by LIKE $1", [ADDED_BY]);
   await pool.query("UPDATE fundraising_categories SET active = true, retired_at = NULL WHERE key = 'party'");

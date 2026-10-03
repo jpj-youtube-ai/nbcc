@@ -78,3 +78,11 @@ describe("the fundraising supporter thank you email kind", () => {
     expect(labelled).toContain("fundraiseSupporterThanks");
   });
 });
+
+// Event tickets: the buyer's tickets and refund, and the two staff emails to events@.
+describe("the event ticket email kinds", () => {
+  it.each(["eventTickets", "eventTicketsRefund", "eventTicketsRefundAsked", "eventTicketsToApprove", "eventTicketsToCheck", "eventTicketsCancelled"])("sends and names %s", (kind) => {
+    expect(sent).toContain(kind);
+    expect(labelled).toContain(kind);
+  });
+});

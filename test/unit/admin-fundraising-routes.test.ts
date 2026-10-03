@@ -564,6 +564,18 @@ describe("correcting the split with another cause", () => {
     );
   });
 
+  // Event tickets: NBCC never sells the tickets of an event that shares with another cause.
+  it("refuses sharing for an event whose tickets NBCC sells, and NBCC selling for one that shares", async () => {
+    db.setFundraiserSplit.mockRejectedValue(new FundraiserError("tickets_no_split"));
+    const split = await run(routes.putAdminFundraiserSplit, { params: P, token: tokenFor("admin"), body: SPLIT });
+    expect(split.statusCode).toBe(409);
+    expect(split.body).toEqual({ error: "NBCC sells this event's tickets, so it can't share with another cause." });
+    db.patchFundraiser.mockRejectedValue(new FundraiserError("tickets_shared"));
+    const patch = await run(routes.patchAdminFundraiser, { params: P, token: tokenFor("admin"), body: { booking: "nbcc" } });
+    expect(patch.statusCode).toBe(409);
+    expect((patch.body as { error: string }).error).toBe("This event shares what it raises with another cause, so NBCC can't sell its tickets.");
+  });
+
   it("checks it with the form's rules", async () => {
     const res = await run(routes.putAdminFundraiserSplit, { params: P, token: tokenFor("admin"), body: { sharesWithOther: true, nbccSharePercent: 0 } });
     expect(res.statusCode).toBe(400);

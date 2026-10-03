@@ -105,6 +105,10 @@
     price: "price",
     booking: "booking-away",
     ticketUrl: "ticketUrl",
+    // Event tickets: the kinds of ticket (the first one's name), and the limit.
+    ticketTypes: "etTypeName0",
+    ticketLimit: "ticketLimit",
+    ticketClose: "ticketCloseAt",
     ageLimit: "ageLimit",
     dressCode: "dressCode",
     included: "included",
@@ -627,6 +631,9 @@
     var ticketField = form.querySelector("[data-ticket-field]");
     function applyBooking() {
       if (ticketField) ticketField.hidden = radio("booking") !== "away";
+      // Event tickets: the kinds of ticket, only when NBCC sells them.
+      var nbccTickets = form.querySelector("[data-nbcc-tickets]");
+      if (nbccTickets) nbccTickets.hidden = radio("booking") !== "nbcc";
     }
 
     // --- what they would like, and the address ----------------------------------------------------
@@ -694,6 +701,50 @@
       var l = r && r.closest ? r.closest("label") : null;
       return l ? String(l.textContent || "").replace(/\s+/g, " ").trim() : "";
     }
+    // Event tickets: the tickets NBCC is asked to sell, in words for Check your answers. Empty for
+    // any other way in.
+    function ticketPlan() {
+      var root = form.querySelector("[data-nbcc-tickets]");
+      if (path() !== "event" || radio("booking") !== "nbcc" || !root || !win.NBCCTicketEditor) return null;
+      return { root: root, plan: win.NBCCTicketEditor.read(root) };
+    }
+    function ticketWords() {
+      var t = ticketPlan();
+      if (!t) return { tickets: "", limit: "", close: "" };
+      var money = function (pence) {
+        return pence === 0 ? "free" : "£" + (pence % 100 === 0 ? String(pence / 100) : (pence / 100).toFixed(2));
+      };
+      var tickets = t.plan.types
+        .filter(function (x) { return x.name; })
+        .map(function (x) { return x.name + (x.pricePence >= 0 ? ", " + money(x.pricePence) : "") + (x.quantity ? " (" + x.quantity + " on sale)" : ""); })
+        .join("; ");
+      var close = t.plan.close === "custom" ? String(t.plan.closeAt || "").replace("T", " at ") : labelOfChoice("ticketClose");
+      return { tickets: tickets ? tickets + ". We check them before they go on sale." : "", limit: t.plan.limit ? String(t.plan.limit) : "No limit", close: close };
+    }
+    // Event tickets: what Next asks for before leaving the step, each in a short, warm prompt.
+    function ticketProblems(scope) {
+      var t = ticketPlan();
+      if (!t || !scope.contains(t.root)) return [];
+      var out = [];
+      var rows = Array.prototype.slice.call(t.root.querySelectorAll("[data-et-row]"));
+      var named = 0;
+      rows.forEach(function (row) {
+        var name = row.querySelector("[data-et-name]");
+        var price = row.querySelector("[data-et-price]");
+        var n = name ? String(name.value || "").trim() : "";
+        var p = price ? String(price.value || "").trim() : "";
+        if (n) named += 1;
+        if (n && !p) out.push({ control: price, message: "Almost! Just add a price for this ticket. Put 0 if it's free." });
+        else if (!n && p) out.push({ control: name, message: "Almost! Just give this ticket a name, like Adult." });
+      });
+      if (named === 0 && !out.length && rows[0]) {
+        out.push({ control: rows[0].querySelector("[data-et-name]"), message: "Almost! Just add at least one kind of ticket, like Adult at £10." });
+      }
+      var at = t.root.querySelector("[data-et-close-at]");
+      if (t.plan.close === "custom" && at && !String(at.value || "").trim()) out.push({ control: at, message: "Almost! Just choose when ticket sales should close." });
+      return out;
+    }
+
     function buildReview() {
       if (!review) return;
       while (review.firstChild) review.removeChild(review.firstChild);
@@ -730,6 +781,8 @@
       if (path() === "event") {
         [["Front of the card", val("cardLine")], ["Finish time", val("endTime")], ["Full address", [val("venueAddress"), val("venuePostcode")].filter(Boolean).join(", ")],
           ["Price", val("price")], ["How people get in", labelOfChoice("booking")], ["Ticket link", radio("booking") === "away" ? val("ticketUrl") : ""],
+          // Event tickets: what NBCC is asked to sell, as they typed it.
+          ["Your tickets", ticketWords().tickets], ["Most tickets in all", ticketWords().limit], ["Ticket sales close", ticketWords().close],
           ["Age limit", val("ageLimit")], ["Dress code", val("dressCode")], ["What's included", val("included")], ["Credit it to", val("creditName")]].forEach(function (r) {
           if (r[1]) rows.push(r);
         });
@@ -808,11 +861,19 @@
       var end = val("endTime");
       return start && end && end <= start ? el("endTime") : null;
     }
+    var TICKETS_SHARED =
+      "NBCC can only sell the tickets when all the ticket money comes to NBCC. As you're sharing with another cause, please press Back and choose another way for people to get in, then pay NBCC its share afterwards.";
     function extraFor(scope, serverFields) {
       return function () {
         var out = [];
         var end = finishBeforeStart();
         if (end && scope.contains(end)) out.push({ control: end, message: "The finish time is before the start." });
+        // Event tickets: the kinds of ticket, and NBCC never sells them when sharing with another cause.
+        ticketProblems(scope).forEach(function (problem) { out.push(problem); });
+        var sharesYes = el("sharesYes");
+        if (sharesYes && scope.contains(sharesYes) && path() === "event" && radio("booking") === "nbcc" && sharing()) {
+          out.push({ control: sharesYes, message: TICKETS_SHARED });
+        }
         Object.keys(SOCIAL).forEach(function (id) {
           var problem = socialProblem(id);
           var box = el(id);
@@ -1248,6 +1309,15 @@
       body.access = access;
       body.booking = booking;
       body.ticketUrl = booking === "away" ? val("ticketUrl") : "";
+      // Event tickets: what assets/js/event-tickets-editor.js reads from its rows.
+      var nbccTickets = form.querySelector("[data-nbcc-tickets]");
+      if (booking === "nbcc" && nbccTickets && win.NBCCTicketEditor) {
+        var plan = win.NBCCTicketEditor.read(nbccTickets);
+        body.ticketTypes = plan.types;
+        body.ticketLimit = plan.limit;
+        body.ticketClose = plan.close;
+        if (plan.close === "custom") body.ticketCloseAt = plan.closeAt;
+      }
       // Team pages: every row in order (the server names a problem by its place), even an empty one.
       body.team = raising ? radio("team") || null : "me";
       body.teamShareMode = team && sharing() ? radio("teamShareMode") || null : null;

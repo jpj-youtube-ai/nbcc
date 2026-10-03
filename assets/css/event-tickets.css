@@ -1,0 +1,99 @@
+/* Event tickets (Jaimie, points 23 and 24): the Get tickets section on an event's page, the ticket
+   money in the summary, the thank you after buying, and the organiser's tickets in the private area.
+   Its own stylesheet, linked only by the pages that draw it (src/tickets/render.ts), so the shared
+   bundle and fundraising.css stay as they are. NBCC's own tokens throughout (styles.css :root).
+   Nothing scrolls inside a box: rows wrap and the page grows. */
+
+.et-tickets { scroll-margin-top: calc(var(--nav-h) + 1rem); }
+.et-tickets:focus { outline: none; }
+.et-card { padding: clamp(22px, 4vw, 40px); border-top: 5px solid var(--holly); }
+.et-eyebrow { margin: 0 0 4px; font-size: 0.74rem; font-weight: 700; letter-spacing: 0.16em; text-transform: uppercase; color: var(--holly-dark); }
+.et-title { margin: 0 0 6px; font-family: var(--font-head); font-size: clamp(1.45rem, 1.2rem + 1vw, 1.85rem); color: var(--maroon); text-wrap: balance; }
+.et-sub { margin: 0 0 22px; color: var(--slate-soft); font-size: 0.98rem; max-width: 60ch; }
+
+.et-form { background: none; border: 0; border-radius: 0; box-shadow: none; padding: 0; }
+.et-fieldset { border: 0; margin: 0 0 22px; padding: 0; min-width: 0; }
+.et-legend { padding: 0; margin: 0 0 12px; font-weight: 600; font-size: 1.02rem; color: var(--slate); }
+
+.et-types { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+.et-type {
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px 18px;
+  padding: 14px 16px; border: 1.6px solid var(--line); border-radius: 14px; background: var(--cream);
+  transition: border-color 0.2s ease, background-color 0.2s ease;
+}
+.et-type.is-chosen { border-color: var(--holly); background: var(--holly-soft); }
+.et-type.is-sold-out { background: var(--tint); }
+.et-type__about { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; min-width: 0; flex: 1 1 180px; }
+.et-type__name { font-weight: 600; font-size: 1.05rem; color: var(--slate); overflow-wrap: anywhere; }
+.et-type.is-sold-out .et-type__name, .et-type.is-sold-out .et-type__price { color: var(--slate-soft); }
+.et-type__price { font-family: var(--font-head); font-weight: 700; font-size: 1.15rem; color: var(--maroon); font-variant-numeric: lining-nums tabular-nums; }
+.et-type__few { font-size: 0.82rem; font-weight: 600; color: var(--crimson); }
+.et-type__out { font-size: 0.78rem; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--maroon); border: 1.6px solid var(--maroon); border-radius: 6px; padding: 5px 10px; }
+
+.et-stepper { display: inline-flex; align-items: stretch; border: 1.6px solid var(--line); border-radius: 12px; background: var(--card); overflow: hidden; }
+.et-stepper:focus-within { border-color: var(--holly); }
+.et-stepper__btn {
+  width: 46px; min-height: 46px; border: 0; background: none; color: var(--maroon); font: inherit; font-size: 1.35rem; font-weight: 600; line-height: 1;
+  cursor: pointer; transition: background-color 0.2s ease, transform 0.1s ease;
+}
+.et-stepper__btn:hover { background: var(--tan-soft); }
+.et-stepper__btn:active { transform: scale(0.94); }
+.et-stepper__btn:focus-visible { outline: 3px solid var(--holly); outline-offset: -3px; }
+.et-stepper__btn:disabled { color: var(--line); cursor: default; background: none; }
+.et-stepper__input {
+  width: 56px; border: 0; border-left: 1px solid var(--line); border-right: 1px solid var(--line); background: none; text-align: center;
+  font: inherit; font-weight: 600; font-size: 1.1rem; color: var(--slate); font-variant-numeric: lining-nums tabular-nums; -moz-appearance: textfield; appearance: textfield;
+}
+.et-stepper__input::-webkit-outer-spin-button, .et-stepper__input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+.et-stepper__input:focus { outline: none; background: var(--holly-soft); }
+
+.et-cover { margin: 0 0 18px; }
+.et-total {
+  display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 6px 16px;
+  padding: 16px 0 0; margin: 0 0 8px; border-top: 1px solid var(--line);
+}
+.et-total__label { font-weight: 600; color: var(--slate); }
+.et-total__sum { font-family: var(--font-head); font-weight: 700; font-size: clamp(1.6rem, 1.3rem + 1.2vw, 2.1rem); color: var(--maroon); font-variant-numeric: lining-nums tabular-nums; }
+.et-note { margin: 0; font-size: 0.86rem; color: var(--slate-soft); }
+.et-buy { width: 100%; justify-content: center; }
+.et-buy:disabled { opacity: 0.55; cursor: not-allowed; }
+.et-nojs { margin: 0; color: var(--slate); }
+
+.et-state { padding: 18px 20px; border-radius: 14px; background: var(--tint); margin: 0 0 14px; }
+.et-state__line { margin: 0; color: var(--slate); font-size: 1.02rem; }
+.et-badge {
+  display: inline-block; margin: 0 0 10px; padding: 6px 14px; border: 2px solid var(--maroon); border-radius: 6px;
+  font-family: var(--font-head); font-weight: 700; font-size: 1.15rem; letter-spacing: 0.06em; text-transform: uppercase; color: var(--maroon); transform: rotate(-2deg);
+}
+
+/* the summary card: ticket money apart from gifts */
+.et-split { margin: -10px 0 0; font-size: 0.98rem; font-weight: 600; color: var(--slate); font-variant-numeric: lining-nums tabular-nums; overflow-wrap: anywhere; }
+.et-summary-btn { justify-content: center; width: 100%; }
+
+.et-thanks p strong { font-variant-numeric: lining-nums tabular-nums; letter-spacing: 0.04em; }
+
+/* the organiser's private area (assets/js/event-tickets-manage.js) and the sign up form */
+.et-mine__money { font-weight: 600; font-variant-numeric: lining-nums tabular-nums; }
+.et-list { list-style: none; margin: 0 0 14px; padding: 0; display: grid; gap: 8px; }
+.et-list li {
+  display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 4px 14px;
+  padding: 10px 14px; border: 1px solid var(--line); border-radius: 12px; background: var(--cream); overflow-wrap: anywhere;
+}
+.et-list__what { font-weight: 600; min-width: 0; }
+.et-list__state { font-size: 0.88rem; color: var(--slate-soft); }
+.et-list__state.is-waiting { color: var(--maroon); font-weight: 600; }
+.et-rows { display: grid; gap: 10px; margin: 0 0 12px; }
+.et-row { display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; padding: 14px; border: 1px solid var(--line); border-radius: 14px; background: var(--cream); }
+@media (min-width: 640px) { .et-row { grid-template-columns: minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1fr) auto; align-items: start; } }
+.et-row .give-field { margin: 0; }
+.et-row__remove { justify-self: start; }
+@media (min-width: 640px) { .et-row__remove { margin-top: 38px; } }
+.et-help { margin: 0 0 12px; padding: 14px 16px; border-left: 4px solid var(--holly); background: var(--holly-soft); border-radius: 0 12px 12px 0; font-size: 0.95rem; color: var(--slate); }
+.et-help p { margin: 0; }
+.et-help p + p { margin-top: 8px; }
+.et-actions { display: flex; flex-wrap: wrap; gap: 10px 14px; align-items: center; }
+[data-et-part] h4 { margin: 24px 0 6px; font-size: 1.05rem; color: var(--maroon); }
+[data-et-part] .et-list { margin-top: 10px; }
+/* A box only a bot fills: off the page for people, and out of the tab order. */
+.et-hp { position: absolute; left: -9999px; width: 1px; height: 1px; overflow: hidden; }
+.et-captcha { margin: 0 0 14px; }

@@ -40,6 +40,17 @@ vi.mock("../../src/config", () => ({
   },
 }));
 vi.mock("../../src/db/pool", () => ({ pool: { query: vi.fn(), connect: vi.fn() } }));
+// The real Signed by list, with a switch to make reading it fail.
+const signerList = vi.hoisted(() => ({ broken: false }));
+vi.mock("../../src/fundraising/signers", async (original) => {
+  const real = await original<typeof import("../../src/fundraising/signers")>();
+  const orBroken = <T extends (...a: never[]) => unknown>(fn: T) =>
+    ((...a: Parameters<T>) => {
+      if (signerList.broken) throw new Error("the list could not be read");
+      return fn(...a);
+    }) as T;
+  return { ...real, listedSigner: orBroken(real.listedSigner), listedSigners: orBroken(real.listedSigners) };
+});
 
 import * as routes from "../../src/routes/admin-welcome-packs";
 import { signAdminSession } from "../../src/admin/session";
@@ -154,17 +165,18 @@ describe("GET /api/admin/fundraising/packs", () => {
 describe("POST /api/admin/fundraisers/:id/pack", () => {
   const P = { id: "9" };
   it("is refused for a viewer", async () => {
-    const res = await run(routes.postPack, { token: tokenFor("viewer", { fundraising: "view" }), params: P, body: { action: "tick", key: "letter" } });
+    const res = await run(routes.postPack, { token: tokenFor("viewer", { fundraising: "view" }), params: P, body: { action: "tick", key: "letter", words: "Welcome letter" } });
     expect(res.statusCode).toBe(403);
     expect(changePack).not.toHaveBeenCalled();
   });
 
   it("lets an editor tick, recorded as them", async () => {
     changePack.mockResolvedValue({ view: { state: "part" }, words: "Welcome pack: 10 A4 posters ticked", requestWords: ["Posters: sent (by post)"] });
-    const res = await run(routes.postPack, { token: tokenFor("editor", { fundraising: "edit" }), params: P, body: { action: "tick", key: "posters_a4" } });
+    const res = await run(routes.postPack, { token: tokenFor("editor", { fundraising: "edit" }), params: P, body: { action: "tick", key: "posters_a4", words: "10 A4 posters", quantity: 10 } });
     expect(res.statusCode).toBe(200);
     // With today as a UK day, for the request the tick marks as sent.
-    expect(changePack).toHaveBeenCalledWith(9, { action: "tick", key: "posters_a4" }, "admin:fern@example.com", expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/));
+    // What staff saw goes with the tick.
+    expect(changePack).toHaveBeenCalledWith(9, { action: "tick", key: "posters_a4", words: "10 A4 posters", quantity: 10 }, "admin:fern@example.com", expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/));
     expect(res.body).toEqual({ pack: { state: "part" }, words: "Welcome pack: 10 A4 posters ticked", requests: ["Posters: sent (by post)"] });
   });
 
@@ -180,9 +192,30 @@ describe("POST /api/admin/fundraisers/:id/pack", () => {
   });
 
   it("asks for a reason to leave something out", async () => {
-    const res = await run(routes.postPack, { token: tokenFor("admin"), params: P, body: { action: "skip", key: "sponsor_form", reason: "" } });
+    const res = await run(routes.postPack, { token: tokenFor("admin"), params: P, body: { action: "skip", key: "sponsor_form", words: "Sponsor form", reason: "" } });
     expect(res.statusCode).toBe(400);
     expect((res.body as { fields: Record<string, string> }).fields.reason).toBe("Say why it is being left out.");
+    expect(changePack).not.toHaveBeenCalled();
+  });
+
+  it("needs what was seen with a tick, and answers 409 when the list has changed since", async () => {
+    const bare = await run(routes.postPack, { token: tokenFor("admin"), params: P, body: { action: "tick", key: "letter" } });
+    expect(bare.statusCode).toBe(400);
+    expect(changePack).not.toHaveBeenCalled();
+    changePack.mockRejectedValue(new PackError("conflict", "This has changed since you opened the page. Check the list and tick it again."));
+    const stale = await run(routes.postPack, { token: tokenFor("admin"), params: P, body: { action: "tick", key: "posters_a4", words: "10 A4 posters", quantity: 10 } });
+    expect(stale.statusCode).toBe(409);
+    expect(stale.body).toEqual({ error: "This has changed since you opened the page. Check the list and tick it again." });
+  });
+
+  it("answers properly when the Signed by list cannot be read", async () => {
+    signerList.broken = true;
+    const errors = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const res = await run(routes.postPack, { token: tokenFor("admin"), params: P, body: { action: "signer", name: SIGNERS[0].name } });
+    signerList.broken = false;
+    errors.mockRestore();
+    expect(res.statusCode).toBe(500);
+    expect(res.body).toEqual({ error: "Admin is temporarily unavailable" });
     expect(changePack).not.toHaveBeenCalled();
   });
 

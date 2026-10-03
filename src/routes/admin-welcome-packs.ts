@@ -21,7 +21,9 @@ import { followUpToday } from "../fundraising/follow-up";
 //   GET  /api/admin/fundraising/packs          every page's pack, which are still to send, and   view
 //                                              who this staff member last chose to sign a letter
 //   POST /api/admin/fundraisers/:id/pack       { action: tick | untick | skip | send | undo |    edit
-//                                              signer, ... }
+//                                              signer, ... }. A tick and a leave out say what the
+//                                              list showed (words, quantity): if it shows something
+//                                              else now, 409, and the panel reads it again.
 //   GET  /api/admin/fundraisers/:id/pack/print the pack's one print view, a whole HTML page       view
 //                                              (?part=letter for the letter on its own)
 //
@@ -93,13 +95,14 @@ export async function postPack(req: Request, res: Response): Promise<Response | 
   if (id === null) return res.status(400).json({ error: "Invalid id" });
   const parsed = packActionSchema.safeParse(req.body ?? {});
   if (!parsed.success) return res.status(400).json({ error: LOOK_AGAIN, fields: fieldErrors(parsed.error.issues) });
-  let input = parsed.data;
-  if (input.action === "signer") {
-    const listed = listedSigner(input.name);
-    if (!listed) return res.status(400).json({ error: LOOK_AGAIN, fields: { name: NOT_ON_THE_LIST } });
-    input = { action: "signer", name: listed.name, role: listed.role || null };
-  }
   try {
+    let input = parsed.data;
+    if (input.action === "signer") {
+      // Inside the try: if the list cannot be read, they get a proper answer, not a dropped request.
+      const listed = listedSigner(input.name);
+      if (!listed) return res.status(400).json({ error: LOOK_AGAIN, fields: { name: NOT_ON_THE_LIST } });
+      input = { action: "signer", name: listed.name, role: listed.role || null };
+    }
     const out = await changePack(id, input, actorOf(claims), followUpToday(new Date()));
     return res.status(200).json({ pack: out.view, words: out.words, requests: out.requestWords });
   } catch (err) {

@@ -8,7 +8,7 @@ import { countPendingPictures } from "./fundraiser-pictures";
 import { countPendingThanks } from "./fundraiser-thanks";
 import { countHeldMessages } from "./fundraiser-memory";
 import { readPromptCounts } from "./fundraising-touch";
-import { sentPackIds } from "./welcome-packs";
+import { settledPackIds } from "./welcome-packs";
 import { INVITE_TTL_DAYS, inviteCc, inviteFullName, inviteNameParts, staffFirstName } from "../fundraising/invite";
 import { summaryRecipientsSchema, type SummaryInputs } from "../fundraising/summary";
 import type { CallRecord, CallWhich } from "../fundraising/follow-up";
@@ -465,9 +465,9 @@ export async function readSummaryInputs(now: Date): Promise<SummaryInputs> {
         console.error("fundraising summary pledges paid twice count failed:", err instanceof Error ? err.message : err);
         return 0;
       }),
-    // Welcome packs: whose pack has gone. If they cannot be read, the summary still goes, without
-    // its welcome pack lines.
-    packsSent: await sentPackIds()
+    // Welcome packs: whose pack has gone, with nothing more owed. If they cannot be read, the
+    // summary still goes, without its welcome pack lines.
+    packsSent: await settledPackIds(fundraisers)
       .then((ids) => [...ids])
       .catch((err: unknown) => {
         console.error("fundraising summary welcome packs read failed:", err instanceof Error ? err.message : err);

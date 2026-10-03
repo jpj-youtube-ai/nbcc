@@ -9651,7 +9651,7 @@ in it is worked out from their sign up each time, only what applies to that page
 | --- | --- |
 | The printed **welcome letter** | Everyone with a pack |
 | What they **asked for** on the form, in the numbers they asked for: A4 and A3 posters, A5 leaflets, printed QR codes, collection buckets and tins | Whoever asked. The form asks only how many posters, so they are A4 unless the organiser's last "Ask us to print these" gave sizes that add up to the same number |
-| The paper **sponsor form** | A sponsorship fundraiser: someone raising money for a sporting event, a team organiser's page, or anyone raising money who asked for one. Never a bake sale or a coffee morning, an event, or in memory |
+| The paper **sponsor form** | A sponsorship fundraiser: someone raising money for a sporting event, or a team organiser's page. Never a bake sale or a coffee morning, an event, or in memory. (Nothing else on the sign up says a page is sponsored: a category is only a name staff can change, with a Sporting tick.) |
 | The **NBCC T-shirt**, in the size they chose | A sporting event. With no size yet it shows "Waiting for T-shirt size", cannot be ticked, and has the "Ask them for their T-shirt size" button |
 
 **In memory of someone** there is no welcome pack and no T-shirt. The same panel is **Things to
@@ -9670,18 +9670,28 @@ pack**, **Part packed**, **Ready to send** or **Sent**. A tick is kept with what
 called when it was made ("10 A4 posters", "NBCC T-shirt, Adult M"): if the sign up has changed since
 (another number, another size, another split between A4 and A3) the tick no longer counts and the
 row says what it was ticked for, so it can be ticked again. Once a pack is **Sent** it stays Sent: a
-later change shows a small **Changed since it was sent** flag instead. A press that leaves the pack
-as it stands (ticking what is ticked) writes nothing and records nothing. The list has a **Pack to send** pill (in memory, **Things to send**) and a **Packs to send
+later change shows a small **Changed since it was sent** flag instead, with what changed (what went
+and is no longer asked for is named). The same goes for a thing **left out**: a T-shirt left out
+while it waited for a size is asked for again once the size comes in ("Their size has come in: Adult
+M. Tick it when the T-shirt goes in."), and on a pack already sent it is flagged. A tick and a leave
+out say what the list showed when they were pressed: if the sign up has changed since the page was
+opened the press is refused (409) and the panel shows how it stands, so a tick always records what
+staff saw. A press that leaves the pack as it stands (ticking what is ticked) writes nothing and
+records nothing. The list has a **Pack to send** pill (in memory, **Things to send**) and a **Packs to send
 (N)** filter: every approved page with a pack not yet sent. Editors and admins tick; viewers read
 and print. Every change is in `audit_log` (`fundraiser.pack_updated`) and so in the History.
 
-**Ticking also looks after Requests.** What they asked for is tracked in Requests too. In the same
-save, once every thing of a kind that is going has its tick, its request is marked as it would be by
-hand (posters, leaflets, QR codes and envelopes **Sent** by post; buckets and tins **With them**),
-with how many went and the note "Sent with the welcome pack." Taking the tick off opens a request
-the pack marked again; one staff dealt with by hand in Requests is never touched. **Pack sent**
-catches up any still open. It uses the Requests' own rules and audit line
-(`changeRequestIn`, `src/db/fundraising-requests.ts`).
+**Ticking also looks after Requests, without overwriting what staff did there by hand.** What they
+asked for is tracked in Requests too. A tick, an untick or a leave out looks only at the request of
+the thing pressed: once every thing of that kind that is going has its tick, the request is marked
+as it would be by hand (posters, leaflets, QR codes and envelopes **Sent** by post; buckets and tins
+**With them**), with how many went and the note "Sent with the welcome pack." Taking the tick off
+opens again a request **the pack marked**; re-ticking a thing (they asked for a different number)
+puts right how many went on one the pack marked. **Pack sent** only catches up requests still To
+send: never a count, never an undo. So a count staff corrected in Requests, or a request they undid
+there, is never put back by a press on something else. Whether the pack marked a request is kept on
+the pack's own rows (`welcome_pack_items.marked_request`), never read from the request's note. It
+uses the Requests' own rules and audit line (`changeRequestIn`, `src/db/fundraising-requests.ts`).
 
 **Signed by** is the admin's one list of who can sign for NBCC (`AdminHelpers.SIGNERS`, as the thank
 you letters use). The server reads the same file (`src/fundraising/signers.ts`), takes only a name
@@ -9700,8 +9710,11 @@ own. Anything staff left out is left out of the print and of the letter's list; 
 but cannot be printed (buckets, the T-shirt) is listed on screen only. A poster asked for up to 10
 times is drawn once and copied when the print window opens (and the copies put away when it closes).
 More than 10 of a kind are never copied in the browser: one is drawn, labelled "print 40 copies of
-this page (set Copies in the print window)", and a note says to print the rest from its own page
-under Materials. The organisers' "Ask us" note is left off this staff page.
+this page (set Copies in the print window)", and a note says to print the rest from its own page,
+with the Materials buttons under Where it is up to. The organisers' "Ask us" note is left off this
+staff page. A long address is set smaller (two steps) to stay in the envelope's window and is never
+clipped; if it cannot fit, staff see a warning on screen (not printed) to check the envelope or
+write it by hand.
 
 The **welcome letter** is in the thank you letter's house style: the maroon frame, our address
 (The Elves' Workshop) and the logo, a script signature, the maroon foot with the phone number,
@@ -9716,9 +9729,11 @@ the covering note is quiet: cream and tan, no QR code, no exclamation marks.
 ### Elsewhere
 
 - **The Monday summary** (`src/fundraising/summary.ts`): "N welcome packs to send" (pages approved
-  more than 2 days ago whose welcome pack is not sent), "N welcome packs waiting for a T-shirt size"
-  (of the packs still to send; never a sign up still new) and "N in memory pages with things to
-  send", all in Waiting on us. If the packs cannot be read the summary still goes, without them.
+  more than 2 days ago whose welcome pack is not sent, or sent with a T-shirt left out whose size
+  has since come in), "N welcome packs waiting for a T-shirt size" (never a sign up still new) and
+  "N in memory pages with things to send", all in Waiting on us. Each page is in one line only: a
+  pack waiting for a size is not also a pack to send. If the packs cannot be read the summary still
+  goes, without them.
 - **The organiser's private area**: one small line once theirs has been sent, "Your welcome pack is
   on its way. We posted it on 4 October 2026." (in memory: "The things you asked for are on their
   way."), and nothing before. Never who sent it.
@@ -9728,7 +9743,7 @@ the covering note is quiet: cream and tan, no QR code, no exclamation marks.
 | Route | Needs | What it does |
 | --- | --- | --- |
 | `GET /api/admin/fundraising/packs` | view | `{ packs: { <id>: view }, toSend: { <id>: true }, mySigner }`: every page's pack, which are still to send, and who this staff member last chose to sign |
-| `POST /api/admin/fundraisers/:id/pack` | edit | `{ action: "tick" \| "untick", key }`, `{ action: "skip", key, reason }`, `{ action: "send" }`, `{ action: "undo" }` or `{ action: "signer", name, role }`. Answers `{ pack, words, requests }` (`requests`: what it marked in Requests, in their words; `words` is empty when nothing changed); 400 with `fields` (a signer not on the Signed by list is one), 404 when there is no pack, 409 with the reason when it cannot be done as it stands |
+| `POST /api/admin/fundraisers/:id/pack` | edit | `{ action: "tick", key, words, quantity }` and `{ action: "skip", key, words, quantity, reason }` (`words` and `quantity` are what the list showed), `{ action: "untick", key }`, `{ action: "send" }`, `{ action: "undo" }` or `{ action: "signer", name, role }`. Answers `{ pack, words, requests }` (`requests`: what it marked in Requests, in their words; `words` is empty when nothing changed); 400 with `fields` (a signer not on the Signed by list is one), 404 when there is no pack, 409 with the reason when it cannot be done as it stands |
 | `GET /api/admin/fundraisers/:id/pack/print` | view | The print view, a whole HTML page; `?part=letter` for the letter only. Never kept, never indexed |
 
 (`PUT /api/admin/fundraisers/:id/welcome-pack`, from the sign up tidy, is a different thing: it sets
@@ -9740,10 +9755,10 @@ Two new tables, cleared with their fundraiser. `welcome_packs`: one row per fund
 first time staff touch its pack (`sent_at`, `sent_by`, `signer`, `signer_role`, `signer_by`,
 `signer_at`).
 `welcome_pack_items`: one row per thing staff have ticked or left out (`key`, the `label` (the
-list's words for it) and `quantity` as they were then, `ticked_at`, `ticked_by`, `skipped_reason`; ticked or left out,
-never both). A thing nobody has touched needs no row, and what a pack holds is never stored.
+list's words for it) and `quantity` as they were then, `ticked_at`, `ticked_by`, `skipped_reason`, and `marked_request`: the
+pack marked this thing's request in Requests; ticked or left out, never both). A thing nobody has touched needs no row, and what a pack holds is never stored.
 Numbered 230, above everything on its way to main before it. In the nightly backup's table count
-(86).
+(88).
 
 ### Where it lives, and tests
 
@@ -10428,7 +10443,7 @@ lives in; the Drive copy is not immutable.
 
 ### There are THREE databases, not one
 
-This is the trap this feature was built around. `DATABASE_URL` holds 83 tables
+This is the trap this feature was built around. `DATABASE_URL` holds 85 tables
 (42 when this was built; the Events page added three in TASK-453, the Festive Ball ticket
 report one in TASK-464, the admin's New pills one, `admin_seen`, in TASK-478, site analytics
 four in TASK-479, the business supporter call log in TASK-491, community fundraising five
@@ -10444,7 +10459,7 @@ lines (with buyers' names, emails and phones), the refunds and the refund reques
 welcome packs: each page's pack and the things ticked in it),
 but `STORIES_DATABASE_URL` and `CONTACT_DATABASE_URL` are separate databases
 (deliberately, so the public story and contact forms can never reach donor
-data). A `pg_dump $DATABASE_URL` captures 83 of **86** tables and silently
+data). A `pg_dump $DATABASE_URL` captures 85 of **88** tables and silently
 drops every My Story submission (and, since TASK-475, the fingerprints in
 `erased_stories` that keep erased stories from coming back) and every contact
 enquiry, while producing a

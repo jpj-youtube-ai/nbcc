@@ -36,9 +36,10 @@ import { packCounts } from "./welcome-pack";
 //                  Get involved; and those who say they've finished
 //                  Team pages: team member sign ups to approve (on their own line), and teams live
 //                  10 days or more that nobody has joined
-//                  Welcome packs: packs to send (approved more than 2 days ago, not yet sent);
-//                  of the packs still to send, those waiting for a T-shirt size (never a sign up
-//                  still new); and in memory pages with things to send, on their own line
+//                  Welcome packs, each page in one line only: packs waiting for a T-shirt size
+//                  (never a sign up still new); packs to send (approved more than 2 days ago, not
+//                  yet sent, or sent with a T-shirt left out whose size has since come in); and in
+//                  memory pages with things to send
 //   coming up      approved fundraisers dated in the next four weeks
 
 export const SUMMARY_MAX_RECIPIENTS = 10;
@@ -102,8 +103,9 @@ export interface SummaryInputs {
   /** Sponsor pledges paid twice (or paid online after cash) that nobody has checked yet. */
   pledgesPaidTwice?: number;
   /**
-   * Welcome packs: the fundraisers whose pack has been sent. Null or missing when it could not be
-   * read: the summary then says nothing of packs to send, rather than counting every one.
+   * Welcome packs: the fundraisers whose pack has gone with nothing more owed (packSettled). Null or
+   * missing when it could not be read: the summary then says nothing of packs to send, rather than
+   * counting every one.
    */
   packsSent?: number[] | null;
 }

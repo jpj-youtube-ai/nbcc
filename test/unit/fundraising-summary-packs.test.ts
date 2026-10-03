@@ -37,18 +37,20 @@ describe("welcome packs in the Monday summary", () => {
           fundraiser(4, { approvedAt: "2026-12-06T10:00:00.000Z" }), // approved yesterday: not yet
           fundraiser(5, { status: "new", approvedAt: null, isSporting: true }), // still new: not counted
           fundraiser(6, { isSporting: true }),
+          fundraiser(9, { isSporting: true, tshirtSize: "adult_m" }),
           fundraiser(7, { inMemory: true, memoryName: "Margaret Exampleton", wants: { ...NONE, envelopeCount: 30 } }),
           fundraiser(8, { inMemory: true, memoryName: "Kit Example" }), // asked for nothing: nothing to send
         ],
         packsSent: [3],
       }),
     );
-    expect(c.packsToSend).toBe(3);
+    // Each page once: one waiting for a T-shirt size is not also a pack to send.
+    expect(c.packsToSend).toBe(2);
     expect(c.tshirtWaiting).toBe(2);
     expect(c.memoryToSend).toBe(1);
-    expect(c.waiting).toBe(6 + c.toApprove);
+    expect(c.waiting).toBe(5 + c.toApprove);
     const lines = summaryLines(c);
-    expect(lines.waiting).toContain("3 welcome packs to send");
+    expect(lines.waiting).toContain("2 welcome packs to send");
     expect(lines.waiting).toContain("2 welcome packs waiting for a T-shirt size");
     expect(lines.waiting).toContain("1 in memory page with things to send");
   });
@@ -59,7 +61,7 @@ describe("welcome packs in the Monday summary", () => {
   });
 
   it("says one in the singular", () => {
-    const lines = summaryLines(summaryCounts(inputs({ fundraisers: [fundraiser(1, { isSporting: true })], packsSent: [] })));
+    const lines = summaryLines(summaryCounts(inputs({ fundraisers: [fundraiser(1), fundraiser(2, { isSporting: true })], packsSent: [] })));
     expect(lines.waiting).toContain("1 welcome pack to send");
     expect(lines.waiting).toContain("1 welcome pack waiting for a T-shirt size");
   });
@@ -74,8 +76,26 @@ describe("welcome packs in the Monday summary", () => {
   });
 
   it("is read with the rest of the summary's inputs", async () => {
-    query.mockImplementation(async (sql: string) => (/FROM welcome_packs WHERE sent_at IS NOT NULL/.test(sql) ? { rows: [{ fundraiser_id: 7 }] } : { rows: [] }));
-    expect((await readSummaryInputs(NOW)).packsSent).toEqual([7]);
+    // Two approved pages, each with a sent pack. 8 left its T-shirt out while it waited for a size,
+    // and the size has come in since: that page has something to send again.
+    const page = (id: number, over: Record<string, unknown> = {}) => ({
+      id, slug: `f-${id}`, path: "raising", kind: "walk", title: `Walk ${id}`, description: "", status: "approved", public: true, organiser_name: "Robin Example",
+      organiser_email: "robin@example.com", organiser_phone: "", wants: {}, post_line1: "1 Example Road", post_town: "Exampleton", post_postcode: "EX1 1EX",
+      created_at: "2026-11-01T10:00:00Z", approved_at: "2026-11-02T10:00:00Z", updated_at: "2026-11-02T10:00:00Z", is_team: true, ...over,
+    });
+    query.mockImplementation(async (sql: string) => {
+      if (/FROM welcome_pack_items/.test(sql)) {
+        return { rows: [{ pack_id: 2, fundraiser_id: 8, key: "tshirt", label: "Waiting for T-shirt size", quantity: null, ticked_at: null, ticked_by: "admin:fern@example.com", skipped_reason: "Later" }] };
+      }
+      if (/FROM welcome_packs/.test(sql)) {
+        return { rows: [7, 8].map((f, i) => ({ id: i + 1, fundraiser_id: f, sent_at: new Date("2026-11-05T10:00:00Z"), sent_by: "admin:fern@example.com", signer: null, signer_role: null })) };
+      }
+      if (/FROM fundraisers f/.test(sql)) return { rows: [page(7), page(8, { is_team: false, is_sporting: true, tshirt_size: "adult_m" })] };
+      return { rows: [] };
+    });
+    const read = await readSummaryInputs(NOW);
+    expect(read.packsSent).toEqual([7]);
+    expect(summaryLines(summaryCounts(read)).waiting).toContain("1 welcome pack to send");
   });
 
   it("still sends the summary when the packs cannot be read", async () => {

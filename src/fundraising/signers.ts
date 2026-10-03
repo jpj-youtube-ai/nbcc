@@ -18,7 +18,10 @@ export interface ListedSigner {
 const HELPERS = resolve(__dirname, "../../assets/js/admin/helpers.js");
 let cached: ListedSigner[] | null = null;
 
-/** The Signed by list, in its order. Empty only if the list could not be read. */
+/**
+ * The Signed by list, in its order. Throws if the file cannot be loaded (callers answer with an
+ * error); an entry with no name is left out, so a file with no usable list gives an empty one.
+ */
 export function listedSigners(): ListedSigner[] {
   if (cached) return cached;
   const api = createRequire(HELPERS)(HELPERS) as { SIGNERS?: unknown };

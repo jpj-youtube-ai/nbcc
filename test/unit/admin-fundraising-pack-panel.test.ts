@@ -238,6 +238,7 @@ describe("the Welcome pack panel", () => {
     await openRow(1);
     expect(text(panel().querySelector("h4"))).toBe("Welcome pack");
     expect(text(panel().querySelector(".fr-pack-state"))).toBe("To pack");
+    expect(text(panel().querySelector(".fr-pack-count"))).toBe("0 of 4 in the pack");
     expect(qa(".fr-pack-item .fr-pack-words").map(text)).toEqual(["Welcome letter", "10 A4 posters", "Sponsor form", "NBCC T-shirt, Adult M"]);
     expect(qa("[data-frpacktick]").every((b) => !(b as HTMLInputElement).checked && !(b as HTMLInputElement).disabled)).toBe(true);
     expect((q("[data-frpacksend]") as HTMLButtonElement).disabled).toBe(true);
@@ -251,7 +252,9 @@ describe("the Welcome pack panel", () => {
     );
     const before = requestsRead;
     await setTick("posters_a4", true);
-    expect(text(el("frPackStatus"))).toBe("Ticked. Also marked in Requests: Posters: sent (by post).");
+    // What staff saw goes with the tick, so the server can refuse one for something that has changed.
+    expect(posts()[0].body).toEqual({ action: "tick", key: "posters_a4", words: "10 A4 posters", quantity: 10 });
+    expect(text(el("frPackStatus"))).toBe("Ticked. Also changed in Requests: Posters: sent (by post).");
     // The Requests part is read again, so it shows the same.
     expect(requestsRead).toBeGreaterThan(before);
   });
@@ -264,6 +267,48 @@ describe("the Welcome pack panel", () => {
     expect(tick("posters_a4").disabled).toBe(false);
     expect(text(q('[data-frpackitem="posters_a4"] .fr-pack-who'))).toBe("It was ticked for 4 A4 posters. They now want 10 A4 posters, so it needs ticking again.");
     expect(text(q('[data-frpackitem="tshirt"] .fr-pack-who'))).toBe("It was ticked for size Adult L. They now want Adult M, so it needs ticking again.");
+  });
+
+  it("shows the page as it stands when a tick is refused because the list has changed", async () => {
+    await openFundraising();
+    await openRow(1);
+    // They ask for 12 while the page is open: the box on screen still says 10.
+    records[0] = fundraiser(1, { isSporting: true, tshirtSize: "adult_m", wants: { ...NONE, posterCount: 12 } });
+    await setTick("posters_a4", true);
+    expect(text(el("frPackStatus"))).toBe("This has changed since you opened the page. Check the list and tick it again.");
+    expect(text(q('[data-frpackitem="posters_a4"] .fr-pack-words'))).toBe("12 A4 posters");
+    expect(tick("posters_a4").checked).toBe(false);
+  });
+
+  it("asks for a T-shirt left out while it waited to be ticked, once their size has come in", async () => {
+    const leftOut = { key: "tshirt", label: "Waiting for T-shirt size", quantity: null, tickedAt: null, tickedBy: "admin:fern@example.com", skippedReason: "Sending it later" };
+    stored.set(1, { sentAt: null, sentBy: null, signer: null, signerRole: null, items: [tickedItem("letter"), tickedItem("posters_a4", 10), tickedItem("sponsor_form"), leftOut] });
+    await openFundraising();
+    await openRow(1);
+    expect(text(panel().querySelector(".fr-pack-state"))).toBe("Part packed");
+    expect(tick("tshirt").disabled).toBe(false);
+    expect(text(q('[data-frpackitem="tshirt"] .fr-pack-who'))).toBe("Their size has come in: Adult M. Tick it when the T-shirt goes in.");
+    expect((q("[data-frpacksend]") as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it("flags it on a pack sent before their size came in, which stays Sent", async () => {
+    const leftOut = { key: "tshirt", label: "Waiting for T-shirt size", quantity: null, tickedAt: null, tickedBy: "admin:fern@example.com", skippedReason: "Sending it later" };
+    stored.set(1, { sentAt: "2026-10-04T09:00:00.000Z", sentBy: "admin:fern@example.com", signer: null, signerRole: null, items: [tickedItem("letter"), tickedItem("posters_a4", 10), tickedItem("sponsor_form"), leftOut] });
+    await openFundraising();
+    await openRow(1);
+    expect(text(panel().querySelector(".fr-pack-state"))).toBe("Sent");
+    expect(text(panel().querySelector(".fr-pack-changed"))).toBe("Changed since it was sent");
+    expect(text(q('[data-frpackitem="tshirt"] .fr-pack-who'))).toBe("Left out: Sending it later (fern@example.com). Their size has come in since the pack was sent: Adult M.");
+    expect(text(panel().querySelector(".fr-pack-count"))).toBe("3 of 4 in, 1 left out");
+  });
+
+  it("says what went in a sent pack and is no longer asked for", async () => {
+    records[0] = fundraiser(1, { isSporting: true, tshirtSize: "adult_m" }); // no posters asked for now
+    stored.set(1, { sentAt: "2026-10-04T09:00:00.000Z", sentBy: "admin:fern@example.com", signer: null, signerRole: null, items: [tickedItem("letter"), tickedItem("posters_a4", 10), tickedItem("sponsor_form"), tickedItem("tshirt")] });
+    await openFundraising();
+    await openRow(1);
+    expect(text(panel().querySelector(".fr-pack-changed"))).toBe("Changed since it was sent");
+    expect(qa(".fr-pack-gone li").map(text)).toEqual(["No longer asked for: 10 A4 posters (it went in the pack)."]);
   });
 
   it("keeps a sent pack Sent when the sign up changes afterwards, with a small flag", async () => {
@@ -321,7 +366,9 @@ describe("the Welcome pack panel", () => {
     (q("#frPackSkipReason") as HTMLInputElement).value = "They have one";
     q("#frPackSkipForm")!.dispatchEvent(new Event("submit", { cancelable: true, bubbles: true }));
     await settle();
-    expect(posts()[0].body).toEqual({ action: "skip", key: "sponsor_form", reason: "They have one" });
+    expect(posts()[0].body).toEqual({ action: "skip", key: "sponsor_form", words: "Sponsor form", quantity: null, reason: "They have one" });
+    // Left out is not in the pack: the count says so.
+    expect(text(panel().querySelector(".fr-pack-count"))).toBe("0 of 4 in, 1 left out");
     expect(text(q('[data-frpackitem="sponsor_form"] .fr-pack-who'))).toMatch(/^Left out: They have one/);
     expect(tick("sponsor_form").disabled).toBe(true);
     await press(q('[data-frpackback="sponsor_form"]'));

@@ -2502,7 +2502,9 @@ textarea.fx-call-input{min-height:88px;line-height:1.5;resize:vertical;field-siz
 #view-fundraising .fr-pack-item.is-skipped .fr-pack-words { color: var(--slate-soft); font-weight: 400; text-decoration: line-through; }
 #view-fundraising .fr-pack-item.is-waiting .fr-pack-words { color: var(--maroon); }
 #view-fundraising .fr-pack-who { grid-column: 1 / -1; padding: 0 0 6px 34px; font-size: 0.8rem; line-height: 1.45; color: var(--slate-soft); overflow-wrap: anywhere; }
-#view-fundraising .fr-pack-actions { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 4px 12px; }
+/* Its actions stay beside its name, on the first line, whatever is said under it. */
+#view-fundraising .fr-pack-tick { grid-column: 1; grid-row: 1; }
+#view-fundraising .fr-pack-actions { grid-column: 2; grid-row: 1; display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 4px 12px; }
 #view-fundraising .fr-pack-skip { grid-column: 1 / -1; display: flex; flex-direction: column; gap: 6px; padding: 4px 0 10px 34px; }
 #view-fundraising .fr-pack-post { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 16rem), 1fr)); gap: 18px 28px; margin-top: 18px; padding-top: 18px; border-top: 1px solid var(--line); }
 #view-fundraising .fr-pack-address, #view-fundraising .fr-pack-sign { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; min-width: 0; margin: 0; }
@@ -2518,10 +2520,11 @@ textarea.fx-call-input{min-height:88px;line-height:1.5;resize:vertical;field-siz
 #view-fundraising .fr-pack-send button:disabled { opacity: 0.5; cursor: not-allowed; }
 #view-fundraising .fr-pack-sent { margin: 0; font-weight: 600; font-size: 0.92rem; color: var(--holly-dark); }
 #view-fundraising .fr-pack-changed { flex: none; }
+#view-fundraising .fr-pack-gone { flex: 1 1 100%; list-style: none; margin: 0; padding: 0; font-size: 0.82rem; line-height: 1.45; color: var(--slate-soft); overflow-wrap: anywhere; }
 /* On a phone, a thing waiting on them has two actions: they go under its name. */
 @media (max-width: 560px) {
   #view-fundraising .fr-pack-item.is-waiting { grid-template-columns: minmax(0, 1fr); }
-  #view-fundraising .fr-pack-item.is-waiting .fr-pack-actions { justify-content: flex-start; padding: 0 0 6px 34px; }
+  #view-fundraising .fr-pack-item.is-waiting .fr-pack-actions { grid-column: 1; grid-row: auto; justify-content: flex-start; padding: 0 0 6px 34px; }
 }
 /* TASK-507: thank yous to supporters. The organiser's words in the wall's style, then a line a
    gift (who, how much, what happened), wrapping; nothing scrolls inside the panel. */

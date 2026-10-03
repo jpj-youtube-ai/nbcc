@@ -133,12 +133,36 @@ async function change(world, email, title, body) {
   return adminCall(world, email, "POST", `/api/admin/fundraisers/${await fundraiserId(title)}/pack`, body);
 }
 
+// What the list shows for a thing right now, as the panel would send it with a tick or a leave out.
+async function seen(email, title, key) {
+  const look = {};
+  const body = await adminCall(look, email, "GET", "/api/admin/fundraising/packs");
+  const pack = (body.packs || {})[String(await fundraiserId(title))];
+  const item = pack && pack.items.find((i) => i.key === key);
+  return item ? { words: item.words, quantity: item.quantity } : { words: "not in the pack", quantity: null };
+}
+
 When("{string} ticks {string} in the pack for {string}", async function (email, key, title) {
-  await change(this, email, title, { action: "tick", key });
+  await change(this, email, title, { action: "tick", key, ...(await seen(email, title, key)) });
+});
+
+// A page left open: the tick says what the list showed then, not what it shows now.
+When("{string} ticks {string} in the pack for {string} as {string}, {int} of them", async function (email, key, title, words, quantity) {
+  await change(this, email, title, { action: "tick", key, words, quantity });
 });
 
 When("{string} leaves {string} out of the pack for {string} because {string}", async function (email, key, title, reason) {
-  await change(this, email, title, { action: "skip", key, reason });
+  await change(this, email, title, { action: "skip", key, reason, ...(await seen(email, title, key)) });
+});
+
+// Staff correct how many went, by hand, in the Requests part.
+When("{string} corrects the posters sent to {string} to {int} in Requests", async function (email, title, quantity) {
+  await adminCall(this, email, "POST", `/api/admin/fundraisers/${await fundraiserId(title)}/requests/posters`, { action: "count", from: "sent", quantity });
+});
+
+// The organiser chooses their size from their private link (stored as that page stores it).
+Given("{string} has now chosen the T-shirt size {string}", async function (title, size) {
+  await pool.query("UPDATE fundraisers SET tshirt_size = $2 WHERE id = $1", [await fundraiserId(title), size]);
 });
 
 When("{string} unticks {string} in the pack for {string}", async function (email, key, title) {

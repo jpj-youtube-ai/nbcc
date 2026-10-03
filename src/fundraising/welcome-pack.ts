@@ -15,9 +15,10 @@ import type { FundraiserRecord } from "./model";
 //   the welcome letter     always
 //   what they asked for    posters (by size), leaflets, printed QR codes, collection envelopes,
 //                          buckets and tins, in the numbers they asked for (fundraisers.wants)
-//   the paper sponsor form a sponsorship fundraiser: a sporting event, a team organiser's page, or
-//                          anyone raising money who asked for one. Never a bake sale or a coffee
-//                          morning, an event, or a page in memory of someone.
+//   the paper sponsor form a sponsorship fundraiser: a sporting event, or a team organiser's page.
+//                          Never a bake sale or a coffee morning, an event, or a page in memory of
+//                          someone. (The sign up records nothing else that says a page is sponsored:
+//                          a category is only a name staff can change, with a Sporting tick.)
 //   the NBCC T-shirt       a sporting event, in the size they chose. With no size yet it shows
 //                          "Waiting for T-shirt size", and cannot be ticked.
 //
@@ -152,14 +153,12 @@ const sportApplies = (f: PackSubject) => f.path === "raising" && f.inMemory !== 
 
 /**
  * Is it a sponsorship fundraiser? Someone raising money (never an event, never in memory) for a
- * sporting event, or as a team's organiser, or who asked us for a sponsor form. A bake sale or a
- * coffee morning has no sponsors, so no form.
+ * sporting event, or as a team's organiser. A bake sale or a coffee morning has no sponsors, so no
+ * form. Nobody can ask for one on the sign up form, so nothing in what they asked for adds it.
  */
 function sponsorship(f: PackSubject): boolean {
   if (f.path !== "raising" || f.inMemory === true) return false;
-  const raw = (f.wants && typeof f.wants === "object" ? f.wants : {}) as Record<string, unknown>;
-  const askedForOne = raw.sponsorForm === true || Number(raw.sponsorFormCount) > 0;
-  return f.isSporting === true || f.isTeam === true || askedForOne;
+  return f.isSporting === true || f.isTeam === true;
 }
 
 /** Everything in this page's pack, in the order it is packed. Empty when it has no pack. */
@@ -207,6 +206,8 @@ export interface StoredItem {
   /** Who ticked it, or left it out. */
   tickedBy: string | null;
   skippedReason: string | null;
+  /** The pack marked this thing's request in Requests (so taking the tick off may open it again). */
+  markedRequest?: boolean;
 }
 
 export interface StoredPack {
@@ -245,6 +246,8 @@ export interface PackView {
   canSend: boolean;
   /** Sent, and the sign up has changed since: a flag, never a reason to tick again. */
   changedSinceSent: boolean;
+  /** Sent: what went in the pack and is no longer in the sign up, a line each. */
+  goneNotes: string[];
   sentAt: string | null;
   sentBy: string | null;
   signer: string | null;
@@ -254,11 +257,24 @@ export interface PackView {
 /** One page's pack as staff see it; null when it has none. */
 /** "Adult M" from "NBCC T-shirt, Adult M". */
 const sizeOf = (words: string) => words.replace(/^NBCC T-shirt,\s*/, "");
+const WAITING_WORDS = "Waiting for T-shirt size";
 
 /** What a tick that no longer counts says of itself. */
 function needsTickingAgain(item: PackItem, was: string): string {
   if (item.key === "tshirt") return `It was ticked for size ${sizeOf(was)}. They now want ${sizeOf(item.words)}, so it needs ticking again.`;
   return `It was ticked for ${was}. They now want ${item.words}, so it needs ticking again.`;
+}
+
+/** A T-shirt left out while it waited for a size, whose size has since come in. */
+const sizeCameIn = (item: PackItem, was: string) => item.key === "tshirt" && was === WAITING_WORDS && !item.waiting;
+
+/** What a leave out that no longer counts says of itself. */
+function leftOutChanged(item: PackItem, was: string, sent: boolean): string {
+  if (sizeCameIn(item, was)) {
+    const size = sizeOf(item.words);
+    return sent ? `Their size has come in since the pack was sent: ${size}.` : `Their size has come in: ${size}. Tick it when the T-shirt goes in.`;
+  }
+  return sent ? `Changed since it was sent: it was left out as ${was}.` : `It was left out as ${was}. They now want ${item.words}, so it needs another look.`;
 }
 
 /** One page's pack as staff see it; null when it has none. */
@@ -270,18 +286,23 @@ export function packView(f: PackSubject, stored: StoredPack | null, sizes?: Post
   const now = packItems(f, sizes);
   const items: PackItemView[] = now.map((item) => {
     const s = byKey.get(item.key) ?? null;
-    const skippedReason = s?.skippedReason ?? null;
-    // A tick counts while the thing is still what it was when ticked: the same words, the same number.
+    // A tick, or a leave out, counts while the thing is still what it was then: the same words, the
+    // same number. (Left out while it waited for a size, and the size has come in: it no longer is.)
     const same = !!s && s.label === item.words && (s.quantity ?? null) === (item.quantity ?? null);
     const wasTicked = !!s?.tickedAt;
-    // Once sent it went as it was ticked: a later change is flagged, never unticked.
+    const wasLeftOut = !!s?.skippedReason;
+    // Once sent it went as it was ticked or left out: a later change is flagged, never undone.
     const ticked = sent ? wasTicked : wasTicked && !item.waiting && same;
+    const skippedReason = wasLeftOut && (sent || same) ? s!.skippedReason : null;
     let changeNote: string | null = null;
     if (sent) {
       if (!s) changeNote = "Asked for since it was sent.";
       else if (wasTicked && !same) changeNote = `Changed since it was sent: it went as ${s.label}.`;
+      else if (wasLeftOut && !same) changeNote = leftOutChanged(item, s.label, true);
     } else if (wasTicked && !item.waiting && !same) {
       changeNote = needsTickingAgain(item, s!.label);
+    } else if (wasLeftOut && !same) {
+      changeNote = leftOutChanged(item, s!.label, false);
     }
     return {
       ...item,
@@ -296,8 +317,10 @@ export function packView(f: PackSubject, stored: StoredPack | null, sizes?: Post
   });
   const done = items.filter((i) => i.done).length;
   const state: PackState = sent ? "sent" : done === items.length ? "ready" : done > 0 ? "part" : "to_pack";
-  // Something that went in the pack and is no longer in the sign up counts as a change too.
-  const gone = (stored?.items ?? []).some((i) => i.tickedAt && !now.some((n) => n.key === i.key));
+  // Something that went in a sent pack and is no longer in the sign up is a change too, and says so.
+  const goneNotes = sent
+    ? (stored?.items ?? []).filter((i) => i.tickedAt && !now.some((n) => n.key === i.key)).map((i) => `No longer asked for: ${i.label} (it went in the pack).`)
+    : [];
   return {
     kind,
     title: PACK_TITLES[kind],
@@ -307,7 +330,8 @@ export function packView(f: PackSubject, stored: StoredPack | null, sizes?: Post
     address: packAddress(f),
     addressNote: kind === "memory" ? MEMORY_ADDRESS_NOTE : null,
     canSend: state === "ready",
-    changedSinceSent: sent && (gone || items.some((i) => i.changeNote !== null)),
+    changedSinceSent: sent && (goneNotes.length > 0 || items.some((i) => i.changeNote !== null)),
+    goneNotes,
     sentAt: sent ? stored!.sentAt : null,
     sentBy: sent ? stored!.sentBy : null,
     signer: stored?.signer ?? null,
@@ -315,16 +339,38 @@ export function packView(f: PackSubject, stored: StoredPack | null, sizes?: Post
   };
 }
 
+/**
+ * Has this page's pack gone, with nothing more owed? Sent, and nothing left out of it has since
+ * become something to send (a T-shirt left out while it waited, whose size has now come in). The
+ * Monday summary counts a page that is not settled as having something to send.
+ */
+export function packSettled(f: PackSubject, stored: StoredPack | null, sizes?: PosterSizes | null): boolean {
+  const view = packView(f, stored, sizes);
+  if (!view || view.state !== "sent") return false;
+  const byKey = new Map((stored?.items ?? []).map((i) => [i.key, i]));
+  return !view.items.some((item) => {
+    const s = byKey.get(item.key);
+    return !!s?.skippedReason && sizeCameIn(item, s.label);
+  });
+}
+
 // --- what each press changes -----------------------------------------------------------------------
 
 const key = z.string().trim().min(1).max(40);
+// What the list said when they pressed, as Requests sends `from`: if it says something else now, the
+// press is refused and the panel shows how it stands, so a tick always records what staff saw.
+const seen = {
+  words: z.string({ required_error: "Say what was ticked." }).min(1, "Say what was ticked.").max(200),
+  quantity: z.number().int().nullable().optional(),
+};
 export const packActionSchema = z.discriminatedUnion("action", [
-  z.object({ action: z.literal("tick"), key }).strict(),
+  z.object({ action: z.literal("tick"), key, ...seen }).strict(),
   z.object({ action: z.literal("untick"), key }).strict(),
   z
     .object({
       action: z.literal("skip"),
       key,
+      ...seen,
       reason: z
         .string({ required_error: "Say why it is being left out." })
         .trim()
@@ -360,6 +406,7 @@ export type PackActionResult =
 export const PACK_SENT_ALREADY = "This has been marked as sent. Press Undo first to change it.";
 export const PACK_NOT_READY = "Tick everything, or leave it out with a reason, before marking it as sent.";
 export const PACK_WAITING_SIZE = "We are waiting for their T-shirt size. Ask them for it, or leave the T-shirt out with a reason.";
+export const PACK_CHANGED = "This has changed since you opened the page. Check the list and tick it again.";
 export const PACK_NOT_IN_IT = "That is not in this pack. Have another look: it may have changed.";
 
 /** What one press does to a pack as it stands. The words go in the fundraiser's History. */
@@ -386,6 +433,9 @@ export function applyPackAction(view: PackView, input: PackActionInput): PackAct
   if (!item) return refuse("not_found", PACK_NOT_IN_IT);
   // In the History a waiting T-shirt is named for what it is, not for what the list says of it.
   const named = item.waiting ? item.label : item.words;
+  if ((input.action === "tick" || input.action === "skip") && (input.words !== item.words || (input.quantity ?? null) !== (item.quantity ?? null))) {
+    return refuse("conflict", PACK_CHANGED);
+  }
   if (input.action === "tick") {
     if (!item.tickable) return refuse("conflict", PACK_WAITING_SIZE);
     if (item.ticked) return nothing;
@@ -407,12 +457,20 @@ export function applyPackAction(view: PackView, input: PackActionInput): PackAct
 
 // --- the requests a pack looks after (Jaimie, WP3) -------------------------------------------------
 //
-// What they asked for is also tracked in Requests (./requests.ts). The pack keeps the two in step:
-// once every thing of a kind that is going has its tick, the request is marked as it would be by
-// hand (posters and the like Sent by post; buckets and tins With them), with how many went and a note
-// saying it went with the pack. Take a tick off and a request the pack marked opens again; one staff
-// dealt with by hand in Requests is never touched. Pure: the SQL applies each step with the Requests'
-// own rules and audit (src/db/welcome-packs.ts).
+// What they asked for is also tracked in Requests (./requests.ts). The pack keeps the two in step,
+// without ever overwriting what staff did by hand there:
+//
+//   a tick, an untick or a leave out   looks ONLY at the request of the thing pressed. Once every
+//       thing of that kind that is going has its tick, the request is marked as it would be by hand
+//       (posters and the like Sent by post; buckets and tins With them), with how many went. Take a
+//       tick off and a request THE PACK marked opens again. Re-tick a thing (they asked for a
+//       different number) and how many went, on a request the pack marked, is put right.
+//   Pack sent   only catches up requests still at their first step. Never a count, never an undo.
+//
+// So a count staff corrected in Requests, or a request they undid there, is never put back by a
+// press on something else. "The pack marked it" is kept on the pack's own rows
+// (welcome_pack_items.marked_request), never read from the request's note. Pure: the SQL applies each
+// step with the Requests' own rules and audit (src/db/welcome-packs.ts).
 
 /** Which request each thing in a pack belongs to. Both poster sizes are the one posters request. */
 export const PACK_REQUEST_KIND: Readonly<Record<string, RequestKind>> = {
@@ -426,21 +484,28 @@ export const PACK_REQUEST_KIND: Readonly<Record<string, RequestKind>> = {
   tins: "tins",
   buckets_or_tins: "buckets_or_tins",
 };
+/** Said on a request the pack marked, for whoever reads it in Requests. Never used to decide anything. */
 export const PACK_REQUEST_NOTES: Record<PackKind, string> = {
   welcome: "Sent with the welcome pack.",
   memory: "Sent with the things they asked for.",
 };
-const PACK_NOTES: ReadonlySet<string> = new Set(Object.values(PACK_REQUEST_NOTES));
 
 export interface PackRequestStep {
   kind: RequestKind;
   input: RequestActionInput;
 }
 
-/** The steps that bring the requests in line with the pack as it stands. `by` is who is ticking. */
-export function packRequestSync(view: PackView, rows: RequestRow[], o: { today: string; by: string }): PackRequestStep[] {
+export type PackPress = { type: "tick" | "untick" | "skip"; key: string } | { type: "send" };
+
+/**
+ * The steps that bring Requests in line with the press just made. `view` is the pack after it;
+ * `by` is who pressed; `marked` is whether the pack had marked the pressed thing's request.
+ */
+export function packRequestSync(view: PackView, rows: RequestRow[], o: { today: string; by: string; press: PackPress; marked: boolean }): PackRequestStep[] {
+  const pressedKind = o.press.type === "send" ? null : (PACK_REQUEST_KIND[o.press.key] ?? null);
+  if (o.press.type !== "send" && !pressedKind) return [];
+  const kinds = pressedKind ? [pressedKind] : [...new Set(view.items.map((i) => PACK_REQUEST_KIND[i.key]).filter((k): k is RequestKind => !!k))];
   const steps: PackRequestStep[] = [];
-  const kinds = [...new Set(view.items.map((i) => PACK_REQUEST_KIND[i.key]).filter((k): k is RequestKind => !!k))];
   for (const kind of kinds) {
     const going = view.items.filter((i) => PACK_REQUEST_KIND[i.key] === kind && !i.skippedReason);
     const allIn = going.length > 0 && going.every((i) => i.ticked);
@@ -448,20 +513,19 @@ export function packRequestSync(view: PackView, rows: RequestRow[], o: { today: 
     const flow = FLOW[group];
     const row = rows.find((r) => r.kind === kind && (flow as readonly string[]).includes(r.status)) ?? null;
     const status = row?.status ?? flow[0];
-    const note = PACK_REQUEST_NOTES[view.kind];
     const quantity = going.reduce((n, i) => n + (i.quantity ?? 0), 0);
-    const byThePack = !!row && row.note !== null && PACK_NOTES.has(row.note);
-    if (allIn && group === "printed" && status === "sent" && byThePack && quantity > 0 && row!.quantity !== quantity) {
-      // Ticked again after they asked for a different number: how many went is put right.
-      steps.push({ kind, input: { action: "count", from: "sent", quantity } });
-    } else if (allIn && status === flow[0]) {
+    const note = PACK_REQUEST_NOTES[view.kind];
+    if (allIn && status === flow[0]) {
       if (quantity < 1) continue;
       steps.push(
         group === "lent"
           ? { kind, input: { action: "out", from: "to_send", on: o.today, quantity, by: o.by, note } }
           : { kind, input: { action: "send", from: "to_send", on: o.today, how: "post", by: o.by, quantity, note } },
       );
-    } else if (!allIn && byThePack && status === flow[1]) {
+    } else if (o.press.type === "tick" && allIn && o.marked && group === "printed" && status === "sent" && quantity > 0 && row!.quantity !== quantity) {
+      // This press re-ticked a thing of this kind: how many went, on a request the pack marked, is put right.
+      steps.push({ kind, input: { action: "count", from: "sent", quantity } });
+    } else if (o.press.type !== "send" && !allIn && o.marked && status === flow[1]) {
       steps.push({ kind, input: { action: "undo", from: status } });
     }
   }
@@ -579,9 +643,9 @@ export function organiserPackLine(f: PackSubject, stored: Pick<StoredPack, "sent
 // --- the counts, for the Monday summary -----------------------------------------------------------
 
 export interface PackCounts {
-  /** Welcome packs for pages approved more than 2 days ago, not yet sent. */
+  /** Welcome packs for pages approved more than 2 days ago, not yet sent, with nothing to wait for. */
   packsToSend: number;
-  /** Of the welcome packs still to send, the sporting events still waiting for a T-shirt size. */
+  /** Welcome packs not yet sent that are waiting for a T-shirt size. Never also in packsToSend. */
   tshirtWaiting: number;
   /** In memory pages approved more than 2 days ago with things to send, not yet sent. */
   memoryToSend: number;
@@ -592,6 +656,10 @@ export function packToSend(f: PackSubject, sent: ReadonlySet<number>): boolean {
   return f.status === "approved" && packKind(f) !== null && !sent.has(f.id);
 }
 
+/**
+ * Each page with something to send is in exactly one count. `sent` holds the pages whose pack has
+ * gone with nothing more owed (packSettled).
+ */
 export function packCounts(list: PackSubject[], sent: ReadonlySet<number>, today: string): PackCounts {
   const before = addDays(today, -PACK_OVERDUE_DAYS);
   const counts: PackCounts = { packsToSend: 0, tshirtWaiting: 0, memoryToSend: 0 };
@@ -601,10 +669,12 @@ export function packCounts(list: PackSubject[], sent: ReadonlySet<number>, today
     const overdue = !!f.approvedAt && londonToday(new Date(f.approvedAt)) < before;
     if (packKind(f) === "memory") {
       if (overdue) counts.memoryToSend += 1;
-      continue;
+    } else if (sportApplies(f) && f.isSporting === true && !tshirtLabel(f.tshirtSize)) {
+      // Waiting on them, not on us: its own line, and never also a pack to send.
+      counts.tshirtWaiting += 1;
+    } else if (overdue) {
+      counts.packsToSend += 1;
     }
-    if (overdue) counts.packsToSend += 1;
-    if (sportApplies(f) && f.isSporting === true && !tshirtLabel(f.tshirtSize)) counts.tshirtWaiting += 1;
   }
   return counts;
 }

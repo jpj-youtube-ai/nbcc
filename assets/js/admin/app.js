@@ -13623,8 +13623,11 @@
     if (!v) return "";
     var memory = v.kind === "memory";
     var items = Array.isArray(v.items) ? v.items : [];
-    var done = items.filter(function (i) { return i.done; }).length;
+    // What is in, and what was left out: a thing left out is never counted as in the pack.
+    var inIt = items.filter(function (i) { return i.ticked; }).length;
+    var leftOut = items.filter(function (i) { return !!i.skippedReason; }).length;
     var sent = v.state === "sent";
+    var gone = Array.isArray(v.goneNotes) ? v.goneNotes : [];
     // In memory with no posters asked for, the note is all there is to print.
     var noteOnly = memory && !items.some(function (i) { return !i.skippedReason && /^(posters_a4|posters_a3|leaflets)$/.test(i.key); });
     var help = memory
@@ -13635,6 +13638,8 @@
       send = '<p class="fr-pack-sent">' + H.escapeHtml("Sent on " + H.fmtDate(v.sentAt) + (v.sentBy ? " by " + frWho(v.sentBy) : "")) + "</p>" +
         // It stays Sent: a later change to the sign up is flagged, never a tick to do again.
         (v.changedSinceSent ? '<span class="admin-pill admin-pill--pending fr-pack-changed">Changed since it was sent</span>' : "") +
+        // What went and is no longer in the sign up, so the flag is never without its reason.
+        (gone.length ? '<ul class="fr-pack-gone">' + gone.map(function (g) { return "<li>" + H.escapeHtml(g) + "</li>"; }).join("") + "</ul>" : "") +
         (write ? '<button class="admin-btn admin-btn--small fr-btn-quiet" type="button" data-frpackundo>Undo</button>' : "");
     } else if (write) {
       send = '<button class="admin-btn admin-btn--small" type="button" data-frpacksend' + (v.canSend ? "" : " disabled") + ">" + (memory ? "Sent" : "Pack sent") + "</button>" +
@@ -13643,7 +13648,7 @@
     return (
       open + "<h4>" + H.escapeHtml(v.title || "Welcome pack") + "</h4>" +
         '<p class="fr-pack-head"><span class="fx-state fx-state--' + (FR_PACK_TONE[v.state] || "todo") + ' fr-pack-state">' + H.escapeHtml(v.stateLabel || "") + "</span>" +
-          '<span class="fr-pack-count">' + done + " of " + items.length + (memory ? " ready" : " in the pack") + "</span></p>" +
+          '<span class="fr-pack-count">' + inIt + " of " + items.length + (leftOut ? (memory ? " ready, " : " in, ") + leftOut + " left out" : memory ? " ready" : " in the pack") + "</span></p>" +
         (sent ? "" : '<p class="fx-help">' + help + "</p>") +
         '<ul class="fr-pack-list">' + items.map(function (i) { return frPackItemHtml(v, i, write); }).join("") + "</ul>" +
         '<div class="fr-pack-post">' + frPackAddressHtml(v) + frPackSignHtml(v, write) + "</div>" +
@@ -13668,7 +13673,7 @@
           if (run.open()) frPackClear();
           // What it did in Requests, in the Requests' own words.
           var also = r.body && Array.isArray(r.body.requests) ? r.body.requests.filter(function (w) { return typeof w === "string" && w; }) : [];
-          run.say((saidOk || "Saved.") + (also.length ? " Also marked in Requests: " + also.join("; ") + "." : ""), false);
+          run.say((saidOk || "Saved.") + (also.length ? " Also changed in Requests: " + also.join("; ") + "." : ""), false);
         } else if (r.status === 400 && r.body && r.body.fields) {
           run.say(Object.keys(r.body.fields).map(function (k) { return r.body.fields[k]; }).join(" "), true);
           return;
@@ -13681,6 +13686,17 @@
         return Promise.all([frLoadPacks(), frLoadHistory(f.id), frLoadRequests()]).then(function () { return r.ok; });
       });
     });
+  }
+
+  // A tick or a leave out says what the list showed (as a request's `from` does): if the sign up
+  // has changed since the page was opened, the server refuses it and the panel shows how it stands.
+  function frPackSeen(body) {
+    var f = frOpenRecord();
+    var v = f && frPackOf(f);
+    var item = v && Array.isArray(v.items) ? v.items.filter(function (i) { return i.key === body.key; })[0] : null;
+    body.words = item ? item.words : "";
+    body.quantity = item && typeof item.quantity === "number" ? item.quantity : null;
+    return body;
   }
 
   function frPackSigner(select) {
@@ -13784,7 +13800,8 @@
         t.checked = !t.checked; // a change is already on its way: this one waits
         return;
       }
-      frPackPost({ action: t.checked ? "tick" : "untick", key: key }, "Saving…", t.checked ? "Ticked." : "Unticked.");
+      if (!t.checked) return frPackPost({ action: "untick", key: key }, "Saving…", "Unticked.");
+      frPackPost(frPackSeen({ action: "tick", key: key }), "Saving…", "Ticked.");
     });
     view.addEventListener("input", function (e) {
       if (e.target && e.target.id === "frPackSkipReason") frPackSkipDraft = e.target.value;
@@ -13798,7 +13815,9 @@
         frSay("pack", "Say why it is being left out.", true);
         return frPaintNotice("pack");
       }
-      frPackPost({ action: "skip", key: frPackSkip, reason: reason }, "Saving…", "Left out.");
+      var body = frPackSeen({ action: "skip", key: frPackSkip });
+      body.reason = reason;
+      frPackPost(body, "Saving…", "Left out.");
     });
   }
 

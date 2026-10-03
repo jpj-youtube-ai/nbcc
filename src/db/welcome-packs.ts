@@ -6,9 +6,13 @@ import { RequestError, changeRequestIn, lockRequestRows } from "./fundraising-re
 import { parseWants } from "../fundraising/requests";
 import type { FundraiserRecord } from "../fundraising/model";
 import {
+  PACK_REQUEST_KIND,
   applyPackAction,
   packRequestSync,
+  packSettled,
   packView,
+  type PackPress,
+  type PackSubject,
   type PackActionInput,
   type PackView,
   type PosterSizes,
@@ -24,9 +28,12 @@ import {
 // out. Every change writes its audit_log row against the fundraiser in the same transaction, so it
 // shows in that fundraiser's History.
 //
-// A tick also keeps Requests in step (Jaimie, WP3): in the same transaction, the request the thing
-// belongs to is marked as it would be by hand (or opened again when the tick comes off), by the
-// Requests' own rules and with their own audit line (changeRequestIn, src/db/fundraising-requests.ts).
+// A tick also keeps Requests in step (Jaimie, WP3): in the same transaction, the request of the
+// thing pressed (and only that one) is marked as it would be by hand, or opened again when the tick
+// comes off, by the Requests' own rules and with their own audit line (changeRequestIn,
+// src/db/fundraising-requests.ts). A row keeps marked_request once the pack has marked its request,
+// and only such a request is ever opened again or has its count put right, so what staff did by
+// hand in Requests is never overwritten.
 
 export class PackError extends Error {
   constructor(
@@ -53,6 +60,7 @@ const toItem = (r: Row): StoredItem => ({
   tickedAt: iso(r.ticked_at),
   tickedBy: text(r.ticked_by),
   skippedReason: text(r.skipped_reason),
+  markedRequest: r.marked_request === true,
 });
 
 const toPack = (r: Row, items: StoredItem[]): StoredPack => ({
@@ -64,7 +72,7 @@ const toPack = (r: Row, items: StoredItem[]): StoredPack => ({
 });
 
 const PACK_COLUMNS = "id, fundraiser_id, sent_at, sent_by, signer, signer_role";
-const ITEM_COLUMNS = "i.pack_id, p.fundraiser_id, i.key, i.label, i.quantity, i.ticked_at, i.ticked_by, i.skipped_reason";
+const ITEM_COLUMNS = "i.pack_id, p.fundraiser_id, i.key, i.label, i.quantity, i.ticked_at, i.ticked_by, i.skipped_reason, i.marked_request";
 
 /** Every pack staff have touched, by fundraiser. */
 export async function listPacks(): Promise<Map<number, StoredPack>> {
@@ -110,10 +118,14 @@ export async function posterSizesFor(fundraiserId: number, client: Pick<PoolClie
   return row ? { a4: whole(row.a4), a3: whole(row.a3) } : null;
 }
 
-/** The fundraisers whose pack has been sent, for the Monday summary. */
-export async function sentPackIds(): Promise<Set<number>> {
-  const r = await pool.query("SELECT fundraiser_id FROM welcome_packs WHERE sent_at IS NOT NULL");
-  return new Set((r.rows as Row[]).map((row) => Number(row.fundraiser_id)));
+/**
+ * The pages whose pack has gone with nothing more owed, for the Monday summary. A pack sent with the
+ * T-shirt left out while it waited for a size is not one of them once the size has come in: the
+ * summary then counts that page as having something to send.
+ */
+export async function settledPackIds(fundraisers: Array<PackSubject & { id: number }>): Promise<Set<number>> {
+  const [stored, sizes] = await Promise.all([listPacks(), listPosterSizes()]);
+  return new Set(fundraisers.filter((f) => packSettled(f, stored.get(f.id) ?? null, sizes.get(f.id) ?? null)).map((f) => f.id));
 }
 
 /** Who this staff member last chose to sign a letter: offered first on their next one. */
@@ -216,14 +228,22 @@ export async function changePack(fundraiserId: number, input: PackActionInput, a
     const after = await readPack(client, fundraiserId, false);
     const fresh = packView(f, after?.pack ?? null, sizes) ?? view;
 
-    // Requests in step with the ticks. Not for Undo of Sent (the ticks stand) or a change of signer.
+    // Requests in step with this press: only the request of the thing pressed, and on Pack sent only
+    // those still to send. Not for Undo of Sent (the ticks stand) or a change of signer.
     const requestWords: string[] = [];
     if (c.type === "tick" || c.type === "untick" || c.type === "skip" || c.type === "send") {
-      const rows = await lockRequestRows(client, fundraiserId);
+      const press: PackPress = c.type === "send" ? { type: "send" } : { type: c.type, key: c.key };
+      const pressedKind = press.type === "send" ? null : (PACK_REQUEST_KIND[press.key] ?? null);
+      // Had the pack marked this request? As its rows stood before the press (an untick removes one).
+      const marked = !!pressedKind && (before?.pack.items ?? []).some((i) => PACK_REQUEST_KIND[i.key] === pressedKind && i.markedRequest === true);
+      const steps = press.type === "send" || pressedKind ? packRequestSync(fresh, await lockRequestRows(client, fundraiserId), { today, by: whoOf(actor), press, marked }) : [];
       const subject = { status: f.status, wants: parseWants(f.wants), socialOk: f.socialOk, eventDate: f.eventDate };
-      for (const step of packRequestSync(fresh, rows, { today, by: whoOf(actor) })) {
+      for (const step of steps) {
         try {
           requestWords.push((await changeRequestIn(client, fundraiserId, subject, step.kind, step.input, actor, today)).words);
+          // The pack's own record of what it marked: set when it marks, cleared when it opens again.
+          const keys = Object.keys(PACK_REQUEST_KIND).filter((k) => PACK_REQUEST_KIND[k] === step.kind);
+          await client.query("UPDATE welcome_pack_items SET marked_request = $2 WHERE pack_id = $1 AND key = ANY($3::text[])", [packId, step.input.action !== "undo", keys]);
         } catch (err) {
           // A request the Requests' own rules will not move (it has moved on by hand) is left as it
           // is: the tick still stands. Anything else stops the whole press.

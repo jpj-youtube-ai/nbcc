@@ -13,8 +13,11 @@ import { EMAIL, PHONE, coveringNote, welcomeLetter, type PackItemView, type Pack
 //                        the maroon frame, our address and the logo, a script signature, the
 //                        maroon foot with how to reach us and the charity statement. Their name
 //                        and address sit where the window of a C5 or DL envelope shows them, with
-//                        the letter folded in three: 20mm in from the left and 45mm down, in a
-//                        space 90mm by 40mm that nothing else enters.
+//                        the letter folded in three: 22mm in from the left and 48mm down, in a
+//                        space 84mm by 34mm that nothing else enters. A long address is set smaller
+//                        (two steps) so it stays in that space, and is never clipped: if it cannot
+//                        fit at the smallest size, every line still prints and staff see a warning
+//                        on screen (not on paper) to check the envelope or write it by hand.
 //   their posters        the A4 poster, the A3 poster and the A5 leaflet, as many of each as they
 //                        asked for, each on its own paper size (a named @page for each)
 //   the sponsor form     for someone raising money, never an event
@@ -53,9 +56,10 @@ const LETTER_CSS = `
   .wl-logo{position:absolute;right:13mm;top:6mm;height:40mm;width:auto}
   /* The window of a C5 or DL envelope, measured from the edge of the paper (the frame is 7mm). */
   .wl-to{position:absolute;left:15mm;top:41mm;width:84mm;height:34mm;display:flex;flex-direction:column;justify-content:center;
-    font-size:11pt;line-height:1.32;color:#1f1b1a;overflow:hidden}
+    font-size:11pt;line-height:1.32;color:#1f1b1a}
   .wl-to span{display:block;overflow-wrap:anywhere}
   .wl-to.long{font-size:9pt;line-height:1.24}
+  .wl-to.tiny{font-size:8pt;line-height:1.2}
   .wl-body{flex:1;min-height:0;padding:84mm 15mm 0;display:flex;flex-direction:column}
   .wl-date{font-weight:600;color:var(--slate);font-size:9.5pt}
   .wl p.wl-greeting{font-family:var(--head);font-weight:700;color:var(--maroon);font-size:13pt;margin:5mm 0 0}
@@ -101,7 +105,9 @@ const PACK_CSS = `
   .pk-label{max-width:640px;margin:26px auto -6px;padding:0 16px;font-size:.9rem;font-weight:600;color:var(--maroon);text-align:center}
   .pk-also{max-width:640px;margin:16px auto 0;padding:12px 18px;background:#fff;border:1.6px solid var(--line);border-radius:12px;
     font-size:.9rem;line-height:1.55;color:var(--slate)}
-  .pk-bulk{border-color:var(--gold);font-weight:600}
+  .pk-bulk,.pk-warn{border-color:var(--gold);font-weight:600}
+  .pk-warn{color:var(--maroon)}
+  .pk-warn[hidden]{display:none}
   @media (max-width:700px){.pk-also{margin:12px 12px 0}}
   @media print{
     .pk-label,.pk-also{display:none}
@@ -139,6 +145,12 @@ const COPIES_SCRIPT = `<script>
   }
   window.addEventListener("beforeprint",add);
   window.addEventListener("afterprint",remove);
+  // The address, measured for real: if it is taller than the envelope's window, say so on screen.
+  function checkAddress(){
+    var to=document.querySelector(".wl-to"),warn=document.querySelector("[data-wl-warn]");
+    if(to&&warn&&to.scrollHeight>to.clientHeight+1)warn.hidden=false;
+  }
+  if(document.fonts&&document.fonts.ready)document.fonts.ready.then(checkAddress);else checkAddress();
 })();
 </script>`;
 
@@ -148,11 +160,33 @@ const ASK_US_ASIDE = `<aside class="ask-us">${escapeHtml(ASK_US)}</aside>`;
 const lines = (list: string[]) => list.map((l) => `<span>${escapeHtml(l)}</span>`).join("");
 const andList = (items: string[]) => (items.length <= 1 ? items.join("") : `${items.slice(0, -1).join(", ")} and ${items[items.length - 1]}`);
 
+/** The address as it is printed: who, then each line. */
+const addressOf = (i: PackPrintInput) => [i.view.address.name, ...i.view.address.lines].filter(Boolean);
+
+// The three sizes the address can be set at, and what fits the window (84mm by 34mm) at each: about
+// how many characters to a line, and how many lines. An estimate; the page measures it when it opens.
+const ADDRESS_SIZES = [
+  { cls: "", perLine: 34, lines: 6 },
+  { cls: " long", perLine: 44, lines: 8 },
+  { cls: " tiny", perLine: 50, lines: 9 },
+] as const;
+
+/** The first size the address fits the window at; `fits` is false when it fits at none (the smallest is used). */
+export function addressSize(to: string[]): { cls: string; fits: boolean } {
+  for (const size of ADDRESS_SIZES) {
+    const needed = to.reduce((n, l) => n + Math.max(1, Math.ceil(l.length / size.perLine)), 0);
+    if (needed <= size.lines) return { cls: size.cls, fits: true };
+  }
+  return { cls: ADDRESS_SIZES[ADDRESS_SIZES.length - 1].cls, fits: false };
+}
+
+export const ADDRESS_TOO_LONG = "This address is too long for the window of the envelope. Check that all of it shows through the window, or write the envelope by hand.";
+
 function head(i: PackPrintInput): string {
-  const to = [i.view.address.name, ...i.view.address.lines].filter(Boolean);
+  const to = addressOf(i);
   return `<address class="wl-from">${lines(FROM_LINES)}</address>
       <img class="wl-logo" src="${i.assets.logo}" alt="${CHARITY_NAME}">
-      <div class="wl-to${to.length > 5 || to.some((l) => l.length > 34) ? " long" : ""}">${lines(to)}</div>`;
+      <div class="wl-to${addressSize(to).cls}">${lines(to)}</div>`;
 }
 
 function sign(signOff: string, signer: string, signerLines: string[]): string {
@@ -268,9 +302,12 @@ export function renderWelcomePack(i: PackPrintInput): string {
     : "";
   const bulkHtml = bulk.length
     ? `<aside class="pk-also pk-bulk">${escapeHtml(
-        `More than ${MAX_COPIES} of a kind are not copied here, so the page stays quick: ${andList(bulk)}. One of each is below. Print the rest from its own page, under Materials for this sign up, setting Copies in the print window.`,
+        `More than ${MAX_COPIES} of a kind are not copied here, so the page stays quick: ${andList(bulk)}. One of each is below. Print the rest from its own page, with the Materials buttons under Where it is up to (Poster, A4, Poster, A3 or Leaflet, A5), setting Copies in the print window.`,
       )}</aside>`
     : "";
+  // On screen only (.pk-also never prints). Shown at once when the address cannot fit by our
+  // estimate; the page's own check shows it too if the real thing is taller than the window.
+  const warnHtml = `<aside class="pk-also pk-warn" data-wl-warn${addressSize(addressOf(i)).fits ? " hidden" : ""}>${escapeHtml(ADDRESS_TOO_LONG)}</aside>`;
   const what = i.part === "letter" ? (memory ? "Covering note" : "Welcome letter") : i.view.title;
   const page = shell({
     title: `${what} for ${title}`,
@@ -282,7 +319,7 @@ export function renderWelcomePack(i: PackPrintInput): string {
       i.part === "letter"
         ? "In the print window, choose A4 and switch off headers and footers. Folded in three, the address shows in the window of a C5 or DL envelope."
         : `Each page prints on its own paper size, and each poster as many times as they asked for, up to ${MAX_COPIES}. In the print window, switch off headers and footers. The letter, folded in three, shows the address in the window of a C5 or DL envelope.`,
-    body: `${bulkHtml}${alsoHtml}\n${pieces.join("\n")}`,
+    body: `${warnHtml}${bulkHtml}${alsoHtml}\n${pieces.join("\n")}`,
     tail: COPIES_SCRIPT,
   });
   return page.replace(ASK_US_ASIDE, "");

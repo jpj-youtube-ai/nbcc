@@ -3,7 +3,8 @@ Feature: Welcome packs: what goes in the post to each approved page, ticked off 
   Every approved fundraiser and event host gets a welcome pack: the welcome letter, what they asked
   for on the form, a sponsor form for a sponsorship fundraiser, and an NBCC T-shirt in their size for
   a sporting event. Staff tick each thing as it goes in, then mark the pack as sent. Ticking something
-  they asked for also marks its request as done. A page in memory of someone has no welcome pack: it
+  they asked for also marks its request as done, and never undoes what staff did by hand in Requests.
+  A page in memory of someone has no welcome pack: it
   has "Things to send", only what they asked for. Viewers can look and print, but not tick. Every
   name here is invented.
 
@@ -91,6 +92,49 @@ Feature: Welcome packs: what goes in the post to each approved page, ticked off 
     When "e8.pack.fr.bdd@example.com" unticks "posters_a4" in the pack for "Jo's Pack Climb (bdd-fr)"
     Then the fundraising answer is 200
     And the posters request for "Jo's Pack Climb (bdd-fr)" is stored as "to_send" with none
+
+  Scenario: a tick from a page left open is refused once the list has changed
+    Given fundraising is switched on
+    And a fundraising staff member "e10.pack.fr.bdd@example.com" with role "editor"
+    And an approved sporting fundraiser "Lee's Pack Row (bdd-fr)" with the T-shirt size "adult_m" asking for 10 posters
+    And "Lee's Pack Row (bdd-fr)" now asks for 12 posters
+    When "e10.pack.fr.bdd@example.com" ticks "posters_a4" in the pack for "Lee's Pack Row (bdd-fr)" as "10 A4 posters", 10 of them
+    Then the fundraising answer is 409
+    And nothing is ticked in the pack for "Lee's Pack Row (bdd-fr)"
+    When "e10.pack.fr.bdd@example.com" ticks "posters_a4" in the pack for "Lee's Pack Row (bdd-fr)"
+    Then the fundraising answer is 200
+
+  Scenario: the pack never puts back a count staff corrected in Requests
+    Given fundraising is switched on
+    And a fundraising staff member "e11.pack.fr.bdd@example.com" with role "editor"
+    And an approved sporting fundraiser "Pat's Pack Swim (bdd-fr)" with the T-shirt size "adult_m" asking for 10 posters
+    When "e11.pack.fr.bdd@example.com" ticks "posters_a4" in the pack for "Pat's Pack Swim (bdd-fr)"
+    Then the posters request for "Pat's Pack Swim (bdd-fr)" is stored as "sent" with 10
+    When "e11.pack.fr.bdd@example.com" corrects the posters sent to "Pat's Pack Swim (bdd-fr)" to 8 in Requests
+    Then the fundraising answer is 200
+    When "e11.pack.fr.bdd@example.com" ticks "letter" in the pack for "Pat's Pack Swim (bdd-fr)"
+    And "e11.pack.fr.bdd@example.com" ticks "sponsor_form" in the pack for "Pat's Pack Swim (bdd-fr)"
+    And "e11.pack.fr.bdd@example.com" ticks "tshirt" in the pack for "Pat's Pack Swim (bdd-fr)"
+    And "e11.pack.fr.bdd@example.com" marks the pack for "Pat's Pack Swim (bdd-fr)" as sent
+    Then the fundraising answer is 200
+    And the pack answer is "Sent"
+    And the posters request for "Pat's Pack Swim (bdd-fr)" is stored as "sent" with 8
+
+  Scenario: a T-shirt left out while it waited is asked for again once their size comes in
+    Given fundraising is switched on
+    And a fundraising staff member "e12.pack.fr.bdd@example.com" with role "editor"
+    And an approved sporting fundraiser "Kit's Pack Ride (bdd-fr)" with no T-shirt size
+    When "e12.pack.fr.bdd@example.com" ticks "letter" in the pack for "Kit's Pack Ride (bdd-fr)"
+    And "e12.pack.fr.bdd@example.com" ticks "sponsor_form" in the pack for "Kit's Pack Ride (bdd-fr)"
+    And "e12.pack.fr.bdd@example.com" leaves "tshirt" out of the pack for "Kit's Pack Ride (bdd-fr)" because "Sending it later (bdd)"
+    Then the fundraising answer is 200
+    And the pack answer is "Ready to send"
+    Given "Kit's Pack Ride (bdd-fr)" has now chosen the T-shirt size "adult_m"
+    When "e12.pack.fr.bdd@example.com" reads the welcome packs
+    Then the pack for "Kit's Pack Ride (bdd-fr)" is called "Welcome pack" and is "Part packed"
+    And "tshirt" in the pack for "Kit's Pack Ride (bdd-fr)" says "Their size has come in: Adult M. Tick it when the T-shirt goes in."
+    When "e12.pack.fr.bdd@example.com" marks the pack for "Kit's Pack Ride (bdd-fr)" as sent
+    Then the fundraising answer is 409
 
   Scenario: a bake sale has no sponsor form or T-shirt in its pack
     Given fundraising is switched on

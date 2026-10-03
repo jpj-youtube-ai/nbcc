@@ -21,6 +21,9 @@
 //                        list still says the same, so a change of number or size is noticed.
 //     ticked_at          when it was put in the pack
 //     skipped_reason     or why it was left out (never both)
+//     marked_request     the pack marked this thing's request in Requests (posters Sent, buckets
+//                        With them). Only then does taking the tick off open the request again, so
+//                        what staff did by hand in Requests is never undone by the pack.
 //     ticked_by          who ticked it, or left it out
 //
 // Every change is in audit_log against the fundraiser, in the same transaction. Cleared with the
@@ -67,6 +70,7 @@ exports.up = (pgm) => {
       ticked_at: { type: "timestamptz" },
       ticked_by: { type: "text" },
       skipped_reason: { type: "text" },
+      marked_request: { type: "boolean", notNull: true, default: false },
       updated_at: { type: "timestamptz", notNull: true, default: pgm.func("now()") },
     },
     {

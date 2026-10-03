@@ -77,7 +77,7 @@ describe("the welcome pack's print view", () => {
       "A5 leaflet: print 30 copies of this page (set Copies in the print window), on A5 paper",
     );
     expect(text(doc.querySelector(".pk-bulk"))).toBe(
-      "More than 10 of a kind are not copied here, so the page stays quick: 30 A5 leaflets. One of each is below. Print the rest from its own page, under Materials for this sign up, setting Copies in the print window.",
+      "More than 10 of a kind are not copied here, so the page stays quick: 30 A5 leaflets. One of each is below. Print the rest from its own page, with the Materials buttons under Where it is up to (Poster, A4, Poster, A3 or Leaflet, A5), setting Copies in the print window.",
     );
     // The copying only happens in the print window, and is put away after.
     const script = Array.from(doc.querySelectorAll("script")).map((s) => s.textContent).join("\n");
@@ -100,7 +100,7 @@ describe("the welcome pack's print view", () => {
   });
 
   it("says what is in the pack but not printed here", () => {
-    expect(text(doc.querySelector(".pk-also:not(.pk-bulk)"))).toBe("Also in this pack, not printed here: 2 collection buckets and NBCC T-shirt, Adult M.");
+    expect(text(doc.querySelector(".pk-also:not(.pk-bulk):not(.pk-warn)"))).toBe("Also in this pack, not printed here: 2 collection buckets and NBCC T-shirt, Adult M.");
   });
 
   it("addresses the letter to them, where a window envelope shows it", () => {
@@ -143,12 +143,50 @@ describe("the welcome pack's print view", () => {
   });
 });
 
+describe("a long address", () => {
+  const to = (s: PackSubject) => page(renderWelcomePack(input({}, s))).querySelector(".wl-to")!;
+  const warning = (s: PackSubject) => page(renderWelcomePack(input({}, s))).querySelector("[data-wl-warn]") as HTMLElement;
+
+  it("is never clipped: the block has no hidden overflow", () => {
+    const css = page(renderWelcomePack(input())).querySelector("style")!.textContent!;
+    const rule = /\.wl-to\{[^}]*\}/.exec(css)![0];
+    expect(rule).not.toContain("overflow:hidden");
+  });
+
+  it("is set smaller the longer it is, so it stays in the envelope's window", () => {
+    expect(to(subject()).className).toBe("wl-to");
+    expect(to(subject({ postLine1: "Flat 12, The Old Exampleton Granary and Maltings", postLine2: "147 Upper Exampleton Harbourside Road West" })).className).toBe("wl-to long");
+    const longer = subject({
+      firstName: "Alexandria-Josephine", lastName: "Featherstonehaugh-Montgomery of Exampleton",
+      postLine1: "Flat 12, The Old Exampleton Granary and Maltings, Second Floor West", postLine2: "147 Upper Exampleton Harbourside Road West, Harbourside Quarter",
+      postTown: "Exampleton by the Sea, near Greater Sampleton and District", postPostcode: "EX12 34EX",
+    });
+    expect(to(longer).className).toBe("wl-to tiny");
+    expect(warning(longer).hidden).toBe(true);
+  });
+
+  it("warns staff on screen, never on paper, when it cannot fit the window at any size", () => {
+    const line = "The Old Exampleton Granary and Maltings, Second Floor West, Harbourside Quarter, Greater Exampleton by the Sea, near Sampleton";
+    const huge = subject({ firstName: line, lastName: "", postLine1: line, postLine2: line, postTown: line, postPostcode: "EX12 34EX" });
+    const w = warning(huge);
+    expect(w.hidden).toBe(false);
+    expect(text(w)).toBe("This address is too long for the window of the envelope. Check that all of it shows through the window, or write the envelope by hand.");
+    expect(w.classList.contains("pk-also")).toBe(true); // .pk-also never prints
+    // Every line is still there, in full.
+    expect(Array.from(to(huge).querySelectorAll("span")).filter((x) => x.textContent === line)).toHaveLength(4);
+    // And the page checks the real size when it opens, in case the estimate was kind.
+    const script = Array.from(page(renderWelcomePack(input())).querySelectorAll("script")).map((s) => s.textContent).join("\n");
+    expect(script).toContain("data-wl-warn");
+    expect(script).toContain("scrollHeight");
+  });
+});
+
 describe("what is left out of the print", () => {
   it("is anything staff left out of the pack, in the letter's list too", () => {
     const s = subject();
     const stored: StoredPack = {
       sentAt: null, sentBy: null, signer: null, signerRole: null,
-      items: [{ key: "posters_a3", label: "A3 posters", quantity: 2, tickedAt: null, tickedBy: "admin:fern@example.com", skippedReason: "No A3 paper" }],
+      items: [{ key: "posters_a3", label: "2 A3 posters", quantity: 2, tickedAt: null, tickedBy: "admin:fern@example.com", skippedReason: "No A3 paper" }],
     };
     const doc = page(renderWelcomePack(input({}, s, stored)));
     expect(doc.querySelector('[data-pack-piece="posters_a3"]')).toBeNull();
@@ -161,7 +199,7 @@ describe("what is left out of the print", () => {
     expect(Array.from(doc.querySelectorAll("[data-pack-piece]")).map((p) => p.getAttribute("data-pack-piece"))).toEqual(["letter", "posters_a4"]);
     expect(doc.querySelector(".pk-bulk")).toBeNull();
     expect(text(doc.querySelector(".wl"))).toContain("Your event's page is live at nbcc.scot/event/robins-quiz.");
-    expect(doc.querySelector(".pk-also:not(.pk-bulk)")).toBeNull();
+    expect(doc.querySelector(".pk-also:not(.pk-bulk):not(.pk-warn)")).toBeNull();
   });
 
   it("is everything but the letter, for Print letter only", () => {
@@ -199,6 +237,6 @@ describe("in memory: the things to send", () => {
   });
 
   it("says what else goes with it", () => {
-    expect(text(doc.querySelector(".pk-also:not(.pk-bulk)"))).toBe("Also to send, not printed here: 20 QR cards for the order of service and 30 collection envelopes.");
+    expect(text(doc.querySelector(".pk-also:not(.pk-bulk):not(.pk-warn)"))).toBe("Also to send, not printed here: 20 QR cards for the order of service and 30 collection envelopes.");
   });
 });

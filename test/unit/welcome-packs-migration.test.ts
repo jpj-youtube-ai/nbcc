@@ -65,6 +65,8 @@ describe("the welcome packs migration", () => {
     expect(cols.ticked_at).toMatchObject({ type: "timestamptz" });
     expect(cols.ticked_by).toMatchObject({ type: "text" });
     expect(cols.skipped_reason).toMatchObject({ type: "text" });
+    // Whether the pack marked this thing's request in Requests: its own record, not the request's note.
+    expect(cols.marked_request).toMatchObject({ type: "boolean", notNull: true, default: false });
     expect(opts.constraints?.unique).toEqual(["pack_id", "key"]);
     const checks = (opts.constraints?.check ?? []).join(" ");
     expect(checks).toContain("char_length(skipped_reason) <= 200");

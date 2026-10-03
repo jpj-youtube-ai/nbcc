@@ -11977,24 +11977,29 @@
 
   function frSendInvite() {
     if (frTeamBusy) return;
-    var name = String(el("frInviteName").value || "").trim();
+    // Jaimie 2026-10-03: the first name and surname in their own boxes, sent as typed.
+    var firstName = String(el("frInviteFirstName").value || "").trim();
+    var lastName = String(el("frInviteLastName").value || "").trim();
+    var name = firstName + " " + lastName;
     var email = String(el("frInviteEmail").value || "").trim().toLowerCase();
     var note = String(el("frInviteNote").value || "").trim();
     var select = el("frInviteSigner");
     var signedBy = Number(select.value);
-    if (!name) return frTeamSay("frInviteStatus", "Add their name.", true);
+    if (!firstName) return frTeamSay("frInviteStatus", "Add their first name.", true);
+    if (!lastName) return frTeamSay("frInviteStatus", "Add their surname.", true);
     if (!FR_EMAIL.test(email)) return frTeamSay("frInviteStatus", "That isn't a whole email address.", true);
     if (note.length > 5000) return frTeamSay("frInviteStatus", "Keep the note to 5,000 characters or fewer.", true);
     if (!signedBy) return frTeamSay("frInviteStatus", "Choose who it is from.", true);
     var signer = select.options[select.selectedIndex] ? select.options[select.selectedIndex].textContent : "";
     if (!window.confirm("Send the invite to " + name + " (" + email + "), signed by " + signer + "?")) return;
-    var body = { name: name, email: email, signedBy: signedBy };
+    var body = { firstName: firstName, lastName: lastName, email: email, signedBy: signedBy };
     if (note) body.note = note;
     frTeamSay("frInviteStatus", "Sending…", false);
     return frInviteRun(function () {
       return frSend("POST", "/api/admin/fundraising/invites", body).then(function (r) {
         if (!r.ok) return frTeamSay("frInviteStatus", frInviteRefusal(r, "That did not send. Please try again."), true);
-        el("frInviteName").value = "";
+        el("frInviteFirstName").value = "";
+        el("frInviteLastName").value = "";
         el("frInviteEmail").value = "";
         el("frInviteNote").value = "";
         frTeamSay("frInviteStatus", frInviteSent(r, name, "Invite sent to"), r.body && r.body.emailed === false);

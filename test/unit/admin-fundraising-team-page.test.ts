@@ -104,7 +104,7 @@ function respond(url: string, init?: { method?: string; body?: string }) {
   }
   if (path === "/api/admin/fundraising/team") return j(JSON.parse(JSON.stringify(team)));
   if (path === "/api/admin/fundraising/invites" && method === "POST") {
-    const inv = { id: 40 + team.invites.length, name: body.name, email: body.email, note: body.note || null, signedBy: body.signedBy === 5 ? "Rowan" : "Fern", sentBy: "admin:fern@example.com", createdAt: "2026-10-02T09:00:00.000Z", resentAt: null };
+    const inv = { id: 40 + team.invites.length, name: `${body.firstName} ${body.lastName}`, firstName: body.firstName, lastName: body.lastName, email: body.email, note: body.note || null, signedBy: body.signedBy === 5 ? "Rowan" : "Fern", sentBy: "admin:fern@example.com", createdAt: "2026-10-02T09:00:00.000Z", resentAt: null };
     team.invites = [inv, ...team.invites];
     return j({ invite: inv, emailed: true }, 201);
   }
@@ -253,33 +253,54 @@ describe("Invite someone", () => {
     expect(select.value).toBe("3");
   });
 
+  // Jaimie 2026-10-03: a First name box and a Surname box, in place of one "Their name" box.
+  it("has a First name box and a Surname box, and no single name box", async () => {
+    await openFundraising();
+    expect(el("frInviteName")).toBeNull();
+    const first = el("frInviteFirstName") as HTMLInputElement;
+    const last = el("frInviteLastName") as HTMLInputElement;
+    expect(text(q('label[for="frInviteFirstName"]'))).toBe("First name");
+    expect(text(q('label[for="frInviteLastName"]'))).toBe("Surname");
+    expect([first.name, first.maxLength]).toEqual(["firstName", 50]);
+    expect([last.name, last.maxLength]).toEqual(["lastName", 50]);
+    expect(first.closest("form")!.id).toBe("frInviteForm");
+    expect(text(first.closest(".fr-field")!.querySelector(".fr-field-hint"))).toBe("The email says hello with this. Both boxes fill in their form exactly as you type them.");
+  });
+
   it("sends the invite after asking, then empties the form and lists it", async () => {
     await openFundraising();
-    setValue("#frInviteName", "Sky Sample");
+    setValue("#frInviteFirstName", "Sky Ann");
+    setValue("#frInviteLastName", "Sample");
     setValue("#frInviteEmail", "sky@example.com");
     setValue("#frInviteNote", "Lovely to chat about the quiz!");
     setValue("#frInviteSigner", "5");
     submit("#frInviteForm");
     await settle();
-    expect(confirmed.pop()).toBe("Send the invite to Sky Sample (sky@example.com), signed by Rowan?");
+    expect(confirmed.pop()).toBe("Send the invite to Sky Ann Sample (sky@example.com), signed by Rowan?");
     expect(sent("POST", "/api/admin/fundraising/invites")[0].body).toEqual({
-      name: "Sky Sample",
+      firstName: "Sky Ann",
+      lastName: "Sample",
       email: "sky@example.com",
       note: "Lovely to chat about the quiz!",
       signedBy: 5,
     });
-    expect(text(el("frInviteStatus"))).toBe("Invite sent to Sky Sample.");
-    expect((el("frInviteName") as HTMLInputElement).value).toBe("");
+    expect(text(el("frInviteStatus"))).toBe("Invite sent to Sky Ann Sample.");
+    expect((el("frInviteFirstName") as HTMLInputElement).value).toBe("");
+    expect((el("frInviteLastName") as HTMLInputElement).value).toBe("");
     expect((el("frInviteNote") as HTMLTextAreaElement).value).toBe("");
-    expect(text(el("frInvites"))).toContain("Sky Sample");
+    expect(text(el("frInvites"))).toContain("Sky Ann Sample");
   });
 
-  it("checks the name, the email and the note before sending", async () => {
+  it("checks the first name, the surname, the email and the note before sending", async () => {
     await openFundraising();
     submit("#frInviteForm");
     await settle();
-    expect(text(el("frInviteStatus"))).toBe("Add their name.");
-    setValue("#frInviteName", "Sky Sample");
+    expect(text(el("frInviteStatus"))).toBe("Add their first name.");
+    setValue("#frInviteFirstName", "Sky");
+    submit("#frInviteForm");
+    await settle();
+    expect(text(el("frInviteStatus"))).toBe("Add their surname.");
+    setValue("#frInviteLastName", "Sample");
     setValue("#frInviteEmail", "sky@");
     submit("#frInviteForm");
     await settle();
@@ -295,7 +316,8 @@ describe("Invite someone", () => {
   it("sends nothing when the question is answered no", async () => {
     confirmAnswer = false;
     await openFundraising();
-    setValue("#frInviteName", "Sky Sample");
+    setValue("#frInviteFirstName", "Sky");
+    setValue("#frInviteLastName", "Sample");
     setValue("#frInviteEmail", "sky@example.com");
     submit("#frInviteForm");
     await settle();
@@ -305,22 +327,36 @@ describe("Invite someone", () => {
   it("says so when the invite is saved but the email did not go", async () => {
     answers["POST /api/admin/fundraising/invites"] = { status: 201, body: { invite: team.invites[0], emailed: false } };
     await openFundraising();
-    setValue("#frInviteName", "Sky Sample");
+    setValue("#frInviteFirstName", "Sky");
+    setValue("#frInviteLastName", "Sample");
     setValue("#frInviteEmail", "sky@example.com");
     submit("#frInviteForm");
     await settle();
     expect(text(el("frInviteStatus"))).toBe("Saved, but the email did not go. Press Resend to try again.");
   });
 
+  it("passes on the server's words for the box that needs another look", async () => {
+    answers["POST /api/admin/fundraising/invites"] = { status: 400, body: { error: "Some of it needs another look", fields: { lastName: "Keep the surname to 50 characters or fewer." } } };
+    await openFundraising();
+    setValue("#frInviteFirstName", "Sky");
+    setValue("#frInviteLastName", "Sample");
+    setValue("#frInviteEmail", "sky@example.com");
+    submit("#frInviteForm");
+    await settle();
+    expect(text(el("frInviteStatus"))).toBe("Keep the surname to 50 characters or fewer.");
+  });
+
   it("passes on the server's words when it refuses", async () => {
     answers["POST /api/admin/fundraising/invites"] = { status: 429, body: { error: "You have sent 50 invites today. Please send the rest tomorrow." } };
     await openFundraising();
-    setValue("#frInviteName", "Sky Sample");
+    setValue("#frInviteFirstName", "Sky");
+    setValue("#frInviteLastName", "Sample");
     setValue("#frInviteEmail", "sky@example.com");
     submit("#frInviteForm");
     await settle();
     expect(text(el("frInviteStatus"))).toBe("You have sent 50 invites today. Please send the rest tomorrow.");
-    expect((el("frInviteName") as HTMLInputElement).value).toBe("Sky Sample");
+    expect((el("frInviteFirstName") as HTMLInputElement).value).toBe("Sky");
+    expect((el("frInviteLastName") as HTMLInputElement).value).toBe("Sample");
   });
 });
 

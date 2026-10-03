@@ -6,7 +6,7 @@ import { listRequestRows } from "./fundraising-requests";
 import { countPendingUpdates } from "./fundraiser-updates";
 import { countPendingThanks } from "./fundraiser-thanks";
 import { readPromptCounts } from "./fundraising-touch";
-import { INVITE_TTL_DAYS, staffFirstName } from "../fundraising/invite";
+import { INVITE_TTL_DAYS, inviteCc, inviteFullName, inviteNameParts, staffFirstName } from "../fundraising/invite";
 import { summaryRecipientsSchema, type SummaryInputs } from "../fundraising/summary";
 import type { CallRecord, CallWhich } from "../fundraising/follow-up";
 
@@ -44,10 +44,16 @@ async function inTransaction<T>(work: (client: PoolClient) => Promise<T>): Promi
 
 // --- invites -------------------------------------------------------------------------------------
 
-/** An invite as staff see it. Never its token or the token's hash. */
+/**
+ * An invite as staff see it. Never its token or the token's hash. firstName and lastName are as
+ * staff typed them; for an invite sent before the two boxes (no first_name), its one name split at
+ * the first space (src/fundraising/invite.ts, inviteNameParts).
+ */
 export interface InviteRow {
   id: number;
   name: string;
+  firstName: string;
+  lastName: string;
   email: string;
   note: string | null;
   signedBy: string;
@@ -56,12 +62,17 @@ export interface InviteRow {
   resentAt: string | null;
 }
 
-const INVITE_COLUMNS = "id, name, email, note, signed_by, sent_by, created_at, resent_at, used_at, used_by_fundraiser_id";
+const INVITE_COLUMNS = "id, name, first_name, last_name, email, note, signed_by, sent_by, created_at, resent_at, used_at, used_by_fundraiser_id";
+
+// The first name and surname kept with the row, or the old split of its one name.
+const namePartsOf = (r: Row) =>
+  inviteNameParts({ name: String(r.name), firstName: (r.first_name as string | null) ?? null, lastName: (r.last_name as string | null) ?? null });
 
 function toInvite(r: Row): InviteRow {
   return {
     id: Number(r.id),
     name: String(r.name),
+    ...namePartsOf(r),
     email: String(r.email),
     note: (r.note as string | null) ?? null,
     signedBy: String(r.signed_by),
@@ -72,15 +83,17 @@ function toInvite(r: Row): InviteRow {
 }
 
 export async function createInvite(
-  i: { name: string; email: string; note: string | null; signedBy: string; tokenHash: string },
+  // cc: who the email copies in (the member of staff sending it), or null; kept on the audit row.
+  i: { firstName: string; lastName: string; email: string; note: string | null; signedBy: string; cc: string | null; tokenHash: string },
   actor: string,
 ): Promise<InviteRow> {
   return writeWithAudit(
     async (client) => {
+      // `name` keeps the two joined, for the admin list, the Monday summary and a code rollback.
       const r = await client.query(
-        `INSERT INTO fundraiser_invites (name, email, note, signed_by, sent_by, token_hash)
-         VALUES ($1, $2, $3, $4, $5, $6) RETURNING ${INVITE_COLUMNS}`,
-        [i.name, i.email, i.note, i.signedBy, actor, i.tokenHash],
+        `INSERT INTO fundraiser_invites (name, first_name, last_name, email, note, signed_by, sent_by, token_hash)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING ${INVITE_COLUMNS}`,
+        [inviteFullName(i.firstName, i.lastName), i.firstName, i.lastName, i.email, i.note, i.signedBy, actor, i.tokenHash],
       );
       return toInvite(r.rows[0]);
     },
@@ -89,13 +102,16 @@ export async function createInvite(
       action: "fundraiser_invite.sent",
       entity: "fundraiser_invite",
       entityId: inv.id,
-      data: { email: inv.email, signedBy: inv.signedBy },
+      data: { email: inv.email, signedBy: inv.signedBy, cc: i.cc },
     }),
   );
 }
 
-/** A new token and a new date for an invite not taken up. Throws not_found otherwise. */
-export async function resendInvite(id: number, tokenHash: string, actor: string): Promise<InviteRow> {
+/**
+ * A new token and a new date for an invite not taken up. Throws not_found otherwise. senderEmail is
+ * the member of staff resending it: the email copies them in, and the audit row says so.
+ */
+export async function resendInvite(id: number, tokenHash: string, actor: string, senderEmail?: string | null): Promise<InviteRow> {
   return inTransaction(async (client) => {
     const r = await client.query(
       `UPDATE fundraiser_invites SET token_hash = $2, resent_at = now()
@@ -109,7 +125,7 @@ export async function resendInvite(id: number, tokenHash: string, actor: string)
       action: "fundraiser_invite.resent",
       entity: "fundraiser_invite",
       entityId: id,
-      data: { email: inv.email },
+      data: { email: inv.email, cc: inviteCc(senderEmail, inv.email) ?? null },
     });
     return inv;
   });
@@ -142,6 +158,8 @@ export async function listOpenInvites(): Promise<InviteRow[]> {
 export interface FoundInvite {
   id: number;
   name: string;
+  firstName: string;
+  lastName: string;
   email: string;
   createdAt: Date;
   resentAt: Date | null;
@@ -155,6 +173,7 @@ export async function findInviteByHash(tokenHash: string): Promise<FoundInvite |
   return {
     id: Number(row.id),
     name: String(row.name),
+    ...namePartsOf(row),
     email: String(row.email),
     createdAt: dateOf(row.created_at),
     resentAt: row.resent_at ? dateOf(row.resent_at) : null,
@@ -418,7 +437,7 @@ export async function readSummaryInputs(now: Date): Promise<SummaryInputs> {
     })),
     cash: cash.rows.map((c) => ({ fundraiserId: Number(c.fundraiser_id), amountPence: Number(c.amount_pence), recordedAt: iso(c.created_at) as string })),
     calls,
-    invites: invites.map((i) => ({ name: i.name, signedBy: i.signedBy, createdAt: i.createdAt, resentAt: i.resentAt })),
+    invites: invites.map((i) => ({ name: i.name, firstName: i.firstName, signedBy: i.signedBy, createdAt: i.createdAt, resentAt: i.resentAt })),
     requests,
     thanksToCheck,
     prompts,

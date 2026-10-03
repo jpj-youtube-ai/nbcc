@@ -32,17 +32,18 @@ describe("the brand pieces the two emails add", () => {
 });
 
 describe("email 7, the invite", () => {
-  const mail = buildInviteEmail({ name: "Alex Example", note: "Great to chat about the bake sale!", signer: "Fern", url: URL });
+  const mail = buildInviteEmail({ firstName: "Mary Jane", note: "Great to chat about the bake sale!", signer: "Fern", url: URL });
 
   it("has the approved subject", () => {
     expect(mail.subject).toBe("We'd love you to fundraise with us");
   });
 
-  it("says the approved words, greeting them by first name", () => {
+  // Jaimie 2026-10-03: the first name is its own box now, so a two word first name is kept whole.
+  it("says the approved words, greeting them by the first name staff typed", () => {
     for (const t of [mail.html, mail.text]) {
       expect(t).toContain("Fundraising for NBCC");
       expect(t).toContain("We’d love you to fundraise with us!");
-      expect(t).toContain("Hi Alex,");
+      expect(t).toContain("Hi Mary Jane,");
       expect(t).toContain("It was so lovely to chat with you about your plans to raise money for NBCC. Thank you, it honestly means the world to us.");
       expect(t).toContain("We’ve given you a head start: press the button below and your page is already filled in with what we talked about. It only takes a couple of minutes.");
       expect(t).toContain("You’ll get your very own fundraising page, with a meter that fills as gifts come in, a wall for your supporters’ messages and your own QR code for posters.");
@@ -72,13 +73,13 @@ describe("email 7, the invite", () => {
   });
 
   it("leaves the quote box out when there is no note", () => {
-    const plain = buildInviteEmail({ name: "Alex", note: null, signer: "Fern", url: URL });
+    const plain = buildInviteEmail({ firstName: "Alex", note: null, signer: "Fern", url: URL });
     expect(plain.html).not.toContain("font-style:italic;font-size:15px");
     expect(plain.html).toContain("Hi Alex,");
   });
 
   it("escapes everything staff typed", () => {
-    const sly = buildInviteEmail({ name: "<script>x</script>", note: "<a href=\"https://bad.example\">click</a>\nsecond line", signer: "<b>", url: URL });
+    const sly = buildInviteEmail({ firstName: "<script>x</script>", note: "<a href=\"https://bad.example\">click</a>\nsecond line", signer: "<b>", url: URL });
     expect(sly.html).not.toContain("<script>");
     expect(sly.html).not.toContain('<a href="https://bad.example"');
     expect(sly.html).toContain("&lt;a href=&quot;https://bad.example&quot;&gt;click&lt;/a&gt;<br>second line");

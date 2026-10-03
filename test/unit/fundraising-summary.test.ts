@@ -266,6 +266,23 @@ describe("waiting on us", () => {
     expect(c.invitesNotTaken).toEqual([{ name: "Alex", signedBy: "Fern" }]);
   });
 
+  // Jaimie 2026-10-03: the first name staff typed in its own box, whole; the first word of the one
+  // name only for an invite sent before the two boxes.
+  it("names an invite not taken up by the first name staff typed", () => {
+    const old = { signedBy: "Fern", createdAt: "2026-11-29T10:00:00.000Z", resentAt: null };
+    const c = summaryCounts({
+      ...inputs,
+      invites: [
+        { ...old, name: "Mary Jane Smith", firstName: "Mary Jane" },
+        { ...old, name: "Alex Example", firstName: null, createdAt: "2026-11-29T11:00:00.000Z" },
+      ],
+    });
+    expect(c.invitesNotTaken).toEqual([
+      { name: "Mary Jane", signedBy: "Fern" },
+      { name: "Alex", signedBy: "Fern" },
+    ]);
+  });
+
   it("leaves out an invite whose link has expired, 60 days after it was last sent", () => {
     const only = (resentAt: string | null, createdAt: string) =>
       summaryCounts({ ...inputs, invites: [{ name: "Jo Oldfriend", signedBy: "Rowan", createdAt, resentAt }] }).invitesNotTaken;

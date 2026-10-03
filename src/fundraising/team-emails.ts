@@ -27,7 +27,7 @@ import type { SummaryLines } from "./summary";
 //
 //   invite    from the events inbox to someone staff have spoken to. Signed by the member of staff
 //             who sent it, so they recognise who they spoke to; their personal note in a quote box;
-//             a button to the sign up form with the invite (only name and email are filled in).
+//             a button to the sign up form with the invite (only first name, surname and email are filled in).
 //   summary   Monday 8am, to the people chosen in Admin > Fundraising. For the team, so no
 //             questions box.
 
@@ -36,8 +36,6 @@ const escapeHtml = (s: string): string =>
 
 const shell = (body: string) =>
   emailShell(body, { contactEmail: FUNDRAISING_EMAIL, registration: true, postalAddress: POSTAL_ADDRESS });
-
-const firstWord = (name: string) => String(name).trim().split(/\s+/)[0] || String(name).trim();
 
 // --- email 7, the invite ----------------------------------------------------------------------------
 
@@ -49,8 +47,9 @@ const INVITE_PAGE =
 const INVITE_ASK = "Need posters, leaflets, a collection bucket or a shout out on our social media? Just ask, we’re here to help.";
 const INVITE_CLOSE = "Warmest wishes,";
 
-export function buildInviteEmail(o: { name: string; note: string | null; signer: string; url: string }): BuiltEmail {
-  const hi = `Hi ${firstWord(o.name)},`;
+// Greeted by the first name staff typed in its own box (Jaimie 2026-10-03), so "Mary Jane" stays whole.
+export function buildInviteEmail(o: { firstName: string; note: string | null; signer: string; url: string }): BuiltEmail {
+  const hi = `Hi ${String(o.firstName).trim()},`;
   const body =
     eyebrow("Fundraising for NBCC") +
     heading("We’d love you to fundraise with us!") +

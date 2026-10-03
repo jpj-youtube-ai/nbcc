@@ -91,6 +91,8 @@ async function run(handler: Handler, o: Opts = {}) {
 const invite = (over: Record<string, unknown> = {}) => ({
   id: 4,
   name: "Alex Example",
+  firstName: "Alex",
+  lastName: "Example",
   email: "alex@example.com",
   note: "Lovely to chat",
   signedBy: "Fern",
@@ -122,14 +124,16 @@ beforeEach(() => {
   team.listSigners.mockResolvedValue([{ id: 3, firstName: "Fern" }, { id: 5, firstName: "Rowan" }]);
   team.getSigner.mockImplementation(async (id: number) => (id === 3 ? { id: 3, firstName: "Fern" } : id === 5 ? { id: 5, firstName: "Rowan" } : null));
   team.countRecentInvites.mockResolvedValue(0);
-  team.createInvite.mockImplementation(async (i: Record<string, unknown>) => invite({ name: i.name, email: i.email, note: i.note, signedBy: i.signedBy }));
+  team.createInvite.mockImplementation(async (i: Record<string, unknown>) =>
+    invite({ name: `${i.firstName} ${i.lastName}`, firstName: i.firstName, lastName: i.lastName, email: i.email, note: i.note, signedBy: i.signedBy }),
+  );
   team.resendInvite.mockResolvedValue(invite({ resentAt: "2026-10-08T09:00:00.000Z" }));
   team.getSummarySettings.mockResolvedValue({ recipients: ["fern@example.com"], lastWeek: null });
   vi.spyOn(console, "error").mockImplementation(() => undefined);
 });
 
 const P = { id: "9" };
-const GOOD_INVITE = { name: "Alex Example", email: "alex@example.com", note: "Lovely to chat", signedBy: 5 };
+const GOOD_INVITE = { firstName: "Mary Jane", lastName: "Smith", email: "mary@example.com", note: "Lovely to chat", signedBy: 5 };
 
 const VIEW: Array<[string, Handler, Opts]> = [["the team's tools", routes.getFundraisingTeam, {}]];
 const EDIT: Array<[string, Handler, Opts]> = [
@@ -214,18 +218,36 @@ describe("inviting someone", () => {
     const res = await run(routes.postInvite, { token: tokenFor("editor"), body: GOOD_INVITE });
     expect(res.statusCode).toBe(201);
     const stored = team.createInvite.mock.calls[0][0];
-    expect(stored).toMatchObject({ name: "Alex Example", email: "alex@example.com", note: "Lovely to chat", signedBy: "Rowan" });
+    expect(stored).toMatchObject({ firstName: "Mary Jane", lastName: "Smith", email: "mary@example.com", note: "Lovely to chat", signedBy: "Rowan" });
+    expect(stored).not.toHaveProperty("name");
     expect(stored.tokenHash).toMatch(/^[0-9a-f]{64}$/);
     expect(team.createInvite.mock.calls[0][1]).toBe("admin:fern@example.com");
     const [name, mail] = sendFundraiseInvite.mock.calls[0];
-    expect(name).toBe("Alex Example");
-    expect(mail).toMatchObject({ email: "alex@example.com", from: "events@nbcc.test", replyTo: "events@nbcc.test" });
+    expect(name).toBe("Mary Jane Smith");
+    expect(mail).toMatchObject({ email: "mary@example.com", from: "events@nbcc.test", replyTo: "events@nbcc.test" });
+    // Greeted by the whole first name staff typed, not the first word of one name box.
+    expect(mail.text).toContain("Hi Mary Jane,");
     expect(mail.text).toContain("Warmest wishes,\nRowan\nNBCC Team");
     const token = String(mail.text).match(/fundraise\?invite=([A-Za-z0-9_-]{43})/)![1];
     expect(hashInviteToken(token)).toBe(stored.tokenHash);
     // The token goes only in the email, never back to the page.
     expect(JSON.stringify(res.body)).not.toContain(token);
     expect(res.body).toMatchObject({ emailed: true, invite: { id: 4 } });
+  });
+
+  // Jaimie 2026-10-03: the member of staff who sends it gets a copy. The person signed in, from the
+  // admin session, not whoever it is signed by (here Rowan signs it and Fern sends it).
+  it("copies in the member of staff who sent it, not the person it is signed by, and records the copy", async () => {
+    await run(routes.postInvite, { token: tokenFor("editor"), body: GOOD_INVITE });
+    expect(sendFundraiseInvite.mock.calls[0][1].cc).toBe("fern@example.com");
+    expect(team.createInvite.mock.calls[0][0].cc).toBe("fern@example.com");
+  });
+
+  it("sends with no copy when the sender is the person invited, and records none", async () => {
+    await run(routes.postInvite, { token: tokenFor("editor"), body: { ...GOOD_INVITE, email: "Fern@Example.com" } });
+    expect(sendFundraiseInvite).toHaveBeenCalledTimes(1);
+    expect(sendFundraiseInvite.mock.calls[0][1].cc).toBeUndefined();
+    expect(team.createInvite.mock.calls[0][0].cc).toBeNull();
   });
 
   it("keeps the invite when the email does not go, and says so", async () => {
@@ -239,6 +261,28 @@ describe("inviting someone", () => {
     const res = await run(routes.postInvite, { token: tokenFor("editor"), body: { ...GOOD_INVITE, email: "alex@", note: "a".repeat(5001) } });
     expect(res.statusCode).toBe(400);
     expect((res.body as { fields: Record<string, string> }).fields).toMatchObject({ email: expect.any(String), note: expect.any(String) });
+    expect(team.createInvite).not.toHaveBeenCalled();
+  });
+
+  it("names the first name and surname boxes when they are empty", async () => {
+    const res = await run(routes.postInvite, { token: tokenFor("editor"), body: { ...GOOD_INVITE, firstName: " ", lastName: "" } });
+    expect(res.statusCode).toBe(400);
+    expect((res.body as { fields: Record<string, string> }).fields).toMatchObject({ firstName: "Add their first name.", lastName: "Add their surname." });
+    expect(team.createInvite).not.toHaveBeenCalled();
+  });
+
+  // An admin page loaded before the two boxes still sends one name, for a while.
+  it("still takes one name from a page loaded before the two boxes, split at its first space", async () => {
+    const res = await run(routes.postInvite, { token: tokenFor("editor"), body: { name: "Mary Jane Smith", email: "mary@example.com", signedBy: 5 } });
+    expect(res.statusCode).toBe(201);
+    expect(team.createInvite.mock.calls[0][0]).toMatchObject({ firstName: "Mary", lastName: "Jane Smith", email: "mary@example.com" });
+    expect(sendFundraiseInvite.mock.calls[0][1].text).toContain("Hi Mary,");
+  });
+
+  it("asks for a refresh, naming no box, when that one name is a single word", async () => {
+    const res = await run(routes.postInvite, { token: tokenFor("editor"), body: { name: "Mary", email: "mary@example.com", signedBy: 5 } });
+    expect(res.statusCode).toBe(400);
+    expect(res.body).toEqual({ error: "Please refresh the page and try again." });
     expect(team.createInvite).not.toHaveBeenCalled();
   });
 
@@ -267,6 +311,14 @@ describe("resending and removing an invite", () => {
     const token = String(sendFundraiseInvite.mock.calls[0][1].text).match(/fundraise\?invite=([A-Za-z0-9_-]{43})/)![1];
     expect(hashInviteToken(token)).toBe(hash);
     expect(sendFundraiseInvite.mock.calls[0][1].text).toContain("Warmest wishes,\nFern\nNBCC Team");
+    expect(sendFundraiseInvite.mock.calls[0][1].text).toContain("Hi Alex,");
+  });
+
+  it("copies in the member of staff who resends it, and passes them on for the record", async () => {
+    team.resendInvite.mockResolvedValue(invite({ signedBy: "Rowan" }));
+    await run(routes.postResendInvite, { token: tokenFor("editor"), params: { id: "4" } });
+    expect(sendFundraiseInvite.mock.calls[0][1].cc).toBe("fern@example.com");
+    expect(team.resendInvite.mock.calls[0][3]).toBe("fern@example.com");
   });
 
   it("counts towards the day's 50", async () => {

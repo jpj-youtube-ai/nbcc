@@ -48,10 +48,13 @@ describe("the keep in touch migration", () => {
   const opts = (table?.args[2] ?? {}) as { constraints?: { unique?: unknown } };
   const added = (t: string) => (calls.find((c) => c.op === "addColumns" && c.args[0] === t)?.args[1] ?? {}) as Record<string, Col>;
 
-  it("sorts last, above every migration on main and the open categories change's 160", () => {
+  // Not "sorts last": a later migration (175, the invite's first name and surname) must not break
+  // this. What matters is that it runs after the ones before it.
+  it("sorts after the categories change's 160 and the invite note limit's 165", () => {
     const all = readdirSync(resolve(ROOT, "migrations")).filter((f) => f.endsWith(".js")).sort();
-    expect(all[all.length - 1]).toBe(NAME);
+    expect(all).toContain(NAME);
     expect(NAME > "1791200000160").toBe(true);
+    expect(all.indexOf(NAME)).toBeGreaterThan(all.indexOf("1791200000165_invite-note-limit.js"));
   });
 
   it("records each automatic email once per fundraiser, cleared with the fundraiser", () => {

@@ -21,7 +21,16 @@ import {
   type InviteRow,
 } from "../db/fundraising-team";
 import { sendFundraiseInvite } from "../clients/email";
-import { INVITES_PER_DAY, hashInviteToken, inviteSchema, inviteUrl, inviteVerdict, newInviteToken } from "../fundraising/invite";
+import {
+  INVITES_PER_DAY,
+  INVITE_REFRESH,
+  hashInviteToken,
+  inviteCc,
+  inviteSchema,
+  inviteUrl,
+  inviteVerdict,
+  newInviteToken,
+} from "../fundraising/invite";
 import { CALL_WHICH, callStates, followUpToday, offListPrompt, type CallRecord, type CallStates } from "../fundraising/follow-up";
 import { summaryRecipientsSchema } from "../fundraising/summary";
 import { buildInviteEmail } from "../fundraising/team-emails";
@@ -32,7 +41,7 @@ import { sendSummaryTest } from "../fundraising/summary-runner";
 // Its own router, beside src/routes/admin-fundraising.ts, so nothing there changes.
 //
 //   GET    /api/admin/fundraising/team                     calls, prompts, open invites, signers  view
-//   POST   /api/admin/fundraising/invites                  { name, email, note?, signedBy }      edit
+//   POST   /api/admin/fundraising/invites                  { firstName, lastName, email, note?, signedBy }  edit
 //   POST   /api/admin/fundraising/invites/:id/resend       a new link, emailed again             edit
 //   DELETE /api/admin/fundraising/invites/:id              its link stops working                edit
 //   POST   /api/admin/fundraisers/:id/calls                { which, note? }                      edit
@@ -43,6 +52,8 @@ import { sendSummaryTest } from "../fundraising/summary-runner";
 //   POST   /api/admin/fundraising/summary/test             the summary, to the admin asking      admin
 //
 // An invite's token goes only in the email, never back to the page, and only its hash is kept.
+// The invite (and a resend) copies in the member of staff who sent it, from their admin session
+// (Jaimie 2026-10-03), so they have a copy; never the token anywhere else.
 // Each member of staff may send 50 invites (and resends) a day. Every write records who did it in
 // audit_log (src/db/fundraising-team.ts). Request and response shapes: README.md, "Community
 // fundraising", the team's tools.
@@ -81,11 +92,24 @@ function failed(res: Response, what: string, err: unknown, notFound = "That no l
 
 const base = () => config.PORTAL_BASE_URL.replace(/\/+$/, "");
 
-// Email the invite with a fresh token. Best effort: the invite stands either way; true when it went.
-async function emailInvite(inv: Pick<InviteRow, "name" | "email" | "note" | "signedBy">, token: string): Promise<boolean> {
+// Email the invite with a fresh token, greeting them by first name and copying in the member of
+// staff sending it (`senderEmail`, from their session; left off when missing, never failing the
+// invite). Best effort: the invite stands either way; true when it went.
+async function emailInvite(
+  inv: Pick<InviteRow, "name" | "firstName" | "email" | "note" | "signedBy">,
+  token: string,
+  senderEmail: string | null | undefined,
+): Promise<boolean> {
   try {
-    const mail = buildInviteEmail({ name: inv.name, note: inv.note, signer: inv.signedBy, url: inviteUrl(base(), token) });
-    await sendFundraiseInvite(inv.name, { email: inv.email, from: config.BALL_FROM_EMAIL, replyTo: config.BALL_FROM_EMAIL, ...mail });
+    const mail = buildInviteEmail({ firstName: inv.firstName, note: inv.note, signer: inv.signedBy, url: inviteUrl(base(), token) });
+    const cc = inviteCc(senderEmail, inv.email);
+    await sendFundraiseInvite(inv.name, {
+      email: inv.email,
+      ...(cc ? { cc } : {}),
+      from: config.BALL_FROM_EMAIL,
+      replyTo: config.BALL_FROM_EMAIL,
+      ...mail,
+    });
     return true;
   } catch (err) {
     // Never the token or the link.
@@ -134,17 +158,29 @@ export async function postInvite(req: Request, res: Response): Promise<Response 
   const claims = await authorizeSection(req, res, "fundraising", "edit");
   if (!claims) return;
   const parsed = inviteSchema.safeParse(req.body);
-  if (!parsed.success) return res.status(400).json({ error: "Some of it needs another look", fields: fieldErrors(parsed.error.issues) });
+  if (!parsed.success) {
+    // A page loaded before the two name boxes, with a one word name: no box to point at.
+    if (parsed.error.issues.some((i) => i.message === INVITE_REFRESH)) return res.status(400).json({ error: INVITE_REFRESH });
+    return res.status(400).json({ error: "Some of it needs another look", fields: fieldErrors(parsed.error.issues) });
+  }
   try {
     const signer = await getSigner(parsed.data.signedBy);
     if (!signer) return res.status(400).json({ error: "Some of it needs another look", fields: { signedBy: "Choose who it is from." } });
     if ((await countRecentInvites(actorOf(claims))) >= INVITES_PER_DAY) return res.status(429).json(TOO_MANY);
     const token = newInviteToken();
     const inv = await createInvite(
-      { name: parsed.data.name, email: parsed.data.email, note: parsed.data.note, signedBy: signer.firstName, tokenHash: hashInviteToken(token) },
+      {
+        firstName: parsed.data.firstName,
+        lastName: parsed.data.lastName,
+        email: parsed.data.email,
+        note: parsed.data.note,
+        signedBy: signer.firstName,
+        cc: inviteCc(claims.email, parsed.data.email) ?? null,
+        tokenHash: hashInviteToken(token),
+      },
       actorOf(claims),
     );
-    const emailed = await emailInvite(inv, token);
+    const emailed = await emailInvite(inv, token, claims.email);
     return res.status(201).json({ invite: inv, emailed });
   } catch (err) {
     return failed(res, "invite", err);
@@ -159,8 +195,8 @@ export async function postResendInvite(req: Request, res: Response): Promise<Res
   try {
     if ((await countRecentInvites(actorOf(claims))) >= INVITES_PER_DAY) return res.status(429).json(TOO_MANY);
     const token = newInviteToken();
-    const inv = await resendInvite(id, hashInviteToken(token), actorOf(claims));
-    const emailed = await emailInvite(inv, token);
+    const inv = await resendInvite(id, hashInviteToken(token), actorOf(claims), claims.email);
+    const emailed = await emailInvite(inv, token, claims.email);
     return res.status(200).json({ invite: inv, emailed });
   } catch (err) {
     return failed(res, "invite resend", err, "That invite has been taken up or removed");

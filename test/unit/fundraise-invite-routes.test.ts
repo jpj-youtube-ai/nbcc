@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 // TASK-503: the public side of an invite. The sign up form sends the token from its link and gets
-// back the name and email to fill in (nothing else); a token that is unknown, used or out of date
+// back the first name, surname and email to fill in (nothing else); a token that is unknown, used or out of date
 // gets the same plain "not found". When the sign up arrives with the token, the invite is marked
 // used and linked to it, best effort: the sign up stands whatever happens to that. Every name and
 // address here is invented.
@@ -50,7 +50,9 @@ async function run(handler: (req: any, res: any) => unknown, o: { body?: unknown
 const TOKEN = newInviteToken();
 const found = (over: Record<string, unknown> = {}) => ({
   id: 4,
-  name: "Alex Example",
+  name: "Mary Jane Smith",
+  firstName: "Mary Jane",
+  lastName: "Smith",
   email: "alex@example.com",
   createdAt: new Date(Date.now() - 24 * 60 * 60 * 1000),
   resentAt: null,
@@ -67,10 +69,11 @@ beforeEach(() => {
 });
 
 describe("filling in the form from an invite", () => {
-  it("gives the name and email, and nothing else", async () => {
+  it("gives the first name, surname and email exactly as staff typed them, and nothing else", async () => {
     const res = await run(postInvitePrefill, { body: { token: TOKEN } });
     expect(res.statusCode).toBe(200);
-    expect(res.body).toEqual({ name: "Alex Example", email: "alex@example.com" });
+    // `name` too, so a sign up page loaded before the two boxes still fills in.
+    expect(res.body).toEqual({ name: "Mary Jane Smith", firstName: "Mary Jane", lastName: "Smith", email: "alex@example.com" });
     expect(team.findInviteByHash).toHaveBeenCalledWith(hashInviteToken(TOKEN));
   });
 

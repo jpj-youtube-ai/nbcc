@@ -2593,6 +2593,21 @@ textarea.fx-call-input{min-height:88px;line-height:1.5;resize:vertical;field-siz
 #view-fundraising .fr-cats li.fr-cat-editing .fr-people-who { display: flex; flex-direction: column; gap: 4px; }
 #view-fundraising .fr-cats li.fr-cat-editing .fx-call-input { width: 100%; max-width: 24rem; min-height: 44px; }
 #view-fundraising .fr-cats li.fr-cat-editing .fr-people-actions { align-items: center; gap: 8px 14px; }
+/* What gifts could do: each example's line, where it shows under it; an edit opens in its row; on a
+   phone the buttons go under the boxes. Words wrap, nothing scrolls. */
+#view-fundraising .fr-impact .fr-people-who > .fr-impact-line { display: block; margin: 0; color: var(--slate); }
+#view-fundraising .fr-impact .fr-people-who > .fr-impact-where { display: block; margin: 2px 0 0; font-size: 0.82rem; }
+#view-fundraising .fr-impact .fr-people-who > .fr-impact-fixed { display: block; margin: 2px 0 0; font-size: 0.82rem; font-style: italic; }
+#view-fundraising .fr-impact .fr-people-actions { align-items: center; }
+#view-fundraising .fr-impact li.fr-impact-editing { align-items: flex-end; gap: 8px 16px; }
+#view-fundraising .fr-impact li.fr-impact-editing .fr-people-who { display: flex; flex-direction: column; gap: 4px; }
+#view-fundraising .fr-impact li.fr-impact-editing .fx-call-input { width: 100%; max-width: 32rem; min-height: 44px; }
+#view-fundraising .fr-impact li.fr-impact-editing #frImpactEditAmount { max-width: 8rem; }
+#view-fundraising .fr-impact li.fr-impact-editing .fr-people-actions { gap: 8px 14px; }
+#view-fundraising .fr-impact-add .fr-impact-amount { flex: 0 1 8rem; }
+#view-fundraising .fr-impact-add .fr-field:not(.fr-impact-amount) { flex: 1 1 18rem; }
+#view-fundraising .fr-impact-give { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; font-size: 0.92rem; color: var(--slate); cursor: pointer; }
+#view-fundraising .fr-impact-give input { width: 18px; height: 18px; margin: 0; accent-color: var(--holly); }
 /* On a fundraiser: the finishing prompt and the calls. */
 #view-fundraising .fr-offlist-done { background: var(--cream); color: var(--slate-soft); box-shadow: inset 0 0 0 1px var(--line); }
 /* An invite whose link has expired (60 days after it was last sent): Resend sends a new one. */

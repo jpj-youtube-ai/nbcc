@@ -302,6 +302,39 @@ fieldset.is-invalid .fr-option { border-color: var(--crimson); }
 .fr-amount:active .fr-amount__face { transform: translateY(1px); }
 .fr-own { margin: 0; }
 .fr-own .give-custom-field { max-width: 360px; }
+/* What gifts could do (src/fundraising/impact-render.ts): small words under a give amount, inside its
+   label so a tap on them chooses it too; under your own amount, the donate page's impact line; under
+   the meter, how many Red Bags the total could fill; and the footnote. Words wrap, nothing scrolls. */
+.fr-amount__could {
+  display: block;
+  margin: 8px 2px 0;
+  font-size: 0.84rem;
+  line-height: 1.4;
+  color: var(--slate-soft);
+  text-align: center;
+  text-wrap: pretty;
+  overflow-wrap: anywhere;
+}
+.fr-amount input:checked ~ .fr-amount__could { color: var(--holly-dark); }
+.fr-own__could {
+  margin: 14px 0 0;
+  max-width: 560px;
+  padding: 12px 16px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--tan-soft);
+  font-size: 1rem;
+  font-weight: 600;
+  line-height: 1.45;
+  color: var(--slate);
+  text-wrap: pretty;
+  overflow-wrap: anywhere;
+}
+/* The live region is always there; empty, it takes no room. */
+.fr-own__could:empty { margin: 0; padding: 0; border: 0; }
+.fr-could-note { margin: 14px 0 0; font-size: 0.84rem; line-height: 1.5; color: var(--slate-soft); text-wrap: pretty; }
+.fr-meter__could { margin: -8px 0 0; font-size: 0.98rem; font-weight: 500; line-height: 1.5; color: var(--slate); text-wrap: pretty; overflow-wrap: anywhere; }
+.fr-summary .fr-could-note { margin: -14px 0 0; }
 .fr-choice { margin-top: 6px; }
 .fr-choice .give-donor-option { min-height: 48px; margin: 0; font-size: 1rem; color: var(--slate); }
 .fr-choice .give-donor-option:has(input:checked) { border-color: var(--holly); background: var(--holly-soft); }

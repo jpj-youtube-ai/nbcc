@@ -83,6 +83,15 @@
     var postcode = doc.getElementById("frPostcode");
     var headline = form.querySelector("[data-giftaid-headline]");
     var feeText = form.querySelector("[data-cover-fee-amount]");
+    // What gifts could do: the examples for the give form, smallest first ({ p: pence, w: words }),
+    // and the line under your own amount (src/fundraising/impact-render.ts). None on some pages.
+    var ownCould = form.querySelector("[data-own-could]");
+    var couldList = [];
+    try {
+      couldList = JSON.parse(form.getAttribute("data-could") || "[]") || [];
+    } catch (e) {
+      couldList = [];
+    }
     var busy = false;
 
     function val(id) {
@@ -108,8 +117,25 @@
       return r ? parseInt(r.value, 10) : null;
     }
 
+    /** The example with the largest amount at or below this one, or null (below the smallest). */
+    function couldFor(pence) {
+      var found = null;
+      couldList.forEach(function (e) {
+        if (e && typeof e.p === "number" && e.p <= pence && (!found || e.p >= found.p)) found = e;
+      });
+      return found;
+    }
+
     function refresh() {
       var a = amount();
+      if (ownCould) {
+        // A live region: always there, and written only when its words change, so a screen reader
+        // hears each new line once. Nothing for an amount below the page's minimum.
+        var typed = own && String(own.value || "").trim() && a && a >= minimum ? a : null;
+        var could = typed ? couldFor(typed) : null;
+        var words = could ? pounds(could.p) + " " + String(could.w) : "";
+        if (ownCould.textContent !== words) ownCould.textContent = words;
+      }
       if (submitBtn && !busy) submitBtn.textContent = a ? "Give " + pounds(a) + " now" : "Give now";
       // An event's headline stays fixed (data-giftaid-fixed): its amount can match the entry price.
       if (headline && !headline.hasAttribute("data-giftaid-fixed")) {

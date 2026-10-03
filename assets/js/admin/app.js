@@ -9197,6 +9197,7 @@
     frLoadTeam();
     frLoadSummary();
     frLoadCategories(); // the Categories card, and the sign up editor's list
+    frLoadImpact(); // What gifts could do
     // TASK-505: the requests, likewise on their own.
     frLoadRequests();
     frLoadNewsCounts(); // TASK-506
@@ -11047,6 +11048,7 @@
     });
     frThanksWire(view); // TASK-507
     frTouchWire(view); // TASK-515
+    frImpactWire(view); // What gifts could do
   }
 
   // ---- news updates (TASK-506) ----
@@ -13001,6 +13003,263 @@
       if (ok === null) return;
       // The row has moved list: its button now does the opposite.
       frCatFocus(ok ? (active ? '[data-frcathide="' + key + '"]' : '[data-frcatshow="' + key + '"]') : null);
+    });
+  }
+
+  // ---- What gifts could do (the list for everyone who can see Fundraising; changes for admins) ----
+  // The shared "could" examples fundraiser, event and team pages show under the give amounts and the
+  // meter (src/impact/examples.ts, GET /api/admin/impact-examples). Admins add, edit, switch off and
+  // on, and move them up or down; the server checks the words say could, never will buy. Nothing is
+  // deleted. Each change is in audit_log.
+  var frImpact = null; // [{ id, amountPence, wording, active, sortOrder, onGiveForm, meterLine }]
+  var frImpactFailed = false;
+  var frImpactEditing = null; // the id of the example being edited
+  var frImpactDraft = null; // { amount, wording, onGiveForm }, as typed
+  var frImpactBusy = false;
+
+  // "£25", "25", "2.50" -> pence; anything else -> null.
+  function frImpactPence(typed) {
+    var t = String(typed || "").replace(/[£,\s]/g, "");
+    if (!/^\d+(\.\d{1,2})?$/.test(t)) return null;
+    return Math.round(parseFloat(t) * 100);
+  }
+  function frImpactFind(id) {
+    return (frImpact || []).filter(function (e) { return e.id === id; })[0] || null;
+  }
+  function frImpactCanEdit() {
+    return isAdmin() && frCanWrite();
+  }
+  function frImpactWhere(e) {
+    var where = e.onGiveForm ? "Under the give amounts" : "Big totals only";
+    if (e.meterLine === "red_bags") where += ". Counts the Red Bags under the meter.";
+    else if (e.meterLine === "uniforms") where += ". Counts the school uniforms under the meter.";
+    return where;
+  }
+
+  function frLoadImpact() {
+    return authFetch("/api/admin/impact-examples")
+      .then(okJson)
+      .then(function (d) {
+        frImpact = d && Array.isArray(d.examples) ? d.examples : null;
+        frImpactFailed = !frImpact;
+        frRenderImpact();
+      })
+      .catch(function (err) {
+        if (err && err.message === "unauthorized") return;
+        frImpact = null;
+        frImpactFailed = true;
+        frRenderImpact();
+      });
+  }
+
+  function frImpactRow(e, i, list) {
+    var id = String(e.id);
+    var line = H.formatPence(e.amountPence) + " " + e.wording;
+    if (frImpactEditing === e.id) {
+      var d = frImpactDraft || { amount: frPounds(e.amountPence), wording: e.wording, onGiveForm: e.onGiveForm };
+      return '<li class="fr-impact-editing"><span class="fr-people-who">' +
+        '<label class="fx-call-label" for="frImpactEditAmount">Amount (£)</label>' +
+        '<input class="fx-call-input" id="frImpactEditAmount" type="text" inputmode="decimal" maxlength="9" autocomplete="off" value="' + H.escapeHtml(d.amount) + '">' +
+        '<label class="fx-call-label" for="frImpactEditWording">What it could do</label>' +
+        '<input class="fx-call-input" id="frImpactEditWording" type="text" maxlength="160" autocomplete="off" value="' + H.escapeHtml(d.wording) + '">' +
+        '<label class="fr-impact-give" for="frImpactEditGive"><input id="frImpactEditGive" type="checkbox"' + (d.onGiveForm ? " checked" : "") + "> Show under the give amounts</label></span>" +
+        '<span class="fr-people-actions"><button class="admin-btn" type="button" data-frimpactsave>Save</button>' +
+        '<button class="fr-link-btn" type="button" data-frimpactcancel>Cancel</button></span></li>';
+    }
+    var name = H.escapeHtml(line);
+    // The two the meter line counts with keep their words and amount: only on, off and moving.
+    var fixed = e.meterLine ? '<span class="fr-impact-fixed">Used for the line under the meter, so its words and amount are fixed.</span>' : "";
+    var who = '<span class="fr-people-who"><span class="fr-impact-line">' + name + '</span><span class="fr-impact-where">' + H.escapeHtml(frImpactWhere(e)) + "</span>" + fixed + "</span>";
+    if (!frImpactCanEdit()) return "<li>" + who + "</li>";
+    var actions = e.meterLine ? "" : '<button class="fr-link-btn" type="button" data-frimpactedit="' + id + '" aria-label="' + H.escapeHtml("Edit " + line) + '">Edit</button>';
+    if (e.active) {
+      if (i > 0) actions += '<button class="fr-link-btn" type="button" data-frimpactup="' + id + '" aria-label="' + H.escapeHtml("Move up: " + line) + '">Move up</button>';
+      if (i < list.length - 1) actions += '<button class="fr-link-btn" type="button" data-frimpactdown="' + id + '" aria-label="' + H.escapeHtml("Move down: " + line) + '">Move down</button>';
+      actions += '<button class="fr-link-btn" type="button" data-frimpactoff="' + id + '" aria-label="' + H.escapeHtml("Switch off " + line) + '">Switch off</button>';
+    } else {
+      actions += '<button class="fr-link-btn" type="button" data-frimpacton="' + id + '" aria-label="' + H.escapeHtml("Switch on " + line) + '">Switch on</button>';
+    }
+    return "<li>" + who + '<span class="fr-people-actions">' + actions + "</span></li>";
+  }
+
+  function frRenderImpact() {
+    var card = el("frImpact");
+    if (!card) return;
+    card.hidden = false;
+    var write = frImpactCanEdit();
+    el("frImpactAddForm").hidden = !write;
+    el("frImpactReadOnly").hidden = write;
+    var list = el("frImpactList");
+    var off = el("frImpactOff");
+    if (!frImpact) {
+      list.innerHTML = '<li class="fr-people-empty">' + (frImpactFailed ? "The examples could not load just now. Try again in a moment." : "Loading&hellip;") + "</li>";
+      off.hidden = true;
+      el("frImpactOffHead").hidden = true;
+      return;
+    }
+    var on = frImpact.filter(function (e) { return e.active; });
+    var gone = frImpact.filter(function (e) { return !e.active; });
+    list.innerHTML = on.length ? on.map(frImpactRow).join("") : '<li class="fr-people-empty">No examples are switched on, so the pages show none.</li>';
+    off.innerHTML = gone.map(frImpactRow).join("");
+    off.hidden = gone.length === 0;
+    el("frImpactOffHead").hidden = gone.length === 0;
+    if (frImpactEditing !== null) {
+      var box = el("frImpactEditWording");
+      var a = doc.activeElement;
+      if (box && a !== box && a !== el("frImpactEditAmount") && a !== el("frImpactEditGive")) box.focus();
+    }
+  }
+
+  // One change at a time. Answers true (saved), false (refused or failed) or null (one on its way).
+  function frImpactSend(method, path, body, saidOk) {
+    if (frImpactBusy) return Promise.resolve(null);
+    frImpactBusy = true;
+    frTeamSay("frImpactStatus", "Saving…", false);
+    return frSend(method, path, body)
+      .then(function (r) {
+        if (!r.ok) {
+          frTeamSay("frImpactStatus", frRefusal(r, "That did not save. Please try again."), true);
+          return false;
+        }
+        frTeamSay("frImpactStatus", saidOk, false);
+        if (r.body && Array.isArray(r.body.examples)) {
+          frImpact = r.body.examples;
+          frRenderImpact();
+          return true;
+        }
+        return frLoadImpact().then(function () { return true; });
+      })
+      .catch(function (err) {
+        if (!(err && err.message === "unauthorized")) frTeamSay("frImpactStatus", "That did not save. Please try again.", true);
+        return false;
+      })
+      .then(function (ok) {
+        frImpactBusy = false;
+        return ok;
+      });
+  }
+  function frImpactFocus(selector) {
+    var target = selector ? doc.querySelector(selector) : null;
+    if (!target) target = el("frImpactStatus");
+    if (target && target.focus) target.focus();
+  }
+
+  // What was typed, checked enough to send: the server checks the words say could.
+  function frImpactRead(amountText, wordingText) {
+    var amountPence = frImpactPence(amountText);
+    var wording = String(wordingText || "").replace(/\s+/g, " ").trim();
+    if (amountPence === null || amountPence < 100) return { error: "Type the amount in pounds first, like 25." };
+    if (!wording) return { error: "Type what a gift could do, like could help buy a pair of school shoes." };
+    return { amountPence: amountPence, wording: wording };
+  }
+
+  function frImpactAdd() {
+    var read = frImpactRead(el("frImpactAmount").value, el("frImpactWording").value);
+    if (read.error) return frTeamSay("frImpactStatus", read.error, true);
+    var body = { amountPence: read.amountPence, wording: read.wording, onGiveForm: !!el("frImpactGive").checked };
+    return frImpactSend("POST", "/api/admin/impact-examples", body, "Added. It shows on fundraiser, event and team pages now.").then(function (ok) {
+      if (ok === null) return;
+      if (ok) {
+        el("frImpactAmount").value = "";
+        el("frImpactWording").value = "";
+        el("frImpactGive").checked = true;
+        el("frImpactAmount").focus();
+      } else frImpactFocus(null);
+    });
+  }
+
+  function frImpactStartEdit(id) {
+    var e = frImpactFind(id);
+    if (!e) return;
+    frImpactEditing = id;
+    frImpactDraft = { amount: frPounds(e.amountPence), wording: e.wording, onGiveForm: !!e.onGiveForm };
+    frTeamSay("frImpactStatus", "", false);
+    frRenderImpact();
+  }
+  function frImpactCancelEdit() {
+    var id = frImpactEditing;
+    frImpactEditing = null;
+    frImpactDraft = null;
+    frRenderImpact();
+    frImpactFocus('[data-frimpactedit="' + id + '"]');
+  }
+  function frImpactSaveEdit() {
+    var id = frImpactEditing;
+    if (!frImpactFind(id)) return;
+    var read = frImpactRead(el("frImpactEditAmount").value, el("frImpactEditWording").value);
+    if (read.error) return frTeamSay("frImpactStatus", read.error, true);
+    var body = { amountPence: read.amountPence, wording: read.wording, onGiveForm: !!el("frImpactEditGive").checked };
+    return frImpactSend("PATCH", "/api/admin/impact-examples/" + id, body, "Saved. The pages say it now.").then(function (ok) {
+      if (ok === null) return;
+      if (ok) {
+        frImpactEditing = null;
+        frImpactDraft = null;
+        frRenderImpact();
+        frImpactFocus('[data-frimpactedit="' + id + '"]');
+      } else frImpactFocus(null);
+    });
+  }
+
+  function frImpactSetActive(id, active) {
+    var e = frImpactFind(id);
+    if (!e) return;
+    var line = H.formatPence(e.amountPence) + " " + e.wording;
+    if (!active && !window.confirm("Switch off “" + line + "”? The pages stop showing it, and you can switch it on again.")) return;
+    var said = active ? "Switched on. The pages show it now." : "Switched off. The pages no longer show it.";
+    return frImpactSend("PATCH", "/api/admin/impact-examples/" + id, { active: active }, said).then(function (ok) {
+      if (ok === null) return;
+      frImpactFocus(ok ? (active ? '[data-frimpactoff="' + id + '"]' : '[data-frimpacton="' + id + '"]') : null);
+    });
+  }
+
+  function frImpactMove(id, direction) {
+    var said = direction === "up" ? "Moved up." : "Moved down.";
+    return frImpactSend("POST", "/api/admin/impact-examples/" + id + "/move", { direction: direction }, said).then(function (ok) {
+      if (ok === null) return;
+      frImpactFocus(ok ? "[data-frimpact" + direction + '="' + id + '"]' : null);
+    });
+  }
+
+  function frImpactWire(view) {
+    view.addEventListener("click", function (e) {
+      var t = e.target;
+      if (!t || !t.closest) return;
+      if (t.closest("#frImpactAdd")) return frImpactAdd();
+      if (t.closest("[data-frimpactsave]")) return frImpactSaveEdit();
+      if (t.closest("[data-frimpactcancel]")) return frImpactCancelEdit();
+      var pick = function (name) {
+        var b = t.closest("[data-frimpact" + name + "]");
+        return b ? Number(b.getAttribute("data-frimpact" + name)) : null;
+      };
+      var id;
+      if ((id = pick("edit")) !== null) return frImpactStartEdit(id);
+      if ((id = pick("up")) !== null) return frImpactMove(id, "up");
+      if ((id = pick("down")) !== null) return frImpactMove(id, "down");
+      if ((id = pick("off")) !== null) return frImpactSetActive(id, false);
+      if ((id = pick("on")) !== null) return frImpactSetActive(id, true);
+    });
+    // What is typed in an edit is kept, so a redraw never loses it.
+    function keep(e) {
+      var t = e.target;
+      if (!t || !frImpactDraft) return;
+      if (t.id === "frImpactEditAmount") frImpactDraft.amount = t.value;
+      if (t.id === "frImpactEditWording") frImpactDraft.wording = t.value;
+      if (t.id === "frImpactEditGive") frImpactDraft.onGiveForm = !!t.checked;
+    }
+    view.addEventListener("input", keep);
+    view.addEventListener("change", keep);
+    // Enter adds or saves; Escape leaves an edit as it was.
+    view.addEventListener("keydown", function (e) {
+      var t = e.target;
+      if (!t || !t.id) return;
+      if (e.key === "Enter" && (t.id === "frImpactAmount" || t.id === "frImpactWording")) {
+        e.preventDefault();
+        frImpactAdd();
+      } else if ((t.id === "frImpactEditAmount" || t.id === "frImpactEditWording") && (e.key === "Enter" || e.key === "Escape")) {
+        e.preventDefault();
+        if (e.key === "Enter") frImpactSaveEdit();
+        else frImpactCancelEdit();
+      }
     });
   }
 

@@ -99,7 +99,7 @@ Feature: The sign up tidy: the welcome pack, sport and the T-shirt, the split ch
   Scenario: joining a team for someone under 18 needs their parent or guardian
     Given fundraising is switched on
     And a fundraising staff member "a6.tidy.fr.bdd@example.com" with role "admin"
-    When someone signs up the team "Exampleton Tidy Juniors (bdd-fr)" adding "ava.team.fr.bdd@example.com" and "parent.team.fr.bdd@example.com"
+    When someone signs up the team "Exampleton Tidy Juniors (bdd-fr)" adding "ava.tidyjoin.fr.bdd@example.com" and "ben.tidyjoin.fr.bdd@example.com"
     And "a6.tidy.fr.bdd@example.com" approves "Exampleton Tidy Juniors (bdd-fr)"
     And a parent joins "Exampleton Tidy Juniors (bdd-fr)" for "Jack" "Sample", under 18, without their own name
     Then the fundraising answer is 400

@@ -53,9 +53,10 @@ describe("knowing how many tables to expect", () => {
   // 66 since TASK-506 added the news updates organisers post to their pages; 68 since TASK-507
   // added the thank yous organisers send to their supporters, and their gifts; 69 with its address
   // level opt out list; 70 since TASK-511 added the old page links of fundraisers whose link staff
-  // changed; 71 with the fundraising categories (the list the sign up form offers).
-  it("counts 71 across the three databases", () => {
-    expect(expectedTableCount(ROOT)).toBe(71);
+  // changed; 71 with the fundraising categories (the list the sign up form offers); 73 since TASK-515
+  // added which automatic emails each fundraiser has had, and the Do it again links.
+  it("counts 73 across the three databases", () => {
+    expect(expectedTableCount(ROOT)).toBe(73);
   });
 
   it("finds the three tables that live outside the main database", () => {
@@ -110,7 +111,11 @@ describe("knowing how many tables to expect", () => {
     expect(main).toContain("fundraiser_slug_history");
     // The fundraising categories: the list the sign up form offers, and every old one, for good.
     expect(main).toContain("fundraising_categories");
-    expect(main.length).toBe(68);
+    // TASK-515: which automatic email each fundraiser has had, so none ever goes twice.
+    expect(main).toContain("fundraiser_touchpoints");
+    // TASK-515: the Do it again links from the year on email (token hashes only).
+    expect(main).toContain("fundraiser_again_tokens");
+    expect(main.length).toBe(70);
   });
 
   it("returns nothing for a directory that does not exist, rather than throwing", () => {

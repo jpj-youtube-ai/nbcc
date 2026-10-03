@@ -135,6 +135,22 @@ if (require.main === module) {
       } catch (err) {
         console.error("fundraising summary failed:", err instanceof Error ? err.message : err);
       }
+      // TASK-515: the automatic emails to organisers (first gift, halfway, target, a week before
+      // and after their date, a year on, need a hand, doing great). Sends NOTHING unless an admin
+      // has switched Automatic emails on in Admin > Fundraising (it ships off) and fundraising is
+      // on; each email goes once per fundraiser at most. It never throws, and has its own
+      // try/catch anyway, like every pass here.
+      try {
+        const { runTouchEmails } = await import("../fundraising/touch-runner");
+        const touch = await runTouchEmails();
+        console.error(
+          typeof touch.skipped === "string"
+            ? `fundraising automatic emails: ${touch.skipped}`
+            : `fundraising automatic emails: considered=${touch.considered} sent=${touch.sent} skipped=${touch.skipped} failed=${touch.failed}`,
+        );
+      } catch (err) {
+        console.error("fundraising automatic emails failed:", err instanceof Error ? err.message : err);
+      }
       // Email-audit retention: prune email_log rows past their six-tax-years window
       // (src/email/log-retention.ts). Rides this existing daily task for the same reason the
       // ball run-up does — one more statement on a schedule that already exists — and in its

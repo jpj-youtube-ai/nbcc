@@ -2683,6 +2683,12 @@
     ["fundraiseNewsApproved", "Fundraiser news update live"], ["fundraiseNewsRejected", "Fundraiser news update not used"],
     // TASK-507: an organiser's thank you, passed on to a giver once staff have checked it.
     ["fundraiseSupporterThanks", "Fundraiser thank you to a supporter"],
+    // TASK-515: the automatic emails to an organiser.
+    ["fundraiseFirstGift", "Fundraiser automatic: first gift"], ["fundraiseHalfway", "Fundraiser automatic: halfway"],
+    ["fundraiseTargetReached", "Fundraiser automatic: target reached"], ["fundraiseWeekBefore", "Fundraiser automatic: a week before"],
+    ["fundraiseWeekAfter", "Fundraiser automatic: a week after"], ["fundraiseFinished", "Fundraiser automatic: thank you, finished"],
+    ["fundraiseYearOn", "Fundraiser automatic: a year on"], ["fundraiseNeedAHand", "Fundraiser automatic: need a hand?"],
+    ["fundraiseOnTrack", "Fundraiser automatic: doing great"],
   ];
   function emailKindLabel(kind) {
     for (var i = 0; i < EMAIL_KINDS.length; i++) if (EMAIL_KINDS[i][0] === kind) return EMAIL_KINDS[i][1];
@@ -9152,6 +9158,7 @@
     // TASK-506
     news: "frNewsStatus",
     thanks: "frThanksStatus", // TASK-507
+    touch: "frTouchCallStatus", // TASK-515
   };
   // Says it now, in place, without a redraw: "Adding…" has to show while the request is out.
   function frPaintNotice(key) {
@@ -9186,6 +9193,7 @@
     frLoadRequests();
     frLoadNewsCounts(); // TASK-506
     frLoadThanksCounts(); // TASK-507
+    frTouchLoad(); // TASK-515
   }
 
   function frLoadSettings() {
@@ -9424,6 +9432,7 @@
       (frReqToDo(f) ? '<span class="admin-pill admin-pill--pending fr-requests-pill">Requests to do</span>' : "") +
       (frReqDueBack(f) ? '<span class="admin-pill is-call-due fr-dueback-pill">Due back</span>' : "") +
       frThanksPill(f) + // TASK-507
+      frTouchPills(f) + // TASK-515: the smart call prompts
       rowNewPill("fundraising", f.createdAt);
     return (
       '<tr class="fx-summary' + (open ? " is-open" : "") + '" data-frtoggle="' + f.id +
@@ -9512,6 +9521,7 @@
     frPaintHistory();
     frPaintNews(); // TASK-506
     frPaintScans(); // TASK-512
+    if (frTouch) frTouchRenderFor(); // TASK-515: "Show it for" lists the pages raising money
     frRestDetail();
     frRestoreFocus(wrap);
   }
@@ -9531,6 +9541,7 @@
     frCashErrors = {};
     frReasonDraft = "";
     frCallDraft = "";
+    frTouchNotes = {}; // TASK-515
     frReqClear();
     frRenderList();
     if (frOpenId != null) frLoadDetail(frOpenId);
@@ -9552,6 +9563,7 @@
         '<section class="fx-panel fx-panel--wide"><h4>Where it is up to</h4>' + frStatePanel(f, write) + "</section>" +
         frOffListSection(f, write) +
         frCallsSection(f, write) +
+        frTouchSection(f, write) + // TASK-515
         (frDetail.waitingEdit ? '<section class="fx-panel fx-panel--wide fr-change-panel"><h4>Changes to check</h4>' + frChangePanel(f, frDetail.waitingEdit, write) + "</section>" : "") +
         frRequestsSection(f, write) +
         frNewsSection() + // TASK-506
@@ -10114,6 +10126,10 @@
     "fundraiser.called": "Called",
     "fundraiser.taken_off_list": "Taken off Get involved",
     "fundraiser.put_back_on_list": "Put back on Get involved",
+    // TASK-515
+    "fundraiser.touch_sent": "An automatic email went to the organiser",
+    "fundraiser.prompt_called": "Called about a prompt",
+    "fundraiser.again_used": "The organiser signed up to do it again",
     // TASK-505: the requests.
     "fundraiser.request_updated": "A request updated",
     // TASK-506
@@ -10150,8 +10166,11 @@
         if (h.action === "fundraiser.cash_added") what = "Cash added: " + frMoney(data.amountPence);
         if (h.action === "fundraiser.cash_removed" && data.amountPence) what = "Cash removed: " + frMoney(data.amountPence);
         if (h.action === "fundraiser.called") what = data.which === "after" ? "Called, a week after its date" : "Called, a week before its date";
+        // TASK-515
+        if (h.action === "fundraiser.touch_sent" && frTouchKindInfo(data.kind)) what = "Automatic email sent: " + frTouchKindInfo(data.kind).label;
+        if (h.action === "fundraiser.prompt_called" && typeof data.prompt === "string") what = "Called about a prompt: " + data.prompt.replace(/_/g, " ");
         if ((h.action === "fundraiser.request_updated" || h.action === "fundraiser.print_requested") && typeof data.words === "string" && data.words) what = data.words;
-        var said = h.action === "fundraiser.declined" || h.action === "fundraiser.news_rejected" ? data.reason : h.action === "fundraiser.called" ? data.note : "";
+        var said = h.action === "fundraiser.declined" || h.action === "fundraiser.news_rejected" ? data.reason : h.action === "fundraiser.called" || h.action === "fundraiser.prompt_called" ? data.note : "";
         var note = said ? '<span class="fx-hist-note">' + H.escapeHtml(said) + "</span>" : "";
         return '<li><span class="fx-hist-what">' + H.escapeHtml(what) + "</span>" +
           '<span class="fx-hist-who">' + H.escapeHtml(H.fmtDate(h.createdAt) + " · " + frThanksWho(h)) + "</span>" + note + "</li>"; // TASK-507: frThanksWho
@@ -10244,7 +10263,13 @@
             (!hasPage ? "a short note to say they are on our list." : "their page link, and the page goes on the website.")),
       decline: "Decline " + f.title + "?" + (f.status === "approved" ? " It comes off the website straight away." : "") +
         " They are not emailed, so tell them yourself if you need to.",
-      finish: "Mark " + f.title + " as finished? It comes off the Get involved list. Its page stays up with a thank you banner and can still take gifts. What it raised stays in the records.",
+      finish: "Mark " + f.title + " as finished? It comes off the Get involved list. Its page stays up with a thank you banner and can still take gifts. What it raised stays in the records." +
+        // TASK-515: the thank you (email 17) goes now, only while automatic emails are on.
+        (hasPage
+          ? frTouch && frTouch.settings && frTouch.settings.on
+            ? " Automatic emails are on, so we email " + f.name + " their thank you, with their certificate."
+            : " Automatic emails are off, so no thank you email goes."
+          : ""),
     }[move];
     if (!window.confirm(question)) return;
     var body = {};
@@ -10662,6 +10687,7 @@
       frToggle(toggle.getAttribute("data-frtoggle"));
     });
     frThanksWire(view); // TASK-507
+    frTouchWire(view); // TASK-515
   }
 
   // ---- news updates (TASK-506) ----
@@ -10883,6 +10909,319 @@
       if (uid === null) return;
       frNewsReasons[uid] = t.value;
       nlFitBox(t);
+    });
+  }
+
+  // ---- keeping in touch (TASK-515) ----
+  // The Automatic emails card: every automatic email to an organiser, rendered by the server
+  // (src/routes/admin-fundraising-touch.ts) for the invented example or for one fundraiser raising
+  // money, so each can be read before any is sent; and the switch, for admins only (it ships off).
+  // On each fundraiser: a pill for each smart call prompt (src/fundraising/call-prompts.ts), and in
+  // the open sign up the reason, the talking points and Called, with which automatic emails it has
+  // had. The server decides everything; this only says it. Every stored string is escaped.
+  var frTouch = null; // GET /api/admin/fundraising/touch: { today, settings, kinds, sent, prompts, promptCalls }
+  var frTouchState = "loading"; // loading, failed or ok
+  var frTouchKind = "first_gift"; // the email being read
+  var frTouchFor = ""; // "" for the example, or a fundraiser id
+  var frTouchBusy = false;
+  var frTouchSeq = 0; // the latest preview asked for, so a slow answer never replaces a newer one
+  var frTouchNotes = {}; // prompt key -> the note typed for its call, kept across a redraw
+  var frTouchShown = ""; // which email, for whom, is in the preview: it is only fetched again when that changes
+  var FR_TOUCH_EMAIL_W = 660;
+
+  function frTouchLoad() {
+    var card = el("frTouch");
+    if (!card) return;
+    return authFetch("/api/admin/fundraising/touch")
+      .then(okJson)
+      .then(function (d) {
+        var ok = d && d.settings && Array.isArray(d.kinds);
+        var was = frTouchState;
+        frTouch = ok ? d : null;
+        frTouchState = ok ? "ok" : "failed";
+        frTouchRenderCard();
+        // The pills and the open sign up's panel come from it; a second failure changes nothing.
+        if (ok || was !== "failed") frRenderList();
+      })
+      .catch(function (err) {
+        if (err && err.message === "unauthorized") return;
+        var was = frTouchState;
+        frTouch = null;
+        frTouchState = "failed";
+        frTouchRenderCard();
+        if (was !== "failed") frRenderList();
+      });
+  }
+
+  function frTouchKindInfo(kind) {
+    var kinds = (frTouch && frTouch.kinds) || [];
+    for (var i = 0; i < kinds.length; i++) if (kinds[i].kind === kind) return kinds[i];
+    return null;
+  }
+
+  function frTouchRenderCard() {
+    var card = el("frTouch");
+    if (!card) return;
+    if (!frTouch) {
+      card.hidden = frTouchState !== "failed";
+      el("frTouchState").textContent = frTouchState === "failed" ? "The automatic emails could not load just now. Try again in a moment." : "Checking…";
+      return;
+    }
+    card.hidden = false;
+    var s = frTouch.settings;
+    card.classList.toggle("is-on", !!s.on);
+    el("frTouchState").innerHTML = s.on
+      ? "<b>On.</b> They go by themselves, each morning at 8am, and when you mark a fundraiser finished." +
+        (s.updatedBy ? " Switched on " + H.escapeHtml(H.fmtDate(s.updatedAt)) + " by " + H.escapeHtml(frWho(s.updatedBy)) + "." : "")
+      : "<b>Off.</b> None of these is sent. Read each one below, then switch them on when you are happy.";
+    // What the next run would send, so the first morning after switching on is no surprise.
+    var due = frTouch.due || {};
+    var dueIds = Object.keys(due);
+    var byKind = {};
+    dueIds.forEach(function (id) { byKind[due[id]] = (byKind[due[id]] || 0) + 1; });
+    var dueWords = (frTouch.kinds || []).filter(function (k) { return byKind[k.kind]; }).map(function (k) {
+      return k.label + " (" + byKind[k.kind] + ")";
+    });
+    el("frTouchDue").textContent = dueIds.length
+      ? (s.on ? "The next 8am run sends up to " : "Switched on now, the next 8am run would send up to ") +
+        (dueIds.length === 1 ? "1 email: " : dueIds.length + " emails: ") + dueWords.join(", ") +
+        ". " + "Anyone who has asked us to stop is left out."
+      : (s.on ? "Nothing is due at the next 8am run." : "Switched on now, the next 8am run would send nothing.");
+    var btn = el("frTouchSwitch");
+    var admin = isAdmin() && frCanWrite();
+    btn.hidden = !admin;
+    btn.textContent = s.on ? "Switch automatic emails off" : "Switch automatic emails on";
+    btn.disabled = frTouchBusy;
+    el("frTouchSwitchNote").hidden = admin;
+    el("frTouchKinds").innerHTML = frTouch.kinds
+      .map(function (k) {
+        var on = k.kind === frTouchKind;
+        return '<button class="admin-seg' + (on ? " is-active" : "") + '" type="button" data-frtouchkind="' + H.escapeHtml(k.kind) +
+          '" aria-pressed="' + (on ? "true" : "false") + '">' + H.escapeHtml(k.label) + (k.newWording ? ' <span class="fr-touch-new">New</span>' : "") + "</button>";
+      })
+      .join("");
+    frTouchRenderFor();
+    if (frTouchShown !== frTouchKind + "|" + frTouchFor) frTouchPreview();
+  }
+
+  // "Show it for": the example, then every public page raising money that is approved or finished.
+  function frTouchRenderFor() {
+    var pick = el("frTouchFor");
+    if (!pick) return;
+    var list = ((frData && frData.fundraisers) || []).filter(function (f) {
+      return f.path === "raising" && f.public && (f.status === "approved" || f.status === "finished");
+    });
+    if (frTouchFor && frTouchFor !== "zero" && !list.some(function (f) { return String(f.id) === frTouchFor; })) frTouchFor = "";
+    pick.innerHTML = '<option value="">An example: Sam\'s Santa Dash</option>' +
+      // 16, 17 and 18 read differently when nothing has been raised: those versions are new wording.
+      '<option value="zero"' + (frTouchFor === "zero" ? " selected" : "") + ">The same example, with nothing raised yet</option>" +
+      list.map(function (f) {
+        return '<option value="' + f.id + '"' + (String(f.id) === frTouchFor ? " selected" : "") + ">" + H.escapeHtml(f.title + ", " + f.name) + "</option>";
+      }).join("");
+    pick.value = frTouchFor;
+  }
+
+  function frTouchPreview() {
+    var frame = el("frTouchPreview");
+    if (!frame || !frTouch) return;
+    var seq = ++frTouchSeq;
+    var kind = frTouchKind;
+    frTouchShown = kind + "|" + frTouchFor;
+    var info = frTouchKindInfo(kind);
+    frTeamSay("frTouchStatus", "", false);
+    var path = "/api/admin/fundraising/touch/preview/" + encodeURIComponent(kind) +
+      (frTouchFor === "zero" ? "?sample=zero" : frTouchFor ? "?fundraiserId=" + encodeURIComponent(frTouchFor) : "");
+    return authFetch(path)
+      .then(okJson)
+      .then(function (d) {
+        if (seq !== frTouchSeq || !d || typeof d.html !== "string") return;
+        el("frTouchMeta").innerHTML =
+          '<p class="fr-touch-when">' + H.escapeHtml(info ? info.when : "") + "</p>" +
+          (d.newWording ? '<p class="fr-touch-signoff">New wording, waiting for sign off. Please read it closely.</p>' : "") +
+          '<p class="fr-touch-subject"><span>Subject</span> ' + H.escapeHtml(d.subject || "") + "</p>" +
+          (d.sample ? "" : '<p class="fr-field-hint">For ' + H.escapeHtml(d.title || "") + ", as it would go today.</p>");
+        frame.setAttribute("srcdoc", d.html);
+      })
+      .catch(function (err) {
+        if (err && err.message === "unauthorized") return;
+        if (seq !== frTouchSeq) return;
+        frTouchShown = "";
+        frTeamSay("frTouchStatus", "That email could not load just now. Try again in a moment.", true);
+      });
+  }
+
+  // The real 660px email, zoomed down to fit the card, and as tall as it is: the page grows.
+  function frTouchFit() {
+    var frame = el("frTouchPreview"), wrap = el("frTouchPreviewWrap");
+    if (!frame || !wrap || !wrap.clientWidth) return;
+    var cdoc = frame.contentDocument;
+    if (!cdoc || !cdoc.body) return;
+    var scale = Math.min(1, wrap.clientWidth / FR_TOUCH_EMAIL_W);
+    frame.style.width = FR_TOUCH_EMAIL_W + "px";
+    frame.style.height = "0px";
+    frame.style.height = Math.max(cdoc.body.scrollHeight, cdoc.documentElement.scrollHeight) + "px";
+    frame.style.zoom = scale;
+  }
+
+  function frTouchSwitch() {
+    if (frTouchBusy || !frTouch) return;
+    var on = !frTouch.settings.on;
+    var question = on
+      ? "Switch the automatic emails on? From the next 8am run they go to real organisers by themselves: first gift, halfway, target, a week before and after their date, need a hand, doing great and a year on, and the thank you when you mark one finished. Only switch on once you have read every one."
+      : "Switch the automatic emails off? Nothing more goes until an admin switches them on again.";
+    if (!window.confirm(question)) return;
+    frTouchBusy = true;
+    frTouchRenderCard();
+    frTeamSay("frTouchStatus", "Saving…", false);
+    frSend("PUT", "/api/admin/fundraising/touch/settings", { on: on })
+      .then(function (r) {
+        frTouchBusy = false;
+        if (!r.ok) {
+          frTeamSay("frTouchStatus", frRefusal(r, "That did not work. Please try again."), true);
+          frTouchRenderCard();
+          return;
+        }
+        frTouch.settings = r.body;
+        frTouchRenderCard();
+        frTeamSay("frTouchStatus", on ? "Automatic emails are on." : "Automatic emails are off.", false);
+      })
+      .catch(function (err) {
+        frTouchBusy = false;
+        if (err && err.message === "unauthorized") return;
+        frTeamSay("frTouchStatus", "That did not work. Please try again.", true);
+        frTouchRenderCard();
+      });
+  }
+
+  function frTouchPrompts(f) {
+    return (frTouch && frTouch.prompts && frTouch.prompts[f.id]) || [];
+  }
+
+  // The pills on the list, one for each prompt.
+  function frTouchPills(f) {
+    return frTouchPrompts(f)
+      .map(function (p) {
+        var tone = p.key === "behind" || p.key === "quiet" ? " is-call-due" : p.key === "ahead" || p.key === "on_track" ? " fr-prompt-good" : " admin-pill--pending";
+        return '<span class="admin-pill fr-prompt-pill' + tone + '" data-frprompt-pill="' + H.escapeHtml(p.key) + '" title="' + H.escapeHtml(p.reason) + '">' +
+          H.escapeHtml(p.pill) + "</span>";
+      })
+      .join("");
+  }
+
+  // "Keeping in touch" in the open sign up: the prompts with Called, then the automatic emails.
+  function frTouchSection(f, write) {
+    if (!frTouch) {
+      if (frTouchState !== "failed") return "";
+      return '<section class="fx-panel fx-panel--wide" data-frtouch-panel><h4>Keeping in touch</h4><p class="fx-empty">This could not load just now.</p></section>';
+    }
+    var prompts = frTouchPrompts(f);
+    var calls = (frTouch.promptCalls && frTouch.promptCalls[f.id]) || [];
+    var sentList = (frTouch.sent && frTouch.sent[f.id]) || [];
+    var labels = {};
+    (frTouch.kinds || []).forEach(function (k) { labels[k.kind] = k.label; });
+    var promptsHtml = prompts.length
+      ? '<ul class="fr-prompts">' + prompts.map(function (p) {
+          return '<li class="fr-prompt" data-frprompt="' + H.escapeHtml(p.key) + '">' +
+            '<p class="fx-letter"><span class="fx-state fx-state--todo">' + H.escapeHtml(p.label) + "</span> " + H.escapeHtml(p.reason) + "</p>" +
+            '<ul class="fr-prompt-points">' + p.points.map(function (t) { return "<li>" + H.escapeHtml(t) + "</li>"; }).join("") + "</ul>" +
+            (write
+              ? '<label class="fx-call-label" for="frPromptNote-' + H.escapeHtml(p.key) + '">Note about the call (optional)</label>' +
+                '<textarea class="fx-call-input fr-input" id="frPromptNote-' + H.escapeHtml(p.key) + '" data-frpromptnote="' + H.escapeHtml(p.key) +
+                '" rows="2" maxlength="500">' + H.escapeHtml(frTouchNotes[p.key] || "") + "</textarea>" +
+                '<div class="fx-call-row"><button class="admin-btn admin-btn--small" type="button" data-frpromptcall="' + H.escapeHtml(p.key) + '">Called</button></div>'
+              : "") +
+            "</li>";
+        }).join("") + "</ul>"
+      : '<p class="fx-letter"><span class="fx-state fx-state--done">No calls suggested today</span></p>';
+    var callsHtml = calls.length
+      ? '<h5 class="fr-touch-h5">Calls about a prompt</h5><ul class="fr-touch-list">' + calls.slice().reverse().map(function (c) {
+          return "<li>" + H.escapeHtml(H.fmtDate(c.calledAt) + (c.calledBy ? " by " + c.calledBy : "") + ": " + c.prompt.replace(/_/g, " ")) +
+            (c.note ? '<span class="fr-field-hint">' + H.escapeHtml(c.note) + "</span>" : "") + "</li>";
+        }).join("") + "</ul>"
+      : "";
+    var next = frTouch.due && frTouch.due[f.id];
+    var sentHtml = '<h5 class="fr-touch-h5">Automatic emails it has had</h5><ul class="fr-touch-list" data-frtouchsent>' +
+      (sentList.length
+        ? sentList.map(function (s) { return "<li>" + H.escapeHtml((labels[s.kind] || s.kind) + ", " + H.fmtDate(s.sentAt)) + "</li>"; }).join("")
+        : '<li class="fx-none">None yet.' + (frTouch.settings.on ? "" : " Automatic emails are switched off.") + "</li>") +
+      "</ul>" +
+      (next ? '<p class="fr-field-hint" data-frtouchnext>Next: ' + H.escapeHtml(labels[next] || next) +
+        (frTouch.settings.on ? ", at the next 8am run." : ", once automatic emails are switched on.") + "</p>" : "") +
+      (f.path === "raising" && f.public
+        ? '<div class="fx-call-row"><button class="admin-btn admin-btn--small fr-btn-quiet" type="button" data-frtouchfor="' + f.id + '">Read its automatic emails</button></div>'
+        : '<p class="fr-field-hint">Automatic emails only go to public pages raising money.</p>');
+    return '<section class="fx-panel fx-panel--wide fr-touch-panel" data-frtouch-panel><h4>Keeping in touch</h4>' + promptsHtml + callsHtml + sentHtml +
+      frNoticeHtml("touch", "frTouchCallStatus") + "</section>";
+  }
+
+  function frTouchRecordCall(key) {
+    if (frBusy) return;
+    var f = frOpenRecord();
+    if (!f) return;
+    var note = String(frTouchNotes[key] || "").trim();
+    if (note.length > 500) {
+      frSay("touch", "A note can be up to 500 characters.", true);
+      frPaintNotice("touch");
+      return;
+    }
+    frRun("touch", "Saving…", function (run) {
+      var body = { prompt: key };
+      if (note) body.note = note;
+      return frSend("POST", "/api/admin/fundraisers/" + f.id + "/prompt-calls", body).then(function (r) {
+        if (!r.ok) {
+          run.say(frRefusal(r, "That was not recorded. Please try again."), true);
+          return;
+        }
+        if (run.open()) delete frTouchNotes[key];
+        run.say("Call recorded.", false);
+        return Promise.all([frReload(), frTouchLoad()]);
+      });
+    });
+  }
+
+  function frTouchWire(view) {
+    var card = el("frTouch");
+    if (card) {
+      card.addEventListener("click", function (e) {
+        var t = e.target;
+        if (!t || !t.closest) return;
+        var kind = t.closest("[data-frtouchkind]");
+        if (kind) {
+          frTouchKind = kind.getAttribute("data-frtouchkind");
+          frTouchRenderCard();
+          return;
+        }
+        if (t.closest("#frTouchSwitch")) frTouchSwitch();
+      });
+      el("frTouchFor").addEventListener("change", function (e) {
+        frTouchFor = String(e.target.value || "");
+        frTouchPreview();
+      });
+      el("frTouchPreview").addEventListener("load", function () {
+        frTouchFit();
+        if (window.requestAnimationFrame) window.requestAnimationFrame(frTouchFit);
+      });
+      window.addEventListener("resize", frTouchFit);
+    }
+    view.addEventListener("click", function (e) {
+      var t = e.target;
+      if (!t || !t.closest) return;
+      var call = t.closest("[data-frpromptcall]");
+      if (call) {
+        frTouchRecordCall(call.getAttribute("data-frpromptcall"));
+        return;
+      }
+      var forBtn = t.closest("[data-frtouchfor]");
+      if (forBtn) {
+        frTouchFor = forBtn.getAttribute("data-frtouchfor");
+        frTouchRenderFor();
+        frTouchPreview();
+        if (card && card.scrollIntoView) card.scrollIntoView({ block: "start" });
+      }
+    });
+    view.addEventListener("input", function (e) {
+      var t = e.target;
+      if (t && t.getAttribute && t.getAttribute("data-frpromptnote")) frTouchNotes[t.getAttribute("data-frpromptnote")] = t.value;
     });
   }
 

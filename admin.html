@@ -1496,6 +1496,28 @@
                 <p class="ty-status" id="frCatsStatus" role="status" aria-live="polite" tabindex="-1"></p>
               </section>
 
+              <!-- TASK-515: the automatic emails to organisers. Every one can be read here, rendered,
+                   before any is sent; only an admin can switch them on (they ship off). The preview
+                   grows to the email's height; nothing scrolls inside it. -->
+              <section class="fr-card" id="frTouch" aria-labelledby="frTouchHead" hidden>
+                <h3 class="admin-subhead" id="frTouchHead">Automatic emails</h3>
+                <p class="fr-summary-state" id="frTouchState" aria-live="polite">Checking&hellip;</p>
+                <p class="fr-touch-due" id="frTouchDue"></p>
+                <p class="fr-card-intro">Friendly emails that go to an organiser by themselves, from the events inbox, at the right moments: their first gift, halfway, their target, a week before and a week after their date, when you mark them finished, and a year on. Each goes once at most, only to a public page raising money, never to anyone who has asked us to stop, and never to a page in memory of someone. Read every one here before switching them on.</p>
+                <div class="fr-touch-switch">
+                  <button class="admin-btn" type="button" id="frTouchSwitch" hidden>Loading&hellip;</button>
+                  <p class="fr-field-hint" id="frTouchSwitchNote" hidden>Only an admin can switch the automatic emails on or off.</p>
+                </div>
+                <h4 class="fr-card-subhead">Read them</h4>
+                <div class="admin-segmented fr-touch-kinds" id="frTouchKinds" role="group" aria-label="Which automatic email to read"></div>
+                <div class="fr-field fr-touch-for-field"><label class="fx-call-label" for="frTouchFor">Show it for</label><select class="fx-call-input" id="frTouchFor"><option value="">An example: Sam's Santa Dash</option></select></div>
+                <div class="fr-touch-meta" id="frTouchMeta"></div>
+                <div class="fr-touch-preview-wrap" id="frTouchPreviewWrap">
+                  <iframe id="frTouchPreview" class="fr-touch-preview" title="The automatic email, as the organiser would see it" sandbox="allow-same-origin" scrolling="no"></iframe>
+                </div>
+                <p class="ty-status" id="frTouchStatus" role="status" aria-live="polite"></p>
+              </section>
+
               <div class="fr-bar">
                 <div class="admin-segmented" id="frFilter" role="group" aria-label="Which sign ups to list">
                   <button class="admin-seg is-active" type="button" data-frfilter="" aria-pressed="true">All (<span data-frcount="all">0</span>)</button>

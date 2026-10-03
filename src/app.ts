@@ -10,8 +10,10 @@ import { adminFundraisingRouter } from "./routes/admin-fundraising";
 import { adminFundraisingCategoriesRouter } from "./routes/admin-fundraising-categories";
 import { adminFundraisingTeamRouter } from "./routes/admin-fundraising-team";
 import { adminFundraisingRequestsRouter } from "./routes/admin-fundraising-requests";
+import { adminFundraisingTouchRouter } from "./routes/admin-fundraising-touch";
 import { fundraiserThanksRouter } from "./routes/fundraiser-thanks";
 import { fundraiseInviteRouter } from "./routes/fundraise-invite";
+import { fundraiseAgainRouter } from "./routes/fundraise-again";
 import { fundraiseRouter } from "./routes/fundraise";
 import { fundraiserNewsRouter, newsBodyGuard, NEWS_JSON_BODY_LIMIT, NEWS_POST_PATH } from "./routes/fundraiser-news";
 import { fundraiseMaterialsRouter } from "./routes/fundraise-materials";
@@ -113,9 +115,13 @@ export function createApp() {
   // the sign up form's invite lookup.
   app.use(adminFundraisingTeamRouter);
   app.use(fundraiseInviteRouter);
+  // TASK-515: the sign up form's Do it again lookup, from the year on email.
+  app.use(fundraiseAgainRouter);
   // TASK-505: what organisers asked us for (posters, leaflets, buckets and tins, shout outs, someone
   // to come along), tracked to done.
   app.use(adminFundraisingRequestsRouter);
+  // TASK-515: keeping in touch: the automatic emails (preview and switch) and the call prompts.
+  app.use(adminFundraisingTouchRouter);
   // TASK-504: a fundraiser's poster, pictures, sponsor form and certificate, for its organiser
   // (signed in) and for staff.
   app.use(fundraiseMaterialsRouter);

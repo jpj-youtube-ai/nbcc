@@ -8039,7 +8039,8 @@ email 11 (`fundraiseSummary`), one email to each address, from and replying to t
   their permission to post; plus "N buckets or tins still out (M due back)", or "..., none due back yet", each one due back
   counting as a thing waiting: see **Community fundraising, requests tracked to done**), calls due, invites not taken up after a week (with who invited them; not those whose link
   has expired), fundraisers four
-  weeks past their date still on Get involved, and those who say they have finished;
+  weeks past their date still on Get involved, those who say they have finished, and (TASK-515) the
+  calls to make from the smart call prompts;
 - **Coming up**: approved fundraisers dated in the next four weeks.
 
 It goes on Mondays only, and never twice for the same Monday: the week is claimed under a row lock
@@ -8794,6 +8795,163 @@ where each is up to (`print` in `GET /api/fundraise/manage/me`: `{ canAsk, poste
 | The five pictures and the zip | `assets/js/fundraise-social.js` |
 | Tests | `test/unit/materials-statement.test.ts`, `fundraising-material-codes.test.ts`, `fundraising-materials-v2.test.ts`, `fundraise-materials-v2-routes.test.ts`, `fundraising-print-requests.test.ts`, `fundraiser-materials-db.test.ts`, and additions to the TASK-504 tests, the private area, admin, logo pack, Analytics label and social picture tests; BDD `features/fundraising-materials-v2.feature` |
 
+## Community fundraising, keeping in touch (TASK-515)
+
+Two things that help staff look after fundraisers without having to remember everything: friendly
+**automatic emails** to an organiser at the right moments, and **smart call prompts** in Admin >
+Fundraising saying who is worth a ring today, and why. Fundraising is live with real fundraisers, so
+the automatic emails **ship switched off**: nothing is sent until an admin has read every one in the
+admin and switched them on. No new config value.
+
+**The automatic emails** (to the organiser, from and replying to the events inbox, each its own
+email kind on the Email audit):
+
+| Email | Kind | When |
+|---|---|---|
+| 12, Your first gift is in! | `fundraiseFirstGift` | the first online gift (never money paid in) was paid in the last week |
+| 13, You're halfway there! | `fundraiseHalfway` | raised (never counting Gift Aid) is at least half the target, and under it; only up to and including the date (never after it, and never once finished) |
+| 14, You did it! Target reached | `fundraiseTargetReached` | raised has reached the target, up to and including the date (never after it, and never once finished); it cheers them on to beat their goal, with a **Raise my target** button to their private area (new wording, for sign off) |
+| 15, One week to go | `fundraiseWeekBefore` | the date is 7 days away (or 6 or 5, if a run was missed) |
+| 16, How did it go? | `fundraiseWeekAfter` | the date was 7 days ago (or 8 or 9), asking them to pay in |
+| 17, Thank you from all of us | `fundraiseFinished` | straight after staff press **Mark finished**, with the link to their certificate |
+| 18, A year ago today... | `fundraiseYearOn` | 365 days after the date, or after it was finished when it had no date (a week to catch a missed run); its **Do it again** button opens the sign up form filled in from last year (below) |
+| Need a hand? | `fundraiseNeedAHand` | once, when the call prompt **Behind** holds (new wording, for sign off) |
+| You're doing great | `fundraiseOnTrack` | once, when the call prompt **On track** holds (new wording, for sign off) |
+
+The words are the ones Jaimie approved on 2026-10-02 (12 to 18), built with the shared email pieces
+(`signOff`, `questionsBox`, `button`, and a new `meterBar` in `src/email/brand.ts`), with a plain text
+part. Jaimie's rule: NBCC supports "children, young people and vulnerable adults", never "families",
+so every one of these says "the children, young people and vulnerable adults we support" (a test
+checks no email here says families). Every guard has to say yes before one goes:
+
+- the **Automatic emails** switch is on (admins only) AND fundraising is on, both read at the start
+  of a run and again before each email, so switching either off stops a run part way;
+- a public page raising money, approved (or finished, for 17 and 18), with an organiser email, and
+  never a page in memory of someone (`isQuietFundraiser` in `src/fundraising/touch-rules.ts`: there
+  are no in memory pages yet, so until there are, a category whose key or name mentions "memory",
+  like one staff add called "In memory", counts as one; when in memory pages are built that is the
+  one place that recognises them);
+- the address is on neither the suppression list nor the opt out list (`email_opt_outs`, either
+  kind); a list that cannot be read means no email;
+- each email goes once per fundraiser, ever: it is claimed in `fundraiser_touchpoints` (unique by
+  fundraiser and kind) BEFORE it is sent, and the claim is given back only if the send fails, so
+  another day can try. An error from the mail service can come after it has accepted an email (a
+  timeout), so a send that errors may still have arrived; it is retried all the same (a rare second
+  copy rather than one never sent), and the log says so plainly, by fundraiser id.
+
+First gift, halfway and target are steps: only the highest that applies is ever sent, and none goes
+once a higher one has gone. At most one automatic email a day for a fundraiser, in the order a week
+after, a week before, target, halfway, first gift, need a hand, doing great, a year on; the two
+gentle ones wait a week after any other. Days are UK calendar days (Europe/London), so the clocks
+changing never moves one. The daily pass rides the 8am task (`npm run reminders`,
+`src/scripts/send-reminders.ts`, its own try/catch) and logs one line:
+`fundraising automatic emails: considered=N sent=N skipped=N failed=N`, or why it did nothing
+(`switched off`, `fundraising off`, `could not read`). Each email sent adds "An automatic email went
+to the organiser" to the fundraiser's History.
+
+**Admin > Fundraising > Automatic emails.** Jaimie's rule: every automatic email is readable in the
+admin before any is sent. A card under the Weekly summary says whether they are on, with **Switch
+automatic emails on/off** for admins (after a warning); a button for each email (the three new
+wordings and 17, whose line about who we support changed, marked **New**); **Show it for**, an invented example (Sam's Santa Dash) or any public page
+raising money, or the example with nothing raised yet (16, 17 and 18 leave the amount out then, and
+those versions are marked new wording too); and the email itself, rendered by the server exactly as it would be sent, with its
+subject and when it goes. It also says what the next 8am run would send (were it on), so the first
+morning after switching on is no surprise: anyone already past halfway or their target gets that
+email then, once. Each open sign up says which one it would get next. Editors and viewers can read them all but not switch them.
+
+**Smart call prompts.** Pills on the list and a **Keeping in touch** panel in the open sign up, each
+with a reason (with the numbers) and a few talking points, and **Called** with an optional note
+(editors and admins). The panel also lists the automatic emails it has had, and when. The rules are
+one table in `src/fundraising/call-prompts.ts`:
+
+| Prompt | When |
+|---|---|
+| Behind | the date is 1 to 14 days away and under a third of the target is raised |
+| Ahead | the target is reached and the date is more than 7 days away |
+| On track | within a quarter either side of the straight line from approval to the date, from a quarter of the way in |
+| Gone quiet | no online gift for 14 days (or none since approval), while its page is live and before the date |
+| Offer a tin | a bake sale or coffee morning with no bucket or tin asked for |
+| Sponsor form | a run, walk or Santa dash (there is no way to ask for a sponsor form yet, so it shows until called) |
+| Offer posters | within 21 days of the date, with no posters or leaflets asked for |
+
+Behind, ahead and on track are one verdict on the pace, so at most one shows. A call clears its
+prompt for good, except Gone quiet, which can come back a fortnight after the call. Calls are kept in
+TASK-503's `fundraiser_calls` (`which = 'prompt'`, with the prompt), and show in History as "Called
+about a prompt". The Monday summary adds one line to Waiting on us, "N calls to make from the
+prompts: 2 behind, 1 gone quiet, ...", each one a thing waiting (the sponsor form suggestion shows
+as a pill but is not counted there: nothing records it but a call); if they cannot be counted, the
+summary still goes, without that line. Matching a kind uses `isKind` from
+`src/fundraising/categories.ts` (TASK-514), so an old combined category and the new split ones are
+read alike. **Mark finished** asks first, and says whether the organiser is emailed their thank you
+(automatic emails on) or not.
+
+**Do it again** (Jaimie's ask, so email 18's "it takes one click to make a new one" is true). Each
+year on email carries a fresh link, `/fundraise?again=<token>`: 32 random bytes, kept only as a
+sha256 with its own prefix (`fundraiser_again_tokens.token_hash`, like TASK-503's invites), working
+for 60 days and once. The form asks `POST /api/fundraise/again { token }`, takes the token out of the
+address bar at once, and fills in only boxes still empty (and a choice not yet made) with last year's
+safe details: raising money or an event, the kind (and its own words for "something else"), the name
+(a year in it earlier than this year becomes this year), the description, the target, the venue and
+town, the Instagram and Facebook links, the organiser's first and last name, email and phone. Never
+the date, the address, what they asked us for, anything staff noted, or anything about anyone who
+gave. Then every question shows, to check and change. While the token is in the address, `/fundraise`
+is served `no-store`, `noindex` and `Referrer-Policy: strict-origin`, as for an invite. The sign up
+carries the token back (`again` on `POST /api/fundraise`), which marks the link used in one statement
+with a History row on last year's fundraiser ("The organiser signed up to do it again"); the new sign
+up waits for staff to approve it like any other. An unknown, used, out of date link, or one whose
+fundraiser has gone, all get the same `404`. Each link gives last year's details at most 3 times
+(`lookups`, counted in the same statement that reads it), so a forwarded link cannot keep fetching
+the organiser's details for 60 days; the sign up can still use it after that. 30 tries in 15 minutes
+from one address (`429` after).
+If the link cannot be made, email 18 does not go that day (its words promise one click), and the
+claim is given back.
+
+### Routes
+
+Admin routes need a session and the `fundraising` section.
+
+| Route | Who | Body | Answer |
+|---|---|---|---|
+| `POST /api/fundraise/again` | anyone | `{ token }` | `200 { path, kind, kindOther, title, description, targetPence, venue, town, instagram, facebook, firstName, lastName, email, phone }`, at most 3 times a link; `404` for any link that does not work; `429` after 30 tries in 15 minutes |
+| `GET /api/admin/fundraising/touch` | view | | `{ today, settings: { on, updatedAt, updatedBy }, kinds: [{ kind, label, when, newWording }], sent: { <id>: [{ kind, sentAt }] }, prompts: { <id>: [{ key, pill, label, reason, points }] }, promptCalls: { <id>: [...] }, due: { <id>: kind } }` (`due`: what the next 8am run would send, were the switch on) |
+| `GET /api/admin/fundraising/touch/preview/:kind` | view | `?fundraiserId=` or `?sample=zero` (optional) | `{ kind, label, newWording, sample, title, subject, html, text }`; `404` for an unknown kind or fundraiser |
+| `PUT /api/admin/fundraising/touch/settings` | admin | `{ on: true \| false }` | `{ on, updatedAt, updatedBy }`; `audit_log` `fundraising.touch_emails_switched` |
+| `POST /api/admin/fundraisers/:id/prompt-calls` | edit | `{ prompt, note? }` (500 at most) | `{ call }`; `audit_log` `fundraiser.prompt_called` |
+
+`POST /api/admin/fundraisers/:id/finish` now also sends email 17 after the finish has committed,
+through the same guards; a failure there never fails the answer.
+
+### Data (`migrations/1791200000170_fundraising-keep-in-touch.js`, additive only)
+
+`fundraiser_touchpoints` (fundraiser, kind, sent at, sent by; unique by fundraiser and kind; cleared
+with its fundraiser), `fundraiser_again_tokens` (the Do it again links: last year's fundraiser, the
+token's hash, made, runs out, how many times it has been looked up, used and by which new sign up), `fundraising_settings.touch_emails_on` (false by default) with
+`touch_emails_updated_at` and `_by`, and `fundraiser_calls.prompt` (nullable), with the check on
+`which` widened to allow `prompt`. Numbered 170, above main's 130 and the 160 an open task uses. The
+new tables are in the nightly backup's table count (73).
+
+### Where it lives, and tests
+
+Rules (pure): `src/fundraising/touch-rules.ts` (which email is due), `src/fundraising/call-prompts.ts`
+(the prompt table), `src/fundraising/again.ts` (Do it again). Do it again's SQL and route:
+`src/db/fundraiser-again.ts`, `src/routes/fundraise-again.ts`; the form's part is in
+`assets/js/fundraise.js`, beside the invite's. Tests: `fundraising-again`, `fundraising-again-db`,
+`fundraise-again-routes`, `fundraise-again-form` (jsdom) and `fundraise-pages-routes`. Emails: `src/fundraising/touch-emails.ts`. SQL: `src/db/fundraising-touch.ts`.
+Sending: `src/fundraising/touch-runner.ts` (the daily pass and the finished email). Routes:
+`src/routes/admin-fundraising-touch.ts`. Screen: the `frTouch` block of `assets/js/admin/app.js`
+(reached by one line hooks marked TASK-515), `#frTouch` in `admin.html`, styles at the end of
+`assets/css/admin.css`. Unit tests: `fundraising-touch-rules` and `fundraising-call-prompts` (fixed
+UK days, both clock changes), `fundraising-touch-emails` (each email, html and text, the approved
+words), `fundraising-touch-runner` (switch off sends nothing, once only, opt outs and suppression,
+the in memory guard, failures given back, the 8am wiring), `fundraising-touch-db`,
+`fundraising-touch-migration`, `admin-fundraising-touch-routes` (admin, editor, viewer),
+`admin-fundraising-touch-panel` (jsdom), `admin-fundraising-finish-touch`,
+`fundraising-summary-prompts`, `admin-email-kinds` and `backup-plan`. BDD:
+`features/fundraising-touch.feature` (ships off and only an admin switches it on; a viewer reads an
+email; nothing goes while off; a week before goes once; nothing to an address that opted out; Mark
+finished sends the thank you; a viewer cannot record a call; Do it again fills in the form from last
+year, once, and the new sign up waits for staff).
+
 ## A QR code encoder for fundraiser pages (TASK-493)
 
 `src/fundraising/qr.ts` draws QR codes with no dependencies, written from the QR standard
@@ -8835,16 +8993,18 @@ lives in; the Drive copy is not immutable.
 
 ### There are THREE databases, not one
 
-This is the trap this feature was built around. `DATABASE_URL` holds 66 tables
+This is the trap this feature was built around. `DATABASE_URL` holds 70 tables
 (42 when this was built; the Events page added three in TASK-453, the Festive Ball ticket
 report one in TASK-464, the admin's New pills one, `admin_seen`, in TASK-478, site analytics
 four in TASK-479, the business supporter call log in TASK-491, community fundraising five
 in TASK-493, the private area's sign in codes and sessions two in TASK-501, the invites and
 calls two in TASK-503, the requests one in TASK-505, the news updates one in TASK-506, and the
-thank yous to supporters and the address level opt out list three in TASK-507),
+thank yous to supporters and the address level opt out list three in TASK-507, the old page
+links one in TASK-511, the fundraising categories one in TASK-514, and which automatic emails each
+fundraiser has had and the Do it again links two in TASK-515),
 but `STORIES_DATABASE_URL` and `CONTACT_DATABASE_URL` are separate databases
 (deliberately, so the public story and contact forms can never reach donor
-data). A `pg_dump $DATABASE_URL` captures 66 of **69** tables and silently
+data). A `pg_dump $DATABASE_URL` captures 70 of **73** tables and silently
 drops every My Story submission (and, since TASK-475, the fingerprints in
 `erased_stories` that keep erased stories from coming back) and every contact
 enquiry, while producing a

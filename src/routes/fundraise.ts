@@ -49,6 +49,7 @@ import { countCodeTry, createSession, deleteSession, deleteSignInCode, findSessi
 import { sendFinishedStaffEmail, sendSignInCodeEmail, sendSignUpEmails, fundraiserPageUrl, manageUrl } from "../fundraising/send";
 import { subscribeSelf } from "../newsletter/self-signup";
 import { useInvite } from "./fundraise-invite";
+import { useAgain } from "./fundraise-again";
 import { readCookie } from "../ball/gate";
 import { listRequestRowsFor } from "../db/fundraising-requests";
 import { organiserRequestLines, parseWants, requestViews, type OrganiserRequestLine, type RequestRow } from "../fundraising/requests";
@@ -135,6 +136,8 @@ export async function postFundraise(req: Request, res: Response): Promise<Respon
     const record = await createFundraiser(parsed.data);
     // TASK-503: made from a staff invite's link? Mark the invite used and linked. Best effort.
     await useInvite(req.body?.invite, record.id);
+    // TASK-515: made from email 18's Do it again link? Mark the link used. Best effort.
+    await useAgain(req.body?.again, record.id);
     await sendSignUpEmails(record);
     // The newsletter tick box (unticked by default): a ticked one subscribes the organiser exactly as
     // the footer form does, recorded as joining from the fundraising form. Best effort: the sign up stands either way. Unticked changes nothing.

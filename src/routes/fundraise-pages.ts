@@ -213,7 +213,8 @@ export function addFundraisePageRoutes(router: Router, siteRoot: string, deps: F
       // ever our origin as a referrer, never the address with its token, to anyone, our own pages
       // included (same-origin would still send it in full to ours). Only the origin keeps the spam
       // check, which may look at it, working. A plain visit to the form is unchanged.
-      if (req.query.invite !== undefined) {
+      // TASK-515: likewise for a Do it again link from the year on email (?again=).
+      if (req.query.invite !== undefined || req.query.again !== undefined) {
         res.setHeader("Cache-Control", "no-store");
         res.setHeader("Referrer-Policy", "strict-origin");
         res.setHeader("X-Robots-Tag", "noindex, nofollow");

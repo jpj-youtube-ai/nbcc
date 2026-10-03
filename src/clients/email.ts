@@ -603,6 +603,44 @@ export async function sendFundraiseSupporterThanks(name: string, message: Fundra
   await sendVerbatim("fundraiseSupporterThanks", name, message);
 }
 
+// TASK-515: the automatic emails to an organiser, each its own kind so they can be told apart in
+// the email audit and a bounce report. Built by src/fundraising/touch-emails.ts and sent by
+// src/fundraising/touch-runner.ts, from and replying to the events inbox, only while the Automatic
+// emails switch in Admin > Fundraising is on.
+export type FundraiseTouchKind =
+  | "first_gift"
+  | "halfway"
+  | "target"
+  | "week_before"
+  | "week_after"
+  | "finished"
+  | "year_on"
+  | "need_a_hand"
+  | "on_track";
+
+export async function sendFundraiseTouch(kind: FundraiseTouchKind, name: string, message: FundraiseEmailMessage): Promise<void> {
+  switch (kind) {
+    case "first_gift":
+      return sendVerbatim("fundraiseFirstGift", name, message);
+    case "halfway":
+      return sendVerbatim("fundraiseHalfway", name, message);
+    case "target":
+      return sendVerbatim("fundraiseTargetReached", name, message);
+    case "week_before":
+      return sendVerbatim("fundraiseWeekBefore", name, message);
+    case "week_after":
+      return sendVerbatim("fundraiseWeekAfter", name, message);
+    case "finished":
+      return sendVerbatim("fundraiseFinished", name, message);
+    case "year_on":
+      return sendVerbatim("fundraiseYearOn", name, message);
+    case "need_a_hand":
+      return sendVerbatim("fundraiseNeedAHand", name, message);
+    case "on_track":
+      return sendVerbatim("fundraiseOnTrack", name, message);
+  }
+}
+
 // --- Backup alerts (TASK-423) ---------------------------------------------------------------
 // An operational notice to ADMIN_NOTIFICATION_EMAIL when the nightly backup fails, refuses to
 // ship, or reaches only one of its two destinations.

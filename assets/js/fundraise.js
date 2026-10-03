@@ -560,6 +560,62 @@
         });
     }
 
+    // --- Do it again, from the year on email (TASK-515) ---------------------------------------------
+    // Opened from email 18's link (/fundraise?again=...): ask the server for last year's details, by
+    // POST, take the token out of the address at once, and fill in only the boxes still empty (and a
+    // choice not yet made). Never the date or the address: those are this year's. The sign up carries
+    // the token back so the link is used once. A link that no longer works changes nothing.
+    var againToken = null;
+    var againMatch = /[?&]again=([A-Za-z0-9_-]{43})(?:&|$)/.exec((win.location && win.location.search) || "");
+    if (againMatch && typeof win.fetch === "function") {
+      var againAsked = win.fetch("/api/fundraise/again", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token: againMatch[1] }),
+      });
+      if (win.history && typeof win.history.replaceState === "function") {
+        try {
+          var againRest = String(win.location.search || "")
+            .replace(/^\?/, "")
+            .split("&")
+            .filter(function (part) { return part && !/^again=/.test(part); })
+            .join("&");
+          win.history.replaceState(win.history.state, "", (win.location.pathname || "/fundraise") + (againRest ? "?" + againRest : "") + (win.location.hash || ""));
+        } catch (e) {
+          /* The address stays as it was; nothing else changes. */
+        }
+      }
+      againAsked
+        .then(function (res) {
+          return res && res.ok ? res.json() : null;
+        })
+        .then(function (data) {
+          if (!data) return;
+          againToken = againMatch[1];
+          // A choice, only when none is made yet, and only one the form offers.
+          ["path", "kind"].forEach(function (name) {
+            if (radio(name) || typeof data[name] !== "string") return;
+            var pick = form.querySelector('input[name="' + name + '"][value="' + String(data[name]).replace(/[^a-z0-9_]/gi, "") + '"]');
+            if (pick) pick.checked = true;
+          });
+          var target = typeof data.targetPence === "number" && data.targetPence > 0 ? String(data.targetPence % 100 === 0 ? data.targetPence / 100 : (data.targetPence / 100).toFixed(2)) : "";
+          [
+            ["title", data.title], ["description", data.description], ["target", target], ["venue", data.venue], ["town", data.town],
+            ["kindOther", data.kindOther], ["instagram", data.instagram], ["facebook", data.facebook], ["firstName", data.firstName],
+            ["lastName", data.lastName], ["email", data.email], ["phone", data.phone],
+          ].forEach(function (pair) {
+            var box = el(pair[0]);
+            if (box && !String(box.value || "").trim() && typeof pair[1] === "string" && pair[1]) box.value = pair[1];
+          });
+          applyAll();
+          // Most of the questions are answered: show them all, to check and change.
+          if (stepped) revealAll();
+        })
+        .catch(function () {
+          /* Could not ask: the form works the same without it. */
+        });
+    }
+
     // --- checking and sending -------------------------------------------------------------------
     // The rule the browser cannot check on its own: an event's finish is after its start.
     function finishBeforeStart() {
@@ -668,6 +724,7 @@
       body.company = val("company");
       body.captchaToken = tokenField ? tokenField.value : "";
       if (inviteToken) body.invite = inviteToken;
+      if (againToken) body.again = againToken; // TASK-515
       return body;
     }
 

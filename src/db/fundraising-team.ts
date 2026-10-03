@@ -5,6 +5,7 @@ import { listAllFundraisers } from "./fundraisers";
 import { listRequestRows } from "./fundraising-requests";
 import { countPendingUpdates } from "./fundraiser-updates";
 import { countPendingThanks } from "./fundraiser-thanks";
+import { readPromptCounts } from "./fundraising-touch";
 import { INVITE_TTL_DAYS, staffFirstName } from "../fundraising/invite";
 import { summaryRecipientsSchema, type SummaryInputs } from "../fundraising/summary";
 import type { CallRecord, CallWhich } from "../fundraising/follow-up";
@@ -245,9 +246,11 @@ export async function recordFundraiserCall(
   });
 }
 
+// The calls before and after a date only: TASK-515's calls about a prompt (which = 'prompt') are read
+// by src/db/fundraising-touch.ts.
 export async function listFundraiserCalls(): Promise<Array<CallRecord & { fundraiserId: number }>> {
   const r = await pool.query(
-    "SELECT fundraiser_id, which, called_at, called_by, note FROM fundraiser_calls ORDER BY called_at DESC, id DESC",
+    "SELECT fundraiser_id, which, called_at, called_by, note FROM fundraiser_calls WHERE which IN ('before', 'after') ORDER BY called_at DESC, id DESC",
   );
   return r.rows.map((row) => ({
     fundraiserId: Number(row.fundraiser_id),
@@ -361,7 +364,7 @@ export async function releaseSummaryWeek(week: string, previous: string | null):
  */
 export async function readSummaryInputs(now: Date): Promise<SummaryInputs> {
   const since = new Date(now.getTime() - 15 * 24 * 60 * 60 * 1000);
-  const [fundraisers, gifts, cash, calls, invites, newsToCheck, requests, thanksToCheck] = await Promise.all([
+  const [fundraisers, gifts, cash, calls, invites, newsToCheck, requests, thanksToCheck, prompts] = await Promise.all([
     listAllFundraisers(),
     pool.query(
       `SELECT g.* FROM (
@@ -394,6 +397,12 @@ export async function readSummaryInputs(now: Date): Promise<SummaryInputs> {
       console.error("fundraising summary thank yous count failed:", err instanceof Error ? err.message : err);
       return 0;
     }),
+    // TASK-515: the smart call prompts showing today. Only one line of the summary: if they cannot
+    // be counted, the summary still goes, without it.
+    readPromptCounts(now).catch((err: unknown) => {
+      console.error("fundraising summary call prompts count failed:", err instanceof Error ? err.message : err);
+      return undefined;
+    }),
   ]);
   return {
     now,
@@ -412,5 +421,6 @@ export async function readSummaryInputs(now: Date): Promise<SummaryInputs> {
     invites: invites.map((i) => ({ name: i.name, signedBy: i.signedBy, createdAt: i.createdAt, resentAt: i.resentAt })),
     requests,
     thanksToCheck,
+    prompts,
   };
 }

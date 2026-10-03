@@ -47,10 +47,11 @@ describe("the fundraising categories migration", () => {
   migration.up(pgm);
   const sql = calls.filter((c) => c.op === "sql").map((c) => String(c.args[0])).join("\n");
 
-  it("sorts after everything on main and the open keep in touch work (150)", () => {
+  // It sorted last when it shipped; later migrations (TASK-517's 165, TASK-515's 170) now sort after it.
+  it("sorts after everything that was on main (130)", () => {
     const all = readdirSync(resolve(ROOT, "migrations")).filter((f) => f.endsWith(".js")).sort();
-    expect(all[all.length - 1]).toBe(NAME);
-    expect(NAME > "1791200000150").toBe(true);
+    expect(all.indexOf(NAME)).toBeGreaterThan(all.indexOf("1791200000130_fundraising-form-v2.js"));
+    expect(NAME > "1791200000130").toBe(true);
   });
 
   it("makes the table: a key that never changes, a name, on offer or not, and who added it when", () => {

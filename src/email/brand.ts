@@ -213,3 +213,28 @@ export const signOffAs = (line: string, name: string): string =>
 
 /** The same in a plain text part. */
 export const signOffAsText = (line: string, name: string): string => `${line}\n${name}\nNBCC Team`;
+
+// --- the meter line (TASK-515) ---------------------------------------------------------------
+// For the automatic emails to an organiser (first gift, halfway, target, doing great), as Jaimie
+// approved them on 2026-10-02: the total large in the serif maroon, "raised of" the target, and a
+// tan bar filled in crimson. Additive; nothing else moves.
+
+const poundsOf = (pence: number): string => {
+  const whole = pence % 100 === 0;
+  return `£${(pence / 100).toLocaleString("en-GB", { minimumFractionDigits: whole ? 0 : 2, maximumFractionDigits: 2 })}`;
+};
+
+/** "£250 raised of £500" over a bar filled to the percentage (held at 100), or the total alone. */
+export const meterBar = (raisedPence: number, targetPence: number | null): string => {
+  const raised = Math.max(0, Math.floor(raisedPence));
+  const total = `<b style="font-family:${HEAD};font-size:20px;color:${MAROON}">${poundsOf(raised)}</b>`;
+  if (!targetPence || targetPence <= 0) {
+    return `<div style="margin:6px 0 18px;font-family:${BODY_FONT};font-size:14px;color:${SLATE}">${total} raised so far</div>`;
+  }
+  const pc = Math.min(100, Math.round((raised * 100) / targetPence));
+  return (
+    `<div style="margin:6px 0 18px"><div style="font-family:${BODY_FONT};font-size:14px;color:${SLATE};margin:0 0 6px">` +
+    `${total} raised of ${poundsOf(targetPence)}</div>` +
+    `<div style="background:${TAN_SOFT};border-radius:999px;height:12px;overflow:hidden"><div style="background:${CRIMSON};width:${pc}%;height:12px"></div></div></div>`
+  );
+};

@@ -5,6 +5,7 @@ import { addDays, callStates, offListPrompt, type CallRecord } from "./follow-up
 import { INVITE_NOT_TAKEN_DAYS, inviteVerdict } from "./invite";
 import { pounds } from "./emails";
 import { requestTotals, type RequestRow } from "./requests";
+import type { PromptCounts } from "./call-prompts";
 
 // TASK-503: the Monday summary (email 11), at 8am on Mondays to the people chosen in Admin >
 // Fundraising. Pure: the runner (./summary-runner.ts) reads the rows and the clock, and every count
@@ -78,6 +79,8 @@ export interface SummaryInputs {
   newsToCheck?: number;
   /** TASK-507: thank yous organisers sent to their supporters that staff have still to check. */
   thanksToCheck?: number;
+  /** TASK-515: the smart call prompts showing today (src/fundraising/call-prompts.ts). */
+  prompts?: PromptCounts;
 }
 
 export interface Materials {
@@ -124,6 +127,8 @@ export interface SummaryCounts {
   pastDate: number;
   saysFinished: number;
   comingUp: Array<{ date: string; title: string; town: string }>;
+  /** TASK-515: the smart call prompts showing today, each a call to make. */
+  prompts: PromptCounts;
   /** Every thing in "Waiting on us", added up. */
   waiting: number;
 }
@@ -197,6 +202,16 @@ export function summaryCounts(i: SummaryInputs): SummaryCounts {
   const pastDate = i.fundraisers.filter((f) => offListPrompt(f, today) === "date").length;
   const saysFinished = i.fundraisers.filter((f) => f.status === "approved" && f.finishedRequestedAt).length;
   const lastDay = addDays(today, COMING_UP_DAYS - 1);
+  const p = i.prompts;
+  const whole = (n: unknown) => Math.max(0, Math.floor(Number(n) || 0));
+  const prompts: PromptCounts = {
+    behind: whole(p?.behind),
+    ahead: whole(p?.ahead),
+    onTrack: whole(p?.onTrack),
+    quiet: whole(p?.quiet),
+    materials: whole(p?.materials),
+  };
+  const promptCalls = prompts.behind + prompts.ahead + prompts.onTrack + prompts.quiet + prompts.materials;
 
   return {
     week,
@@ -231,6 +246,7 @@ export function summaryCounts(i: SummaryInputs): SummaryCounts {
       .filter((f) => f.status === "approved" && f.eventDate && f.eventDate >= today && f.eventDate <= lastDay)
       .sort((a, b) => String(a.eventDate).localeCompare(String(b.eventDate)) || a.title.localeCompare(b.title))
       .map((f) => ({ date: f.eventDate as string, title: f.title, town: f.town })),
+    prompts,
     waiting:
       toApprove +
       changesToCheck +
@@ -243,7 +259,8 @@ export function summaryCounts(i: SummaryInputs): SummaryCounts {
       callsDue +
       invitesNotTaken.length +
       pastDate +
-      saysFinished,
+      saysFinished +
+      promptCalls,
   };
 }
 
@@ -320,6 +337,19 @@ export function summaryLines(c: SummaryCounts): SummaryLines {
     );
   }
   if (c.callsDue) waiting.push(plural(c.callsDue, "call due", "calls due"));
+  // TASK-515: the smart call prompts, in one line.
+  const pr = c.prompts;
+  const prTotal = pr ? pr.behind + pr.quiet + pr.ahead + pr.onTrack + pr.materials : 0;
+  if (pr && prTotal) {
+    const what = [
+      pr.behind ? `${pr.behind} behind` : "",
+      pr.quiet ? `${pr.quiet} gone quiet` : "",
+      pr.ahead ? `${pr.ahead} ahead` : "",
+      pr.onTrack ? `${pr.onTrack} on track` : "",
+      pr.materials ? `${pr.materials} to offer materials` : "",
+    ].filter(Boolean);
+    waiting.push(`${plural(prTotal, "call to make from the prompts", "calls to make from the prompts")}: ${andList(what)}`);
+  }
   if (c.invitesNotTaken.length) {
     waiting.push(
       `${plural(c.invitesNotTaken.length, "invite", "invites")} not taken up after a week: ` +

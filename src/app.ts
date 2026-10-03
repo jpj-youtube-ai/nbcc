@@ -10,6 +10,7 @@ import { adminFundraisingRouter } from "./routes/admin-fundraising";
 import { adminFundraisingCategoriesRouter } from "./routes/admin-fundraising-categories";
 import { adminFundraisingTeamRouter } from "./routes/admin-fundraising-team";
 import { adminFundraisingRequestsRouter } from "./routes/admin-fundraising-requests";
+import { adminFundraisingTouchRouter } from "./routes/admin-fundraising-touch";
 import { fundraiserThanksRouter } from "./routes/fundraiser-thanks";
 import { fundraiseInviteRouter } from "./routes/fundraise-invite";
 import { fundraiseRouter } from "./routes/fundraise";
@@ -116,6 +117,8 @@ export function createApp() {
   // TASK-505: what organisers asked us for (posters, leaflets, buckets and tins, shout outs, someone
   // to come along), tracked to done.
   app.use(adminFundraisingRequestsRouter);
+  // TASK-515: keeping in touch: the automatic emails (preview and switch) and the call prompts.
+  app.use(adminFundraisingTouchRouter);
   // TASK-504: a fundraiser's poster, pictures, sponsor form and certificate, for its organiser
   // (signed in) and for staff.
   app.use(fundraiseMaterialsRouter);

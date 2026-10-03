@@ -27,6 +27,7 @@ import {
 import { insertEventImage } from "../db/events";
 import { validateUpload } from "../newsletter/image-validation";
 import { sendApprovedEmail, sendEditDecisionEmail, sendWaitingLiveEmails, fundraiserPageUrl } from "../fundraising/send";
+import { sendFinishedTouch } from "../fundraising/touch-runner";
 
 // TASK-493: the admin API behind Admin > Fundraising. Section "fundraising": admins and editors
 // edit by default, viewers look (src/admin/permissions.ts).
@@ -270,6 +271,14 @@ function moveHandler(move: "approve" | "decline" | "finish") {
       // After the approval has committed, best effort: it stands whether or not the email goes. A
       // page holder approved while fundraising is off waits for the switch instead (livePending).
       if (move === "approve" && !livePending) await bestEffort("approved", () => sendApprovedEmail(after));
+      // TASK-515: the finished email (17, with the certificate), only while Automatic emails is on,
+      // and only once. sendFinishedTouch checks every guard itself and never throws.
+      if (move === "finish") {
+        await bestEffort("finished thank you", async () => {
+          const withMeter = await getFundraiser(after.id);
+          if (withMeter) await sendFinishedTouch(withMeter);
+        });
+      }
       return res.status(200).json({ fundraiser: forAdmin(after) });
     } catch (err) {
       return failed(res, move, err);

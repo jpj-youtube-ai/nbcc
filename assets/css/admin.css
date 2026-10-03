@@ -2681,3 +2681,31 @@ textarea.fx-call-input{min-height:88px;line-height:1.5;resize:vertical;field-siz
 /* TASK-512: each printed piece's QR code scans, wrapping on a phone. */
 #view-fundraising .fr-scans { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px 18px; }
 #view-fundraising .fr-scans li { white-space: normal; }
+
+/* TASK-515: keeping in touch. The Automatic emails card reads each email as the organiser would see
+   it: the real 660px email zoomed to the card's width and as tall as it is, so the page grows and
+   nothing scrolls inside. The kinds wrap onto as many lines as they need. */
+#view-fundraising .fr-touch-switch { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; margin: 10px 0 2px; }
+#view-fundraising .fr-touch-switch .fr-field-hint { margin: 0; }
+#view-fundraising .fr-touch-kinds { flex-wrap: wrap; max-width: 100%; border-radius: 22px; margin: 2px 0 12px; }
+#view-fundraising .fr-touch-new { display: inline-block; margin-left: 4px; padding: 0 7px; border-radius: 999px; font-size: 0.72rem; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; background: var(--cream); color: var(--maroon); box-shadow: inset 0 0 0 1px var(--line); }
+#view-fundraising .fr-touch-for-field { max-width: 420px; margin: 0 0 10px; }
+#view-fundraising .fr-touch-for-field select { width: 100%; }
+#view-fundraising .fr-touch-meta p { margin: 0 0 6px; max-width: 72ch; overflow-wrap: anywhere; }
+#view-fundraising .fr-touch-when { color: var(--slate-soft); font-size: 0.92rem; }
+#view-fundraising .fr-touch-signoff { display: inline-block; padding: 4px 12px; border-radius: 999px; background: color-mix(in srgb, var(--crimson) 12%, var(--cream)); color: var(--crimson); font-weight: 700; font-size: 0.88rem; }
+#view-fundraising .fr-touch-subject { font-size: 0.98rem; }
+#view-fundraising .fr-touch-subject span { display: inline-block; margin-right: 6px; font-size: 0.72rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--slate-soft); }
+#view-fundraising .fr-touch-preview-wrap { max-width: 660px; margin: 8px 0 4px; border: 1px solid var(--line); border-radius: 12px; overflow: hidden; background: var(--maroon); }
+#view-fundraising .fr-touch-preview { display: block; width: 660px; min-height: 120px; border: 0; background: var(--maroon); }
+/* The prompts in the open sign up, and the quiet good news pill. */
+#view-fundraising .admin-pill.fr-prompt-good { background: var(--holly-soft); color: var(--holly-dark); }
+#view-fundraising .fr-prompts { list-style: none; margin: 0; padding: 0; }
+#view-fundraising .fr-prompt { padding: 10px 0 12px; border-top: 1px solid var(--line); }
+#view-fundraising .fr-prompt:first-child { border-top: 0; padding-top: 0; }
+#view-fundraising .fr-prompt .fx-letter { margin: 0 0 4px; max-width: 72ch; overflow-wrap: anywhere; }
+#view-fundraising .fr-prompt-points { margin: 0 0 8px; padding-left: 20px; max-width: 72ch; font-size: 0.92rem; line-height: 1.5; }
+#view-fundraising .fr-touch-h5 { margin: 14px 0 4px; font-family: var(--font-head); font-size: 0.98rem; color: var(--maroon); }
+#view-fundraising .fr-touch-list { margin: 0 0 8px; padding-left: 20px; font-size: 0.92rem; line-height: 1.5; overflow-wrap: anywhere; }
+#view-fundraising .fr-touch-list .fr-field-hint { display: block; }
+#view-fundraising .fr-touch-due { margin: 0 0 6px; max-width: 72ch; font-size: 0.92rem; color: var(--slate); }

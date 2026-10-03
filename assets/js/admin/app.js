@@ -10129,6 +10129,7 @@
     // TASK-515
     "fundraiser.touch_sent": "An automatic email went to the organiser",
     "fundraiser.prompt_called": "Called about a prompt",
+    "fundraiser.again_used": "The organiser signed up to do it again",
     // TASK-505: the requests.
     "fundraiser.request_updated": "A request updated",
     // TASK-506

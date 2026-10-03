@@ -165,9 +165,9 @@ const BUILDERS: Record<TouchKind, Builder> = {
 
   // 14, the approved email changed as Jaimie asked: cheer them on to beat their goal. NEW WORDING.
   target: (d, hi, t) => {
-    const reached = `has reached its ${pounds(d.targetPence ?? d.raisedPence)} target! That is a truly wonderful thing to have done for the families we support.`;
+    const reached = `has reached its ${pounds(d.targetPence ?? d.raisedPence)} target! That is a truly wonderful thing to have done for the children, young people and vulnerable adults we support.`;
     const further =
-      "But why stop there? Your page stays open, so every gift from here on is a bonus for the families we support. Why not see if you can beat your goal?";
+      "But why stop there? Your page stays open, so every gift from here on is a bonus for the children, young people and vulnerable adults we support. Why not see if you can beat your goal?";
     const raise = "Set yourself a new target from your private area, then share your page again to tell everyone. We’d love to see how far you can go!";
     const check = "We check every change before it goes on your page, so your new target may take a day or so to show.";
     const body =
@@ -248,7 +248,7 @@ const BUILDERS: Record<TouchKind, Builder> = {
 
   // 17, approved, with the certificate (TASK-504). With nothing raised, the amount is left out.
   finished: (d, hi, t) => {
-    const thanks = "Thank you for every step, every share and every ask. You’ve made a real difference to the families we support.";
+    const thanks = "Thank you for every step, every share and every ask. You’ve made a real difference to the children, young people and vulnerable adults we support.";
     const lead = d.raisedPence > 0 ? `<b>${t}</b> raised an incredible <b>${pounds(d.raisedPence)}</b> for NBCC. ${thanks}` : `Thank you so much for <b>${t}</b>. ${thanks.replace("Thank you for every", "For every")}`;
     const leadText = d.raisedPence > 0 ? `${d.title} raised an incredible ${pounds(d.raisedPence)} for NBCC. ${thanks}` : `Thank you so much for ${d.title}. ${thanks.replace("Thank you for every", "For every")}`;
     const cert = "We’ve made you a certificate to say thank you. Print it, frame it, show it off!";
@@ -284,7 +284,7 @@ const BUILDERS: Record<TouchKind, Builder> = {
   // NEW WORDING, for Jaimie to sign off: once, when their date is close and they are behind. It
   // never says so: it offers help.
   need_a_hand: (d, hi, t, first) => {
-    const soon = "is coming up soon, and we’d love to help you make the most of it. Every gift so far is already making a difference to the families we support.";
+    const soon = "is coming up soon, and we’d love to help you make the most of it. Every gift so far is already making a difference to the children, young people and vulnerable adults we support.";
     const offers: Array<[string, string]> = [
       ["Posters and leaflets", " to put up at work, at school or in your local shop."],
       ["A collection bucket or tin", " for the day itself."],
@@ -325,7 +325,7 @@ const BUILDERS: Record<TouchKind, Builder> = {
   // NEW WORDING, for Jaimie to sign off: once, when they are on track for their target.
   on_track: (d, hi, t, first) => {
     const track = `and we just had to say: you’re right on track for your ${pounds(d.targetPence ?? 0)} target!`;
-    const thanks = "Thank you, and a big thank you to everyone who has given so far. Every pound helps the families we support, all year round.";
+    const thanks = "Thank you, and a big thank you to everyone who has given so far. Every pound helps the children, young people and vulnerable adults we support, all year round.";
     const tip =
       "keep the momentum going. Share your page again, or post a news update from your private area so your supporters can see how it’s going. People love to see progress!";
     const body =

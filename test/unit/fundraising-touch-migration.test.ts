@@ -63,6 +63,16 @@ describe("the keep in touch migration", () => {
     for (const k of TOUCH_KINDS) expect(cols.kind.check).toContain(`'${k}'`);
   });
 
+  it("keeps a Do it again link only as a hash, with when it runs out and when it was used", () => {
+    const t = calls.find((c) => c.op === "createTable" && c.args[0] === "fundraiser_again_tokens");
+    const c = (t?.args[1] ?? {}) as Record<string, Col & { unique?: boolean }>;
+    expect(Object.keys(c).sort()).toEqual(["created_at", "expires_at", "fundraiser_id", "id", "token_hash", "used_at", "used_by_fundraiser_id"]);
+    expect(c.token_hash).toMatchObject({ notNull: true, unique: true });
+    expect(c.expires_at.notNull).toBe(true);
+    expect(c.fundraiser_id).toMatchObject({ references: "fundraisers", onDelete: "CASCADE" });
+    expect(c.used_by_fundraiser_id).toMatchObject({ references: "fundraisers", onDelete: "SET NULL" });
+  });
+
   it("adds the Automatic emails switch, off by default", () => {
     const s = added("fundraising_settings");
     expect(s.touch_emails_on).toMatchObject({ type: "boolean", notNull: true, default: false });
@@ -91,6 +101,7 @@ describe("the keep in touch migration", () => {
     const down = fakePgm();
     migration.down(down.pgm);
     expect(down.calls.some((c) => c.op === "dropTable" && c.args[0] === "fundraiser_touchpoints")).toBe(true);
+    expect(down.calls.some((c) => c.op === "dropTable" && c.args[0] === "fundraiser_again_tokens")).toBe(true);
     expect(down.calls.some((c) => c.op === "dropColumns" && c.args[0] === "fundraising_settings")).toBe(true);
     expect(down.calls.some((c) => c.op === "dropColumns" && c.args[0] === "fundraiser_calls")).toBe(true);
   });

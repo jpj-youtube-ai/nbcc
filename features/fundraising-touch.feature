@@ -67,3 +67,17 @@ Feature: Keeping in touch with fundraisers (TASK-515)
     When "e4.touch.fr.bdd@example.com" records a call about "sponsor_form" for "Oz's Run (bdd-fr)"
     Then the fundraising answer is 200
     And the history of "Oz's Run (bdd-fr)" records "fundraiser.prompt_called"
+
+  Scenario: Do it again fills in the form from last year, once
+    Given fundraising is switched on
+    And a finished fundraiser "Pat's Dash 2025 (bdd-fr)" raising 40000 pence, organised by "pat.touch.fr.bdd@example.com"
+    And a Do it again link for "Pat's Dash 2025 (bdd-fr)" whose token we know
+    When the sign up form asks for that Do it again link
+    Then the fundraising answer is 200
+    And the form is given last year's details for "pat.touch.fr.bdd@example.com", and nothing about givers
+    When someone signs up "Pat's Dash Again (bdd-fr)" from that Do it again link
+    Then the fundraising answer is 200
+    And the Do it again link is used by "Pat's Dash Again (bdd-fr)"
+    And "Pat's Dash Again (bdd-fr)" is waiting for staff to approve it
+    When the sign up form asks for that Do it again link
+    Then the fundraising answer is 404

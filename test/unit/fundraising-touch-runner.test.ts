@@ -49,6 +49,7 @@ function deps(over: Partial<TouchDeps> = {}): TouchDeps & { sent: Array<{ kind: 
     claim: vi.fn(async () => true),
     release: vi.fn(async () => undefined),
     recordSent: vi.fn(async () => undefined),
+    againLink: vi.fn(async (id: number) => `https://nbcc.test/fundraise?again=token-for-${id}`),
     send: vi.fn(async (kind: string, _name: string, m: { email: string; subject: string }) => {
       sent.push({ kind, to: m.email, subject: m.subject });
     }),
@@ -149,6 +150,35 @@ describe("the daily pass", () => {
   it("sends nothing to a fundraiser that is not due anything", async () => {
     const d = deps({ readState: vi.fn(async () => [candidate(fr({ eventDate: null, targetPence: null }))]) });
     expect(await runTouchEmails(NOW, d)).toMatchObject({ considered: 1, sent: 0 });
+  });
+});
+
+describe("a year on: Do it again", () => {
+  // 6 December 2027: a year after Sam's Santa Dash.
+  const YEAR_ON = new Date("2027-12-06T08:00:00.000Z");
+  const finished = () => [candidate(fr({ status: "finished" }, 61200))];
+
+  it("makes a one use link to the form, filled in from last year, and puts it on the button", async () => {
+    const d = deps({ readState: vi.fn(async () => finished()) });
+    expect(await runTouchEmails(YEAR_ON, d)).toMatchObject({ sent: 1 });
+    expect(d.sent[0].kind).toBe("year_on");
+    expect(d.againLink).toHaveBeenCalledWith(7);
+    const message = (d.send as ReturnType<typeof vi.fn>).mock.calls[0][2];
+    expect(message.html).toContain('href="https://nbcc.test/fundraise?again=token-for-7"');
+    expect(message.text).toContain("Do it again: https://nbcc.test/fundraise?again=token-for-7");
+  });
+
+  it("makes no link for any other email", async () => {
+    const d = deps();
+    await runTouchEmails(NOW, d);
+    expect(d.againLink).not.toHaveBeenCalled();
+  });
+
+  it("sends nothing, and gives the claim back, when the link cannot be made", async () => {
+    const d = deps({ readState: vi.fn(async () => finished()), againLink: vi.fn(async () => Promise.reject(new Error("down"))) });
+    expect(await runTouchEmails(YEAR_ON, d)).toMatchObject({ sent: 0, failed: 1 });
+    expect(d.send).not.toHaveBeenCalled();
+    expect(d.release).toHaveBeenCalledWith(7, "year_on");
   });
 });
 

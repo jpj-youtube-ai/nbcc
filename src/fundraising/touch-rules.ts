@@ -59,7 +59,7 @@ export const TOUCH_WHEN: Record<TouchKind, string> = {
   week_before: "A week before their date.",
   week_after: "A week after their date.",
   finished: "When you press Mark finished, with their certificate.",
-  year_on: "A year after their date (or after it finished, with no date).",
+  year_on: "A year after their date (or after it finished, with no date). Its button opens the sign up form filled in from last year, with a one use link.",
   need_a_hand: "Once, when their date is under a fortnight away and they have raised under a third of their target.",
   on_track: "Once, when they are on track for their target.",
 };

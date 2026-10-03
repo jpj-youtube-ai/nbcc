@@ -2,7 +2,7 @@ const { Given, When, Then, Before, After } = require("@cucumber/cucumber");
 const assert = require("node:assert/strict");
 const path = require("node:path");
 const { Pool } = require("pg");
-const { randomBytes } = require("node:crypto");
+const { createHash, randomBytes } = require("node:crypto");
 
 // Steps for fundraising-touch.feature (TASK-515): the Automatic emails switch, reading an email
 // before any is sent, the daily pass, the thank you at Mark finished, and a call about a prompt.
@@ -156,4 +156,78 @@ Then("exactly {int} {string} email went to {string}", async function (n, kind, e
     [kind, email],
   );
   assert.equal(r.rows.length, n);
+});
+
+// ---- Do it again (TASK-515) ----
+
+// As src/fundraising/again.ts: only this hash of the token is ever stored.
+const againHash = (token) => createHash("sha256").update("fundraiseagain.v1:" + token).digest("hex");
+
+async function publicCall(world, method, urlPath, body) {
+  const res = await fetch(`${BASE_URL}${urlPath}`, {
+    method,
+    headers: { "Content-Type": "application/json" },
+    body: body === undefined ? undefined : JSON.stringify(body),
+  });
+  world.frStatus = res.status;
+  world.frBody = await res.json().catch(() => ({}));
+  return world.frBody;
+}
+
+Given("a Do it again link for {string} whose token we know", async function (title) {
+  const token = randomBytes(32).toString("base64url");
+  await pool.query(
+    "INSERT INTO fundraiser_again_tokens (fundraiser_id, token_hash, expires_at) VALUES ($1, $2, now() + interval '60 days')",
+    [await fundraiserId(title), againHash(token)],
+  );
+  this.againToken = token;
+});
+
+When("the sign up form asks for that Do it again link", async function () {
+  await publicCall(this, "POST", "/api/fundraise/again", { token: this.againToken });
+});
+
+Then("the form is given last year's details for {string}, and nothing about givers", function (email) {
+  assert.equal(this.frBody.email, email);
+  assert.equal(this.frBody.path, "raising");
+  assert.equal(this.frBody.targetPence, 40000);
+  assert.deepEqual(Object.keys(this.frBody).sort(), [
+    "description", "email", "facebook", "firstName", "instagram", "kind", "kindOther", "lastName", "path", "phone", "targetPence", "title", "town", "venue",
+  ]);
+});
+
+When("someone signs up {string} from that Do it again link", async function (title) {
+  const p = this.frBody && this.frBody.email ? this.frBody : {};
+  await publicCall(this, "POST", "/api/fundraise", {
+    path: "raising",
+    kind: "santa_dash",
+    title,
+    description: "Doing it again.",
+    eventDate: "",
+    startTime: "",
+    venue: "",
+    town: "Exampleton",
+    targetPence: 40000,
+    public: true,
+    firstName: p.firstName || "Robin",
+    lastName: p.lastName || "Testperson",
+    email: p.email || "pat.touch.fr.bdd@example.com",
+    phone: "07700 900127",
+    socialOk: false,
+    wants: { posterCount: 0, leafletCount: 0, bucketCount: 0, tinCount: 0, shoutOut: false, attend: false },
+    newsletterOk: false,
+    company: "",
+    again: this.againToken,
+  });
+});
+
+Then("the Do it again link is used by {string}", async function (title) {
+  const r = await pool.query("SELECT used_at, used_by_fundraiser_id FROM fundraiser_again_tokens WHERE token_hash = $1", [againHash(this.againToken)]);
+  assert.ok(r.rows[0] && r.rows[0].used_at, "the link was not marked used");
+  assert.equal(r.rows[0].used_by_fundraiser_id, await fundraiserId(title));
+});
+
+Then("{string} is waiting for staff to approve it", async function (title) {
+  const r = await pool.query("SELECT status FROM fundraisers WHERE title = $1 ORDER BY id DESC LIMIT 1", [title]);
+  assert.equal(r.rows[0].status, "new");
 });

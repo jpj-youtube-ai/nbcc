@@ -231,6 +231,15 @@ describe("the sign up page", () => {
     expect(await res.text()).toMatch(/data-fundraise-open>/);
   });
 
+  // TASK-515: the same for a Do it again link from the year on email.
+  it("keeps a Do it again link's token from leaving in a referrer, and out of any cache", async () => {
+    const res = await get("/fundraise?again=abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQ");
+    expect(res.status).toBe(200);
+    expect(res.headers.get("referrer-policy")).toBe("strict-origin");
+    expect(res.headers.get("cache-control")).toBe("no-store");
+    expect(res.headers.get("x-robots-tag")).toBe("noindex, nofollow");
+  });
+
   it("leaves the plain sign up page's headers as they were", async () => {
     const res = await get("/fundraise");
     expect(res.headers.get("referrer-policy")).toBeNull();

@@ -4,6 +4,8 @@ import { fundraisingIsOn } from "../db/fundraisers";
 import { claimTouch, readTouchState, recordTouchSent, releaseTouch, touchEmailsOn, type TouchCandidate } from "../db/fundraising-touch";
 import { suppressedAmong } from "../db/email-suppressions";
 import { optedOutAmong } from "../db/email-opt-outs";
+import { createAgainToken } from "../db/fundraiser-again";
+import { againExpiresAt, againUrl, hashAgainToken, newAgainToken } from "./again";
 import { londonToday } from "../events/model";
 import { buildTouchEmail, touchEmailData } from "./touch-emails";
 import { canTouch, isQuietFundraiser, nextTouch, type TouchFundraiser, type TouchKind } from "./touch-rules";
@@ -37,6 +39,8 @@ export interface TouchDeps {
   release: (fundraiserId: number, kind: TouchKind) => Promise<void>;
   recordSent: (fundraiserId: number, kind: TouchKind, by: string) => Promise<void>;
   send: (kind: TouchKind, name: string, message: FundraiseEmailMessage) => Promise<void>;
+  /** TASK-515: a new one use Do it again link for email 18's button (src/fundraising/again.ts). */
+  againLink: (fundraiserId: number) => Promise<string>;
   /** The in memory guard. Only tests pass another. */
   isQuiet?: (f: TouchFundraiser) => boolean;
 }
@@ -45,6 +49,13 @@ async function isBlocked(email: string): Promise<boolean> {
   const address = email.trim().toLowerCase();
   const [suppressed, optedOut] = await Promise.all([suppressedAmong([address]), optedOutAmong([address])]);
   return suppressed.has(address) || optedOut.has(address);
+}
+
+// A fresh token for each email: only its hash is stored, with when it runs out.
+async function makeAgainLink(fundraiserId: number): Promise<string> {
+  const token = newAgainToken();
+  await createAgainToken(fundraiserId, hashAgainToken(token), againExpiresAt(new Date()));
+  return againUrl(config.PORTAL_BASE_URL, token);
 }
 
 export const realTouchDeps: TouchDeps = {
@@ -56,6 +67,7 @@ export const realTouchDeps: TouchDeps = {
   release: releaseTouch,
   recordSent: recordTouchSent,
   send: sendFundraiseTouch,
+  againLink: makeAgainLink,
 };
 
 const why = (err: unknown) => (err instanceof Error ? err.message : String(err));
@@ -92,7 +104,11 @@ async function sendOne(
   }
   if (!claimed) return "skipped";
   try {
-    const mail = buildTouchEmail(kind, touchEmailData(f, base()));
+    const data = touchEmailData(f, base());
+    // Email 18's button opens the form filled in from last year: a one use link made for it. If it
+    // cannot be made, the email does not go (its words promise one click), and another day tries.
+    if (kind === "year_on") data.urls.signUp = await deps.againLink(f.id);
+    const mail = buildTouchEmail(kind, data);
     await deps.send(kind, f.name, { email: f.email, from: config.BALL_FROM_EMAIL, replyTo: config.BALL_FROM_EMAIL, ...mail });
   } catch (err) {
     console.error(`fundraising automatic email (${kind}) failed:`, why(err));

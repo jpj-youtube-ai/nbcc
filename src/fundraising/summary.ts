@@ -87,6 +87,8 @@ export interface SummaryInputs {
   newsToCheck?: number;
   /** TASK-507: thank yous organisers sent to their supporters that staff have still to check. */
   thanksToCheck?: number;
+  /** Profile pictures: photos organisers sent that staff have still to check. */
+  photosToCheck?: number;
   /** TASK-515: the smart call prompts showing today (src/fundraising/call-prompts.ts). */
   prompts?: PromptCounts;
   /** In memory: messages givers left on in memory pages that staff have still to check. */
@@ -121,6 +123,8 @@ export interface SummaryCounts {
   newsToCheck: number;
   /** TASK-507 */
   thanksToCheck: number;
+  /** Profile pictures */
+  photosToCheck: number;
   materials: Materials;
   /** How many fundraisers have something to be sent. */
   materialsFundraisers: number;
@@ -229,6 +233,7 @@ export function summaryCounts(i: SummaryInputs): SummaryCounts {
   const changesToCheck = i.fundraisers.filter((f) => f.editWaiting).length;
   const newsToCheck = Math.max(0, Math.floor(i.newsToCheck ?? 0));
   const thanksToCheck = Math.max(0, Math.floor(Number(i.thanksToCheck ?? 0) || 0));
+  const photosToCheck = Math.max(0, Math.floor(Number(i.photosToCheck ?? 0) || 0));
   const callsDue = i.fundraisers.filter((f) => callStates(f, callsBy.get(f.id) ?? [], today).due).length;
   const pastDate = i.fundraisers.filter((f) => offListPrompt(f, today) === "date").length;
   const saysFinished = i.fundraisers.filter((f) => f.status === "approved" && f.finishedRequestedAt).length;
@@ -265,6 +270,7 @@ export function summaryCounts(i: SummaryInputs): SummaryCounts {
     changesToCheck,
     newsToCheck,
     thanksToCheck,
+    photosToCheck,
     materials,
     materialsFundraisers,
     shoutOuts,
@@ -294,6 +300,7 @@ export function summaryCounts(i: SummaryInputs): SummaryCounts {
       changesToCheck +
       newsToCheck +
       thanksToCheck +
+      photosToCheck +
       materialsFundraisers +
       shoutOuts +
       attend.length +
@@ -355,6 +362,8 @@ export function summaryLines(c: SummaryCounts): SummaryLines {
   if (c.changesToCheck) waiting.push(plural(c.changesToCheck, "change to check", "changes to check"));
   if (c.newsToCheck) waiting.push(plural(c.newsToCheck, "news update to check", "news updates to check"));
   if (c.thanksToCheck) waiting.push(plural(c.thanksToCheck, "thank you to check", "thank yous to check"));
+  // Profile pictures: a waiting photo is kept until staff decide, so the summary keeps asking.
+  if (c.photosToCheck) waiting.push(plural(c.photosToCheck, "photo waiting to be checked", "photos waiting to be checked"));
   // In memory
   if (c.messagesToCheck) waiting.push(`${plural(c.messagesToCheck, "message", "messages")} to check on in memory pages`);
   if (c.memoryYearOn) {

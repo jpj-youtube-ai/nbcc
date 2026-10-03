@@ -898,3 +898,99 @@ fieldset.is-invalid .fr-option { border-color: var(--crimson); }
 .fr-permission { margin-top: 2px; }
 .fr-mine__memory-note { margin: 0 0 12px; font-size: 0.92rem; color: var(--slate-soft); }
 .fr-mine__memory-note[hidden] { display: none; }
+
+/* ---------- profile pictures (Jaimie, 2026-10-03) ----------
+   The organiser's round photo beside their name on their page and their team's page, once staff
+   have approved it; the NBCC elf in the same round frame on a team page for anyone without one;
+   and "Your photos" in the private area: a preview of the top of their page, and the circle they
+   drag a photo around in. Nothing scrolls inside a box; everything wraps at phone width. */
+.fr-avatar {
+  flex: none;
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  object-fit: cover;
+  background: var(--cream);
+  box-shadow: 0 0 0 2px var(--card), 0 0 0 3px var(--line);
+}
+/* The elf (a small copy made for this frame) on the cream behind it. */
+.fr-avatar--elf { object-fit: contain; }
+.fr-facts li.fr-facts__by { align-items: center; gap: 10px; }
+.fr-team__who { display: flex; align-items: center; gap: 12px; margin: 0 0 10px; min-width: 0; }
+.fr-team__who .fr-team__name { margin: 0; min-width: 0; }
+.fr-team__organiser { display: flex; align-items: center; gap: 12px; }
+.intro-hero .fr-team__organiser { justify-content: center; }
+
+.fr-pics__consent { padding: 12px 16px; border-left: 3px solid var(--holly); border-radius: 8px; background: var(--holly-soft); color: var(--holly-dark); font-size: 0.98rem; line-height: 1.55; }
+.fr-picpreview { margin: 4px 0 24px; }
+.fr-picpreview__label { margin: 0 0 8px; font-size: 0.95rem; font-weight: 600; color: var(--slate-soft); }
+.fr-picpreview__page {
+  padding: clamp(16px, 4vw, 24px);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--cream);
+  text-align: center;
+}
+.fr-picpreview__title {
+  margin: 0 0 10px;
+  font-family: var(--font-head);
+  font-size: clamp(1.25rem, 1.1rem + 0.8vw, 1.6rem);
+  font-weight: 800;
+  line-height: 1.2;
+  color: var(--maroon);
+  overflow-wrap: anywhere;
+}
+.fr-picpreview__by { display: inline-flex; align-items: center; gap: 10px; margin: 0 0 16px; color: var(--slate); text-align: left; }
+.fr-picpreview__avatar { display: inline-flex; flex: none; color: var(--crimson); }
+.fr-picpreview__avatar[hidden] { display: none; }
+.fr-picpreview__avatar.has-photo {
+  position: relative;
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  overflow: hidden;
+  background: var(--tint);
+  box-shadow: 0 0 0 2px var(--card), 0 0 0 3px var(--line);
+}
+.fr-picpreview__avatar img { display: block; pointer-events: none; }
+.fr-picpreview__photo {
+  display: grid;
+  place-items: center;
+  min-height: 120px;
+  margin: 0;
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  background: var(--tint);
+  box-shadow: var(--shadow-sm);
+}
+.fr-picpreview__photo img { display: block; width: 100%; height: auto; max-height: 300px; object-fit: cover; }
+.fr-picpreview__photo img[hidden] { display: none; }
+.fr-picpreview__empty { padding: 16px; font-size: 0.95rem; color: var(--slate-soft); }
+.fr-picpreview__empty[hidden] { display: none; }
+
+.fr-pics__forms { display: grid; gap: clamp(22px, 4vw, 30px); }
+.fr-pic { display: grid; gap: 4px; }
+.fr-pic[hidden] { display: none; }
+.fr-pic + .fr-pic { padding-top: clamp(18px, 3vw, 24px); border-top: 1px dashed var(--line); }
+.fr-pic__title { margin: 0 0 4px; font-size: 1.1rem; color: var(--maroon); }
+.fr-pic__now:empty { display: none; }
+.fr-pic__now .fr-mynews__status { margin: 0 0 4px; }
+.fr-pic__note { margin: 0 0 8px; color: var(--slate); }
+.fr-pic__crop { margin: 6px 0 10px; }
+.fr-pic__crop[hidden] { display: none; }
+.fr-crop {
+  position: relative;
+  width: min(240px, 100%);
+  aspect-ratio: 1;
+  margin: 8px 0 10px 6px;
+  border-radius: 50%;
+  overflow: hidden;
+  background: var(--tint);
+  box-shadow: 0 0 0 3px var(--card), 0 0 0 5px var(--holly);
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+}
+.fr-crop.is-dragging { cursor: grabbing; }
+.fr-crop:focus-visible { outline: 3px solid var(--holly); outline-offset: 8px; }
+.fr-crop img { position: absolute; display: block; max-width: none; pointer-events: none; }

@@ -1337,6 +1337,9 @@ hosted-Checkout redirect stays the default fallback and no-JS safety net.
 | `POST /api/fundraise/manage/sign-out` | **implemented** | TASK-501 (ends the session) |
 | `GET /api/fundraise/manage/news`, `POST /api/fundraise/manage/fundraisers/:id/news`, `GET /api/fundraise/manage/news/:updateId/photo` | **implemented** | TASK-506 (the organiser's news updates: theirs listed with where each is up to; a new one, with an optional photo, waits for staff, five a day; their own photo. See **Fundraiser pages: countdown, on the day, and news updates (TASK-506)**) |
 | `GET /api/admin/fundraising/news-waiting`, `GET /api/admin/fundraisers/:id/news`, `.../news/:updateId/photo`, `POST .../news/:updateId/approve` \| `reject` \| `hide` \| `show` | **implemented** | TASK-506 (staff check news updates: fundraising view to look, edit to decide; audited) |
+| `GET /api/fundraise/manage/pictures`, `POST /api/fundraise/manage/fundraisers/:id/pictures`, `GET /api/fundraise/manage/pictures/:pictureId/photo` | **implemented** | Profile pictures (the organiser's main photo and round photo of themselves: theirs with where each is up to; a new one is made again on the server, nothing from the camera kept, and waits for staff, ten a day; their own picture. See **Community fundraising, profile pictures**) |
+| `GET /media/fundraiser-profile/:photoId` | **implemented** | Profile pictures (public; an approved round photo on a page that is up, otherwise 404) |
+| `GET /api/admin/fundraising/pictures-waiting`, `GET /api/admin/fundraisers/:id/pictures`, `.../pictures/:pictureId/photo`, `POST .../pictures/:pictureId/approve` \| `decline` \| `remove` | **implemented** | Profile pictures (staff check the photos organisers send: fundraising view to look, edit to decide; audited) |
 | `GET /api/fundraise/manage/fundraisers/:id/materials/:piece` | **implemented** | TASK-504 (the signed in organiser's poster, pictures to share, sponsor form or certificate, as a whole print page; only their own, approved or finished, and the certificate once finished; anyone else's is a 404, no session a `401` page, and a 404 while fundraising is off. See **Community fundraising, materials**) |
 | `GET /api/admin/fundraisers/:id/materials/:piece` | **implemented** | TASK-504 (the same pages for staff with fundraising: view, for any approved or finished fundraiser whether or not fundraising is on; the certificate as a marked preview before it is finished) |
 | `GET /api/admin/fundraisers/:id/materials/everything` | **implemented** | TASK-512 (Download everything: every printed piece on one print page, each on its own paper size, plus every picture to share as a zip made in the browser; staff with fundraising: view; approved or finished; the certificate only once finished. See **Community fundraising, materials round two**) |
@@ -9458,6 +9461,113 @@ Unit tests: `impact-examples`, `impact-examples-migration`, `impact-examples-db`
 admin adds an example and a fundraiser's page shows it; words not starting with could, or that
 promise, are refused; only an admin may add one).
 
+## Community fundraising, profile pictures
+
+Decided by Jaimie (2026-10-03). A page keeps its **main photo**, and gains a small **round photo of
+its organiser** beside their name ("Organised by Robin O."), like JustGiving. Both are sent by the
+organiser from their private area and **both are checked by staff before they show** (the standing
+rule: staff approve all public content, pictures included).
+
+- **Your photos** (`/fundraise/manage`, `assets/js/fundraise-pictures.js`, for an approved
+  fundraiser with its own page): a live preview of the top of their page (their title, "Organised
+  by" with the round photo, and the main photo), which changes the moment they choose a photo. The
+  round photo is shown in a circle they can drag it around in (or move with the arrow keys); the
+  browser cuts the square from where they put it and makes the main photo smaller (1600 pixels at
+  most), then sends it. Each kind says where it is up to: "Waiting for us to check" (their page keeps
+  showing the last approved photo until then), "On your page", or "Not used" with our note. Sending a
+  new one replaces the one still waiting. Ten a day at most.
+- **On the server** (`src/fundraising/picture-process.ts`, with `sharp`, now a runtime dependency,
+  loaded the first time a picture is made so a native problem can never stop the site): the private
+  area always sends a JPEG, so only a JPEG is taken (checked by the bytes; HEIC is not supported:
+  phones hand over a JPEG when a photo is picked), 2 MB at most like every other upload, at most 3
+  million pixels, and refused if damaged or cut short (sharp's `failOn: "warning"`, and its format
+  checked before anything else). Each is turned the right way up, made smaller (a round photo 400
+  pixels square, a main photo within 1600 pixels) and saved as a fresh JPEG: **nothing from the
+  camera is kept** (no location, no phone, no time). One over 2 MB is saved again at a lower quality,
+  and refused ("too big") if even that is over.
+- **The one 512 MB task is protected before a picture is opened**: every try is counted, failed ones
+  too (20 a session and 60 an address in any 24 hours), then the database says whether ten were sent
+  today; one picture is made at a time with three waiting, and past that the answer is 503 "Lots of
+  photos arriving just now. Please try again in a minute." The runtime image sets
+  `MALLOC_ARENA_MAX=2`, and pr.yml's image check proves sharp loads inside the image.
+- **Never public until approved.** A waiting photo has no public address: the organiser sees theirs
+  through their session, staff through theirs. An approved round photo is served at
+  `/media/fundraiser-profile/<uuid>` only while it is approved, on a page that is up, while
+  fundraising is on (otherwise 404), with nosniff and a five minute cache, so taking one off works
+  within minutes. An approved **main photo** is copied into `event_images` and becomes the page's
+  `image_src`, exactly as if staff had uploaded it, so staff can still change it under "Photo for its
+  page". The copy is remembered (`event_image_id`): taking it off or replacing it deletes the copy,
+  and `/media/events/<id>` serves an organiser's copy only while it is still that page's photo (a
+  five minute cache, not for ever), so a photo taken off, replaced or swapped answers 404. Every
+  picture staff uploaded (events, logos, "Photo for its page") has no organiser's picture behind it
+  and is served exactly as before: 200, kept for good (`immutable`).
+- **Only what is needed is kept.** A picture's bytes go when it is not used, replaced or taken off
+  (its record stays, for the audit). The daily 8am task lets go of any such bytes still left after
+  30 days, and of a main photo staff swapped for another. A photo still **waiting** is never touched,
+  however long it waits: the Monday summary's "Waiting on us" says "N photos waiting to be checked"
+  (and counts them), so staff are nudged instead. An admin can **Delete for good** (the record, the bytes and any copy on the page; the
+  History keeps a note).
+- **Who is in the photo.** The private area says: "Only send photos of people who are happy to be on
+  the page. For anyone under 18, you need their parent or guardian's OK." Staff have a checklist line
+  above the photos.
+- **Admin > Fundraising**: "Photos to check" on a sign up with any waiting, and "Photos from the
+  organiser" in the open sign up: each photo as the page will show it (a round one beside "Organised
+  by", a main one big), Approve photo, Don't use it (with an optional note the organiser sees in their
+  private area), Take it off the page for one in use (round or main), and, for admins, Delete for
+  good. Every decision is in the fundraiser's History (`fundraiser.picture_sent`, `_approved`,
+  `_declined`, `_removed`, `_deleted`). Nothing is emailed.
+- **The pages**: the round photo replaces the person icon beside "Organised by" (or "Team organiser")
+  on a fundraiser's, event's or team's page, described as "A photo of Robin O." (escaped). Without an
+  approved one the page is exactly as before. On a **team page** each member, and the team organiser,
+  show their round photo, or the NBCC elf (`/assets/img/nbcc-elf-96.png`, a small copy made for the frame) in the same round frame.
+- **In memory pages** show the photo of the person remembered, never a round photo of the organiser:
+  `profilePhotoAllowed` is false for them, so the private area offers only the main photo ("A photo
+  of them": "A photo of the person you are remembering. It shows at the top of the page."), the page
+  route asks for no round photo, the public address and the team list skip them, and staff cannot
+  approve one.
+
+### Routes
+
+| Route | Who | Body | Answer |
+|---|---|---|---|
+| `GET /api/fundraise/manage/pictures` | the signed in organiser | | `{ fundraisers: [{ id, canSend, profileAllowed, name, title, path, isTeam, inTeam, pageImageSrc, main: { inUse, latest }, profile: { inUse, latest } }] }`; each picture `{ id, kind, status, statusWords, createdAt, photoUrl, note }` (the note only on one not used); never who decided |
+| `POST /api/fundraise/manage/fundraisers/:id/pictures` | the signed in organiser, from our own page | `{ kind: "main" \| "profile", mime, dataBase64 }` | `202 { status: "waiting", picture }`; `400 { fields: { photo } }`; `413` over 2 MB; `410` not running with a page; `429` after ten a day; the body is only read with a session cookie the shape of ours |
+| `GET /api/fundraise/manage/pictures/:pictureId/photo` | the signed in organiser | | their own picture, whatever its status, `private, no-store` |
+| `GET /media/fundraiser-profile/:photoId` | anyone | | an approved round photo on a page that is up, while fundraising is on; otherwise `404` |
+| `GET /api/admin/fundraising/pictures-waiting` | fundraising view | | `{ counts: { <fundraiser id>: <waiting> } }` |
+| `GET /api/admin/fundraisers/:id/pictures` | fundraising view | | `{ pictures, title, organisedBy }`, with the note, size and who decided |
+| `GET /api/admin/fundraisers/:id/pictures/:pictureId/photo` | fundraising view | | the picture, waiting ones included, `private, no-store` |
+| `POST /api/admin/fundraisers/:id/pictures/:pictureId/approve` \| `decline` \| `remove` | fundraising edit | `{ reason? }` (decline, 500 characters at most) | `{ picture }`; `409` when it was dealt with already, or for a round photo on a page in memory of someone |
+| `POST /api/admin/fundraisers/:id/pictures/:pictureId/delete` | admin, fundraising edit | | `{ deleted: true }`; deletes the record, its bytes and any copy on the page; audited |
+
+### Data (`migrations/1791200000205_profile-pictures.js`, additive only)
+
+`fundraiser_pictures`: fundraiser (cleared with it), `kind` (`main` or `profile`), `status`
+(`pending`, `approved`, `declined`, `replaced`, `removed`), `photo_id` (its own uuid address), `mime`,
+`bytes` (only while it waits or is in use), `byte_size`, `width`, `height`, `event_image_id` (an
+approved main photo's copy), when it was sent, decided, by whom, and the decline note. At most one
+waiting and one in use of each kind per fundraiser (unique partial indexes). Numbered 205,
+after the 200 the impact markers change adds. In the nightly backup's table count (78).
+
+### Where it lives, and tests
+
+Rules (pure): `src/fundraising/pictures.ts`. Processing: `src/fundraising/picture-process.ts`. SQL:
+`src/db/fundraiser-pictures.ts`. Routes: `src/routes/fundraiser-pictures.ts` (mounted before
+`fundraiseRouter`, whose retired link route would take `/manage/pictures`). Pages:
+`src/fundraising/render.ts` (`organiserPhotoSrc`), `src/fundraising/team-render.ts`,
+`src/routes/fundraise-pages.ts`, `src/routes/team-pages.ts`. Private area: `fundraise-manage.html`
+(`data-pictures-pattern`) and `assets/js/fundraise-pictures.js`. Screen: the `frPics` block of
+`assets/js/admin/app.js`. Unit tests: `fundraising-pictures`, `fundraising-picture-process` (real
+pictures, made with sharp), `fundraiser-pictures-db`, `fundraiser-pictures-routes`,
+`fundraising-profile-render`, `fundraiser-page-profile-route`, `fundraise-pictures-page` (jsdom),
+`admin-fundraising-pictures-panel` (jsdom), `event-images-route`, `picture-retention-job`,
+`fundraising-summary-pictures`,
+`sharp-in-image`, `profile-pictures-migration` and `backup-plan`. BDD:
+`features/fundraising-pictures.feature` (a round photo is not public until staff approve it, then
+shows; an approved main photo becomes the page's photo; one not used never shows and the organiser
+sees our note; a team page shows each approved round photo and the elf until then; a round or main
+photo taken off, and a main photo replaced, answers 404).
+
 ## A QR code encoder for fundraiser pages (TASK-493)
 
 `src/fundraising/qr.ts` draws QR codes with no dependencies, written from the QR standard
@@ -9499,7 +9609,7 @@ lives in; the Drive copy is not immutable.
 
 ### There are THREE databases, not one
 
-This is the trap this feature was built around. `DATABASE_URL` holds 74 tables
+This is the trap this feature was built around. `DATABASE_URL` holds 75 tables
 (42 when this was built; the Events page added three in TASK-453, the Festive Ball ticket
 report one in TASK-464, the admin's New pills one, `admin_seen`, in TASK-478, site analytics
 four in TASK-479, the business supporter call log in TASK-491, community fundraising five
@@ -9508,11 +9618,11 @@ calls two in TASK-503, the requests one in TASK-505, the news updates one in TAS
 thank yous to supporters and the address level opt out list three in TASK-507, the old page
 links one in TASK-511, the fundraising categories one in TASK-514, and which automatic emails each
 fundraiser has had and the Do it again links two in TASK-515, the team invites and team
-organiser handovers two for team pages, the approved automatic email wordings one, and the impact
-examples one for what gifts could do),
+organiser handovers two for team pages, the approved automatic email wordings one, the impact
+examples one for what gifts could do, and the photos organisers send one for profile pictures),
 but `STORIES_DATABASE_URL` and `CONTACT_DATABASE_URL` are separate databases
 (deliberately, so the public story and contact forms can never reach donor
-data). A `pg_dump $DATABASE_URL` captures 74 of **77** tables and silently
+data). A `pg_dump $DATABASE_URL` captures 75 of **78** tables and silently
 drops every My Story submission (and, since TASK-475, the fingerprints in
 `erased_stories` that keep erased stories from coming back) and every contact
 enquiry, while producing a

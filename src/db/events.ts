@@ -276,7 +276,19 @@ export async function insertEventImage(mime: string, bytes: Buffer, uploadedBy: 
   return { id };
 }
 
-export async function getEventImage(id: string): Promise<{ mime: string; bytes: Buffer } | null> {
-  const r = await pool.query<{ mime: string; bytes: Buffer }>("SELECT mime, bytes FROM event_images WHERE id = $1", [id]);
-  return r.rows[0] ?? null;
+/**
+ * A picture, and (profile pictures) whether it is the copy of a main photo an organiser sent, and if
+ * so whether it is still in use as its page's photo: one taken off, replaced or swapped answers nothing.
+ */
+export async function getEventImage(id: string): Promise<{ mime: string; bytes: Buffer; organiser: boolean; live: boolean } | null> {
+  const r = await pool.query<{ mime: string; bytes: Buffer; organiser: boolean; live: boolean }>(
+    `SELECT e.mime, e.bytes, (p.id IS NOT NULL) AS organiser,
+            COALESCE(p.status = 'approved' AND EXISTS (
+              SELECT 1 FROM fundraisers f WHERE f.id = p.fundraiser_id AND f.image_src = '/media/events/' || e.id::text), false) AS live
+       FROM event_images e LEFT JOIN fundraiser_pictures p ON p.event_image_id = e.id
+      WHERE e.id = $1`,
+    [id],
+  );
+  const row = r.rows[0];
+  return row ? { mime: row.mime, bytes: row.bytes, organiser: Boolean(row.organiser), live: Boolean(row.live) } : null;
 }

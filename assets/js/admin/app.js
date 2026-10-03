@@ -9163,6 +9163,7 @@
     req: "frReqStatus",
     // TASK-506
     news: "frNewsStatus",
+    pics: "frPicsStatus", // profile pictures
     thanks: "frThanksStatus", // TASK-507
     touch: "frTouchCallStatus", // TASK-515
     group: "frTeamStatus", // team pages
@@ -9201,6 +9202,7 @@
     // TASK-505: the requests, likewise on their own.
     frLoadRequests();
     frLoadNewsCounts(); // TASK-506
+    frLoadPicsCounts(); // profile pictures
     frLoadThanksCounts(); // TASK-507
     frTouchLoad(); // TASK-515
     frMemoryLoadCounts(); // In memory
@@ -9250,6 +9252,7 @@
         frRenderList();
         frLoadHistory(id);
         frLoadNews(id); // TASK-506
+        frLoadPics(id); // profile pictures
         if (d && d.fundraiser && (d.fundraiser.isTeam || d.fundraiser.teamId)) frLoadGroup(id); // team pages
         if (d && d.fundraiser && (d.fundraiser.status === "approved" || d.fundraiser.status === "finished")) frLoadScans(id); // TASK-512
       })
@@ -9318,7 +9321,7 @@
   // TASK-503: and the team's tools, whose calls and prompts the list shows.
   function frReload() {
     var id = frOpenId;
-    return Promise.all([frLoadList(), id != null ? frLoadDetail(id) : null, frLoadTeam(), frLoadNewsCounts(), frLoadRequests()]);
+    return Promise.all([frLoadList(), id != null ? frLoadDetail(id) : null, frLoadTeam(), frLoadNewsCounts(), frLoadPicsCounts(), frLoadRequests()]);
   }
 
   // ---- the switch ----
@@ -9433,6 +9436,7 @@
     var pills = (f.editWaiting ? '<span class="admin-pill admin-pill--pending fr-changes-pill">Changes to check</span>' : "") +
       // TASK-506: news updates the organiser posted, waiting for staff.
       frNewsPill(f) +
+      frPicsPill(f) + // profile pictures: photos the organiser sent, waiting for staff
       // TASK-501: the organiser pressed "I've finished" in their private area (it finishes nothing).
       (f.finishedRequestedAt && f.status === "approved" ? '<span class="admin-pill admin-pill--pending fr-finished-pill">Says they\'ve finished</span>' : "") +
       // TASK-503: a call due, as Business supporters show it; and the finishing prompt.
@@ -9533,6 +9537,7 @@
     frPaintThanks(); // TASK-507
     frPaintHistory();
     frPaintNews(); // TASK-506
+    frPaintPics(); // profile pictures
     frPaintGroup(); // team pages
     frPaintScans(); // TASK-512
     if (frTouch) frTouchRenderFor(); // TASK-515: "Show it for" lists the pages raising money
@@ -9585,6 +9590,7 @@
         (frDetail.waitingEdit ? '<section class="fx-panel fx-panel--wide fr-change-panel"><h4>Changes to check</h4>' + frChangePanel(f, frDetail.waitingEdit, write) + "</section>" : "") +
         frRequestsSection(f, write) +
         frNewsSection() + // TASK-506
+        frPicsSection() + // profile pictures
         frThanksSection() + // TASK-507
         '<section class="fx-panel"><h4>What they told us</h4>' + frAboutPanel(f) + "</section>" +
         frSplitSection(f) +
@@ -10893,6 +10899,7 @@
     el("frSwitchBtn").addEventListener("click", frFlipSwitch);
     var view = el("view-fundraising");
     frNewsWire(view); // TASK-506
+    frPicsWire(view); // profile pictures
     frGroupWire(view); // team pages
     view.addEventListener("click", function (e) {
       var t = e.target;
@@ -11269,6 +11276,246 @@
       var uid = t.getAttribute("data-frnewsreason");
       if (uid === null) return;
       frNewsReasons[uid] = t.value;
+      nlFitBox(t);
+    });
+  }
+
+  // ---- photos from the organiser (profile pictures, Jaimie, 2026-10-03) ----
+  // The main photo and the round photo of themselves an organiser sends from their private area
+  // (src/routes/fundraiser-pictures.ts). Every one waits for staff. The list shows "Photos to check"
+  // on a sign up with any waiting, and the open sign up has a panel: each photo shown as the page will
+  // show it (a round one beside "Organised by", a main one big), fetched with this sign in as a
+  // waiting photo has no public address; Approve and Don't use (with an optional note the organiser
+  // sees in their private area), and Take it off the page for one in use (a main photo comes off the
+  // page too). Admins can also Delete for good. Approving a main photo makes it the page's photo, as
+  // "Photo for its page" shows. Nothing is emailed. Every stored string is escaped. Kept here, in one
+  // block, apart from the rest of the screen.
+  var frPicsCounts = {}; // fundraiser id -> how many wait
+  var frPicsRows = null; // { id, rows, organisedBy } or { id, failed } for the open sign up
+  var frPicsNotes = {}; // picture id -> the note typed for the organiser
+  var frPicsPhotos = {}; // photo address -> its data: address, "loading" or "failed"
+  var FR_PICS_STATUS = {
+    pending: { label: "Waiting for you to check", cls: "admin-pill--pending" },
+    approved: { label: "In use on the page", cls: "admin-pill--active" },
+    declined: { label: "Not used", cls: "admin-pill--cancelled" },
+    removed: { label: "Taken off the page", cls: "admin-pill--cancelled" },
+    replaced: { label: "Replaced by a newer one", cls: "admin-pill--cancelled" },
+  };
+
+  function frPicsPill(f) {
+    return frPicsCounts[f.id] ? '<span class="admin-pill admin-pill--pending fr-pics-pill">Photos to check</span>' : "";
+  }
+
+  function frPicsSection() {
+    return '<section class="fx-panel fx-panel--wide fr-pics-panel"><h4>Photos from the organiser</h4><div id="frPics"></div></section>';
+  }
+
+  function frLoadPicsCounts() {
+    return authFetch("/api/admin/fundraising/pictures-waiting")
+      .then(okJson)
+      .then(function (d) {
+        frPicsCounts = d && d.counts && typeof d.counts === "object" ? d.counts : {};
+        frRenderList();
+      })
+      .catch(function () {
+        /* only a pill: the list works without it */
+      });
+  }
+
+  function frLoadPics(id) {
+    return authFetch("/api/admin/fundraisers/" + encodeURIComponent(id) + "/pictures")
+      .then(okJson)
+      .then(function (d) {
+        if (frOpenId !== id) return;
+        frPicsRows = { id: id, rows: d && Array.isArray(d.pictures) ? d.pictures : [], organisedBy: (d && d.organisedBy) || "" };
+        frPaintPics();
+      })
+      .catch(function (err) {
+        if (err && err.message === "unauthorized") return;
+        if (frOpenId !== id) return;
+        frPicsRows = { id: id, failed: true };
+        frPaintPics();
+      });
+  }
+
+  function frPicsItem(p, write, organisedBy) {
+    var st = FR_PICS_STATUS[p.status] || { label: String(p.status || ""), cls: "" };
+    var id = Number(p.id);
+    var round = p.kind === "profile";
+    var when = "Sent " + H.fmtDate(p.createdAt) + (p.decidedBy && p.decidedBy !== "organiser" ? ", decided by " + frWho(p.decidedBy) : "");
+    var photo = typeof p.photoUrl === "string" && /^\/api\/admin\/fundraisers\/\d+\/pictures\/\d+\/photo$/.test(p.photoUrl) ? p.photoUrl : "";
+    var shown = !photo
+      ? ""
+      : round
+        ? '<p class="fr-pic-as-page"><img class="fr-pic-round" data-frpicphoto="' + H.escapeHtml(photo) + '" alt="The round photo" width="64" height="64" hidden>' +
+            "<span>Organised by " + H.escapeHtml(organisedBy || "") + "</span></p>"
+        : '<img class="fr-pic-main" data-frpicphoto="' + H.escapeHtml(photo) + '" alt="The main photo" hidden>';
+    var actions = "";
+    if (write && p.status === "pending") {
+      actions =
+        '<label class="fx-call-label" for="frPicNote' + id + '">A note for the organiser (optional). They see it in their private area.</label>' +
+        '<textarea class="fx-call-input fr-input" id="frPicNote' + id + '" rows="1" maxlength="500" data-frpicnote="' + id + '">' +
+          H.escapeHtml(frPicsNotes[id] || "") + "</textarea>" +
+        '<div class="fx-call-row fr-actions">' +
+          '<button class="admin-btn admin-btn--small" type="button" data-frpic="approve" data-frpicid="' + id + '" data-frpickind="' + (round ? "profile" : "main") + '">Approve photo</button>' +
+          '<button class="admin-btn admin-btn--small fr-btn-quiet" type="button" data-frpic="decline" data-frpicid="' + id + '" data-frpickind="' + (round ? "profile" : "main") + '">Don\'t use it</button>' +
+        "</div>";
+    } else if (write && p.status === "approved") {
+      actions = '<button class="fr-link-btn" type="button" data-frpic="remove" data-frpicid="' + id + '" data-frpickind="' + (round ? "profile" : "main") + '">Take it off the page</button>';
+    }
+    // Review: an admin can delete a photo for good (its record, its bytes and any copy on the page).
+    if (write && isAdmin()) {
+      actions += '<button class="fr-link-btn fr-pic-delete" type="button" data-frpic="delete" data-frpicid="' + id + '" data-frpickind="' + (round ? "profile" : "main") + '">Delete for good</button>';
+    }
+    return (
+      '<li data-frpicitem="' + id + '"' + (p.status === "pending" || p.status === "approved" ? "" : ' class="is-hidden"') + ">" +
+        '<div class="fr-wall-head"><span class="admin-pill ' + st.cls + '">' + H.escapeHtml(st.label) + "</span>" +
+          '<b class="fr-pic-kind">' + (round ? "Round photo" : "Main photo") + "</b>" +
+          '<span class="fx-hist-who">' + H.escapeHtml(when) + "</span></div>" +
+        (photo ? shown : '<p class="fx-empty">The photo itself has been deleted. Only this record of it is kept.</p>') +
+        (p.note ? '<p class="fx-help">Our note to the organiser: ' + H.escapeHtml(p.note) + "</p>" : "") +
+        actions +
+      "</li>"
+    );
+  }
+
+  function frPaintPics() {
+    var box = el("frPics");
+    if (!box || frOpenId == null) return;
+    var s = frPicsRows && frPicsRows.id === frOpenId ? frPicsRows : null;
+    var status = frNoticeHtml("pics", "frPicsStatus");
+    if (!s) {
+      box.innerHTML = '<p class="admin-loading">Loading…</p>';
+      return;
+    }
+    if (s.failed) {
+      box.innerHTML = '<div role="alert">' +
+        unavailableHtml("The photos could not load just now. Close this sign up and open it again in a moment.") + "</div>";
+      return;
+    }
+    // A photo a newer one replaced was never seen by anyone: it is left out.
+    var rows = s.rows.filter(function (p) { return p.status !== "replaced"; });
+    if (!rows.length) {
+      box.innerHTML = '<p class="fx-empty">No photos from the organiser yet. They can send a main photo and a round photo of themselves from their private area while their page is up.</p>' + status;
+      return;
+    }
+    var write = frCanWrite();
+    var waitingRows = rows.filter(function (p) { return p.status === "pending"; });
+    rows = waitingRows.concat(rows.filter(function (p) { return p.status !== "pending"; }));
+    box.innerHTML =
+      '<p class="fx-help">Each photo waits for you, and shows here as their page will show it. ' +
+        "Nothing is emailed: the organiser sees where it is up to in their private area.</p>" +
+      '<p class="fx-help fr-pics-check">Check: it is them or their day; everyone in it looks happy to be there; no child is named or shown in school uniform; ' +
+        "no address, car number plate or anything private shows.</p>" +
+      '<ul class="fr-wall fr-pics-list">' + rows.map(function (p) { return frPicsItem(p, write, s.organisedBy); }).join("") + "</ul>" + status;
+    nlFitBoxes(Array.prototype.slice.call(box.querySelectorAll("textarea.fr-input")));
+    Array.prototype.forEach.call(box.querySelectorAll("img[data-frpicphoto]"), function (img) {
+      frPicsPhoto(img.getAttribute("data-frpicphoto"));
+    });
+    frRestDetail();
+  }
+
+  // A photo, with this sign in: a waiting one has no public address. Kept as a data: address, so a
+  // redraw shows it again at once.
+  function frPicsPhoto(url) {
+    var have = frPicsPhotos[url];
+    if (have === "loading") return;
+    if (have) return frShowPicsPhoto(url);
+    frPicsPhotos[url] = "loading";
+    authFetch(url)
+      .then(function (res) {
+        if (!res.ok) throw new Error("status " + res.status);
+        return res.blob();
+      })
+      .then(function (blob) {
+        return new Promise(function (done, fail) {
+          var reader = new window.FileReader();
+          reader.onload = function () { done(String(reader.result || "")); };
+          reader.onerror = fail;
+          reader.readAsDataURL(blob);
+        });
+      })
+      .then(function (dataUrl) {
+        frPicsPhotos[url] = /^data:image\/(jpeg|png|webp);base64,/.test(dataUrl) ? dataUrl : "failed";
+        frShowPicsPhoto(url);
+      })
+      .catch(function () {
+        frPicsPhotos[url] = "failed";
+        frShowPicsPhoto(url);
+      });
+  }
+  function frShowPicsPhoto(url) {
+    var v = frPicsPhotos[url];
+    Array.prototype.forEach.call(doc.querySelectorAll("#frPics img[data-frpicphoto]"), function (img) {
+      if (img.getAttribute("data-frpicphoto") !== url) return;
+      if (v && v.indexOf("data:") === 0) {
+        img.src = v;
+        img.hidden = false;
+      } else if (v === "failed") {
+        var p = doc.createElement("p");
+        p.className = "fx-empty";
+        p.textContent = "The photo could not load. Close this sign up and open it again to try once more.";
+        img.parentNode.replaceChild(p, img);
+      }
+    });
+  }
+
+  function frPicsDecide(btn) {
+    if (frBusy) return;
+    var f = frOpenRecord();
+    if (!f) return;
+    var which = btn.getAttribute("data-frpic");
+    var pid = btn.getAttribute("data-frpicid");
+    var round = btn.getAttribute("data-frpickind") === "profile";
+    var question = {
+      approve: round
+        ? "Approve this round photo? It goes beside their name on their page straight away, and on their team's page if they are in one."
+        : "Approve this main photo? It becomes the photo at the top of their page straight away, in place of any photo there now.",
+      decline: "Not use this photo? It stays off the page. The organiser sees it was not used in their private area, with your note if you wrote one.",
+      remove: round
+        ? "Take this round photo off the page? It comes off straight away. The organiser sees it was taken off in their private area."
+        : "Take this main photo off the page? It comes off their page straight away, and the page shows no photo until another is approved or added. The organiser sees it was taken off in their private area.",
+      delete: "Delete this photo for good? It comes off the page if it is on it, and the photo and its record are deleted. Only the History keeps a note that it was deleted. This cannot be undone.",
+    }[which];
+    if (!question || !window.confirm(question)) return;
+    var body = {};
+    if (which === "decline") {
+      var note = String(frPicsNotes[pid] || "").trim();
+      if (note) body.reason = note;
+    }
+    frRun("pics", "Saving…", function (run) {
+      return frSend("POST", "/api/admin/fundraisers/" + f.id + "/pictures/" + encodeURIComponent(pid) + "/" + which, body).then(function (r) {
+        if (!r.ok) run.say(frRefusal(r, "That did not work. Please try again."), true);
+        else {
+          if (which === "decline") delete frPicsNotes[pid];
+          run.say({
+            approve: "Approved. It is on their page now.",
+            decline: "Not used. The organiser sees that in their private area.",
+            remove: "Taken off the page.",
+            delete: "Deleted for good.",
+          }[which], false);
+        }
+        var again = [frLoadPics(f.id), frLoadPicsCounts(), frLoadHistory(f.id)];
+        // A main photo approved, taken off or deleted changes the page's photo: "Photo for its page" shows it.
+        if (r.ok && !round && which !== "decline") again.push(frLoadDetail(f.id));
+        return Promise.all(again);
+      });
+    });
+  }
+
+  function frPicsWire(view) {
+    view.addEventListener("click", function (e) {
+      var t = e.target;
+      if (!t || !t.closest) return;
+      var b = t.closest("[data-frpic]");
+      if (b) frPicsDecide(b);
+    });
+    view.addEventListener("input", function (e) {
+      var t = e.target;
+      if (!t || !t.getAttribute) return;
+      var pid = t.getAttribute("data-frpicnote");
+      if (pid === null) return;
+      frPicsNotes[pid] = t.value;
       nlFitBox(t);
     });
   }

@@ -4,6 +4,7 @@ import { insertAudit, writeWithAudit } from "./donations";
 import { listAllFundraisers } from "./fundraisers";
 import { listRequestRows } from "./fundraising-requests";
 import { countPendingUpdates } from "./fundraiser-updates";
+import { countPendingPictures } from "./fundraiser-pictures";
 import { countPendingThanks } from "./fundraiser-thanks";
 import { countHeldMessages } from "./fundraiser-memory";
 import { readPromptCounts } from "./fundraising-touch";
@@ -384,7 +385,7 @@ export async function releaseSummaryWeek(week: string, previous: string | null):
  */
 export async function readSummaryInputs(now: Date): Promise<SummaryInputs> {
   const since = new Date(now.getTime() - 15 * 24 * 60 * 60 * 1000);
-  const [fundraisers, gifts, cash, calls, invites, newsToCheck, requests, thanksToCheck, prompts] = await Promise.all([
+  const [fundraisers, gifts, cash, calls, invites, newsToCheck, requests, thanksToCheck, prompts, photosToCheck] = await Promise.all([
     listAllFundraisers(),
     pool.query(
       `SELECT g.* FROM (
@@ -423,10 +424,17 @@ export async function readSummaryInputs(now: Date): Promise<SummaryInputs> {
       console.error("fundraising summary call prompts count failed:", err instanceof Error ? err.message : err);
       return undefined;
     }),
+    // Profile pictures: the photos waiting for staff. Only one line of the summary: if it cannot be
+    // counted, the summary still goes, without it.
+    countPendingPictures().catch((err: unknown) => {
+      console.error("fundraising summary photos count failed:", err instanceof Error ? err.message : err);
+      return 0;
+    }),
   ]);
   return {
     now,
     newsToCheck,
+    photosToCheck,
     fundraisers,
     gifts: gifts.rows.map((g) => ({
       fundraiserId: Number(g.fundraiser_id),

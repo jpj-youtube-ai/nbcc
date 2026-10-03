@@ -18,6 +18,7 @@ import { safeFirstName } from "./emails";
 import { entryLine, safeTicketUrl } from "./entry";
 import { NONE as NO_IMPACT, impactParts, type ImpactParts } from "./impact-render";
 import type { ImpactExample } from "../impact/examples";
+import { avatarHtml, isProfilePhotoSrc } from "./pictures";
 
 // TASK-494: the public fundraising pages, drawn on the server.
 //
@@ -395,7 +396,7 @@ export function paragraphs(text: string): string {
  * people get in is words, as on its card, with the seller's link when they sell them elsewhere. A
  * sign up from before the event questions has none of those answers, and promises nothing.
  */
-function renderEventFacts(p: PublicPage): string {
+function renderEventFacts(p: PublicPage, photo?: string | null): string {
   const items: string[] = [];
   if (p.eventDate) {
     const datetime = p.startTime ? `${p.eventDate}T${p.startTime}` : p.eventDate;
@@ -421,7 +422,7 @@ function renderEventFacts(p: PublicPage): string {
   } else if (p.booking === "free") {
     items.push(`<li>${ICON.ticket}<span>No need to book. Just come along.</span></li>`);
   }
-  items.push(`<li>${ICON.person}<span>Organised by ${escapeHtml(p.organisedBy)}</span></li>`);
+  items.push(organiserItem(`Organised by ${p.organisedBy}`, p.organisedBy, photo));
   return `<ul class="fr-facts">${items.join("")}</ul>`;
 }
 
@@ -441,8 +442,17 @@ function listPhrase(items: readonly string[]): string {
   return items.length < 2 ? items.join("") : `${items.slice(0, -1).join(", ")} and ${items[items.length - 1]}`;
 }
 
-function renderFacts(p: PublicPage): string {
-  if (p.path === "event") return renderEventFacts(p);
+/**
+ * Profile pictures: "Organised by Robin O." with their round photo once staff have approved it, or
+ * the person icon as before.
+ */
+function organiserItem(words: string, name: string, photo?: string | null): string {
+  if (isProfilePhotoSrc(photo)) return `<li class="fr-facts__by">${avatarHtml(photo, name)}<span>${escapeHtml(words)}</span></li>`;
+  return `<li>${ICON.person}<span>${escapeHtml(words)}</span></li>`;
+}
+
+function renderFacts(p: PublicPage, photo?: string | null): string {
+  if (p.path === "event") return renderEventFacts(p, photo);
   const items: string[] = [];
   if (p.eventDate) {
     const datetime = p.startTime ? `${p.eventDate}T${p.startTime}` : p.eventDate;
@@ -454,7 +464,7 @@ function renderFacts(p: PublicPage): string {
   const place = [p.venue, p.town].filter(Boolean).join(", ");
   if (place) items.push(`<li>${ICON.pin}<span><span class="sr-only">Where: </span>${escapeHtml(place)}</span></li>`);
   // Team pages: a team page names its organiser as the team organiser.
-  items.push(`<li>${ICON.person}<span>${p.teamName ? "Team organiser: " : "Organised by "}${escapeHtml(p.organisedBy)}</span></li>`);
+  items.push(organiserItem(`${p.teamName ? "Team organiser: " : "Organised by "}${p.organisedBy}`, p.organisedBy, photo));
   return `<ul class="fr-facts">${items.join("")}</ul>`;
 }
 
@@ -730,6 +740,12 @@ export interface FundraiserPageOptions {
    * under the give amounts and the meter. None (a page in memory of someone): no lines at all.
    */
   impact?: readonly ImpactExample[];
+  /**
+   * Profile pictures: the organiser's round photo (its /media/fundraiser-profile/ address), once staff
+   * have approved it. A page in memory of someone is given none: it shows the photo of the person
+   * remembered instead.
+   */
+  organiserPhotoSrc?: string | null;
 }
 
 /**
@@ -900,7 +916,7 @@ export function renderFundraiserPage(template: string, p: PublicPage, opts: Fund
     `<span class="eyebrow">${escapeHtml(p.kindLabel)}</span>` +
     `<h1 id="fr-title">${escapeHtml(p.title)}</h1>` +
     '<div class="rule"><i></i></div>' +
-    renderFacts(p) +
+    renderFacts(p, opts.organiserPhotoSrc) +
     (opts.team?.factsHtml ?? "") +
     renderCountdown(p, opts.now, opts.pageUrl) +
     (p.finished ? renderFinished(p) : "") +

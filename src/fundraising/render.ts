@@ -755,10 +755,46 @@ export function renderFundraiserPage(template: string, p: PublicPage, opts: Fund
 
 // --- the sign up page ----------------------------------------------------------------------------
 
-/** The sign up page: the form while fundraising is on, a gentle "not open yet" while it is off. */
-export function renderFundraiseSignUp(template: string, open: boolean): string {
-  if (open) return template;
-  return template
+// The category radios sit between these, so the server can draw them from the database's list.
+const KINDS_BLOCK = /<!-- kinds -->[\s\S]*?<!-- \/kinds -->/;
+const INDENT = "\n                    ";
+
+/**
+ * The category radios, in the order given (formCategories: A to Z, Something else last). The first
+ * carries the form's "choose one" messages, worded for each path (fundraise.js swaps them in).
+ * fundraise.html is written with exactly this for the starting list (a unit test holds them together).
+ */
+export function kindOptionsHtml(categories: ReadonlyArray<{ key: string; label: string }>): string {
+  return categories
+    .map((c, i) => {
+      const key = escapeHtml(c.key);
+      const say =
+        i === 0
+          ? ' data-invalid-message="Choose what you are doing" data-invalid-raising="Choose what you are doing to raise money" data-invalid-event="Choose what kind of event it is"'
+          : "";
+      return (
+        `<label class="fr-option fr-option--small" for="kind-${key}"><input id="kind-${key}" name="kind" type="radio" value="${key}" ` +
+        `required aria-required="true"${say} /><span>${escapeHtml(c.label)}</span></label>`
+      );
+    })
+    .join(INDENT);
+}
+
+/**
+ * The sign up page: the form while fundraising is on, a gentle "not open yet" while it is off. With
+ * the categories on offer (formCategories), the form offers exactly those; without, it stays as written.
+ */
+export function renderFundraiseSignUp(
+  template: string,
+  open: boolean,
+  categories?: ReadonlyArray<{ key: string; label: string }>,
+): string {
+  const page =
+    categories && categories.length > 0
+      ? template.replace(KINDS_BLOCK, () => `<!-- kinds -->${INDENT}${kindOptionsHtml(categories)}${INDENT}<!-- /kinds -->`)
+      : template;
+  if (open) return page;
+  return page
     .replace("data-fundraise-open>", "data-fundraise-open hidden>")
     .replace("data-fundraise-closed hidden>", "data-fundraise-closed>");
 }

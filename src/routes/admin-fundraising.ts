@@ -2,7 +2,9 @@ import { Router, type Request, type Response } from "express";
 import { z, type ZodIssue } from "zod";
 import { authorizeSection, authorizeSectionAsAdmin } from "./admin-authz";
 import { actorOf } from "./admin";
-import { adminPatchSchema, FINISH_BEFORE_START, hasPage, KIND_LABELS, shortName, type FundraiserRecord } from "../fundraising/model";
+import { adminPatchSchema, FINISH_BEFORE_START, hasPage, kindLabelOf, shortName, type FundraiserRecord } from "../fundraising/model";
+import { loadCategories } from "../db/fundraising-categories";
+import { isActiveCategory } from "../fundraising/categories";
 import {
   addCash,
   decideEdit,
@@ -130,7 +132,7 @@ async function bestEffort(what: string, send: () => Promise<unknown>): Promise<v
 }
 
 function forAdmin(f: FundraiserRecord) {
-  return { ...f, kindLabel: KIND_LABELS[f.kind], pageUrl: hasPage(f) ? fundraiserPageUrl(f.slug) : null };
+  return { ...f, kindLabel: kindLabelOf(f), pageUrl: hasPage(f) ? fundraiserPageUrl(f.slug) : null };
 }
 
 // --- the switch ----------------------------------------------------------------------------------
@@ -233,6 +235,11 @@ export async function patchAdminFundraiser(req: Request, res: Response): Promise
   if (!claims) return;
   const got = ids(req, res, "id");
   if (!got) return;
+  // The categories on offer, as the database has them now: one an admin added a moment ago on
+  // another server is read afresh rather than refused.
+  await loadCategories();
+  const kind = req.body?.kind;
+  if (typeof kind === "string" && !isActiveCategory(kind)) await loadCategories({ fresh: true });
   const parsed = adminPatchSchema.safeParse(req.body);
   if (!parsed.success) {
     return res.status(400).json({ error: "Some of it needs another look", fields: fieldErrors(parsed.error.issues) });

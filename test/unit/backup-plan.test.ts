@@ -53,9 +53,9 @@ describe("knowing how many tables to expect", () => {
   // 66 since TASK-506 added the news updates organisers post to their pages; 68 since TASK-507
   // added the thank yous organisers send to their supporters, and their gifts; 69 with its address
   // level opt out list; 70 since TASK-511 added the old page links of fundraisers whose link staff
-  // changed.
-  it("counts 70 across the three databases", () => {
-    expect(expectedTableCount(ROOT)).toBe(70);
+  // changed; 71 with the fundraising categories (the list the sign up form offers).
+  it("counts 71 across the three databases", () => {
+    expect(expectedTableCount(ROOT)).toBe(71);
   });
 
   it("finds the three tables that live outside the main database", () => {
@@ -108,7 +108,9 @@ describe("knowing how many tables to expect", () => {
     expect(main).toContain("email_opt_outs");
     // TASK-511: every old page link, so a QR code printed with one still reaches its page.
     expect(main).toContain("fundraiser_slug_history");
-    expect(main.length).toBe(67);
+    // The fundraising categories: the list the sign up form offers, and every old one, for good.
+    expect(main).toContain("fundraising_categories");
+    expect(main.length).toBe(68);
   });
 
   it("returns nothing for a directory that does not exist, rather than throwing", () => {

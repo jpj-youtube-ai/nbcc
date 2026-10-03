@@ -130,7 +130,7 @@ describe("one question after another", () => {
   it("brings the next question once the first is answered, and says so for screen readers", () => {
     tick("pathRaising");
     expect(shown()).toHaveLength(2);
-    expect(waiting($("#kind-run_walk"))).toBe(false);
+    expect(waiting($("#kind-bake_sale_2"))).toBe(false);
     expect(waiting($("#title"))).toBe(true);
     expect(news()).toBe("Next question: What are you doing to raise money?");
   });
@@ -138,10 +138,10 @@ describe("one question after another", () => {
   it("words each question for what they chose first", () => {
     tick("pathEvent");
     expect(legendOf($("#kindGroup"))).toBe("What kind of event is it?");
-    expect($("#kind-run_walk").getAttribute("data-invalid-message")).toBe("Choose what kind of event it is");
+    expect($("#kind-bake_sale_2").getAttribute("data-invalid-message")).toBe("Choose what kind of event it is");
     tick("pathRaising");
     expect(legendOf($("#kindGroup"))).toBe("What are you doing to raise money?");
-    expect($("#kind-run_walk").getAttribute("data-invalid-message")).toBe("Choose what you are doing to raise money");
+    expect($("#kind-bake_sale_2").getAttribute("data-invalid-message")).toBe("Choose what you are doing to raise money");
     // Never "event or fundraiser" in one breath.
     expect($("#fundraiseForm").textContent).not.toMatch(/event or fundrais|fundraiser or event|event\/|\/event/i);
   });
@@ -158,13 +158,13 @@ describe("one question after another", () => {
     expect(waiting($("#title"))).toBe(true);
     type("kindOther", "A sponsored silence");
     expect(waiting($("#title"))).toBe(false);
-    tick("kind-quiz_party");
+    tick("kind-quiz");
     expect($("[data-kind-other]").hidden).toBe(true);
   });
 
   it("brings optional questions along with the one before, and stops at the next that needs an answer", () => {
     tick("pathRaising");
-    tick("kind-run_walk");
+    tick("kind-walk");
     expect(waiting($("#title"))).toBe(false);
     expect(waiting($("#target"))).toBe(true);
     type("title", "Jo's Sponsored Swim");
@@ -183,7 +183,7 @@ describe("one question after another", () => {
 
   it("never takes a question away again once it has been shown", () => {
     tick("pathRaising");
-    tick("kind-run_walk");
+    tick("kind-walk");
     type("title", "Jo's Sponsored Swim");
     type("description", "Forty lengths.");
     type("title", "");
@@ -197,7 +197,7 @@ describe("one question after another", () => {
     btn.click();
     expect(document.querySelector(".is-waiting")).toBeNull();
     expect($("[data-show-all-row]").hidden).toBe(true);
-    expect(document.activeElement).toBe($("#kind-run_walk"));
+    expect(document.activeElement).toBe($("#kind-bake_sale_2"));
   });
 
   it("shows every question when Send is pressed early, flagging what is missing", async () => {
@@ -293,7 +293,7 @@ describe("the next question, while they type", () => {
 
   it("waits for them to leave the box, or to pause, rather than coming on the first key", async () => {
     tick("pathRaising");
-    tick("kind-run_walk");
+    tick("kind-walk");
     typeOnly("title", "J");
     typeOnly("description", "F");
     expect(waiting($("#target"))).toBe(true);
@@ -303,7 +303,7 @@ describe("the next question, while they type", () => {
 
   it("comes at once when they leave the box", () => {
     tick("pathRaising");
-    tick("kind-run_walk");
+    tick("kind-walk");
     typeOnly("title", "Jo's Swim");
     typeOnly("description", "Forty lengths.");
     $("#description").dispatchEvent(new Event("change", { bubbles: true }));
@@ -340,7 +340,7 @@ describe("a fault in the form's own script", () => {
       } catch {
         /* the fault itself */
       }
-      expect(waiting($("#kind-run_walk"))).toBe(false);
+      expect(waiting($("#kind-bake_sale_2"))).toBe(false);
     } finally {
       document.getElementById = real;
     }

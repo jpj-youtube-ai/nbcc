@@ -86,6 +86,28 @@ describe("the email to the events inbox, round two", () => {
     );
     expect(old.text).toContain("Facebook or Instagram: https://www.facebook.com/old.page");
     expect(old.text).not.toContain("First name:");
-    expect(old.text).toContain("Kind: A Santa dash");
+    expect(old.text).toContain("Kind: Santa dash");
+  });
+});
+
+// Fundraising categories: the email names a sign up's category as the list has it, an old "this or
+// that" one by its old name, and a renamed one by the name it has now (read with the row).
+describe("the category in the email to the events inbox", () => {
+  const kindLine = (over: Record<string, unknown>) =>
+    buildSignUpStaffEmail({ ...base, ...over } as typeof base, { adminUrl: "https://nbcc.scot/admin" }).text
+      .split("\n")
+      .find((l) => l.startsWith("Kind:"));
+
+  it("names an old category by its old name", () => {
+    expect(kindLine({ kind: "bake_sale", kindOther: null })).toBe("Kind: Bake sale or coffee morning");
+    expect(kindLine({ kind: "run_walk", kindOther: null })).toBe("Kind: Run or walk");
+  });
+
+  it("names a new one plainly", () => {
+    expect(kindLine({ kind: "coffee_morning", kindOther: null })).toBe("Kind: Coffee morning");
+  });
+
+  it("uses the name the database gave it, when the row came with one", () => {
+    expect(kindLine({ kind: "sponsored_silence", kindLabel: "Sponsored silence", kindOther: null })).toBe("Kind: Sponsored silence");
   });
 });

@@ -1480,6 +1480,22 @@
                 </details>
               </section>
 
+              <!-- Fundraising categories: what people choose from on the sign up form, one each, A to
+                   Z with Something else last. Admins only. app.js draws the lists; nothing is ever
+                   deleted, so every sign up keeps its category and its name. -->
+              <section class="fr-card" id="frCats" aria-labelledby="frCatsHead" hidden>
+                <h3 class="admin-subhead" id="frCatsHead">Categories</h3>
+                <p class="fr-card-intro">What people choose from on the sign up form. The form shows them A to Z, with Something else last. Renaming one changes it everywhere, on sign ups already made too. Hiding one takes it off the form, and the sign ups that chose it keep it.</p>
+                <ul class="fr-people fr-cats" id="frCatsList"><li class="fr-people-empty">Loading&hellip;</li></ul>
+                <h4 class="fr-card-subhead" id="frCatsHiddenHead" hidden>Not on the form</h4>
+                <ul class="fr-people fr-cats" id="frCatsHidden" hidden></ul>
+                <div class="fr-summary-add">
+                  <div class="fr-field"><label class="fx-call-label" for="frCatsNew">Add a category</label><input class="fx-call-input" id="frCatsNew" type="text" maxlength="40" autocomplete="off" placeholder="Like Sponsored silence" /></div>
+                  <button class="admin-btn" type="button" id="frCatsAdd">Add to the form</button>
+                </div>
+                <p class="ty-status" id="frCatsStatus" role="status" aria-live="polite"></p>
+              </section>
+
               <div class="fr-bar">
                 <div class="admin-segmented" id="frFilter" role="group" aria-label="Which sign ups to list">
                   <button class="admin-seg is-active" type="button" data-frfilter="" aria-pressed="true">All (<span data-frcount="all">0</span>)</button>

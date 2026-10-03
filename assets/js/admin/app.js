@@ -9007,10 +9007,17 @@
   // API (README, "Community fundraising (TASK-493)"); the server is the real gate on every route.
   // Every stored string is escaped on the way in. Nothing scrolls inside a box: the list shows 25,
   // the wall and History 10, and "Show all" grows the page.
+  // The categories as they start (src/fundraising/categories.ts), for when the list from the server
+  // (frCats, GET /api/admin/fundraising/categories) has not come: A to Z, Something else last, then
+  // the old "this or that" ones, no longer offered, so an old sign up's still has its name.
   var FR_KINDS = [
-    ["run_walk", "A run or walk"], ["santa_dash", "A Santa dash"], ["bake_sale", "A bake sale or coffee morning"],
-    ["quiz_party", "A quiz or party"], ["collection", "A workplace or school collection"], ["birthday", "A birthday"],
-    ["other", "Something else"],
+    ["bake_sale_2", "Bake sale"], ["birthday", "Birthday"], ["coffee_morning", "Coffee morning"], ["party", "Party"],
+    ["quiz", "Quiz"], ["run", "Run"], ["santa_dash", "Santa dash"], ["school_collection", "School collection"],
+    ["walk", "Walk"], ["workplace_collection", "Workplace collection"], ["other", "Something else"],
+  ];
+  var FR_OLD_KINDS = [
+    ["run_walk", "Run or walk"], ["bake_sale", "Bake sale or coffee morning"], ["quiz_party", "Quiz or party"],
+    ["collection", "Workplace or school collection"],
   ];
   var FR_STATUS = {
     new: { label: "New", cls: "is-new" },
@@ -9174,6 +9181,7 @@
     frRenderInvitePanel();
     frLoadTeam();
     frLoadSummary();
+    frLoadCategories(); // the Categories card, and the sign up editor's list
     // TASK-505: the requests, likewise on their own.
     frLoadRequests();
     frLoadNewsCounts(); // TASK-506
@@ -9688,7 +9696,7 @@
   }
 
   function frAboutPanel(f) {
-    var kind = f.kindLabel || (FR_KINDS.filter(function (k) { return k[0] === f.kind; })[0] || [0, f.kind])[1];
+    var kind = f.kindLabel || frCatLabel(f.kind);
     // TASK-511: Something else, in their words.
     if (f.kind === "other" && f.kindOther) kind += ": " + f.kindOther;
     var where = [f.venue, f.town].filter(Boolean).join(", ");
@@ -9696,7 +9704,7 @@
       '<dl class="fx-dl">' +
         fulfilRow("Name for it", H.escapeHtml(f.title)) +
         fulfilRow("They are", H.escapeHtml(frPathWords(f.path))) +
-        fulfilRow("Kind", H.escapeHtml(kind)) +
+        fulfilRow("Category", H.escapeHtml(kind)) +
         fulfilRow("About it", f.description ? '<span class="fx-address">' + H.escapeHtml(f.description) + "</span>" : frNone("Nothing yet")) +
         fulfilRow("Date", f.eventDate ? H.escapeHtml(H.fmtDate(f.eventDate)) : frNone("No date")) +
         fulfilRow("Start time", f.startTime ? H.escapeHtml(String(f.startTime).slice(0, 5)) : frNone("No time")) +
@@ -9969,7 +9977,7 @@
       '<form class="fx-call-form fr-form" id="frEditForm" novalidate>' +
         head("The fundraiser") +
         box("title", "title", "Name for it", "text", 'maxlength="100" autocomplete="off"') +
-        pick("kind", "Kind", FR_KINDS) +
+        pick("kind", "Category", frKindOptions(f.kind)) +
         // TASK-511 review: always there, shown as soon as Something else is chosen (keepTyping).
         box("kindOther", "kindOther", "What it is, in their words (optional)", "text", 'maxlength="80" autocomplete="off"', "For Something else. Up to 80 characters.")
           .replace('<div class="fr-field">', '<div class="fr-field" data-frkindother' + (v.kind === "other" || v.kindOther ? "" : " hidden") + ">") +
@@ -10558,6 +10566,16 @@
       var removeTo = t.closest("[data-frsummaryremove]");
       if (removeTo) return frSummaryRemove(removeTo.getAttribute("data-frsummaryremove"));
       if (t.closest("#frSummaryAdd")) return frSummaryAdd();
+      // The Categories card (admins).
+      if (t.closest("#frCatsAdd")) return frCatAdd();
+      var catRename = t.closest("[data-frcatrename]");
+      if (catRename) return frCatStartRename(catRename.getAttribute("data-frcatrename"));
+      if (t.closest("[data-frcatsave]")) return frCatSaveRename();
+      if (t.closest("[data-frcatcancel]")) return frCatCancelRename();
+      var catHide = t.closest("[data-frcathide]");
+      if (catHide) return frCatSetActive(catHide.getAttribute("data-frcathide"), false);
+      var catShow = t.closest("[data-frcatshow]");
+      if (catShow) return frCatSetActive(catShow.getAttribute("data-frcatshow"), true);
       if (t.closest("#frSummaryTest")) return frSummaryTest();
       // Last, so a control inside the open sign up never also closes it.
       var toggle = t.closest("[data-frtoggle]");
@@ -10586,6 +10604,7 @@
       if (!t || !t.closest) return;
       if (t.id === "frDeclineReason") frReasonDraft = t.value;
       if (t.id === "frCallNote") frCallDraft = t.value;
+      if (t.id === "frCatRename") frCatDraft = t.value;
       // TASK-505: the open request's form; of the radios, the one chosen.
       if (t.closest("#frReqForm") && t.name && (t.type !== "radio" || t.checked)) frReqDraft[t.name] = String(t.value || "");
       // Only the boxes typed in are kept: the rest always show what is live now.
@@ -10620,6 +10639,18 @@
       if (e.key === "Enter" && e.target && e.target.id === "frSummaryEmail") {
         e.preventDefault();
         frSummaryAdd();
+        return;
+      }
+      // The Categories card: Enter adds or saves the name typed; Escape leaves a rename as it was.
+      if (e.target && e.target.id === "frCatsNew" && e.key === "Enter") {
+        e.preventDefault();
+        frCatAdd();
+        return;
+      }
+      if (e.target && e.target.id === "frCatRename" && (e.key === "Enter" || e.key === "Escape")) {
+        e.preventDefault();
+        if (e.key === "Enter") frCatSaveRename();
+        else frCatCancelRename();
         return;
       }
       if (e.key !== "Enter" && e.key !== " " && e.key !== "Spacebar") return;
@@ -11760,6 +11791,185 @@
       });
   }
 
+
+  // ---- Categories (admins; the list itself for everyone who can see Fundraising) ----
+  // What people choose from on the sign up form (src/fundraising/categories.ts). The server keeps the
+  // order (A to Z, Something else last) and every one ever made: none is deleted, so a sign up's
+  // category always has its name. Admins add, rename, hide and put back; each is in audit_log.
+  var frCats = null; // GET /api/admin/fundraising/categories: [{ key, label, active, used }]
+  var frCatsFailed = false;
+  var frCatEditing = null; // the key of the category being renamed
+  var frCatDraft = ""; // its new name, as typed
+
+  function frCatList() {
+    if (frCats) return frCats;
+    return FR_KINDS.map(function (k) { return { key: k[0], label: k[1], active: true }; })
+      .concat(FR_OLD_KINDS.map(function (k) { return { key: k[0], label: k[1], active: false }; }));
+  }
+  function frCatFind(key) {
+    return frCatList().filter(function (c) { return c.key === key; })[0] || null;
+  }
+  // A category's name; a key the list does not know, made readable.
+  function frCatLabel(key) {
+    var c = frCatFind(key);
+    if (c) return c.label;
+    var words = String(key || "").replace(/_\d+$/, "").replace(/_/g, " ").trim();
+    return words ? words.charAt(0).toUpperCase() + words.slice(1) : "Something else";
+  }
+  // The sign up editor's choices: every category on the form, and the sign up's own if it is an old
+  // one, so it shows as it is until someone changes it.
+  function frKindOptions(current) {
+    var opts = frCatList().filter(function (c) { return c.active; }).map(function (c) { return [c.key, c.label]; });
+    var has = opts.some(function (o) { return o[0] === current; });
+    if (current && !has) opts.unshift([current, frCatLabel(current) + " (no longer on the form)"]);
+    return opts;
+  }
+
+  function frLoadCategories() {
+    return authFetch("/api/admin/fundraising/categories")
+      .then(okJson)
+      .then(function (d) {
+        frCats = d && Array.isArray(d.categories) ? d.categories : null;
+        frCatsFailed = !frCats;
+        frRenderCats();
+      })
+      .catch(function (err) {
+        if (err && err.message === "unauthorized") return;
+        frCats = null;
+        frCatsFailed = true;
+        frRenderCats();
+      });
+  }
+
+  function frCatUsed(c) {
+    var n = Number(c.used) || 0;
+    return n === 0 ? "No sign ups yet" : n === 1 ? "1 sign up" : n + " sign ups";
+  }
+
+  function frCatRow(c) {
+    var label = H.escapeHtml(c.label);
+    var key = H.escapeHtml(c.key);
+    if (frCatEditing === c.key) {
+      return '<li class="fr-cat-editing"><span class="fr-people-who"><label class="fx-call-label" for="frCatRename">New name for ' + label + "</label>" +
+        '<input class="fx-call-input" id="frCatRename" type="text" maxlength="40" autocomplete="off" value="' + H.escapeHtml(frCatDraft) + '"></span>' +
+        '<span class="fr-people-actions"><button class="admin-btn" type="button" data-frcatsave>Save the name</button>' +
+        '<button class="fr-link-btn" type="button" data-frcatcancel>Cancel</button></span></li>';
+    }
+    var actions = '<button class="fr-link-btn" type="button" data-frcatrename="' + key + '" aria-label="' + H.escapeHtml("Rename " + c.label) + '">Rename</button>';
+    if (c.key === "other") {
+      actions += '<span class="fr-cat-note">Always last on the form</span>';
+    } else if (c.active) {
+      actions += '<button class="fr-link-btn" type="button" data-frcathide="' + key + '" aria-label="' + H.escapeHtml("Hide " + c.label + " from the form") + '">Hide from the form</button>';
+    } else {
+      actions += '<button class="fr-link-btn" type="button" data-frcatshow="' + key + '" aria-label="' + H.escapeHtml("Put " + c.label + " back on the form") + '">Put back on the form</button>';
+    }
+    return '<li><span class="fr-people-who">' + label + " <span>" + H.escapeHtml(frCatUsed(c)) + "</span></span>" +
+      '<span class="fr-people-actions">' + actions + "</span></li>";
+  }
+
+  function frRenderCats() {
+    var card = el("frCats");
+    if (!card) return;
+    if (!(isAdmin() && frCanWrite())) {
+      card.hidden = true;
+      return;
+    }
+    card.hidden = false;
+    var list = el("frCatsList");
+    var hidden = el("frCatsHidden");
+    if (!frCats) {
+      list.innerHTML = '<li class="fr-people-empty">' + (frCatsFailed ? "The categories could not load just now. Try again in a moment." : "Loading&hellip;") + "</li>";
+      hidden.hidden = true;
+      el("frCatsHiddenHead").hidden = true;
+      return;
+    }
+    var on = frCats.filter(function (c) { return c.active; });
+    var off = frCats.filter(function (c) { return !c.active; });
+    list.innerHTML = on.length ? on.map(frCatRow).join("") : '<li class="fr-people-empty">Nothing is on the form yet.</li>';
+    hidden.innerHTML = off.map(frCatRow).join("");
+    hidden.hidden = off.length === 0;
+    el("frCatsHiddenHead").hidden = off.length === 0;
+    if (frCatEditing) {
+      var box = el("frCatRename");
+      if (box && doc.activeElement !== box) box.focus();
+    }
+  }
+
+  // One change at a time. After it: the card, the sign ups (their category names) and the editor's list.
+  function frCatSend(method, path, body, saidOk) {
+    if (frTeamBusy) return Promise.resolve(false);
+    frTeamBusy = true;
+    frTeamSay("frCatsStatus", "Saving…", false);
+    return frSend(method, path, body)
+      .then(function (r) {
+        if (!r.ok) {
+          frTeamSay("frCatsStatus", frRefusal(r, "That did not save. Please try again."), true);
+          return false;
+        }
+        frTeamSay("frCatsStatus", saidOk(r.body && r.body.category), false);
+        return Promise.all([frLoadCategories(), frLoadList()]).then(function () { return true; });
+      })
+      .catch(function (err) {
+        if (!(err && err.message === "unauthorized")) frTeamSay("frCatsStatus", "That did not save. Please try again.", true);
+        return false;
+      })
+      .then(function (ok) {
+        frTeamBusy = false;
+        return ok;
+      });
+  }
+
+  function frCatAdd() {
+    var box = el("frCatsNew");
+    var label = String(box.value || "").replace(/\s+/g, " ").trim();
+    if (label.length < 2) return frTeamSay("frCatsStatus", "Type the name of the category first, like Sponsored silence.", true);
+    return frCatSend("POST", "/api/admin/fundraising/categories", { label: label }, function (c) {
+      return "Added. " + (c ? c.label : label) + " is on the sign up form now, in its place A to Z.";
+    }).then(function (ok) {
+      if (ok) box.value = "";
+    });
+  }
+
+  function frCatStartRename(key) {
+    var c = frCatFind(key);
+    if (!c) return;
+    frCatEditing = key;
+    frCatDraft = c.label;
+    frTeamSay("frCatsStatus", "", false);
+    frRenderCats();
+  }
+  function frCatCancelRename() {
+    frCatEditing = null;
+    frCatDraft = "";
+    frRenderCats();
+  }
+  function frCatSaveRename() {
+    var key = frCatEditing;
+    var c = frCatFind(key);
+    var box = el("frCatRename");
+    var label = String((box && box.value) || "").replace(/\s+/g, " ").trim();
+    if (!c) return;
+    if (label.length < 2) return frTeamSay("frCatsStatus", "Type the new name first.", true);
+    if (label === c.label) return frCatCancelRename();
+    return frCatSend("PATCH", "/api/admin/fundraising/categories/" + encodeURIComponent(key), { label: label }, function (after) {
+      return "Renamed. It says " + (after ? after.label : label) + " everywhere now.";
+    }).then(function (ok) {
+      if (ok) {
+        frCatEditing = null;
+        frCatDraft = "";
+        frRenderCats();
+      }
+    });
+  }
+
+  function frCatSetActive(key, active) {
+    var c = frCatFind(key);
+    if (!c) return;
+    if (!active && !window.confirm("Take " + c.label + " off the sign up form? The sign ups that chose it keep it, and you can put it back.")) return;
+    return frCatSend("PATCH", "/api/admin/fundraising/categories/" + encodeURIComponent(key), { active: active }, function () {
+      return active ? c.label + " is back on the sign up form." : c.label + " is off the sign up form. The sign ups that chose it keep it.";
+    });
+  }
 
   // ---- boot: restore an in-tab session ----
   var claims = H.parseClaims(token());

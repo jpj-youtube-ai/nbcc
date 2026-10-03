@@ -590,7 +590,7 @@ When(
   async function (title) {
     await call(this, "POST", "/api/fundraise", {
       path: "event",
-      kind: "quiz_party",
+      kind: "quiz",
       title,
       description: "A quiz night in the village hall, with a raffle at half time.",
       eventDate: "2099-11-21",

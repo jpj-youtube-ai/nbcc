@@ -43,7 +43,7 @@
   // The API's field names, and the control each one's message belongs beside.
   var FIELD_CONTROL = {
     path: "pathRaising",
-    kind: "kind-run_walk",
+    // kind: the first category on the form, whichever it is (controlEl, below).
     title: "title",
     description: "description",
     eventDate: "eventDate",
@@ -148,6 +148,12 @@
 
     function el(id) {
       return doc.getElementById(id);
+    }
+    // The control a server message belongs beside. The categories come from the database, so the
+    // category message goes by the first one on the form, whichever it is.
+    function controlEl(key) {
+      if (key === "kind") return form.querySelector('input[name="kind"]');
+      return el(controlFor(key));
     }
     function val(id) {
       var e = el(id);
@@ -575,7 +581,7 @@
         });
         if (serverFields) {
           Object.keys(serverFields).forEach(function (key) {
-            var control = el(controlFor(key));
+            var control = controlEl(key);
             if (control) out.push({ control: control, message: serverFields[key] });
           });
         }

@@ -1,7 +1,6 @@
 import { describe, it, expect } from "vitest";
+import { STARTING_CATEGORIES, categoryLabel } from "../../src/fundraising/categories";
 import {
-  KINDS,
-  KIND_LABELS,
   signUpSchema,
   editSchema,
   adminPatchSchema,
@@ -84,10 +83,11 @@ describe("the sign up form", () => {
     expect(r.data.wants).toEqual({ posterCount: 0, leafletCount: 0, bucketCount: 0, tinCount: 0, leaflets: 0, buckets: 0, qrCount: 0, shoutOut: false, attend: false });
   });
 
-  it.each(KINDS)("knows the kind %s, with a name for people", (kind) => {
+  // Fundraising categories: every one on offer to start with (src/fundraising/categories.ts).
+  it.each(STARTING_CATEGORIES.map((c) => c.key))("knows the kind %s, with a name for people", (kind) => {
     // TASK-511: Something else says what, in a few words.
     expect(signUpSchema.safeParse(signUp({ kind, kindOther: "A sponsored silence" })).success).toBe(true);
-    expect(KIND_LABELS[kind]).toMatch(/^[A-Z]/);
+    expect(categoryLabel(kind)).toMatch(/^[A-Z]/);
   });
 
   it.each([
@@ -122,7 +122,7 @@ describe("the sign up form", () => {
   it("asks for the date when someone is holding an event, and takes no target for one", () => {
     expect(signUpSchema.safeParse(signUp({ path: "event", eventDate: "" })).success).toBe(false);
     const event = { cardLine: "Cakes for NBCC.", booking: "free" }; // TASK-499: asked of every event
-    const r = signUpSchema.safeParse(signUp({ path: "event", kind: "bake_sale", targetPence: 50000, ...event }));
+    const r = signUpSchema.safeParse(signUp({ path: "event", kind: "bake_sale_2", targetPence: 50000, ...event }));
     expect(r.success).toBe(true);
     if (r.success) expect(r.data.targetPence).toBeNull();
   });
@@ -354,7 +354,7 @@ describe("what the public sees", () => {
       id: 7,
       slug: "robins-santa-dash",
       path: "raising",
-      kindLabel: KIND_LABELS.santa_dash,
+      kindLabel: "Santa dash",
       organisedBy: "Robin T.",
       url: "/fundraise/robins-santa-dash",
       meter: m,

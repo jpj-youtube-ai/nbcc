@@ -48,7 +48,7 @@ const raising = (over: Record<string, unknown> = {}) => ({
 const holding = (over: Record<string, unknown> = {}) =>
   raising({
     path: "event",
-    kind: "quiz_party",
+    kind: "quiz",
     title: "The Example Quiz",
     venue: "Example Village Hall",
     cardLine: "Eight rounds, a raffle and a bar, all for NBCC.",
@@ -334,7 +334,7 @@ describe("what the public sees of the new answers", () => {
     id: 7,
     slug: "the-example-quiz",
     path: "event",
-    kind: "quiz_party",
+    kind: "quiz",
     title: "The Example Quiz",
     description: "A quiz.",
     eventDate: "2026-12-05",

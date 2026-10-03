@@ -7,6 +7,7 @@ import { adminRouter } from "./routes/admin";
 import { adminUsersRouter } from "./routes/admin-users";
 import { adminEventsRouter } from "./routes/admin-events";
 import { adminFundraisingRouter } from "./routes/admin-fundraising";
+import { adminFundraisingCategoriesRouter } from "./routes/admin-fundraising-categories";
 import { adminFundraisingTeamRouter } from "./routes/admin-fundraising-team";
 import { adminFundraisingRequestsRouter } from "./routes/admin-fundraising-requests";
 import { fundraiserThanksRouter } from "./routes/fundraiser-thanks";
@@ -106,6 +107,8 @@ export function createApp() {
   app.use(fundraiserNewsRouter);
   app.use(fundraiseRouter);
   app.use(adminFundraisingRouter);
+  // Fundraising categories: the list the sign up form offers, A to Z; admins add, rename and hide them.
+  app.use(adminFundraisingCategoriesRouter);
   // TASK-503: the fundraising team's tools (invite, calls, Get involved, the Monday summary), and
   // the sign up form's invite lookup.
   app.use(adminFundraisingTeamRouter);

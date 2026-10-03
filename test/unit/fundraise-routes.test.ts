@@ -29,6 +29,19 @@ vi.mock("../../src/db/fundraisers", async () => {
   }
   return { ...db, FundraiserError };
 });
+// Fundraising categories: the list as the database has it, read before a sign up is checked.
+const cats = vi.hoisted(() => ({ extra: [] as Array<{ key: string; label: string; active: boolean }>, reads: [] as unknown[] }));
+vi.mock("../../src/db/fundraising-categories", async () => {
+  const c = await import("../../src/fundraising/categories");
+  return {
+    loadCategories: vi.fn(async (o: unknown = {}) => {
+      cats.reads.push(o);
+      const list = [...c.BUILT_IN_CATEGORIES, ...cats.extra];
+      c.rememberCategories(list);
+      return list;
+    }),
+  };
+});
 vi.mock("../../src/fundraising/send", () => send);
 vi.mock("../../src/newsletter/self-signup", () => newsletter);
 vi.mock("../../src/clients/turnstile", () => ({
@@ -70,7 +83,7 @@ async function run(handler: (req: any, res: any) => unknown, o: { body?: unknown
 
 const signUp = (over: Record<string, unknown> = {}) => ({
   path: "raising",
-  kind: "run_walk",
+  kind: "walk",
   title: "Sam's Sponsored Walk",
   description: "Ten miles for NBCC.",
   eventDate: "2026-11-14",
@@ -130,6 +143,8 @@ beforeEach(() => {
   captcha.enabled = false;
   captcha.verdict = { outcome: "passed" };
   db.fundraisingIsOn.mockResolvedValue(true);
+  cats.extra = [];
+  cats.reads = [];
 });
 
 describe("signing up", () => {
@@ -197,6 +212,47 @@ describe("signing up", () => {
   });
 });
 
+describe("the category on a sign up", () => {
+  it.each(["run_walk", "bake_sale", "quiz_party", "collection"])("refuses the old category %s, asking them to choose", async (kind) => {
+    const res = await run(postFundraise, { body: signUp({ kind }) });
+    expect(res.statusCode).toBe(400);
+    expect((res.body as { fields: Record<string, string> }).fields.kind).toBe("Choose what you are doing to raise money.");
+    expect(db.createFundraiser).not.toHaveBeenCalled();
+  });
+
+  it("refuses one that does not exist, worded for an event", async () => {
+    const res = await run(postFundraise, { body: signUp({ kind: "skydive", path: "event" }) });
+    expect((res.body as { fields: Record<string, string> }).fields.kind).toBe("Choose what kind of event it is.");
+  });
+
+  it("refuses one staff have hidden from the form", async () => {
+    cats.extra = [{ key: "abseil", label: "Abseil", active: false }];
+    const res = await run(postFundraise, { body: signUp({ kind: "abseil" }) });
+    expect(res.statusCode).toBe(400);
+  });
+
+  it("takes one an admin has just added, reading the list afresh when this server has not seen it", async () => {
+    db.createFundraiser.mockResolvedValue(record({ status: "new", kind: "sponsored_silence" }));
+    // Read once (the cached list, without it), then afresh once the admin's new one is there.
+    const { loadCategories } = await import("../../src/db/fundraising-categories");
+    (loadCategories as unknown as ReturnType<typeof vi.fn>).mockImplementationOnce(async (o: unknown = {}) => {
+      cats.reads.push(o);
+      cats.extra = [{ key: "sponsored_silence", label: "Sponsored silence", active: true }];
+      return [];
+    });
+    const res = await run(postFundraise, { body: signUp({ kind: "sponsored_silence" }) });
+    expect(res.statusCode).toBe(200);
+    expect(cats.reads).toEqual([{}, { fresh: true }]);
+    expect(db.createFundraiser.mock.calls[0][0].kind).toBe("sponsored_silence");
+  });
+
+  it("reads the list only once for a category it already knows", async () => {
+    db.createFundraiser.mockResolvedValue(record({ status: "new" }));
+    await run(postFundraise, { body: signUp({ kind: "coffee_morning" }) });
+    expect(cats.reads).toEqual([{}]);
+  });
+});
+
 describe("Get involved's list", () => {
   it("is empty, and says so, while fundraising is off", async () => {
     db.fundraisingIsOn.mockResolvedValue(false);
@@ -216,6 +272,8 @@ describe("Get involved's list", () => {
     expect(body.fundraisers.map((f) => f.slug)).toEqual(["sams-sponsored-walk"]);
     expect(body.fundraisers[0]).toMatchObject({ organisedBy: "Sam S.", url: "/fundraise/sams-sponsored-walk" });
     expect((body.fundraisers[0].meter as { raisedPence: number }).raisedPence).toBe(6000);
+    // An old "run or walk" sign up shows its old category's name.
+    expect(body.fundraisers[0].kindLabel).toBe("Run or walk");
     expect(JSON.stringify(body)).not.toContain("sam@example.com");
   });
 });

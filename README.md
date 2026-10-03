@@ -7304,7 +7304,7 @@ All JSON. Money is always in **pence**. Dates are `YYYY-MM-DD`, times `HH:MM`.
 ```json
 {
   "path": "raising | event",
-  "kind": "run_walk | santa_dash | bake_sale | quiz_party | collection | birthday | other",
+  "kind": "walk",                          // a category on the form now (see "Fundraising categories")
   "title": "Sam's Santa Dash",            // 1 to 100
   "description": "...",                    // 1 to 1,000
   "eventDate": "2026-12-05 or empty",      // required when path is event
@@ -7366,7 +7366,7 @@ paths, an event dropping off the day after its date. A **Card** is:
 ```json
 {
   "id": 9, "slug": "sams-santa-dash", "path": "raising", "kind": "santa_dash",
-  "kindLabel": "A Santa dash", "title": "...", "description": "...",
+  "kindLabel": "Santa dash", "title": "...", "description": "...",
   "eventDate": "2026-12-05" | null, "startTime": "10:30" | null, "venue": "", "town": "",
   "imageSrc": "/media/events/<uuid>" | null,
   "organisedBy": "Sam S.",                 // first name and last initial, or an event's creditName
@@ -8181,6 +8181,89 @@ organiser's words), `fundraising-requests-db`, `fundraising-requests-migration`,
 (only their own), `fundraise-manage-page` and `backup-plan`. BDD:
 `features/fundraising-requests.feature` (posters sent and a bucket out then back take what is
 waiting down; a second press changes nothing; Undo goes back one step).
+## Fundraising categories: one each, A to Z, and staff can add more
+
+The sign up form's "What are you doing to raise money?" (or "What kind of event is it?") is a list of
+**categories**, each naming one thing, never "this or that", and named as a plain noun so it reads
+well on a card ("Santa dash", not "A Santa dash"). The form shows them **A to Z, with Something else
+last** (its box for what it is, in their words, is unchanged). To start with:
+
+Bake sale, Birthday, Coffee morning, Party, Quiz, Run, Santa dash, School collection, Walk, Workplace
+collection, and Something else.
+
+**Admins add more** in Admin > Fundraising, on the **Categories** card: type a name and Add to the
+form, and it is on the sign up form at once, in its place A to Z. They can **rename** one (the new
+name shows everywhere, on sign ups already made too) and **hide** one from the form (and put it back);
+Something else is always on the form. Nothing is ever deleted, so every sign up keeps its category
+and its name. Each change is in `audit_log` (`fundraising.category_added`,
+`fundraising.category_changed`, entity `fundraising_category`, the key in its data). Editors and
+viewers do not see the card; the sign up editor's Category list (anyone with Fundraising) offers
+every category on the form, plus a sign up's own if it is an old one, shown "(no longer on the form)"
+until someone changes it.
+
+**The old categories.** "Run or walk", "Bake sale or coffee morning", "Quiz or party" and "Workplace
+or school collection" (keys `run_walk`, `bake_sale`, `quiz_party`, `collection`) are no longer
+offered. Sign ups that chose one keep it, shown by that name on the card, the page, the staff email
+and the admin, until staff change it to a new one. Santa dash (`santa_dash`), Birthday
+(`birthday`) and Something else (`other`) mean what they always did, so they keep their keys; a
+bake sale on its own is `bake_sale_2`, as `bake_sale` was the old pair.
+
+**Keys.** `fundraisers.kind` holds a category's key: small letters, digits and underscores, made from
+its name when an admin adds it ("Sponsored silence" is `sponsored_silence`), with a number if the
+key was ever used (`_2`, `_3`). A key never changes. For code that suggests things by kind (the
+materials, the keep in touch emails): `categoryLabel(key)` is the name to show, and
+`isKind(key, ...kinds)` asks "is it one of these?", matching an old category to the ones it was
+split into either way round, so `isKind(f.kind, "bake_sale")` is true for an old bake sale or coffee
+morning and for a new Bake sale or Coffee morning (`src/fundraising/categories.ts`).
+
+**Checks.** The sign up accepts only a category on the form now; an old one, a hidden one or one that
+does not exist is asked for again ("Choose what you are doing to raise money."). A staff change may
+set any category on the form ("Choose one of the categories on the list."). The list is read from
+the database and kept for a minute; a change on the Categories card is read again at once on that
+server, and a sign up naming a category the server has not seen yet reads the list afresh before
+refusing it. Every name shown with a sign up is read with its row, so a rename shows at once.
+
+### Routes
+
+| Route | Who | Body | Answer |
+|---|---|---|---|
+| `GET /api/admin/fundraising/categories` | Fundraising view | | `{ categories: [{ key, label, active, createdAt, createdBy, retiredAt, used }] }`, A to Z, Something else last; `used` is how many sign ups have it |
+| `POST /api/admin/fundraising/categories` | an admin | `{ label }` (2 to 40, letters and numbers) | `201 { category }`; `409` when a category (hidden or not) has that name |
+| `PATCH /api/admin/fundraising/categories/:key` | an admin | `{ label?, active? }` | `200 { category }`; `409` for hiding Something else or a name taken; `404` |
+
+`GET /fundraise` draws the form's categories from the list (between `<!-- kinds -->` and
+`<!-- /kinds -->` in `fundraise.html`, which holds the starting list for when the database cannot
+answer).
+
+### Data (`migrations/1791200000160_fundraising-categories.js`, additive only)
+
+A new table, `fundraising_categories`: `key` (primary key, checked), `label` (unique whatever the
+case), `active`, `created_at`, `created_by`, `retired_at`. Seeded with the new list and the four old
+categories (not active), `ON CONFLICT DO NOTHING`, plus any key a sign up has that the list does not
+know (there should be none). The hard coded check on `fundraisers.kind` (`fundraisers_kind_check`,
+named in 1791200000000) is dropped by its name, and any other check listing the old kinds (found by
+`quiz_party`, as Postgres keeps `kind IN (...)` as `kind = ANY (ARRAY[...])`), and replaced by a
+link to the table (`fundraisers_kind_fkey`), so a category in use can never be deleted. No sign up is
+changed. The rollback drops the link and the table and puts the old check back `NOT VALID`. Numbered
+160, above 130 on main and 150 (the keep in touch work). The nightly backup's table count is 71.
+
+### Where it lives, and tests
+
+Rules: `src/fundraising/categories.ts`, and the sign up and staff schemas in
+`src/fundraising/model.ts` (`kindLabelOf`). SQL and the one minute list: `src/db/fundraising-categories.ts`;
+the name with each row: `RECORD_COLUMNS` in `src/db/fundraisers.ts`. Routes:
+`src/routes/admin-fundraising-categories.ts`; the checks in `src/routes/fundraise.ts` and
+`src/routes/admin-fundraising.ts`; the form in `src/routes/fundraise-pages.ts` and
+`renderFundraiseSignUp` in `src/fundraising/render.ts`. Admin: the Categories card in `admin.html`
+and `assets/js/admin/app.js`. Unit tests: `fundraising-categories` (the list, the order, names, keys,
+`isKind`, the sign up and staff checks, old sign ups on their card and page),
+`fundraising-categories-migration`, `fundraising-categories-db` (the minute, afresh, audit),
+`admin-fundraising-categories-routes` (admins only), `fundraise-signup-categories` (the form A to Z),
+`fundraise-routes`, `fundraise-pages-routes`, `admin-fundraising-routes`,
+`fundraising-staff-email-v2`, and the Categories card in `admin-fundraising-page`. BDD:
+`features/fundraising-categories.feature` (an admin adds Sponsored silence, the form offers it A to
+Z, a sign up uses it; only an admin may; an old category is refused but keeps its name; hiding one).
+
 ## The fundraising sign up form, round two, and short page links (TASK-511)
 
 Jaimie's second round of changes to the sign up form at `/fundraise`, and shorter page links.
@@ -8279,7 +8362,7 @@ Postgres gave the column check in 080), and any other check listing the kinds (f
 "kind IN" are never there), and the widened one is added back under that name; the rollback puts the
 old list back `NOT VALID`. Printed QR codes need no column: a new key in `wants`. Numbered 130,
 above 110 and 120. The nightly
-backup's table count is 70.
+backup's table count was 70 (71 since the fundraising categories).
 
 ### Where it lives, and tests
 

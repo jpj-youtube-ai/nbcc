@@ -15,6 +15,8 @@ vi.mock("../../src/db/fundraisers", () => {
   return { ...db, FundraiserError };
 });
 vi.mock("../../src/fundraising/send", () => ({ sendSignUpEmails: vi.fn(), fundraiserPageUrl: (s: string) => s, manageUrl: () => "" }));
+// Fundraising categories: the starting list stands in for the database's (src/fundraising/categories.ts).
+vi.mock("../../src/db/fundraising-categories", () => ({ loadCategories: async () => [] }));
 vi.mock("../../src/newsletter/self-signup", () => ({ subscribeSelf: vi.fn() }));
 vi.mock("../../src/clients/turnstile", () => ({ captchaEnabled: () => false, captchaSiteKey: () => null, verifyCaptcha: vi.fn() }));
 vi.mock("../../src/config", () => ({ config: { NODE_ENV: "test", PORTAL_BASE_URL: "https://nbcc.test" } }));
@@ -123,7 +125,7 @@ describe("using an invite", () => {
 describe("a sign up made from an invite", () => {
   const signUp = {
     path: "raising",
-    kind: "run_walk",
+    kind: "walk",
     title: "Alex's Walk",
     description: "Ten miles.",
     town: "Exampleton",

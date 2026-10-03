@@ -14,7 +14,8 @@ import {
   questionsText,
 } from "../email/brand";
 import { FOOTER_TEXT, POSTAL_ADDRESS } from "../legal/registration";
-import { ACCESS_LABELS, BOOKING_LABELS, KIND_LABELS, shortName, type SignUp, type Wants } from "./model";
+import { ACCESS_LABELS, BOOKING_LABELS, kindLabelOf, shortName, type SignUp, type Wants } from "./model";
+import { OTHER_KIND } from "./categories";
 
 // TASK-493: the community fundraising emails, built here and sent by src/fundraising/send.ts.
 // TASK-497: reworded to the words Jaimie signed off on 2026-10-02 (warmer, a signed close, and a
@@ -134,7 +135,7 @@ export function buildSignUpThanksEmail(typedName?: string | null): BuiltEmail {
 // TASK-511: the new answers are absent on a sign up from before them.
 type NewAnswers = "firstName" | "lastName" | "kindOther" | "instagram" | "facebook";
 export type StaffSummary = Omit<SignUp, NewAnswers | "wants"> &
-  Partial<Record<NewAnswers, string | null>> & { id: number; postAddress?: string | null; wants: Wants };
+  Partial<Record<NewAnswers, string | null>> & { id: number; postAddress?: string | null; wants: Wants; kindLabel?: string | null };
 
 /** "1 Example Road, Exampleton, EX1 1EX": the boxes of an address, leaving out the empty ones. */
 function joinParts(...parts: Array<string | null | undefined>): string {
@@ -184,7 +185,7 @@ function staffFacts(f: StaffSummary): Array<[string, string]> {
   const when = [f.eventDate, time].filter(Boolean).join(" at ") + (f.timeTbc ? ", the time is still to be confirmed" : "");
   const where = [f.venue, f.town].filter(Boolean).join(", ");
   // TASK-511: Something else, in their words.
-  const kind = KIND_LABELS[f.kind] + (f.kind === "other" && f.kindOther ? `: ${f.kindOther}` : "");
+  const kind = kindLabelOf(f) + (f.kind === OTHER_KIND && f.kindOther ? `: ${f.kindOther}` : "");
   const facts: Array<[string, string]> = [
     ["What", f.path === "raising" ? "Raising money" : "Holding an event"],
     ["Kind", kind],

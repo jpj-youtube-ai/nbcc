@@ -172,7 +172,7 @@ describe("printed QR codes", () => {
   });
 
   it("are for a page, so an event, which has none, asks for none", () => {
-    const d = ok(signUp({ path: "event", kind: "quiz_party", cardLine: "A quiz.", booking: "free", venue: "Hall", wants: { qrCount: 20, shoutOut: false, attend: false } }));
+    const d = ok(signUp({ path: "event", kind: "quiz", cardLine: "A quiz.", booking: "free", venue: "Hall", wants: { qrCount: 20, shoutOut: false, attend: false } }));
     expect(d.wants.qrCount).toBe(0);
     expect(d.postLine1).toBeNull();
   });

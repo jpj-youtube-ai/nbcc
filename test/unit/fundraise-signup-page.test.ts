@@ -64,7 +64,7 @@ const sent = () => JSON.parse(String(posts()[0].init?.body));
 function fillRaising() {
   tick("pathRaising");
   type("title", "Jo's Sponsored Swim");
-  tick("kind-run_walk");
+  tick("kind-walk");
   type("description", "Forty lengths for NBCC.");
   type("eventDate", "2026-11-14");
   type("town", "Exampleton");
@@ -182,7 +182,7 @@ describe("sending", () => {
     expect(posts()[0].init?.method).toBe("POST");
     expect(sent()).toEqual({
       path: "raising",
-      kind: "run_walk",
+      kind: "walk",
       title: "Jo's Sponsored Swim",
       description: "Forty lengths for NBCC.",
       eventDate: "2026-11-14",

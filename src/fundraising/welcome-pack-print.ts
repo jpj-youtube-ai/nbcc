@@ -1,6 +1,6 @@
 import { escapeHtml } from "../events/render";
 import { MATERIALS_STATEMENT, POSTAL_ADDRESS_LINES } from "../legal/registration";
-import { CHARITY_NAME, PACK_PIECES, POSTER_SIZES, shell, type MaterialAssets, type MaterialFacts, type PosterSize } from "./materials";
+import { ASK_US, CHARITY_NAME, PACK_PIECES, POSTER_SIZES, shell, type MaterialAssets, type MaterialFacts, type PosterSize } from "./materials";
 import { qrSvg } from "./qr";
 import { EMAIL, PHONE, coveringNote, welcomeLetter, type PackItemView, type PackSubject, type PackView, type Signer } from "./welcome-pack";
 
@@ -23,8 +23,11 @@ import { EMAIL, PHONE, coveringNote, welcomeLetter, type PackItemView, type Pack
 // the pack but cannot be printed (buckets, the T-shirt) is listed on screen. In memory of someone, a
 // gentle covering note takes the letter's place: quiet colours, no QR code, no exclamation marks.
 //
-// A poster asked for ten times is drawn once, and a small script copies it before printing, so the
-// page stays light (the logo is inlined in every poster). The copies only show on paper.
+// A poster asked for up to ten times is drawn once, and a small script copies it when the print
+// window opens and puts the copies away when it closes, so the page stays light (the logo is inlined
+// in every poster). More than ten of a kind are never copied in the browser: one is drawn, its label
+// says how many to print, and a note says to print the rest from its own page, setting Copies in the
+// print window. The organisers' "Ask us" note is left out: this page is for staff.
 
 /** Our address as the printed pieces write it, with the apostrophe (as ./envelope.ts). */
 const FROM_LINES = ["The Elves' Workshop", ...POSTAL_ADDRESS_LINES.slice(1)];
@@ -98,33 +101,49 @@ const PACK_CSS = `
   .pk-label{max-width:640px;margin:26px auto -6px;padding:0 16px;font-size:.9rem;font-weight:600;color:var(--maroon);text-align:center}
   .pk-also{max-width:640px;margin:16px auto 0;padding:12px 18px;background:#fff;border:1.6px solid var(--line);border-radius:12px;
     font-size:.9rem;line-height:1.55;color:var(--slate)}
-  .pk-copy{display:none}
+  .pk-bulk{border-color:var(--gold);font-weight:600}
   @media (max-width:700px){.pk-also{margin:12px 12px 0}}
   @media print{
     .pk-label,.pk-also{display:none}
-    .pk-copy{display:block}
     /* Every page ends its sheet, the copies too; only the very last page of the pack does not. */
     .page{break-after:page !important;page-break-after:always !important}
     [data-pack-piece]:last-of-type > .page:last-child{break-after:auto !important;page-break-after:auto !important}
   }`;
 
-// Before printing: each piece asked for more than once is copied that many times. The copies are
-// only for paper (.pk-copy shows in print alone), so the screen stays one of each.
+/** The most copies of one poster the page will make by itself. */
+export const MAX_COPIES = 10;
+
+// When the print window opens: each piece asked for more than once (and no more than MAX_COPIES
+// times) is copied that many times; when it closes the copies are taken away, so the screen stays
+// one of each. Never more than MAX_COPIES, whatever the page says.
 const COPIES_SCRIPT = `<script>
 (function(){
-  var pieces=document.querySelectorAll("[data-pack-piece][data-copies]");
-  for(var i=0;i<pieces.length;i++){
-    var piece=pieces[i],n=parseInt(piece.getAttribute("data-copies"),10)||1,page=piece.querySelector(".page");
-    if(!page||n<2)continue;
-    for(var c=1;c<n;c++){
-      var copy=page.cloneNode(true);
-      copy.classList.add("pk-copy");
-      copy.setAttribute("aria-hidden","true");
-      piece.appendChild(copy);
+  var MAX=${MAX_COPIES};
+  function add(){
+    remove();
+    var pieces=document.querySelectorAll("[data-pack-piece][data-copies]");
+    for(var i=0;i<pieces.length;i++){
+      var piece=pieces[i],n=Math.min(parseInt(piece.getAttribute("data-copies"),10)||1,MAX),page=piece.querySelector(".page");
+      if(!page||n<2)continue;
+      for(var c=1;c<n;c++){
+        var copy=page.cloneNode(true);
+        copy.classList.add("pk-copy");
+        copy.setAttribute("aria-hidden","true");
+        piece.appendChild(copy);
+      }
     }
   }
+  function remove(){
+    var copies=document.querySelectorAll(".pk-copy");
+    for(var i=0;i<copies.length;i++)copies[i].parentNode.removeChild(copies[i]);
+  }
+  window.addEventListener("beforeprint",add);
+  window.addEventListener("afterprint",remove);
 })();
 </script>`;
+
+/** The organisers' note every material's page carries (./materials.ts shell): not for this staff page. */
+const ASK_US_ASIDE = `<aside class="ask-us">${escapeHtml(ASK_US)}</aside>`;
 
 const lines = (list: string[]) => list.map((l) => `<span>${escapeHtml(l)}</span>`).join("");
 const andList = (items: string[]) => (items.length <= 1 ? items.join("") : `${items.slice(0, -1).join(", ")} and ${items[items.length - 1]}`);
@@ -219,6 +238,7 @@ export function renderWelcomePack(i: PackPrintInput): string {
   const pieces = [letter];
   const printed: string[] = [memory ? "the covering note" : "the welcome letter"];
   const also: string[] = [];
+  const bulk: string[] = [];
   if (i.part === "all") {
     for (const item of items) {
       if (item.key === "letter") continue;
@@ -226,9 +246,15 @@ export function renderWelcomePack(i: PackPrintInput): string {
       if (size) {
         const n = item.quantity ?? 1;
         const name = POSTER_SIZES[size].label;
-        const copies = `${name}: prints ${n} ${n === 1 ? "copy" : "copies"}${size === "a3" ? ", on A3 paper" : size === "a5" ? ", on A5 paper" : ""}`;
-        pieces.push(piece(item.key, n, copies, PACK_PIECES.posterPage(i.facts, i.assets, size)));
-        printed.push(item.words);
+        const paper = size === "a3" ? ", on A3 paper" : size === "a5" ? ", on A5 paper" : "";
+        // More than MAX_COPIES of a kind: one is drawn, and staff print the rest with Copies.
+        const many = n > MAX_COPIES;
+        const copies = many
+          ? `${name}: print ${n} copies of this page (set Copies in the print window)${paper}`
+          : `${name}: prints ${n} ${n === 1 ? "copy" : "copies"}${paper}`;
+        pieces.push(piece(item.key, many ? 1 : n, copies, PACK_PIECES.posterPage(i.facts, i.assets, size)));
+        printed.push(many ? `one of the ${item.words}` : item.words);
+        if (many) bulk.push(item.words);
       } else if (item.key === "sponsor_form") {
         pieces.push(piece(item.key, 1, "Sponsor form: 2 pages, A4 on its side", PACK_PIECES.sponsorPages(i.facts, i.assets)));
         printed.push("the sponsor form");
@@ -240,8 +266,13 @@ export function renderWelcomePack(i: PackPrintInput): string {
   const alsoHtml = also.length
     ? `<aside class="pk-also">${escapeHtml(`${memory ? "Also to send" : "Also in this pack"}, not printed here: ${andList(also)}.`)}</aside>`
     : "";
+  const bulkHtml = bulk.length
+    ? `<aside class="pk-also pk-bulk">${escapeHtml(
+        `More than ${MAX_COPIES} of a kind are not copied here, so the page stays quick: ${andList(bulk)}. One of each is below. Print the rest from its own page, under Materials for this sign up, setting Copies in the print window.`,
+      )}</aside>`
+    : "";
   const what = i.part === "letter" ? (memory ? "Covering note" : "Welcome letter") : i.view.title;
-  return shell({
+  const page = shell({
     title: `${what} for ${title}`,
     paper: { rules: PACK_PIECES.pageRules },
     fontCss: i.assets.fontCss,
@@ -250,8 +281,9 @@ export function renderWelcomePack(i: PackPrintInput): string {
     tip:
       i.part === "letter"
         ? "In the print window, choose A4 and switch off headers and footers. Folded in three, the address shows in the window of a C5 or DL envelope."
-        : "Each page prints on its own paper size, and each poster as many times as they asked for. In the print window, switch off headers and footers. The letter, folded in three, shows the address in the window of a C5 or DL envelope.",
-    body: `${alsoHtml}\n${pieces.join("\n")}`,
+        : `Each page prints on its own paper size, and each poster as many times as they asked for, up to ${MAX_COPIES}. In the print window, switch off headers and footers. The letter, folded in three, shows the address in the window of a C5 or DL envelope.`,
+    body: `${bulkHtml}${alsoHtml}\n${pieces.join("\n")}`,
     tail: COPIES_SCRIPT,
   });
+  return page.replace(ASK_US_ASIDE, "");
 }

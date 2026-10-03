@@ -1,10 +1,11 @@
 @fundraising @db
 Feature: Welcome packs: what goes in the post to each approved page, ticked off by staff
   Every approved fundraiser and event host gets a welcome pack: the welcome letter, what they asked
-  for on the form, a sponsor form for someone raising money, and an NBCC T-shirt in their size for a
-  sporting event. Staff tick each thing as it goes in, then mark the pack as sent. A page in memory
-  of someone has no welcome pack: it has "Things to send", only what they asked for. Viewers can
-  look and print, but not tick. Every name here is invented.
+  for on the form, a sponsor form for a sponsorship fundraiser, and an NBCC T-shirt in their size for
+  a sporting event. Staff tick each thing as it goes in, then mark the pack as sent. Ticking something
+  they asked for also marks its request as done. A page in memory of someone has no welcome pack: it
+  has "Things to send", only what they asked for. Viewers can look and print, but not tick. Every
+  name here is invented.
 
   Scenario: a sporting fundraiser's pack has the letter, their posters, the sponsor form and the T-shirt
     Given fundraising is switched on
@@ -44,6 +45,64 @@ Feature: Welcome packs: what goes in the post to each approved page, ticked off 
     When "e2.pack.fr.bdd@example.com" undoes the sent pack for "Sam's Pack Dash (bdd-fr)"
     Then the fundraising answer is 200
     And the pack answer is "Ready to send"
+
+  Scenario: something left out can be put back
+    Given fundraising is switched on
+    And a fundraising staff member "e6.pack.fr.bdd@example.com" with role "editor"
+    And an approved sporting fundraiser "Fern's Pack Hike (bdd-fr)" with the T-shirt size "adult_s" asking for 3 posters
+    When "e6.pack.fr.bdd@example.com" leaves "sponsor_form" out of the pack for "Fern's Pack Hike (bdd-fr)" because ""
+    Then the fundraising answer is 400
+    And the fundraising answer names the field "reason"
+    When "e6.pack.fr.bdd@example.com" leaves "sponsor_form" out of the pack for "Fern's Pack Hike (bdd-fr)" because "They have one (bdd)"
+    Then the fundraising answer is 200
+    And the pack answer is "Part packed"
+    And "sponsor_form" is left out of the pack answer because "They have one (bdd)"
+    When "e6.pack.fr.bdd@example.com" puts "sponsor_form" back in the pack for "Fern's Pack Hike (bdd-fr)"
+    Then the fundraising answer is 200
+    And the pack answer is "To pack"
+    And nothing is ticked in the pack for "Fern's Pack Hike (bdd-fr)"
+
+  Scenario: a tick no longer counts once they ask for a different number, and is ticked again
+    Given fundraising is switched on
+    And a fundraising staff member "e7.pack.fr.bdd@example.com" with role "editor"
+    And an approved sporting fundraiser "Ash's Pack Jog (bdd-fr)" with the T-shirt size "adult_m" asking for 10 posters
+    When "e7.pack.fr.bdd@example.com" ticks "posters_a4" in the pack for "Ash's Pack Jog (bdd-fr)"
+    Then the fundraising answer is 200
+    When "e7.pack.fr.bdd@example.com" ticks "posters_a4" in the pack for "Ash's Pack Jog (bdd-fr)"
+    Then the fundraising answer is 200
+    And the history of "Ash's Pack Jog (bdd-fr)" has 1 pack line
+    Given "Ash's Pack Jog (bdd-fr)" now asks for 12 posters
+    When "e7.pack.fr.bdd@example.com" reads the welcome packs
+    Then the pack for "Ash's Pack Jog (bdd-fr)" lists "12 A4 posters"
+    And "posters_a4" in the pack for "Ash's Pack Jog (bdd-fr)" says "It was ticked for 10 A4 posters. They now want 12 A4 posters, so it needs ticking again."
+    When "e7.pack.fr.bdd@example.com" ticks "posters_a4" in the pack for "Ash's Pack Jog (bdd-fr)"
+    Then the fundraising answer is 200
+    And the pack answer is "Part packed"
+    And the history of "Ash's Pack Jog (bdd-fr)" has 2 pack lines
+
+  Scenario: ticking the posters marks their request as sent, and unticking opens it again
+    Given fundraising is switched on
+    And a fundraising staff member "e8.pack.fr.bdd@example.com" with role "editor"
+    And an approved sporting fundraiser "Jo's Pack Climb (bdd-fr)" with the T-shirt size "adult_m" asking for 10 posters
+    When "e8.pack.fr.bdd@example.com" ticks "posters_a4" in the pack for "Jo's Pack Climb (bdd-fr)"
+    Then the fundraising answer is 200
+    And the pack answer also marked "Posters: sent (by post)" in Requests
+    And the posters request for "Jo's Pack Climb (bdd-fr)" is stored as "sent" with 10
+    When "e8.pack.fr.bdd@example.com" unticks "posters_a4" in the pack for "Jo's Pack Climb (bdd-fr)"
+    Then the fundraising answer is 200
+    And the posters request for "Jo's Pack Climb (bdd-fr)" is stored as "to_send" with none
+
+  Scenario: a bake sale has no sponsor form or T-shirt in its pack
+    Given fundraising is switched on
+    And a fundraising staff member "e9.pack.fr.bdd@example.com" with role "editor"
+    And an approved fundraiser "Mo's Pack Bake Sale (bdd-fr)" that is not a sporting event
+    When "e9.pack.fr.bdd@example.com" reads the welcome packs
+    Then the pack for "Mo's Pack Bake Sale (bdd-fr)" lists "Welcome letter"
+    And the pack for "Mo's Pack Bake Sale (bdd-fr)" does not list "Sponsor form"
+    And the pack for "Mo's Pack Bake Sale (bdd-fr)" has no T-shirt
+    When "e9.pack.fr.bdd@example.com" chooses "Nobody Madeup (bdd)" to sign the letter for "Mo's Pack Bake Sale (bdd-fr)"
+    Then the fundraising answer is 400
+    And the fundraising answer names the field "name"
 
   Scenario: a sporting event with no size yet waits for the T-shirt size
     Given fundraising is switched on

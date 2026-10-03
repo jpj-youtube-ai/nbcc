@@ -13469,7 +13469,8 @@
   // The pack staff post to each approved fundraiser and event host (src/routes/admin-welcome-packs.ts).
   // The server works out what is in each one (the letter, what they asked for, the sponsor form for
   // someone raising money, the T-shirt for a sporting event) and where it is up to; this only shows
-  // it. In the open sign up: a tick box for each thing (who ticked it, and when), "Leave out" with a
+  // it. Ticking something they asked for also marks its request in the Requests part (the server
+  // does it, in the same save). In the open sign up: a tick box for each thing (who ticked it, and when), "Leave out" with a
   // reason, the address ready to copy, who signs the letter (the Signed by list, starting with
   // whoever this staff member chose last), Print welcome pack and Print letter only, then Pack sent
   // and Undo. In memory of someone the same panel is "Things to send": only what they asked for,
@@ -13531,9 +13532,10 @@
       who = "Ticked by " + frWho(item.tickedBy) + (item.tickedAt ? " on " + H.fmtDate(item.tickedAt) : "");
     } else if (skipped) {
       who = "Left out: " + item.skippedReason + (item.tickedBy ? " (" + frWho(item.tickedBy) + ")" : "");
-    } else if (item.changedFrom !== null && item.changedFrom !== undefined) {
-      who = "It was ticked when they had asked for " + item.changedFrom + ". They now ask for " + item.quantity + ", so it needs ticking again.";
     }
+    // The sign up has changed since the tick, in the server's words: before the pack is sent the
+    // tick no longer counts ("needs ticking again"); after, it is only said.
+    if (item.changeNote) who += (who ? ". " : "") + item.changeNote;
     var actions = "";
     if (write && !sent) {
       if (skipped) {
@@ -13626,11 +13628,13 @@
     // In memory with no posters asked for, the note is all there is to print.
     var noteOnly = memory && !items.some(function (i) { return !i.skippedReason && /^(posters_a4|posters_a3|leaflets)$/.test(i.key); });
     var help = memory
-      ? "What they asked for on the form. Tick each thing as it goes in the envelope, then mark it as sent."
-      : "Everything this page gets in the post. Tick each thing as it goes in, then mark the pack as sent.";
+      ? "What they asked for on the form. Tick each thing as it goes in the envelope, then mark it as sent. Ticking something also marks the request as done."
+      : "Everything this page gets in the post. Tick each thing as it goes in, then mark the pack as sent. Ticking something they asked for also marks the request as done.";
     var send = "";
     if (sent) {
       send = '<p class="fr-pack-sent">' + H.escapeHtml("Sent on " + H.fmtDate(v.sentAt) + (v.sentBy ? " by " + frWho(v.sentBy) : "")) + "</p>" +
+        // It stays Sent: a later change to the sign up is flagged, never a tick to do again.
+        (v.changedSinceSent ? '<span class="admin-pill admin-pill--pending fr-pack-changed">Changed since it was sent</span>' : "") +
         (write ? '<button class="admin-btn admin-btn--small fr-btn-quiet" type="button" data-frpackundo>Undo</button>' : "");
     } else if (write) {
       send = '<button class="admin-btn admin-btn--small" type="button" data-frpacksend' + (v.canSend ? "" : " disabled") + ">" + (memory ? "Sent" : "Pack sent") + "</button>" +
@@ -13662,7 +13666,9 @@
       return frSend("POST", "/api/admin/fundraisers/" + f.id + "/pack", body).then(function (r) {
         if (r.ok) {
           if (run.open()) frPackClear();
-          run.say(saidOk || "Saved.", false);
+          // What it did in Requests, in the Requests' own words.
+          var also = r.body && Array.isArray(r.body.requests) ? r.body.requests.filter(function (w) { return typeof w === "string" && w; }) : [];
+          run.say((saidOk || "Saved.") + (also.length ? " Also marked in Requests: " + also.join("; ") + "." : ""), false);
         } else if (r.status === 400 && r.body && r.body.fields) {
           run.say(Object.keys(r.body.fields).map(function (k) { return r.body.fields[k]; }).join(" "), true);
           return;
@@ -13671,7 +13677,8 @@
           if (run.open()) frPackClear();
           run.say(frRefusal(r, "That was not saved. Please try again."), true);
         }
-        return Promise.all([frLoadPacks(), frLoadHistory(f.id)]).then(function () { return r.ok; });
+        // The Requests part too: a tick may have marked one of its requests, or opened it again.
+        return Promise.all([frLoadPacks(), frLoadHistory(f.id), frLoadRequests()]).then(function () { return r.ok; });
       });
     });
   }

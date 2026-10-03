@@ -36,8 +36,9 @@ import { packCounts } from "./welcome-pack";
 //                  Get involved; and those who say they've finished
 //                  Team pages: team member sign ups to approve (on their own line), and teams live
 //                  10 days or more that nobody has joined
-//                  Welcome packs: packs to send (approved more than 2 days ago, not yet sent), and
-//                  sporting events still waiting for a T-shirt size
+//                  Welcome packs: packs to send (approved more than 2 days ago, not yet sent);
+//                  of the packs still to send, those waiting for a T-shirt size (never a sign up
+//                  still new); and in memory pages with things to send, on their own line
 //   coming up      approved fundraisers dated in the next four weeks
 
 export const SUMMARY_MAX_RECIPIENTS = 10;
@@ -166,9 +167,10 @@ export interface SummaryCounts {
   pledgesUnpaid: number;
   /** Sponsor pledges paid twice, to check and refund. */
   pledgesPaidTwice: number;
-  /** Welcome packs: packs to send, and sporting events waiting for a T-shirt size. */
+  /** Welcome packs: packs to send, those waiting for a T-shirt size, and in memory pages with things to send. */
   packsToSend: number;
   tshirtWaiting: number;
+  memoryToSend: number;
   /** Every thing in "Waiting on us", added up. */
   waiting: number;
 }
@@ -274,8 +276,8 @@ export function summaryCounts(i: SummaryInputs): SummaryCounts {
   const pledgesPaidTwice = whole(i.pledgesPaidTwice);
   // Welcome packs (Jaimie, 2026-10-03; ./welcome-pack.ts).
   const packs = packCounts(i.fundraisers, new Set(i.packsSent ?? []), today);
-  const packsToSend = i.packsSent ? packs.packsToSend : 0;
-  const tshirtWaiting = packs.tshirtWaiting;
+  // Not read: no lines at all, rather than every pack ever sent counted as waiting.
+  const { packsToSend, tshirtWaiting, memoryToSend } = i.packsSent ? packs : { packsToSend: 0, tshirtWaiting: 0, memoryToSend: 0 };
 
   return {
     week,
@@ -320,11 +322,13 @@ export function summaryCounts(i: SummaryInputs): SummaryCounts {
     pledgesPaidTwice,
     packsToSend,
     tshirtWaiting,
+    memoryToSend,
     waiting:
       pledgesPaidTwice +
       pledgesUnpaid +
       packsToSend +
       tshirtWaiting +
+      memoryToSend +
       messagesToCheck +
       memoryYearOn +
       toApprove +
@@ -404,7 +408,8 @@ export function summaryLines(c: SummaryCounts): SummaryLines {
   }
   // Welcome packs
   if (c.packsToSend) waiting.push(plural(c.packsToSend, "welcome pack to send", "welcome packs to send"));
-  if (c.tshirtWaiting) waiting.push(`${c.tshirtWaiting} waiting for a T-shirt size`);
+  if (c.tshirtWaiting) waiting.push(plural(c.tshirtWaiting, "welcome pack waiting for a T-shirt size", "welcome packs waiting for a T-shirt size"));
+  if (c.memoryToSend) waiting.push(plural(c.memoryToSend, "in memory page with things to send", "in memory pages with things to send"));
   const m = c.materials;
   const posted = [
     m.posters ? `posters (${m.posters})` : "",

@@ -2517,6 +2517,7 @@ textarea.fx-call-input{min-height:88px;line-height:1.5;resize:vertical;field-siz
 #view-fundraising .fr-pack-send .fr-field-hint { margin: 0; }
 #view-fundraising .fr-pack-send button:disabled { opacity: 0.5; cursor: not-allowed; }
 #view-fundraising .fr-pack-sent { margin: 0; font-weight: 600; font-size: 0.92rem; color: var(--holly-dark); }
+#view-fundraising .fr-pack-changed { flex: none; }
 /* On a phone, a thing waiting on them has two actions: they go under its name. */
 @media (max-width: 560px) {
   #view-fundraising .fr-pack-item.is-waiting { grid-template-columns: minmax(0, 1fr); }

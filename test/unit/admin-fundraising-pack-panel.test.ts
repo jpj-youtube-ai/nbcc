@@ -46,6 +46,7 @@ let perms: PermissionMap;
 let role = "admin";
 let calls: { method: string; path: string; query: string; body: unknown }[] = [];
 let opened: string[] = [];
+let requestsRead = 0;
 
 const view = (f: Rec) => packView(f as unknown as PackSubject, stored.get(f.id) ?? null, null);
 
@@ -71,7 +72,10 @@ function respond(url: string, init?: { method?: string; body?: string }) {
   if (path === "/api/admin/fundraisers" && method === "GET") return j({ pageOn: true, fundraisers: records.map((f) => ({ ...f, meter, editWaiting: false })) });
   if (path === "/api/admin/fundraising/team") return j({ today: "2026-10-03", me: 3, calls: {}, prompts: {}, invites: [], signers: [] });
   if (path === "/api/admin/fundraising/summary") return j({ recipients: [], lastWeek: null });
-  if (path === "/api/admin/fundraising/requests") return j({ today: "2026-10-03", requests: {}, toDo: {}, notBack: {}, totals: {} });
+  if (path === "/api/admin/fundraising/requests") {
+    requestsRead += 1;
+    return j({ today: "2026-10-03", requests: {}, toDo: {}, notBack: {}, totals: {} });
+  }
   if (path === "/api/admin/fundraising/categories") return j({ categories: [] });
   if (path === "/api/admin/fundraising/packs") {
     if (packsDown) return j({ error: "Admin is temporarily unavailable" }, 500);
@@ -95,6 +99,7 @@ function respond(url: string, init?: { method?: string; body?: string }) {
     if (!result.ok) return j({ error: result.message }, result.reason === "conflict" ? 409 : 404);
     const p: StoredPack = stored.get(f.id) ?? { sentAt: null, sentBy: null, signer: null, signerRole: null, items: [] };
     const c = result.change;
+    if (!c) return j({ pack: view(f), words: "", requests: [] });
     if (c.type === "tick" || c.type === "skip") {
       p.items = p.items.filter((i) => i.key !== c.key).concat({
         key: c.key, label: c.label, quantity: c.quantity, tickedAt: c.type === "tick" ? "2026-10-03T10:00:00.000Z" : null,
@@ -108,7 +113,9 @@ function respond(url: string, init?: { method?: string; body?: string }) {
       mySigner = { name: c.name, role: c.role };
     }
     stored.set(f.id, p);
-    return j({ pack: view(f), words: result.words });
+    // As the server does: ticking something they asked for marks its request too.
+    const requests = c.type === "tick" && c.key === "posters_a4" ? ["Posters: sent (by post)"] : [];
+    return j({ pack: view(f), words: result.words, requests });
   }
   const print = path.match(/^\/api\/admin\/fundraisers\/(\d+)\/pack\/print$/);
   if (print) return j({});
@@ -164,8 +171,10 @@ function asRole(r: "admin" | "editor" | "viewer") {
   role = r;
   perms = effectivePermissions({ role: r, permissions: null });
 }
-const tickedItem = (key: string, quantity: number | null = null) => ({
-  key, label: key, quantity, tickedAt: "2026-10-03T10:00:00.000Z", tickedBy: "admin:fern@example.com", skippedReason: null,
+// What each thing was called when it was ticked: a tick only counts while the list still says the same.
+const WORDS: Record<string, string> = { letter: "Welcome letter", sponsor_form: "Sponsor form", posters_a4: "10 A4 posters", tshirt: "NBCC T-shirt, Adult M" };
+const tickedItem = (key: string, quantity: number | null = null, label = WORDS[key] ?? key) => ({
+  key, label, quantity, tickedAt: "2026-10-03T10:00:00.000Z", tickedBy: "admin:fern@example.com", skippedReason: null,
 });
 
 beforeEach(() => {
@@ -182,6 +191,7 @@ beforeEach(() => {
   asRole("admin");
   calls = [];
   opened = [];
+  requestsRead = 0;
   window.sessionStorage.clear();
   window.localStorage.clear();
   document.body.innerHTML = bodyHtml;
@@ -231,6 +241,43 @@ describe("the Welcome pack panel", () => {
     expect(qa(".fr-pack-item .fr-pack-words").map(text)).toEqual(["Welcome letter", "10 A4 posters", "Sponsor form", "NBCC T-shirt, Adult M"]);
     expect(qa("[data-frpacktick]").every((b) => !(b as HTMLInputElement).checked && !(b as HTMLInputElement).disabled)).toBe(true);
     expect((q("[data-frpacksend]") as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it("says that ticking something they asked for also marks its request as done", async () => {
+    await openFundraising();
+    await openRow(1);
+    expect(text(panel().querySelector(".fx-help"))).toBe(
+      "Everything this page gets in the post. Tick each thing as it goes in, then mark the pack as sent. Ticking something they asked for also marks the request as done.",
+    );
+    const before = requestsRead;
+    await setTick("posters_a4", true);
+    expect(text(el("frPackStatus"))).toBe("Ticked. Also marked in Requests: Posters: sent (by post).");
+    // The Requests part is read again, so it shows the same.
+    expect(requestsRead).toBeGreaterThan(before);
+  });
+
+  it("says what a tick was for when the sign up has changed since, so it can be ticked again", async () => {
+    stored.set(1, { sentAt: null, sentBy: null, signer: null, signerRole: null, items: [tickedItem("posters_a4", 4, "4 A4 posters"), tickedItem("tshirt", null, "NBCC T-shirt, Adult L")] });
+    await openFundraising();
+    await openRow(1);
+    expect(tick("posters_a4").checked).toBe(false);
+    expect(tick("posters_a4").disabled).toBe(false);
+    expect(text(q('[data-frpackitem="posters_a4"] .fr-pack-who'))).toBe("It was ticked for 4 A4 posters. They now want 10 A4 posters, so it needs ticking again.");
+    expect(text(q('[data-frpackitem="tshirt"] .fr-pack-who'))).toBe("It was ticked for size Adult L. They now want Adult M, so it needs ticking again.");
+  });
+
+  it("keeps a sent pack Sent when the sign up changes afterwards, with a small flag", async () => {
+    stored.set(1, {
+      sentAt: "2026-10-04T09:00:00.000Z", sentBy: "admin:fern@example.com", signer: null, signerRole: null,
+      items: [tickedItem("letter"), tickedItem("posters_a4", 4, "4 A4 posters"), tickedItem("sponsor_form"), tickedItem("tshirt")],
+    });
+    await openFundraising();
+    await openRow(1);
+    expect(text(panel().querySelector(".fr-pack-state"))).toBe("Sent");
+    expect(text(panel().querySelector(".fr-pack-changed"))).toBe("Changed since it was sent");
+    expect(tick("posters_a4").checked).toBe(true);
+    expect(text(q('[data-frpackitem="posters_a4"] .fr-pack-who'))).toMatch(/Changed since it was sent: it went as 4 A4 posters\.$/);
+    expect(row(1)!.querySelector(".fr-pack-pill")).toBeNull();
   });
 
   it("shows the address ready to copy: their name, each line, the town and the postcode", async () => {

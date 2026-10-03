@@ -9651,7 +9651,7 @@ in it is worked out from their sign up each time, only what applies to that page
 | --- | --- |
 | The printed **welcome letter** | Everyone with a pack |
 | What they **asked for** on the form, in the numbers they asked for: A4 and A3 posters, A5 leaflets, printed QR codes, collection buckets and tins | Whoever asked. The form asks only how many posters, so they are A4 unless the organiser's last "Ask us to print these" gave sizes that add up to the same number |
-| The paper **sponsor form** | Someone raising money, never an event |
+| The paper **sponsor form** | A sponsorship fundraiser: someone raising money for a sporting event, a team organiser's page, or anyone raising money who asked for one. Never a bake sale or a coffee morning, an event, or in memory |
 | The **NBCC T-shirt**, in the size they chose | A sporting event. With no size yet it shows "Waiting for T-shirt size", cannot be ticked, and has the "Ask them for their T-shirt size" button |
 
 **In memory of someone** there is no welcome pack and no T-shirt. The same panel is **Things to
@@ -9666,15 +9666,28 @@ when), **Leave out** with a reason, the address ready to copy (their name, each 
 the postcode; in memory, "This can be the funeral director's address"), who signs the letter,
 **Print welcome pack** and **Print letter only**, then **Pack sent** (the date and who) and
 **Undo**. Pack sent only works once every thing is ticked or left out with a reason. It is **To
-pack**, **Part packed**, **Ready to send** or **Sent**. A tick is kept with how many there were when
-it was made: if they have since asked for a different number, the tick no longer counts and the row
-says so. The list has a **Pack to send** pill (in memory, **Things to send**) and a **Packs to send
+pack**, **Part packed**, **Ready to send** or **Sent**. A tick is kept with what the thing was
+called when it was made ("10 A4 posters", "NBCC T-shirt, Adult M"): if the sign up has changed since
+(another number, another size, another split between A4 and A3) the tick no longer counts and the
+row says what it was ticked for, so it can be ticked again. Once a pack is **Sent** it stays Sent: a
+later change shows a small **Changed since it was sent** flag instead. A press that leaves the pack
+as it stands (ticking what is ticked) writes nothing and records nothing. The list has a **Pack to send** pill (in memory, **Things to send**) and a **Packs to send
 (N)** filter: every approved page with a pack not yet sent. Editors and admins tick; viewers read
 and print. Every change is in `audit_log` (`fundraiser.pack_updated`) and so in the History.
 
+**Ticking also looks after Requests.** What they asked for is tracked in Requests too. In the same
+save, once every thing of a kind that is going has its tick, its request is marked as it would be by
+hand (posters, leaflets, QR codes and envelopes **Sent** by post; buckets and tins **With them**),
+with how many went and the note "Sent with the welcome pack." Taking the tick off opens a request
+the pack marked again; one staff dealt with by hand in Requests is never touched. **Pack sent**
+catches up any still open. It uses the Requests' own rules and audit line
+(`changeRequestIn`, `src/db/fundraising-requests.ts`).
+
 **Signed by** is the admin's one list of who can sign for NBCC (`AdminHelpers.SIGNERS`, as the thank
-you letters use). It is chosen per pack, and each staff member's last choice is offered first on
-their next one (`welcome_packs.signer_by`).
+you letters use). The server reads the same file (`src/fundraising/signers.ts`), takes only a name
+on it, and prints the title the list gives them. It is chosen per pack, and each staff member's last
+choice (`welcome_packs.signer_by`, `signer_at`) is offered first on their next one; with none, the
+first on the list signs, on screen and in a viewer's print alike.
 
 ### The print view
 
@@ -9684,8 +9697,11 @@ the browser, like every material. In order: the welcome letter (A4), their poste
 numbers they asked for (the same renderers as the materials; each size on its own paper, so A3 pages
 come out as A3), then the sponsor form for someone raising money. `?part=letter` is the letter on its
 own. Anything staff left out is left out of the print and of the letter's list; what is in the pack
-but cannot be printed (buckets, the T-shirt) is listed on screen only. A poster asked for ten times
-is drawn once and copied by a small script before printing, so the page stays light.
+but cannot be printed (buckets, the T-shirt) is listed on screen only. A poster asked for up to 10
+times is drawn once and copied when the print window opens (and the copies put away when it closes).
+More than 10 of a kind are never copied in the browser: one is drawn, labelled "print 40 copies of
+this page (set Copies in the print window)", and a note says to print the rest from its own page
+under Materials. The organisers' "Ask us" note is left off this staff page.
 
 The **welcome letter** is in the thank you letter's house style: the maroon frame, our address
 (The Elves' Workshop) and the logo, a script signature, the maroon foot with the phone number,
@@ -9700,8 +9716,9 @@ the covering note is quiet: cream and tan, no QR code, no exclamation marks.
 ### Elsewhere
 
 - **The Monday summary** (`src/fundraising/summary.ts`): "N welcome packs to send" (pages approved
-  more than 2 days ago whose welcome pack is not sent) and "N waiting for a T-shirt size", both in
-  Waiting on us. If the packs cannot be read the summary still goes, without the first line.
+  more than 2 days ago whose welcome pack is not sent), "N welcome packs waiting for a T-shirt size"
+  (of the packs still to send; never a sign up still new) and "N in memory pages with things to
+  send", all in Waiting on us. If the packs cannot be read the summary still goes, without them.
 - **The organiser's private area**: one small line once theirs has been sent, "Your welcome pack is
   on its way. We posted it on 4 October 2026." (in memory: "The things you asked for are on their
   way."), and nothing before. Never who sent it.
@@ -9711,7 +9728,7 @@ the covering note is quiet: cream and tan, no QR code, no exclamation marks.
 | Route | Needs | What it does |
 | --- | --- | --- |
 | `GET /api/admin/fundraising/packs` | view | `{ packs: { <id>: view }, toSend: { <id>: true }, mySigner }`: every page's pack, which are still to send, and who this staff member last chose to sign |
-| `POST /api/admin/fundraisers/:id/pack` | edit | `{ action: "tick" \| "untick", key }`, `{ action: "skip", key, reason }`, `{ action: "send" }`, `{ action: "undo" }` or `{ action: "signer", name, role }`. Answers `{ pack, words }`; 400 with `fields`, 404 when there is no pack, 409 with the reason when it cannot be done as it stands |
+| `POST /api/admin/fundraisers/:id/pack` | edit | `{ action: "tick" \| "untick", key }`, `{ action: "skip", key, reason }`, `{ action: "send" }`, `{ action: "undo" }` or `{ action: "signer", name, role }`. Answers `{ pack, words, requests }` (`requests`: what it marked in Requests, in their words; `words` is empty when nothing changed); 400 with `fields` (a signer not on the Signed by list is one), 404 when there is no pack, 409 with the reason when it cannot be done as it stands |
 | `GET /api/admin/fundraisers/:id/pack/print` | view | The print view, a whole HTML page; `?part=letter` for the letter only. Never kept, never indexed |
 
 (`PUT /api/admin/fundraisers/:id/welcome-pack`, from the sign up tidy, is a different thing: it sets
@@ -9720,9 +9737,10 @@ the covering note is quiet: cream and tan, no QR code, no exclamation marks.
 ### Data (`migrations/1791200000230_welcome-packs.js`, additive only)
 
 Two new tables, cleared with their fundraiser. `welcome_packs`: one row per fundraiser, made the
-first time staff touch its pack (`sent_at`, `sent_by`, `signer`, `signer_role`, `signer_by`).
-`welcome_pack_items`: one row per thing staff have ticked or left out (`key`, the `label` and
-`quantity` as they were then, `ticked_at`, `ticked_by`, `skipped_reason`; ticked or left out,
+first time staff touch its pack (`sent_at`, `sent_by`, `signer`, `signer_role`, `signer_by`,
+`signer_at`).
+`welcome_pack_items`: one row per thing staff have ticked or left out (`key`, the `label` (the
+list's words for it) and `quantity` as they were then, `ticked_at`, `ticked_by`, `skipped_reason`; ticked or left out,
 never both). A thing nobody has touched needs no row, and what a pack holds is never stored.
 Numbered 230, above everything on its way to main before it. In the nightly backup's table count
 (86).

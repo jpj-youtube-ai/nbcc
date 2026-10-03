@@ -9,13 +9,16 @@
 //     sent_at, sent_by   "Pack sent": when, and who ("admin:<email>"). Empty again after Undo.
 //     signer             who signs the printed welcome letter, by name, from the admin's "Signed by"
 //     signer_role        list, with their title when the list has one, and the staff member who
-//     signer_by          chose them (their last choice is offered first on the next letter).
+//     signer_by          chose them, and when (signer_at): their last choice is offered first on
+//     signer_at          their next letter.
 //
 //   welcome_pack_items   one row per thing in a pack that staff have ticked or left out. What a pack
 //                        holds is worked out from the sign up each time (src/fundraising/welcome-
 //                        pack.ts), so a thing nobody has touched needs no row.
 //     key                which thing: letter, posters_a4, sponsor_form, tshirt...
-//     label, quantity    what it was called and how many, as staff saw it when they ticked it
+//     label, quantity    what the list called it and how many, as staff saw it when they ticked it
+//                        ("10 A4 posters", "NBCC T-shirt, Adult M"). A tick only counts while the
+//                        list still says the same, so a change of number or size is noticed.
 //     ticked_at          when it was put in the pack
 //     skipped_reason     or why it was left out (never both)
 //     ticked_by          who ticked it, or left it out
@@ -39,6 +42,7 @@ exports.up = (pgm) => {
       signer: { type: "text" },
       signer_role: { type: "text" },
       signer_by: { type: "text" },
+      signer_at: { type: "timestamptz" },
       created_at: { type: "timestamptz", notNull: true, default: pgm.func("now()") },
       updated_at: { type: "timestamptz", notNull: true, default: pgm.func("now()") },
     },

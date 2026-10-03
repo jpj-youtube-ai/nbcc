@@ -2,9 +2,12 @@ import type { PoolClient } from "pg";
 import { pool } from "./pool";
 import { insertAudit } from "./donations";
 import { FUNDRAISER_SELECT, toRecord } from "./fundraisers";
+import { RequestError, changeRequestIn, lockRequestRows } from "./fundraising-requests";
+import { parseWants } from "../fundraising/requests";
 import type { FundraiserRecord } from "../fundraising/model";
 import {
   applyPackAction,
+  packRequestSync,
   packView,
   type PackActionInput,
   type PackView,
@@ -20,6 +23,10 @@ import {
 // choose who signs its letter, or mark it sent; a thing in it has none until it is ticked or left
 // out. Every change writes its audit_log row against the fundraiser in the same transaction, so it
 // shows in that fundraiser's History.
+//
+// A tick also keeps Requests in step (Jaimie, WP3): in the same transaction, the request the thing
+// belongs to is marked as it would be by hand (or opened again when the tick comes off), by the
+// Requests' own rules and with their own audit line (changeRequestIn, src/db/fundraising-requests.ts).
 
 export class PackError extends Error {
   constructor(
@@ -111,7 +118,7 @@ export async function sentPackIds(): Promise<Set<number>> {
 
 /** Who this staff member last chose to sign a letter: offered first on their next one. */
 export async function lastSignerFor(actor: string): Promise<Signer | null> {
-  const r = await pool.query("SELECT signer, signer_role FROM welcome_packs WHERE signer_by = $1 AND signer IS NOT NULL ORDER BY updated_at DESC LIMIT 1", [actor]);
+  const r = await pool.query("SELECT signer, signer_role FROM welcome_packs WHERE signer_by = $1 AND signer IS NOT NULL ORDER BY signer_at DESC NULLS LAST, id DESC LIMIT 1", [actor]);
   const row = r.rows[0] as Row | undefined;
   return row ? { name: String(row.signer), role: text(row.signer_role) } : null;
 }
@@ -131,32 +138,51 @@ async function inTransaction<T>(work: (client: PoolClient) => Promise<T>): Promi
   }
 }
 
+/** The pack as it is stored now, read inside the transaction. */
+async function readPack(client: PoolClient, fundraiserId: number, lock: boolean): Promise<{ id: number; pack: StoredPack } | null> {
+  const packs = await client.query(`SELECT ${PACK_COLUMNS} FROM welcome_packs WHERE fundraiser_id = $1${lock ? " FOR UPDATE" : ""}`, [fundraiserId]);
+  const p = packs.rows[0] as Row | undefined;
+  if (!p) return null;
+  const items = await client.query(
+    `SELECT ${ITEM_COLUMNS} FROM welcome_pack_items i JOIN welcome_packs p ON p.id = i.pack_id WHERE i.pack_id = $1 ORDER BY i.id`,
+    [p.id],
+  );
+  return { id: Number(p.id), pack: toPack(p, (items.rows as Row[]).map(toItem)) };
+}
+
+/** "fern@example.com" from "admin:fern@example.com": who handled a request the pack marked. */
+const whoOf = (actor: string) => actor.replace(/^admin:/, "").slice(0, 100);
+
+export interface PackChanged {
+  view: PackView;
+  /** For the History; empty when the press changed nothing. */
+  words: string;
+  /** What it did to the requests it looks after, in the Requests' own words. */
+  requestWords: string[];
+  fundraiser: FundraiserRecord;
+}
+
 /**
  * One press on the tick list. The fundraiser's row is locked first, so two presses at once take
- * turns and the second sees the pack as the first left it. Throws PackError, writing nothing.
+ * turns and the second sees the pack as the first left it. A press that leaves the pack as it stands
+ * writes nothing and records nothing. Throws PackError, writing nothing. `today` is the UK day, for
+ * a request the tick marks as sent.
  */
-export async function changePack(fundraiserId: number, input: PackActionInput, actor: string): Promise<{ view: PackView; words: string; fundraiser: FundraiserRecord }> {
+export async function changePack(fundraiserId: number, input: PackActionInput, actor: string, today: string): Promise<PackChanged> {
   return inTransaction(async (client) => {
     const found = await client.query(`${FUNDRAISER_SELECT}\n    WHERE f.id = $1 FOR UPDATE`, [fundraiserId]);
     if (!found.rows[0]) throw new PackError("not_found", "That fundraiser no longer exists");
     const f = toRecord(found.rows[0]);
-    const packRows = await client.query(`SELECT ${PACK_COLUMNS} FROM welcome_packs WHERE fundraiser_id = $1 FOR UPDATE`, [fundraiserId]);
-    const p = packRows.rows[0] as Row | undefined;
-    const itemRows = p
-      ? await client.query(
-          `SELECT ${ITEM_COLUMNS} FROM welcome_pack_items i JOIN welcome_packs p ON p.id = i.pack_id WHERE i.pack_id = $1 ORDER BY i.id`,
-          [p.id],
-        )
-      : { rows: [] };
-    const stored = p ? toPack(p, (itemRows.rows as Row[]).map(toItem)) : null;
+    const before = await readPack(client, fundraiserId, true);
     const sizes = await posterSizesFor(fundraiserId, client);
-    const view = packView(f, stored, sizes);
+    const view = packView(f, before?.pack ?? null, sizes);
     if (!view) throw new PackError("no_pack", "There is no pack for this one: it is not approved, or it asked for nothing.");
     const result = applyPackAction(view, input);
     if (!result.ok) throw new PackError(result.reason, result.message);
-
-    const packId = p ? Number(p.id) : Number((await client.query("INSERT INTO welcome_packs (fundraiser_id) VALUES ($1) RETURNING id", [fundraiserId])).rows[0].id);
     const c = result.change;
+    if (!c) return { view, words: "", requestWords: [], fundraiser: f };
+
+    const packId = before ? before.id : Number((await client.query("INSERT INTO welcome_packs (fundraiser_id) VALUES ($1) RETURNING id", [fundraiserId])).rows[0].id);
     const data: Record<string, unknown> = { ...input, words: result.words };
     if (c.type === "tick" || c.type === "skip") {
       const reason = c.type === "skip" ? c.reason : null;
@@ -178,16 +204,33 @@ export async function changePack(fundraiserId: number, input: PackActionInput, a
       await client.query("UPDATE welcome_packs SET sent_at = NULL, sent_by = NULL, updated_at = now() WHERE id = $1", [packId]);
       data.was = { sentAt: view.sentAt, sentBy: view.sentBy };
     } else {
-      await client.query("UPDATE welcome_packs SET signer = $2, signer_role = $3, signer_by = $4, updated_at = now() WHERE id = $1", [packId, c.name, c.role, actor]);
+      await client.query("UPDATE welcome_packs SET signer = $2, signer_role = $3, signer_by = $4, signer_at = now(), updated_at = now() WHERE id = $1", [
+        packId,
+        c.name,
+        c.role,
+        actor,
+      ]);
     }
     await insertAudit(client, { actor, action: "fundraiser.pack_updated", entity: "fundraiser", entityId: fundraiserId, data });
 
-    const after = await client.query(`SELECT ${PACK_COLUMNS} FROM welcome_packs WHERE id = $1`, [packId]);
-    const afterItems = await client.query(
-      `SELECT ${ITEM_COLUMNS} FROM welcome_pack_items i JOIN welcome_packs p ON p.id = i.pack_id WHERE i.pack_id = $1 ORDER BY i.id`,
-      [packId],
-    );
-    const fresh = after.rows[0] ? packView(f, toPack(after.rows[0] as Row, (afterItems.rows as Row[]).map(toItem)), sizes) : null;
-    return { view: fresh ?? view, words: result.words, fundraiser: f };
+    const after = await readPack(client, fundraiserId, false);
+    const fresh = packView(f, after?.pack ?? null, sizes) ?? view;
+
+    // Requests in step with the ticks. Not for Undo of Sent (the ticks stand) or a change of signer.
+    const requestWords: string[] = [];
+    if (c.type === "tick" || c.type === "untick" || c.type === "skip" || c.type === "send") {
+      const rows = await lockRequestRows(client, fundraiserId);
+      const subject = { status: f.status, wants: parseWants(f.wants), socialOk: f.socialOk, eventDate: f.eventDate };
+      for (const step of packRequestSync(fresh, rows, { today, by: whoOf(actor) })) {
+        try {
+          requestWords.push((await changeRequestIn(client, fundraiserId, subject, step.kind, step.input, actor, today)).words);
+        } catch (err) {
+          // A request the Requests' own rules will not move (it has moved on by hand) is left as it
+          // is: the tick still stands. Anything else stops the whole press.
+          if (!(err instanceof RequestError)) throw err;
+        }
+      }
+    }
+    return { view: fresh, words: result.words, requestWords, fundraiser: f };
   });
 }

@@ -48,6 +48,8 @@ describe("the welcome packs migration", () => {
     expect(cols.sent_at).toMatchObject({ type: "timestamptz" });
     expect(cols.sent_at.notNull).toBeUndefined();
     expect(cols.sent_by).toMatchObject({ type: "text" });
+    // When the signer was chosen, so each staff member's last choice is exactly their last.
+    expect(cols.signer_at).toMatchObject({ type: "timestamptz" });
     for (const c of ["signer", "signer_role", "signer_by"]) {
       expect(cols[c]).toMatchObject({ type: "text" });
       expect(cols[c].notNull).toBeUndefined();

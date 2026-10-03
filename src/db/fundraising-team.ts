@@ -465,16 +465,16 @@ export async function readSummaryInputs(now: Date): Promise<SummaryInputs> {
         console.error("fundraising summary pledges paid twice count failed:", err instanceof Error ? err.message : err);
         return 0;
       }),
-    // In memory: messages waiting for staff. Only one line of the summary: if they cannot be counted,
-    // the summary still goes, without it.
-    // Welcome packs: whose pack has gone. Only one line of the summary: if they cannot be read, the
-    // summary still goes, without it.
+    // Welcome packs: whose pack has gone. If they cannot be read, the summary still goes, without
+    // its welcome pack lines.
     packsSent: await sentPackIds()
       .then((ids) => [...ids])
       .catch((err: unknown) => {
         console.error("fundraising summary welcome packs read failed:", err instanceof Error ? err.message : err);
         return null;
       }),
+    // In memory: messages waiting for staff. Only one line of the summary: if they cannot be counted,
+    // the summary still goes, without it.
     messagesToCheck: await countHeldMessages().catch((err: unknown) => {
       console.error("fundraising summary in memory messages count failed:", err instanceof Error ? err.message : err);
       return 0;

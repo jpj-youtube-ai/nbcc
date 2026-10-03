@@ -112,6 +112,31 @@ export async function changeRequest(
       socialOk: Boolean(f.social_ok),
       eventDate: text(f.event_date),
     };
+    return changeRequestIn(client, fundraiserId, subject, kind, input, actor, today);
+  });
+}
+
+/** Every request of one fundraiser, locked, inside a transaction that already holds the fundraiser's row. */
+export async function lockRequestRows(client: PoolClient, fundraiserId: number): Promise<RequestRow[]> {
+  const r = await client.query(`SELECT ${COLUMNS} FROM fundraiser_requests WHERE fundraiser_id = $1 ORDER BY id FOR UPDATE`, [fundraiserId]);
+  return r.rows.map(toRow);
+}
+
+/**
+ * The change itself, inside a transaction that already holds the fundraiser's row (changeRequest
+ * above; and a welcome pack's tick, which marks the matching request with the same rules and the
+ * same audit line: src/db/welcome-packs.ts). Throws RequestError, writing nothing.
+ */
+export async function changeRequestIn(
+  client: PoolClient,
+  fundraiserId: number,
+  subject: RequestSubject,
+  kind: RequestKind,
+  input: RequestActionInput,
+  actor: string,
+  today: string,
+): Promise<{ row: RequestRow; words: string }> {
+  {
     const cur = await client.query(`SELECT ${COLUMNS} FROM fundraiser_requests WHERE fundraiser_id = $1 AND kind = $2 FOR UPDATE`, [
       fundraiserId,
       kind,
@@ -158,5 +183,5 @@ export async function changeRequest(
     }
     await insertAudit(client, { actor, action: "fundraiser.request_updated", entity: "fundraiser", entityId: fundraiserId, data });
     return { row: toRow(written.rows[0]), words: result.words };
-  });
+  }
 }

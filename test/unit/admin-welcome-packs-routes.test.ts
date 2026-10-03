@@ -44,6 +44,12 @@ vi.mock("../../src/db/pool", () => ({ pool: { query: vi.fn(), connect: vi.fn() }
 import * as routes from "../../src/routes/admin-welcome-packs";
 import { signAdminSession } from "../../src/admin/session";
 import { PackError } from "../../src/db/welcome-packs";
+import { createRequire } from "node:module";
+import { resolve } from "node:path";
+
+// The admin's one list of who can sign for NBCC (assets/js/admin/helpers.js): the server checks a
+// chosen signer against the same file the screen builds its list from.
+const SIGNERS = createRequire(import.meta.url)(resolve(__dirname, "../../assets/js/admin/helpers.js")).SIGNERS as Array<{ name: string; role: string }>;
 
 const SECRET = "test-admin-secret";
 const EMAIL = "fern@example.com";
@@ -90,10 +96,12 @@ const fundraiser = (id: number, over: Record<string, unknown> = {}) => ({
   name: "Robin Example", firstName: "Robin", lastName: "Example", email: "robin@example.com", eventDate: "2026-12-12", startTime: null,
   venue: "", town: "Exampleton", targetPence: 50000, wants: { ...NONE }, postAddress: null, postLine1: "1 Example Road", postLine2: null,
   postTown: "Exampleton", postPostcode: "EX1 1EX", approvedAt: "2026-10-01T09:00:00.000Z", inMemory: false, teamId: null,
-  isSporting: false, tshirtSize: null, meter: { raisedPence: 0, giftAidPence: 0 },
+  // A team organiser's page: a sponsorship fundraiser, so its pack has the sponsor form.
+  isTeam: true, isSporting: false, tshirtSize: null, meter: { raisedPence: 0, giftAidPence: 0 },
   ...over,
 });
-const tickedItem = (key: string) => ({ key, label: key, quantity: null, tickedAt: "2026-10-03T10:00:00.000Z", tickedBy: "admin:fern@example.com", skippedReason: null });
+const WORDS: Record<string, string> = { letter: "Welcome letter", sponsor_form: "Sponsor form" };
+const tickedItem = (key: string) => ({ key, label: WORDS[key] ?? key, quantity: null, tickedAt: "2026-10-03T10:00:00.000Z", tickedBy: "admin:fern@example.com", skippedReason: null });
 
 beforeEach(() => {
   for (const m of [getUserAuthRowMock, listAllFundraisers, getFundraiser, listPacks, listPosterSizes, getPack, posterSizesFor, lastSignerFor, changePack]) m.mockReset();
@@ -152,11 +160,23 @@ describe("POST /api/admin/fundraisers/:id/pack", () => {
   });
 
   it("lets an editor tick, recorded as them", async () => {
-    changePack.mockResolvedValue({ view: { state: "part" }, words: "Welcome pack: Welcome letter ticked" });
-    const res = await run(routes.postPack, { token: tokenFor("editor", { fundraising: "edit" }), params: P, body: { action: "tick", key: "letter" } });
+    changePack.mockResolvedValue({ view: { state: "part" }, words: "Welcome pack: 10 A4 posters ticked", requestWords: ["Posters: sent (by post)"] });
+    const res = await run(routes.postPack, { token: tokenFor("editor", { fundraising: "edit" }), params: P, body: { action: "tick", key: "posters_a4" } });
     expect(res.statusCode).toBe(200);
-    expect(changePack).toHaveBeenCalledWith(9, { action: "tick", key: "letter" }, "admin:fern@example.com");
-    expect(res.body).toEqual({ pack: { state: "part" }, words: "Welcome pack: Welcome letter ticked" });
+    // With today as a UK day, for the request the tick marks as sent.
+    expect(changePack).toHaveBeenCalledWith(9, { action: "tick", key: "posters_a4" }, "admin:fern@example.com", expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/));
+    expect(res.body).toEqual({ pack: { state: "part" }, words: "Welcome pack: 10 A4 posters ticked", requests: ["Posters: sent (by post)"] });
+  });
+
+  it("takes a signer only from the Signed by list, with the title the list gives them", async () => {
+    const stranger = await run(routes.postPack, { token: tokenFor("admin"), params: P, body: { action: "signer", name: "Nobody Madeup", role: "Chief of Everything" } });
+    expect(stranger.statusCode).toBe(400);
+    expect((stranger.body as { fields: Record<string, string> }).fields.name).toBe("Choose someone from the Signed by list.");
+    expect(changePack).not.toHaveBeenCalled();
+    changePack.mockResolvedValue({ view: { state: "to_pack" }, words: "x", requestWords: [] });
+    const ok = await run(routes.postPack, { token: tokenFor("admin"), params: P, body: { action: "signer", name: SIGNERS[1].name, role: "A title somebody typed" } });
+    expect(ok.statusCode).toBe(200);
+    expect(changePack.mock.calls[0][1]).toEqual({ action: "signer", name: SIGNERS[1].name, role: SIGNERS[1].role });
   });
 
   it("asks for a reason to leave something out", async () => {
@@ -189,7 +209,7 @@ describe("GET /api/admin/fundraisers/:id/pack/print", () => {
 
   it("gives a viewer the whole pack as one private page, signed by whoever was chosen for it", async () => {
     getFundraiser.mockResolvedValue(fundraiser(9, { wants: { ...NONE, posterCount: 2 } }));
-    getPack.mockResolvedValue({ sentAt: null, sentBy: null, signer: "Ash Sample", signerRole: "Volunteer", items: [] });
+    getPack.mockResolvedValue({ sentAt: null, sentBy: null, signer: SIGNERS[2].name, signerRole: SIGNERS[2].role, items: [] });
     const res = await run(routes.getPackPrint, { token: tokenFor("viewer", { fundraising: "view" }), params: P });
     expect(res.statusCode).toBe(200);
     expect(res.contentType).toBe("html");
@@ -199,7 +219,8 @@ describe("GET /api/admin/fundraisers/:id/pack/print", () => {
     expect(html).toContain("Welcome pack for Walk 9");
     expect(html).toContain('data-pack-piece="posters_a4" data-copies="2"');
     expect(html).toContain('data-pack-piece="sponsor_form"');
-    expect(html).toContain("Ash Sample");
+    expect(html).toContain(SIGNERS[2].name);
+    expect(html).not.toContain(SIGNERS[0].name);
     expect(html).toContain("nbcc.test/fundraise/walk-9");
   });
 
@@ -211,6 +232,13 @@ describe("GET /api/admin/fundraisers/:id/pack/print", () => {
     expect(html).toContain("Welcome letter for Walk 9");
     expect(html).toContain("Fern Example");
     expect(html).not.toContain('data-pack-piece="sponsor_form"');
+  });
+
+  it("signs as the panel shows by default when nobody has chosen: the first on the Signed by list", async () => {
+    getFundraiser.mockResolvedValue(fundraiser(9));
+    const res = await run(routes.getPackPrint, { token: tokenFor("viewer", { fundraising: "view" }), params: P });
+    expect(String(res.body)).toContain(SIGNERS[0].name);
+    expect(String(res.body)).not.toContain("The NBCC team");
   });
 
   it("is not there for a sign up with no pack", async () => {

@@ -65,11 +65,24 @@ describe("the welcome pack's print view", () => {
     expect(pieces.map((p) => p.getAttribute("data-pack-piece"))).toEqual(["letter", "posters_a4", "posters_a3", "leaflets", "sponsor_form"]);
   });
 
-  it("prints as many of each poster as they asked for, and one of everything else", () => {
+  it("prints up to 10 of each poster as copies, and one of everything else", () => {
     const copies = Object.fromEntries(pieces.map((p) => [p.getAttribute("data-pack-piece"), p.getAttribute("data-copies")]));
-    expect(copies).toEqual({ letter: "1", posters_a4: "10", posters_a3: "2", leaflets: "30", sponsor_form: "1" });
+    expect(copies).toEqual({ letter: "1", posters_a4: "10", posters_a3: "2", leaflets: "1", sponsor_form: "1" });
     expect(text(doc.querySelector('[data-pack-piece="posters_a4"] .pk-label'))).toBe("A4 poster: prints 10 copies");
     expect(text(doc.querySelector('[data-pack-piece="posters_a3"] .pk-label'))).toBe("A3 poster: prints 2 copies, on A3 paper");
+  });
+
+  it("never copies a poster more than 10 times: above that it draws one, and says how many to print", () => {
+    expect(text(doc.querySelector('[data-pack-piece="leaflets"] .pk-label'))).toBe(
+      "A5 leaflet: print 30 copies of this page (set Copies in the print window), on A5 paper",
+    );
+    expect(text(doc.querySelector(".pk-bulk"))).toBe(
+      "More than 10 of a kind are not copied here, so the page stays quick: 30 A5 leaflets. One of each is below. Print the rest from its own page, under Materials for this sign up, setting Copies in the print window.",
+    );
+    // The copying only happens in the print window, and is put away after.
+    const script = Array.from(doc.querySelectorAll("script")).map((s) => s.textContent).join("\n");
+    expect(script).toContain("beforeprint");
+    expect(script).toContain("afterprint");
   });
 
   it("gives each size its own paper", () => {
@@ -82,8 +95,12 @@ describe("the welcome pack's print view", () => {
     expect(css).toContain(".wl{page:a4p}");
   });
 
+  it("leaves out the organisers' Ask us note: this page is for staff", () => {
+    expect(doc.querySelector(".ask-us")).toBeNull();
+  });
+
   it("says what is in the pack but not printed here", () => {
-    expect(text(doc.querySelector(".pk-also"))).toBe("Also in this pack, not printed here: 2 collection buckets and NBCC T-shirt, Adult M.");
+    expect(text(doc.querySelector(".pk-also:not(.pk-bulk)"))).toBe("Also in this pack, not printed here: 2 collection buckets and NBCC T-shirt, Adult M.");
   });
 
   it("addresses the letter to them, where a window envelope shows it", () => {
@@ -142,8 +159,9 @@ describe("what is left out of the print", () => {
     const s = subject({ path: "event", isSporting: null, tshirtSize: null, wants: { ...NONE, posterCount: 5 } });
     const doc = page(renderWelcomePack(input({ facts: facts({ event: true, linkWords: "nbcc.scot/event/robins-quiz", link: "https://nbcc.scot/event/robins-quiz" }) }, s, null, { a4: 5, a3: 0 })));
     expect(Array.from(doc.querySelectorAll("[data-pack-piece]")).map((p) => p.getAttribute("data-pack-piece"))).toEqual(["letter", "posters_a4"]);
+    expect(doc.querySelector(".pk-bulk")).toBeNull();
     expect(text(doc.querySelector(".wl"))).toContain("Your event's page is live at nbcc.scot/event/robins-quiz.");
-    expect(doc.querySelector(".pk-also")).toBeNull();
+    expect(doc.querySelector(".pk-also:not(.pk-bulk)")).toBeNull();
   });
 
   it("is everything but the letter, for Print letter only", () => {
@@ -181,6 +199,6 @@ describe("in memory: the things to send", () => {
   });
 
   it("says what else goes with it", () => {
-    expect(text(doc.querySelector(".pk-also"))).toBe("Also to send, not printed here: 20 QR cards for the order of service and 30 collection envelopes.");
+    expect(text(doc.querySelector(".pk-also:not(.pk-bulk)"))).toBe("Also to send, not printed here: 20 QR cards for the order of service and 30 collection envelopes.");
   });
 });

@@ -11,6 +11,8 @@ import { pageUrlFor } from "../fundraising/page-url";
 import { siteUrl } from "../fundraising/send";
 import { packActionSchema, packToSend, packView, type PackView, type Signer } from "../fundraising/welcome-pack";
 import { renderWelcomePack } from "../fundraising/welcome-pack-print";
+import { listedSigner, listedSigners } from "../fundraising/signers";
+import { followUpToday } from "../fundraising/follow-up";
 
 // Welcome packs (Jaimie, 2026-10-03): the tick list in each approved sign up in Admin > Fundraising
 // (src/fundraising/welcome-pack.ts has the rules). Section "fundraising": viewers look and print,
@@ -23,15 +25,28 @@ import { renderWelcomePack } from "../fundraising/welcome-pack-print";
 //   GET  /api/admin/fundraisers/:id/pack/print the pack's one print view, a whole HTML page       view
 //                                              (?part=letter for the letter on its own)
 //
-// Every change writes audit_log in the same transaction (src/db/welcome-packs.ts). The print view is
-// drawn from the stored (approved) record only, never kept, never indexed.
+// Every change writes audit_log in the same transaction (src/db/welcome-packs.ts), and a tick also
+// marks the request it belongs to in Requests (answered as `requests`, in the Requests' own words).
+// A signer is only ever one from the admin's Signed by list (src/fundraising/signers.ts), with the
+// title the list gives them: a name or title typed into a request is never printed. The print view
+// is drawn from the stored (approved) record only, never kept, never indexed.
 
 export const adminWelcomePacksRouter = Router();
 
 const UNAVAILABLE = { error: "Admin is temporarily unavailable" };
 const LOOK_AGAIN = "Some of it needs another look";
-/** When nobody has been chosen to sign, on this pack or by this staff member before. */
-const NO_SIGNER: Signer = { name: "The NBCC team", role: null };
+export const NOT_ON_THE_LIST = "Choose someone from the Signed by list.";
+
+/**
+ * Who signs when nobody has been chosen for this pack: this staff member's last choice, else the
+ * first on the Signed by list. The same default the panel shows, so a viewer's print matches it.
+ */
+async function defaultSigner(actor: string): Promise<Signer> {
+  const last = await lastSignerFor(actor);
+  if (last) return last;
+  const first = listedSigners()[0];
+  return first ? { name: first.name, role: first.role || null } : { name: "The NBCC team", role: null };
+}
 
 function fieldErrors(issues: ZodIssue[]): Record<string, string> {
   const out: Record<string, string> = {};
@@ -78,9 +93,15 @@ export async function postPack(req: Request, res: Response): Promise<Response | 
   if (id === null) return res.status(400).json({ error: "Invalid id" });
   const parsed = packActionSchema.safeParse(req.body ?? {});
   if (!parsed.success) return res.status(400).json({ error: LOOK_AGAIN, fields: fieldErrors(parsed.error.issues) });
+  let input = parsed.data;
+  if (input.action === "signer") {
+    const listed = listedSigner(input.name);
+    if (!listed) return res.status(400).json({ error: LOOK_AGAIN, fields: { name: NOT_ON_THE_LIST } });
+    input = { action: "signer", name: listed.name, role: listed.role || null };
+  }
   try {
-    const out = await changePack(id, parsed.data, actorOf(claims));
-    return res.status(200).json({ pack: out.view, words: out.words });
+    const out = await changePack(id, input, actorOf(claims), followUpToday(new Date()));
+    return res.status(200).json({ pack: out.view, words: out.words, requests: out.requestWords });
   } catch (err) {
     if (err instanceof PackError) return res.status(err.reason === "conflict" ? 409 : 404).json({ error: err.message });
     console.error("admin welcome pack change failed:", err instanceof Error ? err.message : err);
@@ -106,7 +127,7 @@ export async function getPackPrint(req: Request, res: Response): Promise<Respons
     const [stored, sizes] = await Promise.all([getPack(id), posterSizesFor(id)]);
     const view = packView(f, stored, sizes);
     if (!view) return notThere();
-    const signer: Signer = view.signer ? { name: view.signer, role: view.signerRole } : ((await lastSignerFor(actorOf(claims))) ?? NO_SIGNER);
+    const signer: Signer = view.signer ? { name: view.signer, role: view.signerRole } : await defaultSigner(actorOf(claims));
     const facts = materialFacts(f, f.meter, { pageUrl: pageUrlFor(f), getInvolvedUrl: siteUrl("/get-involved") });
     const p = dateParts(londonToday(new Date()));
     const page = renderWelcomePack({

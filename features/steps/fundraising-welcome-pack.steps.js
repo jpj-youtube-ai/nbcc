@@ -61,7 +61,7 @@ const wants = (over) => JSON.stringify({ posterCount: 0, leafletCount: 0, bucket
 const firstWord = (title) => title.split(/['\s]/)[0];
 
 // Someone raising money for a sporting event, approved, as the tidied sign up form stores it.
-async function sporting(title, size, posters) {
+async function sporting(title, size, posters, isSporting = true) {
   const first = firstWord(title);
   await pool.query(
     `INSERT INTO fundraisers (slug, path, kind, title, description, target_pence, public, status, organiser_name, first_name, last_name,
@@ -69,8 +69,8 @@ async function sporting(title, size, posters) {
                               is_sporting, tshirt_size, approved_at, approved_by, updated_by)
      VALUES ($1, 'raising', 'other', $2, 'A test fundraiser.', 50000, true, 'approved', $3, $4, 'Example',
              $5, '07700 900150', $6::jsonb, '1 Example Road', 'Exampleton', 'EX1 1EX',
-             true, $7, now(), 'bdd', 'bdd')`,
-    [slugFor(title), title, `${first} Example`, first, `${first.toLowerCase()}.pack.fr.bdd@example.com`, wants({ posterCount: posters }), size],
+             $8, $7, now(), 'bdd', 'bdd')`,
+    [slugFor(title), title, `${first} Example`, first, `${first.toLowerCase()}.pack.fr.bdd@example.com`, wants({ posterCount: posters }), size, isSporting],
   );
 }
 
@@ -83,6 +83,16 @@ Given(
 
 Given("an approved sporting fundraiser {string} with no T-shirt size", async function (title) {
   await sporting(title, null, 0);
+});
+
+// Raising money without sponsors (a bake sale, a coffee morning): they answered No to a sporting event.
+Given("an approved fundraiser {string} that is not a sporting event", async function (title) {
+  await sporting(title, null, 0, false);
+});
+
+// They ask for a different number after staff ticked (as "Ask us to print these" would change it).
+Given("{string} now asks for {int} posters", async function (title, posters) {
+  await pool.query("UPDATE fundraisers SET wants = jsonb_set(wants, '{posterCount}', to_jsonb($2::int)) WHERE id = $1", [await fundraiserId(title), posters]);
 });
 
 Given("an approved event {string} asking for {int} posters", async function (title, posters) {
@@ -129,6 +139,18 @@ When("{string} ticks {string} in the pack for {string}", async function (email, 
 
 When("{string} leaves {string} out of the pack for {string} because {string}", async function (email, key, title, reason) {
   await change(this, email, title, { action: "skip", key, reason });
+});
+
+When("{string} unticks {string} in the pack for {string}", async function (email, key, title) {
+  await change(this, email, title, { action: "untick", key });
+});
+
+When("{string} puts {string} back in the pack for {string}", async function (email, key, title) {
+  await change(this, email, title, { action: "untick", key });
+});
+
+When("{string} chooses {string} to sign the letter for {string}", async function (email, name, title) {
+  await change(this, email, title, { action: "signer", name, role: null });
 });
 
 When("{string} marks the pack for {string} as sent", async function (email, title) {
@@ -187,6 +209,48 @@ Then("{string} has no pack to send", async function (title) {
 
 Then("the pack answer is {string}", function (state) {
   assert.equal(this.frBody.pack && this.frBody.pack.stateLabel, state);
+});
+
+Then("{string} is left out of the pack answer because {string}", function (key, reason) {
+  const item = ((this.frBody.pack && this.frBody.pack.items) || []).find((i) => i.key === key);
+  assert.ok(item, `${key} is not in the pack answer`);
+  assert.equal(item.skippedReason, reason);
+  assert.equal(item.ticked, false);
+});
+
+Then("{string} in the pack for {string} says {string}", async function (key, title, words) {
+  const item = (await packOf(this, title)).items.find((i) => i.key === key);
+  assert.ok(item, `${key} is not in the pack for ${title}`);
+  assert.equal(item.ticked, false);
+  assert.equal(item.changeNote, words);
+});
+
+Then("the pack answer also marked {string} in Requests", function (words) {
+  assert.deepEqual(this.frBody.requests, [words]);
+});
+
+Then("the posters request for {string} is stored as {string} with {int}", async function (title, status, quantity) {
+  const r = await pool.query("SELECT status, quantity, note FROM fundraiser_requests WHERE fundraiser_id = $1 AND kind = 'posters'", [await fundraiserId(title)]);
+  assert.ok(r.rows[0], "no posters request is stored");
+  assert.equal(r.rows[0].status, status);
+  assert.equal(r.rows[0].quantity, quantity);
+  assert.equal(r.rows[0].note, "Sent with the welcome pack.");
+});
+
+Then("the posters request for {string} is stored as {string} with none", async function (title, status) {
+  const r = await pool.query("SELECT status, quantity FROM fundraiser_requests WHERE fundraiser_id = $1 AND kind = 'posters'", [await fundraiserId(title)]);
+  assert.ok(r.rows[0], "no posters request is stored");
+  assert.equal(r.rows[0].status, status);
+  assert.equal(r.rows[0].quantity, null);
+});
+
+// A press that leaves the pack as it stands records nothing: only real changes are in the History.
+Then(/^the history of "([^"]*)" has (\d+) pack lines?$/, async function (title, n) {
+  const r = await pool.query(
+    "SELECT count(*)::int AS n FROM audit_log WHERE entity = 'fundraiser' AND entity_id = $1 AND action = 'fundraiser.pack_updated'",
+    [await fundraiserId(title)],
+  );
+  assert.equal(r.rows[0].n, Number(n));
 });
 
 Then("the pack for {string} is stored as sent by {string}", async function (title, actor) {

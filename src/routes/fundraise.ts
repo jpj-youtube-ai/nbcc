@@ -59,6 +59,8 @@ import { listRequestRowsFor } from "../db/fundraising-requests";
 import { organiserRequestLines, parseWants, requestViews, type OrganiserRequestLine, type RequestRow } from "../fundraising/requests";
 import { config } from "../config";
 import { printStatusFor } from "./fundraise-materials";
+import { getPack } from "../db/welcome-packs";
+import { organiserPackLine } from "../fundraising/welcome-pack";
 import { loadCategories } from "../db/fundraising-categories";
 import { KEY_PATTERN, isActiveCategory } from "../fundraising/categories";
 import { checkTeamSignUp } from "../fundraising/teams";
@@ -544,6 +546,17 @@ function splitOf(f: Parameters<typeof publicSplit>[0]): { nbccSharePercent: numb
   return s ? { nbccSharePercent: s.nbccSharePercent, otherCauseName: s.otherCauseName } : null;
 }
 
+// Welcome packs: "Your welcome pack is on its way", once staff have marked it sent. Best effort: a
+// failure here leaves the rest of their private area working.
+async function theirPackLine(f: FundraiserRecord): Promise<string | null> {
+  try {
+    return organiserPackLine(f, await getPack(f.id));
+  } catch (err) {
+    console.error("fundraise private area welcome pack read failed:", err instanceof Error ? err.message : err);
+    return null;
+  }
+}
+
 export async function getManageSession(req: Request, res: Response): Promise<Response | void> {
   try {
     const s = await signedIn(req, res);
@@ -555,11 +568,12 @@ export async function getManageSession(req: Request, res: Response): Promise<Res
         // Their requests are read once, for both "What you asked for" and "Ask us to print these".
         const requestRows = listRequestRowsFor(f.id);
         requestRows.catch(() => undefined); // each reader below reports its own failure
-        const [waiting, rows, requests, print] = await Promise.all([
+        const [waiting, rows, requests, print, pack] = await Promise.all([
           waitingEditFor(f.id),
           wallRows(f.id),
           theirRequests(f, today, requestRows),
           printStatusFor(f, today, requestRows),
+          theirPackLine(f),
         ]);
         // TASK-502: a finished one keeps its public page (and so its QR code) for good.
         const page = hasPage(f);
@@ -590,6 +604,8 @@ export async function getManageSession(req: Request, res: Response): Promise<Res
           gifts: isInMemory(f) ? familyEntries(rows) : wallEntries(rows),
           ...(isInMemory(f) ? { memory: publicMemory(f) } : {}),
           finishedRequestedAt: f.finishedRequestedAt ?? null,
+          // Welcome packs: one line once theirs has been sent (the day it was posted), and null before.
+          pack,
           // TASK-505: where each thing they asked for is up to, in words only (never a staff note
           // or name); null when it could not be read, so the rest still shows.
           requests,

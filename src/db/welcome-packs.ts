@@ -1,0 +1,193 @@
+import type { PoolClient } from "pg";
+import { pool } from "./pool";
+import { insertAudit } from "./donations";
+import { FUNDRAISER_SELECT, toRecord } from "./fundraisers";
+import type { FundraiserRecord } from "../fundraising/model";
+import {
+  applyPackAction,
+  packView,
+  type PackActionInput,
+  type PackView,
+  type PosterSizes,
+  type Signer,
+  type StoredItem,
+  type StoredPack,
+} from "../fundraising/welcome-pack";
+
+// Welcome packs (Jaimie, 2026-10-03): the SQL behind the tick list in Admin > Fundraising. The rules
+// are pure, in src/fundraising/welcome-pack.ts; this file only moves rows
+// (migrations/1791200000230_welcome-packs.js). A pack has no row until staff first tick something,
+// choose who signs its letter, or mark it sent; a thing in it has none until it is ticked or left
+// out. Every change writes its audit_log row against the fundraiser in the same transaction, so it
+// shows in that fundraiser's History.
+
+export class PackError extends Error {
+  constructor(
+    public readonly reason: "not_found" | "no_pack" | "conflict",
+    message: string,
+  ) {
+    super(message);
+    this.name = "PackError";
+  }
+}
+
+type Row = Record<string, unknown>;
+const iso = (v: unknown): string | null => (v == null ? null : new Date(v as string).toISOString());
+const text = (v: unknown): string | null => (v == null ? null : String(v));
+const whole = (v: unknown): number => {
+  const n = Number(v);
+  return Number.isInteger(n) && n > 0 ? n : 0;
+};
+
+const toItem = (r: Row): StoredItem => ({
+  key: String(r.key),
+  label: String(r.label),
+  quantity: r.quantity == null ? null : Number(r.quantity),
+  tickedAt: iso(r.ticked_at),
+  tickedBy: text(r.ticked_by),
+  skippedReason: text(r.skipped_reason),
+});
+
+const toPack = (r: Row, items: StoredItem[]): StoredPack => ({
+  sentAt: iso(r.sent_at),
+  sentBy: text(r.sent_by),
+  signer: text(r.signer),
+  signerRole: text(r.signer_role),
+  items,
+});
+
+const PACK_COLUMNS = "id, fundraiser_id, sent_at, sent_by, signer, signer_role";
+const ITEM_COLUMNS = "i.pack_id, p.fundraiser_id, i.key, i.label, i.quantity, i.ticked_at, i.ticked_by, i.skipped_reason";
+
+/** Every pack staff have touched, by fundraiser. */
+export async function listPacks(): Promise<Map<number, StoredPack>> {
+  const [packs, items] = await Promise.all([
+    pool.query(`SELECT ${PACK_COLUMNS} FROM welcome_packs`),
+    pool.query(`SELECT ${ITEM_COLUMNS} FROM welcome_pack_items i JOIN welcome_packs p ON p.id = i.pack_id ORDER BY i.id`),
+  ]);
+  const byFundraiser = new Map<number, StoredItem[]>();
+  for (const r of items.rows as Row[]) {
+    const id = Number(r.fundraiser_id);
+    byFundraiser.set(id, [...(byFundraiser.get(id) ?? []), toItem(r)]);
+  }
+  return new Map((packs.rows as Row[]).map((r) => [Number(r.fundraiser_id), toPack(r, byFundraiser.get(Number(r.fundraiser_id)) ?? [])]));
+}
+
+/** One fundraiser's pack as stored, or null when staff have not touched it. */
+export async function getPack(fundraiserId: number): Promise<StoredPack | null> {
+  const found = await pool.query(`SELECT ${PACK_COLUMNS} FROM welcome_packs WHERE fundraiser_id = $1`, [fundraiserId]);
+  const p = found.rows[0] as Row | undefined;
+  if (!p) return null;
+  const items = await pool.query(
+    `SELECT ${ITEM_COLUMNS} FROM welcome_pack_items i JOIN welcome_packs p ON p.id = i.pack_id WHERE p.fundraiser_id = $1 ORDER BY i.id`,
+    [fundraiserId],
+  );
+  return toPack(p, (items.rows as Row[]).map(toItem));
+}
+
+// The poster sizes of an organiser's last "Ask us to print these" (src/db/fundraiser-materials.ts
+// keeps the ask in audit_log). The sign up form asks only how many posters; the sizes are known only
+// when they asked that way.
+const SIZES_SQL = `SELECT DISTINCT ON (entity_id) entity_id AS fundraiser_id, data->>'a4' AS a4, data->>'a3' AS a3
+       FROM audit_log
+      WHERE entity = 'fundraiser' AND action = 'fundraiser.print_requested' AND data->>'kind' = 'posters'`;
+
+export async function listPosterSizes(): Promise<Map<number, PosterSizes>> {
+  const r = await pool.query(`${SIZES_SQL} ORDER BY entity_id, id DESC`);
+  return new Map((r.rows as Row[]).map((row) => [Number(row.fundraiser_id), { a4: whole(row.a4), a3: whole(row.a3) }]));
+}
+
+export async function posterSizesFor(fundraiserId: number, client: Pick<PoolClient, "query"> = pool): Promise<PosterSizes | null> {
+  const r = await client.query(`${SIZES_SQL} AND entity_id = $1 ORDER BY entity_id, id DESC`, [fundraiserId]);
+  const row = r.rows[0] as Row | undefined;
+  return row ? { a4: whole(row.a4), a3: whole(row.a3) } : null;
+}
+
+/** The fundraisers whose pack has been sent, for the Monday summary. */
+export async function sentPackIds(): Promise<Set<number>> {
+  const r = await pool.query("SELECT fundraiser_id FROM welcome_packs WHERE sent_at IS NOT NULL");
+  return new Set((r.rows as Row[]).map((row) => Number(row.fundraiser_id)));
+}
+
+/** Who this staff member last chose to sign a letter: offered first on their next one. */
+export async function lastSignerFor(actor: string): Promise<Signer | null> {
+  const r = await pool.query("SELECT signer, signer_role FROM welcome_packs WHERE signer_by = $1 AND signer IS NOT NULL ORDER BY updated_at DESC LIMIT 1", [actor]);
+  const row = r.rows[0] as Row | undefined;
+  return row ? { name: String(row.signer), role: text(row.signer_role) } : null;
+}
+
+async function inTransaction<T>(work: (client: PoolClient) => Promise<T>): Promise<T> {
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    const result = await work(client);
+    await client.query("COMMIT");
+    return result;
+  } catch (err) {
+    await client.query("ROLLBACK").catch(() => undefined);
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
+/**
+ * One press on the tick list. The fundraiser's row is locked first, so two presses at once take
+ * turns and the second sees the pack as the first left it. Throws PackError, writing nothing.
+ */
+export async function changePack(fundraiserId: number, input: PackActionInput, actor: string): Promise<{ view: PackView; words: string; fundraiser: FundraiserRecord }> {
+  return inTransaction(async (client) => {
+    const found = await client.query(`${FUNDRAISER_SELECT}\n    WHERE f.id = $1 FOR UPDATE`, [fundraiserId]);
+    if (!found.rows[0]) throw new PackError("not_found", "That fundraiser no longer exists");
+    const f = toRecord(found.rows[0]);
+    const packRows = await client.query(`SELECT ${PACK_COLUMNS} FROM welcome_packs WHERE fundraiser_id = $1 FOR UPDATE`, [fundraiserId]);
+    const p = packRows.rows[0] as Row | undefined;
+    const itemRows = p
+      ? await client.query(
+          `SELECT ${ITEM_COLUMNS} FROM welcome_pack_items i JOIN welcome_packs p ON p.id = i.pack_id WHERE i.pack_id = $1 ORDER BY i.id`,
+          [p.id],
+        )
+      : { rows: [] };
+    const stored = p ? toPack(p, (itemRows.rows as Row[]).map(toItem)) : null;
+    const sizes = await posterSizesFor(fundraiserId, client);
+    const view = packView(f, stored, sizes);
+    if (!view) throw new PackError("no_pack", "There is no pack for this one: it is not approved, or it asked for nothing.");
+    const result = applyPackAction(view, input);
+    if (!result.ok) throw new PackError(result.reason, result.message);
+
+    const packId = p ? Number(p.id) : Number((await client.query("INSERT INTO welcome_packs (fundraiser_id) VALUES ($1) RETURNING id", [fundraiserId])).rows[0].id);
+    const c = result.change;
+    const data: Record<string, unknown> = { ...input, words: result.words };
+    if (c.type === "tick" || c.type === "skip") {
+      const reason = c.type === "skip" ? c.reason : null;
+      await client.query(
+        `INSERT INTO welcome_pack_items (pack_id, key, label, quantity, ticked_at, ticked_by, skipped_reason)
+         VALUES ($1, $2, $3, $4, CASE WHEN $5 THEN now() END, $6, $7)
+         ON CONFLICT (pack_id, key) DO UPDATE SET
+           label = EXCLUDED.label, quantity = EXCLUDED.quantity, ticked_at = EXCLUDED.ticked_at, ticked_by = EXCLUDED.ticked_by,
+           skipped_reason = EXCLUDED.skipped_reason, updated_at = now()`,
+        [packId, c.key, c.label, c.quantity, c.type === "tick", actor, reason],
+      );
+      data.label = c.label;
+      data.quantity = c.quantity;
+    } else if (c.type === "untick") {
+      await client.query("DELETE FROM welcome_pack_items WHERE pack_id = $1 AND key = $2", [packId, c.key]);
+    } else if (c.type === "send") {
+      await client.query("UPDATE welcome_packs SET sent_at = now(), sent_by = $2, updated_at = now() WHERE id = $1", [packId, actor]);
+    } else if (c.type === "undo") {
+      await client.query("UPDATE welcome_packs SET sent_at = NULL, sent_by = NULL, updated_at = now() WHERE id = $1", [packId]);
+      data.was = { sentAt: view.sentAt, sentBy: view.sentBy };
+    } else {
+      await client.query("UPDATE welcome_packs SET signer = $2, signer_role = $3, signer_by = $4, updated_at = now() WHERE id = $1", [packId, c.name, c.role, actor]);
+    }
+    await insertAudit(client, { actor, action: "fundraiser.pack_updated", entity: "fundraiser", entityId: fundraiserId, data });
+
+    const after = await client.query(`SELECT ${PACK_COLUMNS} FROM welcome_packs WHERE id = $1`, [packId]);
+    const afterItems = await client.query(
+      `SELECT ${ITEM_COLUMNS} FROM welcome_pack_items i JOIN welcome_packs p ON p.id = i.pack_id WHERE i.pack_id = $1 ORDER BY i.id`,
+      [packId],
+    );
+    const fresh = after.rows[0] ? packView(f, toPack(after.rows[0] as Row, (afterItems.rows as Row[]).map(toItem)), sizes) : null;
+    return { view: fresh ?? view, words: result.words, fundraiser: f };
+  });
+}

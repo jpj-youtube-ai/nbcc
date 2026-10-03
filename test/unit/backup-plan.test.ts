@@ -61,6 +61,8 @@ describe("knowing how many tables to expect", () => {
   // photos and round profile photos organisers send; 84 since event tickets added the six ticket
   // tables (types, settings, orders, lines, refunds, requests); 86 with sponsor pledges ("Sponsor now,
   // pay after") and when their Gift Aid declarations were made.
+  // tables (types, settings, orders, lines, refunds, requests); 86 since welcome packs added each
+  // page's pack and the things in it that staff have ticked.
   it("counts 86 across the three databases", () => {
     expect(expectedTableCount(ROOT)).toBe(86);
   });
@@ -144,6 +146,9 @@ describe("knowing how many tables to expect", () => {
     // Sponsor pledges: the promises made on a fundraiser's page, with their Gift Aid declarations.
     expect(main).toContain("sponsor_pledges");
     expect(main).toContain("sponsor_pledge_declarations");
+    // Welcome packs: when each was sent and who signs its letter, and what staff have ticked in it.
+    expect(main).toContain("welcome_packs");
+    expect(main).toContain("welcome_pack_items");
     expect(main.length).toBe(83);
   });
 

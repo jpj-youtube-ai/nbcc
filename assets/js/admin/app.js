@@ -9180,6 +9180,7 @@
     touch: "frTouchCallStatus", // TASK-515
     group: "frTeamStatus", // team pages
     memory: "frMemoryStatus", // In memory
+    pack: "frPackStatus", // welcome packs
   };
   // Says it now, in place, without a redraw: "Adding…" has to show while the request is out.
   function frPaintNotice(key) {
@@ -9218,6 +9219,7 @@
     frLoadThanksCounts(); // TASK-507
     frTouchLoad(); // TASK-515
     frMemoryLoadCounts(); // In memory
+    frLoadPacks(); // welcome packs
   }
 
   function frLoadSettings() {
@@ -9333,7 +9335,7 @@
   // TASK-503: and the team's tools, whose calls and prompts the list shows.
   function frReload() {
     var id = frOpenId;
-    return Promise.all([frLoadList(), id != null ? frLoadDetail(id) : null, frLoadTeam(), frLoadNewsCounts(), frLoadPicsCounts(), frLoadRequests()]);
+    return Promise.all([frLoadList(), id != null ? frLoadDetail(id) : null, frLoadTeam(), frLoadNewsCounts(), frLoadPicsCounts(), frLoadRequests(), frLoadPacks()]); // welcome packs: a new T-shirt size changes one
   }
 
   // ---- the switch ----
@@ -9430,6 +9432,8 @@
     if (toDo) toDo.textContent = list.filter(frReqToDo).length;
     var notBack = doc.querySelector('[data-frcount="notback"]');
     if (notBack) notBack.textContent = list.filter(frReqNotBack).length;
+    var packs = doc.querySelector('[data-frcount="packs"]'); // welcome packs
+    if (packs) packs.textContent = list.filter(frPackToSend).length;
   }
 
   function frRaisedCell(f) {
@@ -9458,6 +9462,7 @@
       // TASK-505: something they asked for still to send or do; buckets or tins due back.
       (frReqToDo(f) ? '<span class="admin-pill admin-pill--pending fr-requests-pill">Requests to do</span>' : "") +
       (frReqDueBack(f) ? '<span class="admin-pill is-call-due fr-dueback-pill">Due back</span>' : "") +
+      frPackPill(f) + // welcome packs
       frThanksPill(f) + // TASK-507
       frMemoryPills(f) + // In memory
       frTouchPills(f) + // TASK-515: the smart call prompts
@@ -9526,12 +9531,13 @@
       // TASK-505
       if (frFilter === "requests") return frReqToDo(f);
       if (frFilter === "notback") return frReqNotBack(f);
+      if (frFilter === "packs") return frPackToSend(f); // welcome packs
       return f.status === frFilter;
     });
     if (!rows.length) {
       var none = {
         new: "No new sign ups are waiting.", approved: "None approved yet.", declined: "None declined.", finished: "None finished yet.",
-        calls: "No calls due.", requests: "No requests to do.", notback: "No buckets or tins are out.",
+        calls: "No calls due.", requests: "No requests to do.", notback: "No buckets or tins are out.", packs: "No packs to send.",
       };
       wrap.innerHTML = '<p class="fx-empty fr-empty">' + H.escapeHtml(none[frFilter] || "None here.") + "</p>";
       return;
@@ -9576,6 +9582,7 @@
     frGroupView = null; // team pages
     frGroupDraft = {};
     frReqClear();
+    frPackClear(); // welcome packs
     frRenderList();
     if (frOpenId != null) frLoadDetail(frOpenId);
   }
@@ -9601,6 +9608,7 @@
         frTouchSection(f, write) + // TASK-515
         (frDetail.waitingEdit ? '<section class="fx-panel fx-panel--wide fr-change-panel"><h4>Changes to check</h4>' + frChangePanel(f, frDetail.waitingEdit, write) + "</section>" : "") +
         frRequestsSection(f, write) +
+        frPackSection(f, write) + // welcome packs
         frNewsSection() + // TASK-506
         frPicsSection() + // profile pictures
         frThanksSection() + // TASK-507
@@ -10532,7 +10540,7 @@
         // TASK-515
         if (h.action === "fundraiser.touch_sent" && frTouchKindInfo(data.kind)) what = "Automatic email sent: " + frTouchKindInfo(data.kind).label;
         if (h.action === "fundraiser.prompt_called" && typeof data.prompt === "string") what = "Called about a prompt: " + data.prompt.replace(/_/g, " ");
-        if ((h.action === "fundraiser.request_updated" || h.action === "fundraiser.print_requested") && typeof data.words === "string" && data.words) what = data.words;
+        if ((h.action === "fundraiser.request_updated" || h.action === "fundraiser.print_requested" || h.action === "fundraiser.pack_updated") && typeof data.words === "string" && data.words) what = data.words;
         // Team pages: who took a member off the team.
         if (h.action === "fundraiser.removed_from_team") what = data.by === "staff" ? "Taken off the team by NBCC" : "Taken off the team by the team organiser";
         if (h.action === "fundraiser.member_removed") what = data.by === "staff" ? "NBCC took someone off the team" : "The team organiser took someone off the team";
@@ -10919,6 +10927,7 @@
     frNewsWire(view); // TASK-506
     frPicsWire(view); // profile pictures
     frGroupWire(view); // team pages
+    frPackWire(view); // welcome packs
     view.addEventListener("click", function (e) {
       var t = e.target;
       if (!t || !t.closest) return;
@@ -13453,6 +13462,336 @@
         run.say("Sent. They have a link to choose their size.", false);
         return frReload();
       });
+    });
+  }
+
+  // ---- Welcome packs (Jaimie, 2026-10-03) ----
+  // The pack staff post to each approved fundraiser and event host (src/routes/admin-welcome-packs.ts).
+  // The server works out what is in each one (the letter, what they asked for, the sponsor form for
+  // someone raising money, the T-shirt for a sporting event) and where it is up to; this only shows
+  // it. In the open sign up: a tick box for each thing (who ticked it, and when), "Leave out" with a
+  // reason, the address ready to copy, who signs the letter (the Signed by list, starting with
+  // whoever this staff member chose last), Print welcome pack and Print letter only, then Pack sent
+  // and Undo. In memory of someone the same panel is "Things to send": only what they asked for,
+  // with a covering note. The list has a "Pack to send" pill and a "Packs to send" filter. Viewers
+  // read and print; editors and admins change. Every stored string is escaped. Kept here, in one
+  // block, reached from the rest of the screen by one line hooks marked "welcome packs".
+  var frPacks = null; // GET /api/admin/fundraising/packs: { packs, toSend, mySigner }
+  var frPacksState = "loading"; // loading, failed or ok
+  var frPackSkip = null; // the key of the thing whose "Leave out" form is open
+  var frPackSkipDraft = ""; // the reason typed in it, kept across a redraw
+  var FR_PACK_TONE = { to_pack: "todo", part: "waiting", ready: "todo", sent: "done" };
+
+  function frLoadPacks() {
+    return authFetch("/api/admin/fundraising/packs")
+      .then(okJson)
+      .then(function (d) {
+        var ok = !!(d && d.packs && typeof d.packs === "object" && d.toSend && typeof d.toSend === "object");
+        frPacks = ok ? d : null;
+        frPacksState = ok ? "ok" : "failed";
+        frRenderList();
+      })
+      .catch(function (err) {
+        if (err && err.message === "unauthorized") return;
+        frPacks = null;
+        frPacksState = "failed";
+        frRenderList();
+      });
+  }
+  function frPackOf(f) {
+    return (frPacks && frPacks.packs && frPacks.packs[f.id]) || null;
+  }
+  function frPackToSend(f) {
+    return !!(frPacks && frPacks.toSend && frPacks.toSend[f.id]);
+  }
+  function frPackPill(f) {
+    if (!frPackToSend(f)) return "";
+    var v = frPackOf(f);
+    return '<span class="admin-pill admin-pill--pending fr-pack-pill">' + (v && v.kind === "memory" ? "Things to send" : "Pack to send") + "</span>";
+  }
+  function frPackClear() {
+    frPackSkip = null;
+    frPackSkipDraft = "";
+  }
+  // Who signs: the one kept for this pack, else this staff member's last choice, else the first on the list.
+  function frPackSignerNow(v) {
+    var list = H.SIGNERS || [];
+    if (v && v.signer) return { name: v.signer, role: v.signerRole || null };
+    if (frPacks && frPacks.mySigner && frPacks.mySigner.name) return { name: frPacks.mySigner.name, role: frPacks.mySigner.role || null };
+    return list[0] ? { name: list[0].name, role: list[0].role || null } : null;
+  }
+
+  function frPackItemHtml(v, item, write) {
+    var key = H.escapeHtml(item.key);
+    var sent = v.state === "sent";
+    var skipped = !!item.skippedReason;
+    var locked = !write || sent || skipped || !item.tickable;
+    var who = "";
+    if (item.ticked) {
+      who = "Ticked by " + frWho(item.tickedBy) + (item.tickedAt ? " on " + H.fmtDate(item.tickedAt) : "");
+    } else if (skipped) {
+      who = "Left out: " + item.skippedReason + (item.tickedBy ? " (" + frWho(item.tickedBy) + ")" : "");
+    } else if (item.changedFrom !== null && item.changedFrom !== undefined) {
+      who = "It was ticked when they had asked for " + item.changedFrom + ". They now ask for " + item.quantity + ", so it needs ticking again.";
+    }
+    var actions = "";
+    if (write && !sent) {
+      if (skipped) {
+        actions += '<button class="fr-link-btn" type="button" data-frpackback="' + key + '">Put it back</button>';
+      } else if (!item.ticked && frPackSkip !== item.key) {
+        // Waiting on the organiser: the button that emails them the link to choose a size (the sign up tidy).
+        if (item.waiting) {
+          actions += '<button class="admin-btn admin-btn--small fr-btn-quiet" type="button" data-frtshirtask>Ask them for their T-shirt size</button>';
+        }
+        actions += '<button class="fr-link-btn" type="button" data-frpackskip="' + key + '">Leave out</button>';
+      }
+    }
+    var form = "";
+    if (write && !sent && frPackSkip === item.key) {
+      form =
+        '<form id="frPackSkipForm" class="fr-pack-skip" novalidate>' +
+          '<label class="fx-call-label" for="frPackSkipReason">Why is it being left out?</label>' +
+          '<div class="fx-call-row">' +
+            '<input class="fx-call-input" id="frPackSkipReason" name="reason" type="text" maxlength="200" autocomplete="off" value="' + H.escapeHtml(frPackSkipDraft) + '">' +
+            '<button class="admin-btn admin-btn--small" type="submit">Leave it out</button>' +
+            '<button class="admin-btn admin-btn--small fr-btn-quiet" type="button" data-frpackskipcancel>Cancel</button>' +
+          "</div>" +
+        "</form>";
+    }
+    return (
+      '<li class="fr-pack-item' + (item.done ? " is-done" : "") + (skipped ? " is-skipped" : "") + (item.waiting ? " is-waiting" : "") +
+        '" data-frpackitem="' + key + '">' +
+        '<label class="fr-pack-tick"><input type="checkbox" data-frpacktick="' + key + '"' + (item.ticked ? " checked" : "") + (locked ? " disabled" : "") + ">" +
+          '<span class="fr-pack-words">' + H.escapeHtml(item.words) + "</span></label>" +
+        (who ? '<span class="fr-pack-who">' + H.escapeHtml(who) + "</span>" : "") +
+        (actions ? '<span class="fr-pack-actions">' + actions + "</span>" : "") +
+        form +
+      "</li>"
+    );
+  }
+
+  function frPackAddressHtml(v) {
+    var a = v.address || {};
+    var lines = Array.isArray(a.lines) ? a.lines : [];
+    var memory = v.kind === "memory";
+    var note = v.addressNote ? '<p class="fr-field-hint">' + H.escapeHtml(v.addressNote) + "</p>" : "";
+    if (!lines.length) {
+      return '<div class="fr-pack-address"><h5 class="fx-call-label">Post to</h5><p class="fx-warn">No address given. Ask them where to post ' +
+        (memory ? "them" : "it") + ".</p>" + note + "</div>";
+    }
+    var all = [a.name].concat(lines).filter(Boolean);
+    return (
+      '<div class="fr-pack-address"><h5 class="fx-call-label">Post to</h5>' +
+        '<address id="frPackAddress">' + all.map(function (l) { return "<span>" + H.escapeHtml(l) + "</span>"; }).join("") + "</address>" +
+        '<button class="admin-btn admin-btn--small fr-btn-quiet" type="button" data-frpackcopy>Copy address</button>' + note +
+      "</div>"
+    );
+  }
+
+  function frPackSignHtml(v, write) {
+    var now = frPackSignerNow(v);
+    var what = v.kind === "memory" ? "note" : "letter";
+    if (!write) {
+      return now ? '<p class="fr-pack-sign">Signed by ' + H.escapeHtml(now.name) + "</p>" : "";
+    }
+    var list = (H.SIGNERS || []).slice();
+    // Someone chosen before who is no longer on the list still shows, so the pack says who signed it.
+    if (now && !list.some(function (s) { return s.name === now.name; })) list.push({ name: now.name, role: now.role || "" });
+    return (
+      '<div class="fr-pack-sign"><label class="fx-call-label" for="frPackSigner">Signed by</label>' +
+        '<select class="fx-call-input" id="frPackSigner">' + list.map(function (s) {
+          return '<option value="' + H.escapeHtml(s.name) + '" data-role="' + H.escapeHtml(s.role || "") + '"' +
+            (now && now.name === s.name ? " selected" : "") + ">" + H.escapeHtml(s.name) + "</option>";
+        }).join("") + "</select>" +
+        '<span class="fr-field-hint">Their name goes at the foot of the printed ' + what + ". Your choice is remembered for your next one.</span></div>"
+    );
+  }
+
+  function frPackSection(f, write) {
+    if (f.status !== "approved" && f.status !== "finished") return "";
+    var open = '<section class="fx-panel fx-panel--wide fr-pack-panel" data-frpack>';
+    if (frPacksState !== "ok") {
+      // In memory with nothing asked for, and a team member's page, have no pack: say nothing of one.
+      if (f.teamId || f.inMemory) return "";
+      return open + "<h4>Welcome pack</h4>" + (frPacksState === "loading"
+        ? '<p class="admin-loading">Loading…</p>'
+        : '<p class="fx-empty">The welcome pack could not load just now.</p>') + "</section>";
+    }
+    var v = frPackOf(f);
+    if (!v) return "";
+    var memory = v.kind === "memory";
+    var items = Array.isArray(v.items) ? v.items : [];
+    var done = items.filter(function (i) { return i.done; }).length;
+    var sent = v.state === "sent";
+    // In memory with no posters asked for, the note is all there is to print.
+    var noteOnly = memory && !items.some(function (i) { return !i.skippedReason && /^(posters_a4|posters_a3|leaflets)$/.test(i.key); });
+    var help = memory
+      ? "What they asked for on the form. Tick each thing as it goes in the envelope, then mark it as sent."
+      : "Everything this page gets in the post. Tick each thing as it goes in, then mark the pack as sent.";
+    var send = "";
+    if (sent) {
+      send = '<p class="fr-pack-sent">' + H.escapeHtml("Sent on " + H.fmtDate(v.sentAt) + (v.sentBy ? " by " + frWho(v.sentBy) : "")) + "</p>" +
+        (write ? '<button class="admin-btn admin-btn--small fr-btn-quiet" type="button" data-frpackundo>Undo</button>' : "");
+    } else if (write) {
+      send = '<button class="admin-btn admin-btn--small" type="button" data-frpacksend' + (v.canSend ? "" : " disabled") + ">" + (memory ? "Sent" : "Pack sent") + "</button>" +
+        (v.canSend ? "" : '<span class="fr-field-hint">Tick everything, or leave it out with a reason, first.</span>');
+    }
+    return (
+      open + "<h4>" + H.escapeHtml(v.title || "Welcome pack") + "</h4>" +
+        '<p class="fr-pack-head"><span class="fx-state fx-state--' + (FR_PACK_TONE[v.state] || "todo") + ' fr-pack-state">' + H.escapeHtml(v.stateLabel || "") + "</span>" +
+          '<span class="fr-pack-count">' + done + " of " + items.length + (memory ? " ready" : " in the pack") + "</span></p>" +
+        (sent ? "" : '<p class="fx-help">' + help + "</p>") +
+        '<ul class="fr-pack-list">' + items.map(function (i) { return frPackItemHtml(v, i, write); }).join("") + "</ul>" +
+        '<div class="fr-pack-post">' + frPackAddressHtml(v) + frPackSignHtml(v, write) + "</div>" +
+        '<div class="fx-call-row fr-pack-print">' +
+          (noteOnly ? "" : '<button class="admin-btn admin-btn--small" type="button" data-frpackprint="all">' + (memory ? "Print the note and posters" : "Print welcome pack") + "</button>") +
+          '<button class="admin-btn admin-btn--small' + (noteOnly ? "" : " fr-btn-quiet") + '" type="button" data-frpackprint="letter">' +
+            (noteOnly ? "Print the note" : memory ? "Print note only" : "Print letter only") + "</button>" +
+        "</div>" +
+        (send ? '<div class="fx-call-row fr-pack-send">' + send + "</div>" : "") +
+        frNoticeHtml("pack", "frPackStatus") +
+      "</section>"
+    );
+  }
+
+  // One press: save it, then read the packs (and the History) again so the list shows how it stands.
+  function frPackPost(body, doing, saidOk) {
+    var f = frOpenRecord();
+    if (!f || frBusy) return;
+    return frRun("pack", doing, function (run) {
+      return frSend("POST", "/api/admin/fundraisers/" + f.id + "/pack", body).then(function (r) {
+        if (r.ok) {
+          if (run.open()) frPackClear();
+          run.say(saidOk || "Saved.", false);
+        } else if (r.status === 400 && r.body && r.body.fields) {
+          run.say(Object.keys(r.body.fields).map(function (k) { return r.body.fields[k]; }).join(" "), true);
+          return;
+        } else {
+          // Someone else changed it, or it is no longer there: show how it stands now.
+          if (run.open()) frPackClear();
+          run.say(frRefusal(r, "That was not saved. Please try again."), true);
+        }
+        return Promise.all([frLoadPacks(), frLoadHistory(f.id)]).then(function () { return r.ok; });
+      });
+    });
+  }
+
+  function frPackSigner(select) {
+    var opt = select.selectedOptions && select.selectedOptions[0];
+    if (!opt) return;
+    frPackPost({ action: "signer", name: opt.value, role: opt.getAttribute("data-role") || null }, "Saving…", "Saved. " + opt.value + " signs this one.");
+  }
+
+  function frPackCopy() {
+    var box = el("frPackAddress");
+    if (!box) return;
+    var words = Array.prototype.map.call(box.querySelectorAll("span"), function (s) { return s.textContent; }).join("\n");
+    var said = function (ok) {
+      frSay("pack", ok ? "Address copied." : "Could not copy it. Select the address and copy it by hand.", !ok);
+      frPaintNotice("pack");
+    };
+    if (window.navigator && window.navigator.clipboard && window.navigator.clipboard.writeText) {
+      window.navigator.clipboard.writeText(words).then(function () { said(true); }, function () { said(false); });
+    } else {
+      said(false);
+    }
+  }
+
+  // The print view opens in its own tab, as every material does (frOpenMaterial): fetched with the
+  // staff member's session and shown from memory. Who signs is kept first, so the letter says it.
+  function frPackPrint(part) {
+    var f = frOpenRecord();
+    if (!f || frBusy) return;
+    var id = f.id;
+    var v = frPackOf(f);
+    var tab = window.open("", "_blank");
+    try {
+      if (tab) {
+        tab.document.title = "Opening";
+        tab.document.body.textContent = "Opening, one moment.";
+      }
+    } catch (e) { /* a tab we cannot write to still navigates */ }
+    var select = el("frPackSigner");
+    var opt = select && select.selectedOptions && select.selectedOptions[0];
+    var keep = frCanWrite() && v && !v.signer && opt
+      ? frSend("POST", "/api/admin/fundraisers/" + id + "/pack", { action: "signer", name: opt.value, role: opt.getAttribute("data-role") || null })
+      : Promise.resolve(null);
+    keep
+      .then(function () {
+        return authFetch("/api/admin/fundraisers/" + id + "/pack/print" + (part === "letter" ? "?part=letter" : ""));
+      })
+      .then(function (res) { return res.ok ? res.text() : Promise.reject(new Error("failed")); })
+      .then(function (page) {
+        var url = URL.createObjectURL(new Blob([page], { type: "text/html" }));
+        if (tab && !tab.closed) tab.location.href = url;
+        else window.open(url, "_blank");
+        setTimeout(function () { URL.revokeObjectURL(url); }, 120000);
+        if (keep && v && !v.signer && opt) frLoadPacks();
+      })
+      .catch(function (err) {
+        if (err && err.message === "unauthorized") return;
+        if (tab && !tab.closed) tab.close();
+        frSay("pack", "Could not open that. Try again.", true, id);
+        frPaintNotice("pack");
+      });
+  }
+
+  function frPackWire(view) {
+    view.addEventListener("click", function (e) {
+      var t = e.target;
+      if (!t || !t.closest) return;
+      var print = t.closest("[data-frpackprint]");
+      if (print) return frPackPrint(print.getAttribute("data-frpackprint"));
+      if (t.closest("[data-frpackcopy]")) return frPackCopy();
+      var skip = t.closest("[data-frpackskip]");
+      if (skip) {
+        if (frBusy) return;
+        frPackSkip = skip.getAttribute("data-frpackskip");
+        frPackSkipDraft = "";
+        frSay("pack", "", false);
+        frRenderList();
+        var box = el("frPackSkipReason");
+        if (box && box.focus) box.focus({ preventScroll: true });
+        return;
+      }
+      if (t.closest("[data-frpackskipcancel]")) {
+        frPackClear();
+        frSay("pack", "", false);
+        return frRenderList();
+      }
+      var back = t.closest("[data-frpackback]");
+      if (back) return frPackPost({ action: "untick", key: back.getAttribute("data-frpackback") }, "Saving…", "Put back.");
+      if (t.closest("[data-frpacksend]")) return frPackPost({ action: "send" }, "Saving…", "Marked as sent.");
+      if (t.closest("[data-frpackundo]")) {
+        if (!window.confirm("Undo Sent? It goes back to Ready to send.")) return;
+        return frPackPost({ action: "undo" }, "Saving…", "Undone.");
+      }
+    });
+    view.addEventListener("change", function (e) {
+      var t = e.target;
+      if (!t || !t.getAttribute) return;
+      if (t.id === "frPackSigner") return frPackSigner(t);
+      var key = t.getAttribute("data-frpacktick");
+      if (key === null) return;
+      if (frBusy) {
+        t.checked = !t.checked; // a change is already on its way: this one waits
+        return;
+      }
+      frPackPost({ action: t.checked ? "tick" : "untick", key: key }, "Saving…", t.checked ? "Ticked." : "Unticked.");
+    });
+    view.addEventListener("input", function (e) {
+      if (e.target && e.target.id === "frPackSkipReason") frPackSkipDraft = e.target.value;
+    });
+    view.addEventListener("submit", function (e) {
+      var form = e.target;
+      if (!form || form.id !== "frPackSkipForm") return;
+      e.preventDefault();
+      var reason = String((form.querySelector('[name="reason"]') || {}).value || "").trim();
+      if (!reason) {
+        frSay("pack", "Say why it is being left out.", true);
+        return frPaintNotice("pack");
+      }
+      frPackPost({ action: "skip", key: frPackSkip, reason: reason }, "Saving…", "Left out.");
     });
   }
 

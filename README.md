@@ -9641,6 +9641,101 @@ Tests: `test/unit/fundraising-signup-tidy*.test.ts`, `fundraising-signup-paths.t
 `admin-fundraising-signup-tidy.test.ts`, `fundraise-join-page.test.ts`; BDD
 `features/fundraising-signup-tidy.feature`.
 
+## Welcome packs: what goes in the post to each approved page
+
+Jaimie, 2026-10-03. Every approved fundraiser and event host gets a welcome pack in the post. What is
+in it is worked out from their sign up each time, only what applies to that page
+(`src/fundraising/welcome-pack.ts`, pure):
+
+| In the pack | Who gets it |
+| --- | --- |
+| The printed **welcome letter** | Everyone with a pack |
+| What they **asked for** on the form, in the numbers they asked for: A4 and A3 posters, A5 leaflets, printed QR codes, collection buckets and tins | Whoever asked. The form asks only how many posters, so they are A4 unless the organiser's last "Ask us to print these" gave sizes that add up to the same number |
+| The paper **sponsor form** | Someone raising money, never an event |
+| The **NBCC T-shirt**, in the size they chose | A sporting event. With no size yet it shows "Waiting for T-shirt size", cannot be ticked, and has the "Ask them for their T-shirt size" button |
+
+**In memory of someone** there is no welcome pack and no T-shirt. The same panel is **Things to
+send**: exactly what they asked for (collection envelopes, QR cards for the order of service, a few
+posters) with a gentle covering note, and no panel at all when they asked for nothing. **A team
+member's page** has none: it gave no address.
+
+### Admin > Fundraising
+
+Each approved sign up has a **Welcome pack** panel: a tick box for each thing (who ticked it, and
+when), **Leave out** with a reason, the address ready to copy (their name, each line, the town and
+the postcode; in memory, "This can be the funeral director's address"), who signs the letter,
+**Print welcome pack** and **Print letter only**, then **Pack sent** (the date and who) and
+**Undo**. Pack sent only works once every thing is ticked or left out with a reason. It is **To
+pack**, **Part packed**, **Ready to send** or **Sent**. A tick is kept with how many there were when
+it was made: if they have since asked for a different number, the tick no longer counts and the row
+says so. The list has a **Pack to send** pill (in memory, **Things to send**) and a **Packs to send
+(N)** filter: every approved page with a pack not yet sent. Editors and admins tick; viewers read
+and print. Every change is in `audit_log` (`fundraiser.pack_updated`) and so in the History.
+
+**Signed by** is the admin's one list of who can sign for NBCC (`AdminHelpers.SIGNERS`, as the thank
+you letters use). It is chosen per pack, and each staff member's last choice is offered first on
+their next one (`welcome_packs.signer_by`).
+
+### The print view
+
+`GET /api/admin/fundraisers/:id/pack/print` is one self contained page
+(`src/fundraising/welcome-pack-print.ts`), opened in its own tab and printed or saved as a PDF from
+the browser, like every material. In order: the welcome letter (A4), their posters in the sizes and
+numbers they asked for (the same renderers as the materials; each size on its own paper, so A3 pages
+come out as A3), then the sponsor form for someone raising money. `?part=letter` is the letter on its
+own. Anything staff left out is left out of the print and of the letter's list; what is in the pack
+but cannot be printed (buckets, the T-shirt) is listed on screen only. A poster asked for ten times
+is drawn once and copied by a small script before printing, so the page stays light.
+
+The **welcome letter** is in the thank you letter's house style: the maroon frame, our address
+(The Elves' Workshop) and the logo, a script signature, the maroon foot with the phone number,
+events@nbcc.scot and the charity statement word for word. Their name and address sit where the
+window of a C5 or DL envelope shows them with the letter folded in three (22mm in and 48mm down, in
+a space 84mm by 34mm). It has their first name, the fundraiser's title, their page's address and QR
+code, what is in the pack, how to pay money in (the private area), the help page, and how to reach
+us. An event host's says "your event's page" and never mentions a sponsor form. **The wording is a
+draft for Jaimie to approve** (`welcomeLetter` and `coveringNote` in `welcome-pack.ts`). In memory,
+the covering note is quiet: cream and tan, no QR code, no exclamation marks.
+
+### Elsewhere
+
+- **The Monday summary** (`src/fundraising/summary.ts`): "N welcome packs to send" (pages approved
+  more than 2 days ago whose welcome pack is not sent) and "N waiting for a T-shirt size", both in
+  Waiting on us. If the packs cannot be read the summary still goes, without the first line.
+- **The organiser's private area**: one small line once theirs has been sent, "Your welcome pack is
+  on its way. We posted it on 4 October 2026." (in memory: "The things you asked for are on their
+  way."), and nothing before. Never who sent it.
+
+### Routes (`src/routes/admin-welcome-packs.ts`, section Fundraising)
+
+| Route | Needs | What it does |
+| --- | --- | --- |
+| `GET /api/admin/fundraising/packs` | view | `{ packs: { <id>: view }, toSend: { <id>: true }, mySigner }`: every page's pack, which are still to send, and who this staff member last chose to sign |
+| `POST /api/admin/fundraisers/:id/pack` | edit | `{ action: "tick" \| "untick", key }`, `{ action: "skip", key, reason }`, `{ action: "send" }`, `{ action: "undo" }` or `{ action: "signer", name, role }`. Answers `{ pack, words }`; 400 with `fields`, 404 when there is no pack, 409 with the reason when it cannot be done as it stands |
+| `GET /api/admin/fundraisers/:id/pack/print` | view | The print view, a whole HTML page; `?part=letter` for the letter only. Never kept, never indexed |
+
+(`PUT /api/admin/fundraisers/:id/welcome-pack`, from the sign up tidy, is a different thing: it sets
+"Sporting event?" and the T-shirt size.)
+
+### Data (`migrations/1791200000230_welcome-packs.js`, additive only)
+
+Two new tables, cleared with their fundraiser. `welcome_packs`: one row per fundraiser, made the
+first time staff touch its pack (`sent_at`, `sent_by`, `signer`, `signer_role`, `signer_by`).
+`welcome_pack_items`: one row per thing staff have ticked or left out (`key`, the `label` and
+`quantity` as they were then, `ticked_at`, `ticked_by`, `skipped_reason`; ticked or left out,
+never both). A thing nobody has touched needs no row, and what a pack holds is never stored.
+Numbered 230, above everything on its way to main before it. In the nightly backup's table count
+(86).
+
+### Where it lives, and tests
+
+`src/fundraising/welcome-pack.ts` (the rules and the words), `welcome-pack-print.ts` (the print
+view), `src/db/welcome-packs.ts`, `src/routes/admin-welcome-packs.ts`, and one marked block in
+`assets/js/admin/app.js` ("Welcome packs") with its styles in `assets/css/admin.css`. Unit tests:
+`fundraising-welcome-pack`, `fundraising-welcome-pack-print`, `welcome-packs-db`,
+`welcome-packs-migration`, `admin-welcome-packs-routes`, `admin-fundraising-pack-panel`,
+`fundraising-summary-packs`, `fundraise-manage-pack`. BDD: `features/fundraising-welcome-pack.feature`.
+
 ## Community fundraising, profile pictures
 
 Decided by Jaimie (2026-10-03). A page keeps its **main photo**, and gains a small **round photo of
@@ -10315,7 +10410,7 @@ lives in; the Drive copy is not immutable.
 
 ### There are THREE databases, not one
 
-This is the trap this feature was built around. `DATABASE_URL` holds 75 tables
+This is the trap this feature was built around. `DATABASE_URL` holds 83 tables
 (42 when this was built; the Events page added three in TASK-453, the Festive Ball ticket
 report one in TASK-464, the admin's New pills one, `admin_seen`, in TASK-478, site analytics
 four in TASK-479, the business supporter call log in TASK-491, community fundraising five
@@ -10325,9 +10420,10 @@ thank yous to supporters and the address level opt out list three in TASK-507, t
 links one in TASK-511, the fundraising categories one in TASK-514, and which automatic emails each
 fundraiser has had and the Do it again links two in TASK-515, the team invites and team
 organiser handovers two for team pages, the approved automatic email wordings one, the impact
-examples one for what gifts could do, and the photos organisers send one for profile pictures, and six
+examples one for what gifts could do, and the photos organisers send one for profile pictures, six
 for event tickets: the ticket types, each event's limit and sales switch, the orders and their
-lines (with buyers' names, emails and phones), the refunds and the refund requests),
+lines (with buyers' names, emails and phones), the refunds and the refund requests, and two for
+welcome packs: each page's pack and the things ticked in it),
 but `STORIES_DATABASE_URL` and `CONTACT_DATABASE_URL` are separate databases
 (deliberately, so the public story and contact forms can never reach donor
 data). A `pg_dump $DATABASE_URL` captures 83 of **86** tables and silently

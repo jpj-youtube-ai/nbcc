@@ -49,6 +49,9 @@ vi.mock("../../src/db/fundraiser-sign-in", () => signIn);
 vi.mock("../../src/db/fundraising-requests", () => requestsDb);
 // TASK-512: the organiser's last asks to print, read back from the audit log.
 vi.mock("../../src/db/fundraiser-materials", () => ({ lastPrintAsks: vi.fn(async () => []), materialScans: vi.fn(), askToPrint: vi.fn(), PrintAskError: Error }));
+// Welcome packs: whether theirs has been sent.
+const packsDb = vi.hoisted(() => ({ getPack: vi.fn() }));
+vi.mock("../../src/db/welcome-packs", () => packsDb);
 vi.mock("../../src/fundraising/send", () => send);
 vi.mock("../../src/newsletter/self-signup", () => ({ subscribeSelf: vi.fn() }));
 vi.mock("../../src/clients/turnstile", () => ({ captchaEnabled: () => false, captchaSiteKey: () => null, verifyCaptcha: vi.fn() }));
@@ -157,6 +160,7 @@ beforeEach(() => {
   db.waitingEditFor.mockResolvedValue(null);
   db.wallRows.mockResolvedValue([]);
   requestsDb.listRequestRowsFor.mockReset().mockResolvedValue([]);
+  packsDb.getPack.mockReset().mockResolvedValue(null);
   signIn.findSession.mockImplementation(async (hash: string) =>
     hash === hashSessionId(SESSION_ID) ? { email: "sam@example.com", expiresAt: new Date(Date.now() + 3600_000) } : null,
   );
@@ -357,6 +361,28 @@ describe("the private area", () => {
     });
     // A private one has no page, so no page link and no QR code.
     expect(body.fundraisers[1]).toMatchObject({ pageUrl: null, qrUrl: null });
+  });
+
+  // Welcome packs: a small line once theirs has been sent, and nothing before.
+  it("says their welcome pack is on its way once it is sent, and nothing before", async () => {
+    db.listForOrganiser.mockResolvedValue([record(), record({ id: 10, slug: "sams-swim", title: "Sam's Swim" })]);
+    packsDb.getPack.mockImplementation(async (id: number) =>
+      id === 9 ? { sentAt: "2026-10-04T09:00:00.000Z", sentBy: "admin:fern@example.com", signer: null, signerRole: null, items: [] } : null,
+    );
+    const body = (await run(getManageSession, { cookie: SAM })).body as { fundraisers: Array<{ pack: string | null }> };
+    expect(body.fundraisers[0].pack).toBe("Your welcome pack is on its way. We posted it on 4 October 2026.");
+    expect(body.fundraisers[1].pack).toBeNull();
+    expect(JSON.stringify(body)).not.toContain("fern@example.com");
+  });
+
+  it("still shows the rest when the pack cannot be read", async () => {
+    db.listForOrganiser.mockResolvedValue([record()]);
+    packsDb.getPack.mockRejectedValue(new Error("down"));
+    const errors = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const res = await run(getManageSession, { cookie: SAM });
+    errors.mockRestore();
+    expect(res.statusCode).toBe(200);
+    expect((res.body as { fundraisers: Array<{ pack: string | null }> }).fundraisers[0].pack).toBeNull();
   });
 
   // Event pages: an approved public event's page, and its QR codes, are at /event/<short name>.

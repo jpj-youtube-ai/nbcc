@@ -376,6 +376,13 @@
 
       q("[data-f-title]").textContent = f.title || "";
       q("[data-f-status]").textContent = statusWords(f);
+      // Welcome packs: "Your welcome pack is on its way", once staff have marked it sent.
+      var packLine = q("[data-f-pack]");
+      if (packLine) {
+        var packWords = typeof f.pack === "string" ? f.pack : "";
+        packLine.textContent = packWords;
+        packLine.hidden = !packWords;
+      }
       var pageLine = q("[data-f-page-line]");
       pageLine.hidden = !f.pageUrl;
       if (f.pageUrl) q("[data-f-page]").setAttribute("href", f.pageUrl);

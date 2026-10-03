@@ -1039,3 +1039,9 @@ export function materialsMessagePage(heading: string, words: string, link?: { hr
     link ? `<p><a href="${escapeHtml(link.href)}">${escapeHtml(link.text)}</a></p>` : ""
   }</main></body></html>`;
 }
+
+/**
+ * Welcome packs (./welcome-pack-print.ts): the pages and rules of the printed pieces, so the one
+ * print view of a pack is drawn from exactly what each piece draws on its own.
+ */
+export const PACK_PIECES = { posterPage, posterCss, sponsorPages, sponsorCss: SPONSOR_CSS, pageRules: EVERYTHING_PAGES, pageCss: EVERYTHING_CSS };

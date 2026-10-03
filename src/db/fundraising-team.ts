@@ -8,6 +8,7 @@ import { countPendingPictures } from "./fundraiser-pictures";
 import { countPendingThanks } from "./fundraiser-thanks";
 import { countHeldMessages } from "./fundraiser-memory";
 import { readPromptCounts } from "./fundraising-touch";
+import { sentPackIds } from "./welcome-packs";
 import { INVITE_TTL_DAYS, inviteCc, inviteFullName, inviteNameParts, staffFirstName } from "../fundraising/invite";
 import { summaryRecipientsSchema, type SummaryInputs } from "../fundraising/summary";
 import type { CallRecord, CallWhich } from "../fundraising/follow-up";
@@ -466,6 +467,14 @@ export async function readSummaryInputs(now: Date): Promise<SummaryInputs> {
       }),
     // In memory: messages waiting for staff. Only one line of the summary: if they cannot be counted,
     // the summary still goes, without it.
+    // Welcome packs: whose pack has gone. Only one line of the summary: if they cannot be read, the
+    // summary still goes, without it.
+    packsSent: await sentPackIds()
+      .then((ids) => [...ids])
+      .catch((err: unknown) => {
+        console.error("fundraising summary welcome packs read failed:", err instanceof Error ? err.message : err);
+        return null;
+      }),
     messagesToCheck: await countHeldMessages().catch((err: unknown) => {
       console.error("fundraising summary in memory messages count failed:", err instanceof Error ? err.message : err);
       return 0;

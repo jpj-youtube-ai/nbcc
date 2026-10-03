@@ -588,7 +588,7 @@ describe("nothing else on the screen moves", () => {
     await openFundraising();
     expect(text(el("frSwitchState"))).toMatch(/^Yes\./);
     // TASK-505 added Requests to do and Buckets not back, after Calls due.
-    expect(qa("[data-frfilter]").map((b) => b.getAttribute("data-frfilter"))).toEqual(["", "new", "approved", "declined", "finished", "calls", "requests", "notback"]);
+    expect(qa("[data-frfilter]").map((b) => b.getAttribute("data-frfilter"))).toEqual(["", "new", "approved", "declined", "finished", "calls", "requests", "notback", "packs"]); // welcome packs added Packs to send
     expect(qa("#frList tr.fx-summary")).toHaveLength(3);
   });
 });

@@ -2348,6 +2348,38 @@ describe("18 or over, and the split with another cause", () => {
     expect(text(el("frSplitStatus"))).toContain("The split cannot be changed now");
   });
 
+  it("says a correction in the history in plain words", async () => {
+    records = [fundraiser(9, SHARED)];
+    historyRows = { 9: [{ id: 4, actor: "admin:fern@example.com", action: "fundraiser.split_changed", data: {}, createdAt: "2026-10-01T09:00:00.000Z" }] };
+    await openFundraising();
+    await openRow(9);
+    expect(text(el("frHistory"))).toContain("Split with another cause changed");
+    expect(text(el("frHistory"))).not.toContain("fundraiser.split_changed");
+  });
+
+  it("hides and switches off the percentage and the name when No is chosen, as the public form does", async () => {
+    records = [fundraiser(9, SHARED)];
+    await openFundraising();
+    await openRow(9);
+    const fields = q("[data-frsplitfields]") as HTMLElement;
+    expect(fields.hidden).toBe(false);
+    (q("#frSplitNo") as HTMLInputElement).click();
+    expect(fields.hidden).toBe(true);
+    expect((q("#frSplitPercent") as HTMLInputElement).disabled).toBe(true);
+    expect((q("#frSplitCause") as HTMLInputElement).disabled).toBe(true);
+    (q("#frSplitYes") as HTMLInputElement).click();
+    expect(fields.hidden).toBe(false);
+    expect((q("#frSplitPercent") as HTMLInputElement).disabled).toBe(false);
+  });
+
+  it("starts with them hidden for a fundraiser not sharing", async () => {
+    records = [fundraiser(9, { over18: true, sharesWithOther: false })];
+    await openFundraising();
+    await openRow(9);
+    expect((q("[data-frsplitfields]") as HTMLElement).hidden).toBe(true);
+    expect((q("#frSplitPercent") as HTMLInputElement).disabled).toBe(true);
+  });
+
   it("is never offered to an editor, who sees the split but cannot change it", async () => {
     asRole("editor");
     records = [fundraiser(9, SHARED)];

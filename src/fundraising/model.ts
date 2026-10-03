@@ -1053,6 +1053,12 @@ export interface PublicCard extends Partial<PublicEventAnswers> {
   /** The fundraiser's own page, or null for an event sign up (listed as an event, no page). */
   url: string | null;
   meter: Meter;
+  /**
+   * Jaimie, 2026-10-03: shared with another cause, with the statement the 2009 regulations ask for;
+   * null when it is not shared (or a sign up from before it was asked). On every card (an event has no
+   * page, so its card is where the public sees it) and on the page.
+   */
+  split?: PublicSplit | null;
 }
 
 export interface PublicPage extends PublicCard {
@@ -1062,11 +1068,6 @@ export interface PublicPage extends PublicCard {
   finished?: boolean;
   /** TASK-506: the news updates staff approved, newest first (src/fundraising/news.ts publicNews). */
   news?: NewsEntry[];
-  /**
-   * Jaimie, 2026-10-03: shared with another cause, with the statement the 2009 regulations ask for;
-   * null when it is not shared (or a sign up from before it was asked).
-   */
-  split?: PublicSplit | null;
 }
 
 export interface PublicSplit {
@@ -1117,6 +1118,7 @@ export function publicCard(f: FundraiserRecord, m: Meter): PublicCard {
     ageLimit: f.ageLimit,
     dressCode: f.dressCode,
     included: f.included,
+    split: publicSplit(f),
   };
 }
 
@@ -1126,7 +1128,6 @@ export function publicPage(f: FundraiserRecord, m: Meter, wall: WallEntry[]): Pu
     wall,
     giving: { fundraiserId: f.id, minimumPence: GIFT_MIN_PENCE },
     finished: f.status === "finished",
-    split: publicSplit(f),
   };
 }
 

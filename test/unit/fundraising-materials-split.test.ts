@@ -82,6 +82,18 @@ describe("every printed piece", () => {
     expect(html.indexOf(SPLIT)).toBeLessThan(html.indexOf('<p class="sf-decl"'));
   });
 
+  it("the sponsor form says it is in aid of both, matching the split line", () => {
+    const html = renderSponsorForm(facts(), ASSETS);
+    const inAid = /<span class="k">In aid of<\/span><span class="v wide">([^<]*)<\/span>/.exec(html)?.[1];
+    expect(inAid).toBe("Night Before Christmas Campaign (NBCC), Scottish Charity SC047995, and Kilmarnock Food Larder");
+    const escaped = renderSponsorForm(facts({ otherCauseName: "Kids & Co <Larder>" }), ASSETS);
+    expect(escaped).toContain("Scottish Charity SC047995, and Kids &amp; Co &lt;Larder&gt;</span>");
+    const plain = renderSponsorForm(facts({ sharesWithOther: false, nbccSharePercent: null, otherCauseName: null }), ASSETS);
+    expect(/<span class="k">In aid of<\/span><span class="v wide">([^<]*)<\/span>/.exec(plain)?.[1]).toBe(
+      "Night Before Christmas Campaign (NBCC), Scottish Charity SC047995",
+    );
+  });
+
   it("the certificate carries it", () => {
     const html = renderCertificate(facts({ status: "finished" }), ASSETS, { date: "1 January 2027", preview: false });
     expect(count(html, SPLIT)).toBe(1);
@@ -131,6 +143,89 @@ describe("room on the poster", () => {
   it("gives the logo up a little, so the split statement fits without moving the QR code", () => {
     const shared = facts();
     const plain = facts({ sharesWithOther: false, nbccSharePercent: null, otherCauseName: null });
-    expect(posterLogoMm(shared)).toBe(posterLogoMm(plain) - 8);
+    expect(posterLogoMm(shared)).toBe(posterLogoMm(plain) - 6);
+  });
+});
+
+// Review fix: everything still fits the paper in the worst case (the longest title, card line and
+// other cause's name the form takes, with a date, a place and a target), so nothing is cut off or
+// covers the charity statement (.page{overflow:hidden}). Checked in a real browser by printing; these
+// pin the layout choices that make the room.
+describe("the worst case still fits", () => {
+  const WORST = {
+    title: "The Exampleton and District Grand Christmas Sponsored Walk, Swim and Cycle for Everyone, Weatherpermitting".slice(0, 100),
+    cardLine: "A long day of walking, swimming and cycling right round the whole of Exampleton and back again, with soup and a raffle at the end",
+    venue: "The Exampleton Community Centre Main Hall",
+    town: "Exampleton by the Sea",
+    targetPence: 10_000_000,
+    name: "Alexandra Bartholomew Example Testperson Longname",
+    otherCauseName: "The Exampleton and District Community Larder and Warm Space for Everyone Who Needs a Hand Over the Long Winter Months UK",
+  };
+  const worst = (over: Partial<FundraiserRecord> = {}) => facts({ ...WORST, ...over });
+  const plainWorst = () => worst({ sharesWithOther: false, nbccSharePercent: null, otherCauseName: null });
+
+  it("uses the longest answers the form takes", () => {
+    expect(WORST.title.length).toBe(100);
+    expect(WORST.cardLine.length).toBeGreaterThan(110);
+    expect(WORST.otherCauseName.length).toBe(120);
+  });
+
+  it("lets the poster's logo go smaller than its usual least when there is a split, most of all on the leaflet", () => {
+    expect(posterLogoMm(plainWorst(), "a4")).toBe(40);
+    expect(posterLogoMm(worst(), "a4")).toBe(34);
+    expect(posterLogoMm(worst(), "a3")).toBe(34);
+    expect(posterLogoMm(worst(), "a5")).toBe(28);
+    expect(posterLogoMm(worst(), "a5")).toBeLessThan(38);
+    // A short poster with a split still has a big logo.
+    expect(posterLogoMm(facts(), "a4")).toBeGreaterThan(50);
+  });
+
+  it("draws each poster size's logo at its own height, and a slightly smaller QR code on a shared leaflet", () => {
+    const html = renderEverything(worst({ status: "approved" }), ASSETS, { date: "x", script: "" });
+    expect(html).toContain(".size-a5 .p-logo{height:28mm}");
+    expect(html).toContain(".size-a4 .p-logo{height:34mm}");
+    expect(html).toMatch(/\.size-a5\.has-split \.p-qr svg\{width:58mm;height:58mm\}/);
+    expect(renderPoster(worst(), ASSETS, "a5")).toContain('class="page size-a5 poster has-split"');
+    expect(renderPoster(plainWorst(), ASSETS, "a5")).toContain('class="page size-a5 poster"');
+  });
+
+  it("keeps the pledge to one smaller line when there is a split", () => {
+    expect(renderPoster(worst(), ASSETS)).toMatch(/\.has-split \.p-foot \.pledge\{font-size:11pt/);
+  });
+
+  const rows = (html: string, page: number) => {
+    const pages = html.split('<div class="page landscape').slice(1);
+    return [...pages[page].matchAll(/<tr class="sf-row"><td class="n">(\d+)<\/td>/g)].map((m) => Number(m[1]));
+  };
+
+  it("gives the sponsor form a row less on each page for the split, and fewer on page 1 for a long name", () => {
+    const html = renderSponsorForm(worst(), ASSETS);
+    expect(rows(html, 0)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9]);
+    expect(rows(html, 1)).toEqual([10, 11, 12, 13, 14, 15, 16, 17, 18, 19]);
+    // A split with a short name: a row less on each page.
+    expect(rows(renderSponsorForm(facts(), ASSETS), 0)).toHaveLength(11);
+    expect(rows(renderSponsorForm(facts(), ASSETS), 1)).toHaveLength(10);
+    const plain = renderSponsorForm(plainWorst(), ASSETS);
+    expect(rows(plain, 0)).toHaveLength(11);
+    expect(rows(plain, 1)).toHaveLength(11);
+    // A short name and no split: the 12 and 11 rows it always had.
+    const short = renderSponsorForm(facts({ sharesWithOther: false, nbccSharePercent: null, otherCauseName: null }), ASSETS);
+    expect(rows(short, 0)).toHaveLength(12);
+    expect(rows(short, 1)).toHaveLength(11);
+    expect(renderSponsorForm(null, ASSETS).match(/<tr class="sf-row">/g)).toHaveLength(23);
+  });
+
+  it("draws a long event name smaller on the sponsor form, so it wraps less", () => {
+    expect(renderSponsorForm(worst(), ASSETS)).toContain('<span class="v long">');
+    expect(renderSponsorForm(facts(), ASSETS)).not.toContain('<span class="v long">');
+  });
+
+  it("draws the certificate closer set when there is a split or a long name, so the statement stays inside its border", () => {
+    const cert = (d: ReturnType<typeof facts>) => renderCertificate(d, ASSETS, { date: "1 January 2027", preview: false });
+    expect(cert(worst({ status: "finished" }))).toContain('class="page landscape cert c-tight"');
+    expect(cert(plainWorst())).toContain('class="page landscape cert c-tight"');
+    expect(cert(facts({ status: "finished", sharesWithOther: false, nbccSharePercent: null, otherCauseName: null, name: "Sam Example" }))).toContain(
+      'class="page landscape cert"',
+    );
   });
 });

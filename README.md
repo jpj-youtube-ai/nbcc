@@ -7302,13 +7302,18 @@ Two more yes or no questions on the sign up form, on both paths, with nothing ch
 - "Are you sharing what you raise with another cause?" On a Yes, NBCC's whole percentage (1 to 99)
   and the other cause's name (up to 120) are required: `shares_with_other`, `nbcc_share_percent`,
   `other_cause_name`, held together by checks (`fundraisers_split_complete`: both when sharing,
-  neither when not). The fundraiser's page (beside the Give button, with "Donations on this page go
-  to NBCC as our share." in the give form) and every material that carries the charity statement
-  (the A4, A3 and A5 posters, the sponsor form on both pages, the certificate and the five pictures
-  to share) carry the statement the Charities and Benevolent Fundraising (Scotland) Regulations 2009
-  ask for, `splitStatement` in `src/fundraising/model.ts`: "60% of what we raise goes to the Night
-  Before Christmas Campaign, Scottish Charity SC047995. The rest goes to <the other cause>." The
-  charity statement itself is unchanged.
+  neither when not). The fundraiser's page (beside the Give button, with "Everything given on this
+  page goes to NBCC, as NBCC's share." in the give form), every card on Get involved (an event's card,
+  which is the only place an event is public, and a raising money card) and every material that
+  carries the charity statement (the A4, A3 and A5 posters, the sponsor form on both pages, which also
+  says it is in aid of NBCC and the other cause, the certificate and the five pictures to share) carry
+  the statement the Charities and Benevolent Fundraising (Scotland) Regulations 2009 ask for,
+  `splitStatement` in `src/fundraising/model.ts`: "60% of what we raise goes to the Night Before
+  Christmas Campaign, Scottish Charity SC047995. The rest goes to <the other cause>." The charity
+  statement itself is unchanged. So the longest answers still fit the paper, a shared poster's logo
+  may go down to 28mm (the leaflet's QR code to 58mm on the design, the pledge to one line), the
+  sponsor form has a row less per page (and fewer on page 1 with a long event name, drawn smaller),
+  and a crowded certificate is set closer (`c-tight`); checked by printing the worst case.
 - **The lock.** Organisers can never change the split: the private area's changes (`editSchema`)
   and staff's ordinary edit (`adminPatchSchema`) do not take it, and an approved change can only
   write the columns in `COLUMNS`. Only an admin may correct it, with

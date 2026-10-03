@@ -123,6 +123,8 @@ export interface MaterialFacts {
    * statement, just before it. Null when it is not shared.
    */
   splitStatement: string | null;
+  /** The other cause, when shared: the sponsor form says it is in aid of both. Null otherwise. */
+  otherCauseName: string | null;
 }
 
 /** The first sentence of a story: up to its first full stop, question or exclamation mark. */
@@ -170,6 +172,7 @@ export function materialFacts(
     linkWords: link ? link.replace(/^https?:\/\//, "").replace(/\/+$/, "") : null,
     qrLinks,
     splitStatement: splitStatement(f),
+    otherCauseName: splitStatement(f) ? (f.otherCauseName ?? "").trim() : null,
   };
 }
 
@@ -344,6 +347,7 @@ function posterTitleSize(title: string): string {
  */
 export function posterLogoMm(
   d: Pick<MaterialFacts, "title" | "line" | "when" | "where" | "targetPence"> & Partial<Pick<MaterialFacts, "splitStatement">>,
+  size: PosterSize = "a4",
 ): number {
   const t = d.title.length;
   const l = d.line?.length ?? 0;
@@ -354,10 +358,15 @@ export function posterLogoMm(
   if (l > 70) mm -= 6;
   if (l > 110) mm -= 2;
   if (d.when && d.where && d.targetPence) mm -= 2;
-  // The split statement's two lines in the foot.
-  if (d.splitStatement) mm -= 8;
-  return Math.max(38, mm);
+  // Review fix: the split statement's lines in the foot. On the leaflet the foot's words are drawn
+  // bigger on the design (so they print at 7pt or more: statementPt), so it takes more room there.
+  // With a split the logo may go below its usual least, so the worst case still fits the paper.
+  if (d.splitStatement) mm -= size === "a5" ? 12 : 6;
+  return Math.max(d.splitStatement ? SPLIT_LOGO_MIN_MM : 38, mm);
 }
+
+/** The least the poster's logo goes to when there is a split statement to fit in too. */
+export const SPLIT_LOGO_MIN_MM = 26;
 
 // Each paper's scale from A4: its width over 210mm, so the design fills it edge to edge.
 const SCALE: Record<PosterSize, string> = { a5: "0.70476", a4: "1", a3: "1.41428" };
@@ -386,7 +395,20 @@ const SIZE_CSS = (Object.keys(POSTER_SIZES) as PosterSize[])
   )
   .join("\n  ");
 
-function posterCss(logoMm: number): string {
+// Review fix: with a split, the pledge in the foot is one smaller line, and on the leaflet the QR code
+// is a little smaller (58mm on the design, still about 41mm across on A5), so the worst case fits.
+const SPLIT_POSTER_CSS = `
+  .has-split .p-foot .pledge{font-size:11pt;line-height:1.25}
+  .size-a5.has-split .p-qr svg{width:58mm;height:58mm}`;
+
+/** The poster's rules, with each paper size's own logo height for these facts. */
+function posterCss(d: MaterialFacts): string {
+  const logos = (Object.keys(POSTER_SIZES) as PosterSize[]).map((s) => `.size-${s} .p-logo{height:${posterLogoMm(d, s)}mm}`).join("");
+  return `${posterCssFor(posterLogoMm(d))}${SPLIT_POSTER_CSS}
+  ${logos}`;
+}
+
+function posterCssFor(logoMm: number): string {
   return `
   .poster{background:var(--maroon)}
   .p-scale{width:210mm;height:297mm;padding:7mm;transform-origin:0 0}
@@ -438,7 +460,7 @@ function posterPage(d: MaterialFacts, a: MaterialAssets, size: PosterSize): stri
         <div class="p-scan-words">${d.linkKind === "page" ? "Scan to give" : "Scan to find out more"}</div>
         <div class="p-address">or visit ${escapeHtml(d.linkWords)}</div>`
       : `<p class="p-noqr">Find out more about NBCC<br>at <b>nbcc.scot</b></p>`;
-  return `<div class="page size-${size} poster">
+  return `<div class="page size-${size} poster${d.splitStatement ? " has-split" : ""}">
   <div class="p-scale">
   <div class="p-sheet">
     <div class="p-body">
@@ -468,7 +490,7 @@ export function renderPoster(d: MaterialFacts, a: MaterialAssets, size: PosterSi
     title: `${label} for ${escapeHtml(d.title)}`,
     paper: `${paper} portrait`,
     fontCss: a.fontCss,
-    css: posterCss(posterLogoMm(d)),
+    css: posterCss(d),
     toolbar: `<span>Your ${label} for <b>${escapeHtml(d.title)}</b></span>`,
     body: posterPage(d, a, size),
     tip:
@@ -590,7 +612,8 @@ const SPONSOR_CSS = `
   .sf-fields .k{font-weight:600;color:var(--maroon);white-space:nowrap}
   .sf-fields .v{border-bottom:1px solid #9b8f86;min-height:6mm;padding:0 1mm .6mm;font-family:var(--head);font-weight:700;color:var(--slate);font-size:11pt;overflow-wrap:anywhere}
   .sf-fields .wide{grid-column:2 / span 3}
-  .sf-split{margin-top:2.5mm;font-size:8.5pt;line-height:1.4;font-weight:600;color:var(--maroon)}
+  .sf-fields .v.long{font-size:9.5pt;line-height:1.3}
+  .sf-split{margin-top:2mm;font-size:8pt;line-height:1.35;font-weight:600;color:var(--maroon)}
   .sf-decl{margin-top:3mm;background:var(--tan-soft);border-left:3px solid var(--crimson);border-radius:0 2mm 2mm 0;padding:2.2mm 4mm;font-size:7.8pt;line-height:1.45}
   .sf-remember{margin-top:1.6mm;font-size:8pt;font-weight:600;color:var(--maroon)}
   .sf-table{width:100%;border-collapse:collapse;margin-top:2.5mm;table-layout:fixed;font-size:8pt}
@@ -617,6 +640,18 @@ function sponsorRows(from: number, count: number): string {
   return rows;
 }
 
+/**
+ * Review fix: the rows on each page of the sponsor form. 12 and 11 as always; with a split, a row less
+ * on each page for its lines, and with a long event name (it wraps in its box) a row less on page 1,
+ * so the foot and the charity statement always fit the paper.
+ */
+export function sponsorRowCounts(d: Pick<MaterialFacts, "title" | "splitStatement"> | null): [number, number] {
+  const split = d?.splitStatement ? 1 : 0;
+  const longName = d && d.title.length > 60 ? 1 : 0;
+  // Both together on page 1: its split lines and a long name in a smaller face still need one more.
+  return [12 - split - longName - split * longName, 11 - split];
+}
+
 const SPONSOR_COLS = `<colgroup><col style="width:7mm"><col style="width:60mm"><col><col style="width:25mm"><col style="width:23mm"><col style="width:23mm"><col style="width:17mm"></colgroup>`;
 const SPONSOR_HEAD = `<thead><tr><th class="c">No.</th><th>Full name<small>first name or initial, and surname</small></th><th>Home address<small>first line. Only needed if you tick Gift Aid. Not your work address, please.</small></th><th>Postcode</th><th>Amount<small>&pound;</small></th><th>Date paid</th><th class="c">Gift Aid?<small>tick &#10003;</small></th></tr></thead>`;
 
@@ -633,8 +668,10 @@ function sponsorPages(d: MaterialFacts | null, a: MaterialAssets): string {
     </div>`;
   const fields = `<div class="sf-fields">
       <span class="k">Please sponsor me</span><span class="v"></span>
-      <span class="k">To (name of event)</span><span class="v">${event}</span>
-      <span class="k">In aid of</span><span class="v wide">${CHARITY_NAME} (NBCC), Scottish Charity ${CHARITY_NUMBER}</span>
+      <span class="k">To (name of event)</span><span class="v${d && d.title.length > 60 ? " long" : ""}">${event}</span>
+      <span class="k">In aid of</span><span class="v wide">${CHARITY_NAME} (NBCC), Scottish Charity ${CHARITY_NUMBER}${
+        d?.otherCauseName ? `, and ${escapeHtml(d.otherCauseName)}` : ""
+      }</span>
     </div>`;
   const foot = (page: number) => `<div class="sf-foot">
       <div><div class="back">${SEND_IT_BACK}</div>
@@ -648,12 +685,13 @@ function sponsorPages(d: MaterialFacts | null, a: MaterialAssets): string {
       <div><span>Total Gift Aid donations</span><b>&pound;</b></div>
       <div><span>Date the money was given to NBCC</span><b></b></div>
     </div>`;
+  const [first, second] = sponsorRowCounts(d);
   return `<div class="page landscape">
   <div class="sheet sf-sheet" style="height:100%">
     ${head("Sponsor form")}
     ${fields}
     ${decl}
-    <table class="sf-table">${SPONSOR_COLS}${SPONSOR_HEAD}<tbody>${sponsorRows(1, 12)}</tbody>${total}</table>
+    <table class="sf-table">${SPONSOR_COLS}${SPONSOR_HEAD}<tbody>${sponsorRows(1, first)}</tbody>${total}</table>
     ${foot(1)}
   </div>
 </div>
@@ -662,7 +700,7 @@ function sponsorPages(d: MaterialFacts | null, a: MaterialAssets): string {
     ${head("Sponsor form, continued")}
     <div class="sf-fields"><span class="k">To (name of event)</span><span class="v wide">${event}</span></div>
     ${decl}
-    <table class="sf-table">${SPONSOR_COLS}${SPONSOR_HEAD}<tbody>${sponsorRows(13, 11)}</tbody>${total}</table>
+    <table class="sf-table">${SPONSOR_COLS}${SPONSOR_HEAD}<tbody>${sponsorRows(first + 1, second)}</tbody>${total}</table>
     ${grand}
     ${foot(2)}
   </div>
@@ -708,7 +746,29 @@ const CERT_CSS = `
     font-weight:700;color:var(--crimson);font-size:19pt;line-height:1}
   .c-sign .rule{height:1px;background:var(--maroon);opacity:.45;margin:1.5mm 0}
   .c-sign .k{font-size:7.5pt;letter-spacing:.16em;text-transform:uppercase;color:var(--muted);font-weight:600}
-  .c-legal{margin-top:4mm;font-size:7pt;line-height:1.45;color:var(--muted);max-width:215mm}`;
+  .c-legal{margin-top:4mm;font-size:7pt;line-height:1.45;color:var(--muted);max-width:215mm}
+  .c-legal.c-split{color:var(--maroon);font-weight:600}
+  .c-legal.c-split + .c-legal{margin-top:1mm}
+  /* Review fix: closer set when there is a split, a long name or a long title, so everything, the
+     charity statement last, stays inside the gold border. */
+  .c-tight .c-sheet{padding:8mm 22mm 8mm}
+  .c-tight .c-logo{height:28mm}
+  .c-tight .c-title{font-size:30pt}
+  .c-tight .c-orn{margin-top:2.5mm}
+  .c-tight .c-to{margin-top:3.5mm}
+  .c-tight .c-name{font-size:25pt}
+  .c-tight .c-for{font-size:14pt;margin-top:2mm}
+  .c-tight .c-raised{margin-top:3mm}
+  .c-tight .c-raised b{font-size:24pt}
+  .c-tight .c-body{margin-top:3mm;max-width:205mm;line-height:1.45}
+  .c-tight .c-sign{margin-top:3.5mm}
+  .c-tight .c-legal{margin-top:2.5mm;line-height:1.35}
+  .c-tight .c-legal.c-split + .c-legal{margin-top:1mm}`;
+
+/** Review fix: the certificate is closer set when it has more to say. */
+export function certificateTight(d: Pick<MaterialFacts, "splitStatement" | "organiser" | "title">): boolean {
+  return Boolean(d.splitStatement) || d.organiser.length > 30 || d.title.length > 60;
+}
 
 /** The certificate's one A4 landscape page. */
 function certificatePage(d: MaterialFacts, a: MaterialAssets, date: string): string {
@@ -718,7 +778,7 @@ function certificatePage(d: MaterialFacts, a: MaterialAssets, date: string): str
           d.giftAidPence > 0 ? `<div class="c-ga">+ ${formatPounds(d.giftAidPence)} Gift Aid</div>` : ""
         }`
       : "";
-  return `<div class="page landscape cert">
+  return `<div class="page landscape cert${certificateTight(d) ? " c-tight" : ""}">
   <div class="c-sheet">
     <img class="c-logo" src="${a.logo}" alt="Night Before Christmas Campaign">
     <h1 class="c-title">Certificate of thanks</h1>
@@ -732,7 +792,7 @@ function certificatePage(d: MaterialFacts, a: MaterialAssets, date: string): str
       <div class="s"><div class="v">${escapeHtml(date)}</div><div class="rule"></div><div class="k">Date</div></div>
       <div class="s"><div class="v team">NBCC Team</div><div class="rule"></div><div class="k">${CHARITY_NAME}</div></div>
     </div>
-    ${splitHtml(d, "c-legal")}<div class="c-legal">${escapeHtml(MATERIALS_STATEMENT)}</div>
+    ${splitHtml(d, "c-legal c-split")}<div class="c-legal">${escapeHtml(MATERIALS_STATEMENT)}</div>
   </div>
 </div>`;
 }
@@ -775,7 +835,7 @@ export function renderEverything(d: MaterialFacts, a: MaterialAssets, o: { date:
     title: `Everything for ${escapeHtml(d.title)}`,
     paper: { rules: EVERYTHING_PAGES },
     fontCss: a.fontCss,
-    css: posterCss(posterLogoMm(d)) + SPONSOR_CSS + CERT_CSS + EVERYTHING_CSS,
+    css: posterCss(d) + SPONSOR_CSS + CERT_CSS + EVERYTHING_CSS,
     toolbar:
       `<span>Everything for <b>${escapeHtml(d.title)}</b>: the A4 and A3 posters, the A5 leaflet, the sponsor form${
         d.status === "finished" ? " and the certificate" : ""

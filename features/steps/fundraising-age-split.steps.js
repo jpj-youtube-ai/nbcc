@@ -130,3 +130,25 @@ When("{string} opens the {string} of {string}", async function (email, piece, ti
   this.visitorBody = await res.text();
   assert.equal(res.status, 200, this.visitorBody.slice(0, 200));
 });
+
+// A holding an event sign up, shown on the website, sharing what it raises.
+When("someone signs up the event {string} sharing {int} percent with {string}", async function (title, percent, cause) {
+  await call(
+    this,
+    "POST",
+    "/api/fundraise",
+    signUpBody(title, {
+      path: "event",
+      kind: "quiz",
+      eventDate: "2099-11-21",
+      startTime: "19:30",
+      venue: "Example Village Hall",
+      targetPence: null,
+      cardLine: "Eight rounds and a raffle (bdd-fr).",
+      booking: "free",
+      sharesWithOther: true,
+      nbccSharePercent: percent,
+      otherCauseName: cause,
+    }),
+  );
+});

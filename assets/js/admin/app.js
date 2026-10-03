@@ -9769,17 +9769,29 @@
             '<label><input type="radio" name="sharesWithOther" id="frSplitYes" value="yes"' + (yes ? " checked" : "") + "> Yes</label> " +
             '<label><input type="radio" name="sharesWithOther" id="frSplitNo" value="no"' + (yes ? "" : " checked") + "> No</label>" +
           "</fieldset>" +
-          '<label class="fx-call-label" for="frSplitPercent">Percentage to NBCC, 1 to 99</label>' +
-          '<input class="fr-input fr-split-percent" id="frSplitPercent" name="nbccSharePercent" type="number" min="1" max="99" step="1" inputmode="numeric" value="' +
-            (yes && f.nbccSharePercent ? H.escapeHtml(String(f.nbccSharePercent)) : "") + '">' +
-          '<label class="fx-call-label" for="frSplitCause">The other cause’s name</label>' +
-          '<input class="fr-input" id="frSplitCause" name="otherCauseName" type="text" maxlength="120" value="' +
-            (yes && f.otherCauseName ? H.escapeHtml(f.otherCauseName) : "") + '">' +
+          // As the public form: the two boxes only for Yes, hidden and switched off for No.
+          '<div class="fr-split-fields" data-frsplitfields' + (yes ? "" : " hidden") + ">" +
+            '<label class="fx-call-label" for="frSplitPercent">Percentage to NBCC, 1 to 99</label>' +
+            '<input class="fr-input fr-split-percent" id="frSplitPercent" name="nbccSharePercent" type="number" min="1" max="99" step="1" inputmode="numeric" value="' +
+              (yes && f.nbccSharePercent ? H.escapeHtml(String(f.nbccSharePercent)) : "") + '"' + (yes ? "" : " disabled") + ">" +
+            '<label class="fx-call-label" for="frSplitCause">The other cause’s name</label>' +
+            '<input class="fr-input" id="frSplitCause" name="otherCauseName" type="text" maxlength="120" value="' +
+              (yes && f.otherCauseName ? H.escapeHtml(f.otherCauseName) : "") + '"' + (yes ? "" : " disabled") + ">" +
+          "</div>" +
           '<div class="fx-call-row fr-actions"><button class="admin-btn admin-btn--small" type="submit">Save the split</button></div>' +
         "</form>";
     }
     return '<section class="fx-panel fx-panel--wide fr-split-panel" data-frsplit><h4>Sharing with another cause</h4>' + body +
       frNoticeHtml("split", "frSplitStatus") + "</section>";
+  }
+  // Yes or No in the split form: the two boxes show, and work, only for Yes.
+  function frSplitChoice(form) {
+    var yes = !!form.querySelector("#frSplitYes:checked");
+    var fields = form.querySelector("[data-frsplitfields]");
+    if (fields) fields.hidden = !yes;
+    Array.prototype.forEach.call(form.querySelectorAll("#frSplitPercent, #frSplitCause"), function (i) {
+      i.disabled = !yes;
+    });
   }
   function frSaveSplit(form) {
     if (frBusy) return;
@@ -10210,6 +10222,8 @@
     "fundraiser.again_used": "The organiser signed up to do it again",
     // TASK-505: the requests.
     "fundraiser.request_updated": "A request updated",
+    // Jaimie, 2026-10-03: an admin corrected the split before the first gift.
+    "fundraiser.split_changed": "Split with another cause changed",
     // TASK-506
     "fundraiser.news_posted": "The organiser posted a news update",
     "fundraiser.news_approved": "News update approved",
@@ -10737,6 +10751,9 @@
     view.addEventListener("input", keepTyping);
     view.addEventListener("change", function (e) {
       if (e.target && e.target.id === "frPhotoInput") return frUploadPhoto(e.target);
+      if (e.target && e.target.name === "sharesWithOther" && e.target.closest && e.target.closest("#frSplitForm")) {
+        return frSplitChoice(e.target.closest("#frSplitForm"));
+      }
       keepTyping(e);
     });
     // The rows are role="button", so they answer Enter and Space as a button does.

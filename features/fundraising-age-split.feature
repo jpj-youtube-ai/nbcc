@@ -23,7 +23,7 @@ Feature: 18 or over, and sharing what is raised with another cause
     When "a1.split.fr.bdd@example.com" approves "Sam's Shared Walk (bdd-fr)"
     And a visitor opens the page for "Sam's Shared Walk (bdd-fr)"
     Then the page shows "60% of what we raise goes to the Night Before Christmas Campaign, Scottish Charity SC047995. The rest goes to Kilmarnock Food Larder."
-    And the page shows "Donations on this page go to NBCC as our share."
+    And the page shows "Everything given on this page goes to NBCC, as NBCC's share."
     When "a1.split.fr.bdd@example.com" opens the "poster" of "Sam's Shared Walk (bdd-fr)"
     Then the page shows "60% of what we raise goes to the Night Before Christmas Campaign, Scottish Charity SC047995. The rest goes to Kilmarnock Food Larder."
 
@@ -42,3 +42,14 @@ Feature: 18 or over, and sharing what is raised with another cause
     And "a2.split.fr.bdd@example.com" corrects the split of "Kim's Shared Swim (bdd-fr)" to 80 percent
     Then the fundraising answer is 409
     And "Kim's Shared Swim (bdd-fr)" is stored as 18 or over, sharing 70 percent with "Kilmarnock Food Larder"
+
+  Scenario: an event shared with another cause says so on its card on Get involved
+    Given the events page is switched on
+    And fundraising is switched on
+    And a fundraising staff member "a3.split.fr.bdd@example.com" with role "admin"
+    When someone signs up the event "Shared Quiz Night (bdd-fr)" sharing 60 percent with "Kilmarnock Food Larder"
+    Then the fundraising answer is 200
+    When "a3.split.fr.bdd@example.com" approves "Shared Quiz Night (bdd-fr)"
+    And a visitor opens "/get-involved"
+    Then the visitor gets status 200
+    And the card for "Shared Quiz Night (bdd-fr)" shows "60% of what we raise goes to the Night Before Christmas Campaign, Scottish Charity SC047995. The rest goes to Kilmarnock Food Larder."

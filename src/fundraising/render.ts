@@ -169,6 +169,8 @@ export function renderFundraiserCard(c: PublicCard, today?: string): string {
     `<p class="fr-card__by">Organised by ${escapeHtml(c.organisedBy)}</p>` +
     (c.description ? `<p class="ev-tldr">${escapeHtml(shorten(c.description, 150))}</p>` : "") +
     renderMeter(c.meter) +
+    // Jaimie, 2026-10-03: shared with another cause, the statement beside the way in.
+    (c.split ? `<p class="fr-card__split">${escapeHtml(c.split.statement)}</p>` : "") +
     '<div class="ev-book-gap"></div>' +
     `<a class="btn btn-primary fr-card__go" href="${href}">See the page and give<span class="sr-only">: ${escapeHtml(c.title)}</span></a>` +
     "</div></article></div></li>"
@@ -256,7 +258,8 @@ export function fundraiserEventRecord(c: PublicCard): CardRecord | null {
     partnerFront: "Organised by",
     partnerCredit: "Organised by",
     partnerLogoSrc: null,
-    partnerLine: "A community event raising money for NBCC.",
+    // Jaimie, 2026-10-03: shared with another cause, the card says how, in the 2009 regulations' words.
+    partnerLine: c.split ? c.split.statement : "A community event raising money for NBCC.",
     ...bookingFor(c),
     status: "live",
     showFrom: null,
@@ -444,7 +447,7 @@ const firstName = (p: PublicCard) => escapeHtml(p.organisedBy.split(" ")[0]);
 
 // Jaimie, 2026-10-03: shared with another cause. Money given on the page is NBCC's share; the
 // statement the 2009 regulations ask for sits beside the Give button (renderSplit).
-const SHARE_NOTE = (p: PublicPage): string => (p.split ? " Donations on this page go to NBCC as our share." : "");
+const SHARE_NOTE = (p: PublicPage): string => (p.split ? " Everything given on this page goes to NBCC, as NBCC's share." : "");
 
 /** The split statement, beside the Give button; nothing when it is not shared. */
 function renderSplit(p: PublicPage): string {

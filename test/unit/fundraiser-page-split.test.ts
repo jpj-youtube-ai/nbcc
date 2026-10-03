@@ -1,8 +1,9 @@
 import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { renderFundraiserPage } from "../../src/fundraising/render";
-import { meter, type PublicPage } from "../../src/fundraising/model";
+import { fundraiserEventRecord, renderFundraiserCard, renderFundraiserPage } from "../../src/fundraising/render";
+import { renderCard } from "../../src/events/render";
+import { meter, publicCard, type FundraiserRecord, type PublicPage } from "../../src/fundraising/model";
 
 // Jaimie, 2026-10-03: a fundraiser sharing what it raises with another cause says so on its page,
 // with the statement the Charities and Benevolent Fundraising (Scotland) Regulations 2009 ask for,
@@ -39,7 +40,7 @@ const page = (over: Partial<PublicPage> = {}): PublicPage => ({
 const render = (p: PublicPage) =>
   renderFundraiserPage(template, p, { pageUrl: "https://nbcc.test/fundraise/robins-santa-dash", now: new Date(Date.UTC(2026, 9, 2)) });
 
-const SHARE_LINE = "Donations on this page go to NBCC as our share.";
+const SHARE_LINE = "Everything given on this page goes to NBCC, as NBCC's share.";
 
 describe("a fundraiser shared with another cause", () => {
   it("says the split beside the Give button", () => {
@@ -74,5 +75,45 @@ describe("a fundraiser not shared", () => {
       expect(html).not.toContain("of what we raise goes to");
       expect(html).not.toContain(SHARE_LINE);
     }
+  });
+});
+
+// Review fix: the hosting an event path has no page, so its card on Get involved is where the public
+// sees it; a raising money card says it too, beside its way in. Built field by field by publicCard.
+describe("the cards on Get involved", () => {
+  const record = (over: Partial<FundraiserRecord> = {}) =>
+    ({
+      id: 7, slug: "eqn", path: "event", kind: "quiz", kindLabel: "Quiz", title: "Exampleton Quiz Night", description: "Eight rounds.",
+      eventDate: "2026-12-05", startTime: "19:30", venue: "Example Hall", town: "Exampleton", targetPence: null, public: true,
+      status: "approved", name: "Sam Sample", imageSrc: null, cardLine: "Eight rounds and a raffle.", access: [], booking: "free",
+      sharesWithOther: true, nbccSharePercent: 60, otherCauseName: "Kilmarnock Food Larder",
+      ...over,
+    }) as FundraiserRecord;
+  const m = meter({ onlinePence: 0, cashPence: 0, targetPence: null });
+
+  it("carry the split when it is shared, and nothing when not", () => {
+    expect(publicCard(record(), m).split?.statement).toBe(STATEMENT);
+    expect(publicCard(record({ sharesWithOther: false, nbccSharePercent: null, otherCauseName: null }), m).split).toBeNull();
+  });
+
+  it("an event's card says the split, escaped", () => {
+    const html = renderCard(fundraiserEventRecord(publicCard(record(), m))!);
+    expect(html).toContain(STATEMENT);
+    const odd = renderCard(fundraiserEventRecord(publicCard(record({ otherCauseName: "Kids & Co <Larder>" }), m))!);
+    expect(odd).toContain("The rest goes to Kids &amp; Co &lt;Larder&gt;.");
+    expect(odd).not.toContain("<Larder>");
+  });
+
+  it("an event's card not shared says what it always did", () => {
+    const html = renderCard(fundraiserEventRecord(publicCard(record({ sharesWithOther: false, nbccSharePercent: null, otherCauseName: null }), m))!);
+    expect(html).toContain("A community event raising money for NBCC.");
+    expect(html).not.toContain("of what we raise goes to");
+  });
+
+  it("a raising money card says the split too, escaped", () => {
+    const raising = record({ path: "raising", targetPence: 50000, otherCauseName: "Kids & Co <Larder>" });
+    const html = renderFundraiserCard(publicCard(raising, m));
+    expect(html).toContain('<p class="fr-card__split">60% of what we raise goes to the Night Before Christmas Campaign, Scottish Charity SC047995. The rest goes to Kids &amp; Co &lt;Larder&gt;.</p>');
+    expect(renderFundraiserCard(publicCard({ ...raising, sharesWithOther: false, nbccSharePercent: null, otherCauseName: null }, m))).not.toContain("fr-card__split");
   });
 });

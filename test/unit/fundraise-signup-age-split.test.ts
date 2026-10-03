@@ -115,6 +115,32 @@ describe("18 or over, in the page as it is", () => {
     expect(note.getAttribute("aria-live")).toBe("polite");
     expect(note.textContent).toBe("");
   });
+
+  // Review fix: a live region a screen reader can announce must be in the page while it is empty, so
+  // the note is never display:none, even empty (as .fr-note:empty would make it).
+  it("keeps the live note in the page while it is empty, so what it says is announced", () => {
+    page();
+    const note = $("[data-age-note]");
+    expect(note.classList.contains("fr-note--live")).toBe(true);
+    const css = readFileSync(resolve(ROOT, "assets/css/fundraising.css"), "utf8");
+    const live = /\.fr-note--live:empty\s*\{([^}]*)\}/.exec(css);
+    expect(live, "no .fr-note--live:empty rule").not.toBeNull();
+    expect(live![1]).toMatch(/display:\s*block/);
+    // After the rule that hides an empty note, so it wins.
+    expect(css.indexOf(".fr-note--live:empty")).toBeGreaterThan(css.indexOf(".fr-note:empty"));
+  });
+
+  it("marks each new yes or no as required on its group, where the ARIA belongs, not on each radio", () => {
+    page();
+    for (const name of ["over18", "sharesWithOther"]) {
+      const radios = [...document.querySelectorAll<HTMLInputElement>(`input[name="${name}"]`)];
+      for (const r of radios) expect(r.hasAttribute("aria-required"), name).toBe(false);
+      const group = radios[0].closest('[role="radiogroup"]')!;
+      expect(group, name).not.toBeNull();
+      expect(group.getAttribute("aria-required"), name).toBe("true");
+      for (const r of radios) expect(r.closest('[role="radiogroup"]'), name).toBe(group);
+    }
+  });
 });
 
 describe("a No to 18 or over", () => {

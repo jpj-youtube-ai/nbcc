@@ -4,6 +4,7 @@ import { isValidUkPostcode } from "../declarations/fields";
 import { containsBlockedWord } from "../donors/display-name-filter";
 import type { NewsEntry } from "./news";
 import { facebookLink, instagramLink, type SocialResult } from "./social";
+import { categoryLabel, isActiveCategory, isKnownCategory, OTHER_KIND } from "./categories";
 
 // TASK-493: community fundraising, the rules. Pure: no pool, no config, no clock, so every rule is
 // unit tested without a database (test/unit/fundraising-model.test.ts). The SQL is in
@@ -20,18 +21,12 @@ import { facebookLink, instagramLink, type SocialResult } from "./social";
 export const PATHS = ["raising", "event"] as const;
 export type FundraiserPath = (typeof PATHS)[number];
 
-export const KINDS = ["run_walk", "santa_dash", "bake_sale", "quiz_party", "collection", "birthday", "other"] as const;
-export type FundraiserKind = (typeof KINDS)[number];
-
-export const KIND_LABELS: Record<FundraiserKind, string> = {
-  run_walk: "A run or walk",
-  santa_dash: "A Santa dash",
-  bake_sale: "A bake sale or coffee morning",
-  quiz_party: "A quiz or party",
-  collection: "A workplace or school collection",
-  birthday: "A birthday",
-  other: "Something else",
-};
+/**
+ * A fundraising category's key (src/fundraising/categories.ts). The list is in the database, so any
+ * string: the sign up form takes only the ones on offer (isActiveCategory), and categoryLabel(key)
+ * names any of them, old ones included.
+ */
+export type FundraiserKind = string;
 
 export const STATUSES = ["new", "approved", "declined", "finished"] as const;
 export type FundraiserStatus = (typeof STATUSES)[number];
@@ -47,7 +42,7 @@ export const MAX_BUCKETS = 20;
 export const MAX_QR_CODES = 200;
 /** TASK-511: the first name and the surname, each. */
 export const NAME_PART_MAX = 50;
-/** TASK-511: what "Something else" is, in their words. */
+/** TASK-511: what "Other" (once "Something else") is, in their words. */
 export const KIND_OTHER_MAX = 80;
 /** The line for the front of an event's card: one or two sentences, as the events editor asks. */
 export const CARD_LINE_MAX = 140;
@@ -334,6 +329,8 @@ const lastNameText = requiredText(NAME_PART_MAX, "Please tell us your surname.")
 export function kindMissing(path: FundraiserPath | undefined): string {
   return path === "event" ? "Choose what kind of event it is." : "Choose what you are doing to raise money.";
 }
+/** A category hidden (or an old one) since their page loaded. */
+export const KIND_GONE = "That choice is no longer on the form. Please choose another.";
 export function kindOtherMissing(path: FundraiserPath | undefined): string {
   return path === "event" ? "Tell us what kind of event it is, in a few words." : "Tell us what you are doing, in a few words.";
 }
@@ -354,7 +351,9 @@ export const signUpSchema = z
   .object({
     path: z.enum(PATHS, { errorMap: () => ({ message: "Tell us whether you are raising money or holding an event." }) }),
     // TASK-511: checked below, so the message can follow what they chose first.
-    kind: z.preprocess((v) => ((KINDS as readonly unknown[]).includes(v) ? v : undefined), z.enum(KINDS).optional()),
+    // Only a category on offer now (the list as last read from the database), checked below: one
+    // no longer on the form (hidden, or an old one) is asked for again, saying so.
+    kind: z.unknown(),
     kindOther: nullableText(KIND_OTHER_MAX),
     title: requiredText(100, "Give it a name, like Sam's Santa Dash."),
     description: requiredText(DESCRIPTION_MAX, "Tell us a little about it."),
@@ -399,8 +398,8 @@ export const signUpSchema = z
   })
   .superRefine((b, ctx) => {
     const missing = (path: string, message: string) => ctx.addIssue({ code: z.ZodIssueCode.custom, path: [path], message });
-    if (!b.kind) missing("kind", kindMissing(b.path));
-    if (b.kind === "other" && !b.kindOther) missing("kindOther", kindOtherMissing(b.path));
+    if (!isActiveCategory(b.kind)) missing("kind", isKnownCategory(b.kind) ? KIND_GONE : kindMissing(b.path));
+    if (b.kind === OTHER_KIND && !b.kindOther) missing("kindOther", kindOtherMissing(b.path));
     if (b.socialOk === undefined) missing("socialOk", SOCIAL_OK_MISSING);
     if (b.path === "event") {
       if (!b.eventDate) missing("eventDate", "Tell us the date of your event.");
@@ -430,7 +429,7 @@ export const signUpSchema = z
       ...b,
       // Checked above: a sign up without a kind never gets this far.
       kind: b.kind as FundraiserKind,
-      kindOther: only(b.kind === "other", b.kindOther),
+      kindOther: only(b.kind === OTHER_KIND, b.kindOther),
       // TASK-511: the whole name, for everything that reads it (emails, the admin, the page).
       name: `${b.firstName} ${b.lastName}`,
       socialOk: b.socialOk === true,
@@ -578,7 +577,9 @@ export function isValidSlug(slug: string): boolean {
 export const adminPatchSchema = z
   .object({
     path: z.enum(PATHS),
-    kind: z.enum(KINDS),
+    // Any category on offer. A sign up keeps an old one until staff change it, as this only checks a
+    // change (the form sends only what changed).
+    kind: z.string().refine(isActiveCategory, "Choose one of the categories on the list."),
     title: requiredText(100, "Give it a name."),
     description: optionalText(DESCRIPTION_MAX),
     eventDate: optionalDate,
@@ -864,6 +865,8 @@ export interface FundraiserRecord {
   slug: string;
   path: FundraiserPath;
   kind: FundraiserKind;
+  /** The category's name, as the database had it when the row was read (src/db/fundraisers.ts). */
+  kindLabel?: string | null;
   title: string;
   description: string;
   eventDate: string | null;
@@ -920,7 +923,7 @@ export interface FundraiserRecord {
   // and its one social link (socialLink).
   firstName?: string | null;
   lastName?: string | null;
-  /** What "Something else" is, in their words. */
+  /** What "Other" is, in their words. */
   kindOther?: string | null;
   /** Their Instagram and Facebook, each a full https link. */
   instagram?: string | null;
@@ -971,6 +974,11 @@ export interface PublicPage extends PublicCard {
   news?: NewsEntry[];
 }
 
+/** A sign up's category, by name: as read with the row, else as the list has it (old ones included). */
+export function kindLabelOf(f: Pick<FundraiserRecord, "kind" | "kindLabel">): string {
+  return f.kindLabel || categoryLabel(f.kind);
+}
+
 /** Built field by field, so nothing private (email, phone, address, notes) can reach the public. */
 export function publicCard(f: FundraiserRecord, m: Meter): PublicCard {
   return {
@@ -978,7 +986,7 @@ export function publicCard(f: FundraiserRecord, m: Meter): PublicCard {
     slug: f.slug,
     path: f.path,
     kind: f.kind,
-    kindLabel: KIND_LABELS[f.kind],
+    kindLabel: kindLabelOf(f),
     title: f.title,
     description: f.description,
     eventDate: f.eventDate,

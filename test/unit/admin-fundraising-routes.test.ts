@@ -47,6 +47,8 @@ vi.mock("../../src/fundraising/send", () => ({
   sendEditDecisionEmail,
   fundraiserPageUrl: (slug: string) => `https://nbcc.test/fundraise/${slug}`,
 }));
+// Fundraising categories: the starting list stands in for the database's (src/fundraising/categories.ts).
+vi.mock("../../src/db/fundraising-categories", () => ({ loadCategories: async () => [] }));
 vi.mock("../../src/db/events", () => ({ insertEventImage }));
 vi.mock("../../src/db/admin-users", () => ({ getUserAuthRow: getUserAuthRowMock }));
 vi.mock("../../src/config", () => ({
@@ -489,5 +491,36 @@ describe("a change that would put the finish before the start", () => {
     expect(res.statusCode).toBe(409);
     expect(res.body).toEqual({ error: "This change would put the finish time before the start. Change the finish time first, or reject it." });
     expect(sendEditDecisionEmail).not.toHaveBeenCalled();
+  });
+});
+
+// Fundraising categories: staff may move a sign up to any category on offer, never to an old one
+// or one that is not there; and an old sign up's category is named as it always was.
+describe("a sign up's category", () => {
+  it("can be changed to any category on offer", async () => {
+    db.patchFundraiser.mockResolvedValue(record({ kind: "walk" }));
+    const res = await run(routes.patchAdminFundraiser, { params: P, token: tokenFor("editor"), body: { kind: "walk" } });
+    expect(res.statusCode).toBe(200);
+    expect(db.patchFundraiser).toHaveBeenCalledWith(9, { kind: "walk" }, `admin:${EMAIL}`);
+    expect((res.body as { fundraiser: { kindLabel: string } }).fundraiser.kindLabel).toBe("Walk");
+  });
+
+  it.each(["run_walk", "nope"])("cannot be changed to %s", async (kind) => {
+    const res = await run(routes.patchAdminFundraiser, { params: P, token: tokenFor("editor"), body: { kind } });
+    expect(res.statusCode).toBe(400);
+    expect((res.body as { fields: Record<string, string> }).fields.kind).toBe("Choose one of the categories on the list.");
+    expect(db.patchFundraiser).not.toHaveBeenCalled();
+  });
+
+  it("of an old sign up is named by its old category, in the list and when opened", async () => {
+    db.listAllFundraisers.mockResolvedValue([{ ...record(), meter: meter({ onlinePence: 0, cashPence: 0, targetPence: 25000 }), editWaiting: false }]);
+    const list = await run(routes.getAdminFundraisers, { token: tokenFor("viewer") });
+    expect((list.body as { fundraisers: Array<{ kind: string; kindLabel: string }> }).fundraisers[0]).toMatchObject({ kind: "run_walk", kindLabel: "Run or walk" });
+    db.getFundraiser.mockResolvedValue({ ...record({ kind: "quiz", kindLabel: "Quiz night" }), meter: meter({ onlinePence: 0, cashPence: 0, targetPence: 25000 }), editWaiting: false });
+    db.listEdits.mockResolvedValue([]);
+    db.listCash.mockResolvedValue([]);
+    db.wallRows.mockResolvedValue([]);
+    const one = await run(routes.getAdminFundraiser, { params: P, token: tokenFor("viewer") });
+    expect((one.body as { fundraiser: { kindLabel: string } }).fundraiser.kindLabel).toBe("Quiz night");
   });
 });

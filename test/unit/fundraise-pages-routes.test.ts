@@ -43,6 +43,16 @@ vi.mock("../../src/db/fundraisers", () => ({
     return state.gift;
   },
 }));
+// Fundraising categories: the list as the database has it (src/db/fundraising-categories.ts).
+vi.mock("../../src/db/fundraising-categories", async () => {
+  const c = await import("../../src/fundraising/categories");
+  return {
+    loadCategories: async () => [
+      ...c.BUILT_IN_CATEGORIES.map((x) => (x.key === "party" ? { ...x, active: false } : x)),
+      { key: "sponsored_silence", label: "Sponsored silence", active: true },
+    ],
+  };
+});
 vi.mock("../../src/fundraising/send", () => ({
   fundraiserPageUrl: (slug: string) => `https://nbcc.test/fundraise/${slug}`,
 }));
@@ -197,6 +207,18 @@ describe("the sign up page", () => {
     expect(res.status).toBe(200);
     const html = await res.text();
     expect(html).toMatch(/data-fundraise-open>/);
+  });
+
+  it("offers the categories as the database has them, A to Z, Other last", async () => {
+    const html = await (await get("/fundraise")).text();
+    const names = [...html.matchAll(/name="kind" type="radio" value="([a-z0-9_]+)"/g)].map((m) => m[1]);
+    expect(names).toEqual([
+      "bake_sale_2", "birthday", "coffee_morning", "quiz", "run", "santa_dash", "school_collection",
+      "sponsored_silence", "walk", "workplace_collection", "other",
+    ]);
+    // Hidden by staff (Party) and the old "this or that" ones are not offered.
+    expect(names).not.toContain("party");
+    expect(names).not.toContain("run_walk");
   });
 
   it("keeps an invite link's token from leaving in a referrer, and out of any cache", async () => {

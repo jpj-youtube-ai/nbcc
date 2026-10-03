@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import { buildSignUpStaffEmail, type StaffSummary } from "../../src/fundraising/emails";
 
 // TASK-511: the email to the events inbox about a new sign up carries every new answer: the name in
-// two parts, what Something else is, Instagram and Facebook on their own lines, printed QR codes,
+// two parts, what Other is, Instagram and Facebook on their own lines, printed QR codes,
 // and a shout out asked for without permission to post, said plainly. Every name is invented.
 
 const base: StaffSummary = {
@@ -51,8 +51,8 @@ const base: StaffSummary = {
 const mail = buildSignUpStaffEmail(base, { adminUrl: "https://nbcc.scot/admin" });
 
 describe("the email to the events inbox, round two", () => {
-  it("says what Something else is, in their words", () => {
-    expect(mail.text).toContain("Kind: Something else: A sponsored silence");
+  it("says what Other is, in their words", () => {
+    expect(mail.text).toContain("Kind: Other: A sponsored silence");
   });
 
   it("gives the first name and the surname", () => {
@@ -86,6 +86,28 @@ describe("the email to the events inbox, round two", () => {
     );
     expect(old.text).toContain("Facebook or Instagram: https://www.facebook.com/old.page");
     expect(old.text).not.toContain("First name:");
-    expect(old.text).toContain("Kind: A Santa dash");
+    expect(old.text).toContain("Kind: Santa dash");
+  });
+});
+
+// Fundraising categories: the email names a sign up's category as the list has it, an old "this or
+// that" one by its old name, and a renamed one by the name it has now (read with the row).
+describe("the category in the email to the events inbox", () => {
+  const kindLine = (over: Record<string, unknown>) =>
+    buildSignUpStaffEmail({ ...base, ...over } as typeof base, { adminUrl: "https://nbcc.scot/admin" }).text
+      .split("\n")
+      .find((l) => l.startsWith("Kind:"));
+
+  it("names an old category by its old name", () => {
+    expect(kindLine({ kind: "bake_sale", kindOther: null })).toBe("Kind: Bake sale or coffee morning");
+    expect(kindLine({ kind: "run_walk", kindOther: null })).toBe("Kind: Run or walk");
+  });
+
+  it("names a new one plainly", () => {
+    expect(kindLine({ kind: "coffee_morning", kindOther: null })).toBe("Kind: Coffee morning");
+  });
+
+  it("uses the name the database gave it, when the row came with one", () => {
+    expect(kindLine({ kind: "sponsored_silence", kindLabel: "Sponsored silence", kindOther: null })).toBe("Kind: Sponsored silence");
   });
 });

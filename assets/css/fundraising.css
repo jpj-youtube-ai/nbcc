@@ -110,6 +110,12 @@ textarea.give-field-input { min-height: 0; }
   .fr-options { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
 }
 .fr-options--grid { gap: 10px; }
+/* The categories: at two columns they read A to Z down the left column, then down the right, with
+   Other the very last (bottom right). The server sets --rows to half the list, rounded up; the
+   page order, and so the tab order, stays A to Z. On a phone, one column. */
+@media (min-width: 640px) {
+  .fr-options--columns { grid-auto-flow: column; grid-template-rows: repeat(var(--rows, 6), auto); }
+}
 .fr-option {
   display: flex;
   gap: 12px;

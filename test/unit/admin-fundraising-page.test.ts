@@ -108,6 +108,20 @@ let role = "admin";
 let failures: Record<string, { status: number; body: unknown }> = {};
 let calls: { method: string; path: string; body: unknown }[] = [];
 let whatsNewAreas: unknown[] = [];
+// Fundraising categories: the list the server keeps, A to Z with Other last.
+type Cat = { key: string; label: string; active: boolean; used: number };
+let cats: Cat[] | null = null;
+function startingCats(): Cat[] {
+  return [
+    ["bake_sale_2", "Bake sale"], ["birthday", "Birthday"], ["coffee_morning", "Coffee morning"], ["party", "Party"], ["quiz", "Quiz"],
+    ["run", "Run"], ["santa_dash", "Santa dash"], ["school_collection", "School collection"], ["walk", "Walk"],
+    ["workplace_collection", "Workplace collection"], ["other", "Other"],
+  ].map(([key, label]) => ({ key, label, active: true, used: key === "santa_dash" ? 2 : 0 }))
+    .concat([{ key: "run_walk", label: "Run or walk", active: false, used: 1 }]);
+}
+function sortCats(list: Cat[]) {
+  return list.slice().sort((a, b) => (a.key === "other" ? 1 : b.key === "other" ? -1 : a.label.localeCompare(b.label)));
+}
 // A gate holds one answer back until the test releases it: "METHOD /path" -> a promise.
 let gates: Record<string, Promise<unknown>> = {};
 function gate(key: string) {
@@ -145,6 +159,21 @@ function respond(url: string, init?: { method?: string; body?: string }) {
   const fail = failures[method + " " + path];
   if (fail) return j(fail.body, fail.status);
 
+  if (path === "/api/admin/fundraising/categories" && cats) {
+    if (method === "POST") {
+      const added = { key: String(body.label).toLowerCase().replace(/[^a-z0-9]+/g, "_"), label: body.label, active: true, used: 0 };
+      cats = sortCats([...cats, added]);
+      return j({ category: added }, 201);
+    }
+    return j({ categories: cats.map((c) => ({ ...c })) });
+  }
+  const catChange = path.match(/^\/api\/admin\/fundraising\/categories\/([a-z0-9_]+)$/);
+  if (catChange && method === "PATCH" && cats) {
+    const c = cats.find((x) => x.key === catChange[1])!;
+    Object.assign(c, body);
+    cats = sortCats(cats);
+    return j({ category: { ...c } });
+  }
   if (path === "/api/admin/fundraising/settings") {
     if (method === "PATCH") {
       settings = { pageOn: body.pageOn, updatedAt: "2026-10-02T09:00:00.000Z", updatedBy: "admin:fern@example.com" };
@@ -282,6 +311,7 @@ beforeEach(() => {
   failures = {};
   calls = [];
   whatsNewAreas = [];
+  cats = null;
   gates = {};
   confirmAnswer = true;
   confirmed = [];
@@ -879,7 +909,7 @@ describe("a sign up from the form's second round", () => {
   const roundTwo = (over: Record<string, unknown> = {}) =>
     fundraiser(1, {
       kind: "other",
-      kindLabel: "Something else",
+      kindLabel: "Other",
       kindOther: "A sponsored silence",
       name: "Robin Example",
       firstName: "Robin",
@@ -896,14 +926,14 @@ describe("a sign up from the form's second round", () => {
       ...over,
     });
 
-  it("shows the first name and surname, Something else in their words, each link, and printed QR codes", async () => {
+  it("shows the first name and surname, Other in their words, each link, and printed QR codes", async () => {
     records = [roundTwo()];
     await openFundraising();
     await openRow(1);
     const d = text(detail());
     expect(d).toMatch(/First name\s*Robin/);
     expect(d).toMatch(/Surname\s*Example/);
-    expect(d).toContain("Something else: A sponsored silence");
+    expect(d).toContain("Other: A sponsored silence");
     expect(d).toMatch(/Facebook\s*Not given/);
     expect(q('#frList a[href="https://www.instagram.com/robin.quiet"]')).not.toBeNull();
     expect(d).not.toContain("Facebook or Instagram");
@@ -911,7 +941,7 @@ describe("a sign up from the form's second round", () => {
     expect(d).toContain("A social media shout out, but they have not said we can post about it yet");
   });
 
-  it("edits the two parts of the name, the two links, Something else and QR codes, never the single name box", async () => {
+  it("edits the two parts of the name, the two links, Other and QR codes, never the single name box", async () => {
     records = [roundTwo()];
     await openFundraising();
     await openRow(1);
@@ -955,7 +985,7 @@ describe("a sign up from the form's second round", () => {
   });
 
   // Review fixes.
-  it("shows the box for what it is as soon as Something else is chosen", async () => {
+  it("shows the box for what it is as soon as Other is chosen", async () => {
     records = [roundTwo({ kind: "santa_dash", kindLabel: "A Santa dash", kindOther: null })];
     await openFundraising();
     await openRow(1);
@@ -2045,4 +2075,190 @@ describe("materials, round two", () => {
   });
 
   const buttons2 = () => qa("#frList [data-frmaterial]").map((b) => b.getAttribute("data-frmaterial"));
+});
+
+// ---- Fundraising categories ----
+
+describe("the Categories card", () => {
+  const items = (id: string) => qa(`#${id} li`).map((li) => text(li.querySelector(".fr-people-who")));
+
+  it("lists what the sign up form offers, A to Z with Other last, and the ones not on it", async () => {
+    cats = startingCats();
+    await openFundraising();
+    expect(el("frCats").hidden).toBe(false);
+    expect(items("frCatsList").map((t) => t.replace(/ (No sign ups yet|\d+ sign ups?)$/, ""))).toEqual([
+      "Bake sale", "Birthday", "Coffee morning", "Party", "Quiz", "Run", "Santa dash", "School collection", "Walk",
+      "Workplace collection", "Other",
+    ]);
+    expect(text(el("frCatsList"))).toContain("Santa dash 2 sign ups");
+    expect(el("frCatsHidden").hidden).toBe(false);
+    expect(items("frCatsHidden")).toEqual(["Run or walk 1 sign up"]);
+    // Other is always on the form: it has no button to hide it.
+    expect(q('[data-frcathide="other"]')).toBeNull();
+    expect(q('[data-frcatshow="run_walk"]')).not.toBeNull();
+  });
+
+  for (const r of ["editor", "viewer"] as const) {
+    it(`is not shown to ${r === "editor" ? "an editor" : "a viewer"}`, async () => {
+      cats = startingCats();
+      asRole(r);
+      await openFundraising();
+      expect(el("frCats").hidden).toBe(true);
+      expect(sent("POST", "/api/admin/fundraising/categories")).toHaveLength(0);
+    });
+  }
+
+  it("adds one, which then sits in its place A to Z", async () => {
+    cats = startingCats();
+    await openFundraising();
+    (el("frCatsNew") as HTMLInputElement).value = "  Sponsored   silence ";
+    el("frCatsAdd").click();
+    await settle();
+    expect(sent("POST", "/api/admin/fundraising/categories")[0].body).toEqual({ label: "Sponsored silence" });
+    const names = items("frCatsList").map((t) => t.replace(/ (No sign ups yet|\d+ sign ups?)$/, ""));
+    expect(names.indexOf("Sponsored silence")).toBe(names.indexOf("School collection") + 1);
+    expect(text(el("frCatsStatus"))).toBe("Added. Sponsored silence is on the sign up form now, in its place A to Z.");
+    expect((el("frCatsNew") as HTMLInputElement).value).toBe("");
+  });
+
+  it("asks for a name before adding", async () => {
+    cats = startingCats();
+    await openFundraising();
+    el("frCatsAdd").click();
+    await settle();
+    expect(sent("POST", "/api/admin/fundraising/categories")).toHaveLength(0);
+    expect(text(el("frCatsStatus"))).toContain("Type the name of the category first");
+  });
+
+  it("says why when the server refuses one", async () => {
+    cats = startingCats();
+    failures["POST /api/admin/fundraising/categories"] = { status: 409, body: { error: "There is already a category called that. If it is hidden, bring it back instead." } };
+    await openFundraising();
+    (el("frCatsNew") as HTMLInputElement).value = "Walk";
+    el("frCatsAdd").click();
+    await settle();
+    expect(text(el("frCatsStatus"))).toBe("There is already a category called that. If it is hidden, bring it back instead.");
+  });
+
+  it("renames one in its row", async () => {
+    cats = startingCats();
+    await openFundraising();
+    (q('[data-frcatrename="quiz"]') as HTMLElement).click();
+    await settle();
+    const box = el("frCatRename") as HTMLInputElement;
+    expect(box.value).toBe("Quiz");
+    setValue("#frCatRename", "Quiz night");
+    (q("[data-frcatsave]") as HTMLElement).click();
+    await settle();
+    expect(sent("PATCH", "/api/admin/fundraising/categories/quiz")[0].body).toEqual({ label: "Quiz night" });
+    expect(text(el("frCatsList"))).toContain("Quiz night");
+    expect(q("#frCatRename")).toBeNull();
+    // The sign ups are read again, so their category names follow.
+    expect(sent("GET", "/api/admin/fundraisers").length).toBeGreaterThan(1);
+  });
+
+  it("hides one from the form after asking, and puts one back", async () => {
+    cats = startingCats();
+    await openFundraising();
+    (q('[data-frcathide="party"]') as HTMLElement).click();
+    await settle();
+    expect(confirmed.at(-1)).toContain("Take Party off the sign up form?");
+    expect(sent("PATCH", "/api/admin/fundraising/categories/party")[0].body).toEqual({ active: false });
+    expect(items("frCatsHidden").some((t) => t.startsWith("Party"))).toBe(true);
+    (q('[data-frcatshow="run_walk"]') as HTMLElement).click();
+    await settle();
+    expect(sent("PATCH", "/api/admin/fundraising/categories/run_walk")[0].body).toEqual({ active: true });
+  });
+
+  it("leaves it alone when the admin thinks better of hiding it", async () => {
+    cats = startingCats();
+    confirmAnswer = false;
+    await openFundraising();
+    (q('[data-frcathide="party"]') as HTMLElement).click();
+    await settle();
+    expect(sent("PATCH", "/api/admin/fundraising/categories/party")).toHaveLength(0);
+  });
+});
+
+// Review fixes for PR #637: after a change, the keyboard goes back to where it was (the row's own
+// button, now changed, or the status line); and the card waits only for its own changes.
+describe("the Categories card, by keyboard", () => {
+  it("after a rename, is back on that row's Rename button", async () => {
+    cats = startingCats();
+    await openFundraising();
+    (q('[data-frcatrename="quiz"]') as HTMLElement).click();
+    await settle();
+    setValue("#frCatRename", "Quiz night");
+    (q("[data-frcatsave]") as HTMLElement).click();
+    await settle();
+    expect(document.activeElement).toBe(q('[data-frcatrename="quiz"]'));
+  });
+
+  it("after hiding one, is on its Put back button; after putting it back, on its Hide button", async () => {
+    cats = startingCats();
+    await openFundraising();
+    (q('[data-frcathide="party"]') as HTMLElement).click();
+    await settle();
+    expect(document.activeElement).toBe(q('[data-frcatshow="party"]'));
+    (q('[data-frcatshow="party"]') as HTMLElement).click();
+    await settle();
+    expect(document.activeElement).toBe(q('[data-frcathide="party"]'));
+  });
+
+  it("when a change is refused, is on the status line, which says why", async () => {
+    cats = startingCats();
+    failures["PATCH /api/admin/fundraising/categories/party"] = { status: 500, body: { error: "Admin is temporarily unavailable" } };
+    await openFundraising();
+    (q('[data-frcathide="party"]') as HTMLElement).click();
+    await settle();
+    expect(document.activeElement).toBe(el("frCatsStatus"));
+    expect(text(el("frCatsStatus"))).toBe("That did not save. Please try again.");
+  });
+
+  it("sends a change once, however many times it is pressed, and has its own wait", async () => {
+    cats = startingCats();
+    await openFundraising();
+    const release = gate("POST /api/admin/fundraising/categories");
+    (el("frCatsNew") as HTMLInputElement).value = "Abseil";
+    el("frCatsAdd").click();
+    el("frCatsAdd").click();
+    await settle();
+    expect(text(el("frCatsStatus"))).toBe("Saving…");
+    release();
+    await settle();
+    // (The stand in records a call when its gate opens: one, however many presses.)
+    expect(sent("POST", "/api/admin/fundraising/categories")).toHaveLength(1);
+    expect(text(el("frCatsStatus"))).toContain("Added. Abseil");
+    expect(appSrc).toMatch(/var frCatBusy = false/);
+    expect(appSrc.slice(appSrc.indexOf("function frCatSend"), appSrc.indexOf("function frCatAdd"))).not.toContain("frTeamBusy");
+  });
+});
+
+describe("a sign up's category in the editor", () => {
+  it("offers what the form offers, and keeps an old sign up's own until it is changed", async () => {
+    cats = startingCats();
+    records = [fundraiser(1, { kind: "run_walk", kindLabel: "Run or walk" })];
+    await openFundraising();
+    await openRow(1);
+    const select = q('#frEditForm [name="kind"]') as HTMLSelectElement;
+    const options = Array.from(select.options).map((o) => o.textContent);
+    expect(options[0]).toBe("Run or walk (no longer on the form)");
+    expect(options.slice(1)).toEqual([
+      "Bake sale", "Birthday", "Coffee morning", "Party", "Quiz", "Run", "Santa dash", "School collection", "Walk",
+      "Workplace collection", "Other",
+    ]);
+    expect(select.value).toBe("run_walk");
+    expect(text(detail())).toContain("CategoryRun or walk");
+  });
+
+  it("still offers the starting list when the categories cannot load", async () => {
+    records = [fundraiser(1)];
+    failures["GET /api/admin/fundraising/categories"] = { status: 500, body: { error: "Admin is temporarily unavailable" } };
+    await openFundraising();
+    await openRow(1);
+    const select = q('#frEditForm [name="kind"]') as HTMLSelectElement;
+    expect(select.value).toBe("santa_dash");
+    expect(Array.from(select.options).map((o) => o.value)).toContain("bake_sale_2");
+    expect(text(el("frCatsList"))).toContain("could not load");
+  });
 });

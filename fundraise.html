@@ -108,18 +108,27 @@
               <div class="give-question" data-step>
                 <fieldset class="fr-fieldset fr-kinds" id="kindGroup">
                   <legend class="give-scope-legend"><span data-say-raising="What are you doing to raise money?" data-say-event="What kind of event is it?">What are you doing?</span></legend>
-                  <div class="fr-options fr-options--grid">
-                    <label class="fr-option fr-option--small" for="kind-run_walk"><input id="kind-run_walk" name="kind" type="radio" value="run_walk" required aria-required="true" data-invalid-message="Choose what you are doing" data-invalid-raising="Choose what you are doing to raise money" data-invalid-event="Choose what kind of event it is" /><span>A run or walk</span></label>
-                    <label class="fr-option fr-option--small" for="kind-santa_dash"><input id="kind-santa_dash" name="kind" type="radio" value="santa_dash" required aria-required="true" /><span>A Santa dash</span></label>
-                    <label class="fr-option fr-option--small" for="kind-bake_sale"><input id="kind-bake_sale" name="kind" type="radio" value="bake_sale" required aria-required="true" /><span>A bake sale or coffee morning</span></label>
-                    <label class="fr-option fr-option--small" for="kind-quiz_party"><input id="kind-quiz_party" name="kind" type="radio" value="quiz_party" required aria-required="true" /><span>A quiz or party</span></label>
-                    <label class="fr-option fr-option--small" for="kind-collection"><input id="kind-collection" name="kind" type="radio" value="collection" required aria-required="true" /><span>A workplace or school collection</span></label>
-                    <label class="fr-option fr-option--small" for="kind-birthday"><input id="kind-birthday" name="kind" type="radio" value="birthday" required aria-required="true" /><span>A birthday</span></label>
-                    <label class="fr-option fr-option--small" for="kind-other"><input id="kind-other" name="kind" type="radio" value="other" required aria-required="true" /><span>Something else</span></label>
+                  <div class="fr-options fr-options--grid fr-options--columns" data-kind-options style="--rows: 6">
+                    <!-- Fundraising categories: one each, A to Z, Other last. The server draws
+                         them from the list in the database (Admin > Fundraising, Categories); this is the
+                         starting list, for when it cannot. -->
+                    <!-- kinds -->
+                    <label class="fr-option fr-option--small" for="kind-bake_sale_2"><input id="kind-bake_sale_2" name="kind" type="radio" value="bake_sale_2" required aria-required="true" data-invalid-message="Choose what you are doing" data-invalid-raising="Choose what you are doing to raise money" data-invalid-event="Choose what kind of event it is" /><span>Bake sale</span></label>
+                    <label class="fr-option fr-option--small" for="kind-birthday"><input id="kind-birthday" name="kind" type="radio" value="birthday" required aria-required="true" /><span>Birthday</span></label>
+                    <label class="fr-option fr-option--small" for="kind-coffee_morning"><input id="kind-coffee_morning" name="kind" type="radio" value="coffee_morning" required aria-required="true" /><span>Coffee morning</span></label>
+                    <label class="fr-option fr-option--small" for="kind-party"><input id="kind-party" name="kind" type="radio" value="party" required aria-required="true" /><span>Party</span></label>
+                    <label class="fr-option fr-option--small" for="kind-quiz"><input id="kind-quiz" name="kind" type="radio" value="quiz" required aria-required="true" /><span>Quiz</span></label>
+                    <label class="fr-option fr-option--small" for="kind-run"><input id="kind-run" name="kind" type="radio" value="run" required aria-required="true" /><span>Run</span></label>
+                    <label class="fr-option fr-option--small" for="kind-santa_dash"><input id="kind-santa_dash" name="kind" type="radio" value="santa_dash" required aria-required="true" /><span>Santa dash</span></label>
+                    <label class="fr-option fr-option--small" for="kind-school_collection"><input id="kind-school_collection" name="kind" type="radio" value="school_collection" required aria-required="true" /><span>School collection</span></label>
+                    <label class="fr-option fr-option--small" for="kind-walk"><input id="kind-walk" name="kind" type="radio" value="walk" required aria-required="true" /><span>Walk</span></label>
+                    <label class="fr-option fr-option--small" for="kind-workplace_collection"><input id="kind-workplace_collection" name="kind" type="radio" value="workplace_collection" required aria-required="true" /><span>Workplace collection</span></label>
+                    <label class="fr-option fr-option--small" for="kind-other"><input id="kind-other" name="kind" type="radio" value="other" required aria-required="true" /><span>Other</span></label>
+                    <!-- /kinds -->
                   </div>
-                  <!-- TASK-511: only for Something else (fundraise.js hides it otherwise). -->
+                  <!-- TASK-511: only for Other (fundraise.js hides it otherwise). -->
                   <div class="give-field fr-kind-other" data-kind-other>
-                    <label for="kindOther"><span data-say-raising="What are you doing?" data-say-event="What kind of event is it?">If it is something else, what is it?</span> <span class="give-req" aria-hidden="true">*</span></label>
+                    <label for="kindOther"><span data-say-raising="What are you doing?" data-say-event="What kind of event is it?">What is it?</span> <span class="give-req" aria-hidden="true">*</span></label>
                     <input class="give-field-input" id="kindOther" name="kindOther" type="text" maxlength="80" autocomplete="off" aria-describedby="kindOtherHelp" data-invalid-message="Tell us in a few words" placeholder="Like a sponsored silence" />
                     <p class="give-field-help" id="kindOtherHelp">A few words, up to 80 characters.</p>
                   </div>

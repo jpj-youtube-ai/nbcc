@@ -116,7 +116,8 @@ const RECORD_COLUMNS = `f.id, f.slug, f.path, f.kind, f.title, f.description,
          f.time_tbc, f.venue_address, f.venue_postcode, f.access, f.price, f.booking, f.ticket_url,
          f.age_limit, f.dress_code, f.included, f.credit_name, f.finished_requested_at,
          f.off_list_at, f.off_list_by,
-         f.first_name, f.last_name, f.kind_other, f.instagram, f.facebook`;
+         f.first_name, f.last_name, f.kind_other, f.instagram, f.facebook,
+         (SELECT c.label FROM fundraising_categories c WHERE c.key = f.kind) AS kind_label`;
 const SELECT = `
   SELECT ${RECORD_COLUMNS}
     FROM fundraisers f`;
@@ -145,7 +146,9 @@ export function toRecord(r: Row): FundraiserRecord {
     id: Number(r.id),
     slug: String(r.slug),
     path: r.path as FundraiserRecord["path"],
-    kind: r.kind as FundraiserRecord["kind"],
+    kind: String(r.kind),
+    // The category's name now (it may have been renamed); an old category keeps its old name.
+    kindLabel: textOrNull(r.kind_label) ?? undefined,
     title: String(r.title),
     description: String(r.description ?? ""),
     eventDate: (r.event_date as string | null) ?? null,
@@ -385,7 +388,7 @@ async function insertSignUp(client: PoolClient, s: SignUp, slug: string): Promis
       s.name, s.email, s.phone, s.socialLink, s.socialOk, JSON.stringify(s.wants), s.newsletterOk,
       s.postLine1, s.postLine2, s.postTown, s.postPostcode, s.cardLine, s.endTime, s.timeTbc, s.venueAddress,
       s.venuePostcode, s.access, s.price, s.booking, s.ticketUrl, s.ageLimit, s.dressCode, s.included, s.creditName,
-      // TASK-511: the name in two parts (name above is the whole), Something else, and the two links.
+      // TASK-511: the name in two parts (name above is the whole), Other, and the two links.
       s.firstName ?? null, s.lastName ?? null, s.kindOther ?? null, s.instagram ?? null, s.facebook ?? null,
     ],
   );

@@ -17,7 +17,7 @@
 // taken away. Each new question is said in a polite live region for screen readers, focus stays
 // where they are, and "Show all the questions at once" (or pressing Send) shows every one. The words
 // of each question follow the answer to the first (data-say-raising, data-say-event). Without this
-// script every question is in the page as it is. The name is in two boxes, Something else says what,
+// script every question is in the page as it is. The name is in two boxes, Other says what,
 // social media is a step of its own, every yes or no is a pair of choices with nothing chosen, and
 // someone raising money can ask for printed QR codes.
 //
@@ -43,7 +43,7 @@
   // The API's field names, and the control each one's message belongs beside.
   var FIELD_CONTROL = {
     path: "pathRaising",
-    kind: "kind-run_walk",
+    // kind: the first category on the form, whichever it is (controlEl, below).
     title: "title",
     description: "description",
     eventDate: "eventDate",
@@ -149,6 +149,12 @@
     function el(id) {
       return doc.getElementById(id);
     }
+    // The control a server message belongs beside. The categories come from the database, so the
+    // category message goes by the first one on the form, whichever it is.
+    function controlEl(key) {
+      if (key === "kind") return form.querySelector('input[name="kind"]');
+      return el(controlFor(key));
+    }
     function val(id) {
       var e = el(id);
       return e ? String(e.value || "").trim() : "";
@@ -221,7 +227,7 @@
       if (eventTimes) eventTimes.hidden = !event;
     }
 
-    // --- TASK-511: what Something else is, only when it is chosen -------------------------------
+    // --- TASK-511: what Other is, only when it is chosen -------------------------------
     var kindOtherField = form.querySelector("[data-kind-other]");
     function applyKind() {
       var other = radio("kind") === "other";
@@ -575,7 +581,7 @@
         });
         if (serverFields) {
           Object.keys(serverFields).forEach(function (key) {
-            var control = el(controlFor(key));
+            var control = controlEl(key);
             if (control) out.push({ control: control, message: serverFields[key] });
           });
         }

@@ -54,6 +54,8 @@ import { listRequestRowsFor } from "../db/fundraising-requests";
 import { organiserRequestLines, parseWants, requestViews, type OrganiserRequestLine, type RequestRow } from "../fundraising/requests";
 import { config } from "../config";
 import { printStatusFor } from "./fundraise-materials";
+import { loadCategories } from "../db/fundraising-categories";
+import { KEY_PATTERN, isActiveCategory } from "../fundraising/categories";
 
 // TASK-493: the public side of community fundraising. Everything here is OFF while the fundraising
 // switch is off (Admin > Fundraising, admins only): sign ups are refused and nothing is listed.
@@ -119,6 +121,12 @@ export async function postFundraise(req: Request, res: Response): Promise<Respon
     if (verdict.outcome === "unavailable") console.error("fundraise captcha unavailable, sign up kept:", verdict.reason);
   }
 
+  // The categories on offer, as the database has them (kept for a minute). One this server has not
+  // seen yet (an admin may have just added it, on another server) is looked for afresh before the
+  // sign up is refused for it.
+  await loadCategories();
+  const kind = req.body?.kind;
+  if (typeof kind === "string" && KEY_PATTERN.test(kind) && !isActiveCategory(kind)) await loadCategories({ fresh: true });
   const parsed = signUpSchema.safeParse(req.body);
   if (!parsed.success) {
     return res.status(400).json({ error: "Some of the form needs another look", fields: fieldErrors(parsed.error.issues) });

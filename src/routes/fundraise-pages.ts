@@ -7,7 +7,8 @@ import { join } from "node:path";
 //   GET /events                    301 to /get-involved, query string kept (old links, newsletters)
 //   GET /getinvolved, /involved    301 to /get-involved too, the ways people type it from a poster
 //   GET /get-involved              NBCC's events, plus fundraisers while fundraising is switched on
-//   GET /fundraise                 the sign up form, or "not open yet" while switched off
+//   GET /fundraise                 the sign up form, or "not open yet" while switched off; its
+//                                  categories drawn from the database's list, A to Z
 //   GET /fundraise/manage          change your page, by the emailed link (?token=); never indexed
 //   GET /fundraise/help            ideas, paying in, Gift Aid and staying safe (TASK-498); indexed
 //   GET /fundraise/logos           the logo pack: the official logos and simple rules (TASK-504)
@@ -197,8 +198,15 @@ export function addFundraisePageRoutes(router: Router, siteRoot: string, deps: F
 
   router.get("/fundraise", async (req, res, next) => {
     try {
-      const { renderFundraiseSignUp } = await import("../fundraising/render");
-      const html = renderFundraiseSignUp(readFileSync(signUpFile, "utf8"), await fundraisingOn());
+      const [{ renderFundraiseSignUp }, { loadCategories }, { formCategories }] = await Promise.all([
+        import("../fundraising/render"),
+        import("../db/fundraising-categories"),
+        import("../fundraising/categories"),
+      ]);
+      // The categories on offer, A to Z, Other last, as the database has them (kept for a
+      // minute; the starting list if it cannot be read).
+      const categories = formCategories(await loadCategories());
+      const html = renderFundraiseSignUp(readFileSync(signUpFile, "utf8"), await fundraisingOn(), categories);
       fresh(res);
       // TASK-503: opened from a staff invite, its token in the address until the page's script takes
       // it out. Until then: never kept by a browser or anything in between, never indexed, and only

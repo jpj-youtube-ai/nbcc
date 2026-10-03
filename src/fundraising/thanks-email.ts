@@ -20,7 +20,7 @@ const shell = (body: string) =>
 
 const EYEBROW = "Fundraising for NBCC";
 const HELLO = "Hello,";
-const LAST = "And from all of us: thank you too. Your gift helps the families we support, all year round.";
+const LAST = "And from all of us: thank you too. Your gift helps the children, young people and vulnerable adults we support, all year round.";
 const CLOSE = "Thanks so much,";
 
 export function buildSupporterThanksEmail(o: { organiserName: string; title: string; message: string }): BuiltEmail {

@@ -8401,7 +8401,7 @@ library.
 
 | Piece | What it is |
 |---|---|
-| `poster` | A4 portrait: the logo, "Fundraising for NBCC", the title, date, time and place, a short line (the card line, or the description's first sentence, trimmed), the target, a big QR code and the address in words, and "Every pound helps the families we support, all year round." The code is the public page's (`src/fundraising/qr.ts`, the same encoder as the SVG download); a public event's points at Get involved; one not on the website has no code and says nbcc.scot |
+| `poster` | A4 portrait: the logo, "Fundraising for NBCC", the title, date, time and place, a short line (the card line, or the description's first sentence, trimmed), the target, a big QR code and the address in words, and "Every pound helps the children, young people and vulnerable adults we support, all year round." The code is the public page's (`src/fundraising/qr.ts`, the same encoder as the SVG download); a public event's points at Get involved; one not on the website has no code and says nbcc.scot |
 | `social` | Pictures to share: a square (1080 x 1080) and a story (1080 x 1920), drawn in the browser on a canvas by `assets/js/fundraise-social.js` (inlined into the page) and saved as PNGs by a Download button each. Title, "Fundraising for NBCC", the meter (optional, a tick box), the page address and the logo with white lettering |
 | `sponsor-form` | A4 landscape, two pages (12 rows, then 11 more and the totals): HMRC's sponsorship and Gift Aid declaration word for word at the head of each page (from HMRC's model "Sponsorship and Gift Aid declaration form", gov.uk), the charity name and number, the fundraiser's title, the columns HMRC asks for (full name, home address, postcode, amount, date paid, Gift Aid tick), totals, and "Please send this form back to us with the money so we can claim Gift Aid." A blank one for anyone is at `/fundraise/sponsor-form` |
 | `certificate` | A4 landscape certificate of thanks: the organiser's name as they gave it, the title, the final total raised (Gift Aid apart, "+ £X Gift Aid" when there is some), today's date and "NBCC Team". The organiser's once the fundraiser is finished; staff can preview it at any time once approved |
@@ -8485,7 +8485,7 @@ donations), so none says "Sending now" for good.
 audit), in the approved words: "A thank you from Sam" (the organiser's first name only, and only if
 it is one plain word of letters; otherwise "A thank you for your gift"), "Hello,", "Sam asked us to
 pass this on to you, for your gift to **title**:", the message in a quote box, "And from all of us:
-thank you too. Your gift helps the families we support, all year round.", "Thanks so much, NBCC
+thank you too. Your gift helps the children, young people and vulnerable adults we support, all year round.", "Thanks so much, NBCC
 Team", and the "Got any questions?" box with the events inbox. Nothing about any other giver, and
 never the organiser's address.
 

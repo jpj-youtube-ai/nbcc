@@ -9378,6 +9378,85 @@ Tests: `test/unit/fundraising-in-memory*.test.ts`, `fundraise-memory-*.test.ts`,
 `fundraiser-memory-*.test.ts`, `fundraising-envelope.test.ts`, `fundraise-signup-memory.test.ts`,
 `fundraise-manage-memory.test.ts`, `admin-fundraising-memory-panel.test.ts`,
 `in-memory-migration.test.ts`; BDD `features/fundraising-in-memory.feature`.
+## What gifts could do: impact examples on fundraiser, event and team pages
+
+Jaimie approved, 2026-10-03. One shared list of examples, like "£25 could help buy a pair of school
+shoes", that fundraiser, event and team pages show, and that a Fill a Red Bag page will read later
+(so it lives in `src/impact/`, not under fundraising). OSCR-safe wording only: every example starts
+"could", and none promises ("will buy", "will pay for", "will cover", "will fund", "will provide",
+"pays for", "buys"), so a gift never reads as a promise and never becomes a restricted fund. The
+server refuses anything else, and so does the table's own check (a check violation is a plain 400).
+
+On a page (`src/fundraising/impact-render.ts`, placed by `renderFundraiserPage`):
+
+- **Under each give amount** that has an example (£5, £10 and £50 to start; £20 has none), its words,
+  small, inside the amount's label, so a screen reader hears "£5 could help put a cosy pair of
+  pyjamas in a Red Bag" as the choice.
+- **Under your own amount**, as it is typed (`assets/js/fundraiser.js`, from the form's `data-could`):
+  the line of the example with the largest amount at or below it, nothing below £5 or below the
+  page's minimum. Typing £30 shows "£25 could help buy a pair of school shoes". It is a live region
+  that is always there (empty until it has something), named by the box's `aria-describedby`, and
+  written only when its words change.
+- **Under the meter** (`meterImpactLine`): below £50 "Every pound could help fill a Red Bag Full of Joy";
+  from £50 "What's been raised so far could fill around N Red Bags Full of Joy" (N is the total over
+  the Red Bag example's amount, rounded down; "1 Red Bag Full of Joy" in the singular); from £400 it
+  adds ", or help N children start school in a uniform that fits" (the total over the uniform
+  example's amount; never "0 children": only once the total covers one). A team page counts the team's combined total. Switch the Red Bag example off and
+  the line goes; switch the uniform one off and that part goes.
+- **The footnote**, shown once wherever any of it shows: "These show what gifts could do. Every gift
+  goes where it's needed most." Under the give amounts when they show examples, else under the
+  meter. When both show, the meter's copy is `data-nojs`: without JavaScript the give form is
+  hidden, so it stands in; the script that shows the form hides it.
+- **Never on a page in memory of someone** (quiet pages): the route passes no list when
+  `showsImpact(f)` is false, which asks `isQuietFundraiser` (`src/fundraising/touch-rules.ts`: the
+  `in_memory` flag, or a category that mentions memory); and the in memory page's own renderer
+  draws the give form with none of it (`renderGiveForm(p, words)` with no impact).
+
+The pages read the list as last read, kept for a minute (`loadImpactExamples`, never throws: on a
+failure the page simply shows none).
+
+### Admin > Fundraising, What gifts could do
+
+A card after Categories. Everyone who can see Fundraising sees the list, read only ("Only an admin
+can change these."); admins get the controls. Each example switched on, in the list's order, with
+where it shows ("Under the give amounts" or "Big totals only", and which part of the meter line
+counts with it); Edit (amount, words, Show under the give amounts) in its row; Move up and Move down;
+Switch off (after asking) and Switch on. The £50 Red Bag and £40 uniform examples have no Edit: "Used
+for the line under the meter, so its words and amount are fixed." (the server refuses with a 409),
+but switch off and on and move like the rest. Below, add one: amount in pounds, what it could do,
+and the give amounts tick. Nothing is deleted. Each change is in `audit_log` (`impact.example_added`, `impact.example_changed`,
+`impact.example_moved`, entity `impact_example`).
+
+| Route | Who | Body | Answer |
+|---|---|---|---|
+| `GET /api/admin/impact-examples` | Fundraising view | | `{ examples: [{ id, amountPence, wording, active, sortOrder, onGiveForm, meterLine, createdAt, createdBy, updatedAt, updatedBy }] }`, in the list's order |
+| `POST /api/admin/impact-examples` | an admin | `{ amountPence (100 to 1000000), wording (10 to 160, starts could, never a promise), onGiveForm? }` | `201 { example }`, switched on, at the end; `400` with the reason |
+| `PATCH /api/admin/impact-examples/:id` | an admin | `{ amountPence?, wording?, active?, onGiveForm? }` | `200 { example }`; `400`; `404`; `409` for a new amount or words on one the meter line counts with |
+| `POST /api/admin/impact-examples/:id/move` | an admin | `{ direction: "up" \| "down" }` | `200 { examples }` (past any switched the other way; at the end, nothing changes); `404` |
+
+### Data (`migrations/1791200000200_impact-examples.js`, additive only)
+
+A new table, `impact_examples`: `id`, `amount_pence` (100 to 1,000,000), `wording` (checked: starts
+could, never a promise), `active`, `sort_order`, `on_give_form` (false: big totals
+only), `meter_line` (`red_bags` or `uniforms`, unique, set by the migration and not by staff),
+`created_at` / `_by`, `updated_at` / `_by`. Seeded, only into an empty table, with the five Jaimie
+approved: £5 "could help put a cosy pair of pyjamas in a Red Bag", £10 "could help put pyjamas,
+socks, a hat and gloves in a Red Bag", £25 "could help buy a pair of school shoes", £50 "could help
+fill a whole Red Bag Full of Joy" (`red_bags`), and £40 "could help a child start school in a uniform
+that fits" (big totals only, `uniforms`). Numbered 200, after 195, 197 and 198, which merge first.
+In the nightly backup's table count (77).
+
+### Where it lives, and tests
+
+Rules (pure): `src/impact/examples.ts`. SQL: `src/db/impact-examples.ts`. Page pieces:
+`src/fundraising/impact-render.ts`; the own amount line in `assets/js/fundraiser.js`; styles in
+`assets/css/fundraising.css`. Route: `src/routes/admin-impact-examples.ts`; the page route passes the
+list in `src/routes/fundraise-pages.ts`. Screen: the `frImpact` block of `assets/js/admin/app.js`.
+Unit tests: `impact-examples`, `impact-examples-migration`, `impact-examples-db`,
+`admin-impact-examples-routes`, `fundraiser-page-impact` (jsdom), `fundraiser-page-impact-route`,
+`admin-impact-examples-card` (jsdom) and `backup-plan`. BDD: `features/impact-examples.feature` (an
+admin adds an example and a fundraiser's page shows it; words not starting with could, or that
+promise, are refused; only an admin may add one).
 
 ## A QR code encoder for fundraiser pages (TASK-493)
 
@@ -9420,7 +9499,7 @@ lives in; the Drive copy is not immutable.
 
 ### There are THREE databases, not one
 
-This is the trap this feature was built around. `DATABASE_URL` holds 70 tables
+This is the trap this feature was built around. `DATABASE_URL` holds 74 tables
 (42 when this was built; the Events page added three in TASK-453, the Festive Ball ticket
 report one in TASK-464, the admin's New pills one, `admin_seen`, in TASK-478, site analytics
 four in TASK-479, the business supporter call log in TASK-491, community fundraising five
@@ -9429,10 +9508,11 @@ calls two in TASK-503, the requests one in TASK-505, the news updates one in TAS
 thank yous to supporters and the address level opt out list three in TASK-507, the old page
 links one in TASK-511, the fundraising categories one in TASK-514, and which automatic emails each
 fundraiser has had and the Do it again links two in TASK-515, the team invites and team
-organiser handovers two for team pages, and the approved automatic email wordings one),
+organiser handovers two for team pages, the approved automatic email wordings one, and the impact
+examples one for what gifts could do),
 but `STORIES_DATABASE_URL` and `CONTACT_DATABASE_URL` are separate databases
 (deliberately, so the public story and contact forms can never reach donor
-data). A `pg_dump $DATABASE_URL` captures 73 of **76** tables and silently
+data). A `pg_dump $DATABASE_URL` captures 74 of **77** tables and silently
 drops every My Story submission (and, since TASK-475, the fingerprints in
 `erased_stories` that keep erased stories from coming back) and every contact
 enquiry, while producing a

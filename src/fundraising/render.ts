@@ -16,6 +16,8 @@ import type { Meter, PublicCard, PublicPage, WallEntry } from "./model";
 import { countdownFor, type NewsEntry } from "./news";
 import { safeFirstName } from "./emails";
 import { entryLine, safeTicketUrl } from "./entry";
+import { NONE as NO_IMPACT, impactParts, type ImpactParts } from "./impact-render";
+import type { ImpactExample } from "../impact/examples";
 
 // TASK-494: the public fundraising pages, drawn on the server.
 //
@@ -592,12 +594,13 @@ export interface GiveWords {
   sub: string;
 }
 
-export function renderGiveForm(p: PublicPage, words?: GiveWords): string {
+/** impact: what gifts could do (./impact-render.ts); none unless the page's own renderer passes it. */
+export function renderGiveForm(p: PublicPage, words?: GiveWords, impact: ImpactParts = NO_IMPACT): string {
   const event = isEvent(p);
   const presets = PRESETS_PENCE.map(
     (pence) =>
       `<label class="fr-amount"><input type="radio" name="frAmount" value="${pence}" />` +
-      `<span class="fr-amount__face">${formatPounds(pence)}</span></label>`,
+      `<span class="fr-amount__face">${formatPounds(pence)}</span>${impact.preset(pence)}</label>`,
   ).join("");
   const min = formatPounds(p.giving.minimumPence);
   return (
@@ -617,7 +620,7 @@ export function renderGiveForm(p: PublicPage, words?: GiveWords): string {
           `<p class="give-step-sub">Your donation goes to NBCC and counts towards ${whose(p)} total.${SHARE_NOTE(p)}</p>`) +
     // Shipped hidden: without JavaScript the browser would send it as a web address, names and all.
     '<p class="fr-noscript" data-nojs>Giving on this page needs JavaScript switched on. You can still donate on our <a href="/donate">donate page</a>.</p>' +
-    `<form id="frGiveForm" class="fr-give-form" data-fundraiser-id="${p.giving.fundraiserId}" data-minimum-pence="${p.giving.minimumPence}" novalidate hidden data-needs-js>` +
+    `<form id="frGiveForm" class="fr-give-form" data-fundraiser-id="${p.giving.fundraiserId}" data-minimum-pence="${p.giving.minimumPence}"${impact.formAttr} novalidate hidden data-needs-js>` +
     '<p class="form-error-summary" role="alert" data-give-error hidden></p>' +
     // 1. how much
     '<div class="give-question">' +
@@ -626,8 +629,9 @@ export function renderGiveForm(p: PublicPage, words?: GiveWords): string {
     '<div class="give-field fr-own">' +
     `<label class="give-custom-label" for="frOwnAmount">Or choose your own amount, ${min} or more</label>` +
     '<div class="give-custom-field"><span class="give-custom-currency" aria-hidden="true">£</span>' +
-    `<input class="give-custom-input" id="frOwnAmount" name="frOwnAmount" type="number" inputmode="decimal" min="${p.giving.minimumPence / 100}" step="0.01" placeholder="Amount" />` +
+    `<input class="give-custom-input" id="frOwnAmount" name="frOwnAmount" type="number" inputmode="decimal" min="${p.giving.minimumPence / 100}" step="0.01" placeholder="Amount"${impact.ownAttr} />` +
     "</div></div>" +
+    impact.afterOwn +
     "</fieldset></div>" +
     // 2. who
     '<div class="give-question">' +
@@ -721,6 +725,11 @@ export interface FundraiserPageOptions {
    * its members after the story; a member page's team under its facts. Nothing for any other page.
    */
   team?: { summaryHtml?: string; mainHtml?: string; factsHtml?: string };
+  /**
+   * What gifts could do (src/fundraising/impact-render.ts): the examples switched on, for the lines
+   * under the give amounts and the meter. None (a page in memory of someone): no lines at all.
+   */
+  impact?: readonly ImpactExample[];
 }
 
 /**
@@ -882,6 +891,7 @@ export function renderFundraiserPage(template: string, p: PublicPage, opts: Fund
     }
   })();
   const event = p.path === "event";
+  const impact = impactParts(opts.impact, p.meter.raisedPence);
   const description = event
     ? `A community event raising money for NBCC, organised by ${p.organisedBy}. ${shorten(p.description, 140)}`
     : `${p.teamName || p.organisedBy} is raising money for NBCC. ${shorten(p.description, 140)}`;
@@ -900,6 +910,7 @@ export function renderFundraiserPage(template: string, p: PublicPage, opts: Fund
     '<h2 class="sr-only">Money raised so far</h2>' +
     renderMeter(p.meter, { large: true }) +
     (event ? '<p class="fr-meter__paidin">Includes any money the organiser has paid in.</p>' : "") +
+    impact.afterMeter +
     renderSplit(p) +
     (event && !p.finished ? renderEntryLine(p) : "") +
     `<a class="btn btn-primary fr-summary__give" href="#give">${p.finished ? "You can still give" : event ? "Make a donation" : "Give to this fundraiser"}</a>` +
@@ -916,7 +927,7 @@ export function renderFundraiserPage(template: string, p: PublicPage, opts: Fund
     "</section>" +
     (opts.team?.mainHtml ?? "") +
     renderNews(p) +
-    renderGiveForm(p) +
+    renderGiveForm(p, undefined, impact) +
     renderWall(p, opts.now) +
     "</div>" +
     `<div class="fr-extras">${renderShare(p, opts.pageUrl)}</div>`;

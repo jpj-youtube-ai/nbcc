@@ -56,9 +56,10 @@ describe("knowing how many tables to expect", () => {
   // changed; 71 with the fundraising categories (the list the sign up form offers); 73 since TASK-515
   // added which automatic emails each fundraiser has had, and the Do it again links; 75 since team
   // pages added the people a team organiser invites, and the team organiser handovers; 76 with the
-  // approved automatic email wordings (Jaimie, 2026-10-03).
-  it("counts 76 across the three databases", () => {
-    expect(expectedTableCount(ROOT)).toBe(76);
+  // approved automatic email wordings (Jaimie, 2026-10-03); 77 with the impact examples (what gifts
+  // could do, shown on fundraiser, event and team pages).
+  it("counts 77 across the three databases", () => {
+    expect(expectedTableCount(ROOT)).toBe(77);
   });
 
   it("finds the three tables that live outside the main database", () => {
@@ -122,7 +123,9 @@ describe("knowing how many tables to expect", () => {
     expect(main).toContain("team_handovers");
     // Which new automatic email wordings an admin has approved (Jaimie, 2026-10-03).
     expect(main).toContain("touch_wording_approvals");
-    expect(main.length).toBe(73);
+    // What gifts could do: the shared list of "could" examples staff edit in Admin > Fundraising.
+    expect(main).toContain("impact_examples");
+    expect(main.length).toBe(74);
   });
 
   it("returns nothing for a directory that does not exist, rather than throwing", () => {

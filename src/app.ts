@@ -8,6 +8,7 @@ import { adminUsersRouter } from "./routes/admin-users";
 import { adminEventsRouter } from "./routes/admin-events";
 import { adminFundraisingRouter } from "./routes/admin-fundraising";
 import { adminFundraisingCategoriesRouter } from "./routes/admin-fundraising-categories";
+import { adminImpactExamplesRouter } from "./routes/admin-impact-examples";
 import { adminFundraisingTeamRouter } from "./routes/admin-fundraising-team";
 import { adminFundraisingRequestsRouter } from "./routes/admin-fundraising-requests";
 import { adminFundraisingTouchRouter } from "./routes/admin-fundraising-touch";
@@ -122,6 +123,8 @@ export function createApp() {
   app.use(adminFundraisingRouter);
   // Fundraising categories: the list the sign up form offers, A to Z; admins add, rename and hide them.
   app.use(adminFundraisingCategoriesRouter);
+  // What gifts could do: the shared "could" examples on fundraiser, event and team pages; admins edit them.
+  app.use(adminImpactExamplesRouter);
   // TASK-503: the fundraising team's tools (invite, calls, Get involved, the Monday summary), and
   // the sign up form's invite lookup.
   app.use(adminFundraisingTeamRouter);

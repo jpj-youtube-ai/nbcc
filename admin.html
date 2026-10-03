@@ -1497,6 +1497,26 @@
                 <p class="ty-status" id="frCatsStatus" role="status" aria-live="polite" tabindex="-1"></p>
               </section>
 
+              <!-- What gifts could do: the shared "could" examples fundraiser, event and team pages show
+                   under the give amounts and the meter (src/impact/examples.ts). Everyone who can see
+                   Fundraising sees the list; only admins change it. app.js draws the lists; nothing
+                   is ever deleted, only switched off. -->
+              <section class="fr-card" id="frImpact" aria-labelledby="frImpactHead" hidden>
+                <h3 class="admin-subhead" id="frImpactHead">What gifts could do</h3>
+                <p class="fr-card-intro">Examples shown under the give amounts and under the meter on every fundraiser, event and team page, never on a page in memory of someone. Always start with could, and never promise (will buy, will pay for, buys): every gift goes where it's needed most, and each page says so. The £50 Red Bag and £40 uniform examples count what the meter could fill, so their words and amount are fixed; switch one off and its part of that line goes.</p>
+                <ul class="fr-people fr-impact" id="frImpactList"><li class="fr-people-empty">Loading&hellip;</li></ul>
+                <h4 class="fr-card-subhead" id="frImpactOffHead" hidden>Switched off</h4>
+                <ul class="fr-people fr-impact" id="frImpactOff" hidden></ul>
+                <p class="fr-field-hint" id="frImpactReadOnly" hidden>Only an admin can change these.</p>
+                <div class="fr-summary-add fr-impact-add" id="frImpactAddForm" hidden>
+                  <div class="fr-field fr-impact-amount"><label class="fx-call-label" for="frImpactAmount">Amount (£)</label><input class="fx-call-input" id="frImpactAmount" type="text" inputmode="decimal" maxlength="9" autocomplete="off" placeholder="25" /></div>
+                  <div class="fr-field"><label class="fx-call-label" for="frImpactWording">What it could do</label><input class="fx-call-input" id="frImpactWording" type="text" maxlength="160" autocomplete="off" placeholder="could help buy a pair of school shoes" /></div>
+                  <label class="fr-impact-give" for="frImpactGive"><input id="frImpactGive" type="checkbox" checked /> Show under the give amounts</label>
+                  <button class="admin-btn" type="button" id="frImpactAdd">Add the example</button>
+                </div>
+                <p class="ty-status" id="frImpactStatus" role="status" aria-live="polite" tabindex="-1"></p>
+              </section>
+
               <!-- TASK-515: the automatic emails to organisers. Every one can be read here, rendered,
                    before any is sent; only an admin can switch them on (they ship off). The preview
                    grows to the email's height; nothing scrolls inside it. -->

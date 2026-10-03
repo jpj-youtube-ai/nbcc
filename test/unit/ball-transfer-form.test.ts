@@ -32,6 +32,7 @@ function fillIn() {
   (f.elements.namedItem("buyerFirstName") as HTMLInputElement).value = "Ada";
   (f.elements.namedItem("buyerSurname") as HTMLInputElement).value = "Test";
   (f.elements.namedItem("buyerEmail") as HTMLInputElement).value = "ada@example.com";
+  (f.elements.namedItem("buyerPhone") as HTMLInputElement).value = "07700 900123";
   (f.elements.namedItem("termsAccepted") as HTMLInputElement).checked = true;
 }
 const submit = () => form().dispatchEvent(new Event("submit", { cancelable: true, bubbles: true }));

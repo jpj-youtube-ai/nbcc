@@ -14,6 +14,7 @@ describe("purchaseSchema", () => {
     buyerFirstName: "Jo",
     buyerSurname: "Smith",
     buyerEmail: "jo@example.com",
+    buyerPhone: "07700 900123",
     termsAccepted: true,
   };
 
@@ -118,6 +119,7 @@ describe("ballMetadata / bookingFromSession round trip", () => {
     buyerFirstName: "Jo",
     buyerSurname: "Smith",
     buyerEmail: "jo@example.com",
+    buyerPhone: "07700 900123",
     termsAccepted: true,
     donationPence: 2_500,
     coverFee: true,

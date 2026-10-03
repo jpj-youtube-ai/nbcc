@@ -66,6 +66,8 @@ import {
   updateSettings as updateBallSettings,
   listGuestProgress,
   listAbandonedBookings,
+  countBookingsWithoutPhone,
+  setBookingPhone,
   listMenuProgress,
   listBookingsNeedingMenuEmail,
   markMenuEmailSent,
@@ -3772,12 +3774,17 @@ export async function getAdminBallBookings(req: Request, res: Response): Promise
   const limit = Number(req.query.limit ?? 200);
   const offset = Number(req.query.offset ?? 0);
   try {
-    const [results, abandoned] = await Promise.all([
+    // Phone numbers past their date (90 days after the event) go before anything is read.
+    await purgeExpiredGuests();
+    const [results, abandoned, noPhone] = await Promise.all([
       listBookings(
         Number.isFinite(limit) ? limit : 200,
         Number.isFinite(offset) ? offset : 0,
       ),
       listAbandonedBookings(),
+      // Jaimie 2026-10-03: bookings still going ahead (paid, or awaiting a transfer) with no phone
+      // number, for staff to chase. Every one, not only the page of rows above.
+      countBookingsWithoutPhone(),
     ]);
     // The rows AND the count. NBCC wanted to see who had tried, without those attempts sitting
     // in the same table as people who actually bought — so they travel together and the admin
@@ -3786,9 +3793,38 @@ export async function getAdminBallBookings(req: Request, res: Response): Promise
       results,
       abandoned: abandoned.length,
       abandonedRows: abandoned,
+      noPhone,
     });
   } catch (err) {
     console.error("admin ball bookings failed:", err instanceof Error ? err.message : err);
+    return res.status(500).json({ error: "Admin is temporarily unavailable" });
+  }
+}
+
+// PUT /api/admin/ball/bookings/:reference/phone — add, change or (empty) take away the booker's
+// phone number (Jaimie 2026-10-03). Bookings made before the ticket page asked for one have none,
+// and staff add it once they have it. Festive Ball edit, like cancelling; audited in
+// src/db/ball.ts. Checked by the same rule as the phone box in Admin > Business supporters.
+const ballPhoneBody = z.object({ phone: z.string().max(200) }).strict();
+
+export async function putAdminBallBookingPhone(req: Request, res: Response): Promise<Response | void> {
+  const claims = await authorizeSection(req, res, "ball", "edit");
+  if (!claims) return;
+  const reference = String(req.params.reference ?? "").trim();
+  if (!reference) return res.status(400).json({ error: "Which booking?" });
+  const parsed = ballPhoneBody.safeParse(req.body ?? {});
+  const phone = parsed.success ? normalisePhone(parsed.data.phone) : null;
+  if (!phone || !phone.ok) {
+    return res.status(400).json({
+      error: "That phone number does not look right. Use digits, spaces, + ( ) and -, up to 40 characters.",
+    });
+  }
+  try {
+    const saved = await setBookingPhone(reference, phone.phone, actorOf(claims));
+    if (!saved.ok) return res.status(404).json({ error: "No booking with that reference." });
+    return res.status(200).json({ reference, phone: saved.phone });
+  } catch (err) {
+    console.error("admin ball phone failed:", err instanceof Error ? err.message : err);
     return res.status(500).json({ error: "Admin is temporarily unavailable" });
   }
 }
@@ -3938,6 +3974,7 @@ export async function postAdminBallChase(req: Request, res: Response): Promise<R
 
 adminRouter.post("/api/admin/ball/chase", postAdminBallChase);
 adminRouter.post("/api/admin/ball/bookings/:reference/cancel", postAdminBallCancelBooking);
+adminRouter.put("/api/admin/ball/bookings/:reference/phone", putAdminBallBookingPhone);
 adminRouter.get("/api/admin/ball/holds", getAdminBallHolds);
 adminRouter.post("/api/admin/ball/holds", postAdminBallHold);
 adminRouter.delete("/api/admin/ball/holds/:id", deleteAdminBallHold);
@@ -3983,6 +4020,8 @@ export async function getAdminBallCatering(req: Request, res: Response): Promise
 export async function getAdminBallBookingsCsv(req: Request, res: Response): Promise<Response | void> {
   if (!(await authorizeSection(req, res, "ball", "view"))) return;
   try {
+    // The phone numbers in it go 90 days after the event, as in the door and catering lists.
+    await purgeExpiredGuests();
     return csvResponse(res, "festive-ball-bookings.csv", bookingsCsv(await listBookingsForExport()));
   } catch (err) {
     console.error("ball bookings export failed:", err instanceof Error ? err.message : err);

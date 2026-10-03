@@ -11,6 +11,7 @@ const seat = purchaseSchema.parse({
   buyerFirstName: "Jo",
   buyerSurname: "Smith",
   buyerEmail: "jo@example.com",
+  buyerPhone: "07700 900123",
   termsAccepted: true,
 });
 
@@ -20,6 +21,7 @@ const tableWithExtras = purchaseSchema.parse({
   buyerFirstName: "Ayrshire",
   buyerSurname: "Bakery",
   buyerEmail: "orders@example.com",
+  buyerPhone: "01632 960123",
   termsAccepted: true,
   donationPence: 5_000,
   coverFee: true,

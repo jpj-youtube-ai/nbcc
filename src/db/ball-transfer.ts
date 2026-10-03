@@ -104,9 +104,9 @@ export async function createTransferBooking(
          (reference, kind, quantity, seats, buyer_name, buyer_first_name, buyer_surname, buyer_email,
           tickets_pence, donation_pence, fee_cover_pence, total_pence, gift_aid, newsletter_opt_in,
           status, terms_accepted_at, payment_method, pay_by,
-          invoice_company, invoice_address, invoice_po, invoice_accounts_email, invoice_phone)
+          invoice_company, invoice_address, invoice_po, invoice_accounts_email, invoice_phone, buyer_phone)
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,0,$11,$12,$13,'pending',now(),'transfer',$14,
-               $15,$16,$17,$18,$19)
+               $15,$16,$17,$18,$19,$20)
        RETURNING id`,
       [
         write.reference,
@@ -128,6 +128,8 @@ export async function createTransferBooking(
         invoice?.po ?? null,
         invoice?.accountsEmail ?? null,
         invoice?.phone ?? null,
+        // Jaimie 2026-10-03: the booker's own phone number, for menu choices.
+        write.buyerPhone ?? null,
       ],
     );
     if (addedBy) {
@@ -213,6 +215,8 @@ export interface AwaitingTransfer {
   seats: number;
   buyerName: string;
   buyerEmail: string;
+  /** Jaimie 2026-10-03: the booker's phone number; null on bookings made before it was asked. */
+  buyerPhone: string | null;
   totalPence: number;
   payBy: string;
   createdAt: string;
@@ -227,7 +231,7 @@ export interface AwaitingTransfer {
 /** Every transfer still waiting for its money, the one due soonest first (so overdue ones lead). */
 export async function listAwaitingTransfers(): Promise<AwaitingTransfer[]> {
   const res = await pool.query(
-    `SELECT id, reference, kind, quantity, seats, buyer_name, buyer_email, total_pence,
+    `SELECT id, reference, kind, quantity, seats, buyer_name, buyer_email, buyer_phone, total_pence,
             to_char(pay_by, 'YYYY-MM-DD') AS pay_by, created_at,
             transfer_reminder_sent_at IS NOT NULL AS reminded, invoice_company
        FROM ball_bookings
@@ -241,6 +245,7 @@ export async function listAwaitingTransfers(): Promise<AwaitingTransfer[]> {
     seats: r.seats,
     buyerName: r.buyer_name,
     buyerEmail: r.buyer_email,
+    buyerPhone: r.buyer_phone ?? null,
     totalPence: r.total_pence,
     payBy: r.pay_by,
     createdAt: r.created_at,

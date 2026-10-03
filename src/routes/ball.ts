@@ -6,7 +6,7 @@ import { z } from "zod";
 import { config } from "../config";
 import { stripe, stripeConfigured } from "../clients/stripe";
 import { canFulfil, seatsFor } from "../ball/capacity";
-import { makeReference, purchaseSchema } from "../ball/booking";
+import { bookingRequestError, makeReference, purchaseSchema } from "../ball/booking";
 import { buildBallSessionParams } from "../ball/checkout";
 import { orderTotalPence } from "../ball/pricing";
 import { publicTransferOpen } from "../ball/transfer";
@@ -90,7 +90,7 @@ const replacesSchema = z.object({
 ballRouter.post("/api/ball/checkout-session", async (req, res) => {
   const parsed = purchaseSchema.safeParse(req.body);
   if (!parsed.success) {
-    return res.status(400).json({ error: "Invalid booking request", details: parsed.error.issues });
+    return res.status(400).json({ error: bookingRequestError(parsed.error.issues), details: parsed.error.issues });
   }
   const purchase = parsed.data;
 
@@ -178,6 +178,8 @@ ballRouter.post("/api/ball/checkout-session", async (req, res) => {
       buyerFirstName: purchase.buyerFirstName,
       buyerSurname: purchase.buyerSurname,
       buyerEmail: purchase.buyerEmail,
+      // Absent only from a page loaded before the phone box existed; the admin flags it to chase.
+      buyerPhone: purchase.buyerPhone ?? null,
       ticketsPence: totals.ticketsPence,
       donationPence: totals.donationPence,
       feeCoverPence: totals.feeCoverPence,

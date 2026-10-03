@@ -259,12 +259,14 @@ export async function releaseReservation(token: string): Promise<void> {
 // abandoned checkout gives its seats back without a sweeper.
 
 export async function createPendingBooking(booking: BallBookingWrite): Promise<void> {
+  // buyer_phone (Jaimie 2026-10-03): the booker's phone number, for menu choices. Nullable, so the
+  // code before it, still running while a deploy rolls out, inserts without it.
   await pool.query(
     `INSERT INTO ball_bookings
        (reference, kind, quantity, seats, buyer_name, buyer_first_name, buyer_surname,
         buyer_email, tickets_pence, donation_pence, fee_cover_pence, total_pence,
-        gift_aid, newsletter_opt_in, stripe_session_id, status, terms_accepted_at)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,'pending',now())
+        gift_aid, newsletter_opt_in, stripe_session_id, status, terms_accepted_at, buyer_phone)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,'pending',now(),$16)
      ON CONFLICT (stripe_session_id) DO NOTHING`,
     [
       booking.reference,
@@ -282,6 +284,7 @@ export async function createPendingBooking(booking: BallBookingWrite): Promise<v
       booking.giftAid,
       booking.newsletterOptIn,
       booking.stripeSessionId,
+      booking.buyerPhone ?? null,
     ],
   );
 }
@@ -692,6 +695,8 @@ export interface BallBookingRow {
   paymentMethod: string;
   /** TASK-484: the status it had when staff cancelled it; only a transfer cancelled unpaid comes back. */
   cancelledFrom: string | null;
+  /** Jaimie 2026-10-03: the booker's phone number; null on bookings made before it was asked. */
+  buyerPhone: string | null;
 }
 
 // TASK-337: how many checkouts were started and never finished.
@@ -708,7 +713,7 @@ export async function listAbandonedBookings(limit = 100): Promise<BallBookingRow
   const res = await pool.query(
     `SELECT id, reference, kind, quantity, seats, buyer_name, buyer_email,
             total_pence, donation_pence, gift_aid, newsletter_opt_in, status,
-            created_at, paid_at, payment_method, cancelled_from
+            created_at, paid_at, payment_method, cancelled_from, buyer_phone
        FROM ball_bookings
       WHERE status = 'pending' AND payment_method = 'card'
       ORDER BY created_at DESC
@@ -732,6 +737,7 @@ export async function listAbandonedBookings(limit = 100): Promise<BallBookingRow
     paidAt: r.paid_at,
     paymentMethod: r.payment_method,
     cancelledFrom: r.cancelled_from,
+    buyerPhone: r.buyer_phone ?? null,
   }));
 }
 
@@ -748,7 +754,7 @@ export async function listBookings(limit = 200, offset = 0): Promise<BallBooking
   const res = await pool.query(
     `SELECT id, reference, kind, quantity, seats, buyer_name, buyer_email,
             total_pence, donation_pence, gift_aid, newsletter_opt_in, status,
-            created_at, paid_at, payment_method, cancelled_from
+            created_at, paid_at, payment_method, cancelled_from, buyer_phone
        FROM ball_bookings
       WHERE status <> 'pending'
       ORDER BY created_at DESC
@@ -772,7 +778,67 @@ export async function listBookings(limit = 200, offset = 0): Promise<BallBooking
     paidAt: r.paid_at,
     paymentMethod: r.payment_method,
     cancelledFrom: r.cancelled_from,
+    buyerPhone: r.buyer_phone ?? null,
   }));
+}
+
+// --- the booker's phone number (Jaimie 2026-10-03) ------------------------------------------------
+//
+// The ticket page asks for it, so NBCC can contact the booker about menu choices for their table.
+// Bookings made before have none; staff chase them by hand and add it here. Nothing is sent
+// automatically.
+
+/**
+ * How many bookings still going ahead have no phone number: paid, or awaiting their bank transfer.
+ * The same bookings the admin flags "No phone number yet", so the count and the flags agree.
+ */
+export async function countBookingsWithoutPhone(): Promise<number> {
+  const res = await pool.query<{ n: string }>(
+    `SELECT COUNT(*)::text AS n FROM ball_bookings
+      WHERE (status = 'paid' OR (status = 'pending' AND payment_method = 'transfer'))
+        AND (buyer_phone IS NULL OR btrim(buyer_phone) = '')`,
+  );
+  return Number(res.rows[0]?.n ?? 0);
+}
+
+/**
+ * Staff add, change or (with null) take away a booking's phone number. Audited in the same
+ * transaction, keeping the number it replaced so a mistyped change can be put back, like the phone
+ * box in Admin > Business supporters. `ok: false` when there is no booking with that reference.
+ */
+export async function setBookingPhone(
+  reference: string,
+  phone: string | null,
+  actor: string,
+): Promise<{ ok: true; phone: string | null } | { ok: false }> {
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    const before = await client.query<{ id: number; buyer_phone: string | null }>(
+      `SELECT id, buyer_phone FROM ball_bookings WHERE reference = $1 FOR UPDATE`,
+      [reference],
+    );
+    const row = before.rows[0];
+    if (!row) {
+      await client.query("ROLLBACK");
+      return { ok: false };
+    }
+    await client.query(`UPDATE ball_bookings SET buyer_phone = $2 WHERE id = $1`, [row.id, phone]);
+    await insertAudit(client, {
+      actor,
+      action: "ball.booking_phone",
+      entity: "ball_booking",
+      entityId: row.id,
+      data: { reference, phone, previous: row.buyer_phone },
+    });
+    await client.query("COMMIT");
+    return { ok: true, phone };
+  } catch (err) {
+    await client.query("ROLLBACK").catch(() => undefined);
+    throw err;
+  } finally {
+    client.release();
+  }
 }
 
 export interface BallDashboard {
@@ -942,8 +1008,16 @@ export async function ensureGuestToken(sessionId: string, token: string): Promis
 // Delete guest details past their retention date. Called from the admin read so it runs
 // naturally without a scheduler; the ninety-day promise in the ticket terms is kept by the
 // row's own expires_at rather than by anyone remembering.
+//
+// The booker's phone number goes on the same date (retentionDate, 90 days after the event): it
+// was asked for the booking and the menu, and the ticket terms say when it is deleted.
 export async function purgeExpiredGuests(): Promise<number> {
   const res = await pool.query("DELETE FROM ball_guests WHERE expires_at <= now()");
+  await pool.query(
+    `UPDATE ball_bookings SET buyer_phone = NULL
+      WHERE buyer_phone IS NOT NULL AND now() >= $1`,
+    [retentionDate()],
+  );
   return res.rowCount ?? 0;
 }
 
@@ -1128,7 +1202,7 @@ export async function listGuestsForExport(): Promise<ExportGuest[]> {
 export async function listBookingsForExport(): Promise<ExportBooking[]> {
   const res = await pool.query(
     `SELECT reference, kind, quantity, seats, buyer_name, buyer_first_name, buyer_surname,
-            buyer_email, tickets_pence, donation_pence, fee_cover_pence, total_pence,
+            buyer_email, buyer_phone, tickets_pence, donation_pence, fee_cover_pence, total_pence,
             gift_aid, newsletter_opt_in, status, table_name, created_at
        FROM ball_bookings
       ORDER BY created_at ASC`,
@@ -1142,6 +1216,7 @@ export async function listBookingsForExport(): Promise<ExportBooking[]> {
     buyerFirstName: r.buyer_first_name,
     buyerSurname: r.buyer_surname,
     buyerEmail: r.buyer_email,
+    buyerPhone: r.buyer_phone ?? null,
     ticketsPence: r.tickets_pence,
     donationPence: r.donation_pence,
     feeCoverPence: r.fee_cover_pence,

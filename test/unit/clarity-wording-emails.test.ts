@@ -11,6 +11,7 @@ import {
 import { buildTouchEmail, sampleTouchData, touchEmailData } from "../../src/fundraising/touch-emails";
 import { TOUCH_KINDS, type TouchKind } from "../../src/fundraising/touch-rules";
 import { buildTeamLiveEmail, buildTeamNudgeEmail } from "../../src/fundraising/team-page-emails";
+import { greetGuardian } from "../../src/fundraising/signup-tidy-emails";
 
 // Jaimie, 2026-10-03: "Your update is live" greeted a pub by "Hi The,". These emails greeted by the
 // first word of the organiser's name, which for a group or a business is no one's first name. They
@@ -143,5 +144,43 @@ describe("the team organiser's emails", () => {
       expect(build({ name: "Robin Organiser" }).text).toContain("Hi Robin,");
       expect(build({ name: "The Red Lion", firstName: "Robin" }).text).toContain("Hi Robin,");
     }
+  });
+});
+
+// With the sign up form's children's pages (TASK-531): an email about a child's member page greets the
+// parent, whatever greeting the email itself opened with ("Hi Jack," or "Hi there,").
+describe("a child's member page greets the parent", () => {
+  const child = { name: "Jack Sample", firstName: "Jack", guardianFirstName: "Sarah", title: "Jack's Dash" };
+  const TO = "Hi Sarah, this is about Jack's page.";
+
+  it("in the emails about an approval, a change and a news update", () => {
+    for (const built of [
+      buildApprovedEmail({ ...child, path: "raising" }, { pageUrl: PAGE, manageUrl: "https://nbcc.scot/fundraise/manage" }),
+      buildEditApprovedEmail(child, { pageUrl: PAGE }),
+      buildEditRejectedEmail(child, { pageLive: true }),
+      buildNewsApprovedEmail(child, { pageUrl: PAGE }),
+      buildNewsRejectedEmail(child, { pageLive: true }),
+    ]) {
+      const mail = greetGuardian(built, child);
+      expect(mail.text, built.subject).toContain(TO);
+      expect(mail.text, built.subject).not.toMatch(/Hi Jack,|Hi there,/);
+      expect(mail.html, built.subject).toContain("Hi Sarah, this is about Jack&#39;s page.");
+    }
+  });
+
+  it("when the email opened with Hi there, too", () => {
+    const titled = { ...child, name: "The Sample", firstName: null };
+    const built = buildEditApprovedEmail(titled, { pageUrl: PAGE });
+    expect(built.text).toContain("Hi there,");
+    const mail = greetGuardian(built, { ...titled, firstName: "Jack" });
+    expect(mail.text).toContain(TO);
+    expect(mail.text).not.toContain("Hi there,");
+  });
+
+  it("in the automatic emails", () => {
+    const data = { ...sampleTouchData("week_before", "https://nbcc.test"), name: "Jack Sample", firstName: "Jack" };
+    const mail = greetGuardian(buildTouchEmail("week_before", data), child);
+    expect(mail.text).toContain(TO);
+    expect(mail.text).not.toContain("Hi Jack,");
   });
 });

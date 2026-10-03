@@ -450,6 +450,20 @@ export async function readSummaryInputs(now: Date): Promise<SummaryInputs> {
     requests,
     thanksToCheck,
     prompts,
+    // Sponsor pledges still unpaid two weeks after their event, and those paid twice. Each is only
+    // one line of the summary: if it cannot be counted, the summary still goes, without it.
+    pledgesUnpaid: await import("./pledges")
+      .then((m) => m.countUnpaidPledges(now))
+      .catch((err: unknown) => {
+        console.error("fundraising summary unpaid pledges count failed:", err instanceof Error ? err.message : err);
+        return 0;
+      }),
+    pledgesPaidTwice: await import("./pledges")
+      .then((m) => m.countDoublePaidPledges())
+      .catch((err: unknown) => {
+        console.error("fundraising summary pledges paid twice count failed:", err instanceof Error ? err.message : err);
+        return 0;
+      }),
     // In memory: messages waiting for staff. Only one line of the summary: if they cannot be counted,
     // the summary still goes, without it.
     messagesToCheck: await countHeldMessages().catch((err: unknown) => {

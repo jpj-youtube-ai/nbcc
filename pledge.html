@@ -4,22 +4,10 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
 
-    <!-- SEO -->
+    <!-- Sponsor pledges: the pay and cannot pay pages an emailed link opens. Private to one sponsor: never indexed. -->
     <title>__TITLE__ | Night Before Christmas Campaign</title>
-    <meta name="description" content="__DESCRIPTION__" />
-    <link rel="canonical" href="__PAGE_URL__" />
-
-    <meta property="og:type" content="website" />
-    <meta property="og:site_name" content="Night Before Christmas Campaign" />
-    <meta property="og:title" content="__TITLE__" />
-    <meta property="og:description" content="__DESCRIPTION__" />
-    <meta property="og:url" content="__PAGE_URL__" />
-    <meta property="og:image" content="__OG_IMAGE__" />
-
-    <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:title" content="__TITLE__" />
-    <meta name="twitter:description" content="__DESCRIPTION__" />
-    <meta name="twitter:image" content="__OG_IMAGE__" />
+    <meta name="description" content="Pay a sponsor pledge to the Night Before Christmas Campaign." />
+    <meta name="robots" content="noindex, nofollow" />
 
     <link rel="stylesheet" href="/assets/css/styles.css" />
     <!-- Community fundraising (TASK-494) has its OWN stylesheet and scripts rather than growing the
@@ -29,8 +17,6 @@
     <link rel="preload" href="/assets/fonts/playfair-var.woff2" as="font" type="font/woff2" crossorigin />
     <link rel="preload" href="/assets/fonts/poppins-400.woff2" as="font" type="font/woff2" crossorigin />
     <script defer src="/assets/js/main.js"></script>
-    <script defer src="/assets/js/fundraiser.js"></script>
-    <script defer src="/assets/js/fundraiser-pledge.js"></script>
     <script defer src="/assets/js/pulse.js"></script>
   </head>
   <body>
@@ -53,23 +39,17 @@
     </header>
 
     <main class="site-main" id="main" tabindex="-1">
-      <!-- TASK-494: one community fundraiser's page, drawn by the server where the markers are
-           (src/fundraising/render.ts renderFundraiserPage): the name and facts in the intro; the
-           story, the meter, the give form, the supporter wall and the share links in the layout.
-           TASK-501: the QR code moved to the organiser's private area, and the page ends with a
-           quiet line pointing the organiser there. The tokens in the head are filled in with the fundraiser's own name and
-           address, so a shared link shows them. Served only for an approved (or, TASK-502, finished), public, raising money
-           fundraiser while fundraising is switched on; anything else is the site's 404. -->
-      <section class="page-top fr-intro" aria-labelledby="fr-title">
+      <!-- Sponsor pledges (src/pledges/render.ts): drawn by the server where the markers are. The pay
+           page is a plain form that works without JavaScript and goes on to Stripe; the cannot pay
+           page asks first, with a button, so a link opened by a mail scanner never cancels anything. -->
+      <section class="page-top fr-intro" aria-labelledby="pledge-heading">
         <div class="wrap">
-          <div class="intro-hero"><!-- fundraiser:intro --></div>
+          <div class="intro-hero"><!-- pledge:intro --></div>
         </div>
       </section>
       <div class="section flush-top">
-        <div class="wrap fr-layout"><!-- fundraiser:page --></div>
+        <div class="wrap fr-narrow"><!-- pledge:page --></div>
       </div>
-      <div class="wrap"><p class="fr-owner">Is this your page? <a href="/fundraise/manage">Manage it</a></p></div>
-      <!-- fundraiser:checkout -->
     </main>
 
     <footer class="site-footer" data-region="footer">

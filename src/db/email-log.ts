@@ -211,7 +211,12 @@ export async function pruneEmailLog(now: Date = new Date()): Promise<number> {
 // repo's erasure today is per-story/per-contact (TASK-311) and carries no email-log linkage —
 // but when a donor-erasure flow lands it must call this in the same stroke, so the helper (and
 // its test) ship with the table rather than being remembered later.
-export async function eraseEmailLogFor(email: string): Promise<number> {
-  const { rowCount } = await pool.query(`DELETE FROM email_log WHERE recipient = lower($1)`, [email]);
+//
+// Sponsor pledges call it with `kinds`: when an unpaid pledge's details are removed, the log rows for
+// the emails about that pledge go too, and nothing else sent to that address is touched.
+export async function eraseEmailLogFor(email: string, kinds?: readonly string[]): Promise<number> {
+  const { rowCount } = kinds
+    ? await pool.query(`DELETE FROM email_log WHERE recipient = lower($1) AND kind = ANY($2)`, [email, [...kinds]])
+    : await pool.query(`DELETE FROM email_log WHERE recipient = lower($1)`, [email]);
   return rowCount ?? 0;
 }

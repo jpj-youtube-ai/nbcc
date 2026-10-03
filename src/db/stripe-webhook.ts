@@ -37,6 +37,7 @@ import {
 } from "./stripe-webhook-model";
 import { recalculateClaimOnRefund } from "../claims/refund";
 import { linkFundraiserGift } from "./fundraisers";
+import { guardPledgePaymentSafely, pledgeFromSession, settlePledgeSafely } from "./pledges";
 import {
   sendDonationConfirmation,
   sendDeclarationEmail,
@@ -89,6 +90,16 @@ export async function processWebhookEvent(event: Stripe.Event): Promise<WebhookR
     const { action, email, declaration, receipt, lapse, refundNotice, refundConfirmation, businessInvite, ballConfirmation, afterCommit } =
       await dispatch(client, event);
     await client.query("COMMIT");
+    // Sponsor pledges: a pledge paid twice (or paid online after being marked as cash) is flagged in
+    // the transaction above; the events inbox is told now, after commit. Best effort, never throws,
+    // and only looked at for a payment made from a pledge's pay link.
+    if (event.type === "checkout.session.completed" && pledgeFromSession(event.data.object)) {
+      try {
+        await (await import("../pledges/runner")).sendDoublePaidAlerts();
+      } catch (err) {
+        console.error("pledge paid twice alert failed:", err instanceof Error ? err.message : err);
+      }
+    }
     // Send the single donation-confirmation email (TASK-070) only AFTER the donor +
     // donation row has committed, and OUTSIDE the transaction: a slow or failing
     // provider must never roll back a recorded gift. Best-effort — the send is
@@ -529,6 +540,10 @@ async function handleCheckoutCompleted(
   client: PoolClient,
   event: Stripe.Event & { data: { object: Stripe.Checkout.Session } },
 ): Promise<DispatchResult> {
+  // Sponsor pledges: a SECOND payment for a pledge already paid carries no Gift Aid (one declaration
+  // covers one donation). Checked first, before anything reads the session; every other session is
+  // left exactly as it came.
+  await guardPledgePaymentSafely(client, event.data.object);
   const { donor, donation } = donationFromCheckoutSession(event.data.object);
   // A gift-aided individual also captures a Gift Aid declaration (REQ-043); it is
   // inserted and linked to the donation in the SAME transaction (declaration_id FK).
@@ -577,6 +592,12 @@ async function handleCheckoutCompleted(
   // TASK-501: money an organiser paid in is thanked as paid in, not as a gift of their own, whether
   // or not it could be linked (linkFundraiserGift keeps its paid in mark either way).
   const paidIn = Boolean(fundraiserGift?.paidIn);
+  // Sponsor pledges: a payment made from a pledge's pay link marks that pledge paid, in THIS
+  // transaction, with the donation and the Gift Aid declaration just written. Sessions without a
+  // pledgeId (every other gift) skip this entirely.
+  // Behind a savepoint: whatever goes wrong marking the pledge, the donation above stays.
+  const pledgePayment = pledgeFromSession(event.data.object);
+  if (pledgePayment) await settlePledgeSafely(client, pledgePayment, { donationId, declarationId, eventId: event.id });
 
   // Business-supporter fulfilment (TASK-206): a BUSINESS MONTHLY gift at/above the £10/month minimum
   // — an incorporated company, or a partnership/sole trader donating under a business name — earns a

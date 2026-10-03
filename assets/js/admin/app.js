@@ -2702,6 +2702,9 @@
     ["eventTicketsRefundAsked", "Event tickets refund asked for (to events@)"], ["eventTicketsToApprove", "Event tickets to approve (to events@)"],
     ["eventTicketsToCheck", "Event tickets booking to check (to events@)"],
     ["eventTicketsCancelled", "Event tickets free booking cancelled (to the buyer)"],
+    // Sponsor pledges: the pay link and its one reminder, to a sponsor.
+    ["fundraisePledgeConfirm", "Sponsor pledge: please confirm"], ["fundraisePledgePay", "Sponsor pledge: link to pay"],
+    ["fundraisePledgeReminder", "Sponsor pledge: reminder"], ["fundraisePledgeStaff", "Sponsor pledge: note to events@"],
   ];
   function emailKindLabel(kind) {
     for (var i = 0; i < EMAIL_KINDS.length; i++) if (EMAIL_KINDS[i][0] === kind) return EMAIL_KINDS[i][1];

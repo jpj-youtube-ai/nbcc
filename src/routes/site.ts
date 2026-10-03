@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { keepQuery } from "../site/redirect";
 import { addFundraisePageRoutes } from "./fundraise-pages";
 import { addTeamPageRoutes } from "./team-pages";
+import { addPledgePageRoutes } from "./pledges";
 import {
   SUPPORTER_TIERS,
   type SupporterTier,
@@ -299,6 +300,8 @@ export function createSiteRouter(siteRoot: string): Router {
   addFundraisePageRoutes(router, siteRoot, { decorate: decorateNav, eventsPageIsOn });
   // Team pages: the join form at /fundraise/<team>/join (src/routes/team-pages.ts).
   addTeamPageRoutes(router, siteRoot, { decorate: decorateNav });
+  // Sponsor pledges: the pay and "can't pay after all" pages an emailed link opens (src/routes/pledges.ts).
+  addPledgePageRoutes(router, siteRoot, { decorate: decorateNav });
 
   // Apply each rule: 301 -> permanent redirect to the clean URL; 200 -> serve
   // the target file in place (the address bar keeps the clean URL).

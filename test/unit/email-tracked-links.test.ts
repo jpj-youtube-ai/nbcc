@@ -315,8 +315,9 @@ describe("staff only emails are never tagged", () => {
       // TASK-503: fundraiseSummary, the Monday fundraising summary to the people chosen in the admin.
       // Team pages: fundraiseTeamJoinStaff and fundraiseTeamMemberRemoved, both to events@.
       // Event tickets: a refund an organiser asked for, and tickets to approve, both to events@.
+      // Sponsor pledges: fundraisePledgeStaff, the events@ note about a pledge paid twice or hidden.
       [
-        "adminInvite", "adminReset", "backupAlert", "ballReport", "ballTransferStaff", "fundraiseFinishedStaff", "fundraiseStaff", "fundraiseSummary",
+        "adminInvite", "adminReset", "backupAlert", "ballReport", "ballTransferStaff", "fundraiseFinishedStaff", "fundraisePledgeStaff", "fundraiseStaff", "fundraiseSummary",
         "fundraiseTeamJoinStaff", "fundraiseTeamMemberRemoved", "lapsedAdmin", "loginCode",
         "eventTicketsRefundAsked", "eventTicketsToApprove", "eventTicketsToCheck",
       ].sort(),

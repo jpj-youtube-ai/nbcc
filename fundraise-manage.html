@@ -13,6 +13,7 @@
     <!-- Community fundraising (TASK-494) has its OWN stylesheet and scripts rather than growing the
          shared bundle, which donate.html's page weight budget counts. -->
     <link rel="stylesheet" href="/assets/css/fundraising.css" />
+    <link rel="stylesheet" href="/assets/css/pledges.css" />
     <link rel="preload" href="/assets/fonts/playfair-var.woff2" as="font" type="font/woff2" crossorigin />
     <link rel="preload" href="/assets/fonts/poppins-400.woff2" as="font" type="font/woff2" crossorigin />
     <!-- TASK-507: "Thank your supporters", added to each card by its own script. -->
@@ -29,6 +30,8 @@
     <link rel="stylesheet" href="/assets/css/event-tickets.css" />
     <script defer src="/assets/js/event-tickets-editor.js"></script>
     <script defer src="/assets/js/event-tickets-manage.js"></script>
+    <!-- Sponsor pledges: the list of who pledged on each card, added by its own script. -->
+    <script defer src="/assets/js/fundraise-pledges.js"></script>
   </head>
   <body>
     <a class="skip-link" href="#main">Skip to content</a>
@@ -172,6 +175,21 @@
                 <h4 id="mineThanksPastHeading">Your thank yous</h4>
                 <ol class="fr-thanks__past-list" role="list" aria-labelledby="mineThanksPastHeading" data-thanks-list></ol>
               </div>
+            </section>
+          </template>
+
+          <!-- Sponsor pledges. fundraise-pledges.js copies this into each card whose page has pledges
+               (just after the latest gifts), giving every id its own ending. Names and amounts only:
+               a sponsor's email is never shown or sent here. A pledge is a promise, never money. -->
+          <template data-pledges-pattern>
+            <section class="fr-mine__part" data-pledges-part aria-labelledby="minePledgesHeading">
+              <h3 id="minePledgesHeading">Sponsor pledges</h3>
+              <p>People who chose &ldquo;Sponsor now, pay after&rdquo; on your page, and confirmed it by email. A pledge is a promise: it joins your total once it is paid. We email each sponsor a link to pay the day after your event, and one reminder a week later.</p>
+              <p class="fr-mine__raised fr-pledges__totals" data-pledges-totals></p>
+              <ol class="fr-pledges__list" role="list" data-pledges-list></ol>
+              <button class="fr-wall__more" type="button" data-pledges-more hidden>Show all</button>
+              <p class="fr-pledges__cash-note"><strong>Paid you in cash instead?</strong> Press &ldquo;Paid me in cash&rdquo; and we won&rsquo;t email them a link. Add the money to what you pay in below. Cash you pay in can&rsquo;t have Gift Aid added online, so if they wanted Gift Aid, ask them to fill in your paper sponsor form too.</p>
+              <p class="form-status" role="status" aria-live="polite" data-pledges-status></p>
             </section>
           </template>
 

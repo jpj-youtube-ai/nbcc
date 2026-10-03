@@ -220,6 +220,49 @@ async function ticketExtrasFor(
   }
 }
 
+/**
+ * Sponsor pledges (src/pledges): what a sponsorship fundraiser's page gains. Nothing for an event, a
+ * page in memory of someone or a team's own page, and nothing if it cannot be read: a failure here
+ * only leaves the pledges out, never takes the page down.
+ */
+async function pledgePageExtras(
+  f: import("../fundraising/model").FundraiserRecord,
+  shortName: (name: string) => string,
+): Promise<import("../pledges/render").PledgeExtras | undefined> {
+  try {
+    if (f.path !== "raising" || f.isTeam || f.inMemory) return undefined;
+    const [{ canPledge, publicPledges, pledgeTotals }, { renderPledgeExtras }, { listPledges }, { londonToday }, { GIFT_MIN_PENCE }] = await Promise.all([
+      import("../pledges/model"),
+      import("../pledges/render"),
+      import("../db/pledges"),
+      import("../events/model"),
+      import("../fundraising/model"),
+    ]);
+    const now = new Date();
+    const today = londonToday(now);
+    const open = canPledge(f, today);
+    const rows = await listPledges([f.id]);
+    const totals = pledgeTotals(rows);
+    if (!open && totals.openCount === 0) return undefined;
+    return renderPledgeExtras({
+      slug: f.slug,
+      title: f.title,
+      organiserFirstName: shortName(f.name).split(" ")[0],
+      eventDate: f.eventDate,
+      open,
+      minimumPence: GIFT_MIN_PENCE,
+      pledges: publicPledges(rows),
+      openCount: totals.openCount,
+      openPence: totals.openPence,
+      today,
+      now,
+    });
+  } catch (err) {
+    console.error("fundraiser page pledges failed:", err instanceof Error ? err.message : err);
+    return undefined;
+  }
+}
+
 export function addFundraisePageRoutes(router: Router, siteRoot: string, deps: FundraisePageDeps): void {
   const getInvolvedFile = join(siteRoot, "events.html");
   const signUpFile = join(siteRoot, "fundraise.html");
@@ -504,6 +547,8 @@ ${title}`, () => qrSvg(url, { title, size: 1024 })));
         // In memory of someone: the photo is of the person remembered, never a round one of the organiser.
         organiserPhotoSrc: f.inMemory ? null : await organiserPhotoFor(f.id),
         tickets: tickets.html,
+        // Sponsor pledges: "Sponsor now, pay after", and what is pledged. Never on the meter.
+        pledge: await pledgePageExtras(f, shortName),
       });
       if (!withSession) fresh(res);
       // The sign up tidy (after review): a page kept off Get involved ("only people you send the

@@ -177,6 +177,37 @@ if (require.main === module) {
       } catch (err) {
         console.error("event tickets daily pass failed:", err instanceof Error ? err.message : err);
       }
+      // Sponsor pledges: the pay link to each sponsor the day after the event, and one reminder a
+      // week later. Sends NOTHING unless Automatic emails and fundraising are both on and an admin
+      // has approved each email's wording; each goes once per pledge at most. Then the tidy up, which
+      // is not an email and runs whatever the switches say: a pledge nobody confirmed by email is
+      // deleted after 7 days, and an unpaid pledge's personal details go 90 days after its pay email. Neither throws, and each has its own try/catch anyway.
+      try {
+        const { runPledgeEmails } = await import("../pledges/runner");
+        const pledges = await runPledgeEmails();
+        console.error(
+          typeof pledges.skipped === "string"
+            ? `sponsor pledge emails: ${pledges.skipped}`
+            : `sponsor pledge emails: considered=${pledges.considered} sent=${pledges.sent} skipped=${pledges.skipped} failed=${pledges.failed} waiting=${pledges.waiting}`,
+        );
+      } catch (err) {
+        console.error("sponsor pledge emails failed:", err instanceof Error ? err.message : err);
+      }
+      try {
+        const { runPledgeRetention } = await import("../pledges/runner");
+        const tidy = await runPledgeRetention();
+        console.error(`sponsor pledge tidy up: anonymised=${tidy.anonymised} trimmed=${tidy.trimmed} deleted=${tidy.deleted} failed=${tidy.failed}`);
+      } catch (err) {
+        console.error("sponsor pledge tidy up failed:", err instanceof Error ? err.message : err);
+      }
+      // Sponsor pledges paid twice: the webhook tells the events inbox as it happens; this catches
+      // any it could not (the email failed that moment). Once each. Never throws.
+      try {
+        const { sendDoublePaidAlerts } = await import("../pledges/runner");
+        console.error(`sponsor pledges paid twice: told=${await sendDoublePaidAlerts()}`);
+      } catch (err) {
+        console.error("sponsor pledges paid twice alert failed:", err instanceof Error ? err.message : err);
+      }
       // Email-audit retention: prune email_log rows past their six-tax-years window
       // (src/email/log-retention.ts). Rides this existing daily task for the same reason the
       // ball run-up does — one more statement on a schedule that already exists — and in its

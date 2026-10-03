@@ -59,9 +59,10 @@ describe("knowing how many tables to expect", () => {
   // approved automatic email wordings (Jaimie, 2026-10-03); 77 with the impact examples (what gifts
   // could do, shown on fundraiser, event and team pages); 78 since profile pictures added the page
   // photos and round profile photos organisers send; 84 since event tickets added the six ticket
-  // tables (types, settings, orders, lines, refunds, requests).
-  it("counts 84 across the three databases", () => {
-    expect(expectedTableCount(ROOT)).toBe(84);
+  // tables (types, settings, orders, lines, refunds, requests); 86 with sponsor pledges ("Sponsor now,
+  // pay after") and when their Gift Aid declarations were made.
+  it("counts 86 across the three databases", () => {
+    expect(expectedTableCount(ROOT)).toBe(86);
   });
 
   it("finds the three tables that live outside the main database", () => {
@@ -140,7 +141,10 @@ describe("knowing how many tables to expect", () => {
     ]) {
       expect(main).toContain(t);
     }
-    expect(main.length).toBe(81);
+    // Sponsor pledges: the promises made on a fundraiser's page, with their Gift Aid declarations.
+    expect(main).toContain("sponsor_pledges");
+    expect(main).toContain("sponsor_pledge_declarations");
+    expect(main.length).toBe(83);
   });
 
   it("returns nothing for a directory that does not exist, rather than throwing", () => {

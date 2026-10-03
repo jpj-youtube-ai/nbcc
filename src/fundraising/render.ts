@@ -820,6 +820,12 @@ export interface FundraiserPageOptions {
    * beside the gifts in the summary, and the Get tickets section, apart from and above the give form.
    */
   tickets?: { introHtml?: string; summaryHtml?: string; mainHtml?: string };
+  /**
+   * Sponsor pledges (src/pledges/render.ts): "Sponsor now, pay after" under the give button with the
+   * pledged line, the pledge form after the give form, and the pledges after the wall. A pledge is a
+   * promise: it never touches the meter. Nothing for a page that takes none (events, in memory).
+   */
+  pledge?: { summaryHtml?: string; giveHtml?: string; wallHtml?: string };
 }
 
 /**
@@ -1007,6 +1013,7 @@ export function renderFundraiserPage(template: string, p: PublicPage, opts: Fund
     (opts.tickets?.summaryHtml ?? "") + // event tickets
     (event && !p.finished ? renderEntryLine(p) : "") +
     `<a class="btn btn-primary fr-summary__give" href="#give">${p.finished ? "You can still give" : event ? "Make a donation" : "Give to this fundraiser"}</a>` +
+    (opts.pledge?.summaryHtml ?? "") +
     (opts.team?.summaryHtml ?? "") +
     "</div>" +
     '<div class="fr-main">' +
@@ -1023,7 +1030,9 @@ export function renderFundraiserPage(template: string, p: PublicPage, opts: Fund
     (opts.tickets?.mainHtml ?? "") + // event tickets: its own section, never inside the give form
     // A member page still on its team is the one handed the team's line for under its facts.
     renderGiveForm(p, undefined, impact, { member: Boolean(opts.team?.factsHtml), members: opts.team?.memberCount }) +
+    (opts.pledge?.giveHtml ?? "") +
     renderWall(p, opts.now) +
+    (opts.pledge?.wallHtml ?? "") +
     "</div>" +
     `<div class="fr-extras">${renderShare(p, opts.pageUrl)}</div>`;
 

@@ -229,6 +229,8 @@ function bookingFor(c: PublicCard): Pick<CardRecord, "bookingHow" | "bookingUrl"
   if (c.booking === "away") return { ...none, bookingSolo: "Tickets are sold on another website." };
   if (c.booking === "door") return { ...none, bookingSolo: "Pay on the door. No need to book." };
   if (c.booking === "free") return none; // the events page's own "No need to book. Just come along."
+  // The sign up tidy: free to come, with a bucket for donations.
+  if (c.booking === "donations") return { ...none, bookingSolo: "Free entry, donations welcome." };
   return { ...none, bookingSolo: null };
 }
 
@@ -978,17 +980,41 @@ export function kindRows(count: number): number {
  * carries the form's "choose one" messages, worded for each path (fundraise.js swaps them in).
  * fundraise.html is written with exactly this for the starting list (a unit test holds them together).
  */
-export function kindOptionsHtml(categories: ReadonlyArray<{ key: string; label: string }>): string {
+export function kindOptionsHtml(categories: ReadonlyArray<{ key: string; label: string; sporty?: boolean }>): string {
   return categories
     .map((c, i) => {
       const key = escapeHtml(c.key);
       const say =
         i === 0
-          ? ' data-invalid-message="Choose what you are doing" data-invalid-raising="Choose what you are doing to raise money" data-invalid-event="Choose what kind of event it is"'
+          ? // The sign up tidy: a warm, short prompt, worded for each path.
+            ` data-invalid-message="Almost! Just choose what you're doing." data-invalid-raising="Almost! Just choose what you're doing to raise money." data-invalid-event="Almost! Just choose what kind of event it is."`
           : "";
       return (
-        `<label class="fr-option fr-option--small" for="kind-${key}"><input id="kind-${key}" name="kind" type="radio" value="${key}" ` +
+        // The sign up tidy: a sporting category is marked, so the form can offer only those (or only
+        // the rest) once they say whether it is a sporting event. Other is never marked: it is in both.
+        `<label class="fr-option fr-option--small" for="kind-${key}"${c.sporty ? " data-sporty" : ""}><input id="kind-${key}" name="kind" type="radio" value="${key}" ` +
         `required aria-required="true"${say} /><span>${escapeHtml(c.label)}</span></label>`
+      );
+    })
+    .join(INDENT);
+}
+
+// The sign up tidy: the in memory ways of giving (memoryCategories) sit between these.
+const MEMORY_KINDS_BLOCK = /<!-- memory-kinds -->[\s\S]*?<!-- \/memory-kinds -->/;
+
+/**
+ * The sign up tidy: "How will people be giving?", in memory of someone. The in memory ways of giving,
+ * then Other as "Something else" (its own id, as the main list has kind-other too). fundraise.html is
+ * written with exactly this for the starting list (a unit test holds them together).
+ */
+export function memoryKindOptionsHtml(categories: ReadonlyArray<{ key: string; label: string }>): string {
+  return categories
+    .map((c) => {
+      const other = c.key === "other";
+      const id = other ? "kind-memory-other" : `kind-${escapeHtml(c.key)}`;
+      return (
+        `<label class="fr-option fr-option--small" for="${id}"><input id="${id}" name="kind" type="radio" value="${escapeHtml(c.key)}" ` +
+        `required aria-required="true" /><span>${other ? "Something else" : escapeHtml(c.label)}</span></label>`
       );
     })
     .join(INDENT);
@@ -997,19 +1023,25 @@ export function kindOptionsHtml(categories: ReadonlyArray<{ key: string; label: 
 /**
  * The sign up page: the form while fundraising is on, a gentle "not open yet" while it is off. With
  * the categories on offer (formCategories), the form offers exactly those; without, it stays as written.
+ * The sign up tidy: likewise the in memory ways of giving (memoryCategories).
  */
 export function renderFundraiseSignUp(
   template: string,
   open: boolean,
-  categories?: ReadonlyArray<{ key: string; label: string }>,
+  categories?: ReadonlyArray<{ key: string; label: string; sporty?: boolean }>,
+  memoryCategories?: ReadonlyArray<{ key: string; label: string }>,
 ): string {
+  const withMemory =
+    memoryCategories && memoryCategories.length > 0
+      ? template.replace(MEMORY_KINDS_BLOCK, () => `<!-- memory-kinds -->${INDENT}${memoryKindOptionsHtml(memoryCategories)}${INDENT}<!-- /memory-kinds -->`)
+      : template;
   const page =
     categories && categories.length > 0
-      ? template
+      ? withMemory
           .replace(KINDS_BLOCK, () => `<!-- kinds -->${INDENT}${kindOptionsHtml(categories)}${INDENT}<!-- /kinds -->`)
           // At two columns the list reads down the left column, then the right: half as many rows.
           .replace(KINDS_ROWS, () => `data-kind-options style="--rows: ${kindRows(categories.length)}"`)
-      : template;
+      : withMemory;
   if (open) return page;
   return page
     .replace("data-fundraise-open>", "data-fundraise-open hidden>")

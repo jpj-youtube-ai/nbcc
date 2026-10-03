@@ -5,6 +5,7 @@ import { addDays } from "./follow-up";
 import { profilePhotoSrc } from "./pictures";
 import { dayCount } from "./call-prompts";
 import { memoryMeter } from "./in-memory";
+import { checkGuardian, firstWord } from "./signup-tidy";
 import {
   NAME_PART_MAX,
   OVER_18_MISSING,
@@ -176,6 +177,9 @@ export interface Join {
   targetPence: number | null;
   why: string;
   split: FundraiserSplit;
+  /** The sign up tidy: joining for someone under 18, their parent's or guardian's first name and tick. */
+  guardianFirstName: string | null;
+  guardianConsent: boolean | null;
 }
 
 function readTarget(v: unknown): { pence: number | null; problem: string | null } {
@@ -226,8 +230,11 @@ export function checkJoin(
     if (parsed.success) split = parsed.data;
     else for (const issue of parsed.error.issues) fields[issue.path.join(".") || "sharesWithOther"] ??= issue.message;
   }
+  const guardian = checkGuardian(b, (path, message) => {
+    fields[path] = message;
+  });
   if (Object.keys(fields).length > 0) return { join: null, fields };
-  return { join: { firstName, lastName, email, targetPence: target.pence, why, split }, fields: {} };
+  return { join: { firstName, lastName, email, targetPence: target.pence, why, split, ...guardian }, fields: {} };
 }
 
 /**
@@ -260,7 +267,7 @@ export function memberSignUp(team: FundraiserRecord, j: Join): SignUp {
     socialOk: false,
     over18: true,
     ...j.split,
-    wants: { posterCount: 0, leafletCount: 0, bucketCount: 0, tinCount: 0, leaflets: 0, buckets: 0, qrCount: 0, shoutOut: false, attend: false },
+    wants: { posterCount: 0, leafletCount: 0, bucketCount: 0, tinCount: 0, leaflets: 0, buckets: 0, qrCount: 0, envelopeCount: 0, shoutOut: false, attend: false },
     postLine1: null,
     postLine2: null,
     postTown: null,
@@ -286,6 +293,23 @@ export function memberSignUp(team: FundraiserRecord, j: Join): SignUp {
     memorySetupBy: null,
     memoryPermission: null,
     memoryShowTarget: null,
+    // The sign up tidy: a member page is listed with its team, and asks none of the new questions.
+    listed: true,
+    isSporting: null,
+    tshirtSize: null,
+    splitConfirmed: false,
+    childFirstName: null,
+    childConsent: null,
+    orgName: null,
+    employerMatch: null,
+    memoryDirectorBusiness: null,
+    memoryFamilyContactName: null,
+    memoryFamilyContactEmail: null,
+    callTime: null,
+    dateTbc: false,
+    guardianFirstName: j.guardianFirstName ?? null,
+    // Their parent or guardian ticked: happy for their first name and any photo to be shown.
+    ...(j.guardianFirstName ? { childConsent: j.guardianConsent === true } : {}),
   } as SignUp;
 }
 
@@ -336,6 +360,7 @@ export interface TeamMemberRow {
   slug: string;
   name: string;
   firstName?: string | null;
+  guardianFirstName?: string | null;
   status: FundraiserRecord["status"];
   public: boolean;
   path: FundraiserRecord["path"];
@@ -371,7 +396,8 @@ export function teamMemberList(rows: TeamMemberRow[], photos: ReadonlyMap<number
     .sort(byName)
     .map((r) => {
       const photoId = photos.get(r.id);
-      return { name: shortName(r.name), url: `/fundraise/${r.slug}`, meter: memoryMeter(r, r.meter), photoSrc: photoId ? profilePhotoSrc(photoId) : null };
+      // A member under 18 (their parent or guardian joined for them): first name only.
+      return { name: r.guardianFirstName ? firstWord(r.firstName ?? r.name) : shortName(r.name), url: `/fundraise/${r.slug}`, meter: memoryMeter(r, r.meter), photoSrc: photoId ? profilePhotoSrc(photoId) : null };
     });
 }
 

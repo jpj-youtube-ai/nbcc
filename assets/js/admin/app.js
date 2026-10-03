@@ -2683,6 +2683,9 @@
     ["fundraiseNewsApproved", "Fundraiser news update live"], ["fundraiseNewsRejected", "Fundraiser news update not used"],
     // TASK-507: an organiser's thank you, passed on to a giver once staff have checked it.
     ["fundraiseSupporterThanks", "Fundraiser thank you to a supporter"],
+    // The sign up tidy: the in memory receipt, and asking for a T-shirt size.
+    ["fundraiseMemoryReceipt", "In memory sign up received"],
+    ["fundraiseTshirtAsk", "Fundraiser T-shirt size asked for"],
     // TASK-515: the automatic emails to an organiser.
     ["fundraiseFirstGift", "Fundraiser automatic: first gift"], ["fundraiseHalfway", "Fundraiser automatic: halfway"],
     ["fundraiseTargetReached", "Fundraiser automatic: target reached"], ["fundraiseWeekBefore", "Fundraiser automatic: a week before"],
@@ -9057,7 +9060,7 @@
   // How people get in (BOOKING_LABELS in src/fundraising/model.ts).
   var FR_BOOKING = [
     ["away", "Tickets are sold on another website"], ["door", "Pay on the door, no booking needed"],
-    ["free", "Free, just come along"],
+    ["free", "Free, just come along"], ["donations", "Free entry, donations welcome"],
   ];
   var FR_LIST_FIRST = 25;
   var FR_WALL_FIRST = 10;
@@ -9594,6 +9597,7 @@
         frThanksSection() + // TASK-507
         '<section class="fx-panel"><h4>What they told us</h4>' + frAboutPanel(f) + "</section>" +
         frSplitSection(f) +
+        frWelcomeSection(f, write) + // the sign up tidy
         '<section class="fx-panel"><h4>The organiser</h4>' + frContactPanel(f) + "</section>" +
         '<section class="fx-panel"><h4>What they would like</h4>' + frWantsPanel(f) + "</section>" +
         '<section class="fx-panel"><h4>Photo for its page</h4>' + frPhotoPanel(f, write) + "</section>" +
@@ -9614,7 +9618,8 @@
     // stays up and takes gifts, as a finished one does.
     if (f.offListAt && f.public) {
       // Event pages: an event's page stays up too.
-      return "Approved, and taken off the Get involved list." + (f.path === "raising" || f.path === "event" ? " Its page stays up and can still take gifts." : "");
+      return (f.offListBy === "organiser" ? "Approved, and not on the Get involved list, as they asked." : "Approved, and taken off the Get involved list.") +
+        (f.path === "raising" || f.path === "event" ? " Its page stays up and can still take gifts." : "");
     }
     if (!f.public) return "Approved. They only wanted to let us know, or wanted materials, so it is not on the website.";
     // Event pages: an approved public event has its own page as well as its card.
@@ -9785,14 +9790,16 @@
         fulfilRow("They are", H.escapeHtml(frPathWords(f.path))) +
         fulfilRow("Category", H.escapeHtml(kind)) +
         fulfilRow("About it", f.description ? '<span class="fx-address">' + H.escapeHtml(f.description) + "</span>" : frNone("Nothing yet")) +
-        fulfilRow("Date", f.eventDate ? H.escapeHtml(H.fmtDate(f.eventDate)) : frNone("No date")) +
+        // Jaimie, 2026-10-03: they ticked "Not decided yet" on the form.
+        fulfilRow("Date", f.eventDate ? H.escapeHtml(H.fmtDate(f.eventDate)) : f.dateTbc ? "Date to be confirmed" : frNone("No date")) +
         fulfilRow("Start time", f.startTime ? H.escapeHtml(String(f.startTime).slice(0, 5)) : frNone("No time")) +
         fulfilRow("Where", where ? H.escapeHtml(where) : frNone("Not given")) +
         fulfilRow("Target", f.targetPence ? H.escapeHtml(frMoney(f.targetPence)) : frNone("No target")) +
-        fulfilRow("On the NBCC website", f.public ? "Show it on our website" : "Not on the website") +
+        fulfilRow("On the NBCC website", frWebsiteWords(f)) +
         fulfilRow("Web address", '<span class="fx-mono">' + H.escapeHtml(frPagePath(f)) + "</span>") +
         fulfilRow("Signed up", H.escapeHtml(H.fmtDate(f.createdAt))) +
         frAgeAndSplitRows(f) +
+        frTidyRows(f) + // the sign up tidy
         (f.path === "event" ? frEventRows(f) : "") +
       "</dl>"
     );
@@ -9983,7 +9990,8 @@
     // for "leaflets or posters" and "buckets or tins", and reads as it always did.
     [["posterCount", " poster", " posters"], ["leafletCount", " leaflet", " leaflets"],
       ["bucketCount", " collection bucket", " collection buckets"], ["tinCount", " collection tin", " collection tins"],
-      ["qrCount", " printed QR code", " printed QR codes"]].forEach(function (c) {
+      ["qrCount", " printed QR code", " printed QR codes"],
+      ["envelopeCount", " collection envelope", " collection envelopes"]].forEach(function (c) {
       var n = Number(w[c[0]]) || 0;
       if (n > 0) items.push(n + (n === 1 ? c[1] : c[2]));
     });
@@ -10319,7 +10327,8 @@
 
   // An admin corrects the details (the organiser asks staff; there is no self service edit). The
   // permission stays as it was given, so it is not here. The server checks it all again.
-  var FR_MEMORY_SETUP = [["family", "A family member"], ["friend", "A friend"], ["funeral_director", "A funeral director"]];
+  var FR_MEMORY_SETUP = [["family", "A family member"], ["friend", "A friend"], ["funeral_director", "A funeral director"],
+    ["someone_else", "Someone else, like a colleague, club or church"]];
   function frMemoryForm(f, write) {
     if (!(write && isAdmin())) return "";
     var options = FR_MEMORY_SETUP.map(function (o) {
@@ -10934,6 +10943,8 @@
       if (memApprove) return frMemoryApprove(memApprove.getAttribute("data-frmemapprove"));
       if (t.closest("[data-frmemyearon]")) return frMemoryYearOnDone();
       if (t.closest("[data-frmemsave]")) return frMemorySave();
+      // The sign up tidy
+      if (t.closest("[data-frtshirtask]")) return frTshirtAsk();
       var show = t.closest("[data-frshow]");
       if (show) return frWallChoice(show.getAttribute("data-frshow"), false);
       // TASK-503: the team's tools.
@@ -10985,6 +10996,9 @@
       } else if (form.id === "frSplitForm") {
         e.preventDefault();
         frSaveSplit(form);
+      } else if (form.id === "frWelcomeForm") {
+        e.preventDefault();
+        frSaveWelcome(form); // the sign up tidy
       }
     });
     // What is typed is kept as it is typed, so a redraw (another action, a reload) never loses it.
@@ -11022,6 +11036,13 @@
       if (e.target && e.target.id === "frPhotoInput") return frUploadPhoto(e.target);
       if (e.target && e.target.name === "sharesWithOther" && e.target.closest && e.target.closest("#frSplitForm")) {
         return frSplitChoice(e.target.closest("#frSplitForm"));
+      }
+      // The sign up tidy: the size only for a sporting event; and a category's Sporting tick.
+      if (e.target && e.target.name === "isSporting" && e.target.closest && e.target.closest("#frWelcomeForm")) {
+        return frWelcomeChoice(e.target.closest("#frWelcomeForm"));
+      }
+      if (e.target && e.target.hasAttribute && e.target.hasAttribute("data-frcatsporty")) {
+        return frCatSetSporty(e.target.getAttribute("data-frcatsporty"), !!e.target.checked);
       }
       keepTyping(e);
     });
@@ -12277,8 +12298,11 @@
     if (!off && !prompt) return "";
     var body;
     if (off) {
-      body = '<p class="fx-letter"><span class="fx-state fx-state--done">Taken off Get involved</span> on ' +
-        H.escapeHtml(H.fmtDate(f.offListAt)) + (f.offListBy ? " by " + H.escapeHtml(frWho(f.offListBy)) : "") + ". " +
+      // The sign up tidy: "No, only people you send the link to" on the sign up form.
+      body = '<p class="fx-letter">' + (f.offListBy === "organiser"
+        ? '<span class="fx-state fx-state--done">Not on Get involved</span> as they asked when they signed up: only people they send the link to. '
+        : '<span class="fx-state fx-state--done">Taken off Get involved</span> on ' +
+          H.escapeHtml(H.fmtDate(f.offListAt)) + (f.offListBy ? " by " + H.escapeHtml(frWho(f.offListBy)) : "") + ". ") +
         (f.path === "raising" || (f.path === "event" && f.public) ? "Its page and giving link still work, so late gifts still count." : "It is no longer on the list.") + "</p>" +
         (write ? '<div class="fx-call-row fr-actions"><button class="admin-btn admin-btn--small fr-btn-quiet" type="button" data-frlist="on">Put it back on Get involved</button></div>' : "");
     } else {
@@ -13134,8 +13158,16 @@
     } else {
       actions += '<button class="fr-link-btn" type="button" data-frcatshow="' + key + '" aria-label="' + H.escapeHtml("Put " + c.label + " back on the form") + '">Put back on the form</button>';
     }
+    // The sign up tidy: a Sporting tick each (never Other, which is in both lists); an in memory
+    // way of giving says so instead, as it is only ever offered on that path.
+    var sporty = c.memoryOnly
+      ? '<span class="fr-cat-note">In memory only</span>'
+      : c.key === "other"
+        ? ""
+        : '<label class="fr-cat-sporty"><input type="checkbox" data-frcatsporty="' + key + '"' + (c.sporty ? " checked" : "") +
+          ' aria-label="' + H.escapeHtml(c.label + " is a sporting category") + '"> Sporting</label>';
     return '<li><span class="fr-people-who">' + label + " <span>" + H.escapeHtml(frCatUsed(c)) + "</span></span>" +
-      '<span class="fr-people-actions">' + actions + "</span></li>";
+      '<span class="fr-people-actions">' + sporty + actions + "</span></li>";
   }
 
   function frRenderCats() {
@@ -13250,6 +13282,168 @@
       if (ok === null) return;
       // The row has moved list: its button now does the opposite.
       frCatFocus(ok ? (active ? '[data-frcathide="' + key + '"]' : '[data-frcatshow="' + key + '"]') : null);
+    });
+  }
+
+  // The sign up tidy: Sporting decides which list a category is in on the sign up form: with a Yes to
+  // "Is it a sporting event?", only the sporting ones (and Other); with a No, only the rest.
+  function frCatSetSporty(key, sporty) {
+    var c = frCatFind(key);
+    if (!c) return;
+    return frCatSend("PATCH", "/api/admin/fundraising/categories/" + encodeURIComponent(key), { sporty: sporty }, function () {
+      return sporty ? c.label + " is offered for a sporting event now." : c.label + " is offered when it is not a sporting event now.";
+    }).then(function (ok) {
+      if (ok === null) return;
+      if (!ok) frRenderCats();
+      frCatFocus(ok ? '[data-frcatsporty="' + key + '"]' : null);
+    });
+  }
+
+  // ---- The sign up tidy (Jaimie, 2026-10-03) ----
+  // What the welcome pack needs: the address (asked of everyone bar in memory), whether it is a
+  // sporting event, and the T-shirt size. Staff may correct sport and the size before approving
+  // (PUT /api/admin/fundraisers/:id/welcome-pack); a sporting event with no size says "Waiting for
+  // T-shirt size", with a button that emails the organiser a private link to choose one (never
+  // automatic). Kept here, in one block, reached from the rest of the screen by one line hooks.
+  var FR_TSHIRT_SIZES = [
+    ["kids_3_4", "Kids 3 to 4"], ["kids_5_6", "Kids 5 to 6"], ["kids_7_8", "Kids 7 to 8"], ["kids_9_10", "Kids 9 to 10"],
+    ["kids_11_12", "Kids 11 to 12"], ["kids_13_14", "Kids 13 to 14"], ["adult_xs", "Adult XS"], ["adult_s", "Adult S"],
+    ["adult_m", "Adult M"], ["adult_l", "Adult L"], ["adult_xl", "Adult XL"], ["adult_xxl", "Adult XXL"],
+  ];
+  var FR_EMPLOYER_MATCH = { yes: "Yes", no: "No", not_sure: "Not sure yet" };
+  function frTshirtLabel(key) {
+    var found = FR_TSHIRT_SIZES.filter(function (s) { return s[0] === key; })[0];
+    return found ? found[1] : "";
+  }
+  function frWaitingForSize(f) {
+    return f.isSporting === true && !f.tshirtSize;
+  }
+  // "Kept off Get involved" when the organiser asked for only people with the link.
+  function frWebsiteWords(f) {
+    if (!f.public) return "Not on the website";
+    if (f.offListBy === "organiser") return "A page of its own, but not on Get involved: only people they send the link to";
+    // An event's card needs a date: until it has one it has its page, but is not on the list.
+    if (f.path === "event" && !f.eventDate) return "Not listed yet: no date. Its page is up; its card joins Get involved once it has a date";
+    return "Show it on our website";
+  }
+  // The new answers, in What they told us. A sign up from before has none, and shows nothing.
+  function frTidyRows(f) {
+    var rows = "";
+    if (f.childFirstName) {
+      rows += fulfilRow("Fundraising for their child", H.escapeHtml(f.childFirstName) +
+        (f.childConsent ? ". They ticked: parent or guardian, happy for the first name and any photo to be shown" : ""));
+    }
+    if (f.orgName) {
+      rows += fulfilRow("Business, school or group", H.escapeHtml(f.orgName));
+      if (f.employerMatch && FR_EMPLOYER_MATCH[f.employerMatch]) rows += fulfilRow("Employer will match", FR_EMPLOYER_MATCH[f.employerMatch]);
+    }
+    if (f.isSporting === true || f.isSporting === false) {
+      rows += fulfilRow("Sporting event", f.isSporting ? "Yes" : "No");
+      if (f.isSporting) {
+        rows += fulfilRow("T-shirt size", f.tshirtSize
+          ? H.escapeHtml(frTshirtLabel(f.tshirtSize))
+          : '<span class="admin-pill admin-pill--pending fr-tshirt-wait">Waiting for T-shirt size</span>');
+      }
+    }
+    if (f.memoryDirectorBusiness) rows += fulfilRow("Funeral director", H.escapeHtml(f.memoryDirectorBusiness));
+    var contact = [f.memoryFamilyContactName, f.memoryFamilyContactEmail].filter(Boolean).join(", ");
+    if (contact) rows += fulfilRow("Send givers' names to", H.escapeHtml(contact));
+    if (f.callTime) rows += fulfilRow("A good time to call", H.escapeHtml(f.callTime));
+    // A team member page for someone under 18: its emails greet their parent or guardian.
+    if (f.guardianFirstName) {
+      rows += fulfilRow("For someone under 18", "Their parent or guardian is " + H.escapeHtml(f.guardianFirstName) +
+        (f.childConsent ? ". They ticked: happy for the first name and any photo to be shown" : ""));
+    }
+    var address = [f.postLine1, f.postLine2, f.postTown, f.postPostcode].filter(function (p) { return p && String(p).trim(); });
+    if (address.length) {
+      rows += fulfilRow(f.inMemory ? "Address for what they asked for" : "Address for the welcome pack",
+        '<span class="fx-address">' + H.escapeHtml(address.join("\n")) + "</span>");
+    }
+    return rows;
+  }
+  function frWelcomeSection(f, write) {
+    // Sport and the T-shirt are only ever for someone raising money, and never in memory.
+    if (f.path !== "raising" || f.inMemory || f.teamId) return "";
+    var sporting = f.isSporting === true;
+    var waiting = frWaitingForSize(f);
+    var asked = f.tshirtAskedAt
+      ? '<p class="fx-help">Asked on ' + H.escapeHtml(H.fmtDate(f.tshirtAskedAt)) + (f.tshirtAskedBy ? " by " + H.escapeHtml(frWho(f.tshirtAskedBy)) : "") + ".</p>"
+      : "";
+    var state = waiting
+      ? '<p class="fr-tshirt-state"><span class="admin-pill admin-pill--pending fr-tshirt-wait">Waiting for T-shirt size</span></p>' + asked
+      : "";
+    if (!write) {
+      return '<section class="fx-panel fr-welcome-panel" data-frwelcome><h4>Sport and the T-shirt</h4>' +
+        (state || '<p class="fx-help">' + (f.isSporting == null ? "They were not asked." : sporting ? "A sporting event, with a T-shirt size." : "Not a sporting event, so no T-shirt.") + "</p>") +
+        "</section>";
+    }
+    var options = '<option value="">' + (sporting ? "No size yet" : "No T-shirt") + "</option>" + FR_TSHIRT_SIZES.map(function (s) {
+      return '<option value="' + s[0] + '"' + (f.tshirtSize === s[0] ? " selected" : "") + ">" + H.escapeHtml(s[1]) + "</option>";
+    }).join("");
+    var form =
+      '<form id="frWelcomeForm" class="fr-split-form fr-welcome-form" novalidate>' +
+        '<p class="fx-help">Correct these if they tell you something different. A sporting event gets an NBCC T-shirt with its welcome pack.</p>' +
+        '<fieldset class="fr-split-choice"><legend class="fx-call-label">Sporting event?</legend>' +
+          '<label><input type="radio" name="isSporting" id="frSportYes" value="yes"' + (sporting ? " checked" : "") + "> Yes</label> " +
+          '<label><input type="radio" name="isSporting" id="frSportNo" value="no"' + (f.isSporting === false ? " checked" : "") + "> No</label>" +
+        "</fieldset>" +
+        '<div data-frtshirtfield' + (sporting ? "" : " hidden") + ">" +
+          '<label class="fx-call-label" for="frTshirtSize">T-shirt size</label>' +
+          '<select class="fr-input fr-tshirt-select" id="frTshirtSize" name="tshirtSize"' + (sporting ? "" : " disabled") + ">" + options + "</select>" +
+        "</div>" +
+        '<div class="fx-call-row fr-actions"><button class="admin-btn admin-btn--small" type="submit">Save</button>' +
+          (waiting ? '<button class="admin-btn admin-btn--small fr-btn-quiet" type="button" data-frtshirtask>' +
+            (f.tshirtAskedAt ? "Ask them again for their T-shirt size" : "Ask them for their T-shirt size") + "</button>" : "") +
+        "</div>" +
+        (waiting ? '<span class="fr-field-hint">Emails ' + H.escapeHtml(f.email || "them") + " a private link to choose a size. Nothing is sent until you press it.</span>" : "") +
+      "</form>";
+    return '<section class="fx-panel fr-welcome-panel" data-frwelcome><h4>Sport and the T-shirt</h4>' + state + form +
+      frNoticeHtml("welcome", "frWelcomeStatus") + "</section>";
+  }
+  // Yes or No in the form: the size shows, and works, only for Yes.
+  function frWelcomeChoice(form) {
+    var yes = !!form.querySelector("#frSportYes:checked");
+    var field = form.querySelector("[data-frtshirtfield]");
+    var size = form.querySelector("#frTshirtSize");
+    if (field) field.hidden = !yes;
+    if (size) size.disabled = !yes;
+  }
+  function frSaveWelcome(form) {
+    if (frBusy) return;
+    var f = frOpenRecord();
+    if (!f) return;
+    var yes = !!form.querySelector("#frSportYes:checked");
+    var no = !!form.querySelector("#frSportNo:checked");
+    if (!yes && !no) return frSay("welcome", "Choose Yes or No first.", true, f.id);
+    var size = String((form.querySelector("#frTshirtSize") || {}).value || "");
+    frRun("welcome", "Saving\u2026", function (run) {
+      return frSend("PUT", "/api/admin/fundraisers/" + f.id + "/welcome-pack", { isSporting: yes, tshirtSize: yes && size ? size : null }).then(function (r) {
+        if (!r.ok) {
+          var fields = r.status === 400 && r.body && r.body.fields
+            ? Object.keys(r.body.fields).map(function (k) { return r.body.fields[k]; }).join(" ")
+            : "";
+          run.say(fields || frRefusal(r, "That was not saved. Please try again."), true);
+          return;
+        }
+        run.say(yes && !size ? "Saved. They are waiting for a T-shirt size: you can ask them for it." : "Saved.", false);
+        return frReload();
+      });
+    });
+  }
+  function frTshirtAsk() {
+    if (frBusy) return;
+    var f = frOpenRecord();
+    if (!f) return;
+    if (!window.confirm("Email " + (f.email || "the organiser") + " a link to choose their T-shirt size?")) return;
+    frRun("welcome", "Sending\u2026", function (run) {
+      return frSend("POST", "/api/admin/fundraisers/" + f.id + "/tshirt-ask").then(function (r) {
+        if (!r.ok) {
+          run.say(frRefusal(r, "The email did not go. Please try again."), true);
+          return frReload();
+        }
+        run.say("Sent. They have a link to choose their size.", false);
+        return frReload();
+      });
     });
   }
 

@@ -4,29 +4,40 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { createRequire } from "node:module";
 import { renderFundraiseSignUp } from "../../src/fundraising/render";
+import { ALL_BUILT_IN_CATEGORIES, formCategories, memoryCategories, rememberCategories } from "../../src/fundraising/categories";
 
-// Jaimie, 2026-10-03: two more questions on the sign up form, on both paths, each a yes or no with
+// Jaimie, 2026-10-03: two more questions on the sign up form, on every path, each a yes or no with
 // nothing chosen for them. "Are you 18 or over?" comes early: a No stops the form there, with a kind
 // note saying what to do instead. "Are you sharing what you raise with another cause?" asks, on a
-// Yes, for NBCC's percentage and the other cause's name. The server checks both again. Every name
-// here, the other cause's included, is invented.
+// Yes, for NBCC's percentage and the other cause's name. The server checks both again.
+//
+// The sign up tidy (Jaimie, 2026-10-03): one step at a time, so "stops the form there" is Next
+// staying on that step, and a Yes to sharing is followed by a step to check the split
+// (test/unit/fundraise-signup-tidy-form.test.ts holds the check itself). Every name here, the other
+// cause's included, is invented.
 
 const ROOT = resolve(__dirname, "../..");
 const require = createRequire(import.meta.url);
 const shared = require(resolve(ROOT, "assets/js/main.js"));
+const stepsLib = require(resolve(ROOT, "assets/js/fundraise-steps.js"));
 const { initFundraiseForm } = require(resolve(ROOT, "assets/js/fundraise.js"));
 const socialHandles = require(resolve(ROOT, "assets/js/social-handles.js"));
 const template = readFileSync(resolve(ROOT, "fundraise.html"), "utf8");
 
+// A walk through every step is a few seconds in jsdom on a busy machine.
+vi.setConfig({ testTimeout: 20_000 });
+
+// The sign up tidy: warmer, with no example to copy.
 const UNDER_18 =
-  "You need to be 18 or over to set up a page. Ask a parent, guardian or another grown up you trust to set it up for you: they can name you on the page (for example, 'for Ella's 10th birthday'). Any questions, call 01292 811 015 or email events@nbcc.scot.";
+  "You need to be 18 or over to sign up. A parent, carer or another adult you trust can do it for you and name you on the page. If you'd like to talk it through, call 01292 811 015 or email events@nbcc.scot.";
 
 let calls: Array<{ url: string; init?: RequestInit }>;
 let answer: (url: string) => { status: number; body: unknown };
 
 function page() {
+  rememberCategories(ALL_BUILT_IN_CATEGORIES);
   document.documentElement.innerHTML = new DOMParser()
-    .parseFromString(renderFundraiseSignUp(template, true), "text/html")
+    .parseFromString(renderFundraiseSignUp(template, true, formCategories(), memoryCategories()), "text/html")
     .documentElement.innerHTML;
 }
 
@@ -42,6 +53,7 @@ function load(search = "") {
   });
   w.NBCCFormValidation = { validateForm: shared.validateForm, clearValidation: shared.clearValidation };
   w.NBCCSocialHandles = socialHandles;
+  w.NBCCFormSteps = stepsLib;
   window.history.replaceState(null, "", `/fundraise${search}`);
   return initFundraiseForm(document, window);
 }
@@ -65,34 +77,60 @@ const submit = async () => {
   await flush();
 };
 const steps = () => [...document.querySelectorAll<HTMLElement>("[data-step]")];
-const waiting = (el: Element) => el.closest("[data-step]")!.classList.contains("is-waiting");
 const sends = () => calls.filter((c) => c.url === "/api/fundraise");
 const sent = () => JSON.parse(String(sends()[0].init?.body));
+const nextBtn = () => $<HTMLButtonElement>("[data-next]");
+const current = () => document.querySelector<HTMLElement>("[data-step].is-current")!;
+const has = (id: string) => current().contains(document.getElementById(id));
+const errorOf = (id: string) => document.getElementById(`${id}-error`)?.textContent ?? "";
+/** Press Next until the last step, or until a step holds them with something to put right. */
+const walk = () => {
+  for (let i = 0; i < 40 && !nextBtn().hidden; i++) {
+    const before = current();
+    nextBtn().click();
+    if (current() === before) break;
+  }
+};
+/** To the last step (Check and send), saying which step held them if one did. */
+const toEnd = () => {
+  walk();
+  if (!nextBtn().hidden) {
+    const held = [...current().querySelectorAll('[aria-invalid="true"]')].map((n) => n.id).join(", ");
+    throw new Error(`held at "${current().querySelector("legend, h2, label")?.textContent}" by: ${held}`);
+  }
+};
 
 function fill(path: "raising" | "event") {
   tick(path === "raising" ? "pathRaising" : "pathEvent");
   tick("over18Yes");
-  tick("inMemoryNo"); // In memory: not this time
-  // Team pages: someone raising money is asked "Just me, or a team?".
-  if (path === "raising") tick("teamMe");
-  tick("kind-walk");
-  type("title", "Sam's Walk");
-  type("description", "Ten miles for NBCC.");
-  type("eventDate", "2026-12-05");
-  if (path === "event") {
-    type("venue", "Example Village Hall");
-    type("cardLine", "A long walk for NBCC.");
-    tick("booking-free");
-  }
-  tick("sharesNo");
-  tick("publicNo");
+  if (path === "raising") tick("childMe");
+  tick("orgNo");
   type("firstName", "Sam");
   type("lastName", "Sample");
   type("email", "sam@example.com");
   type("phone", "07700 900456");
-  tick("socialOkYes");
-  tick("shoutOutNo");
+  // Team pages, and the sign up tidy: someone raising money is asked "Just me, or a team?" and
+  // whether it is a sporting event.
+  if (path === "raising") {
+    tick("teamMe");
+    tick("sportingNo");
+  }
+  tick("kind-quiz");
+  type("title", "Sam's Quiz");
+  type("description", "Ten rounds for NBCC.");
+  type("eventDate", "2026-12-05");
+  if (path === "event") {
+    type("venue", "Example Village Hall");
+    type("cardLine", "A long quiz for NBCC.");
+    tick("booking-free");
+  }
+  tick("listedNo");
+  tick("sharesNo");
+  tick("shareMention");
   tick("attendNo");
+  type("postLine1", "1 Example Road");
+  type("postTown", "Exampleton");
+  type("postPostcode", "EX1 1EX");
 }
 
 beforeEach(() => {
@@ -104,12 +142,16 @@ describe("18 or over, in the page as it is", () => {
     page();
     const step = $("#over18Yes").closest("[data-step]")!;
     expect(steps().indexOf(step as HTMLElement)).toBe(1);
+    // Every path is asked it.
+    expect(step.hasAttribute("data-paths")).toBe(false);
     expect(step.querySelector("legend")!.textContent!.replace(/\s+/g, " ").trim()).toBe("Are you 18 or over?");
     const radios = [...document.querySelectorAll<HTMLInputElement>('input[name="over18"]')];
     expect(radios.map((r) => r.value)).toEqual(["yes", "no"]);
     expect(radios.some((r) => r.checked || r.hasAttribute("checked"))).toBe(false);
     expect(radios.every((r) => r.required)).toBe(true);
-    expect($("#over18Yes").getAttribute("data-invalid-message")).toBe("Tell us whether you are 18 or over");
+    // The sign up tidy: a warm prompt, and a gentle one in memory of someone.
+    expect($("#over18Yes").getAttribute("data-invalid-message")).toBe("Almost! Just tell us whether you're 18 or over.");
+    expect($("#over18Yes").getAttribute("data-invalid-memory")).toBe("Please tell us whether you are 18 or over.");
   });
 
   it("has a polite live note for a No, empty to start", () => {
@@ -149,43 +191,60 @@ describe("18 or over, in the page as it is", () => {
 describe("a No to 18 or over", () => {
   beforeEach(() => load());
 
-  it("says kindly what to do instead", () => {
-    tick("pathRaising");
-    tick("over18No");
-    expect($("[data-age-note]").textContent).toBe(UNDER_18);
+  it("says kindly what to do instead, on every path", () => {
+    for (const id of ["pathRaising", "pathEvent", "pathMemory"]) {
+      tick(id);
+      tick("over18No");
+      expect($("[data-age-note]").textContent, id).toBe(UNDER_18);
+      tick("over18Yes");
+      expect($("[data-age-note]").textContent, id).toBe("");
+    }
   });
 
-  it("stops the form there: nothing after it comes", () => {
+  // Was "stops the form there: nothing after it comes" (the next question never arrived). Now Next
+  // stays on the step, however often it is pressed.
+  it("stops the form there: Next goes no further", () => {
     tick("pathRaising");
+    nextBtn().click();
     tick("over18No");
-    expect(waiting($("#kind-walk"))).toBe(true);
     expect($("#fundraiseForm").classList.contains("fr-under-18")).toBe(true);
+    nextBtn().click();
+    nextBtn().click();
+    expect(has("over18No")).toBe(true);
+    expect(document.activeElement).toBe($("#over18No"));
+    // No red on the question: they answered it. The note says what to do.
+    expect($("#over18Yes").getAttribute("aria-invalid")).not.toBe("true");
   });
 
-  it("hides anything already shown after it, and the Send button with it", () => {
+  it("marks every step after it, so the page can keep them out of sight while it is No", () => {
     fill("raising");
     tick("over18No");
     const after = steps().slice(2);
     expect(after.length).toBeGreaterThan(3);
     for (const s of after) expect(s.hasAttribute("data-after-age")).toBe(true);
     expect($("#over18Yes").closest("[data-step]")!.hasAttribute("data-after-age")).toBe(false);
+    expect($("#pathRaising").closest("[data-step]")!.hasAttribute("data-after-age")).toBe(false);
   });
 
-  it("sends nothing, even when Send is pressed", async () => {
+  it("sends nothing, even when Send is pressed, and goes back to the question", async () => {
     fill("raising");
+    toEnd();
     tick("over18No");
     await submit();
     expect(sends()).toHaveLength(0);
     expect($("[data-age-note]").textContent).toBe(UNDER_18);
+    expect(has("over18No")).toBe(true);
   });
 
   it("lets them carry on once they choose Yes", async () => {
     fill("raising");
     tick("over18No");
+    walk();
+    expect(has("over18No")).toBe(true);
     tick("over18Yes");
-    tick("inMemoryNo"); // In memory: not this time
     expect($("[data-age-note]").textContent).toBe("");
     expect($("#fundraiseForm").classList.contains("fr-under-18")).toBe(false);
+    toEnd();
     await submit();
     expect(sends()).toHaveLength(1);
     expect(sent().over18).toBe(true);
@@ -198,11 +257,12 @@ describe("a No to 18 or over", () => {
 });
 
 describe("sharing with another cause, in the page as it is", () => {
-  it("is asked of both paths, with nothing chosen", () => {
+  it("is asked of every path, with nothing chosen", () => {
     page();
     const step = $("#sharesYes").closest("[data-step]")!;
     expect(step.hasAttribute("data-event-questions")).toBe(false);
-    expect(step.closest("[data-raising-only]")).toBeNull();
+    expect(step.hasAttribute("data-paths")).toBe(false);
+    expect(step.closest("[data-paths]")).toBeNull();
     expect(step.querySelector("legend")!.textContent!.replace(/\s+/g, " ").trim()).toBe("Are you sharing what you raise with another cause?");
     const radios = [...document.querySelectorAll<HTMLInputElement>('input[name="sharesWithOther"]')];
     expect(radios.map((r) => r.value)).toEqual(["yes", "no"]);
@@ -229,58 +289,81 @@ describe("sharing with another cause", () => {
     tick("sharesYes");
     expect($("[data-split-fields]").hidden).toBe(false);
     type("nbccSharePercent", "60");
-    type("otherCauseName", "Kilmarnock Food Larder");
+    type("otherCauseName", "Exampleton Food Larder");
     tick("sharesNo");
     expect($("[data-split-fields]").hidden).toBe(true);
     expect($("#nbccSharePercent").value).toBe("");
     expect($("#otherCauseName").value).toBe("");
   });
 
-  it("waits for both boxes before the next question", () => {
-    tick("pathEvent");
-    tick("over18Yes");
-    tick("inMemoryNo"); // In memory: not this time
-    tick("kind-quiz");
-    type("title", "Quiz Night");
-    type("description", "Eight rounds.");
-    type("eventDate", "2026-12-05");
-    type("venue", "Example Hall");
-    type("cardLine", "A quiz.");
-    tick("booking-free");
+  // Was "waits for both boxes before the next question". Now Next stays on the step until both are
+  // given, then goes to the check of the split.
+  it("waits on Next for both boxes, then asks them to check the split", () => {
+    fill("event");
     tick("sharesYes");
-    expect(waiting($("#publicYes"))).toBe(true);
+    walk();
+    expect(has("sharesYes")).toBe(true);
+    expect(errorOf("nbccSharePercent")).toBe("Almost! Just add a whole number from 1 to 99.");
+    expect(errorOf("otherCauseName")).toBe("Almost! Just add the other cause’s name.");
     type("nbccSharePercent", "60");
-    type("otherCauseName", "Kilmarnock Food Larder");
-    expect(waiting($("#publicYes"))).toBe(false);
+    nextBtn().click();
+    expect(has("sharesYes")).toBe(true);
+    type("otherCauseName", "Exampleton Food Larder");
+    nextBtn().click();
+    expect(has("splitConfirmed")).toBe(true);
+    // And on a No there is no split to check.
+    $<HTMLButtonElement>("[data-back]").click();
+    tick("sharesNo");
+    nextBtn().click();
+    expect(has("shareMention")).toBe(true);
   });
 
-  it("sends the split on a Yes", async () => {
+  it("sends the split on a Yes, once it is ticked as right", async () => {
     fill("event");
     tick("sharesYes");
     type("nbccSharePercent", "60");
-    type("otherCauseName", "Kilmarnock Food Larder");
+    type("otherCauseName", "Exampleton Food Larder");
+    walk();
+    // Held at the check until it is ticked.
+    expect(has("splitConfirmed")).toBe(true);
+    tick("splitConfirmed");
+    toEnd();
     await submit();
-    expect(sent()).toMatchObject({ path: "event", over18: true, sharesWithOther: true, nbccSharePercent: "60", otherCauseName: "Kilmarnock Food Larder" });
+    expect(sent()).toMatchObject({
+      path: "event",
+      over18: true,
+      sharesWithOther: true,
+      nbccSharePercent: "60",
+      otherCauseName: "Exampleton Food Larder",
+      splitConfirmed: true,
+    });
   });
 
   it("sends a plain No, and no percentage or name", async () => {
     fill("raising");
+    toEnd();
     await submit();
-    expect(sent()).toMatchObject({ sharesWithOther: false, nbccSharePercent: null, otherCauseName: "" });
+    expect(sent()).toMatchObject({ sharesWithOther: false, nbccSharePercent: null, otherCauseName: "", splitConfirmed: false });
   });
 
   it("puts the server's messages beside their boxes", async () => {
     answer = (url) =>
       url === "/api/fundraise/captcha"
         ? { status: 200, body: { siteKey: null } }
-        : { status: 400, body: { error: "x", fields: { nbccSharePercent: "Give a whole number from 1 to 99.", over18: "Tell us whether you are 18 or over." } } };
+        : { status: 400, body: { error: "x", fields: { nbccSharePercent: "Give a whole number from 1 to 99.", over18: "Tell us whether you are 18 or over.", splitConfirmed: "Tick to say the split is right." } } };
     fill("raising");
     tick("sharesYes");
     type("nbccSharePercent", "60");
-    type("otherCauseName", "Kilmarnock Food Larder");
+    type("otherCauseName", "Exampleton Food Larder");
+    tick("splitConfirmed");
+    toEnd();
     await submit();
     expect($("#nbccSharePercent").getAttribute("aria-invalid")).toBe("true");
     expect($("#over18Yes").getAttribute("aria-invalid")).toBe("true");
+    expect(errorOf("nbccSharePercent")).toBe("Give a whole number from 1 to 99.");
+    expect(errorOf("splitConfirmed")).toBe("Tick to say the split is right.");
+    // Back to the first of them.
+    expect(has("over18Yes")).toBe(true);
   });
 });
 
@@ -300,7 +383,7 @@ describe("a link that fills the form in", () => {
   it("never answers 18 or over, or the split, from Do it again", async () => {
     answer = (url) =>
       url === "/api/fundraise/again"
-        ? { status: 200, body: { path: "raising", kind: "walk", title: "Sam's Walk", over18: true, sharesWithOther: true } }
+        ? { status: 200, body: { path: "raising", kind: "walk", title: "Sam's Walk", over18: true, sharesWithOther: true, splitConfirmed: true } }
         : { status: 200, body: { siteKey: null } };
     load(`?again=${"b".repeat(43)}`);
     await flush();
@@ -308,5 +391,6 @@ describe("a link that fills the form in", () => {
     expect($("#title").value).toBe("Sam's Walk");
     expect(document.querySelector('input[name="over18"]:checked')).toBeNull();
     expect(document.querySelector('input[name="sharesWithOther"]:checked')).toBeNull();
+    expect($("#splitConfirmed").checked).toBe(false);
   });
 });

@@ -30,6 +30,9 @@ const row = (key: string, label: string, active = true, used = 0) => ({
   key,
   label,
   active,
+  // The sign up tidy (migrations/1791200000210): sporting, and in memory only, both off unless set.
+  sporty: false,
+  memory_only: false,
   created_at: "2026-10-03T09:00:00Z",
   created_by: "migration",
   retired_at: active ? null : "2026-10-03T09:00:00Z",
@@ -150,7 +153,7 @@ describe("adding a category", () => {
 describe("changing a category", () => {
   it("renames it, keeping its key, and records the old and new names", async () => {
     const calls = useClient((sql, params) => {
-      if (sql.startsWith("SELECT key, label, active FROM fundraising_categories WHERE key")) return { rows: [row("quiz", "Quiz")] };
+      if (sql.startsWith("SELECT key, label, active, sporty FROM fundraising_categories WHERE key")) return { rows: [row("quiz", "Quiz")] };
       if (sql.startsWith("SELECT key FROM fundraising_categories WHERE lower(label)")) return { rows: [] };
       if (sql.startsWith("UPDATE fundraising_categories")) return { rows: [row("quiz", String(params[1]))] };
       return undefined;
@@ -164,13 +167,14 @@ describe("changing a category", () => {
       "fundraising.category_changed",
       "fundraising_category",
       null,
-      { key: "quiz", label: "Quiz night", was: { label: "Quiz", active: true } },
+      // The sign up tidy: whether it was sporting is recorded too.
+      { key: "quiz", label: "Quiz night", was: { label: "Quiz", active: true, sporty: false } },
     ]);
   });
 
   it("hides it from the form, noting when, and brings it back", async () => {
     const calls = useClient((sql, params) => {
-      if (sql.startsWith("SELECT key, label, active FROM fundraising_categories WHERE key")) return { rows: [row("party", "Party")] };
+      if (sql.startsWith("SELECT key, label, active, sporty FROM fundraising_categories WHERE key")) return { rows: [row("party", "Party")] };
       if (sql.startsWith("UPDATE fundraising_categories")) return { rows: [row("party", "Party", Boolean(params[2]))] };
       return undefined;
     });
@@ -184,7 +188,7 @@ describe("changing a category", () => {
 
   it("never hides Other", async () => {
     useClient((sql) => {
-      if (sql.startsWith("SELECT key, label, active FROM fundraising_categories WHERE key")) return { rows: [row("other", "Other")] };
+      if (sql.startsWith("SELECT key, label, active, sporty FROM fundraising_categories WHERE key")) return { rows: [row("other", "Other")] };
       return undefined;
     });
     await expect(updateCategory("other", { active: false }, "admin:kim@example.com")).rejects.toMatchObject({ reason: "other_always_on" });
@@ -192,7 +196,7 @@ describe("changing a category", () => {
 
   it("refuses a name another category has, and one that is not there", async () => {
     useClient((sql) => {
-      if (sql.startsWith("SELECT key, label, active FROM fundraising_categories WHERE key")) return { rows: [row("quiz", "Quiz")] };
+      if (sql.startsWith("SELECT key, label, active, sporty FROM fundraising_categories WHERE key")) return { rows: [row("quiz", "Quiz")] };
       if (sql.startsWith("SELECT key FROM fundraising_categories WHERE lower(label)")) return { rows: [{ key: "party" }] };
       return undefined;
     });
@@ -206,7 +210,7 @@ describe("changing a category", () => {
 describe("two admins at once", () => {
   it("a rename that loses a race for the name is 'already taken', not a failure", async () => {
     useClient((sql) => {
-      if (sql.startsWith("SELECT key, label, active FROM fundraising_categories WHERE key")) return { rows: [row("quiz", "Quiz")] };
+      if (sql.startsWith("SELECT key, label, active, sporty FROM fundraising_categories WHERE key")) return { rows: [row("quiz", "Quiz")] };
       if (sql.startsWith("SELECT key FROM fundraising_categories WHERE lower(label)")) return { rows: [] };
       if (sql.startsWith("UPDATE fundraising_categories")) return Object.assign(new Error("duplicate key value"), { code: "23505" });
       return undefined;

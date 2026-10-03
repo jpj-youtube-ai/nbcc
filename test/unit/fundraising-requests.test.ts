@@ -19,7 +19,8 @@ import type { Wants } from "../../src/fundraising/model";
 
 const TODAY = "2026-12-07";
 
-const NONE: Wants = { posterCount: 0, leafletCount: 0, bucketCount: 0, tinCount: 0, leaflets: 0, buckets: 0, qrCount: 0, shoutOut: false, attend: false };
+// The sign up tidy (Jaimie, 2026-10-03): collection envelopes, in memory of someone, none by default.
+const NONE: Wants = { posterCount: 0, leafletCount: 0, bucketCount: 0, tinCount: 0, leaflets: 0, buckets: 0, qrCount: 0, envelopeCount: 0, shoutOut: false, attend: false };
 const subject = (wants: Partial<Wants>, over: Partial<RequestSubject> = {}): RequestSubject => ({
   wants: { ...NONE, ...wants },
   socialOk: true,
@@ -59,7 +60,7 @@ describe("what shows", () => {
 
   it("shows each thing asked for, in a fixed order, the split and the old combined requests alike", () => {
     expect(
-      kinds(subject({ posterCount: 10, leafletCount: 50, bucketCount: 2, tinCount: 1, leaflets: 3, buckets: 1, qrCount: 5, shoutOut: true, attend: true })),
+      kinds(subject({ posterCount: 10, leafletCount: 50, bucketCount: 2, tinCount: 1, leaflets: 3, buckets: 1, qrCount: 5, envelopeCount: 40, shoutOut: true, attend: true })),
     ).toEqual([...REQUEST_KINDS]);
   });
 

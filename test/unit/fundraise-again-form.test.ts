@@ -96,12 +96,17 @@ describe("a form opened from Do it again", () => {
   });
 
   it("leaves anything already typed, and a choice already made", async () => {
+    // The sign up tidy (Jaimie, 2026-10-03): a category belongs to a path, so a choice of category
+    // is only kept alongside the choice of what they are planning (the first question).
     load(`?again=${TOKEN}`, () => {
       ($("#title") as HTMLInputElement).value = "My own name for it";
+      ($('input[name="path"][value="event"]') as HTMLInputElement).checked = true;
       ($('input[name="kind"][value="bake_sale_2"]') as HTMLInputElement).checked = true;
     });
     await settle();
     expect($("#title").value).toBe("My own name for it");
+    expect($('input[name="path"][value="event"]').checked).toBe(true);
+    expect($('input[name="path"][value="raising"]').checked).toBe(false);
     expect($('input[name="kind"][value="bake_sale_2"]').checked).toBe(true);
     expect($('input[name="kind"][value="santa_dash"]').checked).toBe(false);
   });
@@ -115,11 +120,11 @@ describe("a form opened from Do it again", () => {
   });
 
   it("never fills in a box it was not given, whatever comes back", async () => {
-    answer = { status: 200, body: { ...LAST_YEAR, eventDate: "2027-12-05", postLine1: "1 Example Street", company: "spam" } };
+    answer = { status: 200, body: { ...LAST_YEAR, eventDate: "2027-12-05", postLine1: "1 Example Street", nbccCheck: "spam" } };
     const form = load(`?again=${TOKEN}`);
     await settle();
     expect($("#eventDate").value).toBe("");
     expect($("#postLine1").value).toBe("");
-    expect(form.payload().company).toBe("");
+    expect(form.payload().nbccCheck).toBe("");
   });
 });

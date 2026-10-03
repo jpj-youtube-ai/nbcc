@@ -29,6 +29,7 @@
     <link rel="preload" href="/assets/fonts/poppins-400.woff2" as="font" type="font/woff2" crossorigin />
     <script defer src="/assets/js/main.js"></script>
     <script defer src="/assets/js/social-handles.js"></script>
+    <script defer src="/assets/js/fundraise-steps.js"></script>
     <script defer src="/assets/js/fundraise.js"></script>
     <script defer src="/assets/js/pulse.js"></script>
   </head>
@@ -55,10 +56,15 @@
       <section class="page-top fr-intro" aria-labelledby="fundraise-heading">
         <div class="wrap">
           <div class="intro-hero">
-            <span class="eyebrow">Fundraise for us</span>
-            <h1 id="fundraise-heading">Raise money your way, and we will help.</h1>
+            <!-- In memory of someone, fundraise.js swaps the top of the page for gentle words
+                 (data-say-memory), with no reload, and puts these back if they choose another path. -->
+            <span class="eyebrow" data-say-memory="In memory">Fundraise for us</span>
+            <h1 id="fundraise-heading" data-say-memory="A page in their memory">Raise money your way, and we will help.</h1>
             <div class="rule"><i></i></div>
-            <p class="lede">A sponsored walk, a bake sale, a quiz night or a birthday. Tell us what you are planning and we will be in touch. We read every sign up ourselves.</p>
+            <p class="lede" data-say-memory="A quiet page where family and friends can give in memory of someone you love. Take your time: we will go through it all with you on the phone before anything goes live.">A sponsored walk, a bake sale, a quiz night or a birthday. Tell us what you are planning and we will be in touch. We read every sign up ourselves.</p>
+            <!-- The sign up tidy (Jaimie, 2026-10-03): one line to set expectations. In memory of someone,
+                 fundraise.js hides it: there is no welcome pack, and the words above say to take their time. -->
+            <p class="fr-one-liner" data-one-liner>It only takes a few minutes. Have your address handy so we can post your welcome pack.</p>
             <p class="fr-aside-link">New to fundraising? <a href="/fundraise/help">Read our help page</a></p>
             <p class="fr-aside-link fr-aside-link--next">Already signed up? <a href="/fundraise/manage">Change your page</a></p>
           </div>
@@ -76,65 +82,74 @@
           </div>
 
           <div class="fr-signup" data-fundraise-open>
+            <!-- The sign up tidy: anyone who would rather not do it alone can ring, and we fill it in together. -->
+            <aside class="fr-together" aria-label="Help filling this in">
+              <p><strong data-say-memory="Would you rather talk it through?">Rather do this together?</strong> Give us a call on <a href="tel:+441292811015">01292 811 015</a> <span data-say-memory="and we will fill it in with you.">and we'll fill it in with you.</span></p>
+            </aside>
             <!-- Shipped hidden, and shown by fundraise.js: without JavaScript the browser would send the
                  form as a web address, with names and email addresses in it. -->
             <p class="fr-noscript" data-nojs>This form needs JavaScript switched on. You can email your plans to <a href="mailto:events@nbcc.scot">events@nbcc.scot</a> instead.</p>
-            <!-- TASK-511: the questions come one after another, each once the one before is answered
-                 (fundraise.js adds fr-stepped and reveals them). Every question is in the page as it
-                 is sent, so nothing a valid sign up needs is ever left out of it; and the words of
-                 each question follow the answer to the first one (data-say-raising and
-                 data-say-event). -->
+            <!-- The sign up tidy (Jaimie, 2026-10-03): one question at a time, with Next and Back
+                 (assets/js/fundraise-steps.js) and a progress bar of five stages. Which questions come,
+                 and their words, follow the first answer: raising money, holding an event, or a page
+                 in memory of someone (data-paths, data-say-*). Every question is in the page as it is
+                 sent, so nothing a valid sign up needs is ever left out of it. -->
             <form id="fundraiseForm" class="fr-form" novalidate hidden data-needs-js>
               <div hidden aria-hidden="true">
-                <label for="company">Leave blank
-                  <input type="text" id="company" name="company" tabindex="-1" autocomplete="off" />
+                <!-- A trap for bots, never seen or reached by a person. Not called "company" any more:
+                     browsers fill that in for real people. -->
+                <label for="nbccCheck">Leave this one empty
+                  <input type="text" id="nbccCheck" name="nbccCheck" tabindex="-1" autocomplete="off" />
                 </label>
               </div>
+              <nav class="fr-progress" aria-label="Your progress" data-progress hidden>
+                <p class="fr-progress__now"><span data-progress-step>Step 1 of 5</span><span class="fr-progress__lift" data-progress-lift></span></p>
+                <ol class="fr-progress__list" role="list" data-progress-list></ol>
+              </nav>
               <p class="form-error-summary" role="alert" data-form-error hidden></p>
-              <!-- Says each new question as it appears, for anyone using a screen reader. -->
+              <!-- Says each new step as it comes, for anyone using a screen reader. -->
               <p class="sr-only" aria-live="polite" data-step-news></p>
 
-              <div class="give-question" data-step>
+              <!-- ============ 1. Your fundraiser (About them, then The page, in memory) ============ -->
+              <!-- Jaimie, 2026-10-03: the fun part first. What are you planning, a quick 18 or over, then
+                   the fundraiser itself; who they are comes after it. The steps come in the order of
+                   their stage (data-stage, or data-stage-memory in memory), then as they are here. -->
+              <div class="give-question" data-step data-stage="1">
                 <fieldset class="fr-fieldset">
                   <legend class="give-scope-legend">What are you planning?</legend>
-                  <div class="fr-options">
-                    <label class="fr-option" for="pathRaising"><input id="pathRaising" name="path" type="radio" value="raising" required aria-required="true" data-invalid-message="Tell us whether you are raising money or holding an event" /><span><strong>I&rsquo;m raising money</strong><small>Sponsorship, a collection or a birthday. You get your own page with a meter and a QR code.</small></span></label>
-                    <label class="fr-option" for="pathEvent"><input id="pathEvent" name="path" type="radio" value="event" required aria-required="true" /><span><strong>I&rsquo;m holding an event</strong><small>A bake sale, a quiz or a coffee morning. We can list it with our events.</small></span></label>
+                  <div class="fr-options fr-options--stack">
+                    <label class="fr-option" for="pathRaising"><input id="pathRaising" name="path" type="radio" value="raising" required aria-required="true" data-invalid-message="Almost! Just choose what you're planning." data-invalid-memory="Please choose what you are planning." /><span><strong>I&rsquo;m raising money</strong><small>Sponsorship, a collection or a birthday. You get your own page with a meter and a QR code.</small></span></label>
+                    <label class="fr-option" for="pathEvent"><input id="pathEvent" name="path" type="radio" value="event" required aria-required="true" /><span><strong>I&rsquo;m holding an event</strong><small>A bake sale, a quiz or a coffee morning. It gets its own page, and we can list it with our events.</small></span></label>
+                    <label class="fr-option" for="pathMemory"><input id="pathMemory" name="path" type="radio" value="memory" required aria-required="true" /><span><strong>I&rsquo;m setting up a page in memory of someone</strong><small>A quiet page where family and friends can give in their memory. We will go through it with you.</small></span></label>
                   </div>
                 </fieldset>
-                <p class="fr-show-all" data-show-all-row hidden><button class="fr-link-btn" type="button" data-show-all>Show all the questions at once</button></p>
               </div>
 
-              <!-- Jaimie, 2026-10-03: both paths. A No stops the form here (fundraise.js), with a kind
+              <!-- Jaimie, 2026-10-03: every path. A No stops the form here (fundraise.js), with a kind
                    note on what to do instead; the server refuses a sign up without a Yes. -->
-              <div class="give-question" data-step data-age-step>
+              <div class="give-question" data-step data-stage="1" data-age-step>
                 <fieldset class="fr-fieldset" id="over18Group" role="radiogroup" aria-required="true">
                   <legend class="give-scope-legend">Are you 18 or over?</legend>
                   <div class="fr-options fr-options--yesno">
-                    <label class="fr-option fr-option--small" for="over18Yes"><input id="over18Yes" name="over18" type="radio" value="yes" required aria-describedby="over18Note" data-invalid-message="Tell us whether you are 18 or over" /><span>Yes</span></label>
+                    <label class="fr-option fr-option--small" for="over18Yes"><input id="over18Yes" name="over18" type="radio" value="yes" required aria-describedby="over18Note" data-invalid-message="Almost! Just tell us whether you're 18 or over." data-invalid-memory="Please tell us whether you are 18 or over." /><span>Yes</span></label>
                     <label class="fr-option fr-option--small" for="over18No"><input id="over18No" name="over18" type="radio" value="no" required aria-describedby="over18Note" /><span>No</span></label>
                   </div>
                   <p class="fr-note fr-note--live" id="over18Note" aria-live="polite" data-age-note></p>
                 </fieldset>
               </div>
 
-              <!-- In memory (Jaimie, 2026-10-03): raising money only, Yes or No with nothing chosen. A Yes
-                   asks who it remembers; the server checks it all again (src/fundraising/in-memory.ts). -->
-              <div class="give-question" data-step data-raising-only data-memory-step>
-                <fieldset class="fr-fieldset" id="inMemoryGroup" role="radiogroup" aria-required="true">
-                  <legend class="give-scope-legend">Is this in memory of someone?</legend>
-                  <div class="fr-options fr-options--yesno">
-                    <label class="fr-option fr-option--small" for="inMemoryYes"><input id="inMemoryYes" name="inMemory" type="radio" value="yes" required data-invalid-message="Tell us whether this is in memory of someone" /><span>Yes</span></label>
-                    <label class="fr-option fr-option--small" for="inMemoryNo"><input id="inMemoryNo" name="inMemory" type="radio" value="no" required /><span>No</span></label>
-                  </div>
-                  <div class="fr-memory-fields" data-memory-fields hidden>
-                    <!-- Jaimie, A2: sorry for their loss to family and friends; a funeral director is thanked. -->
+              <!-- In memory (Jaimie, 2026-10-03): who it remembers, and who is setting it up. The server
+                   checks it all again (src/fundraising/in-memory.ts and signup-tidy.ts). -->
+              <div class="give-question" data-step data-stage="1" data-paths="memory" data-memory-step>
+                <fieldset class="fr-fieldset">
+                  <legend class="give-scope-legend">Who is the page for?</legend>
+                  <div class="fr-memory-fields" data-memory-fields>
                     <p class="give-field-help fr-lead-help" data-memory-lead="before">Take your time: we will check everything with you before the page goes live.</p>
                     <p class="give-field-help fr-lead-help" data-memory-lead="family" hidden>We are so sorry for your loss. Take your time: we will check everything with you before the page goes live.</p>
                     <p class="give-field-help fr-lead-help" data-memory-lead="director" hidden>Thank you for setting this up for the family. We will check everything with you before the page goes live.</p>
                     <div class="give-field">
                       <label for="memoryName">Their name <span class="give-req" aria-hidden="true">*</span></label>
-                      <input class="give-field-input" id="memoryName" name="memoryName" type="text" maxlength="100" autocomplete="off" required aria-required="true" aria-describedby="memoryNameHelp" data-invalid-message="Tell us the name of the person you are remembering" />
+                      <input class="give-field-input" id="memoryName" name="memoryName" type="text" maxlength="100" autocomplete="off" aria-describedby="memoryNameHelp" data-invalid-message="Please add their name, as you would like it on the page." />
                       <p class="give-field-help" id="memoryNameHelp">As you would like it on the page, after In memory of.</p>
                     </div>
                     <div class="give-field">
@@ -145,37 +160,62 @@
                     <fieldset class="fr-fieldset fr-subgroup" id="memorySetupByGroup" role="radiogroup" aria-required="true">
                       <legend class="fr-sublegend">Who is setting up the page? <span class="give-req" aria-hidden="true">*</span></legend>
                       <div class="fr-options fr-options--stack">
-                        <label class="fr-option fr-option--small" for="memorySetupBy-family"><input id="memorySetupBy-family" name="memorySetupBy" type="radio" value="family" required data-invalid-message="Tell us who is setting up the page" /><span>A family member</span></label>
-                        <label class="fr-option fr-option--small" for="memorySetupBy-friend"><input id="memorySetupBy-friend" name="memorySetupBy" type="radio" value="friend" required /><span>A friend</span></label>
-                        <label class="fr-option fr-option--small" for="memorySetupBy-funeral_director"><input id="memorySetupBy-funeral_director" name="memorySetupBy" type="radio" value="funeral_director" required /><span>A funeral director</span></label>
+                        <label class="fr-option fr-option--small" for="memorySetupBy-family"><input id="memorySetupBy-family" name="memorySetupBy" type="radio" value="family" data-invalid-message="Please choose who is setting up the page." /><span>A family member</span></label>
+                        <label class="fr-option fr-option--small" for="memorySetupBy-friend"><input id="memorySetupBy-friend" name="memorySetupBy" type="radio" value="friend" /><span>A friend</span></label>
+                        <label class="fr-option fr-option--small" for="memorySetupBy-funeral_director"><input id="memorySetupBy-funeral_director" name="memorySetupBy" type="radio" value="funeral_director" /><span>A funeral director</span></label>
+                        <label class="fr-option fr-option--small" for="memorySetupBy-someone_else"><input id="memorySetupBy-someone_else" name="memorySetupBy" type="radio" value="someone_else" /><span>Someone else, like a colleague, club or church</span></label>
                       </div>
                     </fieldset>
-                    <label class="give-check fr-permission" for="memoryPermission"><input class="give-check-box" id="memoryPermission" name="memoryPermission" type="checkbox" required aria-required="true" data-invalid-message="Please tick to say you have the family&rsquo;s permission" /><span class="give-check-text"><strong>I have the family&rsquo;s permission</strong> to set up this page in their memory.</span></label>
+                    <!-- A funeral director: the business, shown on the page as "Set up by ... for the
+                         family", and who to send the names of people who gave to. -->
+                    <div class="fr-subfields" data-director-fields hidden>
+                      <div class="give-field">
+                        <label for="memoryDirectorBusiness">Your business&rsquo;s name <span class="give-req" aria-hidden="true">*</span></label>
+                        <input class="give-field-input" id="memoryDirectorBusiness" name="memoryDirectorBusiness" type="text" maxlength="100" autocomplete="organization" aria-describedby="memoryDirectorBusinessHelp" data-invalid-message="Please add the name of your business." />
+                        <p class="give-field-help" id="memoryDirectorBusinessHelp">The page says it was set up by you, for the family.</p>
+                      </div>
+                      <fieldset class="fr-fieldset fr-subgroup">
+                        <legend class="fr-sublegend">Who should we send the names of people who gave to? <span class="give-optional">(optional)</span></legend>
+                        <p class="give-field-help fr-sublegend-help">Someone in the family. Leave it empty and we will send them to you.</p>
+                        <div class="fr-row">
+                          <div class="give-field">
+                            <label for="memoryFamilyContactName">Their name</label>
+                            <input class="give-field-input" id="memoryFamilyContactName" name="memoryFamilyContactName" type="text" maxlength="100" autocomplete="off" />
+                          </div>
+                          <div class="give-field">
+                            <label for="memoryFamilyContactEmail">Their email</label>
+                            <input class="give-field-input" id="memoryFamilyContactEmail" name="memoryFamilyContactEmail" type="email" maxlength="254" autocomplete="off" data-invalid-message="Please check this email address." />
+                          </div>
+                        </div>
+                      </fieldset>
+                    </div>
+                    <label class="give-check fr-permission" for="memoryPermission"><input class="give-check-box" id="memoryPermission" name="memoryPermission" type="checkbox" data-invalid-message="Please tick to say you have the family&rsquo;s permission." /><span class="give-check-text" data-permission-words data-say-family="The close family know about this page and are happy for it to go ahead."><strong>I have the family&rsquo;s permission</strong> to set up this page in their memory.</span></label>
                     <p class="give-field-help">A photo of them on the page: if you would like one, email it to <a href="mailto:events@nbcc.scot">events@nbcc.scot</a> after you sign up, and we will add it when we check the page with you.</p>
                   </div>
                 </fieldset>
               </div>
 
-              <!-- Team pages (Jaimie, 2026-10-03): only for someone raising money, never an event.
-                   The person setting up a team is its team organiser. The people added are held,
-                   and invited only once staff approve the team page (fundraise.js adds the rows). -->
-              <div class="give-question" data-step data-raising-only data-team-step>
+              <!-- Team pages (Jaimie, 2026-10-03): only for someone raising money. The person setting up a
+                   team is its team organiser. The people added are held, and invited only once staff
+                   approve the team page (fundraise.js adds the rows). -->
+              <div class="give-question" data-step data-stage="1" data-stage-memory="2" data-paths="raising" data-team-step>
                 <fieldset class="fr-fieldset" id="teamGroup" role="radiogroup" aria-required="true">
                   <legend class="give-scope-legend">Just me, or a team?</legend>
                   <div class="fr-options">
-                    <label class="fr-option" for="teamMe"><input id="teamMe" name="team" type="radio" value="me" required data-invalid-message="Tell us whether it is just you, or a team" /><span><strong>Just me</strong><small>A page of your own, with your own meter.</small></span></label>
+                    <label class="fr-option" for="teamMe"><input id="teamMe" name="team" type="radio" value="me" required data-invalid-message="Almost! Just choose Just me or A team." /><span><strong>Just me</strong><small>A page of your own, with your own meter.</small></span></label>
                     <label class="fr-option" for="teamYes"><input id="teamYes" name="team" type="radio" value="team" required /><span><strong>A team</strong><small>A team page with a meter for the whole team. Everyone who joins gets a page of their own too, and what they raise counts on both.</small></span></label>
                   </div>
                   <div class="fr-team-fields" data-team-fields hidden>
                     <p class="fr-team-note" data-team-organiser-note>As the person setting up the team, you&rsquo;ll be the team organiser: you&rsquo;ll get the team&rsquo;s emails and look after the team page.</p>
+                    <p class="fr-team-note">Team pages always go on our Get involved page, so your team can find it and join.</p>
                     <div class="give-field">
                       <label for="teamName">Your team&rsquo;s name <span class="give-req" aria-hidden="true">*</span></label>
-                      <input class="give-field-input" id="teamName" name="teamName" type="text" maxlength="100" autocomplete="off" aria-describedby="teamNameHelp" data-invalid-message="Give your team a name, like Exampleton Juniors" />
+                      <input class="give-field-input" id="teamName" name="teamName" type="text" maxlength="100" autocomplete="off" aria-describedby="teamNameHelp" data-invalid-message="Almost! Just give your team a name, like Exampleton Juniors." />
                       <p class="give-field-help" id="teamNameHelp">For example, Exampleton Juniors or The Office Santa Dashers.</p>
                     </div>
                     <div class="give-field fr-target">
                       <label class="give-custom-label" for="teamTarget">Your team&rsquo;s target <span class="give-optional">(optional)</span></label>
-                      <div class="give-custom-field"><span class="give-custom-currency" aria-hidden="true">&pound;</span><input class="give-custom-input" id="teamTarget" name="teamTarget" type="number" inputmode="numeric" min="10" max="100000" step="1" aria-describedby="teamTargetHelp" data-invalid-message="A target can be from &pound;10 to &pound;100,000" /></div>
+                      <div class="give-custom-field"><span class="give-custom-currency" aria-hidden="true">&pound;</span><input class="give-custom-input" id="teamTarget" name="teamTarget" type="number" inputmode="numeric" min="10" max="100000" step="1" aria-describedby="teamTargetHelp" data-invalid-message="Almost! A target can be from &pound;10 to &pound;100,000." /></div>
                       <p class="give-field-help" id="teamTargetHelp">For the whole team, from &pound;10 to &pound;100,000. Each member can set their own too.</p>
                     </div>
                     <fieldset class="fr-fieldset fr-subgroup fr-team-members">
@@ -189,56 +229,111 @@
                 </fieldset>
               </div>
 
-              <div class="give-question" data-step>
-                <fieldset class="fr-fieldset fr-kinds" id="kindGroup">
-                  <legend class="give-scope-legend"><span data-say-raising="What are you doing to raise money?" data-say-event="What kind of event is it?">What are you doing?</span></legend>
-                  <div class="fr-options fr-options--grid fr-options--columns" data-kind-options style="--rows: 6">
+              <!-- The sign up tidy (Jaimie, 2026-10-03): raising money only, never in memory, and asked
+                   before the category: a Yes offers only the sporting categories and asks a T-shirt
+                   size; a No offers the rest. Other is in both. -->
+              <div class="give-question" data-step data-stage="1" data-stage-memory="2" data-paths="raising" data-sporting-step>
+                <fieldset class="fr-fieldset" id="isSportingGroup" role="radiogroup" aria-required="true">
+                  <legend class="give-scope-legend">Is it a sporting event?</legend>
+                  <p class="give-field-help fr-lead-help">Like a run, a walk or a Santa dash.</p>
+                  <div class="fr-options fr-options--yesno">
+                    <label class="fr-option fr-option--small" for="sportingYes"><input id="sportingYes" name="isSporting" type="radio" value="yes" required aria-required="true" data-invalid-message="Almost! Just tell us whether it's a sporting event." /><span>Yes</span></label>
+                    <label class="fr-option fr-option--small" for="sportingNo"><input id="sportingNo" name="isSporting" type="radio" value="no" required aria-required="true" /><span>No</span></label>
+                  </div>
+                </fieldset>
+              </div>
+
+              <div class="give-question" data-step data-stage="1" data-stage-memory="2">
+                <fieldset class="fr-fieldset fr-kinds" id="kindGroup" data-invalid-raising="Almost! Just choose what you're doing to raise money." data-invalid-event="Almost! Just choose what kind of event it is." data-invalid-memory="Please choose how people will be giving.">
+                  <legend class="give-scope-legend"><span data-say-raising="What are you doing to raise money?" data-say-event="What kind of event is it?" data-say-memory="How will people be giving?">What are you doing?</span></legend>
+                  <div class="fr-options fr-options--grid fr-options--columns" data-kind-options style="--rows: 6" data-paths="raising event">
                     <!-- Fundraising categories: one each, A to Z, Other last. The server draws
                          them from the list in the database (Admin > Fundraising, Categories); this is the
-                         starting list, for when it cannot. -->
+                         starting list, for when it cannot. A sporting one is marked data-sporty. -->
                     <!-- kinds -->
-                    <label class="fr-option fr-option--small" for="kind-bake_sale_2"><input id="kind-bake_sale_2" name="kind" type="radio" value="bake_sale_2" required aria-required="true" data-invalid-message="Choose what you are doing" data-invalid-raising="Choose what you are doing to raise money" data-invalid-event="Choose what kind of event it is" /><span>Bake sale</span></label>
+                    <label class="fr-option fr-option--small" for="kind-bake_sale_2"><input id="kind-bake_sale_2" name="kind" type="radio" value="bake_sale_2" required aria-required="true" data-invalid-message="Almost! Just choose what you're doing." data-invalid-raising="Almost! Just choose what you're doing to raise money." data-invalid-event="Almost! Just choose what kind of event it is." /><span>Bake sale</span></label>
                     <label class="fr-option fr-option--small" for="kind-birthday"><input id="kind-birthday" name="kind" type="radio" value="birthday" required aria-required="true" /><span>Birthday</span></label>
                     <label class="fr-option fr-option--small" for="kind-coffee_morning"><input id="kind-coffee_morning" name="kind" type="radio" value="coffee_morning" required aria-required="true" /><span>Coffee morning</span></label>
                     <label class="fr-option fr-option--small" for="kind-party"><input id="kind-party" name="kind" type="radio" value="party" required aria-required="true" /><span>Party</span></label>
                     <label class="fr-option fr-option--small" for="kind-quiz"><input id="kind-quiz" name="kind" type="radio" value="quiz" required aria-required="true" /><span>Quiz</span></label>
-                    <label class="fr-option fr-option--small" for="kind-run"><input id="kind-run" name="kind" type="radio" value="run" required aria-required="true" /><span>Run</span></label>
-                    <label class="fr-option fr-option--small" for="kind-santa_dash"><input id="kind-santa_dash" name="kind" type="radio" value="santa_dash" required aria-required="true" /><span>Santa dash</span></label>
+                    <label class="fr-option fr-option--small" for="kind-run" data-sporty><input id="kind-run" name="kind" type="radio" value="run" required aria-required="true" /><span>Run</span></label>
+                    <label class="fr-option fr-option--small" for="kind-santa_dash" data-sporty><input id="kind-santa_dash" name="kind" type="radio" value="santa_dash" required aria-required="true" /><span>Santa dash</span></label>
                     <label class="fr-option fr-option--small" for="kind-school_collection"><input id="kind-school_collection" name="kind" type="radio" value="school_collection" required aria-required="true" /><span>School collection</span></label>
-                    <label class="fr-option fr-option--small" for="kind-walk"><input id="kind-walk" name="kind" type="radio" value="walk" required aria-required="true" /><span>Walk</span></label>
+                    <label class="fr-option fr-option--small" for="kind-walk" data-sporty><input id="kind-walk" name="kind" type="radio" value="walk" required aria-required="true" /><span>Walk</span></label>
                     <label class="fr-option fr-option--small" for="kind-workplace_collection"><input id="kind-workplace_collection" name="kind" type="radio" value="workplace_collection" required aria-required="true" /><span>Workplace collection</span></label>
                     <label class="fr-option fr-option--small" for="kind-other"><input id="kind-other" name="kind" type="radio" value="other" required aria-required="true" /><span>Other</span></label>
                     <!-- /kinds -->
                   </div>
+                  <!-- The sign up tidy: in memory of someone, "How will people be giving?" -->
+                  <div class="fr-options fr-options--stack" data-memory-kind-options data-paths="memory">
+                    <!-- memory-kinds -->
+                    <label class="fr-option fr-option--small" for="kind-memory_service"><input id="kind-memory_service" name="kind" type="radio" value="memory_service" required aria-required="true" /><span>A collection at the funeral or service</span></label>
+                    <label class="fr-option fr-option--small" for="kind-memory_event"><input id="kind-memory_event" name="kind" type="radio" value="memory_event" required aria-required="true" /><span>A memorial walk, run or event</span></label>
+                    <label class="fr-option fr-option--small" for="kind-memory_flowers"><input id="kind-memory_flowers" name="kind" type="radio" value="memory_flowers" required aria-required="true" /><span>Donations instead of flowers</span></label>
+                    <label class="fr-option fr-option--small" for="kind-memory-other"><input id="kind-memory-other" name="kind" type="radio" value="other" required aria-required="true" /><span>Something else</span></label>
+                    <!-- /memory-kinds -->
+                  </div>
                   <!-- TASK-511: only for Other (fundraise.js hides it otherwise). -->
                   <div class="give-field fr-kind-other" data-kind-other>
-                    <label for="kindOther"><span data-say-raising="What are you doing?" data-say-event="What kind of event is it?">What is it?</span> <span class="give-req" aria-hidden="true">*</span></label>
-                    <input class="give-field-input" id="kindOther" name="kindOther" type="text" maxlength="80" autocomplete="off" aria-describedby="kindOtherHelp" data-invalid-message="Tell us in a few words" placeholder="Like a sponsored silence" />
+                    <label for="kindOther">Tell us in a few words <span class="give-req" aria-hidden="true">*</span></label>
+                    <input class="give-field-input" id="kindOther" name="kindOther" type="text" maxlength="80" autocomplete="off" aria-describedby="kindOtherHelp" data-invalid-message="Almost! Just tell us in a few words." data-invalid-memory="Please tell us in a few words." placeholder="Like a sponsored silence" data-say-memory-placeholder="Like a collection at the golf club" />
                     <p class="give-field-help" id="kindOtherHelp">A few words, up to 80 characters.</p>
                   </div>
                 </fieldset>
               </div>
 
-              <div class="give-question" data-step>
+              <!-- The sign up tidy: a sporting event's T-shirt size, nothing chosen for them. -->
+              <div class="give-question" data-step data-stage="1" data-stage-memory="2" data-paths="raising" data-tshirt-step hidden>
+                <div class="give-field">
+                  <label class="give-scope-legend fr-legend-label" for="tshirtSize">What size T-shirt would you like?</label>
+                  <p class="give-field-help fr-lead-help" id="tshirtSizeHelp">For your NBCC T-shirt. If it&rsquo;s for a child, choose their size.</p>
+                  <select class="give-field-input fr-select" id="tshirtSize" name="tshirtSize" aria-describedby="tshirtSizeHelp" data-invalid-message="Almost! Just choose a T-shirt size.">
+                    <option value="">Choose a size</option>
+                    <optgroup label="Kids">
+                      <option value="kids_3_4">Kids 3 to 4</option>
+                      <option value="kids_5_6">Kids 5 to 6</option>
+                      <option value="kids_7_8">Kids 7 to 8</option>
+                      <option value="kids_9_10">Kids 9 to 10</option>
+                      <option value="kids_11_12">Kids 11 to 12</option>
+                      <option value="kids_13_14">Kids 13 to 14</option>
+                    </optgroup>
+                    <optgroup label="Adults">
+                      <option value="adult_xs">Adult XS</option>
+                      <option value="adult_s">Adult S</option>
+                      <option value="adult_m">Adult M</option>
+                      <option value="adult_l">Adult L</option>
+                      <option value="adult_xl">Adult XL</option>
+                      <option value="adult_xxl">Adult XXL</option>
+                    </optgroup>
+                  </select>
+                </div>
+              </div>
+
+              <div class="give-question" data-step data-stage="1" data-stage-memory="2">
                 <fieldset class="fr-fieldset">
-                  <legend class="give-scope-legend"><span data-say-raising="Tell us about your fundraising" data-say-event="Tell us about your event">Tell us about it</span></legend>
+                  <legend class="give-scope-legend"><span data-say-raising="Tell us about your fundraising" data-say-event="Tell us about your event" data-say-memory="About the page">Tell us about it</span></legend>
                   <div class="give-field" data-not-team>
-                    <label for="title">Give it a name <span class="give-req" aria-hidden="true" data-title-required>*</span><span class="give-optional" data-title-optional hidden>(optional)</span></label>
-                    <input class="give-field-input" id="title" name="title" type="text" maxlength="100" required aria-required="true" aria-describedby="titleHelp" data-invalid-message="Give it a name, like Sam&rsquo;s Santa Dash" />
+                    <label for="title"><span data-say-raising="Give it a name" data-say-memory="A name for the page">Give it a name</span> <span class="give-req" aria-hidden="true" data-title-required>*</span><span class="give-optional" data-title-optional hidden>(optional)</span></label>
+                    <input class="give-field-input" id="title" name="title" type="text" maxlength="100" required aria-required="true" aria-describedby="titleHelp" data-invalid-message="Almost! Just give it a name, like Sam&rsquo;s Santa Dash." data-invalid-memory="Please give the page a name." />
                     <p class="give-field-help" data-memory-title-help hidden>Leave it empty and we will call it In memory of, and their name.</p>
-                    <p class="give-field-help" id="titleHelp"><span data-say-raising="For example, Sam&rsquo;s Santa Dash or Jo&rsquo;s Sponsored Swim." data-say-event="For example, The Office Bake Sale or the Exampleton Quiz Night.">For example, Sam&rsquo;s Santa Dash or The Office Bake Sale.</span></p>
+                    <p class="give-field-help" id="titleHelp" data-paths="raising event"><span data-say-raising="For example, Sam&rsquo;s Santa Dash or Jo&rsquo;s Sponsored Swim." data-say-event="For example, The Office Bake Sale or the Exampleton Quiz Night.">For example, Sam&rsquo;s Santa Dash or The Office Bake Sale.</span></p>
                   </div>
                   <div class="give-field">
-                    <label for="description"><span data-say-raising="A few words about what you are doing" data-say-event="A few words about your event" data-say-memory="A few words about them, and why you are raising money">A few words about it</span> <span class="give-req" aria-hidden="true">*</span></label>
-                    <textarea class="give-field-input" id="description" name="description" rows="5" maxlength="1000" required aria-required="true" aria-describedby="descriptionCount" data-invalid-message="Tell us a little about it"></textarea>
+                    <label for="description"><span data-say-raising="A few words about what you are doing" data-say-event="A few words about your event" data-say-memory="A few words about them" data-say-team="A few words about what your team is doing">A few words about it</span> <span class="give-req" aria-hidden="true" data-description-required>*</span><span class="give-optional" data-description-optional hidden>(optional)</span></label>
+                    <textarea class="give-field-input" id="description" name="description" rows="5" maxlength="1000" required aria-required="true" aria-describedby="descriptionHelp descriptionCount" data-invalid-message="Almost! Just add a few words about it." data-invalid-memory="Please add a few words about them."></textarea>
+                    <p class="give-field-help" id="descriptionHelp" data-paths="memory">This is shown on the page. You might say what they loved, or why NBCC. If you would rather, leave it and we can write it with you when we ring.</p>
                     <p class="give-field-help" id="descriptionCount" data-count-for="description" data-count-max="1000">Up to 1,000 characters. If it gets a page, this is the story people read.</p>
                   </div>
                   <div class="fr-row">
                     <div class="give-field">
-                      <label for="eventDate"><span data-say-raising="The date" data-say-event="The date of your event">The date</span> <span class="give-optional" data-date-optional>(if there is one)</span><span class="give-req" aria-hidden="true" data-date-required hidden>*</span></label>
-                      <input class="give-field-input" id="eventDate" name="eventDate" type="date" data-invalid-message="Tell us the date of your event" />
+                      <label for="eventDate"><span data-say-raising="When is it happening?" data-say-event="The date of your event" data-say-memory="When is the funeral or service?">The date</span> <span class="give-optional" data-date-optional><span data-say-raising="(if there's a date)" data-say-memory="(optional)">(if there is one)</span></span><span class="give-req" aria-hidden="true" data-date-required hidden>*</span></label>
+                      <input class="give-field-input" id="eventDate" name="eventDate" type="date" aria-describedby="eventDateHelp" data-invalid-message="Almost! Just add the date, or tick Not decided yet." data-invalid-memory="Please check the date." />
+                      <!-- Jaimie, 2026-10-03: ticking it makes the date optional, on an event too; staff see
+                           "Date to be confirmed". Not offered in memory, where the date is optional anyway. -->
+                      <label class="give-check fr-date-tbc" for="dateTbc" data-paths="raising event"><input class="give-check-box" id="dateTbc" name="dateTbc" type="checkbox" /><span class="give-check-text">Not decided yet</span></label>
+                      <p class="give-field-help" id="eventDateHelp" data-paths="memory">So we can get anything you need to you in time. This is not shown on the page.</p>
                     </div>
-                    <div class="give-field">
+                    <div class="give-field" data-paths="raising event">
                       <label for="startTime">Start time <span class="give-optional">(if there is one)</span></label>
                       <input class="give-field-input" id="startTime" name="startTime" type="time" />
                     </div>
@@ -255,10 +350,10 @@
                   </div>
                   <div class="fr-row">
                     <div class="give-field">
-                      <label for="venue">Where <span class="give-optional" data-venue-optional>(if there is somewhere)</span><span class="give-req" aria-hidden="true" data-venue-required hidden>*</span></label>
-                      <input class="give-field-input" id="venue" name="venue" type="text" maxlength="120" placeholder="Like Example Village Hall" data-invalid-message="Tell us the venue" />
+                      <label for="venue"><span data-say-raising="Where" data-say-memory="Where is it?">Where</span> <span class="give-optional" data-venue-optional><span data-say-raising="(if there is somewhere)" data-say-memory="(optional)">(if there is somewhere)</span></span><span class="give-req" aria-hidden="true" data-venue-required hidden>*</span></label>
+                      <input class="give-field-input" id="venue" name="venue" type="text" maxlength="120" placeholder="Like Example Village Hall" data-invalid-message="Almost! Just tell us where it is." data-invalid-memory="Please tell us where it is." />
                     </div>
-                    <div class="give-field">
+                    <div class="give-field" data-paths="raising event">
                       <label for="town">Town <span class="give-optional">(optional)</span></label>
                       <input class="give-field-input" id="town" name="town" type="text" maxlength="80" />
                     </div>
@@ -268,13 +363,13 @@
 
               <!-- TASK-499: the event questions, only for someone holding an event. Worded like the
                    admin's events editor; their answers make the event's card on Get involved. -->
-              <div class="give-question" data-step data-event-questions hidden>
+              <div class="give-question" data-step data-stage="1" data-stage-memory="2" data-paths="event" data-event-questions>
                 <fieldset class="fr-fieldset">
                   <legend class="give-scope-legend">For your event&rsquo;s card</legend>
                   <p class="give-field-help fr-lead-help">If we put your event on our Get involved page, its card is made from these.</p>
                   <div class="give-field">
                     <label for="cardLine">A line for the front of the card <span class="give-req" aria-hidden="true">*</span></label>
-                    <textarea class="give-field-input fr-short-text" id="cardLine" name="cardLine" rows="2" maxlength="140" required aria-required="true" aria-describedby="cardLineHelp cardLineCount" data-invalid-message="Add a line for the front of the card"></textarea>
+                    <textarea class="give-field-input fr-short-text" id="cardLine" name="cardLine" rows="2" maxlength="140" required aria-required="true" aria-describedby="cardLineHelp cardLineCount" data-invalid-message="Almost! Just add a line for the front of the card."></textarea>
                     <p class="give-field-help" id="cardLineHelp">One or two sentences. What is it, and why come?</p>
                     <p class="give-field-help" id="cardLineCount" data-count-for="cardLine" data-count-max="140">Up to 140 characters, so it fits on the card.</p>
                   </div>
@@ -286,7 +381,7 @@
                   <div class="fr-row">
                     <div class="give-field">
                       <label for="venuePostcode">Venue postcode <span class="give-optional">(optional)</span></label>
-                      <input class="give-field-input" id="venuePostcode" name="venuePostcode" type="text" maxlength="10" autocomplete="off" placeholder="e.g. KA1 1AA" pattern="[A-Za-z]{1,2}[0-9][A-Za-z0-9]? ?[0-9][A-Za-z]{2}" data-invalid-message="Please give a UK postcode, like KA1 1AA" />
+                      <input class="give-field-input" id="venuePostcode" name="venuePostcode" type="text" maxlength="10" autocomplete="off" placeholder="e.g. KA1 1AA" pattern="[A-Za-z]{1,2}[0-9][A-Za-z0-9]? ?[0-9][A-Za-z]{2}" data-invalid-message="Almost! That postcode doesn't look quite right. Try one like KA1 1AA." />
                     </div>
                   </div>
                   <fieldset class="fr-fieldset fr-subgroup" id="accessGroup">
@@ -307,13 +402,14 @@
                   <fieldset class="fr-fieldset fr-subgroup" id="bookingGroup">
                     <legend class="fr-sublegend">How do people get in? <span class="give-req" aria-hidden="true">*</span></legend>
                     <div class="fr-options fr-options--stack">
-                      <label class="fr-option fr-option--small" for="booking-away"><input id="booking-away" name="booking" type="radio" value="away" required aria-required="true" data-invalid-message="Tell us how people get in" /><span>Tickets are sold on another website</span></label>
+                      <label class="fr-option fr-option--small" for="booking-away"><input id="booking-away" name="booking" type="radio" value="away" required aria-required="true" data-invalid-message="Almost! Just choose how people get in." /><span>Tickets are sold on another website</span></label>
                       <label class="fr-option fr-option--small" for="booking-door"><input id="booking-door" name="booking" type="radio" value="door" required aria-required="true" /><span>Pay on the door, no booking needed</span></label>
                       <label class="fr-option fr-option--small" for="booking-free"><input id="booking-free" name="booking" type="radio" value="free" required aria-required="true" /><span>Free, just come along</span></label>
+                      <label class="fr-option fr-option--small" for="booking-donations"><input id="booking-donations" name="booking" type="radio" value="donations" required aria-required="true" /><span>Free entry, donations welcome</span></label>
                     </div>
                     <div class="give-field" data-ticket-field hidden>
                       <label for="ticketUrl">The link to buy tickets <span class="give-req" aria-hidden="true">*</span></label>
-                      <input class="give-field-input" id="ticketUrl" name="ticketUrl" type="url" maxlength="500" inputmode="url" autocomplete="off" placeholder="https://..." required aria-required="true" aria-describedby="ticketUrlHelp" pattern="https://[^\s]+" data-invalid-message="Paste the full web address, starting https://" />
+                      <input class="give-field-input" id="ticketUrl" name="ticketUrl" type="url" maxlength="500" inputmode="url" autocomplete="off" placeholder="https://..." required aria-required="true" aria-describedby="ticketUrlHelp" pattern="https://[^\s]+" data-invalid-message="Almost! Just paste the full web address, starting https://" />
                       <p class="give-field-help" id="ticketUrlHelp">Paste the full web address, starting https://</p>
                     </div>
                     <p class="give-field-help fr-ticket-note">Want NBCC to sell the tickets for you? Tell us in the description and we&rsquo;ll be in touch.</p>
@@ -341,198 +437,278 @@
                 </fieldset>
               </div>
 
-              <div class="give-question" data-step data-target-question>
+              <div class="give-question" data-step data-stage="1" data-stage-memory="2" data-target-question>
                 <div class="give-field fr-target">
-                  <label class="give-custom-label" for="target">Your target <span class="give-optional">(optional)</span></label>
-                  <div class="give-custom-field"><span class="give-custom-currency" aria-hidden="true">£</span><input class="give-custom-input" id="target" name="target" type="number" inputmode="numeric" min="10" max="100000" step="1" aria-describedby="targetHelp" data-invalid-message="A target can be from £10 to £100,000" /></div>
-                  <p class="give-field-help" id="targetHelp">Anything from £10 to £100,000. Your page shows how close you are. You can change it later.</p>
+                  <label class="give-custom-label" for="target"><span data-say-raising="Your target" data-say-event="Is there an amount you hope to raise?" data-say-memory="Is there an amount you hope to raise?">Your target</span> <span class="give-optional">(optional)</span></label>
+                  <div class="give-custom-field"><span class="give-custom-currency" aria-hidden="true">£</span><input class="give-custom-input" id="target" name="target" type="number" inputmode="numeric" min="10" max="100000" step="1" aria-describedby="targetHelp" data-invalid-message="Almost! A target can be from £10 to £100,000." data-invalid-memory="An amount can be from £10 to £100,000." /></div>
+                  <p class="give-field-help" id="targetHelp"><span data-say-raising="Anything from £10 to £100,000. Your page shows how close you are. You can change it later." data-say-memory="Many families leave this empty. You can add or change it later.">Anything from £10 to £100,000. Your page shows how close you are. You can change it later.</span></p>
                 </div>
                 <!-- In memory, with a target: asked, never chosen for them. -->
                 <fieldset class="fr-fieldset fr-subgroup" id="memoryShowTargetGroup" role="radiogroup" aria-required="true" data-memory-target hidden>
-                  <legend class="fr-sublegend">Show the target on the page? <span class="give-req" aria-hidden="true">*</span></legend>
+                  <legend class="fr-sublegend">Show the amount on the page? <span class="give-req" aria-hidden="true">*</span></legend>
                   <p class="give-field-help fr-sublegend-help">Some people would rather not. If you say No, the page shows only what has been given.</p>
                   <div class="fr-options fr-options--yesno">
-                    <label class="fr-option fr-option--small" for="memoryShowTargetYes"><input id="memoryShowTargetYes" name="memoryShowTarget" type="radio" value="yes" required data-invalid-message="Tell us whether to show the target on the page" /><span>Yes</span></label>
-                    <label class="fr-option fr-option--small" for="memoryShowTargetNo"><input id="memoryShowTargetNo" name="memoryShowTarget" type="radio" value="no" required /><span>No</span></label>
+                    <label class="fr-option fr-option--small" for="memoryShowTargetYes"><input id="memoryShowTargetYes" name="memoryShowTarget" type="radio" value="yes" data-invalid-message="Please choose Yes or No." /><span>Yes</span></label>
+                    <label class="fr-option fr-option--small" for="memoryShowTargetNo"><input id="memoryShowTargetNo" name="memoryShowTarget" type="radio" value="no" /><span>No</span></label>
                   </div>
                 </fieldset>
               </div>
 
-              <!-- Jaimie, 2026-10-03: both paths. On a Yes, NBCC's share and the other cause's name,
-                   for the statement the law asks for on the page and on every poster and form. -->
-              <div class="give-question" data-step>
+              <!-- The sign up tidy (C4): someone raising money for their child names them on the page,
+                   with the parent's or guardian's tick. -->
+              <div class="give-question" data-step data-stage="1" data-paths="raising">
+                <fieldset class="fr-fieldset" id="childFundraiserGroup" role="radiogroup" aria-required="true">
+                  <legend class="give-scope-legend">Who is doing the fundraising?</legend>
+                  <div class="fr-options fr-options--stack">
+                    <label class="fr-option fr-option--small" for="childMe"><input id="childMe" name="childFundraiser" type="radio" value="me" required aria-required="true" data-invalid-message="Almost! Just choose who is doing the fundraising." /><span>Me</span></label>
+                    <label class="fr-option fr-option--small" for="childYes"><input id="childYes" name="childFundraiser" type="radio" value="child" required aria-required="true" /><span>My child, or a young person I look after</span></label>
+                  </div>
+                  <div class="fr-subfields" data-child-fields hidden>
+                    <div class="give-field">
+                      <label for="childFirstName">Their first name <span class="give-req" aria-hidden="true">*</span></label>
+                      <input class="give-field-input" id="childFirstName" name="childFirstName" type="text" maxlength="50" autocomplete="off" aria-describedby="childFirstNameHelp" data-invalid-message="Almost! Just add their first name." />
+                      <p class="give-field-help" id="childFirstNameHelp">Shown on the page. Only their first name, never their surname.</p>
+                    </div>
+                    <label class="give-check fr-permission" for="childConsent"><input class="give-check-box" id="childConsent" name="childConsent" type="checkbox" data-invalid-message="Almost! Just tick to say you're happy for their first name to be shown." /><span class="give-check-text">I&rsquo;m their parent or guardian, and I&rsquo;m happy for their first name and any photo to be shown on the page and our social media.</span></label>
+                  </div>
+                </fieldset>
+              </div>
+
+              <!-- The sign up tidy (C5): a business, school or group is named on the page. -->
+              <div class="give-question" data-step data-stage="1" data-paths="raising event">
+                <fieldset class="fr-fieldset" id="forOrganisationGroup" role="radiogroup" aria-required="true">
+                  <legend class="give-scope-legend">Are you fundraising for a business, school or group?</legend>
+                  <div class="fr-options fr-options--yesno">
+                    <label class="fr-option fr-option--small" for="orgYes"><input id="orgYes" name="forOrganisation" type="radio" value="yes" required aria-required="true" data-invalid-message="Almost! Just choose Yes or No." /><span>Yes</span></label>
+                    <label class="fr-option fr-option--small" for="orgNo"><input id="orgNo" name="forOrganisation" type="radio" value="no" required aria-required="true" /><span>No</span></label>
+                  </div>
+                  <div class="fr-subfields" data-org-fields hidden>
+                    <div class="give-field">
+                      <label for="orgName">Its name <span class="give-req" aria-hidden="true">*</span></label>
+                      <input class="give-field-input" id="orgName" name="orgName" type="text" maxlength="100" autocomplete="organization" aria-describedby="orgNameHelp" data-invalid-message="Almost! Just add the name of the business, school or group." />
+                      <p class="give-field-help" id="orgNameHelp">Shown on the page as who organised it.</p>
+                    </div>
+                    <fieldset class="fr-fieldset fr-subgroup" id="employerMatchGroup">
+                      <legend class="fr-sublegend">Will your employer match what you raise? <span class="give-optional">(optional)</span></legend>
+                      <div class="fr-options fr-options--three">
+                        <label class="fr-option fr-option--small" for="matchYes"><input id="matchYes" name="employerMatch" type="radio" value="yes" /><span>Yes</span></label>
+                        <label class="fr-option fr-option--small" for="matchNo"><input id="matchNo" name="employerMatch" type="radio" value="no" /><span>No</span></label>
+                        <label class="fr-option fr-option--small" for="matchNotSure"><input id="matchNotSure" name="employerMatch" type="radio" value="not_sure" /><span>Not sure yet</span></label>
+                      </div>
+                    </fieldset>
+                  </div>
+                </fieldset>
+              </div>
+
+              <!-- The sign up tidy (C2): every sign up gets a page; No keeps it off the Get involved list.
+                   A team is always listed (data-not-team), so the team can find it. -->
+              <div class="give-question" data-step data-stage="1" data-stage-memory="2" data-not-team>
+                <fieldset class="fr-fieldset" id="listedGroup" role="radiogroup" aria-required="true">
+                  <legend class="give-scope-legend">Shall we list it on our Get involved page?</legend>
+                  <div class="fr-options">
+                    <label class="fr-option" for="listedYes"><input id="listedYes" name="listed" type="radio" value="yes" required aria-required="true" data-invalid-message="Almost! Just choose whether to list it." data-invalid-memory="Please choose Yes or No." /><span><strong>Yes, list it, so anyone can find it</strong><small>Once we have checked it with you, it goes on our Get involved page at nbcc.scot.</small></span></label>
+                    <label class="fr-option" for="listedNo"><input id="listedNo" name="listed" type="radio" value="no" required aria-required="true" /><span><strong>No, only people you send the link to</strong><small>It still gets its own page. We just won&rsquo;t list it.</small></span></label>
+                  </div>
+                </fieldset>
+              </div>
+
+              <!-- ============ 2. About you (Your details, in memory; its address with what we send) ============ -->
+              <!-- Your details: About you, or (in memory) a stage of their own after the page. -->
+              <div class="give-question" data-step data-stage="2" data-stage-memory="3">
+                <fieldset class="fr-fieldset">
+                  <legend class="give-scope-legend">Your details</legend>
+                  <div class="fr-row">
+                    <div class="give-field">
+                      <label for="firstName">First name <span class="give-req" aria-hidden="true">*</span></label>
+                      <input class="give-field-input" id="firstName" name="firstName" type="text" maxlength="50" autocomplete="given-name" required aria-required="true" data-invalid-message="Almost! Just add your first name." data-invalid-memory="Please add your first name." />
+                    </div>
+                    <div class="give-field">
+                      <label for="lastName">Surname <span class="give-req" aria-hidden="true">*</span></label>
+                      <input class="give-field-input" id="lastName" name="lastName" type="text" maxlength="50" autocomplete="family-name" required aria-required="true" data-invalid-message="Almost! Just add your surname." data-invalid-memory="Please add your surname." />
+                    </div>
+                  </div>
+                  <div class="fr-row">
+                    <div class="give-field">
+                      <label for="email">Email <span class="give-req" aria-hidden="true">*</span></label>
+                      <input class="give-field-input" id="email" name="email" type="email" maxlength="254" autocomplete="email" required aria-required="true" placeholder="you@example.com" data-invalid-message="Almost! Just add your email, like name@example.com." data-invalid-memory="Please add your email, like name@example.com." />
+                    </div>
+                    <div class="give-field">
+                      <label for="phone">Phone <span class="give-req" aria-hidden="true">*</span></label>
+                      <input class="give-field-input" id="phone" name="phone" type="tel" maxlength="20" autocomplete="tel" required aria-required="true" aria-describedby="phoneHelp" data-invalid-message="Almost! Just add a phone number, so we can give you a call." data-invalid-memory="Please add a phone number, so we can ring you." />
+                      <p class="give-field-help" id="phoneHelp"><span data-say-raising="So we can give you a call about it." data-say-memory="So we can ring you to go through the page with you.">So we can give you a call about it.</span></p>
+                    </div>
+                  </div>
+                  <div class="give-field" data-paths="memory">
+                    <label for="callTime">A good time to call <span class="give-optional">(optional)</span></label>
+                    <input class="give-field-input" id="callTime" name="callTime" type="text" maxlength="80" autocomplete="off" placeholder="Like weekday mornings" />
+                  </div>
+                </fieldset>
+              </div>
+
+              <!-- The sign up tidy (Jaimie, 2026-10-03): everyone's address, for the welcome pack (the
+                   boxes TASK-499 asked only when something was posted). In memory there is no welcome
+                   pack: only when something is to be sent, and it can be the funeral director's. -->
+              <div class="give-question" data-step data-stage="2" data-stage-memory="4" data-address-field>
+                <fieldset class="fr-fieldset">
+                  <legend class="give-scope-legend"><span data-say-raising="Your address" data-say-memory="Where should we send them?">Your address</span></legend>
+                  <p class="give-field-help fr-lead-help"><span data-say-raising="So we can post your welcome pack." data-say-memory="This can be the funeral director&rsquo;s address.">So we can post your welcome pack.</span></p>
+                  <p class="give-field-help" data-posted-note hidden>Anything you asked for comes here too. If you are local, we may drop it off instead.</p>
+                  <div class="give-field">
+                    <label for="postLine1">Address line 1 <span class="give-req" aria-hidden="true">*</span></label>
+                    <input class="give-field-input" id="postLine1" name="postLine1" type="text" maxlength="120" autocomplete="address-line1" required aria-required="true" data-invalid-message="Almost! Just add the first line of your address." data-invalid-memory="Please add the first line of the address." />
+                  </div>
+                  <div class="give-field">
+                    <label for="postLine2">Address line 2 <span class="give-optional">(optional)</span></label>
+                    <input class="give-field-input" id="postLine2" name="postLine2" type="text" maxlength="120" autocomplete="address-line2" />
+                  </div>
+                  <div class="fr-row">
+                    <div class="give-field">
+                      <label for="postTown">Town <span class="give-req" aria-hidden="true">*</span></label>
+                      <input class="give-field-input" id="postTown" name="postTown" type="text" maxlength="80" autocomplete="address-level2" required aria-required="true" data-invalid-message="Almost! Just add your town." data-invalid-memory="Please add the town." />
+                    </div>
+                    <div class="give-field">
+                      <label for="postPostcode">Postcode <span class="give-req" aria-hidden="true">*</span></label>
+                      <input class="give-field-input" id="postPostcode" name="postPostcode" type="text" maxlength="10" autocomplete="postal-code" required aria-required="true" placeholder="e.g. KA1 1AA" pattern="[A-Za-z]{1,2}[0-9][A-Za-z0-9]? ?[0-9][A-Za-z]{2}" data-invalid-message="Almost! Just add a UK postcode, like KA1 1AA." data-invalid-memory="Please add a UK postcode, like KA1 1AA." />
+                    </div>
+                  </div>
+                </fieldset>
+              </div>
+
+              <!-- ============ 3. Sharing (The page, in memory) ============ -->
+              <!-- Jaimie, 2026-10-03: every path. On a Yes, NBCC's share and the other cause's name, for
+                   the statement the law asks for on the page and on every poster and form. -->
+              <div class="give-question" data-step data-stage="3" data-stage-memory="2">
                 <fieldset class="fr-fieldset" id="sharesGroup" role="radiogroup" aria-required="true">
                   <legend class="give-scope-legend">Are you sharing what you raise with another cause?</legend>
-                  <p class="give-field-help fr-lead-help">For example, half for NBCC and half for another charity or a local group.</p>
+                  <p class="give-field-help fr-lead-help"><span data-say-raising="For example, half for NBCC and half for another charity or a local group." data-say-memory="For example, if the family has asked for donations to be shared between NBCC and a hospice.">For example, half for NBCC and half for another charity or a local group.</span></p>
                   <div class="fr-options fr-options--yesno">
-                    <label class="fr-option fr-option--small" for="sharesYes"><input id="sharesYes" name="sharesWithOther" type="radio" value="yes" required data-invalid-message="Tell us whether you are sharing what you raise with another cause" /><span>Yes</span></label>
+                    <label class="fr-option fr-option--small" for="sharesYes"><input id="sharesYes" name="sharesWithOther" type="radio" value="yes" required data-invalid-message="Almost! Just tell us whether you're sharing what you raise." data-invalid-memory="Please choose Yes or No." /><span>Yes</span></label>
                     <label class="fr-option fr-option--small" for="sharesNo"><input id="sharesNo" name="sharesWithOther" type="radio" value="no" required /><span>No</span></label>
                   </div>
                   <div class="fr-split-fields" data-split-fields hidden>
                     <div class="give-field">
                       <label for="nbccSharePercent">What percentage comes to NBCC? <span class="give-req" aria-hidden="true">*</span></label>
-                      <div class="fr-percent"><input class="give-field-input" id="nbccSharePercent" name="nbccSharePercent" type="number" inputmode="numeric" min="1" max="99" step="1" required aria-required="true" aria-describedby="nbccSharePercentHelp" data-invalid-message="Give a whole number from 1 to 99" /><span class="fr-percent__sign" aria-hidden="true">%</span></div>
+                      <div class="fr-percent"><input class="give-field-input" id="nbccSharePercent" name="nbccSharePercent" type="number" inputmode="numeric" min="1" max="99" step="1" aria-describedby="nbccSharePercentHelp" data-invalid-message="Almost! Just add a whole number from 1 to 99." data-invalid-memory="Please add a whole number from 1 to 99." /><span class="fr-percent__sign" aria-hidden="true">%</span></div>
                       <p class="give-field-help" id="nbccSharePercentHelp">A whole number from 1 to 99. For half, put 50.</p>
                     </div>
                     <div class="give-field">
                       <label for="otherCauseName">The other cause&rsquo;s name <span class="give-req" aria-hidden="true">*</span></label>
-                      <input class="give-field-input" id="otherCauseName" name="otherCauseName" type="text" maxlength="120" autocomplete="off" required aria-required="true" aria-describedby="otherCauseNameHelp" data-invalid-message="Tell us the name of the other cause" />
-                      <p class="give-field-help" id="otherCauseNameHelp">As it should appear on your page and posters, which say how what you raise is shared. Please check it: once we have approved your sign up, you cannot change the split yourself.</p>
+                      <input class="give-field-input" id="otherCauseName" name="otherCauseName" type="text" maxlength="120" autocomplete="off" aria-describedby="otherCauseNameHelp" data-invalid-message="Almost! Just add the other cause&rsquo;s name." data-invalid-memory="Please add the other cause&rsquo;s name." />
+                      <p class="give-field-help" id="otherCauseNameHelp">Sharing with more than one? Name them all, with their share if it isn&rsquo;t equal, e.g. Exampleton Food Bank (25%) and Exampleton Primary (25%).</p>
                     </div>
+                    <p class="give-field-help fr-split-money">Everything given on your NBCC page comes to NBCC as our share. Please collect the other cause&rsquo;s share your own way, as we can&rsquo;t pass money on to them.</p>
                   </div>
                   <!-- Team pages: a team sharing with another cause says whose split it is. -->
                   <fieldset class="fr-fieldset fr-subgroup" id="teamShareGroup" data-team-share hidden>
                     <legend class="fr-sublegend">Just you, or the whole team?</legend>
                     <div class="fr-options fr-options--stack">
-                      <label class="fr-option fr-option--small" for="teamShareTeam"><input id="teamShareTeam" name="teamShareMode" type="radio" value="team" data-invalid-message="Tell us whether the split is just for you, or for the whole team" /><span>The whole team: every member&rsquo;s page shares the same way, and we won&rsquo;t ask them</span></label>
+                      <label class="fr-option fr-option--small" for="teamShareTeam"><input id="teamShareTeam" name="teamShareMode" type="radio" value="team" data-invalid-message="Almost! Just choose whose split it is." /><span>The whole team: every member&rsquo;s page shares the same way, and we won&rsquo;t ask them</span></label>
                       <label class="fr-option fr-option--small" for="teamShareOrganiser"><input id="teamShareOrganiser" name="teamShareMode" type="radio" value="organiser" /><span>Just me: each member is asked when they join</span></label>
                     </div>
                   </fieldset>
                 </fieldset>
               </div>
 
-              <!-- Team pages: a team is always on the website (it needs a page to be joined), so a team is
-                   never asked (data-not-team). -->
-              <div class="give-question" data-step data-not-team>
+              <!-- The sign up tidy: the split as their page and posters will show it, ticked as right. -->
+              <div class="give-question" data-step data-stage="3" data-stage-memory="2" data-split-check hidden>
                 <fieldset class="fr-fieldset">
-                  <legend class="give-scope-legend">Shall we show it on the NBCC website, on our Get involved page?</legend>
-                  <div class="fr-options">
-                    <label class="fr-option" for="publicYes"><input id="publicYes" name="public" type="radio" value="yes" required aria-required="true" data-invalid-message="Tell us whether to show it on the NBCC website" /><span><strong>Yes, show it on the NBCC website</strong><small>Once we have checked it with you, it goes on our Get involved page at nbcc.scot.</small></span></label>
-                    <label class="fr-option" for="publicNo"><input id="publicNo" name="public" type="radio" value="no" required aria-required="true" /><span><strong>No, keep it off the website</strong><small>That&rsquo;s fine. We&rsquo;ll keep it between us.</small></span></label>
-                  </div>
-                  <p class="fr-either-way">Either way, we&rsquo;re happy to help with posters, leaflets, collection buckets and the rest.</p>
+                  <legend class="give-scope-legend">Please check the split</legend>
+                  <p class="fr-check-statement" data-split-statement>Please check: <b data-split-percent>50%</b> of what you raise comes to NBCC, and the rest goes to <b data-split-cause></b>. This is what your page and posters will say, and it can&rsquo;t be changed once we&rsquo;ve approved your page.</p>
+                  <label class="give-check fr-permission" for="splitConfirmed"><input class="give-check-box" id="splitConfirmed" name="splitConfirmed" type="checkbox" required aria-required="true" data-invalid-message="Almost! Just tick to say that's right, or go Back to change it." data-invalid-memory="Please tick to say that is right, or go Back to change it." /><span class="give-check-text"><strong>Yes, that&rsquo;s right</strong></span></label>
                 </fieldset>
               </div>
 
-              <div class="give-question" data-step>
+              <!-- The sign up tidy (the appropriateness audit): one question about NBCC's social media.
+                   In memory, one gentle question instead, and nothing else here. -->
+              <div class="give-question" data-step data-stage="3" data-stage-memory="2">
                 <fieldset class="fr-fieldset">
-                  <legend class="give-scope-legend">Your details</legend>
-                  <div class="fr-row">
-                    <div class="give-field">
-                      <label for="firstName">First name <span class="give-req" aria-hidden="true">*</span></label>
-                      <input class="give-field-input" id="firstName" name="firstName" type="text" maxlength="50" autocomplete="given-name" required aria-required="true" data-invalid-message="Please tell us your first name" />
+                  <legend class="give-scope-legend"><span data-say-raising="Social media" data-say-memory="Sharing the page">Social media</span></legend>
+                  <div data-paths="raising event">
+                    <p class="give-field-help fr-lead-help">We love cheering our fundraisers on. Tell us where to find you, if you like.</p>
+                    <div class="fr-row">
+                      <div class="give-field">
+                        <label for="instagram">Your (or your organisation&rsquo;s) Instagram <span class="give-optional">(optional)</span></label>
+                        <input class="give-field-input" id="instagram" name="instagram" type="text" maxlength="300" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="@yourname" aria-describedby="instagramHelp" data-invalid-message="Give your Instagram name, like @yourname, or the link to your profile" />
+                        <p class="give-field-help" id="instagramHelp">Your name, like @yourname, or the link to your profile.</p>
+                      </div>
+                      <div class="give-field">
+                        <label for="facebook">Your (or your organisation&rsquo;s) Facebook <span class="give-optional">(optional)</span></label>
+                        <input class="give-field-input" id="facebook" name="facebook" type="text" maxlength="300" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="facebook.com/yourpage" aria-describedby="facebookHelp" data-invalid-message="Give your Facebook page name, or the link to your page, group or event" />
+                        <p class="give-field-help" id="facebookHelp">Your page name, or the link to your page, group or event.</p>
+                      </div>
                     </div>
-                    <div class="give-field">
-                      <label for="lastName">Surname <span class="give-req" aria-hidden="true">*</span></label>
-                      <input class="give-field-input" id="lastName" name="lastName" type="text" maxlength="50" autocomplete="family-name" required aria-required="true" data-invalid-message="Please tell us your surname" />
-                    </div>
+                    <fieldset class="fr-fieldset fr-subgroup" id="shareGroup">
+                      <legend class="fr-sublegend">Shall we share it on NBCC&rsquo;s Facebook and Instagram? <span class="give-req" aria-hidden="true">*</span></legend>
+                      <div class="fr-options fr-options--stack">
+                        <label class="fr-option fr-option--small" for="shareShout"><input id="shareShout" name="share" type="radio" value="shout" required aria-required="true" data-invalid-message="Almost! Just choose one." /><span>Yes, give me a shout out</span></label>
+                        <label class="fr-option fr-option--small" for="shareMention"><input id="shareMention" name="share" type="radio" value="mention" required aria-required="true" /><span>Yes, you can mention it</span></label>
+                        <label class="fr-option fr-option--small" for="shareNo"><input id="shareNo" name="share" type="radio" value="no" required aria-required="true" /><span>No thanks</span></label>
+                      </div>
+                    </fieldset>
                   </div>
-                  <div class="fr-row">
-                    <div class="give-field">
-                      <label for="email">Email <span class="give-req" aria-hidden="true">*</span></label>
-                      <input class="give-field-input" id="email" name="email" type="email" maxlength="254" autocomplete="email" required aria-required="true" placeholder="you@example.com" />
-                    </div>
-                    <div class="give-field">
-                      <label for="phone">Phone <span class="give-req" aria-hidden="true">*</span></label>
-                      <input class="give-field-input" id="phone" name="phone" type="tel" maxlength="20" autocomplete="tel" required aria-required="true" aria-describedby="phoneHelp" data-invalid-message="Please give us a phone number, so we can call you" />
-                      <p class="give-field-help" id="phoneHelp">So we can give you a call about it.</p>
-                    </div>
-                  </div>
-                </fieldset>
-              </div>
-
-              <!-- TASK-511: social media, a step of its own. -->
-              <div class="give-question" data-step>
-                <fieldset class="fr-fieldset">
-                  <legend class="give-scope-legend">Social media</legend>
-                  <p class="give-field-help fr-lead-help">We love cheering our fundraisers on. Tell us where to find you, if you like.</p>
-                  <div class="fr-row">
-                    <div class="give-field">
-                      <label for="instagram">Your Instagram <span class="give-optional">(optional)</span></label>
-                      <input class="give-field-input" id="instagram" name="instagram" type="text" maxlength="300" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="@yourname" aria-describedby="instagramHelp" data-invalid-message="Give your Instagram name, like @yourname, or the link to your profile" />
-                      <p class="give-field-help" id="instagramHelp">Your name, like @yourname, or the link to your profile.</p>
-                    </div>
-                    <div class="give-field">
-                      <label for="facebook">Your Facebook <span class="give-optional">(optional)</span></label>
-                      <input class="give-field-input" id="facebook" name="facebook" type="text" maxlength="300" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="facebook.com/yourpage" aria-describedby="facebookHelp" data-invalid-message="Give your Facebook page name, or the link to your page, group or event" />
-                      <p class="give-field-help" id="facebookHelp">Your page name, or the link to your page, group or event.</p>
-                    </div>
-                  </div>
-                  <fieldset class="fr-fieldset fr-subgroup" id="socialOkGroup">
-                    <legend class="fr-sublegend">Can we post about it on NBCC&rsquo;s social media? <span class="give-req" aria-hidden="true">*</span></legend>
+                  <fieldset class="fr-fieldset fr-subgroup" id="memoryShareGroup" data-paths="memory">
+                    <legend class="fr-sublegend">Would the family be happy for NBCC to share the page on our Facebook and Instagram? <span class="give-req" aria-hidden="true">*</span></legend>
+                    <p class="give-field-help fr-sublegend-help">We would only ever share it gently, and we will check the words with you first.</p>
                     <div class="fr-options fr-options--yesno">
-                      <label class="fr-option fr-option--small" for="socialOkYes"><input id="socialOkYes" name="socialOk" type="radio" value="yes" required aria-required="true" data-invalid-message="Tell us whether we can post about it on NBCC&rsquo;s social media" /><span>Yes</span></label>
-                      <label class="fr-option fr-option--small" for="socialOkNo"><input id="socialOkNo" name="socialOk" type="radio" value="no" required aria-required="true" /><span>No</span></label>
+                      <label class="fr-option fr-option--small" for="memoryShareYes"><input id="memoryShareYes" name="memoryShare" type="radio" value="yes" required aria-required="true" data-invalid-message="Please choose Yes or No." /><span>Yes</span></label>
+                      <label class="fr-option fr-option--small" for="memoryShareNo"><input id="memoryShareNo" name="memoryShare" type="radio" value="no" required aria-required="true" /><span>No</span></label>
                     </div>
-                  </fieldset>
-                  <fieldset class="fr-fieldset fr-subgroup" id="shoutOutGroup">
-                    <legend class="fr-sublegend">Would you like a shout out from us? <span class="give-req" aria-hidden="true">*</span></legend>
-                    <p class="give-field-help fr-sublegend-help">A post on NBCC&rsquo;s Facebook and Instagram, cheering you on.</p>
-                    <div class="fr-options fr-options--yesno">
-                      <label class="fr-option fr-option--small" for="shoutOutYes"><input id="shoutOutYes" name="shoutOut" type="radio" value="yes" required aria-required="true" data-invalid-message="Tell us whether you would like a shout out from us" /><span>Yes</span></label>
-                      <label class="fr-option fr-option--small" for="shoutOutNo"><input id="shoutOutNo" name="shoutOut" type="radio" value="no" required aria-required="true" /><span>No</span></label>
-                    </div>
-                    <p class="fr-note" aria-live="polite" data-shout-note></p>
                   </fieldset>
                 </fieldset>
               </div>
 
-              <div class="give-question" data-step>
+              <!-- ============ 4. What you'd like (Anything we can send, in memory) ============ -->
+              <div class="give-question" data-step data-stage="4">
                 <fieldset class="fr-fieldset">
-                  <legend class="give-scope-legend">What would you like from us?</legend>
-                  <p class="give-field-help fr-lead-help">Leave a box empty, or at 0, for none.</p>
+                  <legend class="give-scope-legend"><span data-say-raising="What would you like from us?" data-say-memory="Is there anything we can send you?">What would you like from us?</span></legend>
+                  <p class="give-field-help fr-lead-help"><span data-say-raising="Leave a box empty, or at 0, for none." data-say-memory="Leave it empty if not.">Leave a box empty, or at 0, for none.</span></p>
+                  <div class="give-field" data-paths="memory">
+                    <label for="envelopes">Collection envelopes for the service, how many?</label>
+                    <input class="give-field-input fr-count" id="envelopes" name="envelopes" type="number" inputmode="numeric" min="0" max="500" step="1" placeholder="0" data-invalid-message="We can send up to 500 envelopes." />
+                  </div>
                   <div class="fr-row">
                     <div class="give-field">
-                      <label for="posters">Posters, how many?</label>
-                      <input class="give-field-input fr-count" id="posters" name="posters" type="number" inputmode="numeric" min="0" max="1000" step="1" placeholder="0" data-invalid-message="We can send up to 1,000 posters" />
+                      <label for="posters"><span data-say-raising="Posters, how many?" data-say-memory="A few posters for the service, how many?">Posters, how many?</span></label>
+                      <input class="give-field-input fr-count" id="posters" name="posters" type="number" inputmode="numeric" min="0" max="1000" step="1" placeholder="0" data-invalid-message="We can send up to 1,000 posters." />
                     </div>
-                    <div class="give-field">
+                    <div class="give-field" data-paths="raising event">
                       <label for="leaflets">Leaflets, how many?</label>
-                      <input class="give-field-input fr-count" id="leaflets" name="leaflets" type="number" inputmode="numeric" min="0" max="1000" step="1" placeholder="0" data-invalid-message="We can send up to 1,000 leaflets" />
+                      <input class="give-field-input fr-count" id="leaflets" name="leaflets" type="number" inputmode="numeric" min="0" max="1000" step="1" placeholder="0" data-invalid-message="We can send up to 1,000 leaflets." />
                     </div>
                   </div>
-                  <!-- TASK-511: printed QR codes carry a page's QR code, so only someone raising money,
-                       who gets a page, is asked. -->
-                  <div class="give-field" data-raising-only>
-                    <label for="qrCodes">How many printed QR codes would you like?</label>
-                    <input class="give-field-input fr-count" id="qrCodes" name="qrCodes" type="number" inputmode="numeric" min="0" max="200" step="1" placeholder="0" aria-describedby="qrCodesHelp" data-invalid-message="We can print up to 200 QR codes" />
-                    <p class="give-field-help" id="qrCodesHelp">Cards or stickers with your page&rsquo;s QR code, so people can scan it and give. Up to 200.</p>
+                  <!-- Printed QR codes carry a page's QR code: every path has a page now. -->
+                  <div class="give-field">
+                    <label for="qrCodes"><span data-say-raising="How many printed QR codes would you like?" data-say-memory="Cards with the page&rsquo;s QR code, for the order of service, how many?">How many printed QR codes would you like?</span></label>
+                    <input class="give-field-input fr-count" id="qrCodes" name="qrCodes" type="number" inputmode="numeric" min="0" max="200" step="1" placeholder="0" aria-describedby="qrCodesHelp" data-invalid-message="We can print up to 200 QR codes." />
+                    <p class="give-field-help" id="qrCodesHelp" data-paths="raising event">Cards or stickers with your page&rsquo;s QR code, so people can scan it and give. Up to 200.</p>
                   </div>
-                  <div class="fr-row">
+                  <div class="fr-row" data-paths="raising event">
                     <div class="give-field">
                       <label for="buckets">Collection buckets, how many?</label>
-                      <input class="give-field-input fr-count" id="buckets" name="buckets" type="number" inputmode="numeric" min="0" max="20" step="1" placeholder="0" data-invalid-message="We can lend up to 20 buckets" />
+                      <input class="give-field-input fr-count" id="buckets" name="buckets" type="number" inputmode="numeric" min="0" max="20" step="1" placeholder="0" data-invalid-message="We can lend up to 20 buckets." />
                     </div>
                     <div class="give-field">
                       <label for="tins">Collection tins, how many?</label>
-                      <input class="give-field-input fr-count" id="tins" name="tins" type="number" inputmode="numeric" min="0" max="20" step="1" placeholder="0" data-invalid-message="We can lend up to 20 tins" />
+                      <input class="give-field-input fr-count" id="tins" name="tins" type="number" inputmode="numeric" min="0" max="20" step="1" placeholder="0" data-invalid-message="We can lend up to 20 tins." />
                     </div>
                   </div>
-                  <!-- TASK-499: the address in separate boxes, only when something is to be posted. -->
-                  <fieldset class="fr-fieldset fr-subgroup" data-address-field hidden>
-                    <legend class="fr-sublegend">Where should we send them?</legend>
-                    <p class="give-field-help fr-sublegend-help">If you are local, we may drop them off instead.</p>
-                    <div class="give-field">
-                      <label for="postLine1">Address line 1 <span class="give-req" aria-hidden="true">*</span></label>
-                      <input class="give-field-input" id="postLine1" name="postLine1" type="text" maxlength="120" autocomplete="address-line1" required aria-required="true" data-invalid-message="Tell us the first line of the address" />
-                    </div>
-                    <div class="give-field">
-                      <label for="postLine2">Address line 2 <span class="give-optional">(optional)</span></label>
-                      <input class="give-field-input" id="postLine2" name="postLine2" type="text" maxlength="120" autocomplete="address-line2" />
-                    </div>
-                    <div class="fr-row">
-                      <div class="give-field">
-                        <label for="postTown">Town <span class="give-req" aria-hidden="true">*</span></label>
-                        <input class="give-field-input" id="postTown" name="postTown" type="text" maxlength="80" autocomplete="address-level2" required aria-required="true" data-invalid-message="Tell us the town" />
-                      </div>
-                      <div class="give-field">
-                        <label for="postPostcode">Postcode <span class="give-req" aria-hidden="true">*</span></label>
-                        <input class="give-field-input" id="postPostcode" name="postPostcode" type="text" maxlength="10" autocomplete="postal-code" required aria-required="true" placeholder="e.g. KA1 1AA" pattern="[A-Za-z]{1,2}[0-9][A-Za-z0-9]? ?[0-9][A-Za-z]{2}" data-invalid-message="Please give a UK postcode, like KA1 1AA" />
-                      </div>
-                    </div>
-                  </fieldset>
-                  <fieldset class="fr-fieldset fr-subgroup" id="attendGroup">
-                    <legend class="fr-sublegend">Would you like someone from NBCC to come along? <span class="give-req" aria-hidden="true">*</span></legend>
+                  <!-- The sign up tidy: come along, only when there is a day or a place to come along to. -->
+                  <fieldset class="fr-fieldset fr-subgroup" id="attendGroup" data-attend hidden>
+                    <legend class="fr-sublegend"><span data-say-raising="If there&rsquo;s something to come along to, would you like someone from NBCC there?" data-say-event="Would you like someone from NBCC to come along?">Would you like someone from NBCC to come along?</span> <span class="give-req" aria-hidden="true">*</span></legend>
                     <div class="fr-options fr-options--yesno">
-                      <label class="fr-option fr-option--small" for="attendYes"><input id="attendYes" name="attend" type="radio" value="yes" required aria-required="true" data-invalid-message="Tell us whether you would like someone from NBCC to come along" /><span>Yes</span></label>
-                      <label class="fr-option fr-option--small" for="attendNo"><input id="attendNo" name="attend" type="radio" value="no" required aria-required="true" /><span>No</span></label>
+                      <label class="fr-option fr-option--small" for="attendYes"><input id="attendYes" name="attend" type="radio" value="yes" data-invalid-message="Almost! Just choose Yes or No." /><span>Yes</span></label>
+                      <label class="fr-option fr-option--small" for="attendNo"><input id="attendNo" name="attend" type="radio" value="no" /><span>No</span></label>
                     </div>
                   </fieldset>
                 </fieldset>
               </div>
 
-              <div class="give-question" data-step data-step-title="Last of all: our newsletter, and sending your sign up">
-                <div class="give-newsletter">
+              <!-- ============ 5. Check and send (Check the details, in memory) ============ -->
+              <div class="give-question" data-step data-stage="5" data-step-title="Last of all: check your answers, and send" data-review-step>
+                <h2 class="give-scope-legend fr-review-heading"><span data-say-raising="Check your answers" data-say-memory="Check the details">Check your answers</span></h2>
+                <p class="give-field-help fr-lead-help">Something not right? Press Back to change it.</p>
+                <dl class="fr-review" data-review></dl>
+                <div class="give-newsletter" data-paths="raising event">
                   <label class="give-check give-newsletter-check" for="newsletterOk">
                     <input class="give-check-box" id="newsletterOk" name="newsletterOk" type="checkbox" />
                     <span class="give-check-text"><strong>Add me to our newsletter.</strong> A warm little update from NBCC on the difference your support helps make. Unsubscribe anytime.</span>
@@ -545,26 +721,37 @@
                 <div class="fr-captcha" id="fundraiseCaptcha" hidden></div>
                 <input type="hidden" id="captchaToken" name="captchaToken" value="" />
                 <div class="give-cta-row">
-                  <button class="btn btn-primary give-cta" type="submit" data-submit>Send my sign up</button>
+                  <button class="btn btn-primary give-cta" type="submit" data-submit><span data-say-raising="Send my sign up" data-say-memory="Send the details">Send my sign up</span></button>
                 </div>
                 <p class="form-privacy">We handle your details as set out in our <a href="/privacy">Privacy notice</a>. Nothing goes on our website until we have checked it with you.</p>
                 <p class="form-status" id="formStatus" role="status" aria-live="polite"></p>
+              </div>
+
+              <!-- The sign up tidy: Back and Next, for the step showing (assets/js/fundraise-steps.js). -->
+              <div class="fr-step-nav" data-step-nav hidden>
+                <button class="btn btn-ghost fr-step-back" type="button" data-back>Back</button>
+                <button class="btn btn-primary fr-step-next" type="button" data-next>Next</button>
               </div>
             </form>
           </div>
 
           <div class="card card-lg fr-panel fr-thanks" data-fundraise-thanks hidden tabindex="-1">
-            <span class="eyebrow">Sign up received</span>
+            <span class="eyebrow"><span data-thanks-eyebrow>Sign up received</span></span>
             <h2>Thank you<span data-thanks-name></span>.</h2>
             <div class="rule"><i></i></div>
             <p data-thanks-emailed>We have your sign up, and we have emailed you to say so. Here is what happens next.</p>
-            <p data-thanks-memory hidden>We have your sign up. Someone from NBCC will give you a call in the next few days, and we will check everything with you before the page goes live. There is no rush at all.</p>
-            <ol class="fr-steps">
+            <ol class="fr-steps" data-thanks-steps>
               <li>Someone from NBCC reads it and gets in touch, usually within a few days.</li>
-              <li data-thanks-raising>Once we have said yes, we email you the link to your own page and its QR code, ready to share.</li>
+              <li>Once we have said yes, we email you the link to your page and its QR code, ready to share.</li>
+              <li data-thanks-listed data-say-undated="We&rsquo;ll list it on Get involved once you&rsquo;ve told us the date.">We also list it on our Get involved page, so anyone can find it.</li>
               <li data-thanks-team hidden>We also email you the link for your team to join, and invite anyone you added.</li>
-              <li data-thanks-event hidden>Once we have said yes, and if you asked us to, we add it to our Get involved page.</li>
-              <li>Anything you asked for, like posters or a bucket, we sort out with you.</li>
+              <li>Your welcome pack comes in the post, with anything you asked for, like posters or a bucket.</li>
+            </ol>
+            <!-- The sign up tidy (the appropriateness audit): in memory of someone, gently. -->
+            <ol class="fr-steps" data-thanks-memory hidden>
+              <li>Someone from NBCC will ring you in the next few days to go through it with you.</li>
+              <li>Once you are happy with it, we will put the page live and email you the link.</li>
+              <li>If you asked for envelopes or posters, we will get them to you in time for the service.</li>
             </ol>
             <p><a class="btn btn-ghost" href="/">Back to the home page</a></p>
           </div>

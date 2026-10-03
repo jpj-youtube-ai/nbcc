@@ -48,7 +48,10 @@ export type FundraiserErrorReason =
   // Team pages: a team, or a page still on one, raises money: it can never be made an event.
   | "team_path"
   // Team pages: a team that shares must say whose split it is.
-  | "team_mode_missing";
+  | "team_mode_missing"
+  // The sign up tidy: a T-shirt size is asked only for a sporting event still waiting for one.
+  | "not_sporting"
+  | "has_size";
 
 export class FundraiserError extends Error {
   constructor(
@@ -141,6 +144,9 @@ const RECORD_COLUMNS = `f.id, f.slug, f.path, f.kind, f.title, f.description,
          f.is_team, f.team_id, f.team_share_mode, f.team_left_at, f.team_nudge_1_at, f.team_nudge_2_at,
          f.in_memory, f.memory_name, f.memory_dates, f.memory_setup_by, f.memory_permission, f.memory_show_target,
          f.memory_reminder_done_at, f.memory_reminder_done_by,
+         f.is_sporting, f.tshirt_size, f.tshirt_asked_at, f.tshirt_asked_by, f.child_first_name, f.child_consent,
+         f.org_name, f.employer_match, f.memory_director_business, f.memory_family_contact_name,
+         f.memory_family_contact_email, f.call_time, f.date_tbc, f.guardian_first_name,
          (SELECT c.label FROM fundraising_categories c WHERE c.key = f.kind) AS kind_label`;
 const SELECT = `
   SELECT ${RECORD_COLUMNS}
@@ -199,6 +205,8 @@ export function toRecord(r: Row): FundraiserRecord {
       buckets: num(wants.buckets ?? 0),
       // TASK-511: printed QR codes; none on a sign up from before.
       qrCount: num(wants.qrCount ?? 0),
+      // The sign up tidy: collection envelopes, in memory of someone; none on any other.
+      envelopeCount: num(wants.envelopeCount ?? 0),
       shoutOut: Boolean(wants.shoutOut),
       attend: Boolean(wants.attend),
     },
@@ -262,6 +270,21 @@ export function toRecord(r: Row): FundraiserRecord {
     memoryShowTarget: r.memory_show_target == null ? null : Boolean(r.memory_show_target),
     memoryReminderDoneAt: iso(r.memory_reminder_done_at),
     memoryReminderDoneBy: textOrNull(r.memory_reminder_done_by),
+    // The sign up tidy (migrations/1791200000210): null on a sign up from before, or not asked.
+    isSporting: r.is_sporting == null ? null : Boolean(r.is_sporting),
+    tshirtSize: textOrNull(r.tshirt_size),
+    tshirtAskedAt: iso(r.tshirt_asked_at),
+    tshirtAskedBy: textOrNull(r.tshirt_asked_by),
+    childFirstName: textOrNull(r.child_first_name),
+    childConsent: r.child_consent == null ? null : Boolean(r.child_consent),
+    orgName: textOrNull(r.org_name),
+    employerMatch: r.employer_match === "yes" || r.employer_match === "no" || r.employer_match === "not_sure" ? r.employer_match : null,
+    memoryDirectorBusiness: textOrNull(r.memory_director_business),
+    memoryFamilyContactName: textOrNull(r.memory_family_contact_name),
+    memoryFamilyContactEmail: textOrNull(r.memory_family_contact_email),
+    callTime: textOrNull(r.call_time),
+    dateTbc: r.date_tbc === true,
+    guardianFirstName: textOrNull(r.guardian_first_name),
   };
 }
 
@@ -455,12 +478,25 @@ async function insertSignUp(client: PoolClient, s: SignUp, slug: string, extra?:
   const id = Number(inserted.rows[0].id);
   // In memory (Jaimie, 2026-10-03): who it remembers, in its own statement in the same transaction.
   if (s.inMemory) await saveMemory(client, id, s);
+  // The sign up tidy: its new answers, and Get involved or not, in the same transaction.
+  await (await import("./fundraiser-signup-tidy")).saveSignUpExtras(client, id, s);
   await insertAudit(client, {
     actor: "public",
     action: "fundraiser.signed_up",
     entity: "fundraiser",
     entityId: id,
-    data: { slug, path: s.path, kind: s.kind, title: s.title, public: s.public, sharesWithOther: s.sharesWithOther, ...(s.inMemory ? { inMemory: true } : {}) },
+    data: {
+      slug,
+      path: s.path,
+      kind: s.kind,
+      title: s.title,
+      public: s.public,
+      sharesWithOther: s.sharesWithOther,
+      ...(s.inMemory ? { inMemory: true } : {}),
+      // The sign up tidy: they ticked "Yes, that's right" to the split as their page will show it.
+      ...(s.splitConfirmed ? { splitConfirmed: true } : {}),
+      ...(s.listed === false ? { listed: false } : {}),
+    },
   });
   if (extra) await extra(client, id);
   return reread(client, id);

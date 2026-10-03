@@ -1,0 +1,134 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <!-- SEO: a private page, opened from an email; never indexed. -->
+    <title>Choose your T-shirt size | Night Before Christmas Campaign</title>
+    <meta name="description" content="Choose your size for an NBCC T-shirt, for your fundraiser for the Night Before Christmas Campaign." />
+    <meta name="robots" content="noindex, nofollow" />
+
+    <link rel="stylesheet" href="/assets/css/styles.css" />
+    <!-- Community fundraising (TASK-494) has its OWN stylesheet and scripts rather than growing the
+         shared bundle, which donate.html's page weight budget counts. -->
+    <link rel="stylesheet" href="/assets/css/fundraising.css" />
+    <link rel="preload" href="/assets/fonts/playfair-var.woff2" as="font" type="font/woff2" crossorigin />
+    <link rel="preload" href="/assets/fonts/poppins-400.woff2" as="font" type="font/woff2" crossorigin />
+    <script defer src="/assets/js/main.js"></script>
+    <script defer src="/assets/js/fundraise-tshirt.js"></script>
+    <script defer src="/assets/js/pulse.js"></script>
+  </head>
+  <body>
+    <a class="skip-link" href="#main">Skip to content</a>
+    <header class="nav" id="nav" data-region="nav">
+      <div class="wrap">
+        <a class="brand" href="/"><img src="/assets/img/nbcc-logo.png" alt="Night Before Christmas Campaign" width="50" height="50" loading="lazy" /></a>
+        <nav aria-label="Primary">
+          <ul class="nav-links" id="navLinks">
+            <li><a href="/">Home</a></li>
+            <li><a href="/about-us">About</a></li>
+            <li><a href="/donate">Donate</a></li>
+            <li><a href="/contact">Contact</a></li>
+            <li><a href="/supporters">Supporters</a></li>
+          </ul>
+        </nav>
+        <a class="nav-cta" href="/donate">Donate</a>
+        <button class="burger" id="burger" aria-label="Open menu" aria-expanded="false" aria-controls="navLinks"><span></span><span></span><span></span></button>
+      </div>
+    </header>
+
+    <main class="site-main" id="main" tabindex="-1">
+      <!-- The sign up tidy (Jaimie, 2026-10-03): the private page an organiser opens from the email
+           staff send to ask for their T-shirt size (src/routes/fundraise-signup-tidy.ts). The link's
+           token rides after the #, so it never reaches a server in an address;
+           assets/js/fundraise-tshirt.js takes it out of the address bar and posts it. -->
+      <section class="page-top fr-intro" aria-labelledby="tshirt-heading">
+        <div class="wrap">
+          <div class="intro-hero">
+            <span class="eyebrow">Fundraising for NBCC</span>
+            <h1 id="tshirt-heading">What size T-shirt would you like?</h1>
+            <div class="rule"><i></i></div>
+            <p class="lede" data-tshirt-lede>As it&rsquo;s a sporting event, we&rsquo;d love to send you an NBCC T-shirt with your welcome pack.</p>
+          </div>
+        </div>
+      </section>
+
+      <div class="section flush-top">
+        <div class="wrap fr-narrow">
+          <p class="fr-noscript" data-nojs>This page needs JavaScript switched on. You can email your size to <a href="mailto:events@nbcc.scot">events@nbcc.scot</a> instead.</p>
+          <p class="fr-loading" data-tshirt-loading hidden>One moment&hellip;</p>
+
+          <div class="card card-lg fr-panel fr-closed" data-tshirt-gone hidden tabindex="-1">
+            <h2>This link has expired or has already been used</h2>
+            <p>No problem at all. Email <a href="mailto:events@nbcc.scot">events@nbcc.scot</a> or call <a href="tel:+441292811015">01292 811 015</a> and we&rsquo;ll sort your size.</p>
+          </div>
+
+          <form id="tshirtForm" class="fr-form" novalidate hidden>
+            <p class="form-error-summary" role="alert" data-form-error hidden></p>
+            <div class="give-field">
+              <label class="give-scope-legend fr-legend-label" for="tshirtSize">Choose your size<span data-tshirt-name></span></label>
+              <p class="give-field-help fr-lead-help" id="tshirtSizeHelp">For your NBCC T-shirt. If it&rsquo;s for a child, choose their size.</p>
+              <select class="give-field-input fr-select" id="tshirtSize" name="tshirtSize" required aria-required="true" aria-describedby="tshirtSizeHelp" data-invalid-message="Almost! Just choose a T-shirt size.">
+                <option value="">Choose a size</option>
+              </select>
+            </div>
+            <div class="give-cta-row">
+              <button class="btn btn-primary give-cta" type="submit" data-submit>Save my size</button>
+            </div>
+            <p class="form-status" id="formStatus" role="status" aria-live="polite"></p>
+          </form>
+
+          <div class="card card-lg fr-panel fr-thanks" data-tshirt-thanks hidden tabindex="-1">
+            <span class="eyebrow">All sorted</span>
+            <h2>Thank you<span data-thanks-name></span>.</h2>
+            <div class="rule"><i></i></div>
+            <p>We have your size: <strong data-thanks-size></strong>. Your T-shirt will come with your welcome pack.</p>
+            <p><a class="btn btn-ghost" href="/">Back to the home page</a></p>
+          </div>
+        </div>
+      </div>
+    </main>
+
+    <footer class="site-footer" data-region="footer">
+      <div class="wrap">
+        <div class="foot-brand">
+          <img src="/assets/img/nbcc-logo-white.svg" alt="Night Before Christmas Campaign" width="74" height="74" loading="lazy" />
+          <p>A volunteer run Scottish charity in Annbank, Ayrshire, bringing comfort, dignity and joy to children, young people and vulnerable adults across South West Scotland, here all year.</p>
+          <div class="socials">
+            <a href="https://www.instagram.com/nbcc.scot" target="_blank" rel="noopener" aria-label="Instagram"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#F8F5EE" stroke-width="1.8" aria-hidden="true"><rect x="2" y="2" width="20" height="20" rx="5"/><circle cx="12" cy="12" r="4"/><circle cx="17.5" cy="6.5" r="1.2" fill="#F8F5EE" stroke="none"/></svg></a>
+            <a href="https://www.facebook.com/nbcc.scot" target="_blank" rel="noopener" aria-label="Facebook"><svg width="20" height="20" viewBox="0 0 24 24" fill="#F8F5EE" aria-hidden="true"><path d="M14 9h3V6h-3c-2.2 0-4 1.8-4 4v2H7v3h3v6h3v-6h3l1-3h-4v-2c0-.6.4-1 1-1z"/></svg></a>
+            <a href="https://x.com/Nightbeforechr1" target="_blank" rel="noopener" aria-label="X"><svg width="18" height="18" viewBox="0 0 24 24" fill="#F8F5EE" aria-hidden="true"><path d="M18 2h3l-7 8 8 12h-6l-5-7-5 7H3l8-9L3 2h6l4 6z"/></svg></a>
+          </div>
+          <p class="handle">Find us at <b>nbcc.scot</b></p>
+        </div>
+        <div class="foot-col">
+          <h4>Explore</h4>
+          <ul>
+            <li><a href="/">Home</a></li>
+            <li><a href="/about-us">About us</a></li>
+            <li><a href="/donate">Donate</a></li>
+            <li><a href="/contact">Contact</a></li>
+            <li><a href="/supporters">Supporters</a></li>
+            <li><a href="/my-story">Share your story</a></li>
+          </ul>
+        </div>
+        <div class="foot-col">
+          <h4>Ways to give</h4>
+          <ul>
+            <li><a href="/donate">Donate money</a></li>
+            <li><a href="/contact">Donate items</a></li>
+            <li><a href="/contact">Fundraise for us</a></li>
+          </ul>
+        </div>
+      </div>
+      <div class="legal">
+        <div class="wrap">
+          <span>Night Before Christmas Campaign, known as NBCC, is a Scottish Charitable Incorporated Organisation.</span>
+          <span>Scottish Charity Number <a href="https://www.oscr.org.uk/about-charities/search-the-register/charity-details?number=SC047995" target="_blank" rel="noopener">SC047995</a>. Regulated by the Scottish Charity Regulator, OSCR.</span>
+          <span>The Elves Workshop, Annbank Village Hall, Weston Avenue, Annbank, KA6 5EE</span>
+        </div>
+      </div>
+    </footer>
+  </body>
+</html>

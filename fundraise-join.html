@@ -16,6 +16,7 @@
     <link rel="preload" href="/assets/fonts/playfair-var.woff2" as="font" type="font/woff2" crossorigin />
     <link rel="preload" href="/assets/fonts/poppins-400.woff2" as="font" type="font/woff2" crossorigin />
     <script defer src="/assets/js/main.js"></script>
+    <script defer src="/assets/js/fundraise-steps.js"></script>
     <script defer src="/assets/js/fundraise-join.js"></script>
     <script defer src="/assets/js/pulse.js"></script>
   </head>
@@ -49,7 +50,9 @@
             <span class="eyebrow">Join a team</span>
             <h1 id="join-heading">Join __TEAM_TITLE__</h1>
             <div class="rule"><i></i></div>
-            <p class="lede">Raise money for NBCC with a page of your own. Everything you raise counts towards the team&rsquo;s total too. It only takes a couple of minutes.</p>
+            <p class="lede">Raise money for NBCC with a page of your own. Everything you raise counts towards the team&rsquo;s total too.</p>
+            <!-- The sign up tidy (Jaimie, 2026-10-03): one line to set expectations. -->
+            <p class="fr-one-liner">It only takes a couple of minutes.</p>
             <!-- join:facts -->
           </div>
         </div>
@@ -66,54 +69,80 @@
             <p class="fr-noscript" data-nojs>This form needs JavaScript switched on. You can email <a href="mailto:events@nbcc.scot">events@nbcc.scot</a> to join the team instead.</p>
             <form id="joinForm" class="fr-form" novalidate hidden data-needs-js data-team-slug="__TEAM_SLUG__">
               <div hidden aria-hidden="true">
-                <label for="company">Leave blank
-                  <input type="text" id="company" name="company" tabindex="-1" autocomplete="off" />
+                <!-- A trap for bots, never seen or reached by a person. Not called "company" any more:
+                     browsers fill that in for real people. -->
+                <label for="nbccCheck">Leave this one empty
+                  <input type="text" id="nbccCheck" name="nbccCheck" tabindex="-1" autocomplete="off" />
                 </label>
               </div>
+              <!-- The sign up tidy: one question at a time with Next and Back, and a progress bar of
+                   three stages (assets/js/fundraise-steps.js). -->
+              <nav class="fr-progress" aria-label="Your progress" data-progress hidden>
+                <p class="fr-progress__now"><span data-progress-step>Step 1 of 3</span><span class="fr-progress__lift" data-progress-lift></span></p>
+                <ol class="fr-progress__list" role="list" data-progress-list></ol>
+              </nav>
               <p class="form-error-summary" role="alert" data-form-error hidden></p>
+              <p class="sr-only" aria-live="polite" data-step-news></p>
 
-              <div class="give-question">
+              <div class="give-question" data-step data-stage="1">
                 <fieldset class="fr-fieldset">
                   <legend class="give-scope-legend">Who&rsquo;s joining the team?</legend>
                   <p class="give-field-help fr-lead-help">Setting this up for a child? Put their name here, and your own email below.</p>
                   <div class="fr-row">
                     <div class="give-field">
                       <label for="firstName">First name <span class="give-req" aria-hidden="true">*</span></label>
-                      <input class="give-field-input" id="firstName" name="firstName" type="text" maxlength="50" autocomplete="given-name" required aria-required="true" data-invalid-message="Please tell us the first name" />
+                      <input class="give-field-input" id="firstName" name="firstName" type="text" maxlength="50" autocomplete="given-name" required aria-required="true" data-invalid-message="Almost! Just add the first name." />
                     </div>
                     <div class="give-field">
                       <label for="lastName">Surname <span class="give-req" aria-hidden="true">*</span></label>
-                      <input class="give-field-input" id="lastName" name="lastName" type="text" maxlength="50" autocomplete="family-name" required aria-required="true" data-invalid-message="Please tell us the surname" />
+                      <input class="give-field-input" id="lastName" name="lastName" type="text" maxlength="50" autocomplete="family-name" required aria-required="true" data-invalid-message="Almost! Just add the surname." />
                     </div>
                   </div>
                   <div class="give-field">
                     <label for="email">Email <span class="give-req" aria-hidden="true">*</span></label>
-                    <input class="give-field-input" id="email" name="email" type="email" maxlength="254" autocomplete="email" required aria-required="true" placeholder="you@example.com" aria-describedby="emailHelp" />
+                    <input class="give-field-input" id="email" name="email" type="email" maxlength="254" autocomplete="email" required aria-required="true" placeholder="you@example.com" aria-describedby="emailHelp" data-invalid-message="Almost! Just add an email, like name@example.com." />
                     <p class="give-field-help" id="emailHelp">If they&rsquo;re under 18, give a parent or guardian&rsquo;s email. We only use it about this page.</p>
                   </div>
+                  <!-- Jaimie, 2026-10-03: a page for someone under 18 is set up by their parent or guardian,
+                       who says so and is greeted in its emails ("Hi Sarah, this is about Jack's page."). -->
+                  <fieldset class="fr-fieldset fr-subgroup" id="memberUnder18Group" role="radiogroup" aria-required="true">
+                    <legend class="fr-sublegend">Is the person joining under 18?</legend>
+                    <div class="fr-options fr-options--yesno">
+                      <label class="fr-option fr-option--small" for="memberUnder18Yes"><input id="memberUnder18Yes" name="memberUnder18" type="radio" value="yes" required aria-required="true" data-invalid-message="Almost! Just tell us whether the person joining is under 18." /><span>Yes</span></label>
+                      <label class="fr-option fr-option--small" for="memberUnder18No"><input id="memberUnder18No" name="memberUnder18" type="radio" value="no" required aria-required="true" /><span>No</span></label>
+                    </div>
+                    <div class="fr-subfields" data-guardian-fields hidden>
+                      <div class="give-field">
+                        <label for="guardianFirstName">Your first name, as their parent or guardian <span class="give-req" aria-hidden="true">*</span></label>
+                        <input class="give-field-input" id="guardianFirstName" name="guardianFirstName" type="text" maxlength="50" autocomplete="given-name" aria-describedby="guardianFirstNameHelp" data-invalid-message="Almost! Just add your first name." />
+                        <p class="give-field-help" id="guardianFirstNameHelp">So our emails about their page say hello to you.</p>
+                      </div>
+                      <label class="give-check fr-permission" for="guardianConsent"><input class="give-check-box" id="guardianConsent" name="guardianConsent" type="checkbox" data-invalid-message="Almost! Just tick to say you're happy for their first name to be shown." /><span class="give-check-text">I&rsquo;m their parent or guardian, and I&rsquo;m happy for their first name and any photo to be shown on the page and our social media.</span></label>
+                    </div>
+                  </fieldset>
                 </fieldset>
               </div>
 
-              <div class="give-question">
+              <div class="give-question" data-step data-stage="1" data-age-step>
                 <fieldset class="fr-fieldset" id="over18Group" role="radiogroup" aria-required="true">
                   <legend class="give-scope-legend">Are you 18 or over?</legend>
                   <p class="give-field-help fr-lead-help">If you&rsquo;re a parent or guardian setting this up for a child, answer for yourself.</p>
                   <div class="fr-options fr-options--yesno">
-                    <label class="fr-option fr-option--small" for="over18Yes"><input id="over18Yes" name="over18" type="radio" value="yes" required aria-describedby="over18Note" data-invalid-message="Tell us whether you are 18 or over" /><span>Yes</span></label>
+                    <label class="fr-option fr-option--small" for="over18Yes"><input id="over18Yes" name="over18" type="radio" value="yes" required aria-describedby="over18Note" data-invalid-message="Almost! Just tell us whether you're 18 or over." /><span>Yes</span></label>
                     <label class="fr-option fr-option--small" for="over18No"><input id="over18No" name="over18" type="radio" value="no" required aria-describedby="over18Note" /><span>No</span></label>
                   </div>
                   <p class="fr-note fr-note--live" id="over18Note" aria-live="polite" data-age-note></p>
                 </fieldset>
               </div>
 
-              <div class="give-question" data-after-age>
+              <div class="give-question" data-step data-stage="2" data-after-age>
                 <div class="give-field fr-target">
                   <label class="give-custom-label" for="target">Your own target <span class="give-optional">(optional)</span></label>
-                  <div class="give-custom-field"><span class="give-custom-currency" aria-hidden="true">&pound;</span><input class="give-custom-input" id="target" name="target" type="number" inputmode="numeric" min="10" max="100000" step="1" aria-describedby="targetHelp" data-invalid-message="A target can be from &pound;10 to &pound;100,000" /></div>
+                  <div class="give-custom-field"><span class="give-custom-currency" aria-hidden="true">&pound;</span><input class="give-custom-input" id="target" name="target" type="number" inputmode="numeric" min="10" max="100000" step="1" aria-describedby="targetHelp" data-invalid-message="Almost! A target can be from &pound;10 to &pound;100,000." /></div>
                   <p class="give-field-help" id="targetHelp">Anything from &pound;10 to &pound;100,000. Your page shows how close you are.</p>
                 </div>
                 <div class="give-field">
-                  <label for="why">Why are you taking part? <span class="give-optional">(optional)</span></label>
+                  <label for="why"><span data-why-words>Why are you taking part?</span> <span class="give-optional">(optional)</span></label>
                   <textarea class="give-field-input fr-short-text" id="why" name="why" rows="2" maxlength="300" aria-describedby="whyHelp"></textarea>
                   <p class="give-field-help" id="whyHelp">A line or two for your page. Up to 300 characters.</p>
                 </div>
@@ -121,30 +150,32 @@
               </div>
 
               <!-- Only when the team's split is just the team organiser's: each member is asked. -->
-              <div class="give-question" data-after-age data-join-share>
+              <div class="give-question" data-step data-stage="2" data-after-age data-join-share>
                 <fieldset class="fr-fieldset" id="sharesGroup" role="radiogroup" aria-required="true">
                   <legend class="give-scope-legend">Are you sharing what you raise with another cause?</legend>
                   <p class="give-field-help fr-lead-help">For example, half for NBCC and half for another charity or a local group.</p>
                   <div class="fr-options fr-options--yesno">
-                    <label class="fr-option fr-option--small" for="sharesYes"><input id="sharesYes" name="sharesWithOther" type="radio" value="yes" required data-invalid-message="Tell us whether you are sharing what you raise with another cause" /><span>Yes</span></label>
+                    <label class="fr-option fr-option--small" for="sharesYes"><input id="sharesYes" name="sharesWithOther" type="radio" value="yes" required data-invalid-message="Almost! Just tell us whether you're sharing what you raise." /><span>Yes</span></label>
                     <label class="fr-option fr-option--small" for="sharesNo"><input id="sharesNo" name="sharesWithOther" type="radio" value="no" required /><span>No</span></label>
                   </div>
                   <div class="fr-split-fields" data-split-fields hidden>
                     <div class="give-field">
                       <label for="nbccSharePercent">What percentage comes to NBCC? <span class="give-req" aria-hidden="true">*</span></label>
-                      <div class="fr-percent"><input class="give-field-input" id="nbccSharePercent" name="nbccSharePercent" type="number" inputmode="numeric" min="1" max="99" step="1" aria-describedby="nbccSharePercentHelp" data-invalid-message="Give a whole number from 1 to 99" /><span class="fr-percent__sign" aria-hidden="true">%</span></div>
+                      <div class="fr-percent"><input class="give-field-input" id="nbccSharePercent" name="nbccSharePercent" type="number" inputmode="numeric" min="1" max="99" step="1" aria-describedby="nbccSharePercentHelp" data-invalid-message="Almost! Just add a whole number from 1 to 99." /><span class="fr-percent__sign" aria-hidden="true">%</span></div>
                       <p class="give-field-help" id="nbccSharePercentHelp">A whole number from 1 to 99. For half, put 50.</p>
                     </div>
                     <div class="give-field">
                       <label for="otherCauseName">The other cause&rsquo;s name <span class="give-req" aria-hidden="true">*</span></label>
-                      <input class="give-field-input" id="otherCauseName" name="otherCauseName" type="text" maxlength="120" autocomplete="off" aria-describedby="otherCauseNameHelp" data-invalid-message="Tell us the name of the other cause" />
+                      <input class="give-field-input" id="otherCauseName" name="otherCauseName" type="text" maxlength="120" autocomplete="off" aria-describedby="otherCauseNameHelp" data-invalid-message="Almost! Just add the other cause&rsquo;s name." />
                       <p class="give-field-help" id="otherCauseNameHelp">As it should appear on your page. Please check it: once we have approved your page, you cannot change the split yourself.</p>
                     </div>
                   </div>
                 </fieldset>
               </div>
 
-              <div class="give-question" data-after-age>
+              <div class="give-question" data-step data-stage="3" data-step-title="Last of all: join the team" data-after-age>
+                <p class="give-scope-legend fr-review-heading">Ready to join?</p>
+                <p class="give-field-help fr-lead-help">Something not right? Press Back to change it.</p>
                 <div class="fr-captcha" id="joinCaptcha" hidden></div>
                 <input type="hidden" id="captchaToken" name="captchaToken" value="" />
                 <div class="give-cta-row">
@@ -152,6 +183,11 @@
                 </div>
                 <p class="form-privacy">We handle your details as set out in our <a href="/privacy">Privacy notice</a>. Nothing goes on our website until we have checked it.</p>
                 <p class="form-status" id="formStatus" role="status" aria-live="polite"></p>
+              </div>
+
+              <div class="fr-step-nav" data-step-nav hidden>
+                <button class="btn btn-ghost fr-step-back" type="button" data-back>Back</button>
+                <button class="btn btn-primary fr-step-next" type="button" data-next>Next</button>
               </div>
             </form>
           </div>

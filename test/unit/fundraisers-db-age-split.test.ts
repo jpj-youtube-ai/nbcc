@@ -41,7 +41,10 @@ const signUp = (over: Record<string, unknown>) => {
     path: "raising", kind: "walk", title: "Sam's Walk", description: "Five miles.", eventDate: "", startTime: "", venue: "",
     town: "Exampleton", targetPence: 20000, public: true, firstName: "Sam", lastName: "Sample", email: "sam@example.com",
     phone: "07700 900456", instagram: "", facebook: "", socialOk: true, over18: true,
-    wants: { shoutOut: false, attend: false }, newsletterOk: false, ...over,
+    wants: { shoutOut: false, attend: false }, newsletterOk: false,
+    // The sign up tidy (Jaimie, 2026-10-03): every new sign up gives an address, for the welcome pack,
+    // and someone sharing ticks to say the split is right.
+    postLine1: "1 Example Road", postTown: "Exampleton", postPostcode: "EX1 1EX", splitConfirmed: true, ...over,
   });
   if (!r.success) throw new Error(JSON.stringify(r.error.issues));
   return r.data;

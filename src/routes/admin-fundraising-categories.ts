@@ -9,7 +9,7 @@ import { KEY_PATTERN, categoryLabelSchema } from "../fundraising/categories";
 //
 //   GET   /api/admin/fundraising/categories          every category, A to Z    fundraising view
 //   POST  /api/admin/fundraising/categories          { label }: add one          an admin
-//   PATCH /api/admin/fundraising/categories/:key     { label?, active? }         an admin
+//   PATCH /api/admin/fundraising/categories/:key     { label?, active?, sporty? } an admin
 //
 // Seeing the list needs only Fundraising view, as the sign up editor offers it. Adding, renaming and
 // hiding are for admins: they change the public sign up form. There is no delete: a category is kept
@@ -61,9 +61,10 @@ export async function postAdminCategory(req: Request, res: Response): Promise<Re
 }
 
 const changeSchema = z
-  .object({ label: categoryLabelSchema.optional(), active: z.boolean().optional() })
+  // The sign up tidy: sporty decides whether it is offered for a sporting event or for the rest.
+  .object({ label: categoryLabelSchema.optional(), active: z.boolean().optional(), sporty: z.boolean().optional() })
   .strict()
-  .refine((b) => b.label !== undefined || b.active !== undefined, { message: "There is nothing to change." });
+  .refine((b) => b.label !== undefined || b.active !== undefined || b.sporty !== undefined, { message: "There is nothing to change." });
 
 export async function patchAdminCategory(req: Request, res: Response): Promise<Response | void> {
   const claims = await authorizeSectionAsAdmin(req, res, "fundraising");

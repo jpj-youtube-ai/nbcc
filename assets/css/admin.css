@@ -2626,6 +2626,12 @@ textarea.fx-call-input{min-height:88px;line-height:1.5;resize:vertical;field-siz
 /* Fundraising categories: the Categories card. A rename opens in its row; on a phone the buttons go
    under the box rather than squeezing it. */
 #view-fundraising .fr-cat-note { font-size: 0.85rem; color: var(--slate-soft); }
+/* The sign up tidy: a Sporting tick on each category, and the sport and T-shirt panel. */
+#view-fundraising .fr-cat-sporty { display: inline-flex; align-items: center; gap: 6px; min-height: 44px; margin-right: 6px; font-size: 0.9rem; font-weight: 600; cursor: pointer; }
+#view-fundraising .fr-cat-sporty input { width: 18px; height: 18px; accent-color: var(--holly); }
+#view-fundraising .fr-tshirt-state { margin: 0 0 8px; }
+#view-fundraising .fr-tshirt-select { max-width: 260px; }
+#view-fundraising .fr-welcome-form .fr-actions { flex-wrap: wrap; gap: 8px; }
 #view-fundraising .fr-cats .fr-people-actions { align-items: center; }
 #view-fundraising .fr-cats li.fr-cat-editing { align-items: flex-end; gap: 8px 16px; }
 #view-fundraising .fr-cats li.fr-cat-editing .fr-people-who { display: flex; flex-direction: column; gap: 4px; }

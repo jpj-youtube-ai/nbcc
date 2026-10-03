@@ -19,6 +19,7 @@ import {
 } from "../fundraising/teams";
 import { sendJoinEmails, sendMemberRemovedEmail } from "../fundraising/team-send";
 import { fromOurOwnPage, ownFundraiser, signedIn } from "./fundraise";
+import { trapFilled } from "../fundraising/signup-tidy";
 
 // Team pages (Jaimie, 2026-10-03): the public side of a team. Everything is OFF while fundraising
 // is switched off, like the rest of fundraising.
@@ -64,7 +65,10 @@ async function openTeam(slug: string): Promise<(FundraiserRecord & { meter: unkn
 const joinLimiter = createRateLimiter({ max: 5, windowMs: 10 * 60_000 });
 
 export async function postJoinTeam(req: Request, res: Response): Promise<Response> {
-  if (typeof req.body?.company === "string" && req.body.company.trim() !== "") return res.status(200).json({ status: "received" });
+  if (trapFilled(req.body)) {
+    console.warn("team join: trap box filled in");
+    return res.status(200).json({ status: "received" });
+  }
   if (!isLoopback(req) && !joinLimiter.allow(req.ip ?? "unknown", Date.now())) {
     return res.status(429).json({ error: "Too many sign ups. Please try again shortly." });
   }

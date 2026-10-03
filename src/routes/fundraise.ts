@@ -61,6 +61,7 @@ import { printStatusFor } from "./fundraise-materials";
 import { loadCategories } from "../db/fundraising-categories";
 import { KEY_PATTERN, isActiveCategory } from "../fundraising/categories";
 import { checkTeamSignUp } from "../fundraising/teams";
+import { trapFilled } from "../fundraising/signup-tidy";
 import { familyGifts, isInMemory, publicMemory } from "../fundraising/in-memory";
 
 /** In memory: the private area's gifts list, in the wall's shape, with no amounts. */
@@ -114,9 +115,15 @@ const signUpLimiter = createRateLimiter({ max: 5, windowMs: 10 * 60_000 });
 // limited: behind the load balancer req.ip is always the real client, so only the CI suite and
 // local development arrive that way, and every real visitor stays limited.
 
+let trapHits = 0;
+
 export async function postFundraise(req: Request, res: Response): Promise<Response> {
   // Honeypot: a real browser never fills the hidden `company` field. Pretend success, store nothing.
-  if (typeof req.body?.company === "string" && req.body.company.trim() !== "") {
+  // The sign up tidy (after review): the box is "nbccCheck" now, as browsers fill in "company" for
+  // real people; "company" still counts, for a page left open from before. Only a count is logged.
+  if (trapFilled(req.body)) {
+    trapHits += 1;
+    console.warn(`fundraise sign up: trap box filled in, ${trapHits} so far`);
     return res.status(200).json({ status: "received" });
   }
   if (!isLoopbackRequest(req) && !signUpLimiter.allow(req.ip ?? "unknown", Date.now())) {

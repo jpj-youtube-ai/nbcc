@@ -9,6 +9,8 @@ import {
   sendFundraiseNewsRejected,
   sendFundraiseStaff,
   sendFundraiseThanks,
+  sendFundraiseMemoryReceipt,
+  sendFundraiseTshirtAsk,
 } from "../clients/email";
 import { claimNextWaitingLiveEmail, fundraisingIsOn, markLiveEmailWaiting } from "../db/fundraisers";
 import {
@@ -26,6 +28,8 @@ import { EVENT_PAGE_PREFIX, hasPage, type FundraiserRecord } from "./model";
 import type { TeamSignUp } from "./teams";
 import { isInMemory } from "./in-memory";
 import { buildInMemoryApprovedEmail } from "./memory-emails";
+import { buildMemoryReceiptEmail, buildTshirtAskEmail, greetGuardian } from "./signup-tidy-emails";
+import { tshirtUrl } from "./signup-tidy";
 
 // TASK-493: sending the fundraising emails. TASK-497 adds "Your page is live" held until the switch
 // goes on (sendWaitingLiveEmails) and the two emails about a change. Each is best effort and runs after its write has
@@ -66,10 +70,28 @@ export function manageUrl(): string {
   return `${base()}/fundraise/manage`;
 }
 
+/** In memory: the short receipt (src/fundraising/signup-tidy-emails.ts). Best effort. */
+async function sendMemoryReceipt(f: FundraiserRecord): Promise<void> {
+  try {
+    const mail = buildMemoryReceiptEmail();
+    await sendFundraiseMemoryReceipt(f.name, { email: f.email, from: config.BALL_FROM_EMAIL, replyTo: config.BALL_FROM_EMAIL, ...mail });
+  } catch (err) {
+    logFailure("in memory receipt", err);
+  }
+}
+
+/** The sign up tidy: ask an organiser for their T-shirt size, with the private link. Staff send it. */
+export async function sendTshirtAsk(f: Pick<FundraiserRecord, "name" | "email" | "firstName">, token: string): Promise<void> {
+  const mail = buildTshirtAskEmail(f.firstName ?? f.name, tshirtUrl(base(), token));
+  await sendFundraiseTshirtAsk(f.name, { email: f.email, from: config.BALL_FROM_EMAIL, replyTo: config.BALL_FROM_EMAIL, ...mail });
+}
+
 /** Thank the organiser, and tell the events inbox, after a sign up. */
 export async function sendSignUpEmails(f: FundraiserRecord, team?: TeamSignUp): Promise<void> {
   // In memory (Jaimie, 2026-10-03): no thank you for signing up, as it is upbeat. Staff ring them.
+  // The sign up tidy: a short receipt instead, with fixed words.
   if (!isInMemory(f)) await sendSignUpThanks(f);
+  else await sendMemoryReceipt(f);
   try {
     // Team pages: a team's sign up says so, whose split it is, and who is held to be invited.
     const mail = buildSignUpStaffEmail({ ...f, id: f.id, ...(team?.isTeam ? { team } : {}) }, { adminUrl: `${base()}/admin` });
@@ -106,10 +128,12 @@ export async function sendApprovedEmail(f: FundraiserRecord): Promise<boolean> {
   }
   try {
     const page = hasPage(f);
-    const mail = buildApprovedEmail(f, {
+    // A member page for someone under 18: the email greets their parent or guardian.
+    const built = buildApprovedEmail(f, {
       pageUrl: page ? pageOf(f) : null,
       manageUrl: page ? `${base()}/fundraise/manage` : null,
     });
+    const mail = greetGuardian(built, f);
     await sendFundraiseApproved(f.name, { email: f.email, from: config.BALL_FROM_EMAIL, replyTo: config.BALL_FROM_EMAIL, ...mail });
     return true;
   } catch (err) {
@@ -184,9 +208,9 @@ export async function sendEditDecisionEmail(f: FundraiserRecord, approved: boole
     const pageLive = hasPage(f) && pagesOpen;
     if (approved) {
       const pageUrl = pageLive ? pageOf(f) : null;
-      await sendFundraiseEditApproved(f.name, { ...message, ...buildEditApprovedEmail(f, { pageUrl }) });
+      await sendFundraiseEditApproved(f.name, { ...message, ...greetGuardian(buildEditApprovedEmail(f, { pageUrl }), f) });
     } else {
-      await sendFundraiseEditRejected(f.name, { ...message, ...buildEditRejectedEmail(f, { pageLive }) });
+      await sendFundraiseEditRejected(f.name, { ...message, ...greetGuardian(buildEditRejectedEmail(f, { pageLive }), f) });
     }
     return true;
   } catch (err) {
@@ -232,9 +256,9 @@ export async function sendNewsDecisionEmail(f: FundraiserRecord, approved: boole
     const pageLive = hasPage(f) && pagesOpen;
     if (approved) {
       const pageUrl = pageLive ? pageOf(f) : null;
-      await sendFundraiseNewsApproved(f.name, { ...message, ...buildNewsApprovedEmail(f, { pageUrl }) });
+      await sendFundraiseNewsApproved(f.name, { ...message, ...greetGuardian(buildNewsApprovedEmail(f, { pageUrl }), f) });
     } else {
-      await sendFundraiseNewsRejected(f.name, { ...message, ...buildNewsRejectedEmail(f, { pageLive }) });
+      await sendFundraiseNewsRejected(f.name, { ...message, ...greetGuardian(buildNewsRejectedEmail(f, { pageLive }), f) });
     }
     return true;
   } catch (err) {

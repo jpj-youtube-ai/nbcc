@@ -21,7 +21,8 @@ import type { FundraiserRecord, Meter, WallSourceRow } from "./model";
 //
 // Plain, gentle words, with no dashes.
 
-export const SETUP_BY = ["family", "friend", "funeral_director"] as const;
+// The sign up tidy (the appropriateness audit): someone else, like a colleague, club or church.
+export const SETUP_BY = ["family", "friend", "funeral_director", "someone_else"] as const;
 export type MemorySetupBy = (typeof SETUP_BY)[number];
 
 /** Who set it up, as the admin and the staff email say it. */
@@ -29,6 +30,7 @@ export const SETUP_BY_LABELS: Record<MemorySetupBy, string> = {
   family: "A family member",
   friend: "A friend",
   funeral_director: "A funeral director",
+  someone_else: "Someone else, like a colleague, club or church",
 };
 
 export const MEMORY_NAME_MAX = 100;

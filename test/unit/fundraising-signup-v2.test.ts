@@ -36,6 +36,10 @@ const signUp = (over: Record<string, unknown> = {}) => ({
   over18: true,
   sharesWithOther: false,
   wants: { posterCount: 0, leafletCount: 0, bucketCount: 0, tinCount: 0, qrCount: 0, shoutOut: false, attend: false },
+  // The sign up tidy (Jaimie, 2026-10-03): every new sign up gives an address, for the welcome pack.
+  postLine1: "1 Example Road",
+  postTown: "Exampleton",
+  postPostcode: "EX1 1EX",
   newsletterOk: false,
   ...over,
 });
@@ -170,13 +174,20 @@ describe("printed QR codes", () => {
   });
 
   it("needs an address to post them to", () => {
-    expect(Object.keys(fields(signUp({ wants: { qrCount: 20, shoutOut: false, attend: false } }))).sort()).toEqual(["postLine1", "postPostcode", "postTown"]);
+    const noAddress = { postLine1: "", postTown: "", postPostcode: "" };
+    expect(Object.keys(fields(signUp({ wants: { qrCount: 20, shoutOut: false, attend: false }, ...noAddress }))).sort()).toEqual([
+      "postLine1",
+      "postPostcode",
+      "postTown",
+    ]);
   });
 
-  it("are for a page, so an event, which has none, asks for none", () => {
+  // The sign up tidy (Jaimie, 2026-10-03): an event's page has a QR code now, so an event may ask for
+  // printed ones too, posted to the address it gives.
+  it("are for a page, and an event has one now, so an event may ask for some", () => {
     const d = ok(signUp({ path: "event", kind: "quiz", cardLine: "A quiz.", booking: "free", venue: "Hall", wants: { qrCount: 20, shoutOut: false, attend: false } }));
-    expect(d.wants.qrCount).toBe(0);
-    expect(d.postLine1).toBeNull();
+    expect(d.wants.qrCount).toBe(20);
+    expect(d.postLine1).toBe("1 Example Road");
   });
 });
 

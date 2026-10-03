@@ -104,6 +104,12 @@ const signUp = (over: Record<string, unknown> = {}) => ({
   over18: true,
   sharesWithOther: false,
   wants: { shoutOut: false, attend: false },
+  // The sign up tidy (Jaimie, 2026-10-03): every new sign up gives an address, for the welcome pack,
+  // and someone sharing ticks to say the split is right.
+  postLine1: "1 Example Road",
+  postTown: "Exampleton",
+  postPostcode: "EX1 1EX",
+  splitConfirmed: true,
   newsletterOk: true,
   ...over,
 });
@@ -168,6 +174,19 @@ describe("signing up", () => {
     const res = await run(postFundraise, { body: signUp({ company: "Spam Ltd" }) });
     expect(res.statusCode).toBe(200);
     expect(db.createFundraiser).not.toHaveBeenCalled();
+  });
+
+  // The sign up tidy (after review): the trap box is no longer called "company" (autofill fills that
+  // in for real people); the old name still counts, for a page left open. Hits are only counted.
+  it("pretends the same for the trap box under its new name, and logs only a count", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    const res = await run(postFundraise, { body: signUp({ nbccCheck: "anything", email: "bot@example.com" }) });
+    expect(res.statusCode).toBe(200);
+    expect(db.createFundraiser).not.toHaveBeenCalled();
+    expect(warn).toHaveBeenCalledTimes(1);
+    expect(String(warn.mock.calls[0].join(" "))).toMatch(/fundraise sign up: trap box filled in, \d+ so far/);
+    expect(String(warn.mock.calls[0].join(" "))).not.toContain("bot@example.com");
+    warn.mockRestore();
   });
 
   it("limits each address to five sign ups in ten minutes", async () => {

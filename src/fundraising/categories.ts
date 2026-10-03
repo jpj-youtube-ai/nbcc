@@ -21,6 +21,12 @@ export interface Category {
   label: string;
   /** On the sign up form. False: no longer offered, but still named for the sign ups that chose it. */
   active: boolean;
+  /** The sign up tidy: a sporting category (Run, Walk, Santa dash...). Someone raising money for a
+   * sporting event sees only these, with Other; anyone else sees the rest, with Other. */
+  sporty?: boolean;
+  /** The sign up tidy: a way of giving in memory of someone ("Donations instead of flowers"),
+   * offered only on the in memory path, and never on the others. */
+  memoryOnly?: boolean;
   createdAt?: string | null;
   createdBy?: string | null;
   retiredAt?: string | null;
@@ -40,17 +46,17 @@ export const LABEL_MAX = 40;
 /** What the form offers to start with, as the migration seeds it. */
 export const STARTING_CATEGORIES: readonly Category[] = [
   // "bake_sale" was "A bake sale or coffee morning", so a bake sale on its own takes a key of its own.
-  { key: "bake_sale_2", label: "Bake sale", active: true },
-  { key: "birthday", label: "Birthday", active: true },
-  { key: "coffee_morning", label: "Coffee morning", active: true },
-  { key: "party", label: "Party", active: true },
-  { key: "quiz", label: "Quiz", active: true },
-  { key: "run", label: "Run", active: true },
-  { key: "santa_dash", label: "Santa dash", active: true },
-  { key: "school_collection", label: "School collection", active: true },
-  { key: "walk", label: "Walk", active: true },
-  { key: "workplace_collection", label: "Workplace collection", active: true },
-  { key: OTHER_KIND, label: "Other", active: true },
+  { key: "bake_sale_2", label: "Bake sale", active: true, sporty: false },
+  { key: "birthday", label: "Birthday", active: true, sporty: false },
+  { key: "coffee_morning", label: "Coffee morning", active: true, sporty: false },
+  { key: "party", label: "Party", active: true, sporty: false },
+  { key: "quiz", label: "Quiz", active: true, sporty: false },
+  { key: "run", label: "Run", active: true, sporty: true },
+  { key: "santa_dash", label: "Santa dash", active: true, sporty: true },
+  { key: "school_collection", label: "School collection", active: true, sporty: false },
+  { key: "walk", label: "Walk", active: true, sporty: true },
+  { key: "workplace_collection", label: "Workplace collection", active: true, sporty: false },
+  { key: OTHER_KIND, label: "Other", active: true, sporty: false },
 ];
 
 /**
@@ -65,6 +71,20 @@ export const LEGACY_CATEGORIES: readonly Category[] = [
 ];
 
 export const BUILT_IN_CATEGORIES: readonly Category[] = [...STARTING_CATEGORIES, ...LEGACY_CATEGORIES];
+
+/**
+ * The sign up tidy (Jaimie, 2026-10-03): "How will people be giving?", asked only in memory of
+ * someone, in place of "What are you doing to raise money?". Seeded by
+ * migrations/1791200000210_signup-tidy.js; Other ("Something else" on that path) is in both lists.
+ */
+export const MEMORY_CATEGORIES: readonly Category[] = [
+  { key: "memory_flowers", label: "Donations instead of flowers", active: true, sporty: false, memoryOnly: true },
+  { key: "memory_service", label: "A collection at the funeral or service", active: true, sporty: false, memoryOnly: true },
+  { key: "memory_event", label: "A memorial walk, run or event", active: true, sporty: false, memoryOnly: true },
+];
+
+/** Every category the code knows before the database is read: the built in ones and the in memory ones. */
+export const ALL_BUILT_IN_CATEGORIES: readonly Category[] = [...BUILT_IN_CATEGORIES, ...MEMORY_CATEGORIES];
 
 /** Each old category, and the ones it was split into. */
 export const KIND_SPLITS: Readonly<Record<string, readonly string[]>> = {
@@ -88,7 +108,7 @@ export function sortCategories<T extends Pick<Category, "key" | "label">>(list: 
 
 // --- the list as last read -----------------------------------------------------------------------
 
-let known: Map<string, Category> = new Map(BUILT_IN_CATEGORIES.map((c) => [c.key, c]));
+let known: Map<string, Category> = new Map(ALL_BUILT_IN_CATEGORIES.map((c) => [c.key, c]));
 
 /** The list as read from the database. Every name and every check below uses it from then on. */
 export function rememberCategories(list: readonly Category[]): void {
@@ -100,9 +120,24 @@ export function knownCategories(): Category[] {
   return sortCategories([...known.values()]);
 }
 
-/** What the sign up form offers: the categories on offer, A to Z, Other last. */
+/** What the sign up form offers: the categories on offer, A to Z, Other last. Never the in memory ones. */
 export function formCategories(list: readonly Category[] = [...known.values()]): Category[] {
-  return sortCategories(list.filter((c) => c.active));
+  return sortCategories(list.filter((c) => c.active && !c.memoryOnly));
+}
+
+/** The sign up tidy: the ways of giving in memory of someone on offer, A to Z, then Other. */
+export function memoryCategories(list: readonly Category[] = [...known.values()]): Category[] {
+  return sortCategories(list.filter((c) => c.active && (c.memoryOnly || c.key === OTHER_KIND)));
+}
+
+/** Is this a sporting category (offered for a Yes to "Is it a sporting event?")? */
+export function isSportyCategory(key: unknown): boolean {
+  return typeof key === "string" && known.get(key)?.sporty === true;
+}
+
+/** Is this one of the in memory ways of giving? */
+export function isMemoryCategory(key: unknown): boolean {
+  return typeof key === "string" && known.get(key)?.memoryOnly === true;
 }
 
 /** Is this a category the list knows, on the form or not (an old one, or one staff have hidden)? */
@@ -115,7 +150,7 @@ export function isActiveCategory(key: unknown): key is string {
   return typeof key === "string" && known.get(key)?.active === true;
 }
 
-const BUILT_IN_LABELS: ReadonlyMap<string, string> = new Map(BUILT_IN_CATEGORIES.map((c) => [c.key, c.label]));
+const BUILT_IN_LABELS: ReadonlyMap<string, string> = new Map(ALL_BUILT_IN_CATEGORIES.map((c) => [c.key, c.label]));
 
 /**
  * The name to show for a category: the stored one, else the built in one, else the key made readable

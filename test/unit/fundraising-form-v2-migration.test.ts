@@ -71,10 +71,12 @@ describe("the form round two migration", () => {
     expect(Object.keys(cols)).toEqual(expect.arrayContaining(["old_slug", "fundraiser_id", "created_at", "created_by"]));
   });
 
-  it("only widens the requests' kind check: every kind the code knows, QR codes included", () => {
+  // The sign up tidy (Jaimie, 2026-10-03) widens the check again, for collection envelopes, in its
+  // own migration (1791200000210, test/unit/signup-tidy-migration.test.ts): every other kind is here.
+  it("only widens the requests' kind check: every kind the code knew then, QR codes included", () => {
     const list = sql.match(/ADD CONSTRAINT fundraiser_requests_kind_check CHECK \(kind IN \(([^)]*)\)\)/);
     const kinds = list ? list[1].split(",").map((s) => s.trim().replace(/'/g, "")) : [];
-    expect(kinds.sort()).toEqual([...REQUEST_KINDS].sort());
+    expect(kinds.sort()).toEqual(REQUEST_KINDS.filter((k) => k !== "envelopes").sort());
     expect(kinds).toContain("qr_codes");
   });
 

@@ -160,11 +160,12 @@ describe("the checks on the change as it would land", () => {
     expect(check(stored(), { booking: null }).fields).toEqual({ booking: "Tell us how people get in." });
   });
 
-  it("refuses event details for a page raising money, and a target for an event", () => {
+  // The sign up tidy (after review): an event may give an amount it hopes to raise, as its sign up may.
+  it("refuses event details for a page raising money, and takes a target for either", () => {
     const raising = stored({ path: "raising", booking: null, cardLine: null, endTime: null, targetPence: 25000 });
     expect(check(raising, { price: "£5" }).fields).toEqual({ price: "This is only for events." });
     expect(check(raising, { targetPence: 30000 }).fields).toEqual({});
-    expect(check(stored(), { targetPence: 30000 }).fields).toEqual({ targetPence: "An event does not have a target." });
+    expect(check(stored(), { targetPence: 30000 }).fields).toEqual({});
   });
 
   it("does not hold a sign up from before the event questions to them, until it is changed", () => {

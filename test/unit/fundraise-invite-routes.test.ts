@@ -143,6 +143,10 @@ describe("a sign up made from an invite", () => {
     over18: true,
     sharesWithOther: false,
     wants: { shoutOut: false, attend: false },
+    // The sign up tidy (Jaimie, 2026-10-03): every new sign up gives an address, for the welcome pack.
+    postLine1: "1 Example Road",
+    postTown: "Exampleton",
+    postPostcode: "EX1 1EX",
   };
 
   it("marks the invite used, linked to the new sign up", async () => {

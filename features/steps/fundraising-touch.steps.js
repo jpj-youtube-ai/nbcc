@@ -251,6 +251,8 @@ When("someone signs up {string} from that Do it again link", async function (tit
     socialOk: false,
     over18: true,
     sharesWithOther: false,
+    // The sign up tidy: every new sign up gives an address for the welcome pack.
+    postLine1: "1 Example Road", postLine2: "", postTown: "Exampleton", postPostcode: "EX1 1EX", splitConfirmed: true,
     wants: { posterCount: 0, leafletCount: 0, bucketCount: 0, tinCount: 0, shoutOut: false, attend: false },
     newsletterOk: false,
     company: "",

@@ -43,6 +43,10 @@ const raising = (over: Record<string, unknown> = {}) => ({
   over18: true,
   sharesWithOther: false,
   wants: NOTHING,
+  // The sign up tidy (Jaimie, 2026-10-03): every new sign up gives an address, for the welcome pack.
+  postLine1: "1 Example Road",
+  postTown: "Exampleton",
+  postPostcode: "EX1 1EX",
   newsletterOk: false,
   ...over,
 });
@@ -89,6 +93,7 @@ describe("what they would like posted", () => {
   const posted = (wants: Record<string, unknown>, address: Record<string, unknown> = {}) =>
     signUpSchema.safeParse(raising({ wants: { ...NOTHING, ...wants }, ...address }));
   const ADDRESS = { postLine1: "1 Example Road", postLine2: "", postTown: "Exampleton", postPostcode: "ex1 1ex" };
+  const NO_ADDRESS = { postLine1: "", postLine2: "", postTown: "", postPostcode: "" };
 
   it("takes posters, leaflets, buckets and tins as numbers of their own", () => {
     const r = posted({ posterCount: 10, leafletCount: 200, bucketCount: 2, tinCount: 3 }, ADDRESS);
@@ -112,7 +117,7 @@ describe("what they would like posted", () => {
 
   it("needs the first line, the town and the postcode once anything is to be posted, but not line two", () => {
     for (const wants of [{ posterCount: 1 }, { leafletCount: 1 }, { bucketCount: 1 }, { tinCount: 1 }]) {
-      const r = posted(wants);
+      const r = posted(wants, NO_ADDRESS);
       expect(Object.keys(issuesOf(r)).sort()).toEqual(["postLine1", "postPostcode", "postTown"]);
     }
     expect(posted({ tinCount: 1 }, { ...ADDRESS, postLine2: "" }).success).toBe(true);
@@ -125,11 +130,14 @@ describe("what they would like posted", () => {
     expect(good.success && good.data.postPostcode).toBe("KA1 1AA");
   });
 
-  it("asks for no address, and keeps none, when nothing is to be posted", () => {
-    const r = posted({ shoutOut: true }, ADDRESS);
+  // The sign up tidy (Jaimie, 2026-10-03): every new sign up gives an address for the welcome pack,
+  // so it is asked for, and kept, even when nothing else is to be posted.
+  it("asks for the address, and keeps it, even when nothing is to be posted", () => {
+    expect(Object.keys(issuesOf(posted({ shoutOut: true }, { ...NO_ADDRESS, formVersion: 2 }))).sort()).toEqual(["postLine1", "postPostcode", "postTown"]);
+    const r = posted({ shoutOut: true }, { ...ADDRESS, formVersion: 2 });
     expect(r.success).toBe(true);
     if (!r.success) return;
-    expect([r.data.postLine1, r.data.postLine2, r.data.postTown, r.data.postPostcode]).toEqual([null, null, null, null]);
+    expect([r.data.postLine1, r.data.postLine2, r.data.postTown, r.data.postPostcode]).toEqual(["1 Example Road", null, "Exampleton", "EX1 1EX"]);
   });
 
   it("never stores the old single address box from the form", () => {
@@ -223,11 +231,13 @@ describe("the event questions", () => {
     expect(Object.values(ACCESS_LABELS)).toEqual(["Step free entry", "Accessible toilets", "Hearing loop", "Blue badge parking"]);
   });
 
-  it("knows the three ways in, in the form's words", () => {
+  // The sign up tidy (Jaimie, 2026-10-03): a fourth, free entry with donations welcome.
+  it("knows the four ways in, in the form's words", () => {
     expect(BOOKING_LABELS).toEqual({
       away: "Tickets are sold on another website",
       door: "Pay on the door, no booking needed",
       free: "Free, just come along",
+      donations: "Free entry, donations welcome",
     });
     expect(signUpSchema.safeParse(holding({ booking: "nbcc" })).success).toBe(false);
   });

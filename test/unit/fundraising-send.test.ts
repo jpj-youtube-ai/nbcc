@@ -59,12 +59,13 @@ describe("after a sign up", () => {
     const sent = mail.sendFundraiseThanks.mock.calls[0][1];
     expect(sent.email).toBe("victim@example.com");
     expect(sent.subject + sent.html + sent.text).not.toContain("spam.example");
-    expect(sent.text).toContain("Hi there Cheap,");
+    // The sign up tidy (Jaimie, 2026-10-03): a comma after "Hi there", as in a letter.
+    expect(sent.text).toContain("Hi there, Cheap,");
   });
 
   it("greets them by their first name", async () => {
     await sendSignUpEmails(record({ name: "Sam Example" }));
-    expect(mail.sendFundraiseThanks.mock.calls[0][1].text).toContain("Hi there Sam,");
+    expect(mail.sendFundraiseThanks.mock.calls[0][1].text).toContain("Hi there, Sam,");
   });
 
   it("sends the team everything they typed, to the events inbox only", async () => {

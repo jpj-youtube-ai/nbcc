@@ -77,6 +77,23 @@ describe("filling in the form from an invite", () => {
     expect(team.findInviteByHash).toHaveBeenCalledWith(hashInviteToken(TOKEN));
   });
 
+  // Invite types: the invite says what it is for, so the form opens at the right place.
+  it("says where the form should open, for an invite with a type", async () => {
+    const who = { name: "Mary Jane Smith", firstName: "Mary Jane", lastName: "Smith", email: "alex@example.com" };
+    const opens: Array<[string, Record<string, string>]> = [
+      ["raising", { path: "raising" }],
+      ["team", { path: "raising", team: "team" }],
+      ["event", { path: "event" }],
+      ["memory", { path: "memory" }],
+    ];
+    for (const [inviteType, more] of opens) {
+      team.findInviteByHash.mockResolvedValueOnce(found({ inviteType }));
+      expect((await run(postInvitePrefill, { body: { token: TOKEN } })).body).toEqual({ ...who, ...more });
+    }
+    team.findInviteByHash.mockResolvedValueOnce(found({ inviteType: null }));
+    expect((await run(postInvitePrefill, { body: { token: TOKEN } })).body).toEqual(who);
+  });
+
   it("answers the same for an invite that is unknown, used, or out of date", async () => {
     const answers = [];
     team.findInviteByHash.mockResolvedValueOnce(null);

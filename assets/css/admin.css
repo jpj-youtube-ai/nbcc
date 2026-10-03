@@ -2696,6 +2696,21 @@ textarea.fx-call-input{min-height:88px;line-height:1.5;resize:vertical;field-siz
 #view-fundraising .fr-offlist-done { background: var(--cream); color: var(--slate-soft); box-shadow: inset 0 0 0 1px var(--line); }
 /* An invite whose link has expired (60 days after it was last sent): Resend sends a new one. */
 #view-fundraising .fr-people-who > .fr-invite-expired { margin-left: 6px; background: var(--cream); color: var(--maroon); box-shadow: inset 0 0 0 1px var(--line); }
+/* Invite types (Jaimie, B1 + I1): what they are invited to do. The drop-down is the first thing
+   asked, at a width that reads as one choice; the email for it is read in a fold that is as tall as
+   the email (the page grows, nothing scrolls inside); and Send rests, saying why, while the in
+   memory wording waits for sign off. */
+#view-fundraising .fr-invite-type-field select { width: 100%; max-width: 22rem; }
+#view-fundraising .fr-people-who > .fr-invite-type { margin-left: 6px; }
+#view-fundraising .fr-invite-wording { min-width: 0; padding: 12px 14px; border: 1px solid var(--line); border-radius: 12px; background: color-mix(in srgb, var(--tan) 8%, var(--card)); }
+#view-fundraising .fr-invite-wording .fr-touch-meta p:last-child { margin-bottom: 8px; }
+#view-fundraising .fr-invite-read > summary { display: inline-flex; align-items: center; min-height: 44px; cursor: pointer; font-weight: 700; font-size: 0.92rem; color: var(--maroon); border-radius: 8px; transition: color .2s ease; }
+#view-fundraising .fr-invite-read > summary:hover { color: var(--crimson); }
+#view-fundraising .fr-invite-read > summary:focus-visible { outline: 2px solid var(--holly); outline-offset: 2px; }
+#view-fundraising .fr-invite-read > .fr-field-hint { margin: 0 0 4px; max-width: 72ch; }
+@media (max-width: 560px) { #view-fundraising .fr-invite-wording { padding: 10px 8px; } }
+#view-fundraising .fr-invite-held { margin: -6px 0 0; font-size: 0.88rem; font-weight: 700; color: var(--crimson); overflow-wrap: anywhere; }
+#view-fundraising .fr-invite-form .admin-btn:disabled { opacity: .55; cursor: not-allowed; }
 #view-fundraising .fr-offlist-panel { background: color-mix(in srgb, var(--tan) 12%, var(--card)); }
 /* Jaimie, 2026-10-03: an admin correcting the split with another cause, before the first gift. */
 #view-fundraising .fr-split-form { display: grid; gap: 6px; max-width: 480px; }

@@ -1327,7 +1327,7 @@ hosted-Checkout redirect stays the default fallback and no-JS safety net.
 | `GET /api/fundraisers` | **implemented** | TASK-493 (Get involved: approved public fundraisers with their meters; empty while switched off) |
 | `GET /api/fundraisers/:slug` | **implemented** | TASK-493 (one fundraiser's page: meter, supporter wall, what giving needs; 404 unless public, raising money, approved or (TASK-502) finished, and switched on) |
 | `POST /api/fundraisers/:slug/wall-message` | **implemented** | TASK-502 (the giver's message and wall choices, added from the thank you after paying, tied to the paid Stripe checkout session, once. Shapes: **Community fundraising, giving (TASK-502)**) |
-| `POST /api/fundraise/invite` | **implemented** | TASK-503 (the sign up form's invite lookup: `{ token }` from the invite link gives `{ name, firstName, lastName, email }` to fill in, and nothing else; any token that does not work is the same `404`. See **Community fundraising, the team's tools**) |
+| `POST /api/fundraise/invite` | **implemented** | TASK-503 (the sign up form's invite lookup: `{ token }` from the invite link gives `{ name, firstName, lastName, email }` to fill in (and, for an invite with a type, `path` and `team`: where the form opens), and nothing else; any token that does not work is the same `404`. See **Community fundraising, the team's tools**) |
 | `POST /api/fundraise/manage/request` | **implemented** | TASK-501 (emails an organiser a 6 digit sign in code for their private area; always the same answer, sent before looking; was TASK-493's 24 hour link) |
 | `POST /api/fundraise/manage/sign-in` | **implemented** | TASK-501 (a right code starts a 2 hour http only session cookie; every refusal the same `401`) |
 | `GET /api/fundraise/manage/me` | **implemented** | TASK-501 (the signed in organiser's fundraisers: status, page, QR code, meter, gifts and messages, editable details; since TASK-505 also `requests`, where each thing they asked for is up to, in words) |
@@ -8088,6 +8088,38 @@ each after a question. One whose link has run out (60 days after it was last sen
 **Expired**, with Resend still there to send a new link. A viewer sees neither the card nor the
 list.
 
+**Invite types** (Jaimie, B1 + I1). The form's first question is a required drop-down, **What are
+you inviting them to do?**, with nothing chosen for staff: Raising money, A team, Hosting an event or
+In memory. It is kept on the invite (`fundraiser_invites.invite_type`: `raising`, `team`, `event` or
+`memory`; migration `1791200000235_invite-types.js`, one nullable column) and decides two things:
+
+- **where their form opens.** `POST /api/fundraise/invite` also answers `path` (and `team: "team"`
+  for a team), and the sign up form opens with that first choice already made: "I'm raising money",
+  raising money with "A team" chosen at the team step, "I'm holding an event", or "I'm setting up a
+  page in memory of someone" (with the gentle words at the top). They can still change it. The name
+  and email are filled in as before; the 18 or over answer, consents and permissions never are;
+- **the email's words** (`buildInviteEmail`, `src/fundraising/team-emails.ts`). Raising money is the
+  approved invite, unchanged. A team and Hosting an event are the same email with one line adapted
+  (a team page and a page for everyone who joins; the event's own page). **In memory is gentle, new
+  wording** with its own subject ("A page in memory of someone you love"), no exclamation marks and
+  none of the cheerful invite's words. All four are from, and reply to, the events inbox, greet by
+  first name, show the personal note, are signed by the chosen signer and copy in the sender.
+
+The in memory wording is **held for sign off** like new automatic email wording, with the same table
+(`touch_wording_approvals`, key `invite_memory`; nothing is seeded as approved). Choosing a type shows
+its email to read under "Read the email they will get" (an example, never a real link); for In memory
+it opens by itself with **Approve this wording** (admins only, after a question; **Withdraw approval**
+once approved). Until it is approved the Send button rests with "The in memory invite wording is
+waiting for sign off. Read it and approve it first.", and the server refuses one all the same
+(`409`), storing and emailing nothing. A resend of an in memory invite is held the same way if the
+approval is withdrawn, leaving its old link working.
+
+Before sending, the question names everything: "Send an in memory invite to Mary Smith at
+mary@example.com, signed by Jaimie?". The list shows each invite's type as a pill, and the Monday
+summary says it ("Mary (in memory), invited by Fern"). Resend keeps the type. An invite from before,
+or one sent from an admin page loaded before the drop-down (no `type`), has none and behaves exactly
+as it always did.
+
 How the invite link works:
 
 - the token is 32 random bytes (base64url, 43 characters), made fresh for every send and resend;
@@ -8167,16 +8199,19 @@ list against entity `fundraiser`, so it shows in that fundraiser's History).
 
 | Route | Who | Body | Answer |
 |---|---|---|---|
-| `GET /api/admin/fundraising/team` | view | | `{ today, me, calls: { <id>: { before, after, due, dueWhich } }, prompts: { <id>: "date" \| "finished" }, invites, signers: [{ id, firstName }] }` |
-| `POST /api/admin/fundraising/invites` | edit | `{ firstName, lastName, email, note?, signedBy: <user id> }` | `201 { invite, emailed }`, the sender copied in; `400` with `fields` (`firstName`, `lastName`, ...); `429` after 50 in a day |
-| `POST /api/admin/fundraising/invites/:id/resend` | edit | | `{ invite, emailed }`; `404` once taken up or removed |
+| `GET /api/admin/fundraising/team` | view | | `{ today, me, calls: { <id>: { before, after, due, dueWhich } }, prompts: { <id>: "date" \| "finished" }, invites, signers: [{ id, firstName }], inviteWording: { approvals: { invite_memory?: { approvedAt, approvedBy } }, unavailable } }` (each invite carries `type`, or `null`) |
+| `POST /api/admin/fundraising/invites` | edit | `{ firstName, lastName, email, note?, signedBy: <user id>, type?: "raising" \| "team" \| "event" \| "memory" }` | `201 { invite, emailed }`, the sender copied in; `400` with `fields` (`firstName`, `lastName`, `type`, ...); `409` for an in memory invite whose wording is waiting for sign off; `429` after 50 in a day |
+| `POST /api/admin/fundraising/invites/:id/resend` | edit | | `{ invite, emailed }`, the type kept; `404` once taken up or removed; `409` for an in memory invite whose wording is waiting for sign off |
+| `GET /api/admin/fundraising/invite-wording/:type` | view | | `{ type, label, subject, html, text, wordingKey: "invite_memory" \| null, approval, approvalsUnavailable }`: that type's invite email as an example; `404` for a type that is not one |
+| `POST /api/admin/fundraising/invite-wording/:key/approval` | admin | | `{ approval }`; only `invite_memory`, `404` otherwise |
+| `DELETE /api/admin/fundraising/invite-wording/:key/approval` | admin | | `{ withdrawn }` |
 | `DELETE /api/admin/fundraising/invites/:id` | edit | | `{ removed }`; `404` once taken up or removed |
 | `POST /api/admin/fundraisers/:id/calls` | edit | `{ which: "before" \| "after", note? }` | `{ call }`; `404` with no date |
 | `POST /api/admin/fundraisers/:id/off-list` and `/on-list` | edit | | `{ offListAt }`; `409` unless approved |
 | `GET /api/admin/fundraising/summary` | admin | | `{ recipients, lastWeek }` |
 | `PUT /api/admin/fundraising/summary` | admin | `{ recipients: [emails] }` | `{ recipients, lastWeek }`; `400` naming the address that needs another look |
 | `POST /api/admin/fundraising/summary/test` | admin | | `{ sentTo }`, always the admin asking; `502` if it did not go |
-| `POST /api/fundraise/invite` | anyone | `{ token }` | `200 { name, firstName, lastName, email }` (`name` is the two joined, for a page loaded before the two boxes; an invite from before them has its one name split at the first space); `404` for any token that does not work |
+| `POST /api/fundraise/invite` | anyone | `{ token }` | `200 { name, firstName, lastName, email, path?, team? }` (`path` and `team` only for an invite with a type: where the form opens; `name` is the two joined, for a page loaded before the two boxes; an invite from before them has its one name split at the first space); `404` for any token that does not work |
 
 The admin's fundraiser now carries `offListAt` and `offListBy`.
 

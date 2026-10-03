@@ -10974,6 +10974,10 @@
       var reqBtn = t.closest("[data-frreqact]");
       if (reqBtn) return frReqAct(reqBtn.getAttribute("data-frreqkind"), reqBtn.getAttribute("data-frreqact"));
       if (t.closest("[data-frreqcancel]")) return frReqCancel();
+      var inviteApprove = t.closest("[data-frinviteapprove]");
+      if (inviteApprove) return frInviteWordingApproval(inviteApprove.getAttribute("data-frinviteapprove"), true);
+      var inviteWithdraw = t.closest("[data-frinvitewithdraw]");
+      if (inviteWithdraw) return frInviteWordingApproval(inviteWithdraw.getAttribute("data-frinvitewithdraw"), false);
       var resend = t.closest("[data-frinviteresend]");
       if (resend) return frResendInvite(resend.getAttribute("data-frinviteresend"));
       var removeInvite = t.closest("[data-frinviteremove]");
@@ -11062,8 +11066,20 @@
       if (e.target && e.target.hasAttribute && e.target.hasAttribute("data-frcatsporty")) {
         return frCatSetSporty(e.target.getAttribute("data-frcatsporty"), !!e.target.checked);
       }
+      // Invite types: what they are invited to do was chosen, so read that email.
+      if (e.target && e.target.id === "frInviteType") return frInviteTypeChanged();
       keepTyping(e);
     });
+    // The invite email being read is as tall as it is, whenever it loads, opens or the window changes.
+    var inviteFrame = el("frInviteWordingFrame");
+    if (inviteFrame) {
+      inviteFrame.addEventListener("load", function () {
+        frInviteFit();
+        if (window.requestAnimationFrame) window.requestAnimationFrame(frInviteFit);
+      });
+      if (el("frInviteRead")) el("frInviteRead").addEventListener("toggle", frInviteFit);
+      window.addEventListener("resize", frInviteFit);
+    }
     // The rows are role="button", so they answer Enter and Space as a button does.
     view.addEventListener("keydown", function (e) {
       // TASK-503: Enter in the summary's address box adds it, as the button does.
@@ -12873,7 +12889,145 @@
       select.setAttribute("data-frsigners", key);
       if (signers.some(function (s) { return String(s.id) === chosen; })) select.value = chosen;
     }
+    frInviteSync();
     frRenderInvites();
+  }
+
+  // Invite types (Jaimie, B1 + I1): what they are invited to do. The words in the drop-down and on
+  // the list, and the type in a sentence ("Send an in memory invite to..."). As INVITE_TYPE_LABELS
+  // and INVITE_TYPE_PHRASES in src/fundraising/invite.ts.
+  var FR_INVITE_TYPES = {
+    raising: { label: "Raising money", phrase: "a raising money invite", the: "the raising money invite" },
+    team: { label: "A team", phrase: "a team invite", the: "the team invite" },
+    event: { label: "Hosting an event", phrase: "an event invite", the: "the event invite" },
+    memory: { label: "In memory", phrase: "an in memory invite", the: "the in memory invite" },
+  };
+  // The in memory invite is new wording: the server only sends it once an admin has approved it
+  // (key invite_memory, with the automatic emails' sign offs). Until then Send rests, and says why.
+  var FR_INVITE_WAITING = "The in memory invite wording is waiting for sign off. Read it and approve it first.";
+  var FR_INVITE_KEYS = { memory: "invite_memory" };
+  var frInviteWordingData = null; // the email being read: { type, subject, html, wordingKey }
+  var frInviteWordingSeq = 0;
+  var frInviteApproving = false;
+
+  function frInviteType() {
+    var select = el("frInviteType");
+    var v = select ? String(select.value || "") : "";
+    return FR_INVITE_TYPES[v] ? v : "";
+  }
+  function frInviteApproval(key) {
+    var w = frTeam && frTeam.inviteWording;
+    return (w && !w.unavailable && w.approvals && w.approvals[key]) || null;
+  }
+  // Is the type chosen one whose wording is still waiting for sign off?
+  function frInviteHeld() {
+    var key = FR_INVITE_KEYS[frInviteType()];
+    return !!key && !frInviteApproval(key);
+  }
+
+  // The Send button, the note beside it and the sign off line, from what is chosen and approved.
+  function frInviteSync() {
+    var held = frInviteHeld();
+    var send = el("frInviteSend");
+    if (send) send.disabled = held || frTeamBusy;
+    var note = el("frInviteHeld");
+    if (note) note.hidden = !held;
+    frInviteWordingMeta();
+  }
+
+  function frInviteSignOffHtml(key) {
+    if (!key) return "";
+    var w = frTeam && frTeam.inviteWording;
+    if (!w || w.unavailable) return '<p class="fr-touch-signoff" data-frinvitesignoff>' + H.escapeHtml(FR_TOUCH_UNCHECKED) + "</p>";
+    var admin = isAdmin() && frCanWrite();
+    var a = frInviteApproval(key);
+    var rest = frInviteApproving ? " disabled" : "";
+    if (!a) {
+      return '<p class="fr-touch-signoff" data-frinvitesignoff>' +
+        (admin ? "New wording, waiting for your sign off. It won't send until you approve it." : "New wording, waiting for sign off. Only an admin can approve it.") + "</p>" +
+        (admin ? '<div class="fx-call-row"><button class="admin-btn admin-btn--small" type="button" data-frinviteapprove="' + H.escapeHtml(key) + '"' + rest + ">Approve this wording</button></div>" : "");
+    }
+    return '<p class="fr-touch-approved" data-frinvitesignoff>Approved by ' + H.escapeHtml(frWho(a.approvedBy)) + " on " + H.escapeHtml(H.fmtDate(a.approvedAt)) + ".</p>" +
+      (admin ? '<div class="fx-call-row"><button class="admin-btn admin-btn--small fr-btn-quiet" type="button" data-frinvitewithdraw="' + H.escapeHtml(key) + '"' + rest + ">Withdraw approval</button></div>" : "");
+  }
+
+  function frInviteWordingMeta() {
+    var meta = el("frInviteWordingMeta");
+    var d = frInviteWordingData;
+    if (!meta || !d) return;
+    meta.innerHTML = frInviteSignOffHtml(d.wordingKey) +
+      '<p class="fr-touch-subject"><span>Subject</span> ' + H.escapeHtml(d.subject || "") + "</p>";
+  }
+
+  // The type was chosen (or cleared, once sent): read its email. New wording waiting for sign off
+  // opens by itself, so it is read before it is approved; approved wording stays folded away.
+  function frInviteTypeChanged() {
+    var type = frInviteType();
+    var box = el("frInviteWording");
+    var seq = ++frInviteWordingSeq;
+    frInviteWordingData = null;
+    if (box) box.hidden = true;
+    frInviteSync();
+    if (!type || !box) return;
+    frTeamSay("frInviteStatus", "", false);
+    return authFetch("/api/admin/fundraising/invite-wording/" + encodeURIComponent(type))
+      .then(okJson)
+      .then(function (d) {
+        if (seq !== frInviteWordingSeq || !d || typeof d.html !== "string") return;
+        frInviteWordingData = d;
+        box.hidden = false;
+        var read = el("frInviteRead");
+        if (read) read.open = !!d.wordingKey && !frInviteApproval(d.wordingKey);
+        el("frInviteWordingFrame").setAttribute("srcdoc", d.html);
+        frInviteSync();
+        frInviteFit();
+      })
+      .catch(function (err) {
+        if (err && err.message === "unauthorized") return;
+        if (seq !== frInviteWordingSeq) return;
+        frTeamSay("frInviteStatus", "That email could not load just now. Try again in a moment.", true);
+      });
+  }
+
+  // The real 660px email, zoomed down to fit the card, and as tall as it is: the page grows. On a
+  // phone it is drawn at the phone's own width instead, as their phone would show it, so it can be read.
+  function frInviteFit() {
+    var frame = el("frInviteWordingFrame"), wrap = el("frInviteWordingWrap");
+    if (!frame || !wrap || !wrap.clientWidth) return;
+    var cdoc = frame.contentDocument;
+    if (!cdoc || !cdoc.body) return;
+    var emailW = wrap.clientWidth >= 480 ? FR_TOUCH_EMAIL_W : Math.max(wrap.clientWidth, 300);
+    var scale = Math.min(1, wrap.clientWidth / emailW);
+    frame.style.width = emailW + "px";
+    frame.style.height = "0px";
+    frame.style.height = Math.max(cdoc.body.scrollHeight, cdoc.documentElement.scrollHeight) + "px";
+    frame.style.zoom = scale;
+  }
+
+  function frInviteWordingApproval(key, approve) {
+    if (frInviteApproving || !frTeam || !key) return;
+    var question = approve
+      ? "Approve this wording? Once approved, in memory invites can be sent with it."
+      : "Withdraw approval? In memory invites cannot be sent until it is approved again.";
+    if (!window.confirm(question)) return;
+    frInviteApproving = true;
+    frInviteSync();
+    frTeamSay("frInviteStatus", "Saving…", false);
+    var said = null;
+    return frSend(approve ? "POST" : "DELETE", "/api/admin/fundraising/invite-wording/" + encodeURIComponent(key) + "/approval")
+      .then(function (r) {
+        said = r.ok ? [approve ? "Wording approved." : "Approval withdrawn.", false] : [frRefusal(r, "That did not work. Please try again."), true];
+        return r.ok ? frLoadTeam() : null;
+      })
+      .catch(function (err) {
+        if (err && err.message === "unauthorized") return;
+        said = ["That did not work. Please try again.", true];
+      })
+      .then(function () {
+        frInviteApproving = false;
+        frInviteSync();
+        if (said) frTeamSay("frInviteStatus", said[0], said[1]);
+      });
   }
 
   function frRenderInvites() {
@@ -12893,6 +13047,7 @@
       // An invite past its 60 days: its link no longer works, so say so, and Resend sends a new one.
       var expired = i.expired === true;
       return '<li data-frinvite="' + id + '"><span class="fr-people-who"><b>' + H.escapeHtml(i.name) + "</b> <span>" + H.escapeHtml(i.email) + "</span>" +
+        (FR_INVITE_TYPES[i.type] ? ' <span class="admin-pill fr-invite-type">' + H.escapeHtml(FR_INVITE_TYPES[i.type].label) + "</span>" : "") +
         (expired ? ' <span class="admin-pill fr-invite-expired">Expired</span>' : "") +
         '<span class="fr-people-when">Invited by ' + H.escapeHtml(i.signedBy) + " on " + H.escapeHtml(H.fmtDate(i.createdAt)) +
         (i.resentAt ? ", sent again on " + H.escapeHtml(H.fmtDate(i.resentAt)) : "") +
@@ -12932,6 +13087,7 @@
       .then(function () {
         frTeamBusy = false;
         if (send) send.disabled = false;
+        frInviteSync();
       });
   }
 
@@ -12945,14 +13101,19 @@
     var note = String(el("frInviteNote").value || "").trim();
     var select = el("frInviteSigner");
     var signedBy = Number(select.value);
+    // What they are invited to do: asked first, with nothing chosen for staff.
+    var type = frInviteType();
+    if (!type) return frTeamSay("frInviteStatus", "Choose what you are inviting them to do.", true);
+    if (frInviteHeld()) return frTeamSay("frInviteStatus", FR_INVITE_WAITING, true);
     if (!firstName) return frTeamSay("frInviteStatus", "Add their first name.", true);
     if (!lastName) return frTeamSay("frInviteStatus", "Add their surname.", true);
     if (!FR_EMAIL.test(email)) return frTeamSay("frInviteStatus", "That isn't a whole email address.", true);
     if (note.length > 5000) return frTeamSay("frInviteStatus", "Keep the note to 5,000 characters or fewer.", true);
     if (!signedBy) return frTeamSay("frInviteStatus", "Choose who it is from.", true);
     var signer = select.options[select.selectedIndex] ? select.options[select.selectedIndex].textContent : "";
-    if (!window.confirm("Send the invite to " + name + " (" + email + "), signed by " + signer + "?")) return;
-    var body = { firstName: firstName, lastName: lastName, email: email, signedBy: signedBy };
+    // Names everything: the type in plain words, the full name, the email and the signer.
+    if (!window.confirm("Send " + FR_INVITE_TYPES[type].phrase + " to " + name + " at " + email + ", signed by " + signer + "?")) return;
+    var body = { firstName: firstName, lastName: lastName, email: email, signedBy: signedBy, type: type };
     if (note) body.note = note;
     frTeamSay("frInviteStatus", "Sending…", false);
     return frInviteRun(function () {
@@ -12962,6 +13123,9 @@
         el("frInviteLastName").value = "";
         el("frInviteEmail").value = "";
         el("frInviteNote").value = "";
+        // Nothing is chosen for the next one either.
+        el("frInviteType").value = "";
+        frInviteTypeChanged();
         frTeamSay("frInviteStatus", frInviteSent(r, name, "Invite sent to"), r.body && r.body.emailed === false);
         return frLoadTeam();
       });
@@ -12971,7 +13135,9 @@
   function frResendInvite(id) {
     var inv = frInviteFound(id);
     if (!inv || frTeamBusy) return;
-    if (!window.confirm("Send the invite to " + inv.name + " again? The link in the first email stops working.")) return;
+    // The type stays as it was: the server keeps it, and sends the same words again.
+    var what = FR_INVITE_TYPES[inv.type] ? FR_INVITE_TYPES[inv.type].the : "the invite";
+    if (!window.confirm("Send " + what + " to " + inv.name + " again? The link in the first email stops working.")) return;
     frTeamSay("frInviteStatus", "Sending…", false);
     return frInviteRun(function () {
       return frSend("POST", "/api/admin/fundraising/invites/" + encodeURIComponent(id) + "/resend").then(function (r) {

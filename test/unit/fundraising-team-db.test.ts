@@ -77,8 +77,9 @@ describe("invites", () => {
     const insert = sqlIn(calls, /INSERT INTO fundraiser_invites/)!;
     expect(insert[0]).toMatch(/token_hash/);
     // Jaimie 2026-10-03: the two boxes are kept as typed, and `name` still has the two joined.
-    expect(insert[0]).toMatch(/\(name, first_name, last_name, email, note, signed_by, sent_by, token_hash\)/);
-    expect(insert[1]).toEqual(["Morag Ann Fyfe", "Morag Ann", "Fyfe", "morag@example.com", "Lovely to chat", "Fern", "admin:fern@example.com", "h".repeat(64)]);
+    expect(insert[0]).toMatch(/\(name, first_name, last_name, email, note, signed_by, sent_by, token_hash, invite_type\)/);
+    // No type given (an admin page loaded before the drop-down): none is kept.
+    expect(insert[1]).toEqual(["Morag Ann Fyfe", "Morag Ann", "Fyfe", "morag@example.com", "Lovely to chat", "Fern", "admin:fern@example.com", "h".repeat(64), null]);
     // Who was copied in is on the record too.
     expect(audits(calls)[0]).toEqual([
       "admin:fern@example.com",
@@ -89,6 +90,41 @@ describe("invites", () => {
     ]);
     expect(inv).toMatchObject({ id: 4, name: "Morag Ann Fyfe", firstName: "Morag Ann", lastName: "Fyfe", signedBy: "Fern", createdAt: "2026-10-01T09:00:00.000Z" });
     expect(JSON.stringify(inv)).not.toContain("hhhh");
+  });
+
+  // Invite types (Jaimie, B1 + I1).
+  it("keeps what they were invited to do, and gives it back", async () => {
+    const calls = useClient((sql) => (/INSERT INTO fundraiser_invites/.test(sql) ? { rows: [inviteRow({ invite_type: "memory" })] } : undefined));
+    const inv = await createInvite(
+      { firstName: "Alex", lastName: "Example", email: "alex@example.com", note: null, signedBy: "Fern", cc: null, tokenHash: "h".repeat(64), inviteType: "memory" },
+      "admin:fern@example.com",
+    );
+    expect(sqlIn(calls, /INSERT INTO fundraiser_invites/)![1][8]).toBe("memory");
+    expect(inv.type).toBe("memory");
+    expect(audits(calls)[0][4]).toEqual({ email: "alex@example.com", signedBy: "Fern", cc: null, type: "memory" });
+  });
+
+  it("reads an invite from before, with no type, as none", async () => {
+    query.mockResolvedValueOnce({ rows: [inviteRow(), inviteRow({ id: 5, invite_type: "team" })] });
+    expect((await listOpenInvites()).map((i) => i.type)).toEqual([null, "team"]);
+    query.mockResolvedValueOnce({ rows: [inviteRow({ invite_type: "event" })] });
+    expect((await findInviteByHash("h".repeat(64)))!.inviteType).toBe("event");
+    query.mockResolvedValueOnce({ rows: [inviteRow()] });
+    expect((await findInviteByHash("h".repeat(64)))!.inviteType).toBeNull();
+  });
+
+  it("keeps the type on a resend, and holds one whose wording is waiting for sign off, changing nothing", async () => {
+    let calls = useClient((sql) => (/UPDATE fundraiser_invites/.test(sql) ? { rows: [inviteRow({ invite_type: "memory" })] } : undefined));
+    const inv = await resendInvite(4, "n".repeat(64), "admin:fern@example.com", "fern@example.com", []);
+    expect(inv.type).toBe("memory");
+    expect(sqlIn(calls, /UPDATE fundraiser_invites/)![0]).not.toMatch(/invite_type =/);
+    calls = useClient((sql) => (/UPDATE fundraiser_invites/.test(sql) ? { rows: [inviteRow({ invite_type: "memory" })] } : undefined));
+    const held = resendInvite(4, "n".repeat(64), "admin:fern@example.com", "fern@example.com", ["memory"]);
+    await expect(held).rejects.toMatchObject({ reason: "wording_waiting" });
+    // Rolled back: the old link still works, and nothing is recorded.
+    expect(calls.some((c) => /ROLLBACK/.test(c[0]))).toBe(true);
+    expect(calls.some((c) => /COMMIT/.test(c[0]))).toBe(false);
+    expect(audits(calls)).toHaveLength(0);
   });
 
   it("records no copy on an invite sent with none", async () => {
@@ -149,6 +185,7 @@ describe("invites", () => {
       sentBy: "admin:fern@example.com",
       createdAt: "2026-10-01T09:00:00.000Z",
       resentAt: null,
+      type: null,
     });
   });
 
@@ -343,7 +380,7 @@ describe("what the summary reads", () => {
     expect(i.now).toBe(now);
     expect(i.gifts).toEqual([{ fundraiserId: 1, amountPence: 2000, refundedPence: 0, giftAid: true, paidIn: false, paidAt: "2026-12-01T10:00:00.000Z" }]);
     expect(i.cash).toEqual([{ fundraiserId: 1, amountPence: 1000, recordedAt: "2026-12-02T15:00:00.000Z" }]);
-    expect(i.invites).toEqual([{ name: "Alex Example", firstName: "Alex", signedBy: "Fern", createdAt: "2026-10-01T09:00:00.000Z", resentAt: null }]);
+    expect(i.invites).toEqual([{ name: "Alex Example", firstName: "Alex", signedBy: "Fern", createdAt: "2026-10-01T09:00:00.000Z", resentAt: null, type: null }]);
     const giftSql = query.mock.calls.map((c) => String(c[0])).find((s) => /AS paid_at/.test(s))!;
     expect(giftSql).toMatch(/d\.payment_status = 'paid'/);
     expect(giftSql).toMatch(/d\.fundraiser_id IS NOT NULL/);

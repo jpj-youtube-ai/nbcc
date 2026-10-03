@@ -59,7 +59,8 @@ function fundraiser(id: number, over: Record<string, unknown> = {}): Rec {
 }
 const meter = { raisedPence: 0, onlinePence: 0, cashPence: 0, targetPence: 25000, percent: 0, barPercent: 0, overTarget: false };
 
-type Invite = { id: number; name: string; email: string; note: string | null; signedBy: string; sentBy: string; createdAt: string; resentAt: string | null; expired?: boolean };
+type Invite = { id: number; name: string; email: string; note: string | null; signedBy: string; sentBy: string; createdAt: string; resentAt: string | null; expired?: boolean; type?: string | null };
+type Approval = { approvedAt: string; approvedBy: string };
 const callState = (over: Record<string, unknown> = {}) => ({
   before: { which: "before", dueOn: "2026-11-29", due: true, called: null },
   after: { which: "after", dueOn: "2026-12-13", due: false, called: null },
@@ -71,7 +72,7 @@ const callState = (over: Record<string, unknown> = {}) => ({
 // ---- the stand in server ----
 
 let records: Rec[] = [];
-let team: { today: string; me: number; calls: Record<string, unknown>; prompts: Record<string, string>; invites: Invite[]; signers: Array<{ id: number; firstName: string }> };
+let team: { today: string; me: number; calls: Record<string, unknown>; prompts: Record<string, string>; invites: Invite[]; signers: Array<{ id: number; firstName: string }>; inviteWording?: { approvals: Record<string, Approval>; unavailable: boolean } };
 let summary: { recipients: string[]; lastWeek: string | null };
 let perms: PermissionMap;
 let role = "admin";
@@ -104,9 +105,30 @@ function respond(url: string, init?: { method?: string; body?: string }) {
   }
   if (path === "/api/admin/fundraising/team") return j(JSON.parse(JSON.stringify(team)));
   if (path === "/api/admin/fundraising/invites" && method === "POST") {
-    const inv = { id: 40 + team.invites.length, name: `${body.firstName} ${body.lastName}`, firstName: body.firstName, lastName: body.lastName, email: body.email, note: body.note || null, signedBy: body.signedBy === 5 ? "Rowan" : "Fern", sentBy: "admin:fern@example.com", createdAt: "2026-10-02T09:00:00.000Z", resentAt: null };
+    const inv = { id: 40 + team.invites.length, name: `${body.firstName} ${body.lastName}`, firstName: body.firstName, lastName: body.lastName, email: body.email, note: body.note || null, signedBy: body.signedBy === 5 ? "Rowan" : "Fern", sentBy: "admin:fern@example.com", createdAt: "2026-10-02T09:00:00.000Z", resentAt: null, type: body.type ?? null };
     team.invites = [inv, ...team.invites];
     return j({ invite: inv, emailed: true }, 201);
+  }
+  // Invite types: each type's email to read, and the in memory wording's sign off.
+  const wording = path.match(/^\/api\/admin\/fundraising\/invite-wording\/([a-z_]+)(\/approval)?$/);
+  if (wording) {
+    const approvals = team.inviteWording!.approvals;
+    if (wording[2]) {
+      if (method === "POST") approvals[wording[1]] = { approvedAt: "2026-10-03T12:00:00.000Z", approvedBy: "admin:fern@example.com" };
+      else delete approvals[wording[1]];
+      return j(method === "POST" ? { approval: { key: wording[1], ...approvals[wording[1]] } } : { withdrawn: true });
+    }
+    const memory = wording[1] === "memory";
+    return j({
+      type: wording[1],
+      label: memory ? "In memory" : "Raising money",
+      wordingKey: memory ? "invite_memory" : null,
+      approval: memory ? (approvals.invite_memory ?? null) : null,
+      approvalsUnavailable: false,
+      subject: memory ? "A page in memory of someone you love" : "We'd love you to fundraise with us",
+      html: `<html><body><p>The ${wording[1]} invite</p></body></html>`,
+      text: `The ${wording[1]} invite`,
+    });
   }
   const inv = path.match(/^\/api\/admin\/fundraising\/invites\/(\d+)(\/resend)?$/);
   if (inv) {
@@ -204,6 +226,7 @@ beforeEach(() => {
     prompts: { "3": "date" },
     invites: [{ id: 7, name: "Alex Example", email: "alex@example.com", note: null, signedBy: "Fern", sentBy: "admin:fern@example.com", createdAt: "2026-10-01T09:00:00.000Z", resentAt: null }],
     signers: [{ id: 3, firstName: "Fern" }, { id: 5, firstName: "Rowan" }],
+    inviteWording: { approvals: {}, unavailable: false },
   };
   summary = { recipients: ["fern@example.com"], lastWeek: "2026-11-30" };
   asRole("admin");
@@ -269,6 +292,7 @@ describe("Invite someone", () => {
 
   it("sends the invite after asking, then empties the form and lists it", async () => {
     await openFundraising();
+    setValue("#frInviteType", "raising");
     setValue("#frInviteFirstName", "Sky Ann");
     setValue("#frInviteLastName", "Sample");
     setValue("#frInviteEmail", "sky@example.com");
@@ -276,23 +300,30 @@ describe("Invite someone", () => {
     setValue("#frInviteSigner", "5");
     submit("#frInviteForm");
     await settle();
-    expect(confirmed.pop()).toBe("Send the invite to Sky Ann Sample (sky@example.com), signed by Rowan?");
+    expect(confirmed.pop()).toBe("Send a raising money invite to Sky Ann Sample at sky@example.com, signed by Rowan?");
     expect(sent("POST", "/api/admin/fundraising/invites")[0].body).toEqual({
       firstName: "Sky Ann",
       lastName: "Sample",
       email: "sky@example.com",
       note: "Lovely to chat about the quiz!",
       signedBy: 5,
+      type: "raising",
     });
     expect(text(el("frInviteStatus"))).toBe("Invite sent to Sky Ann Sample.");
     expect((el("frInviteFirstName") as HTMLInputElement).value).toBe("");
     expect((el("frInviteLastName") as HTMLInputElement).value).toBe("");
     expect((el("frInviteNote") as HTMLTextAreaElement).value).toBe("");
+    // Nothing is chosen for the next one either.
+    expect((el("frInviteType") as HTMLSelectElement).value).toBe("");
     expect(text(el("frInvites"))).toContain("Sky Ann Sample");
   });
 
   it("checks the first name, the surname, the email and the note before sending", async () => {
     await openFundraising();
+    submit("#frInviteForm");
+    await settle();
+    expect(text(el("frInviteStatus"))).toBe("Choose what you are inviting them to do.");
+    setValue("#frInviteType", "event");
     submit("#frInviteForm");
     await settle();
     expect(text(el("frInviteStatus"))).toBe("Add their first name.");
@@ -316,6 +347,7 @@ describe("Invite someone", () => {
   it("sends nothing when the question is answered no", async () => {
     confirmAnswer = false;
     await openFundraising();
+    setValue("#frInviteType", "raising");
     setValue("#frInviteFirstName", "Sky");
     setValue("#frInviteLastName", "Sample");
     setValue("#frInviteEmail", "sky@example.com");
@@ -327,6 +359,7 @@ describe("Invite someone", () => {
   it("says so when the invite is saved but the email did not go", async () => {
     answers["POST /api/admin/fundraising/invites"] = { status: 201, body: { invite: team.invites[0], emailed: false } };
     await openFundraising();
+    setValue("#frInviteType", "raising");
     setValue("#frInviteFirstName", "Sky");
     setValue("#frInviteLastName", "Sample");
     setValue("#frInviteEmail", "sky@example.com");
@@ -338,6 +371,7 @@ describe("Invite someone", () => {
   it("passes on the server's words for the box that needs another look", async () => {
     answers["POST /api/admin/fundraising/invites"] = { status: 400, body: { error: "Some of it needs another look", fields: { lastName: "Keep the surname to 50 characters or fewer." } } };
     await openFundraising();
+    setValue("#frInviteType", "raising");
     setValue("#frInviteFirstName", "Sky");
     setValue("#frInviteLastName", "Sample");
     setValue("#frInviteEmail", "sky@example.com");
@@ -349,6 +383,7 @@ describe("Invite someone", () => {
   it("passes on the server's words when it refuses", async () => {
     answers["POST /api/admin/fundraising/invites"] = { status: 429, body: { error: "You have sent 50 invites today. Please send the rest tomorrow." } };
     await openFundraising();
+    setValue("#frInviteType", "raising");
     setValue("#frInviteFirstName", "Sky");
     setValue("#frInviteLastName", "Sample");
     setValue("#frInviteEmail", "sky@example.com");
@@ -360,7 +395,243 @@ describe("Invite someone", () => {
   });
 });
 
+// ---- invite types (Jaimie, B1 + I1) ----
+
+const WAITING = "The in memory invite wording is waiting for sign off. Read it and approve it first.";
+function fillInvite(type: string) {
+  setValue("#frInviteType", type);
+  setValue("#frInviteFirstName", "Mary");
+  setValue("#frInviteLastName", "Smith");
+  setValue("#frInviteEmail", "mary@example.com");
+}
+const approveMemory = () => {
+  team.inviteWording!.approvals.invite_memory = { approvedAt: "2026-10-03T12:00:00.000Z", approvedBy: "admin:fern@example.com" };
+};
+
+describe("What are you inviting them to do?", () => {
+  it("is a drop-down of the four, required, with nothing chosen", async () => {
+    await openFundraising();
+    const select = el("frInviteType") as HTMLSelectElement;
+    expect(text(q('label[for="frInviteType"]'))).toBe("What are you inviting them to do?");
+    expect(select.closest("form")!.id).toBe("frInviteForm");
+    expect(select.required).toBe(true);
+    expect(select.value).toBe("");
+    expect(Array.from(select.options).map((o) => [o.value, o.textContent])).toEqual([
+      ["", "Choose one"],
+      ["raising", "Raising money"],
+      ["team", "A team"],
+      ["event", "Hosting an event"],
+      ["memory", "In memory"],
+    ]);
+    // The empty choice cannot be picked again.
+    expect(select.options[0].disabled).toBe(true);
+    // The first thing asked.
+    expect(q("#frInviteForm .fr-field")!.contains(select)).toBe(true);
+  });
+
+  it("sends the type with the invite", async () => {
+    for (const type of ["team", "event"]) {
+      calls = [];
+      await openFundraising();
+      fillInvite(type);
+      submit("#frInviteForm");
+      await settle();
+      expect((sent("POST", "/api/admin/fundraising/invites")[0].body as Record<string, unknown>).type).toBe(type);
+    }
+  });
+
+  it("names the type in plain words, the full name, the email and the signer before sending", async () => {
+    const asked: Record<string, string> = {
+      raising: "Send a raising money invite to Mary Smith at mary@example.com, signed by Fern?",
+      team: "Send a team invite to Mary Smith at mary@example.com, signed by Fern?",
+      event: "Send an event invite to Mary Smith at mary@example.com, signed by Fern?",
+      memory: "Send an in memory invite to Mary Smith at mary@example.com, signed by Fern?",
+    };
+    approveMemory();
+    confirmAnswer = false;
+    await openFundraising();
+    for (const type of Object.keys(asked)) {
+      fillInvite(type);
+      await settle();
+      submit("#frInviteForm");
+      await settle();
+      expect(confirmed.pop()).toBe(asked[type]);
+    }
+    expect(sent("POST", "/api/admin/fundraising/invites")).toHaveLength(0);
+  });
+
+  it("shows the email for the type chosen, to read", async () => {
+    await openFundraising();
+    expect(el("frInviteWording").hidden).toBe(true);
+    setValue("#frInviteType", "raising");
+    await settle();
+    expect(sent("GET", "/api/admin/fundraising/invite-wording/raising")).toHaveLength(1);
+    expect(el("frInviteWording").hidden).toBe(false);
+    expect(text(el("frInviteWordingMeta"))).toContain("Subject We'd love you to fundraise with us");
+    expect((el("frInviteWordingFrame") as HTMLIFrameElement).getAttribute("srcdoc")).toContain("The raising invite");
+    // Approved wording: nothing to sign off, and it stays folded away until asked for.
+    expect(q("#frInviteWording [data-frinviteapprove]")).toBeNull();
+    expect((el("frInviteRead") as HTMLDetailsElement).open).toBe(false);
+    expect((el("frInviteSend") as HTMLButtonElement).disabled).toBe(false);
+    expect(el("frInviteHeld").hidden).toBe(true);
+  });
+});
+
+describe("the in memory invite's sign off", () => {
+  it("cannot be sent until the wording is approved, and says why", async () => {
+    await openFundraising();
+    fillInvite("memory");
+    await settle();
+    expect((el("frInviteSend") as HTMLButtonElement).disabled).toBe(true);
+    expect(el("frInviteHeld").hidden).toBe(false);
+    expect(text(el("frInviteHeld"))).toBe(WAITING);
+    // Even if the form is sent some other way, nothing goes.
+    submit("#frInviteForm");
+    await settle();
+    expect(sent("POST", "/api/admin/fundraising/invites")).toHaveLength(0);
+    expect(confirmed).toHaveLength(0);
+    expect(text(el("frInviteStatus"))).toBe(WAITING);
+  });
+
+  it("opens the email to read, with Approve this wording for an admin", async () => {
+    await openFundraising();
+    setValue("#frInviteType", "memory");
+    await settle();
+    expect((el("frInviteRead") as HTMLDetailsElement).open).toBe(true);
+    expect(text(el("frInviteWordingMeta"))).toContain("New wording, waiting for your sign off. It won't send until you approve it.");
+    expect(text(el("frInviteWordingMeta"))).toContain("Subject A page in memory of someone you love");
+    expect((el("frInviteWordingFrame") as HTMLIFrameElement).getAttribute("srcdoc")).toContain("The memory invite");
+    expect(text(q('#frInviteWording [data-frinviteapprove="invite_memory"]'))).toBe("Approve this wording");
+  });
+
+  it("is approved after asking, and then the invite can be sent", async () => {
+    await openFundraising();
+    fillInvite("memory");
+    await settle();
+    (q('[data-frinviteapprove="invite_memory"]') as HTMLElement).click();
+    await settle();
+    expect(confirmed.pop()).toBe("Approve this wording? Once approved, in memory invites can be sent with it.");
+    expect(sent("POST", "/api/admin/fundraising/invite-wording/invite_memory/approval")).toHaveLength(1);
+    expect(text(el("frInviteWordingMeta"))).toContain("Approved by fern@example.com on 03/10/2026.");
+    expect(q("[data-frinviteapprove]")).toBeNull();
+    expect((el("frInviteSend") as HTMLButtonElement).disabled).toBe(false);
+    expect(el("frInviteHeld").hidden).toBe(true);
+    // What was typed is still there.
+    expect((el("frInviteFirstName") as HTMLInputElement).value).toBe("Mary");
+    expect((el("frInviteType") as HTMLSelectElement).value).toBe("memory");
+    submit("#frInviteForm");
+    await settle();
+    expect(confirmed.pop()).toBe("Send an in memory invite to Mary Smith at mary@example.com, signed by Fern?");
+    expect((sent("POST", "/api/admin/fundraising/invites")[0].body as Record<string, unknown>).type).toBe("memory");
+    expect(text(el("frInviteStatus"))).toBe("Invite sent to Mary Smith.");
+  });
+
+  it("approves nothing when the question is answered no", async () => {
+    confirmAnswer = false;
+    await openFundraising();
+    setValue("#frInviteType", "memory");
+    await settle();
+    (q('[data-frinviteapprove="invite_memory"]') as HTMLElement).click();
+    await settle();
+    expect(sent("POST", "/api/admin/fundraising/invite-wording/invite_memory/approval")).toHaveLength(0);
+    expect((el("frInviteSend") as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it("shows an editor that it is waiting, with no Approve button", async () => {
+    asRole("editor");
+    await openFundraising();
+    setValue("#frInviteType", "memory");
+    await settle();
+    expect(q("[data-frinviteapprove]")).toBeNull();
+    expect(text(el("frInviteWordingMeta"))).toContain("New wording, waiting for sign off. Only an admin can approve it.");
+    expect((el("frInviteSend") as HTMLButtonElement).disabled).toBe(true);
+    expect(text(el("frInviteHeld"))).toBe(WAITING);
+  });
+
+  it("lets an editor send one once an admin has approved it", async () => {
+    approveMemory();
+    asRole("editor");
+    await openFundraising();
+    fillInvite("memory");
+    await settle();
+    expect((el("frInviteSend") as HTMLButtonElement).disabled).toBe(false);
+    expect(text(el("frInviteWordingMeta"))).toContain("Approved by fern@example.com on 03/10/2026.");
+    expect(q("[data-frinvitewithdraw]")).toBeNull();
+  });
+
+  it("has its approval withdrawn by an admin, after asking, and is held again", async () => {
+    approveMemory();
+    await openFundraising();
+    setValue("#frInviteType", "memory");
+    await settle();
+    (q('[data-frinvitewithdraw="invite_memory"]') as HTMLElement).click();
+    await settle();
+    expect(confirmed.pop()).toBe("Withdraw approval? In memory invites cannot be sent until it is approved again.");
+    expect(sent("DELETE", "/api/admin/fundraising/invite-wording/invite_memory/approval")).toHaveLength(1);
+    expect((el("frInviteSend") as HTMLButtonElement).disabled).toBe(true);
+    expect(text(el("frInviteHeld"))).toBe(WAITING);
+  });
+
+  it("holds only the in memory type: choosing another lets it be sent again", async () => {
+    await openFundraising();
+    setValue("#frInviteType", "memory");
+    await settle();
+    expect((el("frInviteSend") as HTMLButtonElement).disabled).toBe(true);
+    setValue("#frInviteType", "team");
+    await settle();
+    expect((el("frInviteSend") as HTMLButtonElement).disabled).toBe(false);
+    expect(el("frInviteHeld").hidden).toBe(true);
+  });
+
+  it("is held when the sign offs could not be checked", async () => {
+    team.inviteWording = { approvals: {}, unavailable: true };
+    await openFundraising();
+    setValue("#frInviteType", "memory");
+    await settle();
+    expect((el("frInviteSend") as HTMLButtonElement).disabled).toBe(true);
+    expect(text(el("frInviteWordingMeta"))).toContain("Couldn't check sign-offs just now, so new wording is held.");
+    expect(q("[data-frinviteapprove]")).toBeNull();
+  });
+
+  it("passes on the server's words if it refuses one all the same", async () => {
+    approveMemory();
+    answers["POST /api/admin/fundraising/invites"] = { status: 409, body: { error: WAITING } };
+    await openFundraising();
+    fillInvite("memory");
+    await settle();
+    submit("#frInviteForm");
+    await settle();
+    expect(text(el("frInviteStatus"))).toBe(WAITING);
+  });
+});
+
 describe("invites not taken up", () => {
+  it("shows what each was invited to do, and nothing for one from before", async () => {
+    team.invites = [
+      { ...team.invites[0], id: 8, name: "Mary Smith", type: "memory" },
+      { ...team.invites[0], id: 9, name: "Sky Sample", type: "team" },
+      { ...team.invites[0], id: 10, name: "Jo Sample", type: "event" },
+      { ...team.invites[0], id: 11, name: "Robin Sample", type: "raising" },
+      team.invites[0],
+    ];
+    await openFundraising();
+    const pill = (id: number) => text(q(`#frInvites [data-frinvite="${id}"] .fr-invite-type`));
+    expect([pill(8), pill(9), pill(10), pill(11)]).toEqual(["In memory", "A team", "Hosting an event", "Raising money"]);
+    expect(q('#frInvites [data-frinvite="7"] .fr-invite-type')).toBeNull();
+  });
+
+  it("says the type when asking about a resend, and sends no type: the server keeps it", async () => {
+    team.invites = [{ ...team.invites[0], type: "memory" }];
+    await openFundraising();
+    (q('[data-frinviteresend="7"]') as HTMLElement).click();
+    await settle();
+    expect(confirmed.pop()).toBe("Send the in memory invite to Alex Example again? The link in the first email stops working.");
+    const resent = sent("POST", "/api/admin/fundraising/invites/7/resend");
+    expect(resent).toHaveLength(1);
+    expect(resent[0].body ?? {}).toEqual({});
+  });
+
+
   it("lists each with who invited them and when, with Resend and Remove", async () => {
     await openFundraising();
     const item = q('#frInvites [data-frinvite="7"]')!;

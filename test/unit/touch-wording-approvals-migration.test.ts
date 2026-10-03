@@ -28,6 +28,8 @@ function fakePgm() {
     pgm: {
       createTable: record("createTable"),
       dropTable: record("dropTable"),
+      addColumns: record("addColumns"),
+      dropColumns: record("dropColumns"),
       sql: record("sql"),
       func: (s: string) => ({ func: s }),
     },
@@ -68,10 +70,27 @@ describe("the touch wording approvals migration", () => {
     for (const k of seeded) expect(WORDING_KEYS as readonly string[]).toContain(k);
   });
 
-  it("drops the table on the way down", () => {
+  it("marks a thank you held for sign off or whose send failed, so only those are caught up (review)", () => {
+    const f = fakePgm();
+    migration.up(f.pgm);
+    const add = f.calls.find((c) => c.op === "addColumns")!;
+    expect(add.args[0]).toBe("fundraisers");
+    const cols = add.args[1] as Record<string, Record<string, unknown>>;
+    expect(Object.keys(cols)).toEqual(["touch_finished_pending", "touch_finished_pending_at"]);
+    // Nullable, no default: every page today reads "nothing to catch up".
+    expect(cols.touch_finished_pending).toMatchObject({ type: "text" });
+    expect(cols.touch_finished_pending.notNull).toBeUndefined();
+    expect(String(cols.touch_finished_pending.check)).toContain("'held', 'failed'");
+    expect(cols.touch_finished_pending_at).toEqual({ type: "timestamptz" });
+  });
+
+  it("drops the table and the columns on the way down", () => {
     const f = fakePgm();
     migration.down(f.pgm);
-    expect(f.calls.map((c) => [c.op, c.args[0]])).toEqual([["dropTable", "touch_wording_approvals"]]);
+    expect(f.calls.map((c) => [c.op, c.args[0]])).toEqual([
+      ["dropColumns", "fundraisers"],
+      ["dropTable", "touch_wording_approvals"],
+    ]);
   });
 
   it("sorts after 1791200000196 and before 1791200000200, by name", () => {

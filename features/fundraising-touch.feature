@@ -82,6 +82,18 @@ Feature: Keeping in touch with fundraisers (TASK-515)
     When the daily automatic emails run
     Then exactly 1 "fundraiseFinished" email went to "quinn.touch.fr.bdd@example.com"
 
+  Scenario: a page finished while the automatic emails were off never gets the thank you later
+    Given fundraising is switched on
+    And the automatic emails are switched off
+    And every automatic email wording is approved
+    And a fundraising staff member "e6.touch.fr.bdd@example.com" with role "editor"
+    And an approved fundraiser "Rae's Dash (bdd-fr)" raising 50000 pence, organised by "rae.touch.fr.bdd@example.com"
+    When "e6.touch.fr.bdd@example.com" marks "Rae's Dash (bdd-fr)" finished
+    Then the fundraising answer is 200
+    Given the automatic emails are switched on
+    When the daily automatic emails run
+    Then no "fundraiseFinished" email went to "rae.touch.fr.bdd@example.com"
+
   Scenario: a call about a prompt is recorded by an editor, never by a viewer
     Given a fundraising staff member "e4.touch.fr.bdd@example.com" with role "editor"
     And a fundraising staff member "v4.touch.fr.bdd@example.com" with role "viewer"

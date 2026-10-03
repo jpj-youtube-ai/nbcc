@@ -3,7 +3,6 @@ import { z } from "zod";
 import { authorizeSection, authorizeSectionAsAdmin } from "./admin-authz";
 import { actorOf } from "./admin";
 import { config } from "../config";
-import { getFundraiser } from "../db/fundraisers";
 import {
   approveWording,
   getTouchSettings,
@@ -12,16 +11,16 @@ import {
   recordPromptCall,
   setTouchEmailsOn,
   TouchError,
+  touchFundraiser,
   withdrawWording,
   type WordingApproval,
 } from "../db/fundraising-touch";
 import { callPrompts, PROMPT_KEYS, type CallPrompt, type PromptCall, type PromptKey } from "../fundraising/call-prompts";
 import { buildTouchEmail, sampleTouchData, touchEmailData } from "../fundraising/touch-emails";
 import {
-  dueTouches,
   isNewWording,
-  isSignedOff,
   NEW_WORDING_KINDS,
+  pickTouch,
   TOUCH_KINDS,
   TOUCH_LABELS,
   TOUCH_WHEN,
@@ -65,6 +64,17 @@ function failed(res: Response, what: string, err: unknown): Response {
 
 const isKind = (k: unknown): k is TouchKind => typeof k === "string" && (TOUCH_KINDS as readonly string[]).includes(k);
 const isWordingKey = (k: unknown): k is string => typeof k === "string" && (WORDING_KEYS as readonly string[]).includes(k);
+// The approvals; when they cannot be read, none (so new wording reads as held, as the sender treats
+// it) and the card says so, rather than failing whole.
+async function readApprovals(): Promise<{ list: WordingApproval[]; unavailable: boolean }> {
+  try {
+    return { list: await listWordingApprovals(), unavailable: false };
+  } catch (err) {
+    console.error("admin fundraising: could not read the approved wordings:", err instanceof Error ? err.message : err);
+    return { list: [], unavailable: true };
+  }
+}
+
 const approvalMap = (list: WordingApproval[]) =>
   Object.fromEntries(list.map((a) => [a.key, { approvedAt: a.approvedAt, approvedBy: a.approvedBy }])) as Record<string, { approvedAt: string; approvedBy: string }>;
 const base = () => config.PORTAL_BASE_URL.replace(/\/+$/, "");
@@ -75,8 +85,8 @@ export async function getTouch(req: Request, res: Response): Promise<Response | 
   if (!(await authorizeSection(req, res, "fundraising", "view"))) return;
   try {
     const today = followUpToday(new Date());
-    const [settings, state, approvalList] = await Promise.all([getTouchSettings(), readTouchState(), listWordingApprovals()]);
-    const approvals = approvalMap(approvalList);
+    const [settings, state, read] = await Promise.all([getTouchSettings(), readTouchState(), readApprovals()]);
+    const approvals = approvalMap(read.list);
     const approved = new Set(Object.keys(approvals));
     const sent: Record<string, TouchSent[]> = {};
     const prompts: Record<string, CallPrompt[]> = {};
@@ -91,11 +101,10 @@ export async function getTouch(req: Request, res: Response): Promise<Response | 
       const showing = callPrompts(s.f, s.prompt, today);
       if (showing.length) prompts[id] = showing;
       if (s.prompt.calls.length) promptCalls[id] = s.prompt.calls;
-      const all = dueTouches(s.f, s.touch, today);
-      const next = all.find((k) => isSignedOff(k, s.f.meter.raisedPence, approved));
-      if (next) due[id] = next;
-      const waiting = all.find((k) => !isSignedOff(k, s.f.meter.raisedPence, approved));
-      if (waiting && (!next || all.indexOf(waiting) < all.indexOf(next))) held[id] = waiting;
+      // The same pick the daily run makes (touch-runner.ts).
+      const pick = pickTouch(s.f, s.touch, today, approved);
+      if (pick.kind) due[id] = pick.kind;
+      if (pick.held.length) held[id] = pick.held[0];
     }
     const kinds = TOUCH_KINDS.map((kind) => ({
       kind,
@@ -105,7 +114,9 @@ export async function getTouch(req: Request, res: Response): Promise<Response | 
       // The versions of it still waiting for sign off (its usual one, and the one with nothing raised).
       waiting: wordingKeysOf(kind).filter((k) => !approved.has(k)),
     }));
-    return res.status(200).json({ today, settings, kinds, approvals, sent, prompts, promptCalls, due, held });
+    return res
+      .status(200)
+      .json({ today, settings, kinds, approvals, approvalsUnavailable: read.unavailable, sent, prompts, promptCalls, due, held });
   } catch (err) {
     return failed(res, "keep in touch read", err);
   }
@@ -126,17 +137,27 @@ export async function getTouchPreview(req: Request, res: Response): Promise<Resp
     if (raw !== undefined && raw !== "") {
       const id = Number(raw);
       if (!Number.isInteger(id) || id <= 0) return res.status(400).json({ error: "Invalid id" });
-      const f = await getFundraiser(id);
+      // A team page with its whole team's total, as the daily run and Mark finished send it.
+      const f = await touchFundraiser(id);
       if (!f) return res.status(404).json({ error: "That fundraiser no longer exists" });
       data = touchEmailData(f, base());
       sample = false;
     }
     const mail = buildTouchEmail(kind, data);
     const key = wordingKey(kind, data.raisedPence);
-    const approval = key ? (approvalMap(await listWordingApprovals())[key] ?? null) : null;
-    return res
-      .status(200)
-      .json({ kind, label: TOUCH_LABELS[kind], newWording: isNewWording(kind, data.raisedPence), wordingKey: key, approval, sample, title: data.title, ...mail });
+    const read = key ? await readApprovals() : { list: [], unavailable: false };
+    const approval = key ? (approvalMap(read.list)[key] ?? null) : null;
+    return res.status(200).json({
+      kind,
+      label: TOUCH_LABELS[kind],
+      newWording: isNewWording(kind, data.raisedPence),
+      wordingKey: key,
+      approval,
+      approvalsUnavailable: read.unavailable,
+      sample,
+      title: data.title,
+      ...mail,
+    });
   } catch (err) {
     return failed(res, "automatic email preview", err);
   }

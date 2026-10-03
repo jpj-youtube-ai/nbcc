@@ -140,6 +140,11 @@ export interface TouchFacts {
   lastOnlineGiftAt: string | null;
   /** When staff marked it finished; null when they have not. */
   finishedAt: string | null;
+  /**
+   * The thank you (17) at Mark finished was held back for sign off ("held") or its send failed
+   * ("failed"): only then may the daily run catch it up. Never set when automatic emails were off.
+   */
+  finishedPending?: "held" | "failed" | null;
   /** The automatic emails it has already had. */
   sent: TouchSent[];
 }
@@ -165,11 +170,6 @@ export function isQuietFundraiser(f: Pick<FundraiserRecord, "kind"> & { inMemory
 export interface TouchOptions {
   /** The in memory guard. Only tests pass another. */
   isQuiet?: (f: TouchFundraiser) => boolean;
-  /**
-   * The wordings approved (WORDING_KEYS). When given, an email whose wording is waiting for sign
-   * off is never picked: the next one due is, or none. The sender always gives it.
-   */
-  signedOff?: ReadonlySet<string>;
 }
 
 const quietOf = (o?: TouchOptions) => o?.isQuiet ?? isQuietFundraiser;
@@ -225,7 +225,7 @@ export function dueTouches(f: TouchFundraiser, facts: TouchFacts, today: string,
     if (pace === "on_track") due.add("on_track");
   }
 
-  if (f.status === "finished" && facts.finishedAt) {
+  if (f.status === "finished" && facts.finishedAt && facts.finishedPending) {
     const since = dayCount(ukDay(facts.finishedAt), today);
     if (since >= 0 && since <= FINISHED_CATCH_UP_DAYS) due.add("finished");
   }
@@ -242,8 +242,27 @@ export function dueTouches(f: TouchFundraiser, facts: TouchFacts, today: string,
 
 /** The one automatic email to send today, or null. */
 export function nextTouch(f: TouchFundraiser, facts: TouchFacts, today: string, o?: TouchOptions): TouchKind | null {
-  const due = dueTouches(f, facts, today, o);
-  const signedOff = o?.signedOff;
-  if (!signedOff) return due[0] ?? null;
-  return due.find((k) => isSignedOff(k, f.meter.raisedPence, signedOff)) ?? null;
+  return dueTouches(f, facts, today, o)[0] ?? null;
+}
+
+export interface TouchPick {
+  /** The one automatic email to send today, or null. */
+  kind: TouchKind | null;
+  /** Those due ahead of it, held back because their new wording is waiting for sign off. */
+  held: TouchKind[];
+}
+
+/**
+ * The one automatic email to send today whose wording may go (approved, or needing no sign off),
+ * and what was held back ahead of it. The daily run, the admin's "next run" and its preview all ask
+ * this. While the thank you (17) is held, nothing else goes to that page (never a year on instead).
+ */
+export function pickTouch(f: TouchFundraiser, facts: TouchFacts, today: string, approved: ReadonlySet<string>, o?: TouchOptions): TouchPick {
+  const held: TouchKind[] = [];
+  for (const kind of dueTouches(f, facts, today, o)) {
+    if (isSignedOff(kind, f.meter.raisedPence, approved)) return { kind, held };
+    held.push(kind);
+    if (kind === "finished") break;
+  }
+  return { kind: null, held };
 }

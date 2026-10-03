@@ -9,11 +9,18 @@
 //                              raised versions of 16, 17 and 18 as "<kind>_zero"), with when and by
 //                              whom. No row, not approved: the sender skips that email and does not
 //                              claim it, so it can still go once approved while it is due.
+//   fundraisers.touch_finished_pending / _at
+//                              the thank you (17) at Mark finished was held back for sign off
+//                              ('held') or its send failed ('failed'), and when. Only a page marked
+//                              so has it caught up by the daily run (within a week); one finished
+//                              while automatic emails were off is never marked, so never sent later.
+//                              Cleared when it goes.
 //
 // Seeded with the three Jaimie approved on 2026-10-03 (target, need_a_hand, on_track), each with a
 // History row. Finished and the three nothing raised versions are left waiting for her sign off.
 //
-// Additive only: one new table and its rows, so a code rollback is safe (golden rule 2). Numbered
+// Additive only: one new table and its rows, and two nullable columns with no default, so a code
+// rollback is safe (golden rule 2). Numbered
 // 1791200000197: after 190 on main and the 195 and 196 that open changes use, before 200.
 
 exports.shorthands = undefined;
@@ -42,8 +49,13 @@ exports.up = (pgm) => {
            jsonb_build_object('key', k, 'approvedBy', 'Jaimie', 'approvedOn', '2026-10-03')
       FROM unnest(ARRAY[${APPROVED.map((k) => `'${k}'`).join(", ")}]) AS k
   `);
+  pgm.addColumns("fundraisers", {
+    touch_finished_pending: { type: "text", check: "touch_finished_pending IN ('held', 'failed')" },
+    touch_finished_pending_at: { type: "timestamptz" },
+  });
 };
 
 exports.down = (pgm) => {
+  pgm.dropColumns("fundraisers", ["touch_finished_pending", "touch_finished_pending_at"]);
   pgm.dropTable("touch_wording_approvals");
 };

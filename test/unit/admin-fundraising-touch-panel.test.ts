@@ -52,6 +52,8 @@ const NEW_KINDS = ["target", "finished", "need_a_hand", "on_track"];
 const ZERO_KINDS = ["week_after", "finished", "year_on"];
 const keysOf = (kind: string) => [...(NEW_KINDS.includes(kind) ? [kind] : []), ...(ZERO_KINDS.includes(kind) ? [kind + "_zero"] : [])];
 let approved: Record<string, { approvedAt: string; approvedBy: string }> = {};
+let approvalsUnavailable = false;
+let touchFails = false;
 
 const BEHIND = {
   key: "behind",
@@ -87,7 +89,8 @@ function respond(url: string, init?: { method?: string; body?: string }) {
   if (path === "/api/admin/whats-new") return j({ areas: [] });
   if (path === "/api/admin/fundraising/settings") return j({ pageOn: true, updatedAt: null, updatedBy: null });
   if (path === "/api/admin/fundraisers" && method === "GET") {
-    return j({ pageOn: true, fundraisers: records.map((f) => ({ ...f, meter, editWaiting: false })) });
+    // The list gives a team page its whole team's total (withTeamTotals), as the daily run reads it.
+    return j({ pageOn: true, fundraisers: records.map((f) => ({ ...f, meter: (f.listMeter as typeof meter) || meter, editWaiting: false })) });
   }
   if (path === "/api/admin/fundraising/team") return j({ today: "2026-12-07", me: 3, calls: {}, prompts: {}, invites: [], signers: [] });
   if (path === "/api/admin/fundraising/summary") return j({ recipients: [], lastWeek: null });
@@ -95,11 +98,13 @@ function respond(url: string, init?: { method?: string; body?: string }) {
   if (path === "/api/admin/fundraising/thanks-waiting") return j({ counts: {} });
   if (path === "/api/admin/fundraising/news-waiting") return j({ counts: {} });
   if (path === "/api/admin/fundraising/touch") {
+    if (touchFails) return j({ error: "Admin is temporarily unavailable" }, 500);
     return j({
       today: "2026-12-07",
       settings: { on: touchOn, updatedAt: touchOn ? "2026-12-01T09:00:00.000Z" : null, updatedBy: touchOn ? "admin:fern@example.com" : null },
       kinds: KINDS.map((k) => ({ ...k, waiting: keysOf(k.kind).filter((key) => !approved[key]) })),
       approvals: approved,
+      approvalsUnavailable,
       sent: { "1": [{ kind: "first_gift", sentAt: "2026-11-20T08:00:00.000Z" }] },
       prompts: { "1": [BEHIND] },
       promptCalls: {},
@@ -118,6 +123,7 @@ function respond(url: string, init?: { method?: string; body?: string }) {
       newWording: key !== null,
       wordingKey: key,
       approval: (key && approved[key]) || null,
+      approvalsUnavailable,
       sample: !forId,
       title,
       subject: "Subject for " + pv[1],
@@ -184,6 +190,8 @@ function asRole(r: "admin" | "editor" | "viewer") {
 beforeEach(() => {
   records = [fundraiser(1), fundraiser(2), fundraiser(3, { path: "event", title: "Test Coffee Morning" })];
   touchOn = false;
+  approvalsUnavailable = false;
+  touchFails = false;
   approved = Object.fromEntries(["target", "need_a_hand", "on_track"].map((k) => [k, { approvedAt: "2026-10-03T11:00:00.000Z", approvedBy: "Jaimie" }]));
   asRole("admin");
   calls = [];
@@ -374,6 +382,43 @@ describe("signing off the new wording (Jaimie, 2026-10-03)", () => {
     await openRow(1);
     (q('[data-fraction="finish"]') as HTMLElement).click();
     expect(confirmed.pop()).toContain("its new wording is waiting for your sign off");
+  });
+});
+
+describe("review: sign offs, team totals and an unread card", () => {
+  it("says before Mark finished that a team page's thank you goes, judged on the whole team's total", async () => {
+    // The team page itself has raised nothing (its own meter); its members £500 (the list's meter).
+    // The usual thank you is approved, its nothing raised version is not: the team total decides.
+    approved.finished = { approvedAt: "2026-12-01T09:00:00.000Z", approvedBy: "admin:fern@example.com" };
+    records = [fundraiser(1, { isTeam: true, title: "Team Dash", listMeter: { ...meter, raisedPence: 50000, onlinePence: 50000 } })];
+    touchOn = true;
+    confirmAnswer = false;
+    await openFundraising();
+    await openRow(1);
+    (q('[data-fraction="finish"]') as HTMLElement).click();
+    expect(confirmed.pop()).toContain("Automatic emails are on, so we email Robin Example their thank you");
+  });
+
+  it("does not claim the thank you goes when the automatic emails could not load", async () => {
+    touchFails = true;
+    confirmAnswer = false;
+    await openFundraising();
+    await openRow(1);
+    (q('[data-fraction="finish"]') as HTMLElement).click();
+    const said = confirmed.pop()!;
+    expect(said).toContain("If its wording is still waiting for sign off, the thank you is held until you approve it.");
+    expect(said).not.toContain("so we email");
+  });
+
+  it("says when the sign offs could not be checked, and offers no approve button", async () => {
+    approvalsUnavailable = true;
+    approved = {};
+    await openFundraising();
+    expect(text(el("frTouch"))).toContain("Couldn't check sign-offs just now, so new wording is held.");
+    (q('[data-frtouchkind="target"]') as HTMLElement).click();
+    await settle();
+    expect(q("[data-frtouchapprove]")).toBeNull();
+    expect(text(el("frTouchMeta"))).toContain("Couldn't check sign-offs just now, so new wording is held.");
   });
 });
 

@@ -1,14 +1,24 @@
 import { config } from "../config";
 import { sendFundraiseTouch, type FundraiseEmailMessage } from "../clients/email";
 import { fundraisingIsOn } from "../db/fundraisers";
-import { approvedWordingKeys, claimTouch, readTouchState, recordTouchSent, releaseTouch, touchEmailsOn, type TouchCandidate } from "../db/fundraising-touch";
+import {
+  approvedWordingKeys,
+  claimTouch,
+  clearFinishedPending,
+  markFinishedPending,
+  readTouchState,
+  recordTouchSent,
+  releaseTouch,
+  touchEmailsOn,
+  type TouchCandidate,
+} from "../db/fundraising-touch";
 import { suppressedAmong } from "../db/email-suppressions";
 import { optedOutAmong } from "../db/email-opt-outs";
 import { createAgainToken } from "../db/fundraiser-again";
 import { againExpiresAt, againUrl, hashAgainToken, newAgainToken } from "./again";
 import { londonToday } from "../events/model";
 import { buildTouchEmail, touchEmailData } from "./touch-emails";
-import { canTouch, dueTouches, isQuietFundraiser, isSignedOff, wordingKey, type TouchFundraiser, type TouchKind } from "./touch-rules";
+import { canTouch, isQuietFundraiser, isSignedOff, pickTouch, wordingKey, type TouchFundraiser, type TouchKind } from "./touch-rules";
 import type { FundraiserRecord, Meter } from "./model";
 
 // TASK-515: sending the automatic emails to organisers. Fundraising is live with real fundraisers,
@@ -30,7 +40,10 @@ import type { FundraiserRecord, Meter } from "./model";
 //
 // The daily pass (runTouchEmails) rides the 8am task (src/scripts/send-reminders.ts), one email per
 // fundraiser at most. The finished email (sendFinishedTouch) goes when staff press Mark finished,
-// after that has committed. Neither ever throws: every failure is logged, never with an address.
+// after that has committed; if it is held there for sign off, or its send fails, it is marked
+// (fundraisers.touch_finished_pending) and the daily pass catches it up within a week. One not sent
+// because the switches were off is never marked, so never sent later. Neither ever throws: every
+// failure is logged, never with an address.
 
 export interface TouchDeps {
   touchOn: () => Promise<boolean>;
@@ -46,6 +59,10 @@ export interface TouchDeps {
   againLink: (fundraiserId: number) => Promise<string>;
   /** The wordings an admin has approved (WORDING_KEYS in touch-rules.ts). */
   approvedWordings: () => Promise<ReadonlySet<string>>;
+  /** The thank you at Mark finished was held for sign off, or its send failed: the daily run may catch it up. */
+  markFinishedPending: (fundraiserId: number, reason: "held" | "failed") => Promise<void>;
+  /** The thank you went: nothing to catch up. */
+  clearFinishedPending: (fundraiserId: number) => Promise<void>;
   /** The in memory guard. Only tests pass another. */
   isQuiet?: (f: TouchFundraiser) => boolean;
 }
@@ -74,6 +91,8 @@ export const realTouchDeps: TouchDeps = {
   send: sendFundraiseTouch,
   againLink: makeAgainLink,
   approvedWordings: approvedWordingKeys,
+  markFinishedPending,
+  clearFinishedPending,
 };
 
 const why = (err: unknown) => (err instanceof Error ? err.message : String(err));
@@ -150,6 +169,14 @@ async function sendOne(
   } catch (err) {
     console.error(`fundraising automatic email (${kind}): went, but its History row was not written:`, why(err));
   }
+  if (kind === "finished") {
+    try {
+      await deps.clearFinishedPending(f.id);
+    } catch (err) {
+      // Harmless: it is claimed, so it can never go twice.
+      console.error("fundraising automatic email (finished): went, but its catch up mark was not cleared:", why(err));
+    }
+  }
   return "sent";
 }
 
@@ -182,12 +209,10 @@ export async function runTouchEmails(now = new Date(), deps: TouchDeps = realTou
   for (const c of state) {
     result.considered += 1;
     // New wording waiting for sign off is passed over (never claimed), and the next one due goes.
-    const raised = c.f.meter.raisedPence;
-    const due = dueTouches(c.f, c.touch, today, { isQuiet });
-    const kind = due.find((k) => isSignedOff(k, raised, approved)) ?? null;
-    for (const held of due.slice(0, kind ? due.indexOf(kind) : due.length)) {
+    const { kind, held } = pickTouch(c.f, c.touch, today, approved, { isQuiet });
+    for (const k of held) {
       result.waiting += 1;
-      sayWaiting(c.f.id, held, raised);
+      sayWaiting(c.f.id, k, c.f.meter.raisedPence);
     }
     if (!kind) continue;
     try {
@@ -217,12 +242,16 @@ export async function sendFinishedTouch(
   try {
     if (f.status !== "finished" || !canTouch(f, deps.isQuiet ?? isQuietFundraiser)) return "skipped";
     if ((await bothOn(deps)) !== "on") return "skipped";
-    // Held back, not claimed: the daily run can still send it once approved (touch-rules.ts).
+    // Held back, not claimed, and marked: the daily run sends it once approved, within a week
+    // (touch-rules.ts). Only a held or failed one is ever caught up: never one switched off here.
     if (!isSignedOff("finished", f.meter.raisedPence, await readApproved(deps))) {
       sayWaiting(f.id, "finished", f.meter.raisedPence);
+      await deps.markFinishedPending(f.id, "held");
       return "skipped";
     }
-    return await sendOne(f, "finished", "system:finished", deps);
+    const outcome = await sendOne(f, "finished", "system:finished", deps);
+    if (outcome === "failed") await deps.markFinishedPending(f.id, "failed");
+    return outcome;
   } catch (err) {
     console.error("fundraising automatic email (finished) failed:", why(err));
     return "failed";

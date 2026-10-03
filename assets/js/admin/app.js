@@ -10608,8 +10608,10 @@
       finish: "Mark " + f.title + " as finished? It comes off the Get involved list. Its page stays up with a thank you banner and can still take gifts. What it raised stays in the records." +
         // TASK-515: the thank you (email 17) goes now, only while automatic emails are on.
         (hasPage
-          ? frTouch && frTouch.settings && frTouch.settings.on
-            ? frTouchFinishedWaiting()
+          ? !frTouch
+            ? " If automatic emails are on, we email " + f.name + " their thank you. If its wording is still waiting for sign off, the thank you is held until you approve it."
+            : frTouch.settings && frTouch.settings.on
+            ? frTouchFinishedWaiting(f)
               ? " Automatic emails are on, but the thank you is held back: its new wording is waiting for your sign off. It goes once you approve it in Automatic emails, within a week."
               : " Automatic emails are on, so we email " + f.name + " their thank you, with their certificate."
             : " Automatic emails are off, so no thank you email goes."
@@ -11575,6 +11577,7 @@
         (dueIds.length === 1 ? "1 email: " : dueIds.length + " emails: ") + dueWords.join(", ") +
         ". " + "Anyone who has asked us to stop is left out."
       : (s.on ? "Nothing is due at the next 8am run." : "Switched on now, the next 8am run would send nothing.");
+    if (frTouch.approvalsUnavailable) el("frTouchDue").textContent += " " + FR_TOUCH_UNCHECKED;
     var heldCount = Object.keys(frTouch.held || {}).length;
     if (heldCount) {
       el("frTouchDue").textContent += " " + (heldCount === 1 ? "1 more is" : heldCount + " more are") + " waiting for your sign off.";
@@ -11655,9 +11658,12 @@
       '">Waiting for sign off</span>';
   }
 
+  var FR_TOUCH_UNCHECKED = "Couldn't check sign-offs just now, so new wording is held.";
+
   function frTouchSignOffHtml(d) {
     var key = d && d.wordingKey;
     if (!key) return "";
+    if (d.approvalsUnavailable) return '<p class="fr-touch-signoff" data-frtouchsignoff>' + H.escapeHtml(FR_TOUCH_UNCHECKED) + "</p>";
     var admin = isAdmin() && frCanWrite();
     var a = d.approval;
     if (!a) {
@@ -11741,11 +11747,14 @@
       });
   }
 
-  // Is the thank you (17) for the open sign up waiting for sign off, as it would go with what it has raised?
-  function frTouchFinishedWaiting() {
+  // Is the thank you (17) for this sign up waiting for sign off, as it would go with what it has
+  // raised? The list's meter, as the server reads it: a team page's whole team total.
+  function frTouchFinishedWaiting(f) {
     var info = frTouchKindInfo("finished");
     if (!info || !info.waiting) return false;
-    var raised = Number((frDetail && frDetail.meter && frDetail.meter.raisedPence) || 0);
+    var listed = ((frData && frData.fundraisers) || []).filter(function (x) { return x.id === f.id; })[0];
+    var m = (listed && listed.meter) || (frDetail && frDetail.meter) || {};
+    var raised = Number(m.raisedPence || 0);
     return info.waiting.indexOf(raised > 0 ? "finished" : "finished_zero") !== -1;
   }
 

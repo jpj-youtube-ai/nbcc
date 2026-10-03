@@ -53,6 +53,8 @@ function deps(over: Partial<TouchDeps> = {}): TouchDeps & { sent: Array<{ kind: 
     againLink: vi.fn(async (id: number) => `https://nbcc.test/fundraise?again=token-for-${id}`),
     // Every new wording approved, unless a test says otherwise.
     approvedWordings: vi.fn(async () => new Set<string>(WORDING_KEYS)),
+    markFinishedPending: vi.fn(async () => undefined),
+    clearFinishedPending: vi.fn(async () => undefined),
     send: vi.fn(async (kind: string, _name: string, m: { email: string; subject: string }) => {
       sent.push({ kind, to: m.email, subject: m.subject });
     }),
@@ -203,7 +205,7 @@ describe("new wording waits for sign off (Jaimie, 2026-10-03)", () => {
 
   it("holds back the nothing raised version on its own: approving the usual one is not enough", async () => {
     // Finished two days ago, with nothing raised: the finished email's nothing raised version.
-    const done = [{ ...candidate(fr({ status: "finished", eventDate: null }, 0)), touch: { firstOnlineGiftAt: null, lastOnlineGiftAt: null, finishedAt: "2026-11-27T15:00:00Z", sent: [] } }];
+    const done = [{ ...candidate(fr({ status: "finished", eventDate: null }, 0)), touch: { firstOnlineGiftAt: null, lastOnlineGiftAt: null, finishedAt: "2026-11-27T15:00:00Z", finishedPending: "held" as const, sent: [] } }];
     const held = deps({ readState: vi.fn(async () => done), approvedWordings: approving("finished") });
     expect(await runTouchEmails(NOW, held)).toMatchObject({ sent: 0, waiting: 1 });
     expect(held.claim).not.toHaveBeenCalled();
@@ -220,15 +222,80 @@ describe("new wording waits for sign off (Jaimie, 2026-10-03)", () => {
     expect(d.sent.map((m) => m.kind)).toEqual(["week_before"]);
   });
 
-  it("holds back the finished email at Mark finished until it is approved, without claiming it", async () => {
+  it("holds back the finished email at Mark finished until it is approved, without claiming it, and marks it held", async () => {
     const info = vi.spyOn(console, "info").mockImplementation(() => undefined);
     const d = deps({ approvedWordings: approving("finished_zero") });
     expect(await sendFinishedTouch(fr({ status: "finished" }, 61200), d)).toBe("skipped");
     expect(d.claim).not.toHaveBeenCalled();
     expect(d.send).not.toHaveBeenCalled();
+    expect(d.markFinishedPending).toHaveBeenCalledWith(7, "held");
     expect(info.mock.calls.map((c) => c.join(" ")).join(" | ")).toMatch(/fundraiser 7.*waiting for sign off/);
     const ok = deps({ approvedWordings: approving("finished") });
     expect(await sendFinishedTouch(fr({ status: "finished" }, 61200), ok)).toBe("sent");
+  });
+});
+
+describe("catching up the thank you in the daily run", () => {
+  // Sam's Santa Dash, marked finished two days before NOW, with £612 raised.
+  const finishedSam = (over: Partial<FundraiserRecord> = {}, pending: "held" | "failed" | null = "held", sent: TouchCandidate["touch"]["sent"] = []) => [
+    {
+      ...candidate(fr({ status: "finished", eventDate: null, ...over }, 61200)),
+      touch: { firstOnlineGiftAt: null, lastOnlineGiftAt: null, finishedAt: "2026-11-27T15:00:00Z", finishedPending: pending, sent },
+    },
+  ];
+
+  it("never sends the thank you to a page marked finished while automatic emails were off, once they are on", async () => {
+    // Switched off at Mark finished: nothing is held or failed, so nothing is marked...
+    const off = deps({ touchOn: vi.fn(async () => false) });
+    expect(await sendFinishedTouch(fr({ status: "finished" }, 61200), off)).toBe("skipped");
+    expect(off.markFinishedPending).not.toHaveBeenCalled();
+    // ...and switched on later, the daily run never sends it.
+    const d = deps({ readState: vi.fn(async () => finishedSam({}, null)) });
+    expect(await runTouchEmails(NOW, d)).toMatchObject({ sent: 0 });
+    expect(d.send).not.toHaveBeenCalled();
+  });
+
+  it("sends one held for sign off once it is approved, once, and clears the mark", async () => {
+    const d = deps({ readState: vi.fn(async () => finishedSam()) });
+    expect(await runTouchEmails(NOW, d)).toMatchObject({ sent: 1 });
+    expect(d.sent).toEqual([{ kind: "finished", to: "sam@example.com", subject: "Thank you from all of us at NBCC" }]);
+    expect(d.claim).toHaveBeenCalledWith(7, "finished", "system:schedule");
+    expect(d.clearFinishedPending).toHaveBeenCalledWith(7);
+    const again = deps({ readState: vi.fn(async () => finishedSam({}, "held", [{ kind: "finished", sentAt: "2026-11-29T08:00:00Z" }])) });
+    expect(await runTouchEmails(new Date("2026-11-30T08:00:00Z"), again)).toMatchObject({ sent: 0 });
+  });
+
+  it("marks a thank you whose send failed at Mark finished, and the daily run tries it again", async () => {
+    const failed = deps({ send: vi.fn(async () => Promise.reject(new Error("SES said no"))) });
+    expect(await sendFinishedTouch(fr({ status: "finished" }, 61200), failed)).toBe("failed");
+    expect(failed.release).toHaveBeenCalledWith(7, "finished");
+    expect(failed.markFinishedPending).toHaveBeenCalledWith(7, "failed");
+    const d = deps({ readState: vi.fn(async () => finishedSam({}, "failed")) });
+    expect(await runTouchEmails(NOW, d)).toMatchObject({ sent: 1 });
+    expect(d.sent[0].kind).toBe("finished");
+  });
+
+  it("does not mark one that was never going to go: opted out, already sent, or in memory", async () => {
+    for (const over of [{ blocked: vi.fn(async () => true) }, { claim: vi.fn(async () => false) }, { isQuiet: () => true }]) {
+      const d = deps(over);
+      expect(await sendFinishedTouch(fr({ status: "finished" }, 61200), d)).toBe("skipped");
+      expect(d.markFinishedPending).not.toHaveBeenCalled();
+    }
+  });
+
+  it("skips the catch-up for an in memory page, one not public, and while switched off", async () => {
+    expect(await runTouchEmails(NOW, deps({ readState: vi.fn(async () => finishedSam()), isQuiet: () => true }))).toMatchObject({ sent: 0 });
+    expect(await runTouchEmails(NOW, deps({ readState: vi.fn(async () => finishedSam({ public: false })) }))).toMatchObject({ sent: 0 });
+    const off = deps({ readState: vi.fn(async () => finishedSam()), touchOn: vi.fn(async () => false) });
+    expect(await runTouchEmails(NOW, off)).toMatchObject({ sent: 0, skipped: "switched off" });
+    expect(off.send).not.toHaveBeenCalled();
+  });
+
+  it("while the thank you is held, sends no year on in its place", async () => {
+    // Its date a year before NOW: a year on is due too.
+    const d = deps({ readState: vi.fn(async () => finishedSam({ eventDate: "2025-11-27" })), approvedWordings: vi.fn(async () => new Set<string>()) });
+    expect(await runTouchEmails(NOW, d)).toMatchObject({ sent: 0, waiting: 1 });
+    expect(d.claim).not.toHaveBeenCalled();
   });
 });
 

@@ -8867,7 +8867,7 @@ email kind on the Email audit):
 | 14, You did it! Target reached | `fundraiseTargetReached` | raised has reached the target, up to and including the date (never after it, and never once finished); it cheers them on to beat their goal, with a **Raise my target** button to their private area (new wording, for sign off) |
 | 15, One week to go | `fundraiseWeekBefore` | the date is 7 days away (or 6 or 5, if a run was missed) |
 | 16, How did it go? | `fundraiseWeekAfter` | the date was 7 days ago (or 8 or 9), asking them to pay in |
-| 17, Thank you from all of us | `fundraiseFinished` | straight after staff press **Mark finished**, with the link to their certificate; if it was held back for sign off (or its send failed), the daily run sends it once it can, for up to 7 days after it was finished, never later |
+| 17, Thank you from all of us | `fundraiseFinished` | straight after staff press **Mark finished**, with the link to their certificate; only if it was held back there for sign off, or its send failed there (marked in `fundraisers.touch_finished_pending`), the daily run sends it once it can, for up to 7 days after it was finished, never later. One not sent because automatic emails were off is never sent later. While it is held, nothing else (a year on) goes to that page |
 | 18, A year ago today... | `fundraiseYearOn` | 365 days after the date, or after it was finished when it had no date (a week to catch a missed run); its **Do it again** button opens the sign up form filled in from last year (below) |
 | Need a hand? | `fundraiseNeedAHand` | once, when the call prompt **Behind** holds (new wording, for sign off) |
 | You're doing great | `fundraiseOnTrack` | once, when the call prompt **On track** holds (new wording, for sign off) |
@@ -8889,7 +8889,13 @@ checks no email here says families). Every guard has to say yes before one goes:
 - its wording, if new, has been approved by an admin (Jaimie, 2026-10-03; below). One waiting for
   sign off is skipped and NOT claimed, so it can still go once approved while it is due (if its
   window passes first, it simply does not go); the run logs one info line for it, by fundraiser id,
-  and the next email due that is approved goes instead. Approvals that cannot be read count as none;
+  and the next email due that is approved goes instead (never while the thank you is held). The daily
+  run, the admin's next-run line and its preview all pick with one helper (`pickTouch`). Approvals
+  that cannot be read count as none (the card says "Couldn't check sign-offs just now, so new
+  wording is held.");
+- a team page is judged on its whole team's total everywhere: the daily run, Mark finished and the
+  preview (`touchFundraiser` in `src/db/fundraising-touch.ts`), so the wording (17 or its nothing
+  raised version) and the amount always agree;
 - each email goes once per fundraiser, ever: it is claimed in `fundraiser_touchpoints` (unique by
   fundraiser and kind) BEFORE it is sent, and the claim is given back only if the send fails, so
   another day can try. An error from the mail service can come after it has accepted an email (a
@@ -8984,8 +8990,8 @@ Admin routes need a session and the `fundraising` section.
 | Route | Who | Body | Answer |
 |---|---|---|---|
 | `POST /api/fundraise/again` | anyone | `{ token }` | `200 { path, kind, kindOther, title, description, targetPence, venue, town, instagram, facebook, firstName, lastName, email, phone }`, at most 3 times a link; `404` for any link that does not work; `429` after 30 tries in 15 minutes |
-| `GET /api/admin/fundraising/touch` | view | | `{ today, settings: { on, updatedAt, updatedBy }, kinds: [{ kind, label, when, newWording, waiting: [wordingKey] }], approvals: { <wordingKey>: { approvedAt, approvedBy } }, sent: { <id>: [{ kind, sentAt }] }, prompts: { <id>: [{ key, pill, label, reason, points }] }, promptCalls: { <id>: [...] }, due: { <id>: kind }, held: { <id>: kind } }` (`due`: what the next 8am run would send, were the switch on; `held`: what it would hold back for sign off) |
-| `GET /api/admin/fundraising/touch/preview/:kind` | view | `?fundraiserId=` or `?sample=zero` (optional) | `{ kind, label, newWording, wordingKey, approval: { approvedAt, approvedBy } \| null, sample, title, subject, html, text }`; `404` for an unknown kind or fundraiser |
+| `GET /api/admin/fundraising/touch` | view | | `{ today, settings: { on, updatedAt, updatedBy }, kinds: [{ kind, label, when, newWording, waiting: [wordingKey] }], approvals: { <wordingKey>: { approvedAt, approvedBy } }, approvalsUnavailable, sent: { <id>: [{ kind, sentAt }] }, prompts: { <id>: [{ key, pill, label, reason, points }] }, promptCalls: { <id>: [...] }, due: { <id>: kind }, held: { <id>: kind } }` (`due`: what the next 8am run would send, were the switch on; `held`: what it would hold back for sign off) |
+| `GET /api/admin/fundraising/touch/preview/:kind` | view | `?fundraiserId=` or `?sample=zero` (optional) | `{ kind, label, newWording, wordingKey, approval: { approvedAt, approvedBy } \| null, approvalsUnavailable, sample, title, subject, html, text }`; `404` for an unknown kind or fundraiser |
 | `PUT /api/admin/fundraising/touch/settings` | admin | `{ on: true \| false }` | `{ on, updatedAt, updatedBy }`; `audit_log` `fundraising.touch_emails_switched` |
 | `POST /api/admin/fundraising/touch/approvals/:key` | admin | | `{ approval: { key, approvedAt, approvedBy } }` (one already approved keeps its first approval); `404` for a key not in `WORDING_KEYS`; `audit_log` `fundraising.touch_wording_approved` |
 | `DELETE /api/admin/fundraising/touch/approvals/:key` | admin | | `{ withdrawn }`; `404` for a key not in `WORDING_KEYS`; `audit_log` `fundraising.touch_wording_withdrawn` (with whose approval it was) |
@@ -9004,7 +9010,8 @@ token's hash, made, runs out, how many times it has been looked up, used and by 
 new tables are in the nightly backup's table count (73).
 
 `migrations/1791200000197_touch-wording-approvals.js` (additive only): `touch_wording_approvals` (key,
-approved at, approved by; no row means not approved), seeded with `target`, `need_a_hand` and
+approved at, approved by; no row means not approved) and `fundraisers.touch_finished_pending`
+(`held` or `failed`, nullable) with `_at`, the thank you to catch up; seeded with `target`, `need_a_hand` and
 `on_track` as approved by Jaimie on 2026-10-03, each with an `audit_log` row. Numbered 197: after
 190 and the 195 and 196 that open changes use, before 200. In the nightly backup's table count (76).
 

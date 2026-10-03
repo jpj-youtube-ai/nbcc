@@ -13,6 +13,7 @@ const touch = vi.hoisted(() => ({
   listWordingApprovals: vi.fn(),
   approveWording: vi.fn(),
   withdrawWording: vi.fn(),
+  touchFundraiser: vi.fn(),
 }));
 const { getUserAuthRowMock, getFundraiser } = vi.hoisted(() => ({ getUserAuthRowMock: vi.fn(), getFundraiser: vi.fn() }));
 
@@ -75,6 +76,7 @@ beforeEach(() => {
   for (const fn of Object.values(touch)) fn.mockReset();
   getUserAuthRowMock.mockReset();
   getFundraiser.mockReset().mockResolvedValue(robin);
+  touch.touchFundraiser.mockImplementation(async (id: number) => getFundraiser(id));
   touch.getTouchSettings.mockResolvedValue({ on: false, updatedAt: null, updatedBy: null });
   touch.setTouchEmailsOn.mockImplementation(async (on: boolean) => ({ on, updatedAt: "2026-10-03T09:00:00.000Z", updatedBy: "admin:fern@example.com" }));
   touch.readTouchState.mockResolvedValue([
@@ -191,7 +193,7 @@ describe("the preview", () => {
   it("shows an email for a real fundraiser, from its record", async () => {
     const res = await run(routes.getTouchPreview, { token: tokenFor("viewer"), params: { kind: "halfway" }, query: { fundraiserId: "12" } });
     const body = res.body as { html: string; sample: boolean; title: string };
-    expect(getFundraiser).toHaveBeenCalledWith(12);
+    expect(touch.touchFundraiser).toHaveBeenCalledWith(12);
     expect(body.html).toContain("Robin&#39;s Walk");
     expect(body.html).toContain("Hi Robin,");
     expect(body.sample).toBe(false);
@@ -300,5 +302,43 @@ describe("signing off the new wording (Jaimie, 2026-10-03)", () => {
     expect(zero).toMatchObject({ newWording: true, wordingKey: "year_on_zero", approval: null });
     const old = (await run(routes.getTouchPreview, { token: t, params: { kind: "halfway" } })).body as Record<string, unknown>;
     expect(old).toMatchObject({ newWording: false, wordingKey: null, approval: null });
+  });
+});
+
+describe("review: one answer for every path", () => {
+  it("previews a team page's thank you with the whole team's total, as the daily run sends it", async () => {
+    // The team page itself has raised nothing; its members £500. touchFundraiser gives the team total.
+    const team = { ...robin, id: 40, title: "Team Dash", isTeam: true, status: "finished", targetPence: 100000 };
+    touch.touchFundraiser.mockResolvedValue({ ...team, meter: meter({ onlinePence: 50000, cashPence: 0, targetPence: 100000 }) });
+    const res = await run(routes.getTouchPreview, { token: tokenFor("viewer"), params: { kind: "finished" }, query: { fundraiserId: "40" } });
+    const body = res.body as { wordingKey: string; html: string };
+    expect(touch.touchFundraiser).toHaveBeenCalledWith(40);
+    expect(body.wordingKey).toBe("finished");
+    expect(body.html).toContain("£500");
+  });
+
+  it("still shows the card when the sign offs cannot be read: none approved, and says so", async () => {
+    touch.listWordingApprovals.mockRejectedValue(new Error("connection lost"));
+    touch.readTouchState.mockResolvedValue([
+      {
+        f: { ...robin, meter: meter({ onlinePence: 30000, cashPence: 0, targetPence: 30000 }) },
+        touch: { firstOnlineGiftAt: null, lastOnlineGiftAt: null, finishedAt: null, sent: [] },
+        prompt: { lastOnlineGiftAt: null, calls: [] },
+      },
+    ]);
+    const res = await run(routes.getTouch, { token: tokenFor("viewer") });
+    expect(res.statusCode).toBe(200);
+    const body = res.body as Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
+    expect(body.approvalsUnavailable).toBe(true);
+    expect(body.approvals).toEqual({});
+    expect(body.kinds.find((k: { kind: string }) => k.kind === "target").waiting).toEqual(["target"]);
+    expect(body).toMatchObject({ due: {}, held: { "12": "target" } });
+    const pv = await run(routes.getTouchPreview, { token: tokenFor("viewer"), params: { kind: "target" } });
+    expect(pv.statusCode).toBe(200);
+    expect(pv.body).toMatchObject({ wordingKey: "target", approval: null, approvalsUnavailable: true });
+  });
+
+  it("says the sign offs were read when they were", async () => {
+    expect(((await run(routes.getTouch, { token: tokenFor("viewer") })).body as { approvalsUnavailable: boolean }).approvalsUnavailable).toBe(false);
   });
 });

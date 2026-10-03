@@ -8220,12 +8220,17 @@ materials, the keep in touch emails): `categoryLabel(key)` is the name to show, 
 split into either way round, so `isKind(f.kind, "bake_sale")` is true for an old bake sale or coffee
 morning and for a new Bake sale or Coffee morning (`src/fundraising/categories.ts`).
 
-**Checks.** The sign up accepts only a category on the form now; an old one, a hidden one or one that
-does not exist is asked for again ("Choose what you are doing to raise money."). A staff change may
-set any category on the form ("Choose one of the categories on the list."). The list is read from
-the database and kept for a minute; a change on the Categories card is read again at once on that
-server, and a sign up naming a category the server has not seen yet reads the list afresh before
-refusing it. Every name shown with a sign up is read with its row, so a rename shows at once.
+**Checks.** The sign up accepts only a category on the form now. One no longer on the form (hidden
+since their page loaded, or an old one) is refused with "That choice is no longer on the form.
+Please choose another."; one that does not exist with "Choose what you are doing to raise money."
+(worded for the path). A staff change may set any category on the form ("Choose one of the
+categories on the list."). The list is read from the database (without counting sign ups; only the
+Categories card counts them) and kept for a minute; a change on the Categories card is read again at
+once on that server, and a sign up naming a category the server has not seen yet reads the list
+afresh before refusing it. Two admins adding or renaming to the same name at once: the second is
+told the name is taken (the unique index decides). Every name shown with a sign up is read with its
+row, so a rename shows at once. On the card, after a change the keyboard goes back to that row's
+button (or to the status line, if it was refused), and the card waits only for its own changes.
 
 ### Routes
 
@@ -8249,7 +8254,37 @@ named in 1791200000000) is dropped by its name, and any other check listing the 
 `quiz_party`, as Postgres keeps `kind IN (...)` as `kind = ANY (ARRAY[...])`), and replaced by a
 link to the table (`fundraisers_kind_fkey`), so a category in use can never be deleted. No sign up is
 changed. The rollback drops the link and the table and puts the old check back `NOT VALID`. Numbered
-160, above 130 on main and 150 (the keep in touch work). The nightly backup's table count is 71.
+160, above 130 on main; the keep in touch work takes 170 and lands after this. The nightly backup's
+table count is 71.
+
+**Rolling back past the fundraising categories.** Code from before this release names a category
+from its own fixed list, so a sign up with a new key (`bake_sale_2`, `quiz`, one an admin added) has
+no name there, and Get involved and that fundraiser's page fail. So **before** rolling back code past
+this release (dispatching `deploy-prod.yml` with an earlier `image_sha`), and before migrating down,
+point those sign ups at the old categories. Each new one goes to the old one it was split from (Run
+and Walk to Run or walk, Bake sale and Coffee morning to Bake sale or coffee morning, Quiz and Party
+to Quiz or party, School and Workplace collection to Workplace or school collection), and any other
+(one an admin added) to Other, keeping its name as what Other is, in their words. Santa dash,
+Birthday and Other keep their keys. Run in the production database (CloudShell; this is
+`ROLLBACK_SQL` in the migration):
+
+```sql
+UPDATE fundraisers SET kind = CASE kind
+    WHEN 'run' THEN 'run_walk' WHEN 'walk' THEN 'run_walk'
+    WHEN 'bake_sale_2' THEN 'bake_sale' WHEN 'coffee_morning' THEN 'bake_sale'
+    WHEN 'quiz' THEN 'quiz_party' WHEN 'party' THEN 'quiz_party'
+    WHEN 'school_collection' THEN 'collection' WHEN 'workplace_collection' THEN 'collection'
+  END
+ WHERE kind IN ('run', 'walk', 'bake_sale_2', 'coffee_morning', 'quiz', 'party', 'school_collection', 'workplace_collection');
+UPDATE fundraisers f SET kind = 'other', kind_other = COALESCE(NULLIF(f.kind_other, ''), c.label)
+  FROM fundraising_categories c
+ WHERE c.key = f.kind
+   AND f.kind NOT IN ('run_walk', 'santa_dash', 'bake_sale', 'quiz_party', 'collection', 'birthday', 'other');
+```
+
+The down migration's old check is `NOT VALID`, so it does not stop the rollback, but it does hold
+every later UPDATE to the old list: run the SQL above first, or a sign up left with a new key could
+never be changed.
 
 ### Where it lives, and tests
 

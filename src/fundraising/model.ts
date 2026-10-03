@@ -4,7 +4,7 @@ import { isValidUkPostcode } from "../declarations/fields";
 import { containsBlockedWord } from "../donors/display-name-filter";
 import type { NewsEntry } from "./news";
 import { facebookLink, instagramLink, type SocialResult } from "./social";
-import { categoryLabel, isActiveCategory, OTHER_KIND } from "./categories";
+import { categoryLabel, isActiveCategory, isKnownCategory, OTHER_KIND } from "./categories";
 
 // TASK-493: community fundraising, the rules. Pure: no pool, no config, no clock, so every rule is
 // unit tested without a database (test/unit/fundraising-model.test.ts). The SQL is in
@@ -329,6 +329,8 @@ const lastNameText = requiredText(NAME_PART_MAX, "Please tell us your surname.")
 export function kindMissing(path: FundraiserPath | undefined): string {
   return path === "event" ? "Choose what kind of event it is." : "Choose what you are doing to raise money.";
 }
+/** A category hidden (or an old one) since their page loaded. */
+export const KIND_GONE = "That choice is no longer on the form. Please choose another.";
 export function kindOtherMissing(path: FundraiserPath | undefined): string {
   return path === "event" ? "Tell us what kind of event it is, in a few words." : "Tell us what you are doing, in a few words.";
 }
@@ -349,9 +351,9 @@ export const signUpSchema = z
   .object({
     path: z.enum(PATHS, { errorMap: () => ({ message: "Tell us whether you are raising money or holding an event." }) }),
     // TASK-511: checked below, so the message can follow what they chose first.
-    // Only a category on offer now (the list as last read from the database); anything else, an
-    // old one included, is asked for again.
-    kind: z.preprocess((v) => (isActiveCategory(v) ? v : undefined), z.string().optional()),
+    // Only a category on offer now (the list as last read from the database), checked below: one
+    // no longer on the form (hidden, or an old one) is asked for again, saying so.
+    kind: z.unknown(),
     kindOther: nullableText(KIND_OTHER_MAX),
     title: requiredText(100, "Give it a name, like Sam's Santa Dash."),
     description: requiredText(DESCRIPTION_MAX, "Tell us a little about it."),
@@ -396,7 +398,7 @@ export const signUpSchema = z
   })
   .superRefine((b, ctx) => {
     const missing = (path: string, message: string) => ctx.addIssue({ code: z.ZodIssueCode.custom, path: [path], message });
-    if (!b.kind) missing("kind", kindMissing(b.path));
+    if (!isActiveCategory(b.kind)) missing("kind", isKnownCategory(b.kind) ? KIND_GONE : kindMissing(b.path));
     if (b.kind === OTHER_KIND && !b.kindOther) missing("kindOther", kindOtherMissing(b.path));
     if (b.socialOk === undefined) missing("socialOk", SOCIAL_OK_MISSING);
     if (b.path === "event") {

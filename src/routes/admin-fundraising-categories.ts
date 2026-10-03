@@ -38,7 +38,7 @@ function failed(res: Response, what: string, err: unknown): Response {
 export async function getAdminCategories(req: Request, res: Response): Promise<Response | void> {
   if (!(await authorizeSection(req, res, "fundraising", "view"))) return;
   try {
-    return res.status(200).json({ categories: await listCategories() });
+    return res.status(200).json({ categories: await listCategories({ used: true }) });
   } catch (err) {
     return failed(res, "list", err);
   }

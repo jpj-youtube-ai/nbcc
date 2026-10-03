@@ -20,10 +20,19 @@
 // in use can never be deleted. Every key a sign up has is in the table before the link is made.
 //
 // Additive (golden rule 2): a new table, and a check that only widens (every key the old code writes
-// is in the table). No sign up is changed. Code from before this release reads and writes as it did,
-// so a code rollback is safe.
-// Numbered 1791200000160: above 1791200000130 (the highest on main) and 150 (the keep in touch work,
-// still open), so it sorts last whichever lands first.
+// is in the table). No sign up is changed by this migration.
+//
+// ROLLING BACK needs one step first. Code from before this release names a category from its own
+// fixed list (KIND_LABELS), so a sign up with a new key (bake_sale_2, quiz, one an admin added) has no
+// name there, and Get involved and that fundraiser's page fail. So before rolling back code past this
+// release, and before migrating down, run ROLLBACK_SQL (below, and in README.md, "Rolling back past
+// the fundraising categories"): it points each new category at the old one it was split from, and
+// any other (one an admin added) at Other, keeping its name as what Other is, in their words. The
+// down migration's NOT VALID check still holds every UPDATE to the old list, so run it before that
+// too, or no such sign up can be changed afterwards.
+//
+// Numbered 1791200000160: above 1791200000130 (the highest on main). The keep in touch work takes
+// 170 and lands after this one.
 
 exports.shorthands = undefined;
 
@@ -46,6 +55,23 @@ const SEED = [
   { key: "collection", label: "Workplace or school collection", active: false },
 ];
 exports.SEED = SEED;
+
+/**
+ * Run by hand BEFORE rolling back code past this release, or migrating down (see above). Never run
+ * by the migration: it changes sign ups' categories.
+ */
+const ROLLBACK_SQL = `UPDATE fundraisers SET kind = CASE kind
+    WHEN 'run' THEN 'run_walk' WHEN 'walk' THEN 'run_walk'
+    WHEN 'bake_sale_2' THEN 'bake_sale' WHEN 'coffee_morning' THEN 'bake_sale'
+    WHEN 'quiz' THEN 'quiz_party' WHEN 'party' THEN 'quiz_party'
+    WHEN 'school_collection' THEN 'collection' WHEN 'workplace_collection' THEN 'collection'
+  END
+ WHERE kind IN ('run', 'walk', 'bake_sale_2', 'coffee_morning', 'quiz', 'party', 'school_collection', 'workplace_collection');
+UPDATE fundraisers f SET kind = 'other', kind_other = COALESCE(NULLIF(f.kind_other, ''), c.label)
+  FROM fundraising_categories c
+ WHERE c.key = f.kind
+   AND f.kind NOT IN ('run_walk', 'santa_dash', 'bake_sale', 'quiz_party', 'collection', 'birthday', 'other');`;
+exports.ROLLBACK_SQL = ROLLBACK_SQL;
 
 const OLD_KINDS = ["run_walk", "santa_dash", "bake_sale", "quiz_party", "collection", "birthday", "other"];
 
@@ -105,7 +131,8 @@ exports.up = (pgm) => {
 };
 
 // Back to the old check. NOT VALID, so sign ups that chose a new category do not stop the rollback;
-// new rows are held to the old list again, as the code before this expects.
+// new rows are held to the old list again, as the code before this expects. Run ROLLBACK_SQL first:
+// the check applies to every UPDATE too, so a sign up left with a new key could never be changed.
 exports.down = (pgm) => {
   pgm.sql("ALTER TABLE fundraisers DROP CONSTRAINT IF EXISTS fundraisers_kind_fkey");
   pgm.sql(dropKindChecks);

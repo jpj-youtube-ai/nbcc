@@ -53,14 +53,21 @@ function toCategory(r: Row): Category {
 
 const COLUMNS = "key, label, active, created_at, created_by, retired_at";
 
-/** Every category, A to Z with Other last, and how many sign ups have each. */
-export async function listCategories(): Promise<Category[]> {
-  const r = await pool.query(
-    `SELECT c.key, c.label, c.active, c.created_at, c.created_by, c.retired_at,
-            (SELECT count(*) FROM fundraisers f WHERE f.kind = c.key) AS used
-       FROM fundraising_categories c`,
-  );
+/**
+ * Every category, A to Z with Other last. With used, how many sign ups have each (the admin's card
+ * only: the list kept for the form never counts them).
+ */
+export async function listCategories(o: { used?: boolean } = {}): Promise<Category[]> {
+  const used = o.used ? ",\n            (SELECT count(*) FROM fundraisers f WHERE f.kind = c.key) AS used" : "";
+  const r = await pool.query(`SELECT c.key, c.label, c.active, c.created_at, c.created_by, c.retired_at${used}
+       FROM fundraising_categories c`);
   return sortCategories(r.rows.map(toCategory));
+}
+
+/** Another admin took the name (or the key) a moment before: the unique index says so. */
+function takenInTheMeantime(err: unknown): never {
+  if (typeof err === "object" && err !== null && (err as { code?: string }).code === "23505") throw new CategoryError("label_taken");
+  throw err;
 }
 
 let readAt = 0;
@@ -122,10 +129,13 @@ export async function addCategory(label: string, actor: string): Promise<Categor
     const same = all.rows.find((r) => r.label.toLowerCase() === label.toLowerCase());
     if (same) throw new CategoryError("label_taken", same.key);
     const key = categoryKeyFor(label, all.rows.map((r) => r.key));
-    const r = await client.query(
-      `INSERT INTO fundraising_categories (key, label, active, created_by) VALUES ($1, $2, true, $3) RETURNING ${COLUMNS}`,
-      [key, label, actor],
-    );
+    const r = await client
+      .query(`INSERT INTO fundraising_categories (key, label, active, created_by) VALUES ($1, $2, true, $3) RETURNING ${COLUMNS}`, [
+        key,
+        label,
+        actor,
+      ])
+      .catch(takenInTheMeantime);
     await insertAudit(client, {
       actor,
       action: "fundraising.category_added",
@@ -161,14 +171,16 @@ export async function updateCategory(key: string, change: { label?: string; acti
       );
       if (clash.rows[0]) throw new CategoryError("label_taken", clash.rows[0].key);
     }
-    const r = await client.query(
-      `UPDATE fundraising_categories
-          SET label = $2, active = $3,
-              retired_at = CASE WHEN $3 THEN NULL ELSE COALESCE(retired_at, now()) END
-        WHERE key = $1
-        RETURNING ${COLUMNS}`,
-      [key, label, active],
-    );
+    const r = await client
+      .query(
+        `UPDATE fundraising_categories
+            SET label = $2, active = $3,
+                retired_at = CASE WHEN $3 THEN NULL ELSE COALESCE(retired_at, now()) END
+          WHERE key = $1
+          RETURNING ${COLUMNS}`,
+        [key, label, active],
+      )
+      .catch(takenInTheMeantime);
     await insertAudit(client, {
       actor,
       action: "fundraising.category_changed",

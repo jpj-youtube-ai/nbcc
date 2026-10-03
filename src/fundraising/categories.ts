@@ -105,6 +105,11 @@ export function formCategories(list: readonly Category[] = [...known.values()]):
   return sortCategories(list.filter((c) => c.active));
 }
 
+/** Is this a category the list knows, on the form or not (an old one, or one staff have hidden)? */
+export function isKnownCategory(key: unknown): key is string {
+  return typeof key === "string" && known.has(key);
+}
+
 /** Is this a category a sign up may choose now? */
 export function isActiveCategory(key: unknown): key is string {
   return typeof key === "string" && known.get(key)?.active === true;
@@ -142,7 +147,7 @@ export function categoryKeyFor(label: string, taken: Iterable<string>): string {
   const used = new Set(taken);
   let base = label
     .normalize("NFKD")
-    .replace(/[̀-ͯ]/g, "")
+    .replace(/[\u0300-\u036f]/g, "")
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "_")
     .replace(/^_+|_+$/g, "");

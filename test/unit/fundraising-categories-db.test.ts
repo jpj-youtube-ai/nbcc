@@ -65,7 +65,7 @@ beforeEach(() => {
 describe("reading the list", () => {
   it("is every category, A to Z with Other last, with how many sign ups have each", async () => {
     query.mockResolvedValue({ rows: [row("other", "Other"), row("walk", "Walk", true, 3), row("run_walk", "Run or walk", false, 2)] });
-    const list = await listCategories();
+    const list = await listCategories({ used: true });
     expect(list.map((c) => c.key)).toEqual(["run_walk", "walk", "other"]);
     expect(list[0]).toMatchObject({ label: "Run or walk", active: false, used: 2, retiredAt: "2026-10-03T09:00:00.000Z" });
     expect(String(query.mock.calls[0][0])).toMatch(/FROM fundraising_categories/);
@@ -199,5 +199,44 @@ describe("changing a category", () => {
     await expect(updateCategory("quiz", { label: "Party" }, "admin:kim@example.com")).rejects.toBeInstanceOf(CategoryError);
     useClient(() => undefined);
     await expect(updateCategory("nope", { label: "Nope" }, "admin:kim@example.com")).rejects.toMatchObject({ reason: "not_found" });
+  });
+});
+
+// Review fixes for PR #637.
+describe("two admins at once", () => {
+  it("a rename that loses a race for the name is 'already taken', not a failure", async () => {
+    useClient((sql) => {
+      if (sql.startsWith("SELECT key, label, active FROM fundraising_categories WHERE key")) return { rows: [row("quiz", "Quiz")] };
+      if (sql.startsWith("SELECT key FROM fundraising_categories WHERE lower(label)")) return { rows: [] };
+      if (sql.startsWith("UPDATE fundraising_categories")) return Object.assign(new Error("duplicate key value"), { code: "23505" });
+      return undefined;
+    });
+    await expect(updateCategory("quiz", { label: "Party" }, "admin:kim@example.com")).rejects.toMatchObject({ reason: "label_taken" });
+  });
+
+  it("so is an add that loses one", async () => {
+    useClient((sql) => {
+      if (sql.startsWith("SELECT key, label FROM fundraising_categories")) return { rows: seedRows() };
+      if (sql.startsWith("INSERT INTO fundraising_categories")) return Object.assign(new Error("duplicate key value"), { code: "23505" });
+      return undefined;
+    });
+    await expect(addCategory("Abseil", "admin:kim@example.com")).rejects.toMatchObject({ reason: "label_taken" });
+  });
+});
+
+describe("what each read counts", () => {
+  it("the list kept for the form never counts the sign ups in each", async () => {
+    query.mockResolvedValue({ rows: seedRows() });
+    await loadCategories({ fresh: true });
+    expect(String(query.mock.calls[0][0])).not.toMatch(/count\(/i);
+  });
+
+  it("the admin's list does, when asked", async () => {
+    query.mockResolvedValue({ rows: seedRows() });
+    await listCategories({ used: true });
+    expect(String(query.mock.calls[0][0])).toMatch(/count\(\*\)/);
+    query.mockClear();
+    await listCategories();
+    expect(String(query.mock.calls[0][0])).not.toMatch(/count\(/i);
   });
 });

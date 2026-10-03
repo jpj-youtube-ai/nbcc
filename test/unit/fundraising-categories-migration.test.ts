@@ -2,7 +2,8 @@ import { describe, it, expect } from "vitest";
 import { createRequire } from "node:module";
 import { readdirSync } from "node:fs";
 import { resolve } from "node:path";
-import { BUILT_IN_CATEGORIES, LEGACY_CATEGORIES, STARTING_CATEGORIES } from "../../src/fundraising/categories";
+import { BUILT_IN_CATEGORIES, KIND_SPLITS, LEGACY_CATEGORIES, STARTING_CATEGORIES } from "../../src/fundraising/categories";
+import { readFileSync } from "node:fs";
 
 // Fundraising categories: the table the list lives in, seeded with the new list and the old
 // categories (no longer offered, still named), and the hard coded check on fundraisers.kind swapped
@@ -15,6 +16,7 @@ const migration = createRequire(import.meta.url)(resolve(ROOT, "migrations", NAM
   up: (pgm: unknown) => void;
   down: (pgm: unknown) => void;
   SEED: Array<{ key: string; label: string; active: boolean }>;
+  ROLLBACK_SQL: string;
 };
 
 function fakePgm() {
@@ -106,5 +108,42 @@ describe("the fundraising categories migration", () => {
     expect(downSql).toMatch(/ADD CONSTRAINT fundraisers_kind_check CHECK \(kind IN \('run_walk', 'santa_dash', 'bake_sale', 'quiz_party', 'collection', 'birthday', 'other'\)\) NOT VALID/);
     expect(downSql.indexOf("fundraisers_kind_fkey")).toBeLessThan(downSql.indexOf("ADD CONSTRAINT fundraisers_kind_check"));
     expect(down.calls.find((c) => c.op === "dropTable")?.args[0]).toBe("fundraising_categories");
+  });
+});
+
+// Review fix (PR #637): code from before this release names a category from its own fixed list, so
+// a sign up with a new key (bake_sale_2, say) has no name there and its card and page fail. Before
+// rolling back code past this release, or migrating down, the sign ups with new keys are pointed at
+// the old ones. The exact SQL lives in the migration and the README.
+describe("rolling back past the fundraising categories", () => {
+  const sql = migration.ROLLBACK_SQL;
+  const source = readFileSync(resolve(ROOT, "migrations", NAME), "utf8").replace(/\r\n/g, "\n");
+
+  it("does not claim a code rollback is safe as it stands", () => {
+    expect(source).not.toMatch(/so a code rollback is safe\./);
+    expect(source).toMatch(/ROLLBACK_SQL/);
+  });
+
+  it("points each new category at the old one it was split from", () => {
+    for (const [old, news] of Object.entries(KIND_SPLITS)) {
+      for (const k of news) expect(sql).toContain(`WHEN '${k}' THEN '${old}'`);
+    }
+  });
+
+  it("sends any other new category (one an admin added) to Other, keeping its name in their words", () => {
+    expect(sql).toMatch(/SET kind = 'other', kind_other = COALESCE\(NULLIF\(f\.kind_other, ''\), c\.label\)/);
+    expect(sql).toMatch(/NOT IN \('run_walk', 'santa_dash', 'bake_sale', 'quiz_party', 'collection', 'birthday', 'other'\)/);
+  });
+
+  it("is in the README, word for word, under Rolling back", () => {
+    const readme = readFileSync(resolve(ROOT, "README.md"), "utf8").replace(/\r\n/g, "\n");
+    const at = readme.indexOf("Rolling back past the fundraising categories");
+    expect(at).toBeGreaterThan(-1);
+    expect(readme.slice(at)).toContain(sql.trim());
+  });
+
+  it("names the keep in touch work's number (170), which lands after this", () => {
+    expect(source).toMatch(/170/);
+    expect(source).not.toMatch(/150 \(the keep in touch work,\s*\/\/ still open\)/);
   });
 });

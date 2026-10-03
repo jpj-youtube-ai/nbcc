@@ -139,6 +139,11 @@ describe("a new category's key", () => {
     expect(categoryKeyFor("Bake sale", ["bake_sale", "bake_sale_2"])).toBe("bake_sale_3");
   });
 
+  it("drops accents written as separate marks, as well as joined ones", () => {
+    expect(categoryKeyFor("Café crawl", [])).toBe("cafe_crawl");
+    expect(categoryKeyFor("Piñata party", [])).toBe("pinata_party");
+  });
+
   it("starts with a letter and stays short", () => {
     expect(categoryKeyFor("5k run", [])).toBe("k_5k_run");
     expect(categoryKeyFor("x".repeat(80), []).length).toBeLessThanOrEqual(40);
@@ -215,8 +220,12 @@ describe("the sign up form takes only categories on offer", () => {
     expect(signUpSchema.safeParse(signUp(key)).success).toBe(true);
   });
 
-  it.each(["run_walk", "bake_sale", "quiz_party", "collection", "skydive", "", 7])("refuses %s, asking them to choose", (key) => {
+  it.each(["skydive", "", 7, undefined])("refuses %s, asking them to choose", (key) => {
     expect(kindError(key)).toBe("Choose what you are doing to raise money.");
+  });
+
+  it.each(["run_walk", "bake_sale", "quiz_party", "collection"])("refuses %s, no longer on the form, saying so", (key) => {
+    expect(kindError(key)).toBe("That choice is no longer on the form. Please choose another.");
   });
 
   it("takes a category staff have added, once the list has been read", () => {
@@ -227,7 +236,7 @@ describe("the sign up form takes only categories on offer", () => {
 
   it("refuses one staff have hidden", () => {
     rememberCategories(BUILT_IN_CATEGORIES.map((c) => (c.key === "walk" ? { ...c, active: false } : c)));
-    expect(kindError("walk")).toBeTruthy();
+    expect(kindError("walk")).toBe("That choice is no longer on the form. Please choose another.");
   });
 });
 

@@ -213,10 +213,10 @@ describe("signing up", () => {
 });
 
 describe("the category on a sign up", () => {
-  it.each(["run_walk", "bake_sale", "quiz_party", "collection"])("refuses the old category %s, asking them to choose", async (kind) => {
+  it.each(["run_walk", "bake_sale", "quiz_party", "collection"])("refuses the old category %s, saying it is no longer on the form", async (kind) => {
     const res = await run(postFundraise, { body: signUp({ kind }) });
     expect(res.statusCode).toBe(400);
-    expect((res.body as { fields: Record<string, string> }).fields.kind).toBe("Choose what you are doing to raise money.");
+    expect((res.body as { fields: Record<string, string> }).fields.kind).toBe("That choice is no longer on the form. Please choose another.");
     expect(db.createFundraiser).not.toHaveBeenCalled();
   });
 
@@ -226,9 +226,11 @@ describe("the category on a sign up", () => {
   });
 
   it("refuses one staff have hidden from the form", async () => {
+    // Hidden after their page loaded: they are told, and asked to choose again.
     cats.extra = [{ key: "abseil", label: "Abseil", active: false }];
     const res = await run(postFundraise, { body: signUp({ kind: "abseil" }) });
     expect(res.statusCode).toBe(400);
+    expect((res.body as { fields: Record<string, string> }).fields.kind).toBe("That choice is no longer on the form. Please choose another.");
   });
 
   it("takes one an admin has just added, reading the list afresh when this server has not seen it", async () => {

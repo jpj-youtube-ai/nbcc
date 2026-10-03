@@ -97,6 +97,8 @@ describe("who may do what", () => {
     const res = await run(routes.getAdminCategories, { token: tokenFor(role) });
     expect(res.statusCode).toBe(200);
     expect((res.body as { categories: Array<{ key: string }> }).categories.map((c) => c.key)).toEqual(["quiz", "run_walk", "other"]);
+    // With how many sign ups have each: only this list counts them.
+    expect(db.listCategories).toHaveBeenCalledWith({ used: true });
   });
 
   it("someone without Fundraising may not see it", async () => {

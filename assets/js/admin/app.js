@@ -11800,6 +11800,15 @@
   var frCatsFailed = false;
   var frCatEditing = null; // the key of the category being renamed
   var frCatDraft = ""; // its new name, as typed
+  var frCatBusy = false; // a change to a category is on its way (the card's own, apart from the team's tools)
+
+  // After a change, the keyboard goes back where it was: the row's own button (as it is now), or,
+  // if that is not there or the change was refused, the status line that says what happened.
+  function frCatFocus(selector) {
+    var target = selector ? doc.querySelector(selector) : null;
+    if (!target) target = el("frCatsStatus");
+    if (target && target.focus) target.focus();
+  }
 
   function frCatList() {
     if (frCats) return frCats;
@@ -11896,9 +11905,10 @@
   }
 
   // One change at a time. After it: the card, the sign ups (their category names) and the editor's list.
+  // Answers true (saved), false (refused or failed) or null (another change was still on its way).
   function frCatSend(method, path, body, saidOk) {
-    if (frTeamBusy) return Promise.resolve(false);
-    frTeamBusy = true;
+    if (frCatBusy) return Promise.resolve(null);
+    frCatBusy = true;
     frTeamSay("frCatsStatus", "Saving…", false);
     return frSend(method, path, body)
       .then(function (r) {
@@ -11914,7 +11924,7 @@
         return false;
       })
       .then(function (ok) {
-        frTeamBusy = false;
+        frCatBusy = false;
         return ok;
       });
   }
@@ -11926,7 +11936,11 @@
     return frCatSend("POST", "/api/admin/fundraising/categories", { label: label }, function (c) {
       return "Added. " + (c ? c.label : label) + " is on the sign up form now, in its place A to Z.";
     }).then(function (ok) {
-      if (ok) box.value = "";
+      if (ok === null) return;
+      if (ok) {
+        box.value = "";
+        box.focus();
+      } else frCatFocus(null);
     });
   }
 
@@ -11954,11 +11968,13 @@
     return frCatSend("PATCH", "/api/admin/fundraising/categories/" + encodeURIComponent(key), { label: label }, function (after) {
       return "Renamed. It says " + (after ? after.label : label) + " everywhere now.";
     }).then(function (ok) {
+      if (ok === null) return;
       if (ok) {
         frCatEditing = null;
         frCatDraft = "";
         frRenderCats();
-      }
+        frCatFocus('[data-frcatrename="' + key + '"]');
+      } else frCatFocus(null);
     });
   }
 
@@ -11968,6 +11984,10 @@
     if (!active && !window.confirm("Take " + c.label + " off the sign up form? The sign ups that chose it keep it, and you can put it back.")) return;
     return frCatSend("PATCH", "/api/admin/fundraising/categories/" + encodeURIComponent(key), { active: active }, function () {
       return active ? c.label + " is back on the sign up form." : c.label + " is off the sign up form. The sign ups that chose it keep it.";
+    }).then(function (ok) {
+      if (ok === null) return;
+      // The row has moved list: its button now does the opposite.
+      frCatFocus(ok ? (active ? '[data-frcathide="' + key + '"]' : '[data-frcatshow="' + key + '"]') : null);
     });
   }
 

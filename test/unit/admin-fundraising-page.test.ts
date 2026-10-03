@@ -2180,6 +2180,60 @@ describe("the Categories card", () => {
   });
 });
 
+// Review fixes for PR #637: after a change, the keyboard goes back to where it was (the row's own
+// button, now changed, or the status line); and the card waits only for its own changes.
+describe("the Categories card, by keyboard", () => {
+  it("after a rename, is back on that row's Rename button", async () => {
+    cats = startingCats();
+    await openFundraising();
+    (q('[data-frcatrename="quiz"]') as HTMLElement).click();
+    await settle();
+    setValue("#frCatRename", "Quiz night");
+    (q("[data-frcatsave]") as HTMLElement).click();
+    await settle();
+    expect(document.activeElement).toBe(q('[data-frcatrename="quiz"]'));
+  });
+
+  it("after hiding one, is on its Put back button; after putting it back, on its Hide button", async () => {
+    cats = startingCats();
+    await openFundraising();
+    (q('[data-frcathide="party"]') as HTMLElement).click();
+    await settle();
+    expect(document.activeElement).toBe(q('[data-frcatshow="party"]'));
+    (q('[data-frcatshow="party"]') as HTMLElement).click();
+    await settle();
+    expect(document.activeElement).toBe(q('[data-frcathide="party"]'));
+  });
+
+  it("when a change is refused, is on the status line, which says why", async () => {
+    cats = startingCats();
+    failures["PATCH /api/admin/fundraising/categories/party"] = { status: 500, body: { error: "Admin is temporarily unavailable" } };
+    await openFundraising();
+    (q('[data-frcathide="party"]') as HTMLElement).click();
+    await settle();
+    expect(document.activeElement).toBe(el("frCatsStatus"));
+    expect(text(el("frCatsStatus"))).toBe("That did not save. Please try again.");
+  });
+
+  it("sends a change once, however many times it is pressed, and has its own wait", async () => {
+    cats = startingCats();
+    await openFundraising();
+    const release = gate("POST /api/admin/fundraising/categories");
+    (el("frCatsNew") as HTMLInputElement).value = "Abseil";
+    el("frCatsAdd").click();
+    el("frCatsAdd").click();
+    await settle();
+    expect(text(el("frCatsStatus"))).toBe("Saving…");
+    release();
+    await settle();
+    // (The stand in records a call when its gate opens: one, however many presses.)
+    expect(sent("POST", "/api/admin/fundraising/categories")).toHaveLength(1);
+    expect(text(el("frCatsStatus"))).toContain("Added. Abseil");
+    expect(appSrc).toMatch(/var frCatBusy = false/);
+    expect(appSrc.slice(appSrc.indexOf("function frCatSend"), appSrc.indexOf("function frCatAdd"))).not.toContain("frTeamBusy");
+  });
+});
+
 describe("a sign up's category in the editor", () => {
   it("offers what the form offers, and keeps an old sign up's own until it is changed", async () => {
     cats = startingCats();

@@ -1,6 +1,7 @@
 import { dateParts, escapeHtml } from "../events/render";
 import { renderMeter } from "./render";
 import type { TeamMemberCard } from "./teams";
+import { avatarHtml } from "./pictures";
 
 // Team pages (Jaimie, 2026-10-03): the parts of the public pages that are a team's, drawn on the
 // server like the rest of a fundraiser's page (src/fundraising/render.ts), in its classes and look.
@@ -17,6 +18,8 @@ export interface TeamExtrasInput {
   title: string;
   /** The team organiser, as the page names organisers ("Robin O."). */
   organisedBy: string;
+  /** Profile pictures: the team organiser's approved round photo, or null for the NBCC elf. */
+  organiserPhotoSrc?: string | null;
   finished: boolean;
   members: TeamMemberCard[];
   joinUrl: string;
@@ -35,7 +38,10 @@ const LINK_ICON =
 function memberItem(m: TeamMemberCard): string {
   return (
     '<li class="fr-team__member">' +
+    '<div class="fr-team__who">' +
+    avatarHtml(m.photoSrc, m.name, { elf: true }) +
     `<a class="fr-team__name" href="${escapeHtml(m.url)}">${escapeHtml(m.name)}<span class="sr-only">: see their page</span></a>` +
+    "</div>" +
     renderMeter(m.meter) +
     "</li>"
   );
@@ -65,7 +71,7 @@ export function renderTeamExtras(t: TeamExtrasInput): TeamExtras {
     mainHtml:
       '<section class="fr-team" aria-labelledby="fr-team-heading">' +
       '<h2 id="fr-team-heading">The team</h2>' +
-      `<p class="fr-team__organiser">Team organiser: ${escapeHtml(t.organisedBy)}</p>` +
+      `<p class="fr-team__organiser">${avatarHtml(t.organiserPhotoSrc, t.organisedBy, { elf: true })}<span>Team organiser: ${escapeHtml(t.organisedBy)}</span></p>` +
       list +
       join +
       "</section>",

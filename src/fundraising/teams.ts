@@ -2,6 +2,7 @@ import { createHash, randomBytes } from "node:crypto";
 import { z } from "zod";
 import { londonToday } from "../events/model";
 import { addDays } from "./follow-up";
+import { profilePhotoSrc } from "./pictures";
 import { dayCount } from "./call-prompts";
 import { memoryMeter } from "./in-memory";
 import {
@@ -349,6 +350,8 @@ export interface TeamMemberCard {
   name: string;
   url: string;
   meter: Meter;
+  /** Profile pictures: their approved round photo, or null for the NBCC elf. */
+  photoSrc?: string | null;
 }
 
 const firstOf = (m: Pick<TeamMemberRow, "name" | "firstName">) => (m.firstName || m.name.trim().split(/\s+/)[0] || "").trim();
@@ -358,7 +361,7 @@ const firstOf = (m: Pick<TeamMemberRow, "name" | "firstName">) => (m.firstName |
  * public) still on the team, A to Z by first name (then surname), each as "Ava S." with its own small
  * meter. Never ordered by money.
  */
-export function teamMemberList(rows: TeamMemberRow[]): TeamMemberCard[] {
+export function teamMemberList(rows: TeamMemberRow[], photos: ReadonlyMap<number, string> = new Map()): TeamMemberCard[] {
   const byName = (a: TeamMemberRow, b: TeamMemberRow) =>
     firstOf(a).localeCompare(firstOf(b), "en-GB", { sensitivity: "base" }) ||
     a.name.localeCompare(b.name, "en-GB", { sensitivity: "base" }) ||
@@ -366,7 +369,10 @@ export function teamMemberList(rows: TeamMemberRow[]): TeamMemberCard[] {
   return rows
     .filter((r) => !r.teamLeftAt && hasPage(r))
     .sort(byName)
-    .map((r) => ({ name: shortName(r.name), url: `/fundraise/${r.slug}`, meter: memoryMeter(r, r.meter) }));
+    .map((r) => {
+      const photoId = photos.get(r.id);
+      return { name: shortName(r.name), url: `/fundraise/${r.slug}`, meter: memoryMeter(r, r.meter), photoSrc: photoId ? profilePhotoSrc(photoId) : null };
+    });
 }
 
 // --- the join link ---------------------------------------------------------------------------------

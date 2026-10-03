@@ -19,6 +19,7 @@ import { fundraiseRouter } from "./routes/fundraise";
 import { fundraiseTeamsRouter } from "./routes/fundraise-teams";
 import { adminFundraisingTeamsRouter } from "./routes/admin-fundraising-teams";
 import { fundraiserNewsRouter, newsBodyGuard, NEWS_JSON_BODY_LIMIT, NEWS_POST_PATH } from "./routes/fundraiser-news";
+import { fundraiserPicturesRouter, PICTURE_JSON_BODY_LIMIT, PICTURE_POST_PATH } from "./routes/fundraiser-pictures";
 import { fundraiseMaterialsRouter } from "./routes/fundraise-materials";
 import { fundraiseMemoryRouter } from "./routes/fundraise-memory";
 import { adminBallReportRouter } from "./routes/admin-ball-report";
@@ -82,6 +83,8 @@ export function createApp() {
   // TASK-506: a news update from an organiser's private area may carry a photo (2 MB at most, shrunk
   // in the browser first). Read only with a session cookie (newsBodyGuard), and only on that path.
   app.use(NEWS_POST_PATH, newsBodyGuard, express.json({ limit: NEWS_JSON_BODY_LIMIT }));
+  // Profile pictures: the page photo and round profile photo an organiser sends, the same way.
+  app.use(PICTURE_POST_PATH, newsBodyGuard, express.json({ limit: PICTURE_JSON_BODY_LIMIT }));
   // Hosted-document uploads (TASK-265): same problem, bigger files — the 10 MB document cap is
   // ~13.7 MB base64-encoded, so without this the parser 413s a real certificate BEFORE auth runs
   // and the composer shows a bare "Upload failed". Scoped to exactly the attachments path (the
@@ -111,6 +114,9 @@ export function createApp() {
   // TASK-506: news updates (the organiser's, staff's and the public photo). Before fundraiseRouter,
   // whose retired link route (GET /api/fundraise/manage/:token) would otherwise take "news".
   app.use(fundraiserNewsRouter);
+  // Profile pictures (the organiser's, staff's and the public profile photo). Before fundraiseRouter
+  // for the same reason as news: its retired link route would otherwise take "pictures".
+  app.use(fundraiserPicturesRouter);
   // Team pages: joining a team, an invite's link, the team organiser's own team and confirming a
   // handover; and Admin > Fundraising's team view and handover. Before fundraiseRouter, whose
   // retired link route (POST /api/fundraise/manage/:token) would otherwise take "handover".

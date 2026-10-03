@@ -95,6 +95,7 @@ async function book(world, quantity, what, extra = {}) {
       buyerFirstName: "Ada",
       buyerSurname: "Transfer",
       buyerEmail: BUYER,
+      buyerPhone: "07700 900123",
       termsAccepted: true,
       ...extra,
     }),
@@ -346,6 +347,7 @@ When("the buyer falls back to Stripe's own page for the same order", async funct
       buyerFirstName: "BDD",
       buyerSurname: "Buyer",
       buyerEmail: "checkout.ball.bdd@example.com",
+      buyerPhone: "07700 900123",
       termsAccepted: true,
       uiMode: "hosted",
       replaces: { reference: first.reference, clientSecret: first.clientSecret },
@@ -467,6 +469,7 @@ When("{string} adds a bank transfer booking for {int} {word}", async function (e
     buyerFirstName: "Ada",
     buyerSurname: "Phoned",
     buyerEmail: BUYER,
+    buyerPhone: "01632 960123",
     donationPence: 1000,
     // Sent ticked: a staff booking must still carry no Gift Aid and no newsletter sign-up.
     giftAid: true,
@@ -498,6 +501,49 @@ Then(
     assert.deepEqual(audit.rows.map((r) => r.actor), [`admin:${email}`]);
   },
 );
+
+// --- Jaimie 2026-10-03: the booker's phone number ---------------------------------------------------
+
+// Sent as undefined, so JSON leaves it out.
+When("a buyer books {int} {word} to pay by bank transfer without a phone number", async function (quantity, what) {
+  await book(this, quantity, what, { buyerPhone: undefined });
+});
+
+Then("the booking keeps the buyer's phone number {string}", async function (phone) {
+  const row = await pool.query("SELECT buyer_phone FROM ball_bookings WHERE reference = $1", [this.transferRef]);
+  assert.equal(row.rows[0] && row.rows[0].buyer_phone, phone);
+});
+
+// Inserted straight into the table, as a booking made before the ticket page asked: no phone number.
+Given("a paid card booking made before the ticket page asked for a phone number", async function () {
+  await insertBooking({ reference: "BALL-OLDPHN", method: "card", status: "paid", agoInterval: "10 days" });
+  this.transferRef = "BALL-OLDPHN";
+});
+
+When("{string} lists the ball bookings", async function (email) {
+  await asStaff(this, email, "GET", "/api/admin/ball/bookings");
+});
+
+Then("{int} paid booking(s) has/have no phone number", function (n) {
+  assert.equal(this.adminStatus, 200, JSON.stringify(this.adminBody));
+  assert.equal(this.adminBody.noPhone, n);
+});
+
+When("{string} gives that booking the phone number {string}", async function (email, phone) {
+  await asStaff(this, email, "PUT", `/api/admin/ball/bookings/${this.transferRef}/phone`, { phone });
+});
+
+Then("that booking's phone number is {string}, changed by {string}", async function (phone, email) {
+  const row = await pool.query("SELECT id, buyer_phone FROM ball_bookings WHERE reference = $1", [this.transferRef]);
+  assert.equal(row.rows[0].buyer_phone, phone);
+  const audit = await pool.query(
+    `SELECT actor, data FROM audit_log WHERE action = 'ball.booking_phone' AND entity_id = $1`,
+    [row.rows[0].id],
+  );
+  assert.deepEqual(audit.rows.map((r) => r.actor), [`admin:${email}`]);
+  assert.equal(audit.rows[0].data.phone, phone);
+  assert.equal(audit.rows[0].data.previous, null);
+});
 
 // --- TASK-487: telling the team -------------------------------------------------------------------
 

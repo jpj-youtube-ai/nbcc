@@ -233,10 +233,20 @@
                 <span>Surname</span>
                 <input type="text" name="buyerSurname" autocomplete="family-name" required maxlength="60" />
               </label>
+            </div>
+
+            <!-- Email and phone as a pair, so the four boxes never wrap three-and-one. The phone
+                 number is NBCC's only: for the booking and menu choices, never the venue or marketing. -->
+            <div class="ball-row ball-row-fields">
               <label class="ball-field">
                 <span>Your email</span>
                 <input type="email" name="buyerEmail" autocomplete="email" required maxlength="254" />
                 <small>Your booking confirmation and everything about the night goes here.</small>
+              </label>
+              <label class="ball-field">
+                <span>Your phone number</span>
+                <input type="tel" name="buyerPhone" autocomplete="tel" inputmode="tel" required maxlength="40" />
+                <small>So we can contact you about menu choices for your table.</small>
               </label>
             </div>
 

@@ -212,6 +212,8 @@ async function startCheckout(ctx, body) {
       buyerFirstName: "BDD",
       buyerSurname: "Buyer",
       buyerEmail: "checkout.ball.bdd@example.com",
+      // Jaimie 2026-10-03: required on every new booking. Invented (Ofcom's drama range).
+      buyerPhone: "07700 900123",
       termsAccepted: true,
       ...body,
     }),
@@ -222,6 +224,24 @@ async function startCheckout(ctx, body) {
 
 When("I start a ball checkout for {int} seats", async function (n) {
   await startCheckout(this, { kind: "seat", quantity: n });
+});
+
+// Jaimie 2026-10-03: the phone number is required. Sent as undefined, so JSON leaves it out.
+When("I start a ball checkout for {int} seat(s) with no phone number", async function (n) {
+  await startCheckout(this, { kind: "seat", quantity: n, buyerPhone: undefined });
+});
+
+Then("the ball checkout error should name the phone number", function () {
+  assert.match(String(this.ballCheckout.error || ""), /phone number/, JSON.stringify(this.ballCheckout));
+  const paths = (this.ballCheckout.details || []).map((i) => (i.path || []).join("."));
+  assert.ok(paths.includes("buyerPhone"), `details should name buyerPhone: ${JSON.stringify(paths)}`);
+});
+
+Then("the pending ball booking should keep the booker's phone number", async function () {
+  const rows = await withDb((db) =>
+    db.query("SELECT buyer_phone FROM ball_bookings WHERE reference = $1", [this.ballCheckout.reference]),
+  );
+  assert.equal(rows.rows[0] && rows.rows[0].buyer_phone, "07700 900123");
 });
 
 When("I start an inline ball checkout for {int} seat", async function (n) {

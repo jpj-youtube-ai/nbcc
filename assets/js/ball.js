@@ -399,12 +399,21 @@
     var firstName = (form.elements.buyerFirstName.value || "").trim();
     var surname = (form.elements.buyerSurname.value || "").trim();
     var email = (form.elements.buyerEmail.value || "").trim();
+    // Jaimie 2026-10-03: so we can contact them about menu choices. The same rule as the server
+    // (src/ball/booking.ts): digits, spaces, + ( ) and -, at least 7 digits, up to 40 characters.
+    var phone = form.elements.buyerPhone ? (form.elements.buyerPhone.value || "").trim() : "";
     // Named separately so the message points at the box that is empty, rather than making
     // someone work out which half of "your name" we mean.
     if (!firstName) return showError("Please give your first name, so we know who the booking is for.");
     if (!surname) return showError("Please give your surname, so we can find you on the door list.");
     if (!email || email.indexOf("@") === -1) {
       return showError("Please give us an email address — your booking confirmation goes there.");
+    }
+    if (!phone) {
+      return showError("Please give your phone number, so we can contact you about menu choices for your table.");
+    }
+    if (phone.length > 40 || !/^[0-9 +()-]+$/.test(phone) || phone.replace(/[^0-9]/g, "").length < 7) {
+      return showError("Please check your phone number. Use digits and spaces, for example 07700 900123.");
     }
     if (!form.elements.termsAccepted || !form.elements.termsAccepted.checked) {
       return showError("Please tick to confirm you agree to the ticket terms.");
@@ -427,6 +436,7 @@
       buyerFirstName: firstName,
       buyerSurname: surname,
       buyerEmail: email,
+      buyerPhone: phone,
       donationPence: donation,
       coverFee: !!(form.elements.coverFee && form.elements.coverFee.checked),
       giftAid: !!(form.elements.giftAid && form.elements.giftAid.checked && donation > 0),

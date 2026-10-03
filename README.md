@@ -1385,6 +1385,7 @@ hosted-Checkout redirect stays the default fallback and no-JS safety net.
 | `GET /api/ball/availability` | **implemented** | TASK-313 (public; Festive Ball seats/tables remaining + whether sales are open. Counts only — never buyer details) |
 | `POST /api/ball/checkout-session` | **implemented** | TASK-313 (public; validates the order, holds the seats under a lock, mints a Stripe Checkout session, records a pending booking). TASK-484: takes an optional `replaces`, the inline checkout a fallback to Stripe's own page replaces |
 | `POST /api/ball/bank-transfer` | **implemented** | TASK-484 (public; books to pay by bank transfer and answers with the bank details; refused until an admin switches it on) |
+| `PUT /api/admin/ball/bookings/:reference/phone` | **implemented** | Booker's phone number (Festive Ball edit; `{ phone }`, empty takes it away. Audited as `ball.booking_phone`, keeping the number it replaced) |
 | `GET`/`PUT /api/admin/ball/transfer-settings` | **implemented** | TASK-484 (the bank details and the switch; changing them is admin only) |
 | `GET /api/admin/ball/transfers` | **implemented** | TASK-484 (bookings awaiting a bank transfer) |
 | `POST /api/admin/ball/bookings/:reference/mark-paid` | **implemented** | TASK-484 (admin only; `{ confirmTotalPence }`) |
@@ -1399,7 +1400,7 @@ hosted-Checkout redirect stays the default fallback and no-JS safety net.
 | `POST /api/admin/outreach/:id/send` | **implemented** | TASK-401 (Editor+; send one invitation. 400 without an email address, 409 if already sent; `sent_at` is stamped only after the send succeeds) |
 | `GET /api/admin/ball` | **implemented** | TASK-313 (Viewer+; settings, live availability and money raised) |
 | `PATCH /api/admin/ball` | **implemented** | TASK-313 (Editor+ **with the ball section granted**; capacity, held seats, gate, sales window, late-confirmed details. Audited as `ball.settings_updated`) |
-| `GET /api/admin/ball/bookings` | **implemented** | TASK-313 (Viewer+; bookings newest first) |
+| `GET /api/admin/ball/bookings` | **implemented** | TASK-313 (Viewer+; bookings newest first). Also `noPhone`: how many paid bookings have no phone number |
 | `GET /ball` | **implemented** | TASK-313 (the ticket page; password-gated until staff open the gate, then public and indexable) |
 | `POST /ball/unlock` | **implemented** | TASK-313 (checks the preview password, sets a signed 14-day cookie) |
 | `GET /ball/terms` | **implemented** | TASK-313 (ticket terms; gated alongside the page) |
@@ -2597,6 +2598,28 @@ does.
 The forms use `autocomplete="given-name"` / `"family-name"`. `autocomplete="name"` on a
 half-name box makes a browser offer the whole name for the first field, which is worse than no
 autofill at all.
+
+### The booker's phone number (Jaimie 2026-10-03)
+
+The Festive Ball booking form asks **Your phone number**, required, "So we can contact you about
+menu choices for your table." It is checked on the page and again on the server (`buyerPhone` in
+`purchaseSchema`, `src/ball/booking.ts`) by the same rule as the phone box in Admin > Business
+supporters: digits, spaces, `+ ( ) -`, at least 7 digits, up to 40 characters. A card checkout or bank
+transfer booking without one gets a 400 whose `error` names the phone number and whose `details`
+name `buyerPhone`; staff adding a booking by hand must give one too.
+
+It is stored in `ball_bookings.buyer_phone` (migration `1791200000198_ball-booker-phone.js`: one
+nullable column, so bookings made before have none and the old code keeps inserting during a
+deploy). It is NBCC's only: never stamped on the Stripe session, never in the door or catering lists.
+It appears in Admin > Festive Ball (as a tap-to-ring link), in the bookings CSV (a **Phone** column
+after Email) and in the events@ email about a new bank transfer booking. The buyer's own emails are
+unchanged.
+
+Bookings with no number are chased by hand; nothing is sent automatically. The admin flags each one
+("No phone number yet"), counts the paid bookings without one, can show only those, and lets
+Festive Ball editors add or change the number (`PUT /api/admin/ball/bookings/:reference/phone`,
+audited). The ticket terms and the privacy notice say what it is for. On a phone, the bookings table
+is now a labelled card per booking, as the bank transfer list already was.
 
 ### Paying without leaving the site (TASK-319)
 

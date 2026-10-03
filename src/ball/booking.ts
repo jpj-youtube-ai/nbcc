@@ -1,11 +1,32 @@
 import { z } from "zod";
 import { MAX_SEATS_PER_ORDER, MAX_TABLES_PER_ORDER, seatsFor } from "./capacity";
 import { orderTotalPence, DEFAULT_CARD_FEE, type CardFeeRate } from "./pricing";
+import { normalisePhone, PHONE_MAX } from "../business/call-due";
 
 // TASK-313: pure booking model for the Festive Ball — the request a buyer submits, the
 // reference they are given, and the mapping back out of a Stripe session. NO pool, NO
 // network, NO clock: randomness and the session object are INJECTED, so this is unit-tested
 // DB-free like src/db/stripe-webhook-model.ts, whose shape it deliberately mirrors.
+
+// Jaimie 2026-10-03: the booker's phone number, so NBCC can contact them about menu choices for
+// their table. Required on every NEW booking; bookings made before it was asked have none, and staff
+// add it in the admin. Checked by the same rule as the phone box in Admin > Business supporters
+// (normalisePhone): digits, spaces, + ( ) and -, at least 7 digits, up to 40 characters. That takes
+// UK mobiles and landlines however people space them, and a +44 number. It stays with NBCC: it is
+// never stamped on the Stripe session (ballMetadata), nor in any list that leaves the charity.
+export const PHONE_REQUIRED_MESSAGE =
+  "Please give your phone number, so we can contact you about menu choices for your table.";
+export const PHONE_INVALID_MESSAGE = "Please check your phone number. Use digits and spaces, for example 07700 900123.";
+
+const bookerPhone = z
+  .string({ required_error: PHONE_REQUIRED_MESSAGE, invalid_type_error: PHONE_REQUIRED_MESSAGE })
+  .trim()
+  .min(1, PHONE_REQUIRED_MESSAGE)
+  .max(PHONE_MAX, PHONE_INVALID_MESSAGE)
+  .refine((v) => {
+    const n = normalisePhone(v);
+    return n.ok && n.phone !== null;
+  }, PHONE_INVALID_MESSAGE);
 
 // What the checkout endpoint accepts. The per-order caps live here as well as in
 // capacity.canFulfil: this one rejects a nonsense request before any database work, that one
@@ -22,6 +43,7 @@ export const purchaseSchema = z
     buyerFirstName: z.string().trim().min(1, "please give your first name").max(60),
     buyerSurname: z.string().trim().min(1, "please give your surname").max(60),
     buyerEmail: z.string().trim().toLowerCase().email().max(254),
+    buyerPhone: bookerPhone,
     // A voluntary donation on top of the ticket. This is the ONLY Gift Aid-able money in the
     // event: HMRC does not allow Gift Aid on ticket sales, because the buyer receives a dinner
     // and a show in return. Ceiling of £1,000,000 guards against a fat-fingered amount.
@@ -48,6 +70,19 @@ export const purchaseSchema = z
     path: ["giftAid"],
   });
 export type Purchase = z.infer<typeof purchaseSchema>;
+
+/**
+ * The `error` of a 400 for a booking request the schema refused. The issues still go back as
+ * `details`, naming each field; this names the phone number in words, because the form shows `error`
+ * as it is, and a page loaded before the phone box existed would otherwise only say "Invalid".
+ */
+export function bookingRequestError(
+  issues: ReadonlyArray<{ path: ReadonlyArray<string | number>; message: string }>,
+): string {
+  const phone = issues.find((i) => i.path[0] === "buyerPhone");
+  if (phone) return phone.message === PHONE_INVALID_MESSAGE ? PHONE_INVALID_MESSAGE : PHONE_REQUIRED_MESSAGE;
+  return "Invalid booking request";
+}
 
 // Ambiguous characters removed (no O/0, I/1, L) so a reference read down the phone or copied
 // off a printed door list cannot be transcribed wrongly. 31 symbols.
@@ -118,6 +153,8 @@ export interface BallBookingWrite {
   buyerFirstName: string | null;
   buyerSurname: string | null;
   buyerEmail: string;
+  /** The booker's phone number. Absent on a booking recovered from a Stripe session alone. */
+  buyerPhone?: string | null;
   ticketsPence: number;
   donationPence: number;
   feeCoverPence: number;

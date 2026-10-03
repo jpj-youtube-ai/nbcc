@@ -34,6 +34,8 @@ export interface ExportBooking {
   buyerFirstName: string | null;
   buyerSurname: string | null;
   buyerEmail: string;
+  /** Jaimie 2026-10-03: the booker's phone number. NULL on bookings made before it was asked. */
+  buyerPhone?: string | null;
   ticketsPence: number;
   donationPence: number;
   feeCoverPence: number;
@@ -119,7 +121,7 @@ export function bookingsCsv(bookings: ExportBooking[]): string {
   const money = (p: number) => (p / 100).toFixed(2);
   return csvRows([
     [
-      "Reference", "Booked", "What", "Seats", "Table name", "First name", "Surname", "Email",
+      "Reference", "Booked", "What", "Seats", "Table name", "First name", "Surname", "Email", "Phone",
       "Tickets", "Donation", "Fee covered", "Total", "Gift Aid", "Newsletter", "Status",
     ],
     ...bookings.map((b) => [
@@ -134,6 +136,8 @@ export function bookingsCsv(bookings: ExportBooking[]): string {
       b.buyerFirstName ?? b.buyerName,
       b.buyerSurname ?? "",
       b.buyerEmail,
+      // NBCC's own records only: the door and catering lists, which leave the charity, never carry it.
+      b.buyerPhone ?? "",
       money(b.ticketsPence),
       money(b.donationPence),
       money(b.feeCoverPence),

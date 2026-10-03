@@ -1,5 +1,5 @@
 import { randomBytes } from "node:crypto";
-import { makeReference, purchaseSchema } from "./booking";
+import { bookingRequestError, makeReference, purchaseSchema } from "./booking";
 import { seatsFor } from "./capacity";
 import { orderTotalPence } from "./pricing";
 import {
@@ -57,7 +57,7 @@ export async function placeTransferBooking(
     ...(noGiftAid ? { giftAid: false } : {}),
     ...(staff ? { newsletterOptIn: false } : {}),
   });
-  if (!parsed.success) return refuse(400, { error: "Invalid booking request", details: parsed.error.issues });
+  if (!parsed.success) return refuse(400, { error: bookingRequestError(parsed.error.issues), details: parsed.error.issues });
   // A transfer has no card fee, whatever the form sent.
   const purchase = { ...parsed.data, coverFee: false };
 
@@ -93,6 +93,7 @@ export async function placeTransferBooking(
     buyerFirstName: purchase.buyerFirstName,
     buyerSurname: purchase.buyerSurname,
     buyerEmail: purchase.buyerEmail,
+    buyerPhone: purchase.buyerPhone,
     ticketsPence: totals.ticketsPence,
     donationPence: totals.donationPence,
     feeCoverPence: 0,

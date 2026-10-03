@@ -122,6 +122,10 @@ let awaitingTransfers: unknown[] = [];
 let ballBookings: unknown[] = [];
 // TASK-488: what adding a booking by hand answers.
 let addTransferAnswer: { status: number; body: unknown } = { status: 201, body: {} };
+// Jaimie 2026-10-03: how many paid bookings have no phone number (null: the server did not say), and
+// what adding or changing one answers.
+let ballNoPhone: number | null = null;
+let ballPhoneAnswer: { status: number; body: unknown } = { status: 200, body: {} };
 // TASK-492: the QR codes screen's list, and every code image asked for.
 const QR_SVG = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 29 29"><path d="M0 0h1v1H0z"/></svg>';
 let qrPages: unknown[] = [];
@@ -226,7 +230,10 @@ function respond(url: string, init?: { method?: string; body?: string; headers?:
   if (url.includes("/api/admin/ball/transfers")) return j({ results: awaitingTransfers });
   if (/\/api\/admin\/ball\/bookings\/[^/]+\/mark-paid$/.test(url)) return j({ reference: "BALL-7KQ2MZ", reinstated: false });
   if (/\/api\/admin\/ball\/bookings\/[^/]+\/pay-by$/.test(url)) return j({ reference: "BALL-7KQ2MZ", payBy: "2026-10-20" });
-  if (/\/api\/admin\/ball\/bookings$/.test(url)) return j({ results: ballBookings, abandoned: 0, abandonedRows: [] });
+  if (/\/api\/admin\/ball\/bookings\/[^/]+\/phone$/.test(url)) return j(ballPhoneAnswer.body, ballPhoneAnswer.status);
+  if (/\/api\/admin\/ball\/bookings$/.test(url)) {
+    return j({ results: ballBookings, abandoned: 0, abandonedRows: [], ...(ballNoPhone === null ? {} : { noPhone: ballNoPhone }) });
+  }
   // TASK-478: the seen POST is checked first, since it shares the list's prefix.
   if (url.includes("/api/admin/whats-new/seen") && init?.method === "POST") {
     const area = (JSON.parse(init.body || "{}") as { area?: string }).area;
@@ -267,6 +274,8 @@ describe("admin app integration (jsdom, TASK-118)", () => {
     awaitingTransfers = [];
     ballBookings = [];
     addTransferAnswer = { status: 201, body: {} };
+    ballNoPhone = null;
+    ballPhoneAnswer = { status: 200, body: {} };
     qrPages = [];
     overviewAnswer = { status: 200, body: { updatedAt: "2026-10-03T08:41:00.000Z", needs: [], failed: [] } };
     qrImageUrls = [];
@@ -1781,6 +1790,7 @@ describe("admin app integration (jsdom, TASK-118)", () => {
         field("ballAddFirstName").value = "Ada";
         field("ballAddSurname").value = "Test";
         field("ballAddEmail").value = "ada@example.com";
+        field("ballAddBuyerPhone").value = "07700 900123";
         field("ballAddDonation").value = "20";
         field("ballAddTerms").checked = true;
       };
@@ -1815,6 +1825,18 @@ describe("admin app integration (jsdom, TASK-118)", () => {
         expect(el("ballAddInvoiceFields").hidden).toBe(false);
       });
 
+      it("asks for the buyer's phone number before it sends anything", async () => {
+        loginToken = tokenFor("admin");
+        await openAdd();
+        fillAdd();
+        field("ballAddBuyerPhone").value = "";
+        await submitAdd();
+        expect(posted(/\/api\/admin\/ball\/transfer-bookings$/)).toHaveLength(0);
+        expect(el("ballAddStatus").textContent).toMatch(/phone number/);
+        expect(field("ballAddBuyerPhone").getAttribute("type")).toBe("tel");
+        expect(field("ballAddBuyerPhone").getAttribute("autocomplete")).toBe("off");
+      });
+
       it("needs the buyer's agreement to the terms before it sends anything", async () => {
         loginToken = tokenFor("admin");
         await openAdd();
@@ -1842,6 +1864,7 @@ describe("admin app integration (jsdom, TASK-118)", () => {
           buyerFirstName: "Ada",
           buyerSurname: "Test",
           buyerEmail: "ada@example.com",
+          buyerPhone: "07700 900123",
           donationPence: 2000,
           termsAccepted: true,
         });
@@ -1946,14 +1969,14 @@ describe("admin app integration (jsdom, TASK-118)", () => {
       loginToken = tokenFor("admin");
       awaitingTransfers = [awaiting];
       await openBall();
-      expect(buttonsIn("#ballTransfers")).toEqual(["Mark as paid", "Give more time", "Cancel"]);
+      expect(buttonsIn("#ballTransfers .ball-transfer-actions")).toEqual(["Mark as paid", "Give more time", "Cancel"]);
     });
 
     it("offers an editor with Festive Ball edit only Give more time and Cancel", async () => {
       asEditorWithBallEdit();
       awaitingTransfers = [awaiting];
       await openBall();
-      expect(buttonsIn("#ballTransfers")).toEqual(["Give more time", "Cancel"]);
+      expect(buttonsIn("#ballTransfers .ball-transfer-actions")).toEqual(["Give more time", "Cancel"]);
     });
 
     it("asks before marking paid, naming the amount, and sends that amount", async () => {
@@ -2081,6 +2104,146 @@ describe("admin app integration (jsdom, TASK-118)", () => {
       (document.querySelector("#ballBookings [data-cancel-booking]") as HTMLElement).click();
       expect(confirm).toHaveBeenCalledTimes(1);
       confirm.mockRestore();
+    });
+
+    // Jaimie 2026-10-03: the ticket page now asks for the booker's phone number, so NBCC can contact
+    // them about menu choices. Bookings made before have none: staff chase them by hand, so the screen
+    // flags them, counts them, can show only them, and lets staff add or change the number.
+    describe("the booker's phone number", () => {
+      const paid = (over: Record<string, unknown> = {}) => ({
+        id: 1, reference: "BALL-7KQ2MZ", kind: "table", quantity: 1, seats: 10, buyerName: "Ada Test", buyerEmail: "ada@example.com",
+        buyerPhone: null, totalPence: 100_000, donationPence: 0, giftAid: false, newsletterOptIn: false, status: "paid",
+        createdAt: "2026-10-01T09:00:00Z", paidAt: "2026-10-01T09:00:00Z", paymentMethod: "card", cancelledFrom: null, ...over,
+      });
+      const rowOf = (ref: string) =>
+        Array.from(document.querySelectorAll("#ballBookings tbody tr")).find((r) => (r.textContent || "").includes(ref)) as HTMLElement;
+
+      it("shows the number, as a link to ring it", async () => {
+        ballBookings = [paid({ buyerPhone: "07700 900123" })];
+        loginToken = tokenFor("admin");
+        await openBall();
+        const link = document.querySelector('#ballBookings a[href="tel:07700900123"]') as HTMLAnchorElement;
+        expect(link).not.toBeNull();
+        expect(link.textContent).toBe("07700 900123");
+        expect(rowOf("BALL-7KQ2MZ").textContent).not.toContain("No phone number yet");
+      });
+
+      it("flags a paid booking with no number", async () => {
+        ballBookings = [paid()];
+        loginToken = tokenFor("admin");
+        await openBall();
+        expect(rowOf("BALL-7KQ2MZ").textContent).toContain("No phone number yet");
+      });
+
+      it("does not flag a cancelled booking", async () => {
+        ballBookings = [paid({ status: "cancelled" })];
+        loginToken = tokenFor("admin");
+        await openBall();
+        expect(rowOf("BALL-7KQ2MZ").textContent).not.toContain("No phone number yet");
+      });
+
+      it("flags a booking awaiting a bank transfer with no number", async () => {
+        awaitingTransfers = [{
+          reference: "BALL-2PQRST", kind: "seat", quantity: 2, seats: 2, buyerName: "Bo Example",
+          buyerEmail: "bo@example.com", buyerPhone: null, totalPence: 20_000, payBy: "2026-10-08", createdAt: "2026-10-01T09:00:00Z",
+        }];
+        loginToken = tokenFor("admin");
+        await openBall();
+        expect(el("ballTransfers").textContent).toContain("No phone number yet");
+      });
+
+      it("says how many paid bookings have no number", async () => {
+        ballBookings = [paid(), paid({ id: 2, reference: "BALL-2PQRST", buyerPhone: "01632 960123" })];
+        ballNoPhone = 3;
+        loginToken = tokenFor("admin");
+        await openBall();
+        expect(el("ballNoPhone").hidden).toBe(false);
+        expect(el("ballNoPhoneCount").textContent).toBe("3 paid bookings have no phone number yet.");
+        ballNoPhone = 1;
+        (document.querySelector('.admin-nav-link[data-view="overview"]') as HTMLElement).click();
+        await settle();
+        (document.querySelector('.admin-nav-link[data-view="ball"]') as HTMLElement).click();
+        await settle();
+        expect(el("ballNoPhoneCount").textContent).toBe("1 paid booking has no phone number yet.");
+      });
+
+      it("says so when every paid booking has one", async () => {
+        ballBookings = [paid({ buyerPhone: "07700 900123" })];
+        ballNoPhone = 0;
+        loginToken = tokenFor("admin");
+        await openBall();
+        expect(el("ballNoPhoneCount").textContent).toBe("Every paid booking has a phone number.");
+        expect(el("ballNoPhoneOnlyLabel").hidden).toBe(true);
+      });
+
+      it("can show only the bookings with no number", async () => {
+        ballBookings = [paid(), paid({ id: 2, reference: "BALL-2PQRST", buyerPhone: "01632 960123" })];
+        ballNoPhone = 1;
+        loginToken = tokenFor("admin");
+        await openBall();
+        const only = el("ballNoPhoneOnly") as HTMLInputElement;
+        only.checked = true;
+        only.dispatchEvent(new Event("change", { bubbles: true }));
+        expect(rowOf("BALL-7KQ2MZ").hidden).toBe(false);
+        expect(rowOf("BALL-2PQRST").hidden).toBe(true);
+        only.checked = false;
+        only.dispatchEvent(new Event("change", { bubbles: true }));
+        expect(rowOf("BALL-2PQRST").hidden).toBe(false);
+      });
+
+      it("lets someone with Festive Ball edit add a number, then shows the list again", async () => {
+        ballBookings = [paid()];
+        asEditorWithBallEdit();
+        await openBall();
+        const prompt = vi.spyOn(window, "prompt").mockReturnValue(" 07700 900123 ");
+        const button = rowOf("BALL-7KQ2MZ").querySelector("[data-booking-phone]") as HTMLElement;
+        expect((button.textContent || "").trim()).toBe("Add phone");
+        const loadsBefore = fetchCalls().filter(([u]) => /\/api\/admin\/ball\/bookings$/.test(String(u))).length;
+        button.click();
+        await settle();
+        const [, init] = posted(/\/api\/admin\/ball\/bookings\/BALL-7KQ2MZ\/phone$/)[0];
+        expect(init?.method).toBe("PUT");
+        expect(JSON.parse(init?.body || "{}")).toEqual({ phone: "07700 900123" });
+        expect(fetchCalls().filter(([u]) => /\/api\/admin\/ball\/bookings$/.test(String(u))).length).toBeGreaterThan(loadsBefore);
+        prompt.mockRestore();
+      });
+
+      it("offers the number already there to change", async () => {
+        ballBookings = [paid({ buyerPhone: "07700 900123" })];
+        loginToken = tokenFor("admin");
+        await openBall();
+        const prompt = vi.spyOn(window, "prompt").mockReturnValue(null);
+        const button = rowOf("BALL-7KQ2MZ").querySelector("[data-booking-phone]") as HTMLElement;
+        expect((button.textContent || "").trim()).toBe("Change phone");
+        button.click();
+        await settle();
+        expect(prompt.mock.calls[0][1]).toBe("07700 900123");
+        // Cancelled: nothing sent.
+        expect(posted(/\/phone$/)).toHaveLength(0);
+        prompt.mockRestore();
+      });
+
+      it("says the server's reason when a number is refused", async () => {
+        ballBookings = [paid()];
+        ballPhoneAnswer = { status: 400, body: { error: "That phone number does not look right." } };
+        loginToken = tokenFor("admin");
+        await openBall();
+        const prompt = vi.spyOn(window, "prompt").mockReturnValue("call me");
+        const alert = vi.spyOn(window, "alert").mockImplementation(() => undefined);
+        (rowOf("BALL-7KQ2MZ").querySelector("[data-booking-phone]") as HTMLElement).click();
+        await settle();
+        expect(alert.mock.calls[0][0]).toBe("That phone number does not look right.");
+        prompt.mockRestore();
+        alert.mockRestore();
+      });
+
+      it("is not offered to someone who can only view the Festive Ball", async () => {
+        ballBookings = [paid()];
+        loginToken = tokenFor("viewer");
+        await openBall();
+        expect(document.querySelector("#ballBookings [data-booking-phone]")).toBeNull();
+        expect(rowOf("BALL-7KQ2MZ").textContent).toContain("No phone number yet");
+      });
     });
 
     // A card checkout someone never finished holds its seats for up to an hour now (TASK-484), so

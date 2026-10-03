@@ -44,6 +44,7 @@ const order = {
   buyerFirstName: "Ada",
   buyerSurname: "Test",
   buyerEmail: "ada@example.com",
+  buyerPhone: "07700 900123",
   donationPence: 2000,
   coverFee: true, // a transfer has no card fee, whatever is sent
   giftAid: true,
@@ -122,6 +123,22 @@ describe("POST /api/ball/bank-transfer", () => {
     expect(res.statusCode).toBe(409);
     expect(body(res).error).toBe("There are not enough whole tables left for that booking");
     expect(sendTransferDetailsMock).not.toHaveBeenCalled();
+  });
+
+  // Jaimie 2026-10-03: the booker's phone number, required, stored and given to the team.
+  it("refuses a booking with no phone number, naming it", async () => {
+    const without = { ...order, buyerPhone: undefined };
+    const res = await post(without);
+    expect(res.statusCode).toBe(400);
+    expect(body(res).error).toBe("Please give your phone number, so we can contact you about menu choices for your table.");
+    expect(JSON.stringify(body(res).details)).toContain("buyerPhone");
+    expect(createTransferBookingMock).not.toHaveBeenCalled();
+  });
+
+  it("stores the phone number with the booking and gives it to the team", async () => {
+    await post(order);
+    expect(createTransferBookingMock.mock.calls[0][0]).toMatchObject({ buyerPhone: "07700 900123" });
+    expect(sendTransferStaffNoticeMock.mock.calls[0][0]).toMatchObject({ buyerPhone: "07700 900123" });
   });
 
   // TASK-487: the team hears of each booking at events@.

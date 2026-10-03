@@ -13018,8 +13018,11 @@
       return '<tr data-ref="' + H.escapeHtml(t.reference) + '"><td data-label="Reference">' + H.escapeHtml(t.reference) +
         // TASK-487: made since this person last opened Festive Ball.
         rowNewPill("ball", t.createdAt) +
-        '</td><td data-label="Who">' + H.escapeHtml(t.buyerName) + "<br /><small>" + H.escapeHtml(t.buyerEmail) +
+        // One block, so the narrow card's flex cell keeps name, email, phone and company stacked.
+        '</td><td data-label="Who"><span class="ball-who">' + H.escapeHtml(t.buyerName) + "<br /><small>" + H.escapeHtml(t.buyerEmail) +
         "</small>" +
+        // Awaiting its transfer, so still going ahead: flagged if it has no phone number.
+        ballPhoneBits(t, true) +
         // TASK-486: the company it is invoiced to, and the invoice they were given.
         (t.company
           ? "<br /><small>" + H.escapeHtml(t.company) +
@@ -13028,7 +13031,7 @@
               : "") +
             "</small>"
           : "") +
-        '</td><td data-label="Amount">' + exactMoney(t.totalPence) + "<br /><small>" + what +
+        '</span></td><td data-label="Amount">' + exactMoney(t.totalPence) + "<br /><small>" + what +
         '</small></td><td data-label="Pay by">' + H.escapeHtml(shortDay(t.payBy)) +
         // TASK-485: past its date, for staff to decide on; and whether the reminder has gone.
         (t.overdue ? ' <span class="admin-pill is-new">Overdue</span>' : "") +
@@ -13090,6 +13093,11 @@
         ballStatus("ballAddStatus", "Give the buyer's email address: the bank details go there.");
         return;
       }
+      // Jaimie 2026-10-03: required on every new booking, so we can contact them about menu choices.
+      if (!value("ballAddBuyerPhone")) {
+        ballStatus("ballAddStatus", "Give the buyer's phone number, so we can contact them about menu choices.");
+        return;
+      }
       // One booking takes up to 4 tables or 9 tickets, as on the ticket page.
       var kind = el("ballAddKind").value;
       var quantity = Math.floor(Number(el("ballAddQuantity").value)) || 1;
@@ -13114,6 +13122,7 @@
         buyerFirstName: value("ballAddFirstName"),
         buyerSurname: value("ballAddSurname"),
         buyerEmail: value("ballAddEmail"),
+        buyerPhone: value("ballAddBuyerPhone"),
         donationPence: Math.max(0, Math.round((Number(value("ballAddDonation")) || 0) * 100)),
         termsAccepted: true,
       };
@@ -13240,6 +13249,7 @@
   }
 
   function onTransfersClick(e) {
+    if (onBookingPhoneClick(e)) return;
     if (onMarkPaidClick(e)) return;
     if (onPayByClick(e)) return;
     onCancelBookingClick(e);
@@ -13298,21 +13308,95 @@
       });
   }
 
+  // Jaimie 2026-10-03: the booker's phone number, which the ticket page now asks for so NBCC can
+  // contact them about menu choices. A booking still going ahead (paid, or awaiting its bank transfer)
+  // with none is flagged, because staff chase those by hand; nothing is sent automatically.
+  function ballStillOn(b) {
+    return b.status === "paid" || (b.status === "pending" && b.paymentMethod === "transfer");
+  }
+  function ballPhoneBits(b, stillOn) {
+    var phone = (b.buyerPhone || "").trim();
+    var out = phone
+      ? '<small><a href="tel:' + H.escapeHtml(phone.replace(/[^0-9+]/g, "")) + '">' + H.escapeHtml(phone) + "</a></small>"
+      : stillOn ? '<span class="admin-pill is-new">No phone number yet</span>' : "";
+    if (stillOn && canEdit("ball")) {
+      out += '<button type="button" class="admin-link" data-booking-phone="' + H.escapeHtml(b.reference) +
+        '" data-current="' + H.escapeHtml(phone) + '">' + (phone ? "Change phone" : "Add phone") + "</button>";
+    }
+    return out ? '<span class="ball-phone">' + out + "</span>" : "";
+  }
+
+  // "Show only bookings with no phone number", over the bookings table.
+  function filterBallNoPhone() {
+    var only = el("ballNoPhoneOnly").checked;
+    Array.prototype.forEach.call(document.querySelectorAll("#ballBookings tbody tr"), function (tr) {
+      tr.hidden = only && !tr.hasAttribute("data-no-phone");
+    });
+  }
+
+  // How many paid bookings have no phone number, as the server counted them (every one, not only
+  // the rows on screen). Hidden if it did not say.
+  function ballNoPhoneRender(n) {
+    var box = el("ballNoPhone");
+    if (typeof n !== "number") {
+      box.hidden = true;
+      return;
+    }
+    box.hidden = false;
+    el("ballNoPhoneCount").textContent = n === 0
+      ? "Every paid booking has a phone number."
+      : n + (n === 1 ? " paid booking has" : " paid bookings have") + " no phone number yet.";
+    el("ballNoPhoneHow").hidden = n === 0;
+    el("ballNoPhoneOnlyLabel").hidden = n === 0;
+    if (n === 0) el("ballNoPhoneOnly").checked = false;
+    filterBallNoPhone();
+  }
+
+  // Add or change the number on a booking. An empty box takes it away; Cancel changes nothing.
+  function onBookingPhoneClick(e) {
+    var btn = e.target && e.target.closest && e.target.closest("[data-booking-phone]");
+    if (!btn) return false;
+    var reference = btn.getAttribute("data-booking-phone");
+    var typed = window.prompt(
+      "Phone number for booking " + reference + "\n\nDigits and spaces, for example 07700 900123. Leave it empty to take the number away.",
+      btn.getAttribute("data-current") || "",
+    );
+    if (typed === null) return true;
+    btn.disabled = true;
+    authFetch("/api/admin/ball/bookings/" + encodeURIComponent(reference) + "/phone", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ phone: typed.trim() }),
+    })
+      .then(okJsonOrSaid)
+      .then(function () { loadBall(); })
+      .catch(function (err) {
+        btn.disabled = false;
+        if (err && err.message === "unauthorized") return;
+        window.alert((err && err.said) || "Could not save the phone number for " + reference + ". Nothing has been changed.");
+      });
+    return true;
+  }
+
   function ballBookingsTable(rows) {
     if (!rows.length) return '<p class="admin-empty">No bookings yet.</p>';
     var body = rows.map(function (b) {
       var what = b.kind === "table"
         ? b.quantity + (b.quantity === 1 ? " table" : " tables")
         : b.quantity + (b.quantity === 1 ? " ticket" : " tickets");
-      return "<tr><td>" + H.escapeHtml(b.reference) + rowNewPill("ball", b.status === "paid" ? b.paidAt : null) +
-        "</td><td>" + H.escapeHtml(b.buyerName) +
-        "<br /><small>" + H.escapeHtml(b.buyerEmail) + "</small></td><td>" + what +
-        '</td><td class="admin-num">' + H.formatPence(b.totalPence) +
-        '</td><td class="admin-num">' + (b.donationPence ? H.formatPence(b.donationPence) + (b.giftAid ? " (GA)" : "") : "—") +
-        "</td><td>" + H.escapeHtml(b.status) + "</td><td>" + (b.newsletterOptIn ? "Yes" : "—") +
-        "</td><td>" + cancelCell(b) + "</td></tr>";
+      var stillOn = ballStillOn(b);
+      var noPhone = stillOn && !(b.buyerPhone || "").trim();
+      // Labelled cells, so on a phone each booking is a card like the transfers above.
+      return "<tr" + (noPhone ? ' data-no-phone="1"' : "") + '><td data-label="Reference">' + H.escapeHtml(b.reference) +
+        rowNewPill("ball", b.status === "paid" ? b.paidAt : null) +
+        '</td><td data-label="Who"><span class="ball-who">' + H.escapeHtml(b.buyerName) +
+        "<br /><small>" + H.escapeHtml(b.buyerEmail) + "</small>" + ballPhoneBits(b, stillOn) + '</span></td><td data-label="Bought">' + what +
+        '</td><td class="admin-num" data-label="Paid">' + H.formatPence(b.totalPence) +
+        '</td><td class="admin-num" data-label="Donation">' + (b.donationPence ? H.formatPence(b.donationPence) + (b.giftAid ? " (GA)" : "") : "—") +
+        '</td><td data-label="Status">' + H.escapeHtml(b.status) + '</td><td data-label="Newsletter">' + (b.newsletterOptIn ? "Yes" : "—") +
+        '</td><td data-label="">' + cancelCell(b) + "</td></tr>";
     }).join("");
-    return '<table class="admin-table"><thead><tr><th>Reference</th><th>Who</th><th>Bought</th>' +
+    return '<table class="admin-table ball-bookings-table"><thead><tr><th>Reference</th><th>Who</th><th>Bought</th>' +
       "<th>Paid</th><th>Donation</th><th>Status</th><th>Newsletter</th><th></th></tr></thead><tbody>" +
       body + "</tbody></table>";
   }
@@ -13516,9 +13600,11 @@
               ballBookingsTable(d.abandonedRows || []) +
               "</details>"
             : "");
+        ballNoPhoneRender(d.noPhone);
       })
       .catch(function () {
         el("ballBookings").innerHTML = '<p class="admin-empty">Could not load bookings.</p>';
+        ballNoPhoneRender(null);
       });
     authFetch("/api/admin/ball/guest-progress")
       .then(okJson)
@@ -13589,12 +13675,14 @@
     wireAddTransferBooking();
     el("ballHolds").addEventListener("click", onReleaseHoldClick);
     el("ballBookings").addEventListener("click", function (e) {
+      if (onBookingPhoneClick(e)) return;
       if (onMarkPaidClick(e)) return;
       onCancelBookingClick(e);
     });
     // TASK-484: bank transfer.
     el("ballTransfers").addEventListener("click", onTransfersClick);
     el("ballTransferSearch").addEventListener("input", filterBallTransfers);
+    el("ballNoPhoneOnly").addEventListener("change", filterBallNoPhone);
     el("ballTransferForm").addEventListener("submit", function (e) {
       e.preventDefault();
       if (!isAdmin()) return;

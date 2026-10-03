@@ -1731,6 +1731,7 @@
                 <div class="ty-field"><label for="ballAddFirstName">First name</label><input id="ballAddFirstName" type="text" maxlength="60" /></div>
                 <div class="ty-field"><label for="ballAddSurname">Surname</label><input id="ballAddSurname" type="text" maxlength="60" /></div>
                 <div class="ty-field"><label for="ballAddEmail">Email</label><input id="ballAddEmail" type="email" maxlength="254" /></div>
+                <div class="ty-field"><label for="ballAddBuyerPhone">Phone number</label><input id="ballAddBuyerPhone" type="tel" inputmode="tel" maxlength="40" autocomplete="off" /></div>
                 <p class="ty-controls"><label class="ty-inline ball-add-check"><input id="ballAddInvoice" type="checkbox" /> <span>Their company needs an invoice (14 days to pay)</span></label></p>
                 <div id="ballAddInvoiceFields" hidden>
                   <div class="ty-field"><label for="ballAddCompany">Company name</label><input id="ballAddCompany" type="text" maxlength="120" /></div>
@@ -1757,6 +1758,12 @@
                 <a class="btn btn-ghost" id="ballCatering" href="#" download>Catering list for the venue (CSV)</a>
                 <a class="btn btn-ghost" id="ballBookingsCsv" href="#" download>Bookings (CSV)</a>
               </p>
+              <!-- Jaimie 2026-10-03: the ticket page asks for the booker's phone number, for menu choices.
+                   Bookings made before that have none; staff ring or email for it and add it here. -->
+              <div class="ball-no-phone" id="ballNoPhone" hidden>
+                <p class="admin-note"><b id="ballNoPhoneCount"></b> <span id="ballNoPhoneHow">Bookings made before the ticket page asked for one have none. Ask them by email, then press <b>Add phone</b> beside their booking.</span></p>
+                <p class="ty-controls" id="ballNoPhoneOnlyLabel"><label class="ty-inline ball-add-check"><input id="ballNoPhoneOnly" type="checkbox" /> <span>Show only bookings with no phone number</span></label></p>
+              </div>
               <div class="admin-table-wrap" id="ballBookings" aria-live="polite"><p class="admin-loading">Loading…</p></div>
               <h3 class="admin-subhead">Who has chosen</h3>
               <p class="admin-note">Counted against the guests who have been <b>named</b>, not the seats bought: you cannot pick a dinner for somebody whose name nobody has given you yet. That gap is the guest-details list above, and a different email fixes it.</p>

@@ -63,6 +63,7 @@ const order = {
   buyerFirstName: "Ada",
   buyerSurname: "Test",
   buyerEmail: "ada@example.com",
+  buyerPhone: "01632 960123",
   donationPence: 2000,
   giftAid: true,
   newsletterOptIn: true,
@@ -106,6 +107,14 @@ describe("POST /api/admin/ball/transfer-bookings", () => {
     const [write] = m.createTransferBooking.mock.calls[0];
     expect(write.giftAid).toBe(false);
     expect(write.newsletterOptIn).toBe(false);
+  });
+
+  it("needs the buyer's phone number, and stores it", async () => {
+    const without = { ...order, buyerPhone: undefined };
+    expect((await add(tokenFor("admin"), without)).statusCode).toBe(400);
+    expect(m.createTransferBooking).not.toHaveBeenCalled();
+    await add(tokenFor("admin"), order);
+    expect(m.createTransferBooking.mock.calls[0][0]).toMatchObject({ buyerPhone: "01632 960123" });
   });
 
   it("needs the buyer's agreement to the terms", async () => {

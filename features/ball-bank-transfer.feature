@@ -177,3 +177,29 @@ Feature: Paying for the Festive Ball by bank transfer (TASK-484)
     And the bank details are entered but bank transfer is switched off
     When "vic.transfer.admin.bdd@example.com" adds a bank transfer booking for 1 table
     Then the admin answer is 403
+
+  # Jaimie 2026-10-03: the ticket page asks for the booker's phone number, so NBCC can contact them
+  # about menu choices. Required on every new booking; staff add it to bookings made before.
+  Scenario: A transfer booking needs the booker's phone number, and keeps it
+    Given bank transfer is switched on with bank details
+    When a buyer books 1 table to pay by bank transfer without a phone number
+    Then the transfer booking answer is 400 saying "phone number"
+    When a buyer books 1 table to pay by bank transfer
+    Then the transfer booking answer is 201
+    And the booking keeps the buyer's phone number "07700 900123"
+
+  Scenario: Staff add the phone number to a booking made before the ticket page asked for one
+    Given a paid card booking made before the ticket page asked for a phone number
+    When "ed.transfer.admin.bdd@example.com" lists the ball bookings
+    Then 1 paid booking has no phone number
+    When "ed.transfer.admin.bdd@example.com" gives that booking the phone number "01632 960123"
+    Then the admin answer is 200
+    And that booking's phone number is "01632 960123", changed by "ed.transfer.admin.bdd@example.com"
+    When "ed.transfer.admin.bdd@example.com" lists the ball bookings
+    Then 0 paid bookings have no phone number
+
+  Scenario: Changing a booking's phone number needs Festive Ball edit
+    Given an admin user "vic.transfer.admin.bdd@example.com" with role "viewer" and password "transfer-pw-123"
+    And a paid card booking made before the ticket page asked for a phone number
+    When "vic.transfer.admin.bdd@example.com" gives that booking the phone number "01632 960123"
+    Then the admin answer is 403

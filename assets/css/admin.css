@@ -1824,6 +1824,40 @@ textarea.fx-call-input{min-height:88px;line-height:1.5;resize:vertical;field-siz
   .ball-transfer-actions .admin-link{min-height:44px}
 }
 
+/* Jaimie 2026-10-03: the booker's phone number, or the "No phone number yet" flag, under their name
+   and email, with Add phone / Change phone beside it. One block, so a flex cell cannot set the
+   name, email and phone side by side; a long address wraps rather than pushing the card wider. */
+.ball-who{display:block;min-width:0;overflow-wrap:anywhere}
+.ball-phone{display:flex;flex-wrap:wrap;align-items:center;gap:2px 12px;margin-top:4px}
+.ball-phone .admin-link{white-space:nowrap}
+.ball-no-phone .admin-note{margin-bottom:6px}
+
+/* The bookings table: the Who column gets the room the phone line needs, and Cancel sits on one line. */
+.ball-bookings-table th:nth-child(1),.ball-bookings-table td:nth-child(1){width:13%}  /* Reference */
+.ball-bookings-table th:nth-child(2),.ball-bookings-table td:nth-child(2){width:24%}  /* Who */
+.ball-bookings-table th:nth-child(3),.ball-bookings-table td:nth-child(3){width:10%}  /* Bought */
+.ball-bookings-table th:nth-child(4),.ball-bookings-table td:nth-child(4){width:8%}   /* Paid */
+.ball-bookings-table th:nth-child(5),.ball-bookings-table td:nth-child(5){width:10%}  /* Donation */
+.ball-bookings-table th:nth-child(6),.ball-bookings-table td:nth-child(6){width:8%}   /* Status */
+.ball-bookings-table th:nth-child(7),.ball-bookings-table td:nth-child(7){width:11%}  /* Newsletter */
+.ball-bookings-table th:nth-child(8),.ball-bookings-table td:nth-child(8){width:16%}  /* Cancel */
+.ball-bookings-table [data-cancel-booking]{white-space:nowrap}
+
+/* Narrow, each booking is a labelled card, as the transfers above are. */
+#ballBookings{container:bblist / inline-size}
+@container bblist (max-width:599px){
+  .ball-bookings-table,.ball-bookings-table tbody{display:block}
+  .ball-bookings-table thead{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+  .ball-bookings-table tr{display:flex;flex-direction:column;border-bottom:1px solid var(--line);padding:10px 0}
+  .ball-bookings-table tr[hidden]{display:none}
+  .ball-bookings-table tr:last-child{border-bottom:0}
+  .ball-bookings-table td:nth-child(n){width:auto}
+  .ball-bookings-table td{border-bottom:0;padding:3px 14px;display:flex;gap:10px;align-items:baseline;text-align:left}
+  .ball-bookings-table td::before{content:attr(data-label);flex:0 0 5.5rem;font-size:.78rem;color:var(--slate-soft)}
+  .ball-bookings-table td:last-child{padding-top:8px}
+  .ball-bookings-table td:last-child::before{content:none}
+}
+
 
 @media (max-width:1000px){
   .monthly-table,.monthly-table tbody,.monthly-table tr,.monthly-table td{display:block;width:auto}

@@ -9688,7 +9688,8 @@ as it would be by hand (posters, leaflets, QR codes and envelopes **Sent** by po
 **With them**), with how many went and the note "Sent with the welcome pack." Taking the tick off
 opens again a request **the pack marked**; re-ticking a thing (they asked for a different number)
 puts right how many went on one the pack marked. **Pack sent** only catches up requests still To
-send: never a count, never an undo. So a count staff corrected in Requests, or a request they undid
+send that the pack never marked: never a count, never an undo, and never one the pack marked once
+that staff then undid by hand. So a count staff corrected in Requests, or a request they undid
 there, is never put back by a press on something else. Whether the pack marked a request is kept on
 the pack's own rows (`welcome_pack_items.marked_request`), never read from the request's note. It
 uses the Requests' own rules and audit line (`changeRequestIn`, `src/db/fundraising-requests.ts`).

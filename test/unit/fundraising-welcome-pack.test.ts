@@ -578,6 +578,14 @@ describe("the requests a pack looks after", () => {
       { kind: "posters", input: { action: "send", from: "to_send", on: "2026-10-03", how: "post", by: "fern@example.com", quantity: 12, note: "Sent with the welcome pack." } },
     ]);
   });
+  it("on Pack sent never sends again a request the pack marked once and staff then undid by hand", () => {
+    // Posters ticked (the pack marked the request Sent); staff pressed Undo in Requests, so it stands To send.
+    const all = packView(f, pack({ items: [ticked("letter"), ticked("posters_a4", 10), ticked("posters_a3", 2), ticked("buckets", 2), ticked("sponsor_form")] }), sizes)!;
+    const undone = [row("posters", { status: "to_send" })];
+    const steps = packRequestSync(all, undone, { ...sendPressed, markedKinds: new Set(["posters"]) } as never);
+    // The buckets, which the pack never marked, are still caught up.
+    expect(steps.map((s) => s.kind)).toEqual(["buckets"]);
+  });
   it("leaves alone a request staff already dealt with in Requests", () => {
     const v = packView(f, pack({ items: [ticked("buckets", 2)] }), sizes)!;
     expect(packRequestSync(v, [row("buckets", { status: "with_them", quantity: 2, note: null })], pressed("tick", "buckets"))).toEqual([]);

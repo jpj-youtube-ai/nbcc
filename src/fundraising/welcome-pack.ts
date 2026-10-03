@@ -465,7 +465,9 @@ export function applyPackAction(view: PackView, input: PackActionInput): PackAct
 //       (posters and the like Sent by post; buckets and tins With them), with how many went. Take a
 //       tick off and a request THE PACK marked opens again. Re-tick a thing (they asked for a
 //       different number) and how many went, on a request the pack marked, is put right.
-//   Pack sent   only catches up requests still at their first step. Never a count, never an undo.
+//   Pack sent   only catches up requests still at their first step that the pack never marked.
+//       Never a count, never an undo. One the pack marked once and staff then undid by hand in
+//       Requests is left To send: a deliberate hand undo is never re-sent by any press.
 //
 // So a count staff corrected in Requests, or a request they undid there, is never put back by a
 // press on something else. "The pack marked it" is kept on the pack's own rows
@@ -501,7 +503,12 @@ export type PackPress = { type: "tick" | "untick" | "skip"; key: string } | { ty
  * The steps that bring Requests in line with the press just made. `view` is the pack after it;
  * `by` is who pressed; `marked` is whether the pack had marked the pressed thing's request.
  */
-export function packRequestSync(view: PackView, rows: RequestRow[], o: { today: string; by: string; press: PackPress; marked: boolean }): PackRequestStep[] {
+export function packRequestSync(
+  view: PackView,
+  rows: RequestRow[],
+  /** `markedKinds`: for Pack sent, every request the pack has marked before (those are never caught up). */
+  o: { today: string; by: string; press: PackPress; marked: boolean; markedKinds?: ReadonlySet<RequestKind> },
+): PackRequestStep[] {
   const pressedKind = o.press.type === "send" ? null : (PACK_REQUEST_KIND[o.press.key] ?? null);
   if (o.press.type !== "send" && !pressedKind) return [];
   const kinds = pressedKind ? [pressedKind] : [...new Set(view.items.map((i) => PACK_REQUEST_KIND[i.key]).filter((k): k is RequestKind => !!k))];
@@ -517,6 +524,8 @@ export function packRequestSync(view: PackView, rows: RequestRow[], o: { today: 
     const note = PACK_REQUEST_NOTES[view.kind];
     if (allIn && status === flow[0]) {
       if (quantity < 1) continue;
+      // Pack sent: the pack marked this one before and it stands To send, so staff undid it by hand.
+      if (o.press.type === "send" && o.markedKinds?.has(kind)) continue;
       steps.push(
         group === "lent"
           ? { kind, input: { action: "out", from: "to_send", on: o.today, quantity, by: o.by, note } }

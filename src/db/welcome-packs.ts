@@ -236,7 +236,12 @@ export async function changePack(fundraiserId: number, input: PackActionInput, a
       const pressedKind = press.type === "send" ? null : (PACK_REQUEST_KIND[press.key] ?? null);
       // Had the pack marked this request? As its rows stood before the press (an untick removes one).
       const marked = !!pressedKind && (before?.pack.items ?? []).some((i) => PACK_REQUEST_KIND[i.key] === pressedKind && i.markedRequest === true);
-      const steps = press.type === "send" || pressedKind ? packRequestSync(fresh, await lockRequestRows(client, fundraiserId), { today, by: whoOf(actor), press, marked }) : [];
+      // Every request the pack has marked before: Pack sent never sends one of those again.
+      const markedKinds = new Set((before?.pack.items ?? []).filter((i) => i.markedRequest === true && PACK_REQUEST_KIND[i.key]).map((i) => PACK_REQUEST_KIND[i.key]));
+      const steps =
+        press.type === "send" || pressedKind
+          ? packRequestSync(fresh, await lockRequestRows(client, fundraiserId), { today, by: whoOf(actor), press, marked, markedKinds })
+          : [];
       const subject = { status: f.status, wants: parseWants(f.wants), socialOk: f.socialOk, eventDate: f.eventDate };
       for (const step of steps) {
         try {

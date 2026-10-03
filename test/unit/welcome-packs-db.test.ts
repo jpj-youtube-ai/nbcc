@@ -305,6 +305,20 @@ describe("the requests a pack looks after", () => {
     expect(find(calls, /INSERT INTO fundraiser_requests/)).toBeUndefined();
   });
 
+  it("never sends again, on Pack sent, a request the pack marked and staff then undid in Requests", async () => {
+    // Ticked (the pack marked Posters as Sent); staff pressed Undo in Requests; then Pack sent.
+    const { calls } = db({
+      pack: packRow(),
+      items: [itemRow("letter"), ...everything({ marked_request: true })],
+      requests: [requestRow("posters", { status: "to_send" })],
+    });
+    const out = await changePack(9, { action: "send" }, "admin:ash@example.com", TODAY);
+    expect(out.view.state).toBe("sent");
+    expect(find(calls, /INSERT INTO fundraiser_requests/)).toBeUndefined();
+    expect(requestAudits(calls)).toEqual([]);
+    expect(out.requestWords).toEqual([]);
+  });
+
   it("leaves no matching request open when the pack is marked sent", async () => {
     // Ticked before the request could be marked (it stands open): Pack sent catches it up.
     const { calls } = db({ pack: packRow(), items: [itemRow("letter"), ...everything()] });

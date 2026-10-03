@@ -56,13 +56,15 @@
       <section class="page-top fr-intro" aria-labelledby="fundraise-heading">
         <div class="wrap">
           <div class="intro-hero">
-            <span class="eyebrow">Fundraise for us</span>
-            <h1 id="fundraise-heading">Raise money your way, and we will help.</h1>
+            <!-- In memory of someone, fundraise.js swaps the top of the page for gentle words
+                 (data-say-memory), with no reload, and puts these back if they choose another path. -->
+            <span class="eyebrow" data-say-memory="In memory">Fundraise for us</span>
+            <h1 id="fundraise-heading" data-say-memory="A page in their memory">Raise money your way, and we will help.</h1>
             <div class="rule"><i></i></div>
-            <p class="lede">A sponsored walk, a bake sale, a quiz night or a birthday. Tell us what you are planning and we will be in touch. We read every sign up ourselves.</p>
+            <p class="lede" data-say-memory="A quiet page where family and friends can give in memory of someone you love. Take your time: we will go through it all with you on the phone before anything goes live.">A sponsored walk, a bake sale, a quiz night or a birthday. Tell us what you are planning and we will be in touch. We read every sign up ourselves.</p>
             <!-- The sign up tidy (Jaimie, 2026-10-03): one line to set expectations. In memory of someone,
-                 fundraise.js swaps in gentler words (data-say-memory): there is no welcome pack. -->
-            <p class="fr-one-liner" data-one-liner data-say-memory="Take your time. We will go through it all with you on the phone before anything goes live.">It only takes a few minutes. Have your address handy so we can post your welcome pack.</p>
+                 fundraise.js hides it: there is no welcome pack, and the words above say to take their time. -->
+            <p class="fr-one-liner" data-one-liner>It only takes a few minutes. Have your address handy so we can post your welcome pack.</p>
             <p class="fr-aside-link">New to fundraising? <a href="/fundraise/help">Read our help page</a></p>
             <p class="fr-aside-link fr-aside-link--next">Already signed up? <a href="/fundraise/manage">Change your page</a></p>
           </div>
@@ -82,7 +84,7 @@
           <div class="fr-signup" data-fundraise-open>
             <!-- The sign up tidy: anyone who would rather not do it alone can ring, and we fill it in together. -->
             <aside class="fr-together" aria-label="Help filling this in">
-              <p><strong>Rather do this together?</strong> Give us a call on <a href="tel:+441292811015">01292 811 015</a> and we'll fill it in with you.</p>
+              <p><strong data-say-memory="Would you rather talk it through?">Rather do this together?</strong> Give us a call on <a href="tel:+441292811015">01292 811 015</a> <span data-say-memory="and we will fill it in with you.">and we'll fill it in with you.</span></p>
             </aside>
             <!-- Shipped hidden, and shown by fundraise.js: without JavaScript the browser would send the
                  form as a web address, with names and email addresses in it. -->

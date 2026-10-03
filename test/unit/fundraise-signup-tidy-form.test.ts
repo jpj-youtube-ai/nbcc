@@ -468,12 +468,33 @@ describe("a page in memory of someone", () => {
   it("has gentle stage names, no lift and no exclamation marks", () => {
     tick("pathMemory");
     expect(stageNames()).toEqual(["About them", "The page", "Your details", "Anything we can send", "Check the details"]);
-    expect($("[data-one-liner]").textContent).toBe("Take your time. We will go through it all with you on the phone before anything goes live.");
+    expect($("[data-one-liner]").hidden).toBe(true);
     const shown = [...document.querySelectorAll<HTMLElement>("[data-step]")].filter((s) => !s.hidden);
     for (const s of shown) {
       const prompts = [...s.querySelectorAll("[data-invalid-message]")].filter((n) => !(n as HTMLElement).closest("[hidden]"));
       for (const p of prompts) expect(p.getAttribute("data-invalid-message"), p.id).not.toMatch(/!/);
     }
+  });
+
+  it("has a gentle top of the page, and the usual one again if they choose another path", () => {
+    const hero = () => [$(".intro-hero .eyebrow").textContent, $("#fundraise-heading").textContent, $(".intro-hero .lede").textContent];
+    const usual = hero();
+    const box = () => $(".fr-together").textContent!.replace(/\s+/g, " ").trim();
+    tick("pathMemory");
+    expect(hero()).toEqual([
+      "In memory",
+      "A page in their memory",
+      "A quiet page where family and friends can give in memory of someone you love. Take your time: we will go through it all with you on the phone before anything goes live.",
+    ]);
+    expect(box()).toBe("Would you rather talk it through? Give us a call on 01292 811 015 and we will fill it in with you.");
+    expect($(".fr-together a").getAttribute("href")).toBe("tel:+441292811015");
+    expect($(".intro-hero").textContent).not.toMatch(/!/);
+    expect($(".intro-hero").querySelectorAll(".fr-aside-link a")).toHaveLength(2);
+    tick("pathRaising");
+    expect(hero()).toEqual(usual);
+    expect(usual[1]).toBe("Raise money your way, and we will help.");
+    expect(box()).toBe("Rather do this together? Give us a call on 01292 811 015 and we'll fill it in with you.");
+    expect($("[data-one-liner]").hidden).toBe(false);
   });
 
   it("never asks about sport, a T-shirt, a team, a child, a business, a shout out, coming along or the newsletter", () => {

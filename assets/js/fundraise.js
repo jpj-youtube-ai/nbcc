@@ -350,10 +350,7 @@
       if (targetQ) targetQ.hidden = isTeam();
       // The one liner under the heading: no welcome pack in memory of someone.
       var lede = doc.querySelector("[data-one-liner]");
-      if (lede) {
-        var w = p === "memory" ? lede.getAttribute("data-say-memory") : lede.getAttribute("data-say-default");
-        if (w && lede.textContent !== w) lede.textContent = w;
-      }
+      if (lede) lede.hidden = p === "memory";
     }
 
     // --- who is fundraising (C4), and for a business, school or group (C5) ------------------------

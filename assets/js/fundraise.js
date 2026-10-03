@@ -714,6 +714,7 @@
       }
       var title = team ? val("teamName") : val("title");
       if (title || !m) rows.push(["Name for it", title || ""]);
+      if (val("description")) rows.push([m ? "About them" : "About it", val("description")]);
       var when = [val("eventDate"), val("startTime")].filter(Boolean).join(" at ");
       if (when) rows.push([m ? "The funeral or service" : "When", when]);
       else if (dateTbc()) rows.push(["When", "Not decided yet"]);
@@ -726,6 +727,31 @@
         "Sharing",
         sharing() ? val("nbccSharePercent") + "% to NBCC, the rest to " + val("otherCauseName") : radio("sharesWithOther") === "no" ? "No, all of it comes to NBCC" : "",
       ]);
+      if (path() === "event") {
+        [["Front of the card", val("cardLine")], ["Finish time", val("endTime")], ["Full address", [val("venueAddress"), val("venuePostcode")].filter(Boolean).join(", ")],
+          ["Price", val("price")], ["How people get in", labelOfChoice("booking")], ["Ticket link", radio("booking") === "away" ? val("ticketUrl") : ""],
+          ["Age limit", val("ageLimit")], ["Dress code", val("dressCode")], ["What's included", val("included")], ["Credit it to", val("creditName")]].forEach(function (r) {
+          if (r[1]) rows.push(r);
+        });
+        var access = Array.prototype.filter.call(form.querySelectorAll('input[name="access"]'), function (b) { return b.checked; })
+          .map(function (b) { var l = b.closest("label"); return l ? String(l.textContent || "").trim() : ""; });
+        if (access.length) rows.push(["Access", access.join(", ")]);
+      }
+      if (m) rows.push(["Sharing the page on our social media", radio("memoryShare") === "yes" ? "Yes" : radio("memoryShare") === "no" ? "No" : ""]);
+      else {
+        rows.push(["On NBCC's social media", labelOfChoice("share")]);
+        if (val("instagram")) rows.push(["Instagram", val("instagram")]);
+        if (val("facebook")) rows.push(["Facebook", val("facebook")]);
+      }
+      var wanted = [];
+      [["posters", "poster", "posters"], ["leaflets", "leaflet", "leaflets"], ["qrCodes", "printed QR code", "printed QR codes"], ["buckets", "collection bucket", "collection buckets"],
+        ["tins", "collection tin", "collection tins"], ["envelopes", "collection envelope", "collection envelopes"]].forEach(function (w) {
+        var box = el(w[0]);
+        var n = box && inPlayEl(box) ? whole(w[0]) : 0;
+        if (n > 0) wanted.push(n + " " + (n === 1 ? w[1] : w[2]));
+      });
+      if (attend && !attend.hidden && radio("attend") === "yes") wanted.push("someone from NBCC to come along");
+      rows.push([m ? "What we can send" : "What you would like", wanted.length ? wanted.join(", ") : "Nothing"]);
       rows.push(["Your name", [val("firstName"), val("lastName")].join(" ").trim()]);
       rows.push(["Email", val("email")]);
       rows.push(["Phone", val("phone")]);
@@ -805,10 +831,14 @@
           if (bad) out.push({ control: box, message: box.getAttribute("data-invalid-message") || "Please check this number." });
         });
         if (serverFields) {
+          var loose = [];
           Object.keys(serverFields).forEach(function (key) {
             var control = controlEl(key);
-            if (control) out.push({ control: control, message: serverFields[key] });
+            if (control && inPlayEl(control)) out.push({ control: control, message: serverFields[key] });
+            else loose.push(serverFields[key]);
           });
+          // A message with no box of its own (or one not showing) is still said, by the Send button.
+          if (loose.length) say(loose.join(" "), "error");
         }
         return out;
       };
@@ -857,6 +887,13 @@
         onShow: function (step) {
           if (step.hasAttribute("data-review-step")) safely(buildReview);
           if (summary) summary.hidden = true;
+          // The spam check is drawn once its step shows: never into a box that is not on screen.
+          if (captcha && captchaBox && step.contains(captchaBox)) {
+            safely(function () {
+              loadCaptcha();
+              renderCaptcha();
+            });
+          }
         },
       });
     }
@@ -885,6 +922,8 @@
 
     function renderCaptcha() {
       if (captcha.widgetId !== null || !win.turnstile || !captchaBox) return;
+      // Only once its step is showing (onShow draws it then).
+      if (wizard && wizard.current() && !wizard.current().contains(captchaBox)) return;
       captchaBox.hidden = false;
       var room = form.clientWidth || 400;
       captcha.widgetId = win.turnstile.render(captchaBox, {
@@ -1075,6 +1114,8 @@
       if (shared && typeof shared.validateForm === "function") {
         if (summary) summary.textContent = MSG.check;
         ok = shared.validateForm(form, { summary: summary, extraChecks: extraFor(form, serverFields) }).valid;
+        // The server refused it, though nothing here is flagged: it is not sent as if all were well.
+        if (serverFields) ok = false;
       } else if (serverFields) {
         say(Object.keys(serverFields).map(function (k) { return serverFields[k]; }).join(" "), "error");
         ok = false;
@@ -1133,6 +1174,9 @@
       var share = radio("share");
       var attendAsked = attend && !attend.hidden;
       var body = {
+        // The form as the sign up tidy rebuilt it: the server takes a page left open from before
+        // (which sends none) by the old rules, for the questions it never showed.
+        formVersion: 2,
         // In memory is sent as raising money, with inMemory, as the server has always taken it.
         path: m ? "raising" : p,
         kind: radio("kind"),
@@ -1216,7 +1260,7 @@
             return { firstName: part("firstName"), lastName: part("lastName"), email: part("email") };
           })
         : [];
-      body.company = val("company");
+      body.nbccCheck = val("nbccCheck");
       body.captchaToken = tokenField ? tokenField.value : "";
       if (inviteToken) body.invite = inviteToken;
       if (againToken) body.again = againToken; // TASK-515
@@ -1233,7 +1277,11 @@
       if (steps) steps.hidden = m;
       if (memorySteps) memorySteps.hidden = !m;
       var listed = doc.querySelector("[data-thanks-listed]");
-      if (listed) listed.hidden = body.listed === false;
+      if (listed) {
+        listed.hidden = body.listed === false;
+        // An event with no date yet has its page, but no card on Get involved until it has one.
+        if (body.path === "event" && !body.eventDate) listed.textContent = listed.getAttribute("data-say-undated") || listed.textContent;
+      }
       var teamLine = doc.querySelector("[data-thanks-team]");
       if (teamLine) teamLine.hidden = body.team !== "team";
       // In memory (the appropriateness audit): gently, and only a short receipt has gone.

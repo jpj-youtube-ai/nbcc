@@ -69,8 +69,10 @@
             <p class="fr-noscript" data-nojs>This form needs JavaScript switched on. You can email <a href="mailto:events@nbcc.scot">events@nbcc.scot</a> to join the team instead.</p>
             <form id="joinForm" class="fr-form" novalidate hidden data-needs-js data-team-slug="__TEAM_SLUG__">
               <div hidden aria-hidden="true">
-                <label for="company">Leave blank
-                  <input type="text" id="company" name="company" tabindex="-1" autocomplete="off" />
+                <!-- A trap for bots, never seen or reached by a person. Not called "company" any more:
+                     browsers fill that in for real people. -->
+                <label for="nbccCheck">Leave this one empty
+                  <input type="text" id="nbccCheck" name="nbccCheck" tabindex="-1" autocomplete="off" />
                 </label>
               </div>
               <!-- The sign up tidy: one question at a time with Next and Back, and a progress bar of

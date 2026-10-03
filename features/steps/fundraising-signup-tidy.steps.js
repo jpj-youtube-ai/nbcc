@@ -59,6 +59,8 @@ const ADDRESS = { postLine1: "1 Example Road", postLine2: "", postTown: "Example
 // A raising money sign up as the tidied form sends it.
 function signUpBody(title, over) {
   return {
+    // The rebuilt form says so; a body without it is a page left open from before, taken by the old rules.
+    formVersion: 2,
     path: "raising",
     kind: "quiz",
     kindOther: "",

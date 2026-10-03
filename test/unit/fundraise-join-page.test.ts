@@ -248,6 +248,16 @@ describe("joining for someone under 18 (Jaimie, 2026-10-03)", () => {
   });
 });
 
+describe("the trap box (after review)", () => {
+  it("has a name no autofill fills in, and is sent under it", async () => {
+    load();
+    expect(document.querySelector('[name="company"]')).toBeNull();
+    fillIn();
+    await submit();
+    expect(joins()[0].body).toHaveProperty("nbccCheck", "");
+  });
+});
+
 describe("an invite's link", () => {
   const token = "a".repeat(43);
 

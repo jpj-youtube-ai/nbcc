@@ -9539,6 +9539,17 @@ What is asked, and why:
   Emails about that member page greet the parent: "Hi Sarah, this is about Jack's page."
   (`greetGuardian` in `src/fundraising/signup-tidy-emails.ts`, applied where they are sent).
 
+**A form left open across the deploy.** The rebuilt form sends `formVersion: 2`. A sign up without
+it is the old page still open in someone's browser: it is taken by the old rules for what it never
+asked (an address only when something is to be posted, no split tick, the old in memory categories),
+so no sign up is lost in the deploy window. The trap box for bots is `nbccCheck` now (`company` was
+being filled in by browsers' autofill; the old name still counts), and a hit is only counted in the log.
+
+**After review.** A page kept off Get involved is `noindex` (header and meta). A funeral's day and
+place never reach the public (`publicCard` blanks them in memory). A child on a team is shown by
+first name only, on their page and in the team's list. A sporting answer has to agree with the
+category. Sport and the T-shirt are refused for an event, a page in memory, and a team member's page.
+
 ### The rules the server keeps (`src/fundraising/signup-tidy.ts`, wired into `signUpSchema`)
 
 | Field | Rule |

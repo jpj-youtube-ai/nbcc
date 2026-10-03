@@ -13322,6 +13322,8 @@
   function frWebsiteWords(f) {
     if (!f.public) return "Not on the website";
     if (f.offListBy === "organiser") return "A page of its own, but not on Get involved: only people they send the link to";
+    // An event's card needs a date: until it has one it has its page, but is not on the list.
+    if (f.path === "event" && !f.eventDate) return "Not listed yet: no date. Its page is up; its card joins Get involved once it has a date";
     return "Show it on our website";
   }
   // The new answers, in What they told us. A sign up from before has none, and shows nothing.

@@ -329,7 +329,8 @@ describe("sending", () => {
       team: "me",
       teamShareMode: null,
       teamMembers: [],
-      company: "",
+      nbccCheck: "",
+      formVersion: 2,
       captchaToken: "",
     });
   });

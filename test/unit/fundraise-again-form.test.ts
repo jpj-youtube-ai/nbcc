@@ -120,11 +120,11 @@ describe("a form opened from Do it again", () => {
   });
 
   it("never fills in a box it was not given, whatever comes back", async () => {
-    answer = { status: 200, body: { ...LAST_YEAR, eventDate: "2027-12-05", postLine1: "1 Example Street", company: "spam" } };
+    answer = { status: 200, body: { ...LAST_YEAR, eventDate: "2027-12-05", postLine1: "1 Example Street", nbccCheck: "spam" } };
     const form = load(`?again=${TOKEN}`);
     await settle();
     expect($("#eventDate").value).toBe("");
     expect($("#postLine1").value).toBe("");
-    expect(form.payload().company).toBe("");
+    expect(form.payload().nbccCheck).toBe("");
   });
 });

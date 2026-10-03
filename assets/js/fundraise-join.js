@@ -166,8 +166,13 @@
           }
           return true;
         },
-        onShow: function () {
+        onShow: function (step) {
           if (summary) summary.hidden = true;
+          // The spam check is drawn once its step shows: never into a box that is not on screen.
+          if (captcha && captchaBox && step.contains(captchaBox)) {
+            loadCaptcha();
+            renderCaptcha();
+          }
         },
       });
     }
@@ -192,6 +197,7 @@
     var captcha = { on: false, siteKey: null, loading: false, widgetId: null, broken: false, interactive: false };
     function renderCaptcha() {
       if (captcha.widgetId !== null || !win.turnstile || !captchaBox) return;
+      if (wizard && wizard.current() && !wizard.current().contains(captchaBox)) return;
       captchaBox.hidden = false;
       captcha.widgetId = win.turnstile.render(captchaBox, {
         sitekey: captcha.siteKey,
@@ -341,7 +347,7 @@
         memberUnder18: radio("memberUnder18") === "yes" ? true : radio("memberUnder18") === "no" ? false : null,
         guardianFirstName: forChild() ? val("guardianFirstName") : "",
         guardianConsent: forChild() && !!(el("guardianConsent") && el("guardianConsent").checked),
-        company: val("company"),
+        nbccCheck: val("nbccCheck"),
         captchaToken: tokenField ? tokenField.value : "",
       };
       if (asked()) {

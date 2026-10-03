@@ -695,6 +695,132 @@ describe("a team", () => {
   });
 });
 
+describe("after review", () => {
+  it("says it is the rebuilt form, so the server can tell a page left open from before", async () => {
+    load();
+    raisingToTheEnd();
+    await submit();
+    expect(sent().formVersion).toBe(2);
+  });
+
+  it("has a trap box no autofill fills in, and sends it under its new name", async () => {
+    load();
+    expect(document.querySelector('[name="company"]')).toBeNull();
+    const trap = $("#nbccCheck");
+    expect(trap.getAttribute("autocomplete")).toBe("off");
+    expect(trap.getAttribute("tabindex")).toBe("-1");
+    raisingToTheEnd();
+    await submit();
+    expect(sent()).toHaveProperty("nbccCheck", "");
+    expect(sent()).not.toHaveProperty("company");
+  });
+
+  it("shows a server message that has no box of its own", async () => {
+    load();
+    raisingToTheEnd();
+    answer = (url) =>
+      url === "/api/fundraise" ? { status: 400, body: { fields: { somethingNew: "Please ring us on 01292 811 015." } } } : { status: 200, body: { siteKey: null } };
+    await submit();
+    expect($("#formStatus").textContent).toBe("Please ring us on 01292 811 015.");
+    expect($("#formStatus").className).toContain("is-error");
+  });
+
+  it("lists everything that will be sent, to check", () => {
+    load();
+    raisingToTheEnd();
+    type("posters", "5");
+    type("instagram", "@robin.quizzes");
+    const rows = Object.fromEntries([...document.querySelectorAll("[data-review] dt")].map((dt) => [dt.textContent, dt.nextElementSibling!.textContent]));
+    // Rebuilt as the step shows: go back and forward to see the changes.
+    back();
+    goTo("newsletterOk");
+    const again = Object.fromEntries([...document.querySelectorAll("[data-review] dt")].map((dt) => [dt.textContent, dt.nextElementSibling!.textContent]));
+    expect(rows["About it"]).toBe("A quiz for NBCC.");
+    expect(again["What you would like"]).toBe("5 posters");
+    expect(again["On NBCC's social media"]).toBe("Yes, you can mention it");
+    expect(again.Instagram).toBe("@robin.quizzes");
+  });
+
+  it("lists an event's card details too", () => {
+    load();
+    tick("pathEvent");
+    tick("over18Yes");
+    tick("kind-quiz");
+    type("title", "The Exampleton Quiz Night");
+    type("description", "Eight rounds and a raffle.");
+    tick("dateTbc");
+    type("venue", "Example Village Hall");
+    type("cardLine", "Eight rounds, a raffle and plenty of laughs.");
+    type("price", "Free");
+    tick("booking-donations");
+    tick("orgNo");
+    tick("listedYes");
+    type("firstName", "Sam");
+    type("lastName", "Sample");
+    type("email", "sam@example.com");
+    type("phone", "07700 900456");
+    type("postLine1", "1 Example Road");
+    type("postTown", "Exampleton");
+    type("postPostcode", "EX1 1EX");
+    tick("sharesNo");
+    tick("shareNo");
+    tick("attendNo");
+    goTo("newsletterOk");
+    const rows = Object.fromEntries([...document.querySelectorAll("[data-review] dt")].map((dt) => [dt.textContent, dt.nextElementSibling!.textContent]));
+    expect(rows["Front of the card"]).toBe("Eight rounds, a raffle and plenty of laughs.");
+    expect(rows["How people get in"]).toBe("Free entry, donations welcome");
+    expect(rows.Price).toBe("Free");
+    expect(rows.When).toBe("Not decided yet");
+  });
+
+  it("tells an event with no date that it is listed once there is one", async () => {
+    load();
+    tick("pathEvent");
+    tick("over18Yes");
+    tick("kind-quiz");
+    type("title", "The Exampleton Quiz Night");
+    type("description", "Eight rounds and a raffle.");
+    tick("dateTbc");
+    type("venue", "Example Village Hall");
+    type("cardLine", "Eight rounds.");
+    tick("booking-free");
+    tick("orgNo");
+    tick("listedYes");
+    type("firstName", "Sam");
+    type("lastName", "Sample");
+    type("email", "sam@example.com");
+    type("phone", "07700 900456");
+    type("postLine1", "1 Example Road");
+    type("postTown", "Exampleton");
+    type("postPostcode", "EX1 1EX");
+    tick("sharesNo");
+    tick("shareNo");
+    tick("attendNo");
+    goTo("newsletterOk");
+    await submit();
+    expect($("[data-thanks-listed]").textContent).toBe("We’ll list it on Get involved once you’ve told us the date.");
+    expect($("[data-thanks-listed]").hidden).toBe(false);
+  });
+
+  it("draws the spam check only once its step is showing", () => {
+    answer = (url) => (url === "/api/fundraise/captcha" ? { status: 200, body: { siteKey: "site-key" } } : { status: 200, body: {} });
+    load();
+    const render = vi.fn(() => "w1");
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (window as any).turnstile = { render, reset: vi.fn() };
+    return flush().then(() => {
+      $("#firstName").dispatchEvent(new Event("focusin", { bubbles: true }));
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (window as any).nbccFundraiseTurnstileReady();
+      expect(render).not.toHaveBeenCalled();
+      raisingToTheEnd();
+      expect(render).toHaveBeenCalledTimes(1);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      delete (window as any).turnstile;
+    });
+  });
+});
+
 describe("a server message", () => {
   it("goes back to the step it belongs to", async () => {
     load();

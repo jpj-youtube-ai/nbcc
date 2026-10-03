@@ -96,8 +96,10 @@
                  sent, so nothing a valid sign up needs is ever left out of it. -->
             <form id="fundraiseForm" class="fr-form" novalidate hidden data-needs-js>
               <div hidden aria-hidden="true">
-                <label for="company">Leave blank
-                  <input type="text" id="company" name="company" tabindex="-1" autocomplete="off" />
+                <!-- A trap for bots, never seen or reached by a person. Not called "company" any more:
+                     browsers fill that in for real people. -->
+                <label for="nbccCheck">Leave this one empty
+                  <input type="text" id="nbccCheck" name="nbccCheck" tabindex="-1" autocomplete="off" />
                 </label>
               </div>
               <nav class="fr-progress" aria-label="Your progress" data-progress hidden>
@@ -741,7 +743,7 @@
             <ol class="fr-steps" data-thanks-steps>
               <li>Someone from NBCC reads it and gets in touch, usually within a few days.</li>
               <li>Once we have said yes, we email you the link to your page and its QR code, ready to share.</li>
-              <li data-thanks-listed>We also list it on our Get involved page, so anyone can find it.</li>
+              <li data-thanks-listed data-say-undated="We&rsquo;ll list it on Get involved once you&rsquo;ve told us the date.">We also list it on our Get involved page, so anyone can find it.</li>
               <li data-thanks-team hidden>We also email you the link for your team to join, and invite anyone you added.</li>
               <li>Your welcome pack comes in the post, with anything you asked for, like posters or a bucket.</li>
             </ol>

@@ -234,3 +234,38 @@ describe("review: in memory with the real team question", () => {
     expect(sent()).toMatchObject({ inMemory: true, team: "me" });
   });
 });
+
+describe("the words at the top of the in memory questions (Jaimie, A2)", () => {
+  const SORRY = "We are so sorry for your loss. Take your time: we will check everything with you before the page goes live.";
+  const DIRECTOR = "Thank you for setting this up for the family. We will check everything with you before the page goes live.";
+  const BEFORE = "Take your time: we will check everything with you before the page goes live.";
+  const lead = () => [...document.querySelectorAll<HTMLElement>("[data-memory-lead]")].filter((n) => !n.hidden).map((n) => n.textContent!.trim());
+
+  it("say only take your time until they choose who is setting it up", () => {
+    load();
+    tick("pathRaising");
+    tick("over18Yes");
+    tick("inMemoryYes");
+    expect(lead()).toEqual([BEFORE]);
+  });
+
+  it("are sorry for their loss for a family member or a friend", () => {
+    load();
+    tick("pathRaising");
+    tick("over18Yes");
+    tick("inMemoryYes");
+    tick("memorySetupBy-family");
+    expect(lead()).toEqual([SORRY]);
+    tick("memorySetupBy-friend");
+    expect(lead()).toEqual([SORRY]);
+  });
+
+  it("thank a funeral director for setting it up for the family, with no sorry for your loss", () => {
+    load();
+    tick("pathRaising");
+    tick("over18Yes");
+    tick("inMemoryYes");
+    tick("memorySetupBy-funeral_director");
+    expect(lead()).toEqual([DIRECTOR]);
+  });
+});

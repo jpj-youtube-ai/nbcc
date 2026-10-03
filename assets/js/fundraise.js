@@ -463,6 +463,12 @@
           me.dispatchEvent(new Event("change", { bubbles: true }));
         }
       }
+      // Jaimie, A2: the words at the top follow who is setting it up.
+      var who = radio("memorySetupBy");
+      var leadNow = who === "funeral_director" ? "director" : who === "family" || who === "friend" ? "family" : "before";
+      Array.prototype.forEach.call(form.querySelectorAll("[data-memory-lead]"), function (n) {
+        n.hidden = n.getAttribute("data-memory-lead") !== leadNow;
+      });
       var asked = yes && parseFloat(val("target")) > 0;
       if (memoryTarget) memoryTarget.hidden = !asked;
       Array.prototype.forEach.call(form.querySelectorAll('input[name="memoryShowTarget"]'), function (r) {

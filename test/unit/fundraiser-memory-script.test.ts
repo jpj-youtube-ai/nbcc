@@ -55,3 +55,19 @@ describe("Let the family know I gave", () => {
     expect(calls[0].familyNotify).toBe(true);
   });
 });
+
+describe("audit: Let the family know I gave keeps the amount off", () => {
+  it("unticks and disables Show how much I gave while it is ticked", () => {
+    load();
+    const amount = document.getElementById("frShowAmount") as HTMLInputElement;
+    const family = document.getElementById("frFamilyNotify") as HTMLInputElement;
+    amount.checked = true;
+    family.checked = true;
+    family.dispatchEvent(new Event("change", { bubbles: true }));
+    expect(amount.checked).toBe(false);
+    expect(amount.disabled).toBe(true);
+    family.checked = false;
+    family.dispatchEvent(new Event("change", { bubbles: true }));
+    expect(amount.disabled).toBe(false);
+  });
+});

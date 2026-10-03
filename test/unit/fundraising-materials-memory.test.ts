@@ -134,6 +134,6 @@ describe("the pictures to share, in memory", () => {
       expect(words, kind).toContain("Margaret Exampleton");
     }
     const story = (drawn.get(document.querySelector<HTMLCanvasElement>('canvas[data-social="story"]')!) ?? []).join(" ");
-    expect(story).toContain("Give in their memory");
+    expect(story).toContain("Give to NBCC in their memory");
   });
 });

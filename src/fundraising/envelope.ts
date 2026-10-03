@@ -1,7 +1,7 @@
 import { escapeHtml } from "../events/render";
 import { SINGLE_DONATION_WORDING } from "../declarations/wording";
 import { MATERIALS_STATEMENT, POSTAL_ADDRESS_LINES } from "../legal/registration";
-import { hasPage, type FundraiserRecord } from "./model";
+import { hasPage, splitStatement, type FundraiserRecord } from "./model";
 import { CHARITY_NAME, shell, type MaterialAssets } from "./materials";
 import { qrSvg } from "./qr";
 
@@ -48,6 +48,8 @@ export interface EnvelopeFacts {
   dates: string | null;
   /** The page's short name, printed small as a reference, so staff know whose envelope it is. */
   slug: string;
+  /** Shared with another cause: the statement the 2009 regulations ask for, else null. */
+  split: string | null;
   /** The page's address, or null when it has no public page. */
   link: string | null;
   linkWords: string | null;
@@ -61,6 +63,7 @@ export function envelopeFacts(f: FundraiserRecord, urls: { pageUrl: string }): E
     name: (f.memoryName ?? f.title).trim(),
     dates: f.memoryDates?.trim() || null,
     slug: f.slug,
+    split: splitStatement(f),
     link,
     linkWords: link ? link.replace(/^https?:\/\//, "").replace(/\/+$/, "") : null,
   };
@@ -132,7 +135,7 @@ function envelopePage(d: EnvelopeFacts, a: MaterialAssets): string {
       </div>
       <p class="e-changes">${escapeHtml(ENVELOPE_CHANGES)}</p>
     </div>
-    <div class="e-legal">${escapeHtml(MATERIALS_STATEMENT)}</div>
+    <div class="e-legal">${d.split ? `<b>${escapeHtml(d.split)}</b> ` : ""}${escapeHtml(MATERIALS_STATEMENT)}</div>
   </div>
 </div>`;
 }

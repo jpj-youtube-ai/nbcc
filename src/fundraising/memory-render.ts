@@ -71,7 +71,7 @@ function renderMemoryWallStep(p: PublicPage, sessionId: string): string {
     '<span class="give-check-text">Show how much I gave</span></label>' +
     '<label class="give-check fr-family-check" for="frFamilyNotify"><input class="give-check-box" id="frFamilyNotify" name="frFamilyNotify" type="checkbox" aria-describedby="frFamilyNotifyHelp" />' +
     '<span class="give-check-text"><strong>Let the family know I gave</strong></span></label>' +
-    '<p class="give-field-help" id="frFamilyNotifyHelp">We will share your name and your message with the family, through the person who set up this page, but never how much you gave or your email address. Letting the family know keeps how much you gave private on the page too.</p>' +
+    '<p class="give-field-help" id="frFamilyNotifyHelp">We will share your name and your message with the family, through the person who set up this page, but never how much you gave or your email address. If you tick this, we won’t show how much you gave on the page.</p>' +
     '<div class="fr-after__actions">' +
     '<button class="btn btn-primary" type="submit" data-wall-submit>Add to the wall</button>' +
     '<button class="btn btn-ghost fr-after__skip" type="button" data-wall-skip>No thanks</button>' +
@@ -92,7 +92,7 @@ function renderMemoryThanks(p: PublicPage, pageUrl: string, thanks: NonNullable<
     lead +
     (thanks.sessionId && !thanks.added ? renderMemoryWallStep(p, thanks.sessionId) : "") +
     "<p>If you would like to, you can share the page with others who knew them.</p>" +
-    shareLinks(p, pageUrl, `In memory of ${nameOf(p)}: ${pageUrl}`) +
+    shareLinks(p, pageUrl, `In memory of ${nameOf(p)}, giving to the Night Before Christmas Campaign (NBCC): ${pageUrl}`) +
     '<p class="fr-share__status" role="status" aria-live="polite" data-copy-status></p>' +
     "</div>"
   );
@@ -138,7 +138,7 @@ function renderMemoryShare(p: PublicPage, pageUrl: string): string {
     '<section class="card fr-card fr-share" aria-labelledby="fr-share-heading" data-copy-scope>' +
     '<h2 id="fr-share-heading">Share this page</h2>' +
     "<p>With family and friends who may like to give in their memory.</p>" +
-    shareLinks(p, pageUrl, `In memory of ${nameOf(p)}: ${pageUrl}`) +
+    shareLinks(p, pageUrl, `In memory of ${nameOf(p)}, giving to the Night Before Christmas Campaign (NBCC): ${pageUrl}`) +
     `<p class="fr-share__url"><span class="sr-only">The page address: </span>${escapeHtml(shown)}</p>` +
     '<p class="fr-share__status" role="status" aria-live="polite" data-copy-status></p>' +
     "</section>"

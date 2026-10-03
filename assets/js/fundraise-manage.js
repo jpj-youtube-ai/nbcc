@@ -430,6 +430,30 @@
         });
         var memoryNote = q("[data-f-memory-note]");
         if (memoryNote) memoryNote.hidden = false;
+        // Paying in: the envelopes are posted to us sealed, never paid in here; other cash behind a link.
+        var payMemory = q("[data-f-payin-memory]");
+        var payIntro = q("[data-f-payin-intro]");
+        var payForm = q("form[data-f-payin]");
+        var payOther = q("[data-f-payin-other]");
+        if (payMemory && payForm) {
+          payMemory.hidden = false;
+          if (payIntro) payIntro.hidden = true;
+          payForm.hidden = true;
+          if (payOther) {
+            payOther.addEventListener("click", function () {
+              payForm.hidden = false;
+              payOther.hidden = true;
+              var box = payForm.querySelector("input");
+              if (box && box.focus) {
+                try {
+                  box.focus();
+                } catch (e) {
+                  /* focus unavailable */
+                }
+              }
+            });
+          }
+        }
       }
       fillGifts(card, f.gifts || []);
       // Gifts are made on a page: with no page and nothing given, there is nothing to show.

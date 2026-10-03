@@ -128,7 +128,10 @@
                     <label class="fr-option fr-option--small" for="inMemoryNo"><input id="inMemoryNo" name="inMemory" type="radio" value="no" required /><span>No</span></label>
                   </div>
                   <div class="fr-memory-fields" data-memory-fields hidden>
-                    <p class="give-field-help fr-lead-help">We are so sorry for your loss. Take your time: we will check everything with you before the page goes live.</p>
+                    <!-- Jaimie, A2: sorry for their loss to family and friends; a funeral director is thanked. -->
+                    <p class="give-field-help fr-lead-help" data-memory-lead="before">Take your time: we will check everything with you before the page goes live.</p>
+                    <p class="give-field-help fr-lead-help" data-memory-lead="family" hidden>We are so sorry for your loss. Take your time: we will check everything with you before the page goes live.</p>
+                    <p class="give-field-help fr-lead-help" data-memory-lead="director" hidden>Thank you for setting this up for the family. We will check everything with you before the page goes live.</p>
                     <div class="give-field">
                       <label for="memoryName">Their name <span class="give-req" aria-hidden="true">*</span></label>
                       <input class="give-field-input" id="memoryName" name="memoryName" type="text" maxlength="100" autocomplete="off" required aria-required="true" aria-describedby="memoryNameHelp" data-invalid-message="Tell us the name of the person you are remembering" />

@@ -9286,6 +9286,16 @@ for an in memory page, and the thank you to a giver (email 20) says "In memory" 
 wishes,". Names and dates are kept to one plain line (line breaks and control characters become
 spaces). An admin's name correction renames a page still called "In memory of <old name>".
 
+**Clarity (Jaimie, A2, and an audit).** On the sign up, the line at the top of the in memory
+questions follows who is setting it up: "Take your time..." until they choose, "We are so sorry for
+your loss..." for a family member or a friend, and "Thank you for setting this up for the family..."
+for a funeral director (who also gets the professional email 19). In the private area an in memory
+page's pay in box asks them not to open the envelopes but post them to us sealed, with paying in other
+cash behind "Collected other cash, not in envelopes? Pay it in here.". Shares say "In memory of <name>,
+giving to the Night Before Christmas Campaign (NBCC)", the story picture "Give to NBCC in their
+memory", and ticking "Let the family know I gave" unticks and locks "Show how much I gave". An
+envelope for a page sharing with another cause carries the split statement too.
+
 **Rolling back.** The migration is additive, but rolling the CODE back to before in memory pages
 would show their held messages and their hidden targets, and send them the upbeat emails. If a code
 rollback is ever needed once in memory pages exist, first make those pages not public (or switch

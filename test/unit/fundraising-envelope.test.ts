@@ -130,3 +130,14 @@ describe("review: no certificate of thanks for an in memory page", () => {
     expect(html).not.toMatch(/class="page[^"]*cert/);
   });
 });
+
+describe("audit: an envelope for a page that shares with another cause", () => {
+  it("carries the split statement too", () => {
+    const html = renderEnvelope(
+      envelopeFacts(record({ sharesWithOther: true, nbccSharePercent: 50, otherCauseName: "Exampleton Hospice" }), urls),
+      materialAssets(),
+    );
+    expect(html).toContain("50% of what we raise goes to the Night Before Christmas Campaign");
+    expect(html).toContain("Exampleton Hospice");
+  });
+});

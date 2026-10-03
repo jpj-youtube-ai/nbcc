@@ -96,3 +96,31 @@ describe("review: posting the envelopes back", () => {
     expect(item.textContent).toContain("Please post the sealed envelopes to us unopened at The Elves’ Workshop");
   });
 });
+
+describe("audit: paying in, and the envelopes", () => {
+  it("asks them not to open the envelopes, and keeps paying in other cash behind a link", async () => {
+    await load(fundraiser());
+    const c = card(9);
+    const note = c.querySelector<HTMLElement>("[data-f-payin-memory]")!;
+    expect(note.hidden).toBe(false);
+    expect(note.textContent).toContain(
+      "Please don’t open the funeral collection envelopes: post them to us sealed, so we can claim Gift Aid. Once we’ve opened them, we add what was given to the page.",
+    );
+    expect(c.querySelector<HTMLElement>("[data-f-payin-intro]")!.hidden).toBe(true);
+    const form = c.querySelector<HTMLElement>("form[data-f-payin]")!;
+    expect(form.hidden).toBe(true);
+    const other = c.querySelector<HTMLButtonElement>("[data-f-payin-other]")!;
+    expect(other.textContent).toBe("Collected other cash, not in envelopes? Pay it in here.");
+    other.click();
+    expect(form.hidden).toBe(false);
+  });
+
+  it("leaves paying in as it was on every other page", async () => {
+    const { memory: _m, ...rest } = fundraiser();
+    void _m;
+    await load(rest);
+    const c = card(9);
+    expect(c.querySelector<HTMLElement>("[data-f-payin-memory]")!.hidden).toBe(true);
+    expect(c.querySelector<HTMLElement>("form[data-f-payin]")!.hidden).toBe(false);
+  });
+});

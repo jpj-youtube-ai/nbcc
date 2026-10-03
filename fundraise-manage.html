@@ -392,8 +392,13 @@
               </section>
 
               <section class="fr-mine__part" aria-labelledby="minePayHeading">
-                <h3 id="minePayHeading">Pay in what you collected</h3>
-                <p>Collected cash or sponsor money? Pay it in here by card and it counts towards what you have raised. You can also pay in by bank transfer, or drop it in to us: just get in touch.</p>
+                <h3 id="minePayHeading" data-memory-words="The collection envelopes, and paying in">Pay in what you collected</h3>
+                <!-- In memory: the envelopes come to us sealed, so they are never paid in here. -->
+                <div class="fr-mine__payin-memory" data-f-payin-memory hidden>
+                  <p>Please don&rsquo;t open the funeral collection envelopes: post them to us sealed, so we can claim Gift Aid. Once we&rsquo;ve opened them, we add what was given to the page.</p>
+                  <p><button class="fr-link-btn" type="button" data-f-payin-other>Collected other cash, not in envelopes? Pay it in here.</button></p>
+                </div>
+                <p data-f-payin-intro>Collected cash or sponsor money? Pay it in here by card and it counts towards what you have raised. You can also pay in by bank transfer, or drop it in to us: just get in touch.</p>
                 <form class="fr-form fr-form--plain" novalidate data-f-payin>
                   <div class="give-field">
                     <label class="give-custom-label" for="payAmount">How much are you paying in? <span class="give-req" aria-hidden="true">*</span></label>

@@ -509,6 +509,16 @@
     }
     if (message) message.addEventListener("input", counted);
     counted();
+    // In memory: "Let the family know I gave" keeps the amount off the page (the server holds to it
+    // too), so while it is ticked, "Show how much I gave" is unticked and cannot be ticked.
+    var family = doc.getElementById("frFamilyNotify");
+    var amount = doc.getElementById("frShowAmount");
+    if (family && amount) {
+      family.addEventListener("change", function () {
+        if (family.checked) amount.checked = false;
+        amount.disabled = !!family.checked;
+      });
+    }
     growTextareas(form);
 
     function showError(text) {

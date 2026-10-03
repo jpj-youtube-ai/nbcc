@@ -132,12 +132,20 @@ describe("review: amounts stay private", () => {
     const html = page({}, [], { thanks: { message: false, sessionId: "cs_test_abc" } });
     expect(html).toMatch(/id="frShowAmount"/);
     expect(html).not.toMatch(/id="frShowAmount"[^>]*checked/);
-    expect(html).toContain("Letting the family know keeps how much you gave private");
+    expect(html).toContain("If you tick this, we won’t show how much you gave on the page.");
   });
 
   it("dates each gift on the wall by its day, not how long ago", () => {
     const html = page({}, [row({ createdAt: "2026-10-02T10:15:00.000Z" })]);
     expect(html).toContain('<time datetime="2026-10-02">2 October 2026</time>');
     expect(html).not.toContain("hours ago");
+  });
+});
+
+describe("audit: sharing names NBCC", () => {
+  it("shares as In memory of <name>, giving to the Night Before Christmas Campaign (NBCC)", () => {
+    const html = page();
+    const text = encodeURIComponent("In memory of Margaret Exampleton, giving to the Night Before Christmas Campaign (NBCC): https://nbcc.test/fundraise/ime");
+    expect(html).toContain(`https://wa.me/?text=${text}`);
   });
 });

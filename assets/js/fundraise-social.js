@@ -57,7 +57,7 @@
   var QUIET = {
     eyebrow: "#6F6A66", rule: "#D29C8A", title: C.maroon, line: "#6F6A66", text: "#333333", track: "rgba(128,0,0,0.12)",
     fill: "#B9898A", fillEnd: "#D29C8A", soft: "#6F6A66", pill: C.maroon, pillText: C.cream, statement: "rgba(51,51,51,0.8)",
-    eyebrowWords: "IN MEMORY", caption: "Give in their memory",
+    eyebrowWords: "IN MEMORY", caption: "Give to NBCC in their memory",
   };
   var T = DARK;
 

@@ -6,7 +6,7 @@ import { createRequire } from "node:module";
 import { renderFundraiseSignUp } from "../../src/fundraising/render";
 
 // TASK-503: the sign up form opened from a staff invite's link (/fundraise?invite=...). It asks the
-// server for the invite and fills in the name and email, and nothing else; anything typed already
+// server for the invite and fills in the first name, surname and email, and nothing else; anything typed already
 // stays. The sign up carries the invite back, so the server can mark it used. A link that no longer
 // works changes nothing: the form is just the form. Every name and address here is invented.
 
@@ -39,25 +39,33 @@ const settle = async () => {
 const inviteCalls = () => calls.filter((c) => c.url === "/api/fundraise/invite");
 
 beforeEach(() => {
-  inviteAnswer = { status: 200, body: { name: "Alex Example", email: "alex@example.com" } };
+  inviteAnswer = { status: 200, body: { firstName: "Mary Jane", lastName: "Smith", email: "alex@example.com" } };
 });
 afterEach(() => {
   window.history.replaceState({}, "", "/");
 });
 
 describe("a form opened from an invite", () => {
-  it("asks for the invite by POST, and fills in only the name and email", async () => {
+  it("asks for the invite by POST, and fills in only the first name, surname and email", async () => {
     const form = load(`?invite=${TOKEN}`);
     await settle();
     expect(inviteCalls()).toHaveLength(1);
     expect(inviteCalls()[0].init?.method).toBe("POST");
     expect(JSON.parse(String(inviteCalls()[0].init?.body))).toEqual({ token: TOKEN });
-    // TASK-511: the name in two boxes: the first word, and the rest as the surname.
-    expect($("#firstName").value).toBe("Alex");
-    expect($("#lastName").value).toBe("Example");
+    // Jaimie 2026-10-03: the first name and surname exactly as staff typed them in their own boxes.
+    expect($("#firstName").value).toBe("Mary Jane");
+    expect($("#lastName").value).toBe("Smith");
     expect($("#email").value).toBe("alex@example.com");
     for (const id of ["title", "description", "phone", "town"]) expect($(`#${id}`).value).toBe("");
     expect(form.payload().invite).toBe(TOKEN);
+  });
+
+  it("still splits a one name answer at its first space", async () => {
+    inviteAnswer = { status: 200, body: { name: "Alex Example Jones", email: "alex@example.com" } };
+    load(`?invite=${TOKEN}`);
+    await settle();
+    expect($("#firstName").value).toBe("Alex");
+    expect($("#lastName").value).toBe("Example Jones");
   });
 
   it("takes the invite out of the address as soon as it has asked, keeping the rest", async () => {
@@ -78,7 +86,7 @@ describe("a form opened from an invite", () => {
   });
 
   it("never fills in more, whatever comes back", async () => {
-    inviteAnswer = { status: 200, body: { name: "Alex Example", email: "alex@example.com", title: "Sneaky", phone: "07700 900999" } };
+    inviteAnswer = { status: 200, body: { firstName: "Alex", lastName: "Example", email: "alex@example.com", title: "Sneaky", phone: "07700 900999" } };
     load(`?invite=${TOKEN}`);
     await settle();
     expect($("#title").value).toBe("");

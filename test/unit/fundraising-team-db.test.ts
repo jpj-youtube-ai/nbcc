@@ -68,16 +68,19 @@ const inviteRow = (over: Record<string, unknown> = {}) => ({
 
 describe("invites", () => {
   it("stores a new invite with its token's hash, and records who sent it", async () => {
-    const calls = useClient((sql) => (/INSERT INTO fundraiser_invites/.test(sql) ? { rows: [inviteRow()] } : undefined));
+    const stored = inviteRow({ name: "Morag Ann Fyfe", first_name: "Morag Ann", last_name: "Fyfe", email: "morag@example.com" });
+    const calls = useClient((sql) => (/INSERT INTO fundraiser_invites/.test(sql) ? { rows: [stored] } : undefined));
     const inv = await createInvite(
-      { name: "Alex Example", email: "alex@example.com", note: "Lovely to chat", signedBy: "Fern", tokenHash: "h".repeat(64) },
+      { firstName: "Morag Ann", lastName: "Fyfe", email: "morag@example.com", note: "Lovely to chat", signedBy: "Fern", tokenHash: "h".repeat(64) },
       "admin:fern@example.com",
     );
     const insert = sqlIn(calls, /INSERT INTO fundraiser_invites/)!;
     expect(insert[0]).toMatch(/token_hash/);
-    expect(insert[1]).toEqual(["Alex Example", "alex@example.com", "Lovely to chat", "Fern", "admin:fern@example.com", "h".repeat(64)]);
-    expect(audits(calls)[0]).toEqual(["admin:fern@example.com", "fundraiser_invite.sent", "fundraiser_invite", 4, { email: "alex@example.com", signedBy: "Fern" }]);
-    expect(inv).toMatchObject({ id: 4, name: "Alex Example", signedBy: "Fern", createdAt: "2026-10-01T09:00:00.000Z" });
+    // Jaimie 2026-10-03: the two boxes are kept as typed, and `name` still has the two joined.
+    expect(insert[0]).toMatch(/\(name, first_name, last_name, email, note, signed_by, sent_by, token_hash\)/);
+    expect(insert[1]).toEqual(["Morag Ann Fyfe", "Morag Ann", "Fyfe", "morag@example.com", "Lovely to chat", "Fern", "admin:fern@example.com", "h".repeat(64)]);
+    expect(audits(calls)[0]).toEqual(["admin:fern@example.com", "fundraiser_invite.sent", "fundraiser_invite", 4, { email: "morag@example.com", signedBy: "Fern" }]);
+    expect(inv).toMatchObject({ id: 4, name: "Morag Ann Fyfe", firstName: "Morag Ann", lastName: "Fyfe", signedBy: "Fern", createdAt: "2026-10-01T09:00:00.000Z" });
     expect(JSON.stringify(inv)).not.toContain("hhhh");
   });
 
@@ -109,9 +112,12 @@ describe("invites", () => {
     query.mockResolvedValueOnce({ rows: [inviteRow()] });
     const list = await listOpenInvites();
     expect(String(query.mock.calls[0][0])).toMatch(/WHERE used_at IS NULL/);
+    // An invite sent before the two boxes has only its one name: split at the first space.
     expect(list[0]).toEqual({
       id: 4,
       name: "Alex Example",
+      firstName: "Alex",
+      lastName: "Example",
       email: "alex@example.com",
       note: "Lovely to chat",
       signedBy: "Fern",
@@ -125,8 +131,16 @@ describe("invites", () => {
     query.mockResolvedValueOnce({ rows: [inviteRow()] });
     const found = await findInviteByHash("h".repeat(64));
     expect(String(query.mock.calls[0][0])).toMatch(/WHERE token_hash = \$1/);
-    expect(found).toMatchObject({ name: "Alex Example", email: "alex@example.com", usedAt: null });
+    expect(found).toMatchObject({ name: "Alex Example", firstName: "Alex", lastName: "Example", email: "alex@example.com", usedAt: null });
     expect(found!.createdAt).toEqual(new Date("2026-10-01T09:00:00Z"));
+  });
+
+  it("reads the first name and surname kept with an invite exactly", async () => {
+    query.mockResolvedValueOnce({ rows: [inviteRow({ name: "Mary Jane Smith", first_name: "Mary Jane", last_name: "Smith" })] });
+    expect(String((await listOpenInvites())[0].firstName)).toBe("Mary Jane");
+    expect(String(query.mock.calls[0][0])).toMatch(/first_name, last_name/);
+    query.mockResolvedValueOnce({ rows: [inviteRow({ name: "Mary Jane Smith", first_name: "Mary Jane", last_name: "Smith" })] });
+    expect(await findInviteByHash("h".repeat(64))).toMatchObject({ firstName: "Mary Jane", lastName: "Smith" });
   });
 
   it("marks an invite used once, only while it is in date, with its audit row in the same statement", async () => {

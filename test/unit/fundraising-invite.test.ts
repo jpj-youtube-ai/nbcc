@@ -2,7 +2,11 @@ import { describe, it, expect } from "vitest";
 import {
   INVITE_TTL_DAYS,
   INVITE_NOTE_MAX,
+  INVITE_NAME_PART_MAX,
   hashInviteToken,
+  inviteCc,
+  inviteFullName,
+  inviteNameParts,
   inviteIssuedAt,
   invitePrefill,
   inviteSchema,
@@ -12,10 +16,11 @@ import {
   readInviteToken,
   staffFirstName,
 } from "../../src/fundraising/invite";
+import { NAME_PART_MAX } from "../../src/fundraising/model";
 
 // TASK-503: the invite a member of staff sends from Admin > Fundraising. Its link carries a random
 // token; only a hash of it is kept, it works for 60 days from when it was last sent, once, and it
-// fills in only the name and email on the sign up form. Every name and address here is invented.
+// fills in only the first name, surname and email on the sign up form. Every name and address here is invented.
 
 const DAY = 24 * 60 * 60 * 1000;
 
@@ -82,32 +87,82 @@ describe("whether an invite still works", () => {
 });
 
 describe("what an invite fills in on the form", () => {
-  it("is the name and email, and nothing else", () => {
+  it("is the first name, surname and email exactly as staff typed them, and nothing else", () => {
     const prefill = invitePrefill({
       id: 4,
-      name: "Alex Example",
-      email: "alex@example.com",
+      name: "Morag Ann Fyfe",
+      firstName: "Morag Ann",
+      lastName: "Fyfe",
+      email: "morag@example.com",
       note: "Lovely to chat about the bake sale",
       signedBy: "Fern",
       sentBy: "admin:fern@example.com",
-    } as unknown as { name: string; email: string });
-    expect(prefill).toEqual({ name: "Alex Example", email: "alex@example.com" });
+    } as unknown as { name: string; firstName: string | null; lastName: string | null; email: string });
+    expect(prefill).toEqual({ firstName: "Morag Ann", lastName: "Fyfe", email: "morag@example.com" });
+  });
+
+  it("splits the one name of an invite sent before the two boxes at its first space", () => {
+    expect(invitePrefill({ name: "Alex Example Jones", firstName: null, lastName: null, email: "alex@example.com" })).toEqual({
+      firstName: "Alex",
+      lastName: "Example Jones",
+      email: "alex@example.com",
+    });
+  });
+});
+
+describe("an invite's name", () => {
+  it("is the two boxes when they were kept", () => {
+    expect(inviteNameParts({ name: "Morag Ann Fyfe", firstName: "Morag Ann", lastName: "Fyfe" })).toEqual({ firstName: "Morag Ann", lastName: "Fyfe" });
+  });
+
+  it("falls back to the old split for an invite with only one name", () => {
+    expect(inviteNameParts({ name: " Alex  Example Jones ", firstName: null, lastName: null })).toEqual({ firstName: "Alex", lastName: "Example Jones" });
+    expect(inviteNameParts({ name: "Alex", firstName: null, lastName: null })).toEqual({ firstName: "Alex", lastName: "" });
+    expect(inviteNameParts({ name: "Alex Example" })).toEqual({ firstName: "Alex", lastName: "Example" });
+  });
+
+  it("is kept whole as the first name, a space and the surname, within the 100 the table allows", () => {
+    expect(inviteFullName("Morag Ann", "Fyfe")).toBe("Morag Ann Fyfe");
+    const long = inviteFullName("a".repeat(INVITE_NAME_PART_MAX), "b".repeat(INVITE_NAME_PART_MAX));
+    expect(long.length).toBeLessThanOrEqual(100);
+    expect(long.startsWith("a".repeat(50) + " b")).toBe(true);
+  });
+});
+
+describe("who is copied in on an invite", () => {
+  // Jaimie 2026-10-03: the member of staff who sends it, so they have a copy.
+  it("is the sender's email, tidied", () => {
+    expect(inviteCc(" Fern@Example.com ", "morag@example.com")).toBe("fern@example.com");
+  });
+
+  it("is nobody when the sender's email is missing or not a whole address, so the invite still goes", () => {
+    expect(inviteCc(undefined, "morag@example.com")).toBeUndefined();
+    expect(inviteCc(null, "morag@example.com")).toBeUndefined();
+    expect(inviteCc("", "morag@example.com")).toBeUndefined();
+    expect(inviteCc("fern@", "morag@example.com")).toBeUndefined();
+    expect(inviteCc("fern@example.com, rowan@example.com", "morag@example.com")).toBeUndefined();
+  });
+
+  it("is nobody when the sender is the person invited", () => {
+    expect(inviteCc("Morag@Example.com", "morag@example.com")).toBeUndefined();
   });
 });
 
 describe("the invite form", () => {
-  const ok = { name: " Alex Example ", email: " Alex@Example.com ", note: " Great to chat! ", signedBy: 3 };
+  const ok = { firstName: " Morag Ann ", lastName: " Fyfe ", email: " Morag@Example.com ", note: " Great to chat! ", signedBy: 3 };
 
   it("tidies a good invite", () => {
     const parsed = inviteSchema.safeParse(ok);
     expect(parsed.success).toBe(true);
-    if (parsed.success) expect(parsed.data).toEqual({ name: "Alex Example", email: "alex@example.com", note: "Great to chat!", signedBy: 3 });
+    if (parsed.success) {
+      expect(parsed.data).toEqual({ firstName: "Morag Ann", lastName: "Fyfe", email: "morag@example.com", note: "Great to chat!", signedBy: 3 });
+    }
   });
 
   it("treats a blank note as none", () => {
     const parsed = inviteSchema.safeParse({ ...ok, note: "   " });
     expect(parsed.success && parsed.data.note).toBeNull();
-    const none = inviteSchema.safeParse({ name: "Alex", email: "alex@example.com", signedBy: 3 });
+    const none = inviteSchema.safeParse({ firstName: "Morag", lastName: "Fyfe", email: "morag@example.com", signedBy: 3 });
     expect(none.success && none.data.note).toBeNull();
   });
 
@@ -118,12 +173,37 @@ describe("the invite form", () => {
     expect(inviteSchema.safeParse({ ...ok, note: "a".repeat(5001) }).success).toBe(false);
   });
 
-  it("needs a name, a whole email and who it is signed by, and nothing else", () => {
-    expect(inviteSchema.safeParse({ ...ok, name: " " }).success).toBe(false);
+  it("needs a first name, a surname, a whole email and who it is signed by, and nothing else", () => {
+    expect(inviteSchema.safeParse({ ...ok, firstName: " " }).success).toBe(false);
+    expect(inviteSchema.safeParse({ ...ok, lastName: " " }).success).toBe(false);
     expect(inviteSchema.safeParse({ ...ok, email: "alex@" }).success).toBe(false);
     expect(inviteSchema.safeParse({ ...ok, signedBy: 0 }).success).toBe(false);
     expect(inviteSchema.safeParse({ ...ok, signedBy: "3" }).success).toBe(false);
     expect(inviteSchema.safeParse({ ...ok, eventDate: "2026-12-05" }).success).toBe(false);
+    // The one name box is gone.
+    expect(inviteSchema.safeParse({ ...ok, name: "Morag Fyfe" }).success).toBe(false);
+  });
+
+  it("names the box that needs another look", () => {
+    const blank = inviteSchema.safeParse({ ...ok, firstName: "", lastName: "" });
+    expect(blank.success).toBe(false);
+    if (!blank.success) {
+      const said = Object.fromEntries(blank.error.issues.map((i) => [i.path.join("."), i.message]));
+      expect(said.firstName).toBe("Add their first name.");
+      expect(said.lastName).toBe("Add their surname.");
+    }
+  });
+
+  it("takes as much in each box as the sign up form does", () => {
+    expect(INVITE_NAME_PART_MAX).toBe(NAME_PART_MAX);
+    expect(inviteSchema.safeParse({ ...ok, firstName: "a".repeat(INVITE_NAME_PART_MAX), lastName: "b".repeat(INVITE_NAME_PART_MAX) }).success).toBe(true);
+    const long = inviteSchema.safeParse({ ...ok, firstName: "a".repeat(INVITE_NAME_PART_MAX + 1), lastName: "b".repeat(INVITE_NAME_PART_MAX + 1) });
+    expect(long.success).toBe(false);
+    if (!long.success) {
+      const said = Object.fromEntries(long.error.issues.map((i) => [i.path.join("."), i.message]));
+      expect(said.firstName).toBe("Keep the first name to 50 characters or fewer.");
+      expect(said.lastName).toBe("Keep the surname to 50 characters or fewer.");
+    }
   });
 });
 

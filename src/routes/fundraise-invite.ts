@@ -5,12 +5,12 @@ import { hashInviteToken, invitePrefill, inviteVerdict, readInviteToken } from "
 
 // TASK-503: the public side of an invite from Admin > Fundraising (src/routes/admin-fundraising-team.ts).
 //
-//   POST /api/fundraise/invite   { token }  -> { name, email }, to fill in the sign up form
+//   POST /api/fundraise/invite   { token }  -> { firstName, lastName, email }, to fill in the sign up form
 //
 // The token comes from the invite's link (/fundraise?invite=...). A POST, so it never sits in a
-// server's access log as part of an address. Only the name and email come back; an unknown, used
-// or out of date token gets one plain answer, so a guess learns nothing. Tries are limited per
-// address. The form still works without it: an invite only saves typing.
+// server's access log as part of an address. Only the first name, surname and email come back; an
+// unknown, used or out of date token gets one plain answer, so a guess learns nothing. Tries are
+// limited per address. The form still works without it: an invite only saves typing.
 //
 // When the sign up arrives with the token (POST /api/fundraise, `invite`), useInvite marks the
 // invite used and links it to the new sign up, best effort.

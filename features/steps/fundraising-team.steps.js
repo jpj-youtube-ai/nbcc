@@ -85,8 +85,9 @@ async function inviteTo(email) {
 
 // ---- arranging ----
 
+// An invite from before the two name boxes: only its one name, which the form splits at the first space.
 Given("an invite to {string} at {string} whose link we know", async function (name, email) {
-  // Made as the admin makes one, so the test knows the token the email would have carried.
+  // Made as the admin made one, so the test knows the token the email would have carried.
   const token = randomBytes(32).toString("base64url");
   await pool.query(
     `INSERT INTO fundraiser_invites (name, email, note, signed_by, sent_by, token_hash)
@@ -94,7 +95,20 @@ Given("an invite to {string} at {string} whose link we know", async function (na
     [name, email, hashToken(token)],
   );
   this.inviteToken = token;
-  this.invite = { name, email };
+  const words = name.split(" ");
+  this.invite = { firstName: words[0], lastName: words.slice(1).join(" "), email };
+});
+
+// An invite as the admin makes one now (2026-10-03): the first name and surname in their own boxes.
+Given("an invite to first name {string} and surname {string} at {string} whose link we know", async function (firstName, lastName, email) {
+  const token = randomBytes(32).toString("base64url");
+  await pool.query(
+    `INSERT INTO fundraiser_invites (name, first_name, last_name, email, note, signed_by, sent_by, token_hash)
+     VALUES ($1, $2, $3, lower($4), 'Lovely to talk today.', 'Fern', 'admin:fern.fr.bdd@example.com', $5)`,
+    [`${firstName} ${lastName}`, firstName, lastName, email, hashToken(token)],
+  );
+  this.inviteToken = token;
+  this.invite = { firstName, lastName, email };
 });
 
 Given("an approved fundraiser {string} dated {string}", async function (title, date) {
@@ -109,11 +123,12 @@ Given("an approved fundraiser {string} dated {string}", async function (title, d
 
 // ---- inviting ----
 
-When("{string} invites {string} at {string}, signed by themselves", async function (staff, name, email) {
+When("{string} invites first name {string} and surname {string} at {string}, signed by themselves", async function (staff, firstName, lastName, email) {
   const me = await pool.query("SELECT id FROM users WHERE email = $1", [staff]);
   assert.ok(me.rows[0], `no staff member ${staff}`);
   await adminCall(this, staff, "POST", "/api/admin/fundraising/invites", {
-    name,
+    firstName,
+    lastName,
     email,
     note: "Lovely to talk today. Here is the form we mentioned.",
     signedBy: Number(me.rows[0].id),
@@ -138,12 +153,19 @@ Then("the invite to {string} is kept with a hash of its link, not the link", asy
   assert.equal(row.used_at, null);
 });
 
+Then("the invite to {string} keeps the first name {string} and the surname {string}", async function (email, firstName, lastName) {
+  const row = await inviteTo(email);
+  assert.equal(row.first_name, firstName);
+  assert.equal(row.last_name, lastName);
+  assert.equal(row.name, `${firstName} ${lastName}`);
+});
+
 When("the sign up form asks for that invite", async function () {
   await call(this, "POST", "/api/fundraise/invite", { token: this.inviteToken });
 });
 
-Then("the form is given {string} and {string}, and nothing else", function (name, email) {
-  assert.deepEqual(this.frBody, { name, email });
+Then("the form is given first name {string}, surname {string} and {string}, and nothing else", function (firstName, lastName, email) {
+  assert.deepEqual(this.frBody, { firstName, lastName, email });
 });
 
 When("someone signs up {string} from that invite", async function (title) {
@@ -158,9 +180,9 @@ When("someone signs up {string} from that invite", async function (title) {
     town: "Exampleton",
     targetPence: 20000,
     public: true,
-    // TASK-511: the name in two boxes, as the form fills them in from the invite.
-    firstName: this.invite.name.split(" ")[0],
-    lastName: this.invite.name.split(" ").slice(1).join(" "),
+    // The name in two boxes, as the form fills them in from the invite.
+    firstName: this.invite.firstName,
+    lastName: this.invite.lastName,
     email: this.invite.email,
     phone: "07700 900126",
     socialOk: false,

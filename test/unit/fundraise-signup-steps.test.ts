@@ -434,17 +434,17 @@ describe("sending", () => {
 });
 
 describe("an invite from the team", () => {
-  it("fills in the first name and surname from the name on the invite", async () => {
+  it("fills in the first name and surname from the invite exactly", async () => {
     const token = "a".repeat(43);
     window.history.replaceState(null, "", `/fundraise?invite=${token}`);
     answer = (url) =>
       url === "/api/fundraise/invite"
-        ? { status: 200, body: { name: "Robin Van Quill", email: "robin@example.com" } }
+        ? { status: 200, body: { firstName: "Robin Ann", lastName: "Van Quill", email: "robin@example.com" } }
         : { status: 200, body: { siteKey: null } };
     load();
     await flush();
     await flush();
-    expect($("#firstName").value).toBe("Robin");
+    expect($("#firstName").value).toBe("Robin Ann");
     expect($("#lastName").value).toBe("Van Quill");
     expect($("#email").value).toBe("robin@example.com");
     window.history.replaceState(null, "", "/");

@@ -512,9 +512,9 @@
 
     // --- an invite from the team (TASK-503) ---------------------------------------------------------
     // Opened from a staff invite's link (/fundraise?invite=...): ask the server for it, by POST so
-    // the token never sits in an address, and fill in the name and email, nothing else, leaving
-    // anything already typed. The sign up carries it back so the invite is marked used. A link that
-    // no longer works changes nothing.
+    // the token never sits in an address, and fill in the first name, surname and email, nothing
+    // else, leaving anything already typed. The sign up carries it back so the invite is marked
+    // used. A link that no longer works changes nothing.
     var inviteToken = null;
     var inviteMatch = /[?&]invite=([A-Za-z0-9_-]{43})(?:&|$)/.exec((win.location && win.location.search) || "");
     if (inviteMatch && typeof win.fetch === "function") {
@@ -544,11 +544,20 @@
         .then(function (data) {
           if (!data) return;
           inviteToken = inviteMatch[1];
-          // TASK-511: the name in two boxes: the first word, and the rest as the surname.
-          var parts = typeof data.name === "string" ? data.name.trim().split(/\s+/) : [];
-          var firstWord = parts.length ? parts[0] : "";
-          var rest = parts.slice(1).join(" ");
-          [["firstName", firstWord], ["lastName", rest], ["email", data.email]].forEach(function (pair) {
+          // Jaimie 2026-10-03: staff type the first name and surname in their own boxes, and they
+          // come back exactly. An answer with only one name (from before) is split as TASK-511 did:
+          // the first word, and the rest as the surname.
+          var first = "";
+          var last = "";
+          if (typeof data.firstName === "string") {
+            first = data.firstName.trim();
+            last = typeof data.lastName === "string" ? data.lastName.trim() : "";
+          } else if (typeof data.name === "string") {
+            var parts = data.name.trim().split(/\s+/);
+            first = parts[0] || "";
+            last = parts.slice(1).join(" ");
+          }
+          [["firstName", first], ["lastName", last], ["email", data.email]].forEach(function (pair) {
             var box = el(pair[0]);
             if (box && !String(box.value || "").trim() && typeof pair[1] === "string" && pair[1]) box.value = pair[1];
           });

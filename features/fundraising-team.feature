@@ -1,7 +1,8 @@
 @fundraising @fundraising-team @db
 Feature: The fundraising team's tools (TASK-503)
   Staff invite someone they have spoken to: the invite's link fills in the sign up form with their
-  name and email, and the sign up made from it marks the invite used, so the link works once. Staff
+  first name, surname and email, and the sign up made from it marks the invite used, so the link
+  works once. Staff
   record the calls a week before and a week after a fundraiser's date, and take a fundraiser off
   Get involved when it is done, without stopping its page. Only admins choose who gets the Monday
   summary. Every name and address here is invented.
@@ -9,19 +10,27 @@ Feature: The fundraising team's tools (TASK-503)
   Scenario: an invite fills in the form, and the sign up made from it uses it up
     Given fundraising is switched on
     And a fundraising staff member "a1.team.fr.bdd@example.com" with role "editor"
-    When "a1.team.fr.bdd@example.com" invites "Alex Example" at "alex.team.fr.bdd@example.com", signed by themselves
+    When "a1.team.fr.bdd@example.com" invites first name "Alex Ann" and surname "Example" at "alex.team.fr.bdd@example.com", signed by themselves
     Then the fundraising answer is 201
     And a "fundraiseInvite" email went to "alex.team.fr.bdd@example.com"
     And the invite to "alex.team.fr.bdd@example.com" is kept with a hash of its link, not the link
+    And the invite to "alex.team.fr.bdd@example.com" keeps the first name "Alex Ann" and the surname "Example"
     Given an invite to "Sky Sample" at "sky.team.fr.bdd@example.com" whose link we know
     When the sign up form asks for that invite
     Then the fundraising answer is 200
-    And the form is given "Sky Sample" and "sky.team.fr.bdd@example.com", and nothing else
+    And the form is given first name "Sky", surname "Sample" and "sky.team.fr.bdd@example.com", and nothing else
     When someone signs up "Sky's Bake Sale (bdd-fr)" from that invite
     Then the fundraising answer is 200
     And the invite to "sky.team.fr.bdd@example.com" is used by "Sky's Bake Sale (bdd-fr)"
     When the sign up form asks for that invite
     Then the fundraising answer is 404
+
+  Scenario: an invite fills in the first name and surname exactly as staff typed them
+    Given fundraising is switched on
+    And an invite to first name "Morag Ann" and surname "Fyfe Brown" at "morag.team.fr.bdd@example.com" whose link we know
+    When the sign up form asks for that invite
+    Then the fundraising answer is 200
+    And the form is given first name "Morag Ann", surname "Fyfe Brown" and "morag.team.fr.bdd@example.com", and nothing else
 
   Scenario: taking a fundraiser off Get involved keeps its page working
     Given fundraising is switched on

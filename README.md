@@ -1327,7 +1327,7 @@ hosted-Checkout redirect stays the default fallback and no-JS safety net.
 | `GET /api/fundraisers` | **implemented** | TASK-493 (Get involved: approved public fundraisers with their meters; empty while switched off) |
 | `GET /api/fundraisers/:slug` | **implemented** | TASK-493 (one fundraiser's page: meter, supporter wall, what giving needs; 404 unless public, raising money, approved or (TASK-502) finished, and switched on) |
 | `POST /api/fundraisers/:slug/wall-message` | **implemented** | TASK-502 (the giver's message and wall choices, added from the thank you after paying, tied to the paid Stripe checkout session, once. Shapes: **Community fundraising, giving (TASK-502)**) |
-| `POST /api/fundraise/invite` | **implemented** | TASK-503 (the sign up form's invite lookup: `{ token }` from the invite link gives `{ name, email }` to fill in, and nothing else; any token that does not work is the same `404`. See **Community fundraising, the team's tools**) |
+| `POST /api/fundraise/invite` | **implemented** | TASK-503 (the sign up form's invite lookup: `{ token }` from the invite link gives `{ firstName, lastName, email }` to fill in, and nothing else; any token that does not work is the same `404`. See **Community fundraising, the team's tools**) |
 | `POST /api/fundraise/manage/request` | **implemented** | TASK-501 (emails an organiser a 6 digit sign in code for their private area; always the same answer, sent before looking; was TASK-493's 24 hour link) |
 | `POST /api/fundraise/manage/sign-in` | **implemented** | TASK-501 (a right code starts a 2 hour http only session cookie; every refusal the same `401`) |
 | `GET /api/fundraise/manage/me` | **implemented** | TASK-501 (the signed in organiser's fundraisers: status, page, QR code, meter, gifts and messages, editable details; since TASK-505 also `requests`, where each thing they asked for is up to, in words) |
@@ -7965,12 +7965,17 @@ Four tools for the staff who look after fundraisers, all in **Admin > Fundraisin
 `docs/superpowers/specs/2026-10-02-fundraising-stage-1b-part-1-design.md`). Nothing here adds a
 config value: who gets the Monday summary is chosen in the admin and kept in the database.
 
-**Invite someone** (editors and admins). A card under the switch: their name, their email, an
-optional personal note (up to 600 characters) and **Signed by**, which starts as the person signed
-in and lists everyone who can sign in to the admin, by first name. Send the invite asks first, then
-emails them (email 7, `fundraiseInvite`) from and replying to the events inbox, like every other
-fundraising email. Its button opens `/fundraise?invite=<token>`, and the form fills in their name
-and email, and nothing else (a box they have already typed in is left alone). Below the form,
+**Invite someone** (editors and admins). A card under the switch: **First name** and **Surname**
+(two boxes, up to 50 characters each, as on the sign up form; it was one "Their name" box split at
+its first space until 2026-10-03), their email, an optional personal note (up to 5,000 characters)
+and **Signed by**, which starts as the person signed in and lists everyone who can sign in to the
+admin, by first name. Send the invite asks first, then emails them (email 7, `fundraiseInvite`)
+from and replying to the events inbox, like every other fundraising email, greeting them by the
+first name typed. The member of staff who sends it (the person signed in, from their admin session,
+not whoever it is signed by) is copied in on the email (Cc), and so is whoever presses Resend; when
+their address is missing, or is the person invited, it goes with no copy and the invite still
+stands. Its button opens `/fundraise?invite=<token>`, and the form fills in their first name,
+surname and email exactly as typed, and nothing else (a box they have already typed in is left alone). Below the form,
 **Invites not taken up yet** lists each one with "Invited by <first name> on <date>", **Resend**
 (a new link, emailed again; the old link stops working) and **Remove** (the link stops working),
 each after a question. One whose link has run out (60 days after it was last sent) is marked
@@ -8057,7 +8062,7 @@ list against entity `fundraiser`, so it shows in that fundraiser's History).
 | Route | Who | Body | Answer |
 |---|---|---|---|
 | `GET /api/admin/fundraising/team` | view | | `{ today, me, calls: { <id>: { before, after, due, dueWhich } }, prompts: { <id>: "date" \| "finished" }, invites, signers: [{ id, firstName }] }` |
-| `POST /api/admin/fundraising/invites` | edit | `{ name, email, note?, signedBy: <user id> }` | `201 { invite, emailed }`; `400` with `fields`; `429` after 50 in a day |
+| `POST /api/admin/fundraising/invites` | edit | `{ firstName, lastName, email, note?, signedBy: <user id> }` | `201 { invite, emailed }`, the sender copied in; `400` with `fields` (`firstName`, `lastName`, ...); `429` after 50 in a day |
 | `POST /api/admin/fundraising/invites/:id/resend` | edit | | `{ invite, emailed }`; `404` once taken up or removed |
 | `DELETE /api/admin/fundraising/invites/:id` | edit | | `{ removed }`; `404` once taken up or removed |
 | `POST /api/admin/fundraisers/:id/calls` | edit | `{ which: "before" \| "after", note? }` | `{ call }`; `404` with no date |
@@ -8065,7 +8070,7 @@ list against entity `fundraiser`, so it shows in that fundraiser's History).
 | `GET /api/admin/fundraising/summary` | admin | | `{ recipients, lastWeek }` |
 | `PUT /api/admin/fundraising/summary` | admin | `{ recipients: [emails] }` | `{ recipients, lastWeek }`; `400` naming the address that needs another look |
 | `POST /api/admin/fundraising/summary/test` | admin | | `{ sentTo }`, always the admin asking; `502` if it did not go |
-| `POST /api/fundraise/invite` | anyone | `{ token }` | `200 { name, email }`; `404` for any token that does not work |
+| `POST /api/fundraise/invite` | anyone | `{ token }` | `200 { firstName, lastName, email }` (an invite from before the two boxes: its one name split at the first space); `404` for any token that does not work |
 
 The admin's fundraiser now carries `offListAt` and `offListBy`.
 
@@ -8076,6 +8081,11 @@ and by which sign up), `fundraiser_calls` (which call, when, who, note; cleared 
 fundraiser), `fundraisers.off_list_at` and `off_list_by` (nullable),
 `fundraising_settings.summary_recipients` (a list, empty by default) and `summary_last_week`
 (nullable). Both new tables are in the nightly backup's table count.
+
+`migrations/1791200000175_invite-first-last-name.js` (additive only) adds `fundraiser_invites.first_name`
+and `last_name` (nullable, up to 50 characters each). `name` stays, written as the two joined; an
+invite with no first name falls back to splitting `name` at its first space. No new table, so the
+backup's table count is unchanged.
 
 ### Where it lives, and tests
 

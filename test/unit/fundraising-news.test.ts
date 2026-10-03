@@ -145,11 +145,13 @@ describe("who can post an update", () => {
   it("is an approved fundraiser with a page", () => {
     expect(canPostNews(f)).toBe(true);
   });
-  it("is not a finished, new or declined one, an event, or one not shown on the website", () => {
+  // Event pages: a public event has a page now, so it may post news (a private one may not).
+  it("is not a finished, new or declined one, or one not shown on the website", () => {
     expect(canPostNews({ ...f, status: "finished" })).toBe(false);
     expect(canPostNews({ ...f, status: "new" })).toBe(false);
     expect(canPostNews({ ...f, status: "declined" })).toBe(false);
-    expect(canPostNews({ ...f, path: "event" })).toBe(false);
+    expect(canPostNews({ ...f, path: "event" })).toBe(true);
+    expect(canPostNews({ ...f, path: "event", public: false })).toBe(false);
     expect(canPostNews({ ...f, public: false })).toBe(false);
   });
 });

@@ -22,7 +22,7 @@ import {
   buildSignUpStaffEmail,
   buildSignUpThanksEmail,
 } from "./emails";
-import { hasPage, type FundraiserRecord } from "./model";
+import { EVENT_PAGE_PREFIX, hasPage, type FundraiserRecord } from "./model";
 
 // TASK-493: sending the fundraising emails. TASK-497 adds "Your page is live" held until the switch
 // goes on (sendWaitingLiveEmails) and the two emails about a change. Each is best effort and runs after its write has
@@ -41,6 +41,16 @@ function logFailure(what: string, err: unknown): void {
 
 export function fundraiserPageUrl(slug: string): string {
   return `${base()}/fundraise/${slug}`;
+}
+
+/** Event pages: an event's own page, nbcc.scot/event/<short name>. ./page-url.ts picks the right one. */
+export function eventPageUrl(slug: string): string {
+  return `${base()}${EVENT_PAGE_PREFIX}/${slug}`;
+}
+
+/** The page of either kind (event pages): ./page-url.ts pageUrlFor, kept here so send.ts stands alone. */
+function pageOf(f: Pick<FundraiserRecord, "path" | "slug">): string {
+  return f.path === "event" ? eventPageUrl(f.slug) : fundraiserPageUrl(f.slug);
 }
 
 /** Any address on the public site, from its path (TASK-504: Get involved, for an event's poster). */
@@ -80,7 +90,7 @@ export async function sendApprovedEmail(f: FundraiserRecord): Promise<boolean> {
   try {
     const page = hasPage(f);
     const mail = buildApprovedEmail(f, {
-      pageUrl: page ? fundraiserPageUrl(f.slug) : null,
+      pageUrl: page ? pageOf(f) : null,
       manageUrl: page ? `${base()}/fundraise/manage` : null,
     });
     await sendFundraiseApproved(f.name, { email: f.email, from: config.BALL_FROM_EMAIL, replyTo: config.BALL_FROM_EMAIL, ...mail });
@@ -141,7 +151,7 @@ export async function sendEditDecisionEmail(f: FundraiserRecord, approved: boole
     const message = { email: f.email, from: config.BALL_FROM_EMAIL, replyTo: config.BALL_FROM_EMAIL };
     const pageLive = hasPage(f) && pagesOpen;
     if (approved) {
-      const pageUrl = pageLive ? fundraiserPageUrl(f.slug) : null;
+      const pageUrl = pageLive ? pageOf(f) : null;
       await sendFundraiseEditApproved(f.name, { ...message, ...buildEditApprovedEmail(f, { pageUrl }) });
     } else {
       await sendFundraiseEditRejected(f.name, { ...message, ...buildEditRejectedEmail(f, { pageLive }) });
@@ -187,7 +197,7 @@ export async function sendNewsDecisionEmail(f: FundraiserRecord, approved: boole
     const message = { email: f.email, from: config.BALL_FROM_EMAIL, replyTo: config.BALL_FROM_EMAIL };
     const pageLive = hasPage(f) && pagesOpen;
     if (approved) {
-      const pageUrl = pageLive ? fundraiserPageUrl(f.slug) : null;
+      const pageUrl = pageLive ? pageOf(f) : null;
       await sendFundraiseNewsApproved(f.name, { ...message, ...buildNewsApprovedEmail(f, { pageUrl }) });
     } else {
       await sendFundraiseNewsRejected(f.name, { ...message, ...buildNewsRejectedEmail(f, { pageLive }) });

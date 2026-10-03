@@ -76,8 +76,9 @@ describe("where a scan goes", () => {
     expect(scanTarget({ ...sam, status: "finished" }, "a5")).toBe("/fundraise/sams-santa-dash?utm_medium=qr&utm_campaign=f12-a5");
   });
 
-  it("goes to Get involved for a listed event, which has no page", () => {
-    expect(scanTarget({ ...sam, path: "event" }, "a4")).toBe("/get-involved?utm_medium=qr&utm_campaign=f12-a4");
+  // Event pages: a listed event has its own page now, at /event/<short name>.
+  it("goes to a listed event's own page", () => {
+    expect(scanTarget({ ...sam, path: "event" }, "a4")).toBe(`/event/${sam.slug}?utm_medium=qr&utm_campaign=f12-a4`);
   });
 
   it("goes nowhere for one that is declined, new or not on the website", () => {

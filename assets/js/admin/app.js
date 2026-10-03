@@ -9590,11 +9590,41 @@
     // TASK-503: still approved, but taken off the Get involved list by staff (off_list_at); a page
     // stays up and takes gifts, as a finished one does.
     if (f.offListAt && f.public) {
-      return "Approved, and taken off the Get involved list." + (f.path === "raising" ? " Its page stays up and can still take gifts." : "");
+      // Event pages: an event's page stays up too.
+      return "Approved, and taken off the Get involved list." + (f.path === "raising" || f.path === "event" ? " Its page stays up and can still take gifts." : "");
     }
     if (!f.public) return "Approved. They only wanted to let us know, or wanted materials, so it is not on the website.";
-    if (f.path === "event") return "Approved. It is listed on Get involved as an event while fundraising is switched on.";
+    // Event pages: an approved public event has its own page as well as its card.
+    if (f.path === "event") return "Approved. Its page is on the website, and it is listed on Get involved as an event, while fundraising is switched on.";
     return "Approved. Its page is on the website while fundraising is switched on.";
+  }
+
+  // Event pages: where its page is, or would be: /event/<short name> for an event, /fundraise/<slug>
+  // for raising money. The server says (pagePath); worked out the same way if it does not.
+  function frPagePath(f) {
+    return f.pagePath || (f.path === "event" ? "/event/" : "/fundraise/") + encodeURIComponent(f.slug || "");
+  }
+
+  // Event pages: an event cannot be approved until staff have set its short name.
+  function frNeedsShortName(f) {
+    return f.path === "event" && !f.slugSetAt;
+  }
+
+  // Event pages: keep the suggested short name, which is what lets the event be approved.
+  function frUseShortName() {
+    if (frBusy) return;
+    var f = frOpenRecord();
+    if (!f) return;
+    frRun("detail", "Saving…", function (run) {
+      return frSend("PATCH", "/api/admin/fundraisers/" + f.id, { slug: f.slug }).then(function (r) {
+        if (!r.ok) {
+          run.say(frRefusal(r, "That did not work. Please try again."), true);
+          return frReload();
+        }
+        run.say("Short name saved. You can approve it now.", false);
+        return frReload();
+      });
+    });
   }
 
   function frStatePanel(f, write) {
@@ -9609,21 +9639,21 @@
         '<span class="fr-field-hint">Kept inside NBCC, never shown to them.</span>');
     }
     var page;
+    // Event pages: an event's page and QR codes are at /event/<short name> (the server's pagePath).
+    var pageBase = frPagePath(f);
     if (f.pageUrl && frIsWebLink(f.pageUrl)) {
       page = '<a class="fx-tel" id="frPageLink" href="' + H.escapeHtml(f.pageUrl) + '" target="_blank" rel="noopener noreferrer">' +
         H.escapeHtml(f.pageUrl) + "</a>" +
         // TASK-501: the QR code itself, now it is no longer on the public page.
-        '<img class="fr-qr-preview" src="/fundraise/' + encodeURIComponent(f.slug) + '/qr.svg" alt="' +
+        '<img class="fr-qr-preview" src="' + H.escapeHtml(pageBase) + '/qr.svg" alt="' +
         H.escapeHtml("QR code for " + f.title) + '" width="120" height="120" loading="lazy" />' +
-        '<a class="fr-qr-link" id="frQrLink" href="/fundraise/' + encodeURIComponent(f.slug) + '/qr.svg" download="' +
+        '<a class="fr-qr-link" id="frQrLink" href="' + H.escapeHtml(pageBase) + '/qr.svg" download="' +
         H.escapeHtml("qr-" + f.slug + ".svg") + '">Download its QR code</a>' +
         // TASK-504: the same code as a print size PNG.
-        '<a class="fr-qr-link" id="frQrPngLink" href="/fundraise/' + encodeURIComponent(f.slug) + '/qr.png" download="' +
+        '<a class="fr-qr-link" id="frQrPngLink" href="' + H.escapeHtml(pageBase) + '/qr.png" download="' +
         H.escapeHtml("qr-" + f.slug + ".png") + '">Print size PNG</a>';
     } else {
-      page = frNone(f.path === "event" && f.status === "approved" && f.public
-        ? "No page on the website: an event is listed on Get involved instead."
-        : "No page on the website.");
+      page = frNone("No page on the website.");
     }
     rows += fulfilRow("Its page", page);
     // TASK-504: its materials, made from the approved details, once it is approved. Each opens in
@@ -9647,7 +9677,17 @@
     var actions = "";
     if (write) {
       var buttons = "";
-      if (f.status === "new" || f.status === "declined") {
+      var shortName = "";
+      if ((f.status === "new" || f.status === "declined") && frNeedsShortName(f)) {
+        // Event pages: an event's short name is its web address for good, so staff set it (or keep
+        // the suggested one) before it can be approved. The server refuses it otherwise.
+        shortName =
+          '<div class="fr-decline" id="frShortName">' +
+            '<p class="fx-help">Give this event a short name first, for its web address. It would be <span class="fx-mono">nbcc.scot' +
+              H.escapeHtml(frPagePath(f)) + "</span>. Keep this one, or change it under Web address in Change the details.</p>" +
+            '<div class="fx-call-row"><button class="admin-btn admin-btn--small" type="button" data-frshortname>Use this short name</button></div>' +
+          "</div>";
+      } else if (f.status === "new" || f.status === "declined") {
         buttons += '<button class="admin-btn admin-btn--small" type="button" data-fraction="approve">Approve</button>';
       }
       if (f.status === "approved") {
@@ -9663,7 +9703,7 @@
             '<div class="fx-call-row"><button class="admin-btn admin-btn--small fr-btn-quiet" type="button" data-fraction="decline">Decline</button></div>' +
           "</div>";
       }
-      actions = (buttons ? '<div class="fx-call-row fr-actions">' + buttons + "</div>" : "") + decline;
+      actions = shortName + (buttons ? '<div class="fx-call-row fr-actions">' + buttons + "</div>" : "") + decline;
     }
     return (
       '<p class="fx-letter"><span class="fx-state fx-state--' + (f.status === "new" ? "todo" : f.status === "approved" ? "done" : "waiting") + '">' +
@@ -9725,7 +9765,7 @@
         fulfilRow("Where", where ? H.escapeHtml(where) : frNone("Not given")) +
         fulfilRow("Target", f.targetPence ? H.escapeHtml(frMoney(f.targetPence)) : frNone("No target")) +
         fulfilRow("On the NBCC website", f.public ? "Show it on our website" : "Not on the website") +
-        fulfilRow("Web address", '<span class="fx-mono">/fundraise/' + H.escapeHtml(f.slug) + "</span>") +
+        fulfilRow("Web address", '<span class="fx-mono">' + H.escapeHtml(frPagePath(f)) + "</span>") +
         fulfilRow("Signed up", H.escapeHtml(H.fmtDate(f.createdAt))) +
         frAgeAndSplitRows(f) +
         (f.path === "event" ? frEventRows(f) : "") +
@@ -10090,7 +10130,8 @@
         box("venue", "venue", "Venue (optional)", "text", 'maxlength="120" autocomplete="off"') +
         box("town", "town", "Town (optional)", "text", 'maxlength="80" autocomplete="off"') +
         box("target", "targetPence", "Target in pounds (optional)", "text", 'inputmode="decimal" autocomplete="off"', "From £10 to £100,000. Leave it empty for no target.") +
-        box("slug", "slug", "Web address", "text", 'maxlength="60" autocomplete="off" spellcheck="false"', "The end of nbcc.scot/fundraise/ in small letters and numbers, with a hyphen between words. Change it and the old address still works, sending people on to the new one.") +
+        // Event pages: an event's web address is nbcc.scot/event/<short name>.
+        box("slug", "slug", "Web address", "text", 'maxlength="60" autocomplete="off" spellcheck="false"', "The end of nbcc.scot/" + (f.path === "event" ? "event" : "fundraise") + "/ in small letters and numbers, with a hyphen between words. Change it and the old address still works, sending people on to the new one.") +
         tick("public", "public", "Show it on our website") +
         head("The organiser") +
         (frSplit(f)
@@ -10342,7 +10383,8 @@
     if (frBusy) return;
     var f = frOpenRecord();
     if (!f) return;
-    var hasPage = f.path === "raising" && f.public;
+    // Event pages: a public event has a page now too.
+    var hasPage = (f.path === "raising" || f.path === "event") && f.public;
     var pageOn = !!(frSettings && frSettings.pageOn);
     // TASK-497: a page holder approved while fundraising is off is sent nothing yet; the server
     // emails them "Your page is live" when fundraising is switched on.
@@ -10400,7 +10442,7 @@
     var approve = btn.getAttribute("data-fredit") === "approve";
     var editId = btn.getAttribute("data-freditid");
     // TASK-497: either way the organiser is emailed ("Your update is live" or "About your update").
-    var live = f.path === "raising" && f.public && f.status === "approved" && !!(frSettings && frSettings.pageOn);
+    var live = (f.path === "raising" || f.path === "event") && f.public && f.status === "approved" && !!(frSettings && frSettings.pageOn);
     var question = approve
       ? (live ? "Approve this change? It goes on the website straight away" : "Approve this change? It is saved straight away") +
         ", and the organiser is emailed to say so."
@@ -10657,6 +10699,7 @@
       }
       var action = t.closest("[data-fraction]");
       if (action) return frMove(action.getAttribute("data-fraction"));
+      if (t.closest("[data-frshortname]")) return frUseShortName();
       var material = t.closest("[data-frmaterial]");
       if (material) return frOpenMaterial(material.getAttribute("data-frmaterial"));
       var decide = t.closest("[data-fredit]");
@@ -11459,7 +11502,7 @@
     if (off) {
       body = '<p class="fx-letter"><span class="fx-state fx-state--done">Taken off Get involved</span> on ' +
         H.escapeHtml(H.fmtDate(f.offListAt)) + (f.offListBy ? " by " + H.escapeHtml(frWho(f.offListBy)) : "") + ". " +
-        (f.path === "raising" ? "Its page and giving link still work, so late gifts still count." : "It is no longer on the list.") + "</p>" +
+        (f.path === "raising" || (f.path === "event" && f.public) ? "Its page and giving link still work, so late gifts still count." : "It is no longer on the list.") + "</p>" +
         (write ? '<div class="fx-call-row fr-actions"><button class="admin-btn admin-btn--small fr-btn-quiet" type="button" data-frlist="on">Put it back on Get involved</button></div>' : "");
     } else {
       body = '<p class="fx-letter"><span class="fx-state fx-state--todo">Take off Get involved?</span> ' +

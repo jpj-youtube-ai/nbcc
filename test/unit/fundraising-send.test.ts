@@ -169,7 +169,8 @@ describe("after staff decide a change", () => {
   // finished one keeps its page and still takes gifts, so it is up: see the next test.)
   it.each([
     ["fundraising is switched off", {}, false],
-    ["it is an event", { path: "event" as const }, true],
+    // Event pages: a public event has a page now (event-pages-links.test.ts); a private one does not.
+    ["it is a private event", { path: "event" as const, public: false }, true],
     ["it is private", { public: false }, true],
     ["it was declined", { status: "declined" as const }, true],
   ])("says the change is saved, with no page link, when %s", async (_what, over, on) => {

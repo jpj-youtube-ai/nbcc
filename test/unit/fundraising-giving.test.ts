@@ -171,9 +171,10 @@ describe("a finished fundraiser", () => {
     expect(hasPage(record({ status: "approved" }))).toBe(true);
   });
 
-  it("has no page if it was never public, or never raising money, or was never approved", () => {
+  // Event pages: a finished public event keeps its page too (test/unit/event-pages-model.test.ts).
+  it("has no page if it was never public, or was never approved", () => {
     expect(hasPage(record({ status: "finished", public: false }))).toBe(false);
-    expect(hasPage(record({ status: "finished", path: "event" }))).toBe(false);
+    expect(hasPage(record({ status: "finished", path: "event" }))).toBe(true);
     expect(hasPage(record({ status: "new" }))).toBe(false);
     expect(hasPage(record({ status: "declined" }))).toBe(false);
   });

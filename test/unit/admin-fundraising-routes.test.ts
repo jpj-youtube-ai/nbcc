@@ -47,6 +47,8 @@ vi.mock("../../src/fundraising/send", () => ({
   sendWaitingLiveEmails,
   sendEditDecisionEmail,
   fundraiserPageUrl: (slug: string) => `https://nbcc.test/fundraise/${slug}`,
+  // Event pages: an approved public event has a page of its own now.
+  eventPageUrl: (slug: string) => `https://nbcc.test/event/${slug}`,
 }));
 // Fundraising categories: the starting list stands in for the database's (src/fundraising/categories.ts).
 vi.mock("../../src/db/fundraising-categories", () => ({ loadCategories: async () => [] }));

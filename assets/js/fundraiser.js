@@ -490,6 +490,9 @@
     if (!step || !form) return null;
     nav = nav || { assign: function (u) { win.location.href = u; } };
     var slug = step.getAttribute("data-slug") || "";
+    // Event pages: an event's page says its own address (/event/<short name>); a fundraiser's is
+    // /fundraise/<slug>, as it always was.
+    var pagePath = step.getAttribute("data-page") || "/fundraise/" + encodeURIComponent(slug);
     var sessionId = step.getAttribute("data-session-id") || "";
     var message = doc.getElementById("frMessage");
     var count = form.querySelector("[data-message-count]");
@@ -580,7 +583,7 @@
         .then(function (r) {
           if (r.status === 200) {
             // Saved: the page again, with the thank you and the wall as it now is.
-            nav.assign("/fundraise/" + encodeURIComponent(slug) + "?thanks=1&added=1");
+            nav.assign(pagePath + "?thanks=1&added=1");
             return;
           }
           setBusy(false);

@@ -308,11 +308,20 @@ describe("a fundraiser's page", () => {
     ["it does not exist", null],
     ["it is not approved yet", record({ status: "new" })],
     ["it is private", record({ public: false })],
-    ["it is an event, with no page", record({ path: "event" })],
+    // Event pages: a public event has a page now (below); a private one has none.
+    ["it is a private event, with no page", record({ path: "event", public: false })],
     ["it was declined", record({ status: "declined" })],
   ])("is a 404 when %s", async (_why, found) => {
     db.getBySlug.mockResolvedValue(found);
     expect((await run(getFundraiserPage, { params: { slug: "x" } })).statusCode).toBe(404);
+  });
+
+  it("is there for an approved public event, at its /event/ address", async () => {
+    db.getBySlug.mockResolvedValue(record({ path: "event" }));
+    db.wallRows.mockResolvedValue([]);
+    const res = await run(getFundraiserPage, { params: { slug: "sams-sponsored-walk" } });
+    expect(res.statusCode).toBe(200);
+    expect((res.body as { url: string }).url).toBe("/event/sams-sponsored-walk");
   });
 
   // TASK-502: a finished fundraiser keeps its page, saying so, and still takes gifts.

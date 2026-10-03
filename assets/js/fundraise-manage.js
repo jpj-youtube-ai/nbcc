@@ -357,6 +357,8 @@
     function statusWords(f) {
       if (f.status === "finished") return "Finished. Thank you for everything you raised.";
       if (f.path === "event") {
+        // Event pages: an approved public event has its own page as well as its card.
+        if (f.public && f.pageUrl) return "Approved. Your event's page is live, and it is on our Get involved page.";
         return f.public ? "Approved. Your event is listed on our Get involved page." : "Approved. It is not shown on our website, as you asked.";
       }
       return f.public ? "Approved. Your page is live." : "Approved. It is not shown on our website, as you asked.";

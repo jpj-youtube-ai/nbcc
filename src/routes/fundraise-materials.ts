@@ -5,7 +5,8 @@ import { findSession } from "../db/fundraiser-sign-in";
 import { askToPrint, lastPrintAsks, materialScans, PrintAskError } from "../db/fundraiser-materials";
 import { listRequestRowsFor } from "../db/fundraising-requests";
 import { SESSION_COOKIE, hashSessionId, sentFromOurOwnPage } from "../fundraising/sign-in";
-import { fundraiserPageUrl, siteUrl } from "../fundraising/send";
+import { siteUrl } from "../fundraising/send";
+import { pageUrlFor } from "../fundraising/page-url";
 import { readCookie } from "../ball/gate";
 import { dateParts } from "../events/render";
 import { londonToday } from "../events/model";
@@ -104,7 +105,8 @@ function todayInWords(now: Date): string {
 
 /** Draw one piece of one fundraiser. */
 export function buildMaterial(piece: MaterialPiece | "everything", f: Loaded, who: Who, now: Date = new Date()): string {
-  const facts = materialFacts(f, f.meter, { pageUrl: fundraiserPageUrl(f.slug), getInvolvedUrl: siteUrl("/get-involved") });
+  // Event pages: an event's pieces carry its own page, /event/<short name>.
+  const facts = materialFacts(f, f.meter, { pageUrl: pageUrlFor(f), getInvolvedUrl: siteUrl("/get-involved") });
   const assets = materialAssets();
   switch (piece) {
     case "poster":

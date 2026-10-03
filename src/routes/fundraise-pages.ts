@@ -1,6 +1,7 @@
 import type { Request, Response, NextFunction, Router } from "express";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
+import { EVENT_PAGE_PREFIX, pagePath } from "../fundraising/model";
 
 // TASK-494: the public pages of community fundraising, and Get involved (the Events page, renamed).
 //
@@ -22,6 +23,12 @@ import { join } from "node:path";
 //                                  so, and still takes gifts; ?thanks=1&session_id= is the thank you
 //                                  after paying, with the optional step to add to the wall;
 //                                  TASK-506: its countdown, and the news staff approved)
+//   GET /event/:slug[/qr.svg|/qr.png]  Event pages: an approved public event's own page, by the same
+//                                  code, and its QR codes. Each prefix answers only for its own kind:
+//                                  /fundraise/<x> for an event, or /event/<x> for a fundraiser, is a
+//                                  302 on to its own address (never kept: review fix), so a staff
+//                                  change of kind, or a link typed the wrong way, never breaks. The
+//                                  slug is one column, unique across both, so the two never clash.
 //
 // Added to the site router (src/routes/site.ts) before its catch-all, so "not here" is the site's own
 // 404 page: anything that is not a public, raising money fundraiser, approved or finished, while
@@ -54,7 +61,7 @@ function keepADay(res: Response): void {
   res.setHeader("Cache-Control", "public, max-age=86400");
 }
 
-/** The fundraiser behind /fundraise/:slug, only if it has a public page right now. */
+/** The fundraiser or event with this address, only if it has a public page right now (either kind). */
 async function publicFundraiser(slug: string) {
   if (!(await fundraisingOn())) return null;
   const [{ getBySlug }, { hasPage }] = await Promise.all([import("../db/fundraisers"), import("../fundraising/model")]);
@@ -63,20 +70,49 @@ async function publicFundraiser(slug: string) {
 }
 
 /**
- * TASK-511: the address now of the page that used to be at /fundraise/<slug>, if it still has a page
- * (staff changed its address, and the old one is kept in fundraiser_slug_history). Null otherwise,
- * and on any failure, so the caller falls through to the site's 404. Only asked once no page has
- * that address now: a page with it always answers first.
+ * TASK-511: the path now of the page that used to be at <slug>, if it still has a page (staff
+ * changed its address, and the old one is kept in fundraiser_slug_history). Null otherwise, and on
+ * any failure, so the caller falls through to the site's 404. Only asked once no page has that
+ * address now: a page with it always answers first. Event pages: the path is the page's own kind's,
+ * /event/<x> or /fundraise/<x> (pagePath).
  */
 async function movedTo(slug: string): Promise<string | null> {
   try {
     const { currentSlugFor } = await import("../db/fundraiser-slugs");
     const now = await currentSlugFor(slug);
-    return now && now !== slug && (await publicFundraiser(now)) ? now : null;
+    const f = now && now !== slug ? await publicFundraiser(now) : null;
+    return f ? pagePath(f) : null;
   } catch (err) {
     console.error("fundraiser old address lookup failed:", err instanceof Error ? err.message : err);
     return null;
   }
+}
+
+/**
+ * Event pages: what <prefix>/<slug> is for this kind of page. The page, when one of this kind has the
+ * address; the path to send them on to, when the other kind has it (the slug is unique across both,
+ * so there is only ever one) or when a page used to have it (movedTo); null for the site's 404.
+ */
+async function lookUp(
+  slug: string,
+  kind: "raising" | "event",
+): Promise<{ page: NonNullable<Awaited<ReturnType<typeof publicFundraiser>>> } | { to: string; otherKind: boolean } | null> {
+  const f = await publicFundraiser(slug);
+  if (f) return f.path === kind ? { page: f } : { to: pagePath(f), otherKind: true };
+  const to = await movedTo(slug);
+  return to ? { to, otherKind: false } : null;
+}
+
+/**
+ * Send them on from lookUp. An old address is for good (movedOn). The other kind's page is only for
+ * now (review fix): staff may change an event's kind and change it back, and a redirect a browser
+ * kept would then go round in a circle; and the address may carry a giver's thank you
+ * (?thanks=1&session_id=), which must never be kept anywhere. So: a 302, never kept.
+ */
+function sendOn(res: Response, found: { to: string; otherKind: boolean }, to: string): void {
+  if (!found.otherKind) return movedOn(res, to);
+  res.setHeader("Cache-Control", "no-store");
+  res.redirect(302, to);
 }
 
 /**
@@ -286,25 +322,40 @@ export function addFundraisePageRoutes(router: Router, siteRoot: string, deps: F
     }
   });
 
+  // The pages themselves, their QR codes and their old addresses: a fundraiser's at /fundraise/<slug>,
+  // and (event pages) an event's at /event/<short name>, by the same code.
+  addPageRoutes(router, "raising", pageFile, deps);
+  addPageRoutes(router, "event", pageFile, deps);
+}
+
+type PageKind = "raising" | "event";
+
+/**
+ * Event pages: one kind's page routes, under its own prefix (/fundraise or /event). Each answers
+ * only for its own kind: the other kind's page, or an address it used to have, is a 301 on to its
+ * address now (lookUp), so a staff change of kind, or a link typed the wrong way, never breaks.
+ */
+function addPageRoutes(router: Router, kind: PageKind, pageFile: string, deps: FundraisePageDeps): void {
+  const prefix = kind === "event" ? EVENT_PAGE_PREFIX : "/fundraise";
+
   // TASK-504: the page's QR code as a print size PNG, beside the SVG below: the same code, drawn by
   // the same encoder. Wherever the SVG answers, so does this.
-  router.get("/fundraise/:slug/qr.png", async (req, res, next) => {
+  router.get(`${prefix}/:slug/qr.png`, async (req, res, next) => {
     try {
-      const f = await publicFundraiser(String(req.params.slug));
-      if (!f) {
-        // TASK-511: an old address's PNG goes on to the page's address now, like the SVG.
-        const now = await movedTo(String(req.params.slug));
-        return now ? movedOn(res, `/fundraise/${now}/qr.png${queryOf(req)}`) : next();
-      }
-      const [{ qrPng }, { fundraiserPageUrl }, { qrPngCache }] = await Promise.all([
+      const found = await lookUp(String(req.params.slug), kind);
+      // TASK-511: an old address's PNG goes on to the page's address now, like the SVG.
+      if (!found) return next();
+      if ("to" in found) return sendOn(res, found, `${found.to}/qr.png${queryOf(req)}`);
+      const f = found.page;
+      const [{ qrPng }, { pageUrlFor }, { qrPngCache }] = await Promise.all([
         import("../fundraising/qr-png"),
-        import("../fundraising/send"),
+        import("../fundraising/page-url"),
         import("../fundraising/qr-cache"),
       ]);
       res.setHeader("X-Content-Type-Options", "nosniff");
       res.setHeader("Content-Disposition", `attachment; filename="nbcc-${f.slug}-qr-code.png"`);
       keepADay(res);
-      res.type("image/png").send(qrPngCache.get(fundraiserPageUrl(f.slug), qrPng));
+      res.type("image/png").send(qrPngCache.get(pageUrlFor(f), qrPng));
     } catch (err) {
       console.error("fundraiser qr png failed:", err instanceof Error ? err.message : err);
       next();
@@ -313,23 +364,22 @@ export function addFundraisePageRoutes(router: Router, siteRoot: string, deps: F
 
   // TASK-501 review: the code also answers for a finished fundraiser that had a page, so its
   // organiser keeps it in their private area. TASK-502: wherever the page is, as a finished one keeps it.
-  router.get("/fundraise/:slug/qr.svg", async (req, res, next) => {
+  router.get(`${prefix}/:slug/qr.svg`, async (req, res, next) => {
     try {
-      const f = await publicFundraiser(String(req.params.slug));
-      if (!f) {
-        const now = await movedTo(String(req.params.slug));
-        return now ? movedOn(res, `/fundraise/${now}/qr.svg${queryOf(req)}`) : next();
-      }
-      const [{ qrSvg }, { fundraiserPageUrl }, { qrSvgCache }] = await Promise.all([
+      const found = await lookUp(String(req.params.slug), kind);
+      if (!found) return next();
+      if ("to" in found) return sendOn(res, found, `${found.to}/qr.svg${queryOf(req)}`);
+      const f = found.page;
+      const [{ qrSvg }, { pageUrlFor }, { qrSvgCache }] = await Promise.all([
         import("../fundraising/qr"),
-        import("../fundraising/send"),
+        import("../fundraising/page-url"),
         import("../fundraising/qr-cache"),
       ]);
       res.setHeader("X-Content-Type-Options", "nosniff");
       res.setHeader("Content-Disposition", `inline; filename="nbcc-${f.slug}-qr-code.svg"`);
       keepADay(res);
       // TASK-504 review: kept by the address and the title it is labelled with, since both go in it.
-      const url = fundraiserPageUrl(f.slug);
+      const url = pageUrlFor(f);
       const title = `QR code for ${f.title}`;
       res.type("image/svg+xml").send(qrSvgCache.get(`${url}
 ${title}`, () => qrSvg(url, { title, size: 1024 })));
@@ -339,19 +389,18 @@ ${title}`, () => qrSvg(url, { title, size: 1024 })));
     }
   });
 
-  router.get("/fundraise/:slug", async (req, res, next) => {
+  router.get(`${prefix}/:slug`, async (req, res, next) => {
     try {
-      const f = await publicFundraiser(String(req.params.slug));
-      if (!f) {
-        // TASK-511: an address the page used to have goes on to its address now, for good.
-        const now = await movedTo(String(req.params.slug));
-        return now ? movedOn(res, `/fundraise/${now}${queryOf(req)}`) : next();
-      }
-      const [{ wallRows }, { publicPage, wallEntries }, { renderFundraiserPage }, { fundraiserPageUrl }] = await Promise.all([
+      const found = await lookUp(String(req.params.slug), kind);
+      // TASK-511: an address the page used to have goes on to its address now, for good.
+      if (!found) return next();
+      if ("to" in found) return sendOn(res, found, `${found.to}${queryOf(req)}`);
+      const f = found.page;
+      const [{ wallRows }, { publicPage, wallEntries }, { renderFundraiserPage }, { pageUrlFor }] = await Promise.all([
         import("../db/fundraisers"),
         import("../fundraising/model"),
         import("../fundraising/render"),
-        import("../fundraising/send"),
+        import("../fundraising/page-url"),
       ]);
       const page = { ...publicPage(f, f.meter, wallEntries(await wallRows(f.id))), news: await newsFor(f.id) };
       // ?thanks=1 is where the server sends a giver back to after paying (src/routes/api.ts): a thank
@@ -367,7 +416,7 @@ ${title}`, () => qrSvg(url, { title, size: 1024 })));
         res.setHeader("X-Robots-Tag", "noindex, nofollow");
       }
       const html = renderFundraiserPage(readFileSync(pageFile, "utf8"), page, {
-        pageUrl: fundraiserPageUrl(f.slug),
+        pageUrl: pageUrlFor(f),
         now: new Date(),
         thanks,
       });

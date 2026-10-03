@@ -31,7 +31,11 @@ export const DECK_MARKER = "<!-- events:deck -->";
  * its own words where the booking goes (bookingSolo), or nothing there at all (null). The events
  * editor never sets it, so NBCC's events come out exactly as they always have.
  */
-export type CardRecord = EventRecord & { bookingSolo?: string | null };
+export type CardRecord = EventRecord & {
+  bookingSolo?: string | null;
+  /** Event pages: a community event's own page (/event/<short name>), linked from its card's back. */
+  pageHref?: string | null;
+};
 
 export function escapeHtml(value: string): string {
   return value
@@ -169,6 +173,19 @@ function renderBooking(ev: CardRecord): string {
   return `${gap}<a class="btn btn-primary ev-book" href="${href}">${label}</a>`;
 }
 
+/**
+ * Event pages: the way to a community event's own page, at the foot of its back, under any booking.
+ * NBCC's own events never have one, so their cards are exactly as they were.
+ */
+function renderPageLink(ev: CardRecord, booking: string): string {
+  if (!ev.pageHref) return "";
+  return (
+    (booking ? "" : '<div class="ev-book-gap"></div>') +
+    `<a class="btn btn-ghost ev-book ev-book--page" href="${escapeHtml(ev.pageHref)}">See the event page and give` +
+    `<span class="sr-only">: ${escapeHtml(ev.name)}</span></a>`
+  );
+}
+
 /** One event as a card: the picture and the gist on the front, everything else on the back. */
 export function renderCard(ev: CardRecord, idPrefix = ""): string {
   const id = escapeHtml(`${idPrefix}${ev.slug}`);
@@ -182,6 +199,7 @@ export function renderCard(ev: CardRecord, idPrefix = ""): string {
   const placeShort = joinPlace(ev.venue, ev.town);
   const placeLong = ev.address || placeShort;
   const costLong = ev.costBack || ev.costFront;
+  const booking = renderBooking(ev);
 
   const front =
     `<article class="ev-face ev-front" aria-labelledby="${id}-title">` +
@@ -235,7 +253,8 @@ export function renderCard(ev: CardRecord, idPrefix = ""): string {
         (ev.partnerLine ? `<p>${bolds(ev.partnerLine)}</p>` : "") +
         "</div>"
       : "") +
-    renderBooking(ev) +
+    booking +
+    renderPageLink(ev, booking) +
     "</article>";
 
   // data-kind: which of Get involved's chips the card belongs to (TASK-494). Every event is an event.

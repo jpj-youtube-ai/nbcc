@@ -369,8 +369,9 @@ describe("what the public sees", () => {
     }
   });
 
-  it("gives an event sign up no page of its own", () => {
-    expect(publicCard({ ...record, path: "event" }, m).url).toBeNull();
+  // Event pages: an event sign up has a page of its own now, at /event/<short name>.
+  it("gives an event sign up its own page, at /event/", () => {
+    expect(publicCard({ ...record, path: "event" }, m).url).toBe(`/event/${record.slug}`);
   });
 
   it("is a page with the wall and what the give form needs", () => {

@@ -496,15 +496,16 @@ function fundraiserReturnUrls(
 export async function fundraiserReturnPage(fundraiserId: number | undefined): Promise<string | null> {
   if (fundraiserId === undefined) return null;
   try {
-    const [{ getFundraiser, fundraisingIsOn }, { hasPage }, { fundraiserPageUrl }] = await Promise.all([
+    const [{ getFundraiser, fundraisingIsOn }, { hasPage }, { pageUrlFor }] = await Promise.all([
       import("../db/fundraisers"),
       import("../fundraising/model"),
-      import("../fundraising/send"),
+      import("../fundraising/page-url"),
     ]);
     // Switched off, the fundraiser's page is a 404: coming back there would be a dead end.
     if (!(await fundraisingIsOn())) return null;
     const f = await getFundraiser(fundraiserId);
-    return f && hasPage(f) ? fundraiserPageUrl(f.slug) : null;
+    // Event pages: an event's gift comes back to its own page, /event/<short name>.
+    return f && hasPage(f) ? pageUrlFor(f) : null;
   } catch (err) {
     console.error("fundraiser return page lookup failed:", err instanceof Error ? err.message : err);
     return null;

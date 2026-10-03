@@ -1,7 +1,7 @@
 import type { Request, Response, NextFunction, Router } from "express";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { EVENT_PAGE_PREFIX, pagePath } from "../fundraising/model";
+import { EVENT_PAGE_PREFIX, pagePath, type FundraiserRecord } from "../fundraising/model";
 
 // TASK-494: the public pages of community fundraising, and Get involved (the Events page, renamed).
 //
@@ -86,6 +86,20 @@ async function movedTo(slug: string): Promise<string | null> {
   } catch (err) {
     console.error("fundraiser old address lookup failed:", err instanceof Error ? err.message : err);
     return null;
+  }
+}
+
+/**
+ * What gifts could do, for this page: the shared examples (src/impact/examples.ts), or none for a
+ * page in memory of someone (showsImpact). Never fails the page: on any failure, no examples.
+ */
+async function impactFor(f: Pick<FundraiserRecord, "kind"> & { inMemory?: boolean | null }) {
+  try {
+    const [{ showsImpact }, { loadImpactExamples }] = await Promise.all([import("../fundraising/impact-render"), import("../db/impact-examples")]);
+    return showsImpact(f) ? await loadImpactExamples() : undefined;
+  } catch (err) {
+    console.error("impact examples for a page failed:", err instanceof Error ? err.message : err);
+    return undefined;
   }
 }
 
@@ -451,6 +465,7 @@ ${title}`, () => qrSvg(url, { title, size: 1024 })));
         now: new Date(),
         thanks,
         team: extras.team,
+        impact: await impactFor(f),
       });
       if (!withSession) fresh(res);
       res.type("html").send(await deps.decorate(html, req.headers.cookie));

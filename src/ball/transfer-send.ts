@@ -64,7 +64,11 @@ export async function sendTransferDetails(booking: Recipient, bank: BankDetails,
  * Reply-To is the buyer, so answering it reaches them.
  */
 export async function sendTransferStaffNotice(
-  booking: TransferEmailBooking & { buyerEmail: string; invoice: { bookingId: number; company: string } | null },
+  booking: TransferEmailBooking & {
+    buyerEmail: string;
+    buyerPhone?: string | null;
+    invoice: { bookingId: number; company: string } | null;
+  },
   payBy: string,
   addedBy: string | null = null,
 ): Promise<void> {

@@ -9200,6 +9200,7 @@
     frLoadTeam();
     frLoadSummary();
     frLoadCategories(); // the Categories card, and the sign up editor's list
+    frLoadImpact(); // What gifts could do
     // TASK-505: the requests, likewise on their own.
     frLoadRequests();
     frLoadNewsCounts(); // TASK-506
@@ -10616,8 +10617,12 @@
       finish: "Mark " + f.title + " as finished? It comes off the Get involved list. Its page stays up with a thank you banner and can still take gifts. What it raised stays in the records." +
         // TASK-515: the thank you (email 17) goes now, only while automatic emails are on.
         (hasPage
-          ? frTouch && frTouch.settings && frTouch.settings.on
-            ? " Automatic emails are on, so we email " + f.name + " their thank you, with their certificate."
+          ? !frTouch
+            ? " If automatic emails are on, we email " + f.name + " their thank you. If its wording is still waiting for sign off, the thank you is held until you approve it."
+            : frTouch.settings && frTouch.settings.on
+            ? frTouchFinishedWaiting(f)
+              ? " Automatic emails are on, but the thank you is held back: its new wording is waiting for your sign off. It goes once you approve it in Automatic emails, within a week."
+              : " Automatic emails are on, so we email " + f.name + " their thank you, with their certificate."
             : " Automatic emails are off, so no thank you email goes."
           : ""),
     }[move];
@@ -11063,6 +11068,7 @@
     });
     frThanksWire(view); // TASK-507
     frTouchWire(view); // TASK-515
+    frImpactWire(view); // What gifts could do
   }
 
   // ---- news updates (TASK-506) ----
@@ -11593,6 +11599,11 @@
         (dueIds.length === 1 ? "1 email: " : dueIds.length + " emails: ") + dueWords.join(", ") +
         ". " + "Anyone who has asked us to stop is left out."
       : (s.on ? "Nothing is due at the next 8am run." : "Switched on now, the next 8am run would send nothing.");
+    if (frTouch.approvalsUnavailable) el("frTouchDue").textContent += " " + FR_TOUCH_UNCHECKED;
+    var heldCount = Object.keys(frTouch.held || {}).length;
+    if (heldCount) {
+      el("frTouchDue").textContent += " " + (heldCount === 1 ? "1 more is" : heldCount + " more are") + " waiting for your sign off.";
+    }
     var btn = el("frTouchSwitch");
     var admin = isAdmin() && frCanWrite();
     btn.hidden = !admin;
@@ -11603,7 +11614,7 @@
       .map(function (k) {
         var on = k.kind === frTouchKind;
         return '<button class="admin-seg' + (on ? " is-active" : "") + '" type="button" data-frtouchkind="' + H.escapeHtml(k.kind) +
-          '" aria-pressed="' + (on ? "true" : "false") + '">' + H.escapeHtml(k.label) + (k.newWording ? ' <span class="fr-touch-new">New</span>' : "") + "</button>";
+          '" aria-pressed="' + (on ? "true" : "false") + '">' + H.escapeHtml(k.label) + frTouchWaitingPill(k) + "</button>";
       })
       .join("");
     frTouchRenderFor();
@@ -11643,7 +11654,7 @@
         if (seq !== frTouchSeq || !d || typeof d.html !== "string") return;
         el("frTouchMeta").innerHTML =
           '<p class="fr-touch-when">' + H.escapeHtml(info ? info.when : "") + "</p>" +
-          (d.newWording ? '<p class="fr-touch-signoff">New wording, waiting for sign off. Please read it closely.</p>' : "") +
+          frTouchSignOffHtml(d) +
           '<p class="fr-touch-subject"><span>Subject</span> ' + H.escapeHtml(d.subject || "") + "</p>" +
           (d.sample ? "" : '<p class="fr-field-hint">For ' + H.escapeHtml(d.title || "") + ", as it would go today.</p>");
         frame.setAttribute("srcdoc", d.html);
@@ -11653,6 +11664,65 @@
         if (seq !== frTouchSeq) return;
         frTouchShown = "";
         frTeamSay("frTouchStatus", "That email could not load just now. Try again in a moment.", true);
+      });
+  }
+
+  // Signing off the new wording (Jaimie, 2026-10-03): the server only sends new wording once an admin
+  // has approved it here. Each version that needs it (WORDING_KEYS in src/fundraising/touch-rules.ts,
+  // the nothing raised versions of 16, 17 and 18 too) is approved on its own. Editors and viewers see
+  // whether it is approved; only an admin sees the buttons.
+  function frTouchWaitingPill(k) {
+    var waiting = (k && k.waiting) || [];
+    if (!waiting.length) return "";
+    var onlyZero = waiting.every(function (key) { return /_zero$/.test(key); });
+    return ' <span class="fr-touch-new fr-touch-waiting" data-frtouchwaiting title="' +
+      H.escapeHtml(onlyZero ? "The version with nothing raised yet is waiting for sign off." : "Its new wording is waiting for sign off.") +
+      '">Waiting for sign off</span>';
+  }
+
+  var FR_TOUCH_UNCHECKED = "Couldn't check sign-offs just now, so new wording is held.";
+
+  function frTouchSignOffHtml(d) {
+    var key = d && d.wordingKey;
+    if (!key) return "";
+    if (d.approvalsUnavailable) return '<p class="fr-touch-signoff" data-frtouchsignoff>' + H.escapeHtml(FR_TOUCH_UNCHECKED) + "</p>";
+    var admin = isAdmin() && frCanWrite();
+    var a = d.approval;
+    if (!a) {
+      return '<p class="fr-touch-signoff" data-frtouchsignoff>New wording, waiting for your sign off. It won\'t send until you approve it.</p>' +
+        (admin ? '<div class="fx-call-row"><button class="admin-btn admin-btn--small" type="button" data-frtouchapprove="' + H.escapeHtml(key) + '"' +
+          (frTouchBusy ? " disabled" : "") + ">Approve this wording</button></div>" : "");
+    }
+    return '<p class="fr-touch-approved" data-frtouchsignoff>Approved by ' + H.escapeHtml(frWho(a.approvedBy)) + " on " + H.escapeHtml(H.fmtDate(a.approvedAt)) + ".</p>" +
+      (admin ? '<div class="fx-call-row"><button class="admin-btn admin-btn--small fr-btn-quiet" type="button" data-frtouchwithdraw="' + H.escapeHtml(key) + '"' +
+        (frTouchBusy ? " disabled" : "") + ">Withdraw approval</button></div>" : "");
+  }
+
+  function frTouchApproval(key, approve) {
+    if (frTouchBusy || !frTouch || !key) return;
+    var question = approve
+      ? "Approve this wording? Once approved, it goes to organisers by itself when it is due, while automatic emails are on."
+      : "Withdraw approval? This email stops going until it is approved again.";
+    if (!window.confirm(question)) return;
+    frTouchBusy = true;
+    frTeamSay("frTouchStatus", "Saving…", false);
+    return frSend(approve ? "POST" : "DELETE", "/api/admin/fundraising/touch/approvals/" + encodeURIComponent(key))
+      .then(function (r) {
+        frTouchBusy = false;
+        if (!r.ok) {
+          frTeamSay("frTouchStatus", frRefusal(r, "That did not work. Please try again."), true);
+          return;
+        }
+        // Read it all again: the pills, the next run, and this email's note.
+        frTouchShown = "";
+        return Promise.resolve(frTouchLoad()).then(function () {
+          frTeamSay("frTouchStatus", approve ? "Wording approved." : "Approval withdrawn.", false);
+        });
+      })
+      .catch(function (err) {
+        frTouchBusy = false;
+        if (err && err.message === "unauthorized") return;
+        frTeamSay("frTouchStatus", "That did not work. Please try again.", true);
       });
   }
 
@@ -11697,6 +11767,17 @@
         frTeamSay("frTouchStatus", "That did not work. Please try again.", true);
         frTouchRenderCard();
       });
+  }
+
+  // Is the thank you (17) for this sign up waiting for sign off, as it would go with what it has
+  // raised? The list's meter, as the server reads it: a team page's whole team total.
+  function frTouchFinishedWaiting(f) {
+    var info = frTouchKindInfo("finished");
+    if (!info || !info.waiting) return false;
+    var listed = ((frData && frData.fundraisers) || []).filter(function (x) { return x.id === f.id; })[0];
+    var m = (listed && listed.meter) || (frDetail && frDetail.meter) || {};
+    var raised = Number(m.raisedPence || 0);
+    return info.waiting.indexOf(raised > 0 ? "finished" : "finished_zero") !== -1;
   }
 
   function frTouchPrompts(f) {
@@ -11798,6 +11879,10 @@
           return;
         }
         if (t.closest("#frTouchSwitch")) frTouchSwitch();
+        var approve = t.closest("[data-frtouchapprove]");
+        if (approve) frTouchApproval(approve.getAttribute("data-frtouchapprove"), true);
+        var withdraw = t.closest("[data-frtouchwithdraw]");
+        if (withdraw) frTouchApproval(withdraw.getAttribute("data-frtouchwithdraw"), false);
       });
       el("frTouchFor").addEventListener("change", function (e) {
         frTouchFor = String(e.target.value || "");
@@ -13107,6 +13192,263 @@
     });
   }
 
+  // ---- What gifts could do (the list for everyone who can see Fundraising; changes for admins) ----
+  // The shared "could" examples fundraiser, event and team pages show under the give amounts and the
+  // meter (src/impact/examples.ts, GET /api/admin/impact-examples). Admins add, edit, switch off and
+  // on, and move them up or down; the server checks the words say could, never will buy. Nothing is
+  // deleted. Each change is in audit_log.
+  var frImpact = null; // [{ id, amountPence, wording, active, sortOrder, onGiveForm, meterLine }]
+  var frImpactFailed = false;
+  var frImpactEditing = null; // the id of the example being edited
+  var frImpactDraft = null; // { amount, wording, onGiveForm }, as typed
+  var frImpactBusy = false;
+
+  // "£25", "25", "2.50" -> pence; anything else -> null.
+  function frImpactPence(typed) {
+    var t = String(typed || "").replace(/[£,\s]/g, "");
+    if (!/^\d+(\.\d{1,2})?$/.test(t)) return null;
+    return Math.round(parseFloat(t) * 100);
+  }
+  function frImpactFind(id) {
+    return (frImpact || []).filter(function (e) { return e.id === id; })[0] || null;
+  }
+  function frImpactCanEdit() {
+    return isAdmin() && frCanWrite();
+  }
+  function frImpactWhere(e) {
+    var where = e.onGiveForm ? "Under the give amounts" : "Big totals only";
+    if (e.meterLine === "red_bags") where += ". Counts the Red Bags under the meter.";
+    else if (e.meterLine === "uniforms") where += ". Counts the school uniforms under the meter.";
+    return where;
+  }
+
+  function frLoadImpact() {
+    return authFetch("/api/admin/impact-examples")
+      .then(okJson)
+      .then(function (d) {
+        frImpact = d && Array.isArray(d.examples) ? d.examples : null;
+        frImpactFailed = !frImpact;
+        frRenderImpact();
+      })
+      .catch(function (err) {
+        if (err && err.message === "unauthorized") return;
+        frImpact = null;
+        frImpactFailed = true;
+        frRenderImpact();
+      });
+  }
+
+  function frImpactRow(e, i, list) {
+    var id = String(e.id);
+    var line = H.formatPence(e.amountPence) + " " + e.wording;
+    if (frImpactEditing === e.id) {
+      var d = frImpactDraft || { amount: frPounds(e.amountPence), wording: e.wording, onGiveForm: e.onGiveForm };
+      return '<li class="fr-impact-editing"><span class="fr-people-who">' +
+        '<label class="fx-call-label" for="frImpactEditAmount">Amount (£)</label>' +
+        '<input class="fx-call-input" id="frImpactEditAmount" type="text" inputmode="decimal" maxlength="9" autocomplete="off" value="' + H.escapeHtml(d.amount) + '">' +
+        '<label class="fx-call-label" for="frImpactEditWording">What it could do</label>' +
+        '<input class="fx-call-input" id="frImpactEditWording" type="text" maxlength="160" autocomplete="off" value="' + H.escapeHtml(d.wording) + '">' +
+        '<label class="fr-impact-give" for="frImpactEditGive"><input id="frImpactEditGive" type="checkbox"' + (d.onGiveForm ? " checked" : "") + "> Show under the give amounts</label></span>" +
+        '<span class="fr-people-actions"><button class="admin-btn" type="button" data-frimpactsave>Save</button>' +
+        '<button class="fr-link-btn" type="button" data-frimpactcancel>Cancel</button></span></li>';
+    }
+    var name = H.escapeHtml(line);
+    // The two the meter line counts with keep their words and amount: only on, off and moving.
+    var fixed = e.meterLine ? '<span class="fr-impact-fixed">Used for the line under the meter, so its words and amount are fixed.</span>' : "";
+    var who = '<span class="fr-people-who"><span class="fr-impact-line">' + name + '</span><span class="fr-impact-where">' + H.escapeHtml(frImpactWhere(e)) + "</span>" + fixed + "</span>";
+    if (!frImpactCanEdit()) return "<li>" + who + "</li>";
+    var actions = e.meterLine ? "" : '<button class="fr-link-btn" type="button" data-frimpactedit="' + id + '" aria-label="' + H.escapeHtml("Edit " + line) + '">Edit</button>';
+    if (e.active) {
+      if (i > 0) actions += '<button class="fr-link-btn" type="button" data-frimpactup="' + id + '" aria-label="' + H.escapeHtml("Move up: " + line) + '">Move up</button>';
+      if (i < list.length - 1) actions += '<button class="fr-link-btn" type="button" data-frimpactdown="' + id + '" aria-label="' + H.escapeHtml("Move down: " + line) + '">Move down</button>';
+      actions += '<button class="fr-link-btn" type="button" data-frimpactoff="' + id + '" aria-label="' + H.escapeHtml("Switch off " + line) + '">Switch off</button>';
+    } else {
+      actions += '<button class="fr-link-btn" type="button" data-frimpacton="' + id + '" aria-label="' + H.escapeHtml("Switch on " + line) + '">Switch on</button>';
+    }
+    return "<li>" + who + '<span class="fr-people-actions">' + actions + "</span></li>";
+  }
+
+  function frRenderImpact() {
+    var card = el("frImpact");
+    if (!card) return;
+    card.hidden = false;
+    var write = frImpactCanEdit();
+    el("frImpactAddForm").hidden = !write;
+    el("frImpactReadOnly").hidden = write;
+    var list = el("frImpactList");
+    var off = el("frImpactOff");
+    if (!frImpact) {
+      list.innerHTML = '<li class="fr-people-empty">' + (frImpactFailed ? "The examples could not load just now. Try again in a moment." : "Loading&hellip;") + "</li>";
+      off.hidden = true;
+      el("frImpactOffHead").hidden = true;
+      return;
+    }
+    var on = frImpact.filter(function (e) { return e.active; });
+    var gone = frImpact.filter(function (e) { return !e.active; });
+    list.innerHTML = on.length ? on.map(frImpactRow).join("") : '<li class="fr-people-empty">No examples are switched on, so the pages show none.</li>';
+    off.innerHTML = gone.map(frImpactRow).join("");
+    off.hidden = gone.length === 0;
+    el("frImpactOffHead").hidden = gone.length === 0;
+    if (frImpactEditing !== null) {
+      var box = el("frImpactEditWording");
+      var a = doc.activeElement;
+      if (box && a !== box && a !== el("frImpactEditAmount") && a !== el("frImpactEditGive")) box.focus();
+    }
+  }
+
+  // One change at a time. Answers true (saved), false (refused or failed) or null (one on its way).
+  function frImpactSend(method, path, body, saidOk) {
+    if (frImpactBusy) return Promise.resolve(null);
+    frImpactBusy = true;
+    frTeamSay("frImpactStatus", "Saving…", false);
+    return frSend(method, path, body)
+      .then(function (r) {
+        if (!r.ok) {
+          frTeamSay("frImpactStatus", frRefusal(r, "That did not save. Please try again."), true);
+          return false;
+        }
+        frTeamSay("frImpactStatus", saidOk, false);
+        if (r.body && Array.isArray(r.body.examples)) {
+          frImpact = r.body.examples;
+          frRenderImpact();
+          return true;
+        }
+        return frLoadImpact().then(function () { return true; });
+      })
+      .catch(function (err) {
+        if (!(err && err.message === "unauthorized")) frTeamSay("frImpactStatus", "That did not save. Please try again.", true);
+        return false;
+      })
+      .then(function (ok) {
+        frImpactBusy = false;
+        return ok;
+      });
+  }
+  function frImpactFocus(selector) {
+    var target = selector ? doc.querySelector(selector) : null;
+    if (!target) target = el("frImpactStatus");
+    if (target && target.focus) target.focus();
+  }
+
+  // What was typed, checked enough to send: the server checks the words say could.
+  function frImpactRead(amountText, wordingText) {
+    var amountPence = frImpactPence(amountText);
+    var wording = String(wordingText || "").replace(/\s+/g, " ").trim();
+    if (amountPence === null || amountPence < 100) return { error: "Type the amount in pounds first, like 25." };
+    if (!wording) return { error: "Type what a gift could do, like could help buy a pair of school shoes." };
+    return { amountPence: amountPence, wording: wording };
+  }
+
+  function frImpactAdd() {
+    var read = frImpactRead(el("frImpactAmount").value, el("frImpactWording").value);
+    if (read.error) return frTeamSay("frImpactStatus", read.error, true);
+    var body = { amountPence: read.amountPence, wording: read.wording, onGiveForm: !!el("frImpactGive").checked };
+    return frImpactSend("POST", "/api/admin/impact-examples", body, "Added. It shows on fundraiser, event and team pages now.").then(function (ok) {
+      if (ok === null) return;
+      if (ok) {
+        el("frImpactAmount").value = "";
+        el("frImpactWording").value = "";
+        el("frImpactGive").checked = true;
+        el("frImpactAmount").focus();
+      } else frImpactFocus(null);
+    });
+  }
+
+  function frImpactStartEdit(id) {
+    var e = frImpactFind(id);
+    if (!e) return;
+    frImpactEditing = id;
+    frImpactDraft = { amount: frPounds(e.amountPence), wording: e.wording, onGiveForm: !!e.onGiveForm };
+    frTeamSay("frImpactStatus", "", false);
+    frRenderImpact();
+  }
+  function frImpactCancelEdit() {
+    var id = frImpactEditing;
+    frImpactEditing = null;
+    frImpactDraft = null;
+    frRenderImpact();
+    frImpactFocus('[data-frimpactedit="' + id + '"]');
+  }
+  function frImpactSaveEdit() {
+    var id = frImpactEditing;
+    if (!frImpactFind(id)) return;
+    var read = frImpactRead(el("frImpactEditAmount").value, el("frImpactEditWording").value);
+    if (read.error) return frTeamSay("frImpactStatus", read.error, true);
+    var body = { amountPence: read.amountPence, wording: read.wording, onGiveForm: !!el("frImpactEditGive").checked };
+    return frImpactSend("PATCH", "/api/admin/impact-examples/" + id, body, "Saved. The pages say it now.").then(function (ok) {
+      if (ok === null) return;
+      if (ok) {
+        frImpactEditing = null;
+        frImpactDraft = null;
+        frRenderImpact();
+        frImpactFocus('[data-frimpactedit="' + id + '"]');
+      } else frImpactFocus(null);
+    });
+  }
+
+  function frImpactSetActive(id, active) {
+    var e = frImpactFind(id);
+    if (!e) return;
+    var line = H.formatPence(e.amountPence) + " " + e.wording;
+    if (!active && !window.confirm("Switch off “" + line + "”? The pages stop showing it, and you can switch it on again.")) return;
+    var said = active ? "Switched on. The pages show it now." : "Switched off. The pages no longer show it.";
+    return frImpactSend("PATCH", "/api/admin/impact-examples/" + id, { active: active }, said).then(function (ok) {
+      if (ok === null) return;
+      frImpactFocus(ok ? (active ? '[data-frimpactoff="' + id + '"]' : '[data-frimpacton="' + id + '"]') : null);
+    });
+  }
+
+  function frImpactMove(id, direction) {
+    var said = direction === "up" ? "Moved up." : "Moved down.";
+    return frImpactSend("POST", "/api/admin/impact-examples/" + id + "/move", { direction: direction }, said).then(function (ok) {
+      if (ok === null) return;
+      frImpactFocus(ok ? "[data-frimpact" + direction + '="' + id + '"]' : null);
+    });
+  }
+
+  function frImpactWire(view) {
+    view.addEventListener("click", function (e) {
+      var t = e.target;
+      if (!t || !t.closest) return;
+      if (t.closest("#frImpactAdd")) return frImpactAdd();
+      if (t.closest("[data-frimpactsave]")) return frImpactSaveEdit();
+      if (t.closest("[data-frimpactcancel]")) return frImpactCancelEdit();
+      var pick = function (name) {
+        var b = t.closest("[data-frimpact" + name + "]");
+        return b ? Number(b.getAttribute("data-frimpact" + name)) : null;
+      };
+      var id;
+      if ((id = pick("edit")) !== null) return frImpactStartEdit(id);
+      if ((id = pick("up")) !== null) return frImpactMove(id, "up");
+      if ((id = pick("down")) !== null) return frImpactMove(id, "down");
+      if ((id = pick("off")) !== null) return frImpactSetActive(id, false);
+      if ((id = pick("on")) !== null) return frImpactSetActive(id, true);
+    });
+    // What is typed in an edit is kept, so a redraw never loses it.
+    function keep(e) {
+      var t = e.target;
+      if (!t || !frImpactDraft) return;
+      if (t.id === "frImpactEditAmount") frImpactDraft.amount = t.value;
+      if (t.id === "frImpactEditWording") frImpactDraft.wording = t.value;
+      if (t.id === "frImpactEditGive") frImpactDraft.onGiveForm = !!t.checked;
+    }
+    view.addEventListener("input", keep);
+    view.addEventListener("change", keep);
+    // Enter adds or saves; Escape leaves an edit as it was.
+    view.addEventListener("keydown", function (e) {
+      var t = e.target;
+      if (!t || !t.id) return;
+      if (e.key === "Enter" && (t.id === "frImpactAmount" || t.id === "frImpactWording")) {
+        e.preventDefault();
+        frImpactAdd();
+      } else if ((t.id === "frImpactEditAmount" || t.id === "frImpactEditWording") && (e.key === "Enter" || e.key === "Escape")) {
+        e.preventDefault();
+        if (e.key === "Enter") frImpactSaveEdit();
+        else frImpactCancelEdit();
+      }
+    });
+  }
+
   // ---- boot: restore an in-tab session ----
   var claims = H.parseClaims(token());
   if (claims && typeof claims.exp === "number" && claims.exp > Date.now()) showApp(claims);
@@ -13201,11 +13543,15 @@
             '<button type="button" class="admin-link" data-cancel-booking="' + H.escapeHtml(t.reference) +
             '" data-transfer="1">Cancel</button>'
           : "");
-      return '<tr data-ref="' + H.escapeHtml(t.reference) + '"><td data-label="Reference">' + H.escapeHtml(t.reference) +
+      return '<tr data-ref="' + H.escapeHtml(t.reference) + '"' + ((t.buyerPhone || "").trim() ? "" : ' data-no-phone="1"') +
+        '><td data-label="Reference">' + H.escapeHtml(t.reference) +
         // TASK-487: made since this person last opened Festive Ball.
         rowNewPill("ball", t.createdAt) +
-        '</td><td data-label="Who">' + H.escapeHtml(t.buyerName) + "<br /><small>" + H.escapeHtml(t.buyerEmail) +
+        // One block, so the narrow card's flex cell keeps name, email, phone and company stacked.
+        '</td><td data-label="Who"><span class="ball-who">' + H.escapeHtml(t.buyerName) + "<br /><small>" + H.escapeHtml(t.buyerEmail) +
         "</small>" +
+        // Awaiting its transfer, so still going ahead: flagged if it has no phone number.
+        ballPhoneBits(t, true) +
         // TASK-486: the company it is invoiced to, and the invoice they were given.
         (t.company
           ? "<br /><small>" + H.escapeHtml(t.company) +
@@ -13214,7 +13560,7 @@
               : "") +
             "</small>"
           : "") +
-        '</td><td data-label="Amount">' + exactMoney(t.totalPence) + "<br /><small>" + what +
+        '</span></td><td data-label="Amount">' + exactMoney(t.totalPence) + "<br /><small>" + what +
         '</small></td><td data-label="Pay by">' + H.escapeHtml(shortDay(t.payBy)) +
         // TASK-485: past its date, for staff to decide on; and whether the reminder has gone.
         (t.overdue ? ' <span class="admin-pill is-new">Overdue</span>' : "") +
@@ -13234,10 +13580,12 @@
     var digits = /^[£\d.,\s]+$/.test(q) ? q.replace(/[^0-9]/g, "") : "";
     Array.prototype.forEach.call(document.querySelectorAll("#ballTransfers tbody tr"), function (tr) {
       var t = ballTransferRows.filter(function (r) { return r.reference === tr.getAttribute("data-ref"); })[0];
-      if (!t || !q) { tr.hidden = false; return; }
+      // Jaimie 2026-10-03: "Show only bookings with no phone number" covers this list too.
+      var phoneHidden = ballNoPhoneOnly() && !tr.hasAttribute("data-no-phone");
+      if (!t || !q) { tr.hidden = phoneHidden; return; }
       var text = (t.reference + " " + t.buyerName + " " + t.buyerEmail).toLowerCase();
       var byAmount = digits.length > 0 && String(t.totalPence).indexOf(digits) === 0;
-      tr.hidden = !(text.indexOf(q) !== -1 || byAmount);
+      tr.hidden = phoneHidden || !(text.indexOf(q) !== -1 || byAmount);
     });
   }
 
@@ -13276,6 +13624,9 @@
         ballStatus("ballAddStatus", "Give the buyer's email address: the bank details go there.");
         return;
       }
+      // Jaimie 2026-10-03: the buyer's phone number, for menu choices. Optional here: staff may not
+      // have it for a phone or email order, and the list flags the booking until someone adds it.
+      var buyerPhone = el("ballAddBuyerPhone") ? value("ballAddBuyerPhone") : "";
       // One booking takes up to 4 tables or 9 tickets, as on the ticket page.
       var kind = el("ballAddKind").value;
       var quantity = Math.floor(Number(el("ballAddQuantity").value)) || 1;
@@ -13303,6 +13654,7 @@
         donationPence: Math.max(0, Math.round((Number(value("ballAddDonation")) || 0) * 100)),
         termsAccepted: true,
       };
+      if (buyerPhone) body.buyerPhone = buyerPhone;
       if (invoicing) {
         body.invoice = {
           company: value("ballAddCompany"),
@@ -13426,6 +13778,7 @@
   }
 
   function onTransfersClick(e) {
+    if (onBookingPhoneClick(e)) return;
     if (onMarkPaidClick(e)) return;
     if (onPayByClick(e)) return;
     onCancelBookingClick(e);
@@ -13484,21 +13837,111 @@
       });
   }
 
+  // Jaimie 2026-10-03: the booker's phone number, which the ticket page now asks for so NBCC can
+  // contact them about menu choices. A booking still going ahead (paid, or awaiting its bank transfer)
+  // with none is flagged, because staff chase those by hand; nothing is sent automatically.
+  function ballStillOn(b) {
+    return b.status === "paid" || (b.status === "pending" && b.paymentMethod === "transfer");
+  }
+  function ballPhoneBits(b, stillOn) {
+    var phone = (b.buyerPhone || "").trim();
+    var out = phone
+      ? '<small><a href="tel:' + H.escapeHtml(phone.replace(/[^0-9+]/g, "")) + '">' + H.escapeHtml(phone) + "</a></small>"
+      : stillOn ? '<span class="admin-pill is-new">No phone number yet</span>' : "";
+    if (stillOn && canEdit("ball")) {
+      out += '<button type="button" class="admin-link" data-booking-phone="' + H.escapeHtml(b.reference) +
+        '" data-current="' + H.escapeHtml(phone) + '">' + (phone ? "Change phone" : "Add phone") + "</button>";
+    }
+    return out ? '<span class="ball-phone">' + out + "</span>" : "";
+  }
+
+  // "Show only bookings with no phone number", over the bookings table.
+  // Every element here is null-checked: a browser holding an admin.html from before the phone boxes
+  // existed must still get the rest of the Festive Ball screen.
+  function ballNoPhoneOnly() {
+    var only = el("ballNoPhoneOnly");
+    return !!(only && only.checked);
+  }
+  function filterBallNoPhone() {
+    var only = ballNoPhoneOnly();
+    Array.prototype.forEach.call(document.querySelectorAll("#ballBookings tbody tr"), function (tr) {
+      tr.hidden = only && !tr.hasAttribute("data-no-phone");
+    });
+    // The awaiting-transfer list, which has its own search as well.
+    filterBallTransfers();
+  }
+
+  // How many bookings still going ahead (paid, or awaiting a transfer) have no phone number, as the
+  // server counted them: every one, not only the rows on screen, and the same ones the pill marks.
+  // Hidden if it did not say.
+  function ballNoPhoneRender(n) {
+    var box = el("ballNoPhone");
+    if (!box) return;
+    if (typeof n !== "number") {
+      box.hidden = true;
+      return;
+    }
+    box.hidden = false;
+    var count = el("ballNoPhoneCount");
+    if (count) {
+      count.textContent = n === 0
+        ? "Every booking has a phone number."
+        : n + (n === 1 ? " booking has" : " bookings have") + " no phone number yet.";
+    }
+    ["ballNoPhoneHow", "ballNoPhoneOnlyLabel"].forEach(function (id) {
+      var node = el(id);
+      if (node) node.hidden = n === 0;
+    });
+    var only = el("ballNoPhoneOnly");
+    if (only && n === 0) only.checked = false;
+    filterBallNoPhone();
+  }
+
+  // Add or change the number on a booking. An empty box takes it away; Cancel changes nothing.
+  function onBookingPhoneClick(e) {
+    var btn = e.target && e.target.closest && e.target.closest("[data-booking-phone]");
+    if (!btn) return false;
+    var reference = btn.getAttribute("data-booking-phone");
+    var typed = window.prompt(
+      "Phone number for booking " + reference + "\n\nDigits and spaces, for example 07700 900123. Leave it empty to take the number away.",
+      btn.getAttribute("data-current") || "",
+    );
+    if (typed === null) return true;
+    btn.disabled = true;
+    authFetch("/api/admin/ball/bookings/" + encodeURIComponent(reference) + "/phone", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ phone: typed.trim() }),
+    })
+      .then(okJsonOrSaid)
+      .then(function () { loadBall(); })
+      .catch(function (err) {
+        btn.disabled = false;
+        if (err && err.message === "unauthorized") return;
+        window.alert((err && err.said) || "Could not save the phone number for " + reference + ". Nothing has been changed.");
+      });
+    return true;
+  }
+
   function ballBookingsTable(rows) {
     if (!rows.length) return '<p class="admin-empty">No bookings yet.</p>';
     var body = rows.map(function (b) {
       var what = b.kind === "table"
         ? b.quantity + (b.quantity === 1 ? " table" : " tables")
         : b.quantity + (b.quantity === 1 ? " ticket" : " tickets");
-      return "<tr><td>" + H.escapeHtml(b.reference) + rowNewPill("ball", b.status === "paid" ? b.paidAt : null) +
-        "</td><td>" + H.escapeHtml(b.buyerName) +
-        "<br /><small>" + H.escapeHtml(b.buyerEmail) + "</small></td><td>" + what +
-        '</td><td class="admin-num">' + H.formatPence(b.totalPence) +
-        '</td><td class="admin-num">' + (b.donationPence ? H.formatPence(b.donationPence) + (b.giftAid ? " (GA)" : "") : "—") +
-        "</td><td>" + H.escapeHtml(b.status) + "</td><td>" + (b.newsletterOptIn ? "Yes" : "—") +
-        "</td><td>" + cancelCell(b) + "</td></tr>";
+      var stillOn = ballStillOn(b);
+      var noPhone = stillOn && !(b.buyerPhone || "").trim();
+      // Labelled cells, so on a phone each booking is a card like the transfers above.
+      return "<tr" + (noPhone ? ' data-no-phone="1"' : "") + '><td data-label="Reference">' + H.escapeHtml(b.reference) +
+        rowNewPill("ball", b.status === "paid" ? b.paidAt : null) +
+        '</td><td data-label="Who"><span class="ball-who">' + H.escapeHtml(b.buyerName) +
+        "<br /><small>" + H.escapeHtml(b.buyerEmail) + "</small>" + ballPhoneBits(b, stillOn) + '</span></td><td data-label="Bought">' + what +
+        '</td><td class="admin-num" data-label="Paid">' + H.formatPence(b.totalPence) +
+        '</td><td class="admin-num" data-label="Donation">' + (b.donationPence ? H.formatPence(b.donationPence) + (b.giftAid ? " (GA)" : "") : "—") +
+        '</td><td data-label="Status">' + H.escapeHtml(b.status) + '</td><td data-label="Newsletter">' + (b.newsletterOptIn ? "Yes" : "—") +
+        '</td><td data-label="">' + cancelCell(b) + "</td></tr>";
     }).join("");
-    return '<table class="admin-table"><thead><tr><th>Reference</th><th>Who</th><th>Bought</th>' +
+    return '<table class="admin-table ball-bookings-table"><thead><tr><th>Reference</th><th>Who</th><th>Bought</th>' +
       "<th>Paid</th><th>Donation</th><th>Status</th><th>Newsletter</th><th></th></tr></thead><tbody>" +
       body + "</tbody></table>";
   }
@@ -13702,9 +14145,11 @@
               ballBookingsTable(d.abandonedRows || []) +
               "</details>"
             : "");
+        ballNoPhoneRender(d.noPhone);
       })
       .catch(function () {
         el("ballBookings").innerHTML = '<p class="admin-empty">Could not load bookings.</p>';
+        ballNoPhoneRender(null);
       });
     authFetch("/api/admin/ball/guest-progress")
       .then(okJson)
@@ -13775,12 +14220,14 @@
     wireAddTransferBooking();
     el("ballHolds").addEventListener("click", onReleaseHoldClick);
     el("ballBookings").addEventListener("click", function (e) {
+      if (onBookingPhoneClick(e)) return;
       if (onMarkPaidClick(e)) return;
       onCancelBookingClick(e);
     });
     // TASK-484: bank transfer.
     el("ballTransfers").addEventListener("click", onTransfersClick);
     el("ballTransferSearch").addEventListener("input", filterBallTransfers);
+    if (el("ballNoPhoneOnly")) el("ballNoPhoneOnly").addEventListener("change", filterBallNoPhone);
     el("ballTransferForm").addEventListener("submit", function (e) {
       e.preventDefault();
       if (!isAdmin()) return;

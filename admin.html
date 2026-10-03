@@ -1497,6 +1497,26 @@
                 <p class="ty-status" id="frCatsStatus" role="status" aria-live="polite" tabindex="-1"></p>
               </section>
 
+              <!-- What gifts could do: the shared "could" examples fundraiser, event and team pages show
+                   under the give amounts and the meter (src/impact/examples.ts). Everyone who can see
+                   Fundraising sees the list; only admins change it. app.js draws the lists; nothing
+                   is ever deleted, only switched off. -->
+              <section class="fr-card" id="frImpact" aria-labelledby="frImpactHead" hidden>
+                <h3 class="admin-subhead" id="frImpactHead">What gifts could do</h3>
+                <p class="fr-card-intro">Examples shown under the give amounts and under the meter on every fundraiser, event and team page, never on a page in memory of someone. Always start with could, and never promise (will buy, will pay for, buys): every gift goes where it's needed most, and each page says so. The £50 Red Bag and £40 uniform examples count what the meter could fill, so their words and amount are fixed; switch one off and its part of that line goes.</p>
+                <ul class="fr-people fr-impact" id="frImpactList"><li class="fr-people-empty">Loading&hellip;</li></ul>
+                <h4 class="fr-card-subhead" id="frImpactOffHead" hidden>Switched off</h4>
+                <ul class="fr-people fr-impact" id="frImpactOff" hidden></ul>
+                <p class="fr-field-hint" id="frImpactReadOnly" hidden>Only an admin can change these.</p>
+                <div class="fr-summary-add fr-impact-add" id="frImpactAddForm" hidden>
+                  <div class="fr-field fr-impact-amount"><label class="fx-call-label" for="frImpactAmount">Amount (£)</label><input class="fx-call-input" id="frImpactAmount" type="text" inputmode="decimal" maxlength="9" autocomplete="off" placeholder="25" /></div>
+                  <div class="fr-field"><label class="fx-call-label" for="frImpactWording">What it could do</label><input class="fx-call-input" id="frImpactWording" type="text" maxlength="160" autocomplete="off" placeholder="could help buy a pair of school shoes" /></div>
+                  <label class="fr-impact-give" for="frImpactGive"><input id="frImpactGive" type="checkbox" checked /> Show under the give amounts</label>
+                  <button class="admin-btn" type="button" id="frImpactAdd">Add the example</button>
+                </div>
+                <p class="ty-status" id="frImpactStatus" role="status" aria-live="polite" tabindex="-1"></p>
+              </section>
+
               <!-- TASK-515: the automatic emails to organisers. Every one can be read here, rendered,
                    before any is sent; only an admin can switch them on (they ship off). The preview
                    grows to the email's height; nothing scrolls inside it. -->
@@ -1504,7 +1524,7 @@
                 <h3 class="admin-subhead" id="frTouchHead">Automatic emails</h3>
                 <p class="fr-summary-state" id="frTouchState" aria-live="polite">Checking&hellip;</p>
                 <p class="fr-touch-due" id="frTouchDue"></p>
-                <p class="fr-card-intro">Friendly emails that go to an organiser by themselves, from the events inbox, at the right moments: their first gift, halfway, their target, a week before and a week after their date, when you mark them finished, and a year on. Each goes once at most, only to a public page raising money, never to anyone who has asked us to stop, and never to a page in memory of someone. Read every one here before switching them on.</p>
+                <p class="fr-card-intro">Friendly emails that go to an organiser by themselves, from the events inbox, at the right moments: their first gift, halfway, their target, a week before and a week after their date, when you mark them finished, and a year on. Each goes once at most, only to a public page raising money, never to anyone who has asked us to stop, and never to a page in memory of someone. Read every one here before switching them on. New wording only sends once it's approved here.</p>
                 <div class="fr-touch-switch">
                   <button class="admin-btn" type="button" id="frTouchSwitch" hidden>Loading&hellip;</button>
                   <p class="fr-field-hint" id="frTouchSwitchNote" hidden>Only an admin can switch the automatic emails on or off.</p>
@@ -1731,6 +1751,7 @@
                 <div class="ty-field"><label for="ballAddFirstName">First name</label><input id="ballAddFirstName" type="text" maxlength="60" /></div>
                 <div class="ty-field"><label for="ballAddSurname">Surname</label><input id="ballAddSurname" type="text" maxlength="60" /></div>
                 <div class="ty-field"><label for="ballAddEmail">Email</label><input id="ballAddEmail" type="email" maxlength="254" /></div>
+                <div class="ty-field"><label for="ballAddBuyerPhone">Phone number (optional)</label><input id="ballAddBuyerPhone" type="tel" inputmode="tel" maxlength="40" autocomplete="off" /></div>
                 <p class="ty-controls"><label class="ty-inline ball-add-check"><input id="ballAddInvoice" type="checkbox" /> <span>Their company needs an invoice (14 days to pay)</span></label></p>
                 <div id="ballAddInvoiceFields" hidden>
                   <div class="ty-field"><label for="ballAddCompany">Company name</label><input id="ballAddCompany" type="text" maxlength="120" /></div>
@@ -1757,6 +1778,12 @@
                 <a class="btn btn-ghost" id="ballCatering" href="#" download>Catering list for the venue (CSV)</a>
                 <a class="btn btn-ghost" id="ballBookingsCsv" href="#" download>Bookings (CSV)</a>
               </p>
+              <!-- Jaimie 2026-10-03: the ticket page asks for the booker's phone number, for menu choices.
+                   Bookings made before that have none; staff ring or email for it and add it here. -->
+              <div class="ball-no-phone" id="ballNoPhone" hidden>
+                <p class="admin-note"><b id="ballNoPhoneCount"></b> <span id="ballNoPhoneHow">Bookings made before the ticket page asked for one have none. Ask them by email, then press <b>Add phone</b> beside their booking.</span></p>
+                <p class="ty-controls" id="ballNoPhoneOnlyLabel"><label class="ty-inline ball-add-check"><input id="ballNoPhoneOnly" type="checkbox" /> <span>Show only bookings with no phone number</span></label></p>
+              </div>
               <div class="admin-table-wrap" id="ballBookings" aria-live="polite"><p class="admin-loading">Loading…</p></div>
               <h3 class="admin-subhead">Who has chosen</h3>
               <p class="admin-note">Counted against the guests who have been <b>named</b>, not the seats bought: you cannot pick a dinner for somebody whose name nobody has given you yet. That gap is the guest-details list above, and a different email fixes it.</p>

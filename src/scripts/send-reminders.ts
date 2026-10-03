@@ -146,7 +146,7 @@ if (require.main === module) {
         console.error(
           typeof touch.skipped === "string"
             ? `fundraising automatic emails: ${touch.skipped}`
-            : `fundraising automatic emails: considered=${touch.considered} sent=${touch.sent} skipped=${touch.skipped} failed=${touch.failed}`,
+            : `fundraising automatic emails: considered=${touch.considered} sent=${touch.sent} skipped=${touch.skipped} failed=${touch.failed} waiting=${touch.waiting}`,
         );
       } catch (err) {
         console.error("fundraising automatic emails failed:", err instanceof Error ? err.message : err);

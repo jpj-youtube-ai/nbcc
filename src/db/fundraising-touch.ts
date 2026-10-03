@@ -1,13 +1,14 @@
 import type { PoolClient } from "pg";
 import { pool } from "./pool";
 import { insertAudit } from "./donations";
-import { listAllFundraisers, type FundraiserSummary } from "./fundraisers";
+import { getFundraiser, listAllFundraisers, listFundraisersWhere, type FundraiserSummary } from "./fundraisers";
 import { londonToday } from "../events/model";
 import { promptCounts, type PromptCall, type PromptCounts, type PromptFacts, type PromptKey } from "../fundraising/call-prompts";
 import type { TouchFacts, TouchKind } from "../fundraising/touch-rules";
-import { withTeamTotals } from "../fundraising/teams";
+import { teamMeter, withTeamTotals } from "../fundraising/teams";
 
-// TASK-515: the SQL behind keeping in touch: the Automatic emails switch, which automatic email each
+// TASK-515: the SQL behind keeping in touch: the Automatic emails switch, which new wordings an admin
+// has approved (touch_wording_approvals), which automatic email each
 // fundraiser has had (fundraiser_touchpoints, once each), the calls about a smart call prompt (in
 // TASK-503's fundraiser_calls, which = 'prompt'), and the facts the pure rules read
 // (src/fundraising/touch-rules.ts and call-prompts.ts). This file only moves rows. Every change a
@@ -79,6 +80,71 @@ export async function setTouchEmailsOn(on: boolean, actor: string): Promise<Touc
   });
 }
 
+// --- signing off the new wording (Jaimie, 2026-10-03) ---------------------------------------------
+
+/** An admin's approval of one new wording (WORDING_KEYS in src/fundraising/touch-rules.ts). */
+export interface WordingApproval {
+  key: string;
+  approvedAt: string;
+  approvedBy: string;
+}
+
+const APPROVALS_SQL = "SELECT key, approved_at, approved_by FROM touch_wording_approvals";
+const toApproval = (row: Row): WordingApproval => ({
+  key: row.key as string,
+  approvedAt: iso(row.approved_at) as string,
+  approvedBy: row.approved_by as string,
+});
+
+export async function listWordingApprovals(): Promise<WordingApproval[]> {
+  const r = await pool.query(`${APPROVALS_SQL} ORDER BY key`);
+  return (r.rows as Row[]).map(toApproval);
+}
+
+/** The approved keys. Any failure reads as NONE approved, so no new wording is sent by mistake. */
+export async function approvedWordingKeys(): Promise<Set<string>> {
+  try {
+    return new Set((await listWordingApprovals()).map((a) => a.key));
+  } catch (err) {
+    console.error("fundraising automatic emails: could not read the approved wordings:", err instanceof Error ? err.message : err);
+    return new Set();
+  }
+}
+
+/** Approve one wording. One already approved keeps its first approval (and no second History row). */
+export async function approveWording(key: string, actor: string): Promise<WordingApproval> {
+  return inTransaction(async (client) => {
+    const r = await client.query(
+      `INSERT INTO touch_wording_approvals (key, approved_by) VALUES ($1, $2)
+       ON CONFLICT (key) DO NOTHING RETURNING key, approved_at, approved_by`,
+      [key, actor],
+    );
+    if (r.rows[0]) {
+      await insertAudit(client, { actor, action: "fundraising.touch_wording_approved", entity: "fundraising_settings", entityId: 1, data: { key } });
+      return toApproval(r.rows[0]);
+    }
+    return toApproval((await client.query(`${APPROVALS_SQL} WHERE key = $1`, [key])).rows[0]);
+  });
+}
+
+/** Withdraw one approval: that email stops going until it is approved again. False if it was not approved. */
+export async function withdrawWording(key: string, actor: string): Promise<boolean> {
+  return inTransaction(async (client) => {
+    const r = await client.query("DELETE FROM touch_wording_approvals WHERE key = $1 RETURNING key, approved_at, approved_by", [key]);
+    const row = r.rows[0];
+    if (!row) return false;
+    const was = toApproval(row);
+    await insertAudit(client, {
+      actor,
+      action: "fundraising.touch_wording_withdrawn",
+      entity: "fundraising_settings",
+      entityId: 1,
+      data: { key, approvedAt: was.approvedAt, approvedBy: was.approvedBy },
+    });
+    return true;
+  });
+}
+
 // --- once per fundraiser ---------------------------------------------------------------------------
 
 /**
@@ -108,6 +174,38 @@ export async function recordTouchSent(fundraiserId: number, kind: TouchKind, act
   } finally {
     client.release();
   }
+}
+
+// --- the thank you to catch up (review) ------------------------------------------------------------
+
+/**
+ * The thank you (17) at Mark finished was held back for sign off, or its send failed: mark it, so
+ * the daily run catches it up within a week. Never marked when the switches were off.
+ */
+export async function markFinishedPending(fundraiserId: number, reason: "held" | "failed"): Promise<void> {
+  await pool.query("UPDATE fundraisers SET touch_finished_pending = $2, touch_finished_pending_at = now() WHERE id = $1", [fundraiserId, reason]);
+}
+
+/** It went: nothing left to catch up. */
+export async function clearFinishedPending(fundraiserId: number): Promise<void> {
+  await pool.query("UPDATE fundraisers SET touch_finished_pending = NULL, touch_finished_pending_at = NULL WHERE id = $1", [fundraiserId]);
+}
+
+// --- one fundraiser, as the automatic emails see it ------------------------------------------------
+
+/**
+ * One fundraiser with the meter the automatic emails read: a team page's whole team total (its own
+ * and its current members', as withTeamTotals gives the daily run), everyone else their own. Mark
+ * finished and the admin's preview use it, so the wording (finished or its nothing raised version)
+ * and the amount agree with the daily run.
+ */
+export async function touchFundraiser(id: number): Promise<FundraiserSummary | null> {
+  const f = await getFundraiser(id);
+  if (!f || !f.isTeam) return f;
+  const members = (await listFundraisersWhere("f.team_id = $1", [id])).filter(
+    (m) => !m.teamLeftAt && (m.status === "approved" || m.status === "finished"),
+  );
+  return { ...f, meter: teamMeter(f.meter, members.map((m) => m.meter), f.targetPence) };
 }
 
 // --- calls about a prompt --------------------------------------------------------------------------
@@ -165,14 +263,16 @@ const FINISHED_SQL = `
 
 /** Every fundraiser, with what the rules need about each. */
 export async function readTouchState(): Promise<TouchCandidate[]> {
-  const [fundraisers, gifts, finished, sent, calls] = await Promise.all([
+  const [fundraisers, gifts, finished, sent, calls, pending] = await Promise.all([
     // Team pages: a team is judged on its whole total (its own and its members'), against its target.
     listAllFundraisers().then(withTeamTotals),
     pool.query(GIFTS_SQL),
     pool.query(FINISHED_SQL),
     pool.query("SELECT fundraiser_id, kind, sent_at FROM fundraiser_touchpoints ORDER BY sent_at, id"),
     pool.query("SELECT fundraiser_id, prompt, called_at, called_by, note FROM fundraiser_calls WHERE which = 'prompt' ORDER BY called_at, id"),
+    pool.query("SELECT id, touch_finished_pending FROM fundraisers WHERE touch_finished_pending IS NOT NULL"),
   ]);
+  const pendingBy = new Map<number, "held" | "failed">((pending.rows as Row[]).map((r) => [Number(r.id), r.touch_finished_pending as "held" | "failed"]));
   const giftsBy = new Map<number, Row>(gifts.rows.map((r: Row) => [Number(r.fundraiser_id), r]));
   // Team pages: a team's gifts are its own and its current members' (approved or finished, not taken
   // off) together, for first gift and gone quiet. Members keep their own.
@@ -205,7 +305,13 @@ export async function readTouchState(): Promise<TouchCandidate[]> {
     const last = g ? iso(g.last_at) : null;
     return {
       f,
-      touch: { firstOnlineGiftAt: g ? iso(g.first_at) : null, lastOnlineGiftAt: last, finishedAt: finishedBy.get(f.id) ?? null, sent: sentBy.get(f.id) ?? [] },
+      touch: {
+        firstOnlineGiftAt: g ? iso(g.first_at) : null,
+        lastOnlineGiftAt: last,
+        finishedAt: finishedBy.get(f.id) ?? null,
+        finishedPending: pendingBy.get(f.id) ?? null,
+        sent: sentBy.get(f.id) ?? [],
+      },
       prompt: { lastOnlineGiftAt: last, calls: callsBy.get(f.id) ?? [] },
     };
   });

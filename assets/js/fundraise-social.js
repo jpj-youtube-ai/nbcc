@@ -332,7 +332,8 @@
     if (L.caption) {
       ctx.fillStyle = T.soft;
       ctx.font = "400 30px " + BODY;
-      ctx.fillText(data.linkKind === "page" ? T.caption : "Find out more", cx, pillY - 26);
+      // An event's page is for its details as well as giving (giving there is never a ticket).
+      ctx.fillText(data.linkKind === "page" ? (data.event ? "Find out more and give" : T.caption) : "Find out more", cx, pillY - 26);
     }
     drawPill(ctx, data, cx, pillY, W - 160, L.pillText);
     drawStatement(ctx, stmt, cx, H - L.stmtFoot);

@@ -8,6 +8,12 @@ import {
   TOUCH_KINDS,
   TOUCH_LABELS,
   NEW_WORDING_KINDS,
+  WORDING_KEYS,
+  FINISHED_CATCH_UP_DAYS,
+  isSignedOff,
+  pickTouch,
+  wordingKey,
+  wordingKeysOf,
   type TouchFacts,
 } from "../../src/fundraising/touch-rules";
 import { londonToday } from "../../src/events/model";
@@ -60,6 +66,65 @@ describe("the automatic emails", () => {
     expect(isNewWording("year_on", 61200)).toBe(false);
     expect(isNewWording("halfway", 0)).toBe(false);
     expect(isNewWording("target", 50000)).toBe(true);
+  });
+});
+
+describe("signing off the new wording (Jaimie, 2026-10-03)", () => {
+  it("names each version of an email that needs signing off: the four new wordings and the three nothing raised versions", () => {
+    expect([...WORDING_KEYS]).toEqual(["target", "finished", "need_a_hand", "on_track", "week_after_zero", "finished_zero", "year_on_zero"]);
+  });
+
+  it("gives the version an email goes as, with this much raised", () => {
+    expect(wordingKey("target", 50000)).toBe("target");
+    expect(wordingKey("need_a_hand", 0)).toBe("need_a_hand");
+    expect(wordingKey("finished", 61200)).toBe("finished");
+    // With nothing raised, 16, 17 and 18 read differently: that version is its own sign off.
+    expect(wordingKey("finished", 0)).toBe("finished_zero");
+    expect(wordingKey("week_after", 0)).toBe("week_after_zero");
+    expect(wordingKey("year_on", 0)).toBe("year_on_zero");
+    // The wording that was already approved needs nothing more.
+    expect(wordingKey("week_after", 54000)).toBeNull();
+    expect(wordingKey("halfway", 0)).toBeNull();
+    expect(wordingKey("first_gift", 100)).toBeNull();
+  });
+
+  it("lists every version of one email that needs signing off", () => {
+    expect(wordingKeysOf("finished")).toEqual(["finished", "finished_zero"]);
+    expect(wordingKeysOf("week_after")).toEqual(["week_after_zero"]);
+    expect(wordingKeysOf("target")).toEqual(["target"]);
+    expect(wordingKeysOf("halfway")).toEqual([]);
+  });
+
+  it("is signed off only when its version is approved, or it needs no sign off", () => {
+    const approved = new Set(["target", "finished"]);
+    expect(isSignedOff("target", 50000, approved)).toBe(true);
+    expect(isSignedOff("on_track", 20000, approved)).toBe(false);
+    expect(isSignedOff("finished", 61200, approved)).toBe(true);
+    // Approving the usual finished email never approves the version with nothing raised.
+    expect(isSignedOff("finished", 0, approved)).toBe(false);
+    expect(isSignedOff("halfway", 30000, new Set())).toBe(true);
+    expect(isSignedOff("week_after", 0, new Set())).toBe(false);
+  });
+
+  it("picks the first approved email due, and says which it held back", () => {
+    // A week before (old wording) and halfway are both due: with nothing approved, a week before goes.
+    expect(pickTouch(fr({}, 30000), facts(), "2026-11-29", new Set())).toEqual({ kind: "week_before", held: [] });
+    // Target (new) is due ahead of nothing else: held.
+    expect(pickTouch(fr({ eventDate: null }, 50000), facts(), "2026-11-29", new Set())).toEqual({ kind: null, held: ["target"] });
+    // Need a hand is due and waiting: nothing goes until it is approved.
+    const behind = fr({ eventDate: "2026-12-06" }, 1000);
+    expect(next(behind, "2026-11-25")).toBe("need_a_hand");
+    expect(pickTouch(behind, facts(), "2026-11-25", new Set())).toEqual({ kind: null, held: ["need_a_hand"] });
+    expect(pickTouch(behind, facts(), "2026-11-25", new Set(["need_a_hand"]))).toEqual({ kind: "need_a_hand", held: [] });
+  });
+
+  it("while the thank you is held, sends nothing else to that page: never a year on in its place", () => {
+    // Its date a year ago, finished two days ago with the thank you held: both due, the thank you first.
+    const f = fr({ status: "finished", eventDate: "2025-11-27" }, 50000);
+    const x = facts({ finishedAt: "2026-11-27T10:00:00Z", finishedPending: "held" });
+    expect(dueTouches(f, x, "2026-11-29")).toEqual(["finished", "year_on"]);
+    expect(pickTouch(f, x, "2026-11-29", new Set())).toEqual({ kind: null, held: ["finished"] });
+    expect(pickTouch(f, x, "2026-11-29", new Set(["finished"]))).toEqual({ kind: "finished", held: [] });
   });
 });
 
@@ -229,9 +294,30 @@ describe("one at a time", () => {
     expect(next(fr({}, 30000), "2026-11-29")).toBe("week_before");
   });
 
-  it("never sends the finished email from the daily run: that goes when staff mark it finished", () => {
-    for (const day of ["2026-12-07", "2026-12-20", "2027-01-10"]) {
-      expect(dueTouches(fr({ status: "finished" }, 50000), facts({ finishedAt: "2026-12-07T10:00:00Z" }), day)).not.toContain("finished");
-    }
+  it("catches up a held or failed thank you in the daily run for a week after it was finished, never after", () => {
+    // It goes when staff press Mark finished. Only one held back there for sign off, or whose send
+    // failed there, can still go from the daily run: for FINISHED_CATCH_UP_DAYS after, then never.
+    expect(FINISHED_CATCH_UP_DAYS).toBe(7);
+    const f = fr({ status: "finished" }, 50000);
+    const at = { finishedAt: "2026-12-07T10:00:00Z", finishedPending: "held" as const };
+    expect(dueTouches(f, facts({ ...at, finishedPending: "failed" }), "2026-12-08")[0]).toBe("finished");
+    for (const day of ["2026-12-08", "2026-12-14"]) expect(dueTouches(f, facts(at), day)[0]).toBe("finished");
+    for (const day of ["2026-12-15", "2027-01-10"]) expect(dueTouches(f, facts(at), day)).not.toContain("finished");
+    // Never twice, never for one not finished, and never with no record of when it was finished.
+    expect(dueTouches(f, facts({ ...at, sent: [sentOn("finished", "2026-12-07T10:00:01Z")] }), "2026-12-09")).not.toContain("finished");
+    expect(dueTouches(fr({ status: "approved" }, 50000), facts(at), "2026-12-08")).not.toContain("finished");
+    expect(dueTouches(f, facts(), "2026-12-08")).not.toContain("finished");
+  });
+
+  it("never catches up a thank you that was not held or failed: finished while automatic emails were off", () => {
+    const f = fr({ status: "finished" }, 50000);
+    expect(dueTouches(f, facts({ finishedAt: "2026-12-07T10:00:00Z" }), "2026-12-08")).not.toContain("finished");
+    expect(dueTouches(f, facts({ finishedAt: "2026-12-07T10:00:00Z", finishedPending: null }), "2026-12-08")).not.toContain("finished");
+  });
+
+  it("never catches up the thank you for an in memory page, or one not public", () => {
+    const x = facts({ finishedAt: "2026-12-07T10:00:00Z", finishedPending: "held" });
+    expect(dueTouches(fr({ status: "finished" }, 50000), x, "2026-12-08", { isQuiet: () => true })).toEqual([]);
+    expect(dueTouches(fr({ status: "finished", public: false }, 50000), x, "2026-12-08")).toEqual([]);
   });
 });

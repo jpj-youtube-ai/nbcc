@@ -6,12 +6,23 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 // the rules read. Every name and address is invented.
 
 const { query, connect } = vi.hoisted(() => ({ query: vi.fn(), connect: vi.fn() }));
-const { listAllFundraisers } = vi.hoisted(() => ({ listAllFundraisers: vi.fn() }));
+const { listAllFundraisers, getFundraiser, listFundraisersWhere } = vi.hoisted(() => ({
+  listAllFundraisers: vi.fn(),
+  getFundraiser: vi.fn(),
+  listFundraisersWhere: vi.fn(),
+}));
 vi.mock("../../src/db/pool", () => ({ pool: { query, connect } }));
 vi.mock("../../src/config", () => ({ config: { NODE_ENV: "test" } }));
-vi.mock("../../src/db/fundraisers", () => ({ listAllFundraisers }));
+vi.mock("../../src/db/fundraisers", () => ({ listAllFundraisers, getFundraiser, listFundraisersWhere }));
 
 import {
+  clearFinishedPending,
+  markFinishedPending,
+  touchFundraiser,
+  approveWording,
+  approvedWordingKeys,
+  listWordingApprovals,
+  withdrawWording,
   claimTouch,
   getTouchSettings,
   readTouchState,
@@ -43,6 +54,8 @@ beforeEach(() => {
   query.mockReset().mockResolvedValue({ rows: [] });
   connect.mockReset();
   listAllFundraisers.mockReset().mockResolvedValue([]);
+  getFundraiser.mockReset();
+  listFundraisersWhere.mockReset().mockResolvedValue([]);
 });
 
 describe("the Automatic emails switch", () => {
@@ -132,6 +145,7 @@ describe("the facts the rules read", () => {
         return { rows: [{ fundraiser_id: 9, first_at: new Date("2026-10-19T21:00:00Z"), last_at: new Date("2026-11-02T08:00:00Z") }] };
       }
       if (/fundraiser\.finished/.test(sql)) return { rows: [{ fundraiser_id: 10, finished_at: new Date("2026-12-07T10:00:00Z") }] };
+      if (/touch_finished_pending IS NOT NULL/.test(sql)) return { rows: [{ id: 10, touch_finished_pending: "held" }] };
       if (/FROM fundraiser_touchpoints/.test(sql)) return { rows: [{ fundraiser_id: 9, kind: "first_gift", sent_at: new Date("2026-10-20T07:00:00Z") }] };
       if (/FROM fundraiser_calls/.test(sql)) {
         return { rows: [{ fundraiser_id: 10, prompt: "tin", called_at: new Date("2026-11-01T10:00:00Z"), called_by: "fern@example.com", note: null }] };
@@ -151,13 +165,14 @@ describe("the facts the rules read", () => {
           firstOnlineGiftAt: "2026-10-19T21:00:00.000Z",
           lastOnlineGiftAt: "2026-11-02T08:00:00.000Z",
           finishedAt: null,
+          finishedPending: null,
           sent: [{ kind: "first_gift", sentAt: "2026-10-20T07:00:00.000Z" }],
         },
         prompt: { lastOnlineGiftAt: "2026-11-02T08:00:00.000Z", calls: [] },
       },
       {
         f: { id: 10, title: "Jo's Quiz" },
-        touch: { firstOnlineGiftAt: null, lastOnlineGiftAt: null, finishedAt: "2026-12-07T10:00:00.000Z", sent: [] },
+        touch: { firstOnlineGiftAt: null, lastOnlineGiftAt: null, finishedAt: "2026-12-07T10:00:00.000Z", finishedPending: "held", sent: [] },
         prompt: {
           lastOnlineGiftAt: null,
           calls: [{ prompt: "tin", calledAt: "2026-11-01T10:00:00.000Z", calledBy: "fern@example.com", note: null }],
@@ -207,5 +222,105 @@ describe("a team's gifts, for first gift and gone quiet (review)", () => {
     expect(team.touch.lastOnlineGiftAt).toBe("2026-10-20T10:00:00.000Z");
     expect(team.prompt.lastOnlineGiftAt).toBe("2026-10-20T10:00:00.000Z");
     expect(state.find((s) => s.f.id === 41)!.touch.firstOnlineGiftAt).toBe("2026-10-10T10:00:00.000Z");
+  });
+});
+
+describe("signing off the new wording (Jaimie, 2026-10-03)", () => {
+  it("lists the approvals, with who and when", async () => {
+    query.mockResolvedValueOnce({ rows: [{ key: "target", approved_at: new Date("2026-10-03T11:00:00Z"), approved_by: "Jaimie" }] });
+    expect(await listWordingApprovals()).toEqual([{ key: "target", approvedAt: "2026-10-03T11:00:00.000Z", approvedBy: "Jaimie" }]);
+    expect(query.mock.calls[0][0]).toMatch(/FROM touch_wording_approvals/);
+  });
+
+  it("reads the approved keys, and none when they cannot be read, so no new wording is sent by mistake", async () => {
+    query.mockResolvedValueOnce({ rows: [{ key: "target", approved_at: new Date(), approved_by: "Jaimie" }, { key: "on_track", approved_at: new Date(), approved_by: "Jaimie" }] });
+    expect([...(await approvedWordingKeys())].sort()).toEqual(["on_track", "target"]);
+    query.mockRejectedValueOnce(new Error("connection lost"));
+    vi.spyOn(console, "error").mockImplementation(() => undefined);
+    expect((await approvedWordingKeys()).size).toBe(0);
+  });
+
+  it("approves a wording with who did it, and a History row, in one transaction", async () => {
+    const calls = useClient((sql) =>
+      /INSERT INTO touch_wording_approvals/.test(sql) ? { rows: [{ key: "finished", approved_at: new Date("2026-10-04T09:00:00Z"), approved_by: "admin:fern@example.com" }] } : undefined,
+    );
+    const a = await approveWording("finished", "admin:fern@example.com");
+    expect(a).toEqual({ key: "finished", approvedAt: "2026-10-04T09:00:00.000Z", approvedBy: "admin:fern@example.com" });
+    const write = sqlIn(calls, /INSERT INTO touch_wording_approvals/)!;
+    expect(write[0]).toMatch(/ON CONFLICT \(key\) DO NOTHING/);
+    expect(write[1]).toEqual(["finished", "admin:fern@example.com"]);
+    expect(audits(calls)[0]).toEqual(["admin:fern@example.com", "fundraising.touch_wording_approved", "fundraising_settings", 1, { key: "finished" }]);
+    expect(calls.map((c) => c[0])).toContain("COMMIT");
+  });
+
+  it("approving one already approved keeps the first approval, and writes no second History row", async () => {
+    const calls = useClient((sql) =>
+      /SELECT key, approved_at/.test(sql) ? { rows: [{ key: "target", approved_at: new Date("2026-10-03T11:00:00Z"), approved_by: "Jaimie" }] } : undefined,
+    );
+    const a = await approveWording("target", "admin:fern@example.com");
+    expect(a).toEqual({ key: "target", approvedAt: "2026-10-03T11:00:00.000Z", approvedBy: "Jaimie" });
+    expect(audits(calls)).toEqual([]);
+  });
+
+  it("withdraws an approval with a History row saying whose approval it was", async () => {
+    const calls = useClient((sql) =>
+      /DELETE FROM touch_wording_approvals/.test(sql) ? { rows: [{ key: "on_track", approved_at: new Date("2026-10-03T11:00:00Z"), approved_by: "Jaimie" }] } : undefined,
+    );
+    expect(await withdrawWording("on_track", "admin:fern@example.com")).toBe(true);
+    expect(sqlIn(calls, /DELETE FROM touch_wording_approvals/)![1]).toEqual(["on_track"]);
+    expect(audits(calls)[0]).toEqual([
+      "admin:fern@example.com",
+      "fundraising.touch_wording_withdrawn",
+      "fundraising_settings",
+      1,
+      { key: "on_track", approvedAt: "2026-10-03T11:00:00.000Z", approvedBy: "Jaimie" },
+    ]);
+  });
+
+  it("withdrawing one not approved changes nothing and writes no History row", async () => {
+    const calls = useClient(() => undefined);
+    expect(await withdrawWording("finished_zero", "admin:fern@example.com")).toBe(false);
+    expect(audits(calls)).toEqual([]);
+  });
+});
+
+describe("the thank you to catch up (review)", () => {
+  it("marks one held for sign off, or whose send failed, with when", async () => {
+    await markFinishedPending(9, "held");
+    const [sql, params] = query.mock.calls[0];
+    expect(sql).toMatch(/UPDATE fundraisers SET touch_finished_pending = \$2, touch_finished_pending_at = now\(\) WHERE id = \$1/);
+    expect(params).toEqual([9, "held"]);
+  });
+
+  it("clears the mark once it has gone", async () => {
+    await clearFinishedPending(9);
+    const [sql, params] = query.mock.calls[0];
+    expect(sql).toMatch(/UPDATE fundraisers SET touch_finished_pending = NULL, touch_finished_pending_at = NULL WHERE id = \$1/);
+    expect(params).toEqual([9]);
+  });
+});
+
+describe("one fundraiser, as the automatic emails see it (review: team pages)", () => {
+  const m = (raised: number, target: number | null) => teamMeterOf({ onlinePence: raised, cashPence: 0, targetPence: target });
+
+  it("gives a team page the whole team's total, as the daily run does: members £500, the team page £0", async () => {
+    getFundraiser.mockResolvedValue({ id: 40, status: "finished", isTeam: true, targetPence: 100000, meter: m(0, 100000) });
+    listFundraisersWhere.mockResolvedValue([
+      { id: 41, status: "approved", teamId: 40, targetPence: 30000, meter: m(30000, 30000) },
+      { id: 42, status: "finished", teamId: 40, targetPence: 30000, meter: m(20000, 30000) },
+      { id: 43, status: "approved", teamId: 40, teamLeftAt: "2026-10-01T00:00:00Z", targetPence: 30000, meter: m(9900, 30000) },
+      { id: 44, status: "new", teamId: 40, targetPence: 30000, meter: m(7700, 30000) },
+    ]);
+    const f = await touchFundraiser(40);
+    expect(f!.meter).toMatchObject({ raisedPence: 50000, targetPence: 100000 });
+    expect(listFundraisersWhere).toHaveBeenCalledWith("f.team_id = $1", [40]);
+  });
+
+  it("gives everyone else their own, and null for one not there", async () => {
+    getFundraiser.mockResolvedValue({ id: 41, status: "approved", teamId: 40, targetPence: 30000, meter: m(30000, 30000) });
+    expect((await touchFundraiser(41))!.meter.raisedPence).toBe(30000);
+    expect(listFundraisersWhere).not.toHaveBeenCalled();
+    getFundraiser.mockResolvedValue(null);
+    expect(await touchFundraiser(99)).toBeNull();
   });
 });

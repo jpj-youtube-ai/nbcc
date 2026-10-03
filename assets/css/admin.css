@@ -1824,6 +1824,44 @@ textarea.fx-call-input{min-height:88px;line-height:1.5;resize:vertical;field-siz
   .ball-transfer-actions .admin-link{min-height:44px}
 }
 
+/* Jaimie 2026-10-03: the booker's phone number, or the "No phone number yet" flag, under their name
+   and email, with Add phone / Change phone beside it. One block, so a flex cell cannot set the
+   name, email and phone side by side; a long address wraps rather than pushing the card wider. */
+.ball-who{display:block;min-width:0;overflow-wrap:anywhere}
+.ball-phone{display:flex;flex-wrap:wrap;align-items:center;gap:2px 12px;margin-top:4px}
+.ball-phone .admin-link{white-space:nowrap}
+.ball-no-phone .admin-note{margin-bottom:6px}
+
+/* The bookings table: the Who column gets the room the phone line needs, and Cancel sits on one line. */
+.ball-bookings-table th:nth-child(1),.ball-bookings-table td:nth-child(1){width:13%}  /* Reference */
+.ball-bookings-table th:nth-child(2),.ball-bookings-table td:nth-child(2){width:21%}  /* Who */
+.ball-bookings-table th:nth-child(3),.ball-bookings-table td:nth-child(3){width:9%}   /* Bought */
+.ball-bookings-table th:nth-child(4),.ball-bookings-table td:nth-child(4){width:9%}   /* Paid */
+.ball-bookings-table th:nth-child(5),.ball-bookings-table td:nth-child(5){width:10%}  /* Donation */
+.ball-bookings-table th:nth-child(6),.ball-bookings-table td:nth-child(6){width:11%}  /* Status */
+.ball-bookings-table th:nth-child(7),.ball-bookings-table td:nth-child(7){width:11%}  /* Newsletter */
+.ball-bookings-table th:nth-child(8),.ball-bookings-table td:nth-child(8){width:16%}  /* Cancel */
+.ball-bookings-table [data-cancel-booking]{white-space:nowrap}
+/* No nowrap on a cell: with table-layout:fixed it would paint over its neighbour
+   (admin-no-sideways-scroll.test.ts). Instead Status and Paid take width from Who, so "cancelled"
+   and the amount stay whole, and below the width that needs the list is cards (next rule). */
+
+/* Narrower than eight whole columns can sit in (1000px: a laptop with the side menu open), each
+   booking is a labelled card, as the transfers above are on a phone. */
+#ballBookings{container:bblist / inline-size}
+@container bblist (max-width:999px){
+  .ball-bookings-table,.ball-bookings-table tbody{display:block}
+  .ball-bookings-table thead{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+  .ball-bookings-table tr{display:flex;flex-direction:column;border-bottom:1px solid var(--line);padding:10px 0}
+  .ball-bookings-table tr[hidden]{display:none}
+  .ball-bookings-table tr:last-child{border-bottom:0}
+  .ball-bookings-table td:nth-child(n){width:auto}
+  .ball-bookings-table td{border-bottom:0;padding:3px 14px;display:flex;gap:10px;align-items:baseline;text-align:left}
+  .ball-bookings-table td::before{content:attr(data-label);flex:0 0 5.5rem;font-size:.78rem;color:var(--slate-soft)}
+  .ball-bookings-table td:last-child{padding-top:8px}
+  .ball-bookings-table td:last-child::before{content:none}
+}
+
 
 @media (max-width:1000px){
   .monthly-table,.monthly-table tbody,.monthly-table tr,.monthly-table td{display:block;width:auto}
@@ -2599,6 +2637,21 @@ textarea.fx-call-input{min-height:88px;line-height:1.5;resize:vertical;field-siz
 #view-fundraising .fr-cats li.fr-cat-editing .fr-people-who { display: flex; flex-direction: column; gap: 4px; }
 #view-fundraising .fr-cats li.fr-cat-editing .fx-call-input { width: 100%; max-width: 24rem; min-height: 44px; }
 #view-fundraising .fr-cats li.fr-cat-editing .fr-people-actions { align-items: center; gap: 8px 14px; }
+/* What gifts could do: each example's line, where it shows under it; an edit opens in its row; on a
+   phone the buttons go under the boxes. Words wrap, nothing scrolls. */
+#view-fundraising .fr-impact .fr-people-who > .fr-impact-line { display: block; margin: 0; color: var(--slate); }
+#view-fundraising .fr-impact .fr-people-who > .fr-impact-where { display: block; margin: 2px 0 0; font-size: 0.82rem; }
+#view-fundraising .fr-impact .fr-people-who > .fr-impact-fixed { display: block; margin: 2px 0 0; font-size: 0.82rem; font-style: italic; }
+#view-fundraising .fr-impact .fr-people-actions { align-items: center; }
+#view-fundraising .fr-impact li.fr-impact-editing { align-items: flex-end; gap: 8px 16px; }
+#view-fundraising .fr-impact li.fr-impact-editing .fr-people-who { display: flex; flex-direction: column; gap: 4px; }
+#view-fundraising .fr-impact li.fr-impact-editing .fx-call-input { width: 100%; max-width: 32rem; min-height: 44px; }
+#view-fundraising .fr-impact li.fr-impact-editing #frImpactEditAmount { max-width: 8rem; }
+#view-fundraising .fr-impact li.fr-impact-editing .fr-people-actions { gap: 8px 14px; }
+#view-fundraising .fr-impact-add .fr-impact-amount { flex: 0 1 8rem; }
+#view-fundraising .fr-impact-add .fr-field:not(.fr-impact-amount) { flex: 1 1 18rem; }
+#view-fundraising .fr-impact-give { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; font-size: 0.92rem; color: var(--slate); cursor: pointer; }
+#view-fundraising .fr-impact-give input { width: 18px; height: 18px; margin: 0; accent-color: var(--holly); }
 /* On a fundraiser: the finishing prompt and the calls. */
 #view-fundraising .fr-offlist-done { background: var(--cream); color: var(--slate-soft); box-shadow: inset 0 0 0 1px var(--line); }
 /* An invite whose link has expired (60 days after it was last sent): Resend sends a new one. */
@@ -2705,6 +2758,10 @@ textarea.fx-call-input{min-height:88px;line-height:1.5;resize:vertical;field-siz
 #view-fundraising .fr-touch-meta p { margin: 0 0 6px; max-width: 72ch; overflow-wrap: anywhere; }
 #view-fundraising .fr-touch-when { color: var(--slate-soft); font-size: 0.92rem; }
 #view-fundraising .fr-touch-signoff { display: inline-block; padding: 4px 12px; border-radius: 999px; background: color-mix(in srgb, var(--crimson) 12%, var(--cream)); color: var(--crimson); font-weight: 700; font-size: 0.88rem; }
+/* Signing off the new wording (Jaimie, 2026-10-03): approved reads calm, waiting reads crimson. */
+#view-fundraising .fr-touch-waiting { text-transform: none; letter-spacing: 0; color: var(--crimson); }
+#view-fundraising .fr-touch-approved { display: inline-block; padding: 4px 12px; border-radius: 999px; background: color-mix(in srgb, var(--green, #2e7d32) 12%, var(--cream)); color: var(--slate); font-weight: 700; font-size: 0.88rem; }
+#view-fundraising .fr-touch-meta .fx-call-row { margin: 2px 0 10px; }
 #view-fundraising .fr-touch-subject { font-size: 0.98rem; }
 #view-fundraising .fr-touch-subject span { display: inline-block; margin-right: 6px; font-size: 0.72rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--slate-soft); }
 #view-fundraising .fr-touch-preview-wrap { max-width: 660px; margin: 8px 0 4px; border: 1px solid var(--line); border-radius: 12px; overflow: hidden; background: var(--maroon); }

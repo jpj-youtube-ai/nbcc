@@ -27,9 +27,19 @@ async function setTouch(on) {
   await pool.query("UPDATE fundraising_settings SET touch_emails_on = $1 WHERE id = 1", [on]);
 }
 
+// The wordings approved as the migration seeds them (Jaimie, 2026-10-03): put back after every
+// scenario, so one that approves or withdraws a wording leaves nothing behind.
+const SEEDED = ["target", "need_a_hand", "on_track"];
+const ALL_WORDINGS = ["target", "finished", "need_a_hand", "on_track", "week_after_zero", "finished_zero", "year_on_zero"];
+
 async function clean() {
   await setTouch(false);
   await pool.query("DELETE FROM email_opt_outs WHERE email LIKE $1", [MINE]);
+  await pool.query("DELETE FROM touch_wording_approvals WHERE NOT (key = ANY($1))", [SEEDED]);
+  await pool.query(
+    "INSERT INTO touch_wording_approvals (key, approved_by) SELECT k, 'Jaimie' FROM unnest($1::text[]) AS k ON CONFLICT (key) DO NOTHING",
+    [SEEDED],
+  );
 }
 
 Before({ tags: "@fundraising-touch" }, clean);
@@ -101,6 +111,17 @@ Given("an approved fundraiser {string} a week from today, organised by {string}"
   );
 });
 
+Given("every automatic email wording is approved", async function () {
+  await pool.query(
+    "INSERT INTO touch_wording_approvals (key, approved_by) SELECT k, 'bdd' FROM unnest($1::text[]) AS k ON CONFLICT (key) DO NOTHING",
+    [ALL_WORDINGS],
+  );
+});
+
+Given("the thank you email's wording is waiting for sign off", async function () {
+  await pool.query("DELETE FROM touch_wording_approvals WHERE key IN ('finished', 'finished_zero')");
+});
+
 Given("{string} has asked us to stop all emails", async function (email) {
   await pool.query("INSERT INTO email_opt_outs (email, kind, source) VALUES (lower($1), 'all', 'preferences')", [email]);
 });
@@ -124,6 +145,10 @@ When("the daily automatic emails run", async function () {
   this.touchRun = await runTouchEmails(new Date());
 });
 
+When("{string} approves the {string} automatic email wording", async function (email, key) {
+  await adminCall(this, email, "POST", `/api/admin/fundraising/touch/approvals/${key}`);
+});
+
 When("{string} marks {string} finished", async function (email, title) {
   await adminCall(this, email, "POST", `/api/admin/fundraisers/${await fundraiserId(title)}/finish`);
 });
@@ -137,6 +162,16 @@ When("{string} records a call about {string} for {string}", async function (emai
 Then("the automatic emails are said to be off", function () {
   assert.equal(this.frBody.settings.on, false);
   assert.equal(this.frBody.kinds.length, 9);
+});
+
+Then("the {string} automatic email wording is approved by {string}", async function (key, email) {
+  const r = await pool.query("SELECT approved_by FROM touch_wording_approvals WHERE key = $1", [key]);
+  assert.equal(r.rows[0] && r.rows[0].approved_by, `admin:${email}`);
+  const a = await pool.query(
+    "SELECT 1 FROM audit_log WHERE action = 'fundraising.touch_wording_approved' AND actor = $1 AND data->>'key' = $2 AND created_at > now() - interval '10 minutes'",
+    [`admin:${email}`, key],
+  );
+  assert.equal(a.rows.length, 1, "no History row for the approval");
 });
 
 Then("the automatic emails are switched on in the database", async function () {

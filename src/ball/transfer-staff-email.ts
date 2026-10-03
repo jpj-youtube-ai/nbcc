@@ -32,7 +32,7 @@ function factRow(label: string, value: string): string {
 const addedByLine = (who: string) => `Added by ${who} in the admin, for a phone or email order.`;
 
 export function buildTransferStaffEmail(
-  booking: TransferEmailBooking & { buyerEmail: string },
+  booking: TransferEmailBooking & { buyerEmail: string; buyerPhone?: string | null },
   o: TransferStaffEmailOptions,
 ): TransferEmail {
   const what = describe(booking);
@@ -40,12 +40,16 @@ export function buildTransferStaffEmail(
   const until = longDate(o.payBy);
   const name = escapeHtml(booking.buyerName);
   const adminUrl = escapeHtml(o.adminUrl);
+  // Jaimie 2026-10-03: the booker's phone number, for menu choices. NBCC's own inbox only.
+  const phone = booking.buyerPhone?.trim() || null;
+  const tel = phone ? phone.replace(/[^0-9+]/g, "") : "";
 
   const rows =
     factRow("Payment reference", escapeHtml(booking.reference)) +
     factRow("Amount to arrive", amount) +
     factRow("To be paid by", until) +
     factRow("Buyer", `${name}<br />${escapeHtml(booking.buyerEmail)}`) +
+    (phone ? factRow("Phone", `<a href="tel:${escapeHtml(tel)}" ${LINK}>${escapeHtml(phone)}</a>`) : "") +
     (o.invoice
       ? factRow(
           "Invoice to",
@@ -73,6 +77,7 @@ export function buildTransferStaffEmail(
     `Amount to arrive: ${amount}`,
     `To be paid by: ${until}`,
     `Buyer: ${booking.buyerName}, ${booking.buyerEmail}`,
+    ...(phone ? [`Phone: ${phone}`] : []),
     ...(o.invoice ? [`Invoice to: ${o.invoice.company}`, `View the invoice: ${o.invoice.url}`] : []),
     "",
     "When the money arrives, an admin marks it paid under Festive Ball, Awaiting transfer. That sends",

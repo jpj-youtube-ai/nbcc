@@ -132,7 +132,7 @@ describe("a printed piece's QR code, for an event whose address cannot be linked
 describe("the approved email for an event", () => {
   const eventMail = () =>
     buildApprovedEmail(
-      { name: "Alex Example", title: "Exampleton Quiz Night", path: "event" },
+      { name: "Alex Example", title: "Exampleton Quiz Night", path: "event", booking: "door" },
       { pageUrl: "https://nbcc.test/event/eqn", manageUrl: "https://nbcc.test/fundraise/manage" },
     );
 
@@ -146,7 +146,10 @@ describe("the approved email for an event", () => {
     const t = eventMail().text;
     expect(t).toContain("Share your event page");
     expect(t).toContain("Put up your posters");
-    expect(t).toContain("On the day, point people to your page");
+    expect(t).toContain(
+      "On the day, point people to your page if they’d like to give a little extra. Entry money is separate: collect it as usual and pay it in afterwards from your private area. Gift Aid can’t go on entry or ticket money.",
+    );
+    expect(t).not.toContain("so anyone who would like to give can do it there");
     expect(t).toContain("Just reply to this email.");
     expect(t).toContain("children, young people and vulnerable adults");
   });
@@ -182,5 +185,66 @@ describe("an event shared with another cause, in print", () => {
       expect(html).toContain("The Exampleton Lifeboat");
       expect(html).toContain("nbcc.test/event/eqn");
     }
+  });
+});
+
+// Jaimie, 2026-10-03: giving is a donation, not a ticket. An event's poster asks people to scan for
+// the details as well as to give, and says how to get in; a fundraiser's poster is unchanged.
+describe("an event's poster: the details, and how to get in", () => {
+  const poster = (over: Partial<FundraiserRecord> = {}) =>
+    buildMaterial("poster", { ...event(over), meter: meter({ onlinePence: 0, cashPence: 0, targetPence: null }) }, "staff");
+
+  it("asks people to scan for the details, and to give", () => {
+    expect(poster()).toContain("Scan for the details, and to give");
+    expect(poster()).not.toContain("Scan to give");
+  });
+
+  it("says how to get in, by how people get in", () => {
+    expect(poster({ booking: "door", price: "£5" })).toContain('<div class="p-entry">Entry: £5, paid on the door</div>');
+    expect(poster({ booking: "away", ticketUrl: "https://tickets.example.com/eqn", price: null })).toContain(
+      '<div class="p-entry">Tickets: from tickets.example.com</div>',
+    );
+    expect(poster({ booking: "free" })).toContain('<div class="p-entry">Entry: free</div>');
+    expect(poster({ booking: null })).not.toContain("p-entry\">");
+  });
+
+  it("is unchanged for a fundraiser raising money", () => {
+    const html = poster({ path: "raising", slug: "rsd", booking: null });
+    expect(html).toContain("Scan to give");
+    expect(html).not.toContain('<div class="p-entry">');
+  });
+});
+
+// Event clarity review: the live email's "on the day" point follows how people get in.
+describe("the event page live email, by how people get in", () => {
+  const mailFor = (booking: FundraiserRecord["booking"]) =>
+    buildApprovedEmail(
+      { name: "Alex Example", title: "Exampleton Quiz Night", path: "event", booking },
+      { pageUrl: "https://nbcc.test/event/eqn", manageUrl: "https://nbcc.test/fundraise/manage" },
+    ).text;
+  const LEAD = "On the day, point people to your page if they’d like to give a little extra.";
+
+  it("pay on the door: entry money is separate, and never Gift Aided", () => {
+    expect(mailFor("door")).toContain(
+      `${LEAD} Entry money is separate: collect it as usual and pay it in afterwards from your private area. Gift Aid can’t go on entry or ticket money.`,
+    );
+  });
+
+  it("tickets elsewhere: ticket money goes through the seller", () => {
+    expect(mailFor("away")).toContain(
+      `${LEAD} Ticket money goes through your ticket seller as usual; only pay in NBCC’s share of anything you collect yourself. Gift Aid can’t go on entry or ticket money.`,
+    );
+  });
+
+  it("free: anything given is a donation", () => {
+    const t = mailFor("free");
+    expect(t).toContain(`${LEAD} Entry is free, so anything people give on your page or on the day is a donation.`);
+    expect(t).not.toContain("Entry money is separate");
+  });
+
+  it("never asked: if they charge entry", () => {
+    expect(mailFor(null)).toContain(
+      `${LEAD} If you charge entry, collect it as usual and pay it in afterwards from your private area. Gift Aid can’t go on entry or ticket money.`,
+    );
   });
 });

@@ -1385,6 +1385,7 @@ hosted-Checkout redirect stays the default fallback and no-JS safety net.
 | `GET /api/ball/availability` | **implemented** | TASK-313 (public; Festive Ball seats/tables remaining + whether sales are open. Counts only — never buyer details) |
 | `POST /api/ball/checkout-session` | **implemented** | TASK-313 (public; validates the order, holds the seats under a lock, mints a Stripe Checkout session, records a pending booking). TASK-484: takes an optional `replaces`, the inline checkout a fallback to Stripe's own page replaces |
 | `POST /api/ball/bank-transfer` | **implemented** | TASK-484 (public; books to pay by bank transfer and answers with the bank details; refused until an admin switches it on) |
+| `PUT /api/admin/ball/bookings/:reference/phone` | **implemented** | Booker's phone number (Festive Ball edit; `{ phone }`, empty takes it away. Audited as `ball.booking_phone`, keeping the number it replaced) |
 | `GET`/`PUT /api/admin/ball/transfer-settings` | **implemented** | TASK-484 (the bank details and the switch; changing them is admin only) |
 | `GET /api/admin/ball/transfers` | **implemented** | TASK-484 (bookings awaiting a bank transfer) |
 | `POST /api/admin/ball/bookings/:reference/mark-paid` | **implemented** | TASK-484 (admin only; `{ confirmTotalPence }`) |
@@ -1399,7 +1400,7 @@ hosted-Checkout redirect stays the default fallback and no-JS safety net.
 | `POST /api/admin/outreach/:id/send` | **implemented** | TASK-401 (Editor+; send one invitation. 400 without an email address, 409 if already sent; `sent_at` is stamped only after the send succeeds) |
 | `GET /api/admin/ball` | **implemented** | TASK-313 (Viewer+; settings, live availability and money raised) |
 | `PATCH /api/admin/ball` | **implemented** | TASK-313 (Editor+ **with the ball section granted**; capacity, held seats, gate, sales window, late-confirmed details. Audited as `ball.settings_updated`) |
-| `GET /api/admin/ball/bookings` | **implemented** | TASK-313 (Viewer+; bookings newest first) |
+| `GET /api/admin/ball/bookings` | **implemented** | TASK-313 (Viewer+; bookings newest first). Also `noPhone`: how many bookings still going ahead (paid, or awaiting a transfer) have no phone number. Clears phone numbers past their date first |
 | `GET /ball` | **implemented** | TASK-313 (the ticket page; password-gated until staff open the gate, then public and indexable) |
 | `POST /ball/unlock` | **implemented** | TASK-313 (checks the preview password, sets a signed 14-day cookie) |
 | `GET /ball/terms` | **implemented** | TASK-313 (ticket terms; gated alongside the page) |
@@ -2597,6 +2598,35 @@ does.
 The forms use `autocomplete="given-name"` / `"family-name"`. `autocomplete="name"` on a
 half-name box makes a browser offer the whole name for the first field, which is worse than no
 autofill at all.
+
+### The booker's phone number (Jaimie 2026-10-03)
+
+The Festive Ball booking form asks **Your phone number**, required, "So we can contact you about
+menu choices for your table." It is checked on the page and again on the server (`buyerPhone` in
+`purchaseSchema`, `src/ball/booking.ts`) by the same rule as the phone box in Admin > Business
+supporters: digits, spaces, `+ ( ) -`, at least 7 digits, up to 40 characters. A card checkout or bank
+transfer booking that sends it empty or wrong gets a 400 whose `error` names the phone number and
+whose `details` name `buyerPhone`. A request with no `buyerPhone` key at all (a page loaded before
+the box existed) is still taken, with no number, so a live booking is never lost. For staff adding a
+booking by hand it is optional: they may not have it.
+
+It is stored in `ball_bookings.buyer_phone` (migration `1791200000198_ball-booker-phone.js`: one
+nullable column, so bookings made before have none and the old code keeps inserting during a
+deploy). It is NBCC's only: never stamped on the Stripe session, never in the door or catering lists.
+It appears in Admin > Festive Ball (as a tap-to-ring link), in the bookings CSV (a **Phone** column
+after Email) and in the events@ email about a new bank transfer booking. The buyer's own emails are
+unchanged.
+
+Bookings with no number are chased by hand; nothing is sent automatically. The admin flags each one
+("No phone number yet") and counts the bookings without one, paid or awaiting a transfer, the same
+bookings the flag marks. It can show only those, in both lists, and lets
+Festive Ball editors add or change the number (`PUT /api/admin/ball/bookings/:reference/phone`,
+audited). The ticket terms and the privacy notice say what it is for.
+
+Phone numbers are deleted 90 days after the event, on the same date as guests' dietary details
+(`retentionDate` in `src/ball/guests.ts`), by the same purge (`purgeExpiredGuests`), which now also
+runs before the bookings list and the bookings CSV are read. The ticket terms say so. On a phone, the bookings table
+is now a labelled card per booking, as the bank transfer list already was.
 
 ### Paying without leaving the site (TASK-319)
 
@@ -8869,7 +8899,7 @@ email kind on the Email audit):
 | 14, You did it! Target reached | `fundraiseTargetReached` | raised has reached the target, up to and including the date (never after it, and never once finished); it cheers them on to beat their goal, with a **Raise my target** button to their private area (new wording, for sign off) |
 | 15, One week to go | `fundraiseWeekBefore` | the date is 7 days away (or 6 or 5, if a run was missed) |
 | 16, How did it go? | `fundraiseWeekAfter` | the date was 7 days ago (or 8 or 9), asking them to pay in |
-| 17, Thank you from all of us | `fundraiseFinished` | straight after staff press **Mark finished**, with the link to their certificate |
+| 17, Thank you from all of us | `fundraiseFinished` | straight after staff press **Mark finished**, with the link to their certificate; only if it was held back there for sign off, or its send failed there (marked in `fundraisers.touch_finished_pending`), the daily run sends it once it can, for up to 7 days after it was finished, never later. One not sent because automatic emails were off is never sent later. While it is held, nothing else (a year on) goes to that page |
 | 18, A year ago today... | `fundraiseYearOn` | 365 days after the date, or after it was finished when it had no date (a week to catch a missed run); its **Do it again** button opens the sign up form filled in from last year (below) |
 | Need a hand? | `fundraiseNeedAHand` | once, when the call prompt **Behind** holds (new wording, for sign off) |
 | You're doing great | `fundraiseOnTrack` | once, when the call prompt **On track** holds (new wording, for sign off) |
@@ -8888,6 +8918,16 @@ checks no email here says families). Every guard has to say yes before one goes:
   a category whose key or name mentions "memory");
 - the address is on neither the suppression list nor the opt out list (`email_opt_outs`, either
   kind); a list that cannot be read means no email;
+- its wording, if new, has been approved by an admin (Jaimie, 2026-10-03; below). One waiting for
+  sign off is skipped and NOT claimed, so it can still go once approved while it is due (if its
+  window passes first, it simply does not go); the run logs one info line for it, by fundraiser id,
+  and the next email due that is approved goes instead (never while the thank you is held). The daily
+  run, the admin's next-run line and its preview all pick with one helper (`pickTouch`). Approvals
+  that cannot be read count as none (the card says "Couldn't check sign-offs just now, so new
+  wording is held.");
+- a team page is judged on its whole team's total everywhere: the daily run, Mark finished and the
+  preview (`touchFundraiser` in `src/db/fundraising-touch.ts`), so the wording (17 or its nothing
+  raised version) and the amount always agree;
 - each email goes once per fundraiser, ever: it is claimed in `fundraiser_touchpoints` (unique by
   fundraiser and kind) BEFORE it is sent, and the claim is given back only if the send fails, so
   another day can try. An error from the mail service can come after it has accepted an email (a
@@ -8900,7 +8940,8 @@ after, a week before, target, halfway, first gift, need a hand, doing great, a y
 gentle ones wait a week after any other. Days are UK calendar days (Europe/London), so the clocks
 changing never moves one. The daily pass rides the 8am task (`npm run reminders`,
 `src/scripts/send-reminders.ts`, its own try/catch) and logs one line:
-`fundraising automatic emails: considered=N sent=N skipped=N failed=N`, or why it did nothing
+`fundraising automatic emails: considered=N sent=N skipped=N failed=N waiting=N` (`waiting`: held back
+for sign off), or why it did nothing
 (`switched off`, `fundraising off`, `could not read`). Each email sent adds "An automatic email went
 to the organiser" to the fundraiser's History.
 
@@ -8913,6 +8954,19 @@ those versions are marked new wording too); and the email itself, rendered by th
 subject and when it goes. It also says what the next 8am run would send (were it on), so the first
 morning after switching on is no surprise: anyone already past halfway or their target gets that
 email then, once. Each open sign up says which one it would get next. Editors and viewers can read them all but not switch them.
+
+**Signing off new wording** (Jaimie, 2026-10-03). New wording only sends once an admin approves it
+in this card. Each version that needs it is approved on its own (`WORDING_KEYS` in
+`src/fundraising/touch-rules.ts`): `target`, `finished`, `need_a_hand`, `on_track`, and the nothing
+raised versions of 16, 17 and 18, `week_after_zero`, `finished_zero` and `year_on_zero` (approving the
+usual 17 never approves its nothing raised version). The preview of one waiting says "New wording,
+waiting for your sign off. It won't send until you approve it." with **Approve this wording**; once
+approved, "Approved by <name> on <date>." with **Withdraw approval**. Both buttons are for admins
+only, each after a check, and each writes an `audit_log` row; editors and viewers see whether it is
+approved. Each email with a version still waiting has a **Waiting for sign off** pill in the list of
+emails, the next run line says how many are held back, and **Mark finished** says when the thank you
+is held back. Target, need a hand and on track were approved on 2026-10-03 (seeded by the migration);
+finished and the three nothing raised versions wait for Jaimie.
 
 **Smart call prompts.** Pills on the list and a **Keeping in touch** panel in the open sign up, each
 with a reason (with the numbers) and a few talking points, and **Called** with an optional note
@@ -8968,9 +9022,11 @@ Admin routes need a session and the `fundraising` section.
 | Route | Who | Body | Answer |
 |---|---|---|---|
 | `POST /api/fundraise/again` | anyone | `{ token }` | `200 { path, kind, kindOther, title, description, targetPence, venue, town, instagram, facebook, firstName, lastName, email, phone }`, at most 3 times a link; `404` for any link that does not work; `429` after 30 tries in 15 minutes |
-| `GET /api/admin/fundraising/touch` | view | | `{ today, settings: { on, updatedAt, updatedBy }, kinds: [{ kind, label, when, newWording }], sent: { <id>: [{ kind, sentAt }] }, prompts: { <id>: [{ key, pill, label, reason, points }] }, promptCalls: { <id>: [...] }, due: { <id>: kind } }` (`due`: what the next 8am run would send, were the switch on) |
-| `GET /api/admin/fundraising/touch/preview/:kind` | view | `?fundraiserId=` or `?sample=zero` (optional) | `{ kind, label, newWording, sample, title, subject, html, text }`; `404` for an unknown kind or fundraiser |
+| `GET /api/admin/fundraising/touch` | view | | `{ today, settings: { on, updatedAt, updatedBy }, kinds: [{ kind, label, when, newWording, waiting: [wordingKey] }], approvals: { <wordingKey>: { approvedAt, approvedBy } }, approvalsUnavailable, sent: { <id>: [{ kind, sentAt }] }, prompts: { <id>: [{ key, pill, label, reason, points }] }, promptCalls: { <id>: [...] }, due: { <id>: kind }, held: { <id>: kind } }` (`due`: what the next 8am run would send, were the switch on; `held`: what it would hold back for sign off) |
+| `GET /api/admin/fundraising/touch/preview/:kind` | view | `?fundraiserId=` or `?sample=zero` (optional) | `{ kind, label, newWording, wordingKey, approval: { approvedAt, approvedBy } \| null, approvalsUnavailable, sample, title, subject, html, text }`; `404` for an unknown kind or fundraiser |
 | `PUT /api/admin/fundraising/touch/settings` | admin | `{ on: true \| false }` | `{ on, updatedAt, updatedBy }`; `audit_log` `fundraising.touch_emails_switched` |
+| `POST /api/admin/fundraising/touch/approvals/:key` | admin | | `{ approval: { key, approvedAt, approvedBy } }` (one already approved keeps its first approval); `404` for a key not in `WORDING_KEYS`; `audit_log` `fundraising.touch_wording_approved` |
+| `DELETE /api/admin/fundraising/touch/approvals/:key` | admin | | `{ withdrawn }`; `404` for a key not in `WORDING_KEYS`; `audit_log` `fundraising.touch_wording_withdrawn` (with whose approval it was) |
 | `POST /api/admin/fundraisers/:id/prompt-calls` | edit | `{ prompt, note? }` (500 at most) | `{ call }`; `audit_log` `fundraiser.prompt_called` |
 
 `POST /api/admin/fundraisers/:id/finish` now also sends email 17 after the finish has committed,
@@ -8984,6 +9040,12 @@ token's hash, made, runs out, how many times it has been looked up, used and by 
 `touch_emails_updated_at` and `_by`, and `fundraiser_calls.prompt` (nullable), with the check on
 `which` widened to allow `prompt`. Numbered 170, above main's 130 and the 160 an open task uses. The
 new tables are in the nightly backup's table count (73).
+
+`migrations/1791200000197_touch-wording-approvals.js` (additive only): `touch_wording_approvals` (key,
+approved at, approved by; no row means not approved) and `fundraisers.touch_finished_pending`
+(`held` or `failed`, nullable) with `_at`, the thank you to catch up; seeded with `target`, `need_a_hand` and
+`on_track` as approved by Jaimie on 2026-10-03, each with an `audit_log` row. Numbered 197: after
+190 and the 195 and 196 that open changes use, before 200. In the nightly backup's table count (76).
 
 ### Where it lives, and tests
 
@@ -8999,13 +9061,15 @@ Sending: `src/fundraising/touch-runner.ts` (the daily pass and the finished emai
 UK days, both clock changes), `fundraising-touch-emails` (each email, html and text, the approved
 words), `fundraising-touch-runner` (switch off sends nothing, once only, opt outs and suppression,
 the in memory guard, failures given back, the 8am wiring), `fundraising-touch-db`,
-`fundraising-touch-migration`, `admin-fundraising-touch-routes` (admin, editor, viewer),
+`fundraising-touch-migration`, `touch-wording-approvals-migration`, `admin-fundraising-touch-routes` (admin, editor, viewer,
+and who may approve wording),
 `admin-fundraising-touch-panel` (jsdom), `admin-fundraising-finish-touch`,
 `fundraising-summary-prompts`, `admin-email-kinds` and `backup-plan`. BDD:
 `features/fundraising-touch.feature` (ships off and only an admin switches it on; a viewer reads an
 email; nothing goes while off; a week before goes once; nothing to an address that opted out; Mark
-finished sends the thank you; a viewer cannot record a call; Do it again fills in the form from last
-year, once, and the new sign up waits for staff).
+finished sends the thank you; the thank you is held back while its wording waits for sign off, an
+editor cannot approve it, and once an admin does the daily run sends it, once; a viewer cannot record
+a call; Do it again fills in the form from last year, once, and the new sign up waits for staff).
 
 ## Event pages
 
@@ -9316,6 +9380,85 @@ Tests: `test/unit/fundraising-in-memory*.test.ts`, `fundraise-memory-*.test.ts`,
 `fundraiser-memory-*.test.ts`, `fundraising-envelope.test.ts`, `fundraise-signup-memory.test.ts`,
 `fundraise-manage-memory.test.ts`, `admin-fundraising-memory-panel.test.ts`,
 `in-memory-migration.test.ts`; BDD `features/fundraising-in-memory.feature`.
+## What gifts could do: impact examples on fundraiser, event and team pages
+
+Jaimie approved, 2026-10-03. One shared list of examples, like "£25 could help buy a pair of school
+shoes", that fundraiser, event and team pages show, and that a Fill a Red Bag page will read later
+(so it lives in `src/impact/`, not under fundraising). OSCR-safe wording only: every example starts
+"could", and none promises ("will buy", "will pay for", "will cover", "will fund", "will provide",
+"pays for", "buys"), so a gift never reads as a promise and never becomes a restricted fund. The
+server refuses anything else, and so does the table's own check (a check violation is a plain 400).
+
+On a page (`src/fundraising/impact-render.ts`, placed by `renderFundraiserPage`):
+
+- **Under each give amount** that has an example (£5, £10 and £50 to start; £20 has none), its words,
+  small, inside the amount's label, so a screen reader hears "£5 could help put a cosy pair of
+  pyjamas in a Red Bag" as the choice.
+- **Under your own amount**, as it is typed (`assets/js/fundraiser.js`, from the form's `data-could`):
+  the line of the example with the largest amount at or below it, nothing below £5 or below the
+  page's minimum. Typing £30 shows "£25 could help buy a pair of school shoes". It is a live region
+  that is always there (empty until it has something), named by the box's `aria-describedby`, and
+  written only when its words change.
+- **Under the meter** (`meterImpactLine`): below £50 "Every pound could help fill a Red Bag Full of Joy";
+  from £50 "What's been raised so far could fill around N Red Bags Full of Joy" (N is the total over
+  the Red Bag example's amount, rounded down; "1 Red Bag Full of Joy" in the singular); from £400 it
+  adds ", or help N children start school in a uniform that fits" (the total over the uniform
+  example's amount; never "0 children": only once the total covers one). A team page counts the team's combined total. Switch the Red Bag example off and
+  the line goes; switch the uniform one off and that part goes.
+- **The footnote**, shown once wherever any of it shows: "These show what gifts could do. Every gift
+  goes where it's needed most." Under the give amounts when they show examples, else under the
+  meter. When both show, the meter's copy is `data-nojs`: without JavaScript the give form is
+  hidden, so it stands in; the script that shows the form hides it.
+- **Never on a page in memory of someone** (quiet pages): the route passes no list when
+  `showsImpact(f)` is false, which asks `isQuietFundraiser` (`src/fundraising/touch-rules.ts`: the
+  `in_memory` flag, or a category that mentions memory); and the in memory page's own renderer
+  draws the give form with none of it (`renderGiveForm(p, words)` with no impact).
+
+The pages read the list as last read, kept for a minute (`loadImpactExamples`, never throws: on a
+failure the page simply shows none).
+
+### Admin > Fundraising, What gifts could do
+
+A card after Categories. Everyone who can see Fundraising sees the list, read only ("Only an admin
+can change these."); admins get the controls. Each example switched on, in the list's order, with
+where it shows ("Under the give amounts" or "Big totals only", and which part of the meter line
+counts with it); Edit (amount, words, Show under the give amounts) in its row; Move up and Move down;
+Switch off (after asking) and Switch on. The £50 Red Bag and £40 uniform examples have no Edit: "Used
+for the line under the meter, so its words and amount are fixed." (the server refuses with a 409),
+but switch off and on and move like the rest. Below, add one: amount in pounds, what it could do,
+and the give amounts tick. Nothing is deleted. Each change is in `audit_log` (`impact.example_added`, `impact.example_changed`,
+`impact.example_moved`, entity `impact_example`).
+
+| Route | Who | Body | Answer |
+|---|---|---|---|
+| `GET /api/admin/impact-examples` | Fundraising view | | `{ examples: [{ id, amountPence, wording, active, sortOrder, onGiveForm, meterLine, createdAt, createdBy, updatedAt, updatedBy }] }`, in the list's order |
+| `POST /api/admin/impact-examples` | an admin | `{ amountPence (100 to 1000000), wording (10 to 160, starts could, never a promise), onGiveForm? }` | `201 { example }`, switched on, at the end; `400` with the reason |
+| `PATCH /api/admin/impact-examples/:id` | an admin | `{ amountPence?, wording?, active?, onGiveForm? }` | `200 { example }`; `400`; `404`; `409` for a new amount or words on one the meter line counts with |
+| `POST /api/admin/impact-examples/:id/move` | an admin | `{ direction: "up" \| "down" }` | `200 { examples }` (past any switched the other way; at the end, nothing changes); `404` |
+
+### Data (`migrations/1791200000200_impact-examples.js`, additive only)
+
+A new table, `impact_examples`: `id`, `amount_pence` (100 to 1,000,000), `wording` (checked: starts
+could, never a promise), `active`, `sort_order`, `on_give_form` (false: big totals
+only), `meter_line` (`red_bags` or `uniforms`, unique, set by the migration and not by staff),
+`created_at` / `_by`, `updated_at` / `_by`. Seeded, only into an empty table, with the five Jaimie
+approved: £5 "could help put a cosy pair of pyjamas in a Red Bag", £10 "could help put pyjamas,
+socks, a hat and gloves in a Red Bag", £25 "could help buy a pair of school shoes", £50 "could help
+fill a whole Red Bag Full of Joy" (`red_bags`), and £40 "could help a child start school in a uniform
+that fits" (big totals only, `uniforms`). Numbered 200, after 195, 197 and 198, which merge first.
+In the nightly backup's table count (77).
+
+### Where it lives, and tests
+
+Rules (pure): `src/impact/examples.ts`. SQL: `src/db/impact-examples.ts`. Page pieces:
+`src/fundraising/impact-render.ts`; the own amount line in `assets/js/fundraiser.js`; styles in
+`assets/css/fundraising.css`. Route: `src/routes/admin-impact-examples.ts`; the page route passes the
+list in `src/routes/fundraise-pages.ts`. Screen: the `frImpact` block of `assets/js/admin/app.js`.
+Unit tests: `impact-examples`, `impact-examples-migration`, `impact-examples-db`,
+`admin-impact-examples-routes`, `fundraiser-page-impact` (jsdom), `fundraiser-page-impact-route`,
+`admin-impact-examples-card` (jsdom) and `backup-plan`. BDD: `features/impact-examples.feature` (an
+admin adds an example and a fundraiser's page shows it; words not starting with could, or that
+promise, are refused; only an admin may add one).
 
 ## The sign up tidy: one question at a time, the welcome pack, and a form that fits each person
 
@@ -9484,7 +9627,7 @@ lives in; the Drive copy is not immutable.
 
 ### There are THREE databases, not one
 
-This is the trap this feature was built around. `DATABASE_URL` holds 70 tables
+This is the trap this feature was built around. `DATABASE_URL` holds 74 tables
 (42 when this was built; the Events page added three in TASK-453, the Festive Ball ticket
 report one in TASK-464, the admin's New pills one, `admin_seen`, in TASK-478, site analytics
 four in TASK-479, the business supporter call log in TASK-491, community fundraising five
@@ -9492,11 +9635,12 @@ in TASK-493, the private area's sign in codes and sessions two in TASK-501, the 
 calls two in TASK-503, the requests one in TASK-505, the news updates one in TASK-506, and the
 thank yous to supporters and the address level opt out list three in TASK-507, the old page
 links one in TASK-511, the fundraising categories one in TASK-514, and which automatic emails each
-fundraiser has had and the Do it again links two in TASK-515, and the team invites and team
-organiser handovers two for team pages),
+fundraiser has had and the Do it again links two in TASK-515, the team invites and team
+organiser handovers two for team pages, the approved automatic email wordings one, and the impact
+examples one for what gifts could do),
 but `STORIES_DATABASE_URL` and `CONTACT_DATABASE_URL` are separate databases
 (deliberately, so the public story and contact forms can never reach donor
-data). A `pg_dump $DATABASE_URL` captures 72 of **75** tables and silently
+data). A `pg_dump $DATABASE_URL` captures 74 of **77** tables and silently
 drops every My Story submission (and, since TASK-475, the fingerprints in
 `erased_stories` that keep erased stories from coming back) and every contact
 enquiry, while producing a

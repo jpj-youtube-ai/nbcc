@@ -50,8 +50,8 @@ let calls: Array<{ url: string; body: Record<string, unknown> }>;
 let answer: { status: number; body: unknown };
 let assigned: string | null;
 
-function load(wall: WallEntry[] = []) {
-  const html = renderFundraiserPage(template, page(wall), { pageUrl: "https://nbcc.test/fundraise/robins-santa-dash", now: new Date(Date.UTC(2026, 9, 2)) });
+function load(wall: WallEntry[] = [], over: Partial<PublicPage> = {}) {
+  const html = renderFundraiserPage(template, { ...page(wall), ...over }, { pageUrl: "https://nbcc.test/fundraise/robins-santa-dash", now: new Date(Date.UTC(2026, 9, 2)) });
   document.documentElement.innerHTML = new DOMParser().parseFromString(html, "text/html").documentElement.innerHTML;
   calls = [];
   assigned = null;
@@ -118,6 +118,20 @@ describe("choosing an amount", () => {
     choose(1000);
     expect($("[data-giftaid-headline]").textContent).toBe("Make your £10 worth £12.50");
     expect($("[data-cover-fee-amount]").textContent).toBe("£0.32");
+  });
+
+  it("has no event's entry note on a fundraiser's Gift Aid", () => {
+    expect(document.querySelector(".giftaid-entry")).toBeNull();
+    expect($("[data-giftaid-headline]").hasAttribute("data-giftaid-fixed")).toBe(false);
+  });
+
+  // Jaimie, 2026-10-03: on an event's page the amount can match the entry price, so its Gift Aid
+  // headline never echoes it.
+  it("keeps an event's Gift Aid headline fixed, whatever the amount", () => {
+    load([], { path: "event", booking: "door", price: "£5" });
+    choose(500);
+    expect($("[data-giftaid-headline]").textContent).toBe("Make your donation worth 25% more");
+    expect($("[data-give-submit]").textContent).toBe("Give £5 now");
   });
 
   it("will not send less than £2", async () => {

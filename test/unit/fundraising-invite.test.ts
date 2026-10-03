@@ -111,10 +111,11 @@ describe("the invite form", () => {
     expect(none.success && none.data.note).toBeNull();
   });
 
-  it("keeps the note to 600 characters", () => {
-    expect(INVITE_NOTE_MAX).toBe(600);
-    expect(inviteSchema.safeParse({ ...ok, note: "a".repeat(600) }).success).toBe(true);
-    expect(inviteSchema.safeParse({ ...ok, note: "a".repeat(601) }).success).toBe(false);
+  // Jaimie 2026-10-03: a personal note can be a proper letter, so the limit is 5,000 (was 600).
+  it("keeps the note to 5,000 characters", () => {
+    expect(INVITE_NOTE_MAX).toBe(5000);
+    expect(inviteSchema.safeParse({ ...ok, note: "a".repeat(5000) }).success).toBe(true);
+    expect(inviteSchema.safeParse({ ...ok, note: "a".repeat(5001) }).success).toBe(false);
   });
 
   it("needs a name, a whole email and who it is signed by, and nothing else", () => {

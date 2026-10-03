@@ -14,7 +14,8 @@ import { z } from "zod";
 //   - it fills in the name and the email on the form, and nothing else.
 
 export const INVITE_TTL_DAYS = 60;
-export const INVITE_NOTE_MAX = 600;
+// Jaimie 2026-10-03: a personal note can be a proper letter (was 600).
+export const INVITE_NOTE_MAX = 5000;
 /** Invites (and resends) one member of staff may send in a day. */
 export const INVITES_PER_DAY = 50;
 /** An invite not taken up this many days after it was sent shows on the Monday summary. */
@@ -79,7 +80,7 @@ export const inviteSchema = z
     note: z
       .string()
       .trim()
-      .max(INVITE_NOTE_MAX, `Keep the note to ${INVITE_NOTE_MAX} characters or fewer.`)
+      .max(INVITE_NOTE_MAX, `Keep the note to ${INVITE_NOTE_MAX.toLocaleString("en-GB")} characters or fewer.`)
       .nullish()
       .transform((v) => (v ? v : null)),
     signedBy: z.number({ invalid_type_error: "Choose who it is from." }).int().positive("Choose who it is from."),

@@ -142,6 +142,17 @@ describe("the daily pass", () => {
     expect(d.recordSent).not.toHaveBeenCalled();
   });
 
+  it("says clearly in the log that a failed send may still have reached them, and will be tried again", async () => {
+    const log = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    await runTouchEmails(NOW, deps({ send: vi.fn(async () => Promise.reject(new Error("timed out"))) }));
+    const said = log.mock.calls.map((c) => c.join(" ")).join("\n");
+    expect(said).toMatch(/fundraiser 7/);
+    expect(said).toMatch(/may still have reached them/);
+    expect(said).toMatch(/tried again on a later run/);
+    expect(said).toContain("timed out");
+    expect(said).not.toContain("sam@example.com");
+  });
+
   it("never throws, even when nothing can be read", async () => {
     const d = deps({ readState: vi.fn(async () => Promise.reject(new Error("down"))) });
     expect(await runTouchEmails(NOW, d)).toMatchObject({ sent: 0, skipped: "could not read" });

@@ -56,6 +56,8 @@ exports.up = (pgm) => {
       created_at: { type: "timestamptz", notNull: true, default: pgm.func("now()") },
       expires_at: { type: "timestamptz", notNull: true },
       used_at: { type: "timestamptz" },
+      // How many times the form has fetched last year's details with it: at most 3.
+      lookups: { type: "integer", notNull: true, default: 0 },
       used_by_fundraiser_id: { type: "integer", references: "fundraisers", onDelete: "SET NULL" },
     },
     { comment: "Do it again links from the year on email; tokens kept only as sha256 (TASK-515)." },

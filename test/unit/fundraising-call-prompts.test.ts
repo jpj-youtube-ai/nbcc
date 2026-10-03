@@ -202,6 +202,7 @@ describe("the counts for the Monday summary", () => {
       { f: fr({ id: 2, kind: "bake_sale" }, 60000), facts: facts() }, // ahead, tin, posters
       { f: fr({ id: 3, status: "new" }, 0), facts: facts() },
     ];
-    expect(promptCounts(list, "2026-11-22")).toEqual({ behind: 1, ahead: 1, onTrack: 0, quiet: 0, materials: 4 });
+    // The sponsor form shows as a pill but is not counted: nothing can be done about it but a call.
+    expect(promptCounts(list, "2026-11-22")).toEqual({ behind: 1, ahead: 1, onTrack: 0, quiet: 0, materials: 3 });
   });
 });

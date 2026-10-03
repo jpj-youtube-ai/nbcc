@@ -220,7 +220,8 @@ describe("the Automatic emails card", () => {
     await openFundraising();
     const pick = el("frTouchFor") as HTMLSelectElement;
     const values = Array.from(pick.options).map((o) => o.value);
-    expect(values).toEqual(["", "1", "2"]); // the example, then the pages raising money (not the event)
+    // The example, the example with nothing raised yet, then the pages raising money (not the event).
+    expect(values).toEqual(["", "zero", "1", "2"]);
     pick.value = "2";
     pick.dispatchEvent(new Event("change", { bubbles: true }));
     await settle();
@@ -285,6 +286,20 @@ describe("the call prompts", () => {
     await openRow(1);
     expect(q('[data-frprompt="behind"]')).not.toBeNull();
     expect(q('[data-frpromptcall="behind"]')).toBeNull();
+  });
+
+  it("says, before Mark finished, whether the organiser is emailed their thank you", async () => {
+    confirmAnswer = false;
+    await openFundraising();
+    await openRow(1);
+    (q('[data-fraction="finish"]') as HTMLElement).click();
+    expect(confirmed.pop()).toContain("Automatic emails are off, so no thank you email goes.");
+    // Switched on meanwhile: opening Fundraising again reads it afresh (the sign up stays open).
+    touchOn = true;
+    (q('.admin-nav-link[data-view="fundraising"]') as HTMLElement).click();
+    await settle();
+    (q('[data-fraction="finish"]') as HTMLElement).click();
+    expect(confirmed.pop()).toContain("Automatic emails are on, so we email Robin Example their thank you, with their certificate.");
   });
 
   it("lists which automatic emails a fundraiser has had, and when", async () => {

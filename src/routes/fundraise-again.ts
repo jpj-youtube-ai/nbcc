@@ -1,6 +1,6 @@
 import { Router, type Request, type Response } from "express";
 import { createRateLimiter } from "../portal/request-limiter";
-import { findAgainByHash, markAgainUsed } from "../db/fundraiser-again";
+import { lookUpAgain, markAgainUsed } from "../db/fundraiser-again";
 import { getFundraiser } from "../db/fundraisers";
 import { againPrefill, againVerdict, hashAgainToken, readAgainToken } from "../fundraising/again";
 
@@ -11,7 +11,8 @@ import { againPrefill, againVerdict, hashAgainToken, readAgainToken } from "../f
 // The token comes from the email's button (/fundraise?again=...). A POST, so it never sits in a
 // server's access log as part of an address. Only the safe details come back (againPrefill); an
 // unknown, used or out of date link, or one whose fundraiser has gone, all get one plain answer, so
-// a guess learns nothing. Tries are limited per address, as for an invite. The form still works
+// a guess learns nothing. Each link gives the details at most 3 times (lookUpAgain), and tries are
+// limited per address, as for an invite. The form still works
 // without it, and the new sign up waits for staff to approve it like any other.
 //
 // When the sign up arrives with the token (POST /api/fundraise, `again`), useAgain marks the link
@@ -36,7 +37,7 @@ export async function postAgainPrefill(req: Request, res: Response): Promise<Res
   if (!token) return res.status(404).json(GONE);
   try {
     const now = new Date();
-    const link = await findAgainByHash(hashAgainToken(token));
+    const link = await lookUpAgain(hashAgainToken(token));
     if (!link || againVerdict(link, now) !== "ok") return res.status(404).json(GONE);
     const f = await getFundraiser(link.fundraiserId);
     if (!f) return res.status(404).json(GONE);

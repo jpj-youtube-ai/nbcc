@@ -98,11 +98,11 @@ describe("a form opened from Do it again", () => {
   it("leaves anything already typed, and a choice already made", async () => {
     load(`?again=${TOKEN}`, () => {
       ($("#title") as HTMLInputElement).value = "My own name for it";
-      ($('input[name="kind"][value="bake_sale"]') as HTMLInputElement).checked = true;
+      ($('input[name="kind"][value="bake_sale_2"]') as HTMLInputElement).checked = true;
     });
     await settle();
     expect($("#title").value).toBe("My own name for it");
-    expect($('input[name="kind"][value="bake_sale"]').checked).toBe(true);
+    expect($('input[name="kind"][value="bake_sale_2"]').checked).toBe(true);
     expect($('input[name="kind"][value="santa_dash"]').checked).toBe(false);
   });
 

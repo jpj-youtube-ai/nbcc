@@ -1,5 +1,6 @@
 import { londonToday } from "../events/model";
 import { dayCount, pacePrompt } from "./call-prompts";
+import { categoryLabel } from "./categories";
 import type { FundraiserRecord, Meter } from "./model";
 
 // TASK-515: keeping in touch with an organiser, automatically. Which of the automatic emails is due
@@ -64,8 +65,19 @@ export const TOUCH_WHEN: Record<TouchKind, string> = {
   on_track: "Once, when they are on track for their target.",
 };
 
-/** Wording written for this task, waiting for Jaimie to sign it off (the target one was changed). */
-export const NEW_WORDING_KINDS: readonly TouchKind[] = ["target", "need_a_hand", "on_track"];
+/**
+ * Wording written for this task, for Jaimie to sign off: the target one was changed, finished's line
+ * about who NBCC supports changed, and two are new.
+ */
+export const NEW_WORDING_KINDS: readonly TouchKind[] = ["target", "finished", "need_a_hand", "on_track"];
+
+// 16, 17 and 18 leave out the amount when nothing has been raised: those versions are new too.
+const ZERO_VARIANTS: ReadonlySet<TouchKind> = new Set(["week_after", "finished", "year_on"]);
+
+/** Is this email, as it would go with this much raised, wording still to be signed off? */
+export function isNewWording(kind: TouchKind, raisedPence: number): boolean {
+  return NEW_WORDING_KINDS.includes(kind) || (ZERO_VARIANTS.has(kind) && raisedPence <= 0);
+}
 
 export const FIRST_GIFT_DAYS = 7;
 export const WEEK_DAYS = 7;
@@ -104,12 +116,13 @@ export type TouchFundraiser = Pick<
 /**
  * Is this fundraiser in memory of someone? A page in memory of someone must never get these upbeat
  * automatic emails (Jaimie, 2026-10-03): no "high fives", no "you did it". There are no in memory
- * pages yet, so nothing is, and this says no for everyone. When they are built, this is the one
- * place that recognises one, and every automatic email already asks it first.
+ * pages yet, so until there are, a category whose key or name mentions memory (one staff add, like
+ * "In memory") counts as one. When real in memory pages are built, this is the one place that
+ * recognises them, and every automatic email already asks it first.
  */
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-export function isQuietFundraiser(_f: Pick<FundraiserRecord, "kind">): boolean {
-  return false;
+export function isQuietFundraiser(f: Pick<FundraiserRecord, "kind">): boolean {
+  const key = String(f.kind ?? "");
+  return /memory/i.test(key) || /memory/i.test(categoryLabel(key));
 }
 
 export interface TouchOptions {
@@ -150,6 +163,10 @@ export function dueTouches(f: TouchFundraiser, facts: TouchFacts, today: string,
     if (target && raised >= target) step = "target";
     else if (target && raised * 2 >= target) step = "halfway";
     else if (facts.firstOnlineGiftAt && dayCount(ukDay(facts.firstOnlineGiftAt), today) <= FIRST_GIFT_DAYS) step = "first_gift";
+    // Halfway and target cheer them on to keep sharing or raise their target: never once the date
+    // has gone (on the day itself, still).
+    const over = f.eventDate !== null && f.eventDate !== undefined && f.eventDate < today;
+    if ((step === "halfway" || step === "target") && over) step = null;
     if (step && !STEPS.slice(STEPS.indexOf(step)).some((k) => sent.has(k))) due.add(step);
   }
 

@@ -249,8 +249,8 @@ const BUILDERS: Record<TouchKind, Builder> = {
   // 17, approved, with the certificate (TASK-504). With nothing raised, the amount is left out.
   finished: (d, hi, t) => {
     const thanks = "Thank you for every step, every share and every ask. You’ve made a real difference to the children, young people and vulnerable adults we support.";
-    const lead = d.raisedPence > 0 ? `<b>${t}</b> raised an incredible <b>${pounds(d.raisedPence)}</b> for NBCC. ${thanks}` : `Thank you so much for <b>${t}</b>. ${thanks.replace("Thank you for every", "For every")}`;
-    const leadText = d.raisedPence > 0 ? `${d.title} raised an incredible ${pounds(d.raisedPence)} for NBCC. ${thanks}` : `Thank you so much for ${d.title}. ${thanks.replace("Thank you for every", "For every")}`;
+    const lead = d.raisedPence > 0 ? `<b>${t}</b> raised an incredible <b>${pounds(d.raisedPence)}</b> for NBCC. ${thanks}` : `Thank you so much for <b>${t}</b>, ${thanks.replace("Thank you for every", "and for every")}`;
+    const leadText = d.raisedPence > 0 ? `${d.title} raised an incredible ${pounds(d.raisedPence)} for NBCC. ${thanks}` : `Thank you so much for ${d.title}, ${thanks.replace("Thank you for every", "and for every")}`;
     const cert = "We’ve made you a certificate to say thank you. Print it, frame it, show it off!";
     const after = "Your page stays up, so late gifts still count. And if you fancy doing something again, we’d love that.";
     const body =

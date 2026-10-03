@@ -165,6 +165,19 @@ describe("the preview", () => {
     expect(body.sample).toBe(true);
   });
 
+  it("shows the example with nothing raised yet, marking 16, 17 and 18's versions of it as new wording", async () => {
+    const t = tokenFor("viewer");
+    const zero = await run(routes.getTouchPreview, { token: t, params: { kind: "week_after" }, query: { sample: "zero" } });
+    const body = zero.body as { html: string; newWording: boolean; sample: boolean };
+    expect(body.sample).toBe(true);
+    expect(body.newWording).toBe(true);
+    expect(body.html).not.toContain("So far you");
+    const raised = await run(routes.getTouchPreview, { token: t, params: { kind: "week_after" } });
+    expect((raised.body as { newWording: boolean }).newWording).toBe(false);
+    const finished = await run(routes.getTouchPreview, { token: t, params: { kind: "finished" } });
+    expect((finished.body as { newWording: boolean }).newWording).toBe(true);
+  });
+
   it("shows an email for a real fundraiser, from its record", async () => {
     const res = await run(routes.getTouchPreview, { token: tokenFor("viewer"), params: { kind: "halfway" }, query: { fundraiserId: "12" } });
     const body = res.body as { html: string; sample: boolean; title: string };

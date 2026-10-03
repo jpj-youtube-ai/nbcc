@@ -119,6 +119,12 @@ describe("the approved words", () => {
     expect(mail.html).toContain("With love and huge thanks,");
   });
 
+  it("17 with nothing raised thanks them without an amount (new wording)", () => {
+    const mail = buildTouchEmail("finished", data({ raisedPence: 0 }));
+    expect(mail.html).toContain("Thank you so much for <b>Sam&#39;s Santa Dash</b>, and for every step, every share and every ask.");
+    expect(mail.html).not.toContain("£0");
+  });
+
   it("18, a year on", () => {
     const mail = buildTouchEmail("year_on", data({ raisedPence: 61200 }));
     expect(mail.subject).toBe("A year ago today...");

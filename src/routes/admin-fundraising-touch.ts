@@ -7,7 +7,7 @@ import { getFundraiser } from "../db/fundraisers";
 import { getTouchSettings, readTouchState, recordPromptCall, setTouchEmailsOn, TouchError } from "../db/fundraising-touch";
 import { callPrompts, PROMPT_KEYS, type CallPrompt, type PromptCall, type PromptKey } from "../fundraising/call-prompts";
 import { buildTouchEmail, sampleTouchData, touchEmailData } from "../fundraising/touch-emails";
-import { NEW_WORDING_KINDS, nextTouch, TOUCH_KINDS, TOUCH_LABELS, TOUCH_WHEN, type TouchKind, type TouchSent } from "../fundraising/touch-rules";
+import { isNewWording, NEW_WORDING_KINDS, nextTouch, TOUCH_KINDS, TOUCH_LABELS, TOUCH_WHEN, type TouchKind, type TouchSent } from "../fundraising/touch-rules";
 import { followUpToday } from "../fundraising/follow-up";
 
 // TASK-515: keeping in touch, in Admin > Fundraising. Section "fundraising": viewers look, editors
@@ -19,6 +19,7 @@ import { followUpToday } from "../fundraising/follow-up";
 //                                                      the next 8am run would send (were it on),
 //                                                      and the call prompts showing today          view
 //   GET  /api/admin/fundraising/touch/preview/:kind    one email, rendered, for the invented sample
+//        ?sample=zero                                  (with nothing raised yet)
 //        ?fundraiserId=N                               or for that fundraiser                      view
 //   PUT  /api/admin/fundraising/touch/settings         { on: true | false }                        admin
 //   POST /api/admin/fundraisers/:id/prompt-calls       { prompt, note? }                           edit
@@ -76,6 +77,8 @@ export async function getTouchPreview(req: Request, res: Response): Promise<Resp
   const raw = (req.query ?? {}).fundraiserId;
   try {
     let data = sampleTouchData(kind, base());
+    // The example with nothing raised yet: 16, 17 and 18 read differently then.
+    if ((req.query ?? {}).sample === "zero") data = { ...data, raisedPence: 0 };
     let sample = true;
     if (raw !== undefined && raw !== "") {
       const id = Number(raw);
@@ -86,7 +89,7 @@ export async function getTouchPreview(req: Request, res: Response): Promise<Resp
       sample = false;
     }
     const mail = buildTouchEmail(kind, data);
-    return res.status(200).json({ kind, label: TOUCH_LABELS[kind], newWording: NEW_WORDING_KINDS.includes(kind), sample, title: data.title, ...mail });
+    return res.status(200).json({ kind, label: TOUCH_LABELS[kind], newWording: isNewWording(kind, data.raisedPence), sample, title: data.title, ...mail });
   } catch (err) {
     return failed(res, "automatic email preview", err);
   }

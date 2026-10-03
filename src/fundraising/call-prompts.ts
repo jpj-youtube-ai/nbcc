@@ -1,5 +1,6 @@
 import { londonToday } from "../events/model";
 import { pounds } from "./emails";
+import { isKind } from "./categories";
 import type { FundraiserRecord, Meter } from "./model";
 
 // TASK-515: the smart call prompts in Admin > Fundraising (Jaimie's rules, 2026-10-03). A pill on a
@@ -173,12 +174,10 @@ export const PROMPT_RULES: readonly PromptRule[] = [
 
 const RULES = new Map(PROMPT_RULES.map((r) => [r.key, r]));
 
-// Kinds by their stored keys, old and new, so the rules read a sign up from before the categories
-// were split (run_walk, bake_sale) and one from after (run, walk, bake_sale_2, coffee_morning) alike.
-// Plain keys, on purpose: nothing here depends on the list of kinds the sign up form offers.
-const TIN_KINDS: ReadonlySet<string> = new Set(["bake_sale", "bake_sale_2", "coffee_morning"]);
-const SPONSOR_KINDS: ReadonlySet<string> = new Set(["run_walk", "run", "walk", "santa_dash"]);
-const kindIn = (kinds: ReadonlySet<string>, kind: unknown): boolean => kinds.has(String(kind));
+// By category (src/fundraising/categories.ts): isKind matches an old combined category and the
+// ones it was split into both ways, so a bake sale or coffee morning from before the split, and a
+// Bake sale or Coffee morning since, are all offered a tin; a run, walk or Santa dash, old or new,
+// the sponsor form.
 
 /** The pace verdict, or null when it is none of the three (or cannot be judged). */
 export function pacePrompt(f: PromptFundraiser, today: string): PaceVerdict | null {
@@ -226,8 +225,8 @@ export function callPrompts(f: PromptFundraiser, facts: PromptFacts, today: stri
   if (pace) keys.push(pace);
   if (f.path === "raising" && f.public && beforeDate && quietFrom && quietDays >= QUIET_DAYS) keys.push("quiet");
   const stillToCome = daysAway === null || daysAway >= 0;
-  if (stillToCome && kindIn(TIN_KINDS, f.kind) && w.bucketCount + w.tinCount + w.buckets === 0) keys.push("tin");
-  if (stillToCome && kindIn(SPONSOR_KINDS, f.kind) && !facts.sponsorFormAsked) keys.push("sponsor_form");
+  if (stillToCome && isKind(f.kind, "bake_sale") && w.bucketCount + w.tinCount + w.buckets === 0) keys.push("tin");
+  if (stillToCome && isKind(f.kind, "run_walk", "santa_dash") && !facts.sponsorFormAsked) keys.push("sponsor_form");
   if (daysAway !== null && daysAway >= 0 && daysAway <= POSTERS_DAYS && w.posterCount + w.leafletCount + w.leaflets === 0) keys.push("posters");
 
   return keys
@@ -243,7 +242,7 @@ export interface PromptCounts {
   ahead: number;
   onTrack: number;
   quiet: number;
-  /** Every material suggestion (tin, sponsor form, posters), added up. */
+  /** The tin and posters suggestions, added up (never the sponsor form: see promptCounts). */
   materials: number;
 }
 
@@ -256,7 +255,8 @@ export function promptCounts(list: Array<{ f: PromptFundraiser; facts: PromptFac
       else if (p.key === "ahead") out.ahead += 1;
       else if (p.key === "on_track") out.onTrack += 1;
       else if (p.key === "quiet") out.quiet += 1;
-      else out.materials += 1;
+      // The sponsor form shows as a pill, but is not a thing waiting: nothing records it but a call.
+      else if (p.key !== "sponsor_form") out.materials += 1;
     }
   }
   return out;

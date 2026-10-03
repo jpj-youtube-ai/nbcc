@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   canTouch,
   dueTouches,
+  isNewWording,
   isQuietFundraiser,
   nextTouch,
   TOUCH_KINDS,
@@ -10,6 +11,7 @@ import {
   type TouchFacts,
 } from "../../src/fundraising/touch-rules";
 import { londonToday } from "../../src/events/model";
+import { BUILT_IN_CATEGORIES, rememberCategories } from "../../src/fundraising/categories";
 import { meter, type FundraiserRecord, type Meter } from "../../src/fundraising/model";
 
 // TASK-515: when each automatic email to an organiser is due. Pure, against fixed UK days (and two
@@ -48,7 +50,16 @@ describe("the automatic emails", () => {
       "first_gift", "halfway", "target", "week_before", "week_after", "finished", "year_on", "need_a_hand", "on_track",
     ]);
     for (const k of TOUCH_KINDS) expect(TOUCH_LABELS[k].length).toBeGreaterThan(0);
-    expect([...NEW_WORDING_KINDS]).toEqual(["target", "need_a_hand", "on_track"]);
+    // Finished too: its line about who NBCC supports changed.
+    expect([...NEW_WORDING_KINDS]).toEqual(["target", "finished", "need_a_hand", "on_track"]);
+  });
+
+  it("marks the nothing raised versions of 16, 17 and 18 as new wording too", () => {
+    for (const k of ["week_after", "finished", "year_on"] as const) expect(isNewWording(k, 0)).toBe(true);
+    expect(isNewWording("week_after", 54000)).toBe(false);
+    expect(isNewWording("year_on", 61200)).toBe(false);
+    expect(isNewWording("halfway", 0)).toBe(false);
+    expect(isNewWording("target", 50000)).toBe(true);
   });
 });
 
@@ -59,6 +70,16 @@ describe("who may get one", () => {
     expect(canTouch(fr({ path: "event" }))).toBe(false);
     expect(canTouch(fr({ email: "  " }))).toBe(false);
     for (const status of ["new", "declined"] as const) expect(canTouch(fr({ status }))).toBe(false);
+  });
+
+  it("treats a category about memory as in memory, until real in memory pages exist", () => {
+    rememberCategories([...BUILT_IN_CATEGORIES, { key: "remembering", label: "In Memory of a loved one", active: true }]);
+    expect(isQuietFundraiser(fr({ kind: "remembering" } as never))).toBe(true);
+    expect(isQuietFundraiser(fr({ kind: "in_memory" } as never))).toBe(true);
+    expect(isQuietFundraiser(fr({ kind: "santa_dash" }))).toBe(false);
+    expect(canTouch(fr({ kind: "remembering" } as never))).toBe(false);
+    expect(nextTouch(fr({ kind: "in_memory" } as never, 30000), facts(), "2026-11-29")).toBeNull();
+    rememberCategories(BUILT_IN_CATEGORIES);
   });
 
   it("never sends upbeat emails to an in memory page", () => {
@@ -107,6 +128,24 @@ describe("halfway and the target", () => {
 
   it("never goes back down the steps once a higher one has gone", () => {
     expect(next(fr({}, 30000), "2026-10-12", { sent: [sentOn("target", "2026-10-10T07:00:00Z")] })).toBeNull();
+  });
+
+  it("never after the date: no keep sharing or raise your target once it has happened", () => {
+    // Date 6 December. On the day itself it still goes; the day after, never.
+    expect(next(fr({}, 30000), "2026-12-06")).toBe("halfway");
+    expect(next(fr({}, 50000), "2026-12-06")).toBe("target");
+    expect(dueTouches(fr({}, 30000), facts(), "2026-12-07")).not.toContain("halfway");
+    expect(dueTouches(fr({}, 50000), facts(), "2026-12-07")).not.toContain("target");
+    // And never falls back to the first gift instead.
+    expect(dueTouches(fr({}, 50000), facts({ firstOnlineGiftAt: "2026-12-06T10:00:00Z" }), "2026-12-07")).not.toContain("first_gift");
+  });
+
+  it("goes with no date at all", () => {
+    expect(next(fr({ eventDate: null }, 50000), "2027-03-01")).toBe("target");
+  });
+
+  it("never for a finished fundraiser", () => {
+    expect(dueTouches(fr({ status: "finished", eventDate: null }, 50000), facts(), "2026-11-01")).toEqual([]);
   });
 
   it("needs a target", () => {

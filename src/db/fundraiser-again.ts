@@ -18,8 +18,21 @@ export interface FoundAgain {
   usedAt: Date | null;
 }
 
-export async function findAgainByHash(tokenHash: string): Promise<FoundAgain | null> {
-  const r = await pool.query("SELECT fundraiser_id, expires_at, used_at FROM fundraiser_again_tokens WHERE token_hash = $1", [tokenHash]);
+/** How many times one link may fetch last year's details before the sign up uses it. */
+export const AGAIN_LOOKUPS = 3;
+
+/**
+ * Look a link up by its hash, counting the look: only while it is unused, in date, and has looks
+ * left (review fix: a forwarded or leaked link cannot keep fetching the organiser's details for 60
+ * days). Null when there is nothing to give; the sign up can still use the link (markAgainUsed).
+ */
+export async function lookUpAgain(tokenHash: string): Promise<FoundAgain | null> {
+  const r = await pool.query(
+    `UPDATE fundraiser_again_tokens SET lookups = lookups + 1
+      WHERE token_hash = $1 AND used_at IS NULL AND expires_at > now() AND lookups < $2
+      RETURNING fundraiser_id, expires_at, used_at`,
+    [tokenHash, AGAIN_LOOKUPS],
+  );
   const row = r.rows[0];
   if (!row) return null;
   return {

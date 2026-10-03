@@ -66,7 +66,8 @@ describe("the keep in touch migration", () => {
   it("keeps a Do it again link only as a hash, with when it runs out and when it was used", () => {
     const t = calls.find((c) => c.op === "createTable" && c.args[0] === "fundraiser_again_tokens");
     const c = (t?.args[1] ?? {}) as Record<string, Col & { unique?: boolean }>;
-    expect(Object.keys(c).sort()).toEqual(["created_at", "expires_at", "fundraiser_id", "id", "token_hash", "used_at", "used_by_fundraiser_id"]);
+    expect(Object.keys(c).sort()).toEqual(["created_at", "expires_at", "fundraiser_id", "id", "lookups", "token_hash", "used_at", "used_by_fundraiser_id"]);
+    expect(c.lookups).toMatchObject({ type: "integer", notNull: true, default: 0 });
     expect(c.token_hash).toMatchObject({ notNull: true, unique: true });
     expect(c.expires_at.notNull).toBe(true);
     expect(c.fundraiser_id).toMatchObject({ references: "fundraisers", onDelete: "CASCADE" });

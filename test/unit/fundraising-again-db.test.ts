@@ -7,7 +7,7 @@ const { query } = vi.hoisted(() => ({ query: vi.fn() }));
 vi.mock("../../src/db/pool", () => ({ pool: { query, connect: vi.fn() } }));
 vi.mock("../../src/config", () => ({ config: { NODE_ENV: "test" } }));
 
-import { createAgainToken, findAgainByHash, markAgainUsed } from "../../src/db/fundraiser-again";
+import { AGAIN_LOOKUPS, createAgainToken, lookUpAgain, markAgainUsed } from "../../src/db/fundraiser-again";
 
 beforeEach(() => {
   query.mockReset().mockResolvedValue({ rows: [] });
@@ -23,12 +23,17 @@ describe("Do it again links", () => {
     expect(params).toEqual([7, HASH, new Date("2028-02-04T08:00:00Z")]);
   });
 
-  it("finds one by its hash", async () => {
+  it("finds one by its hash, counting each look, at most 3 times, and only while it can be used", async () => {
+    expect(AGAIN_LOOKUPS).toBe(3);
     query.mockResolvedValueOnce({ rows: [{ fundraiser_id: 7, expires_at: new Date("2028-02-04T08:00:00Z"), used_at: null }] });
-    expect(await findAgainByHash(HASH)).toEqual({ fundraiserId: 7, expiresAt: new Date("2028-02-04T08:00:00Z"), usedAt: null });
-    expect(query.mock.calls[0][0]).toMatch(/WHERE token_hash = \$1/);
+    expect(await lookUpAgain(HASH)).toEqual({ fundraiserId: 7, expiresAt: new Date("2028-02-04T08:00:00Z"), usedAt: null });
+    const [sql, params] = query.mock.calls[0];
+    expect(sql).toMatch(/UPDATE fundraiser_again_tokens SET lookups = lookups \+ 1/);
+    expect(sql).toMatch(/WHERE token_hash = \$1 AND used_at IS NULL AND expires_at > now\(\) AND lookups < \$2/);
+    expect(params).toEqual([HASH, 3]);
+    // A fourth look, a used or out of date link: nothing comes back.
     query.mockResolvedValueOnce({ rows: [] });
-    expect(await findAgainByHash(HASH)).toBeNull();
+    expect(await lookUpAgain(HASH)).toBeNull();
   });
 
   it("is used once, only while in date, with its History row in the same statement", async () => {

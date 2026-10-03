@@ -5,12 +5,12 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 // the same plain 404, so a guess learns nothing; tries are limited per address. The sign up made from
 // it marks it used. Every name here is invented.
 
-const { findAgainByHash, markAgainUsed, getFundraiser } = vi.hoisted(() => ({
-  findAgainByHash: vi.fn(),
+const { lookUpAgain, markAgainUsed, getFundraiser } = vi.hoisted(() => ({
+  lookUpAgain: vi.fn(),
   markAgainUsed: vi.fn(),
   getFundraiser: vi.fn(),
 }));
-vi.mock("../../src/db/fundraiser-again", () => ({ findAgainByHash, markAgainUsed }));
+vi.mock("../../src/db/fundraiser-again", () => ({ lookUpAgain, markAgainUsed }));
 vi.mock("../../src/db/fundraisers", () => ({ getFundraiser }));
 vi.mock("../../src/config", () => ({ config: { NODE_ENV: "test" } }));
 vi.mock("../../src/db/pool", () => ({ pool: { query: vi.fn(), connect: vi.fn() } }));
@@ -41,7 +41,7 @@ const last = {
 
 beforeEach(() => {
   againLimiterReset();
-  findAgainByHash.mockReset().mockResolvedValue({ fundraiserId: 7, expiresAt: new Date(Date.now() + 86_400_000), usedAt: null });
+  lookUpAgain.mockReset().mockResolvedValue({ fundraiserId: 7, expiresAt: new Date(Date.now() + 86_400_000), usedAt: null });
   markAgainUsed.mockReset().mockResolvedValue(7);
   getFundraiser.mockReset().mockResolvedValue(last);
   vi.spyOn(console, "error").mockImplementation(() => undefined);
@@ -51,7 +51,7 @@ describe("asking for last year's details", () => {
   it("looks the link up by its hash and gives back only the safe details", async () => {
     const res = await ask({ token: TOKEN });
     expect(res.statusCode).toBe(200);
-    expect(findAgainByHash).toHaveBeenCalledWith(hashAgainToken(TOKEN));
+    expect(lookUpAgain).toHaveBeenCalledWith(hashAgainToken(TOKEN));
     expect(getFundraiser).toHaveBeenCalledWith(7);
     expect(Object.keys(res.body).sort()).toEqual(
       ["description", "email", "facebook", "firstName", "instagram", "kind", "kindOther", "lastName", "path", "phone", "targetPence", "title", "town", "venue"].sort(),
@@ -62,11 +62,11 @@ describe("asking for last year's details", () => {
 
   it("answers an unknown, used or out of date link, or a missing fundraiser, with the same 404", async () => {
     const answers: unknown[] = [];
-    findAgainByHash.mockResolvedValueOnce(null);
+    lookUpAgain.mockResolvedValueOnce(null);
     answers.push((await ask({ token: TOKEN })).body);
-    findAgainByHash.mockResolvedValueOnce({ fundraiserId: 7, expiresAt: new Date(Date.now() + 86_400_000), usedAt: new Date() });
+    lookUpAgain.mockResolvedValueOnce({ fundraiserId: 7, expiresAt: new Date(Date.now() + 86_400_000), usedAt: new Date() });
     answers.push((await ask({ token: TOKEN })).body);
-    findAgainByHash.mockResolvedValueOnce({ fundraiserId: 7, expiresAt: new Date(Date.now() - 1000), usedAt: null });
+    lookUpAgain.mockResolvedValueOnce({ fundraiserId: 7, expiresAt: new Date(Date.now() - 1000), usedAt: null });
     answers.push((await ask({ token: TOKEN })).body);
     getFundraiser.mockResolvedValueOnce(null);
     answers.push((await ask({ token: TOKEN })).body);
@@ -76,15 +76,24 @@ describe("asking for last year's details", () => {
     expect((await ask({ token: "x" })).statusCode).toBe(404);
   });
 
+  it("stops giving the details after the link's few looks, though the sign up can still use it", async () => {
+    // The database counts the looks (lookUpAgain); once they are gone it finds nothing: a plain 404.
+    lookUpAgain.mockResolvedValueOnce(null);
+    expect((await ask({ token: TOKEN })).statusCode).toBe(404);
+    expect(getFundraiser).not.toHaveBeenCalled();
+    await useAgain(TOKEN, 31);
+    expect(markAgainUsed).toHaveBeenCalledWith(hashAgainToken(TOKEN), 31);
+  });
+
   it("limits tries from one address", async () => {
-    findAgainByHash.mockResolvedValue(null);
+    lookUpAgain.mockResolvedValue(null);
     for (let i = 0; i < 30; i++) expect((await ask({ token: TOKEN }, "198.51.100.9")).statusCode).toBe(404);
     expect((await ask({ token: TOKEN }, "198.51.100.9")).statusCode).toBe(429);
     expect((await ask({ token: TOKEN }, "198.51.100.10")).statusCode).toBe(404);
   });
 
   it("says so plainly when it cannot look", async () => {
-    findAgainByHash.mockRejectedValue(new Error("down"));
+    lookUpAgain.mockRejectedValue(new Error("down"));
     expect((await ask({ token: TOKEN })).statusCode).toBe(503);
   });
 });

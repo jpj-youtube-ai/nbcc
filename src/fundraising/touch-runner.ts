@@ -111,7 +111,14 @@ async function sendOne(
     const mail = buildTouchEmail(kind, data);
     await deps.send(kind, f.name, { email: f.email, from: config.BALL_FROM_EMAIL, replyTo: config.BALL_FROM_EMAIL, ...mail });
   } catch (err) {
-    console.error(`fundraising automatic email (${kind}) failed:`, why(err));
+    // An error from the mail service can come after it has accepted the email (a timeout), so it may
+    // still have arrived. It is given back and tried again on a later run (on purpose, after review: a rare
+    // second copy beats one never sent); the log says so plainly, by fundraiser id, never the address.
+    console.error(
+      `fundraising automatic email (${kind}) for fundraiser ${f.id} did not confirm as sent; it may still have reached them, ` +
+        `and will be tried again on a later run (the email log has the attempt):`,
+      why(err),
+    );
     try {
       await deps.release(f.id, kind);
     } catch (e) {

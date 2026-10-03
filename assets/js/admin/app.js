@@ -10263,7 +10263,13 @@
             (!hasPage ? "a short note to say they are on our list." : "their page link, and the page goes on the website.")),
       decline: "Decline " + f.title + "?" + (f.status === "approved" ? " It comes off the website straight away." : "") +
         " They are not emailed, so tell them yourself if you need to.",
-      finish: "Mark " + f.title + " as finished? It comes off the Get involved list. Its page stays up with a thank you banner and can still take gifts. What it raised stays in the records.",
+      finish: "Mark " + f.title + " as finished? It comes off the Get involved list. Its page stays up with a thank you banner and can still take gifts. What it raised stays in the records." +
+        // TASK-515: the thank you (email 17) goes now, only while automatic emails are on.
+        (hasPage
+          ? frTouch && frTouch.settings && frTouch.settings.on
+            ? " Automatic emails are on, so we email " + f.name + " their thank you, with their certificate."
+            : " Automatic emails are off, so no thank you email goes."
+          : ""),
     }[move];
     if (!window.confirm(question)) return;
     var body = {};
@@ -11005,8 +11011,10 @@
     var list = ((frData && frData.fundraisers) || []).filter(function (f) {
       return f.path === "raising" && f.public && (f.status === "approved" || f.status === "finished");
     });
-    if (frTouchFor && !list.some(function (f) { return String(f.id) === frTouchFor; })) frTouchFor = "";
+    if (frTouchFor && frTouchFor !== "zero" && !list.some(function (f) { return String(f.id) === frTouchFor; })) frTouchFor = "";
     pick.innerHTML = '<option value="">An example: Sam\'s Santa Dash</option>' +
+      // 16, 17 and 18 read differently when nothing has been raised: those versions are new wording.
+      '<option value="zero"' + (frTouchFor === "zero" ? " selected" : "") + ">The same example, with nothing raised yet</option>" +
       list.map(function (f) {
         return '<option value="' + f.id + '"' + (String(f.id) === frTouchFor ? " selected" : "") + ">" + H.escapeHtml(f.title + ", " + f.name) + "</option>";
       }).join("");
@@ -11021,7 +11029,8 @@
     frTouchShown = kind + "|" + frTouchFor;
     var info = frTouchKindInfo(kind);
     frTeamSay("frTouchStatus", "", false);
-    var path = "/api/admin/fundraising/touch/preview/" + encodeURIComponent(kind) + (frTouchFor ? "?fundraiserId=" + encodeURIComponent(frTouchFor) : "");
+    var path = "/api/admin/fundraising/touch/preview/" + encodeURIComponent(kind) +
+      (frTouchFor === "zero" ? "?sample=zero" : frTouchFor ? "?fundraiserId=" + encodeURIComponent(frTouchFor) : "");
     return authFetch(path)
       .then(okJson)
       .then(function (d) {

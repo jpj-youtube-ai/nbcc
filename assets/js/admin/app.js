@@ -9153,6 +9153,7 @@
     detail: "frDetailStatus", edit: "frEditStatus", cash: "frCashStatus", photo: "frPhotoStatus",
     // TASK-503
     call: "frCallStatus", list: "frListStatus",
+    split: "frSplitStatus", // Jaimie, 2026-10-03
     // TASK-505
     req: "frReqStatus",
     // TASK-506
@@ -9569,6 +9570,7 @@
         frNewsSection() + // TASK-506
         frThanksSection() + // TASK-507
         '<section class="fx-panel"><h4>What they told us</h4>' + frAboutPanel(f) + "</section>" +
+        frSplitSection(f) +
         '<section class="fx-panel"><h4>The organiser</h4>' + frContactPanel(f) + "</section>" +
         '<section class="fx-panel"><h4>What they would like</h4>' + frWantsPanel(f) + "</section>" +
         '<section class="fx-panel"><h4>Photo for its page</h4>' + frPhotoPanel(f, write) + "</section>" +
@@ -9725,9 +9727,85 @@
         fulfilRow("On the NBCC website", f.public ? "Show it on our website" : "Not on the website") +
         fulfilRow("Web address", '<span class="fx-mono">/fundraise/' + H.escapeHtml(f.slug) + "</span>") +
         fulfilRow("Signed up", H.escapeHtml(H.fmtDate(f.createdAt))) +
+        frAgeAndSplitRows(f) +
         (f.path === "event" ? frEventRows(f) : "") +
       "</dl>"
     );
+  }
+
+  // Jaimie, 2026-10-03: 18 or over, and sharing with another cause. A sign up from before they were
+  // asked has neither (null), and shows nothing.
+  function frSplitWords(f) {
+    if (f.sharesWithOther === true) {
+      return "Yes: " + f.nbccSharePercent + "% to NBCC, the rest to " + (f.otherCauseName || "");
+    }
+    return "No, all of it comes to NBCC";
+  }
+  function frAgeAndSplitRows(f) {
+    return (
+      (f.over18 === true ? fulfilRow("18 or over", "Confirmed 18 or over") : "") +
+      (f.sharesWithOther === true || f.sharesWithOther === false ? fulfilRow("Sharing with another cause", H.escapeHtml(frSplitWords(f))) : "")
+    );
+  }
+
+  // Organisers can never change the split. An admin may correct it here, only before the first gift;
+  // the server checks that again (409, its words shown). Editors and viewers see it in What they told us.
+  function frHasGifts() {
+    var m = (frDetail && frDetail.meter) || {};
+    return (Number(m.onlinePence) || 0) > 0 || (Number(m.cashPence) || 0) > 0 ||
+      ((frDetail && frDetail.cash) || []).length > 0 || ((frDetail && frDetail.wall) || []).length > 0;
+  }
+  function frSplitSection(f) {
+    if (!(isAdmin() && frCanWrite())) return "";
+    var body;
+    if (frHasGifts()) {
+      body = '<p class="fx-help">The split is locked: this fundraiser has had its first gift, and people gave on the split as it stood.</p>';
+    } else {
+      var yes = f.sharesWithOther === true;
+      body =
+        '<form id="frSplitForm" class="fr-split-form" novalidate>' +
+          '<p class="fx-help">Only correct it if the organiser has told you it was wrong. Once anyone has given, it cannot be changed.</p>' +
+          '<fieldset class="fr-split-choice"><legend class="fx-call-label">Sharing what they raise with another cause?</legend>' +
+            '<label><input type="radio" name="sharesWithOther" id="frSplitYes" value="yes"' + (yes ? " checked" : "") + "> Yes</label> " +
+            '<label><input type="radio" name="sharesWithOther" id="frSplitNo" value="no"' + (yes ? "" : " checked") + "> No</label>" +
+          "</fieldset>" +
+          '<label class="fx-call-label" for="frSplitPercent">Percentage to NBCC, 1 to 99</label>' +
+          '<input class="fr-input fr-split-percent" id="frSplitPercent" name="nbccSharePercent" type="number" min="1" max="99" step="1" inputmode="numeric" value="' +
+            (yes && f.nbccSharePercent ? H.escapeHtml(String(f.nbccSharePercent)) : "") + '">' +
+          '<label class="fx-call-label" for="frSplitCause">The other cause’s name</label>' +
+          '<input class="fr-input" id="frSplitCause" name="otherCauseName" type="text" maxlength="120" value="' +
+            (yes && f.otherCauseName ? H.escapeHtml(f.otherCauseName) : "") + '">' +
+          '<div class="fx-call-row fr-actions"><button class="admin-btn admin-btn--small" type="submit">Save the split</button></div>' +
+        "</form>";
+    }
+    return '<section class="fx-panel fx-panel--wide fr-split-panel" data-frsplit><h4>Sharing with another cause</h4>' + body +
+      frNoticeHtml("split", "frSplitStatus") + "</section>";
+  }
+  function frSaveSplit(form) {
+    if (frBusy) return;
+    var f = frOpenRecord();
+    if (!f) return;
+    var yes = !!form.querySelector("#frSplitYes:checked");
+    var percent = String((form.querySelector("#frSplitPercent") || {}).value || "").trim();
+    var cause = String((form.querySelector("#frSplitCause") || {}).value || "").trim();
+    var body = { sharesWithOther: yes, nbccSharePercent: yes ? percent : null, otherCauseName: yes ? cause : "" };
+    var question = yes
+      ? "Change the split for " + f.title + " to " + percent + "% to NBCC, the rest to " + cause + "? The page and every material will say it."
+      : "Change the split for " + f.title + " to all of it coming to NBCC?";
+    if (!window.confirm(question)) return;
+    frRun("split", "Saving…", function (run) {
+      return frSend("PUT", "/api/admin/fundraisers/" + f.id + "/split", body).then(function (r) {
+        if (!r.ok) {
+          var fields = r.status === 400 && r.body && r.body.fields
+            ? Object.keys(r.body.fields).map(function (k) { return r.body.fields[k]; }).join(" ")
+            : "";
+          run.say(fields || frRefusal(r, "The split was not saved. Please try again."), true);
+          return;
+        }
+        run.say("Split saved. The page and every material now say it.", false);
+        return frReload();
+      });
+    });
   }
 
   // TASK-499: the event questions, as they answered them. A sign up from before the questions has
@@ -10621,6 +10699,9 @@
       } else if (form.id === "frReqForm") {
         e.preventDefault();
         frReqSubmit(form);
+      } else if (form.id === "frSplitForm") {
+        e.preventDefault();
+        frSaveSplit(form);
       }
     });
     // What is typed is kept as it is typed, so a redraw (another action, a reload) never loses it.

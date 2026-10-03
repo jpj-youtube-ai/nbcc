@@ -92,7 +92,15 @@
     dressCode: "dressCode",
     included: "included",
     creditName: "creditName",
+    // Jaimie, 2026-10-03
+    over18: "over18Yes",
+    sharesWithOther: "sharesYes",
+    nbccSharePercent: "nbccSharePercent",
+    otherCauseName: "otherCauseName",
   };
+  // Jaimie, 2026-10-03: what a No to "Are you 18 or over?" says. The server says the same.
+  var UNDER_18 =
+    "You need to be 18 or over to set up a page. Ask a parent, guardian or another grown up you trust to set it up for you: they can name you on the page (for example, 'for Ella's 10th birthday'). Any questions, call 01292 811 015 or email events@nbcc.scot.";
   // The answers only an event is asked: what is sent for one, and blanks for raising money.
   var EVENT_TEXT = ["cardLine", "endTime", "venueAddress", "venuePostcode", "price", "ageLimit", "dressCode", "included", "creditName"];
 
@@ -244,6 +252,39 @@
       if (shoutNote.textContent !== words) shoutNote.textContent = words;
     }
 
+    // --- Jaimie, 2026-10-03: 18 or over ---------------------------------------------------------
+    // A No stops the form there: the kind note says what to do instead, the questions after it are
+    // hidden (data-after-age, by CSS) and never come, and nothing is sent. Yes and they carry on.
+    var ageNote = form.querySelector("[data-age-note]");
+    var over18Yes = el("over18Yes");
+    function under18() {
+      return radio("over18") === "no";
+    }
+    function applyAge() {
+      var no = under18();
+      var words = no ? UNDER_18 : "";
+      if (ageNote && ageNote.textContent !== words) ageNote.textContent = words;
+      form.classList.toggle("fr-under-18", no);
+      // Holds the step unanswered, so the next question never comes while it is No.
+      if (over18Yes && typeof over18Yes.setCustomValidity === "function") over18Yes.setCustomValidity(no ? UNDER_18 : "");
+    }
+
+    // --- Jaimie, 2026-10-03: sharing with another cause ------------------------------------------
+    // NBCC's percentage and the other cause's name, only on a Yes; a No hides and clears them.
+    var splitFields = form.querySelector("[data-split-fields]");
+    function sharing() {
+      return radio("sharesWithOther") === "yes";
+    }
+    function applySplit() {
+      var yes = sharing();
+      if (splitFields) splitFields.hidden = !yes;
+      ["nbccSharePercent", "otherCauseName"].forEach(function (id) {
+        var box = el(id);
+        need(box, yes);
+        if (!yes && box && box.value) box.value = "";
+      });
+    }
+
     // --- the ticket link, only for tickets sold on another website ------------------------------
     var ticketField = form.querySelector("[data-ticket-field]");
     function applyBooking() {
@@ -276,6 +317,13 @@
     // including the first one not yet answered; one with nothing it needs comes along with the one
     // before. Once shown, a step stays shown.
     var steps = Array.prototype.slice.call(form.querySelectorAll("[data-step]"));
+    // Every question after 18 or over, hidden while its answer is No (fr-under-18).
+    var ageStep = form.querySelector("[data-age-step]");
+    if (ageStep) {
+      steps.slice(steps.indexOf(ageStep) + 1).forEach(function (step) {
+        step.setAttribute("data-after-age", "");
+      });
+    }
     var news = form.querySelector("[data-step-news]");
     var showAllRow = form.querySelector("[data-show-all-row]");
     var stepped = steps.length > 1;
@@ -395,6 +443,8 @@
 
     function applyAll() {
       applyPath();
+      applyAge();
+      applySplit();
       applyKind();
       applyBooking();
       applyAddress();
@@ -708,6 +758,11 @@
         instagram: val("instagram"),
         facebook: val("facebook"),
         socialOk: yesNo("socialOk"),
+        // Jaimie, 2026-10-03: never filled in for them, by an invite or Do it again.
+        over18: yesNo("over18"),
+        sharesWithOther: yesNo("sharesWithOther"),
+        nbccSharePercent: sharing() ? val("nbccSharePercent") : null,
+        otherCauseName: sharing() ? val("otherCauseName") : "",
         wants: {
           posterCount: whole("posters"),
           leafletCount: whole("leaflets"),
@@ -774,6 +829,16 @@
       e.preventDefault();
       if (sending) return;
       say("", null);
+      // Under 18: nothing is sent. The note above says what to do instead.
+      if (under18()) {
+        applyAge();
+        try {
+          el("over18No").focus();
+        } catch (err) {
+          /* focus unavailable */
+        }
+        return;
+      }
       // Every question shows before anything is checked, so nothing that needs an answer is hidden.
       revealAll();
       if (!validate(null)) return;

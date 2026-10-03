@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { dateParts, escapeHtml, time12 } from "../events/render";
 import { MATERIALS_STATEMENT, MATERIALS_STATEMENT_SHORT } from "../legal/registration";
-import type { FundraiserRecord, FundraiserStatus, Meter } from "./model";
+import { splitStatement, type FundraiserRecord, type FundraiserStatus, type Meter } from "./model";
 import { TRACKED_PIECES, trackedPath, type TrackedPiece } from "./material-codes";
 import { qrSvg } from "./qr";
 import { formatPounds, shorten } from "./render";
@@ -116,6 +116,13 @@ export interface MaterialFacts {
    * whenever there is no link at all.
    */
   qrLinks: Record<TrackedPiece, string> | null;
+  /**
+   * Jaimie, 2026-10-03: when what is raised is shared with another cause, the statement the Charities
+   * and Benevolent Fundraising (Scotland) Regulations 2009 ask for ("60% of what we raise goes to the
+   * Night Before Christmas Campaign... The rest goes to ..."), on every piece that carries the charity
+   * statement, just before it. Null when it is not shared.
+   */
+  splitStatement: string | null;
 }
 
 /** The first sentence of a story: up to its first full stop, question or exclamation mark. */
@@ -162,6 +169,7 @@ export function materialFacts(
     linkKind: page ? "page" : link ? "get-involved" : null,
     linkWords: link ? link.replace(/^https?:\/\//, "").replace(/\/+$/, "") : null,
     qrLinks,
+    splitStatement: splitStatement(f),
   };
 }
 
@@ -334,7 +342,9 @@ function posterTitleSize(title: string): string {
  * possible"), giving a little way to a long name or line so the QR code keeps its size and
  * everything still fits: 66mm for a short name and line. Never below 38mm (it was 34mm before round two).
  */
-export function posterLogoMm(d: Pick<MaterialFacts, "title" | "line" | "when" | "where" | "targetPence">): number {
+export function posterLogoMm(
+  d: Pick<MaterialFacts, "title" | "line" | "when" | "where" | "targetPence"> & Partial<Pick<MaterialFacts, "splitStatement">>,
+): number {
   const t = d.title.length;
   const l = d.line?.length ?? 0;
   let mm = 66;
@@ -344,6 +354,8 @@ export function posterLogoMm(d: Pick<MaterialFacts, "title" | "line" | "when" | 
   if (l > 70) mm -= 6;
   if (l > 110) mm -= 2;
   if (d.when && d.where && d.targetPence) mm -= 2;
+  // The split statement's two lines in the foot.
+  if (d.splitStatement) mm -= 8;
   return Math.max(38, mm);
 }
 
@@ -404,7 +416,13 @@ function posterCss(logoMm: number): string {
   .p-foot{background:var(--maroon);color:var(--cream);text-align:center;padding:4mm 10mm 3.5mm}
   .p-foot .pledge{font-family:var(--head);font-style:italic;font-size:14pt;line-height:1.3}
   .p-foot .legal{line-height:1.4;opacity:.9;margin:1.5mm auto 0;max-width:182mm}
+  .p-foot .legal.split{opacity:1;font-weight:600}
   ${SIZE_CSS}`;
+}
+
+/** The split statement, when what is raised is shared with another cause; nothing when it is not. */
+function splitHtml(d: MaterialFacts | null, cls: string): string {
+  return d?.splitStatement ? `<div class="${cls}">${escapeHtml(d.splitStatement)}</div>` : "";
 }
 
 /** One poster page, at one size. Its QR code is that size's own short link. */
@@ -436,7 +454,7 @@ function posterPage(d: MaterialFacts, a: MaterialAssets, size: PosterSize): stri
     </div>
     <div class="p-foot">
       <div class="pledge">${EVERY_POUND}</div>
-      <div class="legal">${escapeHtml(MATERIALS_STATEMENT)}</div>
+      ${splitHtml(d, "legal split")}<div class="legal">${escapeHtml(MATERIALS_STATEMENT)}</div>
     </div>
   </div>
   </div>
@@ -508,6 +526,8 @@ function socialData(d: MaterialFacts, a: MaterialAssets) {
     raisedPence: d.raisedPence,
     targetPence: d.targetPence,
     statement: MATERIALS_STATEMENT_SHORT,
+    // Jaimie, 2026-10-03: drawn whole before the statement when shared with another cause.
+    split: d.splitStatement,
     // Only the logo with white lettering is drawn on the maroon pictures.
     logoOnDark: a.logoOnDark,
   };
@@ -570,6 +590,7 @@ const SPONSOR_CSS = `
   .sf-fields .k{font-weight:600;color:var(--maroon);white-space:nowrap}
   .sf-fields .v{border-bottom:1px solid #9b8f86;min-height:6mm;padding:0 1mm .6mm;font-family:var(--head);font-weight:700;color:var(--slate);font-size:11pt;overflow-wrap:anywhere}
   .sf-fields .wide{grid-column:2 / span 3}
+  .sf-split{margin-top:2.5mm;font-size:8.5pt;line-height:1.4;font-weight:600;color:var(--maroon)}
   .sf-decl{margin-top:3mm;background:var(--tan-soft);border-left:3px solid var(--crimson);border-radius:0 2mm 2mm 0;padding:2.2mm 4mm;font-size:7.8pt;line-height:1.45}
   .sf-remember{margin-top:1.6mm;font-size:8pt;font-weight:600;color:var(--maroon)}
   .sf-table{width:100%;border-collapse:collapse;margin-top:2.5mm;table-layout:fixed;font-size:8pt}
@@ -602,7 +623,8 @@ const SPONSOR_HEAD = `<thead><tr><th class="c">No.</th><th>Full name<small>first
 /** The sponsor form's two A4 landscape pages. */
 function sponsorPages(d: MaterialFacts | null, a: MaterialAssets): string {
   const event = d ? escapeHtml(d.title) : "";
-  const decl = `<p class="sf-decl">${escapeHtml(SPONSOR_DECLARATION)}</p>
+  const split = splitHtml(d, "sf-split");
+  const decl = `${split}<p class="sf-decl">${escapeHtml(SPONSOR_DECLARATION)}</p>
     <p class="sf-remember">Remember: please give your full name, home address and postcode, and tick Gift Aid, so that we can claim tax back on your donation.</p>`;
   const head = (heading: string) => `<div class="sf-head">
       <img src="${a.logo}" alt="Night Before Christmas Campaign">
@@ -710,7 +732,7 @@ function certificatePage(d: MaterialFacts, a: MaterialAssets, date: string): str
       <div class="s"><div class="v">${escapeHtml(date)}</div><div class="rule"></div><div class="k">Date</div></div>
       <div class="s"><div class="v team">NBCC Team</div><div class="rule"></div><div class="k">${CHARITY_NAME}</div></div>
     </div>
-    <div class="c-legal">${escapeHtml(MATERIALS_STATEMENT)}</div>
+    ${splitHtml(d, "c-legal")}<div class="c-legal">${escapeHtml(MATERIALS_STATEMENT)}</div>
   </div>
 </div>`;
 }

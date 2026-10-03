@@ -134,8 +134,15 @@ export function buildSignUpThanksEmail(typedName?: string | null): BuiltEmail {
 // a sign up made before TASK-499).
 // TASK-511: the new answers are absent on a sign up from before them.
 type NewAnswers = "firstName" | "lastName" | "kindOther" | "instagram" | "facebook";
-export type StaffSummary = Omit<SignUp, NewAnswers | "wants"> &
-  Partial<Record<NewAnswers, string | null>> & { id: number; postAddress?: string | null; wants: Wants; kindLabel?: string | null };
+// Jaimie, 2026-10-03: 18 or over and the split, absent (or null) on a sign up from before them.
+type AgeAndSplit = "over18" | "sharesWithOther" | "nbccSharePercent" | "otherCauseName";
+export type StaffSummary = Omit<SignUp, NewAnswers | AgeAndSplit | "wants"> &
+  Partial<Record<NewAnswers, string | null>> & { id: number; postAddress?: string | null; wants: Wants; kindLabel?: string | null } & {
+    over18?: boolean | null;
+    sharesWithOther?: boolean | null;
+    nbccSharePercent?: number | null;
+    otherCauseName?: string | null;
+  };
 
 /** "1 Example Road, Exampleton, EX1 1EX": the boxes of an address, leaving out the empty ones. */
 function joinParts(...parts: Array<string | null | undefined>): string {
@@ -196,6 +203,13 @@ function staffFacts(f: StaffSummary): Array<[string, string]> {
   ];
   if (f.path === "event") facts.push(...eventFacts(f));
   if (f.path === "raising") facts.push(["Target", f.targetPence ? pounds(f.targetPence) : "No target"]);
+  // Jaimie, 2026-10-03: a sign up from before was asked neither.
+  if (f.over18 === true) facts.push(["18 or over", "Yes"]);
+  if (f.sharesWithOther === true) {
+    facts.push(["Sharing with another cause", `Yes, ${f.nbccSharePercent}% to NBCC, the rest to ${f.otherCauseName ?? ""}`]);
+  } else if (f.sharesWithOther === false) {
+    facts.push(["Sharing with another cause", "No, all of it comes to NBCC"]);
+  }
   // TASK-511: a sign up made since has the name in two parts, and Instagram and Facebook apart; one
   // from before reads as it always did.
   const split = Boolean(f.firstName || f.lastName);

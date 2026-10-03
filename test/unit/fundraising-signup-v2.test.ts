@@ -33,6 +33,8 @@ const signUp = (over: Record<string, unknown> = {}) => ({
   instagram: "",
   facebook: "",
   socialOk: true,
+  over18: true,
+  sharesWithOther: false,
   wants: { posterCount: 0, leafletCount: 0, bucketCount: 0, tinCount: 0, qrCount: 0, shoutOut: false, attend: false },
   newsletterOk: false,
   ...over,

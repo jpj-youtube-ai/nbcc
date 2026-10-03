@@ -2,7 +2,7 @@ import { Router, type Request, type Response } from "express";
 import { z, type ZodIssue } from "zod";
 import { authorizeSection, authorizeSectionAsAdmin } from "./admin-authz";
 import { actorOf } from "./admin";
-import { adminPatchSchema, FINISH_BEFORE_START, hasPage, kindLabelOf, shortName, type FundraiserRecord } from "../fundraising/model";
+import { adminPatchSchema, FINISH_BEFORE_START, hasPage, kindLabelOf, shortName, splitSchema, type FundraiserRecord } from "../fundraising/model";
 import { loadCategories } from "../db/fundraising-categories";
 import { isActiveCategory } from "../fundraising/categories";
 import {
@@ -22,6 +22,7 @@ import {
   wallRows,
   fundraisingIsOn,
   countWaitingLiveEmails,
+  setFundraiserSplit,
   FundraiserError,
 } from "../db/fundraisers";
 import { insertEventImage } from "../db/events";
@@ -37,6 +38,8 @@ import { sendFinishedTouch } from "../fundraising/touch-runner";
 //   GET    /api/admin/fundraisers                                    every sign up         view
 //   GET    /api/admin/fundraisers/:id                                one, with everything  view
 //   PATCH  /api/admin/fundraisers/:id           any fields           edit it               edit
+//   PUT    /api/admin/fundraisers/:id/split     { sharesWithOther, nbccSharePercent, otherCauseName }
+//                                                correct the split, only before any gift  edit AND an admin
 //   POST   /api/admin/fundraisers/:id/approve                        approve and email     edit
 //   POST   /api/admin/fundraisers/:id/decline   { reason? }          decline (internal)    edit
 //   POST   /api/admin/fundraisers/:id/finish                         mark finished         edit
@@ -252,6 +255,33 @@ export async function patchAdminFundraiser(req: Request, res: Response): Promise
   }
 }
 
+// --- the split with another cause (Jaimie, 2026-10-03) ----------------------------------------------
+//
+// Organisers can never change it (their changes, editSchema, do not take it), and nor can the
+// ordinary edit above (adminPatchSchema does not take it either). An admin may correct it here, and
+// only while the fundraiser has no gifts: once anyone has given, they gave on the statement as it
+// stood. The database checks that under the row's lock (setFundraiserSplit).
+
+export const SPLIT_LOCKED =
+  "The split cannot be changed now: this fundraiser has had its first gift, and people gave on the split as it stood. Please call or email the organiser.";
+
+export async function putAdminFundraiserSplit(req: Request, res: Response): Promise<Response | void> {
+  const claims = await authorizeSectionAsAdmin(req, res, "fundraising");
+  if (!claims) return;
+  const got = ids(req, res, "id");
+  if (!got) return;
+  const parsed = splitSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ error: "Some of it needs another look", fields: fieldErrors(parsed.error.issues) });
+  }
+  try {
+    return res.status(200).json({ fundraiser: forAdmin(await setFundraiserSplit(got[0], parsed.data, actorOf(claims))) });
+  } catch (err) {
+    if (err instanceof FundraiserError && err.reason === "has_gifts") return res.status(409).json({ error: SPLIT_LOCKED });
+    return failed(res, "split", err);
+  }
+}
+
 const declineSchema = z.object({ reason: z.string().trim().max(500).optional() }).strict();
 
 function moveHandler(move: "approve" | "decline" | "finish") {
@@ -400,6 +430,7 @@ adminFundraisingRouter.patch("/api/admin/fundraising/settings", patchAdminFundra
 adminFundraisingRouter.get("/api/admin/fundraisers", getAdminFundraisers);
 adminFundraisingRouter.get("/api/admin/fundraisers/:id", getAdminFundraiser);
 adminFundraisingRouter.patch("/api/admin/fundraisers/:id", patchAdminFundraiser);
+adminFundraisingRouter.put("/api/admin/fundraisers/:id/split", putAdminFundraiserSplit);
 adminFundraisingRouter.get("/api/admin/fundraisers/:id/history", getAdminFundraiserHistory);
 adminFundraisingRouter.post("/api/admin/fundraisers/:id/approve", postApproveFundraiser);
 adminFundraisingRouter.post("/api/admin/fundraisers/:id/decline", postDeclineFundraiser);

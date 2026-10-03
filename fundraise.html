@@ -105,6 +105,19 @@
                 <p class="fr-show-all" data-show-all-row hidden><button class="fr-link-btn" type="button" data-show-all>Show all the questions at once</button></p>
               </div>
 
+              <!-- Jaimie, 2026-10-03: both paths. A No stops the form here (fundraise.js), with a kind
+                   note on what to do instead; the server refuses a sign up without a Yes. -->
+              <div class="give-question" data-step data-age-step>
+                <fieldset class="fr-fieldset" id="over18Group">
+                  <legend class="give-scope-legend">Are you 18 or over?</legend>
+                  <div class="fr-options fr-options--yesno">
+                    <label class="fr-option fr-option--small" for="over18Yes"><input id="over18Yes" name="over18" type="radio" value="yes" required aria-required="true" aria-describedby="over18Note" data-invalid-message="Tell us whether you are 18 or over" /><span>Yes</span></label>
+                    <label class="fr-option fr-option--small" for="over18No"><input id="over18No" name="over18" type="radio" value="no" required aria-required="true" aria-describedby="over18Note" /><span>No</span></label>
+                  </div>
+                  <p class="fr-note" id="over18Note" aria-live="polite" data-age-note></p>
+                </fieldset>
+              </div>
+
               <div class="give-question" data-step>
                 <fieldset class="fr-fieldset fr-kinds" id="kindGroup">
                   <legend class="give-scope-legend"><span data-say-raising="What are you doing to raise money?" data-say-event="What kind of event is it?">What are you doing?</span></legend>
@@ -262,6 +275,31 @@
                   <div class="give-custom-field"><span class="give-custom-currency" aria-hidden="true">£</span><input class="give-custom-input" id="target" name="target" type="number" inputmode="numeric" min="10" max="100000" step="1" aria-describedby="targetHelp" data-invalid-message="A target can be from £10 to £100,000" /></div>
                   <p class="give-field-help" id="targetHelp">Anything from £10 to £100,000. Your page shows how close you are. You can change it later.</p>
                 </div>
+              </div>
+
+              <!-- Jaimie, 2026-10-03: both paths. On a Yes, NBCC's share and the other cause's name,
+                   for the statement the law asks for on the page and on every poster and form. -->
+              <div class="give-question" data-step>
+                <fieldset class="fr-fieldset" id="sharesGroup">
+                  <legend class="give-scope-legend">Are you sharing what you raise with another cause?</legend>
+                  <p class="give-field-help fr-lead-help">For example, half for NBCC and half for another charity or a local group.</p>
+                  <div class="fr-options fr-options--yesno">
+                    <label class="fr-option fr-option--small" for="sharesYes"><input id="sharesYes" name="sharesWithOther" type="radio" value="yes" required aria-required="true" data-invalid-message="Tell us whether you are sharing what you raise with another cause" /><span>Yes</span></label>
+                    <label class="fr-option fr-option--small" for="sharesNo"><input id="sharesNo" name="sharesWithOther" type="radio" value="no" required aria-required="true" /><span>No</span></label>
+                  </div>
+                  <div class="fr-split-fields" data-split-fields hidden>
+                    <div class="give-field">
+                      <label for="nbccSharePercent">What percentage comes to NBCC? <span class="give-req" aria-hidden="true">*</span></label>
+                      <div class="fr-percent"><input class="give-field-input" id="nbccSharePercent" name="nbccSharePercent" type="number" inputmode="numeric" min="1" max="99" step="1" required aria-required="true" aria-describedby="nbccSharePercentHelp" data-invalid-message="Give a whole number from 1 to 99" /><span class="fr-percent__sign" aria-hidden="true">%</span></div>
+                      <p class="give-field-help" id="nbccSharePercentHelp">A whole number from 1 to 99. For half, put 50.</p>
+                    </div>
+                    <div class="give-field">
+                      <label for="otherCauseName">The other cause&rsquo;s name <span class="give-req" aria-hidden="true">*</span></label>
+                      <input class="give-field-input" id="otherCauseName" name="otherCauseName" type="text" maxlength="120" autocomplete="off" required aria-required="true" aria-describedby="otherCauseNameHelp" data-invalid-message="Tell us the name of the other cause" />
+                      <p class="give-field-help" id="otherCauseNameHelp">As it should appear on your page and posters, which say how what you raise is shared. Please check it: once we have approved your sign up, you cannot change the split yourself.</p>
+                    </div>
+                  </div>
+                </fieldset>
               </div>
 
               <div class="give-question" data-step>

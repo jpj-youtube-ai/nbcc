@@ -14,6 +14,7 @@ import {
   type AdminPatch,
   type FundraiserEdit,
   type FundraiserRecord,
+  type FundraiserSplit,
   type GiftForSession,
   type Meter,
   type SignUp,
@@ -29,7 +30,7 @@ import { freeSlugFrom, initialsSlug } from "../fundraising/slugs";
 // writes its audit_log row in the SAME transaction, against entity "fundraiser" and the
 // fundraiser's id, so the admin's History for a fundraiser is one query.
 
-export type FundraiserErrorReason = "not_found" | "bad_status" | "slug_taken" | "not_waiting" | "replaced" | "bad_times";
+export type FundraiserErrorReason = "not_found" | "bad_status" | "slug_taken" | "not_waiting" | "replaced" | "bad_times" | "has_gifts";
 
 export class FundraiserError extends Error {
   constructor(
@@ -117,6 +118,7 @@ const RECORD_COLUMNS = `f.id, f.slug, f.path, f.kind, f.title, f.description,
          f.age_limit, f.dress_code, f.included, f.credit_name, f.finished_requested_at,
          f.off_list_at, f.off_list_by,
          f.first_name, f.last_name, f.kind_other, f.instagram, f.facebook,
+         f.over_18, f.shares_with_other, f.nbcc_share_percent, f.other_cause_name,
          (SELECT c.label FROM fundraising_categories c WHERE c.key = f.kind) AS kind_label`;
 const SELECT = `
   SELECT ${RECORD_COLUMNS}
@@ -213,6 +215,11 @@ export function toRecord(r: Row): FundraiserRecord {
     kindOther: textOrNull(r.kind_other),
     instagram: textOrNull(r.instagram),
     facebook: textOrNull(r.facebook),
+    // Jaimie, 2026-10-03: null on a sign up from before they were asked.
+    over18: r.over_18 == null ? null : Boolean(r.over_18),
+    sharesWithOther: r.shares_with_other == null ? null : Boolean(r.shares_with_other),
+    nbccSharePercent: r.nbcc_share_percent == null ? null : Number(r.nbcc_share_percent),
+    otherCauseName: textOrNull(r.other_cause_name),
   };
 }
 
@@ -378,10 +385,12 @@ async function insertSignUp(client: PoolClient, s: SignUp, slug: string): Promis
         newsletter_ok, updated_by,
         post_line1, post_line2, post_town, post_postcode, card_line, end_time, time_tbc, venue_address,
         venue_postcode, access, price, booking, ticket_url, age_limit, dress_code, included, credit_name,
-        first_name, last_name, kind_other, instagram, facebook)
+        first_name, last_name, kind_other, instagram, facebook,
+        over_18, shares_with_other, nbcc_share_percent, other_cause_name)
      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, 'public',
              $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33, $34, $35,
-             $36, $37, $38, $39, $40)
+             $36, $37, $38, $39, $40,
+             $41, $42, $43, $44)
      RETURNING id`,
     [
       slug, s.path, s.kind, s.title, s.description, s.eventDate, s.startTime, s.venue, s.town, s.targetPence, s.public,
@@ -390,6 +399,8 @@ async function insertSignUp(client: PoolClient, s: SignUp, slug: string): Promis
       s.venuePostcode, s.access, s.price, s.booking, s.ticketUrl, s.ageLimit, s.dressCode, s.included, s.creditName,
       // TASK-511: the name in two parts (name above is the whole), Other, and the two links.
       s.firstName ?? null, s.lastName ?? null, s.kindOther ?? null, s.instagram ?? null, s.facebook ?? null,
+      // Jaimie, 2026-10-03: 18 or over (always Yes: the form refuses No), and the split.
+      s.over18, s.sharesWithOther, s.nbccSharePercent, s.otherCauseName,
     ],
   );
   const id = Number(inserted.rows[0].id);
@@ -398,7 +409,7 @@ async function insertSignUp(client: PoolClient, s: SignUp, slug: string): Promis
     action: "fundraiser.signed_up",
     entity: "fundraiser",
     entityId: id,
-    data: { slug, path: s.path, kind: s.kind, title: s.title, public: s.public },
+    data: { slug, path: s.path, kind: s.kind, title: s.title, public: s.public, sharesWithOther: s.sharesWithOther },
   });
   return reread(client, id);
 }
@@ -587,6 +598,38 @@ export async function patchFundraiser(id: number, patch: AdminPatch, actor: stri
       entity: "fundraiser",
       entityId: id,
       data: { changed, slug: patch.slug ?? before.slug, wasSlug: before.slug },
+    });
+    return reread(client, id);
+  });
+}
+
+/**
+ * Jaimie, 2026-10-03: staff (an admin) correcting the split with another cause. Only while the
+ * fundraiser has no gifts: once anyone has given, they gave on the statement as it stood, so it is
+ * never changed after that. Online gifts of any state and cash paid in both count. Counted under the
+ * row's lock, so a gift recorded at the same moment cannot slip past. Organisers can never change it
+ * (their changes, editSchema, do not take it).
+ */
+export async function setFundraiserSplit(id: number, split: FundraiserSplit, actor: string): Promise<FundraiserRecord> {
+  return inTransaction(async (client) => {
+    const before = await lockFundraiser(client, id);
+    const gifts = await client.query<{ n: string }>("SELECT count(*) AS n FROM donations WHERE fundraiser_id = $1", [id]);
+    const cash = await client.query<{ n: string }>("SELECT count(*) AS n FROM fundraiser_cash WHERE fundraiser_id = $1", [id]);
+    if (Number(gifts.rows[0]?.n ?? 0) > 0 || Number(cash.rows[0]?.n ?? 0) > 0) throw new FundraiserError("has_gifts");
+    await client.query(
+      `UPDATE fundraisers SET shares_with_other = $1, nbcc_share_percent = $2, other_cause_name = $3, updated_at = now(), updated_by = $4 WHERE id = $5`,
+      [split.sharesWithOther, split.nbccSharePercent, split.otherCauseName, actor, id],
+    );
+    await insertAudit(client, {
+      actor,
+      action: "fundraiser.split_changed",
+      entity: "fundraiser",
+      entityId: id,
+      data: {
+        slug: before.slug,
+        was: { sharesWithOther: before.sharesWithOther ?? null, nbccSharePercent: before.nbccSharePercent ?? null, otherCauseName: before.otherCauseName ?? null },
+        now: split,
+      },
     });
     return reread(client, id);
   });

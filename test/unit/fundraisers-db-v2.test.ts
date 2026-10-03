@@ -43,7 +43,7 @@ const newSignUp = () => {
     path: "raising", kind: "other", kindOther: "A sponsored silence", title: "Sam's Santa Dash", description: "Five kilometres.",
     eventDate: "", startTime: "", venue: "", town: "Exampleton", targetPence: 20000, public: true, firstName: "Sam",
     lastName: "Sample", email: "sam@example.com", phone: "07700 900456", instagram: "@sam.runs", facebook: "",
-    socialOk: true, wants: { qrCount: 25, shoutOut: true, attend: false }, postLine1: "1 Example Road", postTown: "Exampleton",
+    socialOk: true, over18: true, sharesWithOther: false, wants: { qrCount: 25, shoutOut: true, attend: false }, postLine1: "1 Example Road", postTown: "Exampleton",
     postPostcode: "EX1 1EX", newsletterOk: false,
   });
   if (!r.success) throw new Error(JSON.stringify(r.error.issues));

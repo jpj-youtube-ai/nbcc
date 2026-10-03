@@ -57,7 +57,7 @@ import {
   getFundraisers,
   getFundraiserPage,
 } from "../../src/routes/fundraise";
-import { meter, type FundraiserRecord } from "../../src/fundraising/model";
+import { meter, OVER_18_MISSING, UNDER_18, type FundraiserRecord } from "../../src/fundraising/model";
 
 type MockRes = { statusCode: number; body: unknown; status: (c: number) => MockRes; json: (b: unknown) => MockRes };
 function mockRes(): MockRes {
@@ -98,6 +98,8 @@ const signUp = (over: Record<string, unknown> = {}) => ({
   email: "sam@example.com",
   phone: "07700 900456",
   socialOk: false,
+  over18: true,
+  sharesWithOther: false,
   wants: { shoutOut: false, attend: false },
   newsletterOk: true,
   ...over,
@@ -122,6 +124,8 @@ const record = (over: Partial<FundraiserRecord> = {}): FundraiserRecord & { mete
   phone: "07700 900456",
   socialLink: null,
   socialOk: false,
+  over18: true,
+  sharesWithOther: false,
   wants: { leaflets: 0, buckets: 0, shoutOut: false, attend: false },
   postAddress: null,
   newsletterOk: true,
@@ -350,5 +354,45 @@ describe("the newsletter tick box on the sign up", () => {
     const quiet = vi.spyOn(console, "error").mockImplementation(() => {});
     expect((await run(postFundraise, { body: signUp({ newsletterOk: true }) })).statusCode).toBe(200);
     quiet.mockRestore();
+  });
+});
+
+// Jaimie, 2026-10-03: 18 or over, and sharing with another cause, on both paths. The server is the
+// real check: a sign up without a Yes to 18 or over is refused, naming the field, and stores nothing.
+describe("18 or over, and sharing with another cause", () => {
+  it("refuses a sign up from someone under 18, naming the field, and stores nothing", async () => {
+    const res = await run(postFundraise, { body: signUp({ over18: false }) });
+    expect(res.statusCode).toBe(400);
+    expect((res.body as { fields: Record<string, string> }).fields).toEqual({ over18: UNDER_18 });
+    expect(db.createFundraiser).not.toHaveBeenCalled();
+  });
+
+  it("refuses a sign up that does not say, on either path", async () => {
+    for (const path of ["raising", "event"]) {
+      const res = await run(postFundraise, { body: signUp({ path, over18: undefined }) });
+      expect(res.statusCode).toBe(400);
+      expect((res.body as { fields: Record<string, string> }).fields.over18).toBe(OVER_18_MISSING);
+    }
+    expect(db.createFundraiser).not.toHaveBeenCalled();
+  });
+
+  it("stores the split with the sign up", async () => {
+    db.createFundraiser.mockResolvedValue(record({ status: "new" }));
+    const res = await run(postFundraise, { body: signUp({ sharesWithOther: true, nbccSharePercent: 50, otherCauseName: "Kilmarnock Food Larder" }) });
+    expect(res.statusCode).toBe(200);
+    expect(db.createFundraiser.mock.calls[0][0]).toMatchObject({ over18: true, sharesWithOther: true, nbccSharePercent: 50, otherCauseName: "Kilmarnock Food Larder" });
+  });
+
+  it("puts the statement on the fundraiser's page when it is shared, and nothing when not", async () => {
+    db.wallRows.mockResolvedValue([]);
+    db.getBySlug.mockResolvedValue(record({ sharesWithOther: true, nbccSharePercent: 60, otherCauseName: "Kilmarnock Food Larder" }));
+    const shared = (await run(getFundraiserPage, { params: { slug: "sams-sponsored-walk" } })).body as { split: unknown };
+    expect(shared.split).toEqual({
+      nbccSharePercent: 60,
+      otherCauseName: "Kilmarnock Food Larder",
+      statement: "60% of what we raise goes to the Night Before Christmas Campaign, Scottish Charity SC047995. The rest goes to Kilmarnock Food Larder.",
+    });
+    db.getBySlug.mockResolvedValue(record());
+    expect(((await run(getFundraiserPage, { params: { slug: "sams-sponsored-walk" } })).body as { split: unknown }).split).toBeNull();
   });
 });

@@ -72,6 +72,8 @@ When("someone signs up {string} with the round two answers", async function (tit
     instagram: "@sam.dashes",
     facebook: "facebook.com/samdashes",
     socialOk: true,
+    over18: true,
+    sharesWithOther: false,
     wants: { posterCount: 0, leafletCount: 0, bucketCount: 0, tinCount: 0, qrCount: 25, shoutOut: true, attend: false },
     postLine1: "1 Example Road",
     postLine2: "",

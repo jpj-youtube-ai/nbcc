@@ -140,6 +140,8 @@ describe("a sign up made from an invite", () => {
     email: "alex@example.com",
     phone: "07700 900456",
     socialOk: false,
+    over18: true,
+    sharesWithOther: false,
     wants: { shoutOut: false, attend: false },
   };
 

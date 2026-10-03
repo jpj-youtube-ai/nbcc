@@ -16,7 +16,8 @@ import type { FundraiserRecord, Meter } from "./model";
 //   target        raised has reached the target
 //   week before   the date is 7 days away (or 6 or 5, if a run was missed)
 //   week after    the date was 7 days ago (or 8 or 9)
-//   finished      not daily: sent when staff press Mark finished, with the certificate
+//   finished      sent when staff press Mark finished, with the certificate; the daily run only
+//                 catches it up (held back for sign off, or a send that failed) for a week after
 //   year on       365 days after the date, or after it was finished when it had no date (a week
 //                 to catch a missed run)
 //   need a hand   the call prompt Behind holds (src/fundraising/call-prompts.ts)
@@ -27,6 +28,10 @@ import type { FundraiserRecord, Meter } from "./model";
 // once a higher one has gone, so nobody hears "your first gift is in" after "you did it". At most
 // one automatic email a day for a fundraiser, and the two gentle ones (need a hand, on track) wait a
 // week after any other, so nobody is crowded.
+//
+// New wording is never sent until an admin approves it (Jaimie, 2026-10-03): WORDING_KEYS below,
+// approved in Admin > Fundraising > Automatic emails. One that is waiting is skipped, never claimed,
+// so it can still go once approved while it is due.
 
 export const TOUCH_KINDS = [
   "first_gift",
@@ -75,9 +80,37 @@ export const NEW_WORDING_KINDS: readonly TouchKind[] = ["target", "finished", "n
 // 16, 17 and 18 leave out the amount when nothing has been raised: those versions are new too.
 const ZERO_VARIANTS: ReadonlySet<TouchKind> = new Set(["week_after", "finished", "year_on"]);
 
+/**
+ * Every version of an automatic email whose wording an admin signs off in Admin > Fundraising >
+ * Automatic emails (touch_wording_approvals): the four new wordings, and the nothing raised versions
+ * of 16, 17 and 18 ("<kind>_zero"). One that is not approved is never sent (Jaimie, 2026-10-03).
+ */
+export const WORDING_KEYS = ["target", "finished", "need_a_hand", "on_track", "week_after_zero", "finished_zero", "year_on_zero"] as const;
+export type WordingKey = (typeof WORDING_KEYS)[number];
+
+/** The version of this email that would go with this much raised, when it needs signing off; else null. */
+export function wordingKey(kind: TouchKind, raisedPence: number): WordingKey | null {
+  if (ZERO_VARIANTS.has(kind) && raisedPence <= 0) return `${kind}_zero` as WordingKey;
+  return NEW_WORDING_KINDS.includes(kind) ? (kind as WordingKey) : null;
+}
+
+/** Every version of one email that needs signing off, the usual one first. */
+export function wordingKeysOf(kind: TouchKind): WordingKey[] {
+  const keys: WordingKey[] = [];
+  if (NEW_WORDING_KINDS.includes(kind)) keys.push(kind as WordingKey);
+  if (ZERO_VARIANTS.has(kind)) keys.push(`${kind}_zero` as WordingKey);
+  return keys;
+}
+
 /** Is this email, as it would go with this much raised, wording still to be signed off? */
 export function isNewWording(kind: TouchKind, raisedPence: number): boolean {
-  return NEW_WORDING_KINDS.includes(kind) || (ZERO_VARIANTS.has(kind) && raisedPence <= 0);
+  return wordingKey(kind, raisedPence) !== null;
+}
+
+/** May this email go, as it would with this much raised: its wording needs no sign off, or has it. */
+export function isSignedOff(kind: TouchKind, raisedPence: number, approved: ReadonlySet<string>): boolean {
+  const key = wordingKey(kind, raisedPence);
+  return key === null || approved.has(key);
 }
 
 export const FIRST_GIFT_DAYS = 7;
@@ -86,9 +119,11 @@ export const CATCH_UP_DAYS = 2;
 export const YEAR_DAYS = 365;
 export const YEAR_CATCH_UP_DAYS = 7;
 export const GENTLE_GAP_DAYS = 7;
+/** The finished email can still go from the daily run this many days after it was finished. */
+export const FINISHED_CATCH_UP_DAYS = 7;
 
 // The order they are tried in when more than one is due on the same day.
-const PRIORITY: readonly TouchKind[] = ["week_after", "week_before", "target", "halfway", "first_gift", "need_a_hand", "on_track", "year_on"];
+const PRIORITY: readonly TouchKind[] = ["finished", "week_after", "week_before", "target", "halfway", "first_gift", "need_a_hand", "on_track", "year_on"];
 const STEPS: readonly TouchKind[] = ["first_gift", "halfway", "target"];
 const GENTLE: ReadonlySet<TouchKind> = new Set(["need_a_hand", "on_track"]);
 
@@ -130,6 +165,11 @@ export function isQuietFundraiser(f: Pick<FundraiserRecord, "kind"> & { inMemory
 export interface TouchOptions {
   /** The in memory guard. Only tests pass another. */
   isQuiet?: (f: TouchFundraiser) => boolean;
+  /**
+   * The wordings approved (WORDING_KEYS). When given, an email whose wording is waiting for sign
+   * off is never picked: the next one due is, or none. The sender always gives it.
+   */
+  signedOff?: ReadonlySet<string>;
 }
 
 const quietOf = (o?: TouchOptions) => o?.isQuiet ?? isQuietFundraiser;
@@ -147,7 +187,11 @@ export function canTouch(f: TouchFundraiser, isQuiet: (f: TouchFundraiser) => bo
 
 const ukDay = (iso: string): string => londonToday(new Date(iso));
 
-/** Every automatic email due today from the daily run, most important first. Never "finished". */
+/**
+ * Every automatic email due today from the daily run, most important first. "Finished" goes when
+ * staff press Mark finished; the daily run only catches it up (held back for sign off, or a send
+ * that failed) in the week after it was finished.
+ */
 export function dueTouches(f: TouchFundraiser, facts: TouchFacts, today: string, o?: TouchOptions): TouchKind[] {
   if (!canTouch(f, quietOf(o))) return [];
   const sent = new Set(facts.sent.map((s) => s.kind));
@@ -181,6 +225,11 @@ export function dueTouches(f: TouchFundraiser, facts: TouchFacts, today: string,
     if (pace === "on_track") due.add("on_track");
   }
 
+  if (f.status === "finished" && facts.finishedAt) {
+    const since = dayCount(ukDay(facts.finishedAt), today);
+    if (since >= 0 && since <= FINISHED_CATCH_UP_DAYS) due.add("finished");
+  }
+
   const yearFrom = f.eventDate ?? (facts.finishedAt ? ukDay(facts.finishedAt) : null);
   if (yearFrom) {
     const since = dayCount(yearFrom, today);
@@ -193,5 +242,8 @@ export function dueTouches(f: TouchFundraiser, facts: TouchFacts, today: string,
 
 /** The one automatic email to send today, or null. */
 export function nextTouch(f: TouchFundraiser, facts: TouchFacts, today: string, o?: TouchOptions): TouchKind | null {
-  return dueTouches(f, facts, today, o)[0] ?? null;
+  const due = dueTouches(f, facts, today, o);
+  const signedOff = o?.signedOff;
+  if (!signedOff) return due[0] ?? null;
+  return due.find((k) => isSignedOff(k, f.meter.raisedPence, signedOff)) ?? null;
 }

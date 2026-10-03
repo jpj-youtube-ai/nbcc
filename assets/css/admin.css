@@ -2699,6 +2699,10 @@ textarea.fx-call-input{min-height:88px;line-height:1.5;resize:vertical;field-siz
 #view-fundraising .fr-touch-meta p { margin: 0 0 6px; max-width: 72ch; overflow-wrap: anywhere; }
 #view-fundraising .fr-touch-when { color: var(--slate-soft); font-size: 0.92rem; }
 #view-fundraising .fr-touch-signoff { display: inline-block; padding: 4px 12px; border-radius: 999px; background: color-mix(in srgb, var(--crimson) 12%, var(--cream)); color: var(--crimson); font-weight: 700; font-size: 0.88rem; }
+/* Signing off the new wording (Jaimie, 2026-10-03): approved reads calm, waiting reads crimson. */
+#view-fundraising .fr-touch-waiting { text-transform: none; letter-spacing: 0; color: var(--crimson); }
+#view-fundraising .fr-touch-approved { display: inline-block; padding: 4px 12px; border-radius: 999px; background: color-mix(in srgb, var(--green, #2e7d32) 12%, var(--cream)); color: var(--slate); font-weight: 700; font-size: 0.88rem; }
+#view-fundraising .fr-touch-meta .fx-call-row { margin: 2px 0 10px; }
 #view-fundraising .fr-touch-subject { font-size: 0.98rem; }
 #view-fundraising .fr-touch-subject span { display: inline-block; margin-right: 6px; font-size: 0.72rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--slate-soft); }
 #view-fundraising .fr-touch-preview-wrap { max-width: 660px; margin: 8px 0 4px; border: 1px solid var(--line); border-radius: 12px; overflow: hidden; background: var(--maroon); }

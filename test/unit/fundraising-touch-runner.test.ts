@@ -12,6 +12,7 @@ vi.mock("../../src/db/pool", () => ({ pool: { query: vi.fn(), connect: vi.fn() }
 import { runTouchEmails, sendFinishedTouch, type TouchDeps } from "../../src/fundraising/touch-runner";
 import { meter, type FundraiserRecord, type Meter } from "../../src/fundraising/model";
 import type { TouchCandidate } from "../../src/db/fundraising-touch";
+import { WORDING_KEYS } from "../../src/fundraising/touch-rules";
 
 type F = FundraiserRecord & { meter: Meter; editWaiting: boolean };
 const WANTS = { posterCount: 0, leafletCount: 0, bucketCount: 0, tinCount: 0, leaflets: 0, buckets: 0, shoutOut: false, attend: false };
@@ -50,6 +51,8 @@ function deps(over: Partial<TouchDeps> = {}): TouchDeps & { sent: Array<{ kind: 
     release: vi.fn(async () => undefined),
     recordSent: vi.fn(async () => undefined),
     againLink: vi.fn(async (id: number) => `https://nbcc.test/fundraise?again=token-for-${id}`),
+    // Every new wording approved, unless a test says otherwise.
+    approvedWordings: vi.fn(async () => new Set<string>(WORDING_KEYS)),
     send: vi.fn(async (kind: string, _name: string, m: { email: string; subject: string }) => {
       sent.push({ kind, to: m.email, subject: m.subject });
     }),
@@ -61,6 +64,7 @@ function deps(over: Partial<TouchDeps> = {}): TouchDeps & { sent: Array<{ kind: 
 beforeEach(() => {
   vi.spyOn(console, "error").mockImplementation(() => undefined);
   vi.spyOn(console, "warn").mockImplementation(() => undefined);
+  vi.spyOn(console, "info").mockImplementation(() => undefined);
 });
 
 describe("the daily pass", () => {
@@ -161,6 +165,70 @@ describe("the daily pass", () => {
   it("sends nothing to a fundraiser that is not due anything", async () => {
     const d = deps({ readState: vi.fn(async () => [candidate(fr({ eventDate: null, targetPence: null }))]) });
     expect(await runTouchEmails(NOW, d)).toMatchObject({ considered: 1, sent: 0 });
+  });
+});
+
+describe("new wording waits for sign off (Jaimie, 2026-10-03)", () => {
+  // Sam has reached the target and has no date: only "target" (new wording) is due.
+  const atTarget = () => [candidate(fr({ eventDate: null }, 50000))];
+  const approving = (...keys: string[]) => vi.fn(async () => new Set<string>(keys));
+
+  it("skips an email whose new wording is not approved: not claimed, not sent, so it can go once approved", async () => {
+    const info = vi.spyOn(console, "info").mockImplementation(() => undefined);
+    const d = deps({ readState: vi.fn(async () => atTarget()), approvedWordings: approving() });
+    const r = await runTouchEmails(NOW, d);
+    expect(r).toMatchObject({ considered: 1, sent: 0, failed: 0, waiting: 1 });
+    expect(d.claim).not.toHaveBeenCalled();
+    expect(d.send).not.toHaveBeenCalled();
+    expect(d.recordSent).not.toHaveBeenCalled();
+    const said = info.mock.calls.map((c) => c.join(" ")).join(" | ");
+    expect(said).toMatch(/fundraiser 7/);
+    expect(said).toMatch(/target/);
+    expect(said).toMatch(/waiting for sign off/);
+    expect(said).not.toContain("sam@example.com");
+  });
+
+  it("sends it once its wording is approved", async () => {
+    const d = deps({ readState: vi.fn(async () => atTarget()), approvedWordings: approving("target") });
+    expect(await runTouchEmails(NOW, d)).toMatchObject({ sent: 1, waiting: 0 });
+    expect(d.sent[0].kind).toBe("target");
+  });
+
+  it("still sends the wording that was already approved, whatever is waiting", async () => {
+    // A week before (approved 2026-10-02) and target are both due: a week before goes.
+    const d = deps({ readState: vi.fn(async () => [candidate(fr({}, 50000))]), approvedWordings: approving() });
+    expect(await runTouchEmails(NOW, d)).toMatchObject({ sent: 1 });
+    expect(d.sent[0].kind).toBe("week_before");
+  });
+
+  it("holds back the nothing raised version on its own: approving the usual one is not enough", async () => {
+    // Finished two days ago, with nothing raised: the finished email's nothing raised version.
+    const done = [{ ...candidate(fr({ status: "finished", eventDate: null }, 0)), touch: { firstOnlineGiftAt: null, lastOnlineGiftAt: null, finishedAt: "2026-11-27T15:00:00Z", sent: [] } }];
+    const held = deps({ readState: vi.fn(async () => done), approvedWordings: approving("finished") });
+    expect(await runTouchEmails(NOW, held)).toMatchObject({ sent: 0, waiting: 1 });
+    expect(held.claim).not.toHaveBeenCalled();
+    const ok = deps({ readState: vi.fn(async () => done), approvedWordings: approving("finished_zero") });
+    expect(await runTouchEmails(NOW, ok)).toMatchObject({ sent: 1 });
+    expect(ok.sent[0].kind).toBe("finished");
+    expect(ok.claim).toHaveBeenCalledWith(7, "finished", "system:schedule");
+  });
+
+  it("sends no new wording at all when the approvals cannot be read, but the rest still goes", async () => {
+    const down = vi.fn(async () => Promise.reject(new Error("down")));
+    const d = deps({ readState: vi.fn(async () => [candidate(fr({}, 50000)), candidate(fr({ id: 8, eventDate: null }, 50000))]), approvedWordings: down });
+    expect(await runTouchEmails(NOW, d)).toMatchObject({ sent: 1, waiting: 1 });
+    expect(d.sent.map((m) => m.kind)).toEqual(["week_before"]);
+  });
+
+  it("holds back the finished email at Mark finished until it is approved, without claiming it", async () => {
+    const info = vi.spyOn(console, "info").mockImplementation(() => undefined);
+    const d = deps({ approvedWordings: approving("finished_zero") });
+    expect(await sendFinishedTouch(fr({ status: "finished" }, 61200), d)).toBe("skipped");
+    expect(d.claim).not.toHaveBeenCalled();
+    expect(d.send).not.toHaveBeenCalled();
+    expect(info.mock.calls.map((c) => c.join(" ")).join(" | ")).toMatch(/fundraiser 7.*waiting for sign off/);
+    const ok = deps({ approvedWordings: approving("finished") });
+    expect(await sendFinishedTouch(fr({ status: "finished" }, 61200), ok)).toBe("sent");
   });
 });
 

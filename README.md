@@ -8867,7 +8867,7 @@ email kind on the Email audit):
 | 14, You did it! Target reached | `fundraiseTargetReached` | raised has reached the target, up to and including the date (never after it, and never once finished); it cheers them on to beat their goal, with a **Raise my target** button to their private area (new wording, for sign off) |
 | 15, One week to go | `fundraiseWeekBefore` | the date is 7 days away (or 6 or 5, if a run was missed) |
 | 16, How did it go? | `fundraiseWeekAfter` | the date was 7 days ago (or 8 or 9), asking them to pay in |
-| 17, Thank you from all of us | `fundraiseFinished` | straight after staff press **Mark finished**, with the link to their certificate |
+| 17, Thank you from all of us | `fundraiseFinished` | straight after staff press **Mark finished**, with the link to their certificate; if it was held back for sign off (or its send failed), the daily run sends it once it can, for up to 7 days after it was finished, never later |
 | 18, A year ago today... | `fundraiseYearOn` | 365 days after the date, or after it was finished when it had no date (a week to catch a missed run); its **Do it again** button opens the sign up form filled in from last year (below) |
 | Need a hand? | `fundraiseNeedAHand` | once, when the call prompt **Behind** holds (new wording, for sign off) |
 | You're doing great | `fundraiseOnTrack` | once, when the call prompt **On track** holds (new wording, for sign off) |
@@ -8886,6 +8886,10 @@ checks no email here says families). Every guard has to say yes before one goes:
   a category whose key or name mentions "memory");
 - the address is on neither the suppression list nor the opt out list (`email_opt_outs`, either
   kind); a list that cannot be read means no email;
+- its wording, if new, has been approved by an admin (Jaimie, 2026-10-03; below). One waiting for
+  sign off is skipped and NOT claimed, so it can still go once approved while it is due (if its
+  window passes first, it simply does not go); the run logs one info line for it, by fundraiser id,
+  and the next email due that is approved goes instead. Approvals that cannot be read count as none;
 - each email goes once per fundraiser, ever: it is claimed in `fundraiser_touchpoints` (unique by
   fundraiser and kind) BEFORE it is sent, and the claim is given back only if the send fails, so
   another day can try. An error from the mail service can come after it has accepted an email (a
@@ -8898,7 +8902,8 @@ after, a week before, target, halfway, first gift, need a hand, doing great, a y
 gentle ones wait a week after any other. Days are UK calendar days (Europe/London), so the clocks
 changing never moves one. The daily pass rides the 8am task (`npm run reminders`,
 `src/scripts/send-reminders.ts`, its own try/catch) and logs one line:
-`fundraising automatic emails: considered=N sent=N skipped=N failed=N`, or why it did nothing
+`fundraising automatic emails: considered=N sent=N skipped=N failed=N waiting=N` (`waiting`: held back
+for sign off), or why it did nothing
 (`switched off`, `fundraising off`, `could not read`). Each email sent adds "An automatic email went
 to the organiser" to the fundraiser's History.
 
@@ -8911,6 +8916,19 @@ those versions are marked new wording too); and the email itself, rendered by th
 subject and when it goes. It also says what the next 8am run would send (were it on), so the first
 morning after switching on is no surprise: anyone already past halfway or their target gets that
 email then, once. Each open sign up says which one it would get next. Editors and viewers can read them all but not switch them.
+
+**Signing off new wording** (Jaimie, 2026-10-03). New wording only sends once an admin approves it
+in this card. Each version that needs it is approved on its own (`WORDING_KEYS` in
+`src/fundraising/touch-rules.ts`): `target`, `finished`, `need_a_hand`, `on_track`, and the nothing
+raised versions of 16, 17 and 18, `week_after_zero`, `finished_zero` and `year_on_zero` (approving the
+usual 17 never approves its nothing raised version). The preview of one waiting says "New wording,
+waiting for your sign off. It won't send until you approve it." with **Approve this wording**; once
+approved, "Approved by <name> on <date>." with **Withdraw approval**. Both buttons are for admins
+only, each after a check, and each writes an `audit_log` row; editors and viewers see whether it is
+approved. Each email with a version still waiting has a **Waiting for sign off** pill in the list of
+emails, the next run line says how many are held back, and **Mark finished** says when the thank you
+is held back. Target, need a hand and on track were approved on 2026-10-03 (seeded by the migration);
+finished and the three nothing raised versions wait for Jaimie.
 
 **Smart call prompts.** Pills on the list and a **Keeping in touch** panel in the open sign up, each
 with a reason (with the numbers) and a few talking points, and **Called** with an optional note
@@ -8966,9 +8984,11 @@ Admin routes need a session and the `fundraising` section.
 | Route | Who | Body | Answer |
 |---|---|---|---|
 | `POST /api/fundraise/again` | anyone | `{ token }` | `200 { path, kind, kindOther, title, description, targetPence, venue, town, instagram, facebook, firstName, lastName, email, phone }`, at most 3 times a link; `404` for any link that does not work; `429` after 30 tries in 15 minutes |
-| `GET /api/admin/fundraising/touch` | view | | `{ today, settings: { on, updatedAt, updatedBy }, kinds: [{ kind, label, when, newWording }], sent: { <id>: [{ kind, sentAt }] }, prompts: { <id>: [{ key, pill, label, reason, points }] }, promptCalls: { <id>: [...] }, due: { <id>: kind } }` (`due`: what the next 8am run would send, were the switch on) |
-| `GET /api/admin/fundraising/touch/preview/:kind` | view | `?fundraiserId=` or `?sample=zero` (optional) | `{ kind, label, newWording, sample, title, subject, html, text }`; `404` for an unknown kind or fundraiser |
+| `GET /api/admin/fundraising/touch` | view | | `{ today, settings: { on, updatedAt, updatedBy }, kinds: [{ kind, label, when, newWording, waiting: [wordingKey] }], approvals: { <wordingKey>: { approvedAt, approvedBy } }, sent: { <id>: [{ kind, sentAt }] }, prompts: { <id>: [{ key, pill, label, reason, points }] }, promptCalls: { <id>: [...] }, due: { <id>: kind }, held: { <id>: kind } }` (`due`: what the next 8am run would send, were the switch on; `held`: what it would hold back for sign off) |
+| `GET /api/admin/fundraising/touch/preview/:kind` | view | `?fundraiserId=` or `?sample=zero` (optional) | `{ kind, label, newWording, wordingKey, approval: { approvedAt, approvedBy } \| null, sample, title, subject, html, text }`; `404` for an unknown kind or fundraiser |
 | `PUT /api/admin/fundraising/touch/settings` | admin | `{ on: true \| false }` | `{ on, updatedAt, updatedBy }`; `audit_log` `fundraising.touch_emails_switched` |
+| `POST /api/admin/fundraising/touch/approvals/:key` | admin | | `{ approval: { key, approvedAt, approvedBy } }` (one already approved keeps its first approval); `404` for a key not in `WORDING_KEYS`; `audit_log` `fundraising.touch_wording_approved` |
+| `DELETE /api/admin/fundraising/touch/approvals/:key` | admin | | `{ withdrawn }`; `404` for a key not in `WORDING_KEYS`; `audit_log` `fundraising.touch_wording_withdrawn` (with whose approval it was) |
 | `POST /api/admin/fundraisers/:id/prompt-calls` | edit | `{ prompt, note? }` (500 at most) | `{ call }`; `audit_log` `fundraiser.prompt_called` |
 
 `POST /api/admin/fundraisers/:id/finish` now also sends email 17 after the finish has committed,
@@ -8982,6 +9002,11 @@ token's hash, made, runs out, how many times it has been looked up, used and by 
 `touch_emails_updated_at` and `_by`, and `fundraiser_calls.prompt` (nullable), with the check on
 `which` widened to allow `prompt`. Numbered 170, above main's 130 and the 160 an open task uses. The
 new tables are in the nightly backup's table count (73).
+
+`migrations/1791200000197_touch-wording-approvals.js` (additive only): `touch_wording_approvals` (key,
+approved at, approved by; no row means not approved), seeded with `target`, `need_a_hand` and
+`on_track` as approved by Jaimie on 2026-10-03, each with an `audit_log` row. Numbered 197: after
+190 and the 195 and 196 that open changes use, before 200. In the nightly backup's table count (76).
 
 ### Where it lives, and tests
 
@@ -8997,13 +9022,15 @@ Sending: `src/fundraising/touch-runner.ts` (the daily pass and the finished emai
 UK days, both clock changes), `fundraising-touch-emails` (each email, html and text, the approved
 words), `fundraising-touch-runner` (switch off sends nothing, once only, opt outs and suppression,
 the in memory guard, failures given back, the 8am wiring), `fundraising-touch-db`,
-`fundraising-touch-migration`, `admin-fundraising-touch-routes` (admin, editor, viewer),
+`fundraising-touch-migration`, `touch-wording-approvals-migration`, `admin-fundraising-touch-routes` (admin, editor, viewer,
+and who may approve wording),
 `admin-fundraising-touch-panel` (jsdom), `admin-fundraising-finish-touch`,
 `fundraising-summary-prompts`, `admin-email-kinds` and `backup-plan`. BDD:
 `features/fundraising-touch.feature` (ships off and only an admin switches it on; a viewer reads an
 email; nothing goes while off; a week before goes once; nothing to an address that opted out; Mark
-finished sends the thank you; a viewer cannot record a call; Do it again fills in the form from last
-year, once, and the new sign up waits for staff).
+finished sends the thank you; the thank you is held back while its wording waits for sign off, an
+editor cannot approve it, and once an admin does the daily run sends it, once; a viewer cannot record
+a call; Do it again fills in the form from last year, once, and the new sign up waits for staff).
 
 ## Event pages
 
@@ -9364,11 +9391,11 @@ in TASK-493, the private area's sign in codes and sessions two in TASK-501, the 
 calls two in TASK-503, the requests one in TASK-505, the news updates one in TASK-506, and the
 thank yous to supporters and the address level opt out list three in TASK-507, the old page
 links one in TASK-511, the fundraising categories one in TASK-514, and which automatic emails each
-fundraiser has had and the Do it again links two in TASK-515, and the team invites and team
-organiser handovers two for team pages),
+fundraiser has had and the Do it again links two in TASK-515, the team invites and team
+organiser handovers two for team pages, and the approved automatic email wordings one),
 but `STORIES_DATABASE_URL` and `CONTACT_DATABASE_URL` are separate databases
 (deliberately, so the public story and contact forms can never reach donor
-data). A `pg_dump $DATABASE_URL` captures 72 of **75** tables and silently
+data). A `pg_dump $DATABASE_URL` captures 73 of **76** tables and silently
 drops every My Story submission (and, since TASK-475, the fingerprints in
 `erased_stories` that keep erased stories from coming back) and every contact
 enquiry, while producing a

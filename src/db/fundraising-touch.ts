@@ -7,7 +7,8 @@ import { promptCounts, type PromptCall, type PromptCounts, type PromptFacts, typ
 import type { TouchFacts, TouchKind } from "../fundraising/touch-rules";
 import { withTeamTotals } from "../fundraising/teams";
 
-// TASK-515: the SQL behind keeping in touch: the Automatic emails switch, which automatic email each
+// TASK-515: the SQL behind keeping in touch: the Automatic emails switch, which new wordings an admin
+// has approved (touch_wording_approvals), which automatic email each
 // fundraiser has had (fundraiser_touchpoints, once each), the calls about a smart call prompt (in
 // TASK-503's fundraiser_calls, which = 'prompt'), and the facts the pure rules read
 // (src/fundraising/touch-rules.ts and call-prompts.ts). This file only moves rows. Every change a
@@ -76,6 +77,71 @@ export async function setTouchEmailsOn(on: boolean, actor: string): Promise<Touc
     );
     await insertAudit(client, { actor, action: "fundraising.touch_emails_switched", entity: "fundraising_settings", entityId: 1, data: { on } });
     return toSettings((await client.query(SETTINGS_SQL)).rows[0]);
+  });
+}
+
+// --- signing off the new wording (Jaimie, 2026-10-03) ---------------------------------------------
+
+/** An admin's approval of one new wording (WORDING_KEYS in src/fundraising/touch-rules.ts). */
+export interface WordingApproval {
+  key: string;
+  approvedAt: string;
+  approvedBy: string;
+}
+
+const APPROVALS_SQL = "SELECT key, approved_at, approved_by FROM touch_wording_approvals";
+const toApproval = (row: Row): WordingApproval => ({
+  key: row.key as string,
+  approvedAt: iso(row.approved_at) as string,
+  approvedBy: row.approved_by as string,
+});
+
+export async function listWordingApprovals(): Promise<WordingApproval[]> {
+  const r = await pool.query(`${APPROVALS_SQL} ORDER BY key`);
+  return (r.rows as Row[]).map(toApproval);
+}
+
+/** The approved keys. Any failure reads as NONE approved, so no new wording is sent by mistake. */
+export async function approvedWordingKeys(): Promise<Set<string>> {
+  try {
+    return new Set((await listWordingApprovals()).map((a) => a.key));
+  } catch (err) {
+    console.error("fundraising automatic emails: could not read the approved wordings:", err instanceof Error ? err.message : err);
+    return new Set();
+  }
+}
+
+/** Approve one wording. One already approved keeps its first approval (and no second History row). */
+export async function approveWording(key: string, actor: string): Promise<WordingApproval> {
+  return inTransaction(async (client) => {
+    const r = await client.query(
+      `INSERT INTO touch_wording_approvals (key, approved_by) VALUES ($1, $2)
+       ON CONFLICT (key) DO NOTHING RETURNING key, approved_at, approved_by`,
+      [key, actor],
+    );
+    if (r.rows[0]) {
+      await insertAudit(client, { actor, action: "fundraising.touch_wording_approved", entity: "fundraising_settings", entityId: 1, data: { key } });
+      return toApproval(r.rows[0]);
+    }
+    return toApproval((await client.query(`${APPROVALS_SQL} WHERE key = $1`, [key])).rows[0]);
+  });
+}
+
+/** Withdraw one approval: that email stops going until it is approved again. False if it was not approved. */
+export async function withdrawWording(key: string, actor: string): Promise<boolean> {
+  return inTransaction(async (client) => {
+    const r = await client.query("DELETE FROM touch_wording_approvals WHERE key = $1 RETURNING key, approved_at, approved_by", [key]);
+    const row = r.rows[0];
+    if (!row) return false;
+    const was = toApproval(row);
+    await insertAudit(client, {
+      actor,
+      action: "fundraising.touch_wording_withdrawn",
+      entity: "fundraising_settings",
+      entityId: 1,
+      data: { key, approvedAt: was.approvedAt, approvedBy: was.approvedBy },
+    });
+    return true;
   });
 }
 

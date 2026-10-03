@@ -12,6 +12,10 @@ vi.mock("../../src/config", () => ({ config: { NODE_ENV: "test" } }));
 vi.mock("../../src/db/fundraisers", () => ({ listAllFundraisers }));
 
 import {
+  approveWording,
+  approvedWordingKeys,
+  listWordingApprovals,
+  withdrawWording,
   claimTouch,
   getTouchSettings,
   readTouchState,
@@ -207,5 +211,64 @@ describe("a team's gifts, for first gift and gone quiet (review)", () => {
     expect(team.touch.lastOnlineGiftAt).toBe("2026-10-20T10:00:00.000Z");
     expect(team.prompt.lastOnlineGiftAt).toBe("2026-10-20T10:00:00.000Z");
     expect(state.find((s) => s.f.id === 41)!.touch.firstOnlineGiftAt).toBe("2026-10-10T10:00:00.000Z");
+  });
+});
+
+describe("signing off the new wording (Jaimie, 2026-10-03)", () => {
+  it("lists the approvals, with who and when", async () => {
+    query.mockResolvedValueOnce({ rows: [{ key: "target", approved_at: new Date("2026-10-03T11:00:00Z"), approved_by: "Jaimie" }] });
+    expect(await listWordingApprovals()).toEqual([{ key: "target", approvedAt: "2026-10-03T11:00:00.000Z", approvedBy: "Jaimie" }]);
+    expect(query.mock.calls[0][0]).toMatch(/FROM touch_wording_approvals/);
+  });
+
+  it("reads the approved keys, and none when they cannot be read, so no new wording is sent by mistake", async () => {
+    query.mockResolvedValueOnce({ rows: [{ key: "target", approved_at: new Date(), approved_by: "Jaimie" }, { key: "on_track", approved_at: new Date(), approved_by: "Jaimie" }] });
+    expect([...(await approvedWordingKeys())].sort()).toEqual(["on_track", "target"]);
+    query.mockRejectedValueOnce(new Error("connection lost"));
+    vi.spyOn(console, "error").mockImplementation(() => undefined);
+    expect((await approvedWordingKeys()).size).toBe(0);
+  });
+
+  it("approves a wording with who did it, and a History row, in one transaction", async () => {
+    const calls = useClient((sql) =>
+      /INSERT INTO touch_wording_approvals/.test(sql) ? { rows: [{ key: "finished", approved_at: new Date("2026-10-04T09:00:00Z"), approved_by: "admin:fern@example.com" }] } : undefined,
+    );
+    const a = await approveWording("finished", "admin:fern@example.com");
+    expect(a).toEqual({ key: "finished", approvedAt: "2026-10-04T09:00:00.000Z", approvedBy: "admin:fern@example.com" });
+    const write = sqlIn(calls, /INSERT INTO touch_wording_approvals/)!;
+    expect(write[0]).toMatch(/ON CONFLICT \(key\) DO NOTHING/);
+    expect(write[1]).toEqual(["finished", "admin:fern@example.com"]);
+    expect(audits(calls)[0]).toEqual(["admin:fern@example.com", "fundraising.touch_wording_approved", "fundraising_settings", 1, { key: "finished" }]);
+    expect(calls.map((c) => c[0])).toContain("COMMIT");
+  });
+
+  it("approving one already approved keeps the first approval, and writes no second History row", async () => {
+    const calls = useClient((sql) =>
+      /SELECT key, approved_at/.test(sql) ? { rows: [{ key: "target", approved_at: new Date("2026-10-03T11:00:00Z"), approved_by: "Jaimie" }] } : undefined,
+    );
+    const a = await approveWording("target", "admin:fern@example.com");
+    expect(a).toEqual({ key: "target", approvedAt: "2026-10-03T11:00:00.000Z", approvedBy: "Jaimie" });
+    expect(audits(calls)).toEqual([]);
+  });
+
+  it("withdraws an approval with a History row saying whose approval it was", async () => {
+    const calls = useClient((sql) =>
+      /DELETE FROM touch_wording_approvals/.test(sql) ? { rows: [{ key: "on_track", approved_at: new Date("2026-10-03T11:00:00Z"), approved_by: "Jaimie" }] } : undefined,
+    );
+    expect(await withdrawWording("on_track", "admin:fern@example.com")).toBe(true);
+    expect(sqlIn(calls, /DELETE FROM touch_wording_approvals/)![1]).toEqual(["on_track"]);
+    expect(audits(calls)[0]).toEqual([
+      "admin:fern@example.com",
+      "fundraising.touch_wording_withdrawn",
+      "fundraising_settings",
+      1,
+      { key: "on_track", approvedAt: "2026-10-03T11:00:00.000Z", approvedBy: "Jaimie" },
+    ]);
+  });
+
+  it("withdrawing one not approved changes nothing and writes no History row", async () => {
+    const calls = useClient(() => undefined);
+    expect(await withdrawWording("finished_zero", "admin:fern@example.com")).toBe(false);
+    expect(audits(calls)).toEqual([]);
   });
 });

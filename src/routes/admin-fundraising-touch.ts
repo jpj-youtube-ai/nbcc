@@ -4,10 +4,33 @@ import { authorizeSection, authorizeSectionAsAdmin } from "./admin-authz";
 import { actorOf } from "./admin";
 import { config } from "../config";
 import { getFundraiser } from "../db/fundraisers";
-import { getTouchSettings, readTouchState, recordPromptCall, setTouchEmailsOn, TouchError } from "../db/fundraising-touch";
+import {
+  approveWording,
+  getTouchSettings,
+  listWordingApprovals,
+  readTouchState,
+  recordPromptCall,
+  setTouchEmailsOn,
+  TouchError,
+  withdrawWording,
+  type WordingApproval,
+} from "../db/fundraising-touch";
 import { callPrompts, PROMPT_KEYS, type CallPrompt, type PromptCall, type PromptKey } from "../fundraising/call-prompts";
 import { buildTouchEmail, sampleTouchData, touchEmailData } from "../fundraising/touch-emails";
-import { isNewWording, NEW_WORDING_KINDS, nextTouch, TOUCH_KINDS, TOUCH_LABELS, TOUCH_WHEN, type TouchKind, type TouchSent } from "../fundraising/touch-rules";
+import {
+  dueTouches,
+  isNewWording,
+  isSignedOff,
+  NEW_WORDING_KINDS,
+  TOUCH_KINDS,
+  TOUCH_LABELS,
+  TOUCH_WHEN,
+  WORDING_KEYS,
+  wordingKey,
+  wordingKeysOf,
+  type TouchKind,
+  type TouchSent,
+} from "../fundraising/touch-rules";
 import { followUpToday } from "../fundraising/follow-up";
 
 // TASK-515: keeping in touch, in Admin > Fundraising. Section "fundraising": viewers look, editors
@@ -22,9 +45,12 @@ import { followUpToday } from "../fundraising/follow-up";
 //        ?sample=zero                                  (with nothing raised yet)
 //        ?fundraiserId=N                               or for that fundraiser                      view
 //   PUT  /api/admin/fundraising/touch/settings         { on: true | false }                        admin
+//   POST   /api/admin/fundraising/touch/approvals/:key approve one new wording (WORDING_KEYS)      admin
+//   DELETE /api/admin/fundraising/touch/approvals/:key withdraw that approval                      admin
 //   POST /api/admin/fundraisers/:id/prompt-calls       { prompt, note? }                           edit
 //
 // Jaimie's rule: every automatic email is readable here before any is sent. The switch ships OFF.
+// And (2026-10-03) new wording only sends once an admin has approved it here.
 // Request and response shapes: README.md, "Community fundraising", keeping in touch.
 
 export const adminFundraisingTouchRouter = Router();
@@ -38,6 +64,9 @@ function failed(res: Response, what: string, err: unknown): Response {
 }
 
 const isKind = (k: unknown): k is TouchKind => typeof k === "string" && (TOUCH_KINDS as readonly string[]).includes(k);
+const isWordingKey = (k: unknown): k is string => typeof k === "string" && (WORDING_KEYS as readonly string[]).includes(k);
+const approvalMap = (list: WordingApproval[]) =>
+  Object.fromEntries(list.map((a) => [a.key, { approvedAt: a.approvedAt, approvedBy: a.approvedBy }])) as Record<string, { approvedAt: string; approvedBy: string }>;
 const base = () => config.PORTAL_BASE_URL.replace(/\/+$/, "");
 
 // --- the overview ----------------------------------------------------------------------------------
@@ -46,23 +75,37 @@ export async function getTouch(req: Request, res: Response): Promise<Response | 
   if (!(await authorizeSection(req, res, "fundraising", "view"))) return;
   try {
     const today = followUpToday(new Date());
-    const [settings, state] = await Promise.all([getTouchSettings(), readTouchState()]);
+    const [settings, state, approvalList] = await Promise.all([getTouchSettings(), readTouchState(), listWordingApprovals()]);
+    const approvals = approvalMap(approvalList);
+    const approved = new Set(Object.keys(approvals));
     const sent: Record<string, TouchSent[]> = {};
     const prompts: Record<string, CallPrompt[]> = {};
     const promptCalls: Record<string, PromptCall[]> = {};
     // What the next 8am run would send, were the switch on: so nobody is surprised by the first one.
+    // And what it would hold back, its new wording waiting for sign off.
     const due: Record<string, TouchKind> = {};
+    const held: Record<string, TouchKind> = {};
     for (const s of state) {
       const id = String(s.f.id);
       if (s.touch.sent.length) sent[id] = s.touch.sent;
       const showing = callPrompts(s.f, s.prompt, today);
       if (showing.length) prompts[id] = showing;
       if (s.prompt.calls.length) promptCalls[id] = s.prompt.calls;
-      const next = nextTouch(s.f, s.touch, today);
+      const all = dueTouches(s.f, s.touch, today);
+      const next = all.find((k) => isSignedOff(k, s.f.meter.raisedPence, approved));
       if (next) due[id] = next;
+      const waiting = all.find((k) => !isSignedOff(k, s.f.meter.raisedPence, approved));
+      if (waiting && (!next || all.indexOf(waiting) < all.indexOf(next))) held[id] = waiting;
     }
-    const kinds = TOUCH_KINDS.map((kind) => ({ kind, label: TOUCH_LABELS[kind], when: TOUCH_WHEN[kind], newWording: NEW_WORDING_KINDS.includes(kind) }));
-    return res.status(200).json({ today, settings, kinds, sent, prompts, promptCalls, due });
+    const kinds = TOUCH_KINDS.map((kind) => ({
+      kind,
+      label: TOUCH_LABELS[kind],
+      when: TOUCH_WHEN[kind],
+      newWording: NEW_WORDING_KINDS.includes(kind),
+      // The versions of it still waiting for sign off (its usual one, and the one with nothing raised).
+      waiting: wordingKeysOf(kind).filter((k) => !approved.has(k)),
+    }));
+    return res.status(200).json({ today, settings, kinds, approvals, sent, prompts, promptCalls, due, held });
   } catch (err) {
     return failed(res, "keep in touch read", err);
   }
@@ -89,7 +132,11 @@ export async function getTouchPreview(req: Request, res: Response): Promise<Resp
       sample = false;
     }
     const mail = buildTouchEmail(kind, data);
-    return res.status(200).json({ kind, label: TOUCH_LABELS[kind], newWording: isNewWording(kind, data.raisedPence), sample, title: data.title, ...mail });
+    const key = wordingKey(kind, data.raisedPence);
+    const approval = key ? (approvalMap(await listWordingApprovals())[key] ?? null) : null;
+    return res
+      .status(200)
+      .json({ kind, label: TOUCH_LABELS[kind], newWording: isNewWording(kind, data.raisedPence), wordingKey: key, approval, sample, title: data.title, ...mail });
   } catch (err) {
     return failed(res, "automatic email preview", err);
   }
@@ -108,6 +155,32 @@ export async function putTouchSettings(req: Request, res: Response): Promise<Res
     return res.status(200).json(await setTouchEmailsOn(body.data.on, actorOf(claims)));
   } catch (err) {
     return failed(res, "automatic emails switch", err);
+  }
+}
+
+// --- signing off the new wording (Jaimie, 2026-10-03) ----------------------------------------------
+
+export async function postWordingApproval(req: Request, res: Response): Promise<Response | void> {
+  const claims = await authorizeSectionAsAdmin(req, res, "fundraising");
+  if (!claims) return;
+  const key = req.params.key;
+  if (!isWordingKey(key)) return res.status(404).json({ error: "There is no new wording of that name to approve" });
+  try {
+    return res.status(200).json({ approval: await approveWording(key, actorOf(claims)) });
+  } catch (err) {
+    return failed(res, "wording approval", err);
+  }
+}
+
+export async function deleteWordingApproval(req: Request, res: Response): Promise<Response | void> {
+  const claims = await authorizeSectionAsAdmin(req, res, "fundraising");
+  if (!claims) return;
+  const key = req.params.key;
+  if (!isWordingKey(key)) return res.status(404).json({ error: "There is no new wording of that name" });
+  try {
+    return res.status(200).json({ withdrawn: await withdrawWording(key, actorOf(claims)) });
+  } catch (err) {
+    return failed(res, "withdrawing a wording approval", err);
   }
 }
 
@@ -141,4 +214,6 @@ export async function postPromptCall(req: Request, res: Response): Promise<Respo
 adminFundraisingTouchRouter.get("/api/admin/fundraising/touch", getTouch);
 adminFundraisingTouchRouter.get("/api/admin/fundraising/touch/preview/:kind", getTouchPreview);
 adminFundraisingTouchRouter.put("/api/admin/fundraising/touch/settings", putTouchSettings);
+adminFundraisingTouchRouter.post("/api/admin/fundraising/touch/approvals/:key", postWordingApproval);
+adminFundraisingTouchRouter.delete("/api/admin/fundraising/touch/approvals/:key", deleteWordingApproval);
 adminFundraisingTouchRouter.post("/api/admin/fundraisers/:id/prompt-calls", postPromptCall);

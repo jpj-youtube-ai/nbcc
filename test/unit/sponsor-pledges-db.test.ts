@@ -109,6 +109,8 @@ describe("reading a row", () => {
     expect(p.createdAt).toBe("2026-11-01T10:00:00.000Z");
     expect(p.payEmailSentAt).toBe("2026-12-06T08:00:00.000Z");
     expect(p.confirmedAt).toBe("2026-11-01T10:05:00.000Z");
+    expect(p.confirmEmailSentAt).toBeNull();
+    expect(toPledge(row({ confirm_email_sent_at: new Date("2026-11-01T10:00:02Z") })).confirmEmailSentAt).toBe("2026-11-01T10:00:02.000Z");
     expect(p.hiddenAt).toBe("2026-11-02T08:00:00.000Z");
   });
 });
@@ -146,6 +148,26 @@ describe("making a pledge", () => {
     expect(params.filter((v) => typeof v === "string" && v.startsWith("I want to Gift Aid"))).toEqual([]);
   });
 
+  it("takes a lock for that sponsor on that page first, so two posts at once never make two pledges", async () => {
+    const { calls } = useClient((sql) => (/INSERT INTO sponsor_pledges/.test(sql) ? { rows: [row({ status: "unconfirmed" })] } : undefined));
+    await createPledge(7, parsed(), "n");
+    expect(calls[1][0]).toBe("SELECT pg_advisory_xact_lock(hashtext($1))");
+    expect(calls[1][1]).toEqual(["sponsor_pledge:7:alex@example.com"]);
+    expect(calls.findIndex((c) => /pg_advisory_xact_lock/.test(c[0]))).toBeLessThan(calls.findIndex((c) => /interval '10 minutes'/.test(c[0])));
+  });
+
+  it("refuses a fourth unconfirmed pledge from one address in a day, on any page, storing nothing", async () => {
+    const { calls } = useClient((sql) => (/count\(\*\)/.test(sql) ? { rows: [{ n: 3 }] } : undefined));
+    const out = await createPledge(7, parsed(), "n");
+    expect(out).toEqual({ pledge: null, duplicate: false, capped: true });
+    const cap = sqlIn(calls, /count\(\*\)/)!;
+    expect(cap[0]).toMatch(/status = 'unconfirmed' AND created_at > now\(\) - interval '24 hours'/);
+    expect(cap[0]).not.toMatch(/fundraiser_id/);
+    expect(cap[1]).toEqual(["alex@example.com"]);
+    expect(sqlIn(calls, /INSERT INTO sponsor_pledges/)).toBeUndefined();
+    expect(audits(calls)).toEqual([]);
+  });
+
   it("a second press of the button makes no second pledge, confirmed yet or not", async () => {
     const { calls } = useClient((sql) => (/SELECT[\s\S]*FROM sponsor_pledges/.test(sql) && /interval '10 minutes'/.test(sql) ? { rows: [row()] } : undefined));
     const out = await createPledge(7, parsed(), "n");
@@ -175,7 +197,11 @@ describe("confirming by email", () => {
     const { calls } = useClient((sql) => (/DELETE FROM sponsor_pledges/.test(sql) ? { rows: [{ fundraiser_id: 7, email: "alex@example.com" }] } : undefined));
     expect(await deleteUnconfirmedPledge(5)).toBe(true);
     expect(sqlIn(calls, /DELETE FROM sponsor_pledges/)![0]).toMatch(/WHERE id = \$1 AND status = 'unconfirmed'/);
-    expect(eraseEmailLogFor).toHaveBeenCalledWith("alex@example.com", ["fundraisePledgeConfirm", "fundraisePledgePay", "fundraisePledgeReminder"]);
+    // In the SAME transaction: the pledge and its email log rows go together or not at all.
+    const log = sqlIn(calls, /DELETE FROM email_log/)!;
+    expect(log[1]).toEqual(["alex@example.com", ["fundraisePledgeConfirm", "fundraisePledgePay", "fundraisePledgeReminder"]]);
+    expect(calls.findIndex((c) => /DELETE FROM email_log/.test(c[0]))).toBeLessThan(calls.findIndex((c) => c[0] === "COMMIT"));
+    expect(eraseEmailLogFor).not.toHaveBeenCalled();
     expect(audits(calls)[0]).toEqual(["system:schedule", "pledge.unconfirmed_deleted", "sponsor_pledge", 5, { fundraiserId: 7 }]);
   });
 });
@@ -277,9 +303,15 @@ describe("cancelling, cash, and hiding", () => {
     expect(audits(calls)[0]).toEqual(["admin:fern@example.com", "pledge.message_hidden", "sponsor_pledge", 5, { fundraiserId: 7 }]);
   });
 
-  it("remembers the checkout it opened", async () => {
-    await saveCheckoutSession(5, "cs_test_2");
-    expect(query.mock.calls[0]).toEqual(["UPDATE sponsor_pledges SET checkout_session_id = $2 WHERE id = $1 AND status = 'open'", [5, "cs_test_2"]]);
+  it("remembers the checkout it opened, only if nobody else opened one since it was read", async () => {
+    query.mockResolvedValueOnce({ rows: [{ id: 5 }] });
+    expect(await saveCheckoutSession(5, "cs_test_2", "cs_test_1")).toBe(true);
+    expect(query.mock.calls[0]).toEqual([
+      "UPDATE sponsor_pledges SET checkout_session_id = $2 WHERE id = $1 AND status = 'open' AND checkout_session_id IS NOT DISTINCT FROM $3 RETURNING id",
+      [5, "cs_test_2", "cs_test_1"],
+    ]);
+    query.mockResolvedValueOnce({ rows: [] });
+    expect(await saveCheckoutSession(5, "cs_test_3", null)).toBe(false);
   });
 });
 
@@ -338,6 +370,8 @@ describe("the webhook marking a pledge paid", () => {
     expect(sqlIn(calls, /UPDATE sponsor_pledges SET status = 'paid'/)).toBeUndefined();
     const flag = sqlIn(calls, /UPDATE sponsor_pledges SET double_paid_at = now\(\)/)!;
     expect(flag[1]).toEqual([5, 91]);
+    // A further payment is told to staff again.
+    expect(flag[0]).toMatch(/double_paid_alerted_at = NULL/);
     expect(audits(calls)[0]).toEqual(["stripe", "pledge.paid_again", "sponsor_pledge", 5, { eventId: "evt_2", fundraiserId: 7, donationId: 91, paidPence: 1000 }]);
   });
 
@@ -405,14 +439,15 @@ describe("removing personal details", () => {
     expect(sql).not.toMatch(/amount_pence\s*=/);
     expect(sql).toMatch(/status = CASE WHEN status = 'open' THEN 'expired' ELSE status END/);
     expect(sql).toMatch(/anonymised_at IS NULL AND status NOT IN \('paid', 'unconfirmed'\)/);
-    expect(eraseEmailLogFor).toHaveBeenCalledWith("alex@example.com", ["fundraisePledgeConfirm", "fundraisePledgePay", "fundraisePledgeReminder"]);
+    expect(sqlIn(calls, /DELETE FROM email_log/)![1]).toEqual(["alex@example.com", ["fundraisePledgeConfirm", "fundraisePledgePay", "fundraisePledgeReminder"]]);
     expect(audits(calls)[0]).toEqual(["system:schedule", "pledge.anonymised", "sponsor_pledge", 5, { fundraiserId: 7, status: "expired" }]);
   });
 
   it("a paid pledge only loses its email, and its log rows", async () => {
-    query.mockResolvedValueOnce({ rows: [{ email: "alex@example.com" }] });
+    const { calls } = useClient((sql) => (/SELECT email FROM sponsor_pledges/.test(sql) ? { rows: [{ email: "alex@example.com" }] } : undefined));
     await trimPaidPledge(5);
-    expect(eraseEmailLogFor).toHaveBeenCalledWith("alex@example.com", expect.any(Array));
-    expect(query.mock.calls[1][0]).toMatch(/UPDATE sponsor_pledges SET email = NULL WHERE id = \$1 AND status = 'paid'/);
+    expect(sqlIn(calls, /DELETE FROM email_log/)![1][0]).toBe("alex@example.com");
+    expect(sqlIn(calls, /UPDATE sponsor_pledges SET email = NULL WHERE id = \$1 AND status = 'paid'/)).toBeDefined();
+    expect(calls[calls.length - 1][0]).toBe("COMMIT");
   });
 });

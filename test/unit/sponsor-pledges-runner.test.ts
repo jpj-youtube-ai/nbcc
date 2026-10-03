@@ -306,6 +306,19 @@ describe("staff sending the pay link by hand", () => {
     expect(d.markSent).toHaveBeenCalledWith(5, 7, "pledge_pay", "admin:fern@example.com");
   });
 
+  it("the first send by hand claims the pay email itself, so it can never race the daily task", async () => {
+    const d = deps([live()]);
+    expect(await sendPledgeEmailNow(5, "admin:fern@example.com", d)).toBe("sent");
+    expect(d.claim).toHaveBeenCalledWith(5, "pledge_pay");
+    expect(d.claimResend).not.toHaveBeenCalled();
+    const taken = deps([live()], { claim: vi.fn(async () => false) });
+    expect(await sendPledgeEmailNow(5, "admin:x", taken)).toBe("too_soon");
+    expect(taken.send).not.toHaveBeenCalled();
+    const failing = deps([live()], { send: vi.fn(async () => Promise.reject(new Error("smtp"))) });
+    expect(await sendPledgeEmailNow(5, "admin:x", failing)).toBe("failed");
+    expect(failing.release).toHaveBeenCalledWith(5, "pledge_pay");
+  });
+
   it("is refused before the link is due", async () => {
     const d = deps([live()], { now: () => new Date("2026-12-04T08:00:00Z") });
     expect(await sendPledgeEmailNow(5, "admin:x", d)).toBe("early");
@@ -334,7 +347,7 @@ describe("staff sending the pay link by hand", () => {
   });
 
   it("says so when the send fails, and lets it be tried again", async () => {
-    const d = deps([live()], { send: vi.fn(async () => Promise.reject(new Error("smtp"))) });
+    const d = deps([sentBefore()], { send: vi.fn(async () => Promise.reject(new Error("smtp"))) });
     expect(await sendPledgeEmailNow(5, "admin:x", d)).toBe("failed");
     expect(d.releaseResend).toHaveBeenCalledWith(5);
   });
@@ -370,11 +383,21 @@ describe("telling the events inbox", () => {
     const message = d.sendStaff.mock.calls[0][0] as unknown as Record<string, string>;
     expect(message.email).toBe("events@nbcc.example");
     expect(message.subject).toBe("1 pledge paid twice: check and refund");
-    expect(message.text).toContain("Robin's Santa Dash: pledge 5 (£10)");
+    expect(message.text).toContain("Robin's Santa Dash: pledge 5 (£10) was paid twice.");
     expect(message.text).not.toContain("Alex");
     expect(message.text).not.toContain("alex@example.com");
     expect(message.html).toContain("https://nbcc.example/admin");
     expect(d.markAlerted).toHaveBeenCalledWith([5]);
+  });
+
+  it("says the right thing for one marked as paid in cash and then paid online: that payment keeps its Gift Aid", async () => {
+    const cash = live({ id: 8, status: "paid", cashMarkedAt: "2026-12-06T10:00:00.000Z", doublePaidAt: "2026-12-07T10:00:00.000Z" });
+    const twice = live({ status: "paid", doublePaidAt: "2026-12-07T10:00:00.000Z" });
+    const d = deps([], { listDoublePaid: vi.fn(async () => [twice, cash]) });
+    await sendDoublePaidAlerts(d);
+    const text = (d.sendStaff.mock.calls[0][0] as unknown as Record<string, string>).text;
+    expect(text).toContain("Robin's Santa Dash: pledge 5 (£10) was paid twice. The second payment is on the page as a donation with no Gift Aid. Check it and refund the extra one.");
+    expect(text).toContain("Robin's Santa Dash: pledge 8 (£10). The sponsor was marked as paid in cash and has now also paid online. Check which is right and refund if needed.");
   });
 
   it("sends nothing when there is nothing to say, and never throws", async () => {

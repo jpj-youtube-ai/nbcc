@@ -325,13 +325,17 @@ async function sendNow(c: PledgeWithFundraiser, actor: string, deps: PledgeRunDe
   if (!(await deps.fundraisingOn())) return "off";
   if (!(await readApproved(deps)).has(kind)) return "waiting";
   if (!(await mayEmail(c, kind, deps))) return "blocked";
-  if (!(await deps.claimResend(c.p.id))) return "too_soon";
+  // The FIRST pay link takes the same claim the daily task takes, so the two can never both send
+  // it; a later one is a resend, held for ten minutes.
+  const first = !c.p.payEmailSentAt;
+  if (!(first ? await deps.claim(c.p.id, kind) : await deps.claimResend(c.p.id))) return "too_soon";
   try {
     await deliver(c, kind, deps);
   } catch (err) {
     console.error(`pledge pay link for pledge ${c.p.id} could not be sent by hand:`, why(err));
     try {
-      await deps.releaseResend(c.p.id);
+      if (first) await deps.release(c.p.id, kind);
+      else await deps.releaseResend(c.p.id);
     } catch (e) {
       console.error(`pledge pay link for pledge ${c.p.id}: could not release its hold:`, why(e));
     }
@@ -423,9 +427,16 @@ export async function sendDoublePaidAlerts(deps: PledgeRunDeps = realPledgeDeps)
     const rows = await deps.listDoublePaid();
     if (rows.length === 0) return 0;
     const subject = `${rows.length} ${rows.length === 1 ? "pledge" : "pledges"} paid twice: check and refund`;
+    // Two different things: a pledge paid twice (the second payment carries no Gift Aid), and one
+    // marked as paid in cash that was then paid online (that one payment keeps its Gift Aid).
     const lines = [
-      "A sponsor has paid for a pledge that was already paid, or paid online for one marked as paid in cash. The extra payment is on the page as a donation, with no Gift Aid. Please check it in Admin, Fundraising, Sponsor pledges, and refund what should not have been taken.",
-      ...rows.map((c) => `${c.f.title}: pledge ${c.p.id} (${pounds(c.p.amountPence)})`),
+      "Please look at these in Admin, Fundraising, Sponsor pledges, then press Mark as checked.",
+      ...rows.map((c) => {
+        const what = `${c.f.title}: pledge ${c.p.id} (${pounds(c.p.amountPence)})`;
+        return c.p.cashMarkedAt
+          ? `${what}. The sponsor was marked as paid in cash and has now also paid online. Check which is right and refund if needed.`
+          : `${what} was paid twice. The second payment is on the page as a donation with no Gift Aid. Check it and refund the extra one.`;
+      }),
     ];
     if (!(await sendPledgeStaffNote(subject, lines, deps))) return 0;
     await deps.markAlerted(rows.map((c) => c.p.id));

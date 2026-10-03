@@ -10033,7 +10033,7 @@ without touching the rest of fundraising.
   show the amount or not, and Gift Aid with the home address when ticked. The names and the message
   are checked against the blocked word list. A hidden honeypot field, per address and per email
   limits, the same origin check and Turnstile, as on the sign up form. In production the form is
-  **closed** if Turnstile is not set up (config already refuses to boot production without its keys;
+  **closed** if Turnstile is not set up, or cannot answer (config already refuses to boot production without its keys;
   this is the second lock). No payment page opens and nothing is paid.
 
 ### Confirm by email
@@ -10048,7 +10048,12 @@ you a link to confirm your pledge."
   organiser's list, and later emailed the pay link. An `unconfirmed` one is shown nowhere (staff see
   it as "Waiting for the sponsor to confirm by email").
 - An unconfirmed pledge is **never emailed again** and is **deleted after 7 days**, with the log row
-  of its email.
+  of its email. The one exception: if the confirm email never went (the send failed), pressing the
+  button again within ten minutes sends it then.
+- One address may have at most **3 pledges waiting to be confirmed** made in the last 24 hours, on
+  any page. A fourth stores nothing and sends nothing, and the form answers exactly as usual. This
+  cap is in the database (the form's other limits are in memory, per server). A lock for that
+  sponsor on that page is taken while a pledge is made, so two posts at once never make two pledges.
 - The confirm email is **not** one of the automatic emails: it goes whatever the Automatic emails
   switch says and its wording is not approval gated, because pledging has to work from day one. It
   still respects the suppression and opt out lists (an address on either gets no email, and the
@@ -10128,7 +10133,8 @@ The pay email can still go up to 60 days after it was due (a missed run, or word
 reminder up to 3 weeks after it was due.
 
 **Staff sending the pay link by hand** (Admin > Fundraising > Sponsor pledges) obeys **every** rule
-above except the daily task's time window: the pledge is open, its page still has pledges on it, the
+above except the daily task's time window (the first send takes the same claim the daily task
+takes, so the two can never both send it): the pledge is open, its page still has pledges on it, the
 link is **due** (never early: "Their link goes the day after the event. To send it early, mark the
 fundraiser finished first."), the switch and fundraising are on, the wording is approved and the
 address is not stopped. A send holds the pledge for ten minutes so two presses never send it twice.
@@ -10161,8 +10167,13 @@ savepoint: an error marking the pledge never rolls back the donation).
 
 **Nobody pays twice by accident.** The pledge remembers the checkout it last opened
 (`checkout_session_id`); opening another (a second tab, the email opened twice) closes the earlier
-one first (`stripe.checkout.sessions.expire`). A checkout is never started for a pledge that is paid,
-cancelled or marked as paid in cash. If a second payment lands anyway, or one marked as cash is then
+one first (`stripe.checkout.sessions.expire`). When Stripe will not close it, the page asks Stripe
+which it is: if that checkout is **already paid** (the money is taken and only the webhook is still to
+land) the sponsor is told "Your pledge is paid. Your receipt is on its way." and no new checkout is
+opened. The new checkout is remembered only if the pledge still has the one this request read
+(`checkout_session_id IS NOT DISTINCT FROM`), so two tabs at the same moment cannot both win: the one
+that loses closes its own checkout and is told to finish in the other tab. A checkout is never
+started for a pledge that is paid, cancelled or marked as paid in cash. If a second payment lands anyway, or one marked as cash is then
 paid online, the pledge is **flagged**: it shows in the admin card ("Paid twice: check the payments
 and refund the extra one", with "Mark as checked"), in the Monday summary ("N pledges paid twice:
 check and refund"), and the events inbox is emailed (`fundraisePledgeStaff`).

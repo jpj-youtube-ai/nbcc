@@ -102,11 +102,12 @@ function deps(over: Partial<PledgeRouteDeps> = {}) {
     fundraisingOn: vi.fn(async () => true),
     getBySlug: vi.fn(async () => fundraiser()),
     production: false,
-    create: vi.fn(async () => ({ pledge: pledge({ status: "unconfirmed" }), duplicate: false })),
+    create: vi.fn(async () => ({ pledge: pledge({ status: "unconfirmed", confirmEmailSentAt: null }), duplicate: false })),
     sendConfirm: vi.fn(async () => "sent" as const),
     confirm: vi.fn(async () => true),
     expireCheckout: vi.fn(async () => undefined),
-    saveCheckout: vi.fn(async () => undefined),
+    saveCheckout: vi.fn(async () => true),
+    retrieveCheckout: vi.fn(async () => ({ status: "expired", paymentStatus: "unpaid" })),
     setHiddenByOrganiser: vi.fn(async () => pledge({ hiddenAt: "2026-11-02T10:00:00.000Z" })),
     notifyStaff: vi.fn(async () => true),
     markChecked: vi.fn(async () => true),
@@ -191,11 +192,44 @@ describe("making a pledge", () => {
   });
 
   it("a second press of the button sends no second email", async () => {
-    const d = deps({ create: vi.fn(async () => ({ pledge: pledge({ status: "unconfirmed" }), duplicate: true })) as never });
+    const d = deps({ create: vi.fn(async () => ({ pledge: pledge({ status: "unconfirmed", confirmEmailSentAt: "2026-11-04T11:59:00.000Z" }), duplicate: true })) as never });
     const res = mockRes();
     await makePledgeHandlers(d).postPledge(req({ params: { slug: "robins-santa-dash" }, body: good() }), res as never);
     expect(res.statusCode).toBe(201);
     expect(d.sendConfirm).not.toHaveBeenCalled();
+  });
+
+  it("a second press sends the confirm email when the first one never went", async () => {
+    const d = deps({ create: vi.fn(async () => ({ pledge: pledge({ status: "unconfirmed", confirmEmailSentAt: null }), duplicate: true })) as never });
+    const res = mockRes();
+    await makePledgeHandlers(d).postPledge(req({ params: { slug: "robins-santa-dash" }, body: good() }), res as never);
+    expect(d.sendConfirm).toHaveBeenCalledTimes(1);
+    expect(res.body).toEqual({ status: "pledged", confirm: true, amountPence: 1000 });
+  });
+
+  it("an address with too many unconfirmed pledges gets the usual answer, no pledge and no email", async () => {
+    const d = deps({ create: vi.fn(async () => ({ pledge: null, duplicate: false, capped: true })) as never });
+    const res = mockRes();
+    await makePledgeHandlers(d).postPledge(req({ params: { slug: "robins-santa-dash" }, body: good() }), res as never);
+    expect(res.statusCode).toBe(201);
+    expect(res.body).toEqual({ status: "pledged", confirm: true, amountPence: 1000 });
+    expect(d.sendConfirm).not.toHaveBeenCalled();
+    expect(d.getPledge).not.toHaveBeenCalled();
+  });
+
+  it("in production, is closed while the spam check cannot answer; elsewhere the pledge is kept", async () => {
+    const down = { captchaEnabled: () => true, verifyCaptcha: vi.fn(async () => ({ outcome: "unavailable" as const, reason: "timeout" })) as never };
+    vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const prod = deps({ ...down, production: true });
+    const res = mockRes();
+    await makePledgeHandlers(prod).postPledge(req({ params: { slug: "robins-santa-dash" }, body: good() }), res as never);
+    expect(res.statusCode).toBe(503);
+    expect(res.body).toEqual({ error: "Pledging is not available just now. You can still give on the page." });
+    expect(prod.create).not.toHaveBeenCalled();
+    const dev = deps(down);
+    const ok = mockRes();
+    await makePledgeHandlers(dev).postPledge(req({ params: { slug: "robins-santa-dash" }, body: good() }), ok as never);
+    expect(ok.statusCode).toBe(201);
   });
 
   it("answers the same whether or not the confirm email could go, so nobody learns who is on a stop list", async () => {
@@ -402,16 +436,44 @@ describe("paying", () => {
     await post({ t: token(), amount: "10" }, d);
     expect(d.expireCheckout).toHaveBeenCalledWith("cs_test_old");
     expect(d.expireCheckout.mock.invocationCallOrder[0]).toBeLessThan(d.createCheckout.mock.invocationCallOrder[0]);
-    expect(d.saveCheckout).toHaveBeenCalledWith(5, "cs_test_1");
+    expect(d.saveCheckout).toHaveBeenCalledWith(5, "cs_test_1", "cs_test_old");
   });
 
-  it("still opens a new checkout when the old one could not be closed (Stripe refuses one already paid or expired)", async () => {
+  it("still opens a new checkout when the old one had simply expired already", async () => {
     const d = deps({
       getPledge: vi.fn(async () => withF(pledge({ checkoutSessionId: "cs_test_old" }))) as never,
       expireCheckout: vi.fn(async () => Promise.reject(new Error("already expired"))) as never,
     });
     const { res } = await post({ t: token(), amount: "10" }, d);
+    expect(d.retrieveCheckout).toHaveBeenCalledWith("cs_test_old");
     expect(res.redirected?.[0]).toBe(303);
+  });
+
+  it.each([
+    ["complete", "unpaid"],
+    ["open", "paid"],
+  ])("paid but the webhook has not landed (the old checkout is %s, %s): says it is paid, and opens no new checkout", async (status, paymentStatus) => {
+    const d = deps({
+      getPledge: vi.fn(async () => withF(pledge({ checkoutSessionId: "cs_test_old" }))) as never,
+      expireCheckout: vi.fn(async () => Promise.reject(new Error("cannot expire a completed session"))) as never,
+      retrieveCheckout: vi.fn(async () => ({ status, paymentStatus })) as never,
+    });
+    const { res } = await post({ t: token(), amount: "10" }, d);
+    expect(d.createCheckout).not.toHaveBeenCalled();
+    expect(res.redirected).toBeNull();
+    expect(res.sent).toContain("Your pledge is paid");
+    expect(res.sent).toContain("Your receipt is on its way.");
+  });
+
+  it("two tabs at once: the one that loses closes its own checkout and sends nobody to pay twice", async () => {
+    const d = deps({ saveCheckout: vi.fn(async () => false) as never });
+    const { res } = await post({ t: token(), amount: "10" }, d);
+    // Saved only if nobody else opened one since this request read the pledge.
+    expect(d.saveCheckout).toHaveBeenCalledWith(5, "cs_test_1", null);
+    expect(d.expireCheckout).toHaveBeenCalledWith("cs_test_1");
+    expect(res.redirected).toBeNull();
+    expect(res.statusCode).toBe(409);
+    expect(res.sent).toContain("This payment is already open in another tab or window. Please finish it there, or wait a minute and try again.");
   });
 
   it("takes Gift Aid off when the box was unticked", async () => {

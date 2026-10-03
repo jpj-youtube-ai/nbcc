@@ -2,7 +2,6 @@ import type { PoolClient } from "pg";
 import type Stripe from "stripe";
 import { pool } from "./pool";
 import { insertAudit } from "./donations";
-import { eraseEmailLogFor } from "./email-log";
 import { londonToday } from "../events/model";
 import {
   PLEDGE_EMAIL_LOG_KINDS,
@@ -37,6 +36,8 @@ export interface PledgeRecord extends PledgeRow {
   gaWordingSnapshot: string | null;
   gaDeclaredAt: string | null;
   donationId: number | null;
+  /** When the confirm email went; null when it never has (a later submit sends it). */
+  confirmEmailSentAt?: string | null;
   /** The Stripe checkout last opened for it, to close before another is opened. */
   checkoutSessionId?: string | null;
   payEmailResends?: number;
@@ -49,7 +50,7 @@ const staleClaim = (claimed: string, sent: string) =>
   `CASE WHEN p.${sent} IS NULL AND p.${claimed} < now() - interval '1 hour' THEN NULL ELSE p.${claimed} END AS ${claimed}`;
 const COLUMNS = `p.id, p.fundraiser_id, p.first_name, p.surname, p.email, p.amount_pence, p.message, p.message_hidden, p.show_name,
   p.show_amount, p.gift_aid, p.ga_house, p.ga_address, p.ga_postcode, p.ga_non_uk, p.ga_wording_version, p.ga_wording_snapshot,
-  p.ga_declared_at, p.status, p.token_nonce, p.created_at, p.confirmed_at, p.hidden_at,
+  p.ga_declared_at, p.status, p.token_nonce, p.created_at, p.confirm_email_sent_at, p.confirmed_at, p.hidden_at,
   ${staleClaim("pay_email_claimed_at", "pay_email_sent_at")}, p.pay_email_sent_at,
   ${staleClaim("reminder_claimed_at", "reminder_sent_at")}, p.reminder_sent_at,
   p.pay_email_last_sent_at, p.pay_email_resends, p.checkout_session_id,
@@ -72,6 +73,7 @@ export function toPledge(r: Row): PledgeRecord {
     giftAid: r.gift_aid === true,
     status: String(r.status) as PledgeStatus,
     createdAt: iso(r.created_at) as string,
+    confirmEmailSentAt: iso(r.confirm_email_sent_at),
     confirmedAt: iso(r.confirmed_at),
     hiddenAt: iso(r.hidden_at),
     payEmailClaimedAt: iso(r.pay_email_claimed_at),
@@ -123,16 +125,35 @@ const audit = (client: PoolClient, actor: string, action: string, pledgeId: numb
 // only has to change (the signature's secret is what keeps a link from being forged).
 const NEW_NONCE = "md5(random()::text || clock_timestamp()::text || id::text)";
 
+// Forget a sponsor in the email log, inside the caller's transaction: the rows for the emails about
+// their pledge go with the pledge's details, or not at all. (The log carries no pledge id, so it is
+// by address and by the three pledge kinds; nothing else sent to that address is touched.)
+const forgetInEmailLog = (client: PoolClient, email: string | null) =>
+  email ? client.query("DELETE FROM email_log WHERE recipient = lower($1) AND kind = ANY($2)", [email, [...PLEDGE_EMAIL_LOG_KINDS]]) : Promise.resolve();
+
+/** One address may have this many pledges waiting to be confirmed, made in the last day, on any page. */
+export const UNCONFIRMED_CAP = 3;
+
 // --- making one, and confirming it -----------------------------------------------------------------
 
 /**
  * Store a pledge, UNCONFIRMED: it counts for nothing until its sponsor confirms it by email. With
  * Gift Aid, its declaration is kept exactly as worded for that amount (pledgeDeclarationWording),
  * dated now by the database. The same person pledging the same amount on the same page within ten
- * minutes (a second press of the button) makes no second pledge, and gets no second email.
+ * minutes (a second press of the button) makes no second pledge. A lock for that sponsor on that page
+ * is taken first, so two posts at once are taken one after the other and never make two pledges.
+ *
+ * `capped`: that address already has 3 pledges waiting to be confirmed, made in the last 24 hours (on
+ * any page, of any amount): nothing is stored. The form's rate limits are in memory and per server;
+ * this one is in the database, so it holds across servers and restarts.
  */
-export async function createPledge(fundraiserId: number, p: PledgeInput, nonce: string): Promise<{ pledge: PledgeRecord; duplicate: boolean }> {
+export async function createPledge(
+  fundraiserId: number,
+  p: PledgeInput,
+  nonce: string,
+): Promise<{ pledge: PledgeRecord; duplicate: boolean; capped?: false } | { pledge: null; duplicate: false; capped: true }> {
   return inTransaction(async (client) => {
+    await client.query("SELECT pg_advisory_xact_lock(hashtext($1))", [`sponsor_pledge:${fundraiserId}:${p.email}`]);
     const same = await client.query(
       `SELECT ${COLUMNS} FROM sponsor_pledges p
         WHERE p.fundraiser_id = $1 AND lower(p.email) = $2 AND p.amount_pence = $3 AND p.status IN ('unconfirmed', 'open')
@@ -141,6 +162,11 @@ export async function createPledge(fundraiserId: number, p: PledgeInput, nonce: 
       [fundraiserId, p.email, p.amountPence],
     );
     if (same.rows[0]) return { pledge: toPledge(same.rows[0]), duplicate: true };
+    const waiting = await client.query(
+      "SELECT count(*)::int AS n FROM sponsor_pledges WHERE lower(email) = $1 AND status = 'unconfirmed' AND created_at > now() - interval '24 hours'",
+      [p.email],
+    );
+    if (Number(waiting.rows[0]?.n ?? 0) >= UNCONFIRMED_CAP) return { pledge: null, duplicate: false, capped: true };
     const wording = p.giftAid ? pledgeDeclarationWording(p.amountPence) : null;
     const r = await client.query(
       `INSERT INTO sponsor_pledges AS p
@@ -196,15 +222,13 @@ export async function confirmPledge(id: number): Promise<boolean> {
  * it. Only ever an unconfirmed one. True when it was deleted.
  */
 export async function deleteUnconfirmedPledge(id: number): Promise<boolean> {
-  const email = await inTransaction(async (client) => {
+  return inTransaction(async (client) => {
     const r = await client.query("DELETE FROM sponsor_pledges WHERE id = $1 AND status = 'unconfirmed' RETURNING fundraiser_id, email", [id]);
-    if (!r.rows[0]) return undefined;
+    if (!r.rows[0]) return false;
+    await forgetInEmailLog(client, text(r.rows[0].email));
     await audit(client, "system:schedule", "pledge.unconfirmed_deleted", id, { fundraiserId: Number(r.rows[0].fundraiser_id) });
-    return text(r.rows[0].email);
+    return true;
   });
-  if (email === undefined) return false;
-  if (email) await eraseEmailLogFor(email, PLEDGE_EMAIL_LOG_KINDS);
-  return true;
 }
 
 // --- reading ---------------------------------------------------------------------------------------
@@ -415,9 +439,17 @@ export async function setPledgeMessageHidden(fundraiserId: number, id: number, h
   });
 }
 
-/** Remember the Stripe checkout just opened for a pledge, so the next one can close it first. */
-export async function saveCheckoutSession(id: number, sessionId: string): Promise<void> {
-  await pool.query("UPDATE sponsor_pledges SET checkout_session_id = $2 WHERE id = $1 AND status = 'open'", [id, sessionId]);
+/**
+ * Remember the Stripe checkout just opened for a pledge, so the next one can close it first. Only if
+ * the pledge still has the checkout it had when this request read it (`previous`): two tabs opening
+ * one at the same moment cannot both win. False for the one that lost, which must close its own.
+ */
+export async function saveCheckoutSession(id: number, sessionId: string, previous: string | null): Promise<boolean> {
+  const r = await pool.query(
+    "UPDATE sponsor_pledges SET checkout_session_id = $2 WHERE id = $1 AND status = 'open' AND checkout_session_id IS NOT DISTINCT FROM $3 RETURNING id",
+    [id, sessionId, previous],
+  );
+  return r.rows.length > 0;
 }
 
 // --- paid ------------------------------------------------------------------------------------------
@@ -500,7 +532,7 @@ export async function settlePledge(client: PoolClient, payment: PledgePayment, m
     return;
   }
   const fundraiserId = Number(row.fundraiser_id);
-  const flag = () => client.query("UPDATE sponsor_pledges SET double_paid_at = now(), double_paid_donation_id = $2, double_paid_checked_at = NULL WHERE id = $1", [payment.pledgeId, made.donationId]);
+  const flag = () => client.query("UPDATE sponsor_pledges SET double_paid_at = now(), double_paid_donation_id = $2, double_paid_checked_at = NULL, double_paid_alerted_at = NULL WHERE id = $1", [payment.pledgeId, made.donationId]);
   if (row.status === "paid") {
     await flag();
     await audit(client, "stripe", "pledge.paid_again", payment.pledgeId, { eventId: made.eventId, fundraiserId, donationId: made.donationId, paidPence: payment.paidPence });
@@ -583,12 +615,6 @@ export async function markDoublePaidChecked(id: number, actor: string): Promise<
 
 // --- removing personal details ---------------------------------------------------------------------
 
-async function forgetInEmailLog(id: number): Promise<void> {
-  const r = await pool.query("SELECT email FROM sponsor_pledges WHERE id = $1", [id]);
-  const email = text(r.rows[0]?.email);
-  if (email) await eraseEmailLogFor(email, PLEDGE_EMAIL_LOG_KINDS);
-}
-
 /**
  * Remove an unpaid pledge's personal details (name, email, message, home address), keeping the
  * amount; one still open becomes "expired". The email log's rows for the emails about it go too.
@@ -607,7 +633,7 @@ export async function anonymisePledge(id: number): Promise<boolean> {
       [id],
     );
     if (!r.rows[0]) return false;
-    if (email) await eraseEmailLogFor(email, PLEDGE_EMAIL_LOG_KINDS);
+    await forgetInEmailLog(client, email);
     await audit(client, "system:schedule", "pledge.anonymised", id, { fundraiserId: Number(r.rows[0].fundraiser_id), status: String(r.rows[0].status) });
     return true;
   });
@@ -615,6 +641,9 @@ export async function anonymisePledge(id: number): Promise<boolean> {
 
 /** A paid pledge loses its email (its donation's donor record has it), and its log rows; the name stays. */
 export async function trimPaidPledge(id: number): Promise<void> {
-  await forgetInEmailLog(id);
-  await pool.query("UPDATE sponsor_pledges SET email = NULL WHERE id = $1 AND status = 'paid'", [id]);
+  await inTransaction(async (client) => {
+    const r = await client.query("SELECT email FROM sponsor_pledges WHERE id = $1 AND status = 'paid' FOR UPDATE", [id]);
+    await forgetInEmailLog(client, text(r.rows[0]?.email));
+    await client.query("UPDATE sponsor_pledges SET email = NULL WHERE id = $1 AND status = 'paid'", [id]);
+  });
 }

@@ -89,7 +89,8 @@ export interface PledgeRouteDeps {
   decorate: (html: string, cookieHeader: string | undefined) => Promise<string>;
   fundraisingOn: () => Promise<boolean>;
   getBySlug: (slug: string) => Promise<Fundraiser | null>;
-  create: (fundraiserId: number, input: PledgeInput, nonce: string) => Promise<{ pledge: PledgeRecord; duplicate: boolean }>;
+  /** `capped`: that address has too many pledges waiting to be confirmed; nothing was stored. */
+  create: (fundraiserId: number, input: PledgeInput, nonce: string) => Promise<{ pledge: PledgeRecord | null; duplicate: boolean; capped?: boolean }>;
   /** The one email asking the sponsor to confirm. Never throws. */
   sendConfirm: (c: PledgeWithFundraiser) => Promise<"sent" | "blocked" | "failed">;
   confirm: (id: number) => Promise<boolean>;
@@ -107,7 +108,10 @@ export interface PledgeRouteDeps {
   createCheckout: (params: StripeNS.Checkout.SessionCreateParams) => Promise<{ id: string; url: string | null }>;
   /** Close a checkout opened earlier for the same pledge. Throws when Stripe will not (it is paid, or already closed). */
   expireCheckout: (sessionId: string) => Promise<void>;
-  saveCheckout: (pledgeId: number, sessionId: string) => Promise<void>;
+  /** What Stripe says of a checkout: its status ("open", "complete", "expired") and payment_status. */
+  retrieveCheckout: (sessionId: string) => Promise<{ status: string | null; paymentStatus: string | null }>;
+  /** Remember the new checkout, only if the pledge still has `previous`. False when another tab won. */
+  saveCheckout: (pledgeId: number, sessionId: string, previous: string | null) => Promise<boolean>;
   cardFee: () => Promise<CardFeeRate | undefined>;
   /** The fundraiser's own page to come back to after paying, or null. */
   fundraiserPage: (fundraiserId: number) => Promise<string | null>;
@@ -239,7 +243,12 @@ export function makePledgeHandlers(deps: PledgeRouteDeps) {
       if (deps.captchaEnabled()) {
         const verdict = await deps.verifyCaptcha(req.body?.captchaToken, req.ip);
         if (verdict.outcome === "refused") return res.status(400).json({ error: "captcha" });
-        if (verdict.outcome === "unavailable") console.error("pledge captcha unavailable, pledge kept:", verdict.reason);
+        if (verdict.outcome === "unavailable") {
+          // In production a check that cannot answer closes the form too: this form emails whoever
+          // is named on it, so it is never left open to robots. Elsewhere the pledge is kept.
+          console.error(`pledge captcha unavailable, ${deps.production ? "pledge refused" : "pledge kept"}:`, verdict.reason);
+          if (deps.production) return res.status(503).json(CLOSED);
+        }
       } else if (deps.production) {
         console.error("pledge refused: the spam check is not set up in production");
         return res.status(503).json(CLOSED);
@@ -252,12 +261,16 @@ export function makePledgeHandlers(deps: PledgeRouteDeps) {
       if (!parsed.success) return res.status(400).json({ error: "Some of the form needs another look", fields: fieldErrors(parsed.error.issues) });
       if (!isLoopbackRequest(req) && !pledgeEmailLimiter.allow(parsed.data.email, Date.now())) return res.status(429).json(TOO_MANY);
       const made = await deps.create(f.id, parsed.data, newPledgeNonce());
-      // One email, once: a second press of the button made no second pledge, and sends no second email.
-      if (!made.duplicate) {
-        const c = await deps.getPledge(made.pledge.id);
+      // One email, once. A second press of the button made no second pledge and sends no second
+      // email, unless the first never went (the send failed): then this one sends it. An address
+      // with too many pledges waiting to be confirmed (capped) stores nothing and is sent nothing.
+      const p = made.pledge;
+      if (p && p.status === "unconfirmed" && (!made.duplicate || !p.confirmEmailSentAt)) {
+        const c = await deps.getPledge(p.id);
         if (c) await deps.sendConfirm(c);
       }
-      // The same answer whether or not the email could go, so nobody learns who is on a stop list.
+      // The same answer whether or not the email could go (or the pledge was capped), so nobody
+      // learns who is on a stop list or how many pledges an address has.
       return res.status(201).json({ status: "pledged", confirm: true, amountPence: parsed.data.amountPence });
     } catch (err) {
       console.error("pledge failed:", why(err));
@@ -419,13 +432,30 @@ export function makePledgeHandlers(deps: PledgeRouteDeps) {
         deps.now(),
       );
       // One checkout at a time: the one opened before (another tab, the email opened twice) is closed
-      // first, so nobody pays the same pledge twice. Stripe refuses to close one already paid or
-      // already expired; either way there is nothing left to pay there, so carry on.
-      if (c.p.checkoutSessionId) {
+      // first, so nobody pays the same pledge twice. Stripe refuses to close one that is already
+      // paid or already expired, so when it refuses we ask which: PAID means the money has been
+      // taken and only the webhook is still to land, so no new checkout is opened.
+      const previous = c.p.checkoutSessionId ?? null;
+      if (previous) {
         try {
-          await deps.expireCheckout(c.p.checkoutSessionId);
+          await deps.expireCheckout(previous);
         } catch (err) {
           console.info(`pledge ${c.p.id}: its earlier checkout could not be closed (${why(err)})`);
+          let earlier: { status: string | null; paymentStatus: string | null } | null = null;
+          try {
+            earlier = await deps.retrieveCheckout(previous);
+          } catch (e) {
+            console.info(`pledge ${c.p.id}: its earlier checkout could not be read (${why(e)})`);
+          }
+          if (earlier && (earlier.status === "complete" || earlier.paymentStatus === "paid")) {
+            const page = pageOf(c);
+            return send(
+              req,
+              res,
+              200,
+              notice("Your pledge is paid", [`Thank you. Your payment for ${c.f.title} has gone through.`, "Your receipt is on its way."], page ? { href: page, label: "See the page" } : undefined),
+            );
+          }
         }
       }
       let session: { id: string; url: string | null };
@@ -435,10 +465,21 @@ export function makePledgeHandlers(deps: PledgeRouteDeps) {
         console.error("pledge checkout failed:", why(err));
         return send(req, res, 502, payPage(c, token, CARDS_DOWN));
       }
+      // Two tabs at the same moment: only the one whose checkout is remembered goes on to pay. The
+      // other closes the checkout it just opened and is told, so there is never a second one to pay.
+      let mine = true;
       try {
-        await deps.saveCheckout(c.p.id, session.id);
+        mine = await deps.saveCheckout(c.p.id, session.id, previous);
       } catch (err) {
         console.error(`pledge ${c.p.id}: could not remember its checkout:`, why(err));
+      }
+      if (!mine) {
+        try {
+          await deps.expireCheckout(session.id);
+        } catch (err) {
+          console.error(`pledge ${c.p.id}: could not close the checkout that lost:`, why(err));
+        }
+        return send(req, res, 409, payPage(c, token, "This payment is already open in another tab or window. Please finish it there, or wait a minute and try again."));
       }
       // The offline stub only (never production): the BDD replays the real stamped session as
       // Stripe's signed webhook, as the public checkout's own stub echo lets it (TASK-116).
@@ -823,7 +864,11 @@ function realDeps(page: { template: () => string; decorate: PledgeRouteDeps["dec
     expireCheckout: async (sessionId) => {
       await (await import("../clients/stripe")).stripe.checkout.sessions.expire(sessionId);
     },
-    saveCheckout: async (id, sessionId) => (await db()).saveCheckoutSession(id, sessionId),
+    retrieveCheckout: async (sessionId) => {
+      const s = await (await import("../clients/stripe")).stripe.checkout.sessions.retrieve(sessionId);
+      return { status: s.status ?? null, paymentStatus: s.payment_status ?? null };
+    },
+    saveCheckout: async (id, sessionId, previous) => (await db()).saveCheckoutSession(id, sessionId, previous),
     cardFee: async () => (await import("./api")).currentCardFee(),
     fundraiserPage: async (id) => (await import("./api")).fundraiserReturnPage(id),
     sendNow: async (id, actor) => (await runner()).sendPledgeEmailNow(id, actor),

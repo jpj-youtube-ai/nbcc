@@ -49,7 +49,8 @@ Feature: 18 or over, and sharing what is raised with another cause
     And a fundraising staff member "a3.split.fr.bdd@example.com" with role "admin"
     When someone signs up the event "Shared Quiz Night (bdd-fr)" sharing 60 percent with "Kilmarnock Food Larder"
     Then the fundraising answer is 200
-    When "a3.split.fr.bdd@example.com" approves "Shared Quiz Night (bdd-fr)"
+    When "a3.split.fr.bdd@example.com" keeps the short name of "Shared Quiz Night (bdd-fr)"
+    And "a3.split.fr.bdd@example.com" approves "Shared Quiz Night (bdd-fr)"
     And a visitor opens "/get-involved"
     Then the visitor gets status 200
     And the card for "Shared Quiz Night (bdd-fr)" shows "60% of what we raise goes to the Night Before Christmas Campaign, Scottish Charity SC047995. The rest goes to Kilmarnock Food Larder."

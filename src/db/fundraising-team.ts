@@ -9,7 +9,7 @@ import { countPendingThanks } from "./fundraiser-thanks";
 import { countHeldMessages } from "./fundraiser-memory";
 import { readPromptCounts } from "./fundraising-touch";
 import { settledPackIds } from "./welcome-packs";
-import { INVITE_TTL_DAYS, inviteCc, inviteFullName, inviteNameParts, inviteTypeOf, staffFirstName, type InviteType } from "../fundraising/invite";
+import { INVITE_TTL_DAYS, inviteCc, inviteFullName, inviteNameParts, inviteTypeOf, inviteWordingKey, staffFirstName, type InviteType } from "../fundraising/invite";
 import { summaryRecipientsSchema, type SummaryInputs } from "../fundraising/summary";
 import type { CallRecord, CallWhich } from "../fundraising/follow-up";
 
@@ -90,6 +90,17 @@ function toInvite(r: Row): InviteRow {
   };
 }
 
+// The sign off an invite of this type needs (the in memory one), read with a lock on its row inside
+// the transaction that stores or resends the invite, so an approval cannot be withdrawn between the
+// check and the send: the withdrawal waits for this transaction, or this finds the row gone. Throws
+// wording_waiting when it is not approved, which rolls the transaction back.
+async function requireSignOff(client: PoolClient, type: InviteType | null | undefined): Promise<void> {
+  const key = inviteWordingKey(type);
+  if (!key) return;
+  const r = await client.query("SELECT 1 FROM touch_wording_approvals WHERE key = $1 FOR SHARE", [key]);
+  if (!r.rows[0]) throw new TeamError("wording_waiting");
+}
+
 export async function createInvite(
   // cc: who the email copies in (the member of staff sending it), or null; kept on the audit row.
   // inviteType: what they are invited to do, or none from an admin page loaded before the drop-down.
@@ -107,6 +118,7 @@ export async function createInvite(
 ): Promise<InviteRow> {
   return writeWithAudit(
     async (client) => {
+      await requireSignOff(client, i.inviteType);
       // `name` keeps the two joined, for the admin list, the Monday summary and a code rollback.
       const r = await client.query(
         `INSERT INTO fundraiser_invites (name, first_name, last_name, email, note, signed_by, sent_by, token_hash, invite_type)
@@ -128,17 +140,11 @@ export async function createInvite(
 /**
  * A new token and a new date for an invite not taken up. Throws not_found otherwise. senderEmail is
  * the member of staff resending it: the email copies them in, and the audit row says so. The type
- * stays as it was. `held` is the types whose wording is waiting for sign off: an invite of one of
- * those throws wording_waiting and nothing changes (the transaction is rolled back, so the link in
- * the first email still works).
+ * stays as it was. An invite whose wording is waiting for sign off (an in memory one whose approval
+ * was withdrawn) throws wording_waiting and nothing changes: the transaction is rolled back, so the
+ * link in the first email still works.
  */
-export async function resendInvite(
-  id: number,
-  tokenHash: string,
-  actor: string,
-  senderEmail?: string | null,
-  held: readonly InviteType[] = [],
-): Promise<InviteRow> {
+export async function resendInvite(id: number, tokenHash: string, actor: string, senderEmail?: string | null): Promise<InviteRow> {
   return inTransaction(async (client) => {
     const r = await client.query(
       `UPDATE fundraiser_invites SET token_hash = $2, resent_at = now()
@@ -147,7 +153,7 @@ export async function resendInvite(
     );
     if (!r.rows[0]) throw new TeamError("not_found");
     const inv = toInvite(r.rows[0]);
-    if (inv.type && held.includes(inv.type)) throw new TeamError("wording_waiting");
+    await requireSignOff(client, inv.type);
     await insertAudit(client, {
       actor,
       action: "fundraiser_invite.resent",

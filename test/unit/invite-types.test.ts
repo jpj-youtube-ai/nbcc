@@ -4,7 +4,6 @@ import {
   INVITE_TYPES,
   INVITE_TYPE_LABELS,
   INVITE_WORDING_KEYS,
-  inviteConfirmQuestion,
   inviteMaySend,
   invitePrefill,
   inviteSchema,
@@ -111,16 +110,6 @@ describe("the in memory invite's sign off", () => {
   });
 });
 
-describe("the question before sending", () => {
-  const o = { name: "Mary Smith", email: "mary@example.com", signer: "Jaimie" };
-  it("names the type in plain words, the full name, the email and the signer", () => {
-    expect(inviteConfirmQuestion({ ...o, type: "memory" })).toBe("Send an in memory invite to Mary Smith at mary@example.com, signed by Jaimie?");
-    expect(inviteConfirmQuestion({ ...o, type: "raising" })).toBe("Send a raising money invite to Mary Smith at mary@example.com, signed by Jaimie?");
-    expect(inviteConfirmQuestion({ ...o, type: "team" })).toBe("Send a team invite to Mary Smith at mary@example.com, signed by Jaimie?");
-    expect(inviteConfirmQuestion({ ...o, type: "event" })).toBe("Send an event invite to Mary Smith at mary@example.com, signed by Jaimie?");
-  });
-});
-
 describe("the invite email, for each type", () => {
   const make = (type: "raising" | "team" | "event" | "memory" | null | undefined) =>
     buildInviteEmail({ firstName: "Mary", note: "It was good to talk today.", signer: "Fern", url: URL, type });
@@ -152,18 +141,27 @@ describe("the invite email, for each type", () => {
     expect(mail.html).toContain(signOffAs("Warmest wishes,", "Fern"));
   });
 
-  it("tells someone hosting an event that it gets its own page", () => {
+  // Reworded for someone hosting an event (Jaimie): its own subject, heading, chat line, head start
+  // line and button; the rest as the raising money invite.
+  it("is about their event, for someone hosting one", () => {
     const mail = make("event");
-    expect(mail.subject).toBe("We'd love you to fundraise with us");
+    expect(mail.subject).toBe("We'd love to help with your event");
     for (const t of [mail.html, mail.text]) {
+      expect(t).toContain("Fundraising for NBCC");
+      expect(t).toContain("We’d love to help with your event!");
       expect(t).toContain("Hi Mary,");
-      expect(t).toContain(CHAT);
-      expect(t).toContain(START);
+      expect(t).toContain("It was so lovely to chat with you about your plans for your event. Thank you, it honestly means the world to us.");
+      expect(t).toContain("We’ve given you a head start: press the button below and the form is already started for you. It only takes a few minutes.");
       expect(t).toContain("Your event gets its own page on our website, with a meter, posters and a QR code.");
-      expect(t).not.toContain("your very own fundraising page");
       expect(t).toContain(ASK);
+      expect(t).toContain("It was good to talk today.");
+      for (const not of ["We’d love you to fundraise with us", CHAT, START, "your very own fundraising page", "Make my page"]) expect(t).not.toContain(not);
     }
+    expect(mail.html).toContain(`href="${URL}"`);
+    expect(mail.html).toContain(">Set up my event</a>");
+    expect(mail.text).toContain(`Set up my event: ${URL}`);
     expect(mail.html).toContain(signOffAs("Warmest wishes,", "Fern"));
+    expect(mail.html).toContain("Got any questions?");
   });
 
   describe("in memory", () => {
@@ -175,9 +173,11 @@ describe("the invite email, for each type", () => {
       expect(mail.text).toContain("A page in their memory");
     });
 
-    it("says the gentle words, greeting them by first name", () => {
+    // Jaimie: "Dear", not "Hi", for someone setting up a page in memory. The others keep "Hi".
+    it("says the gentle words, greeting them Dear and their first name", () => {
       for (const t of [mail.html, mail.text]) {
-        expect(t).toContain("Hi Mary,");
+        expect(t).toContain("Dear Mary,");
+        expect(t).not.toContain("Hi Mary,");
         expect(t).toContain(
           "Thank you for talking with us. If you would like to set up a page in memory of someone you love, the button below opens it with your details already filled in. Take your time: we will go through it all with you on the phone before anything goes live.",
         );

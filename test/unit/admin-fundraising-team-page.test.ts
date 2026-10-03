@@ -76,7 +76,7 @@ let team: { today: string; me: number; calls: Record<string, unknown>; prompts: 
 let summary: { recipients: string[]; lastWeek: string | null };
 let perms: PermissionMap;
 let role = "admin";
-let calls: { method: string; path: string; body: unknown }[] = [];
+let calls: { method: string; path: string; body: unknown; query?: string }[] = [];
 let answers: Record<string, { status: number; body: unknown }> = {};
 
 function respond(url: string, init?: { method?: string; body?: string }) {
@@ -90,7 +90,7 @@ function respond(url: string, init?: { method?: string; body?: string }) {
   const method = (init?.method || "GET").toUpperCase();
   const path = url.split("?")[0];
   const body = init?.body ? JSON.parse(init.body) : undefined;
-  calls.push({ method, path, body });
+  calls.push({ method, path, body, query: url.split("?")[1] || "" });
   if (path === "/api/admin/login") {
     const token = signAdminSession({ sub: 3, email: "fern@example.com", role: role as "admin", now: new Date(), secret: "s" }).token;
     return j({ token, user: { email: "fern@example.com", role } });
@@ -126,7 +126,7 @@ function respond(url: string, init?: { method?: string; body?: string }) {
       approval: memory ? (approvals.invite_memory ?? null) : null,
       approvalsUnavailable: false,
       subject: memory ? "A page in memory of someone you love" : "We'd love you to fundraise with us",
-      html: `<html><body><p>The ${wording[1]} invite</p></body></html>`,
+      html: `<html><body><p>The ${wording[1]} invite, signed by ${new URLSearchParams(url.split("?")[1] || "").get("signedBy") === "5" ? "Rowan" : "Fern"}</p></body></html>`,
       text: `The ${wording[1]} invite`,
     });
   }
@@ -460,6 +460,29 @@ describe("What are you inviting them to do?", () => {
     expect(sent("POST", "/api/admin/fundraising/invites")).toHaveLength(0);
   });
 
+  it("signs the email being read as the signer chosen, and reads it again when that changes", async () => {
+    await openFundraising();
+    setValue("#frInviteType", "team");
+    await settle();
+    const read = () => sent("GET", "/api/admin/fundraising/invite-wording/team");
+    expect(read()).toHaveLength(1);
+    expect(read()[0].query).toBe("signedBy=3");
+    expect((el("frInviteWordingFrame") as HTMLIFrameElement).getAttribute("srcdoc")).toContain("signed by Fern");
+    setValue("#frInviteSigner", "5");
+    await settle();
+    expect(read()).toHaveLength(2);
+    expect(read()[1].query).toBe("signedBy=5");
+    expect((el("frInviteWordingFrame") as HTMLIFrameElement).getAttribute("srcdoc")).toContain("signed by Rowan");
+  });
+
+  it("reads nothing when the signer changes with no type chosen", async () => {
+    await openFundraising();
+    calls = [];
+    setValue("#frInviteSigner", "5");
+    await settle();
+    expect(calls.filter((c) => c.path.indexOf("invite-wording") !== -1)).toHaveLength(0);
+  });
+
   it("shows the email for the type chosen, to read", async () => {
     await openFundraising();
     expect(el("frInviteWording").hidden).toBe(true);
@@ -583,14 +606,22 @@ describe("the in memory invite's sign off", () => {
     expect(el("frInviteHeld").hidden).toBe(true);
   });
 
-  it("is held when the sign offs could not be checked", async () => {
+  it("is held when the sign offs could not be checked, saying so and not to approve it", async () => {
+    const UNCHECKED = "We could not check the sign off just now. Try again in a moment.";
     team.inviteWording = { approvals: {}, unavailable: true };
     await openFundraising();
-    setValue("#frInviteType", "memory");
+    fillInvite("memory");
     await settle();
     expect((el("frInviteSend") as HTMLButtonElement).disabled).toBe(true);
+    expect(el("frInviteHeld").hidden).toBe(false);
+    expect(text(el("frInviteHeld"))).toBe(UNCHECKED);
+    expect(text(el("frInvite"))).not.toContain("Read it and approve it first");
     expect(text(el("frInviteWordingMeta"))).toContain("Couldn't check sign-offs just now, so new wording is held.");
     expect(q("[data-frinviteapprove]")).toBeNull();
+    submit("#frInviteForm");
+    await settle();
+    expect(text(el("frInviteStatus"))).toBe(UNCHECKED);
+    expect(sent("POST", "/api/admin/fundraising/invites")).toHaveLength(0);
   });
 
   it("passes on the server's words if it refuses one all the same", async () => {

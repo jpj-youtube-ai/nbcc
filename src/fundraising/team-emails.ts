@@ -46,9 +46,15 @@ const INVITE_START =
   "We’ve given you a head start: press the button below and your page is already filled in with what we talked about. It only takes a couple of minutes.";
 const INVITE_PAGE =
   "You’ll get your very own fundraising page, with a meter that fills as gifts come in, a wall for your supporters’ messages and your own QR code for posters.";
-// Invite types (Jaimie, B1 + I1): the same email for a team or an event, with only this line adapted.
+// Invite types (Jaimie, B1 + I1): the same email for a team, with only this line adapted.
 const INVITE_PAGE_TEAM =
   "You’ll get a team page with a meter for the whole team, and a page for everyone who joins, with a wall for your supporters’ messages and your own QR code for posters.";
+// For someone hosting an event (Jaimie's wording): about their event throughout, in the same shape.
+const EVENT_SUBJECT = "We'd love to help with your event";
+const EVENT_HEADING = "We’d love to help with your event!";
+const EVENT_CHAT = "It was so lovely to chat with you about your plans for your event. Thank you, it honestly means the world to us.";
+const EVENT_START = "We’ve given you a head start: press the button below and the form is already started for you. It only takes a few minutes.";
+const EVENT_BUTTON = "Set up my event";
 const INVITE_PAGE_EVENT = "Your event gets its own page on our website, with a meter, posters and a QR code.";
 const INVITE_ASK = "Need posters, leaflets, a collection bucket or a shout out on our social media? Just ask, we’re here to help.";
 const INVITE_CLOSE = "Warmest wishes,";
@@ -75,7 +81,9 @@ export interface InviteEmailInput {
   type?: InviteType | null;
 }
 
-function buildMemoryInviteEmail(o: InviteEmailInput, hi: string): BuiltEmail {
+// Greeted "Dear", not "Hi" (Jaimie): the other invites keep "Hi".
+function buildMemoryInviteEmail(o: InviteEmailInput): BuiltEmail {
+  const hi = `Dear ${String(o.firstName).trim()},`;
   const body =
     eyebrow(MEMORY_EYEBROW) +
     heading(MEMORY_HEADING) +
@@ -111,32 +119,37 @@ function buildMemoryInviteEmail(o: InviteEmailInput, hi: string): BuiltEmail {
 // Greeted by the first name staff typed in its own box (Jaimie 2026-10-03), so "Mary Jane" stays whole.
 export function buildInviteEmail(o: InviteEmailInput): BuiltEmail {
   const hi = `Hi ${String(o.firstName).trim()},`;
-  if (o.type === "memory") return buildMemoryInviteEmail(o, hi);
-  const page = o.type === "team" ? INVITE_PAGE_TEAM : o.type === "event" ? INVITE_PAGE_EVENT : INVITE_PAGE;
+  if (o.type === "memory") return buildMemoryInviteEmail(o);
+  const event = o.type === "event";
+  const page = o.type === "team" ? INVITE_PAGE_TEAM : event ? INVITE_PAGE_EVENT : INVITE_PAGE;
+  const headingWords = event ? EVENT_HEADING : "We’d love you to fundraise with us!";
+  const chat = event ? EVENT_CHAT : INVITE_CHAT;
+  const start = event ? EVENT_START : INVITE_START;
+  const buttonWords = event ? EVENT_BUTTON : "Make my page";
   const body =
     eyebrow("Fundraising for NBCC") +
-    heading("We’d love you to fundraise with us!") +
+    heading(headingWords) +
     bodyP(escapeHtml(hi)) +
-    bodyP(INVITE_CHAT) +
+    bodyP(chat) +
     (o.note ? quoteBox(o.note) : "") +
-    bodyP(INVITE_START) +
-    button(o.url, "Make my page") +
+    bodyP(start) +
+    button(o.url, buttonWords) +
     bodyP(page) +
     bodyP(INVITE_ASK) +
     signOffAs(INVITE_CLOSE, o.signer) +
     questionsBox(FUNDRAISING_EMAIL);
   const text = [
     "Fundraising for NBCC",
-    "We’d love you to fundraise with us!",
+    headingWords,
     "",
     hi,
     "",
-    INVITE_CHAT,
+    chat,
     ...(o.note ? ["", o.note] : []),
     "",
-    INVITE_START,
+    start,
     "",
-    `Make my page: ${o.url}`,
+    `${buttonWords}: ${o.url}`,
     "",
     page,
     "",
@@ -148,7 +161,7 @@ export function buildInviteEmail(o: InviteEmailInput): BuiltEmail {
     "",
     FOOTER_TEXT,
   ].join("\n");
-  return { subject: "We'd love you to fundraise with us", html: shell(body), text };
+  return { subject: event ? EVENT_SUBJECT : "We'd love you to fundraise with us", html: shell(body), text };
 }
 
 // --- email 11, the Monday summary -------------------------------------------------------------------

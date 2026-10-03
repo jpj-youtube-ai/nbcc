@@ -8099,20 +8099,29 @@ In memory. It is kept on the invite (`fundraiser_invites.invite_type`: `raising`
   page in memory of someone" (with the gentle words at the top). They can still change it. The name
   and email are filled in as before; the 18 or over answer, consents and permissions never are;
 - **the email's words** (`buildInviteEmail`, `src/fundraising/team-emails.ts`). Raising money is the
-  approved invite, unchanged. A team and Hosting an event are the same email with one line adapted
-  (a team page and a page for everyone who joins; the event's own page). **In memory is gentle, new
-  wording** with its own subject ("A page in memory of someone you love"), no exclamation marks and
-  none of the cheerful invite's words. All four are from, and reply to, the events inbox, greet by
-  first name, show the personal note, are signed by the chosen signer and copy in the sender.
+  approved invite, unchanged. A team is the same email with one line adapted (a team page and a page
+  for everyone who joins). Hosting an event is about their event throughout: its own subject ("We'd
+  love to help with your event"), heading, chat line, head start line and button ("Set up my
+  event"), and "Your event gets its own page on our website, with a meter, posters and a QR code."
+  **In memory is gentle, new wording** with its own subject ("A page in memory of someone you
+  love"), greeted "Dear" and not "Hi", with no exclamation marks and none of the cheerful invite's
+  words. All four are from, and reply to, the events inbox, greet by first name, show the personal
+  note, are signed by the chosen signer and copy in the sender.
 
 The in memory wording is **held for sign off** like new automatic email wording, with the same table
 (`touch_wording_approvals`, key `invite_memory`; nothing is seeded as approved). Choosing a type shows
-its email to read under "Read the email they will get" (an example, never a real link); for In memory
+its email to read under "Read the email they will get" (an example, never a real link, signed by the
+signer chosen in the form and read again when that changes); for In memory
 it opens by itself with **Approve this wording** (admins only, after a question; **Withdraw approval**
 once approved). Until it is approved the Send button rests with "The in memory invite wording is
 waiting for sign off. Read it and approve it first.", and the server refuses one all the same
 (`409`), storing and emailing nothing. A resend of an in memory invite is held the same way if the
-approval is withdrawn, leaving its old link working.
+approval is withdrawn, leaving its old link working. The server checks the sign off before it starts
+and again inside the transaction that stores or resends the invite, with a lock on the sign off's row
+(`SELECT ... FOR SHARE`), so a withdrawal cannot slip in between the check and the send. When the
+sign offs cannot be read, Send rests with "We could not check the sign off just now. Try again in a
+moment." Approving and withdrawing are in `audit_log` as `fundraising.invite_wording_approved` and
+`fundraising.invite_wording_withdrawn`, apart from the automatic emails' own actions.
 
 Before sending, the question names everything: "Send an in memory invite to Mary Smith at
 mary@example.com, signed by Jaimie?". The list shows each invite's type as a pill, and the Monday
@@ -8202,7 +8211,7 @@ list against entity `fundraiser`, so it shows in that fundraiser's History).
 | `GET /api/admin/fundraising/team` | view | | `{ today, me, calls: { <id>: { before, after, due, dueWhich } }, prompts: { <id>: "date" \| "finished" }, invites, signers: [{ id, firstName }], inviteWording: { approvals: { invite_memory?: { approvedAt, approvedBy } }, unavailable } }` (each invite carries `type`, or `null`) |
 | `POST /api/admin/fundraising/invites` | edit | `{ firstName, lastName, email, note?, signedBy: <user id>, type?: "raising" \| "team" \| "event" \| "memory" }` | `201 { invite, emailed }`, the sender copied in; `400` with `fields` (`firstName`, `lastName`, `type`, ...); `409` for an in memory invite whose wording is waiting for sign off; `429` after 50 in a day |
 | `POST /api/admin/fundraising/invites/:id/resend` | edit | | `{ invite, emailed }`, the type kept; `404` once taken up or removed; `409` for an in memory invite whose wording is waiting for sign off |
-| `GET /api/admin/fundraising/invite-wording/:type` | view | | `{ type, label, subject, html, text, wordingKey: "invite_memory" \| null, approval, approvalsUnavailable }`: that type's invite email as an example; `404` for a type that is not one |
+| `GET /api/admin/fundraising/invite-wording/:type?signedBy=<user id>` | view | | `{ type, label, subject, html, text, wordingKey: "invite_memory" \| null, approval, approvalsUnavailable }`: that type's invite email as an example, signed by that signer (or by whoever is reading it when none is given); `400` with `fields.signedBy` for a signer who is not on the team; `404` for a type that is not one |
 | `POST /api/admin/fundraising/invite-wording/:key/approval` | admin | | `{ approval }`; only `invite_memory`, `404` otherwise |
 | `DELETE /api/admin/fundraising/invite-wording/:key/approval` | admin | | `{ withdrawn }` |
 | `DELETE /api/admin/fundraising/invites/:id` | edit | | `{ removed }`; `404` once taken up or removed |

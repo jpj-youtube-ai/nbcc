@@ -94,7 +94,9 @@ describe("invites", () => {
 
   // Invite types (Jaimie, B1 + I1).
   it("keeps what they were invited to do, and gives it back", async () => {
-    const calls = useClient((sql) => (/INSERT INTO fundraiser_invites/.test(sql) ? { rows: [inviteRow({ invite_type: "memory" })] } : undefined));
+    const calls = useClient((sql) =>
+      /touch_wording_approvals/.test(sql) ? { rows: [{ "?column?": 1 }] } : /INSERT INTO fundraiser_invites/.test(sql) ? { rows: [inviteRow({ invite_type: "memory" })] } : undefined,
+    );
     const inv = await createInvite(
       { firstName: "Alex", lastName: "Example", email: "alex@example.com", note: null, signedBy: "Fern", cc: null, tokenHash: "h".repeat(64), inviteType: "memory" },
       "admin:fern@example.com",
@@ -113,18 +115,64 @@ describe("invites", () => {
     expect((await findInviteByHash("h".repeat(64)))!.inviteType).toBeNull();
   });
 
-  it("keeps the type on a resend, and holds one whose wording is waiting for sign off, changing nothing", async () => {
-    let calls = useClient((sql) => (/UPDATE fundraiser_invites/.test(sql) ? { rows: [inviteRow({ invite_type: "memory" })] } : undefined));
-    const inv = await resendInvite(4, "n".repeat(64), "admin:fern@example.com", "fern@example.com", []);
+  // The sign off is checked again inside the transaction, with a lock on its row, so a withdrawal
+  // cannot slip in between the check and the send.
+  const SIGN_OFF = /SELECT 1 FROM touch_wording_approvals WHERE key = \$1 FOR SHARE/;
+  const memoryInvite = { firstName: "Alex", lastName: "Example", email: "alex@example.com", note: null, signedBy: "Fern", cc: null, tokenHash: "h".repeat(64), inviteType: "memory" as const };
+
+  it("checks the in memory wording's sign off in the same transaction, before storing the invite", async () => {
+    const calls = useClient((sql) =>
+      SIGN_OFF.test(sql) ? { rows: [{ "?column?": 1 }] } : /INSERT INTO fundraiser_invites/.test(sql) ? { rows: [inviteRow({ invite_type: "memory" })] } : undefined,
+    );
+    await createInvite(memoryInvite, "admin:fern@example.com");
+    const order = calls.map((c) => c[0]);
+    const check = order.findIndex((q) => SIGN_OFF.test(q));
+    expect(calls[check][1]).toEqual(["invite_memory"]);
+    expect(order.indexOf("BEGIN")).toBeLessThan(check);
+    expect(check).toBeLessThan(order.findIndex((q) => /INSERT INTO fundraiser_invites/.test(q)));
+    expect(order).toContain("COMMIT");
+  });
+
+  it("stores nothing when that sign off has gone", async () => {
+    const calls = useClient(() => undefined);
+    await expect(createInvite(memoryInvite, "admin:fern@example.com")).rejects.toMatchObject({ reason: "wording_waiting" });
+    expect(sqlIn(calls, /INSERT INTO fundraiser_invites/)).toBeUndefined();
+    expect(audits(calls)).toHaveLength(0);
+    expect(calls.some((c) => c[0] === "ROLLBACK")).toBe(true);
+  });
+
+  it("asks about no sign off for the other types", async () => {
+    for (const inviteType of ["raising", "team", "event", null] as const) {
+      const calls = useClient((sql) => (/INSERT INTO fundraiser_invites/.test(sql) ? { rows: [inviteRow({ invite_type: inviteType })] } : undefined));
+      await createInvite({ ...memoryInvite, inviteType }, "admin:fern@example.com");
+      expect(sqlIn(calls, SIGN_OFF)).toBeUndefined();
+    }
+  });
+
+  it("keeps the type on a resend, checking an in memory one's sign off in the same transaction", async () => {
+    const calls = useClient((sql) =>
+      SIGN_OFF.test(sql) ? { rows: [{ "?column?": 1 }] } : /UPDATE fundraiser_invites/.test(sql) ? { rows: [inviteRow({ invite_type: "memory" })] } : undefined,
+    );
+    const inv = await resendInvite(4, "n".repeat(64), "admin:fern@example.com", "fern@example.com");
     expect(inv.type).toBe("memory");
     expect(sqlIn(calls, /UPDATE fundraiser_invites/)![0]).not.toMatch(/invite_type =/);
-    calls = useClient((sql) => (/UPDATE fundraiser_invites/.test(sql) ? { rows: [inviteRow({ invite_type: "memory" })] } : undefined));
-    const held = resendInvite(4, "n".repeat(64), "admin:fern@example.com", "fern@example.com", ["memory"]);
-    await expect(held).rejects.toMatchObject({ reason: "wording_waiting" });
+    expect(sqlIn(calls, SIGN_OFF)![1]).toEqual(["invite_memory"]);
+    expect(calls.map((c) => c[0])).toContain("COMMIT");
+  });
+
+  it("holds a resend whose wording is waiting for sign off, changing nothing", async () => {
+    const calls = useClient((sql) => (/UPDATE fundraiser_invites/.test(sql) ? { rows: [inviteRow({ invite_type: "memory" })] } : undefined));
+    await expect(resendInvite(4, "n".repeat(64), "admin:fern@example.com", "fern@example.com")).rejects.toMatchObject({ reason: "wording_waiting" });
     // Rolled back: the old link still works, and nothing is recorded.
     expect(calls.some((c) => /ROLLBACK/.test(c[0]))).toBe(true);
     expect(calls.some((c) => /COMMIT/.test(c[0]))).toBe(false);
     expect(audits(calls)).toHaveLength(0);
+  });
+
+  it("asks about no sign off on a resend of another type", async () => {
+    const calls = useClient((sql) => (/UPDATE fundraiser_invites/.test(sql) ? { rows: [inviteRow({ invite_type: "team" })] } : undefined));
+    await resendInvite(4, "n".repeat(64), "admin:fern@example.com", "fern@example.com");
+    expect(sqlIn(calls, SIGN_OFF)).toBeUndefined();
   });
 
   it("records no copy on an invite sent with none", async () => {

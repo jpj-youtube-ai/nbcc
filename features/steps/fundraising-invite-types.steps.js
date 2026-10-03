@@ -8,8 +8,10 @@ const { createHash, randomBytes } = require("node:crypto");
 // invite", "no ... email went to") are in fundraising.steps.js, fundraising-team.steps.js,
 // event-pages.steps.js and fundraising-private.steps.js, which also clear staff and invites made at
 // addresses ending "fr.bdd@example.com". Every address here ends "invtype.fr.bdd@example.com", used
-// by no other feature. This file also clears the in memory invite wording's sign off, which only
-// these scenarios make. Every name and address is invented.
+// by no other feature. The in memory invite wording's sign off is shared with the admin, so it is
+// put back exactly as it was found: Before remembers whether it was approved (when, and by whom),
+// and After restores that, never deleting a sign off that was already there. Every name and address
+// is invented.
 
 const BASE_URL = process.env.BASE_URL || "http://localhost:3000";
 const pool = new Pool({ connectionString: process.env.DATABASE_URL });
@@ -21,13 +23,30 @@ const WORDING_KEY = "invite_memory";
 const TOKEN_DOMAIN = "fundraiseinvite.v1:";
 const hashToken = (token) => createHash("sha256").update(TOKEN_DOMAIN + token).digest("hex");
 
-async function clean() {
-  await pool.query("DELETE FROM fundraiser_invites WHERE email LIKE $1", [MINE]);
-  await pool.query("DELETE FROM touch_wording_approvals WHERE key = $1", [WORDING_KEY]);
-}
+const cleanInvites = () => pool.query("DELETE FROM fundraiser_invites WHERE email LIKE $1", [MINE]);
 
-Before({ tags: "@invite-types" }, clean);
-After({ tags: "@invite-types" }, clean);
+// The sign off as it was before the scenario: its row, or null when it was not approved.
+let signOffBefore = null;
+
+Before({ tags: "@invite-types" }, async function () {
+  await cleanInvites();
+  const r = await pool.query("SELECT key, approved_at, approved_by FROM touch_wording_approvals WHERE key = $1", [WORDING_KEY]);
+  signOffBefore = r.rows[0] || null;
+});
+
+After({ tags: "@invite-types" }, async function () {
+  await cleanInvites();
+  // Back to how it was found: gone if it was not approved, and the same approval if it was.
+  await pool.query("DELETE FROM touch_wording_approvals WHERE key = $1", [WORDING_KEY]);
+  if (signOffBefore) {
+    await pool.query("INSERT INTO touch_wording_approvals (key, approved_at, approved_by) VALUES ($1, $2, $3) ON CONFLICT (key) DO NOTHING", [
+      signOffBefore.key,
+      signOffBefore.approved_at,
+      signOffBefore.approved_by,
+    ]);
+  }
+  signOffBefore = null;
+});
 
 async function login(email) {
   const res = await fetch(`${BASE_URL}/api/admin/login`, {
@@ -84,6 +103,7 @@ Given("a {string} invite to first name {string} and surname {string} at {string}
   this.invite = { firstName, lastName, email };
 });
 
+// For the length of the scenario only: After puts back whatever sign off was there.
 Given("the in memory invite wording is not approved", async function () {
   await pool.query("DELETE FROM touch_wording_approvals WHERE key = $1", [WORDING_KEY]);
 });
@@ -130,6 +150,15 @@ When("{string} approves the in memory invite wording", async function (staff) {
 
 When("{string} withdraws the in memory invite wording's approval", async function (staff) {
   await adminCall(this, staff, "DELETE", `/api/admin/fundraising/invite-wording/${WORDING_KEY}/approval`, {});
+});
+
+// Invite wording has its own History actions, apart from the automatic emails'.
+Then("History records {string} by {string}", async function (action, staff) {
+  const r = await pool.query(
+    "SELECT 1 FROM audit_log WHERE action = $1 AND actor = $2 AND data->>'key' = $3 AND created_at > now() - interval '10 minutes'",
+    [action, `admin:${staff}`, WORDING_KEY],
+  );
+  assert.ok(r.rows.length > 0, `History has no ${action} by ${staff}`);
 });
 
 Then("the invite wording has the subject {string} and is waiting for sign off", function (subject) {
@@ -188,9 +217,10 @@ Then("the form opens on {string} for first name {string}, surname {string} and {
 
 // ---- the admin page ----
 
-When("the admin page and its script are read", async function () {
-  this.adminHtml = await (await fetch(`${BASE_URL}/admin`)).text();
-  this.adminJs = await (await fetch(`${BASE_URL}/assets/js/admin/app.js`)).text();
+When("the admin page is read", async function () {
+  const res = await fetch(`${BASE_URL}/admin`);
+  assert.ok(res.ok, `the admin page answered ${res.status}`);
+  this.adminHtml = await res.text();
 });
 
 Then(
@@ -207,12 +237,3 @@ Then(
     for (const o of options.slice(1)) assert.ok(!/selected/.test(o.attrs), `${o.text} is chosen for them`);
   },
 );
-
-Then("the question before sending names the type, the full name, the email and the signer, as in {string}", function (example) {
-  const js = this.adminJs;
-  // The words the page puts together (assets/js/admin/app.js, frSendInvite).
-  const phrase = (js.match(/memory: \{ label: "In memory", phrase: "([^"]+)"/) || [])[1];
-  assert.ok(phrase, "no words for the in memory type");
-  assert.ok(js.includes('"Send " + FR_INVITE_TYPES[type].phrase + " to " + name + " at " + email + ", signed by " + signer + "?"'), "the question is not put together as expected");
-  assert.equal(`Send ${phrase} to Mary Smith at mary@example.com, signed by Jaimie?`, example);
-});

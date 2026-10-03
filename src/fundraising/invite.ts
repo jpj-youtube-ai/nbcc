@@ -108,14 +108,6 @@ export const INVITE_TYPE_LABELS: Record<InviteType, string> = {
   memory: "In memory",
 };
 
-/** The type in a sentence: "Send an in memory invite to...". */
-export const INVITE_TYPE_PHRASES: Record<InviteType, string> = {
-  raising: "a raising money invite",
-  team: "a team invite",
-  event: "an event invite",
-  memory: "an in memory invite",
-};
-
 /** The type in the Monday summary's line: "Mary (in memory), invited by Fern". */
 export const INVITE_TYPE_SUMMARY: Record<InviteType, string> = {
   raising: "raising money",
@@ -129,12 +121,6 @@ export const INVITE_TYPE_NEEDED = "Choose what you are inviting them to do.";
 /** A stored type, or null for none or anything unknown. */
 export function inviteTypeOf(value: unknown): InviteType | null {
   return typeof value === "string" && (INVITE_TYPES as readonly string[]).includes(value) ? (value as InviteType) : null;
-}
-
-/** The question asked before an invite is sent: the type, the full name, the email and the signer. */
-export function inviteConfirmQuestion(o: { type: InviteType | null; name: string; email: string; signer: string }): string {
-  const what = o.type ? INVITE_TYPE_PHRASES[o.type] : "the invite";
-  return `Send ${what} to ${o.name} at ${o.email}, signed by ${o.signer}?`;
 }
 
 // The in memory invite's wording is new, so it is only sent once an admin has approved it, with the

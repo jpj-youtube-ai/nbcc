@@ -11068,6 +11068,8 @@
       }
       // Invite types: what they are invited to do was chosen, so read that email.
       if (e.target && e.target.id === "frInviteType") return frInviteTypeChanged();
+      // The signer changed: the email being read is signed by them, so read it again.
+      if (e.target && e.target.id === "frInviteSigner") return frInviteType() ? frInviteTypeChanged(true) : undefined;
       keepTyping(e);
     });
     // The invite email being read is as tall as it is, whenever it loads, opens or the window changes.
@@ -12905,6 +12907,8 @@
   // The in memory invite is new wording: the server only sends it once an admin has approved it
   // (key invite_memory, with the automatic emails' sign offs). Until then Send rests, and says why.
   var FR_INVITE_WAITING = "The in memory invite wording is waiting for sign off. Read it and approve it first.";
+  // When the sign offs could not be read there is nothing to approve: Send still rests, and says so.
+  var FR_INVITE_UNCHECKED = "We could not check the sign off just now. Try again in a moment.";
   var FR_INVITE_KEYS = { memory: "invite_memory" };
   var frInviteWordingData = null; // the email being read: { type, subject, html, wordingKey }
   var frInviteWordingSeq = 0;
@@ -12924,6 +12928,11 @@
     var key = FR_INVITE_KEYS[frInviteType()];
     return !!key && !frInviteApproval(key);
   }
+  // Why it is held: waiting for sign off, or the sign offs could not be read just now.
+  function frInviteHeldWords() {
+    var w = frTeam && frTeam.inviteWording;
+    return !w || w.unavailable ? FR_INVITE_UNCHECKED : FR_INVITE_WAITING;
+  }
 
   // The Send button, the note beside it and the sign off line, from what is chosen and approved.
   function frInviteSync() {
@@ -12931,7 +12940,10 @@
     var send = el("frInviteSend");
     if (send) send.disabled = held || frTeamBusy;
     var note = el("frInviteHeld");
-    if (note) note.hidden = !held;
+    if (note) {
+      note.hidden = !held;
+      if (held) note.textContent = frInviteHeldWords();
+    }
     frInviteWordingMeta();
   }
 
@@ -12961,23 +12973,28 @@
 
   // The type was chosen (or cleared, once sent): read its email. New wording waiting for sign off
   // opens by itself, so it is read before it is approved; approved wording stays folded away.
-  function frInviteTypeChanged() {
+  function frInviteTypeChanged(keepOpen) {
     var type = frInviteType();
     var box = el("frInviteWording");
     var seq = ++frInviteWordingSeq;
-    frInviteWordingData = null;
-    if (box) box.hidden = true;
+    if (!keepOpen) {
+      frInviteWordingData = null;
+      if (box) box.hidden = true;
+    }
     frInviteSync();
     if (!type || !box) return;
-    frTeamSay("frInviteStatus", "", false);
-    return authFetch("/api/admin/fundraising/invite-wording/" + encodeURIComponent(type))
+    if (!keepOpen) frTeamSay("frInviteStatus", "", false);
+    // Signed as the signer chosen in the form, so the example reads as theirs will.
+    var signedBy = Number((el("frInviteSigner") || {}).value);
+    return authFetch("/api/admin/fundraising/invite-wording/" + encodeURIComponent(type) + (signedBy ? "?signedBy=" + encodeURIComponent(signedBy) : ""))
       .then(okJson)
       .then(function (d) {
         if (seq !== frInviteWordingSeq || !d || typeof d.html !== "string") return;
         frInviteWordingData = d;
         box.hidden = false;
         var read = el("frInviteRead");
-        if (read) read.open = !!d.wordingKey && !frInviteApproval(d.wordingKey);
+        // Left as it is when only the signer changed; opened by itself for wording to sign off.
+        if (read && !keepOpen) read.open = !!d.wordingKey && !frInviteApproval(d.wordingKey);
         el("frInviteWordingFrame").setAttribute("srcdoc", d.html);
         frInviteSync();
         frInviteFit();
@@ -13104,7 +13121,7 @@
     // What they are invited to do: asked first, with nothing chosen for staff.
     var type = frInviteType();
     if (!type) return frTeamSay("frInviteStatus", "Choose what you are inviting them to do.", true);
-    if (frInviteHeld()) return frTeamSay("frInviteStatus", FR_INVITE_WAITING, true);
+    if (frInviteHeld()) return frTeamSay("frInviteStatus", frInviteHeldWords(), true);
     if (!firstName) return frTeamSay("frInviteStatus", "Add their first name.", true);
     if (!lastName) return frTeamSay("frInviteStatus", "Add their surname.", true);
     if (!FR_EMAIL.test(email)) return frTeamSay("frInviteStatus", "That isn't a whole email address.", true);

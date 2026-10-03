@@ -277,6 +277,21 @@ describe("signing off the new wording (Jaimie, 2026-10-03)", () => {
     ]);
   });
 
+  // Invite types: the in memory invite's sign off is kept in the same table, with its own History
+  // actions, so History says it was invite wording and not an automatic email's.
+  it("records an approval or a withdrawal under the action it is given", async () => {
+    let calls = useClient((sql) =>
+      /INSERT INTO touch_wording_approvals/.test(sql) ? { rows: [{ key: "invite_memory", approved_at: new Date("2026-10-04T09:00:00Z"), approved_by: "admin:fern@example.com" }] } : undefined,
+    );
+    await approveWording("invite_memory", "admin:fern@example.com", "fundraising.invite_wording_approved");
+    expect(audits(calls)[0]).toEqual(["admin:fern@example.com", "fundraising.invite_wording_approved", "fundraising_settings", 1, { key: "invite_memory" }]);
+    calls = useClient((sql) =>
+      /DELETE FROM touch_wording_approvals/.test(sql) ? { rows: [{ key: "invite_memory", approved_at: new Date("2026-10-04T09:00:00Z"), approved_by: "admin:fern@example.com" }] } : undefined,
+    );
+    expect(await withdrawWording("invite_memory", "admin:fern@example.com", "fundraising.invite_wording_withdrawn")).toBe(true);
+    expect(audits(calls)[0].slice(0, 2)).toEqual(["admin:fern@example.com", "fundraising.invite_wording_withdrawn"]);
+  });
+
   it("withdrawing one not approved changes nothing and writes no History row", async () => {
     const calls = useClient(() => undefined);
     expect(await withdrawWording("finished_zero", "admin:fern@example.com")).toBe(false);

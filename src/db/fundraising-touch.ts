@@ -111,8 +111,11 @@ export async function approvedWordingKeys(): Promise<Set<string>> {
   }
 }
 
-/** Approve one wording. One already approved keeps its first approval (and no second History row). */
-export async function approveWording(key: string, actor: string): Promise<WordingApproval> {
+/**
+ * Approve one wording. One already approved keeps its first approval (and no second History row).
+ * `action` is the History action: the automatic emails' by default; the invite wording passes its own.
+ */
+export async function approveWording(key: string, actor: string, action = "fundraising.touch_wording_approved"): Promise<WordingApproval> {
   return inTransaction(async (client) => {
     const r = await client.query(
       `INSERT INTO touch_wording_approvals (key, approved_by) VALUES ($1, $2)
@@ -120,7 +123,7 @@ export async function approveWording(key: string, actor: string): Promise<Wordin
       [key, actor],
     );
     if (r.rows[0]) {
-      await insertAudit(client, { actor, action: "fundraising.touch_wording_approved", entity: "fundraising_settings", entityId: 1, data: { key } });
+      await insertAudit(client, { actor, action, entity: "fundraising_settings", entityId: 1, data: { key } });
       return toApproval(r.rows[0]);
     }
     return toApproval((await client.query(`${APPROVALS_SQL} WHERE key = $1`, [key])).rows[0]);
@@ -128,7 +131,7 @@ export async function approveWording(key: string, actor: string): Promise<Wordin
 }
 
 /** Withdraw one approval: that email stops going until it is approved again. False if it was not approved. */
-export async function withdrawWording(key: string, actor: string): Promise<boolean> {
+export async function withdrawWording(key: string, actor: string, action = "fundraising.touch_wording_withdrawn"): Promise<boolean> {
   return inTransaction(async (client) => {
     const r = await client.query("DELETE FROM touch_wording_approvals WHERE key = $1 RETURNING key, approved_at, approved_by", [key]);
     const row = r.rows[0];
@@ -136,7 +139,7 @@ export async function withdrawWording(key: string, actor: string): Promise<boole
     const was = toApproval(row);
     await insertAudit(client, {
       actor,
-      action: "fundraising.touch_wording_withdrawn",
+      action,
       entity: "fundraising_settings",
       entityId: 1,
       data: { key, approvedAt: was.approvedAt, approvedBy: was.approvedBy },

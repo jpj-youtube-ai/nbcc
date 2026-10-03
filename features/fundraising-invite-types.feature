@@ -28,16 +28,16 @@ Feature: Invite types (Jaimie, B1 + I1)
     When "<staff>" sends a "<type>" invite to first name "Sky" and surname "Sample" at "<email>"
     Then the fundraising answer is 201
     And the invite to "<email>" is kept as a "<type>" invite
-    And a "fundraiseInvite" email with the subject "We'd love you to fundraise with us" went to "<email>"
+    And a "fundraiseInvite" email with the subject "<subject>" went to "<email>"
     When "<staff>" resends the invite to "<email>"
     Then the fundraising answer is 200
     And the invite to "<email>" is kept as a "<type>" invite
 
     Examples:
-      | type    | staff                         | email                              |
-      | raising | e1.invtype.fr.bdd@example.com | sky.r.invtype.fr.bdd@example.com   |
-      | team    | e2.invtype.fr.bdd@example.com | sky.t.invtype.fr.bdd@example.com   |
-      | event   | e3.invtype.fr.bdd@example.com | sky.e.invtype.fr.bdd@example.com   |
+      | type    | staff                         | email                            | subject                            |
+      | raising | e1.invtype.fr.bdd@example.com | sky.r.invtype.fr.bdd@example.com | We'd love you to fundraise with us |
+      | team    | e2.invtype.fr.bdd@example.com | sky.t.invtype.fr.bdd@example.com | We'd love you to fundraise with us |
+      | event   | e3.invtype.fr.bdd@example.com | sky.e.invtype.fr.bdd@example.com | We'd love to help with your event  |
 
   Scenario: an in memory invite is refused until its wording is approved, then sent
     Given fundraising is switched on
@@ -56,12 +56,14 @@ Feature: Invite types (Jaimie, B1 + I1)
     Then the fundraising answer is 403
     When "a4.invtype.fr.bdd@example.com" approves the in memory invite wording
     Then the fundraising answer is 200
+    And History records "fundraising.invite_wording_approved" by "a4.invtype.fr.bdd@example.com"
     When "e4.invtype.fr.bdd@example.com" sends a "memory" invite to first name "Morag" and surname "Sample" at "morag.invtype.fr.bdd@example.com"
     Then the fundraising answer is 201
     And the invite to "morag.invtype.fr.bdd@example.com" is kept as a "memory" invite
     And a "fundraiseInvite" email with the subject "A page in memory of someone you love" went to "morag.invtype.fr.bdd@example.com"
     When "a4.invtype.fr.bdd@example.com" withdraws the in memory invite wording's approval
     Then the fundraising answer is 200
+    And History records "fundraising.invite_wording_withdrawn" by "a4.invtype.fr.bdd@example.com"
     When "e4.invtype.fr.bdd@example.com" resends the invite to "morag.invtype.fr.bdd@example.com"
     Then the fundraising answer is 409
 
@@ -79,7 +81,6 @@ Feature: Invite types (Jaimie, B1 + I1)
     Then the fundraising answer is 400
     And there is no invite to "wed.invtype.fr.bdd@example.com"
 
-  Scenario: the admin asks what they are inviting them to do, and names everything before sending
-    When the admin page and its script are read
+  Scenario: the admin asks what they are inviting them to do, with nothing chosen
+    When the admin page is read
     Then the invite form has a required drop-down "What are you inviting them to do?" with nothing chosen and the choices "Raising money", "A team", "Hosting an event" and "In memory"
-    And the question before sending names the type, the full name, the email and the signer, as in "Send an in memory invite to Mary Smith at mary@example.com, signed by Jaimie?"

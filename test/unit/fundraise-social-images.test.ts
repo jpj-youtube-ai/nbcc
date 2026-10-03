@@ -232,3 +232,27 @@ describe("every picture as a zip", () => {
     expect(readZip(zip).map((f) => f.name)).toEqual(KINDS.map((k) => `nbcc-sams-santa-dash-${k}.png`));
   });
 });
+
+// TASK-512 review: the zip waits for the fonts and the logo, so its pictures are never drawn
+// without them.
+describe("the zip waits for the logo", () => {
+  it("draws nothing until the fonts and logo are in", async () => {
+    let release!: (img: null) => void;
+    const logo = new Promise<null>((r) => (release = r));
+    const html = renderSocial(facts(), ASSETS, "");
+    document.documentElement.innerHTML = new DOMParser().parseFromString(html, "text/html").documentElement.innerHTML;
+    let blobs = 0;
+    HTMLCanvasElement.prototype.toBlob = function (cb: BlobCallback) {
+      blobs++;
+      cb(new Blob(["png"], { type: "image/png" }));
+    };
+    initSocial(document, window, { loadImage: () => logo });
+    document.querySelector<HTMLButtonElement>("[data-social-zip]")!.click();
+    await new Promise((r) => setTimeout(r, 20));
+    expect(blobs).toBe(0);
+    expect(saved).toEqual([]);
+    release(null);
+    await vi.waitFor(() => expect(saved.map((s) => s.name)).toEqual(["nbcc-sams-santa-dash-pictures.zip"]));
+    expect(blobs).toBe(5);
+  });
+});

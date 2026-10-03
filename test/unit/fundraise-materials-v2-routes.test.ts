@@ -252,7 +252,8 @@ describe("Ask us to print these", () => {
     const [id, theAsk, actor] = state.asks[0] as [number, unknown, string];
     expect(id).toBe(12);
     expect(theAsk).toEqual({ kind: "posters", a4: 2, a3: 0 });
-    expect(actor).toBe("organiser:sam.example@example.com");
+    // As every other organiser action is recorded: the fundraiser itself says who.
+    expect(actor).toBe("organiser");
   });
 
   it("only for their own: anyone else's reads as not there", async () => {

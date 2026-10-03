@@ -350,13 +350,32 @@ export function posterLogoMm(d: Pick<MaterialFacts, "title" | "line" | "when" | 
 // Each paper's scale from A4: its width over 210mm, so the design fills it edge to edge.
 const SCALE: Record<PosterSize, string> = { a5: "0.70476", a4: "1", a3: "1.41428" };
 
+/** The smallest the charity statement may be on the paper: OSCR asks for it to be legible. */
+export const STATEMENT_MIN_PT = 7;
+/** Its size on the A4 design, which A4 itself prints as it is. */
+const STATEMENT_DESIGN_PT = 7.6;
+
+/**
+ * TASK-512 review: the statement's size on the A4 design for one paper, so that once scaled it is
+ * never under 7pt on the paper. The leaflet draws it bigger (scaled straight down it would print at
+ * about 5.4pt); A3 lets it grow with the paper.
+ */
+export function statementPt(size: PosterSize): number {
+  const scale = Number(SCALE[size]);
+  return Math.max(STATEMENT_DESIGN_PT, Math.ceil((STATEMENT_MIN_PT / scale) * 100) / 100);
+}
+
+// After the general rules, so each paper's statement size wins.
 const SIZE_CSS = (Object.keys(POSTER_SIZES) as PosterSize[])
-  .map((s) => `.size-${s}{width:${POSTER_SIZES[s].widthMm}mm;height:${POSTER_SIZES[s].heightMm}mm}.size-${s} .p-scale{transform:scale(${SCALE[s]})}`)
+  .map(
+    (s) =>
+      `.size-${s}{width:${POSTER_SIZES[s].widthMm}mm;height:${POSTER_SIZES[s].heightMm}mm}.size-${s} .p-scale{transform:scale(${SCALE[s]})}` +
+      `.size-${s} .p-foot .legal{font-size:${statementPt(s)}pt}`,
+  )
   .join("\n  ");
 
 function posterCss(logoMm: number): string {
   return `
-  ${SIZE_CSS}
   .poster{background:var(--maroon)}
   .p-scale{width:210mm;height:297mm;padding:7mm;transform-origin:0 0}
   .p-sheet{height:100%;background:var(--maroon);display:flex;flex-direction:column;position:relative}
@@ -384,7 +403,8 @@ function posterCss(logoMm: number): string {
   .p-noqr b{color:var(--crimson)}
   .p-foot{background:var(--maroon);color:var(--cream);text-align:center;padding:4mm 10mm 3.5mm}
   .p-foot .pledge{font-family:var(--head);font-style:italic;font-size:14pt;line-height:1.3}
-  .p-foot .legal{font-size:7.6pt;line-height:1.45;opacity:.9;margin:1.5mm auto 0;max-width:180mm}`;
+  .p-foot .legal{line-height:1.4;opacity:.9;margin:1.5mm auto 0;max-width:182mm}
+  ${SIZE_CSS}`;
 }
 
 /** One poster page, at one size. Its QR code is that size's own short link. */
@@ -568,7 +588,7 @@ const SPONSOR_CSS = `
   .sf-foot .back{font-family:var(--head);font-weight:700;color:var(--crimson);font-size:11.5pt;line-height:1.3}
   .sf-foot .how{color:var(--slate);max-width:150mm}
   .sf-foot .pg{color:var(--muted);white-space:nowrap}
-  .sf-legal{margin-top:1.8mm;padding-top:1.5mm;border-top:1px solid var(--line);font-size:6.8pt;line-height:1.4;color:var(--muted);text-align:center}`;
+  .sf-legal{margin-top:1.8mm;padding-top:1.5mm;border-top:1px solid var(--line);font-size:7pt;line-height:1.4;color:var(--muted);text-align:center}`;
 
 function sponsorRows(from: number, count: number): string {
   let rows = "";

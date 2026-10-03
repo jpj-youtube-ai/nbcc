@@ -3,6 +3,7 @@ import { pool } from "./pool";
 import { insertAudit } from "./donations";
 import { TRACKED_PIECES, TRACKED, scanCampaign } from "../fundraising/material-codes";
 import { applyPrintAsk, type LastAsk, type PrintAsk, type PrintKind } from "../fundraising/print-requests";
+import { stateOf, type RequestRow } from "../fundraising/requests";
 
 // TASK-512: the SQL behind round two of the materials. The rules are pure, in
 // src/fundraising/material-codes.ts and src/fundraising/print-requests.ts.
@@ -69,7 +70,7 @@ const text = (v: unknown): string | null => (v == null ? null : String(v));
 
 /**
  * The organiser's ask, made the posters or leaflets request. Throws PrintAskError, writing nothing,
- * when the fundraiser is gone or past asking. `actor` is "organiser:<email>".
+ * when the fundraiser is gone or past asking. `actor` is "organiser", as for every organiser action.
  */
 export async function askToPrint(fundraiserId: number, ask: PrintAsk, actor: string, today: string): Promise<{ words: string }> {
   return inTransaction(async (client) => {
@@ -88,7 +89,7 @@ export async function askToPrint(fundraiserId: number, ask: PrintAsk, actor: str
       [fundraiserId, ask.kind],
     );
     const c = cur.rows[0];
-    const current = c
+    const current: RequestRow | null = c
       ? {
           fundraiserId,
           kind: ask.kind,
@@ -134,7 +135,9 @@ export async function askToPrint(fundraiserId: number, ask: PrintAsk, actor: str
       action: "fundraiser.print_requested",
       entity: "fundraiser",
       entityId: fundraiserId,
-      data: { ...ask, asked, total: result.total, words: result.words, before: current ? current.status : null },
+      // As Undo does (changeRequest): the request as it stood before, so a re-opened ask never loses
+      // what was sent.
+      data: { ...ask, asked, total: result.total, words: result.words, before: current ? stateOf(current) : null },
     });
     return { words: result.words };
   });

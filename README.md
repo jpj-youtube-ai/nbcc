@@ -8598,7 +8598,7 @@ OSCR's guidance for a SCIO ask for on fundraising documents: the name, "Scottish
 Incorporated Organisation" in full, and the number. The pictures to share carry the shorter
 `MATERIALS_STATEMENT_SHORT` ("Night Before Christmas Campaign (NBCC), a Scottish Charitable
 Incorporated Organisation, SC047995"), which still has all three. Both are pinned in
-`test/unit/materials-statement.test.ts`. The logo pack's footer already has the site's statement.
+`test/unit/materials-statement.test.ts`. It is never printed smaller than 7pt, so it stays legible: the poster is the A4 design scaled, so the A5 leaflet draws it bigger on the design (`statementPt`) to come out at 7pt rather than about 5.4pt, and A3 lets it grow; the sponsor form and certificate print it at 7pt. The logo pack's footer already has the site's statement.
 
 **The logo, as big as the layout allows.** On the poster it is 38mm to 58mm tall on A4
 (`posterLogoMm`, giving a little way only to a long name or line, so the QR code keeps its size);
@@ -8653,9 +8653,9 @@ their own fundraiser only, from our own page, 10 an hour per organiser, only whi
 to come). It becomes the posters or leaflets request staff already track (TASK-505): how many goes in
 `fundraisers.wants` (`posterCount` or `leafletCount`), the request is To send with a note of the sizes
 and the day ("Asked in their private area on 3 Oct: 10 A4 posters and 2 A3 posters."), and an
-`audit_log` row `fundraiser.print_requested` goes in its History. So it shows in the Requests panel,
+`audit_log` row `fundraiser.print_requested` (actor `organiser`, as every organiser action; with the request as it stood `before`, as Undo keeps it) goes in its History. So it shows in the Requests panel,
 the Monday summary and the Overview with nothing new to learn. Asking again before we send replaces
-the ask; after we sent some, it opens a new To send whose note says what went before (the earlier sending's date, count and who then live in that note and the History, not on the request). An organiser's ask is at the request's first step, so staff move it on by marking it sent, as for any other ask. With no postal
+the ask; after we sent some, it opens a new To send whose note says what went before, and asking again before that is sent keeps saying so (the earlier sending's date, count and who then live in that note and the History, not on the request). An organiser's ask is at the request's first step, so staff move it on by marking it sent, as for any other ask. With no postal
 address on the sign up, the note asks staff to find out where to send them. The private area shows
 where each is up to (`print` in `GET /api/fundraise/manage/me`: `{ canAsk, posters, leaflets }`, each
 `{ asked, words, status }` or null). Printed QR codes (the new kind of request in TASK-511) are not offered here yet.

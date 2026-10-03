@@ -679,7 +679,8 @@ describe("approving, declining and finishing", () => {
     await settle();
     expect(confirmed[2]).toMatch(/their page link, and the page goes on the website/);
     expect(text(el("frDetailStatus"))).toBe("Approved. An email with their page link is on its way to the organiser.");
-  });
+    // Three sign ups opened and approved in turn: slow under a full parallel run, so given room.
+  }, 20_000);
 
   it("sends nothing when the question is answered no", async () => {
     records = [fundraiser(1)];
@@ -2031,7 +2032,7 @@ describe("materials, round two", () => {
       1: [
         {
           id: 4,
-          actor: "organiser:sam@example.com",
+          actor: "organiser",
           action: "fundraiser.print_requested",
           data: { words: "Posters: they asked us to print 10 A4 posters and 2 A3 posters" },
           createdAt: "2026-10-03T09:00:00.000Z",

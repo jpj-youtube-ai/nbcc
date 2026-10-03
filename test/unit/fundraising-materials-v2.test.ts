@@ -10,6 +10,7 @@ import {
   materialAllowed,
   materialFacts,
   posterLogoMm,
+  statementPt,
   renderCertificate,
   renderEverything,
   renderPoster,
@@ -315,5 +316,35 @@ describe("the page address in words", () => {
     const json = /<script type="application\/json" id="socialData">([\s\S]*?)<\/script>/.exec(renderSocial(d, ASSETS, ""))?.[1] ?? "";
     expect(JSON.parse(json).linkWords).toBe("nbcc.test/fundraise/ssd");
     expect(renderEverything(d, ASSETS, { date: "1 January 2027", script: "" }).split("or visit nbcc.test/fundraise/ssd<").length - 1).toBe(3);
+  });
+});
+
+// TASK-512 review: OSCR asks for the statement to be legible, so it is never printed smaller than
+// 7pt on any paper. The poster is the A4 design scaled, so the leaflet's statement is drawn bigger
+// on the design to come out at 7pt once scaled down; A3's grows with the paper.
+describe("the charity statement's printed size", () => {
+  const SCALE = { a5: 148 / 210, a4: 1, a3: 297 / 210 };
+  for (const size of ["a5", "a4", "a3"] as const) {
+    it(`${size}: is at least 7pt on the paper`, () => {
+      const design = statementPt(size);
+      expect(design * SCALE[size]).toBeGreaterThanOrEqual(6.99);
+      expect(renderPoster(facts(), ASSETS, size)).toContain(`.size-${size} .p-foot .legal{font-size:${design}pt}`);
+    });
+  }
+
+  it("the leaflet's comes out at 7pt, not the 5.4pt a straight scale would give", () => {
+    expect(statementPt("a5") * SCALE.a5).toBeLessThan(7.2);
+  });
+
+  it("is 7pt or more on the sponsor form and the certificate", () => {
+    const sponsor = renderSponsorForm(facts(), ASSETS);
+    expect(Number(/\.sf-legal\{[^}]*font-size:([\d.]+)pt/.exec(sponsor)?.[1])).toBeGreaterThanOrEqual(7);
+    const cert = renderCertificate(facts({ status: "finished" }), ASSETS, { date: "1 January 2027", preview: false });
+    expect(Number(/\.c-legal\{[^}]*font-size:([\d.]+)pt/.exec(cert)?.[1])).toBeGreaterThanOrEqual(7);
+  });
+
+  it("every size's own rule is on the everything page too", () => {
+    const all = renderEverything(facts(), ASSETS, { date: "1 January 2027", script: "" });
+    for (const size of ["a5", "a4", "a3"] as const) expect(all).toContain(`.size-${size} .p-foot .legal{font-size:${statementPt(size)}pt}`);
   });
 });

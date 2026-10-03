@@ -71,7 +71,7 @@ describe("asking us to print", () => {
       if (/FROM fundraisers WHERE id = \$1 FOR UPDATE/.test(sql)) return { rows: [fundraiser()] };
       return { rows: [] };
     });
-    const r = await askToPrint(12, { kind: "posters", a4: 10, a3: 2 }, "organiser:sam@example.com", "2026-10-03");
+    const r = await askToPrint(12, { kind: "posters", a4: 10, a3: 2 }, "organiser", "2026-10-03");
     expect(r.words).toBe("Posters: they asked us to print 10 A4 posters and 2 A3 posters");
     const sqls = calls.map((c) => c[0]);
     expect(sqls[0]).toBe("BEGIN");
@@ -83,16 +83,31 @@ describe("asking us to print", () => {
     expect(req?.[1].slice(0, 3)).toEqual([12, "posters", "to_send"]);
     expect(req?.[1]).toContain("Asked in their private area on 3 Oct: 10 A4 posters and 2 A3 posters.");
     const audit = calls.find((c) => /INSERT INTO audit_log/.test(c[0]));
-    expect(audit?.[1][0]).toBe("organiser:sam@example.com");
+    expect(audit?.[1][0]).toBe("organiser");
     expect(audit?.[1][1]).toBe("fundraiser.print_requested");
     expect(audit?.[1][3]).toBe(12);
     expect(audit?.[1][4]).toMatchObject({ kind: "posters", a4: 10, a3: 2, words: r.words, asked: "10 A4 posters and 2 A3 posters" });
+    expect(audit?.[1][4]).toMatchObject({ before: null });
     expect(client.release).toHaveBeenCalled();
+  });
+
+  // TASK-512 review: like Undo, the request as it stood before is kept in the History.
+  it("keeps the request as it stood before in the audit row", async () => {
+    const { calls } = useClient((sql) => {
+      if (/FROM fundraisers WHERE id = \$1 FOR UPDATE/.test(sql)) return { rows: [fundraiser()] };
+      if (/FROM fundraiser_requests WHERE fundraiser_id/.test(sql)) {
+        return { rows: [{ fundraiser_id: 12, kind: "posters", status: "sent", quantity: 10, quantity_back: null, how: "post", sent_on: "2026-10-01", back_on: null, done_on: null, handled_by: "Robin", going: null, note: null, back_note: null, link: null, updated_at: null, updated_by: "admin:kim@example.com" }] };
+      }
+      return { rows: [] };
+    });
+    await askToPrint(12, { kind: "posters", a4: 5, a3: 0 }, "organiser", "2026-10-03");
+    const audit = calls.find((c) => /INSERT INTO audit_log/.test(c[0]));
+    expect(audit?.[1][4]).toMatchObject({ before: { status: "sent", quantity: 10, sentOn: "2026-10-01", handledBy: "Robin", how: "post" } });
   });
 
   it("writes nothing when the fundraiser is past asking", async () => {
     const { calls } = useClient((sql) => (/FOR UPDATE/.test(sql) && /fundraisers/.test(sql) ? { rows: [fundraiser({ status: "finished" })] } : { rows: [] }));
-    await expect(askToPrint(12, { kind: "leaflets", a5: 20 }, "organiser:sam@example.com", "2026-10-03")).rejects.toBeInstanceOf(PrintAskError);
+    await expect(askToPrint(12, { kind: "leaflets", a5: 20 }, "organiser", "2026-10-03")).rejects.toBeInstanceOf(PrintAskError);
     expect(calls.some((c) => /INSERT|UPDATE fundraisers/.test(c[0]))).toBe(false);
     expect(calls.at(-1)?.[0]).toBe("ROLLBACK");
   });
@@ -101,7 +116,7 @@ describe("asking us to print", () => {
     const { calls } = useClient((sql) =>
       /FROM fundraisers WHERE id = \$1 FOR UPDATE/.test(sql) ? { rows: [fundraiser({ post_line1: null, post_address: null })] } : { rows: [] },
     );
-    await askToPrint(12, { kind: "leaflets", a5: 20 }, "organiser:sam@example.com", "2026-10-03");
+    await askToPrint(12, { kind: "leaflets", a5: 20 }, "organiser", "2026-10-03");
     const req = calls.find((c) => /INSERT INTO fundraiser_requests/.test(c[0]));
     expect(String(req?.[1].find((v) => typeof v === "string" && v.startsWith("Asked")))).toMatch(/no address/);
   });

@@ -92,6 +92,10 @@ export function applyPrintAsk(
   let note = `Asked in their private area on ${shortDate(today)}: ${words}.`;
   if (current && current.status === "sent") {
     note += ` More, after the ${current.quantity ?? "ones"} we sent${current.sentOn ? ` on ${shortDate(current.sentOn)}` : ""}.`;
+  } else if (current && current.status === "to_send") {
+    // TASK-512 review: asking again before we send the "more" keeps saying what went before.
+    const before = / More, after the [^.]*./.exec(current.note ?? "");
+    if (before) note += before[0];
   }
   if (f.hasAddress === false) note += " We have no address to post them to: ask them where to send them.";
   const state: RequestState = {

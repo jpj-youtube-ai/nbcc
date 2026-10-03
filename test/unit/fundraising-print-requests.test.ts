@@ -172,3 +172,19 @@ describe("what the organiser sees once it is over", () => {
     expect(s.posters?.status).toBe("sent");
   });
 });
+
+// TASK-512 review: asking again before we send the "more" keeps saying what went before.
+describe("asking again after a re-opened ask", () => {
+  it("carries the 'after the N we sent' forward", () => {
+    const sent = row({ status: "sent", quantity: 10, how: "post", sentOn: "2026-10-01", handledBy: "Robin" });
+    const first = applyPrintAsk(approved, sent, { kind: "posters", a4: 5, a3: 0 }, TODAY);
+    if (!first.ok) throw new Error("refused");
+    const again = applyPrintAsk(approved, row({ ...first.state }), { kind: "posters", a4: 8, a3: 1 }, "2026-10-04");
+    expect(again.ok && again.state.note).toBe("Asked in their private area on 4 Oct: 8 A4 posters and 1 A3 poster. More, after the 10 we sent on 1 Oct.");
+  });
+
+  it("adds nothing when nothing was sent before", () => {
+    const again = applyPrintAsk(approved, row({ note: "Asked in their private area on 1 Oct: 4 A4 posters." }), { kind: "posters", a4: 6, a3: 0 }, TODAY);
+    expect(again.ok && again.state.note).toBe("Asked in their private area on 3 Oct: 6 A4 posters.");
+  });
+});

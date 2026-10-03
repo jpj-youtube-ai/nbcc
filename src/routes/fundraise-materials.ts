@@ -268,7 +268,8 @@ export async function postPrintRequest(req: Request, res: Response): Promise<Res
     const parsed = printAskSchema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ error: "Please check how many you would like.", fields: fieldErrors(parsed.error.issues) });
     const today = londonToday(new Date());
-    await askToPrint(id, parsed.data, `organiser:${email}`, today);
+    // Recorded as every other organiser action is: "organiser", the fundraiser says who.
+    await askToPrint(id, parsed.data, "organiser", today);
     const fresh = (await getFundraiser(id)) ?? f;
     return res.status(200).json({ status: "asked", print: await printStatusFor(fresh, today) });
   } catch (err) {

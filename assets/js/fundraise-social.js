@@ -520,23 +520,28 @@
 
     /* Every size drawn afresh on a canvas of its own (so it works on a page with none showing), as
        PNGs in one zip. */
+    function drawOne(kind) {
+      return new Promise(function (resolve, reject) {
+        var canvas = doc.createElement("canvas");
+        canvas.width = SIZES[kind].w;
+        canvas.height = SIZES[kind].h;
+        if (!draw(canvas, kind, data, logo, showMeter()) || !canvas.toBlob) return reject(new Error("no canvas"));
+        canvas.toBlob(function (blob) {
+          if (!blob) return reject(new Error("no picture"));
+          blobBytes(win, blob).then(function (bytes) {
+            resolve({ name: nameFor(kind), bytes: bytes });
+          }, reject);
+        }, "image/png");
+      });
+    }
+
     function saveZip() {
       say("Making your pictures, one moment.");
-      var made = ORDER.map(function (kind) {
-        return new Promise(function (resolve, reject) {
-          var canvas = doc.createElement("canvas");
-          canvas.width = SIZES[kind].w;
-          canvas.height = SIZES[kind].h;
-          if (!draw(canvas, kind, data, logo, showMeter()) || !canvas.toBlob) return reject(new Error("no canvas"));
-          canvas.toBlob(function (blob) {
-            if (!blob) return reject(new Error("no picture"));
-            blobBytes(win, blob).then(function (bytes) {
-              resolve({ name: nameFor(kind), bytes: bytes });
-            }, reject);
-          }, "image/png");
-        });
-      });
-      return Promise.all(made)
+      // TASK-512 review: once the fonts and the logo are in (ready), so no picture is drawn without them.
+      return Promise.resolve(ready)
+        .then(function () {
+          return Promise.all(ORDER.map(drawOne));
+        })
         .then(function (files) {
           var zip = makeZip(files, new Date());
           handBlob(new win.Blob([zip], { type: "application/zip" }), "nbcc-" + (data.slug || "fundraiser") + "-pictures.zip");

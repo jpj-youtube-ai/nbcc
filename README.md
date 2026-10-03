@@ -1339,6 +1339,10 @@ hosted-Checkout redirect stays the default fallback and no-JS safety net.
 | `GET /api/admin/fundraising/news-waiting`, `GET /api/admin/fundraisers/:id/news`, `.../news/:updateId/photo`, `POST .../news/:updateId/approve` \| `reject` \| `hide` \| `show` | **implemented** | TASK-506 (staff check news updates: fundraising view to look, edit to decide; audited) |
 | `GET /api/fundraise/manage/fundraisers/:id/materials/:piece` | **implemented** | TASK-504 (the signed in organiser's poster, pictures to share, sponsor form or certificate, as a whole print page; only their own, approved or finished, and the certificate once finished; anyone else's is a 404, no session a `401` page, and a 404 while fundraising is off. See **Community fundraising, materials**) |
 | `GET /api/admin/fundraisers/:id/materials/:piece` | **implemented** | TASK-504 (the same pages for staff with fundraising: view, for any approved or finished fundraiser whether or not fundraising is on; the certificate as a marked preview before it is finished) |
+| `GET /api/admin/fundraisers/:id/materials/everything` | **implemented** | TASK-512 (Download everything: every printed piece on one print page, each on its own paper size, plus every picture to share as a zip made in the browser; staff with fundraising: view; approved or finished; the certificate only once finished. See **Community fundraising, materials round two**) |
+| `GET /api/admin/fundraisers/:id/scans` | **implemented** | TASK-512 (each printed piece's QR code scans, `{ scans: [{ piece, code, label, scans, link }], total }`, counted once per person per day from the visit counter; staff with fundraising: view; `no-store`) |
+| `POST /api/fundraise/manage/fundraisers/:id/print-request` | **implemented** | TASK-512 (Ask us to print these: `{ kind: "posters", a4, a3 }` or `{ kind: "leaflets", a5 }`; the signed in organiser's own, from our own page, 10 an hour; makes the posters or leaflets request To send; `400` with `fields`, `401`, `403`, `404`, `409` too late, `429`) |
+| `GET /q/:code` | **implemented** | TASK-512 (a printed piece's own QR code, `/q/<id>-<a4|a3|a5>`: `302` to the fundraiser's page as it is now, found by id, tagged `utm_medium=qr&utm_campaign=f<id>-<size>`; `no-store`, `noindex`; anything else is the site's 404) |
 | `GET` and `POST /api/fundraise/manage/:token` | **retired** | TASK-501 (`410`: the 24 hour links no longer open anything; ask for a sign in code) |
 | `POST /api/my-story` | **implemented** | Task B1 (My Story submission — persists to the separate `stories` DB) |
 | `POST /api/pulse` | **implemented** | TASK-479 (site analytics: a page view, leave or click from `assets/js/pulse.js`, JSON in a `text/plain` body, 2 KB at most; always `204` with an empty body; kept only while collecting is switched on; see **Site analytics (TASK-479)**) |
@@ -8579,6 +8583,94 @@ supporters" and never an address; a gift on someone else's fundraiser cannot be 
 In the private area, once every gift has been thanked the form goes and the part says "Everyone has
 been thanked. Thank you for saying thank you!". In History, the sender's own step reads "Sent
 automatically".
+
+## Community fundraising, materials round two (TASK-512)
+
+Round two of the materials above, from Jaimie's review. No migration and no new packages.
+
+**The charity statement on every printed piece.** The poster, the leaflet, the sponsor form (both
+pages, and the blank one) and the certificate carry `MATERIALS_STATEMENT`
+(`src/legal/registration.ts`) word for word: "Night Before Christmas Campaign, known as NBCC, is a
+Scottish Charitable Incorporated Organisation. Scottish Charity Number SC047995. Regulated by the
+Scottish Charity Regulator, OSCR. The Elves' Workshop, Annbank Village Hall, Weston Avenue, Annbank,
+KA6 5EE". That is what section 52 of the Charities and Trustee Investment (Scotland) Act 2005 and
+OSCR's guidance for a SCIO ask for on fundraising documents: the name, "Scottish Charitable
+Incorporated Organisation" in full, and the number. The pictures to share carry the shorter
+`MATERIALS_STATEMENT_SHORT` ("Night Before Christmas Campaign (NBCC), a Scottish Charitable
+Incorporated Organisation, SC047995"), which still has all three. Both are pinned in
+`test/unit/materials-statement.test.ts`. It is never printed smaller than 7pt, so it stays legible: the poster is the A4 design scaled, so the A5 leaflet draws it bigger on the design (`statementPt`) to come out at 7pt rather than about 5.4pt, and A3 lets it grow; the sponsor form and certificate print it at 7pt. The logo pack's footer already has the site's statement.
+
+**The logo, as big as the layout allows.** On the poster it is 38mm to 58mm tall on A4
+(`posterLogoMm`, giving a little way only to a long name or line, so the QR code keeps its size);
+38mm on the certificate (was 27mm) and 24mm on the sponsor form (was 17mm); on the pictures it takes
+whatever room the words leave, between a smallest and a biggest size per layout.
+
+**Three sizes of poster.** `poster` (A4), `poster-a3` (A3) and `leaflet` (A5) are one design: drawn on
+an A4 sheet and scaled to the paper with a CSS transform (so the QR code stays a sharp vector), in a
+page exactly the paper's size, with its own `@page` size. Checked to fit with the longest title and
+line the forms allow.
+
+**A QR code of its own for every printed piece.** Each poster and leaflet's code is a short link,
+`https://nbcc.scot/q/<fundraiser id>-<a4|a3|a5>` (`src/fundraising/material-codes.ts`), about 26
+characters, so the code stays small and easy to scan. `GET /q/:code` answers with a `302` to wherever
+the fundraiser is now, found by its **id**, never its address, so a printed code keeps working for
+good whatever its page's address becomes: its page, or Get involved for a listed event, with
+`utm_medium=qr&utm_campaign=f<id>-<size>`. It is `no-store` (an address change is followed at once)
+and `noindex`. Anything else (not one of ours, no such fundraiser, one that is new, declined or not on
+the website, fundraising switched off) falls through to the site's own 404; the target is always a
+path on our own site, so it can never send anyone elsewhere. The scan is counted the way every QR code
+is (TASK-492): the visit counter on the page it lands on records channel `qr` with the tag. So it
+shows in Admin > Analytics, "QR codes", named "Sam's Santa Dash, A4 poster" (`labelQrScans` with the
+fundraisers' titles), and per piece in Admin > Fundraising (`GET /api/admin/fundraisers/:id/scans`,
+counted once per person per day from `analytics_views`). Nothing new is stored: like every visit, a
+scan is not counted for a browser that asks not to be tracked, and it is kept 13 months.
+
+**Pictures in five sizes** (Meta's guidance, October 2026): Instagram post square 1080 x 1080,
+Instagram post portrait 1080 x 1350 (4:5, the tallest a feed post can be), a story for Instagram and
+Facebook 1080 x 1920, a Facebook post 1200 x 630 (1.91:1), and a Facebook event cover 1920 x 1005 (what
+Facebook asks for so it is not cropped on phones). Each has its own Download, and "Download every
+picture as a zip" makes all five in the browser and zips them there (`makeZip` in
+`assets/js/fundraise-social.js`: stored, not compressed, with a CRC32 of its own; no library). Tall
+and square pictures stack down the middle; the two wide ones put the logo on the left.
+
+**"Need something else?"** Every materials page (on screen only, never printed), the private area's
+"Your materials" and the logo pack say Jaimie's words (`ASK_US`): "Need something else, like a banner
+or a different size? Give us a call on 01292 811 015 or email events@nbcc.scot and we'll make it for
+you. Please don't make your own versions of our logo or materials."
+
+**Download everything (staff).** Admin > Fundraising has a "Download everything" button on an
+approved or finished sign up: `GET /api/admin/fundraisers/:id/materials/everything` (fundraising:
+view) is every printed piece on one page, one after another, each on its own paper (named `@page`
+rules: A4 poster, A3 poster, A5 leaflet, the two sponsor form pages, and the certificate once
+finished), to print or save as one PDF; its toolbar also has "Download every picture as a zip". A zip
+of PNGs made on the server is not possible without an image library (none may be added), so the
+pictures are drawn and zipped in the browser, from the same page. Organisers do not have it.
+
+**Ask us to print these.** In "Your materials", beside the posters (A4 and A3) and the leaflet (A5),
+an organiser can ask us to print some: `POST /api/fundraise/manage/fundraisers/:id/print-request`
+`{ kind: "posters", a4, a3 }` or `{ kind: "leaflets", a5 }` (up to 100 A4, 50 A3, 500 A5 at a time;
+their own fundraiser only, from our own page, 10 an hour per organiser, only while approved and still
+to come). It becomes the posters or leaflets request staff already track (TASK-505): how many goes in
+`fundraisers.wants` (`posterCount` or `leafletCount`), the request is To send with a note of the sizes
+and the day ("Asked in their private area on 3 Oct: 10 A4 posters and 2 A3 posters."), and an
+`audit_log` row `fundraiser.print_requested` (actor `organiser`, as every organiser action; with the request as it stood `before`, as Undo keeps it) goes in its History. So it shows in the Requests panel,
+the Monday summary and the Overview with nothing new to learn. Asking again before we send replaces
+the ask; after we sent some, it opens a new To send whose note says what went before, and asking again before that is sent keeps saying so (the earlier sending's date, count and who then live in that note and the History, not on the request). An organiser's ask is at the request's first step, so staff move it on by marking it sent, as for any other ask. With no postal
+address on the sign up, the note asks staff to find out where to send them. The private area shows
+where each is up to (`print` in `GET /api/fundraise/manage/me`: `{ canAsk, posters, leaflets }`, each
+`{ asked, words, status }` or null). Printed QR codes (the new kind of request in TASK-511) are not offered here yet.
+
+| Where it lives | File |
+|---|---|
+| The statements | `src/legal/registration.ts` |
+| The pages, sizes, statement, logo, everything page | `src/fundraising/materials.ts` |
+| Each piece's short link, its tag and its label | `src/fundraising/material-codes.ts` |
+| Ask us to print these, the rules | `src/fundraising/print-requests.ts` |
+| The SQL (scans, the ask) | `src/db/fundraiser-materials.ts` |
+| The routes (`/q/:code`, scans, everything, the ask) | `src/routes/fundraise-materials.ts` |
+| Naming the scans in Analytics | `src/db/analytics-report.ts`, `src/site/qr.ts` (`labelQrScans`) |
+| The five pictures and the zip | `assets/js/fundraise-social.js` |
+| Tests | `test/unit/materials-statement.test.ts`, `fundraising-material-codes.test.ts`, `fundraising-materials-v2.test.ts`, `fundraise-materials-v2-routes.test.ts`, `fundraising-print-requests.test.ts`, `fundraiser-materials-db.test.ts`, and additions to the TASK-504 tests, the private area, admin, logo pack, Analytics label and social picture tests; BDD `features/fundraising-materials-v2.feature` |
 
 ## A QR code encoder for fundraiser pages (TASK-493)
 

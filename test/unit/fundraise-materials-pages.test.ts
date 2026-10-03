@@ -178,3 +178,25 @@ describe("a page's print size QR code", () => {
     expect((await get("/fundraise/robins-santa-dash/qr.png")).status).toBe(404);
   });
 });
+
+// TASK-512: NBCC's policy on the logo pack, and the charity statement on the blank sponsor form.
+describe("round two, on the public pieces", () => {
+  it("the logo pack says how to ask us for anything else, and not to make our logo your own", async () => {
+    const { ASK_US } = await import("../../src/fundraising/materials");
+    const html = await (await get("/fundraise/logos")).text();
+    const box = /<p class="fr-ask-us"[^>]*>([\s\S]*?)<\/p>/.exec(html)?.[1] ?? "";
+    expect(box.replace(/<[^>]+>/g, "")).toBe(ASK_US);
+  });
+
+  it("the logo pack's footer still has the registration statement", async () => {
+    const html = await (await get("/fundraise/logos")).text();
+    expect(html).toContain("is a Scottish Charitable Incorporated Organisation");
+    expect(html).toContain("SC047995");
+  });
+
+  it("the blank sponsor form carries the charity statement word for word", async () => {
+    const { MATERIALS_STATEMENT } = await import("../../src/legal/registration");
+    const html = await (await get("/fundraise/sponsor-form")).text();
+    expect(html).toContain(MATERIALS_STATEMENT.replace(/'/g, "&#39;"));
+  });
+});

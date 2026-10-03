@@ -597,3 +597,152 @@ describe("your materials", () => {
     expect($("[data-f-materials]", card(7)).hidden).toBe(true);
   });
 });
+
+// TASK-512: round two of "Your materials". The poster on A4 and A3 and the A5 leaflet; "Ask us to
+// print these" next to the posters and the leaflet, showing where their ask is up to; and how to ask
+// us for anything else.
+describe("your materials, round two", () => {
+  const at = (id: number, piece: string) => `/api/fundraise/manage/fundraisers/${id}/materials/${piece}`;
+  const materials = (id: number) => ({
+    poster: at(id, "poster"),
+    posterA3: at(id, "poster-a3"),
+    leaflet: at(id, "leaflet"),
+    social: at(id, "social"),
+    sponsorForm: at(id, "sponsor-form"),
+    certificate: null,
+    qrPng: "/fundraise/robins-santa-dash/qr.png",
+  });
+  const canAsk = { canAsk: true, posters: null, leaflets: null };
+  const link = (id: number, which: string) => $<HTMLAnchorElement>(`[data-f-mat="${which}"] a`, card(id));
+  const printForm = (id: number, kind: string) => $<HTMLFormElement>(`form[data-f-print="${kind}"]`, card(id));
+
+  it("links the A3 poster and the A5 leaflet, each in a new tab", async () => {
+    await load("", signedIn(raising({ materials: materials(7), print: canAsk })));
+    expect(link(7, "posterA3").getAttribute("href")).toBe(at(7, "poster-a3"));
+    expect(link(7, "leaflet").getAttribute("href")).toBe(at(7, "leaflet"));
+    expect(link(7, "leaflet").getAttribute("target")).toBe("_blank");
+  });
+
+  it("says how to ask us for anything else", async () => {
+    await load("", signedIn(raising({ materials: materials(7), print: canAsk })));
+    expect($("[data-f-materials]", card(7)).textContent?.replace(/\s+/g, " ")).toContain(
+      "Need something else, like a banner or a different size? Give us a call on 01292 811 015 or email events@nbcc.scot and we'll make it for you. Please don't make your own versions of our logo or materials.",
+    );
+  });
+
+  it("asks us to print posters, A4 and A3, and shows where it is up to", async () => {
+    const asked = { canAsk: true, posters: { asked: 12, words: "You asked for 10 A4 posters and 2 A3 posters on 3 Oct. We're getting them ready.", status: "to_send" }, leaflets: null };
+    await load("", (url, method) =>
+      method === "POST" ? { status: 200, body: { status: "asked", print: asked } } : signedIn(raising({ materials: materials(7), print: canAsk }))(url, method),
+    );
+    const form = printForm(7, "posters");
+    expect(form.hidden).toBe(false);
+    type($("input[name=a4]", form), "10");
+    type($("input[name=a3]", form), "2");
+    await submit(form);
+    expect(posts()).toEqual([{ url: "/api/fundraise/manage/fundraisers/7/print-request", method: "POST", body: { kind: "posters", a4: 10, a3: 2 } }]);
+    expect($("[data-f-print-status]", form).textContent).toContain("You asked for 10 A4 posters and 2 A3 posters on 3 Oct");
+  });
+
+  it("asks us to print A5 leaflets", async () => {
+    await load("", (url, method) =>
+      method === "POST" ? { status: 200, body: { status: "asked", print: canAsk } } : signedIn(raising({ materials: materials(7), print: canAsk }))(url, method),
+    );
+    const form = printForm(7, "leaflets");
+    type($("input[name=a5]", form), "50");
+    await submit(form);
+    expect(posts()[0].body).toEqual({ kind: "leaflets", a5: 50 });
+  });
+
+  it("asks for a number before sending anything", async () => {
+    await load("", signedIn(raising({ materials: materials(7), print: canAsk })));
+    const form = printForm(7, "posters");
+    await submit(form);
+    expect(posts()).toHaveLength(0);
+    expect($("[data-f-print-status]", form).textContent).toMatch(/how many/i);
+  });
+
+  it("shows what the server says when it cannot take it", async () => {
+    await load("", (url, method) =>
+      method === "POST" ? { status: 429, body: { error: "You have asked a lot of times just now." } } : signedIn(raising({ materials: materials(7), print: canAsk }))(url, method),
+    );
+    const form = printForm(7, "leaflets");
+    type($("input[name=a5]", form), "5");
+    await submit(form);
+    expect($("[data-f-print-status]", form).textContent).toBe("You have asked a lot of times just now.");
+  });
+
+  it("shows where an earlier ask is up to when the page opens", async () => {
+    const sent = { canAsk: true, posters: { asked: 12, words: "We dropped off 12 posters on 2 Oct.", status: "sent" }, leaflets: null };
+    await load("", signedIn(raising({ materials: materials(7), print: sent })));
+    expect($("[data-f-print-status]", printForm(7, "posters")).textContent).toBe("We dropped off 12 posters on 2 Oct.");
+  });
+
+  it("offers no form once it is too late, and says to call instead", async () => {
+    await load("", signedIn(raising({ status: "finished", materials: materials(7), print: { canAsk: false, posters: null, leaflets: null } })));
+    expect(printForm(7, "posters").hidden).toBe(true);
+    expect(printForm(7, "leaflets").hidden).toBe(true);
+    expect($("[data-f-print-closed]", card(7)).hidden).toBe(false);
+  });
+});
+
+// TASK-512, after Jaimie's look: every material opens from a proper button (an outline button,
+// not underlined text), each saying it opens in a new tab; and the "Need something else?" note is a
+// soft, fully bordered box rather than a coloured stripe down one side.
+describe("your materials, as buttons", () => {
+  const at = (id: number, piece: string) => `/api/fundraise/manage/fundraisers/${id}/materials/${piece}`;
+  const materials = (id: number) => ({
+    poster: at(id, "poster"),
+    posterA3: at(id, "poster-a3"),
+    leaflet: at(id, "leaflet"),
+    social: at(id, "social"),
+    sponsorForm: at(id, "sponsor-form"),
+    certificate: at(id, "certificate"),
+    qrPng: "/fundraise/robins-santa-dash/qr.png",
+  });
+  const words: Record<string, string> = {
+    poster: "Open A4 poster",
+    posterA3: "Open A3 poster",
+    leaflet: "Open A5 leaflet",
+    social: "Open pictures to share",
+    sponsorForm: "Open sponsor form",
+    certificate: "Open certificate",
+    logos: "Open our logos",
+  };
+
+  it("opens every material from an outline button, in a new tab, and says so", async () => {
+    await load("", signedIn(raising({ status: "finished", materials: materials(7), print: { canAsk: false, posters: null, leaflets: null } })));
+    for (const [key, label] of Object.entries(words)) {
+      const a = $<HTMLAnchorElement>(`[data-f-mat="${key}"] a`, card(7));
+      expect(a.classList.contains("btn"), key).toBe(true);
+      expect(a.classList.contains("btn-ghost"), key).toBe(true);
+      expect(a.getAttribute("target"), key).toBe("_blank");
+      expect(a.getAttribute("rel"), key).toContain("noopener");
+      expect(a.textContent?.replace(/\s+/g, " ").trim(), key).toBe(`${label} (opens in a new tab)`);
+      expect($(".sr-only", a).textContent?.trim(), key).toBe("(opens in a new tab)");
+    }
+  });
+
+  it("keeps Ask us to print these as each card's main button", async () => {
+    await load("", signedIn(raising({ materials: materials(7), print: { canAsk: true, posters: null, leaflets: null } })));
+    const go = $<HTMLButtonElement>('form[data-f-print="posters"] button[type=submit]', card(7));
+    expect(go.classList.contains("btn")).toBe(true);
+    expect(go.classList.contains("btn-ghost")).toBe(false);
+  });
+});
+
+describe("the Need something else note's style", () => {
+  const css = readFileSync(resolve(ROOT, "assets/css/fundraising.css"), "utf8");
+  it("is a fully bordered, tinted box with no stripe down one side", () => {
+    const rules = [...css.matchAll(/\.fr-ask-us\s*\{([^}]*)\}/g)].map((m) => m[1]).join(";");
+    expect(rules).toMatch(/border:\s*1\.6px solid/);
+    expect(rules).toMatch(/background:\s*var\(--tint\)/);
+    expect(rules).not.toMatch(/border-left/);
+  });
+
+  it("the materials buttons are at least 44px tall and wrap on a phone", () => {
+    const rule = /(?:^|\n)\.fr-mat-btn\s*\{([^}]*)\}/.exec(css)?.[1] ?? "";
+    expect(rule).toMatch(/min-height:\s*44px/);
+    expect(rule).toMatch(/white-space:\s*normal/);
+  });
+});

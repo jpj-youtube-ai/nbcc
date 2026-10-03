@@ -2668,3 +2668,8 @@ textarea.fx-call-input{min-height:88px;line-height:1.5;resize:vertical;field-siz
   #view-overview .ov-event{grid-template-columns:3.6rem minmax(0,1fr);align-items:baseline}
   #view-overview .ov-event .ov-go{grid-column:2;margin:4px 0 0;justify-self:start}
 }
+
+
+/* TASK-512: each printed piece's QR code scans, wrapping on a phone. */
+#view-fundraising .fr-scans { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px 18px; }
+#view-fundraising .fr-scans li { white-space: normal; }

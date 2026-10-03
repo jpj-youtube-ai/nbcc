@@ -12,7 +12,7 @@ import { materialFacts, renderSocial } from "../../src/fundraising/materials";
 
 const ROOT = resolve(__dirname, "../..");
 const require = createRequire(import.meta.url);
-const { initSocial } = require(resolve(ROOT, "assets/js/fundraise-social.js"));
+const { initSocial, crc32, makeZip } = require(resolve(ROOT, "assets/js/fundraise-social.js"));
 
 const ASSETS = { fontCss: "", logo: "data:image/png;base64,TE9HTw==", logoOnDark: "data:image/png;base64,REFSSw==" };
 
@@ -146,5 +146,113 @@ describe("the social pictures", () => {
     document.querySelector<HTMLButtonElement>('[data-social-download="square"]')!.click();
     expect(saved).toEqual([]);
     expect(document.querySelector("[data-social-status]")!.textContent).toMatch(/could not/i);
+  });
+});
+
+// TASK-512: five sizes, the shorter charity statement on each, and every picture at once as a zip.
+const KINDS = ["square", "portrait", "story", "facebook", "cover"];
+
+describe("the five sizes", () => {
+  it("each draws the title, Fundraising for NBCC, the address and the charity statement", async () => {
+    await open();
+    for (const kind of KINDS) {
+      const text = textOn(kind);
+      expect(text, kind).toContain("Sam's Santa Dash");
+      expect(text.toLowerCase(), kind).toContain("fundraising for nbcc");
+      expect(text, kind).toContain("nbcc.test/fundraise/sams-santa-dash");
+      // The statement may be split over two lines: all of its words are there, in order.
+      expect(text.replace(/\s+/g, " "), kind).toContain(
+        "Night Before Christmas Campaign (NBCC), a Scottish Charitable Incorporated Organisation, SC047995",
+      );
+    }
+  });
+
+  it("each shows the meter while the box is ticked", async () => {
+    await open();
+    for (const kind of KINDS) expect(textOn(kind), kind).toContain("£540 raised");
+  });
+
+  it("each downloads as its own PNG", async () => {
+    await open();
+    for (const kind of KINDS) document.querySelector<HTMLButtonElement>(`[data-social-download="${kind}"]`)!.click();
+    expect(saved.map((s) => s.name)).toEqual(KINDS.map((k) => `nbcc-sams-santa-dash-${k}.png`));
+  });
+});
+
+/** The files in a zip, read from its central directory (stored, not compressed). */
+function readZip(bytes: Uint8Array): Array<{ name: string; data: string; crc: number }> {
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  const end = bytes.byteLength - 22;
+  expect(view.getUint32(end, true)).toBe(0x06054b50);
+  const count = view.getUint16(end + 10, true);
+  let at = view.getUint32(end + 16, true);
+  const files = [];
+  for (let i = 0; i < count; i++) {
+    expect(view.getUint32(at, true)).toBe(0x02014b50);
+    const crc = view.getUint32(at + 16, true);
+    const size = view.getUint32(at + 20, true);
+    const nameLen = view.getUint16(at + 28, true);
+    const extra = view.getUint16(at + 30, true);
+    const comment = view.getUint16(at + 32, true);
+    const local = view.getUint32(at + 42, true);
+    const name = new TextDecoder().decode(bytes.subarray(at + 46, at + 46 + nameLen));
+    expect(view.getUint32(local, true)).toBe(0x04034b50);
+    const start = local + 30 + view.getUint16(local + 26, true) + view.getUint16(local + 28, true);
+    files.push({ name, data: new TextDecoder().decode(bytes.subarray(start, start + size)), crc });
+    at += 46 + nameLen + extra + comment;
+  }
+  return files;
+}
+
+describe("every picture as a zip", () => {
+  it("works out the standard CRC32", () => {
+    expect(crc32(new TextEncoder().encode("123456789"))).toBe(0xcbf43926);
+    expect(crc32(new Uint8Array(0))).toBe(0);
+  });
+
+  it("makes a zip any computer can open, each file stored whole", () => {
+    const zip = makeZip([
+      { name: "a.png", bytes: new TextEncoder().encode("first") },
+      { name: "b.png", bytes: new TextEncoder().encode("second one") },
+    ], new Date(2026, 9, 3, 12, 0, 0));
+    expect(readZip(zip)).toEqual([
+      { name: "a.png", data: "first", crc: crc32(new TextEncoder().encode("first")) },
+      { name: "b.png", data: "second one", crc: crc32(new TextEncoder().encode("second one")) },
+    ]);
+  });
+
+  it("downloads all five pictures in one zip from the button", async () => {
+    await open();
+    const blobs: Blob[] = [];
+    (URL.createObjectURL as ReturnType<typeof vi.fn>).mockImplementation((b: Blob) => (blobs.push(b), "blob:nbcc.test/zip"));
+    document.querySelector<HTMLButtonElement>("[data-social-zip]")!.click();
+    await vi.waitFor(() => expect(saved.length).toBe(1));
+    expect(saved[0].name).toBe("nbcc-sams-santa-dash-pictures.zip");
+    const zip = new Uint8Array(await blobs[0].arrayBuffer());
+    expect(readZip(zip).map((f) => f.name)).toEqual(KINDS.map((k) => `nbcc-sams-santa-dash-${k}.png`));
+  });
+});
+
+// TASK-512 review: the zip waits for the fonts and the logo, so its pictures are never drawn
+// without them.
+describe("the zip waits for the logo", () => {
+  it("draws nothing until the fonts and logo are in", async () => {
+    let release!: (img: null) => void;
+    const logo = new Promise<null>((r) => (release = r));
+    const html = renderSocial(facts(), ASSETS, "");
+    document.documentElement.innerHTML = new DOMParser().parseFromString(html, "text/html").documentElement.innerHTML;
+    let blobs = 0;
+    HTMLCanvasElement.prototype.toBlob = function (cb: BlobCallback) {
+      blobs++;
+      cb(new Blob(["png"], { type: "image/png" }));
+    };
+    initSocial(document, window, { loadImage: () => logo });
+    document.querySelector<HTMLButtonElement>("[data-social-zip]")!.click();
+    await new Promise((r) => setTimeout(r, 20));
+    expect(blobs).toBe(0);
+    expect(saved).toEqual([]);
+    release(null);
+    await vi.waitFor(() => expect(saved.map((s) => s.name)).toEqual(["nbcc-sams-santa-dash-pictures.zip"]));
+    expect(blobs).toBe(5);
   });
 });

@@ -1,7 +1,9 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { dateParts, escapeHtml, time12 } from "../events/render";
+import { MATERIALS_STATEMENT, MATERIALS_STATEMENT_SHORT } from "../legal/registration";
 import type { FundraiserRecord, FundraiserStatus, Meter } from "./model";
+import { TRACKED_PIECES, trackedPath, type TrackedPiece } from "./material-codes";
 import { qrSvg } from "./qr";
 import { formatPounds, shorten } from "./render";
 
@@ -23,13 +25,54 @@ import { formatPounds, shorten } from "./render";
 // Pure renders over MaterialFacts, which are taken from the stored fundraiser record only: that is
 // the APPROVED version (a change an organiser asked for waits in fundraiser_edits and is never
 // passed in). Everything a person typed is escaped on the way out. Plain friendly words, no dashes.
+//
+// TASK-512, round two:
+//   - every printed piece carries the charity statement word for word (MATERIALS_STATEMENT, in
+//     src/legal/registration.ts); the pictures carry the shorter one (MATERIALS_STATEMENT_SHORT)
+//   - the logo as big as each layout allows
+//   - the poster also comes as an A5 leaflet and an A3 poster: the A4 design, scaled to the paper
+//   - every printed piece's QR code is its own short link (./material-codes.ts), so a scan says
+//     which fundraiser and which piece it came from
+//   - the pictures in five sizes: Instagram square and portrait, a story, a Facebook post and a
+//     Facebook event cover, each its own download, or all of them as one zip
+//   - every page says how to ask us for anything else (ASK_US), on screen only
+//   - renderEverything: every printed piece on one page, for staff to print or save as one PDF
 
-export const MATERIALS = ["poster", "social", "sponsor-form", "certificate"] as const;
+export const MATERIALS = ["poster", "poster-a3", "leaflet", "social", "sponsor-form", "certificate"] as const;
 export type MaterialPiece = (typeof MATERIALS)[number];
 
 export const CHARITY_NAME = "Night Before Christmas Campaign";
 export const CHARITY_NUMBER = "SC047995";
 export const EVERY_POUND = "Every pound helps the families we support, all year round.";
+
+/** NBCC's policy, on every piece, the logo pack and the private area. Jaimie's words. */
+export const ASK_US =
+  "Need something else, like a banner or a different size? Give us a call on 01292 811 015 or email events@nbcc.scot and we'll make it for you. Please don't make your own versions of our logo or materials.";
+
+/** The poster's three papers. Each is the A4 design, scaled. */
+export const POSTER_SIZES = {
+  a5: { label: "A5 leaflet", paper: "A5", widthMm: 148, heightMm: 210 },
+  a4: { label: "A4 poster", paper: "A4", widthMm: 210, heightMm: 297 },
+  a3: { label: "A3 poster", paper: "A3", widthMm: 297, heightMm: 420 },
+} as const;
+export type PosterSize = keyof typeof POSTER_SIZES;
+
+/** Which poster each piece is, and which piece each poster is. */
+export const POSTER_PIECE: Record<PosterSize, TrackedPiece> = { a4: "poster", a3: "poster-a3", a5: "leaflet" };
+
+/**
+ * The pictures to share (checked against Meta's guidance, October 2026): Instagram's square post and
+ * its 4:5 portrait post (the tallest a feed post can be), a story for Instagram and Facebook (9:16),
+ * a Facebook post (1.91:1, as a shared link's picture), and a Facebook event's cover (1920 x 1005,
+ * what Facebook asks for so it is not cropped on phones).
+ */
+export const SOCIAL_SIZES = [
+  { kind: "square", width: 1080, height: 1080, name: "Instagram post, square", use: "For an Instagram or Facebook post." },
+  { kind: "portrait", width: 1080, height: 1350, name: "Instagram post, tall", use: "Fills more of the screen in an Instagram feed." },
+  { kind: "story", width: 1080, height: 1920, name: "Story", use: "For an Instagram or Facebook story." },
+  { kind: "facebook", width: 1200, height: 630, name: "Facebook post", use: "A wide picture for a Facebook post." },
+  { kind: "cover", width: 1920, height: 1005, name: "Facebook event cover", use: "The cover picture for a Facebook event." },
+] as const;
 export const SEND_IT_BACK = "Please send this form back to us with the money so we can claim Gift Aid.";
 
 /**
@@ -47,6 +90,7 @@ export const SPONSOR_DECLARATION =
 
 /** What every piece is drawn from: the approved record, and nothing private but the organiser's name. */
 export interface MaterialFacts {
+  id: number;
   slug: string;
   title: string;
   /** As they gave it. Only the certificate shows it. */
@@ -66,6 +110,12 @@ export interface MaterialFacts {
   linkKind: "page" | "get-involved" | null;
   /** The same address, as people would type it. */
   linkWords: string | null;
+  /**
+   * TASK-512: what each printed piece's QR code carries: its own short link on the public site
+   * (https://nbcc.scot/q/12-a4), which finds the fundraiser by its id and counts the scan. Null
+   * whenever there is no link at all.
+   */
+  qrLinks: Record<TrackedPiece, string> | null;
 }
 
 /** The first sentence of a story: up to its first full stop, question or exclamation mark. */
@@ -91,7 +141,13 @@ export function materialFacts(
   const page = f.path === "raising" && f.public && (f.status === "approved" || f.status === "finished") ? urls.pageUrl : null;
   const listed = f.path === "event" && f.public;
   const link = page ?? (listed ? urls.getInvolvedUrl : null);
+  // The short links sit on the same public site as Get involved.
+  const origin = new URL(urls.getInvolvedUrl).origin;
+  const qrLinks = link
+    ? (Object.fromEntries(TRACKED_PIECES.map((p) => [p, `${origin}${trackedPath(f.id, p)}`])) as Record<TrackedPiece, string>)
+    : null;
   return {
+    id: f.id,
     slug: f.slug,
     title: f.title,
     organiser: f.name,
@@ -105,6 +161,7 @@ export function materialFacts(
     link,
     linkKind: page ? "page" : link ? "get-involved" : null,
     linkWords: link ? link.replace(/^https?:\/\//, "").replace(/\/+$/, "") : null,
+    qrLinks,
   };
 }
 
@@ -174,13 +231,21 @@ const BASE_CSS = `
   .page{margin:18px auto;box-shadow:0 12px 40px rgba(60,20,20,.22);overflow:hidden;position:relative}
   .portrait{width:210mm;height:297mm}
   .landscape{width:297mm;height:210mm}
+  .ask-us{max-width:640px;margin:16px auto 0;padding:12px 18px;background:#F3EEE3;border:1.6px solid var(--line);
+    border-radius:12px;font-size:.9rem;line-height:1.55;color:var(--slate)}
+  .ask-us a{color:var(--maroon);font-weight:600}
+  @media (max-width:700px){.ask-us{margin:12px 12px 0}}
   @media print{
     html,body{background:#fff}
     .toolbar{display:none}
     .page{margin:0;box-shadow:none;zoom:1 !important;break-after:page;page-break-after:always}
     .page:last-of-type{break-after:auto;page-break-after:auto}
     *{-webkit-print-color-adjust:exact;print-color-adjust:exact}
-  }`;
+  }
+  @media print{.ask-us{display:none}}`;
+
+/** The policy line, on screen only: nobody needs it on a poster in a shop window. */
+const ASK_US_HTML = `<aside class="ask-us">${escapeHtml(ASK_US)}</aside>`;
 
 // On a screen narrower than the paper, shrink the page to fit rather than scroll sideways. Printing
 // ignores it (zoom:1 above).
@@ -198,18 +263,24 @@ const FIT_SCRIPT = `<script>
 })();
 </script>`;
 
+type Paper = "A4 portrait" | "A4 landscape" | "A3 portrait" | "A5 portrait";
+
 function shell(o: {
   title: string;
-  orientation: "portrait" | "landscape";
+  /** The paper it prints on; or, for a page of several sizes, its own @page rules. */
+  paper: Paper | { rules: string };
   fontCss: string;
   css: string;
   toolbar: string;
   body: string;
   print?: boolean;
   tail?: string;
+  /** Print tip, when the paper is not A4. */
+  tip?: string;
 }): string {
   const print = o.print !== false;
-  const pageRule = print ? `@page{size:A4 ${o.orientation};margin:0}` : "";
+  const pageRule = !print ? "" : typeof o.paper === "string" ? `@page{size:${o.paper};margin:0}` : o.paper.rules;
+  const paperName = typeof o.paper === "string" ? o.paper.split(" ")[0] : "the paper size of each page";
   return `<!doctype html>
 <html lang="en-GB">
 <head>
@@ -224,9 +295,12 @@ ${o.css}</style>
 <body>
 <div class="toolbar">${o.toolbar}${
     print
-      ? `<button type="button" onclick="window.print()">Print or save as PDF</button><span class="tip">In the print window, choose A4 and switch off headers and footers.</span>`
+      ? `<button type="button" onclick="window.print()">Print or save as PDF</button><span class="tip">${
+          o.tip ?? `In the print window, choose ${paperName} and switch off headers and footers.`
+        }</span>`
       : ""
   }</div>
+${ASK_US_HTML}
 ${o.body}
 ${print ? FIT_SCRIPT : ""}${o.tail ?? ""}
 </body>
@@ -238,7 +312,12 @@ const ICON_CLOCK =
 const ICON_PIN =
   '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 21s-7-6.2-7-11.5a7 7 0 0 1 14 0C19 14.8 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.5"/></svg>';
 
-// --- the poster --------------------------------------------------------------------------------------
+// --- the poster, in three sizes --------------------------------------------------------------------
+//
+// One design, drawn on an A4 sheet (.p-scale, 210 x 297mm) and scaled to the paper: the A5 leaflet
+// and the A3 poster are exactly the A4 poster, smaller or bigger. A transform scales the drawing as
+// drawing (the QR code stays a sharp vector), and the page around it is exactly the paper's size, so
+// nothing can spill onto a second sheet.
 
 /** Big for a short name, smaller as it grows, so even 100 characters fits the page. */
 function posterTitleSize(title: string): string {
@@ -250,46 +329,99 @@ function posterTitleSize(title: string): string {
   return "26pt";
 }
 
-const POSTER_CSS = `
-  .poster{background:var(--maroon);padding:7mm}
-  .p-sheet{height:100%;background:radial-gradient(120% 70% at 50% 0%,#fffdf8 0%,var(--cream) 70%);display:flex;flex-direction:column;position:relative}
-  .p-body{flex:1;display:flex;flex-direction:column;align-items:center;text-align:center;padding:12mm 16mm 7mm;min-height:0;position:relative}
+/**
+ * The logo's height on the A4 design, in millimetres: as big as the page allows (Jaimie: "as big as
+ * possible"), giving a little way to a long name or line so the QR code keeps its size and
+ * everything still fits: 66mm for a short name and line. Never below 38mm (it was 34mm before round two).
+ */
+export function posterLogoMm(d: Pick<MaterialFacts, "title" | "line" | "when" | "where" | "targetPence">): number {
+  const t = d.title.length;
+  const l = d.line?.length ?? 0;
+  let mm = 66;
+  if (t > 30) mm -= 6;
+  if (t > 48) mm -= 6;
+  if (t > 70) mm -= 4;
+  if (l > 70) mm -= 6;
+  if (l > 110) mm -= 2;
+  if (d.when && d.where && d.targetPence) mm -= 2;
+  return Math.max(38, mm);
+}
+
+// Each paper's scale from A4: its width over 210mm, so the design fills it edge to edge.
+const SCALE: Record<PosterSize, string> = { a5: "0.70476", a4: "1", a3: "1.41428" };
+
+/** The smallest the charity statement may be on the paper: OSCR asks for it to be legible. */
+export const STATEMENT_MIN_PT = 7;
+/** Its size on the A4 design, which A4 itself prints as it is. */
+const STATEMENT_DESIGN_PT = 7.6;
+
+/**
+ * TASK-512 review: the statement's size on the A4 design for one paper, so that once scaled it is
+ * never under 7pt on the paper. The leaflet draws it bigger (scaled straight down it would print at
+ * about 5.4pt); A3 lets it grow with the paper.
+ */
+export function statementPt(size: PosterSize): number {
+  const scale = Number(SCALE[size]);
+  return Math.max(STATEMENT_DESIGN_PT, Math.ceil((STATEMENT_MIN_PT / scale) * 100) / 100);
+}
+
+// After the general rules, so each paper's statement size wins.
+const SIZE_CSS = (Object.keys(POSTER_SIZES) as PosterSize[])
+  .map(
+    (s) =>
+      `.size-${s}{width:${POSTER_SIZES[s].widthMm}mm;height:${POSTER_SIZES[s].heightMm}mm}.size-${s} .p-scale{transform:scale(${SCALE[s]})}` +
+      `.size-${s} .p-foot .legal{font-size:${statementPt(s)}pt}`,
+  )
+  .join("\n  ");
+
+function posterCss(logoMm: number): string {
+  return `
+  .poster{background:var(--maroon)}
+  .p-scale{width:210mm;height:297mm;padding:7mm;transform-origin:0 0}
+  .p-sheet{height:100%;background:var(--maroon);display:flex;flex-direction:column;position:relative}
+  .p-body{flex:1;display:flex;flex-direction:column;align-items:center;text-align:center;padding:9mm 14mm 6mm;min-height:0;position:relative;
+    background:radial-gradient(120% 70% at 50% 0%,#fffdf8 0%,var(--cream) 70%)}
   .p-body::before{content:"";position:absolute;inset:4mm 4mm 3mm;border:1px solid var(--gold);border-radius:2mm;pointer-events:none;opacity:.7}
-  .p-logo{height:34mm;width:auto;display:block}
-  .p-eyebrow{display:flex;align-items:center;gap:4mm;margin-top:3mm;font-weight:600;letter-spacing:.24em;text-transform:uppercase;
+  .p-logo{height:${logoMm}mm;width:auto;display:block}
+  .p-eyebrow{display:flex;align-items:center;gap:4mm;margin-top:2mm;font-weight:600;letter-spacing:.24em;text-transform:uppercase;
     color:var(--crimson);font-size:11pt;padding-left:.24em}
   .p-eyebrow::before,.p-eyebrow::after{content:"";width:14mm;height:1px;background:var(--gold)}
-  .p-title{font-family:var(--head);font-weight:800;color:var(--maroon);line-height:1.04;letter-spacing:-.01em;margin:6mm 0 0;
-    overflow-wrap:anywhere;max-width:170mm}
-  .p-meta{display:flex;flex-wrap:wrap;justify-content:center;gap:2mm 7mm;margin-top:5mm;font-size:12.5pt;color:var(--slate)}
+  .p-title{font-family:var(--head);font-weight:800;color:var(--maroon);line-height:1.04;letter-spacing:-.01em;margin:4.5mm 0 0;
+    overflow-wrap:anywhere;max-width:172mm}
+  .p-meta{display:flex;flex-wrap:wrap;justify-content:center;gap:2mm 7mm;margin-top:4mm;font-size:12.5pt;color:var(--slate)}
   .p-meta span{display:inline-flex;align-items:center;gap:2mm}
   .p-meta svg{color:var(--crimson);flex:0 0 auto}
-  .p-line{font-family:var(--head);font-style:italic;color:var(--crimson);font-size:16pt;line-height:1.35;margin:5mm 0 0;max-width:150mm;overflow-wrap:anywhere}
-  .p-target{margin-top:5mm;background:var(--tan-soft);color:var(--maroon);border-radius:999px;padding:2.2mm 8mm;font-size:13pt;font-weight:600}
+  .p-line{font-family:var(--head);font-style:italic;color:var(--crimson);font-size:15pt;line-height:1.32;margin:4mm 0 0;max-width:155mm;overflow-wrap:anywhere}
+  .p-target{margin-top:4mm;background:var(--tan-soft);color:var(--maroon);border-radius:999px;padding:2mm 8mm;font-size:13pt;font-weight:600}
   .p-target b{font-family:var(--head);font-weight:800;font-size:15pt}
-  .p-scan{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:0;margin-top:5mm}
+  .p-scan{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:0;margin-top:4mm}
   .p-qr{background:#fff;border-radius:4mm;padding:3mm;box-shadow:0 0 0 1px var(--line),0 3mm 8mm -4mm rgba(92,15,24,.35)}
-  .p-qr svg{display:block;width:72mm;height:72mm}
-  .p-scan-words{font-family:var(--head);font-weight:700;color:var(--maroon);font-size:17pt;margin-top:4mm}
-  .p-address{font-weight:600;color:var(--crimson);font-size:12.5pt;margin-top:1mm;overflow-wrap:anywhere}
+  .p-qr svg{display:block;width:66mm;height:66mm}
+  .p-scan-words{font-family:var(--head);font-weight:700;color:var(--maroon);font-size:17pt;margin-top:3mm}
+  .p-address{font-weight:600;color:var(--crimson);font-size:12pt;margin-top:1mm;overflow-wrap:anywhere}
   .p-noqr{font-family:var(--head);font-weight:700;color:var(--maroon);font-size:17pt;line-height:1.4}
   .p-noqr b{color:var(--crimson)}
-  .p-foot{background:var(--maroon);color:var(--cream);text-align:center;padding:5mm 12mm 4.5mm}
-  .p-foot .pledge{font-family:var(--head);font-style:italic;font-size:16pt;line-height:1.3}
-  .p-foot .legal{font-size:8pt;opacity:.85;margin-top:1.5mm;letter-spacing:.02em}`;
+  .p-foot{background:var(--maroon);color:var(--cream);text-align:center;padding:4mm 10mm 3.5mm}
+  .p-foot .pledge{font-family:var(--head);font-style:italic;font-size:14pt;line-height:1.3}
+  .p-foot .legal{line-height:1.4;opacity:.9;margin:1.5mm auto 0;max-width:182mm}
+  ${SIZE_CSS}`;
+}
 
-export function renderPoster(d: MaterialFacts, a: MaterialAssets): string {
+/** One poster page, at one size. Its QR code is that size's own short link. */
+function posterPage(d: MaterialFacts, a: MaterialAssets, size: PosterSize): string {
   const meta = [
     d.when ? `<span>${ICON_CLOCK}${escapeHtml(d.when)}</span>` : "",
     d.where ? `<span>${ICON_PIN}${escapeHtml(d.where)}</span>` : "",
   ].join("");
+  const qr = d.qrLinks ? d.qrLinks[POSTER_PIECE[size]] : null;
   const scan =
-    d.link && d.linkWords
-      ? `<div class="p-qr">${qrSvg(d.link)}</div>
+    qr && d.linkWords
+      ? `<div class="p-qr">${qrSvg(qr, { title: `QR code for ${d.title}` })}</div>
         <div class="p-scan-words">${d.linkKind === "page" ? "Scan to give" : "Scan to find out more"}</div>
         <div class="p-address">or visit ${escapeHtml(d.linkWords)}</div>`
       : `<p class="p-noqr">Find out more about NBCC<br>at <b>nbcc.scot</b></p>`;
-  const body = `<div class="page portrait poster">
+  return `<div class="page size-${size} poster">
+  <div class="p-scale">
   <div class="p-sheet">
     <div class="p-body">
       <img class="p-logo" src="${a.logo}" alt="Night Before Christmas Campaign">
@@ -304,17 +436,27 @@ export function renderPoster(d: MaterialFacts, a: MaterialAssets): string {
     </div>
     <div class="p-foot">
       <div class="pledge">${EVERY_POUND}</div>
-      <div class="legal">${CHARITY_NAME} &middot; Scottish Charity ${CHARITY_NUMBER} &middot; nbcc.scot</div>
+      <div class="legal">${escapeHtml(MATERIALS_STATEMENT)}</div>
     </div>
   </div>
+  </div>
 </div>`;
+}
+
+/** The poster at one size: A4 (the poster), A3 (the big poster) or A5 (the leaflet). */
+export function renderPoster(d: MaterialFacts, a: MaterialAssets, size: PosterSize = "a4"): string {
+  const { label, paper } = POSTER_SIZES[size];
   return shell({
-    title: `Poster for ${escapeHtml(d.title)}`,
-    orientation: "portrait",
+    title: `${label} for ${escapeHtml(d.title)}`,
+    paper: `${paper} portrait`,
     fontCss: a.fontCss,
-    css: POSTER_CSS,
-    toolbar: `<span>Your poster for <b>${escapeHtml(d.title)}</b></span>`,
-    body,
+    css: posterCss(posterLogoMm(d)),
+    toolbar: `<span>Your ${label} for <b>${escapeHtml(d.title)}</b></span>`,
+    body: posterPage(d, a, size),
+    tip:
+      size === "a5"
+        ? "In the print window, choose A5, or A4 with two to a sheet, and switch off headers and footers."
+        : `In the print window, choose ${paper} and switch off headers and footers.`,
   });
 }
 
@@ -331,27 +473,32 @@ function scriptJson(value: unknown): string {
 }
 
 const SOCIAL_CSS = `
-  .s-wrap{max-width:1000px;margin:0 auto;padding:22px 16px 48px}
+  .s-wrap{max-width:1160px;margin:0 auto;padding:22px 16px 48px}
   .s-intro{font-size:1rem;line-height:1.6;max-width:62ch;margin:0 auto 18px;text-align:center}
   .s-intro h1{font-family:var(--head);color:var(--maroon);font-size:clamp(1.6rem,4vw,2.2rem);margin:0 0 6px}
-  .s-choice{display:flex;justify-content:center;margin:0 0 20px}
+  .s-choice{display:flex;flex-wrap:wrap;gap:12px;justify-content:center;align-items:center;margin:0 0 20px}
   .s-choice label{display:inline-flex;gap:10px;align-items:center;background:#fff;border:1px solid var(--line);border-radius:999px;padding:8px 18px;cursor:pointer}
   .s-choice input{width:18px;height:18px;accent-color:var(--crimson)}
   .s-grid{display:flex;flex-wrap:wrap;gap:24px;justify-content:center;align-items:flex-start}
-  .s-card{background:#fff;border-radius:16px;padding:16px;box-shadow:0 10px 30px -18px rgba(60,20,20,.5);display:flex;flex-direction:column;gap:12px;align-items:center}
-  .s-card h2{font-family:var(--head);color:var(--maroon);font-size:1.15rem;margin:0}
-  .s-card p{margin:0;font-size:.85rem;color:var(--muted);text-align:center}
-  .s-card canvas{display:block;border-radius:8px;box-shadow:0 0 0 1px var(--line);height:auto}
-  .s-square canvas{width:min(420px,calc(100vw - 64px))}
-  .s-story canvas{width:min(270px,calc(100vw - 64px))}
-  .s-card button{font-family:var(--body);font-weight:600;font-size:1rem;border:0;border-radius:999px;background:var(--crimson);color:#fff;padding:11px 26px;cursor:pointer}
-  .s-card button:hover{background:var(--maroon)}
-  .s-card button:focus-visible{outline:3px solid var(--gold);outline-offset:2px}
-  .s-card button[disabled]{opacity:.6;cursor:progress}
+  .s-card{background:#fff;border-radius:16px;padding:16px;box-shadow:0 10px 30px -18px rgba(60,20,20,.5);display:flex;flex-direction:column;gap:10px;align-items:center;max-width:100%}
+  .s-card h2{font-family:var(--head);color:var(--maroon);font-size:1.15rem;margin:0;text-align:center}
+  .s-card p{margin:0;font-size:.85rem;color:var(--muted);text-align:center;max-width:36ch}
+  .s-card canvas{display:block;border-radius:8px;box-shadow:0 0 0 1px var(--line);height:auto;max-width:calc(100vw - 64px)}
+  .s-square canvas{width:340px}
+  .s-portrait canvas{width:300px}
+  .s-story canvas{width:230px}
+  .s-facebook canvas{width:480px}
+  .s-cover canvas{width:560px}
+  .s-wrap button{font-family:var(--body);font-weight:600;font-size:1rem;border:0;border-radius:999px;background:var(--crimson);color:#fff;padding:11px 26px;cursor:pointer}
+  .s-wrap button:hover{background:var(--maroon)}
+  .s-wrap button:focus-visible{outline:3px solid var(--gold);outline-offset:2px}
+  .s-wrap button[disabled]{opacity:.6;cursor:progress}
+  .s-wrap .s-zip{background:var(--maroon)}
   .s-status{min-height:1.2em;font-size:.85rem;color:var(--holly);text-align:center}`;
 
-export function renderSocial(d: MaterialFacts, a: MaterialAssets, script: string): string {
-  const data = {
+/** What the drawing script is handed: the approved facts it draws, and nothing else about anyone. */
+function socialData(d: MaterialFacts, a: MaterialAssets) {
+  return {
     slug: d.slug,
     title: d.title,
     line: d.line,
@@ -360,50 +507,60 @@ export function renderSocial(d: MaterialFacts, a: MaterialAssets, script: string
     linkKind: d.linkKind,
     raisedPence: d.raisedPence,
     targetPence: d.targetPence,
+    statement: MATERIALS_STATEMENT_SHORT,
     // Only the logo with white lettering is drawn on the maroon pictures.
     logoOnDark: a.logoOnDark,
   };
+}
+
+/** The script that draws the pictures, after the data it draws from. */
+function socialTail(d: MaterialFacts, a: MaterialAssets, script: string): string {
+  return `<script type="application/json" id="socialData">${scriptJson(socialData(d, a))}</script>\n<script>${script}</script>`;
+}
+
+const ZIP_BUTTON = `<button type="button" class="s-zip" data-social-zip>Download every picture as a zip</button>`;
+
+export function renderSocial(d: MaterialFacts, a: MaterialAssets, script: string): string {
   const showMeter = d.raisedPence > 0;
+  const cards = SOCIAL_SIZES.map(
+    (s) => `<section class="s-card s-${s.kind}" aria-labelledby="${s.kind}Heading">
+      <h2 id="${s.kind}Heading">${s.name}</h2>
+      <p>${s.use} ${s.width} by ${s.height} pixels.</p>
+      <canvas data-social="${s.kind}" width="${s.width}" height="${s.height}" role="img" aria-label="${escapeHtml(s.name)} picture for ${escapeHtml(d.title)}"></canvas>
+      <button type="button" data-social-download="${s.kind}">Download</button>
+    </section>`,
+  ).join("\n    ");
   const body = `<main class="s-wrap">
   <div class="s-intro">
     <h1>Pictures to share</h1>
-    <p>Two pictures for <b>${escapeHtml(d.title)}</b>, ready for Facebook and Instagram. Download them, then add them to a post or a story. ${
+    <p>Pictures for <b>${escapeHtml(d.title)}</b>, in the sizes Facebook and Instagram ask for. Download the ones you need, then add them to a post, a story or your event. ${
       d.linkWords ? "Put your page address in the words of your post too, so people can tap it." : ""
     }</p>
   </div>
-  <div class="s-choice"><label><input type="checkbox" data-social-meter${showMeter ? " checked" : ""}> Show how much has been raised</label></div>
+  <div class="s-choice"><label><input type="checkbox" data-social-meter${showMeter ? " checked" : ""}> Show how much has been raised</label>${ZIP_BUTTON}</div>
   <div class="s-grid">
-    <section class="s-card s-square" aria-labelledby="squareHeading">
-      <h2 id="squareHeading">Square, for a post</h2>
-      <canvas data-social="square" width="1080" height="1080" role="img" aria-label="Square picture for ${escapeHtml(d.title)}"></canvas>
-      <button type="button" data-social-download="square">Download the square picture</button>
-    </section>
-    <section class="s-card s-story" aria-labelledby="storyHeading">
-      <h2 id="storyHeading">Tall, for a story</h2>
-      <canvas data-social="story" width="1080" height="1920" role="img" aria-label="Story picture for ${escapeHtml(d.title)}"></canvas>
-      <button type="button" data-social-download="story">Download the story picture</button>
-    </section>
+    ${cards}
   </div>
   <p class="s-status" role="status" aria-live="polite" data-social-status></p>
 </main>`;
   return shell({
     title: `Pictures to share for ${escapeHtml(d.title)}`,
-    orientation: "portrait",
+    paper: "A4 portrait",
     fontCss: a.fontCss,
     css: SOCIAL_CSS,
     toolbar: `<span>Your pictures for <b>${escapeHtml(d.title)}</b></span>`,
     body,
     print: false,
-    tail: `<script type="application/json" id="socialData">${scriptJson(data)}</script>\n<script>${script}</script>`,
+    tail: socialTail(d, a, script),
   });
 }
 
 // --- the sponsor form -------------------------------------------------------------------------------------
 
 const SPONSOR_CSS = `
-  .sf-sheet{background:#fff;padding:8mm 11mm 7mm;display:flex;flex-direction:column}
-  .sf-head{display:flex;align-items:center;gap:5mm;border-bottom:2px solid var(--maroon);padding-bottom:3mm}
-  .sf-head img{height:17mm;width:auto}
+  .sf-sheet{background:#fff;padding:6mm 11mm 4.5mm;display:flex;flex-direction:column}
+  .sf-head{display:flex;align-items:center;gap:5mm;border-bottom:2px solid var(--maroon);padding-bottom:2.5mm}
+  .sf-head img{height:23mm;width:auto}
   .sf-head .t{flex:1}
   .sf-head h1{font-family:var(--head);font-weight:800;color:var(--maroon);font-size:21pt;margin:0;line-height:1.05}
   .sf-head .sub{font-size:8.5pt;letter-spacing:.16em;text-transform:uppercase;color:var(--crimson);font-weight:600;margin-top:1mm}
@@ -418,10 +575,10 @@ const SPONSOR_CSS = `
   .sf-table{width:100%;border-collapse:collapse;margin-top:2.5mm;table-layout:fixed;font-size:8pt}
   .sf-table th{background:var(--maroon);color:var(--cream);font-weight:600;text-align:left;padding:1.4mm 2mm;vertical-align:bottom;line-height:1.25;border:1px solid var(--maroon)}
   .sf-table th small{display:block;font-weight:400;font-size:6.8pt;opacity:.9}
-  .sf-table td{border:1px solid #b9ada4;height:7.4mm;padding:0 2mm}
+  .sf-table td{border:1px solid #b9ada4;height:6.2mm;padding:0 2mm}
   .sf-table td.n{color:var(--muted);text-align:center;font-size:7.5pt;padding:0}
   .sf-table .c{text-align:center}
-  .sf-table tfoot td{height:7.4mm;border:1px solid #b9ada4;font-weight:600;color:var(--maroon)}
+  .sf-table tfoot td{height:6.4mm;border:1px solid #b9ada4;font-weight:600;color:var(--maroon)}
   .sf-table tfoot td.lbl{text-align:right;border:0;border-right:1px solid #b9ada4;background:transparent}
   .sf-table tfoot td.blank{border:0;background:transparent}
   .sf-grand{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:4mm;margin-top:2.5mm}
@@ -430,7 +587,8 @@ const SPONSOR_CSS = `
   .sf-foot{margin-top:auto;padding-top:2.5mm;display:flex;gap:6mm;align-items:flex-end;justify-content:space-between;font-size:8pt;line-height:1.45}
   .sf-foot .back{font-family:var(--head);font-weight:700;color:var(--crimson);font-size:11.5pt;line-height:1.3}
   .sf-foot .how{color:var(--slate);max-width:150mm}
-  .sf-foot .pg{color:var(--muted);white-space:nowrap}`;
+  .sf-foot .pg{color:var(--muted);white-space:nowrap}
+  .sf-legal{margin-top:1.8mm;padding-top:1.5mm;border-top:1px solid var(--line);font-size:7pt;line-height:1.4;color:var(--muted);text-align:center}`;
 
 function sponsorRows(from: number, count: number): string {
   let rows = "";
@@ -441,7 +599,8 @@ function sponsorRows(from: number, count: number): string {
 const SPONSOR_COLS = `<colgroup><col style="width:7mm"><col style="width:60mm"><col><col style="width:25mm"><col style="width:23mm"><col style="width:23mm"><col style="width:17mm"></colgroup>`;
 const SPONSOR_HEAD = `<thead><tr><th class="c">No.</th><th>Full name<small>first name or initial, and surname</small></th><th>Home address<small>first line. Only needed if you tick Gift Aid. Not your work address, please.</small></th><th>Postcode</th><th>Amount<small>&pound;</small></th><th>Date paid</th><th class="c">Gift Aid?<small>tick &#10003;</small></th></tr></thead>`;
 
-export function renderSponsorForm(d: MaterialFacts | null, a: MaterialAssets): string {
+/** The sponsor form's two A4 landscape pages. */
+function sponsorPages(d: MaterialFacts | null, a: MaterialAssets): string {
   const event = d ? escapeHtml(d.title) : "";
   const decl = `<p class="sf-decl">${escapeHtml(SPONSOR_DECLARATION)}</p>
     <p class="sf-remember">Remember: please give your full name, home address and postcode, and tick Gift Aid, so that we can claim tax back on your donation.</p>`;
@@ -459,14 +618,15 @@ export function renderSponsorForm(d: MaterialFacts | null, a: MaterialAssets): s
       <div><div class="back">${SEND_IT_BACK}</div>
       <div class="how">Pay the money in from your private area at nbcc.scot/fundraise/manage, then post this form to Elves Workshop, Annbank Village Hall, Weston Avenue, Annbank, KA6 5EE, or email a clear photo of it to events@nbcc.scot. ${EVERY_POUND}</div></div>
       <div class="pg">Page ${page} of 2</div>
-    </div>`;
+    </div>
+    <div class="sf-legal">${escapeHtml(MATERIALS_STATEMENT)}</div>`;
   const total = `<tfoot><tr><td class="blank" colspan="2"></td><td class="lbl" colspan="2">Total on this page</td><td>&pound;</td><td class="blank" colspan="2"></td></tr></tfoot>`;
   const grand = `<div class="sf-grand">
       <div><span>Total donations received, both pages</span><b>&pound;</b></div>
       <div><span>Total Gift Aid donations</span><b>&pound;</b></div>
       <div><span>Date the money was given to NBCC</span><b></b></div>
     </div>`;
-  const body = `<div class="page landscape">
+  return `<div class="page landscape">
   <div class="sheet sf-sheet" style="height:100%">
     ${head("Sponsor form")}
     ${fields}
@@ -485,13 +645,17 @@ export function renderSponsorForm(d: MaterialFacts | null, a: MaterialAssets): s
     ${foot(2)}
   </div>
 </div>`;
+}
+
+export function renderSponsorForm(d: MaterialFacts | null, a: MaterialAssets): string {
+  const event = d ? escapeHtml(d.title) : "";
   return shell({
     title: d ? `Sponsor form for ${event}` : "Sponsor form",
-    orientation: "landscape",
+    paper: "A4 landscape",
     fontCss: a.fontCss,
     css: SPONSOR_CSS,
     toolbar: d ? `<span>Your sponsor form for <b>${event}</b></span>` : `<span>NBCC sponsor form</span>`,
-    body,
+    body: sponsorPages(d, a),
   });
 }
 
@@ -500,11 +664,11 @@ export function renderSponsorForm(d: MaterialFacts | null, a: MaterialAssets): s
 const CERT_CSS = `
   .cert{background:var(--maroon);padding:8mm}
   .c-sheet{height:100%;position:relative;background:radial-gradient(120% 95% at 50% 0%,#fffdf8 0%,var(--cream) 72%);
-    display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:12mm 26mm 11mm}
+    display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:10mm 24mm 9mm}
   .c-sheet::before{content:"";position:absolute;inset:4.5mm;border:1.2px solid var(--gold);border-radius:2mm;pointer-events:none}
   .c-sheet::after{content:"";position:absolute;inset:6.5mm;border:.5px solid var(--gold);border-radius:1.5mm;opacity:.55;pointer-events:none}
-  .c-logo{height:27mm;width:auto;display:block}
-  .c-title{font-family:var(--head);font-weight:700;color:var(--maroon);font-size:36pt;line-height:1;margin:3mm 0 0;letter-spacing:.01em}
+  .c-logo{height:38mm;width:auto;display:block}
+  .c-title{font-family:var(--head);font-weight:700;color:var(--maroon);font-size:34pt;line-height:1;margin:2.5mm 0 0;letter-spacing:.01em}
   .c-orn{display:flex;align-items:center;gap:4mm;margin:3.5mm 0 0;color:var(--gold);font-size:10pt}
   .c-orn::before,.c-orn::after{content:"";width:30mm;height:1px;background:linear-gradient(90deg,transparent,var(--gold))}
   .c-orn::after{background:linear-gradient(90deg,var(--gold),transparent)}
@@ -515,23 +679,24 @@ const CERT_CSS = `
   .c-raised b{display:block;font-family:var(--head);font-weight:800;color:var(--maroon);font-size:28pt;line-height:1.1;margin-top:.5mm}
   .c-ga{font-size:10.5pt;color:var(--holly);font-weight:600;margin-top:.5mm}
   .c-body{max-width:170mm;margin:4mm auto 0;font-size:10pt;line-height:1.55;color:var(--slate)}
-  .c-sign{display:flex;justify-content:space-between;align-items:flex-end;width:100%;max-width:210mm;margin-top:7mm}
+  .c-sign{display:flex;justify-content:space-between;align-items:flex-end;width:100%;max-width:210mm;margin-top:5mm}
   .c-sign .s{width:62mm}
   .c-sign .v{font-family:var(--head);font-weight:700;color:var(--slate);font-size:12pt;min-height:8mm;display:flex;align-items:flex-end;justify-content:center}
   .c-sign .team{font-family:var(--head);font-style:italic;
     font-weight:700;color:var(--crimson);font-size:19pt;line-height:1}
   .c-sign .rule{height:1px;background:var(--maroon);opacity:.45;margin:1.5mm 0}
   .c-sign .k{font-size:7.5pt;letter-spacing:.16em;text-transform:uppercase;color:var(--muted);font-weight:600}
-  .c-legal{margin-top:5mm;font-size:7.5pt;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}`;
+  .c-legal{margin-top:4mm;font-size:7pt;line-height:1.45;color:var(--muted);max-width:215mm}`;
 
-export function renderCertificate(d: MaterialFacts, a: MaterialAssets, o: { date: string; preview: boolean }): string {
+/** The certificate's one A4 landscape page. */
+function certificatePage(d: MaterialFacts, a: MaterialAssets, date: string): string {
   const raised =
     d.raisedPence > 0
       ? `<div class="c-raised">raising<b>${formatPounds(d.raisedPence)}</b></div>${
           d.giftAidPence > 0 ? `<div class="c-ga">+ ${formatPounds(d.giftAidPence)} Gift Aid</div>` : ""
         }`
       : "";
-  const body = `<div class="page landscape cert">
+  return `<div class="page landscape cert">
   <div class="c-sheet">
     <img class="c-logo" src="${a.logo}" alt="Night Before Christmas Campaign">
     <h1 class="c-title">Certificate of thanks</h1>
@@ -542,20 +707,60 @@ export function renderCertificate(d: MaterialFacts, a: MaterialAssets, o: { date
     ${raised}
     <p class="c-body">Thank you for fundraising for the ${CHARITY_NAME}. ${EVERY_POUND} We could not do it without people like you.</p>
     <div class="c-sign">
-      <div class="s"><div class="v">${escapeHtml(o.date)}</div><div class="rule"></div><div class="k">Date</div></div>
+      <div class="s"><div class="v">${escapeHtml(date)}</div><div class="rule"></div><div class="k">Date</div></div>
       <div class="s"><div class="v team">NBCC Team</div><div class="rule"></div><div class="k">${CHARITY_NAME}</div></div>
     </div>
-    <div class="c-legal">${CHARITY_NAME} &middot; Scottish Charity No. ${CHARITY_NUMBER}</div>
+    <div class="c-legal">${escapeHtml(MATERIALS_STATEMENT)}</div>
   </div>
 </div>`;
+}
+
+export function renderCertificate(d: MaterialFacts, a: MaterialAssets, o: { date: string; preview: boolean }): string {
   const flag = o.preview ? `<span class="flag">Preview</span><span>The organiser can open this once the fundraiser is marked finished.</span>` : "";
   return shell({
     title: `Certificate of thanks for ${escapeHtml(d.title)}`,
-    orientation: "landscape",
+    paper: "A4 landscape",
     fontCss: a.fontCss,
     css: CERT_CSS,
     toolbar: `${flag}<span>Certificate of thanks for <b>${escapeHtml(d.title)}</b></span>`,
-    body,
+    body: certificatePage(d, a, o.date),
+  });
+}
+
+// --- everything, on one page (staff) ---------------------------------------------------------------------
+//
+// TASK-512: Admin > Fundraising's "Download everything". Every printed piece one after another, each
+// on its own paper (a named @page for each size, so the print window and Save as PDF give every page
+// its right size), ready to print or save as one PDF. The pictures to share are drawn in the browser,
+// so they come as a zip from the same page: there is no image library on the server to draw them
+// there, and adding one is not possible (no new packages). The certificate only once finished.
+
+const EVERYTHING_PAGES =
+  "@page{margin:0}\n@page a4p{size:A4 portrait;margin:0}\n@page a4l{size:A4 landscape;margin:0}\n" +
+  "@page a3p{size:A3 portrait;margin:0}\n@page a5p{size:A5 portrait;margin:0}";
+const EVERYTHING_CSS = `
+  .size-a4{page:a4p}.size-a3{page:a3p}.size-a5{page:a5p}.landscape{page:a4l}`;
+
+export function renderEverything(d: MaterialFacts, a: MaterialAssets, o: { date: string; script: string }): string {
+  const pages = [
+    posterPage(d, a, "a4"),
+    posterPage(d, a, "a3"),
+    posterPage(d, a, "a5"),
+    sponsorPages(d, a),
+    d.status === "finished" ? certificatePage(d, a, o.date) : "",
+  ].join("\n");
+  return shell({
+    title: `Everything for ${escapeHtml(d.title)}`,
+    paper: { rules: EVERYTHING_PAGES },
+    fontCss: a.fontCss,
+    css: posterCss(posterLogoMm(d)) + SPONSOR_CSS + CERT_CSS + EVERYTHING_CSS,
+    toolbar:
+      `<span>Everything for <b>${escapeHtml(d.title)}</b>: the A4 and A3 posters, the A5 leaflet, the sponsor form${
+        d.status === "finished" ? " and the certificate" : ""
+      }</span>` + `<button type="button" data-social-zip>Download every picture as a zip</button><span class="tip" role="status" aria-live="polite" data-social-status></span>`,
+    tip: "Each page prints on its own paper size. To print just one, open it on its own from Admin > Fundraising.",
+    body: pages,
+    tail: socialTail(d, a, o.script),
   });
 }
 

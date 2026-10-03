@@ -69,16 +69,19 @@ export function qrRows(pages: readonly SitePage[], gates: QrGates, parentLive = 
 /**
  * Admin > Analytics counts scans by the tag each code carries (its campaign); staff read them as
  * page names. A tag not in the page list (a code made for another address) shows as that address.
+ * TASK-512: `named` gives names looked up elsewhere first: a fundraiser's printed piece
+ * ("Sam's Santa Dash, A4 poster", src/fundraising/material-codes.ts).
  */
 export function labelQrScans(
   rows: readonly { campaign: string | null; visits: number }[],
   pages: readonly SitePage[],
+  named: ReadonlyMap<string, string> = new Map(),
 ): { label: string; visits: number }[] {
   const titles = new Map(
     qrRows(pages, { ballOpen: true, eventsOn: true, fundraisingOn: true }).map((r) => [qrSlug(r.path), r.title]),
   );
   return rows.map((r) => ({
-    label: r.campaign === null ? "Not named" : (titles.get(r.campaign) ?? `/${r.campaign}`),
+    label: r.campaign === null ? "Not named" : (named.get(r.campaign) ?? titles.get(r.campaign) ?? `/${r.campaign}`),
     visits: r.visits,
   }));
 }

@@ -15,6 +15,7 @@ import { bookingFromSession, isBallSession, type BallBookingWrite } from "../bal
 import { buildBallConfirmationEmail } from "../ball/confirmation-email";
 import { sendBallConfirmation } from "../clients/email";
 import { markBookingExpired, markBookingPaid } from "./ball";
+import { handleTicketEvent } from "../tickets/webhook";
 import { ensureFulfilmentRecord, markFulfilmentInvited } from "./fulfilment";
 import { fulfilmentBandFor, type SupporterBand } from "../donors/fulfilment";
 import { buildBusinessSupporterInviteEmail } from "../business/invite-email";
@@ -85,7 +86,7 @@ export async function processWebhookEvent(event: Stripe.Event): Promise<WebhookR
       await client.query("COMMIT");
       return { processed: false, action: "duplicate" };
     }
-    const { action, email, declaration, receipt, lapse, refundNotice, refundConfirmation, businessInvite, ballConfirmation } =
+    const { action, email, declaration, receipt, lapse, refundNotice, refundConfirmation, businessInvite, ballConfirmation, afterCommit } =
       await dispatch(client, event);
     await client.query("COMMIT");
     // Send the single donation-confirmation email (TASK-070) only AFTER the donor +
@@ -117,6 +118,8 @@ export async function processWebhookEvent(event: Stripe.Event): Promise<WebhookR
     // other send here. A slow or failing email provider must never roll back a paid booking —
     // the seat is already durably recorded and the buyer's money is already taken.
     await sendBallConfirmationEmail(ballConfirmation ?? null);
+    // Event tickets: the buyer's tickets (or refund) email, post-commit and best-effort like the rest.
+    await runAfterCommit(afterCommit ?? null);
     return { processed: true, action };
   } catch (err) {
     await client.query("ROLLBACK");
@@ -152,6 +155,18 @@ interface DispatchResult {
   // The business-supporter thank-you invite to send post-commit (TASK-213), or null when this gift
   // did not create a NEW fulfilment record or the business gave us no email.
   businessInvite?: BusinessInviteSend | null;
+  // Event tickets (src/tickets/webhook.ts): what to do once this event has committed, or null.
+  afterCommit?: (() => Promise<void>) | null;
+}
+
+// Post-commit, best-effort: a failed send never fails the webhook (the write is already committed).
+async function runAfterCommit(after: (() => Promise<void>) | null): Promise<void> {
+  if (!after) return;
+  try {
+    await after();
+  } catch (err) {
+    console.error("webhook after-commit step failed:", err instanceof Error ? err.message : err);
+  }
 }
 
 // A committed individual-donor refund whose confirmation email must be sent AFTER commit (TASK-099).
@@ -443,6 +458,10 @@ export async function sendConfirmation(email: DonationConfirmationEmail | null):
 }
 
 async function dispatch(client: PoolClient, event: Stripe.Event): Promise<DispatchResult> {
+  // Event tickets: a ticket checkout, or a ticket charge refunded or disputed, is taken here BEFORE
+  // anything else looks at it, so ticket money can never be recorded as a gift (src/tickets/webhook.ts).
+  const ticket = await handleTicketEvent(client, event);
+  if (ticket) return { action: ticket.action, email: null, afterCommit: ticket.afterCommit };
   switch (event.type) {
     case "checkout.session.completed": {
       // Festive Ball ticket purchases (TASK-313) share this ONE webhook endpoint with

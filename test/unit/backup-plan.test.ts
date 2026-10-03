@@ -58,9 +58,10 @@ describe("knowing how many tables to expect", () => {
   // pages added the people a team organiser invites, and the team organiser handovers; 76 with the
   // approved automatic email wordings (Jaimie, 2026-10-03); 77 with the impact examples (what gifts
   // could do, shown on fundraiser, event and team pages); 78 since profile pictures added the page
-  // photos and round profile photos organisers send.
-  it("counts 78 across the three databases", () => {
-    expect(expectedTableCount(ROOT)).toBe(78);
+  // photos and round profile photos organisers send; 84 since event tickets added the six ticket
+  // tables (types, settings, orders, lines, refunds, requests).
+  it("counts 84 across the three databases", () => {
+    expect(expectedTableCount(ROOT)).toBe(84);
   });
 
   it("finds the three tables that live outside the main database", () => {
@@ -128,7 +129,18 @@ describe("knowing how many tables to expect", () => {
     expect(main).toContain("impact_examples");
     // Profile pictures: the page photos and round profile photos organisers send, waiting for staff.
     expect(main).toContain("fundraiser_pictures");
-    expect(main.length).toBe(75);
+    // Event tickets: buyers' names, emails and phones are on the orders, kept like donation records.
+    for (const t of [
+      "event_ticket_settings",
+      "event_ticket_types",
+      "event_ticket_orders",
+      "event_ticket_order_lines",
+      "event_ticket_refunds",
+      "event_ticket_refund_requests",
+    ]) {
+      expect(main).toContain(t);
+    }
+    expect(main.length).toBe(81);
   });
 
   it("returns nothing for a directory that does not exist, rather than throwing", () => {

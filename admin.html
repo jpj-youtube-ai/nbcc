@@ -11,6 +11,9 @@
     <script defer src="/assets/js/admin/helpers.js"></script>
     <script defer src="/assets/js/admin/paste-prose.js"></script>
     <script defer src="/assets/js/admin/app.js"></script>
+    <!-- Event tickets: the Event tickets card in Fundraising, its own script and styles. -->
+    <link rel="stylesheet" href="/assets/css/admin-event-tickets.css" />
+    <script defer src="/assets/js/admin/event-tickets.js"></script>
     <!-- app.js is a classic script; bridge the ES-module gmail-reply.js helpers onto window
          so app.js (Contact form tab) can call them (2026-07-10 contact-inbox spec, Task 8). -->
     <script type="module">
@@ -1537,6 +1540,17 @@
                   <iframe id="frTouchPreview" class="fr-touch-preview" title="The automatic email, as the organiser would see it" sandbox="allow-same-origin" scrolling="no"></iframe>
                 </div>
                 <p class="ty-status" id="frTouchStatus" role="status" aria-live="polite"></p>
+              </section>
+
+              <!-- Event tickets (Jaimie, points 23 and 24): events where NBCC sells the tickets. Drawn by its
+                   own script (assets/js/admin/event-tickets.js) and styles, apart from app.js. Approve each
+                   kind of ticket, set the limit, close or open sales, print the guest list, download the
+                   CSV, and (admins only) make a refund. Nothing scrolls inside a box. -->
+              <section class="fr-card et-admin" id="etAdmin" aria-labelledby="etAdminHead" hidden>
+                <h3 class="admin-subhead" id="etAdminHead">Event tickets</h3>
+                <p class="fr-card-intro">Events where NBCC sells the tickets, soonest first. Nothing goes on sale until you approve each kind of ticket here, and the event itself is approved and public. Ticket money is shown apart from gifts and never has Gift Aid. An organiser can only ask for a refund: an admin makes it here, and it goes back to the buyer&rsquo;s card.</p>
+                <div id="etAdminList"><p class="admin-loading">Loading&hellip;</p></div>
+                <p class="ty-status" id="etAdminStatus" role="status" aria-live="polite"></p>
               </section>
 
               <div class="fr-bar">

@@ -81,7 +81,7 @@ describe("the sign up details migration", () => {
 
   // The sign up tidy (Jaimie, 2026-10-03) adds a fourth way in, "donations", after this migration
   // was run: it is never edited (golden rule 2), so a later migration must widen the check for it.
-  const LATER_BOOKINGS = ["donations"];
+  const LATER_BOOKINGS = ["donations", "nbcc"];
 
   it("holds the way in and the access ticks to the same lists as the code", () => {
     const checks = calls.filter((c) => c.op === "addConstraint").map((c) => JSON.stringify(c.args));

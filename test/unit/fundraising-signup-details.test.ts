@@ -232,14 +232,17 @@ describe("the event questions", () => {
   });
 
   // The sign up tidy (Jaimie, 2026-10-03): a fourth, free entry with donations welcome.
-  it("knows the four ways in, in the form's words", () => {
+  // Event tickets added the fifth: NBCC selling them (src/tickets/model.ts).
+  it("knows the five ways in, in the form's words", () => {
     expect(BOOKING_LABELS).toEqual({
       away: "Tickets are sold on another website",
       door: "Pay on the door, no booking needed",
       free: "Free, just come along",
       donations: "Free entry, donations welcome",
+      nbcc: "NBCC sells the tickets for me",
     });
-    expect(signUpSchema.safeParse(holding({ booking: "nbcc" })).success).toBe(false);
+    expect(signUpSchema.safeParse(holding({ booking: "nbcc" })).success).toBe(true);
+    expect(signUpSchema.safeParse(holding({ booking: "somewhere" })).success).toBe(false);
   });
 
   it.each([

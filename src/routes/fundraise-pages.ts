@@ -204,6 +204,22 @@ async function organiserPhotoFor(fundraiserId: number): Promise<string | null> {
   }
 }
 
+/**
+ * Event tickets: the page's ticket parts (src/tickets/page.ts). Only a part of the page: if they
+ * cannot be read (or even loaded), the page goes out without them rather than not at all.
+ */
+async function ticketExtrasFor(
+  f: Parameters<typeof import("../tickets/page").ticketPageExtras>[0],
+  query: Request["query"],
+): Promise<import("../tickets/page").TicketPageExtras> {
+  try {
+    return await (await import("../tickets/page")).ticketPageExtras(f, query as Record<string, unknown>, new Date());
+  } catch (err) {
+    console.error("event page tickets failed:", err instanceof Error ? err.message : err);
+    return {};
+  }
+}
+
 export function addFundraisePageRoutes(router: Router, siteRoot: string, deps: FundraisePageDeps): void {
   const getInvolvedFile = join(siteRoot, "events.html");
   const signUpFile = join(siteRoot, "fundraise.html");
@@ -456,15 +472,19 @@ ${title}`, () => qrSvg(url, { title, size: 1024 })));
       ]);
       // Team pages: a team's combined meter and members; a member page's team.
       const extras = await teamPageExtras(f, shortName);
+      // Event tickets (src/tickets/page.ts): ticket money beside the gifts, Get tickets, and the thank
+      // you after buying. Best effort: {} leaves the page exactly as it was.
+      const tickets = kind === "event" ? await ticketExtrasFor(f, req.query) : {};
       const page = {
-        ...publicPage(f, extras.meter ?? f.meter, wallEntries(await wallRows(f.id))),
+        ...publicPage(f, tickets.meter ?? extras.meter ?? f.meter, wallEntries(await wallRows(f.id))),
         news: await newsFor(f.id),
         ...(f.isTeam ? { teamName: f.title } : {}),
       };
       // ?thanks=1 is where the server sends a giver back to after paying (src/routes/api.ts): a thank
       // you at the top. Anyone can add it to the address, and all it shows is a thank you.
       const thanks = req.query.thanks === "1" ? await thanksFor(req.query, f.id) : undefined;
-      const withSession = req.query.session_id !== undefined;
+      // Event tickets: a buyer's own thank you carries their payment's id too (tickets.private).
+      const withSession = req.query.session_id !== undefined || tickets.private === true;
       if (withSession) {
         // TASK-502: a giver's own thank you, with their payment's id in the address: never kept by a
         // browser or anything in between, never indexed, and never handed to another website as a
@@ -483,6 +503,7 @@ ${title}`, () => qrSvg(url, { title, size: 1024 })));
         impact: await impactFor(f),
         // In memory of someone: the photo is of the person remembered, never a round one of the organiser.
         organiserPhotoSrc: f.inMemory ? null : await organiserPhotoFor(f.id),
+        tickets: tickets.html,
       });
       if (!withSession) fresh(res);
       // The sign up tidy (after review): a page kept off Get involved ("only people you send the

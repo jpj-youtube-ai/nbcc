@@ -51,7 +51,10 @@ export type FundraiserErrorReason =
   | "team_mode_missing"
   // The sign up tidy: a T-shirt size is asked only for a sporting event still waiting for one.
   | "not_sporting"
-  | "has_size";
+  | "has_size"
+  // Event tickets: NBCC never sells the tickets of an event that shares with another cause.
+  | "tickets_shared"
+  | "tickets_no_split";
 
 export class FundraiserError extends Error {
   constructor(
@@ -681,6 +684,8 @@ export async function patchFundraiser(id: number, patch: AdminPatch, actor: stri
   return inTransaction(async (client) => {
     const before = await lockFundraiser(client, id);
     checkTimes(before, patch);
+    // Event tickets: all the ticket money must come to NBCC, so never for an event that shares.
+    if (patch.booking === "nbcc" && before.sharesWithOther === true) throw new FundraiserError("tickets_shared");
     // Team pages: a team, or a page still on one, raises money (the table's check holds it too).
     if (patch.path === "event" && (before.isTeam || (before.teamId && !before.teamLeftAt))) throw new FundraiserError("team_path");
     const newSlug = typeof patch.slug === "string" && patch.slug !== before.slug ? patch.slug : null;
@@ -734,6 +739,14 @@ export async function setFundraiserSplit(
 ): Promise<FundraiserRecord> {
   return inTransaction(async (client) => {
     const before = await lockFundraiser(client, id);
+    // Event tickets: an event whose tickets NBCC sells (or has ever sold) can never start sharing.
+    if (split.sharesWithOther) {
+      // Behind the event's ticket lock (the one a checkout takes), so a checkout starting at this
+      // very moment either sees the split, or is seen here.
+      await client.query("SELECT 1 FROM event_ticket_settings WHERE fundraiser_id = $1 FOR UPDATE", [id]);
+      const sold = await client.query("SELECT 1 FROM event_ticket_orders WHERE fundraiser_id = $1 AND status IN ('pending', 'paid') LIMIT 1", [id]);
+      if (before.booking === "nbcc" || sold.rows.length > 0) throw new FundraiserError("tickets_no_split");
+    }
     // Team pages: a member page of a whole team split has the team's split; only the team's changes.
     if (before.teamId && !before.teamLeftAt) {
       const t = await client.query<{ team_share_mode: string | null }>("SELECT team_share_mode FROM fundraisers WHERE id = $1", [before.teamId]);
@@ -962,6 +975,9 @@ export async function decideEdit(
     if (edit.status !== "waiting") throw new FundraiserError("not_waiting");
     let changed: string[] = [];
     if (approve) checkTimes(live, (edit.changes ?? {}) as Record<string, unknown>);
+    // Event tickets: all the ticket money must come to NBCC, so never for an event that shares
+    // (the split may have changed since the organiser asked).
+    if (approve && (edit.changes as { booking?: unknown } | null)?.booking === "nbcc" && live.sharesWithOther === true) throw new FundraiserError("tickets_shared");
     if (approve) {
       const changes = { ...(edit.changes ?? {}) } as FundraiserEdit;
       // TASK-511 review: the old single link follows an approved change to Instagram or Facebook.

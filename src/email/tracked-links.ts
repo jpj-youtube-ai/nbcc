@@ -49,6 +49,10 @@ export const STAFF_ONLY_KINDS: ReadonlySet<string> = new Set([
   // Team pages: a new team member to approve, and a member taken off a team, both to events@.
   "fundraiseTeamJoinStaff",
   "fundraiseTeamMemberRemoved",
+  // Event tickets: a refund an organiser asked for, and tickets to approve, both to events@.
+  "eventTicketsRefundAsked",
+  "eventTicketsToApprove",
+  "eventTicketsToCheck",
   "backupAlert",
 ]);
 

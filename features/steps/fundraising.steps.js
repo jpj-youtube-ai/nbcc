@@ -105,6 +105,9 @@ async function clean() {
     await pool.query("DELETE FROM donors WHERE id = ANY($1)", [donorIds]);
   }
   await pool.query("DELETE FROM stripe_webhook_events WHERE id LIKE 'evt_fr_bdd_%'");
+  // Event tickets: an order never goes with its event (ON DELETE RESTRICT: a record of money), so
+  // the test's own orders are deleted first; their lines, refunds and refund requests go with them.
+  await pool.query("DELETE FROM event_ticket_orders WHERE fundraiser_id IN (SELECT id FROM fundraisers WHERE title LIKE $1)", [MARK]);
   // Edits, manage links and cash go with their fundraiser (ON DELETE CASCADE).
   await pool.query("DELETE FROM fundraisers WHERE title LIKE $1", [MARK]);
   // TASK-501: the private area's codes and sessions, by the organisers' invented addresses.

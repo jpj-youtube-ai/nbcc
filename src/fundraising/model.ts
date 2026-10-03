@@ -24,6 +24,7 @@ import {
   isOldForm,
   type EmployerMatch,
 } from "./signup-tidy";
+import { NBCC_SELLS_LABEL, NBCC_TICKETS_SHARED } from "../tickets/model";
 import { checkMemory, isInMemory, memoryDay, memoryFields, memoryMeter, memoryOf, publicMemory, titleFor, titleOptional, type MemorySetupBy, type PublicMemory } from "./in-memory";
 
 // TASK-493: community fundraising, the rules. Pure: no pool, no config, no clock, so every rule is
@@ -133,8 +134,8 @@ export const ACCESS_LABELS: Record<AccessFeature, string> = {
   "blue badge parking": "Blue badge parking",
 };
 
-/** How people get in. NBCC selling the tickets comes with the ticketing stage, not here. */
-export const BOOKINGS = ["away", "door", "free", "donations"] as const;
+/** How people get in. Event tickets: 'nbcc' is NBCC selling them (src/tickets/model.ts). */
+export const BOOKINGS = ["away", "door", "free", "donations", "nbcc"] as const;
 export type FundraiserBooking = (typeof BOOKINGS)[number];
 export const BOOKING_LABELS: Record<FundraiserBooking, string> = {
   away: "Tickets are sold on another website",
@@ -142,6 +143,7 @@ export const BOOKING_LABELS: Record<FundraiserBooking, string> = {
   free: "Free, just come along",
   // The sign up tidy (the appropriateness audit).
   donations: "Free entry, donations welcome",
+  nbcc: NBCC_SELLS_LABEL,
 };
 
 /** "ka11aa" -> "KA1 1AA": upper case, one space before the last three. Check it is valid first. */
@@ -734,6 +736,8 @@ export function checkOrganiserEdit(
     if (has("cardLine") && !change.cardLine) fields.cardLine = "Add a line for the front of the card.";
     if (has("venue") && !change.venue) fields.venue = "Tell us the venue.";
     if (has("booking") && !change.booking) fields.booking = "Tell us how people get in.";
+    // Event tickets: NBCC sells them only when all the ticket money comes to NBCC.
+    if (has("booking") && change.booking === "nbcc" && stored.sharesWithOther === true) fields.booking = NBCC_TICKETS_SHARED;
     const booking = has("booking") ? change.booking : stored.booking;
     const ticket = has("ticketUrl") ? change.ticketUrl : stored.ticketUrl;
     if (booking === "away") {

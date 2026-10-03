@@ -105,6 +105,10 @@
     price: "price",
     booking: "booking-away",
     ticketUrl: "ticketUrl",
+    // Event tickets: the kinds of ticket (the first one's name), and the limit.
+    ticketTypes: "etTypeName0",
+    ticketLimit: "ticketLimit",
+    ticketClose: "ticketCloseAt",
     ageLimit: "ageLimit",
     dressCode: "dressCode",
     included: "included",
@@ -627,6 +631,9 @@
     var ticketField = form.querySelector("[data-ticket-field]");
     function applyBooking() {
       if (ticketField) ticketField.hidden = radio("booking") !== "away";
+      // Event tickets: the kinds of ticket, only when NBCC sells them.
+      var nbccTickets = form.querySelector("[data-nbcc-tickets]");
+      if (nbccTickets) nbccTickets.hidden = radio("booking") !== "nbcc";
     }
 
     // --- what they would like, and the address ----------------------------------------------------
@@ -1248,6 +1255,15 @@
       body.access = access;
       body.booking = booking;
       body.ticketUrl = booking === "away" ? val("ticketUrl") : "";
+      // Event tickets: what assets/js/event-tickets-editor.js reads from its rows.
+      var nbccTickets = form.querySelector("[data-nbcc-tickets]");
+      if (booking === "nbcc" && nbccTickets && win.NBCCTicketEditor) {
+        var plan = win.NBCCTicketEditor.read(nbccTickets);
+        body.ticketTypes = plan.types;
+        body.ticketLimit = plan.limit;
+        body.ticketClose = plan.close;
+        if (plan.close === "custom") body.ticketCloseAt = plan.closeAt;
+      }
       // Team pages: every row in order (the server names a problem by its place), even an empty one.
       body.team = raising ? radio("team") || null : "me";
       body.teamShareMode = team && sharing() ? radio("teamShareMode") || null : null;

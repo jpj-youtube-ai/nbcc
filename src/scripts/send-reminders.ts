@@ -165,6 +165,16 @@ if (require.main === module) {
       } catch (err) {
         console.error("fundraising team emails failed:", err instanceof Error ? err.message : err);
       }
+      // Event tickets: a tickets email that did not go when its payment landed is sent again, and
+      // buyers' phone numbers are deleted 90 days after their event (src/tickets/runner.ts). Its
+      // own try/catch, like every pass here.
+      try {
+        const { runTicketDailyPass } = await import("../tickets/runner");
+        const t = await runTicketDailyPass();
+        console.error(`event tickets: emails tried=${t.emailsTried} sent=${t.emailsSent} phones deleted=${t.phonesDeleted} failed=${t.failed}`);
+      } catch (err) {
+        console.error("event tickets daily pass failed:", err instanceof Error ? err.message : err);
+      }
       // Email-audit retention: prune email_log rows past their six-tax-years window
       // (src/email/log-retention.ts). Rides this existing daily task for the same reason the
       // ball run-up does — one more statement on a schedule that already exists — and in its

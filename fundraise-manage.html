@@ -25,6 +25,10 @@
     <script defer src="/assets/js/fundraise-team-manage.js"></script>
     <!-- Profile pictures: "Your photos", the main photo and a round photo of them, with a preview. -->
     <script defer src="/assets/js/fundraise-pictures.js"></script>
+    <!-- Event tickets: "Your tickets" for an event selling through NBCC (its own script and styles). -->
+    <link rel="stylesheet" href="/assets/css/event-tickets.css" />
+    <script defer src="/assets/js/event-tickets-editor.js"></script>
+    <script defer src="/assets/js/event-tickets-manage.js"></script>
   </head>
   <body>
     <a class="skip-link" href="#main">Skip to content</a>
@@ -348,7 +352,9 @@
                         <label class="fr-option fr-option--small" for="editBookingAway"><input id="editBookingAway" name="booking" type="radio" value="away" /><span>Tickets are sold on another website</span></label>
                         <label class="fr-option fr-option--small" for="editBookingDoor"><input id="editBookingDoor" name="booking" type="radio" value="door" /><span>Pay on the door, no booking needed</span></label>
                         <label class="fr-option fr-option--small" for="editBookingFree"><input id="editBookingFree" name="booking" type="radio" value="free" /><span>Free, just come along</span></label>
+                        <label class="fr-option fr-option--small" for="editBookingNbcc"><input id="editBookingNbcc" name="booking" type="radio" value="nbcc" /><span>NBCC sells the tickets for me</span></label>
                       </div>
+                      <p class="give-field-help">NBCC sells the tickets for me: choose this only if all the ticket money is going to NBCC. If you&rsquo;re sharing ticket money with another cause or keeping some for costs, sell them your own way and pay NBCC its share afterwards. If you have costs, like the hall, talk to us: we can repay agreed costs against receipts. Once we have approved the change, add your tickets under Your tickets.</p>
                       <div class="give-field" data-ticket-link hidden>
                         <label for="editTicket">The link to buy tickets <span class="give-req" aria-hidden="true">*</span></label>
                         <input class="give-field-input" id="editTicket" name="ticketUrl" type="url" maxlength="500" inputmode="url" autocomplete="off" placeholder="https://..." required aria-required="true" pattern="https://[^\s]+" data-invalid-message="Paste the full web address, starting https://" />

@@ -34,6 +34,7 @@ export const STRIPE_API_VERSION = "2026-06-24.dahlia" as const;
 
 function stubStripe(): Stripe {
   let n = 0;
+  const stubRefunds: Array<{ id: string; status: string; amount: unknown; payment_intent: unknown; metadata: unknown }> = [];
   return {
     checkout: {
       sessions: {
@@ -63,6 +64,25 @@ function stubStripe(): Stripe {
         // session that has completed; the stub has none that do.
         expire: async (id: string) => ({ id, status: "expired" }),
       },
+    },
+    // Event tickets: an admin's refund, exercised end to end without a Stripe account. It echoes
+    // what was asked, as a succeeded refund with an obviously fake id; no charge.refunded follows.
+    refunds: {
+      create: async (params: Stripe.RefundCreateParams) => {
+        const refund = {
+          id: `re_preview_${(n += 1)}`,
+          object: "refund",
+          status: "succeeded",
+          amount: params.amount,
+          payment_intent: params.payment_intent,
+          metadata: params.metadata ?? {},
+        };
+        stubRefunds.push(refund);
+        return refund;
+      },
+      // Event tickets: every refund made on a payment. Stripe is the source of truth for refunded
+      // money (reconcileRefunds), so the stand-in must answer with what it was asked to make.
+      list: async (params: Stripe.RefundListParams) => ({ object: "list", data: stubRefunds.filter((r) => r.payment_intent === params.payment_intent) }),
     },
     // Subscription tier changes (REQ-055) exercised end to end without a Stripe
     // account. The retrieved sub carries a single item on an obviously-fake price

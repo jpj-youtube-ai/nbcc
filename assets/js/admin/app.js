@@ -2697,6 +2697,11 @@
     ["fundraiseTeamInviteReminder", "Team invite reminder"], ["fundraiseTeamNudge", "Team automatic: did you send the invite?"],
     ["fundraiseTeamJoined", "Team member joined (thank you)"], ["fundraiseTeamJoinStaff", "Team member to approve (to events@)"],
     ["fundraiseTeamMemberRemoved", "Team member taken off (to events@)"], ["fundraiseTeamHandoverCode", "Team organiser handover code"],
+    // Event tickets: the buyer's tickets and refund, and the two to events@.
+    ["eventTickets", "Event tickets (to the buyer)"], ["eventTicketsRefund", "Event tickets refund (to the buyer)"],
+    ["eventTicketsRefundAsked", "Event tickets refund asked for (to events@)"], ["eventTicketsToApprove", "Event tickets to approve (to events@)"],
+    ["eventTicketsToCheck", "Event tickets booking to check (to events@)"],
+    ["eventTicketsCancelled", "Event tickets free booking cancelled (to the buyer)"],
   ];
   function emailKindLabel(kind) {
     for (var i = 0; i < EMAIL_KINDS.length; i++) if (EMAIL_KINDS[i][0] === kind) return EMAIL_KINDS[i][1];
@@ -9061,6 +9066,7 @@
   var FR_BOOKING = [
     ["away", "Tickets are sold on another website"], ["door", "Pay on the door, no booking needed"],
     ["free", "Free, just come along"], ["donations", "Free entry, donations welcome"],
+    ["nbcc", "NBCC sells the tickets for me"], // event tickets
   ];
   var FR_LIST_FIRST = 25;
   var FR_WALL_FIRST = 10;

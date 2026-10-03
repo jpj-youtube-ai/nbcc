@@ -9106,7 +9106,8 @@ Every approved public event signed up through `/fundraise` has its own page at
 drawn by the same code (`renderFundraiserPage` in `src/fundraising/render.ts`, the routes in
 `src/routes/fundraise-pages.ts`), with what an event needs: when, from and to (and "to be
 confirmed"), where in full, the cost, how people get in (as words, with the seller's link when
-tickets are sold elsewhere; NBCC does not sell tickets yet), the good to know notes and the access.
+tickets are sold elsewhere; when NBCC sells them, the page has its own Get tickets section: see
+"Event tickets" below), the good to know notes and the access.
 Like a fundraiser's page it has the meter (gifts on the page plus cash staff record as paid in; an
 event has no target, so no bar), the give form through NBCC's Stripe, the supporter wall, the
 countdown (gone once the date has passed), news updates, the share links, its QR codes and its
@@ -9743,6 +9744,257 @@ shows; an approved main photo becomes the page's photo; one not used never shows
 sees our note; a team page shows each approved round photo and the elf until then; a round or main
 photo taken off, and a main photo replaced, answers 404).
 
+## Event tickets: NBCC sells an event's tickets
+
+Jaimie, points 23 and 24. An organiser holding an event can ask NBCC to sell the tickets, when ALL
+the ticket money comes to NBCC. A separate module: the rules in `src/tickets/model.ts` (pure, unit
+tested), the SQL in `src/db/event-tickets.ts`, the routes in `src/routes/event-tickets.ts` and
+`src/routes/admin-event-tickets.ts`, the emails in `src/tickets/emails.ts` and `send.ts`, and its
+own scripts and styles (`assets/js/event-tickets*.js`, `assets/js/admin/event-tickets.js`,
+`assets/css/event-tickets.css`, `assets/css/admin-event-tickets.css`). The Festive Ball's own
+ticketing (`src/ball/`) is untouched; this borrows its patterns (the card fee gross up in
+`src/ball/pricing.ts`, the CSV quoting in `src/ball/exports.ts`).
+
+**The rules**
+
+- "How do people get in?" has a fourth answer, **NBCC sells the tickets for me** (`booking = 'nbcc'`).
+  The form says: "Choose this only if all the ticket money is going to NBCC. If you're sharing
+  ticket money with another cause or keeping some for costs, sell them your own way and pay NBCC its
+  share afterwards." and "If you have costs, like the hall, talk to us: we can repay agreed costs
+  against receipts." (staff repay agreed costs outside the system). **Never when sharing with
+  another cause, on every path**: the sign up and an organiser's change refuse it; a staff change of
+  how people get in refuses it for a sharing event ("This event shares what it raises with another
+  cause, so NBCC can't sell its tickets."); a staff change of the split refuses sharing once NBCC
+  sells the event's tickets or any ticket order exists ("NBCC sells this event's tickets, so it can't
+  share with another cause."); and `salesState` (the one place the page, the checkout and the lock
+  all ask) is off for a sharing event whatever else is true.
+- **Ticket types**: a name (up to 60 characters), a price in whole pence (**£0 for a free ticket**
+  that still needs booking, so the host knows the numbers, or from £1 to £500), and an optional
+  number on sale; up to 10 for an event. An event may also have an overall **sales limit**. The
+  organiser proposes them with the sign up or in their private area; **staff approve each one**
+  before it goes on sale (staff approve all public content).
+- **Free bookings**: an order where every ticket is £0 never goes to Stripe. It costs nothing to
+  make, so it is held tighter: at most **10 free tickets in one order** ("You can book up to 10 free
+  tickets at a time. Need more? Email events@nbcc.scot."), at most **2 standing free bookings** for
+  an event per email and **6 per address** (a household or a school shares one; past that: "We've
+  had several free bookings from this connection. If that isn't you, email events@nbcc.scot and
+  we'll book you in."), with one still on its way counted too, and the spam check **fails closed** (if Turnstile cannot be
+  reached, or is not set up in production, the booking is refused: "We can't take bookings just
+  now. Please try again in a few minutes."). It is reserved under the same lock and limits as any
+  order, then booked at once, with the same reference
+  and tickets email ("Nothing to pay") and the same thank you. There is nothing to refund: the
+  organiser (in their private area) or staff (in the admin) **cancel** it, which puts the places back
+  on sale and emails the buyer "Your booking is cancelled" (`eventTicketsCancelled`). An order with a
+  free ticket and a paid one goes through Stripe for the paid part: the free tickets stay on our
+  order and are never a line at Stripe (its page says "Plus 2 free Child tickets"), so what Stripe
+  charges is still exactly the order's total.
+- **Sold out**, per type and for the whole event, when the number on sale or the limit is reached.
+- Tickets are sold only for an **approved, public** event (listed or taken off the list) while
+  **fundraising is on**, never for a page in memory of someone, and a finished event sells none.
+- **When sales close is the host's choice** ("When should ticket sales close?", on the sign up and
+  in the private area): when the event starts, the day before (midnight, London time), or a date and
+  time they choose, which must be before the event starts and must not have passed already. Staff approve it with the tickets and can
+  set it in the admin (for an NBCC run event staff set it there). Never asked (older data) is when
+  the event starts; an event with no start time closes at the start of its day; and nothing sells
+  after the start whatever was chosen. Staff can also close sales at once ("Close sales now").
+- Ticket money is **never a gift**: never Gift Aid, never in `donations`, and shown apart from gifts
+  everywhere ("£40 from tickets, £25 in gifts"). On the event's page the meter counts both together
+  and the line under it says each; Gift Aid stays on the gifts only.
+- An organiser can only **ask** for a refund; an **admin** makes it.
+
+**Buying.** The event's page has a **Get tickets** section of its own (`#tickets`), above and apart
+from the give form: how many of each type, the buyer's first name, surname, email and optional
+phone, and "Add a little to cover the card fee" (the Ball's gross up, on the tickets). It says
+"Tickets are not donations, so Gift Aid does not apply." `POST /api/event-tickets/:id/checkout`
+reserves the places and opens a Stripe Checkout (card, so Apple Pay and Google Pay too; it closes
+after 31 minutes), one line per type at the stored price and the fee cover on its own line. The
+session carries `product=event_tickets` and the order's reference (`TIX-` and six characters) in
+its metadata. After paying, the buyer is back on the event's page
+(`?tickets=thanks&ticket_session=...`, never kept or indexed) with a thank you; the payment's id is
+taken out of the address bar.
+
+**Oversell protection.** A checkout locks its event's row in `event_ticket_settings`, so buyers of
+one event queue; what is left counts every paid ticket and every checkout still inside its hold.
+The order is written `pending` and holds its places for 5 minutes; once Stripe's checkout is
+attached to it, for an hour. Stripe's `checkout.session.expired` gives the places back at once
+(`expired`); the hour is the backstop if that event were lost, and nothing has to run for it to
+work. If Stripe cannot start the checkout the order is cancelled straight away. The price the
+buyer's page showed is sent with the order, and a price changed since is refused ("The price of this
+ticket has changed. Please refresh the page."). A booking reference already taken is made again.
+
+**Holding the room by asking is stopped four ways**: the spam check (Cloudflare Turnstile, when it is
+switched on, as on the sign up form; a refused pass reserves nothing, a check that cannot answer
+lets the buyer through), a hidden box only a bot fills, the rate limit (10 checkouts in 10 minutes
+from one address), and a cap of two open checkouts for one event per email and per address (a hash
+of the address is kept on the order, never the address). An honest buyer is never caught by their
+own checkout: when the same email from the same address starts again, their older open checkouts for
+that event are closed at Stripe and cancelled first, so the cap only bites on checkouts opened side
+by side from different addresses or emails. A hold that ran out while Stripe was opening the checkout
+is never brought back: that checkout is closed and the buyer starts again.
+
+**A payment that should not have fitted is still recorded, flagged, and staff are told.** If a
+payment lands after its hold ran out and the event is now over its limit, or the amount, the
+checkout or the currency is not what the order was made for, the order keeps a flag ("Paid late:
+this event is now 2 over its limit", "Amount paid doesn't match: check this booking"), shown on the
+booking in the admin, and the events inbox is emailed (`eventTicketsToCheck`).
+
+**The webhook** (`src/tickets/webhook.ts`, called first by `src/db/stripe-webhook.ts`, on its
+transaction): `checkout.session.completed` marks the order paid and, once committed, emails the
+buyer their tickets (kind `eventTickets`, From and Reply-To events@): the reference, the tickets,
+what was paid, when and where, and "Show this email at the door". A ticket checkout never reaches
+the donations handler. `checkout.session.expired` releases the places. Every refund event
+(`charge.refunded`, `refund.created`, `refund.updated`, `refund.failed`) only says which payment
+changed: Stripe is then asked what it has refunded on it and the order is made to agree (see
+Refunds below). A dispute is noted in the audit log; once the bank takes the money back
+(`charge.dispute.funds_withdrawn`) the order is flagged, its money stops counting as ticket money,
+and the events inbox is emailed; a dispute won counts again.
+
+**A tickets email that did not go** (the email provider was down when the payment landed) leaves the
+order unstamped: the admin shows "Tickets email not sent" with "Send tickets email again" (editors
+and admins, audited), and the daily task (`src/tickets/runner.ts`, on `send-reminders`) sends every
+one still unsent (free bookings too), newest first, each claimed so two runs never send it
+together. After three tries it is left alone and flagged in the admin: "Tickets email keeps failing:
+check the address".
+
+**Refunds.** In the private area the organiser picks a booking and gives a reason
+(`event_ticket_refund_requests`, one open request a booking); the events inbox is emailed
+(`eventTicketsRefundAsked`, Reply-To the organiser). In Admin > Fundraising > Event tickets an admin
+chooses the tickets to refund: the amount is their price as sold, or all that is left of the payment
+(card fee cover included) when no ticket is left standing.
+
+**Stripe is the source of truth for refunded money.** One function, `reconcileRefunds`
+(`src/db/event-tickets.ts`), is the only place refunded money is decided. Under the order's lock it
+asks Stripe for every refund on the payment (`refunds.list`) and makes the order agree:
+
+- `refunded_pence` is the sum of Stripe's **succeeded** refunds, never more than was paid;
+- a refund of ours still waiting whose Stripe refund has succeeded is **finished**: its tickets
+  back on sale, its request closed, the audit row (`tickets.refunded`), and the buyer emailed
+  (`eventTicketsRefund`). It is matched **by the refund's metadata** (`refundIntent`, the intent's
+  id) or Stripe's refund id, never by its amount;
+- one whose Stripe refund failed or was cancelled, or that Stripe never made and whose key is too
+  old to use again (23 hours), is closed as failed;
+- a succeeded refund that is not one of ours was **made in Stripe itself**: its money is recorded,
+  and no ticket is released, as nobody said which (see below), unless the booking is now refunded
+  in full, when every place goes back on sale. The buyer is emailed.
+
+It is run by every refund event on the webhook (the event's own amounts and status are never
+used), and by the admin's refund before and after Stripe is asked. Running it twice changes nothing
+and sends no second email, so events that come late, twice or out of order do no harm. If Stripe
+cannot be reached inside the webhook, the webhook answers 500 and Stripe sends the event again.
+
+An admin's refund, so one that times out or half fails is never paid twice and never leaves the
+wrong tickets standing:
+
+1. The booking is reconciled with Stripe. If Stripe cannot be asked, nothing new is started (502).
+2. Under the order's lock, the booking must be exactly as the admin's screen showed it (they send how
+   many of each line and how much money were already refunded: any difference is a 409, "This
+   booking has changed. Refresh and check before refunding."), and a request given must still be
+   open. The refund is then written down `pending` (an intent: the tickets, the amount, its own
+   idempotency key) and committed, before Stripe is asked.
+3. Stripe's refund API is asked with that key. The same refund asked again reuses it.
+4. The booking is reconciled again, which finishes the refund Stripe has just made.
+
+If step 4 never happens, the next refund event from Stripe, or the admin making the same refund
+again, finishes it. A definite no from Stripe closes the intent as failed and changes nothing. One
+still on its way releases nothing until Stripe confirms it. A different refund while one is
+unconfirmed is refused until that one is finished. A request can also be declined (admins).
+
+**A refund that fails at the bank** after it was applied here (ours, or one made in Stripe): the
+reconcile puts the money back to what Stripe says and closes the refund as failed. The tickets are
+**not** taken back (their places may have been sold again). The booking is flagged "Refund failed
+at the bank: the buyer has not been paid back. Their tickets were released: contact them and
+refund again." (with how far over its limit the event is, counting their tickets, if it is), the
+events inbox is emailed, and the buyer gets no automatic email. Staff contact the buyer and refund
+again in Stripe; that refund is then recorded by the same reconcile and the flag clears.
+
+**Money refunded in Stripe itself** (not in the admin) is recorded by the reconcile as above. A
+refund in full puts every place back on sale; a partial one releases nothing. An admin then uses
+**Release these tickets (no money)** on the booking: it puts tickets back on sale and emails the
+buyer that those tickets are cancelled, with no money moving. It is allowed only for free tickets
+(on a mixed booking), and for paid tickets up to the money already refunded. Audited
+(`tickets.released_no_money`).
+
+**The guest list** for the door, to print, from the admin and the organiser's private area: a tick
+box, the name, the tickets and the reference, by surname, with the totals. No email, phone or
+money. Staff can also download every booking as a **CSV** with the money, and (for editors and
+admins only) the buyer's email and phone: someone who may only look sees names and tickets, in the
+admin and in the CSV.
+
+**Admin > Fundraising > Event tickets** (its own card): every ticketed event with what is waiting;
+opened, an event's types (approve, change, take off sale, add), the limit (and the organiser's
+proposed one), close or open sales, the money apart from gifts, the guest list and CSV, the refunds
+asked for, the bookings and the refunds made.
+
+| Route | Who | What |
+|---|---|---|
+| `GET /api/event-tickets/:id` | anyone | `{ state, types: [{ id, name, pricePence, remaining, soldOut }], overallRemaining }`; 404 unless the event sells through NBCC |
+| `POST /api/event-tickets/:id/checkout` `{ lines: [{ typeId, quantity, pricePence }], firstName, lastName, email, phone?, coverFee, captchaToken? }` | anyone, from our own page | `{ url }` (Stripe); 400 with `fields` (or `{ error: "captcha" }`); 409 `{ error, refresh: true }` when the places are not there or a price has changed; 429 for too many open checkouts; 502 if Stripe cannot start |
+| `GET /api/fundraise/manage/fundraisers/:id/tickets` | the signed in organiser | types and where each is up to, the limit, the money, bookings (names and tickets only), refund requests; 404 for anything else |
+| `POST /api/fundraise/manage/fundraisers/:id/tickets/propose` `{ ticketTypes?, ticketLimit?, ticketClose?, ticketCloseAt? }` | the signed in organiser | 202; staff are emailed (`eventTicketsToApprove`) |
+| `POST /api/fundraise/manage/fundraisers/:id/tickets/bookings/:orderId/cancel` | the signed in organiser | cancels a free booking and emails the buyer; 409 for one that was paid for |
+| `POST /api/fundraise/manage/fundraisers/:id/tickets/refund-request` `{ orderId, reason }` | the signed in organiser | 202; staff are emailed |
+| `GET /api/fundraise/manage/fundraisers/:id/tickets/guest-list` | the signed in organiser | the guest list page |
+| `GET /api/admin/event-tickets`, `GET /api/admin/event-tickets/:id` | fundraising view | the list, and one event |
+| `POST /api/admin/event-tickets/:id/types`, `PATCH .../types/:typeId`, `POST .../types/:typeId/approve`, `POST .../types/:typeId/withdraw` | fundraising edit | add, change, approve, take off sale |
+| `PUT /api/admin/event-tickets/:id/limit` `{ limit }`, `POST .../limit/approve`, `POST .../limit/decline`, `POST .../sales` `{ open }` | fundraising edit | the limit and the sales switch |
+| `PUT /api/admin/event-tickets/:id/close` `{ ticketClose: start, day_before or custom, ticketCloseAt? }`, `POST .../close/approve`, `POST .../close/decline` | fundraising edit | when sales close: set it, or approve or decline the host's choice |
+| `POST /api/admin/event-tickets/:id/orders/:orderId/cancel` | fundraising edit | cancels a free booking; 409 for one that was paid for |
+| `GET /api/admin/event-tickets/:id/guest-list`, `GET .../orders.csv` | fundraising view | the guest list page, and the CSV |
+| `POST /api/admin/event-tickets/:id/orders/:orderId/refund` `{ lines: [{ lineId, quantity, refundedQuantity }], refundedPence, requestId?, note? }` | an admin (fundraising edit) | refunds through Stripe; 409 with why not (`refresh: true` when the booking has changed); 502 if Stripe refuses or could not be reached |
+| `POST /api/admin/event-tickets/:id/orders/:orderId/release` `{ lines: [{ lineId, quantity, refundedQuantity }], refundedPence }` | an admin (fundraising edit) | releases tickets with no money moving and emails the buyer; 409 with why not |
+| `POST /api/admin/event-tickets/:id/orders/:orderId/resend` | fundraising edit | sends the buyer's tickets email again; audit `tickets.email_resent` |
+| `POST /api/admin/event-tickets/:id/requests/:requestId/decline` `{ note? }` | an admin (fundraising edit) | declines a refund request |
+
+### Deploy note: the Stripe webhook's events
+
+The one Stripe webhook endpoint (`POST /api/stripe/webhook`) must be subscribed, in the Stripe
+dashboard, to every event the ticket code handles (`src/tickets/webhook.ts`), on top of the ones
+donations and the Ball already use. A missing one fails quietly: Stripe simply never sends it.
+
+| Event | What the tickets do with it |
+|---|---|
+| `checkout.session.completed` | the order is paid; the buyer's tickets are emailed |
+| `checkout.session.expired` | an abandoned checkout gives its places back |
+| `charge.refunded` | the order is reconciled with what Stripe has refunded on the payment |
+| `refund.created` | the same |
+| `refund.updated` | the same |
+| `refund.failed` | the same: the money is put right, the booking flagged, and staff told (tickets are not taken back) |
+| `charge.dispute.created` | noted in the audit log |
+| `charge.dispute.funds_withdrawn` | the order is flagged, its money stops counting, staff are emailed |
+| `charge.dispute.funds_reinstated` | a dispute won: the money counts again |
+| `charge.dispute.closed` | noted; closed as won counts the money again |
+
+(`checkout.session.async_payment_succeeded` and `checkout.session.async_payment_failed` are
+donations' events: a ticket checkout takes cards only, and one arriving for a ticket checkout is
+ignored rather than treated as a gift.) Turnstile must also be set up in production
+(`TURNSTILE_SITE_KEY`, `TURNSTILE_SECRET_KEY`) for free bookings to be taken at all.
+
+### Data (`migrations/1791200000215_event-tickets.js`, additive only)
+
+`fundraisers.booking` takes `'nbcc'` (the check is widened). Six new tables:
+`event_ticket_settings` (one row per ticketed event: the limit, the proposed limit, sales closed by
+staff, when sales close and the host's proposed closing time),
+`event_ticket_types` (name, price, number on sale, proposed, approved or withdrawn),
+`event_ticket_orders` (reference, status `pending`, `paid`, `expired` or `cancelled`, the buyer's
+first name, surname, email and phone, tickets, fee cover, total and refunded pence, Stripe's
+session and payment intent, the hold's expiry, flags for staff, when it was disputed, a hash of the
+buyer's address, when its tickets email went), `event_ticket_order_lines` (type, name and price as
+sold, quantity, refunded quantity), `event_ticket_refund_requests` (booking, reason, by whom, open,
+refunded or declined; one open request a booking) and `event_ticket_refunds` (every refund:
+`pending`, `done` or `failed`, its amount, tickets, idempotency key, Stripe's refund id, by whom).
+A record of money never goes with its event: orders and refund requests stop an event being deleted,
+and a ticket type that has been sold cannot be deleted (`ON DELETE RESTRICT`).
+
+**Personal data.** A buyer's name, email and optional phone are on their order. The **phone number
+is deleted 90 days after the event** by the daily task (the buy form says so); the name and email are
+part of the record of a payment, kept as long as donation records are (nothing deletes them
+automatically yet) and backed up nightly with the rest of the main database. The organiser never
+sees a buyer's email or phone, and in the admin only editors and admins do. The printed guest list
+says to shred or bin it after the event.
+
+Tests: `test/unit/event-tickets-*.test.ts`, `admin-event-tickets-*.test.ts`,
+`stripe-webhook-tickets.test.ts`; BDD `features/event-tickets.feature`.
+
 ## A QR code encoder for fundraiser pages (TASK-493)
 
 `src/fundraising/qr.ts` draws QR codes with no dependencies, written from the QR standard
@@ -9794,10 +10046,12 @@ thank yous to supporters and the address level opt out list three in TASK-507, t
 links one in TASK-511, the fundraising categories one in TASK-514, and which automatic emails each
 fundraiser has had and the Do it again links two in TASK-515, the team invites and team
 organiser handovers two for team pages, the approved automatic email wordings one, the impact
-examples one for what gifts could do, and the photos organisers send one for profile pictures),
+examples one for what gifts could do, and the photos organisers send one for profile pictures, and six
+for event tickets: the ticket types, each event's limit and sales switch, the orders and their
+lines (with buyers' names, emails and phones), the refunds and the refund requests),
 but `STORIES_DATABASE_URL` and `CONTACT_DATABASE_URL` are separate databases
 (deliberately, so the public story and contact forms can never reach donor
-data). A `pg_dump $DATABASE_URL` captures 75 of **78** tables and silently
+data). A `pg_dump $DATABASE_URL` captures 81 of **84** tables and silently
 drops every My Story submission (and, since TASK-475, the fingerprints in
 `erased_stories` that keep erased stories from coming back) and every contact
 enquiry, while producing a

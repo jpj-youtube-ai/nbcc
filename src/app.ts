@@ -23,6 +23,8 @@ import { fundraiserNewsRouter, newsBodyGuard, NEWS_JSON_BODY_LIMIT, NEWS_POST_PA
 import { fundraiserPicturesRouter, PICTURE_JSON_BODY_LIMIT, PICTURE_POST_PATH } from "./routes/fundraiser-pictures";
 import { fundraiseMaterialsRouter } from "./routes/fundraise-materials";
 import { fundraiseMemoryRouter } from "./routes/fundraise-memory";
+import { eventTicketsRouter } from "./routes/event-tickets";
+import { adminEventTicketsRouter } from "./routes/admin-event-tickets";
 import { adminBallReportRouter } from "./routes/admin-ball-report";
 import { adminAnalyticsRouter } from "./routes/admin-analytics";
 import { adminStoriesImportRouter, STORIES_IMPORT_BODY_LIMIT, STORIES_IMPORT_PATH } from "./routes/admin-stories-import";
@@ -148,6 +150,10 @@ export function createApp() {
   // TASK-504: a fundraiser's poster, pictures, sponsor form and certificate, for its organiser
   // (signed in) and for staff.
   app.use(fundraiseMaterialsRouter);
+  // Event tickets (Jaimie, points 23 and 24): buying, the organiser's tickets, and Admin > Fundraising's
+  // Event tickets card.
+  app.use(eventTicketsRouter);
+  app.use(adminEventTicketsRouter);
   // The Festive Ball ticket report, set up from the Events page (TASK-464).
   app.use(adminBallReportRouter);
   // Admin > Analytics (TASK-482): the numbers and the collecting switch.

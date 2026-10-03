@@ -10608,8 +10608,12 @@
       finish: "Mark " + f.title + " as finished? It comes off the Get involved list. Its page stays up with a thank you banner and can still take gifts. What it raised stays in the records." +
         // TASK-515: the thank you (email 17) goes now, only while automatic emails are on.
         (hasPage
-          ? frTouch && frTouch.settings && frTouch.settings.on
-            ? " Automatic emails are on, so we email " + f.name + " their thank you, with their certificate."
+          ? !frTouch
+            ? " If automatic emails are on, we email " + f.name + " their thank you. If its wording is still waiting for sign off, the thank you is held until you approve it."
+            : frTouch.settings && frTouch.settings.on
+            ? frTouchFinishedWaiting(f)
+              ? " Automatic emails are on, but the thank you is held back: its new wording is waiting for your sign off. It goes once you approve it in Automatic emails, within a week."
+              : " Automatic emails are on, so we email " + f.name + " their thank you, with their certificate."
             : " Automatic emails are off, so no thank you email goes."
           : ""),
     }[move];
@@ -11573,6 +11577,11 @@
         (dueIds.length === 1 ? "1 email: " : dueIds.length + " emails: ") + dueWords.join(", ") +
         ". " + "Anyone who has asked us to stop is left out."
       : (s.on ? "Nothing is due at the next 8am run." : "Switched on now, the next 8am run would send nothing.");
+    if (frTouch.approvalsUnavailable) el("frTouchDue").textContent += " " + FR_TOUCH_UNCHECKED;
+    var heldCount = Object.keys(frTouch.held || {}).length;
+    if (heldCount) {
+      el("frTouchDue").textContent += " " + (heldCount === 1 ? "1 more is" : heldCount + " more are") + " waiting for your sign off.";
+    }
     var btn = el("frTouchSwitch");
     var admin = isAdmin() && frCanWrite();
     btn.hidden = !admin;
@@ -11583,7 +11592,7 @@
       .map(function (k) {
         var on = k.kind === frTouchKind;
         return '<button class="admin-seg' + (on ? " is-active" : "") + '" type="button" data-frtouchkind="' + H.escapeHtml(k.kind) +
-          '" aria-pressed="' + (on ? "true" : "false") + '">' + H.escapeHtml(k.label) + (k.newWording ? ' <span class="fr-touch-new">New</span>' : "") + "</button>";
+          '" aria-pressed="' + (on ? "true" : "false") + '">' + H.escapeHtml(k.label) + frTouchWaitingPill(k) + "</button>";
       })
       .join("");
     frTouchRenderFor();
@@ -11623,7 +11632,7 @@
         if (seq !== frTouchSeq || !d || typeof d.html !== "string") return;
         el("frTouchMeta").innerHTML =
           '<p class="fr-touch-when">' + H.escapeHtml(info ? info.when : "") + "</p>" +
-          (d.newWording ? '<p class="fr-touch-signoff">New wording, waiting for sign off. Please read it closely.</p>' : "") +
+          frTouchSignOffHtml(d) +
           '<p class="fr-touch-subject"><span>Subject</span> ' + H.escapeHtml(d.subject || "") + "</p>" +
           (d.sample ? "" : '<p class="fr-field-hint">For ' + H.escapeHtml(d.title || "") + ", as it would go today.</p>");
         frame.setAttribute("srcdoc", d.html);
@@ -11633,6 +11642,65 @@
         if (seq !== frTouchSeq) return;
         frTouchShown = "";
         frTeamSay("frTouchStatus", "That email could not load just now. Try again in a moment.", true);
+      });
+  }
+
+  // Signing off the new wording (Jaimie, 2026-10-03): the server only sends new wording once an admin
+  // has approved it here. Each version that needs it (WORDING_KEYS in src/fundraising/touch-rules.ts,
+  // the nothing raised versions of 16, 17 and 18 too) is approved on its own. Editors and viewers see
+  // whether it is approved; only an admin sees the buttons.
+  function frTouchWaitingPill(k) {
+    var waiting = (k && k.waiting) || [];
+    if (!waiting.length) return "";
+    var onlyZero = waiting.every(function (key) { return /_zero$/.test(key); });
+    return ' <span class="fr-touch-new fr-touch-waiting" data-frtouchwaiting title="' +
+      H.escapeHtml(onlyZero ? "The version with nothing raised yet is waiting for sign off." : "Its new wording is waiting for sign off.") +
+      '">Waiting for sign off</span>';
+  }
+
+  var FR_TOUCH_UNCHECKED = "Couldn't check sign-offs just now, so new wording is held.";
+
+  function frTouchSignOffHtml(d) {
+    var key = d && d.wordingKey;
+    if (!key) return "";
+    if (d.approvalsUnavailable) return '<p class="fr-touch-signoff" data-frtouchsignoff>' + H.escapeHtml(FR_TOUCH_UNCHECKED) + "</p>";
+    var admin = isAdmin() && frCanWrite();
+    var a = d.approval;
+    if (!a) {
+      return '<p class="fr-touch-signoff" data-frtouchsignoff>New wording, waiting for your sign off. It won\'t send until you approve it.</p>' +
+        (admin ? '<div class="fx-call-row"><button class="admin-btn admin-btn--small" type="button" data-frtouchapprove="' + H.escapeHtml(key) + '"' +
+          (frTouchBusy ? " disabled" : "") + ">Approve this wording</button></div>" : "");
+    }
+    return '<p class="fr-touch-approved" data-frtouchsignoff>Approved by ' + H.escapeHtml(frWho(a.approvedBy)) + " on " + H.escapeHtml(H.fmtDate(a.approvedAt)) + ".</p>" +
+      (admin ? '<div class="fx-call-row"><button class="admin-btn admin-btn--small fr-btn-quiet" type="button" data-frtouchwithdraw="' + H.escapeHtml(key) + '"' +
+        (frTouchBusy ? " disabled" : "") + ">Withdraw approval</button></div>" : "");
+  }
+
+  function frTouchApproval(key, approve) {
+    if (frTouchBusy || !frTouch || !key) return;
+    var question = approve
+      ? "Approve this wording? Once approved, it goes to organisers by itself when it is due, while automatic emails are on."
+      : "Withdraw approval? This email stops going until it is approved again.";
+    if (!window.confirm(question)) return;
+    frTouchBusy = true;
+    frTeamSay("frTouchStatus", "Saving…", false);
+    return frSend(approve ? "POST" : "DELETE", "/api/admin/fundraising/touch/approvals/" + encodeURIComponent(key))
+      .then(function (r) {
+        frTouchBusy = false;
+        if (!r.ok) {
+          frTeamSay("frTouchStatus", frRefusal(r, "That did not work. Please try again."), true);
+          return;
+        }
+        // Read it all again: the pills, the next run, and this email's note.
+        frTouchShown = "";
+        return Promise.resolve(frTouchLoad()).then(function () {
+          frTeamSay("frTouchStatus", approve ? "Wording approved." : "Approval withdrawn.", false);
+        });
+      })
+      .catch(function (err) {
+        frTouchBusy = false;
+        if (err && err.message === "unauthorized") return;
+        frTeamSay("frTouchStatus", "That did not work. Please try again.", true);
       });
   }
 
@@ -11677,6 +11745,17 @@
         frTeamSay("frTouchStatus", "That did not work. Please try again.", true);
         frTouchRenderCard();
       });
+  }
+
+  // Is the thank you (17) for this sign up waiting for sign off, as it would go with what it has
+  // raised? The list's meter, as the server reads it: a team page's whole team total.
+  function frTouchFinishedWaiting(f) {
+    var info = frTouchKindInfo("finished");
+    if (!info || !info.waiting) return false;
+    var listed = ((frData && frData.fundraisers) || []).filter(function (x) { return x.id === f.id; })[0];
+    var m = (listed && listed.meter) || (frDetail && frDetail.meter) || {};
+    var raised = Number(m.raisedPence || 0);
+    return info.waiting.indexOf(raised > 0 ? "finished" : "finished_zero") !== -1;
   }
 
   function frTouchPrompts(f) {
@@ -11778,6 +11857,10 @@
           return;
         }
         if (t.closest("#frTouchSwitch")) frTouchSwitch();
+        var approve = t.closest("[data-frtouchapprove]");
+        if (approve) frTouchApproval(approve.getAttribute("data-frtouchapprove"), true);
+        var withdraw = t.closest("[data-frtouchwithdraw]");
+        if (withdraw) frTouchApproval(withdraw.getAttribute("data-frtouchwithdraw"), false);
       });
       el("frTouchFor").addEventListener("change", function (e) {
         frTouchFor = String(e.target.value || "");

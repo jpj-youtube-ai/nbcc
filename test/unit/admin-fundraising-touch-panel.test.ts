@@ -44,7 +44,16 @@ const KINDS = [
   ["year_on", "A year ago today", false],
   ["need_a_hand", "Need a hand?", true],
   ["on_track", "You’re doing great", true],
-].map(([kind, label, newWording]) => ({ kind, label, when: "When it goes.", newWording }));
+].map(([kind, label, newWording]) => ({ kind: kind as string, label: label as string, when: "When it goes.", newWording }));
+
+// Signing off the new wording (Jaimie, 2026-10-03): each version of an email that needs it, and the
+// ones approved so far (as seeded: target, need a hand, on track).
+const NEW_KINDS = ["target", "finished", "need_a_hand", "on_track"];
+const ZERO_KINDS = ["week_after", "finished", "year_on"];
+const keysOf = (kind: string) => [...(NEW_KINDS.includes(kind) ? [kind] : []), ...(ZERO_KINDS.includes(kind) ? [kind + "_zero"] : [])];
+let approved: Record<string, { approvedAt: string; approvedBy: string }> = {};
+let approvalsUnavailable = false;
+let touchFails = false;
 
 const BEHIND = {
   key: "behind",
@@ -80,7 +89,8 @@ function respond(url: string, init?: { method?: string; body?: string }) {
   if (path === "/api/admin/whats-new") return j({ areas: [] });
   if (path === "/api/admin/fundraising/settings") return j({ pageOn: true, updatedAt: null, updatedBy: null });
   if (path === "/api/admin/fundraisers" && method === "GET") {
-    return j({ pageOn: true, fundraisers: records.map((f) => ({ ...f, meter, editWaiting: false })) });
+    // The list gives a team page its whole team's total (withTeamTotals), as the daily run reads it.
+    return j({ pageOn: true, fundraisers: records.map((f) => ({ ...f, meter: (f.listMeter as typeof meter) || meter, editWaiting: false })) });
   }
   if (path === "/api/admin/fundraising/team") return j({ today: "2026-12-07", me: 3, calls: {}, prompts: {}, invites: [], signers: [] });
   if (path === "/api/admin/fundraising/summary") return j({ recipients: [], lastWeek: null });
@@ -88,10 +98,13 @@ function respond(url: string, init?: { method?: string; body?: string }) {
   if (path === "/api/admin/fundraising/thanks-waiting") return j({ counts: {} });
   if (path === "/api/admin/fundraising/news-waiting") return j({ counts: {} });
   if (path === "/api/admin/fundraising/touch") {
+    if (touchFails) return j({ error: "Admin is temporarily unavailable" }, 500);
     return j({
       today: "2026-12-07",
       settings: { on: touchOn, updatedAt: touchOn ? "2026-12-01T09:00:00.000Z" : null, updatedBy: touchOn ? "admin:fern@example.com" : null },
-      kinds: KINDS,
+      kinds: KINDS.map((k) => ({ ...k, waiting: keysOf(k.kind).filter((key) => !approved[key]) })),
+      approvals: approved,
+      approvalsUnavailable,
       sent: { "1": [{ kind: "first_gift", sentAt: "2026-11-20T08:00:00.000Z" }] },
       prompts: { "1": [BEHIND] },
       promptCalls: {},
@@ -102,16 +115,30 @@ function respond(url: string, init?: { method?: string; body?: string }) {
   if (pv) {
     const forId = new URLSearchParams(query).get("fundraiserId");
     const title = forId ? "Test Dash " + forId : "Sam's Santa Dash";
+    const zero = new URLSearchParams(query).get("sample") === "zero";
+    const key = zero && ZERO_KINDS.includes(pv[1]) ? pv[1] + "_zero" : NEW_KINDS.includes(pv[1]) ? pv[1] : null;
     return j({
       kind: pv[1],
       label: KINDS.find((k) => k.kind === pv[1])!.label,
-      newWording: KINDS.find((k) => k.kind === pv[1])!.newWording,
+      newWording: key !== null,
+      wordingKey: key,
+      approval: (key && approved[key]) || null,
+      approvalsUnavailable,
       sample: !forId,
       title,
       subject: "Subject for " + pv[1],
       html: "<!doctype html><html><body><p>Email body for " + pv[1] + " about " + title + "</p></body></html>",
       text: "Text for " + pv[1],
     });
+  }
+  const ap = path.match(/^\/api\/admin\/fundraising\/touch\/approvals\/([a-z_]+)$/);
+  if (ap && method === "POST") {
+    approved[ap[1]] = { approvedAt: "2026-12-07T09:00:00.000Z", approvedBy: "admin:fern@example.com" };
+    return j({ approval: { key: ap[1], ...approved[ap[1]] } });
+  }
+  if (ap && method === "DELETE") {
+    delete approved[ap[1]];
+    return j({ withdrawn: true });
   }
   if (path === "/api/admin/fundraising/touch/settings" && method === "PUT") {
     touchOn = !!body.on;
@@ -163,6 +190,9 @@ function asRole(r: "admin" | "editor" | "viewer") {
 beforeEach(() => {
   records = [fundraiser(1), fundraiser(2), fundraiser(3, { path: "event", title: "Test Coffee Morning" })];
   touchOn = false;
+  approvalsUnavailable = false;
+  touchFails = false;
+  approved = Object.fromEntries(["target", "need_a_hand", "on_track"].map((k) => [k, { approvedAt: "2026-10-03T11:00:00.000Z", approvedBy: "Jaimie" }]));
   asRole("admin");
   calls = [];
   confirmAnswer = true;
@@ -210,10 +240,15 @@ describe("the Automatic emails card", () => {
     (q('[data-frtouchkind="need_a_hand"]') as HTMLElement).click();
     await settle();
     expect((el("frTouchPreview") as HTMLIFrameElement).getAttribute("srcdoc")).toContain("Email body for need_a_hand");
-    expect(text(el("frTouchMeta"))).toContain("New wording, waiting for sign off");
+    expect(text(el("frTouchMeta"))).toContain("Approved by Jaimie on 03/10/2026.");
+    (q('[data-frtouchkind="finished"]') as HTMLElement).click();
+    await settle();
+    expect(text(el("frTouchMeta"))).toContain("New wording, waiting for your sign off. It won't send until you approve it.");
     (q('[data-frtouchkind="halfway"]') as HTMLElement).click();
     await settle();
     expect(text(el("frTouchMeta"))).not.toContain("New wording");
+    expect(text(el("frTouchMeta"))).not.toContain("Approved by");
+    expect(q("[data-frtouchapprove]")).toBeNull();
   });
 
   it("shows an email for a real fundraiser raising money, picked from the list", async () => {
@@ -259,6 +294,134 @@ describe("the Automatic emails card", () => {
   });
 });
 
+describe("signing off the new wording (Jaimie, 2026-10-03)", () => {
+  const pickKind = async (kind: string) => {
+    (q(`[data-frtouchkind="${kind}"]`) as HTMLElement).click();
+    await settle();
+  };
+  const pillOn = (kind: string) => q(`[data-frtouchkind="${kind}"] [data-frtouchwaiting]`);
+
+  it("says in the card that new wording only sends once approved", async () => {
+    await openFundraising();
+    expect(text(el("frTouch"))).toContain("New wording only sends once it's approved here.");
+  });
+
+  it("puts a Waiting for sign off pill on each email with a version still waiting, and none on the approved ones", async () => {
+    await openFundraising();
+    for (const k of ["finished", "week_after", "year_on"]) expect(text(pillOn(k))).toBe("Waiting for sign off");
+    for (const k of ["target", "need_a_hand", "on_track", "halfway", "first_gift"]) expect(pillOn(k)).toBeNull();
+  });
+
+  it("lets an admin approve a wording that is waiting, after a check, and then shows who approved it", async () => {
+    await openFundraising();
+    await pickKind("finished");
+    const btn = q("[data-frtouchapprove]")!;
+    expect(text(btn)).toBe("Approve this wording");
+    expect(btn.getAttribute("data-frtouchapprove")).toBe("finished");
+    btn.click();
+    await settle();
+    expect(confirmed.pop()).toMatch(/Approve this wording/);
+    expect(sent("POST", "/api/admin/fundraising/touch/approvals/finished")).toHaveLength(1);
+    expect(text(el("frTouchMeta"))).toContain("Approved by fern@example.com on 07/12/2026.");
+    expect(pillOn("finished")).not.toBeNull(); // its nothing raised version is still waiting
+    expect(text(el("frTouchStatus"))).toBe("Wording approved.");
+  });
+
+  it("approves the nothing raised version on its own, from the example with nothing raised", async () => {
+    await openFundraising();
+    await pickKind("year_on");
+    expect(q("[data-frtouchapprove]")).toBeNull(); // the usual year on wording needs no sign off
+    const pick = el("frTouchFor") as HTMLSelectElement;
+    pick.value = "zero";
+    pick.dispatchEvent(new Event("change", { bubbles: true }));
+    await settle();
+    expect(text(el("frTouchMeta"))).toContain("waiting for your sign off");
+    q("[data-frtouchapprove]")!.click();
+    await settle();
+    expect(sent("POST", "/api/admin/fundraising/touch/approvals/year_on_zero")).toHaveLength(1);
+    expect(pillOn("year_on")).toBeNull();
+  });
+
+  it("sends nothing when the check is cancelled", async () => {
+    confirmAnswer = false;
+    await openFundraising();
+    await pickKind("finished");
+    q("[data-frtouchapprove]")!.click();
+    await settle();
+    expect(sent("POST", "/api/admin/fundraising/touch/approvals/finished")).toHaveLength(0);
+  });
+
+  it("lets an admin withdraw an approval", async () => {
+    await openFundraising();
+    await pickKind("target");
+    const btn = q("[data-frtouchwithdraw]")!;
+    expect(text(btn)).toBe("Withdraw approval");
+    btn.click();
+    await settle();
+    expect(confirmed.pop()).toMatch(/Withdraw approval/);
+    expect(sent("DELETE", "/api/admin/fundraising/touch/approvals/target")).toHaveLength(1);
+    expect(text(el("frTouchMeta"))).toContain("waiting for your sign off");
+    expect(text(pillOn("target"))).toBe("Waiting for sign off");
+  });
+
+  it("shows an editor whether each is approved, but neither button", async () => {
+    asRole("editor");
+    await openFundraising();
+    await pickKind("finished");
+    expect(text(el("frTouchMeta"))).toContain("waiting for your sign off");
+    expect(q("[data-frtouchapprove]")).toBeNull();
+    await pickKind("target");
+    expect(text(el("frTouchMeta"))).toContain("Approved by Jaimie on 03/10/2026.");
+    expect(q("[data-frtouchwithdraw]")).toBeNull();
+  });
+
+  it("says before Mark finished that the thank you waits for its wording to be approved", async () => {
+    confirmAnswer = false;
+    touchOn = true;
+    await openFundraising();
+    await openRow(1);
+    (q('[data-fraction="finish"]') as HTMLElement).click();
+    expect(confirmed.pop()).toContain("its new wording is waiting for your sign off");
+  });
+});
+
+describe("review: sign offs, team totals and an unread card", () => {
+  it("says before Mark finished that a team page's thank you goes, judged on the whole team's total", async () => {
+    // The team page itself has raised nothing (its own meter); its members £500 (the list's meter).
+    // The usual thank you is approved, its nothing raised version is not: the team total decides.
+    approved.finished = { approvedAt: "2026-12-01T09:00:00.000Z", approvedBy: "admin:fern@example.com" };
+    records = [fundraiser(1, { isTeam: true, title: "Team Dash", listMeter: { ...meter, raisedPence: 50000, onlinePence: 50000 } })];
+    touchOn = true;
+    confirmAnswer = false;
+    await openFundraising();
+    await openRow(1);
+    (q('[data-fraction="finish"]') as HTMLElement).click();
+    expect(confirmed.pop()).toContain("Automatic emails are on, so we email Robin Example their thank you");
+  });
+
+  it("does not claim the thank you goes when the automatic emails could not load", async () => {
+    touchFails = true;
+    confirmAnswer = false;
+    await openFundraising();
+    await openRow(1);
+    (q('[data-fraction="finish"]') as HTMLElement).click();
+    const said = confirmed.pop()!;
+    expect(said).toContain("If its wording is still waiting for sign off, the thank you is held until you approve it.");
+    expect(said).not.toContain("so we email");
+  });
+
+  it("says when the sign offs could not be checked, and offers no approve button", async () => {
+    approvalsUnavailable = true;
+    approved = {};
+    await openFundraising();
+    expect(text(el("frTouch"))).toContain("Couldn't check sign-offs just now, so new wording is held.");
+    (q('[data-frtouchkind="target"]') as HTMLElement).click();
+    await settle();
+    expect(q("[data-frtouchapprove]")).toBeNull();
+    expect(text(el("frTouchMeta"))).toContain("Couldn't check sign-offs just now, so new wording is held.");
+  });
+});
+
 describe("the call prompts", () => {
   it("puts a pill on the list for each prompt", async () => {
     await openFundraising();
@@ -294,8 +457,10 @@ describe("the call prompts", () => {
     await openRow(1);
     (q('[data-fraction="finish"]') as HTMLElement).click();
     expect(confirmed.pop()).toContain("Automatic emails are off, so no thank you email goes.");
-    // Switched on meanwhile: opening Fundraising again reads it afresh (the sign up stays open).
+    // Switched on meanwhile, with its wording approved: opening Fundraising again reads it afresh
+    // (the sign up stays open).
     touchOn = true;
+    for (const k of ["finished", "finished_zero"]) approved[k] = { approvedAt: "2026-12-01T09:00:00.000Z", approvedBy: "admin:fern@example.com" };
     (q('.admin-nav-link[data-view="fundraising"]') as HTMLElement).click();
     await settle();
     (q('[data-fraction="finish"]') as HTMLElement).click();

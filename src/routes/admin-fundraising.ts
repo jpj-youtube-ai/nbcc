@@ -40,6 +40,7 @@ import { insertEventImage } from "../db/events";
 import { validateUpload } from "../newsletter/image-validation";
 import { sendApprovedEmail, sendEditDecisionEmail, sendWaitingLiveEmails } from "../fundraising/send";
 import { sendFinishedTouch } from "../fundraising/touch-runner";
+import { touchFundraiser } from "../db/fundraising-touch";
 import { TEAM_SHARE_MODE_MISSING, withTeamTotals } from "../fundraising/teams";
 import { memoryAdminFacts } from "../fundraising/in-memory";
 import { londonToday } from "../events/model";
@@ -352,7 +353,9 @@ function moveHandler(move: "approve" | "decline" | "finish") {
       // and only once. sendFinishedTouch checks every guard itself and never throws.
       if (move === "finish") {
         await bestEffort("finished thank you", async () => {
-          const withMeter = await getFundraiser(after.id);
+          // With the meter the daily run reads (a team page's whole team total), so the wording
+          // and the amount agree with it.
+          const withMeter = await touchFundraiser(after.id);
           if (withMeter) await sendFinishedTouch(withMeter);
         });
       }

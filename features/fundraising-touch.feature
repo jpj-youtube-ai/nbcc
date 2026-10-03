@@ -1,7 +1,8 @@
 @fundraising @fundraising-touch @db
 Feature: Keeping in touch with fundraisers (TASK-515)
   Friendly automatic emails go to an organiser at the right moments, but only once an admin has
-  read them all in Admin > Fundraising and switched them on: they ship switched off. Each goes once
+  read them all in Admin > Fundraising and switched them on: they ship switched off. New wording only
+  goes once an admin has approved it there. Each goes once
   at most, never to anyone who has asked us to stop, and the thank you goes when staff mark a
   fundraiser finished. Staff see smart call prompts and record the calls they make. Every name and
   address here is invented.
@@ -52,11 +53,46 @@ Feature: Keeping in touch with fundraisers (TASK-515)
   Scenario: marking a fundraiser finished sends the thank you with the certificate
     Given fundraising is switched on
     And the automatic emails are switched on
+    And every automatic email wording is approved
     And a fundraising staff member "e3.touch.fr.bdd@example.com" with role "editor"
     And an approved fundraiser "Nat's Dash (bdd-fr)" raising 50000 pence, organised by "nat.touch.fr.bdd@example.com"
     When "e3.touch.fr.bdd@example.com" marks "Nat's Dash (bdd-fr)" finished
     Then the fundraising answer is 200
     And a "fundraiseFinished" email went to "nat.touch.fr.bdd@example.com"
+
+  Scenario: new wording waits for sign off: the thank you is held back until an admin approves it
+    Given fundraising is switched on
+    And the automatic emails are switched on
+    And the thank you email's wording is waiting for sign off
+    And a fundraising staff member "a5.touch.fr.bdd@example.com" with role "admin"
+    And a fundraising staff member "e5.touch.fr.bdd@example.com" with role "editor"
+    And an approved fundraiser "Quinn's Dash (bdd-fr)" raising 50000 pence, organised by "quinn.touch.fr.bdd@example.com"
+    When "e5.touch.fr.bdd@example.com" marks "Quinn's Dash (bdd-fr)" finished
+    Then the fundraising answer is 200
+    And no "fundraiseFinished" email went to "quinn.touch.fr.bdd@example.com"
+    When the daily automatic emails run
+    Then no "fundraiseFinished" email went to "quinn.touch.fr.bdd@example.com"
+    When "e5.touch.fr.bdd@example.com" approves the "finished_zero" automatic email wording
+    Then the fundraising answer is 403
+    When "a5.touch.fr.bdd@example.com" approves the "finished_zero" automatic email wording
+    Then the fundraising answer is 200
+    And the "finished_zero" automatic email wording is approved by "a5.touch.fr.bdd@example.com"
+    When the daily automatic emails run
+    Then exactly 1 "fundraiseFinished" email went to "quinn.touch.fr.bdd@example.com"
+    When the daily automatic emails run
+    Then exactly 1 "fundraiseFinished" email went to "quinn.touch.fr.bdd@example.com"
+
+  Scenario: a page finished while the automatic emails were off never gets the thank you later
+    Given fundraising is switched on
+    And the automatic emails are switched off
+    And every automatic email wording is approved
+    And a fundraising staff member "e6.touch.fr.bdd@example.com" with role "editor"
+    And an approved fundraiser "Rae's Dash (bdd-fr)" raising 50000 pence, organised by "rae.touch.fr.bdd@example.com"
+    When "e6.touch.fr.bdd@example.com" marks "Rae's Dash (bdd-fr)" finished
+    Then the fundraising answer is 200
+    Given the automatic emails are switched on
+    When the daily automatic emails run
+    Then no "fundraiseFinished" email went to "rae.touch.fr.bdd@example.com"
 
   Scenario: a call about a prompt is recorded by an editor, never by a viewer
     Given a fundraising staff member "e4.touch.fr.bdd@example.com" with role "editor"

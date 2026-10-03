@@ -26,6 +26,9 @@ vi.mock("../../src/fundraising/send", () => ({
   fundraiserPageUrl: (slug: string) => `https://nbcc.test/fundraise/${slug}`,
 }));
 vi.mock("../../src/fundraising/touch-runner", () => ({ sendFinishedTouch }));
+// Review: the thank you is sent with the meter the daily run reads (a team page's whole team total).
+const { touchFundraiser } = vi.hoisted(() => ({ touchFundraiser: vi.fn() }));
+vi.mock("../../src/db/fundraising-touch", async (orig) => ({ ...(await orig<Record<string, unknown>>()), touchFundraiser }));
 vi.mock("../../src/db/events", () => ({ insertEventImage: vi.fn() }));
 vi.mock("../../src/db/admin-users", () => ({ getUserAuthRow: getUserAuthRowMock }));
 vi.mock("../../src/config", () => ({
@@ -62,7 +65,8 @@ const after = { id: 9, slug: "sams-walk", title: "Sam's Walk", kind: "run_walk",
 
 beforeEach(() => {
   moveFundraiser.mockReset().mockResolvedValue({ before: { ...after, status: "approved" }, after, livePending: false });
-  getFundraiser.mockReset().mockResolvedValue({ ...after, meter: { raisedPence: 61200 } });
+  getFundraiser.mockReset().mockResolvedValue({ ...after, meter: { raisedPence: 0 } });
+  touchFundraiser.mockReset().mockResolvedValue({ ...after, meter: { raisedPence: 61200 } });
   sendFinishedTouch.mockReset().mockResolvedValue("sent");
   vi.spyOn(console, "error").mockImplementation(() => undefined);
 });
@@ -71,6 +75,7 @@ describe("Mark finished", () => {
   it("sends the finished email with the fundraiser's meter, after the finish has committed", async () => {
     const res = await run(routes.postFinishFundraiser);
     expect(res.statusCode).toBe(200);
+    expect(touchFundraiser).toHaveBeenCalledWith(9);
     expect(sendFinishedTouch).toHaveBeenCalledWith(expect.objectContaining({ id: 9, meter: { raisedPence: 61200 } }));
     expect(moveFundraiser.mock.invocationCallOrder[0]).toBeLessThan(sendFinishedTouch.mock.invocationCallOrder[0]);
   });

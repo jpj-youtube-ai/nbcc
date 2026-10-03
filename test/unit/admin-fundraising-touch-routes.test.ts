@@ -10,6 +10,10 @@ const touch = vi.hoisted(() => ({
   setTouchEmailsOn: vi.fn(),
   readTouchState: vi.fn(),
   recordPromptCall: vi.fn(),
+  listWordingApprovals: vi.fn(),
+  approveWording: vi.fn(),
+  withdrawWording: vi.fn(),
+  touchFundraiser: vi.fn(),
 }));
 const { getUserAuthRowMock, getFundraiser } = vi.hoisted(() => ({ getUserAuthRowMock: vi.fn(), getFundraiser: vi.fn() }));
 
@@ -72,6 +76,7 @@ beforeEach(() => {
   for (const fn of Object.values(touch)) fn.mockReset();
   getUserAuthRowMock.mockReset();
   getFundraiser.mockReset().mockResolvedValue(robin);
+  touch.touchFundraiser.mockImplementation(async (id: number) => getFundraiser(id));
   touch.getTouchSettings.mockResolvedValue({ on: false, updatedAt: null, updatedBy: null });
   touch.setTouchEmailsOn.mockImplementation(async (on: boolean) => ({ on, updatedAt: "2026-10-03T09:00:00.000Z", updatedBy: "admin:fern@example.com" }));
   touch.readTouchState.mockResolvedValue([
@@ -81,6 +86,13 @@ beforeEach(() => {
       prompt: { lastOnlineGiftAt: null, calls: [] },
     },
   ]);
+  touch.listWordingApprovals.mockResolvedValue([
+    { key: "target", approvedAt: "2026-10-03T11:00:00.000Z", approvedBy: "Jaimie" },
+    { key: "need_a_hand", approvedAt: "2026-10-03T11:00:00.000Z", approvedBy: "Jaimie" },
+    { key: "on_track", approvedAt: "2026-10-03T11:00:00.000Z", approvedBy: "Jaimie" },
+  ]);
+  touch.approveWording.mockImplementation(async (key: string, actor: string) => ({ key, approvedAt: "2026-10-04T09:00:00.000Z", approvedBy: actor }));
+  touch.withdrawWording.mockResolvedValue(true);
   touch.recordPromptCall.mockResolvedValue({ prompt: "sponsor_form", calledAt: "2026-10-03T10:00:00.000Z", calledBy: "fern@example.com", note: null });
   vi.spyOn(console, "error").mockImplementation(() => undefined);
 });
@@ -181,7 +193,7 @@ describe("the preview", () => {
   it("shows an email for a real fundraiser, from its record", async () => {
     const res = await run(routes.getTouchPreview, { token: tokenFor("viewer"), params: { kind: "halfway" }, query: { fundraiserId: "12" } });
     const body = res.body as { html: string; sample: boolean; title: string };
-    expect(getFundraiser).toHaveBeenCalledWith(12);
+    expect(touch.touchFundraiser).toHaveBeenCalledWith(12);
     expect(body.html).toContain("Robin&#39;s Walk");
     expect(body.html).toContain("Hi Robin,");
     expect(body.sample).toBe(false);
@@ -215,5 +227,118 @@ describe("recording a call about a prompt", () => {
   it("says when the fundraiser is not there", async () => {
     touch.recordPromptCall.mockRejectedValue(new TouchError("not_found"));
     expect((await run(routes.postPromptCall, { token: tokenFor("editor"), params: { id: "12" }, body: { prompt: "quiet" } })).statusCode).toBe(404);
+  });
+});
+
+describe("signing off the new wording (Jaimie, 2026-10-03)", () => {
+  it("needs a session to approve or withdraw", async () => {
+    for (const h of [routes.postWordingApproval, routes.deleteWordingApproval]) {
+      expect((await run(h, { params: { key: "finished" } })).statusCode).toBe(401);
+    }
+  });
+
+  it("lets only an admin approve a wording, recording who", async () => {
+    for (const r of ["viewer", "editor"]) {
+      const t = tokenFor(r);
+      expect((await run(routes.postWordingApproval, { token: t, params: { key: "finished" } })).statusCode).toBe(403);
+      expect((await run(routes.deleteWordingApproval, { token: t, params: { key: "target" } })).statusCode).toBe(403);
+    }
+    expect(touch.approveWording).not.toHaveBeenCalled();
+    expect(touch.withdrawWording).not.toHaveBeenCalled();
+    const res = await run(routes.postWordingApproval, { token: tokenFor("admin"), params: { key: "finished" } });
+    expect(res.statusCode).toBe(200);
+    expect(touch.approveWording).toHaveBeenCalledWith("finished", "admin:fern@example.com");
+    expect(res.body).toEqual({ approval: { key: "finished", approvedAt: "2026-10-04T09:00:00.000Z", approvedBy: "admin:fern@example.com" } });
+  });
+
+  it("lets an admin withdraw an approval", async () => {
+    const res = await run(routes.deleteWordingApproval, { token: tokenFor("admin"), params: { key: "target" } });
+    expect(res.statusCode).toBe(200);
+    expect(touch.withdrawWording).toHaveBeenCalledWith("target", "admin:fern@example.com");
+    expect(res.body).toEqual({ withdrawn: true });
+  });
+
+  it("refuses a wording that does not need signing off, or does not exist", async () => {
+    const t = tokenFor("admin");
+    for (const key of ["halfway", "nope", "week_after"]) {
+      expect((await run(routes.postWordingApproval, { token: t, params: { key } })).statusCode).toBe(404);
+      expect((await run(routes.deleteWordingApproval, { token: t, params: { key } })).statusCode).toBe(404);
+    }
+    expect(touch.approveWording).not.toHaveBeenCalled();
+  });
+
+  it("gives each email's versions waiting for sign off, and every approval, in the overview", async () => {
+    const body = (await run(routes.getTouch, { token: tokenFor("viewer") })).body as Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
+    const waiting = Object.fromEntries(body.kinds.map((k: { kind: string; waiting: string[] }) => [k.kind, k.waiting]));
+    expect(waiting).toEqual({
+      first_gift: [], halfway: [], target: [], week_before: [], week_after: ["week_after_zero"],
+      finished: ["finished", "finished_zero"], year_on: ["year_on_zero"], need_a_hand: [], on_track: [],
+    });
+    expect(body.approvals.target).toEqual({ approvedAt: "2026-10-03T11:00:00.000Z", approvedBy: "Jaimie" });
+    expect(body.approvals.finished).toBeUndefined();
+  });
+
+  it("leaves out of the next run what is waiting for sign off, and says so", async () => {
+    // Robin is at the target with no date: target is due. Approved, it would go; withdrawn, it waits.
+    touch.readTouchState.mockResolvedValue([
+      {
+        f: { ...robin, meter: meter({ onlinePence: 30000, cashPence: 0, targetPence: 30000 }) },
+        touch: { firstOnlineGiftAt: null, lastOnlineGiftAt: null, finishedAt: null, sent: [] },
+        prompt: { lastOnlineGiftAt: null, calls: [] },
+      },
+    ]);
+    expect((await run(routes.getTouch, { token: tokenFor("viewer") })).body).toMatchObject({ due: { "12": "target" }, held: {} });
+    touch.listWordingApprovals.mockResolvedValue([]);
+    expect((await run(routes.getTouch, { token: tokenFor("viewer") })).body).toMatchObject({ due: {}, held: { "12": "target" } });
+  });
+
+  it("says in the preview which version it is, and whether it is approved, by whom and when", async () => {
+    const t = tokenFor("viewer");
+    const target = (await run(routes.getTouchPreview, { token: t, params: { kind: "target" } })).body as Record<string, unknown>;
+    expect(target).toMatchObject({ newWording: true, wordingKey: "target", approval: { approvedAt: "2026-10-03T11:00:00.000Z", approvedBy: "Jaimie" } });
+    const finished = (await run(routes.getTouchPreview, { token: t, params: { kind: "finished" } })).body as Record<string, unknown>;
+    expect(finished).toMatchObject({ newWording: true, wordingKey: "finished", approval: null });
+    const zero = (await run(routes.getTouchPreview, { token: t, params: { kind: "year_on" }, query: { sample: "zero" } })).body as Record<string, unknown>;
+    expect(zero).toMatchObject({ newWording: true, wordingKey: "year_on_zero", approval: null });
+    const old = (await run(routes.getTouchPreview, { token: t, params: { kind: "halfway" } })).body as Record<string, unknown>;
+    expect(old).toMatchObject({ newWording: false, wordingKey: null, approval: null });
+  });
+});
+
+describe("review: one answer for every path", () => {
+  it("previews a team page's thank you with the whole team's total, as the daily run sends it", async () => {
+    // The team page itself has raised nothing; its members £500. touchFundraiser gives the team total.
+    const team = { ...robin, id: 40, title: "Team Dash", isTeam: true, status: "finished", targetPence: 100000 };
+    touch.touchFundraiser.mockResolvedValue({ ...team, meter: meter({ onlinePence: 50000, cashPence: 0, targetPence: 100000 }) });
+    const res = await run(routes.getTouchPreview, { token: tokenFor("viewer"), params: { kind: "finished" }, query: { fundraiserId: "40" } });
+    const body = res.body as { wordingKey: string; html: string };
+    expect(touch.touchFundraiser).toHaveBeenCalledWith(40);
+    expect(body.wordingKey).toBe("finished");
+    expect(body.html).toContain("£500");
+  });
+
+  it("still shows the card when the sign offs cannot be read: none approved, and says so", async () => {
+    touch.listWordingApprovals.mockRejectedValue(new Error("connection lost"));
+    touch.readTouchState.mockResolvedValue([
+      {
+        f: { ...robin, meter: meter({ onlinePence: 30000, cashPence: 0, targetPence: 30000 }) },
+        touch: { firstOnlineGiftAt: null, lastOnlineGiftAt: null, finishedAt: null, sent: [] },
+        prompt: { lastOnlineGiftAt: null, calls: [] },
+      },
+    ]);
+    const res = await run(routes.getTouch, { token: tokenFor("viewer") });
+    expect(res.statusCode).toBe(200);
+    const body = res.body as Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
+    expect(body.approvalsUnavailable).toBe(true);
+    expect(body.approvals).toEqual({});
+    expect(body.kinds.find((k: { kind: string }) => k.kind === "target").waiting).toEqual(["target"]);
+    expect(body).toMatchObject({ due: {}, held: { "12": "target" } });
+    const pv = await run(routes.getTouchPreview, { token: tokenFor("viewer"), params: { kind: "target" } });
+    expect(pv.statusCode).toBe(200);
+    expect(pv.body).toMatchObject({ wordingKey: "target", approval: null, approvalsUnavailable: true });
+  });
+
+  it("says the sign offs were read when they were", async () => {
+    expect(((await run(routes.getTouch, { token: tokenFor("viewer") })).body as { approvalsUnavailable: boolean }).approvalsUnavailable).toBe(false);
   });
 });

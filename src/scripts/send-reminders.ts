@@ -171,7 +171,9 @@ if (require.main === module) {
       try {
         const { runTicketDailyPass } = await import("../tickets/runner");
         const t = await runTicketDailyPass();
-        console.error(`event tickets: emails tried=${t.emailsTried} sent=${t.emailsSent} phones deleted=${t.phonesDeleted} failed=${t.failed}`);
+        console.error(
+          `event tickets: emails tried=${t.emailsTried} sent=${t.emailsSent} refund emails tried=${t.refundEmailsTried} sent=${t.refundEmailsSent} phones deleted=${t.phonesDeleted} failed=${t.failed}`,
+        );
       } catch (err) {
         console.error("event tickets daily pass failed:", err instanceof Error ? err.message : err);
       }

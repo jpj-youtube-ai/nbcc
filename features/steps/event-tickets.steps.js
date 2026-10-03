@@ -151,7 +151,18 @@ const signUpBody = (title, over) => ({
   socialOk: false,
   over18: true,
   sharesWithOther: false,
-  wants: { posterCount: 0, leafletCount: 0, bucketCount: 0, tinCount: 0, shoutOut: false, attend: false },
+  // As the rebuilt sign up form sends it (the sign up tidy): it says so, and answers what that form asks.
+  formVersion: 2,
+  listed: true,
+  inMemory: false,
+  forOrganisation: false,
+  instagram: "",
+  facebook: "",
+  postLine1: "1 Example Road",
+  postLine2: "",
+  postTown: "Exampleton",
+  postPostcode: "EX1 1EX",
+  wants: { posterCount: 0, leafletCount: 0, bucketCount: 0, tinCount: 0, qrCount: 0, envelopeCount: 0, shoutOut: false, attend: false },
   newsletterOk: false,
   cardLine: "A ceilidh for NBCC (bdd-fr).",
   endTime: "22:30",
@@ -509,4 +520,30 @@ When("Stripe says a refund of {int} pence changed on the payment {string}", asyn
     payment_intent: paymentIntent,
     metadata: { product: "event_tickets" },
   });
+});
+
+// ---- a refund that failed at the bank: flagged until an admin marks it as sorted ----
+
+Given("a refund on the booking of {string} has failed at the bank", async function (email) {
+  const o = await orderOf(email);
+  await pool.query(`UPDATE event_ticket_orders SET flags = flags || '{"refundFailed": {"released": false, "overBy": 0}}'::jsonb WHERE id = $1`, [o.id]);
+});
+
+When("{string} marks the failed refund on the booking of {string} as sorted", async function (staff, email) {
+  const o = await orderOf(email);
+  await adminCall(this, staff, "POST", `/api/admin/event-tickets/${o.fundraiser_id}/orders/${o.id}/refund-failed-sorted`, {});
+});
+
+async function refundFailedFlag(email) {
+  const o = await orderOf(email);
+  const r = await pool.query("SELECT flags ? 'refundFailed' AS flagged FROM event_ticket_orders WHERE id = $1", [o.id]);
+  return r.rows[0].flagged;
+}
+
+Then("the booking of {string} is flagged for a failed refund", async function (email) {
+  assert.equal(await refundFailedFlag(email), true);
+});
+
+Then("the booking of {string} is not flagged for a failed refund", async function (email) {
+  assert.equal(await refundFailedFlag(email), false);
 });

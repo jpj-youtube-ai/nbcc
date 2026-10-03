@@ -539,7 +539,7 @@ export function refundFailedWords(f: boolean | { released: boolean; overBy: numb
   const start = "Refund failed at the bank: the buyer has not been paid back.";
   if (typeof f !== "object" || !f.released) return `${start} Refund again.`;
   const over = f.overBy > 0 ? ` Counting their tickets, this event is now ${f.overBy} over its limit.` : "";
-  return `${start} Their tickets were released: contact them and refund again.${over}`;
+  return `${start} Their tickets were released: contact them and refund them in Stripe.${over}`;
 }
 
 /** A booking's flags, in words for staff. A late payment is only a worry when it took the event over. */

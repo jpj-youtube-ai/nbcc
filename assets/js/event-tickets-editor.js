@@ -63,8 +63,8 @@
       row.className = "et-row";
       row.setAttribute("data-et-row", "");
       row.appendChild(field(doc, pre + "Name" + n, "Kind of ticket", { type: "text", maxlength: "60", autocomplete: "off", "data-et-name": "" }, false, "Like Adult"));
-      row.appendChild(field(doc, pre + "Price" + n, "Price, in pounds (0 for free)", { type: "number", inputmode: "decimal", min: "0", max: "500", step: "0.01", "data-et-price": "" }, false, "10"));
-      row.appendChild(field(doc, pre + "Qty" + n, "How many", { type: "number", inputmode: "numeric", min: "1", max: "5000", step: "1", "data-et-quantity": "" }, true, "No limit"));
+      row.appendChild(field(doc, pre + "Price" + n, "Price, in pounds", { type: "number", inputmode: "decimal", min: "0", max: "500", step: "0.01", "data-et-price": "", "data-invalid-message": "Almost! A ticket can be up to £500. Put 0 if it's free." }, false, "10"));
+      row.appendChild(field(doc, pre + "Qty" + n, "How many", { type: "number", inputmode: "numeric", min: "1", max: "5000", step: "1", "data-et-quantity": "", "data-invalid-message": "Almost! Just put a whole number, or leave it empty for no limit." }, false, "No limit"));
       var remove = doc.createElement("button");
       remove.type = "button";
       remove.className = "fr-link-btn et-row__remove";

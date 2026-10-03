@@ -429,7 +429,7 @@
                       <p><button class="fr-link-btn" type="button" data-et-add>Add another kind of ticket</button></p>
                       <div class="give-field">
                         <label for="ticketLimit">The most tickets to sell in all <span class="give-optional">(optional)</span></label>
-                        <input class="give-field-input" id="ticketLimit" name="ticketLimit" type="number" inputmode="numeric" min="1" max="5000" step="1" autocomplete="off" aria-describedby="ticketLimitHelp" data-et-limit />
+                        <input class="give-field-input" id="ticketLimit" name="ticketLimit" type="number" inputmode="numeric" min="1" max="5000" step="1" autocomplete="off" aria-describedby="ticketLimitHelp" data-invalid-message="Almost! Just put a whole number, or leave it empty for no limit." data-et-limit />
                         <p class="give-field-help" id="ticketLimitHelp">Like the number the hall holds. Leave it empty for no limit. We say Sold out when it is reached.</p>
                       </div>
                       <fieldset class="fr-fieldset fr-subgroup" id="ticketCloseGroup">

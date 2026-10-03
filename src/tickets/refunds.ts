@@ -15,7 +15,9 @@ export function refundLite(r: { id?: unknown; status?: unknown; amount?: unknown
 /** Every refund Stripe has on this payment (a ticket order never has anywhere near a hundred). */
 export const listStripeRefunds: RefundLister = async (paymentIntentId) => {
   const { stripe } = await import("../clients/stripe");
-  const list = await stripe.refunds.list({ payment_intent: paymentIntentId, limit: 100 });
+  // Asked while the order is locked, so it must not hang: eight seconds, and no second try (the
+  // caller says so, and Stripe's event or the admin tries again).
+  const list = await stripe.refunds.list({ payment_intent: paymentIntentId, limit: 100 }, { timeout: 8000, maxNetworkRetries: 0 });
   return list.data.map((r) => refundLite(r));
 };
 

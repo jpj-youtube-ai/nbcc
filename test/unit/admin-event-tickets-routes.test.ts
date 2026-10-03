@@ -21,6 +21,7 @@ const db = vi.hoisted(() => ({
   setSalesClosed: vi.fn(),
   beginRefund: vi.fn(),
   reconcileOrderRefunds: vi.fn(),
+  markRefundFailedSorted: vi.fn(),
   releaseTickets: vi.fn(),
   failRefund: vi.fn(),
   getOrder: vi.fn(),
@@ -70,6 +71,7 @@ import {
   getAdminGuestList,
   getAdminTicketsCsv,
   postAdminRefund,
+  postRefundFailedSorted,
   postDeclineRequest,
   postResendTickets,
   putSalesClose,
@@ -217,6 +219,7 @@ type Lister = (pi: string) => Promise<Array<{ id: string; amount: number; status
 describe("refunds", () => {
   beforeEach(() => {
     db.reconcileOrderRefunds.mockReset();
+    db.getOrder.mockResolvedValue(paidOrder);
     db.beginRefund.mockResolvedValue(intent);
     refunds.list.mockResolvedValue({ data: [] });
     refunds.create.mockResolvedValue({ id: "re_1", status: "succeeded", amount: 1000 });
@@ -238,7 +241,7 @@ describe("refunds", () => {
     expect(authz.authorizeSectionAsAdmin).toHaveBeenCalled();
     expect(order).toEqual(["reconcile", "begin", "stripe", "reconcile"]);
     expect(db.reconcileOrderRefunds.mock.calls.map((c) => c[0])).toEqual([70, 70]);
-    expect(refunds.list).toHaveBeenCalledWith({ payment_intent: "pi_1", limit: 100 });
+    expect(refunds.list).toHaveBeenCalledWith({ payment_intent: "pi_1", limit: 100 }, { timeout: 8000, maxNetworkRetries: 0 });
     expect(db.beginRefund).toHaveBeenCalledWith(12, 70, REFUND.lines, { refundedPence: 0 }, { actor: "admin:staff@example.com", requestId: 5, note: "Ill" });
     expect(refunds.create).toHaveBeenCalledWith(
       { payment_intent: "pi_1", amount: 1000, reason: "requested_by_customer", metadata: { product: "event_tickets", orderReference: "TIX-ABCDEF", refundIntent: "31" } },
@@ -423,9 +426,53 @@ describe("a free booking (staff)", () => {
   });
 });
 
+describe("a booking that is not this event's", () => {
+  it("is refused before Stripe is asked anything about it", async () => {
+    db.getOrder.mockResolvedValueOnce({ ...paidOrder, fundraiserId: 99 });
+    const res = await run(postAdminRefund, { params: { id: "12", orderId: "70" }, body: REFUND });
+    expect(res.statusCode).toBe(404);
+    expect(res.body.error).toBe("We could not find that booking.");
+    expect(db.reconcileOrderRefunds).not.toHaveBeenCalled();
+    expect(refunds.list).not.toHaveBeenCalled();
+    expect(db.beginRefund).not.toHaveBeenCalled();
+  });
+
+  it("nor is one that does not exist", async () => {
+    db.getOrder.mockResolvedValueOnce(null);
+    const res = await run(postAdminRefund, { params: { id: "12", orderId: "70" }, body: REFUND });
+    expect(res.statusCode).toBe(404);
+    expect(db.reconcileOrderRefunds).not.toHaveBeenCalled();
+  });
+});
+
+describe("a refund that failed at the bank", () => {
+  it("is marked as sorted by an admin, by hand, and audited with who did it", async () => {
+    const res = await run(postRefundFailedSorted, { params: { id: "12", orderId: "70" } });
+    expect(authz.authorizeSectionAsAdmin).toHaveBeenCalled();
+    expect(db.markRefundFailedSorted).toHaveBeenCalledWith(12, 70, "admin:staff@example.com");
+    expect(res.statusCode).toBe(200);
+    expect(res.body).toEqual({ status: "sorted" });
+  });
+
+  it("says so when there is nothing to mark", async () => {
+    db.markRefundFailedSorted.mockRejectedValueOnce(new db.TicketError("not_found", "That booking has no failed refund to mark as sorted."));
+    const res = await run(postRefundFailedSorted, { params: { id: "12", orderId: "70" } });
+    expect(res.statusCode).toBe(404);
+  });
+
+  it("shows on the booking until then", async () => {
+    db.listOrders.mockResolvedValue([{ ...paidOrder, flags: { refundFailed: { released: true, overBy: 0 } } }]);
+    const res = await run(getAdminEventTickets, { params: { id: "12" } });
+    const o = res.body.orders[0];
+    expect(o.refundFailed).toBe(true);
+    expect(o.flagWords).toEqual(["Refund failed at the bank: the buyer has not been paid back. Their tickets were released: contact them and refund them in Stripe."]);
+  });
+});
+
 describe("what Stripe says about the refund it just made", () => {
   beforeEach(() => {
     db.reconcileOrderRefunds.mockReset();
+    db.getOrder.mockResolvedValue(paidOrder);
     db.beginRefund.mockResolvedValue(intent);
     refunds.list.mockResolvedValue({ data: [] });
   });

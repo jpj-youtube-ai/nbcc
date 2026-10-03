@@ -260,3 +260,22 @@ Feature: NBCC sells an event's tickets for its organiser
     Then the booking of "nia.et.fr.bdd@example.com" has 1000 pence refunded and 1 ticket left
     And exactly 1 refund has been made on the booking of "nia.et.fr.bdd@example.com"
     And exactly 2 "eventTicketsRefund" email went to "nia.et.fr.bdd@example.com"
+
+  Scenario: a refund that failed at the bank stays flagged until an admin marks it as sorted
+    Given the events page is switched on
+    And fundraising is switched on
+    And a fundraising staff member "a9.et.fr.bdd@example.com" with role "admin"
+    And a fundraising staff member "e9.et.fr.bdd@example.com" with role "editor"
+    And an approved event "The Sorted Quiz (bdd-fr)" selling 10 "Adult" tickets at 1000 pence through NBCC
+    And "zed.et.fr.bdd@example.com" has bought 2 "Adult" tickets for "The Sorted Quiz (bdd-fr)", paid as "pi_fr_bdd_et_9"
+    And a refund on the booking of "zed.et.fr.bdd@example.com" has failed at the bank
+    # A refund event that changes nothing never takes the flag away.
+    When Stripe reports 0 pence refunded on the payment "pi_fr_bdd_et_9"
+    Then the booking of "zed.et.fr.bdd@example.com" is flagged for a failed refund
+    When "e9.et.fr.bdd@example.com" marks the failed refund on the booking of "zed.et.fr.bdd@example.com" as sorted
+    Then the fundraising answer is 403
+    When "a9.et.fr.bdd@example.com" marks the failed refund on the booking of "zed.et.fr.bdd@example.com" as sorted
+    Then the fundraising answer is 200
+    And the booking of "zed.et.fr.bdd@example.com" is not flagged for a failed refund
+    When "a9.et.fr.bdd@example.com" marks the failed refund on the booking of "zed.et.fr.bdd@example.com" as sorted
+    Then the fundraising answer is 404

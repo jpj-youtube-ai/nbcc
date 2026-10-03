@@ -9757,7 +9757,12 @@ ticketing (`src/ball/`) is untouched; this borrows its patterns (the card fee gr
 
 **The rules**
 
-- "How do people get in?" has a fourth answer, **NBCC sells the tickets for me** (`booking = 'nbcc'`).
+- "How do people get in?" (in the sign up form's event step; the form is one step at a time since
+  the sign up tidy) has a fifth answer, after "Free entry, donations welcome": **NBCC sells the
+  tickets for me** (`booking = 'nbcc'`). Next asks warmly for what is missing ("Almost! Just add at
+  least one kind of ticket, like Adult at £10."), and Check your answers shows the tickets, the
+  limit and when sales close. The migration re-creates `fundraisers_booking_check` with all five
+  values (away, door, free, donations, nbcc).
   The form says: "Choose this only if all the ticket money is going to NBCC. If you're sharing
   ticket money with another cause or keeping some for costs, sell them your own way and pay NBCC its
   share afterwards." and "If you have costs, like the hall, talk to us: we can repay agreed costs
@@ -9854,7 +9859,8 @@ order unstamped: the admin shows "Tickets email not sent" with "Send tickets ema
 and admins, audited), and the daily task (`src/tickets/runner.ts`, on `send-reminders`) sends every
 one still unsent (free bookings too), newest first, each claimed so two runs never send it
 together. After three tries it is left alone and flagged in the admin: "Tickets email keeps failing:
-check the address".
+check the address". **A refund email that did not go** marks its order with what it was to say
+(`refund_email_unsent_pence`), and the same daily task sends it, three tries at most.
 
 **Refunds.** In the private area the organiser picks a booking and gives a reason
 (`event_ticket_refund_requests`, one open request a booking); the events inbox is emailed
@@ -9903,9 +9909,16 @@ unconfirmed is refused until that one is finished. A request can also be decline
 reconcile puts the money back to what Stripe says and closes the refund as failed. The tickets are
 **not** taken back (their places may have been sold again). The booking is flagged "Refund failed
 at the bank: the buyer has not been paid back. Their tickets were released: contact them and
-refund again." (with how far over its limit the event is, counting their tickets, if it is), the
-events inbox is emailed, and the buyer gets no automatic email. Staff contact the buyer and refund
-again in Stripe; that refund is then recorded by the same reconcile and the flag clears.
+refund them in Stripe." (with how far over its limit the event is, counting their tickets, if it
+is), the events inbox is emailed, and the buyer gets no automatic email. Staff contact the buyer and
+refund them in Stripe (the admin's refund screen has no tickets left to choose); that refund is
+recorded by the same reconcile. **The flag never clears by itself**: an admin presses **Mark as
+sorted** on the booking, after a second press, audited (`tickets.refund_failed_sorted`).
+
+Stripe is asked for a payment's refunds with an eight second wait and no second try, as the order
+is locked meanwhile. An admin's refund first checks the booking is this event's (404 if not). If an
+old refund of ours is still on its way at Stripe, a new one is refused: "Stripe is still working on
+the last refund for this booking. Check again later today."
 
 **Money refunded in Stripe itself** (not in the admin) is recorded by the reconcile as above. A
 refund in full puts every place back on sale; a partial one releases nothing. An admin then uses
@@ -9941,6 +9954,7 @@ asked for, the bookings and the refunds made.
 | `POST /api/admin/event-tickets/:id/orders/:orderId/cancel` | fundraising edit | cancels a free booking; 409 for one that was paid for |
 | `GET /api/admin/event-tickets/:id/guest-list`, `GET .../orders.csv` | fundraising view | the guest list page, and the CSV |
 | `POST /api/admin/event-tickets/:id/orders/:orderId/refund` `{ lines: [{ lineId, quantity, refundedQuantity }], refundedPence, requestId?, note? }` | an admin (fundraising edit) | refunds through Stripe; 409 with why not (`refresh: true` when the booking has changed); 502 if Stripe refuses or could not be reached |
+| `POST /api/admin/event-tickets/:id/orders/:orderId/refund-failed-sorted` | an admin (fundraising edit) | takes the "refund failed at the bank" flag off the booking; 404 when there is none |
 | `POST /api/admin/event-tickets/:id/orders/:orderId/release` `{ lines: [{ lineId, quantity, refundedQuantity }], refundedPence }` | an admin (fundraising edit) | releases tickets with no money moving and emails the buyer; 409 with why not |
 | `POST /api/admin/event-tickets/:id/orders/:orderId/resend` | fundraising edit | sends the buyer's tickets email again; audit `tickets.email_resent` |
 | `POST /api/admin/event-tickets/:id/requests/:requestId/decline` `{ note? }` | an admin (fundraising edit) | declines a refund request |

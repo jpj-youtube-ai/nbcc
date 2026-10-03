@@ -40,7 +40,7 @@
 
 exports.shorthands = undefined;
 
-const OLD = ["away", "door", "free"];
+const OLD = ["away", "door", "free", "donations"];
 const NEW = [...OLD, "nbcc"];
 const quoted = (list) => list.map((v) => `'${v}'`).join(", ");
 
@@ -129,6 +129,9 @@ exports.up = (pgm) => {
     confirmation_sent_at: { type: "timestamptz" },
     confirmation_claimed_at: { type: "timestamptz" },
     confirmation_attempts: { type: "integer", notNull: true, default: 0 },
+    // A refund email to the buyer that did not go: how much it was to say, and how often it was tried.
+    refund_email_unsent_pence: { type: "integer" },
+    refund_email_attempts: { type: "integer", notNull: true, default: 0 },
     flags: { type: "jsonb", notNull: true, default: pgm.func("'{}'::jsonb") },
     disputed_at: { type: "timestamptz" },
     ip_hash: { type: "text" },

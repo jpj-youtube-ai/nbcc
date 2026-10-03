@@ -24,6 +24,7 @@ import {
   listRefundRequests,
   listRefunds,
   listTicketedEvents,
+  markRefundFailedSorted,
   reconcileOrderRefunds,
   releaseTickets,
   setSalesClosed,
@@ -160,6 +161,8 @@ export async function getAdminEventTickets(req: Request, res: Response): Promise
         tickets: ticketsWords(o.lines),
         free: o.totalPence === 0,
         flagWords: flagWords(o.flags),
+        // A refund failed at the bank and nobody has marked it sorted yet (an admin does, by hand).
+        refundFailed: Boolean(o.flags?.refundFailed),
         emailSent: o.emailSent !== false,
       })),
       requests,
@@ -415,6 +418,13 @@ export async function postAdminRefund(req: Request, res: Response): Promise<Resp
   if (id === null || orderId === null) return;
   const parsed = adminRefundSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: "Choose which tickets to refund, from the booking as it is now. Refresh and try again." });
+  // The booking must be this event's before anything is asked of Stripe about it.
+  try {
+    const order = await getOrder(pool, orderId);
+    if (!order || order.fundraiserId !== id) return res.status(404).json({ error: "We could not find that booking." });
+  } catch (err) {
+    return failed(res, "refund", err);
+  }
   try {
     const before = await reconcileOrderRefunds(orderId, listStripeRefunds);
     await tellAfterReconcile(orderId, before);
@@ -509,6 +519,21 @@ export async function postReleaseTickets(req: Request, res: Response): Promise<R
   }
 }
 
+/** An admin has sorted a refund that failed at the bank: the flag comes off the booking. Audited. */
+export async function postRefundFailedSorted(req: Request, res: Response): Promise<Response | void> {
+  const claims = await authorizeSectionAsAdmin(req, res, "fundraising");
+  if (!claims) return;
+  const id = numberParam(req, res, "id");
+  const orderId = id === null ? null : numberParam(req, res, "orderId");
+  if (id === null || orderId === null) return;
+  try {
+    await markRefundFailedSorted(id, orderId, actorOf(claims));
+    return res.status(200).json({ status: "sorted" });
+  } catch (err) {
+    return failed(res, "refund sorted", err);
+  }
+}
+
 const declineSchema = z.object({ note: z.string().trim().max(500).optional() });
 
 export async function postDeclineRequest(req: Request, res: Response): Promise<Response | void> {
@@ -546,4 +571,5 @@ adminEventTicketsRouter.get("/api/admin/event-tickets/:id/orders.csv", getAdminT
 adminEventTicketsRouter.post("/api/admin/event-tickets/:id/orders/:orderId/refund", postAdminRefund);
 adminEventTicketsRouter.post("/api/admin/event-tickets/:id/orders/:orderId/resend", postResendTickets);
 adminEventTicketsRouter.post("/api/admin/event-tickets/:id/orders/:orderId/release", postReleaseTickets);
+adminEventTicketsRouter.post("/api/admin/event-tickets/:id/orders/:orderId/refund-failed-sorted", postRefundFailedSorted);
 adminEventTicketsRouter.post("/api/admin/event-tickets/:id/requests/:requestId/decline", postDeclineRequest);

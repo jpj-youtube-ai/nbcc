@@ -40,6 +40,7 @@ const DETAIL = {
     {
       id: 73, reference: "TIX-MIXEDA", status: "paid", firstName: "Sam", surname: "Mixed", email: "sam@example.com", phone: null,
       ticketsPence: 1000, feeCoverPence: 0, totalPence: 1000, refundedPence: 0, tickets: "1 Adult, 2 Under 5", paidAt: "2026-11-01T10:00:00Z",
+      refundFailed: true, flagWords: ["Refund failed at the bank: the buyer has not been paid back. Refund again."],
       lines: [{ id: 730, typeName: "Adult", unitPence: 1000, quantity: 1, refundedQuantity: 0 }, { id: 731, typeName: "Under 5", unitPence: 0, quantity: 2, refundedQuantity: 0 }],
     },
     {
@@ -229,6 +230,21 @@ describe("when sales close, and free bookings (staff)", () => {
 
 describe("releasing tickets with no money moving, and an email that keeps failing", () => {
   beforeEach(open);
+
+  it("keeps a failed refund flagged until an admin marks it as sorted, after a second press", async () => {
+    const o = $("[data-et-order='73']");
+    expect(o.textContent).toContain("Refund failed at the bank: the buyer has not been paid back. Refund again.");
+    expect($("[data-et-order='70'] [data-et-refund-sorted]")).toBeNull();
+    const sorted = o.querySelector("[data-et-refund-sorted]") as HTMLButtonElement;
+    expect(sorted.textContent).toBe("Mark as sorted");
+    sorted.click();
+    await flush();
+    expect(posts()).toHaveLength(0);
+    expect(sorted.textContent).toBe("Yes, the buyer has their money");
+    sorted.click();
+    await flush();
+    expect(posts()[0][0]).toBe("/api/admin/event-tickets/12/orders/73/refund-failed-sorted");
+  });
 
   it("says when the tickets email keeps failing", () => {
     expect($("[data-et-order='70']").textContent).toContain("Tickets email keeps failing: check the address");

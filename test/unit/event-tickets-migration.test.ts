@@ -76,7 +76,7 @@ describe("the event tickets migration", () => {
     migration.up(pgm);
     const sql = sqlOf(calls);
     expect(sql).toContain("DROP CONSTRAINT IF EXISTS fundraisers_booking_check");
-    expect(sql).toMatch(/booking IN \('away', 'door', 'free', 'nbcc'\)/);
+    expect(sql).toMatch(/booking IN \('away', 'door', 'free', 'donations', 'nbcc'\)/);
     expect(sql.indexOf("DROP CONSTRAINT")).toBeLessThan(sql.indexOf("ADD CONSTRAINT"));
   });
 
@@ -129,6 +129,10 @@ describe("the event tickets migration", () => {
     expect(orders.ip_hash.type).toBe("text");
     // How many times the daily task has tried a tickets email that will not go (it stops at three).
     expect(orders.confirmation_attempts).toMatchObject({ type: "integer", notNull: true, default: 0 });
+    // A refund email that did not go: what it was to say, and how often it was tried.
+    expect(orders.refund_email_unsent_pence).toMatchObject({ type: "integer" });
+    expect(orders.refund_email_unsent_pence.notNull).toBeUndefined();
+    expect(orders.refund_email_attempts).toMatchObject({ type: "integer", notNull: true, default: 0 });
   });
 
   it("keeps money in whole pence, never below nothing, and never refunds more than was paid", () => {
@@ -194,7 +198,7 @@ describe("the event tickets migration", () => {
     const dropped = calls.filter((c) => c.op === "dropTable").map((c) => c.args[0]);
     expect([...dropped].sort()).toEqual([...TABLES].sort());
     const sql = sqlOf(calls);
-    expect(sql).toMatch(/booking IN \('away', 'door', 'free'\)\) NOT VALID/);
+    expect(sql).toMatch(/booking IN \('away', 'door', 'free', 'donations'\)\) NOT VALID/);
   });
 
   it("sorts after 1791200000210, the migration built alongside it", () => {

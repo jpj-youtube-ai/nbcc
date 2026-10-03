@@ -9,7 +9,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 vi.mock("../../src/db/pool", () => ({ pool: { query: vi.fn(), connect: vi.fn() } }));
 vi.mock("../../src/config", () => ({ config: { NODE_ENV: "test" } }));
 
-import { reconcileRefunds, supersedeOrder, TOO_MANY_FREE, TOO_MANY_FREE_HERE, type StripeRefundLite } from "../../src/db/event-tickets";
+import { STRIPE_STILL_WORKING, reconcileRefunds, supersedeOrder, TOO_MANY_FREE, TOO_MANY_FREE_HERE, type StripeRefundLite } from "../../src/db/event-tickets";
 import { pool } from "../../src/db/pool";
 import { FREE_BOOKINGS_IP_MAX, FREE_BOOKINGS_MAX } from "../../src/tickets/model";
 
@@ -169,7 +169,7 @@ describe("a refund that failed at the bank after it was applied here", () => {
     expect(lines[0].refunded_quantity).toBe(1);
     expect(refunds[0].status).toBe("failed");
     expect(r.refundedNowPence).toBe(0);
-    expect(r.failedWords).toEqual(["Refund failed at the bank: the buyer has not been paid back. Their tickets were released: contact them and refund again."]);
+    expect(r.failedWords).toEqual(["Refund failed at the bank: the buyer has not been paid back. Their tickets were released: contact them and refund them in Stripe."]);
     expect(order.flags.refundFailed).toEqual({ released: true, overBy: 0 });
   });
 
@@ -178,7 +178,7 @@ describe("a refund that failed at the bank after it was applied here", () => {
     takenByOthers = 10; // their released place has since been sold to someone else
     const r = await reconcileRefunds(client, 7, stripe([re("re_1", 1000, "failed", 31)]));
     expect(r.failedWords[0]).toBe(
-      "Refund failed at the bank: the buyer has not been paid back. Their tickets were released: contact them and refund again. Counting their tickets, this event is now 2 over its limit.",
+      "Refund failed at the bank: the buyer has not been paid back. Their tickets were released: contact them and refund them in Stripe. Counting their tickets, this event is now 2 over its limit.",
     );
   });
 
@@ -189,6 +189,22 @@ describe("a refund that failed at the bank after it was applied here", () => {
     expect(order.refunded_pence).toBe(0);
     expect(refunds[0].status).toBe("failed");
     expect(late.failedWords).toEqual([]);
+  });
+});
+
+describe("the failed refund flag", () => {
+  it("is never cleared by itself, even when a later refund goes through: an admin marks it sorted", async () => {
+    refunds = [intent({ status: "done", stripe_refund_id: "re_1" })];
+    order.refunded_pence = 1000;
+    lines[0].refunded_quantity = 1;
+    await reconcileRefunds(client, 7, stripe([re("re_1", 1000, "failed", 31)]));
+    expect(order.flags.refundFailed).toBeTruthy();
+    // Staff refund them in Stripe: recorded, the buyer told, and the flag still there.
+    const r = await reconcileRefunds(client, 7, stripe([re("re_1", 1000, "failed", 31), re("re_again", 1000, "succeeded")]));
+    expect(r.refundedNowPence).toBe(1000);
+    expect(order.refunded_pence).toBe(1000);
+    expect(order.flags.refundFailed).toBeTruthy();
+    expect(client.query.mock.calls.some((c) => /flags - 'refundFailed'/.test(String(c[0])))).toBe(false);
   });
 });
 
@@ -264,5 +280,11 @@ describe("the caps on free bookings", () => {
     expect([FREE_BOOKINGS_MAX, FREE_BOOKINGS_IP_MAX]).toEqual([2, 6]);
     expect(TOO_MANY_FREE).toBe("You already have 2 free bookings for this event. Need more? Email events@nbcc.scot.");
     expect(TOO_MANY_FREE_HERE).toBe("We've had several free bookings from this connection. If that isn't you, email events@nbcc.scot and we'll book you in.");
+  });
+});
+
+describe("an old refund Stripe has not finished with", () => {
+  it("is said plainly to the admin who tries another", () => {
+    expect(STRIPE_STILL_WORKING).toBe("Stripe is still working on the last refund for this booking. Check again later today.");
   });
 });

@@ -641,10 +641,10 @@ describe("more things staff are told", () => {
     expect(flagWords({ refundFailed: true })).toEqual(["Refund failed at the bank: the buyer has not been paid back. Refund again."]);
     expect(flagWords({ refundFailed: { released: false, overBy: 0 } })).toEqual(["Refund failed at the bank: the buyer has not been paid back. Refund again."]);
     expect(flagWords({ refundFailed: { released: true, overBy: 0 } })).toEqual([
-      "Refund failed at the bank: the buyer has not been paid back. Their tickets were released: contact them and refund again.",
+      "Refund failed at the bank: the buyer has not been paid back. Their tickets were released: contact them and refund them in Stripe.",
     ]);
     expect(flagWords({ refundFailed: { released: true, overBy: 3 } })).toEqual([
-      "Refund failed at the bank: the buyer has not been paid back. Their tickets were released: contact them and refund again. Counting their tickets, this event is now 3 over its limit.",
+      "Refund failed at the bank: the buyer has not been paid back. Their tickets were released: contact them and refund them in Stripe. Counting their tickets, this event is now 3 over its limit.",
     ]);
   });
 });

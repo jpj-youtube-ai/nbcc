@@ -650,6 +650,23 @@
         (o.flagWords || []).forEach(function (w) {
           li.appendChild(el("span", "admin-pill admin-pill--failed et-flag", w));
         });
+        // A refund failed at the bank. The flag stays until an admin says the buyer has their money
+        // (it never clears by itself), after a second press.
+        if (o.refundFailed && isAdmin) {
+          var sorted = btn("admin-btn fr-btn-quiet", "Mark as sorted", "data-et-refund-sorted", o.id);
+          var armedSorted = false;
+          sorted.addEventListener("click", function () {
+            if (!armedSorted) {
+              armedSorted = true;
+              sorted.textContent = "Yes, the buyer has their money";
+              return;
+            }
+            act(API + "/" + id + "/orders/" + o.id + "/refund-failed-sorted", "POST", {}, "Saving…", "Marked as sorted.");
+          });
+          var sortedActs = el("div", "et-row__acts");
+          sortedActs.appendChild(sorted);
+          li.appendChild(sortedActs);
+        }
         // The tickets email did not go when the payment landed: say so, with a way to send it again.
         if (o.emailSent === false && !fully) {
           var unsent = el("div", "et-row__acts et-unsent");

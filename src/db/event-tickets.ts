@@ -944,8 +944,8 @@ export async function reconcileRefunds(client: Querier, orderId: number, list: R
   if (moneyChanged) await client.query(`UPDATE event_ticket_orders SET refunded_pence = $2 WHERE id = $1`, [orderId, refunded]);
 
   // 6. The flag. A failure is flagged, with how far over its limit the event is if the buyer (who
-  //    has not been paid back) still comes with the tickets that were released. A refund that then
-  //    goes through clears it.
+  //    has not been paid back) still comes with the tickets that were released. It is never cleared
+  //    here: an admin marks it sorted once the buyer has their money (markRefundFailedSorted).
   if (failures > 0) {
     let over = 0;
     if (releasedForFailed.length > 0) {
@@ -963,8 +963,6 @@ export async function reconcileRefunds(client: Querier, orderId: number, list: R
     const flag = { released: releasedForFailed.length > 0, overBy: over };
     await client.query(`UPDATE event_ticket_orders SET flags = flags || $2::jsonb WHERE id = $1`, [orderId, JSON.stringify({ refundFailed: flag })]);
     out.failedWords = [refundFailedWords(flag)];
-  } else if (out.completedPence + out.stripePence > 0) {
-    await client.query(`UPDATE event_ticket_orders SET flags = flags - 'refundFailed' WHERE id = $1`, [orderId]);
   }
 
   out.refundedNowPence = out.completedPence + out.stripePence;
@@ -1223,6 +1221,8 @@ export async function declineRefundRequest(fundraiserId: number, requestId: numb
  */
 const INTENT_HOURS = 23;
 
+export const STRIPE_STILL_WORKING = "Stripe is still working on the last refund for this booking. Check again later today.";
+
 export interface RefundIntent {
   id: number;
   key: string;
@@ -1274,7 +1274,8 @@ export async function beginRefund(
       )
     ).rows as Row[];
     if (pending.some((i) => i.old)) {
-      throw new TicketError("refused", "An earlier refund on this booking is still being checked with Stripe. Please try again in a few minutes.");
+      // Old, and still here after the reconcile: Stripe has it and has not finished with it.
+      throw new TicketError("refused", STRIPE_STILL_WORKING);
     }
     const same = pending.find((i) => num(i.amount_pence) === plan.amountPence && sameLines((i.lines as Array<{ lineId: number; quantity: number }>) ?? [], plan.lines));
     if (same) {
@@ -1332,6 +1333,23 @@ export async function releaseTickets(
   });
 }
 
+/**
+ * An admin has sorted a refund that failed at the bank (the buyer has their money another way): the
+ * flag comes off the booking. Never by itself; audited with who did it.
+ */
+export async function markRefundFailedSorted(fundraiserId: number, orderId: number, actor: string): Promise<void> {
+  await inTransaction(async (client) => {
+    const r = await client.query(
+      `UPDATE event_ticket_orders SET flags = flags - 'refundFailed'
+        WHERE id = $1 AND fundraiser_id = $2 AND flags ? 'refundFailed' RETURNING reference`,
+      [orderId, fundraiserId],
+    );
+    const row = (r.rows as Row[])[0];
+    if (!row) throw new TicketError("not_found", "That booking has no failed refund to mark as sorted.");
+    await insertAudit(client, { actor, action: "tickets.refund_failed_sorted", entity: "event_ticket_order", entityId: orderId, data: { reference: row.reference } });
+  });
+}
+
 /** Stripe said a definite no: the intent is closed as failed, and nothing else changes. */
 export async function failRefund(intentId: number, why: string): Promise<void> {
   await inTransaction(async (client) => {
@@ -1374,6 +1392,38 @@ export async function claimUnsentConfirmations(limit = 50): Promise<number[]> {
     [limit, EMAIL_ATTEMPTS_MAX],
   );
   return (r.rows as Row[]).map((x) => num(x.id)).sort((a, b) => b - a);
+}
+
+/** The buyer's refund email did not go: how much it was to tell them of is kept, for the daily task. */
+export async function noteRefundEmailUnsent(orderId: number, pence: number): Promise<void> {
+  await pool.query(
+    `UPDATE event_ticket_orders SET refund_email_unsent_pence = COALESCE(refund_email_unsent_pence, 0) + $2, refund_email_attempts = 0 WHERE id = $1`,
+    [orderId, pence],
+  );
+}
+
+/**
+ * Orders with a refund email still to go, claimed so two runs never send the same one together, and
+ * not tried three times already. Each claim counts a try.
+ */
+export async function claimUnsentRefundEmails(limit = 50): Promise<Array<{ orderId: number; pence: number }>> {
+  const r = await pool.query(
+    `UPDATE event_ticket_orders SET refund_email_attempts = refund_email_attempts + 1
+      WHERE id IN (SELECT id FROM event_ticket_orders
+                    WHERE refund_email_unsent_pence > 0 AND refund_email_attempts < $2
+                    ORDER BY id LIMIT $1 FOR UPDATE SKIP LOCKED)
+      RETURNING id, refund_email_unsent_pence`,
+    [limit, EMAIL_ATTEMPTS_MAX],
+  );
+  return (r.rows as Row[]).map((x) => ({ orderId: num(x.id), pence: num(x.refund_email_unsent_pence) }));
+}
+
+/** That refund email has gone: only what it told them of comes off (more may have failed since). */
+export async function markRefundEmailSent(orderId: number, pence: number): Promise<void> {
+  await pool.query(
+    `UPDATE event_ticket_orders SET refund_email_unsent_pence = NULLIF(GREATEST(0, COALESCE(refund_email_unsent_pence, 0) - $2), 0), refund_email_attempts = 0 WHERE id = $1`,
+    [orderId, pence],
+  );
 }
 
 /** A buyer's phone number is only for reaching them about the event: gone 90 days after it. */

@@ -17,8 +17,8 @@ const TEMPLATE = readFileSync(resolve(ROOT, "fundraiser.html"), "utf8");
 const parse = (html: string) => new DOMParser().parseFromString(html, "text/html");
 
 describe("How do people get in?", () => {
-  it("has a fourth answer, NBCC sells the tickets for me", () => {
-    expect([...BOOKINGS]).toEqual(["away", "door", "free", "nbcc"]);
+  it("has NBCC sells the tickets for me, after the four ways the form already had", () => {
+    expect([...BOOKINGS]).toEqual(["away", "door", "free", "donations", "nbcc"]);
     expect(BOOKING_LABELS.nbcc).toBe("NBCC sells the tickets for me");
   });
 

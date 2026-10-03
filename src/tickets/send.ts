@@ -1,7 +1,16 @@
 import { config } from "../config";
 import { sendEventTickets } from "../clients/email";
 import { getFundraiser } from "../db/fundraisers";
-import { claimUnsentConfirmations, deleteOldBuyerPhones, getOrder, markConfirmationSent, type OrderFull } from "../db/event-tickets";
+import {
+  claimUnsentConfirmations,
+  claimUnsentRefundEmails,
+  deleteOldBuyerPhones,
+  getOrder,
+  markConfirmationSent,
+  markRefundEmailSent,
+  noteRefundEmailUnsent,
+  type OrderFull,
+} from "../db/event-tickets";
 import { pool } from "../db/pool";
 import { pageUrlFor } from "../fundraising/page-url";
 import type { FundraiserRecord } from "../fundraising/model";
@@ -124,14 +133,41 @@ async function sendRefundEmail(order: OrderFull, amountPence: number, full: bool
   await sendEventTickets("eventTicketsRefund", `${order.firstName} ${order.surname}`, { email: order.email, ...events(), ...mail });
 }
 
-/** The buyer's refund email, once a refund is recorded here (reconcileRefunds found Stripe had made it). */
+/**
+ * The buyer's refund email, once a refund is recorded here (reconcileRefunds found Stripe had made
+ * it). If it will not go, the order is marked with what it was to say, and the daily task sends it
+ * (resendUnsentRefundEmails).
+ */
 export async function sendRefundRecordedEmail(orderId: number, amountPence: number, full: boolean): Promise<void> {
   try {
     const order = await getOrder(pool, orderId);
     if (order) await sendRefundEmail(order, amountPence, full);
   } catch (err) {
     logFailure("refund", err);
+    try {
+      await noteRefundEmailUnsent(orderId, amountPence);
+    } catch (noteErr) {
+      logFailure("refund (not sent, and could not be marked)", noteErr);
+    }
   }
+}
+
+/** The daily task: every refund email that did not go, each claimed and tried once a run, three times at most. */
+export async function resendUnsentRefundEmails(): Promise<{ tried: number; sent: number }> {
+  const waiting = await claimUnsentRefundEmails();
+  let sent = 0;
+  for (const w of waiting) {
+    try {
+      const order = await getOrder(pool, w.orderId);
+      if (!order) continue;
+      await sendRefundEmail(order, w.pence, order.lines.every((l) => l.refundedQuantity >= l.quantity));
+      await markRefundEmailSent(w.orderId, w.pence);
+      sent += 1;
+    } catch (err) {
+      logFailure("refund (daily)", err);
+    }
+  }
+  return { tried: waiting.length, sent };
 }
 
 /**

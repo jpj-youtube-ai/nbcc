@@ -84,9 +84,10 @@
 .et-list__state.is-waiting { color: var(--maroon); font-weight: 600; }
 .et-rows { display: grid; gap: 10px; margin: 0 0 12px; }
 .et-row { display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; padding: 14px; border: 1px solid var(--line); border-radius: 14px; background: var(--cream); }
-@media (min-width: 640px) { .et-row { grid-template-columns: minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1fr) auto; align-items: end; } }
+@media (min-width: 640px) { .et-row { grid-template-columns: minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1fr) auto; align-items: start; } }
 .et-row .give-field { margin: 0; }
-.et-row__remove { justify-self: start; padding-bottom: 12px; }
+.et-row__remove { justify-self: start; }
+@media (min-width: 640px) { .et-row__remove { margin-top: 38px; } }
 .et-help { margin: 0 0 12px; padding: 14px 16px; border-left: 4px solid var(--holly); background: var(--holly-soft); border-radius: 0 12px 12px 0; font-size: 0.95rem; color: var(--slate); }
 .et-help p { margin: 0; }
 .et-help p + p { margin-top: 8px; }

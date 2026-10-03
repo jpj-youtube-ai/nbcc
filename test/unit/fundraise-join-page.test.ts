@@ -79,6 +79,7 @@ function fillIn() {
   type("firstName", "Jack");
   type("lastName", "Sample");
   type("email", "parent@example.com");
+  tick("memberUnder18No");
   tick("over18Yes");
 }
 
@@ -194,6 +195,59 @@ describe("one question at a time (the sign up tidy)", () => {
   });
 });
 
+describe("joining for someone under 18 (Jaimie, 2026-10-03)", () => {
+  it("asks whether the person joining is under 18, with nothing chosen", () => {
+    load();
+    const radios = [...document.querySelectorAll<HTMLInputElement>('input[name="memberUnder18"]')];
+    expect(radios).toHaveLength(2);
+    expect(radios.some((r) => r.checked)).toBe(false);
+    expect($("#memberUnder18Group legend").textContent).toBe("Is the person joining under 18?");
+    expect($("[data-guardian-fields]").hidden).toBe(true);
+    next();
+    expect(document.getElementById("memberUnder18-error")!.textContent).toBe("Almost! Just tell us whether the person joining is under 18.");
+  });
+
+  it("asks a parent or guardian for their first name and their tick", () => {
+    load();
+    type("firstName", "Jack");
+    type("lastName", "Sample");
+    type("email", "parent@example.com");
+    tick("memberUnder18Yes");
+    expect($("[data-guardian-fields]").hidden).toBe(false);
+    expect($("label[for=guardianFirstName]").textContent!.replace(/\s+/g, " ").trim()).toBe("Your first name, as their parent or guardian *");
+    expect($("label[for=guardianConsent] .give-check-text").textContent).toBe(
+      "I’m their parent or guardian, and I’m happy for their first name and any photo to be shown on the page and our social media.",
+    );
+    next();
+    expect(document.getElementById("guardianFirstName-error")!.textContent).toBe("Almost! Just add your first name.");
+    expect(document.getElementById("guardianConsent-error")!.textContent).toBe("Almost! Just tick to say you're happy for their first name to be shown.");
+  });
+
+  it("asks why they are taking part by their name", () => {
+    load();
+    expect($("label[for=why]").textContent!.replace(/\s+/g, " ").trim()).toBe("Why are you taking part? (optional)");
+    type("firstName", "Jack");
+    tick("memberUnder18Yes");
+    expect($("label[for=why]").textContent!.replace(/\s+/g, " ").trim()).toBe("Why is Jack taking part? (optional)");
+    tick("memberUnder18No");
+    expect($("label[for=why]").textContent!.replace(/\s+/g, " ").trim()).toBe("Why are you taking part? (optional)");
+  });
+
+  it("sends the parent's first name and tick, and nothing of them for an adult", async () => {
+    load();
+    fillIn();
+    tick("memberUnder18Yes");
+    type("guardianFirstName", "Sarah");
+    tick("guardianConsent");
+    await submit();
+    expect(joins()[0].body).toMatchObject({ memberUnder18: true, guardianFirstName: "Sarah", guardianConsent: true });
+    load();
+    fillIn();
+    await submit();
+    expect(joins()[0].body).toMatchObject({ memberUnder18: false, guardianFirstName: "", guardianConsent: false });
+  });
+});
+
 describe("an invite's link", () => {
   const token = "a".repeat(43);
 
@@ -210,6 +264,7 @@ describe("an invite's link", () => {
     expect(calls.find((c) => c.url === "/api/fundraise/team-invite")?.body).toEqual({ token });
     expect($("#firstName").value).toBe("Jack");
     expect($("#email").value).toBe("parent@example.com");
+    tick("memberUnder18No");
     tick("over18Yes");
     await submit();
     expect(joins()[0].body).toMatchObject({ invite: token });

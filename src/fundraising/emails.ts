@@ -154,7 +154,9 @@ type Tidy =
   | "memoryDirectorBusiness"
   | "memoryFamilyContactName"
   | "memoryFamilyContactEmail"
-  | "callTime";
+  | "callTime"
+  | "dateTbc"
+  | "guardianFirstName";
 export type StaffSummary = Omit<SignUp, NewAnswers | AgeAndSplit | Memory | Tidy | "wants"> &
   Partial<Pick<FundraiserRecord, Memory | Exclude<Tidy, "splitConfirmed" | "listed">>> &
   Partial<Pick<SignUp, "splitConfirmed" | "listed">> &
@@ -226,7 +228,8 @@ function staffFacts(f: StaffSummary): Array<[string, string]> {
     ["Kind", kind],
     ["Name for it", f.title],
     ["About it", f.description],
-    ["When", when || "Not given"],
+    // Jaimie, 2026-10-03: they ticked "Not decided yet".
+    ["When", when || (f.dateTbc ? "Date to be confirmed" : "Not given")],
     ["Where", where || "Not given"],
   ];
   if (f.path === "event") facts.push(...eventFacts(f));
@@ -288,7 +291,7 @@ function staffFacts(f: StaffSummary): Array<[string, string]> {
     ["A social media shout out", shoutOut],
     ["Someone from NBCC to come along", f.wants.attend ? "Yes please" : "No"],
   );
-  // The sign up tidy: who it is for, sport and the T shirt, Get involved, and when to call.
+  // The sign up tidy: who it is for, sport and the T-shirt, Get involved, and when to call.
   facts.push(...tidyStaffFacts(f));
   const address = joinParts(f.postLine1, f.postLine2, f.postTown, f.postPostcode) || f.postAddress;
   // Everyone but in memory gives an address for the welcome pack; in memory, only for what they asked for.

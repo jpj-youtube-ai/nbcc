@@ -211,21 +211,22 @@ describe("one question at a time", () => {
   it("asks someone raising money each question in turn, on Next", () => {
     fill("raising");
     expect(walk()).toEqual([
+      // Jaimie, 2026-10-03: the fun part first, then who they are.
       "What are you planning?",
       "Are you 18 or over?",
-      "Who is doing the fundraising?",
-      "Are you fundraising for a business, school or group?",
-      "Your details",
       "Just me, or a team?",
       "Is it a sporting event?",
       "What are you doing to raise money?",
       "Tell us about your fundraising",
       "Your target (optional)",
+      "Who is doing the fundraising?",
+      "Are you fundraising for a business, school or group?",
       "Shall we list it on our Get involved page?",
+      "Your details",
+      "Your address",
       "Are you sharing what you raise with another cause?",
       "Social media",
       "What would you like from us?",
-      "Your address",
       "Check your answers",
     ]);
   });
@@ -235,17 +236,17 @@ describe("one question at a time", () => {
     expect(walk()).toEqual([
       "What are you planning?",
       "Are you 18 or over?",
-      "Are you fundraising for a business, school or group?",
-      "Your details",
       "What kind of event is it?",
       "Tell us about your event",
       "For your event’s card",
       "Is there an amount you hope to raise? (optional)",
+      "Are you fundraising for a business, school or group?",
       "Shall we list it on our Get involved page?",
+      "Your details",
+      "Your address",
       "Are you sharing what you raise with another cause?",
       "Social media",
       "What would you like from us?",
-      "Your address",
       "Check your answers",
     ]);
   });
@@ -301,10 +302,10 @@ describe("one question at a time", () => {
     await submit();
     expect(calls.filter((c) => c.url === "/api/fundraise")).toHaveLength(0);
     for (const id of ["title", "lastName"]) expect($(`#${id}`).getAttribute("aria-invalid"), id).toBe("true");
-    // Your details comes before the name for it.
-    expect(has("lastName")).toBe(true);
-    expect(document.activeElement).toBe($("#lastName"));
-    expect(document.getElementById("lastName-error")?.textContent).toBe("Almost! Just add your surname.");
+    // The name for it comes before Your details (Jaimie, 2026-10-03: the fundraiser first).
+    expect(has("title")).toBe(true);
+    expect(document.activeElement).toBe($("#title"));
+    expect(document.getElementById("title-error")?.textContent).toBe("Almost! Just give it a name, like Sam’s Santa Dash.");
   });
 });
 
@@ -503,8 +504,8 @@ describe("sending", () => {
     expect(document.getElementById("qrCodes-error")?.textContent).toBe("Too many.");
     expect(document.getElementById("kindOther-error")?.textContent).toBe("Say what.");
     expect($("#attendYes").getAttribute("aria-invalid")).toBe("true");
-    // And goes back to the first of them.
-    expect(has("firstName")).toBe(true);
+    // And goes back to the first of them: what Other is, in Your fundraiser.
+    expect(has("kindOther")).toBe(true);
   });
 });
 

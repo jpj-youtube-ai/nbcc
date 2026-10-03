@@ -1,4 +1,4 @@
-// Choosing a T shirt size at /fundraise/t-shirt (the sign up tidy, Jaimie, 2026-10-03).
+// Choosing a T-shirt size at /fundraise/t-shirt (the sign up tidy, Jaimie, 2026-10-03).
 //
 // Opened from the email staff send from Admin > Fundraising when a sporting event's sign up has no
 // size yet. The link is /fundraise/t-shirt#<token>: after the #, so the token is never sent to a
@@ -109,7 +109,7 @@
         if (thanksName) thanksName.textContent = first ? ", " + first : "";
         var lede = doc.querySelector("[data-tshirt-lede]");
         if (lede && typeof r.data.title === "string" && r.data.title) {
-          lede.textContent = "As " + r.data.title + " is a sporting event, we’d love to send you an NBCC T shirt with your welcome pack.";
+          lede.textContent = "As " + r.data.title + " is a sporting event, we’d love to send you an NBCC T-shirt with your welcome pack.";
         }
         show(form);
       })
@@ -125,7 +125,7 @@
       if (shared && typeof shared.validateForm === "function") {
         if (!shared.validateForm(form, { summary: doc.createElement("p") }).valid) return;
       } else if (!select.value) {
-        say("Please choose a T shirt size.", "error");
+        say("Please choose a T-shirt size.", "error");
         return;
       }
       sending = true;

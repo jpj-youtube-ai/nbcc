@@ -8,8 +8,8 @@ import { effectivePermissions, type PermissionMap } from "../../src/admin/permis
 
 // The sign up tidy (Jaimie, 2026-10-03) on Admin > Fundraising, in the admin's jsdom harness (as
 // admin-fundraising-memory-panel.test.ts): each category has a Sporting tick (admins only); an open
-// sign up shows the welcome pack's address, sport and the T shirt size in What they told us; staff
-// correct sport and the size; and a sporting event with no size says "Waiting for T shirt size",
+// sign up shows the welcome pack's address, sport and the T-shirt size in What they told us; staff
+// correct sport and the size; and a sporting event with no size says "Waiting for T-shirt size",
 // with a button that emails the organiser a link to choose one. A fake fetch stands in for the API.
 // Every person, place and number is invented.
 
@@ -208,12 +208,23 @@ const told = (label: string) => {
 };
 
 describe("what they told us", () => {
-  it("shows the welcome pack's address, sport and the T shirt size", async () => {
+  it("shows the welcome pack's address, sport and the T-shirt size", async () => {
     await openFundraising();
     await openRow(3);
     expect(told("Address for the welcome pack")).toBe("1 Example Road Exampleton EX1 1EX");
     expect(told("Sporting event")).toBe("Yes");
-    expect(told("T shirt size")).toBe("Adult M");
+    expect(told("T-shirt size")).toBe("Adult M");
+  });
+
+  it("says when the date is to be confirmed, and who the parent of a child's member page is", async () => {
+    records[0] = fundraiser(1, { dateTbc: true, guardianFirstName: "Sarah", childConsent: true });
+    await openFundraising();
+    await openRow(1);
+    expect(told("Date")).toBe("Date to be confirmed");
+    expect(told("For someone under 18")).toBe("Their parent or guardian is Sarah. They ticked: happy for the first name and any photo to be shown");
+    await openRow(1);
+    await openRow(2);
+    expect(told("Date")).toBe("No date");
   });
 
   it("shows a child, a business and Get involved", async () => {
@@ -227,13 +238,13 @@ describe("what they told us", () => {
   });
 });
 
-describe("sport and the T shirt", () => {
-  it("says Waiting for T shirt size, and offers to ask them", async () => {
+describe("sport and the T-shirt", () => {
+  it("says Waiting for T-shirt size, and offers to ask them", async () => {
     await openFundraising();
     await openRow(2);
     const panel = q("[data-frwelcome]")!;
-    expect(text(panel.querySelector(".fr-tshirt-wait"))).toBe("Waiting for T shirt size");
-    expect(text(panel.querySelector("[data-frtshirtask]"))).toBe("Ask them for their T shirt size");
+    expect(text(panel.querySelector(".fr-tshirt-wait"))).toBe("Waiting for T-shirt size");
+    expect(text(panel.querySelector("[data-frtshirtask]"))).toBe("Ask them for their T-shirt size");
     expect(text(panel)).toContain("Emails robin@example.com a private link to choose a size. Nothing is sent until you press it.");
   });
 
@@ -246,7 +257,7 @@ describe("sport and the T shirt", () => {
     expect(calls.find((c) => c.path === "/api/admin/fundraisers/2/tshirt-ask")?.method).toBe("POST");
     expect(text(q("[data-frwelcome]"))).toContain("Sent. They have a link to choose their size.");
     expect(text(q("[data-frwelcome]"))).toContain("Asked on");
-    expect(text(q("[data-frtshirtask]"))).toBe("Ask them again for their T shirt size");
+    expect(text(q("[data-frtshirtask]"))).toBe("Ask them again for their T-shirt size");
   });
 
   it("lets an editor correct sport and the size", async () => {
@@ -264,7 +275,7 @@ describe("sport and the T shirt", () => {
     form.dispatchEvent(new Event("submit", { cancelable: true, bubbles: true }));
     await settle();
     expect(calls.find((c) => c.method === "PUT")).toMatchObject({ path: "/api/admin/fundraisers/1/welcome-pack", body: { isSporting: true, tshirtSize: "kids_9_10" } });
-    expect(told("T shirt size")).toBe("Kids 9 to 10");
+    expect(told("T-shirt size")).toBe("Kids 9 to 10");
   });
 
   it("only shows a viewer where it is up to", async () => {
@@ -273,7 +284,7 @@ describe("sport and the T shirt", () => {
     await openRow(2);
     expect(q("#frWelcomeForm")).toBeNull();
     expect(q("[data-frtshirtask]")).toBeNull();
-    expect(text(q("[data-frwelcome]"))).toContain("Waiting for T shirt size");
+    expect(text(q("[data-frwelcome]"))).toContain("Waiting for T-shirt size");
   });
 
   it("is not there for a page in memory of someone", async () => {

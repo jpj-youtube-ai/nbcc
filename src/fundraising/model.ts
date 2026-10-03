@@ -18,6 +18,7 @@ import {
   ADDRESS_POSTCODE_MISSING,
   ADDRESS_TOWN_MISSING,
   ATTEND_WHEN_SOMETHING_ON,
+  DATE_OR_TBC_MISSING,
   MEMORY_GIVING_MISSING,
   type EmployerMatch,
 } from "./signup-tidy";
@@ -534,7 +535,8 @@ export const signUpSchema = z
     else if (b.over18 !== true) missing("over18", UNDER_18);
     checkSplit(b, missing);
     if (b.path === "event") {
-      if (!b.eventDate) missing("eventDate", "Tell us the date of your event.");
+      // Jaimie, 2026-10-03: "Not decided yet" makes the date optional.
+      if (!b.eventDate && b.dateTbc !== true) missing("eventDate", DATE_OR_TBC_MISSING);
       if (!b.cardLine) missing("cardLine", "Add a line for the front of the card.");
       if (!b.venue) missing("venue", "Tell us the venue.");
       if (!b.booking) missing("booking", "Tell us how people get in.");
@@ -579,6 +581,8 @@ export const signUpSchema = z
       ...memoryOf(b),
       ...welcomePackOf(b),
       ...pathsOf(b),
+      // Not decided yet: only while there is no date.
+      dateTbc: b.dateTbc === true && !b.eventDate,
       public: b.listed === undefined ? b.public : true,
       listed,
       // In memory: no newsletter tick is offered.
@@ -1134,6 +1138,10 @@ export interface FundraiserRecord {
   memoryFamilyContactEmail?: string | null;
   /** A good time to call them. */
   callTime?: string | null;
+  /** They ticked "Not decided yet" beside the date: the date is to be confirmed. */
+  dateTbc?: boolean;
+  /** A member page for someone under 18: their parent's or guardian's first name, to greet in emails. */
+  guardianFirstName?: string | null;
   /** A member taken off the team: the page carries on as their own. */
   teamLeftAt?: string | null;
   /** When the two "did you send the invite to your team?" emails went. */

@@ -48,8 +48,9 @@
   // The stages of the progress bar, for each path (Jaimie, 2026-10-03). In memory: gentler names,
   // and no lift near the end.
   var STAGES = {
-    raising: ["About you", "Your fundraiser", "Sharing", "What you'd like", "Check and send"],
-    event: ["About you", "Your event", "Sharing", "What you'd like", "Check and send"],
+    // Jaimie, 2026-10-03: the fun part first, then who they are.
+    raising: ["Your fundraiser", "About you", "Sharing", "What you'd like", "Check and send"],
+    event: ["Your event", "About you", "Sharing", "What you'd like", "Check and send"],
     memory: ["About them", "The page", "Your details", "Anything we can send", "Check the details"],
   };
   var LIFT = { 4: "Nearly there!", 5: "Last step!" };
@@ -61,6 +62,7 @@
     title: "title",
     description: "description",
     eventDate: "eventDate",
+    dateTbc: "dateTbc",
     startTime: "startTime",
     venue: "venue",
     town: "town",
@@ -263,6 +265,9 @@
     function memory() {
       return path() === "memory";
     }
+    function dateTbc() {
+      return path() !== "memory" && path() !== "" && checked("dateTbc");
+    }
     /** Is this box or step on the path chosen? Before a path is chosen, only the ones for every path. */
     function onPath(n) {
       var paths = n.getAttribute("data-paths");
@@ -326,8 +331,15 @@
         n.hidden = !onPath(n);
       });
       applyWords();
-      need(el("eventDate"), event);
-      if (dateRequired) dateRequired.hidden = !event;
+      // Jaimie, 2026-10-03: "Not decided yet" makes the date optional (an event's too), and lets it go.
+      var tbc = dateTbc();
+      var dateBox = el("eventDate");
+      need(dateBox, event && !tbc);
+      if (dateBox) {
+        if (tbc && dateBox.value) dateBox.value = "";
+        dateBox.disabled = tbc;
+      }
+      if (dateRequired) dateRequired.hidden = !event || tbc;
       if (dateOptional) dateOptional.hidden = event;
       // An event's card needs somewhere to say it is.
       need(el("venue"), event);
@@ -386,7 +398,7 @@
       need(el("kindOther"), other);
     }
 
-    // --- the sign up tidy: is it a sporting event, and the T shirt ---------------------------------
+    // --- the sign up tidy: is it a sporting event, and the T-shirt ---------------------------------
     var tshirtStep = form.querySelector("[data-tshirt-step]");
     function applySporting() {
       var yes = path() === "raising" && radio("isSporting") === "yes";
@@ -701,12 +713,13 @@
       rows.push([m ? "How people will give" : "Kind", kind]);
       if (path() === "raising" && radio("isSporting") === "yes") {
         var size = el("tshirtSize");
-        rows.push(["T shirt", size && size.selectedIndex > 0 ? size.options[size.selectedIndex].text : ""]);
+        rows.push(["T-shirt", size && size.selectedIndex > 0 ? size.options[size.selectedIndex].text : ""]);
       }
       var title = team ? val("teamName") : val("title");
       if (title || !m) rows.push(["Name for it", title || ""]);
       var when = [val("eventDate"), val("startTime")].filter(Boolean).join(" at ");
       if (when) rows.push([m ? "The funeral or service" : "When", when]);
+      else if (dateTbc()) rows.push(["When", "Not decided yet"]);
       var where = [val("venue"), val("town")].filter(Boolean).join(", ");
       if (where) rows.push(["Where", where]);
       var amount = team ? val("teamTarget") : val("target");
@@ -814,6 +827,13 @@
         stageOf: function (step) {
           var m = memory() && step.getAttribute("data-stage-memory");
           return Number(m || step.getAttribute("data-stage")) || 1;
+        },
+        // In memory the address comes after what to send (it is only asked when something is), though
+        // the page has it with Your details, where it belongs for everyone else.
+        orderOf: function (step) {
+          var m = memory() && step.getAttribute("data-stage-memory");
+          var stage = Number(m || step.getAttribute("data-stage")) || 1;
+          return memory() && step === addressField ? stage + 0.5 : stage;
         },
         stages: function () {
           return STAGES[path()] || STAGES.raising;
@@ -1122,7 +1142,8 @@
         kindOther: radio("kind") === "other" ? val("kindOther") : "",
         title: team ? val("teamName") : val("title"),
         description: val("description"),
-        eventDate: val("eventDate"),
+        eventDate: dateTbc() ? "" : val("eventDate"),
+        dateTbc: dateTbc() && !val("eventDate"),
         startTime: m ? "" : val("startTime"),
         venue: val("venue"),
         town: m ? "" : val("town"),
@@ -1154,7 +1175,7 @@
         memoryFamilyContactName: m && radio("memorySetupBy") === "funeral_director" ? val("memoryFamilyContactName") : "",
         memoryFamilyContactEmail: m && radio("memorySetupBy") === "funeral_director" ? val("memoryFamilyContactEmail") : "",
         callTime: m ? val("callTime") : "",
-        // The sign up tidy: sport and the T shirt (raising money), a child, and a business.
+        // The sign up tidy: sport and the T-shirt (raising money), a child, and a business.
         isSporting: raising ? yesNo("isSporting") : null,
         tshirtSize: raising && radio("isSporting") === "yes" ? val("tshirtSize") : "",
         childFundraiser: raising ? radio("childFundraiser") || null : null,

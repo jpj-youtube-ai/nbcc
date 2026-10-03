@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from "vitest";
 
 // The sign up tidy, the SQL side, against a fake client that answers by statement (no database): a
 // sign up stores its new answers and, for "No, only people you send the link to", is kept off the
-// Get involved list; staff correct sport and the T shirt under the row's lock; staff send a private
+// Get involved list; staff correct sport and the T-shirt under the row's lock; staff send a private
 // link to choose a size; and the organiser's choice is saved once. Every change is in audit_log.
 // Every name here is invented.
 
@@ -68,7 +68,7 @@ describe("a sign up's new answers", () => {
     );
     const save = calls.find(([sql]) => /UPDATE fundraisers SET is_sporting/.test(sql))!;
     expect(save).toBeTruthy();
-    expect(save[1]).toEqual([true, "adult_m", "Ella", true, "Exampleton Bakery", "yes", null, null, null, "Evenings", false, 21]);
+    expect(save[1]).toEqual([true, "adult_m", "Ella", true, "Exampleton Bakery", "yes", null, null, null, "Evenings", false, null, false, 21]);
     const insertAt = calls.findIndex(([sql]) => sql.includes("INSERT INTO fundraisers"));
     const saveAt = calls.findIndex(([sql]) => /UPDATE fundraisers SET is_sporting/.test(sql));
     expect(saveAt).toBeGreaterThan(insertAt);
@@ -79,9 +79,19 @@ describe("a sign up's new answers", () => {
     const calls = signingUp();
     await createFundraiser(signUp({ listed: false }));
     const save = calls.find(([sql]) => /UPDATE fundraisers SET is_sporting/.test(sql))!;
-    expect(save[0]).toMatch(/off_list_at = CASE WHEN \$11 THEN now\(\) ELSE off_list_at END/);
-    expect(save[0]).toMatch(/off_list_by = CASE WHEN \$11 THEN 'organiser' ELSE off_list_by END/);
+    expect(save[0]).toMatch(/off_list_at = CASE WHEN \$13 THEN now\(\) ELSE off_list_at END/);
+    expect(save[0]).toMatch(/off_list_by = CASE WHEN \$13 THEN 'organiser' ELSE off_list_by END/);
+    expect(save[1][12]).toBe(true);
+  });
+
+  it("keeps a date not decided yet", async () => {
+    const calls = signingUp();
+    await createFundraiser(signUp({ dateTbc: true }));
+    const save = calls.find(([sql]) => /UPDATE fundraisers SET is_sporting/.test(sql))!;
+    expect(save[0]).toMatch(/date_tbc = \$11, guardian_first_name = \$12/);
     expect(save[1][10]).toBe(true);
+    expect(toRecord(fundraiserRow({ date_tbc: true, guardian_first_name: "Sarah" }))).toMatchObject({ dateTbc: true, guardianFirstName: "Sarah" });
+    expect(toRecord(fundraiserRow())).toMatchObject({ dateTbc: false, guardianFirstName: null });
   });
 
   it("records the split check in the sign up's history", async () => {
@@ -133,7 +143,7 @@ describe("staff correcting sport and the t-shirt", () => {
   });
 });
 
-describe("the private link to choose a T shirt size", () => {
+describe("the private link to choose a T-shirt size", () => {
   it("is kept only as its hash, with when and who sent it", async () => {
     const calls = useClient((sql) => {
       if (sql.includes("FOR UPDATE")) return { rows: [fundraiserRow({ is_sporting: true })] };

@@ -16,7 +16,7 @@
 // fundraisers
 //   is_sporting              "Is it a sporting event?" Raising money only, never in memory. Null when
 //                            not asked (and on every sign up before).
-//   tshirt_size              their size for an NBCC T shirt, for a sporting event (TSHIRT_SIZES)
+//   tshirt_size              their size for an NBCC T-shirt, for a sporting event (TSHIRT_SIZES)
 //   tshirt_token_hash        staff may email them a private link to choose a size: only its sha256 is
 //   tshirt_asked_at          kept, with when and by whom it was last sent. The link is used once.
 //   tshirt_asked_by
@@ -28,6 +28,9 @@
 //   memory_family_contact_name   contact, for the names of people who gave
 //   memory_family_contact_email
 //   call_time                a good time to call them
+//   date_tbc                 they ticked "Not decided yet" beside the date (an event may then have none yet)
+//   guardian_first_name      a team member page for someone under 18: their parent's or guardian's
+//                            first name (with child_consent, their tick), greeted in its emails
 //
 //   fundraisers_memory_setup_by_known   WIDENED to take 'someone_else' (a colleague, club or church)
 //   fundraisers_booking_check           WIDENED to take 'donations' (free entry, donations welcome)
@@ -84,6 +87,8 @@ const FUNDRAISER_COLUMNS = [
   "memory_family_contact_name",
   "memory_family_contact_email",
   "call_time",
+  "date_tbc",
+  "guardian_first_name",
 ];
 
 const quote = (s) => `'${String(s).replace(/'/g, "''")}'`;
@@ -136,6 +141,8 @@ exports.up = (pgm) => {
     memory_family_contact_name: { type: "text" },
     memory_family_contact_email: { type: "text" },
     call_time: { type: "text" },
+    date_tbc: { type: "boolean" },
+    guardian_first_name: { type: "text" },
   });
   pgm.addConstraint("fundraisers", "fundraisers_tshirt_size_known", {
     check: `tshirt_size IS NULL OR tshirt_size IN (${list(TSHIRT_SIZES)})`,
@@ -149,7 +156,8 @@ exports.up = (pgm) => {
       " AND (memory_director_business IS NULL OR char_length(memory_director_business) <= 100)" +
       " AND (memory_family_contact_name IS NULL OR char_length(memory_family_contact_name) <= 100)" +
       " AND (memory_family_contact_email IS NULL OR char_length(memory_family_contact_email) <= 254)" +
-      " AND (call_time IS NULL OR char_length(call_time) <= 80)",
+      " AND (call_time IS NULL OR char_length(call_time) <= 80)" +
+      " AND (guardian_first_name IS NULL OR char_length(guardian_first_name) <= 50)",
   });
   // One private link opens one sign up.
   pgm.createIndex("fundraisers", "tshirt_token_hash", { unique: true, where: "tshirt_token_hash IS NOT NULL", name: "fundraisers_tshirt_token_hash_unique" });

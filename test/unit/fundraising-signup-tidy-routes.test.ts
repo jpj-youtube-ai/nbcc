@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-// The sign up tidy's routes: staff correct "Sporting event?" and the T shirt size (Fundraising edit),
+// The sign up tidy's routes: staff correct "Sporting event?" and the T-shirt size (Fundraising edit),
 // and send the organiser a private link to choose a size (never automatic); the organiser opens the
 // link and chooses. The database and the email are mocked. Every name here is invented.
 
@@ -103,7 +103,7 @@ describe("staff correcting sport and the t-shirt", () => {
   });
 });
 
-describe("asking them for their T shirt size", () => {
+describe("asking them for their T-shirt size", () => {
   it("needs Fundraising edit", async () => {
     expect((await run(routes.postTshirtAsk, { params: { id: "9" }, token: tokenFor("viewer") })).statusCode).toBe(403);
     expect(sendTshirtAsk).not.toHaveBeenCalled();
@@ -162,7 +162,7 @@ describe("the organiser's private link", () => {
   it("asks for a size from the list", async () => {
     const res = await run(routes.postTshirtChoose, { body: { token: LINK, tshirtSize: "" } });
     expect(res.statusCode).toBe(400);
-    expect((res.body as { fields: Record<string, string> }).fields.tshirtSize).toBe("Please choose a T shirt size.");
+    expect((res.body as { fields: Record<string, string> }).fields.tshirtSize).toBe("Please choose a T-shirt size.");
   });
 
   it("refuses a page on another website", async () => {

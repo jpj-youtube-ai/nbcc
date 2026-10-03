@@ -101,6 +101,23 @@
                     <input class="give-field-input" id="email" name="email" type="email" maxlength="254" autocomplete="email" required aria-required="true" placeholder="you@example.com" aria-describedby="emailHelp" data-invalid-message="Almost! Just add an email, like name@example.com." />
                     <p class="give-field-help" id="emailHelp">If they&rsquo;re under 18, give a parent or guardian&rsquo;s email. We only use it about this page.</p>
                   </div>
+                  <!-- Jaimie, 2026-10-03: a page for someone under 18 is set up by their parent or guardian,
+                       who says so and is greeted in its emails ("Hi Sarah, this is about Jack's page."). -->
+                  <fieldset class="fr-fieldset fr-subgroup" id="memberUnder18Group" role="radiogroup" aria-required="true">
+                    <legend class="fr-sublegend">Is the person joining under 18?</legend>
+                    <div class="fr-options fr-options--yesno">
+                      <label class="fr-option fr-option--small" for="memberUnder18Yes"><input id="memberUnder18Yes" name="memberUnder18" type="radio" value="yes" required aria-required="true" data-invalid-message="Almost! Just tell us whether the person joining is under 18." /><span>Yes</span></label>
+                      <label class="fr-option fr-option--small" for="memberUnder18No"><input id="memberUnder18No" name="memberUnder18" type="radio" value="no" required aria-required="true" /><span>No</span></label>
+                    </div>
+                    <div class="fr-subfields" data-guardian-fields hidden>
+                      <div class="give-field">
+                        <label for="guardianFirstName">Your first name, as their parent or guardian <span class="give-req" aria-hidden="true">*</span></label>
+                        <input class="give-field-input" id="guardianFirstName" name="guardianFirstName" type="text" maxlength="50" autocomplete="given-name" aria-describedby="guardianFirstNameHelp" data-invalid-message="Almost! Just add your first name." />
+                        <p class="give-field-help" id="guardianFirstNameHelp">So our emails about their page say hello to you.</p>
+                      </div>
+                      <label class="give-check fr-permission" for="guardianConsent"><input class="give-check-box" id="guardianConsent" name="guardianConsent" type="checkbox" data-invalid-message="Almost! Just tick to say you're happy for their first name to be shown." /><span class="give-check-text">I&rsquo;m their parent or guardian, and I&rsquo;m happy for their first name and any photo to be shown on the page and our social media.</span></label>
+                    </div>
+                  </fieldset>
                 </fieldset>
               </div>
 
@@ -123,7 +140,7 @@
                   <p class="give-field-help" id="targetHelp">Anything from &pound;10 to &pound;100,000. Your page shows how close you are.</p>
                 </div>
                 <div class="give-field">
-                  <label for="why">Why are you taking part? <span class="give-optional">(optional)</span></label>
+                  <label for="why"><span data-why-words>Why are you taking part?</span> <span class="give-optional">(optional)</span></label>
                   <textarea class="give-field-input fr-short-text" id="why" name="why" rows="2" maxlength="300" aria-describedby="whyHelp"></textarea>
                   <p class="give-field-help" id="whyHelp">A line or two for your page. Up to 300 characters.</p>
                 </div>

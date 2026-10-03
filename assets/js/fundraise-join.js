@@ -49,6 +49,9 @@
     targetPence: "target",
     why: "why",
     sharesWithOther: "sharesYes",
+    memberUnder18: "memberUnder18Yes",
+    guardianFirstName: "guardianFirstName",
+    guardianConsent: "guardianConsent",
     nbccSharePercent: "nbccSharePercent",
     otherCauseName: "otherCauseName",
   };
@@ -101,7 +104,25 @@
       return radio("over18") === "no";
     }
 
+    // Jaimie, 2026-10-03: joining for someone under 18. Their parent's or guardian's first name and
+    // tick are asked, and "Why are you taking part?" asks about them by name.
+    var guardianFields = form.querySelector("[data-guardian-fields]");
+    var whyWords = form.querySelector("[data-why-words]");
+    function forChild() {
+      return radio("memberUnder18") === "yes";
+    }
+    function applyChild() {
+      var child = forChild();
+      if (guardianFields) guardianFields.hidden = !child;
+      need(el("guardianFirstName"), child);
+      need(el("guardianConsent"), child);
+      var first = val("firstName").split(/\s+/)[0];
+      var words = child && first ? "Why is " + first + " taking part?" : "Why are you taking part?";
+      if (whyWords && whyWords.textContent !== words) whyWords.textContent = words;
+    }
+
     function applyAll() {
+      applyChild();
       var no = under18();
       var words = no ? UNDER_18 : "";
       if (ageNote && ageNote.textContent !== words) ageNote.textContent = words;
@@ -317,6 +338,9 @@
         over18: radio("over18") === "yes" ? true : radio("over18") === "no" ? false : null,
         targetPence: isFinite(pounds) && pounds > 0 ? Math.round(pounds * 100) : null,
         why: val("why"),
+        memberUnder18: radio("memberUnder18") === "yes" ? true : radio("memberUnder18") === "no" ? false : null,
+        guardianFirstName: forChild() ? val("guardianFirstName") : "",
+        guardianConsent: forChild() && !!(el("guardianConsent") && el("guardianConsent").checked),
         company: val("company"),
         captchaToken: tokenField ? tokenField.value : "",
       };

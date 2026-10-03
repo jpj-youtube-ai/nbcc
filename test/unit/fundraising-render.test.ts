@@ -401,7 +401,8 @@ describe("the words on the drawn pages", () => {
 
   it.each(pages)("%s has no hyphen between words and no en or em dash", (_name, html) => {
     // A web address shown for copying is an address, not words: its hyphens are the slug's.
-    const text = visible(html).replace(/\S*\/\S*/g, " ");
+    // "T-shirt" is the one word allowed its hyphen (copy-rules.test.ts).
+    const text = visible(html).replace(/\S*\/\S*/g, " ").replace(/\bT-shirts?\b/gi, " ");
     expect(text.match(/\w-\w/g) ?? []).toEqual([]);
     expect(text).not.toMatch(/[–—]/);
   });

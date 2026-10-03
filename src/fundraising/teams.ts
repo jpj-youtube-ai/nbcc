@@ -5,6 +5,7 @@ import { addDays } from "./follow-up";
 import { profilePhotoSrc } from "./pictures";
 import { dayCount } from "./call-prompts";
 import { memoryMeter } from "./in-memory";
+import { checkGuardian } from "./signup-tidy";
 import {
   NAME_PART_MAX,
   OVER_18_MISSING,
@@ -176,6 +177,9 @@ export interface Join {
   targetPence: number | null;
   why: string;
   split: FundraiserSplit;
+  /** The sign up tidy: joining for someone under 18, their parent's or guardian's first name and tick. */
+  guardianFirstName: string | null;
+  guardianConsent: boolean | null;
 }
 
 function readTarget(v: unknown): { pence: number | null; problem: string | null } {
@@ -226,8 +230,11 @@ export function checkJoin(
     if (parsed.success) split = parsed.data;
     else for (const issue of parsed.error.issues) fields[issue.path.join(".") || "sharesWithOther"] ??= issue.message;
   }
+  const guardian = checkGuardian(b, (path, message) => {
+    fields[path] = message;
+  });
   if (Object.keys(fields).length > 0) return { join: null, fields };
-  return { join: { firstName, lastName, email, targetPence: target.pence, why, split }, fields: {} };
+  return { join: { firstName, lastName, email, targetPence: target.pence, why, split, ...guardian }, fields: {} };
 }
 
 /**
@@ -299,6 +306,10 @@ export function memberSignUp(team: FundraiserRecord, j: Join): SignUp {
     memoryFamilyContactName: null,
     memoryFamilyContactEmail: null,
     callTime: null,
+    dateTbc: false,
+    guardianFirstName: j.guardianFirstName ?? null,
+    // Their parent or guardian ticked: happy for their first name and any photo to be shown.
+    ...(j.guardianFirstName ? { childConsent: j.guardianConsent === true } : {}),
   } as SignUp;
 }
 

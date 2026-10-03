@@ -9489,10 +9489,10 @@ its `data-paths`; its words follow the path (`data-say-<path>`, `data-invalid-<p
 
 | Stage | Raising money / holding an event | In memory of someone |
 | --- | --- | --- |
-| 1 | **About you**: what you are planning, 18 or over, who is fundraising (me, or my child), a business, school or group, your details | **About them**: what you are planning, 18 or over, who the page is for and who is setting it up |
-| 2 | **Your fundraiser** (**Your event**): team, is it a sporting event, the category, the T shirt size, about it, the event's card, the target, Get involved | **The page**: how people will be giving, about the page, an amount, Get involved, sharing and the split check, sharing the page |
+| 1 | **Your fundraiser** (**Your event**), the fun part first: what you are planning, a quick 18 or over, team, is it a sporting event, the category, the T-shirt size, about it, the event's card, the target, who is fundraising (me, or my child), a business, school or group, Get involved | **About them**: what you are planning, 18 or over, who the page is for and who is setting it up |
+| 2 | **About you**: your details, and the address for the welcome pack | **The page**: how people will be giving, about the page, an amount, Get involved, sharing and the split check, sharing the page |
 | 3 | **Sharing**: another cause, the split check, social media | **Your details** |
-| 4 | **What you'd like**: materials, and the address for the welcome pack | **Anything we can send**: envelopes, QR cards and posters, and an address only if something is asked for |
+| 4 | **What you'd like**: materials | **Anything we can send**: envelopes, QR cards and posters, and an address only if something is asked for |
 | 5 | **Check and send** | **Check the details** |
 
 What is asked, and why:
@@ -9503,7 +9503,7 @@ What is asked, and why:
   and always kept. In memory there is no welcome pack: the address is asked only when something is
   to be sent ("This can be the funeral director's address.").
 - **"Is it a sporting event?"** (raising money only, never in memory, asked before the category). A
-  Yes offers only the sporting categories and asks a **T shirt size** (Kids 3 to 4 up to 13 to 14,
+  Yes offers only the sporting categories and asks a **T-shirt size** (Kids 3 to 4 up to 13 to 14,
   Adult XS to XXL; nothing chosen for them). A No offers the rest. Other is in both. Each category has
   a `sporty` mark; admins tick **Sporting** in Admin > Fundraising, Categories.
 - **The split check.** After the sharing details, a step shows the split as the page and posters
@@ -9526,9 +9526,18 @@ What is asked, and why:
   will be giving (its own list of categories, `memory_only`), an optional date and place for the
   funeral or service, optional words about them, one gentle question about sharing the page, and
   collection envelopes, QR cards or posters for the service. It is never asked about a team, sport, a
-  T shirt, a shout out, someone coming along or the newsletter, and nothing on its path has an
+  T-shirt, a shout out, someone coming along or the newsletter, and nothing on its path has an
   exclamation mark. Its thank you is quiet, and a short receipt email goes in place of nothing.
 - **Under 18** says the same on every form, with no example to copy.
+- **"Not decided yet"** is a tick beside the date. Ticked, the date is optional (an event's too) and
+  staff see "Date to be confirmed" in the admin and the summary email. An event with no date has its
+  page but no card on Get involved until staff add one.
+- **"T-shirt"** keeps its hyphen: the one word the no hyphen copy rule lets through
+  (`test/unit/copy-rules.test.ts`, the whole word only).
+- **Joining a team for someone under 18.** The join form asks "Is the person joining under 18?" A
+  Yes asks the parent's or guardian's first name and their tick, and "Why is Jack taking part?".
+  Emails about that member page greet the parent: "Hi Sarah, this is about Jack's page."
+  (`greetGuardian` in `src/fundraising/signup-tidy-emails.ts`, applied where they are sent).
 
 ### The rules the server keeps (`src/fundraising/signup-tidy.ts`, wired into `signUpSchema`)
 
@@ -9540,6 +9549,8 @@ What is asked, and why:
 | `childFundraiser`, `childFirstName`, `childConsent` | for `child`: the first name and the tick |
 | `forOrganisation`, `orgName`, `employerMatch` | for a Yes: the name; `yes`, `no` or `not_sure` |
 | `listed` | `false` keeps the page off Get involved; a team is always listed |
+| `eventDate`, `dateTbc` | an event needs a date, or `dateTbc: true`; the tick is kept only while there is no date |
+| join: `memberUnder18`, `guardianFirstName`, `guardianConsent` | for `true`: the first name and the tick; a page cached from before sends none, and is taken as an adult |
 | `kind` | in memory: one of the in memory ways of giving, or Other; anyone else: never one of those |
 | `description` | optional in memory |
 | `wants.shoutOut`, `wants.attend` | not needed in memory (both false); come along only for an event, or with a date or venue |
@@ -9559,8 +9570,8 @@ What is asked, and why:
 
 The link is `/fundraise/t-shirt#<token>`: the token rides after the `#`, so it never reaches a server
 in an address, and only its sha256 is stored. Admin > Fundraising shows the new answers in **What
-they told us**, and a **Sport and the T shirt** panel: "Waiting for T shirt size" and the button "Ask
-them for their T shirt size". The summary to the events inbox carries the new answers; for a page in
+they told us**, and a **Sport and the T-shirt** panel: "Waiting for T-shirt size" and the button "Ask
+them for their T-shirt size". The summary to the events inbox carries the new answers; for a page in
 memory of someone it is headed "A new page in memory of ...", with a plain sign off.
 
 The team join form (`fundraise-join.html`) has the same Next and Back, with three stages (About you,
@@ -9572,7 +9583,7 @@ Your page, Send). `fundraise-join.html` and `fundraise-tshirt.html` are now copi
 | Table | Change |
 | --- | --- |
 | `fundraising_categories` | `sporty`, `memory_only` (both false by default); Run, Walk and Santa dash marked sporting; three in memory ways of giving added |
-| `fundraisers` | `is_sporting`, `tshirt_size` (checked against the list), `tshirt_token_hash`, `tshirt_asked_at`, `tshirt_asked_by`, `child_first_name`, `child_consent`, `org_name`, `employer_match`, `memory_director_business`, `memory_family_contact_name`, `memory_family_contact_email`, `call_time`, all nullable |
+| `fundraisers` | `is_sporting`, `tshirt_size` (checked against the list), `tshirt_token_hash`, `tshirt_asked_at`, `tshirt_asked_by`, `child_first_name`, `child_consent`, `org_name`, `employer_match`, `memory_director_business`, `memory_family_contact_name`, `memory_family_contact_email`, `call_time`, `date_tbc`, `guardian_first_name`, all nullable |
 | checks | `fundraisers_memory_setup_by_known` takes `someone_else`; `fundraisers_booking_check` takes `donations`; the request kind check takes `envelopes` |
 
 No new table. **Rolling back past the sign up tidy.** Code from before this release does not know

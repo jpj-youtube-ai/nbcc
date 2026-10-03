@@ -8,7 +8,7 @@ import { EMPLOYER_MATCH_LABELS, TSHIRT_LINK_DAYS, tshirtLabel, type EmployerMatc
 //
 //   - buildMemoryReceiptEmail: a short receipt for a page in memory of someone. Fixed words with no
 //     name in it (anyone can type any address into the public form), and nothing upbeat.
-//   - buildTshirtAskEmail: staff ask an organiser for their T shirt size (Admin > Fundraising, never
+//   - buildTshirtAskEmail: staff ask an organiser for their T-shirt size (Admin > Fundraising, never
 //     automatic), with the private link to choose it.
 //   - tidyStaffFacts: the new answers, for the summary to the events inbox.
 
@@ -33,28 +33,52 @@ export function buildMemoryReceiptEmail(): BuiltEmail {
   return toOrganiser("We have your details for the page", body, [MEMORY_RECEIPT_LINE, "", MEMORY_RECEIPT_SMALL], "With warmest thoughts,");
 }
 
-// --- asking for a T shirt size --------------------------------------------------------------------
+// --- asking for a T-shirt size --------------------------------------------------------------------
 
 export function buildTshirtAskEmail(typedName: string | null | undefined, url: string): BuiltEmail {
   const first = safeFirstName(typedName);
   const hi = first ? `Hi ${first},` : "Hi there,";
-  const intro = "Thank you for signing up to fundraise for NBCC. As it's a sporting event, we'd love to send you an NBCC T shirt with your welcome pack.";
+  const intro = "Thank you for signing up to fundraise for NBCC. As it's a sporting event, we'd love to send you an NBCC T-shirt with your welcome pack.";
   const ask = "Please choose your size with the button below. It only takes a moment.";
   const small = `If it's for a child, choose their size. The link works for ${TSHIRT_LINK_DAYS} days.`;
   const body =
     eyebrow("Fundraising for NBCC") +
-    heading("What size T shirt would you like?") +
+    heading("What size T-shirt would you like?") +
     bodyP(escapeHtml(hi)) +
     bodyP(escapeHtml(intro)) +
     bodyP(escapeHtml(ask)) +
     button(url, "Choose my size") +
     note(escapeHtml(small));
   return toOrganiser(
-    "Your NBCC T shirt: what size would you like?",
+    "Your NBCC T-shirt: what size would you like?",
     body,
     [hi, "", intro, "", ask, "", `Choose my size: ${url}`, "", small],
     "Thanks so much,",
   );
+}
+
+// --- a child's member page: greet the parent ------------------------------------------------------------
+
+/**
+ * An email about a member page set up for someone under 18 goes to their parent or guardian, so it
+ * says hello to them and whose page it is about: "Hi Sarah, this is about Jack's page." Any other
+ * email comes back untouched. Applied where the emails are sent (send.ts, team-send.ts, touch-runner.ts).
+ */
+export function greetGuardian<T extends { html: string; text?: string }>(
+  mail: T,
+  f: { name: string; firstName?: string | null; guardianFirstName?: string | null },
+): T {
+  const guardian = safeFirstName(f.guardianFirstName);
+  if (!guardian) return mail;
+  const child = String(f.firstName ?? f.name ?? "").trim().split(/\s+/)[0] ?? "";
+  if (!child) return mail;
+  const from = `Hi ${child},`;
+  const to = `Hi ${guardian}, this is about ${child}'s page.`;
+  return {
+    ...mail,
+    html: mail.html.replace(escapeHtml(from), escapeHtml(to)),
+    ...(mail.text === undefined ? {} : { text: mail.text.replace(from, to) }),
+  };
 }
 
 // --- the new answers, for the events inbox ------------------------------------------------------------
@@ -71,6 +95,7 @@ export interface TidyFacts {
   memoryFamilyContactName?: string | null;
   memoryFamilyContactEmail?: string | null;
   callTime?: string | null;
+  guardianFirstName?: string | null;
 }
 
 /** The new answers, each only when it was asked. */
@@ -88,11 +113,14 @@ export function tidyStaffFacts(f: TidyFacts): Array<[string, string]> {
   }
   if (f.isSporting === true || f.isSporting === false) {
     facts.push(["Sporting event", f.isSporting ? "Yes" : "No"]);
-    if (f.isSporting) facts.push(["T shirt size", f.tshirtSize ? tshirtLabel(f.tshirtSize) : "Not given yet. Ask them from Admin > Fundraising"]);
+    if (f.isSporting) facts.push(["T-shirt size", f.tshirtSize ? tshirtLabel(f.tshirtSize) : "Not given yet. Ask them from Admin > Fundraising"]);
   }
   if (f.memoryDirectorBusiness) facts.push(["Funeral director", f.memoryDirectorBusiness]);
   const contact = [f.memoryFamilyContactName, f.memoryFamilyContactEmail].filter(Boolean).join(", ");
   if (contact) facts.push(["Send the names of people who gave to", contact]);
   if (f.callTime) facts.push(["A good time to call", f.callTime]);
+  if (f.guardianFirstName) {
+    facts.push(["For someone under 18", `Their parent or guardian is ${f.guardianFirstName}, who ticked that they are happy for the first name and any photo to be shown`]);
+  }
   return facts;
 }

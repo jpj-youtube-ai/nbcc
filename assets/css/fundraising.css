@@ -973,6 +973,8 @@ fieldset.is-invalid .fr-option { border-color: var(--crimson); }
 .fr-together a { font-weight: 700; color: var(--maroon); white-space: nowrap; }
 .fr-one-liner { margin: 14px 0 0; font-weight: 600; color: var(--holly-dark); }
 
+/* "Not decided yet", close under the date it belongs to. */
+.fr-date-tbc { margin: -6px 0 14px; }
 /* Boxes that open under a choice (their child's name, the business, the funeral director). */
 .fr-subfields { margin: 16px 0 0; }
 .fr-options.fr-options--three { grid-template-columns: repeat(3, minmax(0, max-content)); gap: 10px; }

@@ -7,7 +7,7 @@ import { MEMORY_CATEGORIES } from "../../src/fundraising/categories";
 import { SETUP_BY } from "../../src/fundraising/in-memory";
 
 // The sign up tidy (Jaimie, 2026-10-03): a "sporty" mark on each fundraising category (Run, Walk and
-// Santa dash start sporting), and on each sign up whether it is a sporting event, the T shirt size,
+// Santa dash start sporting), and on each sign up whether it is a sporting event, the T-shirt size,
 // and the private link staff may send to ask for the size. Additive only, so a code rollback is
 // safe, and numbered after the profile pictures migration (205): node-pg-migrate refuses on
 // production to run one that sorts before one already run.
@@ -91,7 +91,7 @@ describe("the sign up tidy migration", () => {
     const { calls, pgm } = fakePgm();
     migration.up(pgm);
     const cols = added(calls, "fundraisers")!;
-    expect(Object.keys(cols).sort()).toEqual(["call_time", "child_consent", "child_first_name", "employer_match", "is_sporting", "memory_director_business", "memory_family_contact_email", "memory_family_contact_name", "org_name", "tshirt_asked_at", "tshirt_asked_by", "tshirt_size", "tshirt_token_hash"]);
+    expect(Object.keys(cols).sort()).toEqual(["call_time", "child_consent", "child_first_name", "date_tbc", "employer_match", "guardian_first_name", "is_sporting", "memory_director_business", "memory_family_contact_email", "memory_family_contact_name", "org_name", "tshirt_asked_at", "tshirt_asked_by", "tshirt_size", "tshirt_token_hash"]);
     for (const [name, c] of Object.entries(cols)) expect(c.notNull, name).not.toBe(true);
     expect(cols.is_sporting.type).toBe("boolean");
   });
@@ -115,7 +115,7 @@ describe("the sign up tidy migration", () => {
     migration.down(pgm);
     const dropped = calls.filter((c) => c.op === "dropColumns");
     expect(dropped.map((c) => [c.args[0], [...(c.args[1] as string[])].sort()])).toEqual([
-      ["fundraisers", ["call_time", "child_consent", "child_first_name", "employer_match", "is_sporting", "memory_director_business", "memory_family_contact_email", "memory_family_contact_name", "org_name", "tshirt_asked_at", "tshirt_asked_by", "tshirt_size", "tshirt_token_hash"]],
+      ["fundraisers", ["call_time", "child_consent", "child_first_name", "date_tbc", "employer_match", "guardian_first_name", "is_sporting", "memory_director_business", "memory_family_contact_email", "memory_family_contact_name", "org_name", "tshirt_asked_at", "tshirt_asked_by", "tshirt_size", "tshirt_token_hash"]],
       ["fundraising_categories", ["memory_only", "sporty"]],
     ]);
   });

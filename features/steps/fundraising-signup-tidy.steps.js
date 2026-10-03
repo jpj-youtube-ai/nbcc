@@ -4,7 +4,7 @@ const { createHash, randomBytes } = require("node:crypto");
 const { Pool } = require("pg");
 
 // Steps for fundraising-signup-tidy.feature (Jaimie, 2026-10-03): the welcome pack's address, sport
-// and the T shirt, the split check, the in memory path, and "only people with the link". The switch,
+// and the T-shirt, the split check, the in memory path, and "only people with the link". The switch,
 // staff accounts, approving and the clean up of every "(bdd-fr)" fundraiser are fundraising.steps.js's;
 // "the fundraising answer names the field" and "no fundraiser called" are fundraising-age-split's;
 // opening a page and what it shows are events.steps.js's and fundraising-pages.steps.js's. Every name
@@ -13,7 +13,7 @@ const { Pool } = require("pg");
 const BASE_URL = process.env.BASE_URL || "http://localhost:3000";
 const PASSWORD = "pw-fundraising-bdd";
 const pool = new Pool({ connectionString: process.env.DATABASE_URL });
-// The page's own POSTs say where they came from; the T shirt choice is refused from anywhere else.
+// The page's own POSTs say where they came from; the T-shirt choice is refused from anywhere else.
 const OUR_PAGE = { "sec-fetch-site": "same-origin", origin: BASE_URL };
 
 async function login(email) {
@@ -101,11 +101,11 @@ When("someone signs up {string} without an address", async function (title) {
   await call(this, "POST", "/api/fundraise", signUpBody(title, { postLine1: "", postLine2: "", postTown: "", postPostcode: "" }));
 });
 
-When("someone signs up the sporting event {string} with no T shirt size", async function (title) {
+When("someone signs up the sporting event {string} with no T-shirt size", async function (title) {
   await call(this, "POST", "/api/fundraise", signUpBody(title, { kind: "walk", isSporting: true, tshirtSize: "" }));
 });
 
-When("someone signs up the sporting event {string} with the T shirt size {string}", async function (title, size) {
+When("someone signs up the sporting event {string} with the T-shirt size {string}", async function (title, size) {
   await call(this, "POST", "/api/fundraise", signUpBody(title, { kind: "walk", isSporting: true, tshirtSize: size }));
 });
 
@@ -163,7 +163,7 @@ Then("the sign up form does not mark {string} as a sporting category", function 
   assert.ok(this.visitorBody.includes(`for="kind-${key}">`), `${key} is not on the form, or is marked sporting`);
 });
 
-Then("{string} is stored as a sporting event with the T shirt size {string}", async function (title, size) {
+Then("{string} is stored as a sporting event with the T-shirt size {string}", async function (title, size) {
   const f = await fundraiser(title);
   assert.equal(f.is_sporting, true);
   assert.equal(f.tshirt_size, size);
@@ -174,13 +174,13 @@ Then("{string} is stored with the address {string} {string} {string}", async fun
   assert.deepEqual([f.post_line1, f.post_town, f.post_postcode], [line1, town, postcode]);
 });
 
-Then("{string} is waiting for a T shirt size", async function (title) {
+Then("{string} is waiting for a T-shirt size", async function (title) {
   const f = await fundraiser(title);
   assert.equal(f.is_sporting, true);
   assert.equal(f.tshirt_size, null);
 });
 
-Then("{string} is stored in memory with no sport, no T shirt and no address", async function (title) {
+Then("{string} is stored in memory with no sport, no T-shirt and no address", async function (title) {
   const f = await fundraiser(title);
   assert.equal(f.in_memory, true);
   assert.equal(f.is_sporting, null);
@@ -204,26 +204,91 @@ Then("{string} puts the category {string} back as not sporting", async function 
   assert.equal(r.rows[0].sporty, false);
 });
 
-// ---- sport and the T shirt, after the sign up ----
+// ---- sport and the T-shirt, after the sign up ----
 
-When("{string} sets {string} as a sporting event with no T shirt size", async function (email, title) {
+When("{string} sets {string} as a sporting event with no T-shirt size", async function (email, title) {
   const f = await fundraiser(title);
   await call(this, "PUT", `/api/admin/fundraisers/${f.id}/welcome-pack`, { isSporting: true, tshirtSize: null }, await login(email));
 });
 
 // The link staff email carries a token only the organiser has; only its sha256 is stored. Here one
 // is made and stored the same way (src/fundraising/signup-tidy.ts hashTshirtToken), as if just sent.
-Given("a T shirt link for {string} whose token we know", async function (title) {
+Given("a T-shirt link for {string} whose token we know", async function (title) {
   const f = await fundraiser(title);
   this.tshirtToken = randomBytes(32).toString("base64url");
   const hash = createHash("sha256").update("fundraisetshirt.v1:" + this.tshirtToken).digest("hex");
   await pool.query("UPDATE fundraisers SET tshirt_token_hash = $1, tshirt_asked_at = now(), tshirt_asked_by = 'bdd' WHERE id = $2", [hash, f.id]);
 });
 
-When("the organiser opens that T shirt link", async function () {
+When("the organiser opens that T-shirt link", async function () {
   await call(this, "POST", "/api/fundraise/tshirt/look", { token: this.tshirtToken }, null, OUR_PAGE);
 });
 
-When("the organiser chooses the T shirt size {string} with that link", async function (size) {
+When("the organiser chooses the T-shirt size {string} with that link", async function (size) {
   await call(this, "POST", "/api/fundraise/tshirt", { token: this.tshirtToken, tshirtSize: size }, null, OUR_PAGE);
+});
+
+// ---- a date not decided yet (Jaimie, 2026-10-03) ----
+
+function eventBody(title, over) {
+  return signUpBody(title, {
+    path: "event",
+    eventDate: "",
+    venue: "Example Village Hall",
+    targetPence: null,
+    cardLine: "Eight rounds and a raffle (bdd-fr).",
+    booking: "donations",
+    inMemory: null,
+    isSporting: null,
+    childFundraiser: null,
+    ...over,
+  });
+}
+
+When("someone signs up the event {string} with no date", async function (title) {
+  await call(this, "POST", "/api/fundraise", eventBody(title, { dateTbc: false }));
+});
+
+When("someone signs up the event {string} with the date not decided yet", async function (title) {
+  await call(this, "POST", "/api/fundraise", eventBody(title, { dateTbc: true }));
+});
+
+Then("{string} is stored with its date to be confirmed", async function (title) {
+  const r = await pool.query("SELECT event_date, date_tbc, booking FROM fundraisers WHERE title = $1 ORDER BY id DESC LIMIT 1", [title]);
+  assert.ok(r.rows[0], `no fundraiser called ${title}`);
+  assert.equal(r.rows[0].event_date, null);
+  assert.equal(r.rows[0].date_tbc, true);
+  assert.equal(r.rows[0].booking, "donations");
+});
+
+// ---- joining a team for someone under 18 ----
+
+async function joinFor(world, teamTitle, first, last, over) {
+  const team = await pool.query("SELECT slug FROM fundraisers WHERE title = $1 ORDER BY id DESC LIMIT 1", [teamTitle]);
+  assert.ok(team.rows[0], `no team called ${teamTitle}`);
+  await call(world, "POST", `/api/fundraise/teams/${team.rows[0].slug}/join`, {
+    firstName: first,
+    lastName: last,
+    email: "parent.tidy.fr.bdd@example.com",
+    over18: true,
+    why: "",
+    company: "",
+    memberUnder18: true,
+    ...over,
+  });
+}
+
+When("a parent joins {string} for {string} {string}, under 18, without their own name", async function (teamTitle, first, last) {
+  await joinFor(this, teamTitle, first, last, { guardianFirstName: "", guardianConsent: false });
+});
+
+When("the parent {string} joins {string} for {string} {string}, under 18", async function (parent, teamTitle, first, last) {
+  await joinFor(this, teamTitle, first, last, { guardianFirstName: parent, guardianConsent: true });
+});
+
+Then("{string} is stored for someone under 18, with the parent {string}", async function (title, parent) {
+  const r = await pool.query("SELECT guardian_first_name, child_consent FROM fundraisers WHERE title = $1 ORDER BY id DESC LIMIT 1", [title]);
+  assert.ok(r.rows[0], `no fundraiser called ${title}`);
+  assert.equal(r.rows[0].guardian_first_name, parent);
+  assert.equal(r.rows[0].child_consent, true);
 });

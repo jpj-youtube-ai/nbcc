@@ -39,7 +39,9 @@
     function inPlay() {
       return steps
         .map(function (s, i) {
-          return { s: s, i: i, stage: stageOf(s) };
+          // Where it comes: by its stage, unless the form places it (a step that belongs later in
+          // its stage than the page has it).
+          return { s: s, i: i, stage: opts.orderOf ? Number(opts.orderOf(s)) : stageOf(s) };
         })
         .filter(function (x) {
           return !x.s.hidden;

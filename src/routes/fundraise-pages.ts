@@ -11,7 +11,7 @@ import { EVENT_PAGE_PREFIX, pagePath, type FundraiserRecord } from "../fundraisi
 //   GET /fundraise                 the sign up form, or "not open yet" while switched off; its
 //                                  categories drawn from the database's list, A to Z
 //   GET /fundraise/manage          change your page, by the emailed link (?token=); never indexed
-//   GET /fundraise/t-shirt         choose a T shirt size, from the email staff send; never indexed
+//   GET /fundraise/t-shirt         choose a T-shirt size, from the email staff send; never indexed
 //   GET /fundraise/help            ideas, paying in, Gift Aid and staying safe (TASK-498); indexed
 //   GET /fundraise/logos           the logo pack: the official logos and simple rules (TASK-504)
 //   GET /fundraise/sponsor-form    a blank sponsor form to print, with HMRC's Gift Aid columns (TASK-504)
@@ -314,7 +314,7 @@ export function addFundraisePageRoutes(router: Router, siteRoot: string, deps: F
     }
   });
 
-  // The sign up tidy: the private page to choose a T shirt size, opened from the email staff send.
+  // The sign up tidy: the private page to choose a T-shirt size, opened from the email staff send.
   // Before /fundraise/:slug ("t-shirt" is a reserved slug too). Its link's token rides after the #,
   // so it never reaches here; still never indexed, never cached, and no referrer to anyone.
   router.get("/fundraise/t-shirt", async (req, res, next) => {

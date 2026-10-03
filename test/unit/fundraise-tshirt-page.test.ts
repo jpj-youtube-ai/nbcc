@@ -6,7 +6,7 @@ import { createRequire } from "node:module";
 import { TSHIRT_SIZES } from "../../src/fundraising/signup-tidy";
 
 // The sign up tidy (Jaimie, 2026-10-03): the private page an organiser opens from the email staff
-// send to ask for their T shirt size. The link's token rides after the # and comes out of the address
+// send to ask for their T-shirt size. The link's token rides after the # and comes out of the address
 // bar at once; the page asks the server who it is for, offers the sizes with nothing chosen, and
 // saves the choice once. A link that no longer works says so kindly. Every name here is invented.
 
@@ -50,12 +50,13 @@ beforeEach(() => {
       : { status: 200, body: { status: "saved" } };
 });
 
-describe("the page to choose a T shirt size", () => {
-  it("is never indexed, and has no hyphen in its words", () => {
+describe("the page to choose a T-shirt size", () => {
+  it("is never indexed, and has no hyphen in its words bar T-shirt", () => {
     expect(template).toContain('<meta name="robots" content="noindex, nofollow" />');
     const body = new DOMParser().parseFromString(template, "text/html").body;
     body.querySelectorAll("script, style, svg").forEach((n) => n.remove());
-    expect(body.textContent).not.toMatch(/\w-\w/);
+    expect((body.textContent ?? "").replace(/T-shirt/g, " ")).not.toMatch(/\w-\w/);
+    expect(body.textContent).toContain("What size T-shirt would you like?");
   });
 
   it("takes the link out of the address bar and asks who it is for", async () => {
@@ -81,7 +82,7 @@ describe("the page to choose a T shirt size", () => {
     load();
     await flush();
     await submit();
-    expect(document.getElementById("tshirtSize-error")!.textContent).toBe("Almost! Just choose a T shirt size.");
+    expect(document.getElementById("tshirtSize-error")!.textContent).toBe("Almost! Just choose a T-shirt size.");
     expect(calls.filter((c) => c.url === "/api/fundraise/tshirt")).toHaveLength(0);
   });
 

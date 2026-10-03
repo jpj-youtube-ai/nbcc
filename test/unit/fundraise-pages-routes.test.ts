@@ -349,8 +349,8 @@ describe("the manage page", () => {
   });
 });
 
-// The sign up tidy: the private page to choose a T shirt size, from the email staff send.
-describe("the T shirt size page", () => {
+// The sign up tidy: the private page to choose a T-shirt size, from the email staff send.
+describe("the T-shirt size page", () => {
   it("is served, never indexed or cached, and never taken for a fundraiser", async () => {
     state.fundraisers = [record({ slug: "t-shirt" })];
     const res = await get("/fundraise/t-shirt");

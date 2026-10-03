@@ -129,13 +129,14 @@ const submit = async () => {
 };
 
 describe("Just me, or a team?, in the page as it is", () => {
-  // The sign up tidy (Jaimie, 2026-10-03): was "comes straight after 18 or over". About you comes
-  // first now, so it is the first question about the fundraiser, straight after Your details.
-  it("is the first question about the fundraiser, straight after Your details, with nothing chosen", () => {
+  // Jaimie, 2026-10-03: the fundraiser comes first, so for someone raising money it is the first
+  // question after "Are you 18 or over?" (only the in memory step sits between them in the page).
+  it("is the first question about the fundraiser, straight after 18 or over, with nothing chosen", () => {
     load();
     const step = $("#teamYes").closest("[data-step]") as HTMLElement;
-    expect(steps()[steps().indexOf(step) - 1]).toBe($("#firstName").closest("[data-step]"));
-    expect(steps().filter((s) => s.getAttribute("data-stage") === "2")[0]).toBe(step);
+    const raising = steps().filter((s) => (s.getAttribute("data-paths") ?? "raising").includes("raising"));
+    expect(raising[raising.indexOf(step) - 1]).toBe($("#over18Yes").closest("[data-step]"));
+    expect(step.getAttribute("data-stage")).toBe("1");
     expect(step.getAttribute("data-paths")).toBe("raising");
     expect(step.querySelector("legend")!.textContent!.trim()).toBe("Just me, or a team?");
     const radios = $$<HTMLInputElement>('input[name="team"]');

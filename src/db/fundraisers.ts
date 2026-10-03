@@ -49,7 +49,7 @@ export type FundraiserErrorReason =
   | "team_path"
   // Team pages: a team that shares must say whose split it is.
   | "team_mode_missing"
-  // The sign up tidy: a T shirt size is asked only for a sporting event still waiting for one.
+  // The sign up tidy: a T-shirt size is asked only for a sporting event still waiting for one.
   | "not_sporting"
   | "has_size";
 
@@ -146,7 +146,7 @@ const RECORD_COLUMNS = `f.id, f.slug, f.path, f.kind, f.title, f.description,
          f.memory_reminder_done_at, f.memory_reminder_done_by,
          f.is_sporting, f.tshirt_size, f.tshirt_asked_at, f.tshirt_asked_by, f.child_first_name, f.child_consent,
          f.org_name, f.employer_match, f.memory_director_business, f.memory_family_contact_name,
-         f.memory_family_contact_email, f.call_time,
+         f.memory_family_contact_email, f.call_time, f.date_tbc, f.guardian_first_name,
          (SELECT c.label FROM fundraising_categories c WHERE c.key = f.kind) AS kind_label`;
 const SELECT = `
   SELECT ${RECORD_COLUMNS}
@@ -283,6 +283,8 @@ export function toRecord(r: Row): FundraiserRecord {
     memoryFamilyContactName: textOrNull(r.memory_family_contact_name),
     memoryFamilyContactEmail: textOrNull(r.memory_family_contact_email),
     callTime: textOrNull(r.call_time),
+    dateTbc: r.date_tbc === true,
+    guardianFirstName: textOrNull(r.guardian_first_name),
   };
 }
 

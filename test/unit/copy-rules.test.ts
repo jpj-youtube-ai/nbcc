@@ -50,7 +50,11 @@ const FULL_PHRASE = "children, young people and vulnerable adults";
 // style (the rule targets phrases like "one-off" / "volunteer-run", not names).
 // Stripped from the copy before the hyphen scan so the guard still catches the
 // style violations it is meant to.
+// "T-shirt" is the one ordinary word allowed its hyphen (Jaimie, 2026-10-03): it is how the word is
+// spelt, and "T shirt" reads as a mistake. Only that whole word (or T-shirts), in either
+// case: "sweat-shirt" and every other hyphen are still caught.
 const ALLOWED_HYPHENATED = ["Lisa-Marie"];
+const ALLOWED_WORD = /\bT-shirts?\b/gi;
 
 // The rendered, human-visible copy of a page: <body> text (with script / style /
 // svg stripped, so code and path data never count) plus the four human-facing
@@ -85,7 +89,7 @@ describe.each(PAGES)("copy rules (REQ-031): %s", (page) => {
   it("has no hyphen between word characters (e.g. one-off, year-round, volunteer-run)", () => {
     // Allow hyphenated proper names (e.g. "Lisa-Marie") but keep guarding phrases.
     let scan = copy;
-    for (const name of ALLOWED_HYPHENATED) scan = scan.split(name).join(" ");
+    for (const name of ALLOWED_HYPHENATED) scan = scan.split(name).join(" "); scan = scan.replace(ALLOWED_WORD, " ");
     const matches = scan.match(/\w-\w/g) ?? [];
     expect(matches, `hyphenated word(s) in visible copy: ${[...new Set(matches)].join(", ")}`).toEqual(
       [],
@@ -132,5 +136,14 @@ describe.each(DONATION_TERM_PAGES)("donation terminology (TASK-218): %s", (page)
     const withoutGiftAid = visibleCopy(read(page)).toLowerCase().split("gift aid").join(" ");
     const strays = withoutGiftAid.match(/gift/g) ?? [];
     expect(strays, `"gift" (meaning the donation) in visible copy of ${page}`).toEqual([]);
+  });
+});
+
+// The exception for "T-shirt" is narrow: only that word, and every other hyphen is still caught.
+describe("the one hyphenated word allowed", () => {
+  it("lets T-shirt through and nothing else", () => {
+    let scan = "A one-off T-shirt for a year-round t-shirt wearer, and a sweat-shirt";
+    for (const name of ALLOWED_HYPHENATED) scan = scan.split(name).join(" "); scan = scan.replace(ALLOWED_WORD, " ");
+    expect(scan.match(/\w-\w/g)).toEqual(["e-o", "r-r", "t-s"]);
   });
 });

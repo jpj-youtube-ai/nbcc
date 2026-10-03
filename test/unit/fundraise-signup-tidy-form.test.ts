@@ -83,20 +83,24 @@ beforeEach(() => {
   answer = (url) => (url === "/api/fundraise/captcha" ? { status: 200, body: { siteKey: null } } : { status: 200, body: { status: "received" } });
 });
 
-/** Answer each step as it comes, for a sign up raising money, to the last step. */
+/** Press Next until the step holding this box shows (every answer before it must be given). */
+function goTo(id: string) {
+  for (let i = 0; i < 30 && !has(id); i++) {
+    const before = current();
+    next();
+    if (current() === before) break;
+  }
+  expect(has(id), `could not get to ${id}: stuck on "${current().querySelector("legend, h2, label")?.textContent}"`).toBe(true);
+}
+
+/**
+ * Answer each step as it comes, for a sign up raising money, to the last step. Jaimie, 2026-10-03:
+ * the fun part first: what you are planning, 18 or over, then Your fundraiser, then About you.
+ */
 function raisingToTheEnd(o: { sporting?: boolean; sharing?: boolean; listed?: boolean } = {}) {
   tick("pathRaising");
   next();
   tick("over18Yes");
-  next();
-  tick("childMe");
-  next();
-  tick("orgNo");
-  next();
-  type("firstName", "Robin");
-  type("lastName", "Testperson");
-  type("email", "robin@example.com");
-  type("phone", "07700 900123");
   next();
   tick("teamMe");
   next();
@@ -105,16 +109,29 @@ function raisingToTheEnd(o: { sporting?: boolean; sharing?: boolean; listed?: bo
   tick(o.sporting ? "kind-walk" : "kind-quiz");
   next();
   if (o.sporting) {
-    const s = $<HTMLSelectElement>("#tshirtSize");
-    s.value = "adult_m";
-    s.dispatchEvent(new Event("change", { bubbles: true }));
+    const size = $<HTMLSelectElement>("#tshirtSize");
+    size.value = "adult_m";
+    size.dispatchEvent(new Event("change", { bubbles: true }));
     next();
   }
   type("title", "Robin's Quiz");
   type("description", "A quiz for NBCC.");
   next();
   next(); // the target is optional
+  tick("childMe");
+  next();
+  tick("orgNo");
+  next();
   tick(o.listed === false ? "listedNo" : "listedYes");
+  next();
+  type("firstName", "Robin");
+  type("lastName", "Testperson");
+  type("email", "robin@example.com");
+  type("phone", "07700 900123");
+  next();
+  type("postLine1", "1 Example Road");
+  type("postTown", "Exampleton");
+  type("postPostcode", "EX1 1EX");
   next();
   if (o.sharing) {
     tick("sharesYes");
@@ -130,10 +147,20 @@ function raisingToTheEnd(o: { sporting?: boolean; sharing?: boolean; listed?: bo
   tick("shareMention");
   next();
   next(); // nothing asked for
-  type("postLine1", "1 Example Road");
-  type("postTown", "Exampleton");
-  type("postPostcode", "EX1 1EX");
-  next();
+}
+
+/** The answers of Your fundraiser, given without walking, for a test about a later step. */
+function fundraiserAnswers() {
+  tick("pathRaising");
+  tick("over18Yes");
+  tick("teamMe");
+  tick("sportingNo");
+  tick("kind-quiz");
+  type("title", "Robin's Quiz");
+  type("description", "A quiz for NBCC.");
+  tick("childMe");
+  tick("orgNo");
+  tick("listedYes");
 }
 
 describe("the top of the form", () => {
@@ -157,8 +184,8 @@ describe("the top of the form", () => {
 
   it("shows a progress bar of five stages, the first one current", () => {
     expect($("[data-progress]").hidden).toBe(false);
-    expect(stageNames()).toEqual(["About you", "Your fundraiser", "Sharing", "What you'd like", "Check and send"]);
-    expect(progressWords()).toBe("Step 1 of 5: About you");
+    expect(stageNames()).toEqual(["Your fundraiser", "About you", "Sharing", "What you'd like", "Check and send"]);
+    expect(progressWords()).toBe("Step 1 of 5: Your fundraiser");
     const stages = [...document.querySelectorAll(".fr-progress__stage")];
     expect(stages[0].getAttribute("aria-current")).toBe("step");
     expect(stages[0].textContent).toContain("you are here");
@@ -177,10 +204,8 @@ describe("Next and Back", () => {
   beforeEach(() => load());
 
   it("turns nothing red while they type", () => {
-    tick("pathRaising");
-    next();
-    tick("over18Yes");
-    next();
+    fundraiserAnswers();
+    goTo("childMe");
     tick("childYes");
     type("childFirstName", "E");
     expect(document.querySelector('[aria-invalid="true"]')).toBeNull();
@@ -195,14 +220,9 @@ describe("Next and Back", () => {
   });
 
   it("gives each box on a step its own prompt", () => {
-    tick("pathRaising");
-    next();
-    tick("over18Yes");
-    next();
-    tick("childMe");
-    next();
-    tick("orgNo");
-    next();
+    fundraiserAnswers();
+    goTo("firstName");
+    expect(progressWords()).toBe("Step 2 of 5: About you");
     type("email", "not an email");
     next();
     expect(errorOf("firstName")).toBe("Almost! Just add your first name.");
@@ -228,7 +248,7 @@ describe("Next and Back", () => {
   it("says each new step for screen readers, and moves the focus to it", () => {
     tick("pathRaising");
     next();
-    expect($("[data-step-news]").textContent).toBe("Step 1 of 5, About you: Are you 18 or over?");
+    expect($("[data-step-news]").textContent).toBe("Step 1 of 5, Your fundraiser: Are you 18 or over?");
     expect(document.activeElement).toBe(current());
   });
 
@@ -236,7 +256,7 @@ describe("Next and Back", () => {
     raisingToTheEnd();
     expect(progressWords()).toBe("Step 5 of 5: Check and send Last step!");
     const done = [...document.querySelectorAll(".fr-progress__stage.is-done")].map((s) => s.querySelector(".fr-progress__label")!.textContent);
-    expect(done).toEqual(["About you", "Your fundraiser", "Sharing", "What you'd like"]);
+    expect(done).toEqual(["Your fundraiser", "About you", "Sharing", "What you'd like"]);
     back();
     expect(progressWords()).toBe("Step 4 of 5: What you'd like Nearly there!");
   });
@@ -287,19 +307,10 @@ describe("raising money", () => {
     expect($("[data-thanks-listed]").hidden).toBe(true);
   });
 
-  it("asks a sporting event only the sporting categories, then a T shirt size", () => {
+  it("asks a sporting event only the sporting categories, then a T-shirt size", () => {
     tick("pathRaising");
     next();
     tick("over18Yes");
-    next();
-    tick("childMe");
-    next();
-    tick("orgNo");
-    next();
-    type("firstName", "Robin");
-    type("lastName", "Testperson");
-    type("email", "robin@example.com");
-    type("phone", "07700 900123");
     next();
     tick("teamMe");
     next();
@@ -312,9 +323,9 @@ describe("raising money", () => {
     tick("kind-walk");
     next();
     expect(has("tshirtSize")).toBe(true);
-    expect($("#tshirtSizeHelp").textContent).toBe("For your NBCC T shirt. If it’s for a child, choose their size.");
+    expect($("#tshirtSizeHelp").textContent).toBe("For your NBCC T-shirt. If it’s for a child, choose their size.");
     next();
-    expect(errorOf("tshirtSize")).toBe("Almost! Just choose a T shirt size.");
+    expect(errorOf("tshirtSize")).toBe("Almost! Just choose a T-shirt size.");
     expect($<HTMLSelectElement>("#tshirtSize").value).toBe("");
   });
 
@@ -338,10 +349,8 @@ describe("raising money", () => {
   });
 
   it("asks a child's first name and the parent's tick", () => {
-    tick("pathRaising");
-    next();
-    tick("over18Yes");
-    next();
+    fundraiserAnswers();
+    goTo("childMe");
     tick("childYes");
     next();
     expect(errorOf("childFirstName")).toBe("Almost! Just add their first name.");
@@ -352,12 +361,8 @@ describe("raising money", () => {
   });
 
   it("asks the name of a business, school or group", () => {
-    tick("pathRaising");
-    next();
-    tick("over18Yes");
-    next();
-    tick("childMe");
-    next();
+    fundraiserAnswers();
+    goTo("orgYes");
     tick("orgYes");
     next();
     expect(errorOf("orgName")).toBe("Almost! Just add the name of the business, school or group.");
@@ -423,6 +428,16 @@ describe("the split check", () => {
 describe("the address", () => {
   beforeEach(() => load());
 
+  it("comes with their details, in About you", () => {
+    fundraiserAnswers();
+    type("firstName", "Robin");
+    type("lastName", "Testperson");
+    type("email", "robin@example.com");
+    type("phone", "07700 900123");
+    goTo("postLine1");
+    expect(progressWords()).toBe("Step 2 of 5: About you");
+  });
+
   it("is asked of everyone raising money or holding an event, for the welcome pack", () => {
     tick("pathEvent");
     const step = $("[data-address-field]");
@@ -435,7 +450,7 @@ describe("the address", () => {
 
   it("checks the postcode on Next", () => {
     raisingToTheEnd();
-    back();
+    for (let i = 0; i < 20 && !has("postPostcode"); i++) back();
     type("postPostcode", "12345");
     next();
     expect(errorOf("postPostcode")).toBe("Almost! Just add a UK postcode, like KA1 1AA.");
@@ -461,7 +476,7 @@ describe("a page in memory of someone", () => {
     }
   });
 
-  it("never asks about sport, a T shirt, a team, a child, a business, a shout out, coming along or the newsletter", () => {
+  it("never asks about sport, a T-shirt, a team, a child, a business, a shout out, coming along or the newsletter", () => {
     tick("pathMemory");
     for (const sel of ["[data-sporting-step]", "[data-tshirt-step]", "[data-team-step]"]) expect($(sel).hidden, sel).toBe(true);
     for (const id of ["childMe", "orgYes", "shareShout", "attendYes", "newsletterOk", "instagram", "leaflets", "buckets", "tins"]) {
@@ -511,6 +526,28 @@ describe("a page in memory of someone", () => {
     expect(step.querySelector("legend")!.textContent).toBe("Where should we send them?");
     expect(step.textContent).toContain("This can be the funeral director’s address.");
     expect(step.textContent).not.toMatch(/welcome pack/i);
+  });
+
+  it("asks where to send things straight after what to send", () => {
+    tick("pathMemory");
+    tick("over18Yes");
+    type("memoryName", "Margaret Exampleton");
+    tick("memorySetupBy-family");
+    tick("memoryPermission");
+    tick("kind-memory_flowers");
+    tick("listedYes");
+    tick("sharesNo");
+    tick("memoryShareYes");
+    type("firstName", "Alex");
+    type("lastName", "Exampleton");
+    type("email", "alex@example.com");
+    type("phone", "07700 900456");
+    goTo("envelopes");
+    expect(progressWords()).toBe("Step 4 of 5: Anything we can send");
+    type("envelopes", "50");
+    next();
+    expect(has("postLine1")).toBe(true);
+    expect(progressWords()).toBe("Step 4 of 5: Anything we can send");
   });
 
   it("words the date, the amount and the sharing gently", () => {
@@ -571,7 +608,7 @@ describe("holding an event", () => {
     expect($("label[for=booking-donations]").textContent).toBe("Free entry, donations welcome");
     expect($("label[for=target]").textContent!.replace(/\s+/g, " ").trim()).toBe("Is there an amount you hope to raise? (optional)");
     expect($("#qrCodes").closest("[hidden]")).toBeNull();
-    expect(stageNames()[1]).toBe("Your event");
+    expect(stageNames()[0]).toBe("Your event");
   });
 
   it("asks someone to come along only when there is something to come along to", () => {
@@ -582,6 +619,46 @@ describe("holding an event", () => {
     expect($("[data-attend] legend").textContent!.replace(/\s+/g, " ").trim()).toBe(
       "If there’s something to come along to, would you like someone from NBCC there? *",
     );
+  });
+});
+
+describe("a date not decided yet", () => {
+  beforeEach(() => load());
+
+  it("sits beside the date, unticked, for raising money and for an event, never in memory", () => {
+    tick("pathEvent");
+    expect($("#dateTbc").checked).toBe(false);
+    expect(seen("label[for=dateTbc]")).toBe("Not decided yet");
+    expect($("#dateTbc").closest("[data-step]")).toBe($("#eventDate").closest("[data-step]"));
+    tick("pathMemory");
+    expect($("#dateTbc").closest("[hidden]")).not.toBeNull();
+  });
+
+  it("asks an event for the date, or the tick", () => {
+    tick("pathEvent");
+    expect($("#eventDate").required).toBe(true);
+    expect($("#eventDate").getAttribute("data-invalid-message")).toBe("Almost! Just add the date, or tick Not decided yet.");
+    tick("dateTbc");
+    expect($("#eventDate").required).toBe(false);
+    expect($("#eventDate").disabled).toBe(true);
+  });
+
+  it("lets the date go when it is ticked, and sends the tick", async () => {
+    raisingToTheEnd();
+    type("eventDate", "2026-12-05");
+    tick("dateTbc");
+    expect($("#eventDate").value).toBe("");
+    await submit();
+    expect(sent()).toMatchObject({ eventDate: "", dateTbc: true });
+  });
+
+  it("sends no tick when there is a date", async () => {
+    raisingToTheEnd();
+    type("eventDate", "2026-12-05");
+    type("attendNo", "no");
+    tick("attendNo");
+    await submit();
+    expect(sent()).toMatchObject({ eventDate: "2026-12-05", dateTbc: false });
   });
 });
 

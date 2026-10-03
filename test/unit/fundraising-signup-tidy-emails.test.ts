@@ -5,7 +5,7 @@ import { buildMemoryReceiptEmail, buildTshirtAskEmail } from "../../src/fundrais
 // The sign up tidy's emails (Jaimie and the appropriateness audit, 2026-10-03): the thank you's
 // greeting; the summary to the events inbox with the new answers, and a gentle one for a page in
 // memory of someone; a short receipt for in memory (fixed words, no name); and the email staff send
-// to ask for a T shirt size. Every name here is invented.
+// to ask for a T-shirt size. Every name here is invented.
 
 const base: StaffSummary = {
   id: 7,
@@ -64,13 +64,18 @@ describe("the thank you for signing up", () => {
 describe("the summary to the events inbox", () => {
   const text = (f: Partial<StaffSummary>) => buildSignUpStaffEmail({ ...base, ...f } as StaffSummary, { adminUrl: "https://nbcc.test/admin" }).text;
 
-  it("shows the welcome pack's address, sport and the T shirt", () => {
+  it("shows the welcome pack's address, sport and the T-shirt", () => {
     const t = text({ isSporting: true, tshirtSize: "adult_m" });
     expect(t).toContain("Address for the welcome pack: 1 Example Road, Exampleton, EX1 1EX");
     expect(t).toContain("Sporting event: Yes");
-    expect(t).toContain("T shirt size: Adult M");
-    expect(text({ isSporting: true, tshirtSize: null })).toContain("T shirt size: Not given yet. Ask them from Admin > Fundraising");
+    expect(t).toContain("T-shirt size: Adult M");
+    expect(text({ isSporting: true, tshirtSize: null })).toContain("T-shirt size: Not given yet. Ask them from Admin > Fundraising");
     expect(text({ isSporting: false })).toContain("Sporting event: No");
+  });
+
+  it("says when the date is still to be confirmed", () => {
+    expect(text({ dateTbc: true })).toContain("When: Date to be confirmed");
+    expect(text({})).toContain("When: Not given");
   });
 
   it("shows a child, a business and when to call", () => {
@@ -125,11 +130,11 @@ describe("the receipt for a page in memory of someone", () => {
   });
 });
 
-describe("asking for a T shirt size", () => {
+describe("asking for a T-shirt size", () => {
   const mail = buildTshirtAskEmail("Sam", "https://nbcc.test/fundraise/t-shirt#abc");
 
   it("links to the private page to choose one", () => {
-    expect(mail.subject).toBe("Your NBCC T shirt: what size would you like?");
+    expect(mail.subject).toBe("Your NBCC T-shirt: what size would you like?");
     expect(mail.html).toContain('href="https://nbcc.test/fundraise/t-shirt#abc"');
     expect(mail.text).toContain("Choose my size: https://nbcc.test/fundraise/t-shirt#abc");
     expect(mail.text).toContain("Hi Sam,");
@@ -138,5 +143,23 @@ describe("asking for a T shirt size", () => {
 
   it("falls back to Hi there for a name it cannot use safely", () => {
     expect(buildTshirtAskEmail("<b>x</b>", "https://nbcc.test/fundraise/t-shirt#abc").text).toContain("Hi there,");
+  });
+});
+
+describe("the thank you for joining a team, for someone under 18", () => {
+  it("greets their parent or guardian", async () => {
+    const { vi } = await import("vitest");
+    vi.doMock("../../src/config", () => ({ config: { PORTAL_BASE_URL: "https://nbcc.test", BALL_FROM_EMAIL: "events@nbcc.scot" } }));
+    vi.doMock("../../src/db/pool", () => ({ pool: { query: vi.fn(), connect: vi.fn() } }));
+    const { sendJoinEmails } = await import("../../src/fundraising/team-send");
+    const sent: Array<{ kind: string; text?: string }> = [];
+    const send = async (kind: string, _name: string, m: { text?: string }) => {
+      sent.push({ kind, text: m.text });
+    };
+    const member = { id: 2, name: "Jack Sample", firstName: "Jack", email: "parent@example.com", title: "Jack's page", guardianFirstName: "Sarah", wants: {} };
+    const team = { id: 1, name: "Robin Organiser", title: "Exampleton Juniors", email: "robin@example.com", slug: "ej" };
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await sendJoinEmails(member as any, team as any, send as any);
+    expect(sent[0].text).toContain("Hi Sarah, this is about Jack's page.");
   });
 });

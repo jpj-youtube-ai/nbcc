@@ -264,6 +264,7 @@ describe("sending", () => {
       title: "Jo's Sponsored Walk",
       description: "Forty miles for NBCC.",
       eventDate: "2026-11-14",
+      dateTbc: false,
       startTime: "",
       venue: "",
       town: "Exampleton",

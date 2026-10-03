@@ -13,7 +13,7 @@ import {
   welcomePackSchema,
 } from "../fundraising/signup-tidy";
 
-// The sign up tidy (Jaimie, 2026-10-03): sport and the T shirt, after the sign up.
+// The sign up tidy (Jaimie, 2026-10-03): sport and the T-shirt, after the sign up.
 //
 //   PUT  /api/admin/fundraisers/:id/welcome-pack  { isSporting, tshirtSize }  Fundraising edit
 //   POST /api/admin/fundraisers/:id/tshirt-ask    email the organiser a private link to choose
@@ -97,15 +97,15 @@ export async function postTshirtAsk(req: Request, res: Response): Promise<Respon
     const reason = reasonOf(err);
     if (reason === "not_found") return res.status(404).json({ error: "That sign up is not there" });
     if (reason === "not_sporting") return res.status(409).json({ error: "Set Sporting event to Yes first, and save." });
-    if (reason === "has_size") return res.status(409).json({ error: "They already have a T shirt size." });
-    console.error("fundraiser T shirt ask failed:", err instanceof Error ? err.message : err);
+    if (reason === "has_size") return res.status(409).json({ error: "They already have a T-shirt size." });
+    console.error("fundraiser T-shirt ask failed:", err instanceof Error ? err.message : err);
     return res.status(500).json(UNAVAILABLE);
   }
   try {
     const { sendTshirtAsk } = await import("../fundraising/send");
     await sendTshirtAsk(saved, token);
   } catch (err) {
-    console.error("fundraiser T shirt ask email failed:", err instanceof Error ? err.message : err);
+    console.error("fundraiser T-shirt ask email failed:", err instanceof Error ? err.message : err);
     return res.status(502).json({ error: "The email could not be sent just now. Please try again in a few minutes." });
   }
   return res.status(200).json({ fundraiser: saved });
@@ -130,7 +130,7 @@ export async function postTshirtLook(req: Request, res: Response): Promise<Respo
     const first = String(f.firstName ?? f.name ?? "").trim().split(/\s+/)[0] ?? "";
     return res.status(200).json({ firstName: first, title: f.title, sizes: TSHIRT_SIZES });
   } catch (err) {
-    console.error("fundraiser T shirt link read failed:", err instanceof Error ? err.message : err);
+    console.error("fundraiser T-shirt link read failed:", err instanceof Error ? err.message : err);
     return res.status(503).json({ error: "We could not open this just now. Please try again in a few minutes." });
   }
 }
@@ -151,7 +151,7 @@ export async function postTshirtChoose(req: Request, res: Response): Promise<Res
     if (!(await chooseTshirtSize(hashTshirtToken(token), parsed.data.tshirtSize, new Date()))) return res.status(404).json(GONE);
     return res.status(200).json({ status: "saved" });
   } catch (err) {
-    console.error("fundraiser T shirt choice failed:", err instanceof Error ? err.message : err);
+    console.error("fundraiser T-shirt choice failed:", err instanceof Error ? err.message : err);
     return res.status(503).json({ error: "We could not save that just now. Please try again in a few minutes." });
   }
 }

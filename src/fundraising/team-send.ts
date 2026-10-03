@@ -5,6 +5,7 @@ import { fundraisingIsOn } from "../db/fundraisers";
 import { suppressedAmong } from "../db/email-suppressions";
 import { optedOutAmong } from "../db/email-opt-outs";
 import { hasPage, kindLabelOf, publicSplit, type FundraiserRecord } from "./model";
+import { greetGuardian } from "./signup-tidy-emails";
 import { hashTeamInviteToken, joinUrl, newTeamInviteToken, teamInviteUrl } from "./teams";
 import {
   buildHandoverCodeEmail,
@@ -163,7 +164,7 @@ export async function sendTeamApproved(
 /** Someone joined: thank them (their page waits for staff), and tell the events inbox. */
 export async function sendJoinEmails(member: FundraiserRecord, team: FundraiserRecord, send = sendFundraiseTeam): Promise<void> {
   try {
-    await send("fundraiseTeamJoined", member.name, { ...fromEvents(member.email), ...buildJoinThanksEmail(member.firstName ?? member.name, team.title) });
+    await send("fundraiseTeamJoined", member.name, { ...fromEvents(member.email), ...greetGuardian(buildJoinThanksEmail(member.firstName ?? member.name, team.title), member) });
   } catch (err) {
     console.error("team join thanks email failed:", why(err));
   }

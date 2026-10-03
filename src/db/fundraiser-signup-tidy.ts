@@ -10,7 +10,7 @@ import { tshirtLinkLive, type WelcomePackChange } from "../fundraising/signup-ti
 //   - a sign up's new answers, saved in the sign up's own transaction (saveSignUpExtras, called by
 //     createFundraiser), and a page they asked to keep off Get involved, taken off the list as staff
 //     would (off_list_at, off_list_by 'organiser');
-//   - staff correcting "Sporting event?" and the T shirt size before approving (setWelcomePack);
+//   - staff correcting "Sporting event?" and the T-shirt size before approving (setWelcomePack);
 //   - the private link staff may email to ask for a size: only its sha256 is kept (saveTshirtLink),
 //     it works for 60 days, and once (chooseTshirtSize).
 //
@@ -37,10 +37,10 @@ export async function saveSignUpExtras(client: PoolClient, id: number, s: SignUp
   await client.query(
     `UPDATE fundraisers SET is_sporting = $1, tshirt_size = $2, child_first_name = $3, child_consent = $4, org_name = $5,
             employer_match = $6, memory_director_business = $7, memory_family_contact_name = $8,
-            memory_family_contact_email = $9, call_time = $10,
-            off_list_at = CASE WHEN $11 THEN now() ELSE off_list_at END,
-            off_list_by = CASE WHEN $11 THEN 'organiser' ELSE off_list_by END
-      WHERE id = $12`,
+            memory_family_contact_email = $9, call_time = $10, date_tbc = $11, guardian_first_name = $12,
+            off_list_at = CASE WHEN $13 THEN now() ELSE off_list_at END,
+            off_list_by = CASE WHEN $13 THEN 'organiser' ELSE off_list_by END
+      WHERE id = $14`,
     [
       s.isSporting,
       s.tshirtSize,
@@ -52,6 +52,8 @@ export async function saveSignUpExtras(client: PoolClient, id: number, s: SignUp
       s.memoryFamilyContactName,
       s.memoryFamilyContactEmail,
       s.callTime,
+      s.dateTbc === true,
+      s.guardianFirstName ?? null,
       s.listed === false,
       id,
     ],
@@ -68,7 +70,7 @@ async function reread(client: PoolClient, id: number): Promise<FundraiserRecord>
   return toRecord((await client.query(`${FUNDRAISER_SELECT} WHERE f.id = $1`, [id])).rows[0]);
 }
 
-/** Staff set "Sporting event?" and the T shirt size (a Yes may wait for one). */
+/** Staff set "Sporting event?" and the T-shirt size (a Yes may wait for one). */
 export async function setWelcomePack(id: number, change: WelcomePackChange, actor: string): Promise<FundraiserRecord> {
   return inTransaction(async (client) => {
     const before = await lock(client, id);

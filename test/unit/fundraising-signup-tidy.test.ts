@@ -12,12 +12,17 @@ import {
   ADDRESS_TOWN_MISSING,
   ADDRESS_POSTCODE_MISSING,
   welcomePackSchema,
+  DATE_OR_TBC_MISSING,
+  GUARDIAN_NAME_MISSING,
+  GUARDIAN_CONSENT_MISSING,
 } from "../../src/fundraising/signup-tidy";
+import { greetGuardian } from "../../src/fundraising/signup-tidy-emails";
+import { checkJoin, memberSignUp } from "../../src/fundraising/teams";
 
 // The sign up tidy (Jaimie, 2026-10-03): every new sign up gives an address for the welcome pack;
-// someone raising money says whether it is a sporting event, and if so their T shirt size; and
+// someone raising money says whether it is a sporting event, and if so their T-shirt size; and
 // someone sharing with another cause ticks to say the split is right. An in memory sign up is never
-// asked about sport or a T shirt, and gives an address only when something is to be posted.
+// asked about sport or a T-shirt, and gives an address only when something is to be posted.
 // Every name, place and cause here is invented.
 
 const ADDRESS = { postLine1: "1 Example Road", postLine2: "", postTown: "Exampleton", postPostcode: "ex1 1ex" };
@@ -64,7 +69,7 @@ function ok(body: unknown) {
   return r.data;
 }
 
-describe("the T shirt sizes", () => {
+describe("the T-shirt sizes", () => {
   it("are the kids' sizes, then the adults', in order", () => {
     expect(TSHIRT_SIZES.map((s) => s.label)).toEqual([
       "Kids 3 to 4", "Kids 5 to 6", "Kids 7 to 8", "Kids 9 to 10", "Kids 11 to 12", "Kids 13 to 14",
@@ -133,7 +138,7 @@ describe("is it a sporting event?", () => {
     expect(s.tshirtSize).toBeNull();
   });
 
-  it("needs a T shirt size with a Yes, and only one from the list", () => {
+  it("needs a T-shirt size with a Yes, and only one from the list", () => {
     expect(fields(signUp({ isSporting: true }))).toEqual({ tshirtSize: TSHIRT_MISSING });
     expect(fields(signUp({ isSporting: true, tshirtSize: "adult_xxxl" }))).toEqual({ tshirtSize: TSHIRT_UNKNOWN });
     const s = ok(signUp({ isSporting: true, tshirtSize: "kids_7_8" }));
@@ -158,7 +163,7 @@ describe("is it a sporting event?", () => {
 
   it("says what is missing kindly", () => {
     expect(SPORTING_MISSING).toBe("Please tell us whether it is a sporting event.");
-    expect(TSHIRT_MISSING).toBe("Please choose a T shirt size.");
+    expect(TSHIRT_MISSING).toBe("Please choose a T-shirt size.");
   });
 });
 
@@ -191,5 +196,73 @@ describe("a staff correction of sport and the t-shirt", () => {
     expect(welcomePackSchema.safeParse({ isSporting: true, tshirtSize: "huge" }).success).toBe(false);
     expect(welcomePackSchema.safeParse({ tshirtSize: "adult_s" }).success).toBe(false);
     expect(welcomePackSchema.safeParse({ isSporting: true, tshirtSize: "adult_s", other: 1 }).success).toBe(false);
+  });
+});
+
+describe("a date not decided yet (Jaimie, 2026-10-03)", () => {
+  const event = (over: Record<string, unknown> = {}) =>
+    signUp({ path: "event", kind: "quiz", venue: "Example Hall", cardLine: "Come along.", booking: "free", wants: { shoutOut: false, attend: false }, ...over });
+
+  it("lets an event sign up without a date when they tick Not decided yet", () => {
+    expect(fields(event({ eventDate: "" }))).toEqual({ eventDate: DATE_OR_TBC_MISSING });
+    const s = ok(event({ eventDate: "", dateTbc: true }));
+    expect([s.eventDate, s.dateTbc]).toEqual([null, true]);
+  });
+
+  it("keeps the tick only while there is no date", () => {
+    expect(ok(event({ dateTbc: true })).dateTbc).toBe(false);
+    expect(ok(signUp({ eventDate: "", dateTbc: true })).dateTbc).toBe(true);
+    expect(ok(signUp({ eventDate: "" })).dateTbc).toBe(false);
+  });
+
+  it("asks warmly", () => {
+    expect(DATE_OR_TBC_MISSING).toBe("Please add the date, or tick Not decided yet.");
+  });
+});
+
+describe("joining a team for someone under 18", () => {
+  const team = { sharesWithOther: false, nbccSharePercent: null, otherCauseName: null, teamShareMode: null };
+  const join = (over: Record<string, unknown> = {}) => ({ firstName: "Jack", lastName: "Sample", email: "parent@example.com", over18: true, why: "", ...over });
+
+  it("needs the parent's or guardian's first name and their tick", () => {
+    expect(checkJoin(join({ memberUnder18: true }), team).fields).toEqual({ guardianFirstName: GUARDIAN_NAME_MISSING, guardianConsent: GUARDIAN_CONSENT_MISSING });
+    const j = checkJoin(join({ memberUnder18: true, guardianFirstName: " Sarah ", guardianConsent: true }), team).join!;
+    expect([j.guardianFirstName, j.guardianConsent]).toEqual(["Sarah", true]);
+  });
+
+  it("asks nothing more of an adult, or of a page cached from before", () => {
+    expect(checkJoin(join({ memberUnder18: false, guardianFirstName: "Sarah" }), team).join).toMatchObject({ guardianFirstName: null, guardianConsent: null });
+    expect(checkJoin(join(), team).join).toMatchObject({ guardianFirstName: null });
+  });
+
+  it("keeps them on the member page", () => {
+    const j = checkJoin(join({ memberUnder18: true, guardianFirstName: "Sarah", guardianConsent: true }), team).join!;
+    const page = memberSignUp({ title: "Exampleton Juniors", kind: "santa_dash", public: true } as never, j);
+    expect([page.guardianFirstName, page.childConsent]).toEqual(["Sarah", true]);
+  });
+
+  it("says what is missing kindly", () => {
+    expect(GUARDIAN_NAME_MISSING).toBe("Please add your first name, as their parent or guardian.");
+    expect(GUARDIAN_CONSENT_MISSING).toBe("Please tick to say you are their parent or guardian, and happy for their first name to be shown.");
+  });
+});
+
+describe("greeting the parent of a child's page", () => {
+  const mail = { subject: "Your page is live", html: "<p>Hi Jack,</p><p>It&#39;s live.</p>", text: "Hi Jack,\n\nIt's live." };
+
+  it("says Hi to the parent, and whose page it is about", () => {
+    const out = greetGuardian(mail, { name: "Jack Sample", firstName: "Jack", guardianFirstName: "Sarah" });
+    expect(out.text).toBe("Hi Sarah, this is about Jack's page.\n\nIt's live.");
+    expect(out.html).toBe("<p>Hi Sarah, this is about Jack&#39;s page.</p><p>It&#39;s live.</p>");
+  });
+
+  it("leaves every other email as it is", () => {
+    expect(greetGuardian(mail, { name: "Jack Sample", firstName: "Jack", guardianFirstName: null })).toBe(mail);
+    expect(greetGuardian(mail, { name: "Jack Sample" })).toBe(mail);
+  });
+
+  it("never puts markup in from a name", () => {
+    const out = greetGuardian(mail, { name: "Jack Sample", firstName: "Jack", guardianFirstName: "<b>x</b>" });
+    expect(out.html).not.toContain("<b>");
   });
 });

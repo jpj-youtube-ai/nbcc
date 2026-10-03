@@ -6,8 +6,8 @@ import { z } from "zod";
 //   - An address for the welcome pack, on every new sign up (the four boxes the form already had for
 //     posting materials, now always asked). In memory of someone, the welcome pack is not offered:
 //     the address is asked only when something is to be posted, as before.
-//   - Someone raising money says whether it is a sporting event. A Yes asks their T shirt size, from
-//     the list below, for their NBCC T shirt. Never asked for an event, or in memory of someone.
+//   - Someone raising money says whether it is a sporting event. A Yes asks their T-shirt size, from
+//     the list below, for their NBCC T-shirt. Never asked for an event, or in memory of someone.
 //     A sign up from a page cached before this (no answer at all) is taken without one.
 //   - Someone sharing with another cause ticks "Yes, that's right" to the split as it will be shown.
 //
@@ -19,7 +19,7 @@ export interface TshirtSize {
   label: string;
 }
 
-/** The T shirt sizes, kids' then adults', smallest first. The keys are what is stored. */
+/** The T-shirt sizes, kids' then adults', smallest first. The keys are what is stored. */
 export const TSHIRT_SIZES: readonly TshirtSize[] = [
   { key: "kids_3_4", label: "Kids 3 to 4" },
   { key: "kids_5_6", label: "Kids 5 to 6" },
@@ -47,7 +47,7 @@ export function tshirtLabel(key: string | null | undefined): string {
 }
 
 export const SPORTING_MISSING = "Please tell us whether it is a sporting event.";
-export const TSHIRT_MISSING = "Please choose a T shirt size.";
+export const TSHIRT_MISSING = "Please choose a T-shirt size.";
 export const TSHIRT_UNKNOWN = "Please choose one of the sizes on the list.";
 export const SPLIT_CONFIRM_MISSING = "Please tick to say the split is right.";
 export const ADDRESS_LINE1_MISSING = "Please add the first line of your address, so we can post your welcome pack.";
@@ -72,7 +72,7 @@ export interface WelcomePackIn {
   splitConfirmed?: unknown;
 }
 
-/** Sport and the T shirt are asked only of someone raising money, and never in memory of someone. */
+/** Sport and the T-shirt are asked only of someone raising money, and never in memory of someone. */
 export function sportAsked(b: WelcomePackIn): boolean {
   return b.path === "raising" && b.inMemory !== true;
 }
@@ -98,7 +98,7 @@ export function welcomePackOf(b: WelcomePackIn): { isSporting: boolean | null; t
 }
 
 /**
- * Staff correcting "Sporting event?" and the T shirt size before approving (PUT
+ * Staff correcting "Sporting event?" and the T-shirt size before approving (PUT
  * /api/admin/fundraisers/:id/welcome-pack). A Yes may wait for a size (they are then asked for it); a
  * No keeps none.
  */
@@ -115,7 +115,7 @@ export type WelcomePackChange = z.infer<typeof welcomePackSchema>;
 
 // --- the private link to choose a size ------------------------------------------------------------
 
-/** How long a link to choose a T shirt size works for. */
+/** How long a link to choose a T-shirt size works for. */
 export const TSHIRT_LINK_DAYS = 60;
 const TSHIRT_TOKEN_DOMAIN = "fundraisetshirt.v1:";
 const TOKEN_SHAPE = /^[A-Za-z0-9_-]{43}$/;
@@ -191,7 +191,27 @@ const tidy = (v: unknown, max: number): string | null => {
 };
 const EMAIL_SHAPE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
+/** Jaimie, 2026-10-03: "Not decided yet" beside the date makes it optional, on an event too. */
+export const DATE_OR_TBC_MISSING = "Please add the date, or tick Not decided yet.";
+/** The join form, for someone under 18: their parent's or guardian's first name, and their tick. */
+export const GUARDIAN_NAME_MISSING = "Please add your first name, as their parent or guardian.";
+export const GUARDIAN_CONSENT_MISSING = "Please tick to say you are their parent or guardian, and happy for their first name to be shown.";
+export const GUARDIAN_NAME_MAX = 50;
+
+/** The join form's answers about someone under 18. A page cached from before sends none: an adult. */
+export function checkGuardian(
+  b: { memberUnder18?: unknown; guardianFirstName?: unknown; guardianConsent?: unknown },
+  missing: (path: string, message: string) => void,
+): { guardianFirstName: string | null; guardianConsent: boolean | null } {
+  if (b.memberUnder18 !== true) return { guardianFirstName: null, guardianConsent: null };
+  const name = tidy(b.guardianFirstName, GUARDIAN_NAME_MAX);
+  if (!name) missing("guardianFirstName", GUARDIAN_NAME_MISSING);
+  if (b.guardianConsent !== true) missing("guardianConsent", GUARDIAN_CONSENT_MISSING);
+  return { guardianFirstName: name, guardianConsent: b.guardianConsent === true };
+}
+
 export const pathFields = {
+  dateTbc: z.unknown(),
   childFundraiser: z.unknown(),
   childFirstName: z.unknown(),
   childConsent: z.unknown(),
@@ -253,6 +273,8 @@ export interface PathStored {
   memoryFamilyContactName: string | null;
   memoryFamilyContactEmail: string | null;
   callTime: string | null;
+  /** A member page for someone under 18 (the join form): their parent's or guardian's first name. */
+  guardianFirstName: string | null;
 }
 
 export function pathsOf(b: PathIn): PathStored {
@@ -268,6 +290,7 @@ export function pathsOf(b: PathIn): PathStored {
     memoryFamilyContactName: director ? tidy(b.memoryFamilyContactName, 100) : null,
     memoryFamilyContactEmail: director ? tidy(b.memoryFamilyContactEmail, 254)?.toLowerCase() ?? null : null,
     callTime: tidy(b.callTime, CALL_TIME_MAX),
+    guardianFirstName: null,
   };
 }
 

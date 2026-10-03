@@ -1400,7 +1400,7 @@ hosted-Checkout redirect stays the default fallback and no-JS safety net.
 | `POST /api/admin/outreach/:id/send` | **implemented** | TASK-401 (Editor+; send one invitation. 400 without an email address, 409 if already sent; `sent_at` is stamped only after the send succeeds) |
 | `GET /api/admin/ball` | **implemented** | TASK-313 (Viewer+; settings, live availability and money raised) |
 | `PATCH /api/admin/ball` | **implemented** | TASK-313 (Editor+ **with the ball section granted**; capacity, held seats, gate, sales window, late-confirmed details. Audited as `ball.settings_updated`) |
-| `GET /api/admin/ball/bookings` | **implemented** | TASK-313 (Viewer+; bookings newest first). Also `noPhone`: how many paid bookings have no phone number |
+| `GET /api/admin/ball/bookings` | **implemented** | TASK-313 (Viewer+; bookings newest first). Also `noPhone`: how many bookings still going ahead (paid, or awaiting a transfer) have no phone number. Clears phone numbers past their date first |
 | `GET /ball` | **implemented** | TASK-313 (the ticket page; password-gated until staff open the gate, then public and indexable) |
 | `POST /ball/unlock` | **implemented** | TASK-313 (checks the preview password, sets a signed 14-day cookie) |
 | `GET /ball/terms` | **implemented** | TASK-313 (ticket terms; gated alongside the page) |
@@ -2605,8 +2605,10 @@ The Festive Ball booking form asks **Your phone number**, required, "So we can c
 menu choices for your table." It is checked on the page and again on the server (`buyerPhone` in
 `purchaseSchema`, `src/ball/booking.ts`) by the same rule as the phone box in Admin > Business
 supporters: digits, spaces, `+ ( ) -`, at least 7 digits, up to 40 characters. A card checkout or bank
-transfer booking without one gets a 400 whose `error` names the phone number and whose `details`
-name `buyerPhone`; staff adding a booking by hand must give one too.
+transfer booking that sends it empty or wrong gets a 400 whose `error` names the phone number and
+whose `details` name `buyerPhone`. A request with no `buyerPhone` key at all (a page loaded before
+the box existed) is still taken, with no number, so a live booking is never lost. For staff adding a
+booking by hand it is optional: they may not have it.
 
 It is stored in `ball_bookings.buyer_phone` (migration `1791200000198_ball-booker-phone.js`: one
 nullable column, so bookings made before have none and the old code keeps inserting during a
@@ -2616,9 +2618,14 @@ after Email) and in the events@ email about a new bank transfer booking. The buy
 unchanged.
 
 Bookings with no number are chased by hand; nothing is sent automatically. The admin flags each one
-("No phone number yet"), counts the paid bookings without one, can show only those, and lets
+("No phone number yet") and counts the bookings without one, paid or awaiting a transfer, the same
+bookings the flag marks. It can show only those, in both lists, and lets
 Festive Ball editors add or change the number (`PUT /api/admin/ball/bookings/:reference/phone`,
-audited). The ticket terms and the privacy notice say what it is for. On a phone, the bookings table
+audited). The ticket terms and the privacy notice say what it is for.
+
+Phone numbers are deleted 90 days after the event, on the same date as guests' dietary details
+(`retentionDate` in `src/ball/guests.ts`), by the same purge (`purgeExpiredGuests`), which now also
+runs before the bookings list and the bookings CSV are read. The ticket terms say so. On a phone, the bookings table
 is now a labelled card per booking, as the bank transfer list already was.
 
 ### Paying without leaving the site (TASK-319)

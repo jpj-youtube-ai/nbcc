@@ -504,9 +504,33 @@ Then(
 
 // --- Jaimie 2026-10-03: the booker's phone number ---------------------------------------------------
 
-// Sent as undefined, so JSON leaves it out.
-When("a buyer books {int} {word} to pay by bank transfer without a phone number", async function (quantity, what) {
+When("a buyer books {int} {word} to pay by bank transfer with an empty phone number", async function (quantity, what) {
+  await book(this, quantity, what, { buyerPhone: "" });
+});
+
+// A page loaded before the phone box existed: no buyerPhone at all (undefined: JSON leaves it out).
+When("a buyer books {int} {word} to pay by bank transfer from a page with no phone box", async function (quantity, what) {
   await book(this, quantity, what, { buyerPhone: undefined });
+});
+
+// Staff may not have the number for a phone or email order.
+When("{string} adds a bank transfer booking for {int} {word} without a phone number", async function (email, quantity, what) {
+  await asStaff(this, email, "POST", "/api/admin/ball/transfer-bookings", {
+    kind: what.startsWith("table") ? "table" : "seat",
+    quantity,
+    buyerFirstName: "Ada",
+    buyerSurname: "Phoned",
+    buyerEmail: BUYER,
+    buyerPhone: "",
+    termsAccepted: true,
+  });
+  if (this.adminStatus === 201) this.transferRef = this.adminBody.reference;
+});
+
+Then("the booking has no phone number", async function () {
+  const row = await pool.query("SELECT buyer_phone FROM ball_bookings WHERE reference = $1", [this.transferRef]);
+  assert.ok(row.rows[0], `no booking ${this.transferRef}`);
+  assert.equal(row.rows[0].buyer_phone, null);
 });
 
 Then("the booking keeps the buyer's phone number {string}", async function (phone) {
@@ -524,7 +548,7 @@ When("{string} lists the ball bookings", async function (email) {
   await asStaff(this, email, "GET", "/api/admin/ball/bookings");
 });
 
-Then("{int} paid booking(s) has/have no phone number", function (n) {
+Then("{int} booking(s) has/have no phone number", function (n) {
   assert.equal(this.adminStatus, 200, JSON.stringify(this.adminBody));
   assert.equal(this.adminBody.noPhone, n);
 });

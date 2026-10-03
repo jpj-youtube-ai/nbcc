@@ -8,16 +8,18 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 const m = vi.hoisted(() => ({
   getUserAuthRow: vi.fn(),
   setBookingPhone: vi.fn(),
-  countPaidWithoutPhone: vi.fn(),
+  countBookingsWithoutPhone: vi.fn(),
   listBookings: vi.fn(),
   listAbandonedBookings: vi.fn(),
+  purgeExpiredGuests: vi.fn(),
 }));
 vi.mock("../../src/db/ball", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../../src/db/ball")>()),
   setBookingPhone: m.setBookingPhone,
-  countPaidWithoutPhone: m.countPaidWithoutPhone,
+  countBookingsWithoutPhone: m.countBookingsWithoutPhone,
   listBookings: m.listBookings,
   listAbandonedBookings: m.listAbandonedBookings,
+  purgeExpiredGuests: m.purgeExpiredGuests,
 }));
 vi.mock("../../src/db/admin-users", () => ({ getUserAuthRow: m.getUserAuthRow }));
 vi.mock("../../src/config", () => ({
@@ -59,9 +61,10 @@ const answer = (res: MockRes) => res.body as Record<string, unknown>;
 beforeEach(() => {
   vi.clearAllMocks();
   m.setBookingPhone.mockResolvedValue({ ok: true, phone: "07700 900123" });
-  m.countPaidWithoutPhone.mockResolvedValue(4);
+  m.countBookingsWithoutPhone.mockResolvedValue(4);
   m.listBookings.mockResolvedValue([]);
   m.listAbandonedBookings.mockResolvedValue([]);
+  m.purgeExpiredGuests.mockResolvedValue(0);
 });
 
 describe("PUT /api/admin/ball/bookings/:reference/phone", () => {
@@ -104,10 +107,19 @@ describe("PUT /api/admin/ball/bookings/:reference/phone", () => {
 });
 
 describe("GET /api/admin/ball/bookings", () => {
-  it("says how many paid bookings have no phone number", async () => {
+  it("says how many bookings still going ahead have no phone number", async () => {
     const res = mockRes();
     await getAdminBallBookings({ headers: { authorization: `Bearer ${tokenFor("viewer")}` }, query: {}, params: {} } as never, res as never);
     expect(res.statusCode).toBe(200);
     expect(answer(res).noPhone).toBe(4);
+  });
+
+  // Review of PR #650: phone numbers go 90 days after the event, with the dietary details. The
+  // bookings list runs the same purge the door and catering lists do, before it reads anything.
+  it("clears what is past its retention date before reading", async () => {
+    const res = mockRes();
+    await getAdminBallBookings({ headers: { authorization: `Bearer ${tokenFor("viewer")}` }, query: {}, params: {} } as never, res as never);
+    expect(m.purgeExpiredGuests).toHaveBeenCalledTimes(1);
+    expect(m.purgeExpiredGuests.mock.invocationCallOrder[0]).toBeLessThan(m.listBookings.mock.invocationCallOrder[0]);
   });
 });

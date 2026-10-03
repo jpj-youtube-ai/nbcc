@@ -1834,18 +1834,22 @@ textarea.fx-call-input{min-height:88px;line-height:1.5;resize:vertical;field-siz
 
 /* The bookings table: the Who column gets the room the phone line needs, and Cancel sits on one line. */
 .ball-bookings-table th:nth-child(1),.ball-bookings-table td:nth-child(1){width:13%}  /* Reference */
-.ball-bookings-table th:nth-child(2),.ball-bookings-table td:nth-child(2){width:24%}  /* Who */
-.ball-bookings-table th:nth-child(3),.ball-bookings-table td:nth-child(3){width:10%}  /* Bought */
-.ball-bookings-table th:nth-child(4),.ball-bookings-table td:nth-child(4){width:8%}   /* Paid */
+.ball-bookings-table th:nth-child(2),.ball-bookings-table td:nth-child(2){width:21%}  /* Who */
+.ball-bookings-table th:nth-child(3),.ball-bookings-table td:nth-child(3){width:9%}   /* Bought */
+.ball-bookings-table th:nth-child(4),.ball-bookings-table td:nth-child(4){width:9%}   /* Paid */
 .ball-bookings-table th:nth-child(5),.ball-bookings-table td:nth-child(5){width:10%}  /* Donation */
-.ball-bookings-table th:nth-child(6),.ball-bookings-table td:nth-child(6){width:8%}   /* Status */
+.ball-bookings-table th:nth-child(6),.ball-bookings-table td:nth-child(6){width:11%}  /* Status */
 .ball-bookings-table th:nth-child(7),.ball-bookings-table td:nth-child(7){width:11%}  /* Newsletter */
 .ball-bookings-table th:nth-child(8),.ball-bookings-table td:nth-child(8){width:16%}  /* Cancel */
 .ball-bookings-table [data-cancel-booking]{white-space:nowrap}
+/* No nowrap on a cell: with table-layout:fixed it would paint over its neighbour
+   (admin-no-sideways-scroll.test.ts). Instead Status and Paid take width from Who, so "cancelled"
+   and the amount stay whole, and below the width that needs the list is cards (next rule). */
 
-/* Narrow, each booking is a labelled card, as the transfers above are. */
+/* Narrower than eight whole columns can sit in (1000px: a laptop with the side menu open), each
+   booking is a labelled card, as the transfers above are on a phone. */
 #ballBookings{container:bblist / inline-size}
-@container bblist (max-width:599px){
+@container bblist (max-width:999px){
   .ball-bookings-table,.ball-bookings-table tbody{display:block}
   .ball-bookings-table thead{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
   .ball-bookings-table tr{display:flex;flex-direction:column;border-bottom:1px solid var(--line);padding:10px 0}

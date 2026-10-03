@@ -29,11 +29,19 @@ const issuesFor = (body: Record<string, unknown>) => {
 };
 
 describe("the booker's phone number on a new booking", () => {
-  it("is required", () => {
-    const without = { ...valid, buyerPhone: undefined };
-    const issues = issuesFor(without);
-    expect(issues.map((i) => i.path.join("."))).toContain("buyerPhone");
+  it("is required whenever the box was sent: empty or only spaces is refused", () => {
+    expect(issuesFor({ ...valid, buyerPhone: "" }).map((i) => i.path.join("."))).toContain("buyerPhone");
     expect(issuesFor({ ...valid, buyerPhone: "   " }).map((i) => i.path.join("."))).toContain("buyerPhone");
+  });
+
+  // Review of PR #650: a page loaded before the phone box existed sends no buyerPhone at all. Never
+  // lose a live booking over it: it goes through with no number, and the admin flags it to chase.
+  it("lets a booking from a page loaded before the phone box through, with no number", () => {
+    const fromOldPage: Record<string, unknown> = { ...valid };
+    delete fromOldPage.buyerPhone;
+    const p = purchaseSchema.safeParse(fromOldPage);
+    expect(p.success).toBe(true);
+    expect(p.success && p.data.buyerPhone).toBeUndefined();
   });
 
   it.each([
@@ -69,8 +77,7 @@ describe("the booker's phone number on a new booking", () => {
 
 describe("the error a booking without a phone number gets back", () => {
   it("names the phone number, in words the booker can act on", () => {
-    const without = { ...valid, buyerPhone: undefined };
-    expect(bookingRequestError(issuesFor(without))).toBe(PHONE_REQUIRED_MESSAGE);
+    expect(bookingRequestError(issuesFor({ ...valid, buyerPhone: "" }))).toBe(PHONE_REQUIRED_MESSAGE);
     expect(PHONE_REQUIRED_MESSAGE).toMatch(/phone number/i);
     expect(PHONE_REQUIRED_MESSAGE).toMatch(/menu/i);
   });

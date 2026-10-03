@@ -52,8 +52,13 @@ export async function placeTransferBooking(
     invoice = inv.data;
   }
   const noGiftAid = invoice !== null || staff;
+  // Staff may not have the buyer's phone number for a phone or email order: an empty box is "not
+  // given" for them, and the admin flags the booking until someone adds it. A buyer on the website
+  // must fill it in.
+  const staffNoPhone = staff && (typeof input.buyerPhone !== "string" || input.buyerPhone.trim() === "");
   const parsed = purchaseSchema.safeParse({
     ...input,
+    ...(staffNoPhone ? { buyerPhone: undefined } : {}),
     ...(noGiftAid ? { giftAid: false } : {}),
     ...(staff ? { newsletterOptIn: false } : {}),
   });
@@ -93,7 +98,7 @@ export async function placeTransferBooking(
     buyerFirstName: purchase.buyerFirstName,
     buyerSurname: purchase.buyerSurname,
     buyerEmail: purchase.buyerEmail,
-    buyerPhone: purchase.buyerPhone,
+    buyerPhone: purchase.buyerPhone ?? null,
     ticketsPence: totals.ticketsPence,
     donationPence: totals.donationPence,
     feeCoverPence: 0,

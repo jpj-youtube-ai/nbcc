@@ -788,11 +788,15 @@ export async function listBookings(limit = 200, offset = 0): Promise<BallBooking
 // Bookings made before have none; staff chase them by hand and add it here. Nothing is sent
 // automatically.
 
-/** How many PAID bookings have no phone number: the ones staff still have to ask. */
-export async function countPaidWithoutPhone(): Promise<number> {
+/**
+ * How many bookings still going ahead have no phone number: paid, or awaiting their bank transfer.
+ * The same bookings the admin flags "No phone number yet", so the count and the flags agree.
+ */
+export async function countBookingsWithoutPhone(): Promise<number> {
   const res = await pool.query<{ n: string }>(
     `SELECT COUNT(*)::text AS n FROM ball_bookings
-      WHERE status = 'paid' AND (buyer_phone IS NULL OR btrim(buyer_phone) = '')`,
+      WHERE (status = 'paid' OR (status = 'pending' AND payment_method = 'transfer'))
+        AND (buyer_phone IS NULL OR btrim(buyer_phone) = '')`,
   );
   return Number(res.rows[0]?.n ?? 0);
 }
@@ -1004,8 +1008,16 @@ export async function ensureGuestToken(sessionId: string, token: string): Promis
 // Delete guest details past their retention date. Called from the admin read so it runs
 // naturally without a scheduler; the ninety-day promise in the ticket terms is kept by the
 // row's own expires_at rather than by anyone remembering.
+//
+// The booker's phone number goes on the same date (retentionDate, 90 days after the event): it
+// was asked for the booking and the menu, and the ticket terms say when it is deleted.
 export async function purgeExpiredGuests(): Promise<number> {
   const res = await pool.query("DELETE FROM ball_guests WHERE expires_at <= now()");
+  await pool.query(
+    `UPDATE ball_bookings SET buyer_phone = NULL
+      WHERE buyer_phone IS NOT NULL AND now() >= $1`,
+    [retentionDate()],
+  );
   return res.rowCount ?? 0;
 }
 

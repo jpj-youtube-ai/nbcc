@@ -1825,16 +1825,20 @@ describe("admin app integration (jsdom, TASK-118)", () => {
         expect(el("ballAddInvoiceFields").hidden).toBe(false);
       });
 
-      it("asks for the buyer's phone number before it sends anything", async () => {
+      // Review of PR #650: staff may not have the number for a phone or email order. Optional here;
+      // the booking is then flagged until someone adds it.
+      it("adds it without a phone number when staff do not have one", async () => {
         loginToken = tokenFor("admin");
+        addTransferAnswer = { status: 201, body: { reference: "BALL-7KQ2MZ", totalPence: 102_000, payBy: "2026-10-08" } };
         await openAdd();
         fillAdd();
         field("ballAddBuyerPhone").value = "";
         await submitAdd();
-        expect(posted(/\/api\/admin\/ball\/transfer-bookings$/)).toHaveLength(0);
-        expect(el("ballAddStatus").textContent).toMatch(/phone number/);
+        const [, init] = posted(/\/api\/admin\/ball\/transfer-bookings$/)[0];
+        expect(JSON.parse(init?.body || "{}")).not.toHaveProperty("buyerPhone");
         expect(field("ballAddBuyerPhone").getAttribute("type")).toBe("tel");
         expect(field("ballAddBuyerPhone").getAttribute("autocomplete")).toBe("off");
+        expect(document.querySelector('label[for="ballAddBuyerPhone"]')?.textContent).toBe("Phone number (optional)");
       });
 
       it("needs the buyer's agreement to the terms before it sends anything", async () => {
@@ -2152,27 +2156,27 @@ describe("admin app integration (jsdom, TASK-118)", () => {
         expect(el("ballTransfers").textContent).toContain("No phone number yet");
       });
 
-      it("says how many paid bookings have no number", async () => {
+      it("says how many bookings have no number", async () => {
         ballBookings = [paid(), paid({ id: 2, reference: "BALL-2PQRST", buyerPhone: "01632 960123" })];
         ballNoPhone = 3;
         loginToken = tokenFor("admin");
         await openBall();
         expect(el("ballNoPhone").hidden).toBe(false);
-        expect(el("ballNoPhoneCount").textContent).toBe("3 paid bookings have no phone number yet.");
+        expect(el("ballNoPhoneCount").textContent).toBe("3 bookings have no phone number yet.");
         ballNoPhone = 1;
         (document.querySelector('.admin-nav-link[data-view="overview"]') as HTMLElement).click();
         await settle();
         (document.querySelector('.admin-nav-link[data-view="ball"]') as HTMLElement).click();
         await settle();
-        expect(el("ballNoPhoneCount").textContent).toBe("1 paid booking has no phone number yet.");
+        expect(el("ballNoPhoneCount").textContent).toBe("1 booking has no phone number yet.");
       });
 
-      it("says so when every paid booking has one", async () => {
+      it("says so when every booking has one", async () => {
         ballBookings = [paid({ buyerPhone: "07700 900123" })];
         ballNoPhone = 0;
         loginToken = tokenFor("admin");
         await openBall();
-        expect(el("ballNoPhoneCount").textContent).toBe("Every paid booking has a phone number.");
+        expect(el("ballNoPhoneCount").textContent).toBe("Every booking has a phone number.");
         expect(el("ballNoPhoneOnlyLabel").hidden).toBe(true);
       });
 
@@ -2189,6 +2193,71 @@ describe("admin app integration (jsdom, TASK-118)", () => {
         only.checked = false;
         only.dispatchEvent(new Event("change", { bubbles: true }));
         expect(rowOf("BALL-2PQRST").hidden).toBe(false);
+      });
+
+      // The count covers bookings awaiting a transfer too, so the filter does as well, alongside the
+      // search over that list.
+      it("shows only the bookings awaiting a transfer with no number too", async () => {
+        const t = {
+          reference: "BALL-4MNPQR", kind: "seat", quantity: 2, seats: 2, buyerName: "Dee Example",
+          buyerEmail: "dee@example.com", buyerPhone: null, totalPence: 20_000, payBy: "2026-10-08", createdAt: "2026-10-01T09:00:00Z",
+        };
+        awaitingTransfers = [t, { ...t, reference: "BALL-5RSTUV", buyerName: "Eve Example", buyerPhone: "07700 900123" }];
+        ballBookings = [paid()];
+        ballNoPhone = 2;
+        loginToken = tokenFor("admin");
+        await openBall();
+        const transferRow = (ref: string) => document.querySelector(`#ballTransfers tr[data-ref="${ref}"]`) as HTMLElement;
+        const only = el("ballNoPhoneOnly") as HTMLInputElement;
+        only.checked = true;
+        only.dispatchEvent(new Event("change", { bubbles: true }));
+        expect(transferRow("BALL-4MNPQR").hidden).toBe(false);
+        expect(transferRow("BALL-5RSTUV").hidden).toBe(true);
+        // Searching keeps the filter: Eve stays hidden, and Dee goes because the search does not match her.
+        const search = el("ballTransferSearch") as HTMLInputElement;
+        search.value = "eve";
+        search.dispatchEvent(new Event("input", { bubbles: true }));
+        expect(transferRow("BALL-5RSTUV").hidden).toBe(true);
+        expect(transferRow("BALL-4MNPQR").hidden).toBe(true);
+        search.value = "";
+        search.dispatchEvent(new Event("input", { bubbles: true }));
+        only.checked = false;
+        only.dispatchEvent(new Event("change", { bubbles: true }));
+        expect(transferRow("BALL-5RSTUV").hidden).toBe(false);
+      });
+
+      // Review of PR #650: a browser holding an admin.html from before this change has none of the
+      // phone boxes. The rest of the Festive Ball screen must still work.
+      it("leaves the rest of the screen working when the page has no phone count or filter", async () => {
+        el("ballNoPhone").remove();
+        ballBookings = [paid()];
+        ballNoPhone = 1;
+        loginToken = tokenFor("admin");
+        await openBall();
+        expect(rowOf("BALL-7KQ2MZ").textContent).toContain("No phone number yet");
+        // Wired after the filter: the bank details form still saves.
+        (el("ballTransferAccountName") as HTMLInputElement).value = "Example Account";
+        (el("ballTransferSortCode") as HTMLInputElement).value = "000000";
+        (el("ballTransferAccountNumber") as HTMLInputElement).value = "00000000";
+        el("ballTransferForm").dispatchEvent(new Event("submit", { cancelable: true, bubbles: true }));
+        await settle();
+        expect(posted(/\/api\/admin\/ball\/transfer-settings$/)).toHaveLength(1);
+      });
+
+      // Review of PR #650: on a desktop the money and the status must not break mid-value.
+      // Not by nowrap, which paints a cell over its neighbour in a fixed table
+      // (admin-no-sideways-scroll.test.ts): Status gets the width "cancelled" needs, taken from Who,
+      // and below the width eight whole columns need, each booking is a labelled card.
+      it("gives the status and the amount room, and becomes cards before the columns get too narrow", () => {
+        const css = readFileSync(resolve(ROOT, "assets/css/admin.css"), "utf8");
+        const width = (n: number) =>
+          Number((css.match(new RegExp(`\\.ball-bookings-table td:nth-child\\(${n}\\)\\{width:(\\d+)%\\}`)) || [])[1]);
+        const widths = [1, 2, 3, 4, 5, 6, 7, 8].map(width);
+        expect(widths.reduce((a, b) => a + b, 0)).toBe(100);
+        // "cancelled" is about 75px and a cell has 24px of padding: 11% of the 1000px minimum is 110px.
+        expect(width(6)).toBeGreaterThanOrEqual(11);
+        expect(width(4)).toBeGreaterThanOrEqual(9);
+        expect(css).toContain("@container bblist (max-width:999px)");
       });
 
       it("lets someone with Festive Ball edit add a number, then shows the list again", async () => {

@@ -226,9 +226,23 @@ When("I start a ball checkout for {int} seats", async function (n) {
   await startCheckout(this, { kind: "seat", quantity: n });
 });
 
-// Jaimie 2026-10-03: the phone number is required. Sent as undefined, so JSON leaves it out.
-When("I start a ball checkout for {int} seat(s) with no phone number", async function (n) {
+// Jaimie 2026-10-03: the phone box left empty is refused.
+When("I start a ball checkout for {int} seat(s) with an empty phone number", async function (n) {
+  await startCheckout(this, { kind: "seat", quantity: n, buyerPhone: "" });
+});
+
+// A page loaded before the phone box existed sends no buyerPhone at all (undefined: JSON leaves it
+// out). Never lose a live booking over it.
+When("I start a ball checkout for {int} seat(s) from a page with no phone box", async function (n) {
   await startCheckout(this, { kind: "seat", quantity: n, buyerPhone: undefined });
+});
+
+Then("the pending ball booking should have no phone number", async function () {
+  const rows = await withDb((db) =>
+    db.query("SELECT buyer_phone FROM ball_bookings WHERE reference = $1", [this.ballCheckout.reference]),
+  );
+  assert.ok(rows.rows[0], "the booking exists");
+  assert.equal(rows.rows[0].buyer_phone, null);
 });
 
 Then("the ball checkout error should name the phone number", function () {

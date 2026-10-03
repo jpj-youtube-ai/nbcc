@@ -9,8 +9,8 @@ import { normalisePhone, PHONE_MAX } from "../business/call-due";
 // DB-free like src/db/stripe-webhook-model.ts, whose shape it deliberately mirrors.
 
 // Jaimie 2026-10-03: the booker's phone number, so NBCC can contact them about menu choices for
-// their table. Required on every NEW booking; bookings made before it was asked have none, and staff
-// add it in the admin. Checked by the same rule as the phone box in Admin > Business supporters
+// their table. Asked on every NEW booking; bookings made before it was asked have none, nor do staff
+// orders taken without it, and staff add it in the admin. Checked by the same rule as the phone box in Admin > Business supporters
 // (normalisePhone): digits, spaces, + ( ) and -, at least 7 digits, up to 40 characters. That takes
 // UK mobiles and landlines however people space them, and a +44 number. It stays with NBCC: it is
 // never stamped on the Stripe session (ballMetadata), nor in any list that leaves the charity.
@@ -43,7 +43,10 @@ export const purchaseSchema = z
     buyerFirstName: z.string().trim().min(1, "please give your first name").max(60),
     buyerSurname: z.string().trim().min(1, "please give your surname").max(60),
     buyerEmail: z.string().trim().toLowerCase().email().max(254),
-    buyerPhone: bookerPhone,
+    // Optional only in the sense that the KEY may be absent: a page loaded before the phone box
+    // existed sends none, and a live booking is never lost over it (the admin flags it to chase).
+    // Sent but empty or not a phone number is refused, which is what the current page does.
+    buyerPhone: bookerPhone.optional(),
     // A voluntary donation on top of the ticket. This is the ONLY Gift Aid-able money in the
     // event: HMRC does not allow Gift Aid on ticket sales, because the buyer receives a dinner
     // and a show in return. Ceiling of £1,000,000 guards against a fat-fingered amount.

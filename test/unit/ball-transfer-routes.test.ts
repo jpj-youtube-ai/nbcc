@@ -126,13 +126,21 @@ describe("POST /api/ball/bank-transfer", () => {
   });
 
   // Jaimie 2026-10-03: the booker's phone number, required, stored and given to the team.
-  it("refuses a booking with no phone number, naming it", async () => {
-    const without = { ...order, buyerPhone: undefined };
-    const res = await post(without);
+  it("refuses a booking whose phone box was left empty, naming it", async () => {
+    const res = await post({ ...order, buyerPhone: "" });
     expect(res.statusCode).toBe(400);
     expect(body(res).error).toBe("Please give your phone number, so we can contact you about menu choices for your table.");
     expect(JSON.stringify(body(res).details)).toContain("buyerPhone");
     expect(createTransferBookingMock).not.toHaveBeenCalled();
+  });
+
+  // Review of PR #650: a page loaded before the phone box existed sends no buyerPhone at all.
+  it("takes a booking from a page loaded before the phone box, with no number", async () => {
+    const fromOldPage: Record<string, unknown> = { ...order };
+    delete fromOldPage.buyerPhone;
+    const res = await post(fromOldPage);
+    expect(res.statusCode).toBe(201);
+    expect(createTransferBookingMock.mock.calls[0][0].buyerPhone).toBeNull();
   });
 
   it("stores the phone number with the booking and gives it to the team", async () => {

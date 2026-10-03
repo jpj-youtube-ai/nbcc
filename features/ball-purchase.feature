@@ -49,13 +49,21 @@ Feature: Festive Ball purchases through the shared Stripe webhook (TASK-313)
 
   # Jaimie 2026-10-03: the booker's phone number is required, so NBCC can contact them about menu
   # choices for their table. Refused before any seats are held.
-  Scenario: a checkout without a phone number is refused, naming it
+  Scenario: a checkout with the phone box left empty is refused, naming it
     Given the ball is reset to 40 tables of 10 with 0 held back
-    When I start a ball checkout for 2 seats with no phone number
+    When I start a ball checkout for 2 seats with an empty phone number
     Then the ball response status should be 400
     And the ball checkout error should name the phone number
     When I request the ball availability
     Then the ball availability should show 400 seats remaining
+
+  # A page loaded before the phone box existed sends no phone at all: the booking still goes
+  # through, and the admin flags it for staff to chase.
+  Scenario: a checkout from a page with no phone box still goes through
+    Given the ball is reset to 40 tables of 10 with 0 held back
+    When I start a ball checkout for 2 seats from a page with no phone box
+    Then the ball response status should be 201
+    And the pending ball booking should have no phone number
 
   Scenario: paying inline returns a client secret instead of a redirect
     # uiMode "embedded" keeps the buyer on nbcc.scot: the endpoint returns a clientSecret and the

@@ -109,12 +109,26 @@ describe("POST /api/admin/ball/transfer-bookings", () => {
     expect(write.newsletterOptIn).toBe(false);
   });
 
-  it("needs the buyer's phone number, and stores it", async () => {
-    const without = { ...order, buyerPhone: undefined };
-    expect((await add(tokenFor("admin"), without)).statusCode).toBe(400);
-    expect(m.createTransferBooking).not.toHaveBeenCalled();
-    await add(tokenFor("admin"), order);
+  // Review of PR #650: staff may not have the number for a phone or email order. It is optional
+  // for them; the admin flags the booking until someone adds it.
+  it("stores the buyer's phone number when staff have it", async () => {
+    expect((await add(tokenFor("admin"), order)).statusCode).toBe(201);
     expect(m.createTransferBooking.mock.calls[0][0]).toMatchObject({ buyerPhone: "01632 960123" });
+  });
+
+  it.each([
+    ["no phone box", undefined],
+    ["an empty box", ""],
+    ["only spaces", "   "],
+  ])("takes the booking without a phone number from staff: %s", async (_label, phone) => {
+    const res = await add(tokenFor("admin"), { ...order, buyerPhone: phone });
+    expect(res.statusCode).toBe(201);
+    expect(m.createTransferBooking.mock.calls[0][0].buyerPhone).toBeNull();
+  });
+
+  it("still refuses a number from staff that is not a phone number", async () => {
+    expect((await add(tokenFor("admin"), { ...order, buyerPhone: "call me" })).statusCode).toBe(400);
+    expect(m.createTransferBooking).not.toHaveBeenCalled();
   });
 
   it("needs the buyer's agreement to the terms", async () => {

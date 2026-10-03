@@ -13015,7 +13015,8 @@
             '<button type="button" class="admin-link" data-cancel-booking="' + H.escapeHtml(t.reference) +
             '" data-transfer="1">Cancel</button>'
           : "");
-      return '<tr data-ref="' + H.escapeHtml(t.reference) + '"><td data-label="Reference">' + H.escapeHtml(t.reference) +
+      return '<tr data-ref="' + H.escapeHtml(t.reference) + '"' + ((t.buyerPhone || "").trim() ? "" : ' data-no-phone="1"') +
+        '><td data-label="Reference">' + H.escapeHtml(t.reference) +
         // TASK-487: made since this person last opened Festive Ball.
         rowNewPill("ball", t.createdAt) +
         // One block, so the narrow card's flex cell keeps name, email, phone and company stacked.
@@ -13051,10 +13052,12 @@
     var digits = /^[£\d.,\s]+$/.test(q) ? q.replace(/[^0-9]/g, "") : "";
     Array.prototype.forEach.call(document.querySelectorAll("#ballTransfers tbody tr"), function (tr) {
       var t = ballTransferRows.filter(function (r) { return r.reference === tr.getAttribute("data-ref"); })[0];
-      if (!t || !q) { tr.hidden = false; return; }
+      // Jaimie 2026-10-03: "Show only bookings with no phone number" covers this list too.
+      var phoneHidden = ballNoPhoneOnly() && !tr.hasAttribute("data-no-phone");
+      if (!t || !q) { tr.hidden = phoneHidden; return; }
       var text = (t.reference + " " + t.buyerName + " " + t.buyerEmail).toLowerCase();
       var byAmount = digits.length > 0 && String(t.totalPence).indexOf(digits) === 0;
-      tr.hidden = !(text.indexOf(q) !== -1 || byAmount);
+      tr.hidden = phoneHidden || !(text.indexOf(q) !== -1 || byAmount);
     });
   }
 
@@ -13093,11 +13096,9 @@
         ballStatus("ballAddStatus", "Give the buyer's email address: the bank details go there.");
         return;
       }
-      // Jaimie 2026-10-03: required on every new booking, so we can contact them about menu choices.
-      if (!value("ballAddBuyerPhone")) {
-        ballStatus("ballAddStatus", "Give the buyer's phone number, so we can contact them about menu choices.");
-        return;
-      }
+      // Jaimie 2026-10-03: the buyer's phone number, for menu choices. Optional here: staff may not
+      // have it for a phone or email order, and the list flags the booking until someone adds it.
+      var buyerPhone = el("ballAddBuyerPhone") ? value("ballAddBuyerPhone") : "";
       // One booking takes up to 4 tables or 9 tickets, as on the ticket page.
       var kind = el("ballAddKind").value;
       var quantity = Math.floor(Number(el("ballAddQuantity").value)) || 1;
@@ -13122,10 +13123,10 @@
         buyerFirstName: value("ballAddFirstName"),
         buyerSurname: value("ballAddSurname"),
         buyerEmail: value("ballAddEmail"),
-        buyerPhone: value("ballAddBuyerPhone"),
         donationPence: Math.max(0, Math.round((Number(value("ballAddDonation")) || 0) * 100)),
         termsAccepted: true,
       };
+      if (buyerPhone) body.buyerPhone = buyerPhone;
       if (invoicing) {
         body.invoice = {
           company: value("ballAddCompany"),
@@ -13327,28 +13328,44 @@
   }
 
   // "Show only bookings with no phone number", over the bookings table.
+  // Every element here is null-checked: a browser holding an admin.html from before the phone boxes
+  // existed must still get the rest of the Festive Ball screen.
+  function ballNoPhoneOnly() {
+    var only = el("ballNoPhoneOnly");
+    return !!(only && only.checked);
+  }
   function filterBallNoPhone() {
-    var only = el("ballNoPhoneOnly").checked;
+    var only = ballNoPhoneOnly();
     Array.prototype.forEach.call(document.querySelectorAll("#ballBookings tbody tr"), function (tr) {
       tr.hidden = only && !tr.hasAttribute("data-no-phone");
     });
+    // The awaiting-transfer list, which has its own search as well.
+    filterBallTransfers();
   }
 
-  // How many paid bookings have no phone number, as the server counted them (every one, not only
-  // the rows on screen). Hidden if it did not say.
+  // How many bookings still going ahead (paid, or awaiting a transfer) have no phone number, as the
+  // server counted them: every one, not only the rows on screen, and the same ones the pill marks.
+  // Hidden if it did not say.
   function ballNoPhoneRender(n) {
     var box = el("ballNoPhone");
+    if (!box) return;
     if (typeof n !== "number") {
       box.hidden = true;
       return;
     }
     box.hidden = false;
-    el("ballNoPhoneCount").textContent = n === 0
-      ? "Every paid booking has a phone number."
-      : n + (n === 1 ? " paid booking has" : " paid bookings have") + " no phone number yet.";
-    el("ballNoPhoneHow").hidden = n === 0;
-    el("ballNoPhoneOnlyLabel").hidden = n === 0;
-    if (n === 0) el("ballNoPhoneOnly").checked = false;
+    var count = el("ballNoPhoneCount");
+    if (count) {
+      count.textContent = n === 0
+        ? "Every booking has a phone number."
+        : n + (n === 1 ? " booking has" : " bookings have") + " no phone number yet.";
+    }
+    ["ballNoPhoneHow", "ballNoPhoneOnlyLabel"].forEach(function (id) {
+      var node = el(id);
+      if (node) node.hidden = n === 0;
+    });
+    var only = el("ballNoPhoneOnly");
+    if (only && n === 0) only.checked = false;
     filterBallNoPhone();
   }
 
@@ -13682,7 +13699,7 @@
     // TASK-484: bank transfer.
     el("ballTransfers").addEventListener("click", onTransfersClick);
     el("ballTransferSearch").addEventListener("input", filterBallTransfers);
-    el("ballNoPhoneOnly").addEventListener("change", filterBallNoPhone);
+    if (el("ballNoPhoneOnly")) el("ballNoPhoneOnly").addEventListener("change", filterBallNoPhone);
     el("ballTransferForm").addEventListener("submit", function (e) {
       e.preventDefault();
       if (!isAdmin()) return;

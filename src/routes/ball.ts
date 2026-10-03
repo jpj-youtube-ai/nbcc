@@ -178,7 +178,8 @@ ballRouter.post("/api/ball/checkout-session", async (req, res) => {
       buyerFirstName: purchase.buyerFirstName,
       buyerSurname: purchase.buyerSurname,
       buyerEmail: purchase.buyerEmail,
-      buyerPhone: purchase.buyerPhone,
+      // Absent only from a page loaded before the phone box existed; the admin flags it to chase.
+      buyerPhone: purchase.buyerPhone ?? null,
       ticketsPence: totals.ticketsPence,
       donationPence: totals.donationPence,
       feeCoverPence: totals.feeCoverPence,

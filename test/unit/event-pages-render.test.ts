@@ -328,8 +328,8 @@ describe("an event's page: giving is a donation, not a ticket", () => {
     expect(d.querySelector(".giftaid-entry")?.textContent).toBe("Gift Aid is only for donations, never for entry or ticket money.");
   });
 
-  it("says on the meter that it includes money the organiser has paid in", () => {
-    expect(render().querySelector(".fr-summary .fr-meter__paidin")?.textContent).toBe("Includes money the organiser has paid in.");
+  it("says on the meter that it includes any money the organiser has paid in", () => {
+    expect(render().querySelector(".fr-summary .fr-meter__paidin")?.textContent).toBe("Includes any money the organiser has paid in.");
   });
 
   const thanksText = (p: PublicPage) =>

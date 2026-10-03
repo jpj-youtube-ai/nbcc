@@ -893,7 +893,7 @@ export function renderFundraiserPage(template: string, p: PublicPage, opts: Fund
     '<div class="card card-lg fr-summary">' +
     '<h2 class="sr-only">Money raised so far</h2>' +
     renderMeter(p.meter, { large: true }) +
-    (event ? '<p class="fr-meter__paidin">Includes money the organiser has paid in.</p>' : "") +
+    (event ? '<p class="fr-meter__paidin">Includes any money the organiser has paid in.</p>' : "") +
     renderSplit(p) +
     (event && !p.finished ? renderEntryLine(p) : "") +
     `<a class="btn btn-primary fr-summary__give" href="#give">${p.finished ? "You can still give" : event ? "Make a donation" : "Give to this fundraiser"}</a>` +

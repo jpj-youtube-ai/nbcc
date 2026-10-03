@@ -8362,6 +8362,8 @@ Z, a sign up uses it; only an admin may; an old category is refused but keeps it
 
 Jaimie's second round of changes to the sign up form at `/fundraise`, and shorter page links.
 
+(Replaced on 2026-10-03 by Next and Back, one question at a time: see "The sign up tidy" below.)
+
 **One question after another.** `assets/js/fundraise.js` adds `fr-stepped` to the form and shows
 each question (each `[data-step]`) once the one before is answered: answered means every question
 in it that needs an answer, and is in play for their path, is valid (read from `validity`, so
@@ -9314,6 +9316,132 @@ Tests: `test/unit/fundraising-in-memory*.test.ts`, `fundraise-memory-*.test.ts`,
 `fundraiser-memory-*.test.ts`, `fundraising-envelope.test.ts`, `fundraise-signup-memory.test.ts`,
 `fundraise-manage-memory.test.ts`, `admin-fundraising-memory-panel.test.ts`,
 `in-memory-migration.test.ts`; BDD `features/fundraising-in-memory.feature`.
+
+## The sign up tidy: one question at a time, the welcome pack, and a form that fits each person
+
+Jaimie's changes of 2026-10-03, with the form appropriateness audit: the sign up form at
+`/fundraise` should be low friction, upbeat, easy, simple and encouraging, and gentle for someone
+setting up a page in memory of someone. It replaces the "one question after another" reveal and the
+"Show all the questions at once" button described under TASK-511 above.
+
+**One question at a time.** `assets/js/fundraise-steps.js` (shared with the team join form) shows one
+`[data-step]` at a time, with **Back** and **Next** under it, and a progress bar of stages above
+(stages, not questions, because the questions branch). The stage they are on is marked
+`aria-current="step"` and says "Step 2 of 5: Your fundraiser" in words, never by colour alone; the
+ones done are ticked; near the end the words lift ("Nearly there!" on stage 4, "Last step!" on 5).
+Nothing goes red while someone types. On Next, anything missing or wrong on that step gets its own
+short warm prompt ("Almost! Just add your first name.", from `data-invalid-message`, through
+`main.js`'s shared highlighting) and the focus moves to it. Back keeps every answer. Each new step is
+said in a polite live region and takes the focus. Enter in a box before the last step is Next. On
+the last step, Send checks the whole form and goes back to the first step with a problem; the
+server's messages do the same. Without the script every question is in the page as it is.
+
+**Three paths from the first question**: raising money, holding an event, or a page in memory of
+someone (now the third choice there; the old "Is this in memory of someone?" step is gone, and it is
+still sent as `path: "raising"` with `inMemory: true`). A step or box is only on the paths named in
+its `data-paths`; its words follow the path (`data-say-<path>`, `data-invalid-<path>`).
+
+| Stage | Raising money / holding an event | In memory of someone |
+| --- | --- | --- |
+| 1 | **About you**: what you are planning, 18 or over, who is fundraising (me, or my child), a business, school or group, your details | **About them**: what you are planning, 18 or over, who the page is for and who is setting it up |
+| 2 | **Your fundraiser** (**Your event**): team, is it a sporting event, the category, the T shirt size, about it, the event's card, the target, Get involved | **The page**: how people will be giving, about the page, an amount, Get involved, sharing and the split check, sharing the page |
+| 3 | **Sharing**: another cause, the split check, social media | **Your details** |
+| 4 | **What you'd like**: materials, and the address for the welcome pack | **Anything we can send**: envelopes, QR cards and posters, and an address only if something is asked for |
+| 5 | **Check and send** | **Check the details** |
+
+What is asked, and why:
+
+- **"Rather do this together?"** A tinted panel above the form with the phone number (a `tel:` link).
+- **The address** is asked of everyone raising money or holding an event, "So we can post your
+  welcome pack." It uses the four `post_*` boxes the form already had (TASK-499), now always asked
+  and always kept. In memory there is no welcome pack: the address is asked only when something is
+  to be sent ("This can be the funeral director's address.").
+- **"Is it a sporting event?"** (raising money only, never in memory, asked before the category). A
+  Yes offers only the sporting categories and asks a **T shirt size** (Kids 3 to 4 up to 13 to 14,
+  Adult XS to XXL; nothing chosen for them). A No offers the rest. Other is in both. Each category has
+  a `sporty` mark; admins tick **Sporting** in Admin > Fundraising, Categories.
+- **The split check.** After the sharing details, a step shows the split as the page and posters
+  will say it, with a required tick "Yes, that's right". Changing the split asks for the tick again.
+- **A child.** "Who is doing the fundraising?" Me, or my child or a young person I look after: their
+  first name (shown on the page) and the parent's or guardian's tick.
+- **A business, school or group**: its name (the page says "Organised by" it) and, optionally,
+  whether the employer will match what is raised.
+- **Get involved.** "Shall we list it on our Get involved page?" Every sign up now gets a page
+  (`public` is always true); a No keeps it off the list (`off_list_at`, `off_list_by = 'organiser'`,
+  the mechanism staff already use). A team is always listed.
+- **Social media** is one question: a shout out, a mention, or no thanks (`socialOk` and
+  `wants.shoutOut` as before).
+- **Someone from NBCC to come along** is asked only when there is a day or a place to come along to.
+- **An event** may be "Free entry, donations welcome", may ask for printed QR codes for its page, and
+  may give an amount it hopes to raise.
+- **In memory of someone** is asked only what fits: who it remembers, who is setting it up (now also
+  "Someone else, like a colleague, club or church"; a funeral director gives the business name, shown
+  as "Set up by ... for the family", and may give the family's contact for givers' names), how people
+  will be giving (its own list of categories, `memory_only`), an optional date and place for the
+  funeral or service, optional words about them, one gentle question about sharing the page, and
+  collection envelopes, QR cards or posters for the service. It is never asked about a team, sport, a
+  T shirt, a shout out, someone coming along or the newsletter, and nothing on its path has an
+  exclamation mark. Its thank you is quiet, and a short receipt email goes in place of nothing.
+- **Under 18** says the same on every form, with no example to copy.
+
+### The rules the server keeps (`src/fundraising/signup-tidy.ts`, wired into `signUpSchema`)
+
+| Field | Rule |
+| --- | --- |
+| `postLine1`, `postTown`, `postPostcode` | needed on every new sign up (a 400 names each), with a UK postcode; in memory only when something is to be posted |
+| `isSporting`, `tshirtSize` | raising money only, never in memory; a size from the list is needed with a Yes; a page cached from before (no answer) is taken without |
+| `splitConfirmed` | must be `true` when `sharesWithOther` is |
+| `childFundraiser`, `childFirstName`, `childConsent` | for `child`: the first name and the tick |
+| `forOrganisation`, `orgName`, `employerMatch` | for a Yes: the name; `yes`, `no` or `not_sure` |
+| `listed` | `false` keeps the page off Get involved; a team is always listed |
+| `kind` | in memory: one of the in memory ways of giving, or Other; anyone else: never one of those |
+| `description` | optional in memory |
+| `wants.shoutOut`, `wants.attend` | not needed in memory (both false); come along only for an event, or with a date or venue |
+| `wants.envelopeCount` | in memory only; a request kind of its own (`envelopes`), ticked off like posters |
+| `memoryDirectorBusiness`, `memoryFamilyContactName`, `memoryFamilyContactEmail`, `callTime` | a funeral director gives the business; the rest are optional |
+
+### After the sign up
+
+| Route | Who | What |
+| --- | --- | --- |
+| `PATCH /api/admin/fundraising/categories/:key` `{ sporty }` | an admin | the Sporting tick; audit `fundraising.category_changed` |
+| `PUT /api/admin/fundraisers/:id/welcome-pack` `{ isSporting, tshirtSize }` | fundraising edit | correct sport and the size before approving; a Yes may wait for a size; audit `fundraiser.welcome_pack_changed` |
+| `POST /api/admin/fundraisers/:id/tshirt-ask` | fundraising edit | email the organiser a private link to choose a size (never automatic); audit `fundraiser.tshirt_asked`; 409 unless it is a sporting event with no size |
+| `GET /fundraise/t-shirt` | the organiser | the page to choose a size (`fundraise-tshirt.html`, `assets/js/fundraise-tshirt.js`); never indexed |
+| `POST /api/fundraise/tshirt/look` `{ token }` | the organiser | their first name, the fundraiser's name and the sizes; one plain 404 for a link not there, used or over 60 days old |
+| `POST /api/fundraise/tshirt` `{ token, tshirtSize }` | the organiser | saves the size, once; audit `fundraiser.tshirt_chosen` |
+
+The link is `/fundraise/t-shirt#<token>`: the token rides after the `#`, so it never reaches a server
+in an address, and only its sha256 is stored. Admin > Fundraising shows the new answers in **What
+they told us**, and a **Sport and the T shirt** panel: "Waiting for T shirt size" and the button "Ask
+them for their T shirt size". The summary to the events inbox carries the new answers; for a page in
+memory of someone it is headed "A new page in memory of ...", with a plain sign off.
+
+The team join form (`fundraise-join.html`) has the same Next and Back, with three stages (About you,
+Your page, Send). `fundraise-join.html` and `fundraise-tshirt.html` are now copied into the image
+(the join page was missing from the Dockerfile's list).
+
+### Data (`migrations/1791200000210_signup-tidy.js`, additive only)
+
+| Table | Change |
+| --- | --- |
+| `fundraising_categories` | `sporty`, `memory_only` (both false by default); Run, Walk and Santa dash marked sporting; three in memory ways of giving added |
+| `fundraisers` | `is_sporting`, `tshirt_size` (checked against the list), `tshirt_token_hash`, `tshirt_asked_at`, `tshirt_asked_by`, `child_first_name`, `child_consent`, `org_name`, `employer_match`, `memory_director_business`, `memory_family_contact_name`, `memory_family_contact_email`, `call_time`, all nullable |
+| checks | `fundraisers_memory_setup_by_known` takes `someone_else`; `fundraisers_booking_check` takes `donations`; the request kind check takes `envelopes` |
+
+No new table. **Rolling back past the sign up tidy.** Code from before this release does not know
+`memory_only`, and would offer the in memory ways of giving on the ordinary form. Before rolling the
+code back, run:
+
+```sql
+UPDATE fundraising_categories SET active = false, retired_at = COALESCE(retired_at, now()) WHERE memory_only;
+```
+
+Tests: `test/unit/fundraising-signup-tidy*.test.ts`, `fundraising-signup-paths.test.ts`,
+`fundraising-categories-sporty.test.ts`, `signup-tidy-migration.test.ts`,
+`fundraise-signup-tidy-form.test.ts`, `fundraise-tshirt-page.test.ts`,
+`admin-fundraising-signup-tidy.test.ts`, `fundraise-join-page.test.ts`; BDD
+`features/fundraising-signup-tidy.feature`.
 
 ## A QR code encoder for fundraiser pages (TASK-493)
 

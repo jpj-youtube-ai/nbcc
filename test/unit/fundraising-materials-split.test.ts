@@ -189,6 +189,36 @@ describe("the worst case still fits", () => {
     expect(renderPoster(plainWorst(), ASSETS, "a5")).toContain('class="page size-a5 poster"');
   });
 
+  // Event clarity review: an event's poster says how to get in, a line under the target, so the logo
+  // gives way to it: 8mm for a line, 6mm more for one long enough to wrap. Checked in headless
+  // Chromium at A5, A4 and A3: the address stays inside the gold frame and the QR code clear of it.
+  const DOOR = { path: "event" as const, booking: "door" as const, price: "£5" };
+  const AWAY = {
+    path: "event" as const,
+    booking: "away" as const,
+    price: "£12.50 adults, £6 children, under 5s free",
+    ticketUrl: "https://www.a-very-long-ticket-seller-name.example.co.uk/e/1",
+  };
+  const plain = { sharesWithOther: false, nbccSharePercent: null, otherCauseName: null };
+
+  it("makes room for an event's entry line, without a split", () => {
+    expect(worst({ ...DOOR, ...plain }).entry).toBe("Entry: £5, paid on the door");
+    expect(posterLogoMm(worst({ ...DOOR, ...plain }), "a4")).toBe(32);
+    expect(posterLogoMm(worst({ ...AWAY, ...plain }), "a4")).toBe(26);
+    expect(posterLogoMm(worst({ ...AWAY, ...plain }), "a5")).toBe(26);
+  });
+
+  it("makes room for an event's entry line, with a split", () => {
+    expect(posterLogoMm(worst(DOOR), "a4")).toBe(26);
+    expect(posterLogoMm(worst(DOOR), "a5")).toBe(20);
+    expect(posterLogoMm(worst(AWAY), "a3")).toBe(20);
+    expect(posterLogoMm(worst(AWAY), "a5")).toBe(14);
+  });
+
+  it("still gives a short event's poster a big logo", () => {
+    expect(posterLogoMm(facts({ ...DOOR, ...plain }), "a4")).toBe(56);
+  });
+
   it("keeps the pledge to one smaller line when there is a split", () => {
     expect(renderPoster(worst(), ASSETS)).toMatch(/\.has-split \.p-foot \.pledge\{font-size:11pt/);
   });

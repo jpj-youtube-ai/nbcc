@@ -24,7 +24,8 @@ Feature: Every approved public event has its own page, at /event/<short name>
     Then the visitor gets status 200
     And the page shows "The Event Page Quiz (bdd-fr)"
     And the page shows "About this event"
-    And the page shows "Give to this event"
+    And the page shows "Make a donation"
+    And the page shows "This is a donation to NBCC, not a ticket."
     And the page shows "Tickets are sold on another website."
     When a visitor opens the event page QR code for "The Event Page Quiz (bdd-fr)"
     Then the visitor gets status 200

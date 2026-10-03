@@ -288,3 +288,18 @@ describe("a fundraiser sharing with another cause", () => {
     for (const kind of KINDS) expect(flat(kind), kind).not.toContain("of what we raise goes to");
   });
 });
+
+// Jaimie, 2026-10-03: an event's picture asks people to find out more as well as to give, as giving
+// on its page is a donation, not a ticket. A fundraiser's says Give on my page, as before.
+describe("the caption over the address", () => {
+  it("says Give on my page for a fundraiser's page", async () => {
+    await open();
+    expect(textOn("story")).toContain("Give on my page");
+  });
+
+  it("says Find out more and give for an event's page", async () => {
+    await open({ path: "event", slug: "eqn", title: "Exampleton Quiz Night", targetPence: null });
+    expect(textOn("story")).toContain("Find out more and give");
+    expect(textOn("story")).not.toContain("Give on my page");
+  });
+});

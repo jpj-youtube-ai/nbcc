@@ -317,7 +317,7 @@ export function buildSignUpStaffEmail(f: StaffSummary, o: { adminUrl: string }):
  * and this goes to them when an admin switches fundraising on (src/fundraising/send.ts).
  */
 export function buildApprovedEmail(
-  f: { name: string; title: string; path?: string },
+  f: { name: string; title: string; path?: string; booking?: FundraiserRecord["booking"] },
   o: { pageUrl: string | null; manageUrl: string | null },
 ): BuiltEmail {
   const hi = `Hi ${firstName(f.name)},`;
@@ -387,13 +387,28 @@ export function buildApprovedEmail(
  * Event pages: "Your event's page is live", for an approved public event: its own page to share, its
  * posters with their QR codes, giving on the page, and help from us. Wording for Jaimie to approve.
  */
-function eventPageLiveEmail(f: { title: string }, hi: string, pageUrl: string, manageUrl: string | null): BuiltEmail {
+/**
+ * Event clarity (Jaimie, 2026-10-03): what the organiser does with entry money, by how people get in.
+ * Giving on the page is a donation, and Gift Aid never goes on entry or ticket money.
+ */
+function entryMoneyWords(booking: FundraiserRecord["booking"] | undefined): string {
+  const noGiftAid = "Gift Aid can’t go on entry or ticket money.";
+  if (booking === "door") return `Entry money is separate: collect it as usual and pay it in afterwards from your private area. ${noGiftAid}`;
+  if (booking === "away") return `Ticket money goes through your ticket seller as usual; only pay in NBCC’s share of anything you collect yourself. ${noGiftAid}`;
+  if (booking === "free") return "Entry is free, so anything people give on your page or on the day is a donation.";
+  return `If you charge entry, collect it as usual and pay it in afterwards from your private area. ${noGiftAid}`;
+}
+
+function eventPageLiveEmail(f: { title: string; booking?: FundraiserRecord["booking"] }, hi: string, pageUrl: string, manageUrl: string | null): BuiltEmail {
   const title = escapeHtml(f.title);
   const intro = "is approved, and your event now has its very own page on the NBCC website, with a meter that fills up as people give.";
   const steps: Array<[string, string]> = [
     ["Share your event page", " on Facebook, WhatsApp and by email, so people know when and where to come."],
     ["Put up your posters", " from your private area. Each one has a QR code that takes people straight to your page."],
-    ["On the day, point people to your page", " so anyone who would like to give can do it there, in a minute, on their phone."],
+    [
+      "On the day, point people to your page",
+      ` if they’d like to give a little extra. ${entryMoneyWords(f.booking)}`,
+    ],
   ];
   const gifts =
     "Every gift made on your page comes straight to NBCC, with Gift Aid on top when your supporters are UK taxpayers, and helps us bring comfort, dignity and joy to children, young people and vulnerable adults across South West Scotland.";

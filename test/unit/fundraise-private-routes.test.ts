@@ -367,6 +367,17 @@ describe("the private area", () => {
     expect((f.materials as Record<string, unknown>).qrPng).toBe("/event/sqn/qr.png");
   });
 
+  // Event clarity review: whether it shares with another cause, for the pay in box's words.
+  it("says whether each one shares what it raises with another cause", async () => {
+    db.listForOrganiser.mockResolvedValue([
+      record({ path: "event", slug: "sqn", sharesWithOther: true, nbccSharePercent: 60, otherCauseName: "The Exampleton Larder" }),
+      record({ id: 10, slug: "sams-swim" }),
+    ]);
+    const [shared, plain] = ((await run(getManageSession, { cookie: SAM })).body as { fundraisers: Array<Record<string, unknown>> }).fundraisers;
+    expect(shared.sharesWithOther).toBe(true);
+    expect(plain.sharesWithOther).toBe(false);
+  });
+
   // TASK-511 review: a sign up made since the form's second round changes Instagram and Facebook,
   // each in a box of its own; one from before keeps its one link box.
   it("says which link boxes each fundraiser's form has, and gives both links to change", async () => {

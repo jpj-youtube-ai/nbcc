@@ -7,6 +7,7 @@ import { TRACKED_PIECES, trackedPath, type TrackedPiece } from "./material-codes
 import { qrSvg } from "./qr";
 import { isInMemory } from "./in-memory";
 import { formatPounds, shorten } from "./render";
+import { entryWords } from "./entry";
 
 // TASK-504 (stage 2 of community fundraising): the materials an organiser prints and shares. Each is
 // a print ready HTML page, A4, with its own @page rules and a print button, that looks right on screen
@@ -132,6 +133,13 @@ export interface MaterialFacts {
    * "Fundraising for NBCC". Null for any other fundraiser.
    */
   memory?: { name: string; dates: string | null } | null;
+  /**
+   * Jaimie, 2026-10-03: an event (its poster asks people to scan for the details as well as to give,
+   * as giving on its page is a donation, never a ticket), and how people get in ("Entry: £5, paid on
+   * the door"), or null. Optional, so facts made before stay valid.
+   */
+  event?: boolean;
+  entry?: string | null;
 }
 
 /** The first sentence of a story: up to its first full stop, question or exclamation mark. */
@@ -184,6 +192,8 @@ export function materialFacts(
     splitStatement: splitStatement(f),
     otherCauseName: splitStatement(f) ? (f.otherCauseName ?? "").trim() : null,
     memory: isInMemory(f) && f.memoryName ? { name: f.memoryName.trim(), dates: f.memoryDates?.trim() || null } : null,
+    event: f.path === "event",
+    entry: f.path === "event" ? entryWords(f) : null,
   };
 }
 
@@ -366,7 +376,7 @@ function posterTitleSize(title: string): string {
  * everything still fits: 66mm for a short name and line. Never below 38mm (it was 34mm before round two).
  */
 export function posterLogoMm(
-  d: Pick<MaterialFacts, "title" | "line" | "when" | "where" | "targetPence"> & Partial<Pick<MaterialFacts, "splitStatement" | "memory">>,
+  d: Pick<MaterialFacts, "title" | "line" | "when" | "where" | "targetPence"> & Partial<Pick<MaterialFacts, "splitStatement" | "memory" | "entry">>,
   size: PosterSize = "a4",
 ): number {
   const t = (d.memory ? `In memory of ${d.memory.name}` : d.title).length;
@@ -384,11 +394,20 @@ export function posterLogoMm(
   // bigger on the design (so they print at 7pt or more: statementPt), so it takes more room there.
   // With a split the logo may go below its usual least, so the worst case still fits the paper.
   if (d.splitStatement) mm -= size === "a5" ? 12 : 6;
-  return Math.max(d.splitStatement ? SPLIT_LOGO_MIN_MM : 38, mm);
+  // Event clarity review: an event's entry line under the target ("Entry: £5, paid on the door"), and
+  // a second line when it is long enough to wrap. The logo gives way to it, below its usual least too,
+  // so the address and QR code stay inside the frame (measured in headless Chromium at A5, A4 and A3).
+  const entry = d.entry ? ENTRY_LOGO_MM + (d.entry.length > ENTRY_WRAPS_AT ? ENTRY_WRAP_LOGO_MM : 0) : 0;
+  return Math.max((d.splitStatement ? SPLIT_LOGO_MIN_MM : 38) - entry, mm - entry);
 }
 
 /** The least the poster's logo goes to when there is a split statement to fit in too. */
 export const SPLIT_LOGO_MIN_MM = 26;
+
+/** What an event's entry line takes from the logo, and a second line when it is longer than this. */
+const ENTRY_LOGO_MM = 8;
+const ENTRY_WRAP_LOGO_MM = 6;
+const ENTRY_WRAPS_AT = 45;
 
 // Each paper's scale from A4: its width over 210mm, so the design fills it edge to edge.
 const SCALE: Record<PosterSize, string> = { a5: "0.70476", a4: "1", a3: "1.41428" };
@@ -470,6 +489,7 @@ function posterCssFor(logoMm: number): string {
   .p-line{font-family:var(--head);font-style:italic;color:var(--crimson);font-size:15pt;line-height:1.32;margin:4mm 0 0;max-width:155mm;overflow-wrap:anywhere}
   .p-target{margin-top:4mm;background:var(--tan-soft);color:var(--maroon);border-radius:999px;padding:2mm 8mm;font-size:13pt;font-weight:600}
   .p-target b{font-family:var(--head);font-weight:800;font-size:15pt}
+  .p-entry{margin-top:3mm;color:var(--maroon);font-size:12.5pt;font-weight:600;overflow-wrap:anywhere;max-width:160mm}
   .p-scan{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:0;margin-top:4mm}
   .p-qr{background:#fff;border-radius:4mm;padding:3mm;box-shadow:0 0 0 1px var(--line),0 3mm 8mm -4mm rgba(92,15,24,.35)}
   .p-qr svg{display:block;width:66mm;height:66mm}
@@ -498,7 +518,13 @@ function posterPage(d: MaterialFacts, a: MaterialAssets, size: PosterSize): stri
   const qr = d.qrLinks ? d.qrLinks[POSTER_PIECE[size]] : null;
   const memory = d.memory ?? null;
   const headline = headlineOf(d);
-  const scanWords = memory ? "Give in their memory" : d.linkKind === "page" ? "Scan to give" : "Scan to find out more";
+  const scanWords = memory
+    ? "Give in their memory"
+    : d.linkKind === "page"
+      ? d.event
+        ? "Scan for the details, and to give"
+        : "Scan to give"
+      : "Scan to find out more";
   const scan =
     qr && d.linkWords
       ? `<div class="p-qr">${qrSvg(qr, { title: `QR code for ${headline}` })}</div>
@@ -521,6 +547,7 @@ function posterPage(d: MaterialFacts, a: MaterialAssets, size: PosterSize): stri
       ${meta ? `<div class="p-meta">${meta}</div>` : ""}
       ${d.line ? `<p class="p-line">${escapeHtml(d.line)}</p>` : ""}
       ${target}
+      ${d.entry ? `<div class="p-entry">${escapeHtml(d.entry)}</div>` : ""}
       <div class="p-scan">
         ${scan}
       </div>
@@ -596,6 +623,7 @@ function socialData(d: MaterialFacts, a: MaterialAssets) {
     when: d.when,
     linkWords: d.linkWords,
     linkKind: d.linkKind,
+    event: !!d.event,
     raisedPence: d.raisedPence,
     targetPence: d.targetPence,
     statement: MATERIALS_STATEMENT_SHORT,

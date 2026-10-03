@@ -289,6 +289,25 @@ describe("signed in", () => {
     expect($("[data-f-gifts-part]", card(8)).hidden).toBe(true);
   });
 
+  // Jaimie, 2026-10-03: an event's pay in box speaks of entry money too, and that Gift Aid cannot go on it.
+  it("tells an event's organiser what to pay in, and that Gift Aid can't be added to it", async () => {
+    await load("", signedIn(raising(), event()));
+    const words = (id: number) =>
+      [...card(id).querySelectorAll<HTMLElement>("[data-f-payin-intro], [data-f-payin-event]")].filter((e) => !e.hidden).map((e) => e.textContent).join(" ");
+    expect(words(8)).toBe(
+      "Collected entry money, raffle money or cash gifts at your event? Pay it in here by card and it goes onto your event’s total. Gift Aid can’t be added to money paid in. You can also pay in by bank transfer, or drop it in to us: just get in touch.",
+    );
+    expect(words(7)).toContain("Collected cash or sponsor money?");
+    expect(words(7)).not.toContain("entry money");
+  });
+
+  it("asks an event shared with another cause to pay in NBCC's share", async () => {
+    await load("", signedIn(event({ sharesWithOther: true })));
+    const text = [...card(8).querySelectorAll<HTMLElement>("[data-f-payin-event]")].map((e) => e.textContent).join(" ");
+    expect(text).toContain("Pay NBCC’s share in here by card and it goes onto your event’s total.");
+    expect(text).not.toContain("Pay it in here by card");
+  });
+
   it("asks a page raising money for a target, and an event for its event details", async () => {
     await load("", signedIn(raising(), event()));
     expect($("[data-raising-only]", card(7)).hidden).toBe(false);

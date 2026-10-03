@@ -111,7 +111,10 @@
     function refresh() {
       var a = amount();
       if (submitBtn && !busy) submitBtn.textContent = a ? "Give " + pounds(a) + " now" : "Give now";
-      if (headline) headline.textContent = a ? "Make your " + pounds(a) + " worth " + pounds(Math.round(a * 1.25)) : "Make your donation worth 25% more";
+      // An event's headline stays fixed (data-giftaid-fixed): its amount can match the entry price.
+      if (headline && !headline.hasAttribute("data-giftaid-fixed")) {
+        headline.textContent = a ? "Make your " + pounds(a) + " worth " + pounds(Math.round(a * 1.25)) : "Make your donation worth 25% more";
+      }
       if (feeText) feeText.textContent = a ? pounds(Math.ceil((a * CARD_FEE_BP) / 10000) + CARD_FEE_FIXED_PENCE) : "a little";
       if (declaration && giftAid) declaration.hidden = !giftAid.checked;
       var abroad = !!(nonUk && nonUk.checked);

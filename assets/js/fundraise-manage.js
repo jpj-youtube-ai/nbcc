@@ -469,6 +469,14 @@
       Array.prototype.forEach.call(card.querySelectorAll("[data-raising-only]"), function (n) {
         n.hidden = event;
       });
+      // Event clarity (Jaimie, 2026-10-03): an event's pay in box has its own words (data-f-payin-event).
+      if (event) {
+        var raisingIntro = q("[data-f-payin-intro]");
+        if (raisingIntro) raisingIntro.hidden = true;
+        // Shared with another cause: they pay in NBCC's share; otherwise all of it.
+        var payHow = q("[data-f-payin-how]");
+        if (payHow && f.sharesWithOther) payHow.textContent = payHow.getAttribute("data-share-words");
+      }
       // Finished (Jaimie's decision): it stays here, with its gifts, QR code and paying in late
       // money, but takes no more changes, and there is nothing left to say it has finished.
       var finished = f.status === "finished";

@@ -267,7 +267,7 @@ describe("the sponsor form", () => {
     expect(html).toContain("Night Before Christmas Campaign");
     expect(html).toContain("SC047995");
     expect(html).toContain("Sam&#39;s Santa Dash");
-    expect(html).toContain("Please send this form back to us with the money so we can claim Gift Aid");
+    expect(html).toContain("Please send this form back to us once you have paid the money in, so we can claim Gift Aid");
   });
 
   it("has a blank version for anyone, with nobody's details on it", () => {

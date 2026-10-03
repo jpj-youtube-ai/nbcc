@@ -83,7 +83,7 @@ describe("the blank sponsor form", () => {
     const html = await res.text();
     expect(html).toContain(SPONSOR_DECLARATION.replace(/'/g, "&#39;"));
     expect(html).toContain("SC047995");
-    expect(html).toContain("Please send this form back to us with the money so we can claim Gift Aid");
+    expect(html).toContain("Please send this form back to us once you have paid the money in, so we can claim Gift Aid");
     expect(html).toContain('<meta name="robots" content="noindex, nofollow"');
     expect(html).not.toContain("Robin");
   });

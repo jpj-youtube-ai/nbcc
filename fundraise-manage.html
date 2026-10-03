@@ -187,6 +187,8 @@
               <section class="fr-mine__part" aria-labelledby="mineRaisedHeading">
                 <h3 id="mineRaisedHeading">Raised so far</h3>
                 <p class="fr-mine__raised" data-f-raised></p>
+                <!-- Clarity audit: Gift Aid is extra, never part of the figure above. Filled in by the script. -->
+                <p class="give-field-help fr-mine__giftaid" data-f-giftaid hidden></p>
               </section>
 
               <section class="fr-mine__part" data-f-qr aria-labelledby="mineQrHeading">
@@ -403,6 +405,8 @@
                 <p data-f-payin-intro>Collected cash or sponsor money? Pay it in here by card and it counts towards what you have raised. You can also pay in by bank transfer, or drop it in to us: just get in touch.</p>
                 <p data-f-payin-event data-event-only hidden>Collected entry money, raffle money or cash gifts at your event? <span data-f-payin-how data-share-words="Pay NBCC&rsquo;s share in here by card">Pay it in here by card</span> and it goes onto your event&rsquo;s total. Gift Aid can&rsquo;t be added to money paid in. You can also pay in by bank transfer, or drop it in to us: just get in touch.</p>
                 <form class="fr-form fr-form--plain" novalidate data-f-payin>
+                  <!-- Clarity audit: shared with another cause, only NBCC's share is paid in. Filled in by the script. -->
+                  <p class="fr-mine__payin-share" data-f-payin-share hidden></p>
                   <div class="give-field">
                     <label class="give-custom-label" for="payAmount">How much are you paying in? <span class="give-req" aria-hidden="true">*</span></label>
                     <div class="give-custom-field"><span class="give-custom-currency" aria-hidden="true">&pound;</span><input class="give-custom-input" id="payAmount" name="amount" type="number" inputmode="decimal" min="1" max="10000" step="0.01" required aria-required="true" placeholder="Amount" data-invalid-message="Put in an amount from &pound;1 to &pound;10,000" /></div>

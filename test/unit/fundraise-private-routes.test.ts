@@ -378,6 +378,18 @@ describe("the private area", () => {
     expect(plain.sharesWithOther).toBe(false);
   });
 
+  // Clarity audit: the pay in box says whose share to pay in, by NBCC's percentage and the other
+  // cause's name. Both are the organiser's own answers, and already on their public page.
+  it("gives a shared one's percentage and other cause, and nothing for one not shared", async () => {
+    db.listForOrganiser.mockResolvedValue([
+      record({ slug: "sams-walk", sharesWithOther: true, nbccSharePercent: 60, otherCauseName: " The Exampleton Larder " }),
+      record({ id: 10, slug: "sams-swim" }),
+    ]);
+    const [shared, plain] = ((await run(getManageSession, { cookie: SAM })).body as { fundraisers: Array<Record<string, unknown>> }).fundraisers;
+    expect(shared.split).toEqual({ nbccSharePercent: 60, otherCauseName: "The Exampleton Larder" });
+    expect(plain.split).toBeNull();
+  });
+
   // TASK-511 review: a sign up made since the form's second round changes Instagram and Facebook,
   // each in a box of its own; one from before keeps its one link box.
   it("says which link boxes each fundraiser's form has, and gives both links to change", async () => {

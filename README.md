@@ -7336,14 +7336,39 @@ Two more yes or no questions on the sign up form, on both paths, with nothing ch
 - "Are you sharing what you raise with another cause?" On a Yes, NBCC's whole percentage (1 to 99)
   and the other cause's name (up to 120) are required: `shares_with_other`, `nbcc_share_percent`,
   `other_cause_name`, held together by checks (`fundraisers_split_complete`: both when sharing,
-  neither when not). The fundraiser's page (beside the Give button, with "Everything given on this
-  page goes to NBCC, as NBCC's share." in the give form), every card on Get involved (an event's card,
+  neither when not). The fundraiser's page (beside the Give button; the give form says "Everything
+  you give on this page goes to NBCC. <First name> is collecting the share for <the other cause>
+  separately, so if you'd like to support them too, please ask <first name> how.", with the team's
+  name on a team page and "the organiser" when the name is a group's (the line above then says "this
+  page's total"); an event's says only the first sentence; a page in memory of someone keeps "Everything given on this page goes to NBCC, as NBCC's
+  share."), every card on Get involved (an event's card,
   which is the only place an event is public, and a raising money card) and every material that
   carries the charity statement (the A4, A3 and A5 posters, the sponsor form on both pages, which also
   says it is in aid of NBCC and the other cause, the certificate and the five pictures to share) carry
   the statement the Charities and Benevolent Fundraising (Scotland) Regulations 2009 ask for,
   `splitStatement` in `src/fundraising/model.ts`: "60% of what we raise goes to the Night Before
-  Christmas Campaign, Scottish Charity SC047995. The rest goes to <the other cause>." The charity
+  Christmas Campaign, Scottish Charity SC047995. The rest goes to <the other cause>." Clarity audit
+  (2026-10-03): because that reads as if each gift were split, the cards on Get involved, the posters
+  and the pictures to share say straight after it "Gifts made on the NBCC page all go to NBCC."
+  (`ALL_TO_NBCC`; on a poster or picture only where there is a page to give on; never on anything in
+  memory of someone, which is as it was). In the private area a shared page's pay in form says "Only
+  pay in NBCC's share (<N>%). The share for <the other cause> goes to them from you." (`split` in `GET /api/fundraise/manage/me`: the percentage and the name, both the
+  organiser's own answers), and under "£X raised of your £Y target" every page raising money says
+  "Plus £Z Gift Aid. Gift Aid is extra, so it doesn't count towards your target. Gift Aid on paper
+  sponsor forms is claimed later and isn't shown here." (without the first sentence when there is no
+  Gift Aid yet). A page raising money that is still going also tells a giver "Giving here is sponsoring <first name>.
+  Already on <first name>'s paper sponsor form? Then please just hand <first name> the money, so it
+  isn't counted twice."; a team page says a gift counts towards the team's total and, once someone has
+  joined, where to sponsor one person, with "Includes everything the team members have raised." under its meter; a member's
+  page says a gift counts towards theirs "and the team's total too". Every email that names an organiser (an approval, a change, a news update, the automatic emails
+  and the team organiser's) greets by the first name they gave, skips a title (Mr, Mrs, Ms, Miss, Dr,
+  Rev, Sir, Cllr), and says "Hi there," to a group or a business; the automatic emails' subjects then
+  drop the name ("One week to go!") (`organiserFirstName` and `organiserGreeting` in
+  `src/fundraising/emails.ts`). Posters always fit the paper: `posterLogoMm` is the most the logo may
+  be and the page gives the logo up (to 10mm at the least) before anything else moves; the QR code is
+  66mm on the design and a little smaller only for a shared event, a long way in, or a shared or event
+  leaflet (`posterQrMm`); a page address over 52 characters is drawn smaller so it stays on one line
+  (`posterAddressPt`). The charity
   statement itself is unchanged. So the longest answers still fit the paper, a shared poster's logo
   may go down to 28mm (the leaflet's QR code to 58mm on the design, the pledge to one line), the
   sponsor form has a row less per page (and fewer on page 1 with a long event name, drawn smaller),
@@ -8615,7 +8640,7 @@ library.
 |---|---|
 | `poster` | A4 portrait: the logo, "Fundraising for NBCC", the title, date, time and place, a short line (the card line, or the description's first sentence, trimmed), the target, a big QR code and the address in words, and "Every pound helps the children, young people and vulnerable adults we support, all year round." The code is the public page's (`src/fundraising/qr.ts`, the same encoder as the SVG download); a public event's points at Get involved; one not on the website has no code and says nbcc.scot |
 | `social` | Pictures to share: a square (1080 x 1080) and a story (1080 x 1920), drawn in the browser on a canvas by `assets/js/fundraise-social.js` (inlined into the page) and saved as PNGs by a Download button each. Title, "Fundraising for NBCC", the meter (optional, a tick box), the page address and the logo with white lettering |
-| `sponsor-form` | A4 landscape, two pages (12 rows, then 11 more and the totals): HMRC's sponsorship and Gift Aid declaration word for word at the head of each page (from HMRC's model "Sponsorship and Gift Aid declaration form", gov.uk), the charity name and number, the fundraiser's title, the columns HMRC asks for (full name, home address, postcode, amount, date paid, Gift Aid tick), totals, and "Please send this form back to us with the money so we can claim Gift Aid." A blank one for anyone is at `/fundraise/sponsor-form` |
+| `sponsor-form` | A4 landscape, two pages (12 rows, then 11 more and the totals): HMRC's sponsorship and Gift Aid declaration word for word at the head of each page (from HMRC's model "Sponsorship and Gift Aid declaration form", gov.uk), the charity name and number, the fundraiser's title, the columns HMRC asks for (full name, home address, postcode, amount, date paid, Gift Aid tick), totals, and "Please send this form back to us once you have paid the money in, so we can claim Gift Aid." With a page to give on, the heading of each page also says "Sponsoring online instead? Give on the page at <address>, and please don't add your name here as well." (never on the blank form or one in memory of someone). Shared with another cause: the split's lines end "NBCC can claim Gift Aid only on the part of each gift that comes to NBCC.", the foot says "Pay NBCC's <N>% in from your private area...", and the pages have 10 rows each (9 on page 1 when the event's name is over 60 characters or the other cause's name over 38; 9 on page 2 when the page address is over 52 characters, which is also drawn smaller in the heading), `sponsorRowCounts`. A blank one for anyone is at `/fundraise/sponsor-form` |
 | `certificate` | A4 landscape certificate of thanks: the organiser's name as they gave it, the title, the final total raised (Gift Aid apart, "+ £X Gift Aid" when there is some), today's date and "NBCC Team". The organiser's once the fundraiser is finished; staff can preview it at any time once approved |
 
 Also: the print size QR code PNG (`/fundraise/<slug>/qr.png`, `src/fundraising/qr-png.ts`, a one bit

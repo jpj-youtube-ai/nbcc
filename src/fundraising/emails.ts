@@ -54,6 +54,42 @@ const escapeHtml = (s: string): string =>
 
 const firstName = (name: string): string => shortName(name).split(" ")[0];
 
+/** Who an email to an organiser greets: their name, the first name they gave, and the name an event is credited to. */
+export interface Greeted {
+  name: string;
+  firstName?: string | null;
+  creditName?: string | null;
+}
+
+/**
+ * "Hi Sam," to the organiser. Jaimie, 2026-10-03: the first word of the organiser's name gave "Hi The,"
+ * for a pub. So: the first name they gave on the form when there is one; for a sign up from before
+ * first names were asked, the first word of their name, unless that name is a group's or a business's
+ * (it starts with "The", or it is the name their event is credited to), which gets "Hi there,".
+ */
+export function organiserGreeting(f: Greeted): string {
+  const first = organiserFirstName(f);
+  return first ? `Hi ${first},` : "Hi there,";
+}
+
+/** A title is no one's first name: the word after it is ("Dr Sam Example"). */
+const TITLE = /^(mr|mrs|ms|miss|dr|rev|sir|cllr)\.?$/i;
+
+/**
+ * The organiser's first name, for a greeting or a subject line ("One week to go, Sam!"), or null when
+ * there is none to use: a group's or a business's name, or only a title. Every email that names the
+ * organiser asks this, so none says "Hi The,".
+ */
+export function organiserFirstName(f: Greeted): string | null {
+  const same = (a: string, b: string) => a.trim().toLowerCase() === b.trim().toLowerCase();
+  const given = (f.firstName ?? "").trim();
+  const group = !given && Boolean(f.creditName) && same(f.name, f.creditName as string);
+  const words = (given || (group ? "" : f.name)).trim().split(/\s+/).filter(Boolean);
+  const word = TITLE.test(words[0] ?? "") ? words[1] : words[0];
+  if (!word || same(word, "the") || TITLE.test(word)) return null;
+  return firstName(word);
+}
+
 /** £500, £12.50, £100,000. */
 export function pounds(pence: number): string {
   const whole = pence % 100 === 0;
@@ -401,10 +437,10 @@ function memoryStaffEmail(f: StaffSummary, o: { adminUrl: string }): BuiltEmail 
  * and this goes to them when an admin switches fundraising on (src/fundraising/send.ts).
  */
 export function buildApprovedEmail(
-  f: { name: string; title: string; path?: string; booking?: FundraiserRecord["booking"] },
+  f: Greeted & { title: string; path?: string; booking?: FundraiserRecord["booking"] },
   o: { pageUrl: string | null; manageUrl: string | null },
 ): BuiltEmail {
-  const hi = `Hi ${firstName(f.name)},`;
+  const hi = organiserGreeting(f);
   const title = escapeHtml(f.title);
   // Event pages: an event's page has words of its own, about the event, with no sponsorship tips.
   if (o.pageUrl && f.path === "event") return eventPageLiveEmail(f, hi, o.pageUrl, o.manageUrl);
@@ -599,8 +635,8 @@ export function buildFinishedStaffEmail(
  * (they have one, it is approved and fundraising is on): then it says the change is on their page,
  * with the link and a nudge to share. Otherwise neutral words: the changes are saved.
  */
-export function buildEditApprovedEmail(f: { name: string; title: string }, o: { pageUrl: string | null }): BuiltEmail {
-  const hi = `Hi ${firstName(f.name)},`;
+export function buildEditApprovedEmail(f: Greeted & { title: string }, o: { pageUrl: string | null }): BuiltEmail {
+  const hi = organiserGreeting(f);
   const share = "Why not share it again so everyone sees what’s new? A fresh share often brings in a few more gifts.";
   const where = o.pageUrl ? "they’re now on your page" : "they’re all saved";
   const body =
@@ -623,8 +659,8 @@ export function buildEditApprovedEmail(f: { name: string; title: string }, o: { 
  * Staff rejected a change the organiser asked for: nothing to worry about, we'll ring. Only while
  * their page is up (`pageLive`) does it say the page is still live and gifts still coming in.
  */
-export function buildEditRejectedEmail(f: { name: string; title: string }, o: { pageLive: boolean }): BuiltEmail {
-  const hi = `Hi ${firstName(f.name)},`;
+export function buildEditRejectedEmail(f: Greeted & { title: string }, o: { pageLive: boolean }): BuiltEmail {
+  const hi = organiserGreeting(f);
   const held = "We haven’t put this change on your page just yet, and someone from our team will give you a quick ring to talk it through.";
   const calm = o.pageLive
     ? "Nothing to worry about: your page is still live, just as it was, and gifts are still coming in."
@@ -646,8 +682,8 @@ export function buildEditRejectedEmail(f: { name: string; title: string }, o: { 
 // never goes in the email.
 
 /** Staff approved a news update. `pageUrl` only while their page is up, as for a change. */
-export function buildNewsApprovedEmail(f: { name: string; title: string }, o: { pageUrl: string | null }): BuiltEmail {
-  const hi = `Hi ${firstName(f.name)},`;
+export function buildNewsApprovedEmail(f: Greeted & { title: string }, o: { pageUrl: string | null }): BuiltEmail {
+  const hi = organiserGreeting(f);
   const share = "Why not share your page again so everyone sees your news? A fresh share often brings in a few more gifts.";
   const where = o.pageUrl ? "it’s now on your page" : "it’s all saved";
   const body =
@@ -667,8 +703,8 @@ export function buildNewsApprovedEmail(f: { name: string; title: string }, o: { 
 }
 
 /** Staff did not use a news update: nothing to worry about, we'll ring. */
-export function buildNewsRejectedEmail(f: { name: string; title: string }, o: { pageLive: boolean }): BuiltEmail {
-  const hi = `Hi ${firstName(f.name)},`;
+export function buildNewsRejectedEmail(f: Greeted & { title: string }, o: { pageLive: boolean }): BuiltEmail {
+  const hi = organiserGreeting(f);
   const held = "We haven’t put this one on your page, and someone from our team will give you a quick ring to talk it through.";
   const calm = o.pageLive
     ? "Nothing to worry about: your page is still live, just as it was, and gifts are still coming in."

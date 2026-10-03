@@ -254,6 +254,9 @@ fieldset.is-invalid .fr-option { border-color: var(--crimson); }
 .giftaid-entry { margin-top: 8px; font-weight: 600; }
 .fr-thanks__entry { font-weight: 600; }
 .give-step-sub + .fr-give-share { margin-top: -12px; font-weight: 600; }
+/* Clarity audit: already on the paper sponsor form? A quieter line of its own under the rest. */
+.give-step-sub + .fr-give-paper { margin-top: -12px; }
+.fr-card__split-note { margin-top: 2px; }
 .fr-card__split { margin: 10px 0 0; font-size: 0.85rem; line-height: 1.5; color: var(--slate); overflow-wrap: anywhere; }
 .fr-main { grid-area: main; display: grid; gap: clamp(28px, 4vw, 44px); min-width: 0; }
 .fr-extras { grid-area: extras; display: grid; gap: clamp(22px, 3vw, 30px); align-content: start; }
@@ -506,6 +509,9 @@ fieldset.is-invalid .fr-option { border-color: var(--crimson); }
 .fr-mine__requests { margin: 0; padding-left: 1.2em; display: grid; gap: 6px; overflow-wrap: anywhere; }
 .fr-mine__requests a { font-weight: 600; text-underline-offset: 3px; }
 .fr-mine__raised { font-family: var(--font-head); font-size: 1.35rem; font-weight: 800; color: var(--maroon); font-variant-numeric: lining-nums tabular-nums; }
+/* Clarity audit: Gift Aid is extra, under the figure; only NBCC's share is paid in, above the amount. */
+.fr-mine__giftaid { margin: 6px 0 0; overflow-wrap: anywhere; }
+.fr-mine__payin-share { margin: 0 0 14px; font-weight: 600; color: var(--maroon); overflow-wrap: anywhere; }
 .fr-mine .fr-thanks-panel { margin: 0 0 18px; }
 .fr-mine .fr-thanks-panel h4 { margin: 0; font-size: 1.15rem; color: var(--holly-dark); }
 .fr-mine__done { margin: 12px 0 0; padding: 14px 16px; border-radius: 12px; background: var(--holly-soft); color: var(--holly-dark); font-weight: 600; }

@@ -143,7 +143,8 @@ describe("room on the poster", () => {
   it("gives the logo up a little, so the split statement fits without moving the QR code", () => {
     const shared = facts();
     const plain = facts({ sharesWithOther: false, nbccSharePercent: null, otherCauseName: null });
-    expect(posterLogoMm(shared)).toBe(posterLogoMm(plain) - 6);
+    // 6mm for the statement, and 4mm for "Gifts made on the NBCC page all go to NBCC." after it.
+    expect(posterLogoMm(shared)).toBe(posterLogoMm(plain) - 10);
   });
 });
 
@@ -172,9 +173,9 @@ describe("the worst case still fits", () => {
 
   it("lets the poster's logo go smaller than its usual least when there is a split, most of all on the leaflet", () => {
     expect(posterLogoMm(plainWorst(), "a4")).toBe(40);
-    expect(posterLogoMm(worst(), "a4")).toBe(34);
-    expect(posterLogoMm(worst(), "a3")).toBe(34);
-    expect(posterLogoMm(worst(), "a5")).toBe(28);
+    expect(posterLogoMm(worst(), "a4")).toBe(30);
+    expect(posterLogoMm(worst(), "a3")).toBe(30);
+    expect(posterLogoMm(worst(), "a5")).toBe(26);
     expect(posterLogoMm(worst(), "a5")).toBeLessThan(38);
     // A short poster with a split still has a big logo.
     expect(posterLogoMm(facts(), "a4")).toBeGreaterThan(50);
@@ -182,9 +183,9 @@ describe("the worst case still fits", () => {
 
   it("draws each poster size's logo at its own height, and a slightly smaller QR code on a shared leaflet", () => {
     const html = renderEverything(worst({ status: "approved" }), ASSETS, { date: "x", script: "" });
-    expect(html).toContain(".size-a5 .p-logo{height:28mm}");
-    expect(html).toContain(".size-a4 .p-logo{height:34mm}");
-    expect(html).toMatch(/\.size-a5\.has-split \.p-qr svg\{width:58mm;height:58mm\}/);
+    expect(html).toContain(".size-a5 .p-logo{height:26mm}");
+    expect(html).toContain(".size-a4 .p-logo{height:30mm}");
+    expect(html).toContain(".size-a5 .p-qr svg{width:58mm;height:58mm}");
     expect(renderPoster(worst(), ASSETS, "a5")).toContain('class="page size-a5 poster has-split"');
     expect(renderPoster(plainWorst(), ASSETS, "a5")).toContain('class="page size-a5 poster"');
   });
@@ -209,10 +210,10 @@ describe("the worst case still fits", () => {
   });
 
   it("makes room for an event's entry line, with a split", () => {
-    expect(posterLogoMm(worst(DOOR), "a4")).toBe(26);
-    expect(posterLogoMm(worst(DOOR), "a5")).toBe(20);
-    expect(posterLogoMm(worst(AWAY), "a3")).toBe(20);
-    expect(posterLogoMm(worst(AWAY), "a5")).toBe(14);
+    expect(posterLogoMm(worst(DOOR), "a4")).toBe(22);
+    expect(posterLogoMm(worst(DOOR), "a5")).toBe(18);
+    expect(posterLogoMm(worst(AWAY), "a3")).toBe(16);
+    expect(posterLogoMm(worst(AWAY), "a5")).toBe(12);
   });
 
   it("still gives a short event's poster a big logo", () => {
@@ -228,12 +229,13 @@ describe("the worst case still fits", () => {
     return [...pages[page].matchAll(/<tr class="sf-row"><td class="n">(\d+)<\/td>/g)].map((m) => Number(m[1]));
   };
 
-  it("gives the sponsor form a row less on each page for the split, and fewer on page 1 for a long name", () => {
+  it("gives the sponsor form fewer rows for the split, and fewer on page 1 for a long name", () => {
     const html = renderSponsorForm(worst(), ASSETS);
     expect(rows(html, 0)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9]);
     expect(rows(html, 1)).toEqual([10, 11, 12, 13, 14, 15, 16, 17, 18, 19]);
-    // A split with a short name: a row less on each page.
-    expect(rows(renderSponsorForm(facts(), ASSETS), 0)).toHaveLength(11);
+    // A split with a short name and a short other cause. Clarity audit: the split's lines now end with the Gift Aid line, so
+    // page 1 gives up two rows for them (test/unit/clarity-wording-materials.test.ts).
+    expect(rows(renderSponsorForm(facts(), ASSETS), 0)).toHaveLength(10);
     expect(rows(renderSponsorForm(facts(), ASSETS), 1)).toHaveLength(10);
     const plain = renderSponsorForm(plainWorst(), ASSETS);
     expect(rows(plain, 0)).toHaveLength(11);

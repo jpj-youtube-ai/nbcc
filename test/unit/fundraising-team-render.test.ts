@@ -140,12 +140,27 @@ describe("a team page speaks of the team, not its organiser", () => {
       pageUrl: "https://nbcc.scot/fundraise/ej",
       now: new Date("2026-10-20T10:00:00Z"),
       thanks: { message: false },
+      // Two people on the team, so the give box can point to them under The team.
+      team: { memberCount: 2 },
     });
 
-  it("says the gift counts towards the team's total, a name ending in s taking just an apostrophe", () => {
+  // Clarity audit (Jaimie, 2026-10-03): a gift on a team page counts towards the team, and to sponsor
+  // one person a giver goes to that person's own page.
+  it("says the gift counts towards the team's total, and where to sponsor one person", () => {
     const html = draw("Exampleton Juniors", "Exampleton Juniors");
-    expect(html).toContain("Your donation goes to NBCC and counts towards Exampleton Juniors' total.");
-    expect(draw("Exampleton Dashers Team", "Exampleton Dashers Team")).toContain("counts towards Exampleton Dashers Team's total.");
+    expect(html).toContain(
+      "Your donation goes to NBCC and counts towards the team's total. To sponsor one person, give on their own page: you'll find everyone under The team.",
+    );
+  });
+
+  it("once finished, still names the team's total, a name ending in s taking just an apostrophe", () => {
+    const finished = (title: string) =>
+      renderFundraiserPage(template, { ...publicPage(f(title), m(1000, 200000), []), teamName: title, finished: true }, {
+        pageUrl: "https://nbcc.scot/fundraise/ej",
+        now: new Date("2026-10-20T10:00:00Z"),
+      });
+    expect(finished("Exampleton Juniors")).toContain("Your donation goes to NBCC and still counts towards Exampleton Juniors' total.");
+    expect(finished("Exampleton Dashers Team")).toContain("still counts towards Exampleton Dashers Team's total.");
   });
 
   it("says every share helps the team, and heads the story About the team", () => {

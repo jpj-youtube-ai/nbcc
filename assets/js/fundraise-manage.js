@@ -422,6 +422,36 @@
       var m = f.meter || {};
       q("[data-f-raised]").textContent =
         m.targetPence ? money(m.raisedPence) + " raised of your " + money(m.targetPence) + " target" : money(m.raisedPence) + " raised so far";
+      // Clarity audit (Jaimie, 2026-10-03): Gift Aid is extra. It never counts towards the target, and
+      // Gift Aid on paper sponsor forms is claimed later. An event has no sponsor forms, so it only says
+      // what Gift Aid there is; a page in memory of someone says nothing here.
+      var aidLine = q("[data-f-giftaid]");
+      if (aidLine) {
+        var aid = Number(m.giftAidPence) || 0;
+        var aidWords = [];
+        if (aid > 0) aidWords.push("Plus " + money(aid) + " Gift Aid.");
+        if (!event || aid > 0) {
+          aidWords.push(
+            m.targetPence
+              ? "Gift Aid is extra, so it doesn\u2019t count towards your target."
+              : "Gift Aid is extra, so it isn\u2019t counted in what you have raised."
+          );
+        }
+        if (!event) aidWords.push("Gift Aid on paper sponsor forms is claimed later and isn\u2019t shown here.");
+        var showAid = !f.memory && aidWords.length > 0;
+        aidLine.textContent = showAid ? aidWords.join(" ") : "";
+        aidLine.hidden = !showAid;
+      }
+      // Clarity audit: shared with another cause, only NBCC's share is paid in here. An event's pay in
+      // box says so in its own words (below); a page in memory of someone is as it was.
+      var shareLine = q("[data-f-payin-share]");
+      if (shareLine) {
+        var split = !event && !f.memory && f.split && f.split.nbccSharePercent && f.split.otherCauseName ? f.split : null;
+        shareLine.textContent = split
+          ? "Only pay in NBCC\u2019s share (" + split.nbccSharePercent + "%). The share for " + String(split.otherCauseName) + " goes to them from you."
+          : "";
+        shareLine.hidden = !split;
+      }
 
       // In memory: the list is of people who asked to let the family know, in its own gentle words.
       if (f.memory) {

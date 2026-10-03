@@ -774,3 +774,87 @@ describe("the Need something else note's style", () => {
     expect(rule).toMatch(/white-space:\s*normal/);
   });
 });
+
+// Clarity audit (Jaimie, 2026-10-03), item 4: on a page shared with another cause, only NBCC's share
+// is paid in here. The other cause's name is the one the organiser gave, as their own page shows it.
+describe("paying in on a page shared with another cause", () => {
+  const SPLIT = { nbccSharePercent: 60, otherCauseName: "Kilmarnock Food Larder" };
+  const line = (id: number) => $<HTMLElement>("[data-f-payin-share]", card(id));
+
+  it("says to pay in only NBCC's share, by its percentage, and where the rest goes", async () => {
+    await load("", signedIn(raising({ sharesWithOther: true, split: SPLIT })));
+    expect(line(7).hidden).toBe(false);
+    expect(line(7).textContent).toBe("Only pay in NBCC’s share (60%). The share for Kilmarnock Food Larder goes to them from you.");
+    // In the pay in form itself, above the amount, so it is read before paying.
+    expect(line(7).closest("form[data-f-payin]")).not.toBeNull();
+  });
+
+  // Review: no possessive of the other cause's name.
+  it("never makes a possessive of the other cause's name", async () => {
+    await load("", signedIn(raising({ sharesWithOther: true, split: { nbccSharePercent: 50, otherCauseName: "Exampleton Friends Ltd." } })));
+    expect(line(7).textContent).toBe("Only pay in NBCC’s share (50%). The share for Exampleton Friends Ltd. goes to them from you.");
+  });
+
+  // Review: a page in memory of someone is untouched by this change.
+  it("says nothing on a shared page in memory of someone", async () => {
+    await load("", signedIn(raising({ sharesWithOther: true, split: SPLIT, memory: { name: "Alex Example", dates: null, showTarget: false } })));
+    expect(line(7).hidden).toBe(true);
+    expect(line(7).textContent).toBe("");
+  });
+
+  it("says nothing on a page that is not shared", async () => {
+    await load("", signedIn(raising(), raising({ id: 9, sharesWithOther: false, split: null })));
+    expect(line(7).hidden).toBe(true);
+    expect(line(9).hidden).toBe(true);
+    expect(line(7).textContent).toBe("");
+  });
+
+  it("leaves an event's own pay in words as they are", async () => {
+    await load("", signedIn(event({ sharesWithOther: true, split: SPLIT })));
+    expect(line(8).hidden).toBe(true);
+    expect($("[data-f-payin-event]", card(8)).textContent).toContain("Pay NBCC’s share in here by card");
+  });
+});
+
+// Clarity audit, item 11: Gift Aid is extra. It never counts towards the target, and Gift Aid on
+// paper sponsor forms is claimed later, so it is not in the figure here.
+describe("Gift Aid under what has been raised", () => {
+  const withAid = (giftAidPence: number, over: Record<string, unknown> = {}) =>
+    raising({ meter: { raisedPence: 6000, onlinePence: 5000, cashPence: 1000, giftAidPence, targetPence: 25000, percent: 24, barPercent: 24, overTarget: false }, ...over });
+  const line = (id: number) => $<HTMLElement>("[data-f-giftaid]", card(id));
+  const HELP = "Gift Aid is extra, so it doesn’t count towards your target. Gift Aid on paper sponsor forms is claimed later and isn’t shown here.";
+
+  it("says how much Gift Aid there is, and that it is extra", async () => {
+    await load("", signedIn(withAid(1250)));
+    expect($("[data-f-raised]", card(7)).textContent).toBe("£60 raised of your £250 target");
+    expect(line(7).hidden).toBe(false);
+    expect(line(7).textContent).toBe(`Plus £12.50 Gift Aid. ${HELP}`);
+  });
+
+  it("is just the help line when there is no Gift Aid yet", async () => {
+    await load("", signedIn(withAid(0), raising({ id: 9 })));
+    expect(line(7).textContent).toBe(HELP);
+    expect(line(9).textContent).toBe(HELP);
+    expect(line(9).hidden).toBe(false);
+  });
+
+  it("speaks of what has been raised when there is no target", async () => {
+    const noTarget = { raisedPence: 6000, onlinePence: 6000, cashPence: 0, giftAidPence: 500, targetPence: null, percent: null, barPercent: null, overTarget: false };
+    await load("", signedIn(raising({ meter: noTarget })));
+    expect(line(7).textContent).toBe(
+      "Plus £5 Gift Aid. Gift Aid is extra, so it isn’t counted in what you have raised. Gift Aid on paper sponsor forms is claimed later and isn’t shown here.",
+    );
+  });
+
+  it("on an event, says only what Gift Aid there is: an event has no sponsor forms", async () => {
+    const meterOf = (giftAidPence: number) => ({ raisedPence: 4000, onlinePence: 4000, cashPence: 0, giftAidPence, targetPence: null, percent: null, barPercent: null, overTarget: false });
+    await load("", signedIn(event({ meter: meterOf(1000) }), event({ id: 9, meter: meterOf(0) })));
+    expect(line(8).textContent).toBe("Plus £10 Gift Aid. Gift Aid is extra, so it isn’t counted in what you have raised.");
+    expect(line(9).hidden).toBe(true);
+  });
+
+  it("says nothing on a page in memory of someone", async () => {
+    await load("", signedIn(withAid(1250, { memory: { name: "Alex Example", dates: null, showTarget: false } })));
+    expect(line(7).hidden).toBe(true);
+  });
+});

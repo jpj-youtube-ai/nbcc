@@ -14,6 +14,7 @@ import {
   publicPage,
   signUpSchema,
   splitStatement,
+  publicSplit,
   wallEntries,
   wallMessageSchema,
   type FundraiserRecord,
@@ -527,6 +528,12 @@ async function theirRequests(
   }
 }
 
+/** A shared fundraiser's split for the private area: NBCC's percentage and the other cause's name; else null. */
+function splitOf(f: Parameters<typeof publicSplit>[0]): { nbccSharePercent: number; otherCauseName: string } | null {
+  const s = publicSplit(f);
+  return s ? { nbccSharePercent: s.nbccSharePercent, otherCauseName: s.otherCauseName } : null;
+}
+
 export async function getManageSession(req: Request, res: Response): Promise<Response | void> {
   try {
     const s = await signedIn(req, res);
@@ -560,8 +567,11 @@ export async function getManageSession(req: Request, res: Response): Promise<Res
           meter: f.meter,
           editable: editableOf(f),
           linkBoxes: linkBoxesOf(f),
-          // Event clarity: a shared one's pay in box asks for NBCC's share; never the other cause's name.
+          // Event clarity: a shared one's pay in box asks for NBCC's share.
           sharesWithOther: splitStatement(f) !== null,
+          // Clarity audit: by its percentage, naming the other cause. Both are the organiser's own
+          // answers, already on their public page; nothing else about the split goes here.
+          split: splitOf(f),
           waitingEdit: waiting ? { id: waiting.id, changes: waiting.changes, createdAt: waiting.createdAt } : null,
           // As the wall shows them: a name or Anonymous, the amount unless hidden, the message unless
           // staff hid it. Never a giver's email, full name or anything else about them.

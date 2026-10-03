@@ -1024,6 +1024,18 @@ export interface FundraiserRecord {
    * Null on a sign up staff have not looked at yet, and on a raising one, which never needs it.
    */
   slugSetAt?: string | null;
+  // Team pages (Jaimie, 2026-10-03; src/fundraising/teams.ts). False or null on everything else.
+  /** A team page: its organiser is the team organiser. */
+  isTeam?: boolean;
+  /** A member page of this team. */
+  teamId?: number | null;
+  /** A team sharing with another cause: the whole team's split, or just the organiser's. */
+  teamShareMode?: "team" | "organiser" | null;
+  /** A member taken off the team: the page carries on as their own. */
+  teamLeftAt?: string | null;
+  /** When the two "did you send the invite to your team?" emails went. */
+  teamNudge1At?: string | null;
+  teamNudge2At?: string | null;
 }
 
 /** The event answers a card shows. All of them are meant for the public; none is private. */
@@ -1074,6 +1086,8 @@ export interface PublicPage extends PublicCard {
   finished?: boolean;
   /** TASK-506: the news updates staff approved, newest first (src/fundraising/news.ts publicNews). */
   news?: NewsEntry[];
+  /** Team pages: a team page's own name, so the page speaks of the team, not its organiser. */
+  teamName?: string | null;
 }
 
 export interface PublicSplit {

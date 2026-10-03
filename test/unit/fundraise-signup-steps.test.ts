@@ -135,7 +135,12 @@ describe("one question after another", () => {
     expect(waiting($("#kind-bake_sale_2"))).toBe(true);
     expect(news()).toBe("Next question: Are you 18 or over?");
     tick("over18Yes");
+    // Team pages: then "Just me, or a team?", for someone raising money.
     expect(shown()).toHaveLength(3);
+    expect(waiting($("#kind-bake_sale_2"))).toBe(true);
+    expect(news()).toBe("Next question: Just me, or a team?");
+    tick("teamMe");
+    expect(shown()).toHaveLength(4);
     expect(waiting($("#kind-bake_sale_2"))).toBe(false);
     expect(waiting($("#title"))).toBe(true);
     expect(news()).toBe("Next question: What are you doing to raise money?");
@@ -172,6 +177,7 @@ describe("one question after another", () => {
   it("brings optional questions along with the one before, and stops at the next that needs an answer", () => {
     tick("pathRaising");
     tick("over18Yes");
+    tick("teamMe");
     tick("kind-walk");
     expect(waiting($("#title"))).toBe(false);
     expect(waiting($("#target"))).toBe(true);
@@ -195,6 +201,7 @@ describe("one question after another", () => {
   it("never takes a question away again once it has been shown", () => {
     tick("pathRaising");
     tick("over18Yes");
+    tick("teamMe");
     tick("kind-walk");
     type("title", "Jo's Sponsored Swim");
     type("description", "Forty lengths.");
@@ -269,6 +276,8 @@ function fill(path: "raising" | "event") {
   tick(path === "raising" ? "pathRaising" : "pathEvent");
   // Jaimie, 2026-10-03: 18 or over, and not sharing with another cause.
   tick("over18Yes");
+  // Team pages: someone raising money is asked "Just me, or a team?".
+  if (path === "raising") tick("teamMe");
   tick("sharesNo");
   tick("kind-other");
   type("kindOther", "A sponsored silence");
@@ -311,6 +320,7 @@ describe("the next question, while they type", () => {
   it("waits for them to leave the box, or to pause, rather than coming on the first key", async () => {
     tick("pathRaising");
     tick("over18Yes");
+    tick("teamMe");
     tick("kind-walk");
     typeOnly("title", "J");
     typeOnly("description", "F");
@@ -322,6 +332,7 @@ describe("the next question, while they type", () => {
   it("comes at once when they leave the box", () => {
     tick("pathRaising");
     tick("over18Yes");
+    tick("teamMe");
     tick("kind-walk");
     typeOnly("title", "Jo's Swim");
     typeOnly("description", "Forty lengths.");

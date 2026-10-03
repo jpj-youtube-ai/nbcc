@@ -208,11 +208,13 @@ export function addFundraisePageRoutes(router: Router, siteRoot: string, deps: F
         // A failed fundraiser read must not take NBCC's own events down with it: the page goes out
         // without the fundraisers rather than not at all.
         try {
-          const [{ listApprovedPublic }, { isListed, publicCard }] = await Promise.all([
+          // Team pages: a team once, with its combined meter; its member pages are on the team page.
+          const [{ listApprovedPublic }, { isListed, publicCard }, { teamsOnGetInvolved }] = await Promise.all([
             import("../db/fundraisers"),
             import("../fundraising/model"),
+            import("./team-pages"),
           ]);
-          fundraisers = (await listApprovedPublic()).filter((f) => isListed(f, today)).map((f) => publicCard(f, f.meter));
+          fundraisers = (await teamsOnGetInvolved(await listApprovedPublic())).filter((f) => isListed(f, today)).map((f) => publicCard(f, f.meter));
         } catch (err) {
           console.error("get involved fundraisers failed:", err instanceof Error ? err.message : err);
         }
@@ -396,13 +398,20 @@ ${title}`, () => qrSvg(url, { title, size: 1024 })));
       if (!found) return next();
       if ("to" in found) return sendOn(res, found, `${found.to}${queryOf(req)}`);
       const f = found.page;
-      const [{ wallRows }, { publicPage, wallEntries }, { renderFundraiserPage }, { pageUrlFor }] = await Promise.all([
+      const [{ wallRows }, { publicPage, wallEntries, shortName }, { renderFundraiserPage }, { pageUrlFor }, { teamPageExtras }] = await Promise.all([
         import("../db/fundraisers"),
         import("../fundraising/model"),
         import("../fundraising/render"),
         import("../fundraising/page-url"),
+        import("./team-pages"),
       ]);
-      const page = { ...publicPage(f, f.meter, wallEntries(await wallRows(f.id))), news: await newsFor(f.id) };
+      // Team pages: a team's combined meter and members; a member page's team.
+      const extras = await teamPageExtras(f, shortName);
+      const page = {
+        ...publicPage(f, extras.meter ?? f.meter, wallEntries(await wallRows(f.id))),
+        news: await newsFor(f.id),
+        ...(f.isTeam ? { teamName: f.title } : {}),
+      };
       // ?thanks=1 is where the server sends a giver back to after paying (src/routes/api.ts): a thank
       // you at the top. Anyone can add it to the address, and all it shows is a thank you.
       const thanks = req.query.thanks === "1" ? await thanksFor(req.query, f.id) : undefined;
@@ -419,6 +428,7 @@ ${title}`, () => qrSvg(url, { title, size: 1024 })));
         pageUrl: pageUrlFor(f),
         now: new Date(),
         thanks,
+        team: extras.team,
       });
       if (!withSession) fresh(res);
       res.type("html").send(await deps.decorate(html, req.headers.cookie));

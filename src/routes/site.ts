@@ -3,6 +3,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { keepQuery } from "../site/redirect";
 import { addFundraisePageRoutes } from "./fundraise-pages";
+import { addTeamPageRoutes } from "./team-pages";
 import {
   SUPPORTER_TIERS,
   type SupporterTier,
@@ -296,6 +297,8 @@ export function createSiteRouter(siteRoot: string): Router {
   // involved is served only while an admin has the page switched on; switched off it falls through to
   // the catch-all below exactly as if the route were not here. src/routes/fundraise-pages.ts.
   addFundraisePageRoutes(router, siteRoot, { decorate: decorateNav, eventsPageIsOn });
+  // Team pages: the join form at /fundraise/<team>/join (src/routes/team-pages.ts).
+  addTeamPageRoutes(router, siteRoot, { decorate: decorateNav });
 
   // Apply each rule: 301 -> permanent redirect to the clean URL; 200 -> serve
   // the target file in place (the address bar keeps the clean URL).

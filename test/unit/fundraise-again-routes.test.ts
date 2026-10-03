@@ -114,7 +114,8 @@ describe("the sign up made from it", () => {
 
   it("is wired into the sign up, after it is saved", () => {
     const src = readFileSync(resolve(__dirname, "../../src/routes/fundraise.ts"), "utf8");
-    const saved = src.indexOf("await createFundraiser(parsed.data)");
+    // Team pages: the sign up may carry a team's extra step, so it is matched up to its first argument.
+    const saved = src.search(/await createFundraiser\(\s*parsed\.data/);
     const used = src.indexOf("await useAgain(req.body?.again, record.id)");
     expect(saved).toBeGreaterThan(-1);
     expect(used).toBeGreaterThan(saved);

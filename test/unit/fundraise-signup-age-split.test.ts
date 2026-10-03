@@ -72,6 +72,8 @@ const sent = () => JSON.parse(String(sends()[0].init?.body));
 function fill(path: "raising" | "event") {
   tick(path === "raising" ? "pathRaising" : "pathEvent");
   tick("over18Yes");
+  // Team pages: someone raising money is asked "Just me, or a team?".
+  if (path === "raising") tick("teamMe");
   tick("kind-walk");
   type("title", "Sam's Walk");
   type("description", "Ten miles for NBCC.");

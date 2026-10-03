@@ -5,6 +5,7 @@ import { listAllFundraisers, type FundraiserSummary } from "./fundraisers";
 import { londonToday } from "../events/model";
 import { promptCounts, type PromptCall, type PromptCounts, type PromptFacts, type PromptKey } from "../fundraising/call-prompts";
 import type { TouchFacts, TouchKind } from "../fundraising/touch-rules";
+import { withTeamTotals } from "../fundraising/teams";
 
 // TASK-515: the SQL behind keeping in touch: the Automatic emails switch, which automatic email each
 // fundraiser has had (fundraiser_touchpoints, once each), the calls about a smart call prompt (in
@@ -165,13 +166,26 @@ const FINISHED_SQL = `
 /** Every fundraiser, with what the rules need about each. */
 export async function readTouchState(): Promise<TouchCandidate[]> {
   const [fundraisers, gifts, finished, sent, calls] = await Promise.all([
-    listAllFundraisers(),
+    // Team pages: a team is judged on its whole total (its own and its members'), against its target.
+    listAllFundraisers().then(withTeamTotals),
     pool.query(GIFTS_SQL),
     pool.query(FINISHED_SQL),
     pool.query("SELECT fundraiser_id, kind, sent_at FROM fundraiser_touchpoints ORDER BY sent_at, id"),
     pool.query("SELECT fundraiser_id, prompt, called_at, called_by, note FROM fundraiser_calls WHERE which = 'prompt' ORDER BY called_at, id"),
   ]);
   const giftsBy = new Map<number, Row>(gifts.rows.map((r: Row) => [Number(r.fundraiser_id), r]));
+  // Team pages: a team's gifts are its own and its current members' (approved or finished, not taken
+  // off) together, for first gift and gone quiet. Members keep their own.
+  const own = new Map(giftsBy);
+  for (const m of fundraisers) {
+    if (!m.teamId || m.teamLeftAt || (m.status !== "approved" && m.status !== "finished")) continue;
+    const g = own.get(m.id);
+    if (!g) continue;
+    const t = giftsBy.get(m.teamId);
+    const first = (a: unknown, b: unknown) => (a == null ? b : b == null ? a : new Date(a as string) < new Date(b as string) ? a : b);
+    const last = (a: unknown, b: unknown) => (a == null ? b : b == null ? a : new Date(a as string) > new Date(b as string) ? a : b);
+    giftsBy.set(m.teamId, { fundraiser_id: m.teamId, first_at: first(t?.first_at, g.first_at), last_at: last(t?.last_at, g.last_at) });
+  }
   const finishedBy = new Map<number, string | null>(finished.rows.map((r: Row) => [Number(r.fundraiser_id), iso(r.finished_at)]));
   const sentBy = new Map<number, TouchFacts["sent"]>();
   for (const r of sent.rows as Row[]) {

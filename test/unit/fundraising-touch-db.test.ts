@@ -166,3 +166,46 @@ describe("the facts the rules read", () => {
     ]);
   });
 });
+
+// Team pages (Jaimie, 2026-10-03): the automatic emails (halfway, target reached and the rest) read
+// a team's whole total against the team's target; its members keep their own.
+import { meter as teamMeterOf } from "../../src/fundraising/model";
+
+describe("a team, for the automatic emails", () => {
+  it("is judged on the whole team's total and the team's target", async () => {
+    const m = (raised: number, target: number | null) => teamMeterOf({ onlinePence: raised, cashPence: 0, targetPence: target });
+    listAllFundraisers.mockResolvedValue([
+      { id: 40, status: "approved", isTeam: true, targetPence: 10000, meter: m(1000, 10000) },
+      { id: 41, status: "approved", teamId: 40, targetPence: 5000, meter: m(4500, 5000) },
+    ]);
+    const state = await readTouchState();
+    expect(state.find((s) => s.f.id === 40)!.f.meter).toMatchObject({ raisedPence: 5500, targetPence: 10000, percent: 55 });
+    expect(state.find((s) => s.f.id === 41)!.f.meter.raisedPence).toBe(4500);
+  });
+});
+
+describe("a team's gifts, for first gift and gone quiet (review)", () => {
+  it("are its own and its current members' together; members keep their own", async () => {
+    listAllFundraisers.mockResolvedValue([
+      { id: 40, status: "approved", isTeam: true, targetPence: 10000, meter: teamMeterOf({ onlinePence: 0, cashPence: 0, targetPence: 10000 }) },
+      { id: 41, status: "approved", teamId: 40, targetPence: 5000, meter: teamMeterOf({ onlinePence: 2000, cashPence: 0, targetPence: 5000 }) },
+      { id: 42, status: "approved", teamId: 40, teamLeftAt: "2026-10-01T00:00:00Z", targetPence: 5000, meter: teamMeterOf({ onlinePence: 0, cashPence: 0, targetPence: 5000 }) },
+    ]);
+    query.mockImplementation(async (sql: string) =>
+      /FROM donations/.test(sql)
+        ? {
+            rows: [
+              { fundraiser_id: 41, first_at: new Date("2026-10-10T10:00:00Z"), last_at: new Date("2026-10-20T10:00:00Z") },
+              { fundraiser_id: 42, first_at: new Date("2026-09-01T10:00:00Z"), last_at: new Date("2026-11-01T10:00:00Z") },
+            ],
+          }
+        : { rows: [] },
+    );
+    const state = await readTouchState();
+    const team = state.find((s) => s.f.id === 40)!;
+    expect(team.touch.firstOnlineGiftAt).toBe("2026-10-10T10:00:00.000Z");
+    expect(team.touch.lastOnlineGiftAt).toBe("2026-10-20T10:00:00.000Z");
+    expect(team.prompt.lastOnlineGiftAt).toBe("2026-10-20T10:00:00.000Z");
+    expect(state.find((s) => s.f.id === 41)!.touch.firstOnlineGiftAt).toBe("2026-10-10T10:00:00.000Z");
+  });
+});

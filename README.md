@@ -7254,7 +7254,7 @@ is listed, every page is a 404, and the private area is closed, until an admin s
 | Public API | `src/routes/fundraise.ts` |
 | Admin API | `src/routes/admin-fundraising.ts` |
 | Checkout and webhook additions | `src/routes/api.ts`, `src/db/stripe-webhook-model.ts`, `src/db/stripe-webhook.ts` |
-| Tables | `migrations/1791200000000_fundraising.js`; access backfill `1791200000001_permissions-fundraising.js`; newsletter source `1791200000002_newsletter-source-fundraise.js`; the address boxes and event questions (TASK-499) `1791200000040_fundraiser-sign-up-details.js`; the private area (TASK-501) `1791200000050_fundraising-private-area.js`; the message after paying (TASK-502) `1791200000060_fundraising-wall-after-paying.js`; news updates (TASK-506) `1791200000100_fundraiser-updates.js`; the form's second round and old page links (TASK-511) `1791200000130_fundraising-form-v2.js`; 18 or over and the split with another cause `1791200000180_signup-age-and-split.js` |
+| Tables | `migrations/1791200000000_fundraising.js`; access backfill `1791200000001_permissions-fundraising.js`; newsletter source `1791200000002_newsletter-source-fundraise.js`; the address boxes and event questions (TASK-499) `1791200000040_fundraiser-sign-up-details.js`; the private area (TASK-501) `1791200000050_fundraising-private-area.js`; the message after paying (TASK-502) `1791200000060_fundraising-wall-after-paying.js`; news updates (TASK-506) `1791200000100_fundraiser-updates.js`; the form's second round and old page links (TASK-511) `1791200000130_fundraising-form-v2.js`; 18 or over and the split with another cause `1791200000180_signup-age-and-split.js`; team pages `1791200000190_teams.js` |
 
 ### Data
 
@@ -9052,6 +9052,147 @@ own page. The Get involved card links to it ("See the event page and give", on t
 - **Tests:** `test/unit/event-pages-*.test.ts` (model, migration, database, admin API, routes,
   drawing, links, the page's script, the admin screen); BDD `features/event-pages.feature`.
 
+## Community fundraising, team pages
+
+Jaimie's decisions of 2026-10-03 (the Get involved master list, points 29, 34a and 35). A
+sponsorship fundraiser (raising money, never an event) can be a **team**. The person who sets it up
+is the **team organiser** (never "captain"): they get the team's emails and look after the team page.
+Everything below is off while fundraising is switched off, like the rest of fundraising.
+
+- **The sign up.** "Just me, or a team?" comes straight after "Are you 18 or over?", for someone
+  raising money only, with nothing chosen. A team asks the team's name and target (in place of the
+  page's), says who the team organiser is, and may add people: a first name, surname and email each
+  ("If they're under 18, give their parent or guardian's email"), up to 30, added and removed a row
+  at a time. They are **held**: nothing is sent until staff approve the team. Sharing with another
+  cause asks one more question, "Just you, or the whole team?". A sign up sent without the question
+  (a page opened before it, or the API) is just me, as before.
+- **Approval.** Staff approve the team as any sign up. Then (after it commits, best effort) each
+  person added is invited (`fundraiseTeamInvite`), and the team organiser gets "Your team page is
+  live" (`fundraiseTeamLive`), always with the join link and a short message to forward to a group
+  chat. An invite says why they got it ("[team organiser] gave us your email so we could invite you,
+  or [first name] if this is a parent or guardian's email, to join [team] for their [kind] on
+  [date]"), that that person is the team organiser, and that questions can still come to NBCC (a
+  reply, events@ or 01292 811 015); its button opens the join form filled in. Every email to an
+  invitee ends "Not for you? Ignore this and we won't email again." An address on the suppression or
+  opt out list is never invited. A team approved while fundraising is off waits for the switch, as
+  every "Your page is live" does.
+- **Joining.** `/fundraise/<team>/join`, from the team page's "Join this team", the join link, or an
+  invite: first name, surname, email (a parent's for someone under 18), "Are you 18 or over?" (the
+  sign up form's kind note on No, and the server refuses it), an optional target and a line about
+  why. A whole team split is only said ("This team shares what it raises: 50% comes to NBCC..."),
+  never asked, and every member page has it; with just the team organiser's split each member is
+  asked. A join makes a **member page** (`<First>'s page for <team>`, the team's kind, date, place
+  and website choice) linked to the team in the same transaction, waiting for staff: **staff approve
+  every member page**. The member is thanked (`fundraiseTeamJoined`) and the events inbox told
+  (`fundraiseTeamJoinStaff`).
+- **The team page** (`/fundraise/<team>`): the team's meter is its own gifts and cash plus every
+  current member page's (approved or finished, not taken off), with Gift Aid shown under it; giving,
+  the wall, news, the QR code and materials are the team page's own. "The team" lists the member
+  pages **A to Z by first name**, each with a small meter and a link: never a ranking. A member page
+  says "Part of the team ...". Get involved lists a team once, with its whole meter, and never its
+  member pages on their own. The combined total is the team's everywhere: the team page and its
+  JSON (`/api/fundraisers/<team>`), Get involved, the admin's list and team view, and the automatic
+  emails (halfway and target reached read the whole total against the team's target). A team page
+  speaks of the team ("counts towards Exampleton Juniors' total", "Every share helps Exampleton
+  Juniors", "About the team", "Team organiser: Robin O."); a member page keeps its own name.
+- **The team organiser's private area** (`assets/js/fundraise-team-manage.js`): "Your team" on the
+  team's card: the join link and the message to forward (each to copy), who has joined (live and
+  waiting), and Remove (the member page carries on as their own, no longer counting; the events
+  inbox is told, `fundraiseTeamMemberRemoved`). Team news is the team page's own News updates.
+- **Handover, staff only.** Admin > Fundraising hands the team organiser role to a member or someone
+  new (with their phone). We email them a 6 digit code (`fundraiseTeamHandoverCode`), kept only as a
+  keyed hash bound to the team and their email, working for 3 days and 5 tries; they put it in under
+  "Taking over a team?" on `/fundraise/manage`, and only then do the team's organiser name, email and
+  phone change. No self service handover.
+- **Automatic team emails** (the daily 8am task; only while Automatic emails and fundraising are
+  both on; never to an address that asked us to stop; each claimed before it is sent, so once):
+  the team organiser's "Did you send the invite to your team?" on day 3 after the team went live,
+  and a second on day 10 only if still nobody has joined (`fundraiseTeamNudge`); nothing once anyone
+  has joined or after the event. ONE gentle reminder to someone invited, 5 days after the invite, if
+  they have not joined (`fundraiseTeamInviteReminder`). **Every day, whatever the switches**, the
+  names, emails and tokens of the people added are deleted 30 days after the invite (or after they
+  were added, if never sent) or once the event is over, whichever is sooner.
+- **The split lock** holds for a whole team split: only an admin corrects it, on the team, and only
+  while neither the team nor any current member has a gift; it changes on every member page with it.
+  A member page of a whole team split refuses a correction of its own (`team_split`).
+- **Admin > Fundraising**: a team is marked Team and a member sign up "Joining <team>"; an open team
+  shows its split, join link, whole meter, members (every status) and its invites (held, invited,
+  reminded, joined, name and email deleted), and the handover. Staff (editors and admins) can take
+  a member off the team there too, with the same effect as the team organiser's remove; History says
+  "Taken off the team by NBCC". Changing a team (or a page still on one) to an event is refused with
+  409 "A team raises money, so it can't be an event. Take everyone off the team first." The Monday summary says how many team
+  member sign ups wait for staff, and which teams have had nobody join 10 days after going live.
+
+**After the independent review (PR #645):**
+- A team is **always on the website** (it needs a page to be joined): the form never asks a team,
+  and the server refuses a team sent as not public. A team approved while fundraising is off always
+  waits for the switch, and nothing team related (invites, reminders, nudges, the live email, a
+  handover code) emails anyone while fundraising is off.
+- **Retention:** invites and reminders go with no name in the email log; when an invite's details are
+  deleted (30 days, or after the event, or at once when staff decline the team), its email log rows
+  are anonymised too (the address becomes "deleted team invitee", the subject only the team). The
+  events inbox's sign up email gives only how many people are to be invited. A handover's name,
+  email, phone and code hash are cleared 30 days after it is confirmed, cancelled or runs out. Send
+  failures are logged with any address taken out.
+- A member joining takes the team's whole team split as it is at that moment, under the team's lock.
+  An invite whose email joins another way is marked joined, so it is never reminded. The reminder
+  has a link of its own; the invite's first link keeps working. The invite's footer says one gentle
+  reminder at most may follow.
+- An admin correcting a team's split says whose split it is (asked again when sharing is turned on).
+  For a team, first gift and gone quiet read its members' gifts too. The Monday summary lists a team
+  nobody has joined only from day 10 to day 30, and never after its event. An invite's link fills
+  nothing in while fundraising is off or the team is no longer approved. A handover only goes to an
+  approved member still on the team, or someone new.
+
+### Routes
+
+| Route | Who | Body | Answer |
+|---|---|---|---|
+| `POST /api/fundraise` | anyone | as before, plus `team: "me" \| "team"`, `teamShareMode: "team" \| "organiser" \| null`, `teamMembers: [{ firstName, lastName, email }]` | as before; a problem with a person added is named by place, `teamMembers.<n>.<part>` |
+| `GET /fundraise/:slug/join` | anyone | | the join form for an approved team (a finished one says it is not taking members); never indexed or kept |
+| `POST /api/fundraise/teams/:slug/join` | anyone | `{ firstName, lastName, email, over18, targetPence?, why?, sharesWithOther?, nbccSharePercent?, otherCauseName?, invite?, captchaToken, company }` | `200`; `400 { fields }`; `404` if the team is not taking members; honeypot, the spam check and 5 in 10 minutes from one address, as the sign up |
+| `POST /api/fundraise/team-invite` | anyone | `{ token }` | `200 { firstName, lastName, email, teamSlug }`; `404` for anything else; 30 in 15 minutes |
+| `GET /api/fundraise/manage/fundraisers/:id/team` | the signed in team organiser | | `{ joinUrl, forwardMessage, shareMode, members: [{ id, name, status, raisedPence, targetPence, pageUrl }] }`; `404` for a page that is not a team |
+| `POST /api/fundraise/manage/fundraisers/:id/team/members/:memberId/remove` | the signed in team organiser, from our own page | | `200`; `404` for someone not on the team |
+| `POST /api/fundraise/manage/handover` | from our own page | `{ email, code }` | `200 { status: "ok", title }`; `401` for a wrong, old or used code; limited per email and per address |
+| `GET /api/admin/fundraisers/:id/team` | view | | `{ kind: "team", shareMode, split, joinUrl, meter, members, invites, handover }`, `{ kind: "member", left, team }` or `{ kind: "none" }` |
+| `POST /api/admin/fundraisers/:id/team/handover` | edit | `{ memberId, phone? }` or `{ firstName, lastName, email, phone }` | `{ handover, emailed }`; the code goes only in the email |
+| `POST /api/admin/fundraisers/:id/team/handover/cancel` | edit | | `{ cancelled }` |
+| `POST /api/admin/fundraisers/:id/team/members/:memberId/remove` | edit | | `{ removed }`; `404` for someone not on the team; `audit_log` `fundraiser.member_removed` / `fundraiser.removed_from_team` with `by: "staff"` |
+
+### Data (`migrations/1791200000190_teams.js`, additive only)
+
+`fundraisers.is_team` (false by default), `team_id` (a member page's team), `team_share_mode`
+(`team` or `organiser`, only on a team sharing with another cause), `team_left_at` / `_by` (taken off
+the team), `team_nudge_1_at` / `_2_at` (the nudges, claimed before sending), with checks: a team is
+raising money and never a member; a page is never its own team. `team_invites` (team, first name,
+surname, email, the sha256 of the invite link's token, added, sent, reminded, joined and by which
+member page, deleted; one live invite per address on a team; a deleted one keeps no name, email or
+token). `team_handovers` (team, the new organiser's name, email and phone, the code's keyed hash,
+runs out, tries, who started it, confirmed or cancelled; one open a team). Numbered 190, after the
+185 the event pages change adds. The new tables are in the nightly backup's table count (75).
+
+### Where it lives, and tests
+
+Rules (pure): `src/fundraising/teams.ts`. Emails (pure, NEW WORDING for Jaimie):
+`src/fundraising/team-page-emails.ts`. Sending: `src/fundraising/team-send.ts` (approval, joining,
+removal, handover) and `src/fundraising/team-runner.ts` (the daily pass, on `send-reminders.ts`).
+SQL: `src/db/fundraising-teams.ts` (and `createFundraiser`'s extra step, `setFundraiserSplit`'s team
+rule and `listFundraisersWhere` in `src/db/fundraisers.ts`). Pages: `src/fundraising/team-render.ts`,
+`src/routes/team-pages.ts`, `fundraise-join.html`, `assets/js/fundraise-join.js`; the sign up step in
+`fundraise.html` and `assets/js/fundraise.js`. Routes: `src/routes/fundraise-teams.ts` (mounted before
+`fundraiseRouter`, whose retired link route would take `/manage/handover`) and
+`src/routes/admin-fundraising-teams.ts`. Screen: the `frGroup` block of `assets/js/admin/app.js`.
+Unit tests: `fundraising-teams`, `fundraising-team-page-emails`, `fundraising-team-send`,
+`fundraising-send-teams`, `fundraising-team-runner`, `fundraising-teams-db`, `fundraisers-db-teams`,
+`teams-migration`, `fundraise-signup-teams-routes`, `fundraise-teams-routes`,
+`admin-fundraising-teams-routes`, `team-pages-routes`, `fundraising-team-render`,
+`fundraise-signup-teams` (jsdom), `fundraise-join-page` (jsdom), `fundraise-team-manage-page` (jsdom),
+`admin-fundraising-teams-panel` (jsdom), `fundraising-summary-teams`, `admin-email-kinds` and
+`backup-plan`. BDD: `features/fundraising-teams.feature` (a team signs up with members and approval
+sends the invites; joining from an invite, staff approve the member, gifts count on the member and
+the team; a whole team split is every member's; members A to Z; someone under 18 cannot join).
+
 ## A QR code encoder for fundraiser pages (TASK-493)
 
 `src/fundraising/qr.ts` draws QR codes with no dependencies, written from the QR standard
@@ -9101,10 +9242,11 @@ in TASK-493, the private area's sign in codes and sessions two in TASK-501, the 
 calls two in TASK-503, the requests one in TASK-505, the news updates one in TASK-506, and the
 thank yous to supporters and the address level opt out list three in TASK-507, the old page
 links one in TASK-511, the fundraising categories one in TASK-514, and which automatic emails each
-fundraiser has had and the Do it again links two in TASK-515),
+fundraiser has had and the Do it again links two in TASK-515, and the team invites and team
+organiser handovers two for team pages),
 but `STORIES_DATABASE_URL` and `CONTACT_DATABASE_URL` are separate databases
 (deliberately, so the public story and contact forms can never reach donor
-data). A `pg_dump $DATABASE_URL` captures 70 of **73** tables and silently
+data). A `pg_dump $DATABASE_URL` captures 72 of **75** tables and silently
 drops every My Story submission (and, since TASK-475, the fingerprints in
 `erased_stories` that keep erased stories from coming back) and every contact
 enquiry, while producing a

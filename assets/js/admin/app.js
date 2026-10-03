@@ -2689,6 +2689,11 @@
     ["fundraiseWeekAfter", "Fundraiser automatic: a week after"], ["fundraiseFinished", "Fundraiser automatic: thank you, finished"],
     ["fundraiseYearOn", "Fundraiser automatic: a year on"], ["fundraiseNeedAHand", "Fundraiser automatic: need a hand?"],
     ["fundraiseOnTrack", "Fundraiser automatic: doing great"],
+    // Team pages: the team emails.
+    ["fundraiseTeamLive", "Team page live (to the team organiser)"], ["fundraiseTeamInvite", "Team invite"],
+    ["fundraiseTeamInviteReminder", "Team invite reminder"], ["fundraiseTeamNudge", "Team automatic: did you send the invite?"],
+    ["fundraiseTeamJoined", "Team member joined (thank you)"], ["fundraiseTeamJoinStaff", "Team member to approve (to events@)"],
+    ["fundraiseTeamMemberRemoved", "Team member taken off (to events@)"], ["fundraiseTeamHandoverCode", "Team organiser handover code"],
   ];
   function emailKindLabel(kind) {
     for (var i = 0; i < EMAIL_KINDS.length; i++) if (EMAIL_KINDS[i][0] === kind) return EMAIL_KINDS[i][1];
@@ -9160,6 +9165,7 @@
     news: "frNewsStatus",
     thanks: "frThanksStatus", // TASK-507
     touch: "frTouchCallStatus", // TASK-515
+    group: "frTeamStatus", // team pages
   };
   // Says it now, in place, without a redraw: "Adding…" has to show while the request is out.
   function frPaintNotice(key) {
@@ -9241,6 +9247,7 @@
         frRenderList();
         frLoadHistory(id);
         frLoadNews(id); // TASK-506
+        if (d && d.fundraiser && (d.fundraiser.isTeam || d.fundraiser.teamId)) frLoadGroup(id); // team pages
         if (d && d.fundraiser && (d.fundraiser.status === "approved" || d.fundraiser.status === "finished")) frLoadScans(id); // TASK-512
       })
       .catch(function (err) {
@@ -9434,6 +9441,7 @@
       (frReqDueBack(f) ? '<span class="admin-pill is-call-due fr-dueback-pill">Due back</span>' : "") +
       frThanksPill(f) + // TASK-507
       frTouchPills(f) + // TASK-515: the smart call prompts
+      frGroupPills(f) + // team pages: Team, or Joining <team>
       rowNewPill("fundraising", f.createdAt);
     return (
       '<tr class="fx-summary' + (open ? " is-open" : "") + '" data-frtoggle="' + f.id +
@@ -9521,6 +9529,7 @@
     frPaintThanks(); // TASK-507
     frPaintHistory();
     frPaintNews(); // TASK-506
+    frPaintGroup(); // team pages
     frPaintScans(); // TASK-512
     if (frTouch) frTouchRenderFor(); // TASK-515: "Show it for" lists the pages raising money
     frRestDetail();
@@ -9543,6 +9552,8 @@
     frReasonDraft = "";
     frCallDraft = "";
     frTouchNotes = {}; // TASK-515
+    frGroupView = null; // team pages
+    frGroupDraft = {};
     frReqClear();
     frRenderList();
     if (frOpenId != null) frLoadDetail(frOpenId);
@@ -9562,6 +9573,7 @@
     return (
       '<div class="fx-detail fr-detail" data-frdetail="' + f.id + '">' +
         '<section class="fx-panel fx-panel--wide"><h4>Where it is up to</h4>' + frStatePanel(f, write) + "</section>" +
+        frGroupSection(f) + // team pages
         frOffListSection(f, write) +
         frCallsSection(f, write) +
         frTouchSection(f, write) + // TASK-515
@@ -9817,6 +9829,15 @@
             '<label class="fx-call-label" for="frSplitCause">The other cause’s name</label>' +
             '<input class="fr-input" id="frSplitCause" name="otherCauseName" type="text" maxlength="120" value="' +
               (yes && f.otherCauseName ? H.escapeHtml(f.otherCauseName) : "") + '"' + (yes ? "" : " disabled") + ">" +
+            // Team pages: a team that shares says whose split it is; turning it on asks again.
+            (f.isTeam
+              ? '<fieldset class="fr-split-choice"><legend class="fx-call-label">Whose split is it?</legend>' +
+                '<label><input type="radio" name="teamShareMode" value="team"' + (yes && f.teamShareMode === "team" ? " checked" : "") + (yes ? "" : " disabled") +
+                  "> The whole team: every member page shares the same way</label><br>" +
+                '<label><input type="radio" name="teamShareMode" value="organiser"' + (yes && f.teamShareMode === "organiser" ? " checked" : "") + (yes ? "" : " disabled") +
+                  "> Just the team organiser: each member is asked when they join</label>" +
+                "</fieldset>"
+              : "") +
           "</div>" +
           '<div class="fx-call-row fr-actions"><button class="admin-btn admin-btn--small" type="submit">Save the split</button></div>' +
         "</form>";
@@ -9829,7 +9850,7 @@
     var yes = !!form.querySelector("#frSplitYes:checked");
     var fields = form.querySelector("[data-frsplitfields]");
     if (fields) fields.hidden = !yes;
-    Array.prototype.forEach.call(form.querySelectorAll("#frSplitPercent, #frSplitCause"), function (i) {
+    Array.prototype.forEach.call(form.querySelectorAll('#frSplitPercent, #frSplitCause, input[name="teamShareMode"]'), function (i) {
       i.disabled = !yes;
     });
   }
@@ -9841,6 +9862,9 @@
     var percent = String((form.querySelector("#frSplitPercent") || {}).value || "").trim();
     var cause = String((form.querySelector("#frSplitCause") || {}).value || "").trim();
     var body = { sharesWithOther: yes, nbccSharePercent: yes ? percent : null, otherCauseName: yes ? cause : "" };
+    // Team pages: whose split it is, when a team shares (the server asks if none is chosen).
+    var mode = form.querySelector('input[name="teamShareMode"]:checked');
+    if (f.isTeam && yes && mode) body.teamShareMode = mode.value;
     var question = yes
       ? "Change the split for " + f.title + " to " + percent + "% to NBCC, the rest to " + cause + "? The page and every material will say it."
       : "Change the split for " + f.title + " to all of it coming to NBCC?";
@@ -10265,6 +10289,11 @@
     "fundraiser.request_updated": "A request updated",
     // Jaimie, 2026-10-03: an admin corrected the split before the first gift.
     "fundraiser.split_changed": "Split with another cause changed",
+    // Team pages
+    "fundraiser.joined_team": "Someone asked to join the team",
+    "fundraiser.handover_started": "Team organiser handover started: code emailed",
+    "fundraiser.handover_cancelled": "Team organiser handover cancelled",
+    "fundraiser.organiser_handed_over": "New team organiser confirmed with their code",
     // TASK-506
     "fundraiser.news_posted": "The organiser posted a news update",
     "fundraiser.news_approved": "News update approved",
@@ -10303,6 +10332,9 @@
         if (h.action === "fundraiser.touch_sent" && frTouchKindInfo(data.kind)) what = "Automatic email sent: " + frTouchKindInfo(data.kind).label;
         if (h.action === "fundraiser.prompt_called" && typeof data.prompt === "string") what = "Called about a prompt: " + data.prompt.replace(/_/g, " ");
         if ((h.action === "fundraiser.request_updated" || h.action === "fundraiser.print_requested") && typeof data.words === "string" && data.words) what = data.words;
+        // Team pages: who took a member off the team.
+        if (h.action === "fundraiser.removed_from_team") what = data.by === "staff" ? "Taken off the team by NBCC" : "Taken off the team by the team organiser";
+        if (h.action === "fundraiser.member_removed") what = data.by === "staff" ? "NBCC took someone off the team" : "The team organiser took someone off the team";
         var said = h.action === "fundraiser.declined" || h.action === "fundraiser.news_rejected" ? data.reason : h.action === "fundraiser.called" || h.action === "fundraiser.prompt_called" ? data.note : "";
         var note = said ? '<span class="fx-hist-note">' + H.escapeHtml(said) + "</span>" : "";
         return '<li><span class="fx-hist-what">' + H.escapeHtml(what) + "</span>" +
@@ -10680,6 +10712,7 @@
     el("frSwitchBtn").addEventListener("click", frFlipSwitch);
     var view = el("view-fundraising");
     frNewsWire(view); // TASK-506
+    frGroupWire(view); // team pages
     view.addEventListener("click", function (e) {
       var t = e.target;
       if (!t || !t.closest) return;
@@ -11050,6 +11083,237 @@
       if (uid === null) return;
       frNewsReasons[uid] = t.value;
       nlFitBox(t);
+    });
+  }
+
+  // ---- team pages (Jaimie, 2026-10-03) ----
+  // A team page and its members. In the list, a team is marked Team and a member sign up says which
+  // team it is joining. In an open team: its split (the whole team's, or just the team organiser's),
+  // its join link, its meter for the whole team, its members (every status, A to Z), the people its
+  // team organiser added and where each invite is up to, and the handover of the team organiser role
+  // (editors and admins; the new team organiser confirms with a code we email them). In an open
+  // member sign up: the team it is joining. GET /api/admin/fundraisers/:id/team decides it all; this
+  // only says it. Every stored string is escaped. ("frGroup" in the code, as frTeam is the team's
+  // tools of TASK-503.)
+  var frGroupView = null; // { id, data } or { id, failed } for the open sign up
+  var frGroupDraft = {}; // the handover boxes, so a redraw keeps what was typed
+
+  var FR_INVITE_WORDS = {
+    held: "Held until you approve the team",
+    sent: "Invited",
+    reminded: "Invited, and reminded once",
+    joined: "Joined",
+    deleted: "Name and email deleted",
+  };
+  var FR_MEMBER_WORDS = { new: "Waiting for you to approve", approved: "Live", declined: "Declined", finished: "Finished" };
+
+  function frGroupTitleOf(id) {
+    var list = (frData && frData.fundraisers) || [];
+    for (var i = 0; i < list.length; i++) if (list[i].id === id) return list[i].title;
+    return "";
+  }
+
+  function frGroupPills(f) {
+    if (f.isTeam) return '<span class="admin-pill fr-team-pill">Team</span>';
+    if (f.teamId && !f.teamLeftAt) {
+      var title = frGroupTitleOf(f.teamId);
+      // Waiting for staff: joining; approved since: on the team.
+      var words = f.status === "new" ? "Joining " : "On the team ";
+      return '<span class="admin-pill' + (f.status === "new" ? " admin-pill--pending" : "") + ' fr-joining-pill">' +
+        H.escapeHtml(title ? words + title : words + "(a team)") + "</span>";
+    }
+    return "";
+  }
+
+  function frGroupSection(f) {
+    if (!f.isTeam && !f.teamId) return "";
+    return '<section class="fx-panel fx-panel--wide fr-group-panel"><h4>Team</h4><div id="frTeam"></div>' +
+      frNoticeHtml("group", "frTeamStatus") + "</section>";
+  }
+
+  function frLoadGroup(id) {
+    return authFetch("/api/admin/fundraisers/" + encodeURIComponent(id) + "/team")
+      .then(okJson)
+      .then(function (d) {
+        if (frOpenId !== id) return;
+        frGroupView = { id: id, data: d || {} };
+        frPaintGroup();
+      })
+      .catch(function (err) {
+        if (err && err.message === "unauthorized") return;
+        if (frOpenId !== id) return;
+        frGroupView = { id: id, failed: true };
+        frPaintGroup();
+      });
+  }
+
+  function frGroupMeter(m) {
+    if (!m) return "";
+    return "<p><strong>" + H.escapeHtml(frMoney(m.raisedPence) + " raised" + (m.targetPence ? " of " + frMoney(m.targetPence) : "") + ", by the whole team") +
+      "</strong>" + (m.giftAidPence ? " " + H.escapeHtml("+ " + frMoney(m.giftAidPence) + " Gift Aid") : "") + "</p>";
+  }
+
+  function frGroupHandoverHtml(d, write) {
+    var h = d.handover;
+    if (h) {
+      return '<p class="fx-help">' + H.escapeHtml(
+        "Waiting for " + h.toFirstName + " " + h.toLastName + " (" + h.toEmail + ") to confirm with the code we emailed on " +
+          H.fmtDate(h.createdAt) + ". Until they do, nothing changes.") + "</p>" +
+        (write ? '<button class="admin-btn admin-btn--small fr-btn-quiet" type="button" data-frteam-cancel>Cancel the handover</button>' : "");
+    }
+    if (!write) return '<p class="fx-help">Editors and admins can hand the team organiser role to someone else here.</p>';
+    var v = frGroupDraft;
+    // Only to an approved member still on the team, or someone new.
+    var members = (d.members || []).filter(function (m) { return !m.left && m.status === "approved"; });
+    var options = '<option value="">Someone new</option>' + members.map(function (m) {
+      return '<option value="' + Number(m.id) + '"' + (String(v.memberId || "") === String(m.id) ? " selected" : "") + ">" + H.escapeHtml(m.name) + "</option>";
+    }).join("");
+    var box = function (id, label, key, type, auto) {
+      return '<div class="fx-field"><label for="' + id + '">' + label + "</label>" +
+        '<input class="fr-input" id="' + id + '" type="' + type + '" autocomplete="' + auto + '" data-frteam-box="' + key + '" value="' + H.escapeHtml(v[key] || "") + '"></div>';
+    };
+    var someoneNew = !v.memberId;
+    return '<p class="fx-help">Only when the team asks. We email the new team organiser a code; nothing changes until they put it in on their private area page. It works for 3 days.</p>' +
+      '<div class="fx-field"><label for="frTeamMember">Hand it to</label><select class="fr-input" id="frTeamMember" data-frteam-member>' + options + "</select></div>" +
+      (someoneNew ? box("frTeamFirst", "First name", "firstName", "text", "off") + box("frTeamLast", "Surname", "lastName", "text", "off") +
+        box("frTeamEmail", "Email", "email", "email", "off") : "") +
+      box("frTeamPhone", "Their phone" + (someoneNew ? "" : " (optional)"), "phone", "tel", "off") +
+      '<div class="fx-call-row fr-actions"><button class="admin-btn admin-btn--small" type="button" data-frteam-handover>Email them a code</button></div>';
+  }
+
+  function frPaintGroup() {
+    var box = el("frTeam");
+    if (!box || frOpenId == null) return;
+    var s = frGroupView && frGroupView.id === frOpenId ? frGroupView : null;
+    if (!s) {
+      box.innerHTML = '<p class="admin-loading">Loading…</p>';
+      return;
+    }
+    if (s.failed) {
+      box.innerHTML = '<div role="alert">' + unavailableHtml("The team could not load just now. Close this sign up and open it again in a moment.") + "</div>";
+      return;
+    }
+    var d = s.data;
+    if (d.kind === "member") {
+      var t = d.team || {};
+      box.innerHTML = "<p>" + H.escapeHtml((d.left ? "Was on the team " : "Joining the team ") + (t.title || "")) + "</p>" +
+        (t.shareMode === "team" ? '<p class="fx-help">The whole team shares the same split, so this page has the team&rsquo;s. Correct it on the team.</p>' : "");
+      return;
+    }
+    if (d.kind !== "team") {
+      box.innerHTML = "";
+      return;
+    }
+    var write = frCanWrite();
+    var members = d.members || [];
+    var invites = d.invites || [];
+    box.innerHTML =
+      "<p>" + H.escapeHtml(d.split || "") + "</p>" +
+      '<p class="fx-help">Join link: <a href="' + H.escapeHtml(d.joinUrl || "") + '" target="_blank" rel="noopener">' +
+        H.escapeHtml(String(d.joinUrl || "").replace(/^https?:\/\//, "")) + "</a></p>" +
+      frGroupMeter(d.meter) +
+      "<h5>Members</h5>" +
+      (members.length
+        ? '<ul class="fr-wall fr-group-list">' + members.map(function (m) {
+            var words = m.left ? "Taken off the team" : FR_MEMBER_WORDS[m.status] || m.status;
+            // Staff can take a current member off the team, as its team organiser can.
+            var remove = write && !m.left && m.status !== "declined"
+              ? ' <button class="fr-link-btn" type="button" data-frteam-remove="' + Number(m.id) + '" data-frteam-name="' + H.escapeHtml(m.name) + '">Take off the team</button>'
+              : "";
+            return "<li><strong>" + (m.pageUrl ? '<a href="' + H.escapeHtml(m.pageUrl) + '" target="_blank" rel="noopener">' + H.escapeHtml(m.name) + "</a>" : H.escapeHtml(m.name)) +
+              "</strong> " + H.escapeHtml("(" + m.email + ")") + ' <span class="fx-hist-who">' + H.escapeHtml(words + ", " + frMoney(m.raisedPence) + " raised") + "</span>" + remove + "</li>";
+          }).join("") + "</ul>"
+        : '<p class="fx-empty">Nobody has joined yet.</p>') +
+      "<h5>People the team organiser added</h5>" +
+      (invites.length
+        ? '<ul class="fr-wall fr-group-list">' + invites.map(function (i) {
+            var when = i.status === "joined" ? i.joinedAt : i.status === "deleted" ? i.deletedAt : i.status === "reminded" ? i.remindedAt : i.sentAt;
+            var who = i.name ? i.name + (i.email ? " (" + i.email + ")" : "") : "Name and email deleted";
+            return "<li><strong>" + H.escapeHtml(who) + '</strong> <span class="fx-hist-who">' +
+              H.escapeHtml((FR_INVITE_WORDS[i.status] || i.status) + (when ? ", " + H.fmtDate(when) : "")) + "</span></li>";
+          }).join("") + "</ul>"
+        : '<p class="fx-empty">Nobody was added. The team organiser can share the join link.</p>') +
+      "<h5>Hand over the team organiser role</h5>" + frGroupHandoverHtml(d, write);
+    frRestDetail();
+  }
+
+  function frGroupHandover() {
+    var f = frOpenRecord();
+    if (!f || frBusy) return;
+    // What the boxes say now, whether or not they were typed into.
+    var boxRoot = el("frTeam");
+    if (boxRoot) {
+      Array.prototype.forEach.call(boxRoot.querySelectorAll("[data-frteam-box]"), function (b) {
+        frGroupDraft[b.getAttribute("data-frteam-box")] = b.value;
+      });
+      var pickNow = boxRoot.querySelector("[data-frteam-member]");
+      if (pickNow) frGroupDraft.memberId = pickNow.value;
+    }
+    var v = frGroupDraft;
+    var body = v.memberId
+      ? { memberId: Number(v.memberId), phone: String(v.phone || "").trim() }
+      : { firstName: String(v.firstName || "").trim(), lastName: String(v.lastName || "").trim(), email: String(v.email || "").trim(), phone: String(v.phone || "").trim() };
+    if (v.memberId && !body.phone) delete body.phone;
+    if (!window.confirm("Hand over the team organiser role? We will email them a code. Nothing changes until they put it in.")) return;
+    frRun("group", "Sending…", function (run) {
+      return frSend("POST", "/api/admin/fundraisers/" + f.id + "/team/handover", body).then(function (r) {
+        if (!r.ok) {
+          var fields = r.body && r.body.fields ? Object.keys(r.body.fields).map(function (k) { return r.body.fields[k]; }).join(" ") : "";
+          run.say(fields || frRefusal(r, "That did not work. Please try again."), true);
+        } else {
+          frGroupDraft = {};
+          run.say(r.body.emailed === false ? "Saved, but the email did not go. Cancel it and try again." : "We have emailed them the code.", r.body.emailed === false);
+        }
+        return Promise.all([frLoadGroup(f.id), frLoadHistory(f.id)]);
+      });
+    });
+  }
+
+  function frGroupCancel() {
+    var f = frOpenRecord();
+    if (!f || frBusy) return;
+    if (!window.confirm("Cancel this handover? The code we emailed stops working.")) return;
+    frRun("group", "Cancelling…", function (run) {
+      return frSend("POST", "/api/admin/fundraisers/" + f.id + "/team/handover/cancel", {}).then(function (r) {
+        run.say(r.ok ? "Cancelled. The code no longer works." : frRefusal(r, "That did not work. Please try again."), !r.ok);
+        return Promise.all([frLoadGroup(f.id), frLoadHistory(f.id)]);
+      });
+    });
+  }
+
+  function frGroupRemove(btn) {
+    var f = frOpenRecord();
+    if (!f || frBusy) return;
+    var mid = btn.getAttribute("data-frteam-remove");
+    var name = btn.getAttribute("data-frteam-name") || "them";
+    if (!window.confirm("Take " + name + " off the team? Their page stays up as their own, and what it raises no longer counts towards the team.")) return;
+    frRun("group", "Saving…", function (run) {
+      return frSend("POST", "/api/admin/fundraisers/" + f.id + "/team/members/" + encodeURIComponent(mid) + "/remove", {}).then(function (r) {
+        run.say(r.ok ? name + " is off the team." : frRefusal(r, "That did not work. Please try again."), !r.ok);
+        return Promise.all([frLoadGroup(f.id), frLoadHistory(f.id), frLoadList()]);
+      });
+    });
+  }
+
+  function frGroupWire(view) {
+    view.addEventListener("click", function (e) {
+      var t = e.target;
+      if (!t || !t.closest) return;
+      var rm = t.closest("[data-frteam-remove]");
+      if (rm) frGroupRemove(rm);
+      else if (t.closest("[data-frteam-handover]")) frGroupHandover();
+      else if (t.closest("[data-frteam-cancel]")) frGroupCancel();
+    });
+    view.addEventListener("input", function (e) {
+      var t = e.target;
+      if (!t || !t.getAttribute || t.getAttribute("data-frteam-box") === null) return;
+      frGroupDraft[t.getAttribute("data-frteam-box")] = t.value;
+    });
+    view.addEventListener("change", function (e) {
+      var t = e.target;
+      if (!t || !t.hasAttribute || !t.hasAttribute("data-frteam-member")) return;
+      frGroupDraft.memberId = t.value;
+      frPaintGroup();
     });
   }
 

@@ -253,7 +253,8 @@ describe("switching fundraising on, for the people waiting", () => {
     const [sql, params] = q().mock.calls.at(-1) as [string, unknown[]];
     expect(sql).toMatch(/UPDATE fundraisers f SET live_email_pending = false/);
     expect(sql).toMatch(/WHERE f\.id = \(\s*SELECT id FROM fundraisers/);
-    expect(sql).toMatch(/live_email_pending AND status = 'approved' AND public AND path IN \('raising', 'event'\) AND id > \$1/);
+    // Event pages: an event's page waits too. Team pages: a team waits too, page or not.
+    expect(sql).toMatch(/live_email_pending AND status = 'approved' AND \(is_team OR \(public AND path IN \('raising', 'event'\)\)\) AND id > \$1/);
     expect(sql).toMatch(/ORDER BY id LIMIT 1 FOR UPDATE SKIP LOCKED/);
     expect(sql).toMatch(/RETURNING/);
     expect(params).toEqual([0]);
@@ -269,7 +270,7 @@ describe("switching fundraising on, for the people waiting", () => {
   it("counts the page holders waiting", async () => {
     q().mockResolvedValueOnce({ rows: [{ n: "3" }] });
     expect(await countWaitingLiveEmails()).toBe(3);
-    expect(String(q().mock.calls.at(-1)?.[0])).toMatch(/count\(\*\).*live_email_pending AND status = 'approved' AND public AND path IN \('raising', 'event'\)/s);
+    expect(String(q().mock.calls.at(-1)?.[0])).toMatch(/count\(\*\).*live_email_pending AND status = 'approved' AND \(is_team OR \(public AND path IN \('raising', 'event'\)\)\)/s);
   });
 
   it("can mark one as waiting again, when its email did not go", async () => {

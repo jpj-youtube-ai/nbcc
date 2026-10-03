@@ -151,6 +151,20 @@ if (require.main === module) {
       } catch (err) {
         console.error("fundraising automatic emails failed:", err instanceof Error ? err.message : err);
       }
+      // Team pages: the team pass. The names and emails of the people a team organiser added are
+      // deleted on time every day; the team organiser's nudges and the one reminder to someone
+      // invited go only while Automatic emails and fundraising are both on, once each. It never
+      // throws, and has its own try/catch anyway, like every pass here.
+      try {
+        const { runTeamEmails } = await import("../fundraising/team-runner");
+        const team = await runTeamEmails();
+        console.error(
+          `fundraising team emails: deleted=${team.deleted} nudges=${team.nudges} reminders=${team.reminders} failed=${team.failed}` +
+            (team.skipped ? ` (${team.skipped})` : ""),
+        );
+      } catch (err) {
+        console.error("fundraising team emails failed:", err instanceof Error ? err.message : err);
+      }
       // Email-audit retention: prune email_log rows past their six-tax-years window
       // (src/email/log-retention.ts). Rides this existing daily task for the same reason the
       // ball run-up does — one more statement on a schedule that already exists — and in its

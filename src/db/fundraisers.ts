@@ -41,7 +41,13 @@ export type FundraiserErrorReason =
   // Event pages: an event cannot be approved until staff have set its short name (approveProblem).
   | "needs_short_name"
   // Jaimie, 2026-10-03: the split cannot change once a fundraiser has had a gift.
-  | "has_gifts";
+  | "has_gifts"
+  // Team pages: a member page's whole team split is the team's to change, never one member's.
+  | "team_split"
+  // Team pages: a team, or a page still on one, raises money: it can never be made an event.
+  | "team_path"
+  // Team pages: a team that shares must say whose split it is.
+  | "team_mode_missing";
 
 export class FundraiserError extends Error {
   constructor(
@@ -131,10 +137,13 @@ const RECORD_COLUMNS = `f.id, f.slug, f.path, f.kind, f.title, f.description,
          f.first_name, f.last_name, f.kind_other, f.instagram, f.facebook,
          f.over_18, f.shares_with_other, f.nbcc_share_percent, f.other_cause_name,
          f.slug_set_at,
+         f.is_team, f.team_id, f.team_share_mode, f.team_left_at, f.team_nudge_1_at, f.team_nudge_2_at,
          (SELECT c.label FROM fundraising_categories c WHERE c.key = f.kind) AS kind_label`;
 const SELECT = `
   SELECT ${RECORD_COLUMNS}
     FROM fundraisers f`;
+/** Team pages: the same select, for reads in src/db/fundraising-teams.ts (toRecord reads it). */
+export const FUNDRAISER_SELECT = SELECT;
 
 // Online: paid gifts less refunds. Cash: what staff recorded as paid in. Summed per fundraiser.
 const ONLINE_SQL = `(SELECT COALESCE(SUM(GREATEST(d.amount_pence - d.refunded_amount_pence, 0))
@@ -234,6 +243,13 @@ export function toRecord(r: Row): FundraiserRecord {
     otherCauseName: textOrNull(r.other_cause_name),
     // Event pages: when staff last set its short name; null before then.
     slugSetAt: iso(r.slug_set_at),
+    // Team pages: false and null on everything that is not a team or a member of one.
+    isTeam: r.is_team === true,
+    teamId: r.team_id == null ? null : Number(r.team_id),
+    teamShareMode: r.team_share_mode === "team" || r.team_share_mode === "organiser" ? r.team_share_mode : null,
+    teamLeftAt: iso(r.team_left_at),
+    teamNudge1At: iso(r.team_nudge_1_at),
+    teamNudge2At: iso(r.team_nudge_2_at),
   };
 }
 
@@ -373,7 +389,14 @@ const isSlugClash = (err: unknown): boolean =>
   typeof err === "object" && err !== null && (err as { code?: string }).code === "23505" &&
   /slug/.test(String((err as { constraint?: string }).constraint ?? "fundraisers_slug_key"));
 
-export async function createFundraiser(s: SignUp): Promise<FundraiserRecord> {
+/**
+ * Something more a sign up does in its own transaction, after it is inserted and before it is read
+ * back (team pages: a team's held invites, a member page's link to its team). If it throws, nothing
+ * of the sign up is kept.
+ */
+export type SignUpExtra = (client: PoolClient, id: number) => Promise<void>;
+
+export async function createFundraiser(s: SignUp, extra?: SignUpExtra): Promise<FundraiserRecord> {
   return inTransaction(async (client) => {
     // Two sign ups with the same name at the same moment can both pick the same free address; the
     // second then clashes on the unique slug. A savepoint lets it look again and take the next one.
@@ -381,7 +404,7 @@ export async function createFundraiser(s: SignUp): Promise<FundraiserRecord> {
       const slug = await freeSlug(client, s.title);
       await client.query("SAVEPOINT fundraiser_slug");
       try {
-        return await insertSignUp(client, s, slug);
+        return await insertSignUp(client, s, slug, extra);
       } catch (err) {
         if (!isSlugClash(err) || attempt >= 5) throw err;
         await client.query("ROLLBACK TO SAVEPOINT fundraiser_slug");
@@ -390,7 +413,7 @@ export async function createFundraiser(s: SignUp): Promise<FundraiserRecord> {
   });
 }
 
-async function insertSignUp(client: PoolClient, s: SignUp, slug: string): Promise<FundraiserRecord> {
+async function insertSignUp(client: PoolClient, s: SignUp, slug: string, extra?: SignUpExtra): Promise<FundraiserRecord> {
   const inserted = await client.query<{ id: number }>(
     // TASK-499: the address goes in its separate boxes; the old single box is left empty.
     `INSERT INTO fundraisers
@@ -425,6 +448,7 @@ async function insertSignUp(client: PoolClient, s: SignUp, slug: string): Promis
     entityId: id,
     data: { slug, path: s.path, kind: s.kind, title: s.title, public: s.public, sharesWithOther: s.sharesWithOther },
   });
+  if (extra) await extra(client, id);
   return reread(client, id);
 }
 
@@ -449,6 +473,15 @@ export interface FundraiserSummary extends FundraiserRecord {
 /** Every sign up, newest first, for the admin's list. */
 export async function listAllFundraisers(): Promise<FundraiserSummary[]> {
   const r = await pool.query(`${WITH_SUMS} ORDER BY f.created_at DESC, f.id DESC`);
+  return r.rows.map((row) => ({ ...toRecord(row), meter: meterOf(row), editWaiting: Boolean(row.edit_waiting) }));
+}
+
+/**
+ * Team pages: the sign ups matching a WHERE clause of the caller's (written in code, never from
+ * input; values only ever as parameters), each with its meter, oldest first. For a team's members.
+ */
+export async function listFundraisersWhere(where: string, params: unknown[]): Promise<FundraiserSummary[]> {
+  const r = await pool.query(`${WITH_SUMS} WHERE ${where} ORDER BY f.created_at, f.id`, params);
   return r.rows.map((row) => ({ ...toRecord(row), meter: meterOf(row), editWaiting: Boolean(row.edit_waiting) }));
 }
 
@@ -585,6 +618,8 @@ export async function patchFundraiser(id: number, patch: AdminPatch, actor: stri
   return inTransaction(async (client) => {
     const before = await lockFundraiser(client, id);
     checkTimes(before, patch);
+    // Team pages: a team, or a page still on one, raises money (the table's check holds it too).
+    if (patch.path === "event" && (before.isTeam || (before.teamId && !before.teamLeftAt))) throw new FundraiserError("team_path");
     const newSlug = typeof patch.slug === "string" && patch.slug !== before.slug ? patch.slug : null;
     if (newSlug) {
       await client.query(SLUG_LOCK);
@@ -627,16 +662,52 @@ export async function patchFundraiser(id: number, patch: AdminPatch, actor: stri
  * row's lock, so a gift recorded at the same moment cannot slip past. Organisers can never change it
  * (their changes, editSchema, do not take it).
  */
-export async function setFundraiserSplit(id: number, split: FundraiserSplit, actor: string): Promise<FundraiserRecord> {
+export async function setFundraiserSplit(
+  id: number,
+  split: FundraiserSplit,
+  actor: string,
+  /** Team pages: whose split it is, for a team that shares. Kept as it was when not given. */
+  teamShareMode?: "team" | "organiser" | null,
+): Promise<FundraiserRecord> {
   return inTransaction(async (client) => {
     const before = await lockFundraiser(client, id);
-    const gifts = await client.query<{ n: string }>("SELECT count(*) AS n FROM donations WHERE fundraiser_id = $1", [id]);
-    const cash = await client.query<{ n: string }>("SELECT count(*) AS n FROM fundraiser_cash WHERE fundraiser_id = $1", [id]);
+    // Team pages: a member page of a whole team split has the team's split; only the team's changes.
+    if (before.teamId && !before.teamLeftAt) {
+      const t = await client.query<{ team_share_mode: string | null }>("SELECT team_share_mode FROM fundraisers WHERE id = $1", [before.teamId]);
+      if (t.rows[0]?.team_share_mode === "team") throw new FundraiserError("team_split");
+    }
+    // A whole team split is the team's and every current member's: all of them have no gifts, or
+    // none of them changes. Read under the team's lock, so a member joining at the same moment waits.
+    // Team pages: a team that shares says whose split it is. Turning sharing (back) on asks; a
+    // correction of a team already sharing keeps the mode it has unless a new one is given.
+    const isTeam = before.isTeam === true;
+    const newMode = !isTeam || !split.sharesWithOther ? null : teamShareMode ?? (before.sharesWithOther === true ? before.teamShareMode ?? null : null);
+    if (isTeam && split.sharesWithOther && !newMode) throw new FundraiserError("team_mode_missing");
+    const wasWholeTeam = isTeam && before.teamShareMode === "team";
+    const wholeTeam = wasWholeTeam || newMode === "team";
+    const members = wholeTeam
+      ? (await client.query<{ id: number }>("SELECT id FROM fundraisers WHERE team_id = $1 AND team_left_at IS NULL FOR UPDATE", [id])).rows.map((r) => Number(r.id))
+      : [];
+    const all = [id, ...members];
+    const gifts = await client.query<{ n: string }>("SELECT count(*) AS n FROM donations WHERE fundraiser_id = ANY($1)", [all]);
+    const cash = await client.query<{ n: string }>("SELECT count(*) AS n FROM fundraiser_cash WHERE fundraiser_id = ANY($1)", [all]);
     if (Number(gifts.rows[0]?.n ?? 0) > 0 || Number(cash.rows[0]?.n ?? 0) > 0) throw new FundraiserError("has_gifts");
+    // A team that stops sharing has no split mode any more (the table's check holds them together).
     await client.query(
-      `UPDATE fundraisers SET shares_with_other = $1, nbcc_share_percent = $2, other_cause_name = $3, updated_at = now(), updated_by = $4 WHERE id = $5`,
+      `UPDATE fundraisers SET shares_with_other = $1, nbcc_share_percent = $2, other_cause_name = $3,
+              team_share_mode = CASE WHEN $1::boolean THEN team_share_mode ELSE NULL END, updated_at = now(), updated_by = $4 WHERE id = $5`,
       [split.sharesWithOther, split.nbccSharePercent, split.otherCauseName, actor, id],
     );
+    if (isTeam && newMode) await client.query("UPDATE fundraisers SET team_share_mode = $2 WHERE id = $1", [id, newMode]);
+    // Every current member gets a whole team split; one that was the whole team's and is no longer
+    // (not sharing now) is cleared with it. Just the organiser's leaves the members as they are.
+    if (newMode === "team" || (wasWholeTeam && !split.sharesWithOther)) {
+      await client.query(
+        `UPDATE fundraisers SET shares_with_other = $1, nbcc_share_percent = $2, other_cause_name = $3, updated_at = now(), updated_by = $4
+          WHERE team_id = $5 AND team_left_at IS NULL`,
+        [split.sharesWithOther, split.nbccSharePercent, split.otherCauseName, actor, id],
+      );
+    }
     await insertAudit(client, {
       actor,
       action: "fundraiser.split_changed",
@@ -646,6 +717,7 @@ export async function setFundraiserSplit(id: number, split: FundraiserSplit, act
         slug: before.slug,
         was: { sharesWithOther: before.sharesWithOther ?? null, nbccSharePercent: before.nbccSharePercent ?? null, otherCauseName: before.otherCauseName ?? null },
         now: split,
+        ...(wholeTeam ? { members } : {}),
       },
     });
     return reread(client, id);
@@ -678,7 +750,8 @@ export async function moveFundraiser(
       // the first, and the email goes exactly once (now, or at the switch).
       const settings = await client.query<{ page_on: boolean }>("SELECT page_on FROM fundraising_settings WHERE id = 1 FOR SHARE");
       const pageOn = settings.rows[0]?.page_on ?? false;
-      livePending = !pageOn && hasPage({ ...before, status: "approved" });
+      // Team pages: a team's emails (its live email and the invites) always wait for the switch.
+      livePending = !pageOn && (before.isTeam === true || hasPage({ ...before, status: "approved" }));
       await client.query(
         `UPDATE fundraisers SET status = 'approved', approved_at = now(), approved_by = $1, declined_reason = NULL,
                 live_email_pending = $2, updated_at = now(), updated_by = $1 WHERE id = $3`,
@@ -714,7 +787,8 @@ export async function moveFundraiser(
 
 // An approved page holder still waiting for "Your page is live".
 // Event pages: an event's page is live too, so an event approved while it is off waits as well.
-const WAITING_LIVE = "live_email_pending AND status = 'approved' AND public AND path IN ('raising', 'event')";
+// Team pages: a team waits too, page or not.
+const WAITING_LIVE = "live_email_pending AND status = 'approved' AND (is_team OR (public AND path IN ('raising', 'event')))";
 
 /**
  * Claim ONE approved page holder still waiting for "Your page is live", past `afterId`, clearing its

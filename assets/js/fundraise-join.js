@@ -19,8 +19,19 @@
   "use strict";
 
   var SCRIPT_URL = "https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit&onload=nbccJoinTurnstileReady";
+  // The sign up tidy (Jaimie, 2026-10-03): the same words as the sign up form and the server.
   var UNDER_18 =
-    "You need to be 18 or over to set up a page. Ask a parent, guardian or another grown up you trust to set it up for you: they can name you on the page (for example, 'for Ella's 10th birthday'). Any questions, call 01292 811 015 or email events@nbcc.scot.";
+    "You need to be 18 or over to sign up. A parent, carer or another adult you trust can do it for you and name you on the page. If you'd like to talk it through, call 01292 811 015 or email events@nbcc.scot.";
+  // One question at a time, with a progress bar of three stages (assets/js/fundraise-steps.js).
+  var STAGES = ["About you", "Your page", "Send"];
+  var StepsLib = null;
+  if (typeof module !== "undefined" && module.exports && typeof require === "function") {
+    try {
+      StepsLib = require("./fundraise-steps.js");
+    } catch (e) {
+      StepsLib = null;
+    }
+  }
   var MSG = {
     sending: "Sending…",
     waiting: "One moment, we're still checking you're not a robot. Please press Join the team again in a second.",
@@ -104,8 +115,47 @@
         need(el(id), yes);
       });
     }
-    form.addEventListener("change", applyAll);
+    // --- the sign up tidy: Next, Back and the progress bar -------------------------------------------
+    var Steps = win.NBCCFormSteps || StepsLib;
+    var steps = Array.prototype.slice.call(form.querySelectorAll("[data-step]"));
+    var ageStep = form.querySelector("[data-age-step]");
+    var wizard = null;
+    if (Steps && steps.length > 1) {
+      wizard = Steps.create(form, {
+        doc: doc,
+        win: win,
+        steps: steps,
+        nav: form.querySelector("[data-step-nav]"),
+        progress: form.querySelector("[data-progress]"),
+        news: form.querySelector("[data-step-news]"),
+        stages: function () {
+          return STAGES;
+        },
+        lift: function (at, count) {
+          return at === count ? "Last step!" : "";
+        },
+        validate: function (step) {
+          return Steps.checkStep(win, step, null);
+        },
+        canLeave: function (step) {
+          // Under 18: Next stays here. The note says what to do instead.
+          if (step === ageStep && under18()) {
+            applyAll();
+            return false;
+          }
+          return true;
+        },
+        onShow: function () {
+          if (summary) summary.hidden = true;
+        },
+      });
+    }
+    form.addEventListener("change", function () {
+      applyAll();
+      if (wizard) wizard.refresh();
+    });
     applyAll();
+    if (wizard) wizard.refresh();
 
     // A text box grows with what is typed, so nothing scrolls inside it (Jaimie's rule).
     Array.prototype.forEach.call(form.querySelectorAll("textarea"), function (t) {
@@ -229,7 +279,20 @@
       };
       if (shared && typeof shared.validateForm === "function") {
         if (summary) summary.textContent = MSG.check;
-        return shared.validateForm(form, { summary: summary, extraChecks: extra }).valid;
+        var ok = shared.validateForm(form, { summary: summary, extraChecks: extra }).valid;
+        // Anything wrong: back to the first step with a problem, with the focus on it.
+        var flagged = !ok && wizard ? form.querySelector('[aria-invalid="true"]') : null;
+        var step = flagged ? wizard.stepOf(flagged) : null;
+        if (step) {
+          wizard.goTo(step);
+          if (summary) summary.hidden = true;
+          try {
+            flagged.focus();
+          } catch (e) {
+            /* focus unavailable */
+          }
+        }
+        return ok;
       }
       if (serverFields) {
         say(
@@ -281,9 +344,15 @@
     form.addEventListener("submit", function (e) {
       e.preventDefault();
       if (sending) return;
+      // Enter in a box before the last step is Next, not Join.
+      if (wizard && !wizard.isLast()) {
+        wizard.next();
+        return;
+      }
       say("", null);
       if (under18()) {
         applyAll();
+        if (wizard && ageStep) wizard.goTo(ageStep);
         return;
       }
       if (!validate(null)) return;

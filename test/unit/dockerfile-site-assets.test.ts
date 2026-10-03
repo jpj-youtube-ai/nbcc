@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import { resolve } from "node:path";
 
 // The site router serves the marketing pages from the app's WORKDIR at runtime
@@ -44,5 +44,14 @@ describe("Dockerfile bakes every served marketing page into the image", () => {
     expect(missing, `served .html files missing from the Dockerfile COPY: ${missing.join(", ")}`).toEqual(
       [],
     );
+  });
+
+  // The sign up tidy: some pages are served by a route of their own, not by _redirects (the team
+  // join form was one, and was never in the image: its page read fundraise-join.html and found
+  // nothing). Every page at the top of the repo is one the app serves, so every one is copied.
+  it("COPYies every .html page at the top of the repo", () => {
+    const copied = copiedFiles();
+    const pages = readdirSync(repoRoot).filter((f) => f.endsWith(".html"));
+    expect(pages.filter((f) => !copied.has(f))).toEqual([]);
   });
 });

@@ -17,8 +17,9 @@ const shared = require(resolve(ROOT, "assets/js/main.js"));
 const { initJoinForm } = require(resolve(ROOT, "assets/js/fundraise-join.js"));
 const template = readFileSync(resolve(ROOT, "fundraise-join.html"), "utf8");
 
+// The sign up tidy (Jaimie, 2026-10-03): the same words on every form.
 const UNDER_18 =
-  "You need to be 18 or over to set up a page. Ask a parent, guardian or another grown up you trust to set it up for you: they can name you on the page (for example, 'for Ella's 10th birthday'). Any questions, call 01292 811 015 or email events@nbcc.scot.";
+  "You need to be 18 or over to sign up. A parent, carer or another adult you trust can do it for you and name you on the page. If you'd like to talk it through, call 01292 811 015 or email events@nbcc.scot.";
 
 let calls: Array<{ url: string; body: Record<string, unknown> | null }>;
 let answer: (url: string) => { status: number; body: unknown };
@@ -59,7 +60,11 @@ const tick = (id: string) => {
   el.checked = true;
   el.dispatchEvent(new Event("change", { bubbles: true }));
 };
+// The sign up tidy: one question at a time. Next to the last step, then Join the team.
+const next = () => $<HTMLButtonElement>("[data-next]").click();
+const current = () => document.querySelector<HTMLElement>("[data-step].is-current")!;
 const submit = async () => {
+  for (let i = 0; i < 8 && !$("[data-next]").hidden; i++) next();
   $("#joinForm").dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
   await flush();
 };
@@ -133,6 +138,59 @@ describe("the join form", () => {
     await submit();
     expect($("[data-join-closed]").hidden).toBe(false);
     expect($("[data-join-open]").hidden).toBe(true);
+  });
+});
+
+describe("one question at a time (the sign up tidy)", () => {
+  it("shows a progress bar of three stages, and says how long it takes", () => {
+    load();
+    expect([...document.querySelectorAll(".fr-progress__label")].map((n) => n.textContent)).toEqual(["About you", "Your page", "Send"]);
+    expect($("[data-progress-step]").textContent).toBe("Step 1 of 3: About you");
+    expect(document.querySelector(".fr-progress__stage.is-current")!.getAttribute("aria-current")).toBe("step");
+    expect($(".fr-one-liner").textContent).toBe("It only takes a couple of minutes.");
+  });
+
+  it("stays on a step with something missing, with a warm prompt and the focus on it", () => {
+    load();
+    next();
+    expect(current().contains($("#firstName"))).toBe(true);
+    expect(document.getElementById("firstName-error")!.textContent).toBe("Almost! Just add the first name.");
+    expect(document.activeElement).toBe($("#firstName"));
+  });
+
+  it("goes on with Next, back with Back keeping every answer, and lifts on the last step", () => {
+    load();
+    fillIn();
+    next();
+    expect(current().contains($("#over18Yes"))).toBe(true);
+    next();
+    expect($("[data-progress-step]").textContent).toBe("Step 2 of 3: Your page");
+    next();
+    expect(($("[data-progress-step]").textContent ?? "") + ($("[data-progress-lift]").textContent ?? "")).toBe("Step 3 of 3: Send Last step!");
+    expect($("[data-next]").hidden).toBe(true);
+    $<HTMLButtonElement>("[data-back]").click();
+    $<HTMLButtonElement>("[data-back]").click();
+    $<HTMLButtonElement>("[data-back]").click();
+    expect($("#firstName").value).toBe("Jack");
+    expect($("[data-back]").hidden).toBe(true);
+  });
+
+  it("skips the sharing question when the team is not asked it", () => {
+    load();
+    fillIn();
+    next();
+    next();
+    next();
+    expect(current().contains($("#sharesYes"))).toBe(false);
+  });
+
+  it("holds an under 18 on that step", () => {
+    load();
+    fillIn();
+    tick("over18No");
+    next();
+    next();
+    expect(current().contains($("#over18Yes"))).toBe(true);
   });
 });
 

@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { dateParts, escapeHtml, time12 } from "../events/render";
 import { MATERIALS_STATEMENT, MATERIALS_STATEMENT_SHORT } from "../legal/registration";
-import { splitStatement, type FundraiserRecord, type FundraiserStatus, type Meter } from "./model";
+import { hasPage, splitStatement, type FundraiserRecord, type FundraiserStatus, type Meter } from "./model";
 import { TRACKED_PIECES, trackedPath, type TrackedPiece } from "./material-codes";
 import { qrSvg } from "./qr";
 import { formatPounds, shorten } from "./render";
@@ -147,7 +147,9 @@ export function materialFacts(
   const where = [f.venue, f.town].map((s) => (s ?? "").trim()).filter(Boolean).join(", ") || null;
   const source = (f.cardLine ?? "").trim() || firstSentence(f.description ?? "");
   const line = source ? shorten(source, 140) : null;
-  const page = f.path === "raising" && f.public && (f.status === "approved" || f.status === "finished") ? urls.pageUrl : null;
+  // Event pages: an event with a page carries it too, as a fundraiser's does (the caller gives its
+  // /event/ address); one without falls back to Get involved, as before.
+  const page = hasPage(f) ? urls.pageUrl : null;
   const listed = f.path === "event" && f.public;
   const link = page ?? (listed ? urls.getInvolvedUrl : null);
   // The short links sit on the same public site as Get involved.

@@ -2,7 +2,18 @@ import { Router, type Request, type Response } from "express";
 import { z, type ZodIssue } from "zod";
 import { authorizeSection, authorizeSectionAsAdmin } from "./admin-authz";
 import { actorOf } from "./admin";
-import { adminPatchSchema, FINISH_BEFORE_START, hasPage, kindLabelOf, shortName, splitSchema, type FundraiserRecord } from "../fundraising/model";
+import {
+  adminPatchSchema,
+  EVENT_SHORT_NAME_NEEDED,
+  FINISH_BEFORE_START,
+  hasPage,
+  kindLabelOf,
+  pagePath,
+  shortName,
+  splitSchema,
+  type FundraiserRecord,
+} from "../fundraising/model";
+import { pageUrlFor } from "../fundraising/page-url";
 import { loadCategories } from "../db/fundraising-categories";
 import { isActiveCategory } from "../fundraising/categories";
 import {
@@ -27,7 +38,7 @@ import {
 } from "../db/fundraisers";
 import { insertEventImage } from "../db/events";
 import { validateUpload } from "../newsletter/image-validation";
-import { sendApprovedEmail, sendEditDecisionEmail, sendWaitingLiveEmails, fundraiserPageUrl } from "../fundraising/send";
+import { sendApprovedEmail, sendEditDecisionEmail, sendWaitingLiveEmails } from "../fundraising/send";
 import { sendFinishedTouch } from "../fundraising/touch-runner";
 
 // TASK-493: the admin API behind Admin > Fundraising. Section "fundraising": admins and editors
@@ -108,6 +119,9 @@ function failed(res: Response, what: string, err: unknown): Response {
         return res.status(409).json({ error: "That change has already been dealt with" });
       case "replaced":
         return res.status(409).json({ error: "This change has been replaced; look again" });
+      case "needs_short_name":
+        // Event pages: the short name is its web address, so it is set before anything is public.
+        return res.status(409).json({ error: EVENT_SHORT_NAME_NEEDED, fields: { slug: EVENT_SHORT_NAME_NEEDED } });
       case "bad_times":
         // A staff change names the box to look at; an organiser's change can only be rejected or
         // waited on, so it says why it cannot be approved.
@@ -136,7 +150,9 @@ async function bestEffort(what: string, send: () => Promise<unknown>): Promise<v
 }
 
 function forAdmin(f: FundraiserRecord) {
-  return { ...f, kindLabel: kindLabelOf(f), pageUrl: hasPage(f) ? fundraiserPageUrl(f.slug) : null };
+  // Event pages: pagePath is where its page is, or would be (/event/<short name> for an event), for
+  // the admin's QR code links; pageUrl only while it has one.
+  return { ...f, kindLabel: kindLabelOf(f), pageUrl: hasPage(f) ? pageUrlFor(f) : null, pagePath: pagePath(f) };
 }
 
 // --- the switch ----------------------------------------------------------------------------------

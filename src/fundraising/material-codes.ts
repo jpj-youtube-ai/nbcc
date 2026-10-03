@@ -1,4 +1,4 @@
-import { hasPage, isValidSlug, type FundraiserRecord } from "./model";
+import { hasPage, isValidSlug, pagePath, type FundraiserRecord } from "./model";
 
 // TASK-512: a QR code of its own for every printed piece, so a scan says where it came from
 // ("Sam's Santa Dash, A4 poster"). Pure: no pool, no clock.
@@ -77,7 +77,8 @@ export function scanTarget(
   code: MaterialCode,
 ): string | null {
   const tag = `?utm_medium=qr&utm_campaign=${scanCampaign(f.id, code)}`;
-  if (hasPage(f)) return isValidSlug(f.slug) ? `/fundraise/${f.slug}${tag}` : null;
+  // Event pages: an event's page is /event/<short name> (pagePath).
+  if (hasPage(f)) return isValidSlug(f.slug) ? `${pagePath(f)}${tag}` : null;
   if (f.path === "event" && f.public && (f.status === "approved" || f.status === "finished")) return `/get-involved${tag}`;
   return null;
 }

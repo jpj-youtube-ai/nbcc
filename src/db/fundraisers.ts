@@ -3,6 +3,7 @@ import { pool } from "./pool";
 import { insertAudit } from "./donations";
 import { ACCESS } from "../events/model";
 import {
+  approveProblem,
   BOOKINGS,
   finishTimeProblem,
   hasPage,
@@ -30,7 +31,17 @@ import { freeSlugFrom, initialsSlug } from "../fundraising/slugs";
 // writes its audit_log row in the SAME transaction, against entity "fundraiser" and the
 // fundraiser's id, so the admin's History for a fundraiser is one query.
 
-export type FundraiserErrorReason = "not_found" | "bad_status" | "slug_taken" | "not_waiting" | "replaced" | "bad_times" | "has_gifts";
+export type FundraiserErrorReason =
+  | "not_found"
+  | "bad_status"
+  | "slug_taken"
+  | "not_waiting"
+  | "replaced"
+  | "bad_times"
+  // Event pages: an event cannot be approved until staff have set its short name (approveProblem).
+  | "needs_short_name"
+  // Jaimie, 2026-10-03: the split cannot change once a fundraiser has had a gift.
+  | "has_gifts";
 
 export class FundraiserError extends Error {
   constructor(
@@ -119,6 +130,7 @@ const RECORD_COLUMNS = `f.id, f.slug, f.path, f.kind, f.title, f.description,
          f.off_list_at, f.off_list_by,
          f.first_name, f.last_name, f.kind_other, f.instagram, f.facebook,
          f.over_18, f.shares_with_other, f.nbcc_share_percent, f.other_cause_name,
+         f.slug_set_at,
          (SELECT c.label FROM fundraising_categories c WHERE c.key = f.kind) AS kind_label`;
 const SELECT = `
   SELECT ${RECORD_COLUMNS}
@@ -220,6 +232,8 @@ export function toRecord(r: Row): FundraiserRecord {
     sharesWithOther: r.shares_with_other == null ? null : Boolean(r.shares_with_other),
     nbccSharePercent: r.nbcc_share_percent == null ? null : Number(r.nbcc_share_percent),
     otherCauseName: textOrNull(r.other_cause_name),
+    // Event pages: when staff last set its short name; null before then.
+    slugSetAt: iso(r.slug_set_at),
   };
 }
 
@@ -585,6 +599,9 @@ export async function patchFundraiser(id: number, patch: AdminPatch, actor: stri
     // TASK-511: what they would like is saved whole; printed QR codes not sent are kept as stored.
     if (full.wants && full.wants.qrCount === undefined) full.wants = { ...full.wants, qrCount: before.wants.qrCount ?? 0 };
     const changed = await applyPatch(client, id, full, actor);
+    // Event pages: staff saving a short name, new or the suggested one kept, is what lets an event
+    // be approved (approveProblem).
+    if (typeof patch.slug === "string") await client.query("UPDATE fundraisers SET slug_set_at = now() WHERE id = $1", [id]);
     // TASK-511: the old address keeps working, with a 301 to the new one, and is never reused.
     if (newSlug) {
       await client.query(
@@ -651,6 +668,8 @@ export async function moveFundraiser(
   return inTransaction(async (client) => {
     const before = await lockFundraiser(client, id);
     if (!ALLOWED_FROM[move].includes(before.status)) throw new FundraiserError("bad_status");
+    // Event pages: checked under the row's lock, so a short name cleared a moment ago is seen.
+    if (move === "approve" && approveProblem(before)) throw new FundraiserError("needs_short_name");
     let livePending = false;
     if (move === "approve") {
       // TASK-497: a page holder approved while fundraising is off waits for "Your page is live",
@@ -694,7 +713,8 @@ export async function moveFundraiser(
 }
 
 // An approved page holder still waiting for "Your page is live".
-const WAITING_LIVE = "live_email_pending AND status = 'approved' AND public AND path = 'raising'";
+// Event pages: an event's page is live too, so an event approved while it is off waits as well.
+const WAITING_LIVE = "live_email_pending AND status = 'approved' AND public AND path IN ('raising', 'event')";
 
 /**
  * Claim ONE approved page holder still waiting for "Your page is live", past `afterId`, clearing its

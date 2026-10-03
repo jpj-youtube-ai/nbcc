@@ -140,10 +140,13 @@ describe("the poster in three sizes", () => {
     expect(renderPoster(facts(), ASSETS, "a3")).toContain("Your A3 poster");
   });
 
-  it("an event's poster still has a code of its own, which leads to Get involved", () => {
-    const html = renderPoster(facts({ path: "event" }), ASSETS, "a3");
+  // Event pages: an event's poster carries its own page now (the caller gives its /event/ address).
+  it("an event's poster still has a code of its own, which leads to its own page", () => {
+    const f = record({ path: "event" });
+    const d = materialFacts(f, f.meter, { pageUrl: "https://nbcc.test/event/sams-santa-dash", getInvolvedUrl: INVOLVED });
+    const html = renderPoster(d, ASSETS, "a3");
     expect(html).toContain(`d="${qrPath("https://nbcc.test/q/12-a3")}"`);
-    expect(html).toContain("nbcc.test/get-involved");
+    expect(html).toContain("nbcc.test/event/sams-santa-dash");
   });
 
   it("no code at all for a fundraiser not on the website", () => {

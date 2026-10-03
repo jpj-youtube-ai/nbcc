@@ -8,6 +8,7 @@ import {
   checkOrganiserEdit,
   editSchema,
   hasPage,
+  pagePath,
   isListed,
   publicCard,
   publicPage,
@@ -46,7 +47,8 @@ import {
   FundraiserError,
 } from "../db/fundraisers";
 import { countCodeTry, createSession, deleteSession, deleteSignInCode, findSession, saveSignInCode } from "../db/fundraiser-sign-in";
-import { sendFinishedStaffEmail, sendSignInCodeEmail, sendSignUpEmails, fundraiserPageUrl, manageUrl } from "../fundraising/send";
+import { sendFinishedStaffEmail, sendSignInCodeEmail, sendSignUpEmails, manageUrl } from "../fundraising/send";
+import { pageUrlFor } from "../fundraising/page-url";
 import { subscribeSelf } from "../newsletter/self-signup";
 import { useInvite } from "./fundraise-invite";
 import { useAgain } from "./fundraise-again";
@@ -504,9 +506,10 @@ export async function getManageSession(req: Request, res: Response): Promise<Res
           path: f.path,
           status: f.status,
           public: f.public,
-          pageUrl: page ? fundraiserPageUrl(f.slug) : null,
+          // Event pages: an event's page and QR codes are at /event/<short name> (pagePath).
+          pageUrl: page ? pageUrlFor(f) : null,
           // The QR code is the page's, so only a page has one (it is no longer on the page itself).
-          qrUrl: page ? `/fundraise/${f.slug}/qr.svg` : null,
+          qrUrl: page ? `${pagePath(f)}/qr.svg` : null,
           meter: f.meter,
           editable: editableOf(f),
           linkBoxes: linkBoxesOf(f),
@@ -528,7 +531,7 @@ export async function getManageSession(req: Request, res: Response): Promise<Res
             social: `/api/fundraise/manage/fundraisers/${f.id}/materials/social`,
             sponsorForm: `/api/fundraise/manage/fundraisers/${f.id}/materials/sponsor-form`,
             certificate: f.status === "finished" ? `/api/fundraise/manage/fundraisers/${f.id}/materials/certificate` : null,
-            qrPng: page ? `/fundraise/${f.slug}/qr.png` : null,
+            qrPng: page ? `${pagePath(f)}/qr.png` : null,
           },
           // TASK-512: "Ask us to print these": whether they can, and where their posters and
           // leaflets are up to (POST .../print-request, src/routes/fundraise-materials.ts); null when

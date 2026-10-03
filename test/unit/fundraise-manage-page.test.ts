@@ -237,6 +237,15 @@ describe("signed in", () => {
     expect($("[data-f-raised]", c).textContent).toContain("£250");
   });
 
+  // Event pages: an approved public event has its own page and QR code, at /event/<short name>.
+  it("shows an event's own page and QR code, and says its page is live", async () => {
+    await load("", signedIn(event({ pageUrl: "https://nbcc.test/event/kq", qrUrl: "/event/kq/qr.svg" })));
+    const c = card(8);
+    expect($("[data-f-status]", c).textContent).toBe("Approved. Your event's page is live, and it is on our Get involved page.");
+    expect($<HTMLAnchorElement>("a[data-f-page]", c).getAttribute("href")).toBe("https://nbcc.test/event/kq");
+    expect($<HTMLImageElement>("img[data-f-qr-img]", c).getAttribute("src")).toBe("/event/kq/qr.svg");
+  });
+
   it("has no page link and no QR code for one without a page", async () => {
     await load("", signedIn(event()));
     expect($("[data-f-qr]", card(8)).hidden).toBe(true);

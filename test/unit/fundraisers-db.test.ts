@@ -221,9 +221,11 @@ describe("approving while fundraising is switched off", () => {
     expect((approveSql(calls) as [string, unknown[]])[1]).toEqual(["admin:kim@example.com", false, 9]);
   });
 
+  // Event pages: a public event has a page now, so it waits like any page holder
+  // (test/unit/event-pages-db.test.ts); a private one still has none.
   it.each([
     ["a private sign up", { public: false }],
-    ["an event", { path: "event" }],
+    ["a private event", { path: "event", public: false, slug_set_at: "2026-10-03T09:00:00Z" }],
   ])("does not mark %s, who has no page and is told they are on our list now", async (_what, over) => {
     approving(over, false);
     expect((await moveFundraiser(9, "approve", "admin:kim@example.com")).livePending).toBe(false);
@@ -251,7 +253,7 @@ describe("switching fundraising on, for the people waiting", () => {
     const [sql, params] = q().mock.calls.at(-1) as [string, unknown[]];
     expect(sql).toMatch(/UPDATE fundraisers f SET live_email_pending = false/);
     expect(sql).toMatch(/WHERE f\.id = \(\s*SELECT id FROM fundraisers/);
-    expect(sql).toMatch(/live_email_pending AND status = 'approved' AND public AND path = 'raising' AND id > \$1/);
+    expect(sql).toMatch(/live_email_pending AND status = 'approved' AND public AND path IN \('raising', 'event'\) AND id > \$1/);
     expect(sql).toMatch(/ORDER BY id LIMIT 1 FOR UPDATE SKIP LOCKED/);
     expect(sql).toMatch(/RETURNING/);
     expect(params).toEqual([0]);
@@ -267,7 +269,7 @@ describe("switching fundraising on, for the people waiting", () => {
   it("counts the page holders waiting", async () => {
     q().mockResolvedValueOnce({ rows: [{ n: "3" }] });
     expect(await countWaitingLiveEmails()).toBe(3);
-    expect(String(q().mock.calls.at(-1)?.[0])).toMatch(/count\(\*\).*live_email_pending AND status = 'approved' AND public AND path = 'raising'/s);
+    expect(String(q().mock.calls.at(-1)?.[0])).toMatch(/count\(\*\).*live_email_pending AND status = 'approved' AND public AND path IN \('raising', 'event'\)/s);
   });
 
   it("can mark one as waiting again, when its email did not go", async () => {

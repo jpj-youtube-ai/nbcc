@@ -1018,6 +1018,12 @@ export interface FundraiserRecord {
   sharesWithOther?: boolean | null;
   nbccSharePercent?: number | null;
   otherCauseName?: string | null;
+  /**
+   * Event pages: when staff last set its short name (the slug) in the admin. An event cannot be
+   * approved until they have (approveProblem): its short name is its web address, /event/<slug>.
+   * Null on a sign up staff have not looked at yet, and on a raising one, which never needs it.
+   */
+  slugSetAt?: string | null;
 }
 
 /** The event answers a card shows. All of them are meant for the public; none is private. */
@@ -1050,7 +1056,7 @@ export interface PublicCard extends Partial<PublicEventAnswers> {
   town: string;
   imageSrc: string | null;
   organisedBy: string;
-  /** The fundraiser's own page, or null for an event sign up (listed as an event, no page). */
+  /** Its own page: /fundraise/<slug>, or /event/<short name> for an event (pagePath). */
   url: string | null;
   meter: Meter;
   /**
@@ -1104,7 +1110,7 @@ export function publicCard(f: FundraiserRecord, m: Meter): PublicCard {
     imageSrc: f.imageSrc,
     // An event may be credited to the name they gave (their group or business); a page never is.
     organisedBy: f.path === "event" && f.creditName ? f.creditName : shortName(f.name),
-    url: f.path === "raising" ? `/fundraise/${f.slug}` : null,
+    url: pagePath(f),
     meter: m,
     cardLine: f.cardLine,
     endTime: f.endTime,
@@ -1146,10 +1152,36 @@ export function isListed(
 }
 
 /**
- * Does it have a page of its own? Public and raising money, and approved, or finished: TASK-502 keeps
- * a finished fundraiser's page at the same address for good, so the giving link on a poster or a
- * social media post still works. A finished one is no longer listed on Get involved (isListed).
+ * Does it have a page of its own? Public, and approved, or finished: TASK-502 keeps a finished
+ * fundraiser's page at the same address for good, so the giving link on a poster or a social media
+ * post still works. A finished one is no longer listed on Get involved (isListed).
+ * Event pages: an event has one too now, at /event/<short name> (pagePath), as well as its card.
  */
 export function hasPage(f: Pick<FundraiserRecord, "status" | "public" | "path">): boolean {
-  return (f.status === "approved" || f.status === "finished") && f.public && f.path === "raising";
+  return (f.status === "approved" || f.status === "finished") && f.public && (f.path === "raising" || f.path === "event");
+}
+
+// --- event pages ---------------------------------------------------------------------------------
+
+/** Where an event's page lives: nbcc.scot/event/<short name>. */
+export const EVENT_PAGE_PREFIX = "/event";
+
+/**
+ * The page's path on the site: /event/<short name> for an event, /fundraise/<slug> for raising
+ * money. Both are the one stored slug, unique across the two kinds, so the two can never clash; each
+ * address answers only for its own kind (src/routes/fundraise-pages.ts sends the other on).
+ */
+export function pagePath(f: Pick<FundraiserRecord, "path" | "slug">): string {
+  return f.path === "event" ? `${EVENT_PAGE_PREFIX}/${f.slug}` : `/fundraise/${f.slug}`;
+}
+
+export const EVENT_SHORT_NAME_NEEDED = "Give this event a short name first, for its web address.";
+
+/**
+ * Why it cannot be approved yet, or null. Event pages: an event needs a short name set by staff
+ * first, as that is its web address for good (posters and QR codes carry it). A sign up raising money
+ * keeps its suggested address as before.
+ */
+export function approveProblem(f: Pick<FundraiserRecord, "path" | "slugSetAt">): string | null {
+  return f.path === "event" && !f.slugSetAt ? EVENT_SHORT_NAME_NEEDED : null;
 }

@@ -150,6 +150,8 @@ export const RESERVED_PREFIXES: string[] = [
   "/involved",
   // TASK-494: the fundraising sign up, each fundraiser's page and the manage page.
   "/fundraise",
+  // Event pages: each approved public event's own page, /event/<short name>.
+  "/event",
   "/g",
   "/gift-aid",
   "/health",

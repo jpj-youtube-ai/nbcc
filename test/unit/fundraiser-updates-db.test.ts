@@ -132,8 +132,9 @@ describe("posting an update", () => {
     expect(sqlIn(missing.calls, /INSERT/)).toBeUndefined();
   });
 
-  it("refuses one that is finished, not approved, an event, or has no page", async () => {
-    for (const f of [owner({ status: "finished" }), owner({ status: "new" }), owner({ path: "event" }), owner({ public: false })]) {
+  // Event pages: a public event has a page now, so only a private one is refused.
+  it("refuses one that is finished, not approved, a private event, or has no page", async () => {
+    for (const f of [owner({ status: "finished" }), owner({ status: "new" }), owner({ path: "event", public: false }), owner({ public: false })]) {
       answer(f);
       await expect(postUpdate(7, "sam@example.com", { text: "Hi", photo: null })).rejects.toMatchObject({ reason: "bad_status" });
     }

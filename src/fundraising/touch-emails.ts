@@ -15,7 +15,7 @@ import {
 } from "../email/brand";
 import { FOOTER_TEXT, POSTAL_ADDRESS } from "../legal/registration";
 import { FUNDRAISING_EMAIL, pounds, type BuiltEmail } from "./emails";
-import { shortName, type FundraiserRecord, type Meter } from "./model";
+import { pagePath, shortName, type FundraiserRecord, type Meter } from "./model";
 import type { TouchKind } from "./touch-rules";
 
 // TASK-515: the automatic emails to an organiser, built here and sent by ./touch-runner.ts.
@@ -75,10 +75,11 @@ const meterText = (raised: number, target: number | null) =>
   target ? `${pounds(raised)} raised of ${pounds(target)}` : `${pounds(raised)} raised so far`;
 
 /** All the links an organiser's emails use, from the site's address. */
-export function touchUrls(base: string, f: { id: number; slug: string }): TouchUrls {
+export function touchUrls(base: string, f: { id: number; slug: string; path?: FundraiserRecord["path"] }): TouchUrls {
   const b = base.replace(/\/+$/, "");
   return {
-    page: `${b}/fundraise/${f.slug}`,
+    // Event pages: an event's own page is /event/<short name>; without a kind it is a fundraiser's.
+    page: `${b}${pagePath({ slug: f.slug, path: f.path ?? "raising" })}`,
     manage: `${b}/fundraise/manage`,
     editTarget: `${b}/fundraise/manage#mineEditHeading`,
     certificate: `${b}/api/fundraise/manage/fundraisers/${f.id}/materials/certificate`,
@@ -88,7 +89,10 @@ export function touchUrls(base: string, f: { id: number; slug: string }): TouchU
 }
 
 /** What the emails need from a stored fundraiser and its meter. Raised never counts Gift Aid. */
-export function touchEmailData(f: Pick<FundraiserRecord, "id" | "slug" | "name" | "title" | "targetPence"> & { meter: Pick<Meter, "raisedPence"> }, base: string): TouchEmailData {
+export function touchEmailData(
+  f: Pick<FundraiserRecord, "id" | "slug" | "name" | "title" | "targetPence"> & Partial<Pick<FundraiserRecord, "path">> & { meter: Pick<Meter, "raisedPence"> },
+  base: string,
+): TouchEmailData {
   return { name: f.name, title: f.title, raisedPence: f.meter.raisedPence, targetPence: f.targetPence, urls: touchUrls(base, f) };
 }
 

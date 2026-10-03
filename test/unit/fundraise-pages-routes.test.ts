@@ -272,7 +272,9 @@ describe("a fundraiser's page", () => {
       ["robins-santa-dash", () => (state.fundraisers = [record({ status: "new" })])],
       ["robins-santa-dash", () => (state.fundraisers = [record({ status: "declined" })])],
       ["robins-santa-dash", () => (state.fundraisers = [record({ public: false })])],
-      ["robins-santa-dash", () => (state.fundraisers = [record({ path: "event" })])],
+      // Event pages: a public event's page is at /event/<x>, and /fundraise/<x> sends people on to
+      // it (event-pages-routes.test.ts); a private one has no page at either.
+      ["robins-santa-dash", () => (state.fundraisers = [record({ path: "event", public: false })])],
       ["robins-santa-dash", () => (state.fundraisingOn = false)],
     ];
     for (const [slug, arrange] of cases) {

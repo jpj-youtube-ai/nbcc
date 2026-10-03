@@ -110,7 +110,8 @@ Feature: Get involved and the public fundraising pages (TASK-494)
     When someone signs up the event "The BDD Quiz (bdd-fr)", ticketed on another website, to be shown on the website
     Then the fundraising answer is 200
     And the fundraiser "The BDD Quiz (bdd-fr)" is stored with its event answers
-    When "a5.fr.bdd@example.com" approves "The BDD Quiz (bdd-fr)"
+    When "a5.fr.bdd@example.com" keeps the short name of "The BDD Quiz (bdd-fr)"
+    And "a5.fr.bdd@example.com" approves "The BDD Quiz (bdd-fr)"
     And a visitor opens "/get-involved"
     Then the visitor gets status 200
     And the card for "The BDD Quiz (bdd-fr)" shows "Eight rounds and a raffle (bdd-fr)."

@@ -124,10 +124,13 @@ describe("the facts a piece is drawn from", () => {
     expect(d.linkWords).toBe("nbcc.test/fundraise/sams-santa-dash");
   });
 
-  it("point a public event's code at Get involved, where it is listed", () => {
-    const d = facts({ path: "event" });
-    expect(d.link).toBe(INVOLVED);
-    expect(d.linkWords).toBe("nbcc.test/get-involved");
+  // Event pages: a public event has its own page now, and the caller gives its /event/ address.
+  it("point a public event's code at its own page, as a fundraiser's", () => {
+    const f = record({ path: "event" });
+    const d = materialFacts(f, f.meter, { pageUrl: "https://nbcc.test/event/sams-santa-dash", getInvolvedUrl: INVOLVED });
+    expect(d.link).toBe("https://nbcc.test/event/sams-santa-dash");
+    expect(d.linkKind).toBe("page");
+    expect(d.linkWords).toBe("nbcc.test/event/sams-santa-dash");
   });
 
   it("give no code at all to a fundraiser that is not on the website", () => {

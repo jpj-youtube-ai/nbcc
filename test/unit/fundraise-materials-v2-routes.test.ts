@@ -136,9 +136,11 @@ describe("a piece's own QR code", () => {
     expect((await scan("12-a4")).headers.get("location")).toBe("/fundraise/sams-big-santa-dash?utm_medium=qr&utm_campaign=f12-a4");
   });
 
-  it("leads to Get involved for a listed event", async () => {
-    state.fundraisers = [record({ path: "event" })];
-    expect((await scan("12-a4")).headers.get("location")).toBe("/get-involved?utm_medium=qr&utm_campaign=f12-a4");
+  // Event pages: a listed event has its own page now, at /event/<short name>.
+  it("leads to a listed event's own page", async () => {
+    const ev = record({ path: "event" });
+    state.fundraisers = [ev];
+    expect((await scan("12-a4")).headers.get("location")).toBe(`/event/${ev.slug}?utm_medium=qr&utm_campaign=f12-a4`);
   });
 
   it("is the site's 404 for a fundraiser that is not there, not ours to show, or a code that is not one", async () => {

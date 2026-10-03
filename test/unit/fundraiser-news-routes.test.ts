@@ -207,7 +207,8 @@ describe("posting an update from the private area", () => {
   });
 
   it("is only for one still running with a page", async () => {
-    for (const over of [{ status: "finished" as const }, { path: "event" as const }, { public: false }]) {
+    // Event pages: a public event has a page now, so it may post news; a private one has nowhere to.
+    for (const over of [{ status: "finished" as const }, { path: "event" as const, public: false }, { public: false }]) {
       db.getFundraiser.mockResolvedValue(record(over));
       const res = await post({ text: "Hello" });
       expect(res.status).toBe(410);

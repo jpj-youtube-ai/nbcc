@@ -690,7 +690,8 @@ describe("approving, declining and finishing", () => {
   });
 
   it("says what the organiser's email will hold, which depends on the switch", async () => {
-    records = [fundraiser(1), fundraiser(2, { path: "event" }), fundraiser(3)];
+    // Event pages: a private event has no page, so it is told it is on our list; its short name is set.
+    records = [fundraiser(1), fundraiser(2, { path: "event", public: false, slugSetAt: "2026-10-03T09:00:00.000Z" }), fundraiser(3)];
     await openFundraising();
     await openRow(1);
     (q('[data-fraction="approve"]') as HTMLElement).click();

@@ -627,3 +627,6 @@
   .gi-chip, .gi-chip:active { transition: none; transform: none; }
 }
 
+
+/* Event pages: a community event's own page, under any booking button on its back. */
+.ev-book--page { margin-top: 10px; }

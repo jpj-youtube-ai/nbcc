@@ -30,6 +30,7 @@ const send = vi.hoisted(() => ({
   sendSignInCodeEmail: vi.fn(),
   sendFinishedStaffEmail: vi.fn(),
   fundraiserPageUrl: (slug: string) => `https://nbcc.test/fundraise/${slug}`,
+  eventPageUrl: (slug: string) => `https://nbcc.test/event/${slug}`,
   manageUrl: () => "https://nbcc.test/fundraise/manage",
 }));
 const stripeMock = vi.hoisted(() => ({ create: vi.fn() }));
@@ -356,6 +357,14 @@ describe("the private area", () => {
     });
     // A private one has no page, so no page link and no QR code.
     expect(body.fundraisers[1]).toMatchObject({ pageUrl: null, qrUrl: null });
+  });
+
+  // Event pages: an approved public event's page, and its QR codes, are at /event/<short name>.
+  it("gives an event its own page and QR codes, at /event/", async () => {
+    db.listForOrganiser.mockResolvedValue([record({ path: "event", slug: "sqn", title: "Sam's Quiz Night" })]);
+    const f = ((await run(getManageSession, { cookie: SAM })).body as { fundraisers: Array<Record<string, unknown>> }).fundraisers[0];
+    expect(f).toMatchObject({ pageUrl: "https://nbcc.test/event/sqn", qrUrl: "/event/sqn/qr.svg" });
+    expect((f.materials as Record<string, unknown>).qrPng).toBe("/event/sqn/qr.png");
   });
 
   // TASK-511 review: a sign up made since the form's second round changes Instagram and Facebook,

@@ -1327,7 +1327,7 @@ hosted-Checkout redirect stays the default fallback and no-JS safety net.
 | `GET /api/fundraisers` | **implemented** | TASK-493 (Get involved: approved public fundraisers with their meters; empty while switched off) |
 | `GET /api/fundraisers/:slug` | **implemented** | TASK-493 (one fundraiser's page: meter, supporter wall, what giving needs; 404 unless public, raising money, approved or (TASK-502) finished, and switched on) |
 | `POST /api/fundraisers/:slug/wall-message` | **implemented** | TASK-502 (the giver's message and wall choices, added from the thank you after paying, tied to the paid Stripe checkout session, once. Shapes: **Community fundraising, giving (TASK-502)**) |
-| `POST /api/fundraise/invite` | **implemented** | TASK-503 (the sign up form's invite lookup: `{ token }` from the invite link gives `{ firstName, lastName, email }` to fill in, and nothing else; any token that does not work is the same `404`. See **Community fundraising, the team's tools**) |
+| `POST /api/fundraise/invite` | **implemented** | TASK-503 (the sign up form's invite lookup: `{ token }` from the invite link gives `{ name, firstName, lastName, email }` to fill in, and nothing else; any token that does not work is the same `404`. See **Community fundraising, the team's tools**) |
 | `POST /api/fundraise/manage/request` | **implemented** | TASK-501 (emails an organiser a 6 digit sign in code for their private area; always the same answer, sent before looking; was TASK-493's 24 hour link) |
 | `POST /api/fundraise/manage/sign-in` | **implemented** | TASK-501 (a right code starts a 2 hour http only session cookie; every refusal the same `401`) |
 | `GET /api/fundraise/manage/me` | **implemented** | TASK-501 (the signed in organiser's fundraisers: status, page, QR code, meter, gifts and messages, editable details; since TASK-505 also `requests`, where each thing they asked for is up to, in words) |
@@ -7974,7 +7974,9 @@ from and replying to the events inbox, like every other fundraising email, greet
 first name typed. The member of staff who sends it (the person signed in, from their admin session,
 not whoever it is signed by) is copied in on the email (Cc), and so is whoever presses Resend; when
 their address is missing, or is the person invited, it goes with no copy and the invite still
-stands. Its button opens `/fundraise?invite=<token>`, and the form fills in their first name,
+stands. Who was copied in (or `null`) is on the `fundraiser_invite.sent` and `.resent` audit rows.
+For a while, an admin page loaded before the two boxes can still send one `name`: it is split at its
+first space, and a single word gets `400 { error: "Please refresh the page and try again." }`. Its button opens `/fundraise?invite=<token>`, and the form fills in their first name,
 surname and email exactly as typed, and nothing else (a box they have already typed in is left alone). Below the form,
 **Invites not taken up yet** lists each one with "Invited by <first name> on <date>", **Resend**
 (a new link, emailed again; the old link stops working) and **Remove** (the link stops working),
@@ -8070,7 +8072,7 @@ list against entity `fundraiser`, so it shows in that fundraiser's History).
 | `GET /api/admin/fundraising/summary` | admin | | `{ recipients, lastWeek }` |
 | `PUT /api/admin/fundraising/summary` | admin | `{ recipients: [emails] }` | `{ recipients, lastWeek }`; `400` naming the address that needs another look |
 | `POST /api/admin/fundraising/summary/test` | admin | | `{ sentTo }`, always the admin asking; `502` if it did not go |
-| `POST /api/fundraise/invite` | anyone | `{ token }` | `200 { firstName, lastName, email }` (an invite from before the two boxes: its one name split at the first space); `404` for any token that does not work |
+| `POST /api/fundraise/invite` | anyone | `{ token }` | `200 { name, firstName, lastName, email }` (`name` is the two joined, for a page loaded before the two boxes; an invite from before them has its one name split at the first space); `404` for any token that does not work |
 
 The admin's fundraiser now carries `offListAt` and `offListBy`.
 

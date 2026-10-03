@@ -61,6 +61,8 @@ export type SummaryCall = CallRecord & { fundraiserId: number };
 /** An invite not yet taken up. */
 export interface SummaryInvite {
   name: string;
+  /** The first name staff typed in its own box; missing for an invite sent before the two boxes. */
+  firstName?: string | null;
   signedBy: string;
   createdAt: string;
   resentAt: string | null;
@@ -192,7 +194,7 @@ export function summaryCounts(i: SummaryInputs): SummaryCounts {
     // An expired link can no longer be taken up: Admin > Fundraising marks it Expired, to resend.
     .filter((inv) => inviteVerdict({ createdAt: new Date(inv.createdAt), resentAt: inv.resentAt ? new Date(inv.resentAt) : null, usedAt: null }, i.now) === "ok")
     .sort((a, b) => ((a.resentAt ?? a.createdAt) < (b.resentAt ?? b.createdAt) ? -1 : 1))
-    .map((inv) => ({ name: firstWord(inv.name), signedBy: inv.signedBy }));
+    .map((inv) => ({ name: inv.firstName || firstWord(inv.name), signedBy: inv.signedBy }));
 
   const toApprove = i.fundraisers.filter((f) => f.status === "new").length;
   const changesToCheck = i.fundraisers.filter((f) => f.editWaiting).length;

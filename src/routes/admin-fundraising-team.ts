@@ -21,7 +21,16 @@ import {
   type InviteRow,
 } from "../db/fundraising-team";
 import { sendFundraiseInvite } from "../clients/email";
-import { INVITES_PER_DAY, hashInviteToken, inviteCc, inviteSchema, inviteUrl, inviteVerdict, newInviteToken } from "../fundraising/invite";
+import {
+  INVITES_PER_DAY,
+  INVITE_REFRESH,
+  hashInviteToken,
+  inviteCc,
+  inviteSchema,
+  inviteUrl,
+  inviteVerdict,
+  newInviteToken,
+} from "../fundraising/invite";
 import { CALL_WHICH, callStates, followUpToday, offListPrompt, type CallRecord, type CallStates } from "../fundraising/follow-up";
 import { summaryRecipientsSchema } from "../fundraising/summary";
 import { buildInviteEmail } from "../fundraising/team-emails";
@@ -149,7 +158,11 @@ export async function postInvite(req: Request, res: Response): Promise<Response 
   const claims = await authorizeSection(req, res, "fundraising", "edit");
   if (!claims) return;
   const parsed = inviteSchema.safeParse(req.body);
-  if (!parsed.success) return res.status(400).json({ error: "Some of it needs another look", fields: fieldErrors(parsed.error.issues) });
+  if (!parsed.success) {
+    // A page loaded before the two name boxes, with a one word name: no box to point at.
+    if (parsed.error.issues.some((i) => i.message === INVITE_REFRESH)) return res.status(400).json({ error: INVITE_REFRESH });
+    return res.status(400).json({ error: "Some of it needs another look", fields: fieldErrors(parsed.error.issues) });
+  }
   try {
     const signer = await getSigner(parsed.data.signedBy);
     if (!signer) return res.status(400).json({ error: "Some of it needs another look", fields: { signedBy: "Choose who it is from." } });
@@ -162,6 +175,7 @@ export async function postInvite(req: Request, res: Response): Promise<Response 
         email: parsed.data.email,
         note: parsed.data.note,
         signedBy: signer.firstName,
+        cc: inviteCc(claims.email, parsed.data.email) ?? null,
         tokenHash: hashInviteToken(token),
       },
       actorOf(claims),
@@ -181,7 +195,7 @@ export async function postResendInvite(req: Request, res: Response): Promise<Res
   try {
     if ((await countRecentInvites(actorOf(claims))) >= INVITES_PER_DAY) return res.status(429).json(TOO_MANY);
     const token = newInviteToken();
-    const inv = await resendInvite(id, hashInviteToken(token), actorOf(claims));
+    const inv = await resendInvite(id, hashInviteToken(token), actorOf(claims), claims.email);
     const emailed = await emailInvite(inv, token, claims.email);
     return res.status(200).json({ invite: inv, emailed });
   } catch (err) {

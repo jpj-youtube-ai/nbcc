@@ -72,7 +72,8 @@ describe("filling in the form from an invite", () => {
   it("gives the first name, surname and email exactly as staff typed them, and nothing else", async () => {
     const res = await run(postInvitePrefill, { body: { token: TOKEN } });
     expect(res.statusCode).toBe(200);
-    expect(res.body).toEqual({ firstName: "Mary Jane", lastName: "Smith", email: "alex@example.com" });
+    // `name` too, so a sign up page loaded before the two boxes still fills in.
+    expect(res.body).toEqual({ name: "Mary Jane Smith", firstName: "Mary Jane", lastName: "Smith", email: "alex@example.com" });
     expect(team.findInviteByHash).toHaveBeenCalledWith(hashInviteToken(TOKEN));
   });
 

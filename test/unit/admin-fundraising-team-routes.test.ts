@@ -237,15 +237,17 @@ describe("inviting someone", () => {
 
   // Jaimie 2026-10-03: the member of staff who sends it gets a copy. The person signed in, from the
   // admin session, not whoever it is signed by (here Rowan signs it and Fern sends it).
-  it("copies in the member of staff who sent it, not the person it is signed by", async () => {
+  it("copies in the member of staff who sent it, not the person it is signed by, and records the copy", async () => {
     await run(routes.postInvite, { token: tokenFor("editor"), body: GOOD_INVITE });
     expect(sendFundraiseInvite.mock.calls[0][1].cc).toBe("fern@example.com");
+    expect(team.createInvite.mock.calls[0][0].cc).toBe("fern@example.com");
   });
 
-  it("sends with no copy when the sender is the person invited", async () => {
+  it("sends with no copy when the sender is the person invited, and records none", async () => {
     await run(routes.postInvite, { token: tokenFor("editor"), body: { ...GOOD_INVITE, email: "Fern@Example.com" } });
     expect(sendFundraiseInvite).toHaveBeenCalledTimes(1);
     expect(sendFundraiseInvite.mock.calls[0][1].cc).toBeUndefined();
+    expect(team.createInvite.mock.calls[0][0].cc).toBeNull();
   });
 
   it("keeps the invite when the email does not go, and says so", async () => {
@@ -269,9 +271,18 @@ describe("inviting someone", () => {
     expect(team.createInvite).not.toHaveBeenCalled();
   });
 
-  it("no longer takes the one name box", async () => {
+  // An admin page loaded before the two boxes still sends one name, for a while.
+  it("still takes one name from a page loaded before the two boxes, split at its first space", async () => {
     const res = await run(routes.postInvite, { token: tokenFor("editor"), body: { name: "Mary Jane Smith", email: "mary@example.com", signedBy: 5 } });
+    expect(res.statusCode).toBe(201);
+    expect(team.createInvite.mock.calls[0][0]).toMatchObject({ firstName: "Mary", lastName: "Jane Smith", email: "mary@example.com" });
+    expect(sendFundraiseInvite.mock.calls[0][1].text).toContain("Hi Mary,");
+  });
+
+  it("asks for a refresh, naming no box, when that one name is a single word", async () => {
+    const res = await run(routes.postInvite, { token: tokenFor("editor"), body: { name: "Mary", email: "mary@example.com", signedBy: 5 } });
     expect(res.statusCode).toBe(400);
+    expect(res.body).toEqual({ error: "Please refresh the page and try again." });
     expect(team.createInvite).not.toHaveBeenCalled();
   });
 
@@ -303,10 +314,11 @@ describe("resending and removing an invite", () => {
     expect(sendFundraiseInvite.mock.calls[0][1].text).toContain("Hi Alex,");
   });
 
-  it("copies in the member of staff who resends it", async () => {
+  it("copies in the member of staff who resends it, and passes them on for the record", async () => {
     team.resendInvite.mockResolvedValue(invite({ signedBy: "Rowan" }));
     await run(routes.postResendInvite, { token: tokenFor("editor"), params: { id: "4" } });
     expect(sendFundraiseInvite.mock.calls[0][1].cc).toBe("fern@example.com");
+    expect(team.resendInvite.mock.calls[0][3]).toBe("fern@example.com");
   });
 
   it("counts towards the day's 50", async () => {

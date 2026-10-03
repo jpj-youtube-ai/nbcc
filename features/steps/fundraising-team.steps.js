@@ -164,8 +164,9 @@ When("the sign up form asks for that invite", async function () {
   await call(this, "POST", "/api/fundraise/invite", { token: this.inviteToken });
 });
 
+// `name` (the two joined) comes too, so a sign up page loaded before the two boxes still fills in.
 Then("the form is given first name {string}, surname {string} and {string}, and nothing else", function (firstName, lastName, email) {
-  assert.deepEqual(this.frBody, { firstName, lastName, email });
+  assert.deepEqual(this.frBody, { name: `${firstName} ${lastName}`, firstName, lastName, email });
 });
 
 When("someone signs up {string} from that invite", async function (title) {

@@ -71,7 +71,7 @@ describe("invites", () => {
     const stored = inviteRow({ name: "Morag Ann Fyfe", first_name: "Morag Ann", last_name: "Fyfe", email: "morag@example.com" });
     const calls = useClient((sql) => (/INSERT INTO fundraiser_invites/.test(sql) ? { rows: [stored] } : undefined));
     const inv = await createInvite(
-      { firstName: "Morag Ann", lastName: "Fyfe", email: "morag@example.com", note: "Lovely to chat", signedBy: "Fern", tokenHash: "h".repeat(64) },
+      { firstName: "Morag Ann", lastName: "Fyfe", email: "morag@example.com", note: "Lovely to chat", signedBy: "Fern", cc: "fern@example.com", tokenHash: "h".repeat(64) },
       "admin:fern@example.com",
     );
     const insert = sqlIn(calls, /INSERT INTO fundraiser_invites/)!;
@@ -79,14 +79,39 @@ describe("invites", () => {
     // Jaimie 2026-10-03: the two boxes are kept as typed, and `name` still has the two joined.
     expect(insert[0]).toMatch(/\(name, first_name, last_name, email, note, signed_by, sent_by, token_hash\)/);
     expect(insert[1]).toEqual(["Morag Ann Fyfe", "Morag Ann", "Fyfe", "morag@example.com", "Lovely to chat", "Fern", "admin:fern@example.com", "h".repeat(64)]);
-    expect(audits(calls)[0]).toEqual(["admin:fern@example.com", "fundraiser_invite.sent", "fundraiser_invite", 4, { email: "morag@example.com", signedBy: "Fern" }]);
+    // Who was copied in is on the record too.
+    expect(audits(calls)[0]).toEqual([
+      "admin:fern@example.com",
+      "fundraiser_invite.sent",
+      "fundraiser_invite",
+      4,
+      { email: "morag@example.com", signedBy: "Fern", cc: "fern@example.com" },
+    ]);
     expect(inv).toMatchObject({ id: 4, name: "Morag Ann Fyfe", firstName: "Morag Ann", lastName: "Fyfe", signedBy: "Fern", createdAt: "2026-10-01T09:00:00.000Z" });
     expect(JSON.stringify(inv)).not.toContain("hhhh");
   });
 
+  it("records no copy on an invite sent with none", async () => {
+    const calls = useClient((sql) => (/INSERT INTO fundraiser_invites/.test(sql) ? { rows: [inviteRow()] } : undefined));
+    await createInvite(
+      { firstName: "Alex", lastName: "Example", email: "alex@example.com", note: null, signedBy: "Fern", cc: null, tokenHash: "h".repeat(64) },
+      "admin:alex@example.com",
+    );
+    expect(audits(calls)[0][4]).toEqual({ email: "alex@example.com", signedBy: "Fern", cc: null });
+  });
+
+  it("records who was copied in on a resend: the person resending, never the person invited", async () => {
+    let calls = useClient((sql) => (/UPDATE fundraiser_invites/.test(sql) ? { rows: [inviteRow()] } : undefined));
+    await resendInvite(4, "n".repeat(64), "admin:rowan@example.com", "Rowan@Example.com");
+    expect(audits(calls)[0][4]).toEqual({ email: "alex@example.com", cc: "rowan@example.com" });
+    calls = useClient((sql) => (/UPDATE fundraiser_invites/.test(sql) ? { rows: [inviteRow()] } : undefined));
+    await resendInvite(4, "n".repeat(64), "admin:alex@example.com", "alex@example.com");
+    expect(audits(calls)[0][4]).toEqual({ email: "alex@example.com", cc: null });
+  });
+
   it("gives a resent invite a new token and a new date, only while it is not used", async () => {
     const calls = useClient((sql) => (/UPDATE fundraiser_invites/.test(sql) ? { rows: [inviteRow({ resent_at: new Date("2026-10-08T09:00:00Z") })] } : undefined));
-    const inv = await resendInvite(4, "n".repeat(64), "admin:fern@example.com");
+    const inv = await resendInvite(4, "n".repeat(64), "admin:fern@example.com", "fern@example.com");
     const update = sqlIn(calls, /UPDATE fundraiser_invites/)!;
     expect(update[0]).toMatch(/SET token_hash = \$2, resent_at = now\(\)/);
     expect(update[0]).toMatch(/used_at IS NULL/);
@@ -318,7 +343,7 @@ describe("what the summary reads", () => {
     expect(i.now).toBe(now);
     expect(i.gifts).toEqual([{ fundraiserId: 1, amountPence: 2000, refundedPence: 0, giftAid: true, paidIn: false, paidAt: "2026-12-01T10:00:00.000Z" }]);
     expect(i.cash).toEqual([{ fundraiserId: 1, amountPence: 1000, recordedAt: "2026-12-02T15:00:00.000Z" }]);
-    expect(i.invites).toEqual([{ name: "Alex Example", signedBy: "Fern", createdAt: "2026-10-01T09:00:00.000Z", resentAt: null }]);
+    expect(i.invites).toEqual([{ name: "Alex Example", firstName: "Alex", signedBy: "Fern", createdAt: "2026-10-01T09:00:00.000Z", resentAt: null }]);
     const giftSql = query.mock.calls.map((c) => String(c[0])).find((s) => /AS paid_at/.test(s))!;
     expect(giftSql).toMatch(/d\.payment_status = 'paid'/);
     expect(giftSql).toMatch(/d\.fundraiser_id IS NOT NULL/);

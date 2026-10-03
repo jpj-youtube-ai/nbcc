@@ -6,7 +6,7 @@ import { listRequestRows } from "./fundraising-requests";
 import { countPendingUpdates } from "./fundraiser-updates";
 import { countPendingThanks } from "./fundraiser-thanks";
 import { readPromptCounts } from "./fundraising-touch";
-import { INVITE_TTL_DAYS, inviteFullName, inviteNameParts, staffFirstName } from "../fundraising/invite";
+import { INVITE_TTL_DAYS, inviteCc, inviteFullName, inviteNameParts, staffFirstName } from "../fundraising/invite";
 import { summaryRecipientsSchema, type SummaryInputs } from "../fundraising/summary";
 import type { CallRecord, CallWhich } from "../fundraising/follow-up";
 
@@ -83,7 +83,8 @@ function toInvite(r: Row): InviteRow {
 }
 
 export async function createInvite(
-  i: { firstName: string; lastName: string; email: string; note: string | null; signedBy: string; tokenHash: string },
+  // cc: who the email copies in (the member of staff sending it), or null; kept on the audit row.
+  i: { firstName: string; lastName: string; email: string; note: string | null; signedBy: string; cc: string | null; tokenHash: string },
   actor: string,
 ): Promise<InviteRow> {
   return writeWithAudit(
@@ -101,13 +102,16 @@ export async function createInvite(
       action: "fundraiser_invite.sent",
       entity: "fundraiser_invite",
       entityId: inv.id,
-      data: { email: inv.email, signedBy: inv.signedBy },
+      data: { email: inv.email, signedBy: inv.signedBy, cc: i.cc },
     }),
   );
 }
 
-/** A new token and a new date for an invite not taken up. Throws not_found otherwise. */
-export async function resendInvite(id: number, tokenHash: string, actor: string): Promise<InviteRow> {
+/**
+ * A new token and a new date for an invite not taken up. Throws not_found otherwise. senderEmail is
+ * the member of staff resending it: the email copies them in, and the audit row says so.
+ */
+export async function resendInvite(id: number, tokenHash: string, actor: string, senderEmail?: string | null): Promise<InviteRow> {
   return inTransaction(async (client) => {
     const r = await client.query(
       `UPDATE fundraiser_invites SET token_hash = $2, resent_at = now()
@@ -121,7 +125,7 @@ export async function resendInvite(id: number, tokenHash: string, actor: string)
       action: "fundraiser_invite.resent",
       entity: "fundraiser_invite",
       entityId: id,
-      data: { email: inv.email },
+      data: { email: inv.email, cc: inviteCc(senderEmail, inv.email) ?? null },
     });
     return inv;
   });
@@ -433,7 +437,7 @@ export async function readSummaryInputs(now: Date): Promise<SummaryInputs> {
     })),
     cash: cash.rows.map((c) => ({ fundraiserId: Number(c.fundraiser_id), amountPence: Number(c.amount_pence), recordedAt: iso(c.created_at) as string })),
     calls,
-    invites: invites.map((i) => ({ name: i.name, signedBy: i.signedBy, createdAt: i.createdAt, resentAt: i.resentAt })),
+    invites: invites.map((i) => ({ name: i.name, firstName: i.firstName, signedBy: i.signedBy, createdAt: i.createdAt, resentAt: i.resentAt })),
     requests,
     thanksToCheck,
     prompts,

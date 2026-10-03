@@ -91,13 +91,18 @@ export function inviteNameParts(row: { name: string; firstName?: string | null; 
   return { firstName: words[0] ?? "", lastName: words.slice(1).join(" ") };
 }
 
-/** What the form is filled in with: the first name, surname and email, never the note or who sent it. */
+/**
+ * What the form is filled in with: the first name, surname and email, never the note or who sent it.
+ * `name` (the two joined) comes too, for a sign up page loaded before the two boxes, which reads it.
+ */
 export function invitePrefill(row: { name: string; firstName?: string | null; lastName?: string | null; email: string }): {
+  name: string;
   firstName: string;
   lastName: string;
   email: string;
 } {
-  return { ...inviteNameParts(row), email: row.email };
+  const parts = inviteNameParts(row);
+  return { name: inviteFullName(parts.firstName, parts.lastName), ...parts, email: row.email };
 }
 
 const WHOLE_EMAIL = z.string().email();
@@ -115,7 +120,26 @@ export function inviteCc(senderEmail: string | null | undefined, recipient: stri
   return cc;
 }
 
-export const inviteSchema = z
+/** What an admin page loaded before the two boxes is told when its one name has no surname in it. */
+export const INVITE_REFRESH = "Please refresh the page and try again.";
+
+// For a while (Jaimie 2026-10-03): an admin page loaded before the two boxes (an old app.js still in
+// the browser) sends one `name`. With neither box sent, it is split at its first space, as the sign
+// up form used to. A single word has no surname, and the page has no Surname box to point at, so
+// that is one error naming no box: refresh the page. Remove once old pages are gone.
+function fromOneName(body: unknown, ctx: z.RefinementCtx): unknown {
+  if (!body || typeof body !== "object" || Array.isArray(body)) return body;
+  const { name, ...rest } = body as Record<string, unknown>;
+  if (name === undefined || "firstName" in rest || "lastName" in rest) return body;
+  const { firstName, lastName } = inviteNameParts({ name: String(name ?? "") });
+  if (!firstName || !lastName) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: [], message: INVITE_REFRESH, fatal: true });
+    return z.NEVER;
+  }
+  return { ...rest, firstName, lastName };
+}
+
+const inviteFields = z
   .object({
     firstName: z
       .string({ required_error: "Add their first name.", invalid_type_error: "Add their first name." })
@@ -142,6 +166,8 @@ export const inviteSchema = z
     signedBy: z.number({ invalid_type_error: "Choose who it is from." }).int().positive("Choose who it is from."),
   })
   .strict();
+
+export const inviteSchema = z.preprocess(fromOneName, inviteFields);
 
 export type InviteInput = z.infer<typeof inviteSchema>;
 

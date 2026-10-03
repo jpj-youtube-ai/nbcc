@@ -39,7 +39,8 @@ const settle = async () => {
 const inviteCalls = () => calls.filter((c) => c.url === "/api/fundraise/invite");
 
 beforeEach(() => {
-  inviteAnswer = { status: 200, body: { firstName: "Mary Jane", lastName: "Smith", email: "alex@example.com" } };
+  // As the server answers now: the two boxes, and the one name for pages loaded before them.
+  inviteAnswer = { status: 200, body: { name: "Mary Jane Smith", firstName: "Mary Jane", lastName: "Smith", email: "alex@example.com" } };
 });
 afterEach(() => {
   window.history.replaceState({}, "", "/");

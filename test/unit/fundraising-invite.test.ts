@@ -3,6 +3,7 @@ import {
   INVITE_TTL_DAYS,
   INVITE_NOTE_MAX,
   INVITE_NAME_PART_MAX,
+  INVITE_REFRESH,
   hashInviteToken,
   inviteCc,
   inviteFullName,
@@ -98,11 +99,13 @@ describe("what an invite fills in on the form", () => {
       signedBy: "Fern",
       sentBy: "admin:fern@example.com",
     } as unknown as { name: string; firstName: string | null; lastName: string | null; email: string });
-    expect(prefill).toEqual({ firstName: "Morag Ann", lastName: "Fyfe", email: "morag@example.com" });
+    // `name`, the two joined, is there too so a sign up page loaded before the two boxes still fills in.
+    expect(prefill).toEqual({ name: "Morag Ann Fyfe", firstName: "Morag Ann", lastName: "Fyfe", email: "morag@example.com" });
   });
 
   it("splits the one name of an invite sent before the two boxes at its first space", () => {
     expect(invitePrefill({ name: "Alex Example Jones", firstName: null, lastName: null, email: "alex@example.com" })).toEqual({
+      name: "Alex Example Jones",
       firstName: "Alex",
       lastName: "Example Jones",
       email: "alex@example.com",
@@ -180,8 +183,29 @@ describe("the invite form", () => {
     expect(inviteSchema.safeParse({ ...ok, signedBy: 0 }).success).toBe(false);
     expect(inviteSchema.safeParse({ ...ok, signedBy: "3" }).success).toBe(false);
     expect(inviteSchema.safeParse({ ...ok, eventDate: "2026-12-05" }).success).toBe(false);
-    // The one name box is gone.
+    // Both kinds of name at once is not something either page sends.
     expect(inviteSchema.safeParse({ ...ok, name: "Morag Fyfe" }).success).toBe(false);
+  });
+
+  // An admin page loaded before the two boxes (an old app.js still in the browser) sends one name.
+  // For a while, that is split at its first space, as the sign up form used to.
+  it("takes one name from a page loaded before the two boxes, split at its first space", () => {
+    const parsed = inviteSchema.safeParse({ name: " Mary Jane  Smith ", email: "mary@example.com", note: "Hi", signedBy: 3 });
+    expect(parsed.success).toBe(true);
+    if (parsed.success) {
+      expect(parsed.data).toEqual({ firstName: "Mary", lastName: "Jane Smith", email: "mary@example.com", note: "Hi", signedBy: 3 });
+      expect(parsed.data).not.toHaveProperty("name");
+    }
+  });
+
+  it("asks for a refresh, naming no box, when that one name has no surname in it", () => {
+    expect(INVITE_REFRESH).toBe("Please refresh the page and try again.");
+    const parsed = inviteSchema.safeParse({ name: "Mary", email: "mary@example.com", signedBy: 3 });
+    expect(parsed.success).toBe(false);
+    if (!parsed.success) {
+      expect(parsed.error.issues).toHaveLength(1);
+      expect(parsed.error.issues[0]).toMatchObject({ path: [], message: INVITE_REFRESH });
+    }
   });
 
   it("names the box that needs another look", () => {

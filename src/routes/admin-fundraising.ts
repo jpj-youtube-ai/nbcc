@@ -40,6 +40,7 @@ import { insertEventImage } from "../db/events";
 import { validateUpload } from "../newsletter/image-validation";
 import { sendApprovedEmail, sendEditDecisionEmail, sendWaitingLiveEmails } from "../fundraising/send";
 import { sendFinishedTouch } from "../fundraising/touch-runner";
+import { TEAM_SHARE_MODE_MISSING, withTeamTotals } from "../fundraising/teams";
 
 // TASK-493: the admin API behind Admin > Fundraising. Section "fundraising": admins and editors
 // edit by default, viewers look (src/admin/permissions.ts).
@@ -74,6 +75,9 @@ import { sendFinishedTouch } from "../fundraising/touch-runner";
 // logged and never fails the answer.
 
 export const adminFundraisingRouter = Router();
+
+/** Team pages: why a team, or a page on a team, can never be made an event. */
+export const TEAM_PATH = "A team raises money, so it can't be an event. Take everyone off the team first.";
 
 const UNAVAILABLE = { error: "Admin is temporarily unavailable" };
 
@@ -115,6 +119,9 @@ function failed(res: Response, what: string, err: unknown): Response {
         return res.status(409).json({ error: "Another fundraiser has that web address, or had it before, so it cannot be used" });
       case "bad_status":
         return res.status(409).json({ error: "That cannot be done at this stage" });
+      case "team_path":
+        // Team pages: a team (or a page on one) raises money; the table's check would refuse it anyway.
+        return res.status(409).json({ error: TEAM_PATH });
       case "not_waiting":
         return res.status(409).json({ error: "That change has already been dealt with" });
       case "replaced":
@@ -205,7 +212,8 @@ export async function getAdminFundraisers(req: Request, res: Response): Promise<
     const [settings, list] = await Promise.all([getFundraisingSettings(), listAllFundraisers()]);
     return res.status(200).json({
       pageOn: settings.pageOn,
-      fundraisers: list.map((f) => ({ ...forAdmin(f), meter: f.meter, editWaiting: f.editWaiting })),
+      // Team pages: a team's total is the whole team's; its members keep their own.
+      fundraisers: withTeamTotals(list).map((f) => ({ ...forAdmin(f), meter: f.meter, editWaiting: f.editWaiting })),
     });
   } catch (err) {
     return failed(res, "list", err);
@@ -286,14 +294,24 @@ export async function putAdminFundraiserSplit(req: Request, res: Response): Prom
   if (!claims) return;
   const got = ids(req, res, "id");
   if (!got) return;
-  const parsed = splitSchema.safeParse(req.body);
+  // Team pages: a team's correction may say whose split it is (the whole team's, or the organiser's).
+  const { teamShareMode, ...rest } = (req.body ?? {}) as Record<string, unknown>;
+  if (teamShareMode !== undefined && teamShareMode !== null && teamShareMode !== "team" && teamShareMode !== "organiser") {
+    return res.status(400).json({ error: "Some of it needs another look", fields: { teamShareMode: TEAM_SHARE_MODE_MISSING } });
+  }
+  const parsed = splitSchema.safeParse(rest);
   if (!parsed.success) {
     return res.status(400).json({ error: "Some of it needs another look", fields: fieldErrors(parsed.error.issues) });
   }
   try {
-    return res.status(200).json({ fundraiser: forAdmin(await setFundraiserSplit(got[0], parsed.data, actorOf(claims))) });
+    const mode = teamShareMode === "team" || teamShareMode === "organiser" ? teamShareMode : undefined;
+    const saved = mode ? await setFundraiserSplit(got[0], parsed.data, actorOf(claims), mode) : await setFundraiserSplit(got[0], parsed.data, actorOf(claims));
+    return res.status(200).json({ fundraiser: forAdmin(saved) });
   } catch (err) {
     if (err instanceof FundraiserError && err.reason === "has_gifts") return res.status(409).json({ error: SPLIT_LOCKED });
+    if (err instanceof FundraiserError && err.reason === "team_mode_missing") {
+      return res.status(400).json({ error: "Some of it needs another look", fields: { teamShareMode: TEAM_SHARE_MODE_MISSING } });
+    }
     return failed(res, "split", err);
   }
 }
@@ -317,6 +335,10 @@ function moveHandler(move: "approve" | "decline" | "finish") {
       // After the approval has committed, best effort: it stands whether or not the email goes. A
       // page holder approved while fundraising is off waits for the switch instead (livePending).
       if (move === "approve" && !livePending) await bestEffort("approved", () => sendApprovedEmail(after));
+      // Team pages: a declined team's invites (names, emails and links) are deleted at once.
+      if (move === "decline" && after.isTeam) {
+        await bestEffort("team invites deleted", async () => (await import("../db/fundraising-teams")).deleteTeamInvites(after.id));
+      }
       // TASK-515: the finished email (17, with the certificate), only while Automatic emails is on,
       // and only once. sendFinishedTouch checks every guard itself and never throws.
       if (move === "finish") {

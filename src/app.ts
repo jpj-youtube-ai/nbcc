@@ -15,6 +15,8 @@ import { fundraiserThanksRouter } from "./routes/fundraiser-thanks";
 import { fundraiseInviteRouter } from "./routes/fundraise-invite";
 import { fundraiseAgainRouter } from "./routes/fundraise-again";
 import { fundraiseRouter } from "./routes/fundraise";
+import { fundraiseTeamsRouter } from "./routes/fundraise-teams";
+import { adminFundraisingTeamsRouter } from "./routes/admin-fundraising-teams";
 import { fundraiserNewsRouter, newsBodyGuard, NEWS_JSON_BODY_LIMIT, NEWS_POST_PATH } from "./routes/fundraiser-news";
 import { fundraiseMaterialsRouter } from "./routes/fundraise-materials";
 import { adminBallReportRouter } from "./routes/admin-ball-report";
@@ -107,6 +109,11 @@ export function createApp() {
   // TASK-506: news updates (the organiser's, staff's and the public photo). Before fundraiseRouter,
   // whose retired link route (GET /api/fundraise/manage/:token) would otherwise take "news".
   app.use(fundraiserNewsRouter);
+  // Team pages: joining a team, an invite's link, the team organiser's own team and confirming a
+  // handover; and Admin > Fundraising's team view and handover. Before fundraiseRouter, whose
+  // retired link route (POST /api/fundraise/manage/:token) would otherwise take "handover".
+  app.use(fundraiseTeamsRouter);
+  app.use(adminFundraisingTeamsRouter);
   app.use(fundraiseRouter);
   app.use(adminFundraisingRouter);
   // Fundraising categories: the list the sign up form offers, A to Z; admins add, rename and hide them.

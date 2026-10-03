@@ -641,6 +641,42 @@ export async function sendFundraiseTouch(kind: FundraiseTouchKind, name: string,
   }
 }
 
+// Team pages (Jaimie, 2026-10-03): the team emails, each its own kind so they can be told apart in
+// the email audit and a bounce report. Built by src/fundraising/team-page-emails.ts and sent by
+// src/fundraising/team-send.ts and team-runner.ts, from and replying to the events inbox. The two
+// to the events inbox are staff only (never link tagged).
+export type FundraiseTeamKind =
+  | "fundraiseTeamLive"
+  | "fundraiseTeamInvite"
+  | "fundraiseTeamInviteReminder"
+  | "fundraiseTeamNudge"
+  | "fundraiseTeamJoined"
+  | "fundraiseTeamJoinStaff"
+  | "fundraiseTeamMemberRemoved"
+  | "fundraiseTeamHandoverCode";
+
+export async function sendFundraiseTeam(kind: FundraiseTeamKind, name: string | null, message: FundraiseEmailMessage): Promise<void> {
+  switch (kind) {
+    case "fundraiseTeamLive":
+      return sendVerbatim("fundraiseTeamLive", name, message);
+    case "fundraiseTeamInvite":
+      return sendVerbatim("fundraiseTeamInvite", name, message);
+    case "fundraiseTeamInviteReminder":
+      return sendVerbatim("fundraiseTeamInviteReminder", name, message);
+    case "fundraiseTeamNudge":
+      return sendVerbatim("fundraiseTeamNudge", name, message);
+    case "fundraiseTeamJoined":
+      return sendVerbatim("fundraiseTeamJoined", name, message);
+    case "fundraiseTeamJoinStaff":
+      return sendVerbatim("fundraiseTeamJoinStaff", name, message);
+    case "fundraiseTeamMemberRemoved":
+      return sendVerbatim("fundraiseTeamMemberRemoved", name, message);
+    case "fundraiseTeamHandoverCode":
+      // The code is in the body only, never the subject, so the log's subject is the email's own.
+      return sendVerbatim("fundraiseTeamHandoverCode", name, message);
+  }
+}
+
 // --- Backup alerts (TASK-423) ---------------------------------------------------------------
 // An operational notice to ADMIN_NOTIFICATION_EMAIL when the nightly backup fails, refuses to
 // ship, or reaches only one of its two destinations.

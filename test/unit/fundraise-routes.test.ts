@@ -43,6 +43,9 @@ vi.mock("../../src/db/fundraising-categories", async () => {
   };
 });
 vi.mock("../../src/fundraising/send", () => send);
+// Team pages: a team's page reads its member pages, for the whole team's total.
+const teamDb = vi.hoisted(() => ({ listTeamMembers: vi.fn() }));
+vi.mock("../../src/db/fundraising-teams", () => teamDb);
 vi.mock("../../src/newsletter/self-signup", () => newsletter);
 vi.mock("../../src/clients/turnstile", () => ({
   captchaEnabled: () => captcha.enabled,
@@ -403,5 +406,24 @@ describe("18 or over, and sharing with another cause", () => {
     });
     db.getBySlug.mockResolvedValue(record());
     expect(((await run(getFundraiserPage, { params: { slug: "sams-sponsored-walk" } })).body as { split: unknown }).split).toBeNull();
+  });
+});
+
+describe("a team's page, as JSON", () => {
+  it("has the whole team's total against the team's target; a member page keeps its own", async () => {
+    db.fundraisingIsOn.mockResolvedValue(true);
+    db.wallRows.mockResolvedValue([]);
+    const m = (raised: number, target: number | null) => meter({ onlinePence: raised, cashPence: 0, targetPence: target });
+    teamDb.listTeamMembers.mockResolvedValue([
+      { ...record({ id: 41, teamId: 40 }), meter: m(2500, 5000) },
+      { ...record({ id: 42, teamId: 40, status: "new" }), meter: m(900, 5000) },
+      { ...record({ id: 43, teamId: 40, teamLeftAt: "2026-10-10T10:00:00.000Z" }), meter: m(700, 5000) },
+    ]);
+    db.getBySlug.mockResolvedValue({ ...record({ id: 40, slug: "ej", isTeam: true, targetPence: 200000 }), meter: m(1000, 200000) });
+    const team = await run(getFundraiserPage, { params: { slug: "ej" } });
+    expect((team.body as { meter: { raisedPence: number; targetPence: number } }).meter).toMatchObject({ raisedPence: 3500, targetPence: 200000 });
+    db.getBySlug.mockResolvedValue({ ...record({ id: 41, slug: "as", teamId: 40 }), meter: m(2500, 5000) });
+    const member = await run(getFundraiserPage, { params: { slug: "as" } });
+    expect((member.body as { meter: { raisedPence: number } }).meter.raisedPence).toBe(2500);
   });
 });

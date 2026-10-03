@@ -756,3 +756,43 @@ fieldset.is-invalid .fr-option { border-color: var(--crimson); }
 .fr-materials a.fr-mat-btn { font-weight: 600; text-decoration: none; }
 .fr-mat-btn { min-height: 44px; padding: 9px 18px; font-size: 0.95rem; line-height: 1.3; white-space: normal; text-align: left; max-width: 100%; align-self: flex-start; }
 .fr-mat-print__pieces .fr-mat-btn { align-self: auto; }
+
+/* ---------- Team pages (Jaimie, 2026-10-03) ---------- */
+/* The sign up's "Just me, or a team?": the team's boxes under the choice, and a row per person added
+   (three boxes side by side on a wide screen, one under another on a phone). Nothing scrolls. */
+.fr-team-fields { margin: 18px 0 0; }
+.fr-team-note { margin: 0 0 18px; padding: 12px 16px; border-left: 3px solid var(--holly); border-radius: 8px; background: var(--holly-soft); color: var(--holly-dark); font-size: 0.98rem; line-height: 1.55; }
+.fr-team-members { margin-top: 18px; }
+.fr-team-rows { list-style: none; margin: 0; padding: 0; display: grid; gap: 12px; }
+.fr-team-row { padding: 14px 16px 6px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--card); }
+@media (min-width: 760px) { .fr-row.fr-row--three { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1.4fr); } }
+.fr-team-remove { min-height: 40px; font-size: 0.95rem; }
+.fr-team-add-row { margin: 10px 0 0; }
+.fr-link-btn:disabled { color: var(--slate-soft); text-decoration: none; cursor: default; }
+
+/* A team page: "Join this team" under the give button, and the team after the story: the members
+   A to Z in a list that grows the page, each with a small meter. Never a ranking. */
+.fr-summary__join { justify-content: center; width: 100%; }
+.fr-team h2 { font-size: clamp(1.5rem, 1.25rem + 1vw, 1.95rem); color: var(--maroon); margin-bottom: 8px; }
+.fr-team__organiser { margin: 0 0 14px; font-weight: 600; color: var(--slate); }
+.fr-team__count { color: var(--slate-soft); margin: 0 0 14px; }
+.fr-team__list { list-style: none; margin: 0; padding: 0; display: grid; gap: 12px; }
+@media (min-width: 640px) { .fr-team__list { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); } }
+.fr-team__member { padding: 16px 18px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--card); box-shadow: var(--shadow-sm); }
+.fr-team__name { display: inline-block; margin: 0 0 8px; font-weight: 600; font-size: 1.05rem; color: var(--maroon); text-underline-offset: 3px; overflow-wrap: anywhere; }
+.fr-team__member .fr-meter__figures { font-size: 0.95rem; }
+.fr-team__member .fr-meter__raised { font-size: 1.2rem; }
+.fr-team__join { margin-top: 22px; padding: 20px; border: 1.6px solid var(--line); border-radius: var(--radius); background: var(--cream); }
+.fr-team__join-title { margin: 0 0 6px; font-size: clamp(1.2rem, 1.1rem + 0.5vw, 1.45rem); color: var(--maroon); }
+.fr-team__join > p { margin: 0 0 14px; color: var(--slate); }
+.fr-team-of { margin: 10px 0 0; font-weight: 600; color: var(--slate); }
+.fr-team-of a { color: var(--maroon); text-underline-offset: 3px; }
+
+/* The team organiser's private area: who has joined, a line each, and the message to forward. */
+.fr-mine__team-list { list-style: none; margin: 0 0 14px; padding: 0; display: grid; gap: 8px; }
+.fr-mine__team-list li { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 4px 14px; padding: 10px 14px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--card); }
+.fr-mine__team-who { font-weight: 600; color: var(--maroon); overflow-wrap: anywhere; }
+.fr-mine__team-what { color: var(--slate-soft); font-size: 0.95rem; }
+.fr-mine__forward { margin: 0 0 12px; padding: 14px 16px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--cream); font-family: var(--font-head); font-style: italic; color: var(--maroon); line-height: 1.55; overflow-wrap: anywhere; }
+.intro-hero .fr-team__organiser { margin: 18px 0 0; }
+.intro-hero .fr-team-of { margin: 6px 0 0; }

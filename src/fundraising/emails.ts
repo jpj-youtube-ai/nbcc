@@ -142,6 +142,8 @@ export type StaffSummary = Omit<SignUp, NewAnswers | AgeAndSplit | "wants"> &
     sharesWithOther?: boolean | null;
     nbccSharePercent?: number | null;
     otherCauseName?: string | null;
+    /** Team pages: a team's sign up, whose split it is, and the people held to be invited. */
+    team?: { isTeam: boolean; shareMode: "team" | "organiser" | null; members: Array<{ firstName: string; lastName: string; email: string }> };
   };
 
 /** "1 Example Road, Exampleton, EX1 1EX": the boxes of an address, leaving out the empty ones. */
@@ -209,6 +211,24 @@ function staffFacts(f: StaffSummary): Array<[string, string]> {
     facts.push(["Sharing with another cause", `Yes, ${f.nbccSharePercent}% to NBCC, the rest to ${f.otherCauseName ?? ""}`]);
   } else if (f.sharesWithOther === false) {
     facts.push(["Sharing with another cause", "No, all of it comes to NBCC"]);
+  }
+  // Team pages: the person signing up is the team organiser (never "captain").
+  if (f.team?.isTeam) {
+    facts.push(["A team", `Yes. ${f.name} is the team organiser`]);
+    if (f.sharesWithOther === true) {
+      facts.push([
+        "Whose split",
+        f.team.shareMode === "team"
+          ? "The whole team’s: every member page shares the same way"
+          : "Just the team organiser’s: each member is asked when they join",
+      ]);
+    }
+    // Only how many: their names and emails stay in the admin, and are deleted on time.
+    const n = f.team.members.length;
+    facts.push([
+      "People to invite",
+      n ? `${n === 1 ? "1 person" : `${n} people`} to invite once you approve it: see Admin > Fundraising` : "Nobody added. They can share the join link.",
+    ]);
   }
   // TASK-511: a sign up made since has the name in two parts, and Instagram and Facebook apart; one
   // from before reads as it always did.

@@ -65,6 +65,9 @@ vi.mock("../../src/config", () => ({
   },
 }));
 vi.mock("../../src/db/pool", () => ({ pool: { query: vi.fn(), connect: vi.fn() } }));
+// Team pages: a declined team's invites are deleted at once.
+const teamDb = vi.hoisted(() => ({ deleteTeamInvites: vi.fn() }));
+vi.mock("../../src/db/fundraising-teams", () => teamDb);
 
 import * as routes from "../../src/routes/admin-fundraising";
 import { SPLIT_LOCKED } from "../../src/routes/admin-fundraising";
@@ -572,5 +575,62 @@ describe("correcting the split with another cause", () => {
     const res = await run(routes.patchAdminFundraiser, { params: P, token: tokenFor("admin"), body: { nbccSharePercent: 10 } });
     expect(res.statusCode).toBe(400);
     expect(db.patchFundraiser).not.toHaveBeenCalled();
+  });
+});
+
+// Team pages (Jaimie, 2026-10-03): a team's total in the admin's list is the whole team's, and a
+// team can never be made an event.
+describe("teams in Admin > Fundraising", () => {
+  const m = (raised: number, target: number | null) => meter({ onlinePence: raised, cashPence: 0, targetPence: target });
+
+  it("shows a team's combined total in the list; its members keep their own", async () => {
+    db.getFundraisingSettings.mockResolvedValue({ pageOn: true, updatedAt: null, updatedBy: null });
+    db.listAllFundraisers.mockResolvedValue([
+      { ...record({ id: 40, isTeam: true, targetPence: 200000 }), meter: m(1000, 200000), editWaiting: false },
+      { ...record({ id: 41, teamId: 40 }), meter: m(2500, 25000), editWaiting: false },
+      { ...record({ id: 42, teamId: 40, status: "new" }), meter: m(700, 25000), editWaiting: false },
+    ]);
+    const res = await run(routes.getAdminFundraisers, { token: tokenFor("viewer") });
+    const list = (res.body as { fundraisers: Array<{ id: number; meter: { raisedPence: number; targetPence: number } }> }).fundraisers;
+    expect(list.find((f) => f.id === 40)!.meter).toMatchObject({ raisedPence: 3500, targetPence: 200000 });
+    expect(list.find((f) => f.id === 41)!.meter.raisedPence).toBe(2500);
+    expect(list.find((f) => f.id === 42)!.meter.raisedPence).toBe(700);
+  });
+
+  it("refuses to make a team an event, plainly", async () => {
+    db.patchFundraiser.mockRejectedValue(new FundraiserError("team_path"));
+    const res = await run(routes.patchAdminFundraiser, { params: { id: "40" }, token: tokenFor("editor"), body: { path: "event" } });
+    expect(res.statusCode).toBe(409);
+    expect(res.body).toEqual({ error: "A team raises money, so it can't be an event. Take everyone off the team first." });
+  });
+});
+
+describe("declining a team (review)", () => {
+  it("deletes the people its organiser added at once, and only for a team", async () => {
+    teamDb.deleteTeamInvites.mockReset().mockResolvedValue(2);
+    db.moveFundraiser.mockResolvedValue({ before: record({ id: 40, isTeam: true }), after: record({ id: 40, isTeam: true, status: "declined" }), livePending: false });
+    const res = await run(routes.postDeclineFundraiser, { params: { id: "40" }, token: tokenFor("editor"), body: {} });
+    expect(res.statusCode).toBe(200);
+    expect(teamDb.deleteTeamInvites).toHaveBeenCalledWith(40);
+    teamDb.deleteTeamInvites.mockClear();
+    db.moveFundraiser.mockResolvedValue({ before: record(), after: record({ status: "declined" }), livePending: false });
+    await run(routes.postDeclineFundraiser, { params: { id: "9" }, token: tokenFor("editor"), body: {} });
+    expect(teamDb.deleteTeamInvites).not.toHaveBeenCalled();
+  });
+});
+
+describe("correcting a team's split (review)", () => {
+  it("passes whose split it is, and asks for it when a team shares", async () => {
+    db.setFundraiserSplit.mockResolvedValue(record({ id: 40, isTeam: true }));
+    const body = { sharesWithOther: true, nbccSharePercent: 50, otherCauseName: "Exampleton Food Larder", teamShareMode: "team" };
+    const ok = await run(routes.putAdminFundraiserSplit, { params: { id: "40" }, token: tokenFor("admin"), body });
+    expect(ok.statusCode).toBe(200);
+    expect(db.setFundraiserSplit).toHaveBeenCalledWith(40, { sharesWithOther: true, nbccSharePercent: 50, otherCauseName: "Exampleton Food Larder" }, expect.any(String), "team");
+    db.setFundraiserSplit.mockRejectedValue(new FundraiserError("team_mode_missing"));
+    const asked = await run(routes.putAdminFundraiserSplit, { params: { id: "40" }, token: tokenFor("admin"), body: { ...body, teamShareMode: undefined } });
+    expect(asked.statusCode).toBe(400);
+    expect((asked.body as { fields: Record<string, string> }).fields).toEqual({ teamShareMode: "Tell us whether the split is just for you, or for the whole team." });
+    const bad = await run(routes.putAdminFundraiserSplit, { params: { id: "40" }, token: tokenFor("admin"), body: { ...body, teamShareMode: "everyone" } });
+    expect(bad.statusCode).toBe(400);
   });
 });

@@ -6,6 +6,7 @@ import { INVITE_NOT_TAKEN_DAYS, inviteVerdict } from "./invite";
 import { pounds } from "./emails";
 import { requestTotals, type RequestRow } from "./requests";
 import type { PromptCounts } from "./call-prompts";
+import { isCurrentMember, NUDGE_DAYS } from "./teams";
 
 // TASK-503: the Monday summary (email 11), at 8am on Mondays to the people chosen in Admin >
 // Fundraising. Pure: the runner (./summary-runner.ts) reads the rows and the clock, and every count
@@ -31,10 +32,14 @@ import type { PromptCounts } from "./call-prompts";
 //                  up a week after they were sent (not those whose link has expired); fundraisers
 //                  four weeks past their date still on
 //                  Get involved; and those who say they've finished
+//                  Team pages: team member sign ups to approve (on their own line), and teams live
+//                  10 days or more that nobody has joined
 //   coming up      approved fundraisers dated in the next four weeks
 
 export const SUMMARY_MAX_RECIPIENTS = 10;
 export const COMING_UP_DAYS = 28;
+/** Team pages: a team nobody has joined is listed up to this many days after going live. */
+export const NOBODY_JOINED_UNTIL_DAY = 30;
 
 export type SummaryFundraiser = FundraiserRecord & { meter: Meter; editWaiting: boolean };
 
@@ -131,6 +136,10 @@ export interface SummaryCounts {
   comingUp: Array<{ date: string; title: string; town: string }>;
   /** TASK-515: the smart call prompts showing today, each a call to make. */
   prompts: PromptCounts;
+  /** Team pages: member sign ups waiting for staff (not counted in toApprove). */
+  teamMembersToApprove: number;
+  /** Team pages: teams live 10 days or more that nobody has joined, by name, A to Z. */
+  teamsNobodyJoined: string[];
   /** Every thing in "Waiting on us", added up. */
   waiting: number;
 }
@@ -196,7 +205,21 @@ export function summaryCounts(i: SummaryInputs): SummaryCounts {
     .sort((a, b) => ((a.resentAt ?? a.createdAt) < (b.resentAt ?? b.createdAt) ? -1 : 1))
     .map((inv) => ({ name: inv.firstName || firstWord(inv.name), signedBy: inv.signedBy }));
 
-  const toApprove = i.fundraisers.filter((f) => f.status === "new").length;
+  // Team pages: a member sign up waiting is counted on its own line.
+  const isMember = (f: SummaryFundraiser) => Boolean(f.teamId && !f.teamLeftAt);
+  const toApprove = i.fundraisers.filter((f) => f.status === "new" && !isMember(f)).length;
+  const teamMembersToApprove = i.fundraisers.filter((f) => f.status === "new" && isMember(f)).length;
+  const joinedBy = new Set(i.fundraisers.filter((f) => f.teamId && isCurrentMember(f)).map((f) => Number(f.teamId)));
+  const teamsNobodyJoined = i.fundraisers
+    .filter((f) => f.isTeam && f.status === "approved" && f.approvedAt && !joinedBy.has(f.id))
+    // From day 10 to day 30 after going live, and never once the event is over: only while a nudge
+    // from us could still help.
+    .filter((f) => {
+      const live = ukDay(f.approvedAt as string);
+      return addDays(live, NUDGE_DAYS[1]) <= today && today <= addDays(live, NOBODY_JOINED_UNTIL_DAY) && !(f.eventDate && f.eventDate < today);
+    })
+    .map((f) => f.title)
+    .sort((a, b) => a.localeCompare(b, "en-GB"));
   const changesToCheck = i.fundraisers.filter((f) => f.editWaiting).length;
   const newsToCheck = Math.max(0, Math.floor(i.newsToCheck ?? 0));
   const thanksToCheck = Math.max(0, Math.floor(Number(i.thanksToCheck ?? 0) || 0));
@@ -249,8 +272,12 @@ export function summaryCounts(i: SummaryInputs): SummaryCounts {
       .sort((a, b) => String(a.eventDate).localeCompare(String(b.eventDate)) || a.title.localeCompare(b.title))
       .map((f) => ({ date: f.eventDate as string, title: f.title, town: f.town })),
     prompts,
+    teamMembersToApprove,
+    teamsNobodyJoined,
     waiting:
       toApprove +
+      teamMembersToApprove +
+      teamsNobodyJoined.length +
       changesToCheck +
       newsToCheck +
       thanksToCheck +
@@ -307,6 +334,11 @@ export function summaryLines(c: SummaryCounts): SummaryLines {
 
   const waiting: string[] = [];
   if (c.toApprove) waiting.push(plural(c.toApprove, "sign up to approve", "sign ups to approve"));
+  // Team pages
+  if (c.teamMembersToApprove) waiting.push(plural(c.teamMembersToApprove, "team member sign up to approve", "team member sign ups to approve"));
+  if (c.teamsNobodyJoined?.length) {
+    waiting.push(`${plural(c.teamsNobodyJoined.length, "team", "teams")} with nobody joined after 10 days: ${andList(c.teamsNobodyJoined)}`);
+  }
   if (c.changesToCheck) waiting.push(plural(c.changesToCheck, "change to check", "changes to check"));
   if (c.newsToCheck) waiting.push(plural(c.newsToCheck, "news update to check", "news updates to check"));
   if (c.thanksToCheck) waiting.push(plural(c.thanksToCheck, "thank you to check", "thank yous to check"));

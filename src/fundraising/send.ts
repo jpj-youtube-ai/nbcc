@@ -23,6 +23,7 @@ import {
   buildSignUpThanksEmail,
 } from "./emails";
 import { EVENT_PAGE_PREFIX, hasPage, type FundraiserRecord } from "./model";
+import type { TeamSignUp } from "./teams";
 
 // TASK-493: sending the fundraising emails. TASK-497 adds "Your page is live" held until the switch
 // goes on (sendWaitingLiveEmails) and the two emails about a change. Each is best effort and runs after its write has
@@ -64,7 +65,7 @@ export function manageUrl(): string {
 }
 
 /** Thank the organiser, and tell the events inbox, after a sign up. */
-export async function sendSignUpEmails(f: FundraiserRecord): Promise<void> {
+export async function sendSignUpEmails(f: FundraiserRecord, team?: TeamSignUp): Promise<void> {
   try {
     // Only a safe first name from what they typed (safeFirstName in ./emails), nothing else.
     const mail = buildSignUpThanksEmail(f.name);
@@ -73,7 +74,8 @@ export async function sendSignUpEmails(f: FundraiserRecord): Promise<void> {
     logFailure("sign up thanks", err);
   }
   try {
-    const mail = buildSignUpStaffEmail({ ...f, id: f.id }, { adminUrl: `${base()}/admin` });
+    // Team pages: a team's sign up says so, whose split it is, and who is held to be invited.
+    const mail = buildSignUpStaffEmail({ ...f, id: f.id, ...(team?.isTeam ? { team } : {}) }, { adminUrl: `${base()}/admin` });
     await sendFundraiseStaff(f.name, { email: config.BALL_FROM_EMAIL, from: config.BALL_FROM_EMAIL, replyTo: f.email, ...mail });
   } catch (err) {
     logFailure("sign up staff summary", err);
@@ -87,6 +89,12 @@ export async function sendSignUpEmails(f: FundraiserRecord): Promise<void> {
  * sends theirs at the switch. True when the email went.
  */
 export async function sendApprovedEmail(f: FundraiserRecord): Promise<boolean> {
+  // Team pages: a team's own "your team page is live" (always with the join link), after inviting
+  // the people its organiser added. Loaded here, so nothing else here needs the team modules.
+  if (f.isTeam) {
+    const { sendTeamApproved } = await import("./team-send");
+    return (await sendTeamApproved(f)).liveSent;
+  }
   try {
     const page = hasPage(f);
     const mail = buildApprovedEmail(f, {

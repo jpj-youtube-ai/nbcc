@@ -46,6 +46,9 @@ export const STAFF_ONLY_KINDS: ReadonlySet<string> = new Set([
   "fundraiseFinishedStaff",
   // TASK-503: the Monday fundraising summary to the people chosen in the admin.
   "fundraiseSummary",
+  // Team pages: a new team member to approve, and a member taken off a team, both to events@.
+  "fundraiseTeamJoinStaff",
+  "fundraiseTeamMemberRemoved",
   "backupAlert",
 ]);
 

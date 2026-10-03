@@ -97,7 +97,13 @@
     sharesWithOther: "sharesYes",
     nbccSharePercent: "nbccSharePercent",
     otherCauseName: "otherCauseName",
+    // Team pages (Jaimie, 2026-10-03). A person added is named by place: teamMembers.<n>.<part>.
+    team: "teamYes",
+    teamShareMode: "teamShareTeam",
+    teamMembers: "teamName",
   };
+  // Team pages: the most people a team organiser adds on the form.
+  var TEAM_MEMBERS_MAX = 30;
   // Jaimie, 2026-10-03: what a No to "Are you 18 or over?" says. The server says the same.
   var UNDER_18 =
     "You need to be 18 or over to set up a page. Ask a parent, guardian or another grown up you trust to set it up for you: they can name you on the page (for example, 'for Ella's 10th birthday'). Any questions, call 01292 811 015 or email events@nbcc.scot.";
@@ -161,6 +167,12 @@
     // category message goes by the first one on the form, whichever it is.
     function controlEl(key) {
       if (key === "kind") return form.querySelector('input[name="kind"]');
+      // Team pages: "teamMembers.1.email" is the email box of the second person added.
+      var person = /^teamMembers\.(\d+)\.(firstName|lastName|email)$/.exec(String(key));
+      if (person) {
+        var row = form.querySelectorAll("[data-team-row]")[Number(person[1])];
+        return row ? row.querySelector('input[data-part="' + person[2] + '"]') : null;
+      }
       return el(controlFor(key));
     }
     function val(id) {
@@ -223,7 +235,8 @@
       raisingOnly.forEach(function (n) {
         n.hidden = event;
       });
-      if (targetQ) targetQ.hidden = event;
+      // Team pages: a team's target is asked with the team, so the page's target goes.
+      if (targetQ) targetQ.hidden = event || radio("team") === "team";
       need(date, event);
       if (dateRequired) dateRequired.hidden = !event;
       if (dateOptional) dateOptional.hidden = event;
@@ -283,6 +296,122 @@
         need(box, yes);
         if (!yes && box && box.value) box.value = "";
       });
+    }
+
+    // --- Team pages (Jaimie, 2026-10-03): just me, or a team? ------------------------------------
+    // Only for raising money (the step is data-raising-only). A team asks the team's name and
+    // target in place of the page's, says the person setting it up is the team organiser, and may
+    // add people: a row each (first name, surname, email), up to 30, every box of a row needed once
+    // any is typed. Sharing with another cause asks whose split it is.
+    var teamFields = form.querySelector("[data-team-fields]");
+    var teamRows = form.querySelector("[data-team-rows]");
+    var teamAdd = form.querySelector("[data-team-add]");
+    var teamShare = form.querySelector("[data-team-share]");
+    var notTeam = Array.prototype.slice.call(form.querySelectorAll("[data-not-team]"));
+    var rowSeq = 0;
+    var PARTS = [
+      ["firstName", "First name", "text", 50, "Add their first name"],
+      ["lastName", "Surname", "text", 50, "Add their surname"],
+      ["email", "Email", "email", 254, "Check this email address"],
+    ];
+    function isTeam() {
+      return radio("path") === "raising" && radio("team") === "team";
+    }
+    function teamRowList() {
+      return Array.prototype.slice.call(form.querySelectorAll("[data-team-row]"));
+    }
+    function applyTeamRows() {
+      var list = teamRowList();
+      list.forEach(function (li, i) {
+        var boxes = Array.prototype.slice.call(li.querySelectorAll("input[data-part]"));
+        var any = boxes.some(function (b) {
+          return String(b.value || "").trim() !== "";
+        });
+        boxes.forEach(function (b) {
+          need(b, any);
+        });
+        var remove = li.querySelector("[data-team-remove]");
+        if (remove) remove.setAttribute("aria-label", "Remove team member " + (i + 1));
+      });
+      if (teamAdd) teamAdd.disabled = list.length >= TEAM_MEMBERS_MAX;
+    }
+    function addTeamRow() {
+      if (!teamRows || teamRowList().length >= TEAM_MEMBERS_MAX) return null;
+      rowSeq += 1;
+      var li = doc.createElement("li");
+      li.className = "fr-team-row";
+      li.setAttribute("data-team-row", "");
+      var row = doc.createElement("div");
+      row.className = "fr-row fr-row--three";
+      PARTS.forEach(function (p) {
+        var id = "teamMember" + rowSeq + "-" + p[0];
+        var field = doc.createElement("div");
+        field.className = "give-field";
+        var label = doc.createElement("label");
+        label.setAttribute("for", id);
+        label.textContent = p[1];
+        var input = doc.createElement("input");
+        input.className = "give-field-input";
+        input.id = id;
+        input.name = id;
+        input.type = p[2];
+        input.maxLength = p[3];
+        input.setAttribute("autocomplete", "off");
+        input.setAttribute("data-part", p[0]);
+        input.setAttribute("data-invalid-message", p[4]);
+        field.appendChild(label);
+        field.appendChild(input);
+        row.appendChild(field);
+      });
+      var remove = doc.createElement("button");
+      remove.type = "button";
+      remove.className = "fr-link-btn fr-team-remove";
+      remove.setAttribute("data-team-remove", "");
+      remove.textContent = "Remove";
+      li.appendChild(row);
+      li.appendChild(remove);
+      teamRows.appendChild(li);
+      applyTeamRows();
+      return li;
+    }
+    if (teamAdd) {
+      teamAdd.addEventListener("click", function () {
+        var li = addTeamRow();
+        var first = li && li.querySelector("input");
+        if (first && first.focus) {
+          try {
+            first.focus();
+          } catch (e) {
+            /* focus unavailable */
+          }
+        }
+      });
+    }
+    if (teamRows) {
+      teamRows.addEventListener("click", function (e) {
+        var btn = e.target && e.target.closest ? e.target.closest("[data-team-remove]") : null;
+        if (!btn) return;
+        var li = btn.closest("[data-team-row]");
+        if (li && li.parentNode) li.parentNode.removeChild(li);
+        if (!teamRowList().length) addTeamRow();
+        applyTeamRows();
+      });
+    }
+    function applyTeam() {
+      var team = isTeam();
+      if (teamFields) teamFields.hidden = !team;
+      need(el("teamName"), team);
+      notTeam.forEach(function (n) {
+        n.hidden = team;
+      });
+      need(el("title"), !team);
+      if (team && teamRows && !teamRowList().length) addTeamRow();
+      var shareMode = team && sharing();
+      if (teamShare) teamShare.hidden = !shareMode;
+      Array.prototype.forEach.call(form.querySelectorAll('input[name="teamShareMode"]'), function (r) {
+        need(r, shareMode);
+      });
+      applyTeamRows();
     }
 
     // --- the ticket link, only for tickets sold on another website ------------------------------
@@ -445,6 +574,7 @@
       applyPath();
       applyAge();
       applySplit();
+      applyTeam();
       applyKind();
       applyBooking();
       applyAddress();
@@ -480,6 +610,7 @@
     });
     form.addEventListener("input", function () {
       safely(applyAddress);
+      safely(applyTeamRows);
       safely(applyCounts);
       revealSoon();
     });
@@ -724,6 +855,10 @@
       return v === "yes" ? true : v === "no" ? false : null;
     }
 
+    function wholePence(pounds) {
+      return isFinite(pounds) && pounds > 0 ? Math.round(pounds * 100) : null;
+    }
+
     function payload() {
       var path = radio("path");
       var event = path === "event";
@@ -739,18 +874,22 @@
               return b.value;
             })
         : [];
+      // Team pages: a team's name and target are the page's.
+      var team = isTeam();
+      var teamPounds = parseFloat(val("teamTarget"));
       var body = {
         path: path,
         kind: radio("kind"),
         kindOther: radio("kind") === "other" ? val("kindOther") : "",
-        title: val("title"),
+        title: team ? val("teamName") : val("title"),
         description: val("description"),
         eventDate: val("eventDate"),
         startTime: val("startTime"),
         venue: val("venue"),
         town: val("town"),
-        targetPence: path === "raising" && isFinite(pounds) && pounds > 0 ? Math.round(pounds * 100) : null,
-        public: radio("public") === "yes",
+        targetPence: path !== "raising" ? null : wholePence(team ? teamPounds : pounds),
+        // Team pages: a team is always on the website.
+        public: team || radio("public") === "yes",
         firstName: val("firstName"),
         lastName: val("lastName"),
         email: val("email"),
@@ -785,6 +924,18 @@
       body.access = access;
       body.booking = booking;
       body.ticketUrl = booking === "away" ? val("ticketUrl") : "";
+      // Team pages: every row in order (the server names a problem by its place), even an empty one.
+      body.team = path === "raising" ? radio("team") || null : "me";
+      body.teamShareMode = team && sharing() ? radio("teamShareMode") || null : null;
+      body.teamMembers = team
+        ? teamRowList().map(function (li) {
+            var part = function (name) {
+              var b = li.querySelector('input[data-part="' + name + '"]');
+              return b ? String(b.value || "").trim() : "";
+            };
+            return { firstName: part("firstName"), lastName: part("lastName"), email: part("email") };
+          })
+        : [];
       body.company = val("company");
       body.captchaToken = tokenField ? tokenField.value : "";
       if (inviteToken) body.invite = inviteToken;
@@ -799,6 +950,8 @@
       var raising = doc.querySelector("[data-thanks-raising]");
       var event = doc.querySelector("[data-thanks-event]");
       if (raising) raising.hidden = body.path !== "raising";
+      var teamLine = doc.querySelector("[data-thanks-team]");
+      if (teamLine) teamLine.hidden = body.team !== "team";
       if (event) event.hidden = body.path === "raising";
       openPanel.hidden = true;
       if (thanks) {

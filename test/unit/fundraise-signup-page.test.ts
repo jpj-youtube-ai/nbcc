@@ -63,8 +63,9 @@ const sent = () => JSON.parse(String(posts()[0].init?.body));
 
 function fillRaising() {
   tick("pathRaising");
-  // Jaimie, 2026-10-03: 18 or over, and not sharing with another cause.
+  // Jaimie, 2026-10-03: 18 or over, and not sharing with another cause; and just me, not a team.
   tick("over18Yes");
+  tick("teamMe");
   tick("sharesNo");
   type("title", "Jo's Sponsored Swim");
   tick("kind-walk");
@@ -226,6 +227,10 @@ describe("sending", () => {
       dressCode: "",
       included: "",
       creditName: "",
+      // Team pages: just me, so no split mode and nobody to invite.
+      team: "me",
+      teamShareMode: null,
+      teamMembers: [],
       company: "",
       captchaToken: "",
     });

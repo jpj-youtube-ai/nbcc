@@ -59,6 +59,7 @@ import { config } from "../config";
 import { printStatusFor } from "./fundraise-materials";
 import { loadCategories } from "../db/fundraising-categories";
 import { KEY_PATTERN, isActiveCategory } from "../fundraising/categories";
+import { checkTeamSignUp } from "../fundraising/teams";
 
 // TASK-493: the public side of community fundraising. Everything here is OFF while the fundraising
 // switch is off (Admin > Fundraising, admins only): sign ups are refused and nothing is listed.
@@ -131,16 +132,31 @@ export async function postFundraise(req: Request, res: Response): Promise<Respon
   const kind = req.body?.kind;
   if (typeof kind === "string" && KEY_PATTERN.test(kind) && !isActiveCategory(kind)) await loadCategories({ fresh: true });
   const parsed = signUpSchema.safeParse(req.body);
-  if (!parsed.success) {
-    return res.status(400).json({ error: "Some of the form needs another look", fields: fieldErrors(parsed.error.issues) });
+  // Team pages: "Just me, or a team?" and the people added, checked beside the rest, so every
+  // problem is named at once.
+  const team = checkTeamSignUp(req.body);
+  if (!parsed.success || !team.team) {
+    const fields = { ...(parsed.success ? {} : fieldErrors(parsed.error.issues)), ...team.fields };
+    return res.status(400).json({ error: "Some of the form needs another look", fields });
   }
+  const asTeam = team.team.isTeam ? team.team : null;
   try {
-    const record = await createFundraiser(parsed.data);
+    // A team is marked a team, and the people added are HELD, in the sign up's own transaction.
+    const record = await createFundraiser(
+      parsed.data,
+      asTeam
+        ? async (client, id) => {
+            const { markTeam, insertHeldInvites } = await import("../db/fundraising-teams");
+            await markTeam(client, id, asTeam.shareMode);
+            await insertHeldInvites(client, id, asTeam.members);
+          }
+        : undefined,
+    );
     // TASK-503: made from a staff invite's link? Mark the invite used and linked. Best effort.
     await useInvite(req.body?.invite, record.id);
     // TASK-515: made from email 18's Do it again link? Mark the link used. Best effort.
     await useAgain(req.body?.again, record.id);
-    await sendSignUpEmails(record);
+    await (asTeam ? sendSignUpEmails(record, asTeam) : sendSignUpEmails(record));
     // The newsletter tick box (unticked by default): a ticked one subscribes the organiser exactly as
     // the footer form does, recorded as joining from the fundraising form. Best effort: the sign up stands either way. Unticked changes nothing.
     if (parsed.data.newsletterOk) {
@@ -181,7 +197,15 @@ export async function getFundraiserPage(req: Request, res: Response): Promise<Re
     const f = await getBySlug(String(req.params.slug ?? ""));
     if (!f || !hasPage(f)) return res.status(404).json({ error: "Not found" });
     const wall = wallEntries(await wallRows(f.id));
-    return res.status(200).json(publicPage(f, f.meter, wall));
+    // Team pages: a team's total is the whole team's (its own and every current member page's), against
+    // the team's target. Read only for a team; a member page keeps its own.
+    let m = f.meter;
+    if (f.isTeam) {
+      const [{ listTeamMembers }, { teamMeter }] = await Promise.all([import("../db/fundraising-teams"), import("../fundraising/teams")]);
+      const counting = (await listTeamMembers(f.id)).filter((x) => !x.teamLeftAt && (x.status === "approved" || x.status === "finished"));
+      m = teamMeter(f.meter, counting.map((x) => x.meter), f.targetPence);
+    }
+    return res.status(200).json(publicPage(f, m, wall));
   } catch (err) {
     console.error("fundraiser page failed:", err instanceof Error ? err.message : err);
     return res.status(500).json({ error: "This page is temporarily unavailable" });

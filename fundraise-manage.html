@@ -21,6 +21,8 @@
     <script defer src="/assets/js/social-handles.js"></script>
     <script defer src="/assets/js/fundraise-manage.js"></script>
     <script defer src="/assets/js/fundraise-news.js"></script>
+    <!-- Team pages: "Your team" on a team's card, and taking over a team. -->
+    <script defer src="/assets/js/fundraise-team-manage.js"></script>
   </head>
   <body>
     <a class="skip-link" href="#main">Skip to content</a>
@@ -73,6 +75,26 @@
               </div>
               <button class="btn btn-primary" type="submit" data-request-submit>Email me a code</button>
               <p class="form-status" role="status" aria-live="polite" data-request-status></p>
+            </form>
+            <!-- Team pages: someone staff have asked to take over as team organiser says yes here,
+                 with the code we emailed them (fundraise-team-manage.js). -->
+            <p class="fr-code-links" data-handover-row hidden><button class="fr-link-btn" type="button" data-handover-open aria-expanded="false" aria-controls="handoverPanel">Taking over a team?</button></p>
+          </div>
+
+          <div class="card card-lg fr-panel" id="handoverPanel" data-manage-handover hidden>
+            <h2>Taking over a team</h2>
+            <p>If we have emailed you a code to become a team organiser, put in your email address and the code here. It works for 3 days.</p>
+            <form id="handoverForm" class="fr-form fr-form--plain" novalidate>
+              <div class="give-field">
+                <label for="handoverEmail">Your email address <span class="give-req" aria-hidden="true">*</span></label>
+                <input class="give-field-input" id="handoverEmail" name="email" type="email" autocomplete="email" required aria-required="true" placeholder="you@example.com" />
+              </div>
+              <div class="give-field">
+                <label for="handoverCode">The 6 digit code <span class="give-req" aria-hidden="true">*</span></label>
+                <input class="give-field-input fr-code-input" id="handoverCode" name="code" type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="7" required aria-required="true" placeholder="123456" data-invalid-message="Put in the 6 digit code from the email" />
+              </div>
+              <button class="btn btn-primary" type="submit" data-handover-submit>Become team organiser</button>
+              <p class="form-status" role="status" aria-live="polite" data-handover-status></p>
             </form>
           </div>
 
@@ -393,6 +415,28 @@
               </section>
             </article>
           </div>
+
+          <!-- Team pages: "Your team", on a team's card only. fundraise-team-manage.js copies this in
+               (before All done?): the join link and a message to forward, and who has joined. -->
+          <template data-team-pattern>
+            <section class="fr-mine__part" data-team-part aria-labelledby="mineTeamHeading">
+              <h3 id="mineTeamHeading">Your team</h3>
+              <p>You&rsquo;re the team organiser. Share this link with your team: anyone who joins gets a page of their own once we&rsquo;ve checked it, and what they raise counts towards your team too.</p>
+              <p class="fr-share__url" data-team-link></p>
+              <p class="fr-sublegend">A message to send your team</p>
+              <p class="fr-mine__forward" data-team-forward></p>
+              <div class="fr-share__links" data-team-copies hidden>
+                <button class="fr-share__btn" type="button" data-team-copy="link">Copy the join link</button>
+                <button class="fr-share__btn" type="button" data-team-copy="message">Copy the message</button>
+              </div>
+              <p class="fr-share__status" role="status" aria-live="polite" data-team-copy-status></p>
+              <h4 class="fr-sublegend">Who has joined</h4>
+              <p class="fr-wall__empty" data-team-empty hidden>Nobody has joined yet. Send them the link!</p>
+              <ul class="fr-mine__team-list" data-team-list></ul>
+              <p class="form-status" role="status" aria-live="polite" data-team-status></p>
+              <p class="give-field-help">News for the whole team goes in News updates, on your team page.</p>
+            </section>
+          </template>
 
           <!-- TASK-506: News updates, for a fundraiser running with its own page. fundraise-news.js
                copies this into each such card (before All done?), giving every id its own ending.

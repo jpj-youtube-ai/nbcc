@@ -437,7 +437,8 @@ function renderFacts(p: PublicPage): string {
   }
   const place = [p.venue, p.town].filter(Boolean).join(", ");
   if (place) items.push(`<li>${ICON.pin}<span><span class="sr-only">Where: </span>${escapeHtml(place)}</span></li>`);
-  items.push(`<li>${ICON.person}<span>Organised by ${escapeHtml(p.organisedBy)}</span></li>`);
+  // Team pages: a team page names its organiser as the team organiser.
+  items.push(`<li>${ICON.person}<span>${p.teamName ? "Team organiser: " : "Organised by "}${escapeHtml(p.organisedBy)}</span></li>`);
   return `<ul class="fr-facts">${items.join("")}</ul>`;
 }
 
@@ -501,8 +502,16 @@ function renderShare(p: PublicPage, pageUrl: string): string {
   );
 }
 
-/** The organiser's first name, for "Robin's total" and "Robin's wall". */
-const firstName = (p: PublicCard) => escapeHtml(p.organisedBy.split(" ")[0]);
+/**
+ * The organiser's first name, for "Robin's total" and "Robin's wall". Team pages: a team page speaks
+ * of the team instead ("Exampleton Juniors' total"); a member page keeps its own name.
+ */
+const firstName = (p: PublicCard & { teamName?: string | null }) => escapeHtml(p.teamName || p.organisedBy.split(" ")[0]);
+/** "Robin's", "Exampleton Juniors'": a name ending in s takes just the apostrophe. Escaped. */
+const whose = (p: PublicCard & { teamName?: string | null }) => {
+  const name = p.teamName || p.organisedBy.split(" ")[0];
+  return `${escapeHtml(name)}${/s$/i.test(name) ? "'" : "'s"}`;
+};
 
 // Jaimie, 2026-10-03: shared with another cause. Money given on the page is NBCC's share; the
 // statement the 2009 regulations ask for sits beside the Give button (renderSplit).
@@ -519,10 +528,9 @@ const isEvent = (p: PublicCard) => p.path === "event";
 /** Who a share helps: "Robin", or "this event". */
 const sharer = (p: PublicCard) => (isEvent(p) ? "this event" : firstName(p));
 /** Whose wall: "Robin's wall", or "the wall". */
-const wallOf = (p: PublicCard) => (isEvent(p) ? "the wall" : `${firstName(p)}'s wall`);
+const wallOf = (p: PublicCard & { teamName?: string | null }) => (isEvent(p) ? "the wall" : `${whose(p)} wall`);
 
 function renderGiveForm(p: PublicPage): string {
-  const first = firstName(p);
   const event = isEvent(p);
   const presets = PRESETS_PENCE.map(
     (pence) =>
@@ -537,9 +545,9 @@ function renderGiveForm(p: PublicPage): string {
       ? '<h2 class="give-step-title" id="fr-give-heading">You can still give</h2>' +
         (event
           ? `<p class="give-step-sub">Your donation goes to NBCC and still counts towards this event's total.${SHARE_NOTE(p)}</p>`
-          : `<p class="give-step-sub">Your donation goes to NBCC and still counts towards ${first}'s total for ${escapeHtml(p.title)}.${SHARE_NOTE(p)}</p>`)
+          : `<p class="give-step-sub">Your donation goes to NBCC and still counts towards ${whose(p)} total${p.teamName ? "" : ` for ${escapeHtml(p.title)}`}.${SHARE_NOTE(p)}</p>`)
       : `<h2 class="give-step-title" id="fr-give-heading">Give to ${escapeHtml(p.title)}</h2>` +
-        `<p class="give-step-sub">Your donation goes to NBCC and counts towards ${event ? "this event" : first}'s total.${SHARE_NOTE(p)}</p>`) +
+        `<p class="give-step-sub">Your donation goes to NBCC and counts towards ${event ? "this event's" : whose(p)} total.${SHARE_NOTE(p)}</p>`) +
     // Shipped hidden: without JavaScript the browser would send it as a web address, names and all.
     '<p class="fr-noscript" data-nojs>Giving on this page needs JavaScript switched on. You can still donate on our <a href="/donate">donate page</a>.</p>' +
     `<form id="frGiveForm" class="fr-give-form" data-fundraiser-id="${p.giving.fundraiserId}" data-minimum-pence="${p.giving.minimumPence}" novalidate hidden data-needs-js>` +
@@ -638,6 +646,11 @@ export interface FundraiserPageOptions {
    * message was left on the give form (?message=1).
    */
   thanks?: { message: boolean; sessionId?: string | null; added?: boolean };
+  /**
+   * Team pages (src/fundraising/team-render.ts): a team's "Join this team" under the give button and
+   * its members after the story; a member page's team under its facts. Nothing for any other page.
+   */
+  team?: { summaryHtml?: string; mainHtml?: string; factsHtml?: string };
 }
 
 /**
@@ -726,7 +739,8 @@ function renderCountdown(p: PublicPage, now: Date, pageUrl: string): string {
       : `<p class="fr-countdown"><span class="fr-countdown__num">${c.days}</span> days to go</p>`;
   }
   const word = p.organisedBy.trim().split(/\s+/)[0] ?? "";
-  const first = word.toLowerCase() === "anonymous" ? null : safeFirstName(word);
+  // Team pages: a team page wishes the team luck, by its name.
+  const first = p.teamName ? p.teamName : word.toLowerCase() === "anonymous" ? null : safeFirstName(word);
   // Event pages: an event's name is often a group's or a business's, so on its day it has no name.
   const today = isEvent(p)
     ? "<h2 class=\"fr-today__title\">Today's the day!</h2><p>A share today goes a long way.</p>"
@@ -799,13 +813,14 @@ export function renderFundraiserPage(template: string, p: PublicPage, opts: Fund
   const event = p.path === "event";
   const description = event
     ? `A community event raising money for NBCC, organised by ${p.organisedBy}. ${shorten(p.description, 140)}`
-    : `${p.organisedBy} is raising money for NBCC. ${shorten(p.description, 140)}`;
+    : `${p.teamName || p.organisedBy} is raising money for NBCC. ${shorten(p.description, 140)}`;
   const image = p.imageSrc ? `${origin}${p.imageSrc}` : "https://nbcc.scot/assets/img/og-image.png";
   const intro =
     `<span class="eyebrow">${escapeHtml(p.kindLabel)}</span>` +
     `<h1 id="fr-title">${escapeHtml(p.title)}</h1>` +
     '<div class="rule"><i></i></div>' +
     renderFacts(p) +
+    (opts.team?.factsHtml ?? "") +
     renderCountdown(p, opts.now, opts.pageUrl) +
     (p.finished ? renderFinished(p) : "") +
     (opts.thanks ? renderThanks(p, opts.pageUrl, opts.thanks) : "");
@@ -815,16 +830,18 @@ export function renderFundraiserPage(template: string, p: PublicPage, opts: Fund
     renderMeter(p.meter, { large: true }) +
     renderSplit(p) +
     `<a class="btn btn-primary fr-summary__give" href="#give">${p.finished ? "You can still give" : event ? "Give to this event" : "Give to this fundraiser"}</a>` +
+    (opts.team?.summaryHtml ?? "") +
     "</div>" +
     '<div class="fr-main">' +
     (p.imageSrc
       ? `<figure class="fr-photo"><img src="${escapeHtml(p.imageSrc)}" alt="${escapeHtml(`A picture for ${p.title}`)}" decoding="async" /></figure>`
       : "") +
     '<section class="fr-story" aria-labelledby="fr-story-heading">' +
-    `<h2 id="fr-story-heading">${event ? "About this event" : "About this fundraiser"}</h2>` +
+    `<h2 id="fr-story-heading">${event ? "About this event" : p.teamName ? "About the team" : "About this fundraiser"}</h2>` +
     paragraphs(p.description) +
     (event ? renderEventNotes(p) : "") +
     "</section>" +
+    (opts.team?.mainHtml ?? "") +
     renderNews(p) +
     renderGiveForm(p) +
     renderWall(p, opts.now) +

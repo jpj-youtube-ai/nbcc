@@ -708,7 +708,7 @@ fieldset.is-invalid .fr-option { border-color: var(--crimson); }
 .fr-materials a { font-weight: 600; text-underline-offset: 3px; }
 .fr-materials span { font-size: 0.85rem; color: var(--slate-soft); }
 .fr-qr__download[hidden] { display: none; }
-.logo-example__poster { position: relative; overflow: hidden; padding-bottom: 54px; }
+.logo-example__poster { position: relative; overflow: hidden; padding-bottom: 78px; }
 .logo-example__foot { position: absolute; left: 0; right: 0; bottom: 0; background: var(--maroon); color: var(--cream); font-family: var(--font-head); font-style: italic; font-size: 0.78rem; line-height: 1.3; padding: 10px 14px; }
 .fr-qr__download + .fr-qr__download { margin-left: 18px; }
 

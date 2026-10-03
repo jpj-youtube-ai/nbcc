@@ -114,7 +114,7 @@ export function buildSignUpThanksEmail(typedName?: string | null): BuiltEmail {
   const first = safeFirstName(typedName);
   const hi = first ? `Hi there ${first},` : "Hi there,";
   const intro =
-    "We’re so excited that you want to raise money for NBCC. Every pound you raise helps the families we support, all year round, and we can’t wait to cheer you on.";
+    "We’re so excited that you want to raise money for NBCC. Every pound you raise helps the children, young people and vulnerable adults we support, all year round, and we can’t wait to cheer you on.";
   const small = "Nothing goes on our website until we’ve spoken. If this wasn’t you, don’t worry, you can ignore this email.";
   const body =
     EYEBROW +

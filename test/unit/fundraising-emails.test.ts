@@ -153,7 +153,7 @@ describe("thanks for signing up", () => {
     expect(mail.subject).toBe("Thank you for fundraising for NBCC!");
     expect(mail.html).toContain("Fundraising for NBCC");
     expect(mail.html).toContain("Thank you, you’ve made our day!");
-    expect(mail.html).toContain("We’re so excited that you want to raise money for NBCC. Every pound you raise helps the families we support, all year round, and we can’t wait to cheer you on.");
+    expect(mail.html).toContain("We’re so excited that you want to raise money for NBCC. Every pound you raise helps the children, young people and vulnerable adults we support, all year round, and we can’t wait to cheer you on.");
     expect(mail.html).toContain("What happens next");
     expect(mail.html).toContain("<ol");
     for (const step of [

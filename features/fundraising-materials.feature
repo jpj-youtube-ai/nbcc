@@ -14,7 +14,7 @@ Feature: Fundraising materials (TASK-504)
     Then the materials answer is 200
     And the materials page shows "Fundraising for NBCC"
     And the materials page shows "Sams Poster Dash (bdd-fr)"
-    And the materials page shows "Every pound helps the families we support, all year round."
+    And the materials page shows "Every pound helps the children, young people and vulnerable adults we support, all year round."
     And the materials page is never kept or indexed
     When the signed in organiser opens the "sponsor-form" for "Sams Poster Dash (bdd-fr)"
     Then the materials answer is 200

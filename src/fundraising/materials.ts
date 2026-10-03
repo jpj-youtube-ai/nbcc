@@ -43,7 +43,7 @@ export type MaterialPiece = (typeof MATERIALS)[number];
 
 export const CHARITY_NAME = "Night Before Christmas Campaign";
 export const CHARITY_NUMBER = "SC047995";
-export const EVERY_POUND = "Every pound helps the families we support, all year round.";
+export const EVERY_POUND = "Every pound helps the children, young people and vulnerable adults we support, all year round.";
 
 /** NBCC's policy, on every piece, the logo pack and the private area. Jaimie's words. */
 export const ASK_US =
@@ -586,7 +586,7 @@ const SPONSOR_CSS = `
   .sf-grand b{min-width:24mm;border-bottom:1px solid #9b8f86;height:5.5mm;font-weight:600}
   .sf-foot{margin-top:auto;padding-top:2.5mm;display:flex;gap:6mm;align-items:flex-end;justify-content:space-between;font-size:8pt;line-height:1.45}
   .sf-foot .back{font-family:var(--head);font-weight:700;color:var(--crimson);font-size:11.5pt;line-height:1.3}
-  .sf-foot .how{color:var(--slate);max-width:150mm}
+  .sf-foot .how{color:var(--slate);max-width:205mm}
   .sf-foot .pg{color:var(--muted);white-space:nowrap}
   .sf-legal{margin-top:1.8mm;padding-top:1.5mm;border-top:1px solid var(--line);font-size:7pt;line-height:1.4;color:var(--muted);text-align:center}`;
 

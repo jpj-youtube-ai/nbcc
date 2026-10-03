@@ -33,7 +33,7 @@ function record(over: Partial<FundraiserRecord> = {}): FundraiserRecord & { mete
     path: "raising",
     kind: "santa_dash",
     title: "Sam's Santa Dash",
-    description: "Five kilometres round the North Inch in a red suit. Every mile for the families NBCC helps. Please give what you can.",
+    description: "Five kilometres round the North Inch in a red suit. Every mile for the children, young people and vulnerable adults NBCC helps. Please give what you can.",
     eventDate: "2026-12-05",
     startTime: "10:00",
     venue: "North Inch",
@@ -179,7 +179,7 @@ describe("the poster", () => {
     expect(html).toContain("North Inch, Perth");
     expect(html).toContain("Five kilometres round the North Inch in a red suit.");
     expect(html).toContain("£500");
-    expect(html).toContain("Every pound helps the families we support, all year round.");
+    expect(html).toContain("Every pound helps the children, young people and vulnerable adults we support, all year round.");
     expect(html).toContain(ASSETS.logo);
   });
 

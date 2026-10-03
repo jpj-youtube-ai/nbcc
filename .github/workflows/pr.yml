@@ -129,3 +129,7 @@ jobs:
           fi
       - name: 7z must exist, or the archive cannot be encrypted
         run: docker run --rm nbcc-image-check 7z i > /dev/null
+      # Profile pictures: sharp is native. If it does not load in the image, every photo an organiser
+      # sends fails in production, and only there.
+      - name: sharp must load, or no photo an organiser sends can be made
+        run: docker run --rm nbcc-image-check node -e "require('sharp')"

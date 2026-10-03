@@ -2711,6 +2711,37 @@ textarea.fx-call-input{min-height:88px;line-height:1.5;resize:vertical;field-siz
 }
 #view-fundraising .fr-news-list textarea.fr-input { max-width: 560px; }
 #view-fundraising .fr-news-list .fx-call-label { display: block; margin-top: 12px; }
+/* ---- Profile pictures (Jaimie, 2026-10-03): the photos an organiser sends, shown as their page will
+   show them: a round one at the size of a face beside "Organised by", a main one big. ---- */
+#view-fundraising .fr-pics-panel { background: color-mix(in srgb, var(--holly) 5%, var(--card)); }
+#view-fundraising .fr-pic-kind { margin: 0 8px; color: var(--maroon); }
+#view-fundraising .fr-pic-as-page { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin: 12px 0 0; font-weight: 600; }
+#view-fundraising .fr-pic-round {
+  display: block;
+  flex: none;
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  object-fit: cover;
+  background: var(--tint);
+  box-shadow: 0 0 0 2px var(--card), 0 0 0 3px var(--line);
+}
+#view-fundraising .fr-pic-main {
+  display: block;
+  width: 100%;
+  max-width: 420px;
+  height: auto;
+  max-height: 280px;
+  object-fit: cover;
+  margin: 12px 0 0;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: var(--tint);
+}
+#view-fundraising .fr-pic-round[hidden], #view-fundraising .fr-pic-main[hidden] { display: none; }
+#view-fundraising .fr-pics-list textarea.fr-input { max-width: 560px; }
+#view-fundraising .fr-pics-list .fx-call-label { display: block; margin-top: 12px; }
+#view-fundraising .fr-pic-delete { margin-left: 16px; color: var(--crimson); }
 /* TASK-509: the Overview's "How we are doing": one row per number, in the Needs you card's shape.
    A small label, the headline figure, the detail under it in a quieter voice, and the quiet button
    to the screen with the full story. On a phone the label sits above and the button below. */

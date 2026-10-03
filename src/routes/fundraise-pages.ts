@@ -189,6 +189,21 @@ async function newsFor(fundraiserId: number): Promise<import("../fundraising/new
   }
 }
 
+/**
+ * Profile pictures: the organiser's round photo, once staff approved it. Only a part of the page: if
+ * it cannot be read, the page goes out with the person icon instead.
+ */
+async function organiserPhotoFor(fundraiserId: number): Promise<string | null> {
+  try {
+    const [{ approvedProfilePhotos }, { profilePhotoSrc }] = await Promise.all([import("../db/fundraiser-pictures"), import("../fundraising/pictures")]);
+    const photoId = (await approvedProfilePhotos([fundraiserId])).get(fundraiserId);
+    return photoId ? profilePhotoSrc(photoId) : null;
+  } catch (err) {
+    console.error("fundraiser page photo failed:", err instanceof Error ? err.message : err);
+    return null;
+  }
+}
+
 export function addFundraisePageRoutes(router: Router, siteRoot: string, deps: FundraisePageDeps): void {
   const getInvolvedFile = join(siteRoot, "events.html");
   const signUpFile = join(siteRoot, "fundraise.html");
@@ -466,6 +481,8 @@ ${title}`, () => qrSvg(url, { title, size: 1024 })));
         thanks,
         team: extras.team,
         impact: await impactFor(f),
+        // In memory of someone: the photo is of the person remembered, never a round one of the organiser.
+        organiserPhotoSrc: f.inMemory ? null : await organiserPhotoFor(f.id),
       });
       if (!withSession) fresh(res);
       res.type("html").send(await deps.decorate(html, req.headers.cookie));

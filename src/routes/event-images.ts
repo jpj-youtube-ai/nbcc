@@ -16,11 +16,13 @@ eventImagesRouter.get("/media/events/:id", async (req: Request, res: Response) =
   if (!UUID_RE.test(req.params.id)) return res.status(404).type("text/plain").send("Not found");
   try {
     const img = await getEventImage(req.params.id);
-    if (!img) return res.status(404).type("text/plain").send("Not found");
+    // Profile pictures: an organiser's main photo answers only while it is still its page's photo.
+    if (!img || (img.organiser && !img.live)) return res.status(404).type("text/plain").send("Not found");
     res.setHeader("Content-Type", img.mime);
     res.setHeader("X-Content-Type-Options", "nosniff");
-    // A picture's address never changes what it points to (a new upload gets a new id).
-    res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
+    // A picture's address never changes what it points to (a new upload gets a new id). An
+    // organiser's main photo can be taken off, so browsers keep it for five minutes only.
+    res.setHeader("Cache-Control", img.organiser ? "public, max-age=300" : "public, max-age=31536000, immutable");
     return res.send(img.bytes);
   } catch (err) {
     console.error("event image serve failed", err);

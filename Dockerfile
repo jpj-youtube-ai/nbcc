@@ -32,6 +32,10 @@ RUN if [ -n "$GEO_SKIP" ]; then echo "geo: GEO_SKIP is set; building without the
 # ---- runtime ----
 FROM node:20-slim AS runtime
 ENV NODE_ENV=production
+# Profile pictures: sharp (native, libvips) makes the pictures organisers send. glibc gives each
+# thread its own memory arena by default, which lets a native library's memory grow well past what
+# it uses; two is plenty for one small task with 512 MB.
+ENV MALLOC_ARENA_MAX=2
 
 # TASK-423: the nightly backup (`npm run backup`) needs pg_dump and 7z.
 #

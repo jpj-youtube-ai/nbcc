@@ -23,6 +23,8 @@
     <script defer src="/assets/js/fundraise-news.js"></script>
     <!-- Team pages: "Your team" on a team's card, and taking over a team. -->
     <script defer src="/assets/js/fundraise-team-manage.js"></script>
+    <!-- Profile pictures: "Your photos", the main photo and a round photo of them, with a preview. -->
+    <script defer src="/assets/js/fundraise-pictures.js"></script>
   </head>
   <body>
     <a class="skip-link" href="#main">Skip to content</a>
@@ -478,6 +480,62 @@
               <p class="fr-mine__done" data-news-closed hidden>Your fundraiser is finished, so there are no more updates to send. Thank you!</p>
               <ol class="fr-mynews" role="list" data-news-list></ol>
               <button class="fr-wall__more" type="button" data-news-more hidden>Show all</button>
+            </section>
+          </template>
+          <!-- Profile pictures (Jaimie, 2026-10-03): "Your photos", for a fundraiser running with its
+               own page. fundraise-pictures.js copies this into each such card (before Change your
+               details), giving every id its own ending: a preview of the top of their page, then the
+               main photo and a round photo of them, each waiting for staff before it shows. -->
+          <template data-pictures-pattern>
+            <section class="fr-mine__part fr-pics" data-pictures-part aria-labelledby="minePicturesHeading">
+              <h3 id="minePicturesHeading">Your photos</h3>
+              <p>Add a main photo for your page, and a small round photo of you to go beside your name. We check every photo before it goes on your page.</p>
+              <p class="fr-pics__consent">Only send photos of people who are happy to be on the page. For anyone under 18, you need their parent or guardian's OK.</p>
+              <div class="fr-picpreview" data-pic-preview>
+                <p class="fr-picpreview__label" id="picPreviewLabel">How the top of your page will look</p>
+                <div class="fr-picpreview__page" role="group" aria-labelledby="picPreviewLabel">
+                  <p class="fr-picpreview__title" data-pic-title></p>
+                  <p class="fr-picpreview__by"><span class="fr-picpreview__avatar" data-pic-avatar></span><span data-pic-by></span></p>
+                  <figure class="fr-picpreview__photo" data-pic-main>
+                    <img data-pic-main-img src="data:," alt="Your main photo, as your page will show it" hidden />
+                    <span class="fr-picpreview__empty" data-pic-main-empty>Your main photo goes here</span>
+                  </figure>
+                </div>
+              </div>
+              <div class="fr-pics__forms">
+                <form class="fr-form fr-form--plain fr-pic" novalidate data-pic-form="profile">
+                  <h4 class="fr-pic__title">A round photo of you</h4>
+                  <div class="fr-pic__now" data-pic-now></div>
+                  <div class="give-field">
+                    <label for="picProfileFile">Choose a photo of you</label>
+                    <input class="fr-newspost__file" id="picProfileFile" name="photo" type="file" accept="image/jpeg,image/png,image/webp" aria-describedby="picProfileHelp" />
+                    <p class="give-field-help" id="picProfileHelp" data-pic-profile-help>A JPG, PNG or WebP of just you, with your face clear. It shows small and round beside your name on your page.</p>
+                  </div>
+                  <div class="fr-pic__crop" data-pic-crop hidden>
+                    <div class="fr-crop" data-crop tabindex="0" role="group" aria-roledescription="photo position" aria-label="Your photo in its circle" aria-describedby="picProfileCropHelp">
+                      <img data-crop-img src="data:," alt="" draggable="false" />
+                    </div>
+                    <p class="give-field-help" id="picProfileCropHelp">Drag your photo to move it in the circle, or use the arrow keys.</p>
+                  </div>
+                  <div class="give-cta-row">
+                    <button class="btn btn-primary give-cta" type="submit" data-pic-submit>Send for checking</button>
+                  </div>
+                  <p class="form-status" role="status" aria-live="polite" data-pic-status></p>
+                </form>
+                <form class="fr-form fr-form--plain fr-pic" novalidate data-pic-form="main">
+                  <h4 class="fr-pic__title" data-pic-main-title>Your main photo</h4>
+                  <div class="fr-pic__now" data-pic-now></div>
+                  <div class="give-field">
+                    <label for="picMainFile">Choose your main photo</label>
+                    <input class="fr-newspost__file" id="picMainFile" name="photo" type="file" accept="image/jpeg,image/png,image/webp" aria-describedby="picMainHelp" />
+                    <p class="give-field-help" id="picMainHelp" data-pic-main-help>A JPG, PNG or WebP. A photo of you or your day works best, rather than a poster. It shows big at the top of your page.</p>
+                  </div>
+                  <div class="give-cta-row">
+                    <button class="btn btn-primary give-cta" type="submit" data-pic-submit>Send for checking</button>
+                  </div>
+                  <p class="form-status" role="status" aria-live="polite" data-pic-status></p>
+                </form>
+              </div>
             </section>
           </template>
         </div>

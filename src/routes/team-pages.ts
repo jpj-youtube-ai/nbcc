@@ -27,6 +27,16 @@ async function fundraisingOn(): Promise<boolean> {
   }
 }
 
+/** Profile pictures: the approved round photos, by fundraiser. If they cannot be read, the elf for all. */
+async function teamPhotos(ids: number[]): Promise<Map<number, string>> {
+  try {
+    return await (await import("../db/fundraiser-pictures")).approvedProfilePhotos(ids);
+  } catch (err) {
+    console.error("team page photos failed:", err instanceof Error ? err.message : err);
+    return new Map();
+  }
+}
+
 const base = async () => (await import("../config")).config.PORTAL_BASE_URL.replace(/\/+$/, "");
 
 /**
@@ -40,20 +50,25 @@ export async function teamPageExtras(
 ): Promise<{ meter?: Meter; team?: Partial<TeamExtras> }> {
   try {
     if (f.isTeam) {
-      const [{ listTeamMembers }, { teamMeter, teamMemberList, joinUrl }, { renderTeamExtras }] = await Promise.all([
+      const [{ listTeamMembers }, { teamMeter, teamMemberList, joinUrl }, { renderTeamExtras }, { profilePhotoSrc }] = await Promise.all([
         import("../db/fundraising-teams"),
         import("../fundraising/teams"),
         import("../fundraising/team-render"),
+        import("../fundraising/pictures"),
       ]);
       const rows = (await listTeamMembers(f.id)).filter((m) => !m.teamLeftAt && (m.status === "approved" || m.status === "finished"));
+      // Profile pictures: each approved round photo, the NBCC elf for anyone without one.
+      const photos = await teamPhotos([f.id, ...rows.map((m) => m.id)]);
+      const organiserPhoto = photos.get(f.id);
       return {
         meter: teamMeter(f.meter, rows.map((m) => m.meter), f.targetPence),
         team: renderTeamExtras({
           slug: f.slug,
           title: f.title,
           organisedBy: shortName(f.name),
+          organiserPhotoSrc: organiserPhoto ? profilePhotoSrc(organiserPhoto) : null,
           finished: f.status !== "approved",
-          members: teamMemberList(rows),
+          members: teamMemberList(rows, photos),
           joinUrl: joinUrl(await base(), f.slug),
         }),
       };

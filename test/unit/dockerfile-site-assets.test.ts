@@ -46,7 +46,7 @@ describe("Dockerfile bakes every served marketing page into the image", () => {
     );
   });
 
-  // The sign up tidy: some pages are served by a route of their own, not by _redirects (the team
+  // Some pages are served by a route of their own, not by _redirects (the team
   // join form was one, and was never in the image: its page read fundraise-join.html and found
   // nothing). Every page at the top of the repo is one the app serves, so every one is copied.
   it("COPYies every .html page at the top of the repo", () => {

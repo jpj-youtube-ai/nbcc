@@ -186,6 +186,15 @@ if (require.main === module) {
       } catch (err) {
         console.error("analytics prune failed:", err instanceof Error ? err.message : err);
       }
+      // Profile pictures: the bytes of a picture not used, replaced or taken off go after 30 days (only
+      // the record stays). One still waiting for staff is never touched. Its own try/catch, like every pass.
+      try {
+        const { purgePictureBytes } = await import("../db/fundraiser-pictures");
+        const purged = await purgePictureBytes();
+        console.error(`picture retention: cleared=${purged.cleared} swapped=${purged.swapped}`);
+      } catch (err) {
+        console.error("picture purge failed:", err instanceof Error ? err.message : err);
+      }
       await pool.end();
     })
     .catch(async (err: unknown) => {

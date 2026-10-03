@@ -408,7 +408,8 @@
         matsPart.hidden = !mats;
         if (mats) {
           // TASK-512: the A3 poster and the A5 leaflet too.
-          ["poster", "posterA3", "leaflet", "social", "sponsorForm", "certificate"].forEach(function (key) {
+          // In memory (Jaimie, 2026-10-03): the funeral collection envelopes, only for one in memory.
+          ["poster", "posterA3", "leaflet", "social", "sponsorForm", "certificate", "envelopes"].forEach(function (key) {
             var item = q('[data-f-mat="' + key + '"]');
             if (!item) return;
             item.hidden = !mats[key];
@@ -422,6 +423,14 @@
       q("[data-f-raised]").textContent =
         m.targetPence ? money(m.raisedPence) + " raised of your " + money(m.targetPence) + " target" : money(m.raisedPence) + " raised so far";
 
+      // In memory: the list is of people who asked to let the family know, in its own gentle words.
+      if (f.memory) {
+        Array.prototype.forEach.call(card.querySelectorAll("[data-memory-words]"), function (n) {
+          n.textContent = n.getAttribute("data-memory-words");
+        });
+        var memoryNote = q("[data-f-memory-note]");
+        if (memoryNote) memoryNote.hidden = false;
+      }
       fillGifts(card, f.gifts || []);
       // Gifts are made on a page: with no page and nothing given, there is nothing to show.
       var giftsPart = q("[data-f-gifts-part]");

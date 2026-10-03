@@ -65,6 +65,7 @@ function fillRaising() {
   tick("pathRaising");
   // Jaimie, 2026-10-03: 18 or over, and not sharing with another cause; and just me, not a team.
   tick("over18Yes");
+  tick("inMemoryNo"); // In memory: not this time
   tick("teamMe");
   tick("sharesNo");
   type("title", "Jo's Sponsored Swim");
@@ -207,6 +208,13 @@ describe("sending", () => {
       sharesWithOther: false,
       nbccSharePercent: null,
       otherCauseName: "",
+      // In memory (Jaimie, 2026-10-03): asked of someone raising money; a No sends none of it.
+      inMemory: false,
+      memoryName: "",
+      memoryDates: "",
+      memorySetupBy: "",
+      memoryPermission: false,
+      memoryShowTarget: null,
       wants: { posterCount: 0, leafletCount: 25, bucketCount: 0, tinCount: 2, qrCount: 0, shoutOut: true, attend: false },
       postLine1: "1 Example Road",
       postLine2: "",

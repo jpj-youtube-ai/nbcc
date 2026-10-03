@@ -7,6 +7,7 @@ import { pounds } from "./emails";
 import { requestTotals, type RequestRow } from "./requests";
 import type { PromptCounts } from "./call-prompts";
 import { isCurrentMember, NUDGE_DAYS } from "./teams";
+import { memoryYearOnDue } from "./in-memory";
 
 // TASK-503: the Monday summary (email 11), at 8am on Mondays to the people chosen in Admin >
 // Fundraising. Pure: the runner (./summary-runner.ts) reads the rows and the clock, and every count
@@ -88,6 +89,8 @@ export interface SummaryInputs {
   thanksToCheck?: number;
   /** TASK-515: the smart call prompts showing today (src/fundraising/call-prompts.ts). */
   prompts?: PromptCounts;
+  /** In memory: messages givers left on in memory pages that staff have still to check. */
+  messagesToCheck?: number;
 }
 
 export interface Materials {
@@ -140,6 +143,9 @@ export interface SummaryCounts {
   teamMembersToApprove: number;
   /** Team pages: teams live 10 days or more that nobody has joined, by name, A to Z. */
   teamsNobodyJoined: string[];
+  /** In memory: messages to check, and pages a year on for staff to decide whether to get in touch. */
+  messagesToCheck: number;
+  memoryYearOn: number;
   /** Every thing in "Waiting on us", added up. */
   waiting: number;
 }
@@ -237,6 +243,9 @@ export function summaryCounts(i: SummaryInputs): SummaryCounts {
     materials: whole(p?.materials),
   };
   const promptCalls = prompts.behind + prompts.ahead + prompts.onTrack + prompts.quiet + prompts.materials;
+  // In memory (Jaimie, 2026-10-03): no automatic anniversary email, a reminder here instead.
+  const messagesToCheck = whole(i.messagesToCheck);
+  const memoryYearOn = i.fundraisers.filter((f) => memoryYearOnDue(f, today)).length;
 
   return {
     week,
@@ -274,7 +283,11 @@ export function summaryCounts(i: SummaryInputs): SummaryCounts {
     prompts,
     teamMembersToApprove,
     teamsNobodyJoined,
+    messagesToCheck,
+    memoryYearOn,
     waiting:
+      messagesToCheck +
+      memoryYearOn +
       toApprove +
       teamMembersToApprove +
       teamsNobodyJoined.length +
@@ -342,6 +355,11 @@ export function summaryLines(c: SummaryCounts): SummaryLines {
   if (c.changesToCheck) waiting.push(plural(c.changesToCheck, "change to check", "changes to check"));
   if (c.newsToCheck) waiting.push(plural(c.newsToCheck, "news update to check", "news updates to check"));
   if (c.thanksToCheck) waiting.push(plural(c.thanksToCheck, "thank you to check", "thank yous to check"));
+  // In memory
+  if (c.messagesToCheck) waiting.push(`${plural(c.messagesToCheck, "message", "messages")} to check on in memory pages`);
+  if (c.memoryYearOn) {
+    waiting.push(`${plural(c.memoryYearOn, "in memory page", "in memory pages")} a year on: decide whether to get in touch`);
+  }
   const m = c.materials;
   const posted = [
     m.posters ? `posters (${m.posters})` : "",

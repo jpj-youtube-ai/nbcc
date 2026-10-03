@@ -1,4 +1,5 @@
 import { londonToday } from "../events/model";
+import { isInMemory } from "./in-memory";
 import { pounds } from "./emails";
 import { isKind } from "./categories";
 import type { FundraiserRecord, Meter } from "./model";
@@ -59,7 +60,7 @@ export interface PromptFacts {
 export type PromptFundraiser = Pick<
   FundraiserRecord,
   "status" | "public" | "path" | "kind" | "eventDate" | "approvedAt" | "targetPence" | "wants"
-> & { meter: Pick<Meter, "raisedPence"> };
+> & { meter: Pick<Meter, "raisedPence">; inMemory?: boolean | null };
 
 export interface CallPrompt {
   key: PromptKey;
@@ -207,6 +208,8 @@ function cleared(key: PromptKey, calls: PromptCall[], today: string): boolean {
 /** Every prompt showing today for one fundraiser, in the table's order. */
 export function callPrompts(f: PromptFundraiser, facts: PromptFacts, today: string): CallPrompt[] {
   if (f.status !== "approved") return [];
+  // In memory (Jaimie, 2026-10-03): no upbeat prompts. Staff get in touch personally, as they see fit.
+  if (isInMemory(f)) return [];
   const daysAway = f.eventDate ? dayCount(today, f.eventDate) : null;
   const beforeDate = daysAway === null || daysAway > 0;
   const raised = f.meter.raisedPence;

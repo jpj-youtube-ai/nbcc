@@ -8881,10 +8881,9 @@ checks no email here says families). Every guard has to say yes before one goes:
 - the **Automatic emails** switch is on (admins only) AND fundraising is on, both read at the start
   of a run and again before each email, so switching either off stops a run part way;
 - a public page raising money, approved (or finished, for 17 and 18), with an organiser email, and
-  never a page in memory of someone (`isQuietFundraiser` in `src/fundraising/touch-rules.ts`: there
-  are no in memory pages yet, so until there are, a category whose key or name mentions "memory",
-  like one staff add called "In memory", counts as one; when in memory pages are built that is the
-  one place that recognises them);
+  never a page in memory of someone (`isQuietFundraiser` in `src/fundraising/touch-rules.ts`: a page
+  set up in memory of someone, see "Community fundraising, in memory pages", and as before a page in
+  a category whose key or name mentions "memory");
 - the address is on neither the suppression list nor the opt out list (`email_opt_outs`, either
   kind); a list that cannot be read means no email;
 - each email goes once per fundraiser, ever: it is claimed in `fundraiser_touchpoints` (unique by
@@ -9192,6 +9191,119 @@ Unit tests: `fundraising-teams`, `fundraising-team-page-emails`, `fundraising-te
 `backup-plan`. BDD: `features/fundraising-teams.feature` (a team signs up with members and approval
 sends the invites; joining from an invite, staff approve the member, gifts count on the member and
 the team; a whole team split is every member's; members A to Z; someone under 18 cannot join).
+
+## Community fundraising, in memory pages
+
+A page raising money **in memory of someone** (Jaimie, 2026-10-03), set up by the family, a friend
+or a funeral director, each ticking "I have the family's permission". Staff check it before it goes
+live, as every page. The rules are in `src/fundraising/in-memory.ts` (pure, unit tested); migration
+`1791200000195_in-memory.js` is additive (new columns only, no new tables, so the backups are
+unchanged). No new config value.
+
+**Signing up** (`/fundraise`, raising money only). Straight after "Are you 18 or over?":
+**Is this in memory of someone?**, Yes or No with nothing chosen. A Yes asks their name (up to 100),
+their dates in their own words (optional, up to 60, like "1948 to 2026"), **Who is setting up the
+page?** (A family member, A friend, A funeral director) and the permission tick. The name for the
+page becomes optional: left empty, it is "In memory of <name>". With a target, **Show the target on
+the page?** is asked, Yes or No with nothing chosen. A photo is not uploaded on the form: the form
+says to email it to events@nbcc.scot, and staff add it with the page's usual photo upload (so it is
+checked like every page photo). `POST /api/fundraise` takes `inMemory`, `memoryName`, `memoryDates`,
+`memorySetupBy` (`family`, `friend` or `funeral_director`), `memoryPermission` (must be `true`) and
+`memoryShowTarget` (asked only with a target); a sign up that sends no `inMemory` is not in memory,
+as before. An event is never in memory.
+
+**The page** (`/fundraise/<slug>`, drawn by `src/fundraising/memory-render.ts`) is the same page made
+quieter: "In memory of <name>" with the dates under it and their photo if staff added one; the house
+palette at a lower contrast (`.fr-memory-page` in `fundraising.css`); no countdown, no "Good luck"
+banner, nothing festive. What has been given always shows; the target, the bar and the percentage
+only if the family chose to show them (`memoryMeter`, also on its Get involved card and in
+`GET /api/fundraisers/:slug`). Giving and Gift Aid work exactly as on every page. **Every message
+waits for staff**: until approved it is held off the wall (and off the organiser's list). After
+giving, the optional step adds **Let the family know I gave** (unticked unless ticked), sent as
+`familyNotify` to `POST /api/fundraisers/:slug/wall-message` and kept only on an in memory page.
+
+**The private area.** An in memory page's gifts list is **People who asked us to let you know they
+gave**: only givers who ticked it, by the name they gave, with their message once staff have
+approved it, never an amount or an email address. **Thank your supporters** offers only those givers
+(the database refuses any other gift on an in memory page). **Funeral collection envelopes** sit
+first in Your materials.
+
+**Funeral collection envelopes** (`src/fundraising/envelope.ts`): a DL envelope (110 x 220mm, the
+common size for collection and Gift Aid envelopes), printed on its front, one to a page:
+"In memory of <name>", the dates, the QR code to the page and its address, and a Gift Aid
+declaration for one gift: HMRC's model single donation declaration with the amount written in
+("I want to Gift Aid my donation of £____ to the Night Before Christmas Campaign. I am a UK
+taxpayer...", the same liability sentence as the give form's), a tick box, full name, home address,
+postcode and the date, and the note to tell us of a change. NBCC's charity statement runs along the
+bottom word for word. From `GET /api/fundraise/manage/fundraisers/:id/materials/envelopes` (the
+organiser, signed in) and `GET /api/admin/fundraisers/:id/materials/envelopes` (staff, view), only
+for an in memory page that is approved or finished.
+
+**The other materials are the gentle versions too** (`src/fundraising/materials.ts`,
+`assets/js/fundraise-social.js`): the posters (A4, A3), the A5 leaflet, the pictures to share and
+the sponsor form never say "Fundraising for NBCC". They say "In memory" and "In memory of <name>"
+with the dates, "Give in their memory" by the QR code, the target only if the family chose to show
+it ("Raising £X in their memory"), the foot line "Every gift goes to NBCC in their memory, for the
+children, young people and vulnerable adults we support.", and use the page's quieter cream and
+tan (the pictures with the logo that has maroon lettering). The charity statement, any split
+statement and HMRC's sponsorship declaration stay word for word.
+
+**Emails.** The only automatic email the organiser gets is **email 19** when staff approve it with a
+page ("Your page in memory of <name>", `fundraiseApproved`, the words Jaimie approved on 2026-10-02,
+`src/fundraising/memory-emails.ts`). No thank you for signing up (it is upbeat: the screen says we
+will call instead), no emails about changes or news updates, none of the keep in touch emails
+(`isQuietFundraiser` now asks `isInMemory` first), and no smart call prompts. The sign in code still
+goes when they ask for it. The events inbox summary says who it remembers and who set it up. **No
+automatic anniversary email**: a year after the page went live, Admin > Fundraising shows **A year
+on** and the Monday summary says "N in memory pages a year on: decide whether to get in touch";
+staff press **Done** (with an optional note) when they have.
+
+**Admin > Fundraising.** An in memory page has an **In memory** pill, **Messages to check** while any
+wait, and **A year on** when due. Open, its **In memory** panel shows who it remembers, who set it
+up with the family's permission, the target choice, the envelopes, and the year on reminder. On its
+wall each waiting message has **Approve for the page**; **Hide from the page** still says no. An
+admin can **Correct the in memory details** (their name, dates, who set it up, the target choice)
+when the organiser asks; the family's permission stays as it was given, and the History says
+"In memory details corrected". The photo is the page's usual staff photo upload. The
+Monday summary counts "N messages to check on in memory pages".
+
+**Privacy of amounts.** On an in memory page "Show how much I gave" starts unticked, and a giver
+who ticks "Let the family know I gave" never has their amount on the page (the server sets
+`showAmount` to false). The family's list and the page's wall date each gift by its day only
+(`memoryDay`), never the time, so a name cannot be matched to an amount by when it came.
+
+**Always just me.** An in memory page is never a team: the sign up puts the team question away and
+answers it Just me while in memory is Yes, and the server refuses `team: "team"` with in memory
+("A page in memory of someone is just for you, not a team...").
+
+**The envelopes come back sealed.** Each envelope says "Please seal your envelope and hand it back
+to the person collecting. All envelopes are posted to NBCC unopened, so we can claim Gift Aid.",
+carries a small reference (the page's short name, "Ref: ime"), and the line "This gift is my own
+money. It is not from a collection, a company or a group." by the declaration. The print tip and the
+private area tell whoever collects to post the sealed envelopes to us unopened at The Elves'
+Workshop (or hand them in) rather than paying the cash in online. No certificate of thanks is offered
+for an in memory page, and the thank you to a giver (email 20) says "In memory" and closes "With warm
+wishes,". Names and dates are kept to one plain line (line breaks and control characters become
+spaces). An admin's name correction renames a page still called "In memory of <old name>".
+
+**Rolling back.** The migration is additive, but rolling the CODE back to before in memory pages
+would show their held messages and their hidden targets, and send them the upbeat emails. If a code
+rollback is ever needed once in memory pages exist, first make those pages not public (or switch
+the automatic emails off) in Admin > Fundraising.
+
+| Route | Who | What |
+|---|---|---|
+| `GET /api/admin/fundraising/memory-waiting` | fundraising view | `{ counts: { <id>: n } }` messages waiting per page |
+| `POST /api/admin/fundraisers/:id/wall/:donationId/approve` | fundraising edit | the message shows; audit `fundraiser.message_approved` |
+| `POST /api/admin/fundraisers/:id/memory/year-on-done` `{ note? }` | fundraising edit | the year on reminder is dealt with; audit `fundraiser.memory_year_on_done`; 409 if already |
+| `GET /api/admin/fundraisers/:id/materials/envelopes` | fundraising view | the envelope page |
+| `PUT /api/admin/fundraisers/:id/memory` `{ memoryName, memoryDates, memorySetupBy, memoryShowTarget }` | an admin (fundraising edit) | correct the in memory details, never the permission; audit `fundraiser.memory_changed` with what it was and is now; 404 if not in memory |
+| `GET /api/fundraise/manage/fundraisers/:id/materials/envelopes` | the signed in organiser | the envelope page |
+
+Tests: `test/unit/fundraising-in-memory*.test.ts`, `fundraise-memory-*.test.ts`,
+`fundraiser-memory-*.test.ts`, `fundraising-envelope.test.ts`, `fundraise-signup-memory.test.ts`,
+`fundraise-manage-memory.test.ts`, `admin-fundraising-memory-panel.test.ts`,
+`in-memory-migration.test.ts`; BDD `features/fundraising-in-memory.feature`.
 
 ## A QR code encoder for fundraiser pages (TASK-493)
 

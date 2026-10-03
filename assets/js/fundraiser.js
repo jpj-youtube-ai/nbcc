@@ -564,6 +564,8 @@
         showName: !checked("frShowNameNo"),
         showAmount: checked("frShowAmount"),
       };
+      // In memory (Jaimie, 2026-10-03): "Let the family know I gave", only where the page asks it.
+      if (doc.getElementById("frFamilyNotify")) body.familyNotify = checked("frFamilyNotify");
       win
         .fetch("/api/fundraisers/" + encodeURIComponent(slug) + "/wall-message", {
           method: "POST",

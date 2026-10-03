@@ -41,6 +41,8 @@ import { validateUpload } from "../newsletter/image-validation";
 import { sendApprovedEmail, sendEditDecisionEmail, sendWaitingLiveEmails } from "../fundraising/send";
 import { sendFinishedTouch } from "../fundraising/touch-runner";
 import { TEAM_SHARE_MODE_MISSING, withTeamTotals } from "../fundraising/teams";
+import { memoryAdminFacts } from "../fundraising/in-memory";
+import { londonToday } from "../events/model";
 
 // TASK-493: the admin API behind Admin > Fundraising. Section "fundraising": admins and editors
 // edit by default, viewers look (src/admin/permissions.ts).
@@ -159,7 +161,14 @@ async function bestEffort(what: string, send: () => Promise<unknown>): Promise<v
 function forAdmin(f: FundraiserRecord) {
   // Event pages: pagePath is where its page is, or would be (/event/<short name> for an event), for
   // the admin's QR code links; pageUrl only while it has one.
-  return { ...f, kindLabel: kindLabelOf(f), pageUrl: hasPage(f) ? pageUrlFor(f) : null, pagePath: pagePath(f) };
+  return {
+    ...f,
+    kindLabel: kindLabelOf(f),
+    pageUrl: hasPage(f) ? pageUrlFor(f) : null,
+    pagePath: pagePath(f),
+    // In memory (Jaimie, 2026-10-03): who set it up, and the quiet reminder a year on.
+    ...memoryAdminFacts(f, londonToday(new Date())),
+  };
 }
 
 // --- the switch ----------------------------------------------------------------------------------

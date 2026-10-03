@@ -68,6 +68,7 @@ beforeEach(() => {
 function fillTeam() {
   tick("pathRaising");
   tick("over18Yes");
+  tick("inMemoryNo"); // In memory: not this time
   tick("teamYes");
   type("teamName", "Exampleton Juniors");
   type("teamTarget", "2000");
@@ -93,7 +94,8 @@ describe("Just me, or a team?, in the page as it is", () => {
   it("comes straight after 18 or over, with nothing chosen", () => {
     load();
     const step = $("#teamYes").closest("[data-step]") as HTMLElement;
-    expect(steps().indexOf(step)).toBe(2);
+    // In memory (Jaimie, 2026-10-03): after "Is this in memory of someone?", which comes first.
+    expect(steps().indexOf(step)).toBe(3);
     expect(step.querySelector("legend")!.textContent!.trim()).toBe("Just me, or a team?");
     const radios = $$<HTMLInputElement>('input[name="team"]');
     expect(radios.map((r) => r.value)).toEqual(["me", "team"]);

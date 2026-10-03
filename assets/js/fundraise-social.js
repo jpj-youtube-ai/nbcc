@@ -46,6 +46,21 @@
     goldSoft: "#E9D9B0",
     crimson: "#C02238",
   };
+  // The colours each picture is drawn in. Every fundraiser's: maroon with gold and cream (as it always
+  // was). In memory of someone (Jaimie, 2026-10-03): the page's quieter cream and tan, with maroon
+  // only for the name and the address pill, and no gold. draw() picks one for each picture.
+  var DARK = {
+    eyebrow: C.goldSoft, rule: C.gold, title: C.cream, line: C.goldSoft, text: C.cream, track: "rgba(248,245,238,0.22)",
+    fill: C.gold, fillEnd: C.goldSoft, soft: C.goldSoft, pill: C.cream, pillText: C.maroon, statement: "rgba(248,245,238,0.8)",
+    eyebrowWords: "FUNDRAISING FOR NBCC", caption: "Give on my page",
+  };
+  var QUIET = {
+    eyebrow: "#6F6A66", rule: "#D29C8A", title: C.maroon, line: "#6F6A66", text: "#333333", track: "rgba(128,0,0,0.12)",
+    fill: "#B9898A", fillEnd: "#D29C8A", soft: "#6F6A66", pill: C.maroon, pillText: C.cream, statement: "rgba(51,51,51,0.8)",
+    eyebrowWords: "IN MEMORY", caption: "Give in their memory",
+  };
+  var T = DARK;
+
   var HEAD = '"Playfair Display", Georgia, serif';
   var BODY = '"Poppins", system-ui, sans-serif';
   var STATEMENT = "Night Before Christmas Campaign (NBCC), a Scottish Charitable Incorporated Organisation, SC047995";
@@ -117,6 +132,21 @@
   }
 
   function background(ctx, W, H) {
+    if (T === QUIET) {
+      var soft = ctx.createLinearGradient(0, 0, 0, H);
+      soft.addColorStop(0, C.cream);
+      soft.addColorStop(1, "#F3E4DD");
+      ctx.fillStyle = soft;
+      ctx.fillRect(0, 0, W, H);
+      var edge = Math.round(Math.min(W, H) * 0.032);
+      ctx.strokeStyle = "#D29C8A";
+      ctx.globalAlpha = 0.8;
+      ctx.lineWidth = 2;
+      roundRect(ctx, edge, edge, W - edge * 2, H - edge * 2, 18);
+      ctx.stroke();
+      ctx.globalAlpha = 1;
+      return;
+    }
     var big = Math.max(W, H);
     var bg = ctx.createRadialGradient(W / 2, H * 0.12, 40, W / 2, H * 0.3, big);
     bg.addColorStop(0, C.maroonGlow);
@@ -141,9 +171,13 @@
   /* What goes under the logo, measured before anything is drawn, so the logo can take what is left. */
   function measure(ctx, data, L, width, showMeter) {
     var m = {};
-    m.title = fit(ctx, data.title, "800 {s}px " + HEAD, width, L.titleLines, L.titleBig, L.titleSmall);
+    // In memory: "In memory of <name>", with their dates as the line (on every size).
+    var title = data.memory ? "In memory of " + data.memory.name : data.title;
+    var lineText = data.memory ? data.memory.dates : data.line;
+    var lineLines = data.memory ? Math.max(1, L.lineLines) : L.lineLines;
+    m.title = fit(ctx, title, "800 {s}px " + HEAD, width, L.titleLines, L.titleBig, L.titleSmall);
     m.titleStep = Math.round(m.title.size * 1.12);
-    m.line = L.lineLines && data.line ? fit(ctx, data.line, "italic 400 {s}px " + HEAD, width, L.lineLines, Math.round(L.titleBig * 0.4), Math.round(L.titleBig * 0.3)) : null;
+    m.line = lineLines && lineText ? fit(ctx, lineText, "italic 400 {s}px " + HEAD, width, lineLines, Math.round(L.titleBig * 0.4), Math.round(L.titleBig * 0.3)) : null;
     m.lineStep = m.line ? Math.round(m.line.size * 1.3) : 0;
     m.when = L.when && data.when ? data.when : null;
     m.meter = showMeter && data.raisedPence > 0;
@@ -166,14 +200,14 @@
   function drawWords(ctx, L, m, h, cx, y, data) {
     ctx.textAlign = "center";
     ctx.textBaseline = "alphabetic";
-    ctx.fillStyle = C.goldSoft;
+    ctx.fillStyle = T.eyebrow;
     ctx.font = "600 " + L.eyebrow + "px " + BODY;
-    spaced(ctx, "FUNDRAISING FOR NBCC", cx, y + L.eyebrow, Math.round(L.eyebrow / 5));
-    ctx.fillStyle = C.gold;
+    spaced(ctx, T.eyebrowWords, cx, y + L.eyebrow, Math.round(L.eyebrow / 5));
+    ctx.fillStyle = T.rule;
     ctx.fillRect(cx - 60, y + L.eyebrow * 1.75, 120, 3);
     y += h.eyebrow;
 
-    ctx.fillStyle = C.cream;
+    ctx.fillStyle = T.title;
     ctx.font = "800 " + m.title.size + "px " + HEAD;
     m.title.lines.forEach(function (l, i) {
       ctx.fillText(l, cx, y + m.title.size * 0.86 + i * m.titleStep);
@@ -182,7 +216,7 @@
 
     if (m.line) {
       y += L.eyebrow * 1.2;
-      ctx.fillStyle = C.goldSoft;
+      ctx.fillStyle = T.line;
       ctx.font = "italic 400 " + m.line.size + "px " + HEAD;
       m.line.lines.forEach(function (l, i) {
         ctx.fillText(l, cx, y + m.line.size * 0.86 + i * m.lineStep);
@@ -190,14 +224,14 @@
       y += m.line.lines.length * m.lineStep;
     }
     if (m.when) {
-      ctx.fillStyle = C.cream;
+      ctx.fillStyle = T.text;
       ctx.font = "400 " + Math.round(L.eyebrow * 1.05) + "px " + BODY;
       ctx.fillText(m.when, cx, y + L.eyebrow * 1.7);
       y += h.when;
     }
     if (m.meter) {
       var num = L.meterNum;
-      ctx.fillStyle = C.cream;
+      ctx.fillStyle = T.text;
       ctx.font = "800 " + num + "px " + HEAD;
       var numY = y + num * 1.15;
       ctx.fillText(money(data.raisedPence) + " raised", cx, numY);
@@ -206,18 +240,18 @@
         var barH = Math.round(num * 0.38);
         var barY = numY + num * 0.42;
         var pct = Math.max(0, Math.min(1, data.raisedPence / data.targetPence));
-        ctx.fillStyle = "rgba(248,245,238,0.22)";
+        ctx.fillStyle = T.track;
         roundRect(ctx, cx - barW / 2, barY, barW, barH, barH / 2);
         ctx.fill();
         if (pct > 0) {
           var fill = ctx.createLinearGradient(cx - barW / 2, 0, cx + barW / 2, 0);
-          fill.addColorStop(0, C.gold);
-          fill.addColorStop(1, C.goldSoft);
+          fill.addColorStop(0, T.fill);
+          fill.addColorStop(1, T.fillEnd);
           ctx.fillStyle = fill;
           roundRect(ctx, cx - barW / 2, barY, Math.max(barH, barW * pct), barH, barH / 2);
           ctx.fill();
         }
-        ctx.fillStyle = C.goldSoft;
+        ctx.fillStyle = T.soft;
         ctx.font = "400 " + Math.round(num * 0.45) + "px " + BODY;
         ctx.fillText("of " + money(data.targetPence) + " target", cx, barY + barH + num * 0.72);
       }
@@ -235,10 +269,10 @@
     var text = pf.lines[0] || words;
     var pw = Math.min(maxWidth, ctx.measureText(text).width + 90);
     var ph = pf.size + 44;
-    ctx.fillStyle = C.cream;
+    ctx.fillStyle = T.pill;
     roundRect(ctx, cx - pw / 2, y, pw, ph, ph / 2);
     ctx.fill();
-    ctx.fillStyle = C.maroon;
+    ctx.fillStyle = T.pillText;
     ctx.textAlign = "center";
     ctx.fillText(text, cx, y + ph / 2 + pf.size * 0.36);
     return ph;
@@ -260,7 +294,7 @@
 
   /* The charity statement, small, centred at the foot, its last line on `baseline`. */
   function drawStatement(ctx, s, cx, baseline) {
-    ctx.fillStyle = "rgba(248,245,238,0.8)";
+    ctx.fillStyle = T.statement;
     ctx.font = "400 " + s.size + "px " + BODY;
     ctx.textAlign = "center";
     s.lines.forEach(function (l, i) {
@@ -296,9 +330,9 @@
     y += logoSize + 40;
     y = drawWords(ctx, L, m, h, cx, y, data);
     if (L.caption) {
-      ctx.fillStyle = C.goldSoft;
+      ctx.fillStyle = T.soft;
       ctx.font = "400 30px " + BODY;
-      ctx.fillText(data.linkKind === "page" ? "Give on my page" : "Find out more", cx, pillY - 26);
+      ctx.fillText(data.linkKind === "page" ? T.caption : "Find out more", cx, pillY - 26);
     }
     drawPill(ctx, data, cx, pillY, W - 160, L.pillText);
     drawStatement(ctx, stmt, cx, H - L.stmtFoot);
@@ -341,6 +375,7 @@
     var size = SIZES[kind];
     var ctx = canvas.getContext("2d");
     if (!ctx || !size) return false;
+    T = data && data.memory ? QUIET : DARK;
     background(ctx, size.w, size.h);
     if (WIDE[kind]) drawWide(ctx, kind, data, logo, showMeter);
     else drawTall(ctx, kind, data, logo, showMeter);

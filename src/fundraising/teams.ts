@@ -277,6 +277,13 @@ export function memberSignUp(team: FundraiserRecord, j: Join): SignUp {
     dressCode: null,
     included: null,
     creditName: null,
+    // In memory: a member page of a team is never in memory (an in memory page is never a team).
+    inMemory: false,
+    memoryName: null,
+    memoryDates: null,
+    memorySetupBy: null,
+    memoryPermission: null,
+    memoryShowTarget: null,
   } as SignUp;
 }
 

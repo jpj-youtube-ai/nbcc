@@ -23,24 +23,30 @@ const HELLO = "Hello,";
 const LAST = "And from all of us: thank you too. Your gift helps the children, young people and vulnerable adults we support, all year round.";
 const CLOSE = "Thanks so much,";
 
-export function buildSupporterThanksEmail(o: { organiserName: string; title: string; message: string }): BuiltEmail {
+// In memory (review fix): the same email, gently, for a page in memory of someone.
+const MEMORY_EYEBROW = "In memory";
+const MEMORY_CLOSE = "With warm wishes,";
+
+export function buildSupporterThanksEmail(o: { organiserName: string; title: string; message: string; inMemory?: boolean }): BuiltEmail {
+  const EYEBROW_WORDS = o.inMemory ? MEMORY_EYEBROW : EYEBROW;
+  const CLOSE_WORDS = o.inMemory ? MEMORY_CLOSE : CLOSE;
   const first = safeFirstName(o.organiserName);
   const title = first ? `A thank you from ${first}` : "A thank you for your gift";
   const who = first ?? "The organiser";
   const intro = (t: string) => `${who} asked us to pass this on to you, for your gift to ${t}:`;
   const quoted = `“${o.message.trim()}”`;
   const html = shell(
-    eyebrow(EYEBROW) +
+    eyebrow(EYEBROW_WORDS) +
       heading(title) +
       bodyP(HELLO) +
       bodyP(intro(`<b>${escapeHtml(o.title)}</b>`)) +
       quoteBox(quoted) +
       bodyP(LAST) +
-      signOff(CLOSE) +
+      signOff(CLOSE_WORDS) +
       questionsBox(FUNDRAISING_EMAIL),
   );
   const text = [
-    EYEBROW,
+    EYEBROW_WORDS,
     title,
     "",
     HELLO,
@@ -51,7 +57,7 @@ export function buildSupporterThanksEmail(o: { organiserName: string; title: str
     "",
     LAST,
     "",
-    signOffText(CLOSE),
+    signOffText(CLOSE_WORDS),
     "",
     questionsText(FUNDRAISING_EMAIL),
     "",

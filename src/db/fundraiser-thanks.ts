@@ -127,6 +127,14 @@ export async function createThanks(fundraiserId: number, email: string, message:
     );
     const realIds = new Set(real.rows.map((row) => Number(row.id)));
     if (donationIds.some((id) => !realIds.has(id))) return { verdict: "bad_gift" as const };
+    // In memory (Jaimie, 2026-10-03): only givers who ticked "Let the family know I gave" may be
+    // thanked, as only they are on the organiser's list.
+    const unasked = await client.query(
+      `SELECT d.id AS unasked FROM donations d JOIN fundraisers f ON f.id = d.fundraiser_id
+        WHERE d.id = ANY($1) AND d.fundraiser_id = $2 AND f.in_memory AND NOT d.family_notify`,
+      [donationIds, fundraiserId],
+    );
+    if (unasked.rows.length > 0) return { verdict: "bad_gift" as const };
     const held = await client.query(
       `SELECT g.donation_id FROM fundraiser_thank_gifts g WHERE g.donation_id = ANY($1) AND g.outcome <> 'cancelled'`,
       [donationIds],
@@ -271,6 +279,8 @@ export interface QueuedThanksGift {
   refundedPence: number;
   paidIn: boolean;
   fundraiserStatus: string;
+  /** In memory: the email is the gentle version. */
+  inMemory?: boolean;
 }
 
 /** Claim the next queued gift (it becomes "sending"), or null when there is none. */
@@ -283,7 +293,7 @@ export async function claimNextQueuedThanksGift(): Promise<QueuedThanksGift | nu
   const c = claimed.rows[0] as Row | undefined;
   if (!c) return null;
   const r = await pool.query(
-    `SELECT t.id AS thanks_id, t.fundraiser_id, t.message, f.title, f.organiser_name, f.status AS fundraiser_status,
+    `SELECT t.id AS thanks_id, t.fundraiser_id, t.message, f.title, f.organiser_name, f.status AS fundraiser_status, f.in_memory,
             dn.full_name, dn.email, d.payment_status, d.amount_pence, d.refunded_amount_pence, d.paid_in_by_organiser,
             EXISTS (SELECT 1 FROM fundraiser_thank_gifts g2
                       JOIN donations d2 ON d2.id = g2.donation_id JOIN donors dn2 ON dn2.id = d2.donor_id
@@ -312,6 +322,7 @@ export async function claimNextQueuedThanksGift(): Promise<QueuedThanksGift | nu
     refundedPence: row ? Number(row.refunded_amount_pence ?? 0) : 0,
     paidIn: row ? Boolean(row.paid_in_by_organiser) : false,
     fundraiserStatus: row ? String(row.fundraiser_status) : "missing",
+    ...(row && row.in_memory === true ? { inMemory: true } : {}),
   };
 }
 

@@ -5,6 +5,7 @@ import { MATERIALS_STATEMENT, MATERIALS_STATEMENT_SHORT } from "../legal/registr
 import { hasPage, splitStatement, type FundraiserRecord, type FundraiserStatus, type Meter } from "./model";
 import { TRACKED_PIECES, trackedPath, type TrackedPiece } from "./material-codes";
 import { qrSvg } from "./qr";
+import { isInMemory } from "./in-memory";
 import { formatPounds, shorten } from "./render";
 
 // TASK-504 (stage 2 of community fundraising): the materials an organiser prints and shares. Each is
@@ -125,6 +126,12 @@ export interface MaterialFacts {
   splitStatement: string | null;
   /** The other cause, when shared: the sponsor form says it is in aid of both. Null otherwise. */
   otherCauseName: string | null;
+  /**
+   * In memory of someone (Jaimie, 2026-10-03): who, and their dates. Every piece is then the gentle
+   * version: "In memory", "In memory of <name>", "Give in their memory", the quieter colours, never
+   * "Fundraising for NBCC". Null for any other fundraiser.
+   */
+  memory?: { name: string; dates: string | null } | null;
 }
 
 /** The first sentence of a story: up to its first full stop, question or exclamation mark. */
@@ -166,7 +173,8 @@ export function materialFacts(
     when,
     where,
     line,
-    targetPence: f.targetPence && f.targetPence > 0 ? f.targetPence : null,
+    // In memory: the target only if the family chose to show it (src/fundraising/in-memory.ts).
+    targetPence: f.targetPence && f.targetPence > 0 && !(isInMemory(f) && f.memoryShowTarget !== true) ? f.targetPence : null,
     raisedPence: m.raisedPence,
     giftAidPence: m.giftAidPence ?? 0,
     link,
@@ -175,7 +183,16 @@ export function materialFacts(
     qrLinks,
     splitStatement: splitStatement(f),
     otherCauseName: splitStatement(f) ? (f.otherCauseName ?? "").trim() : null,
+    memory: isInMemory(f) && f.memoryName ? { name: f.memoryName.trim(), dates: f.memoryDates?.trim() || null } : null,
   };
+}
+
+/** In memory: the gentle line in a piece's foot, in place of EVERY_POUND's. */
+export const IN_MEMORY_POUND = "Every gift goes to NBCC in their memory, for the children, young people and vulnerable adults we support.";
+
+/** The headline of a piece: the fundraiser's name, or "In memory of <name>". */
+export function headlineOf(d: Pick<MaterialFacts, "title" | "memory">): string {
+  return d.memory ? `In memory of ${d.memory.name}` : d.title;
 }
 
 /**
@@ -278,7 +295,8 @@ const FIT_SCRIPT = `<script>
 
 type Paper = "A4 portrait" | "A4 landscape" | "A3 portrait" | "A5 portrait";
 
-function shell(o: {
+/** The page every piece sits in (also the in memory envelopes, ./envelope.ts). */
+export function shell(o: {
   title: string;
   /** The paper it prints on; or, for a page of several sizes, its own @page rules. */
   paper: Paper | { rules: string };
@@ -348,12 +366,14 @@ function posterTitleSize(title: string): string {
  * everything still fits: 66mm for a short name and line. Never below 38mm (it was 34mm before round two).
  */
 export function posterLogoMm(
-  d: Pick<MaterialFacts, "title" | "line" | "when" | "where" | "targetPence"> & Partial<Pick<MaterialFacts, "splitStatement">>,
+  d: Pick<MaterialFacts, "title" | "line" | "when" | "where" | "targetPence"> & Partial<Pick<MaterialFacts, "splitStatement" | "memory">>,
   size: PosterSize = "a4",
 ): number {
-  const t = d.title.length;
+  const t = (d.memory ? `In memory of ${d.memory.name}` : d.title).length;
   const l = d.line?.length ?? 0;
   let mm = 66;
+  // In memory: the headline is "In memory of <name>", and the dates take a line under it.
+  if (d.memory) mm -= 8;
   if (t > 30) mm -= 6;
   if (t > 48) mm -= 6;
   if (t > 70) mm -= 4;
@@ -403,10 +423,30 @@ const SPLIT_POSTER_CSS = `
   .has-split .p-foot .pledge{font-size:11pt;line-height:1.25}
   .size-a5.has-split .p-qr svg{width:58mm;height:58mm}`;
 
+// In memory: the page's quieter colours. Cream and tan, maroon only for the name, no gold frame and
+// no crimson; the foot in soft tan with the charity statement in slate.
+const MEMORY_POSTER_CSS = `
+  .poster.memory,.memory .p-sheet{background:var(--tan-soft)}
+  .memory .p-body{background:var(--cream)}
+  .memory .p-body::before{border-color:var(--tan);opacity:.8}
+  .memory .p-eyebrow{color:var(--muted)}
+  .memory .p-eyebrow::before,.memory .p-eyebrow::after{background:var(--tan)}
+  .memory .p-title{font-weight:600}
+  .memory .p-dates{font-family:var(--head);font-style:italic;color:var(--muted);font-size:17pt;margin-top:2.5mm}
+  .memory .p-meta svg{color:var(--muted)}
+  .memory .p-line{color:var(--slate)}
+  .memory .p-target{background:var(--tan-soft);color:var(--slate);font-weight:400}
+  .memory .p-target b{color:var(--maroon);font-weight:700}
+  .memory .p-qr{box-shadow:0 0 0 1px var(--line)}
+  .memory .p-scan-words{font-weight:600}
+  .memory .p-address{color:var(--maroon)}
+  .memory .p-foot{background:var(--tan-soft);color:var(--slate)}
+  .memory .p-foot .pledge{font-size:12.5pt}`;
+
 /** The poster's rules, with each paper size's own logo height for these facts. */
 function posterCss(d: MaterialFacts): string {
   const logos = (Object.keys(POSTER_SIZES) as PosterSize[]).map((s) => `.size-${s} .p-logo{height:${posterLogoMm(d, s)}mm}`).join("");
-  return `${posterCssFor(posterLogoMm(d))}${SPLIT_POSTER_CSS}
+  return `${posterCssFor(posterLogoMm(d))}${SPLIT_POSTER_CSS}${d.memory ? MEMORY_POSTER_CSS : ""}
   ${logos}`;
 }
 
@@ -456,28 +496,37 @@ function posterPage(d: MaterialFacts, a: MaterialAssets, size: PosterSize): stri
     d.where ? `<span>${ICON_PIN}${escapeHtml(d.where)}</span>` : "",
   ].join("");
   const qr = d.qrLinks ? d.qrLinks[POSTER_PIECE[size]] : null;
+  const memory = d.memory ?? null;
+  const headline = headlineOf(d);
+  const scanWords = memory ? "Give in their memory" : d.linkKind === "page" ? "Scan to give" : "Scan to find out more";
   const scan =
     qr && d.linkWords
-      ? `<div class="p-qr">${qrSvg(qr, { title: `QR code for ${d.title}` })}</div>
-        <div class="p-scan-words">${d.linkKind === "page" ? "Scan to give" : "Scan to find out more"}</div>
+      ? `<div class="p-qr">${qrSvg(qr, { title: `QR code for ${headline}` })}</div>
+        <div class="p-scan-words">${scanWords}</div>
         <div class="p-address">or visit ${escapeHtml(d.linkWords)}</div>`
       : `<p class="p-noqr">Find out more about NBCC<br>at <b>nbcc.scot</b></p>`;
-  return `<div class="page size-${size} poster${d.splitStatement ? " has-split" : ""}">
+  const target = d.targetPence
+    ? memory
+      ? `<div class="p-target">Raising <b>${formatPounds(d.targetPence)}</b> in their memory</div>`
+      : `<div class="p-target">Help us raise <b>${formatPounds(d.targetPence)}</b></div>`
+    : "";
+  return `<div class="page size-${size} poster${memory ? " memory" : ""}${d.splitStatement ? " has-split" : ""}">
   <div class="p-scale">
   <div class="p-sheet">
     <div class="p-body">
       <img class="p-logo" src="${a.logo}" alt="Night Before Christmas Campaign">
-      <div class="p-eyebrow">Fundraising for NBCC</div>
-      <h1 class="p-title" style="font-size:${posterTitleSize(d.title)}">${escapeHtml(d.title)}</h1>
+      <div class="p-eyebrow">${memory ? "In memory" : "Fundraising for NBCC"}</div>
+      <h1 class="p-title" style="font-size:${posterTitleSize(headline)}">${escapeHtml(headline)}</h1>
+      ${memory?.dates ? `<div class="p-dates">${escapeHtml(memory.dates)}</div>` : ""}
       ${meta ? `<div class="p-meta">${meta}</div>` : ""}
       ${d.line ? `<p class="p-line">${escapeHtml(d.line)}</p>` : ""}
-      ${d.targetPence ? `<div class="p-target">Help us raise <b>${formatPounds(d.targetPence)}</b></div>` : ""}
+      ${target}
       <div class="p-scan">
         ${scan}
       </div>
     </div>
     <div class="p-foot">
-      <div class="pledge">${EVERY_POUND}</div>
+      <div class="pledge">${memory ? IN_MEMORY_POUND : EVERY_POUND}</div>
       ${splitHtml(d, "legal split")}<div class="legal">${escapeHtml(MATERIALS_STATEMENT)}</div>
     </div>
   </div>
@@ -552,8 +601,11 @@ function socialData(d: MaterialFacts, a: MaterialAssets) {
     statement: MATERIALS_STATEMENT_SHORT,
     // Jaimie, 2026-10-03: drawn whole before the statement when shared with another cause.
     split: d.splitStatement,
-    // Only the logo with white lettering is drawn on the maroon pictures.
-    logoOnDark: a.logoOnDark,
+    // Only the logo with white lettering is drawn on the maroon pictures. In memory the pictures are
+    // the page's cream, so the logo with maroon lettering goes in its place.
+    logoOnDark: d.memory ? a.logo : a.logoOnDark,
+    // In memory (Jaimie, 2026-10-03): the gentle pictures (assets/js/fundraise-social.js).
+    memory: d.memory ?? null,
   };
 }
 
@@ -634,6 +686,9 @@ const SPONSOR_CSS = `
   .sf-foot .back{font-family:var(--head);font-weight:700;color:var(--crimson);font-size:11.5pt;line-height:1.3}
   .sf-foot .how{color:var(--slate);max-width:205mm}
   .sf-foot .pg{color:var(--muted);white-space:nowrap}
+  .sf-memory{margin-top:1mm;font-family:var(--head);font-style:italic;font-size:11pt;color:var(--maroon)}
+  .sf-head.is-memory{border-bottom-color:var(--tan)}
+  .sf-head.is-memory .sub{color:var(--muted)}
   .sf-legal{margin-top:1.8mm;padding-top:1.5mm;border-top:1px solid var(--line);font-size:7pt;line-height:1.4;color:var(--muted);text-align:center}`;
 
 function sponsorRows(from: number, count: number): string {
@@ -663,9 +718,13 @@ function sponsorPages(d: MaterialFacts | null, a: MaterialAssets): string {
   const split = splitHtml(d, "sf-split");
   const decl = `${split}<p class="sf-decl">${escapeHtml(SPONSOR_DECLARATION)}</p>
     <p class="sf-remember">Remember: please give your full name, home address and postcode, and tick Gift Aid, so that we can claim tax back on your donation.</p>`;
-  const head = (heading: string) => `<div class="sf-head">
+  // In memory: who it remembers, under the heading, in the quieter colours.
+  const memory = d?.memory
+    ? `<div class="sf-memory">In memory of ${escapeHtml(d.memory.name)}${d.memory.dates ? `, ${escapeHtml(d.memory.dates)}` : ""}</div>`
+    : "";
+  const head = (heading: string) => `<div class="sf-head${d?.memory ? " is-memory" : ""}">
       <img src="${a.logo}" alt="Night Before Christmas Campaign">
-      <div class="t"><h1>${heading}</h1><div class="sub">Sponsorship and Gift Aid declaration</div></div>
+      <div class="t"><h1>${heading}</h1><div class="sub">Sponsorship and Gift Aid declaration</div>${memory}</div>
       <div class="charity"><b>${CHARITY_NAME} (NBCC)</b><br>Scottish Charity ${CHARITY_NUMBER}<br>nbcc.scot &middot; events@nbcc.scot</div>
     </div>`;
   const fields = `<div class="sf-fields">
@@ -831,7 +890,8 @@ export function renderEverything(d: MaterialFacts, a: MaterialAssets, o: { date:
     posterPage(d, a, "a3"),
     posterPage(d, a, "a5"),
     sponsorPages(d, a),
-    d.status === "finished" ? certificatePage(d, a, o.date) : "",
+    // In memory (review fix): no certificate of thanks.
+    d.status === "finished" && !d.memory ? certificatePage(d, a, o.date) : "",
   ].join("\n");
   return shell({
     title: `Everything for ${escapeHtml(d.title)}`,
@@ -840,7 +900,7 @@ export function renderEverything(d: MaterialFacts, a: MaterialAssets, o: { date:
     css: posterCss(d) + SPONSOR_CSS + CERT_CSS + EVERYTHING_CSS,
     toolbar:
       `<span>Everything for <b>${escapeHtml(d.title)}</b>: the A4 and A3 posters, the A5 leaflet, the sponsor form${
-        d.status === "finished" ? " and the certificate" : ""
+        d.status === "finished" && !d.memory ? " and the certificate" : ""
       }</span>` + `<button type="button" data-social-zip>Download every picture as a zip</button><span class="tip" role="status" aria-live="polite" data-social-status></span>`,
     tip: "Each page prints on its own paper size. To print just one, open it on its own from Admin > Fundraising.",
     body: pages,

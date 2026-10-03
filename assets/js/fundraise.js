@@ -101,6 +101,13 @@
     team: "teamYes",
     teamShareMode: "teamShareTeam",
     teamMembers: "teamName",
+    // In memory (Jaimie, 2026-10-03)
+    inMemory: "inMemoryYes",
+    memoryName: "memoryName",
+    memoryDates: "memoryDates",
+    memorySetupBy: "memorySetupBy-family",
+    memoryPermission: "memoryPermission",
+    memoryShowTarget: "memoryShowTargetYes",
   };
   // Team pages: the most people a team organiser adds on the form.
   var TEAM_MEMBERS_MAX = 30;
@@ -404,7 +411,8 @@
       notTeam.forEach(function (n) {
         n.hidden = team;
       });
-      need(el("title"), !team);
+      // In memory: the name for the page is optional too (applyMemory), and a team never in memory.
+      need(el("title"), !team && !inMemory());
       if (team && teamRows && !teamRowList().length) addTeamRow();
       var shareMode = team && sharing();
       if (teamShare) teamShare.hidden = !shareMode;
@@ -412,6 +420,54 @@
         need(r, shareMode);
       });
       applyTeamRows();
+    }
+    // --- In memory of someone (Jaimie, 2026-10-03) ----------------------------------------------------
+    // Raising money only. A Yes shows the questions about who it remembers and needs their answers;
+    // the name for the page becomes optional (it is named for them), the description's words change,
+    // and with a target they are asked whether to show it, with nothing chosen. A No, or the event
+    // path, asks none of it.
+    var memoryFields = form.querySelector("[data-memory-fields]");
+    var memoryTarget = form.querySelector("[data-memory-target]");
+    var titleRequired = form.querySelector("[data-title-required]");
+    var titleOptional = form.querySelector("[data-title-optional]");
+    var memoryTitleHelp = form.querySelector("[data-memory-title-help]");
+    var memoryWords = Array.prototype.slice.call(form.querySelectorAll("[data-say-memory]"));
+    function inMemory() {
+      return radio("path") === "raising" && radio("inMemory") === "yes";
+    }
+    function applyMemory() {
+      var yes = inMemory();
+      if (memoryFields) memoryFields.hidden = !yes;
+      need(el("memoryName"), yes);
+      need(el("memoryPermission"), yes);
+      Array.prototype.forEach.call(form.querySelectorAll('input[name="memorySetupBy"]'), function (r) {
+        r.required = yes;
+      });
+      need(el("title"), !yes);
+      if (titleRequired) titleRequired.hidden = yes;
+      if (titleOptional) titleOptional.hidden = !yes;
+      if (memoryTitleHelp) memoryTitleHelp.hidden = !yes;
+      memoryWords.forEach(function (n) {
+        var words = yes ? n.getAttribute("data-say-memory") : n.getAttribute("data-say-" + radio("path"));
+        if (words && n.textContent !== words) n.textContent = words;
+      });
+      // Team pages: an in memory page is always Just me. The team question (if the form has it) is
+      // answered so and put away while in memory is Yes; the server refuses a team in memory too.
+      var teamStep = form.querySelector("[data-team-step]");
+      if (teamStep) {
+        // Only ever hidden here: applyPath (just before) shows or hides it for the path.
+        if (yes) teamStep.hidden = true;
+        var me = el("teamMe");
+        if (yes && me && !me.checked) {
+          me.checked = true;
+          me.dispatchEvent(new Event("change", { bubbles: true }));
+        }
+      }
+      var asked = yes && parseFloat(val("target")) > 0;
+      if (memoryTarget) memoryTarget.hidden = !asked;
+      Array.prototype.forEach.call(form.querySelectorAll('input[name="memoryShowTarget"]'), function (r) {
+        r.required = asked;
+      });
     }
 
     // --- the ticket link, only for tickets sold on another website ------------------------------
@@ -572,6 +628,7 @@
 
     function applyAll() {
       applyPath();
+      applyMemory();
       applyAge();
       applySplit();
       applyTeam();
@@ -611,6 +668,7 @@
     form.addEventListener("input", function () {
       safely(applyAddress);
       safely(applyTeamRows);
+      safely(applyMemory);
       safely(applyCounts);
       revealSoon();
     });
@@ -902,6 +960,13 @@
         sharesWithOther: yesNo("sharesWithOther"),
         nbccSharePercent: sharing() ? val("nbccSharePercent") : null,
         otherCauseName: sharing() ? val("otherCauseName") : "",
+        // In memory: only on the raising money path, and the answers only on a Yes.
+        inMemory: path === "raising" ? yesNo("inMemory") : null,
+        memoryName: inMemory() ? val("memoryName") : "",
+        memoryDates: inMemory() ? val("memoryDates") : "",
+        memorySetupBy: inMemory() ? radio("memorySetupBy") : "",
+        memoryPermission: inMemory() && checked("memoryPermission"),
+        memoryShowTarget: inMemory() && isFinite(pounds) && pounds > 0 ? yesNo("memoryShowTarget") : null,
         wants: {
           posterCount: whole("posters"),
           leafletCount: whole("leaflets"),
@@ -953,6 +1018,11 @@
       var teamLine = doc.querySelector("[data-thanks-team]");
       if (teamLine) teamLine.hidden = body.team !== "team";
       if (event) event.hidden = body.path === "raising";
+      // In memory: no thank you email goes, so the panel does not promise one.
+      var emailed = doc.querySelector("[data-thanks-emailed]");
+      var memoryThanks = doc.querySelector("[data-thanks-memory]");
+      if (emailed) emailed.hidden = body.inMemory === true;
+      if (memoryThanks) memoryThanks.hidden = body.inMemory !== true;
       openPanel.hidden = true;
       if (thanks) {
         thanks.hidden = false;

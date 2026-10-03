@@ -19,6 +19,7 @@ import { fundraiseTeamsRouter } from "./routes/fundraise-teams";
 import { adminFundraisingTeamsRouter } from "./routes/admin-fundraising-teams";
 import { fundraiserNewsRouter, newsBodyGuard, NEWS_JSON_BODY_LIMIT, NEWS_POST_PATH } from "./routes/fundraiser-news";
 import { fundraiseMaterialsRouter } from "./routes/fundraise-materials";
+import { fundraiseMemoryRouter } from "./routes/fundraise-memory";
 import { adminBallReportRouter } from "./routes/admin-ball-report";
 import { adminAnalyticsRouter } from "./routes/admin-analytics";
 import { adminStoriesImportRouter, STORIES_IMPORT_BODY_LIMIT, STORIES_IMPORT_PATH } from "./routes/admin-stories-import";
@@ -114,6 +115,9 @@ export function createApp() {
   // retired link route (POST /api/fundraise/manage/:token) would otherwise take "handover".
   app.use(fundraiseTeamsRouter);
   app.use(adminFundraisingTeamsRouter);
+  // In memory pages (Jaimie, 2026-10-03): envelopes, message checks and the year on reminder. Before
+  // fundraiseMaterialsRouter, whose /materials/:piece would read "envelopes" as a piece it does not know.
+  app.use(fundraiseMemoryRouter);
   app.use(fundraiseRouter);
   app.use(adminFundraisingRouter);
   // Fundraising categories: the list the sign up form offers, A to Z; admins add, rename and hide them.

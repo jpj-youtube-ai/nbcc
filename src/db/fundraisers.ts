@@ -25,6 +25,7 @@ import {
   type WallStepVerdict,
 } from "../fundraising/model";
 import { freeSlugFrom, initialsSlug } from "../fundraising/slugs";
+import { SETUP_BY } from "../fundraising/in-memory";
 
 // TASK-493: the SQL behind community fundraising. The rules live in src/fundraising/model.ts; this
 // file only moves rows. Every write a person makes (staff, an organiser, the public form, Stripe)
@@ -138,6 +139,8 @@ const RECORD_COLUMNS = `f.id, f.slug, f.path, f.kind, f.title, f.description,
          f.over_18, f.shares_with_other, f.nbcc_share_percent, f.other_cause_name,
          f.slug_set_at,
          f.is_team, f.team_id, f.team_share_mode, f.team_left_at, f.team_nudge_1_at, f.team_nudge_2_at,
+         f.in_memory, f.memory_name, f.memory_dates, f.memory_setup_by, f.memory_permission, f.memory_show_target,
+         f.memory_reminder_done_at, f.memory_reminder_done_by,
          (SELECT c.label FROM fundraising_categories c WHERE c.key = f.kind) AS kind_label`;
 const SELECT = `
   SELECT ${RECORD_COLUMNS}
@@ -250,6 +253,15 @@ export function toRecord(r: Row): FundraiserRecord {
     teamLeftAt: iso(r.team_left_at),
     teamNudge1At: iso(r.team_nudge_1_at),
     teamNudge2At: iso(r.team_nudge_2_at),
+    // In memory (Jaimie, 2026-10-03): false on every other row, and on one from before.
+    inMemory: r.in_memory === true,
+    memoryName: textOrNull(r.memory_name),
+    memoryDates: textOrNull(r.memory_dates),
+    memorySetupBy: (SETUP_BY as readonly string[]).includes(String(r.memory_setup_by)) ? (r.memory_setup_by as FundraiserRecord["memorySetupBy"]) : null,
+    memoryPermission: r.memory_permission == null ? null : Boolean(r.memory_permission),
+    memoryShowTarget: r.memory_show_target == null ? null : Boolean(r.memory_show_target),
+    memoryReminderDoneAt: iso(r.memory_reminder_done_at),
+    memoryReminderDoneBy: textOrNull(r.memory_reminder_done_by),
   };
 }
 
@@ -441,15 +453,26 @@ async function insertSignUp(client: PoolClient, s: SignUp, slug: string, extra?:
     ],
   );
   const id = Number(inserted.rows[0].id);
+  // In memory (Jaimie, 2026-10-03): who it remembers, in its own statement in the same transaction.
+  if (s.inMemory) await saveMemory(client, id, s);
   await insertAudit(client, {
     actor: "public",
     action: "fundraiser.signed_up",
     entity: "fundraiser",
     entityId: id,
-    data: { slug, path: s.path, kind: s.kind, title: s.title, public: s.public, sharesWithOther: s.sharesWithOther },
+    data: { slug, path: s.path, kind: s.kind, title: s.title, public: s.public, sharesWithOther: s.sharesWithOther, ...(s.inMemory ? { inMemory: true } : {}) },
   });
   if (extra) await extra(client, id);
   return reread(client, id);
+}
+
+async function saveMemory(client: PoolClient, id: number, s: SignUp): Promise<void> {
+  await client.query(
+    `UPDATE fundraisers SET in_memory = true, memory_name = $1, memory_dates = $2, memory_setup_by = $3,
+            memory_permission = $4, memory_show_target = $5
+      WHERE id = $6`,
+    [s.memoryName, s.memoryDates, s.memorySetupBy, s.memoryPermission, s.memoryShowTarget, id],
+  );
 }
 
 // --- reading -------------------------------------------------------------------------------------
@@ -501,11 +524,13 @@ export async function getBySlug(slug: string): Promise<(FundraiserRecord & { met
 
 /** The gifts made on a fundraiser's page, for its wall. Hidden ones too; the caller decides. */
 export async function wallRows(fundraiserId: number): Promise<WallSourceRow[]> {
+  // In memory: a message staff have not yet approved is held (wallEntries leaves it off), and the
+  // giver's "Let the family know I gave" tick is read for the organiser's list.
   const r = await pool.query(
     `SELECT d.id, dn.full_name, dn.anonymous, d.show_name, d.show_amount, d.amount_pence,
             d.refunded_amount_pence, d.supporter_message, d.message_hidden, d.created_at, d.paid_in_by_organiser,
-            d.gift_aid
-       FROM donations d JOIN donors dn ON dn.id = d.donor_id
+            d.gift_aid, (f.in_memory AND d.message_approved_at IS NULL) AS message_held, d.family_notify
+       FROM donations d JOIN donors dn ON dn.id = d.donor_id JOIN fundraisers f ON f.id = d.fundraiser_id
       WHERE d.fundraiser_id = $1 AND d.payment_status = 'paid'
       ORDER BY d.created_at DESC, d.id DESC
       LIMIT 1000`,
@@ -524,6 +549,8 @@ export async function wallRows(fundraiserId: number): Promise<WallSourceRow[]> {
     createdAt: iso(row.created_at) as string,
     paidIn: Boolean(row.paid_in_by_organiser),
     giftAid: Boolean(row.gift_aid),
+    held: row.message_held === true,
+    familyNotify: row.family_notify === true,
   }));
 }
 
@@ -1143,12 +1170,13 @@ export async function giftForSession(sessionId: string): Promise<GiftForSession 
 export async function addWallMessage(
   sessionId: string,
   fundraiserId: number,
-  input: Pick<WallMessage, "message" | "showName" | "showAmount">,
+  input: Pick<WallMessage, "message" | "showName" | "showAmount"> & { familyNotify?: boolean },
 ): Promise<{ verdict: WallStepVerdict; entry: WallEntry | null }> {
   return inTransaction(async (client) => {
     const r = await client.query(
       `SELECT d.id, d.fundraiser_id, d.paid_in_by_organiser, d.payment_status, d.supporter_message, d.wall_added_at,
-              dn.full_name, dn.anonymous, d.amount_pence, d.refunded_amount_pence, d.gift_aid, d.created_at
+              dn.full_name, dn.anonymous, d.amount_pence, d.refunded_amount_pence, d.gift_aid, d.created_at,
+              COALESCE((SELECT f.in_memory FROM fundraisers f WHERE f.id = d.fundraiser_id), false) AS in_memory
          FROM donations d JOIN donors dn ON dn.id = d.donor_id
         WHERE d.stripe_session_id = $1
         ORDER BY d.id DESC LIMIT 1
@@ -1159,17 +1187,26 @@ export async function addWallMessage(
     const verdict = wallStepVerdict(row ? toGiftForSession(row) : null, fundraiserId);
     if (verdict !== "ok") return { verdict, entry: null };
     const message = input.message.trim() === "" ? null : input.message.trim();
+    // In memory: "Let the family know I gave" (the caller passes it only for an in memory page).
+    const familyNotify = input.familyNotify === true;
     await client.query(
       `UPDATE donations SET supporter_message = $1, show_name = $2, show_amount = $3, wall_added_at = now()
         WHERE id = $4 AND wall_added_at IS NULL`,
       [message, input.showName, input.showAmount, Number(row.id)],
     );
+    if (familyNotify) await client.query("UPDATE donations SET family_notify = true WHERE id = $1", [Number(row.id)]);
     await insertAudit(client, {
       actor: "giver",
       action: "fundraiser.wall_message_added",
       entity: "fundraiser",
       entityId: fundraiserId,
-      data: { donationId: Number(row.id), withMessage: message !== null, showName: input.showName, showAmount: input.showAmount },
+      data: {
+        donationId: Number(row.id),
+        withMessage: message !== null,
+        showName: input.showName,
+        showAmount: input.showAmount,
+        ...(familyNotify ? { familyNotify } : {}),
+      },
     });
     const [entry] =
       row.payment_status === "paid"
@@ -1184,6 +1221,8 @@ export async function addWallMessage(
               refundedPence: Number(row.refunded_amount_pence ?? 0),
               message,
               hidden: false,
+              // In memory: the message waits for staff, so the wall does not show it yet.
+              held: row.in_memory === true,
               createdAt: iso(row.created_at) as string,
               giftAid: Boolean(row.gift_aid),
             },

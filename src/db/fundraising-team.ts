@@ -5,6 +5,7 @@ import { listAllFundraisers } from "./fundraisers";
 import { listRequestRows } from "./fundraising-requests";
 import { countPendingUpdates } from "./fundraiser-updates";
 import { countPendingThanks } from "./fundraiser-thanks";
+import { countHeldMessages } from "./fundraiser-memory";
 import { readPromptCounts } from "./fundraising-touch";
 import { INVITE_TTL_DAYS, inviteCc, inviteFullName, inviteNameParts, staffFirstName } from "../fundraising/invite";
 import { summaryRecipientsSchema, type SummaryInputs } from "../fundraising/summary";
@@ -441,5 +442,11 @@ export async function readSummaryInputs(now: Date): Promise<SummaryInputs> {
     requests,
     thanksToCheck,
     prompts,
+    // In memory: messages waiting for staff. Only one line of the summary: if they cannot be counted,
+    // the summary still goes, without it.
+    messagesToCheck: await countHeldMessages().catch((err: unknown) => {
+      console.error("fundraising summary in memory messages count failed:", err instanceof Error ? err.message : err);
+      return 0;
+    }),
   };
 }

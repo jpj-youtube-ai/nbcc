@@ -6,6 +6,7 @@ import type { NewsEntry } from "./news";
 import { facebookLink, instagramLink, type SocialResult } from "./social";
 import { categoryLabel, isActiveCategory, isKnownCategory, OTHER_KIND } from "./categories";
 import { CHARITY_NAME, OSCR_NUMBER } from "../legal/registration";
+import { checkMemory, isInMemory, memoryDay, memoryFields, memoryMeter, memoryOf, publicMemory, titleFor, titleOptional, type MemorySetupBy, type PublicMemory } from "./in-memory";
 
 // TASK-493: community fundraising, the rules. Pure: no pool, no config, no clock, so every rule is
 // unit tested without a database (test/unit/fundraising-model.test.ts). The SQL is in
@@ -326,6 +327,8 @@ const socialBox = (tidy: (raw: unknown) => SocialResult) =>
 const firstNameText = requiredText(NAME_PART_MAX, "Please tell us your first name.");
 const lastNameText = requiredText(NAME_PART_MAX, "Please tell us your surname.");
 
+export const TITLE_MISSING = "Give it a name, like Sam's Santa Dash.";
+
 /** TASK-511: the kind question's words follow their answer to the first question. */
 export function kindMissing(path: FundraiserPath | undefined): string {
   return path === "event" ? "Choose what kind of event it is." : "Choose what you are doing to raise money.";
@@ -429,7 +432,8 @@ export const signUpSchema = z
     // no longer on the form (hidden, or an old one) is asked for again, saying so.
     kind: z.unknown(),
     kindOther: nullableText(KIND_OTHER_MAX),
-    title: requiredText(100, "Give it a name, like Sam's Santa Dash."),
+    // In memory (Jaimie, 2026-10-03): may be left empty, and is named for them. Checked below.
+    title: optionalText(100),
     description: requiredText(DESCRIPTION_MAX, "Tell us a little about it."),
     eventDate: optionalDate,
     startTime: optionalTime,
@@ -472,9 +476,13 @@ export const signUpSchema = z
     dressCode: nullableText(60),
     included: nullableText(300),
     creditName: nullableText(80),
+    // In memory of someone (Jaimie, 2026-10-03): src/fundraising/in-memory.ts.
+    ...memoryFields,
   })
   .superRefine((b, ctx) => {
     const missing = (path: string, message: string) => ctx.addIssue({ code: z.ZodIssueCode.custom, path: [path], message });
+    if (!b.title && !titleOptional(b)) missing("title", TITLE_MISSING);
+    checkMemory(b, missing);
     if (!isActiveCategory(b.kind)) missing("kind", isKnownCategory(b.kind) ? KIND_GONE : kindMissing(b.path));
     if (b.kind === OTHER_KIND && !b.kindOther) missing("kindOther", kindOtherMissing(b.path));
     if (b.socialOk === undefined) missing("socialOk", SOCIAL_OK_MISSING);
@@ -509,6 +517,9 @@ export const signUpSchema = z
       ...b,
       // Checked above: a sign up without a kind never gets this far.
       kind: b.kind as FundraiserKind,
+      // In memory: named for them when they give it no name (src/fundraising/in-memory.ts).
+      title: titleFor(b),
+      ...memoryOf(b),
       kindOther: only(b.kind === OTHER_KIND, b.kindOther),
       // TASK-511: the whole name, for everything that reads it (emails, the admin, the page).
       name: `${b.firstName} ${b.lastName}`,
@@ -850,6 +861,10 @@ export interface WallSourceRow {
   paidIn?: boolean;
   /** TASK-502: the gift claimed Gift Aid. */
   giftAid?: boolean;
+  /** In memory: its message is still waiting for staff to check it, so it does not show yet. */
+  held?: boolean;
+  /** In memory: the giver ticked "Let the family know I gave". */
+  familyNotify?: boolean;
 }
 
 export interface WallEntry {
@@ -881,7 +896,8 @@ export function wallEntries(rows: WallSourceRow[]): WallEntry[] {
         name: r.showName && !r.anonymous && r.fullName.trim().toLowerCase() !== REDACTED_NAME ? shortName(r.fullName) : "Anonymous",
         amountPence: r.showAmount ? net : null,
         giftAidPence: aid > 0 ? aid : null,
-        message: !r.hidden && r.message && r.message.trim() !== "" ? r.message.trim() : null,
+        // In memory: a message waiting for staff (held) does not show until they approve it.
+        message: !r.hidden && !r.held && r.message && r.message.trim() !== "" ? r.message.trim() : null,
         createdAt: r.createdAt,
       };
     });
@@ -937,6 +953,8 @@ export const wallMessageSchema = z.object({
   // Matches checkout: a giver's name stays off the wall unless they choose to show it (Jaimie, 2026-10-02).
   showName: z.boolean().default(false),
   showAmount: z.boolean().default(true),
+  // In memory: "Let the family know I gave", unticked unless they tick it (left out, it is No).
+  familyNotify: z.boolean().optional(),
 });
 
 export type WallMessage = z.infer<typeof wallMessageSchema>;
@@ -1036,6 +1054,18 @@ export interface FundraiserRecord {
   /** When the two "did you send the invite to your team?" emails went. */
   teamNudge1At?: string | null;
   teamNudge2At?: string | null;
+  // In memory of someone (Jaimie, 2026-10-03; src/fundraising/in-memory.ts). False or null on
+  // every other sign up, and on one from before it was asked.
+  inMemory?: boolean | null;
+  memoryName?: string | null;
+  memoryDates?: string | null;
+  memorySetupBy?: MemorySetupBy | null;
+  memoryPermission?: boolean | null;
+  /** The family's answer to showing the target and how close it is; null with no target. */
+  memoryShowTarget?: boolean | null;
+  /** A year on, staff are reminded to decide whether to get in touch: when someone dealt with it. */
+  memoryReminderDoneAt?: string | null;
+  memoryReminderDoneBy?: string | null;
 }
 
 /** The event answers a card shows. All of them are meant for the public; none is private. */
@@ -1077,6 +1107,8 @@ export interface PublicCard extends Partial<PublicEventAnswers> {
    * page, so its card is where the public sees it) and on the page.
    */
   split?: PublicSplit | null;
+  /** In memory of someone: who, the dates, and whether the target shows. Null on any other page. */
+  memory?: PublicMemory | null;
 }
 
 export interface PublicPage extends PublicCard {
@@ -1125,7 +1157,8 @@ export function publicCard(f: FundraiserRecord, m: Meter): PublicCard {
     // An event may be credited to the name they gave (their group or business); a page never is.
     organisedBy: f.path === "event" && f.creditName ? f.creditName : shortName(f.name),
     url: pagePath(f),
-    meter: m,
+    // In memory: the target and how close it is only if the family chose to show them.
+    meter: memoryMeter(f, m),
     cardLine: f.cardLine,
     endTime: f.endTime,
     timeTbc: f.timeTbc,
@@ -1139,13 +1172,15 @@ export function publicCard(f: FundraiserRecord, m: Meter): PublicCard {
     dressCode: f.dressCode,
     included: f.included,
     split: publicSplit(f),
+    memory: publicMemory(f),
   };
 }
 
 export function publicPage(f: FundraiserRecord, m: Meter, wall: WallEntry[]): PublicPage {
   return {
     ...publicCard(f, m),
-    wall,
+    // In memory (review fix): each gift dated by its day only, so a gift cannot be matched by its time.
+    wall: isInMemory(f) ? wall.map((w) => ({ ...w, createdAt: memoryDay(w.createdAt) })) : wall,
     giving: { fundraiserId: f.id, minimumPence: GIFT_MIN_PENCE },
     finished: f.status === "finished",
   };

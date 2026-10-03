@@ -168,9 +168,10 @@ describe("thanks for signing up", () => {
     expect(mail.html).toContain("<!doctype html>");
   });
 
+  // The sign up tidy (Jaimie, 2026-10-03): a comma after "Hi there", as in a letter.
   it("greets them by a safe first name, or just Hi there", () => {
-    expect(mail.text).toContain("Hi there Sam,");
-    expect(mail.html).toContain("Hi there Sam,");
+    expect(mail.text).toContain("Hi there, Sam,");
+    expect(mail.html).toContain("Hi there, Sam,");
     for (const typed of ["", "<b>x", "Abcdefghijklmnopqrstuvwxyz", undefined]) {
       expect(buildSignUpThanksEmail(typed).text).toContain("Hi there,");
     }
@@ -182,9 +183,9 @@ describe("thanks for signing up", () => {
   it("carries none of their other words", () => {
     const hostile = buildSignUpThanksEmail("Click http://evil.example now");
     expect(hostile.subject + hostile.text + hostile.html).not.toContain("evil.example");
-    expect(hostile.text).toContain("Hi there Click,");
+    expect(hostile.text).toContain("Hi there, Click,");
     const long = buildSignUpThanksEmail(signUp.description);
-    expect(long.text).toContain("Hi there Running,");
+    expect(long.text).toContain("Hi there, Running,");
     expect(long.subject + long.text + long.html).not.toContain("round the park");
     const markup = buildSignUpThanksEmail("<b>Sam</b>");
     expect(markup.subject + markup.text + markup.html).not.toContain("<b>Sam");
@@ -447,8 +448,10 @@ describe("the summary to the events inbox, with the new answers", () => {
   };
   const mail = buildSignUpStaffEmail({ ...event, id: 44 }, { adminUrl: "https://nbcc.scot/admin" });
 
+  // The sign up tidy (Jaimie, 2026-10-03): every sign up gives an address for the welcome pack, so
+  // it is labelled for that.
   it("lists each request on its own, and the address from its boxes", () => {
-    for (const line of ["Posters: 5", "Leaflets: 0", "Collection buckets: 0", "Collection tins: 2", "Address for materials: 1 Example Road, Flat 2, Exampleton, EX1 1EX"]) {
+    for (const line of ["Posters: 5", "Leaflets: 0", "Collection buckets: 0", "Collection tins: 2", "Address for the welcome pack: 1 Example Road, Flat 2, Exampleton, EX1 1EX"]) {
       expect(mail.text).toContain(line);
     }
     expect(mail.text).not.toContain("Leaflets or posters");
@@ -491,7 +494,7 @@ describe("the summary to the events inbox, with the new answers", () => {
 
   it("still shows a sign up from before the split as it did", () => {
     expect(buildSignUpStaffEmail({ ...signUp, id: 47 }, { adminUrl: "https://nbcc.scot/admin" }).text).toContain(
-      "Address for materials: 1 Example Street, Exampleton",
+      "Address for the welcome pack: 1 Example Street, Exampleton",
     );
   });
 

@@ -4,8 +4,23 @@ import { isValidUkPostcode } from "../declarations/fields";
 import { containsBlockedWord } from "../donors/display-name-filter";
 import type { NewsEntry } from "./news";
 import { facebookLink, instagramLink, type SocialResult } from "./social";
-import { categoryLabel, isActiveCategory, isKnownCategory, OTHER_KIND } from "./categories";
+import { categoryLabel, isActiveCategory, isKnownCategory, isMemoryCategory, OTHER_KIND } from "./categories";
 import { CHARITY_NAME, OSCR_NUMBER } from "../legal/registration";
+import {
+  checkPaths,
+  checkWelcomePack,
+  organisedByFor,
+  pathFields,
+  pathsOf,
+  welcomePackFields,
+  welcomePackOf,
+  ADDRESS_LINE1_MISSING,
+  ADDRESS_POSTCODE_MISSING,
+  ADDRESS_TOWN_MISSING,
+  ATTEND_WHEN_SOMETHING_ON,
+  MEMORY_GIVING_MISSING,
+  type EmployerMatch,
+} from "./signup-tidy";
 import { checkMemory, isInMemory, memoryDay, memoryFields, memoryMeter, memoryOf, publicMemory, titleFor, titleOptional, type MemorySetupBy, type PublicMemory } from "./in-memory";
 
 // TASK-493: community fundraising, the rules. Pure: no pool, no config, no clock, so every rule is
@@ -42,6 +57,8 @@ export const MAX_LEAFLETS = 1000;
 export const MAX_BUCKETS = 20;
 /** TASK-511: printed QR codes, cards or stickers with their page's QR code. */
 export const MAX_QR_CODES = 200;
+/** The sign up tidy: collection envelopes for a funeral or service, in memory of someone. */
+export const MAX_ENVELOPES = 500;
 /** TASK-511: the first name and the surname, each. */
 export const NAME_PART_MAX = 50;
 /** TASK-511: what "Other" (once "Something else") is, in their words. */
@@ -51,7 +68,8 @@ export const CARD_LINE_MAX = 140;
 
 // Addresses under /fundraise/ that are pages of their own, so no fundraiser may take them: the manage
 // page (TASK-494), the help page (TASK-498), and the logo pack and blank sponsor form (TASK-504).
-export const RESERVED_SLUGS: ReadonlySet<string> = new Set(["manage", "help", "logos", "sponsor-form"]);
+// The sign up tidy: "t-shirt" is the page to choose a t-shirt size.
+export const RESERVED_SLUGS: ReadonlySet<string> = new Set(["manage", "help", "logos", "sponsor-form", "t-shirt"]);
 
 /**
  * What they would like from us, stored as the fundraisers.wants jsonb.
@@ -73,13 +91,15 @@ export interface Wants {
   buckets: number;
   /** TASK-511: printed QR codes, cards or stickers with their page's QR code. None before then. */
   qrCount?: number;
+  /** The sign up tidy: collection envelopes for a funeral or service, in memory of someone only. */
+  envelopeCount?: number;
   shoutOut: boolean;
   attend: boolean;
 }
 
 /** Is anything to be posted? Then we need an address. Old combined requests count too. */
 export function wantsPosted(w: Wants): boolean {
-  return w.posterCount + w.leafletCount + w.bucketCount + w.tinCount + w.leaflets + w.buckets + (w.qrCount ?? 0) > 0;
+  return w.posterCount + w.leafletCount + w.bucketCount + w.tinCount + w.leaflets + w.buckets + (w.qrCount ?? 0) + (w.envelopeCount ?? 0) > 0;
 }
 
 const count = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
@@ -92,6 +112,7 @@ export function wantsLines(w: Wants): string[] {
   if (w.bucketCount > 0) lines.push(count(w.bucketCount, "collection bucket", "collection buckets"));
   if (w.tinCount > 0) lines.push(count(w.tinCount, "collection tin", "collection tins"));
   if ((w.qrCount ?? 0) > 0) lines.push(count(w.qrCount ?? 0, "printed QR code", "printed QR codes"));
+  if ((w.envelopeCount ?? 0) > 0) lines.push(count(w.envelopeCount ?? 0, "collection envelope", "collection envelopes"));
   if (w.leaflets > 0) lines.push(count(w.leaflets, "leaflet or poster", "leaflets or posters"));
   if (w.buckets > 0) lines.push(count(w.buckets, "bucket or tin", "buckets or tins"));
   return lines;
@@ -110,12 +131,14 @@ export const ACCESS_LABELS: Record<AccessFeature, string> = {
 };
 
 /** How people get in. NBCC selling the tickets comes with the ticketing stage, not here. */
-export const BOOKINGS = ["away", "door", "free"] as const;
+export const BOOKINGS = ["away", "door", "free", "donations"] as const;
 export type FundraiserBooking = (typeof BOOKINGS)[number];
 export const BOOKING_LABELS: Record<FundraiserBooking, string> = {
   away: "Tickets are sold on another website",
   door: "Pay on the door, no booking needed",
   free: "Free, just come along",
+  // The sign up tidy (the appropriateness audit).
+  donations: "Free entry, donations welcome",
 };
 
 /** "ka11aa" -> "KA1 1AA": upper case, one space before the last three. Check it is valid first. */
@@ -216,6 +239,8 @@ const wantsCounts = {
   buckets: howMany(MAX_BUCKETS, `We can lend up to ${MAX_BUCKETS} buckets or tins.`),
   // TASK-511: printed QR codes, cards or stickers with their page's QR code.
   qrCount: howMany(MAX_QR_CODES, `We can print up to ${MAX_QR_CODES} QR codes.`),
+  // The sign up tidy: collection envelopes for a funeral or service (in memory of someone).
+  envelopeCount: howMany(MAX_ENVELOPES, `We can send up to ${MAX_ENVELOPES} envelopes.`),
 };
 
 // What staff save: a yes or no not given is No, as it always was. Printed QR codes not given are left
@@ -225,6 +250,7 @@ const wantsSchema = z
   .object({
     ...wantsCounts,
     qrCount: wantsCounts.qrCount.removeDefault().optional(),
+    envelopeCount: wantsCounts.envelopeCount.removeDefault().optional(),
     shoutOut: z.boolean().default(false),
     attend: z.boolean().default(false),
   })
@@ -239,18 +265,15 @@ export const SHOUT_OUT_MISSING = "Tell us whether you would like a shout out fro
 export const ATTEND_MISSING = "Tell us whether you would like someone from NBCC to come along.";
 export const SOCIAL_OK_MISSING = "Tell us whether we can post about it on NBCC’s social media.";
 
+// The sign up tidy: whether each is needed depends on the path (in memory asks neither, and come
+// along only when there is something to come along to), so the sign up's own checks ask for them.
 const signUpWantsSchema = z
   .object({
     ...wantsCounts,
     shoutOut: yesNo,
     attend: yesNo,
   })
-  .strict()
-  .superRefine((w, ctx) => {
-    if (w.shoutOut === undefined) ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["shoutOut"], message: SHOUT_OUT_MISSING });
-    if (w.attend === undefined) ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["attend"], message: ATTEND_MISSING });
-  })
-  .transform((w) => ({ ...w, shoutOut: w.shoutOut === true, attend: w.attend === true }));
+  .strict();
 
 const optionalPostcode = z
   .preprocess(
@@ -359,8 +382,9 @@ const optionalImage = z
 // gifts (src/db/fundraisers.ts setFundraiserSplit).
 
 export const OVER_18_MISSING = "Tell us whether you are 18 or over.";
+// The sign up tidy (Jaimie, 2026-10-03): the same words on every form, with no example to copy.
 export const UNDER_18 =
-  "You need to be 18 or over to set up a page. Ask a parent, guardian or another grown up you trust to set it up for you: they can name you on the page (for example, 'for Ella's 10th birthday'). Any questions, call 01292 811 015 or email events@nbcc.scot.";
+  "You need to be 18 or over to sign up. A parent, carer or another adult you trust can do it for you and name you on the page. If you'd like to talk it through, call 01292 811 015 or email events@nbcc.scot.";
 export const SHARES_MISSING = "Tell us whether you are sharing what you raise with another cause.";
 export const SHARE_PERCENT_MISSING = "Tell us what percentage of what you raise comes to NBCC.";
 export const SHARE_PERCENT_RANGE = "Give a whole number from 1 to 99.";
@@ -434,7 +458,8 @@ export const signUpSchema = z
     kindOther: nullableText(KIND_OTHER_MAX),
     // In memory (Jaimie, 2026-10-03): may be left empty, and is named for them. Checked below.
     title: optionalText(100),
-    description: requiredText(DESCRIPTION_MAX, "Tell us a little about it."),
+    // The sign up tidy: optional in memory of someone (staff write it with the family); asked below.
+    description: optionalText(DESCRIPTION_MAX),
     eventDate: optionalDate,
     startTime: optionalTime,
     venue: optionalText(120),
@@ -478,12 +503,31 @@ export const signUpSchema = z
     creditName: nullableText(80),
     // In memory of someone (Jaimie, 2026-10-03): src/fundraising/in-memory.ts.
     ...memoryFields,
+    // The sign up tidy (Jaimie, 2026-10-03): sport, the t-shirt and the split check (./welcome-pack.ts).
+    ...welcomePackFields,
+    // Who is fundraising, and for whom; and whether to list it on Get involved (./signup-tidy.ts).
+    ...pathFields,
   })
   .superRefine((b, ctx) => {
     const missing = (path: string, message: string) => ctx.addIssue({ code: z.ZodIssueCode.custom, path: [path], message });
     if (!b.title && !titleOptional(b)) missing("title", TITLE_MISSING);
     checkMemory(b, missing);
-    if (!isActiveCategory(b.kind)) missing("kind", isKnownCategory(b.kind) ? KIND_GONE : kindMissing(b.path));
+    // The sign up tidy: in memory of someone is its own path, asked only what fits it.
+    const memory = b.path === "raising" && b.inMemory === true;
+    if (!memory && !b.description) missing("description", "Tell us a little about it.");
+    if (memory) {
+      if (!isActiveCategory(b.kind) || !(isMemoryCategory(b.kind) || b.kind === OTHER_KIND)) missing("kind", MEMORY_GIVING_MISSING);
+    } else if (!isActiveCategory(b.kind) || isMemoryCategory(b.kind)) {
+      missing("kind", isKnownCategory(b.kind) && !isMemoryCategory(b.kind) ? KIND_GONE : kindMissing(b.path));
+    }
+    if (!memory) {
+      if (b.wants.shoutOut === undefined) missing("wants.shoutOut", SHOUT_OUT_MISSING);
+      // Come along: for an event, and for anything else with a day or a place to come along to.
+      if (b.wants.attend === undefined && (b.path === "event" || b.eventDate || b.venue)) {
+        missing("wants.attend", b.path === "event" ? ATTEND_MISSING : ATTEND_WHEN_SOMETHING_ON);
+      }
+    }
+    checkPaths(b, missing);
     if (b.kind === OTHER_KIND && !b.kindOther) missing("kindOther", kindOtherMissing(b.path));
     if (b.socialOk === undefined) missing("socialOk", SOCIAL_OK_MISSING);
     if (b.over18 === undefined) missing("over18", OVER_18_MISSING);
@@ -497,21 +541,34 @@ export const signUpSchema = z
       if (b.booking === "away" && !b.ticketUrl) missing("ticketUrl", "Paste the link to where the tickets are sold, starting https://");
       finishAfterStart(b, ctx);
     }
-    // TASK-511: an event asks for no printed QR codes (it has no page), so none are posted to it.
-    if (wantsPosted({ ...b.wants, qrCount: b.path === "event" ? 0 : b.wants.qrCount })) {
-      if (!b.postLine1) missing("postLine1", "Tell us the first line of the address.");
-      if (!b.postTown) missing("postTown", "Tell us the town.");
-      if (!b.postPostcode) missing("postPostcode", "Tell us the postcode.");
+    // The sign up tidy: every new sign up gives an address for the welcome pack. In memory of
+    // someone there is no welcome pack, so only something to be posted needs one, as before.
+    // Event pages have a QR code now, so an event may ask for printed ones too.
+    if (!memory || wantsPosted({ ...b.wants, shoutOut: false, attend: false })) {
+      if (!b.postLine1) missing("postLine1", ADDRESS_LINE1_MISSING);
+      if (!b.postTown) missing("postTown", ADDRESS_TOWN_MISSING);
+      if (!b.postPostcode) missing("postPostcode", ADDRESS_POSTCODE_MISSING);
     }
+    checkWelcomePack(b, missing);
   })
   .transform((b) => {
     // Holding an event is listed as an event: it has no page and no meter in stage 1, so no target.
     // Raising money gets a page, never an event card, so none of the event answers are kept.
     const event = b.path === "event";
-    // TASK-511: printed QR codes carry a page's QR code, and an event has no page.
-    const wanted = { ...b.wants, qrCount: event ? 0 : b.wants.qrCount };
-    // Nothing to post, no address kept.
-    const posted = wantsPosted(wanted);
+    const memory = b.path === "raising" && b.inMemory === true;
+    // The sign up tidy: in memory asks for no shout out and no come along; envelopes only in memory.
+    const wanted = {
+      ...b.wants,
+      envelopeCount: memory ? b.wants.envelopeCount : 0,
+      shoutOut: !memory && b.wants.shoutOut === true,
+      attend: !memory && b.wants.attend === true,
+    };
+    // The welcome pack's address is always kept; in memory, only when something is to be posted.
+    const posted = wantsPosted(wanted) || !memory;
+    // "Shall we list it on our Get involved page?": every new sign up gets a page (public), and a No
+    // keeps it off the list. A page cached from before sends only public, read as it always was. A
+    // team is always listed, so the team can find it.
+    const listed = b.team === "team" || b.listed !== false;
     const only = <T>(keep: boolean, value: T) => (keep ? value : null);
     return {
       ...b,
@@ -520,6 +577,12 @@ export const signUpSchema = z
       // In memory: named for them when they give it no name (src/fundraising/in-memory.ts).
       title: titleFor(b),
       ...memoryOf(b),
+      ...welcomePackOf(b),
+      ...pathsOf(b),
+      public: b.listed === undefined ? b.public : true,
+      listed,
+      // In memory: no newsletter tick is offered.
+      newsletterOk: !memory && b.newsletterOk,
       kindOther: only(b.kind === OTHER_KIND, b.kindOther),
       // TASK-511: the whole name, for everything that reads it (emails, the admin, the page).
       name: `${b.firstName} ${b.lastName}`,
@@ -530,7 +593,8 @@ export const signUpSchema = z
       // The old single link, filled for anything that still reads it: Facebook first.
       socialLink: b.facebook ?? b.instagram,
       wants: wanted,
-      targetPence: event ? null : b.targetPence,
+      // The sign up tidy: an event may give an amount it hopes to raise (its page has a meter).
+      targetPence: b.targetPence,
       postLine1: only(posted, b.postLine1),
       postLine2: only(posted, b.postLine2),
       postTown: only(posted, b.postTown),
@@ -1049,6 +1113,27 @@ export interface FundraiserRecord {
   teamId?: number | null;
   /** A team sharing with another cause: the whole team's split, or just the organiser's. */
   teamShareMode?: "team" | "organiser" | null;
+  // The sign up tidy (Jaimie, 2026-10-03; ./signup-tidy.ts). Null on a sign up from before, and
+  // wherever the path does not ask it.
+  /** A sporting event? Asked of someone raising money, never in memory of someone. */
+  isSporting?: boolean | null;
+  /** Their t-shirt size (TSHIRT_SIZES), for a sporting event. */
+  tshirtSize?: string | null;
+  /** When staff last emailed them the link to choose a size, and who. */
+  tshirtAskedAt?: string | null;
+  tshirtAskedBy?: string | null;
+  /** Raising money for their child: the child's first name (on the page), and the parent's tick. */
+  childFirstName?: string | null;
+  childConsent?: boolean | null;
+  /** For a business, school or group: its name (on the page), and whether the employer will match. */
+  orgName?: string | null;
+  employerMatch?: EmployerMatch | null;
+  /** In memory, set up by a funeral director: the business, and the family's contact for givers' names. */
+  memoryDirectorBusiness?: string | null;
+  memoryFamilyContactName?: string | null;
+  memoryFamilyContactEmail?: string | null;
+  /** A good time to call them. */
+  callTime?: string | null;
   /** A member taken off the team: the page carries on as their own. */
   teamLeftAt?: string | null;
   /** When the two "did you send the invite to your team?" emails went. */
@@ -1155,7 +1240,8 @@ export function publicCard(f: FundraiserRecord, m: Meter): PublicCard {
     town: f.town,
     imageSrc: f.imageSrc,
     // An event may be credited to the name they gave (their group or business); a page never is.
-    organisedBy: f.path === "event" && f.creditName ? f.creditName : shortName(f.name),
+    // The sign up tidy: a funeral director for the family, a child, or a business, school or group.
+    organisedBy: organisedByFor(f) ?? shortName(f.name),
     url: pagePath(f),
     // In memory: the target and how close it is only if the family chose to show them.
     meter: memoryMeter(f, m),

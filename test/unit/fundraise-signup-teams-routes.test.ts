@@ -55,6 +55,12 @@ const signUp = (over: Record<string, unknown> = {}) => ({
   over18: true,
   sharesWithOther: false,
   wants: { shoutOut: false, attend: false },
+  // The sign up tidy (Jaimie, 2026-10-03): every new sign up gives an address, for the welcome pack,
+  // and someone sharing ticks to say the split is right.
+  postLine1: "1 Example Road",
+  postTown: "Exampleton",
+  postPostcode: "EX1 1EX",
+  splitConfirmed: true,
   newsletterOk: false,
   ...over,
 });

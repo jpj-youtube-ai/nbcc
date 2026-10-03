@@ -41,6 +41,12 @@ const signUp = (over: Record<string, unknown> = {}) => ({
   over18: true,
   sharesWithOther: false,
   wants: { posterCount: 0, leafletCount: 0, bucketCount: 0, tinCount: 0, qrCount: 0, shoutOut: false, attend: false },
+  // The sign up tidy (Jaimie, 2026-10-03): every new sign up gives an address, for the welcome pack,
+  // and someone sharing ticks to say the split is right (test/unit/fundraising-signup-tidy.test.ts).
+  postLine1: "1 Example Road",
+  postTown: "Exampleton",
+  postPostcode: "EX1 1EX",
+  splitConfirmed: true,
   newsletterOk: false,
   ...over,
 });
@@ -78,8 +84,9 @@ describe("18 or over", () => {
 
   it("says it kindly and plainly", () => {
     expect(OVER_18_MISSING).toBe("Tell us whether you are 18 or over.");
+    // The sign up tidy (Jaimie, 2026-10-03): the same words on every form, with no example to copy.
     expect(UNDER_18).toBe(
-      "You need to be 18 or over to set up a page. Ask a parent, guardian or another grown up you trust to set it up for you: they can name you on the page (for example, 'for Ella's 10th birthday'). Any questions, call 01292 811 015 or email events@nbcc.scot.",
+      "You need to be 18 or over to sign up. A parent, carer or another adult you trust can do it for you and name you on the page. If you'd like to talk it through, call 01292 811 015 or email events@nbcc.scot.",
     );
   });
 });

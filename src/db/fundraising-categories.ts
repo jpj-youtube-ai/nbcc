@@ -2,7 +2,7 @@ import type { PoolClient } from "pg";
 import { pool } from "./pool";
 import { insertAudit } from "./donations";
 import {
-  BUILT_IN_CATEGORIES,
+  ALL_BUILT_IN_CATEGORIES,
   OTHER_KIND,
   categoryKeyFor,
   knownCategories,
@@ -44,6 +44,9 @@ function toCategory(r: Row): Category {
     key: String(r.key),
     label: String(r.label),
     active: Boolean(r.active),
+    // The sign up tidy (migrations/1791200000210): false until an admin ticks Sporting.
+    sporty: r.sporty === true,
+    memoryOnly: r.memory_only === true,
     createdAt: iso(r.created_at),
     createdBy: r.created_by == null ? null : String(r.created_by),
     retiredAt: iso(r.retired_at),
@@ -51,7 +54,7 @@ function toCategory(r: Row): Category {
   };
 }
 
-const COLUMNS = "key, label, active, created_at, created_by, retired_at";
+const COLUMNS = "key, label, active, sporty, memory_only, created_at, created_by, retired_at";
 
 /**
  * Every category, A to Z with Other last. With used, how many sign ups have each (the admin's card
@@ -59,7 +62,7 @@ const COLUMNS = "key, label, active, created_at, created_by, retired_at";
  */
 export async function listCategories(o: { used?: boolean } = {}): Promise<Category[]> {
   const used = o.used ? ",\n            (SELECT count(*) FROM fundraisers f WHERE f.kind = c.key) AS used" : "";
-  const r = await pool.query(`SELECT c.key, c.label, c.active, c.created_at, c.created_by, c.retired_at${used}
+  const r = await pool.query(`SELECT c.key, c.label, c.active, c.sporty, c.memory_only, c.created_at, c.created_by, c.retired_at${used}
        FROM fundraising_categories c`);
   return sortCategories(r.rows.map(toCategory));
 }
@@ -95,7 +98,7 @@ export async function loadCategories(o: { fresh?: boolean; now?: number } = {}):
     return list;
   } catch (err) {
     console.error("fundraising categories read failed:", err instanceof Error ? err.message : err);
-    return cached ?? (knownCategories().length ? knownCategories() : sortCategories([...BUILT_IN_CATEGORIES]));
+    return cached ?? (knownCategories().length ? knownCategories() : sortCategories([...ALL_BUILT_IN_CATEGORIES]));
   }
 }
 
@@ -150,13 +153,18 @@ export async function addCategory(label: string, actor: string): Promise<Categor
 }
 
 /**
- * Rename a category, or take it off the form (active false) or put it back. Never deletes: the sign
- * ups that have it keep it, under its name. Other is always on the form.
+ * Rename a category, or take it off the form (active false) or put it back, or mark it sporting or
+ * not (the sign up tidy). Never deletes: the sign ups that have it keep it, under its name. Other is
+ * always on the form.
  */
-export async function updateCategory(key: string, change: { label?: string; active?: boolean }, actor: string): Promise<Category> {
+export async function updateCategory(
+  key: string,
+  change: { label?: string; active?: boolean; sporty?: boolean },
+  actor: string,
+): Promise<Category> {
   const after = await inTransaction(async (client) => {
-    const found = await client.query<{ key: string; label: string; active: boolean }>(
-      "SELECT key, label, active FROM fundraising_categories WHERE key = $1 FOR UPDATE",
+    const found = await client.query<{ key: string; label: string; active: boolean; sporty: boolean }>(
+      "SELECT key, label, active, sporty FROM fundraising_categories WHERE key = $1 FOR UPDATE",
       [key],
     );
     const before = found.rows[0];
@@ -164,6 +172,7 @@ export async function updateCategory(key: string, change: { label?: string; acti
     if (key === OTHER_KIND && change.active === false) throw new CategoryError("other_always_on");
     const label = change.label ?? before.label;
     const active = change.active ?? before.active;
+    const sporty = change.sporty ?? before.sporty === true;
     if (label.toLowerCase() !== before.label.toLowerCase()) {
       const clash = await client.query<{ key: string }>(
         "SELECT key FROM fundraising_categories WHERE lower(label) = lower($1) AND key <> $2",
@@ -174,11 +183,11 @@ export async function updateCategory(key: string, change: { label?: string; acti
     const r = await client
       .query(
         `UPDATE fundraising_categories
-            SET label = $2, active = $3,
+            SET label = $2, active = $3, sporty = $4,
                 retired_at = CASE WHEN $3 THEN NULL ELSE COALESCE(retired_at, now()) END
           WHERE key = $1
           RETURNING ${COLUMNS}`,
-        [key, label, active],
+        [key, label, active, sporty],
       )
       .catch(takenInTheMeantime);
     await insertAudit(client, {
@@ -186,7 +195,13 @@ export async function updateCategory(key: string, change: { label?: string; acti
       action: "fundraising.category_changed",
       entity: "fundraising_category",
       entityId: null,
-      data: { key, label, ...(active !== before.active ? { active } : {}), was: { label: before.label, active: before.active } },
+      data: {
+        key,
+        label,
+        ...(active !== before.active ? { active } : {}),
+        ...(sporty !== (before.sporty === true) ? { sporty } : {}),
+        was: { label: before.label, active: before.active, sporty: before.sporty === true },
+      },
     });
     return toCategory(r.rows[0]);
   });

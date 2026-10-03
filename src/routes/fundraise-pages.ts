@@ -11,6 +11,7 @@ import { EVENT_PAGE_PREFIX, pagePath } from "../fundraising/model";
 //   GET /fundraise                 the sign up form, or "not open yet" while switched off; its
 //                                  categories drawn from the database's list, A to Z
 //   GET /fundraise/manage          change your page, by the emailed link (?token=); never indexed
+//   GET /fundraise/t-shirt         choose a T shirt size, from the email staff send; never indexed
 //   GET /fundraise/help            ideas, paying in, Gift Aid and staying safe (TASK-498); indexed
 //   GET /fundraise/logos           the logo pack: the official logos and simple rules (TASK-504)
 //   GET /fundraise/sponsor-form    a blank sponsor form to print, with HMRC's Gift Aid columns (TASK-504)
@@ -178,6 +179,7 @@ export function addFundraisePageRoutes(router: Router, siteRoot: string, deps: F
   const getInvolvedFile = join(siteRoot, "events.html");
   const signUpFile = join(siteRoot, "fundraise.html");
   const manageFile = join(siteRoot, "fundraise-manage.html");
+  const tshirtFile = join(siteRoot, "fundraise-tshirt.html");
   const pageFile = join(siteRoot, "fundraiser.html");
   const helpFile = join(siteRoot, "fundraise-help.html");
   const logosFile = join(siteRoot, "fundraise-logos.html");
@@ -236,15 +238,17 @@ export function addFundraisePageRoutes(router: Router, siteRoot: string, deps: F
 
   router.get("/fundraise", async (req, res, next) => {
     try {
-      const [{ renderFundraiseSignUp }, { loadCategories }, { formCategories }] = await Promise.all([
+      const [{ renderFundraiseSignUp }, { loadCategories }, { formCategories, memoryCategories }] = await Promise.all([
         import("../fundraising/render"),
         import("../db/fundraising-categories"),
         import("../fundraising/categories"),
       ]);
       // The categories on offer, A to Z, Other last, as the database has them (kept for a
       // minute; the starting list if it cannot be read).
-      const categories = formCategories(await loadCategories());
-      const html = renderFundraiseSignUp(readFileSync(signUpFile, "utf8"), await fundraisingOn(), categories);
+      const all = await loadCategories();
+      const categories = formCategories(all);
+      // The sign up tidy: and the in memory ways of giving, for that path.
+      const html = renderFundraiseSignUp(readFileSync(signUpFile, "utf8"), await fundraisingOn(), categories, memoryCategories(all));
       fresh(res);
       // TASK-503: opened from a staff invite, its token in the address until the page's script takes
       // it out. Until then: never kept by a browser or anything in between, never indexed, and only
@@ -277,6 +281,22 @@ export function addFundraisePageRoutes(router: Router, siteRoot: string, deps: F
       res.type("html").send(await deps.decorate(readFileSync(manageFile, "utf8"), req.headers.cookie));
     } catch (err) {
       console.error("fundraise manage page failed:", err instanceof Error ? err.message : err);
+      next();
+    }
+  });
+
+  // The sign up tidy: the private page to choose a T shirt size, opened from the email staff send.
+  // Before /fundraise/:slug ("t-shirt" is a reserved slug too). Its link's token rides after the #,
+  // so it never reaches here; still never indexed, never cached, and no referrer to anyone.
+  router.get("/fundraise/t-shirt", async (req, res, next) => {
+    try {
+      if (!(await fundraisingOn())) return next();
+      res.setHeader("X-Robots-Tag", "noindex, nofollow");
+      res.setHeader("Referrer-Policy", "no-referrer");
+      res.setHeader("Cache-Control", "no-store");
+      res.type("html").send(await deps.decorate(readFileSync(tshirtFile, "utf8"), req.headers.cookie));
+    } catch (err) {
+      console.error("fundraise t-shirt page failed:", err instanceof Error ? err.message : err);
       next();
     }
   });

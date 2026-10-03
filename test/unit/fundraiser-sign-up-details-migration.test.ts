@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { createRequire } from "node:module";
-import { readdirSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { ACCESS } from "../../src/events/model";
 import { BOOKINGS } from "../../src/fundraising/model";
@@ -79,12 +79,24 @@ describe("the sign up details migration", () => {
     expect(columns.end_time.type).toBe("time");
   });
 
+  // The sign up tidy (Jaimie, 2026-10-03) adds a fourth way in, "donations", after this migration
+  // was run: it is never edited (golden rule 2), so a later migration must widen the check for it.
+  const LATER_BOOKINGS = ["donations"];
+
   it("holds the way in and the access ticks to the same lists as the code", () => {
     const checks = calls.filter((c) => c.op === "addConstraint").map((c) => JSON.stringify(c.args));
     expect(checks.join("\n")).toContain("fundraisers_booking_check");
-    for (const b of BOOKINGS) expect(checks.join("\n")).toContain(`'${b}'`);
+    for (const b of BOOKINGS.filter((b) => !LATER_BOOKINGS.includes(b))) expect(checks.join("\n")).toContain(`'${b}'`);
     expect(checks.join("\n")).toContain("fundraisers_access_check");
     for (const a of ACCESS) expect(checks.join("\n")).toContain(`'${a}'`);
+  });
+
+  it("has its way in check widened by a later migration for every way in the code added since", () => {
+    const later = readdirSync(resolve(ROOT, "migrations"))
+      .filter((f) => f.endsWith(".js") && f > NAME)
+      .map((f) => readFileSync(resolve(ROOT, "migrations", f), "utf8"))
+      .filter((src) => src.includes("fundraisers_booking_check"));
+    for (const b of LATER_BOOKINGS) expect(later.some((src) => src.includes(`"${b}"`) || src.includes(`'${b}'`)), b).toBe(true);
   });
 
   it("drops nothing, renames nothing and rewrites no row on the way up", () => {

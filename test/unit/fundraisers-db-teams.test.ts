@@ -58,6 +58,8 @@ describe("a record's team columns", () => {
       town: "", targetPence: 200000, public: true, firstName: "Robin", lastName: "Organiser", email: "robin@example.com",
       phone: "07700 900111", instagram: "", facebook: "", socialOk: false, over18: true, sharesWithOther: false,
       wants: { shoutOut: false, attend: false }, newsletterOk: false,
+      // The sign up tidy (Jaimie, 2026-10-03): every new sign up gives an address, for the welcome pack.
+      postLine1: "1 Example Road", postTown: "Exampleton", postPostcode: "EX1 1EX",
     });
     await createFundraiser(parsed);
     const read = calls.find(([s]) => s.includes("WHERE f.id = $1"))![0];
@@ -73,6 +75,8 @@ describe("a sign up that does more in its own transaction", () => {
       town: "", targetPence: 200000, public: true, firstName: "Robin", lastName: "Organiser", email: "robin@example.com",
       phone: "07700 900111", instagram: "", facebook: "", socialOk: false, over18: true, sharesWithOther: false,
       wants: { shoutOut: false, attend: false }, newsletterOk: false,
+      // The sign up tidy (Jaimie, 2026-10-03): every new sign up gives an address, for the welcome pack.
+      postLine1: "1 Example Road", postTown: "Exampleton", postPostcode: "EX1 1EX",
     });
     const after = await createFundraiser(parsed, async (client, id) => {
       await client.query("UPDATE fundraisers SET is_team = true WHERE id = $1", [id]);

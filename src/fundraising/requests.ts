@@ -27,6 +27,8 @@ export const REQUEST_KINDS = [
   "leaflets_or_posters",
   // TASK-511: printed QR codes, cards or stickers with their page's QR code. Sent like posters.
   "qr_codes",
+  // The sign up tidy: collection envelopes for a funeral or service, in memory of someone. Sent like posters.
+  "envelopes",
   "buckets",
   "tins",
   "buckets_or_tins",
@@ -52,6 +54,7 @@ export const KIND_INFO: Record<RequestKind, { group: RequestGroup; label: string
   leaflets: { group: "printed", label: "Leaflets", wantsKey: "leafletCount" },
   leaflets_or_posters: { group: "printed", label: "Leaflets or posters", wantsKey: "leaflets" },
   qr_codes: { group: "printed", label: "QR codes", wantsKey: "qrCount" },
+  envelopes: { group: "printed", label: "Collection envelopes", wantsKey: "envelopeCount" },
   buckets: { group: "lent", label: "Collection buckets", wantsKey: "bucketCount" },
   tins: { group: "lent", label: "Collection tins", wantsKey: "tinCount" },
   buckets_or_tins: { group: "lent", label: "Buckets or tins", wantsKey: "buckets" },
@@ -159,6 +162,7 @@ export function parseWants(raw: unknown): Wants {
     leaflets: num(w.leaflets),
     buckets: num(w.buckets),
     qrCount: num(w.qrCount),
+    envelopeCount: num(w.envelopeCount),
     shoutOut: w.shoutOut === true,
     attend: w.attend === true,
   };

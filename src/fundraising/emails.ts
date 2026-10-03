@@ -17,6 +17,7 @@ import { FOOTER_TEXT, POSTAL_ADDRESS } from "../legal/registration";
 import { ACCESS_LABELS, BOOKING_LABELS, kindLabelOf, shortName, type FundraiserRecord, type SignUp, type Wants } from "./model";
 import { OTHER_KIND } from "./categories";
 import { memoryStaffFacts } from "./in-memory";
+import { tidyStaffFacts } from "./signup-tidy-emails";
 
 // TASK-493: the community fundraising emails, built here and sent by src/fundraising/send.ts.
 // TASK-497: reworded to the words Jaimie signed off on 2026-10-02 (warmer, a signed close, and a
@@ -113,7 +114,8 @@ const THANKS_STEPS = [
 // inbox instead.
 export function buildSignUpThanksEmail(typedName?: string | null): BuiltEmail {
   const first = safeFirstName(typedName);
-  const hi = first ? `Hi there ${first},` : "Hi there,";
+  // The sign up tidy: a comma after "Hi there", as in a letter.
+  const hi = first ? `Hi there, ${first},` : "Hi there,";
   const intro =
     "We’re so excited that you want to raise money for NBCC. Every pound you raise helps the children, young people and vulnerable adults we support, all year round, and we can’t wait to cheer you on.";
   const small = "Nothing goes on our website until we’ve spoken. If this wasn’t you, don’t worry, you can ignore this email.";
@@ -139,8 +141,24 @@ type NewAnswers = "firstName" | "lastName" | "kindOther" | "instagram" | "facebo
 type AgeAndSplit = "over18" | "sharesWithOther" | "nbccSharePercent" | "otherCauseName";
 // In memory (Jaimie, 2026-10-03), absent on a sign up from before.
 type Memory = "inMemory" | "memoryName" | "memoryDates" | "memorySetupBy" | "memoryPermission" | "memoryShowTarget";
-export type StaffSummary = Omit<SignUp, NewAnswers | AgeAndSplit | Memory | "wants"> &
-  Partial<Pick<FundraiserRecord, Memory>> &
+// The sign up tidy (Jaimie, 2026-10-03), absent (or null) on a sign up from before.
+type Tidy =
+  | "splitConfirmed"
+  | "listed"
+  | "isSporting"
+  | "tshirtSize"
+  | "childFirstName"
+  | "childConsent"
+  | "orgName"
+  | "employerMatch"
+  | "memoryDirectorBusiness"
+  | "memoryFamilyContactName"
+  | "memoryFamilyContactEmail"
+  | "callTime";
+export type StaffSummary = Omit<SignUp, NewAnswers | AgeAndSplit | Memory | Tidy | "wants"> &
+  Partial<Pick<FundraiserRecord, Memory | Exclude<Tidy, "splitConfirmed" | "listed">>> &
+  Partial<Pick<SignUp, "splitConfirmed" | "listed">> &
+  Partial<Pick<FundraiserRecord, "offListBy">> &
   Partial<Record<NewAnswers, string | null>> & { id: number; postAddress?: string | null; wants: Wants; kindLabel?: string | null } & {
     over18?: boolean | null;
     sharesWithOther?: boolean | null;
@@ -172,6 +190,8 @@ function requestFacts(w: Wants): Array<[string, string]> {
   }
   // TASK-511: printed QR codes, only on a sign up that asked for some.
   if (n(w.qrCount) > 0) facts.push(["Printed QR codes: " + n(w.qrCount), ""]);
+  // The sign up tidy: collection envelopes, in memory of someone.
+  if (n(w.envelopeCount) > 0) facts.push(["Collection envelopes: " + n(w.envelopeCount), ""]);
   if (combined) facts.push(["Leaflets or posters: " + n(w.leaflets), ""], ["Buckets or tins: " + n(w.buckets), ""]);
   return facts;
 }
@@ -249,7 +269,15 @@ function staffFacts(f: StaffSummary): Array<[string, string]> {
       ? "Yes please"
       : "Yes please, but they have not said we can post about it, so ask them first";
   facts.push(
-    ["On the NBCC website", f.public ? "Yes, they would like it shown" : "No, not to be shown on the website"],
+    // The sign up tidy: "No, only people you send the link to" still gets a page, off the list.
+    [
+      "On the NBCC website",
+      !f.public
+        ? "No, not to be shown on the website"
+        : f.listed === false || f.offListBy === "organiser"
+          ? "Not on Get involved, only people they send the link to. It still gets a page"
+          : "Yes, they would like it shown",
+    ],
     ["Organiser", f.name],
     ...(split ? ([["First name", f.firstName ?? ""], ["Surname", f.lastName ?? ""]] as Array<[string, string]>) : []),
     ["Email", f.email],
@@ -260,14 +288,19 @@ function staffFacts(f: StaffSummary): Array<[string, string]> {
     ["A social media shout out", shoutOut],
     ["Someone from NBCC to come along", f.wants.attend ? "Yes please" : "No"],
   );
+  // The sign up tidy: who it is for, sport and the T shirt, Get involved, and when to call.
+  facts.push(...tidyStaffFacts(f));
   const address = joinParts(f.postLine1, f.postLine2, f.postTown, f.postPostcode) || f.postAddress;
-  if (address) facts.push(["Address for materials", address]);
+  // Everyone but in memory gives an address for the welcome pack; in memory, only for what they asked for.
+  if (address) facts.push([f.inMemory === true ? "Address for what they asked for" : "Address for the welcome pack", address]);
   facts.push(["Newsletter", f.newsletterOk ? "Yes, they ticked the box" : "No"]);
   return facts;
 }
 
 // For the team only, so no questions box: they are the people the questions go to.
 export function buildSignUpStaffEmail(f: StaffSummary, o: { adminUrl: string }): BuiltEmail {
+  // The sign up tidy (the appropriateness audit): a page in memory of someone has a gentle summary.
+  if (f.inMemory === true) return memoryStaffEmail(f, o);
   const facts = staffFacts(f);
   const first = firstName(f.name);
   const rows = facts
@@ -307,6 +340,49 @@ export function buildSignUpStaffEmail(f: StaffSummary, o: { adminUrl: string }):
     signOffText(line),
   ].join("\n");
   return { subject: `New fundraiser: ${f.title}`, html: shell(body), text };
+}
+
+// In memory of someone: plain words, a plain sign off, and no exclamation marks.
+function memoryStaffEmail(f: StaffSummary, o: { adminUrl: string }): BuiltEmail {
+  const facts = staffFacts(f);
+  const who = String(f.memoryName ?? "").trim() || "someone";
+  const rows = facts
+    .map(
+      ([label, value]) =>
+        `<tr><td style="padding:6px 12px 6px 0;vertical-align:top;color:#6F6A66;font-size:13px">${escapeHtml(label)}</td>` +
+        `<td style="padding:6px 0;vertical-align:top;font-size:14px">${escapeHtml(value)}</td></tr>`,
+    )
+    .join("");
+  const ring = "No thank you email has gone to them, only a short note to say we have their details. Please give them a ring.";
+  const steps = ["Approve or decline in Admin > Fundraising.", `Replying to this email replies to ${firstName(f.name)}.`];
+  const line = "Thank you.";
+  const body =
+    eyebrow("For the team") +
+    heading(`A new page in memory of ${escapeHtml(who)}`) +
+    bodyP(`<b>${escapeHtml(f.name)}</b> has asked for a page in memory of <b>${escapeHtml(who)}</b>. Nothing is public until someone approves it.`) +
+    bodyP(escapeHtml(ring)) +
+    `<table role="presentation" cellpadding="0" cellspacing="0" style="border-collapse:collapse;margin:0 0 16px">${rows}</table>` +
+    subheading("Next steps") +
+    bodyList(steps.map(escapeHtml)) +
+    button(o.adminUrl, "Open the admin") +
+    signOff(line);
+  const text = [
+    `A NEW PAGE IN MEMORY OF ${who.toUpperCase()}`,
+    "",
+    `${f.name} has asked for a page in memory of ${who}. Nothing is public until someone approves it.`,
+    "",
+    ring,
+    "",
+    ...facts.map(([label, value]) => (value ? `${label}: ${value}` : label)),
+    "",
+    "NEXT STEPS",
+    ...bulleted(steps),
+    "",
+    `Open the admin: ${o.adminUrl}`,
+    "",
+    signOffText(line),
+  ].join("\n");
+  return { subject: `New page in memory of ${who}`, html: shell(body), text };
 }
 
 // --- approved -------------------------------------------------------------------------------------

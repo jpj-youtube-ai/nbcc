@@ -15,6 +15,7 @@ import { fundraiserThanksRouter } from "./routes/fundraiser-thanks";
 import { fundraiseInviteRouter } from "./routes/fundraise-invite";
 import { fundraiseAgainRouter } from "./routes/fundraise-again";
 import { fundraiseRouter } from "./routes/fundraise";
+import { fundraiseSignupTidyRouter } from "./routes/fundraise-signup-tidy";
 import { fundraiseTeamsRouter } from "./routes/fundraise-teams";
 import { adminFundraisingTeamsRouter } from "./routes/admin-fundraising-teams";
 import { fundraiserNewsRouter, newsBodyGuard, NEWS_JSON_BODY_LIMIT, NEWS_POST_PATH } from "./routes/fundraiser-news";
@@ -128,6 +129,8 @@ export function createApp() {
   app.use(fundraiseInviteRouter);
   // TASK-515: the sign up form's Do it again lookup, from the year on email.
   app.use(fundraiseAgainRouter);
+  // The sign up tidy: staff correct sport and the t-shirt, and ask for a size by a private link.
+  app.use(fundraiseSignupTidyRouter);
   // TASK-505: what organisers asked us for (posters, leaflets, buckets and tins, shout outs, someone
   // to come along), tracked to done.
   app.use(adminFundraisingRequestsRouter);

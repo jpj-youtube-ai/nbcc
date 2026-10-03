@@ -210,7 +210,9 @@ describe("the sign up page", () => {
   });
 
   it("offers the categories as the database has them, A to Z, Other last", async () => {
-    const html = await (await get("/fundraise")).text();
+    const page = await (await get("/fundraise")).text();
+    // The sign up tidy: the in memory ways of giving are a list of their own, after this one.
+    const html = page.slice(0, page.indexOf("<!-- /kinds -->"));
     const names = [...html.matchAll(/name="kind" type="radio" value="([a-z0-9_]+)"/g)].map((m) => m[1]);
     expect(names).toEqual([
       "bake_sale_2", "birthday", "coffee_morning", "quiz", "run", "santa_dash", "school_collection",
@@ -344,6 +346,19 @@ describe("the manage page", () => {
   it("is never taken for a fundraiser called manage", async () => {
     state.fundraisers = [record({ slug: "manage" })];
     expect(await (await get("/fundraise/manage")).text()).toContain("manageRequestForm");
+  });
+});
+
+// The sign up tidy: the private page to choose a T shirt size, from the email staff send.
+describe("the T shirt size page", () => {
+  it("is served, never indexed or cached, and never taken for a fundraiser", async () => {
+    state.fundraisers = [record({ slug: "t-shirt" })];
+    const res = await get("/fundraise/t-shirt");
+    expect(res.status).toBe(200);
+    expect(res.headers.get("x-robots-tag")).toBe("noindex, nofollow");
+    expect(res.headers.get("referrer-policy")).toBe("no-referrer");
+    expect(res.headers.get("cache-control")).toBe("no-store");
+    expect(await res.text()).toContain('id="tshirtForm"');
   });
 });
 

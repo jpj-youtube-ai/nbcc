@@ -78,7 +78,9 @@ describe("a sign up in memory of someone", () => {
       if (sql.includes("FROM fundraisers f WHERE f.id = $1")) return { rows: [fundraiserRow({ id: 22 })] };
       return { rows: [] };
     });
-    await createFundraiser(signUp({ inMemory: false, title: "Sam's Walk" }));
+    // The sign up tidy (Jaimie, 2026-10-03): a sign up not in memory of someone gives an address, for
+    // the welcome pack.
+    await createFundraiser(signUp({ inMemory: false, title: "Sam's Walk", postLine1: "1 Example Road", postTown: "Exampleton", postPostcode: "EX1 1EX" }));
     expect(calls.some(([sql]) => sql.includes("in_memory = true"))).toBe(false);
   });
 

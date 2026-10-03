@@ -207,7 +207,7 @@ describe("a member page, made from the team and the join form", () => {
       socialOk: false,
       newsletterOk: false,
     });
-    expect(s.wants).toEqual({ posterCount: 0, leafletCount: 0, bucketCount: 0, tinCount: 0, leaflets: 0, buckets: 0, qrCount: 0, shoutOut: false, attend: false });
+    expect(s.wants).toEqual({ posterCount: 0, leafletCount: 0, bucketCount: 0, tinCount: 0, leaflets: 0, buckets: 0, qrCount: 0, envelopeCount: 0, shoutOut: false, attend: false });
   });
 
   it("uses their line about why as the story, and keeps the title within 100 characters", () => {

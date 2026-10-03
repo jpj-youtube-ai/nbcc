@@ -42,6 +42,10 @@ const signUp = (over: Record<string, unknown> = {}) => ({
   sharesWithOther: false,
   wants: { leaflets: 0, buckets: 0, shoutOut: true, attend: false },
   postAddress: "",
+  // The sign up tidy (Jaimie, 2026-10-03): every new sign up gives an address, for the welcome pack.
+  postLine1: "1 Example Road",
+  postTown: "Exampleton",
+  postPostcode: "EX1 1EX",
   newsletterOk: false,
   ...over,
 });
@@ -62,8 +66,9 @@ describe("the sign up form", () => {
       name: "Robin Testperson",
       email: "robin@example.com",
       socialLink: "https://www.facebook.com/example.page",
-      postLine1: null,
-      wants: { posterCount: 0, leafletCount: 0, bucketCount: 0, tinCount: 0, leaflets: 0, buckets: 0, qrCount: 0, shoutOut: true, attend: false },
+      // The sign up tidy (Jaimie, 2026-10-03): the address is kept, for the welcome pack.
+      postLine1: "1 Example Road",
+      wants: { posterCount: 0, leafletCount: 0, bucketCount: 0, tinCount: 0, leaflets: 0, buckets: 0, qrCount: 0, envelopeCount: 0, shoutOut: true, attend: false },
     });
   });
 
@@ -82,7 +87,7 @@ describe("the sign up form", () => {
     expect(r.data.startTime).toBeNull();
     expect(r.data.targetPence).toBeNull();
     expect(r.data.socialLink).toBeNull();
-    expect(r.data.wants).toEqual({ posterCount: 0, leafletCount: 0, bucketCount: 0, tinCount: 0, leaflets: 0, buckets: 0, qrCount: 0, shoutOut: false, attend: false });
+    expect(r.data.wants).toEqual({ posterCount: 0, leafletCount: 0, bucketCount: 0, tinCount: 0, leaflets: 0, buckets: 0, qrCount: 0, envelopeCount: 0, shoutOut: false, attend: false });
   });
 
   // Fundraising categories: every one on offer to start with (src/fundraising/categories.ts).
@@ -112,21 +117,28 @@ describe("the sign up form", () => {
   });
 
   // TASK-499: the address is now separate boxes (test/unit/fundraising-signup-details.test.ts).
-  it("asks for an address when leaflets or buckets are wanted", () => {
+  // The sign up tidy (Jaimie, 2026-10-03): every new sign up gives one, for the welcome pack, whether
+  // or not anything else is to be posted.
+  it("asks for an address, with or without leaflets or buckets", () => {
     const wants = { leaflets: 20, buckets: 1, shoutOut: false, attend: false };
-    const without = signUpSchema.safeParse(signUp({ wants }));
+    const noAddress = { postLine1: "", postTown: "", postPostcode: "" };
+    const without = signUpSchema.safeParse(signUp({ wants, ...noAddress }));
     expect(without.success).toBe(false);
     if (!without.success) expect(without.error.issues.map((i) => i.path[0])).toEqual(["postLine1", "postTown", "postPostcode"]);
     const address = { postLine1: "1 Example Street", postTown: "Exampleton", postPostcode: "EX1 1EX" };
     expect(signUpSchema.safeParse(signUp({ wants, ...address })).success).toBe(true);
+    const nothingPosted = signUpSchema.safeParse(signUp(noAddress));
+    expect(nothingPosted.success).toBe(false);
+    if (!nothingPosted.success) expect(nothingPosted.error.issues.map((i) => i.path[0])).toEqual(["postLine1", "postTown", "postPostcode"]);
   });
 
-  it("asks for the date when someone is holding an event, and takes no target for one", () => {
+  // The sign up tidy (Jaimie, 2026-10-03): an event page has a meter now, so an event keeps its target.
+  it("asks for the date when someone is holding an event, and keeps a target for one", () => {
     expect(signUpSchema.safeParse(signUp({ path: "event", eventDate: "" })).success).toBe(false);
     const event = { cardLine: "Cakes for NBCC.", booking: "free" }; // TASK-499: asked of every event
     const r = signUpSchema.safeParse(signUp({ path: "event", kind: "bake_sale_2", targetPence: 50000, ...event }));
     expect(r.success).toBe(true);
-    if (r.success) expect(r.data.targetPence).toBeNull();
+    if (r.success) expect(r.data.targetPence).toBe(50000);
   });
 
   it("speaks plainly when it refuses, without dashes", () => {
@@ -210,7 +222,8 @@ describe("slugs", () => {
   // hidden behind a fundraiser.
   it("never take the addresses of the site's own fundraising pages", () => {
     // TASK-504: the logo pack and the blank sponsor form too.
-    expect([...RESERVED_SLUGS].sort()).toEqual(["help", "logos", "manage", "sponsor-form"]);
+    // The sign up tidy (Jaimie, 2026-10-03): "t-shirt" is the page to choose a t-shirt size.
+    expect([...RESERVED_SLUGS].sort()).toEqual(["help", "logos", "manage", "sponsor-form", "t-shirt"]);
     for (const reserved of RESERVED_SLUGS) expect(slugify(reserved)).toBe(reserved);
   });
 });

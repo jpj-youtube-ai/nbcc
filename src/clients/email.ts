@@ -551,6 +551,16 @@ export async function sendFundraiseApproved(name: string, message: FundraiseEmai
   await sendVerbatim("fundraiseApproved", name, message);
 }
 
+// The sign up tidy: the short receipt for a page in memory of someone, and the email staff send to
+// ask an organiser for their T shirt size (with a private link, which the link tagging leaves alone).
+export async function sendFundraiseMemoryReceipt(name: string, message: FundraiseEmailMessage): Promise<void> {
+  await sendVerbatim("fundraiseMemoryReceipt", name, message);
+}
+
+export async function sendFundraiseTshirtAsk(name: string, message: FundraiseEmailMessage): Promise<void> {
+  await sendVerbatim("fundraiseTshirtAsk", name, message);
+}
+
 // TASK-501: the sign in code for the private area (email 8). It replaced the 24 hour manage link
 // ("fundraiseManage", still named on the Email audit for the rows already there). The code is in
 // the subject line, so the log keeps a subject without it.

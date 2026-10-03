@@ -59,6 +59,10 @@ const signUp = (over: Record<string, unknown> = {}) => ({
   ...over,
 });
 
+// The sign up tidy (Jaimie, 2026-10-03): every sign up that is not in memory of someone gives an
+// address, for the welcome pack.
+const ADDRESS = { postLine1: "1 Example Road", postTown: "Exampleton", postPostcode: "EX1 1EX" };
+
 function fields(body: unknown): Record<string, string> {
   const r = signUpSchema.safeParse(body);
   if (r.success) return {};
@@ -99,9 +103,13 @@ describe("signing up in memory of someone", () => {
     expect(f.memoryPermission).toBe(PERMISSION_MISSING);
   });
 
-  it("takes only family, a friend or a funeral director as who set it up", () => {
+  // The sign up tidy (Jaimie, 2026-10-03): someone else (a colleague, club or church) may set it up
+  // too, and a funeral director names their business.
+  it("takes only family, a friend, a funeral director or someone else as who set it up", () => {
     expect(fields(signUp({ memorySetupBy: "neighbour" })).memorySetupBy).toBe(SETUP_BY_MISSING);
-    for (const who of ["family", "friend", "funeral_director"]) expect(ok(signUp({ memorySetupBy: who })).memorySetupBy).toBe(who);
+    for (const who of ["family", "friend", "funeral_director", "someone_else"]) {
+      expect(ok(signUp({ memorySetupBy: who, memoryDirectorBusiness: "Example Funeral Care" })).memorySetupBy).toBe(who);
+    }
   });
 
   it("needs the permission ticked for a funeral director and a friend too", () => {
@@ -125,7 +133,7 @@ describe("signing up in memory of someone", () => {
 
   it("is never in memory when they say No, or when no answer is sent, and keeps none of it", () => {
     for (const answer of [false, undefined]) {
-      const s = ok(signUp({ inMemory: answer, title: "Robin's Walk" }));
+      const s = ok(signUp({ inMemory: answer, title: "Robin's Walk", ...ADDRESS }));
       expect(s.inMemory).toBe(false);
       expect(s.memoryName).toBeNull();
       expect(s.memoryDates).toBeNull();
@@ -144,6 +152,7 @@ describe("signing up in memory of someone", () => {
         venue: "Example Hall",
         cardLine: "A quiz night.",
         booking: "free",
+        ...ADDRESS,
       }),
     );
     expect(s.inMemory).toBe(false);

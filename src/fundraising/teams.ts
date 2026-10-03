@@ -259,7 +259,7 @@ export function memberSignUp(team: FundraiserRecord, j: Join): SignUp {
     socialOk: false,
     over18: true,
     ...j.split,
-    wants: { posterCount: 0, leafletCount: 0, bucketCount: 0, tinCount: 0, leaflets: 0, buckets: 0, qrCount: 0, shoutOut: false, attend: false },
+    wants: { posterCount: 0, leafletCount: 0, bucketCount: 0, tinCount: 0, leaflets: 0, buckets: 0, qrCount: 0, envelopeCount: 0, shoutOut: false, attend: false },
     postLine1: null,
     postLine2: null,
     postTown: null,
@@ -285,6 +285,19 @@ export function memberSignUp(team: FundraiserRecord, j: Join): SignUp {
     memorySetupBy: null,
     memoryPermission: null,
     memoryShowTarget: null,
+    // The sign up tidy: a member page is listed with its team, and asks none of the new questions.
+    listed: true,
+    isSporting: null,
+    tshirtSize: null,
+    splitConfirmed: false,
+    childFirstName: null,
+    childConsent: null,
+    orgName: null,
+    employerMatch: null,
+    memoryDirectorBusiness: null,
+    memoryFamilyContactName: null,
+    memoryFamilyContactEmail: null,
+    callTime: null,
   } as SignUp;
 }
 

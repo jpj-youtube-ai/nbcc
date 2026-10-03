@@ -222,3 +222,38 @@ describe("an event credited to a group or a business", () => {
     expect(d.querySelector(".fr-today p")?.textContent).toBe("A share today goes a long way.");
   });
 });
+
+// Jaimie, 2026-10-03 (TASK-519): an event shared with another cause says so, as a fundraiser's page
+// does: the statement the 2009 regulations ask for under the meter, above the Give button, and in the
+// give intro that everything given on the page is NBCC's share. Its card and materials carry it too.
+describe("an event shared with another cause", () => {
+  const SPLIT = {
+    nbccSharePercent: 60,
+    otherCauseName: "The Exampleton <Lifeboat>",
+    statement: "60% of what we raise goes to the Night Before Christmas Campaign, Scottish Charity SC047995. The rest goes to The Exampleton <Lifeboat>.",
+  };
+
+  it("shows the statement, escaped, under the meter and above the Give button", () => {
+    const d = render(page({ split: SPLIT }));
+    const summary = d.querySelector(".fr-summary")!;
+    const statement = summary.querySelector(".fr-split");
+    expect(statement?.textContent).toBe(SPLIT.statement);
+    const order = [...summary.children].map((e) => e.className);
+    expect(order.indexOf("fr-split")).toBeGreaterThan(order.findIndex((c) => c.includes("fr-meter")));
+    expect(order.indexOf("fr-split")).toBeLessThan(order.findIndex((c) => c.includes("fr-summary__give")));
+    expect(renderFundraiserPage(TEMPLATE, page({ split: SPLIT }), { pageUrl: PAGE_URL, now: NOW })).not.toContain("<Lifeboat>");
+  });
+
+  it("says in the give intro that everything given on the page is NBCC's share", () => {
+    expect(render(page({ split: SPLIT })).querySelector(".give-step-sub")?.textContent).toBe(
+      "Your donation goes to NBCC and counts towards this event's total. Everything given on this page goes to NBCC, as NBCC's share.",
+    );
+    expect(render(page()).querySelector(".give-step-sub")?.textContent).not.toContain("NBCC's share");
+  });
+
+  it("has the statement and the way to its page on the back of its Get involved card", () => {
+    const card = frag(renderCard(fundraiserEventRecord(eventCard({ split: SPLIT }))!));
+    expect(card.querySelector(".ev-back")?.textContent).toContain(SPLIT.statement);
+    expect(card.querySelector('.ev-back a[href="/event/eqn"]')).not.toBeNull();
+  });
+});

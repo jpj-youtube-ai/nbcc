@@ -170,3 +170,17 @@ describe("the approved email for an event", () => {
     expect(m.text).toContain("Make the first gift yourself");
   });
 });
+
+// TASK-519: an event shared with another cause carries the statement on its printed pieces, by the
+// same materials code as a fundraiser's.
+describe("an event shared with another cause, in print", () => {
+  it("has the statement on its poster and leaflet", () => {
+    const f = { ...event({ sharesWithOther: true, nbccSharePercent: 60, otherCauseName: "The Exampleton Lifeboat" }), meter: meter({ onlinePence: 0, cashPence: 0, targetPence: null }) };
+    for (const piece of ["poster", "leaflet"] as const) {
+      const html = buildMaterial(piece, f, "staff");
+      expect(html).toContain("60% of what we raise goes to the Night Before Christmas Campaign");
+      expect(html).toContain("The Exampleton Lifeboat");
+      expect(html).toContain("nbcc.test/event/eqn");
+    }
+  });
+});

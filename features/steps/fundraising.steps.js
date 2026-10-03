@@ -623,6 +623,9 @@ When(
       dressCode: "",
       included: "",
       creditName: "The BDD Quiz Team",
+      // TASK-519: every sign up says they are 18 or over, and whether they share with another cause.
+      over18: true,
+      sharesWithOther: false,
       company: "",
     });
   },

@@ -58,6 +58,8 @@ describe("the event pages migration", () => {
   it("sorts after keep in touch and after 180", () => {
     const names = readdirSync(resolve(ROOT, "migrations")).filter((n) => n.endsWith(".js")).sort();
     expect(names.indexOf(NAME)).toBeGreaterThan(names.indexOf("1791200000170_fundraising-keep-in-touch.js"));
-    expect([NAME, "1791200000180_zzz.js"].sort()[1]).toBe(NAME);
+    expect(names.indexOf("1791200000180_signup-age-and-split.js")).toBeGreaterThan(-1);
+    expect(names.indexOf(NAME)).toBeGreaterThan(names.indexOf("1791200000180_signup-age-and-split.js"));
+    expect(names.indexOf(NAME)).toBeGreaterThan(names.indexOf("1791200000175_invite-first-last-name.js"));
   });
 });

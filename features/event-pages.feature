@@ -3,7 +3,8 @@ Feature: Every approved public event has its own page, at /event/<short name>
   An event signed up through /fundraise gets a page of its own once staff approve it, like a
   fundraiser's: what, when and where, a meter, the way to give, the supporter wall, its QR code and
   a countdown. Staff must set its short name (its web address) before approving it. Each address
-  answers only for its own kind: /fundraise/<x> for an event sends people on to /event/<x>. While
+  answers only for its own kind: /fundraise/<x> for an event sends people on to /event/<x> (a
+  temporary redirect, never kept). While
   fundraising is switched off, an event's page is not found, like every fundraising page.
 
   Scenario: an event cannot be approved until its short name is set, and then has its own page
@@ -29,7 +30,7 @@ Feature: Every approved public event has its own page, at /event/<short name>
     Then the visitor gets status 200
     And the answer is an SVG picture
     When a visitor opens the page for "The Event Page Quiz (bdd-fr)"
-    Then the visitor gets status 301
+    Then the visitor gets status 302
     And the visitor is sent to the event page of "The Event Page Quiz (bdd-fr)"
     When a visitor opens "/get-involved"
     Then the card for "The Event Page Quiz (bdd-fr)" links to its event page

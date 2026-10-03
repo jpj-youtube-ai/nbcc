@@ -195,7 +195,8 @@ describe("whose photo it is", () => {
     const sql = String(query.mock.calls[0][0]);
     expect(sql).toMatch(/u\.status = 'approved'/);
     expect(sql).toMatch(/f\.public = true/);
-    expect(sql).toMatch(/f\.path = 'raising'/);
+    // Event pages: an event's page shows its news photos too.
+    expect(sql).toMatch(/f\.path IN \('raising', 'event'\)/);
     expect(sql).toMatch(/f\.status IN \('approved', 'finished'\)/);
   });
 });

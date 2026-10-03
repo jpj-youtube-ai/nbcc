@@ -173,3 +173,52 @@ describe("the Get involved card for an event", () => {
     expect(parse(html).querySelector('#community-eqn a[href="/event/eqn"]')).not.toBeNull();
   });
 });
+
+// Review fix: an event is often credited to a group or a business ("The Red Lion"), so its page
+// never takes the first word of that name as a person's first name. It speaks of the event instead.
+describe("an event credited to a group or a business", () => {
+  const names = ["The Red Lion", "Exampleton Rotary"];
+  const thanksPage = (p: PublicPage, thanks: { message: boolean; sessionId?: string | null; added?: boolean }, now = NOW) =>
+    parse(renderFundraiserPage(TEMPLATE, p, { pageUrl: PAGE_URL, now, thanks }));
+
+  it.each(names)("never calls %s by its first word", (organisedBy) => {
+    const p = page({ organisedBy });
+    const first = organisedBy.split(" ")[0];
+    const html = [
+      renderFundraiserPage(TEMPLATE, p, { pageUrl: PAGE_URL, now: NOW }),
+      renderFundraiserPage(TEMPLATE, p, { pageUrl: PAGE_URL, now: NOW, thanks: { message: false, sessionId: "cs_test_abc" } }),
+      renderFundraiserPage(TEMPLATE, p, { pageUrl: PAGE_URL, now: NOW, thanks: { message: false, added: true } }),
+      renderFundraiserPage(TEMPLATE, { ...p, finished: true }, { pageUrl: PAGE_URL, now: NOW }),
+      renderFundraiserPage(TEMPLATE, p, { pageUrl: PAGE_URL, now: new Date(Date.UTC(2026, 11, 5, 12)) }),
+    ].join("");
+    expect(html).not.toContain(`${first}'s`);
+    expect(html).not.toContain(`${first}&#39;s`);
+    expect(html).not.toContain(`helps ${first} `);
+    expect(html).not.toContain(`Good luck, ${first}`);
+    expect(html).not.toContain(`${first} has finished`);
+    expect(html).not.toContain(`Cheer ${first}`);
+  });
+
+  it("speaks of the event's total and the event's wall", () => {
+    const d = render(page({ organisedBy: "The Red Lion" }));
+    expect(d.querySelector(".give-step-sub")?.textContent).toBe("Your donation goes to NBCC and counts towards this event's total.");
+    expect(d.querySelector(".fr-share p")?.textContent).toBe("Every share helps this event reach more people.");
+    const step = thanksPage(page({ organisedBy: "The Red Lion" }), { message: false, sessionId: "cs_test_abc" });
+    expect(step.querySelector(".fr-after__title")?.textContent).toBe("Add a message to the wall (optional)");
+    expect(step.querySelector(".fr-thanks-panel")?.textContent).toContain("Every share helps this event reach more people.");
+    const added = thanksPage(page({ organisedBy: "The Red Lion" }), { message: false, added: true });
+    expect(added.querySelector(".fr-thanks-panel")?.textContent).toContain("We have added that to the wall.");
+  });
+
+  it("says it has finished without a name", () => {
+    const d = render(page({ organisedBy: "The Red Lion", finished: true }));
+    expect(d.querySelector(".fr-finished")?.textContent).toContain("This event has finished, and together supporters raised £100 for NBCC.");
+    expect(d.querySelector(".give-step-sub")?.textContent).toBe("Your donation goes to NBCC and still counts towards this event's total.");
+  });
+
+  it("wishes it well on the day without a name", () => {
+    const d = render(page({ organisedBy: "Exampleton Rotary" }), new Date(Date.UTC(2026, 11, 5, 12)));
+    expect(d.querySelector(".fr-today__title")?.textContent).toBe("Today's the day!");
+    expect(d.querySelector(".fr-today p")?.textContent).toBe("A share today goes a long way.");
+  });
+});

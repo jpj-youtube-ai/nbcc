@@ -146,22 +146,34 @@ describe("its QR code", () => {
 });
 
 describe("each address answers only for its own kind", () => {
-  it("sends /fundraise/<x> for an event on to /event/<x>, query string kept", async () => {
+  // Review fix: a temporary redirect that is never kept. Staff may change an event's kind and change
+  // it back, and a kept redirect would then send people round in a circle; and a giver's thank you
+  // (?thanks=1&session_id=) must never be kept anywhere.
+  it("sends /fundraise/<x> for an event on to /event/<x>, query string kept, never kept itself", async () => {
     const res = await get("/fundraise/eqn?utm_source=poster");
-    expect(res.status).toBe(301);
+    expect(res.status).toBe(302);
     expect(res.headers.get("location")).toBe("/event/eqn?utm_source=poster");
-    expect(res.headers.get("cache-control")).toBe("public, max-age=3600");
+    expect(res.headers.get("cache-control")).toBe("no-store");
   });
 
-  it("sends /event/<x> for a fundraiser raising money on to /fundraise/<x>", async () => {
+  it("sends /event/<x> for a fundraiser raising money on to /fundraise/<x>, the same way", async () => {
     const res = await get("/event/rsd");
-    expect(res.status).toBe(301);
+    expect(res.status).toBe(302);
     expect(res.headers.get("location")).toBe("/fundraise/rsd");
+    expect(res.headers.get("cache-control")).toBe("no-store");
+  });
+
+  it("never lets a giver's thank you be kept on the way", async () => {
+    const res = await get("/fundraise/eqn?thanks=1&session_id=cs_test_abc");
+    expect(res.status).toBe(302);
+    expect(res.headers.get("location")).toBe("/event/eqn?thanks=1&session_id=cs_test_abc");
+    expect(res.headers.get("cache-control")).toBe("no-store");
   });
 
   it("does the same for the QR codes", async () => {
     expect((await get("/fundraise/eqn/qr.svg")).headers.get("location")).toBe("/event/eqn/qr.svg");
     expect((await get("/event/rsd/qr.png")).headers.get("location")).toBe("/fundraise/rsd/qr.png");
+    expect((await get("/fundraise/eqn/qr.svg")).status).toBe(302);
   });
 
   it("never sends anyone to a page that is not there", async () => {
@@ -180,6 +192,10 @@ describe("a short name the event used to have", () => {
 
   it("goes to the right kind's address, whichever prefix it came in on", async () => {
     state.history = { "quiz-night": "eqn" };
-    expect((await get("/fundraise/quiz-night")).headers.get("location")).toBe("/event/eqn");
+    const res = await get("/fundraise/quiz-night");
+    expect(res.headers.get("location")).toBe("/event/eqn");
+    // An old address is for good, as a fundraiser's is (TASK-511).
+    expect(res.status).toBe(301);
+    expect(res.headers.get("cache-control")).toBe("public, max-age=3600");
   });
 });

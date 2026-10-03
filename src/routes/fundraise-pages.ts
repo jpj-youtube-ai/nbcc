@@ -26,7 +26,7 @@ import { EVENT_PAGE_PREFIX, pagePath } from "../fundraising/model";
 //   GET /event/:slug[/qr.svg|/qr.png]  Event pages: an approved public event's own page, by the same
 //                                  code, and its QR codes. Each prefix answers only for its own kind:
 //                                  /fundraise/<x> for an event, or /event/<x> for a fundraiser, is a
-//                                  301 on to its own address (an hour, like an old address), so a staff
+//                                  302 on to its own address (never kept: review fix), so a staff
 //                                  change of kind, or a link typed the wrong way, never breaks. The
 //                                  slug is one column, unique across both, so the two never clash.
 //
@@ -96,11 +96,23 @@ async function movedTo(slug: string): Promise<string | null> {
 async function lookUp(
   slug: string,
   kind: "raising" | "event",
-): Promise<{ page: NonNullable<Awaited<ReturnType<typeof publicFundraiser>>> } | { to: string } | null> {
+): Promise<{ page: NonNullable<Awaited<ReturnType<typeof publicFundraiser>>> } | { to: string; otherKind: boolean } | null> {
   const f = await publicFundraiser(slug);
-  if (f) return f.path === kind ? { page: f } : { to: pagePath(f) };
+  if (f) return f.path === kind ? { page: f } : { to: pagePath(f), otherKind: true };
   const to = await movedTo(slug);
-  return to ? { to } : null;
+  return to ? { to, otherKind: false } : null;
+}
+
+/**
+ * Send them on from lookUp. An old address is for good (movedOn). The other kind's page is only for
+ * now (review fix): staff may change an event's kind and change it back, and a redirect a browser
+ * kept would then go round in a circle; and the address may carry a giver's thank you
+ * (?thanks=1&session_id=), which must never be kept anywhere. So: a 302, never kept.
+ */
+function sendOn(res: Response, found: { to: string; otherKind: boolean }, to: string): void {
+  if (!found.otherKind) return movedOn(res, to);
+  res.setHeader("Cache-Control", "no-store");
+  res.redirect(302, to);
 }
 
 /**
@@ -333,7 +345,7 @@ function addPageRoutes(router: Router, kind: PageKind, pageFile: string, deps: F
       const found = await lookUp(String(req.params.slug), kind);
       // TASK-511: an old address's PNG goes on to the page's address now, like the SVG.
       if (!found) return next();
-      if ("to" in found) return movedOn(res, `${found.to}/qr.png${queryOf(req)}`);
+      if ("to" in found) return sendOn(res, found, `${found.to}/qr.png${queryOf(req)}`);
       const f = found.page;
       const [{ qrPng }, { pageUrlFor }, { qrPngCache }] = await Promise.all([
         import("../fundraising/qr-png"),
@@ -356,7 +368,7 @@ function addPageRoutes(router: Router, kind: PageKind, pageFile: string, deps: F
     try {
       const found = await lookUp(String(req.params.slug), kind);
       if (!found) return next();
-      if ("to" in found) return movedOn(res, `${found.to}/qr.svg${queryOf(req)}`);
+      if ("to" in found) return sendOn(res, found, `${found.to}/qr.svg${queryOf(req)}`);
       const f = found.page;
       const [{ qrSvg }, { pageUrlFor }, { qrSvgCache }] = await Promise.all([
         import("../fundraising/qr"),
@@ -382,7 +394,7 @@ ${title}`, () => qrSvg(url, { title, size: 1024 })));
       const found = await lookUp(String(req.params.slug), kind);
       // TASK-511: an address the page used to have goes on to its address now, for good.
       if (!found) return next();
-      if ("to" in found) return movedOn(res, `${found.to}${queryOf(req)}`);
+      if ("to" in found) return sendOn(res, found, `${found.to}${queryOf(req)}`);
       const f = found.page;
       const [{ wallRows }, { publicPage, wallEntries }, { renderFundraiserPage }, { pageUrlFor }] = await Promise.all([
         import("../db/fundraisers"),

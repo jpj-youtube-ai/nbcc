@@ -77,8 +77,10 @@ export function scanTarget(
   code: MaterialCode,
 ): string | null {
   const tag = `?utm_medium=qr&utm_campaign=${scanCampaign(f.id, code)}`;
-  // Event pages: an event's page is /event/<short name> (pagePath).
-  if (hasPage(f)) return isValidSlug(f.slug) ? `${pagePath(f)}${tag}` : null;
+  // Event pages: an event's page is /event/<short name> (pagePath). An event whose stored address is
+  // not a valid one falls through to Get involved below, as before event pages (review fix).
+  if (hasPage(f) && isValidSlug(f.slug)) return `${pagePath(f)}${tag}`;
+  if (hasPage(f) && f.path !== "event") return null;
   if (f.path === "event" && f.public && (f.status === "approved" || f.status === "finished")) return `/get-involved${tag}`;
   return null;
 }

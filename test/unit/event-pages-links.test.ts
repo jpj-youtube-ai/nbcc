@@ -25,6 +25,7 @@ import { materialFacts } from "../../src/fundraising/materials";
 import { touchUrls } from "../../src/fundraising/touch-emails";
 import { sendApprovedEmail, sendEditDecisionEmail, sendNewsDecisionEmail } from "../../src/fundraising/send";
 import { pageUrlFor } from "../../src/fundraising/page-url";
+import { buildApprovedEmail } from "../../src/fundraising/emails";
 import { fundraiserReturnPage } from "../../src/routes/api";
 import { buildMaterial } from "../../src/routes/fundraise-materials";
 import { meter, type FundraiserRecord } from "../../src/fundraising/model";
@@ -112,5 +113,60 @@ describe("after giving on an event's page", () => {
   it("the giver comes back to that page", async () => {
     db.getFundraiser.mockResolvedValue(event());
     expect(await fundraiserReturnPage(12)).toBe("https://nbcc.test/event/eqn");
+  });
+});
+
+// Review fix: a public event whose stored address is not a valid one (it can never be put in a link)
+// still goes somewhere useful: Get involved, where it is listed, as before event pages.
+describe("a printed piece's QR code, for an event whose address cannot be linked", () => {
+  it("goes to Get involved, with its tag", () => {
+    expect(scanTarget(event({ slug: "Not A Valid Address" }), "a5")).toBe("/get-involved?utm_medium=qr&utm_campaign=f12-a5");
+  });
+
+  it("still goes nowhere for a fundraiser raising money with such an address", () => {
+    expect(scanTarget(event({ path: "raising", slug: "Not A Valid Address" }), "a5")).toBeNull();
+  });
+});
+
+// Review fix: an event's approved email is about its event page, with no sponsorship tips.
+describe("the approved email for an event", () => {
+  const eventMail = () =>
+    buildApprovedEmail(
+      { name: "Alex Example", title: "Exampleton Quiz Night", path: "event" },
+      { pageUrl: "https://nbcc.test/event/eqn", manageUrl: "https://nbcc.test/fundraise/manage" },
+    );
+
+  it("says the event's page is live", () => {
+    expect(eventMail().subject).toBe("Your event's page is live: Exampleton Quiz Night");
+    expect(eventMail().html).toContain("Your event’s page is live!");
+    expect(eventMail().text).toContain("See my event page: https://nbcc.test/event/eqn");
+  });
+
+  it("gives an event's tips: share it, put up the posters, give on the page, and ask us for help", () => {
+    const t = eventMail().text;
+    expect(t).toContain("Share your event page");
+    expect(t).toContain("Put up your posters");
+    expect(t).toContain("On the day, point people to your page");
+    expect(t).toContain("Just reply to this email.");
+    expect(t).toContain("children, young people and vulnerable adults");
+  });
+
+  it("has none of the sponsorship tips, and never says families", () => {
+    const all = eventMail().text + eventMail().html;
+    expect(all).not.toContain("Make the first gift yourself");
+    expect(all).not.toContain("fundraising page");
+    // Not the email's own styles (font-family): only words people read.
+    expect(all.replace(/font-family/gi, "")).not.toMatch(/famil(y|ies)/i);
+  });
+
+  it("is sent to an approved event with a page", async () => {
+    await sendApprovedEmail(event());
+    expect(mail.sendFundraiseApproved.mock.calls[0][1].subject).toBe("Your event's page is live: Exampleton Quiz Night");
+  });
+
+  it("leaves a fundraiser's approved email exactly as it was", () => {
+    const m = buildApprovedEmail({ name: "Robin Quill", title: "Robin's Santa Dash" }, { pageUrl: "https://nbcc.test/fundraise/rsd", manageUrl: null });
+    expect(m.subject).toBe("Your fundraising page is live: Robin's Santa Dash");
+    expect(m.text).toContain("Make the first gift yourself");
   });
 });

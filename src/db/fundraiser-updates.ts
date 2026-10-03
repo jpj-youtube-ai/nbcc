@@ -145,14 +145,14 @@ export async function photoForStaff(fundraiserId: number, updateId: number): Pro
 }
 
 /**
- * A photo for anyone: only while its update is approved, on a public raising money page that is up
- * (approved or finished). The caller checks fundraising is switched on.
+ * A photo for anyone: only while its update is approved, on a public page that is up (approved or
+ * finished): a fundraiser's, or (event pages) an event's. The caller checks fundraising is switched on.
  */
 export async function publicPhoto(photoId: string): Promise<Photo | null> {
   const r = await pool.query(
     `SELECT u.photo_mime, u.photo_bytes FROM fundraiser_updates u JOIN fundraisers f ON f.id = u.fundraiser_id
       WHERE u.photo_id = $1 AND u.status = 'approved' AND u.photo_bytes IS NOT NULL
-        AND f.public = true AND f.path = 'raising' AND f.status IN ('approved', 'finished')`,
+        AND f.public = true AND f.path IN ('raising', 'event') AND f.status IN ('approved', 'finished')`,
     [photoId],
   );
   return toPhoto(r.rows[0]);

@@ -291,11 +291,13 @@ export function buildSignUpStaffEmail(f: StaffSummary, o: { adminUrl: string }):
  * and this goes to them when an admin switches fundraising on (src/fundraising/send.ts).
  */
 export function buildApprovedEmail(
-  f: { name: string; title: string },
+  f: { name: string; title: string; path?: string },
   o: { pageUrl: string | null; manageUrl: string | null },
 ): BuiltEmail {
   const hi = `Hi ${firstName(f.name)},`;
   const title = escapeHtml(f.title);
+  // Event pages: an event's page has words of its own, about the event, with no sponsorship tips.
+  if (o.pageUrl && f.path === "event") return eventPageLiveEmail(f, hi, o.pageUrl, o.manageUrl);
   if (o.pageUrl) {
     const steps: Array<[string, string]> = [
       ["Share your page", " on Facebook, WhatsApp and by email. Most gifts come from people you know."],
@@ -353,6 +355,56 @@ export function buildApprovedEmail(
     `${where} nbcc.scot/get-involved. ${after}`,
   ];
   return toOrganiser(`You're on our list: ${f.title}`, body, text, "You’re a star. Thank you,");
+}
+
+/**
+ * Event pages: "Your event's page is live", for an approved public event: its own page to share, its
+ * posters with their QR codes, giving on the page, and help from us. Wording for Jaimie to approve.
+ */
+function eventPageLiveEmail(f: { title: string }, hi: string, pageUrl: string, manageUrl: string | null): BuiltEmail {
+  const title = escapeHtml(f.title);
+  const intro = "is approved, and your event now has its very own page on the NBCC website, with a meter that fills up as people give.";
+  const steps: Array<[string, string]> = [
+    ["Share your event page", " on Facebook, WhatsApp and by email, so people know when and where to come."],
+    ["Put up your posters", " from your private area. Each one has a QR code that takes people straight to your page."],
+    ["On the day, point people to your page", " so anyone who would like to give can do it there, in a minute, on their phone."],
+  ];
+  const gifts =
+    "Every gift made on your page comes straight to NBCC, with Gift Aid on top when your supporters are UK taxpayers, and helps us bring comfort, dignity and joy to children, young people and vulnerable adults across South West Scotland.";
+  const help = "Need anything for the day, like a collection bucket or someone from NBCC to come along? Just reply to this email.";
+  const area = "is where you update your event, post news, print your posters and QR code, and pay in any cash you collect. We send you a code to get in, so there are no passwords to remember.";
+  const areaHtml = manageUrl
+    ? `<a href="${escapeHtml(manageUrl)}" style="color:inherit">Your private area</a> ${area}`
+    : `Your private area ${area}`;
+  const body =
+    EYEBROW +
+    heading("Your event’s page is live!") +
+    bodyP(escapeHtml(hi)) +
+    bodyP(`Great news: <b>${title}</b> ${intro}`) +
+    button(pageUrl, "See my event page") +
+    subheading("Three things that help") +
+    bodyList(steps.map(([lead, rest]) => `<b>${lead}</b>${rest}`), true) +
+    bodyP(gifts) +
+    bodyP(help) +
+    note(areaHtml);
+  const text = [
+    hi,
+    "",
+    `Great news: ${f.title} ${intro}`,
+    "",
+    `See my event page: ${pageUrl}`,
+    "",
+    "THREE THINGS THAT HELP",
+    ...numbered(steps.map(([lead, rest]) => lead + rest)),
+    "",
+    gifts,
+    "",
+    help,
+    "",
+    `Your private area ${area}`,
+    ...(manageUrl ? [`Your private area: ${manageUrl}`] : []),
+  ];
+  return toOrganiser(`Your event's page is live: ${f.title}`, body, text, "Wishing you a brilliant event,");
 }
 
 // --- the sign in code (TASK-501, email 8) ---------------------------------------------------------

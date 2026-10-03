@@ -1414,7 +1414,7 @@ hosted-Checkout redirect stays the default fallback and no-JS safety net.
 | `GET /fundraise/sponsor-form` | **implemented** | TASK-504 (a blank sponsor form to print, with HMRC's sponsorship and Gift Aid columns and declaration; `noindex`; 404 while fundraising is switched off; `sponsor-form` is a reserved slug) |
 | `GET /fundraise/:slug/qr.svg` | **implemented** | TASK-494 (the page's QR code as an SVG to download; 404 wherever the page is) |
 | `GET /fundraise/:slug/qr.png` | **implemented** | TASK-504 (the same code as a print size PNG, about 2000px square, as a download; answers wherever the SVG does. Both are drawn once per address and kept in memory, at most 500 of each, oldest out first (`src/fundraising/qr-cache.ts`), and sent with `Cache-Control: public, max-age=86400`) |
-| `GET /event/:slug`, `/event/:slug/qr.svg`, `/event/:slug/qr.png` | **implemented** | Event pages (an approved public event's own page, drawn by the fundraiser page's code, and its QR codes; the site's 404 unless public, approved or finished, and switched on. Each prefix answers only for its own kind: `/fundraise/<x>` for an event, or `/event/<x>` for a fundraiser, is a 301 on to its own address. See "Event pages") |
+| `GET /event/:slug`, `/event/:slug/qr.svg`, `/event/:slug/qr.png` | **implemented** | Event pages (an approved public event's own page, drawn by the fundraiser page's code, and its QR codes; the site's 404 unless public, approved or finished, and switched on. Each prefix answers only for its own kind: `/fundraise/<x>` for an event, or `/event/<x>` for a fundraiser, is a 302 on to its own address, `no-store`. See "Event pages") |
 | `GET /media/events/:id` | **implemented** | TASK-453 (public; an uploaded event picture or organiser logo by uuid, `nosniff`) |
 | `GET /media/fundraiser-news/:photoId` | **implemented** | TASK-506 (public; a news update's photo by uuid, only once its update is approved on a page that is up, `nosniff`, `max-age=300`; a waiting or hidden one is a 404) |
 | `GET /api/admin/events` | **implemented** | TASK-453 (events: view; the page switch and every event) |
@@ -9024,15 +9024,26 @@ own page. The Get involved card links to it ("See the event page and give", on t
   kinds, with its history (`fundraiser_slug_history`), so an event and a fundraiser can never share
   one, and the same rules and reserved words apply (`isValidSlug`). `/event/<x>` answers only for an
   event and `/fundraise/<x>` only for a fundraiser raising money; either sends the other kind on to
-  its own address with a 301 (kept an hour, like an old address), so a staff change of kind, or a
-  link typed the wrong way, never breaks. An old short name goes on to the new one.
+  its own address with a 302 that is never kept (`Cache-Control: no-store`), so a staff change of
+  kind, or a link typed the wrong way, never breaks, a change of kind made twice never loops, and a
+  giver's thank you (`?thanks=1&session_id=`) is never kept on the way. An old short name goes on to
+  the new one with a 301 kept an hour, as a fundraiser's does.
+- **Group and business names.** An event is often credited to a group or a business ("The Red
+  Lion"), so its page never takes the first word of that name as a person's: it says "this event's
+  total", "Add a message to the wall", "Every share helps this event reach more people", "This event
+  has finished", and on the day just "Today's the day!". A fundraiser's page is unchanged.
 - **Staff set the short name before approving an event.** `fundraisers.slug_set_at` says when they
   last saved it (`PATCH` with `slug`, the suggested one kept or a new one). Approving an event
   without it is refused under the row's lock (`409`, "Give this event a short name first, for its web
   address."). In the admin the Approve button is replaced by that line, the address it would have,
   and "Use this short name". A fundraiser raising money keeps its suggested address as before.
-- **Emails.** An event approved while fundraising is off now waits for "Your page is live", like any
-  page holder; the approved, change and news emails link the event's page.
+- **Emails.** An event approved while fundraising is off now waits for its page is live email, like
+  any page holder. An event's is its own, "Your event's page is live" (`buildApprovedEmail` in
+  `src/fundraising/emails.ts`): share the page, put up the posters with their QR codes, point people
+  to the page on the day, and reply for help; no sponsorship tips. The change and news emails link
+  the event's page. News photos show on an event's page as on a fundraiser's.
+- **QR codes on printed pieces** (`/q/<id>-<size>`) go to the event's page; an event whose stored
+  address cannot be linked goes to Get involved, as before.
 - **Switched off**, an event's page is the site's 404, like every fundraising page. `/event` is in
   `RESERVED_PREFIXES`. Fundraiser pages are not in the sitemap, so event pages are not either.
 - **Data:** `migrations/1791200000185_event-pages.js`, additive: one nullable column,

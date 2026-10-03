@@ -18,6 +18,7 @@ import {
   patchFundraiser,
   toRecord,
 } from "../../src/db/fundraisers";
+import { publicPhoto } from "../../src/db/fundraiser-updates";
 
 const eventRow = (over: Record<string, unknown> = {}) => ({
   id: 12, slug: "eqn", path: "event", kind: "quiz", title: "Exampleton Quiz Night", description: "", event_date: "2026-12-05",
@@ -126,5 +127,18 @@ describe("the live emails at the switch", () => {
     q.mockResolvedValueOnce({ rows: [{ n: "1" }] });
     await countWaitingLiveEmails();
     expect(String(q.mock.calls.at(-1)?.[0])).toMatch(/path IN \('raising', 'event'\)/);
+  });
+});
+
+describe("a news photo on an event's page", () => {
+  it("is shown to the public on an event page too, by the same rules as a fundraiser's", async () => {
+    const q = pool.query as unknown as ReturnType<typeof vi.fn>;
+    q.mockResolvedValueOnce({ rows: [] });
+    await publicPhoto("0b5c1d2e-3f40-4a5b-8c6d-7e8f9a0b1c2d");
+    const sql = String(q.mock.calls.at(-1)?.[0]);
+    expect(sql).toMatch(/f\.path IN \('raising', 'event'\)/);
+    expect(sql).toMatch(/u\.status = 'approved'/);
+    expect(sql).toMatch(/f\.public = true/);
+    expect(sql).toMatch(/f\.status IN \('approved', 'finished'\)/);
   });
 });

@@ -217,7 +217,8 @@ function bookingFor(c: PublicCard): Pick<CardRecord, "bookingHow" | "bookingUrl"
 
 /**
  * A "holding an event" sign up as an ordinary event card, credited to its organiser (or the name
- * they gave to credit it to). It has no page of its own. No date, no card: there would be nothing
+ * they gave to credit it to). Event pages: it has a page of its own now too, at /event/<short name>,
+ * linked from the back of the card (pageHref). No date, no card: there would be nothing
  * to put in the corner, and Get involved is a list of dates.
  *
  * TASK-499: drawn from the event questions: the line for the front, the finish time and "to be
@@ -492,7 +493,7 @@ function renderShare(p: PublicPage, pageUrl: string): string {
   return (
     '<section class="card fr-card fr-share" aria-labelledby="fr-share-heading" data-copy-scope>' +
     '<h2 id="fr-share-heading">Share this page</h2>' +
-    `<p>Every share helps ${escapeHtml(p.organisedBy.split(" ")[0])} reach more people.</p>` +
+    `<p>Every share helps ${sharer(p)} reach more people.</p>` +
     shareLinks(p, pageUrl) +
     `<p class="fr-share__url"><span class="sr-only">The page address: </span>${escapeHtml(shown)}</p>` +
     '<p class="fr-share__status" role="status" aria-live="polite" data-copy-status></p>' +
@@ -512,8 +513,17 @@ function renderSplit(p: PublicPage): string {
   return p.split ? `<p class="fr-split">${escapeHtml(p.split.statement)}</p>` : "";
 }
 
+// Event pages: an event is often credited to a group or a business ("The Red Lion"), whose first word
+// is no one's first name, so an event's page speaks of the event instead. A fundraiser's is unchanged.
+const isEvent = (p: PublicCard) => p.path === "event";
+/** Who a share helps: "Robin", or "this event". */
+const sharer = (p: PublicCard) => (isEvent(p) ? "this event" : firstName(p));
+/** Whose wall: "Robin's wall", or "the wall". */
+const wallOf = (p: PublicCard) => (isEvent(p) ? "the wall" : `${firstName(p)}'s wall`);
+
 function renderGiveForm(p: PublicPage): string {
   const first = firstName(p);
+  const event = isEvent(p);
   const presets = PRESETS_PENCE.map(
     (pence) =>
       `<label class="fr-amount"><input type="radio" name="frAmount" value="${pence}" />` +
@@ -525,9 +535,11 @@ function renderGiveForm(p: PublicPage): string {
     '<div class="card card-lg give-card fr-give-card"><div class="give-main">' +
     (p.finished
       ? '<h2 class="give-step-title" id="fr-give-heading">You can still give</h2>' +
-        `<p class="give-step-sub">Your donation goes to NBCC and still counts towards ${first}'s total for ${escapeHtml(p.title)}.${SHARE_NOTE(p)}</p>`
+        (event
+          ? `<p class="give-step-sub">Your donation goes to NBCC and still counts towards this event's total.${SHARE_NOTE(p)}</p>`
+          : `<p class="give-step-sub">Your donation goes to NBCC and still counts towards ${first}'s total for ${escapeHtml(p.title)}.${SHARE_NOTE(p)}</p>`)
       : `<h2 class="give-step-title" id="fr-give-heading">Give to ${escapeHtml(p.title)}</h2>` +
-        `<p class="give-step-sub">Your donation goes to NBCC and counts towards ${first}'s total.${SHARE_NOTE(p)}</p>`) +
+        `<p class="give-step-sub">Your donation goes to NBCC and counts towards ${event ? "this event" : first}'s total.${SHARE_NOTE(p)}</p>`) +
     // Shipped hidden: without JavaScript the browser would send it as a web address, names and all.
     '<p class="fr-noscript" data-nojs>Giving on this page needs JavaScript switched on. You can still donate on our <a href="/donate">donate page</a>.</p>' +
     `<form id="frGiveForm" class="fr-give-form" data-fundraiser-id="${p.giving.fundraiserId}" data-minimum-pence="${p.giving.minimumPence}" novalidate hidden data-needs-js>` +
@@ -635,12 +647,11 @@ export interface FundraiserPageOptions {
  * can send it shows it, so without JavaScript the thank you is simply the plain one.
  */
 function renderWallStep(p: PublicPage, sessionId: string): string {
-  const first = firstName(p);
   return (
     // Event pages: an event's page says where to come back to (fundraiser.js goes to /fundraise/<slug>
     // without it, as a fundraiser's page always has).
     `<section class="fr-after" data-wall-step data-slug="${escapeHtml(p.slug)}"${p.path === "event" && p.url ? ` data-page="${escapeHtml(p.url)}"` : ""} data-session-id="${escapeHtml(sessionId)}" aria-labelledby="fr-after-heading" hidden>` +
-    `<h3 class="fr-after__title" id="fr-after-heading">Add a message to ${first}'s wall <span class="give-optional">(optional)</span></h3>` +
+    `<h3 class="fr-after__title" id="fr-after-heading">Add a message to ${wallOf(p)} <span class="give-optional">(optional)</span></h3>` +
     "<p>Only if you would like to. Your donation already counts, with or without one.</p>" +
     '<form id="frWallForm" class="fr-after__form" novalidate>' +
     '<p class="form-error-summary" role="alert" data-wall-error hidden></p>' +
@@ -666,16 +677,15 @@ function renderWallStep(p: PublicPage, sessionId: string): string {
 
 /** The thank you a giver sees on coming back from paying, with the share links. */
 function renderThanks(p: PublicPage, pageUrl: string, thanks: NonNullable<FundraiserPageOptions["thanks"]>): string {
-  const first = firstName(p);
   const lead = thanks.added
-    ? `<p>We have added that to ${first}'s wall. <a href="#fr-wall-heading">See the wall</a></p>`
+    ? `<p>We have added that to ${wallOf(p)}. <a href="#fr-wall-heading">See the wall</a></p>`
     : `<p>${thanks.message ? "Your message will appear on the wall shortly. " : ""}Your donation will show on the meter shortly.</p>`;
   return (
     '<div class="fr-thanks-panel" data-thanks-panel data-copy-scope tabindex="-1">' +
     `<h2>Thank you for supporting ${escapeHtml(p.title)}.</h2>` +
     lead +
     (thanks.sessionId && !thanks.added ? renderWallStep(p, thanks.sessionId) : "") +
-    `<p>Could you share the page too? Every share helps ${first} reach more people.</p>` +
+    `<p>Could you share the page too? Every share helps ${sharer(p)} reach more people.</p>` +
     shareLinks(p, pageUrl) +
     '<p class="fr-share__status" role="status" aria-live="polite" data-copy-status></p>' +
     "</div>"
@@ -690,7 +700,7 @@ function renderFinished(p: PublicPage): string {
   return (
     '<div class="fr-finished">' +
     '<h2 class="fr-finished__title">Finished, thank you</h2>' +
-    `<p>${firstName(p)} has finished fundraising, and together supporters raised <strong>${formatPounds(p.meter.raisedPence)}</strong> for NBCC. ` +
+    `<p>${isEvent(p) ? "This event has finished" : `${firstName(p)} has finished fundraising`}, and together supporters raised <strong>${formatPounds(p.meter.raisedPence)}</strong> for NBCC. ` +
     'Thank you to everyone who gave. <a href="#give">You can still give</a>.</p>' +
     "</div>"
   );
@@ -717,11 +727,15 @@ function renderCountdown(p: PublicPage, now: Date, pageUrl: string): string {
   }
   const word = p.organisedBy.trim().split(/\s+/)[0] ?? "";
   const first = word.toLowerCase() === "anonymous" ? null : safeFirstName(word);
+  // Event pages: an event's name is often a group's or a business's, so on its day it has no name.
+  const today = isEvent(p)
+    ? "<h2 class=\"fr-today__title\">Today's the day!</h2><p>A share today goes a long way.</p>"
+    : `<h2 class="fr-today__title">Today's the day! Good luck${first ? `, ${escapeHtml(first)}!` : "!"}</h2>` +
+      `<p>Cheer ${first ? escapeHtml(first) : "them"} on: a share today goes a long way.</p>`;
   return (
     '<div class="fr-today" data-copy-scope>' +
     STAR +
-    `<h2 class="fr-today__title">Today's the day! Good luck${first ? `, ${escapeHtml(first)}!` : "!"}</h2>` +
-    `<p>Cheer ${first ? escapeHtml(first) : "them"} on: a share today goes a long way.</p>` +
+    today +
     shareLinks(p, pageUrl) +
     '<p class="fr-share__status" role="status" aria-live="polite" data-copy-status></p>' +
     "</div>"

@@ -25,7 +25,7 @@
 //
 // Additive only: new columns, nullable or with a constant default, and checks every row already
 // there passes (in_memory is false on all of them), so a code rollback is safe (golden rule 2).
-// Numbered 1791200000195: after the team pages migration (190), which merges first.
+// Numbered 1791200000195: after the team pages migration (190), whose is_team and team_id it checks.
 
 exports.shorthands = undefined;
 
@@ -66,6 +66,11 @@ exports.up = (pgm) => {
       "in_memory IS NOT TRUE OR (memory_name IS NOT NULL AND btrim(memory_name) <> '' AND memory_setup_by IS NOT NULL AND memory_permission IS TRUE)",
   });
 
+  // Team pages (1791200000190): an in memory page is always just the one page, never a team or on one.
+  pgm.addConstraint("fundraisers", "fundraisers_memory_not_team", {
+    check: "in_memory IS NOT TRUE OR (is_team IS NOT TRUE AND team_id IS NULL)",
+  });
+
   pgm.addColumns("donations", {
     family_notify: { type: "boolean", notNull: true, default: false },
     message_approved_at: { type: "timestamptz" },
@@ -81,6 +86,7 @@ exports.up = (pgm) => {
 exports.down = (pgm) => {
   pgm.dropIndex("donations", "fundraiser_id", { name: "donations_message_unchecked_idx", ifExists: true });
   pgm.dropColumns("donations", DONATION_COLUMNS);
+  pgm.dropConstraint("fundraisers", "fundraisers_memory_not_team", { ifExists: true });
   pgm.dropConstraint("fundraisers", "fundraisers_memory_complete", { ifExists: true });
   pgm.dropConstraint("fundraisers", "fundraisers_memory_setup_by_known", { ifExists: true });
   pgm.dropConstraint("fundraisers", "fundraisers_memory_dates_length", { ifExists: true });

@@ -122,7 +122,7 @@ export async function sendApprovedEmail(f: FundraiserRecord): Promise<boolean> {
 async function sendInMemoryApprovedEmail(f: FundraiserRecord): Promise<boolean> {
   if (!hasPage(f) || !f.memoryName) return false;
   try {
-    const mail = buildInMemoryApprovedEmail({ name: f.name, memoryName: f.memoryName }, { pageUrl: fundraiserPageUrl(f.slug) });
+    const mail = buildInMemoryApprovedEmail({ name: f.name, memoryName: f.memoryName, setupBy: f.memorySetupBy ?? null }, { pageUrl: fundraiserPageUrl(f.slug) });
     await sendFundraiseApproved(f.name, { email: f.email, from: config.BALL_FROM_EMAIL, replyTo: config.BALL_FROM_EMAIL, ...mail });
     return true;
   } catch (err) {

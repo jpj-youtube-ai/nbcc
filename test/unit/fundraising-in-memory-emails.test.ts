@@ -157,3 +157,34 @@ describe("review: the thank you to a giver on an in memory page", () => {
     expect(other.text).toContain("Thanks so much,");
   });
 });
+
+describe("email 19 for a funeral director (Jaimie, A2)", () => {
+  it("is professional: no sorry for your loss, and thanks them for setting it up for the family", () => {
+    const m = buildInMemoryApprovedEmail(
+      { name: "Sam Example", memoryName: "Jean", setupBy: "funeral_director" },
+      { pageUrl: "https://nbcc.test/fundraise/ime" },
+    );
+    expect(m.subject).toBe("Your page in memory of Jean");
+    expect(m.text).not.toContain("sorry for your loss");
+    expect(m.text).toContain(
+      "Thank you for setting up this page for the family of Jean. It is now live on our website, ready to share with everyone who would like to give in their memory.",
+    );
+    expect(m.text).toContain("See the page: https://nbcc.test/fundraise/ime");
+    expect(m.text).toContain("collection envelopes");
+    expect(m.text).toContain("Our team reads every message before it shows on the page.");
+    expect(m.text).toContain("With warmest thoughts,");
+  });
+
+  it("leaves the family and friends version as Jaimie approved it", () => {
+    for (const setupBy of ["family", "friend", undefined] as const) {
+      const m = buildInMemoryApprovedEmail({ name: "Sam Example", memoryName: "Jean", setupBy }, { pageUrl: "https://nbcc.test/fundraise/ime" });
+      expect(m.text).toContain("we’re so sorry for your loss");
+      expect(m.text).not.toContain("for the family of Jean");
+    }
+  });
+
+  it("goes when a funeral director's page is approved", async () => {
+    await sendApprovedEmail(record({ memorySetupBy: "funeral_director" }));
+    expect(mail.sendFundraiseApproved.mock.calls[0][1].text).toContain("for the family of Margaret Exampleton");
+  });
+});

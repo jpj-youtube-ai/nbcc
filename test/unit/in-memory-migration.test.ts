@@ -95,5 +95,8 @@ describe("the in memory migration", () => {
     expect(names).toContain(NAME);
     expect(NAME > "1791200000190").toBe(true);
     expect(names.indexOf(NAME)).toBeGreaterThan(names.indexOf("1791200000180_signup-age-and-split.js"));
+    // Team pages (190) are on main now: this one runs after them.
+    expect(names).toContain("1791200000190_teams.js");
+    expect(names.indexOf(NAME)).toBeGreaterThan(names.indexOf("1791200000190_teams.js"));
   });
 });

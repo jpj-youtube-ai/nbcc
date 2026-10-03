@@ -1434,7 +1434,7 @@
 
               <div class="fr-switch" id="frSwitch">
                 <div class="fr-switch-text">
-                  <h3 class="admin-subhead">Is fundraising on the website?</h3>
+                  <h3 class="fr-switch-title">Fundraising on the website</h3>
                   <p class="fr-switch-state" id="frSwitchState" aria-live="polite">Checking&hellip;</p>
                   <p class="fr-switch-who" id="frSwitchWho"></p>
                 </div>
@@ -1460,17 +1460,24 @@
                 <ul class="fr-people" id="frInvites"><li class="fr-people-empty">Loading&hellip;</li></ul>
               </section>
 
-              <section class="fr-card" id="frSummary" aria-labelledby="frSummaryHead" hidden>
-                <h3 class="admin-subhead" id="frSummaryHead">Weekly summary</h3>
-                <p class="fr-summary-state" id="frSummaryState" aria-live="polite">Checking&hellip;</p>
-                <p class="fr-card-intro">Every Monday at 8am, one email to each person on this list: last week's money, new sign ups, what is waiting on us and what is coming up.</p>
-                <ul class="fr-people" id="frSummaryList"></ul>
-                <div class="fr-summary-add">
-                  <div class="fr-field"><label class="fx-call-label" for="frSummaryEmail">Add an email address</label><input class="fx-call-input" id="frSummaryEmail" type="email" maxlength="254" autocomplete="off" spellcheck="false" /></div>
-                  <button class="admin-btn" type="button" id="frSummaryAdd">Add to the list</button>
-                  <button class="admin-btn fr-btn-quiet" type="button" id="frSummaryTest">Send a test now</button>
-                </div>
-                <p class="ty-status" id="frSummaryStatus" role="status" aria-live="polite"></p>
+              <!-- Folded by default (Jaimie): the state line shows in the summary bar; open it to change the list. -->
+              <section class="fr-card fr-card--fold" id="frSummary" aria-labelledby="frSummaryHead" hidden>
+                <details class="fr-fold" id="frSummaryFold">
+                  <summary class="fr-fold-bar">
+                    <span class="admin-subhead fr-fold-title" id="frSummaryHead">Weekly summary</span>
+                    <span class="fr-summary-state" id="frSummaryState" aria-live="polite">Checking&hellip;</span>
+                  </summary>
+                  <div class="fr-fold-body">
+                    <p class="fr-card-intro">Every Monday at 8am, one email to each person on this list: last week's money, new sign ups, what is waiting on us and what is coming up.</p>
+                    <ul class="fr-people" id="frSummaryList"></ul>
+                    <div class="fr-summary-add">
+                      <div class="fr-field"><label class="fx-call-label" for="frSummaryEmail">Add an email address</label><input class="fx-call-input" id="frSummaryEmail" type="email" maxlength="254" autocomplete="off" spellcheck="false" /></div>
+                      <button class="admin-btn" type="button" id="frSummaryAdd">Add to the list</button>
+                      <button class="admin-btn fr-btn-quiet" type="button" id="frSummaryTest">Send a test now</button>
+                    </div>
+                    <p class="ty-status" id="frSummaryStatus" role="status" aria-live="polite"></p>
+                  </div>
+                </details>
               </section>
 
               <div class="fr-bar">

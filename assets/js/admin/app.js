@@ -9261,8 +9261,8 @@
     var on = !!(frSettings && frSettings.pageOn);
     el("frSwitch").classList.toggle("is-on", on);
     el("frSwitchState").innerHTML = on
-      ? "<b>Yes.</b> The Fundraise for us form takes sign ups, approved public fundraisers are on Get involved, and each one raising money has its own page."
-      : "<b>No.</b> Fundraising is switched off: the form takes no sign ups, nothing is listed and every fundraiser page is hidden. Check and approve sign ups here, then switch it on when you are ready.";
+      ? "<b>Yes.</b> Sign ups are open and approved fundraisers are live."
+      : "<b>No.</b> Sign ups are closed and nothing is on the website.";
     var by = frSettings && frSettings.updatedBy && String(frSettings.updatedBy).indexOf("admin:") === 0
       ? String(frSettings.updatedBy).slice(6) : "";
     el("frSwitchWho").textContent = by
@@ -9272,8 +9272,9 @@
     var btn = el("frSwitchBtn");
     btn.hidden = !mayFlip;
     el("frSwitchNote").hidden = mayFlip;
-    btn.textContent = on ? "Switch fundraising off" : "Switch fundraising on";
-    btn.className = on ? "btn btn-ghost" : "btn btn-primary";
+    btn.textContent = on ? "Switch off" : "Switch on";
+    btn.setAttribute("aria-label", on ? "Switch fundraising off" : "Switch fundraising on");
+    btn.className = on ? "btn btn-ghost fr-switch-btn" : "btn btn-primary fr-switch-btn";
   }
 
   function frFlipSwitch() {

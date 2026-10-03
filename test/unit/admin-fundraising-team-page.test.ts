@@ -285,10 +285,10 @@ describe("Invite someone", () => {
     await settle();
     expect(text(el("frInviteStatus"))).toBe("That isn't a whole email address.");
     setValue("#frInviteEmail", "sky@example.com");
-    setValue("#frInviteNote", "a".repeat(601));
+    setValue("#frInviteNote", "a".repeat(5001));
     submit("#frInviteForm");
     await settle();
-    expect(text(el("frInviteStatus"))).toBe("Keep the note to 600 characters or fewer.");
+    expect(text(el("frInviteStatus"))).toBe("Keep the note to 5,000 characters or fewer.");
     expect(sent("POST", "/api/admin/fundraising/invites")).toHaveLength(0);
   });
 

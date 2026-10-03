@@ -11645,7 +11645,7 @@
     var signedBy = Number(select.value);
     if (!name) return frTeamSay("frInviteStatus", "Add their name.", true);
     if (!FR_EMAIL.test(email)) return frTeamSay("frInviteStatus", "That isn't a whole email address.", true);
-    if (note.length > 600) return frTeamSay("frInviteStatus", "Keep the note to 600 characters or fewer.", true);
+    if (note.length > 5000) return frTeamSay("frInviteStatus", "Keep the note to 5,000 characters or fewer.", true);
     if (!signedBy) return frTeamSay("frInviteStatus", "Choose who it is from.", true);
     var signer = select.options[select.selectedIndex] ? select.options[select.selectedIndex].textContent : "";
     if (!window.confirm("Send the invite to " + name + " (" + email + "), signed by " + signer + "?")) return;

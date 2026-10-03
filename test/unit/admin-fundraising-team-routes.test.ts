@@ -236,7 +236,7 @@ describe("inviting someone", () => {
   });
 
   it("refuses a form that needs another look, naming the box", async () => {
-    const res = await run(routes.postInvite, { token: tokenFor("editor"), body: { ...GOOD_INVITE, email: "alex@", note: "a".repeat(601) } });
+    const res = await run(routes.postInvite, { token: tokenFor("editor"), body: { ...GOOD_INVITE, email: "alex@", note: "a".repeat(5001) } });
     expect(res.statusCode).toBe(400);
     expect((res.body as { fields: Record<string, string> }).fields).toMatchObject({ email: expect.any(String), note: expect.any(String) });
     expect(team.createInvite).not.toHaveBeenCalled();

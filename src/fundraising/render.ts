@@ -12,7 +12,7 @@ import {
   timeText,
 } from "../events/render";
 import { SINGLE_DONATION_WORDING } from "../declarations/wording";
-import type { Meter, PublicCard, PublicPage, WallEntry } from "./model";
+import { ALL_TO_NBCC, type Meter, type PublicCard, type PublicPage, type WallEntry } from "./model";
 import { countdownFor, type NewsEntry } from "./news";
 import { safeFirstName } from "./emails";
 import { entryLine, safeTicketUrl } from "./entry";
@@ -190,7 +190,7 @@ export function renderFundraiserCard(c: PublicCard, today?: string): string {
     (c.description ? `<p class="ev-tldr">${escapeHtml(shorten(c.description, 150))}</p>` : "") +
     renderMeter(c.meter) +
     // Jaimie, 2026-10-03: shared with another cause, the statement beside the way in.
-    (c.split ? `<p class="fr-card__split">${escapeHtml(c.split.statement)}</p>` : "") +
+    (c.split ? `<p class="fr-card__split">${escapeHtml(c.split.statement)}</p><p class="fr-card__split fr-card__split-note">${ALL_TO_NBCC}</p>` : "") +
     '<div class="ev-book-gap"></div>' +
     `<a class="btn btn-primary fr-card__go" href="${href}">See the page and give<span class="sr-only">: ${escapeHtml(c.title)}</span></a>` +
     "</div></article></div></li>"
@@ -282,7 +282,7 @@ export function fundraiserEventRecord(c: PublicCard): CardRecord | null {
     partnerCredit: "Organised by",
     partnerLogoSrc: null,
     // Jaimie, 2026-10-03: shared with another cause, the card says how, in the 2009 regulations' words.
-    partnerLine: c.split ? c.split.statement : "A community event raising money for NBCC.",
+    partnerLine: c.split ? `${c.split.statement} ${ALL_TO_NBCC}` : "A community event raising money for NBCC.",
     ...bookingFor(c),
     status: "live",
     showFrom: null,
@@ -543,7 +543,50 @@ const whose = (p: PublicCard & { teamName?: string | null }) => {
 
 // Jaimie, 2026-10-03: shared with another cause. Money given on the page is NBCC's share; the
 // statement the 2009 regulations ask for sits beside the Give button (renderSplit).
-const SHARE_NOTE = (p: PublicPage): string => (p.split ? " Everything given on this page goes to NBCC, as NBCC's share." : "");
+// Clarity audit: the statement reads as if each gift were split, so the give box says plainly that
+// every gift here is NBCC's, and who to ask about giving to the other cause.
+/**
+ * Who a giver would ask or hand money to, in the middle of a sentence: the organiser's first name,
+ * the team's name on a team page, or "the organiser" when the first word is no one's first name (a
+ * group's "The ...", "Anonymous", anything that is not a plain word of letters). Not escaped.
+ */
+function askWho(p: PublicPage): string {
+  if (p.teamName) return p.teamName;
+  const word = p.organisedBy.trim().split(/\s+/)[0] ?? "";
+  const first = /^(the|anonymous)$/i.test(word) ? null : safeFirstName(word);
+  return first ?? "the organiser";
+}
+const possessive = (name: string): string => `${name}${/s$/i.test(name) ? "'" : "'s"}`;
+const sentenceStart = (words: string): string => words.charAt(0).toUpperCase() + words.slice(1);
+
+function shareLine(p: PublicPage): string {
+  if (!p.split) return "";
+  const who = escapeHtml(askWho(p));
+  const other = p.split.otherCauseName;
+  return (
+    `<p class="give-step-sub fr-give-share">Everything you give on this page goes to NBCC. ${sentenceStart(who)} is collecting ` +
+    `${escapeHtml(possessive(other))} share separately, so if you'd like to support ${escapeHtml(other)} too, please ask ${who} how.</p>`
+  );
+}
+
+/**
+ * Clarity audit: a sponsor already on the paper sponsor form who also gives online is counted twice,
+ * and Gift Aid could be claimed twice. Only on a page raising money (never an event's, never one in
+ * memory of someone, which have their own words).
+ */
+function paperLine(p: PublicPage): string {
+  if (p.teamName) {
+    return `<p class="give-step-sub fr-give-paper">Giving here is sponsoring the team. Already on a paper sponsor form for the team? Then please just hand the money to whoever has the form, so it isn't counted twice.</p>`;
+  }
+  const who = escapeHtml(askWho(p));
+  return `<p class="give-step-sub fr-give-paper">Giving here is sponsoring ${who}. Already on ${escapeHtml(possessive(askWho(p)))} paper sponsor form? Then please just hand ${who} the money, so it isn't counted twice.</p>`;
+}
+
+/** Clarity audit: whose total a gift counts towards, on a team page and on a team member's page. */
+function countsTowards(p: PublicPage, onTeam: boolean): string {
+  if (p.teamName) return "Your donation goes to NBCC and counts towards the team's total. To sponsor one person, give on their own page: you'll find everyone under The team.";
+  return `Your donation goes to NBCC and counts towards ${whose(p)} total${onTeam ? ", and the team's total too" : ""}.`;
+}
 /** Jaimie, 2026-10-03 (event clarity): an event's give box says it as a line of its own instead. */
 const EVENT_SHARE_LINE = (p: PublicPage): string => (p.split ? '<p class="give-step-sub fr-give-share">Everything you give on this page goes to NBCC.</p>' : "");
 
@@ -607,7 +650,7 @@ export interface GiveWords {
 }
 
 /** impact: what gifts could do (./impact-render.ts); none unless the page's own renderer passes it. */
-export function renderGiveForm(p: PublicPage, words?: GiveWords, impact: ImpactParts = NO_IMPACT): string {
+export function renderGiveForm(p: PublicPage, words?: GiveWords, impact: ImpactParts = NO_IMPACT, onTeam = false): string {
   const event = isEvent(p);
   const presets = PRESETS_PENCE.map(
     (pence) =>
@@ -625,11 +668,11 @@ export function renderGiveForm(p: PublicPage, words?: GiveWords, impact: ImpactP
       ? '<h2 class="give-step-title" id="fr-give-heading">You can still give</h2>' +
         (event
           ? `<p class="give-step-sub">Your donation goes to NBCC and still counts towards this event's total.</p>${EVENT_SHARE_LINE(p)}`
-          : `<p class="give-step-sub">Your donation goes to NBCC and still counts towards ${whose(p)} total${p.teamName ? "" : ` for ${escapeHtml(p.title)}`}.${SHARE_NOTE(p)}</p>`)
+          : `<p class="give-step-sub">Your donation goes to NBCC and still counts towards ${whose(p)} total${p.teamName ? "" : ` for ${escapeHtml(p.title)}`}.</p>${shareLine(p)}${paperLine(p)}`)
       : event
         ? '<h2 class="give-step-title" id="fr-give-heading">Make a donation</h2>' + `<p class="give-step-sub">${eventGiveSub(p)}</p>${EVENT_SHARE_LINE(p)}`
         : `<h2 class="give-step-title" id="fr-give-heading">Give to ${escapeHtml(p.title)}</h2>` +
-          `<p class="give-step-sub">Your donation goes to NBCC and counts towards ${whose(p)} total.${SHARE_NOTE(p)}</p>`) +
+          `<p class="give-step-sub">${countsTowards(p, onTeam)}</p>${shareLine(p)}${paperLine(p)}`) +
     // Shipped hidden: without JavaScript the browser would send it as a web address, names and all.
     '<p class="fr-noscript" data-nojs>Giving on this page needs JavaScript switched on. You can still donate on our <a href="/donate">donate page</a>.</p>' +
     `<form id="frGiveForm" class="fr-give-form" data-fundraiser-id="${p.giving.fundraiserId}" data-minimum-pence="${p.giving.minimumPence}"${impact.formAttr} novalidate hidden data-needs-js>` +
@@ -928,6 +971,7 @@ export function renderFundraiserPage(template: string, p: PublicPage, opts: Fund
     '<h2 class="sr-only">Money raised so far</h2>' +
     renderMeter(p.meter, { large: true }) +
     (event ? '<p class="fr-meter__paidin">Includes any money the organiser has paid in.</p>' : "") +
+    (p.teamName ? '<p class="fr-meter__paidin">Includes everything the team members have raised.</p>' : "") +
     impact.afterMeter +
     renderSplit(p) +
     (event && !p.finished ? renderEntryLine(p) : "") +
@@ -945,7 +989,8 @@ export function renderFundraiserPage(template: string, p: PublicPage, opts: Fund
     "</section>" +
     (opts.team?.mainHtml ?? "") +
     renderNews(p) +
-    renderGiveForm(p, undefined, impact) +
+    // A member page still on its team is the one handed the team's line for under its facts.
+    renderGiveForm(p, undefined, impact, Boolean(opts.team?.factsHtml)) +
     renderWall(p, opts.now) +
     "</div>" +
     `<div class="fr-extras">${renderShare(p, opts.pageUrl)}</div>`;

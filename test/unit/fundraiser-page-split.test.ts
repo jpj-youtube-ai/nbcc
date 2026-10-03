@@ -40,7 +40,9 @@ const page = (over: Partial<PublicPage> = {}): PublicPage => ({
 const render = (p: PublicPage) =>
   renderFundraiserPage(template, p, { pageUrl: "https://nbcc.test/fundraise/robins-santa-dash", now: new Date(Date.UTC(2026, 9, 2)) });
 
-const SHARE_LINE = "Everything given on this page goes to NBCC, as NBCC's share.";
+// Clarity audit: the give box says plainly that every gift here is NBCC's, and who to ask about the
+// other cause (test/unit/clarity-wording-pages.test.ts has the whole line, and its variations).
+const SHARE_LINE = "Everything you give on this page goes to NBCC. Robin is collecting Kilmarnock Food Larder";
 
 describe("a fundraiser shared with another cause", () => {
   it("says the split beside the Give button", () => {

@@ -23,7 +23,7 @@ Feature: 18 or over, and sharing what is raised with another cause
     When "a1.split.fr.bdd@example.com" approves "Sam's Shared Walk (bdd-fr)"
     And a visitor opens the page for "Sam's Shared Walk (bdd-fr)"
     Then the page shows "60% of what we raise goes to the Night Before Christmas Campaign, Scottish Charity SC047995. The rest goes to Kilmarnock Food Larder."
-    And the page shows "Everything given on this page goes to NBCC, as NBCC's share."
+    And the page shows "Everything you give on this page goes to NBCC."
     When "a1.split.fr.bdd@example.com" opens the "poster" of "Sam's Shared Walk (bdd-fr)"
     Then the page shows "60% of what we raise goes to the Night Before Christmas Campaign, Scottish Charity SC047995. The rest goes to Kilmarnock Food Larder."
 

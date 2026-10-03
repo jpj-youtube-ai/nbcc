@@ -18,7 +18,7 @@ Feature: Fundraising materials (TASK-504)
     And the materials page is never kept or indexed
     When the signed in organiser opens the "sponsor-form" for "Sams Poster Dash (bdd-fr)"
     Then the materials answer is 200
-    And the materials page shows "Please send this form back to us with the money so we can claim Gift Aid"
+    And the materials page shows "Please send this form back to us once you have paid the money in, so we can claim Gift Aid"
     And the materials page shows "I confirm that I am a UK Income or Capital Gains taxpayer"
     When the signed in organiser opens the "certificate" for "Sams Poster Dash (bdd-fr)"
     Then the materials answer is 404

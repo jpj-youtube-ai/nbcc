@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { dateParts, escapeHtml, time12 } from "../events/render";
 import { MATERIALS_STATEMENT, MATERIALS_STATEMENT_SHORT } from "../legal/registration";
-import { hasPage, splitStatement, type FundraiserRecord, type FundraiserStatus, type Meter } from "./model";
+import { ALL_TO_NBCC, hasPage, splitStatement, type FundraiserRecord, type FundraiserStatus, type Meter } from "./model";
 import { TRACKED_PIECES, trackedPath, type TrackedPiece } from "./material-codes";
 import { qrSvg } from "./qr";
 import { isInMemory } from "./in-memory";
@@ -75,7 +75,10 @@ export const SOCIAL_SIZES = [
   { kind: "facebook", width: 1200, height: 630, name: "Facebook post", use: "A wide picture for a Facebook post." },
   { kind: "cover", width: 1920, height: 1005, name: "Facebook event cover", use: "The cover picture for a Facebook event." },
 ] as const;
-export const SEND_IT_BACK = "Please send this form back to us with the money so we can claim Gift Aid.";
+// Clarity audit (Jaimie, 2026-10-03): the money is paid in from the private area, not posted with the form.
+export const SEND_IT_BACK = "Please send this form back to us once you have paid the money in, so we can claim Gift Aid.";
+/** Clarity audit: on a shared sponsor form, by the declaration. Only NBCC's part of a gift can carry Gift Aid. */
+export const GIFT_AID_NBCC_PART = "NBCC can claim Gift Aid only on the part of each gift that comes to NBCC.";
 
 /**
  * HMRC's model sponsorship declaration, word for word, from its "Sponsorship and Gift Aid declaration
@@ -127,6 +130,8 @@ export interface MaterialFacts {
   splitStatement: string | null;
   /** The other cause, when shared: the sponsor form says it is in aid of both. Null otherwise. */
   otherCauseName: string | null;
+  /** NBCC's share, when shared: the sponsor form's foot asks for that much to be paid in. Null otherwise. */
+  nbccSharePercent?: number | null;
   /**
    * In memory of someone (Jaimie, 2026-10-03): who, and their dates. Every piece is then the gentle
    * version: "In memory", "In memory of <name>", "Give in their memory", the quieter colours, never
@@ -191,6 +196,7 @@ export function materialFacts(
     qrLinks,
     splitStatement: splitStatement(f),
     otherCauseName: splitStatement(f) ? (f.otherCauseName ?? "").trim() : null,
+    nbccSharePercent: splitStatement(f) ? (f.nbccSharePercent ?? null) : null,
     memory: isInMemory(f) && f.memoryName ? { name: f.memoryName.trim(), dates: f.memoryDates?.trim() || null } : null,
     event: f.path === "event",
     entry: f.path === "event" ? entryWords(f) : null,
@@ -376,7 +382,7 @@ function posterTitleSize(title: string): string {
  * everything still fits: 66mm for a short name and line. Never below 38mm (it was 34mm before round two).
  */
 export function posterLogoMm(
-  d: Pick<MaterialFacts, "title" | "line" | "when" | "where" | "targetPence"> & Partial<Pick<MaterialFacts, "splitStatement" | "memory" | "entry">>,
+  d: Pick<MaterialFacts, "title" | "line" | "when" | "where" | "targetPence"> & Partial<Pick<MaterialFacts, "splitStatement" | "memory" | "entry" | "linkKind">>,
   size: PosterSize = "a4",
 ): number {
   const t = (d.memory ? `In memory of ${d.memory.name}` : d.title).length;
@@ -394,11 +400,26 @@ export function posterLogoMm(
   // bigger on the design (so they print at 7pt or more: statementPt), so it takes more room there.
   // With a split the logo may go below its usual least, so the worst case still fits the paper.
   if (d.splitStatement) mm -= size === "a5" ? 12 : 6;
+  // Clarity audit: "Gifts made on the NBCC page all go to NBCC." after the statement can take the
+  // foot a line further (measured in headless Chromium at A5, A4 and A3, worst case).
+  const note = posterSplitNote(d) ? SPLIT_NOTE_LOGO_MM : 0;
+  mm -= note;
   // Event clarity review: an event's entry line under the target ("Entry: £5, paid on the door"), and
   // a second line when it is long enough to wrap. The logo gives way to it, below its usual least too,
   // so the address and QR code stay inside the frame (measured in headless Chromium at A5, A4 and A3).
   const entry = d.entry ? ENTRY_LOGO_MM + (d.entry.length > ENTRY_WRAPS_AT ? ENTRY_WRAP_LOGO_MM : 0) : 0;
-  return Math.max((d.splitStatement ? SPLIT_LOGO_MIN_MM : 38) - entry, mm - entry);
+  return Math.max((d.splitStatement ? SPLIT_LOGO_MIN_MM - note : 38) - entry, mm - entry);
+}
+
+/**
+ * What the words after the split statement take from the logo. They can take the foot a line further;
+ * the room made for the split already holds that at every size, so this only keeps a little in hand.
+ */
+const SPLIT_NOTE_LOGO_MM = 2;
+
+/** The words after a poster's split statement: only where there is an NBCC page to give on. */
+function posterSplitNote(d: Partial<Pick<MaterialFacts, "splitStatement" | "linkKind">>): string | null {
+  return d.splitStatement && d.linkKind === "page" ? ALL_TO_NBCC : null;
 }
 
 /** The least the poster's logo goes to when there is a split statement to fit in too. */
@@ -554,7 +575,7 @@ function posterPage(d: MaterialFacts, a: MaterialAssets, size: PosterSize): stri
     </div>
     <div class="p-foot">
       <div class="pledge">${memory ? IN_MEMORY_POUND : EVERY_POUND}</div>
-      ${splitHtml(d, "legal split")}<div class="legal">${escapeHtml(MATERIALS_STATEMENT)}</div>
+      ${d.splitStatement ? `<div class="legal split">${escapeHtml([d.splitStatement, posterSplitNote(d)].filter(Boolean).join(" "))}</div>` : ""}<div class="legal">${escapeHtml(MATERIALS_STATEMENT)}</div>
     </div>
   </div>
   </div>
@@ -629,6 +650,8 @@ function socialData(d: MaterialFacts, a: MaterialAssets) {
     statement: MATERIALS_STATEMENT_SHORT,
     // Jaimie, 2026-10-03: drawn whole before the statement when shared with another cause.
     split: d.splitStatement,
+    // Clarity audit: drawn straight after it, where there is an NBCC page to give on.
+    splitNote: posterSplitNote(d),
     // Only the logo with white lettering is drawn on the maroon pictures. In memory the pictures are
     // the page's cream, so the logo with maroon lettering goes in its place.
     logoOnDark: d.memory ? a.logo : a.logoOnDark,
@@ -698,6 +721,7 @@ const SPONSOR_CSS = `
   .sf-split{margin-top:2mm;font-size:8pt;line-height:1.35;font-weight:600;color:var(--maroon)}
   .sf-decl{margin-top:3mm;background:var(--tan-soft);border-left:3px solid var(--crimson);border-radius:0 2mm 2mm 0;padding:2.2mm 4mm;font-size:7.8pt;line-height:1.45}
   .sf-remember{margin-top:1.6mm;font-size:8pt;font-weight:600;color:var(--maroon)}
+  .sf-head .sf-online{margin-top:1.2mm;font-size:8pt;line-height:1.35;color:var(--slate);max-width:150mm}
   .sf-table{width:100%;border-collapse:collapse;margin-top:2.5mm;table-layout:fixed;font-size:8pt}
   .sf-table th{background:var(--maroon);color:var(--cream);font-weight:600;text-align:left;padding:1.4mm 2mm;vertical-align:bottom;line-height:1.25;border:1px solid var(--maroon)}
   .sf-table th small{display:block;font-weight:400;font-size:6.8pt;opacity:.9}
@@ -726,15 +750,31 @@ function sponsorRows(from: number, count: number): string {
 }
 
 /**
- * Review fix: the rows on each page of the sponsor form. 12 and 11 as always; with a split, a row less
- * on each page for its lines, and with a long event name (it wraps in its box) a row less on page 1,
+ * Review fix: the rows on each page of the sponsor form. 12 and 11 as always, a row less on page 1
+ * with a long event name (it wraps in its box); with a split, fewer on each page for its lines (below),
  * so the foot and the charity statement always fit the paper.
  */
-export function sponsorRowCounts(d: Pick<MaterialFacts, "title" | "splitStatement"> | null): [number, number] {
-  const split = d?.splitStatement ? 1 : 0;
+export function sponsorRowCounts(d: (Pick<MaterialFacts, "title" | "splitStatement"> & Partial<Pick<MaterialFacts, "otherCauseName">>) | null): [number, number] {
   const longName = d && d.title.length > 60 ? 1 : 0;
-  // Both together on page 1: its split lines and a long name in a smaller face still need one more.
-  return [12 - split - longName - split * longName, 11 - split];
+  if (!d?.splitStatement) return [12 - longName, 11];
+  // Clarity audit: the split's lines end with the Gift Aid line, so they are always two lines, and
+  // page 1 gives up two rows for them. One more when the event's name is long (it wraps in its box) or
+  // the other cause's name is (it wraps "In aid of"). Measured in headless Chromium, worst case.
+  const longCause = (d.otherCauseName ?? "").length > SPONSOR_CAUSE_WRAPS_AT ? 1 : 0;
+  return [10 - Math.max(longName, longCause), 10];
+}
+
+/** A cause's name longer than this may wrap "In aid of" on the sponsor form (it does from about 45). */
+const SPONSOR_CAUSE_WRAPS_AT = 30;
+
+/**
+ * Clarity audit: a sponsor who gives on the page and also signs the paper form is counted twice, and
+ * Gift Aid could be claimed twice. Only where there is a page to give on; never on the blank form or
+ * on a form in memory of someone.
+ */
+function sponsorOnlineLine(d: Partial<Pick<MaterialFacts, "linkKind" | "linkWords" | "memory">> | null): string | null {
+  if (!d || d.memory || d.linkKind !== "page" || !d.linkWords) return null;
+  return `Sponsoring online instead? Give on the page at ${d.linkWords}, and please don't add your name here as well.`;
 }
 
 const SPONSOR_COLS = `<colgroup><col style="width:7mm"><col style="width:60mm"><col><col style="width:25mm"><col style="width:23mm"><col style="width:23mm"><col style="width:17mm"></colgroup>`;
@@ -743,16 +783,23 @@ const SPONSOR_HEAD = `<thead><tr><th class="c">No.</th><th>Full name<small>first
 /** The sponsor form's two A4 landscape pages. */
 function sponsorPages(d: MaterialFacts | null, a: MaterialAssets): string {
   const event = d ? escapeHtml(d.title) : "";
-  const split = splitHtml(d, "sf-split");
+  // Clarity audit: one declaration under two causes, so it says whose part can carry Gift Aid.
+  const split = d?.splitStatement ? `<div class="sf-split">${escapeHtml(d.splitStatement)} ${GIFT_AID_NBCC_PART}</div>` : "";
+  const online = sponsorOnlineLine(d);
   const decl = `${split}<p class="sf-decl">${escapeHtml(SPONSOR_DECLARATION)}</p>
     <p class="sf-remember">Remember: please give your full name, home address and postcode, and tick Gift Aid, so that we can claim tax back on your donation.</p>`;
+  // Shared with another cause: only NBCC's share is paid in to NBCC.
+  const payIn = d?.splitStatement && d.nbccSharePercent ? escapeHtml(`Pay NBCC's ${d.nbccSharePercent}% in`) : "Pay the money in";
   // In memory: who it remembers, under the heading, in the quieter colours.
   const memory = d?.memory
     ? `<div class="sf-memory">In memory of ${escapeHtml(d.memory.name)}${d.memory.dates ? `, ${escapeHtml(d.memory.dates)}` : ""}</div>`
     : "";
   const head = (heading: string) => `<div class="sf-head${d?.memory ? " is-memory" : ""}">
       <img src="${a.logo}" alt="Night Before Christmas Campaign">
-      <div class="t"><h1>${heading}</h1><div class="sub">Sponsorship and Gift Aid declaration</div>${memory}</div>
+      <div class="t"><h1>${heading}</h1><div class="sub">Sponsorship and Gift Aid declaration</div>${memory}${
+        // Beside the logo, which is taller than the heading: it takes no room from the rows.
+        online ? `<div class="sf-online">${escapeHtml(online)}</div>` : ""
+      }</div>
       <div class="charity"><b>${CHARITY_NAME} (NBCC)</b><br>Scottish Charity ${CHARITY_NUMBER}<br>nbcc.scot &middot; events@nbcc.scot</div>
     </div>`;
   const fields = `<div class="sf-fields">
@@ -764,7 +811,7 @@ function sponsorPages(d: MaterialFacts | null, a: MaterialAssets): string {
     </div>`;
   const foot = (page: number) => `<div class="sf-foot">
       <div><div class="back">${SEND_IT_BACK}</div>
-      <div class="how">Pay the money in from your private area at nbcc.scot/fundraise/manage, then post this form to Elves Workshop, Annbank Village Hall, Weston Avenue, Annbank, KA6 5EE, or email a clear photo of it to events@nbcc.scot. ${EVERY_POUND}</div></div>
+      <div class="how">${payIn} from your private area at nbcc.scot/fundraise/manage, then post this form to Elves Workshop, Annbank Village Hall, Weston Avenue, Annbank, KA6 5EE, or email a clear photo of it to events@nbcc.scot. ${EVERY_POUND}</div></div>
       <div class="pg">Page ${page} of 2</div>
     </div>
     <div class="sf-legal">${escapeHtml(MATERIALS_STATEMENT)}</div>`;

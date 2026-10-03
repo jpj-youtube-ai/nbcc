@@ -285,7 +285,25 @@ describe("a fundraiser sharing with another cause", () => {
 
   it("adds nothing when it is not shared", async () => {
     await open();
-    for (const kind of KINDS) expect(flat(kind), kind).not.toContain("of what we raise goes to");
+    for (const kind of KINDS) {
+      expect(flat(kind), kind).not.toContain("of what we raise goes to");
+      expect(flat(kind), kind).not.toContain("Gifts made on the NBCC page");
+    }
+  });
+
+  // Clarity audit (Jaimie, 2026-10-03): the statement reads as if each gift were split, so straight
+  // after it each picture says gifts on the NBCC page all go to NBCC. Whole, even with the longest name.
+  it("each picture says, after the split statement, that gifts on the NBCC page all go to NBCC", async () => {
+    const NOTE = "Gifts made on the NBCC page all go to NBCC.";
+    const name = "The Exampleton and District Community Larder and Warm Space for Everyone Who Needs a Hand Over the Long Winter Months";
+    for (const cause of ["Kilmarnock Food Larder", name]) {
+      await open({ sharesWithOther: true, nbccSharePercent: 60, otherCauseName: cause });
+      for (const kind of KINDS) {
+        expect(flat(kind), kind).toContain(`${SPLIT}${cause}. ${NOTE} Night Before Christmas Campaign (NBCC)`);
+        expect(flat(kind), kind).toContain("SC047995");
+        expect(flat(kind), kind).not.toContain("…");
+      }
+    }
   });
 });
 

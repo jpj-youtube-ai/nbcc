@@ -281,11 +281,13 @@
   /* The charity statement, measured: one line if it fits, else two. top: how far above the last
      line's baseline its first line starts. Jaimie, 2026-10-03: a fundraiser sharing what it raises
      with another cause has the statement the 2009 regulations ask for (data.split) first, so it gets
-     up to four lines, and a smaller size before anything would be cut short. */
+     up to four lines, and a smaller size before anything would be cut short. Clarity audit: straight
+     after it, that gifts on the NBCC page all go to NBCC (data.splitNote), with a line more for it. */
   function statementLines(ctx, data, maxWidth, size) {
-    var text = (data.split ? data.split + " " : "") + (data.statement || STATEMENT);
+    var note = data.split && data.splitNote ? data.splitNote + " " : "";
+    var text = (data.split ? data.split + " " + note : "") + (data.statement || STATEMENT);
     var s = data.split
-      ? fit(ctx, text, "400 {s}px " + BODY, maxWidth, 4, size, Math.round(size * 0.6))
+      ? fit(ctx, text, "400 {s}px " + BODY, maxWidth, note ? 5 : 4, size, Math.round(size * 0.6))
       : fit(ctx, text, "400 {s}px " + BODY, maxWidth, 2, size, Math.round(size * 0.75));
     s.step = Math.round(s.size * 1.35);
     s.top = (s.lines.length - 1) * s.step + s.size;

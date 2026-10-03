@@ -168,6 +168,13 @@ describe("paying in, on the help page", () => {
     expect(section).not.toMatch(/link we email/i);
   });
 
+  // Clarity audit (Jaimie, 2026-10-03): "every penny reaches NBCC" is not true of a fundraiser shared
+  // with another cause, so the page makes no such promise.
+  it("opens by saying how NBCC's money reaches us, with no promise about every penny", () => {
+    expect(section).toContain("However you raise it, here is how NBCC’s money reaches us.");
+    expect(html).not.toMatch(/every penny/i);
+  });
+
   it("says how to sign in to the private area with a code", () => {
     expect(section).toContain(
       "Cash and sponsor money can be paid in by card from your private area. Go to nbcc.scot/fundraise/manage, put in your email address, and we will email you a code to sign in.",

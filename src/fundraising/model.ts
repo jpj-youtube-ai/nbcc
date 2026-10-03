@@ -449,6 +449,12 @@ export function splitStatement(f: { sharesWithOther?: boolean | null; nbccShareP
   return `${f.nbccSharePercent}% of what we raise goes to the ${CHARITY_NAME}, Scottish Charity ${OSCR_NUMBER}. The rest goes to ${other}${/[.!?]$/.test(other) ? "" : "."}`;
 }
 
+/**
+ * Clarity audit (Jaimie, 2026-10-03): the statement above reads as if each gift were split. Under it
+ * on a Get involved card, a poster and a picture to share: what is given on the NBCC page is all NBCC's.
+ */
+export const ALL_TO_NBCC = "Gifts made on the NBCC page all go to NBCC.";
+
 // --- the sign up form (POST /api/fundraise) ---------------------------------------------------------
 
 export const signUpSchema = z

@@ -87,6 +87,8 @@ export interface Materials {
   tins: number;
   leafletsOrPosters: number;
   bucketsOrTins: number;
+  /** TASK-511: printed QR codes still to post. */
+  qrCodes?: number;
 }
 
 export interface SummaryCounts {
@@ -294,6 +296,7 @@ export function summaryLines(c: SummaryCounts): SummaryLines {
     m.posters ? `posters (${m.posters})` : "",
     m.leaflets ? `leaflets (${m.leaflets})` : "",
     m.leafletsOrPosters ? `leaflets or posters (${m.leafletsOrPosters})` : "",
+    m.qrCodes ? `printed QR codes (${m.qrCodes})` : "",
   ].filter(Boolean);
   if (posted.length) waiting.push(`${capital(andList(posted))} to post`);
   const sent = [

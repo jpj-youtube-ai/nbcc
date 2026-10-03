@@ -32,10 +32,12 @@ const signUp = (over: Record<string, unknown> = {}) => ({
   town: "Exampleton",
   targetPence: 50000,
   public: true,
-  name: "Robin Testperson",
+  // TASK-511: the name in two boxes, and Facebook in a box of its own.
+  firstName: "Robin",
+  lastName: "Testperson",
   email: "robin@example.com",
   phone: "07700 900123",
-  socialLink: "https://www.facebook.com/example.page",
+  facebook: "https://www.facebook.com/example.page",
   socialOk: true,
   wants: { leaflets: 0, buckets: 0, shoutOut: true, attend: false },
   postAddress: "",
@@ -60,7 +62,7 @@ describe("the sign up form", () => {
       email: "robin@example.com",
       socialLink: "https://www.facebook.com/example.page",
       postLine1: null,
-      wants: { posterCount: 0, leafletCount: 0, bucketCount: 0, tinCount: 0, leaflets: 0, buckets: 0, shoutOut: true, attend: false },
+      wants: { posterCount: 0, leafletCount: 0, bucketCount: 0, tinCount: 0, leaflets: 0, buckets: 0, qrCount: 0, shoutOut: true, attend: false },
     });
   });
 
@@ -71,7 +73,7 @@ describe("the sign up form", () => {
 
   it("needs only the essentials: no date, place, target or link", () => {
     const r = signUpSchema.safeParse(
-      signUp({ eventDate: "", startTime: "", venue: "", town: "", targetPence: null, socialLink: "", wants: undefined }),
+      signUp({ eventDate: "", startTime: "", venue: "", town: "", targetPence: null, facebook: "", wants: { shoutOut: false, attend: false } }),
     );
     expect(r.success).toBe(true);
     if (!r.success) return;
@@ -79,11 +81,12 @@ describe("the sign up form", () => {
     expect(r.data.startTime).toBeNull();
     expect(r.data.targetPence).toBeNull();
     expect(r.data.socialLink).toBeNull();
-    expect(r.data.wants).toEqual({ posterCount: 0, leafletCount: 0, bucketCount: 0, tinCount: 0, leaflets: 0, buckets: 0, shoutOut: false, attend: false });
+    expect(r.data.wants).toEqual({ posterCount: 0, leafletCount: 0, bucketCount: 0, tinCount: 0, leaflets: 0, buckets: 0, qrCount: 0, shoutOut: false, attend: false });
   });
 
   it.each(KINDS)("knows the kind %s, with a name for people", (kind) => {
-    expect(signUpSchema.safeParse(signUp({ kind })).success).toBe(true);
+    // TASK-511: Something else says what, in a few words.
+    expect(signUpSchema.safeParse(signUp({ kind, kindOther: "A sponsored silence" })).success).toBe(true);
     expect(KIND_LABELS[kind]).toMatch(/^[A-Z]/);
   });
 
@@ -100,7 +103,7 @@ describe("the sign up form", () => {
     ["a bad email", { email: "robin.example.com" }],
     ["a date that is not a date", { eventDate: "2026-02-30" }],
     ["a time that is not a time", { startTime: "25:00" }],
-    ["a link that is not a web address", { socialLink: "javascript:alert(1)" }],
+    ["a link that is not a web address", { facebook: "javascript:alert(1)" }],
     ["more leaflets than we could post", { wants: { leaflets: 5000, buckets: 0, shoutOut: false, attend: false } }],
   ])("refuses %s", (_what, over) => {
     expect(signUpSchema.safeParse(signUp(over)).success).toBe(false);

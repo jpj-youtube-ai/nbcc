@@ -9023,6 +9023,8 @@
   var FR_EDITABLE = [
     ["description", "Description"], ["targetPence", "Target"], ["eventDate", "Date"], ["startTime", "Start time"],
     ["venue", "Venue"], ["town", "Town"], ["socialLink", "Facebook or Instagram link"],
+    // TASK-511 review: a sign up made since the form's second round changes these instead.
+    ["instagram", "Instagram"], ["facebook", "Facebook"],
     ["cardLine", "Line for the front of the card"], ["endTime", "Finish time"], ["timeTbc", "Time still to be confirmed"],
     ["venueAddress", "Full address"], ["venuePostcode", "Venue postcode"], ["access", "Access"], ["price", "Price"],
     ["booking", "How people get in"], ["ticketUrl", "Ticket link"], ["ageLimit", "Age limit"], ["dressCode", "Dress code"],
@@ -9638,6 +9640,8 @@
 
   function frAboutPanel(f) {
     var kind = f.kindLabel || (FR_KINDS.filter(function (k) { return k[0] === f.kind; })[0] || [0, f.kind])[1];
+    // TASK-511: Something else, in their words.
+    if (f.kind === "other" && f.kindOther) kind += ": " + f.kindOther;
     var where = [f.venue, f.town].filter(Boolean).join(", ");
     return (
       '<dl class="fx-dl">' +
@@ -9649,7 +9653,7 @@
         fulfilRow("Start time", f.startTime ? H.escapeHtml(String(f.startTime).slice(0, 5)) : frNone("No time")) +
         fulfilRow("Where", where ? H.escapeHtml(where) : frNone("Not given")) +
         fulfilRow("Target", f.targetPence ? H.escapeHtml(frMoney(f.targetPence)) : frNone("No target")) +
-        fulfilRow("On the website", f.public ? "Show it on our website" : "Just letting us know, or only wants materials") +
+        fulfilRow("On the NBCC website", f.public ? "Show it on our website" : "Not on the website") +
         fulfilRow("Web address", '<span class="fx-mono">/fundraise/' + H.escapeHtml(f.slug) + "</span>") +
         fulfilRow("Signed up", H.escapeHtml(H.fmtDate(f.createdAt))) +
         (f.path === "event" ? frEventRows(f) : "") +
@@ -9697,18 +9701,31 @@
     );
   }
 
+  // TASK-511: a sign up made since the form's second round has the name in two parts, and Instagram
+  // and Facebook apart. One from before has one name and one link, and shows and edits as it did.
+  function frSplit(f) {
+    return f.firstName !== null && f.firstName !== undefined && f.firstName !== "";
+  }
+  function frLinkHtml(link) {
+    if (!link) return frNone("Not given");
+    return frIsWebLink(link)
+      ? '<a class="fx-tel" href="' + H.escapeHtml(link) + '" target="_blank" rel="noopener noreferrer">' + H.escapeHtml(link) + "</a>"
+      : '<span class="fx-mono">' + H.escapeHtml(link) + "</span>";
+  }
   function frContactPanel(f) {
-    var social = f.socialLink
-      ? frIsWebLink(f.socialLink)
-        ? '<a class="fx-tel" href="' + H.escapeHtml(f.socialLink) + '" target="_blank" rel="noopener noreferrer">' + H.escapeHtml(f.socialLink) + "</a>"
-        : '<span class="fx-mono">' + H.escapeHtml(f.socialLink) + "</span>"
-      : frNone("Not given");
+    var split = frSplit(f);
+    var names = split
+      ? fulfilRow("First name", H.escapeHtml(f.firstName)) + fulfilRow("Surname", f.lastName ? H.escapeHtml(f.lastName) : frNone("Not given"))
+      : fulfilRow("Name", H.escapeHtml(f.name));
+    var links = split || f.instagram || f.facebook
+      ? fulfilRow("Instagram", frLinkHtml(f.instagram)) + fulfilRow("Facebook", frLinkHtml(f.facebook))
+      : fulfilRow("Facebook or Instagram", frLinkHtml(f.socialLink));
     return (
       '<dl class="fx-dl">' +
-        fulfilRow("Name", H.escapeHtml(f.name)) +
+        names +
         fulfilRow("Phone", f.phone ? '<a class="fx-tel" href="' + H.escapeHtml(telHref(f.phone)) + '">' + H.escapeHtml(f.phone) + "</a>" : frNone("Not given")) +
         fulfilRow("Email", f.email ? '<a class="fx-tel" href="mailto:' + H.escapeHtml(f.email) + '">' + H.escapeHtml(f.email) + "</a>" : frNone("Not given")) +
-        fulfilRow("Facebook or Instagram", social) +
+        links +
         fulfilRow("Post about it on NBCC's social media", fulfilYesNo(f.socialOk)) +
         fulfilRow("Newsletter", fulfilYesNo(f.newsletterOk)) +
       "</dl>"
@@ -9729,14 +9746,15 @@
     // TASK-499: posters, leaflets, buckets and tins each on their own; a sign up from before asked
     // for "leaflets or posters" and "buckets or tins", and reads as it always did.
     [["posterCount", " poster", " posters"], ["leafletCount", " leaflet", " leaflets"],
-      ["bucketCount", " collection bucket", " collection buckets"], ["tinCount", " collection tin", " collection tins"]].forEach(function (c) {
+      ["bucketCount", " collection bucket", " collection buckets"], ["tinCount", " collection tin", " collection tins"],
+      ["qrCount", " printed QR code", " printed QR codes"]].forEach(function (c) {
       var n = Number(w[c[0]]) || 0;
       if (n > 0) items.push(n + (n === 1 ? c[1] : c[2]));
     });
     var posted = items.length > 0 || leaflets > 0 || buckets > 0;
     if (leaflets > 0) items.push(leaflets + (leaflets === 1 ? " leaflet or poster" : " leaflets or posters"));
     if (buckets > 0) items.push(buckets + (buckets === 1 ? " bucket or tin" : " buckets or tins"));
-    if (w.shoutOut) items.push("A social media shout out");
+    if (w.shoutOut) items.push(f.socialOk ? "A social media shout out" : "A social media shout out, but they have not said we can post about it yet");
     if (w.attend) items.push("Someone from NBCC to come along");
     var list = items.length
       ? '<ul class="fr-wants">' + items.map(function (s) { return "<li>" + H.escapeHtml(s) + "</li>"; }).join("") + "</ul>"
@@ -9833,6 +9851,9 @@
       eventDate: f.eventDate || "", startTime: f.startTime ? String(f.startTime).slice(0, 5) : "", venue: f.venue || "",
       town: f.town || "", target: frPounds(f.targetPence), public: !!f.public, slug: f.slug || "",
       name: f.name || "", email: f.email || "", phone: f.phone || "", socialLink: f.socialLink || "", socialOk: !!f.socialOk,
+      // TASK-511
+      firstName: f.firstName || "", lastName: f.lastName || "", kindOther: f.kindOther || "", instagram: f.instagram || "",
+      facebook: f.facebook || "", qrCount: String(Number(w.qrCount) || 0),
       postAddress: f.postAddress || "", leaflets: String(Number(w.leaflets) || 0), buckets: String(Number(w.buckets) || 0),
       shoutOut: !!w.shoutOut, attend: !!w.attend,
       // TASK-499
@@ -9856,9 +9877,11 @@
     return (Number(w.leaflets) || 0) > 0 || (Number(w.buckets) || 0) > 0;
   }
   var FR_TEXT_FIELDS = ["title", "kind", "path", "description", "venue", "town", "slug", "name", "email", "phone", "socialLink", "postAddress",
+    "firstName", "lastName", "kindOther", "instagram", "facebook",
     "postLine1", "postLine2", "postTown", "postPostcode", "cardLine", "venueAddress", "venuePostcode", "price", "booking", "ticketUrl",
     "ageLimit", "dressCode", "included", "creditName"];
-  var FR_COUNTS = [["posterCount", "5"], ["leafletCount", "50"], ["bucketCount", "2"], ["tinCount", "2"], ["leaflets", "50"], ["buckets", "2"]];
+  var FR_COUNTS = [["posterCount", "5"], ["leafletCount", "50"], ["bucketCount", "2"], ["tinCount", "2"], ["leaflets", "50"], ["buckets", "2"],
+    ["qrCount", "20"]];
 
   function frEditForm(f) {
     // What is live, with only the boxes someone has typed in laid over it (frEditDraft).
@@ -9898,6 +9921,9 @@
         head("The fundraiser") +
         box("title", "title", "Name for it", "text", 'maxlength="100" autocomplete="off"') +
         pick("kind", "Kind", FR_KINDS) +
+        // TASK-511 review: always there, shown as soon as Something else is chosen (keepTyping).
+        box("kindOther", "kindOther", "What it is, in their words (optional)", "text", 'maxlength="80" autocomplete="off"', "For Something else. Up to 80 characters.")
+          .replace('<div class="fr-field">', '<div class="fr-field" data-frkindother' + (v.kind === "other" || v.kindOther ? "" : " hidden") + ">") +
         pick("path", "They are", [["raising", "Raising money"], ["event", "Holding an event"]]) +
         area("description", "description", "About it", 4, 1000) +
         box("eventDate", "eventDate", "Date (optional)", "date", "") +
@@ -9905,13 +9931,19 @@
         box("venue", "venue", "Venue (optional)", "text", 'maxlength="120" autocomplete="off"') +
         box("town", "town", "Town (optional)", "text", 'maxlength="80" autocomplete="off"') +
         box("target", "targetPence", "Target in pounds (optional)", "text", 'inputmode="decimal" autocomplete="off"', "From £10 to £100,000. Leave it empty for no target.") +
-        box("slug", "slug", "Web address", "text", 'maxlength="60" autocomplete="off" spellcheck="false"', "The end of nbcc.scot/fundraise/ in small letters and numbers, with a hyphen between words.") +
+        box("slug", "slug", "Web address", "text", 'maxlength="60" autocomplete="off" spellcheck="false"', "The end of nbcc.scot/fundraise/ in small letters and numbers, with a hyphen between words. Change it and the old address still works, sending people on to the new one.") +
         tick("public", "public", "Show it on our website") +
         head("The organiser") +
-        box("name", "name", "Name", "text", 'maxlength="100" autocomplete="off"') +
+        (frSplit(f)
+          ? box("firstName", "firstName", "First name", "text", 'maxlength="50" autocomplete="off"') +
+            box("lastName", "lastName", "Surname", "text", 'maxlength="50" autocomplete="off"')
+          : box("name", "name", "Name", "text", 'maxlength="100" autocomplete="off"')) +
         box("email", "email", "Email", "email", 'maxlength="254" autocomplete="off" spellcheck="false"') +
         box("phone", "phone", "Phone", "tel", 'maxlength="20" autocomplete="off"') +
-        box("socialLink", "socialLink", "Facebook or Instagram link (optional)", "url", 'maxlength="300" autocomplete="off" spellcheck="false"') +
+        (frSplit(f) || f.instagram || f.facebook
+          ? box("instagram", "instagram", "Instagram (optional)", "text", 'maxlength="300" autocomplete="off" spellcheck="false"', "A name like @theirname, or the link to their profile.") +
+            box("facebook", "facebook", "Facebook (optional)", "text", 'maxlength="300" autocomplete="off" spellcheck="false"', "A page name, or the link to their page, group or event.")
+          : box("socialLink", "socialLink", "Facebook or Instagram link (optional)", "url", 'maxlength="300" autocomplete="off" spellcheck="false"')) +
         tick("socialOk", "socialOk", "They are happy for NBCC to post about it on social media") +
         (f.path === "event" ? frEventEditFields(box, area, tick, head, v, e) : "") +
         head("What they would like") +
@@ -9919,6 +9951,10 @@
         box("leafletCount", "wants.leafletCount", "Leaflets", "text", 'inputmode="numeric" autocomplete="off"', "How many. 0 for none, up to 1,000.") +
         box("bucketCount", "wants.bucketCount", "Collection buckets", "text", 'inputmode="numeric" autocomplete="off"', "How many. 0 for none, up to 20.") +
         box("tinCount", "wants.tinCount", "Collection tins", "text", 'inputmode="numeric" autocomplete="off"', "How many. 0 for none, up to 20.") +
+        // TASK-511 review: printed QR codes carry a page's QR code, and an event has none.
+        (f.path !== "event" || Number(v.qrCount) > 0
+          ? box("qrCount", "wants.qrCount", "Printed QR codes", "text", 'inputmode="numeric" autocomplete="off"', "Cards or stickers with their page\u2019s QR code. 0 for none, up to 200.")
+          : "") +
         (frHasOldRequests(f)
           ? box("leaflets", "wants.leaflets", "Leaflets or posters", "text", 'inputmode="numeric" autocomplete="off"', "Asked for before posters and leaflets were split. 0 for none, up to 1,000.") +
             box("buckets", "wants.buckets", "Buckets or tins to borrow", "text", 'inputmode="numeric" autocomplete="off"', "Asked for before buckets and tins were split. 0 for none, up to 20.")
@@ -10261,7 +10297,7 @@
     }
     var wants = {
       posterCount: counts.posterCount, leafletCount: counts.leafletCount, bucketCount: counts.bucketCount, tinCount: counts.tinCount,
-      leaflets: counts.leaflets, buckets: counts.buckets, shoutOut: !!typed.shoutOut, attend: !!typed.attend,
+      leaflets: counts.leaflets, buckets: counts.buckets, qrCount: counts.qrCount, shoutOut: !!typed.shoutOut, attend: !!typed.attend,
     };
     var countChanged = FR_COUNTS.some(function (c) { return String(wants[c[0]]) !== live[c[0]]; });
     if (countChanged || wants.shoutOut !== live.shoutOut || wants.attend !== live.attend) {
@@ -10505,6 +10541,12 @@
       if (t.closest("#frEditForm") && t.name) {
         frEditDraft = frEditDraft || {};
         frEditDraft[t.name] = t.type === "checkbox" ? !!t.checked : String(t.value || "");
+        // TASK-511 review: what Something else is, as soon as it is chosen.
+        if (t.name === "kind") {
+          var other = t.closest("#frEditForm").querySelector("[data-frkindother]");
+          var said = other && other.querySelector("input");
+          if (other) other.hidden = t.value !== "other" && !(said && String(said.value || "").trim());
+        }
       }
       var cashForm = t.closest("#frCashForm");
       if (cashForm) {
@@ -10982,7 +11024,7 @@
   // Did they ask for anything? Read from the sign up itself, for when the requests could not load.
   function frAskedAnything(f) {
     var w = f.wants || {};
-    return ["posterCount", "leafletCount", "bucketCount", "tinCount", "leaflets", "buckets"].some(function (k) {
+    return ["posterCount", "leafletCount", "bucketCount", "tinCount", "leaflets", "buckets", "qrCount"].some(function (k) {
       return Number(w[k]) > 0;
     }) || !!w.shoutOut || !!w.attend;
   }

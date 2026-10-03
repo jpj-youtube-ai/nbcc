@@ -158,10 +158,11 @@ When("someone signs up {string} from that invite", async function (title) {
     town: "Exampleton",
     targetPence: 20000,
     public: true,
-    name: this.invite.name,
+    // TASK-511: the name in two boxes, as the form fills them in from the invite.
+    firstName: this.invite.name.split(" ")[0],
+    lastName: this.invite.name.split(" ").slice(1).join(" "),
     email: this.invite.email,
     phone: "07700 900126",
-    socialLink: "",
     socialOk: false,
     wants: { posterCount: 0, leafletCount: 0, bucketCount: 0, tinCount: 0, shoutOut: false, attend: false },
     newsletterOk: false,

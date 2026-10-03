@@ -244,7 +244,7 @@ describe("waiting on us", () => {
   });
 
   it("adds up what is to be sent, from the split requests and the old combined ones, leaving out anything past its date", () => {
-    expect(c.materials).toEqual({ posters: 10, leaflets: 50, buckets: 2, tins: 1, leafletsOrPosters: 3, bucketsOrTins: 1 });
+    expect(c.materials).toEqual({ posters: 10, leaflets: 50, buckets: 2, tins: 1, leafletsOrPosters: 3, bucketsOrTins: 1, qrCodes: 0 });
     expect(c.materialsFundraisers).toBe(5);
   });
 
@@ -324,7 +324,7 @@ describe("requests tracked to done", () => {
   const c = summaryCounts(tracked);
 
   it("counts only what is still to send", () => {
-    expect(c.materials).toEqual({ posters: 0, leaflets: 50, buckets: 0, tins: 1, leafletsOrPosters: 3, bucketsOrTins: 1 });
+    expect(c.materials).toEqual({ posters: 0, leaflets: 50, buckets: 0, tins: 1, leafletsOrPosters: 3, bucketsOrTins: 1, qrCodes: 0 });
     expect(c.materialsFundraisers).toBe(4);
   });
 

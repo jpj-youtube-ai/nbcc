@@ -34,10 +34,11 @@ const raising = (over: Record<string, unknown> = {}) => ({
   town: "Exampleton",
   targetPence: 50000,
   public: true,
-  name: "Robin Testperson",
+  // TASK-511: the name in two boxes; no link at all now means neither box.
+  firstName: "Robin",
+  lastName: "Testperson",
   email: "robin@example.com",
   phone: "07700 900123",
-  socialLink: "",
   socialOk: false,
   wants: NOTHING,
   newsletterOk: false,

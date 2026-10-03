@@ -52,7 +52,9 @@ describe("a form opened from an invite", () => {
     expect(inviteCalls()).toHaveLength(1);
     expect(inviteCalls()[0].init?.method).toBe("POST");
     expect(JSON.parse(String(inviteCalls()[0].init?.body))).toEqual({ token: TOKEN });
-    expect($("#name").value).toBe("Alex Example");
+    // TASK-511: the name in two boxes: the first word, and the rest as the surname.
+    expect($("#firstName").value).toBe("Alex");
+    expect($("#lastName").value).toBe("Example");
     expect($("#email").value).toBe("alex@example.com");
     for (const id of ["title", "description", "phone", "town"]) expect($(`#${id}`).value).toBe("");
     expect(form.payload().invite).toBe(TOKEN);
@@ -85,9 +87,9 @@ describe("a form opened from an invite", () => {
 
   it("keeps anything already typed", async () => {
     load(`?invite=${TOKEN}`);
-    $("#name").value = "Alexandra Example";
+    $("#firstName").value = "Alexandra";
     await settle();
-    expect($("#name").value).toBe("Alexandra Example");
+    expect($("#firstName").value).toBe("Alexandra");
     expect($("#email").value).toBe("alex@example.com");
   });
 
@@ -95,7 +97,8 @@ describe("a form opened from an invite", () => {
     inviteAnswer = { status: 404, body: { error: "That invite link has expired or already been used. You can still fill in the form." } };
     const form = load(`?invite=${TOKEN}`);
     await settle();
-    expect($("#name").value).toBe("");
+    expect($("#firstName").value).toBe("");
+    expect($("#lastName").value).toBe("");
     expect(form.payload().invite).toBeUndefined();
   });
 });

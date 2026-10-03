@@ -71,7 +71,7 @@ describe("reading a row", () => {
       created_at: "2026-10-02T10:00:00Z", approved_at: null, approved_by: null, updated_at: "2026-10-02T10:00:00Z", updated_by: null,
     });
     expect(r.id).toBe(3);
-    expect(r.wants).toEqual({ posterCount: 0, leafletCount: 0, bucketCount: 0, tinCount: 0, leaflets: 0, buckets: 0, shoutOut: false, attend: false });
+    expect(r.wants).toEqual({ posterCount: 0, leafletCount: 0, bucketCount: 0, tinCount: 0, leaflets: 0, buckets: 0, qrCount: 0, shoutOut: false, attend: false });
     expect(r.createdAt).toBe("2026-10-02T10:00:00.000Z");
   });
 });
@@ -153,15 +153,15 @@ describe("two sign ups with the same name at the same moment", () => {
       if (sql.startsWith("SELECT slug FROM fundraisers")) {
         slugReads += 1;
         // The second look sees the address the other sign up has just taken.
-        return { rows: slugReads === 1 ? [] : [{ slug: "sams-walk" }] };
+        return { rows: slugReads === 1 ? [] : [{ slug: "sw" }] };
       }
       if (sql.includes("INSERT INTO fundraisers")) {
         inserts += 1;
         if (inserts === 1) return Object.assign(new Error("duplicate key"), { code: "23505", constraint: "fundraisers_slug_key" });
-        expect(params[0]).toBe("sams-walk-2");
+        expect(params[0]).toBe("sw2");
         return { rows: [{ id: 12 }] };
       }
-      if (sql.includes("FROM fundraisers f WHERE f.id = $1")) return { rows: [fundraiserRow({ id: 12, slug: "sams-walk-2", status: "new" })] };
+      if (sql.includes("FROM fundraisers f WHERE f.id = $1")) return { rows: [fundraiserRow({ id: 12, slug: "sw2", status: "new" })] };
       return { rows: [] };
     });
     const made = await createFundraiser({
@@ -170,7 +170,7 @@ describe("two sign ups with the same name at the same moment", () => {
       socialLink: null, socialOk: false, wants: { leaflets: 0, buckets: 0, shoutOut: false, attend: false }, postAddress: null,
       newsletterOk: false,
     });
-    expect(made.slug).toBe("sams-walk-2");
+    expect(made.slug).toBe("sw2");
     const sqls = calls.map(([s]) => s);
     expect(sqls).toContain("ROLLBACK TO SAVEPOINT fundraiser_slug");
     expect(sqls).toContain("COMMIT");
@@ -325,12 +325,12 @@ describe("the sign up details (TASK-499)", () => {
       included: "A cuppa",
       creditName: "The Example Bakers",
     });
-    expect(r.wants).toEqual({ posterCount: 2, leafletCount: 30, bucketCount: 1, tinCount: 4, leaflets: 0, buckets: 0, shoutOut: true, attend: false });
+    expect(r.wants).toEqual({ posterCount: 2, leafletCount: 30, bucketCount: 1, tinCount: 4, leaflets: 0, buckets: 0, qrCount: 0, shoutOut: true, attend: false });
   });
 
   it("reads a sign up from before the new questions as not answered, with its old combined requests", () => {
     const r = toRecord(fundraiserRow({ wants: { leaflets: 20, buckets: 1, shoutOut: false, attend: true }, post_address: "1 Old Street" }));
-    expect(r.wants).toEqual({ posterCount: 0, leafletCount: 0, bucketCount: 0, tinCount: 0, leaflets: 20, buckets: 1, shoutOut: false, attend: true });
+    expect(r.wants).toEqual({ posterCount: 0, leafletCount: 0, bucketCount: 0, tinCount: 0, leaflets: 20, buckets: 1, qrCount: 0, shoutOut: false, attend: true });
     expect(r.postAddress).toBe("1 Old Street");
     expect(r).toMatchObject({ postLine1: null, cardLine: null, endTime: null, timeTbc: false, access: [], booking: null, creditName: null });
   });

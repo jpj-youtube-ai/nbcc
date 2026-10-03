@@ -7249,7 +7249,7 @@ is listed, every page is a 404, and the private area is closed, until an admin s
 | Public API | `src/routes/fundraise.ts` |
 | Admin API | `src/routes/admin-fundraising.ts` |
 | Checkout and webhook additions | `src/routes/api.ts`, `src/db/stripe-webhook-model.ts`, `src/db/stripe-webhook.ts` |
-| Tables | `migrations/1791200000000_fundraising.js`; access backfill `1791200000001_permissions-fundraising.js`; newsletter source `1791200000002_newsletter-source-fundraise.js`; the address boxes and event questions (TASK-499) `1791200000040_fundraiser-sign-up-details.js`; the private area (TASK-501) `1791200000050_fundraising-private-area.js`; the message after paying (TASK-502) `1791200000060_fundraising-wall-after-paying.js`; news updates (TASK-506) `1791200000100_fundraiser-updates.js` |
+| Tables | `migrations/1791200000000_fundraising.js`; access backfill `1791200000001_permissions-fundraising.js`; newsletter source `1791200000002_newsletter-source-fundraise.js`; the address boxes and event questions (TASK-499) `1791200000040_fundraiser-sign-up-details.js`; the private area (TASK-501) `1791200000050_fundraising-private-area.js`; the message after paying (TASK-502) `1791200000060_fundraising-wall-after-paying.js`; news updates (TASK-506) `1791200000100_fundraiser-updates.js`; the form's second round and old page links (TASK-511) `1791200000130_fundraising-form-v2.js` |
 
 ### Data
 
@@ -7307,12 +7307,17 @@ All JSON. Money is always in **pence**. Dates are `YYYY-MM-DD`, times `HH:MM`.
   "startTime": "10:30 or empty",
   "venue": "", "town": "",
   "targetPence": 50000,                    // optional, 1000 to 10000000; ignored for an event
-  "public": true,                          // show it on the website, or only to let us know
-  "name": "...", "email": "...", "phone": "...",   // all required
-  "socialLink": "https://... or empty",
-  "socialOk": false,                       // we may post about it on NBCC's social media
+  "public": true,                          // show it on the NBCC website, or only to let us know
+  "kindOther": "",                         // TASK-511: required when kind is other, up to 80; dropped otherwise
+  "firstName": "...", "lastName": "...",   // TASK-511: both required, up to 50 each; "name" is made from them
+  "email": "...", "phone": "...",          // required
+  "instagram": "@name, name or a link",    // TASK-511: optional; tidied to https://www.instagram.com/<name>
+  "facebook": "name or a link",            // TASK-511: optional; tidied to https://www.facebook.com/<path>
+  "socialOk": true,                        // TASK-511: required, true or false: we may post about it
   "wants": { "posterCount": 0, "leafletCount": 0, "bucketCount": 0, "tinCount": 0,   // TASK-499
-             "shoutOut": false, "attend": false },  // printed up to 1,000 each, buckets and tins up to 20
+             "qrCount": 0,                 // TASK-511: printed QR codes, up to 200; 0 for an event
+             "shoutOut": false, "attend": false },  // TASK-511: both required, true or false
+                                           // printed up to 1,000 each, buckets and tins up to 20
   "postLine1": "...", "postLine2": "", "postTown": "...", "postPostcode": "KA1 1AA",
                                            // line 1, town and a UK postcode required once anything is
                                            // to be posted; kept only then. postAddress is dropped.
@@ -7417,7 +7422,7 @@ transaction, with the actor `admin:<email>`.
 | `PATCH /api/admin/fundraising/settings` (admins only) | `{ pageOn: boolean }` | `{ pageOn, updatedAt, updatedBy }`; switching on then sends "Your page is live" to every approved page holder still waiting, in the background (see Emails) |
 | `GET /api/admin/fundraisers` | | `{ pageOn, fundraisers: [Fundraiser + meter + editWaiting] }`, newest first |
 | `GET /api/admin/fundraisers/:id` | | `{ fundraiser, meter, waitingEdit, editWaiting, edits, cash, wall }` |
-| `PATCH /api/admin/fundraisers/:id` | any of the sign up fields, plus `slug` and `imageSrc` | `{ fundraiser }`; `409` if the slug is taken |
+| `PATCH /api/admin/fundraisers/:id` | any of the sign up fields, plus `slug` and `imageSrc` | `{ fundraiser }`; `409` if the slug is taken, or (TASK-511) was ever another page's |
 | `POST /api/admin/fundraisers/:id/approve` | | `{ fundraiser }`; emails the organiser, or marks a page holder as waiting while fundraising is off (see below); from New or Declined |
 | `POST /api/admin/fundraisers/:id/decline` | `{ reason? }` (internal, up to 500) | `{ fundraiser }`; from New or Approved; no email |
 | `POST /api/admin/fundraisers/:id/finish` | | `{ fundraiser }`; from Approved |
@@ -8172,6 +8177,122 @@ organiser's words), `fundraising-requests-db`, `fundraising-requests-migration`,
 (only their own), `fundraise-manage-page` and `backup-plan`. BDD:
 `features/fundraising-requests.feature` (posters sent and a bucket out then back take what is
 waiting down; a second press changes nothing; Undo goes back one step).
+## The fundraising sign up form, round two, and short page links (TASK-511)
+
+Jaimie's second round of changes to the sign up form at `/fundraise`, and shorter page links.
+
+**One question after another.** `assets/js/fundraise.js` adds `fr-stepped` to the form and shows
+each question (each `[data-step]`) once the one before is answered: answered means every question
+in it that needs an answer, and is in play for their path, is valid (read from `validity`, so
+nothing is flagged red on the way), checked when they leave a box (`change`) or pause typing for
+0.6 seconds, never on the first key. A step with nothing it needs comes along with the one before; a
+step once shown is never taken away. Once every question for their path shows, stepping stops (and
+the other path's questions are let go, so a change of path shows them at once); a fault in the
+form's own tidying never stops the next question coming. Each new one is said in a polite live region ("Next question:
+What kind of event is it?"), focus stays where they are, and "Show all the questions at once" (or
+pressing Send) shows every one, Send then flagging whatever is missing. The rise and fade is off for
+anyone who asks for less motion. Without the script every question is in the page as it is.
+The order: what you are planning, what kind, about it, the event's card (events only), the target
+(raising money only), the NBCC website, your details, social media, what you would like, and the
+newsletter and Send.
+
+**Words that follow the first answer.** Elements with `data-say-raising` and `data-say-event` take
+those words once a path is chosen ("What are you doing to raise money?" or "What kind of event is
+it?"), and a control's `data-invalid-raising` or `data-invalid-event` becomes its message. The
+server's messages follow the path too (`kindMissing`, `kindOtherMissing` in
+`src/fundraising/model.ts`).
+
+**The answers.**
+
+- First name and surname, both required (up to 50 each). Stored in `first_name` and `last_name`;
+  `organiser_name` is still filled as "first last" for everything that reads it. A sign up from
+  before keeps its one name. In the admin a new one shows and edits both parts, and changing either
+  changes the whole name with it (`organiserNameFor`); an old one shows and edits its one name.
+- "Something else" asks what, in up to 80 characters, worded for the path, required when chosen
+  (`kind_other`; dropped for any other kind). Shown in the staff email and the admin as
+  "Something else: A sponsored silence".
+- **Social media** is a step of its own: their Instagram and their Facebook (optional), "Can we post
+  about it on NBCC's social media?" and "Would you like a shout out from us?". A handle (`@name` or
+  `name`) or a link, with or without https, from the app or the website, is tidied to one full link
+  (`src/fundraising/social.ts`): `https://www.instagram.com/<name>` (a profile, never a post), and
+  `https://www.facebook.com/<path>` (a page, group, event, share link, or `profile.php?id=`; a post
+  or video link, `story.php`, `permalink.php`, `photo.php`, `video.php` or `watch`, keeps its
+  query less tracking such as `fbclid` and `utm_*`); any other website is refused in plain words.
+  The browser has a copy of these rules (`assets/js/social-handles.js`, held to the same answers by
+  `fundraising-social-links`), so the form says what is wrong as they leave the box and holds Send.
+  Stored in `instagram` and `facebook`; `social_link` is still filled (Facebook first) for
+  anything that reads it, and follows every later change to either link (`socialLinkFor`, on a
+  staff change and on approving an organiser's); an old sign up keeps its one link. The organiser's
+  private area changes Instagram and Facebook in boxes of their own for a sign up made since
+  (`linkBoxes: "two"` on `GET /api/fundraise/manage/me`; still approved by staff), and the one link
+  box for one from before (`"one"`). A
+  shout out asked for without their OK to post is taken, and the form, the staff email and the
+  admin all say we need their OK first.
+- **Yes or no** questions (posting about it, a shout out, someone coming along, and the website) are
+  a pair of choices with nothing chosen, and must be answered: the server asks for any missing one,
+  never taking it as No. The newsletter stays an unticked box they tick to join.
+- **The website question** says which website: "Shall we show it on the NBCC website, on our Get
+  involved page?", and that we are happy to help with posters, leaflets, buckets and the rest
+  either way.
+- **Printed QR codes** (cards or stickers with their page's QR code): "How many printed QR codes would
+  you like?", 0 to 200, asked only of someone raising money (an event has no page, so the server
+  keeps 0 for one). Stored as `qrCount` in `wants`; they need an address, like posters. A staff
+  change to what they would like that does not send `qrCount` keeps the stored number.
+- **A choice made is holly green** (`--holly`): the card's border (doubled), its fill, the radio and
+  tick themselves, with a holly focus ring. Yes and No sit side by side, even on a phone.
+
+**Requests.** Printed QR codes are a request kind of their own, `qr_codes` ("QR codes", To send then
+Sent, like posters), in the admin's Requests part, the totals, the Monday summary ("printed QR codes
+(30) to post") and the organiser's private area (in words only, as every request is).
+
+**Short page links.** A new sign up's page is `nbcc.scot/fundraise/<initials>`: the first letter or
+number of each word of its name, in lower case ("Sam's Santa Dash" is `ssd`). Under two letters, the
+first word is used instead ("Bakeathon"); nothing usable, `fundraiser`. A clash takes a number
+(`ssd2`, `ssd3`); a reserved address (`RESERVED_SLUGS`: manage, help, logos, sponsor-form) is never
+used. Existing pages keep the link they have. Staff can still change any page's link in the admin.
+Rules: `src/fundraising/slugs.ts`; the lookup of what is taken: `freeSlug` in
+`src/db/fundraisers.ts`.
+
+**Old page links keep working.** When staff change a page's link, the old one is kept in
+`fundraiser_slug_history`, and `/fundraise/<old>` (and its `qr.svg` and `qr.png`) answer with a
+**301** to the page's link now, query string kept, while it has a page; otherwise the site's 404. So a
+QR code printed with the old link never breaks. The 301 carries `Cache-Control: public,
+max-age=3600`, so a browser asks again after an hour (a link changed and later changed back never
+sends anyone round in a circle). No other page may ever take an old link: a new sign up counts
+every one as taken, and staff giving one to another page get a `409`; who may take which address is
+decided one at a time (a transaction lock, `pg_advisory_xact_lock`, around picking a sign up's
+address and moving a page), so a sign up can never take an old address in the moment a page is
+moved off it. A page may take back a link it had before.
+
+### Data (`migrations/1791200000130_fundraising-form-v2.js`, additive only)
+
+New nullable columns on `fundraisers`: `first_name`, `last_name`, `kind_other`, `instagram`,
+`facebook`. A new table, `fundraiser_slug_history`: the old link (primary key, so each once), the
+fundraiser (cleared with it), when and by whom. The requests' kind check is widened to take
+`qr_codes`: the old check is dropped by its name (`fundraiser_requests_kind_check`, the name
+Postgres gave the column check in 080), and any other check listing the kinds (found by
+`shout_out` in it: Postgres keeps `kind IN (...)` as `kind = ANY (ARRAY[...])`, so the words
+"kind IN" are never there), and the widened one is added back under that name; the rollback puts the
+old list back `NOT VALID`. Printed QR codes need no column: a new key in `wants`. Numbered 130,
+above 110 and 120. The nightly
+backup's table count is 70.
+
+### Where it lives, and tests
+
+Form: `fundraise.html`, `assets/js/fundraise.js`, the "TASK-511" block in
+`assets/css/fundraising.css`. Rules: `src/fundraising/model.ts` (the sign up and staff schemas,
+`organiserNameFor`), `src/fundraising/social.ts`, `src/fundraising/slugs.ts`,
+`src/fundraising/requests.ts`, `src/fundraising/summary.ts`, the staff email in
+`src/fundraising/emails.ts`. SQL: `src/db/fundraisers.ts`, `src/db/fundraiser-slugs.ts`. The
+redirect: `src/routes/fundraise-pages.ts`. Admin: `assets/js/admin/app.js`. Unit tests:
+`fundraise-signup-steps` (jsdom: one question after another, the words, nothing preselected, the
+payload, the look), `fundraise-signup-page`, `fundraising-signup-v2`, `fundraising-social-links`,
+`fundraising-short-links`, `fundraisers-db-v2`, `fundraise-old-address`, `fundraising-qr-requests`,
+`fundraising-staff-email-v2`, `fundraising-form-v2-migration`, `admin-fundraising-page` and
+`backup-plan`. BDD: `features/fundraising-form-v2.feature` (a sign up with the new answers gets an
+initials link, a clash takes the next number, an old link answers 301 and is never given to another
+page).
+
 ## Fundraiser pages: countdown, on the day, and news updates (TASK-506)
 
 Two things for a raising money fundraiser's own page (`/fundraise/<slug>`), decided by Jaimie on

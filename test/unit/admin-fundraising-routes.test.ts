@@ -241,7 +241,8 @@ describe("approving and the rest", () => {
     db.patchFundraiser.mockRejectedValue(new FundraiserError("slug_taken"));
     const res = await run(routes.patchAdminFundraiser, { params: P, token: tokenFor("editor"), body: { slug: "taken-already" } });
     expect(res.statusCode).toBe(409);
-    expect(res.body).toEqual({ error: "Another fundraiser already uses that web address" });
+    // TASK-511: an address a page used to have is never reused either, as it still leads to that page.
+    expect(res.body).toEqual({ error: "Another fundraiser has that web address, or had it before, so it cannot be used" });
   });
 
   it("refuses to decide a change the organiser has since replaced, and says to look again", async () => {

@@ -130,12 +130,36 @@ textarea.give-field-input { min-height: 0; }
 .fr-option input { width: 22px; height: 22px; flex: none; margin: 2px 0 0; padding: 0; accent-color: var(--holly); }
 .fr-option strong { display: block; font-weight: 600; color: var(--maroon); font-size: 1.05rem; }
 .fr-option small { display: block; margin-top: 4px; font-size: 0.92rem; line-height: 1.5; color: var(--slate-soft); }
-.fr-option:has(input:checked) { border-color: var(--holly); background: var(--holly-soft); }
+/* TASK-511: a choice made is NBCC holly green: the border (doubled), the fill and the radio itself. */
+.fr-option:has(input:checked) { border-color: var(--holly); background: var(--holly-soft); box-shadow: inset 0 0 0 1px var(--holly); }
 .fr-option:has(input:focus-visible) { outline: 3px solid var(--holly); outline-offset: 3px; }
 .fr-option--small { align-items: center; padding: 12px 16px; }
 .fr-option--small span { font-weight: 600; color: var(--maroon); }
 fieldset.is-invalid .fr-option { border-color: var(--crimson); }
 .fr-kinds { margin: 4px 0 18px; }
+
+/* ---------- TASK-511: one question after another, and every choice in holly green ----------
+   fundraise.js adds fr-stepped and reveals each question once the one before is answered. Without
+   the script nothing here applies and every question shows. The reveal is a short rise and fade,
+   and none at all for anyone who asks for less motion. */
+.fr-stepped .give-question.is-waiting { display: none; }
+@media (prefers-reduced-motion: no-preference) {
+  .fr-stepped .give-question.is-arriving { animation: fr-arrive 0.36s cubic-bezier(0.25, 1, 0.5, 1) both; }
+}
+@keyframes fr-arrive { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+.fr-show-all { margin: 14px 0 0; font-size: 0.95rem; }
+.fr-kinds .fr-kind-other { margin: 16px 0 0; }
+.fr-option:has(input:checked):hover { border-color: var(--holly-dark); }
+.fr-option:has(input:checked) strong, .fr-option--small:has(input:checked) span { color: var(--holly-dark); }
+.fr-form .give-check-box, .fr-form .fr-option input { accent-color: var(--holly); }
+.fr-form .give-check:has(.give-check-box:checked) .give-check-text { color: var(--holly-dark); }
+.fr-form .give-check:has(.give-check-box:focus-visible) { outline: 3px solid var(--holly); outline-offset: 2px; border-radius: 8px; }
+/* Yes and No side by side, even on a phone, and never wider than they need. */
+.fr-options.fr-options--yesno { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; max-width: 340px; }
+.fr-options--yesno .fr-option--small { justify-content: flex-start; }
+.fr-note { margin: 12px 0 0; padding: 10px 14px; border-left: 3px solid var(--holly); border-radius: 8px; background: var(--holly-soft); color: var(--holly-dark); font-size: 0.95rem; line-height: 1.5; }
+.fr-note:empty { display: none; }
+.fr-either-way { margin: 14px 0 0; font-size: 0.95rem; color: var(--slate-soft); }
 
 /* ---------- the sign up's target and counts ---------- */
 .fr-target .give-custom-field { max-width: 320px; }

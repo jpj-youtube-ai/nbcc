@@ -7,8 +7,8 @@ import {
   finishTimeProblem,
   hasPage,
   meter,
-  slugify,
-  RESERVED_SLUGS,
+  organiserNameFor,
+  socialLinkFor,
   wallEntries,
   wallStepVerdict,
   type AdminPatch,
@@ -22,6 +22,7 @@ import {
   type WallSourceRow,
   type WallStepVerdict,
 } from "../fundraising/model";
+import { freeSlugFrom, initialsSlug } from "../fundraising/slugs";
 
 // TASK-493: the SQL behind community fundraising. The rules live in src/fundraising/model.ts; this
 // file only moves rows. Every write a person makes (staff, an organiser, the public form, Stripe)
@@ -94,6 +95,12 @@ const COLUMNS = {
   dressCode: "dress_code",
   included: "included",
   creditName: "credit_name",
+  // TASK-511
+  firstName: "first_name",
+  lastName: "last_name",
+  kindOther: "kind_other",
+  instagram: "instagram",
+  facebook: "facebook",
 } as const;
 type PatchField = keyof typeof COLUMNS;
 
@@ -108,7 +115,8 @@ const RECORD_COLUMNS = `f.id, f.slug, f.path, f.kind, f.title, f.description,
          to_char(f.end_time, 'HH24:MI') AS end_time,
          f.time_tbc, f.venue_address, f.venue_postcode, f.access, f.price, f.booking, f.ticket_url,
          f.age_limit, f.dress_code, f.included, f.credit_name, f.finished_requested_at,
-         f.off_list_at, f.off_list_by`;
+         f.off_list_at, f.off_list_by,
+         f.first_name, f.last_name, f.kind_other, f.instagram, f.facebook`;
 const SELECT = `
   SELECT ${RECORD_COLUMNS}
     FROM fundraisers f`;
@@ -160,6 +168,8 @@ export function toRecord(r: Row): FundraiserRecord {
       tinCount: num(wants.tinCount ?? 0),
       leaflets: num(wants.leaflets ?? 0),
       buckets: num(wants.buckets ?? 0),
+      // TASK-511: printed QR codes; none on a sign up from before.
+      qrCount: num(wants.qrCount ?? 0),
       shoutOut: Boolean(wants.shoutOut),
       attend: Boolean(wants.attend),
     },
@@ -194,6 +204,12 @@ export function toRecord(r: Row): FundraiserRecord {
     // TASK-503: taken off the Get involved list by staff (its page still works).
     offListAt: iso(r.off_list_at),
     offListBy: textOrNull(r.off_list_by),
+    // TASK-511: empty on a sign up from before.
+    firstName: textOrNull(r.first_name),
+    lastName: textOrNull(r.last_name),
+    kindOther: textOrNull(r.kind_other),
+    instagram: textOrNull(r.instagram),
+    facebook: textOrNull(r.facebook),
   };
 }
 
@@ -305,19 +321,28 @@ export async function setFundraisingOn(pageOn: boolean, actor: string): Promise<
 
 // --- signing up ----------------------------------------------------------------------------------
 
-// A slug nobody has: the title's, then -2, -3... Staff may change it before approving.
+// TASK-511: a short address nobody has, or has ever had: the initials of the title (ssd), then ssd2,
+// ssd3... (src/fundraising/slugs.ts). Every address a page used to have counts as taken, so an old
+// link can never lead to someone else's page. Staff may change it before approving.
+// TASK-511 review: who may take which address is decided one at a time across the whole site, with
+// a lock held to the end of the transaction. Without it a sign up could read the addresses in use a
+// moment before staff move a page off one (into the history), and then take that old address.
+const SLUG_LOCK = "SELECT pg_advisory_xact_lock(hashtext('fundraiser_slugs'))";
+
 async function freeSlug(client: PoolClient, title: string): Promise<string> {
-  const base = slugify(title);
+  await client.query(SLUG_LOCK);
+  const base = initialsSlug(title);
+  // The base is only letters and numbers, so it is safe in the pattern as it is.
   const taken = new Set(
-    (await client.query<{ slug: string }>("SELECT slug FROM fundraisers WHERE slug = $1 OR slug LIKE $2", [base, `${base}-%`])).rows.map(
-      (r) => r.slug,
-    ),
+    (
+      await client.query<{ slug: string }>(
+        `SELECT slug FROM fundraisers WHERE slug ~ $1
+         UNION SELECT old_slug FROM fundraiser_slug_history WHERE old_slug ~ $1`,
+        [`^${base}[0-9]*$`],
+      )
+    ).rows.map((r) => r.slug),
   );
-  for (const reserved of RESERVED_SLUGS) taken.add(reserved);
-  if (!taken.has(base)) return base;
-  let n = 2;
-  while (taken.has(`${base}-${n}`)) n += 1;
-  return `${base}-${n}`;
+  return freeSlugFrom(base, taken);
 }
 
 const isSlugClash = (err: unknown): boolean =>
@@ -349,15 +374,19 @@ async function insertSignUp(client: PoolClient, s: SignUp, slug: string): Promis
         organiser_name, organiser_email, organiser_phone, social_link, social_ok, wants,
         newsletter_ok, updated_by,
         post_line1, post_line2, post_town, post_postcode, card_line, end_time, time_tbc, venue_address,
-        venue_postcode, access, price, booking, ticket_url, age_limit, dress_code, included, credit_name)
+        venue_postcode, access, price, booking, ticket_url, age_limit, dress_code, included, credit_name,
+        first_name, last_name, kind_other, instagram, facebook)
      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, 'public',
-             $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33, $34, $35)
+             $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33, $34, $35,
+             $36, $37, $38, $39, $40)
      RETURNING id`,
     [
       slug, s.path, s.kind, s.title, s.description, s.eventDate, s.startTime, s.venue, s.town, s.targetPence, s.public,
       s.name, s.email, s.phone, s.socialLink, s.socialOk, JSON.stringify(s.wants), s.newsletterOk,
       s.postLine1, s.postLine2, s.postTown, s.postPostcode, s.cardLine, s.endTime, s.timeTbc, s.venueAddress,
       s.venuePostcode, s.access, s.price, s.booking, s.ticketUrl, s.ageLimit, s.dressCode, s.included, s.creditName,
+      // TASK-511: the name in two parts (name above is the whole), Something else, and the two links.
+      s.firstName ?? null, s.lastName ?? null, s.kindOther ?? null, s.instagram ?? null, s.facebook ?? null,
     ],
   );
   const id = Number(inserted.rows[0].id);
@@ -512,11 +541,43 @@ export async function fundraiserHistory(fundraiserId: number): Promise<HistoryRo
 
 // --- staff changes -------------------------------------------------------------------------------
 
+/**
+ * TASK-511: may this page take `slug`? Never an address another page used to have. One this page had
+ * before it may take back: it then comes out of the history, as it is in use again.
+ */
+async function claimOldSlug(client: PoolClient, id: number, slug: string): Promise<void> {
+  const r = await client.query<{ fundraiser_id: number }>("SELECT fundraiser_id FROM fundraiser_slug_history WHERE old_slug = $1", [slug]);
+  const owner = r.rows[0];
+  if (!owner) return;
+  if (Number(owner.fundraiser_id) !== id) throw new FundraiserError("slug_taken");
+  await client.query("DELETE FROM fundraiser_slug_history WHERE old_slug = $1 AND fundraiser_id = $2", [slug, id]);
+}
+
 export async function patchFundraiser(id: number, patch: AdminPatch, actor: string): Promise<FundraiserRecord> {
   return inTransaction(async (client) => {
     const before = await lockFundraiser(client, id);
     checkTimes(before, patch);
-    const changed = await applyPatch(client, id, patch, actor);
+    const newSlug = typeof patch.slug === "string" && patch.slug !== before.slug ? patch.slug : null;
+    if (newSlug) {
+      await client.query(SLUG_LOCK);
+      await claimOldSlug(client, id, newSlug);
+    }
+    // TASK-511: the whole name follows a change to its first name or surname.
+    const name = organiserNameFor(before, patch);
+    const full: AdminPatch = name ? { ...patch, name } : { ...patch };
+    // TASK-511 review: the old single link follows Instagram and Facebook.
+    const link = socialLinkFor(before, full);
+    if (link !== undefined) full.socialLink = link;
+    // TASK-511: what they would like is saved whole; printed QR codes not sent are kept as stored.
+    if (full.wants && full.wants.qrCount === undefined) full.wants = { ...full.wants, qrCount: before.wants.qrCount ?? 0 };
+    const changed = await applyPatch(client, id, full, actor);
+    // TASK-511: the old address keeps working, with a 301 to the new one, and is never reused.
+    if (newSlug) {
+      await client.query(
+        "INSERT INTO fundraiser_slug_history (old_slug, fundraiser_id, created_by) VALUES ($1, $2, $3) ON CONFLICT (old_slug) DO NOTHING",
+        [before.slug, id, actor],
+      );
+    }
     await insertAudit(client, {
       actor,
       action: "fundraiser.updated",
@@ -698,7 +759,13 @@ export async function decideEdit(
     if (edit.status !== "waiting") throw new FundraiserError("not_waiting");
     let changed: string[] = [];
     if (approve) checkTimes(live, (edit.changes ?? {}) as Record<string, unknown>);
-    if (approve) changed = await applyPatch(client, fundraiserId, edit.changes as Partial<Record<PatchField, unknown>>, actor);
+    if (approve) {
+      const changes = { ...(edit.changes ?? {}) } as FundraiserEdit;
+      // TASK-511 review: the old single link follows an approved change to Instagram or Facebook.
+      const link = socialLinkFor(live, changes);
+      if (link !== undefined) changes.socialLink = link;
+      changed = await applyPatch(client, fundraiserId, changes as Partial<Record<PatchField, unknown>>, actor);
+    }
     await client.query(
       "UPDATE fundraiser_edits SET status = $1, decided_at = now(), decided_by = $2 WHERE id = $3",
       [approve ? "approved" : "rejected", actor, editId],

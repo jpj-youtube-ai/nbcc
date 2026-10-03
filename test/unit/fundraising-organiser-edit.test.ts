@@ -57,6 +57,9 @@ describe("what an organiser may ask to change", () => {
       "venue",
       "town",
       "socialLink",
+      // TASK-511 review: a sign up made since the form's second round changes these instead.
+      "instagram",
+      "facebook",
       "cardLine",
       "endTime",
       "timeTbc",

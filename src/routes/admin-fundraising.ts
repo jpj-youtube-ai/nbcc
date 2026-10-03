@@ -94,7 +94,8 @@ function failed(res: Response, what: string, err: unknown): Response {
       case "not_found":
         return res.status(404).json({ error: "That no longer exists" });
       case "slug_taken":
-        return res.status(409).json({ error: "Another fundraiser already uses that web address" });
+        // TASK-511: an address a page used to have still leads to that page, so it is never reused.
+        return res.status(409).json({ error: "Another fundraiser has that web address, or had it before, so it cannot be used" });
       case "bad_status":
         return res.status(409).json({ error: "That cannot be done at this stage" });
       case "not_waiting":

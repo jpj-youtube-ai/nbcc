@@ -356,6 +356,21 @@ describe("the private area", () => {
     expect(body.fundraisers[1]).toMatchObject({ pageUrl: null, qrUrl: null });
   });
 
+  // TASK-511 review: a sign up made since the form's second round changes Instagram and Facebook,
+  // each in a box of its own; one from before keeps its one link box.
+  it("says which link boxes each fundraiser's form has, and gives both links to change", async () => {
+    db.listForOrganiser.mockResolvedValue([
+      record({ firstName: "Sam", lastName: "Sample", instagram: "https://www.instagram.com/sam", facebook: null }),
+      record({ id: 10, slug: "sams-swim", socialLink: "https://www.facebook.com/old" }),
+    ]);
+    const res = await run(getManageSession, { cookie: SAM });
+    const [roundTwo, before] = (res.body as { fundraisers: Array<Record<string, unknown> & { editable: Record<string, unknown> }> }).fundraisers;
+    expect(roundTwo.linkBoxes).toBe("two");
+    expect(roundTwo.editable).toMatchObject({ instagram: "https://www.instagram.com/sam", facebook: null });
+    expect(before.linkBoxes).toBe("one");
+    expect(before.editable).toMatchObject({ socialLink: "https://www.facebook.com/old", instagram: null, facebook: null });
+  });
+
   it("shows the latest gifts and messages as the wall does, and never a giver's email or full name", async () => {
     db.listForOrganiser.mockResolvedValue([record()]);
     db.wallRows.mockResolvedValue([

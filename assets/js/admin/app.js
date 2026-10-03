@@ -9166,6 +9166,7 @@
     thanks: "frThanksStatus", // TASK-507
     touch: "frTouchCallStatus", // TASK-515
     group: "frTeamStatus", // team pages
+    memory: "frMemoryStatus", // In memory
   };
   // Says it now, in place, without a redraw: "Adding…" has to show while the request is out.
   function frPaintNotice(key) {
@@ -9201,6 +9202,7 @@
     frLoadNewsCounts(); // TASK-506
     frLoadThanksCounts(); // TASK-507
     frTouchLoad(); // TASK-515
+    frMemoryLoadCounts(); // In memory
   }
 
   function frLoadSettings() {
@@ -9440,6 +9442,7 @@
       (frReqToDo(f) ? '<span class="admin-pill admin-pill--pending fr-requests-pill">Requests to do</span>' : "") +
       (frReqDueBack(f) ? '<span class="admin-pill is-call-due fr-dueback-pill">Due back</span>' : "") +
       frThanksPill(f) + // TASK-507
+      frMemoryPills(f) + // In memory
       frTouchPills(f) + // TASK-515: the smart call prompts
       frGroupPills(f) + // team pages: Team, or Joining <team>
       rowNewPill("fundraising", f.createdAt);
@@ -9574,6 +9577,7 @@
       '<div class="fx-detail fr-detail" data-frdetail="' + f.id + '">' +
         '<section class="fx-panel fx-panel--wide"><h4>Where it is up to</h4>' + frStatePanel(f, write) + "</section>" +
         frGroupSection(f) + // team pages
+        frMemorySection(f, write) + // In memory
         frOffListSection(f, write) +
         frCallsSection(f, write) +
         frTouchSection(f, write) + // TASK-515
@@ -9675,7 +9679,9 @@
       // TASK-512: the A3 poster and the A5 leaflet, and Download everything first: every printed
       // piece on one page to print or save as one PDF, with every picture as a zip.
       var mats = [["poster", "Poster, A4"], ["poster-a3", "Poster, A3"], ["leaflet", "Leaflet, A5"], ["social", "Pictures to share"],
-        ["sponsor-form", "Sponsor form"], ["certificate", f.status === "finished" ? "Certificate of thanks" : "Certificate (preview)"]];
+        ["sponsor-form", "Sponsor form"], ["certificate", f.status === "finished" ? "Certificate of thanks" : "Certificate (preview)"]]
+        // In memory: no certificate of thanks.
+        .filter(function (m) { return !(f.inMemory && m[0] === "certificate"); });
       rows += fulfilRow("Materials", '<span class="fr-materials-admin">' +
         '<button class="admin-btn admin-btn--small" type="button" data-frmaterial="everything">Download everything</button>' +
         mats.map(function (m) {
@@ -10231,6 +10237,170 @@
     );
   }
 
+  // ---- In memory pages (Jaimie, 2026-10-03) ----
+  // A page in memory of someone (src/fundraising/in-memory.ts). The list marks it "In memory", with
+  // "Messages to check" while any giver's message waits for staff, and "A year on" when it is time to
+  // decide whether to get in touch (there is no automatic anniversary email). The open sign up has an
+  // In memory panel: who it remembers, who set it up with the family's permission, the target
+  // choice, the funeral collection envelopes, and the year on reminder. On its wall each message
+  // waits for Approve (src/routes/fundraise-memory.ts). Kept here, in one block, reached from the rest
+  // of the screen by one line hooks marked "In memory".
+  var frMemoryCounts = {}; // fundraiser id -> how many messages wait
+  var frMemoryNote = "";
+
+  function frMemoryLoadCounts() {
+    return authFetch("/api/admin/fundraising/memory-waiting")
+      .then(okJson)
+      .then(function (d) {
+        frMemoryCounts = d && d.counts && typeof d.counts === "object" ? d.counts : {};
+        frRenderList();
+      })
+      .catch(function () {
+        /* only a pill: the list works without it */
+      });
+  }
+
+  function frMemoryPills(f) {
+    if (!f.inMemory) return "";
+    return '<span class="admin-pill fr-memory-pill">In memory</span>' +
+      (frMemoryCounts[f.id] ? '<span class="admin-pill admin-pill--pending fr-memory-msgs-pill">Messages to check</span>' : "") +
+      (f.memoryYearOnDue ? '<span class="admin-pill admin-pill--pending fr-memory-yearon-pill">A year on</span>' : "");
+  }
+
+  function frMemorySection(f, write) {
+    if (!f.inMemory) return "";
+    var who = H.escapeHtml(String(f.memoryName || "")) + (f.memoryDates ? " (" + H.escapeHtml(f.memoryDates) + ")" : "");
+    var target = !f.targetPence
+      ? frNone("No target")
+      : f.memoryShowTarget
+        ? "Shown on the page, as they chose"
+        : "Hidden on the page, as they chose. The page shows only what has been given.";
+    var waiting = Number(frMemoryCounts[f.id]) || 0;
+    var rows =
+      fulfilRow("In memory of", who) +
+      fulfilRow("Set up by", H.escapeHtml(f.memorySetupWords || "")) +
+      fulfilRow("The target", target) +
+      fulfilRow("Messages", waiting
+        ? H.escapeHtml(waiting === 1 ? "1 message waiting for you to check, on the wall below" : waiting + " messages waiting for you to check, on the wall below")
+        : "Every message waits for you to check it before it shows on the page. None waiting.") +
+      fulfilRow("Emails", f.public
+        ? "No automatic emails, bar the gentle one when you approve it. Anything else, please write to them personally."
+        : "No email goes for this one: please ring them.");
+    if (f.memoryReminderDoneAt) {
+      rows += fulfilRow("A year on", H.escapeHtml("Dealt with on " + H.fmtDate(f.memoryReminderDoneAt) + (f.memoryReminderDoneBy ? " by " + frWho(f.memoryReminderDoneBy) : "")));
+    }
+    var yearOn = "";
+    if (f.memoryYearOnDue) {
+      var first = String(f.name || "").trim().split(/\s+/)[0] || "them";
+      yearOn =
+        '<div class="fr-memory-yearon">' +
+          '<p class="fx-help">It is a year since this page went live. Nothing goes by itself: decide whether to get in touch with ' + H.escapeHtml(first) + ", and how.</p>" +
+          (write
+            ? '<label class="fx-call-label" for="frMemoryNote">A note for the history (optional)</label>' +
+              '<textarea class="fx-call-input fr-input" id="frMemoryNote" rows="2" maxlength="500">' + H.escapeHtml(frMemoryNote) + "</textarea>" +
+              '<div class="fx-call-row"><button class="admin-btn admin-btn--small" type="button" data-frmemyearon>Done</button></div>'
+            : "") +
+        "</div>";
+    }
+    var envelopes = f.status === "approved" || f.status === "finished"
+      ? '<div class="fx-call-row fr-actions"><button class="admin-btn admin-btn--small fr-btn-quiet" type="button" data-frmaterial="envelopes">Funeral collection envelopes</button></div>' +
+        '<span class="fr-field-hint">DL envelopes, printed on the front: In memory of, the page&rsquo;s QR code and a Gift Aid declaration. The same as the organiser has.</span>'
+      : "";
+    return '<section class="fx-panel fx-panel--wide fr-memory-panel" data-frmemory><h4>In memory</h4>' +
+      '<dl class="fx-dl">' + rows + "</dl>" + yearOn + envelopes + frMemoryForm(f, write) + frNoticeHtml("memory", "frMemoryStatus") + "</section>";
+  }
+
+  // An admin corrects the details (the organiser asks staff; there is no self service edit). The
+  // permission stays as it was given, so it is not here. The server checks it all again.
+  var FR_MEMORY_SETUP = [["family", "A family member"], ["friend", "A friend"], ["funeral_director", "A funeral director"]];
+  function frMemoryForm(f, write) {
+    if (!(write && isAdmin())) return "";
+    var options = FR_MEMORY_SETUP.map(function (o) {
+      return '<option value="' + o[0] + '"' + (f.memorySetupBy === o[0] ? " selected" : "") + ">" + H.escapeHtml(o[1]) + "</option>";
+    }).join("");
+    var show = f.memoryShowTarget === true;
+    var hide = f.memoryShowTarget === false;
+    return (
+      '<details class="fr-memory-edit"><summary>Correct the in memory details</summary>' +
+      '<div class="fr-memory-form" data-frmemform>' +
+        '<span class="fr-field-hint">For when the organiser asks us. The family&rsquo;s permission stays as they gave it.</span>' +
+        '<label class="fx-call-label" for="frMemName">Their name</label>' +
+        '<input class="fr-input" id="frMemName" type="text" maxlength="100" value="' + H.escapeHtml(String(f.memoryName || "")) + '">' +
+        '<label class="fx-call-label" for="frMemDates">Their dates (optional)</label>' +
+        '<input class="fr-input" id="frMemDates" type="text" maxlength="60" value="' + H.escapeHtml(String(f.memoryDates || "")) + '">' +
+        '<label class="fx-call-label" for="frMemSetupBy">Set up by</label>' +
+        '<select class="fr-input" id="frMemSetupBy">' + options + "</select>" +
+        '<fieldset class="fr-split-choice"><legend class="fx-call-label">Show the target on the page?</legend>' +
+          '<label><input type="radio" name="frMemShow" id="frMemShowYes" value="yes"' + (show ? " checked" : "") + "> Yes</label> " +
+          '<label><input type="radio" name="frMemShow" id="frMemShowNo" value="no"' + (hide ? " checked" : "") + "> No</label>" +
+          (f.targetPence ? "" : '<span class="fr-field-hint">There is no target just now, so this only matters if one is added.</span>') +
+        "</fieldset>" +
+        '<div class="fx-call-row fr-actions"><button class="admin-btn admin-btn--small" type="button" data-frmemsave>Save the in memory details</button></div>' +
+      "</div></details>"
+    );
+  }
+
+  function frMemorySave() {
+    if (frBusy) return;
+    var f = frOpenRecord();
+    if (!f) return;
+    var val = function (id) { var e = el(id); return e ? String(e.value || "").trim() : ""; };
+    var yes = el("frMemShowYes");
+    var no = el("frMemShowNo");
+    var body = {
+      memoryName: val("frMemName"),
+      memoryDates: val("frMemDates"),
+      memorySetupBy: val("frMemSetupBy"),
+      memoryShowTarget: yes && yes.checked ? true : no && no.checked ? false : null,
+    };
+    frRun("memory", "Saving…", function (run) {
+      return frSend("PUT", "/api/admin/fundraisers/" + f.id + "/memory", body).then(function (r) {
+        var fields = r.body && r.body.fields ? Object.keys(r.body.fields).map(function (k) { return r.body.fields[k]; }).join(" ") : "";
+        run.say(r.ok ? "Saved. It is in the history." : fields || frRefusal(r, "That was not saved. Please try again."), !r.ok);
+        return frReload();
+      });
+    });
+  }
+
+  // On the wall: a message waiting for staff, and whether the giver asked to let the family know.
+  function frMemoryWallBits(g, write) {
+    var bits = "";
+    if (g.held && g.message && !g.hidden) bits += '<span class="admin-pill admin-pill--pending fr-memory-held-pill">Waiting for you to check</span>';
+    if (g.familyNotify) bits += '<span class="admin-pill fr-memory-family-pill">Asked to let the family know</span>';
+    var approve = write && g.held && g.message && !g.paidIn
+      ? '<button class="fr-link-btn" type="button" data-frmemapprove="' + Number(g.donationId) + '">Approve for the page</button>'
+      : "";
+    return { pills: bits, approve: approve };
+  }
+
+  function frMemoryApprove(donationId) {
+    if (frBusy) return;
+    var f = frOpenRecord();
+    if (!f) return;
+    frRun("detail", null, function (run) {
+      return frSend("POST", "/api/admin/fundraisers/" + f.id + "/wall/" + encodeURIComponent(donationId) + "/approve").then(function (r) {
+        if (!r.ok) run.say(frRefusal(r, "That did not work. Please try again."), true);
+        return Promise.all([frReload(), frMemoryLoadCounts()]);
+      });
+    });
+  }
+
+  function frMemoryYearOnDone() {
+    if (frBusy) return;
+    var f = frOpenRecord();
+    if (!f) return;
+    var box = el("frMemoryNote");
+    frMemoryNote = box ? box.value : frMemoryNote;
+    var note = frMemoryNote.trim();
+    frRun("memory", "Saving…", function (run) {
+      return frSend("POST", "/api/admin/fundraisers/" + f.id + "/memory/year-on-done", note ? { note: note } : {}).then(function (r) {
+        if (r.ok) frMemoryNote = "";
+        run.say(r.ok ? "Done. It is in the history." : frRefusal(r, "That was not saved. Please try again."), !r.ok);
+        return frReload();
+      });
+    });
+  }
+
   function frWallPanel(rows, write) {
     if (!rows.length) return '<div id="frWall"><p class="fx-empty">No gifts on this page yet.</p></div>';
     var shown = frMore.wall ? rows : rows.slice(0, FR_WALL_FIRST);
@@ -10241,15 +10411,17 @@
         var amount = frMoney(g.amountPence) +
           (Number(g.refundedPence) > 0 ? " (" + frMoney(g.refundedPence) + " refunded)" : "") +
           (g.showAmount === false ? ", amount hidden on the page" : "");
+        var mem = frMemoryWallBits(g, write); // In memory
         return '<li data-frwall="' + Number(g.donationId) + '"' + (g.hidden ? ' class="is-hidden"' : "") + ">" +
           '<div class="fr-wall-head"><span class="fr-wall-who">' + H.escapeHtml(g.fullName) + "</span>" +
             '<span class="fx-hist-who">Shown as ' + H.escapeHtml(g.shortName) + " · " + H.escapeHtml(amount) + " · " +
             H.escapeHtml(H.fmtDate(g.createdAt)) + "</span>" +
             (g.hidden ? '<span class="admin-pill admin-pill--cancelled fr-hidden-pill">Hidden</span>' : "") +
             // TASK-501: money the organiser collected and paid in: on the meter, never on the page.
-            (g.paidIn ? '<span class="admin-pill fr-paidin-pill">Paid in by the organiser</span>' : "") + "</div>" +
+            (g.paidIn ? '<span class="admin-pill fr-paidin-pill">Paid in by the organiser</span>' : "") + mem.pills + "</div>" +
           (g.message ? '<p class="fr-wall-msg">' + H.escapeHtml(g.message) + "</p>" : '<p class="fx-empty">No message.</p>') +
-          (write && !g.paidIn
+          mem.approve +
+          (write && !g.paidIn && !(g.held && g.hidden)
             ? g.hidden
               ? '<button class="fr-link-btn" type="button" data-frshow="' + Number(g.donationId) + '">Show on the page</button>'
               : '<button class="fr-link-btn" type="button" data-frhide="' + Number(g.donationId) + '">Hide from the page</button>'
@@ -10302,6 +10474,10 @@
     "fundraiser.news_shown": "News update shown on the page again",
     // TASK-512: "Ask us to print these" in their private area.
     "fundraiser.print_requested": "The organiser asked us to print some",
+    // In memory
+    "fundraiser.message_approved": "A message approved for the page",
+    "fundraiser.memory_year_on_done": "A year on: dealt with",
+    "fundraiser.memory_changed": "In memory details corrected",
   };
 
   function frPaintHistory() {
@@ -10741,6 +10917,11 @@
       if (remove) return frRemoveCash(remove.getAttribute("data-frcashremove"));
       var hide = t.closest("[data-frhide]");
       if (hide) return frWallChoice(hide.getAttribute("data-frhide"), true);
+      // In memory
+      var memApprove = t.closest("[data-frmemapprove]");
+      if (memApprove) return frMemoryApprove(memApprove.getAttribute("data-frmemapprove"));
+      if (t.closest("[data-frmemyearon]")) return frMemoryYearOnDone();
+      if (t.closest("[data-frmemsave]")) return frMemorySave();
       var show = t.closest("[data-frshow]");
       if (show) return frWallChoice(show.getAttribute("data-frshow"), false);
       // TASK-503: the team's tools.

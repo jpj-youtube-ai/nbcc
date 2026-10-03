@@ -199,6 +199,8 @@
                 <h3 id="mineMaterialsHeading">Your materials</h3>
                 <p>Ready to print and share, made from your approved details. Each one opens in a new tab.</p>
                 <ul class="fr-materials" role="list">
+                  <!-- In memory (Jaimie, 2026-10-03): funeral collection envelopes, only for a page in memory of someone. -->
+                  <li data-f-mat="envelopes" hidden><strong class="fr-mat__name">Funeral collection envelopes</strong><span class="fr-mat-print__about">DL envelopes in their memory, with your page&rsquo;s QR code and a Gift Aid declaration. Please post the sealed envelopes to us unopened at The Elves&rsquo; Workshop, Annbank Village Hall, Weston Avenue, Annbank, KA6 5EE (or hand them in), rather than paying the cash in online, so we can claim Gift Aid on them.</span><a class="btn btn-ghost fr-mat-btn" href="/" target="_blank" rel="noopener">Open envelopes<span class="sr-only"> (opens in a new tab)</span></a></li>
                   <!-- TASK-512: the poster on A4 and A3, and the A5 leaflet, each with "Ask us to print
                        these" beside it. Each size has its own QR code, so we can see which is scanned. -->
                   <li class="fr-mat-print">
@@ -247,8 +249,9 @@
               </section>
 
               <section class="fr-mine__part" data-f-gifts-part aria-labelledby="mineGiftsHeading">
-                <h3 id="mineGiftsHeading">Latest gifts and messages</h3>
-                <p class="fr-wall__empty" data-f-gifts-empty hidden>No gifts on your page yet. Sharing it is the best way to get the first one.</p>
+                <h3 id="mineGiftsHeading" data-memory-words="People who asked us to let you know they gave">Latest gifts and messages</h3>
+                <p class="fr-mine__memory-note" data-f-memory-note hidden>When someone gives and ticks Let the family know I gave, their name shows here, with their message once we have read it. We never show how much anyone gave, or their email address.</p>
+                <p class="fr-wall__empty" data-f-gifts-empty hidden data-memory-words="No one has asked us to let you know yet. We never show how much anyone gave.">No gifts on your page yet. Sharing it is the best way to get the first one.</p>
                 <ol class="fr-wall__list" role="list" data-f-gifts></ol>
                 <button class="fr-wall__more" type="button" data-f-gifts-more hidden>Show all</button>
               </section>
@@ -389,8 +392,13 @@
               </section>
 
               <section class="fr-mine__part" aria-labelledby="minePayHeading">
-                <h3 id="minePayHeading">Pay in what you collected</h3>
-                <p>Collected cash or sponsor money? Pay it in here by card and it counts towards what you have raised. You can also pay in by bank transfer, or drop it in to us: just get in touch.</p>
+                <h3 id="minePayHeading" data-memory-words="The collection envelopes, and paying in">Pay in what you collected</h3>
+                <!-- In memory: the envelopes come to us sealed, so they are never paid in here. -->
+                <div class="fr-mine__payin-memory" data-f-payin-memory hidden>
+                  <p>Please don&rsquo;t open the funeral collection envelopes: post them to us sealed, so we can claim Gift Aid. Once we&rsquo;ve opened them, we add what was given to the page.</p>
+                  <p><button class="fr-link-btn" type="button" data-f-payin-other>Collected other cash, not in envelopes? Pay it in here.</button></p>
+                </div>
+                <p data-f-payin-intro>Collected cash or sponsor money? Pay it in here by card and it counts towards what you have raised. You can also pay in by bank transfer, or drop it in to us: just get in touch.</p>
                 <form class="fr-form fr-form--plain" novalidate data-f-payin>
                   <div class="give-field">
                     <label class="give-custom-label" for="payAmount">How much are you paying in? <span class="give-req" aria-hidden="true">*</span></label>

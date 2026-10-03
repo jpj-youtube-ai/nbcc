@@ -3,6 +3,7 @@ import { z } from "zod";
 import { londonToday } from "../events/model";
 import { addDays } from "./follow-up";
 import { dayCount } from "./call-prompts";
+import { memoryMeter } from "./in-memory";
 import {
   NAME_PART_MAX,
   OVER_18_MISSING,
@@ -277,6 +278,13 @@ export function memberSignUp(team: FundraiserRecord, j: Join): SignUp {
     dressCode: null,
     included: null,
     creditName: null,
+    // In memory: a member page of a team is never in memory (an in memory page is never a team).
+    inMemory: false,
+    memoryName: null,
+    memoryDates: null,
+    memorySetupBy: null,
+    memoryPermission: null,
+    memoryShowTarget: null,
   } as SignUp;
 }
 
@@ -332,6 +340,9 @@ export interface TeamMemberRow {
   path: FundraiserRecord["path"];
   teamLeftAt?: string | null;
   meter: Meter;
+  /** In memory: never a member page, but its target stays hidden whatever a row says. */
+  inMemory?: boolean | null;
+  memoryShowTarget?: boolean | null;
 }
 
 export interface TeamMemberCard {
@@ -355,7 +366,7 @@ export function teamMemberList(rows: TeamMemberRow[]): TeamMemberCard[] {
   return rows
     .filter((r) => !r.teamLeftAt && hasPage(r))
     .sort(byName)
-    .map((r) => ({ name: shortName(r.name), url: `/fundraise/${r.slug}`, meter: r.meter }));
+    .map((r) => ({ name: shortName(r.name), url: `/fundraise/${r.slug}`, meter: memoryMeter(r, r.meter) }));
 }
 
 // --- the join link ---------------------------------------------------------------------------------

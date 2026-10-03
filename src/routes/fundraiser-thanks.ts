@@ -17,6 +17,12 @@ import {
 } from "../db/fundraiser-thanks";
 import { forOrganiser, SKIP_WORDS, thankableGifts, thanksPostSchema, thanksStatusWords } from "../fundraising/thanks";
 import { sendQueuedThanks } from "../fundraising/thanks-send";
+import { familyGifts, isInMemory } from "../fundraising/in-memory";
+
+/** In memory: the gifts to pick, in the thank you's shape: the name they gave, never an amount. */
+function familyThankable(rows: Parameters<typeof familyGifts>[0], held: Set<number>) {
+  return familyGifts(rows, held).map((g) => ({ ...g, amountPence: null, giftAidPence: null }));
+}
 
 // TASK-507: "Thank your supporters". The rules are in src/fundraising/thanks.ts, the SQL in
 // src/db/fundraiser-thanks.ts and the sending in src/fundraising/thanks-send.ts.
@@ -90,7 +96,8 @@ export async function getOrganiserThanks(req: Request, res: Response): Promise<R
       fundraisers: mine.map((f, i) => ({
         id: f.id,
         canThank: f.status === "approved" || f.status === "finished",
-        gifts: thankableGifts(gifts[i], held),
+        // In memory: only givers who asked to let the family know, with no amounts.
+        gifts: isInMemory(f) ? familyThankable(gifts[i], held) : thankableGifts(gifts[i], held),
         thanks: thanks.filter((t) => t.fundraiserId === f.id).map(forOrganiser),
       })),
     });

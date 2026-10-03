@@ -141,6 +141,16 @@ function cardArt(c: PublicCard): string {
       "</div>"
     );
   }
+  // In memory, no photo: a soft cream cover with their name and dates, nothing festive.
+  if (c.memory) {
+    return (
+      '<div class="ev-art ev-art--type ev-art--memory" aria-hidden="true"><div>' +
+      '<p class="ev-art__place">In memory of</p>' +
+      `<p class="ev-art__name">${escapeHtml(c.memory.name)}</p>` +
+      (c.memory.dates ? `<p class="ev-art__place">${escapeHtml(c.memory.dates)}</p>` : "") +
+      "</div></div>"
+    );
+  }
   // No photo: the card sets its own cover from the name, in holly so it reads as a community
   // fundraiser beside NBCC's crimson events.
   return (
@@ -160,15 +170,18 @@ function cardArt(c: PublicCard): string {
 export function renderFundraiserCard(c: PublicCard, today?: string): string {
   const id = escapeHtml(`fundraiser-${c.slug}`);
   const href = escapeHtml(c.url ?? `/fundraise/${c.slug}`);
+  // In memory of someone (Jaimie, 2026-10-03): quieter. Who it remembers, no Fundraiser flag and no
+  // date in the corner; the meter keeps the target hidden unless the family chose to show it.
+  const memory = c.memory ?? null;
   return (
-    `<li class="ev-card ev-card--fundraiser" id="${id}" data-kind="fundraiser"><div class="ev-card__inner">` +
+    `<li class="ev-card ev-card--fundraiser${memory ? " ev-card--memory" : ""}" id="${id}" data-kind="fundraiser"><div class="ev-card__inner">` +
     `<article class="ev-face ev-front" aria-labelledby="${id}-title">` +
     cardArt(c) +
-    (c.eventDate && (!today || c.eventDate >= today) ? renderIndex({ date: c.eventDate }) : "") +
-    '<p class="ev-flag fr-flag">Fundraiser</p>' +
+    (!memory && c.eventDate && (!today || c.eventDate >= today) ? renderIndex({ date: c.eventDate }) : "") +
+    (memory ? "" : '<p class="ev-flag fr-flag">Fundraiser</p>') +
     '<div class="ev-body">' +
-    `<p class="ev-host">${escapeHtml(c.kindLabel)}</p>` +
-    `<h2 class="ev-title" id="${id}-title">${escapeHtml(c.title)}</h2>` +
+    `<p class="ev-host">${escapeHtml(memory ? "In memory" : c.kindLabel)}</p>` +
+    `<h2 class="ev-title" id="${id}-title">${escapeHtml(memory ? `In memory of ${memory.name}` : c.title)}</h2>` +
     `<p class="fr-card__by">Organised by ${escapeHtml(c.organisedBy)}</p>` +
     (c.description ? `<p class="ev-tldr">${escapeHtml(shorten(c.description, 150))}</p>` : "") +
     renderMeter(c.meter) +
@@ -364,7 +377,7 @@ export function renderGetInvolvedPage(template: string, input: GetInvolvedInput)
 export const WALL_FIRST = 10;
 const PRESETS_PENCE = [500, 1000, 2000, 5000];
 
-function paragraphs(text: string): string {
+export function paragraphs(text: string): string {
   return text
     .split(/\n\s*\n/)
     .map((p) => p.trim())
@@ -442,7 +455,7 @@ function renderFacts(p: PublicPage): string {
   return `<ul class="fr-facts">${items.join("")}</ul>`;
 }
 
-function renderWallItem(w: WallEntry, i: number, now: Date): string {
+export function renderWallItem(w: WallEntry, i: number, now: Date): string {
   const more = i >= WALL_FIRST ? " data-wall-more" : "";
   return (
     `<li class="fr-wall__item"${more}${i === WALL_FIRST ? ' tabindex="-1"' : ""}>` +
@@ -478,8 +491,8 @@ function renderWall(p: PublicPage, now: Date): string {
 }
 
 /** Copy the link, Facebook and WhatsApp: plain links, no script from anyone else. */
-function shareLinks(p: PublicPage, pageUrl: string): string {
-  const shareText = `${p.title}, raising money for NBCC: ${pageUrl}`;
+export function shareLinks(p: PublicPage, pageUrl: string, text?: string): string {
+  const shareText = text ?? `${p.title}, raising money for NBCC: ${pageUrl}`;
   return (
     '<div class="fr-share__links">' +
     `<button class="fr-share__btn fr-share__copy" type="button" data-copy-link="${escapeHtml(pageUrl)}" hidden>${ICON.link}Copy the link</button>` +
@@ -530,7 +543,13 @@ const sharer = (p: PublicCard) => (isEvent(p) ? "this event" : firstName(p));
 /** Whose wall: "Robin's wall", or "the wall". */
 const wallOf = (p: PublicCard & { teamName?: string | null }) => (isEvent(p) ? "the wall" : `${whose(p)} wall`);
 
-function renderGiveForm(p: PublicPage): string {
+/** In memory (./memory-render.ts): the give form's heading and line in its own words. */
+export interface GiveWords {
+  heading: string;
+  sub: string;
+}
+
+export function renderGiveForm(p: PublicPage, words?: GiveWords): string {
   const event = isEvent(p);
   const presets = PRESETS_PENCE.map(
     (pence) =>
@@ -541,7 +560,10 @@ function renderGiveForm(p: PublicPage): string {
   return (
     '<section class="fr-give" id="give" aria-labelledby="fr-give-heading" tabindex="-1">' +
     '<div class="card card-lg give-card fr-give-card"><div class="give-main">' +
-    (p.finished
+    (words
+      ? `<h2 class="give-step-title" id="fr-give-heading">${escapeHtml(words.heading)}</h2>` +
+        `<p class="give-step-sub">${escapeHtml(words.sub)}</p>`
+      : p.finished
       ? '<h2 class="give-step-title" id="fr-give-heading">You can still give</h2>' +
         (event
           ? `<p class="give-step-sub">Your donation goes to NBCC and still counts towards this event's total.${SHARE_NOTE(p)}</p>`
@@ -624,7 +646,7 @@ function renderGiveForm(p: PublicPage): string {
 // Stripe's own checkout opens on the page in this panel, exactly as on the donate page; main.js is
 // not what drives it here (assets/js/fundraiser.js is), but the markup and styles are the donate
 // page's, so it looks the same.
-const EMBEDDED_CHECKOUT =
+export const EMBEDDED_CHECKOUT =
   '<div class="give-embedded-modal" id="embeddedCheckoutModal" role="dialog" aria-modal="true" aria-label="Secure payment" aria-hidden="true" hidden>' +
   '<div class="give-embedded-panel"><div class="give-embedded-bar">' +
   '<button class="give-embedded-close" id="embeddedCheckoutClose" type="button">Close</button></div>' +
@@ -787,7 +809,7 @@ function renderNewsItem(n: NewsEntry, i: number): string {
   );
 }
 
-function renderNews(p: PublicPage): string {
+export function renderNews(p: PublicPage): string {
   const items = p.news ?? [];
   if (!items.length) return "";
   return (

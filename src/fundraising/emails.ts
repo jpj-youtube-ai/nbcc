@@ -14,8 +14,9 @@ import {
   questionsText,
 } from "../email/brand";
 import { FOOTER_TEXT, POSTAL_ADDRESS } from "../legal/registration";
-import { ACCESS_LABELS, BOOKING_LABELS, kindLabelOf, shortName, type SignUp, type Wants } from "./model";
+import { ACCESS_LABELS, BOOKING_LABELS, kindLabelOf, shortName, type FundraiserRecord, type SignUp, type Wants } from "./model";
 import { OTHER_KIND } from "./categories";
+import { memoryStaffFacts } from "./in-memory";
 
 // TASK-493: the community fundraising emails, built here and sent by src/fundraising/send.ts.
 // TASK-497: reworded to the words Jaimie signed off on 2026-10-02 (warmer, a signed close, and a
@@ -136,7 +137,10 @@ export function buildSignUpThanksEmail(typedName?: string | null): BuiltEmail {
 type NewAnswers = "firstName" | "lastName" | "kindOther" | "instagram" | "facebook";
 // Jaimie, 2026-10-03: 18 or over and the split, absent (or null) on a sign up from before them.
 type AgeAndSplit = "over18" | "sharesWithOther" | "nbccSharePercent" | "otherCauseName";
-export type StaffSummary = Omit<SignUp, NewAnswers | AgeAndSplit | "wants"> &
+// In memory (Jaimie, 2026-10-03), absent on a sign up from before.
+type Memory = "inMemory" | "memoryName" | "memoryDates" | "memorySetupBy" | "memoryPermission" | "memoryShowTarget";
+export type StaffSummary = Omit<SignUp, NewAnswers | AgeAndSplit | Memory | "wants"> &
+  Partial<Pick<FundraiserRecord, Memory>> &
   Partial<Record<NewAnswers, string | null>> & { id: number; postAddress?: string | null; wants: Wants; kindLabel?: string | null } & {
     over18?: boolean | null;
     sharesWithOther?: boolean | null;
@@ -197,6 +201,8 @@ function staffFacts(f: StaffSummary): Array<[string, string]> {
   const kind = kindLabelOf(f) + (f.kind === OTHER_KIND && f.kindOther ? `: ${f.kindOther}` : "");
   const facts: Array<[string, string]> = [
     ["What", f.path === "raising" ? "Raising money" : "Holding an event"],
+    // In memory of someone: who, the dates, who set it up, and the target choice.
+    ...memoryStaffFacts(f),
     ["Kind", kind],
     ["Name for it", f.title],
     ["About it", f.description],

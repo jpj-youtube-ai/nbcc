@@ -60,6 +60,12 @@ import { printStatusFor } from "./fundraise-materials";
 import { loadCategories } from "../db/fundraising-categories";
 import { KEY_PATTERN, isActiveCategory } from "../fundraising/categories";
 import { checkTeamSignUp } from "../fundraising/teams";
+import { familyGifts, isInMemory, publicMemory } from "../fundraising/in-memory";
+
+/** In memory: the private area's gifts list, in the wall's shape, with no amounts. */
+function familyEntries(rows: Parameters<typeof familyGifts>[0]) {
+  return familyGifts(rows, new Set()).map((g) => ({ name: g.name, amountPence: null, giftAidPence: null, message: g.message, createdAt: g.createdAt }));
+}
 
 // TASK-493: the public side of community fundraising. Everything here is OFF while the fundraising
 // switch is off (Admin > Fundraising, admins only): sign ups are refused and nothing is listed.
@@ -279,8 +285,17 @@ export async function postWallMessage(req: Request, res: Response): Promise<Resp
     if (!(await fundraisingIsOn())) return res.status(404).json(NOT_FOUND);
     const f = await getBySlug(String(req.params.slug ?? ""));
     if (!f || !hasPage(f)) return res.status(404).json(NOT_FOUND);
-    const { sessionId, message, showName, showAmount } = parsed.data;
-    const { verdict, entry } = await addWallMessage(sessionId, f.id, { message, showName, showAmount });
+    const { sessionId, message, showName, showAmount, familyNotify } = parsed.data;
+    // In memory: "Let the family know I gave" is kept only on a page in memory of someone.
+    // Review fix: a giver who asks to let the family know never has their amount on the page, so the
+    // family cannot match their name to it.
+    const tellFamily = isInMemory(f) && familyNotify === true;
+    const { verdict, entry } = await addWallMessage(sessionId, f.id, {
+      message,
+      showName,
+      showAmount: tellFamily ? false : showAmount,
+      ...(isInMemory(f) ? { familyNotify: tellFamily } : {}),
+    });
     switch (verdict) {
       case "ok":
         return res.status(200).json({ status: "added", entry });
@@ -540,7 +555,10 @@ export async function getManageSession(req: Request, res: Response): Promise<Res
           waitingEdit: waiting ? { id: waiting.id, changes: waiting.changes, createdAt: waiting.createdAt } : null,
           // As the wall shows them: a name or Anonymous, the amount unless hidden, the message unless
           // staff hid it. Never a giver's email, full name or anything else about them.
-          gifts: wallEntries(rows),
+          // In memory: only givers who asked to let the family know, by the name they gave, with their
+          // message once staff have approved it; never an amount (familyGifts, in-memory.ts).
+          gifts: isInMemory(f) ? familyEntries(rows) : wallEntries(rows),
+          ...(isInMemory(f) ? { memory: publicMemory(f) } : {}),
           finishedRequestedAt: f.finishedRequestedAt ?? null,
           // TASK-505: where each thing they asked for is up to, in words only (never a staff note
           // or name); null when it could not be read, so the rest still shows.
@@ -554,8 +572,11 @@ export async function getManageSession(req: Request, res: Response): Promise<Res
             leaflet: `/api/fundraise/manage/fundraisers/${f.id}/materials/leaflet`,
             social: `/api/fundraise/manage/fundraisers/${f.id}/materials/social`,
             sponsorForm: `/api/fundraise/manage/fundraisers/${f.id}/materials/sponsor-form`,
-            certificate: f.status === "finished" ? `/api/fundraise/manage/fundraisers/${f.id}/materials/certificate` : null,
+            // In memory (review fix): no certificate of thanks.
+            certificate: f.status === "finished" && !isInMemory(f) ? `/api/fundraise/manage/fundraisers/${f.id}/materials/certificate` : null,
             qrPng: page ? `${pagePath(f)}/qr.png` : null,
+            // In memory: funeral collection envelopes (src/routes/fundraise-memory.ts).
+            ...(isInMemory(f) ? { envelopes: `/api/fundraise/manage/fundraisers/${f.id}/materials/envelopes` } : {}),
           },
           // TASK-512: "Ask us to print these": whether they can, and where their posters and
           // leaflets are up to (POST .../print-request, src/routes/fundraise-materials.ts); null when

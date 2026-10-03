@@ -1,6 +1,7 @@
 import { londonToday } from "../events/model";
 import { dayCount, pacePrompt } from "./call-prompts";
 import { categoryLabel } from "./categories";
+import { isInMemory } from "./in-memory";
 import type { FundraiserRecord, Meter } from "./model";
 
 // TASK-515: keeping in touch with an organiser, automatically. Which of the automatic emails is due
@@ -111,16 +112,17 @@ export interface TouchFacts {
 export type TouchFundraiser = Pick<
   FundraiserRecord,
   "status" | "public" | "path" | "kind" | "email" | "eventDate" | "approvedAt" | "targetPence" | "wants"
-> & { meter: Pick<Meter, "raisedPence"> };
+> & { meter: Pick<Meter, "raisedPence">; inMemory?: boolean | null };
 
 /**
  * Is this fundraiser in memory of someone? A page in memory of someone must never get these upbeat
- * automatic emails (Jaimie, 2026-10-03): no "high fives", no "you did it". There are no in memory
- * pages yet, so until there are, a category whose key or name mentions memory (one staff add, like
- * "In memory") counts as one. When real in memory pages are built, this is the one place that
- * recognises them, and every automatic email already asks it first.
+ * automatic emails (Jaimie, 2026-10-03): no "high fives", no "you did it". A page set up in memory
+ * of someone (isInMemory, src/fundraising/in-memory.ts) is one; so, as before real in memory pages,
+ * is one in a category whose key or name mentions memory (one staff add, like "In memory"). Every
+ * automatic email asks this first.
  */
-export function isQuietFundraiser(f: Pick<FundraiserRecord, "kind">): boolean {
+export function isQuietFundraiser(f: Pick<FundraiserRecord, "kind"> & { inMemory?: boolean | null }): boolean {
+  if (isInMemory(f)) return true;
   const key = String(f.kind ?? "");
   return /memory/i.test(key) || /memory/i.test(categoryLabel(key));
 }

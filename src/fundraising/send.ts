@@ -24,6 +24,8 @@ import {
 } from "./emails";
 import { EVENT_PAGE_PREFIX, hasPage, type FundraiserRecord } from "./model";
 import type { TeamSignUp } from "./teams";
+import { isInMemory } from "./in-memory";
+import { buildInMemoryApprovedEmail } from "./memory-emails";
 
 // TASK-493: sending the fundraising emails. TASK-497 adds "Your page is live" held until the switch
 // goes on (sendWaitingLiveEmails) and the two emails about a change. Each is best effort and runs after its write has
@@ -66,19 +68,24 @@ export function manageUrl(): string {
 
 /** Thank the organiser, and tell the events inbox, after a sign up. */
 export async function sendSignUpEmails(f: FundraiserRecord, team?: TeamSignUp): Promise<void> {
-  try {
-    // Only a safe first name from what they typed (safeFirstName in ./emails), nothing else.
-    const mail = buildSignUpThanksEmail(f.name);
-    await sendFundraiseThanks(f.name, { email: f.email, from: config.BALL_FROM_EMAIL, replyTo: config.BALL_FROM_EMAIL, ...mail });
-  } catch (err) {
-    logFailure("sign up thanks", err);
-  }
+  // In memory (Jaimie, 2026-10-03): no thank you for signing up, as it is upbeat. Staff ring them.
+  if (!isInMemory(f)) await sendSignUpThanks(f);
   try {
     // Team pages: a team's sign up says so, whose split it is, and who is held to be invited.
     const mail = buildSignUpStaffEmail({ ...f, id: f.id, ...(team?.isTeam ? { team } : {}) }, { adminUrl: `${base()}/admin` });
     await sendFundraiseStaff(f.name, { email: config.BALL_FROM_EMAIL, from: config.BALL_FROM_EMAIL, replyTo: f.email, ...mail });
   } catch (err) {
     logFailure("sign up staff summary", err);
+  }
+}
+
+async function sendSignUpThanks(f: FundraiserRecord): Promise<void> {
+  try {
+    // Only a safe first name from what they typed (safeFirstName in ./emails), nothing else.
+    const mail = buildSignUpThanksEmail(f.name);
+    await sendFundraiseThanks(f.name, { email: f.email, from: config.BALL_FROM_EMAIL, replyTo: config.BALL_FROM_EMAIL, ...mail });
+  } catch (err) {
+    logFailure("sign up thanks", err);
   }
 }
 
@@ -89,6 +96,8 @@ export async function sendSignUpEmails(f: FundraiserRecord, team?: TeamSignUp): 
  * sends theirs at the switch. True when the email went.
  */
 export async function sendApprovedEmail(f: FundraiserRecord): Promise<boolean> {
+  // In memory: email 19, the gentle one, and only with a page to link to; otherwise staff write.
+  if (isInMemory(f)) return sendInMemoryApprovedEmail(f);
   // Team pages: a team's own "your team page is live" (always with the join link), after inviting
   // the people its organiser added. Loaded here, so nothing else here needs the team modules.
   if (f.isTeam) {
@@ -105,6 +114,19 @@ export async function sendApprovedEmail(f: FundraiserRecord): Promise<boolean> {
     return true;
   } catch (err) {
     logFailure("approved", err);
+    return false;
+  }
+}
+
+/** Email 19 (src/fundraising/memory-emails.ts), the only automatic email an in memory page gets. */
+async function sendInMemoryApprovedEmail(f: FundraiserRecord): Promise<boolean> {
+  if (!hasPage(f) || !f.memoryName) return false;
+  try {
+    const mail = buildInMemoryApprovedEmail({ name: f.name, memoryName: f.memoryName, setupBy: f.memorySetupBy ?? null }, { pageUrl: fundraiserPageUrl(f.slug) });
+    await sendFundraiseApproved(f.name, { email: f.email, from: config.BALL_FROM_EMAIL, replyTo: config.BALL_FROM_EMAIL, ...mail });
+    return true;
+  } catch (err) {
+    logFailure("in memory approved", err);
     return false;
   }
 }
@@ -155,6 +177,8 @@ export async function sendWaitingLiveEmails(): Promise<{ sent: number; failed: n
  * emails talk about the page and link it. True when the email went.
  */
 export async function sendEditDecisionEmail(f: FundraiserRecord, approved: boolean, pagesOpen: boolean): Promise<boolean> {
+  // In memory: only email 19 goes by itself; staff tell them about a change personally.
+  if (isInMemory(f)) return false;
   try {
     const message = { email: f.email, from: config.BALL_FROM_EMAIL, replyTo: config.BALL_FROM_EMAIL };
     const pageLive = hasPage(f) && pagesOpen;
@@ -201,6 +225,8 @@ export async function sendFinishedStaffEmail(f: FundraiserRecord, raisedPence: n
  * talk about the page and link it. True when the email went. Never throws.
  */
 export async function sendNewsDecisionEmail(f: FundraiserRecord, approved: boolean, pagesOpen: boolean): Promise<boolean> {
+  // In memory: only email 19 goes by itself; staff tell them about a news update personally.
+  if (isInMemory(f)) return false;
   try {
     const message = { email: f.email, from: config.BALL_FROM_EMAIL, replyTo: config.BALL_FROM_EMAIL };
     const pageLive = hasPage(f) && pagesOpen;

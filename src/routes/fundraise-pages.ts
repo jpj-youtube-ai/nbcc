@@ -424,7 +424,9 @@ ${title}`, () => qrSvg(url, { title, size: 1024 })));
         res.setHeader("Referrer-Policy", "same-origin");
         res.setHeader("X-Robots-Tag", "noindex, nofollow");
       }
-      const html = renderFundraiserPage(readFileSync(pageFile, "utf8"), page, {
+      // In memory of someone (Jaimie, 2026-10-03): the quieter page (src/fundraising/memory-render.ts).
+      const render = f.inMemory ? (await import("../fundraising/memory-render")).renderMemoryPage : renderFundraiserPage;
+      const html = render(readFileSync(pageFile, "utf8"), page, {
         pageUrl: pageUrlFor(f),
         now: new Date(),
         thanks,

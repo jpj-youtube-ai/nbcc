@@ -17,6 +17,7 @@ import { kindLabelOf } from "./model";
 import { buildTeamInviteReminderEmail, buildTeamNudgeEmail } from "./team-page-emails";
 import { safeWhy, teamEmailBlocked } from "./team-send";
 import { hashTeamInviteToken, inviteReminderDue, joinUrl, newTeamInviteToken, teamInviteUrl, teamNudgeDue } from "./teams";
+import { isInMemory } from "./in-memory";
 
 // Team pages (Jaimie, 2026-10-03): the daily team pass, on the 8am task (src/scripts/send-reminders.ts).
 //
@@ -126,6 +127,8 @@ export async function runTeamEmails(now = new Date(), deps: TeamRunDeps = realTe
   };
 
   for (const { team, joined } of state.teams) {
+    // In memory: never a team, and never emailed about as one (src/fundraising/in-memory.ts).
+    if (isInMemory(team)) continue;
     const n = teamNudgeDue(team, joined, today);
     if (!n) continue;
     if (!(await stillOn())) return out;
@@ -152,6 +155,7 @@ export async function runTeamEmails(now = new Date(), deps: TeamRunDeps = realTe
   }
 
   for (const inv of state.invites) {
+    if (isInMemory(inv.team)) continue;
     const t = inv.team;
     if (!t || t.status !== "approved" || !inviteReminderDue(inv, t.eventDate, now)) continue;
     if (!(await stillOn())) return out;

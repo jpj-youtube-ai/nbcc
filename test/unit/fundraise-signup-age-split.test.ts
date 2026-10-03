@@ -72,6 +72,7 @@ const sent = () => JSON.parse(String(sends()[0].init?.body));
 function fill(path: "raising" | "event") {
   tick(path === "raising" ? "pathRaising" : "pathEvent");
   tick("over18Yes");
+  tick("inMemoryNo"); // In memory: not this time
   // Team pages: someone raising money is asked "Just me, or a team?".
   if (path === "raising") tick("teamMe");
   tick("kind-walk");
@@ -182,6 +183,7 @@ describe("a No to 18 or over", () => {
     fill("raising");
     tick("over18No");
     tick("over18Yes");
+    tick("inMemoryNo"); // In memory: not this time
     expect($("[data-age-note]").textContent).toBe("");
     expect($("#fundraiseForm").classList.contains("fr-under-18")).toBe(false);
     await submit();
@@ -237,6 +239,7 @@ describe("sharing with another cause", () => {
   it("waits for both boxes before the next question", () => {
     tick("pathEvent");
     tick("over18Yes");
+    tick("inMemoryNo"); // In memory: not this time
     tick("kind-quiz");
     type("title", "Quiz Night");
     type("description", "Eight rounds.");

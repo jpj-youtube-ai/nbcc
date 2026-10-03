@@ -796,3 +796,64 @@ fieldset.is-invalid .fr-option { border-color: var(--crimson); }
 .fr-mine__forward { margin: 0 0 12px; padding: 14px 16px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--cream); font-family: var(--font-head); font-style: italic; color: var(--maroon); line-height: 1.55; overflow-wrap: anywhere; }
 .intro-hero .fr-team__organiser { margin: 18px 0 0; }
 .intro-hero .fr-team-of { margin: 6px 0 0; }
+/* ---------- In memory of someone (Jaimie, 2026-10-03) ----------
+   A page in memory of someone (src/fundraising/memory-render.ts) is the same page made quieter: the
+   house palette at a lower contrast (maroon, tan and cream, no crimson call to action, no holly
+   cheer), lighter headings, no festive banner, countdown or confetti. Only what is scoped under
+   .fr-memory-page (the page) and .ev-card--memory (its card on Get involved) changes. */
+.fr-memory-page .eyebrow { color: var(--slate-soft); letter-spacing: 0.24em; }
+.fr-memory-page .intro-hero h1 { font-weight: 600; color: var(--maroon); letter-spacing: -0.005em; }
+.fr-memory__dates {
+  margin: 10px 0 0;
+  font-family: var(--font-head);
+  font-style: italic;
+  font-size: clamp(1.1rem, 1rem + 0.4vw, 1.3rem);
+  color: var(--slate-soft);
+  overflow-wrap: anywhere;
+}
+.fr-memory-page .rule::before,
+.fr-memory-page .rule::after { background: var(--tan); opacity: 0.6; }
+.fr-memory-page .rule i { background: var(--tan); }
+.fr-memory-page .fr-facts svg { color: var(--slate-soft); }
+.fr-memory-page .btn-primary { --bg: var(--maroon); --fg: var(--cream); }
+.fr-memory-page .btn-primary:hover { --bg: var(--slate); }
+.fr-memory-page .fr-summary { background: var(--tint); box-shadow: none; border: 1px solid var(--line); }
+.fr-memory-page .fr-meter__fill { background: var(--tan); background: color-mix(in srgb, var(--maroon) 45%, var(--tan)); animation: none; }
+.fr-memory-page .fr-meter__percent { color: var(--slate-soft); font-weight: 500; }
+.fr-memory-page .fr-meter__giftaid { color: var(--slate-soft); }
+.fr-memory-page .fr-story h2,
+.fr-memory-page .fr-wall h2,
+.fr-memory-page .fr-card h2 { font-weight: 600; }
+.fr-memory__photo {
+  margin: 0;
+  max-width: 420px;
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  border: 1px solid var(--line);
+  background: var(--tint);
+}
+.fr-memory__photo img { display: block; width: 100%; height: auto; aspect-ratio: 4 / 5; object-fit: cover; }
+.fr-memory-page .fr-wall__amount { color: var(--slate); font-weight: 700; }
+.fr-memory-page .fr-wall__giftaid { color: var(--slate-soft); }
+.fr-wall__note { margin: 14px 0 0; font-size: 0.92rem; color: var(--slate-soft); }
+.fr-memory-page .fr-thanks-panel { background: var(--tint); border-color: var(--line); }
+.fr-memory-page .fr-thanks-panel h2 { color: var(--maroon); font-weight: 600; }
+.fr-memory-page .fr-finished { border-color: var(--tan); background: var(--tint); }
+.fr-memory-page .fr-finished__title { color: var(--maroon); font-weight: 600; }
+.fr-family-check { margin-top: 4px; }
+
+/* Its card on Get involved: a soft cream cover with their name, and no Fundraiser flag. */
+.ev-art--memory { --art-ground: var(--tint); color: var(--maroon); }
+.ev-art--memory .ev-art__name { font-style: normal; font-weight: 600; font-size: clamp(1.7rem, 1.4rem + 1vw, 2.2rem); line-height: 1.1; }
+.ev-art--memory .ev-art__place { color: var(--slate-soft); margin: 10px 0 0; }
+.ev-art--memory .ev-art__place:first-child { margin: 0 0 8px; }
+.ev-card--memory .fr-meter__fill { background: var(--tan); background: color-mix(in srgb, var(--maroon) 45%, var(--tan)); }
+.ev-card--memory .btn-primary { --bg: var(--maroon); --fg: var(--cream); }
+
+/* The sign up's in memory questions, and the private area's note. */
+.fr-memory-fields { display: grid; gap: 14px; margin-top: 16px; }
+.fr-memory-fields[hidden] { display: none; }
+.fr-memory-fields .fr-lead-help { margin: 0; }
+.fr-permission { margin-top: 2px; }
+.fr-mine__memory-note { margin: 0 0 12px; font-size: 0.92rem; color: var(--slate-soft); }
+.fr-mine__memory-note[hidden] { display: none; }

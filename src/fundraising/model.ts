@@ -5,6 +5,7 @@ import { containsBlockedWord } from "../donors/display-name-filter";
 import type { NewsEntry } from "./news";
 import { facebookLink, instagramLink, type SocialResult } from "./social";
 import { categoryLabel, isActiveCategory, isKnownCategory, OTHER_KIND } from "./categories";
+import { CHARITY_NAME, OSCR_NUMBER } from "../legal/registration";
 
 // TASK-493: community fundraising, the rules. Pure: no pool, no config, no clock, so every rule is
 // unit tested without a database (test/unit/fundraising-model.test.ts). The SQL is in
@@ -345,6 +346,79 @@ const optionalImage = z
   )
   .transform((v) => (v === "" ? null : v));
 
+// --- 18 or over, and sharing with another cause (Jaimie, 2026-10-03) ------------------------------
+//
+// Both asked on both paths, each a yes or no with nothing chosen for them. Someone under 18 cannot
+// set up a page: a grown up sets it up for them. Sharing what is raised with another cause needs
+// NBCC's whole percentage (1 to 99) and the other cause's name, for the statement the Charities and
+// Benevolent Fundraising (Scotland) Regulations 2009 ask for (splitStatement, below). Organisers can
+// never change the split (editSchema does not take it); staff correct it only while there are no
+// gifts (src/db/fundraisers.ts setFundraiserSplit).
+
+export const OVER_18_MISSING = "Tell us whether you are 18 or over.";
+export const UNDER_18 =
+  "You need to be 18 or over to set up a page. Ask a parent, guardian or another grown up you trust to set it up for you: they can name you on the page (for example, 'for Ella's 10th birthday'). Any questions, call 01292 811 015 or email events@nbcc.scot.";
+export const SHARES_MISSING = "Tell us whether you are sharing what you raise with another cause.";
+export const SHARE_PERCENT_MISSING = "Tell us what percentage of what you raise comes to NBCC.";
+export const SHARE_PERCENT_RANGE = "Give a whole number from 1 to 99.";
+export const OTHER_CAUSE_MISSING = "Tell us the name of the other cause.";
+export const OTHER_CAUSE_MAX = 120;
+
+/** NBCC's share as sent: a whole number from 1 to 99 (digits typed in a box count), null if not given. */
+function readPercent(v: unknown): number | null | "bad" {
+  if (v == null || (typeof v === "string" && v.trim() === "")) return null;
+  const n = typeof v === "string" && /^\s*\d+\s*$/.test(v) ? Number(v) : v;
+  return typeof n === "number" && Number.isInteger(n) && n >= 1 && n <= 99 ? n : "bad";
+}
+
+type SplitIn = { sharesWithOther?: boolean; nbccSharePercent?: unknown; otherCauseName?: string };
+
+function checkSplit(b: SplitIn, missing: (path: string, message: string) => void): void {
+  if (b.sharesWithOther === undefined) missing("sharesWithOther", SHARES_MISSING);
+  if (b.sharesWithOther !== true) return;
+  const p = readPercent(b.nbccSharePercent);
+  if (p === null) missing("nbccSharePercent", SHARE_PERCENT_MISSING);
+  else if (p === "bad") missing("nbccSharePercent", SHARE_PERCENT_RANGE);
+  if (!b.otherCauseName) missing("otherCauseName", OTHER_CAUSE_MISSING);
+}
+
+/** The split as stored: the percentage and the name only when sharing. */
+function splitOf(b: SplitIn): { sharesWithOther: boolean; nbccSharePercent: number | null; otherCauseName: string | null } {
+  const shares = b.sharesWithOther === true;
+  const p = readPercent(b.nbccSharePercent);
+  return {
+    sharesWithOther: shares,
+    nbccSharePercent: shares && typeof p === "number" ? p : null,
+    otherCauseName: shares && b.otherCauseName ? b.otherCauseName : null,
+  };
+}
+
+const splitFields = {
+  sharesWithOther: yesNo,
+  nbccSharePercent: z.unknown(),
+  otherCauseName: optionalText(OTHER_CAUSE_MAX),
+};
+
+/** A staff correction of the split (PUT /api/admin/fundraisers/:id/split): the form's own rules. */
+export const splitSchema = z
+  .object(splitFields)
+  .strict()
+  .superRefine((b, ctx) => checkSplit(b, (path, message) => ctx.addIssue({ code: z.ZodIssueCode.custom, path: [path], message })))
+  .transform(splitOf);
+
+export type FundraiserSplit = z.infer<typeof splitSchema>;
+
+/**
+ * The statement the Charities and Benevolent Fundraising (Scotland) Regulations 2009 ask for when
+ * what is raised is shared: NBCC's share, the charity's name and number, and who has the rest. Null
+ * when it is not shared, or for a sign up from before it was asked.
+ */
+export function splitStatement(f: { sharesWithOther?: boolean | null; nbccSharePercent?: number | null; otherCauseName?: string | null }): string | null {
+  if (f.sharesWithOther !== true || !f.nbccSharePercent || !f.otherCauseName) return null;
+  const other = f.otherCauseName.trim();
+  return `${f.nbccSharePercent}% of what we raise goes to the ${CHARITY_NAME}, Scottish Charity ${OSCR_NUMBER}. The rest goes to ${other}${/[.!?]$/.test(other) ? "" : "."}`;
+}
+
 // --- the sign up form (POST /api/fundraise) ---------------------------------------------------------
 
 export const signUpSchema = z
@@ -373,6 +447,9 @@ export const signUpSchema = z
     instagram: socialBox(instagramLink),
     facebook: socialBox(facebookLink),
     socialOk: yesNo,
+    // Jaimie, 2026-10-03: both paths. Checked below, so every missing answer is named at once.
+    over18: yesNo,
+    ...splitFields,
     wants: signUpWants,
     // TASK-499: where to post things, in separate boxes. The old single box (postAddress) is no
     // longer on the form; one sent anyway is dropped, never stored.
@@ -401,6 +478,9 @@ export const signUpSchema = z
     if (!isActiveCategory(b.kind)) missing("kind", isKnownCategory(b.kind) ? KIND_GONE : kindMissing(b.path));
     if (b.kind === OTHER_KIND && !b.kindOther) missing("kindOther", kindOtherMissing(b.path));
     if (b.socialOk === undefined) missing("socialOk", SOCIAL_OK_MISSING);
+    if (b.over18 === undefined) missing("over18", OVER_18_MISSING);
+    else if (b.over18 !== true) missing("over18", UNDER_18);
+    checkSplit(b, missing);
     if (b.path === "event") {
       if (!b.eventDate) missing("eventDate", "Tell us the date of your event.");
       if (!b.cardLine) missing("cardLine", "Add a line for the front of the card.");
@@ -433,6 +513,9 @@ export const signUpSchema = z
       // TASK-511: the whole name, for everything that reads it (emails, the admin, the page).
       name: `${b.firstName} ${b.lastName}`,
       socialOk: b.socialOk === true,
+      // Checked above: only a Yes gets this far.
+      over18: true as const,
+      ...splitOf(b),
       // The old single link, filled for anything that still reads it: Facebook first.
       socialLink: b.facebook ?? b.instagram,
       wants: wanted,
@@ -928,6 +1011,13 @@ export interface FundraiserRecord {
   /** Their Instagram and Facebook, each a full https link. */
   instagram?: string | null;
   facebook?: string | null;
+  // Jaimie, 2026-10-03. All null on a sign up from before they were asked.
+  /** They said they are 18 or over (every sign up since must). */
+  over18?: boolean | null;
+  /** Sharing what is raised with another cause, NBCC's whole percentage, and the other cause. */
+  sharesWithOther?: boolean | null;
+  nbccSharePercent?: number | null;
+  otherCauseName?: string | null;
 }
 
 /** The event answers a card shows. All of them are meant for the public; none is private. */
@@ -963,6 +1053,12 @@ export interface PublicCard extends Partial<PublicEventAnswers> {
   /** The fundraiser's own page, or null for an event sign up (listed as an event, no page). */
   url: string | null;
   meter: Meter;
+  /**
+   * Jaimie, 2026-10-03: shared with another cause, with the statement the 2009 regulations ask for;
+   * null when it is not shared (or a sign up from before it was asked). On every card (an event has no
+   * page, so its card is where the public sees it) and on the page.
+   */
+  split?: PublicSplit | null;
 }
 
 export interface PublicPage extends PublicCard {
@@ -972,6 +1068,18 @@ export interface PublicPage extends PublicCard {
   finished?: boolean;
   /** TASK-506: the news updates staff approved, newest first (src/fundraising/news.ts publicNews). */
   news?: NewsEntry[];
+}
+
+export interface PublicSplit {
+  nbccSharePercent: number;
+  otherCauseName: string;
+  statement: string;
+}
+
+/** The split as the public sees it, or null. */
+export function publicSplit(f: Pick<FundraiserRecord, "sharesWithOther" | "nbccSharePercent" | "otherCauseName">): PublicSplit | null {
+  const statement = splitStatement(f);
+  return statement ? { nbccSharePercent: f.nbccSharePercent as number, otherCauseName: (f.otherCauseName as string).trim(), statement } : null;
 }
 
 /** A sign up's category, by name: as read with the row, else as the list has it (old ones included). */
@@ -1010,6 +1118,7 @@ export function publicCard(f: FundraiserRecord, m: Meter): PublicCard {
     ageLimit: f.ageLimit,
     dressCode: f.dressCode,
     included: f.included,
+    split: publicSplit(f),
   };
 }
 

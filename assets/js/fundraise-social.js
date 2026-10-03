@@ -245,9 +245,14 @@
   }
 
   /* The charity statement, measured: one line if it fits, else two. top: how far above the last
-     line's baseline its first line starts. */
+     line's baseline its first line starts. Jaimie, 2026-10-03: a fundraiser sharing what it raises
+     with another cause has the statement the 2009 regulations ask for (data.split) first, so it gets
+     up to four lines, and a smaller size before anything would be cut short. */
   function statementLines(ctx, data, maxWidth, size) {
-    var s = fit(ctx, data.statement || STATEMENT, "400 {s}px " + BODY, maxWidth, 2, size, Math.round(size * 0.75));
+    var text = (data.split ? data.split + " " : "") + (data.statement || STATEMENT);
+    var s = data.split
+      ? fit(ctx, text, "400 {s}px " + BODY, maxWidth, 4, size, Math.round(size * 0.6))
+      : fit(ctx, text, "400 {s}px " + BODY, maxWidth, 2, size, Math.round(size * 0.75));
     s.step = Math.round(s.size * 1.35);
     s.top = (s.lines.length - 1) * s.step + s.size;
     return s;
@@ -304,7 +309,9 @@
     var W = size.w;
     var H = size.h;
     var L = WIDE[kind];
-    var stmtBand = L.stmt * 3.2;
+    var stmt = statementLines(ctx, data, W - L.pad * 4, L.stmt);
+    // Room at the foot for the statement: as it always was for two lines, more for the split's.
+    var stmtBand = Math.max(L.stmt * 3.2, stmt.top + L.stmt * 0.85);
     var top = L.pad;
     var bottom = H - L.pad - stmtBand;
     var logoSize = Math.min(L.logo, bottom - top);
@@ -327,7 +334,7 @@
     var y = top + Math.max(0, (bottom - top - total()) / 2);
     y = drawWords(ctx, L, m, h, cx, y, data);
     drawPill(ctx, data, cx, y + (h.meter ? 24 : 0) + 30, width, L.pillText);
-    drawStatement(ctx, statementLines(ctx, data, W - L.pad * 4, L.stmt), W / 2, H - L.pad * 0.75);
+    drawStatement(ctx, stmt, W / 2, H - L.pad * 0.75);
   }
 
   function draw(canvas, kind, data, logo, showMeter) {

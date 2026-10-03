@@ -165,7 +165,19 @@ fieldset.is-invalid .fr-option { border-color: var(--crimson); }
 .fr-options--yesno .fr-option--small { justify-content: flex-start; }
 .fr-note { margin: 12px 0 0; padding: 10px 14px; border-left: 3px solid var(--holly); border-radius: 8px; background: var(--holly-soft); color: var(--holly-dark); font-size: 0.95rem; line-height: 1.5; }
 .fr-note:empty { display: none; }
+/* A note that is also a live region stays in the page while empty, so a screen reader announces what
+   it later says (the 18 or over note). It takes no room until then. */
+.fr-note--live:empty { display: block; margin: 0; padding: 0; border: 0; }
 .fr-either-way { margin: 14px 0 0; font-size: 0.95rem; color: var(--slate-soft); }
+
+/* Jaimie, 2026-10-03: a No to "Are you 18 or over?" stops the form there. fundraise.js marks every
+   question after it (data-after-age) and adds fr-under-18 while the answer is No. */
+.fr-under-18 [data-after-age] { display: none; }
+/* Sharing with another cause: NBCC's percentage, with its sign beside the box. */
+.fr-split-fields { margin: 16px 0 0; }
+.fr-percent { display: flex; align-items: center; gap: 8px; max-width: 160px; }
+.fr-percent .give-field-input { flex: 1; min-width: 0; }
+.fr-percent__sign { font-weight: 600; color: var(--slate); }
 
 /* ---------- the sign up's target and counts ---------- */
 .fr-target .give-custom-field { max-width: 320px; }
@@ -238,6 +250,9 @@ fieldset.is-invalid .fr-option { border-color: var(--crimson); }
 }
 .fr-summary { grid-area: summary; padding: clamp(22px, 3.4vw, 32px); display: grid; gap: 22px; }
 .fr-summary__give { justify-content: center; width: 100%; font-size: 1.08rem; padding: 16px 24px; }
+/* Jaimie, 2026-10-03: shared with another cause, the statement the 2009 regulations ask for. */
+.fr-split { margin: 0; font-size: 0.95rem; line-height: 1.55; color: var(--slate); overflow-wrap: anywhere; }
+.fr-card__split { margin: 10px 0 0; font-size: 0.85rem; line-height: 1.5; color: var(--slate); overflow-wrap: anywhere; }
 .fr-main { grid-area: main; display: grid; gap: clamp(28px, 4vw, 44px); min-width: 0; }
 .fr-extras { grid-area: extras; display: grid; gap: clamp(22px, 3vw, 30px); align-content: start; }
 

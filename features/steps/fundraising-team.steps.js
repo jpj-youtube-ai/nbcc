@@ -187,6 +187,8 @@ When("someone signs up {string} from that invite", async function (title) {
     email: this.invite.email,
     phone: "07700 900126",
     socialOk: false,
+    over18: true,
+    sharesWithOther: false,
     wants: { posterCount: 0, leafletCount: 0, bucketCount: 0, tinCount: 0, shoutOut: false, attend: false },
     newsletterOk: false,
     company: "",

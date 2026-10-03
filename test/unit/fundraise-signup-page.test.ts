@@ -63,6 +63,9 @@ const sent = () => JSON.parse(String(posts()[0].init?.body));
 
 function fillRaising() {
   tick("pathRaising");
+  // Jaimie, 2026-10-03: 18 or over, and not sharing with another cause.
+  tick("over18Yes");
+  tick("sharesNo");
   type("title", "Jo's Sponsored Swim");
   tick("kind-walk");
   type("description", "Forty lengths for NBCC.");
@@ -199,6 +202,10 @@ describe("sending", () => {
       instagram: "@jo.swims",
       facebook: "",
       socialOk: true,
+      over18: true,
+      sharesWithOther: false,
+      nbccSharePercent: null,
+      otherCauseName: "",
       wants: { posterCount: 0, leafletCount: 25, bucketCount: 0, tinCount: 2, qrCount: 0, shoutOut: true, attend: false },
       postLine1: "1 Example Road",
       postLine2: "",

@@ -256,3 +256,35 @@ describe("the zip waits for the logo", () => {
     expect(blobs).toBe(5);
   });
 });
+
+// Jaimie, 2026-10-03: a fundraiser sharing with another cause carries the statement the 2009
+// regulations ask for on every picture, whole (never cut short with "…"), before the charity's own.
+describe("a fundraiser sharing with another cause", () => {
+  const SPLIT = "60% of what we raise goes to the Night Before Christmas Campaign, Scottish Charity SC047995. The rest goes to ";
+  const flat = (kind: string) => textOn(kind).replace(/\s+/g, " ");
+
+  it("each picture draws the split statement whole, then the charity statement", async () => {
+    await open({ sharesWithOther: true, nbccSharePercent: 60, otherCauseName: "Kilmarnock Food Larder" });
+    for (const kind of KINDS) {
+      expect(flat(kind), kind).toContain(`${SPLIT}Kilmarnock Food Larder.`);
+      expect(flat(kind), kind).toContain("Night Before Christmas Campaign (NBCC), a Scottish Charitable Incorporated Organisation, SC047995");
+      expect(flat(kind).indexOf(SPLIT), kind).toBeLessThan(flat(kind).indexOf("(NBCC), a Scottish"));
+      expect(flat(kind), kind).not.toContain("…");
+    }
+  });
+
+  it("still draws it whole with the longest name the form takes", async () => {
+    const name = "The Exampleton and District Community Larder and Warm Space for Everyone Who Needs a Hand Over the Long Winter Months";
+    expect(name.length).toBeLessThanOrEqual(120);
+    await open({ sharesWithOther: true, nbccSharePercent: 60, otherCauseName: name });
+    for (const kind of KINDS) {
+      expect(flat(kind), kind).toContain(`${SPLIT}${name}.`);
+      expect(flat(kind), kind).not.toContain("…");
+    }
+  });
+
+  it("adds nothing when it is not shared", async () => {
+    await open();
+    for (const kind of KINDS) expect(flat(kind), kind).not.toContain("of what we raise goes to");
+  });
+});

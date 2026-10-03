@@ -7253,7 +7253,7 @@ is listed, every page is a 404, and the private area is closed, until an admin s
 | Public API | `src/routes/fundraise.ts` |
 | Admin API | `src/routes/admin-fundraising.ts` |
 | Checkout and webhook additions | `src/routes/api.ts`, `src/db/stripe-webhook-model.ts`, `src/db/stripe-webhook.ts` |
-| Tables | `migrations/1791200000000_fundraising.js`; access backfill `1791200000001_permissions-fundraising.js`; newsletter source `1791200000002_newsletter-source-fundraise.js`; the address boxes and event questions (TASK-499) `1791200000040_fundraiser-sign-up-details.js`; the private area (TASK-501) `1791200000050_fundraising-private-area.js`; the message after paying (TASK-502) `1791200000060_fundraising-wall-after-paying.js`; news updates (TASK-506) `1791200000100_fundraiser-updates.js`; the form's second round and old page links (TASK-511) `1791200000130_fundraising-form-v2.js` |
+| Tables | `migrations/1791200000000_fundraising.js`; access backfill `1791200000001_permissions-fundraising.js`; newsletter source `1791200000002_newsletter-source-fundraise.js`; the address boxes and event questions (TASK-499) `1791200000040_fundraiser-sign-up-details.js`; the private area (TASK-501) `1791200000050_fundraising-private-area.js`; the message after paying (TASK-502) `1791200000060_fundraising-wall-after-paying.js`; news updates (TASK-506) `1791200000100_fundraiser-updates.js`; the form's second round and old page links (TASK-511) `1791200000130_fundraising-form-v2.js`; 18 or over and the split with another cause `1791200000180_signup-age-and-split.js` |
 
 ### Data
 
@@ -7289,6 +7289,42 @@ those keys keep that meaning, are still read, and show in those words everywhere
 **Raised** = paid online gifts on the page, less any refund, plus cash staff recorded. The
 percentage is rounded down and can pass 100; the bar is held at 100.
 
+**18 or over, and sharing with another cause (Jaimie, 2026-10-03, `1791200000180_signup-age-and-split.js`).**
+Two more yes or no questions on the sign up form, on both paths, with nothing chosen for them:
+
+- "Are you 18 or over?" comes straight after the first question. A No stops the form there (the
+  questions after it hide and Send does nothing) with a kind note: "You need to be 18 or over to
+  set up a page. Ask a parent, guardian or another grown up you trust to set it up for you: they can
+  name you on the page (for example, 'for Ella's 10th birthday'). Any questions, call 01292 811 015
+  or email events@nbcc.scot." The server refuses any sign up without `over18: true` (`400`, naming
+  `over18`). Stored as `fundraisers.over_18`; the admin shows "Confirmed 18 or over". A staff invite
+  or Do it again link never fills it in.
+- "Are you sharing what you raise with another cause?" On a Yes, NBCC's whole percentage (1 to 99)
+  and the other cause's name (up to 120) are required: `shares_with_other`, `nbcc_share_percent`,
+  `other_cause_name`, held together by checks (`fundraisers_split_complete`: both when sharing,
+  neither when not). The fundraiser's page (beside the Give button, with "Everything given on this
+  page goes to NBCC, as NBCC's share." in the give form), every card on Get involved (an event's card,
+  which is the only place an event is public, and a raising money card) and every material that
+  carries the charity statement (the A4, A3 and A5 posters, the sponsor form on both pages, which also
+  says it is in aid of NBCC and the other cause, the certificate and the five pictures to share) carry
+  the statement the Charities and Benevolent Fundraising (Scotland) Regulations 2009 ask for,
+  `splitStatement` in `src/fundraising/model.ts`: "60% of what we raise goes to the Night Before
+  Christmas Campaign, Scottish Charity SC047995. The rest goes to <the other cause>." The charity
+  statement itself is unchanged. So the longest answers still fit the paper, a shared poster's logo
+  may go down to 28mm (the leaflet's QR code to 58mm on the design, the pledge to one line), the
+  sponsor form has a row less per page (and fewer on page 1 with a long event name, drawn smaller),
+  and a crowded certificate is set closer (`c-tight`); checked by printing the worst case.
+- **The lock.** Organisers can never change the split: the private area's changes (`editSchema`)
+  and staff's ordinary edit (`adminPatchSchema`) do not take it, and an approved change can only
+  write the columns in `COLUMNS`. Only an admin may correct it, with
+  `PUT /api/admin/fundraisers/:id/split` (Admin > Fundraising, "Sharing with another cause"), and
+  only while the fundraiser has no gifts: `setFundraiserSplit` counts its donations and cash paid in
+  under the row's lock, and refuses with `409` once there is any. Every correction is audited
+  (`fundraiser.split_changed`, with the split before and after).
+
+All four columns are nullable with no default: a sign up from before was never asked, reads as
+null, and shows nothing.
+
 ### Permissions
 
 A new admin section, `fundraising`: admins **edit**, editors **edit**, viewers **view** by default,
@@ -7318,6 +7354,10 @@ All JSON. Money is always in **pence**. Dates are `YYYY-MM-DD`, times `HH:MM`.
   "instagram": "@name, name or a link",    // TASK-511: optional; tidied to https://www.instagram.com/<name>
   "facebook": "name or a link",            // TASK-511: optional; tidied to https://www.facebook.com/<path>
   "socialOk": true,                        // TASK-511: required, true or false: we may post about it
+  "over18": true,                          // 2026-10-03: required, both paths; anything but true is a 400 naming over18
+  "sharesWithOther": false,                // 2026-10-03: required, both paths: sharing what is raised with another cause
+  "nbccSharePercent": 50,                  // when sharing: required, a whole number 1 to 99 (digits as text too); dropped otherwise
+  "otherCauseName": "...",                 // when sharing: required, up to 120; dropped otherwise
   "wants": { "posterCount": 0, "leafletCount": 0, "bucketCount": 0, "tinCount": 0,   // TASK-499
              "qrCount": 0,                 // TASK-511: printed QR codes, up to 200; 0 for an event
              "shoutOut": false, "attend": false },  // TASK-511: both required, true or false
@@ -7426,7 +7466,8 @@ transaction, with the actor `admin:<email>`.
 | `PATCH /api/admin/fundraising/settings` (admins only) | `{ pageOn: boolean }` | `{ pageOn, updatedAt, updatedBy }`; switching on then sends "Your page is live" to every approved page holder still waiting, in the background (see Emails) |
 | `GET /api/admin/fundraisers` | | `{ pageOn, fundraisers: [Fundraiser + meter + editWaiting] }`, newest first |
 | `GET /api/admin/fundraisers/:id` | | `{ fundraiser, meter, waitingEdit, editWaiting, edits, cash, wall }` |
-| `PATCH /api/admin/fundraisers/:id` | any of the sign up fields, plus `slug` and `imageSrc` | `{ fundraiser }`; `409` if the slug is taken, or (TASK-511) was ever another page's |
+| `PATCH /api/admin/fundraisers/:id` | any of the sign up fields, plus `slug` and `imageSrc` (never `over18` or the split) | `{ fundraiser }`; `409` if the slug is taken, or (TASK-511) was ever another page's |
+| `PUT /api/admin/fundraisers/:id/split` (admins only) | `{ sharesWithOther, nbccSharePercent, otherCauseName }`, the sign up's rules | `{ fundraiser }`; `409` "The split cannot be changed now: this fundraiser has had its first gift..." once it has any gift or cash paid in (counted under the row's lock); `400` with `fields`; `403` for anyone but an admin |
 | `POST /api/admin/fundraisers/:id/approve` | | `{ fundraiser }`; emails the organiser, or marks a page holder as waiting while fundraising is off (see below); from New or Declined |
 | `POST /api/admin/fundraisers/:id/decline` | `{ reason? }` (internal, up to 500) | `{ fundraiser }`; from New or Approved; no email |
 | `POST /api/admin/fundraisers/:id/finish` | | `{ fundraiser }`; from Approved |

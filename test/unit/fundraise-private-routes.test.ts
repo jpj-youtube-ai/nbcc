@@ -521,6 +521,16 @@ describe("asking for a change", () => {
     expect(db.requestEdit).not.toHaveBeenCalled();
   });
 
+  // Jaimie, 2026-10-03: the split with another cause is never theirs to change once approved; only
+  // staff correct it, and only before the first gift.
+  it("never takes a change to the split with another cause", async () => {
+    for (const body of [{ sharesWithOther: false }, { nbccSharePercent: 90 }, { otherCauseName: "Another Cause" }, { description: "x", nbccSharePercent: 90 }]) {
+      const res = await run(postManageEdit, { cookie: SAM, params: { id: "9" }, body });
+      expect(res.statusCode, JSON.stringify(body)).toBe(400);
+    }
+    expect(db.requestEdit).not.toHaveBeenCalled();
+  });
+
   it("needs a session, and our own page", async () => {
     expect((await run(postManageEdit, { params: { id: "9" }, body: { description: "x" } })).statusCode).toBe(401);
     const cross = await run(postManageEdit, { cookie: SAM, params: { id: "9" }, body: { description: "x" }, headers: { "sec-fetch-site": "cross-site" } });

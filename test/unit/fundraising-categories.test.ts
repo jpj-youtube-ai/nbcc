@@ -209,6 +209,8 @@ describe("the sign up form takes only categories on offer", () => {
     email: "sam@example.com",
     phone: "07700 900456",
     socialOk: false,
+    over18: true,
+    sharesWithOther: false,
     wants: { shoutOut: false, attend: false },
   });
   const kindError = (kind: unknown) => {

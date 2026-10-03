@@ -169,6 +169,8 @@ export function renderFundraiserCard(c: PublicCard, today?: string): string {
     `<p class="fr-card__by">Organised by ${escapeHtml(c.organisedBy)}</p>` +
     (c.description ? `<p class="ev-tldr">${escapeHtml(shorten(c.description, 150))}</p>` : "") +
     renderMeter(c.meter) +
+    // Jaimie, 2026-10-03: shared with another cause, the statement beside the way in.
+    (c.split ? `<p class="fr-card__split">${escapeHtml(c.split.statement)}</p>` : "") +
     '<div class="ev-book-gap"></div>' +
     `<a class="btn btn-primary fr-card__go" href="${href}">See the page and give<span class="sr-only">: ${escapeHtml(c.title)}</span></a>` +
     "</div></article></div></li>"
@@ -256,7 +258,8 @@ export function fundraiserEventRecord(c: PublicCard): CardRecord | null {
     partnerFront: "Organised by",
     partnerCredit: "Organised by",
     partnerLogoSrc: null,
-    partnerLine: "A community event raising money for NBCC.",
+    // Jaimie, 2026-10-03: shared with another cause, the card says how, in the 2009 regulations' words.
+    partnerLine: c.split ? c.split.statement : "A community event raising money for NBCC.",
     ...bookingFor(c),
     status: "live",
     showFrom: null,
@@ -442,6 +445,15 @@ function renderShare(p: PublicPage, pageUrl: string): string {
 /** The organiser's first name, for "Robin's total" and "Robin's wall". */
 const firstName = (p: PublicCard) => escapeHtml(p.organisedBy.split(" ")[0]);
 
+// Jaimie, 2026-10-03: shared with another cause. Money given on the page is NBCC's share; the
+// statement the 2009 regulations ask for sits beside the Give button (renderSplit).
+const SHARE_NOTE = (p: PublicPage): string => (p.split ? " Everything given on this page goes to NBCC, as NBCC's share." : "");
+
+/** The split statement, beside the Give button; nothing when it is not shared. */
+function renderSplit(p: PublicPage): string {
+  return p.split ? `<p class="fr-split">${escapeHtml(p.split.statement)}</p>` : "";
+}
+
 function renderGiveForm(p: PublicPage): string {
   const first = firstName(p);
   const presets = PRESETS_PENCE.map(
@@ -455,9 +467,9 @@ function renderGiveForm(p: PublicPage): string {
     '<div class="card card-lg give-card fr-give-card"><div class="give-main">' +
     (p.finished
       ? '<h2 class="give-step-title" id="fr-give-heading">You can still give</h2>' +
-        `<p class="give-step-sub">Your donation goes to NBCC and still counts towards ${first}'s total for ${escapeHtml(p.title)}.</p>`
+        `<p class="give-step-sub">Your donation goes to NBCC and still counts towards ${first}'s total for ${escapeHtml(p.title)}.${SHARE_NOTE(p)}</p>`
       : `<h2 class="give-step-title" id="fr-give-heading">Give to ${escapeHtml(p.title)}</h2>` +
-        `<p class="give-step-sub">Your donation goes to NBCC and counts towards ${first}'s total.</p>`) +
+        `<p class="give-step-sub">Your donation goes to NBCC and counts towards ${first}'s total.${SHARE_NOTE(p)}</p>`) +
     // Shipped hidden: without JavaScript the browser would send it as a web address, names and all.
     '<p class="fr-noscript" data-nojs>Giving on this page needs JavaScript switched on. You can still donate on our <a href="/donate">donate page</a>.</p>' +
     `<form id="frGiveForm" class="fr-give-form" data-fundraiser-id="${p.giving.fundraiserId}" data-minimum-pence="${p.giving.minimumPence}" novalidate hidden data-needs-js>` +
@@ -724,6 +736,7 @@ export function renderFundraiserPage(template: string, p: PublicPage, opts: Fund
     '<div class="card card-lg fr-summary">' +
     '<h2 class="sr-only">Money raised so far</h2>' +
     renderMeter(p.meter, { large: true }) +
+    renderSplit(p) +
     `<a class="btn btn-primary fr-summary__give" href="#give">${p.finished ? "You can still give" : "Give to this fundraiser"}</a>` +
     "</div>" +
     '<div class="fr-main">' +

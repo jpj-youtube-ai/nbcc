@@ -231,6 +231,18 @@ describe("the summary to the events inbox", () => {
     expect(privateOne.text).toMatch(/not to be shown on the website/i);
   });
 
+  // Jaimie, 2026-10-03: 18 or over, and sharing with another cause (the other cause is invented).
+  it("says they are 18 or over, and how what they raise is shared", () => {
+    const shared = buildSignUpStaffEmail(
+      { ...signUp, id: 45, over18: true, sharesWithOther: true, nbccSharePercent: 60, otherCauseName: "Kilmarnock Food Larder" },
+      { adminUrl: "https://nbcc.scot/admin" },
+    );
+    expect(shared.text).toContain("18 or over: Yes");
+    expect(shared.text).toContain("Sharing with another cause: Yes, 60% to NBCC, the rest to Kilmarnock Food Larder");
+    const notShared = buildSignUpStaffEmail({ ...signUp, id: 46, over18: true, sharesWithOther: false }, { adminUrl: "https://nbcc.scot/admin" });
+    expect(notShared.text).toContain("Sharing with another cause: No, all of it comes to NBCC");
+  });
+
   it("is plain English", () => expectPlainEnglish(mail.text));
 });
 

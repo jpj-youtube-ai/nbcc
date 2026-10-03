@@ -93,8 +93,11 @@ describe.each(PAGES)("accessibility floor (REQ-032): %s", (page) => {
       expect(label, `no <label for="${id}"> on ${page}`).not.toBeNull();
       expect(norm(label?.textContent).length, `empty <label for="${id}">`).toBeGreaterThan(0);
 
-      // Required fields must carry BOTH the HTML constraint and the ARIA hint.
-      if (el.hasAttribute("required")) {
+      // Required fields must carry BOTH the HTML constraint and the ARIA hint. A radio may carry the
+      // hint on its radiogroup instead, where ARIA puts it (aria-required is not a radio's own).
+      const group = el.closest('[role="radiogroup"]');
+      const onGroup = (el.getAttribute("type") ?? "").toLowerCase() === "radio" && group?.getAttribute("aria-required") === "true";
+      if (el.hasAttribute("required") && !onGroup) {
         expect(
           el.getAttribute("aria-required"),
           `#${id} is required but missing aria-required="true"`,

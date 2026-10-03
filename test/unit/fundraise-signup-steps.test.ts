@@ -88,7 +88,7 @@ describe("without the script", () => {
 
   it("chooses nothing for them in any yes or no", () => {
     page();
-    for (const name of ["path", "kind", "public", "socialOk", "shoutOut", "attend"]) {
+    for (const name of ["path", "kind", "over18", "sharesWithOther", "public", "socialOk", "shoutOut", "attend"]) {
       const radios = [...document.querySelectorAll<HTMLInputElement>(`input[name="${name}"]`)];
       expect(radios.length, name).toBeGreaterThan(0);
       expect(radios.some((r) => r.checked || r.hasAttribute("checked")), name).toBe(false);
@@ -130,6 +130,12 @@ describe("one question after another", () => {
   it("brings the next question once the first is answered, and says so for screen readers", () => {
     tick("pathRaising");
     expect(shown()).toHaveLength(2);
+    // Jaimie, 2026-10-03: 18 or over comes straight after the first question.
+    expect(waiting($("#over18Yes"))).toBe(false);
+    expect(waiting($("#kind-bake_sale_2"))).toBe(true);
+    expect(news()).toBe("Next question: Are you 18 or over?");
+    tick("over18Yes");
+    expect(shown()).toHaveLength(3);
     expect(waiting($("#kind-bake_sale_2"))).toBe(false);
     expect(waiting($("#title"))).toBe(true);
     expect(news()).toBe("Next question: What are you doing to raise money?");
@@ -148,6 +154,7 @@ describe("one question after another", () => {
 
   it("asks what Other is, only when it is chosen", () => {
     tick("pathEvent");
+    tick("over18Yes");
     expect($("[data-kind-other]").hidden).toBe(true);
     expect($("#kindOther").required).toBe(false);
     tick("kind-other");
@@ -164,13 +171,17 @@ describe("one question after another", () => {
 
   it("brings optional questions along with the one before, and stops at the next that needs an answer", () => {
     tick("pathRaising");
+    tick("over18Yes");
     tick("kind-walk");
     expect(waiting($("#title"))).toBe(false);
     expect(waiting($("#target"))).toBe(true);
     type("title", "Jo's Sponsored Swim");
     type("description", "Forty lengths for NBCC.");
-    // The target is optional, so the website question comes with it, and waits for its answer.
+    // The target is optional, so the sharing question comes with it, and waits for its answer.
     expect(waiting($("#target"))).toBe(false);
+    expect(waiting($("#sharesYes"))).toBe(false);
+    expect(waiting($("#publicYes"))).toBe(true);
+    tick("sharesNo");
     expect(waiting($("#publicYes"))).toBe(false);
     expect(waiting($("#firstName"))).toBe(true);
   });
@@ -183,9 +194,11 @@ describe("one question after another", () => {
 
   it("never takes a question away again once it has been shown", () => {
     tick("pathRaising");
+    tick("over18Yes");
     tick("kind-walk");
     type("title", "Jo's Sponsored Swim");
     type("description", "Forty lengths.");
+    tick("sharesNo");
     type("title", "");
     expect(waiting($("#publicYes"))).toBe(false);
   });
@@ -197,7 +210,8 @@ describe("one question after another", () => {
     btn.click();
     expect(document.querySelector(".is-waiting")).toBeNull();
     expect($("[data-show-all-row]").hidden).toBe(true);
-    expect(document.activeElement).toBe($("#kind-bake_sale_2"));
+    // The first still to answer: 18 or over (Jaimie, 2026-10-03).
+    expect(document.activeElement).toBe($("#over18Yes"));
   });
 
   it("shows every question when Send is pressed early, flagging what is missing", async () => {
@@ -212,7 +226,7 @@ describe("one question after another", () => {
 
   it("reveals gently, and not at all for someone who asks for less motion", () => {
     tick("pathRaising");
-    expect($("#kindGroup").closest("[data-step]")!.classList.contains("is-arriving")).toBe(true);
+    expect($("#over18Group").closest("[data-step]")!.classList.contains("is-arriving")).toBe(true);
     expect(css).toMatch(/@media \(prefers-reduced-motion: no-preference\)\s*\{[^}]*\.fr-stepped [^{]*is-arriving[^{]*\{[^}]*animation/);
   });
 });
@@ -253,6 +267,9 @@ describe("printed QR codes", () => {
 
 function fill(path: "raising" | "event") {
   tick(path === "raising" ? "pathRaising" : "pathEvent");
+  // Jaimie, 2026-10-03: 18 or over, and not sharing with another cause.
+  tick("over18Yes");
+  tick("sharesNo");
   tick("kind-other");
   type("kindOther", "A sponsored silence");
   type("title", "Sam's Silent Day");
@@ -293,6 +310,7 @@ describe("the next question, while they type", () => {
 
   it("waits for them to leave the box, or to pause, rather than coming on the first key", async () => {
     tick("pathRaising");
+    tick("over18Yes");
     tick("kind-walk");
     typeOnly("title", "J");
     typeOnly("description", "F");
@@ -303,6 +321,7 @@ describe("the next question, while they type", () => {
 
   it("comes at once when they leave the box", () => {
     tick("pathRaising");
+    tick("over18Yes");
     tick("kind-walk");
     typeOnly("title", "Jo's Swim");
     typeOnly("description", "Forty lengths.");
@@ -340,7 +359,7 @@ describe("a fault in the form's own script", () => {
       } catch {
         /* the fault itself */
       }
-      expect(waiting($("#kind-bake_sale_2"))).toBe(false);
+      expect(waiting($("#over18Yes"))).toBe(false);
     } finally {
       document.getElementById = real;
     }

@@ -21,6 +21,7 @@ const db = vi.hoisted(() => ({
   wallRows: vi.fn(),
   fundraisingIsOn: vi.fn(),
   countWaitingLiveEmails: vi.fn(),
+  setFundraiserSplit: vi.fn(),
 }));
 const { getUserAuthRowMock, sendApprovedEmail, sendWaitingLiveEmails, sendEditDecisionEmail, insertEventImage } = vi.hoisted(() => ({
   getUserAuthRowMock: vi.fn(),
@@ -64,6 +65,7 @@ vi.mock("../../src/config", () => ({
 vi.mock("../../src/db/pool", () => ({ pool: { query: vi.fn(), connect: vi.fn() } }));
 
 import * as routes from "../../src/routes/admin-fundraising";
+import { SPLIT_LOCKED } from "../../src/routes/admin-fundraising";
 import { signAdminSession } from "../../src/admin/session";
 import { FundraiserError } from "../../src/db/fundraisers";
 import { meter, type FundraiserRecord } from "../../src/fundraising/model";
@@ -522,5 +524,51 @@ describe("a sign up's category", () => {
     db.wallRows.mockResolvedValue([]);
     const one = await run(routes.getAdminFundraiser, { params: P, token: tokenFor("viewer") });
     expect((one.body as { fundraiser: { kindLabel: string } }).fundraiser.kindLabel).toBe("Quiz night");
+  });
+});
+
+// Jaimie, 2026-10-03: the split with another cause. Organisers can never change it; an admin may
+// correct it in the admin, and only while the fundraiser has no gifts (the database refuses after
+// that, under the row's lock). The other cause here is invented.
+describe("correcting the split with another cause", () => {
+  const SPLIT = { sharesWithOther: true, nbccSharePercent: 70, otherCauseName: "Kilmarnock Food Larder" };
+
+  it("is for admins only: an editor with edit may not", async () => {
+    const res = await run(routes.putAdminFundraiserSplit, { params: P, token: tokenFor("editor"), body: SPLIT });
+    expect(res.statusCode).toBe(403);
+    expect(db.setFundraiserSplit).not.toHaveBeenCalled();
+    expect((await run(routes.putAdminFundraiserSplit, { params: P, token: tokenFor("viewer"), body: SPLIT })).statusCode).toBe(403);
+    expect((await run(routes.putAdminFundraiserSplit, { params: P, token: null, body: SPLIT })).statusCode).toBe(401);
+  });
+
+  it("saves it while there are no gifts, recording who did it", async () => {
+    db.setFundraiserSplit.mockResolvedValue(record(SPLIT));
+    const res = await run(routes.putAdminFundraiserSplit, { params: P, token: tokenFor("admin"), body: SPLIT });
+    expect(res.statusCode).toBe(200);
+    expect(db.setFundraiserSplit).toHaveBeenCalledWith(9, SPLIT, `admin:${EMAIL}`);
+    expect((res.body as { fundraiser: { nbccSharePercent: number } }).fundraiser.nbccSharePercent).toBe(70);
+  });
+
+  it("refuses it once there is a gift, in plain words", async () => {
+    db.setFundraiserSplit.mockRejectedValue(new FundraiserError("has_gifts"));
+    const res = await run(routes.putAdminFundraiserSplit, { params: P, token: tokenFor("admin"), body: SPLIT });
+    expect(res.statusCode).toBe(409);
+    expect(res.body).toEqual({ error: SPLIT_LOCKED });
+    expect(SPLIT_LOCKED).toBe(
+      "The split cannot be changed now: this fundraiser has had its first gift, and people gave on the split as it stood. Please call or email the organiser.",
+    );
+  });
+
+  it("checks it with the form's rules", async () => {
+    const res = await run(routes.putAdminFundraiserSplit, { params: P, token: tokenFor("admin"), body: { sharesWithOther: true, nbccSharePercent: 0 } });
+    expect(res.statusCode).toBe(400);
+    expect(Object.keys((res.body as { fields: Record<string, string> }).fields).sort()).toEqual(["nbccSharePercent", "otherCauseName"]);
+    expect(db.setFundraiserSplit).not.toHaveBeenCalled();
+  });
+
+  it("is never part of the ordinary edit, so an editor cannot slip it in there", async () => {
+    const res = await run(routes.patchAdminFundraiser, { params: P, token: tokenFor("admin"), body: { nbccSharePercent: 10 } });
+    expect(res.statusCode).toBe(400);
+    expect(db.patchFundraiser).not.toHaveBeenCalled();
   });
 });

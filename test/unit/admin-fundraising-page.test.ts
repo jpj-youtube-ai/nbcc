@@ -251,6 +251,11 @@ function respond(url: string, init?: { method?: string; body?: string }) {
     row.hidden = w[2] === "hide";
     return j({ donationId: row.donationId, hidden: row.hidden });
   }
+  // Jaimie, 2026-10-03: an admin correcting the split with another cause.
+  if (rest === "/split" && method === "PUT") {
+    Object.assign(f, { ...body, nbccSharePercent: body.sharesWithOther ? Number(body.nbccSharePercent) : null, otherCauseName: body.sharesWithOther ? body.otherCauseName : null });
+    return j({ fundraiser: f });
+  }
   return j({ error: "not here" }, 404);
 }
 
@@ -2260,5 +2265,127 @@ describe("a sign up's category in the editor", () => {
     expect(select.value).toBe("santa_dash");
     expect(Array.from(select.options).map((o) => o.value)).toContain("bake_sale_2");
     expect(text(el("frCatsList"))).toContain("could not load");
+  });
+});
+
+// Jaimie, 2026-10-03: 18 or over, and sharing with another cause. The sign up shows both answers
+// (a sign up from before was never asked, and shows nothing); only an admin may correct the split,
+// and only before the first gift (the server refuses after that, and its words are shown). The
+// other cause here is invented.
+describe("18 or over, and the split with another cause", () => {
+  const SHARED = { over18: true, sharesWithOther: true, nbccSharePercent: 60, otherCauseName: "Kilmarnock Food Larder" };
+  // What they told us: each answer and its words, one space between.
+  const about = () => {
+    const panel = qa("#frList [data-frdetail] .fx-panel").find((p) => text(p.querySelector("h4")) === "What they told us");
+    return panel ? Array.from(panel.querySelectorAll("dt, dd")).map((n) => text(n)).join(" ") : "";
+  };
+
+  it("says they confirmed they are 18 or over", async () => {
+    records = [fundraiser(9, { over18: true, sharesWithOther: false })];
+    await openFundraising();
+    await openRow(9);
+    expect(about()).toContain("18 or over Confirmed 18 or over");
+  });
+
+  it("says nothing about either for a sign up from before they were asked", async () => {
+    records = [fundraiser(9)];
+    await openFundraising();
+    await openRow(9);
+    expect(about()).not.toContain("18 or over");
+    expect(about()).not.toContain("another cause");
+  });
+
+  it("shows the split, and that all of it comes to NBCC when not shared", async () => {
+    records = [fundraiser(9, SHARED), fundraiser(10, { over18: true, sharesWithOther: false })];
+    await openFundraising();
+    await openRow(9);
+    expect(about()).toContain("Sharing with another cause Yes: 60% to NBCC, the rest to Kilmarnock Food Larder");
+    await openRow(10);
+    expect(about()).toContain("Sharing with another cause No, all of it comes to NBCC");
+  });
+
+  it("lets an admin correct it before the first gift", async () => {
+    records = [fundraiser(9, { ...SHARED, status: "approved" })];
+    await openFundraising();
+    await openRow(9);
+    const form = q("#frSplitForm") as HTMLFormElement;
+    expect(form).not.toBeNull();
+    setValue("#frSplitPercent", "70");
+    submit("#frSplitForm");
+    await settle();
+    expect(confirmed.at(-1)).toContain("Change the split");
+    expect(sent("PUT", "/api/admin/fundraisers/9/split")[0].body).toEqual({ sharesWithOther: true, nbccSharePercent: "70", otherCauseName: "Kilmarnock Food Larder" });
+    expect(text(el("frSplitStatus"))).toBe("Split saved. The page and every material now say it.");
+    expect(about()).toContain("Yes: 70% to NBCC");
+  });
+
+  it("clears the percentage and the name when an admin sets it to not shared", async () => {
+    records = [fundraiser(9, SHARED)];
+    await openFundraising();
+    await openRow(9);
+    (q("#frSplitNo") as HTMLInputElement).click();
+    submit("#frSplitForm");
+    await settle();
+    expect(sent("PUT", "/api/admin/fundraisers/9/split")[0].body).toEqual({ sharesWithOther: false, nbccSharePercent: null, otherCauseName: "" });
+  });
+
+  it("is locked once there is a gift: no form, and it says why", async () => {
+    records = [fundraiser(9, { ...SHARED, status: "approved" })];
+    online[9] = 1500;
+    await openFundraising();
+    await openRow(9);
+    expect(q("#frSplitForm")).toBeNull();
+    expect(text(q("[data-frsplit]"))).toContain("The split is locked: this fundraiser has had its first gift");
+  });
+
+  it("shows the server's words when it refuses", async () => {
+    records = [fundraiser(9, SHARED)];
+    failures["PUT /api/admin/fundraisers/9/split"] = { status: 409, body: { error: "The split cannot be changed now: this fundraiser has had its first gift, and people gave on the split as it stood. Please call or email the organiser." } };
+    await openFundraising();
+    await openRow(9);
+    submit("#frSplitForm");
+    await settle();
+    expect(text(el("frSplitStatus"))).toContain("The split cannot be changed now");
+  });
+
+  it("says a correction in the history in plain words", async () => {
+    records = [fundraiser(9, SHARED)];
+    historyRows = { 9: [{ id: 4, actor: "admin:fern@example.com", action: "fundraiser.split_changed", data: {}, createdAt: "2026-10-01T09:00:00.000Z" }] };
+    await openFundraising();
+    await openRow(9);
+    expect(text(el("frHistory"))).toContain("Split with another cause changed");
+    expect(text(el("frHistory"))).not.toContain("fundraiser.split_changed");
+  });
+
+  it("hides and switches off the percentage and the name when No is chosen, as the public form does", async () => {
+    records = [fundraiser(9, SHARED)];
+    await openFundraising();
+    await openRow(9);
+    const fields = q("[data-frsplitfields]") as HTMLElement;
+    expect(fields.hidden).toBe(false);
+    (q("#frSplitNo") as HTMLInputElement).click();
+    expect(fields.hidden).toBe(true);
+    expect((q("#frSplitPercent") as HTMLInputElement).disabled).toBe(true);
+    expect((q("#frSplitCause") as HTMLInputElement).disabled).toBe(true);
+    (q("#frSplitYes") as HTMLInputElement).click();
+    expect(fields.hidden).toBe(false);
+    expect((q("#frSplitPercent") as HTMLInputElement).disabled).toBe(false);
+  });
+
+  it("starts with them hidden for a fundraiser not sharing", async () => {
+    records = [fundraiser(9, { over18: true, sharesWithOther: false })];
+    await openFundraising();
+    await openRow(9);
+    expect((q("[data-frsplitfields]") as HTMLElement).hidden).toBe(true);
+    expect((q("#frSplitPercent") as HTMLInputElement).disabled).toBe(true);
+  });
+
+  it("is never offered to an editor, who sees the split but cannot change it", async () => {
+    asRole("editor");
+    records = [fundraiser(9, SHARED)];
+    await openFundraising();
+    await openRow(9);
+    expect(about()).toContain("Yes: 60% to NBCC");
+    expect(q("#frSplitForm")).toBeNull();
   });
 });

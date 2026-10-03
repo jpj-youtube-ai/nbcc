@@ -214,6 +214,8 @@ When("someone signs up {string} from that Do it again link", async function (tit
     email: p.email || "pat.touch.fr.bdd@example.com",
     phone: "07700 900127",
     socialOk: false,
+    over18: true,
+    sharesWithOther: false,
     wants: { posterCount: 0, leafletCount: 0, bucketCount: 0, tinCount: 0, shoutOut: false, attend: false },
     newsletterOk: false,
     company: "",

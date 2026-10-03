@@ -8,6 +8,10 @@ import { BUILT_IN_CATEGORIES, formCategories, rememberCategories, type Category 
 // Fundraising categories on the sign up form: one each, A to Z, Other last, drawn from the
 // list in the database, so a category an admin adds is there at once. The first one carries the
 // form's "choose one" messages. Every name here is invented.
+//
+// The sign up tidy (Jaimie, 2026-10-03): the prompts are warm ("Almost! Just ..."), and in memory of
+// someone has a list of its own beside this one (held by fundraising-categories-sporty.test.ts and
+// fundraise-signup-tidy-form.test.ts), so these look only at the list for raising money or an event.
 
 const ROOT = resolve(__dirname, "../..");
 const template = readFileSync(resolve(ROOT, "fundraise.html"), "utf8");
@@ -16,7 +20,7 @@ beforeEach(() => rememberCategories(BUILT_IN_CATEGORIES));
 
 function radios(html: string) {
   const d = new DOMParser().parseFromString(html, "text/html");
-  return Array.from(d.querySelectorAll<HTMLInputElement>('#kindGroup input[name="kind"]'));
+  return Array.from(d.querySelectorAll<HTMLInputElement>('#kindGroup [data-kind-options] input[name="kind"]'));
 }
 const labelOf = (input: HTMLInputElement) => (input.closest("label")?.textContent ?? "").trim();
 
@@ -60,8 +64,8 @@ describe("the categories on the sign up form", () => {
 
   it("puts the 'choose one' messages on the first, and only the first", () => {
     const shown = radios(renderFundraiseSignUp(template, true, formCategories()));
-    expect(shown[0].getAttribute("data-invalid-raising")).toBe("Choose what you are doing to raise money");
-    expect(shown[0].getAttribute("data-invalid-event")).toBe("Choose what kind of event it is");
+    expect(shown[0].getAttribute("data-invalid-raising")).toBe("Almost! Just choose what you're doing to raise money.");
+    expect(shown[0].getAttribute("data-invalid-event")).toBe("Almost! Just choose what kind of event it is.");
     expect(shown.slice(1).every((r) => !r.hasAttribute("data-invalid-message"))).toBe(true);
     expect(shown.every((r) => r.required)).toBe(true);
   });
@@ -112,8 +116,13 @@ describe("the categories at two columns", () => {
 });
 
 describe("the box for Other", () => {
-  it("asks 'What is it?' until they say whether they are raising money or holding an event", () => {
+  // The sign up tidy (Jaimie, 2026-10-03): one label for every path, "Tell us in a few words", in
+  // place of "What is it?" reworded for each path.
+  it("asks them to say it in a few words, whichever path they are on", () => {
     const d = new DOMParser().parseFromString(template, "text/html");
-    expect(d.querySelector("label[for=kindOther] > span")?.textContent).toBe("What is it?");
+    const label = d.querySelector("label[for=kindOther]")!;
+    expect(label.textContent!.replace(/\s+/g, " ").trim()).toBe("Tell us in a few words *");
+    expect(label.querySelector("[data-say-raising], [data-say-event], [data-say-memory]")).toBeNull();
+    expect(d.querySelector("#kindOther")!.getAttribute("data-invalid-message")).toBe("Almost! Just tell us in a few words.");
   });
 });

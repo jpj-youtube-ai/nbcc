@@ -144,16 +144,10 @@ textarea.give-field-input { min-height: 0; }
 fieldset.is-invalid .fr-option { border-color: var(--crimson); }
 .fr-kinds { margin: 4px 0 18px; }
 
-/* ---------- TASK-511: one question after another, and every choice in holly green ----------
-   fundraise.js adds fr-stepped and reveals each question once the one before is answered. Without
-   the script nothing here applies and every question shows. The reveal is a short rise and fade,
-   and none at all for anyone who asks for less motion. */
-.fr-stepped .give-question.is-waiting { display: none; }
-@media (prefers-reduced-motion: no-preference) {
-  .fr-stepped .give-question.is-arriving { animation: fr-arrive 0.36s cubic-bezier(0.25, 1, 0.5, 1) both; }
-}
+/* ---------- TASK-511: every choice in holly green ----------
+   (The questions now come one at a time with Next and Back: the sign up tidy, at the end of this
+   file. The rise and fade below is shared with it.) */
 @keyframes fr-arrive { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
-.fr-show-all { margin: 14px 0 0; font-size: 0.95rem; }
 .fr-kinds .fr-kind-other { margin: 16px 0 0; }
 .fr-option:has(input:checked):hover { border-color: var(--holly-dark); }
 .fr-option:has(input:checked) strong, .fr-option--small:has(input:checked) span { color: var(--holly-dark); }
@@ -857,3 +851,105 @@ fieldset.is-invalid .fr-option { border-color: var(--crimson); }
 .fr-permission { margin-top: 2px; }
 .fr-mine__memory-note { margin: 0 0 12px; font-size: 0.92rem; color: var(--slate-soft); }
 .fr-mine__memory-note[hidden] { display: none; }
+
+/* ---------- The sign up tidy (Jaimie, 2026-10-03): one question at a time ----------
+   assets/js/fundraise-steps.js adds fr-wizard and shows one step (.is-current) at a time, with Back
+   and Next under it and a progress bar of stages above. Without the script nothing here applies and
+   every question shows. Built from the shared tokens, so it reads as the rest of NBCC: holly green
+   for what is done, crimson for where they are, cream and warm hairlines for what is still to come. */
+.fr-wizard .give-question.is-off { display: none; }
+/* One step at a time: the progress bar does the counting, so no big number, and no rule above. */
+.fr-wizard .give-question { padding-left: 0; border-top: 0; padding-top: 4px; }
+.fr-wizard .give-question::before { content: none; display: none; }
+.fr-wizard .give-question:focus { outline: none; }
+.fr-wizard .give-question:focus-visible { outline: 3px solid var(--holly); outline-offset: 6px; border-radius: 12px; }
+@media (prefers-reduced-motion: no-preference) {
+  .fr-wizard .give-question.is-arriving { animation: fr-arrive 0.32s cubic-bezier(0.25, 1, 0.5, 1) both; }
+}
+.fr-form { scroll-margin-top: calc(var(--nav-h, 78px) + 16px); }
+
+/* The progress bar: a stage each, joined by a line; ticked when done, crimson where they are. */
+.fr-progress { margin: 0 0 22px; padding: 18px 18px 14px; border-radius: var(--radius); background: var(--card); box-shadow: inset 0 0 0 1px var(--line); scroll-margin-top: calc(var(--nav-h, 78px) + 16px); }
+.fr-progress__now { margin: 0 0 14px; font-weight: 600; color: var(--maroon); font-size: 1rem; line-height: 1.4; }
+.fr-progress__lift { color: var(--crimson); font-family: var(--font-head); font-style: italic; font-weight: 700; }
+.fr-progress__list { display: grid; grid-template-columns: repeat(var(--stages, 5), minmax(0, 1fr)); margin: 0; padding: 0; list-style: none; counter-reset: none; }
+.fr-progress__stage { position: relative; display: flex; flex-direction: column; align-items: center; gap: 6px; text-align: center; min-width: 0; }
+/* The line from the stage before. */
+.fr-progress__stage + .fr-progress__stage::before {
+  content: "";
+  position: absolute;
+  top: 15px;
+  right: calc(50% + 18px);
+  left: calc(-50% + 18px);
+  height: 3px;
+  border-radius: var(--radius-pill);
+  background: var(--line);
+}
+.fr-progress__stage.is-done + .fr-progress__stage::before,
+.fr-progress__stage.is-current::before { background: var(--holly); }
+.fr-progress__dot {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: 2px solid var(--line);
+  background: var(--cream);
+  color: var(--slate-soft);
+  font-weight: 700;
+  font-size: 0.92rem;
+  font-variant-numeric: tabular-nums;
+  transition: background-color 0.25s, border-color 0.25s, color 0.25s;
+}
+.fr-progress__stage.is-done .fr-progress__dot { background: var(--holly); border-color: var(--holly); color: var(--cream); }
+.fr-progress__stage.is-current .fr-progress__dot { background: var(--crimson); border-color: var(--crimson); color: var(--cream); box-shadow: 0 0 0 4px color-mix(in srgb, var(--crimson) 18%, transparent); }
+.fr-progress__label { font-size: 0.8rem; line-height: 1.3; color: var(--slate-soft); }
+.fr-progress__stage.is-current .fr-progress__label { color: var(--maroon); font-weight: 700; }
+.fr-progress__stage.is-done .fr-progress__label { color: var(--holly-dark); }
+/* On a phone the names would crowd under the dots: the line above says which stage they are on,
+   and the names stay for screen readers. */
+@media (max-width: 560px) {
+  .fr-progress { padding: 14px 12px 14px; }
+  .fr-progress__label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; }
+}
+
+/* Back and Next, under the step showing. Back says where it goes, with its arrow first. */
+.fr-step-nav { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 12px; margin: 26px 0 0; }
+.fr-step-nav.is-first { justify-content: flex-end; }
+.fr-step-nav .btn { min-height: 48px; }
+.fr-step-nav .btn:active { transform: translateY(1px) scale(0.99); }
+.fr-step-back::after { content: none; }
+.fr-step-back::before { content: "\2190"; transition: transform 0.2s ease; }
+.fr-step-back:hover::before, .fr-step-back:focus-visible::before { transform: translateX(-3px); }
+.fr-step-nav [hidden] { display: none; }
+
+/* "Rather do this together?": a friendly tinted panel above the form. */
+.fr-together { margin: 0 0 18px; padding: 14px 18px; border-radius: 14px; background: var(--tan-soft); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--tan) 45%, transparent); }
+.fr-together p { margin: 0; color: var(--slate); line-height: 1.55; }
+.fr-together strong { color: var(--maroon); }
+.fr-together a { font-weight: 700; color: var(--maroon); white-space: nowrap; }
+.fr-one-liner { margin: 14px 0 0; font-weight: 600; color: var(--holly-dark); }
+
+/* Boxes that open under a choice (their child's name, the business, the funeral director). */
+.fr-subfields { margin: 16px 0 0; }
+.fr-options.fr-options--three { grid-template-columns: repeat(3, minmax(0, max-content)); gap: 10px; }
+@media (max-width: 420px) { .fr-options.fr-options--three { grid-template-columns: minmax(0, 1fr); } }
+.fr-legend-label { display: block; margin-bottom: 8px; }
+.fr-select { max-width: 320px; }
+
+/* The split, as their page and posters will say it. */
+.fr-check-statement { margin: 0 0 16px; padding: 16px 18px; border-left: 4px solid var(--holly); border-radius: 10px; background: var(--holly-soft); color: var(--slate); line-height: 1.6; }
+.fr-check-statement b { color: var(--holly-dark); }
+.fr-split-money { margin: 4px 0 0; padding: 10px 14px; border-radius: 10px; background: var(--tint); }
+
+/* Check your answers: what they told us, to look over before sending. Wraps, never scrolls. */
+.fr-review-heading { margin: 0 0 6px; }
+.fr-review { display: grid; grid-template-columns: minmax(0, max-content) minmax(0, 1fr); gap: 8px 18px; margin: 4px 0 22px; padding: 16px 18px; border-radius: 14px; background: var(--card); box-shadow: inset 0 0 0 1px var(--line); }
+.fr-review dt { font-size: 0.9rem; color: var(--slate-soft); }
+.fr-review dd { margin: 0; font-weight: 600; color: var(--slate); overflow-wrap: anywhere; }
+@media (max-width: 480px) {
+  .fr-review { grid-template-columns: minmax(0, 1fr); gap: 2px; }
+  .fr-review dd { margin-bottom: 8px; }
+}

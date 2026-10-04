@@ -140,14 +140,16 @@ export function doorTile(d: DoorView, now: Date): string {
   const kind = doorKind(d, now);
   const open = kind === "found" || kind === "revealed";
   const face = kind === "found" ? winnerPicture(d, 46) : carving(d);
+  const worn = pill(kind, d);
+  const classes = `elf-door elf-door--${kind}${open ? " is-open" : ""}${worn ? " has-pill" : ""}`;
   return (
-    `<a class="elf-door elf-door--${kind}${open ? " is-open" : ""}" id="door-${d.door}" href="#case-${d.door}" ` +
+    `<a class="${classes}" id="door-${d.door}" href="#case-${d.door}" ` +
     `data-door="${d.door}" data-kind="${kind}" data-v="${doorVersion(d, now)}" aria-label="${escapeHtml(doorLabel(d, now))}">` +
     `<span class="elf-door__num" aria-hidden="true">${d.door}</span>` +
-    pill(kind, d) +
-    `<span class="elf-door__face">${face}</span>` +
+    worn +
+    // The family's own marks sit on the corner of the picture. The page's script fills them in.
+    `<span class="elf-door__face">${face}<span class="elf-door__marks" aria-hidden="true"></span></span>` +
     foot(kind, d, now) +
-    `<span class="elf-door__marks" aria-hidden="true"></span>` +
     `</a>`
   );
 }

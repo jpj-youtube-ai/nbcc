@@ -32,6 +32,8 @@ export function candyCane(size = 18): string {
   const cane = "M5.5 15V6.5a3 3 0 0 1 6 0V8";
   return (
     `<svg class="elf-icon" width="${size}" height="${size}" viewBox="0 0 16 16" fill="none" stroke-linecap="round" aria-hidden="true" focusable="false">` +
-    `<path d="${cane}" stroke="#C02238" stroke-width="2.6"/><path d="${cane}" stroke="#FFFDFA" stroke-width="2.6" stroke-dasharray="1.4 2"/></svg>`
+    // The white stripes have square ends: round ones spread until the red all but disappears.
+    `<path d="${cane}" stroke="#C02238" stroke-width="2.8"/>` +
+    `<path d="${cane}" stroke="#FFFDFA" stroke-width="2.8" stroke-linecap="butt" stroke-dasharray="1.2 2.4" stroke-dashoffset="-1.2"/></svg>`
   );
 }

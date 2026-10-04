@@ -1,66 +1,12 @@
 // @vitest-environment jsdom
 import { describe, it, expect } from "vitest";
 import { calendarStatus, renderCalendarPage } from "../../src/elf/pages/calendar";
-import type { CalendarView, DoorView } from "../../src/elf/pages/types";
-import { isDoor } from "../../src/elf/calendar";
-import { ELF_NAMES } from "../../src/elf/names";
+import type { CalendarView } from "../../src/elf/pages/types";
+import { AFTERNOON, at, calendarView as view } from "./elf-fixtures";
 
-// NBCC Elf Detective School: the public calendar. Every business and detective here is invented.
+// NBCC Elf Detective School: the public calendar. Every business and detective here is invented
+// (see elf-fixtures.ts).
 
-const at = (iso: string) => new Date(iso);
-const pad = (n: number) => String(n).padStart(2, "0");
-
-/** A calendar on the given day: doors before it found, the day's own door as asked, later ones shut. */
-function view(now: Date, today: Partial<DoorView> = {}, over: Partial<CalendarView> = {}): CalendarView {
-  const dayOfMonth = now.getUTCMonth() === 11 ? now.getUTCDate() : 0;
-  const doors: DoorView[] = [];
-  for (let n = 1; n <= 24; n++) {
-    if (!isDoor(n)) continue;
-    const base: DoorView = {
-      door: n,
-      state: "shut",
-      clueAt: at(`2026-12-${pad(n)}T17:30:00.000Z`),
-      shapeUrl: null,
-      bigPrize: n === 12,
-      teaser: n === 12 ? "Something with two wheels" : null,
-      elfName: ELF_NAMES[n - 1],
-      place: null,
-      found: null,
-      counts: null,
-      factLine: null,
-    };
-    if (n < dayOfMonth) {
-      doors.push({
-        ...base,
-        state: "found",
-        place: { name: `Shop number ${n}`, town: "Ayr" },
-        found: { at: at(`2026-12-${pad(n)}T18:05:00.000Z`), by: "Detective Ruby Tinselfoot", elfUrl: `/elf/pic/${n}.svg`, photoUrl: null },
-        counts: { cracked: 10 + n, visited: n },
-        factLine: "NBCC began with a question from a girl aged 12 in Annbank.",
-      });
-    } else if (n === dayOfMonth) {
-      doors.push({ ...base, ...today });
-    } else {
-      doors.push(base);
-    }
-  }
-  return {
-    year: 2026,
-    now,
-    doors,
-    places: [
-      { name: "Shop number 1", town: "Ayr", found: true },
-      { name: "The Toy Shop", town: "Troon", found: false },
-      { name: "The Corner Bakery", town: "Kilmarnock", found: false },
-    ],
-    price: { from: "£1", suggested: "£5" },
-    joinUrl: "/elf/join",
-    hqUrl: "/elf/hq",
-    ...over,
-  };
-}
-
-const AFTERNOON = at("2026-12-07T15:00:00.000Z");
 const page = (v: CalendarView) => new DOMParser().parseFromString(renderCalendarPage(v), "text/html");
 const words = (el: Element | null) => (el?.textContent ?? "").replace(/\s+/g, " ").trim();
 
@@ -98,6 +44,10 @@ describe("the calendar page", () => {
     expect(board.getAttribute("data-feed")).toBe("/api/elf/calendar");
     expect(board.getAttribute("data-door-api")).toBe("/api/elf/door/");
     expect(board.getAttribute("data-me")).toBe("/api/elf/me");
+  });
+
+  it("tells the script the time on the server, so a countdown is right even if the phone's clock is wrong", () => {
+    expect(page(view(AFTERNOON)).querySelector("#elf-board")!.getAttribute("data-now")).toBe("2026-12-07T15:00:00.000Z");
   });
 
   it("counts the elves found so far", () => {

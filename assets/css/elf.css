@@ -1,0 +1,381 @@
+/* =================================================================
+   NBCC ELF DETECTIVE SCHOOL: page stylesheet
+
+   Loaded only by the elf screens (src/elf/pages/), after styles.css.
+   Deliberately not part of the shared stylesheet: donate.html sits at
+   its enforced weight budget (test/unit/perf-budget.test.ts), and that
+   page is where donations are made.
+
+   Everything builds on the brand tokens in styles.css. The only new
+   colours are the wood of the calendar and a gold, scoped to these
+   pages. The design is one loud thing a page: on the calendar that is
+   the walnut board; everything round it stays NBCC cream.
+
+   Nothing here scrolls inside a box (no inner scrollbars: content
+   wraps and the page grows), and every animation is inside a
+   prefers-reduced-motion: no-preference block.
+   ================================================================= */
+
+.elf-page {
+  /* The calendar's wood. Walnut for the board, oak for a shut door, paper behind an open one. */
+  --elf-walnut: #6E4429;
+  --elf-walnut-deep: #55331D;
+  --elf-oak: #D9B48A;
+  --elf-oak-light: #E6C79E;
+  --elf-oak-edge: #B88A5D;
+  --elf-paper: #FBF3E6;
+  --elf-paper-deep: #E7D4BA;
+  --elf-carve-hi: #EED3AC;
+  --elf-carve-lo: #9A6640;
+  --elf-ink: #3A2416;
+  --elf-brass: #C9A24A;
+
+  /* Things slow to a stop the way real objects do. No bounce. */
+  --elf-ease: cubic-bezier(0.25, 1, 0.5, 1);
+  --elf-ease-expo: cubic-bezier(0.16, 1, 0.3, 1);
+
+  /* The shape carved into a door when staff have not uploaded one: the mystery star. */
+  --elf-star: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 48 48'%3E%3Cpath d='M24 6l5.3 11.6 12.7 1.4-9.5 8.6 2.7 12.5L24 33.6l-11.2 6.5 2.7-12.5L6 19l12.7-1.4z'/%3E%3C/svg%3E");
+}
+
+/* ---------- the bar across the top: always solid cream ----------
+   The NBCC logo is the red mark and sits on cream only (.impeccable.md). These pages do not load
+   main.js, which is what paints the bar once a page is scrolled, so it is painted from the start. */
+.elf-page .nav {
+  background: var(--cream);
+  box-shadow: var(--shadow-sm);
+  border-bottom: 1px solid var(--line);
+}
+
+.elf-page .elf-icon { vertical-align: -0.18em; flex: none; }
+
+.elf-page .elf-link { color: var(--maroon); text-underline-offset: 3px; }
+
+/* ---------- the top of the calendar page ---------- */
+.elf-top { padding-bottom: clamp(20px, 3vw, 36px); }
+.elf-top__grid { display: grid; gap: clamp(22px, 4vw, 48px); align-items: center; }
+.elf-top h1 { font-size: var(--fs-page-intro); text-wrap: balance; }
+.elf-top .lede { margin-top: 14px; }
+.elf-top__actions { display: flex; flex-wrap: wrap; gap: 12px; margin: 22px 0 0; }
+@media (min-width: 981px) {
+  .elf-top__grid { grid-template-columns: 1.15fr 0.85fr; }
+}
+
+/* Today's news. A quiet card: the board below is the loud thing. */
+.elf-status {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+  padding: clamp(18px, 3vw, 28px);
+}
+.elf-status p { margin: 6px 0 0; }
+.elf-status__eyebrow {
+  margin: 0;
+  font-size: var(--fs-eyebrow);
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  font-weight: 600;
+  color: var(--holly);
+}
+.elf-status__title { font-size: clamp(1.5rem, 1.25rem + 1.2vw, 2.1rem); color: var(--maroon); margin-top: 6px; text-wrap: balance; }
+.elf-status__count {
+  font-family: var(--font-head);
+  font-weight: 800;
+  font-size: clamp(2.2rem, 1.7rem + 2.6vw, 3.4rem);
+  line-height: 1.05;
+  color: var(--crimson);
+  font-variant-numeric: lining-nums tabular-nums;
+}
+/* While an elf is being hunted the card turns holly green: the one moment it should catch the eye. */
+.elf-status--hunting { background: var(--holly); border-color: var(--holly-dark); color: var(--cream); }
+.elf-status--hunting .elf-status__eyebrow { color: var(--cream-82); }
+.elf-status--hunting .elf-status__title { color: var(--cream); }
+.elf-status--found { background: var(--holly-soft); border-color: transparent; }
+
+/* ---------- the calendar ---------- */
+.elf-calendar { padding-block: clamp(18px, 3vw, 36px) clamp(40px, 6vw, 72px); }
+.elf-calendar__head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 6px 20px; margin-bottom: 14px; }
+.elf-calendar__head h2 { font-size: clamp(1.6rem, 1.35rem + 1.2vw, 2.2rem); }
+.elf-tally { margin: 0; color: var(--slate-soft); }
+.elf-tally b { font-family: var(--font-head); font-weight: 800; font-size: 1.35em; color: var(--maroon); font-variant-numeric: lining-nums; }
+
+/* The walnut board. The grain is two soft gradients: no picture to download. */
+.elf-board {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  /* dense: an opened detail takes a whole row, and the doors after it fill the row above it, so the
+     detail sits directly under its own door's row with no script working anything out. */
+  grid-auto-flow: row dense;
+  gap: 7px;
+  padding: 9px;
+  border-radius: var(--radius);
+  background-color: var(--elf-walnut);
+  background-image:
+    repeating-linear-gradient(91deg, rgba(255, 255, 255, 0.04) 0 2px, transparent 2px 11px, rgba(0, 0, 0, 0.06) 11px 13px, transparent 13px 29px),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.07), rgba(0, 0, 0, 0.16));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.14), inset 0 -2px 0 rgba(0, 0, 0, 0.28), var(--shadow);
+}
+@media (min-width: 640px) {
+  .elf-board { grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 10px; padding: 14px; border-radius: var(--radius-lg); }
+}
+@media (min-width: 981px) {
+  .elf-board { grid-template-columns: repeat(8, minmax(0, 1fr)); gap: 12px; padding: 16px; }
+}
+
+/* One door. On a phone it shows its number, its carving and one short line; from 640 pixels there
+   is room for a pill at the top as well as the line at the foot. */
+.elf-door {
+  position: relative;
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  justify-items: center;
+  gap: 3px;
+  min-height: 98px;
+  padding: 6px 5px 7px;
+  border-radius: 9px;
+  border: 1px solid var(--elf-oak-edge);
+  background: linear-gradient(180deg, var(--elf-oak-light) 0%, var(--elf-oak) 46%, #CDA57A 100%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4), 0 2px 0 rgba(0, 0, 0, 0.24);
+  color: var(--elf-ink);
+  text-decoration: none;
+  font-size: 0.75rem;
+  line-height: 1.2;
+  text-align: center;
+  -webkit-tap-highlight-color: transparent;
+}
+/* The doorknob, on a door that is still shut. */
+.elf-door:not(.is-open)::after {
+  content: "";
+  position: absolute;
+  right: 5px;
+  top: 52%;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, #F1DA9A, var(--elf-brass) 60%, #8C6A22);
+  box-shadow: 0 1px 1px rgba(0, 0, 0, 0.3);
+}
+.elf-door__num {
+  justify-self: start;
+  font-family: var(--font-head);
+  font-weight: 800;
+  font-size: 1.02rem;
+  line-height: 1;
+  color: var(--elf-walnut-deep);
+  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.45);
+  font-variant-numeric: lining-nums;
+}
+.elf-door__face { align-self: center; display: grid; place-items: center; }
+.elf-door__foot { min-height: 1.2em; overflow-wrap: anywhere; }
+.elf-door__more { display: none; }
+.elf-door__place { display: none; }
+/* On a phone a door with a pill shows the pill in place of its line. */
+.elf-door .elf-pill { grid-row: 3; }
+.elf-door.has-pill .elf-door__foot { display: none; }
+
+.elf-door--today { background: linear-gradient(180deg, #F2DDBD 0%, var(--elf-oak-light) 60%, #DDB98C 100%); box-shadow: inset 0 0 0 2px var(--holly), 0 2px 0 rgba(0, 0, 0, 0.24); }
+.elf-door--hunting { background: linear-gradient(180deg, #F2DDBD 0%, var(--elf-oak-light) 60%, #DDB98C 100%); box-shadow: inset 0 0 0 2px var(--crimson), 0 2px 0 rgba(0, 0, 0, 0.24); }
+.elf-door.is-open { background: var(--elf-paper); border-color: #E2D3BC; box-shadow: inset 0 2px 6px rgba(110, 68, 41, 0.18); }
+
+.elf-door:focus-visible { outline: 3px solid var(--cream); outline-offset: 2px; border-radius: 9px; }
+/* The door whose detail is open. */
+.elf-door[aria-expanded="true"],
+.elf-door:has(+ .elf-detail:target) { outline: 3px solid var(--cream); outline-offset: 2px; }
+
+@media (min-width: 640px) {
+  .elf-door { min-height: 132px; padding: 9px 8px 9px; font-size: 0.8rem; gap: 5px; }
+  .elf-door__num { font-size: 1.2rem; }
+  .elf-door__more { display: inline; }
+  .elf-door__place { display: block; }
+  .elf-door .elf-pill { position: absolute; top: 8px; right: 8px; grid-row: auto; }
+  .elf-door.has-pill .elf-door__foot { display: block; }
+  .elf-door:not(.is-open)::after { right: 7px; width: 7px; height: 7px; }
+}
+
+/* ---------- the carving ----------
+   One picture of the prize's shape, used as a mask twice: a pale copy nudged down and right, and a
+   dark copy on top, so the shape looks cut into the wood. Staff upload the shape in one colour. */
+.elf-carve { --shape: var(--elf-star); position: relative; display: block; width: 44px; height: 44px; }
+.elf-carve__hi,
+.elf-carve__lo {
+  position: absolute;
+  inset: 0;
+  -webkit-mask: var(--shape) center / contain no-repeat;
+  mask: var(--shape) center / contain no-repeat;
+}
+.elf-carve__hi { background: var(--elf-carve-hi); transform: translate(1.2px, 1.2px); }
+.elf-carve__lo { background: var(--elf-carve-lo); }
+@media (min-width: 640px) {
+  .elf-carve { width: 54px; height: 54px; }
+}
+
+/* The winner on an open door: their dressed elf, or their photo once it has been checked. */
+.elf-shot { display: block; height: auto; }
+.elf-door .elf-shot--elf { width: 40px; }
+.elf-door .elf-shot--photo { width: 46px; height: 46px; object-fit: cover; border-radius: 6px; }
+@media (min-width: 640px) {
+  .elf-door .elf-shot--elf { width: 50px; }
+  .elf-door .elf-shot--photo { width: 60px; height: 60px; }
+}
+
+/* A family's own marks, laid over the board by the page's script. Marks are only ever earned at an
+   open door, which has no doorknob, so they sit where the knob was: down the door's right edge. */
+.elf-door__marks { position: absolute; right: 3px; top: 50%; transform: translateY(-50%); display: grid; gap: 3px; }
+.elf-door__marks:empty { display: none; }
+.elf-mark {
+  display: inline-grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--white);
+  box-shadow: 0 1px 2px rgba(58, 36, 22, 0.35);
+  vertical-align: -0.3em;
+}
+.elf-mark--cracked { color: var(--holly); }
+.elf-door__marks .elf-mark { width: 18px; height: 18px; }
+.elf-door__marks .elf-icon { width: 13px; height: 13px; }
+@media (min-width: 640px) {
+  .elf-door__marks { right: 6px; }
+  .elf-door__marks .elf-mark { width: 22px; height: 22px; }
+  .elf-door__marks .elf-icon { width: 15px; height: 15px; }
+}
+
+/* ---------- pills ---------- */
+.elf-pill {
+  display: inline-block;
+  padding: 3px 6px;
+  border-radius: var(--radius-pill);
+  font-size: 0.66rem;
+  font-weight: 600;
+  line-height: 1.2;
+  white-space: nowrap;
+  background: var(--holly);
+  color: var(--cream);
+}
+.elf-pill--found { background: var(--holly-soft); color: var(--holly-dark); }
+.elf-pill--revealed { background: var(--tan-soft); color: var(--maroon); }
+.elf-pill--hunting { background: var(--crimson); color: var(--cream); }
+.elf-pill--big { background: var(--gold-ink); color: #2A1C05; }
+@media (min-width: 640px) {
+  .elf-pill { font-size: 0.72rem; padding: 4px 9px; }
+}
+
+/* ---------- a door's detail ----------
+   Hidden until asked for. With no script, a door is a link to its detail and :target shows it. With
+   the script (which adds is-live to the board) only is-open counts, so two can never show at once. */
+.elf-detail {
+  display: none;
+  grid-column: 1 / -1;
+  gap: 14px 20px;
+  padding: 16px;
+  border-radius: 12px;
+  background: var(--card);
+  border: 1px solid var(--line);
+  color: var(--slate);
+  scroll-margin-top: calc(var(--nav-h) + 132px);
+}
+.elf-detail:target,
+.elf-detail.is-open { display: grid; }
+.elf-board.is-live .elf-detail:target:not(.is-open) { display: none; }
+.elf-detail p { margin: 0 0 8px; }
+.elf-detail__media { justify-self: center; }
+.elf-detail__wood,
+.elf-detail__paper { display: grid; place-items: center; width: 150px; min-height: 150px; padding: 12px; border-radius: 10px; }
+.elf-detail__wood { background: linear-gradient(180deg, var(--elf-oak-light), var(--elf-oak)); border: 1px solid var(--elf-oak-edge); }
+.elf-detail__wood .elf-carve { width: 104px; height: 104px; }
+.elf-detail__paper { background: var(--elf-paper-deep); }
+.elf-detail__paper .elf-shot--elf { width: 112px; }
+.elf-detail__paper .elf-shot--photo { width: 100%; height: auto; aspect-ratio: 1; object-fit: cover; border-radius: 8px; }
+.elf-detail--today .elf-detail__wood { box-shadow: inset 0 0 0 2px var(--holly); }
+.elf-detail--hunting .elf-detail__wood { box-shadow: inset 0 0 0 2px var(--crimson); }
+.elf-detail__meta { font-size: 0.86rem; color: var(--maroon); margin-bottom: 4px; }
+.elf-detail__title { font-size: clamp(1.3rem, 1.15rem + 0.8vw, 1.7rem); color: var(--maroon); margin-bottom: 10px; text-wrap: balance; overflow-wrap: anywhere; }
+.elf-detail__when { color: var(--holly-dark); }
+.elf-detail__by .elf-icon { color: var(--gold-ink); }
+.elf-detail__counts { list-style: none; margin: 0 0 10px; padding: 0; display: grid; gap: 6px; }
+.elf-detail__fact,
+.elf-detail__mine { background: var(--holly-soft); color: var(--holly-dark); border-radius: 10px; padding: 9px 12px; }
+.elf-detail__hint { color: var(--slate-soft); font-size: 0.94rem; }
+.elf-detail__actions { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 18px; margin-top: 12px; }
+.elf-detail .elf-cd { font-weight: 600; font-variant-numeric: tabular-nums; }
+@media (min-width: 560px) {
+  .elf-detail { grid-template-columns: auto minmax(0, 1fr); align-items: start; padding: 20px; }
+}
+
+/* ---------- under the board ---------- */
+.elf-legend { list-style: none; margin: 14px 2px 0; padding: 0; display: flex; flex-wrap: wrap; gap: 8px 22px; font-size: 0.9rem; color: var(--slate-soft); }
+.elf-legend li { display: inline-flex; align-items: center; gap: 7px; }
+
+/* ---------- how it works: numbered steps, no boxes ---------- */
+.elf-how { background: linear-gradient(180deg, var(--cream), var(--tint)); }
+.elf-steps { list-style: none; counter-reset: step; margin: clamp(22px, 3vw, 34px) 0 0; padding: 0; display: grid; gap: clamp(20px, 3vw, 34px) clamp(28px, 5vw, 64px); }
+.elf-steps > li { counter-increment: step; display: grid; grid-template-columns: auto minmax(0, 1fr); column-gap: 16px; max-width: 46ch; }
+.elf-steps > li::before {
+  content: counter(step);
+  grid-row: 1 / span 2;
+  font-family: var(--font-head);
+  font-weight: 800;
+  font-size: clamp(2.4rem, 2rem + 1.6vw, 3.2rem);
+  line-height: 0.9;
+  color: var(--tan);
+  font-variant-numeric: lining-nums;
+}
+.elf-steps h3 { font-size: 1.2rem; color: var(--maroon); margin-bottom: 4px; }
+.elf-steps p { margin: 0; color: var(--slate); }
+@media (min-width: 720px) {
+  .elf-steps { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+/* ---------- the hiding places ---------- */
+.elf-where .lede { margin-top: 12px; }
+.elf-places { list-style: none; margin: clamp(18px, 3vw, 28px) 0 0; padding: 0; columns: 1; column-gap: 40px; }
+.elf-places li { break-inside: avoid; padding: 9px 0; border-bottom: 1px solid var(--line); }
+.elf-places li.is-found { color: var(--slate-soft); }
+.elf-places .elf-pill { margin-left: 6px; }
+@media (min-width: 640px) { .elf-places { columns: 2; } }
+@media (min-width: 981px) { .elf-places { columns: 3; } }
+
+/* ---------- the ask at the foot ---------- */
+.elf-join { background: var(--maroon); color: var(--cream); }
+.elf-join h2 { color: var(--cream); }
+.elf-join .lede { color: var(--cream); margin-top: 12px; }
+.elf-join p { color: var(--cream-90); }
+.elf-join .btn { --bg: var(--cream); --fg: var(--maroon); margin-top: 8px; }
+.elf-join .btn:hover { --bg: var(--white); }
+
+/* ---------- motion: only where something changes ---------- */
+@media (hover: hover) and (prefers-reduced-motion: no-preference) {
+  .elf-door { transition: transform 0.2s var(--elf-ease); }
+  .elf-door:hover { transform: translateY(-2px); }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .elf-door:active { transform: scale(0.97); }
+
+  /* The board fills, a column at a time, when the page opens. */
+  .elf-door { animation: elf-arrive 0.45s var(--elf-ease) backwards; }
+  .elf-door:nth-of-type(6n + 2) { animation-delay: 40ms; }
+  .elf-door:nth-of-type(6n + 3) { animation-delay: 80ms; }
+  .elf-door:nth-of-type(6n + 4) { animation-delay: 120ms; }
+  .elf-door:nth-of-type(6n + 5) { animation-delay: 160ms; }
+  .elf-door:nth-of-type(6n + 6) { animation-delay: 200ms; }
+  @keyframes elf-arrive { from { opacity: 0; transform: translateY(8px); } }
+
+  /* A detail slides out from under its door. */
+  .elf-detail.is-open,
+  .elf-detail:target { animation: elf-drawer 0.28s var(--elf-ease); }
+  @keyframes elf-drawer { from { opacity: 0; transform: translateY(-8px); } }
+
+  /* A shut door, tapped: it rattles, and stays shut. */
+  .elf-door.is-rattled { animation: elf-rattle 0.45s var(--elf-ease-expo); }
+  @keyframes elf-rattle { 30% { transform: rotate(-2.5deg); } 60% { transform: rotate(2deg); } }
+
+  /* An elf has just been found: its door swings open on its hinge. */
+  .elf-door.is-opening { transform-origin: left center; animation: elf-swing 0.7s var(--elf-ease-expo); }
+  @keyframes elf-swing { from { transform: perspective(500px) rotateY(-78deg); opacity: 0.3; } }
+
+  /* The hunt is on: its pill breathes. */
+  .elf-pill--hunting { animation: elf-breathe 1.8s ease-in-out infinite; }
+  @keyframes elf-breathe { 50% { opacity: 0.72; } }
+}

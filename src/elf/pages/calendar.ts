@@ -143,7 +143,7 @@ export function renderCalendarPage(view: CalendarView): string {
       <div class="elf-status elf-status--${status.kind}" aria-live="polite">
         <p class="elf-status__eyebrow">Today</p>
         <h2 class="elf-status__title">${status.title}</h2>
-        ${status.html}
+        <div class="elf-status__body">${status.html}</div>
       </div>
     </div>
   </section>
@@ -154,7 +154,7 @@ export function renderCalendarPage(view: CalendarView): string {
         <h2 id="elf-calendar-heading">The calendar</h2>
         <p class="elf-tally"><b>${found}</b> of ${DOOR_COUNT} elves found</p>
       </div>
-      <div class="elf-board" id="elf-board" role="group" aria-label="Advent calendar of ${DOOR_COUNT} doors" data-feed="/api/elf/calendar" data-door-api="/api/elf/door/" data-me="/api/elf/me">
+      <div class="elf-board" id="elf-board" role="group" aria-label="Advent calendar of ${DOOR_COUNT} doors" data-now="${view.now.toISOString()}" data-feed="/api/elf/calendar" data-door-api="/api/elf/door/" data-me="/api/elf/me">
 ${board}
       </div>
       <ul class="elf-legend" aria-label="What the marks mean">

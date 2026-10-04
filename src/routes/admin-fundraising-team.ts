@@ -20,16 +20,24 @@ import {
   TeamError,
   type InviteRow,
 } from "../db/fundraising-team";
+import { approvedWordingKeys, approveWording, listWordingApprovals, withdrawWording } from "../db/fundraising-touch";
 import { sendFundraiseInvite } from "../clients/email";
 import {
   INVITES_PER_DAY,
+  INVITE_MEMORY_WAITING,
   INVITE_REFRESH,
+  INVITE_TYPE_LABELS,
+  INVITE_WORDING_KEYS,
   hashInviteToken,
   inviteCc,
+  inviteMaySend,
   inviteSchema,
+  inviteTypeOf,
   inviteUrl,
   inviteVerdict,
+  inviteWordingKey,
   newInviteToken,
+  staffFirstName,
 } from "../fundraising/invite";
 import { CALL_WHICH, callStates, followUpToday, offListPrompt, type CallRecord, type CallStates } from "../fundraising/follow-up";
 import { summaryRecipientsSchema } from "../fundraising/summary";
@@ -41,7 +49,11 @@ import { sendSummaryTest } from "../fundraising/summary-runner";
 // Its own router, beside src/routes/admin-fundraising.ts, so nothing there changes.
 //
 //   GET    /api/admin/fundraising/team                     calls, prompts, open invites, signers  view
-//   POST   /api/admin/fundraising/invites                  { firstName, lastName, email, note?, signedBy }  edit
+//   POST   /api/admin/fundraising/invites                  { firstName, lastName, email, note?, signedBy, type? }  edit
+//   GET    /api/admin/fundraising/invite-wording/:type     that type's invite email, as an example  view
+//          ?signedBy=<user id>                             signed by the signer chosen in the form
+//   POST   /api/admin/fundraising/invite-wording/:key/approval   approve new invite wording        admin
+//   DELETE /api/admin/fundraising/invite-wording/:key/approval   withdraw that approval            admin
 //   POST   /api/admin/fundraising/invites/:id/resend       a new link, emailed again             edit
 //   DELETE /api/admin/fundraising/invites/:id              its link stops working                edit
 //   POST   /api/admin/fundraisers/:id/calls                { which, note? }                      edit
@@ -57,11 +69,25 @@ import { sendSummaryTest } from "../fundraising/summary-runner";
 // Each member of staff may send 50 invites (and resends) a day. Every write records who did it in
 // audit_log (src/db/fundraising-team.ts). Request and response shapes: README.md, "Community
 // fundraising", the team's tools.
+//
+// Invite types (Jaimie, B1 + I1): `type` says what they are invited to do (raising, team, event or
+// memory), kept on the invite, so its email has the right words and its link opens the form at the
+// right place. A page loaded before the drop-down sends none, and all is as it was. The in memory
+// invite's wording is new: it is refused (409) until an admin approves it, with the same sign off as
+// the automatic emails (touch_wording_approvals, key "invite_memory"), and a resend of one is held
+// the same way if that approval is withdrawn. The sign off is checked here first, and again inside
+// the transaction that stores or resends the invite (src/db/fundraising-team.ts), so a withdrawal
+// cannot slip in between. Approving and withdrawing it are in History under their own actions,
+// fundraising.invite_wording_approved and fundraising.invite_wording_withdrawn.
 
 export const adminFundraisingTeamRouter = Router();
 
 const UNAVAILABLE = { error: "Admin is temporarily unavailable" };
 const TOO_MANY = { error: `You have sent ${INVITES_PER_DAY} invites today. Please send the rest tomorrow.` };
+const WAITING = { error: INVITE_MEMORY_WAITING };
+const BAD_SIGNER = { error: "Some of it needs another look", fields: { signedBy: "Choose who it is from." } };
+const WORDING_APPROVED = "fundraising.invite_wording_approved";
+const WORDING_WITHDRAWN = "fundraising.invite_wording_withdrawn";
 
 function fieldErrors(issues: ZodIssue[]): Record<string, string> {
   const out: Record<string, string> = {};
@@ -85,6 +111,7 @@ function failed(res: Response, what: string, err: unknown, notFound = "That no l
   if (err instanceof TeamError) {
     if (err.reason === "not_found") return res.status(404).json({ error: notFound });
     if (err.reason === "bad_status") return res.status(409).json({ error: "Only an approved fundraiser can be taken off Get involved" });
+    if (err.reason === "wording_waiting") return res.status(409).json(WAITING);
   }
   console.error(`admin fundraising ${what} failed:`, err instanceof Error ? err.message : err);
   return res.status(500).json(UNAVAILABLE);
@@ -96,12 +123,18 @@ const base = () => config.PORTAL_BASE_URL.replace(/\/+$/, "");
 // staff sending it (`senderEmail`, from their session; left off when missing, never failing the
 // invite). Best effort: the invite stands either way; true when it went.
 async function emailInvite(
-  inv: Pick<InviteRow, "name" | "firstName" | "email" | "note" | "signedBy">,
+  inv: Pick<InviteRow, "name" | "firstName" | "email" | "note" | "signedBy"> & Partial<Pick<InviteRow, "type">>,
   token: string,
   senderEmail: string | null | undefined,
 ): Promise<boolean> {
   try {
-    const mail = buildInviteEmail({ firstName: inv.firstName, note: inv.note, signer: inv.signedBy, url: inviteUrl(base(), token) });
+    const mail = buildInviteEmail({
+      firstName: inv.firstName,
+      note: inv.note,
+      signer: inv.signedBy,
+      url: inviteUrl(base(), token),
+      type: inviteTypeOf(inv.type),
+    });
     const cc = inviteCc(senderEmail, inv.email);
     await sendFundraiseInvite(inv.name, {
       email: inv.email,
@@ -118,6 +151,23 @@ async function emailInvite(
   }
 }
 
+// --- the invite wording's sign off -----------------------------------------------------------------
+
+const isInviteWordingKey = (k: unknown): k is string => typeof k === "string" && (INVITE_WORDING_KEYS as readonly string[]).includes(k);
+
+// The invite wordings' sign offs (never the automatic emails', which have their own card). When they
+// cannot be read, none, and the page says so: the in memory invite then reads as waiting, as the
+// sender treats it.
+async function readInviteWording(): Promise<{ approvals: Record<string, { approvedAt: string; approvedBy: string }>; unavailable: boolean }> {
+  try {
+    const list = (await listWordingApprovals()).filter((a) => isInviteWordingKey(a.key));
+    return { approvals: Object.fromEntries(list.map((a) => [a.key, { approvedAt: a.approvedAt, approvedBy: a.approvedBy }])), unavailable: false };
+  } catch (err) {
+    console.error("admin fundraising: could not read the invite wording sign offs:", err instanceof Error ? err.message : err);
+    return { approvals: {}, unavailable: true };
+  }
+}
+
 // --- the team's tools, read together --------------------------------------------------------------
 
 export async function getFundraisingTeam(req: Request, res: Response): Promise<Response | void> {
@@ -126,11 +176,12 @@ export async function getFundraisingTeam(req: Request, res: Response): Promise<R
   try {
     const now = new Date();
     const today = followUpToday(now);
-    const [fundraisers, allCalls, invites, signers] = await Promise.all([
+    const [fundraisers, allCalls, invites, signers, inviteWording] = await Promise.all([
       listAllFundraisers(),
       listFundraiserCalls(),
       listOpenInvites(),
       listSigners(),
+      readInviteWording(),
     ]);
     const byId = new Map<number, CallRecord[]>();
     for (const c of allCalls) byId.set(c.fundraiserId, [...(byId.get(c.fundraiserId) ?? []), c]);
@@ -146,7 +197,7 @@ export async function getFundraisingTeam(req: Request, res: Response): Promise<R
       ...i,
       expired: inviteVerdict({ createdAt: new Date(i.createdAt), resentAt: i.resentAt ? new Date(i.resentAt) : null, usedAt: null }, now) === "expired",
     }));
-    return res.status(200).json({ today, me: claims.sub, calls, prompts, invites: listed, signers });
+    return res.status(200).json({ today, me: claims.sub, calls, prompts, invites: listed, signers, inviteWording });
   } catch (err) {
     return failed(res, "team read", err);
   }
@@ -165,7 +216,9 @@ export async function postInvite(req: Request, res: Response): Promise<Response 
   }
   try {
     const signer = await getSigner(parsed.data.signedBy);
-    if (!signer) return res.status(400).json({ error: "Some of it needs another look", fields: { signedBy: "Choose who it is from." } });
+    if (!signer) return res.status(400).json(BAD_SIGNER);
+    // New wording is never sent before its sign off. Any failure to read reads as not approved.
+    if (inviteWordingKey(parsed.data.type) && !inviteMaySend(parsed.data.type, await approvedWordingKeys())) return res.status(409).json(WAITING);
     if ((await countRecentInvites(actorOf(claims))) >= INVITES_PER_DAY) return res.status(429).json(TOO_MANY);
     const token = newInviteToken();
     const inv = await createInvite(
@@ -177,6 +230,7 @@ export async function postInvite(req: Request, res: Response): Promise<Response 
         signedBy: signer.firstName,
         cc: inviteCc(claims.email, parsed.data.email) ?? null,
         tokenHash: hashInviteToken(token),
+        inviteType: parsed.data.type,
       },
       actorOf(claims),
     );
@@ -195,6 +249,8 @@ export async function postResendInvite(req: Request, res: Response): Promise<Res
   try {
     if ((await countRecentInvites(actorOf(claims))) >= INVITES_PER_DAY) return res.status(429).json(TOO_MANY);
     const token = newInviteToken();
+    // The type stays as it was. One whose wording is waiting for sign off is held (wording_waiting,
+    // checked inside the transaction), changing nothing.
     const inv = await resendInvite(id, hashInviteToken(token), actorOf(claims), claims.email);
     const emailed = await emailInvite(inv, token, claims.email);
     return res.status(200).json({ invite: inv, emailed });
@@ -213,6 +269,68 @@ export async function deleteInvite(req: Request, res: Response): Promise<Respons
     return res.status(200).json({ removed: id });
   } catch (err) {
     return failed(res, "invite remove", err, "That invite has been taken up or removed");
+  }
+}
+
+// --- the invite email for each type, to read; and the in memory one's sign off ---------------------
+
+export async function getInviteWording(req: Request, res: Response): Promise<Response | void> {
+  const claims = await authorizeSection(req, res, "fundraising", "view");
+  if (!claims) return;
+  const type = inviteTypeOf(req.params.type);
+  if (!type) return res.status(404).json({ error: "There is no invite of that kind" });
+  // Signed by the signer chosen in the form, checked as a send checks it; by whoever is reading it
+  // when none is chosen yet.
+  const raw = (req.query ?? {}).signedBy;
+  const chosen = raw === undefined || raw === "" ? null : Number(raw);
+  if (chosen !== null && (!Number.isInteger(chosen) || chosen <= 0)) return res.status(400).json(BAD_SIGNER);
+  try {
+    const signer = chosen === null ? null : await getSigner(chosen);
+    if (chosen !== null && !signer) return res.status(400).json(BAD_SIGNER);
+    // An example: never a real link, and never anyone's details.
+    const mail = buildInviteEmail({
+      firstName: "Mary",
+      note: null,
+      signer: signer ? signer.firstName : staffFirstName(null, claims.email),
+      url: `${base()}/fundraise`,
+      type,
+    });
+    const key = inviteWordingKey(type);
+    const read = key ? await readInviteWording() : { approvals: {}, unavailable: false };
+    return res.status(200).json({
+      type,
+      label: INVITE_TYPE_LABELS[type],
+      wordingKey: key,
+      approval: key ? ((read.approvals as Record<string, { approvedAt: string; approvedBy: string }>)[key] ?? null) : null,
+      approvalsUnavailable: read.unavailable,
+      ...mail,
+    });
+  } catch (err) {
+    return failed(res, "invite wording", err);
+  }
+}
+
+export async function postInviteWordingApproval(req: Request, res: Response): Promise<Response | void> {
+  const claims = await authorizeSectionAsAdmin(req, res, "fundraising");
+  if (!claims) return;
+  const key = req.params.key;
+  if (!isInviteWordingKey(key)) return res.status(404).json({ error: "There is no invite wording of that name to approve" });
+  try {
+    return res.status(200).json({ approval: await approveWording(key, actorOf(claims), WORDING_APPROVED) });
+  } catch (err) {
+    return failed(res, "invite wording approval", err);
+  }
+}
+
+export async function deleteInviteWordingApproval(req: Request, res: Response): Promise<Response | void> {
+  const claims = await authorizeSectionAsAdmin(req, res, "fundraising");
+  if (!claims) return;
+  const key = req.params.key;
+  if (!isInviteWordingKey(key)) return res.status(404).json({ error: "There is no invite wording of that name" });
+  try {
+    return res.status(200).json({ withdrawn: await withdrawWording(key, actorOf(claims), WORDING_WITHDRAWN) });
+  } catch (err) {
+    return failed(res, "withdrawing an invite wording approval", err);
   }
 }
 
@@ -310,6 +428,9 @@ adminFundraisingTeamRouter.get("/api/admin/fundraising/team", getFundraisingTeam
 adminFundraisingTeamRouter.post("/api/admin/fundraising/invites", postInvite);
 adminFundraisingTeamRouter.post("/api/admin/fundraising/invites/:id/resend", postResendInvite);
 adminFundraisingTeamRouter.delete("/api/admin/fundraising/invites/:id", deleteInvite);
+adminFundraisingTeamRouter.get("/api/admin/fundraising/invite-wording/:type", getInviteWording);
+adminFundraisingTeamRouter.post("/api/admin/fundraising/invite-wording/:key/approval", postInviteWordingApproval);
+adminFundraisingTeamRouter.delete("/api/admin/fundraising/invite-wording/:key/approval", deleteInviteWordingApproval);
 adminFundraisingTeamRouter.post("/api/admin/fundraisers/:id/calls", postFundraiserCall);
 adminFundraisingTeamRouter.post("/api/admin/fundraisers/:id/off-list", postOffList);
 adminFundraisingTeamRouter.post("/api/admin/fundraisers/:id/on-list", postOnList);

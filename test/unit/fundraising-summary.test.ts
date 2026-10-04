@@ -283,6 +283,31 @@ describe("waiting on us", () => {
     ]);
   });
 
+  // Invite types (Jaimie, B1 + I1): the summary says what each was invited to do.
+  it("says what each invite not taken up was for, and nothing for one from before", () => {
+    const old = { signedBy: "Fern", createdAt: "2026-11-29T10:00:00.000Z", resentAt: null };
+    const typed = summaryCounts({
+      ...inputs,
+      invites: [
+        { ...old, name: "Mary Sample", firstName: "Mary", type: "memory" },
+        { ...old, name: "Sky Sample", firstName: "Sky", type: "team", createdAt: "2026-11-29T11:00:00.000Z" },
+        { ...old, name: "Jo Sample", firstName: "Jo", type: "event", createdAt: "2026-11-29T12:00:00.000Z" },
+        { ...old, name: "Robin Sample", firstName: "Robin", type: "raising", createdAt: "2026-11-29T13:00:00.000Z" },
+        { ...old, name: "Alex Example", firstName: "Alex", type: null, createdAt: "2026-11-29T14:00:00.000Z" },
+      ],
+    });
+    expect(typed.invitesNotTaken).toEqual([
+      { name: "Mary", signedBy: "Fern", type: "memory" },
+      { name: "Sky", signedBy: "Fern", type: "team" },
+      { name: "Jo", signedBy: "Fern", type: "event" },
+      { name: "Robin", signedBy: "Fern", type: "raising" },
+      { name: "Alex", signedBy: "Fern" },
+    ]);
+    expect(summaryLines(typed).waiting).toContain(
+      "5 invites not taken up after a week: Mary (in memory), invited by Fern; Sky (a team), invited by Fern; Jo (hosting an event), invited by Fern; Robin (raising money), invited by Fern; Alex, invited by Fern",
+    );
+  });
+
   it("leaves out an invite whose link has expired, 60 days after it was last sent", () => {
     const only = (resentAt: string | null, createdAt: string) =>
       summaryCounts({ ...inputs, invites: [{ name: "Jo Oldfriend", signedBy: "Rowan", createdAt, resentAt }] }).invitesNotTaken;

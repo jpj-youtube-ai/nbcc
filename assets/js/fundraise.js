@@ -1103,6 +1103,18 @@
             var box = el(pair[0]);
             if (box && !String(box.value || "").trim() && typeof pair[1] === "string" && pair[1]) box.value = pair[1];
           });
+          // Invite types (Jaimie, B1 + I1): the invite may say what they were invited to do, and the
+          // form opens there: the first question answered, and A team chosen at the team step for a
+          // team. Only when they have not chosen already, and they can still change it. Never the
+          // 18 or over answer, a consent or a permission, whatever comes back.
+          if (["raising", "event", "memory"].indexOf(data.path) !== -1 && !radio("path")) {
+            var opensOn = form.querySelector('input[name="path"][value="' + data.path + '"]');
+            if (opensOn) opensOn.checked = true;
+            if (data.path === "raising" && data.team === "team" && !radio("team")) {
+              var asTeam = form.querySelector('input[name="team"][value="team"]');
+              if (asTeam) asTeam.checked = true;
+            }
+          }
           applyAll();
           if (wizard) wizard.refresh();
         })

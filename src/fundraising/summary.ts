@@ -2,7 +2,7 @@ import { z } from "zod";
 import { londonToday } from "../events/model";
 import { giftAidPence, giftNetPence, type FundraiserRecord, type Meter } from "./model";
 import { addDays, callStates, offListPrompt, type CallRecord } from "./follow-up";
-import { INVITE_NOT_TAKEN_DAYS, inviteVerdict } from "./invite";
+import { INVITE_NOT_TAKEN_DAYS, INVITE_TYPE_SUMMARY, inviteTypeOf, inviteVerdict, type InviteType } from "./invite";
 import { pounds } from "./emails";
 import { requestTotals, type RequestRow } from "./requests";
 import type { PromptCounts } from "./call-prompts";
@@ -77,6 +77,8 @@ export interface SummaryInvite {
   signedBy: string;
   createdAt: string;
   resentAt: string | null;
+  /** What they were invited to do; missing or null for an invite from before the drop-down. */
+  type?: InviteType | null;
 }
 
 export interface SummaryInputs {
@@ -152,7 +154,7 @@ export interface SummaryCounts {
   /** How many requests have buckets or tins due back: each is someone to chase. */
   dueBackRequests: number;
   callsDue: number;
-  invitesNotTaken: Array<{ name: string; signedBy: string }>;
+  invitesNotTaken: Array<{ name: string; signedBy: string; type?: InviteType }>;
   pastDate: number;
   saysFinished: number;
   comingUp: Array<{ date: string; title: string; town: string }>;
@@ -236,7 +238,10 @@ export function summaryCounts(i: SummaryInputs): SummaryCounts {
     // An expired link can no longer be taken up: Admin > Fundraising marks it Expired, to resend.
     .filter((inv) => inviteVerdict({ createdAt: new Date(inv.createdAt), resentAt: inv.resentAt ? new Date(inv.resentAt) : null, usedAt: null }, i.now) === "ok")
     .sort((a, b) => ((a.resentAt ?? a.createdAt) < (b.resentAt ?? b.createdAt) ? -1 : 1))
-    .map((inv) => ({ name: inv.firstName || firstWord(inv.name), signedBy: inv.signedBy }));
+    .map((inv) => {
+      const type = inviteTypeOf(inv.type);
+      return { name: inv.firstName || firstWord(inv.name), signedBy: inv.signedBy, ...(type ? { type } : {}) };
+    });
 
   // Team pages: a member sign up waiting is counted on its own line.
   const isMember = (f: SummaryFundraiser) => Boolean(f.teamId && !f.teamLeftAt);
@@ -457,7 +462,7 @@ export function summaryLines(c: SummaryCounts): SummaryLines {
   if (c.invitesNotTaken.length) {
     waiting.push(
       `${plural(c.invitesNotTaken.length, "invite", "invites")} not taken up after a week: ` +
-        c.invitesNotTaken.map((i) => `${i.name}, invited by ${i.signedBy}`).join("; "),
+        c.invitesNotTaken.map((i) => `${i.name}${i.type ? ` (${INVITE_TYPE_SUMMARY[i.type]})` : ""}, invited by ${i.signedBy}`).join("; "),
     );
   }
   // Sponsor pledges: promises still not paid a fortnight after the event.

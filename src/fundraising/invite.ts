@@ -91,18 +91,90 @@ export function inviteNameParts(row: { name: string; firstName?: string | null; 
   return { firstName: words[0] ?? "", lastName: words.slice(1).join(" ") };
 }
 
-/**
- * What the form is filled in with: the first name, surname and email, never the note or who sent it.
- * `name` (the two joined) comes too, for a sign up page loaded before the two boxes, which reads it.
- */
-export function invitePrefill(row: { name: string; firstName?: string | null; lastName?: string | null; email: string }): {
+// --- what they are invited to do (Jaimie, B1 + I1) --------------------------------------------------
+// Staff choose it in a drop-down with nothing chosen for them. It decides where the sign up form
+// opens (invitePrefill) and which words the email has (src/fundraising/team-emails.ts). An invite
+// from before, or from an admin page loaded before the drop-down, has none (null) and behaves as it
+// always did: the form opens at its first question, and the email is the raising money one.
+
+export const INVITE_TYPES = ["raising", "team", "event", "memory"] as const;
+export type InviteType = (typeof INVITE_TYPES)[number];
+
+/** The drop-down's words, and the pill on "Invites not taken up yet". */
+export const INVITE_TYPE_LABELS: Record<InviteType, string> = {
+  raising: "Raising money",
+  team: "A team",
+  event: "Hosting an event",
+  memory: "In memory",
+};
+
+/** The type in the Monday summary's line: "Mary (in memory), invited by Fern". */
+export const INVITE_TYPE_SUMMARY: Record<InviteType, string> = {
+  raising: "raising money",
+  team: "a team",
+  event: "hosting an event",
+  memory: "in memory",
+};
+
+export const INVITE_TYPE_NEEDED = "Choose what you are inviting them to do.";
+
+/** A stored type, or null for none or anything unknown. */
+export function inviteTypeOf(value: unknown): InviteType | null {
+  return typeof value === "string" && (INVITE_TYPES as readonly string[]).includes(value) ? (value as InviteType) : null;
+}
+
+// The in memory invite's wording is new, so it is only sent once an admin has approved it, with the
+// same sign off as new automatic email wording (touch_wording_approvals, key "invite_memory"). The
+// team and event invites are small adaptations of the approved raising money invite: not held.
+export const INVITE_WORDING_KEYS = ["invite_memory"] as const;
+export type InviteWordingKey = (typeof INVITE_WORDING_KEYS)[number];
+export const INVITE_MEMORY_WAITING = "The in memory invite wording is waiting for sign off. Read it and approve it first.";
+
+/** The sign off an invite of this type needs, or null when it needs none. */
+export function inviteWordingKey(type: InviteType | null | undefined): InviteWordingKey | null {
+  return type === "memory" ? "invite_memory" : null;
+}
+
+/** May an invite of this type be sent: its wording needs no sign off, or has it. */
+export function inviteMaySend(type: InviteType | null | undefined, approved: ReadonlySet<string>): boolean {
+  const key = inviteWordingKey(type);
+  return key === null || approved.has(key);
+}
+
+export interface InvitePrefill {
   name: string;
   firstName: string;
   lastName: string;
   email: string;
-} {
+  /** The first question's answer the form opens on, when the invite says what it is for. */
+  path?: "raising" | "event" | "memory";
+  /** "team" when they were invited to set up a team: chosen for them at the team step. */
+  team?: "team";
+}
+
+// Where each type opens the form. Never the 18 or over answer, a consent or a permission.
+const INVITE_OPENS: Record<InviteType, Pick<InvitePrefill, "path" | "team">> = {
+  raising: { path: "raising" },
+  team: { path: "raising", team: "team" },
+  event: { path: "event" },
+  memory: { path: "memory" },
+};
+
+/**
+ * What the form is filled in with: the first name, surname and email, never the note or who sent it,
+ * and, when the invite says what it is for, the choice the form opens on (which they can change).
+ * `name` (the two joined) comes too, for a sign up page loaded before the two boxes, which reads it.
+ */
+export function invitePrefill(row: {
+  name: string;
+  firstName?: string | null;
+  lastName?: string | null;
+  email: string;
+  inviteType?: InviteType | null;
+}): InvitePrefill {
   const parts = inviteNameParts(row);
-  return { name: inviteFullName(parts.firstName, parts.lastName), ...parts, email: row.email };
+  const type = inviteTypeOf(row.inviteType);
+  return { name: inviteFullName(parts.firstName, parts.lastName), ...parts, email: row.email, ...(type ? INVITE_OPENS[type] : {}) };
 }
 
 const WHOLE_EMAIL = z.string().email();
@@ -164,6 +236,11 @@ const inviteFields = z
       .nullish()
       .transform((v) => (v ? v : null)),
     signedBy: z.number({ invalid_type_error: "Choose who it is from." }).int().positive("Choose who it is from."),
+    // What they are invited to do. Not sent by an admin page loaded before the drop-down: none.
+    type: z
+      .enum(INVITE_TYPES, { errorMap: () => ({ message: INVITE_TYPE_NEEDED }) })
+      .nullish()
+      .transform((v) => v ?? null),
   })
   .strict();
 

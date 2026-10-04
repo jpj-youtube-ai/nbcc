@@ -9,7 +9,7 @@ import { countPendingThanks } from "./fundraiser-thanks";
 import { countHeldMessages } from "./fundraiser-memory";
 import { readPromptCounts } from "./fundraising-touch";
 import { settledPackIds } from "./welcome-packs";
-import { INVITE_TTL_DAYS, inviteCc, inviteFullName, inviteNameParts, staffFirstName } from "../fundraising/invite";
+import { INVITE_TTL_DAYS, inviteCc, inviteFullName, inviteNameParts, inviteTypeOf, inviteWordingKey, staffFirstName, type InviteType } from "../fundraising/invite";
 import { summaryRecipientsSchema, type SummaryInputs } from "../fundraising/summary";
 import type { CallRecord, CallWhich } from "../fundraising/follow-up";
 
@@ -20,7 +20,8 @@ import type { CallRecord, CallWhich } from "../fundraising/follow-up";
 // list against "fundraiser" and its id, so it shows in that fundraiser's History.
 
 export class TeamError extends Error {
-  constructor(public readonly reason: "not_found" | "bad_status") {
+  // wording_waiting: a resend of an invite whose wording is waiting for sign off (the in memory one).
+  constructor(public readonly reason: "not_found" | "bad_status" | "wording_waiting") {
     super(`fundraising team: ${reason}`);
     this.name = "TeamError";
   }
@@ -50,7 +51,8 @@ async function inTransaction<T>(work: (client: PoolClient) => Promise<T>): Promi
 /**
  * An invite as staff see it. Never its token or the token's hash. firstName and lastName are as
  * staff typed them; for an invite sent before the two boxes (no first_name), its one name split at
- * the first space (src/fundraising/invite.ts, inviteNameParts).
+ * the first space (src/fundraising/invite.ts, inviteNameParts). type is what they were invited to
+ * do (invite_type, migration 1791200000235), or null for an invite from before the drop-down.
  */
 export interface InviteRow {
   id: number;
@@ -63,9 +65,11 @@ export interface InviteRow {
   sentBy: string;
   createdAt: string;
   resentAt: string | null;
+  type: InviteType | null;
 }
 
-const INVITE_COLUMNS = "id, name, first_name, last_name, email, note, signed_by, sent_by, created_at, resent_at, used_at, used_by_fundraiser_id";
+const INVITE_COLUMNS =
+  "id, name, first_name, last_name, email, note, signed_by, sent_by, created_at, resent_at, used_at, used_by_fundraiser_id, invite_type";
 
 // The first name and surname kept with the row, or the old split of its one name.
 const namePartsOf = (r: Row) =>
@@ -82,21 +86,44 @@ function toInvite(r: Row): InviteRow {
     sentBy: String(r.sent_by),
     createdAt: iso(r.created_at) as string,
     resentAt: iso(r.resent_at),
+    type: inviteTypeOf(r.invite_type),
   };
+}
+
+// The sign off an invite of this type needs (the in memory one), read with a lock on its row inside
+// the transaction that stores or resends the invite, so an approval cannot be withdrawn between the
+// check and the send: the withdrawal waits for this transaction, or this finds the row gone. Throws
+// wording_waiting when it is not approved, which rolls the transaction back.
+async function requireSignOff(client: PoolClient, type: InviteType | null | undefined): Promise<void> {
+  const key = inviteWordingKey(type);
+  if (!key) return;
+  const r = await client.query("SELECT 1 FROM touch_wording_approvals WHERE key = $1 FOR SHARE", [key]);
+  if (!r.rows[0]) throw new TeamError("wording_waiting");
 }
 
 export async function createInvite(
   // cc: who the email copies in (the member of staff sending it), or null; kept on the audit row.
-  i: { firstName: string; lastName: string; email: string; note: string | null; signedBy: string; cc: string | null; tokenHash: string },
+  // inviteType: what they are invited to do, or none from an admin page loaded before the drop-down.
+  i: {
+    firstName: string;
+    lastName: string;
+    email: string;
+    note: string | null;
+    signedBy: string;
+    cc: string | null;
+    tokenHash: string;
+    inviteType?: InviteType | null;
+  },
   actor: string,
 ): Promise<InviteRow> {
   return writeWithAudit(
     async (client) => {
+      await requireSignOff(client, i.inviteType);
       // `name` keeps the two joined, for the admin list, the Monday summary and a code rollback.
       const r = await client.query(
-        `INSERT INTO fundraiser_invites (name, first_name, last_name, email, note, signed_by, sent_by, token_hash)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING ${INVITE_COLUMNS}`,
-        [inviteFullName(i.firstName, i.lastName), i.firstName, i.lastName, i.email, i.note, i.signedBy, actor, i.tokenHash],
+        `INSERT INTO fundraiser_invites (name, first_name, last_name, email, note, signed_by, sent_by, token_hash, invite_type)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING ${INVITE_COLUMNS}`,
+        [inviteFullName(i.firstName, i.lastName), i.firstName, i.lastName, i.email, i.note, i.signedBy, actor, i.tokenHash, i.inviteType ?? null],
       );
       return toInvite(r.rows[0]);
     },
@@ -105,14 +132,17 @@ export async function createInvite(
       action: "fundraiser_invite.sent",
       entity: "fundraiser_invite",
       entityId: inv.id,
-      data: { email: inv.email, signedBy: inv.signedBy, cc: i.cc },
+      data: { email: inv.email, signedBy: inv.signedBy, cc: i.cc, ...(inv.type ? { type: inv.type } : {}) },
     }),
   );
 }
 
 /**
  * A new token and a new date for an invite not taken up. Throws not_found otherwise. senderEmail is
- * the member of staff resending it: the email copies them in, and the audit row says so.
+ * the member of staff resending it: the email copies them in, and the audit row says so. The type
+ * stays as it was. An invite whose wording is waiting for sign off (an in memory one whose approval
+ * was withdrawn) throws wording_waiting and nothing changes: the transaction is rolled back, so the
+ * link in the first email still works.
  */
 export async function resendInvite(id: number, tokenHash: string, actor: string, senderEmail?: string | null): Promise<InviteRow> {
   return inTransaction(async (client) => {
@@ -123,6 +153,7 @@ export async function resendInvite(id: number, tokenHash: string, actor: string,
     );
     if (!r.rows[0]) throw new TeamError("not_found");
     const inv = toInvite(r.rows[0]);
+    await requireSignOff(client, inv.type);
     await insertAudit(client, {
       actor,
       action: "fundraiser_invite.resent",
@@ -167,6 +198,8 @@ export interface FoundInvite {
   createdAt: Date;
   resentAt: Date | null;
   usedAt: Date | null;
+  /** What they were invited to do, or null for an invite from before the drop-down. */
+  inviteType: InviteType | null;
 }
 
 export async function findInviteByHash(tokenHash: string): Promise<FoundInvite | null> {
@@ -181,6 +214,7 @@ export async function findInviteByHash(tokenHash: string): Promise<FoundInvite |
     createdAt: dateOf(row.created_at),
     resentAt: row.resent_at ? dateOf(row.resent_at) : null,
     usedAt: row.used_at ? dateOf(row.used_at) : null,
+    inviteType: inviteTypeOf(row.invite_type),
   };
 }
 
@@ -447,7 +481,7 @@ export async function readSummaryInputs(now: Date): Promise<SummaryInputs> {
     })),
     cash: cash.rows.map((c) => ({ fundraiserId: Number(c.fundraiser_id), amountPence: Number(c.amount_pence), recordedAt: iso(c.created_at) as string })),
     calls,
-    invites: invites.map((i) => ({ name: i.name, firstName: i.firstName, signedBy: i.signedBy, createdAt: i.createdAt, resentAt: i.resentAt })),
+    invites: invites.map((i) => ({ name: i.name, firstName: i.firstName, signedBy: i.signedBy, createdAt: i.createdAt, resentAt: i.resentAt, type: i.type })),
     requests,
     thanksToCheck,
     prompts,

@@ -174,3 +174,12 @@ Then("All emails says {string} has no sign off", function (id) {
 Then("All emails says the version of {string} that is waiting is {string}", function (id, version) {
   assert.equal(rowOf(this, id).waitingVersion, version);
 });
+
+// The read-through (2026-10-04): what an email, as rendered, does and does not say.
+Then("the All emails email says {string}", function (words) {
+  assert.ok(String(this.frBody.html).includes(words), `the email does not say "${words}"`);
+});
+
+Then("the All emails email does not say {string}", function (words) {
+  assert.ok(!String(this.frBody.html).includes(words), `the email says "${words}"`);
+});

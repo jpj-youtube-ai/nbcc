@@ -7789,7 +7789,7 @@ and email) and the sign off. Plain English, no dashes, every stored value escape
 | `fundraiseThanks` | the address typed in the form | they sign up | "Thank you, you've made our day!", what happens next. Greets "Hi there <first name>," only with a safe first name (`safeFirstName`: put together first (NFC), then the first word, Latin letters only, accents included, with apostrophes or hyphens inside, at most 20 characters; another script, a lookalike or an invisible letter is refused), otherwise "Hi there,". No other typed words, since anyone can type any address |
 | `fundraiseStaff` | `events@` (Reply-To the organiser) | they sign up | "Exciting news: a new fundraiser!", everything they told us and asked for, Next steps. Staff only, so its links are never tagged |
 | `fundraiseApproved` | the organiser | approved with a page (raising money and public) while fundraising is on, or at the switch on (below) | "Your page is live!", the page link and three things to do today |
-| `fundraiseApproved` | the organiser | approved with no page (private, or an event) | "You're on our list!" |
+| `fundraiseApproved` | the organiser | approved with no page: one that is not shown on the website | "You're on our list!", which says "As you asked, we won't show it on our website." (left out when staff changed the website choice in the admin, or when that cannot be read) |
 | `fundraiseManage` | the organiser | (retired by TASK-501) | the 24 hour link; no longer sent, still named on the Email audit for the rows already there |
 | `fundraiseCode` | the email asked for | they ask for a sign in code (TASK-501, email 8) | "Here's your code": the 6 digit code in its box, works for 10 minutes, what is inside the private area, "Didn't ask for this?", "Happy fundraising!". Subject "Your NBCC sign in code: 482 915"; the Email audit keeps the subject without the code |
 | `fundraiseFinishedStaff` | `events@` (Reply-To the organiser) | the organiser presses "I've finished" (TASK-501), once | "A fundraiser says they've finished": who, what it has raised, next steps. Staff only, so never link tagged |
@@ -10579,6 +10579,70 @@ real words.
 Tests: `test/unit/email-catalogue.test.ts`, `test/unit/email-catalogue-guard.test.ts`,
 `test/unit/admin-fundraising-emails-routes.test.ts`, `test/unit/admin-all-emails-panel.test.ts`, and
 `features/fundraising-all-emails.feature`.
+
+## The email read-through (2026-10-04)
+
+The charity's operator read every email in **All emails** and decided these changes. Tests:
+`test/unit/receipt-footer.test.ts`, `in-memory-from-jodie.test.ts`, `in-memory-from-jodie-send.test.ts`,
+`get-involved-tab-wording.test.ts`, `readthrough-who-we-help.test.ts`, and the last scenario of
+`features/fundraising-all-emails.feature`. No migration, no new config, nothing under `src/ball`.
+
+**"You're on our list"** (`buildApprovedEmail`, the branch with no page) only ever goes to an approved
+sign up that is not shown on the website: every sign up is raising money or an event, and a public
+one of either has a page (`hasPage`), whether or not fundraising is switched on (a page holder
+approved while it is off waits for "Your page is live"). So the stale "If you asked us to show it,
+you'll find it on our Get involved page" became **"As you asked, we won't show it on our website."**
+One case where that would be untrue: staff unticked the website choice in the admin
+(`PATCH /api/admin/fundraisers/:id` with `public`). `websiteChoiceChangedByStaff`
+(`src/db/fundraisers.ts`) reads the history (`audit_log`, `fundraiser.updated` whose `changed` lists
+`public`); if staff ever changed it, or the history cannot be read, the sentence is left out
+(`hiddenBy: "staff"`). All emails shows that as its own version.
+
+**Donation receipts carry the charity statement in the footer bar.** The receipt (`donation` kind:
+an ordinary gift, money a fundraiser pays in, a paid pledge) had the two registration lines and the
+postal address as a paragraph in its body. It is now in the maroon footer bar like every other
+email. The footer bar's usual sentence (`CHARITY_REGISTRATION` in `src/email/brand.ts`) is shorter
+than the wording TASK-126 mandates, so the receipt's footer carries the two mandated
+`REGISTRATION_LINES` word for word (`emailShell`'s `registrationLines` option, used by `receiptBody`
+in `src/email/templates.ts`), then the address. The name, "Scottish Charitable Incorporated
+Organisation" in full and the charity number are all still on every receipt, once. The plain text
+part is unchanged: it ends with the statement and the address, then the contacts. Sender, subject,
+amounts and Gift Aid wording are untouched. **Left as they were**, with the statement in their body:
+the refund confirmation, the Corporation Tax receipt for a company and its void or correction
+notice, and the two business outreach emails.
+
+**In memory emails come from Jodie.** Every email on the in memory path that goes to a family, a
+funeral director or a giver (the in memory invite, "We have your details", "Your page in memory" in
+both versions, the giver's thank you from an in memory page, and the gentle sign in code) is sent
+From `Jodie at NBCC <jodie@nbcc.scot>`, Reply-To `jodie@nbcc.scot`, and shows that address in the
+questions box and the footer bar. None of them says `events@`. The address and the name are in ONE
+place: `MEMORY_EMAIL`, `MEMORY_FROM_NAME`, `MEMORY_FROM` and `memorySender()` beside
+`FUNDRAISING_EMAIL` in `src/fundraising/emails.ts`. The invite still signs off with the first name
+of whoever sent it and still copies them in. Staff notices are unchanged, and every other email is
+byte for byte as it was. **Why this is safe to send:** the SES identity is the whole domain
+`nbcc.scot` (`aws_sesv2_email_identity.apex`), not a single address, so any address at it is signed
+with the same Easy DKIM keys (`d=nbcc.scot`, aligned for DMARC) and leaves on the same
+`bounce.nbcc.scot` return path; the task role's `ses:SendEmail` is scoped to that identity with no
+condition on the From address; and nothing in config or code lists allowed senders. It goes on the
+same transactional configuration set, so the email log, bounces, complaints and the suppression list
+work as before. **Ops prerequisite:** `jodie@nbcc.scot` must be a mailbox that is read (the charity
+has confirmed it is). Never move it to `news.nbcc.scot`, which cannot receive.
+
+**"across South West Scotland"** was added after "children, young people and vulnerable adults"
+in the thank you for signing up, the giver's thank you, and the target, finished, need a hand and on
+track emails (once per email).
+
+**The charity's description of itself** is two constants in `src/email/brand.ts`, word for word as
+the charity gave them: `ABOUT_NBCC_FULL` and `ABOUT_NBCC_SHORT`. One goes, as its own paragraph
+near the end, in the three emails whose reader may never have dealt with NBCC: the pledge
+confirmation (the full one), the team invite and its parent or guardian version (the short one, in
+place of its own "a Scottish charity supporting..." line), and the ticket confirmation (the short
+one; its "where the money goes" line no longer repeats who NBCC helps).
+
+**Staff notices name the Get involved tab** and its section: "Admin > Get involved > Sign ups",
+"Admin > Get involved > Tickets and pledges > Event tickets", "Open Admin, Get involved", "Admin,
+Get involved, Tickets and pledges, Sponsor pledges"; and the switch's refusal reads "Only an admin
+can switch the Get involved page on or off".
 
 ## Sponsor pledges: "Sponsor now, pay after" (Jaimie, 2026-10-03)
 

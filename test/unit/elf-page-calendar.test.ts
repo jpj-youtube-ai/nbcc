@@ -1,5 +1,7 @@
 // @vitest-environment jsdom
 import { describe, it, expect } from "vitest";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { calendarStatus, renderCalendarPage } from "../../src/elf/pages/calendar";
 import type { CalendarView } from "../../src/elf/pages/types";
 import { AFTERNOON, at, calendarView as view } from "./elf-fixtures";
@@ -9,6 +11,19 @@ import { AFTERNOON, at, calendarView as view } from "./elf-fixtures";
 
 const page = (v: CalendarView) => new DOMParser().parseFromString(renderCalendarPage(v), "text/html");
 const words = (el: Element | null) => (el?.textContent ?? "").replace(/\s+/g, " ").trim();
+
+describe("what Jaimie asked for on 4 October", () => {
+  it("tells under 16s to bring a grown up, in How it works", () => {
+    const how = new DOMParser().parseFromString(renderCalendarPage(view(AFTERNOON)), "text/html").querySelector(".elf-how")!;
+    expect((how.textContent ?? "").replace(/\s+/g, " ")).toContain("Under 16? Bring a grown up with you to every hiding place.");
+  });
+
+  it("shows the countdown on today's door on a phone, in place of the word Today", () => {
+    const css = readFileSync(resolve(__dirname, "../../assets/css/elf.css"), "utf8");
+    expect(css).toMatch(/\.elf-door--today\.has-pill \.elf-door__foot \{[^}]*display:\s*block/);
+    expect(css).toMatch(/\.elf-door--today \.elf-pill \{[^}]*display:\s*none/);
+  });
+});
 
 describe("the calendar page", () => {
   it("is a whole page with one heading, the site's styles and its own", () => {

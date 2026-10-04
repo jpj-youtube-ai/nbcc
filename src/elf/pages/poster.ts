@@ -262,6 +262,7 @@ export function renderPosterPage(view: PosterView, outcome?: PosterOutcome): str
     <div class="wrap">
       <div id="elf-result" class="elf-result" tabindex="-1" aria-live="polite">${result}</div>
       ${body}
+      <p class="elf-grown-up">Under 16? Bring a grown up with you to every hiding place.</p>
       <p class="elf-poster__links"><a class="elf-link" href="${calendar}">See the calendar</a>${view.signedIn ? ` ${link(view.hqUrl, "Detective HQ")}` : ""}</p>
     </div>
   </section>`;

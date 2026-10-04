@@ -65,6 +65,13 @@ describe("the page", () => {
   });
 });
 
+describe("the reminder for children", () => {
+  it("tells under 16s to bring a grown up, whoever is looking and whatever the door is doing", () => {
+    const views = [posterView(), posterView({ open: true, claimable: true }), posterView({ open: true, claimable: false }), posterView({ signedIn: false, detectives: [] })];
+    for (const view of views) expect(words(page(view).querySelector("main"))).toContain("Under 16? Bring a grown up with you to every hiding place.");
+  });
+});
+
 describe("a visitor who is not signed in", () => {
   const doc = page(posterView({ signedIn: false, detectives: [] }));
 

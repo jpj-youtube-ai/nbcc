@@ -169,6 +169,7 @@ ${board}
     <div class="wrap">
       <h2 id="elf-how-heading" class="h-lg">How it works</h2>
       <ol class="elf-steps">${steps}</ol>
+      <p class="elf-grown-up">Under 16? Bring a grown up with you to every hiding place.</p>
     </div>
   </section>
 

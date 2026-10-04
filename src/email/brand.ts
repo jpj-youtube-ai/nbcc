@@ -190,7 +190,7 @@ export const signOffText = (line: string): string => `${line}\nNBCC Team`;
 // giver's thank you from a fundraiser has the full one (src/fundraising/thanks-email.ts). Not in the in
 // memory emails, the Festive Ball's, staff notices, or the company and refund receipts.
 export const ABOUT_NBCC_FULL =
-  "NBCC is a volunteer led charity here all year for children, young people and vulnerable adults across South West Scotland, with school clothing and crisis support whenever it is needed, and every December a full bag for those who would otherwise wake up on Christmas morning with nothing to open.";
+  "NBCC is a volunteer led charity here all year for children, young people and vulnerable adults across South West Scotland, with school clothing and crisis support whenever it is needed, and every December a full red bag for those who would otherwise wake up on Christmas morning with nothing to open.";
 export const ABOUT_NBCC_SHORT = "NBCC is a volunteer led charity here all year for children, young people and vulnerable adults across South West Scotland.";
 
 export const QUESTIONS_HEADING = "Got any questions?";

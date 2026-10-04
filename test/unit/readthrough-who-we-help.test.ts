@@ -95,7 +95,7 @@ describe("across South West Scotland", () => {
 describe("the charity's description of itself", () => {
   it("is the charity's own sentences, word for word", () => {
     expect(ABOUT_NBCC_FULL).toBe(
-      "NBCC is a volunteer led charity here all year for children, young people and vulnerable adults across South West Scotland, with school clothing and crisis support whenever it is needed, and every December a full bag for those who would otherwise wake up on Christmas morning with nothing to open.",
+      "NBCC is a volunteer led charity here all year for children, young people and vulnerable adults across South West Scotland, with school clothing and crisis support whenever it is needed, and every December a full red bag for those who would otherwise wake up on Christmas morning with nothing to open.",
     );
     expect(ABOUT_NBCC_SHORT).toBe("NBCC is a volunteer led charity here all year for children, young people and vulnerable adults across South West Scotland.");
   });

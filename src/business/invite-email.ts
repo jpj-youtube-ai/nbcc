@@ -76,7 +76,7 @@ export function buildBusinessSupporterInviteEmail(input: {
   // The four body paragraphs, shared verbatim between the HTML and text parts so the two never drift
   // (and the plain-text copy carries the same dash-free wording).
   const p1 =
-    "Thank you for becoming a monthly business supporter of the Night Before Christmas Campaign. Businesses like yours help a small, volunteer run charity do big things for children, young people and vulnerable adults right across South West Scotland.";
+    "Thank you for becoming a monthly business supporter of the Night Before Christmas Campaign. Businesses like yours help a small, volunteer led charity do big things for children, young people and vulnerable adults right across South West Scotland.";
   const p2 =
     "We really want to thank you properly, and we would love you to choose how. From a place on our supporters page to a mention in our newsletter, there are some lovely ways to celebrate your business, and it is entirely your call.";
   const p3 =

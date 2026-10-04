@@ -329,12 +329,8 @@ describe("signing off the new wording (Jaimie, 2026-10-03)", () => {
 
   it("approves the nothing raised version on its own, from the example with nothing raised", async () => {
     await openFundraising();
-    await pickKind("year_on");
-    expect(q("[data-frtouchapprove]")).toBeNull(); // the usual year on wording needs no sign off
-    const pick = el("frTouchFor") as HTMLSelectElement;
-    pick.value = "zero";
-    pick.dispatchEvent(new Event("change", { bubbles: true }));
-    await settle();
+    await pickKind("year_on"); // it opens straight on the example with nothing raised
+    expect((el("frTouchFor") as HTMLSelectElement).value).toBe("zero");
     expect(text(el("frTouchMeta"))).toContain("waiting for your sign off");
     q("[data-frtouchapprove]")!.click();
     await settle();
@@ -382,6 +378,153 @@ describe("signing off the new wording (Jaimie, 2026-10-03)", () => {
     await openRow(1);
     (q('[data-fraction="finish"]') as HTMLElement).click();
     expect(confirmed.pop()).toContain("its new wording is waiting for your sign off");
+  });
+});
+
+describe("making the version that is waiting easy to find", () => {
+  const pickKind = async (kind: string) => {
+    (q(`[data-frtouchkind="${kind}"]`) as HTMLElement).click();
+    await settle();
+  };
+  const showFor = async (value: string) => {
+    const pick = el("frTouchFor") as HTMLSelectElement;
+    pick.value = value;
+    pick.dispatchEvent(new Event("change", { bubbles: true }));
+    await settle();
+  };
+  const shown = () => (el("frTouchFor") as HTMLSelectElement).value;
+  const other = () => q("[data-frtouchother]");
+  const showBtn = () => q("[data-frtouchshow]");
+  const lastPreview = (kind: string) => calls.filter((c) => c.path === "/api/admin/fundraising/touch/preview/" + kind).pop()!;
+  const ZERO_LINE = "The version for a page that has raised nothing yet is still waiting for your sign off.";
+  const USUAL_LINE = "The usual version is still waiting for your sign off.";
+
+  it("opens an email whose only waiting version is the nothing raised one straight on that version", async () => {
+    await openFundraising();
+    await pickKind("week_after");
+    expect(shown()).toBe("zero");
+    expect(lastPreview("week_after").query).toBe("sample=zero");
+    expect(q("[data-frtouchapprove]")!.getAttribute("data-frtouchapprove")).toBe("week_after_zero");
+    expect(other()).toBeNull();
+  });
+
+  it("opens on the usual example when the usual version is waiting too, and says the other one is waiting", async () => {
+    await openFundraising();
+    await pickKind("finished");
+    expect(shown()).toBe("");
+    expect(q("[data-frtouchapprove]")!.getAttribute("data-frtouchapprove")).toBe("finished");
+    expect(text(other())).toBe(ZERO_LINE);
+  });
+
+  it("goes back to the usual example on the next email, when it was us who changed it", async () => {
+    await openFundraising();
+    await pickKind("year_on");
+    expect(shown()).toBe("zero");
+    await pickKind("halfway");
+    expect(shown()).toBe("");
+    expect(lastPreview("halfway").query).toBe("");
+  });
+
+  it("says which version is waiting when the usual example is on screen, with a button that shows it", async () => {
+    await openFundraising();
+    await pickKind("year_on");
+    await showFor("");
+    expect(q("[data-frtouchapprove]")).toBeNull();
+    expect(text(other())).toBe(ZERO_LINE);
+    expect(other()!.className).toBe("fr-touch-signoff");
+    const btn = showBtn()!;
+    expect(text(btn)).toBe("Show that version");
+    expect(btn.className).toBe("admin-btn admin-btn--small fr-btn-quiet");
+    btn.click();
+    await settle();
+    expect(shown()).toBe("zero");
+    expect(q("[data-frtouchapprove]")!.getAttribute("data-frtouchapprove")).toBe("year_on_zero");
+    expect(other()).toBeNull();
+  });
+
+  it("says so beside an approved usual version too", async () => {
+    approved.finished = { approvedAt: "2026-12-01T09:00:00.000Z", approvedBy: "admin:fern@example.com" };
+    await openFundraising();
+    await pickKind("finished");
+    await showFor("");
+    expect(text(el("frTouchMeta"))).toContain("Approved by fern@example.com");
+    expect(text(other())).toBe(ZERO_LINE);
+  });
+
+  it("says the usual version is waiting when the nothing raised one is on screen", async () => {
+    await openFundraising();
+    await pickKind("finished");
+    await showFor("zero");
+    expect(text(other())).toBe(USUAL_LINE);
+    showBtn()!.click();
+    await settle();
+    expect(shown()).toBe("");
+    expect(q("[data-frtouchapprove]")!.getAttribute("data-frtouchapprove")).toBe("finished");
+  });
+
+  it("after an approval, points at the version still waiting, and at nothing once none is left", async () => {
+    await openFundraising();
+    await pickKind("finished");
+    q("[data-frtouchapprove]")!.click();
+    await settle();
+    expect(text(el("frTouchMeta"))).toContain("Approved by fern@example.com on 07/12/2026.");
+    expect(text(other())).toBe(ZERO_LINE);
+    showBtn()!.click();
+    await settle();
+    q("[data-frtouchapprove]")!.click();
+    await settle();
+    expect(sent("POST", "/api/admin/fundraising/touch/approvals/finished_zero")).toHaveLength(1);
+    expect(other()).toBeNull();
+    expect(showBtn()).toBeNull();
+    expect(q('[data-frtouchkind="finished"] [data-frtouchwaiting]')).toBeNull();
+  });
+
+  it("leaves a real fundraiser picked in the list alone, and still says what is waiting", async () => {
+    await openFundraising();
+    await showFor("2");
+    await pickKind("year_on");
+    expect(shown()).toBe("2");
+    expect(lastPreview("year_on").query).toBe("fundraiserId=2");
+    expect(text(other())).toBe(ZERO_LINE);
+  });
+
+  it("never changes the list again once the user has changed it themselves", async () => {
+    await openFundraising();
+    await pickKind("year_on");
+    await showFor("");
+    await pickKind("week_after");
+    expect(shown()).toBe("");
+    expect(text(other())).toBe(ZERO_LINE);
+  });
+
+  it("shows nothing extra on an email with nothing waiting", async () => {
+    await openFundraising();
+    for (const k of ["target", "halfway"]) {
+      await pickKind(k);
+      expect(other()).toBeNull();
+      expect(showBtn()).toBeNull();
+    }
+  });
+
+  it("tells an editor which version is waiting, with the button to show it but none to approve", async () => {
+    asRole("editor");
+    await openFundraising();
+    await pickKind("year_on");
+    expect(shown()).toBe("zero");
+    expect(q("[data-frtouchapprove]")).toBeNull();
+    await showFor("");
+    expect(text(other())).toBe("The version for a page that has raised nothing yet is still waiting for sign off.");
+    expect(text(showBtn())).toBe("Show that version");
+    await pickKind("finished");
+    await showFor("zero");
+    expect(text(other())).toBe("The usual version is still waiting for sign off.");
+  });
+
+  it("does not point at another version when the sign offs could not be checked", async () => {
+    approvalsUnavailable = true;
+    await openFundraising();
+    await pickKind("finished");
+    expect(other()).toBeNull();
   });
 });
 

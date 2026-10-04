@@ -19,7 +19,6 @@ import { FOOTER_TEXT, POSTAL_ADDRESS } from "../legal/registration";
 import { dateParts } from "../events/render";
 import { categoryLabel, OTHER_KIND } from "./categories";
 import { FUNDRAISING_EMAIL, organiserFirstName, organiserGreeting, pounds, safeFirstName, type BuiltEmail, type Greeted } from "./emails";
-import { shortName } from "./model";
 import { forwardMessage } from "./teams";
 
 // Team pages (Jaimie, 2026-10-03): the emails, built here and sent by src/fundraising/team-send.ts.
@@ -55,8 +54,6 @@ export const INVITE_NOT_FOR_YOU = "Not for you? Just ignore this. We’ll send o
 
 const escapeHtml = (s: string): string =>
   String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
-
-const firstName = (name: string): string => shortName(name).split(" ")[0];
 
 const shell = (body: string) => emailShell(body, { contactEmail: FUNDRAISING_EMAIL, registration: true, postalAddress: POSTAL_ADDRESS });
 

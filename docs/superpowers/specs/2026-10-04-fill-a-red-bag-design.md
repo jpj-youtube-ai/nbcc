@@ -30,10 +30,14 @@ Address: `/fill-a-red-bag`. Name: "Fill a Red Bag". Layout as the signed-off cha
    on 4 October 2026). Items grouped under the sheet's own headings. Each row: name, price, a big minus
    button, a number box you can also type in, a big plus button. Typing updates the total at once;
    no Enter needed. Quantities 0 to 99.
-3. Beside the list (below it on a phone): the bags, a status line, the total, a tick
-   "Give £31 every month" (the live total, shown as the total is; "Give this amount every month"
-   while the bag is empty), the Donate button, the nudge line, and the elves line. Ticked, the pay
-   button still reads "Donate £31 a month".
+3. The bag panel: the bags, a status line, the total, the round-up button (below), a small label
+   "How often?" over two buttons side by side, "Give once" (chosen to begin with) and "Give
+   monthly", then the Donate button, the nudge line, and the elves line. The two buttons replaced a
+   tick on 4 October 2026 and follow the donate page's once or monthly buttons (a named group, each
+   button saying whether it is pressed, the chosen one in holly green with a tick). Donate reads
+   "Donate £31" for once and "Donate £31 every month" for monthly ("Donate" while the bag is
+   empty). Everything after it is what the tick did: the pay button still reads "Donate £31 a
+   month". The choice is kept when coming back from the details step.
    On a phone the bag is below a long list, so a slim bar fixed to the foot of the screen shows
    "Your bag £18" and a Donate button while the list is scrolled. It hides once the real total and
    Donate are on screen (nothing is doubled), over the footer, on the details step and the thank
@@ -41,8 +45,15 @@ Address: `/fill-a-red-bag`. Name: "Fill a Red Bag". Layout as the signed-off cha
    shows the nudge and brings it into view). Never at desktop widths; not a live region.
 4. "Whenever the need comes", introduced word for word: "Christmas is our big night, and the need
    comes all year round. Tap an example to add it to your bag, and tap it again to take it out."
-   Four themes, three examples each. Tapping an example adds it to the
+   Three themes, three examples each. Tapping an example adds it to the
    same list as a line under "Also in your bag", with a remove control; tapping again takes it off.
+
+   Where things sit (4 October 2026, so the themes are less hidden). The page's own order is the
+   phone's: the list, then the themes, then the bag panel with Donate, then the real items note.
+   On a desktop (from 861px) the stylesheet places the bag panel at the top of the right hand
+   column and the themes directly under it, stacked one under another at the column's full width,
+   beside the long paper. Nothing is moved by script, nothing sticks, nothing scrolls inside a box.
+   A keyboard therefore goes list, themes, bag panel, in both layouts.
 5. A small note, word for word: "Prefer to give the real thing? We would love that. Find a
    drop-off point near you." with "Find a drop-off point near you" linking to https://drop.nbcc.scot
    (opening as the site's other outside links do). That address did not resolve on 3 October 2026;
@@ -68,12 +79,37 @@ fill", "about a quarter full", "about half full", "about three quarters full", "
 "That's around the value of a whole Red Bag Full of Joy." (or "N Red Bags"), plus "Another one is
 filling." when there is a remainder.
 
+### The round-up (Jaimie's idea, 4 October 2026)
+
+ONE button in the bag panel, under the total and above "How often?", offering the NEXT milestone
+only, with the amount it adds, for example "+ £7 Round up to half a bag" at £18:
+
+- above £0 and under £25: "Round up to half a bag";
+- from £25 and under £50: "Round up to a full bag";
+- from £50: "Round up to 2 full bags", then 3, 4 and so on: always the next whole bag;
+- at £0 there is no button. The milestone offered is always above the total shown, so a total
+  sitting exactly on one is offered the next.
+
+Pressing it adds a line under "Also in your bag": "A little extra to round up", its amount, and a
+Remove. It is simply extra money: it is never described as buying anything.
+
+The round-up keeps its TARGET, not an amount. If the donor adds items or examples the extra shrinks
+so the total stays at the target; if they take things out it grows back. When their own items reach
+or pass the target the line goes and the button offers the next step; if they then take that item
+out again the line comes back (a plus followed by a minus leaves the bag as it was). After rounding
+up, the button offers the step after it, and pressing that REPLACES the round-up: two are never
+stacked. Remove clears it for good.
+
+The bags, the status line, the Donate button, the phone bar and the amount sent to the checkout
+all follow the total including the round-up. The sums are whole pence, pure functions in the one
+catalogue module (`nextMilestone`, `roundUpOffer`, `roundUpPence`).
+
 ### Money rules
 
-- One running total: items plus tapped examples. One Donate button.
+- One running total: items plus tapped examples plus the round-up. One Donate button.
 - £2 minimum. Below it the button stays enabled and pressing it shows the friendly nudge:
   "Add a little more to reach £2. Maybe some socks?"
-- One-off by default. The monthly tick turns the total into a monthly gift (no fee cover on monthly,
+- One-off by default. "Give monthly" turns the total into a monthly gift (no fee cover on monthly,
   as on /donate).
 - Gift Aid as on the other give forms.
 
@@ -88,9 +124,9 @@ One of everything is £54.10.
 
 ## The themes (agreed)
 
-- Red Bags Full of Joy, "For those going without at Christmas": £10 could help with cosy essentials
-  like a hat, gloves and socks; £25 could help fill half a Red Bag Full of Joy; £50 could help fill
-  a whole Red Bag Full of Joy.
+Three, in this order. A fourth, "Red Bags Full of Joy" (£10, £25, £50), was taken out on 4 October
+2026: the donor is already filling a bag from the list, so its examples said the same thing twice.
+
 - After a crisis, "Helping families start again": £15 could help replace a child's favourite cuddly
   toy; £30 could help with fresh bedding for a child; £60 could help a family with kitchen basics
   to start again.
@@ -146,7 +182,8 @@ source of truth and half 2 can move the data to the admin without touching the p
 ## Testing
 
 - Unit: totals in pence (no float drift: 10p pencils), bag count and fill at the edges (0, 199, 200,
-  4999, 5000, 5410, 25000+), status wording, the checkout schema rules, the off/on/staff gate, the
+  4999, 5000, 5410, 25000+), the round-up at its edges (1p, 199, 200, 2499, 2500, 2501, 4999, 5000,
+  5001, 9999, 10000; shrink, grow, go, replace; what is sent equals what is shown), status wording, the checkout schema rules, the off/on/staff gate, the
   server-built return addresses, the wording rules (no "will", the elves line and the audience
   phrase present word for word).
 - BDD: the page is a 404 to the public while off; a Red Bag checkout under £2 is refused.

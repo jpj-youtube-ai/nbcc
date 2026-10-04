@@ -12151,23 +12151,38 @@ kept and tested for it. Switched off:
 - `POST /api/checkout-session` refuses a Red Bag donation (`403`) from anyone but signed in staff.
 
 **The one list.** `assets/js/red-bag-catalogue.js` holds the items and their prices (the printed
-sheet's four headings: Home comforts, Play & downtime, Books & creativity, Clothing), the four
-themes and their examples, the £50 bag value, the £2 minimum, and the pure sums: the total in whole
-pence, how many bags to draw and how full (five at most, then "and N more"), and the status line.
+sheet's four headings: Home comforts, Play & downtime, Books & creativity, Clothing), the three
+themes and their examples (After a crisis; Clothing & school; A hand at rock bottom), the £50 bag
+value, the £2 minimum, and the pure sums: the total in whole pence, how many bags to draw and how
+full (five at most, then "and N more"), the status line, and the round-up (`nextMilestone`,
+`roundUpOffer`, `roundUpPence`).
 The page loads that file; the server reads the same file to draw the list into the page
 (`src/red-bag/catalogue.ts`, `src/red-bag/render.ts`), so the list is in the HTML without
 JavaScript; and the tests read it too. To change a price or a word, change it there.
 
 **The page** (`fill-a-red-bag.html`, `assets/css/red-bag.css`, `assets/js/red-bag.js`): the list
 with a minus button, a number box and a plus button for each item (0 to 99; typing counts at once);
-the bags, the status line, the total, a monthly tick that names the amount ("Give £31 every
-month", following the total; "Give this amount every month" while the bag is empty) and one Donate
-button;
-"Whenever the need comes", four themes of three examples that go into the same bag when tapped; and
+"Whenever the need comes", three themes of three examples that go into the same bag when tapped;
+the bag panel: the bags, the status line, the total, the round-up button, "How often?" with two
+buttons ("Give once", chosen to begin with, and "Give monthly", following the donate page's once or
+monthly buttons) and one Donate button, which reads "Donate £31" or "Donate £31 every month"; and
 "Prefer to give the real thing? We would love that. Find a drop-off point near you." (the last
 sentence links to `DROP_OFF_URL`, https://drop.nbcc.scot, in `src/red-bag/render.ts`, in a new tab;
 `DROP_OFF_LIVE` is `true` since Jaimie confirmed the address on 4 October 2026, and set to `false`
-the note shows the phone number and no link). **On a phone** the bag sits below the list, so a slim
+the note shows the phone number and no link). **Where things sit:** the page's own order is the
+phone's (the list, the themes, the bag panel, the real items note); from 861px the stylesheet places
+the bag panel at the top of a right hand column with the themes under it, beside the paper. Nothing
+is moved by script, nothing sticks, and a keyboard goes list, themes, bag panel in both layouts.
+**The round-up** is ONE button under the total offering the next milestone only, with what it adds:
+"+ £7 Round up to half a bag" under £25, "Round up to a full bag" from £25, then "Round up to 2
+full bags" and so on from £50 (always the next whole bag; no button at £0). Pressed, it adds "A
+little extra to round up" with its amount and a Remove under "Also in your bag". It keeps its
+target, not an amount: the extra shrinks as things go in and grows back as they come out, the line
+goes once the donor's own items reach the target (and the button offers the next step), pressing
+the button again replaces the round-up and never stacks two, and Remove clears it. It is simply
+extra money and is never described as buying anything. The bags, the status line, the phone bar and
+the amount sent to the checkout all follow the total including it.
+**On a phone** the bag sits below the list and the themes, so a slim
 bar fixed to the foot of the screen shows "Your bag £18" and a Donate button while the list is
 scrolled: it hides once the real total and Donate are on screen, over the footer, on the details
 step and the thank you, and while the total is £0; its Donate does what the main one does; it is

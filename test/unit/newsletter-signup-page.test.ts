@@ -52,7 +52,10 @@ const submit = () => $<HTMLFormElement>("#nlForm").dispatchEvent(new Event("subm
 const answer = (status: number, data: unknown) => ({ ok: status >= 200 && status < 300, status, json: async () => data });
 
 function start(signup: () => Promise<unknown> = async () => answer(201, { ok: true, outcome: "added" })) {
-  const fetch = vi.fn((...call: [string, { method: string; headers: Record<string, string>; body: string }?]) => (call.length ? signup() : signup()));
+  const fetch = vi.fn((...call: [string, { method: string; headers: Record<string, string>; body: string }?]) => {
+    void call;
+    return signup();
+  });
   const alert = vi.fn();
   initNewsletterSignup(document, { fetch, alert });
   return { fetch, alert };
@@ -102,7 +105,14 @@ describe("the page at /newsletter", () => {
     expect($("label[for=nlFirstName]").textContent).toContain("First name");
     expect($("label[for=nlSurname]").textContent).toContain("Surname");
     expect($("label[for=nlEmail]").textContent).toContain("Email");
-    expect($("label[for=nlPhone]").textContent).toBe("Mobile (optional, for texts)");
+    expect($("label[for=nlPhone]").textContent).toBe("Mobile (optional)");
+  });
+
+  it("neither sign up form promises texts: the mobile box only says it is optional", () => {
+    const main = read("assets/js/main.js");
+    expect(HTML).not.toMatch(/for texts/i);
+    expect(main).not.toMatch(/for texts/i);
+    expect(main).toContain('placeholder="Mobile (optional)" autocomplete="tel" aria-label="Mobile number, optional"');
   });
 
   it("each required box has its own message beside it", () => {
@@ -327,7 +337,9 @@ describe("sending the form", () => {
     await flush();
     expect($<HTMLElement>("#nlForm").hidden).toBe(true);
     expect($<HTMLElement>("#nlDone").hidden).toBe(false);
-    expect(document.activeElement).toBe($("#nlDone"));
+    // A screen reader hears "You're signed up": the heading takes the focus.
+    expect(document.activeElement).toBe($("#nlDone h2"));
+    expect($("#nlDone").getAttribute("aria-labelledby")).toBe($("#nlDone h2").id);
   });
 
   it("a second press while it is sending sends nothing more", async () => {
@@ -348,6 +360,9 @@ describe("sending the form", () => {
     [400, { error: "Please give your name and a valid email address" }, "Please give your name and a valid email address"],
     [429, { error: "Too many attempts. Please try again shortly." }, "Too many attempts. Please try again shortly."],
     [500, {}, "Something went wrong and we could not sign you up. Please try again in a few minutes."],
+    // Only a refusal (400, 429) is said in the server's words: anything else gets the page's own.
+    [500, { error: "Something went wrong — please try again later" }, "Something went wrong and we could not sign you up. Please try again in a few minutes."],
+    [503, { error: "upstream said something odd" }, "Something went wrong and we could not sign you up. Please try again in a few minutes."],
   ])("says the server's own words on the page when it answers %i, and the form can be sent again", async (status, data, words) => {
     start(async () => answer(status as number, data));
     fill();
@@ -358,6 +373,35 @@ describe("sending the form", () => {
     expect(said.className).toBe("form-status is-error");
     expect($<HTMLElement>("#nlForm").hidden).toBe(false);
     expect($<HTMLButtonElement>("#nlSubmit").disabled).toBe(false);
+  });
+
+  it("an error is put where a screen reader will hear it: the message takes the focus", async () => {
+    start(async () => answer(429, { error: "Too many attempts. Please try again shortly." }));
+    fill();
+    submit();
+    await flush();
+    expect($("#nlStatus").getAttribute("tabindex")).toBe("-1");
+    expect(document.activeElement).toBe($("#nlStatus"));
+  });
+
+  it("the message area is always on the page, so Sending is announced too", () => {
+    const css = read("assets/css/newsletter.css");
+    expect(css).toContain(".nl-form .form-status{display:block}");
+    expect(css).not.toMatch(/.form-status:empty{display:none}/);
+    expect($("#nlStatus").getAttribute("role")).toBe("status");
+    expect($("#nlStatus").getAttribute("aria-live")).toBe("polite");
+  });
+
+  it("in a browser that cannot send it, the form is never posted raw: it says to email us instead", () => {
+    initNewsletterSignup(document, {});
+    fill();
+    const ev = new Event("submit", { bubbles: true, cancelable: true });
+    $<HTMLFormElement>("#nlForm").dispatchEvent(ev);
+    expect(ev.defaultPrevented).toBe(true);
+    const said = $<HTMLElement>("#nlStatus");
+    expect(said.textContent).toBe("This form could not be sent from your browser. Please email us at info@nbcc.scot and ask to join instead.");
+    expect(said.className).toBe("form-status is-error");
+    expect($<HTMLElement>("#nlDone").hidden).toBe(true);
   });
 
   it("says so when the request could not be made at all", async () => {

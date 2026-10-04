@@ -21,6 +21,7 @@
     consent: "Please tick the box to confirm you'd like to hear from us.",
     sending: "Sending…",
     failed: "Something went wrong and we could not sign you up. Please try again in a few minutes.",
+    cannotSend: "This form could not be sent from your browser. Please email us at info@nbcc.scot and ask to join instead.",
   };
   // The same loose shape the browser's own email check uses: something@something.something.
   var EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -35,7 +36,8 @@
   function initNewsletterSignup(doc, win) {
     var form = doc.getElementById("nlForm");
     var done = doc.getElementById("nlDone");
-    if (!form || !done || typeof win.fetch !== "function") return null;
+    if (!form || !done) return null;
+    var canSend = typeof win.fetch === "function";
     var status = doc.getElementById("nlStatus");
     var button = doc.getElementById("nlSubmit");
     var busy = false;
@@ -109,6 +111,17 @@
       input.addEventListener("change", recheck);
     });
 
+    // Something went wrong: said in the message area, which takes the focus so it is heard.
+    function fail(text) {
+      say(text, "error");
+      if (!status) return;
+      try {
+        status.focus();
+      } catch (e) {
+        /* focus unavailable */
+      }
+    }
+
     function setBusy(on) {
       busy = on;
       if (button) button.disabled = on;
@@ -118,8 +131,10 @@
     function thank() {
       form.hidden = true;
       done.hidden = false;
+      // The heading takes the focus, so a screen reader says "You're signed up".
+      var title = doc.getElementById("nlDoneTitle") || done;
       try {
-        done.focus();
+        title.focus();
       } catch (e) {
         /* focus unavailable */
       }
@@ -129,6 +144,9 @@
       ev.preventDefault();
       if (busy) return;
       say("", "");
+      // A browser that cannot send it: never let the form post itself (that lands on a page of raw
+      // code). The no script line on the page covers a browser with no JavaScript at all.
+      if (!canSend) return fail(MSG.cannotSend);
       if (!show(problems())) return;
       setBusy(true);
       win
@@ -148,22 +166,24 @@
         .then(function (res) {
           return res.json().then(
             function (data) {
-              return { ok: res.ok, data: data || {} };
+              return { ok: res.ok, status: res.status, data: data || {} };
             },
             function () {
-              return { ok: res.ok, data: {} };
+              return { ok: res.ok, status: res.status, data: {} };
             },
           );
         })
         .then(function (r) {
           setBusy(false);
           if (r.ok) return thank();
-          // The server's own words, as the footer form shows them.
-          say(typeof r.data.error === "string" && r.data.error ? r.data.error : MSG.failed, "error");
+          // A refusal (the boxes need another look, or too many tries) is said in the server's own
+          // words, as the footer form shows them. Anything else gets this page's own message.
+          var refused = r.status === 400 || r.status === 429;
+          fail(refused && typeof r.data.error === "string" && r.data.error ? r.data.error : MSG.failed);
         })
         .catch(function () {
           setBusy(false);
-          say(MSG.failed, "error");
+          fail(MSG.failed);
         });
     });
 

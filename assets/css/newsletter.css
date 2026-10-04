@@ -6,10 +6,13 @@
 .nl-narrow{max-width:600px;margin-inline:auto}
 .nl-form .btn{width:100%;justify-content:center;white-space:normal;text-align:center}
 .nl-consent .give-check{margin:4px 0 0;font-size:.95rem;font-weight:400}
-.nl-form .form-status:empty{display:none}
+/* The message area is always on the page (only here: styles.css hides it elsewhere until it has
+   something to say), so a screen reader announces what is put in it. Empty, it takes no room. */
+.nl-form .form-status{display:block}
+.nl-form .form-status:empty{margin:0;padding:0;border:0}
+.nl-form .form-status:focus,.nl-panel h2:focus{outline:none}
 .nl-form .field.invalid .err{display:block}
 .nl-panel{padding:clamp(24px,4vw,38px);overflow-wrap:anywhere}
-.nl-panel:focus{outline:none}
 .nl-panel h2,.nl-who h2{font-size:clamp(1.45rem,1.25rem + .8vw,1.9rem);color:var(--maroon)}
 .nl-panel p{margin-top:12px;color:var(--slate);line-height:1.7}
 .nl-who{margin-top:clamp(28px,5vw,44px);text-align:center}

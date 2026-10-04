@@ -95,7 +95,7 @@
                 <span class="err" id="nlEmail-error" hidden>Please enter a valid email address.</span>
               </div>
               <div class="field">
-                <label for="nlPhone">Mobile (optional, for texts)</label>
+                <label for="nlPhone">Mobile (optional)</label>
                 <input id="nlPhone" name="phone" type="tel" autocomplete="tel" maxlength="30" />
               </div>
               <!-- The legal bit: never ticked for them. The words are the footer form's, word for word. -->
@@ -109,10 +109,10 @@
               <noscript><p class="form-privacy">This form needs JavaScript switched on. You can email us at <a href="mailto:info@nbcc.scot">info@nbcc.scot</a> and ask to join instead.</p></noscript>
               <button class="btn btn-holly" type="submit" id="nlSubmit">Join our mailing list</button>
               <p class="form-privacy">We handle your details as set out in our <a href="/privacy">Privacy notice</a>.</p>
-              <p class="form-status" id="nlStatus" role="status" aria-live="polite"></p>
+              <p class="form-status" id="nlStatus" role="status" aria-live="polite" tabindex="-1"></p>
             </form>
-            <div class="card card-lg nl-panel" id="nlDone" tabindex="-1" hidden>
-              <h2>You're signed up</h2>
+            <div class="card card-lg nl-panel" id="nlDone" role="status" aria-labelledby="nlDoneTitle" hidden>
+              <h2 id="nlDoneTitle" tabindex="-1">You're signed up</h2>
               <p>Thank you. Look out for us in your inbox.</p>
               <p>You can unsubscribe at any time, using the link at the bottom of any email we send you.</p>
             </div>

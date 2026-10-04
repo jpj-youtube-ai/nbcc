@@ -51,7 +51,7 @@ export const SITE_PAGES: SitePage[] = [
     ],
   },
   { path: "/contact", title: "Contact", listedByDefault: true },
-  // Joining the mailing list, with a confirm by email step (src/routes/newsletter-signup.ts).
+  // Joining the mailing list: the footer sign up form on a page of its own (newsletter.html).
   { path: "/newsletter", title: "Join our mailing list", listedByDefault: true },
   { path: "/privacy", title: "Privacy notice", listedByDefault: true },
   { path: "/donor-portal", title: "Donor portal", listedByDefault: false },

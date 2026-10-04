@@ -91,10 +91,12 @@ describe.each(MEMORY_MAILS)("%s", (_what, mail, hasBox) => {
   });
 });
 
+// The charity then asked for it to be signed by Jodie too: test/unit/in-memory-signed-by-jodie.test.ts.
 describe("the in memory invite", () => {
-  it("still signs off with the first name of whoever sent it, though it comes from Jodie's address", () => {
-    expect(invite(null).text).toContain("With warmest thoughts,\nRobin\nNBCC Team");
-    expect(invite(null).html).toContain("With warmest thoughts,<br>Robin<br>");
+  it("is signed by Jodie, not by whoever sent it", () => {
+    expect(invite(null).text).toContain("With warmest thoughts,\nJodie\nNBCC Team");
+    expect(invite(null).html).toContain("With warmest thoughts,<br>Jodie<br>");
+    expect(invite(null).html + invite(null).text).not.toContain("Robin");
   });
 });
 

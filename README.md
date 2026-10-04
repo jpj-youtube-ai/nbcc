@@ -10588,10 +10588,19 @@ funeral director or a giver (the in memory invite, "We have your details", "Your
 both versions, the giver's thank you from an in memory page, and the gentle sign in code) is sent
 From `Jodie at NBCC <jodie@nbcc.scot>`, Reply-To `jodie@nbcc.scot`, and shows that address in the
 questions box and the footer bar. None of them says `events@`. The address and the name are in ONE
-place: `MEMORY_EMAIL`, `MEMORY_FROM_NAME`, `MEMORY_FROM` and `memorySender()` beside
-`FUNDRAISING_EMAIL` in `src/fundraising/emails.ts`. The invite still signs off with the first name
-of whoever sent it and still copies them in. Staff notices are unchanged, and every other email is
-byte for byte as it was. **Why this is safe to send:** the SES identity is the whole domain
+place: `MEMORY_EMAIL`, `MEMORY_FROM_NAME`, `MEMORY_FROM`, `MEMORY_SIGNER` and `memorySender()` beside
+`FUNDRAISING_EMAIL` in `src/fundraising/emails.ts`. Each is **signed by Jodie**: "With warmest
+thoughts," then "Jodie" then "NBCC Team" (`signOffAs`, the helper the staff invite uses for a named
+signer). None of them copies anyone in, bar the invite. **The in memory invite** is always signed
+Jodie and copies in Jodie and nobody else (`memoryInviteCc` in `src/fundraising/invite.ts`; nobody
+when Jodie herself is invited), on a send and on a resend, where the address kept from the first
+send is not read (`resendInvite`). "Signed by" is therefore not asked for it: the form hides the box
+and says "In memory invites come from Jodie, are signed by her, and a copy goes to her.", the
+confirm question ends "It comes from Jodie.", and the server neither needs nor reads `signedBy` for
+type `memory` (`inviteSchema`), storing "Jodie" as who signed it. The other three invite types are
+exactly as before: `signedBy` required and checked, signed by and copied to that person. The audit
+row records who was copied and, as its actor, who pressed the button. Staff notices are unchanged,
+and every other email is byte for byte as it was. **Why this is safe to send:** the SES identity is the whole domain
 `nbcc.scot` (`aws_sesv2_email_identity.apex`), not a single address, so any address at it is signed
 with the same Easy DKIM keys (`d=nbcc.scot`, aligned for DMARC) and leaves on the same
 `bounce.nbcc.scot` return path; the task role's `ses:SendEmail` is scoped to that identity with no

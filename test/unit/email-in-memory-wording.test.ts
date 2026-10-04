@@ -41,8 +41,9 @@ describe("every in memory email", () => {
   });
 
   it.each(named)("%s signs off With warmest thoughts", (_name, m) => {
-    expect(m.text).toMatch(/With warmest thoughts,\n(?:Fern\n)?NBCC Team/);
-    expect(words(m.html)).toMatch(/With warmest thoughts,\u00a6+(?:Fern\u00a6+)?NBCC Team/);
+    // The charity, 2026-10-04: every in memory email is signed by Jodie, the invite included.
+    expect(m.text).toMatch(/With warmest thoughts,\nJodie\nNBCC Team/);
+    expect(words(m.html)).toMatch(/With warmest thoughts,\u00a6+Jodie\u00a6+NBCC Team/);
     expect(m.html + m.text).not.toContain("With warm wishes");
   });
 

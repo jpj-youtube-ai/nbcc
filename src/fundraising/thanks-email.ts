@@ -1,7 +1,7 @@
-import { emailShell, eyebrow, heading, bodyP, quoteBox, signOff, signOffText, questionsBox, questionsText } from "../email/brand";
+import { emailShell, eyebrow, heading, bodyP, quoteBox, signOff, signOffText, signOffAs, signOffAsText, questionsBox, questionsText } from "../email/brand";
 import { FOOTER_TEXT, POSTAL_ADDRESS } from "../legal/registration";
 import { raiseOrdinals } from "../email/dates";
-import { FUNDRAISING_EMAIL, MEMORY_EMAIL, MEMORY_EYEBROW, MEMORY_SIGN_OFF, dearGreeting, safeFirstName, type BuiltEmail } from "./emails";
+import { FUNDRAISING_EMAIL, MEMORY_EMAIL, MEMORY_EYEBROW, MEMORY_SIGNER, MEMORY_SIGN_OFF, dearGreeting, safeFirstName, type BuiltEmail } from "./emails";
 
 // TASK-507: email 20, to a giver when the organiser thanks them (staff check it first), in the words
 // Jaimie approved on 2026-10-02 (memory: nbcc-fundraising-emails-approved-2026-10-02). Pure, in the
@@ -48,7 +48,8 @@ export function buildSupporterThanksEmail(o: { organiserName: string; title: str
       bodyP(intro(`<b>${escapeHtml(o.title)}</b>`)) +
       quoteBox(quoted) +
       bodyP(LAST) +
-      signOff(CLOSE_WORDS) +
+      // In memory, Jodie signs it: her name above "NBCC Team".
+      (o.inMemory ? signOffAs(CLOSE_WORDS, MEMORY_SIGNER) : signOff(CLOSE_WORDS)) +
       questionsBox(contact),
     contact,
   );
@@ -64,7 +65,7 @@ export function buildSupporterThanksEmail(o: { organiserName: string; title: str
     "",
     LAST,
     "",
-    signOffText(CLOSE_WORDS),
+    o.inMemory ? signOffAsText(CLOSE_WORDS, MEMORY_SIGNER) : signOffText(CLOSE_WORDS),
     "",
     questionsText(contact),
     "",

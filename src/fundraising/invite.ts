@@ -1,5 +1,6 @@
 import { createHash, randomBytes } from "node:crypto";
 import { z } from "zod";
+import { MEMORY_EMAIL } from "./emails";
 
 // TASK-503: inviting someone to fundraise, from Admin > Fundraising. Pure apart from the random
 // bytes, so every rule is unit tested (test/unit/fundraising-invite.test.ts). The SQL is in
@@ -197,6 +198,15 @@ export function inviteCc(email: string | null | undefined, recipient: string, fa
   return cc;
 }
 
+/**
+ * Who an IN MEMORY invite copies in (the charity, 2026-10-04): Jodie, and nobody else. Not whoever
+ * is chosen under "Signed by", not whoever pressed send, on a send and on a resend alike. Nobody at
+ * all when Jodie herself is the person invited (the rule every invite has).
+ */
+export function memoryInviteCc(recipient: string): string | null {
+  return inviteCc(MEMORY_EMAIL, recipient) ?? null;
+}
+
 /** What an admin page loaded before the two boxes is told when its one name has no surname in it. */
 export const INVITE_REFRESH = "Please refresh the page and try again.";
 
@@ -249,7 +259,24 @@ const inviteFields = z
   })
   .strict();
 
-export const inviteSchema = z.preprocess(fromOneName, inviteFields);
+// An in memory invite comes from Jodie, is signed by her and copies her: "Signed by" is not asked
+// for it, and one that is sent anyway (an older page, or anything else) is ignored, never checked.
+const memoryInviteFields = inviteFields.omit({ signedBy: true }).extend({ type: z.literal("memory"), signedBy: z.unknown().transform(() => null) }).strict();
+
+const isMemoryInvite = (body: unknown): boolean => !!body && typeof body === "object" && (body as { type?: unknown }).type === "memory";
+
+type InviteFields = z.infer<typeof inviteFields> | z.infer<typeof memoryInviteFields>;
+
+// Every other type needs and checks "Signed by" exactly as it always did.
+export const inviteSchema = z.preprocess(
+  fromOneName,
+  z.unknown().transform((body, ctx): InviteFields => {
+    const parsed = isMemoryInvite(body) ? memoryInviteFields.safeParse(body) : inviteFields.safeParse(body);
+    if (parsed.success) return parsed.data;
+    for (const issue of parsed.error.issues) ctx.addIssue(issue);
+    return z.NEVER;
+  }),
+);
 
 export type InviteInput = z.infer<typeof inviteSchema>;
 

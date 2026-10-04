@@ -30,6 +30,7 @@ import {
   INVITE_WORDING_KEYS,
   hashInviteToken,
   inviteCc,
+  memoryInviteCc,
   inviteMaySend,
   inviteSchema,
   inviteTypeOf,
@@ -42,7 +43,7 @@ import {
 import { CALL_WHICH, callStates, followUpToday, offListPrompt, type CallRecord, type CallStates } from "../fundraising/follow-up";
 import { summaryRecipientsSchema } from "../fundraising/summary";
 import { buildInviteEmail } from "../fundraising/team-emails";
-import { memorySender } from "../fundraising/emails";
+import { MEMORY_SIGNER, memorySender } from "../fundraising/emails";
 import { sendSummaryTest } from "../fundraising/summary-runner";
 
 // TASK-503: the fundraising team's tools, in Admin > Fundraising. Section "fundraising": viewers
@@ -217,22 +218,25 @@ export async function postInvite(req: Request, res: Response): Promise<Response 
     return res.status(400).json({ error: "Some of it needs another look", fields: fieldErrors(parsed.error.issues) });
   }
   try {
-    const signer = await getSigner(parsed.data.signedBy);
-    if (!signer) return res.status(400).json(BAD_SIGNER);
+    // An in memory invite comes from Jodie: signed by her and copied to her alone, whatever the
+    // page sent under "Signed by" (it is not looked up). Every other type: the signer chosen.
+    const memory = parsed.data.type === "memory";
+    const signer = memory || parsed.data.signedBy === null ? null : await getSigner(parsed.data.signedBy);
+    if (!memory && !signer) return res.status(400).json(BAD_SIGNER);
     // New wording is never sent before its sign off. Any failure to read reads as not approved.
     if (inviteWordingKey(parsed.data.type) && !inviteMaySend(parsed.data.type, await approvedWordingKeys())) return res.status(409).json(WAITING);
     if ((await countRecentInvites(actorOf(claims))) >= INVITES_PER_DAY) return res.status(429).json(TOO_MANY);
     const token = newInviteToken();
     // The copy goes to whoever it is signed by; to the person signed in only when the signer has no
     // usable address. The audit row's actor is still who pressed send.
-    const cc = inviteCc(signer.email, parsed.data.email, claims.email) ?? null;
+    const cc = signer ? (inviteCc(signer.email, parsed.data.email, claims.email) ?? null) : memoryInviteCc(parsed.data.email);
     const inv = await createInvite(
       {
         firstName: parsed.data.firstName,
         lastName: parsed.data.lastName,
         email: parsed.data.email,
         note: parsed.data.note,
-        signedBy: signer.firstName,
+        signedBy: signer ? signer.firstName : MEMORY_SIGNER,
         cc,
         tokenHash: hashInviteToken(token),
         inviteType: parsed.data.type,
@@ -256,8 +260,8 @@ export async function postResendInvite(req: Request, res: Response): Promise<Res
     const token = newInviteToken();
     // The type stays as it was. One whose wording is waiting for sign off is held (wording_waiting,
     // checked inside the transaction), changing nothing.
-    // Copied to whoever was copied in when it was sent (the signer); the address is for the email
-    // only and does not go back to the page.
+    // Copied to whoever was copied in when it was sent (the signer), or for an in memory invite to
+    // Jodie alone; the address is for the email only and does not go back to the page.
     const { cc, ...inv } = await resendInvite(id, hashInviteToken(token), actorOf(claims), claims.email);
     const emailed = await emailInvite(inv, token, cc);
     return res.status(200).json({ invite: inv, emailed });

@@ -193,11 +193,12 @@ describe("the invite email, for each type", () => {
       expect(mail.text).toContain(`Start the page: ${URL}`);
     });
 
-    it("shows the personal note, and is signed With warmest thoughts by the chosen signer", () => {
+    // The charity, 2026-10-04: it is signed by Jodie, whoever is chosen under Signed by.
+    it("shows the personal note, and is signed With warmest thoughts by Jodie", () => {
       expect(mail.html).toContain(quoteBox("It was good to talk today."));
       expect(mail.text).toContain("It was good to talk today.");
-      expect(mail.html).toContain(signOffAs("With warmest thoughts,", "Fern"));
-      expect(mail.text).toContain("With warmest thoughts,\nFern\nNBCC Team");
+      expect(mail.html).toContain(signOffAs("With warmest thoughts,", "Jodie"));
+      expect(mail.text).toContain("With warmest thoughts,\nJodie\nNBCC Team");
     });
 
     it("has no exclamation mark and none of the cheerful invite's words", () => {

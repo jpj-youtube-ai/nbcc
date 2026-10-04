@@ -10,6 +10,8 @@ import {
   codeBox,
   signOff,
   signOffText,
+  signOffAs,
+  signOffAsText,
   questionsBox,
   questionsText,
 } from "../email/brand";
@@ -59,6 +61,12 @@ export const MEMORY_EMAIL = "jodie@nbcc.scot";
 export const MEMORY_FROM_NAME = "Jodie at NBCC";
 /** The From line: the name, then the address in angle brackets. */
 export const MEMORY_FROM = `${MEMORY_FROM_NAME} <${MEMORY_EMAIL}>`;
+/**
+ * Who signs an in memory email: "With warmest thoughts," then this name, then "NBCC Team" (the
+ * charity, 2026-10-04). Every email sent from Jodie's address is signed by her, the in memory invite
+ * included, whoever is chosen under "Signed by" in the admin.
+ */
+export const MEMORY_SIGNER = "Jodie";
 /** What an in memory email is sent with, in place of the events inbox. */
 export const memorySender = (): { from: string; replyTo: string } => ({ from: MEMORY_FROM, replyTo: MEMORY_EMAIL });
 
@@ -143,9 +151,10 @@ export function dearGreeting(first: string | null | undefined): string {
 }
 
 /** An email to an organiser: the body, the sign off, then the questions box, in both parts. */
-function toOrganiser(subject: string, bodyHtml: string, textLines: string[], line: string, contact: string = FUNDRAISING_EMAIL): BuiltEmail {
-  const html = shell(bodyHtml + signOff(line) + questionsBox(contact), contact);
-  const text = [...textLines, "", signOffText(line), "", questionsText(contact), "", FOOTER_TEXT].join("\n");
+// `signer`: a name above "NBCC Team" in the sign off (only ever Jodie, on an in memory email).
+function toOrganiser(subject: string, bodyHtml: string, textLines: string[], line: string, contact: string = FUNDRAISING_EMAIL, signer?: string): BuiltEmail {
+  const html = shell(bodyHtml + (signer ? signOffAs(line, signer) : signOff(line)) + questionsBox(contact), contact);
+  const text = [...textLines, "", signer ? signOffAsText(line, signer) : signOffText(line), "", questionsText(contact), "", FOOTER_TEXT].join("\n");
   return { subject, html, text };
 }
 
@@ -634,8 +643,9 @@ export function buildSignInCodeEmail(typedName: string | null | undefined, code:
   const small = "Didn't ask for this? No problem, just ignore this email. Nobody can get in without the code.";
   const body = (gentle ? eyebrow(MEMORY_EYEBROW) : EYEBROW) + heading("Here's your code") + bodyP(escapeHtml(hi)) + bodyP(intro) + codeBox(code) + bodyP(inside) + note(small);
   const text = [hi, "", intro, "", `Your code: ${code}`, "", inside, "", small];
-  // The gentle one comes from Jodie, so it shows her address (the readthrough, 2026-10-04).
-  return toOrganiser(`Your NBCC sign in code: ${code.slice(0, 3)} ${code.slice(3)}`, body, text, gentle ? MEMORY_SIGN_OFF : "Happy fundraising!", gentle ? MEMORY_EMAIL : FUNDRAISING_EMAIL);
+  // The gentle one comes from Jodie, so it shows her address and she signs it (the readthrough, 2026-10-04).
+  if (gentle) return toOrganiser(`Your NBCC sign in code: ${code.slice(0, 3)} ${code.slice(3)}`, body, text, MEMORY_SIGN_OFF, MEMORY_EMAIL, MEMORY_SIGNER);
+  return toOrganiser(`Your NBCC sign in code: ${code.slice(0, 3)} ${code.slice(3)}`, body, text, "Happy fundraising!");
 }
 
 // --- "I've finished", to the events inbox (TASK-501) ---------------------------------------------

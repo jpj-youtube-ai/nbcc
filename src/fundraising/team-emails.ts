@@ -20,7 +20,7 @@ import {
 } from "../email/brand";
 import { FOOTER_TEXT, POSTAL_ADDRESS } from "../legal/registration";
 import { raiseOrdinals } from "../email/dates";
-import { FUNDRAISING_EMAIL, MEMORY_EMAIL, MEMORY_EYEBROW, MEMORY_SIGN_OFF, STAFF_SIGN_OFF, dearGreeting, type BuiltEmail } from "./emails";
+import { FUNDRAISING_EMAIL, MEMORY_EMAIL, MEMORY_EYEBROW, MEMORY_SIGNER, MEMORY_SIGN_OFF, STAFF_SIGN_OFF, dearGreeting, type BuiltEmail } from "./emails";
 import type { InviteType } from "./invite";
 import type { SummaryLines } from "./summary";
 
@@ -97,7 +97,8 @@ function buildMemoryInviteEmail(o: InviteEmailInput): BuiltEmail {
     button(o.url, MEMORY_BUTTON) +
     bodyP(MEMORY_PAGE) +
     bodyP(MEMORY_CALL) +
-    signOffAs(MEMORY_CLOSE, o.signer);
+    // Always Jodie: it comes from her address, so she signs it, whoever sent it (o.signer is not used).
+    signOffAs(MEMORY_CLOSE, MEMORY_SIGNER);
   const text = [
     MEMORY_EYEBROW,
     MEMORY_HEADING,
@@ -113,11 +114,11 @@ function buildMemoryInviteEmail(o: InviteEmailInput): BuiltEmail {
     "",
     MEMORY_CALL,
     "",
-    signOffAsText(MEMORY_CLOSE, o.signer),
+    signOffAsText(MEMORY_CLOSE, MEMORY_SIGNER),
     "",
     FOOTER_TEXT,
   ].join("\n");
-  // It comes from Jodie's address and shows it, but is still signed by whoever sent it (o.signer).
+  // It comes from Jodie's address, shows it, and is signed by her.
   return { subject: MEMORY_SUBJECT, html: shell(body, MEMORY_EMAIL), text };
 }
 

@@ -197,6 +197,15 @@ thing is removed by a timer, and under `prefers-reduced-motion` nothing moves: n
 flurry or swing, while the peeks, the ribbon and tag and the note still appear at once. Nothing
 plays on the details step. The thank you page is untouched.
 
+It can never stop the page working. The whole layer is switched off unless the catalogue has every
+part of it (during a deploy a donor can be handed the new page script with the old catalogue), and
+every way into it from the page's own code is wrapped: anything that goes wrong in it is swallowed
+and said once in the console, and the total, the status line, Donate and the checkout carry on. A
+note on one row keeps its moment (0.9 seconds) whatever its kind, and the newest change is written
+when that is up. The drop into the bottom bar flies inside the bar, so it is seen to land.
+The drawings Jaimie chose (4 October 2026): the soft toy is a bear, the toy a little train, the
+toiletry set a perfume bottle with its spray, and the winter coat a child's hooded puffer.
+
 ### Money rules
 
 - One running total: items plus tapped examples plus the round-up. One Donate button.

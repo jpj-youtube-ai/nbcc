@@ -12309,7 +12309,11 @@ functions (`peekSlots`, `milestoneCrossed`, `strains`, `noteFor`); `assets/js/re
 applies them. It changes no price, total, wording or checkout field, makes no network request, and
 adds no file to load. Everything decorative is `aria-hidden`, out of the tab order and removed by a
 timer; the one live region is untouched; motion is transform and opacity only and is off under
-`prefers-reduced-motion` (the peeks, ribbon, tag and note still appear, at once). Nothing plays on
+`prefers-reduced-motion` (the peeks, ribbon, tag and note still appear, at once). **It can never
+stop the page working:** the whole layer is off unless the catalogue has every part of it (a donor
+can be handed the new script with the old catalogue while a version is going out), and every way
+into it is wrapped, so a failure in it is swallowed and said once in the console while the sums,
+Donate and the checkout carry on. Nothing plays on
 the details step or the thank you page. Tests: `test/unit/red-bag-delight.test.ts` and
 `test/unit/red-bag-delight-script.test.ts`.
 

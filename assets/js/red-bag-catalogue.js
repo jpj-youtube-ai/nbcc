@@ -277,21 +277,26 @@
       '<path class="t" d="M10 8h20a1.5 1.5 0 0 1 1.5 1.5V13h-23V9.5A1.5 1.5 0 0 1 10 8z"/><path class="t" d="M16 8V5.5h8V8"/>' +
       '<path class="r n" d="M20 22.2c1.2-1.6 3.4-.3 2.6 1.4-.5 1-1.6 1.7-2.6 2.6-1-.9-2.1-1.6-2.6-2.6-.8-1.7 1.4-3 2.6-1.4z"/>',
     "toiletry-set":
-      '<path class="s" d="M6 19a3 3 0 0 1 3-3h7a3 3 0 0 1 3 3v15a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2z"/><rect class="t" x="10" y="11" width="5" height="5"/>' +
-      '<path d="M12.5 11V7h6v2.5"/><rect class="r" x="8.5" y="22" width="8" height="8" rx="1.5"/>' +
-      '<rect class="c" x="23" y="21" width="12" height="15" rx="2.5"/><rect class="g" x="26.5" y="15.5" width="5" height="5.5" rx="1"/><path d="M26 28.5h6"/>' +
-      '<path class="g n" d="M29 3l1 2.6 2.6 1-2.6 1-1 2.6-1-2.6-2.6-1 2.6-1z"/>',
+      '<rect class="s" x="5" y="18" width="18" height="18" rx="4"/><path class="r" d="M5 27h18v5a4 4 0 0 1-4 4H9a4 4 0 0 1-4-4z"/>' +
+      '<rect class="g" x="11" y="13.5" width="6" height="4.5"/><rect class="d" x="9" y="7.5" width="10" height="6" rx="1.5"/><path class="x" d="M19 10.5h2.5"/>' +
+      '<path class="q" d="M25 10.5h4M24.8 7.5l3.4-2.2M24.8 13.5l3.4 2.2"/>' +
+      '<circle class="g n" cx="32.5" cy="10.5" r="1.1"/><circle class="g n" cx="31" cy="4" r="1"/><circle class="g n" cx="31" cy="17" r="1"/><circle class="g n" cx="35.5" cy="6.5" r=".9"/><circle class="g n" cx="35.5" cy="14.5" r=".9"/>' +
+      '<path class="l" d="M9.5 22v2.5"/>',
     toy:
-      '<path d="M20 9V5.5"/><circle class="r" cx="20" cy="4" r="2.2"/><rect class="t" x="10.5" y="9" width="19" height="12.5" rx="3"/>' +
-      '<circle class="w" cx="16" cy="15" r="2.3"/><circle class="w" cx="24" cy="15" r="2.3"/><circle class="d n" cx="16" cy="15" r=".9"/><circle class="d n" cx="24" cy="15" r=".9"/>' +
-      '<rect class="r" x="12.5" y="23.5" width="15" height="10.5" rx="2"/><path d="M12.5 26.5H8.5v5M27.5 26.5h4v5M17 34v3.5M23 34v3.5"/>' +
-      '<circle class="g" cx="20" cy="28.7" r="2.2"/>',
+      '<circle class="w" cx="12" cy="5" r="2.3"/><circle class="w" cx="17" cy="3" r="1.6"/>' +
+      '<rect class="t" x="9.5" y="11" width="5" height="7"/><rect class="d" x="8" y="9" width="8" height="3" rx="1"/>' +
+      '<rect class="h" x="5" y="17" width="19" height="11" rx="3"/><path class="g" d="M17 17a2.6 2.6 0 0 1 5.2 0z"/>' +
+      '<rect class="r" x="22" y="10" width="13" height="18" rx="2"/><rect class="c" x="25.5" y="13.5" width="6" height="6" rx="1"/><rect class="d" x="20.5" y="7.5" width="16" height="3.5" rx="1.5"/>' +
+      '<rect class="d" x="3" y="26.5" width="33" height="3.5" rx="1.5"/><path class="l" d="M9 22.5h8"/>' +
+      '<circle class="g" cx="10" cy="32.5" r="4.3"/><circle class="g" cx="20" cy="32.5" r="4.3"/><circle class="g" cx="30" cy="32.5" r="4.3"/>' +
+      '<circle class="d n" cx="10" cy="32.5" r="1.2"/><circle class="d n" cx="20" cy="32.5" r="1.2"/><circle class="d n" cx="30" cy="32.5" r="1.2"/>',
     "soft-toy":
-      '<ellipse class="c" cx="14.5" cy="9" rx="3.2" ry="7.5"/><ellipse class="c" cx="25.5" cy="9" rx="3.2" ry="7.5"/>' +
-      '<ellipse class="t n" cx="14.5" cy="9.5" rx="1.3" ry="4.5"/><ellipse class="t n" cx="25.5" cy="9.5" rx="1.3" ry="4.5"/>' +
-      '<ellipse class="c" cx="20" cy="31" rx="8" ry="7"/><circle class="c" cx="13" cy="36" r="2.8"/><circle class="c" cx="27" cy="36" r="2.8"/>' +
-      '<circle class="c" cx="20" cy="20" r="8"/><circle class="d n" cx="16.8" cy="19" r="1"/><circle class="d n" cx="23.2" cy="19" r="1"/>' +
-      '<path class="r n" d="M18.7 22h2.6L20 23.6z"/><path d="M20 23.6v1.2M18 25.5c1 1 3 1 4 0"/>',
+      '<circle class="t" cx="11.5" cy="8" r="4.3"/><circle class="t" cx="28.5" cy="8" r="4.3"/><circle class="c n" cx="11.5" cy="8" r="1.9"/><circle class="c n" cx="28.5" cy="8" r="1.9"/>' +
+      '<ellipse class="t" cx="9.5" cy="27.5" rx="3.2" ry="4.6"/><ellipse class="t" cx="30.5" cy="27.5" rx="3.2" ry="4.6"/><ellipse class="t" cx="20" cy="30" rx="9" ry="7.5"/>' +
+      '<circle class="t" cx="13" cy="36" r="3.2"/><circle class="t" cx="27" cy="36" r="3.2"/>' +
+      '<circle class="t" cx="20" cy="14" r="9.5"/><ellipse class="c" cx="20" cy="17" rx="4.2" ry="3.2"/>' +
+      '<circle class="d n" cx="16.2" cy="12" r="1"/><circle class="d n" cx="23.8" cy="12" r="1"/><path class="d n" d="M18.7 15.5h2.6L20 17.1z"/><path d="M20 17.1v1.4"/>' +
+      '<path class="r" d="M20 25l-5.5-2.8v5.6zM20 25l5.5-2.8v5.6z"/><circle class="r" cx="20" cy="25" r="1.6"/>',
     headphones:
       '<path class="x" d="M9 24v-4a11 11 0 0 1 22 0v4"/><rect class="r" x="4.5" y="21.5" width="8" height="13.5" rx="3.5"/>' +
       '<rect class="r" x="27.5" y="21.5" width="8" height="13.5" rx="3.5"/><path class="l" d="M8.5 25.5v5.5M31.5 25.5v5.5"/>',
@@ -343,8 +348,11 @@
       '<path class="e" d="M4.5 31.5v-8.3c0-1.1.9-2 2-2h5.8l5.5 5.6 8.2 1.5c3 .5 5 2 5 3.7z"/><rect class="t" x="3.5" y="31.5" width="28.5" height="3.5" rx="1.7"/>' +
       '<path class="l" d="M12.5 23.5l3.8 4.8M16.5 26.3l2.5-2M19.3 28l2.2-1.8"/>',
     "school-35":
-      '<path class="h" d="M14 7l-7.5 4L3.5 28.5h5.5l1.5-8V36h19V20.5l1.5 8h5.5L33.5 11 26 7z"/><path class="c" d="M13 7.5c.5 4.5 13.5 4.5 14 0l-2.5-3h-9z"/>' +
-      '<path d="M20 11v25"/><path class="l" d="M13 27.5h4M23 27.5h4"/><circle class="g n" cx="22.3" cy="16" r="1.1"/><circle class="g n" cx="22.3" cy="21" r="1.1"/>',
+      '<path class="h" d="M11.5 14.5a8.5 8.5 0 0 1 17 0z"/><path class="c" d="M15.2 14.5a4.8 4.8 0 0 1 9.6 0z"/>' +
+      '<path class="h" d="M12.5 14c-4.2 1-7.3 4.8-7.8 9.3L4 30.5h6.6l1.9-6z"/><path class="h" d="M27.5 14c4.2 1 7.3 4.8 7.8 9.3l.7 7.2h-6.6l-1.9-6z"/>' +
+      '<rect class="c" x="3.6" y="30" width="7.2" height="3.2" rx="1.4"/><rect class="c" x="29.2" y="30" width="7.2" height="3.2" rx="1.4"/>' +
+      '<rect class="h" x="11.5" y="13.5" width="17" height="22.5" rx="3.5"/><path class="l" d="M11.5 19.5h17M11.5 25h17M11.5 30.5h17M5.2 24.5h5.6M29.2 24.5h5.6"/>' +
+      '<path d="M20 13.5V36"/><circle class="g n" cx="20" cy="16.6" r="1.4"/>',
     "school-40":
       '<path class="d" d="M14 7l-8 4-2.5 18.5h5.5l1.5-9V36h19V20.5l1.5 9h5.5L34 11l-8-4-6 8.5z"/><path class="w" d="M14 7l6 8.5L26 7l-2.5-2h-7z"/>' +
       '<path class="r" d="M20 8l1.8 2.2L20 15.5l-1.8-5.3z"/><path class="l" d="M10.5 32.5h19M4.7 26.5h4.6M30.7 26.5h4.6"/>',

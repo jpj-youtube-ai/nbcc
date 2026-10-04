@@ -43,6 +43,15 @@ export interface RedBagBags {
   more: number;
 }
 
+export interface RedBagRoundUpOffer {
+  /** The milestone it rounds up to, in pence. */
+  target: number;
+  /** What pressing it adds to the total shown, in pence. */
+  add: number;
+  /** The button's words: "Round up to half a bag". */
+  words: string;
+}
+
 export interface RedBagCatalogue {
   BAG_VALUE_PENCE: number;
   MIN_PENCE: number;
@@ -50,13 +59,22 @@ export interface RedBagCatalogue {
   MAX_BAGS_DRAWN: number;
   GROUPS: RedBagGroup[];
   THEMES: RedBagTheme[];
-  WORDS: { elves: string; audience: string; empty: string; nudge: string; another: string };
+  /** The first milestone a round-up offers: half a bag. */
+  HALF_BAG_PENCE: number;
+  WORDS: { elves: string; audience: string; empty: string; nudge: string; another: string; roundUp: string };
   items(): RedBagItem[];
   examples(): RedBagExample[];
   clampQuantity(value: unknown): number;
   totalPence(quantities: Record<string, unknown>, exampleKeys: readonly string[]): number;
   bags(pence: number): RedBagBags;
   statusLine(pence: number): string;
+  /** The next milestone above a total: half a bag, a full bag, then each whole bag. 0 for nothing. */
+  nextMilestone(pence: number): number;
+  milestoneWords(targetPence: number): string;
+  /** The round-up on offer for the total shown, or null for an empty bag. */
+  roundUpOffer(pence: number): RedBagRoundUpOffer | null;
+  /** What a round-up adds: the gap between the donor's own items and the target they chose. */
+  roundUpPence(ownPence: number, targetPence: number): number;
   pounds(pence: number): string;
 }
 

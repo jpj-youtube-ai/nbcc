@@ -149,8 +149,8 @@ export interface PosterView {
 
 | Call | Answers | Used by |
 |---|---|---|
-| `GET /api/elf/calendar` | `{ found: number, doors: [{ door, v }] }`. `v` changes whenever a door's tile would. Small and cached. | calendar script, every few seconds |
-| `GET /api/elf/door/:n` | `{ tile: string, panel: string }`: that door's HTML, drawn by the same functions as the page. | calendar script, only for a door whose `v` changed |
+| `GET /api/elf/calendar` | `{ now, found: number, status, doors: [{ door, v }] }` (`now` is the server's time; `status` is `calendarStatus(view)` for the news card). `v` changes whenever a door's tile would. Small and cached. | calendar script, every few seconds |
+| `GET /api/elf/door/:n` | `{ tile: string, detail: string }`: that door's HTML, drawn by the same functions as the page. | calendar script, only for a door whose `v` changed |
 | `GET /api/elf/me` | `FamilyMarks`, or 401 when nobody is signed in. | calendar script |
 | `POST /api/elf/guess` | `{ ok: true }` or `{ ok: false, reason }` (`decideGuess`). | HQ script |
 | `POST /api/elf/look` | Sent `{ detectiveId, look, tried }` (`tried`: what has just been tried on, so its "New" tag can go). Answers `{ ok: true, look }`: the look as saved, after `normaliseLook` against what the detective has earned in the database, never what the page says. | wardrobe script, by itself once the choices settle |

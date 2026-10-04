@@ -29,9 +29,14 @@ export interface DoorView {
   teaser: string | null;
   /** The name of this door's elf. */
   elfName: string;
-  /** Where it was hiding. Shown only once the door is open, whatever is passed in. */
+  /** Where it was hiding. Pass null until the door is open. The screens also refuse to show it
+   *  before then, whatever is passed in: two locks on the one secret. */
   place: { name: string; town: string } | null;
-  /** Who found it. Null until it is found. `by` is the detective names as people read them. */
+  /** Who found it. Null until it is found.
+   *  `by` is PUBLIC: it MUST come from detectiveNames in src/elf/names.ts, which shows a first name
+   *  staff have not ticked yet as its first letter. Never familyDetectiveName: that is for a
+   *  family's own screens and would publish a child's name nobody has checked.
+   *  `photoUrl` only when the grown up said yes for that photo AND staff have checked it. */
   found: { at: Date; by: string; elfUrl: string; photoUrl: string | null } | null;
   /** How many detectives cracked it and how many have visited. Null until the door is open. */
   counts: { cracked: number; visited: number } | null;
@@ -89,7 +94,8 @@ export interface TodayView {
    *  open and the place is no longer one of the options. */
   guess: { id: string; name: string; town: string } | null;
   /** How it ended, once the door is open: where the elf was, who found it (nobody yet for a revealed
-   *  door), and whether this family cracked the case. */
+   *  door), and whether this family cracked the case. `by` names ANOTHER family's detectives, so
+   *  it is public too: it MUST come from detectiveNames, like DoorView.found.by. */
   outcome: { place: string; by: string | null; at: Date | null; cracked: boolean } | null;
 }
 
@@ -154,7 +160,8 @@ export interface ClaimWin {
   /** When the claim arrived, and the server's time as the card is drawn (for the ticking clock). */
   at: Date;
   now: Date;
-  detectives: { name: string; badgeNumber: string; elfUrl: string }[];
+  /** The badge of each detective who found it: name, number, rank and their elf (decision 13). */
+  detectives: { name: string; badgeNumber: string; rank: Rank; elfUrl: string }[];
   calendarUrl: string;
   hqUrl: string;
 }

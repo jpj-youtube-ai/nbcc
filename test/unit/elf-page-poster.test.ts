@@ -262,6 +262,7 @@ describe("the gold card for the first to find an elf", () => {
     expect(text).toContain("Found at 5:47pm on Monday 7 December");
     expect(text).toContain("Show this screen to the staff");
     expect(text).toContain("Badge 0427");
+    expect(text).toContain("Junior Detective");
   });
 
   it("shows each detective's elf", () => {
@@ -275,8 +276,8 @@ describe("the gold card for the first to find an elf", () => {
   it("names everyone when more than one detective found it", () => {
     const win = claimWin({
       detectives: [
-        { name: "Detective Ruby Tinselfoot", badgeNumber: "0427", elfUrl: "/elf/pic/d1.svg" },
-        { name: "Detective Leo Frostwhistle", badgeNumber: "0428", elfUrl: "/elf/pic/d2.svg" },
+        { name: "Detective Ruby Tinselfoot", badgeNumber: "0427", rank: "Junior Detective", elfUrl: "/elf/pic/d1.svg" },
+        { name: "Detective Leo Frostwhistle", badgeNumber: "0428", rank: "Trainee", elfUrl: "/elf/pic/d2.svg" },
       ],
     });
     const card = piece(claimWinHtml(win));
@@ -300,7 +301,7 @@ describe("the gold card for the first to find an elf", () => {
     const win = claimWin({
       elfName: "<b>Bauble</b>",
       placeName: '"><script>x</script>',
-      detectives: [{ name: "<img src=x onerror=alert(1)>", badgeNumber: "<i>", elfUrl: "javascript:alert(1)" }],
+      detectives: [{ name: "<img src=x onerror=alert(1)>", badgeNumber: "<i>", rank: "Trainee", elfUrl: "javascript:alert(1)" }],
       hqUrl: "https://example.com",
     });
     const card = piece(claimWinHtml(win));

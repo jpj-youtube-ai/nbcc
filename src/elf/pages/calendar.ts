@@ -184,7 +184,7 @@ ${board}
     <div class="wrap">
       <h2 id="elf-join-heading" class="h-lg">Join Elf Detective School</h2>
       <p class="lede">Pay what you can. We suggest ${escapeHtml(view.price.suggested)} for each detective, and you can join from ${escapeHtml(view.price.from)}. A grown up joins and adds their detectives.</p>
-      <p>Every pound helps remind someone that they have not been forgotten.</p>
+      <p>Every pound could help remind someone that they have not been forgotten.</p>
       <p><a class="btn btn-primary" href="${join}">Join the school</a></p>
     </div>
   </section>`;

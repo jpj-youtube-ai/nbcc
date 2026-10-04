@@ -18,7 +18,7 @@ import {
   pieceWords,
 } from "../wardrobe";
 import type { ElfLook, WardrobeOutfit, WardrobeSlot, WardrobeState, WardrobeStyle } from "../wardrobe";
-import { listWords } from "../words";
+import { listWords, things } from "../words";
 import { gift, icon } from "./icons";
 import { elfPage, escapeHtml, sitePath } from "./shell";
 import type { WardrobeView } from "./types";
@@ -32,7 +32,7 @@ import type { WardrobeView } from "./types";
 // the elf changing as things are tried on, and saves without leaving the page.
 //
 // Everything in the wardrobe is shown, earned or not. What is still locked cannot be picked: it is
-// drawn faint, wears a padlock and says which door opens it. The saved look is made safe before it
+// drawn faint, wears a padlock and says how many doors earn it. The saved look is made safe before it
 // is drawn, so the elf never wears what it has not earned, whatever was stored.
 //
 // Every drawing and every rule comes from the one wardrobe file the browser also loads
@@ -140,10 +140,16 @@ function lookPanel(look: ElfLook): string {
   );
 }
 
+/** A thing unlocks at a number of doors DONE, cracked or visited, not when a door of that number
+ *  opens on the calendar: a late joiner can see door 12 open and still be short of 12 doors. */
+function doorsLock(doors: number): { short: string; full: string } {
+  return { short: things(doors, "door"), full: `locked until you have done ${things(doors, "door")}` };
+}
+
 function outfitLock(outfit: WardrobeOutfit): { short: string; full: string } {
   if (outfit.special === "gold-seal") return { short: `Visit all ${DOOR_COUNT} places`, full: `locked until you have visited all ${DOOR_COUNT} places` };
   if (outfit.special === "race-win") return { short: "Win a race", full: "locked until you win a race" };
-  return { short: `Door ${outfit.doors}`, full: `locked until door ${outfit.doors}` };
+  return doorsLock(outfit.doors ?? 0);
 }
 
 function outfitsPanel(look: ElfLook, state: WardrobeState, fresh: Fresh): string {
@@ -185,7 +191,7 @@ function styleRow(style: WardrobeStyle, slot: WardrobeSlot, look: ElfLook, state
         caption: c.name,
         words: pieceWords(style.id, c.id),
         checked: !!worn && worn[0] === style.id && worn[1] === c.id,
-        lock: pieceUnlocked(style.id, c.id, state) ? undefined : { short: `Door ${c.door}`, full: `locked until door ${c.door}` },
+        lock: pieceUnlocked(style.id, c.id, state) ? undefined : doorsLock(c.door),
         fresh: fresh.pieces.has(`${style.id}:${c.id}`),
       }),
     )

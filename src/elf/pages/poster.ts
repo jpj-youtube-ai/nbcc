@@ -93,7 +93,7 @@ export function claimWinHtml(win: ClaimWin): string {
       const name = escapeHtml(d.name);
       return (
         `<li>${src ? `<img src="${src}" alt="${name}'s elf" width="72" height="94" />` : ""}` +
-        `<span><b>${name}</b><br />Badge ${escapeHtml(d.badgeNumber)}</span></li>`
+        `<span><b>${name}</b><br />Badge ${escapeHtml(d.badgeNumber)} &middot; ${escapeHtml(d.rank)}</span></li>`
       );
     })
     .join("");

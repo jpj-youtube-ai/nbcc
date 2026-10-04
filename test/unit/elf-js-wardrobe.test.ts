@@ -148,7 +148,7 @@ describe("what is locked", () => {
     document.querySelector<HTMLElement>(`label[for="${bobble.id}"]`)!.click();
     expect(bobble.checked).toBe(false);
     expect($(".elf-wd-mirror").innerHTML).toBe(before);
-    expect(words($(".elf-wd-status"))).toBe("Red bobble hat, locked until door 7.");
+    expect(words($(".elf-wd-status"))).toBe("Red bobble hat, locked until you have done 7 doors.");
     expect(bobble.closest(".elf-wd-tile")!.classList.contains("is-rattled")).toBe(true);
     expect(calls).toEqual([]);
   });

@@ -34,7 +34,7 @@ export function claimWin(over: Partial<ClaimWin> = {}): ClaimWin {
     placeName: "The Toy Shop",
     at: new Date("2026-12-07T17:47:12.000Z"),
     now: new Date("2026-12-07T17:47:13.000Z"),
-    detectives: [{ name: "Detective Ruby Tinselfoot", badgeNumber: "0427", elfUrl: "/elf/pic/d1.svg" }],
+    detectives: [{ name: "Detective Ruby Tinselfoot", badgeNumber: "0427", rank: "Junior Detective", elfUrl: "/elf/pic/d1.svg" }],
     calendarUrl: "/elf",
     hqUrl: "/elf/hq",
     ...over,

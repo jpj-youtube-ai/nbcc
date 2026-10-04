@@ -189,6 +189,12 @@ describe.each(PAGES)("%s", (_name, html) => {
     expect(badWords(doc)).toEqual([]);
   });
 
+  it('says what money "could" do, never what it does', () => {
+    for (const said of readWords(doc)) {
+      if (/\b(pounds?|pennies|penny|donations?|gifts?)\b[^.]*\b(helps?|pays?|buys?|gives?|will)\b/i.test(said)) expect(said).toMatch(/\bcould\b/);
+    }
+  });
+
   it("spells the building one way, and never names the other elf", () => {
     // One piece of text at a time: "Workshop elf" next to "Workshop elf outfit" is not the building.
     for (const said of readWords(doc)) {

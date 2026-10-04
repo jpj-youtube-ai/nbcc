@@ -221,6 +221,16 @@ describe("a door's detail", () => {
     expect(big).toContain("Something with two wheels");
   });
 
+  it("keeps a big prize's ribbon words and teaser on its own day, shut or hunted", () => {
+    const big = { bigPrize: true, teaser: "Something with two wheels" };
+    expect(doorLabel({ ...HUNTING, ...big }, NOW)).toBe("Door 7. The hunt is on. Big prize.");
+    for (const d of [TODAY, HUNTING]) {
+      const said = text(doorDetail({ ...d, ...big }, CTX));
+      expect(said).toContain("Big prize: Something with two wheels");
+      expect(text(doorDetail(d, CTX))).not.toContain("Big prize");
+    }
+  });
+
   it("counts down to today's clue and explains the race", () => {
     const html = doorDetail(TODAY, CTX);
     expect(text(html)).toContain("Today's elf is hiding");

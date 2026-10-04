@@ -171,17 +171,17 @@ describe("the pieces", () => {
     expect(label.querySelector("svg")!.getAttribute("aria-hidden")).toBe("true");
   });
 
-  it("locks what has not been earned: it cannot be picked, wears a padlock and says which door opens it", () => {
+  it("locks what has not been earned: it cannot be picked, wears a padlock and says how many doors earn it", () => {
     const doc = page();
     const locked = radios(doc, "piece-hat").filter((r) => r.disabled).map((r) => r.value).sort();
     const expected = STYLES.filter((s) => s.slot === "hat").flatMap((s) => s.colours.filter((c) => c.door > 6).map((c) => `${s.id}:${c.id}`));
     expect(locked).toEqual(expected.sort());
     const bobble = choice(doc, "bobble:red");
     expect(bobble.disabled).toBe(true);
-    expect(said(doc, bobble)).toBe("Red bobble hat, locked until door 7");
+    expect(said(doc, bobble)).toBe("Red bobble hat, locked until you have done 7 doors");
     const tile = bobble.closest(".elf-wd-tile")!;
     expect(tile.classList.contains("is-locked")).toBe(true);
-    expect(words(tile.querySelector(".elf-wd-lock"))).toBe("Door 7");
+    expect(words(tile.querySelector(".elf-wd-lock"))).toBe("7 doors");
     expect(tile.querySelector(".elf-wd-lock svg")).not.toBeNull();
     expect(choice(doc, "jumper:red").disabled).toBe(false);
     expect(choice(doc, "jumper:red").closest(".elf-wd-tile")!.querySelector(".elf-wd-lock")).toBeNull();
@@ -199,7 +199,7 @@ describe("the pieces", () => {
   it("does not call a thing new while it is still locked", () => {
     const doc = page(wardrobeView({ fresh: ["bobble:red", "pudding"] }));
     expect(doc.querySelectorAll(".elf-wd-tile.is-new").length).toBe(0);
-    expect(said(doc, choice(doc, "bobble:red"))).toBe("Red bobble hat, locked until door 7");
+    expect(said(doc, choice(doc, "bobble:red"))).toBe("Red bobble hat, locked until you have done 7 doors");
   });
 });
 
@@ -219,8 +219,8 @@ describe("the outfits", () => {
     expect(said(doc, outfit("tree"))).toBe("Christmas tree outfit, new");
     expect(said(doc, outfit("present"))).toBe("Present outfit");
     expect(outfit("pudding").disabled).toBe(true);
-    expect(said(doc, outfit("pudding"))).toBe("Christmas pudding outfit, locked until door 9");
-    expect(words(outfit("pudding").closest(".elf-wd-tile")!.querySelector(".elf-wd-lock"))).toBe("Door 9");
+    expect(said(doc, outfit("pudding"))).toBe("Christmas pudding outfit, locked until you have done 9 doors");
+    expect(words(outfit("pudding").closest(".elf-wd-tile")!.querySelector(".elf-wd-lock"))).toBe("9 doors");
     expect(said(doc, outfit("golden"))).toBe("Golden detective outfit, locked until you have visited all 24 places");
     expect(words(outfit("golden").closest(".elf-wd-tile")!.querySelector(".elf-wd-lock"))).toBe("Visit all 24 places");
     expect(said(doc, outfit("nessie"))).toBe("Nessie outfit, locked until you win a race");

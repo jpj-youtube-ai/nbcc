@@ -51,7 +51,7 @@ export function doorLabel(d: DoorView, now: Date): string {
     return `Door ${d.door}, found.${place ? ` ${place}.` : ""}${d.found ? ` Found by ${d.found.by}.` : ""}`;
   }
   if (kind === "revealed") return `Door ${d.door}, not found yet.${place ? ` ${d.elfName} is waiting at ${place}.` : ""}`;
-  if (kind === "hunting") return `Door ${d.door}. The hunt is on.`;
+  if (kind === "hunting") return `Door ${d.door}. The hunt is on.${big}`;
   if (kind === "today") return `Door ${d.door}, today. Clue out at ${clockWords(d.clueAt)}.${big}`;
   if (kind === "tomorrow") return `Door ${d.door}, tomorrow. Clue out at ${clockWords(d.clueAt)}.${big}`;
   return `Door ${d.door}, shut. Clue out ${dayWords(d.clueAt)} at ${clockWords(d.clueAt)}.${big}`;
@@ -183,6 +183,8 @@ function detailParts(d: DoorView, ctx: DoorContext): { meta: string; title: stri
   const join = sitePath(ctx.joinUrl) ?? "/";
   const when = (words: string): string => line(`${icon("clock", 16)} ${words}`, "elf-detail__when");
   const bigCarving = `<span class="elf-detail__wood">${carving(d)}</span>`;
+  // A prize staff chose to show off keeps its ribbon and its teaser on its own day too.
+  const bigPrize = d.bigPrize ? line(`<span class="elf-pill elf-pill--big">Big prize</span>${d.teaser ? `: ${escapeHtml(d.teaser)}` : ""}`) : "";
 
   if (kind === "found") {
     const foundAt = d.found ? ` &middot; found at ${clockWords(d.found.at)}` : "";
@@ -218,6 +220,7 @@ function detailParts(d: DoorView, ctx: DoorContext): { meta: string; title: stri
       media: bigCarving,
       body:
         line(`${elf}'s clue came out at ${clock}. ${elf} is hiding somewhere in NBCC's area.`) +
+        bigPrize +
         line("The first detective to find the elf and read its secret word wins it.") +
         `<p class="elf-detail__actions"><a class="btn btn-primary" href="${hq}">See the clue</a> ` +
         `<a class="elf-link" href="${join}">Not a detective yet? Join in</a></p>`,
@@ -230,6 +233,7 @@ function detailParts(d: DoorView, ctx: DoorContext): { meta: string; title: stri
       media: bigCarving,
       body:
         when(`Clue out at ${clock}, in ${countdown(d, ctx.now)}`) +
+        bigPrize +
         line("Then the race is on. The first detective to find the elf and read its secret word wins it.") +
         line("Lock in your guess before anyone finds it to crack the case.") +
         `<p class="elf-detail__actions"><a class="btn btn-primary" href="${hq}">Detective HQ</a> ` +

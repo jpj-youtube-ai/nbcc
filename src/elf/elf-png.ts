@@ -12,16 +12,23 @@ import { drawElf, type WardrobeState } from "./wardrobe";
 //   - sharp is loaded the first time a picture is made, not when the app starts, so a problem with
 //     its native library can only ever fail one picture, never stop the site;
 //   - its cache is off and it works on one thread;
-//   - pictures are made one at a time, in the order they were asked for.
+//   - pictures are made one at a time, and when too many are already waiting the answer is "busy"
+//     (null) at once, not a queue that grows until the task runs out of memory.
 // The two files each keep their own queue, so one photo and one elf can still be made at the same
-// moment. Whoever first sends these pictures in bulk should give the two a single queue, and keep
-// each picture once it is made: the same look always gives the same picture.
+// moment. Whoever first serves these pictures should give the two a single queue, and keep each
+// picture once it is made: the same look always gives the same picture, and there are not many.
 //
 // Unit tested in test/unit/elf-png.test.ts.
 
 /** The widest an elf is ever made, in pixels. */
 export const ELF_PNG_MAX_WIDTH = 800;
 const ELF_PNG_MIN_WIDTH = 40;
+
+/** How many pictures may wait behind the one being made. One more is told "busy". */
+export const ELF_PNG_QUEUE_MAX = 8;
+
+/** The page colour of the site, for a picture that must not be see through. */
+const CREAM = "#F8F5EE";
 
 type SharpFn = typeof import("sharp")["default"];
 let loaded: Promise<SharpFn> | null = null;
@@ -41,13 +48,27 @@ function loadSharp(): Promise<SharpFn> {
   return loaded;
 }
 
-let last: Promise<unknown> = Promise.resolve();
+let running = false;
+const waiting: (() => void)[] = [];
 
-/** Runs `work` once everything asked for before it has finished, whether that worked or failed. */
-export function inTurn<T>(work: () => Promise<T>): Promise<T> {
-  const mine = last.then(work, work);
-  last = mine.catch(() => undefined);
-  return mine;
+/** Runs `work` when it is its turn, in the order asked, or answers `busy` at once when the queue is
+ *  full. A piece of work that fails does not stop the ones behind it. */
+export function inTurn<T>(work: () => Promise<T>, busy: T): Promise<T> {
+  if (running && waiting.length >= ELF_PNG_QUEUE_MAX) return Promise.resolve(busy);
+  return new Promise<T>((resolve, reject) => {
+    const run = (): void => {
+      running = true;
+      work()
+        .then(resolve, reject)
+        .finally(() => {
+          const next = waiting.shift();
+          if (next) next();
+          else running = false;
+        });
+    };
+    if (running) waiting.push(run);
+    else run();
+  });
 }
 
 /** The width actually used: a whole number of pixels, kept between 40 and 800. */
@@ -56,12 +77,25 @@ export function elfPngWidth(asked: number): number {
   return Math.min(ELF_PNG_MAX_WIDTH, Math.max(ELF_PNG_MIN_WIDTH, width));
 }
 
-/** The elf as a PNG on a see through background, `width` pixels wide and 1.3 times as tall. */
-export function elfPng(look: unknown, state: WardrobeState, width = 320): Promise<Buffer> {
+/**
+ * The elf as a PNG, `width` pixels wide and 1.3 times as tall. Null means busy: too many pictures
+ * are already waiting, so ask again shortly.
+ *
+ * The background is see through unless `background` is "cream". Ask for cream in an email: some mail
+ * apps turn the page dark, and a see through picture then loses anything dark in it, such as the
+ * snowman's hat.
+ */
+export function elfPng(
+  look: unknown,
+  state: WardrobeState,
+  width = 320,
+  background: "clear" | "cream" = "clear",
+): Promise<Buffer | null> {
   const px = elfPngWidth(width);
   const svg = drawElf(look, state, { size: px, label: false });
-  return inTurn(async () => {
+  return inTurn<Buffer | null>(async () => {
     const sharp = await loadSharp();
-    return sharp(Buffer.from(svg)).png().toBuffer();
-  });
+    const picture = sharp(Buffer.from(svg));
+    return (background === "cream" ? picture.flatten({ background: CREAM }) : picture).png().toBuffer();
+  }, null);
 }

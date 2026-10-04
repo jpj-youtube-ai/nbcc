@@ -1,5 +1,6 @@
 import { createRequire } from "node:module";
 import { resolve } from "node:path";
+import type { Progress } from "./progress";
 
 // NBCC Elf Detective School: the elf wardrobe, as the server sees it. The design is
 // docs/superpowers/specs/2026-10-04-elf-detective-school-design.md (decisions 14 and 15).
@@ -8,52 +9,72 @@ import { resolve } from "node:path";
 // and outfit is drawn) lives in ONE file that the browser also loads: assets/js/elf-wardrobe.js. The
 // server reads that same file, the way src/fundraising/signers.ts reads the admin's list of signers,
 // so the two can never disagree about what a detective may wear or how their elf looks. It ships
-// with the app, next to the pages.
+// with the app, next to the pages. It is read when this module is first loaded: if the file were
+// missing the app would not start, which is the right failure for a file every elf screen needs.
 //
-// This module adds the types and nothing else. Everything in it is pure once the file is read.
+// This module adds the types, and one function, wardrobeState, that turns a detective's progress
+// into what the wardrobe needs to know. Everything in it is pure once the file is read.
 // Unit tested in test/unit/elf-wardrobe.test.ts.
 
 export type SlotId = "hat" | "face" | "neck" | "top" | "feet" | "hand" | "extra";
 
 export interface WardrobeSlot {
-  id: SlotId;
+  readonly id: SlotId;
   /** The heading people read: "Hats". */
-  name: string;
+  readonly name: string;
   /** Can this slot be left empty? Hat, top and shoes cannot. */
-  optional: boolean;
+  readonly optional: boolean;
 }
 
 export interface WardrobeColour {
-  id: string;
+  readonly id: string;
   /** The word people read: "Red". */
-  name: string;
+  readonly name: string;
   /** How many doors done unlock it. 0 is the starter kit. */
-  door: number;
-  fill: string;
-  dark: string;
+  readonly door: number;
+  readonly fill: string;
+  readonly dark: string;
 }
 
 export interface WardrobeStyle {
-  id: string;
-  slot: SlotId;
+  readonly id: string;
+  readonly slot: SlotId;
   /** The words people read: "Detective's hat". */
-  name: string;
+  readonly name: string;
   /** The crop for a wardrobe tile, as an SVG viewBox. */
-  box: string;
-  colours: WardrobeColour[];
+  readonly box: string;
+  readonly colours: readonly WardrobeColour[];
 }
 
 export interface WardrobeOutfit {
-  id: string;
-  name: string;
+  readonly id: string;
+  readonly name: string;
   /** How many doors done unlock it, for the outfits that come with doors. */
-  doors?: number;
+  readonly doors?: number;
   /** The other way in: the gold seal, or winning a race. */
-  special?: "gold-seal" | "race-win";
+  readonly special?: "gold-seal" | "race-win";
+}
+
+/** A hair colour: its fill, and the darker edge drawn round it so it shows against any skin. */
+export interface HairColour {
+  readonly id: string;
+  readonly hex: string;
+  readonly dark: string;
 }
 
 /** A piece being worn: the style and the colour. */
 export type PieceChoice = [style: string, colour: string];
+
+/** What is worn in each slot. A hat, a top and shoes are always worn. */
+export interface ElfPieces {
+  hat: PieceChoice;
+  top: PieceChoice;
+  feet: PieceChoice;
+  face: PieceChoice | null;
+  neck: PieceChoice | null;
+  hand: PieceChoice | null;
+  extra: PieceChoice | null;
+}
 
 export interface ElfLook {
   skin: string;
@@ -61,11 +82,12 @@ export interface ElfLook {
   hairStyle: string;
   /** A whole costume, or null to wear the pieces. */
   outfit: string | null;
-  pieces: Record<SlotId, PieceChoice | null>;
+  pieces: ElfPieces;
 }
 
-/** What a detective has earned, as far as the wardrobe cares. */
+/** What a detective has earned, as far as the wardrobe cares. Build it with wardrobeState. */
 export interface WardrobeState {
+  /** A NUMBER. Text such as "6" counts as no doors at all, and the starter kit is all that is left. */
   doorsDone: number;
   goldSeal?: boolean;
   wonRace?: boolean;
@@ -81,18 +103,21 @@ export interface DrawOptions {
   size?: number;
   /** The pale circle behind the elf. On unless false. */
   backdrop?: boolean;
-  /** False for an elf that is decoration, so screen readers skip it. */
-  label?: false;
+  /** The words a screen reader says, such as whose elf it is. False for an elf that is decoration. */
+  label?: string | false;
+  /** A short name that is this drawing's alone on the page. Give one whenever several elves are put
+   *  into one page as SVG, so that their stripes and tartans keep apart. */
+  key?: string;
 }
 
 interface WardrobeApi {
   DOORS: number;
-  SKIN_TONES: { id: string; hex: string }[];
-  HAIR_COLOURS: { id: string; hex: string }[];
-  HAIR_STYLES: { id: string; name: string }[];
-  SLOTS: WardrobeSlot[];
-  STYLES: WardrobeStyle[];
-  OUTFITS: WardrobeOutfit[];
+  SKIN_TONES: readonly { readonly id: string; readonly hex: string }[];
+  HAIR_COLOURS: readonly HairColour[];
+  HAIR_STYLES: readonly { readonly id: string; readonly name: string }[];
+  SLOTS: readonly WardrobeSlot[];
+  STYLES: readonly WardrobeStyle[];
+  OUTFITS: readonly WardrobeOutfit[];
   pieceUnlocked(styleId: string, colourId: string, state: WardrobeState): boolean;
   outfitUnlocked(outfitId: string, state: WardrobeState): boolean;
   newlyUnlocked(before: WardrobeState, after: WardrobeState): Unlocks;
@@ -132,3 +157,14 @@ export const drawElf = api.drawElf;
 export const drawPiece = api.drawPiece;
 /** One outfit on a plain elf, for a wardrobe tile. */
 export const drawOutfit = api.drawOutfit;
+
+/**
+ * What a detective has earned, built from their progress. Always build a WardrobeState here.
+ *
+ * A wrong state fails shut and says nothing: hand normaliseLook a count of doors as text and it sees
+ * no doors, so a saved outfit quietly becomes the starter kit. Building the state in one typed place
+ * from progressOf is what stops that.
+ */
+export function wardrobeState(progress: Pick<Progress, "doorsDone" | "goldSeal">, wonRace: boolean): WardrobeState {
+  return { doorsDone: progress.doorsDone, goldSeal: progress.goldSeal === true, wonRace: wonRace === true };
+}

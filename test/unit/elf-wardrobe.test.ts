@@ -15,7 +15,9 @@ import {
   outfitUnlocked,
   pieceUnlocked,
   pieceWords,
+  wardrobeState,
 } from "../../src/elf/wardrobe";
+import { progressOf } from "../../src/elf/progress";
 
 // NBCC Elf Detective School: the elf wardrobe. These tests read the one file the browser also loads
 // (assets/js/elf-wardrobe.js) through src/elf/wardrobe.ts, so they hold the real thing: what there
@@ -328,5 +330,121 @@ describe("drawing", () => {
     expect(drawPiece("cape", "red", 40)).toBe("");
     expect(drawPiece("elf", "purple", 40)).toBe("");
     expect(drawOutfit("robot", null, 58)).toBe("");
+  });
+
+  it("draws whatever is worn in every slot, so nothing in the catalogue can go undrawn", () => {
+    for (const slot of SLOTS) {
+      const styles = STYLES.filter((s) => s.slot === slot.id);
+      const drawings = styles.flatMap((style) =>
+        style.colours.map((colour) => {
+          const look = defaultLook();
+          look.pieces[slot.id] = [style.id, colour.id];
+          return drawElf(look, EVERYTHING);
+        }),
+      );
+      // Every style in every colour draws differently from every other, and from wearing nothing.
+      const bare = defaultLook();
+      if (slot.optional) (bare.pieces as Record<string, unknown>)[slot.id] = null;
+      const all = slot.optional ? [...drawings, drawElf(bare, EVERYTHING)] : drawings;
+      expect(new Set(all).size, slot.id).toBe(all.length);
+    }
+  });
+
+  it("can say whose elf it is, in words that are made safe", () => {
+    const named = drawElf(defaultLook(), EVERYTHING, { label: "Detective Ruby Tinselfoot's elf" });
+    expect(named).toContain('aria-label="Detective Ruby Tinselfoot&#39;s elf"');
+    const nasty = drawElf(defaultLook(), EVERYTHING, { label: '"><script>alert(1)</script>' });
+    expect(nasty).not.toContain("<script");
+    expect(nasty.match(/<svg/g)?.length).toBe(1);
+  });
+});
+
+describe("patterns: the stripes, checks and tartans", () => {
+  const ids = (svg: string) => [...svg.matchAll(/ id="([^"]+)"/g)].map((m) => m[1]);
+  const refs = (svg: string) => [...svg.matchAll(/url\(#([^)]+)\)/g)].map((m) => m[1]);
+  const pieceTiles = () => STYLES.flatMap((s) => s.colours.map((c) => drawPiece(s.id, c.id, 40)));
+  const outfitTiles = () => OUTFITS.map((o) => drawOutfit(o.id, null, 58));
+  const worn = () =>
+    STYLES.flatMap((s) =>
+      s.colours.map((c) => {
+        const look = defaultLook();
+        look.pieces[s.slot] = [s.id, c.id];
+        return drawElf(look, EVERYTHING);
+      }),
+    );
+
+  it("defines every pattern a drawing uses, and none that it does not", () => {
+    for (const svg of [...pieceTiles(), ...outfitTiles(), ...worn()]) {
+      expect(new Set(ids(svg))).toEqual(new Set(refs(svg)));
+    }
+  });
+
+  it("gives every tile ids of its own, so a whole wardrobe can sit on one page", () => {
+    const all = [...pieceTiles(), ...outfitTiles()].flatMap(ids);
+    expect(all.length).toBeGreaterThan(10);
+    expect(new Set(all).size).toBe(all.length);
+  });
+
+  it("gives an elf ids from its key, so several elves can sit on one page", () => {
+    const ruby = drawElf(defaultLook(), EVERYTHING, { key: "ruby" });
+    const sam = drawElf(defaultLook(), EVERYTHING, { key: "sam" });
+    expect(ids(ruby).length).toBeGreaterThan(0);
+    expect(ids(ruby).every((id) => id.endsWith("-ruby"))).toBe(true);
+    expect(ids(ruby).filter((id) => ids(sam).includes(id))).toEqual([]);
+  });
+
+  it("keeps a key to plain characters", () => {
+    const svg = drawElf(defaultLook(), EVERYTHING, { key: '"><script>x' });
+    expect(svg).not.toContain("<script");
+    expect(ids(svg).every((id) => /^[A-Za-z0-9_-]+$/.test(id))).toBe(true);
+  });
+
+  it("draws the same elf the same way every time", () => {
+    expect(drawElf(defaultLook(), EVERYTHING)).toBe(drawElf(defaultLook(), EVERYTHING));
+  });
+});
+
+describe("hair that can be seen", () => {
+  const rgb = (hex: string) => [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16));
+  const distance = (a: string, b: string) => Math.hypot(...rgb(a).map((v, i) => v - rgb(b)[i]));
+
+  it("gives every hair colour an edge that stands out from every skin tone", () => {
+    // Brown hair on a brown face is nearly one colour. The edge is what shows the hair is there.
+    for (const hair of HAIR_COLOURS) {
+      for (const skin of SKIN_TONES) {
+        expect(distance(hair.dark, skin.hex), `${hair.id} hair on ${skin.id}`).toBeGreaterThanOrEqual(40);
+      }
+    }
+  });
+
+  it("draws that edge round the hair, in every style", () => {
+    for (const hair of HAIR_COLOURS) {
+      for (const style of HAIR_STYLES) {
+        const svg = drawElf({ ...defaultLook(), hair: hair.id, hairStyle: style.id }, EVERYTHING);
+        expect(svg, `${style.id} ${hair.id}`).toContain(`stroke="${hair.dark}"`);
+      }
+    }
+  });
+});
+
+describe("the catalogue", () => {
+  it("cannot be changed by anything that reads it", () => {
+    expect(Object.isFrozen(STYLES)).toBe(true);
+    expect(Object.isFrozen(STYLES[0].colours[0])).toBe(true);
+    expect(Object.isFrozen(OUTFITS[0])).toBe(true);
+    expect(() => {
+      (STYLES.find((s) => s.id === "crown")!.colours[2] as { door: number }).door = 0;
+    }).toThrow();
+    expect(pieceUnlocked("crown", "gold", { doorsDone: 0 })).toBe(false);
+  });
+});
+
+describe("what a detective has earned, for the wardrobe", () => {
+  it("is built from their progress in one place, so it can never be text by mistake", () => {
+    const progress = progressOf({ cracked: [1, 2, 3], visited: [3, 4] });
+    expect(wardrobeState(progress, false)).toEqual({ doorsDone: 4, goldSeal: false, wonRace: false });
+    const all = progressOf({ cracked: [], visited: Array.from({ length: 24 }, (_, i) => i + 1) });
+    expect(wardrobeState(all, true)).toEqual({ doorsDone: 24, goldSeal: true, wonRace: true });
+    expect(wardrobeState(progress, "yes" as unknown as boolean).wonRace).toBe(false);
   });
 });

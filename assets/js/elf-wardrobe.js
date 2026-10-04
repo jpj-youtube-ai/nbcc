@@ -34,12 +34,14 @@
     { id: "s5", hex: "#6B4430" }
   ];
 
+  // `dark` is the edge drawn round the hair. It is chosen to stand out from every skin tone above,
+  // because the hair's own colour does not always: brown hair and a brown face are close.
   var HAIR_COLOURS = [
-    { id: "dark", hex: "#3A2416" },
-    { id: "brown", hex: "#7A4B2E" },
-    { id: "ginger", hex: "#C9772F" },
-    { id: "blonde", hex: "#E8C46A" },
-    { id: "black", hex: "#2B2A33" }
+    { id: "dark", hex: "#3A2416", dark: "#1E110A" },
+    { id: "brown", hex: "#7A4B2E", dark: "#4A2C1A" },
+    { id: "ginger", hex: "#C9772F", dark: "#8E4F1C" },
+    { id: "blonde", hex: "#E8C46A", dark: "#A67C1F" },
+    { id: "black", hex: "#2B2A33", dark: "#111016" }
   ];
 
   var HAIR_STYLES = [
@@ -66,6 +68,7 @@
     return { id: id, name: name, door: door, fill: fill, dark: dark || INK };
   }
 
+  var MAROON = "#800000";
   var RED = "#C02238";
   var RED_D = "#8E1626";
   var GREEN = "#1A531A";
@@ -114,7 +117,7 @@
       col("tan", "Tan", 18, "#B88A5D", "#8A6340"), col("grey", "Grey", 18, "#8E8E86", "#6B6B64"), col("navy", "Navy", 21, "#2B3A55", "#1C273A")] },
     // Shoes.
     { id: "curly", slot: "feet", name: "Curly shoes", box: "54 222 92 30", colours: [
-      col("maroon", "Maroon", 0, "#800000"), col("green", "Green", 1, GREEN), col("gold", "Gold", 7, "#B8862B")] },
+      col("maroon", "Maroon", 0, MAROON), col("green", "Green", 1, GREEN), col("gold", "Gold", 7, "#B8862B")] },
     { id: "boots", slot: "feet", name: "Snow boots", box: "62 212 76 40", colours: [
       col("brown", "Brown", 5, "#5A3A22"), col("red", "Red", 6, "#A3202F"), col("blue", "Blue", 8, BLUE)] },
     { id: "wellies", slot: "feet", name: "Wellies", box: "62 200 76 52", colours: [
@@ -275,30 +278,42 @@
 
   // ---- drawing: shared parts ---------------------------------------------------------------
 
-  var DEFS =
-    "<defs>" +
-    pattern("ew-stp", 14, 10, '<rect width="14" height="10" fill="' + CREAM + '"/><rect width="14" height="5" fill="' + RED + '"/>') +
-    scarfPattern("red", RED) + scarfPattern("green", GREEN) + scarfPattern("blue", BLUE) +
-    tartanPattern("red", "#A3202F", GREEN, "#E9C46A") + tartanPattern("green", GREEN, RED, "#E9C46A") + tartanPattern("blue", BLUE, GREEN, CREAM) +
-    checkPattern("tan", "#C9A26B", "#9C7A48") + checkPattern("grey", "#A9A9A0", "#6B6B64") + checkPattern("green", "#7E9A66", "#55703F") + checkPattern("gold", GOLD, GOLD_D) +
-    "</defs>";
+  // Stripes, checks and tartans are SVG patterns, and a pattern is found by its id. On a page that
+  // holds several drawings the first element with an id wins, so if every drawing carried the same
+  // ids, one hidden drawing would take the stripes off all the others. So the patterns are kept
+  // here by name, and svg() gives each drawing only the ones it uses, under ids of its own.
+  var PATTERNS = {};
 
   function pattern(id, w, h, inner) {
-    return '<pattern id="' + id + '" width="' + w + '" height="' + h + '" patternUnits="userSpaceOnUse">' + inner + "</pattern>";
+    PATTERNS[id] = { w: w, h: h, inner: inner };
   }
 
   function scarfPattern(key, fill) {
-    return pattern("ew-sc-" + key, 10, 20, '<rect width="10" height="20" fill="' + fill + '"/><rect width="5" height="20" fill="' + CREAM + '"/>');
+    pattern("ew-sc-" + key, 10, 20, '<rect width="10" height="20" fill="' + fill + '"/><rect width="5" height="20" fill="' + CREAM + '"/>');
   }
 
-  function tartanPattern(key, base, thick, thin) {
-    return pattern("ew-tt-" + key, 12, 12,
-      '<rect width="12" height="12" fill="' + base + '"/><path d="M0 6h12M6 0v12" stroke="' + thick + '" stroke-width="3"/><path d="M0 2h12M2 0v12" stroke="' + thin + '" stroke-width="1"/>');
+  // The lines over a tartan are kept thin, so the cloth's own colour carries it: with thick lines
+  // the red tartan and the green one came out much the same brown.
+  function tartanPattern(key, base, over, thin) {
+    pattern("ew-tt-" + key, 12, 12,
+      '<rect width="12" height="12" fill="' + base + '"/><path d="M0 6h12M6 0v12" stroke="' + over + '" stroke-width="1.5"/><path d="M0 2h12M2 0v12" stroke="' + thin + '" stroke-width="0.8"/>');
   }
 
   function checkPattern(key, base, line) {
-    return pattern("ew-ck-" + key, 8, 8, '<rect width="8" height="8" fill="' + base + '"/><path d="M0 4h8M4 0v8" stroke="' + line + '" stroke-width="1.5"/>');
+    pattern("ew-ck-" + key, 8, 8, '<rect width="8" height="8" fill="' + base + '"/><path d="M0 4h8M4 0v8" stroke="' + line + '" stroke-width="1.5"/>');
   }
+
+  pattern("ew-stp", 14, 10, '<rect width="14" height="10" fill="' + CREAM + '"/><rect width="14" height="5" fill="' + RED + '"/>');
+  scarfPattern("red", RED);
+  scarfPattern("green", GREEN);
+  scarfPattern("blue", BLUE);
+  tartanPattern("red", "#A3202F", GREEN, "#E9C46A");
+  tartanPattern("green", GREEN, RED, "#E9C46A");
+  tartanPattern("blue", BLUE, GREEN, CREAM);
+  checkPattern("tan", "#C9A26B", "#9C7A48");
+  checkPattern("grey", "#A9A9A0", "#6B6B64");
+  checkPattern("green", "#7E9A66", "#55703F");
+  checkPattern("gold", GOLD, GOLD_D);
 
   var LEGS = '<rect x="80" y="198" width="14" height="40" fill="url(#ew-stp)"/><rect x="106" y="198" width="14" height="40" fill="url(#ew-stp)"/>';
 
@@ -325,24 +340,29 @@
   }
 
   // Hair is drawn in two passes: the part behind the head, then the part in front of the face.
-  function hairBack(style, fill) {
-    if (style === "bunches") return '<circle cx="50" cy="124" r="14" fill="' + fill + '"/><circle cx="150" cy="124" r="14" fill="' + fill + '"/>';
-    if (style === "curly") return '<circle cx="54" cy="96" r="13" fill="' + fill + '"/><circle cx="146" cy="96" r="13" fill="' + fill + '"/>';
+  // `hair` is a hair colour from the catalogue. Every part of the hair is drawn with a darker edge:
+  // brown hair on a brown face is nearly one colour, and the edge is what shows the hair is there.
+  function hairGroup(hair, shapes) {
+    return '<g fill="' + hair.hex + '" stroke="' + hair.dark + '" stroke-width="1.6" stroke-linejoin="round">' + shapes + "</g>";
+  }
+
+  function hairBack(style, hair) {
+    if (style === "bunches") return hairGroup(hair, '<circle cx="50" cy="124" r="14"/><circle cx="150" cy="124" r="14"/>');
+    if (style === "curly") return hairGroup(hair, '<circle cx="54" cy="96" r="13"/><circle cx="146" cy="96" r="13"/>');
     return "";
   }
 
-  function hairFront(style, fill) {
+  function hairFront(style, hair) {
     if (style === "curly") {
-      return '<g fill="' + fill + '"><circle cx="62" cy="76" r="13"/><circle cx="76" cy="62" r="13"/><circle cx="92" cy="55" r="13"/><circle cx="108" cy="55" r="13"/><circle cx="124" cy="62" r="13"/><circle cx="138" cy="76" r="13"/></g>';
+      return hairGroup(hair, '<circle cx="62" cy="76" r="13"/><circle cx="76" cy="62" r="13"/><circle cx="92" cy="55" r="13"/><circle cx="108" cy="55" r="13"/><circle cx="124" cy="62" r="13"/><circle cx="138" cy="76" r="13"/>');
     }
-    var fringe = '<path d="M58 90Q58 52 100 50q42 2 42 40-12-14-28-10-14-12-28 0-16-6-28 10z" fill="' + fill + '"/>';
+    var fringe = '<path d="M58 90Q58 52 100 50q42 2 42 40-12-14-28-10-14-12-28 0-16-6-28 10z"/>';
     if (style === "bunches") {
-      return fringe + '<circle cx="57" cy="112" r="5" fill="' + RED + '"/><circle cx="143" cy="112" r="5" fill="' + RED + '"/>';
+      return hairGroup(hair, fringe) + '<circle cx="57" cy="112" r="5" fill="' + RED + '"/><circle cx="143" cy="112" r="5" fill="' + RED + '"/>';
     }
     // Short hair comes down beside the face. A hat is always worn and covers the fringe, so without
     // these two tufts the hair colour a child picks would not show at all.
-    return fringe +
-      '<path d="M55.5 88h13q1 16-6 28-6-9-7-28z" fill="' + fill + '"/><path d="M144.5 88h-13q-1 16 6 28 6-9 7-28z" fill="' + fill + '"/>';
+    return hairGroup(hair, fringe + '<path d="M55.5 88h13q1 16-6 28-6-9-7-28z"/><path d="M144.5 88h-13q-1 16 6 28 6-9 7-28z"/>');
   }
 
   function star(x, y, fill, stroke) {
@@ -461,7 +481,7 @@
     // bell on the hat. It has to look different from the starter pieces, or putting it on would
     // seem to do nothing.
     workshop: function (a) {
-      return LEGS + PIECES.curly({ fill: "#800000" }) + PIECES.tunic({ fill: GREEN }) + sleeves(GREEN) +
+      return LEGS + PIECES.curly({ fill: MAROON }) + PIECES.tunic({ fill: GREEN }) + sleeves(GREEN) +
         '<path d="M84 148h32l10 30v20q-26 8-52 0v-20z" fill="#C9A26B" stroke="#9C7A48" stroke-width="2" stroke-linejoin="round"/><path d="M74 178h52" stroke="#9C7A48" stroke-width="3"/>' +
         '<rect x="89" y="182" width="22" height="13" rx="3" fill="#B58C55" stroke="#9C7A48" stroke-width="1.5"/><path d="M105 185l3-12" stroke="#E9C46A" stroke-width="3" stroke-linecap="round"/><path d="M108 173l1-4" stroke="' + INK + '" stroke-width="3" stroke-linecap="round"/>' +
         hands(a.skin) +
@@ -470,14 +490,14 @@
         '<circle cx="142" cy="16" r="9" fill="#E9C46A" stroke="#B8862B" stroke-width="1.5"/><path d="M137 18h10" stroke="#B8862B" stroke-width="1.5" stroke-linecap="round"/>';
     },
     present: function (a) {
-      return LEGS + PIECES.curly({ fill: "#800000" }) +
+      return LEGS + PIECES.curly({ fill: MAROON }) +
         '<path d="M62 150L44 178M138 150l18 28" stroke="' + RED + '" stroke-width="12" stroke-linecap="round"/><circle cx="42" cy="182" r="8" fill="' + a.skin + '"/><circle cx="158" cy="182" r="8" fill="' + a.skin + '"/>' +
         '<rect x="56" y="130" width="88" height="96" rx="4" fill="' + RED + '"/><rect x="94" y="130" width="12" height="96" fill="#E9C46A"/><rect x="56" y="170" width="88" height="12" fill="#E9C46A"/><path d="M126 186l14 6-4 12-14-6z" fill="' + CREAM + '" stroke="#B8862B" stroke-width="1.5"/>' +
         elfHead(a) +
         '<path d="M100 50c-14-20-40-18-36-2 3 10 24 8 36 2zM100 50c14-20 40-18 36-2-3 10-24 8-36 2z" fill="#E9C46A" stroke="#B8862B" stroke-width="2"/><path d="M96 54l-10 18M104 54l10 18" stroke="#E9C46A" stroke-width="5" stroke-linecap="round"/><circle cx="100" cy="51" r="6" fill="#B8862B"/>';
     },
     tree: function (a) {
-      return LEGS + PIECES.curly({ fill: "#800000" }) +
+      return LEGS + PIECES.curly({ fill: MAROON }) +
         '<rect x="80" y="204" width="40" height="8" rx="2" fill="#6E4429"/><path d="M83 212h34l-3 18H86z" fill="#8B5A3C"/>' +
         '<path d="M100 98L172 210H28z" fill="#245A27"/><path d="M100 50L162 146H38z" fill="#2E6B30"/><path d="M100 18L148 88H52z" fill="#357A37"/>' +
         '<path d="M46 138q54 22 108 0M36 198q64 24 128 0" fill="none" stroke="#E9C46A" stroke-width="3" stroke-dasharray="2 5" stroke-linecap="round"/>' +
@@ -566,7 +586,7 @@
   function appearance(look) {
     return {
       skin: find(SKIN_TONES, look.skin).hex,
-      hair: find(HAIR_COLOURS, look.hair).hex,
+      hair: find(HAIR_COLOURS, look.hair),
       hairStyle: look.hairStyle
     };
   }
@@ -583,16 +603,45 @@
     if (look.outfit) return OUTFIT_DRAW[look.outfit](a);
     var p = look.pieces;
     var top = colourOf(styleOf(p.top[0]), p.top[1]);
-    return LEGS + layer(p.feet) + layer(p.top) + sleeves(top.fill) + hands(a.skin) +
-      (p.extra && p.extra[0] === "satchel" ? layer(p.extra) : "") +
-      (p.extra && p.extra[0] === "badge" ? layer(p.extra) : "") +
+    // Every slot is drawn through layer(), so anything added to the catalogue is drawn too.
+    return LEGS + layer(p.feet) + layer(p.top) + sleeves(top.fill) + hands(a.skin) + layer(p.extra) +
       hairBack(a.hairStyle, a.hair) + ears(a.skin) + head(a.skin) + FACE + layer(p.face) + hairFront(a.hairStyle, a.hair) +
       layer(p.neck) + layer(p.hat) + layer(p.hand);
   }
 
-  function svg(viewBox, width, height, label, inner) {
+  function escapeText(value) {
+    return String(value).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+  }
+
+  // A short code made from a drawing, for a drawing that is not given a key of its own. The same
+  // drawing always gets the same code, so the same elf is always drawn the same way.
+  function codeOf(text) {
+    var hash = 0x811c9dc5;
+    for (var i = 0; i < text.length; i++) {
+      hash ^= text.charCodeAt(i);
+      hash = (hash * 0x01000193) >>> 0;
+    }
+    return "e" + hash.toString(36);
+  }
+
+  // The finished SVG. It carries only the patterns this drawing uses, under ids that end in `key`,
+  // so that many drawings can share a page (see PATTERNS above). `label` is plain words.
+  function svg(viewBox, width, height, label, inner, key) {
+    var own = String(key || "").replace(/[^A-Za-z0-9_-]/g, "") || codeOf(inner);
+    var used = [];
+    var body = inner.replace(/url\(#(ew-[a-z-]+)\)/g, function (whole, id) {
+      if (!PATTERNS[id]) return whole;
+      if (used.indexOf(id) < 0) used.push(id);
+      return "url(#" + id + "-" + own + ")";
+    });
+    var defs = "";
+    for (var i = 0; i < used.length; i++) {
+      var p = PATTERNS[used[i]];
+      defs += '<pattern id="' + used[i] + "-" + own + '" width="' + p.w + '" height="' + p.h + '" patternUnits="userSpaceOnUse">' + p.inner + "</pattern>";
+    }
     return '<svg xmlns="http://www.w3.org/2000/svg" width="' + width + '" height="' + height + '" viewBox="' + viewBox + '"' +
-      (label ? ' role="img" aria-label="' + label + '"' : ' aria-hidden="true"') + ">" + DEFS + inner + "</svg>";
+      (label ? ' role="img" aria-label="' + escapeText(label) + '"' : ' aria-hidden="true"') + ">" +
+      (defs ? "<defs>" + defs + "</defs>" : "") + body + "</svg>";
   }
 
   function sizeOf(value, fallback) {
@@ -600,13 +649,19 @@
     return n < 16 ? 16 : n > 2000 ? 2000 : n;
   }
 
-  /** The whole elf as an SVG string. `state` is what the detective has unlocked; `opts` is
-   *  { size (width in pixels), backdrop (true by default), label (already safe words) }. */
+  /** The whole elf as an SVG string. `state` is what the detective has unlocked. `opts` is:
+   *    size      the width in pixels (the height follows);
+   *    backdrop  the pale circle behind the elf, on unless false;
+   *    label     the words a screen reader says, such as whose elf it is. They are made safe here.
+   *              False for an elf that is decoration. Left out, it says "Elf detective";
+   *    key       a short name that is this drawing's alone on the page. Give one whenever several
+   *              elves are put into one page as SVG, so that their patterns keep apart. */
   function drawElf(look, state, opts) {
     var o = opts || {};
     var safe = normaliseLook(look, state);
     var width = sizeOf(o.size, 210);
-    return svg("0 0 200 260", width, Math.round(width * 1.3), o.label === false ? "" : "Elf detective", (o.backdrop === false ? "" : BACKDROP) + figure(safe));
+    var label = o.label === false ? "" : typeof o.label === "string" && o.label ? o.label : "Elf detective";
+    return svg("0 0 200 260", width, Math.round(width * 1.3), label, (o.backdrop === false ? "" : BACKDROP) + figure(safe), o.key);
   }
 
   /** One piece on its own, cropped close, for a wardrobe tile. Empty for anything unknown. */
@@ -616,7 +671,7 @@
     if (!style || !colour) return "";
     var inner = PIECES[style.id](colour) + (style.slot === "top" ? sleeves(colour.fill) : "");
     var px = sizeOf(size, 40);
-    return svg(style.box, px, px, "", inner);
+    return svg(style.box, px, px, "", inner, style.id + "-" + colour.id);
   }
 
   /** One outfit on a plain elf, for a wardrobe tile. Empty for anything unknown. */
@@ -624,8 +679,21 @@
     if (!outfitOf(outfitId)) return "";
     var base = normaliseLook(look, { doorsDone: 0 });
     var px = sizeOf(size, 58);
-    return svg("0 0 200 260", px, Math.round(px * 1.3), "", OUTFIT_DRAW[outfitId](appearance(base)));
+    return svg("0 0 200 260", px, Math.round(px * 1.3), "", OUTFIT_DRAW[outfitId](appearance(base)), outfitId);
   }
+
+  // Nothing that reads the catalogue can change it: a slip that set one door number to nought
+  // would hand that piece to everyone.
+  function freeze(value) {
+    if (value && typeof value === "object" && !Object.isFrozen(value)) {
+      Object.freeze(value);
+      for (var name in value) {
+        if (Object.prototype.hasOwnProperty.call(value, name)) freeze(value[name]);
+      }
+    }
+    return value;
+  }
+  [SKIN_TONES, HAIR_COLOURS, HAIR_STYLES, SLOTS, STYLES, OUTFITS, STARTER, PATTERNS].forEach(freeze);
 
   var api = {
     DOORS: DOORS,

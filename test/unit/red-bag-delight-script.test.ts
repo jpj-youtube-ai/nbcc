@@ -37,17 +37,25 @@ const example = (key: string) => $<HTMLButtonElement>(`[data-rb-example="${key}"
 const bags = () => $$("[data-rb-bags] .rb-bag");
 const drops = () => $$(".rb-drop");
 const note = () => $(".rb-note");
-const peeks = (bag: Element) => [...bag.querySelectorAll("[data-rb-peek]")].map((p) => p.getAttribute("data-rb-peek"));
+// What peeks out of a bag, the FRONT place first (the newest), then the one before it, and so on.
+const peekEls = (bag: Element) => [...bag.querySelectorAll("[data-rb-peek]")].sort((a, b) => Number(a.getAttribute("data-rb-slot")) - Number(b.getAttribute("data-rb-slot")));
+const peeks = (bag: Element) => peekEls(bag).map((p) => p.getAttribute("data-rb-peek"));
+// The same, as they are drawn: the last one drawn is on top.
+const drawn = (bag: Element) => [...bag.querySelectorAll("[data-rb-peek]")].map((p) => p.getAttribute("data-rb-peek"));
+const sinking = (bag: Element) => [...bag.querySelectorAll(".rb-peek.is-leaving")];
+const flurries = () => $$(".rb-flurry");
 
 let fetchMock: ReturnType<typeof vi.fn>;
 let api: ReturnType<typeof initRedBag>;
 let watchers: Array<{ el: Element | null; say: (onScreen: boolean) => void }>;
 
-function start(opts: { reduce?: boolean; catalogue?: Record<string, unknown> } = {}) {
+function start(opts: { reduce?: boolean; catalogue?: Record<string, unknown>; width?: number } = {}) {
   const html = renderRedBagPage(template, { preview: false });
   const parsed = new DOMParser().parseFromString(html, "text/html");
   document.body.innerHTML = parsed.body.innerHTML;
   document.body.classList.remove("rb-bar-on");
+  // The details step asks for the payment script once; a test that went there must not leave it for the next.
+  document.getElementById("stripe-js-sdk")?.remove();
   fetchMock = vi.fn(async () => ({ ok: true, status: 200, json: async () => ({ url: "https://checkout.stripe.test/pay" }) }));
   watchers = [];
   class Observer {
@@ -67,6 +75,7 @@ function start(opts: { reduce?: boolean; catalogue?: Record<string, unknown> } =
     addEventListener: () => undefined,
     fetch: fetchMock,
     innerHeight: 800,
+    innerWidth: opts.width ?? 1280,
     location: { href: "", pathname: "/fill", search: "" },
     sessionStorage: { getItem: (k: string) => store.get(k) ?? null, setItem: (k: string, v: string) => void store.set(k, v), removeItem: (k: string) => void store.delete(k) },
     matchMedia: (q: string) => ({ matches: !!opts.reduce && /prefers-reduced-motion/.test(q) }),
@@ -249,21 +258,174 @@ describe("what peeks out of the bag", () => {
     expect(holder.querySelectorAll("svg.rb-art").length).toBe(1);
   });
 
-  it("follows the bag: more as it fills, three at most, and each gone when its item is taken out", () => {
+  // The owner, 5 October 2026: "the prizes at the top of the bag should be the last (latest) item(s)
+  // to be added, not the first".
+  it("shows the LATEST things added, the newest in the front place and drawn on top", () => {
+    // 40 pencils (£4) take the bag past... nothing: three places need half a bag, so fill it first.
+    type("pyjamas", "5");
+    leave("pyjamas");
+    plus("socks");
+    plus("book");
+    plus("soft-toy");
+    expect(api!.total()).toBe(3300);
+    const bag = bags()[0];
+    expect(peeks(bag)).toEqual(["soft-toy", "book", "socks"]);
+    // The newest is drawn last, so it is the one on top where two overlap.
+    expect(drawn(bag)).toEqual(["socks", "book", "soft-toy"]);
+    plus("blanket");
+    expect(peeks(bag)).toEqual(["blanket", "soft-toy", "book"]);
+    expect(drawn(bag)).toEqual(["book", "soft-toy", "blanket"]);
+  });
+
+  it("moves an item to the front again when more of it is added", () => {
+    type("pyjamas", "5");
+    leave("pyjamas");
+    plus("socks");
+    plus("book");
+    plus("soft-toy");
+    plus("socks");
+    expect(peeks(bags()[0])).toEqual(["socks", "soft-toy", "book"]);
+    expect(drawn(bags()[0])).toEqual(["book", "soft-toy", "socks"]);
+    // More of the one already at the front: nothing moves, and it is still there once.
+    plus("socks");
+    expect(peeks(bags()[0])).toEqual(["socks", "soft-toy", "book"]);
+  });
+
+  it("keeps the order when one is taken out of an item that still has some left", () => {
+    type("pyjamas", "5");
+    leave("pyjamas");
+    plus("socks", 2);
+    plus("book");
+    plus("soft-toy");
+    minus("socks");
+    expect(peeks(bags()[0])).toEqual(["soft-toy", "book", "socks"]);
+  });
+
+  it("drops an item's peek when the last one is taken out, and the next most recent takes the free place", () => {
+    type("pyjamas", "5");
+    leave("pyjamas");
+    plus("socks");
+    plus("book");
+    plus("soft-toy");
+    expect(peeks(bags()[0])).toEqual(["soft-toy", "book", "socks"]);
+    minus("book");
+    expect(peeks(bags()[0])).toEqual(["soft-toy", "socks", "pyjamas"]);
+    // The one that came back is the oldest showing, so it is drawn underneath.
+    expect(drawn(bags()[0])).toEqual(["pyjamas", "socks", "soft-toy"]);
+  });
+
+  it("follows the arrow keys and a typed number once the typing has stopped", () => {
+    type("pyjamas", "5");
+    leave("pyjamas");
+    plus("socks");
+    box("book").value = "0";
+    box("book").dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowUp", bubbles: true }));
+    expect(peeks(bags()[0])).toEqual(["book", "socks", "pyjamas"]);
+    // A typed increase counts once it is finished: when the typing stops, or the box is left.
+    type("socks", "3");
+    expect(peeks(bags()[0])).toEqual(["book", "socks", "pyjamas"]);
+    vi.advanceTimersByTime(500);
+    expect(peeks(bags()[0])).toEqual(["socks", "book", "pyjamas"]);
+    type("pyjamas", "6");
+    leave("pyjamas");
+    expect(peeks(bags()[0])).toEqual(["pyjamas", "socks", "book"]);
+  });
+
+  it("does not reorder for a number retyped lower, even by way of an empty box", () => {
+    type("pyjamas", "5");
+    leave("pyjamas");
+    plus("socks");
+    expect(peeks(bags()[0])).toEqual(["socks", "pyjamas"]);
+    type("pyjamas", "");
+    // Nothing of it in the bag just now, so it does not peek.
+    expect(peeks(bags()[0])).toEqual(["socks"]);
+    type("pyjamas", "4");
+    leave("pyjamas");
+    // 5 became 4: one taken out with some left. The socks are still the latest.
+    expect(api!.total()).toBe(2100);
+    expect(peeks(bags()[0])).toEqual(["socks", "pyjamas"]);
+    // And typed back up again, it is the latest.
+    type("pyjamas", "");
+    type("pyjamas", "6");
+    vi.advanceTimersByTime(500);
+    expect(peeks(bags()[0])).toEqual(["pyjamas", "socks"]);
+  });
+
+  it("shows more as the bag fills, three at most, each item once, and only things that are in the bag", () => {
     plus("blanket");
     plus("book");
-    expect(peeks(bags()[0])).toEqual(["blanket"]);
+    expect(peeks(bags()[0])).toEqual(["book"]);
     plus("headphones");
-    expect(peeks(bags()[0])).toEqual(["blanket", "headphones"]);
+    expect(peeks(bags()[0])).toEqual(["headphones", "book"]);
     plus("toy");
-    expect(peeks(bags()[0])).toEqual(["blanket", "headphones", "toy"]);
+    expect(peeks(bags()[0])).toEqual(["toy", "headphones", "book"]);
     type("socks", "10");
+    leave("socks");
     plus("pencil");
-    expect(peeks(bags()[0]).length).toBe(3);
-    expect(peeks(bags()[0])).toContain("blanket");
-    minus("blanket");
-    expect(peeks(bags()[0])).not.toContain("blanket");
+    plus("pencil");
+    expect(peeks(bags()[0])).toEqual(["pencil", "socks", "toy"]);
+    minus("pencil");
+    minus("pencil");
+    expect(peeks(bags()[0])).toEqual(["socks", "toy", "headphones"]);
     for (const key of peeks(bags()[0])) expect(Number(box(key!).value)).toBeGreaterThan(0);
+  });
+
+  it("shows the latest things in the NEW bag when one has filled: the bags are one bag", () => {
+    type("pyjamas", "9");
+    leave("pyjamas");
+    plus("socks");
+    plus("book");
+    expect(api!.total()).toBe(4900);
+    expect(peeks(bags()[0])).toEqual(["book", "socks", "pyjamas"]);
+    plus("soft-toy");
+    // £53: the first bag is tied, and the second has just started.
+    expect(bags().length).toBe(2);
+    expect(peeks(bags()[0])).toEqual([]);
+    expect(peeks(bags()[1])).toEqual(["soft-toy"]);
+    type("toy", "4");
+    leave("toy");
+    plus("blanket");
+    expect(api!.total()).toBe(8100);
+    expect(peeks(bags()[1])).toEqual(["blanket", "toy", "soft-toy"]);
+  });
+
+  it("swaps naturally: the new one pops up, the oldest sinks and is cleared away, and the others slide along", () => {
+    type("pyjamas", "5");
+    leave("pyjamas");
+    plus("socks");
+    plus("book");
+    vi.advanceTimersByTime(1000);
+    const bag = bags()[0];
+    const [book, socks, pyjamas] = peekEls(bag) as HTMLElement[];
+    expect(peeks(bag)).toEqual(["book", "socks", "pyjamas"]);
+    const bookWas = book.style.transform;
+    const socksWas = socks.style.transform;
+    plus("soft-toy");
+    // The two that stay are the SAME drawings, moved along one place (so they slide, not blink).
+    const now = peekEls(bag) as HTMLElement[];
+    expect(peeks(bag)).toEqual(["soft-toy", "book", "socks"]);
+    expect(now[1]).toBe(book);
+    expect(now[2]).toBe(socks);
+    expect(book.style.transform).toBe(socksWas);
+    expect(book.style.transform).not.toBe(bookWas);
+    expect(now[0].style.transform).toBe(bookWas);
+    // The oldest is on its way out: still drawn for a moment, no longer one of the peeks.
+    expect(sinking(bag)).toEqual([pyjamas]);
+    expect(pyjamas.hasAttribute("data-rb-peek")).toBe(false);
+    vi.advanceTimersByTime(299);
+    expect(sinking(bag)).toEqual([]);
+    expect(pyjamas.isConnected).toBe(false);
+    expect(bag.querySelectorAll(".rb-peek").length).toBe(3);
+  });
+
+  it("never builds up: quick taps leave three peeks and nothing sinking", () => {
+    type("pyjamas", "5");
+    leave("pyjamas");
+    for (const key of ["socks", "book", "pencil", "notebook", "socks", "book"]) plus(key);
+    expect(api!.total()).toBe(3410);
+    expect(peeks(bags()[0])).toEqual(["book", "socks", "notebook"]);
+    vi.advanceTimersByTime(300);
+    expect(bags()[0].querySelectorAll(".rb-peek").length).toBe(3);
   });
 
   it("shows nothing for examples or a round-up alone", () => {
@@ -275,6 +437,8 @@ describe("what peeks out of the bag", () => {
     plus("socks");
     minus("socks");
     expect(peeks(bags()[0])).toEqual([]);
+    vi.advanceTimersByTime(300);
+    expect(bags()[0].querySelectorAll(".rb-peek").length).toBe(0);
   });
 });
 
@@ -296,6 +460,7 @@ describe("a full bag is tied and tagged", () => {
   it("comes off again when the total drops below a full bag", () => {
     type("socks", "50");
     type("socks", "49");
+    leave("socks");
     expect(bags()[0].classList.contains("is-full")).toBe(false);
     expect(bags()[0].classList.contains("is-latest")).toBe(false);
     expect(peeks(bags()[0])).toEqual(["socks"]);
@@ -303,6 +468,7 @@ describe("a full bag is tied and tagged", () => {
 
   it("keeps the first bag tied while the second fills, with the peeks in the one that is filling", () => {
     type("socks", "60");
+    leave("socks");
     expect(bags().length).toBe(2);
     expect(bags()[0].classList.contains("is-full")).toBe(true);
     expect(bags()[0].classList.contains("is-latest")).toBe(true);
@@ -321,25 +487,98 @@ describe("a full bag is tied and tagged", () => {
   });
 });
 
+// The owner, 5 October 2026: "make the star moment across the entire page: a bigger moment".
 describe("the snow and stars", () => {
-  const flurries = () => $$(".rb-flurry");
+  const flakes = (f: Element) => [...f.querySelectorAll<HTMLElement>(".rb-flake")];
+  const lands = (flake: HTMLElement) => Number.parseFloat(flake.style.getPropertyValue("--rb-d")) + Number.parseFloat(flake.style.getPropertyValue("--rb-t"));
 
-  it("falls once at half a bag, over the bag's panel, taking no tap, and clears completely", () => {
-    type("socks", "24");
+  it("falls over the WHOLE screen at a full bag: one layer on the page itself, taking no tap, hidden from screen readers", () => {
+    type("socks", "49");
+    leave("socks");
+    vi.advanceTimersByTime(3000);
     expect(flurries().length).toBe(0);
     plus("socks");
     expect(flurries().length).toBe(1);
     const f = flurries()[0];
-    expect(f.parentElement).toBe($(".rb-panel"));
+    // Straight on the page's body, not in the bag's panel: the stylesheet fixes it to the screen.
+    expect(f.parentElement).toBe(document.body);
+    expect(f.closest(".rb-panel, [data-rb-builder], header, footer, main")).toBeNull();
     expect(f.getAttribute("aria-hidden")).toBe("true");
-    expect(f.querySelectorAll(".rb-flake").length).toBeGreaterThan(8);
-    expect(f.querySelectorAll(".rb-flake").length).toBeLessThanOrEqual(16);
-    for (const flake of f.querySelectorAll<HTMLElement>(".rb-flake")) {
-      const wait = Number.parseFloat(flake.style.getPropertyValue("--rb-d")) + Number.parseFloat(flake.style.getPropertyValue("--rb-t"));
-      expect(wait).toBeLessThanOrEqual(2.05);
+    expect(f.classList.contains("rb-flurry--full")).toBe(true);
+    expect(f.querySelectorAll("a, button, input, select, textarea, [tabindex], img, canvas, audio, video").length).toBe(0);
+    for (const svg of f.querySelectorAll("svg")) {
+      expect(svg.getAttribute("aria-hidden")).toBe("true");
+      expect(svg.getAttribute("focusable")).toBe("false");
     }
-    vi.advanceTimersByTime(2300);
+  });
+
+  it("is the big one at a full bag: many pieces, capped at sixty, stars and snow, a few larger stars, about three seconds", () => {
+    type("socks", "50");
+    const f = flurries()[0];
+    const all = flakes(f);
+    expect(all.length).toBe(56);
+    expect(all.length).toBeLessThanOrEqual(60);
+    expect(f.querySelectorAll(".rb-flake--star").length).toBeGreaterThan(15);
+    expect(f.querySelectorAll(".rb-flake--snow").length).toBeGreaterThan(15);
+    const big = f.querySelectorAll(".rb-flake--big").length;
+    expect(big).toBeGreaterThanOrEqual(3);
+    expect(big).toBeLessThanOrEqual(6);
+    for (const flake of all) expect(lands(flake)).toBeLessThanOrEqual(2.9);
+    expect(Math.max(...all.map(lands))).toBeGreaterThan(2.5);
+    // Spread across the full width, each with its own size, drift and turn.
+    const across = all.map((p) => Number.parseFloat(p.style.getPropertyValue("--rb-x")));
+    expect(Math.min(...across)).toBeLessThan(5);
+    expect(Math.max(...across)).toBeGreaterThan(95);
+    for (const name of ["--rb-w", "--rb-s", "--rb-r", "--rb-d"]) expect(new Set(all.map((p) => p.style.getPropertyValue(name))).size, name).toBeGreaterThan(8);
+  });
+
+  it("clears completely when it ends: the layer is taken out of the page", () => {
+    type("socks", "50");
+    vi.advanceTimersByTime(2850);
+    expect(flurries().length).toBe(1);
+    vi.advanceTimersByTime(200);
     expect(flurries().length).toBe(0);
+    expect($(".rb-flake")).toBeNull();
+    expect(document.body.lastElementChild?.classList.contains("rb-flurry")).toBe(false);
+  });
+
+  it("is a lighter one at half a bag: the same whole screen, fewer pieces, about two seconds", () => {
+    type("socks", "24");
+    leave("socks");
+    expect(flurries().length).toBe(0);
+    plus("socks");
+    expect(flurries().length).toBe(1);
+    const f = flurries()[0];
+    expect(f.parentElement).toBe(document.body);
+    expect(f.classList.contains("rb-flurry--half")).toBe(true);
+    expect(flakes(f).length).toBe(24);
+    for (const flake of flakes(f)) expect(lands(flake)).toBeLessThanOrEqual(2);
+    vi.advanceTimersByTime(1950);
+    expect(flurries().length).toBe(1);
+    vi.advanceTimersByTime(200);
+    expect(flurries().length).toBe(0);
+  });
+
+  it("has fewer pieces on a small screen, and the full bag is still the bigger moment there", () => {
+    start({ width: 390 });
+    type("socks", "25");
+    expect(flakes(flurries()[0]).length).toBe(16);
+    vi.advanceTimersByTime(2500);
+    type("socks", "50");
+    expect(flakes(flurries()[0]).length).toBe(34);
+    expect(flurries()[0].classList.contains("rb-flurry--full")).toBe(true);
+  });
+
+  it("falls for each further full bag", () => {
+    type("socks", "50");
+    vi.advanceTimersByTime(3500);
+    type("blanket", "6");
+    expect(api!.total()).toBe(9800);
+    expect(flurries().length).toBe(0);
+    plus("socks", 2);
+    expect(api!.total()).toBe(10000);
+    expect(flurries().length).toBe(1);
+    expect(flurries()[0].classList.contains("rb-flurry--full")).toBe(true);
   });
 
   it("does not fall again while the total goes on up past the milestone", () => {
@@ -349,33 +588,76 @@ describe("the snow and stars", () => {
     expect(flurries().length).toBe(0);
   });
 
-  it("falls again only after the total has dropped below the milestone and come back", () => {
-    type("socks", "25");
-    vi.advanceTimersByTime(3000);
+  it("does not fall on the way down", () => {
+    type("socks", "51");
+    vi.advanceTimersByTime(30000);
     minus("socks");
-    expect(flurries().length).toBe(0);
-    plus("socks");
-    expect(flurries().length).toBe(1);
-  });
-
-  it("falls at each full bag", () => {
-    type("socks", "49");
-    vi.advanceTimersByTime(3000);
-    plus("socks");
-    expect(flurries().length).toBe(1);
-    vi.advanceTimersByTime(3000);
-    type("blanket", "6");
-    expect(api!.total()).toBe(9800);
-    expect(flurries().length).toBe(0);
-    plus("socks", 2);
-    expect(api!.total()).toBe(10000);
-    expect(flurries().length).toBe(1);
-  });
-
-  it("is never doubled: one at a time", () => {
+    minus("socks");
     type("socks", "25");
+    type("socks", "10");
+    expect(flurries().length).toBe(0);
+  });
+
+  it("has a cooldown: the same milestone, crossed again within about 20 seconds, does not snow again", () => {
+    type("socks", "25");
+    expect(flurries().length).toBe(1);
+    vi.advanceTimersByTime(3000);
+    // Back and forth across £25, again and again.
+    for (let i = 0; i < 4; i += 1) {
+      minus("socks");
+      plus("socks");
+      vi.advanceTimersByTime(3000);
+    }
+    expect(flurries().length).toBe(0);
+    // 15 seconds gone. After 20 it may come again.
+    vi.advanceTimersByTime(5100);
+    minus("socks");
+    plus("socks");
+    expect(flurries().length).toBe(1);
+  });
+
+  it("lets a HIGHER milestone through during another one's cooldown", () => {
+    type("socks", "25");
+    vi.advanceTimersByTime(3000);
     type("socks", "50");
     expect(flurries().length).toBe(1);
+    expect(flurries()[0].classList.contains("rb-flurry--full")).toBe(true);
+    vi.advanceTimersByTime(3500);
+    // The full bag has its own cooldown too.
+    minus("socks");
+    plus("socks");
+    expect(flurries().length).toBe(0);
+    type("blanket", "7");
+    expect(api!.total()).toBe(10600);
+    expect(flurries().length).toBe(1);
+  });
+
+  it("is never doubled: one layer at a time, however the total jumps about", () => {
+    type("socks", "50");
+    type("socks", "49");
+    type("socks", "100");
+    type("socks", "24");
+    type("socks", "25");
+    type("socks", "99");
+    type("socks", "50");
+    expect(flurries().length).toBe(1);
+    expect($$(".rb-flake").length).toBeLessThanOrEqual(60);
+    vi.advanceTimersByTime(3100);
+    expect(flurries().length).toBe(0);
+  });
+
+  it("gives way to the bigger moment: a full bag reached while half a bag's snow is falling takes its place", () => {
+    type("socks", "25");
+    expect(flurries()[0].classList.contains("rb-flurry--half")).toBe(true);
+    vi.advanceTimersByTime(800);
+    type("socks", "50");
+    expect(flurries().length).toBe(1);
+    expect(flurries()[0].classList.contains("rb-flurry--full")).toBe(true);
+    // The first one's timer does not cut the second short.
+    vi.advanceTimersByTime(1500);
+    expect(flurries().length).toBe(1);
+    vi.advanceTimersByTime(1600);
+    expect(flurries().length).toBe(0);
   });
 
   it("falls for a round-up that reaches the milestone", () => {
@@ -384,6 +666,28 @@ describe("the snow and stars", () => {
     $<HTMLButtonElement>("[data-rb-round]").click();
     expect(api!.total()).toBe(2500);
     expect(flurries().length).toBe(1);
+  });
+
+  it("is cleared away at once when the donor moves on to their details", () => {
+    type("socks", "50");
+    expect(flurries().length).toBe(1);
+    $<HTMLButtonElement>("[data-rb-donate]").click();
+    expect($("[data-rb-details]").hidden).toBe(false);
+    expect(flurries().length).toBe(0);
+  });
+
+  it("changes nothing the donor reads or can reach while it falls", () => {
+    type("socks", "49");
+    leave("socks");
+    const add = row("socks").querySelector("[data-rb-plus]") as HTMLButtonElement;
+    add.focus();
+    add.click();
+    expect(flurries().length).toBe(1);
+    expect(document.activeElement).toBe(add);
+    expect(text("[data-rb-total]")).toBe("£50");
+    expect(text("[data-rb-donate]")).toBe("Donate £50");
+    expect($("[data-rb-bar]").contains(flurries()[0])).toBe(false);
+    expect(document.body.classList.contains("rb-flurry-on")).toBe(false);
   });
 });
 
@@ -503,15 +807,29 @@ describe("for someone who asked for less motion", () => {
     example("hand-20").click();
     expect(drops().length).toBe(0);
     expect($(".rb-flurry")).toBeNull();
+    expect($(".rb-flake")).toBeNull();
     expect($(".rb-bag.is-wobbling")).toBeNull();
     expect($("[data-rb-bar-total]").classList.contains("is-bumped")).toBe(false);
+  });
+
+  it("swaps the peeks at once: nothing lingers to sink", () => {
+    type("pyjamas", "5");
+    leave("pyjamas");
+    plus("socks");
+    plus("book");
+    plus("soft-toy");
+    expect(peeks(bags()[0])).toEqual(["soft-toy", "book", "socks"]);
+    expect(bags()[0].querySelectorAll(".rb-peek").length).toBe(3);
+    expect(sinking(bags()[0])).toEqual([]);
   });
 
   it("still changes what is shown, at once: the peek, the ribbon and tag, and the note", () => {
     plus("socks");
     expect(peeks(bags()[0])).toEqual(["socks"]);
     expect(note().classList.contains("is-on")).toBe(true);
-    type("socks", "50");
+    plus("book");
+    expect(peeks(bags()[0])).toEqual(["book"]);
+    type("socks", "47");
     expect(bags()[0].classList.contains("is-full")).toBe(true);
     expect(bags()[0].classList.contains("is-latest")).toBe(true);
     expect(bags()[0].querySelector(".rb-bag__tie")).not.toBeNull();
@@ -677,7 +995,7 @@ describe("the page works whatever happens to the feel good layer", () => {
   };
   const old = () => {
     const stub: Record<string, unknown> = { ...catalogue };
-    for (const k of ["ART", "art", "TAG_LINES", "MAX_PEEKS", "peekCount", "peekSlots", "strains", "milestoneCrossed", "NOTES", "noteKind", "noteFor", "allNotes"]) delete stub[k];
+    for (const k of ["ART", "art", "TAG_LINES", "MAX_PEEKS", "peekCount", "peekOrder", "latestPeeks", "strains", "milestoneCrossed", "FLURRY_COOLDOWN_MS", "flurryKind", "flurryDue", "flurryPlan", "NOTES", "noteKind", "noteFor", "allNotes"]) delete stub[k];
     return stub;
   };
 
@@ -693,6 +1011,20 @@ describe("the page works whatever happens to the feel good layer", () => {
     spy.mockRestore();
   });
 
+  // The catalogue as it was on 4 October 2026 (the first feel good layer), with this newer script: it
+  // has peekSlots and no latestPeeks, peekOrder or flurry plan. All off, and the page works.
+  it("with the catalogue from before the peeks and the snow changed: the whole layer is off, and the page works", () => {
+    const spy = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const stub: Record<string, unknown> = { ...catalogue, peekSlots: () => [null, null, null] };
+    for (const k of ["peekOrder", "latestPeeks", "FLURRY_COOLDOWN_MS", "flurryKind", "flurryDue", "flurryPlan"]) delete stub[k];
+    start({ catalogue: stub });
+    giving();
+    expect($(".rb-fx, .rb-drop, .rb-note, .rb-flurry, .rb-bag__peeks, .rb-bag__tie, .rb-also__icon")).toBeNull();
+    stillWorks();
+    expect(spy).not.toHaveBeenCalled();
+    spy.mockRestore();
+  });
+
   it("with only some of the layer's functions: it is all off, not half on", () => {
     const stub = old();
     stub.art = catalogue.art;
@@ -703,7 +1035,7 @@ describe("the page works whatever happens to the feel good layer", () => {
     stillWorks();
   });
 
-  for (const broken of ["peekSlots", "milestoneCrossed", "strains", "noteKind", "noteFor", "art"]) {
+  for (const broken of ["peekOrder", "latestPeeks", "milestoneCrossed", "flurryDue", "flurryKind", "flurryPlan", "strains", "noteKind", "noteFor", "art"]) {
     it(`when ${broken} throws: it is swallowed, said once in the console, and the page carries on`, () => {
       const spy = vi.spyOn(console, "error").mockImplementation(() => undefined);
       start({

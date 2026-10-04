@@ -368,8 +368,8 @@ body.rb-bar-on{padding-bottom:calc(64px + env(safe-area-inset-bottom))}
    The feel good layer (4 October 2026): a drawing of the item drops
    into the bag, things peek out of its top, an elf scribbles a note on
    the paper, the bag wobbles, a full bag is tied with a gold ribbon and
-   a tag, and a little paper snow falls at half a bag and at each full
-   one. ALL of it is decoration: it is hidden from screen readers, takes
+   a tag, and paper snow and gold stars fall across the whole screen at
+   half a bag and (the big moment) at each full one. ALL of it is decoration: it is hidden from screen readers, takes
    no tap, shifts nothing, and changes no price, total or word. It moves
    with transform and opacity only, nothing loops, and none of it moves
    for anyone who has asked for less motion (the last block).
@@ -435,6 +435,14 @@ body.rb-bar-on{padding-bottom:calc(64px + env(safe-area-inset-bottom))}
 .rb-peek__in{transform-box:fill-box;transform-origin:50% 100%;animation:rb-peek .4s cubic-bezier(.22,1,.36,1) both}
 @keyframes rb-peek{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}
 
+/* ---- the peeks are the LATEST things added (5 October 2026), the newest in the front place. When
+   a new one arrives it pops up there (above), the ones that stay slide along one place, and the
+   oldest sinks back into the bag and is cleared away. A peek's place is a transform the script
+   sets, so the slide is a transform and nothing else. ---- */
+.rb-peek{transition:transform .26s cubic-bezier(.22,1,.36,1)}
+.rb-peek.is-leaving .rb-peek__in{animation:rb-peek-out .2s cubic-bezier(.5,0,.75,.4) both}
+@keyframes rb-peek-out{from{opacity:1;transform:none}to{opacity:0;transform:translateY(14px)}}
+
 /* ---- a full bag: a gold ribbon ties the handles and a gift tag swings out ---- */
 .rb-bag__tie{opacity:0;transition:opacity .2s ease-out}
 .rb-bag.is-full .rb-bag__tie{opacity:1}
@@ -454,14 +462,22 @@ body.rb-bar-on{padding-bottom:calc(64px + env(safe-area-inset-bottom))}
 .rb-bag__tag-words{font-family:var(--rb-hand);font-size:15px;font-weight:700;fill:var(--maroon);text-anchor:middle;opacity:0}
 .rb-bag.is-latest .rb-bag__tag-words{opacity:1}
 
-/* ---- the snow and stars: about two seconds over the bag's panel, then gone ---- */
+/* ---- the snow and stars (5 October 2026): a moment across the WHOLE screen. One layer, fixed to
+   the screen, above the page, the site's header and the bottom bar (and under the payment window);
+   it takes no tap and clips what leaves it, so it can never block Donate or make the page scroll.
+   Paper snow and gold stars fall from the top of the screen to the bottom, each with its own
+   place, size, drift, turn and wait (the script sets them from the catalogue's flurryPlan): about
+   three seconds for a full bag, a lighter two for half a bag. Each piece is ONE animation of
+   transform and opacity, easing out with no bounce, and the script takes the whole layer out of
+   the page when it ends. ---- */
 .rb-panel{position:relative}
-.rb-flurry{position:absolute;inset:0;overflow:hidden;pointer-events:none;border-radius:inherit}
-.rb-flake{position:absolute;top:-26px;left:var(--rb-x,50%);width:var(--rb-w,18px);height:var(--rb-w,18px);animation:rb-fall var(--rb-t,1.5s) cubic-bezier(.3,.3,.6,1) var(--rb-d,0s) both}
+.rb-flurry{position:fixed;inset:0;z-index:1050;overflow:hidden;pointer-events:none;contain:strict}
+.rb-flake{position:absolute;top:-44px;left:var(--rb-x,50%);width:var(--rb-w,18px);height:var(--rb-w,18px);margin-left:calc(var(--rb-w,18px) / -2);pointer-events:none;will-change:transform;animation:rb-fall var(--rb-t,1.8s) cubic-bezier(.3,.3,.6,1) var(--rb-d,0s) both}
 .rb-flake svg{display:block;width:100%;height:100%;overflow:visible}
 .rb-flake__snow{fill:var(--white);stroke:var(--tan);stroke-width:1.2;stroke-linejoin:round}
 .rb-flake__star{fill:var(--gold-ink);stroke:color-mix(in srgb,var(--gold-ink) 60%,var(--maroon));stroke-width:1;stroke-linejoin:round}
-@keyframes rb-fall{0%{opacity:0;transform:translate(0,0) rotate(0deg)}12%{opacity:1}70%{opacity:1}100%{opacity:0;transform:translate(var(--rb-s,0px),290px) rotate(var(--rb-r,90deg))}}
+.rb-flake--big .rb-flake__star{stroke-width:.8}
+@keyframes rb-fall{0%{opacity:0;transform:translate3d(0,0,0) rotate(0deg)}8%{opacity:1}78%{opacity:1}100%{opacity:0;transform:translate3d(var(--rb-s,0px),calc(100vh + 60px),0) rotate(var(--rb-r,90deg))}}
 
 /* ---- the elf's note: a line in the paper's hand, written on the rule above the row just changed
    (below it for the first row under a heading), at a slight tilt. It lies over empty paper only,
@@ -495,4 +511,8 @@ body.rb-bar-on{padding-bottom:calc(64px + env(safe-area-inset-bottom))}
 @media (prefers-reduced-motion:reduce){
   .rb-bag.is-new,.rb-drop,.rb-drop__y,.rb-drop__hop,.rb-drop .rb-art,.rb-flake,.rb-bag.is-wobbling,.rb-peek__in,.rb-bag.is-full .rb-bag__bow,.rb-bag.is-full .rb-bag__tag,.rb-bar__total strong.is-bumped{animation:none}
   .rb-bag__fill,.rb-bag__tissue,.rb-step,.rb-example,.rb-remove,.rb-round,.rb-mode,.rb-paper .rb-note,.rb-bags .rb-bag__cord,.rb-bags .rb-bag__twist,.rb-bag__tie{transition:none}
+  /* the peeks change places at once, and no snow falls at all (the script makes none either) */
+  .rb-peek{transition:none}
+  .rb-peek.is-leaving{display:none}
+  .rb-flurry{display:none}
 }

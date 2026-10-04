@@ -397,31 +397,40 @@
   }
 
   /**
-   * Which items peek out of the bag that is filling, as three places (an item's key, or null).
-   * `previous` is what peeked before, `keys` the items in the bag with the newest first, `fill` how
-   * full that bag is (0 to 1). Only things in the bag ever peek; what was peeking stays where it
-   * was; a free place goes to the newest item not yet showing; an item taken out loses its peek.
+   * The items in the bag with the newest first, after ONE item's quantity has settled from `was` to
+   * `now` (5 October 2026: what peeks is the LATEST thing added, not the first). Going up puts the
+   * item at the front, whether it is new to the bag or more of one already there. Coming down with
+   * some left changes nothing. Down to none takes it off the list. A new list: `order` is untouched.
    */
-  function peekSlots(previous, keys, fill) {
-    var inBag = (keys || []).filter(function (k) {
-      return Object.prototype.hasOwnProperty.call(ART, k);
-    });
+  function peekOrder(order, key, was, now) {
+    var before = clampQuantity(was);
+    var after = clampQuantity(now);
+    var out = (order || []).slice();
+    if (after === before) return out;
+    var at = out.indexOf(key);
+    if (after <= 0) {
+      if (at !== -1) out.splice(at, 1);
+    } else if (after > before) {
+      if (at !== -1) out.splice(at, 1);
+      out.unshift(key);
+    }
+    return out;
+  }
+
+  /**
+   * Which items peek out of the bag that is filling, as three places (an item's key, or null).
+   * `order` is the items in the bag with the newest first (peekOrder), `fill` how full that bag is
+   * (0 to 1). Place 0 is the front one and holds the newest, place 1 the one before it, place 2 the
+   * one before that: as many as the bag's fill allows. Each item once, and only what has a drawing.
+   * The bags are one bag in the donor's mind, so a new bag after a full one shows the latest too.
+   */
+  function latestPeeks(order, fill) {
     var allowed = peekCount(fill);
     var out = [];
-    var shown = 0;
-    var i;
-    for (i = 0; i < MAX_PEEKS; i += 1) {
-      var was = previous ? previous[i] : null;
-      if (was && shown < allowed && inBag.indexOf(was) !== -1 && out.indexOf(was) === -1) {
-        out.push(was);
-        shown += 1;
-      } else out.push(null);
-    }
-    for (i = 0; i < inBag.length && shown < allowed; i += 1) {
-      if (out.indexOf(inBag[i]) !== -1) continue;
-      out[out.indexOf(null)] = inBag[i];
-      shown += 1;
-    }
+    (order || []).forEach(function (k) {
+      if (out.length < allowed && out.indexOf(k) === -1 && Object.prototype.hasOwnProperty.call(ART, k)) out.push(k);
+    });
+    while (out.length < MAX_PEEKS) out.push(null);
     return out;
   }
 
@@ -443,6 +452,90 @@
     var top = Math.floor(after / BAG_VALUE_PENCE) * BAG_VALUE_PENCE;
     if (top > before) return top;
     return before < HALF_BAG_PENCE && after >= HALF_BAG_PENCE ? HALF_BAG_PENCE : 0;
+  }
+
+  // The snow and stars (5 October 2026: a moment across the whole screen). A FULL bag, and each
+  // further full one, is the big moment; HALF a bag is a lighter one of the same kind. The numbers
+  // are all here: how many pieces (fewer on a small screen, never more than sixty), and how long.
+  var FLURRY_COOLDOWN_MS = 20000;
+  var FLURRY_SMALL_SCREEN = 600; // px: under this, fewer pieces
+  var FLURRIES = {
+    //       pieces: wide, small; over in (ms); the last piece sets off by (s); a fall takes (s)
+    full: { wide: 56, small: 34, ms: 2900, spread: 0.95, fall: [1.55, 1.95], big: 5, drift: 44 },
+    half: { wide: 24, small: 16, ms: 2000, spread: 0.5, fall: [1.25, 1.5], big: 2, drift: 30 },
+  };
+
+  /** Which flurry a milestone earns: "full" for each whole bag, "half" for half a bag, or "". */
+  function flurryKind(milestonePence) {
+    var m = Math.max(0, Math.floor(milestonePence || 0));
+    if (m === HALF_BAG_PENCE) return "half";
+    return m > 0 && m % BAG_VALUE_PENCE === 0 ? "full" : "";
+  }
+
+  /**
+   * Whether a milestone just crossed should have its flurry now. `firedAt` is when each milestone
+   * last had one ({ pence: time in ms }), `now` the time. The SAME milestone waits out the cooldown,
+   * so someone stepping back and forth across £25 is not snowed on again and again; a different
+   * milestone (the next bag) is not held back by it.
+   */
+  function flurryDue(milestonePence, firedAt, now) {
+    if (!flurryKind(milestonePence)) return false;
+    var last = firedAt ? firedAt[Math.floor(milestonePence)] : undefined;
+    return typeof last !== "number" || now - last >= FLURRY_COOLDOWN_MS;
+  }
+
+  /**
+   * The pieces of one flurry, for a screen `width` px wide: { ms, pieces }. `ms` is when it is all
+   * over. Each piece is { x (how far across, 0 to 100), wait and fall (seconds), drift (px sideways
+   * as it falls), turn (degrees), size (px), star (a gold star, else a paper snowflake), big (one of
+   * the few larger stars) }. Nothing is left to chance: the same numbers every time, from a fixed
+   * sequence, so every flurry is the same gentle one and wait + fall never passes `ms`.
+   */
+  function flurryPlan(kind, width) {
+    var f = Object.prototype.hasOwnProperty.call(FLURRIES, kind) ? FLURRIES[kind] : null;
+    if (!f) return { ms: 0, pieces: [] };
+    var w = Number(width) || 0;
+    var small = w > 0 && w < FLURRY_SMALL_SCREEN;
+    var n = small ? f.small : f.wide;
+    var seed = kind === "full" ? 20261205 : 20261224;
+    function next() {
+      seed = (seed * 1103515245 + 12345) % 2147483648;
+      return seed / 2147483648;
+    }
+    function round(v, to) {
+      return Math.round(v * to) / to;
+    }
+    var bigEvery = Math.floor(n / f.big);
+    var pieces = [];
+    for (var i = 0; i < n; i += 1) {
+      // Across: one in each strip of the width, so the whole screen is covered and nothing clumps.
+      // The strips are visited out of order so that neighbours do not set off together (5 shares
+      // no factor with any of the counts above, so every strip is visited exactly once).
+      var strip = (i * 5 + 3) % n;
+      var big = i % bigEvery === Math.floor(bigEvery / 2) && pieces.filter(isBig).length < f.big;
+      var star = big || i % 2 === 1;
+      var fall = f.fall[0] + next() * (f.fall[1] - f.fall[0]);
+      // The first few set off at once, so the moment answers the tap; the rest follow in a scatter.
+      var wait = i < 3 ? i * 0.02 : next() * f.spread;
+      var drift = (next() * 2 - 1) * (small ? f.drift * 0.6 : f.drift);
+      var turn = (60 + next() * 180) * (next() < 0.5 ? -1 : 1);
+      // A quarter larger on a wide screen, where there is far more room to fill.
+      var size = (big ? 30 + next() * 8 : star ? 13 + next() * 10 : 10 + next() * 12) * (small ? 1 : 1.25);
+      pieces.push({
+        x: round(((strip + 0.15 + next() * 0.7) / n) * 100, 10),
+        wait: round(Math.min(wait, f.ms / 1000 - f.fall[1]), 100),
+        fall: round(Math.min(fall, f.fall[1]), 100),
+        drift: Math.round(drift),
+        turn: Math.round(turn),
+        size: Math.round(size),
+        star: star,
+        big: big,
+      });
+    }
+    return { ms: f.ms, pieces: pieces };
+  }
+  function isBig(piece) {
+    return piece.big;
   }
 
   // The elf's notes: short lines scribbled on the paper beside the row just changed, as if an elf
@@ -566,9 +659,14 @@
     TAG_LINES: TAG_LINES,
     MAX_PEEKS: MAX_PEEKS,
     peekCount: peekCount,
-    peekSlots: peekSlots,
+    peekOrder: peekOrder,
+    latestPeeks: latestPeeks,
     strains: strains,
     milestoneCrossed: milestoneCrossed,
+    FLURRY_COOLDOWN_MS: FLURRY_COOLDOWN_MS,
+    flurryKind: flurryKind,
+    flurryDue: flurryDue,
+    flurryPlan: flurryPlan,
     NOTES: NOTES,
     noteKind: noteKind,
     noteFor: noteFor,

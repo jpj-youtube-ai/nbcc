@@ -123,10 +123,11 @@
     // --- the feel good layer -------------------------------------------------------------------
     // Decoration only, and all of it hidden from screen readers: a drawing of the item drops into
     // the bag (or into the bottom bar's total while the bag is off screen), things peek out of the
-    // bag's top, the bag wobbles, a full bag is tied with a ribbon and a tag, a little snow falls at
-    // half a bag and at each full one, and an elf scribbles a note on the paper. WHAT to show comes
-    // from the catalogue's pure functions (peekSlots, milestoneCrossed, strains, noteFor); this only
-    // applies it. It changes no sum and no word, takes no tap and never moves the focus. Everything
+    // bag's top (the latest added, the newest in front), the bag wobbles, a full bag is tied with a
+    // ribbon and a tag, paper snow and gold stars fall over the whole screen at half a bag and (the
+    // big moment) at each full one, and an elf scribbles a note on the paper. WHAT to show comes
+    // from the catalogue's pure functions (peekOrder, latestPeeks, milestoneCrossed, flurryDue,
+    // flurryPlan, strains, noteFor); this only applies it. It changes no sum and no word, takes no tap and never moves the focus. Everything
     // made here is cleared away by a timer, so nothing builds up however fast the donor taps.
     //
     // It can NEVER stop the page working. Two guards: (1) the whole layer is switched off unless the
@@ -137,7 +138,7 @@
     var delightOn =
       !!rb.NOTES &&
       !!rb.TAG_LINES &&
-      ["art", "peekSlots", "strains", "milestoneCrossed", "noteKind", "noteFor"].every(function (name) {
+      ["art", "peekOrder", "latestPeeks", "strains", "milestoneCrossed", "flurryKind", "flurryDue", "flurryPlan", "noteKind", "noteFor"].every(function (name) {
         return typeof rb[name] === "function";
       });
     var delightSaid = false;
@@ -155,35 +156,19 @@
         }
       };
     }
-    var panel = doc.querySelector(".rb-panel");
     var NAV_HEIGHT = 80; // the site's fixed header: a bag under it is not "on screen"
     var MAX_DROPS = 3; // in the air at once; a tap beyond that simply plays no drop
     var DROP_MS = 600; // as in the stylesheet
     var TYPING_MS = 450; // a typed number is finished when the typing stops this long
     var NOTE_MS = 3200;
     var NOTE_HOLD_MS = 900; // a note on one row is left alone this long before the next replaces it
-    var FLURRY_MS = 2150;
-    // Where the three peeks sit along the bag's top, and their tilt: [across, degrees].
+    var PEEK_OUT_MS = 240; // a peek that is leaving sinks for this long (as in the stylesheet), then goes
+    // Where the three peeks sit along the bag's top, and their tilt: [across, down, degrees]. The
+    // first is the FRONT place, for the newest thing: it stands a little taller than the others.
     var PEEK_AT = [
-      [25, -11],
-      [57, 3],
-      [92, 12],
-    ];
-    // The snow and stars: [across %, wait s, fall s, drift px, turn deg, size px]. Fixed, so every
-    // flurry is the same gentle one, and the last piece has landed within two seconds.
-    var FLAKES = [
-      [6, 0, 1.5, 14, 80, 18],
-      [15, 0.28, 1.45, -10, -120, 14],
-      [24, 0.1, 1.6, 8, 140, 20],
-      [33, 0.46, 1.4, -14, 90, 15],
-      [42, 0.04, 1.55, 10, -100, 17],
-      [51, 0.36, 1.5, -8, 160, 21],
-      [60, 0.16, 1.45, 12, -80, 14],
-      [69, 0.5, 1.5, -12, 110, 18],
-      [78, 0.08, 1.6, 6, -150, 16],
-      [87, 0.32, 1.4, -10, 100, 20],
-      [94, 0.2, 1.5, -16, -90, 15],
-      [47, 0.55, 1.45, 14, 130, 14],
+      [25, 34, -11],
+      [57, 36, 3],
+      [92, 37, 12],
     ];
     var SNOW =
       '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path class="rb-flake__snow" d="M12 1.5l2.6 6 6.5-.75-3.9 5.25 3.9 5.25-6.5-.75-2.6 6-2.6-6-6.5.75L6.8 12 2.9 6.75l6.5.75z"/></svg>';
@@ -192,11 +177,13 @@
 
     var ready = false; // nothing plays while the page is being set up
     var order = []; // the items in the bag, the newest first
-    var slots = [null, null, null]; // what peeks out of the bag that is filling
     var seen = {}; // each item's quantity when it was last celebrated
     var typing = {}; // a timer for each number box still being typed in
     var inTheAir = 0;
-    var flurryBox = null;
+    var flurryBox = null; // the one layer of snow and stars, while it falls
+    var flurryKind = ""; // "half" or "full", while it falls
+    var flurryTimer = null;
+    var flurryAt = {}; // when each milestone last had its snow: the cooldown
     var lastPence = 0;
     var noteEl = null;
     var noteTimer = null;
@@ -263,19 +250,53 @@
       );
     }
 
-    function peek(key, at) {
-      var g = shapes(
-        '<g class="rb-peek" transform="translate(' +
-          PEEK_AT[at][0] +
-          " 36) rotate(" +
-          PEEK_AT[at][1] +
-          ')"><g class="rb-peek__in">' +
-          rb.art(key, "", 28).replace("<svg ", '<svg x="-14" y="-16" ') +
-          "</g></g>",
-      );
-      g.setAttribute("data-rb-peek", key);
+    /** Put a peek in its place. The place is a style, so a move from one to the next can slide. */
+    function seat(g, at) {
+      g.style.transform = "translate(" + PEEK_AT[at][0] + "px," + PEEK_AT[at][1] + "px) rotate(" + PEEK_AT[at][2] + "deg)";
       g.setAttribute("data-rb-slot", String(at));
+    }
+    function peek(key, at) {
+      var g = shapes('<g class="rb-peek"><g class="rb-peek__in">' + rb.art(key, "", 28).replace("<svg ", '<svg x="-14" y="-16" ') + "</g></g>");
+      g.setAttribute("data-rb-peek", key);
+      seat(g, at);
       return g;
+    }
+    /** A peek leaves: it sinks back into the bag and is cleared away (at once, for less motion). */
+    function sink(g) {
+      g.removeAttribute("data-rb-peek");
+      g.removeAttribute("data-rb-slot");
+      if (calm()) return gone(g);
+      g.classList.add("is-leaving");
+      later(function () {
+        gone(g);
+      }, PEEK_OUT_MS);
+    }
+
+    // What peeks out of one bag: `want` is three places, the front (newest) first. A thing that
+    // stays keeps its own drawing and slides to its new place; a new one pops up; one that is no
+    // longer wanted sinks. They are drawn oldest first, so the newest is the one on top.
+    function dressPeeks(holder, want) {
+      var have = {};
+      each(holder.querySelectorAll("[data-rb-peek]"), function (g) {
+        var key = g.getAttribute("data-rb-peek");
+        if (want.indexOf(key) === -1 || have[key]) sink(g);
+        else have[key] = g;
+      });
+      var under = null;
+      for (var i = want.length - 1; i >= 0; i -= 1) {
+        var key = want[i];
+        if (!key) continue;
+        var g = have[key];
+        if (!g) {
+          g = peek(key, i);
+          holder.insertBefore(g, under ? under.nextSibling : holder.firstChild);
+        } else {
+          if (g.getAttribute("data-rb-slot") !== String(i)) seat(g, i);
+          // Only one that has become newer than its neighbours is moved (and so pops up afresh).
+          if (under && !(under.compareDocumentPosition(g) & 4)) holder.insertBefore(g, under.nextSibling);
+        }
+        under = g;
+      }
     }
 
     // The bags as they stand: the peeks in the one that is filling, the handles straining when it
@@ -287,19 +308,17 @@
       state.drawn.forEach(function (f, n) {
         if (f >= 1) newestFull = n;
       });
-      slots = rb.peekSlots(slots, order, fill);
+      // The latest things added, the newest first, leaving out anything whose number box is empty
+      // just now (half way through being retyped).
+      var slots = rb.latestPeeks(
+        order.filter(function (key) {
+          return quantities[key] > 0;
+        }),
+        fill,
+      );
       each(bagsBox.querySelectorAll(".rb-bag"), function (svg, n) {
         dress(svg);
-        var holder = svg.querySelector(".rb-bag__peeks");
-        for (var i = 0; i < slots.length; i += 1) {
-          var want = n === filling ? slots[i] : null;
-          var have = holder.querySelector('[data-rb-slot="' + i + '"]');
-          if (have && have.getAttribute("data-rb-peek") !== want) {
-            holder.removeChild(have);
-            have = null;
-          }
-          if (want && !have) holder.appendChild(peek(want, i));
-        }
+        dressPeeks(svg.querySelector(".rb-bag__peeks"), n === filling ? slots : []);
         if (n === filling && rb.strains(fill)) svg.classList.add("is-heavy");
         else svg.classList.remove("is-heavy");
         if (n === newestFull && state.drawn.length <= 3) svg.classList.add("is-latest");
@@ -307,13 +326,14 @@
       });
     }
 
-    /** Keep the list of what is in the bag, the newest first. */
+    /**
+     * Keep the list of what is in the bag, the newest first, on a FINISHED change (a plus or minus,
+     * an arrow key, a box left, or the typing stopped), and show the peeks that follow from it.
+     */
     function track(key, was, now) {
-      var at = order.indexOf(key);
-      if (now > 0 && was === 0) {
-        if (at !== -1) order.splice(at, 1);
-        order.unshift(key);
-      } else if (now === 0 && at !== -1) order.splice(at, 1);
+      if (was === now) return;
+      order = rb.peekOrder(order, key, was, now);
+      if (bagsBox) dressBags(rb.bags(total()));
     }
 
     // A small happy wobble of the bag that is filling, after `wait` seconds (as a drop lands).
@@ -382,37 +402,56 @@
       return where === "bag";
     }
 
-    // The snow and stars over the bag's panel: one flurry at a time, gone in about two seconds.
-    function flurry() {
-      if (calm() || !panel || flurryBox || step !== "bag") return;
-      var box = doc.createElement("div");
-      box.className = "rb-flurry";
-      box.setAttribute("aria-hidden", "true");
-      FLAKES.forEach(function (f, n) {
-        var piece = doc.createElement("span");
-        piece.className = "rb-flake";
-        piece.style.setProperty("--rb-x", f[0] + "%");
-        piece.style.setProperty("--rb-d", f[1] + "s");
-        piece.style.setProperty("--rb-t", f[2] + "s");
-        piece.style.setProperty("--rb-s", f[3] + "px");
-        piece.style.setProperty("--rb-r", f[4] + "deg");
-        piece.style.setProperty("--rb-w", f[5] + "px");
-        piece.innerHTML = n % 2 ? STAR : SNOW;
-        box.appendChild(piece);
-      });
-      panel.appendChild(box);
-      flurryBox = box;
-      later(function () {
-        gone(box);
-        flurryBox = null;
-      }, FLURRY_MS);
+    /** Clear the snow and stars away, whatever is left of them. */
+    function endFlurry() {
+      clearTimeout(flurryTimer);
+      flurryTimer = null;
+      gone(flurryBox);
+      flurryBox = null;
+      flurryKind = "";
     }
 
-    // The snow and stars: only when a milestone is newly crossed on the way up.
+    // The snow and stars, over the WHOLE screen: one layer on the page's body, which the stylesheet
+    // fixes to the screen above the header and the bottom bar. It takes no tap, is hidden from
+    // screen readers, and is taken out of the page when its time is up. One at a time: only the big
+    // moment (a full bag) may take the place of the lighter one (half a bag) while that is falling.
+    // Says whether it began.
+    function flurry(kind) {
+      if (calm() || !doc.body || step !== "bag") return false;
+      if (flurryBox && !(kind === "full" && flurryKind === "half")) return false;
+      var plan = rb.flurryPlan(kind, win.innerWidth || (doc.documentElement && doc.documentElement.clientWidth) || 0);
+      if (!plan || !plan.pieces || !plan.pieces.length) return false;
+      var box = doc.createElement("div");
+      box.className = "rb-flurry rb-flurry--" + kind;
+      box.setAttribute("aria-hidden", "true");
+      plan.pieces.forEach(function (p) {
+        var piece = doc.createElement("span");
+        piece.className = "rb-flake rb-flake--" + (p.star ? "star" : "snow") + (p.big ? " rb-flake--big" : "");
+        piece.style.setProperty("--rb-x", p.x + "%");
+        piece.style.setProperty("--rb-d", p.wait + "s");
+        piece.style.setProperty("--rb-t", p.fall + "s");
+        piece.style.setProperty("--rb-s", p.drift + "px");
+        piece.style.setProperty("--rb-r", p.turn + "deg");
+        piece.style.setProperty("--rb-w", p.size + "px");
+        piece.innerHTML = p.star ? STAR : SNOW;
+        box.appendChild(piece);
+      });
+      endFlurry();
+      doc.body.appendChild(box);
+      flurryBox = box;
+      flurryKind = kind;
+      flurryTimer = later(endFlurry, plan.ms + 100);
+      return true;
+    }
+
+    // The snow and stars: only when a milestone is newly crossed on the way up, and not for the
+    // same milestone again within the cooldown (someone stepping back and forth across £25).
     function milestone(pence) {
       var crossed = rb.milestoneCrossed(lastPence, pence);
       lastPence = pence;
-      if (crossed && ready) flurry();
+      if (!crossed || !ready) return;
+      var now = Date.now();
+      if (rb.flurryDue(crossed, flurryAt, now) && flurry(rb.flurryKind(crossed))) flurryAt[crossed] = now;
     }
 
     /** The example's own small drawing at the start of its line; the line's words are unchanged. */
@@ -475,6 +514,7 @@
       var before = seen[key] || 0;
       var after = quantities[key] || 0;
       seen[key] = after;
+      track(key, before, after);
       if (!ready || step !== "bag" || after === before) return;
       if (after > before) {
         var price = Number(row.getAttribute("data-pence")) || 0;
@@ -493,6 +533,7 @@
     // Every way in from the page's own code, made safe (see the top of this block).
     dressBags = safe(dressBags);
     track = safe(track);
+    endFlurry = safe(endFlurry);
     wobble = safe(wobble);
     milestone = safe(milestone);
     alsoIcon = safe(alsoIcon);
@@ -638,7 +679,6 @@
 
       function set(n, write) {
         var q = rb.clampQuantity(n);
-        track(key, quantities[key] || 0, q);
         quantities[key] = q;
         if (write) box.value = String(q);
         // They SAY they are off, and stay focusable: a button that switched itself off while it
@@ -833,6 +873,8 @@
       // The list, the themes and the bag are one section: they go and come back together.
       builder.hidden = step !== "bag";
       if (details) details.hidden = step !== "details";
+      // The snow belongs to the bag: it never falls over the donor's details.
+      if (step !== "bag") endFlurry();
       refreshBar();
     }
 

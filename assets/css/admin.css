@@ -2392,6 +2392,41 @@ textarea.fx-call-input{min-height:88px;line-height:1.5;resize:vertical;field-siz
 #view-fundraising .admin-seg:hover:not(.is-active) { color: var(--maroon); }
 #view-fundraising .admin-seg:focus-visible { outline: 3px solid var(--crimson); outline-offset: 2px; }
 
+/* ---- Get involved: one tab, five sections ----
+   The section buttons are the admin's own segmented control. They wrap onto a second line on a
+   narrow screen (no sideways scroll, no drop-down), and the page grows: nothing in the tab
+   scrolls inside a box. The old tabs' boxes, #view-events and #view-fundraising, sit inside
+   #view-get-involved, so every rule written for them still reaches their cards. */
+#giSections { display: flex; flex-wrap: wrap; width: fit-content; max-width: 100%; border-radius: 22px; margin: 0 0 16px; }
+#giSections .admin-seg { transition: background .2s, color .2s; }
+#giSections .admin-seg:hover:not(.is-active) { color: var(--maroon); }
+#giSections .admin-seg:focus-visible { outline: 3px solid var(--crimson); outline-offset: 2px; }
+#giSections .admin-seg .admin-new-pill { margin-left: 6px; }
+#view-get-involved > .admin-view-intro { margin-bottom: 20px; }
+@media (max-width: 720px) {
+  /* A finger's target: 44px tall, as the rest of the admin's buttons are on a phone. A little
+     less room either side, so the five sit on two lines at 375px rather than three. */
+  #giSections .admin-seg { min-height: 44px; padding: 8px 12px; }
+}
+@media (prefers-reduced-motion: reduce) { #giSections .admin-seg { transition: none; } }
+
+/* The kind filter sits over the status filter, each on its own line. */
+#view-fundraising .fr-bar--kind { margin: 0 0 10px; }
+#view-fundraising .fr-bar--kind + .fr-bar { margin-top: 0; }
+#frKindFilter .admin-seg { white-space: nowrap; }
+
+/* The kind of a sign up, large, on every row: the words are always on it, so the colour is never
+   the only thing saying which it is. Colours are the site's own tokens. In memory is the quietest. */
+#view-fundraising .fr-kind {
+  display: block; width: fit-content; max-width: 100%; margin: 0 0 8px 22px; padding: 6px 16px;
+  border: 1px solid transparent; border-radius: 999px;
+  font-size: .95rem; font-weight: 600; line-height: 1.3;
+}
+#view-fundraising .fr-kind[data-kind="raising"] { background: color-mix(in srgb, var(--tan) 45%, var(--cream)); color: var(--maroon); }
+#view-fundraising .fr-kind[data-kind="team"] { background: var(--holly-soft); color: var(--holly-dark); }
+#view-fundraising .fr-kind[data-kind="event"] { background: var(--maroon); color: var(--cream); }
+#view-fundraising .fr-kind[data-kind="memory"] { background: var(--cream); color: var(--slate-soft); border-color: var(--line); }
+
 /* ---- the list ---- */
 #view-fundraising .fr-table > thead > tr > th:nth-child(2),
 #view-fundraising .fr-table > tbody > tr > td:nth-child(2) { width: 120px; }

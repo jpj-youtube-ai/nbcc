@@ -109,8 +109,10 @@
               <li class="admin-nav-group" aria-hidden="true">Content</li>
               <li><button class="admin-nav-link" type="button" data-view="stories">Stories</button></li>
               <li><button class="admin-nav-link" type="button" data-view="ticker">Partners</button></li>
-              <li><button class="admin-nav-link" type="button" data-view="events">Events</button></li>
-              <li><button class="admin-nav-link" type="button" data-view="fundraising">Fundraising</button></li>
+              <!-- Get involved: NBCC's own events and community fundraising in one tab. It has no permission of
+                   its own: app.js shows it to anyone who may see Events or Fundraising, and inside it only
+                   the sections that person may see. -->
+              <li><button class="admin-nav-link" type="button" data-view="get-involved" data-view-gate-any="events fundraising">Get involved</button></li>
               <li><button class="admin-nav-link" type="button" data-view="ball">Festive Ball</button></li>
               <li><button class="admin-nav-link" type="button" data-view="contact">Contact form</button></li>
               <li><button class="admin-nav-link" type="button" data-view="newsletter">Newsletter</button></li>
@@ -1093,18 +1095,38 @@
               <div class="admin-table-wrap" id="tickerTable" aria-live="polite"><p class="admin-loading">Loading…</p></div>
             </section>
 
-            <!-- Events (TASK-453). The public /events page: a deck of cards, one per event, built here.
-                 The whole page sits behind a switch only an admin can flip; switched off, /events is a
-                 404 and no page's menu mentions it. Everything else here follows the "events" section
-                 of the permission matrix. The previews are the real renderer's output, in frames
-                 sized to their content so nothing scrolls inside them. -->
-            <section class="admin-view" id="view-events" aria-labelledby="events-heading" hidden>
-              <h2 id="events-heading">Events</h2>
-              <p class="admin-view-intro">Everything on the website&rsquo;s Events page. Each event here is one card on the page, in date order, soonest first. The morning after an event happens it moves to Past by itself.</p>
+            <!-- Get involved: the old Events (TASK-453) and Fundraising (TASK-495) tabs as one tab with five
+                 sections, one showing at a time (app.js, "Get involved: one tab, five sections"). A move, not a
+                 rewrite: every card keeps its id and its code. The two boxes below keep the old tabs' ids,
+                 #view-events and #view-fundraising, because admin.css and the card scripts look for them, and
+                 because they are still the two permission sections: app.js shows each box only to someone who
+                 may see that section. Inside them, each [data-gi-part] belongs to one section button; Settings
+                 has a part in both (the Get involved page switch is an Events thing, the rest is Fundraising).
+                 Nothing here scrolls inside a box: the section buttons wrap and the page grows. -->
+            <section class="admin-view" id="view-get-involved" aria-labelledby="get-involved-heading" hidden>
+              <h2 id="get-involved-heading">Get involved</h2>
+              <div class="admin-segmented gi-sections" id="giSections" role="group" aria-label="Which part of Get involved to show">
+                <button class="admin-seg is-active" type="button" data-gi-section="signups" aria-pressed="true">Sign-ups</button>
+                <button class="admin-seg" type="button" data-gi-section="events" aria-pressed="false">Our events</button>
+                <button class="admin-seg" type="button" data-gi-section="tickets" aria-pressed="false">Tickets and pledges</button>
+                <button class="admin-seg" type="button" data-gi-section="emails" aria-pressed="false">Emails</button>
+                <button class="admin-seg" type="button" data-gi-section="settings" aria-pressed="false">Settings</button>
+              </div>
+              <!-- One short line for the section showing. -->
+              <p class="admin-view-intro" data-gi-intro="signups">Everyone who has signed up to raise money for NBCC or hold an event for us. Nothing about a sign up is on the website until it is approved here, and every change an organiser asks for waits here for you too.</p>
+              <p class="admin-view-intro" data-gi-intro="events" hidden>NBCC&rsquo;s own events on the Get involved page. Each event here is one card on the page, in date order, soonest first. The morning after an event happens it moves to Past by itself.</p>
+              <p class="admin-view-intro" data-gi-intro="tickets" hidden>Tickets sold for supporters&rsquo; events, and sponsors&rsquo; promises to pay after an event.</p>
+              <p class="admin-view-intro" data-gi-intro="emails" hidden>Invite someone to fundraise, and read every email the website sends about fundraising and events.</p>
+              <p class="admin-view-intro" data-gi-intro="settings" hidden>What is switched on, and the lists and examples the fundraising pages use.</p>
 
+              <!-- NBCC's own events (TASK-453): the "events" section of the permission matrix. The page switch
+                   is an admin's; switched off, /get-involved is a 404 and no page's menu mentions it. The
+                   previews are the real renderer's output, in frames sized to their content. -->
+              <div id="view-events" hidden>
+                <div class="gi-part" data-gi-part="settings" role="group" aria-label="The Get involved page" hidden>
               <div class="ev-switch" id="evSwitch">
                 <div class="ev-switch-text">
-                  <h3 class="admin-subhead">Is the Events page on the website?</h3>
+                  <h3 class="admin-subhead">Is the Get involved page on the website?</h3>
                   <p class="ev-switch-state" id="evSwitchState" aria-live="polite">Checking&hellip;</p>
                   <p class="ev-switch-who" id="evSwitchWho"></p>
                 </div>
@@ -1112,7 +1134,8 @@
                 <p class="ev-switch-note" id="evSwitchNote" hidden>Only an admin can put the page on the website or take it off.</p>
               </div>
               <p class="ty-status" id="evSwitchStatus" role="status" aria-live="polite"></p>
-
+                </div>
+                <div class="gi-part" data-gi-part="events" role="group" aria-label="Our events" hidden>
               <!-- TASK-464: the Festive Ball ticket report. Counts only, twice a week, to the people
                    running the Ball with us. app.js shows it once the settings have loaded, and only
                    those who can edit Events can change it. -->
@@ -1397,7 +1420,7 @@
                       <label for="evf-showFrom">Put it on the website on</label>
                       <input type="date" id="evf-showFrom" data-evk="showFrom" class="ev-input-date" />
                     </div>
-                    <p class="ev-step-note ev-step-note--last">It only shows while the Events page itself is switched on (at the top of this screen). Every save goes in the Audit log: who changed what, and when.</p>
+                    <p class="ev-step-note ev-step-note--last">It only shows while the Get involved page itself is switched on (in Settings). Every save goes in the Audit log: who changed what, and when.</p>
                   </fieldset>
 
                   <div class="ev-problems" id="evProblems" role="alert" hidden></div>
@@ -1423,33 +1446,86 @@
               </div>
 
               <section class="ev-page-preview" id="evPagePreviewBox" aria-labelledby="evPagePrevHead" hidden>
-                <h3 id="evPagePrevHead">The Events page, as visitors would see it</h3>
+                <h3 id="evPagePrevHead">Our events on the Get involved page, as visitors would see them</h3>
                 <p id="evPagePrevNote">Every event on the page in date order, with the face down card last.</p>
-                <div id="evPageBox"><iframe class="ev-page-frame" id="evPagePreview" title="The Events page, as visitors would see it" scrolling="no"></iframe></div>
+                <div id="evPageBox"><iframe class="ev-page-frame" id="evPagePreview" title="Our events on the Get involved page, as visitors would see them" scrolling="no"></iframe></div>
               </section>
-            </section>
-
-            <!-- TASK-495: Admin > Fundraising, community fundraising stage 1 (design:
-                 docs/superpowers/specs/2026-10-02-community-fundraising-design.md; API: README,
-                 "Community fundraising (TASK-493)"). Gated on fundraising:view; changes need
-                 fundraising:edit, and the switch needs an admin as well. app.js draws the list and
-                 opens one sign up below its row, like Business supporters. Nothing here scrolls
-                 inside a box: long lists show their top items and "Show all" grows the page. -->
-            <section class="admin-view" id="view-fundraising" aria-labelledby="fundraising-heading" hidden>
-              <h2 id="fundraising-heading">Fundraising</h2>
-              <p class="admin-view-intro">Everyone who has signed up to raise money for NBCC or hold an event for us. Nothing about a sign up is on the website until it is approved here, and every change an organiser asks for waits here for you too.</p>
-
-              <div class="fr-switch" id="frSwitch">
-                <div class="fr-switch-text">
-                  <h3 class="fr-switch-title">Fundraising on the website</h3>
-                  <p class="fr-switch-state" id="frSwitchState" aria-live="polite">Checking&hellip;</p>
-                  <p class="fr-switch-who" id="frSwitchWho"></p>
                 </div>
-                <button class="btn" type="button" id="frSwitchBtn" hidden>Loading&hellip;</button>
-                <p class="fr-switch-note" id="frSwitchNote" hidden>Only an admin can switch fundraising on or off.</p>
               </div>
-              <p class="ty-status" id="frSwitchStatus" role="status" aria-live="polite"></p>
 
+              <!-- Community fundraising (TASK-495; design: docs/superpowers/specs/2026-10-02-community-fundraising-design.md;
+                   API: README, "Community fundraising (TASK-493)"). Gated on fundraising:view; changes need
+                   fundraising:edit, and the switch needs an admin as well. app.js draws the list and opens one
+                   sign up below its row, like Business supporters. Long lists show their top items and
+                   "Show all" grows the page. -->
+              <div id="view-fundraising" hidden>
+                <div class="gi-part" data-gi-part="signups" role="group" aria-label="Sign-ups" hidden>
+                  <!-- What kind of sign up: one list, filtered. app.js counts each kind and draws the same words
+                       on a large pill on every row. It works alongside the status filter under it. -->
+                  <div class="fr-bar fr-bar--kind">
+                    <div class="admin-segmented" id="frKindFilter" role="group" aria-label="Which kind of sign up to list">
+                      <button class="admin-seg is-active" type="button" data-frkind="" aria-pressed="true">All (<span data-frkindcount="all">0</span>)</button>
+                      <button class="admin-seg" type="button" data-frkind="raising" aria-pressed="false">Raising money (<span data-frkindcount="raising">0</span>)</button>
+                      <button class="admin-seg" type="button" data-frkind="team" aria-pressed="false">Teams (<span data-frkindcount="team">0</span>)</button>
+                      <button class="admin-seg" type="button" data-frkind="event" aria-pressed="false">Events (<span data-frkindcount="event">0</span>)</button>
+                      <button class="admin-seg" type="button" data-frkind="memory" aria-pressed="false">In memory (<span data-frkindcount="memory">0</span>)</button>
+                    </div>
+                  </div>
+              <div class="fr-bar">
+                <div class="admin-segmented" id="frFilter" role="group" aria-label="Which sign ups to list">
+                  <button class="admin-seg is-active" type="button" data-frfilter="" aria-pressed="true">All (<span data-frcount="all">0</span>)</button>
+                  <button class="admin-seg" type="button" data-frfilter="new" aria-pressed="false">New (<span data-frcount="new">0</span>)</button>
+                  <button class="admin-seg" type="button" data-frfilter="approved" aria-pressed="false">Approved (<span data-frcount="approved">0</span>)</button>
+                  <button class="admin-seg" type="button" data-frfilter="declined" aria-pressed="false">Declined (<span data-frcount="declined">0</span>)</button>
+                  <button class="admin-seg" type="button" data-frfilter="finished" aria-pressed="false">Finished (<span data-frcount="finished">0</span>)</button>
+                  <button class="admin-seg" type="button" data-frfilter="calls" aria-pressed="false">Calls due (<span data-frcount="calls">0</span>)</button>
+                  <button class="admin-seg" type="button" data-frfilter="requests" aria-pressed="false">Requests to do (<span data-frcount="requests">0</span>)</button>
+                  <button class="admin-seg" type="button" data-frfilter="notback" aria-pressed="false">Buckets not back (<span data-frcount="notback">0</span>)</button>
+                  <button class="admin-seg" type="button" data-frfilter="packs" aria-pressed="false">Packs to send (<span data-frcount="packs">0</span>)</button>
+                </div>
+              </div>
+              <!-- No aria-live on the list: it redraws whenever a sign up opens or saves, and a live
+                   region would read it all out again (TASK-465). Each action speaks through its own
+                   status line inside the sign up. -->
+              <div class="admin-table-wrap fr-list" id="frList"><p class="admin-loading">Loading&hellip;</p></div>
+                </div>
+                <div class="gi-part" data-gi-part="tickets" role="group" aria-label="Tickets and pledges" hidden>
+              <!-- Event tickets (Jaimie, points 23 and 24): events where NBCC sells the tickets. Drawn by its
+                   own script (assets/js/admin/event-tickets.js) and styles, apart from app.js. Approve each
+                   kind of ticket, set the limit, close or open sales, print the guest list, download the
+                   CSV, and (admins only) make a refund. Nothing scrolls inside a box. -->
+              <section class="fr-card et-admin" id="etAdmin" aria-labelledby="etAdminHead" hidden>
+                <h3 class="admin-subhead" id="etAdminHead">Event tickets</h3>
+                <p class="fr-card-intro">Events where NBCC sells the tickets, soonest first. Nothing goes on sale until you approve each kind of ticket here, and the event itself is approved and public. Ticket money is shown apart from gifts and never has Gift Aid. An organiser can only ask for a refund: an admin makes it here, and it goes back to the buyer&rsquo;s card.</p>
+                <div id="etAdminList"><p class="admin-loading">Loading&hellip;</p></div>
+                <p class="ty-status" id="etAdminStatus" role="status" aria-live="polite"></p>
+              </section>
+
+              <!-- Sponsor pledges ("Sponsor now, pay after"): every fundraiser's pledges with the sponsor's
+                   email for staff, send the pay link and cancel. The two emails to sponsors are read and
+                   approved in the All emails card: the button here opens it at "Sponsor pledges". Drawn by
+                   assets/js/admin/pledges.js. Folded, with the totals in its bar. -->
+              <section class="fr-card fr-card--fold" id="frPledges" aria-labelledby="frPledgesHead" hidden>
+                <details class="fr-fold" id="frPledgesFold">
+                  <summary class="fr-fold-bar">
+                    <span class="admin-subhead fr-fold-title" id="frPledgesHead">Sponsor pledges</span>
+                    <span class="fr-summary-state" id="frPledgesState" aria-live="polite">Checking&hellip;</span>
+                  </summary>
+                  <div class="fr-fold-body">
+                    <p class="fr-card-intro">People who chose &ldquo;Sponsor now, pay after&rdquo; on a fundraiser&rsquo;s page. A pledge is a promise, not money: it never counts on the meter until it is paid. A pledge only counts once its sponsor confirms it by email. Each sponsor is emailed a link to pay the day after the event, and one reminder a week later. Unpaid pledges lose their name and email 90 days after the pay link.</p>
+                    <div class="fr-pledges-list" id="frPledgesList"></div>
+                    <div id="frPledgesTools" hidden>
+                      <div class="fx-call-row"><button class="admin-btn admin-btn--small fr-btn-quiet" type="button" id="frPledgesSendAll">Send new pay links to everyone unpaid</button></div>
+                      <p class="fr-field-hint">Only needed if the links we already emailed have stopped working. It sends one new link to each sponsor who has had one and hasn&rsquo;t paid, under the same rules as the daily emails.</p>
+                    </div>
+                    <p class="fr-touch-due" id="frPledgesEmailsState"></p>
+                    <div class="fx-call-row fr-emails-link"><button class="admin-btn admin-btn--small fr-btn-quiet" type="button" data-allemails-open="pledges">Read and approve these in All emails</button></div>
+                    <p class="ty-status" id="frPledgesStatus" role="status" aria-live="polite"></p>
+                  </div>
+                </details>
+              </section>
+                </div>
+                <div class="gi-part" data-gi-part="emails" role="group" aria-label="Emails" hidden>
               <!-- TASK-503: the team's tools. Invite someone (editors and admins), and who gets the
                    Monday summary (admins). Both grow the page; nothing scrolls inside them. -->
               <section class="fr-card" id="frInvite" aria-labelledby="frInviteHead" hidden>
@@ -1486,25 +1562,53 @@
                 <ul class="fr-people" id="frInvites"><li class="fr-people-empty">Loading&hellip;</li></ul>
               </section>
 
-              <!-- Folded by default (Jaimie): the state line shows in the summary bar; open it to change the list. -->
-              <section class="fr-card fr-card--fold" id="frSummary" aria-labelledby="frSummaryHead" hidden>
-                <details class="fr-fold" id="frSummaryFold">
+              <!-- TASK-515: the automatic emails to organisers. Only an admin can switch them on (they
+                   ship off). Every one is read, and its new wording approved, in the All emails card
+                   below: the button here opens it at "Keeping in touch (automatic)". -->
+              <section class="fr-card" id="frTouch" aria-labelledby="frTouchHead" hidden>
+                <h3 class="admin-subhead" id="frTouchHead">Automatic emails</h3>
+                <p class="fr-summary-state" id="frTouchState" aria-live="polite">Checking&hellip;</p>
+                <p class="fr-touch-due" id="frTouchDue"></p>
+                <p class="fr-card-intro">Friendly emails that go to an organiser by themselves, from the events inbox, at the right moments: their first gift, halfway, their target, a week before and a week after their date, when you mark them finished, and a year on. Each goes once at most, only to a public page raising money, never to anyone who has asked us to stop, and never to a page in memory of someone. Read every one in All emails before switching them on. New wording only sends once it's approved there.</p>
+                <div class="fr-touch-switch">
+                  <button class="admin-btn" type="button" id="frTouchSwitch" hidden>Loading&hellip;</button>
+                  <p class="fr-field-hint" id="frTouchSwitchNote" hidden>Only an admin can switch the automatic emails on or off.</p>
+                </div>
+                <div class="fx-call-row fr-emails-link"><button class="admin-btn admin-btn--small fr-btn-quiet" type="button" data-allemails-open="touch">Read and approve these in All emails</button></div>
+                <p class="fr-field-hint">They are under &ldquo;Keeping in touch (automatic)&rdquo;. The two that go after their date, &ldquo;How did it go?&rdquo; and the thank you when you mark them finished, are under &ldquo;Finishing and paying in&rdquo;.</p>
+                <p class="ty-status" id="frTouchStatus" role="status" aria-live="polite"></p>
+              </section>
+
+              <!-- All emails: every email the fundraising, pledge, ticket and Festive Ball code sends, in
+                   ten folded groups, each one opened exactly as it would arrive. The few that are approval
+                   gated are approved here (admins only). Drawn by assets/js/admin/all-emails.js from the
+                   one catalogue (src/email/catalogue.ts). Folded, with what is waiting in its bar. Each
+                   email is as tall as it is: the page grows, and nothing scrolls inside a box. -->
+              <section class="fr-card fr-card--fold" id="frAllEmails" aria-labelledby="frAllEmailsHead" hidden>
+                <details class="fr-fold" id="frAllEmailsFold">
                   <summary class="fr-fold-bar">
-                    <span class="admin-subhead fr-fold-title" id="frSummaryHead">Weekly summary</span>
-                    <span class="fr-summary-state" id="frSummaryState" aria-live="polite">Checking&hellip;</span>
+                    <span class="admin-subhead fr-fold-title" id="frAllEmailsHead">All emails</span>
+                    <span class="fr-summary-state" id="frAllEmailsState" aria-live="polite">Checking&hellip;</span>
                   </summary>
                   <div class="fr-fold-body">
-                    <p class="fr-card-intro">Every Monday at 8am, one email to each person on this list: last week's money, new sign ups, what is waiting on us and what is coming up.</p>
-                    <ul class="fr-people" id="frSummaryList"></ul>
-                    <div class="fr-summary-add">
-                      <div class="fr-field"><label class="fx-call-label" for="frSummaryEmail">Add an email address</label><input class="fx-call-input" id="frSummaryEmail" type="email" maxlength="254" autocomplete="off" spellcheck="false" /></div>
-                      <button class="admin-btn" type="button" id="frSummaryAdd">Add to the list</button>
-                      <button class="admin-btn fr-btn-quiet" type="button" id="frSummaryTest">Send a test now</button>
-                    </div>
-                    <p class="ty-status" id="frSummaryStatus" role="status" aria-live="polite"></p>
+                    <p class="fr-card-intro">Every email the website sends about fundraising, sponsor pledges, event tickets and the Festive Ball. Open a group, then press an email to read it exactly as it arrives, with made-up names. The wording can&rsquo;t be changed here. A few emails only go once an admin has approved their wording: those say &ldquo;Waiting for sign off&rdquo; or &ldquo;Approved&rdquo;.</p>
+                    <div class="fr-emails-groups" id="frAllEmailsGroups"></div>
+                    <p class="ty-status" id="frAllEmailsStatus" role="status" aria-live="polite"></p>
                   </div>
                 </details>
               </section>
+                </div>
+                <div class="gi-part" data-gi-part="settings" role="group" aria-label="Fundraising settings" hidden>
+              <div class="fr-switch" id="frSwitch">
+                <div class="fr-switch-text">
+                  <h3 class="fr-switch-title">Fundraising on the website</h3>
+                  <p class="fr-switch-state" id="frSwitchState" aria-live="polite">Checking&hellip;</p>
+                  <p class="fr-switch-who" id="frSwitchWho"></p>
+                </div>
+                <button class="btn" type="button" id="frSwitchBtn" hidden>Loading&hellip;</button>
+                <p class="fr-switch-note" id="frSwitchNote" hidden>Only an admin can switch fundraising on or off.</p>
+              </div>
+              <p class="ty-status" id="frSwitchStatus" role="status" aria-live="polite"></p>
 
               <!-- Fundraising categories: what people choose from on the sign up form, one each, A to
                    Z with Other last. Admins only. app.js draws the lists; nothing is ever
@@ -1542,94 +1646,27 @@
                 <p class="ty-status" id="frImpactStatus" role="status" aria-live="polite" tabindex="-1"></p>
               </section>
 
-              <!-- TASK-515: the automatic emails to organisers. Only an admin can switch them on (they
-                   ship off). Every one is read, and its new wording approved, in the All emails card
-                   below: the button here opens it at "Keeping in touch (automatic)". -->
-              <section class="fr-card" id="frTouch" aria-labelledby="frTouchHead" hidden>
-                <h3 class="admin-subhead" id="frTouchHead">Automatic emails</h3>
-                <p class="fr-summary-state" id="frTouchState" aria-live="polite">Checking&hellip;</p>
-                <p class="fr-touch-due" id="frTouchDue"></p>
-                <p class="fr-card-intro">Friendly emails that go to an organiser by themselves, from the events inbox, at the right moments: their first gift, halfway, their target, a week before and a week after their date, when you mark them finished, and a year on. Each goes once at most, only to a public page raising money, never to anyone who has asked us to stop, and never to a page in memory of someone. Read every one in All emails before switching them on. New wording only sends once it's approved there.</p>
-                <div class="fr-touch-switch">
-                  <button class="admin-btn" type="button" id="frTouchSwitch" hidden>Loading&hellip;</button>
-                  <p class="fr-field-hint" id="frTouchSwitchNote" hidden>Only an admin can switch the automatic emails on or off.</p>
-                </div>
-                <div class="fx-call-row fr-emails-link"><button class="admin-btn admin-btn--small fr-btn-quiet" type="button" data-allemails-open="touch">Read and approve these in All emails</button></div>
-                <p class="fr-field-hint">They are under &ldquo;Keeping in touch (automatic)&rdquo;. The two that go after their date, &ldquo;How did it go?&rdquo; and the thank you when you mark them finished, are under &ldquo;Finishing and paying in&rdquo;.</p>
-                <p class="ty-status" id="frTouchStatus" role="status" aria-live="polite"></p>
-              </section>
-
-              <!-- Event tickets (Jaimie, points 23 and 24): events where NBCC sells the tickets. Drawn by its
-                   own script (assets/js/admin/event-tickets.js) and styles, apart from app.js. Approve each
-                   kind of ticket, set the limit, close or open sales, print the guest list, download the
-                   CSV, and (admins only) make a refund. Nothing scrolls inside a box. -->
-              <section class="fr-card et-admin" id="etAdmin" aria-labelledby="etAdminHead" hidden>
-                <h3 class="admin-subhead" id="etAdminHead">Event tickets</h3>
-                <p class="fr-card-intro">Events where NBCC sells the tickets, soonest first. Nothing goes on sale until you approve each kind of ticket here, and the event itself is approved and public. Ticket money is shown apart from gifts and never has Gift Aid. An organiser can only ask for a refund: an admin makes it here, and it goes back to the buyer&rsquo;s card.</p>
-                <div id="etAdminList"><p class="admin-loading">Loading&hellip;</p></div>
-                <p class="ty-status" id="etAdminStatus" role="status" aria-live="polite"></p>
-              </section>
-
-              <!-- Sponsor pledges ("Sponsor now, pay after"): every fundraiser's pledges with the sponsor's
-                   email for staff, send the pay link and cancel. The two emails to sponsors are read and
-                   approved in the All emails card: the button here opens it at "Sponsor pledges". Drawn by
-                   assets/js/admin/pledges.js. Folded, with the totals in its bar. -->
-              <section class="fr-card fr-card--fold" id="frPledges" aria-labelledby="frPledgesHead" hidden>
-                <details class="fr-fold" id="frPledgesFold">
+              <!-- Folded by default (Jaimie): the state line shows in the summary bar; open it to change the list. -->
+              <section class="fr-card fr-card--fold" id="frSummary" aria-labelledby="frSummaryHead" hidden>
+                <details class="fr-fold" id="frSummaryFold">
                   <summary class="fr-fold-bar">
-                    <span class="admin-subhead fr-fold-title" id="frPledgesHead">Sponsor pledges</span>
-                    <span class="fr-summary-state" id="frPledgesState" aria-live="polite">Checking&hellip;</span>
+                    <span class="admin-subhead fr-fold-title" id="frSummaryHead">Weekly summary</span>
+                    <span class="fr-summary-state" id="frSummaryState" aria-live="polite">Checking&hellip;</span>
                   </summary>
                   <div class="fr-fold-body">
-                    <p class="fr-card-intro">People who chose &ldquo;Sponsor now, pay after&rdquo; on a fundraiser&rsquo;s page. A pledge is a promise, not money: it never counts on the meter until it is paid. A pledge only counts once its sponsor confirms it by email. Each sponsor is emailed a link to pay the day after the event, and one reminder a week later. Unpaid pledges lose their name and email 90 days after the pay link.</p>
-                    <div class="fr-pledges-list" id="frPledgesList"></div>
-                    <div id="frPledgesTools" hidden>
-                      <div class="fx-call-row"><button class="admin-btn admin-btn--small fr-btn-quiet" type="button" id="frPledgesSendAll">Send new pay links to everyone unpaid</button></div>
-                      <p class="fr-field-hint">Only needed if the links we already emailed have stopped working. It sends one new link to each sponsor who has had one and hasn&rsquo;t paid, under the same rules as the daily emails.</p>
+                    <p class="fr-card-intro">Every Monday at 8am, one email to each person on this list: last week's money, new sign ups, what is waiting on us and what is coming up.</p>
+                    <ul class="fr-people" id="frSummaryList"></ul>
+                    <div class="fr-summary-add">
+                      <div class="fr-field"><label class="fx-call-label" for="frSummaryEmail">Add an email address</label><input class="fx-call-input" id="frSummaryEmail" type="email" maxlength="254" autocomplete="off" spellcheck="false" /></div>
+                      <button class="admin-btn" type="button" id="frSummaryAdd">Add to the list</button>
+                      <button class="admin-btn fr-btn-quiet" type="button" id="frSummaryTest">Send a test now</button>
                     </div>
-                    <p class="fr-touch-due" id="frPledgesEmailsState"></p>
-                    <div class="fx-call-row fr-emails-link"><button class="admin-btn admin-btn--small fr-btn-quiet" type="button" data-allemails-open="pledges">Read and approve these in All emails</button></div>
-                    <p class="ty-status" id="frPledgesStatus" role="status" aria-live="polite"></p>
+                    <p class="ty-status" id="frSummaryStatus" role="status" aria-live="polite"></p>
                   </div>
                 </details>
               </section>
-
-              <!-- All emails: every email the fundraising, pledge, ticket and Festive Ball code sends, in
-                   ten folded groups, each one opened exactly as it would arrive. The few that are approval
-                   gated are approved here (admins only). Drawn by assets/js/admin/all-emails.js from the
-                   one catalogue (src/email/catalogue.ts). Folded, with what is waiting in its bar. Each
-                   email is as tall as it is: the page grows, and nothing scrolls inside a box. -->
-              <section class="fr-card fr-card--fold" id="frAllEmails" aria-labelledby="frAllEmailsHead" hidden>
-                <details class="fr-fold" id="frAllEmailsFold">
-                  <summary class="fr-fold-bar">
-                    <span class="admin-subhead fr-fold-title" id="frAllEmailsHead">All emails</span>
-                    <span class="fr-summary-state" id="frAllEmailsState" aria-live="polite">Checking&hellip;</span>
-                  </summary>
-                  <div class="fr-fold-body">
-                    <p class="fr-card-intro">Every email the website sends about fundraising, sponsor pledges, event tickets and the Festive Ball. Open a group, then press an email to read it exactly as it arrives, with made-up names. The wording can&rsquo;t be changed here. A few emails only go once an admin has approved their wording: those say &ldquo;Waiting for sign off&rdquo; or &ldquo;Approved&rdquo;.</p>
-                    <div class="fr-emails-groups" id="frAllEmailsGroups"></div>
-                    <p class="ty-status" id="frAllEmailsStatus" role="status" aria-live="polite"></p>
-                  </div>
-                </details>
-              </section>
-
-              <div class="fr-bar">
-                <div class="admin-segmented" id="frFilter" role="group" aria-label="Which sign ups to list">
-                  <button class="admin-seg is-active" type="button" data-frfilter="" aria-pressed="true">All (<span data-frcount="all">0</span>)</button>
-                  <button class="admin-seg" type="button" data-frfilter="new" aria-pressed="false">New (<span data-frcount="new">0</span>)</button>
-                  <button class="admin-seg" type="button" data-frfilter="approved" aria-pressed="false">Approved (<span data-frcount="approved">0</span>)</button>
-                  <button class="admin-seg" type="button" data-frfilter="declined" aria-pressed="false">Declined (<span data-frcount="declined">0</span>)</button>
-                  <button class="admin-seg" type="button" data-frfilter="finished" aria-pressed="false">Finished (<span data-frcount="finished">0</span>)</button>
-                  <button class="admin-seg" type="button" data-frfilter="calls" aria-pressed="false">Calls due (<span data-frcount="calls">0</span>)</button>
-                  <button class="admin-seg" type="button" data-frfilter="requests" aria-pressed="false">Requests to do (<span data-frcount="requests">0</span>)</button>
-                  <button class="admin-seg" type="button" data-frfilter="notback" aria-pressed="false">Buckets not back (<span data-frcount="notback">0</span>)</button>
-                  <button class="admin-seg" type="button" data-frfilter="packs" aria-pressed="false">Packs to send (<span data-frcount="packs">0</span>)</button>
                 </div>
               </div>
-              <!-- No aria-live on the list: it redraws whenever a sign up opens or saves, and a live
-                   region would read it all out again (TASK-465). Each action speaks through its own
-                   status line inside the sign up. -->
-              <div class="admin-table-wrap fr-list" id="frList"><p class="admin-loading">Loading&hellip;</p></div>
             </section>
 
             <!-- Festive Ball 2026 (TASK-313). The launch controls: the gate that publishes the

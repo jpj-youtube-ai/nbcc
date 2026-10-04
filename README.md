@@ -1343,11 +1343,11 @@ hosted-Checkout redirect stays the default fallback and no-JS safety net.
 | `POST /api/fundraisers/:slug/pledges` | **implemented** | Sponsor pledges (public; "Sponsor now, pay after" on a sponsorship fundraiser's page: a promise, never money, and unconfirmed until the sponsor confirms by email. See **Sponsor pledges**) |
 | `GET` \| `POST /pledge/confirm`, `/pledge/pay`, `/pledge/cancel` | **implemented** | Sponsor pledges (the sponsor, by the signed link in an email: confirm the pledge, pay it through Stripe Checkout, or cancel it quietly. Each link only asks; a button does the thing) |
 | `GET /api/fundraise/manage/pledges`, `POST /api/fundraise/manage/fundraisers/:id/pledges/:pledgeId/cash` \| `hide` | **implemented** | Sponsor pledges (the signed in organiser: confirmed pledges by name, never emails; "Paid me in cash"; hide one from their page) |
-| `GET /api/admin/fundraising/emails/summary`, `GET /api/admin/fundraising/emails`, `GET /api/admin/fundraising/emails/:id/:version` | **implemented** | All emails (staff with fundraising view: every fundraising, pledge, ticket and Festive Ball email, listed from one catalogue and rendered with the real builders and invented sample data. Read only: approving stays with the three endpoints that already did it. See **All emails, in Admin > Fundraising**) |
+| `GET /api/admin/fundraising/emails/summary`, `GET /api/admin/fundraising/emails`, `GET /api/admin/fundraising/emails/:id/:version` | **implemented** | All emails (staff with fundraising view: every fundraising, pledge, ticket and Festive Ball email, listed from one catalogue and rendered with the real builders and invented sample data. Read only: approving stays with the three endpoints that already did it. See **All emails, in Admin > Get involved**) |
 | `GET /api/admin/fundraising/pledges`, `POST` \| `DELETE .../pledges/approvals/:key`, `POST .../pledges/send-pay-links`, `POST /api/admin/pledges/:id/send-pay-link` \| `cancel` \| `message` \| `checked` | **implemented** | Sponsor pledges (staff with fundraising: view to look, edit to act, admin to approve the two emails' wording and to send new pay links to everyone unpaid) |
 | `GET /api/fundraise/manage/fundraisers/:id/materials/:piece` | **implemented** | TASK-504 (the signed in organiser's poster, pictures to share, sponsor form or certificate, as a whole print page; only their own, approved or finished, and the certificate once finished; anyone else's is a 404, no session a `401` page, and a 404 while fundraising is off. See **Community fundraising, materials**) |
 | `GET /api/admin/fundraisers/:id/materials/:piece` | **implemented** | TASK-504 (the same pages for staff with fundraising: view, for any approved or finished fundraiser whether or not fundraising is on; the certificate as a marked preview before it is finished) |
-| `GET /api/fundraise/manage/fundraisers/:id/materials/qr-code` and `GET /api/admin/fundraisers/:id/materials/qr-code` | **implemented** | "Print the QR code": the page's own QR code on one clean A4 page, with the name (or "In memory of ..."), the code 120mm across, the web address in words under it and the charity statement (and the sharing statement, when shared). For a fundraiser or an event that has a page, approved or finished; a 404 for one with no page. From "Print your QR code" in the private area and "Print the QR code" beside the code in Admin > Fundraising (`renderQrSheet`, `src/fundraising/materials.ts`) |
+| `GET /api/fundraise/manage/fundraisers/:id/materials/qr-code` and `GET /api/admin/fundraisers/:id/materials/qr-code` | **implemented** | "Print the QR code": the page's own QR code on one clean A4 page, with the name (or "In memory of ..."), the code 120mm across, the web address in words under it and the charity statement (and the sharing statement, when shared). For a fundraiser or an event that has a page, approved or finished; a 404 for one with no page. From "Print your QR code" in the private area and "Print the QR code" beside the code in Admin > Get involved (`renderQrSheet`, `src/fundraising/materials.ts`) |
 | `GET /api/admin/fundraisers/:id/materials/everything` | **implemented** | TASK-512 (Download everything: every printed piece on one print page, each on its own paper size, plus every picture to share as a zip made in the browser; staff with fundraising: view; approved or finished; the certificate only once finished. See **Community fundraising, materials round two**) |
 | `GET /api/admin/fundraisers/:id/scans` | **implemented** | TASK-512 (each printed piece's QR code scans, `{ scans: [{ piece, code, label, scans, link }], total }`, counted once per person per day from the visit counter; staff with fundraising: view; `no-store`) |
 | `POST /api/fundraise/manage/fundraisers/:id/print-request` | **implemented** | TASK-512 (Ask us to print these: `{ kind: "posters", a4, a3 }` or `{ kind: "leaflets", a5 }`; the signed in organiser's own, from our own page, 10 an hour; makes the posters or leaflets request To send; `400` with `fields`, `401`, `403`, `404`, `409` too late, `429`) |
@@ -7234,6 +7234,79 @@ the place seam, the handler, the SQL, the route's 204s, pulse.js itself in jsdom
 carry it, the retention wiring and the privacy section). BDD: `features/analytics-pulse.feature`
 against Postgres, and the backfill scenarios in `features/admin-permissions.feature`.
 
+## Admin > Get involved: NBCC's own events and fundraising in one tab
+
+The admin's **Events** and **Fundraising** tabs are one tab, **Get involved**, named after the public
+page they both feed (`/get-involved`). It was a move, not a rewrite: every card kept its id, its code,
+its routes and its permissions. The **Festive Ball** tab is untouched.
+
+**Five sections**, one showing at a time, chosen with a row of buttons under the heading (the
+admin's own segmented control, `#giSections`; real buttons with `aria-pressed`; arrow keys, Home and
+End move along them; on a phone the row wraps onto two lines, and nothing scrolls sideways or
+inside a box). Each starts with one line saying what it is for.
+
+| Section | What is in it | Permission section |
+|---|---|---|
+| **Sign-ups** (opens first) | The list of supporters' sign ups and each one's panel, with the kind filter and the status filter | `fundraising` |
+| **Our events** | NBCC's own events: the Festive Ball ticket report card, the list, the editor and the page preview | `events` |
+| **Tickets and pledges** | Event tickets, Sponsor pledges | `fundraising` |
+| **Emails** | Invite someone, Automatic emails, All emails | `fundraising` |
+| **Settings** | "Is the Get involved page on the website?" (`events`), then Fundraising on the website, Categories, What gifts could do, Weekly summary (`fundraising`) | either |
+
+**Who sees what** is exactly as it was when they were two tabs. The menu entry shows to anyone who
+may view `events` or `fundraising` (`data-view-gate-any="events fundraising"`, read by
+`applyNavFiltering`). Inside, `giOpen` hides the section buttons a person may not see and opens on
+the first they can: someone with only `events` gets Our events and Settings (with the page switch
+alone); someone with only `fundraising` gets the other four (Settings without the page switch);
+someone with neither does not get the tab. View against edit, and the controls only an admin has,
+are decided by the same code as before. The server is still the real gate on every route.
+
+**Markup.** `#view-get-involved` is the tab. Inside it two boxes keep the old tabs' ids,
+`#view-events` and `#view-fundraising`, because `admin.css` and the card scripts are written against
+them and because they are still the two permission sections. Inside those, each `[data-gi-part]`
+belongs to one section button (`data-gi-section`); Settings has a part in both boxes.
+
+**Every old way in still works** (`selectView` in `app.js`): the names `events` and `fundraising`
+still mean something, as the server uses them for the Overview's buttons and the New pills.
+
+| Old way in | Where it lands now |
+|---|---|
+| Overview button with `view: "fundraising"` (Needs you, How we are doing, Coming up) | Get involved, Sign-ups. The button reads "Get involved" |
+| Overview button with `view: "events"` (an event coming up; "The Festive Ball ticket report goes out") | Get involved, Our events. The button reads "Get involved" |
+| A browser tab that remembered `events` or `fundraising` before this change (`nbccAdminView`) | The same two sections, if the person may still see them |
+| "Read and approve these in All emails" (Automatic emails, Sponsor pledges), "Approve it in All emails" (Invite someone), "Read its automatic emails" (an open sign up): any `[data-allemails-open]` | Emails, with the All emails card open at that group or email |
+| New pill for area `fundraising` or `events` | On the Get involved menu entry, and on the Sign-ups or Our events button. Showing Sign-ups records the visit to `fundraising`; showing Our events the visit to `events` |
+
+The section you were on is kept for the browser tab (`nbccAdminGiSection` in `sessionStorage`), so a
+refresh returns to it, as it returns to the tab.
+
+**A section loads when it is shown**, not when the tab opens, and again each time you come back to
+it. Opening the tab reads Sign-ups only (the list and what its rows and panels need). Our events
+reads the events and the Ball ticket report; Tickets and pledges its two cards
+(`event-tickets.js` and `pledges.js` watch their own part); Emails the invites, the automatic
+emails and the All emails count (`all-emails.js`; the emails themselves still wait for the card to
+be opened); Settings the two switches, Categories, What gifts could do and the Weekly summary.
+Nothing of the tab is asked for at sign in.
+
+**The kind of each sign up.** Sign ups stay one list. Each row has a large pill saying its kind, in
+words as well as colour: **Raising money**, **A team**, **Hosting an event** or **In memory** (the
+invite types' own words). `frKindOf` works it out from what the list already holds: `inMemory`
+first; then a team (`isTeam`) or a member's own page while they are on one (`teamId` and no
+`teamLeftAt`); then `path === "event"`; else raising money. Above the list, **All, Raising money,
+Teams, Events, In memory**, each with its count of every sign up. It works alongside the status
+filter (a row must pass both), and is kept for the visit: through a refresh (`nbccAdminFrKind` in
+`sessionStorage`), not past signing out. Colours are the site's tokens, all past WCAG AA for their
+text: maroon on a tan tint (7.3 to 1), dark holly on the holly tint (10.8 to 1), cream on maroon
+(10.1 to 1), and for In memory, the quietest, soft slate on cream with a hairline (4.9 to 1).
+
+**Wording.** The page has been Get involved since TASK-494, and the screen now says so: "Is the Get
+involved page on the website?", its questions and answers, and "NBCC's own events on the Get involved
+page".
+
+Tests: `test/unit/admin-get-involved-tab.test.ts` (the sections, the pills and filter, each
+permission combination, each old way in, what each section fetches and when, the wording, and the
+Ball ticket report in its new place) and `features/admin-get-involved.feature`.
+
 ## Admin > Analytics (TASK-482)
 
 Part 4 of site analytics: the page that shows the numbers TASK-479 counts. Admin > Analytics, in the
@@ -7301,7 +7374,7 @@ splits a visit and one of exactly 30 that does not).
 ## Community fundraising (TASK-493)
 
 People sign up at `/fundraise` to raise money for NBCC or to hold an event (a bake sale, a quiz).
-Staff approve every one in **Admin > Fundraising** before anything about it is public. An approved,
+Staff approve every one in **Admin > Get involved** before anything about it is public. An approved,
 public, raising money fundraiser gets its own page at `/fundraise/<slug>` with a meter and a
 supporter wall, and giving on it goes through the donate page's checkout. Organisers change their
 page by an emailed link, and every change waits for staff. Design:
@@ -7421,7 +7494,7 @@ Two more yes or no questions on the sign up form, on both paths, with nothing ch
 - **The lock.** Organisers can never change the split: the private area's changes (`editSchema`)
   and staff's ordinary edit (`adminPatchSchema`) do not take it, and an approved change can only
   write the columns in `COLUMNS`. Only an admin may correct it, with
-  `PUT /api/admin/fundraisers/:id/split` (Admin > Fundraising, "Sharing with another cause"), and
+  `PUT /api/admin/fundraisers/:id/split` (Admin > Get involved, "Sharing with another cause"), and
   only while the fundraiser has no gifts: `setFundraiserSplit` counts its donations and cash paid in
   under the row's lock, and refuses with `409` once there is any. Every correction is audited
   (`fundraiser.split_changed`, with the split before and after).
@@ -7602,15 +7675,18 @@ waiting one first. `cash` rows are `{ id, amountPence, paidInOn, note, createdBy
 showAmount, amountPence, refundedPence, message, hidden, createdAt }`. Refusals are
 `{ error }` in plain English: `400` (with `fields`), `403`, `404`, `409`.
 
-Admin > Fundraising has a **New pill** (area `fundraising`, lit by each new sign up). Its line in the
+Admin > Get involved has a **New pill** (area `fundraising`, lit by each new sign up). Its line in the
 admin's new features list arrives with the screen itself (TASK-495, below).
 
-### The admin screen: Admin > Fundraising (TASK-495)
+### The admin screen: Admin > Get involved (TASK-495)
 
-In Content, after Events. The menu link shows to anyone with `fundraising` view; changing anything
-needs edit; the switch needs an admin as well. Markup `#view-fundraising` in `admin.html`, code the
-`fr` block in `assets/js/admin/app.js` (`loadFundraising`), styles at the end of
-`assets/css/admin.css`. It is built from the admin's own parts: the Events switch card, the Events
+Fundraising is four of the five sections of the **Get involved** tab (see
+[Admin > Get involved](#admin--get-involved-nbccs-own-events-and-fundraising-in-one-tab)): Sign-ups,
+Tickets and pledges, Emails and Settings. They show to anyone with `fundraising` view; changing
+anything needs edit; the switch needs an admin as well. Markup `#view-fundraising` (a box inside
+`#view-get-involved`) in `admin.html`, code the `fr` block in `assets/js/admin/app.js`
+(`loadFundraising` loads Sign-ups; `frLoadEmailsSection` and `frLoadSettingsSection` the cards in
+those sections), styles at the end of `assets/css/admin.css`. It is built from the admin's own parts: the Events switch card, the Events
 status chips and Business supporters' rows that open in place.
 
 - **The switch**, as on Events: an admin can switch fundraising on or off after a question; everyone
@@ -7680,7 +7756,7 @@ and email) and the sign off. Plain English, no dashes, every stored value escape
 | `fundraiseFinishedStaff` | `events@` (Reply-To the organiser) | the organiser presses "I've finished" (TASK-501), once | "A fundraiser says they've finished": who, what it has raised, next steps. Staff only, so never link tagged |
 | `fundraiseEditApproved` | the organiser | staff approve their waiting change | "Your update is live!" with the page link while their page is up (raising money, public, approved and fundraising on); otherwise "Your update is saved!", with no page link |
 | `fundraiseEditRejected` | the organiser | staff reject their waiting change | "About your update": not used yet, we'll give you a ring; "your page is still live" only while it is up, otherwise "everything stays just as it was" |
-| `fundraiseInvite` | the person invited | staff send or resend an invite from Admin > Fundraising (TASK-503, email 7) | "We'd love you to fundraise with us!", the personal note in a quote box, **Make my page** to the form filled in with their name and email, signed "Warmest wishes," with the first name chosen under Signed by, then "NBCC Team", and the questions box. Subject "We'd love you to fundraise with us" |
+| `fundraiseInvite` | the person invited | staff send or resend an invite from Admin > Get involved (TASK-503, email 7) | "We'd love you to fundraise with us!", the personal note in a quote box, **Make my page** to the form filled in with their name and email, signed "Warmest wishes," with the first name chosen under Signed by, then "NBCC Team", and the questions box. Subject "We'd love you to fundraise with us" |
 | `fundraiseNewsApproved` | the organiser | staff approve a news update they posted (TASK-506) | "Your news update is live!" with the page link while their page is up; otherwise "Your news update is saved!". "Thanks so much," and the questions box |
 | `fundraiseNewsRejected` | the organiser | staff do not use a news update (TASK-506) | "About your news update": not on the page, we'll give you a ring; never the internal reason. "Speak soon," and the questions box |
 | `fundraiseSummary` | each address on the Weekly summary list | Mondays at 8am (TASK-503, email 11), or Send a test now (to the admin pressing it, marked as a test) | "Good morning, team!": last week's money, new sign ups, Waiting on us, Coming up, Open the admin, "Have a brilliant week,". Staff only: no questions box, never link tagged. Subject like "Fundraising this week: £1,240 raised, 10 things waiting" |
@@ -7696,7 +7772,7 @@ statement, so a restart part way loses at most the one in flight and a second sw
 nobody twice), reads the switch again before each, and stops if fundraising has been switched off
 meanwhile. A send that fails is logged and that fundraiser marked as waiting again, for the next
 switch on; nothing about the emails can fail the switch. Declining or finishing clears the mark.
-Admin > Fundraising says all this in its questions: approving a page holder while fundraising is off
+Admin > Get involved says all this in its questions: approving a page holder while fundraising is off
 says nothing is emailed yet, switching on says "Your page is live" goes to the waiting fundraisers
 (with how many), and rejecting a change says the organiser is emailed a short, kind note.
 Every email goes after its write has committed, best effort: a failed send never fails the answer.
@@ -7929,7 +8005,7 @@ change; "Pay in what you collected"; and "I've finished".
 - **I've finished.** Records `fundraisers.finished_requested_at` (the first press is kept), emails
   the events inbox once (`fundraiseFinishedStaff`, staff only so never link tagged, Reply-To the
   organiser), and says "Thank you, we'll be in touch." It finishes and hides nothing: staff still
-  press Mark finished. Admin > Fundraising shows a **Says they've finished** pill on the row and the
+  press Mark finished. Admin > Get involved shows a **Says they've finished** pill on the row and the
   date in the detail while it is approved.
 
 **Security.**
@@ -8106,7 +8182,7 @@ Tests: `fundraising-giving.test.ts` (the sums, the rules, the drawn page), `fund
 
 ## Community fundraising, the team's tools (TASK-503)
 
-Four tools for the staff who look after fundraisers, all in **Admin > Fundraising** (section 5 of
+Four tools for the staff who look after fundraisers, all in **Admin > Get involved** (section 5 of
 `docs/superpowers/specs/2026-10-02-fundraising-stage-1b-part-1-design.md`). Nothing here adds a
 config value: who gets the Monday summary is chosen in the admin and kept in the database.
 
@@ -8159,7 +8235,7 @@ The in memory wording is **held for sign off** like new automatic email wording,
 its email to read under "Read the email they will get" (an example, never a real link, signed by the
 signer chosen in the form and read again when that changes); for In memory
 it opens by itself and says whether it is approved. It is approved, and its approval withdrawn, in
-the **All emails** card (admins only; see **All emails, in Admin > Fundraising**), not in the form.
+the **All emails** card (admins only; see **All emails, in Admin > Get involved**), not in the form.
 Until it is approved the Send button rests with "The in memory invite wording is waiting for sign
 off, so this invite cannot be sent yet." and a link, **Approve it in All emails** (**Read it in All
 emails** for an editor, who is told only an admin can approve it), which opens that card at the in
@@ -8406,7 +8482,7 @@ and so the tab order, stays A to Z; on a phone it is one column. To start with:
 Bake sale, Birthday, Coffee morning, Party, Quiz, Run, Santa dash, School collection, Walk, Workplace
 collection, and Other.
 
-**Admins add more** in Admin > Fundraising, on the **Categories** card: type a name and Add to the
+**Admins add more** in Admin > Get involved, on the **Categories** card: type a name and Add to the
 form, and it is on the sign up form at once, in its place A to Z. They can **rename** one (the new
 name shows everywhere, on sign ups already made too) and **hide** one from the form (and put it back);
 Other is always on the form. Nothing is ever deleted, so every sign up keeps its category
@@ -8657,7 +8733,7 @@ fundraiser, counted in the database under the fundraiser's lock. Every update wa
 updates are listed below the form, newest first, each saying where it is up to: "Waiting for us to
 check", "On your page" or "Not used". A finished fundraiser keeps its list, with no form.
 
-In **Admin > Fundraising**, a sign up with updates waiting shows **Updates to check** on its row, and
+In **Admin > Get involved**, a sign up with updates waiting shows **Updates to check** on its row, and
 the open sign up has a **News updates** panel: each update with its words and its photo (fetched
 with the admin's own sign in, as a waiting photo has no public address, and shown small), and
 **Approve update** or **Don't use it**, with an optional reason that stays in the admin, for staff
@@ -8789,7 +8865,7 @@ one fundraiser. Below the form, **Your thank yous**, each with where it is up to
 check**, **Sending now**, **Sent to N supporters** (counts only, never who), or **Not sent**.
 Added by its own script, `assets/js/fundraise-thanks.js`, from a `<template data-thanks-pattern>`.
 
-**Admin > Fundraising.** A **Thank yous to check** pill on a sign up with any waiting, and a
+**Admin > Get involved.** A **Thank yous to check** pill on a sign up with any waiting, and a
 **Thank yous to supporters** panel in the open sign up: the organiser's words, the gifts it picked
 (each giver's name and amount, and later what happened to each), **Approve and send** and **Don't
 send** (with an optional reason that stays with staff), each after a question. A viewer sees it all
@@ -8811,7 +8887,7 @@ thank you once (`duplicate`), even with two senders at work: an earlier claim fo
 still sending counts as sent. A failed send is recorded and the run goes on;
 nothing throws. A gift left "sending" for 15 minutes (a restart part way) is marked failed rather
 than sent twice; gifts left queued (or sending, or a thank you left unmarked) are picked up the next
-time anyone opens Admin > Fundraising. When the last gift of a thank you is dealt with, it is marked
+time anyone opens Admin > Get involved. When the last gift of a thank you is dealt with, it is marked
 delivered and the counts are written to `audit_log` once; every run also ends by marking any
 approved thank you with nothing left to send (its mark failed, or its gifts all went with their
 donations), so none says "Sending now" for good.
@@ -8956,7 +9032,7 @@ the website, fundraising switched off) falls through to the site's own 404; the 
 path on our own site, so it can never send anyone elsewhere. The scan is counted the way every QR code
 is (TASK-492): the visit counter on the page it lands on records channel `qr` with the tag. So it
 shows in Admin > Analytics, "QR codes", named "Sam's Santa Dash, A4 poster" (`labelQrScans` with the
-fundraisers' titles), and per piece in Admin > Fundraising (`GET /api/admin/fundraisers/:id/scans`,
+fundraisers' titles), and per piece in Admin > Get involved (`GET /api/admin/fundraisers/:id/scans`,
 counted once per person per day from `analytics_views`). Nothing new is stored: like every visit, a
 scan is not counted for a browser that asks not to be tracked, and it is kept 13 months.
 
@@ -8973,7 +9049,7 @@ and square pictures stack down the middle; the two wide ones put the logo on the
 or a different size? Give us a call on 01292 811 015 or email events@nbcc.scot and we'll make it for
 you. Please don't make your own versions of our logo or materials."
 
-**Download everything (staff).** Admin > Fundraising has a "Download everything" button on an
+**Download everything (staff).** Admin > Get involved has a "Download everything" button on an
 approved or finished sign up: `GET /api/admin/fundraisers/:id/materials/everything` (fundraising:
 view) is every printed piece on one page, one after another, each on its own paper (named `@page`
 rules: A4 poster, A3 poster, A5 leaflet, the two sponsor form pages, and the certificate once
@@ -9053,7 +9129,7 @@ as they were.
 `sendTeamMemberJoined` in `src/fundraising/team-send.ts`, logged as `fundraiseTeamMemberJoined`):
 to the team organiser when staff approve a new team member's page, once the member's own "Your page
 is live" has gone. It is new wording, so it is **held until an admin approves it**: key
-`team_joined` in `touch_wording_approvals`, read and approved in Admin > Fundraising > **All emails**
+`team_joined` in `touch_wording_approvals`, read and approved in Admin > Get involved > **All emails**
 with the others (the catalogue entry `team-member-joined`, in Teams; it counts in the "waiting for
 sign off" number until approved). `GET /api/admin/fundraising/touch` also lists it as a tenth kind, `team_joined`;
 `GET .../touch/preview/team_joined` is always the invented example; `POST` and `DELETE
@@ -9139,7 +9215,7 @@ for sign off), or why it did nothing
 (`switched off`, `fundraising off`, `could not read`). Each email sent adds "An automatic email went
 to the organiser" to the fundraiser's History.
 
-**Admin > Fundraising > Automatic emails.** Jaimie's rule: every automatic email is readable in the
+**Admin > Get involved > Automatic emails.** Jaimie's rule: every automatic email is readable in the
 admin before any is sent. A card under the Weekly summary says whether they are on, with **Switch
 automatic emails on/off** for admins (after a warning). It also says what the next 8am run would
 send (were it on), so the first morning after switching on is no surprise: anyone already past
@@ -9378,7 +9454,7 @@ Everything below is off while fundraising is switched off, like the rest of fund
   team's card: the join link and the message to forward (each to copy), who has joined (live and
   waiting), and Remove (the member page carries on as their own, no longer counting; the events
   inbox is told, `fundraiseTeamMemberRemoved`). Team news is the team page's own News updates.
-- **Handover, staff only.** Admin > Fundraising hands the team organiser role to a member or someone
+- **Handover, staff only.** Admin > Get involved hands the team organiser role to a member or someone
   new (with their phone). We email them a 6 digit code (`fundraiseTeamHandoverCode`), kept only as a
   keyed hash bound to the team and their email, working for 3 days and 5 tries; they put it in under
   "Taking over a team?" on `/fundraise/manage`, and only then do the team's organiser name, email and
@@ -9394,7 +9470,7 @@ Everything below is off while fundraising is switched off, like the rest of fund
 - **The split lock** holds for a whole team split: only an admin corrects it, on the team, and only
   while neither the team nor any current member has a gift; it changes on every member page with it.
   A member page of a whole team split refuses a correction of its own (`team_split`).
-- **Admin > Fundraising**: a team is marked Team and a member sign up "Joining <team>"; an open team
+- **Admin > Get involved**: a team is marked Team and a member sign up "Joining <team>"; an open team
   shows its split, join link, whole meter, members (every status) and its invites (held, invited,
   reminded, joined, name and email deleted), and the handover. Staff (editors and admins) can take
   a member off the team there too, with the same effect as the team organiser's remove; History says
@@ -9534,11 +9610,11 @@ page ("Your page in memory of <name>", `fundraiseApproved`, the words Jaimie app
 will call instead), no emails about changes or news updates, none of the keep in touch emails
 (`isQuietFundraiser` now asks `isInMemory` first), and no smart call prompts. The sign in code still
 goes when they ask for it. The events inbox summary says who it remembers and who set it up. **No
-automatic anniversary email**: a year after the page went live, Admin > Fundraising shows **A year
+automatic anniversary email**: a year after the page went live, Admin > Get involved shows **A year
 on** and the Monday summary says "N in memory pages a year on: decide whether to get in touch";
 staff press **Done** (with an optional note) when they have.
 
-**Admin > Fundraising.** An in memory page has an **In memory** pill, **Messages to check** while any
+**Admin > Get involved.** An in memory page has an **In memory** pill, **Messages to check** while any
 wait, and **A year on** when due. Open, its **In memory** panel shows who it remembers, who set it
 up with the family's permission, the target choice, the envelopes, and the year on reminder. On its
 wall each waiting message has **Approve for the page**; **Hide from the page** still says no. An
@@ -9579,7 +9655,7 @@ envelope for a page sharing with another cause carries the split statement too.
 **Rolling back.** The migration is additive, but rolling the CODE back to before in memory pages
 would show their held messages and their hidden targets, and send them the upbeat emails. If a code
 rollback is ever needed once in memory pages exist, first make those pages not public (or switch
-the automatic emails off) in Admin > Fundraising.
+the automatic emails off) in Admin > Get involved.
 
 | Route | Who | What |
 |---|---|---|
@@ -9631,7 +9707,7 @@ On a page (`src/fundraising/impact-render.ts`, placed by `renderFundraiserPage`)
 The pages read the list as last read, kept for a minute (`loadImpactExamples`, never throws: on a
 failure the page simply shows none).
 
-### Admin > Fundraising, What gifts could do
+### Admin > Get involved, What gifts could do
 
 A card after Categories. Everyone who can see Fundraising sees the list, read only ("Only an admin
 can change these."); admins get the controls. Each example switched on, in the list's order, with
@@ -9716,7 +9792,7 @@ What is asked, and why:
 - **"Is it a sporting event?"** (raising money only, never in memory, asked before the category). A
   Yes offers only the sporting categories and asks a **T-shirt size** (Kids 3 to 4 up to 13 to 14,
   Adult XS to XXL; nothing chosen for them). A No offers the rest. Other is in both. Each category has
-  a `sporty` mark; admins tick **Sporting** in Admin > Fundraising, Categories.
+  a `sporty` mark; admins tick **Sporting** in Admin > Get involved, Categories.
 - **The split check.** After the sharing details, a step shows the split as the page and posters
   will say it, with a required tick "Yes, that's right". Changing the split asks for the tick again.
 - **A child.** "Who is doing the fundraising?" Me, or my child or a young person I look after: their
@@ -9791,7 +9867,7 @@ category. Sport and the T-shirt are refused for an event, a page in memory, and 
 | `POST /api/fundraise/tshirt` `{ token, tshirtSize }` | the organiser | saves the size, once; audit `fundraiser.tshirt_chosen` |
 
 The link is `/fundraise/t-shirt#<token>`: the token rides after the `#`, so it never reaches a server
-in an address, and only its sha256 is stored. Admin > Fundraising shows the new answers in **What
+in an address, and only its sha256 is stored. Admin > Get involved shows the new answers in **What
 they told us**, and a **Sport and the T-shirt** panel: "Waiting for T-shirt size" and the button "Ask
 them for their T-shirt size". The summary to the events inbox carries the new answers; for a page in
 memory of someone it is headed "A new page in memory of ...", with a plain sign off.
@@ -9840,7 +9916,7 @@ send**: exactly what they asked for (collection envelopes, QR cards for the orde
 posters) with a gentle covering note, and no panel at all when they asked for nothing. **A team
 member's page** has none: it gave no address.
 
-### Admin > Fundraising
+### Admin > Get involved
 
 Each approved sign up has a **Welcome pack** panel: a tick box for each thing (who ticked it, and
 when), **Leave out** with a reason, the address ready to copy (their name, each line, the town and
@@ -10015,7 +10091,7 @@ rule: staff approve all public content, pictures included).
 - **Who is in the photo.** The private area says: "Only send photos of people who are happy to be on
   the page. For anyone under 18, you need their parent or guardian's OK." Staff have a checklist line
   above the photos.
-- **Admin > Fundraising**: "Photos to check" on a sign up with any waiting, and "Photos from the
+- **Admin > Get involved**: "Photos to check" on a sign up with any waiting, and "Photos from the
   organiser" in the open sign up: each photo as the page will show it (a round one beside "Organised
   by", a main one big), Approve photo, Don't use it (with an optional note the organiser sees in their
   private area), Take it off the page for one in use (round or main), and, for admins, Delete for
@@ -10193,7 +10269,7 @@ check the address". **A refund email that did not go** marks its order with what
 
 **Refunds.** In the private area the organiser picks a booking and gives a reason
 (`event_ticket_refund_requests`, one open request a booking); the events inbox is emailed
-(`eventTicketsRefundAsked`, Reply-To the organiser). In Admin > Fundraising > Event tickets an admin
+(`eventTicketsRefundAsked`, Reply-To the organiser). In Admin > Get involved > Event tickets an admin
 chooses the tickets to refund: the amount is their price as sold, or all that is left of the payment
 (card fee cover included) when no ticket is left standing.
 
@@ -10262,7 +10338,7 @@ money. Staff can also download every booking as a **CSV** with the money, and (f
 admins only) the buyer's email and phone: someone who may only look sees names and tickets, in the
 admin and in the CSV.
 
-**Admin > Fundraising > Event tickets** (its own card): every ticketed event with what is waiting;
+**Admin > Get involved > Event tickets** (its own card): every ticketed event with what is waiting;
 opened, an event's types (approve, change, take off sale, add), the limit (and the organiser's
 proposed one), close or open sales, the money apart from gifts, the guest list and CSV, the refunds
 asked for, the bookings and the refunds made.
@@ -10337,7 +10413,7 @@ says to shred or bin it after the event.
 
 Tests: `test/unit/event-tickets-*.test.ts`, `admin-event-tickets-*.test.ts`,
 `stripe-webhook-tickets.test.ts`; BDD `features/event-tickets.feature`.
-## All emails, in Admin > Fundraising
+## All emails, in Admin > Get involved
 
 One folded card, **All emails**, where every email the website sends about community fundraising,
 sponsor pledges, event tickets and the Festive Ball can be read exactly as it would arrive, and
@@ -10572,7 +10648,7 @@ Both say why the sponsor is getting the email and carry a link to say "I can't p
 They are **automatic emails**, sent by the daily 8am task (`runPledgeEmails`,
 `src/pledges/runner.ts`) only when every guard says yes:
 
-- the **Automatic emails** switch in Admin > Fundraising is on, and fundraising is on;
+- the **Automatic emails** switch in Admin > Get involved is on, and fundraising is on;
 - the email's **wording is approved** by an admin. Both keys (`pledge_pay`, `pledge_reminder`) ship
   **unapproved**, in the same `touch_wording_approvals` table as the automatic emails to organisers.
   One waiting is skipped and not claimed, so it still goes once approved while it is due;
@@ -10585,7 +10661,7 @@ They are **automatic emails**, sent by the daily 8am task (`runPledgeEmails`,
 The pay email can still go up to 60 days after it was due (a missed run, or wording waiting); the
 reminder up to 3 weeks after it was due.
 
-**Staff sending the pay link by hand** (Admin > Fundraising > Sponsor pledges) obeys **every** rule
+**Staff sending the pay link by hand** (Admin > Get involved > Sponsor pledges) obeys **every** rule
 above except the daily task's time window (the first send takes the same claim the daily task
 takes, so the two can never both send it): the pledge is open, its page still has pledges on it, the
 link is **due** (never early: "Their link goes the day after the event. To send it early, mark the
@@ -10604,7 +10680,7 @@ cash", so the links already sent for it stop working.
 
 **Rotating `ADMIN_SESSION_SECRET` makes every pay, cancel and confirm link already emailed stop
 working.** After rotating it, an admin presses **"Send new pay links to everyone unpaid"** in
-Admin > Fundraising > Sponsor pledges: one new link to each open pledge that has already had one,
+Admin > Get involved > Sponsor pledges: one new link to each open pledge that has already had one,
 under the same rules as sending one by hand. (Unconfirmed pledges whose confirm link broke simply
 lapse after 7 days; the sponsor can pledge again.)
 
@@ -10643,7 +10719,7 @@ check and refund"), and the events inbox is emailed (`fundraisePledgeStaff`).
   part of the cash they pay in, and its home address is dropped at once: cash has no Gift Aid online,
   and the page says to use the paper sponsor form for it. "Hide from my page" takes a pledge off
   the page.
-- **Admin > Fundraising > Sponsor pledges** (`assets/js/admin/pledges.js`, its own file beside
+- **Admin > Get involved > Sponsor pledges** (`assets/js/admin/pledges.js`, its own file beside
   `app.js`): every fundraiser's pledges with the sponsor's email, send or resend the pay link, cancel
   a pledge, hide a message, mark one paid twice as checked, new pay links for everyone unpaid
   (admins), and a line saying whether the two automatic emails are going (and how many are waiting

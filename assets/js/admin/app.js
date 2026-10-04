@@ -43,6 +43,13 @@
     "donations", "claims", "gasds", "subscriptions", "stories", "ticker", "contact", "newsletter", "thank-you", "search",
     "outreach", "events", "fundraising",
   ];
+  // Get involved: one tab holding two of those sections. "events" and "fundraising" are still the
+  // permission sections, and the server's names for the two old tabs (the Overview's buttons, the
+  // New pills); here they are only where in the one tab each lands.
+  var GI_VIEW = "get-involved";
+  var GI_SECTIONS = ["signups", "events", "tickets", "emails", "settings"];
+  var GI_OLD_VIEWS = { events: "events", fundraising: "signups" }; // old tab -> the section it opens
+  var GI_AREA = { signups: "fundraising", events: "events" }; // section -> the New pill it is a visit to
   var LEVEL_RANK = { none: 0, view: 1, edit: 2 };
   // Mirrors can() in src/admin/permissions.ts: edit satisfies a view requirement; missing/none fails.
   function permCan(perms, section, level) {
@@ -137,6 +144,7 @@
   function showLogin() {
     storiesImportReset("");
     brReset();
+    frKindReset();
     el("appView").hidden = true;
     el("loginView").hidden = false;
     var email = el("adminEmail");
@@ -215,6 +223,13 @@
       // donations (TASK-457). Everything else gates on view of its own section, as before.
       var editGate = b.getAttribute("data-edit-gate");
       var viewGate = b.getAttribute("data-view-gate");
+      // Or on VIEW of any one of several sections (data-view-gate-any): Get involved holds the Events
+      // and the Fundraising sections, and shows to anyone who may see either.
+      var anyGate = b.getAttribute("data-view-gate-any");
+      if (anyGate) {
+        b.hidden = !anyGate.split(" ").some(canView);
+        return;
+      }
       b.hidden = editGate ? !canEdit(editGate) : !canView(viewGate || section);
     });
     var teamNavGroup = el("teamNavGroup");
@@ -454,10 +469,23 @@
       var old = b.querySelector(".admin-new-pill");
       if (old) old.remove();
       var area = b.getAttribute("data-view");
-      var isNew = !!(whatsNew && whatsNew[area] && whatsNew[area].new) && area !== currentView && !b.hidden;
+      // Get involved is two of the server's areas, fundraising and events: either lights it.
+      var areas = area === GI_VIEW ? ["fundraising", "events"] : [area];
+      var isNew = !b.hidden && areas.some(function (a) {
+        return !!(whatsNew && whatsNew[a] && whatsNew[a].new) && a !== currentView;
+      });
       if (!isNew) return;
       b.insertAdjacentHTML("beforeend", NEW_PILL);
       any = true;
+    });
+    // Inside Get involved, the section holding what is new says so too: Sign-ups or Our events.
+    Array.prototype.forEach.call(doc.querySelectorAll("#giSections [data-gi-section]"), function (b) {
+      var old = b.querySelector(".admin-new-pill");
+      if (old) old.remove();
+      var area = GI_AREA[b.getAttribute("data-gi-section")];
+      if (area && !b.hidden && whatsNew && whatsNew[area] && whatsNew[area].new && area !== currentView) {
+        b.insertAdjacentHTML("beforeend", NEW_PILL);
+      }
     });
     var toggle = el("adminNavToggle");
     if (!toggle) return;
@@ -528,12 +556,23 @@
       return null;
     }
     if (!name) return null;
+    // "events" or "fundraising", left by a browser tab from before they became Get involved: only
+    // if this person may see that part of it.
+    if (GI_OLD_VIEWS[name]) return canView(name) ? name : null;
     var link = doc.querySelector('.admin-nav-link[data-view="' + name.replace(/"/g, "") + '"]');
     if (!link || link.hidden || link.offsetParent === null) return null;
     return name;
   }
 
   function selectView(name) {
+    // The old Events and Fundraising tabs are sections of Get involved now. Everything that still
+    // asks for them by name (the Overview's buttons, whose names come from the server, and a browser
+    // tab that remembers one) lands on the tab at the right section.
+    var giSection = null;
+    if (GI_OLD_VIEWS[name]) {
+      giSection = GI_OLD_VIEWS[name];
+      name = GI_VIEW;
+    }
     rememberView(name);
     Array.prototype.forEach.call(doc.querySelectorAll(".admin-nav-link"), function (b) {
       b.classList.toggle("is-active", b.getAttribute("data-view") === name);
@@ -568,11 +607,7 @@
     else if (name === "outreach") loadOutreach();
     else if (name === "ticker") loadTicker();
     else if (name === "ball") loadBall();
-    else if (name === "events") {
-      loadEvents();
-      loadBallReport();
-    }
-    else if (name === "fundraising") loadFundraising();
+    else if (name === GI_VIEW) giOpen(giSection);
     else if (name === "audit") loadAudit();
     else if (name === "email-audit") loadEmailAudit();
     else if (name === "analytics") loadAnalytics();
@@ -586,6 +621,134 @@
       selectView(b.getAttribute("data-view"));
     });
   });
+
+  // ---- Get involved: one tab, five sections ----
+  // Sign-ups, Our events, Tickets and pledges, Emails and Settings: one shows at a time. The cards
+  // are the old Events and Fundraising tabs' own, with their ids and their code; this only decides
+  // which are on screen, and loads a section when it is shown, so opening the tab does not fetch
+  // all five at once. Who sees what is the same as before: Our events and the Get involved page
+  // switch follow the "events" permission section, everything else follows "fundraising". The
+  // server is the real gate on every route; this keeps the screen from offering what it would refuse.
+  var GI_SECTION_KEY = "nbccAdminGiSection";
+  var giSection = null; // the section on screen
+
+  function giMaySee(section) {
+    if (section === "events") return canView("events");
+    if (section === "settings") return canView("events") || canView("fundraising");
+    return canView("fundraising");
+  }
+  function giButtons() {
+    return Array.prototype.slice.call(doc.querySelectorAll("#giSections [data-gi-section]"));
+  }
+  function giRemembered() {
+    try {
+      return sessionStorage.getItem(GI_SECTION_KEY);
+    } catch {
+      return null;
+    }
+  }
+  // Opening the tab: the section asked for (an old tab's name), else the one this browser tab was
+  // last on, else the first; always one this person may see.
+  function giOpen(wanted) {
+    el("view-events").hidden = !canView("events");
+    el("view-fundraising").hidden = !canView("fundraising");
+    giButtons().forEach(function (b) {
+      b.hidden = !giMaySee(b.getAttribute("data-gi-section"));
+    });
+    var section = [wanted, giRemembered()].concat(GI_SECTIONS).filter(function (s) {
+      return GI_SECTIONS.indexOf(s) !== -1 && giMaySee(s);
+    })[0];
+    if (section) giShow(section, true);
+  }
+  // fresh: the tab has just been opened, so the section is read again even if it was the one
+  // showing when the tab was left, as the old tabs read themselves again each time they opened.
+  function giShow(section, fresh) {
+    if (GI_SECTIONS.indexOf(section) === -1 || !giMaySee(section)) return;
+    if (!fresh && section === giSection) return;
+    giSection = section;
+    try {
+      sessionStorage.setItem(GI_SECTION_KEY, section);
+    } catch {
+      // Private mode: the section is not remembered through a refresh, and nothing else is lost.
+    }
+    giButtons().forEach(function (b) {
+      var on = b.getAttribute("data-gi-section") === section;
+      b.classList.toggle("is-active", on);
+      b.setAttribute("aria-pressed", on ? "true" : "false");
+    });
+    Array.prototype.forEach.call(doc.querySelectorAll("#view-get-involved [data-gi-intro]"), function (p) {
+      p.hidden = p.getAttribute("data-gi-intro") !== section;
+    });
+    // The card scripts (event-tickets.js, pledges.js, all-emails.js) watch their own part's hidden
+    // mark and load when it comes off. A fresh opening hides every part first, so the part showing
+    // is un-hidden again and its cards read themselves afresh.
+    var all = doc.querySelectorAll("#view-get-involved [data-gi-part]");
+    if (fresh) Array.prototype.forEach.call(all, function (p) { p.hidden = true; });
+    Array.prototype.forEach.call(all, function (p) {
+      // A part in a box this person may not see stays hidden with it, so nothing in it loads.
+      p.hidden = p.getAttribute("data-gi-part") !== section || p.parentNode.hidden;
+    });
+    giPlaceEventsStatus(section);
+    // The New pills: Sign-ups is the visit the Fundraising tab recorded, Our events the Events tab's.
+    // The other sections are a visit to neither, so a pill waits until its list has been looked at.
+    currentView = GI_AREA[section] || GI_VIEW;
+    if (GI_AREA[section]) beginVisit(GI_AREA[section]);
+    renderNewPills();
+    giLoad(section);
+  }
+  // One status line serves both the page switch and the events under it ("Deleted." is said there).
+  // It used to sit between the two; now they are in different sections, so it goes to whichever of
+  // them is on screen: under the switch in Settings, above the list in Our events.
+  function giPlaceEventsStatus(section) {
+    var line = el("evSwitchStatus");
+    var home = doc.querySelector('#view-events [data-gi-part="' + section + '"]');
+    if (!line || !home || line.parentNode === home) return;
+    if (section === "settings") home.appendChild(line);
+    else home.insertBefore(line, home.firstChild);
+  }
+  function giLoad(section) {
+    if (section === "signups") loadFundraising();
+    else if (section === "events") {
+      loadEvents();
+      loadBallReport();
+    } else if (section === "emails") frLoadEmailsSection();
+    else if (section === "settings") {
+      if (canView("events")) evLoadSwitch();
+      if (canView("fundraising")) frLoadSettingsSection();
+    }
+    // Tickets and pledges: its two cards load themselves when their part is shown.
+  }
+  (function giWire() {
+    var row = el("giSections");
+    var tab = el("view-get-involved");
+    if (!row || !tab) return;
+    row.addEventListener("click", function (e) {
+      var b = e.target && e.target.closest ? e.target.closest("[data-gi-section]") : null;
+      if (b) giShow(b.getAttribute("data-gi-section"));
+    });
+    // Arrow keys, Home and End move along the buttons that are offered, and show that section.
+    row.addEventListener("keydown", function (e) {
+      var keys = { ArrowRight: 1, ArrowDown: 1, ArrowLeft: -1, ArrowUp: -1, Home: "first", End: "last" };
+      var move = keys[e.key];
+      var from = e.target && e.target.closest ? e.target.closest("[data-gi-section]") : null;
+      if (!move || !from) return;
+      var offered = giButtons().filter(function (b) { return !b.hidden; });
+      var at = offered.indexOf(from);
+      if (at === -1) return;
+      e.preventDefault();
+      var next = move === "first" ? offered[0] : move === "last" ? offered[offered.length - 1]
+        : offered[(at + move + offered.length) % offered.length];
+      next.focus();
+      giShow(next.getAttribute("data-gi-section"));
+    });
+    // A link to the All emails card ("Read and approve these in All emails", "Read its automatic
+    // emails") can sit in another section. Caught on the way down, so Emails is on screen before
+    // all-emails.js opens the card and scrolls to it.
+    tab.addEventListener("click", function (e) {
+      var link = e.target && e.target.closest ? e.target.closest("[data-allemails-open]") : null;
+      if (link) giShow("emails");
+    }, true);
+  })();
 
   // TASK-454: below 860px the sections sit behind one Menu button, because the line of twenty that
   // used to scroll sideways broke the client's standing rule that nothing in the admin does. The
@@ -719,6 +882,12 @@
   // and words it (src/admin/overview.ts); this only draws it. The five Gift Aid figures that used to
   // sit here are lines in it now, in the slowest of the three groups.
   var NEED_LEVEL_WORDS = { 1: "Urgent: ", 2: "Waiting: ", 3: "Coming due: " };
+  // A button is named after the tab it opens, and the server names it. Events and Fundraising are
+  // sections of Get involved now, so a button to either says the tab it really opens; pressing it
+  // still lands on the right section (selectView).
+  function ovButtonWords(item) {
+    return GI_OLD_VIEWS[item.view] ? "Get involved" : item.button;
+  }
   function needsHtml(d) {
     var esc = H.escapeHtml;
     var needs = d.needs || [];
@@ -731,7 +900,7 @@
               '<li class="ov-need" data-level="' + Number(n.level) + '">' +
               '<span class="ov-dot" aria-hidden="true"></span>' +
               '<span class="ov-text"><span class="sr-only">' + (NEED_LEVEL_WORDS[n.level] || "") + "</span>" + esc(n.text) + "</span>" +
-              '<button type="button" class="admin-btn admin-btn--small ov-go" data-ov-view="' + esc(n.view) + '">' + esc(n.button) + "</button>" +
+              '<button type="button" class="admin-btn admin-btn--small ov-go" data-ov-view="' + esc(n.view) + '">' + esc(ovButtonWords(n)) + "</button>" +
               "</li>"
             );
           })
@@ -760,7 +929,7 @@
             '<span class="ov-number-headline">' + esc(n.headline) + "</span>" +
             '<span class="ov-number-detail">' + esc(n.detail) + "</span>" +
             "</span>" +
-            '<button type="button" class="admin-btn admin-btn--small ov-go" data-ov-view="' + esc(n.view) + '">' + esc(n.button) + "</button>" +
+            '<button type="button" class="admin-btn admin-btn--small ov-go" data-ov-view="' + esc(n.view) + '">' + esc(ovButtonWords(n)) + "</button>" +
             "</li>"
           );
         })
@@ -789,7 +958,7 @@
                 '<li class="ov-event">' +
                 '<span class="ov-event-when">' + esc(i.when) + "</span>" +
                 '<span class="ov-event-text">' + esc(i.text) + "</span>" +
-                '<button type="button" class="admin-btn admin-btn--small ov-go" data-ov-view="' + esc(i.view) + '">' + esc(i.button) + "</button>" +
+                '<button type="button" class="admin-btn admin-btn--small ov-go" data-ov-view="' + esc(i.view) + '">' + esc(ovButtonWords(i)) + "</button>" +
                 "</li>"
               );
             })
@@ -9079,6 +9248,43 @@
   var frData = null; // the last GET /api/admin/fundraisers
   var frSettings = null; // the last GET /api/admin/fundraising/settings
   var frFilter = ""; // "" is every status
+  // The kind filter: "" is every kind, else raising, team, event or memory. Kept for the visit, in
+  // the browser tab's own storage beside the session, so a refresh keeps it and signing out forgets it.
+  var FR_KIND_KEY = "nbccAdminFrKind";
+  var FR_KIND_NAMES = ["raising", "team", "event", "memory"];
+  var frKind = "";
+  try {
+    frKind = sessionStorage.getItem(FR_KIND_KEY) || "";
+  } catch {
+    frKind = "";
+  }
+  if (FR_KIND_NAMES.indexOf(frKind) === -1) frKind = "";
+  function frSetKind(kind) {
+    frKind = FR_KIND_NAMES.indexOf(kind) === -1 ? "" : kind;
+    try {
+      if (frKind) sessionStorage.setItem(FR_KIND_KEY, frKind);
+      else sessionStorage.removeItem(FR_KIND_KEY);
+    } catch {
+      // Private mode: it lasts until the page is refreshed.
+    }
+  }
+  function frKindReset() {
+    frSetKind("");
+  }
+  // What kind of sign up it is, from what the list already says about it: a page in memory of
+  // someone; a team, or a member's own page while they are on one; an event; else raising money.
+  // In memory comes first, as it changes how everything about the page is worded.
+  function frKindOf(f) {
+    if (f.inMemory) return "memory";
+    if (f.isTeam || (f.teamId && !f.teamLeftAt)) return "team";
+    return f.path === "event" ? "event" : "raising";
+  }
+  // The large pill on each row. The words are always on it (the invite types' own), so the colour
+  // is never the only thing saying which kind it is.
+  function frKindPill(f) {
+    var kind = frKindOf(f);
+    return '<span class="fr-kind" data-kind="' + kind + '">' + H.escapeHtml(FR_INVITE_TYPES[kind].label) + "</span>";
+  }
   var frOpenId = null; // the sign up open below its row
   var frDetail = null; // GET /api/admin/fundraisers/:id for the open one
   var frDetailFailed = false;
@@ -9202,17 +9408,17 @@
   }
 
   // ---- loading ----
+  // Sign-ups: the list, the open sign up, and everything a row or an open sign up says or asks.
+  // The other sections' own cards load when they are shown (giLoad).
   function loadFundraising() {
     frWire();
-    frLoadSettings();
+    frLoadSettings(); // approving a page asks differently while fundraising is switched off
     frLoadList();
     if (frOpenId != null) frLoadDetail(frOpenId);
-    // TASK-503: the team's tools. Each loads on its own, so the rest of the screen never waits on it.
-    frRenderInvitePanel();
+    // TASK-503: the calls due and the prompts on the list. Each loads on its own, so the rest of
+    // the screen never waits on it.
     frLoadTeam();
-    frLoadSummary();
-    frLoadCategories(); // the Categories card, and the sign up editor's list
-    frLoadImpact(); // What gifts could do
+    frLoadCategories(); // the sign up editor's list
     // TASK-505: the requests, likewise on their own.
     frLoadRequests();
     frLoadNewsCounts(); // TASK-506
@@ -9221,6 +9427,22 @@
     frTouchLoad(); // TASK-515
     frMemoryLoadCounts(); // In memory
     frLoadPacks(); // welcome packs
+  }
+  // Emails: Invite someone with the invites not taken up, and the Automatic emails card. The All
+  // emails card counts what is waiting by itself when its part is shown (all-emails.js).
+  function frLoadEmailsSection() {
+    frWire();
+    frRenderInvitePanel();
+    frLoadTeam();
+    frTouchLoad(); // TASK-515
+  }
+  // Settings: the Fundraising switch, Categories, What gifts could do and the Weekly summary.
+  function frLoadSettingsSection() {
+    frWire();
+    frLoadSettings();
+    frLoadCategories();
+    frLoadImpact();
+    frLoadSummary();
   }
 
   function frLoadSettings() {
@@ -9435,6 +9657,15 @@
     if (notBack) notBack.textContent = list.filter(frReqNotBack).length;
     var packs = doc.querySelector('[data-frcount="packs"]'); // welcome packs
     if (packs) packs.textContent = list.filter(frPackToSend).length;
+    // How many of each kind, of every sign up, whichever filters are pressed.
+    var kinds = { all: list.length, raising: 0, team: 0, event: 0, memory: 0 };
+    list.forEach(function (f) {
+      kinds[frKindOf(f)] += 1;
+    });
+    Object.keys(kinds).forEach(function (k) {
+      var c = doc.querySelector('[data-frkindcount="' + k + '"]');
+      if (c) c.textContent = kinds[k];
+    });
   }
 
   function frRaisedCell(f) {
@@ -9472,7 +9703,7 @@
     return (
       '<tr class="fx-summary' + (open ? " is-open" : "") + '" data-frtoggle="' + f.id +
       '" tabindex="0" role="button" aria-expanded="' + (open ? "true" : "false") + '">' +
-        '<td><span class="fx-caret" aria-hidden="true"></span><span class="fr-title">' + H.escapeHtml(f.title) + "</span>" +
+        "<td>" + frKindPill(f) + '<span class="fx-caret" aria-hidden="true"></span><span class="fr-title">' + H.escapeHtml(f.title) + "</span>" +
           '<span class="fr-sub">' + sub.map(function (s) { return H.escapeHtml(s); }).join(" · ") + "</span>" +
           (pills ? '<span class="fr-pills">' + pills + "</span>" : "") + "</td>" +
         "<td>" + frStatusPill(f.status) + "</td>" +
@@ -9522,11 +9753,17 @@
       b.classList.toggle("is-active", on);
       b.setAttribute("aria-pressed", on ? "true" : "false");
     });
+    Array.prototype.forEach.call(doc.querySelectorAll("[data-frkind]"), function (b) {
+      var on = b.getAttribute("data-frkind") === frKind;
+      b.classList.toggle("is-active", on);
+      b.setAttribute("aria-pressed", on ? "true" : "false");
+    });
     if (!all.length) {
       wrap.innerHTML = '<p class="fx-empty fr-empty">Nobody has signed up yet. Sign ups from the Fundraise for us form arrive here, with a New pill.</p>';
       return;
     }
     var rows = all.filter(function (f) {
+      if (frKind && frKindOf(f) !== frKind) return false; // the kind filter, alongside the one below
       if (!frFilter) return true;
       if (frFilter === "calls") return frCallDue(f);
       // TASK-505
@@ -9540,7 +9777,8 @@
         new: "No new sign ups are waiting.", approved: "None approved yet.", declined: "None declined.", finished: "None finished yet.",
         calls: "No calls due.", requests: "No requests to do.", notback: "No buckets or tins are out.", packs: "No packs to send.",
       };
-      wrap.innerHTML = '<p class="fx-empty fr-empty">' + H.escapeHtml(none[frFilter] || "None here.") + "</p>";
+      // With a kind chosen as well, the status filter's own words could be untrue of the whole list.
+      wrap.innerHTML = '<p class="fx-empty fr-empty">' + H.escapeHtml((!frKind && none[frFilter]) || "None here.") + "</p>";
       return;
     }
     var openAt = -1;
@@ -10938,6 +11176,12 @@
       var chip = t.closest("[data-frfilter]");
       if (chip) {
         frFilter = chip.getAttribute("data-frfilter") || "";
+        frRenderList();
+        return;
+      }
+      var kindChip = t.closest("[data-frkind]");
+      if (kindChip) {
+        frSetKind(kindChip.getAttribute("data-frkind") || "");
         frRenderList();
         return;
       }
@@ -15286,6 +15530,32 @@
       });
   }
 
+  // Settings shows the page switch without the events under it, so it reads the switch alone: no
+  // event is opened and no preview is drawn while Our events is off screen. The same request the
+  // list makes, as that is where the server says whether the page is on.
+  function evLoadSwitch() {
+    evWire();
+    authFetch("/api/admin/events")
+      .then(function (res) {
+        if (!res.ok) throw new Error("status " + res.status);
+        return res.json();
+      })
+      .then(function (d) {
+        if (evData) {
+          evData.pageOn = d.pageOn;
+          evData.updatedAt = d.updatedAt;
+          evData.updatedBy = d.updatedBy;
+        } else {
+          evData = d;
+        }
+        evRenderSwitch();
+      })
+      .catch(function (err) {
+        if (err && err.message === "unauthorized") return;
+        el("evSwitchState").textContent = "Could not check.";
+      });
+  }
+
   function evSorted(list) {
     return (list || []).slice().sort(function (a, b) {
       if (a.date !== b.date) return a.date < b.date ? -1 : 1;
@@ -15317,8 +15587,8 @@
   function evFlipSwitch() {
     var on = !!(evData && evData.pageOn);
     var question = on
-      ? "Take the Events page off the website? It will disappear from the site and from every page’s menu straight away."
-      : "Put the Events page on the website? Everyone will be able to see it, and every page’s menu will offer it, straight away.";
+      ? "Take the Get involved page off the website? It will disappear from the site and from every page’s menu straight away."
+      : "Put the Get involved page on the website? Everyone will be able to see it, and every page’s menu will offer it, straight away.";
     if (!window.confirm(question)) return;
     var btn = el("evSwitchBtn");
     var status = el("evSwitchStatus");
@@ -15344,7 +15614,7 @@
         evData.updatedAt = r.body.updatedAt;
         evData.updatedBy = r.body.updatedBy;
         status.className = "ty-status is-ok";
-        status.textContent = r.body.pageOn ? "The Events page is now on the website." : "The Events page is now off the website.";
+        status.textContent = r.body.pageOn ? "The Get involved page is now on the website." : "The Get involved page is now off the website.";
         evRenderSwitch();
         evSchedulePreview(0);
       })
@@ -15620,7 +15890,7 @@
         var where = saved.status === "draft"
           ? "Saved as a draft."
           : evIsOnPage(saved)
-            ? (evData && evData.pageOn ? "Saved, and on the website." : "Saved. It will show once the Events page is switched on.")
+            ? (evData && evData.pageOn ? "Saved, and on the website." : "Saved. It will show once the Get involved page is switched on.")
             : saved.status === "scheduled" ? "Saved. It goes up on " + evShortDate(saved.showFrom) + "." : "Saved.";
         evSetSaveState(where, "ok");
         var i = evData.events.findIndex(function (e) { return e.id === saved.id; });
@@ -15808,7 +16078,7 @@
     var note = el("evPagePrevNote");
     if (!evCurrent || !where) return;
     var pageOff = !(evData && evData.pageOn);
-    var tail = pageOff ? " The Events page itself is switched off, so only staff can see this for now." : "";
+    var tail = pageOff ? " The Get involved page itself is switched off, so only staff can see this for now." : "";
     note.textContent = "Every event on the page in date order, with this one where its date puts it and the face down card last." + tail;
     var today = evToday();
     if (evCurrent.date && evCurrent.date < today) {

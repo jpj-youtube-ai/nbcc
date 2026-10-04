@@ -273,7 +273,7 @@ const el = (id: string) => document.getElementById(id) as HTMLElement;
 const q = (sel: string) => document.querySelector(sel) as HTMLElement | null;
 const qa = (sel: string) => Array.from(document.querySelectorAll(sel)) as HTMLElement[];
 const text = (node: Element | null) => ((node && node.textContent) || "").replace(/\s+/g, " ").trim();
-const navLink = () => q('.admin-nav-link[data-view="fundraising"]') as HTMLElement;
+const navLink = () => q('.admin-nav-link[data-view="get-involved"]') as HTMLElement;
 const row = (id: number) => q(`#frList tr[data-frtoggle="${id}"]`);
 const detail = () => q("#frList [data-frdetail]");
 const sent = (method: string, path: string) => calls.filter((c) => c.method === method && c.path === path);
@@ -351,10 +351,14 @@ function asRole(r: "admin" | "editor" | "viewer") {
 
 // ---- the menu ----
 
-describe("the Fundraising menu link", () => {
-  it("sits in Content, after Events", () => {
+// Fundraising is in the Get involved tab now, with NBCC's own events: one menu entry for both
+// (admin-get-involved-tab.test.ts has the sections and who sees which).
+describe("the Get involved menu link, for fundraising", () => {
+  it("sits in Content, after Partners and before the Festive Ball", () => {
     const views = qa(".admin-nav-link").map((b) => b.getAttribute("data-view"));
-    expect(views.indexOf("fundraising")).toBe(views.indexOf("events") + 1);
+    expect(views.indexOf("get-involved")).toBe(views.indexOf("ticker") + 1);
+    expect(views.indexOf("ball")).toBe(views.indexOf("get-involved") + 1);
+    expect(views).not.toContain("fundraising");
   });
 
   for (const r of ["admin", "editor", "viewer"] as const) {
@@ -365,10 +369,20 @@ describe("the Fundraising menu link", () => {
     });
   }
 
-  it("is hidden from someone without fundraising access", async () => {
-    perms = { ...effectivePermissions({ role: "admin", permissions: null }), fundraising: "none" };
+  it("is hidden from someone with neither fundraising nor events access", async () => {
+    perms = { ...effectivePermissions({ role: "admin", permissions: null }), fundraising: "none", events: "none" };
     await signIn();
     expect(navLink().hidden).toBe(true);
+  });
+
+  it("offers nothing of fundraising to someone with events access alone", async () => {
+    perms = { ...effectivePermissions({ role: "admin", permissions: null }), fundraising: "none" };
+    await signIn();
+    expect(navLink().hidden).toBe(false);
+    navLink().click();
+    await settle();
+    expect(el("view-fundraising").hidden).toBe(true);
+    expect(sent("GET", "/api/admin/fundraisers")).toHaveLength(0);
   });
 
   it("carries the New pill when a sign up has arrived since the last visit", async () => {

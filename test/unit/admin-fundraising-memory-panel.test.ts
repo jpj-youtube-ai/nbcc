@@ -1,10 +1,14 @@
 // @vitest-environment jsdom
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, vi } from "vitest";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { createRequire } from "node:module";
 import { signAdminSession } from "../../src/admin/session";
 import { effectivePermissions, type PermissionMap } from "../../src/admin/permissions";
+
+// Each test loads the whole admin page afresh in jsdom: quick alone, but past the usual 5 seconds
+// under a full parallel run (as admin-fundraising-page.test.ts).
+vi.setConfig({ testTimeout: 20_000 });
 
 // In memory pages (Jaimie, 2026-10-03) on Admin > Fundraising, in the admin's jsdom harness (as
 // admin-fundraising-thanks-panel.test.ts): an in memory page is marked on the list, with its messages
@@ -115,7 +119,7 @@ async function openFundraising() {
   (el("adminPassword") as HTMLInputElement).value = "pw";
   el("loginForm").dispatchEvent(new Event("submit", { cancelable: true, bubbles: true }));
   await settle();
-  (q('.admin-nav-link[data-view="fundraising"]') as HTMLElement).click();
+  (q('.admin-nav-link[data-view="get-involved"]') as HTMLElement).click();
   await settle();
 }
 async function openRow(id: number) {

@@ -114,23 +114,40 @@ These are the rules the pure logic in `src/elf/` implements. Times are Europe/Lo
 - **Door states.** `shut` (clue not out), `hunting` (clue out, elf not found), `found` (claimed),
   `revealed` (the place closed for the day with the elf unclaimed: the place is shown, the elf waits,
   and the first valid claim still wins). A door in `found` or `revealed` is "open".
+- **Closing time.** Every door has one, so every door opens. A place with none set closes at 20:00.
+  A closing time that is not after the clue means that time on the next day (a place open past
+  midnight, or one that shut before its clue came out). No door's place is shown later than 20:00
+  on Christmas Eve, so everyone can finish.
 - **Guess.** One per family per door, chosen from places whose door is not open. Allowed only while
-  the door is `hunting`. Changing it replaces it. When the door opens, a family whose guess matches
-  the place has cracked it: every detective in the family at that moment gets the magnifying glass.
+  the door is `hunting`. Changing it replaces it. When the door opens, a family whose guess was
+  saved before it opened and matches the place has cracked it: every detective in the family at
+  that moment gets the magnifying glass. Nothing says whether a guess is right until the door is
+  open.
 - **Claim.** Needs: a signed-in family, the door `hunting` or `revealed`, the secret word typed
-  correctly (compared ignoring case, spaces and punctuation), at least one detective chosen, and the
-  family not having won an elf already. The earliest valid claim wins. The claim also counts as a
-  visit for the detectives chosen.
+  correctly (compared ignoring case, spaces, punctuation and accents), at least one detective
+  chosen, and the family not having won an elf already. The first valid claim to arrive wins. The
+  claim also counts as a visit for the detectives chosen.
+- **Keeping the word secret.** Every poster stays up all month and is only a link, so anyone can
+  try a word at any place from home. Three rules answer that. A wrong word gets the same answer at
+  every place, whether or not an elf is hiding there that day, so trying a made up word everywhere
+  finds nothing out. A family gets six wrong tries at a place. And a secret word has a letter and
+  at least three numbers picked at random, like SNOWBALL 472, because the list of word ideas is
+  public.
 - **Stamp.** Needs: the door open, at least one detective chosen, and either a location within the
-  allowed distance of the place (300 metres by default) or a photo. One stamp per detective per
-  door.
+  allowed distance of the place (300 metres by default, never more than 2,000) or a photo that the
+  server received. The phone's own estimate of its accuracy is not used: a phone that cannot get a
+  good fix sends a photo. One stamp per detective per door. Both proofs are the family's word: they
+  make a real visit the easy thing to do, they do not catch a determined cheat.
 - **Progress.** Doors done = cracked or visited, counted once each. Rank from doors done: 0 Trainee,
   6 Junior Detective, 12 Detective, 18 Senior Detective, 24 Graduate. Gold seal = 24 visited.
 - **Wardrobe.** A piece colour unlocks at a number of doors done. An outfit unlocks at its number of
   doors done, or for the Gold seal, or for a race win. A look is valid only if everything in it is
   unlocked for that detective.
-- **Names.** A detective name is a first name (letters, spaces, hyphens and apostrophes, 1 to 20
-  characters, passing the blocked-word filter) plus a festive surname from the fixed list.
+- **Names.** A detective name is a first name plus a festive surname from the fixed list. The first
+  name is one word of 1 to 20 characters: letters, with hyphens and apostrophes inside it. A space
+  is refused, so a surname typed after the first name is never shown. It must pass the blocked-word
+  filter however it is hyphenated or accented. This matters because a detective name goes on the
+  public calendar the moment an elf is found, before any member of staff has looked.
 
 ## What the website already has that this reuses
 

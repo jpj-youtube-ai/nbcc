@@ -20,6 +20,38 @@
 **Running things.** From the worktree root (`.claude/worktrees/elf-detective`):
 `npx vitest run test/unit/<file>` runs one test file; `npm run lint` and `npm run build` check the whole repo. This plan is Stage A: commit locally, never push, never open a PR.
 
+## Changes made after review (read this first)
+
+The tasks below are the plan as it was first written and carried out. Independent reviews then found
+gaps, and the code was changed in the commits that follow the ten tasks. Where a task's code block
+and this section disagree, this section and the code in `src/elf/` are right. The design's "Rules,
+precisely" section was brought up to date at the same time.
+
+| File | What changed after review, and why |
+|---|---|
+| `src/elf/calendar.ts` | The functions that take a door now take the `Door` type (1 to 24), which can only be had through `isDoor`, so a made up door cannot reach them. `isClockTime` was added and every time from staff is checked with it. `closingInstant` was added: it works out when a door's place closes. A place with no closing time closes at 20:00. A closing time that is not after the clue is taken as that time on the next day (a place open past midnight). Nothing is later than 20:00 on Christmas Eve, so door 24 always opens in time for everyone to finish. |
+| `src/elf/doors.ts` | `revealAt` can no longer be missing: a door that never opened could never be stamped. A closing time that is not after the clue is not trusted. A clue time that is not a real date leaves the door shut. `openedAt` was added: the moment the door's place was first shown. |
+| `src/elf/guess.ts` | `cracked` now takes the door (its state, its place, the moment it opened) and the saved guess with the time it was saved. It only answers yes once the door is open, for a guess saved before it opened, so no screen can confirm a guess while it can still be changed. |
+| `src/elf/claim.ts` | The order of the checks changed so that a wrong word gets the same answer at every place, whether or not an elf is hiding there that day. Before, trying a made up word at all 24 places from home found the elf. A family gets six wrong tries at a place (`MAX_WRONG_WORDS`, `too-many-tries`), and a missing count refuses. `isUsableSecretWord` was added: a tag's word needs a letter and at least three numbers, because the list of word ideas is public and a right guess is confirmed even on a day the elf is not out. Accents and wide letters are folded. A valid claim names its detectives once each. `earliest` was removed: who was first is settled where claims are stored. |
+| `src/elf/detectives.ts` (new) | `chosenDetectives` and `allInFamily`. Claiming and stamping both ask "which detectives are here?", and a form sends one ticked box as a single value, several as a list and none as nothing at all. Both rules now read the answer through here, and ids are compared as text. |
+| `src/elf/distance.ts` | `isNear` no longer widens the allowed distance by the phone's own estimate of its accuracy. The phone supplies that figure, so it let a phone check in from 800 metres away and undid a tighter distance set by staff. `isNear` refuses a position that is not on the globe. `nearRadius` was added: the distance staff set is used only when it is a real distance, and never beyond 2,000 metres, so an empty setting cannot switch the check off. |
+| `src/elf/stamps.ts` | A photo counts only on a plain `true` from the server. A position that is not on the globe counts as not shared. A place with no real position answers `place-unknown`, not `too-far`, so a position stored as text shows up at once. The header lists what the caller must guard. |
+| `src/elf/progress.ts` | `progressOf` takes named lists, `{ cracked, visited }`. Passed in order they could be swapped, and then 24 cracked doors looked like the gold seal. Missing lists count as empty. `promotionsBetween` never lists Trainee. |
+| `src/elf/names.ts` | A first name is one word, so a surname typed after it is never shown, and it is checked against the blocked words however it is hyphenated or accented. A phone's curly apostrophe and separate accents are accepted. Seven word ideas that were also elf names were replaced, two surnames that echoed brands were replaced, and `secretWordFrom` makes a word for a tag from an idea and three numbers. |
+
+For Stage B, which calls these rules:
+
+- The claim screen must look the same at every place and never say which door a place belongs to.
+- Count a wrong try only on a `wrong-word` answer, for each family at each place, and take the try in one step before the word is checked, or a burst of requests would each read the same count.
+- One winner for each door, one win for each family, and one stamp for each detective at each door must also be guarded where they are stored, because two requests can pass these checks in the same moment.
+- Work a door's state out at the moment a guess, a claim or a stamp is saved, never from an earlier copy of the calendar. Keep the time a guess was saved.
+- The admin must refuse a secret word that fails `isUsableSecretWord`, and should offer `secretWordFrom` with two numbers picked at random.
+- The admin should ask for a closing time for every place, and warn when a place shuts before its door's clue or soon after it. That warning must compare the two clock times: `closingInstant` has already moved such a closing on a day. It must refuse a clue later than 20:00 on Christmas Eve.
+- Build an `ElfSeason` from settings through a schema, and refuse a staff time that fails `isClockTime`.
+- Store a place's position as two numbers. A database `numeric` column comes back as text, which is not a position.
+- `hasPhoto` is true only when the server received a picture with the request and it passed the picture checks. Stamps stop after Christmas Eve; the route must check the date.
+- Ids come back from the rules as text.
+
 ## File structure
 
 | File | Responsibility |
@@ -28,6 +60,7 @@
 | `src/elf/doors.ts` | A door's state (`shut`, `hunting`, `found`, `revealed`) and what each allows |
 | `src/elf/guess.ts` | The places a family can guess from, whether a guess is allowed, whether it cracked the case |
 | `src/elf/claim.ts` | The secret word comparison, whether a claim is valid, who was first |
+| `src/elf/detectives.ts` | Added after review: which detectives a form is talking about |
 | `src/elf/distance.ts` | Metres between two points, and "is this phone near this place" |
 | `src/elf/stamps.ts` | Whether a visit earns a stamp, and on what proof |
 | `src/elf/progress.ts` | Doors done, rank, graduate, gold seal, promotions |

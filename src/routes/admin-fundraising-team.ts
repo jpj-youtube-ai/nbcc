@@ -42,6 +42,7 @@ import {
 import { CALL_WHICH, callStates, followUpToday, offListPrompt, type CallRecord, type CallStates } from "../fundraising/follow-up";
 import { summaryRecipientsSchema } from "../fundraising/summary";
 import { buildInviteEmail } from "../fundraising/team-emails";
+import { memorySender } from "../fundraising/emails";
 import { sendSummaryTest } from "../fundraising/summary-runner";
 
 // TASK-503: the fundraising team's tools, in Admin > Fundraising. Section "fundraising": viewers
@@ -135,11 +136,13 @@ async function emailInvite(
       url: inviteUrl(base(), token),
       type: inviteTypeOf(inv.type),
     });
+    // The in memory invite comes from Jodie and replies go to Jodie; every other type is from the
+    // events inbox as before. The copy to whoever signed it goes either way.
+    const sender = inviteTypeOf(inv.type) === "memory" ? memorySender() : { from: config.BALL_FROM_EMAIL, replyTo: config.BALL_FROM_EMAIL };
     await sendFundraiseInvite(inv.name, {
       email: inv.email,
       ...(cc ? { cc } : {}),
-      from: config.BALL_FROM_EMAIL,
-      replyTo: config.BALL_FROM_EMAIL,
+      ...sender,
       ...mail,
     });
     return true;

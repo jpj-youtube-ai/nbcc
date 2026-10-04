@@ -124,7 +124,7 @@ describe("an automatic email about a page for someone under 18", () => {
 
   it("thank you, from all of us", () => {
     const m = jack("finished");
-    expect(m.text).toContain("Jack's walk raised an incredible £300 for NBCC. Thank you for every step, every share and every ask. Jack has made a real difference to the children, young people and vulnerable adults we support.");
+    expect(m.text).toContain("Jack's walk raised an incredible £300 for NBCC. Thank you for every step, every share and every ask. Jack has made a real difference to the children, young people and vulnerable adults we support across South West Scotland.");
     expect(m.text).toContain("We've made Jack a certificate to say thank you. Print it, frame it, show it off!");
     expect(m.text).toContain("Jack's page stays up, so late gifts still count. And if Jack fancies doing something again, we'd love that.");
     expect(m.html).toContain(">See the certificate</a>");

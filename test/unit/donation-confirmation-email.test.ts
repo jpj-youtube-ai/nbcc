@@ -195,7 +195,9 @@ describe("buildDonationConfirmation (pure content) — REQ-060 · TASK-098", () 
       "known as NBCC, is a Scottish Charitable Incorporated Organisation.",
     );
     expect(content.text).toContain("Regulated by the Scottish Charity Regulator, OSCR.");
-    expect(content.html).toContain('class="charity-registration"');
+    // The readthrough (2026-10-04): the HTML body no longer carries the statement as a paragraph.
+    // The receipt as sent has it in the maroon footer bar: test/unit/receipt-footer.test.ts.
+    expect(content.html).not.toContain('class="charity-registration"');
   });
 });
 

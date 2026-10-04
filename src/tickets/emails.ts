@@ -1,4 +1,4 @@
-import { emailShell, heading, subheading, eyebrow, bodyP, bodyList, note, button, card, signOff, signOffText, questionsBox, questionsText } from "../email/brand";
+import { emailShell, heading, subheading, eyebrow, bodyP, bodyList, note, button, card, signOff, signOffText, questionsBox, questionsText, ABOUT_NBCC_SHORT } from "../email/brand";
 import { CHARITY_NAME, FOOTER_TEXT, OSCR_NUMBER, POSTAL_ADDRESS } from "../legal/registration";
 import { dateParts, timeText } from "../events/render";
 import { emailDate, raiseOrdinals } from "../email/dates";
@@ -74,7 +74,10 @@ function emailWhenWords(e: Pick<TicketEmailEvent, "eventDate" | "startTime" | "e
 const lineWords = (l: OrderLine) => (l.unitPence === 0 ? `${l.quantity} × ${l.typeName}, free` : `${l.quantity} × ${l.typeName} at ${pounds(l.unitPence)} each`);
 
 const NOT_A_GIFT = "Tickets are not donations, so Gift Aid does not apply to them.";
-const WHERE_IT_GOES = `Every penny of your ticket money goes to the ${CHARITY_NAME} (Scottish Charity ${OSCR_NUMBER}), helping the children, young people and vulnerable adults we support.`;
+// Who NBCC helps is said once, by the charity's own description at the end of the email (the
+// readthrough, 2026-10-04), so this line no longer ends "helping the children, young people and
+// vulnerable adults we support".
+const WHERE_IT_GOES = `Every penny of your ticket money goes to the ${CHARITY_NAME} (Scottish Charity ${OSCR_NUMBER}).`;
 
 function factRow(label: string, valueHtml: string): string {
   return (
@@ -110,7 +113,10 @@ export function buildTicketConfirmationEmail(
     bodyP(`<b>${escapeHtml(doorLine)}</b> On your phone or printed, either is fine.`) +
     (free ? "" : bodyP(escapeHtml(WHERE_IT_GOES)) + note(escapeHtml(NOT_A_GIFT))) +
     button(e.pageUrl, "See the event page") +
-    bodyP("Can't come after all? Reply to this email and we'll help.");
+    bodyP("Can't come after all? Reply to this email and we'll help.") +
+    // The buyer may never have heard of NBCC: who we are, in the charity's own words. The short one,
+    // as the email already carries the booking, the door line and where the money goes.
+    bodyP(escapeHtml(ABOUT_NBCC_SHORT));
   const text = [
     hi(o.firstName),
     "",
@@ -130,6 +136,8 @@ export function buildTicketConfirmationEmail(
     `See the event page: ${e.pageUrl}`,
     "",
     "Can't come after all? Reply to this email and we'll help.",
+    "",
+    ABOUT_NBCC_SHORT,
   ];
   return toBuyer(`Your tickets for ${e.title}`, body, text, "See you there!");
 }
@@ -194,7 +202,7 @@ export function buildRefundRequestStaffEmail(
 ): BuiltEmail {
   const what = `${e.organiserName} has asked for a refund of booking ${r.reference} (${r.buyerName}, ${r.tickets}).`;
   const steps = [
-    "Only an admin can make the refund, in Admin > Fundraising > Event tickets.",
+    "Only an admin can make the refund, in Admin > Get involved > Tickets and pledges > Event tickets.",
     "Pick the tickets to refund there: the money goes back to the buyer's card and they are emailed.",
     "If it should not be refunded, decline the request there and let the organiser know.",
     `Replying to this email replies to ${e.organiserName}.`,
@@ -270,7 +278,7 @@ export function buildOrderFlagStaffEmail(
     o.refundFailed
       ? "The refund did not go through, and the buyer has not been told. Please get in touch with them."
       : "The payment is recorded and the buyer has their tickets email.",
-    "Open the booking in Admin > Fundraising > Event tickets and check it against Stripe.",
+    "Open the booking in Admin > Get involved > Tickets and pledges > Event tickets and check it against Stripe.",
     "If the event is over its limit, speak to the organiser: you can refund this booking there, or raise the limit.",
   ];
   const line = "Thank you!";

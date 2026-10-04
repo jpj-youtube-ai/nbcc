@@ -20,7 +20,7 @@ import {
 } from "../email/brand";
 import { FOOTER_TEXT, POSTAL_ADDRESS } from "../legal/registration";
 import { raiseOrdinals } from "../email/dates";
-import { FUNDRAISING_EMAIL, MEMORY_EYEBROW, MEMORY_SIGN_OFF, STAFF_SIGN_OFF, dearGreeting, type BuiltEmail } from "./emails";
+import { FUNDRAISING_EMAIL, MEMORY_EMAIL, MEMORY_EYEBROW, MEMORY_SIGN_OFF, STAFF_SIGN_OFF, dearGreeting, type BuiltEmail } from "./emails";
 import type { InviteType } from "./invite";
 import type { SummaryLines } from "./summary";
 
@@ -38,8 +38,10 @@ const escapeHtml = (s: string): string =>
   s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
 
 // Every date in the body has its ending raised ("7th" as 7<sup>th</sup>): ../email/dates.ts.
-const shell = (body: string) =>
-  emailShell(raiseOrdinals(body), { contactEmail: FUNDRAISING_EMAIL, registration: true, postalAddress: POSTAL_ADDRESS });
+// `contact` is the address in the footer bar: the events inbox, or Jodie's for the in memory invite
+// (the readthrough, 2026-10-04).
+const shell = (body: string, contact: string = FUNDRAISING_EMAIL) =>
+  emailShell(raiseOrdinals(body), { contactEmail: contact, registration: true, postalAddress: POSTAL_ADDRESS });
 
 // --- email 7, the invite ----------------------------------------------------------------------------
 
@@ -115,7 +117,8 @@ function buildMemoryInviteEmail(o: InviteEmailInput): BuiltEmail {
     "",
     FOOTER_TEXT,
   ].join("\n");
-  return { subject: MEMORY_SUBJECT, html: shell(body), text };
+  // It comes from Jodie's address and shows it, but is still signed by whoever sent it (o.signer).
+  return { subject: MEMORY_SUBJECT, html: shell(body, MEMORY_EMAIL), text };
 }
 
 // Greeted by the first name staff typed in its own box (Jaimie 2026-10-03), so "Mary Jane" stays whole.

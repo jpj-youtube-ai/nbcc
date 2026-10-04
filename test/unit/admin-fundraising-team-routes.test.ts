@@ -530,7 +530,10 @@ describe("the in memory invite waits for sign off", () => {
     expect(team.createInvite.mock.calls[0][0].inviteType).toBe("memory");
     const mail = sendFundraiseInvite.mock.calls[0][1];
     expect(mail.subject).toBe("A page in memory of someone you love");
-    expect(mail).toMatchObject({ from: "events@nbcc.test", replyTo: "events@nbcc.test", cc: "rowan@example.com" });
+    // The readthrough (2026-10-04): an in memory invite comes from Jodie and replies go to Jodie,
+    // still copied to whoever signed it, and still signed with their first name.
+    expect(mail).toMatchObject({ from: "Jodie at NBCC <jodie@nbcc.scot>", replyTo: "jodie@nbcc.scot", cc: "rowan@example.com" });
+    expect(mail.html + mail.text).not.toContain("events@");
     expect(mail.text).toContain("Dear Mary Jane,");
     expect(mail.text).toContain("With warmest thoughts,\nRowan\nNBCC Team");
     expect(mail.text).not.toContain("!");

@@ -6,7 +6,29 @@ import { describe, it, expect, vi } from "vitest";
 vi.mock("../../src/db/pool", () => ({ pool: { query: vi.fn(), connect: vi.fn() } }));
 vi.mock("../../src/config", () => ({ config: { NODE_ENV: "test" } }));
 
-import { patchAssignments, linkFundraiserGift, toRecord } from "../../src/db/fundraisers";
+import { patchAssignments, linkFundraiserGift, toRecord, websiteChoiceChangedByStaff } from "../../src/db/fundraisers";
+import { pool } from "../../src/db/pool";
+
+// The readthrough (2026-10-04): "You're on our list" says "As you asked, we won't show it on our
+// website", which is only true if staff never changed the website choice in the admin.
+describe("who changed the website choice", () => {
+  const query = pool.query as unknown as ReturnType<typeof vi.fn>;
+
+  it("asks the history for a staff change that touched it", async () => {
+    query.mockResolvedValueOnce({ rows: [{ found: 1 }] });
+    expect(await websiteChoiceChangedByStaff(9)).toBe(true);
+    const [sql, params] = query.mock.calls[query.mock.calls.length - 1];
+    expect(sql).toContain("FROM audit_log");
+    expect(sql).toContain("action = 'fundraiser.updated'");
+    expect(sql).toContain("data->'changed' ? 'public'");
+    expect(params).toEqual([9]);
+  });
+
+  it("says no when staff never changed it", async () => {
+    query.mockResolvedValueOnce({ rows: [] });
+    expect(await websiteChoiceChangedByStaff(9)).toBe(false);
+  });
+});
 
 describe("a partial change", () => {
   it("sets only the fields given, through their own columns", () => {

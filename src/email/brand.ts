@@ -60,6 +60,12 @@ export interface ShellOptions {
   /** Add the charity registration sentence under the contact line. */
   registration?: boolean;
   /**
+   * The mandated registration lines, word for word (REGISTRATION_LINES in ../legal/registration.ts),
+   * under the contact line in place of the shorter sentence above. For a donation receipt, whose
+   * statement must be the mandated one. Each line is escaped; they sit one above the other.
+   */
+  registrationLines?: readonly string[];
+  /**
    * Add the registered postal address under the registration line. Microsoft and the other big
    * filters look for a real address; its absence is a small but real spam signal.
    */
@@ -88,10 +94,13 @@ function sponsorBand(s: SponsorCredit): string {
 export function emailShell(bodyHtml: string, options: ShellOptions = {}): string {
   const contact = options.contactEmail ?? GIVING_EMAIL;
   const sponsor = options.sponsor ? sponsorBand(options.sponsor) : "";
-  const registration = options.registration
+  const registration = options.registrationLines?.length
     ? `
+      <div style="color:${CREAM_82};font-size:11px;margin-top:8px">${options.registrationLines.map(esc).join("<br />")}</div>`
+    : options.registration
+      ? `
       <div style="color:${CREAM_82};font-size:11px;margin-top:8px">${CHARITY_REGISTRATION}</div>`
-    : "";
+      : "";
   const address = options.postalAddress
     ? `
       <div style="color:${CREAM_82};font-size:11px;margin-top:4px">${esc(options.postalAddress)}</div>`
@@ -170,6 +179,17 @@ export const signOff = (line: string): string =>
 
 /** The sign off in a plain text part. */
 export const signOffText = (line: string): string => `${line}\nNBCC Team`;
+
+// --- who NBCC is, in the charity's own words (the readthrough, 2026-10-04) --------------------------
+// The exact sentences the charity uses to describe itself, word for word ("volunteer led" with no
+// hyphen, "South West Scotland"). ONE of them goes, as its own short paragraph near the end of the
+// body, in the emails whose reader may never have dealt with NBCC: the pledge confirmation, the team
+// invite and the ticket confirmation. The full one where the email is short enough to take it, the
+// short one otherwise, and never beside another sentence that says much the same. Not in the in
+// memory emails, the Festive Ball's, staff notices or receipts.
+export const ABOUT_NBCC_FULL =
+  "NBCC is a volunteer led charity here all year for children, young people and vulnerable adults across South West Scotland, with school clothing and crisis support whenever it is needed, and every December a full bag for those who would otherwise wake up on Christmas morning with nothing to open.";
+export const ABOUT_NBCC_SHORT = "NBCC is a volunteer led charity here all year for children, young people and vulnerable adults across South West Scotland.";
 
 export const QUESTIONS_HEADING = "Got any questions?";
 export const QUESTIONS_LINE = "We'd love to hear from you. Give us a ring or drop us a line, whichever suits you.";

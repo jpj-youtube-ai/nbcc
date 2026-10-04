@@ -3097,8 +3097,12 @@ compared byte for byte in `test/unit/ball-reminder-days-to-go.test.ts`). On any 
 places that say "a week" say the real number instead: the subject and the small line above the
 heading read "4 days to go" (or "Tomorrow" the day before), and "A week on Saturday you'll be with
 us" reads "In 4 days you'll be with us" ("Tomorrow you'll be with us"). The staff button passes
-today's number too, so it is right when pressed early ("10 days to go") or late. Nobody gets it
-twice: both ways of sending write and check the one `reminder_sent_at` stamp.
+today's number too, so it is right when pressed early ("10 days to go") or late. Pressed ON the day
+of the Ball it says "Today" ("Today you'll be with us at The Park Hotel"), never "A week to go";
+pressed AFTER the Ball it is refused (409, "The Ball has been and gone, so the reminder was not
+sent.") and sends nothing. The automatic run still never sends on the day or after. Nobody gets it
+twice: both ways of sending write and check the one `reminder_sent_at` stamp. All emails shows each
+of these as a version of "A week to go".
 
 It carries the practical details **and reads back what the booker told us** — guest names,
 allergies, access needs. That is the point of it: a coeliac note that never saved is caught a week
@@ -9025,15 +9029,18 @@ for by `postManageRequest` when any of their pages is in memory); everyone else'
 **A page for someone under 18**: the automatic emails go to the parent or guardian, and
 `buildTouchEmail` now writes them for the parent throughout ("Jack's page", "Jack has raised",
 "Jack is doing great!"; "the page for James" for a name ending in s). It builds the greeting itself
-("Hi Sarah, this is about Jack's page."), so the daily run no longer applies `greetGuardian` to
-them. An adult's emails are byte for byte as they were.
+("Hi Sarah, this is about Jack's page."). `touchEmailAsSent` is still the ONE function the daily
+run, Mark finished, the admin preview and All emails call; it no longer adds the greeting itself
+(the builder has written it), so it can never be put on twice. An adult's emails are byte for byte
+as they were.
 
 **A new email, "[First name] has joined [team name]"** (`buildTeamMemberJoinedEmail`, sent by
 `sendTeamMemberJoined` in `src/fundraising/team-send.ts`, logged as `fundraiseTeamMemberJoined`):
 to the team organiser when staff approve a new team member's page, once the member's own "Your page
 is live" has gone. It is new wording, so it is **held until an admin approves it**: key
-`team_joined` in `touch_wording_approvals`, read and approved in Admin > Fundraising > Automatic
-emails with the others (`GET /api/admin/fundraising/touch` lists it as a tenth kind, `team_joined`;
+`team_joined` in `touch_wording_approvals`, read and approved in Admin > Fundraising > **All emails**
+with the others (the catalogue entry `team-member-joined`, in Teams; it counts in the "waiting for
+sign off" number until approved). `GET /api/admin/fundraising/touch` also lists it as a tenth kind, `team_joined`;
 `GET .../touch/preview/team_joined` is always the invented example; `POST` and `DELETE
 .../touch/approvals/team_joined` approve and withdraw, admins only, in History as the other
 wordings are). It is an automatic email, so it also waits for the Automatic emails switch and for

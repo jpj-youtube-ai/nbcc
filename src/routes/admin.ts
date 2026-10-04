@@ -4045,13 +4045,16 @@ export async function postAdminBallReminders(req: Request, res: Response): Promi
   const claims = await authorizeSection(req, res, "ball", "edit");
   if (!claims) return;
   try {
+    // The true time to go today, by the day in the UK. After the Ball there is nothing true to say,
+    // so the button refuses and sends nothing (the charity, 2026-10-04).
+    const { BALL_EVENT_DATE } = await import("../ball/run-up-runner");
+    const daysToGo = daysToBall(new Date(), BALL_EVENT_DATE);
+    if (daysToGo < 0) return res.status(409).json({ error: "The Ball has been and gone, so the reminder was not sent." });
     const [targets, settings] = await Promise.all([
       listBookingsNeedingReminder(),
       getBallSettings(),
     ]);
     const base = config.BALL_BASE_URL.replace(/\/+$/, "");
-    const { BALL_EVENT_DATE } = await import("../ball/run-up-runner");
-    const daysToGo = daysToBall(new Date(), BALL_EVENT_DATE);
 
     let sent = 0;
     const failed: string[] = [];
@@ -4063,8 +4066,8 @@ export async function postAdminBallReminders(req: Request, res: Response): Promi
           arrivalTime: settings.arrivalTime,
           includedNote: settings.includedNote,
           guestLink: t.guestToken ? `${base}/ball/guests/${t.guestToken}` : null,
-          // The true time to go today, so the button is never wrong either: "A week to go" only a
-          // week before, otherwise "10 days to go", "4 days to go" or "Tomorrow".
+          // So the button is never wrong either: "A week to go" only a week before, otherwise
+          // "10 days to go", "4 days to go", "Tomorrow", or "Today" on the day itself.
           daysToGo,
         },
       );

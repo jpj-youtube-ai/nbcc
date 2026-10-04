@@ -71,6 +71,16 @@ describe("the reminder sent on any other day", () => {
     expect(m.subject + m.html + m.text).not.toMatch(/a week|days to go|1 day/i);
   });
 
+  // Only the staff button can send it on the day of the Ball: the daily run never does.
+  it("says Today on the day of the Ball", () => {
+    const m = at(0);
+    expect(m.subject).toBe("Today: you're coming to the ball, BALL-EXAMPL");
+    expect(eyebrow(m.html)).toBe("Today");
+    expect(m.html).toContain("Hello Alex. Today you'll be with us at The Park Hotel. Here's everything you need.</p>");
+    expect(m.text).toContain("IT'S NEARLY HERE: TODAY\n\nHello Alex. Today you'll be with us at\nThe Park Hotel. Here's everything you need.");
+    expect(m.subject + m.html + m.text).not.toMatch(/a week|days to go|tomorrow/i);
+  });
+
   it("changes nothing else in the email", () => {
     const swap = (s: string) => s.replace(/4 days to go/g, "A week to go").replace(/4 DAYS TO GO/g, "A WEEK TO GO").replace(/In 4 days you'll/g, "A week on Saturday you'll");
     const four = at(4);

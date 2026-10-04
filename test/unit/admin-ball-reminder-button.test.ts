@@ -69,6 +69,19 @@ beforeEach(() => {
 });
 afterEach(() => vi.useRealTimers());
 
+describe("the Send the reminder button, after the Ball", () => {
+  it.each(["2026-11-08T00:30:00Z", "2026-11-09T10:00:00Z", "2026-12-01T10:00:00Z"])("pressed at %s it is refused, plainly, and sends nothing", async (now) => {
+    vi.setSystemTime(new Date(now));
+    const res = await press();
+    expect(res.statusCode).toBe(409);
+    expect(res.body).toEqual({ error: "The Ball has been and gone, so the reminder was not sent." });
+    expect(m.sendBallReminder).not.toHaveBeenCalled();
+    expect(m.markReminderSent).not.toHaveBeenCalled();
+    expect(m.listBookingsNeedingReminder).not.toHaveBeenCalled();
+    expect(m.recordAudit).not.toHaveBeenCalled();
+  });
+});
+
 describe("the Send the reminder button", () => {
   it("still sends to everyone who has not had it, stamping each as it sends", async () => {
     vi.setSystemTime(new Date("2026-10-31T10:00:00Z"));
@@ -92,6 +105,9 @@ describe("the Send the reminder button", () => {
     ["2026-10-31T10:00:00Z", "A week to go: you're coming to the ball, BALL-EXAMP1", "A week on Saturday you'll be with us"],
     ["2026-11-03T10:00:00Z", "4 days to go: you're coming to the ball, BALL-EXAMP1", "In 4 days you'll be with us"],
     ["2026-11-06T10:00:00Z", "Tomorrow: you're coming to the ball, BALL-EXAMP1", "Tomorrow you'll be with us"],
+    // On the day of the Ball itself it never says "A week to go".
+    ["2026-11-07T10:00:00Z", "Today: you're coming to the ball, BALL-EXAMP1", "Today you'll be with us"],
+    ["2026-11-07T23:30:00Z", "Today: you're coming to the ball, BALL-EXAMP1", "Today you'll be with us"],
   ])("pressed at %s it says the true time to go", async (now, subject, sentence) => {
     vi.setSystemTime(new Date(now));
     await press();

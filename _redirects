@@ -20,8 +20,7 @@
 /admin         /admin.html       200
 /my-story      /my-story.html    200
 /hub           /hub.html         200
-# Joining the mailing list. The pages its emailed link opens (/newsletter/confirm) are drawn by
-# src/routes/newsletter-signup.ts from the same file.
+# Joining the mailing list: the footer sign up form on a page of its own.
 /newsletter    /newsletter.html  200
 # Private business-supporter thank-you page (TASK-212): token-gated, noindex, reached from the
 # business's thank-you email. Served at the clean URL, like /donor-portal.

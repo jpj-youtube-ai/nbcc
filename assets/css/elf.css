@@ -683,6 +683,94 @@ form.elf-wd { display: grid; gap: 16px; padding: 0; background: none; border: 0;
   .elf-wd-styles { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px 22px; }
 }
 
+/* =================================================================
+   THE POSTER PAGE: claiming an elf, and checking in
+   Used on a phone, standing in a shop: one narrow column, big
+   targets. The loud thing is the gold card for whoever is first.
+   ================================================================= */
+
+.elf-poster-top { padding-bottom: clamp(14px, 2vw, 24px); }
+.elf-poster { padding-bottom: clamp(48px, 7vw, 88px); }
+.elf-poster > .wrap { display: grid; gap: 18px; justify-items: start; }
+.elf-poster > .wrap > * { width: 100%; }
+
+/* Where the answer to a form goes. Empty until there is one. */
+.elf-result:empty { display: none; }
+.elf-result:focus { outline: none; }
+.elf-result { scroll-margin-top: calc(var(--nav-h) + 12px); }
+
+/* Tick boxes for the family's detectives: each row is a whole button to a thumb. */
+.elf-ticks { min-width: 0; margin: 0 0 18px; padding: 0; border: 0; }
+.elf-ticks legend,
+.elf-field > label { display: block; padding: 0; margin: 0 0 10px; font-family: var(--font-head); font-weight: 800; font-size: 1.2rem; line-height: 1.25; color: var(--maroon); }
+.elf-ticks ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.elf-ticks li { position: relative; }
+.elf-ticks input { position: absolute; left: 14px; top: 50%; width: 20px; height: 20px; margin: -10px 0 0; padding: 0; accent-color: var(--holly); }
+.elf-ticks label { display: block; min-height: 48px; margin: 0; padding: 12px 14px 12px 46px; border: 1.6px solid var(--line); border-radius: 12px; background: var(--white); font-size: 1rem; font-weight: 400; cursor: pointer; overflow-wrap: anywhere; }
+.elf-ticks input:checked + label { border-color: var(--holly); background: var(--holly-soft); color: var(--holly-dark); }
+.elf-ticks input:focus-visible { outline: none; }
+.elf-ticks input:focus-visible + label { outline: 3px solid var(--holly); outline-offset: 2px; }
+
+.elf-field { margin: 0 0 16px; }
+.elf-case .elf-hint { margin: 7px 0 0; font-size: 0.9rem; color: var(--slate-soft); }
+/* The secret word, set large: the staff may want to read it over a shoulder. */
+.elf-word { background: var(--white); font-size: 1.3rem; letter-spacing: 0.06em; text-transform: uppercase; }
+.elf-field input[type="file"] { padding: 10px; background: var(--white); font-size: 0.95rem; }
+.elf-case .elf-form-status { min-height: 1.5em; margin: 12px 0; color: var(--holly-dark); }
+.elf-case .elf-form-status:empty { min-height: 0; margin: 0 0 4px; }
+.elf-case .elf-form-status.is-error { color: var(--crimson); }
+.elf-claim .btn,
+.elf-stamp .btn { width: 100%; max-width: 380px; justify-content: center; }
+.elf-claim button[disabled],
+.elf-stamp button[disabled] { opacity: 0.6; cursor: progress; }
+
+.elf-stamp__location { margin: 0 0 18px; }
+.elf-case .elf-stamp__or { margin: 16px 0 0; color: var(--slate-soft); }
+.elf-case .elf-stamp__have { display: flex; align-items: baseline; gap: 8px; padding: 10px 12px; border-radius: 12px; background: var(--holly-soft); color: var(--holly-dark); }
+.elf-poster__actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 16px; }
+.elf-poster__later { max-width: 760px; }
+.elf-poster__later h2 { margin-bottom: 8px; font-size: 1.3rem; color: var(--maroon); }
+.elf-poster__later p { margin: 0; }
+.elf-poster__links { display: flex; flex-wrap: wrap; gap: 8px 24px; margin: 4px 0 0; }
+/* An answer card brings its own way on, so the same links are not offered twice. */
+.elf-result:not(:empty) ~ .elf-poster__links { display: none; }
+
+/* "You're first!" Gold, because it is the one thing on this page the staff must not miss. */
+.elf-win {
+  position: relative;
+  max-width: 760px;
+  padding: clamp(22px, 5vw, 40px);
+  border: 2px solid var(--elf-brass);
+  border-radius: var(--radius-lg);
+  background: linear-gradient(155deg, #FBEFC4 0%, #F1D888 44%, #E0BC5A 100%);
+  box-shadow: inset 0 0 0 5px rgba(255, 253, 250, 0.55), var(--shadow);
+  color: #3A2A07;
+  text-align: center;
+  overflow: hidden;
+}
+.elf-win > * { position: relative; }
+.elf-win p { margin: 0 0 10px; }
+.elf-win h2 { margin: 6px 0 12px; font-size: clamp(2.6rem, 2rem + 4vw, 4.2rem); line-height: 1; color: var(--maroon); }
+.elf-win__door { font-size: var(--fs-eyebrow); font-weight: 600; letter-spacing: 0.2em; text-transform: uppercase; color: #5C4308; }
+.elf-win__who { font-size: 1.15rem; overflow-wrap: anywhere; }
+.elf-win__badges { list-style: none; margin: 16px 0; padding: 0; display: flex; flex-wrap: wrap; justify-content: center; gap: 12px; }
+.elf-win__badges li { display: grid; justify-items: center; gap: 6px; min-width: 132px; padding: 12px; border-radius: 12px; background: var(--card); box-shadow: var(--shadow-sm); font-size: 0.9rem; line-height: 1.35; color: var(--slate); overflow-wrap: anywhere; }
+.elf-win__badges img { width: 72px; height: auto; }
+.elf-win__now b { display: block; font-family: var(--font-head); font-weight: 800; font-size: 1.7rem; line-height: 1.2; font-variant-numeric: lining-nums tabular-nums; }
+.elf-win .elf-win__staff { max-width: 44ch; margin: 14px auto; padding: 12px 14px; border-radius: 12px; background: rgba(255, 253, 250, 0.72); }
+.elf-win__links { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 10px 22px; margin-top: 16px; }
+.elf-win .elf-link { color: #3A2A07; }
+
+/* A candy cane collected. */
+.elf-stamped { max-width: 760px; padding: clamp(20px, 4vw, 36px); border-radius: var(--radius-lg); background: var(--holly-soft); color: var(--holly-dark); }
+.elf-stamped p { margin: 0 0 10px; }
+.elf-stamped h2 { margin: 10px 0 8px; font-size: clamp(1.8rem, 1.4rem + 2vw, 2.6rem); color: var(--holly-dark); }
+.elf-stamped__cane { display: inline-grid; place-items: center; width: 84px; height: 84px; border-radius: 50%; background: var(--white); box-shadow: var(--shadow-sm); }
+.elf-stamped__who { list-style: none; margin: 12px 0 16px; padding: 0; display: grid; gap: 8px; }
+.elf-stamped__who li { padding: 10px 12px; border-radius: 12px; background: var(--card); color: var(--slate); overflow-wrap: anywhere; }
+.elf-stamped__up { color: var(--crimson); }
+.elf-stamped__links { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 22px; }
+
 /* ---------- motion: only where something changes ---------- */
 @media (hover: hover) and (prefers-reduced-motion: no-preference) {
   .elf-door { transition: transform 0.2s var(--elf-ease); }
@@ -734,4 +822,26 @@ form.elf-wd { display: grid; gap: 16px; padding: 0; background: none; border: 0;
 
   /* A section of the wardrobe opens. */
   .elf-wd.is-live .elf-wd-panel { animation: elf-drawer 0.25s var(--elf-ease); }
+
+  /* First to the elf: the gold card arrives, and light fans out behind the words once. */
+  .elf-win { animation: elf-first 0.6s var(--elf-ease-expo); }
+  @keyframes elf-first { from { opacity: 0; transform: scale(0.9); } }
+  .elf-win::before {
+    content: "";
+    position: absolute;
+    inset: -70%;
+    background: repeating-conic-gradient(from 0deg, rgba(255, 253, 250, 0.55) 0 7deg, transparent 7deg 20deg);
+    opacity: 0;
+    pointer-events: none;
+    animation: elf-rays 1.8s var(--elf-ease) 0.15s;
+  }
+  @keyframes elf-rays {
+    0% { opacity: 0; transform: rotate(0deg) scale(0.6); }
+    25% { opacity: 0.9; }
+    100% { opacity: 0; transform: rotate(38deg) scale(1.1); }
+  }
+
+  /* A candy cane lands like a rubber stamp. */
+  .elf-stamped__cane { animation: elf-stamp 0.5s var(--elf-ease-expo); }
+  @keyframes elf-stamp { from { opacity: 0; transform: scale(1.7) rotate(-14deg); } }
 }

@@ -1,6 +1,8 @@
 import type { Door } from "../calendar";
+import type { ClaimRefusal } from "../claim";
 import type { DoorState } from "../doors";
 import type { Rank } from "../progress";
+import type { StampRefusal } from "../stamps";
 import type { ElfLook, WardrobeState } from "../wardrobe";
 
 // NBCC Elf Detective School: what each screen is given. The plan is
@@ -119,16 +121,64 @@ export interface WardrobeView {
   saveUrl: string;
 }
 
+/** The page a poster's QR code opens. It is given only what the public calendar already shows about
+ *  the place's door (see posterState in poster.ts), never the door's number or its state, so the
+ *  page cannot say whether today is the day an elf hides here. */
 export interface PosterView {
-  /** The place's own code from its poster. The page never says which door it belongs to. */
+  /** The place's own code from its poster. */
   code: string;
   placeName: string;
-  /** Only what the public calendar already shows: is this place's door open? */
+  placeTown: string;
+  /** Is this place's door open on the calendar? Then visitors can check in. */
   open: boolean;
   /** Is the elf still there to be claimed? True unless the door is found. */
   claimable: boolean;
   signedIn: boolean;
+  /** The family's detectives, with who already has this place's candy cane. Empty when nobody is
+   *  signed in. Names as the family sees them. */
   detectives: { id: string; name: string; hasStamp: boolean }[];
   joinUrl: string;
+  signInUrl: string;
   calendarUrl: string;
+  hqUrl: string;
+  /** Where the two forms post when there is no script. */
+  claimUrl: string;
+  stampUrl: string;
 }
+
+/** A claim that won: what the gold "You're first!" card shows the staff. */
+export interface ClaimWin {
+  door: Door;
+  elfName: string;
+  placeName: string;
+  /** When the claim arrived, and the server's time as the card is drawn (for the ticking clock). */
+  at: Date;
+  now: Date;
+  detectives: { name: string; badgeNumber: string; elfUrl: string }[];
+  calendarUrl: string;
+  hqUrl: string;
+}
+
+/** A check in that earned candy canes. */
+export interface StampWin {
+  placeName: string;
+  detectives: {
+    name: string;
+    doorsDone: number;
+    /** The rank this visit has just earned, if it earned one. */
+    promotedTo: Rank | null;
+    /** How many things this visit has just added to the wardrobe. */
+    newThings: number;
+    wardrobeUrl: string;
+  }[];
+  calendarUrl: string;
+  hqUrl: string;
+}
+
+/** What happened to a form that was posted with no script, so the page can be drawn with the
+ *  answer in it. With the script, the same answers come back from the API instead. */
+export type PosterOutcome =
+  | { form: "claim"; ok: true; win: ClaimWin }
+  | { form: "claim"; ok: false; reason: ClaimRefusal; triesLeft?: number }
+  | { form: "stamp"; ok: true; win: StampWin }
+  | { form: "stamp"; ok: false; reason: StampRefusal };

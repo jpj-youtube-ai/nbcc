@@ -154,8 +154,8 @@ export interface PosterView {
 | `GET /api/elf/me` | `FamilyMarks`, or 401 when nobody is signed in. | calendar script |
 | `POST /api/elf/guess` | `{ ok: true }` or `{ ok: false, reason }` (`decideGuess`). | HQ script |
 | `POST /api/elf/look` | Sent `{ detectiveId, look, tried }` (`tried`: what has just been tried on, so its "New" tag can go). Answers `{ ok: true, look }`: the look as saved, after `normaliseLook` against what the detective has earned in the database, never what the page says. | wardrobe script, by itself once the choices settle |
-| `POST /api/elf/claim` | `{ ok: true, html }` (the "You're first!" card) or `{ ok: false, reason, triesLeft? }`. | poster script |
-| `POST /api/elf/stamp` | `{ ok: true, html }` or `{ ok: false, reason }`. | poster script |
+| `POST /api/elf/claim` | Sent `{ code, detectiveIds, word }`. Answers `{ ok: true, html }` (the "You're first!" card, drawn by `claimWinHtml`) or `{ ok: false, reason, message, triesLeft? }`, where `message` is `claimRefusalWords(reason, triesLeft)`: the script shows the server's words and holds none of its own. | poster script |
+| `POST /api/elf/stamp` | Sent as JSON `{ code, detectiveIds, location: { lat, lng } }`, or as a form with a `photo` file and one `detective` field for each detective. Answers `{ ok: true, html }` (`stampWinHtml`) or `{ ok: false, reason, message }` (`stampRefusalWords`). | poster script |
 
 One renderer for a door, on the server. The script never builds a door from data, so the page and its live updates cannot drift apart.
 
@@ -171,7 +171,7 @@ One renderer for a door, on the server. The script never builds a door from data
 | `src/elf/pages/calendar.ts` | `renderCalendarPage(view)`. |
 | `src/elf/pages/hq.ts` | `renderHqPage(view)`: the family's detectives, today's clue and guess, their marks. |
 | `src/elf/pages/wardrobe.ts` | `renderWardrobePage(view)`. |
-| `src/elf/pages/poster.ts` | `renderPosterPage(view)`, `claimResult(...)`, `stampResult(...)`. |
+| `src/elf/pages/poster.ts` | `renderPosterPage(view, outcome?)`, `posterState(doorState)`, `claimWinHtml(win)`, `stampWinHtml(win)`, `claimRefusalWords(reason, triesLeft?)`, `stampRefusalWords(reason)`. |
 | `assets/css/elf.css` | Every style for these screens, scoped to `.elf-page`. |
 | `assets/js/elf-calendar.js` | Opens a door's detail under its row, ticks the countdown, fetches changed doors, lays the family's marks over the board. |
 | `assets/js/elf-hq.js` | Saves the guess without leaving the page. |

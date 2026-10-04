@@ -1,6 +1,59 @@
 import { isDoor } from "../../src/elf/calendar";
 import { ELF_NAMES } from "../../src/elf/names";
-import type { CalendarView, DoorView, HqView, WardrobeView } from "../../src/elf/pages/types";
+import type { CalendarView, ClaimWin, DoorView, HqView, PosterView, StampWin, WardrobeView } from "../../src/elf/pages/types";
+
+/** The page a family sees after scanning the poster at an invented shop. Signed in, two detectives,
+ *  and the shop's door still shut on the calendar unless told otherwise. */
+export function posterView(over: Partial<PosterView> = {}): PosterView {
+  return {
+    code: "toy-shop-k4f9",
+    placeName: "The Toy Shop",
+    placeTown: "Troon",
+    open: false,
+    claimable: true,
+    signedIn: true,
+    detectives: [
+      { id: "d1", name: "Detective Ruby Tinselfoot", hasStamp: false },
+      { id: "d2", name: "Detective Leo Frostwhistle", hasStamp: false },
+    ],
+    joinUrl: "/elf/join",
+    signInUrl: "/elf/sign-in",
+    calendarUrl: "/elf",
+    hqUrl: "/elf/hq",
+    claimUrl: "/elf/p/toy-shop-k4f9/claim",
+    stampUrl: "/elf/p/toy-shop-k4f9/stamp",
+    ...over,
+  };
+}
+
+/** Ruby has just won door 7's elf. */
+export function claimWin(over: Partial<ClaimWin> = {}): ClaimWin {
+  return {
+    door: 7,
+    elfName: "Bauble",
+    placeName: "The Toy Shop",
+    at: new Date("2026-12-07T17:47:12.000Z"),
+    now: new Date("2026-12-07T17:47:13.000Z"),
+    detectives: [{ name: "Detective Ruby Tinselfoot", badgeNumber: "0427", elfUrl: "/elf/pic/d1.svg" }],
+    calendarUrl: "/elf",
+    hqUrl: "/elf/hq",
+    ...over,
+  };
+}
+
+/** Ruby and Leo have checked in. The visit took Ruby to six doors and a promotion. */
+export function stampWin(over: Partial<StampWin> = {}): StampWin {
+  return {
+    placeName: "The Toy Shop",
+    detectives: [
+      { name: "Detective Ruby Tinselfoot", doorsDone: 6, promotedTo: "Junior Detective", newThings: 4, wardrobeUrl: "/elf/hq/wardrobe/d1" },
+      { name: "Detective Leo Frostwhistle", doorsDone: 1, promotedTo: null, newThings: 0, wardrobeUrl: "/elf/hq/wardrobe/d2" },
+    ],
+    calendarUrl: "/elf",
+    hqUrl: "/elf/hq",
+    ...over,
+  };
+}
 
 /** Ruby's wardrobe with six doors done: the Christmas jumper and the tree outfit have just arrived. */
 export function wardrobeView(over: Partial<WardrobeView> = {}): WardrobeView {

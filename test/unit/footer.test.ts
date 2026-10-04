@@ -29,21 +29,15 @@ const PAGES = [
   "thank-you.html",
   "ball.html",
   "ball-terms.html",
-  // Site-pages feature: both carry privacy.html's (legitimately shorter) footer, so they join
-  // PAGES but not the byte-identity group below.
   "404.html",
   "sitemap.html",
 ];
 
-// Pages whose footer is byte-identical to index.html's (full brand paragraph,
-// "Find us at nbcc.scot" handle line, three-item "Ways to give"). Some pages
-// (portal/privacy/gift-aid/thank-you) ship a legitimately shorter footer (no
-// handle line, only two "Ways to give" items) and are intentionally excluded
-// from the byte-identity group below.
-// TASK-326: ball.html and ball-terms.html joined this group. They had carried a "Festive
-// Ball" column in place of "Ways to give"; staff asked for one footer everywhere, and
-// nothing was lost since those links all appear in the page body already.
-const IDENTICAL_FOOTER_GROUP = ["index.html", "about.html", "donate.html", "contact.html", "supporters.html", "my-story.html", "ball.html", "ball-terms.html", "newsletter.html"];
+// Every page carries the one footer: the full brand paragraph, the "Find us at nbcc.scot" handle
+// line and the three-item "Ways to give". It is kept in partials/footer.html and copied into each
+// page by scripts/sync-footer.mjs; test/unit/footer-master.test.ts holds every page to it, however
+// the page indents it. Some pages (portal, privacy, gift-aid, thank-you, 404, sitemap) once shipped
+// a shorter footer; staff asked for one footer everywhere (TASK-326 for the Ball pages, then all).
 
 describe.each(PAGES)("%s footer", (file) => {
   const footer = footerOf(read(file));
@@ -92,27 +86,11 @@ describe.each(PAGES)("%s footer", (file) => {
   });
 });
 
-describe("the footer is identical across pages that share the full footer", () => {
-  it("is byte-identical", () => {
-    const footers = IDENTICAL_FOOTER_GROUP.map((f) => footerOf(read(f)));
+describe("the footer is the same on every page", () => {
+  it("is identical, line for line, whatever the page's indentation", () => {
+    const lines = (footer: string) => footer.split(/\r?\n/).map((l) => l.trim()).join("\n");
+    const footers = PAGES.map((f) => lines(footerOf(read(f))));
     expect(footers.every((f) => f.length > 0)).toBe(true);
     expect(new Set(footers).size).toBe(1);
-  });
-});
-
-describe("the shorter-footer pages are identical to each other", () => {
-  const SHORT_FOOTER_GROUP = PAGES.filter((f) => !IDENTICAL_FOOTER_GROUP.includes(f));
-
-  it("is byte-identical", () => {
-    const footers = SHORT_FOOTER_GROUP.map((f) => footerOf(read(f)));
-    expect(footers.every((f) => f.length > 0)).toBe(true);
-    expect(new Set(footers).size).toBe(1);
-  });
-
-  it("still carries the /my-story Explore link", () => {
-    for (const file of SHORT_FOOTER_GROUP) {
-      const list = exploreList(footerOf(read(file)));
-      expect(list, `${file} Explore list`).toContain('href="/my-story"');
-    }
   });
 });

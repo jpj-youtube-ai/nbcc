@@ -89,6 +89,17 @@ Feature: Get involved and the public fundraising pages (TASK-494)
     When a visitor opens "/contact"
     Then the page does not show '<a href="/fundraise">Fundraise for us</a>'
 
+  # TASK-545: the sitemap is built on its own route, and its footer now has the link like every page.
+  # Checked by the contact link going, not the sign up link appearing: the sitemap's own list of
+  # pages prints the sign up link too, so that would pass whether or not the footer was changed.
+  Scenario: the sitemap's footer stops sending Fundraise for us to the contact page while fundraising is on
+    Given fundraising is switched on
+    When a visitor opens "/sitemap"
+    Then the page does not show '<a href="/contact">Fundraise for us</a>'
+    Given fundraising is switched off
+    When a visitor opens "/sitemap"
+    Then the page shows '<a href="/contact">Fundraise for us</a>'
+
   Scenario: the fundraising help page is there only while fundraising is on (TASK-498)
     Given fundraising is switched on
     When a visitor opens "/fundraise/help"

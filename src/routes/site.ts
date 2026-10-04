@@ -366,10 +366,12 @@ export function createSiteRouter(siteRoot: string): Router {
         fundraisingIsOn(),
       ]);
       const template = readFileSync(sitemapFile, "utf8");
-      const html = template.replace(
+      let html = template.replace(
         /<div class="sitemap-tree">[\s\S]*?<\/div>/,
         `<div class="sitemap-tree">${renderSitemapTree(SITE_PAGES, ballOpen, eventsOn, fundraisingOn)}</div>`,
       );
+      // The footer's "Fundraise for us", as on every other page (TASK-545: this page now has it).
+      if (fundraisingOn) html = (await import("../fundraising/footer-link")).addFundraiseFooterLink(html);
       res.type("html").send(html);
     } catch (err) {
       console.error("sitemap render failed:", err instanceof Error ? err.message : err);

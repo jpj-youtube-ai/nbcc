@@ -180,6 +180,39 @@ stack at ≤680px). The logo is the only `<img>` (social icons are inline SVG) a
 declares width/height + `loading="lazy"`, so the perf budget holds. Verified by
 `test/unit/footer.test.ts`.
 
+**One footer, kept in one place.** The footer's master copy is `partials/footer.html`. To change the
+footer, edit that file and run `node scripts/sync-footer.mjs`, which copies it into every page in
+the site's root that has a site footer (each page keeps its own indentation and line endings; only
+the `<footer>` element is replaced). `node scripts/sync-footer.mjs --check` changes nothing and
+lists any page out of step. `test/unit/footer-master.test.ts` fails when a page's footer differs
+from the master, so a footer edited by hand in one page, or a new page given an old footer, cannot
+ship. Every page now has the same full footer: the seven pages that once had a shorter one (no
+"Find us at" line, two "Ways to give" links) were brought into line, and the Get involved page lost
+its footer link to itself. The Festive Ball's server-built pages (guest details, thank you) carry
+only the legal strip and are not part of this.
+
+### How NBCC describes itself
+
+The charity's own words, used exactly (`test/unit/charity-description.test.ts`): "volunteer led"
+(never "volunteer run"), "South West Scotland", "a full red bag".
+
+- **Short:** "NBCC is a volunteer led charity here all year for children, young people and
+  vulnerable adults across South West Scotland." Used in every footer, as the home page's opening
+  line and share description, and (with "Scottish charity SC047995." after it) the home page's
+  search description. The About page's search and share description is the short version followed
+  by "Based in Annbank, Ayrshire."
+- **Full:** the short version, then ", with school clothing and crisis support whenever it is
+  needed, and every December a full red bag for those who would otherwise wake up on Christmas
+  morning with nothing to open." Used as the About page's opening line, followed by "We are based
+  in Annbank, Ayrshire, and reach from Girvan to Largs."
+- **"Fundraise for us" on three pages.** While fundraising is on, the server points the footer's
+  link at the sign up (`src/fundraising/footer-link.ts`) on every page it decorates, the sitemap
+  included. The 404 page and the Gift Aid declaration page go out undecorated (no extra database
+  read on a page not found, or in the middle of a declaration), so there the link stays on the
+  contact page, which is where it goes when fundraising is off.
+- Still to follow: the Festive Ball page's "Who you're supporting" paragraph (after the Ball), and
+  the emails and letters that say who NBCC is.
+
 ### Accessibility floor — skip link & landmarks (REQ-032)
 
 Every page's `<body>` opens with a **skip link** — `<a class="skip-link"
@@ -371,9 +404,9 @@ components (REQ-009), the `.rule` divider + logo lockup (REQ-007), `.reveal`
 hero-specific layout (two-column grid stacking ≤680px, `.eyebrow`, the emphasised
 `em`/`.allyear` headline treatment, proof-card positioning) — token-only colours.
 
-Content: a crimson eyebrow ("Volunteer run Scottish charity · Annbank, Ayrshire"),
+Content: a crimson eyebrow ("Volunteer led Scottish charity · Annbank, Ayrshire"),
 an emotive H1 ("You know us at Christmas. We're here all year.") with an emphasised
-element, a lede on the volunteer run, year round mission, two CTAs (**Donate now**
+element, the charity's short description as the lede, two CTAs (**Donate now**
 `.btn-primary` → `/donate`, **What we do all year** `.btn-ghost` → `/about-us`), the
 logo lockup as the illustration, and a floating proof card (`.card`) reading "7,657
 Red Bags Full of Joy delivered in 2025". Honours the copy rules (REQ-031, no dashes)
@@ -392,7 +425,7 @@ background, `--radius-lg`) holds four `.card` pillars in a responsive grid
 (4-across → 2-col ≤900px → 1-col ≤680px). Each pillar is an `<article class="card
 pillar reveal">` with a decorative `aria-hidden` inline-SVG icon (crimson via
 `currentColor` — the contrast guard forbids holly text), an `<h2>` title and a
-one-line of leaflet copy: **Volunteer run**, **South West Scotland**, **Red Bags
+one-line of leaflet copy: **Volunteer led**, **South West Scotland**, **Red Bags
 Full of Joy**, **7,657 delivered in 2025**. Reuses `.card`/`.reveal`/tokens only —
 no `<img>`, no new fonts, token-only colours. Verified by
 `test/unit/home-pillars.test.ts`.
@@ -5627,7 +5660,7 @@ The 2025 NBCC donation leaflet is the **source of truth** for page content, and
 the marketing copy follows a small house style:
 
 - **No dashes in visible copy.** Reword rather than hyphenate — "one off",
-  "year round", "volunteer run", "post Christmas", "South West Scotland" — and use
+  "year round", "volunteer led", "post Christmas", "South West Scotland" — and use
   commas, parentheses or restructured sentences instead of en/em dashes.
 - **Write "NBCC"** in full (never a mistyped variant such as "NB4CC").
 - **Beneficiaries** are always the full phrase **"children, young people and

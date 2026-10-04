@@ -1,5 +1,6 @@
 import { escapeHtml } from "../../events/render";
 import { CHARITY_NAME, REGISTRATION_LINES } from "../../legal/registration";
+import { schoolLogo } from "../logo";
 
 // NBCC Elf Detective School: the page every elf screen sits in. The plan is
 // docs/superpowers/plans/2026-10-04-elf-detective-a3-screens.md.
@@ -7,7 +8,10 @@ import { CHARITY_NAME, REGISTRATION_LINES } from "../../legal/registration";
 // A whole document as a string, the way src/ball/thank-you-page.ts is, so no file at the root of the
 // site is needed. It loads the site's own stylesheet and then assets/css/elf.css, which holds every
 // style these screens add. The bar across the top is the site's, cut down to the logo and one link,
-// and it stays solid cream: the red logo sits on cream only (.impeccable.md).
+// and it stays solid cream: the red logo sits on cream only (.impeccable.md). On the calendar the
+// logo in the bar is the charity's and leads to the site; the calendar wears the school's own logo
+// as its heading. On every other screen the school's logo takes that place in the bar and leads
+// back to the calendar: the two logos are the same peeping elf, and one of them is enough.
 //
 // Scripts are files, never text in the page, and each one only improves a page that already works
 // without it.
@@ -23,6 +27,8 @@ export interface ElfPageOptions {
   description: string;
   /** The one link in the bar across the top. */
   cta: { href: string; label: string };
+  /** The calendar's address. Given, the logo in the bar is the school's own and leads there. */
+  home?: string;
   /** The sections that go inside <main>. Already safe HTML. */
   main: string;
   /** Script files to load, by name: "elf-calendar.js". */
@@ -45,6 +51,10 @@ export function elfPage(o: ElfPageOptions): string {
     .map((name) => `<script defer src="/assets/js/${name}"></script>`)
     .join("\n");
   const robots = o.listed ? "" : '\n<meta name="robots" content="noindex, nofollow" />';
+  const home = sitePath(o.home);
+  const brand = home
+    ? `<a class="brand elf-school" href="${escapeHtml(home)}">${schoolLogo(68)}</a>`
+    : `<a class="brand" href="/"><img src="/assets/img/nbcc-logo.png" alt="${CHARITY_NAME}" width="50" height="50" /></a>`;
   return `<!doctype html>
 <html lang="en">
 <head>
@@ -59,7 +69,7 @@ export function elfPage(o: ElfPageOptions): string {
 <a class="skip-link" href="#main">Skip to content</a>
 <header class="nav" id="nav" data-region="nav">
   <div class="wrap">
-    <a class="brand" href="/"><img src="/assets/img/nbcc-logo.png" alt="${CHARITY_NAME}" width="50" height="50" /></a>
+    ${brand}
     <a class="nav-cta" href="${escapeHtml(sitePath(o.cta.href) ?? "/")}">${escapeHtml(o.cta.label)}</a>
   </div>
 </header>

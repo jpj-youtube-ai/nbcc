@@ -1,4 +1,5 @@
 import { DOOR_COUNT } from "../calendar";
+import { SCHOOL_NAME, schoolLogo } from "../logo";
 import { clockWords, countdownWords, dayWords, longDayWords, sameDay, sleepsUntil, things } from "../words";
 import { doorDetail, doorTile } from "./door";
 import { candyCane, icon } from "./icons";
@@ -132,8 +133,8 @@ export function renderCalendarPage(view: CalendarView): string {
   const main = `  <section class="page-top elf-top" aria-labelledby="elf-heading">
     <div class="wrap elf-top__grid">
       <div class="elf-top__words">
-        <span class="eyebrow">NBCC &middot; Class of ${view.year}</span>
-        <h1 id="elf-heading">Elf Detective School</h1>
+        <h1 id="elf-heading">${schoolLogo(260, SCHOOL_NAME, "elf-top__logo")}</h1>
+        <span class="eyebrow">Class of ${view.year}</span>
         <p class="lede">24 cheeky elves have escaped from the Elves' Workshop. Find them all by the Night Before Christmas.</p>
         <p class="elf-top__actions">
           <a class="btn btn-primary" href="${join}">Join the school</a>

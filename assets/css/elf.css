@@ -60,6 +60,13 @@
 /* The site hides the bar's one link on a phone, where its own menu takes over. These pages have no
    menu: that link is the only way across, so it stays. */
 .elf-page .nav-cta { display: inline-block; }
+
+/* The school's own logo, in the charity's place in the bar on every screen but the calendar. It
+   leads back to the calendar. Its lettering is dark red and green, so like the charity's mark it
+   sits on cream only. */
+.elf-page .elf-school { border-radius: 12px; }
+.elf-page .elf-school img { display: block; height: 68px; width: 68px; }
+.elf-school:focus-visible { outline: 3px solid var(--holly); outline-offset: 2px; }
 @media (max-width: 680px) {
   .elf-page .nav-cta { padding: 11px 18px; font-size: 0.9rem; }
 }
@@ -77,6 +84,8 @@
 .elf-top { padding-bottom: clamp(20px, 3vw, 36px); }
 .elf-top__grid { display: grid; gap: clamp(22px, 4vw, 48px); align-items: center; }
 .elf-top h1 { font-size: var(--fs-page-intro); text-wrap: balance; }
+/* On the calendar the logo IS the heading. */
+.elf-top__logo { display: block; width: clamp(190px, 46vw, 260px); max-width: 100%; height: auto; margin: -6px 0 14px -6px; }
 .elf-top .lede { margin-top: 14px; }
 .elf-top__actions { display: flex; flex-wrap: wrap; gap: 12px; margin: 22px 0 0; }
 @media (min-width: 981px) {

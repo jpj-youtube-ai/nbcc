@@ -271,6 +271,7 @@ export function renderPosterPage(view: PosterView, outcome?: PosterOutcome): str
     title: view.placeName,
     description: "A hiding place in NBCC Elf Detective School: claim the elf with its secret word, or check in for a candy cane.",
     cta: { href: view.calendarUrl, label: "The calendar" },
+    home: view.calendarUrl,
     main,
     scripts: ["elf-poster.js"],
   });

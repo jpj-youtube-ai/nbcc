@@ -288,6 +288,7 @@ export function renderWardrobePage(view: WardrobeView): string {
     title: "The wardrobe",
     description: "Dress your elf detective: hats, scarves, gadgets and whole outfits that unlock as the doors open.",
     cta: { href: view.hqUrl, label: "Detective HQ" },
+    home: view.calendarUrl,
     main,
     scripts: ["elf-wardrobe.js", "elf-wardrobe-ui.js"],
   });

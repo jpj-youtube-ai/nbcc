@@ -123,6 +123,8 @@ export interface WardrobeView {
   /** What has not been tried on yet: "style:colour" for a piece, the id for an outfit. */
   fresh: string[];
   hqUrl: string;
+  /** The calendar: where the school's logo in the bar leads. */
+  calendarUrl: string;
   /** Where the form posts when there is no script. */
   saveUrl: string;
 }

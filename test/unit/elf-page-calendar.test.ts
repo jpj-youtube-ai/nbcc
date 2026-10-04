@@ -29,7 +29,9 @@ describe("the calendar page", () => {
   it("is a whole page with one heading, the site's styles and its own", () => {
     const doc = page(view(AFTERNOON));
     expect(doc.querySelectorAll("h1").length).toBe(1);
-    expect(words(doc.querySelector("h1"))).toBe("Elf Detective School");
+    // The heading is the school's logo, which spells the name out.
+    expect(doc.querySelector("h1 img")!.getAttribute("alt")).toBe("NBCC Elf Detective School");
+    expect(words(doc.querySelector("h1"))).toBe("");
     expect(doc.title).toBe("Elf Detective School | Night Before Christmas Campaign");
     const sheets = [...doc.querySelectorAll('link[rel="stylesheet"]')].map((l) => l.getAttribute("href"));
     expect(sheets).toEqual(["/assets/css/styles.css", "/assets/css/elf.css"]);

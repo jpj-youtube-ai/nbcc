@@ -1,9 +1,10 @@
 import { escapeHtml } from "../events/render";
 import { materialAssets, shell } from "../fundraising/materials";
 import { qrSvg } from "../fundraising/qr";
-import { MATERIALS_STATEMENT } from "../legal/registration";
+import { CHARITY_NAME, MATERIALS_STATEMENT } from "../legal/registration";
 import { DOOR_COUNT, isDoor, type Door } from "./calendar";
 import { isUsableSecretWord } from "./claim";
+import { SCHOOL_NAME, schoolLogoData } from "./logo";
 import { detectiveName, type DetectiveNameParts } from "./names";
 import type { Rank } from "./progress";
 import { drawElf, type WardrobeState } from "./wardrobe";
@@ -16,6 +17,9 @@ import { clockWords, longDayWords } from "./words";
 // graduate's certificate, and the share card. The four printed ones sit in the site's own print
 // page (shell in src/fundraising/materials.ts), with its fonts and its "Print or save as PDF"
 // button, so they print the way NBCC's other materials do.
+//
+// The school's own logo is on the poster, the certificate and the share card, always on cream:
+// its lettering is dark red, so it never goes on the dark red band (src/elf/logo.ts).
 //
 // Two of them hold secrets. The staff card names the place's day, and the tag carries the elf's
 // secret word: both are for staff to print, never for a public address. The poster is the opposite:
@@ -96,6 +100,9 @@ const BASE_CSS = `
   .elf-band{background:var(--maroon);color:var(--cream);padding:9mm 14mm;display:flex;align-items:center;gap:8mm}
   .elf-band img{width:24mm;height:24mm}
   .elf-band p{margin:0;font-family:var(--head);font-weight:800;font-size:19pt;line-height:1.15}
+  .elf-band--slim{padding:5mm 14mm;gap:5mm}
+  .elf-band--slim img{width:15mm;height:15mm}
+  .elf-band--slim p{font-size:14pt}
   .elf-body{flex:1;padding:10mm 14mm 0;display:flex;flex-direction:column}
   h1{font-family:var(--head);font-weight:800;color:var(--crimson);margin:0;line-height:1.05}
   h2{font-family:var(--head);font-weight:800;color:var(--maroon);margin:7mm 0 2mm;font-size:15pt}
@@ -106,7 +113,14 @@ const BASE_CSS = `
 
 const band = (logo: string): string =>
   `<div class="elf-band"><img src="${logo}" alt="NBCC" width="96" height="96"><p>NBCC Elf Detective School</p></div>`;
+/** The band for a page that wears the school's logo below it: slimmer, and it names the charity,
+ *  because the logo already names the school. */
+const slimBand = (logo: string): string =>
+  `<div class="elf-band elf-band--slim"><img src="${logo}" alt="" width="60" height="60"><p>${escapeHtml(CHARITY_NAME)}</p></div>`;
 const statement = `<p class="elf-statement">${escapeHtml(MATERIALS_STATEMENT)}</p>`;
+/** The school's logo on paper, `mm` millimetres square. */
+const paperLogo = (mm: number): string =>
+  `<img class="elf-logo" src="${schoolLogoData("print")}" alt="${SCHOOL_NAME}" width="${mm * 4}" height="${mm * 4}" style="width:${mm}mm;height:${mm}mm">`;
 
 /** The poster a hiding place puts in its window. */
 export function renderElfPoster(p: PlacePrint): string {
@@ -118,8 +132,11 @@ export function renderElfPoster(p: PlacePrint): string {
   const place = escapeHtml(p.placeName);
   const css = `${BASE_CSS}
   .poster h1{font-size:43pt;margin-top:2mm}
+  .poster .head{display:flex;align-items:center;justify-content:space-between;gap:8mm}
+  .poster .head img{flex:none}
+  .poster .head h1,.poster .head .where{text-wrap:balance}
   .poster .where{font-family:var(--head);font-weight:800;font-size:26pt;color:var(--maroon);margin:4mm 0 0}
-  .poster .scan{display:flex;gap:10mm;align-items:center;margin:8mm 0 7mm}
+  .poster .scan{display:flex;gap:10mm;align-items:center;margin:6mm 0 5mm}
   .poster .p-qr{flex:none;width:92mm;height:92mm;background:#fff;border-radius:4mm;padding:3mm;border:.6mm solid var(--line)}
   .poster .p-qr svg{width:100%;height:100%;display:block}
   .poster .scan p{font-size:15pt}
@@ -127,10 +144,15 @@ export function renderElfPoster(p: PlacePrint): string {
   .poster .how p{font-size:15.5pt;margin-bottom:3mm}
   .poster .elf-grown{font-size:14pt}`;
   const body = `<div class="page portrait poster">
-${band(assets.logoOnDark)}
+${slimBand(assets.logoOnDark)}
 <div class="elf-body">
-  <h1>This is a hiding place</h1>
-  <p class="where" style="font-size:${wherePt}pt">${place}, ${escapeHtml(p.placeTown)}</p>
+  <div class="head">
+    <div>
+      <h1>This is a hiding place</h1>
+      <p class="where" style="font-size:${wherePt}pt">${place}, ${escapeHtml(p.placeTown)}</p>
+    </div>
+    ${paperLogo(46)}
+  </div>
   <div class="scan">
     <div class="p-qr">${qrSvg(url, { title: `QR code for ${p.placeName}'s Elf Detective School page` })}</div>
     <p><b>Detectives, scan here</b> with a phone's camera.</p>
@@ -241,7 +263,9 @@ export function renderElfCertificate(c: CertificatePrint): string {
   .cert-frame{flex:1;border:1.2mm solid var(--gold);border-radius:5mm;outline:.4mm solid var(--gold-soft);outline-offset:-3mm;padding:10mm 14mm 6mm;
     display:grid;grid-template-columns:1fr 62mm;gap:8mm;align-items:center}
   .cert h1{font-family:var(--head);font-weight:800;color:var(--crimson);font-size:38pt;line-height:1.1;margin:0 0 6mm}
-  .cert .class{font-size:12pt;letter-spacing:.2em;text-transform:uppercase;color:var(--holly);margin:0 0 3mm}
+  .cert .class{font-size:12pt;letter-spacing:.2em;text-transform:uppercase;color:var(--holly);margin:0}
+  .cert .school{display:flex;align-items:center;gap:6mm;margin:0 0 4mm}
+  .cert .school img{flex:none}
   .cert p{margin:0 0 3mm;font-size:15pt;line-height:1.5}
   .cert .who{font-family:var(--head);font-weight:800;font-size:42pt;line-height:1.1;color:var(--maroon);margin:2mm 0 5mm;overflow-wrap:anywhere}
   .cert .small{font-size:11.5pt;color:var(--muted)}
@@ -254,7 +278,7 @@ export function renderElfCertificate(c: CertificatePrint): string {
   const body = `<div class="page landscape cert">
 <div class="cert-frame">
   <div>
-    <p class="class">NBCC Elf Detective School &middot; Class of ${year}</p>
+    <div class="school">${paperLogo(34)}<p class="class">Class of ${year}</p></div>
     <h1>Graduate Elf Detective</h1>
     <p>This is to say that</p>
     <p class="who">${name}</p>
@@ -272,7 +296,7 @@ ${statement}
   return shell({ title: `Elf Detective School certificate for ${name}`, paper: "A4 landscape", fontCss: assets.fontCss, css, toolbar: `<span>Certificate for ${name}</span>`, body });
 }
 
-/** The card a family can share: the elf and the rank, never a photo, and the public form of the
+/** The card a family can share: the school's logo, the elf and the rank, never a photo, and the public form of the
  *  name. One SVG of 1200 by 630; Stage B turns it into a PNG. It uses fonts every computer has,
  *  because a picture made on the server cannot fetch the site's own. */
 export function shareCardSvg(s: ShareCardPrint): string {
@@ -284,14 +308,15 @@ export function shareCardSvg(s: ShareCardPrint): string {
   // 620 units beside the elf. A bold serif letter is a little over half as wide as it is tall.
   const fit = (words: string, biggest: number): number => Math.max(24, Math.min(biggest, Math.floor(620 / (Math.max(1, words.length) * 0.56))));
   return (
-    `<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630" role="img" aria-label="${escapeHtml(`${publicName}, ${s.rank}`)}">` +
+    `<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630" role="img" aria-label="${escapeHtml(`${SCHOOL_NAME}: ${publicName}, ${s.rank}`)}">` +
     `<rect width="1200" height="630" fill="#F8F5EE"/>` +
     `<rect x="24" y="24" width="1152" height="582" rx="28" fill="none" stroke="#C02238" stroke-width="6"/>` +
     `<g transform="translate(70 68)">${elf}</g>` +
-    `<text x="510" y="170" font-family="${sans}" font-size="30" letter-spacing="5" fill="#1A531A">NBCC Elf Detective School ${count(s.year)}</text>` +
-    `<text x="510" y="270" font-family="${serif}" font-weight="700" font-size="${fit(publicName, 58)}" fill="#800000">${escapeHtml(publicName)}</text>` +
-    `<text x="510" y="360" font-family="${serif}" font-weight="700" font-size="${fit(s.rank, 76)}" fill="#C02238">${escapeHtml(s.rank)}</text>` +
-    `<text x="510" y="440" font-family="${sans}" font-size="34" fill="#333333">${Math.min(DOOR_COUNT, count(s.doorsDone))} of ${DOOR_COUNT} doors done</text>` +
+    `<image href="${schoolLogoData("card")}" x="500" y="50" width="200" height="200"/>` +
+    `<text x="730" y="165" font-family="${sans}" font-size="30" letter-spacing="5" fill="#1A531A">Class of ${count(s.year)}</text>` +
+    `<text x="510" y="335" font-family="${serif}" font-weight="700" font-size="${fit(publicName, 58)}" fill="#800000">${escapeHtml(publicName)}</text>` +
+    `<text x="510" y="425" font-family="${serif}" font-weight="700" font-size="${fit(s.rank, 76)}" fill="#C02238">${escapeHtml(s.rank)}</text>` +
+    `<text x="510" y="500" font-family="${sans}" font-size="34" fill="#333333">${Math.min(DOOR_COUNT, count(s.doorsDone))} of ${DOOR_COUNT} doors done</text>` +
     `</svg>`
   );
 }

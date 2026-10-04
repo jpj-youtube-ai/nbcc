@@ -215,6 +215,7 @@ export function renderHqPage(view: HqView): string {
     title: "Detective HQ",
     description: "Your family's Elf Detective School page: today's clue, your guess, and your detectives' progress.",
     cta: { href: view.calendarUrl, label: "The calendar" },
+    home: view.calendarUrl,
     main,
     scripts: ["elf-hq.js"],
   });

@@ -90,6 +90,7 @@ export function wardrobeView(over: Partial<WardrobeView> = {}): WardrobeView {
     state: { doorsDone: 6, goldSeal: false, wonRace: false },
     fresh: ["jumper:red", "jumper:green", "boots:red", "tree"],
     hqUrl: "/elf/hq",
+    calendarUrl: "/elf",
     saveUrl: "/elf/hq/wardrobe/d1",
     ...over,
   };

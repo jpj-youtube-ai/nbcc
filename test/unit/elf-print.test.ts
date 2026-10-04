@@ -3,6 +3,7 @@ import { describe, it, expect } from "vitest";
 import { renderElfCertificate, renderElfPoster, renderElfTag, renderStaffCard, shareCardSvg } from "../../src/elf/print";
 import type { CertificatePrint, PlacePrint, ShareCardPrint, StaffCardPrint } from "../../src/elf/print";
 import { MATERIALS_STATEMENT } from "../../src/legal/registration";
+import { schoolLogoData } from "../../src/elf/logo";
 import { defaultLook, drawElf } from "../../src/elf/wardrobe";
 
 // NBCC Elf Detective School: the things NBCC prints or a family shares. Every shop, elf, word and
@@ -228,7 +229,8 @@ describe("the share card", () => {
     const text = words(doc.documentElement);
     expect(text).toContain("Junior Detective");
     expect(text).toContain("6 of 24 doors done");
-    expect(text).toContain("NBCC Elf Detective School 2026");
+    expect(text).toContain("Class of 2026");
+    expect(doc.documentElement.getAttribute("aria-label")).toBe("NBCC Elf Detective School: Detective R. Tinselfoot, Junior Detective");
   });
 
   it("sets a long name smaller so that it stays on the card", () => {
@@ -242,7 +244,10 @@ describe("the share card", () => {
   });
 
   it("shows the elf, never a photo", () => {
-    expect(svg).not.toMatch(/<image\b/);
+    // The one picture on it is the school's logo.
+    const pictures = svg.match(/<image\b[^>]*>/g) ?? [];
+    expect(pictures.length).toBe(1);
+    expect(pictures[0]).toContain(schoolLogoData("card"));
     expect(svg).toContain(drawElf(defaultLook(), { doorsDone: 6 }, { size: 380, backdrop: true, label: false, key: "share" }).replace(/^<svg[^>]*>/, "").slice(0, 200));
   });
 

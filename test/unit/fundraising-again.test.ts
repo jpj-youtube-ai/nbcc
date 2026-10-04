@@ -109,3 +109,29 @@ describe("what it fills in", () => {
     expect(againPrefill(rec({ path: "event", targetPence: null }), NOW).targetPence).toBeNull();
   });
 });
+
+// A family should never reach this for a page in memory of someone (no year on email goes), but if a
+// link ever opens one, the form opens on the gentle in memory path, never the raising money one.
+describe("what it fills in for a page in memory of someone", () => {
+  const memory = rec({ inMemory: true, kind: "memory_flowers", title: "Remembering Jean 1948 to 2026", memoryName: "Jean Example", memoryDates: "1948 to 2026" } as Partial<FundraiserRecord>);
+
+  it("opens the in memory path, with who it remembers", () => {
+    const p = againPrefill(memory, NOW);
+    expect(p.path).toBe("memory");
+    expect(p).toMatchObject({ kind: "memory_flowers", memoryName: "Jean Example", memoryDates: "1948 to 2026", firstName: "Sam", email: "sam@example.com" });
+  });
+
+  it("never changes a year in the page's name: it may be a year of their life", () => {
+    expect(againPrefill(memory, NOW).title).toBe("Remembering Jean 1948 to 2026");
+  });
+
+  it("is gentle too for a page in a category about memory that staff added", () => {
+    expect(againPrefill(rec({ kind: "in_memory" as never }), NOW).path).toBe("memory");
+  });
+
+  it("gives no memory details for any other page", () => {
+    const p = againPrefill(rec(), NOW);
+    expect(p).not.toHaveProperty("memoryName");
+    expect(p).not.toHaveProperty("memoryDates");
+  });
+});

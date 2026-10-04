@@ -1174,17 +1174,22 @@
         .then(function (data) {
           if (!data) return;
           againToken = againMatch[1];
-          // A choice, only when none is made yet, and only one the form offers.
+          // A choice, only when none is made yet, and only one the form offers. The path first, so
+          // the kind is chosen from the list that path shows: a page in memory of someone opens on
+          // the gentle in memory path, with its own ways of giving.
           ["path", "kind"].forEach(function (name) {
             if (radio(name) || typeof data[name] !== "string") return;
-            var pick = form.querySelector('input[name="' + name + '"][value="' + String(data[name]).replace(/[^a-z0-9_]/gi, "") + '"]');
+            var picks = Array.prototype.slice.call(form.querySelectorAll('input[name="' + name + '"][value="' + String(data[name]).replace(/[^a-z0-9_]/gi, "") + '"]'));
+            var pick = picks.filter(inPlayEl)[0] || picks[0];
             if (pick) pick.checked = true;
+            if (name === "path") applyAll();
           });
           var target = typeof data.targetPence === "number" && data.targetPence > 0 ? String(data.targetPence % 100 === 0 ? data.targetPence / 100 : (data.targetPence / 100).toFixed(2)) : "";
           [
             ["title", data.title], ["description", data.description], ["target", target], ["venue", data.venue], ["town", data.town],
             ["kindOther", data.kindOther], ["instagram", data.instagram], ["facebook", data.facebook], ["firstName", data.firstName],
             ["lastName", data.lastName], ["email", data.email], ["phone", data.phone],
+            ["memoryName", data.memoryName], ["memoryDates", data.memoryDates],
           ].forEach(function (pair) {
             var box = el(pair[0]);
             if (box && !String(box.value || "").trim() && typeof pair[1] === "string" && pair[1]) box.value = pair[1];

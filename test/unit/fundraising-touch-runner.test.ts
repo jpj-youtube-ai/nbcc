@@ -304,6 +304,18 @@ describe("a year on: Do it again", () => {
   const YEAR_ON = new Date("2027-12-06T08:00:00.000Z");
   const finished = () => [candidate(fr({ status: "finished" }, 61200))];
 
+  // The real in memory guard (no stand in): a year on from a page in memory of someone, nothing goes
+  // and no Do it again link is ever made for it.
+  it("never goes to a page in memory of someone, and makes no link for it", async () => {
+    for (const memory of [{ inMemory: true, memoryName: "Jean Example" }, { kind: "in_memory" }]) {
+      const d = deps({ readState: vi.fn(async () => [candidate(fr({ status: "finished", ...memory } as Partial<FundraiserRecord>, 61200))]) });
+      expect(await runTouchEmails(YEAR_ON, d)).toMatchObject({ sent: 0 });
+      expect(d.againLink).not.toHaveBeenCalled();
+      expect(d.send).not.toHaveBeenCalled();
+      expect(d.claim).not.toHaveBeenCalled();
+    }
+  });
+
   it("makes a one use link to the form, filled in from last year, and puts it on the button", async () => {
     const d = deps({ readState: vi.fn(async () => finished()) });
     expect(await runTouchEmails(YEAR_ON, d)).toMatchObject({ sent: 1 });

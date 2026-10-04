@@ -111,6 +111,23 @@ describe("after approval", () => {
     expect(sent.html + sent.text).not.toContain("As you asked");
   });
 
+  // A team member's page takes "shown on the website" from the team: the member was never asked.
+  // So their email never says "As you asked", whoever chose it for the team (review of PR #666).
+  it("does not say a team member asked for it: the choice was the team's, not theirs", async () => {
+    await sendApprovedEmail(record({ title: "Alex's page for The Example Runners", name: "Alex Example", public: false, teamId: 4 }));
+    const sent = mail.sendFundraiseApproved.mock.calls[0][1];
+    expect(sent.subject).toBe("You're on our list: Alex's page for The Example Runners");
+    expect(sent.html + sent.text).not.toContain("As you asked");
+    expect(sent.text).toContain("We'll be in touch about anything you asked us for.");
+    // Not even looked up: the history of the member's own page could only ever say "nobody changed it".
+    expect(db.websiteChoiceChangedByStaff).not.toHaveBeenCalled();
+  });
+
+  it("does not say it to someone who has since left their team either", async () => {
+    await sendApprovedEmail(record({ name: "Alex Example", public: false, teamId: 4, teamLeftAt: "2026-10-03T09:00:00.000Z" }));
+    expect(mail.sendFundraiseApproved.mock.calls[0][1].text).not.toContain("As you asked");
+  });
+
   it("does not look up who changed it for someone with a page", async () => {
     await sendApprovedEmail(record({ title: "Sam's Walk", name: "Sam Example" }));
     expect(db.websiteChoiceChangedByStaff).not.toHaveBeenCalled();

@@ -212,7 +212,7 @@ const SIGNUP: CatalogueEmail[] = [
       v("usual", "The usual one (they asked us not to show it on the website)", onList(SAM)),
       v("group", GROUP_LABEL, onList(ARMS)),
       // The readthrough (2026-10-04): "As you asked" is only said when they did ask.
-      v("staff-hid", "Staff took it off the website in the admin, so it does not say “As you asked”", onList(SAM, "staff")),
+      v("staff-hid", "Staff took it off the website, or it is a team member's page: it does not say “As you asked”", onList(SAM, "staff")),
     ],
   },
   {

@@ -480,8 +480,9 @@ function memoryStaffEmail(f: StaffSummary, o: { adminUrl: string }): BuiltEmail 
  * means one that is not to be shown there (hasPage in ./model.ts: every sign up is raising money or
  * an event, and a public one of either has a page, whether or not fundraising is switched on). So it
  * says "As you asked, we won't show it on our website." `hiddenBy: "staff"` is the one case where
- * that would not be true: staff unticked "show it on the website" in the admin, so the organiser
- * did not ask, and the sentence is left out.
+ * that would not be true, and the sentence is left out: staff unticked "show it on the website" in
+ * the admin, or the page is a team member's (it takes the choice from its team, so the member was
+ * never asked).
  */
 export function buildApprovedEmail(
   f: Greeted & { title: string; path?: string; booking?: FundraiserRecord["booking"] },

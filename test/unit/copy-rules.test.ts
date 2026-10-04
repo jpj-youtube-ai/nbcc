@@ -41,6 +41,8 @@ const PAGES = [
   "fundraise-help.html",
   // TASK-504: the logo pack.
   "fundraise-logos.html",
+  // Joining the mailing list.
+  "newsletter.html",
 ].filter((f) => existsSync(resolve(ROOT, f)));
 
 const VISIBLE_ATTRS = ["alt", "title", "aria-label", "placeholder"];

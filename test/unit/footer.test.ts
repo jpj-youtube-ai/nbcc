@@ -24,6 +24,7 @@ const PAGES = [
   "my-story.html",
   "portal.html",
   "privacy.html",
+  "newsletter.html",
   "gift-aid.html",
   "thank-you.html",
   "ball.html",
@@ -42,7 +43,7 @@ const PAGES = [
 // TASK-326: ball.html and ball-terms.html joined this group. They had carried a "Festive
 // Ball" column in place of "Ways to give"; staff asked for one footer everywhere, and
 // nothing was lost since those links all appear in the page body already.
-const IDENTICAL_FOOTER_GROUP = ["index.html", "about.html", "donate.html", "contact.html", "supporters.html", "my-story.html", "ball.html", "ball-terms.html"];
+const IDENTICAL_FOOTER_GROUP = ["index.html", "about.html", "donate.html", "contact.html", "supporters.html", "my-story.html", "ball.html", "ball-terms.html", "newsletter.html"];
 
 describe.each(PAGES)("%s footer", (file) => {
   const footer = footerOf(read(file));

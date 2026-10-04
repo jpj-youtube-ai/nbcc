@@ -37,6 +37,7 @@ import { sesWebhookRouter } from "./routes/ses-webhook";
 import { pulseRouter } from "./routes/pulse";
 import { preferencesRouter } from "./routes/preferences";
 import { subscribeRouter } from "./routes/subscribe";
+import { newsletterSignupRouter } from "./routes/newsletter-signup";
 import { unsubscribeRouter } from "./routes/unsubscribe";
 import { thankYouLetterRouter } from "./routes/thank-you";
 import { businessRouter } from "./routes/business";
@@ -184,6 +185,9 @@ export function createApp() {
   app.use(unsubscribeRouter);
   // Public footer signup (TASK-261) — JSON POST, rate-limited + honeypotted in the route.
   app.use(subscribeRouter);
+  // Joining the mailing list from /newsletter, with a confirm by email step: the form's API. Its
+  // pages are on the site router (src/routes/site.ts). It only adds people to the newsletter's list.
+  app.use(newsletterSignupRouter);
   // Public printable thank-you letter page (TASK-165/REQ-069). Also before the site catch-all so its
   // wildcard doesn't shadow /thank-you/letter/:token.
   app.use(thankYouLetterRouter);

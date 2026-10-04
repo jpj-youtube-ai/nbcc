@@ -252,6 +252,8 @@ describe("which pages carry it", () => {
     "fundraise-help.html",
     // TASK-504: the logo pack.
     "fundraise-logos.html",
+    // Joining the mailing list.
+    "newsletter.html",
   ];
   const TAG = '<script defer src="/assets/js/pulse.js"></script>';
 

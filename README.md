@@ -56,6 +56,7 @@ Each page is served at a clean, canonical URL (no `.html`):
 | `/donor-portal` | `portal.html` |
 | `/business/thank-you` | `business-thank-you.html` |
 | `/privacy` | `privacy.html` |
+| `/newsletter` | `newsletter.html` (joining the mailing list) |
 | `/my-story` | `my-story.html` |
 
 `/donate/thank-you` is the post-payment confirmation page Stripe returns the
@@ -1245,6 +1246,78 @@ future marketing sit inside the regulatory framework:
   reassurance states it to the donor. This is a standing **requirement**, not an assumption, for any
   monthly-gift or plan-change comms.
 Both lines are guarded by `test/unit/fundraising-governance.test.ts`.
+
+### Joining the mailing list, with a confirm by email step (`/newsletter`)
+
+`newsletter.html` is a public page at the clean URL `/newsletter`: a short heading, two lines on
+what people will get (occasional news, a few emails a year, unsubscribe at any time), a form with
+**First name** and **Email**, the Turnstile spam check, a link to the privacy notice, and one
+button, "Join our mailing list". There are no tick boxes: pressing the button is the consent, and
+the words beside it say what is being asked for. Under the form is "Who we are", the charity's own
+sentence, word for word (`WHO_WE_ARE` in `src/mailing-list/model.ts`; the short version,
+`WHO_WE_ARE_SHORT`, is in the email). It is on the site map, and not in the main menu.
+
+**It only adds people to the list the newsletter already uses.** Nothing about how newsletters are
+written, previewed, sent, tracked or unsubscribed is changed, and no newsletter code was edited. A
+confirmed person is added by calling the website's existing self sign up, `subscribeSelf`
+(`src/newsletter/self-signup.ts`), exactly as the footer form on every page does: the `newsletter`
+list, `consent_source` `footer` (the existing value for "signed up themselves on the website"),
+`consented_at` now, `added_by` NULL, and the usual welcome email. That it came from the newsletter
+page, confirmed by email, is written to the audit log (`newsletter_signup.confirmed`, with
+`source: "newsletter page"`). A new `consent_source` value was deliberately NOT added: it would need
+a change to the `list_subscribers` check constraint and to newsletter code.
+
+How it works (`src/routes/newsletter-signup.ts`):
+
+| Route | What it does |
+|---|---|
+| `GET /newsletter` | the page (`_redirects`) |
+| `GET /api/newsletter/captcha` | the Turnstile site key, or null when the check is off |
+| `POST /api/newsletter/signup` | `{ firstName, email }`: emails ONE link to confirm |
+| `GET /newsletter/confirm?t=` | "One more step": a page with a "Yes, add me" button |
+| `POST /newsletter/confirm` | adds them to the list, and says thank you |
+
+- **The same answer for everyone.** The form always answers `200 { status: "check_email" }` and the
+  page shows "Check your email", whether the address is new, already on the list, unsubscribed, or
+  on the stop list. Nobody can use the form to find out who is on the list.
+- **Opening the link adds nobody.** Mail security software opens every link in an email, so the
+  link only shows a page; the button on it (a plain form `POST`, no JavaScript needed) is what adds
+  them. This is the same rule the unsubscribe link and the pledge confirm link follow.
+- **The link** is 32 random bytes, only ever in the email: the table keeps its SHA-256 hash. It
+  works once (the row is deleted when it is used) and for 7 days. An expired, used or made up link
+  shows "This link no longer works" with a button to start again.
+- **Limits**, the same shape as the pledge form: 8 requests per caller in 10 minutes, 4 per email
+  address in 15 minutes, and a fresh link to the same address no more often than every 10 minutes
+  (asking again sooner gets the same answer and no second email). A hidden box catches robots, and
+  only our own pages may post the form. In production the form is closed (503) if the spam check is
+  not set up or cannot answer, because this form emails whoever is named on it.
+- **Who is never added.** An address on the stop list for a bounce or a complaint
+  (`email_suppressions`) is sent nothing when it asks, and is not added even if it confirms a link
+  sent earlier; it sees the same thank you. Someone already on the list is thanked and nothing
+  about them changes (no second welcome). Someone who unsubscribed and now signs up again
+  themselves is added again with a fresh consent time, exactly as the footer form and the donation
+  form's tick box already allow.
+- **The email** (`src/mailing-list/confirm-email.ts`, log kind `newsletterSignupConfirm`) is short
+  and in the shared brand shell: "One more step", a button "Yes, add me to the mailing list", and a
+  line that it can be ignored. It is NOT a newsletter, so it is sent **From `MAIL_FROM`
+  (`noreply@nbcc.scot`) on the apex with the transactional configuration set** (no click tracking),
+  Reply-To `NEWSLETTER_REPLY_TO_EMAIL` (`newsletter@nbcc.scot`, which receives), and never from
+  `news.nbcc.scot`. It is not a fundraising email, so it is on the allow-list in
+  `test/unit/email-catalogue-guard.test.ts` rather than in All emails.
+- **Data.** One new table, `newsletter_signup_requests` (migration `1791200000250`): the address,
+  the first name, the link's hash, and when it was made, sent and expires. A request nobody
+  confirms is deleted once its link expires (7 days) by the daily task that already runs
+  (`src/scripts/send-reminders.ts`, `purgeSignupRequests`).
+- **The footer form.** Every other page's footer still has the short "Keep in touch" form
+  (TASK-261), unchanged, which joins people at once with a tick box. This page does not show it as
+  well.
+
+Pages and script: `newsletter.html` (also the frame for the three pages the link opens, drawn by
+`src/mailing-list/render.ts` between its markers), `assets/js/newsletter-signup.js`,
+`assets/css/newsletter.css`. Tests: `test/unit/newsletter-signup-*.test.ts` (routes, email, model,
+database, migration, and the page in jsdom with its Dockerfile, clean URL and site map checks) and
+`features/newsletter-signup.feature`. The page is held to the same weight budget as the four main
+pages (`test/unit/perf-budget.test.ts`).
 
 ### Checkout contract (REQ-028)
 

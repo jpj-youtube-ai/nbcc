@@ -208,6 +208,15 @@ if (require.main === module) {
       } catch (err) {
         console.error("sponsor pledges paid twice alert failed:", err instanceof Error ? err.message : err);
       }
+      // Joining the mailing list from /newsletter: a request nobody confirmed by email is deleted once
+      // its link has expired (7 days). Not an email, and nothing to do with the mailing list itself.
+      // Its own try/catch, like every pass here.
+      try {
+        const { purgeSignupRequests } = await import("../db/newsletter-signups");
+        console.error(`mailing list sign up tidy up: deleted=${await purgeSignupRequests(new Date())}`);
+      } catch (err) {
+        console.error("mailing list sign up tidy up failed:", err instanceof Error ? err.message : err);
+      }
       // Email-audit retention: prune email_log rows past their six-tax-years window
       // (src/email/log-retention.ts). Rides this existing daily task for the same reason the
       // ball run-up does — one more statement on a schedule that already exists — and in its

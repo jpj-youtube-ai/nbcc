@@ -75,6 +75,9 @@ const OTHER_PARTS_OF_THE_SITE = [
   "businessReminder",
   "outreach",
   "backupAlert",
+  // Joining the mailing list from /newsletter: the one email asking someone to confirm. It belongs to
+  // the mailing list sign up, not to fundraising, pledges, tickets or the Ball, so it is not in All emails.
+  "newsletterSignupConfirm",
 ];
 
 const client = read("src/clients/email.ts");

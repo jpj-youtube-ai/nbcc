@@ -124,12 +124,12 @@
             <h2 class="sr-only" id="rb-panel-title">Your bag</h2>
             <div class="rb-bags" data-rb-bags data-count="1" aria-hidden="true"><!-- red-bag:bag --></div>
             <p class="rb-more" data-rb-more hidden></p>
-            <!-- The phone bar (below) shows only while this block, the real total and Donate, is off screen. -->
+            <!-- The bottom bar (below) shows only while this block, the real total and Donate, is off screen. -->
             <div data-rb-watch>
             <!-- ONE polite region, read whole: a tap is announced once, the status and the total together. -->
             <div class="rb-said" role="status" aria-live="polite" aria-atomic="true">
               <p class="rb-status" data-rb-status>Your bag is empty. Pop something in.</p>
-              <p class="rb-total"><span class="rb-total__label">Your total</span> <strong class="rb-total__sum"><span data-rb-total>£0</span><span class="rb-total__per" data-rb-per-month hidden> a month</span></strong></p>
+              <p class="rb-total"><span class="rb-total__label">Your total</span> <strong class="rb-total__sum"><span data-rb-total>£0</span><span class="rb-total__per" data-rb-per-month hidden> every month</span></strong></p>
             </div>
             <p class="rb-nojs" data-nojs>Filling a bag needs JavaScript switched on. You can still donate on our <a href="/donate">donate page</a>.</p>
             <div class="rb-give" data-needs-js hidden>
@@ -160,9 +160,9 @@
         <div class="wrap"><!-- red-bag:details --></div>
       </section>
 
-      <!-- Phones only (assets/css/red-bag.css): a slim bar at the foot of the screen with the total and
-           a Donate button, shown by the script while the real ones above are out of sight, so nothing
-           is ever shown twice. Not a live region: the status line already says each change. -->
+      <!-- At every width: a slim bar at the foot of the screen with the total and a Donate button,
+           shown by the script while the real ones above are out of sight, so nothing is ever shown
+           twice. Not a live region: the status line already says each change. -->
       <div class="rb-bar" data-rb-bar hidden>
         <p class="rb-bar__total">Your bag <strong data-rb-bar-total>£0</strong></p>
         <button class="btn btn-primary rb-bar__donate" type="button" data-rb-bar-donate>Donate</button>

@@ -133,7 +133,7 @@ export function renderRedBagDetails(): string {
   return (
     '<div class="card card-lg rb-details">' +
     '<h2 class="rb-details__title" id="rb-details-title" tabindex="-1">Your details</h2>' +
-    '<p class="rb-details__sum">Your Red Bag donation: <strong data-rb-details-total>£0</strong><span data-rb-details-monthly hidden> a month</span>. ' +
+    '<p class="rb-details__sum">Your Red Bag donation: <strong data-rb-details-total>£0</strong><span data-rb-details-monthly hidden> every month</span>. ' +
     '<button class="rb-link" type="button" data-rb-back>Back to my bag</button></p>' +
     '<form id="rbDetailsForm" class="rb-form" novalidate>' +
     '<p class="form-error-summary" role="alert" data-rb-error hidden></p>' +

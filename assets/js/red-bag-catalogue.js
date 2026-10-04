@@ -236,11 +236,13 @@
   /**
    * The top-up a round-up adds: whatever takes the donor's own items (and examples) up to the
    * target they chose. So it shrinks as they add things, grows back as they take things out, and
-   * is nothing once their own items reach or pass the target. Whole pence.
+   * is nothing once their own items reach or pass the target. It never stands alone: with none of
+   * their own choices in the bag there is nothing to round up, and it is nothing. Whole pence.
    */
   function roundUpPence(ownPence, targetPence) {
     var own = Math.max(0, Math.floor(ownPence || 0));
     var target = Math.max(0, Math.floor(targetPence || 0));
+    if (own === 0) return 0;
     return target > own ? target - own : 0;
   }
 

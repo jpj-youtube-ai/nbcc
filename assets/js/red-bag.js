@@ -7,7 +7,8 @@
 //   - the round-up: one button by the total offering the NEXT milestone only (half a bag, a full
 //     bag, then the next whole bag). Pressed, it adds "A little extra to round up" under "Also in
 //     your bag". It keeps its TARGET, so the extra shrinks and grows as the bag changes and the
-//     total stays put. Simply extra money: it buys nothing;
+//     total stays put. Emptying the bag clears it: a round-up never stands alone. Simply extra
+//     money: it buys nothing;
 //   - once or monthly: two buttons, "Give once" and "Give monthly", as on the donate page;
 //   - the bags, the status line and the total, kept in step. The sums and the words come from the
 //     one catalogue (assets/js/red-bag-catalogue.js, window.NBCCRedBag), never from here;
@@ -102,8 +103,8 @@
     var summary = form ? form.querySelector("[data-rb-error]") : null;
     var payBtn = form ? form.querySelector("[data-rb-pay]") : null;
     var preview = !!(doc.body && doc.body.getAttribute("data-rb-preview") === "true");
-    // The phone bar: the total and a Donate button at the foot of the screen (phones only, by the
-    // stylesheet), shown while the real ones are out of sight.
+    // The bottom bar: the total and a Donate button at the foot of the screen, at every width,
+    // shown while the real ones are out of sight.
     var bar = doc.querySelector("[data-rb-bar]");
     var barTotal = doc.querySelector("[data-rb-bar-total]");
     var barDonate = doc.querySelector("[data-rb-bar-donate]");
@@ -194,6 +195,9 @@
 
     // --- everything that follows the total ------------------------------------------------------
     function refresh() {
+      // A round-up never stands alone: once their own choices come to nothing it is cleared, for
+      // good, so it does not come back when something goes in again.
+      if (roundTarget && own() === 0) roundTarget = 0;
       var pence = total();
       drawBags(pence);
       setText(status, rb.statusLine(pence));
@@ -425,7 +429,7 @@
       refreshBar();
     }
 
-    // One Donate, two buttons: the real one, and the phone bar's. Under £2 the nudge shows; from
+    // One Donate, two buttons: the real one, and the bottom bar's. Under £2 the nudge shows; from
     // the bar it is also brought into view, since the bar only shows while the nudge's place is
     // off screen.
     function pressDonate(fromBar) {
@@ -528,7 +532,7 @@
       var postcode = byId("rbPostcode");
       if (postcodeField) postcodeField.hidden = abroad;
       if (postcode) postcode.disabled = !giftAid || abroad;
-      if (payBtn && !busy) payBtn.textContent = pence ? "Donate " + a + (month ? " a month" : "") : "Donate";
+      if (payBtn && !busy) payBtn.textContent = pence ? "Donate " + a + (month ? " every month" : "") : "Donate";
     }
 
     function payload() {
@@ -757,7 +761,7 @@
     var plain = thanks.querySelector("[data-rb-thanks-plain]");
     var aid = thanks.querySelector("[data-rb-thanks-giftaid]");
     if (ok && totalLine) {
-      setText(thanks.querySelector("[data-rb-thanks-amount]"), rb.pounds(gift.pence) + (gift.monthly ? " a month" : ""));
+      setText(thanks.querySelector("[data-rb-thanks-amount]"), rb.pounds(gift.pence) + (gift.monthly ? " every month" : ""));
       totalLine.hidden = false;
       if (plain) plain.hidden = true;
       if (aid && gift.giftAid === true) {

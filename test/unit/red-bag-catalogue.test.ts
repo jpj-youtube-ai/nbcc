@@ -256,7 +256,15 @@ describe("rounding up: the top-up for a target", () => {
   });
 
   it("shrinks as items go in, and grows back as they come out, so the total stays at the target", () => {
-    for (const own of [1800, 1900, 2400, 2499, 1000, 10, 0]) expect(own + rb.roundUpPence(own, 2500), String(own)).toBe(2500);
+    for (const own of [1800, 1900, 2400, 2499, 1000, 10, 1]) expect(own + rb.roundUpPence(own, 2500), String(own)).toBe(2500);
+  });
+
+  // Jaimie, 4 October 2026: emptying the bag clears the round-up. There is nothing to round up.
+  it("never stands alone: with none of the donor's own choices in the bag it is nothing", () => {
+    expect(rb.roundUpPence(0, 2500)).toBe(0);
+    expect(rb.roundUpPence(0, 5000)).toBe(0);
+    expect(rb.roundUpPence(0, 10000)).toBe(0);
+    expect(rb.roundUpPence(-5, 2500)).toBe(0);
   });
 
   it("is nothing once the donor's own items reach or pass the target", () => {

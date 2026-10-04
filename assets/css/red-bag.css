@@ -281,6 +281,26 @@
 .rb-share__actions{display:flex;flex-wrap:wrap;gap:12px;margin-top:16px}
 .rb-share__status{min-height:1.5em;font-size:.92rem;color:var(--holly-dark)}
 
+/* ---- the bottom bar, at every width: the total and a Donate button, in reach while the real ones
+   are scrolled out of sight; the script hides it once they are on screen. The strip spans the
+   screen, and its padding is the page's own gutter (growing beyond the page's widest), so what is
+   in it sits in line with the page. Clear of the phone's home bar. ---- */
+.rb-bar{
+  display:flex;position:fixed;left:0;right:0;bottom:0;z-index:90;
+  align-items:center;justify-content:space-between;gap:12px;
+  padding-block:9px calc(9px + env(safe-area-inset-bottom));
+  padding-inline:max(var(--pad),calc((100% - var(--maxw)) / 2 + var(--pad)));
+  background:var(--card);border-top:1px solid color-mix(in srgb,var(--maroon) 24%,transparent);
+}
+.rb-bar__total{margin:0;min-width:0;font-weight:600;line-height:1.2;color:var(--slate)}
+.rb-bar__total strong{
+  margin-left:4px;font-family:var(--font-head);font-weight:800;font-size:1.45rem;
+  color:var(--crimson);font-variant-numeric:tabular-nums;white-space:nowrap;
+}
+.rb-bar__donate{flex:0 0 auto;min-height:44px;padding:10px 22px;box-shadow:none}
+/* while it shows, the page is longer by its height, so it never rests on the end of the footer */
+body.rb-bar-on{padding-bottom:calc(64px + env(safe-area-inset-bottom))}
+
 /* ---- desktop: two columns. The paper, at a slight tilt, down the left; on the right the bag at
    the top and the themes under it. The second row takes what is left, so the themes start straight
    under the bag however long the paper is. Nothing sticks and nothing scrolls inside a box. ---- */
@@ -292,6 +312,8 @@
   .rb-real{grid-column:1 / -1}
   .rb-themes{grid-template-columns:minmax(0,1fr);gap:24px}
   .rb-need__head{margin-bottom:20px}
+  /* the bar's total sits beside its button, under the bag's column, not far across the page */
+  .rb-bar{justify-content:flex-end;gap:20px}
   .rb-need__head h2{font-size:clamp(1.45rem,1.1rem + .9vw,1.75rem)}
 }
 
@@ -303,28 +325,6 @@
   .rb-mode[aria-pressed="true"]::before{margin-right:4px}
 }
 
-/* ---- the phone bar: never drawn at desktop widths, where the bag is beside the list ---- */
-.rb-bar{display:none}
-
-/* ---- stacked: the list, the themes, then the bag ---- */
-@media (max-width:860px){
-  /* the total and a Donate button, in reach while the list is scrolled; the script hides it once
-     the real ones are on screen. Clear of the phone's home bar. */
-  .rb-bar{
-    display:flex;position:fixed;left:0;right:0;bottom:0;z-index:90;
-    align-items:center;justify-content:space-between;gap:12px;
-    padding:9px clamp(16px,5vw,28px) calc(9px + env(safe-area-inset-bottom));
-    background:var(--card);border-top:1px solid color-mix(in srgb,var(--maroon) 24%,transparent);
-  }
-  .rb-bar__total{margin:0;min-width:0;font-weight:600;line-height:1.2;color:var(--slate)}
-  .rb-bar__total strong{
-    margin-left:4px;font-family:var(--font-head);font-weight:800;font-size:1.45rem;
-    color:var(--crimson);font-variant-numeric:tabular-nums;white-space:nowrap;
-  }
-  .rb-bar__donate{flex:0 0 auto;min-height:44px;padding:10px 22px;box-shadow:none}
-  /* while it shows, the page is longer by its height, so it never rests on the end of the footer */
-  body.rb-bar-on{padding-bottom:calc(64px + env(safe-area-inset-bottom))}
-}
 @media (max-width:520px){
   /* the price drops under the name, so a long name has room beside the stepper */
   .rb-item{grid-template-columns:minmax(0,1fr) auto;column-gap:10px}

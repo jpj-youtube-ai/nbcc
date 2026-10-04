@@ -1,5 +1,7 @@
 import { UK_POSTCODE_RE } from "../declarations/fields";
 import { ALL_DONATIONS_WORDING, SINGLE_DONATION_WORDING } from "../declarations/wording";
+import { BLOCKED_NAME_LISTS } from "../donors/display-name-filter";
+import { MATERIALS_STATEMENT } from "../legal/registration";
 import { redBag, type RedBagCatalogue } from "./catalogue";
 
 // Fill a Red Bag: the parts of the page the server draws into fill-a-red-bag.html, where its
@@ -15,6 +17,9 @@ export const DETAILS_MARKER = "<!-- red-bag:details -->";
 export const PREVIEW_MARKER = "<!-- red-bag:preview -->";
 export const BAG_MARKER = "<!-- red-bag:bag -->";
 export const REAL_MARKER = "<!-- red-bag:real -->";
+// The thank you page only: the charity's statement on the certificate, and the name filter's lists.
+export const STATEMENT_MARKER = "<!-- red-bag:statement -->";
+export const NAME_FILTER_MARKER = "<!-- red-bag:name-filter -->";
 
 /**
  * "Prefer to give the real thing?" points here. The address did not resolve on 3 October 2026;
@@ -234,13 +239,27 @@ function markPreview(html: string): string {
 }
 
 /**
- * The thank you page, /fill/thank-you (fill-thank-you.html): the tied red bag drawn in, and the
- * staff strip on a preview. Everything else on it is in the file, and reads without JavaScript.
+ * The supporter wall's bad word lists (src/donors/display-name-filter.ts), as JSON for the thank
+ * you page's script: a donor may add a name to the picture and the certificate there, and that name
+ * never leaves the browser, so it is screened in the browser, against the site's one list. Our own
+ * fixed words, and "<" is written so that nothing here can end the element it sits in.
+ */
+export function renderNameFilter(): string {
+  return JSON.stringify({ words: BLOCKED_NAME_LISTS.words, inside: BLOCKED_NAME_LISTS.inside }).replace(/</g, "\u003c");
+}
+
+/**
+ * The thank you page, /fill/thank-you (fill-thank-you.html): the tied red bag drawn in, the
+ * charity's statement on the certificate to print (the one every printed piece carries,
+ * MATERIALS_STATEMENT), the name filter's lists, and the staff strip on a preview. Everything else
+ * on it is in the file, and reads without JavaScript.
  */
 export function renderRedBagThanksPage(template: string, opts: Pick<RedBagPageOptions, "preview">): string {
   const html = template
     .split(BAG_MARKER)
     .join(BAG_SVG)
+    .replace(STATEMENT_MARKER, escapeHtml(MATERIALS_STATEMENT))
+    .replace(NAME_FILTER_MARKER, renderNameFilter())
     .replace(PREVIEW_MARKER, opts.preview ? PREVIEW_STRIP : "");
   return opts.preview ? markPreview(html) : html;
 }

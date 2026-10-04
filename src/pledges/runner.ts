@@ -1,8 +1,8 @@
 import { config } from "../config";
 import { sendFundraisePledge, sendFundraisePledgeStaff, type FundraiseEmailMessage } from "../clients/email";
 import { londonToday } from "../events/model";
-import { buildPledgeConfirmEmail, buildPledgeEmail, buildPledgeStaffEmail } from "./emails";
-import { payLinkRefusal, pledgeEmailDue, pounds, retentionAction, type PledgeEmailKind } from "./model";
+import { buildPledgeConfirmEmail, buildPledgeEmail, buildPledgeStaffEmail, pledgesPaidTwiceNote } from "./emails";
+import { payLinkRefusal, pledgeEmailDue, retentionAction, type PledgeEmailKind } from "./model";
 import { signPledgeToken } from "./token";
 import type { PledgeRecord, PledgeWithFundraiser } from "../db/pledges";
 
@@ -426,18 +426,7 @@ export async function sendDoublePaidAlerts(deps: PledgeRunDeps = realPledgeDeps)
   try {
     const rows = await deps.listDoublePaid();
     if (rows.length === 0) return 0;
-    const subject = `${rows.length} ${rows.length === 1 ? "pledge" : "pledges"} paid twice: check and refund`;
-    // Two different things: a pledge paid twice (the second payment carries no Gift Aid), and one
-    // marked as paid in cash that was then paid online (that one payment keeps its Gift Aid).
-    const lines = [
-      "Please look at these in Admin, Fundraising, Sponsor pledges, then press Mark as checked.",
-      ...rows.map((c) => {
-        const what = `${c.f.title}: pledge ${c.p.id} (${pounds(c.p.amountPence)})`;
-        return c.p.cashMarkedAt
-          ? `${what}. The sponsor was marked as paid in cash and has now also paid online. Check which is right and refund if needed.`
-          : `${what} was paid twice. The second payment is on the page as a donation with no Gift Aid. Check it and refund the extra one.`;
-      }),
-    ];
+    const { subject, lines } = pledgesPaidTwiceNote(rows.map((c) => ({ title: c.f.title, pledgeId: c.p.id, amountPence: c.p.amountPence, cashMarked: Boolean(c.p.cashMarkedAt) })));
     if (!(await sendPledgeStaffNote(subject, lines, deps))) return 0;
     await deps.markAlerted(rows.map((c) => c.p.id));
     return rows.length;

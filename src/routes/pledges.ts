@@ -11,7 +11,7 @@ import { hasPage, pagePath, type FundraiserRecord } from "../fundraising/model";
 import { safeFirstName } from "../fundraising/emails";
 import type { PledgeRecord, PledgeWithFundraiser } from "../db/pledges";
 import type { PledgeCheckoutInput } from "../pledges/checkout";
-import { buildPledgeEmail, PLEDGE_EMAIL_LABELS, PLEDGE_EMAIL_WHEN, samplePledgeEmailData } from "../pledges/emails";
+import { PLEDGE_EMAIL_LABELS, PLEDGE_EMAIL_WHEN, pledgeHiddenNote } from "../pledges/emails";
 import {
   PLEDGE_WORDING_KEYS,
   canPledge,
@@ -60,7 +60,7 @@ import { newPledgeNonce, pledgeIdOfToken, verifyPledgeToken, type PledgeLinkPurp
 //
 // Staff, Admin > Fundraising (section "fundraising"):
 //   GET    /api/admin/fundraising/pledges                 every fundraiser's pledges, with emails   view
-//   GET    /api/admin/fundraising/pledges/preview/:key    one of the two emails, rendered           view
+//   (the two emails to sponsors are read in All emails: src/routes/admin-fundraising-emails.ts)
 //   POST   /api/admin/fundraising/pledges/approvals/:key  approve its wording                       admin
 //   DELETE /api/admin/fundraising/pledges/approvals/:key  withdraw that approval                    admin
 //   POST   /api/admin/fundraising/pledges/send-pay-links  new pay links to everyone unpaid          admin
@@ -608,10 +608,8 @@ export function makePledgeHandlers(deps: PledgeRouteDeps) {
       if (!p) return res.status(409).json(CANNOT_CHANGE);
       // Staff are told, by pledge number: never the sponsor's name or address in an email.
       if (hidden) {
-        await deps.notifyStaff("A pledge was hidden by its organiser", [
-          `${own.f.title}: pledge ${p.id} (${pounds(p.amountPence)}) was hidden from the page by its organiser. It is still a pledge, and its sponsor will still be asked to pay.`,
-          "If its name or message should not have been there at all, you can cancel it or hide its message in Admin, Fundraising, Sponsor pledges.",
-        ]);
+        const note = pledgeHiddenNote({ title: own.f.title, pledgeId: p.id, amountPence: p.amountPence });
+        await deps.notifyStaff(note.subject, note.lines);
       }
       return res.status(200).json({ pledge: forOrganiser(p) });
     } catch (err) {
@@ -670,20 +668,6 @@ export function makePledgeHandlers(deps: PledgeRouteDeps) {
       });
     } catch (err) {
       console.error("admin pledges read failed:", why(err));
-      return res.status(500).json(UNAVAILABLE);
-    }
-  }
-
-  async function getAdminPreview(req: Request, res: Response): Promise<Response | void> {
-    if (!(await deps.authorize(req, res, "view"))) return;
-    const key = req.params.key;
-    if (!isKey(key)) return res.status(404).json({ error: "There is no pledge email of that kind" });
-    try {
-      const approvals = await approvalsByKey();
-      const mail = buildPledgeEmail(key, samplePledgeEmailData(deps.baseUrl));
-      return res.status(200).json({ key, label: PLEDGE_EMAIL_LABELS[key], when: PLEDGE_EMAIL_WHEN[key], approval: approvals.map[key] ?? null, approvalsUnavailable: approvals.unavailable, ...mail });
-    } catch (err) {
-      console.error("admin pledge email preview failed:", why(err));
       return res.status(500).json(UNAVAILABLE);
     }
   }
@@ -809,7 +793,6 @@ export function makePledgeHandlers(deps: PledgeRouteDeps) {
     postOrganiserCash,
     postOrganiserHide,
     getAdminPledges,
-    getAdminPreview,
     postApproval,
     deleteApproval,
     postAdminSend,
@@ -941,7 +924,6 @@ export const pledgesRouter = Router();
   pledgesRouter.post("/api/fundraise/manage/fundraisers/:id/pledges/:pledgeId/cash", h.postOrganiserCash);
   pledgesRouter.post("/api/fundraise/manage/fundraisers/:id/pledges/:pledgeId/hide", h.postOrganiserHide);
   pledgesRouter.get("/api/admin/fundraising/pledges", h.getAdminPledges);
-  pledgesRouter.get("/api/admin/fundraising/pledges/preview/:key", h.getAdminPreview);
   pledgesRouter.post("/api/admin/fundraising/pledges/approvals/:key", h.postApproval);
   pledgesRouter.delete("/api/admin/fundraising/pledges/approvals/:key", h.deleteApproval);
   pledgesRouter.post("/api/admin/fundraising/pledges/send-pay-links", h.postAdminSendAll);

@@ -697,13 +697,8 @@ describe("staff", () => {
     }
   });
 
-  it("read each email before it is ever sent", async () => {
-    const res = mockRes();
-    await makePledgeHandlers(deps()).getAdminPreview(req({ params: { key: "pledge_pay" } }), res as never);
-    expect(res.body).toMatchObject({ key: "pledge_pay", subject: "Sam finished Sam's Santa Dash! Here's your link to pay your £10 pledge", approval: null });
-    const none = mockRes();
-    await makePledgeHandlers(deps()).getAdminPreview(req({ params: { key: "target" } }), none as never);
-    expect(none.statusCode).toBe(404);
+  it("no longer has a preview of its own: the two emails are read in All emails", () => {
+    expect(makePledgeHandlers(deps())).not.toHaveProperty("getAdminPreview");
   });
 
   it("only an admin approves a wording, and only one of the two pledge wordings", async () => {

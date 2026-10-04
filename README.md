@@ -1343,7 +1343,8 @@ hosted-Checkout redirect stays the default fallback and no-JS safety net.
 | `POST /api/fundraisers/:slug/pledges` | **implemented** | Sponsor pledges (public; "Sponsor now, pay after" on a sponsorship fundraiser's page: a promise, never money, and unconfirmed until the sponsor confirms by email. See **Sponsor pledges**) |
 | `GET` \| `POST /pledge/confirm`, `/pledge/pay`, `/pledge/cancel` | **implemented** | Sponsor pledges (the sponsor, by the signed link in an email: confirm the pledge, pay it through Stripe Checkout, or cancel it quietly. Each link only asks; a button does the thing) |
 | `GET /api/fundraise/manage/pledges`, `POST /api/fundraise/manage/fundraisers/:id/pledges/:pledgeId/cash` \| `hide` | **implemented** | Sponsor pledges (the signed in organiser: confirmed pledges by name, never emails; "Paid me in cash"; hide one from their page) |
-| `GET /api/admin/fundraising/pledges`, `.../pledges/preview/:key`, `POST` \| `DELETE .../pledges/approvals/:key`, `POST .../pledges/send-pay-links`, `POST /api/admin/pledges/:id/send-pay-link` \| `cancel` \| `message` \| `checked` | **implemented** | Sponsor pledges (staff with fundraising: view to look, edit to act, admin to approve the two emails' wording and to send new pay links to everyone unpaid) |
+| `GET /api/admin/fundraising/emails/summary`, `GET /api/admin/fundraising/emails`, `GET /api/admin/fundraising/emails/:id/:version` | **implemented** | All emails (staff with fundraising view: every fundraising, pledge, ticket and Festive Ball email, listed from one catalogue and rendered with the real builders and invented sample data. Read only: approving stays with the three endpoints that already did it. See **All emails, in Admin > Fundraising**) |
+| `GET /api/admin/fundraising/pledges`, `POST` \| `DELETE .../pledges/approvals/:key`, `POST .../pledges/send-pay-links`, `POST /api/admin/pledges/:id/send-pay-link` \| `cancel` \| `message` \| `checked` | **implemented** | Sponsor pledges (staff with fundraising: view to look, edit to act, admin to approve the two emails' wording and to send new pay links to everyone unpaid) |
 | `GET /api/fundraise/manage/fundraisers/:id/materials/:piece` | **implemented** | TASK-504 (the signed in organiser's poster, pictures to share, sponsor form or certificate, as a whole print page; only their own, approved or finished, and the certificate once finished; anyone else's is a 404, no session a `401` page, and a 404 while fundraising is off. See **Community fundraising, materials**) |
 | `GET /api/admin/fundraisers/:id/materials/:piece` | **implemented** | TASK-504 (the same pages for staff with fundraising: view, for any approved or finished fundraiser whether or not fundraising is on; the certificate as a marked preview before it is finished) |
 | `GET /api/fundraise/manage/fundraisers/:id/materials/qr-code` and `GET /api/admin/fundraisers/:id/materials/qr-code` | **implemented** | "Print the QR code": the page's own QR code on one clean A4 page, with the name (or "In memory of ..."), the code 120mm across, the web address in words under it and the charity statement (and the sharing statement, when shared). For a fundraiser or an event that has a page, approved or finished; a 404 for one with no page. From "Print your QR code" in the private area and "Print the QR code" beside the code in Admin > Fundraising (`renderQrSheet`, `src/fundraising/materials.ts`) |
@@ -8124,10 +8125,14 @@ The in memory wording is **held for sign off** like new automatic email wording,
 (`touch_wording_approvals`, key `invite_memory`; nothing is seeded as approved). Choosing a type shows
 its email to read under "Read the email they will get" (an example, never a real link, signed by the
 signer chosen in the form and read again when that changes); for In memory
-it opens by itself with **Approve this wording** (admins only, after a question; **Withdraw approval**
-once approved). Until it is approved the Send button rests with "The in memory invite wording is
-waiting for sign off. Read it and approve it first.", and the server refuses one all the same
-(`409`), storing and emailing nothing. A resend of an in memory invite is held the same way if the
+it opens by itself and says whether it is approved. It is approved, and its approval withdrawn, in
+the **All emails** card (admins only; see **All emails, in Admin > Fundraising**), not in the form.
+Until it is approved the Send button rests with "The in memory invite wording is waiting for sign
+off, so this invite cannot be sent yet." and a link, **Approve it in All emails** (**Read it in All
+emails** for an editor, who is told only an admin can approve it), which opens that card at the in
+memory invite. The server refuses one all the same (`409`, "The in memory invite wording is waiting
+for sign off. Read it and approve it first."), storing and emailing nothing. The form reads the sign
+off again when it changes in All emails, so Send wakes up without a reload and what was typed stays. A resend of an in memory invite is held the same way if the
 approval is withdrawn, leaving its old link working. The server checks the sign off before it starts
 and again inside the transaction that stores or resends the invite, with a lock on the sign off's row
 (`SELECT ... FOR SHARE`), so a withdrawal cannot slip in between the check and the send. When the
@@ -9035,33 +9040,26 @@ to the organiser" to the fundraiser's History.
 
 **Admin > Fundraising > Automatic emails.** Jaimie's rule: every automatic email is readable in the
 admin before any is sent. A card under the Weekly summary says whether they are on, with **Switch
-automatic emails on/off** for admins (after a warning); a button for each email (the three new
-wordings and 17, whose line about who we support changed, marked **New**); **Show it for**, an invented example (Sam's Santa Dash) or any public page
-raising money, or the example with nothing raised yet (16, 17 and 18 leave the amount out then, and
-those versions are marked new wording too); and the email itself, rendered by the server exactly as it would be sent, with its
-subject and when it goes. It also says what the next 8am run would send (were it on), so the first
-morning after switching on is no surprise: anyone already past halfway or their target gets that
-email then, once. Each open sign up says which one it would get next. Editors and viewers can read them all but not switch them.
+automatic emails on/off** for admins (after a warning). It also says what the next 8am run would
+send (were it on), so the first morning after switching on is no surprise: anyone already past
+halfway or their target gets that email then, once; and how many more are held back waiting for sign
+off. The emails themselves are no longer read in this card: **Read and approve these in All emails**
+opens the **All emails** card at "Keeping in touch (automatic)" (see **All emails, in Admin >
+Fundraising**), with a line saying that "How did it go?" and the thank you at Mark finished are under
+"Finishing and paying in". Each open sign up says which one it would get next, and its **Read its
+automatic emails** button opens All emails with that fundraiser chosen in **Show it for**, on the
+email due next for them (the first one when none is due), as it would go to them today. Editors and
+viewers see the card but not the switch.
 
-**Signing off new wording** (Jaimie, 2026-10-03). New wording only sends once an admin approves it
-in this card. Each version that needs it is approved on its own (`WORDING_KEYS` in
+**Signing off new wording** (Jaimie, 2026-10-03). New wording only sends once an admin approves it,
+in the **All emails** card. Each version that needs it is approved on its own (`WORDING_KEYS` in
 `src/fundraising/touch-rules.ts`): `target`, `finished`, `need_a_hand`, `on_track`, and the nothing
 raised versions of 16, 17 and 18, `week_after_zero`, `finished_zero` and `year_on_zero` (approving the
-usual 17 never approves its nothing raised version). The preview of one waiting says "New wording,
-waiting for your sign off. It won't send until you approve it." with **Approve this wording**; once
-approved, "Approved by <name> on <date>." with **Withdraw approval**. Both buttons are for admins
-only, each after a check, and each writes an `audit_log` row; editors and viewers see whether it is
-approved. Each email with a version still waiting has a **Waiting for sign off** pill in the list of
-emails, the next run line says how many are held back, and **Mark finished** says when the thank you
-is held back. The Approve button is only ever on the version on screen, so the card makes the one
-waiting easy to find (2026-10-04): an email whose only waiting version is the nothing raised one opens
-straight on "The same example, with nothing raised yet" (never over a real fundraiser picked in **Show
-it for**, and never again once the user has changed that list themselves; the usual example comes back
-on the next email if it was the card that left it); and whenever a version that is not on screen is
-waiting, the preview says "The version for a page that has raised nothing yet is still waiting for your
-sign off." or "The usual version is still waiting for your sign off." ("for sign off" to editors and
-viewers) with **Show that version**, which switches the preview to it. It reads the `waiting` keys the
-card already has; nothing new on the server. Target, need a hand and on track were approved on 2026-10-03 (seeded by the migration);
+usual 17 never approves its nothing raised version). Approving and withdrawing are for admins only,
+each after a check, and each writes an `audit_log` row; editors and viewers see whether it is
+approved. The Automatic emails card's next run line says how many are held back, and **Mark
+finished** says when the thank you is held back. The card reads what is due again whenever a sign off
+changes in All emails. Target, need a hand and on track were approved on 2026-10-03 (seeded by the migration);
 finished and the three nothing raised versions wait for Jaimie.
 
 **Smart call prompts.** Pills on the list and a **Keeping in touch** panel in the open sign up, each
@@ -9153,7 +9151,7 @@ Rules (pure): `src/fundraising/touch-rules.ts` (which email is due), `src/fundra
 `assets/js/fundraise.js`, beside the invite's. Tests: `fundraising-again`, `fundraising-again-db`,
 `fundraise-again-routes`, `fundraise-again-form` (jsdom) and `fundraise-pages-routes`. Emails: `src/fundraising/touch-emails.ts`. SQL: `src/db/fundraising-touch.ts`.
 Sending: `src/fundraising/touch-runner.ts` (the daily pass and the finished email). Routes:
-`src/routes/admin-fundraising-touch.ts`. Screen: the `frTouch` block of `assets/js/admin/app.js`
+`src/routes/admin-fundraising-touch.ts` (the screen only calls its `preview/:kind` with `?fundraiserId=` now, from All emails' **Show it for**; the example and `?sample=zero` forms are no longer called by any screen and are kept for the BDD step that reads one. For a real fundraiser it builds the email with `touchEmailAsSent`, the function the daily run sends with, so a page for someone under 18 shows the hello to their parent or guardian, exactly as it would go). Screen: the `frTouch` block of `assets/js/admin/app.js`
 (reached by one line hooks marked TASK-515), `#frTouch` in `admin.html`, styles at the end of
 `assets/css/admin.css`. Unit tests: `fundraising-touch-rules` and `fundraising-call-prompts` (fixed
 UK days, both clock changes), `fundraising-touch-emails` (each email, html and text, the approved
@@ -10238,6 +10236,134 @@ says to shred or bin it after the event.
 
 Tests: `test/unit/event-tickets-*.test.ts`, `admin-event-tickets-*.test.ts`,
 `stripe-webhook-tickets.test.ts`; BDD `features/event-tickets.feature`.
+## All emails, in Admin > Fundraising
+
+One folded card, **All emails**, where every email the website sends about community fundraising,
+sponsor pledges, event tickets and the Festive Ball can be read exactly as it would arrive, and
+where the few emails whose wording is approval gated are approved. Nothing is edited here. It took
+over the reading and approving that used to be spread across three cards (the "Read them" tabs in
+Automatic emails, "The two emails to sponsors" in Sponsor pledges, and Approve / Withdraw in Invite
+someone).
+
+### One catalogue (`src/email/catalogue.ts`)
+
+The single source of truth. `CATALOGUE` lists every email (69 when it was written) in the order it is shown: by
+group, then the order they would be sent. Each entry has a stable `id`, its `group`, `name`, `who`
+(one sentence: who gets it and when), `audience` (`public` or `staff`), `logKinds` (the names it is
+written to the email log under), an optional quiet `note` (its words are typed elsewhere, or depend
+on what people typed), an optional `touchKind` (one of the automatic emails to an organiser), and its
+`versions`. A version has an `id`, a `label` for the Version drop-down, a `render(base)` that returns
+`{ subject, html }` by calling the **real builder** with invented sample data (never a copy of the
+wording), and, only where that wording is gated today, `approval: { key, path }`.
+
+- **Sample data is invented**: Sam Example and "Sam's Santa Dash", "The Example Runners", "The
+  Example Christmas Fair", `example.com` addresses. The repo is public, so never a real person.
+- **No gate is created or changed.** A version's `approval` only points at a sign off that already
+  exists in `touch_wording_approvals`, and at the endpoint that already approves it. The keys are
+  worked out with the senders' own rules (`wordingKey` in `src/fundraising/touch-rules.ts`,
+  `inviteWordingKey` in `src/fundraising/invite.ts`), not typed in. A unit test pins the set to
+  exactly `WORDING_KEYS` + `PLEDGE_WORDING_KEYS` + `INVITE_WORDING_KEYS`.
+- The ten groups, in order: Signing up and approval; Invites from staff; Teams; Keeping in touch
+  (automatic); Finishing and paying in; In memory; Sponsor pledges; Event pages and tickets; The
+  Festive Ball; Staff notices.
+
+What is gated, and how each is shown:
+
+| Email (`id`) | Key(s) | Approved through |
+|---|---|---|
+| You did it, target reached (`touch-target`) | `target` | `/api/admin/fundraising/touch/approvals/:key` |
+| You're doing great (`touch-on-track`) | `on_track` | the same |
+| Need a hand? (`touch-need-a-hand`) | `need_a_hand` | the same |
+| A year ago today (`touch-year-on`) | `year_on_zero`, its nothing raised version only | the same |
+| How did it go? (`touch-week-after`) | `week_after_zero`, its nothing raised version only | the same |
+| Thank you, from all of us (`touch-finished`) | `finished`, and `finished_zero` for its nothing raised version | the same |
+| Invite: in memory (`invite-memory`) | `invite_memory` | `/api/admin/fundraising/invite-wording/:key/approval` |
+| Here's your link to pay your pledge (`pledge-pay`) | `pledge_pay` | `/api/admin/fundraising/pledges/approvals/:key` |
+| A reminder about your pledge (`pledge-reminder`) | `pledge_reminder` | the same |
+
+An email's row says **Approved** once every gated version of it is approved, **Waiting for sign off**
+while any is not (with "Version: ..." when the one waiting is not the usual one, and the row opens on
+it), and nothing when the email has no approval.
+
+### The guard (`test/unit/email-catalogue-guard.test.ts`)
+
+The card promises every email, so a new one cannot ship without a row. Five checks, read from the
+source:
+
+1. **Kinds.** Every kind passed to `sendAndLog` / `sendVerbatim` in `src/clients/email.ts` must be
+   claimed by an entry's `logKinds`, or be named in the test's `OTHER_PARTS_OF_THE_SITE` list
+   (donation receipts for companies, the newsletter, admin sign in and so on). A new kind forces the
+   choice.
+2. **Kinds are written out.** Check 1 reads kinds as string literals, so every call to
+   `sendAndLog` / `sendVerbatim` must name its kind as a literal (apart from the two definitions and
+   `sendVerbatim` handing its kind on), neither may be exported, and nothing in the four folders may
+   send past them.
+3. **Builders.** Every exported `build...Email` (a function or a `const`, and the Ball report's
+   `renderReport`) in any file under `src/fundraising`, `src/pledges`, `src/tickets` and `src/ball`,
+   however deep, must be called by the catalogue. This catches a new email that reuses an existing
+   kind. (`buildTouchEmail` is reached through `touchEmailAsSent`, the function that really sends it.)
+4. **Emails that share a builder.** Every `TOUCH_KINDS` kind and every `INVITE_TYPES` type must have
+   its entry.
+5. **Words typed at the call.** The pledge note to staff takes its words from its caller, so a new
+   note written inline would be a new email with an existing kind and builder. Its subject may never
+   be a string at the call (`sendPledgeStaffNote`, `notifyStaff`, `buildPledgeStaffEmail`): the words
+   live in a named `...Note` function in `src/pledges/emails.ts`, each of which must be in the
+   catalogue.
+
+`test/unit/email-catalogue.test.ts` renders every version of every email and checks the groups, the
+ids, that no address outside `example.com` and our own appears, that nothing reads "undefined", and
+the house style of the catalogue's own words.
+
+### API (`src/routes/admin-fundraising-emails.ts`, section `fundraising`, view)
+
+| Route | Returns |
+|---|---|
+| `GET /api/admin/fundraising/emails/summary` | `{ count, waiting, approvalsUnavailable }`: the closed card's line. Builds no email. |
+| `GET /api/admin/fundraising/emails` | `{ count, waiting, approvalsUnavailable, groups: [{ id, name, emails: [{ id, name, subject, who, audience, note, touchKind, state: "approved" \| "waiting" \| null, waitingVersion, versions: [{ id, label, approval: { key, path, approvedAt, approvedBy } \| null }] }] }] }`. No HTML. `subject` is the usual version's, `null` if that one builder throws. |
+| `GET /api/admin/fundraising/emails/:id/:version` | `{ id, version, label, subject, html, approval, approvalsUnavailable }`. `404` for an id or version not in the catalogue; `500` with "That email could not be shown just now. The others are not affected." if its builder throws. |
+
+`count` comes from the catalogue, never a number typed on screen. When the approvals cannot be read,
+everything gated reads as waiting (as the senders treat it) and `approvalsUnavailable` is `true`.
+There is no write route: approving is `POST`, and withdrawing `DELETE`, on the version's `path`
+(admins only, each with its own History action, exactly as before). No migration.
+
+`pledgeHiddenNote` and `pledgesPaidTwiceNote` (`src/pledges/emails.ts`) hold the words of the two
+pledge notices to staff, which used to be written where they were sent, so the catalogue shows the
+real words.
+
+### The screen (`assets/js/admin/all-emails.js`, its own file beside `app.js`)
+
+- **The card** (`#frAllEmails`, after Sponsor pledges) is folded and closed by default. Its bar says
+  "N waiting for sign off" when anything needs an admin, otherwise "69 emails" (the server's count).
+- **Lazy.** The count is fetched when Fundraising is shown; the list when the card is first opened;
+  an email's HTML when its row is first opened.
+- **Groups** are folded (`<details>`), each with how many emails it has and how many are waiting.
+- **A row** is a real button (`aria-expanded`, `aria-controls`): the name, the label, the subject
+  line, and who gets it and when. Pressing it opens the email underneath in a sandboxed `iframe`
+  (`srcdoc`, `scrolling="no"`) as tall as the email is, drawn at 660px and zoomed to fit, or at the
+  phone's own width under 480px. Opening another closes nothing: the page grows, and nothing scrolls
+  inside a box.
+- **Version** drop-down where an email has more than one version. Where another version is the one
+  waiting, the open email says so, with **Show that version**.
+- **Show it for**, on the automatic emails to organisers only: an example, or any public page raising
+  money, as it would go to them today (`GET /api/admin/fundraising/touch/preview/:kind?fundraiserId=`).
+  One choice for all of them. The pages come from `window.AdminFundraising.raisingPages()` in `app.js`.
+- **Approve this wording** / **Withdraw approval**, for an admin who can also edit Fundraising (what
+  the server asks; `window.AdminFundraising.canApprove()` in `app.js`), after a question, on gated
+  emails only; everyone else sees "Waiting for sign off. It won't send until an admin approves it." or
+  "Approved by ... on ...". After either, every label and the bar are read again, nothing is closed,
+  and `nbcc:wording-changed` bubbles from the card so Automatic emails, Sponsor pledges and the invite
+  form read their own state again.
+- **Links from the other cards**: any button with `data-allemails-open="<group id>"` (and optionally
+  `data-allemails-email`, `data-allemails-touch`, `data-allemails-fundraiser`) opens the card at that
+  group and moves the focus there.
+- **Adding an email**: add its entry to `CATALOGUE` (the guard will tell you if you forget). The card
+  needs no change.
+
+Tests: `test/unit/email-catalogue.test.ts`, `test/unit/email-catalogue-guard.test.ts`,
+`test/unit/admin-fundraising-emails-routes.test.ts`, `test/unit/admin-all-emails-panel.test.ts`, and
+`features/fundraising-all-emails.feature`.
+
 ## Sponsor pledges: "Sponsor now, pay after" (Jaimie, 2026-10-03)
 
 On a sponsorship fundraiser's page, next to "give now", a sponsor can **pledge**: promise an amount
@@ -10419,7 +10545,9 @@ check and refund"), and the events inbox is emailed (`fundraisePledgeStaff`).
 - **Admin > Fundraising > Sponsor pledges** (`assets/js/admin/pledges.js`, its own file beside
   `app.js`): every fundraiser's pledges with the sponsor's email, send or resend the pay link, cancel
   a pledge, hide a message, mark one paid twice as checked, new pay links for everyone unpaid
-  (admins), and the two automatic emails rendered to read and approve.
+  (admins), and a line saying whether the two automatic emails are going (and how many are waiting
+  for sign off) with **Read and approve these in All emails**, which opens the **All emails** card at
+  "Sponsor pledges". The two emails are read and approved there now, not in this card.
 - **Monday summary:** "N pledges unpaid 2 weeks after the event" and "N pledges paid twice: check and
   refund", under Waiting on us.
 
@@ -10457,7 +10585,6 @@ enquiry); when one lands it must also clear `sponsor_pledges` for that address, 
 | `POST /api/fundraise/manage/fundraisers/:id/pledges/:pledgeId/cash` | the signed in organiser | `{ paid: true \| false }` | `{ pledge }`; `409` when it can no longer change |
 | `POST /api/fundraise/manage/fundraisers/:id/pledges/:pledgeId/hide` | the signed in organiser | `{ hidden: true \| false }` | `{ pledge }`; the events inbox is told |
 | `GET /api/admin/fundraising/pledges` | fundraising view | | `{ today, fundraisers, totals, unpaidTwoWeeks, paidTwice, emails: { on, kinds } }`, with sponsor emails |
-| `GET /api/admin/fundraising/pledges/preview/:key` | fundraising view | | one email rendered for an invented example, and its approval |
 | `POST` \| `DELETE /api/admin/fundraising/pledges/approvals/:key` | admin | | approve or withdraw a wording |
 | `POST /api/admin/fundraising/pledges/send-pay-links` | admin | | `{ sent, skipped, failed, stopped }`; `409` when the rules say none may go |
 | `POST /api/admin/pledges/:id/send-pay-link` | fundraising edit | | `{ status: "sent" }`; `409` with why not (early, switched off, waiting for sign off, stopped address, sent in the last 10 minutes) |

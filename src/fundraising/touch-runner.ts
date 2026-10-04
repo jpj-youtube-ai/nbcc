@@ -17,8 +17,7 @@ import { optedOutAmong } from "../db/email-opt-outs";
 import { createAgainToken } from "../db/fundraiser-again";
 import { againExpiresAt, againUrl, hashAgainToken, newAgainToken } from "./again";
 import { londonToday } from "../events/model";
-import { buildTouchEmail, touchEmailData } from "./touch-emails";
-import { greetGuardian } from "./signup-tidy-emails";
+import { touchEmailAsSent, touchEmailData } from "./touch-emails";
 import { canTouch, isQuietFundraiser, isSignedOff, pickTouch, wordingKey, type TouchFundraiser, type TouchKind } from "./touch-rules";
 import type { FundraiserRecord, Meter } from "./model";
 
@@ -147,8 +146,9 @@ async function sendOne(
     // Email 18's button opens the form filled in from last year: a one use link made for it. If it
     // cannot be made, the email does not go (its words promise one click), and another day tries.
     if (kind === "year_on") data.urls.signUp = await deps.againLink(f.id);
-    // A member page for someone under 18: the email greets their parent or guardian.
-    const mail = greetGuardian(buildTouchEmail(kind, data), f);
+    // A page for someone under 18: the email greets their parent or guardian. Built by the same
+    // function the admin's preview uses, so what staff read there is what goes.
+    const mail = touchEmailAsSent(kind, data);
     await deps.send(kind, f.name, { email: f.email, from: config.BALL_FROM_EMAIL, replyTo: config.BALL_FROM_EMAIL, ...mail });
   } catch (err) {
     // An error from the mail service can come after it has accepted the email (a timeout), so it may

@@ -16,6 +16,8 @@
     <script defer src="/assets/js/admin/event-tickets.js"></script>
     <!-- Sponsor pledges: its own card in Admin > Fundraising, kept apart from app.js. -->
     <script defer src="/assets/js/admin/pledges.js"></script>
+    <!-- All emails: every fundraising and events email to read, and the few to approve. Its own card. -->
+    <script defer src="/assets/js/admin/all-emails.js"></script>
     <!-- app.js is a classic script; bridge the ES-module gmail-reply.js helpers onto window
          so app.js (Contact form tab) can call them (2026-07-10 contact-inbox spec, Task 8). -->
     <script type="module">
@@ -1463,8 +1465,9 @@
                   <div class="fr-field fr-field--wide"><label class="fx-call-label" for="frInviteNote">A personal note (optional)</label><textarea class="fx-call-input fr-input" id="frInviteNote" name="note" rows="6" maxlength="5000"></textarea><span class="fr-field-hint">Up to 5,000 characters, so it can be a proper letter. It shows in the email, under a friendly hello.</span></div>
                   <div class="fr-field"><label class="fx-call-label" for="frInviteSigner">Signed by</label><select class="fx-call-input" id="frInviteSigner" name="signedBy"></select><span class="fr-field-hint">The email is signed with this first name, so they know who they spoke to. A copy goes to whoever it is signed by.</span></div>
                   <!-- The email for the type chosen, to read before sending. The in memory invite is new
-                       wording: it opens by itself, with Approve this wording for an admin, and cannot
-                       be sent until it is approved. As tall as the email is: the page grows. -->
+                       wording: it opens by itself and cannot be sent until an admin has approved it in
+                       the All emails card (the link under Send opens it there). As tall as the email
+                       is: the page grows. -->
                   <div class="fr-field--wide fr-invite-wording" id="frInviteWording" hidden>
                     <div class="fr-touch-meta" id="frInviteWordingMeta"></div>
                     <details class="fr-invite-read" id="frInviteRead">
@@ -1476,7 +1479,7 @@
                     </details>
                   </div>
                   <div class="fx-call-row fr-field--wide"><button class="admin-btn" type="submit" id="frInviteSend">Send the invite</button></div>
-                  <p class="fr-field-hint fr-field--wide fr-invite-held" id="frInviteHeld" hidden>The in memory invite wording is waiting for sign off. Read it and approve it first.</p>
+                  <p class="fr-field-hint fr-field--wide fr-invite-held" id="frInviteHeld" hidden><span id="frInviteHeldWords">The in memory invite wording is waiting for sign off, so this invite cannot be sent yet.</span> <button class="admin-link" type="button" id="frInviteHeldLink" data-allemails-open="invites" data-allemails-email="invite-memory">Approve it in All emails</button></p>
                   <p class="ty-status fr-field--wide" id="frInviteStatus" role="status" aria-live="polite"></p>
                 </form>
                 <h4 class="fr-card-subhead">Invites not taken up yet</h4>
@@ -1539,25 +1542,20 @@
                 <p class="ty-status" id="frImpactStatus" role="status" aria-live="polite" tabindex="-1"></p>
               </section>
 
-              <!-- TASK-515: the automatic emails to organisers. Every one can be read here, rendered,
-                   before any is sent; only an admin can switch them on (they ship off). The preview
-                   grows to the email's height; nothing scrolls inside it. -->
+              <!-- TASK-515: the automatic emails to organisers. Only an admin can switch them on (they
+                   ship off). Every one is read, and its new wording approved, in the All emails card
+                   below: the button here opens it at "Keeping in touch (automatic)". -->
               <section class="fr-card" id="frTouch" aria-labelledby="frTouchHead" hidden>
                 <h3 class="admin-subhead" id="frTouchHead">Automatic emails</h3>
                 <p class="fr-summary-state" id="frTouchState" aria-live="polite">Checking&hellip;</p>
                 <p class="fr-touch-due" id="frTouchDue"></p>
-                <p class="fr-card-intro">Friendly emails that go to an organiser by themselves, from the events inbox, at the right moments: their first gift, halfway, their target, a week before and a week after their date, when you mark them finished, and a year on. Each goes once at most, only to a public page raising money, never to anyone who has asked us to stop, and never to a page in memory of someone. Read every one here before switching them on. New wording only sends once it's approved here.</p>
+                <p class="fr-card-intro">Friendly emails that go to an organiser by themselves, from the events inbox, at the right moments: their first gift, halfway, their target, a week before and a week after their date, when you mark them finished, and a year on. Each goes once at most, only to a public page raising money, never to anyone who has asked us to stop, and never to a page in memory of someone. Read every one in All emails before switching them on. New wording only sends once it's approved there.</p>
                 <div class="fr-touch-switch">
                   <button class="admin-btn" type="button" id="frTouchSwitch" hidden>Loading&hellip;</button>
                   <p class="fr-field-hint" id="frTouchSwitchNote" hidden>Only an admin can switch the automatic emails on or off.</p>
                 </div>
-                <h4 class="fr-card-subhead">Read them</h4>
-                <div class="admin-segmented fr-touch-kinds" id="frTouchKinds" role="group" aria-label="Which automatic email to read"></div>
-                <div class="fr-field fr-touch-for-field"><label class="fx-call-label" for="frTouchFor">Show it for</label><select class="fx-call-input" id="frTouchFor"><option value="">An example: Sam's Santa Dash</option></select></div>
-                <div class="fr-touch-meta" id="frTouchMeta"></div>
-                <div class="fr-touch-preview-wrap" id="frTouchPreviewWrap">
-                  <iframe id="frTouchPreview" class="fr-touch-preview" title="The automatic email, as the organiser would see it" sandbox="allow-same-origin" scrolling="no"></iframe>
-                </div>
+                <div class="fx-call-row fr-emails-link"><button class="admin-btn admin-btn--small fr-btn-quiet" type="button" data-allemails-open="touch">Read and approve these in All emails</button></div>
+                <p class="fr-field-hint">They are under &ldquo;Keeping in touch (automatic)&rdquo;. The two that go after their date, &ldquo;How did it go?&rdquo; and the thank you when you mark them finished, are under &ldquo;Finishing and paying in&rdquo;.</p>
                 <p class="ty-status" id="frTouchStatus" role="status" aria-live="polite"></p>
               </section>
 
@@ -1573,9 +1571,9 @@
               </section>
 
               <!-- Sponsor pledges ("Sponsor now, pay after"): every fundraiser's pledges with the sponsor's
-                   email for staff, send the pay link, cancel, and the two emails to sponsors, read and
-                   approved here before any is sent. Drawn by assets/js/admin/pledges.js. Folded, with the
-                   totals in its bar. The email preview grows to the email's height; nothing scrolls inside. -->
+                   email for staff, send the pay link and cancel. The two emails to sponsors are read and
+                   approved in the All emails card: the button here opens it at "Sponsor pledges". Drawn by
+                   assets/js/admin/pledges.js. Folded, with the totals in its bar. -->
               <section class="fr-card fr-card--fold" id="frPledges" aria-labelledby="frPledgesHead" hidden>
                 <details class="fr-fold" id="frPledgesFold">
                   <summary class="fr-fold-bar">
@@ -1589,14 +1587,28 @@
                       <div class="fx-call-row"><button class="admin-btn admin-btn--small fr-btn-quiet" type="button" id="frPledgesSendAll">Send new pay links to everyone unpaid</button></div>
                       <p class="fr-field-hint">Only needed if the links we already emailed have stopped working. It sends one new link to each sponsor who has had one and hasn&rsquo;t paid, under the same rules as the daily emails.</p>
                     </div>
-                    <h4 class="fr-card-subhead">The two emails to sponsors</h4>
                     <p class="fr-touch-due" id="frPledgesEmailsState"></p>
-                    <div class="admin-segmented fr-touch-kinds" id="frPledgesKinds" role="group" aria-label="Which pledge email to read"></div>
-                    <div class="fr-touch-meta" id="frPledgesMeta"></div>
-                    <div class="fr-touch-preview-wrap" id="frPledgesPreviewWrap">
-                      <iframe id="frPledgesPreview" class="fr-touch-preview" title="The pledge email, as the sponsor would see it" sandbox="allow-same-origin" scrolling="no"></iframe>
-                    </div>
+                    <div class="fx-call-row fr-emails-link"><button class="admin-btn admin-btn--small fr-btn-quiet" type="button" data-allemails-open="pledges">Read and approve these in All emails</button></div>
                     <p class="ty-status" id="frPledgesStatus" role="status" aria-live="polite"></p>
+                  </div>
+                </details>
+              </section>
+
+              <!-- All emails: every email the fundraising, pledge, ticket and Festive Ball code sends, in
+                   ten folded groups, each one opened exactly as it would arrive. The few that are approval
+                   gated are approved here (admins only). Drawn by assets/js/admin/all-emails.js from the
+                   one catalogue (src/email/catalogue.ts). Folded, with what is waiting in its bar. Each
+                   email is as tall as it is: the page grows, and nothing scrolls inside a box. -->
+              <section class="fr-card fr-card--fold" id="frAllEmails" aria-labelledby="frAllEmailsHead" hidden>
+                <details class="fr-fold" id="frAllEmailsFold">
+                  <summary class="fr-fold-bar">
+                    <span class="admin-subhead fr-fold-title" id="frAllEmailsHead">All emails</span>
+                    <span class="fr-summary-state" id="frAllEmailsState" aria-live="polite">Checking&hellip;</span>
+                  </summary>
+                  <div class="fr-fold-body">
+                    <p class="fr-card-intro">Every email the website sends about fundraising, sponsor pledges, event tickets and the Festive Ball. Open a group, then press an email to read it exactly as it arrives, with made-up names. The wording can&rsquo;t be changed here. A few emails only go once an admin has approved their wording: those say &ldquo;Waiting for sign off&rdquo; or &ldquo;Approved&rdquo;.</p>
+                    <div class="fr-emails-groups" id="frAllEmailsGroups"></div>
+                    <p class="ty-status" id="frAllEmailsStatus" role="status" aria-live="polite"></p>
                   </div>
                 </details>
               </section>

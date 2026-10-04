@@ -8,18 +8,17 @@
 //     Hide message, and Mark as checked on one that was paid twice;
 //   - for an admin: "Send new pay links to everyone unpaid", for when the links already emailed have
 //     stopped working (the signing secret was changed);
-//   - the two emails to sponsors, rendered, to read before any is sent. Both are new wording: neither
-//     is sent until an admin approves it here, as with the automatic emails to organisers.
+//   - whether the two emails to sponsors are being sent, with a link to read and approve them in the
+//     All emails card (assets/js/admin/all-emails.js). Both are new wording: neither is sent until
+//     an admin approves it there, as with the automatic emails to organisers.
 // The server enforces every rule; the role in the token only decides which buttons are offered.
-// Everything a person typed is written as text, never as markup. The email preview grows to the
-// email's height: nothing scrolls inside it.
+// Everything a person typed is written as text, never as markup.
 //
 // A classic <script defer>, exported under a CommonJS guard so it can be unit tested in jsdom.
 (function () {
   "use strict";
 
   var TOKEN_KEY = "nbcc_admin_token";
-  var EMAIL_W = 660;
   var MSG = {
     failed: "Sponsor pledges could not load just now. Try again in a moment.",
     did: "That did not work. Please try again.",
@@ -30,9 +29,7 @@
     if (!card) return null;
     var H = win.AdminHelpers || {};
     var data = null;
-    var kind = "pledge_pay";
     var busy = false;
-    var seq = 0;
 
     function el(id) {
       return doc.getElementById(id);
@@ -68,10 +65,6 @@
     function day(iso) {
       if (!iso) return "";
       return H.fmtDate ? H.fmtDate(iso) : String(iso).slice(0, 10);
-    }
-    function who(actor) {
-      var a = String(actor || "");
-      return a.indexOf("admin:") === 0 ? a.slice(6) : a || "unknown";
     }
     function say(text, error) {
       var line = el("frPledgesStatus");
@@ -190,91 +183,20 @@
       });
     }
 
-    // --- the two emails ----------------------------------------------------------------------------
-    function kindInfo(key) {
-      var kinds = (data && data.emails && data.emails.kinds) || [];
-      for (var i = 0; i < kinds.length; i++) if (kinds[i].key === key) return kinds[i];
-      return null;
-    }
-
-    function drawKinds() {
-      var box = el("frPledgesKinds");
-      if (!box) return;
-      while (box.firstChild) box.removeChild(box.firstChild);
-      ((data.emails && data.emails.kinds) || []).forEach(function (k) {
-        var on = k.key === kind;
-        var b = make("button", "admin-seg" + (on ? " is-active" : ""), k.label);
-        b.type = "button";
-        b.setAttribute("data-pledge-kind", k.key);
-        b.setAttribute("aria-pressed", on ? "true" : "false");
-        if (!k.approval) {
-          b.appendChild(doc.createTextNode(" "));
-          b.appendChild(make("span", "fr-touch-new fr-touch-waiting", "Waiting for sign off"));
-        }
-        box.appendChild(b);
-      });
+    // --- the two emails: are they going? Reading and approving them is in All emails. ---------------
+    function drawEmailsState() {
       var state = el("frPledgesEmailsState");
-      if (state) {
-        state.textContent = data.emails && data.emails.on
-          ? "Automatic emails are switched on. Each of these is sent only once its wording is approved."
-          : "Automatic emails are switched off, so neither is being sent. Read and approve them here first, then switch Automatic emails on above.";
-      }
-    }
-
-    function fit() {
-      var frame = el("frPledgesPreview"), wrap = el("frPledgesPreviewWrap");
-      if (!frame || !wrap || !wrap.clientWidth) return;
-      var cdoc = frame.contentDocument;
-      if (!cdoc || !cdoc.body) return;
-      frame.style.width = EMAIL_W + "px";
-      frame.style.height = "0px";
-      frame.style.height = Math.max(cdoc.body.scrollHeight, cdoc.documentElement.scrollHeight) + "px";
-      frame.style.zoom = Math.min(1, wrap.clientWidth / EMAIL_W);
-    }
-
-    function drawMeta(d) {
-      var meta = el("frPledgesMeta");
-      if (!meta) return;
-      while (meta.firstChild) meta.removeChild(meta.firstChild);
-      meta.appendChild(make("p", "fr-touch-when", d.when || ""));
-      if (d.approvalsUnavailable) {
-        meta.appendChild(make("p", "fr-touch-signoff", "The approvals could not be checked just now, so this is treated as waiting."));
-      } else if (!d.approval) {
-        meta.appendChild(make("p", "fr-touch-signoff", "New wording, waiting for sign off. It won't send until an admin approves it."));
-        if (isAdmin()) {
-          var row = make("div", "fx-call-row");
-          row.appendChild(button("Approve this wording", "data-pledge-approve", d.key, false));
-          meta.appendChild(row);
-        }
-      } else {
-        meta.appendChild(make("p", "fr-touch-approved", "Approved by " + who(d.approval.approvedBy) + " on " + day(d.approval.approvedAt) + "."));
-        if (isAdmin()) {
-          var row2 = make("div", "fx-call-row");
-          row2.appendChild(button("Withdraw approval", "data-pledge-withdraw", d.key, true));
-          meta.appendChild(row2);
-        }
-      }
-      var subject = make("p", "fr-touch-subject");
-      subject.appendChild(make("span", "", "Subject"));
-      subject.appendChild(doc.createTextNode(" " + (d.subject || "")));
-      meta.appendChild(subject);
-    }
-
-    function preview() {
-      var frame = el("frPledgesPreview");
-      if (!frame || !data) return Promise.resolve();
-      var mine = ++seq;
-      return call("GET", "/api/admin/fundraising/pledges/preview/" + encodeURIComponent(kind))
-        .then(function (r) {
-          if (mine !== seq || r.status !== 200 || typeof r.data.html !== "string") return;
-          drawMeta(r.data);
-          frame.onload = fit;
-          frame.setAttribute("srcdoc", r.data.html);
-          fit();
-        })
-        .catch(function () {
-          if (mine === seq) say("That email could not load just now. Try again in a moment.", true);
-        });
+      if (!state) return;
+      var emails = data.emails || {};
+      var waiting = (emails.kinds || []).filter(function (k) {
+        return !k.approval;
+      }).length;
+      var words = emails.on
+        ? "Automatic emails are switched on. The pay link and the reminder are each sent only once their wording is approved."
+        : "Automatic emails are switched off, so the pay link and the reminder are not being sent.";
+      if (emails.approvalsUnavailable) words += " Couldn't check sign-offs just now, so both are held.";
+      else if (waiting) words += " " + (waiting === 1 ? "1 is" : "Both are") + " waiting for sign off.";
+      state.textContent = words;
     }
 
     // --- loading -----------------------------------------------------------------------------------
@@ -293,8 +215,7 @@
           var tools = el("frPledgesTools");
           if (tools) tools.hidden = !isAdmin();
           drawList();
-          drawKinds();
-          return preview();
+          drawEmailsState();
         })
         .catch(function () {
           data = null;
@@ -351,12 +272,6 @@
       var t = ev.target && ev.target.closest ? ev.target.closest("button") : null;
       if (!t || !card.contains(t)) return;
       var id;
-      if ((id = t.getAttribute("data-pledge-kind"))) {
-        kind = id;
-        drawKinds();
-        say("", false);
-        return preview();
-      }
       if ((id = t.getAttribute("data-pledge-send"))) return act("POST", "/api/admin/pledges/" + encodeURIComponent(id) + "/send-pay-link", undefined, "Pay link sent.");
       if ((id = t.getAttribute("data-pledge-cancel"))) {
         if (win.confirm && !win.confirm("Cancel this pledge? The sponsor will not be emailed about it again. No money has been taken.")) return;
@@ -369,20 +284,16 @@
       }
       if ((id = t.getAttribute("data-pledge-hide"))) return act("POST", "/api/admin/pledges/" + encodeURIComponent(id) + "/message", { hidden: true }, "Message hidden from the page.");
       if ((id = t.getAttribute("data-pledge-show"))) return act("POST", "/api/admin/pledges/" + encodeURIComponent(id) + "/message", { hidden: false }, "Message showing on the page again.");
-      if ((id = t.getAttribute("data-pledge-approve"))) {
-        if (win.confirm && !win.confirm("Approve this wording? From then on it is sent to sponsors while Automatic emails are on.")) return;
-        return act("POST", "/api/admin/fundraising/pledges/approvals/" + encodeURIComponent(id), undefined, "Wording approved.");
-      }
-      if ((id = t.getAttribute("data-pledge-withdraw"))) return act("DELETE", "/api/admin/fundraising/pledges/approvals/" + encodeURIComponent(id), undefined, "Approval withdrawn.");
     });
-
-    // The preview is fitted again when the card is opened or the window changes width.
-    var fold = el("frPledgesFold");
-    if (fold) fold.addEventListener("toggle", fit);
-    if (win.addEventListener) win.addEventListener("resize", fit);
 
     // Load whenever the Fundraising section is shown (app.js un-hides it), and now if it already is.
     var view = doc.getElementById("view-fundraising");
+    // A sign off changed in All emails: say again whether the two emails are going.
+    if (view) {
+      view.addEventListener("nbcc:wording-changed", function () {
+        if (data) load();
+      });
+    }
     var Observer = win.MutationObserver;
     if (view && Observer) {
       new Observer(function () {

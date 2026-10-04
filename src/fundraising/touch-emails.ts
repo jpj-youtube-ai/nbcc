@@ -16,6 +16,7 @@ import {
 import { FOOTER_TEXT, POSTAL_ADDRESS } from "../legal/registration";
 import { FUNDRAISING_EMAIL, organiserFirstName, organiserGreeting, pounds, type BuiltEmail } from "./emails";
 import { pagePath, type FundraiserRecord, type Meter } from "./model";
+import { greetGuardian } from "./signup-tidy-emails";
 import type { TouchKind } from "./touch-rules";
 
 // TASK-515: the automatic emails to an organiser, built here and sent by ./touch-runner.ts.
@@ -385,4 +386,14 @@ export function buildTouchEmail(kind: TouchKind, d: TouchEmailData): BuiltEmail 
   // goes to them, so no subject ever speaks to the child.
   const child = String(d.guardianFirstName ?? "").trim() !== "";
   return BUILDERS[kind](d, organiserGreeting(d), escapeHtml(d.title), organiserFirstName(d), child);
+}
+
+/**
+ * One automatic email exactly as it is sent: the builder's email, and on a page for someone under 18
+ * the hello to their parent or guardian ("Hi Sarah, this is about Jack's page."). The daily run and
+ * Mark finished (./touch-runner.ts) send this, and the admin shows this (the preview for a real
+ * fundraiser, and All emails), so what is read is what goes. Use this, never buildTouchEmail alone.
+ */
+export function touchEmailAsSent(kind: TouchKind, d: TouchEmailData): BuiltEmail {
+  return greetGuardian(buildTouchEmail(kind, d), { name: d.name, firstName: d.firstName, guardianFirstName: d.guardianFirstName });
 }

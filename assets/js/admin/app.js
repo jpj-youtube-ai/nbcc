@@ -9558,7 +9558,6 @@
     frPaintPics(); // profile pictures
     frPaintGroup(); // team pages
     frPaintScans(); // TASK-512
-    if (frTouch) frTouchRenderFor(); // TASK-515: "Show it for" lists the pages raising money
     frRestDetail();
     frRestoreFocus(wrap);
   }
@@ -10978,10 +10977,6 @@
       var reqBtn = t.closest("[data-frreqact]");
       if (reqBtn) return frReqAct(reqBtn.getAttribute("data-frreqkind"), reqBtn.getAttribute("data-frreqact"));
       if (t.closest("[data-frreqcancel]")) return frReqCancel();
-      var inviteApprove = t.closest("[data-frinviteapprove]");
-      if (inviteApprove) return frInviteWordingApproval(inviteApprove.getAttribute("data-frinviteapprove"), true);
-      var inviteWithdraw = t.closest("[data-frinvitewithdraw]");
-      if (inviteWithdraw) return frInviteWordingApproval(inviteWithdraw.getAttribute("data-frinvitewithdraw"), false);
       var resend = t.closest("[data-frinviteresend]");
       if (resend) return frResendInvite(resend.getAttribute("data-frinviteresend"));
       var removeInvite = t.closest("[data-frinviteremove]");
@@ -11823,14 +11818,8 @@
   // had. The server decides everything; this only says it. Every stored string is escaped.
   var frTouch = null; // GET /api/admin/fundraising/touch: { today, settings, kinds, sent, prompts, promptCalls }
   var frTouchState = "loading"; // loading, failed or ok
-  var frTouchKind = "first_gift"; // the email being read
-  var frTouchFor = ""; // "" for the example, "zero" for it with nothing raised, or a fundraiser id
-  var frTouchForOurs = false; // we opened the nothing raised example ourselves, so we may put the usual one back
-  var frTouchForTheirs = false; // they have changed "Show it for" themselves: from then on it is left alone
   var frTouchBusy = false;
-  var frTouchSeq = 0; // the latest preview asked for, so a slow answer never replaces a newer one
   var frTouchNotes = {}; // prompt key -> the note typed for its call, kept across a redraw
-  var frTouchShown = ""; // which email, for whom, is in the preview: it is only fetched again when that changes
   var FR_TOUCH_EMAIL_W = 660;
 
   function frTouchLoad() {
@@ -11877,7 +11866,7 @@
     el("frTouchState").innerHTML = s.on
       ? "<b>On.</b> They go by themselves, each morning at 8am, and when you mark a fundraiser finished." +
         (s.updatedBy ? " Switched on " + H.escapeHtml(H.fmtDate(s.updatedAt)) + " by " + H.escapeHtml(frWho(s.updatedBy)) + "." : "")
-      : "<b>Off.</b> None of these is sent. Read each one below, then switch them on when you are happy.";
+      : "<b>Off.</b> None of these is sent. Read each one in All emails, then switch them on when you are happy.";
     // What the next run would send, so the first morning after switching on is no surprise.
     var due = frTouch.due || {};
     var dueIds = Object.keys(due);
@@ -11902,159 +11891,25 @@
     btn.textContent = s.on ? "Switch automatic emails off" : "Switch automatic emails on";
     btn.disabled = frTouchBusy;
     el("frTouchSwitchNote").hidden = admin;
-    el("frTouchKinds").innerHTML = frTouch.kinds
-      .map(function (k) {
-        var on = k.kind === frTouchKind;
-        return '<button class="admin-seg' + (on ? " is-active" : "") + '" type="button" data-frtouchkind="' + H.escapeHtml(k.kind) +
-          '" aria-pressed="' + (on ? "true" : "false") + '">' + H.escapeHtml(k.label) + frTouchWaitingPill(k) + "</button>";
-      })
-      .join("");
-    frTouchRenderFor();
-    if (frTouchShown !== frTouchKind + "|" + frTouchFor) frTouchPreview();
   }
 
-  // "Show it for": the example, then every public page raising money that is approved or finished.
-  function frTouchRenderFor() {
-    var pick = el("frTouchFor");
-    if (!pick) return;
-    var list = ((frData && frData.fundraisers) || []).filter(function (f) {
-      return f.path === "raising" && f.public && (f.status === "approved" || f.status === "finished");
-    });
-    if (frTouchFor && frTouchFor !== "zero" && !list.some(function (f) { return String(f.id) === frTouchFor; })) frTouchFor = "";
-    pick.innerHTML = '<option value="">An example: Sam\'s Santa Dash</option>' +
-      // 16, 17 and 18 read differently when nothing has been raised: those versions are new wording.
-      '<option value="zero"' + (frTouchFor === "zero" ? " selected" : "") + ">The same example, with nothing raised yet</option>" +
-      list.map(function (f) {
-        return '<option value="' + f.id + '"' + (String(f.id) === frTouchFor ? " selected" : "") + ">" + H.escapeHtml(f.title + ", " + f.name) + "</option>";
-      }).join("");
-    pick.value = frTouchFor;
-  }
-
-  function frTouchPreview() {
-    var frame = el("frTouchPreview");
-    if (!frame || !frTouch) return;
-    var seq = ++frTouchSeq;
-    var kind = frTouchKind;
-    frTouchShown = kind + "|" + frTouchFor;
-    var info = frTouchKindInfo(kind);
-    frTeamSay("frTouchStatus", "", false);
-    // The note and its buttons belong to the preview being replaced: gone until the new one is in.
-    el("frTouchMeta").innerHTML = "";
-    var path = "/api/admin/fundraising/touch/preview/" + encodeURIComponent(kind) +
-      (frTouchFor === "zero" ? "?sample=zero" : frTouchFor ? "?fundraiserId=" + encodeURIComponent(frTouchFor) : "");
-    return authFetch(path)
-      .then(okJson)
-      .then(function (d) {
-        if (seq !== frTouchSeq || !d || typeof d.html !== "string") return;
-        el("frTouchMeta").innerHTML =
-          '<p class="fr-touch-when">' + H.escapeHtml(info ? info.when : "") + "</p>" +
-          frTouchSignOffHtml(d) +
-          '<p class="fr-touch-subject"><span>Subject</span> ' + H.escapeHtml(d.subject || "") + "</p>" +
-          (d.sample ? "" : '<p class="fr-field-hint">For ' + H.escapeHtml(d.title || "") + ", as it would go today.</p>");
-        frame.setAttribute("srcdoc", d.html);
-      })
-      .catch(function (err) {
-        if (err && err.message === "unauthorized") return;
-        if (seq !== frTouchSeq) return;
-        frTouchShown = "";
-        frTeamSay("frTouchStatus", "That email could not load just now. Try again in a moment.", true);
-      });
-  }
-
-  // Signing off the new wording (Jaimie, 2026-10-03): the server only sends new wording once an admin
-  // has approved it here. Each version that needs it (WORDING_KEYS in src/fundraising/touch-rules.ts,
-  // the nothing raised versions of 16, 17 and 18 too) is approved on its own. Editors and viewers see
-  // whether it is approved; only an admin sees the buttons.
-  function frTouchWaitingPill(k) {
-    var waiting = (k && k.waiting) || [];
-    if (!waiting.length) return "";
-    var onlyZero = frTouchOnlyZeroWaiting(k);
-    return ' <span class="fr-touch-new fr-touch-waiting" data-frtouchwaiting title="' +
-      H.escapeHtml(onlyZero ? "The version with nothing raised yet is waiting for sign off." : "Its new wording is waiting for sign off.") +
-      '">Waiting for sign off</span>';
-  }
+  // Reading and approving the emails themselves is in the All emails card (assets/js/admin/all-emails.js).
+  // It asks for these when it draws "Show it for": every public page raising money that is approved
+  // or finished, so an automatic email can be read as it would go today to a real fundraiser.
+  // And whether to offer Approve and Withdraw: an admin who can also edit Fundraising, which is what
+  // the server asks of them (authorizeSectionAsAdmin), read from /api/admin/me, not the token.
+  window.AdminFundraising = {
+    canApprove: function () {
+      return isAdmin() && frCanWrite();
+    },
+    raisingPages: function () {
+      return ((frData && frData.fundraisers) || [])
+        .filter(function (f) { return f.path === "raising" && f.public && (f.status === "approved" || f.status === "finished"); })
+        .map(function (f) { return { id: f.id, title: f.title, name: f.name }; });
+    },
+  };
 
   var FR_TOUCH_UNCHECKED = "Couldn't check sign-offs just now, so new wording is held.";
-
-  function frTouchSignOffHtml(d) {
-    var key = d && d.wordingKey;
-    if (d && d.approvalsUnavailable) return key ? '<p class="fr-touch-signoff" data-frtouchsignoff>' + H.escapeHtml(FR_TOUCH_UNCHECKED) + "</p>" : "";
-    var other = frTouchOtherHtml(d);
-    if (!key) return other;
-    var admin = isAdmin() && frCanWrite();
-    var a = d.approval;
-    if (!a) {
-      return '<p class="fr-touch-signoff" data-frtouchsignoff>New wording, waiting for your sign off. It won\'t send until you approve it.</p>' +
-        (admin ? '<div class="fx-call-row"><button class="admin-btn admin-btn--small" type="button" data-frtouchapprove="' + H.escapeHtml(key) + '"' +
-          (frTouchBusy ? " disabled" : "") + ">Approve this wording</button></div>" : "") + other;
-    }
-    return '<p class="fr-touch-approved" data-frtouchsignoff>Approved by ' + H.escapeHtml(frWho(a.approvedBy)) + " on " + H.escapeHtml(H.fmtDate(a.approvedAt)) + ".</p>" +
-      (admin ? '<div class="fx-call-row"><button class="admin-btn admin-btn--small fr-btn-quiet" type="button" data-frtouchwithdraw="' + H.escapeHtml(key) + '"' +
-        (frTouchBusy ? " disabled" : "") + ">Withdraw approval</button></div>" : "") + other;
-  }
-
-  // The tab says "Waiting for sign off" while any version of its email is waiting, and the Approve
-  // button is only ever on the version on screen. So when a version that is not on screen is the
-  // one waiting, say which, with a button that shows it (Jaimie, 2026-10-04).
-  function frTouchOnlyZeroWaiting(k) {
-    var waiting = (k && k.waiting) || [];
-    return waiting.length > 0 && waiting.every(function (key) { return /_zero$/.test(key); });
-  }
-
-  function frTouchOtherHtml(d) {
-    // With the sign offs unread, the card cannot say what is waiting: it says nothing here.
-    if (!frTouch || frTouch.approvalsUnavailable) return "";
-    var info = frTouchKindInfo((d && d.kind) || frTouchKind);
-    var others = ((info && info.waiting) || []).filter(function (key) { return key !== d.wordingKey; });
-    if (!others.length) return "";
-    var zero = /_zero$/.test(others[0]);
-    var mine = isAdmin() && frCanWrite() ? "your sign off." : "sign off.";
-    // In a block of its own, so it never sits beside the line above it (an editor has no button between).
-    return '<div><p class="fr-touch-signoff" data-frtouchother>' +
-      (zero ? "The version for a page that has raised nothing yet is still waiting for " : "The usual version is still waiting for ") + mine + "</p>" +
-      '<div class="fx-call-row"><button class="admin-btn admin-btn--small fr-btn-quiet" type="button" data-frtouchshow="' + (zero ? "zero" : "") + '">Show that version</button></div></div>';
-  }
-
-  function frTouchApproval(key, approve) {
-    if (frTouchBusy || !frTouch || !key) return;
-    var question = approve
-      ? "Approve this wording? Once approved, it goes to organisers by itself when it is due, while automatic emails are on."
-      : "Withdraw approval? This email stops going until it is approved again.";
-    if (!window.confirm(question)) return;
-    frTouchBusy = true;
-    frTeamSay("frTouchStatus", "Saving…", false);
-    return frSend(approve ? "POST" : "DELETE", "/api/admin/fundraising/touch/approvals/" + encodeURIComponent(key))
-      .then(function (r) {
-        frTouchBusy = false;
-        if (!r.ok) {
-          frTeamSay("frTouchStatus", frRefusal(r, "That did not work. Please try again."), true);
-          return;
-        }
-        // Read it all again: the pills, the next run, and this email's note.
-        frTouchShown = "";
-        return Promise.resolve(frTouchLoad()).then(function () {
-          frTeamSay("frTouchStatus", approve ? "Wording approved." : "Approval withdrawn.", false);
-        });
-      })
-      .catch(function (err) {
-        frTouchBusy = false;
-        if (err && err.message === "unauthorized") return;
-        frTeamSay("frTouchStatus", "That did not work. Please try again.", true);
-      });
-  }
-
-  // The real 660px email, zoomed down to fit the card, and as tall as it is: the page grows.
-  function frTouchFit() {
-    var frame = el("frTouchPreview"), wrap = el("frTouchPreviewWrap");
-    if (!frame || !wrap || !wrap.clientWidth) return;
-    var cdoc = frame.contentDocument;
-    if (!cdoc || !cdoc.body) return;
-    var scale = Math.min(1, wrap.clientWidth / FR_TOUCH_EMAIL_W);
-    frame.style.width = FR_TOUCH_EMAIL_W + "px";
-    frame.style.height = "0px";
-    frame.style.height = Math.max(cdoc.body.scrollHeight, cdoc.documentElement.scrollHeight) + "px";
-    frame.style.zoom = scale;
-  }
 
   function frTouchSwitch() {
     if (frTouchBusy || !frTouch) return;
@@ -12152,7 +12007,8 @@
       (next ? '<p class="fr-field-hint" data-frtouchnext>Next: ' + H.escapeHtml(labels[next] || next) +
         (frTouch.settings.on ? ", at the next 8am run." : ", once automatic emails are switched on.") + "</p>" : "") +
       (f.path === "raising" && f.public
-        ? '<div class="fx-call-row"><button class="admin-btn admin-btn--small fr-btn-quiet" type="button" data-frtouchfor="' + f.id + '">Read its automatic emails</button></div>'
+        ? '<div class="fx-call-row"><button class="admin-btn admin-btn--small fr-btn-quiet" type="button" data-allemails-open="touch" data-allemails-fundraiser="' + f.id + '"' +
+          (next ? ' data-allemails-touch="' + H.escapeHtml(next) + '"' : "") + ">Read its automatic emails</button></div>"
         : '<p class="fr-field-hint">Automatic emails only go to public pages raising money.</p>');
     return '<section class="fx-panel fx-panel--wide fr-touch-panel" data-frtouch-panel><h4>Keeping in touch</h4>' + promptsHtml + callsHtml + sentHtml +
       frNoticeHtml("touch", "frTouchCallStatus") + "</section>";
@@ -12189,50 +12045,13 @@
       card.addEventListener("click", function (e) {
         var t = e.target;
         if (!t || !t.closest) return;
-        var kind = t.closest("[data-frtouchkind]");
-        if (kind) {
-          frTouchKind = kind.getAttribute("data-frtouchkind");
-          // An email whose only waiting version is the nothing raised one opens straight on it, so
-          // Approve is there at once. Never over a real fundraiser, nor once they have picked for
-          // themselves; and the usual example comes back on the next email if it was us who left it.
-          if (!frTouchForTheirs && (frTouchFor === "" || frTouchFor === "zero")) {
-            var zeroOnly = frTouchOnlyZeroWaiting(frTouchKindInfo(frTouchKind)) && !frTouch.approvalsUnavailable;
-            if (zeroOnly && frTouchFor === "") {
-              frTouchFor = "zero";
-              frTouchForOurs = true;
-            } else if (!zeroOnly && frTouchForOurs) {
-              frTouchFor = "";
-              frTouchForOurs = false;
-            }
-          }
-          frTouchRenderCard();
-          return;
-        }
-        var show = t.closest("[data-frtouchshow]");
-        if (show) {
-          frTouchFor = show.getAttribute("data-frtouchshow");
-          frTouchForOurs = frTouchFor === "zero";
-          frTouchRenderFor();
-          frTouchPreview();
-          return;
-        }
         if (t.closest("#frTouchSwitch")) frTouchSwitch();
-        var approve = t.closest("[data-frtouchapprove]");
-        if (approve) frTouchApproval(approve.getAttribute("data-frtouchapprove"), true);
-        var withdraw = t.closest("[data-frtouchwithdraw]");
-        if (withdraw) frTouchApproval(withdraw.getAttribute("data-frtouchwithdraw"), false);
       });
-      el("frTouchFor").addEventListener("change", function (e) {
-        frTouchFor = String(e.target.value || "");
-        frTouchForTheirs = true;
-        frTouchForOurs = false;
-        frTouchPreview();
+      // A sign off changed in All emails: what is due, and what is held, is read again.
+      view.addEventListener("nbcc:wording-changed", function () {
+        frTouchLoad();
+        frLoadTeam();
       });
-      el("frTouchPreview").addEventListener("load", function () {
-        frTouchFit();
-        if (window.requestAnimationFrame) window.requestAnimationFrame(frTouchFit);
-      });
-      window.addEventListener("resize", frTouchFit);
     }
     view.addEventListener("click", function (e) {
       var t = e.target;
@@ -12241,13 +12060,6 @@
       if (call) {
         frTouchRecordCall(call.getAttribute("data-frpromptcall"));
         return;
-      }
-      var forBtn = t.closest("[data-frtouchfor]");
-      if (forBtn) {
-        frTouchFor = forBtn.getAttribute("data-frtouchfor");
-        frTouchRenderFor();
-        frTouchPreview();
-        if (card && card.scrollIntoView) card.scrollIntoView({ block: "start" });
       }
     });
     view.addEventListener("input", function (e) {
@@ -12961,14 +12773,14 @@
     memory: { label: "In memory", phrase: "an in memory invite", the: "the in memory invite" },
   };
   // The in memory invite is new wording: the server only sends it once an admin has approved it
-  // (key invite_memory, with the automatic emails' sign offs). Until then Send rests, and says why.
-  var FR_INVITE_WAITING = "The in memory invite wording is waiting for sign off. Read it and approve it first.";
+  // (key invite_memory, with the automatic emails' sign offs). Until then Send rests, and says why,
+  // with a link to the All emails card, where an admin approves it.
+  var FR_INVITE_WAITING = "The in memory invite wording is waiting for sign off, so this invite cannot be sent yet.";
   // When the sign offs could not be read there is nothing to approve: Send still rests, and says so.
   var FR_INVITE_UNCHECKED = "We could not check the sign off just now. Try again in a moment.";
   var FR_INVITE_KEYS = { memory: "invite_memory" };
   var frInviteWordingData = null; // the email being read: { type, subject, html, wordingKey }
   var frInviteWordingSeq = 0;
-  var frInviteApproving = false;
 
   function frInviteType() {
     var select = el("frInviteType");
@@ -12987,7 +12799,8 @@
   // Why it is held: waiting for sign off, or the sign offs could not be read just now.
   function frInviteHeldWords() {
     var w = frTeam && frTeam.inviteWording;
-    return !w || w.unavailable ? FR_INVITE_UNCHECKED : FR_INVITE_WAITING;
+    if (!w || w.unavailable) return FR_INVITE_UNCHECKED;
+    return FR_INVITE_WAITING + (isAdmin() && frCanWrite() ? "" : " Only an admin can approve it.");
   }
 
   // The Send button, the note beside it and the sign off line, from what is chosen and approved.
@@ -12998,7 +12811,15 @@
     var note = el("frInviteHeld");
     if (note) {
       note.hidden = !held;
-      if (held) note.textContent = frInviteHeldWords();
+      var heldWords = el("frInviteHeldWords");
+      if (held && heldWords) heldWords.textContent = frInviteHeldWords();
+      // The link to where it is approved. Nothing can be approved while the sign offs cannot be read.
+      var heldLink = el("frInviteHeldLink");
+      var unchecked = !frTeam || !frTeam.inviteWording || frTeam.inviteWording.unavailable;
+      if (heldLink) {
+        heldLink.hidden = unchecked;
+        heldLink.textContent = unchecked ? "" : isAdmin() && frCanWrite() ? "Approve it in All emails" : "Read it in All emails";
+      }
     }
     frInviteWordingMeta();
   }
@@ -13007,16 +12828,9 @@
     if (!key) return "";
     var w = frTeam && frTeam.inviteWording;
     if (!w || w.unavailable) return '<p class="fr-touch-signoff" data-frinvitesignoff>' + H.escapeHtml(FR_TOUCH_UNCHECKED) + "</p>";
-    var admin = isAdmin() && frCanWrite();
     var a = frInviteApproval(key);
-    var rest = frInviteApproving ? " disabled" : "";
-    if (!a) {
-      return '<p class="fr-touch-signoff" data-frinvitesignoff>' +
-        (admin ? "New wording, waiting for your sign off. It won't send until you approve it." : "New wording, waiting for sign off. Only an admin can approve it.") + "</p>" +
-        (admin ? '<div class="fx-call-row"><button class="admin-btn admin-btn--small" type="button" data-frinviteapprove="' + H.escapeHtml(key) + '"' + rest + ">Approve this wording</button></div>" : "");
-    }
-    return '<p class="fr-touch-approved" data-frinvitesignoff>Approved by ' + H.escapeHtml(frWho(a.approvedBy)) + " on " + H.escapeHtml(H.fmtDate(a.approvedAt)) + ".</p>" +
-      (admin ? '<div class="fx-call-row"><button class="admin-btn admin-btn--small fr-btn-quiet" type="button" data-frinvitewithdraw="' + H.escapeHtml(key) + '"' + rest + ">Withdraw approval</button></div>" : "");
+    if (!a) return '<p class="fr-touch-signoff" data-frinvitesignoff>' + "Waiting for sign off. It won't send until an admin approves it." + "</p>";
+    return '<p class="fr-touch-approved" data-frinvitesignoff>Approved by ' + H.escapeHtml(frWho(a.approvedBy)) + " on " + H.escapeHtml(H.fmtDate(a.approvedAt)) + ".</p>";
   }
 
   function frInviteWordingMeta() {
@@ -13075,32 +12889,6 @@
     frame.style.height = "0px";
     frame.style.height = Math.max(cdoc.body.scrollHeight, cdoc.documentElement.scrollHeight) + "px";
     frame.style.zoom = scale;
-  }
-
-  function frInviteWordingApproval(key, approve) {
-    if (frInviteApproving || !frTeam || !key) return;
-    var question = approve
-      ? "Approve this wording? Once approved, in memory invites can be sent with it."
-      : "Withdraw approval? In memory invites cannot be sent until it is approved again.";
-    if (!window.confirm(question)) return;
-    frInviteApproving = true;
-    frInviteSync();
-    frTeamSay("frInviteStatus", "Saving…", false);
-    var said = null;
-    return frSend(approve ? "POST" : "DELETE", "/api/admin/fundraising/invite-wording/" + encodeURIComponent(key) + "/approval")
-      .then(function (r) {
-        said = r.ok ? [approve ? "Wording approved." : "Approval withdrawn.", false] : [frRefusal(r, "That did not work. Please try again."), true];
-        return r.ok ? frLoadTeam() : null;
-      })
-      .catch(function (err) {
-        if (err && err.message === "unauthorized") return;
-        said = ["That did not work. Please try again.", true];
-      })
-      .then(function () {
-        frInviteApproving = false;
-        frInviteSync();
-        if (said) frTeamSay("frInviteStatus", said[0], said[1]);
-      });
   }
 
   function frRenderInvites() {

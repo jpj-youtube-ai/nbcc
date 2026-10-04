@@ -6,8 +6,9 @@ import { createRequire } from "node:module";
 
 // Sponsor pledges in Admin > Fundraising (assets/js/admin/pledges.js, its own file beside app.js):
 // the folded card with the totals, each fundraiser's pledges with emails for staff, send the pay
-// link, cancel, hide a message, and the two emails to read and approve before any is sent. A fake
-// fetch stands in for the API. Every name and address is invented.
+// link, cancel, hide a message, and whether the two emails to sponsors are going, with a button that
+// opens them in the All emails card (where they are read and approved now). A fake fetch stands in
+// for the API. Every name and address is invented.
 
 const require = createRequire(import.meta.url);
 const ROOT = resolve(__dirname, "../..");
@@ -88,11 +89,6 @@ async function start(role = "editor", data = overview(), answers: Record<string,
       posts.push([method, url]);
       const a = answers[url] ?? { status: 200, body: { status: "ok" } };
       return { status: a.status, ok: a.status < 400, json: async () => a.body };
-    }
-    if (url.includes("/preview/")) {
-      const key = url.split("/").pop();
-      const kind = data.emails.kinds.find((k) => k.key === key)!;
-      return { status: 200, ok: true, json: async () => ({ key, label: kind.label, when: kind.when, approval: kind.approval, subject: "Sam finished Sam's Santa Dash!", html: "<!doctype html><p>Hello Alex</p>", text: "Hello Alex" }) };
     }
     return { status: 200, ok: true, json: async () => data };
   });
@@ -223,36 +219,58 @@ describe("the Sponsor pledges card", () => {
     expect(JSON.parse(String((hide[1] as RequestInit).body))).toEqual({ hidden: true });
   });
 
-  it("shows the two emails to read, with which is waiting for sign off", async () => {
-    await start();
-    const kinds = [...el("frPledgesKinds")!.querySelectorAll("button")];
-    expect(kinds.map((k) => words(k))).toEqual(["Here’s your link to pay your pledge Waiting for sign off", "A reminder about your pledge"]);
-    expect(words(el("frPledgesMeta"))).toContain("New wording, waiting for sign off. It won't send until an admin approves it.");
-    expect(words(el("frPledgesMeta"))).toContain("Sam finished Sam's Santa Dash!");
-    expect((el("frPledgesPreview") as HTMLIFrameElement).getAttribute("srcdoc")).toContain("Hello Alex");
-  });
-
-  it("says the automatic emails are off, so nothing goes yet", async () => {
-    await start();
-    expect(words(el("frPledgesEmailsState"))).toContain("Automatic emails are switched off, so neither is being sent.");
-  });
-
-  it("only an admin gets the approve button, and approving posts the key", async () => {
-    await start("editor");
-    expect(el("frPledgesMeta")!.querySelector("button")).toBeNull();
+  it("no longer shows the two emails itself, and fetches neither", async () => {
     await start("admin");
-    const approve = el("frPledgesMeta")!.querySelector("[data-pledge-approve]");
-    expect(words(approve)).toBe("Approve this wording");
-    await click(approve);
-    expect(posts).toContainEqual(["POST", "/api/admin/fundraising/pledges/approvals/pledge_pay"]);
+    for (const id of ["frPledgesKinds", "frPledgesMeta", "frPledgesPreview", "frPledgesPreviewWrap"]) expect(el(id), id).toBeNull();
+    expect(words(el("frPledges"))).not.toMatch(/The two emails to sponsors|Approve this wording|Withdraw approval/);
+    expect(fetchMock.mock.calls.some((c) => String(c[0]).includes("/preview/"))).toBe(false);
   });
 
-  it("an admin can withdraw an approval", async () => {
-    await start("admin");
-    await click(el("frPledgesKinds")!.querySelectorAll("button")[1]);
-    expect(words(el("frPledgesMeta"))).toContain("Approved by jaimie@example.com");
-    await click(el("frPledgesMeta")!.querySelector("[data-pledge-withdraw]"));
-    expect(posts).toContainEqual(["DELETE", "/api/admin/fundraising/pledges/approvals/pledge_reminder"]);
+  it("has a button that opens All emails at Sponsor pledges", async () => {
+    await start();
+    const link = el("frPledges")!.querySelector('[data-allemails-open="pledges"]')!;
+    expect(link.tagName).toBe("BUTTON");
+    expect(link.getAttribute("type")).toBe("button");
+    expect(words(link)).toBe("Read and approve these in All emails");
+  });
+
+  it("says the automatic emails are off, so neither email goes yet, and how many are waiting for sign off", async () => {
+    await start();
+    expect(words(el("frPledgesEmailsState"))).toBe("Automatic emails are switched off, so the pay link and the reminder are not being sent. 1 is waiting for sign off.");
+  });
+
+  it("says they are on, and that each goes only once approved", async () => {
+    const data = overview();
+    data.emails.on = true;
+    data.emails.kinds[1].approval = null;
+    await start("editor", data);
+    expect(words(el("frPledgesEmailsState"))).toBe(
+      "Automatic emails are switched on. The pay link and the reminder are each sent only once their wording is approved. Both are waiting for sign off.",
+    );
+  });
+
+  it("says nothing about waiting once both are approved", async () => {
+    const data = overview();
+    data.emails.on = true;
+    data.emails.kinds[0].approval = data.emails.kinds[1].approval as never;
+    await start("editor", data);
+    expect(words(el("frPledgesEmailsState"))).toBe("Automatic emails are switched on. The pay link and the reminder are each sent only once their wording is approved.");
+  });
+
+  it("says so when the sign offs could not be checked", async () => {
+    const data = overview();
+    data.emails.approvalsUnavailable = true;
+    await start("editor", data);
+    expect(words(el("frPledgesEmailsState"))).toContain("Couldn't check sign-offs just now, so both are held.");
+  });
+
+  it("reads it all again when a sign off changes in All emails", async () => {
+    await start();
+    const before = fetchMock.mock.calls.length;
+    document.getElementById("frPledges")!.dispatchEvent(new CustomEvent("nbcc:wording-changed", { bubbles: true, detail: { key: "pledge_pay" } }));
+    await flush();
+    expect(fetchMock.mock.calls.length).toBe(before + 1);
+    expect(fetchMock.mock.calls[before][0]).toBe("/api/admin/fundraising/pledges");
   });
 
   it("writes names and messages as text, never as markup", async () => {

@@ -405,7 +405,11 @@ describe("Invite someone", () => {
 
 // ---- invite types (Jaimie, B1 + I1) ----
 
-const WAITING = "The in memory invite wording is waiting for sign off. Read it and approve it first.";
+// What the form says while the wording is waiting, and what the server says if it refuses one.
+const WAITING = "The in memory invite wording is waiting for sign off, so this invite cannot be sent yet.";
+const SERVER_WAITING = "The in memory invite wording is waiting for sign off. Read it and approve it first.";
+// A sign off changed in the All emails card (assets/js/admin/all-emails.js): it says so with this.
+const wordingChanged = () => el("frInvite").dispatchEvent(new CustomEvent("nbcc:wording-changed", { bubbles: true, detail: { key: "invite_memory" } }));
 function fillInvite(type: string) {
   setValue("#frInviteType", type);
   setValue("#frInviteFirstName", "Mary");
@@ -509,13 +513,19 @@ describe("What are you inviting them to do?", () => {
 });
 
 describe("the in memory invite's sign off", () => {
-  it("cannot be sent until the wording is approved, and says why", async () => {
+  it("cannot be sent until the wording is approved, and says why, with a link to All emails", async () => {
     await openFundraising();
     fillInvite("memory");
     await settle();
     expect((el("frInviteSend") as HTMLButtonElement).disabled).toBe(true);
     expect(el("frInviteHeld").hidden).toBe(false);
-    expect(text(el("frInviteHeld"))).toBe(WAITING);
+    expect(text(el("frInviteHeldWords"))).toBe(WAITING);
+    const link = el("frInviteHeldLink");
+    expect(link.tagName).toBe("BUTTON");
+    expect(link.hidden).toBe(false);
+    expect(text(link)).toBe("Approve it in All emails");
+    expect(link.getAttribute("data-allemails-open")).toBe("invites");
+    expect(link.getAttribute("data-allemails-email")).toBe("invite-memory");
     // Even if the form is sent some other way, nothing goes.
     submit("#frInviteForm");
     await settle();
@@ -524,30 +534,28 @@ describe("the in memory invite's sign off", () => {
     expect(text(el("frInviteStatus"))).toBe(WAITING);
   });
 
-  it("opens the email to read, with Approve this wording for an admin", async () => {
+  it("opens the email to read and says it is waiting, with no Approve button of its own", async () => {
     await openFundraising();
     setValue("#frInviteType", "memory");
     await settle();
     expect((el("frInviteRead") as HTMLDetailsElement).open).toBe(true);
-    expect(text(el("frInviteWordingMeta"))).toContain("New wording, waiting for your sign off. It won't send until you approve it.");
+    expect(text(el("frInviteWordingMeta"))).toContain("Waiting for sign off. It won't send until an admin approves it.");
     expect(text(el("frInviteWordingMeta"))).toContain("Subject A page in memory of someone you love");
     expect((el("frInviteWordingFrame") as HTMLIFrameElement).getAttribute("srcdoc")).toContain("The memory invite");
-    expect(text(q('#frInviteWording [data-frinviteapprove="invite_memory"]'))).toBe("Approve this wording");
+    expect(text(el("frInvite"))).not.toMatch(/Approve this wording|Withdraw approval/);
+    expect(q("#frInvite [data-frinviteapprove], #frInvite [data-frinvitewithdraw]")).toBeNull();
   });
 
-  it("is approved after asking, and then the invite can be sent", async () => {
+  it("can be sent once it is approved in All emails, with what was typed still there", async () => {
     await openFundraising();
     fillInvite("memory");
     await settle();
-    (q('[data-frinviteapprove="invite_memory"]') as HTMLElement).click();
+    approveMemory();
+    wordingChanged();
     await settle();
-    expect(confirmed.pop()).toBe("Approve this wording? Once approved, in memory invites can be sent with it.");
-    expect(sent("POST", "/api/admin/fundraising/invite-wording/invite_memory/approval")).toHaveLength(1);
     expect(text(el("frInviteWordingMeta"))).toContain("Approved by fern@example.com on 03/10/2026.");
-    expect(q("[data-frinviteapprove]")).toBeNull();
     expect((el("frInviteSend") as HTMLButtonElement).disabled).toBe(false);
     expect(el("frInviteHeld").hidden).toBe(true);
-    // What was typed is still there.
     expect((el("frInviteFirstName") as HTMLInputElement).value).toBe("Mary");
     expect((el("frInviteType") as HTMLSelectElement).value).toBe("memory");
     submit("#frInviteForm");
@@ -557,26 +565,25 @@ describe("the in memory invite's sign off", () => {
     expect(text(el("frInviteStatus"))).toBe("Invite sent to Mary Smith.");
   });
 
-  it("approves nothing when the question is answered no", async () => {
-    confirmAnswer = false;
+  it("never approves or withdraws anything itself", async () => {
     await openFundraising();
-    setValue("#frInviteType", "memory");
+    fillInvite("memory");
     await settle();
-    (q('[data-frinviteapprove="invite_memory"]') as HTMLElement).click();
+    approveMemory();
+    wordingChanged();
     await settle();
-    expect(sent("POST", "/api/admin/fundraising/invite-wording/invite_memory/approval")).toHaveLength(0);
-    expect((el("frInviteSend") as HTMLButtonElement).disabled).toBe(true);
+    expect(calls.filter((c) => c.path.includes("/invite-wording/") && c.method !== "GET")).toHaveLength(0);
   });
 
-  it("shows an editor that it is waiting, with no Approve button", async () => {
+  it("tells an editor that only an admin can approve it, with a link to read it", async () => {
     asRole("editor");
     await openFundraising();
     setValue("#frInviteType", "memory");
     await settle();
-    expect(q("[data-frinviteapprove]")).toBeNull();
-    expect(text(el("frInviteWordingMeta"))).toContain("New wording, waiting for sign off. Only an admin can approve it.");
+    expect(text(el("frInviteWordingMeta"))).toContain("Waiting for sign off. It won't send until an admin approves it.");
     expect((el("frInviteSend") as HTMLButtonElement).disabled).toBe(true);
-    expect(text(el("frInviteHeld"))).toBe(WAITING);
+    expect(text(el("frInviteHeldWords"))).toBe(WAITING + " Only an admin can approve it.");
+    expect(text(el("frInviteHeldLink"))).toBe("Read it in All emails");
   });
 
   it("lets an editor send one once an admin has approved it", async () => {
@@ -590,17 +597,17 @@ describe("the in memory invite's sign off", () => {
     expect(q("[data-frinvitewithdraw]")).toBeNull();
   });
 
-  it("has its approval withdrawn by an admin, after asking, and is held again", async () => {
+  it("is held again when its approval is withdrawn in All emails", async () => {
     approveMemory();
     await openFundraising();
     setValue("#frInviteType", "memory");
     await settle();
-    (q('[data-frinvitewithdraw="invite_memory"]') as HTMLElement).click();
+    expect((el("frInviteSend") as HTMLButtonElement).disabled).toBe(false);
+    team.inviteWording = { approvals: {}, unavailable: false };
+    wordingChanged();
     await settle();
-    expect(confirmed.pop()).toBe("Withdraw approval? In memory invites cannot be sent until it is approved again.");
-    expect(sent("DELETE", "/api/admin/fundraising/invite-wording/invite_memory/approval")).toHaveLength(1);
     expect((el("frInviteSend") as HTMLButtonElement).disabled).toBe(true);
-    expect(text(el("frInviteHeld"))).toBe(WAITING);
+    expect(text(el("frInviteHeldWords"))).toBe(WAITING);
   });
 
   it("holds only the in memory type: choosing another lets it be sent again", async () => {
@@ -614,7 +621,7 @@ describe("the in memory invite's sign off", () => {
     expect(el("frInviteHeld").hidden).toBe(true);
   });
 
-  it("is held when the sign offs could not be checked, saying so and not to approve it", async () => {
+  it("is held when the sign offs could not be checked, saying so, with no link to approve it", async () => {
     const UNCHECKED = "We could not check the sign off just now. Try again in a moment.";
     team.inviteWording = { approvals: {}, unavailable: true };
     await openFundraising();
@@ -623,9 +630,9 @@ describe("the in memory invite's sign off", () => {
     expect((el("frInviteSend") as HTMLButtonElement).disabled).toBe(true);
     expect(el("frInviteHeld").hidden).toBe(false);
     expect(text(el("frInviteHeld"))).toBe(UNCHECKED);
-    expect(text(el("frInvite"))).not.toContain("Read it and approve it first");
+    expect(el("frInviteHeldLink").hidden).toBe(true);
+    expect(text(el("frInvite"))).not.toContain("Approve it in All emails");
     expect(text(el("frInviteWordingMeta"))).toContain("Couldn't check sign-offs just now, so new wording is held.");
-    expect(q("[data-frinviteapprove]")).toBeNull();
     submit("#frInviteForm");
     await settle();
     expect(text(el("frInviteStatus"))).toBe(UNCHECKED);
@@ -634,13 +641,13 @@ describe("the in memory invite's sign off", () => {
 
   it("passes on the server's words if it refuses one all the same", async () => {
     approveMemory();
-    answers["POST /api/admin/fundraising/invites"] = { status: 409, body: { error: WAITING } };
+    answers["POST /api/admin/fundraising/invites"] = { status: 409, body: { error: SERVER_WAITING } };
     await openFundraising();
     fillInvite("memory");
     await settle();
     submit("#frInviteForm");
     await settle();
-    expect(text(el("frInviteStatus"))).toBe(WAITING);
+    expect(text(el("frInviteStatus"))).toBe(SERVER_WAITING);
   });
 });
 

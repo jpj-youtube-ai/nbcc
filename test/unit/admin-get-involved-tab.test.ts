@@ -6,7 +6,7 @@ import { createRequire } from "node:module";
 import { signAdminSession } from "../../src/admin/session";
 import { effectivePermissions, type PermissionMap } from "../../src/admin/permissions";
 
-// Admin > Get involved: the old Events and Fundraising tabs as one tab with five sections (Sign-ups,
+// Admin > Get involved: the old Events and Fundraising tabs as one tab with five sections (Sign ups,
 // Our events, Tickets and pledges, Emails, Settings). A move, not a rewrite: every card keeps its
 // ids and its code, so these tests are about where things are, who sees which section, that every
 // old way in still lands in the right place, and that a section only fetches when it is shown.
@@ -224,7 +224,7 @@ describe("the five sections", () => {
     expect(row.getAttribute("role")).toBe("group");
     expect(row.getAttribute("aria-label")).toBeTruthy();
     const buttons = qa("#giSections [data-gi-section]");
-    expect(buttons.map((b) => text(b))).toEqual(["Sign-ups", "Our events", "Tickets and pledges", "Emails", "Settings"]);
+    expect(buttons.map((b) => text(b))).toEqual(["Sign ups", "Our events", "Tickets and pledges", "Emails", "Settings"]);
     expect(buttons.map((b) => b.getAttribute("data-gi-section"))).toEqual([...SECTIONS]);
     for (const b of buttons) {
       expect(b.tagName).toBe("BUTTON");
@@ -233,7 +233,7 @@ describe("the five sections", () => {
     }
   });
 
-  it("opens on Sign-ups, and shows one section at a time", async () => {
+  it("opens on Sign ups, and shows one section at a time", async () => {
     await openTab();
     expect(shownSections()).toEqual(["signups"]);
     expect(pressed()).toEqual(["signups"]);
@@ -320,7 +320,12 @@ describe("the five sections", () => {
     expect(line.closest("[data-gi-part]")?.getAttribute("data-gi-part")).toBe("events");
     expect(showing(line)).toBe(true);
     expect(line.compareDocumentPosition(el("evList")) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    line.textContent = "Deleted.";
+    line.className = "ty-status is-ok";
     await go("settings");
+    // What it said about an event is not left under the page switch.
+    expect(line.textContent).toBe("");
+    expect(line.className).toBe("ty-status");
     expect(el("evSwitchStatus")).toBe(line);
     expect(line.closest("[data-gi-part]")?.getAttribute("data-gi-part")).toBe("settings");
     expect(showing(line)).toBe(true);
@@ -356,7 +361,7 @@ describe("the five sections", () => {
   });
 });
 
-describe("Sign-ups: a large pill for each kind", () => {
+describe("Sign ups: a large pill for each kind", () => {
   beforeEach(() => boot(false));
   const pill = (id: number) => q(`#frList tr[data-frtoggle="${id}"] .fr-kind`);
 
@@ -383,6 +388,24 @@ describe("Sign-ups: a large pill for each kind", () => {
     expect(pill(4)!.getAttribute("data-kind")).toBe("event");
     expect(pill(5)!.getAttribute("data-kind")).toBe("memory");
     for (const k of ["raising", "team", "event", "memory"]) expect(css).toContain(`.fr-kind[data-kind="${k}"]`);
+  });
+
+  // The large pill says the kind, so nothing smaller on the row says it again or contradicts it.
+  it("does not say the kind twice: no small Team or In memory pill, and no kind in the line under the title", async () => {
+    await openTab();
+    expect(qa("#frList .fr-team-pill, #frList .fr-memory-pill")).toEqual([]);
+    const sub = (id: number) => text(q(`#frList tr[data-frtoggle="${id}"] .fr-sub`));
+    expect(sub(1)).toBe("Robin Example · 05/12/2026");
+    for (const id of [2, 3, 4, 5]) {
+      expect(sub(id), String(id)).not.toMatch(/Raising money|Holding an event|Hosting an event/);
+      expect(sub(id), String(id)).toContain("Robin Example");
+    }
+    expect(text(el("frList"))).not.toContain("Holding an event");
+  });
+
+  it("still says which team a member is on", async () => {
+    await openTab();
+    expect(text(q('#frList tr[data-frtoggle="3"] .fr-joining-pill'))).toMatch(/^Joining /);
   });
 
   it("keeps the pill on the row while its sign up is open", async () => {
@@ -441,16 +464,16 @@ describe("Sign-ups: a large pill for each kind", () => {
   });
 });
 
-describe("Sign-ups: the kind filter", () => {
+describe("Sign ups: the kind filter", () => {
   beforeEach(() => boot(false));
   const kind = (k: string) => q(`#frKindFilter [data-frkind="${k}"]`) as HTMLElement;
   const titles = () => qa("#frList tr[data-frtoggle] .fr-title").map((t) => text(t));
   const count = (k: string) => text(q(`[data-frkindcount="${k}"]`));
 
-  it("has All, Raising money, Teams, Events and In memory above the list, each with its count", async () => {
+  it("has All and the four kinds above the list, in the pills' own words, each with its count", async () => {
     await openTab();
     expect(qa("#frKindFilter [data-frkind]").map((b) => text(b))).toEqual([
-      "All (6)", "Raising money (2)", "Teams (2)", "Events (1)", "In memory (1)",
+      "All (6)", "Raising money (2)", "A team (2)", "Hosting an event (1)", "In memory (1)",
     ]);
     expect([count("all"), count("raising"), count("team"), count("event"), count("memory")]).toEqual(["6", "2", "2", "1", "1"]);
     const box = el("frKindFilter");
@@ -538,6 +561,10 @@ describe("who sees which section", () => {
     expect(showing(el("evSwitch"))).toBe(true);
     expect(showing(el("frSwitch"))).toBe(false);
     expect(showing(el("frCats"))).toBe(false);
+    // The line over it is about what they can see: nothing about fundraising pages.
+    const lines = qa("#view-get-involved [data-gi-intro]").filter(showing);
+    expect(lines).toHaveLength(1);
+    expect(text(lines[0])).toBe("Whether the Get involved page is on the website.");
     // Not an admin: they see the switch's state, as they did, and cannot flip it.
     expect(el("evSwitchBtn").hidden).toBe(true);
     expect(el("evSwitchNote").hidden).toBe(false);
@@ -562,6 +589,9 @@ describe("who sees which section", () => {
     expect(shownSections()).toEqual(["signups"]);
     expect(el("view-events").hidden).toBe(true);
     for (const s of ["tickets", "emails", "settings"] as const) await go(s);
+    expect(qa("#view-get-involved [data-gi-intro]").filter(showing).map((l) => text(l))).toEqual([
+      "What is switched on, and the lists and examples the fundraising pages use.",
+    ]);
     expect(showing(el("frSwitch"))).toBe(true);
     expect(showing(el("evSwitch"))).toBe(false);
     expect(el("frSwitchBtn").hidden).toBe(true); // the switch is an admin's
@@ -603,7 +633,7 @@ describe("every old way in still lands in the right place", () => {
   beforeEach(() => boot(true));
   const ovButtons = () => qa("#view-overview [data-ov-view]");
 
-  it("an Overview button for fundraising opens Get involved at Sign-ups", async () => {
+  it("an Overview button for fundraising opens Get involved at Sign ups", async () => {
     overview = {
       updatedAt: "2026-10-03T08:41:00.000Z", numbers: [], comingUp: [], failed: [],
       needs: [{ level: 2, text: "2 new sign ups to check", view: "fundraising", button: "Fundraising" }],
@@ -616,6 +646,29 @@ describe("every old way in still lands in the right place", () => {
     expect(el("view-get-involved").hidden).toBe(false);
     expect(shownSections()).toEqual(["signups"]);
     expect(navLink().classList.contains("is-active")).toBe(true);
+  });
+
+  it("an Overview button for fundraising shows every kind, whatever the kind filter was left on", async () => {
+    overview = {
+      updatedAt: "2026-10-03T08:41:00.000Z", numbers: [], comingUp: [], failed: [],
+      needs: [{ level: 2, text: "2 new sign ups to check", view: "fundraising", button: "Fundraising" }],
+    };
+    await openTab();
+    (q('#frKindFilter [data-frkind="memory"]') as HTMLElement).click();
+    expect(qa("#frList tr[data-frtoggle]")).toHaveLength(1);
+    (q('.admin-nav-link[data-view="overview"]') as HTMLElement).click();
+    await settle();
+    // By the menu, the filter is as it was left.
+    navLink().click();
+    await settle();
+    expect(qa("#frList tr[data-frtoggle]")).toHaveLength(1);
+    (q('.admin-nav-link[data-view="overview"]') as HTMLElement).click();
+    await settle();
+    ovButtons()[0].click();
+    await settle();
+    expect(qa("#frList tr[data-frtoggle]")).toHaveLength(6);
+    expect((q('#frKindFilter [data-frkind=""]') as HTMLElement).getAttribute("aria-pressed")).toBe("true");
+    expect(window.sessionStorage.getItem("nbccAdminFrKind")).toBeNull();
   });
 
   it("an Overview button for an event, or the Ball ticket report, opens Get involved at Our events", async () => {
@@ -696,7 +749,7 @@ describe("every old way in still lands in the right place", () => {
     expect((el("frAllEmailsFold") as HTMLDetailsElement).open).toBe(true);
   });
 
-  it("an All emails link inside an open sign up (“Read its automatic emails”) moves from Sign-ups to Emails", async () => {
+  it("an All emails link inside an open sign up (“Read its automatic emails”) moves from Sign ups to Emails", async () => {
     await openTab();
     // The link as a sign up's panel draws it: any [data-allemails-open] inside the list.
     const link = document.createElement("button");
@@ -724,9 +777,14 @@ describe("every old way in still lands in the right place", () => {
     const seen = () => calls.filter((c) => c.path === "/api/admin/whats-new/seen").map((c) => (c.body as { area: string }).area);
     navLink().click();
     await settle();
-    // Sign-ups is the old Fundraising tab's list: opening it is the visit that tab recorded.
+    // Sign ups is the old Fundraising tab's list: opening it is the visit that tab recorded.
     expect(seen()).toEqual(["fundraising"]);
     await go("events");
+    expect(seen()).toEqual(["fundraising", "events"]);
+    // Coming back to a section is not a new visit: only opening the tab afresh is, as it was.
+    await go("signups");
+    await go("emails");
+    await go("signups");
     expect(seen()).toEqual(["fundraising", "events"]);
     // Only the two areas the server knows are ever sent.
     expect(seen().every((a) => a === "fundraising" || a === "events")).toBe(true);
@@ -735,6 +793,19 @@ describe("every old way in still lands in the right place", () => {
   it("marks a sign up that arrived since the last visit as New, as the Fundraising tab did", async () => {
     whatsNewAreas = [{ area: "fundraising", new: true, since: "2026-09-19T00:00:00.000Z" }];
     await openTab();
+    expect(q('#frList tr[data-frtoggle="1"] .admin-new-pill')).not.toBeNull();
+    // Looking at another section and coming back does not take the row's pill away.
+    await go("emails");
+    await go("signups");
+    expect(q('#frList tr[data-frtoggle="1"] .admin-new-pill')).not.toBeNull();
+    // Nor does following a link to All emails from the list and coming back.
+    const link = document.createElement("button");
+    link.setAttribute("data-allemails-open", "touch");
+    el("frList").appendChild(link);
+    link.click();
+    await settle();
+    expect(shownSections()).toEqual(["emails"]);
+    await go("signups");
     expect(q('#frList tr[data-frtoggle="1"] .admin-new-pill')).not.toBeNull();
   });
 });
@@ -752,7 +823,7 @@ describe("a section only fetches when it is shown", () => {
     expect(asked).toEqual([]);
   });
 
-  it("opening the tab loads Sign-ups and none of the other sections", async () => {
+  it("opening the tab loads Sign ups and none of the other sections", async () => {
     await openTab();
     expect(got("/api/admin/fundraisers")).toBe(1);
     for (const p of LATER) expect(got(p), p).toBe(0);
@@ -784,9 +855,30 @@ describe("a section only fetches when it is shown", () => {
     expect(got("/api/admin/fundraising/emails/summary")).toBe(1);
     expect(got("/api/admin/fundraising/team")).toBe(before.team + 1);
     expect(got("/api/admin/fundraising/touch")).toBe(before.touch + 1);
+    // The sign ups are already here from Sign ups, so they are not asked for again.
+    expect(got("/api/admin/fundraisers")).toBe(1);
     // The emails themselves wait for the card to be opened, as before.
     expect(got("/api/admin/fundraising/emails")).toBe(0);
     expect(got("/api/admin/fundraising/pledges")).toBe(0);
+  });
+
+  // "Show it for" in All emails offers the real fundraisers. Arriving straight at Emails (a refresh
+  // while on it), nothing has loaded them yet, so Emails asks for the list itself.
+  it("Emails, opened first after a refresh, loads the sign ups too, for the Show it for list in All emails", async () => {
+    records = [fundraiser(7, { title: "Robin's Walk", status: "approved", public: true })];
+    window.sessionStorage.setItem("nbccAdminGiSection", "emails");
+    let told = 0;
+    el("view-fundraising").addEventListener("nbcc:fundraisers-loaded", () => (told += 1));
+    await openTab();
+    expect(shownSections()).toEqual(["emails"]);
+    expect(got("/api/admin/fundraisers")).toBe(1);
+    const pages = (window as unknown as { AdminFundraising: { raisingPages: () => { id: number; title: string }[] } }).AdminFundraising.raisingPages();
+    expect(pages.map((p) => p.title)).toEqual(["Robin's Walk"]);
+    // All emails is told when the list arrives, in case an email is already open.
+    expect(told).toBe(1);
+    // None of what only Sign ups needs.
+    expect(got("/api/admin/fundraising/requests")).toBe(0);
+    expect(got("/api/admin/fundraising/packs")).toBe(0);
   });
 
   it("Settings loads the switches, the categories, the examples and the weekly summary when it is first shown", async () => {
@@ -812,6 +904,45 @@ describe("a section only fetches when it is shown", () => {
     expect(shownSections()).toEqual(["tickets"]);
     expect(got("/api/admin/fundraising/pledges")).toBe(2);
     expect(got("/api/admin/event-tickets")).toBe(2);
+  });
+});
+
+// jsdom lays nothing out, so a frame's content has no height of its own: each test gives the card's
+// document one, and reads what the admin set the frame to. The real thing is checked in Chromium.
+describe("Our events: the card preview keeps its height", () => {
+  beforeEach(() => {
+    boot(false);
+    records = [];
+  });
+  const frame = () => el("evCardPreview") as HTMLIFrameElement;
+  const tall = (px: number) => {
+    Object.defineProperty(frame().contentDocument!.body, "scrollHeight", { configurable: true, value: px });
+  };
+  async function openAnEvent() {
+    await openTab();
+    await go("events");
+    expect(el("evEditor").hidden).toBe(false); // an empty list opens a blank event by itself
+    expect(frame().contentDocument?.body).toBeTruthy();
+  }
+
+  it("is not fitted while Our events is off screen", async () => {
+    await openAnEvent();
+    tall(321);
+    window.dispatchEvent(new Event("resize"));
+    expect(frame().style.height).toBe("321px");
+    await go("settings");
+    tall(0); // what a hidden frame measures
+    window.dispatchEvent(new Event("resize"));
+    expect(frame().style.height).toBe("321px");
+  });
+
+  it("is fitted again when Our events comes back", async () => {
+    await openAnEvent();
+    await go("settings");
+    frame().style.height = "0px"; // as a preview redrawn while hidden left it
+    tall(288);
+    await go("events");
+    expect(frame().style.height).toBe("288px");
   });
 });
 

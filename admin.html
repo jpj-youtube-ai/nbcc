@@ -1106,7 +1106,7 @@
             <section class="admin-view" id="view-get-involved" aria-labelledby="get-involved-heading" hidden>
               <h2 id="get-involved-heading">Get involved</h2>
               <div class="admin-segmented gi-sections" id="giSections" role="group" aria-label="Which part of Get involved to show">
-                <button class="admin-seg is-active" type="button" data-gi-section="signups" aria-pressed="true">Sign-ups</button>
+                <button class="admin-seg is-active" type="button" data-gi-section="signups" aria-pressed="true">Sign ups</button>
                 <button class="admin-seg" type="button" data-gi-section="events" aria-pressed="false">Our events</button>
                 <button class="admin-seg" type="button" data-gi-section="tickets" aria-pressed="false">Tickets and pledges</button>
                 <button class="admin-seg" type="button" data-gi-section="emails" aria-pressed="false">Emails</button>
@@ -1118,6 +1118,8 @@
               <p class="admin-view-intro" data-gi-intro="tickets" hidden>Tickets sold for supporters&rsquo; events, and sponsors&rsquo; promises to pay after an event.</p>
               <p class="admin-view-intro" data-gi-intro="emails" hidden>Invite someone to fundraise, and read every email the website sends about fundraising and events.</p>
               <p class="admin-view-intro" data-gi-intro="settings" hidden>What is switched on, and the lists and examples the fundraising pages use.</p>
+              <!-- For someone who sees only the Get involved page switch here (Events, not Fundraising). -->
+              <p class="admin-view-intro" data-gi-intro="settings" data-gi-only="events" hidden>Whether the Get involved page is on the website.</p>
 
               <!-- NBCC's own events (TASK-453): the "events" section of the permission matrix. The page switch
                    is an admin's; switched off, /get-involved is a 404 and no page's menu mentions it. The
@@ -1459,15 +1461,15 @@
                    sign up below its row, like Business supporters. Long lists show their top items and
                    "Show all" grows the page. -->
               <div id="view-fundraising" hidden>
-                <div class="gi-part" data-gi-part="signups" role="group" aria-label="Sign-ups" hidden>
+                <div class="gi-part" data-gi-part="signups" role="group" aria-label="Sign ups" hidden>
                   <!-- What kind of sign up: one list, filtered. app.js counts each kind and draws the same words
                        on a large pill on every row. It works alongside the status filter under it. -->
                   <div class="fr-bar fr-bar--kind">
                     <div class="admin-segmented" id="frKindFilter" role="group" aria-label="Which kind of sign up to list">
                       <button class="admin-seg is-active" type="button" data-frkind="" aria-pressed="true">All (<span data-frkindcount="all">0</span>)</button>
                       <button class="admin-seg" type="button" data-frkind="raising" aria-pressed="false">Raising money (<span data-frkindcount="raising">0</span>)</button>
-                      <button class="admin-seg" type="button" data-frkind="team" aria-pressed="false">Teams (<span data-frkindcount="team">0</span>)</button>
-                      <button class="admin-seg" type="button" data-frkind="event" aria-pressed="false">Events (<span data-frkindcount="event">0</span>)</button>
+                      <button class="admin-seg" type="button" data-frkind="team" aria-pressed="false">A team (<span data-frkindcount="team">0</span>)</button>
+                      <button class="admin-seg" type="button" data-frkind="event" aria-pressed="false">Hosting an event (<span data-frkindcount="event">0</span>)</button>
                       <button class="admin-seg" type="button" data-frkind="memory" aria-pressed="false">In memory (<span data-frkindcount="memory">0</span>)</button>
                     </div>
                   </div>

@@ -1,6 +1,6 @@
 @admin @get-involved
 Feature: Admin > Get involved: NBCC's own events and community fundraising in one tab
-  The admin's Events and Fundraising tabs are one tab, Get involved, with five sections: Sign-ups,
+  The admin's Events and Fundraising tabs are one tab, Get involved, with five sections: Sign ups,
   Our events, Tickets and pledges, Emails and Settings. Nothing about what they do has changed, and
   the Festive Ball tab is as it was. The switch for the public page says the page's real name.
 
@@ -13,7 +13,7 @@ Feature: Admin > Get involved: NBCC's own events and community fundraising in on
 
   Scenario: Get involved has its five sections, in order
     When the admin page is read
-    Then Get involved offers the sections "Sign-ups", "Our events", "Tickets and pledges", "Emails" and "Settings"
+    Then Get involved offers the sections "Sign ups", "Our events", "Tickets and pledges", "Emails" and "Settings"
 
   Scenario: the page switch calls the page Get involved
     When the admin page is read

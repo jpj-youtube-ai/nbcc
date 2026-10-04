@@ -478,7 +478,7 @@
       b.insertAdjacentHTML("beforeend", NEW_PILL);
       any = true;
     });
-    // Inside Get involved, the section holding what is new says so too: Sign-ups or Our events.
+    // Inside Get involved, the section holding what is new says so too: Sign ups or Our events.
     Array.prototype.forEach.call(doc.querySelectorAll("#giSections [data-gi-section]"), function (b) {
       var old = b.querySelector(".admin-new-pill");
       if (old) old.remove();
@@ -568,9 +568,13 @@
     // The old Events and Fundraising tabs are sections of Get involved now. Everything that still
     // asks for them by name (the Overview's buttons, whose names come from the server, and a browser
     // tab that remembers one) lands on the tab at the right section.
-    var giSection = null;
+    var wanted = null;
     if (GI_OLD_VIEWS[name]) {
-      giSection = GI_OLD_VIEWS[name];
+      wanted = GI_OLD_VIEWS[name];
+      // Sent to the sign ups by name ("3 new sign ups" on the Overview): every kind shows, so a kind
+      // filter left on from earlier never makes that list look empty. By the menu, or after a
+      // refresh, the filter stays as it was left.
+      if (wanted === "signups") frKindReset();
       name = GI_VIEW;
     }
     rememberView(name);
@@ -607,7 +611,7 @@
     else if (name === "outreach") loadOutreach();
     else if (name === "ticker") loadTicker();
     else if (name === "ball") loadBall();
-    else if (name === GI_VIEW) giOpen(giSection);
+    else if (name === GI_VIEW) giOpen(wanted);
     else if (name === "audit") loadAudit();
     else if (name === "email-audit") loadEmailAudit();
     else if (name === "analytics") loadAnalytics();
@@ -623,7 +627,7 @@
   });
 
   // ---- Get involved: one tab, five sections ----
-  // Sign-ups, Our events, Tickets and pledges, Emails and Settings: one shows at a time. The cards
+  // Sign ups, Our events, Tickets and pledges, Emails and Settings: one shows at a time. The cards
   // are the old Events and Fundraising tabs' own, with their ids and their code; this only decides
   // which are on screen, and loads a section when it is shown, so opening the tab does not fetch
   // all five at once. Who sees what is the same as before: Our events and the Get involved page
@@ -631,6 +635,7 @@
   // server is the real gate on every route; this keeps the screen from offering what it would refuse.
   var GI_SECTION_KEY = "nbccAdminGiSection";
   var giSection = null; // the section on screen
+  var giVisited = {}; // New pill area -> its visit has been recorded since the tab was last opened
 
   function giMaySee(section) {
     if (section === "events") return canView("events");
@@ -677,7 +682,10 @@
       b.setAttribute("aria-pressed", on ? "true" : "false");
     });
     Array.prototype.forEach.call(doc.querySelectorAll("#view-get-involved [data-gi-intro]"), function (p) {
-      p.hidden = p.getAttribute("data-gi-intro") !== section;
+      // Settings has two lines: one for someone who sees only the Get involved page switch
+      // (data-gi-only="events"), one for everyone who sees the fundraising settings.
+      var eventsOnly = p.getAttribute("data-gi-only") === "events";
+      p.hidden = p.getAttribute("data-gi-intro") !== section || eventsOnly === canView("fundraising");
     });
     // The card scripts (event-tickets.js, pledges.js, all-emails.js) watch their own part's hidden
     // mark and load when it comes off. A fresh opening hides every part first, so the part showing
@@ -689,10 +697,17 @@
       p.hidden = p.getAttribute("data-gi-part") !== section || p.parentNode.hidden;
     });
     giPlaceEventsStatus(section);
-    // The New pills: Sign-ups is the visit the Fundraising tab recorded, Our events the Events tab's.
+    // The New pills: Sign ups is the visit the Fundraising tab recorded, Our events the Events tab's.
     // The other sections are a visit to neither, so a pill waits until its list has been looked at.
-    currentView = GI_AREA[section] || GI_VIEW;
-    if (GI_AREA[section]) beginVisit(GI_AREA[section]);
+    // A visit is recorded once each time the tab is opened, as the old tabs did, not each time a
+    // section comes back: a second visit would take the New pills off the rows still being read.
+    var area = GI_AREA[section];
+    currentView = area || GI_VIEW;
+    if (fresh) giVisited = {};
+    if (area && !giVisited[area]) {
+      giVisited[area] = true;
+      beginVisit(area);
+    }
     renderNewPills();
     giLoad(section);
   }
@@ -703,6 +718,9 @@
     var line = el("evSwitchStatus");
     var home = doc.querySelector('#view-events [data-gi-part="' + section + '"]');
     if (!line || !home || line.parentNode === home) return;
+    // What it last said belongs to where it was ("Deleted." is not about the page switch).
+    line.textContent = "";
+    line.className = "ty-status";
     if (section === "settings") home.appendChild(line);
     else home.insertBefore(line, home.firstChild);
   }
@@ -711,6 +729,10 @@
     else if (section === "events") {
       loadEvents();
       loadBallReport();
+      // The previews are not fitted while this section is off screen (a hidden frame measures
+      // nothing), so an event already open is fitted again now that it can be measured.
+      evFitCard();
+      evFitPage();
     } else if (section === "emails") frLoadEmailsSection();
     else if (section === "settings") {
       if (canView("events")) evLoadSwitch();
@@ -9363,7 +9385,7 @@
     return '<span class="admin-pill fr-status' + (s.cls ? " " + s.cls : "") + '">' + H.escapeHtml(s.label) + "</span>";
   }
   function frPathWords(path) {
-    return path === "event" ? "Holding an event" : "Raising money";
+    return path === "event" ? "Hosting an event" : "Raising money";
   }
   // A message belongs to the sign up it is about (id), and only shows while that one is open.
   function frSay(key, msg, error, id) {
@@ -9408,7 +9430,7 @@
   }
 
   // ---- loading ----
-  // Sign-ups: the list, the open sign up, and everything a row or an open sign up says or asks.
+  // Sign ups: the list, the open sign up, and everything a row or an open sign up says or asks.
   // The other sections' own cards load when they are shown (giLoad).
   function loadFundraising() {
     frWire();
@@ -9432,6 +9454,9 @@
   // emails card counts what is waiting by itself when its part is shown (all-emails.js).
   function frLoadEmailsSection() {
     frWire();
+    // All emails offers the real fundraisers under "Show it for" (AdminFundraising.raisingPages).
+    // Arriving here first, after a refresh, Sign ups has not loaded them, so they are asked for now.
+    if (!frData) frLoadList();
     frRenderInvitePanel();
     frLoadTeam();
     frTouchLoad(); // TASK-515
@@ -9469,6 +9494,9 @@
       .then(function (d) {
         frData = d;
         frRenderList();
+        // All emails fills "Show it for" from this list: tell it, in case an email is already open.
+        var view = el("view-fundraising");
+        if (view && window.CustomEvent) view.dispatchEvent(new window.CustomEvent("nbcc:fundraisers-loaded"));
       })
       .catch(function (err) {
         if (err && err.message === "unauthorized") return;
@@ -9680,7 +9708,8 @@
 
   function frSummaryRow(f) {
     var open = frOpenId === f.id;
-    var sub = [f.name, frPathWords(f.path), f.eventDate ? H.fmtDate(f.eventDate) : "No date"];
+    // No kind here: the large pill above the title says it, in the same words as the filter.
+    var sub = [f.name, f.eventDate ? H.fmtDate(f.eventDate) : "No date"];
     var pills = (f.editWaiting ? '<span class="admin-pill admin-pill--pending fr-changes-pill">Changes to check</span>' : "") +
       // TASK-506: news updates the organiser posted, waiting for staff.
       frNewsPill(f) +
@@ -10427,7 +10456,7 @@
         // TASK-511 review: always there, shown as soon as Other is chosen (keepTyping).
         box("kindOther", "kindOther", "What it is, in their words (optional)", "text", 'maxlength="80" autocomplete="off"', "For Other. Up to 80 characters.")
           .replace('<div class="fr-field">', '<div class="fr-field" data-frkindother' + (v.kind === "other" || v.kindOther ? "" : " hidden") + ">") +
-        pick("path", "They are", [["raising", "Raising money"], ["event", "Holding an event"]]) +
+        pick("path", "They are", [["raising", "Raising money"], ["event", "Hosting an event"]]) +
         area("description", "description", "About it", 4, 1000) +
         box("eventDate", "eventDate", "Date (optional)", "date", "") +
         box("startTime", "startTime", "Start time (optional)", "time", "") +
@@ -10536,8 +10565,8 @@
 
   function frMemoryPills(f) {
     if (!f.inMemory) return "";
-    return '<span class="admin-pill fr-memory-pill">In memory</span>' +
-      (frMemoryCounts[f.id] ? '<span class="admin-pill admin-pill--pending fr-memory-msgs-pill">Messages to check</span>' : "") +
+    // The row's large kind pill says In memory; these are only what is waiting on it.
+    return (frMemoryCounts[f.id] ? '<span class="admin-pill admin-pill--pending fr-memory-msgs-pill">Messages to check</span>' : "") +
       (f.memoryYearOnDue ? '<span class="admin-pill admin-pill--pending fr-memory-yearon-pill">A year on</span>' : "");
   }
 
@@ -11849,7 +11878,7 @@
   }
 
   function frGroupPills(f) {
-    if (f.isTeam) return '<span class="admin-pill fr-team-pill">Team</span>';
+    // A team's own row says so on its large kind pill; a member's row says which team.
     if (f.teamId && !f.teamLeftAt) {
       var title = frGroupTitleOf(f.teamId);
       // Waiting for staff: joining; approved since: on the team.
@@ -16037,10 +16066,16 @@
     }
   }
 
+  // Our events is off screen while another section of Get involved shows. A frame cannot be measured
+  // then: fitting it would set it to nothing, and it would stay blank when the section came back.
+  function evOffScreen() {
+    var part = el("evEditor").closest("[data-gi-part]");
+    return !!(part && part.hidden);
+  }
   function evFitCard() {
     var frame = el("evCardPreview");
     var cdoc = evFrameDoc(frame);
-    if (!cdoc || !cdoc.body) return;
+    if (!cdoc || !cdoc.body || evOffScreen()) return;
     frame.style.height = "0px";
     frame.style.height = Math.max(cdoc.body.scrollHeight, cdoc.documentElement.scrollHeight) + "px";
   }
@@ -16052,7 +16087,7 @@
     var frame = el("evPagePreview");
     var box = el("evPageBox");
     var cdoc = evFrameDoc(frame);
-    if (!cdoc || !cdoc.body || !box.clientWidth) return;
+    if (!cdoc || !cdoc.body || !box.clientWidth || evOffScreen()) return;
     var mini = box.clientWidth >= 640;
     frame.style.width = (mini ? EV_PAGE_WIDTH : box.clientWidth) + "px";
     frame.style.height = "0px";

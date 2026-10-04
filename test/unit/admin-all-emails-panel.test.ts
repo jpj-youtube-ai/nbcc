@@ -573,6 +573,24 @@ describe("the automatic emails, for a real fundraiser", () => {
     expect(panel("team-live").querySelector("select[data-emails-for]")).toBeNull();
   });
 
+  // Emails can be shown before the sign ups have loaded (a refresh while on it): app.js says when
+  // they arrive, and an email already open offers them without being closed and opened again.
+  it("fills Show it for again when the sign ups arrive after the email was opened", async () => {
+    const all = RAISING.splice(0, RAISING.length);
+    try {
+      await opened();
+      await click(rowBtn("touch-first-gift"));
+      const pick = panel("touch-first-gift").querySelector("select[data-emails-for]") as HTMLSelectElement;
+      expect([...pick.options].map((o) => o.textContent)).toEqual(["An example: Sam's Santa Dash"]);
+      RAISING.push(...all);
+      document.getElementById("view-fundraising")!.dispatchEvent(new CustomEvent("nbcc:fundraisers-loaded"));
+      expect([...pick.options].map((o) => o.textContent)).toEqual(["An example: Sam's Santa Dash", "Robin's Walk, Robin Sample", "Alex's Abseil, Alex Sample"]);
+      expect(pick.value).toBe("");
+    } finally {
+      if (!RAISING.length) RAISING.push(...all);
+    }
+  });
+
   it("shows it as it would go today for the fundraiser chosen, and puts the versions away", async () => {
     await opened();
     await click(rowBtn("touch-finished"));

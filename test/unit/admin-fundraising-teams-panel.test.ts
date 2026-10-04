@@ -162,9 +162,12 @@ function asRole(r: "admin" | "editor" | "viewer") {
 describe("the list", () => {
   it("marks a team page as a team, and says which team a member sign up is joining", async () => {
     await openFundraising();
-    expect(text(row(40)?.querySelector(".fr-team-pill") ?? null)).toBe("Team");
+    // The large kind pill says A team; there is no second, small Team pill.
+    expect(text(row(40)?.querySelector(".fr-kind") ?? null)).toBe("A team");
+    expect(row(40)?.querySelector(".fr-team-pill")).toBeNull();
     expect(text(row(41)?.querySelector(".fr-joining-pill") ?? null)).toBe("Joining Exampleton Juniors");
     expect(row(50)?.querySelector(".fr-team-pill, .fr-joining-pill")).toBeNull();
+    expect(text(row(50)?.querySelector(".fr-kind") ?? null)).not.toBe("A team");
     expect(document.body.textContent).not.toMatch(/captain/i);
   });
 });

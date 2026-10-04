@@ -158,10 +158,12 @@ beforeEach(() => {
 describe("an in memory page on the list", () => {
   it("is marked In memory, with its messages to check and the reminder a year on", async () => {
     await openFundraising();
-    expect(text(row(1)!.querySelector(".fr-memory-pill"))).toBe("In memory");
+    // The large kind pill says In memory; there is no second, small one.
+    expect(text(row(1)!.querySelector(".fr-kind"))).toBe("In memory");
+    expect(row(1)!.querySelector(".fr-memory-pill")).toBeNull();
     expect(text(row(1)!.querySelector(".fr-memory-msgs-pill"))).toBe("Messages to check");
     expect(text(row(1)!.querySelector(".fr-memory-yearon-pill"))).toBe("A year on");
-    expect(row(2)!.querySelector(".fr-memory-pill")).toBeNull();
+    expect(text(row(2)!.querySelector(".fr-kind"))).not.toBe("In memory");
   });
 });
 

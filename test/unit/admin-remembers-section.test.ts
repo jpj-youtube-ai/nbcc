@@ -17,7 +17,7 @@ describe("remembering where you were", () => {
     // remembered is a section that still has a menu entry. Nothing else comes before it.
     const start = app.slice(app.indexOf("function selectView(name)"), app.indexOf("closeNav(\"chosen\")"));
     expect(start).toMatch(/name = GI_VIEW;\s*\}\s*rememberView\(name\);/);
-    expect(start.replace(/\/\/.*$/gm, "")).toMatch(/function selectView\(name\) \{\s*var giSection = null;\s*if \(GI_OLD_VIEWS\[name\]\) \{/);
+    expect(start.replace(/\/\/.*$/gm, "")).toMatch(/function selectView\(name\) \{\s*var wanted = null;\s*if \(GI_OLD_VIEWS\[name\]\) \{/);
   });
 
   it("returns you there on sign-in, rather than always the overview", () => {

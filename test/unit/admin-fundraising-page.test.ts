@@ -514,11 +514,14 @@ describe("the list", () => {
     await openFundraising();
     expect(text(row(1))).toContain("Test Dash 1");
     expect(text(row(1))).toContain("Robin Example");
-    expect(text(row(1))).toContain("Raising money");
+    expect(text(row(1)!.querySelector(".fr-kind"))).toBe("Raising money");
     expect(text(row(1))).toContain("05/12/2026");
     expect(text(row(1))).toContain("£60 of £250");
     expect(text(row(1))).toContain("24%");
-    expect(text(row(2))).toContain("Holding an event");
+    // The kind is said once, on the large pill, in the words the invites use.
+    expect(text(row(2)!.querySelector(".fr-kind"))).toBe("Hosting an event");
+    expect(text(row(2))).not.toContain("Holding an event");
+    expect(text(row(1)!.querySelector(".fr-sub"))).toBe("Robin Example · 05/12/2026");
     expect(text(row(3))).toContain("No date");
     expect(text(row(3))).toContain("£0 raised");
     expect(text(row(1)!.querySelector(".fr-status"))).toBe("New");

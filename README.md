@@ -7247,7 +7247,7 @@ inside a box). Each starts with one line saying what it is for.
 
 | Section | What is in it | Permission section |
 |---|---|---|
-| **Sign-ups** (opens first) | The list of supporters' sign ups and each one's panel, with the kind filter and the status filter | `fundraising` |
+| **Sign ups** (opens first) | The list of supporters' sign ups and each one's panel, with the kind filter and the status filter | `fundraising` |
 | **Our events** | NBCC's own events: the Festive Ball ticket report card, the list, the editor and the page preview | `events` |
 | **Tickets and pledges** | Event tickets, Sponsor pledges | `fundraising` |
 | **Emails** | Invite someone, Automatic emails, All emails | `fundraising` |
@@ -7271,31 +7271,38 @@ still mean something, as the server uses them for the Overview's buttons and the
 
 | Old way in | Where it lands now |
 |---|---|
-| Overview button with `view: "fundraising"` (Needs you, How we are doing, Coming up) | Get involved, Sign-ups. The button reads "Get involved" |
+| Overview button with `view: "fundraising"` (Needs you, How we are doing, Coming up) | Get involved, Sign ups. The button reads "Get involved" |
 | Overview button with `view: "events"` (an event coming up; "The Festive Ball ticket report goes out") | Get involved, Our events. The button reads "Get involved" |
 | A browser tab that remembered `events` or `fundraising` before this change (`nbccAdminView`) | The same two sections, if the person may still see them |
 | "Read and approve these in All emails" (Automatic emails, Sponsor pledges), "Approve it in All emails" (Invite someone), "Read its automatic emails" (an open sign up): any `[data-allemails-open]` | Emails, with the All emails card open at that group or email |
-| New pill for area `fundraising` or `events` | On the Get involved menu entry, and on the Sign-ups or Our events button. Showing Sign-ups records the visit to `fundraising`; showing Our events the visit to `events` |
+| New pill for area `fundraising` or `events` | On the Get involved menu entry, and on the Sign ups or Our events button. Showing Sign ups records the visit to `fundraising`, and showing Our events the visit to `events`, once each time the tab is opened: coming back to a section does not record another, so the rows' New pills stay while you work |
 
 The section you were on is kept for the browser tab (`nbccAdminGiSection` in `sessionStorage`), so a
 refresh returns to it, as it returns to the tab.
 
 **A section loads when it is shown**, not when the tab opens, and again each time you come back to
-it. Opening the tab reads Sign-ups only (the list and what its rows and panels need). Our events
+it. Opening the tab reads Sign ups only (the list and what its rows and panels need). Our events
 reads the events and the Ball ticket report; Tickets and pledges its two cards
 (`event-tickets.js` and `pledges.js` watch their own part); Emails the invites, the automatic
 emails and the All emails count (`all-emails.js`; the emails themselves still wait for the card to
 be opened); Settings the two switches, Categories, What gifts could do and the Weekly summary.
-Nothing of the tab is asked for at sign in.
+Nothing of the tab is asked for at sign in. Emails, shown first (a refresh while on it), also asks
+for the sign ups, as All emails offers them under "Show it for"; `app.js` says
+`nbcc:fundraisers-loaded` on `#view-fundraising` when they arrive and `all-emails.js` fills any
+open picker again. The event previews are never fitted while Our events is off screen (a hidden
+frame measures nothing) and are fitted again when it comes back.
 
 **The kind of each sign up.** Sign ups stay one list. Each row has a large pill saying its kind, in
 words as well as colour: **Raising money**, **A team**, **Hosting an event** or **In memory** (the
 invite types' own words). `frKindOf` works it out from what the list already holds: `inMemory`
 first; then a team (`isTeam`) or a member's own page while they are on one (`teamId` and no
 `teamLeftAt`); then `path === "event"`; else raising money. Above the list, **All, Raising money,
-Teams, Events, In memory**, each with its count of every sign up. It works alongside the status
+A team, Hosting an event, In memory** (the pills' own words), each with its count of every sign up.
+The line under a row's title is the organiser and the date only, and there is no small Team or In
+memory pill: the kind is said once. A member's row still says "Joining" or "On the team" and which. It works alongside the status
 filter (a row must pass both), and is kept for the visit: through a refresh (`nbccAdminFrKind` in
-`sessionStorage`), not past signing out. Colours are the site's tokens, all past WCAG AA for their
+`sessionStorage`), not past signing out, and it is cleared when you are sent to the sign ups by name (an Overview button),
+so "3 new sign ups" never lands on a filtered list. Colours are the site's tokens, all past WCAG AA for their
 text: maroon on a tan tint (7.3 to 1), dark holly on the holly tint (10.8 to 1), cream on maroon
 (10.1 to 1), and for In memory, the quietest, soft slate on cream with a hairline (4.9 to 1).
 
@@ -7681,12 +7688,13 @@ admin's new features list arrives with the screen itself (TASK-495, below).
 ### The admin screen: Admin > Get involved (TASK-495)
 
 Fundraising is four of the five sections of the **Get involved** tab (see
-[Admin > Get involved](#admin--get-involved-nbccs-own-events-and-fundraising-in-one-tab)): Sign-ups,
+[Admin > Get involved](#admin--get-involved-nbccs-own-events-and-fundraising-in-one-tab)): Sign ups,
 Tickets and pledges, Emails and Settings. They show to anyone with `fundraising` view; changing
 anything needs edit; the switch needs an admin as well. Markup `#view-fundraising` (a box inside
 `#view-get-involved`) in `admin.html`, code the `fr` block in `assets/js/admin/app.js`
-(`loadFundraising` loads Sign-ups; `frLoadEmailsSection` and `frLoadSettingsSection` the cards in
-those sections), styles at the end of `assets/css/admin.css`. It is built from the admin's own parts: the Events switch card, the Events
+(`loadFundraising` loads Sign ups; `frLoadEmailsSection` and `frLoadSettingsSection` the cards in
+those sections; Emails also loads the sign ups if nothing has yet, for All emails' "Show it for"),
+styles at the end of `assets/css/admin.css`. It is built from the admin's own parts: the Events switch card, the Events
 status chips and Business supporters' rows that open in place.
 
 - **The switch**, as on Events: an admin can switch fundraising on or off after a question; everyone

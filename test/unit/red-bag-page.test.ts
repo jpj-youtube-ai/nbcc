@@ -95,10 +95,52 @@ describe("beside the list", () => {
     expect(norm(total.textContent)).toBe("£0");
   });
 
-  it("has the monthly tick, one Donate button and the nudge", () => {
-    // With nothing in the bag the tick names no amount; the script names it as the bag fills.
-    expect(norm(doc.querySelector('label[for="rbMonthly"]')?.textContent)).toBe("Give this amount every month");
-    expect(doc.querySelector('label[for="rbMonthly"] [data-rb-monthly-label]')).not.toBeNull();
+  // Once or monthly is two buttons side by side, as on the donate page (its .give-toggle), not a
+  // tick: a named group, each button saying whether it is pressed.
+  it("asks how often with two buttons: Give once, chosen to begin with, and Give monthly", () => {
+    const group = main.querySelector(".rb-toggle")!;
+    expect(group.getAttribute("role")).toBe("group");
+    const label = doc.getElementById(group.getAttribute("aria-labelledby") ?? "")!;
+    expect(norm(label.textContent)).toBe("How often?");
+    const modes = [...group.querySelectorAll("button[data-rb-mode]")];
+    expect(modes.map((b) => [b.getAttribute("data-rb-mode"), norm(b.textContent), b.getAttribute("aria-pressed"), b.getAttribute("type")])).toEqual([
+      ["once", "Give once", "true", "button"],
+      ["monthly", "Give monthly", "false", "button"],
+    ]);
+    // The tick it replaces is gone, and so is its label.
+    expect(doc.getElementById("rbMonthly")).toBeNull();
+    expect(main.querySelector(".rb-panel input")).toBeNull();
+    expect(norm(main.querySelector(".rb-panel")!.textContent)).not.toContain("Give this amount every month");
+  });
+
+  // Jaimie's idea (4 October 2026): one button by the total, offering the next milestone only.
+  it("has one round-up button, hidden until there is something to round up", () => {
+    const rounds = main.querySelectorAll("[data-rb-round]");
+    expect(rounds.length).toBe(1);
+    const round = rounds[0];
+    expect(round.tagName).toBe("BUTTON");
+    expect(round.getAttribute("type")).toBe("button");
+    expect(round.hasAttribute("hidden")).toBe(true);
+    expect(round.querySelector("[data-rb-round-amount]")).not.toBeNull();
+    expect(round.querySelector("[data-rb-round-words]")).not.toBeNull();
+    expect(round.closest(".rb-panel")).not.toBeNull();
+    // Not in the live region: the status line and the total say what pressing it did.
+    expect(round.closest("[aria-live]")).toBeNull();
+  });
+
+  it("puts them in order: the total, the round-up, how often, Donate, the nudge", () => {
+    const order = [...main.querySelectorAll("[data-rb-total], [data-rb-round], .rb-toggle, [data-rb-donate], [data-rb-nudge]")].map(
+      (el) => (el.hasAttribute("data-rb-total") ? "total" : el.hasAttribute("data-rb-round") ? "round" : el.classList.contains("rb-toggle") ? "often" : el.hasAttribute("data-rb-donate") ? "donate" : "nudge"),
+    );
+    expect(order).toEqual(["total", "round", "often", "donate", "nudge"]);
+    // All of it is what the phone bar watches for, and all of it needs the script.
+    for (const sel of ["[data-rb-round]", ".rb-toggle", "[data-rb-donate]"]) {
+      expect(main.querySelector(sel)!.closest("[data-rb-watch]"), sel).not.toBeNull();
+      expect(main.querySelector(sel)!.closest("[data-needs-js]"), sel).not.toBeNull();
+    }
+  });
+
+  it("has one Donate button and the nudge", () => {
     const buttons = main.querySelectorAll("[data-rb-donate]");
     expect(buttons.length).toBe(1);
     expect(norm(buttons[0].textContent)).toBe("Donate");
@@ -152,8 +194,10 @@ describe("the phone bar", () => {
 });
 
 describe("whenever the need comes", () => {
-  it("has the four themes as plain groups, three examples each", () => {
+  it("has the three themes as plain groups, three examples each", () => {
     const themes = [...main.querySelectorAll(".rb-theme")];
+    expect(themes.map((t) => norm(t.querySelector("h3")?.textContent))).toEqual(["After a crisis", "Clothing & school", "A hand at rock bottom"]);
+    expect(main.querySelectorAll("button[data-rb-example]").length).toBe(9);
     expect(themes.map((t) => norm(t.querySelector("h3")?.textContent))).toEqual(rb.THEMES.map((t) => t.title));
     expect(themes.map((t) => norm(t.querySelector(".rb-theme__sub")?.textContent))).toEqual(rb.THEMES.map((t) => t.sub));
     for (const t of themes) {
@@ -170,6 +214,33 @@ describe("whenever the need comes", () => {
       expect(b.getAttribute("type")).toBe("button");
       expect(norm(b.textContent)).toBe(`${rb.pounds(e.pence)} ${e.words}`);
     }
+  });
+
+  it("no longer has the Red Bags Full of Joy theme", () => {
+    const need = norm(main.querySelector("[data-rb-need]")?.textContent);
+    expect(need).not.toContain("Red Bags Full of Joy");
+    expect(need).not.toContain("For those going without at Christmas");
+    expect(main.querySelector('[data-rb-example^="joy"]')).toBeNull();
+  });
+
+  // The themes used to be a section of their own far below the bag. They are now in the bag's own
+  // section: on a phone the list, then the themes, then the bag and Donate; on a desktop the
+  // stylesheet lifts the bag to the top of the right hand column with the themes under it.
+  it("sits between the list and the bag in the page, with the real items note last", () => {
+    const layout = main.querySelector("[data-rb-builder] .rb-layout")!;
+    const kids = [...layout.children].map((el) => el.className.split(" ")[0]);
+    expect(kids).toEqual(["rb-paper", "rb-need", "rb-panel", "rb-real"]);
+    expect(main.querySelectorAll("[data-rb-need]").length).toBe(1);
+  });
+
+  it("is a named part of the page, with its heading and its own words above the themes", () => {
+    const need = main.querySelector("[data-rb-need]")!;
+    expect(need.tagName).toBe("DIV");
+    expect(need.getAttribute("role")).toBe("region");
+    expect(doc.getElementById(need.getAttribute("aria-labelledby") ?? "")).toBe(need.querySelector("h2"));
+    expect(norm(need.querySelector("h2")?.textContent)).toBe("Whenever the need comes");
+    const parts = [...need.children].map((el) => el.className.split(" ")[0]);
+    expect(parts).toEqual(["rb-need__head", "rb-themes"]);
   });
 
   it("keeps a place on the paper for what is tapped: Also in your bag", () => {
@@ -701,7 +772,46 @@ describe("the page's own stylesheet", () => {
     expect(size(".rb-also__words")).toBeGreaterThanOrEqual(1.4);
   });
 
+  // Desktop: the list on the left; on the right the bag at the top and the themes under it, in the
+  // space beside the long paper. The page's order is the phone's (list, themes, bag), so the
+  // stylesheet places them; nothing is moved by script.
+  const desktopRules = () => /@media \(min-width:861px\)\{((?:[^{}]*\{[^{}]*\})*)/.exec(rules)?.[1] ?? "";
+
+  it("places the bag at the top of the right hand column on a desktop, with the themes under it", () => {
+    const desktop = desktopRules();
+    expect(desktop).toMatch(/\.rb-layout\{[^}]*grid-template-columns:minmax\(0,1\.2fr\) minmax\(0,\.8fr\)/);
+    // The second row takes what is left, so the themes start straight under the bag.
+    expect(desktop).toMatch(/\.rb-layout\{[^}]*grid-template-rows:auto 1fr/);
+    expect(desktop).toMatch(/\.rb-paper\{[^}]*grid-column:1;grid-row:1 \/ span 2/);
+    expect(desktop).toMatch(/\.rb-panel\{[^}]*grid-column:2;grid-row:1/);
+    expect(desktop).toMatch(/\.rb-need\{[^}]*grid-column:2;grid-row:2/);
+    expect(desktop).toMatch(/\.rb-real\{[^}]*grid-column:1 \/ -1/);
+  });
+
+  it("stacks the themes one under another in that column, each example the column's full width", () => {
+    expect(desktopRules()).toMatch(/\.rb-themes\{[^}]*grid-template-columns:minmax\(0,1fr\)/);
+    expect(rules).toMatch(/\.rb-example\{[^}]*width:100%/);
+  });
+
+  it("is one column when stacked: the list, the themes, then the bag", () => {
+    const outside = rules.replace(/@media[^{]*\{(?:[^{}]*\{[^{}]*\})*[^{}]*\}/g, "");
+    expect(outside).toMatch(/\.rb-layout\{[^}]*grid-template-columns:minmax\(0,1fr\)/);
+    expect(outside).not.toMatch(/grid-row|grid-column:[12]/);
+  });
+
+  it("has no sticky panel: nothing follows the reader down the page but the phone bar", () => {
+    expect(rules).not.toMatch(/position:\s*sticky/);
+    expect(rules.match(/position:fixed/g)?.length).toBe(1);
+  });
+
+  it("shows which of once and monthly is chosen by more than colour: a tick as well", () => {
+    expect(rules).toMatch(/\.rb-mode\[aria-pressed="true"\]\{[^}]*background(-color)?:var\(--holly\)/);
+    expect(rules).toMatch(/\.rb-mode\[aria-pressed="true"\]::before\{[^}]*content:"\\2713"/);
+  });
+
   it("keeps tap targets at 44px or more", () => {
+    expect(rules).toMatch(/\.rb-mode\{[^}]*min-height:44px/);
+    expect(rules).toMatch(/\.rb-round\{[^}]*min-height:44px/);
     expect(rules).toMatch(/\.rb-step\{[^}]*min-width:44px[^}]*min-height:44px/);
     expect(rules).toMatch(/\.rb-qty\{[^}]*min-height:44px/);
     expect(rules).toMatch(/\.rb-example\{[^}]*min-height:44px/);

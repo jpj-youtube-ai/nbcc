@@ -50,7 +50,12 @@
            where the markers are (src/red-bag/render.ts), from the one catalogue
            (assets/js/red-bag-catalogue.js), so the list reads without JavaScript;
            assets/js/red-bag.js makes it work. The items are EXAMPLES of what a donation could do:
-           every line says "could", never "will", and nothing is bought item by item. -->
+           every line says "could", never "will", and nothing is bought item by item.
+
+           The order here is the PHONE's: the list, then "Whenever the need comes", then the bag
+           with the total and Donate, then the real items note. On a desktop the stylesheet
+           (assets/css/red-bag.css) puts the bag at the top of the right hand column and the themes
+           under it, beside the long paper; nothing is moved by script. -->
       <section class="page-top rb-intro" aria-labelledby="rb-title">
         <div class="wrap">
           <!-- red-bag:preview -->
@@ -107,6 +112,14 @@
             </div>
           </div>
 
+          <div class="rb-need" data-rb-need role="region" aria-labelledby="rb-themes-title">
+            <div class="rb-need__head">
+              <h2 id="rb-themes-title">Whenever the need comes</h2>
+              <p>Christmas is our big night, and the need comes all year round. Tap an example to add it to your bag, and tap it again to take it out.</p>
+            </div>
+            <!-- red-bag:themes -->
+          </div>
+
           <div class="rb-panel" role="region" aria-labelledby="rb-panel-title">
             <h2 class="sr-only" id="rb-panel-title">Your bag</h2>
             <div class="rb-bags" data-rb-bags data-count="1" aria-hidden="true"><!-- red-bag:bag --></div>
@@ -120,23 +133,24 @@
             </div>
             <p class="rb-nojs" data-nojs>Filling a bag needs JavaScript switched on. You can still donate on our <a href="/donate">donate page</a>.</p>
             <div class="rb-give" data-needs-js hidden>
-              <label class="give-check rb-monthly" for="rbMonthly"><input class="give-check-box" id="rbMonthly" name="rbMonthly" type="checkbox" /><span class="give-check-text" data-rb-monthly-label>Give this amount every month</span></label>
+              <!-- The round-up: ONE button, offering the next milestone only (half a bag, a full bag,
+                   then the next whole bag). The script writes its words and shows it once there is
+                   something to round up. It is simply extra money: it buys nothing. -->
+              <button class="rb-round" type="button" data-rb-round hidden><span class="rb-round__amount" data-rb-round-amount></span> <span class="rb-round__words" data-rb-round-words>Round up</span></button>
+              <!-- Once or monthly: two buttons, as on the donate page (its .give-toggle). -->
+              <div class="rb-often">
+                <p class="rb-often__label" id="rbOftenLabel">How often?</p>
+                <div class="rb-toggle" role="group" aria-labelledby="rbOftenLabel">
+                  <button class="rb-mode" type="button" data-rb-mode="once" aria-pressed="true">Give once</button>
+                  <button class="rb-mode" type="button" data-rb-mode="monthly" aria-pressed="false">Give monthly</button>
+                </div>
+              </div>
               <button class="btn btn-primary rb-donate" type="button" data-rb-donate aria-describedby="rbNudge">Donate</button>
               <p class="rb-nudge" id="rbNudge" data-rb-nudge role="alert" hidden>Add a little more to reach £2. Maybe some socks?</p>
             </div>
             </div>
             <p class="rb-elves">Our elves use your gift wherever it's needed most, so the items are a taste of what it could do, not a shopping list.</p>
           </div>
-        </div>
-      </section>
-
-      <section class="section rb-need" data-rb-need aria-labelledby="rb-themes-title">
-        <div class="wrap">
-          <div class="rb-need__head">
-            <h2 id="rb-themes-title">Whenever the need comes</h2>
-            <p>Christmas is our big night, and the need comes all year round. Tap an example to add it to your bag, and tap it again to take it out.</p>
-          </div>
-          <!-- red-bag:themes -->
           <!-- red-bag:real -->
         </div>
       </section>

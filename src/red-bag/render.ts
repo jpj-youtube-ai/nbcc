@@ -102,7 +102,7 @@ export function renderRedBagList(rb: RedBagCatalogue = redBag()): string {
   }).join("");
 }
 
-/** "Whenever the need comes": four plain groups of examples, each a button that is pressed or not. */
+/** "Whenever the need comes": three plain groups of examples, each a button that is pressed or not. */
 export function renderRedBagThemes(rb: RedBagCatalogue = redBag()): string {
   const themes = rb.THEMES.map((t) => {
     const examples = t.examples

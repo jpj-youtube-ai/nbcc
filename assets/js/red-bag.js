@@ -4,6 +4,11 @@
 //   - the steppers on the paper (minus, a number box you can type in, plus; 0 to 99) and the
 //     examples under "Whenever the need comes" (tap to add, tap again or Remove to take out), all
 //     adding up to ONE running total;
+//   - the round-up: one button by the total offering the NEXT milestone only (half a bag, a full
+//     bag, then the next whole bag). Pressed, it adds "A little extra to round up" under "Also in
+//     your bag". It keeps its TARGET, so the extra shrinks and grows as the bag changes and the
+//     total stays put. Simply extra money: it buys nothing;
+//   - once or monthly: two buttons, "Give once" and "Give monthly", as on the donate page;
 //   - the bags, the status line and the total, kept in step. The sums and the words come from the
 //     one catalogue (assets/js/red-bag-catalogue.js, window.NBCCRedBag), never from here;
 //   - Donate: under £2 it shows the friendly nudge; from £2 it opens the details step, the same asks
@@ -77,7 +82,6 @@
     if (!rb || !builder) return null;
     nav = nav || { assign: function (u) { win.location.href = u; } };
 
-    var need = doc.querySelector("[data-rb-need]");
     var details = doc.querySelector("[data-rb-details]");
     var thanks = doc.querySelector("[data-rb-thanks]");
     var bagsBox = doc.querySelector("[data-rb-bags]");
@@ -86,7 +90,10 @@
     var status = doc.querySelector("[data-rb-status]");
     var totalEl = doc.querySelector("[data-rb-total]");
     var perMonth = doc.querySelector("[data-rb-per-month]");
-    var monthly = doc.getElementById("rbMonthly");
+    var modeButtons = doc.querySelectorAll("[data-rb-mode]");
+    var roundBtn = doc.querySelector("[data-rb-round]");
+    var roundAmount = doc.querySelector("[data-rb-round-amount]");
+    var roundWords = doc.querySelector("[data-rb-round-words]");
     var donateBtn = doc.querySelector("[data-rb-donate]");
     var nudge = doc.querySelector("[data-rb-nudge]");
     var also = doc.querySelector("[data-rb-also]");
@@ -95,7 +102,6 @@
     var summary = form ? form.querySelector("[data-rb-error]") : null;
     var payBtn = form ? form.querySelector("[data-rb-pay]") : null;
     var preview = !!(doc.body && doc.body.getAttribute("data-rb-preview") === "true");
-    var monthlyLabel = doc.querySelector("[data-rb-monthly-label]");
     // The phone bar: the total and a Donate button at the foot of the screen (phones only, by the
     // stylesheet), shown while the real ones are out of sight.
     var bar = doc.querySelector("[data-rb-bar]");
@@ -108,6 +114,11 @@
 
     var quantities = {};
     var tapped = []; // example keys, in the order they were tapped
+    var mode = "once"; // or "monthly"
+    // The milestone a round-up was pressed for, in pence; 0 for none. It is the TARGET that is kept,
+    // not an amount: the extra is always whatever takes their own items up to it.
+    var roundTarget = 0;
+    var roundLine = null; // its line under "Also in your bag", made once and kept
     var busy = false;
 
     // The working parts ship hidden; the script that can work them shows them.
@@ -118,11 +129,20 @@
       n.hidden = true;
     });
 
-    function total() {
+    /** Their own items and examples, before any round-up. */
+    function own() {
       return rb.totalPence(quantities, tapped);
     }
+    /** What the round-up adds just now: nothing once their own items reach its target. */
+    function extra() {
+      return rb.roundUpPence(own(), roundTarget);
+    }
+    /** The total shown, and exactly what is sent: their own items plus the round-up. */
+    function total() {
+      return own() + extra();
+    }
     function isMonthly() {
-      return !!(monthly && monthly.checked);
+      return mode === "monthly";
     }
     function exampleOf(key) {
       var found = null;
@@ -180,8 +200,9 @@
       setText(totalEl, rb.pounds(pence));
       if (perMonth) perMonth.hidden = !isMonthly();
       if (nudge && pence >= rb.MIN_PENCE) nudge.hidden = true;
-      // The tick names the amount it would make monthly: "Give £31 every month".
-      setText(monthlyLabel, pence ? "Give " + rb.pounds(pence) + " every month" : "Give this amount every month");
+      drawRoundUp(pence);
+      // Donate names what it would give: "Donate £31", or "Donate £31 every month".
+      setText(donateBtn, pence ? "Donate " + rb.pounds(pence) + (isMonthly() ? " every month" : "") : "Donate");
       setText(barTotal, rb.pounds(pence));
       refreshBar();
       refreshDetails();
@@ -267,6 +288,72 @@
       return doc.querySelector('[data-rb-example="' + key + '"]');
     }
 
+    // The round-up's own line, last under "Also in your bag". ONE element, made once and kept:
+    // only its amount is rewritten as the bag changes, so it is never rebuilt under a finger.
+    function roundUpLine() {
+      if (roundLine) return roundLine;
+      var li = doc.createElement("li");
+      li.className = "rb-item rb-item--round";
+      li.setAttribute("data-rb-round-line", "");
+      var words = doc.createElement("span");
+      words.className = "rb-also__words";
+      words.textContent = rb.WORDS.roundUp;
+      var sum = doc.createElement("span");
+      sum.className = "rb-item__price";
+      sum.setAttribute("data-rb-round-sum", "");
+      var remove = doc.createElement("button");
+      remove.type = "button";
+      remove.className = "rb-remove";
+      remove.setAttribute("data-rb-round-remove", "");
+      remove.textContent = "Remove";
+      remove.addEventListener("click", function () {
+        roundTarget = 0;
+        refresh();
+        // The button that offers it again is where they land (or Donate, if the bag is now empty).
+        focusOn(roundBtn && !roundBtn.hidden ? roundBtn : donateBtn);
+      });
+      li.appendChild(words);
+      li.appendChild(sum);
+      li.appendChild(remove);
+      roundLine = li;
+      return li;
+    }
+
+    // The round-up button and its line, for the total shown. The button offers the NEXT milestone
+    // above that total, so once a round-up is in, it offers the step after it, and pressing that
+    // replaces the target: two round-ups are never stacked.
+    function drawRoundUp(pence) {
+      var offer = rb.roundUpOffer(pence);
+      if (roundBtn) {
+        roundBtn.hidden = !offer;
+        if (offer) {
+          setText(roundAmount, "+ " + rb.pounds(offer.add));
+          setText(roundWords, offer.words);
+        }
+      }
+      if (!also || !alsoList) return;
+      var add = extra();
+      if (add > 0) {
+        var li = roundUpLine();
+        var amount = rb.pounds(add);
+        setText(li.querySelector("[data-rb-round-sum]"), amount);
+        li.querySelector("[data-rb-round-remove]").setAttribute("aria-label", "Remove from your bag: " + rb.WORDS.roundUp + ", " + amount);
+        if (alsoList.lastChild !== li) alsoList.appendChild(li);
+      } else if (roundLine && roundLine.parentNode === alsoList) {
+        alsoList.removeChild(roundLine);
+      }
+      also.hidden = !alsoList.firstChild;
+    }
+
+    if (roundBtn) {
+      roundBtn.addEventListener("click", function () {
+        var offer = rb.roundUpOffer(total());
+        if (!offer) return;
+        roundTarget = offer.target;
+        refresh();
+      });
+    }
+
     function drawAlso() {
       if (!also || !alsoList) return;
       while (alsoList.firstChild) alsoList.removeChild(alsoList.firstChild);
@@ -293,7 +380,8 @@
         li.appendChild(remove);
         alsoList.appendChild(li);
       });
-      also.hidden = tapped.length === 0;
+      // The round-up's line goes back on, last, when everything is refreshed.
+      also.hidden = !alsoList.firstChild;
     }
 
     function setExample(key, on) {
@@ -312,13 +400,22 @@
       });
     });
 
-    if (monthly) monthly.addEventListener("change", refresh);
+    // --- once or monthly: two buttons, one of them pressed ---------------------------------------
+    each(modeButtons, function (btn) {
+      btn.addEventListener("click", function () {
+        mode = btn.getAttribute("data-rb-mode") === "monthly" ? "monthly" : "once";
+        each(modeButtons, function (b) {
+          b.setAttribute("aria-pressed", b.getAttribute("data-rb-mode") === mode ? "true" : "false");
+        });
+        refresh();
+      });
+    });
 
     // --- Donate: the nudge, or on to the details step ----------------------------------------------
     function showStep(to) {
       step = to;
+      // The list, the themes and the bag are one section: they go and come back together.
       builder.hidden = step !== "bag";
-      if (need) need.hidden = step !== "bag";
       if (details) details.hidden = step !== "details";
       if (thanks) thanks.hidden = step !== "thanks";
       // "Pop a few things in the bag" is no thing to say to someone who has just filled one. Only

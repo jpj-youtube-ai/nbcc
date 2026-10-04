@@ -10596,7 +10596,9 @@ One case where that would be untrue: staff unticked the website choice in the ad
 (`PATCH /api/admin/fundraisers/:id` with `public`). `websiteChoiceChangedByStaff`
 (`src/db/fundraisers.ts`) reads the history (`audit_log`, `fundraiser.updated` whose `changed` lists
 `public`); if staff ever changed it, or the history cannot be read, the sentence is left out
-(`hiddenBy: "staff"`). All emails shows that as its own version.
+(`hiddenBy: "staff"`). It is also left out for a team member's page (`teamId`), which takes the
+choice from its team, so the member was never asked. A team's organiser never gets this email (a
+team has its own "your team page is live"). All emails shows that as its own version.
 
 **Donation receipts carry the charity statement in the footer bar.** The receipt (`donation` kind:
 an ordinary gift, money a fundraiser pays in, a paid pledge) had the two registration lines and the
@@ -10637,7 +10639,11 @@ the charity gave them: `ABOUT_NBCC_FULL` and `ABOUT_NBCC_SHORT`. One goes, as it
 near the end, in the three emails whose reader may never have dealt with NBCC: the pledge
 confirmation (the full one), the team invite and its parent or guardian version (the short one, in
 place of its own "a Scottish charity supporting..." line), and the ticket confirmation (the short
-one; its "where the money goes" line no longer repeats who NBCC helps).
+one; its "where the money goes" line no longer repeats who NBCC helps). The donation receipt has
+the short one too, on every variant (one builder, `buildDonationConfirmation`): its closing line is
+now "Kindness like yours makes a real difference, at Christmas and all year round.", then the
+description as its own paragraph, so the people NBCC helps are named once. The Corporation Tax
+receipt and the refund email are untouched.
 
 **Staff notices name the Get involved tab** and its section: "Admin > Get involved > Sign ups",
 "Admin > Get involved > Tickets and pledges > Event tickets", "Open Admin, Get involved", "Admin,

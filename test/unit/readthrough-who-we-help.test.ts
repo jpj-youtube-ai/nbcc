@@ -67,10 +67,10 @@ describe("across South West Scotland", () => {
     );
   });
 
-  it("was already in the event page email and the donation receipt, and is still there once", () => {
+  it("is on the donation receipt once, in the charity's own description", () => {
     const receipt = buildDonationConfirmation({ fullName: "Sam Example", amountPence: 5000, currency: "GBP", giftAid: false, mode: "once" }).text;
-    expect(receipt).toContain("children, young people and vulnerable adults across South West Scotland, at Christmas and all year round.");
     expect(count(receipt, PLACE)).toBe(1);
+    expect(count(receipt, WHO)).toBe(1);
   });
 
   it("is never said twice in one email", () => {
@@ -181,13 +181,44 @@ describe("the charity's description of itself", () => {
     });
   });
 
-  it("is not in the emails it was not asked for: in memory, the pay link, a receipt", () => {
+  // The charity asked for it on the donation receipt too (ordinary, paid in, pledge, monthly, with or
+  // without Gift Aid: one builder). The line before it no longer names the same people, so they are
+  // named once.
+  describe("the donation receipt takes the short one, straight after its closing line", () => {
+    const base = { fullName: "Sam Example", amountPence: 5000, currency: "GBP", giftAid: false, mode: "once" } as const;
+    const KIND = "Kindness like yours makes a real difference, at Christmas and all year round.";
+    const variants: Array<[string, Parameters<typeof buildDonationConfirmation>[0]]> = [
+      ["an ordinary donation", base],
+      ["with Gift Aid", { ...base, giftAid: true }],
+      ["monthly", { ...base, mode: "monthly" }],
+      ["monthly with Gift Aid", { ...base, mode: "monthly", giftAid: true }],
+      ["money a fundraiser paid in", { ...base, paidIn: true }],
+      ["a paid pledge", { ...base, amountPence: 1000, reference: "NBCC-000123", donationDate: "2026-12-12T12:00:00Z" }],
+    ];
+
+    it.each(variants)("%s", (_what, input) => {
+      const c = buildDonationConfirmation(input);
+      expect(c.text).toContain(`
+
+${KIND}
+
+${ABOUT_NBCC_SHORT}
+
+Night Before Christmas Campaign, known as NBCC,`);
+      expect(c.html).toContain(`<p>${KIND}</p><p>${ABOUT_NBCC_SHORT}</p></section>`);
+      expect(c.html + c.text).not.toContain("bring comfort, dignity and a moment of joy");
+      expect(count(c.text, WHO)).toBe(1);
+      expect(count(c.html, WHO)).toBe(1);
+      expect(c.text).not.toContain(ABOUT_NBCC_FULL);
+    });
+  });
+
+  it("is not in the emails it was not asked for: in memory, the pay link, the giver's thank you", () => {
     const others = [
       buildInMemoryApprovedEmail({ name: "Sam Example", memoryName: "Mary Example" }, { pageUrl: `${BASE}/fundraise/x` }),
       buildPledgeEmail("pledge_pay", samplePledgeEmailData(BASE)),
       buildPledgeEmail("pledge_reminder", samplePledgeEmailData(BASE)),
       buildSupporterThanksEmail({ organiserName: "Sam Example", title: "Sam's Santa Dash", message: "Thank you!" }),
-      buildDonationConfirmation({ fullName: "Sam Example", amountPence: 5000, currency: "GBP", giftAid: false, mode: "once" }),
     ];
     for (const m of others) expect(m.html + m.text).not.toContain("volunteer led");
   });

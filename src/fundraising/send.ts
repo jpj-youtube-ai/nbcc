@@ -116,12 +116,16 @@ async function sendSignUpThanks(f: FundraiserRecord): Promise<void> {
 
 /**
  * "You're on our list" says "As you asked, we won't show it on our website." That is only true when
- * the organiser chose it: if staff changed the website choice in the admin, or we cannot tell, the
- * email leaves that sentence out.
+ * the organiser chose it: if staff changed the website choice in the admin, the page is a team
+ * member's, or we cannot tell, the email leaves that sentence out.
  */
-async function whoHidIt(id: number): Promise<"them" | "staff"> {
+async function whoHidIt(f: Pick<FundraiserRecord, "id" | "teamId">): Promise<"them" | "staff"> {
+  // A team member's page (now or once) took the choice from its team (memberSignUp in ./teams.ts):
+  // the member was never asked, so they did not ask, whoever chose it for the team. A team's
+  // organiser never gets this email: a team has its own "your team page is live".
+  if (f.teamId) return "staff";
   try {
-    return (await websiteChoiceChangedByStaff(id)) === false ? "them" : "staff";
+    return (await websiteChoiceChangedByStaff(f.id)) === false ? "them" : "staff";
   } catch (err) {
     logFailure("approved (reading who changed the website choice)", err);
     return "staff";
@@ -149,7 +153,7 @@ export async function sendApprovedEmail(f: FundraiserRecord, o: { reapproved?: b
     const built = buildApprovedEmail(f, {
       pageUrl: page ? pageOf(f) : null,
       manageUrl: page ? `${base()}/fundraise/manage` : null,
-      ...(page ? {} : { hiddenBy: await whoHidIt(f.id) }),
+      ...(page ? {} : { hiddenBy: await whoHidIt(f) }),
     });
     const mail = greetGuardian(built, f);
     await sendFundraiseApproved(f.name, { email: f.email, from: config.BALL_FROM_EMAIL, replyTo: config.BALL_FROM_EMAIL, ...mail });

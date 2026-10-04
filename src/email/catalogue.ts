@@ -526,8 +526,9 @@ const receipt = (o: Partial<Parameters<typeof buildDonationConfirmation>[0]>) =>
   } as Parameters<typeof buildDonationConfirmation>[0]);
   return buildKindEmail("donation", { html: c.html, text: c.text });
 };
-const supporterThanks = (o: Partial<Parameters<typeof buildSupporterThanksEmail>[0]> = {}) => () =>
+const supporterThanks = (o: Partial<Parameters<typeof buildSupporterThanksEmail>[0]> = {}) => (b: string) =>
   buildSupporterThanksEmail({
+    baseUrl: b,
     organiserName: SAM.name,
     title: PAGE,
     message: "Thank you so much for sponsoring me. I made it round, in full Santa suit, and every pound will help a child this Christmas.",

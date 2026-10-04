@@ -57,7 +57,7 @@ const MEMORY_MAILS: Array<[string, Built, boolean]> = [
     buildInMemoryApprovedEmail({ name: "The Example Funeral Directors", firstName: null, memoryName: "Mary Example", setupBy: "funeral_director" }, { pageUrl: `${BASE}/fundraise/x` }),
     true,
   ],
-  ["the giver's thank you, in memory", buildSupporterThanksEmail({ ...thanks, inMemory: true, giverName: "Alex Example" }), true],
+  ["the giver's thank you, in memory", buildSupporterThanksEmail({ ...thanks, inMemory: true, giverName: "Alex Example", baseUrl: "https://nbcc.test" }), true],
   ["the gentle sign in code", buildSignInCodeEmail("Sam Example", "123456", { gentle: true }), true],
 ];
 
@@ -106,7 +106,7 @@ describe("emails that are not in memory", () => {
     ["the invite to raise money", buildInviteEmail({ firstName: "Mary", note: null, signer: "Robin", url: `${BASE}/fundraise?invite=example`, type: "raising" })],
     ["the invite to host an event", buildInviteEmail({ firstName: "Mary", note: null, signer: "Robin", url: `${BASE}/fundraise?invite=example`, type: "event" })],
     ["the invite to set up a team", buildInviteEmail({ firstName: "Mary", note: null, signer: "Robin", url: `${BASE}/fundraise?invite=example`, type: "team" })],
-    ["the giver's thank you", buildSupporterThanksEmail({ organiserName: "Sam Example", title: "Sam's Santa Dash", message: "Thank you!" })],
+    ["the giver's thank you", buildSupporterThanksEmail({ organiserName: "Sam Example", title: "Sam's Santa Dash", message: "Thank you!", baseUrl: "https://nbcc.test" })],
     ["the sign in code", buildSignInCodeEmail("Sam Example", "123456")],
     ["the T-shirt size email", buildTshirtAskEmail("Sam", `${BASE}/fundraise/tshirt?t=example`)],
   ];

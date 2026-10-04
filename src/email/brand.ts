@@ -186,7 +186,8 @@ export const signOffText = (line: string): string => `${line}\nNBCC Team`;
 // body, in the emails whose reader may never have dealt with NBCC: the pledge confirmation, the team
 // invite and the ticket confirmation. The full one where the email is short enough to take it, the
 // short one otherwise, and never beside another sentence that says much the same. The donation
-// receipt has the short one too, after its closing line (src/donors/confirmation.ts). Not in the in
+// receipt has the short one too, after its closing line (src/donors/confirmation.ts), and the
+// giver's thank you from a fundraiser has the full one (src/fundraising/thanks-email.ts). Not in the in
 // memory emails, the Festive Ball's, staff notices, or the company and refund receipts.
 export const ABOUT_NBCC_FULL =
   "NBCC is a volunteer led charity here all year for children, young people and vulnerable adults across South West Scotland, with school clothing and crisis support whenever it is needed, and every December a full bag for those who would otherwise wake up on Christmas morning with nothing to open.";

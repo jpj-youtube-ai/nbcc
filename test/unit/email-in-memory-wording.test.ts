@@ -14,7 +14,7 @@ const words = (html: string) => html.replace(/<style[\s\S]*?<\/style>/g, "").rep
 
 const invite = (firstName: string) => buildInviteEmail({ firstName, note: "It was good to talk today.", signer: "Fern", url: "https://nbcc.test/fundraise?invite=x", type: "memory" });
 const live = (over: object = {}) => buildInMemoryApprovedEmail({ name: "Sam Example", firstName: "Sam", memoryName: "Pat Example", setupBy: "family", ...over }, { pageUrl: "https://nbcc.test/fundraise/pat" });
-const thanks = (giverName?: string | null) => buildSupporterThanksEmail({ organiserName: "Sam Example", title: "For Pat", message: "Thank you all.", inMemory: true, giverName });
+const thanks = (giverName?: string | null) => buildSupporterThanksEmail({ organiserName: "Sam Example", title: "For Pat", message: "Thank you all.", inMemory: true, giverName, baseUrl: "https://nbcc.test" });
 
 const named: Array<[string, { subject: string; html: string; text: string }]> = [
   ["13 the in memory invite", invite("Sam")],
@@ -101,10 +101,10 @@ describe("the sign in code", () => {
 
 describe("a thank you from the fundraiser, on any other page", () => {
   it("is as it always was: Hello, with no name, and Thanks so much", () => {
-    const usual = buildSupporterThanksEmail({ organiserName: "Sam Example", title: "Sam's Santa Dash", message: "Thank you all.", giverName: "Alex Example" });
+    const usual = buildSupporterThanksEmail({ organiserName: "Sam Example", title: "Sam's Santa Dash", message: "Thank you all.", giverName: "Alex Example", baseUrl: "https://nbcc.test" });
     expect(usual.text).toContain("Hello,\n");
     expect(usual.text).not.toContain("Dear");
     expect(usual.text).toContain("Thanks so much,\nNBCC Team");
-    expect(usual).toEqual(buildSupporterThanksEmail({ organiserName: "Sam Example", title: "Sam's Santa Dash", message: "Thank you all." }));
+    expect(usual).toEqual(buildSupporterThanksEmail({ organiserName: "Sam Example", title: "Sam's Santa Dash", message: "Thank you all.", baseUrl: "https://nbcc.test" }));
   });
 });

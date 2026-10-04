@@ -22,7 +22,7 @@ vi.mock("../../src/db/fundraiser-thanks", () => db);
 vi.mock("../../src/db/email-suppressions", () => ({ suppressedAmong }));
 vi.mock("../../src/db/email-opt-outs", () => ({ optedOutAmong }));
 vi.mock("../../src/clients/email", () => ({ sendFundraiseSupporterThanks }));
-vi.mock("../../src/config", () => ({ config: { BALL_FROM_EMAIL: "events@nbcc.test", NODE_ENV: "test" } }));
+vi.mock("../../src/config", () => ({ config: { BALL_FROM_EMAIL: "events@nbcc.test", PORTAL_BASE_URL: "https://nbcc.test/", NODE_ENV: "test" } }));
 
 import { sendQueuedThanks } from "../../src/fundraising/thanks-send";
 import type { QueuedThanksGift } from "../../src/db/fundraiser-thanks";
@@ -93,6 +93,28 @@ describe("sending the approved thank yous", () => {
     expect(msg.html).toContain("Sam&#39;s Walk");
     expect(db.finishThanksGift).toHaveBeenCalledWith(70, "sent", null);
     expect(db.markThanksDeliveredIfDone).toHaveBeenCalledWith(3);
+  });
+
+  // 2026-10-04: the keep in touch links are built on the public site address the other fundraising
+  // emails use, and are the same for every giver: nothing of theirs is in them.
+  it("invites the giver to keep in touch, with plain links to the site and nothing of theirs in them", async () => {
+    queue(queued());
+    await sendQueuedThanks();
+    const msg = sendFundraiseSupporterThanks.mock.calls[0][1];
+    expect(msg.html).toContain('href="https://nbcc.test/newsletter"');
+    expect(msg.html).toContain('href="https://nbcc.test/get-involved"');
+    expect(msg.text).toContain("Join our mailing list: https://nbcc.test/newsletter");
+    expect(msg.text).toContain("Get involved page: https://nbcc.test/get-involved");
+    expect(msg.html + msg.text).not.toMatch(/nbcc\.test\/[^\s"<]*[?#&=]/);
+    expect(msg.html + msg.text).not.toMatch(/alex|token/i);
+  });
+
+  it("keeps the in memory one free of the keep in touch links", async () => {
+    queue(queued({ inMemory: true }));
+    await sendQueuedThanks();
+    const msg = sendFundraiseSupporterThanks.mock.calls[0][1];
+    expect(msg.html + msg.text).not.toContain("nbcc.test/");
+    expect(msg.html + msg.text).not.toContain("mailing list");
   });
 
   it("never puts the organiser's address anywhere, so a reply goes to NBCC", async () => {

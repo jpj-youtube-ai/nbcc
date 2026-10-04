@@ -94,8 +94,8 @@ for (const kind of TOUCH_KINDS) {
 }
 
 // --- finishing, and in memory
-add("33 supporter thanks", buildSupporterThanksEmail({ organiserName: "Sam Example", title: "Sam's Santa Dash", message: "Thank you all." }));
-add("33 supporter thanks, in memory", buildSupporterThanksEmail({ organiserName: "Sam Example", title: "For Pat", message: "Thank you all.", inMemory: true }));
+add("33 supporter thanks", buildSupporterThanksEmail({ organiserName: "Sam Example", title: "Sam's Santa Dash", message: "Thank you all.", baseUrl: "https://nbcc.test" }));
+add("33 supporter thanks, in memory", buildSupporterThanksEmail({ organiserName: "Sam Example", title: "For Pat", message: "Thank you all.", inMemory: true, baseUrl: "https://nbcc.test" }));
 add("34 memory receipt", buildMemoryReceiptEmail("Sam Example"));
 add("35 memory live", buildInMemoryApprovedEmail({ name: "Sam Example", firstName: "Sam", memoryName: "Pat Example", setupBy: "family" }, { pageUrl: `${BASE}/fundraise/pat` }));
 add("36 memory live, funeral director", buildInMemoryApprovedEmail({ name: "Sam Example", firstName: "Sam", memoryName: "Pat Example", setupBy: "funeral_director" }, { pageUrl: `${BASE}/fundraise/pat` }));

@@ -134,3 +134,37 @@ describe("the Ball reminder", () => {
     expect(words(version("ball-week-to-go", "tomorrow").mail.html)).toContain("Tomorrow you'll be with us at The Park Hotel.");
   });
 });
+
+describe("a thank you from the fundraiser, as All emails shows it (2026-10-04)", () => {
+  const ABOUT = "NBCC is a volunteer led charity here all year for children, young people and vulnerable adults across South West Scotland";
+
+  it("introduces NBCC and invites the giver to keep in touch, in the usual and the group version", () => {
+    for (const id of ["usual", "group"]) {
+      const { mail, version: v } = version("supporter-thanks", id);
+      expect(v.approval).toBeUndefined();
+      const read = words(mail.html);
+      expect(read).toContain("And from all of us: thank you too. " + ABOUT);
+      expect(read).toContain("We'd love to keep in touch");
+      expect(read).toContain("If you'd like to hear how your gift helps, join our mailing list. It's a few emails a year, and you can unsubscribe at any time.");
+      expect(read).not.toContain("Your gift helps the children");
+      expect(mail.html).toContain(`<a href="${BASE}/newsletter"`);
+      expect(mail.html).toContain(`<a href="${BASE}/get-involved"`);
+      expect(mail.text).toContain(`Join our mailing list: ${BASE}/newsletter`);
+      expect(mail.text).toContain(`Get involved page: ${BASE}/get-involved`);
+      expect(mail.html + mail.text).not.toMatch(/nbcc\.test\/[^\s"<]*[?#&=]/);
+    }
+  });
+
+  it("leaves the in memory versions without any of it", () => {
+    for (const id of ["in-memory", "in-memory-no-name"]) {
+      const { mail } = version("supporter-thanks", id);
+      for (const part of [mail.html, mail.text]) {
+        expect(part).toContain("Your gift helps the children, young people and vulnerable adults we support across South West Scotland, all year round.");
+        expect(part).not.toContain("volunteer led");
+        expect(part).not.toContain("keep in touch");
+        expect(part).not.toContain("/newsletter");
+        expect(part).not.toContain("/get-involved");
+      }
+    }
+  });
+});

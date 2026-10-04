@@ -75,7 +75,9 @@ async function sendOne(g: QueuedThanksGift, tally: Tally): Promise<void> {
       reason = verdict.reason;
     } else if (verdict && verdict.send && g.email) {
       // The giver's name is only used to greet them on a page in memory of someone ("Dear Sam,").
-      const mail = buildSupporterThanksEmail({ organiserName: g.organiserName, title: g.title, message: g.message, inMemory: g.inMemory === true, giverName: g.donorName });
+      // The keep in touch links are built on PORTAL_BASE_URL, the public site address the other
+      // fundraising emails use. They are the plain pages: nothing about the giver is in them.
+      const mail = buildSupporterThanksEmail({ organiserName: g.organiserName, title: g.title, message: g.message, baseUrl: config.PORTAL_BASE_URL, inMemory: g.inMemory === true, giverName: g.donorName });
       // From a page in memory of someone, it comes from Jodie and replies go to Jodie.
       const sender = g.inMemory === true ? memorySender() : { from: config.BALL_FROM_EMAIL, replyTo: config.BALL_FROM_EMAIL };
       await sendFundraiseSupporterThanks(g.donorName, { email: g.email, ...sender, ...mail });

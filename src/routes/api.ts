@@ -24,6 +24,8 @@ import { insertEnquiry } from "../db/contact";
 import { createRateLimiter } from "../portal/request-limiter";
 import { captchaEnabled, captchaSiteKey, verifyCaptcha } from "../clients/turnstile";
 import { GIFT_MIN_PENCE, MESSAGE_MAX } from "../fundraising/model";
+import { RED_BAG_PATH } from "../red-bag/switch";
+import { redBagOpenTo } from "../red-bag/staff";
 
 // Marketing-site API endpoints, both implemented.
 // - POST /api/checkout-session (REQ-029): turns the REQ-028 front-end payload into
@@ -40,6 +42,9 @@ const PLANS = ["bronze", "silver", "gold", "platinum"] as const;
 // a monthly gift needs a plan (to pick its recurring price), a one-off needs an
 // amount (to build the inline price).
 const DONOR_TYPES = ["individual", "company", "partnership"] as const;
+
+// Fill a Red Bag: the smallest gift, in pence (the page says the same: assets/js/red-bag-catalogue.js).
+export const RED_BAG_MIN_PENCE = 200;
 
 const checkoutBodySchema = z
   .object({
@@ -112,6 +117,18 @@ const checkoutBodySchema = z
     supporterMessage: z.string().trim().max(MESSAGE_MAX).optional(),
     showName: z.boolean().optional(),
     showAmount: z.boolean().optional(),
+    // Fill a Red Bag (/fill-a-red-bag): an optional marker on an otherwise ordinary donation. Absent
+    // (every donate page gift), nothing below applies and the session is exactly what it always was.
+    redBag: z.boolean().optional(),
+  })
+  // Fill a Red Bag: £2 at least, and never also a gift on a fundraiser's page. Only with the marker.
+  .refine((b) => b.redBag !== true || (b.amount ?? 0) >= RED_BAG_MIN_PENCE, {
+    message: "the smallest Fill a Red Bag gift is £2",
+    path: ["amount"],
+  })
+  .refine((b) => b.redBag !== true || b.fundraiserId === undefined, {
+    message: "a Fill a Red Bag gift is not a gift on a fundraising page",
+    path: ["fundraiserId"],
   })
   // TASK-493: giving on a fundraiser's page is one off only, and £2 at least, as the design asks.
   // Monthly gifts there are not built yet (they would need the wall and meter to follow renewals).
@@ -323,6 +340,10 @@ export function buildSessionParams(
     metadata.showAmount = String(body.showAmount ?? true);
   }
 
+  // Fill a Red Bag: one key, only for a gift made on that page, so a donate page session gains no
+  // keys at all. The webhook records the gift as the ordinary donation it is.
+  if (body.redBag === true) metadata.redBag = "true";
+
   // The declaration scope defaults from the gift's frequency (REQ-041): monthly is
   // enduring — one declaration covers all the donor's gifts — while a one-off covers just
   // this donation. When the donor makes an explicit choice (REQ-044, TASK-065), that value
@@ -405,7 +426,9 @@ export function buildSessionParams(
     // BOTH land the SAME type-aware thank-you page (TASK-221) via thankYouReturnUrl — carrying the
     // gift's mode+donor (which of the four variants to show) and {CHECKOUT_SESSION_ID} (the business
     // supporter recognition lookup). cancel_url is unchanged (a cancel is not a thank-you).
-    ...(fundraiserPage
+    ...(body.redBag === true
+      ? redBagReturnUrls(embeddedRequested(body))
+      : fundraiserPage
       ? fundraiserReturnUrls(fundraiserPage, Boolean(body.supporterMessage), embeddedRequested(body))
       : embeddedRequested(body)
         ? { ui_mode: "embedded_page", return_url: thankYouReturnUrl(body.mode, body.donorType) }
@@ -484,6 +507,23 @@ function fundraiserReturnUrls(
   embedded: boolean,
 ): Pick<StripeNS.Checkout.SessionCreateParams, "ui_mode" | "return_url" | "success_url" | "cancel_url"> {
   const thanks = `${page}?thanks=1${leftMessage ? "&message=1" : ""}&session_id={CHECKOUT_SESSION_ID}`;
+  return embedded ? { ui_mode: "embedded_page", return_url: thanks } : { success_url: thanks, cancel_url: page };
+}
+
+// Fill a Red Bag: where a gift made on /fill-a-red-bag comes back to. Worked out HERE, from the
+// site's own address (config.PORTAL_BASE_URL, the public address the fundraiser pages use too), and
+// never taken from the browser. The thank you is the page with ?thanks=1 and Stripe's
+// {CHECKOUT_SESSION_ID} template (Stripe fills it in, so the braces must NOT be encoded); a cancel on
+// Stripe's own page goes back to the page itself.
+export function redBagPageUrl(): string {
+  return `${config.PORTAL_BASE_URL.replace(/\/+$/, "")}${RED_BAG_PATH}`;
+}
+
+function redBagReturnUrls(
+  embedded: boolean,
+): Pick<StripeNS.Checkout.SessionCreateParams, "ui_mode" | "return_url" | "success_url" | "cancel_url"> {
+  const page = redBagPageUrl();
+  const thanks = `${page}?thanks=1&session_id={CHECKOUT_SESSION_ID}`;
   return embedded ? { ui_mode: "embedded_page", return_url: thanks } : { success_url: thanks, cancel_url: page };
 }
 
@@ -593,6 +633,13 @@ export async function postCheckoutSession(req: Request, res: Response): Promise<
       error: "Invalid checkout request",
       details: parsed.error.flatten(),
     });
+  }
+
+  // Fill a Red Bag: while the page is switched off (src/red-bag/switch.ts), only a signed in member
+  // of staff may make a Red Bag gift. Asked ONLY for a gift carrying the marker, so every other
+  // gift goes on exactly as before, with no look at who is signed in.
+  if (parsed.data.redBag === true && !(await redBagOpenTo(req.headers?.authorization))) {
+    return res.status(403).json({ error: "Fill a Red Bag is not open yet" });
   }
 
   try {

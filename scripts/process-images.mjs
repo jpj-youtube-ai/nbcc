@@ -35,7 +35,7 @@ const TEAM = ["Tygan", "Jodie", "Isabella", "Jaimie", "Dawn", "Jill", "Jon", "Ke
 // Captioned scene photos (REQ-015 founding headshot, REQ-012 packing/delivery).
 const SCENES = [
   { name: "story-tygan", w: 640, h: 800, position: "top", label: "Tygan, 2015", sub: "Founding moment" },
-  { name: "why-packing", w: 900, h: 600, position: "centre", label: "Volunteers packing Red Bags", sub: "Elves Workshop" },
+  { name: "why-packing", w: 900, h: 600, position: "centre", label: "Volunteers packing Red Bags", sub: "The Elves' Workshop" },
 ];
 
 const OG = { name: "og-image", w: 1200, h: 630 };

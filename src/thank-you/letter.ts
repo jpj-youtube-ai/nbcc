@@ -8,7 +8,7 @@
 import { formatGiftAmount, giftAidUpliftPence } from "./model";
 // TASK-293: the registered postal address, from the one module that owns NBCC's registration
 // details — so the site footer, the newsletter and this letter cannot drift apart.
-import { POSTAL_ADDRESS } from "../legal/registration";
+import { POSTAL_ADDRESS, POSTAL_ADDRESS_LINES } from "../legal/registration";
 
 // The presentation view of a thank-you letter. It mirrors ThankYouInput's letter
 // fields, plus the two presentation-only values the route supplies: a formatted
@@ -50,8 +50,8 @@ const BODY = "'Poppins', system-ui, -apple-system, 'Segoe UI', Roboto, Arial, sa
 export const SCRIPT = "'Snell Roundhand','Palace Script MT','Edwardian Script ITC','Apple Chancery','Lucida Calligraphy','Lucida Handwriting',cursive";
 // The real logo needs an ABSOLUTE URL in email (relative paths don't resolve in a mail client).
 const LOGO_URL = "https://nbcc.scot/assets/img/nbcc-logo.png";
-// The fixed NBCC letterhead sender (as in the mockup).
-const SENDER_LINES = ["Elves Workshop", "Annbank Village Hall", "Weston Avenue", "Annbank", "KA6 5EE"];
+// The fixed NBCC letterhead sender: the registered address, one part to a line.
+const SENDER_LINES = POSTAL_ADDRESS_LINES;
 
 // Minimal HTML escaping for donor-supplied fields. Ampersand first so we don't
 // double-escape the entities we introduce.

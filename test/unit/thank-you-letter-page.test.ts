@@ -11,7 +11,7 @@ const base: ThankYouLetterPageData = {
   giftAmountPence: 150000,
   giftInKind: null,
   giftAided: true,
-  personalMessage: "It was lovely to meet you at the Elves Workshop.",
+  personalMessage: "It was lovely to meet you at the Elves' Workshop.",
   signedByName: "Jodie McFarlane",
   signedByRole: "Head Elf (Trustee), Night Before Christmas Campaign",
   sentAt: "2026-12-25T18:20:00.000Z",

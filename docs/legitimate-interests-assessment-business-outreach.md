@@ -5,7 +5,7 @@
 | | |
 |---|---|
 | **Activity** | Writing to local businesses to ask whether they would consider becoming a monthly supporter |
-| **Data controller** | Night Before Christmas Campaign, The Elves Workshop, Annbank Village Hall, Weston Avenue, Annbank, KA6 5EE |
+| **Data controller** | Night Before Christmas Campaign, The Elves' Workshop, Annbank Village Hall, Weston Avenue, Annbank, KA6 5EE |
 | **Prepared** | 2 September 2026 |
 | **Reviewed by** | *(trustee name)* |
 | **Signed** | *(signature and date)* |

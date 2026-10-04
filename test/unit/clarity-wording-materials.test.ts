@@ -165,14 +165,14 @@ describe("a shared sponsor form", () => {
 
   it("asks for NBCC's share to be paid in, by its percentage", () => {
     const html = renderSponsorForm(facts(), ASSETS);
-    expect(count(html, "Pay NBCC&#39;s 60% in from your private area at nbcc.scot/fundraise/manage, then post this form to Elves Workshop")).toBe(2);
+    expect(count(html, "Pay NBCC&#39;s 60% in from your private area at nbcc.scot/fundraise/manage, then post this form to The Elves' Workshop, Annbank Village Hall, Weston Avenue, Annbank, KA6 5EE,")).toBe(2);
     expect(html).not.toContain("Pay the money in from your private area");
   });
 
   it("a form that is not shared says neither", () => {
     const html = renderSponsorForm(facts(PLAIN), ASSETS);
     expect(html).not.toContain(GIFT_AID_NBCC_PART);
-    expect(count(html, "Pay the money in from your private area at nbcc.scot/fundraise/manage, then post this form to Elves Workshop")).toBe(2);
+    expect(count(html, "Pay the money in from your private area at nbcc.scot/fundraise/manage, then post this form to The Elves' Workshop, Annbank Village Hall, Weston Avenue, Annbank, KA6 5EE,")).toBe(2);
     expect(renderSponsorForm(null, ASSETS)).not.toContain(GIFT_AID_NBCC_PART);
   });
 });

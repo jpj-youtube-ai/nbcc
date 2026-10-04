@@ -19,7 +19,7 @@ const base: ThankYouLetterView = {
   giftAmountPence: 150000,
   giftInKind: null,
   giftAided: true,
-  personalMessage: "It was lovely to meet you at the Elves Workshop.",
+  personalMessage: "It was lovely to meet you at the Elves' Workshop.",
   signedByName: "Jodie McFarlane",
   signedByRole: "Head Elf (Trustee), Night Before Christmas Campaign",
   letterDate: "25 December 2026",
@@ -68,7 +68,7 @@ describe("thank-you letter (REQ-069 · TASK-163)", () => {
     });
 
     it("includes the personal message when present and omits it when null", () => {
-      expect(buildThankYouEmailHtml(base)).toContain("It was lovely to meet you at the Elves Workshop.");
+      expect(buildThankYouEmailHtml(base)).toContain("It was lovely to meet you at the Elves' Workshop.");
       const without = buildThankYouEmailHtml({ ...base, personalMessage: null });
       expect(without).not.toContain("It was lovely to meet you");
     });
@@ -101,7 +101,7 @@ describe("thank-you letter (REQ-069 · TASK-163)", () => {
 
     it("carries the letterhead sender, pull-quote and donate CTA from the mockup", () => {
       const html = buildThankYouEmailHtml(base);
-      expect(html).toContain("Elves Workshop");
+      expect(html).toContain("The Elves' Workshop");
       expect(html).toContain("One random act of kindness at a time.");
       expect(html).toContain("nbcc.scot/donate");
       expect(html).toContain("7,657"); // the impact stat paragraph
@@ -139,7 +139,7 @@ describe("thank-you letter (REQ-069 · TASK-163)", () => {
       expect(text).toContain("Dear Mrs Robertson,");
       expect(text).toContain("£1500.00");
       expect(text).toContain("£1875.00"); // Gift Aid uplift
-      expect(text).toContain("It was lovely to meet you at the Elves Workshop.");
+      expect(text).toContain("It was lovely to meet you at the Elves' Workshop.");
       expect(text).toContain("Jodie McFarlane");
       expect(text).toContain("View & print your letter: https://nbcc.scot/thank-you/letter/7.sig");
       expect(text).toContain("SC047995");

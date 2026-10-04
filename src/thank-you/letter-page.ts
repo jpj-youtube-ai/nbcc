@@ -6,6 +6,7 @@
 // our own domain, so it links the site stylesheet (fonts + brand tokens) and the real logo. Pure and
 // DB-free (the route loads the row and passes it in), so it is unit-tested directly.
 import { formatGiftAmount, giftAidUpliftPence } from "./model";
+import { POSTAL_ADDRESS_LINES } from "../legal/registration";
 
 // The fields of a sent letter this page renders (a subset of db ThankYouSent).
 export interface ThankYouLetterPageData {
@@ -146,7 +147,7 @@ export function buildThankYouLetterPage(d: ThankYouLetterPageData): string {
     <div class="sheet">
       <div class="sheet-body">
         <div class="letter-head">
-          <address class="sender">Elves Workshop<br />Annbank Village Hall<br />Weston Avenue<br />Annbank<br />KA6 5EE</address>
+          <address class="sender">${POSTAL_ADDRESS_LINES.join("<br />")}</address>
           <div class="logo">
             <img src="/assets/img/nbcc-logo.png" alt="Night Before Christmas Campaign" />
             <div class="tagline">Here all year</div>

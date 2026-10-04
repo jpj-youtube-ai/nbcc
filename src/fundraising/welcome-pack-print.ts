@@ -32,8 +32,8 @@ import { EMAIL, PHONE, coveringNote, welcomeLetter, type PackItemView, type Pack
 // says how many to print, and a note says to print the rest from its own page, setting Copies in the
 // print window. The organisers' "Ask us" note is left out: this page is for staff.
 
-/** Our address as the printed pieces write it, with the apostrophe (as ./envelope.ts). */
-const FROM_LINES = ["The Elves' Workshop", ...POSTAL_ADDRESS_LINES.slice(1)];
+/** Our registered address, one part to a line. */
+const FROM_LINES = [...POSTAL_ADDRESS_LINES];
 
 export interface PackPrintInput {
   subject: PackSubject;

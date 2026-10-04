@@ -241,3 +241,37 @@ export function buildPledgeStaffEmail(o: { subject: string; lines: string[]; adm
   const text = [o.subject, "", ...o.lines, "", `Open Admin, Fundraising: ${o.adminUrl}`, "", FOOTER_TEXT].join("\n");
   return { subject: o.subject, html, text };
 }
+
+/**
+ * The words of the note when an organiser hides a pledge from their page. By pledge number, never the
+ * sponsor's name or address. Here, beside the builder, so All emails in the admin shows the real words.
+ */
+export function pledgeHiddenNote(o: { title: string; pledgeId: number; amountPence: number }): { subject: string; lines: string[] } {
+  return {
+    subject: "A pledge was hidden by its organiser",
+    lines: [
+      `${o.title}: pledge ${o.pledgeId} (${pounds(o.amountPence)}) was hidden from the page by its organiser. It is still a pledge, and its sponsor will still be asked to pay.`,
+      "If its name or message should not have been there at all, you can cancel it or hide its message in Admin, Fundraising, Sponsor pledges.",
+    ],
+  };
+}
+
+/**
+ * The words of the note about pledges paid twice. Two different things: a pledge paid twice (the
+ * second payment carries no Gift Aid), and one marked as paid in cash that was then paid online (that
+ * one payment keeps its Gift Aid).
+ */
+export function pledgesPaidTwiceNote(rows: Array<{ title: string; pledgeId: number; amountPence: number; cashMarked: boolean }>): { subject: string; lines: string[] } {
+  return {
+    subject: `${rows.length} ${rows.length === 1 ? "pledge" : "pledges"} paid twice: check and refund`,
+    lines: [
+      "Please look at these in Admin, Fundraising, Sponsor pledges, then press Mark as checked.",
+      ...rows.map((r) => {
+        const what = `${r.title}: pledge ${r.pledgeId} (${pounds(r.amountPence)})`;
+        return r.cashMarked
+          ? `${what}. The sponsor was marked as paid in cash and has now also paid online. Check which is right and refund if needed.`
+          : `${what} was paid twice. The second payment is on the page as a donation with no Gift Aid. Check it and refund the extra one.`;
+      }),
+    ],
+  };
+}

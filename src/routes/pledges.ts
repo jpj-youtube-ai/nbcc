@@ -11,7 +11,7 @@ import { hasPage, pagePath, type FundraiserRecord } from "../fundraising/model";
 import { safeFirstName } from "../fundraising/emails";
 import type { PledgeRecord, PledgeWithFundraiser } from "../db/pledges";
 import type { PledgeCheckoutInput } from "../pledges/checkout";
-import { buildPledgeEmail, PLEDGE_EMAIL_LABELS, PLEDGE_EMAIL_WHEN, samplePledgeEmailData } from "../pledges/emails";
+import { buildPledgeEmail, PLEDGE_EMAIL_LABELS, PLEDGE_EMAIL_WHEN, pledgeHiddenNote, samplePledgeEmailData } from "../pledges/emails";
 import {
   PLEDGE_WORDING_KEYS,
   canPledge,
@@ -608,10 +608,8 @@ export function makePledgeHandlers(deps: PledgeRouteDeps) {
       if (!p) return res.status(409).json(CANNOT_CHANGE);
       // Staff are told, by pledge number: never the sponsor's name or address in an email.
       if (hidden) {
-        await deps.notifyStaff("A pledge was hidden by its organiser", [
-          `${own.f.title}: pledge ${p.id} (${pounds(p.amountPence)}) was hidden from the page by its organiser. It is still a pledge, and its sponsor will still be asked to pay.`,
-          "If its name or message should not have been there at all, you can cancel it or hide its message in Admin, Fundraising, Sponsor pledges.",
-        ]);
+        const note = pledgeHiddenNote({ title: own.f.title, pledgeId: p.id, amountPence: p.amountPence });
+        await deps.notifyStaff(note.subject, note.lines);
       }
       return res.status(200).json({ pledge: forOrganiser(p) });
     } catch (err) {

@@ -13,6 +13,7 @@ import { adminFundraisingTeamRouter } from "./routes/admin-fundraising-team";
 import { adminFundraisingRequestsRouter } from "./routes/admin-fundraising-requests";
 import { adminWelcomePacksRouter } from "./routes/admin-welcome-packs";
 import { adminFundraisingTouchRouter } from "./routes/admin-fundraising-touch";
+import { adminFundraisingEmailsRouter } from "./routes/admin-fundraising-emails";
 import { fundraiserThanksRouter } from "./routes/fundraiser-thanks";
 import { fundraiseInviteRouter } from "./routes/fundraise-invite";
 import { fundraiseAgainRouter } from "./routes/fundraise-again";
@@ -154,6 +155,8 @@ export function createApp() {
   app.use(adminWelcomePacksRouter);
   // TASK-515: keeping in touch: the automatic emails (preview and switch) and the call prompts.
   app.use(adminFundraisingTouchRouter);
+  // All emails: every fundraising, pledge, ticket and Festive Ball email, to read in Admin > Fundraising.
+  app.use(adminFundraisingEmailsRouter);
   // TASK-504: a fundraiser's poster, pictures, sponsor form and certificate, for its organiser
   // (signed in) and for staff.
   app.use(fundraiseMaterialsRouter);

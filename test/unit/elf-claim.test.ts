@@ -24,16 +24,22 @@ describe("the secret word", () => {
     expect(normaliseWord(undefined as unknown as string)).toBe("");
   });
 
-  it("can go on a tag only with a letter and a number in it, and at least four characters once tidied", () => {
-    expect(isUsableSecretWord("TINSEL 38")).toBe(true);
-    expect(isUsableSecretWord("Noël 12")).toBe(true);
+  it("reads the wide letters and numbers some keyboards type as the plain ones", () => {
+    const wide = String.fromCharCode(0xff33, 0xff4e, 0xff4f, 0xff57, 0xff14, 0xff17);
+    expect(normaliseWord(wide)).toBe("snow47");
+  });
+
+  it("can go on a tag only with a letter and at least three numbers in it", () => {
+    expect(isUsableSecretWord("TINSEL 384")).toBe(true);
+    expect(isUsableSecretWord("Noël 127")).toBe(true);
     expect(isUsableSecretWord("e123")).toBe(true);
   });
 
-  it("cannot go on a tag as a word on its own, because the list of word ideas is public", () => {
+  it("cannot go on a tag if it could be guessed, because the list of word ideas is public", () => {
     expect(isUsableSecretWord("SNOWBALL")).toBe(false);
+    expect(isUsableSecretWord("SNOWBALL 4")).toBe(false);
+    expect(isUsableSecretWord("Elf 77")).toBe(false);
     expect(isUsableSecretWord("2026")).toBe(false);
-    expect(isUsableSecretWord("e1")).toBe(false);
     expect(isUsableSecretWord("!!!")).toBe(false);
     expect(isUsableSecretWord("")).toBe(false);
   });
@@ -42,17 +48,17 @@ describe("the secret word", () => {
 describe("claiming an elf", () => {
   const ctx: ClaimContext = {
     doorState: "hunting",
-    secretWord: "Snowball 47",
+    secretWord: "Snowball 472",
     familyDetectiveIds: ["d1", "d2"],
     familyHasWon: false,
     wrongTries: 0,
   };
-  const right = { detectiveIds: ["d1"], word: "snowball 47" };
+  const right = { detectiveIds: ["d1"], word: "snowball 472" };
   const wrong = { detectiveIds: ["d1"], word: "snowman 12" };
 
   it("accepts the right word from a family's own detectives, each named once", () => {
     expect(decideClaim(ctx, right)).toEqual({ ok: true, detectiveIds: ["d1"] });
-    expect(decideClaim(ctx, { detectiveIds: ["d2", "d1", "d2"], word: " SNOW ball 47 " })).toEqual({
+    expect(decideClaim(ctx, { detectiveIds: ["d2", "d1", "d2"], word: " SNOW ball 472 " })).toEqual({
       ok: true,
       detectiveIds: ["d2", "d1"],
     });
@@ -68,11 +74,11 @@ describe("claiming an elf", () => {
   });
 
   it("refuses with no detective chosen", () => {
-    expect(decideClaim(ctx, { detectiveIds: [], word: "snowball 47" })).toEqual({ ok: false, reason: "no-detectives" });
+    expect(decideClaim(ctx, { detectiveIds: [], word: "snowball 472" })).toEqual({ ok: false, reason: "no-detectives" });
   });
 
   it("refuses a detective from another family", () => {
-    expect(decideClaim(ctx, { detectiveIds: ["d1", "d9"], word: "snowball 47" })).toEqual({
+    expect(decideClaim(ctx, { detectiveIds: ["d1", "d9"], word: "snowball 472" })).toEqual({
       ok: false,
       reason: "not-your-detective",
     });
@@ -103,6 +109,12 @@ describe("claiming an elf", () => {
     expect(decideClaim({ ...ctx, wrongTries: 6 }, right)).toEqual({ ok: false, reason: "too-many-tries" });
     expect(decideClaim({ ...ctx, wrongTries: 6 }, wrong)).toEqual({ ok: false, reason: "too-many-tries" });
     expect(decideClaim({ ...ctx, doorState: "shut", wrongTries: 9 }, wrong)).toEqual({ ok: false, reason: "too-many-tries" });
+  });
+
+  it("refuses when the count of wrong tries is missing, rather than allowing any number of tries", () => {
+    const missing = undefined as unknown as number;
+    expect(decideClaim({ ...ctx, wrongTries: Number.NaN }, right)).toEqual({ ok: false, reason: "too-many-tries" });
+    expect(decideClaim({ ...ctx, wrongTries: missing }, right)).toEqual({ ok: false, reason: "too-many-tries" });
   });
 
   it("refuses a family that has already won an elf, but only once they show the right word", () => {

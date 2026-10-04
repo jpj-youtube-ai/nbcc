@@ -2,7 +2,9 @@ import { describe, it, expect } from "vitest";
 import {
   DOOR_COUNT,
   DEFAULT_MORNING_CLUE_TIME,
+  DEFAULT_CLOSING_TIME,
   DEFAULT_SCHOOL_CLUE_TIME,
+  LAST_REVEAL_TIME,
   closingInstant,
   clueTimeFor,
   dayKind,
@@ -158,7 +160,7 @@ describe("the moment a door's place closes", () => {
 
   it("is the next day for a place that is open past midnight", () => {
     expect(closingInstant(SEASON, 7, "17:30", "01:00")?.toISOString()).toBe("2026-12-08T01:00:00.000Z");
-    expect(closingInstant(SEASON, 24, "10:00", "00:30")?.toISOString()).toBe("2026-12-25T00:30:00.000Z");
+    expect(closingInstant(SEASON, 23, "10:00", "00:30")?.toISOString()).toBe("2026-12-24T00:30:00.000Z");
   });
 
   it("is the next day for a place that shut before the clue came out, so the hunt carries on when it opens again", () => {
@@ -166,10 +168,21 @@ describe("the moment a door's place closes", () => {
     expect(closingInstant(SEASON, 7, "17:30", "17:30")?.toISOString()).toBe("2026-12-08T17:30:00.000Z");
   });
 
-  it("is midnight at the end of the door's day when no closing time is set, or it is not a real time", () => {
-    expect(closingInstant(SEASON, 7, "17:30", null)?.toISOString()).toBe("2026-12-08T00:00:00.000Z");
-    expect(closingInstant(SEASON, 7, "17:30", undefined)?.toISOString()).toBe("2026-12-08T00:00:00.000Z");
-    expect(closingInstant(SEASON, 7, "17:30", "late")?.toISOString()).toBe("2026-12-08T00:00:00.000Z");
+  it("is 8pm when no closing time is set, or it is not a real time", () => {
+    expect(DEFAULT_CLOSING_TIME).toBe("20:00");
+    expect(closingInstant(SEASON, 7, "17:30", null)?.toISOString()).toBe("2026-12-07T20:00:00.000Z");
+    expect(closingInstant(SEASON, 7, "17:30", undefined)?.toISOString()).toBe("2026-12-07T20:00:00.000Z");
+    expect(closingInstant(SEASON, 7, "17:30", "late")?.toISOString()).toBe("2026-12-07T20:00:00.000Z");
+    expect(closingInstant(SEASON, 7, "20:30", null)?.toISOString()).toBe("2026-12-08T20:00:00.000Z");
+  });
+
+  it("is never later than 8pm on Christmas Eve, so that every door is open in time for everyone to finish", () => {
+    expect(LAST_REVEAL_TIME).toBe("20:00");
+    expect(closingInstant(SEASON, 24, "10:00", "23:00")?.toISOString()).toBe("2026-12-24T20:00:00.000Z");
+    expect(closingInstant(SEASON, 24, "10:00", "00:30")?.toISOString()).toBe("2026-12-24T20:00:00.000Z");
+    expect(closingInstant(SEASON, 24, "10:00", null)?.toISOString()).toBe("2026-12-24T20:00:00.000Z");
+    expect(closingInstant(SEASON, 24, "10:00", "16:00")?.toISOString()).toBe("2026-12-24T16:00:00.000Z");
+    expect(closingInstant(SEASON, 23, "22:00", "21:00")?.toISOString()).toBe("2026-12-24T20:00:00.000Z");
   });
 
   it("is nothing when the door or its clue time is not real", () => {

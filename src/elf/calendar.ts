@@ -99,14 +99,25 @@ export function doorInstant(season: Pick<ElfSeason, "year">, door: number, time:
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
+/** When a place is taken to close if staff have set no time for it. */
+export const DEFAULT_CLOSING_TIME = "20:00";
+
+/** No door's place is shown later than this on Christmas Eve, so that everyone can finish. */
+export const LAST_REVEAL_TIME = "20:00";
+
 /**
  * The moment a door's place closes, which is when an unfound elf's place is shown. `clueTime` is the
- * door's clue time and `closingTime` is the time staff gave for the place.
+ * door's clue time and `closingTime` is the time staff gave for the place (8pm if they gave none, or
+ * one that is not a real time).
  *
  * A closing time that is not after the clue cannot mean that day: the place is open past midnight,
  * or it shut before the clue came out and the hunt carries on when it opens again. Either way it is
- * taken as that time on the next day. A place with no closing time, or one that is not a real time,
- * closes at midnight at the end of the door's day. Null if the door or its clue time is not real.
+ * taken as that time on the next day. So anything that warns staff about a place shutting before
+ * its clue must compare the two clock times itself: this function has already moved it on a day.
+ *
+ * Whatever the times, the answer is never later than 8pm on Christmas Eve. Every door has to be open
+ * by then, or nobody could finish. (A clue set later than that on Christmas Eve is a mistake the
+ * admin must refuse.) Null if the door or its clue time is not real.
  */
 export function closingInstant(
   season: Pick<ElfSeason, "year">,
@@ -115,10 +126,10 @@ export function closingInstant(
   closingTime: string | null | undefined,
 ): Date | null {
   const clue = doorInstant(season, door, clueTime);
-  const dayStart = doorInstant(season, door, "00:00");
-  if (!clue || !dayStart) return null;
-  const close = isClockTime(closingTime) ? doorInstant(season, door, closingTime) : null;
+  const sameDay = doorInstant(season, door, clockOr(closingTime, DEFAULT_CLOSING_TIME));
+  const last = doorInstant(season, DOOR_COUNT, LAST_REVEAL_TIME);
+  if (!clue || !sameDay || !last) return null;
   // December has no clock change, so a day later is the same time on the clock.
-  if (!close) return new Date(dayStart.getTime() + DAY_MS);
-  return close.getTime() > clue.getTime() ? close : new Date(close.getTime() + DAY_MS);
+  const close = sameDay.getTime() > clue.getTime() ? sameDay.getTime() : sameDay.getTime() + DAY_MS;
+  return new Date(Math.min(close, last.getTime()));
 }

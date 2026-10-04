@@ -1,4 +1,4 @@
-import type { DoorState } from "./doors";
+import { isClaimable, type DoorState } from "./doors";
 
 // NBCC Elf Detective School: claiming an elf. The design is
 // docs/superpowers/specs/2026-10-04-elf-detective-school-design.md ("Rules, precisely").
@@ -11,34 +11,40 @@ import type { DoorState } from "./doors";
 // poster is only a link, so anyone can try a word at any place from home. A wrong word therefore
 // gets the same answer whether or not an elf is hiding there today: trying a made up word at all 24
 // places finds nothing out. Only the right word, which means holding the elf, is ever told that it
-// is too early. And a family gets six wrong tries at a place, so the word cannot be guessed either.
-// Only a `wrong-word` answer counts as a wrong try. The claim screen must look the same at every
-// place too: it never says which door a place belongs to.
+// is too early. The claim screen must look the same at every place too: it never says which door a
+// place belongs to.
 //
-// These functions say whether one claim is valid. Two things must ALSO be guarded where claims are
-// stored, because two requests can pass this check in the same moment: one winner per door (the
-// first to arrive), and one win per family.
+// That leaves guessing the word itself, and a right guess is confirmed even on a day the elf is not
+// out. Two things make it hopeless. A family gets six wrong tries at a place (only a `wrong-word`
+// answer counts as one). And a tag's word must carry at least three numbers, picked at random,
+// because the list of word ideas is public: six tries at tens of thousands of words.
+//
+// These functions say whether one claim is valid. Three things must ALSO be guarded where claims
+// are stored, because several requests can pass this check in the same moment: one winner per door
+// (the first to arrive), one win per family, and the count of wrong tries. Take a try in one step,
+// before the word is checked, or a burst of requests would each read the same count.
 //
 // Pure: no pool, no config, no clock. Unit tested in test/unit/elf-claim.test.ts.
 
 /** How many wrong words a family may type at one place. After that, staff sort it out by hand. */
 export const MAX_WRONG_WORDS = 6;
 
-/** The secret word as it is compared: accents folded away, then letters and digits only, in lower case. */
+/** The secret word as it is compared: wide letters made plain and accents folded away, then letters
+ *  and digits only, in lower case. */
 export function normaliseWord(typed: string): string {
   return String(typed ?? "")
-    .normalize("NFD")
+    .normalize("NFKD")
     .replace(/[\u0300-\u036f]/g, "")
     .toLowerCase()
     .replace(/[^a-z0-9]/g, "");
 }
 
-/** Can this word go on an elf's tag? Once tidied it needs at least four characters, with a letter and
- *  a number among them, like "Snowball 47". The number matters: the list of word ideas is public
- *  (SECRET_WORD_IDEAS in src/elf/names.ts), so a word on its own could be guessed from home. */
+/** Can this word go on an elf's tag? It needs a letter and at least three numbers, like
+ *  "Snowball 472". The numbers matter: the list of word ideas is public (SECRET_WORD_IDEAS in
+ *  src/elf/names.ts), so a word on its own, or with one number, could be guessed from home. */
 export function isUsableSecretWord(word: string): boolean {
   const tidy = normaliseWord(word);
-  return tidy.length >= 4 && /[a-z]/.test(tidy) && /[0-9]/.test(tidy);
+  return /[a-z]/.test(tidy) && (tidy.match(/[0-9]/g) ?? []).length >= 3;
 }
 
 export type ClaimRefusal =
@@ -78,11 +84,13 @@ export function decideClaim(ctx: ClaimContext, attempt: ClaimAttempt): ClaimDeci
   const chosen = [...new Set(attempt.detectiveIds)];
   if (chosen.length === 0) return { ok: false, reason: "no-detectives" };
   if (!chosen.every((id) => ctx.familyDetectiveIds.includes(id))) return { ok: false, reason: "not-your-detective" };
-  if (ctx.wrongTries >= MAX_WRONG_WORDS) return { ok: false, reason: "too-many-tries" };
+  // Written this way round so that a count that is missing or not a number refuses, not allows.
+  if (!(ctx.wrongTries < MAX_WRONG_WORDS)) return { ok: false, reason: "too-many-tries" };
   // The word comes before the door's state: see the note at the top of this file.
   const want = normaliseWord(ctx.secretWord);
   if (want === "" || normaliseWord(attempt.word) !== want) return { ok: false, reason: "wrong-word" };
-  if (ctx.doorState === "shut") return { ok: false, reason: "too-early" };
+  // A found door was answered above, so a door that cannot be claimed here is one still shut.
+  if (!isClaimable(ctx.doorState)) return { ok: false, reason: "too-early" };
   if (ctx.familyHasWon) return { ok: false, reason: "already-won" };
   return { ok: true, detectiveIds: chosen };
 }

@@ -13,7 +13,7 @@ const mail = vi.hoisted(() => ({
   sendFundraiseEditApproved: vi.fn(),
   sendFundraiseEditRejected: vi.fn(),
 }));
-const db = vi.hoisted(() => ({ claimNextWaitingLiveEmail: vi.fn(), markLiveEmailWaiting: vi.fn(), fundraisingIsOn: vi.fn() }));
+const db = vi.hoisted(() => ({ claimNextWaitingLiveEmail: vi.fn(), markLiveEmailWaiting: vi.fn(), fundraisingIsOn: vi.fn(), websiteChoiceChangedByStaff: vi.fn() }));
 vi.mock("../../src/clients/email", () => mail);
 vi.mock("../../src/db/fundraisers", () => db);
 vi.mock("../../src/config", () => ({
@@ -45,6 +45,7 @@ beforeEach(() => {
   for (const fn of Object.values(mail)) fn.mockReset().mockResolvedValue(undefined);
   for (const fn of Object.values(db)) fn.mockReset().mockResolvedValue(undefined);
   db.fundraisingIsOn.mockResolvedValue(true);
+  db.websiteChoiceChangedByStaff.mockResolvedValue(false);
 });
 
 // The claim answers with each of these in turn, then nothing, as the database would.
@@ -89,6 +90,30 @@ describe("after approval", () => {
     const sent = mail.sendFundraiseApproved.mock.calls[0][1];
     expect(sent.subject).toBe("You're on our list: Sam's Walk");
     expect(sent.text).not.toContain("/fundraise/sams-walk");
+    // They chose "not shown on the website" themselves, so it says so.
+    expect(sent.text).toContain("As you asked, we won't show it on our website.");
+    expect(db.websiteChoiceChangedByStaff).toHaveBeenCalledWith(9);
+  });
+
+  it("does not say they asked for it when staff took it off the website", async () => {
+    db.websiteChoiceChangedByStaff.mockResolvedValue(true);
+    await sendApprovedEmail(record({ title: "Sam's Walk", name: "Sam Example", public: false }));
+    const sent = mail.sendFundraiseApproved.mock.calls[0][1];
+    expect(sent.subject).toBe("You're on our list: Sam's Walk");
+    expect(sent.html + sent.text).not.toContain("As you asked");
+    expect(sent.text).toContain("We'll be in touch about anything you asked us for.");
+  });
+
+  it("does not say they asked for it when who changed it cannot be read", async () => {
+    db.websiteChoiceChangedByStaff.mockRejectedValue(new Error("database is down"));
+    expect(await sendApprovedEmail(record({ title: "Sam's Walk", name: "Sam Example", public: false }))).toBe(true);
+    const sent = mail.sendFundraiseApproved.mock.calls[0][1];
+    expect(sent.html + sent.text).not.toContain("As you asked");
+  });
+
+  it("does not look up who changed it for someone with a page", async () => {
+    await sendApprovedEmail(record({ title: "Sam's Walk", name: "Sam Example" }));
+    expect(db.websiteChoiceChangedByStaff).not.toHaveBeenCalled();
   });
 
   it("says false, and throws nothing, when the email does not go", async () => {

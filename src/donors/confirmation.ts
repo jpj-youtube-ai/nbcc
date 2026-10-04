@@ -1,5 +1,7 @@
 import { z } from "zod";
 import { CHARITY_SHORT_NAME, FOOTER_TEXT, FOOTER_HTML } from "../legal/registration";
+// FOOTER_HTML is still used by the refund confirmation below; the donation receipt's statement is in
+// the email's footer bar (src/email/templates.ts, the "donation" kind).
 
 // Pure, DB-free content builder for the post-payment donation-confirmation email (REQ-060 · TASK-098,
 // extending TASK-070). Mirrors src/donors/receipt.ts (buildCorporationTaxReceipt): no
@@ -113,11 +115,13 @@ export function buildDonationConfirmation(input: ConfirmationInput): DonationCon
   // A warm, non-definitive closing so every receipt still leaves the donor with the mission.
   paragraphs.push(DONATION_IMPACT_LINE);
 
+  // The charity statement and the address: at the bottom of the plain text part here, and in the
+  // maroon footer bar of the HTML (added by the "donation" kind in src/email/templates.ts), where
+  // every other email has it. Never as a paragraph of the body.
   const text = paragraphs.join("\n\n") + "\n\n" + FOOTER_TEXT + "\n";
   const html =
     `<section class="donation-confirmation">` +
     paragraphs.map((p) => `<p>${escapeHtml(p)}</p>`).join("") +
-    FOOTER_HTML +
     `</section>`;
   return { text, html };
 }

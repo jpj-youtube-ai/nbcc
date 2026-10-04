@@ -12,7 +12,7 @@ import {
   sendFundraiseMemoryReceipt,
   sendFundraiseTshirtAsk,
 } from "../clients/email";
-import { claimNextWaitingLiveEmail, fundraisingIsOn, markLiveEmailWaiting } from "../db/fundraisers";
+import { claimNextWaitingLiveEmail, fundraisingIsOn, markLiveEmailWaiting, websiteChoiceChangedByStaff } from "../db/fundraisers";
 import {
   buildApprovedEmail,
   buildEditApprovedEmail,
@@ -23,6 +23,7 @@ import {
   buildSignInCodeEmail,
   buildSignUpStaffEmail,
   buildSignUpThanksEmail,
+  memorySender,
 } from "./emails";
 import { EVENT_PAGE_PREFIX, hasPage, type FundraiserRecord } from "./model";
 import type { TeamSignUp } from "./teams";
@@ -75,7 +76,8 @@ async function sendMemoryReceipt(f: FundraiserRecord): Promise<void> {
   try {
     // Only a safe first name from what they typed goes in it ("Dear Sam,"), nothing else.
     const mail = buildMemoryReceiptEmail(f.firstName ?? f.name);
-    await sendFundraiseMemoryReceipt(f.name, { email: f.email, from: config.BALL_FROM_EMAIL, replyTo: config.BALL_FROM_EMAIL, ...mail });
+    // In memory: from Jodie, and replies go to Jodie (./emails.ts, MEMORY_EMAIL).
+    await sendFundraiseMemoryReceipt(f.name, { email: f.email, ...memorySender(), ...mail });
   } catch (err) {
     logFailure("in memory receipt", err);
   }
@@ -113,6 +115,20 @@ async function sendSignUpThanks(f: FundraiserRecord): Promise<void> {
 }
 
 /**
+ * "You're on our list" says "As you asked, we won't show it on our website." That is only true when
+ * the organiser chose it: if staff changed the website choice in the admin, or we cannot tell, the
+ * email leaves that sentence out.
+ */
+async function whoHidIt(id: number): Promise<"them" | "staff"> {
+  try {
+    return (await websiteChoiceChangedByStaff(id)) === false ? "them" : "staff";
+  } catch (err) {
+    logFailure("approved (reading who changed the website choice)", err);
+    return "staff";
+  }
+}
+
+/**
  * "Your page is live" with their page link (raising money and public), or "you're on our list" for
  * anyone else. The caller sends this only when there is nothing to wait for: a page holder approved
  * while fundraising is off is marked as waiting instead (moveFundraiser), and sendWaitingLiveEmails
@@ -133,6 +149,7 @@ export async function sendApprovedEmail(f: FundraiserRecord, o: { reapproved?: b
     const built = buildApprovedEmail(f, {
       pageUrl: page ? pageOf(f) : null,
       manageUrl: page ? `${base()}/fundraise/manage` : null,
+      ...(page ? {} : { hiddenBy: await whoHidIt(f.id) }),
     });
     const mail = greetGuardian(built, f);
     await sendFundraiseApproved(f.name, { email: f.email, from: config.BALL_FROM_EMAIL, replyTo: config.BALL_FROM_EMAIL, ...mail });
@@ -162,7 +179,8 @@ async function sendInMemoryApprovedEmail(f: FundraiserRecord): Promise<boolean> 
   if (!hasPage(f) || !f.memoryName) return false;
   try {
     const mail = buildInMemoryApprovedEmail({ name: f.name, firstName: f.firstName ?? null, memoryName: f.memoryName, setupBy: f.memorySetupBy ?? null }, { pageUrl: fundraiserPageUrl(f.slug) });
-    await sendFundraiseApproved(f.name, { email: f.email, from: config.BALL_FROM_EMAIL, replyTo: config.BALL_FROM_EMAIL, ...mail });
+    // In memory: from Jodie, and replies go to Jodie (./emails.ts, MEMORY_EMAIL).
+    await sendFundraiseApproved(f.name, { email: f.email, ...memorySender(), ...mail });
     return true;
   } catch (err) {
     logFailure("in memory approved", err);
@@ -242,8 +260,11 @@ export async function sendEditDecisionEmail(f: FundraiserRecord, approved: boole
  */
 export async function sendSignInCodeEmail(email: string, name: string, code: string, o: { gentle?: boolean } = {}): Promise<void> {
   try {
-    const mail = buildSignInCodeEmail(name, code, { gentle: o.gentle === true });
-    await sendFundraiseCode(name, { email, from: config.BALL_FROM_EMAIL, replyTo: config.BALL_FROM_EMAIL, ...mail });
+    const gentle = o.gentle === true;
+    const mail = buildSignInCodeEmail(name, code, { gentle });
+    // The gentle one is for someone with a page in memory of someone: from Jodie, replying to Jodie.
+    const sender = gentle ? memorySender() : { from: config.BALL_FROM_EMAIL, replyTo: config.BALL_FROM_EMAIL };
+    await sendFundraiseCode(name, { email, ...sender, ...mail });
   } catch (err) {
     logFailure("sign in code", err);
   }

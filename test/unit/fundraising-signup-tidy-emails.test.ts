@@ -69,7 +69,7 @@ describe("the summary to the events inbox", () => {
     expect(t).toContain("Address for the welcome pack: 1 Example Road, Exampleton, EX1 1EX");
     expect(t).toContain("Sporting event: Yes");
     expect(t).toContain("T-shirt size: Adult M");
-    expect(text({ isSporting: true, tshirtSize: null })).toContain("T-shirt size: Not given yet. Ask them from Admin > Fundraising");
+    expect(text({ isSporting: true, tshirtSize: null })).toContain("T-shirt size: Not given yet. Ask them from Admin > Get involved > Sign ups");
     expect(text({ isSporting: false })).toContain("Sporting event: No");
   });
 

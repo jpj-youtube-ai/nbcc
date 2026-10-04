@@ -102,7 +102,7 @@ describe("the staff email for a refund request", () => {
     expect(mail.subject).toBe("Refund asked for: TIX-ABCDEF, Example Quiz Night");
     expect(mail.text).toContain("Kim Example has asked for a refund of booking TIX-ABCDEF (Robin Example, 2 Adult).");
     expect(mail.text).toContain("They are ill and cannot come.");
-    expect(mail.text).toContain("Only an admin can make the refund, in Admin > Fundraising > Event tickets.");
+    expect(mail.text).toContain("Only an admin can make the refund, in Admin > Get involved > Tickets and pledges > Event tickets.");
   });
 });
 

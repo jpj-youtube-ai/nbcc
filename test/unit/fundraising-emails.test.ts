@@ -153,7 +153,7 @@ describe("thanks for signing up", () => {
     expect(mail.subject).toBe("Thank you for fundraising for NBCC!");
     expect(mail.html).toContain("Fundraising for NBCC");
     expect(mail.html).toContain("Thank you, you've made our day!");
-    expect(mail.html).toContain("We're so excited that you want to raise money for NBCC. Every pound you raise helps the children, young people and vulnerable adults we support, all year round, and we can't wait to cheer you on.");
+    expect(mail.html).toContain("We're so excited that you want to raise money for NBCC. Every pound you raise helps the children, young people and vulnerable adults we support across South West Scotland, all year round, and we can't wait to cheer you on.");
     expect(mail.html).toContain("What happens next");
     expect(mail.html).toContain("<ol");
     for (const step of [
@@ -219,8 +219,8 @@ describe("the summary to the events inbox", () => {
       expect(mail.html).toContain(step);
       expect(mail.text).toContain(step);
     }
-    expect(mail.html).toContain("Approve or decline in Admin &gt; Fundraising.");
-    expect(mail.text).toContain("Approve or decline in Admin > Fundraising.");
+    expect(mail.html).toContain("Approve or decline in Admin &gt; Get involved &gt; Sign ups.");
+    expect(mail.text).toContain("Approve or decline in Admin > Get involved > Sign ups.");
     expect(mail.html).toContain(">Open the admin</a>");
   });
 
@@ -285,8 +285,24 @@ describe("you're on our list", () => {
     expect(mail.subject).toBe("You're on our list: Sam's <Santa> Dash");
     expect(mail.html).toContain("You're on our list!");
     expect(mail.html).toContain("Thank you so much for doing <b>Sam&#39;s &lt;Santa&gt; Dash</b> for NBCC. It's all approved, and you're officially part of the NBCC family.");
-    expect(mail.html).toContain("If you asked us to show it, you'll find it on our Get involved page at <b>nbcc.scot/get-involved</b>. We'll be in touch about anything you asked us for.");
+    // The readthrough (2026-10-04): it only goes to a sign up with no page on the website, so it no
+    // longer says "If you asked us to show it, you'll find it on our Get involved page".
+    expect(mail.html).toContain("As you asked, we won't show it on our website. We'll be in touch about anything you asked us for.");
+    expect(mail.text).toContain("As you asked, we won't show it on our website. We'll be in touch about anything you asked us for.");
+    expect(mail.html + mail.text).not.toContain("If you asked us to show it");
+    expect(mail.html + mail.text).not.toContain("nbcc.scot/get-involved");
     expect(mail.text).not.toContain("/fundraise/");
+  });
+
+  // Staff can untick "show it on the website" in the admin. Then it was not the organiser who asked,
+  // so the email does not say they did.
+  it("does not say 'As you asked' when it was staff who took it off the website", () => {
+    const byStaff = buildApprovedEmail(who, { pageUrl: null, manageUrl: null, hiddenBy: "staff" });
+    expect(byStaff.subject).toBe(mail.subject);
+    expect(byStaff.html + byStaff.text).not.toContain("As you asked");
+    expect(byStaff.html + byStaff.text).not.toContain("on our website");
+    expect(byStaff.html).toContain("We'll be in touch about anything you asked us for.");
+    expect(byStaff.text).toContain("We'll be in touch about anything you asked us for.");
   });
 
   it("is signed, with the questions box", () => expectSignedWithQuestions(mail, "You're a star. Thank you,"));

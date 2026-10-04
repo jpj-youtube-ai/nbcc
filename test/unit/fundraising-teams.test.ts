@@ -65,6 +65,22 @@ describe("Just me, or a team?", () => {
     });
   });
 
+  it("keeps the tick for someone under 18, whose email box is their parent's or guardian's", () => {
+    const r = checkTeamSignUp({
+      path: "raising",
+      team: "team",
+      sharesWithOther: false,
+      teamMembers: [member({ firstName: "Jack", email: "parent@example.com", under18: true }), member({ under18: false }), member({ firstName: "Ben", email: "ben@example.com", under18: "yes" })],
+    });
+    expect(r.fields).toEqual({});
+    expect(r.team?.members.map((m) => m.under18 === true)).toEqual([true, false, false]);
+  });
+
+  it("takes a tick on an empty row as nobody", () => {
+    const r = checkTeamSignUp({ path: "raising", team: "team", sharesWithOther: false, teamMembers: [{ firstName: "", lastName: "", email: "", under18: true }] });
+    expect(r).toEqual({ team: { isTeam: true, shareMode: null, members: [] }, fields: {} });
+  });
+
   it("names each box of a half filled row, by its place", () => {
     const r = checkTeamSignUp({ path: "raising", team: "team", sharesWithOther: false, teamMembers: [member(), { firstName: "Cal", lastName: "", email: "not an email" }] });
     expect(r.fields["teamMembers.1.lastName"]).toBe("Add their surname.");

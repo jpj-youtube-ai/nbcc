@@ -91,6 +91,7 @@ export async function getAdminTeam(req: Request, res: Response): Promise<Respons
         id: i.id,
         name: i.firstName ? `${i.firstName} ${i.lastName ?? ""}`.trim() : null,
         email: i.email,
+        under18: i.under18 === true,
         status: inviteStatus(i),
         createdAt: i.createdAt,
         sentAt: i.sentAt,

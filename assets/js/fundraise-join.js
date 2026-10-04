@@ -285,6 +285,12 @@
             var box = el(pair[0]);
             if (box && !String(box.value || "").trim() && typeof pair[1] === "string" && pair[1]) box.value = pair[1];
           });
+          // The team organiser ticked "This person is under 18": the form opens for their parent or
+          // guardian, who can still change the answer.
+          if (data.under18 === true && !radio("memberUnder18") && el("memberUnder18Yes")) {
+            el("memberUnder18Yes").checked = true;
+            applyAll();
+          }
         })
         .catch(function () {
           /* The form works the same without it. */

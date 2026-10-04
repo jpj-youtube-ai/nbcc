@@ -809,6 +809,7 @@ fieldset.is-invalid .fr-option { border-color: var(--crimson); }
 .fr-team-rows { list-style: none; margin: 0; padding: 0; display: grid; gap: 12px; }
 .fr-team-row { padding: 14px 16px 6px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--card); }
 @media (min-width: 760px) { .fr-row.fr-row--three { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1.4fr); } }
+.fr-team-under18 { margin: 0 0 4px; }
 .fr-team-remove { min-height: 40px; font-size: 0.95rem; }
 .fr-team-add-row { margin: 10px 0 0; }
 .fr-link-btn:disabled { color: var(--slate-soft); text-decoration: none; cursor: default; }

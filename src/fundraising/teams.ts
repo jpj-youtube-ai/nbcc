@@ -82,6 +82,8 @@ export interface TeamMemberToInvite {
   firstName: string;
   lastName: string;
   email: string;
+  /** The team organiser ticked "This person is under 18": the email is their parent's or guardian's. */
+  under18?: true;
 }
 
 export interface TeamSignUp {
@@ -141,7 +143,7 @@ export function checkTeamSignUp(body: unknown): { team: TeamSignUp | null; field
       if (!EMAIL.safeParse(email).success) fields[`${at}.email`] = "Check this email address.";
       else if (seen.has(email)) fields[`${at}.email`] = "That email is already on the list.";
       seen.add(email);
-      members.push({ firstName, lastName, email });
+      members.push({ firstName, lastName, email, ...(o.under18 === true ? { under18: true as const } : {}) });
     });
   }
   if (Object.keys(fields).length > 0) return { team: null, fields };

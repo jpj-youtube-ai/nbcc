@@ -41,7 +41,7 @@ const teamView = () => ({
     { id: 42, name: "Zara Example", email: "zara@example.com", status: "approved", left: false, raisedPence: 2500, targetPence: 5000, pageUrl: "https://nbcc.scot/fundraise/ze" },
   ],
   invites: [
-    { id: 7, name: "Dee <Example>", email: "dee@example.com", status: "held", createdAt: "2026-10-01T10:00:00.000Z", sentAt: null, remindedAt: null, joinedAt: null, deletedAt: null },
+    { id: 7, name: "Dee <Example>", email: "dee@example.com", under18: true, status: "held", createdAt: "2026-10-01T10:00:00.000Z", sentAt: null, remindedAt: null, joinedAt: null, deletedAt: null },
     { id: 8, name: null, email: null, status: "joined", createdAt: "2026-09-01T10:00:00.000Z", sentAt: "2026-09-02T10:00:00.000Z", remindedAt: null, joinedAt: "2026-09-03T10:00:00.000Z", deletedAt: "2026-10-02T10:00:00.000Z" },
   ],
   handover: handoverOpen
@@ -179,6 +179,7 @@ describe("an open team", () => {
     expect(text(p)).toContain("Zara Example");
     expect(text(p)).toContain("Dee <Example>");
     expect(p.innerHTML).not.toContain("<Example>");
+    expect(text(p)).toContain("Dee <Example> (under 18, parent or guardian’s email: dee@example.com)");
     expect(text(p)).toContain("Held until you approve the team");
     expect(text(p)).toContain("Joined");
     expect(text(p)).toContain("Name and email deleted");

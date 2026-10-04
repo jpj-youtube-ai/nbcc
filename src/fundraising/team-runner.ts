@@ -172,6 +172,8 @@ export async function runTeamEmails(now = new Date(), deps: TeamRunDeps = realTe
       const mail = buildTeamInviteReminderEmail({
         firstName: inv.firstName,
         organiserName: t.name,
+        organiserFirstName: t.firstName ?? null,
+        under18: inv.under18 === true,
         team: { title: t.title, kind: t.kind, kindLabel: kindLabelOf(t), kindOther: t.kindOther ?? null, eventDate: t.eventDate },
         joinUrl: teamInviteUrl(base(), t.slug, token),
       });

@@ -474,6 +474,18 @@
       ["lastName", "Surname", "text", 50, "Almost! Just add their surname."],
       ["email", "Email", "email", 254, "Almost! Just check this email address."],
     ];
+    // A tick per person: "This person is under 18". Ticked, the email box in that row is their
+    // parent's or guardian's, and the invite speaks to the parent.
+    var UNDER_18_EMAIL = ["Parent or guardian’s email", "Almost! Just check their parent or guardian’s email address."];
+    function applyUnder18(li) {
+      var tickBox = li.querySelector("input[data-team-under18]");
+      var email = li.querySelector('input[data-part="email"]');
+      if (!tickBox || !email) return;
+      var label = li.querySelector('label[for="' + email.id + '"]');
+      var words = tickBox.checked ? UNDER_18_EMAIL : [PARTS[2][1], PARTS[2][4]];
+      if (label) label.textContent = words[0];
+      email.setAttribute("data-invalid-message", words[1]);
+    }
     function isTeam() {
       return path() === "raising" && radio("team") === "team";
     }
@@ -528,7 +540,22 @@
       remove.className = "fr-link-btn fr-team-remove";
       remove.setAttribute("data-team-remove", "");
       remove.textContent = "Remove";
+      var under = doc.createElement("label");
+      under.className = "give-check fr-team-under18";
+      under.setAttribute("for", "teamMember" + rowSeq + "-under18");
+      var underBox = doc.createElement("input");
+      underBox.className = "give-check-box";
+      underBox.type = "checkbox";
+      underBox.id = "teamMember" + rowSeq + "-under18";
+      underBox.name = underBox.id;
+      underBox.setAttribute("data-team-under18", "");
+      var underText = doc.createElement("span");
+      underText.className = "give-check-text";
+      underText.textContent = "This person is under 18";
+      under.appendChild(underBox);
+      under.appendChild(underText);
       li.appendChild(row);
+      li.appendChild(under);
       li.appendChild(remove);
       teamRows.appendChild(li);
       applyTeamRows();
@@ -555,6 +582,10 @@
         if (li && li.parentNode) li.parentNode.removeChild(li);
         if (!teamRowList().length) addTeamRow();
         applyTeamRows();
+      });
+      teamRows.addEventListener("change", function (e) {
+        var li = e.target && e.target.closest && e.target.hasAttribute("data-team-under18") ? e.target.closest("[data-team-row]") : null;
+        if (li) applyUnder18(li);
       });
     }
     function applyTeam() {
@@ -1327,7 +1358,10 @@
               var b = li.querySelector('input[data-part="' + name + '"]');
               return b ? String(b.value || "").trim() : "";
             };
-            return { firstName: part("firstName"), lastName: part("lastName"), email: part("email") };
+            var person = { firstName: part("firstName"), lastName: part("lastName"), email: part("email") };
+            var under = li.querySelector("input[data-team-under18]");
+            if (under && under.checked) person.under18 = true;
+            return person;
           })
         : [];
       body.nbccCheck = val("nbccCheck");

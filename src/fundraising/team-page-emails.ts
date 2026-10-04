@@ -18,7 +18,7 @@ import {
 import { FOOTER_TEXT, POSTAL_ADDRESS } from "../legal/registration";
 import { dateParts } from "../events/render";
 import { categoryLabel, OTHER_KIND } from "./categories";
-import { FUNDRAISING_EMAIL, organiserGreeting, pounds, safeFirstName, type BuiltEmail, type Greeted } from "./emails";
+import { FUNDRAISING_EMAIL, organiserFirstName, organiserGreeting, pounds, safeFirstName, type BuiltEmail, type Greeted } from "./emails";
 import { shortName } from "./model";
 import { forwardMessage } from "./teams";
 
@@ -33,6 +33,9 @@ import { forwardMessage } from "./teams";
 //                    [first name] if this is a parent or guardian's email"), that that person is the
 //                    team organiser, and that questions can still come to NBCC. Its button opens the
 //                    join form filled in. "Not for you? Ignore this and we won't email again."
+//                    When the team organiser ticked "This person is under 18", the email box was
+//                    their parent's or guardian's: the invite and the reminder speak to the parent
+//                    ("[team organiser] has invited [first name] to join ..."). NEW WORDING.
 //   reminder         the ONE gentle reminder, 5 days later, if they have not joined. The same why.
 //   nudge 1 and 2    to the team organiser, day 3 and (only if still nobody has joined) day 10:
 //                    "Did you send the invite to your team? Here's the link to share with them."
@@ -147,12 +150,27 @@ export interface InviteWords {
   firstName: string;
   /** The team organiser's whole name. */
   organiserName: string;
+  /** The first name the team organiser gave on the form, when they gave one. */
+  organiserFirstName?: string | null;
+  /** The team organiser ticked "This person is under 18": the email is their parent's or guardian's. */
+  under18?: boolean;
   team: TeamWords;
   /** The join form, with this invite's token, so it opens filled in. */
   joinUrl: string;
 }
 
+/** "Robin" for the team organiser; a group's or a business's whole name, never "The" (organiserFirstName). */
+const organiserShort = (o: InviteWords): string =>
+  organiserFirstName({ name: o.organiserName, firstName: o.organiserFirstName ?? null }) ?? o.organiserName.trim();
+
 function why(o: InviteWords): string {
+  if (o.under18) {
+    const child = o.firstName.trim();
+    return (
+      `${o.organiserName.trim()} gave us your email, as the parent or guardian of ${child}, so we could invite ${child} ` +
+      `to join ${o.team.title} for ${teamEventWords(o.team)}.`
+    );
+  }
   return (
     `${o.organiserName.trim()} gave us your email so we could invite you (or ${o.firstName.trim()}, if this is a parent or guardian’s email) ` +
     `to join ${o.team.title} for ${teamEventWords(o.team)}.`
@@ -162,16 +180,21 @@ function why(o: InviteWords): string {
 const WHO_WE_ARE = "We’re the Night Before Christmas Campaign (NBCC), a Scottish charity supporting children, young people and vulnerable adults, all year round.";
 
 function askUs(o: InviteWords): string {
-  return `Any questions about the team? Ask ${firstName(o.organiserName)}, or ask us: just reply to this email, email ${FUNDRAISING_EMAIL} or call ${PHONE_DISPLAY}.`;
+  return `Any questions about the team? Ask ${organiserShort(o)}, or ask us: just reply to this email, email ${FUNDRAISING_EMAIL} or call ${PHONE_DISPLAY}.`;
 }
 
 export function buildTeamInviteEmail(o: InviteWords): BuiltEmail {
-  const organiser = firstName(o.organiserName);
-  const role = `${organiser} is the team organiser. Joining takes a couple of minutes: you get your own page with a meter, and everything you raise counts towards the team’s total too.`;
-  const child = "Setting this up for someone under 18? A parent or guardian sets up their page, and can name them on it.";
+  const organiser = organiserShort(o);
+  const name = o.firstName.trim();
+  const role = o.under18
+    ? `${organiser} is the team organiser. Joining takes a couple of minutes: ${name} gets a page with a meter, and everything it raises counts towards the team’s total too.`
+    : `${organiser} is the team organiser. Joining takes a couple of minutes: you get your own page with a meter, and everything you raise counts towards the team’s total too.`;
+  const child = o.under18
+    ? `As ${name} is under 18, you set up the page as the parent or guardian, and can name ${name} on it.`
+    : "Setting this up for someone under 18? A parent or guardian sets up their page, and can name them on it.";
   const body =
     EYEBROW +
-    heading("You’re invited to join a team!") +
+    heading(o.under18 ? `${escapeHtml(name)} is invited to join a team!` : "You’re invited to join a team!") +
     bodyP("Hello,") +
     bodyP(escapeHtml(why(o))) +
     bodyP(escapeHtml(role)) +
@@ -181,17 +204,18 @@ export function buildTeamInviteEmail(o: InviteWords): BuiltEmail {
     bodyP(escapeHtml(askUs(o))) +
     note(escapeHtml(INVITE_NOT_FOR_YOU));
   const text = ["Hello,", "", why(o), "", role, "", `Join the team: ${o.joinUrl}`, "", child, "", WHO_WE_ARE, "", askUs(o), "", INVITE_NOT_FOR_YOU];
-  return toPerson(`${organiser} has invited you to join ${o.team.title}`, body, text, "Hope to see you on the team,");
+  return toPerson(`${organiser} has invited ${o.under18 ? name : "you"} to join ${o.team.title}`, body, text, "Hope to see you on the team,");
 }
 
 export function buildTeamInviteReminderEmail(o: InviteWords): BuiltEmail {
-  const organiser = firstName(o.organiserName);
+  const organiser = organiserShort(o);
+  const name = o.firstName.trim();
   const lead = "Just a gentle reminder about the team invite we sent a few days ago.";
   const role = `${organiser} is the team organiser, and it only takes a couple of minutes to join.`;
   const once = "This is the only reminder we’ll send.";
   const body =
     EYEBROW +
-    heading(`Still keen to join ${escapeHtml(o.team.title)}?`) +
+    heading(`Still keen ${o.under18 ? `for ${escapeHtml(name)} to join` : "to join"} ${escapeHtml(o.team.title)}?`) +
     bodyP("Hello,") +
     bodyP(escapeHtml(lead)) +
     bodyP(escapeHtml(why(o))) +
@@ -200,7 +224,7 @@ export function buildTeamInviteReminderEmail(o: InviteWords): BuiltEmail {
     bodyP(escapeHtml(askUs(o))) +
     note(`${escapeHtml(once)} ${NOT_FOR_YOU}`);
   const text = ["Hello,", "", lead, "", why(o), "", role, "", `Join the team: ${o.joinUrl}`, "", askUs(o), "", once, NOT_FOR_YOU];
-  return toPerson(`A gentle reminder: join ${o.team.title}`, body, text, "Hope to see you on the team,");
+  return toPerson(`A gentle reminder: ${o.under18 ? `${name} is invited to join` : "join"} ${o.team.title}`, body, text, "Hope to see you on the team,");
 }
 
 // --- the nudges to the team organiser -----------------------------------------------------------

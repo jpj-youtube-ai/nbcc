@@ -177,19 +177,68 @@ describe("choosing", () => {
     load();
     tick("pathRaising");
     tick("teamYes");
-    expect($("[data-team-members-note]").textContent).toContain("If they’re under 18, give their parent or guardian’s email.");
+    expect($("[data-team-members-note]").textContent).toContain("If someone is under 18, tick the box in their row and give their parent or guardian’s email.");
     expect(rows()).toHaveLength(1);
     const add = $<HTMLButtonElement>("[data-team-add]");
     click(add);
     click(add);
     expect(rows()).toHaveLength(3);
     const labels = rows()[1].querySelectorAll("label");
-    expect([...labels].map((l) => l.textContent!.replace(/\s+/g, " ").trim())).toEqual(["First name", "Surname", "Email"]);
+    expect([...labels].map((l) => l.textContent!.replace(/\s+/g, " ").trim())).toEqual(["First name", "Surname", "Email", "This person is under 18"]);
     click(rows()[1].querySelector<HTMLElement>("[data-team-remove]")!);
     expect(rows()).toHaveLength(2);
     for (let i = 0; i < 40; i++) click(add);
     expect(rows()).toHaveLength(30);
     expect(add.disabled).toBe(true);
+  });
+
+  it("has a tick per person for under 18, which makes the email box their parent's or guardian's", () => {
+    load();
+    tick("pathRaising");
+    tick("teamYes");
+    click($<HTMLButtonElement>("[data-team-add]"));
+    const [one, two] = rows();
+    const box = (li: HTMLElement) => li.querySelector<HTMLInputElement>("input[data-team-under18]")!;
+    const emailLabel = (li: HTMLElement) => li.querySelector<HTMLLabelElement>(`label[for="${li.querySelector<HTMLInputElement>('input[data-part="email"]')!.id}"]`)!.textContent;
+    expect(box(one).type).toBe("checkbox");
+    expect(box(one).checked).toBe(false);
+    // Its label is its own, so a screen reader says which tick this is.
+    expect(one.querySelector(`label[for="${box(one).id}"]`)!.textContent).toBe("This person is under 18");
+    expect(box(one).id).not.toBe(box(two).id);
+    box(one).checked = true;
+    box(one).dispatchEvent(new Event("change", { bubbles: true }));
+    expect(emailLabel(one)).toBe("Parent or guardian’s email");
+    expect(one.querySelector<HTMLInputElement>('input[data-part="email"]')!.getAttribute("data-invalid-message")).toBe("Almost! Just check their parent or guardian’s email address.");
+    expect(emailLabel(two)).toBe("Email");
+    box(one).checked = false;
+    box(one).dispatchEvent(new Event("change", { bubbles: true }));
+    expect(emailLabel(one)).toBe("Email");
+    // The tick alone asks for nothing: an empty row is still nobody.
+    box(two).checked = true;
+    box(two).dispatchEvent(new Event("change", { bubbles: true }));
+    expect([...two.querySelectorAll<HTMLInputElement>("input[data-part]")].some((b) => b.required)).toBe(false);
+  });
+
+  it("sends the tick with the person it is beside, and nothing for anyone else", async () => {
+    load();
+    fillTeam();
+    click($<HTMLButtonElement>("[data-team-add]"));
+    const fill = (li: HTMLElement, first: string, email: string) => {
+      type(li.querySelector<HTMLInputElement>('input[data-part="firstName"]')!, first);
+      type(li.querySelector<HTMLInputElement>('input[data-part="lastName"]')!, "Example");
+      type(li.querySelector<HTMLInputElement>('input[data-part="email"]')!, email);
+    };
+    fill(rows()[0], "Ava", "ava@example.com");
+    fill(rows()[1], "Jack", "parent@example.com");
+    const under = rows()[1].querySelector<HTMLInputElement>("input[data-team-under18]")!;
+    under.checked = true;
+    under.dispatchEvent(new Event("change", { bubbles: true }));
+    toEnd();
+    await submit();
+    expect(sent().teamMembers).toEqual([
+      { firstName: "Ava", lastName: "Example", email: "ava@example.com" },
+      { firstName: "Jack", lastName: "Example", email: "parent@example.com", under18: true },
+    ]);
   });
 
   it("asks for all three of a person once any is typed", () => {

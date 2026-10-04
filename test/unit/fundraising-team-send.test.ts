@@ -65,6 +65,13 @@ describe("approving a team", () => {
     expect(sent[2].text).toContain("the 2 people you added");
   });
 
+  it("speaks to the parent or guardian when the team organiser ticked under 18", async () => {
+    const { d, sent } = deps({ listHeld: vi.fn(async () => [{ ...held(8, "parent@example.com", "Jack"), under18: true }]) });
+    await sendTeamApproved(team, d);
+    expect(sent[0].subject).toBe("Robin has invited Jack to join Exampleton Juniors");
+    expect(sent[0].text).toContain("as the parent or guardian of Jack");
+  });
+
   it("claims each invite with its token's hash before sending it", async () => {
     const { d } = deps();
     await sendTeamApproved(team, d);

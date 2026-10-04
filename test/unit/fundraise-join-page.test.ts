@@ -280,6 +280,31 @@ describe("an invite's link", () => {
     expect(joins()[0].body).toMatchObject({ invite: token });
   });
 
+  it("opens for a parent or guardian when the team organiser ticked under 18, and can still be changed", async () => {
+    answer = (url) =>
+      url === "/api/fundraise/team-invite"
+        ? { status: 200, body: { firstName: "Jack", lastName: "Sample", email: "parent@example.com", teamSlug: "ej", under18: true } }
+        : { status: 200, body: { siteKey: null } };
+    load({ search: `?invite=${token}` });
+    await flush();
+    expect($("#memberUnder18Yes").checked).toBe(true);
+    expect($<HTMLElement>("[data-guardian-fields]").hidden).toBe(false);
+    expect($("#guardianFirstName").required).toBe(true);
+    tick("memberUnder18No");
+    expect($<HTMLElement>("[data-guardian-fields]").hidden).toBe(true);
+  });
+
+  it("leaves the under 18 question unanswered for anyone else's invite", async () => {
+    answer = (url) =>
+      url === "/api/fundraise/team-invite"
+        ? { status: 200, body: { firstName: "Ava", lastName: "Example", email: "ava@example.com", teamSlug: "ej" } }
+        : { status: 200, body: { siteKey: null } };
+    load({ search: `?invite=${token}` });
+    await flush();
+    expect($("#memberUnder18Yes").checked).toBe(false);
+    expect($("#memberUnder18No").checked).toBe(false);
+  });
+
   it("fills in nothing for another team's invite", async () => {
     answer = (url) =>
       url === "/api/fundraise/team-invite"

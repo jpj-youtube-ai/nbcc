@@ -11701,7 +11701,9 @@
       (invites.length
         ? '<ul class="fr-wall fr-group-list">' + invites.map(function (i) {
             var when = i.status === "joined" ? i.joinedAt : i.status === "deleted" ? i.deletedAt : i.status === "reminded" ? i.remindedAt : i.sentAt;
-            var who = i.name ? i.name + (i.email ? " (" + i.email + ")" : "") : "Name and email deleted";
+            // Ticked under 18 by the team organiser: the email is their parent's or guardian's.
+            var mail = i.email ? " (" + (i.under18 ? "under 18, parent or guardian’s email: " : "") + i.email + ")" : "";
+            var who = i.name ? i.name + mail : "Name and email deleted";
             return "<li><strong>" + H.escapeHtml(who) + '</strong> <span class="fx-hist-who">' +
               H.escapeHtml((FR_INVITE_WORDS[i.status] || i.status) + (when ? ", " + H.fmtDate(when) : "")) + "</span></li>";
           }).join("") + "</ul>"

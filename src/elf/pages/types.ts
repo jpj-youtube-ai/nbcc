@@ -57,8 +57,10 @@ export interface FamilyMarks {
 
 export interface DetectiveView {
   id: string;
-  /** "Detective Ruby Tinselfoot". */
+  /** The name as the family sees it, from familyDetectiveName: "Detective Ruby Tinselfoot". */
   name: string;
+  /** Has a member of staff ticked the first name yet? Until then the public sees its first letter. */
+  nameApproved: boolean;
   badgeNumber: string;
   rank: Rank;
   doorsDone: number;
@@ -71,17 +73,22 @@ export interface DetectiveView {
   wardrobeUrl: string;
 }
 
+/** Today's case, for a family. Built from the door's state at the moment the page is drawn. */
 export interface TodayView {
   door: Door;
   state: DoorState;
   clueAt: Date;
   elfName: string;
-  /** The clue, once it is out. */
+  /** The clue, once it is out. Never before. */
   clue: string | null;
-  /** The places a family can still guess from. */
+  /** The places a family can still guess from, while the elf is hunted. */
   options: { id: string; name: string; town: string }[];
-  /** The family's guess so far. */
-  guessId: string | null;
+  /** The place the family has guessed, or null. `name` is there so it can be said once the door is
+   *  open and the place is no longer one of the options. */
+  guess: { id: string; name: string; town: string } | null;
+  /** How it ended, once the door is open: where the elf was, who found it (nobody yet for a revealed
+   *  door), and whether this family cracked the case. */
+  outcome: { place: string; by: string | null; at: Date | null; cracked: boolean } | null;
 }
 
 export interface HqView {
@@ -89,10 +96,14 @@ export interface HqView {
   /** The grown up's first name, for the greeting. */
   familyName: string;
   detectives: DetectiveView[];
-  /** Null outside 1 to 24 December. */
+  /** Today's case, or null on a day with no door (before 1 December, after Christmas Eve). */
   today: TodayView | null;
+  /** When the next clue comes out, for a day with no case of its own. */
+  nextClueAt: Date | null;
   marks: FamilyMarks;
   calendarUrl: string;
+  /** Where the guess form posts when there is no script. */
+  guessUrl: string;
 }
 
 export interface WardrobeView {

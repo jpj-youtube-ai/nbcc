@@ -345,6 +345,155 @@
 .elf-join .btn { --bg: var(--cream); --fg: var(--maroon); margin-top: 8px; }
 .elf-join .btn:hover { --bg: var(--white); }
 
+/* =================================================================
+   DETECTIVE HQ: a family's own page
+   ================================================================= */
+
+.elf-hq-case { padding-bottom: clamp(8px, 2vw, 20px); }
+
+/* Today's case. The same quiet card as the calendar's news, a little larger: it is what the family
+   came for. */
+.elf-case {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+  padding: clamp(20px, 4vw, 36px);
+  max-width: 760px;
+}
+.elf-case h2 { font-size: clamp(1.6rem, 1.3rem + 1.4vw, 2.3rem); color: var(--maroon); margin-bottom: 12px; text-wrap: balance; }
+.elf-case p { margin: 0 0 10px; }
+.elf-case__door {
+  font-size: var(--fs-eyebrow);
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  font-weight: 600;
+  color: var(--holly);
+}
+.elf-case__count {
+  font-family: var(--font-head);
+  font-weight: 800;
+  font-size: clamp(2.2rem, 1.7rem + 2.6vw, 3.4rem);
+  line-height: 1.05;
+  color: var(--crimson);
+  font-variant-numeric: lining-nums tabular-nums;
+}
+.elf-case--hunting { box-shadow: inset 0 0 0 2px var(--holly), var(--shadow-sm); border-color: transparent; }
+.elf-case__by .elf-icon { color: var(--gold-ink); }
+.elf-case__verdict { background: var(--tint); border-radius: 12px; padding: 12px 14px; }
+.elf-case__verdict.is-cracked { background: var(--holly-soft); color: var(--holly-dark); }
+.elf-case__hint { color: var(--slate-soft); }
+
+/* The clue, set a size up from everything round it: it is read aloud to children. */
+.elf-clue {
+  margin: 0 0 clamp(16px, 3vw, 24px);
+  padding: clamp(16px, 3vw, 24px);
+  border-radius: 14px;
+  background: var(--tan-soft);
+  color: var(--elf-ink);
+  font-size: clamp(1.12rem, 1.05rem + 0.5vw, 1.35rem);
+  line-height: 1.55;
+}
+
+/* The guess: one choice from the places still in play. Each row is a whole button to a thumb.
+   The site gives every form a card of its own; this one already sits in the case card. */
+.elf-case form { background: none; border: 0; border-radius: 0; box-shadow: none; padding: 0; }
+.elf-guess fieldset { border: 0; margin: 0; padding: 0; min-width: 0; }
+.elf-guess legend { padding: 0; margin-bottom: 10px; font-family: var(--font-head); font-weight: 800; font-size: 1.2rem; color: var(--maroon); }
+.elf-guess__choices { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.elf-guess__choices li { position: relative; }
+.elf-guess__choices input {
+  position: absolute;
+  left: 14px;
+  top: 50%;
+  width: 20px;
+  height: 20px;
+  margin: -10px 0 0;
+  accent-color: var(--holly);
+}
+.elf-guess__choices label {
+  display: block;
+  min-height: 48px;
+  padding: 12px 14px 12px 46px;
+  border: 1.6px solid var(--line);
+  border-radius: 12px;
+  background: var(--white);
+  cursor: pointer;
+  overflow-wrap: anywhere;
+}
+.elf-guess__choices input:checked + label { border-color: var(--holly); background: var(--holly-soft); color: var(--holly-dark); }
+.elf-guess__choices input:focus-visible { outline: none; }
+.elf-guess__choices input:focus-visible + label { outline: 3px solid var(--holly); outline-offset: 2px; }
+.elf-case .elf-guess__status { min-height: 1.7em; margin: 12px 0; color: var(--holly-dark); }
+.elf-case .elf-guess__status.is-error { color: var(--crimson); }
+.elf-guess button[disabled] { opacity: 0.6; cursor: progress; }
+@media (min-width: 640px) {
+  .elf-guess__choices { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+/* The detectives. One card each: a child is a person, not a row in a table. */
+.elf-detectives { display: grid; gap: 16px; margin-top: clamp(18px, 3vw, 28px); }
+.elf-detective {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 16px;
+  align-items: start;
+  padding: 18px;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-sm);
+}
+.elf-detective__elf { width: 84px; height: auto; background: var(--holly-soft); border-radius: 14px; }
+.elf-detective h3 { font-size: 1.25rem; color: var(--maroon); overflow-wrap: anywhere; }
+.elf-detective p { margin: 6px 0 0; }
+.elf-detective__rank { color: var(--slate-soft); }
+.elf-detective__rank b { color: var(--holly-dark); }
+.elf-detective progress {
+  display: block;
+  width: 100%;
+  height: 10px;
+  margin-top: 10px;
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: var(--tint);
+  accent-color: var(--holly);
+  overflow: hidden;
+}
+.elf-detective progress::-webkit-progress-bar { background: var(--tint); border-radius: var(--radius-pill); }
+.elf-detective progress::-webkit-progress-value { background: var(--holly); border-radius: var(--radius-pill); }
+.elf-detective progress::-moz-progress-bar { background: var(--holly); border-radius: var(--radius-pill); }
+.elf-detective__note { font-size: 0.9rem; color: var(--slate-soft); }
+.elf-detective .elf-detective__actions { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-top: 14px; }
+.elf-detective__actions .btn { padding: 10px 20px; }
+.elf-new { display: inline-block; padding: 4px 10px; border-radius: var(--radius-pill); background: var(--crimson); color: var(--cream); font-size: 0.8rem; font-weight: 600; }
+@media (min-width: 720px) {
+  .elf-detectives { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .elf-detective__elf { width: 104px; }
+}
+
+/* The family's marks: all 24 doors, small. */
+.elf-hq-marks .lede { margin-top: 12px; }
+.elf-marks { list-style: none; margin: clamp(16px, 3vw, 24px) 0 0; padding: 0; display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 6px; }
+.elf-marks li {
+  display: grid;
+  justify-items: center;
+  align-content: start;
+  gap: 3px;
+  min-height: 62px;
+  padding: 6px 2px;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  background: var(--white);
+}
+.elf-marks li.is-done { background: var(--holly-soft); border-color: transparent; }
+.elf-marks__num { font-family: var(--font-head); font-weight: 800; color: var(--slate-soft); font-variant-numeric: lining-nums; }
+.elf-marks li.is-done .elf-marks__num { color: var(--holly-dark); }
+.elf-marks .elf-mark { width: 20px; height: 20px; }
+.elf-marks__sum { margin: 14px 0 18px; color: var(--slate-soft); }
+@media (min-width: 640px) { .elf-marks { grid-template-columns: repeat(8, minmax(0, 1fr)); gap: 8px; } }
+@media (min-width: 981px) { .elf-marks { grid-template-columns: repeat(12, minmax(0, 1fr)); } }
+
 /* ---------- motion: only where something changes ---------- */
 @media (hover: hover) and (prefers-reduced-motion: no-preference) {
   .elf-door { transition: transform 0.2s var(--elf-ease); }

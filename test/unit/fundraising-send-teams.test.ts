@@ -123,7 +123,7 @@ describe("a team's sign up, to the events inbox", () => {
     expect(staff.text).toContain("A team: Yes. Robin Organiser is the team organiser");
     expect(staff.text).toContain("Whose split: The whole team's: every member page shares the same way");
     // Review: only how many, never their names or emails (they are in the admin, and deleted on time).
-    expect(staff.text).toContain("People to invite: 2 people to invite once you approve it: see Admin > Fundraising");
+    expect(staff.text).toContain("People to invite: 2 people to invite once you approve it: see Admin > Get involved > Sign ups");
     expect(staff.text + staff.html).not.toMatch(/ava@example\.com|parent@example\.com|Ava Example|Jack Sample/);
     expect(staff.text).not.toMatch(/captain/i);
   });

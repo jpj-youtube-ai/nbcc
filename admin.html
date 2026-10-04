@@ -1542,6 +1542,9 @@
                   <div class="fr-field"><label class="fx-call-label" for="frInviteEmail">Their email</label><input class="fx-call-input" id="frInviteEmail" name="email" type="email" maxlength="254" autocomplete="off" spellcheck="false" /></div>
                   <div class="fr-field fr-field--wide"><label class="fx-call-label" for="frInviteNote">A personal note (optional)</label><textarea class="fx-call-input fr-input" id="frInviteNote" name="note" rows="6" maxlength="5000"></textarea><span class="fr-field-hint">Up to 5,000 characters, so it can be a proper letter. It shows in the email, under a friendly hello.</span></div>
                   <div class="fr-field"><label class="fx-call-label" for="frInviteSigner">Signed by</label><select class="fx-call-input" id="frInviteSigner" name="signedBy"></select><span class="fr-field-hint">The email is signed with this first name, so they know who they spoke to. A copy goes to whoever it is signed by.</span></div>
+                  <!-- In memory invites come from Jodie: "Signed by" does nothing for them, so it is
+                       hidden and this line takes its place (frInviteSync in app.js). -->
+                  <p class="fr-field-hint" id="frInviteMemoryNote" hidden>In memory invites come from Jodie, are signed by her, and a copy goes to her.</p>
                   <!-- The email for the type chosen, to read before sending. The in memory invite is new
                        wording: it opens by itself and cannot be sent until an admin has approved it in
                        the All emails card (the link under Send opens it there). As tall as the email

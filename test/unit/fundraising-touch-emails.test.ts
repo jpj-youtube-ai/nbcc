@@ -75,7 +75,7 @@ describe("the approved words", () => {
   it("14, the target, changed to cheer them on to beat it, with a button to raise it", () => {
     const mail = buildTouchEmail("target", data({ raisedPence: 50000, targetPence: 50000 }));
     expect(mail.subject).toBe("You did it! Target reached");
-    expect(mail.html).toContain("WOW. <b>Sam&#39;s Santa Dash</b> has reached its £500 target! That is a truly wonderful thing to have done for the children, young people and vulnerable adults we support.");
+    expect(mail.html).toContain("WOW. <b>Sam&#39;s Santa Dash</b> has reached its £500 target! That is a truly wonderful thing to have done for the children, young people and vulnerable adults we support across South West Scotland.");
     expect(mail.html).toMatch(/beat your goal/);
     expect(mail.html).toContain(">Raise my target</a>");
     expect(mail.html).toContain('href="https://nbcc.test/fundraise/manage#mineEditHeading"');
@@ -113,7 +113,7 @@ describe("the approved words", () => {
     const mail = buildTouchEmail("finished", data({ raisedPence: 61200 }));
     expect(mail.subject).toBe("Thank you from all of us at NBCC");
     expect(mail.html).toContain(
-      "<b>Sam&#39;s Santa Dash</b> raised an incredible <b>£612</b> for NBCC. Thank you for every step, every share and every ask. You've made a real difference to the children, young people and vulnerable adults we support.",
+      "<b>Sam&#39;s Santa Dash</b> raised an incredible <b>£612</b> for NBCC. Thank you for every step, every share and every ask. You've made a real difference to the children, young people and vulnerable adults we support across South West Scotland.",
     );
     expect(mail.html).toContain(">See my certificate</a>");
     expect(mail.html).toContain('href="https://nbcc.test/api/fundraise/manage/fundraisers/7/materials/certificate"');

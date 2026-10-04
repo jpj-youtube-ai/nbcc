@@ -467,7 +467,8 @@ describe("What are you inviting them to do?", () => {
       raising: "Send a raising money invite to Mary Smith at mary@example.com, signed by Fern?",
       team: "Send a team invite to Mary Smith at mary@example.com, signed by Fern?",
       event: "Send an event invite to Mary Smith at mary@example.com, signed by Fern?",
-      memory: "Send an in memory invite to Mary Smith at mary@example.com, signed by Fern?",
+      // The charity, 2026-10-04: an in memory invite comes from Jodie, whoever is signed in.
+      memory: "Send an in memory invite to Mary Smith at mary@example.com? It comes from Jodie.",
     };
     approveMemory();
     confirmAnswer = false;
@@ -570,9 +571,70 @@ describe("the in memory invite's sign off", () => {
     expect((el("frInviteType") as HTMLSelectElement).value).toBe("memory");
     submit("#frInviteForm");
     await settle();
-    expect(confirmed.pop()).toBe("Send an in memory invite to Mary Smith at mary@example.com, signed by Fern?");
+    expect(confirmed.pop()).toBe("Send an in memory invite to Mary Smith at mary@example.com? It comes from Jodie.");
     expect((sent("POST", "/api/admin/fundraising/invites")[0].body as Record<string, unknown>).type).toBe("memory");
+    // No signer is sent: the server signs it Jodie and copies Jodie, whatever a page sends.
+    expect(sent("POST", "/api/admin/fundraising/invites")[0].body as Record<string, unknown>).not.toHaveProperty("signedBy");
     expect(text(el("frInviteStatus"))).toBe("Invite sent to Mary Smith.");
+  });
+
+  // The charity, 2026-10-04: an in memory invite comes from Jodie, is signed by her and copies her
+  // and nobody else, so "Signed by" does nothing for it: the box goes and one line says what is true.
+  it("hides Signed by for an in memory invite, and says who it comes from instead", async () => {
+    approveMemory();
+    await openFundraising();
+    const field = el("frInviteSigner")!.closest(".fr-field") as HTMLElement;
+    const line = el("frInviteMemoryNote");
+    expect(field.hidden).toBe(false);
+    expect(line.hidden).toBe(true);
+    setValue("#frInviteType", "memory");
+    await settle();
+    expect(field.hidden).toBe(true);
+    expect(line.hidden).toBe(false);
+    expect(text(line)).toBe("In memory invites come from Jodie, are signed by her, and a copy goes to her.");
+    for (const type of ["raising", "team", "event"]) {
+      setValue("#frInviteType", type);
+      await settle();
+      expect(field.hidden).toBe(false);
+      expect(line.hidden).toBe(true);
+    }
+  });
+
+  // The signer chosen is not lost by a look at In memory: back on another type, it is still sent.
+  it("keeps the signer chosen through a switch to In memory and back", async () => {
+    approveMemory();
+    await openFundraising();
+    setValue("#frInviteSigner", "5");
+    fillInvite("memory");
+    await settle();
+    expect((el("frInviteSigner")!.closest(".fr-field") as HTMLElement).hidden).toBe(true);
+    setValue("#frInviteType", "team");
+    await settle();
+    expect((el("frInviteSigner")!.closest(".fr-field") as HTMLElement).hidden).toBe(false);
+    expect((el("frInviteSigner") as HTMLSelectElement).value).toBe("5");
+    submit("#frInviteForm");
+    await settle();
+    expect(confirmed.pop()).toBe("Send a team invite to Mary Smith at mary@example.com, signed by Rowan?");
+    expect(sent("POST", "/api/admin/fundraising/invites")[0].body).toMatchObject({ type: "team", signedBy: 5 });
+  });
+
+  it("reads the in memory email without a signer, as it is signed by Jodie", async () => {
+    approveMemory();
+    await openFundraising();
+    calls = [];
+    setValue("#frInviteType", "memory");
+    await settle();
+    const read = calls.filter((c) => c.path.includes("/invite-wording/memory"));
+    expect(read).toHaveLength(1);
+    expect(read[0].query ?? "").not.toContain("signedBy");
+  });
+
+  it("does not say an in memory invite was invited by someone it was not signed by", async () => {
+    team.invites = [{ ...team.invites[0], type: "memory" }];
+    await openFundraising();
+    const item = q('#frInvites [data-frinvite="7"]')!;
+    expect(text(item)).toContain("Invited on 01/10/2026");
+    expect(text(item)).not.toContain("Invited by");
   });
 
   it("never approves or withdraws anything itself", async () => {

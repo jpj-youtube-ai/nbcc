@@ -1,15 +1,16 @@
-import { bodyP, button, emailShell, eyebrow, heading, questionsBox, questionsText, signOff, signOffText } from "../email/brand";
+import { bodyP, button, emailShell, eyebrow, heading, questionsBox, questionsText, signOffAs, signOffAsText } from "../email/brand";
 import { FOOTER_TEXT, POSTAL_ADDRESS } from "../legal/registration";
 import { raiseOrdinals } from "../email/dates";
-import { FUNDRAISING_EMAIL, MEMORY_EYEBROW, MEMORY_SIGN_OFF, dearGreeting, organiserFirstName, type BuiltEmail } from "./emails";
+import { MEMORY_EMAIL, MEMORY_EYEBROW, MEMORY_SIGNER, MEMORY_SIGN_OFF, dearGreeting, organiserFirstName, type BuiltEmail } from "./emails";
 
 // In memory pages (Jaimie, 2026-10-03): email 19, "When you approve an in memory page (gentler, no
 // fun sign off)", in the words Jaimie approved on 2026-10-02 (memory:
 // nbcc-fundraising-emails-approved-2026-10-02). It is the only automatic email the organiser of an
 // in memory page gets (src/fundraising/send.ts); everything else comes from staff, personally.
 //
-// Pure, in the same shell as the other fundraising emails: the events inbox as the contact, the
-// sign off, then the questions box. The name they gave is escaped; it goes out only once staff have
+// Pure, in the same shell as the other fundraising emails, with Jodie's address as the contact (the
+// readthrough, 2026-10-04: in memory emails come from Jodie, never "events@"), the sign off, then the
+// questions box. The name they gave is escaped; it goes out only once staff have
 // approved the page.
 
 const escapeHtml = (s: string): string =>
@@ -17,7 +18,7 @@ const escapeHtml = (s: string): string =>
 
 // Every date in the body has its ending raised ("7th" as 7<sup>th</sup>): ../email/dates.ts.
 const shell = (body: string) =>
-  emailShell(raiseOrdinals(body), { contactEmail: FUNDRAISING_EMAIL, registration: true, postalAddress: POSTAL_ADDRESS });
+  emailShell(raiseOrdinals(body), { contactEmail: MEMORY_EMAIL, registration: true, postalAddress: POSTAL_ADDRESS });
 
 const SIGN_OFF = MEMORY_SIGN_OFF;
 
@@ -57,7 +58,7 @@ export function buildInMemoryApprovedEmail(
     button(o.pageUrl, "See the page") +
     middle.map((m) => bodyP(m)).join("") +
     bodyP(anything);
-  const html = shell(body + signOff(SIGN_OFF) + questionsBox(FUNDRAISING_EMAIL));
+  const html = shell(body + signOffAs(SIGN_OFF, MEMORY_SIGNER) + questionsBox(MEMORY_EMAIL));
   const text = [
     hi,
     "",
@@ -69,9 +70,9 @@ export function buildInMemoryApprovedEmail(
     "",
     anything,
     "",
-    signOffText(SIGN_OFF),
+    signOffAsText(SIGN_OFF, MEMORY_SIGNER),
     "",
-    questionsText(FUNDRAISING_EMAIL),
+    questionsText(MEMORY_EMAIL),
     "",
     FOOTER_TEXT,
   ].join("\n");

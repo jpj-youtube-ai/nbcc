@@ -174,7 +174,8 @@ const v = (id: string, label: string, render: (base: string) => Rendered, approv
 
 const pageLinks = (b: string) => ({ pageUrl: `${b}/fundraise/sams-santa-dash`, manageUrl: `${b}/fundraise/manage` });
 const pageLive = (f: typeof SAM | typeof ARMS | typeof JACK) => (b: string) => buildApprovedEmail({ ...f, title: PAGE, path: "raising" }, pageLinks(b));
-const onList = (f: typeof SAM | typeof ARMS) => () => buildApprovedEmail({ ...f, title: PAGE, path: "raising" }, { pageUrl: null, manageUrl: null });
+const onList = (f: typeof SAM | typeof ARMS, hiddenBy: "them" | "staff" = "them") => () =>
+  buildApprovedEmail({ ...f, title: PAGE, path: "raising" }, { pageUrl: null, manageUrl: null, hiddenBy });
 const titled = <T extends object>(f: T) => ({ ...f, title: PAGE });
 
 const SIGNUP: CatalogueEmail[] = [
@@ -204,10 +205,15 @@ const SIGNUP: CatalogueEmail[] = [
     id: "signup-on-list",
     group: "signup",
     name: "You're on our list",
-    who: "Goes to the fundraiser or event host when staff approve a sign up that has no public page.",
+    who: "Goes to the fundraiser or event host when staff approve a sign up that is not shown on the website.",
     audience: "public",
     logKinds: ["fundraiseApproved"],
-    versions: [v("usual", USUAL, onList(SAM)), v("group", GROUP_LABEL, onList(ARMS))],
+    versions: [
+      v("usual", "The usual one (they asked us not to show it on the website)", onList(SAM)),
+      v("group", GROUP_LABEL, onList(ARMS)),
+      // The readthrough (2026-10-04): "As you asked" is only said when they did ask.
+      v("staff-hid", "Staff took it off the website, or it is a team member's page: it does not say “As you asked”", onList(SAM, "staff")),
+    ],
   },
   {
     id: "sign-in-code",

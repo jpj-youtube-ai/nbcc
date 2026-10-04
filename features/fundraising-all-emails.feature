@@ -58,3 +58,31 @@ Feature: All emails, in Admin > Fundraising
     When "a4.allemails.fr.bdd@example.com" reads the All emails list
     Then All emails says "touch-finished" is "waiting"
     And All emails says the version of "touch-finished" that is waiting is "nothing-raised"
+
+  Scenario: the read-through changes show in the emails themselves
+    Given a fundraising staff member "v5.readthrough.fr.bdd@example.com" with role "viewer"
+    When "v5.readthrough.fr.bdd@example.com" opens the All emails email "signup-on-list" in its "usual" version
+    Then the fundraising answer is 200
+    And the All emails email says "As you asked, we won't show it on our website."
+    And the All emails email does not say "If you asked us to show it"
+    When "v5.readthrough.fr.bdd@example.com" opens the All emails email "signup-on-list" in its "staff-hid" version
+    Then the fundraising answer is 200
+    And the All emails email does not say "As you asked"
+    When "v5.readthrough.fr.bdd@example.com" opens the All emails email "memory-live" in its "usual" version
+    Then the fundraising answer is 200
+    And the All emails email says "mailto:jodie@nbcc.scot"
+    And the All emails email does not say "events@"
+    When "v5.readthrough.fr.bdd@example.com" opens the All emails email "invite-memory" in its "usual" version
+    Then the fundraising answer is 200
+    And the All emails email says "mailto:jodie@nbcc.scot"
+    And the All emails email does not say "events@"
+    When "v5.readthrough.fr.bdd@example.com" opens the All emails email "paid-in-receipt" in its "usual" version
+    Then the fundraising answer is 200
+    And the All emails email says "is a Scottish Charitable Incorporated Organisation."
+    And the All emails email does not say "charity-registration"
+    When "v5.readthrough.fr.bdd@example.com" opens the All emails email "pledge-confirm" in its "usual" version
+    Then the fundraising answer is 200
+    And the All emails email says "NBCC is a volunteer led charity here all year for children, young people and vulnerable adults across South West Scotland"
+    When "v5.readthrough.fr.bdd@example.com" opens the All emails email "staff-signup" in its "usual" version
+    Then the fundraising answer is 200
+    And the All emails email says "Get involved &gt; Sign ups"

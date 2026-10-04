@@ -28,6 +28,7 @@ const gbp = (pence: unknown, currency: unknown): string => {
 // Rendering both families through one module is what stops that happening again. This file's
 // output is unchanged by the move, which is what its own tests assert.
 import { emailShell, heading, bodyP, note, button, codeBox, CHARITY_REGISTRATION } from "./brand";
+import { POSTAL_ADDRESS, REGISTRATION_LINES } from "../legal/registration";
 
 const TEXT_CONTACTS = "01292 811 015 · giving@nbcc.scot · nbcc.scot";
 
@@ -58,6 +59,19 @@ const appBody = (subject: string, html: unknown, text: unknown): BuiltEmail => (
   text: `${text ?? ""}\n${TEXT_CONTACTS}`,
 });
 
+// A donation RECEIPT (the readthrough, 2026-10-04): like every other email it carries the charity
+// statement in the maroon footer bar, not as a paragraph in its body (src/donors/confirmation.ts no
+// longer puts one there). The footer bar's usual sentence is shorter than the wording TASK-126
+// mandates, so a receipt's footer carries the two mandated lines themselves, word for word, then the
+// registered address: the name, "Scottish Charitable Incorporated Organisation" in full and the
+// charity number are all still on the receipt. The plain text part is as it always was: it already
+// ends with the statement and the address, then the contacts.
+const receiptBody = (subject: string, html: unknown, text: unknown): BuiltEmail => ({
+  subject,
+  html: emailShell(String(html ?? ""), { registrationLines: REGISTRATION_LINES, postalAddress: POSTAL_ADDRESS }),
+  text: `${text ?? ""}\n${TEXT_CONTACTS}`,
+});
+
 export type EmailKind =
   | "donation"
   | "receipt"
@@ -78,7 +92,7 @@ export function buildKindEmail(kind: EmailKind, p: Record<string, unknown>): Bui
   switch (kind) {
     // App-built bodies (html + text already rendered by the app, ending with the charity line).
     case "donation":
-      return appBody("Thank you for your donation to NBCC", p.html, p.text);
+      return receiptBody("Thank you for your donation to NBCC", p.html, p.text);
     case "receipt":
       return appBody("Your NBCC donation receipt", p.html, p.text);
     case "refund":

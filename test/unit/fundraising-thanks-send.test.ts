@@ -65,6 +65,23 @@ beforeEach(() => {
 });
 
 describe("sending the approved thank yous", () => {
+  // The readthrough (2026-10-04): a thank you from a page in memory of someone comes from Jodie.
+  it("sends the in memory one from Jodie, replying to Jodie, with her address in it", async () => {
+    queue(queued({ inMemory: true }));
+    expect(await sendQueuedThanks()).toEqual({ sent: 1, skipped: 0, failed: 0 });
+    const msg = sendFundraiseSupporterThanks.mock.calls[0][1];
+    expect(msg).toMatchObject({ email: "alex@example.com", from: "Jodie at NBCC <jodie@nbcc.scot>", replyTo: "jodie@nbcc.scot" });
+    expect(msg.html + msg.text).not.toContain("events@");
+    expect(msg.html).toContain("mailto:jodie@nbcc.scot");
+  });
+
+  it("still checks the suppression and opt out lists before an in memory one", async () => {
+    suppressedAmong.mockResolvedValue(new Set(["alex@example.com"]));
+    queue(queued({ inMemory: true }));
+    expect(await sendQueuedThanks()).toEqual({ sent: 0, skipped: 1, failed: 0 });
+    expect(sendFundraiseSupporterThanks).not.toHaveBeenCalled();
+  });
+
   it("emails the giver email 20, from and replying to the events inbox, and records it sent", async () => {
     queue(queued());
     expect(await sendQueuedThanks()).toEqual({ sent: 1, skipped: 0, failed: 0 });

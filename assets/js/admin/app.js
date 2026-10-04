@@ -13079,6 +13079,14 @@
 
   // The Send button, the note beside it and the sign off line, from what is chosen and approved.
   function frInviteSync() {
+    // An in memory invite comes from Jodie, is signed by her and copies her (the server sees to all
+    // three), so "Signed by" does nothing for it: the box goes, and one line says what is true.
+    var memory = frInviteType() === "memory";
+    var signer = el("frInviteSigner");
+    var signerField = signer && signer.closest ? signer.closest(".fr-field") : null;
+    if (signerField) signerField.hidden = memory;
+    var memoryNote = el("frInviteMemoryNote");
+    if (memoryNote) memoryNote.hidden = !memory;
     var held = frInviteHeld();
     var send = el("frInviteSend");
     if (send) send.disabled = held || frTeamBusy;
@@ -13129,7 +13137,8 @@
     if (!type || !box) return;
     if (!keepOpen) frTeamSay("frInviteStatus", "", false);
     // Signed as the signer chosen in the form, so the example reads as theirs will.
-    var signedBy = Number((el("frInviteSigner") || {}).value);
+    // The in memory one is signed by Jodie whoever is chosen, so no signer is asked for.
+    var signedBy = type === "memory" ? 0 : Number((el("frInviteSigner") || {}).value);
     return authFetch("/api/admin/fundraising/invite-wording/" + encodeURIComponent(type) + (signedBy ? "?signedBy=" + encodeURIComponent(signedBy) : ""))
       .then(okJson)
       .then(function (d) {
@@ -13184,7 +13193,8 @@
       return '<li data-frinvite="' + id + '"><span class="fr-people-who"><b>' + H.escapeHtml(i.name) + "</b> <span>" + H.escapeHtml(i.email) + "</span>" +
         (FR_INVITE_TYPES[i.type] ? ' <span class="admin-pill fr-invite-type">' + H.escapeHtml(FR_INVITE_TYPES[i.type].label) + "</span>" : "") +
         (expired ? ' <span class="admin-pill fr-invite-expired">Expired</span>' : "") +
-        '<span class="fr-people-when">Invited by ' + H.escapeHtml(i.signedBy) + " on " + H.escapeHtml(H.fmtDate(i.createdAt)) +
+        // An in memory invite is signed by Jodie, whoever sent it: it does not say "Invited by".
+        '<span class="fr-people-when">' + (i.type === "memory" ? "Invited" : "Invited by " + H.escapeHtml(i.signedBy)) + " on " + H.escapeHtml(H.fmtDate(i.createdAt)) +
         (i.resentAt ? ", sent again on " + H.escapeHtml(H.fmtDate(i.resentAt)) : "") +
         (expired ? ". The link has expired. Resend to send a new one." : "") + "</span></span>" +
         '<span class="fr-people-actions">' +
@@ -13244,11 +13254,15 @@
     if (!lastName) return frTeamSay("frInviteStatus", "Add their surname.", true);
     if (!FR_EMAIL.test(email)) return frTeamSay("frInviteStatus", "That isn't a whole email address.", true);
     if (note.length > 5000) return frTeamSay("frInviteStatus", "Keep the note to 5,000 characters or fewer.", true);
-    if (!signedBy) return frTeamSay("frInviteStatus", "Choose who it is from.", true);
+    // An in memory invite comes from Jodie: no signer is chosen, asked about or sent.
+    var memory = type === "memory";
+    if (!memory && !signedBy) return frTeamSay("frInviteStatus", "Choose who it is from.", true);
     var signer = select.options[select.selectedIndex] ? select.options[select.selectedIndex].textContent : "";
     // Names everything: the type in plain words, the full name, the email and the signer.
-    if (!window.confirm("Send " + FR_INVITE_TYPES[type].phrase + " to " + name + " at " + email + ", signed by " + signer + "?")) return;
-    var body = { firstName: firstName, lastName: lastName, email: email, signedBy: signedBy, type: type };
+    var ask = "Send " + FR_INVITE_TYPES[type].phrase + " to " + name + " at " + email + (memory ? "? It comes from Jodie." : ", signed by " + signer + "?");
+    if (!window.confirm(ask)) return;
+    var body = { firstName: firstName, lastName: lastName, email: email, type: type };
+    if (!memory) body.signedBy = signedBy;
     if (note) body.note = note;
     frTeamSay("frInviteStatus", "Sending…", false);
     return frInviteRun(function () {

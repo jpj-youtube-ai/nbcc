@@ -66,10 +66,6 @@
       if (!iso) return "";
       return H.fmtDate ? H.fmtDate(iso) : String(iso).slice(0, 10);
     }
-    function who(actor) {
-      var a = String(actor || "");
-      return a.indexOf("admin:") === 0 ? a.slice(6) : a || "unknown";
-    }
     function say(text, error) {
       var line = el("frPledgesStatus");
       if (!line) return;

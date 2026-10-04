@@ -10,7 +10,7 @@
 //     the email is. Opening another closes nothing: the page grows, and nothing scrolls inside a box;
 //   - a Version drop-down where an email has more than one version, and on the automatic emails to
 //     organisers "Show it for", to see one as it would go today to a real fundraiser;
-//   - for an admin, on the few emails that are approval gated: Approve this wording and Withdraw
+//   - for an admin who can edit Fundraising, on the few emails that are approval gated: Approve this wording and Withdraw
 //     approval. They call the endpoints that already did this (the list gives each one's path), so
 //     nothing new is gated here and nothing that is gated is changed.
 // Nothing is fetched until it is wanted: the count when Fundraising is shown, the list when the card
@@ -19,7 +19,8 @@
 // Other cards link here with a button carrying data-allemails-open="<group id>" (and optionally
 // data-allemails-email, data-allemails-touch, data-allemails-fundraiser). After a sign off changes,
 // "nbcc:wording-changed" bubbles up from this card so those cards can read their state again.
-// The server enforces every rule; the role in the token only decides which buttons are offered.
+// The server enforces every rule; app.js (an admin who can edit Fundraising) only decides which
+// buttons are offered.
 // Everything from the server is written as text, never as markup.
 //
 // A classic <script defer>, exported under a CommonJS guard so it can be unit tested in jsdom.
@@ -71,7 +72,13 @@
         return null;
       }
     }
-    function isAdmin() {
+    // Approve and Withdraw are offered to an admin who can also edit Fundraising: what the server
+    // asks (authorizeSectionAsAdmin). app.js knows the person's live permissions and says so here;
+    // only if it is not on the page does the role in the token decide. The server always has the
+    // last word.
+    function canApprove() {
+      var src = win.AdminFundraising;
+      if (src && typeof src.canApprove === "function") return !!src.canApprove();
       var claims = H.parseClaims ? H.parseClaims(token()) : null;
       return !!claims && claims.role === "admin";
     }
@@ -419,7 +426,7 @@
         }
         line.setAttribute("data-emails-signoff", a.key);
         r.meta.appendChild(line);
-        if (isAdmin() && !data.approvalsUnavailable) {
+        if (canApprove() && !data.approvalsUnavailable) {
           r.meta.appendChild(a.approvedAt ? actionRow("Withdraw approval", "data-emails-withdraw", true) : actionRow("Approve this wording", "data-emails-approve", false));
         }
       }
@@ -474,6 +481,7 @@
         .then(function (res) {
           if (mine !== r.seq) return;
           if (res.status !== 200 || typeof res.data.html !== "string") {
+            putAway(r);
             say(r.status, res.data.error || MSG.one, true);
             return;
           }
@@ -486,8 +494,17 @@
           fit(r);
         })
         .catch(function () {
-          if (mine === r.seq) say(r.status, MSG.one, true);
+          if (mine !== r.seq) return;
+          putAway(r);
+          say(r.status, MSG.one, true);
         });
+    }
+
+    // An email that could not load: the one shown before is put away too, so a stale email is never
+    // left under a drop-down that names another version.
+    function putAway(r) {
+      r.wrap.hidden = true;
+      r.frame.removeAttribute("srcdoc");
     }
 
     function openRow(r) {
@@ -532,7 +549,7 @@
 
     function signOff(r, approve) {
       var a = shownApproval(r);
-      if (busy || !a || !isAdmin()) return Promise.resolve();
+      if (busy || !a || !canApprove()) return Promise.resolve();
       if (win.confirm && !win.confirm(ask(a.path, approve))) return Promise.resolve();
       busy = true;
       say(r.status, "Saving…", false);

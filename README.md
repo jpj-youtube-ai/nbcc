@@ -9151,7 +9151,7 @@ Rules (pure): `src/fundraising/touch-rules.ts` (which email is due), `src/fundra
 `assets/js/fundraise.js`, beside the invite's. Tests: `fundraising-again`, `fundraising-again-db`,
 `fundraise-again-routes`, `fundraise-again-form` (jsdom) and `fundraise-pages-routes`. Emails: `src/fundraising/touch-emails.ts`. SQL: `src/db/fundraising-touch.ts`.
 Sending: `src/fundraising/touch-runner.ts` (the daily pass and the finished email). Routes:
-`src/routes/admin-fundraising-touch.ts` (its `preview/:kind` is now only called with `?fundraiserId=`, by All emails' **Show it for**). Screen: the `frTouch` block of `assets/js/admin/app.js`
+`src/routes/admin-fundraising-touch.ts` (the screen only calls its `preview/:kind` with `?fundraiserId=` now, from All emails' **Show it for**; the example and `?sample=zero` forms are no longer called by any screen and are kept for the BDD step that reads one. For a real fundraiser it builds the email with `touchEmailAsSent`, the function the daily run sends with, so a page for someone under 18 shows the hello to their parent or guardian, exactly as it would go). Screen: the `frTouch` block of `assets/js/admin/app.js`
 (reached by one line hooks marked TASK-515), `#frTouch` in `admin.html`, styles at the end of
 `assets/css/admin.css`. Unit tests: `fundraising-touch-rules` and `fundraising-call-prompts` (fixed
 UK days, both clock changes), `fundraising-touch-emails` (each email, html and text, the approved
@@ -10247,7 +10247,7 @@ someone).
 
 ### One catalogue (`src/email/catalogue.ts`)
 
-The single source of truth. `CATALOGUE` lists every email (69 today) in the order it is shown: by
+The single source of truth. `CATALOGUE` lists every email (69 when it was written) in the order it is shown: by
 group, then the order they would be sent. Each entry has a stable `id`, its `group`, `name`, `who`
 (one sentence: who gets it and when), `audience` (`public` or `staff`), `logKinds` (the names it is
 written to the email log under), an optional quiet `note` (its words are typed elsewhere, or depend
@@ -10287,18 +10287,28 @@ it), and nothing when the email has no approval.
 
 ### The guard (`test/unit/email-catalogue-guard.test.ts`)
 
-The card promises every email, so a new one cannot ship without a row. Three checks, read from the
+The card promises every email, so a new one cannot ship without a row. Five checks, read from the
 source:
 
 1. **Kinds.** Every kind passed to `sendAndLog` / `sendVerbatim` in `src/clients/email.ts` must be
    claimed by an entry's `logKinds`, or be named in the test's `OTHER_PARTS_OF_THE_SITE` list
    (donation receipts for companies, the newsletter, admin sign in and so on). A new kind forces the
    choice.
-2. **Builders.** Every exported `build...Email` function (and the Ball report's `renderReport`) in
-   `src/fundraising`, `src/pledges`, `src/tickets` and `src/ball` must be called by the catalogue.
-   This catches a new email that reuses an existing kind.
-3. **Emails that share a builder.** Every `TOUCH_KINDS` kind and every `INVITE_TYPES` type must have
+2. **Kinds are written out.** Check 1 reads kinds as string literals, so every call to
+   `sendAndLog` / `sendVerbatim` must name its kind as a literal (apart from the two definitions and
+   `sendVerbatim` handing its kind on), neither may be exported, and nothing in the four folders may
+   send past them.
+3. **Builders.** Every exported `build...Email` (a function or a `const`, and the Ball report's
+   `renderReport`) in any file under `src/fundraising`, `src/pledges`, `src/tickets` and `src/ball`,
+   however deep, must be called by the catalogue. This catches a new email that reuses an existing
+   kind. (`buildTouchEmail` is reached through `touchEmailAsSent`, the function that really sends it.)
+4. **Emails that share a builder.** Every `TOUCH_KINDS` kind and every `INVITE_TYPES` type must have
    its entry.
+5. **Words typed at the call.** The pledge note to staff takes its words from its caller, so a new
+   note written inline would be a new email with an existing kind and builder. Its subject may never
+   be a string at the call (`sendPledgeStaffNote`, `notifyStaff`, `buildPledgeStaffEmail`): the words
+   live in a named `...Note` function in `src/pledges/emails.ts`, each of which must be in the
+   catalogue.
 
 `test/unit/email-catalogue.test.ts` renders every version of every email and checks the groups, the
 ids, that no address outside `example.com` and our own appears, that nothing reads "undefined", and
@@ -10338,8 +10348,9 @@ real words.
 - **Show it for**, on the automatic emails to organisers only: an example, or any public page raising
   money, as it would go to them today (`GET /api/admin/fundraising/touch/preview/:kind?fundraiserId=`).
   One choice for all of them. The pages come from `window.AdminFundraising.raisingPages()` in `app.js`.
-- **Approve this wording** / **Withdraw approval**, admins only, after a question, on gated emails
-  only; everyone else sees "Waiting for sign off. It won't send until an admin approves it." or
+- **Approve this wording** / **Withdraw approval**, for an admin who can also edit Fundraising (what
+  the server asks; `window.AdminFundraising.canApprove()` in `app.js`), after a question, on gated
+  emails only; everyone else sees "Waiting for sign off. It won't send until an admin approves it." or
   "Approved by ... on ...". After either, every label and the bar are read again, nothing is closed,
   and `nbcc:wording-changed` bubbles from the card so Automatic emails, Sponsor pledges and the invite
   form read their own state again.

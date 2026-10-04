@@ -299,6 +299,20 @@ describe("the Automatic emails card", () => {
     expect(text(q("[data-frtouch-panel]"))).toContain("Automatic emails only go to public pages raising money.");
   });
 
+  it("tells All emails that only an admin who can edit Fundraising may approve", async () => {
+    const say = () => (window as unknown as { AdminFundraising: { canApprove: () => boolean } }).AdminFundraising.canApprove();
+    await openFundraising();
+    expect(say()).toBe(true);
+    asRole("editor");
+    await openFundraising();
+    expect(say()).toBe(false);
+    // An admin whose access to Fundraising was cut to view only: the server refuses them, so no button.
+    role = "admin";
+    perms = { ...effectivePermissions({ role: "admin", permissions: null }), fundraising: "view" };
+    await openFundraising();
+    expect(say()).toBe(false);
+  });
+
   it("reads what is due again when a sign off changes in All emails", async () => {
     await openFundraising();
     const before = sent("GET", "/api/admin/fundraising/touch").length;

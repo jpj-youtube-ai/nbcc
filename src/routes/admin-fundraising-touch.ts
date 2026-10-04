@@ -16,7 +16,7 @@ import {
   type WordingApproval,
 } from "../db/fundraising-touch";
 import { callPrompts, PROMPT_KEYS, type CallPrompt, type PromptCall, type PromptKey } from "../fundraising/call-prompts";
-import { buildTouchEmail, sampleTouchData, touchEmailData } from "../fundraising/touch-emails";
+import { sampleTouchData, touchEmailAsSent, touchEmailData } from "../fundraising/touch-emails";
 import {
   isNewWording,
   NEW_WORDING_KINDS,
@@ -143,7 +143,8 @@ export async function getTouchPreview(req: Request, res: Response): Promise<Resp
       data = touchEmailData(f, base());
       sample = false;
     }
-    const mail = buildTouchEmail(kind, data);
+    // As the daily run sends it: on a page for someone under 18 it greets their parent or guardian.
+    const mail = touchEmailAsSent(kind, data);
     const key = wordingKey(kind, data.raisedPence);
     const read = key ? await readApprovals() : { list: [], unavailable: false };
     const approval = key ? (approvalMap(read.list)[key] ?? null) : null;

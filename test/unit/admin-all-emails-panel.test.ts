@@ -132,6 +132,8 @@ let data: ReturnType<typeof listing>;
 let fail: Record<string, number>;
 let confirmAnswer = true;
 let confirms: string[];
+// What app.js says of the signed in person: an admin who can also edit Fundraising (as the server asks).
+let canApprove = true;
 const RAISING = [
   { id: 12, title: "Robin's Walk", name: "Robin Sample" },
   { id: 14, title: "Alex's Abseil", name: "Alex Sample" },
@@ -145,6 +147,7 @@ async function start(role = "admin", first = listing(), extra = "") {
   fail = {};
   data = first;
   confirmAnswer = true;
+  canApprove = role === "admin";
   const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
     const method = init?.method ?? "GET";
     const json = (status: number, body: unknown) => ({ status, ok: status < 400, json: async () => body });
@@ -179,7 +182,7 @@ async function start(role = "admin", first = listing(), extra = "") {
     confirm: (q: string) => (confirms.push(q), confirmAnswer),
     MutationObserver,
     CustomEvent,
-    AdminFundraising: { raisingPages: () => RAISING },
+    AdminFundraising: { raisingPages: () => RAISING, canApprove: () => canApprove },
     addEventListener: () => {},
   };
   const api = initAdminAllEmails(document, win)!;
@@ -413,6 +416,16 @@ describe("approving", () => {
     }
   });
 
+  it("an admin who can only view Fundraising sees the state, and no button: the server would refuse them", async () => {
+    await opened("admin");
+    canApprove = false;
+    await click(rowBtn("pledge-pay"));
+    await click(rowBtn("touch-target"));
+    expect(words(panel("pledge-pay").querySelector("[data-emails-signoff]"))).toMatch(/^Waiting for sign off/);
+    expect(words(panel("touch-target").querySelector("[data-emails-signoff]"))).toMatch(/^Approved by/);
+    expect(document.querySelector("[data-emails-approve],[data-emails-withdraw]")).toBeNull();
+  });
+
   it("approving asks first, posts to the endpoint that already approves it, and updates the labels without closing anything", async () => {
     const heard: string[] = [];
     await opened("admin");
@@ -510,6 +523,10 @@ describe("approving", () => {
     pick.dispatchEvent(new Event("change", { bubbles: true }));
     await flush();
     expect(panel("touch-finished").querySelector("[data-emails-signoff],[data-emails-approve],[data-emails-withdraw],.fr-touch-subject")).toBeNull();
+    // Nor is the email that did load left showing under a drop-down that names another version.
+    const frame = panel("touch-finished").querySelector("iframe")!;
+    expect((frame.parentElement as HTMLElement).hidden).toBe(true);
+    expect(frame.getAttribute("srcdoc") || "").not.toContain("touch-finished nothing-raised");
     expect(words(panel("touch-finished").querySelector("[data-emails-status]"))).toBe("That email could not be shown just now. The others are not affected.");
     // Going back to the version that did load reads it again, with its sign off.
     fail = {};
@@ -518,6 +535,8 @@ describe("approving", () => {
     await flush();
     expect(words(panel("touch-finished").querySelector("[data-emails-approve]"))).toBe("Approve this wording");
     expect(gets.filter((u) => u.endsWith("/touch-finished/nothing-raised")).length).toBe(2);
+    expect((frame.parentElement as HTMLElement).hidden).toBe(false);
+    expect(frame.getAttribute("srcdoc")).toContain("touch-finished nothing-raised");
   });
 });
 

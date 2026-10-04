@@ -24,7 +24,7 @@ import {
   buildTeamLiveEmail,
   buildTeamNudgeEmail,
 } from "../fundraising/team-page-emails";
-import { buildTouchEmail, sampleTouchData, type TouchEmailData } from "../fundraising/touch-emails";
+import { sampleTouchData, touchEmailAsSent, type TouchEmailData } from "../fundraising/touch-emails";
 import { TOUCH_LABELS, wordingKey, type TouchKind } from "../fundraising/touch-rules";
 import { summaryLines, type SummaryCounts } from "../fundraising/summary";
 import { joinUrl } from "../fundraising/teams";
@@ -434,19 +434,16 @@ const TEAMS: CatalogueEmail[] = [
 
 // --- keeping in touch (automatic), and the two that go after their date ------------------------------
 
-// As the daily run sends it (src/fundraising/touch-runner.ts): the builder, then the parent's greeting
-// on a page for someone under 18. The approval key is the sender's own rule for this much raised.
+// As the daily run sends it (touchEmailAsSent, which src/fundraising/touch-runner.ts sends too): the
+// builder, then the parent's greeting on a page for someone under 18. The approval key is the
+// sender's own rule for this much raised.
 function touchVersion(kind: TouchKind, id: string, label: string, over: Partial<TouchEmailData> = {}): CatalogueVersion {
   const data = (b: string): TouchEmailData => ({ ...sampleTouchData(kind, b), ...over });
   const raised = data("").raisedPence;
   return v(
     id,
     label,
-    (b) => {
-      const d = data(b);
-      const built = buildTouchEmail(kind, d);
-      return d.guardianFirstName ? greetGuardian(built, { name: d.name, firstName: d.firstName, guardianFirstName: d.guardianFirstName }) : built;
-    },
+    (b) => touchEmailAsSent(kind, data(b)),
     touchApproval(wordingKey(kind, raised)),
   );
 }

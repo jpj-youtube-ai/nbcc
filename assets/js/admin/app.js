@@ -11896,7 +11896,12 @@
   // Reading and approving the emails themselves is in the All emails card (assets/js/admin/all-emails.js).
   // It asks for these when it draws "Show it for": every public page raising money that is approved
   // or finished, so an automatic email can be read as it would go today to a real fundraiser.
+  // And whether to offer Approve and Withdraw: an admin who can also edit Fundraising, which is what
+  // the server asks of them (authorizeSectionAsAdmin), read from /api/admin/me, not the token.
   window.AdminFundraising = {
+    canApprove: function () {
+      return isAdmin() && frCanWrite();
+    },
     raisingPages: function () {
       return ((frData && frData.fundraisers) || [])
         .filter(function (f) { return f.path === "raising" && f.public && (f.status === "approved" || f.status === "finished"); })

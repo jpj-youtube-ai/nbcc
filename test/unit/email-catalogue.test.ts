@@ -65,8 +65,10 @@ describe("the groups", () => {
 });
 
 describe("the entries", () => {
-  it("lists all 69 emails from the audit", () => {
-    expect(CATALOGUE.length).toBe(69);
+  // The audit of 2026-10-04 found 69. It only grows: a new email adds a row (the guard insists), and
+  // this never needs a number changed for it.
+  it("lists every email the audit found, and any added since", () => {
+    expect(CATALOGUE.length).toBeGreaterThanOrEqual(69);
   });
 
   it("gives each a unique, url safe id", () => {

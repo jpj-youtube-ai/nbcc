@@ -87,7 +87,7 @@ const wants = (w: Partial<SummaryFundraiser["wants"]>): SummaryFundraiser["wants
 
 const fundraisers: SummaryFundraiser[] = [
   rec(1, {
-    title: "Sam’s Santa Dash",
+    title: "Sam's Santa Dash",
     town: "Perth",
     eventDate: "2026-12-12",
     // TASK-505: a shout out counts only with their permission to post.
@@ -98,7 +98,7 @@ const fundraisers: SummaryFundraiser[] = [
   rec(2, {
     status: "new",
     path: "event",
-    title: "Coffee morning at St Example’s",
+    title: "Coffee morning at St Example's",
     town: "Ayr",
     eventDate: "2026-12-20",
     createdAt: "2026-12-02T10:00:00.000Z",
@@ -111,7 +111,7 @@ const fundraisers: SummaryFundraiser[] = [
     editWaiting: true,
     wants: wants({ leaflets: 5, buckets: 1 }),
   }),
-  rec(4, { title: "Fern’s Fun Run", finishedRequestedAt: "2026-12-05T10:00:00.000Z", wants: wants({ tinCount: 1 }) }),
+  rec(4, { title: "Fern's Fun Run", finishedRequestedAt: "2026-12-05T10:00:00.000Z", wants: wants({ tinCount: 1 }) }),
   rec(5, { status: "declined", path: "event", title: "Carol singing", createdAt: "2026-12-06T23:30:00.000Z" }),
   rec(6, { status: "new", title: "Late one", createdAt: "2026-12-07T00:10:00.000Z" }),
   rec(7, { path: "event", title: "Christmas fair", town: "Troon", eventDate: "2027-01-03", wants: wants({ leaflets: 3 }) }),
@@ -231,7 +231,7 @@ describe("the money", () => {
 
 describe("new sign ups", () => {
   it("lists those that arrived last week, oldest first", () => {
-    expect(summaryCounts(inputs).newSignUps.map((s) => s.title)).toEqual(["Coffee morning at St Example’s", "Carol singing"]);
+    expect(summaryCounts(inputs).newSignUps.map((s) => s.title)).toEqual(["Coffee morning at St Example's", "Carol singing"]);
   });
 });
 
@@ -394,7 +394,7 @@ describe("requests tracked to done", () => {
       "2 calls due",
       "1 invite not taken up after a week: Alex, invited by Fern",
       "1 fundraiser 4 weeks past its date: take it off Get involved?",
-      "1 fundraiser says they’ve finished",
+      "1 fundraiser says they've finished",
     ]);
   });
 
@@ -417,7 +417,7 @@ describe("requests tracked to done", () => {
 describe("coming up", () => {
   it("lists approved fundraisers in the next four weeks, by date", () => {
     expect(summaryCounts(inputs).comingUp).toEqual([
-      { date: "2026-12-12", title: "Sam’s Santa Dash", town: "Perth" },
+      { date: "2026-12-12", title: "Sam's Santa Dash", town: "Perth" },
       { date: "2027-01-03", title: "Christmas fair", town: "Troon" },
     ]);
   });
@@ -436,7 +436,7 @@ describe("the words", () => {
   });
 
   it("lists the new sign ups", () => {
-    expect(l.newSignUps).toEqual(["Coffee morning at St Example’s, holding an event, Ayr", "Carol singing, holding an event"]);
+    expect(l.newSignUps).toEqual(["Coffee morning at St Example's, holding an event, Ayr", "Carol singing, holding an event"]);
   });
 
   it("lists what is waiting", () => {
@@ -446,16 +446,16 @@ describe("the words", () => {
       "Posters (10), leaflets (50) and leaflets or posters (3) to post",
       "2 collection buckets, 1 collection tin and 1 bucket or tin to send",
       "1 social media shout out",
-      "1 request for someone to come along, on 20 December",
+      "1 request for someone to come along, on 20th December",
       "2 calls due",
       "1 invite not taken up after a week: Alex, invited by Fern",
       "1 fundraiser 4 weeks past its date: take it off Get involved?",
-      "1 fundraiser says they’ve finished",
+      "1 fundraiser says they've finished",
     ]);
   });
 
   it("lists what is coming up", () => {
-    expect(l.comingUp).toEqual(["Sat 12 Dec: Sam’s Santa Dash, Perth", "Sun 3 Jan: Christmas fair, Troon"]);
+    expect(l.comingUp).toEqual(["Saturday 12th December: Sam's Santa Dash, Perth", "Sunday 3rd January: Christmas fair, Troon"]);
   });
 
   it("reads well on a quiet week", () => {
@@ -483,7 +483,7 @@ describe("the words", () => {
     expect(one.subject).toBe("Fundraising this week: £1,240 raised, 1 thing waiting");
     expect(one.money).toBe("£1,050 online and £190 paid in, plus £210 Gift Aid to claim. 14 fundraisers live, £8,930 raised in total.");
     expect(one.waiting).toContain("Posters (10) and leaflets (50) to post");
-    expect(one.waiting).toContain("1 request for someone to come along, on 6 December");
+    expect(one.waiting).toContain("1 request for someone to come along, on 6th December");
   });
 });
 

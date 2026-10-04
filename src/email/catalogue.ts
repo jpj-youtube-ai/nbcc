@@ -22,12 +22,13 @@ import {
   buildTeamInviteEmail,
   buildTeamInviteReminderEmail,
   buildTeamLiveEmail,
+  buildTeamMemberJoinedEmail,
   buildTeamNudgeEmail,
 } from "../fundraising/team-page-emails";
 import { sampleTouchData, touchEmailAsSent, type TouchEmailData } from "../fundraising/touch-emails";
 import { TOUCH_LABELS, wordingKey, type TouchKind } from "../fundraising/touch-rules";
 import { summaryLines, type SummaryCounts } from "../fundraising/summary";
-import { joinUrl } from "../fundraising/teams";
+import { joinUrl, TEAM_JOINED_KEY, TEAM_JOINED_LABEL } from "../fundraising/teams";
 import { inviteWordingKey, type InviteType } from "../fundraising/invite";
 import {
   buildPledgeConfirmEmail,
@@ -49,7 +50,7 @@ import {
   buildTicketsReleasedEmail,
   buildUnknownPaymentStaffEmail,
 } from "../tickets/emails";
-import { closeWords, flagWords } from "../tickets/model";
+import { flagWords } from "../tickets/model";
 import { buildBallConfirmationEmail } from "../ball/confirmation-email";
 import { buildBallReminderEmail } from "../ball/reminder-email";
 import { buildGuestChaseEmail, buildGuestSummaryEmail } from "../ball/run-up-email";
@@ -215,7 +216,13 @@ const SIGNUP: CatalogueEmail[] = [
     who: "Goes to anyone with a fundraiser, when they ask for a code to open their private area.",
     audience: "public",
     logKinds: ["fundraiseCode"],
-    versions: [v("usual", USUAL, () => buildSignInCodeEmail(SAM.name, CODE)), v("no-name", NO_NAME_LABEL, () => buildSignInCodeEmail("4x4 Club", CODE))],
+    versions: [
+      v("usual", USUAL, () => buildSignInCodeEmail(SAM.name, CODE)),
+      v("no-name", NO_NAME_LABEL, () => buildSignInCodeEmail("4x4 Club", CODE)),
+      // Jaimie, 2026-10-04: a family or a funeral director with a page in memory of someone.
+      v("in-memory", "They have a page in memory of someone (the gentle one)", () => buildSignInCodeEmail(SAM.name, CODE, { gentle: true })),
+      v("in-memory-no-name", "In memory, with no first name we can safely use", () => buildSignInCodeEmail("4x4 Club", CODE, { gentle: true })),
+    ],
   },
   {
     id: "update-live",
@@ -335,6 +342,9 @@ const teamInvite = (b: string, o: Partial<InviteWordsIn> = {}): InviteWordsIn =>
 const nudge = (n: 1 | 2, f: typeof SAM | typeof ARMS = SAM) => (b: string) =>
   buildTeamNudgeEmail(n, { ...f, title: TEAM_TITLE, pageUrl: `${b}/fundraise/the-example-runners`, joinUrl: joinUrl(b, "the-example-runners") });
 
+const memberJoined = (b: string | null, o: Partial<Parameters<typeof buildTeamMemberJoinedEmail>[0]> = {}) =>
+  buildTeamMemberJoinedEmail({ organiser: SAM, memberFirstName: "Alex", teamTitle: TEAM_TITLE, teamUrl: b === null ? null : `${b}/fundraise/the-example-runners`, ...o });
+
 const TEAMS: CatalogueEmail[] = [
   {
     id: "team-live",
@@ -421,6 +431,22 @@ const TEAMS: CatalogueEmail[] = [
       v("under-18", "Joining for someone under 18 (goes to the parent or guardian)", () => greetGuardian(buildJoinThanksEmail("Jack", TEAM_TITLE), JACK)),
     ],
   },
+  // Jaimie, 2026-10-04: new wording, held until an admin approves it (key team_joined, signed off by
+  // the automatic emails' endpoint). Sent by sendTeamMemberJoined in src/fundraising/team-send.ts.
+  {
+    id: "team-member-joined",
+    group: "teams",
+    name: TEAM_JOINED_LABEL,
+    who: "Goes to the team organiser when staff approve a new team member's page. Never about their own page.",
+    audience: "public",
+    logKinds: ["fundraiseTeamMemberJoined"],
+    versions: [
+      v("usual", USUAL, (b) => memberJoined(b), touchApproval(TEAM_JOINED_KEY)),
+      v("under-18", "The new member is under 18 (their first name only, never the parent's)", (b) => memberJoined(b, { memberFirstName: "Jack" }), touchApproval(TEAM_JOINED_KEY)),
+      v("off-site", "The team is kept off the website (no team page to link to)", () => memberJoined(null), touchApproval(TEAM_JOINED_KEY)),
+      v("group", GROUP_LABEL, (b) => memberJoined(b, { organiser: ARMS }), touchApproval(TEAM_JOINED_KEY)),
+    ],
+  },
   {
     id: "team-handover",
     group: "teams",
@@ -434,9 +460,10 @@ const TEAMS: CatalogueEmail[] = [
 
 // --- keeping in touch (automatic), and the two that go after their date ------------------------------
 
-// As the daily run sends it (touchEmailAsSent, which src/fundraising/touch-runner.ts sends too): the
-// builder, then the parent's greeting on a page for someone under 18. The approval key is the
-// sender's own rule for this much raised.
+// As the daily run sends it (touchEmailAsSent, which src/fundraising/touch-runner.ts sends too). On a
+// page for someone under 18 the whole email is written for the parent or guardian (Jaimie,
+// 2026-10-04): the hello, the subject, the heading and every line. The approval key is the sender's
+// own rule for this much raised.
 function touchVersion(kind: TouchKind, id: string, label: string, over: Partial<TouchEmailData> = {}): CatalogueVersion {
   const data = (b: string): TouchEmailData => ({ ...sampleTouchData(kind, b), ...over });
   const raised = data("").raisedPence;
@@ -528,7 +555,8 @@ const FINISHING: CatalogueEmail[] = [
     versions: [
       v("usual", USUAL, supporterThanks()),
       v("group", "From a group or business (no first name to use)", supporterThanks({ organiserName: "4x4 Club" })),
-      v("in-memory", "The page is in memory of someone", supporterThanks({ inMemory: true, message: "Thank you for your kind gift, and for remembering her with us." })),
+      v("in-memory", "The page is in memory of someone", supporterThanks({ inMemory: true, giverName: "Alex Example", message: "Thank you for your kind gift, and for remembering her with us." })),
+      v("in-memory-no-name", "In memory, and the giver has no first name we can safely use", supporterThanks({ inMemory: true, giverName: "4x4 Club", message: "Thank you for your kind gift, and for remembering her with us." })),
     ],
   },
 ];
@@ -547,7 +575,7 @@ const MEMORY: CatalogueEmail[] = [
     who: "Goes to the person who asked for a page in memory of someone, as soon as they sign up.",
     audience: "public",
     logKinds: ["fundraiseMemoryReceipt"],
-    versions: [v("usual", USUAL, () => buildMemoryReceiptEmail())],
+    versions: [v("usual", USUAL, () => buildMemoryReceiptEmail(SAM.name)), v("no-name", NO_NAME_LABEL, () => buildMemoryReceiptEmail("4x4 Club"))],
   },
   {
     id: "memory-live",
@@ -907,7 +935,7 @@ const BALL: CatalogueEmail[] = [
     id: "ball-week-to-go",
     group: "ball",
     name: "A week to go",
-    who: "Goes to everyone who has paid, 3 days before the Ball, or when staff press “Send the reminder”.",
+    who: "Goes to everyone who has paid, a week before the Ball (the morning after, for a booking paid in the last week), or when staff press “Send the reminder”.",
     audience: "public",
     logKinds: ["ballRunUp", "ballReminder"],
     note: "The arrival time and the table name are typed by staff. Pick that version to see them, with example words.",
@@ -917,6 +945,11 @@ const BALL: CatalogueEmail[] = [
       v("no-guests", "No guest names given at all", ballReminder({}, [])),
       v("staff-words", "With the arrival time and a table name (example words)", ballReminder({ tableName: "Table 4" }, GUESTS, { arrivalTime: "Arrival from 6.30pm" })),
       v("by-button", "Sent with the button in the admin (it uses their whole name)", ballReminder({ buyerFirstName: null })),
+      // The charity, 2026-10-04: it says the true time to go when it is not sent a week before.
+      v("days-to-go", "A few days to go (someone who booked in the last week)", ballReminder({}, GUESTS, { daysToGo: 4 })),
+      v("tomorrow", "Tomorrow (sent the day before the Ball)", ballReminder({}, GUESTS, { daysToGo: 1 })),
+      v("today", "Today (only if staff press the button on the day of the Ball)", ballReminder({}, GUESTS, { daysToGo: 0 })),
+      v("early", "More than a week to go (staff pressed the button early)", ballReminder({}, GUESTS, { daysToGo: 10 })),
     ],
   },
   {
@@ -1153,7 +1186,7 @@ const STAFF: CatalogueEmail[] = [
   ]),
   staff("staff-team-joined", "New team member", "when someone joins a team.", "fundraiseTeamJoinStaff", [
     v("usual", USUAL, joinNotice(20000, "No, all of it comes to NBCC")),
-    v("sharing", "No target, and sharing with another cause as the whole team does", joinNotice(null, "60% to NBCC, the rest to Example Hospice (the whole team’s split)")),
+    v("sharing", "No target, and sharing with another cause as the whole team does", joinNotice(null, "60% to NBCC, the rest to Example Hospice (the whole team's split)")),
   ]),
   staff("staff-team-removed", "Someone was taken off a team", "when a team organiser removes a member.", "fundraiseTeamMemberRemoved", [
     v("usual", USUAL, (b) => buildMemberRemovedStaffEmail({ memberName: "Alex Example", teamTitle: TEAM_TITLE, organiserName: SAM.name }, admin(b))),
@@ -1174,9 +1207,9 @@ const STAFF: CatalogueEmail[] = [
     v("one", "Only one pledge", pledgeNote(pledgesPaidTwiceNote(TWICE.slice(0, 1)))),
   ]),
   staff("staff-tickets-to-approve", "Tickets to approve", "when a host proposes tickets.", "eventTicketsToApprove", [
-    v("usual", "A limit on tickets, closing the day before", proposed({ types: [{ name: "Adult", pricePence: 1300, quantity: 50 }, { name: "Child", pricePence: 0, quantity: null }], salesLimit: 80, closeWords: closeWords({ mode: "day_before" }) } as ProposedIn)),
-    v("no-limit", "No limit, closing when the event starts", proposed({ types: [{ name: "Adult", pricePence: 1300, quantity: 50 }], salesLimit: null, closeWords: closeWords({ mode: "start" }) } as ProposedIn)),
-    v("custom-close", "Sales close at a time the host chose", proposed({ types: [{ name: "Adult", pricePence: 1300, quantity: 50 }], salesLimit: 80, closeWords: closeWords({ mode: "custom", at: "2026-12-04T17:00:00Z" }) } as ProposedIn)),
+    v("usual", "A limit on tickets, closing the day before", proposed({ types: [{ name: "Adult", pricePence: 1300, quantity: 50 }, { name: "Child", pricePence: 0, quantity: null }], salesLimit: 80, close: { mode: "day_before", at: null } })),
+    v("no-limit", "No limit, closing when the event starts", proposed({ types: [{ name: "Adult", pricePence: 1300, quantity: 50 }], salesLimit: null, close: { mode: "start", at: null } })),
+    v("custom-close", "Sales close at a time the host chose", proposed({ types: [{ name: "Adult", pricePence: 1300, quantity: 50 }], salesLimit: 80, close: { mode: "custom", at: "2026-12-04T17:00:00Z" } })),
   ]),
   staff("staff-ticket-refund-asked", "A refund has been asked for", "when a host asks for a refund.", "eventTicketsRefundAsked", [
     v("usual", USUAL, (b) => buildRefundRequestStaffEmail(HOST, { reference: REF, buyerName: "Alex Example", tickets: "2 Adult", reason: "They can no longer come, and asked me for their money back." }, admin(b))),
@@ -1194,7 +1227,8 @@ const STAFF: CatalogueEmail[] = [
         { title: EVENT_TITLE },
         { reference: REF, buyerName: "Alex Example", tickets: "", paid: "£26" },
         flagWords({ refundFailed: { released: true, overBy: 2 } }),
-        admin(b),
+        // As ./send.ts sends it for a failed refund: it never says the buyer has their tickets email.
+        { ...admin(b), refundFailed: true },
       )),
   ]),
   staff("staff-ticket-unknown", "A ticket payment with no booking", "if a ticket payment arrives with no matching booking.", "eventTicketsToCheck", [

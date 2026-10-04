@@ -2697,6 +2697,7 @@
     ["fundraiseTeamInviteReminder", "Team invite reminder"], ["fundraiseTeamNudge", "Team automatic: did you send the invite?"],
     ["fundraiseTeamJoined", "Team member joined (thank you)"], ["fundraiseTeamJoinStaff", "Team member to approve (to events@)"],
     ["fundraiseTeamMemberRemoved", "Team member taken off (to events@)"], ["fundraiseTeamHandoverCode", "Team organiser handover code"],
+    ["fundraiseTeamMemberJoined", "Team member approved (to the team organiser)"],
     // Event tickets: the buyer's tickets and refund, and the two to events@.
     ["eventTickets", "Event tickets (to the buyer)"], ["eventTicketsRefund", "Event tickets refund (to the buyer)"],
     ["eventTicketsRefundAsked", "Event tickets refund asked for (to events@)"], ["eventTicketsToApprove", "Event tickets to approve (to events@)"],
@@ -15084,11 +15085,11 @@
       remindBtn.addEventListener("click", function () {
         // Naming the number is the whole safety mechanism: "are you sure?" tells an operator
         // nothing, whereas "email 137 people" is a fact they can check against what they expect.
-        if (!window.confirm("Send the week-before reminder to everyone who has paid and not had it yet? This emails real people.")) return;
+        if (!window.confirm("Send the reminder to everyone who has paid and not had it yet? This emails real people.")) return;
         remindBtn.disabled = true;
         ballStatus("ballReminderStatus", "Sending…");
         authFetch("/api/admin/ball/reminders", { method: "POST" })
-          .then(okJson)
+          .then(okJsonOrSaid)
           .then(function (d) {
             remindBtn.disabled = false;
             var failed = (d.failed || []).length;
@@ -15099,9 +15100,11 @@
             );
             loadBall();
           })
-          .catch(function () {
+          .catch(function (err) {
             remindBtn.disabled = false;
-            ballStatus("ballReminderStatus", "Could not send. Nobody has been emailed twice — try again.");
+            // The server's own words when it refuses ("The Ball has been and gone, so the reminder
+            // was not sent."); otherwise a plain failure.
+            ballStatus("ballReminderStatus", (err && err.said) || "Could not send. Nobody has been emailed twice. Please try again.");
           });
       });
     }

@@ -11,6 +11,7 @@ const mail = vi.hoisted(() => ({
   sendFundraiseStaff: vi.fn(),
   sendFundraiseApproved: vi.fn(),
   sendFundraiseCode: vi.fn(),
+  sendFundraiseMemoryReceipt: vi.fn(),
   sendFundraiseFinishedStaff: vi.fn(),
   sendFundraiseEditApproved: vi.fn(),
   sendFundraiseEditRejected: vi.fn(),
@@ -55,16 +56,17 @@ beforeEach(() => {
 });
 
 // Jaimie, 2026-10-03: "Hi The," for a pub. A funeral director's business name, or no name, is the same.
+// Jaimie, 2026-10-04: every in memory email opens "Dear [first name],", and "Hello," with no name.
 describe("email 19's greeting", () => {
   const hi = (f: { name: string; firstName?: string | null }) => buildInMemoryApprovedEmail({ ...f, memoryName: "Jean" }, { pageUrl: "p" }).text.split(String.fromCharCode(10))[0];
 
-  it("never says Hi The, or Hi with no name", () => {
-    expect(hi({ name: "The Example Funeral Home" })).toBe("Hi there,");
-    expect(hi({ name: "" })).toBe("Hi there,");
+  it("never says Dear The, or Dear with no name", () => {
+    expect(hi({ name: "The Example Funeral Home" })).toBe("Hello,");
+    expect(hi({ name: "" })).toBe("Hello,");
   });
 
   it("uses the first name they gave on the form", () => {
-    expect(hi({ name: "S Example", firstName: "Sam" })).toBe("Hi Sam,");
+    expect(hi({ name: "S Example", firstName: "Sam" })).toBe("Dear Sam,");
   });
 });
 
@@ -73,14 +75,14 @@ describe("email 19, when staff approve an in memory page", () => {
 
   it("is in the words Jaimie approved", () => {
     expect(mailOut.subject).toBe("Your page in memory of Jean");
-    expect(mailOut.text).toContain("Hi Sam,");
+    expect(mailOut.text).toContain("Dear Sam,");
     expect(mailOut.text).toContain(
-      "Thank you for choosing to remember Jean by raising money for NBCC. We’re honoured to be part of it, and we’re so sorry for your loss.",
+      "Thank you for choosing to remember Jean by raising money for NBCC. We're honoured to be part of it, and we're so sorry for your loss.",
     );
     expect(mailOut.text).toContain(
-      "Your page is now live. It’s a quiet place where family and friends can give and leave a message in Jean’s memory.",
+      "Your page is now live. It's a quiet place where family and friends can give and leave a message in Jean's memory.",
     );
-    expect(mailOut.text).toContain("If there’s anything you’d like changed, or anything we can do, please just let us know. There’s no rush at all.");
+    expect(mailOut.text).toContain("If there's anything you'd like changed, or anything we can do, please just let us know. There's no rush at all.");
     expect(mailOut.text).toContain("With warmest thoughts,");
     expect(mailOut.html).toContain("In memory of Jean");
     expect(mailOut.html).toContain("See the page");
@@ -131,9 +133,22 @@ describe("the emails an in memory page gets", () => {
     expect(mail.sendFundraiseNewsRejected).not.toHaveBeenCalled();
   });
 
-  it("still sends the sign in code they ask for", async () => {
-    await sendSignInCodeEmail("sam@example.com", "Sam Example", "123456");
-    expect(mail.sendFundraiseCode).toHaveBeenCalled();
+  // Jaimie, 2026-10-04: a family or a funeral director gets the gentle sign in code email.
+  it("still sends the sign in code they ask for, in the gentle version", async () => {
+    await sendSignInCodeEmail("sam@example.com", "Sam Example", "123456", { gentle: true });
+    const sent = mail.sendFundraiseCode.mock.calls[0][1];
+    expect(sent.text).toContain("Dear Sam,");
+    expect(sent.text).toContain("Your code: 123456");
+    expect(sent.text).toContain("With warmest thoughts,\nNBCC Team");
+    expect(sent.text).not.toContain("!");
+  });
+
+  it("sends the short receipt when they sign up, greeting them by first name", async () => {
+    await sendSignUpEmails(record({ status: "new", firstName: "Sam" }));
+    const sent = mail.sendFundraiseMemoryReceipt.mock.calls[0][1];
+    expect(sent.email).toBe("sam@example.com");
+    expect(sent.text.split("\n")[0]).toBe("Dear Sam,");
+    expect(sent.text).toContain("We have your details for the page.");
   });
 
   it("leaves every other page's emails as they were", async () => {
@@ -159,12 +174,12 @@ describe("the summary to the events inbox", () => {
 });
 
 describe("review: the thank you to a giver on an in memory page", () => {
-  it("is gentle: In memory, and With warm wishes", async () => {
+  it("is gentle: In memory, and With warmest thoughts, as every in memory email signs off", async () => {
     const { buildSupporterThanksEmail } = await import("../../src/fundraising/thanks-email");
     const m = buildSupporterThanksEmail({ organiserName: "Sam Example", title: "In memory of Jean", message: "Thank you.", inMemory: true });
     expect(m.text).toContain("In memory");
     expect(m.text).not.toContain("Fundraising for NBCC");
-    expect(m.text).toContain("With warm wishes,");
+    expect(m.text).toContain("With warmest thoughts,");
     expect(m.text).not.toContain("Thanks so much,");
     const other = buildSupporterThanksEmail({ organiserName: "Sam Example", title: "Sam's Walk", message: "Thank you." });
     expect(other.text).toContain("Fundraising for NBCC");
@@ -192,7 +207,7 @@ describe("email 19 for a funeral director (Jaimie, A2)", () => {
   it("leaves the family and friends version as Jaimie approved it", () => {
     for (const setupBy of ["family", "friend", undefined] as const) {
       const m = buildInMemoryApprovedEmail({ name: "Sam Example", memoryName: "Jean", setupBy }, { pageUrl: "https://nbcc.test/fundraise/ime" });
-      expect(m.text).toContain("we’re so sorry for your loss");
+      expect(m.text).toContain("we're so sorry for your loss");
       expect(m.text).not.toContain("for the family of Jean");
     }
   });

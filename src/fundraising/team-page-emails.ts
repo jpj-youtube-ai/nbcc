@@ -16,9 +16,9 @@ import {
   PHONE_DISPLAY,
 } from "../email/brand";
 import { FOOTER_TEXT, POSTAL_ADDRESS } from "../legal/registration";
-import { dateParts } from "../events/render";
+import { emailDate, raiseOrdinals } from "../email/dates";
 import { categoryLabel, OTHER_KIND } from "./categories";
-import { FUNDRAISING_EMAIL, organiserFirstName, organiserGreeting, pounds, safeFirstName, type BuiltEmail, type Greeted } from "./emails";
+import { FUNDRAISING_EMAIL, STAFF_SIGN_OFF, organiserFirstName, organiserGreeting, pounds, safeFirstName, type BuiltEmail, type Greeted } from "./emails";
 import { forwardMessage } from "./teams";
 
 // Team pages (Jaimie, 2026-10-03): the emails, built here and sent by src/fundraising/team-send.ts.
@@ -31,7 +31,7 @@ import { forwardMessage } from "./teams";
 //                    they got it ("[team organiser] gave us your email so we could invite you, or
 //                    [first name] if this is a parent or guardian's email"), that that person is the
 //                    team organiser, and that questions can still come to NBCC. Its button opens the
-//                    join form filled in. "Not for you? Ignore this and we won't email again."
+//                    join form filled in. "Not for you? Ignore this and we won't email you again."
 //                    When the team organiser ticked "This person is under 18", the email box was
 //                    their parent's or guardian's: the invite and the reminder speak to the parent
 //                    ("[team organiser] has invited [first name] to join ..."). NEW WORDING.
@@ -43,19 +43,24 @@ import { forwardMessage } from "./teams";
 //   join staff       to the events inbox: a new member page to approve.
 //   member removed   to the events inbox: the team organiser took someone off the team.
 //   handover code    to the new team organiser when staff hand the role over: the code to confirm.
+//   member joined    to the team organiser when staff approve a new team member's page (Jaimie,
+//                    2026-10-04), so "you get the team's emails" is true: who joined, that their page
+//                    now counts towards the team total, and a button to the team page. NEW WORDING,
+//                    held until an admin approves it (TEAM_JOINED_KEY in ./teams.ts).
 //
 // The same shell, sign off and "Got any questions?" box as the other fundraising emails, with the
 // events inbox as the contact. Every typed or stored value is escaped. No dashes.
 
 /** The footer line on every email to someone the team organiser added (Jaimie's Q6). */
-export const NOT_FOR_YOU = "Not for you? Ignore this and we won’t email again.";
+export const NOT_FOR_YOU = "Not for you? Ignore this and we won't email you again.";
 /** The invite's footer: a reminder may still follow, once (review, 2026-10-03). */
-export const INVITE_NOT_FOR_YOU = "Not for you? Just ignore this. We’ll send one gentle reminder at most, then we won’t email you again.";
+export const INVITE_NOT_FOR_YOU = "Not for you? Just ignore this. We'll send one gentle reminder at most, then we won't email you again.";
 
 const escapeHtml = (s: string): string =>
   String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
 
-const shell = (body: string) => emailShell(body, { contactEmail: FUNDRAISING_EMAIL, registration: true, postalAddress: POSTAL_ADDRESS });
+// Every date in the body has its ending raised ("7th" as 7<sup>th</sup>): ../email/dates.ts.
+const shell = (body: string) => emailShell(raiseOrdinals(body), { contactEmail: FUNDRAISING_EMAIL, registration: true, postalAddress: POSTAL_ADDRESS });
 
 const EYEBROW = eyebrow("Fundraising for NBCC");
 
@@ -66,7 +71,7 @@ function toPerson(subject: string, bodyHtml: string, textLines: string[], line: 
 }
 
 function toStaff(subject: string, bodyHtml: string, textLines: string[]): BuiltEmail {
-  const line = "Go team!";
+  const line = STAFF_SIGN_OFF;
   return { subject, html: shell(bodyHtml + signOff(line)), text: [...textLines, "", signOffText(line)].join("\n") };
 }
 
@@ -78,14 +83,13 @@ export interface TeamWords {
   eventDate: string | null;
 }
 
-/** "their Santa dash on Saturday 5 December": what the team is doing, from its category and date. */
+/** "their Santa dash on Saturday 5th December": what the team is doing, from its category and date. */
 export function teamEventWords(t: TeamWords): string {
   const what = (t.kind === OTHER_KIND && t.kindOther ? t.kindOther : t.kindLabel || categoryLabel(t.kind)).trim();
   // "Walk" reads "their walk"; a name stays a name: "their Santa dash".
   const lower = /^(Santa|Christmas|NBCC)\b/.test(what) ? what : what.charAt(0).toLowerCase() + what.slice(1);
   if (!t.eventDate) return `their ${lower}`;
-  const p = dateParts(t.eventDate);
-  return `their ${lower} on ${p.dayName} ${p.day} ${p.month}`;
+  return `their ${lower} on ${emailDate(t.eventDate)}`;
 }
 
 // --- your team page is live ---------------------------------------------------------------------
@@ -100,15 +104,15 @@ export function buildTeamLiveEmail(
   const page = o.pageUrl;
   const liveWords = (name: string) =>
     page
-      ? `Brilliant news: ${name} is approved and your team page is live. As the team organiser, you get the team’s emails and look after the team page.`
-      : `Brilliant news: ${name} is approved. As the team organiser, you get the team’s emails and look after your team.`;
+      ? `Brilliant news: ${name} is approved and your team page is live. As the team organiser, you get the team's emails and look after the team page.`
+      : `Brilliant news: ${name} is approved. As the team organiser, you get the team's emails and look after your team.`;
   const live = liveWords(t.title);
-  const share = "Here’s the link for your team to join. Copy and send this to your team, on WhatsApp, in a group chat or by email:";
+  const share = "Here's the link for your team to join. Copy and send this to your team, on WhatsApp, in a group chat or by email:";
   const message = forwardMessage(t, o.joinUrl);
   const invited =
     o.invited > 0
-      ? `We’ve emailed an invite to the ${o.invited === 1 ? "1 person" : `${o.invited} people`} you added. Anyone who joins gets their own page once we’ve checked it, and everything they raise counts towards your team total too.`
-      : "Anyone who joins gets their own page once we’ve checked it, and everything they raise counts towards your team total too.";
+      ? `We've emailed an invite to the ${o.invited === 1 ? "1 person" : `${o.invited} people`} you added. Anyone who joins gets their own page once we've checked it, and everything they raise counts towards your team total too.`
+      : "Anyone who joins gets their own page once we've checked it, and everything they raise counts towards your team total too.";
   const area = "Your private area has the join link too, and shows who has joined.";
   const body =
     EYEBROW +
@@ -117,7 +121,7 @@ export function buildTeamLiveEmail(
     bodyP(liveWords(`<b>${title}</b>`)) +
     (page ? button(page, "See our team page") : "") +
     subheading("Invite your team") +
-    bodyP("Here’s the link for your team to join. Copy and send this to your team, on WhatsApp, in a group chat or by email:") +
+    bodyP("Here's the link for your team to join. Copy and send this to your team, on WhatsApp, in a group chat or by email:") +
     quoteBox(message) +
     bodyP(escapeHtml(invited)) +
     note(`<a href="${escapeHtml(o.manageUrl)}" style="color:inherit">Your private area</a> has the join link too, and shows who has joined.`);
@@ -169,12 +173,12 @@ function why(o: InviteWords): string {
     );
   }
   return (
-    `${o.organiserName.trim()} gave us your email so we could invite you (or ${o.firstName.trim()}, if this is a parent or guardian’s email) ` +
+    `${o.organiserName.trim()} gave us your email so we could invite you (or ${o.firstName.trim()}, if this is a parent or guardian's email) ` +
     `to join ${o.team.title} for ${teamEventWords(o.team)}.`
   );
 }
 
-const WHO_WE_ARE = "We’re the Night Before Christmas Campaign (NBCC), a Scottish charity supporting children, young people and vulnerable adults, all year round.";
+const WHO_WE_ARE = "We're the Night Before Christmas Campaign (NBCC), a Scottish charity supporting children, young people and vulnerable adults, all year round.";
 
 function askUs(o: InviteWords): string {
   return `Any questions about the team? Ask ${organiserShort(o)}, or ask us: just reply to this email, email ${FUNDRAISING_EMAIL} or call ${PHONE_DISPLAY}.`;
@@ -193,14 +197,14 @@ export function buildTeamInviteEmail(o: InviteWords): BuiltEmail {
   const name = o.firstName.trim();
   const who = invitedChild(o);
   const role = o.under18
-    ? `${organiser} is the team organiser. Joining takes a couple of minutes: ${name} gets a page with a meter, and everything it raises counts towards the team’s total too.`
-    : `${organiser} is the team organiser. Joining takes a couple of minutes: you get your own page with a meter, and everything you raise counts towards the team’s total too.`;
+    ? `${organiser} is the team organiser. Joining takes a couple of minutes: ${name} gets a page with a meter, and everything it raises counts towards the team's total too.`
+    : `${organiser} is the team organiser. Joining takes a couple of minutes: you get your own page with a meter, and everything you raise counts towards the team's total too.`;
   const child = o.under18
     ? `As ${name} is under 18, you set up the page as the parent or guardian, and can name ${name} on it.`
     : "Setting this up for someone under 18? A parent or guardian sets up their page, and can name them on it.";
   const body =
     EYEBROW +
-    heading(o.under18 ? `${escapeHtml(capital(who))} is invited to join a team!` : "You’re invited to join a team!") +
+    heading(o.under18 ? `${escapeHtml(capital(who))} is invited to join a team!` : "You're invited to join a team!") +
     bodyP("Hello,") +
     bodyP(escapeHtml(why(o))) +
     bodyP(escapeHtml(role)) +
@@ -218,7 +222,7 @@ export function buildTeamInviteReminderEmail(o: InviteWords): BuiltEmail {
   const who = invitedChild(o);
   const lead = "Just a gentle reminder about the team invite we sent a few days ago.";
   const role = `${organiser} is the team organiser, and it only takes a couple of minutes to join.`;
-  const once = "This is the only reminder we’ll send.";
+  const once = "This is the only reminder we'll send.";
   const body =
     EYEBROW +
     heading(`Still keen ${o.under18 ? `for ${escapeHtml(who)} to join` : "to join"} ${escapeHtml(o.team.title)}?`) +
@@ -240,13 +244,13 @@ export function buildTeamNudgeEmail(n: 1 | 2, o: Greeted & { title: string; page
   const message = forwardMessage(o, o.joinUrl);
   const lead =
     n === 1
-      ? `${o.title} has been live for a few days, and nobody has joined yet. Did you send the invite to your team? Here’s the link to share with them:`
-      : `${o.title} has been live for over a week, and nobody has joined yet. Here’s your team link again, ready to share:`;
+      ? `${o.title} has been live for a few days, and nobody has joined yet. Did you send the invite to your team? Here's the link to share with them:`
+      : `${o.title} has been live for over a week, and nobody has joined yet. Here's your team link again, ready to share:`;
   const tip = "A quick message in your group chat usually does it. Copy this and send it:";
-  const last = n === 2 ? "We won’t nudge you about this again." : "";
+  const last = n === 2 ? "We won't nudge you about this again." : "";
   const body =
     EYEBROW +
-    heading(n === 1 ? "Did you send the invite to your team?" : "Here’s your team link again") +
+    heading(n === 1 ? "Did you send the invite to your team?" : "Here's your team link again") +
     bodyP(escapeHtml(hi)) +
     bodyP(`${escapeHtml(lead)} <a href="${escapeHtml(o.joinUrl)}">${escapeHtml(o.joinUrl)}</a>`) +
     bodyP(escapeHtml(tip)) +
@@ -254,7 +258,7 @@ export function buildTeamNudgeEmail(n: 1 | 2, o: Greeted & { title: string; page
     button(o.pageUrl, "See our team page") +
     (last ? note(escapeHtml(last)) : "");
   const text = [hi, "", lead, o.joinUrl, "", tip, "", message, "", `See our team page: ${o.pageUrl}`, ...(last ? ["", last] : [])];
-  const subject = n === 1 ? "Did you send the invite to your team?" : `Nobody on ${o.title} yet: here’s your team link again`;
+  const subject = n === 1 ? "Did you send the invite to your team?" : `Nobody on ${o.title} yet: here's your team link again`;
   return toPerson(subject, body, text, "Cheering your team on,");
 }
 
@@ -268,9 +272,9 @@ export function buildTeamNudgeEmail(n: 1 | 2, o: Greeted & { title: string; page
 export function buildJoinThanksEmail(typedFirstName: string | null | undefined, teamTitle: string): BuiltEmail {
   const first = safeFirstName(typedFirstName);
   const hi = first ? `Hi ${first},` : "Hi there,";
-  const got = `Thank you for joining ${teamTitle}! We’ve got your sign up.`;
-  const next = "Someone from NBCC will check it, usually within a few days, and then we’ll email you the link to your own page. Everything you raise counts towards the team’s total too.";
-  const small = "Didn’t sign up? No problem, just ignore this email. Nothing goes on our website until we’ve checked it.";
+  const got = `Thank you for joining ${teamTitle}! We've got your sign up.`;
+  const next = "Someone from NBCC will check it, usually within a few days, and then we'll email you the link to your own page. Everything you raise counts towards the team's total too.";
+  const small = "Didn't sign up? No problem, just ignore this email. Nothing goes on our website until we've checked it.";
   const body = EYEBROW + heading("Welcome to the team!") + bodyP(escapeHtml(hi)) + bodyP(escapeHtml(got)) + bodyP(escapeHtml(next)) + note(escapeHtml(small));
   return toPerson(`Thanks for joining ${teamTitle}!`, body, [hi, "", got, "", next, "", small], "Thanks so much,");
 }
@@ -328,7 +332,7 @@ export function buildMemberRemovedStaffEmail(
   links: { adminUrl: string },
 ): BuiltEmail {
   const what = `${o.organiserName}, the team organiser, took ${o.memberName} off ${o.teamTitle} from their private area.`;
-  const after = "Their page stays up as their own, and what it raises no longer counts towards the team’s total. If that doesn’t sound right, give the team organiser a ring.";
+  const after = "Their page stays up as their own, and what it raises no longer counts towards the team's total. If that doesn't sound right, give the team organiser a ring.";
   const body =
     eyebrow("For the team") +
     heading("Someone was taken off a team") +
@@ -338,11 +342,56 @@ export function buildMemberRemovedStaffEmail(
   return toStaff(`${o.memberName} was taken off ${o.teamTitle}`, body, [what, "", after, "", `Open the admin: ${links.adminUrl}`]);
 }
 
+// --- a new member's page is approved: tell the team organiser --------------------------------------
+
+export interface TeamMemberJoinedWords {
+  /** The team organiser, greeted "Hi Robin," (or "Hi there," for a group or a business). */
+  organiser: Greeted;
+  /**
+   * The new member's first name. For a member under 18, the child's first name as their page shows
+   * it. Null when there is none to use: the email then says "a new member".
+   */
+  memberFirstName: string | null;
+  teamTitle: string;
+  /** The team page, or null for a team kept off the website: then there is no button. */
+  teamUrl: string | null;
+}
+
+export function buildTeamMemberJoinedEmail(o: TeamMemberJoinedWords): BuiltEmail {
+  const hi = organiserGreeting(o.organiser);
+  // One line, whatever was typed: it goes in the subject.
+  const name = String(o.memberFirstName ?? "").replace(/\s+/g, " ").trim();
+  const team = o.teamTitle.replace(/\s+/g, " ").trim();
+  const who = name || "a new member";
+  const Who = name || "A new member";
+  const counts = "We've approved their page, and everything it raises now counts towards your team total.";
+  const label = "See your team page";
+  const body =
+    EYEBROW +
+    heading(`${escapeHtml(Who)} has joined your team!`) +
+    bodyP(escapeHtml(hi)) +
+    bodyP(`Great news: ${escapeHtml(who)} has joined <b>${escapeHtml(team)}</b>.`) +
+    bodyP(escapeHtml(counts)) +
+    (o.teamUrl ? button(o.teamUrl, label) : "");
+  const text = [hi, "", `Great news: ${who} has joined ${team}.`, "", counts, ...(o.teamUrl ? ["", `${label}: ${o.teamUrl}`] : [])];
+  return toPerson(`${Who} has joined ${team}`, body, text, "Cheering your whole team on,");
+}
+
+/** What the admin reads before approving the wording: invented, like the other examples. */
+export function sampleTeamMemberJoinedEmail(base: string): BuiltEmail {
+  return buildTeamMemberJoinedEmail({
+    organiser: { name: "Sam Example", firstName: "Sam" },
+    memberFirstName: "Alex",
+    teamTitle: "Team Tinsel",
+    teamUrl: `${base.replace(/\/+$/, "")}/fundraise/team-tinsel`,
+  });
+}
+
 // --- the handover code ----------------------------------------------------------------------------
 
 export function buildHandoverCodeEmail(o: { firstName: string; teamTitle: string; code: string; manageUrl: string }): BuiltEmail {
   const hi = `Hi ${o.firstName.trim()},`;
-  const why = `We’ve been asked to make you the team organiser of ${o.teamTitle}. The team organiser gets the team’s emails and looks after the team page.`;
+  const why = `We've been asked to make you the team organiser of ${o.teamTitle}. The team organiser gets the team's emails and looks after the team page.`;
   const how = `To say yes, go to ${o.manageUrl}, choose "Taking over a team?", and put in your email address and this code. It works for 3 days.`;
   const small = "Not expecting this? Ignore it and nothing changes.";
   const body =

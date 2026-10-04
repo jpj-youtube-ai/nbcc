@@ -39,9 +39,9 @@ const team = {
 
 describe("what the team is doing, in words", () => {
   it("is the kind and the date", () => {
-    expect(teamEventWords(team)).toBe("their Santa dash on Saturday 5 December");
+    expect(teamEventWords(team)).toBe("their Santa dash on Saturday 5th December");
     expect(teamEventWords({ ...team, eventDate: null })).toBe("their Santa dash");
-    expect(teamEventWords({ ...team, kind: "other", kindLabel: "Other", kindOther: "Sponsored silence" })).toBe("their sponsored silence on Saturday 5 December");
+    expect(teamEventWords({ ...team, kind: "other", kindLabel: "Other", kindOther: "Sponsored silence" })).toBe("their sponsored silence on Saturday 5th December");
   });
 });
 
@@ -61,7 +61,7 @@ describe("your team page is live", () => {
   });
 
   it("says who has been invited, and that the link is in their private area too", () => {
-    expect(m.text).toContain("We’ve emailed an invite to the 3 people you added.");
+    expect(m.text).toContain("We've emailed an invite to the 3 people you added.");
     expect(m.text).toContain("Your private area");
     expect(buildTeamLiveEmail(team, { pageUrl: "p", manageUrl: "m", joinUrl: "j", invited: 1 }).text).toContain("the 1 person you added");
     expect(buildTeamLiveEmail(team, { pageUrl: "p", manageUrl: "m", joinUrl: "j", invited: 0 }).text).not.toContain("emailed an invite");
@@ -94,8 +94,10 @@ describe("the invite to someone the team organiser added", () => {
   it("says, kindly, why they got it and who asked", () => {
     expect(m.subject).toBe("Robin has invited you to join Exampleton Juniors");
     expect(m.text).toContain(
-      "Robin Organiser gave us your email so we could invite you (or Jack, if this is a parent or guardian’s email) to join Exampleton Juniors for their Santa dash on Saturday 5 December.",
+      "Robin Organiser gave us your email so we could invite you (or Jack, if this is a parent or guardian's email) to join Exampleton Juniors for their Santa dash on Saturday 5th December.",
     );
+    // Raised in the HTML.
+    expect(m.html).toContain("their Santa dash on Saturday 5<sup>th</sup> December.");
     expect(m.text).toContain("Robin is the team organiser");
   });
 
@@ -108,9 +110,9 @@ describe("the invite to someone the team organiser added", () => {
     expect(m.html).toContain("Join the team");
     // Review: the invite says a reminder may follow; the reminder says it is the last.
     expect(both(m)).toContain(INVITE_NOT_FOR_YOU);
-    expect(INVITE_NOT_FOR_YOU).toBe("Not for you? Just ignore this. We’ll send one gentle reminder at most, then we won’t email you again.");
+    expect(INVITE_NOT_FOR_YOU).toBe("Not for you? Just ignore this. We'll send one gentle reminder at most, then we won't email you again.");
     expect(m.text).not.toContain(NOT_FOR_YOU);
-    expect(NOT_FOR_YOU).toBe("Not for you? Ignore this and we won’t email again.");
+    expect(NOT_FOR_YOU).toBe("Not for you? Ignore this and we won't email you again.");
     neverSays(m);
   });
 
@@ -128,7 +130,7 @@ describe("the one reminder", () => {
     expect(m.subject).toBe("A gentle reminder: join Exampleton Juniors");
     expect(m.text).toContain("Robin Organiser gave us your email");
     expect(m.text).toContain("Robin is the team organiser");
-    expect(m.text).toContain("This is the only reminder we’ll send.");
+    expect(m.text).toContain("This is the only reminder we'll send.");
     expect(both(m)).toContain(NOT_FOR_YOU);
     expect(m.text).toContain("events@nbcc.scot or call 01292 811 015");
     neverSays(m);
@@ -142,7 +144,7 @@ describe("the nudges to the team organiser", () => {
     const m = buildTeamNudgeEmail(1, o);
     expect(m.subject).toBe("Did you send the invite to your team?");
     expect(m.text).toContain("Hi Robin,");
-    expect(m.text).toContain("Here’s the link to share with them");
+    expect(m.text).toContain("Here's the link to share with them");
     expect(m.text).toContain("https://nbcc.scot/fundraise/ej/join");
     expect(m.text).toContain("I've set up a team");
     neverSays(m);
@@ -150,8 +152,8 @@ describe("the nudges to the team organiser", () => {
 
   it("is the last nudge on day 10", () => {
     const m = buildTeamNudgeEmail(2, o);
-    expect(m.subject).toBe("Nobody on Exampleton Juniors yet: here’s your team link again");
-    expect(m.text).toContain("We won’t nudge you about this again.");
+    expect(m.subject).toBe("Nobody on Exampleton Juniors yet: here's your team link again");
+    expect(m.text).toContain("We won't nudge you about this again.");
     neverSays(m);
   });
 });
@@ -161,7 +163,7 @@ describe("after someone joins", () => {
     const m = buildJoinThanksEmail("Jack <b>", "Exampleton Juniors");
     expect(m.subject).toBe("Thanks for joining Exampleton Juniors!");
     expect(m.text).toContain("Hi Jack,");
-    expect(m.text).toContain("we’ll email you the link to your own page");
+    expect(m.text).toContain("we'll email you the link to your own page");
     expect(m.html).not.toContain("<b>");
     neverSays(m);
     expect(buildJoinThanksEmail("1234", "T").text).toContain("Hi there,");
@@ -171,7 +173,7 @@ describe("after someone joins", () => {
     const m = buildJoinStaffEmail(
       { name: "Jack Sample", email: "parent@example.com", title: "Jack's page for Exampleton Juniors", targetPence: 5000, description: "For Christmas." },
       { title: "Exampleton Juniors", name: "Robin Organiser" },
-      { adminUrl: "https://nbcc.scot/admin", split: "50% to NBCC, the rest to Exampleton Food Larder (the whole team’s split)" },
+      { adminUrl: "https://nbcc.scot/admin", split: "50% to NBCC, the rest to Exampleton Food Larder (the whole team's split)" },
     );
     expect(m.subject).toBe("New team member: Jack Sample wants to join Exampleton Juniors");
     expect(m.text).toContain("Approve or decline it in Admin > Fundraising");
@@ -197,7 +199,7 @@ describe("the handover code", () => {
     const m = buildHandoverCodeEmail({ firstName: "Sam", teamTitle: "Exampleton Juniors", code: "123456", manageUrl: "https://nbcc.scot/fundraise/manage" });
     expect(m.subject).toBe("Your code to become team organiser of Exampleton Juniors");
     expect(m.text).toContain("Hi Sam,");
-    expect(m.text).toContain("We’ve been asked to make you the team organiser of Exampleton Juniors.");
+    expect(m.text).toContain("We've been asked to make you the team organiser of Exampleton Juniors.");
     expect(both(m)).toContain("123456");
     expect(m.text).toContain("https://nbcc.scot/fundraise/manage");
     expect(m.text).toContain("It works for 3 days.");
@@ -220,14 +222,14 @@ describe("the invite for someone under 18, to their parent or guardian", () => {
   });
 
   it("says why the parent got it, with no maybe about whose email it is", () => {
-    const why = "Robin Organiser gave us your email, as the parent or guardian of Jack, so we could invite Jack to join Exampleton Juniors for their Santa dash on Saturday 5 December.";
+    const why = "Robin Organiser gave us your email, as the parent or guardian of Jack, so we could invite Jack to join Exampleton Juniors for their Santa dash on Saturday 5th December.";
     expect(m.text).toContain(why);
     expect(r.text).toContain(why);
     expect(both(m) + both(r)).not.toContain("if this is a parent or guardian");
   });
 
   it("tells the parent they set the page up", () => {
-    expect(m.text).toContain("Robin is the team organiser. Joining takes a couple of minutes: Jack gets a page with a meter, and everything it raises counts towards the team’s total too.");
+    expect(m.text).toContain("Robin is the team organiser. Joining takes a couple of minutes: Jack gets a page with a meter, and everything it raises counts towards the team's total too.");
     expect(m.text).toContain("As Jack is under 18, you set up the page as the parent or guardian, and can name Jack on it.");
     expect(m.html).toContain("Jack is invited to join a team!");
     expect(r.html).toContain("Still keen for Jack to join Exampleton Juniors?");
@@ -237,7 +239,7 @@ describe("the invite for someone under 18, to their parent or guardian", () => {
     for (const x of [m, r]) {
       expect(x.text).toContain("Join the team: https://nbcc.scot/fundraise/ej/join?invite=abc");
       expect(x.text).toContain("reply to this email, email events@nbcc.scot or call 01292 811 015");
-      expect(both(x)).not.toMatch(/Jack['’]s/);
+      expect(both(x)).not.toMatch(/Jack['']s/);
       neverSays(x);
     }
     expect(m.text).toContain(INVITE_NOT_FOR_YOU);
@@ -266,7 +268,7 @@ describe("the invite for someone under 18, to their parent or guardian", () => {
   it("leaves an adult's invite as it was", () => {
     const a = buildTeamInviteEmail({ ...o, under18: false });
     expect(a.subject).toBe("Robin has invited you to join Exampleton Juniors");
-    expect(a.text).toContain("(or Jack, if this is a parent or guardian’s email)");
+    expect(a.text).toContain("(or Jack, if this is a parent or guardian's email)");
   });
 });
 

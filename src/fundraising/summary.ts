@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { londonToday } from "../events/model";
+import { emailDate } from "../email/dates";
 import { giftAidPence, giftNetPence, type FundraiserRecord, type Meter } from "./model";
 import { addDays, callStates, offListPrompt, type CallRecord } from "./follow-up";
 import { INVITE_NOT_TAKEN_DAYS, INVITE_TYPE_SUMMARY, inviteTypeOf, inviteVerdict, type InviteType } from "./invite";
@@ -362,21 +363,11 @@ export function summaryCounts(i: SummaryInputs): SummaryCounts {
 
 // --- the words -------------------------------------------------------------------------------------
 
-const SHORT_DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-const SHORT_MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
-
-const parts = (ymd: string) => ymd.split("-").map(Number);
-/** "Sat 6 Dec" */
-const shortDay = (ymd: string) => {
-  const [, m, d] = parts(ymd);
-  return `${SHORT_DAYS[weekday(ymd)]} ${d} ${SHORT_MONTHS[m - 1]}`;
-};
-/** "6 December" */
-const dayMonth = (ymd: string) => {
-  const [, m, d] = parts(ymd);
-  return `${d} ${MONTHS[m - 1]}`;
-};
+// Dates in the one style every email uses (src/email/dates.ts).
+/** "Saturday 6th December" */
+const shortDay = (ymd: string) => emailDate(ymd);
+/** "6th December" */
+const dayMonth = (ymd: string) => emailDate(ymd, { weekday: false });
 const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
 const andList = (items: string[]) =>
   items.length <= 1 ? items.join("") : `${items.slice(0, -1).join(", ")} and ${items[items.length - 1]}`;
@@ -479,7 +470,7 @@ export function summaryLines(c: SummaryCounts): SummaryLines {
     );
   }
   if (c.saysFinished) {
-    waiting.push(c.saysFinished === 1 ? "1 fundraiser says they’ve finished" : `${c.saysFinished} fundraisers say they’ve finished`);
+    waiting.push(c.saysFinished === 1 ? "1 fundraiser says they've finished" : `${c.saysFinished} fundraisers say they've finished`);
   }
 
   const things = c.waiting === 0 ? "nothing waiting" : plural(c.waiting, "thing waiting", "things waiting");

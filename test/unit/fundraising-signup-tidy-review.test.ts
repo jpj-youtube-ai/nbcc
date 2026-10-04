@@ -176,6 +176,14 @@ describe("greeting the parent, whatever the case of the name", () => {
     expect(out.text).toBe("Hi Sarah, this is about Jack's page.\n\nNews.");
     expect(out.html).toBe("<p>Hi Sarah, this is about Jack&#39;s page.</p><p>News.</p>");
   });
+
+  // Review, 2026-10-04: no awkward possessive after a name ending in s, as the automatic emails have it.
+  it("says the page for James, never James's page", () => {
+    const mail = { html: "<p>Hi James,</p><p>News.</p>", text: "Hi James,\n\nNews." };
+    const out = greetGuardian(mail, { name: "James Sample", firstName: "James", guardianFirstName: "Sarah" });
+    expect(out.text).toBe("Hi Sarah, this is about the page for James.\n\nNews.");
+    expect(out.html).toBe("<p>Hi Sarah, this is about the page for James.</p><p>News.</p>");
+  });
 });
 
 describe("an organiser's change to an event", () => {

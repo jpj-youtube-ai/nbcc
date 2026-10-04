@@ -111,7 +111,7 @@ describe("an event's page in the admin", () => {
     const f = (res.body as { fundraiser: { pageUrl: string; pagePath: string } }).fundraiser;
     expect(f.pageUrl).toBe("https://nbcc.test/event/eqn");
     expect(f.pagePath).toBe("/event/eqn");
-    expect(sendApprovedEmail).toHaveBeenCalledWith(after);
+    expect(sendApprovedEmail).toHaveBeenCalledWith(after, { reapproved: false });
   });
 
   it("says whether its short name has been set yet, for the approve button", async () => {

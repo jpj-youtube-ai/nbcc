@@ -138,7 +138,7 @@ describe("the approved email for an event", () => {
 
   it("says the event's page is live", () => {
     expect(eventMail().subject).toBe("Your event's page is live: Exampleton Quiz Night");
-    expect(eventMail().html).toContain("Your event’s page is live!");
+    expect(eventMail().html).toContain("Your event's page is live!");
     expect(eventMail().text).toContain("See my event page: https://nbcc.test/event/eqn");
   });
 
@@ -147,7 +147,7 @@ describe("the approved email for an event", () => {
     expect(t).toContain("Share your event page");
     expect(t).toContain("Put up your posters");
     expect(t).toContain(
-      "On the day, point people to your page if they’d like to give a little extra. Entry money is separate: collect it as usual and pay it in afterwards from your private area. Gift Aid can’t go on entry or ticket money.",
+      "On the day, point people to your page if they'd like to give a little extra. Entry money is separate: collect it as usual and pay it in afterwards from your private area. Gift Aid can't go on entry or ticket money.",
     );
     expect(t).not.toContain("so anyone who would like to give can do it there");
     expect(t).toContain("Just reply to this email.");
@@ -222,17 +222,17 @@ describe("the event page live email, by how people get in", () => {
       { name: "Alex Example", title: "Exampleton Quiz Night", path: "event", booking },
       { pageUrl: "https://nbcc.test/event/eqn", manageUrl: "https://nbcc.test/fundraise/manage" },
     ).text;
-  const LEAD = "On the day, point people to your page if they’d like to give a little extra.";
+  const LEAD = "On the day, point people to your page if they'd like to give a little extra.";
 
   it("pay on the door: entry money is separate, and never Gift Aided", () => {
     expect(mailFor("door")).toContain(
-      `${LEAD} Entry money is separate: collect it as usual and pay it in afterwards from your private area. Gift Aid can’t go on entry or ticket money.`,
+      `${LEAD} Entry money is separate: collect it as usual and pay it in afterwards from your private area. Gift Aid can't go on entry or ticket money.`,
     );
   });
 
   it("tickets elsewhere: ticket money goes through the seller", () => {
     expect(mailFor("away")).toContain(
-      `${LEAD} Ticket money goes through your ticket seller as usual; only pay in NBCC’s share of anything you collect yourself. Gift Aid can’t go on entry or ticket money.`,
+      `${LEAD} Ticket money goes through your ticket seller as usual; only pay in NBCC's share of anything you collect yourself. Gift Aid can't go on entry or ticket money.`,
     );
   });
 
@@ -244,7 +244,7 @@ describe("the event page live email, by how people get in", () => {
 
   it("never asked: if they charge entry", () => {
     expect(mailFor(null)).toContain(
-      `${LEAD} If you charge entry, collect it as usual and pay it in afterwards from your private area. Gift Aid can’t go on entry or ticket money.`,
+      `${LEAD} If you charge entry, collect it as usual and pay it in afterwards from your private area. Gift Aid can't go on entry or ticket money.`,
     );
   });
 });

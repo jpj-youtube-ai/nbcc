@@ -31,6 +31,26 @@ export interface ReminderDetails {
   arrivalTime: string | null;
   includedNote: string | null;
   guestLink: string | null;
+  /**
+   * How many days it is to the Ball on the day this is sent, counted by the day in the UK
+   * (daysToBall in ./run-up.ts). 7, or not given, is the email exactly as it always was: "A week to
+   * go". Any other number says so truthfully (the charity, 2026-10-04): "4 days to go" and "In 4 days
+   * you'll be with us", "Tomorrow" the day before, and "Today" on the day itself (only the staff button
+   * can send it then). After the Ball the button refuses; a number below 0, or not a number, throws.
+   */
+  daysToGo?: number;
+}
+
+/** The three places the email says how long there is to go. A week is the wording it always had. */
+function timeToGo(daysToGo: number | undefined): { label: string; shout: string; lead: string } {
+  const n = daysToGo === undefined ? 7 : Math.round(daysToGo);
+  // After the Ball, or not a number at all: there is nothing true to say, so nothing is built (and
+  // so nothing false can be sent). The button refuses before it gets here; the daily run never asks.
+  if (!Number.isFinite(n) || n < 0) throw new Error(`The Ball reminder cannot be built for ${String(daysToGo)} days to go.`);
+  if (n === 1) return { label: "Tomorrow", shout: "TOMORROW", lead: "Tomorrow" };
+  if (n === 0) return { label: "Today", shout: "TODAY", lead: "Today" };
+  if (n === 7) return { label: "A week to go", shout: "A WEEK TO GO", lead: "A week on Saturday" };
+  return { label: `${n} days to go`, shout: `${n} DAYS TO GO`, lead: `In ${n} days` };
 }
 
 export interface ReminderEmail {
@@ -52,6 +72,7 @@ export function buildBallReminderEmail(
   const named = guests.filter((g) => g.fullName.trim().length > 0);
   const missing = Math.max(0, booking.seats - named.length);
   const arrival = details.arrivalTime ?? "We'll confirm the start time shortly";
+  const toGo = timeToGo(details.daysToGo);
 
   // The same sentence the website and the confirmation use, so a guest reading this a week out
   // is told exactly what they were told when they bought.
@@ -93,10 +114,10 @@ export function buildBallReminderEmail(
   <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;margin:0 0 16px;">${guestRowsHtml}</table>`
     : "";
 
-  const body = `<p style="margin:0 0 6px;font-family:${BODY_FONT};font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:${SLATE_SOFT};font-weight:700">A week to go</p>
+  const body = `<p style="margin:0 0 6px;font-family:${BODY_FONT};font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:${SLATE_SOFT};font-weight:700">${toGo.label}</p>
   <h1 style="color:${CRIMSON};font-family:${HEAD};font-size:26px;font-weight:800;margin:0 0 14px;letter-spacing:-.01em">It's nearly here!</h1>
 
-  <p ${P}>Hello ${escapeHtml(greetingName(booking))}. A week on Saturday you'll be with us at The Park Hotel. Here's everything you need.</p>
+  <p ${P}>Hello ${escapeHtml(greetingName(booking))}. ${toGo.lead} you'll be with us at The Park Hotel. Here's everything you need.</p>
 
   ${factsCard(
     `<tr><td style="padding:14px 18px 4px;color:${SLATE_SOFT};font-family:${BODY_FONT};font-size:13px;">When</td></tr>
@@ -140,9 +161,9 @@ export function buildBallReminderEmail(
       ? `\n\nThere ${missing === 1 ? "is" : "are"} still ${missing} ${missing === 1 ? "place" : "places"} without a name:\n${details.guestLink}`
       : "";
 
-  const text = `IT'S NEARLY HERE: A WEEK TO GO
+  const text = `IT'S NEARLY HERE: ${toGo.shout}
 
-Hello ${greetingName(booking)}. A week on Saturday you'll be with us at
+Hello ${greetingName(booking)}. ${toGo.lead} you'll be with us at
 The Park Hotel. Here's everything you need.
 
 WHEN   Saturday 7th November 2026
@@ -165,7 +186,7 @@ See you Saturday.
 ${BALL_TEXT_FOOTER}`;
 
   return {
-    subject: `A week to go: you're coming to the ball, ${booking.reference}`,
+    subject: `${toGo.label}: you're coming to the ball, ${booking.reference}`,
     html: ballEmailShell(body),
     text,
   };

@@ -32,6 +32,7 @@ import {
 import { WORDING_KEYS } from "../../src/fundraising/touch-rules";
 import { PLEDGE_WORDING_KEYS } from "../../src/pledges/model";
 import { INVITE_WORDING_KEYS } from "../../src/fundraising/invite";
+import { TEAM_WORDING_KEYS } from "../../src/fundraising/teams";
 
 const BASE = "https://nbcc.test";
 
@@ -173,8 +174,9 @@ describe("finding", () => {
 });
 
 describe("what is approval gated", () => {
-  it("is exactly what is gated today: the automatic wording keys, the two pledge emails and the in memory invite", () => {
-    const expected = [...WORDING_KEYS, ...PLEDGE_WORDING_KEYS, ...INVITE_WORDING_KEYS].sort();
+  // Jaimie, 2026-10-04: and the new email to a team organiser about a new member (team_joined).
+  it("is exactly what is gated today: the automatic wording keys, the two pledge emails, the in memory invite and the new team member email", () => {
+    const expected = [...WORDING_KEYS, ...PLEDGE_WORDING_KEYS, ...INVITE_WORDING_KEYS, ...TEAM_WORDING_KEYS].sort();
     expect(catalogueApprovalKeys().sort()).toEqual(expected);
   });
 

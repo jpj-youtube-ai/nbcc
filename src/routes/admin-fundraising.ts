@@ -350,10 +350,16 @@ function moveHandler(move: "approve" | "decline" | "finish") {
       reason = parsed.data.reason ? parsed.data.reason : null;
     }
     try {
-      const { after, livePending } = await moveFundraiser(got[0], move, actorOf(claims), reason);
+      const { before, after, livePending } = await moveFundraiser(got[0], move, actorOf(claims), reason);
       // After the approval has committed, best effort: it stands whether or not the email goes. A
       // page holder approved while fundraising is off waits for the switch instead (livePending).
-      if (move === "approve" && !livePending) await bestEffort("approved", () => sendApprovedEmail(after));
+      // `reapproved`: a page keeps its approved date through a decline, so one that has a date
+      // before this approval was approved once already. Its team organiser is not told twice that
+      // the member has joined (the member themselves still hears their page is live).
+      if (move === "approve" && !livePending) {
+        const reapproved = Boolean(before && before.approvedAt);
+        await bestEffort("approved", () => sendApprovedEmail(after, { reapproved }));
+      }
       // Team pages: a declined team's invites (names, emails and links) are deleted at once.
       if (move === "decline" && after.isTeam) {
         await bestEffort("team invites deleted", async () => (await import("../db/fundraising-teams")).deleteTeamInvites(after.id));

@@ -114,13 +114,26 @@ describe("the summary to the events inbox", () => {
     expect(mail.text).toContain("Funeral director: Exampleton Funeral Care");
     expect(mail.text).toContain("Send the names of people who gave to: Alex Exampleton, alex@example.com");
     expect(mail.text).toContain("Collection envelopes: 50");
+    // Deliberately quiet (the charity, 2026-10-04): not even the "Thank you!" the other staff notices have.
     expect(mail.text).not.toMatch(/Exciting|Go team|!/);
+    expect(mail.text).toContain("Thank you.\nNBCC Team");
+    expect(mail.html).not.toContain("Thank you!");
     expect(mail.text).not.toContain("Address for the welcome pack");
   });
 });
 
 describe("the receipt for a page in memory of someone", () => {
-  it("is short and fixed, with no name in it", () => {
+  // Jaimie, 2026-10-04: like every in memory email it opens "Dear [first name],". Anyone can type any
+  // address into the public form, so only a safe first name goes in it: one word of letters.
+  it("greets them by a safe first name only, and Hello with none", () => {
+    expect(buildMemoryReceiptEmail("Sam Example").text.split("\n")[0]).toBe("Dear Sam,");
+    expect(buildMemoryReceiptEmail("http://bad.example now").text.split("\n")[0]).toBe("Hello,");
+    expect(buildMemoryReceiptEmail().text.split("\n")[0]).toBe("Hello,");
+    const odd = buildMemoryReceiptEmail("Sam <b>Example</b> http://bad.example");
+    expect(odd.html + odd.text).not.toMatch(/bad\.example|<b>Example/);
+  });
+
+  it("is short and fixed", () => {
     const mail = buildMemoryReceiptEmail();
     expect(mail.subject).toBe("We have your details for the page");
     expect(mail.text).toContain("We have your details for the page. Someone from NBCC will ring you in the next few days.");

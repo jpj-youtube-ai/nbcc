@@ -45,7 +45,7 @@ describe("Your news update is live", () => {
     expect(m.subject).toBe("Your news update is live: Sam's <Santa> Dash");
     expect(m.html).toContain("Your news update is live!");
     expect(m.text).toContain("Hi Sam,");
-    expect(m.html).toContain("Good news: we’ve checked your news update for <b>Sam&#39;s &lt;Santa&gt; Dash</b> and it’s now on your page.");
+    expect(m.html).toContain("Good news: we've checked your news update for <b>Sam&#39;s &lt;Santa&gt; Dash</b> and it's now on your page.");
     expect(m.html).toContain(`href="${PAGE}"`);
     expect(m.text).toContain(`See my page: ${PAGE}`);
     expect(m.text).toContain("share");
@@ -55,7 +55,7 @@ describe("Your news update is live", () => {
   it("says it is saved, with no link, when the page is not up", () => {
     const saved = buildNewsApprovedEmail(who, { pageUrl: null });
     expect(saved.subject).toBe("Your news update is saved: Sam's <Santa> Dash");
-    expect(saved.text).toContain("it’s all saved");
+    expect(saved.text).toContain("it's all saved");
     expect(saved.text).not.toContain("See my page");
     expectSignedWithQuestions(saved, "Thanks so much,");
   });
@@ -74,7 +74,7 @@ describe("About your news update", () => {
     expect(m.html).toContain("About your news update");
     expect(m.text).toContain("Hi Sam,");
     expect(m.html).toContain(
-      "Thank you for sending a news update for <b>Sam&#39;s &lt;Santa&gt; Dash</b>. We haven’t put this one on your page, and someone from our team will give you a quick ring to talk it through.",
+      "Thank you for sending a news update for <b>Sam&#39;s &lt;Santa&gt; Dash</b>. We haven't put this one on your page, and someone from our team will give you a quick ring to talk it through.",
     );
     expect(m.html).toContain("Nothing to worry about: your page is still live, just as it was, and gifts are still coming in.");
   });

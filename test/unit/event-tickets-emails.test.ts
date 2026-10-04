@@ -48,10 +48,12 @@ describe("the buyer's tickets email", () => {
       expect(part).toContain("1 × Child");
       expect(part).toContain("£25.52");
       expect(part).toContain("£0.52 to cover the card fee");
-      expect(part).toContain("Saturday 5 December 2026, 7.30pm to 10.30pm");
       expect(part).toContain("Example Village Hall, Main Street, Exampleton, KA1 1AA");
       expect(part).toContain("Show this email at the door");
     }
+    // The date with its ending: plain in the text part, raised in the HTML.
+    expect(mail.text).toContain("When: Saturday 5th December 2026, 7.30pm to 10.30pm");
+    expect(mail.html).toContain("Saturday 5<sup>th</sup> December 2026, 7.30pm to 10.30pm");
   });
 
   it("says ticket money is not a donation, so there is no Gift Aid on it", () => {
@@ -131,6 +133,22 @@ describe("the staff email about a booking to check", () => {
     expect(mail.text).toContain("Robin Example, 2 Adult, paid £25.52");
     expect(mail.text).toContain("The payment is recorded and the buyer has their tickets email.");
     expect(mail.html).toContain("TIX-ABCDEF");
+  });
+
+  // A refund that failed at the bank, on a booking whose tickets were cancelled: the buyer's tickets
+  // email no longer stands, so it says what is true instead (Jaimie, 2026-10-04).
+  it("does not say the buyer has their tickets email when it is about a failed refund", () => {
+    const mail = buildOrderFlagStaffEmail(
+      { title: "Example Quiz Night" },
+      { reference: "TIX-ABCDEF", buyerName: "Robin Example", tickets: "", paid: "£25.52" },
+      ["Refund failed at the bank: the buyer has not been paid back. Their tickets were released: contact them and refund them in Stripe."],
+      { adminUrl: "https://nbcc.scot/admin", refundFailed: true },
+    );
+    for (const part of [mail.html, mail.text]) {
+      expect(part).not.toContain("has their tickets email");
+      expect(part).toContain("The refund did not go through, and the buyer has not been told. Please get in touch with them.");
+      expect(part).toContain("check it against Stripe");
+    }
   });
 });
 

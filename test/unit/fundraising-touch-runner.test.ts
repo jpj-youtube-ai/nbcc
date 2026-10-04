@@ -85,6 +85,19 @@ describe("the daily pass", () => {
     expect(claimOrder).toBeLessThan(sendOrder);
   });
 
+  // Jaimie, 2026-10-04: a page for someone under 18 goes to their parent or guardian, and speaks to
+  // them throughout. The greeting says whose page it is about, once.
+  it("sends a parent the version written for them, greeted once", async () => {
+    const d = deps({ readState: vi.fn(async () => [candidate(fr({ name: "JACK example", firstName: "JACK", guardianFirstName: "Sarah", email: "parent@example.com", title: "Jack's walk" }, 20000))]) });
+    await runTouchEmails(NOW, d);
+    expect(d.sent).toEqual([{ kind: "week_before", to: "parent@example.com", subject: "One week to go for Jack!" }]);
+    const message = (d.send as ReturnType<typeof vi.fn>).mock.calls[0][2];
+    expect(message.text.split("\n")[0]).toBe("Hi Sarah, this is about Jack's page.");
+    expect(message.text.match(/this is about/g)).toHaveLength(1);
+    expect(message.text).toContain("we're so excited for Jack!");
+    expect(message.text).toContain("a last share of Jack's page this week");
+  });
+
   it("sends nothing, and reads nothing, while the Automatic emails switch is off", async () => {
     const d = deps({ touchOn: vi.fn(async () => false) });
     expect(await runTouchEmails(NOW, d)).toMatchObject({ sent: 0, skipped: "switched off" });

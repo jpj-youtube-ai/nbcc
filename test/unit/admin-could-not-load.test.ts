@@ -682,5 +682,22 @@ describe("the ball: a change the server refused is never reported as done (TASK-
     btn.click();
     await settle();
     expect(el("ballReminderStatus").textContent).toContain("Could not send.");
+    // Plain words, no dash.
+    expect(el("ballReminderStatus").textContent).toBe("Could not send. Nobody has been emailed twice. Please try again.");
+  });
+
+  // Review, 2026-10-04: after the Ball the server refuses, and says why. The button shows its words.
+  it("the reminder button shows the server's own words when it refuses", async () => {
+    failing["POST /api/admin/ball/reminders"] = { status: 409, body: { error: "The Ball has been and gone, so the reminder was not sent." } };
+    const asked: string[] = [];
+    window.confirm = (m?: string) => { asked.push(String(m)); return true; };
+    await signIn();
+    await open("ball");
+    el("ballSendReminders").click();
+    await settle();
+    expect(el("ballReminderStatus").textContent).toBe("The Ball has been and gone, so the reminder was not sent.");
+    expect((el("ballSendReminders") as HTMLButtonElement).disabled).toBe(false);
+    // It is not only sent a week before now, so the question says "the reminder".
+    expect(asked).toEqual(["Send the reminder to everyone who has paid and not had it yet? This emails real people."]);
   });
 });

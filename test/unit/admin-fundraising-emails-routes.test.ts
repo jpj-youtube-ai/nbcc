@@ -114,10 +114,12 @@ describe("GET /api/admin/fundraising/emails", () => {
     expect(emailIn(res.body, "pledge-pay").state).toBe("approved");
     expect(emailIn(res.body, "pledge-pay").waitingVersion).toBeNull();
     expect(emailIn(res.body, "invite-memory").state).toBe("waiting");
-    // Nine emails are gated in some version; two of them are fully approved here.
+    // Ten emails are gated in some version (the tenth is the new team member email, key team_joined,
+    // which waits like the rest); two of them are fully approved here.
     const gated = CATALOGUE.filter((e) => e.versions.some((v) => v.approval)).length;
-    expect(gated).toBe(9);
+    expect(gated).toBe(10);
     expect(res.body.waiting).toBe(gated - 1);
+    expect(emailIn(res.body, "team-member-joined").state).toBe("waiting");
     expect(res.body.approvalsUnavailable).toBe(false);
   });
 
@@ -176,7 +178,7 @@ describe("GET /api/admin/fundraising/emails/summary", () => {
     touch.listWordingApprovals.mockRejectedValue(new Error("db down"));
     const res = await run(routes.getEmailsSummary, { token: tokenFor("viewer") });
     expect(res.body.approvalsUnavailable).toBe(true);
-    expect(res.body.waiting).toBe(9);
+    expect(res.body.waiting).toBe(10);
   });
 });
 

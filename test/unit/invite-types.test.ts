@@ -114,26 +114,26 @@ describe("the invite email, for each type", () => {
   const make = (type: "raising" | "team" | "event" | "memory" | null | undefined) =>
     buildInviteEmail({ firstName: "Mary", note: "It was good to talk today.", signer: "Fern", url: URL, type });
   const CHAT = "It was so lovely to chat with you about your plans to raise money for NBCC. Thank you, it honestly means the world to us.";
-  const START = "We’ve given you a head start: press the button below and your page is already filled in with what we talked about. It only takes a couple of minutes.";
-  const ASK = "Need posters, leaflets, a collection bucket or a shout out on our social media? Just ask, we’re here to help.";
+  const START = "We've given you a head start: press the button below and the form is already started for you. It only takes a few minutes.";
+  const ASK = "Need posters, leaflets, a collection bucket or a shout out on our social media? Just ask, we're here to help.";
 
   it("is the approved wording, unchanged, for raising money and for an invite with no type", () => {
     const plain = buildInviteEmail({ firstName: "Mary", note: "It was good to talk today.", signer: "Fern", url: URL });
     expect(make("raising")).toEqual(plain);
     expect(make(null)).toEqual(plain);
     expect(plain.subject).toBe("We'd love you to fundraise with us");
-    expect(plain.text).toContain("You’ll get your very own fundraising page, with a meter that fills as gifts come in, a wall for your supporters’ messages and your own QR code for posters.");
+    expect(plain.text).toContain("You'll get your very own fundraising page, with a meter that fills as gifts come in, a wall for your supporters' messages and your own QR code for posters.");
   });
 
   it("tells a team about the team page and a page for everyone who joins", () => {
     const mail = make("team");
     expect(mail.subject).toBe("We'd love you to fundraise with us");
     for (const t of [mail.html, mail.text]) {
-      expect(t).toContain("We’d love you to fundraise with us!");
+      expect(t).toContain("We'd love you to fundraise with us!");
       expect(t).toContain("Hi Mary,");
       expect(t).toContain(CHAT);
       expect(t).toContain(START);
-      expect(t).toContain("You’ll get a team page with a meter for the whole team, and a page for everyone who joins, with a wall for your supporters’ messages and your own QR code for posters.");
+      expect(t).toContain("You'll get a team page with a meter for the whole team, and a page for everyone who joins, with a wall for your supporters' messages and your own QR code for posters.");
       expect(t).not.toContain("your very own fundraising page");
       expect(t).toContain(ASK);
     }
@@ -148,14 +148,15 @@ describe("the invite email, for each type", () => {
     expect(mail.subject).toBe("We'd love to help with your event");
     for (const t of [mail.html, mail.text]) {
       expect(t).toContain("Fundraising for NBCC");
-      expect(t).toContain("We’d love to help with your event!");
+      expect(t).toContain("We'd love to help with your event!");
       expect(t).toContain("Hi Mary,");
       expect(t).toContain("It was so lovely to chat with you about your plans for your event. Thank you, it honestly means the world to us.");
-      expect(t).toContain("We’ve given you a head start: press the button below and the form is already started for you. It only takes a few minutes.");
+      expect(t).toContain("We've given you a head start: press the button below and the form is already started for you. It only takes a few minutes.");
       expect(t).toContain("Your event gets its own page on our website, with a meter, posters and a QR code.");
       expect(t).toContain(ASK);
       expect(t).toContain("It was good to talk today.");
-      for (const not of ["We’d love you to fundraise with us", CHAT, START, "your very own fundraising page", "Make my page"]) expect(t).not.toContain(not);
+      expect(t).toContain(START);
+      for (const not of ["We'd love you to fundraise with us", CHAT, "your very own fundraising page", "Make my page"]) expect(t).not.toContain(not);
     }
     expect(mail.html).toContain(`href="${URL}"`);
     expect(mail.html).toContain(">Set up my event</a>");

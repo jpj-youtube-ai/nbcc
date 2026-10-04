@@ -44,6 +44,7 @@ import { ballSettingsUpdateSchema } from "../ball/settings";
 import { hashPassword } from "../admin/password";
 import { bookingsCsv, cateringCsv, doorListCsv } from "../ball/exports";
 import { buildBallReminderEmail } from "../ball/reminder-email";
+import { daysToBall } from "../ball/run-up";
 import { sendBallReminder, sendBallRunUp } from "../clients/email";
 import { availability } from "../ball/capacity";
 import { holdCreateSchema, seatsForHold } from "../ball/holds";
@@ -4044,6 +4045,11 @@ export async function postAdminBallReminders(req: Request, res: Response): Promi
   const claims = await authorizeSection(req, res, "ball", "edit");
   if (!claims) return;
   try {
+    // The true time to go today, by the day in the UK. After the Ball there is nothing true to say,
+    // so the button refuses and sends nothing (the charity, 2026-10-04).
+    const { BALL_EVENT_DATE } = await import("../ball/run-up-runner");
+    const daysToGo = daysToBall(new Date(), BALL_EVENT_DATE);
+    if (daysToGo < 0) return res.status(409).json({ error: "The Ball has been and gone, so the reminder was not sent." });
     const [targets, settings] = await Promise.all([
       listBookingsNeedingReminder(),
       getBallSettings(),
@@ -4060,6 +4066,9 @@ export async function postAdminBallReminders(req: Request, res: Response): Promi
           arrivalTime: settings.arrivalTime,
           includedNote: settings.includedNote,
           guestLink: t.guestToken ? `${base}/ball/guests/${t.guestToken}` : null,
+          // So the button is never wrong either: "A week to go" only a week before, otherwise
+          // "10 days to go", "4 days to go", "Tomorrow", or "Today" on the day itself.
+          daysToGo,
         },
       );
       try {

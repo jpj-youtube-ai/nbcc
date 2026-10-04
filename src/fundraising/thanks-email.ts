@@ -1,6 +1,7 @@
 import { emailShell, eyebrow, heading, bodyP, quoteBox, signOff, signOffText, questionsBox, questionsText } from "../email/brand";
 import { FOOTER_TEXT, POSTAL_ADDRESS } from "../legal/registration";
-import { FUNDRAISING_EMAIL, safeFirstName, type BuiltEmail } from "./emails";
+import { raiseOrdinals } from "../email/dates";
+import { FUNDRAISING_EMAIL, MEMORY_EYEBROW, MEMORY_SIGN_OFF, dearGreeting, safeFirstName, type BuiltEmail } from "./emails";
 
 // TASK-507: email 20, to a giver when the organiser thanks them (staff check it first), in the words
 // Jaimie approved on 2026-10-02 (memory: nbcc-fundraising-emails-approved-2026-10-02). Pure, in the
@@ -15,21 +16,24 @@ import { FUNDRAISING_EMAIL, safeFirstName, type BuiltEmail } from "./emails";
 const escapeHtml = (s: string): string =>
   s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
 
+// Every date in the body has its ending raised ("7th" as 7<sup>th</sup>): ../email/dates.ts.
 const shell = (body: string) =>
-  emailShell(body, { contactEmail: FUNDRAISING_EMAIL, registration: true, postalAddress: POSTAL_ADDRESS });
+  emailShell(raiseOrdinals(body), { contactEmail: FUNDRAISING_EMAIL, registration: true, postalAddress: POSTAL_ADDRESS });
 
 const EYEBROW = "Fundraising for NBCC";
 const HELLO = "Hello,";
 const LAST = "And from all of us: thank you too. Your gift helps the children, young people and vulnerable adults we support, all year round.";
 const CLOSE = "Thanks so much,";
 
-// In memory (review fix): the same email, gently, for a page in memory of someone.
-const MEMORY_EYEBROW = "In memory";
-const MEMORY_CLOSE = "With warm wishes,";
+// In memory (review fix): the same email, gently, for a page in memory of someone. Jaimie,
+// 2026-10-04: like every in memory email it opens "Dear [first name]," (the giver's, and only a safe
+// first name; "Hello," without one) and signs off "With warmest thoughts,". Any other page's is as
+// it was: "Hello," with no name.
 
-export function buildSupporterThanksEmail(o: { organiserName: string; title: string; message: string; inMemory?: boolean }): BuiltEmail {
+export function buildSupporterThanksEmail(o: { organiserName: string; title: string; message: string; inMemory?: boolean; giverName?: string | null }): BuiltEmail {
   const EYEBROW_WORDS = o.inMemory ? MEMORY_EYEBROW : EYEBROW;
-  const CLOSE_WORDS = o.inMemory ? MEMORY_CLOSE : CLOSE;
+  const CLOSE_WORDS = o.inMemory ? MEMORY_SIGN_OFF : CLOSE;
+  const hello = o.inMemory ? dearGreeting(safeFirstName(o.giverName)) : HELLO;
   const first = safeFirstName(o.organiserName);
   const title = first ? `A thank you from ${first}` : "A thank you for your gift";
   const who = first ?? "The organiser";
@@ -38,7 +42,7 @@ export function buildSupporterThanksEmail(o: { organiserName: string; title: str
   const html = shell(
     eyebrow(EYEBROW_WORDS) +
       heading(title) +
-      bodyP(HELLO) +
+      bodyP(escapeHtml(hello)) +
       bodyP(intro(`<b>${escapeHtml(o.title)}</b>`)) +
       quoteBox(quoted) +
       bodyP(LAST) +
@@ -49,7 +53,7 @@ export function buildSupporterThanksEmail(o: { organiserName: string; title: str
     EYEBROW_WORDS,
     title,
     "",
-    HELLO,
+    hello,
     "",
     intro(o.title),
     "",

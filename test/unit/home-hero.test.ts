@@ -18,9 +18,9 @@ const doc = new DOMParser().parseFromString(html, "text/html");
 const norm = (s: string | null | undefined) => (s ?? "").replace(/\s+/g, " ").trim();
 
 describe("home hero (REQ-010)", () => {
-  it("shows the eyebrow naming the volunteer-run Scottish charity", () => {
+  it("shows the eyebrow naming the volunteer led Scottish charity", () => {
     const eyebrow = doc.querySelector("main .eyebrow");
-    expect(norm(eyebrow?.textContent)).toContain("Volunteer run Scottish charity");
+    expect(norm(eyebrow?.textContent)).toContain("Volunteer led Scottish charity");
   });
 
   it("has an emotive H1 with a dedicated emphasised element", () => {

@@ -180,6 +180,34 @@ stack at ≤680px). The logo is the only `<img>` (social icons are inline SVG) a
 declares width/height + `loading="lazy"`, so the perf budget holds. Verified by
 `test/unit/footer.test.ts`.
 
+**One footer, kept in one place.** The footer's master copy is `partials/footer.html`. To change the
+footer, edit that file and run `node scripts/sync-footer.mjs`, which copies it into every page in
+the site's root that has a site footer (each page keeps its own indentation and line endings; only
+the `<footer>` element is replaced). `node scripts/sync-footer.mjs --check` changes nothing and
+lists any page out of step. `test/unit/footer-master.test.ts` fails when a page's footer differs
+from the master, so a footer edited by hand in one page, or a new page given an old footer, cannot
+ship. Every page now has the same full footer: the seven pages that once had a shorter one (no
+"Find us at" line, two "Ways to give" links) were brought into line, and the Get involved page lost
+its footer link to itself. The Festive Ball's server-built pages (guest details, thank you) carry
+only the legal strip and are not part of this.
+
+### How NBCC describes itself
+
+The charity's own words, used exactly (`test/unit/charity-description.test.ts`): "volunteer led"
+(never "volunteer run"), "South West Scotland", "a full red bag".
+
+- **Short:** "NBCC is a volunteer led charity here all year for children, young people and
+  vulnerable adults across South West Scotland." Used in every footer, as the home page's opening
+  line and share description, and (with "Scottish charity SC047995." after it) the home page's
+  search description. The About page's search and share description is the short version followed
+  by "Based in Annbank, Ayrshire."
+- **Full:** the short version, then ", with school clothing and crisis support whenever it is
+  needed, and every December a full red bag for those who would otherwise wake up on Christmas
+  morning with nothing to open." Used as the About page's opening line, followed by "We are based
+  in Annbank, Ayrshire, and reach from Girvan to Largs."
+- Still to follow: the Festive Ball page's "Who you're supporting" paragraph (after the Ball), and
+  the emails and letters that say who NBCC is.
+
 ### Accessibility floor — skip link & landmarks (REQ-032)
 
 Every page's `<body>` opens with a **skip link** — `<a class="skip-link"

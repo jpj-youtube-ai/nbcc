@@ -65,6 +65,12 @@ describe("the daily team pass", () => {
     expect(d.claimReminder).toHaveBeenCalledWith(7, expect.stringMatching(/^[0-9a-f]{64}$/));
   });
 
+  it("reminds the parent or guardian when the team organiser ticked under 18", async () => {
+    const { d, sent } = deps({ readState: vi.fn(async () => ({ teams: [], invites: [invite({ under18: true }) as never] })) });
+    await runTeamEmails(NOW, d);
+    expect(sent[0].subject).toBe("A gentle reminder: Jack is invited to join Exampleton Juniors");
+  });
+
   it("still deletes, and sends nothing, while Automatic emails is off", async () => {
     const { d, sent } = deps({ touchOn: vi.fn(async () => false) });
     const r = await runTeamEmails(NOW, d);

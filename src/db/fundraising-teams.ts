@@ -51,9 +51,9 @@ export async function markTeam(client: PoolClient, id: number, shareMode: TeamSh
 export async function insertHeldInvites(client: PoolClient, teamId: number, people: TeamMemberToInvite[]): Promise<void> {
   if (people.length === 0) return;
   await client.query(
-    `INSERT INTO team_invites (team_id, first_name, last_name, email)
-     SELECT $1, f, l, e FROM unnest($2::text[], $3::text[], $4::text[]) AS p(f, l, e)`,
-    [teamId, people.map((p) => p.firstName), people.map((p) => p.lastName), people.map((p) => lower(p.email))],
+    `INSERT INTO team_invites (team_id, first_name, last_name, email, under_18)
+     SELECT $1, f, l, e, u FROM unnest($2::text[], $3::text[], $4::text[], $5::boolean[]) AS p(f, l, e, u)`,
+    [teamId, people.map((p) => p.firstName), people.map((p) => p.lastName), people.map((p) => lower(p.email)), people.map((p) => p.under18 === true)],
   );
 }
 
@@ -139,6 +139,8 @@ export interface TeamInviteRow {
   firstName: string | null;
   lastName: string | null;
   email: string | null;
+  /** The team organiser ticked "This person is under 18": the email is their parent's or guardian's. */
+  under18?: boolean;
   createdAt: string;
   sentAt: string | null;
   remindedAt: string | null;
@@ -147,7 +149,7 @@ export interface TeamInviteRow {
   joinedFundraiserId: number | null;
 }
 
-const INVITE_COLUMNS = "i.id, i.team_id, i.first_name, i.last_name, i.email, i.created_at, i.sent_at, i.reminded_at, i.joined_at, i.deleted_at, i.joined_fundraiser_id";
+const INVITE_COLUMNS = "i.id, i.team_id, i.first_name, i.last_name, i.email, i.created_at, i.sent_at, i.reminded_at, i.joined_at, i.deleted_at, i.joined_fundraiser_id, i.under_18";
 
 function toInvite(r: Row): TeamInviteRow {
   return {
@@ -156,6 +158,7 @@ function toInvite(r: Row): TeamInviteRow {
     firstName: textOrNull(r.first_name),
     lastName: textOrNull(r.last_name),
     email: textOrNull(r.email),
+    under18: r.under_18 === true,
     createdAt: iso(r.created_at) as string,
     sentAt: iso(r.sent_at),
     remindedAt: iso(r.reminded_at),
@@ -233,7 +236,7 @@ export async function releaseInviteReminder(inviteId: number): Promise<void> {
 // emails to it (the invite and the reminder): the address becomes a marker that names nobody, the
 // subject only the team, and no name. The rows stay, so the counts still add up.
 const CLEAR_INVITE =
-  "first_name = NULL, last_name = NULL, email = NULL, token_hash = NULL, reminder_token_hash = NULL, deleted_at = now()";
+  "first_name = NULL, last_name = NULL, email = NULL, token_hash = NULL, reminder_token_hash = NULL, under_18 = false, deleted_at = now()";
 
 async function clearInvites(client: PoolClient, where: string, params: unknown[]): Promise<number> {
   const r = await client.query<{ id: number; email: string; title: string }>(

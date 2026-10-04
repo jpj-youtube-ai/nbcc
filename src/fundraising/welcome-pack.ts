@@ -5,6 +5,7 @@ import { addDays } from "./follow-up";
 import { FLOW, KIND_INFO, parseWants, type RequestActionInput, type RequestKind, type RequestRow } from "./requests";
 import { tshirtLabel } from "./signup-tidy";
 import type { FundraiserRecord } from "./model";
+import { organiserFirstName } from "./emails";
 
 // Welcome packs (Jaimie, 2026-10-03). Pure: no pool, no clock. The SQL is in src/db/welcome-packs.ts,
 // the routes in src/routes/admin-welcome-packs.ts, the printed letter in ./welcome-pack-print.ts.
@@ -90,7 +91,9 @@ export type PackSubject = Pick<
   | "memoryName"
   | "memorySetupBy"
   | "memoryDirectorBusiness"
->;
+> &
+  // The name a page is credited to: a group's or a business's has no first name to greet by.
+  Partial<Pick<FundraiserRecord, "creditName">>;
 
 /** A welcome pack, things to send (in memory), or no pack at all. */
 export function packKind(f: PackSubject): PackKind | null {
@@ -296,7 +299,8 @@ export function packView(f: PackSubject, stored: StoredPack | null, sizes?: Post
     const skippedReason = wasLeftOut && (sent || same) ? s!.skippedReason : null;
     let changeNote: string | null = null;
     if (sent) {
-      if (!s) changeNote = "Asked for since it was sent.";
+      // A row kept cleared (an untick that kept the pack's mark) is neither: as if there were none.
+      if (!s || (!wasTicked && !wasLeftOut)) changeNote = "Asked for since it was sent.";
       else if (wasTicked && !same) changeNote = `Changed since it was sent: it went as ${s.label}.`;
       else if (wasLeftOut && !same) changeNote = leftOutChanged(item, s.label, true);
     } else if (wasTicked && !item.waiting && !same) {
@@ -467,12 +471,24 @@ export function applyPackAction(view: PackView, input: PackActionInput): PackAct
 //       different number) and how many went, on a request the pack marked, is put right.
 //   Pack sent   only catches up requests still at their first step that the pack never marked.
 //       Never a count, never an undo. One the pack marked once and staff then undid by hand in
-//       Requests is left To send: a deliberate hand undo is never re-sent by any press.
+//       Requests is left To send: a deliberate hand undo is never re-sent by any press, not by
+//       Pack sent and not by ticking its thing again. (One the pack itself opened again, because a
+//       tick came off, is sent again when the tick goes back.)
+//
+//   a leave out   of one of two things of a kind after both went (the A3 posters, say) puts how many
+//       went right too, on a request the pack marked.
 //
 // So a count staff corrected in Requests, or a request they undid there, is never put back by a
 // press on something else. "The pack marked it" is kept on the pack's own rows
 // (welcome_pack_items.marked_request), never read from the request's note. Pure: the SQL applies each
 // step with the Requests' own rules and audit (src/db/welcome-packs.ts).
+//
+// And a request staff changed by hand AFTER the pack marked it is theirs from then on (review): the
+// pack marked Posters Sent, staff undid it in Requests and later sent it again by hand, with their
+// own count. The pack's mark is still on its rows, so the mark alone cannot tell. The request says
+// who changed it last: the pack writes itself there (PACK_HANDLED before the staff member), a change
+// by hand writes the staff member alone. The pack only puts a count right, or opens a request again,
+// while it was the last to change it.
 
 /** Which request each thing in a pack belongs to. Both poster sizes are the one posters request. */
 export const PACK_REQUEST_KIND: Readonly<Record<string, RequestKind>> = {
@@ -491,6 +507,41 @@ export const PACK_REQUEST_NOTES: Record<PackKind, string> = {
   welcome: "Sent with the welcome pack.",
   memory: "Sent with the things they asked for.",
 };
+
+/** On a request the pack changed, before who pressed: "pack:admin:fern@example.com" (fundraiser_requests.updated_by). */
+export const PACK_HANDLED = "pack:";
+/** Was the pack the last to change this request? False once staff change it by hand in Requests. */
+const packHandled = (row: RequestRow | null): boolean => !!row?.updatedBy?.startsWith(PACK_HANDLED);
+
+/**
+ * Whose is this request, as far as the pack goes? The ONE place the two things the pack keeps are
+ * read together: its own mark on its rows (`marked`: the pack marked this request at some point)
+ * and who the request says changed it last (packHandled).
+ *
+ *   "pack"    the pack marked it and nobody has touched it by hand since: the pack may put its
+ *             count right, and open it again when a tick comes off.
+ *   "staff"   the pack marked it, and staff have changed it by hand since (undone, sent again, a
+ *             count corrected): theirs from then on. No press changes it.
+ *   "open"    the pack has no mark on it, or the ORGANISER has asked afresh since the pack marked
+ *             it: at its first step the pack marks it; further on (staff dealt with it themselves)
+ *             it is left alone.
+ *
+ * Who a request says changed it last (fundraiser_requests.updated_by), each decided on purpose:
+ *   "pack:admin:<email>"  the pack, for that staff member (src/db/welcome-packs.ts): the pack's.
+ *   "admin:<email>"       a staff member, by hand in Requests (changeRequest): staff's.
+ *   "organiser"           their own "Ask us to print these" (askToPrint), which opens the request
+ *                         again with what they now want: a fresh ask, so open. The tick no longer
+ *                         counts (the number changed), and ticking it again, or Pack sent, marks it.
+ *   nobody, or anything else   never written today. Not a staff member's change, so open: at its
+ *                         first step the pack marks it, further on it is left alone.
+ */
+type RequestOwner = "pack" | "staff" | "open";
+const STAFF_HANDLED = "admin:";
+function requestOwner(marked: boolean, row: RequestRow | null): RequestOwner {
+  if (!marked) return "open";
+  if (packHandled(row)) return "pack";
+  return row?.updatedBy?.startsWith(STAFF_HANDLED) ? "staff" : "open";
+}
 
 export interface PackRequestStep {
   kind: RequestKind;
@@ -522,19 +573,25 @@ export function packRequestSync(
     const status = row?.status ?? flow[0];
     const quantity = going.reduce((n, i) => n + (i.quantity ?? 0), 0);
     const note = PACK_REQUEST_NOTES[view.kind];
+    // The pack's mark on this request: for Pack sent, on any of its things; else on the thing pressed.
+    const owner = requestOwner(o.press.type === "send" ? !!o.markedKinds?.has(kind) : o.marked, row);
+    // Staff changed it by hand since the pack marked it (undone, sent again, corrected): left as it is.
+    if (owner === "staff") continue;
     if (allIn && status === flow[0]) {
       if (quantity < 1) continue;
-      // Pack sent: the pack marked this one before and it stands To send, so staff undid it by hand.
-      if (o.press.type === "send" && o.markedKinds?.has(kind)) continue;
       steps.push(
         group === "lent"
           ? { kind, input: { action: "out", from: "to_send", on: o.today, quantity, by: o.by, note } }
           : { kind, input: { action: "send", from: "to_send", on: o.today, how: "post", by: o.by, quantity, note } },
       );
-    } else if (o.press.type === "tick" && allIn && o.marked && group === "printed" && status === "sent" && quantity > 0 && row!.quantity !== quantity) {
-      // This press re-ticked a thing of this kind: how many went, on a request the pack marked, is put right.
+    } else if (owner !== "pack") {
+      // Never the pack's, and already dealt with in Requests: left as it is.
+      continue;
+    } else if ((o.press.type === "tick" || o.press.type === "skip") && allIn && group === "printed" && status === "sent" && quantity > 0 && row!.quantity !== quantity) {
+      // This press re-ticked a thing of this kind, or left one of them out after it went: how many
+      // went, on a request the pack marked, is put right.
       steps.push({ kind, input: { action: "count", from: "sent", quantity } });
-    } else if (o.press.type !== "send" && !allIn && o.marked && status === flow[1]) {
+    } else if (o.press.type !== "send" && !allIn && status === flow[1]) {
       steps.push({ kind, input: { action: "undo", from: status } });
     }
   }
@@ -568,6 +625,20 @@ export function packFirstName(f: Pick<PackSubject, "firstName" | "name">): strin
   return String(f.firstName ?? "").trim() || String(f.name ?? "").trim().split(/\s+/)[0] || "";
 }
 
+/**
+ * "Dear Robin," or, for a group's or a business's name or none, "Hello,": never "Dear The,". The
+ * same rule as the emails (organiserFirstName): the first name they gave; else the first word of
+ * their name, past a title ("Dr Sam Example" is "Dear Sam,"), unless the name is a group's or a
+ * business's (it starts with "The", or it is the name their page is credited to).
+ */
+function packGreeting(f: Pick<PackSubject, "firstName" | "name" | "creditName">): string {
+  const given = String(f.firstName ?? "").trim().replace(/\s+/g, " ");
+  const first = organiserFirstName({ name: String(f.name ?? ""), firstName: f.firstName ?? null, creditName: f.creditName ?? null });
+  if (!first) return "Hello,";
+  // A first name of two words ("Mary Jane") stays whole.
+  return `Dear ${given && given.toLowerCase().startsWith(first.toLowerCase()) ? given : first},`;
+}
+
 function signerLines(signer: Signer): string[] {
   const role = String(signer.role ?? "").trim();
   if (!role) return [CHARITY];
@@ -594,7 +665,7 @@ export function welcomeLetter(f: PackSubject, items: PackItem[], signer: Signer,
     opening.push(`Your ${event ? "event's page" : "page"} is live at ${pageWords}. Scan the code to see it, and share it with everyone you know.`);
   }
   return {
-    greeting: `Dear ${packFirstName(f)},`,
+    greeting: packGreeting(f),
     heading: f.title,
     opening,
     packIntro: packList.length ? "In this pack you'll find:" : null,
@@ -624,7 +695,7 @@ export interface NoteWords {
 export function coveringNote(f: PackSubject, signer: Signer): NoteWords {
   const name = String(f.memoryName ?? "").trim();
   return {
-    greeting: `Dear ${packFirstName(f)},`,
+    greeting: packGreeting(f),
     paragraphs: [
       name ? `Here are the things you asked for, for ${name}'s page.` : "Here are the things you asked for.",
       `If there is anything else we can do, please call us on ${PHONE} or email ${EMAIL}.`,
@@ -660,6 +731,17 @@ export interface PackCounts {
   memoryToSend: number;
 }
 
+/**
+ * Has staff left this pack's waiting T-shirt out with a reason? Then the pack no longer waits on the
+ * organiser: it is a pack to send. Not once the size has come in (the leave out no longer counts, and
+ * the T-shirt is there to tick), nor once the pack is sent.
+ */
+export function tshirtLeftOut(f: PackSubject, stored: StoredPack | null, sizes?: PosterSizes | null): boolean {
+  const view = packView(f, stored, sizes);
+  if (!view || view.state === "sent") return false;
+  return view.items.some((i) => i.key === "tshirt" && i.waiting && !!i.skippedReason);
+}
+
 /** Is this page's pack still to send? Approved (a finished one is past it), with a pack, not sent. */
 export function packToSend(f: PackSubject, sent: ReadonlySet<number>): boolean {
   return f.status === "approved" && packKind(f) !== null && !sent.has(f.id);
@@ -667,9 +749,10 @@ export function packToSend(f: PackSubject, sent: ReadonlySet<number>): boolean {
 
 /**
  * Each page with something to send is in exactly one count. `sent` holds the pages whose pack has
- * gone with nothing more owed (packSettled).
+ * gone with nothing more owed (packSettled); `leftOut` those whose waiting T-shirt staff left out
+ * with a reason (tshirtLeftOut), which are packs to send, not packs waiting for a size.
  */
-export function packCounts(list: PackSubject[], sent: ReadonlySet<number>, today: string): PackCounts {
+export function packCounts(list: PackSubject[], sent: ReadonlySet<number>, today: string, leftOut: ReadonlySet<number> = new Set()): PackCounts {
   const before = addDays(today, -PACK_OVERDUE_DAYS);
   const counts: PackCounts = { packsToSend: 0, tshirtWaiting: 0, memoryToSend: 0 };
   for (const f of list) {
@@ -678,7 +761,7 @@ export function packCounts(list: PackSubject[], sent: ReadonlySet<number>, today
     const overdue = !!f.approvedAt && londonToday(new Date(f.approvedAt)) < before;
     if (packKind(f) === "memory") {
       if (overdue) counts.memoryToSend += 1;
-    } else if (sportApplies(f) && f.isSporting === true && !tshirtLabel(f.tshirtSize)) {
+    } else if (sportApplies(f) && f.isSporting === true && !tshirtLabel(f.tshirtSize) && !leftOut.has(f.id)) {
       // Waiting on them, not on us: its own line, and never also a pack to send.
       counts.tshirtWaiting += 1;
     } else if (overdue) {

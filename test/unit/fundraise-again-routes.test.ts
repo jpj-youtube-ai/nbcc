@@ -60,6 +60,13 @@ describe("asking for last year's details", () => {
     for (const never of ["1 Example Street", "2026-12-06", "internal", "posterCount", "finished"]) expect(json).not.toContain(never);
   });
 
+  it("opens the gentle in memory path for a page in memory of someone, never the raising money one", async () => {
+    getFundraiser.mockResolvedValueOnce({ ...last, inMemory: true, kind: "memory_flowers", memoryName: "Jean Example", memoryDates: "1948 to 2026", title: "Remembering Jean" });
+    const res = await ask({ token: TOKEN });
+    expect(res.statusCode).toBe(200);
+    expect(res.body).toMatchObject({ path: "memory", memoryName: "Jean Example", memoryDates: "1948 to 2026", title: "Remembering Jean" });
+  });
+
   it("answers an unknown, used or out of date link, or a missing fundraiser, with the same 404", async () => {
     const answers: unknown[] = [];
     lookUpAgain.mockResolvedValueOnce(null);

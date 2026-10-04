@@ -39,9 +39,15 @@ import { entryWords } from "./entry";
 //     Facebook event cover, each its own download, or all of them as one zip
 //   - every page says how to ask us for anything else (ASK_US), on screen only
 //   - renderEverything: every printed piece on one page, for staff to print or save as one PDF
+//
+// "Print the QR code" (staff and hosts asked for a simple way to print an event's code):
+//   the QR code sheet   A4 portrait: the logo, the name, the page's own QR code large, the address in
+//                       words under it, and the charity statement. For any page that has one.
 
 export const MATERIALS = ["poster", "poster-a3", "leaflet", "social", "sponsor-form", "certificate"] as const;
 export type MaterialPiece = (typeof MATERIALS)[number];
+/** The page's QR code on one A4 page, to print. Only for a fundraiser or an event with a page. */
+export const QR_SHEET = "qr-code";
 
 export const CHARITY_NAME = "Night Before Christmas Campaign";
 export const CHARITY_NUMBER = "SC047995";
@@ -565,6 +571,13 @@ function splitHtml(d: MaterialFacts | null, cls: string): string {
   return d?.splitStatement ? `<div class="${cls}">${escapeHtml(d.splitStatement)}</div>` : "";
 }
 
+/** What a scan does, under a QR code: gently in memory, the details too for an event. */
+function scanWordsOf(d: Pick<MaterialFacts, "memory" | "linkKind" | "event">): string {
+  if (d.memory) return "Give in their memory";
+  if (d.linkKind !== "page") return "Scan to find out more";
+  return d.event ? "Scan for the details, and to give" : "Scan to give";
+}
+
 /** One poster page, at one size. Its QR code is that size's own short link. */
 function posterPage(d: MaterialFacts, a: MaterialAssets, size: PosterSize): string {
   const meta = [
@@ -574,13 +587,7 @@ function posterPage(d: MaterialFacts, a: MaterialAssets, size: PosterSize): stri
   const qr = d.qrLinks ? d.qrLinks[POSTER_PIECE[size]] : null;
   const memory = d.memory ?? null;
   const headline = headlineOf(d);
-  const scanWords = memory
-    ? "Give in their memory"
-    : d.linkKind === "page"
-      ? d.event
-        ? "Scan for the details, and to give"
-        : "Scan to give"
-      : "Scan to find out more";
+  const scanWords = scanWordsOf(d);
   const scan =
     qr && d.linkWords
       ? `<div class="p-qr">${qrSvg(qr, { title: `QR code for ${headline}` })}</div>
@@ -631,6 +638,68 @@ export function renderPoster(d: MaterialFacts, a: MaterialAssets, size: PosterSi
       size === "a5"
         ? "In the print window, choose A5, or A4 with two to a sheet, and switch off headers and footers."
         : `In the print window, choose ${paper} and switch off headers and footers.`,
+  });
+}
+
+// --- the QR code, on a page of its own -------------------------------------------------------------------
+//
+// For a noticeboard, a table or a till: the name, the page's own QR code large (the same link as the
+// code in the private area and the admin), the address in words, and the charity statement. One A4
+// page; a long name or address is drawn smaller, so nothing spills onto a second sheet.
+
+const QR_SHEET_MM = 120;
+const QR_SHEET_CSS = `
+  .qrsheet{background:#fff}
+  .q-sheet{height:100%;display:flex;flex-direction:column;align-items:center;text-align:center;padding:16mm 16mm 10mm}
+  .q-sheet>*{flex-shrink:0}
+  .q-logo{height:30mm;width:auto;display:block}
+  .q-title{font-family:var(--head);font-weight:800;color:var(--maroon);line-height:1.1;letter-spacing:-.01em;margin:8mm 0 0;
+    overflow-wrap:anywhere;max-width:176mm}
+  .q-scan{flex:1 0 auto;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:0}
+  .q-qr{background:#fff;border:1px solid var(--line);border-radius:4mm;padding:4mm}
+  .q-qr svg{display:block;width:${QR_SHEET_MM}mm;height:${QR_SHEET_MM}mm}
+  .q-words{font-family:var(--head);font-weight:700;color:var(--maroon);font-size:22pt;line-height:1.2;margin-top:6mm}
+  .q-address{font-weight:600;color:var(--slate);margin-top:2mm;overflow-wrap:anywhere;max-width:176mm}
+  .q-legal{font-size:8.5pt;line-height:1.45;color:var(--slate);max-width:176mm;margin-top:3mm}
+  .q-legal.split{font-weight:600}`;
+
+function qrSheetTitlePt(title: string): number {
+  const n = title.length;
+  if (n <= 18) return 44;
+  if (n <= 30) return 38;
+  if (n <= 48) return 32;
+  return n <= 70 ? 27 : 23;
+}
+
+function qrSheetAddressPt(linkWords: string): number {
+  if (linkWords.length <= 40) return 18;
+  return linkWords.length <= 60 ? 14 : 11;
+}
+
+/** The page's QR code on one A4 page, or null when there is no page of its own to scan to. */
+export function renderQrSheet(d: MaterialFacts, a: MaterialAssets): string | null {
+  if (d.linkKind !== "page" || !d.link || !d.linkWords) return null;
+  const headline = headlineOf(d);
+  const body = `<div class="page portrait qrsheet">
+  <div class="q-sheet">
+    <img class="q-logo" src="${a.logo}" alt="Night Before Christmas Campaign">
+    <h1 class="q-title" style="font-size:${qrSheetTitlePt(headline)}pt">${escapeHtml(headline)}</h1>
+    <div class="q-scan">
+      <div class="q-qr">${qrSvg(d.link, { title: `QR code for ${headline}` })}</div>
+      <div class="q-words">${scanWordsOf(d)}</div>
+      <div class="q-address" style="font-size:${qrSheetAddressPt(d.linkWords)}pt">${escapeHtml(d.linkWords)}</div>
+    </div>
+    ${splitHtml(d, "q-legal split")}
+    <div class="q-legal">${escapeHtml(MATERIALS_STATEMENT)}</div>
+  </div>
+</div>`;
+  return shell({
+    title: `QR code for ${escapeHtml(d.title)}`,
+    paper: "A4 portrait",
+    fontCss: a.fontCss,
+    css: QR_SHEET_CSS,
+    toolbar: `<span>The QR code for <b>${escapeHtml(d.title)}</b>, on one A4 page</span>`,
+    body,
   });
 }
 

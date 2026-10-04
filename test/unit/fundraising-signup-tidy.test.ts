@@ -258,7 +258,13 @@ describe("greeting the parent of a child's page", () => {
     expect(out.html).toBe("<p>Hi Sarah, this is about Jack&#39;s page.</p><p>It&#39;s live.</p>");
   });
 
+  it("never says Hi to the child when the parent's name is not one we can greet by", () => {
+    const out = greetGuardian(mail, { name: "Jack Sample", firstName: "Jack", guardianFirstName: "Sarah2" });
+    expect(out.text).toBe("Hi there, this is about Jack's page.\n\nIt's live.");
+  });
+
   it("leaves every other email as it is", () => {
+    expect(greetGuardian(mail, { name: "Jack Sample", firstName: "Jack", guardianFirstName: "  " })).toBe(mail);
     expect(greetGuardian(mail, { name: "Jack Sample", firstName: "Jack", guardianFirstName: null })).toBe(mail);
     expect(greetGuardian(mail, { name: "Jack Sample" })).toBe(mail);
   });

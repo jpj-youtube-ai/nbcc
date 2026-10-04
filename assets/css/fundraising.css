@@ -768,7 +768,8 @@ fieldset.is-invalid .fr-option { border-color: var(--crimson); }
 .fr-qr__download[hidden] { display: none; }
 .logo-example__poster { position: relative; overflow: hidden; padding-bottom: 78px; }
 .logo-example__foot { position: absolute; left: 0; right: 0; bottom: 0; background: var(--maroon); color: var(--cream); font-family: var(--font-head); font-style: italic; font-size: 0.78rem; line-height: 1.3; padding: 10px 14px; }
-.fr-qr__download + .fr-qr__download { margin-left: 18px; }
+/* The space is after each link, so one that wraps onto its own line starts at the left edge. */
+.fr-qr__download { margin-right: 18px; }
 
 /* ---------- "Your materials", round two (TASK-512): the posters and the leaflet, each with "Ask us
    to print these"; how to ask us for anything else ---------- */
@@ -809,6 +810,7 @@ fieldset.is-invalid .fr-option { border-color: var(--crimson); }
 .fr-team-rows { list-style: none; margin: 0; padding: 0; display: grid; gap: 12px; }
 .fr-team-row { padding: 14px 16px 6px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--card); }
 @media (min-width: 760px) { .fr-row.fr-row--three { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1.4fr); } }
+.fr-team-under18 { margin: 0 0 4px; }
 .fr-team-remove { min-height: 40px; font-size: 0.95rem; }
 .fr-team-add-row { margin: 10px 0 0; }
 .fr-link-btn:disabled { color: var(--slate-soft); text-decoration: none; cursor: default; }

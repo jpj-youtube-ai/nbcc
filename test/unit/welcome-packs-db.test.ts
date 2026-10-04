@@ -74,7 +74,14 @@ function db(o: { fundraiser?: Record<string, unknown> | null; pack?: Record<stri
         .filter((i) => i.key !== params[1])
         .concat(itemRow(String(params[1]), { label: params[2], quantity: params[3], ticked_at: params[4] ? new Date("2026-10-03T10:00:00Z") : null, ticked_by: params[5], skipped_reason: params[6] }));
     }
-    if (/DELETE FROM welcome_pack_items/.test(sql)) items = items.filter((i) => i.key !== params[1]);
+    // An untick of a thing whose request the pack marked keeps its row, cleared, so the mark is kept.
+    if (/UPDATE welcome_pack_items SET ticked_at = NULL/.test(sql)) {
+      items = items.map((i) => (i.key === params[1] ? { ...i, ticked_at: null, ticked_by: null, skipped_reason: null } : i));
+    }
+    if (/DELETE FROM welcome_pack_items/.test(sql)) {
+      const onlyUnmarked = /marked_request = false/.test(sql);
+      items = items.filter((i) => i.key !== params[1] || (onlyUnmarked && (i.marked_request === true || i.ticked_at || i.skipped_reason)));
+    }
     if (/UPDATE welcome_pack_items SET marked_request/.test(sql)) {
       items = items.map((i) => ((params[2] as string[]).includes(String(i.key)) ? { ...i, marked_request: params[1] } : i));
     }
@@ -253,7 +260,10 @@ describe("the requests a pack looks after", () => {
     expect(req[1].slice(0, 4)).toEqual([9, "posters", "sent", 12]);
     expect(req[1]).toContain("Sent with the welcome pack.");
     expect(req[1]).toContain("fern@example.com"); // who handled it
-    expect(req[1][req[1].length - 1]).toBe("admin:fern@example.com");
+    // Kept on the request as last changed by the pack, so a later change by hand in Requests shows.
+    expect(req[1][req[1].length - 1]).toBe("pack:admin:fern@example.com");
+    // The History still says who pressed.
+    expect(requestAudits(calls)[0][0]).toBe("admin:fern@example.com");
     const [audit] = requestAudits(calls);
     expect(audit[4]).toMatchObject({ kind: "posters", action: "send", from: "to_send", to: "sent", words: "Posters: sent (by post)" });
     expect(calls.findIndex((c) => /INSERT INTO fundraiser_requests/.test(c[0]))).toBeLessThan(calls.findIndex((c) => c[0] === "COMMIT"));
@@ -266,7 +276,7 @@ describe("the requests a pack looks after", () => {
     const { calls } = db({
       pack: packRow(),
       items: [itemRow("posters_a4", { quantity: 12, marked_request: true })],
-      requests: [requestRow("posters", { status: "sent", quantity: 12, how: "post", sent_on: "2026-10-03", note: "Sent with the welcome pack." })],
+      requests: [requestRow("posters", { status: "sent", quantity: 12, how: "post", sent_on: "2026-10-03", note: "Sent with the welcome pack.", updated_by: "pack:admin:fern@example.com" })],
     });
     await changePack(9, { action: "untick", key: "posters_a4" }, "admin:fern@example.com", TODAY);
     expect(find(calls, /INSERT INTO fundraiser_requests/)![1].slice(0, 3)).toEqual([9, "posters", "to_send"]);
@@ -331,11 +341,116 @@ describe("the requests a pack looks after", () => {
     const { calls } = db({
       pack: packRow(),
       items: [itemRow("posters_a4", { label: "10 A4 posters", quantity: 10, marked_request: true })],
-      requests: [requestRow("posters", { status: "sent", quantity: 10, how: "post", sent_on: "2026-10-02", note: "Sent with the welcome pack." })],
+      requests: [requestRow("posters", { status: "sent", quantity: 10, how: "post", sent_on: "2026-10-02", note: "Sent with the welcome pack.", updated_by: "pack:admin:fern@example.com" })],
     });
     const out = await changePack(9, TICK_POSTERS, "admin:fern@example.com", TODAY);
     expect(find(calls, /INSERT INTO fundraiser_requests/)![1].slice(0, 4)).toEqual([9, "posters", "sent", 12]);
     expect(out.requestWords).toEqual(["Posters: count sent changed from 10 to 12"]);
+  });
+
+  // Review: A4 and A3 both ticked (Posters: Sent, 12). Staff Undo in Requests, untick the A4
+  // posters, then mark Posters Sent by hand, with 8. Ticking the A4 posters again must leave it at 8.
+  describe("a request staff sent again by hand", () => {
+    const SIZES = { fundraiser_id: 9, a4: "10", a3: "2" };
+    const byHand = [requestRow("posters", { status: "sent", quantity: 8, how: "dropped_off", sent_on: "2026-10-03", updated_by: "admin:ash@example.com" })];
+    const a3 = itemRow("posters_a3", { label: "2 A3 posters", quantity: 2, marked_request: true });
+
+    it("keeps its count when the thing is ticked again", async () => {
+      const { calls } = db({ pack: packRow(), items: [a3], sizes: SIZES, requests: byHand });
+      const out = await changePack(9, { action: "tick", key: "posters_a4", words: "10 A4 posters", quantity: 10 }, "admin:fern@example.com", TODAY);
+      expect(out.view.items.find((i) => i.key === "posters_a4")!.ticked).toBe(true);
+      expect(find(calls, /INSERT INTO fundraiser_requests/)).toBeUndefined();
+      expect(requestAudits(calls)).toEqual([]);
+      expect(out.requestWords).toEqual([]);
+    });
+
+    // Staff Undo in Requests, the A4 posters are unticked, then ticked again: it stays To send.
+    it("is not sent again by a tick once staff have undone it by hand", async () => {
+      const undone = [requestRow("posters", { status: "to_send", updated_by: "admin:ash@example.com" })];
+      const { calls } = db({ pack: packRow(), items: [a3], sizes: SIZES, requests: undone });
+      const out = await changePack(9, { action: "tick", key: "posters_a4", words: "10 A4 posters", quantity: 10 }, "admin:fern@example.com", TODAY);
+      expect(out.view.items.find((i) => i.key === "posters_a4")!.ticked).toBe(true);
+      expect(find(calls, /INSERT INTO fundraiser_requests/)).toBeUndefined();
+      expect(out.requestWords).toEqual([]);
+    });
+
+    // The usual pack: one poster size, so the unticked thing is the only one of its kind. The
+    // pack's mark must outlive the untick, or the tick that follows would send the request again.
+    it("is not sent again by a tick once staff have undone it by hand, with only one size in the pack", async () => {
+      const undone = [requestRow("posters", { status: "to_send", updated_by: "admin:ash@example.com" })];
+      const { calls } = db({ pack: packRow(), items: [itemRow("posters_a4", { quantity: 12, marked_request: true })], requests: undone });
+      const off = await changePack(9, { action: "untick", key: "posters_a4" }, "admin:fern@example.com", TODAY);
+      expect(off.view.items.find((i) => i.key === "posters_a4")).toMatchObject({ ticked: false, done: false, changeNote: null });
+      expect(find(calls, /INSERT INTO fundraiser_requests/)).toBeUndefined();
+      const on = await changePack(9, TICK_POSTERS, "admin:fern@example.com", TODAY);
+      expect(on.view.items.find((i) => i.key === "posters_a4")!.ticked).toBe(true);
+      expect(find(calls, /INSERT INTO fundraiser_requests/)).toBeUndefined();
+      expect(on.requestWords).toEqual([]);
+    });
+
+    it("keeps no cleared row once the pack itself has opened the request again", async () => {
+      const { calls } = db({
+        pack: packRow(),
+        items: [itemRow("posters_a4", { quantity: 12, marked_request: true })],
+        requests: [requestRow("posters", { status: "sent", quantity: 12, how: "post", sent_on: "2026-10-03", updated_by: "pack:admin:fern@example.com" })],
+      });
+      const off = await changePack(9, { action: "untick", key: "posters_a4" }, "admin:fern@example.com", TODAY);
+      expect(off.requestWords).toHaveLength(1);
+      // The row is gone, as an untick always left it: read again, nothing is stored for the posters.
+      const again = await changePack(9, { action: "untick", key: "posters_a4" }, "admin:fern@example.com", TODAY);
+      expect(again.words).toBe("");
+      expect(calls.filter((c) => /DELETE FROM welcome_pack_items/.test(c[0])).length).toBeGreaterThan(0);
+    });
+
+    it("is not opened again when a tick comes off", async () => {
+      const a4 = itemRow("posters_a4", { label: "10 A4 posters", quantity: 10, marked_request: true });
+      const { calls } = db({ pack: packRow(), items: [a4, a3], sizes: SIZES, requests: byHand });
+      await changePack(9, { action: "untick", key: "posters_a4" }, "admin:fern@example.com", TODAY);
+      expect(find(calls, /INSERT INTO fundraiser_requests/)).toBeUndefined();
+      expect(requestAudits(calls)).toEqual([]);
+    });
+  });
+
+  // Review: A4 10 and A3 2 both ticked (Posters: Sent, 12). Leaving the A3 posters out: 10 went.
+  it("puts how many went right when one size is left out after both went", async () => {
+    const { calls } = db({
+      pack: packRow(),
+      items: [
+        itemRow("posters_a4", { label: "10 A4 posters", quantity: 10, marked_request: true }),
+        itemRow("posters_a3", { label: "2 A3 posters", quantity: 2, marked_request: true }),
+      ],
+      sizes: { fundraiser_id: 9, a4: "10", a3: "2" },
+      requests: [requestRow("posters", { status: "sent", quantity: 12, how: "post", sent_on: "2026-10-03", note: "Sent with the welcome pack.", updated_by: "pack:admin:fern@example.com" })],
+    });
+    const out = await changePack(9, { action: "skip", key: "posters_a3", words: "2 A3 posters", quantity: 2, reason: "No A3 paper" }, "admin:fern@example.com", TODAY);
+    expect(find(calls, /INSERT INTO fundraiser_requests/)![1].slice(0, 4)).toEqual([9, "posters", "sent", 10]);
+    expect(out.requestWords).toEqual(["Posters: count sent changed from 12 to 10"]);
+  });
+
+  // Re-check: ticked (Sent, 10); the organiser then asks us to print 12, which opens the request
+  // again as "organiser". The tick no longer counts; ticked again, the request is Sent with 12.
+  it("marks again a request the organiser asked for afresh, when its thing is ticked again", async () => {
+    const { calls } = db({
+      pack: packRow(),
+      items: [itemRow("posters_a4", { label: "10 A4 posters", quantity: 10, marked_request: true })],
+      requests: [requestRow("posters", { status: "to_send", quantity: 10, updated_by: "organiser" })],
+    });
+    const out = await changePack(9, TICK_POSTERS, "admin:fern@example.com", TODAY);
+    const req = find(calls, /INSERT INTO fundraiser_requests/)!;
+    expect(req[1].slice(0, 4)).toEqual([9, "posters", "sent", 12]);
+    expect(req[1][req[1].length - 1]).toBe("pack:admin:fern@example.com");
+    expect(out.requestWords).toEqual(["Posters: sent (by post)"]);
+  });
+
+  it("catches up on Pack sent a request the organiser asked for afresh", async () => {
+    const { calls } = db({
+      pack: packRow(),
+      items: [itemRow("letter"), ...everything({ marked_request: true })],
+      requests: [requestRow("posters", { status: "to_send", quantity: 12, updated_by: "organiser" })],
+    });
+    const out = await changePack(9, { action: "send" }, "admin:fern@example.com", TODAY);
+    expect(out.view.state).toBe("sent");
+    expect(find(calls, /INSERT INTO fundraiser_requests/)![1].slice(0, 4)).toEqual([9, "posters", "sent", 12]);
   });
 
   it("does not touch the requests for a change of signer", async () => {

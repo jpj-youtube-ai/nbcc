@@ -4,6 +4,7 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { createRequire } from "node:module";
 import { renderFundraiseSignUp } from "../../src/fundraising/render";
+import { ALL_BUILT_IN_CATEGORIES, formCategories, memoryCategories, rememberCategories } from "../../src/fundraising/categories";
 
 // TASK-515: the sign up form opened from email 18's Do it again link (/fundraise?again=...). It asks
 // the server for last year's details by POST, takes the token out of the address at once, fills in
@@ -37,9 +38,11 @@ const LAST_YEAR = {
   phone: "07700 900123",
 };
 
-function load(search: string, before?: () => void) {
+function load(search: string, before?: () => void, withCategories = false) {
   window.history.replaceState({}, "", "/fundraise" + search);
-  document.documentElement.innerHTML = new DOMParser().parseFromString(renderFundraiseSignUp(template, true), "text/html").documentElement.innerHTML;
+  if (withCategories) rememberCategories(ALL_BUILT_IN_CATEGORIES);
+  const page = withCategories ? renderFundraiseSignUp(template, true, formCategories(), memoryCategories()) : renderFundraiseSignUp(template, true);
+  document.documentElement.innerHTML = new DOMParser().parseFromString(page, "text/html").documentElement.innerHTML;
   if (before) before();
   calls = [];
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -85,6 +88,50 @@ describe("a form opened from Do it again", () => {
     // Never the date: that is this year's to choose.
     expect($("#eventDate").value).toBe("");
     expect(form.payload().again).toBe(TOKEN);
+  });
+
+  // A page in memory of someone gets no year on email, but if a link ever opens one, the form is the
+  // gentle in memory one, with their details, never the cheerful raising money one.
+  it("opens on the gentle in memory path for a page in memory of someone", async () => {
+    answer = {
+      status: 200,
+      body: { ...LAST_YEAR, path: "memory", kind: "other", kindOther: "A quiet collection", title: "Remembering Jean", memoryName: "Jean Example", memoryDates: "1948 to 2026" },
+    };
+    const form = load(`?again=${TOKEN}`, undefined, true);
+    await settle();
+    expect($('input[name="path"][value="memory"]').checked).toBe(true);
+    expect($('input[name="path"][value="raising"]').checked).toBe(false);
+    expect(document.getElementById("fundraise-heading")!.textContent).toBe("A page in their memory");
+    expect($("#memoryName").value).toBe("Jean Example");
+    expect($("#memoryDates").value).toBe("1948 to 2026");
+    expect($("#title").value).toBe("Remembering Jean");
+    expect($("#firstName").value).toBe("Sam");
+    // The way of giving is the one on the in memory list, and it stays chosen.
+    const kind = document.querySelector<HTMLInputElement>('input[name="kind"]:checked')!;
+    expect(kind.value).toBe("other");
+    expect(kind.closest("[hidden]")).toBeNull();
+    // Their permission is never ticked for them.
+    expect($("#memoryPermission").checked).toBe(false);
+    expect(form.payload()).toMatchObject({ path: "raising", inMemory: true, memoryName: "Jean Example", again: TOKEN });
+  });
+
+  // Review: they had already chosen raising money before last year's details arrived. Nothing of
+  // the in memory page (who it remembers, their dates, its name) goes into that form.
+  it("fills in nothing of an in memory page when another path is already chosen", async () => {
+    answer = {
+      status: 200,
+      body: { ...LAST_YEAR, path: "memory", kind: "other", title: "Remembering Jean", memoryName: "Jean Example", memoryDates: "1948 to 2026" },
+    };
+    load(`?again=${TOKEN}`, () => {
+      ($('input[name="path"][value="raising"]') as HTMLInputElement).checked = true;
+    }, true);
+    await settle();
+    expect($('input[name="path"][value="raising"]').checked).toBe(true);
+    expect($("#memoryName").value).toBe("");
+    expect($("#memoryDates").value).toBe("");
+    expect($("#title").value).toBe("");
+    // Their own details still come.
+    expect($("#firstName").value).toBe("Sam");
   });
 
   it("takes the token out of the address at once, keeping the rest", async () => {

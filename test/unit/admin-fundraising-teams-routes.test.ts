@@ -77,7 +77,7 @@ beforeEach(() => {
   db.getFundraiser.mockImplementation(async (id: number) => (id === 40 ? rec() : id === 41 ? member(41, "Ava Sample") : null));
   teams.listTeamMembers.mockResolvedValue([member(42, "Zara Example"), member(41, "Ava Sample"), member(43, "Ben New", { status: "new" }), member(44, "Cal Gone", { teamLeftAt: "2026-10-10T10:00:00.000Z" })]);
   teams.listTeamInvites.mockResolvedValue([
-    { id: 7, teamId: 40, firstName: "Dee", lastName: "Example", email: "dee@example.com", createdAt: "2026-10-01T10:00:00.000Z", sentAt: null, remindedAt: null, joinedAt: null, deletedAt: null, joinedFundraiserId: null },
+    { id: 7, teamId: 40, firstName: "Dee", lastName: "Example", email: "dee@example.com", under18: true, createdAt: "2026-10-01T10:00:00.000Z", sentAt: null, remindedAt: null, joinedAt: null, deletedAt: null, joinedFundraiserId: null },
     { id: 8, teamId: 40, firstName: null, lastName: null, email: null, createdAt: "2026-09-01T10:00:00.000Z", sentAt: "2026-09-02T10:00:00.000Z", remindedAt: null, joinedAt: "2026-09-03T10:00:00.000Z", deletedAt: "2026-10-02T10:00:00.000Z", joinedFundraiserId: 41 },
   ]);
   teams.openHandoverFor.mockResolvedValue(null);
@@ -105,6 +105,8 @@ describe("a team, for staff", () => {
       ["held", "Dee Example"],
       ["joined", null],
     ]);
+    // Ticked under 18 by the team organiser: staff see the email is a parent's or guardian's.
+    expect(res.body.invites.map((i: { under18: boolean }) => i.under18)).toEqual([true, false]);
     expect(res.body.split).toBe("The whole team’s split: every member page shares 50% with NBCC, the rest to Exampleton Food Larder.");
     expect(res.body.joinUrl).toBe("https://nbcc.test/fundraise/ej/join");
     // The team's own £10, and two current approved members' £25 each (not the waiting one, not the one taken off).

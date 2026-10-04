@@ -70,11 +70,12 @@ describe("a team's sign up, in its own transaction", () => {
     const { client, calls } = useClient(() => undefined);
     await insertHeldInvites(client as never, 40, [
       { firstName: "Ava", lastName: "Example", email: "ava@example.com" },
-      { firstName: "Jack", lastName: "Sample", email: "parent@example.com" },
+      { firstName: "Jack", lastName: "Sample", email: "parent@example.com", under18: true },
     ]);
     const insert = calls.find(([s]) => s.includes("INSERT INTO team_invites"))!;
     expect(insert[0]).not.toContain("sent_at");
-    expect(insert[1]).toEqual([40, ["Ava", "Jack"], ["Example", "Sample"], ["ava@example.com", "parent@example.com"]]);
+    expect(insert[0]).toContain("(team_id, first_name, last_name, email, under_18)");
+    expect(insert[1]).toEqual([40, ["Ava", "Jack"], ["Example", "Sample"], ["ava@example.com", "parent@example.com"], [false, true]]);
   });
 
   it("adds nobody when nobody was added", async () => {
@@ -127,7 +128,10 @@ describe("sending the invites", () => {
       rows: [{ id: 7, team_id: 40, first_name: "Jack", last_name: "Sample", email: "parent@example.com", created_at: "2026-10-03T10:00:00Z", sent_at: "2026-10-03T10:00:00Z", reminded_at: null, joined_at: null, deleted_at: null, team_slug: "ej" }],
     });
     const inv = await findTeamInviteByHash("c".repeat(64));
-    expect(inv).toMatchObject({ id: 7, teamId: 40, teamSlug: "ej", firstName: "Jack", email: "parent@example.com" });
+    expect(inv).toMatchObject({ id: 7, teamId: 40, teamSlug: "ej", firstName: "Jack", email: "parent@example.com", under18: false });
+    expect(query.mock.calls[0][0]).toContain("i.under_18");
+    query.mockResolvedValueOnce({ rows: [{ id: 8, team_id: 40, first_name: "Jack", last_name: "Sample", email: "parent@example.com", created_at: "2026-10-03T10:00:00Z", under_18: true, team_slug: "ej" }] });
+    expect((await findTeamInviteByHash("d".repeat(64)))?.under18).toBe(true);
     expect(query.mock.calls[0][1]).toEqual(["c".repeat(64)]);
   });
 });
@@ -370,6 +374,8 @@ describe("deleting names and emails, after review", () => {
     expect(await deleteDueInvites("2026-12-06")).toBe(2);
     const del = calls.find(([s]) => s.includes("UPDATE team_invites"))!;
     expect(del[0]).toContain("reminder_token_hash = NULL");
+    // The under 18 tick goes with the name it was about.
+    expect(del[0]).toContain("under_18 = false");
     expect(del[0]).toContain("COALESCE(i.sent_at, i.created_at) <= now() - interval '30 days'");
     expect(del[0]).toContain("FOR UPDATE");
     const log = calls.find(([s]) => s.includes("UPDATE email_log"))!;

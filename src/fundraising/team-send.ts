@@ -95,6 +95,8 @@ async function inviteOne(team: FundraiserRecord, inv: TeamInviteRow, deps: TeamS
     const mail = buildTeamInviteEmail({
       firstName: inv.firstName,
       organiserName: team.name,
+      organiserFirstName: team.firstName ?? null,
+      under18: inv.under18 === true,
       team: teamWords(team),
       joinUrl: teamInviteUrl(base(), team.slug, token),
     });

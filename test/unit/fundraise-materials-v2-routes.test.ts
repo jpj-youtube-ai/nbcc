@@ -44,6 +44,7 @@ vi.mock("../../src/db/fundraiser-materials", () => {
 vi.mock("../../src/db/fundraising-requests", () => ({ listRequestRowsFor: async () => [] }));
 vi.mock("../../src/fundraising/send", () => ({
   fundraiserPageUrl: (slug: string) => `https://nbcc.test/fundraise/${slug}`,
+  eventPageUrl: (slug: string) => `https://nbcc.test/event/${slug}`,
   siteUrl: (path: string) => `https://nbcc.test${path}`,
 }));
 vi.mock("../../src/db/admin-users", () => ({ getUserAuthRow: async () => state.authRow }));
@@ -165,6 +166,42 @@ describe("a piece's own QR code", () => {
     state.fundraisers = [record({ slug: "//evil.example" })];
     expect((await scan("12-a4")).status).toBe(404);
     expect((await fetch(`${base}/q/%2F%2Fevil.example`, { redirect: "manual" })).status).toBe(404);
+  });
+});
+
+// "Print the QR code": a clean A4 page with the page's QR code, for the organiser and for staff.
+describe("the QR code to print", () => {
+  const mine = (id: number, session = SAM) => fetch(`${base}/api/fundraise/manage/fundraisers/${id}/materials/qr-code`, { headers: { cookie: `nbcc_fr_session=${session}` } });
+
+  it("opens for the organiser of an event with a page, on one A4 page with the event's address", async () => {
+    state.fundraisers = [record({ path: "event", slug: "quiz-night", title: "Exampleton Quiz Night" })];
+    const res = await mine(12);
+    expect(res.status).toBe(200);
+    const html = await res.text();
+    expect(html).toContain("@page{size:A4 portrait;margin:0}");
+    expect(html).toContain("Exampleton Quiz Night");
+    expect(html).toContain("nbcc.test/event/quiz-night");
+    expect(res.headers.get("cache-control")).toBe("no-store");
+  });
+
+  it("opens for a fundraiser's page too, and for staff", async () => {
+    expect((await mine(12)).status).toBe(200);
+    const res = await staffGet("/api/admin/fundraisers/12/materials/qr-code", staffToken({ fundraising: "view" }));
+    expect(res.status).toBe(200);
+    expect(await res.text()).toContain("nbcc.test/fundraise/sams-santa-dash");
+  });
+
+  it("is not there for someone else's, one not approved, or one with no page", async () => {
+    expect((await mine(13)).status).toBe(404);
+    state.fundraisers = [record({ status: "new" })];
+    expect((await mine(12)).status).toBe(404);
+    state.fundraisers = [record({ public: false })];
+    expect((await mine(12)).status).toBe(404);
+    expect((await staffGet("/api/admin/fundraisers/12/materials/qr-code", staffToken({ fundraising: "view" }))).status).toBe(404);
+  });
+
+  it("needs staff who can view fundraising", async () => {
+    expect((await staffGet("/api/admin/fundraisers/12/materials/qr-code", null)).status).toBe(401);
   });
 });
 

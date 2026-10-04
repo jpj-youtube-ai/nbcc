@@ -206,3 +206,85 @@ describe("the handover code", () => {
     neverSays(m);
   });
 });
+
+// The team organiser ticked "This person is under 18" beside someone they added: the email box was
+// their parent's or guardian's, so the invite and its one reminder speak to the parent. Invented names.
+describe("the invite for someone under 18, to their parent or guardian", () => {
+  const o = { firstName: "Jack", organiserName: "Robin Organiser", team, joinUrl: "https://nbcc.scot/fundraise/ej/join?invite=abc", under18: true };
+  const m = buildTeamInviteEmail(o);
+  const r = buildTeamInviteReminderEmail(o);
+
+  it("says in the subject who is invited, so the parent is not asked to join", () => {
+    expect(m.subject).toBe("Robin has invited Jack to join Exampleton Juniors");
+    expect(r.subject).toBe("A gentle reminder: Jack is invited to join Exampleton Juniors");
+  });
+
+  it("says why the parent got it, with no maybe about whose email it is", () => {
+    const why = "Robin Organiser gave us your email, as the parent or guardian of Jack, so we could invite Jack to join Exampleton Juniors for their Santa dash on Saturday 5 December.";
+    expect(m.text).toContain(why);
+    expect(r.text).toContain(why);
+    expect(both(m) + both(r)).not.toContain("if this is a parent or guardian");
+  });
+
+  it("tells the parent they set the page up", () => {
+    expect(m.text).toContain("Robin is the team organiser. Joining takes a couple of minutes: Jack gets a page with a meter, and everything it raises counts towards the team’s total too.");
+    expect(m.text).toContain("As Jack is under 18, you set up the page as the parent or guardian, and can name Jack on it.");
+    expect(m.html).toContain("Jack is invited to join a team!");
+    expect(r.html).toContain("Still keen for Jack to join Exampleton Juniors?");
+  });
+
+  it("keeps the button, the questions and the way out, with no possessive on the name", () => {
+    for (const x of [m, r]) {
+      expect(x.text).toContain("Join the team: https://nbcc.scot/fundraise/ej/join?invite=abc");
+      expect(x.text).toContain("reply to this email, email events@nbcc.scot or call 01292 811 015");
+      expect(both(x)).not.toMatch(/Jack['’]s/);
+      neverSays(x);
+    }
+    expect(m.text).toContain(INVITE_NOT_FOR_YOU);
+    expect(r.text).toContain(NOT_FOR_YOU);
+  });
+
+  it("escapes the name", () => {
+    expect(buildTeamInviteEmail({ ...o, firstName: "<i>J</i>" }).html).not.toContain("<i>J</i>");
+  });
+
+  // Review: the name the team organiser typed goes in a subject line, so only a safe first name
+  // does (one word of letters); anything else is "your child", and the email still goes.
+  it("never puts a strange name in the subject or the heading", () => {
+    for (const odd of ["Jack123", "http://x.example", "J".repeat(30), "<b>"]) {
+      const x = buildTeamInviteEmail({ ...o, firstName: odd });
+      const y = buildTeamInviteReminderEmail({ ...o, firstName: odd });
+      expect(x.subject).toBe("Robin has invited your child to join Exampleton Juniors");
+      expect(x.html).toContain("Your child is invited to join a team!");
+      expect(y.subject).toBe("A gentle reminder: your child is invited to join Exampleton Juniors");
+      expect(y.html).toContain("Still keen for your child to join Exampleton Juniors?");
+    }
+    // The first word of a name of two words, with its first letter a capital.
+    expect(buildTeamInviteEmail({ ...o, firstName: "mary jane" }).subject).toBe("Robin has invited Mary to join Exampleton Juniors");
+  });
+
+  it("leaves an adult's invite as it was", () => {
+    const a = buildTeamInviteEmail({ ...o, under18: false });
+    expect(a.subject).toBe("Robin has invited you to join Exampleton Juniors");
+    expect(a.text).toContain("(or Jack, if this is a parent or guardian’s email)");
+  });
+});
+
+// Jaimie, 2026-10-03: "Hi The," for a pub. The same care for the team organiser's name in an invite.
+describe("the team organiser's name in an invite, when it is a group's or has a title", () => {
+  const o = { firstName: "Jack", team, joinUrl: "j" };
+
+  it("uses the whole name of a group, never 'The has invited you'", () => {
+    for (const x of [buildTeamInviteEmail({ ...o, organiserName: "The Example Arms" }), buildTeamInviteReminderEmail({ ...o, organiserName: "The Example Arms" })]) {
+      expect(x.subject).not.toMatch(/^The has/);
+      expect(x.text).toContain("The Example Arms is the team organiser");
+      expect(x.text).toContain("Ask The Example Arms, or ask us");
+    }
+    expect(buildTeamInviteEmail({ ...o, organiserName: "The Example Arms" }).subject).toBe("The Example Arms has invited you to join Exampleton Juniors");
+  });
+
+  it("skips a title, and uses the first name they gave on the form when there is one", () => {
+    expect(buildTeamInviteEmail({ ...o, organiserName: "Dr Robin Organiser" }).subject).toBe("Robin has invited you to join Exampleton Juniors");
+    expect(buildTeamInviteEmail({ ...o, organiserName: "R Organiser", organiserFirstName: "Robin" }).subject).toBe("Robin has invited you to join Exampleton Juniors");
+  });
+});

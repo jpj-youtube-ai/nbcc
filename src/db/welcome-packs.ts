@@ -6,11 +6,13 @@ import { RequestError, changeRequestIn, lockRequestRows } from "./fundraising-re
 import { parseWants } from "../fundraising/requests";
 import type { FundraiserRecord } from "../fundraising/model";
 import {
+  PACK_HANDLED,
   PACK_REQUEST_KIND,
   applyPackAction,
   packRequestSync,
   packSettled,
   packView,
+  tshirtLeftOut,
   type PackPress,
   type PackSubject,
   type PackActionInput,
@@ -33,7 +35,10 @@ import {
 // comes off, by the Requests' own rules and with their own audit line (changeRequestIn,
 // src/db/fundraising-requests.ts). A row keeps marked_request once the pack has marked its request,
 // and only such a request is ever opened again or has its count put right, so what staff did by
-// hand in Requests is never overwritten.
+// hand in Requests is never overwritten. (An untick of a thing whose request the pack marked keeps
+// its row, cleared, while staff hold that request, so the mark is not lost with the tick.) The request itself says who changed it last: the pack writes
+// "pack:" before the staff member there (PACK_HANDLED), so a request staff changed by hand since the
+// pack marked it (undone, then sent again with their own count) is told apart and left alone.
 
 export class PackError extends Error {
   constructor(
@@ -124,8 +129,19 @@ export async function posterSizesFor(fundraiserId: number, client: Pick<PoolClie
  * summary then counts that page as having something to send.
  */
 export async function settledPackIds(fundraisers: Array<PackSubject & { id: number }>): Promise<Set<number>> {
+  return (await summaryPackIds(fundraisers)).settled;
+}
+
+/**
+ * What the Monday summary needs of the packs, in one read: the pages whose pack has gone with nothing
+ * more owed (above), and those whose waiting T-shirt staff left out with a reason, which are packs to
+ * send rather than packs waiting for a size.
+ */
+export async function summaryPackIds(fundraisers: Array<PackSubject & { id: number }>): Promise<{ settled: Set<number>; tshirtLeftOut: Set<number> }> {
   const [stored, sizes] = await Promise.all([listPacks(), listPosterSizes()]);
-  return new Set(fundraisers.filter((f) => packSettled(f, stored.get(f.id) ?? null, sizes.get(f.id) ?? null)).map((f) => f.id));
+  const ids = (test: (f: PackSubject, pack: StoredPack | null, s: PosterSizes | null) => boolean) =>
+    new Set(fundraisers.filter((f) => test(f, stored.get(f.id) ?? null, sizes.get(f.id) ?? null)).map((f) => f.id));
+  return { settled: ids(packSettled), tshirtLeftOut: ids(tshirtLeftOut) };
 }
 
 /** Who this staff member last chose to sign a letter: offered first on their next one. */
@@ -209,7 +225,16 @@ export async function changePack(fundraiserId: number, input: PackActionInput, a
       data.label = c.label;
       data.quantity = c.quantity;
     } else if (c.type === "untick") {
-      await client.query("DELETE FROM welcome_pack_items WHERE pack_id = $1 AND key = $2", [packId, c.key]);
+      // The pack's mark on this thing's request must outlive the untick while staff hold the request
+      // (they undid it, or sent it again, by hand): else the next tick would find no mark and send
+      // it again. So a marked thing's row is kept, cleared (no tick, no reason: the list reads it as
+      // untouched); it goes below once the pack itself has opened the request again.
+      const keepsMark = (before?.pack.items ?? []).some((i) => i.key === c.key && i.markedRequest === true);
+      if (keepsMark) {
+        await client.query("UPDATE welcome_pack_items SET ticked_at = NULL, ticked_by = NULL, skipped_reason = NULL, updated_at = now() WHERE pack_id = $1 AND key = $2", [packId, c.key]);
+      } else {
+        await client.query("DELETE FROM welcome_pack_items WHERE pack_id = $1 AND key = $2", [packId, c.key]);
+      }
     } else if (c.type === "send") {
       await client.query("UPDATE welcome_packs SET sent_at = now(), sent_by = $2, updated_at = now() WHERE id = $1", [packId, actor]);
     } else if (c.type === "undo") {
@@ -245,7 +270,8 @@ export async function changePack(fundraiserId: number, input: PackActionInput, a
       const subject = { status: f.status, wants: parseWants(f.wants), socialOk: f.socialOk, eventDate: f.eventDate };
       for (const step of steps) {
         try {
-          requestWords.push((await changeRequestIn(client, fundraiserId, subject, step.kind, step.input, actor, today)).words);
+          // Kept on the request as changed by the pack; its History line still says who pressed.
+          requestWords.push((await changeRequestIn(client, fundraiserId, subject, step.kind, step.input, actor, today, PACK_HANDLED + actor)).words);
           // The pack's own record of what it marked: set when it marks, cleared when it opens again.
           const keys = Object.keys(PACK_REQUEST_KIND).filter((k) => PACK_REQUEST_KIND[k] === step.kind);
           await client.query("UPDATE welcome_pack_items SET marked_request = $2 WHERE pack_id = $1 AND key = ANY($3::text[])", [packId, step.input.action !== "undo", keys]);
@@ -254,6 +280,14 @@ export async function changePack(fundraiserId: number, input: PackActionInput, a
           // is: the tick still stands. Anything else stops the whole press.
           if (!(err instanceof RequestError)) throw err;
         }
+      }
+      // An unticked thing's cleared row has done its work once its mark is gone (the pack opened the
+      // request again): removed, as an untick always left it.
+      if (c.type === "untick") {
+        await client.query(
+          "DELETE FROM welcome_pack_items WHERE pack_id = $1 AND key = $2 AND ticked_at IS NULL AND skipped_reason IS NULL AND marked_request = false",
+          [packId, c.key],
+        );
       }
     }
     return { view: fresh, words: result.words, requestWords, fundraiser: f };

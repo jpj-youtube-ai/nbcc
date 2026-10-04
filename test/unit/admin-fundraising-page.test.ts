@@ -1947,9 +1947,25 @@ describe("its materials", () => {
     await openFundraising();
     await openRow(1);
     // TASK-512: the A3 poster, the A5 leaflet, and Download everything.
-    expect(buttons()).toEqual(["everything", "poster", "poster-a3", "leaflet", "social", "sponsor-form", "certificate"]);
+    // And, with a page, its QR code on one A4 page to print, beside the code itself.
+    expect(buttons()).toEqual(["qr-code", "everything", "poster", "poster-a3", "leaflet", "social", "sponsor-form", "certificate"]);
+    expect(text(q('#frList [data-frmaterial="qr-code"]'))).toBe("Print the QR code");
     expect(text(q('#frList [data-frmaterial="everything"]'))).toBe("Download everything");
     expect(text(q('#frList [data-frmaterial="certificate"]'))).toContain("preview");
+  });
+
+  it("opens the QR code to print in its own tab, and offers none without a page", async () => {
+    records = [fundraiser(1, { status: "approved", pageUrl: "https://nbcc.scot/fundraise/test-dash-1" })];
+    await openFundraising();
+    await openRow(1);
+    (q('#frList [data-frmaterial="qr-code"]') as HTMLButtonElement).click();
+    await settle();
+    expect(sent("GET", "/api/admin/fundraisers/1/materials/qr-code").length).toBe(1);
+    expect(tabs[0].location.href).toBe("blob:nbcc.test/material-1");
+    records = [fundraiser(2, { status: "approved", pageUrl: null })];
+    await openFundraising();
+    await openRow(2);
+    expect(q('#frList [data-frmaterial="qr-code"]')).toBeNull();
   });
 
   it("offers the certificate itself once finished", async () => {

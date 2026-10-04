@@ -141,6 +141,12 @@ describe("an invite's link filling in the join form", () => {
     expect(res.headers["Cache-Control"]).toBe("no-store");
   });
 
+  it("says when the team organiser ticked under 18, so the form opens for a parent or guardian", async () => {
+    teams.findTeamInviteByHash.mockResolvedValue(invite({ under18: true }));
+    const res = await run(postTeamInvitePrefill, { body: { token: "a".repeat(43) } });
+    expect(res.body).toEqual({ firstName: "Jack", lastName: "Sample", email: "parent@example.com", teamSlug: "ej", under18: true });
+  });
+
   it("gives one plain answer for anything else: unknown, joined, deleted or not a token", async () => {
     for (const found of [null, invite({ joinedAt: "2026-10-04T10:00:00Z" }), invite({ deletedAt: "2026-10-30T10:00:00Z", firstName: null, email: null })]) {
       teams.findTeamInviteByHash.mockResolvedValue(found);

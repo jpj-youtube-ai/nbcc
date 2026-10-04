@@ -109,7 +109,8 @@ export async function postTeamInvitePrefill(req: Request, res: Response): Promis
     if (!(await fundraisingIsOn())) return res.status(404).json(GONE);
     const inv = await findTeamInviteByHash(hashTeamInviteToken(token));
     if (!inv || inv.teamStatus !== "approved" || inv.deletedAt || inv.joinedAt || !inv.sentAt || !inv.firstName || !inv.email) return res.status(404).json(GONE);
-    return res.status(200).json({ firstName: inv.firstName, lastName: inv.lastName ?? "", email: inv.email, teamSlug: inv.teamSlug });
+    // Ticked under 18 by the team organiser: the join form opens for a parent or guardian.
+    return res.status(200).json({ firstName: inv.firstName, lastName: inv.lastName ?? "", email: inv.email, teamSlug: inv.teamSlug, ...(inv.under18 ? { under18: true } : {}) });
   } catch (err) {
     console.error("team invite lookup failed:", err instanceof Error ? err.message : err);
     return res.status(503).json({ error: "We could not fill this in just now. You can still fill in the form." });

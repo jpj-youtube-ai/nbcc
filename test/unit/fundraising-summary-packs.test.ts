@@ -55,6 +55,15 @@ describe("welcome packs in the Monday summary", () => {
     expect(lines.waiting).toContain("1 in memory page with things to send");
   });
 
+  // Review: a waiting T-shirt staff left out with a reason is no longer waiting on the organiser.
+  it("counts a pack whose waiting T-shirt was left out under packs to send", () => {
+    const c = summaryCounts(inputs({ fundraisers: [fundraiser(2, { isSporting: true }), fundraiser(6, { isSporting: true })], packsSent: [], packsTshirtLeftOut: [6] }));
+    expect([c.packsToSend, c.tshirtWaiting]).toEqual([1, 1]);
+    const lines = summaryLines(c).waiting;
+    expect(lines).toContain("1 welcome pack to send");
+    expect(lines).toContain("1 welcome pack waiting for a T-shirt size");
+  });
+
   it("says in memory pages in the plural", () => {
     const two = [7, 8].map((id) => fundraiser(id, { inMemory: true, memoryName: "Margaret Exampleton", wants: { ...NONE, envelopeCount: 30 } }));
     expect(summaryLines(summaryCounts(inputs({ fundraisers: two, packsSent: [] }))).waiting).toContain("2 in memory pages with things to send");
@@ -95,7 +104,28 @@ describe("welcome packs in the Monday summary", () => {
     });
     const read = await readSummaryInputs(NOW);
     expect(read.packsSent).toEqual([7]);
+    expect(read.packsTshirtLeftOut).toEqual([]);
     expect(summaryLines(summaryCounts(read)).waiting).toContain("1 welcome pack to send");
+  });
+
+  it("reads which packs had their waiting T-shirt left out", async () => {
+    const page = (id: number, over: Record<string, unknown> = {}) => ({
+      id, slug: `f-${id}`, path: "raising", kind: "walk", title: `Walk ${id}`, description: "", status: "approved", public: true, organiser_name: "Robin Example",
+      organiser_email: "robin@example.com", organiser_phone: "", wants: {}, post_line1: "1 Example Road", post_town: "Exampleton", post_postcode: "EX1 1EX",
+      created_at: "2026-11-01T10:00:00Z", approved_at: "2026-11-02T10:00:00Z", updated_at: "2026-11-02T10:00:00Z", is_sporting: true, ...over,
+    });
+    query.mockImplementation(async (sql: string) => {
+      if (/FROM welcome_pack_items/.test(sql)) {
+        return { rows: [{ pack_id: 2, fundraiser_id: 8, key: "tshirt", label: "Waiting for T-shirt size", quantity: null, ticked_at: null, ticked_by: "admin:fern@example.com", skipped_reason: "They do not want one" }] };
+      }
+      if (/FROM welcome_packs/.test(sql)) return { rows: [{ id: 2, fundraiser_id: 8, sent_at: null, sent_by: null, signer: null, signer_role: null }] };
+      if (/FROM fundraisers f/.test(sql)) return { rows: [page(7), page(8)] };
+      return { rows: [] };
+    });
+    const read = await readSummaryInputs(NOW);
+    expect(read.packsTshirtLeftOut).toEqual([8]);
+    const c = summaryCounts(read);
+    expect([c.packsToSend, c.tshirtWaiting]).toEqual([1, 1]);
   });
 
   it("still sends the summary when the packs cannot be read", async () => {

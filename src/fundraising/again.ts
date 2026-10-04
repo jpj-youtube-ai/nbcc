@@ -1,6 +1,7 @@
 import { createHash, randomBytes } from "node:crypto";
 import { londonToday } from "../events/model";
 import type { FundraiserRecord } from "./model";
+import { isQuietFundraiser } from "./touch-rules";
 
 // TASK-515: "Do it again", from email 18 (a year on). Jaimie asked for its button to open the sign up
 // form filled in from last year's fundraiser in one click, so the approved line "We've kept your page
@@ -13,6 +14,10 @@ import type { FundraiserRecord } from "./model";
 //   - it works for 60 days, and once: the sign up made from it marks it used;
 //   - it fills in only the safe details of last year's fundraiser (againPrefill), never its date,
 //     its address, what it asked us for, anything staff noted, or anything about anyone who gave.
+//
+// A page in memory of someone never gets email 18, so a family should never hold one of these links.
+// If one ever opens such a page all the same (a category changed since, a link made by hand), the
+// form opens on the gentle in memory path with who it remembers, never the raising money one.
 //
 // The new sign up goes to staff to approve like any other. Pure apart from the random bytes, so
 // every rule is unit tested (test/unit/fundraising-again.test.ts).
@@ -56,7 +61,8 @@ export function againVerdict(row: { expiresAt: Date; usedAt: Date | null } | nul
 }
 
 export interface AgainPrefill {
-  path: FundraiserRecord["path"];
+  /** The choice on the form: "memory" is the gentle path, sent as raising money with inMemory. */
+  path: FundraiserRecord["path"] | "memory";
   kind: string;
   kindOther: string | null;
   title: string;
@@ -70,6 +76,9 @@ export interface AgainPrefill {
   lastName: string;
   email: string;
   phone: string;
+  /** Only for a page in memory of someone: who it remembers, and their dates in the family's words. */
+  memoryName?: string | null;
+  memoryDates?: string | null;
 }
 
 /** A year in the name (2000 to 2099) earlier than this year becomes this year (UK). */
@@ -86,17 +95,22 @@ export function againPrefill(
     facebook?: string | null;
     firstName?: string | null;
     lastName?: string | null;
+    inMemory?: boolean | null;
+    memoryName?: string | null;
+    memoryDates?: string | null;
   },
   now: Date,
 ): AgainPrefill {
   const words = String(f.name ?? "").trim().split(/\s+/).filter(Boolean);
   const firstName = f.firstName && f.firstName.trim() ? f.firstName.trim() : words[0] ?? "";
   const lastName = f.lastName && f.lastName.trim() ? f.lastName.trim() : words.slice(1).join(" ");
+  const memory = isQuietFundraiser(f);
   return {
-    path: f.path,
+    path: memory ? "memory" : f.path,
     kind: String(f.kind),
     kindOther: f.kindOther ?? null,
-    title: thisYearIn(f.title, now),
+    // In memory, a year in the name may be a year of their life: it is left as the family wrote it.
+    title: memory ? f.title : thisYearIn(f.title, now),
     description: f.description,
     targetPence: f.path === "raising" ? f.targetPence : null,
     venue: f.venue,
@@ -107,5 +121,6 @@ export function againPrefill(
     lastName,
     email: f.email,
     phone: f.phone,
+    ...(memory ? { memoryName: f.memoryName ?? null, memoryDates: f.memoryDates ?? null } : {}),
   };
 }

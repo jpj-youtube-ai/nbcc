@@ -621,6 +621,8 @@ export async function getManageSession(req: Request, res: Response): Promise<Res
             // In memory (review fix): no certificate of thanks.
             certificate: f.status === "finished" && !isInMemory(f) ? `/api/fundraise/manage/fundraisers/${f.id}/materials/certificate` : null,
             qrPng: page ? `${pagePath(f)}/qr.png` : null,
+            // The page's QR code on one A4 page, to print (only where there is a page).
+            qrSheet: page ? `/api/fundraise/manage/fundraisers/${f.id}/materials/qr-code` : null,
             // In memory: funeral collection envelopes (src/routes/fundraise-memory.ts).
             ...(isInMemory(f) ? { envelopes: `/api/fundraise/manage/fundraisers/${f.id}/materials/envelopes` } : {}),
           },

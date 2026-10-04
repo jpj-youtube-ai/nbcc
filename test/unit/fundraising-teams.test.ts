@@ -65,11 +65,55 @@ describe("Just me, or a team?", () => {
     });
   });
 
+  it("keeps the tick for someone under 18, whose email box is their parent's or guardian's", () => {
+    const r = checkTeamSignUp({
+      path: "raising",
+      team: "team",
+      sharesWithOther: false,
+      teamMembers: [member({ firstName: "Jack", email: "parent@example.com", under18: true }), member({ under18: false }), member({ firstName: "Ben", email: "ben@example.com", under18: "yes" })],
+    });
+    expect(r.fields).toEqual({});
+    expect(r.team?.members.map((m) => m.under18 === true)).toEqual([true, false, false]);
+  });
+
+  it("takes a tick on an empty row as nobody", () => {
+    const r = checkTeamSignUp({ path: "raising", team: "team", sharesWithOther: false, teamMembers: [{ firstName: "", lastName: "", email: "", under18: true }] });
+    expect(r).toEqual({ team: { isTeam: true, shareMode: null, members: [] }, fields: {} });
+  });
+
   it("names each box of a half filled row, by its place", () => {
     const r = checkTeamSignUp({ path: "raising", team: "team", sharesWithOther: false, teamMembers: [member(), { firstName: "Cal", lastName: "", email: "not an email" }] });
     expect(r.fields["teamMembers.1.lastName"]).toBe("Add their surname.");
     expect(r.fields["teamMembers.1.email"]).toBe("Check this email address.");
     expect(r.team).toBeNull();
+  });
+
+  it("keeps a name to one plain line: no line breaks or other control characters, one space between words", () => {
+    const r = checkTeamSignUp({
+      path: "raising",
+      team: "team",
+      sharesWithOther: false,
+      teamMembers: [member({ firstName: " Mary\n\tJane\u0000 ", lastName: "Ex\u2028ample  Smith" })],
+    });
+    expect(r.fields).toEqual({});
+    expect(r.team?.members[0]).toMatchObject({ firstName: "Mary Jane", lastName: "Ex ample Smith" });
+    // Only control characters is nobody's name.
+    expect(checkTeamSignUp({ path: "raising", team: "team", sharesWithOther: false, teamMembers: [member({ firstName: "\u0007\n" })] }).fields["teamMembers.0.firstName"]).toBe("Add their first name.");
+  });
+
+  // One live invite per address on a team (the database keeps it so), so two children at one
+  // parent's email cannot both be added here: the message says what to do instead.
+  it("says what to do when two children share a parent's email", () => {
+    const r = checkTeamSignUp({
+      path: "raising",
+      team: "team",
+      sharesWithOther: false,
+      teamMembers: [member({ firstName: "Jack", email: "parent@example.com", under18: true }), member({ firstName: "Isla", email: "Parent@example.com", under18: true })],
+    });
+    expect(r.team).toBeNull();
+    expect(r.fields["teamMembers.1.email"]).toBe(
+      "That email is already on the list. If two children share a parent’s email, add one here and the other can join with the team link.",
+    );
   });
 
   it("refuses the same email twice", () => {

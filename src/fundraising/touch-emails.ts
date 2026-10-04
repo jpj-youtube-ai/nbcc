@@ -52,6 +52,8 @@ export interface TouchEmailData {
   /** The first name they gave on the form, and the name an event is credited to (organiserFirstName). */
   firstName?: string | null;
   creditName?: string | null;
+  /** A page for someone under 18: their parent's or guardian's first name. The email goes to them. */
+  guardianFirstName?: string | null;
   title: string;
   raisedPence: number;
   targetPence: number | null;
@@ -92,13 +94,14 @@ export function touchUrls(base: string, f: { id: number; slug: string; path?: Fu
 /** What the emails need from a stored fundraiser and its meter. Raised never counts Gift Aid. */
 export function touchEmailData(
   f: Pick<FundraiserRecord, "id" | "slug" | "name" | "title" | "targetPence"> &
-    Partial<Pick<FundraiserRecord, "path" | "firstName" | "creditName">> & { meter: Pick<Meter, "raisedPence"> },
+    Partial<Pick<FundraiserRecord, "path" | "firstName" | "creditName" | "guardianFirstName">> & { meter: Pick<Meter, "raisedPence"> },
   base: string,
 ): TouchEmailData {
   return {
     name: f.name,
     firstName: f.firstName ?? null,
     creditName: f.creditName ?? null,
+    guardianFirstName: f.guardianFirstName ?? null,
     title: f.title,
     raisedPence: f.meter.raisedPence,
     targetPence: f.targetPence,
@@ -131,7 +134,14 @@ export function sampleTouchData(kind: TouchKind, base: string): TouchEmailData {
 }
 
 // `first` is null for a group or a business: the greeting is then "Hi there," and a subject drops the name.
-type Builder = (d: TouchEmailData, hi: string, t: string, first: string | null) => BuiltEmail;
+// `child` is true on a page for someone under 18: the email goes to their parent or guardian, so a
+// subject talks about the child ("One week to go for Jack!"), never to them. No possessives, so a
+// name ending in s reads well.
+type Builder = (d: TouchEmailData, hi: string, t: string, first: string | null, child: boolean) => BuiltEmail;
+
+/** A subject that carries the first name: to an adult, about a child to their parent, or with no name. */
+const named = (first: string | null, child: boolean, adult: string, parent: string, plain: string): string =>
+  first ? (child ? parent : adult).replace("{name}", () => first) : plain;
 
 const BUILDERS: Record<TouchKind, Builder> = {
   // 12, approved.
@@ -214,7 +224,7 @@ const BUILDERS: Record<TouchKind, Builder> = {
   },
 
   // 15, approved.
-  week_before: (d, hi, t, first) => {
+  week_before: (d, hi, t, first, child) => {
     const away =
       "is just a week away, and we’re so excited for you! Everything you need is ready in your private area: your QR code, your poster and your sponsor form.";
     const tip =
@@ -227,7 +237,7 @@ const BUILDERS: Record<TouchKind, Builder> = {
       button(d.urls.manage, "Open my private area") +
       bodyP(`<b>Top tip:</b> ${tip}`);
     const text = [hi, "", `${d.title} ${away}`, "", `Open my private area: ${d.urls.manage}`, "", `Top tip: ${tip}`];
-    return toOrganiser(first ? `One week to go, ${first}!` : "One week to go!", body, text, "Good luck, you’ve got this!");
+    return toOrganiser(named(first, child, "One week to go, {name}!", "One week to go for {name}!", "One week to go!"), body, text, "Good luck, you’ve got this!");
   },
 
   // 16, approved. With nothing in yet, the total is left out rather than cheering £0.
@@ -298,7 +308,7 @@ const BUILDERS: Record<TouchKind, Builder> = {
 
   // NEW WORDING, for Jaimie to sign off: once, when their date is close and they are behind. It
   // never says so: it offers help.
-  need_a_hand: (d, hi, t, first) => {
+  need_a_hand: (d, hi, t, first, child) => {
     const soon = "is coming up soon, and we’d love to help you make the most of it. Every gift so far is already making a difference to the children, young people and vulnerable adults we support.";
     const offers: Array<[string, string]> = [
       ["Posters and leaflets", " to put up at work, at school or in your local shop."],
@@ -334,11 +344,11 @@ const BUILDERS: Record<TouchKind, Builder> = {
       "",
       `Top tip: ${tip}`,
     ];
-    return toOrganiser(first ? `Need a hand, ${first}?` : "Need a hand?", body, text, "Cheering you on,");
+    return toOrganiser(named(first, child, "Need a hand, {name}?", "Can we give you and {name} a hand?", "Need a hand?"), body, text, "Cheering you on,");
   },
 
   // NEW WORDING, for Jaimie to sign off: once, when they are on track for their target.
-  on_track: (d, hi, t, first) => {
+  on_track: (d, hi, t, first, child) => {
     const track = `and we just had to say: you’re right on track for your ${pounds(d.targetPence ?? 0)} target!`;
     const thanks = "Thank you, and a big thank you to everyone who has given so far. Every pound helps the children, young people and vulnerable adults we support, all year round.";
     const tip =
@@ -365,11 +375,14 @@ const BUILDERS: Record<TouchKind, Builder> = {
       "",
       `See my page: ${d.urls.page}`,
     ];
-    return toOrganiser(first ? `You're doing great, ${first}!` : "You're doing great!", body, text, "Keep up the brilliant work,");
+    return toOrganiser(named(first, child, "You're doing great, {name}!", "{name} is doing great!", "You're doing great!"), body, text, "Keep up the brilliant work,");
   },
 };
 
 /** One automatic email, ready to send. */
 export function buildTouchEmail(kind: TouchKind, d: TouchEmailData): BuiltEmail {
-  return BUILDERS[kind](d, organiserGreeting(d), escapeHtml(d.title), organiserFirstName(d));
+  // A child's page is one with a parent or guardian on it, whatever their name looks like: the email
+  // goes to them, so no subject ever speaks to the child.
+  const child = String(d.guardianFirstName ?? "").trim() !== "";
+  return BUILDERS[kind](d, organiserGreeting(d), escapeHtml(d.title), organiserFirstName(d), child);
 }

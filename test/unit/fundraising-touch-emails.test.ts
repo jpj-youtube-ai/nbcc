@@ -184,3 +184,49 @@ describe("the details from a real fundraiser", () => {
     expect(d.urls.signUp).toBe("https://nbcc.test/fundraise");
   });
 });
+
+// A page for someone under 18: the email goes to their parent or guardian (greetGuardian says hello
+// to them), so a subject must not speak to the child by name. Invented names.
+describe("a subject on a page for someone under 18", () => {
+  const child = (over: Partial<TouchEmailData> = {}) => data({ name: "Jack Example", firstName: "Jack", guardianFirstName: "Sarah", ...over });
+
+  it("reads right for the parent, where an adult's has their first name", () => {
+    expect(buildTouchEmail("week_before", child()).subject).toBe("One week to go for Jack!");
+    expect(buildTouchEmail("need_a_hand", child()).subject).toBe("Can we give you and Jack a hand?");
+    expect(buildTouchEmail("on_track", child()).subject).toBe("Jack is doing great!");
+  });
+
+  it("never needs a possessive, so a name ending in s reads well", () => {
+    for (const kind of ["week_before", "need_a_hand", "on_track"] as const) {
+      const subject = buildTouchEmail(kind, child({ name: "James Example", firstName: "James" })).subject;
+      expect(subject).toContain("James");
+      expect(subject).not.toMatch(/James['’]/);
+    }
+  });
+
+  it("no subject speaks to the child", () => {
+    for (const kind of TOUCH_KINDS) expect(buildTouchEmail(kind, child()).subject).not.toMatch(/, Jack[!?]/);
+  });
+
+  // Review: a child's page is one with a parent or guardian on it, whatever their name looks like.
+  it("never speaks to the child when the parent's name is not one we can greet by", () => {
+    for (const guardianFirstName of ["Sarah2", "S.", "Sarah-Jane Example-Smith the Third"]) {
+      expect(buildTouchEmail("week_before", child({ guardianFirstName })).subject).toBe("One week to go for Jack!");
+      expect(buildTouchEmail("on_track", child({ guardianFirstName })).subject).toBe("Jack is doing great!");
+    }
+    // No parent or guardian on the page: an adult's.
+    expect(buildTouchEmail("week_before", child({ guardianFirstName: "  " })).subject).toBe("One week to go, Jack!");
+  });
+
+  it("leaves an adult's subjects as they were", () => {
+    const adult = data({ name: "Jack Example", firstName: "Jack" });
+    expect(buildTouchEmail("week_before", adult).subject).toBe("One week to go, Jack!");
+    expect(buildTouchEmail("need_a_hand", adult).subject).toBe("Need a hand, Jack?");
+    expect(buildTouchEmail("on_track", adult).subject).toBe("You're doing great, Jack!");
+  });
+
+  it("is carried from the stored fundraiser", () => {
+    const f = { id: 7, slug: "jacks-walk", name: "Jack Example", firstName: "Jack", guardianFirstName: "Sarah", title: "Jack's walk", targetPence: 50000, meter: { raisedPence: 100 } };
+    expect(buildTouchEmail("week_before", touchEmailData(f, BASE)).subject).toBe("One week to go for Jack!");
+  });
+});

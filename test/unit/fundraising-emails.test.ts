@@ -211,6 +211,10 @@ describe("the summary to the events inbox", () => {
     expect(mail.html).toContain("Exciting news: a new fundraiser!");
     expect(mail.html).toContain("<b>Robin Testperson</b> has signed up <b>Robin&#39;s &lt;Santa&gt; Dash</b>. Nothing is public until someone approves it.");
     expect(mail.html).toContain("Next steps");
+    // A group's or a business's whole name, never "Give The a ring".
+    const pub = buildSignUpStaffEmail({ ...signUp, id: 1, name: "The Example Arms", firstName: null }, { adminUrl: "a" }).text;
+    expect(pub).toContain("Give The Example Arms a ring within a few days to say hello.");
+    expect(pub).toContain("Replying to this email replies to The Example Arms.");
     for (const step of ["Give Robin a ring within a few days to say hello.", "Replying to this email replies to Robin."]) {
       expect(mail.html).toContain(step);
       expect(mail.text).toContain(step);

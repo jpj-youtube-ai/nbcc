@@ -17,6 +17,7 @@ import { printAskSchema, printStatus, type PrintStatus } from "../fundraising/pr
 import { parseWants, type RequestRow } from "../fundraising/requests";
 import {
   MATERIALS,
+  QR_SHEET,
   materialAllowed,
   materialAssets,
   materialFacts,
@@ -24,6 +25,7 @@ import {
   renderCertificate,
   renderEverything,
   renderPoster,
+  renderQrSheet,
   renderSocial,
   renderSponsorForm,
   socialScript,
@@ -38,6 +40,7 @@ import {
 //
 // :piece is poster, poster-a3, leaflet (TASK-512), social, sponsor-form or certificate. Each answer
 // is a whole HTML page. Staff also have `everything` (TASK-512): every printed piece on one page.
+// Both also have qr-code: the page's QR code on one A4 page to print, for one that has a page.
 //
 // The organiser's address sits under /api/fundraise/manage because that is where their session
 // cookie goes (src/fundraising/sign-in.ts scopes it there), so a plain link from the private area
@@ -84,9 +87,12 @@ function html(res: Response, status: number, body: string): Response {
 const notThere = (res: Response) =>
   html(res, 404, materialsMessagePage("Not found", "We could not find that. It may not be ready yet.", { href: "/fundraise/manage", text: "Go to your fundraising area" }));
 
-/** One of the pieces; `everything` too, for staff. */
-function pieceOf(raw: unknown, who: Who): MaterialPiece | "everything" | null {
+type Piece = MaterialPiece | "everything" | typeof QR_SHEET;
+
+/** One of the pieces; the QR code to print; `everything` too, for staff. */
+function pieceOf(raw: unknown, who: Who): Piece | null {
   if (who === "staff" && raw === "everything") return "everything";
+  if (raw === QR_SHEET) return QR_SHEET;
   return (MATERIALS as readonly string[]).includes(String(raw)) ? (raw as MaterialPiece) : null;
 }
 
@@ -104,7 +110,10 @@ function todayInWords(now: Date): string {
 }
 
 /** Draw one piece of one fundraiser. */
-export function buildMaterial(piece: MaterialPiece | "everything", f: Loaded, who: Who, now: Date = new Date()): string {
+export function buildMaterial(piece: MaterialPiece | "everything", f: Loaded, who: Who, now?: Date): string;
+/** The QR code to print is null for one with no page of its own. */
+export function buildMaterial(piece: Piece, f: Loaded, who: Who, now?: Date): string | null;
+export function buildMaterial(piece: Piece, f: Loaded, who: Who, now: Date = new Date()): string | null {
   // Event pages: an event's pieces carry its own page, /event/<short name>.
   const facts = materialFacts(f, f.meter, { pageUrl: pageUrlFor(f), getInvolvedUrl: siteUrl("/get-involved") });
   const assets = materialAssets();
@@ -123,6 +132,8 @@ export function buildMaterial(piece: MaterialPiece | "everything", f: Loaded, wh
       return renderCertificate(facts, assets, { date: todayInWords(now), preview: who === "staff" && f.status !== "finished" });
     case "everything":
       return renderEverything(facts, assets, { date: todayInWords(now), script: socialScript() });
+    case QR_SHEET:
+      return renderQrSheet(facts, assets);
   }
 }
 
@@ -154,8 +165,10 @@ export async function getOrganiserMaterial(req: Request, res: Response): Promise
     }
     const f = await getFundraiser(id);
     if (!f || f.email.trim().toLowerCase() !== email) return notThere(res);
-    if (!materialAllowed(piece, f.status, "organiser")) return notThere(res);
-    return html(res, 200, buildMaterial(piece, f, "organiser"));
+    // The QR code to print follows the poster's rule, and needs a page to scan to.
+    if (!materialAllowed(piece === QR_SHEET ? "poster" : piece, f.status, "organiser")) return notThere(res);
+    const page = buildMaterial(piece, f, "organiser");
+    return page ? html(res, 200, page) : notThere(res);
   } catch (err) {
     console.error("fundraising materials failed:", err instanceof Error ? err.message : err);
     return html(res, 500, materialsMessagePage("Sorry, something went wrong", "We could not make that just now. Please try again in a few minutes."));
@@ -172,8 +185,9 @@ export async function getStaffMaterial(req: Request, res: Response): Promise<Res
     const f = await getFundraiser(id);
     // Everything follows the poster's rule: approved or finished. The certificate inside it only
     // once finished (renderEverything).
-    if (!f || !materialAllowed(piece === "everything" ? "poster" : piece, f.status, "staff")) return notThere(res);
-    return html(res, 200, buildMaterial(piece, f, "staff"));
+    if (!f || !materialAllowed(piece === "everything" || piece === QR_SHEET ? "poster" : piece, f.status, "staff")) return notThere(res);
+    const page = buildMaterial(piece, f, "staff");
+    return page ? html(res, 200, page) : notThere(res);
   } catch (err) {
     console.error("admin fundraising materials failed:", err instanceof Error ? err.message : err);
     return html(res, 500, materialsMessagePage("Sorry, something went wrong", "That could not be made just now. Please try again."));

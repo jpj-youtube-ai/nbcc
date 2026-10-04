@@ -11824,7 +11824,9 @@
   var frTouch = null; // GET /api/admin/fundraising/touch: { today, settings, kinds, sent, prompts, promptCalls }
   var frTouchState = "loading"; // loading, failed or ok
   var frTouchKind = "first_gift"; // the email being read
-  var frTouchFor = ""; // "" for the example, or a fundraiser id
+  var frTouchFor = ""; // "" for the example, "zero" for it with nothing raised, or a fundraiser id
+  var frTouchForOurs = false; // we opened the nothing raised example ourselves, so we may put the usual one back
+  var frTouchForTheirs = false; // they have changed "Show it for" themselves: from then on it is left alone
   var frTouchBusy = false;
   var frTouchSeq = 0; // the latest preview asked for, so a slow answer never replaces a newer one
   var frTouchNotes = {}; // prompt key -> the note typed for its call, kept across a redraw
@@ -11936,6 +11938,8 @@
     frTouchShown = kind + "|" + frTouchFor;
     var info = frTouchKindInfo(kind);
     frTeamSay("frTouchStatus", "", false);
+    // The note and its buttons belong to the preview being replaced: gone until the new one is in.
+    el("frTouchMeta").innerHTML = "";
     var path = "/api/admin/fundraising/touch/preview/" + encodeURIComponent(kind) +
       (frTouchFor === "zero" ? "?sample=zero" : frTouchFor ? "?fundraiserId=" + encodeURIComponent(frTouchFor) : "");
     return authFetch(path)
@@ -11964,7 +11968,7 @@
   function frTouchWaitingPill(k) {
     var waiting = (k && k.waiting) || [];
     if (!waiting.length) return "";
-    var onlyZero = waiting.every(function (key) { return /_zero$/.test(key); });
+    var onlyZero = frTouchOnlyZeroWaiting(k);
     return ' <span class="fr-touch-new fr-touch-waiting" data-frtouchwaiting title="' +
       H.escapeHtml(onlyZero ? "The version with nothing raised yet is waiting for sign off." : "Its new wording is waiting for sign off.") +
       '">Waiting for sign off</span>';
@@ -11974,18 +11978,41 @@
 
   function frTouchSignOffHtml(d) {
     var key = d && d.wordingKey;
-    if (!key) return "";
-    if (d.approvalsUnavailable) return '<p class="fr-touch-signoff" data-frtouchsignoff>' + H.escapeHtml(FR_TOUCH_UNCHECKED) + "</p>";
+    if (d && d.approvalsUnavailable) return key ? '<p class="fr-touch-signoff" data-frtouchsignoff>' + H.escapeHtml(FR_TOUCH_UNCHECKED) + "</p>" : "";
+    var other = frTouchOtherHtml(d);
+    if (!key) return other;
     var admin = isAdmin() && frCanWrite();
     var a = d.approval;
     if (!a) {
       return '<p class="fr-touch-signoff" data-frtouchsignoff>New wording, waiting for your sign off. It won\'t send until you approve it.</p>' +
         (admin ? '<div class="fx-call-row"><button class="admin-btn admin-btn--small" type="button" data-frtouchapprove="' + H.escapeHtml(key) + '"' +
-          (frTouchBusy ? " disabled" : "") + ">Approve this wording</button></div>" : "");
+          (frTouchBusy ? " disabled" : "") + ">Approve this wording</button></div>" : "") + other;
     }
     return '<p class="fr-touch-approved" data-frtouchsignoff>Approved by ' + H.escapeHtml(frWho(a.approvedBy)) + " on " + H.escapeHtml(H.fmtDate(a.approvedAt)) + ".</p>" +
       (admin ? '<div class="fx-call-row"><button class="admin-btn admin-btn--small fr-btn-quiet" type="button" data-frtouchwithdraw="' + H.escapeHtml(key) + '"' +
-        (frTouchBusy ? " disabled" : "") + ">Withdraw approval</button></div>" : "");
+        (frTouchBusy ? " disabled" : "") + ">Withdraw approval</button></div>" : "") + other;
+  }
+
+  // The tab says "Waiting for sign off" while any version of its email is waiting, and the Approve
+  // button is only ever on the version on screen. So when a version that is not on screen is the
+  // one waiting, say which, with a button that shows it (Jaimie, 2026-10-04).
+  function frTouchOnlyZeroWaiting(k) {
+    var waiting = (k && k.waiting) || [];
+    return waiting.length > 0 && waiting.every(function (key) { return /_zero$/.test(key); });
+  }
+
+  function frTouchOtherHtml(d) {
+    // With the sign offs unread, the card cannot say what is waiting: it says nothing here.
+    if (!frTouch || frTouch.approvalsUnavailable) return "";
+    var info = frTouchKindInfo((d && d.kind) || frTouchKind);
+    var others = ((info && info.waiting) || []).filter(function (key) { return key !== d.wordingKey; });
+    if (!others.length) return "";
+    var zero = /_zero$/.test(others[0]);
+    var mine = isAdmin() && frCanWrite() ? "your sign off." : "sign off.";
+    // In a block of its own, so it never sits beside the line above it (an editor has no button between).
+    return '<div><p class="fr-touch-signoff" data-frtouchother>' +
+      (zero ? "The version for a page that has raised nothing yet is still waiting for " : "The usual version is still waiting for ") + mine + "</p>" +
+      '<div class="fx-call-row"><button class="admin-btn admin-btn--small fr-btn-quiet" type="button" data-frtouchshow="' + (zero ? "zero" : "") + '">Show that version</button></div></div>';
   }
 
   function frTouchApproval(key, approve) {
@@ -12165,7 +12192,28 @@
         var kind = t.closest("[data-frtouchkind]");
         if (kind) {
           frTouchKind = kind.getAttribute("data-frtouchkind");
+          // An email whose only waiting version is the nothing raised one opens straight on it, so
+          // Approve is there at once. Never over a real fundraiser, nor once they have picked for
+          // themselves; and the usual example comes back on the next email if it was us who left it.
+          if (!frTouchForTheirs && (frTouchFor === "" || frTouchFor === "zero")) {
+            var zeroOnly = frTouchOnlyZeroWaiting(frTouchKindInfo(frTouchKind)) && !frTouch.approvalsUnavailable;
+            if (zeroOnly && frTouchFor === "") {
+              frTouchFor = "zero";
+              frTouchForOurs = true;
+            } else if (!zeroOnly && frTouchForOurs) {
+              frTouchFor = "";
+              frTouchForOurs = false;
+            }
+          }
           frTouchRenderCard();
+          return;
+        }
+        var show = t.closest("[data-frtouchshow]");
+        if (show) {
+          frTouchFor = show.getAttribute("data-frtouchshow");
+          frTouchForOurs = frTouchFor === "zero";
+          frTouchRenderFor();
+          frTouchPreview();
           return;
         }
         if (t.closest("#frTouchSwitch")) frTouchSwitch();
@@ -12176,6 +12224,8 @@
       });
       el("frTouchFor").addEventListener("change", function (e) {
         frTouchFor = String(e.target.value || "");
+        frTouchForTheirs = true;
+        frTouchForOurs = false;
         frTouchPreview();
       });
       el("frTouchPreview").addEventListener("load", function () {

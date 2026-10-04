@@ -9053,7 +9053,15 @@ approved, "Approved by <name> on <date>." with **Withdraw approval**. Both butto
 only, each after a check, and each writes an `audit_log` row; editors and viewers see whether it is
 approved. Each email with a version still waiting has a **Waiting for sign off** pill in the list of
 emails, the next run line says how many are held back, and **Mark finished** says when the thank you
-is held back. Target, need a hand and on track were approved on 2026-10-03 (seeded by the migration);
+is held back. The Approve button is only ever on the version on screen, so the card makes the one
+waiting easy to find (2026-10-04): an email whose only waiting version is the nothing raised one opens
+straight on "The same example, with nothing raised yet" (never over a real fundraiser picked in **Show
+it for**, and never again once the user has changed that list themselves; the usual example comes back
+on the next email if it was the card that left it); and whenever a version that is not on screen is
+waiting, the preview says "The version for a page that has raised nothing yet is still waiting for your
+sign off." or "The usual version is still waiting for your sign off." ("for sign off" to editors and
+viewers) with **Show that version**, which switches the preview to it. It reads the `waiting` keys the
+card already has; nothing new on the server. Target, need a hand and on track were approved on 2026-10-03 (seeded by the migration);
 finished and the three nothing raised versions wait for Jaimie.
 
 **Smart call prompts.** Pills on the list and a **Keeping in touch** panel in the open sign up, each

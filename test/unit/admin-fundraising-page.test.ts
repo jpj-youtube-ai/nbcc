@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, vi } from "vitest";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { createRequire } from "node:module";
@@ -9,6 +9,10 @@ import { effectivePermissions, type PermissionMap } from "../../src/admin/permis
 // TASK-495: Admin > Fundraising in the admin's jsdom harness (admin-could-not-load.test.ts):
 // admin.html's <body>, a fake fetch standing in for the core's admin API (README, "Community
 // fundraising (TASK-493)"), app.js evaluated against it. Every person, place and amount is invented.
+
+// Each test loads the whole admin page afresh in jsdom: about a second on a quiet machine, up to
+// 3.5 seconds for the slowest, and past the usual 5 seconds under a full parallel run.
+vi.setConfig({ testTimeout: 20_000 });
 
 const require = createRequire(import.meta.url);
 const ROOT = resolve(__dirname, "../..");

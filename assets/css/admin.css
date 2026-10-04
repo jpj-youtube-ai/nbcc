@@ -2832,20 +2832,14 @@ textarea.fx-call-input{min-height:88px;line-height:1.5;resize:vertical;field-siz
 #view-fundraising .fr-scans { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px 18px; }
 #view-fundraising .fr-scans li { white-space: normal; }
 
-/* TASK-515: keeping in touch. The Automatic emails card reads each email as the organiser would see
-   it: the real 660px email zoomed to the card's width and as tall as it is, so the page grows and
-   nothing scrolls inside. The kinds wrap onto as many lines as they need. */
+/* TASK-515: keeping in touch. The Automatic emails card has the switch; an email is read (in the All
+   emails card, and the invite form) as it would arrive: the real 660px email zoomed to the card's
+   width and as tall as it is, so the page grows and nothing scrolls inside. */
 #view-fundraising .fr-touch-switch { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; margin: 10px 0 2px; }
 #view-fundraising .fr-touch-switch .fr-field-hint { margin: 0; }
-#view-fundraising .fr-touch-kinds { flex-wrap: wrap; max-width: 100%; border-radius: 22px; margin: 2px 0 12px; }
-#view-fundraising .fr-touch-new { display: inline-block; margin-left: 4px; padding: 0 7px; border-radius: 999px; font-size: 0.72rem; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; background: var(--cream); color: var(--maroon); box-shadow: inset 0 0 0 1px var(--line); }
-#view-fundraising .fr-touch-for-field { max-width: 420px; margin: 0 0 10px; }
-#view-fundraising .fr-touch-for-field select { width: 100%; }
 #view-fundraising .fr-touch-meta p { margin: 0 0 6px; max-width: 72ch; overflow-wrap: anywhere; }
-#view-fundraising .fr-touch-when { color: var(--slate-soft); font-size: 0.92rem; }
 #view-fundraising .fr-touch-signoff { display: inline-block; padding: 4px 12px; border-radius: 999px; background: color-mix(in srgb, var(--crimson) 12%, var(--cream)); color: var(--crimson); font-weight: 700; font-size: 0.88rem; }
 /* Signing off the new wording (Jaimie, 2026-10-03): approved reads calm, waiting reads crimson. */
-#view-fundraising .fr-touch-waiting { text-transform: none; letter-spacing: 0; color: var(--crimson); }
 #view-fundraising .fr-touch-approved { display: inline-block; padding: 4px 12px; border-radius: 999px; background: color-mix(in srgb, var(--green, #2e7d32) 12%, var(--cream)); color: var(--slate); font-weight: 700; font-size: 0.88rem; }
 #view-fundraising .fr-touch-meta .fx-call-row { margin: 2px 0 10px; }
 #view-fundraising .fr-touch-subject { font-size: 0.98rem; }
@@ -2879,3 +2873,39 @@ textarea.fx-call-input{min-height:88px;line-height:1.5;resize:vertical;field-siz
 #view-fundraising .fr-pledge-row__actions { margin-top: 8px; }
 #view-fundraising .fr-pledge-row__twice { margin-top: 6px; }
 #view-fundraising #frPledgesTools { margin: 4px 0 14px; }
+
+/* All emails (assets/js/admin/all-emails.js): ten folded groups, a row for each email, and the email
+   itself underneath when its row is opened. Rows wrap, the frame is as tall as its email, and the
+   page grows: nothing here scrolls inside a box. Colours are the admin's own tokens. */
+#view-fundraising .fr-emails-groups { display: grid; gap: 8px; margin: 12px 0 4px; min-width: 0; }
+#view-fundraising .fr-emails-group { min-width: 0; border: 1px solid var(--line); border-radius: 12px; background: var(--card); }
+#view-fundraising .fr-emails-group-bar { align-items: center; min-height: 44px; padding: 8px 14px; border-radius: 12px; }
+#view-fundraising .fr-emails-group-name { font-family: var(--font-head); font-weight: 700; color: var(--maroon); }
+#view-fundraising .fr-emails-group-count { font-size: 0.85rem; color: var(--slate-soft); }
+#view-fundraising .fr-emails-rows { list-style: none; display: grid; gap: 6px; margin: 0; padding: 0 10px 10px; }
+#view-fundraising .fr-emails-item { min-width: 0; border: 1px solid var(--line); border-radius: 10px; background: color-mix(in srgb, var(--tan) 8%, var(--card)); }
+#view-fundraising .fr-emails-row { display: grid; gap: 3px; width: 100%; min-height: 44px; padding: 10px 12px; border: 0; border-radius: 10px; background: none; font: inherit; line-height: 1.45; color: var(--slate); text-align: left; cursor: pointer; transition: background-color 160ms ease; }
+#view-fundraising .fr-emails-row:hover { background: var(--tan-soft); }
+#view-fundraising .fr-emails-row:focus-visible { outline: 3px solid var(--holly); outline-offset: 2px; }
+#view-fundraising .fr-emails-row-top { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; }
+#view-fundraising .fr-emails-row-name { font-weight: 700; color: var(--maroon); overflow-wrap: anywhere; }
+#view-fundraising .fr-emails-row-name::before { content: "B8"; display: inline-block; margin-right: 8px; transition: transform 160ms ease; }
+#view-fundraising .fr-emails-row[aria-expanded="true"] .fr-emails-row-name::before { transform: rotate(90deg); }
+#view-fundraising .fr-emails-row-version { font-size: 0.82rem; font-weight: 700; color: var(--crimson); }
+#view-fundraising .fr-emails-row-subject, #view-fundraising .fr-emails-row-who { font-size: 0.9rem; overflow-wrap: anywhere; }
+#view-fundraising .fr-emails-row-subject span { display: inline-block; margin-right: 6px; font-size: 0.72rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--slate-soft); }
+#view-fundraising .fr-emails-row-who { color: var(--slate-soft); }
+#view-fundraising .fr-emails-panel { min-width: 0; padding: 4px 12px 12px; }
+#view-fundraising .fr-emails-controls { display: flex; flex-wrap: wrap; gap: 10px 16px; margin: 4px 0 10px; }
+#view-fundraising .fr-emails-controls .fr-field { flex: 1 1 16rem; max-width: 420px; }
+#view-fundraising .fr-emails-controls select { width: 100%; }
+#view-fundraising .fr-emails-note { margin: 0 0 6px; font-size: 0.85rem; }
+#view-fundraising .fr-emails-link { margin: 8px 0 2px; }
+@media (max-width: 560px) {
+  #view-fundraising .fr-emails-rows { padding: 0 6px 8px; }
+  #view-fundraising .fr-emails-panel { padding: 4px 8px 10px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  #view-fundraising .fr-emails-row, #view-fundraising .fr-emails-row-name::before { transition: none; }
+}
+/* end All emails */

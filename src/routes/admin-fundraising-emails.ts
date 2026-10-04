@@ -17,6 +17,8 @@ import {
 // code can send, read from the one catalogue (src/email/catalogue.ts). Section "fundraising", view:
 // anyone who can see Fundraising can read them.
 //
+//   GET /api/admin/fundraising/emails/summary         the closed card: how many emails there are,
+//                                                     and how many are waiting for sign off        view
 //   GET /api/admin/fundraising/emails                 the list: groups, each email's name, subject,
 //                                                     who gets it and when, its versions and where
 //                                                     its sign off is up to. No HTML.              view
@@ -63,17 +65,24 @@ function subjectOf(e: CatalogueEmail): string | null {
   }
 }
 
+const waitingCount = (approved: ReadonlySet<string>) => CATALOGUE.filter((e) => emailState(e, approved).state === "waiting").length;
+
+// The closed card's line. Nothing is built for it: only the approvals are read.
+export async function getEmailsSummary(req: Request, res: Response): Promise<Response | void> {
+  if (!(await authorizeSection(req, res, "fundraising", "view"))) return;
+  const read = await readApprovals();
+  return res.status(200).json({ count: CATALOGUE.length, waiting: waitingCount(new Set(Object.keys(read.map))), approvalsUnavailable: read.unavailable });
+}
+
 export async function getEmails(req: Request, res: Response): Promise<Response | void> {
   if (!(await authorizeSection(req, res, "fundraising", "view"))) return;
   const read = await readApprovals();
   const approved = new Set(Object.keys(read.map));
-  let waiting = 0;
   const groups = CATALOGUE_GROUPS.map((g) => ({
     id: g.id,
     name: g.name,
     emails: CATALOGUE.filter((e) => e.group === g.id).map((e) => {
       const s = emailState(e, approved);
-      if (s.state === "waiting") waiting += 1;
       return {
         id: e.id,
         name: e.name,
@@ -88,7 +97,7 @@ export async function getEmails(req: Request, res: Response): Promise<Response |
       };
     }),
   }));
-  return res.status(200).json({ count: CATALOGUE.length, waiting, approvalsUnavailable: read.unavailable, groups });
+  return res.status(200).json({ count: CATALOGUE.length, waiting: waitingCount(approved), approvalsUnavailable: read.unavailable, groups });
 }
 
 export async function getEmail(req: Request, res: Response): Promise<Response | void> {
@@ -114,5 +123,6 @@ export async function getEmail(req: Request, res: Response): Promise<Response | 
   });
 }
 
+adminFundraisingEmailsRouter.get("/api/admin/fundraising/emails/summary", getEmailsSummary);
 adminFundraisingEmailsRouter.get("/api/admin/fundraising/emails", getEmails);
 adminFundraisingEmailsRouter.get("/api/admin/fundraising/emails/:id/:version", getEmail);

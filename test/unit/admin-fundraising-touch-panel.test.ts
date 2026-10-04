@@ -7,8 +7,10 @@ import { signAdminSession } from "../../src/admin/session";
 import { effectivePermissions, type PermissionMap } from "../../src/admin/permissions";
 
 // TASK-515: Admin > Fundraising > Automatic emails and the smart call prompts, in the admin's jsdom
-// harness (as admin-fundraising-thanks-panel.test.ts). The card reads every automatic email,
-// rendered, before any is sent; only an admin sees the switch; the list shows a pill for each
+// harness (as admin-fundraising-thanks-panel.test.ts). The card has the switch (admins only) and what
+// the next 8am run would send; reading and approving the emails themselves moved to the All emails
+// card (assets/js/admin/all-emails.js, test/unit/admin-all-emails-panel.test.ts), which this card
+// and each fundraiser's "Read its automatic emails" button open. The list shows a pill for each
 // prompt; the open sign up shows each prompt's reason and talking points with Called, and which
 // automatic emails it has had. A fake fetch stands in for the API. Every name is invented.
 
@@ -16,6 +18,7 @@ const require = createRequire(import.meta.url);
 const ROOT = resolve(__dirname, "../..");
 const html = readFileSync(resolve(ROOT, "admin.html"), "utf8");
 const appSrc = readFileSync(resolve(ROOT, "assets/js/admin/app.js"), "utf8");
+const allEmailsSrc = readFileSync(resolve(ROOT, "assets/js/admin/all-emails.js"), "utf8");
 const helpers = require(resolve(ROOT, "assets/js/admin/helpers.js"));
 const bodyHtml = (html.match(/<body[^>]*>([\s\S]*)<\/body>/i) || ["", ""])[1];
 
@@ -53,8 +56,6 @@ const ZERO_KINDS = ["week_after", "finished", "year_on"];
 const keysOf = (kind: string) => [...(NEW_KINDS.includes(kind) ? [kind] : []), ...(ZERO_KINDS.includes(kind) ? [kind + "_zero"] : [])];
 let approved: Record<string, { approvedAt: string; approvedBy: string }> = {};
 let approvalsUnavailable = false;
-// What one preview says about the sign offs, when it differs from the card (null: the same).
-let previewUnavailable: boolean | null = null;
 let touchFails = false;
 
 const BEHIND = {
@@ -113,6 +114,22 @@ function respond(url: string, init?: { method?: string; body?: string }) {
       due: { "1": "need_a_hand", "2": "halfway" },
     });
   }
+  if (path === "/api/admin/fundraising/emails/summary") return j({ count: 3, waiting: 1, approvalsUnavailable });
+  if (path === "/api/admin/fundraising/emails") {
+    const one = (id: string, kind: string, name: string) => ({
+      id, name, subject: "Subject for " + kind, who: "Goes to the fundraiser.", audience: "public", note: null, touchKind: kind,
+      state: null, waitingVersion: null, versions: [{ id: "usual", label: "The usual one", approval: null }],
+    });
+    return j({
+      count: 3,
+      waiting: 0,
+      approvalsUnavailable,
+      groups: [
+        { id: "touch", name: "Keeping in touch (automatic)", emails: [one("touch-first-gift", "first_gift", "Your first gift is in"), one("touch-need-a-hand", "need_a_hand", "Need a hand?")] },
+        { id: "finishing", name: "Finishing and paying in", emails: [one("touch-finished", "finished", "Thank you, from all of us")] },
+      ],
+    });
+  }
   const pv = path.match(/^\/api\/admin\/fundraising\/touch\/preview\/([a-z_]+)$/);
   if (pv) {
     const forId = new URLSearchParams(query).get("fundraiserId");
@@ -125,7 +142,7 @@ function respond(url: string, init?: { method?: string; body?: string }) {
       newWording: key !== null,
       wordingKey: key,
       approval: (key && approved[key]) || null,
-      approvalsUnavailable: previewUnavailable === null ? approvalsUnavailable : previewUnavailable,
+      approvalsUnavailable,
       sample: !forId,
       title,
       subject: "Subject for " + pv[1],
@@ -193,7 +210,6 @@ beforeEach(() => {
   records = [fundraiser(1), fundraiser(2), fundraiser(3, { path: "event", title: "Test Coffee Morning" })];
   touchOn = false;
   approvalsUnavailable = false;
-  previewUnavailable = null;
   touchFails = false;
   approved = Object.fromEntries(["target", "need_a_hand", "on_track"].map((k) => [k, { approvedAt: "2026-10-03T11:00:00.000Z", approvedBy: "Jaimie" }]));
   asRole("admin");
@@ -215,16 +231,35 @@ beforeEach(() => {
     Promise.resolve(respond(String(url), init as { method?: string; body?: string } | undefined));
   // eslint-disable-next-line no-eval
   (0, eval)(appSrc);
+  // eslint-disable-next-line no-eval
+  (0, eval)(allEmailsSrc);
 });
 
 describe("the Automatic emails card", () => {
-  it("says they are off, and shows the first email straight away, for the invented example", async () => {
+  it("says they are off, and that each one is read in All emails", async () => {
     await openFundraising();
     expect(el("frTouch").hidden).toBe(false);
-    expect(text(el("frTouchState"))).toContain("Off.");
-    expect(sent("GET", "/api/admin/fundraising/touch/preview/first_gift")).toHaveLength(1);
-    expect((el("frTouchPreview") as HTMLIFrameElement).getAttribute("srcdoc")).toContain("Email body for first_gift about Sam's Santa Dash");
-    expect(text(el("frTouchMeta"))).toContain("Subject for first_gift");
+    expect(text(el("frTouchState"))).toBe("Off. None of these is sent. Read each one in All emails, then switch them on when you are happy.");
+  });
+
+  it("no longer shows the emails itself: no tabs, no preview, and none is fetched", async () => {
+    await openFundraising();
+    for (const id of ["frTouchKinds", "frTouchFor", "frTouchMeta", "frTouchPreview", "frTouchPreviewWrap"]) expect(document.getElementById(id), id).toBeNull();
+    expect(text(el("frTouch"))).not.toContain("Read them");
+    expect(calls.filter((c) => c.path.startsWith("/api/admin/fundraising/touch/preview/"))).toHaveLength(0);
+  });
+
+  it("has a button that opens All emails at Keeping in touch (automatic)", async () => {
+    await openFundraising();
+    const link = q('#frTouch [data-allemails-open="touch"]') as HTMLButtonElement;
+    expect(link.tagName).toBe("BUTTON");
+    expect(text(link)).toBe("Read and approve these in All emails");
+    expect(text(el("frTouch"))).toContain("The two that go after their date, “How did it go?” and the thank you when you mark them finished, are under “Finishing and paying in”.");
+    link.click();
+    await settle();
+    expect((el("frAllEmailsFold") as HTMLDetailsElement).open).toBe(true);
+    expect((q('[data-emails-group="touch"]') as HTMLDetailsElement).open).toBe(true);
+    expect((q('[data-emails-group="finishing"]') as HTMLDetailsElement).open).toBe(false);
   });
 
   it("says what the next 8am run would send, so the first morning is no surprise", async () => {
@@ -236,36 +271,40 @@ describe("the Automatic emails card", () => {
     expect(text(q("[data-frtouchnext]"))).toBe("Next: Need a hand?, once automatic emails are switched on.");
   });
 
-  it("has a button for every email, and marks the new wording for sign off", async () => {
+  it("“Read its automatic emails” on a fundraiser opens All emails for them, on the email due next", async () => {
     await openFundraising();
-    const buttons = Array.from(document.querySelectorAll("[data-frtouchkind]"));
-    expect(buttons.map((b) => b.getAttribute("data-frtouchkind"))).toEqual(KINDS.map((k) => k.kind));
-    (q('[data-frtouchkind="need_a_hand"]') as HTMLElement).click();
+    await openRow(1);
+    const btn = q('[data-frtouch-panel] [data-allemails-open="touch"]') as HTMLButtonElement;
+    expect(text(btn)).toBe("Read its automatic emails");
+    btn.click();
     await settle();
-    expect((el("frTouchPreview") as HTMLIFrameElement).getAttribute("srcdoc")).toContain("Email body for need_a_hand");
-    expect(text(el("frTouchMeta"))).toContain("Approved by Jaimie on 03/10/2026.");
-    (q('[data-frtouchkind="finished"]') as HTMLElement).click();
-    await settle();
-    expect(text(el("frTouchMeta"))).toContain("New wording, waiting for your sign off. It won't send until you approve it.");
-    (q('[data-frtouchkind="halfway"]') as HTMLElement).click();
-    await settle();
-    expect(text(el("frTouchMeta"))).not.toContain("New wording");
-    expect(text(el("frTouchMeta"))).not.toContain("Approved by");
-    expect(q("[data-frtouchapprove]")).toBeNull();
+    expect((el("frAllEmailsFold") as HTMLDetailsElement).open).toBe(true);
+    // Fundraiser 1 is due "Need a hand?" next: that is the email opened, as it would go to them today.
+    const last = calls.filter((c) => c.path === "/api/admin/fundraising/touch/preview/need_a_hand").pop()!;
+    expect(last.query).toBe("fundraiserId=1");
+    const panel = q('[data-email="touch-need-a-hand"] .fr-emails-panel') as HTMLElement;
+    expect(panel.hidden).toBe(false);
+    expect(panel.querySelector("iframe")!.getAttribute("srcdoc")).toContain("about Test Dash 1");
+    expect(text(panel)).toContain("For Test Dash 1, as it would go today.");
+    // "Show it for" lists the example, then the pages raising money (never the event).
+    const pick = panel.querySelector("select[data-emails-for]") as HTMLSelectElement;
+    expect(Array.from(pick.options).map((o) => o.value)).toEqual(["", "1", "2"]);
+    expect(pick.value).toBe("1");
   });
 
-  it("shows an email for a real fundraiser raising money, picked from the list", async () => {
+  it("is not offered on an event, which gets no automatic emails", async () => {
     await openFundraising();
-    const pick = el("frTouchFor") as HTMLSelectElement;
-    const values = Array.from(pick.options).map((o) => o.value);
-    // The example, the example with nothing raised yet, then the pages raising money (not the event).
-    expect(values).toEqual(["", "zero", "1", "2"]);
-    pick.value = "2";
-    pick.dispatchEvent(new Event("change", { bubbles: true }));
+    await openRow(3);
+    expect(q("[data-frtouch-panel] [data-allemails-open]")).toBeNull();
+    expect(text(q("[data-frtouch-panel]"))).toContain("Automatic emails only go to public pages raising money.");
+  });
+
+  it("reads what is due again when a sign off changes in All emails", async () => {
+    await openFundraising();
+    const before = sent("GET", "/api/admin/fundraising/touch").length;
+    el("frAllEmails").dispatchEvent(new CustomEvent("nbcc:wording-changed", { bubbles: true, detail: { key: "finished" } }));
     await settle();
-    const last = calls.filter((c) => c.path === "/api/admin/fundraising/touch/preview/first_gift").pop()!;
-    expect(last.query).toBe("fundraiserId=2");
-    expect((el("frTouchPreview") as HTMLIFrameElement).getAttribute("srcdoc")).toContain("about Test Dash 2");
+    expect(sent("GET", "/api/admin/fundraising/touch").length).toBe(before + 1);
   });
 
   it("lets an admin switch them on, after a warning", async () => {
@@ -288,7 +327,7 @@ describe("the Automatic emails card", () => {
     expect(sent("PUT", "/api/admin/fundraising/touch/settings")).toHaveLength(0);
   });
 
-  it("shows an editor the emails but not the switch", async () => {
+  it("shows an editor the card but not the switch", async () => {
     asRole("editor");
     await openFundraising();
     expect(el("frTouch").hidden).toBe(false);
@@ -298,80 +337,15 @@ describe("the Automatic emails card", () => {
 });
 
 describe("signing off the new wording (Jaimie, 2026-10-03)", () => {
-  const pickKind = async (kind: string) => {
-    (q(`[data-frtouchkind="${kind}"]`) as HTMLElement).click();
-    await settle();
-  };
-  const pillOn = (kind: string) => q(`[data-frtouchkind="${kind}"] [data-frtouchwaiting]`);
-
   it("says in the card that new wording only sends once approved", async () => {
     await openFundraising();
-    expect(text(el("frTouch"))).toContain("New wording only sends once it's approved here.");
+    expect(text(el("frTouch"))).toContain("Read every one in All emails before switching them on. New wording only sends once it's approved there.");
   });
 
-  it("puts a Waiting for sign off pill on each email with a version still waiting, and none on the approved ones", async () => {
+  it("has no approve or withdraw button of its own: those are in All emails", async () => {
     await openFundraising();
-    for (const k of ["finished", "week_after", "year_on"]) expect(text(pillOn(k))).toBe("Waiting for sign off");
-    for (const k of ["target", "need_a_hand", "on_track", "halfway", "first_gift"]) expect(pillOn(k)).toBeNull();
-  });
-
-  it("lets an admin approve a wording that is waiting, after a check, and then shows who approved it", async () => {
-    await openFundraising();
-    await pickKind("finished");
-    const btn = q("[data-frtouchapprove]")!;
-    expect(text(btn)).toBe("Approve this wording");
-    expect(btn.getAttribute("data-frtouchapprove")).toBe("finished");
-    btn.click();
-    await settle();
-    expect(confirmed.pop()).toMatch(/Approve this wording/);
-    expect(sent("POST", "/api/admin/fundraising/touch/approvals/finished")).toHaveLength(1);
-    expect(text(el("frTouchMeta"))).toContain("Approved by fern@example.com on 07/12/2026.");
-    expect(pillOn("finished")).not.toBeNull(); // its nothing raised version is still waiting
-    expect(text(el("frTouchStatus"))).toBe("Wording approved.");
-  });
-
-  it("approves the nothing raised version on its own, from the example with nothing raised", async () => {
-    await openFundraising();
-    await pickKind("year_on"); // it opens straight on the example with nothing raised
-    expect((el("frTouchFor") as HTMLSelectElement).value).toBe("zero");
-    expect(text(el("frTouchMeta"))).toContain("waiting for your sign off");
-    q("[data-frtouchapprove]")!.click();
-    await settle();
-    expect(sent("POST", "/api/admin/fundraising/touch/approvals/year_on_zero")).toHaveLength(1);
-    expect(pillOn("year_on")).toBeNull();
-  });
-
-  it("sends nothing when the check is cancelled", async () => {
-    confirmAnswer = false;
-    await openFundraising();
-    await pickKind("finished");
-    q("[data-frtouchapprove]")!.click();
-    await settle();
-    expect(sent("POST", "/api/admin/fundraising/touch/approvals/finished")).toHaveLength(0);
-  });
-
-  it("lets an admin withdraw an approval", async () => {
-    await openFundraising();
-    await pickKind("target");
-    const btn = q("[data-frtouchwithdraw]")!;
-    expect(text(btn)).toBe("Withdraw approval");
-    btn.click();
-    await settle();
-    expect(confirmed.pop()).toMatch(/Withdraw approval/);
-    expect(sent("DELETE", "/api/admin/fundraising/touch/approvals/target")).toHaveLength(1);
-    expect(text(el("frTouchMeta"))).toContain("waiting for your sign off");
-    expect(text(pillOn("target"))).toBe("Waiting for sign off");
-  });
-
-  it("shows an editor whether each is approved, but neither button", async () => {
-    asRole("editor");
-    await openFundraising();
-    await pickKind("finished");
-    expect(text(el("frTouchMeta"))).toContain("waiting for your sign off");
-    expect(q("[data-frtouchapprove]")).toBeNull();
-    await pickKind("target");
-    expect(text(el("frTouchMeta"))).toContain("Approved by Jaimie on 03/10/2026.");
-    expect(q("[data-frtouchwithdraw]")).toBeNull();
+    expect(text(el("frTouch"))).not.toMatch(/Approve this wording|Withdraw approval/);
+    expect(appSrc).not.toMatch(/data-frtouchapprove|data-frtouchwithdraw|data-frtouchkind|data-frtouchshow/);
   });
 
   it("says before Mark finished that the thank you waits for its wording to be approved", async () => {
@@ -381,197 +355,6 @@ describe("signing off the new wording (Jaimie, 2026-10-03)", () => {
     await openRow(1);
     (q('[data-fraction="finish"]') as HTMLElement).click();
     expect(confirmed.pop()).toContain("its new wording is waiting for your sign off");
-  });
-});
-
-describe("making the version that is waiting easy to find", () => {
-  const pickKind = async (kind: string) => {
-    (q(`[data-frtouchkind="${kind}"]`) as HTMLElement).click();
-    await settle();
-  };
-  const showFor = async (value: string) => {
-    const pick = el("frTouchFor") as HTMLSelectElement;
-    pick.value = value;
-    pick.dispatchEvent(new Event("change", { bubbles: true }));
-    await settle();
-  };
-  const shown = () => (el("frTouchFor") as HTMLSelectElement).value;
-  const other = () => q("[data-frtouchother]");
-  const showBtn = () => q("[data-frtouchshow]");
-  const lastPreview = (kind: string) => calls.filter((c) => c.path === "/api/admin/fundraising/touch/preview/" + kind).pop()!;
-  const ZERO_LINE = "The version for a page that has raised nothing yet is still waiting for your sign off.";
-  const USUAL_LINE = "The usual version is still waiting for your sign off.";
-
-  it("opens an email whose only waiting version is the nothing raised one straight on that version", async () => {
-    await openFundraising();
-    await pickKind("week_after");
-    expect(shown()).toBe("zero");
-    expect(lastPreview("week_after").query).toBe("sample=zero");
-    expect(q("[data-frtouchapprove]")!.getAttribute("data-frtouchapprove")).toBe("week_after_zero");
-    expect(other()).toBeNull();
-  });
-
-  it("opens on the usual example when the usual version is waiting too, and says the other one is waiting", async () => {
-    await openFundraising();
-    await pickKind("finished");
-    expect(shown()).toBe("");
-    expect(q("[data-frtouchapprove]")!.getAttribute("data-frtouchapprove")).toBe("finished");
-    expect(text(other())).toBe(ZERO_LINE);
-  });
-
-  it("goes back to the usual example on the next email, when it was us who changed it", async () => {
-    await openFundraising();
-    await pickKind("year_on");
-    expect(shown()).toBe("zero");
-    await pickKind("halfway");
-    expect(shown()).toBe("");
-    expect(lastPreview("halfway").query).toBe("");
-  });
-
-  it("says which version is waiting when the usual example is on screen, with a button that shows it", async () => {
-    await openFundraising();
-    await pickKind("year_on");
-    await showFor("");
-    expect(q("[data-frtouchapprove]")).toBeNull();
-    expect(text(other())).toBe(ZERO_LINE);
-    expect(other()!.className).toBe("fr-touch-signoff");
-    const btn = showBtn()!;
-    expect(text(btn)).toBe("Show that version");
-    expect(btn.className).toBe("admin-btn admin-btn--small fr-btn-quiet");
-    btn.click();
-    await settle();
-    expect(shown()).toBe("zero");
-    expect(q("[data-frtouchapprove]")!.getAttribute("data-frtouchapprove")).toBe("year_on_zero");
-    expect(other()).toBeNull();
-  });
-
-  it("says so beside an approved usual version too", async () => {
-    approved.finished = { approvedAt: "2026-12-01T09:00:00.000Z", approvedBy: "admin:fern@example.com" };
-    await openFundraising();
-    await pickKind("finished");
-    await showFor("");
-    expect(text(el("frTouchMeta"))).toContain("Approved by fern@example.com");
-    expect(text(other())).toBe(ZERO_LINE);
-  });
-
-  it("says the usual version is waiting when the nothing raised one is on screen", async () => {
-    await openFundraising();
-    await pickKind("finished");
-    await showFor("zero");
-    expect(text(other())).toBe(USUAL_LINE);
-    showBtn()!.click();
-    await settle();
-    expect(shown()).toBe("");
-    expect(q("[data-frtouchapprove]")!.getAttribute("data-frtouchapprove")).toBe("finished");
-  });
-
-  it("after an approval, points at the version still waiting, and at nothing once none is left", async () => {
-    await openFundraising();
-    await pickKind("finished");
-    q("[data-frtouchapprove]")!.click();
-    await settle();
-    expect(text(el("frTouchMeta"))).toContain("Approved by fern@example.com on 07/12/2026.");
-    expect(text(other())).toBe(ZERO_LINE);
-    showBtn()!.click();
-    await settle();
-    q("[data-frtouchapprove]")!.click();
-    await settle();
-    expect(sent("POST", "/api/admin/fundraising/touch/approvals/finished_zero")).toHaveLength(1);
-    expect(other()).toBeNull();
-    expect(showBtn()).toBeNull();
-    expect(q('[data-frtouchkind="finished"] [data-frtouchwaiting]')).toBeNull();
-  });
-
-  it("leaves a real fundraiser picked in the list alone, and still says what is waiting", async () => {
-    await openFundraising();
-    await showFor("2");
-    await pickKind("year_on");
-    expect(shown()).toBe("2");
-    expect(lastPreview("year_on").query).toBe("fundraiserId=2");
-    expect(text(other())).toBe(ZERO_LINE);
-  });
-
-  it("never changes the list again once the user has changed it themselves", async () => {
-    await openFundraising();
-    await pickKind("year_on");
-    await showFor("");
-    await pickKind("week_after");
-    expect(shown()).toBe("");
-    expect(text(other())).toBe(ZERO_LINE);
-  });
-
-  it("shows nothing extra on an email with nothing waiting", async () => {
-    await openFundraising();
-    for (const k of ["target", "halfway"]) {
-      await pickKind(k);
-      expect(other()).toBeNull();
-      expect(showBtn()).toBeNull();
-    }
-  });
-
-  it("tells an editor which version is waiting, with the button to show it but none to approve", async () => {
-    asRole("editor");
-    await openFundraising();
-    await pickKind("year_on");
-    expect(shown()).toBe("zero");
-    expect(q("[data-frtouchapprove]")).toBeNull();
-    await showFor("");
-    expect(text(other())).toBe("The version for a page that has raised nothing yet is still waiting for sign off.");
-    expect(text(showBtn())).toBe("Show that version");
-    await pickKind("finished");
-    await showFor("zero");
-    expect(text(other())).toBe("The usual version is still waiting for sign off.");
-  });
-
-  it("does not point at another version when the sign offs could not be checked", async () => {
-    approvalsUnavailable = true;
-    await openFundraising();
-    await pickKind("finished");
-    expect(other()).toBeNull();
-  });
-
-  it("does not point at another version when the card could not check them, whatever the preview says", async () => {
-    approvalsUnavailable = true;
-    previewUnavailable = false;
-    await openFundraising();
-    await pickKind("finished");
-    expect(other()).toBeNull();
-    expect(showBtn()).toBeNull();
-  });
-
-  it("stays on the usual example when the sign offs could not be checked", async () => {
-    approvalsUnavailable = true;
-    await openFundraising();
-    await pickKind("year_on");
-    expect(shown()).toBe("");
-    expect(lastPreview("year_on").query).toBe("");
-  });
-
-  it("keeps the line in a block of its own, so it never sits against the Approved by line", async () => {
-    asRole("editor");
-    approved.finished = { approvedAt: "2026-12-01T09:00:00.000Z", approvedBy: "admin:fern@example.com" };
-    await openFundraising();
-    await pickKind("finished");
-    await showFor("");
-    const approvedLine = q("#frTouchMeta .fr-touch-approved")!;
-    const wrap = other()!.parentElement!;
-    expect(wrap.tagName).toBe("DIV");
-    expect(wrap.id).toBe("");
-    expect(wrap.contains(approvedLine)).toBe(false);
-    expect(approvedLine.nextElementSibling).toBe(wrap);
-  });
-
-  it("clears the note and its buttons as soon as another preview starts, so a stale one cannot be pressed", async () => {
-    await openFundraising();
-    await pickKind("year_on");
-    await showFor("");
-    expect(showBtn()).not.toBeNull();
-    (q('[data-frtouchkind="finished"]') as HTMLElement).click(); // not waited for
-    expect(showBtn()).toBeNull();
-    expect(q("[data-frtouchapprove]")).toBeNull();
-    expect(text(el("frTouchMeta"))).toBe("");
-    await settle();
-    expect(q("[data-frtouchapprove]")!.getAttribute("data-frtouchapprove")).toBe("finished");
   });
 });
 
@@ -600,15 +383,11 @@ describe("review: sign offs, team totals and an unread card", () => {
     expect(said).not.toContain("so we email");
   });
 
-  it("says when the sign offs could not be checked, and offers no approve button", async () => {
+  it("says when the sign offs could not be checked", async () => {
     approvalsUnavailable = true;
     approved = {};
     await openFundraising();
     expect(text(el("frTouch"))).toContain("Couldn't check sign-offs just now, so new wording is held.");
-    (q('[data-frtouchkind="target"]') as HTMLElement).click();
-    await settle();
-    expect(q("[data-frtouchapprove]")).toBeNull();
-    expect(text(el("frTouchMeta"))).toContain("Couldn't check sign-offs just now, so new wording is held.");
   });
 });
 

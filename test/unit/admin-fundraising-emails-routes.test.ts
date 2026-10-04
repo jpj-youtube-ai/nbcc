@@ -149,6 +149,37 @@ describe("GET /api/admin/fundraising/emails", () => {
   });
 });
 
+describe("GET /api/admin/fundraising/emails/summary", () => {
+  it("refuses without a session, and without access to Fundraising", async () => {
+    expect((await run(routes.getEmailsSummary)).statusCode).toBe(401);
+    const none = tokenFor("viewer", { fundraising: "none" });
+    expect((await run(routes.getEmailsSummary, { token: none })).statusCode).toBe(403);
+  });
+
+  it("is only the numbers for the closed card: how many emails, and how many are waiting for sign off", async () => {
+    touch.listWordingApprovals.mockResolvedValue([approved("finished"), approved("pledge_pay")]);
+    const viewer = tokenFor("viewer");
+    const res = await run(routes.getEmailsSummary, { token: viewer });
+    const list = await run(routes.getEmails, { token: viewer });
+    expect(res.statusCode).toBe(200);
+    expect(res.body).toEqual({ count: CATALOGUE.length, waiting: list.body.waiting, approvalsUnavailable: false });
+  });
+
+  it("builds no email to do it", async () => {
+    const spies = CATALOGUE.map((e) => vi.spyOn(e.versions[0], "render"));
+    await run(routes.getEmailsSummary, { token: tokenFor("viewer") });
+    expect(spies.every((s) => s.mock.calls.length === 0)).toBe(true);
+    spies.forEach((s) => s.mockRestore());
+  });
+
+  it("says so when the approvals cannot be read", async () => {
+    touch.listWordingApprovals.mockRejectedValue(new Error("db down"));
+    const res = await run(routes.getEmailsSummary, { token: tokenFor("viewer") });
+    expect(res.body.approvalsUnavailable).toBe(true);
+    expect(res.body.waiting).toBe(9);
+  });
+});
+
 describe("GET /api/admin/fundraising/emails/:id/:version", () => {
   const at = (id: string, version: string) => ({ params: { id, version } });
 
@@ -217,6 +248,6 @@ describe("the router", () => {
   it("only reads: there is nothing here to approve or change", () => {
     const stack = (routes.adminFundraisingEmailsRouter as unknown as { stack: Array<{ route?: { path: string; methods: Record<string, boolean> } }> }).stack;
     const all = stack.filter((l) => l.route).map((l) => `${Object.keys(l.route!.methods).join(",")} ${l.route!.path}`);
-    expect(all).toEqual(["get /api/admin/fundraising/emails", "get /api/admin/fundraising/emails/:id/:version"]);
+    expect(all).toEqual(["get /api/admin/fundraising/emails/summary", "get /api/admin/fundraising/emails", "get /api/admin/fundraising/emails/:id/:version"]);
   });
 });

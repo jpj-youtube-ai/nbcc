@@ -225,8 +225,10 @@ const BUILDERS: Record<TouchKind, Builder> = {
   },
 
   // 14, the approved email changed as Jaimie asked: cheer them on to beat their goal. NEW WORDING.
+  // "across South West Scotland" (the readthrough, 2026-10-04) is in the first sentence only: the
+  // second says who we support again two lines later, and saying where twice would be clumsy.
   target: (d, hi, t, _first, kid) => {
-    const reached = `has reached its ${pounds(d.targetPence ?? d.raisedPence)} target! That is a truly wonderful thing to have done for the children, young people and vulnerable adults we support.`;
+    const reached = `has reached its ${pounds(d.targetPence ?? d.raisedPence)} target! That is a truly wonderful thing to have done for the children, young people and vulnerable adults we support across South West Scotland.`;
     const further = kid
       ? `But why stop there? ${kid.Page} stays open, so every gift from here on is a bonus for the children, young people and vulnerable adults we support. Why not see if ${kid.name} can beat the goal?`
       : "But why stop there? Your page stays open, so every gift from here on is a bonus for the children, young people and vulnerable adults we support. Why not see if you can beat your goal?";
@@ -325,8 +327,8 @@ const BUILDERS: Record<TouchKind, Builder> = {
   // 17, approved, with the certificate (TASK-504). With nothing raised, the amount is left out.
   finished: (d, hi, t, _first, kid) => {
     const thanks = kid
-      ? `Thank you for every step, every share and every ask. ${kid.Name} has made a real difference to the children, young people and vulnerable adults we support.`
-      : "Thank you for every step, every share and every ask. You've made a real difference to the children, young people and vulnerable adults we support.";
+      ? `Thank you for every step, every share and every ask. ${kid.Name} has made a real difference to the children, young people and vulnerable adults we support across South West Scotland.`
+      : "Thank you for every step, every share and every ask. You've made a real difference to the children, young people and vulnerable adults we support across South West Scotland.";
     const thanksHtml = kid ? h(thanks) : thanks;
     const and = (s: string) => s.replace("Thank you for every", "and for every");
     const lead = d.raisedPence > 0 ? `<b>${t}</b> raised an incredible <b>${pounds(d.raisedPence)}</b> for NBCC. ${thanksHtml}` : `Thank you so much for <b>${t}</b>, ${and(thanksHtml)}`;
@@ -370,7 +372,7 @@ const BUILDERS: Record<TouchKind, Builder> = {
   // NEW WORDING, for Jaimie to sign off: once, when their date is close and they are behind. It
   // never says so: it offers help.
   need_a_hand: (d, hi, t, first, kid) => {
-    const soon = `is coming up soon, and we'd love to help you ${kid ? `and ${kid.name} ` : ""}make the most of it. Every gift so far is already making a difference to the children, young people and vulnerable adults we support.`;
+    const soon = `is coming up soon, and we'd love to help you ${kid ? `and ${kid.name} ` : ""}make the most of it. Every gift so far is already making a difference to the children, young people and vulnerable adults we support across South West Scotland.`;
     const offers: Array<[string, string]> = [
       ["Posters and leaflets", " to put up at work, at school or in your local shop."],
       ["A collection bucket or tin", " for the day itself."],
@@ -413,7 +415,7 @@ const BUILDERS: Record<TouchKind, Builder> = {
     const track = kid
       ? `and we just had to say: ${kid.name} is right on track for the ${pounds(d.targetPence ?? 0)} target!`
       : `and we just had to say: you're right on track for your ${pounds(d.targetPence ?? 0)} target!`;
-    const thanks = "Thank you, and a big thank you to everyone who has given so far. Every pound helps the children, young people and vulnerable adults we support, all year round.";
+    const thanks = "Thank you, and a big thank you to everyone who has given so far. Every pound helps the children, young people and vulnerable adults we support across South West Scotland, all year round.";
     const tip = kid
       ? `keep the momentum going. Share ${kid.page} again, or post a news update from your private area so supporters can see how it's going. People love to see progress!`
       : "keep the momentum going. Share your page again, or post a news update from your private area so your supporters can see how it's going. People love to see progress!";

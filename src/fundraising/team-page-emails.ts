@@ -14,6 +14,7 @@ import {
   questionsBox,
   questionsText,
   PHONE_DISPLAY,
+  ABOUT_NBCC_SHORT,
 } from "../email/brand";
 import { FOOTER_TEXT, POSTAL_ADDRESS } from "../legal/registration";
 import { emailDate, raiseOrdinals } from "../email/dates";
@@ -178,7 +179,12 @@ function why(o: InviteWords): string {
   );
 }
 
-const WHO_WE_ARE = "We're the Night Before Christmas Campaign (NBCC), a Scottish charity supporting children, young people and vulnerable adults, all year round.";
+// Who we are, for someone who may never have heard of NBCC: the charity's own short description (the
+// readthrough, 2026-10-04). It took the place of this email's own line, which said much the same
+// ("a Scottish charity supporting children, young people and vulnerable adults, all year round"), so
+// it is never said twice. The short one, as the invite is already five paragraphs. The reminder has
+// never had it.
+const WHO_WE_ARE = ABOUT_NBCC_SHORT;
 
 function askUs(o: InviteWords): string {
   return `Any questions about the team? Ask ${organiserShort(o)}, or ask us: just reply to this email, email ${FUNDRAISING_EMAIL} or call ${PHONE_DISPLAY}.`;
@@ -295,7 +301,7 @@ export function buildJoinStaffEmail(
     ["Why", m.description],
     ["Sharing with another cause", o.split],
   ];
-  const steps = ["Approve or decline it in Admin > Fundraising. Nothing shows until you do.", `Replying to this email replies to ${organiserFirstName(m) ?? m.name.trim()}.`];
+  const steps = ["Approve or decline it in Admin > Get involved > Sign ups. Nothing shows until you do.", `Replying to this email replies to ${organiserFirstName(m) ?? m.name.trim()}.`];
   const rows = facts
     .map(
       ([label, value]) =>

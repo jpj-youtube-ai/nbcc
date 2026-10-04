@@ -666,6 +666,21 @@ export async function fundraiserHistory(fundraiserId: number): Promise<HistoryRo
   }));
 }
 
+/**
+ * Has staff ever changed whether it is shown on the website (the "public" tick, in the admin)? Read
+ * from the history, where every staff edit lists the fields it changed. The "You're on our list"
+ * email says "As you asked, we won't show it on our website" only when this is false, so that the
+ * sentence is true of everyone who reads it (src/fundraising/send.ts).
+ */
+export async function websiteChoiceChangedByStaff(fundraiserId: number): Promise<boolean> {
+  const r = await pool.query(
+    `SELECT 1 AS found FROM audit_log
+      WHERE entity = 'fundraiser' AND entity_id = $1 AND action = 'fundraiser.updated' AND data->'changed' ? 'public' LIMIT 1`,
+    [fundraiserId],
+  );
+  return r.rows.length > 0;
+}
+
 // --- staff changes -------------------------------------------------------------------------------
 
 /**

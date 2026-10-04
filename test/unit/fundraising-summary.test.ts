@@ -304,7 +304,7 @@ describe("waiting on us", () => {
       { name: "Alex", signedBy: "Fern" },
     ]);
     expect(summaryLines(typed).waiting).toContain(
-      "5 invites not taken up after a week: Mary (in memory), invited by Fern; Sky (a team), invited by Fern; Jo (hosting an event), invited by Fern; Robin (raising money), invited by Fern; Alex, invited by Fern",
+      "5 invites not taken up after a week: Mary (in memory); Sky (a team), invited by Fern; Jo (hosting an event), invited by Fern; Robin (raising money), invited by Fern; Alex, invited by Fern",
     );
   });
 

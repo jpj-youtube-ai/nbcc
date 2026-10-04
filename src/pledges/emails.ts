@@ -1,4 +1,4 @@
-import { emailShell, eyebrow, heading, bodyP, note, button, signOff, signOffText, questionsBox, questionsText } from "../email/brand";
+import { emailShell, eyebrow, heading, bodyP, note, button, signOff, signOffText, questionsBox, questionsText, ABOUT_NBCC_FULL } from "../email/brand";
 import { FOOTER_TEXT, POSTAL_ADDRESS } from "../legal/registration";
 import { emailDate, raiseOrdinals } from "../email/dates";
 import { FUNDRAISING_EMAIL, STAFF_SIGN_OFF, safeFirstName, type BuiltEmail } from "../fundraising/emails";
@@ -202,6 +202,9 @@ export function buildPledgeConfirmEmail(d: PledgeConfirmData): BuiltEmail {
       bodyP(escapeHtml(thanks("{title}")).replace("{title}", `<b>${escapeHtml(d.title)}</b>`)) +
       button(d.confirmUrl, label) +
       bodyP(escapeHtml(next)) +
+      // The sponsor may never have heard of NBCC: who we are, in the charity's own words. The email
+      // is short, so it takes the full sentence.
+      bodyP(escapeHtml(ABOUT_NBCC_FULL)) +
       note(escapeHtml(notYou)) +
       signOff(close) +
       questionsBox(FUNDRAISING_EMAIL),
@@ -216,6 +219,8 @@ export function buildPledgeConfirmEmail(d: PledgeConfirmData): BuiltEmail {
     `${label}: ${d.confirmUrl}`,
     "",
     next,
+    "",
+    ABOUT_NBCC_FULL,
     "",
     notYou,
     "",
@@ -236,10 +241,10 @@ export function buildPledgeStaffEmail(o: { subject: string; lines: string[]; adm
     eyebrow("Sponsor pledges") +
       heading(escapeHtml(o.subject)) +
       o.lines.map((l) => bodyP(escapeHtml(l))).join("") +
-      button(o.adminUrl, "Open Admin, Fundraising") +
+      button(o.adminUrl, "Open Admin, Get involved") +
       signOff(STAFF_SIGN_OFF),
   );
-  const text = [o.subject, "", ...o.lines, "", `Open Admin, Fundraising: ${o.adminUrl}`, "", signOffText(STAFF_SIGN_OFF), "", FOOTER_TEXT].join("\n");
+  const text = [o.subject, "", ...o.lines, "", `Open Admin, Get involved: ${o.adminUrl}`, "", signOffText(STAFF_SIGN_OFF), "", FOOTER_TEXT].join("\n");
   return { subject: o.subject, html, text };
 }
 
@@ -252,7 +257,7 @@ export function pledgeHiddenNote(o: { title: string; pledgeId: number; amountPen
     subject: "A pledge was hidden by its organiser",
     lines: [
       `${o.title}: pledge ${o.pledgeId} (${pounds(o.amountPence)}) was hidden from the page by its organiser. It is still a pledge, and its sponsor will still be asked to pay.`,
-      "If its name or message should not have been there at all, you can cancel it or hide its message in Admin, Fundraising, Sponsor pledges.",
+      "If its name or message should not have been there at all, you can cancel it or hide its message in Admin, Get involved, Tickets and pledges, Sponsor pledges.",
     ],
   };
 }
@@ -266,7 +271,7 @@ export function pledgesPaidTwiceNote(rows: Array<{ title: string; pledgeId: numb
   return {
     subject: `${rows.length} ${rows.length === 1 ? "pledge" : "pledges"} paid twice: check and refund`,
     lines: [
-      "Please look at these in Admin, Fundraising, Sponsor pledges, then press Mark as checked.",
+      "Please look at these in Admin, Get involved, Tickets and pledges, Sponsor pledges, then press Mark as checked.",
       ...rows.map((r) => {
         const what = `${r.title}: pledge ${r.pledgeId} (${pounds(r.amountPence)})`;
         return r.cashMarked

@@ -11,6 +11,7 @@ import {
   type QueuedThanksGift,
 } from "../db/fundraiser-thanks";
 import { buildSupporterThanksEmail } from "./thanks-email";
+import { memorySender } from "./emails";
 import { giftNoLongerThankable, recipientVerdict, type SkipReason } from "./thanks";
 
 // TASK-507: sending the thank yous staff approved (email 20), in the background after the admin has
@@ -25,8 +26,9 @@ import { giftNoLongerThankable, recipientVerdict, type SkipReason } from "./than
 //     staff), and the opt out list (Stop all emails, or thank yous turned off). A list that cannot be
 //     read means no email. One person whose several gifts were picked gets this thank you once, even
 //     with two senders at work (an earlier claim for the same address counts as sent).
-//   - From and Reply-To are the events inbox (config.BALL_FROM_EMAIL), so a reply goes to NBCC, never
-//     to the organiser; nothing about the giver goes back to them.
+//   - From and Reply-To are the events inbox (config.BALL_FROM_EMAIL), or Jodie's address for a page
+//     in memory of someone (memorySender in ./emails.ts), so a reply goes to NBCC, never to the
+//     organiser; nothing about the giver goes back to them.
 //   - A failed send is recorded and the run goes on. Nothing here ever throws: everything is logged.
 //   - Each run ends by marking delivered any approved thank you with nothing left to send (one whose
 //     mark failed, or whose gifts all went with their donations), so none says "Sending now" for good.
@@ -74,7 +76,9 @@ async function sendOne(g: QueuedThanksGift, tally: Tally): Promise<void> {
     } else if (verdict && verdict.send && g.email) {
       // The giver's name is only used to greet them on a page in memory of someone ("Dear Sam,").
       const mail = buildSupporterThanksEmail({ organiserName: g.organiserName, title: g.title, message: g.message, inMemory: g.inMemory === true, giverName: g.donorName });
-      await sendFundraiseSupporterThanks(g.donorName, { email: g.email, from: config.BALL_FROM_EMAIL, replyTo: config.BALL_FROM_EMAIL, ...mail });
+      // From a page in memory of someone, it comes from Jodie and replies go to Jodie.
+      const sender = g.inMemory === true ? memorySender() : { from: config.BALL_FROM_EMAIL, replyTo: config.BALL_FROM_EMAIL };
+      await sendFundraiseSupporterThanks(g.donorName, { email: g.email, ...sender, ...mail });
       outcome = "sent";
     }
   } catch (err) {

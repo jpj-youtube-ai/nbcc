@@ -1,7 +1,7 @@
-import { bodyP, button, emailShell, eyebrow, heading, note, questionsBox, questionsText, signOff, signOffText } from "../email/brand";
+import { bodyP, button, emailShell, eyebrow, heading, note, questionsBox, questionsText, signOff, signOffAs, signOffAsText, signOffText } from "../email/brand";
 import { FOOTER_TEXT, POSTAL_ADDRESS } from "../legal/registration";
 import { raiseOrdinals } from "../email/dates";
-import { FUNDRAISING_EMAIL, MEMORY_EYEBROW, MEMORY_SIGN_OFF, dearGreeting, safeFirstName, type BuiltEmail } from "./emails";
+import { FUNDRAISING_EMAIL, MEMORY_EMAIL, MEMORY_EYEBROW, MEMORY_SIGNER, MEMORY_SIGN_OFF, dearGreeting, safeFirstName, type BuiltEmail } from "./emails";
 import { EMPLOYER_MATCH_LABELS, TSHIRT_LINK_DAYS, firstWord, tshirtLabel, type EmployerMatch } from "./signup-tidy";
 
 // The sign up tidy's emails (Jaimie and the appropriateness audit, 2026-10-03). Draft wording, for
@@ -18,11 +18,14 @@ const escapeHtml = (s: string): string =>
   s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
 
 // Every date in the body has its ending raised ("7th" as 7<sup>th</sup>): ../email/dates.ts.
-const shell = (body: string) => emailShell(raiseOrdinals(body), { contactEmail: FUNDRAISING_EMAIL, registration: true, postalAddress: POSTAL_ADDRESS });
+// `contact` is the address in the questions box and the footer bar: the events inbox, or Jodie's for
+// the in memory receipt (the readthrough, 2026-10-04).
+const shell = (body: string, contact: string) => emailShell(raiseOrdinals(body), { contactEmail: contact, registration: true, postalAddress: POSTAL_ADDRESS });
 
-function toOrganiser(subject: string, bodyHtml: string, textLines: string[], line: string): BuiltEmail {
-  const html = shell(bodyHtml + signOff(line) + questionsBox(FUNDRAISING_EMAIL));
-  const text = [...textLines, "", signOffText(line), "", questionsText(FUNDRAISING_EMAIL), "", FOOTER_TEXT].join("\n");
+// `signer`: a name above "NBCC Team" in the sign off (only ever Jodie, on the in memory receipt).
+function toOrganiser(subject: string, bodyHtml: string, textLines: string[], line: string, contact: string = FUNDRAISING_EMAIL, signer?: string): BuiltEmail {
+  const html = shell(bodyHtml + (signer ? signOffAs(line, signer) : signOff(line)) + questionsBox(contact), contact);
+  const text = [...textLines, "", signer ? signOffAsText(line, signer) : signOffText(line), "", questionsText(contact), "", FOOTER_TEXT].join("\n");
   return { subject, html, text };
 }
 
@@ -38,7 +41,7 @@ const MEMORY_RECEIPT_SMALL = "If this wasn't you, you can ignore this email.";
 export function buildMemoryReceiptEmail(typedName?: string | null): BuiltEmail {
   const hi = dearGreeting(safeFirstName(typedName));
   const body = eyebrow(MEMORY_EYEBROW) + heading("Thank you") + bodyP(escapeHtml(hi)) + bodyP(MEMORY_RECEIPT_LINE) + note(MEMORY_RECEIPT_SMALL);
-  return toOrganiser("We have your details for the page", body, [hi, "", MEMORY_RECEIPT_LINE, "", MEMORY_RECEIPT_SMALL], MEMORY_SIGN_OFF);
+  return toOrganiser("We have your details for the page", body, [hi, "", MEMORY_RECEIPT_LINE, "", MEMORY_RECEIPT_SMALL], MEMORY_SIGN_OFF, MEMORY_EMAIL, MEMORY_SIGNER);
 }
 
 // --- asking for a T-shirt size --------------------------------------------------------------------
@@ -126,7 +129,7 @@ export function tidyStaffFacts(f: TidyFacts): Array<[string, string]> {
   }
   if (f.isSporting === true || f.isSporting === false) {
     facts.push(["Sporting event", f.isSporting ? "Yes" : "No"]);
-    if (f.isSporting) facts.push(["T-shirt size", f.tshirtSize ? tshirtLabel(f.tshirtSize) : "Not given yet. Ask them from Admin > Fundraising"]);
+    if (f.isSporting) facts.push(["T-shirt size", f.tshirtSize ? tshirtLabel(f.tshirtSize) : "Not given yet. Ask them from Admin > Get involved > Sign ups"]);
   }
   if (f.memoryDirectorBusiness) facts.push(["Funeral director", f.memoryDirectorBusiness]);
   const contact = [f.memoryFamilyContactName, f.memoryFamilyContactEmail].filter(Boolean).join(", ");

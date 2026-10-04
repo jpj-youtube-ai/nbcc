@@ -19,7 +19,7 @@ import { FOOTER_TEXT, POSTAL_ADDRESS } from "../../src/legal/registration";
 
 const shell = (body: string) => emailShell(body, { contactEmail: "events@nbcc.scot", registration: true, postalAddress: POSTAL_ADDRESS });
 const MESSAGE = "Thank you so much for sponsoring me! I’ll be running in my Santa suit.";
-const LAST = "And from all of us: thank you too. Your gift helps the children, young people and vulnerable adults we support, all year round.";
+const LAST = "And from all of us: thank you too. Your gift helps the children, young people and vulnerable adults we support across South West Scotland, all year round.";
 
 describe("email 20, a thank you passed on to a giver", () => {
   const mail = buildSupporterThanksEmail({ organiserName: "sam example", title: "Sam's Santa Dash", message: MESSAGE });

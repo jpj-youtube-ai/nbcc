@@ -10,6 +10,8 @@ import {
   codeBox,
   signOff,
   signOffText,
+  signOffAs,
+  signOffAsText,
   questionsBox,
   questionsText,
 } from "../email/brand";
@@ -43,6 +45,30 @@ import { tidyStaffFacts } from "./signup-tidy-emails";
 // friendly English, no dashes, and every stored value escaped.
 
 export const FUNDRAISING_EMAIL = "events@nbcc.scot";
+
+// In memory emails come from Jodie (the readthrough, 2026-10-04): "events@" is the wrong note for a
+// family arranging a funeral. Every email on the in memory path that goes to a family, a funeral
+// director or a giver (the in memory invite, the note after signing up, "your page in memory", the
+// giver's thank you from an in memory page, and the gentle sign in code) is sent From "Jodie at NBCC"
+// at this address, replies go to it, and it is the contact shown in the email (the questions box and
+// the footer bar). Staff notices are unchanged. The address and the name live HERE and nowhere else.
+//
+// It is another address at nbcc.scot, so it sends on the same verified SES identity as the events
+// inbox: the identity is the whole domain (infra/modules/app/ses.tf), which signs every address at
+// it with the same DKIM keys and the same bounce.nbcc.scot return path. It must be a mailbox that
+// is read, as a reply lands there. Never an address at news.nbcc.scot, which cannot receive.
+export const MEMORY_EMAIL = "jodie@nbcc.scot";
+export const MEMORY_FROM_NAME = "Jodie at NBCC";
+/** The From line: the name, then the address in angle brackets. */
+export const MEMORY_FROM = `${MEMORY_FROM_NAME} <${MEMORY_EMAIL}>`;
+/**
+ * Who signs an in memory email: "With warmest thoughts," then this name, then "NBCC Team" (the
+ * charity, 2026-10-04). Every email sent from Jodie's address is signed by her, the in memory invite
+ * included, whoever is chosen under "Signed by" in the admin.
+ */
+export const MEMORY_SIGNER = "Jodie";
+/** What an in memory email is sent with, in place of the events inbox. */
+export const memorySender = (): { from: string; replyTo: string } => ({ from: MEMORY_FROM, replyTo: MEMORY_EMAIL });
 
 export interface BuiltEmail {
   subject: string;
@@ -101,8 +127,9 @@ export function pounds(pence: number): string {
 }
 
 // Every date in the body has its ending raised ("7th" as 7<sup>th</sup>): ../email/dates.ts.
-const shell = (body: string) =>
-  emailShell(raiseOrdinals(body), { contactEmail: FUNDRAISING_EMAIL, registration: true, postalAddress: POSTAL_ADDRESS });
+// `contact` is the address in the footer bar: the events inbox, or Jodie's for an in memory email.
+const shell = (body: string, contact: string = FUNDRAISING_EMAIL) =>
+  emailShell(raiseOrdinals(body), { contactEmail: contact, registration: true, postalAddress: POSTAL_ADDRESS });
 
 /** Every staff notice signs off the same way (Jaimie, 2026-10-04): "Thank you!", then "NBCC Team". */
 export const STAFF_SIGN_OFF = "Thank you!";
@@ -124,9 +151,10 @@ export function dearGreeting(first: string | null | undefined): string {
 }
 
 /** An email to an organiser: the body, the sign off, then the questions box, in both parts. */
-function toOrganiser(subject: string, bodyHtml: string, textLines: string[], line: string): BuiltEmail {
-  const html = shell(bodyHtml + signOff(line) + questionsBox(FUNDRAISING_EMAIL));
-  const text = [...textLines, "", signOffText(line), "", questionsText(FUNDRAISING_EMAIL), "", FOOTER_TEXT].join("\n");
+// `signer`: a name above "NBCC Team" in the sign off (only ever Jodie, on an in memory email).
+function toOrganiser(subject: string, bodyHtml: string, textLines: string[], line: string, contact: string = FUNDRAISING_EMAIL, signer?: string): BuiltEmail {
+  const html = shell(bodyHtml + (signer ? signOffAs(line, signer) : signOff(line)) + questionsBox(contact), contact);
+  const text = [...textLines, "", signer ? signOffAsText(line, signer) : signOffText(line), "", questionsText(contact), "", FOOTER_TEXT].join("\n");
   return { subject, html, text };
 }
 
@@ -172,7 +200,7 @@ export function buildSignUpThanksEmail(typedName?: string | null): BuiltEmail {
   // The sign up tidy: a comma after "Hi there", as in a letter.
   const hi = first ? `Hi there, ${first},` : "Hi there,";
   const intro =
-    "We're so excited that you want to raise money for NBCC. Every pound you raise helps the children, young people and vulnerable adults we support, all year round, and we can't wait to cheer you on.";
+    "We're so excited that you want to raise money for NBCC. Every pound you raise helps the children, young people and vulnerable adults we support across South West Scotland, all year round, and we can't wait to cheer you on.";
   const small = "Nothing goes on our website until we've spoken. If this wasn't you, don't worry, you can ignore this email.";
   const body =
     EYEBROW +
@@ -312,7 +340,7 @@ function staffFacts(f: StaffSummary): Array<[string, string]> {
     const n = f.team.members.length;
     facts.push([
       "People to invite",
-      n ? `${n === 1 ? "1 person" : `${n} people`} to invite once you approve it: see Admin > Fundraising` : "Nobody added. They can share the join link.",
+      n ? `${n === 1 ? "1 person" : `${n} people`} to invite once you approve it: see Admin > Get involved > Sign ups` : "Nobody added. They can share the join link.",
     ]);
   }
   // TASK-511: a sign up made since has the name in two parts, and Instagram and Facebook apart; one
@@ -377,7 +405,7 @@ export function buildSignUpStaffEmail(f: StaffSummary, o: { adminUrl: string }):
     .join("");
   const steps = [
     `Give ${first} a ring within a few days to say hello.`,
-    "Approve or decline in Admin > Fundraising.",
+    "Approve or decline in Admin > Get involved > Sign ups.",
     `Replying to this email replies to ${first}.`,
   ];
   const line = STAFF_SIGN_OFF;
@@ -419,7 +447,7 @@ function memoryStaffEmail(f: StaffSummary, o: { adminUrl: string }): BuiltEmail 
     )
     .join("");
   const ring = "No thank you email has gone to them, only a short note to say we have their details. Please give them a ring.";
-  const steps = ["Approve or decline in Admin > Fundraising.", `Replying to this email replies to ${organiserFirstName(f) ?? f.name.trim()}.`];
+  const steps = ["Approve or decline in Admin > Get involved > Sign ups.", `Replying to this email replies to ${organiserFirstName(f) ?? f.name.trim()}.`];
   const line = "Thank you.";
   const body =
     eyebrow("For the team") +
@@ -456,10 +484,18 @@ function memoryStaffEmail(f: StaffSummary, o: { adminUrl: string }): BuiltEmail 
  * "Your page is live" when they have a page to link to, otherwise "you're on our list". A page
  * holder approved while fundraising is switched off gets nothing yet: they are marked as waiting,
  * and this goes to them when an admin switches fundraising on (src/fundraising/send.ts).
+ *
+ * "You're on our list" only ever goes to an approved sign up with no page on the website, which
+ * means one that is not to be shown there (hasPage in ./model.ts: every sign up is raising money or
+ * an event, and a public one of either has a page, whether or not fundraising is switched on). So it
+ * says "As you asked, we won't show it on our website." `hiddenBy: "staff"` is the one case where
+ * that would not be true, and the sentence is left out: staff unticked "show it on the website" in
+ * the admin, or the page is a team member's (it takes the choice from its team, so the member was
+ * never asked).
  */
 export function buildApprovedEmail(
   f: Greeted & { title: string; path?: string; booking?: FundraiserRecord["booking"] },
-  o: { pageUrl: string | null; manageUrl: string | null },
+  o: { pageUrl: string | null; manageUrl: string | null; hiddenBy?: "them" | "staff" },
 ): BuiltEmail {
   const hi = organiserGreeting(f);
   const title = escapeHtml(f.title);
@@ -506,20 +542,19 @@ export function buildApprovedEmail(
     return toOrganiser(`Your fundraising page is live: ${f.title}`, body, text, "Cheering you on all the way,");
   }
   const thanks = "It's all approved, and you're officially part of the NBCC family.";
-  const where = "If you asked us to show it, you'll find it on our Get involved page at";
-  const after = "We'll be in touch about anything you asked us for.";
+  const after = (o.hiddenBy === "staff" ? "" : "As you asked, we won't show it on our website. ") + "We'll be in touch about anything you asked us for.";
   const body =
     EYEBROW +
     heading("You're on our list!") +
     bodyP(escapeHtml(hi)) +
     bodyP(`Thank you so much for doing <b>${title}</b> for NBCC. ${thanks}`) +
-    bodyP(`${where} <b>nbcc.scot/get-involved</b>. ${after}`);
+    bodyP(after);
   const text = [
     hi,
     "",
     `Thank you so much for doing ${f.title} for NBCC. ${thanks}`,
     "",
-    `${where} nbcc.scot/get-involved. ${after}`,
+    after,
   ];
   return toOrganiser(`You're on our list: ${f.title}`, body, text, "You're a star. Thank you,");
 }
@@ -608,7 +643,9 @@ export function buildSignInCodeEmail(typedName: string | null | undefined, code:
   const small = "Didn't ask for this? No problem, just ignore this email. Nobody can get in without the code.";
   const body = (gentle ? eyebrow(MEMORY_EYEBROW) : EYEBROW) + heading("Here's your code") + bodyP(escapeHtml(hi)) + bodyP(intro) + codeBox(code) + bodyP(inside) + note(small);
   const text = [hi, "", intro, "", `Your code: ${code}`, "", inside, "", small];
-  return toOrganiser(`Your NBCC sign in code: ${code.slice(0, 3)} ${code.slice(3)}`, body, text, gentle ? MEMORY_SIGN_OFF : "Happy fundraising!");
+  // The gentle one comes from Jodie, so it shows her address and she signs it (the readthrough, 2026-10-04).
+  if (gentle) return toOrganiser(`Your NBCC sign in code: ${code.slice(0, 3)} ${code.slice(3)}`, body, text, MEMORY_SIGN_OFF, MEMORY_EMAIL, MEMORY_SIGNER);
+  return toOrganiser(`Your NBCC sign in code: ${code.slice(0, 3)} ${code.slice(3)}`, body, text, "Happy fundraising!");
 }
 
 // --- "I've finished", to the events inbox (TASK-501) ---------------------------------------------
@@ -622,7 +659,7 @@ export function buildFinishedStaffEmail(
   const raised = pounds(f.raisedPence);
   const steps = [
     `Give ${first} a ring to say thank you, and to check any cash or sponsor money is on its way.`,
-    "When everything is in, press Mark finished in Admin > Fundraising.",
+    "When everything is in, press Mark finished in Admin > Get involved > Sign ups.",
     `Replying to this email replies to ${first}.`,
   ];
   const line = STAFF_SIGN_OFF;

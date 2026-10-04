@@ -139,7 +139,7 @@ describe("the emails an in memory page gets", () => {
     const sent = mail.sendFundraiseCode.mock.calls[0][1];
     expect(sent.text).toContain("Dear Sam,");
     expect(sent.text).toContain("Your code: 123456");
-    expect(sent.text).toContain("With warmest thoughts,\nNBCC Team");
+    expect(sent.text).toContain("With warmest thoughts,\nJodie\nNBCC Team");
     expect(sent.text).not.toContain("!");
   });
 

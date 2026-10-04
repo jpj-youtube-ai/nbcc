@@ -1093,7 +1093,7 @@ export function renderEverything(d: MaterialFacts, a: MaterialAssets, o: { date:
       `<span>Everything for <b>${escapeHtml(d.title)}</b>: the A4 and A3 posters, the A5 leaflet, the sponsor form${
         d.status === "finished" && !d.memory ? " and the certificate" : ""
       }</span>` + `<button type="button" data-social-zip>Download every picture as a zip</button><span class="tip" role="status" aria-live="polite" data-social-status></span>`,
-    tip: "Each page prints on its own paper size. To print just one, open it on its own from Admin > Fundraising.",
+    tip: "Each page prints on its own paper size. To print just one, open it on its own from Admin > Get involved > Sign ups.",
     body: pages,
     tail: socialTail(d, a, o.script),
   });

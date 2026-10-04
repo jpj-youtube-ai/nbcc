@@ -176,7 +176,7 @@ describe("after someone joins", () => {
       { adminUrl: "https://nbcc.scot/admin", split: "50% to NBCC, the rest to Exampleton Food Larder (the whole team's split)" },
     );
     expect(m.subject).toBe("New team member: Jack Sample wants to join Exampleton Juniors");
-    expect(m.text).toContain("Approve or decline it in Admin > Fundraising");
+    expect(m.text).toContain("Approve or decline it in Admin > Get involved > Sign ups");
     expect(m.text).toContain("Team organiser: Robin Organiser");
     expect(m.text).toContain("Target: £50");
     expect(m.text).toContain("50% to NBCC");

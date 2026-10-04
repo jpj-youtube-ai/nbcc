@@ -52,9 +52,17 @@ describe("buildKindEmail bodies", () => {
   });
 
   it("app-built kinds do NOT duplicate the registration (their body already carries it)", () => {
-    const built = buildKindEmail("donation", { html: "<p>Thanks — SC047995</p>", text: "Thanks — SC047995" });
+    const built = buildKindEmail("receipt", { html: "<p>Thanks — SC047995</p>", text: "Thanks — SC047995" });
     // exactly one occurrence: the app body's own, not a second one from the shell footer
     expect(built.html.split("SC047995").length - 1).toBe(1);
+  });
+
+  // The readthrough (2026-10-04): a donation receipt has it in the footer bar, once, and not in its
+  // body. See test/unit/receipt-footer.test.ts.
+  it("the donation receipt carries the registration once, in the footer bar", () => {
+    const built = buildKindEmail("donation", { html: "<p>Thanks</p>", text: "Thanks" });
+    expect(built.html.split("SC047995").length - 1).toBe(1);
+    expect(built.html.indexOf("SC047995")).toBeGreaterThan(built.html.indexOf("<p>Thanks</p>"));
   });
 
   it("formats donation amounts as GBP in the declaration email", () => {

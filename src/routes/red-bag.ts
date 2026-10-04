@@ -7,8 +7,9 @@ import { RED_BAG_PATH, redBagAccess, redBagIsLive } from "../red-bag/switch";
 
 // Fill a Red Bag: the page, /fill-a-red-bag (docs/superpowers/specs/2026-10-04-fill-a-red-bag-design.md).
 //
-//   GET /fill-a-red-bag    switched ON: the page, for everyone.
-//                          switched OFF (src/red-bag/switch.ts, as it ships):
+//   GET /fill-a-red-bag    switched ON (src/red-bag/switch.ts, as it is now): the page, for
+//                          everyone. Public but unlisted for now, so it still answers noindex.
+//                          switched OFF (one line there takes it down again):
 //                            - the public: the site's own 404 page, with a real 404 status;
 //                            - a signed in member of staff: the page, under a plain strip saying
 //                              "Staff preview: not public yet". Never kept by a browser or a cache.
@@ -88,9 +89,10 @@ export function redBagPageHandler(deps: RedBagPageDeps) {
       res.setHeader("Cache-Control", "private, no-store");
       res.setHeader("Vary", "Authorization");
     }
-    // Switched off, nothing here is ever indexed. (Switched on, the page's own robots line decides:
-    // it comes out when the page is listed, the last go live step in src/red-bag/switch.ts.)
-    if (!on) res.setHeader("X-Robots-Tag", "noindex, nofollow");
+    // Never indexed: switched off because it is not public, and switched on because the page is
+    // public but UNLISTED for now. The page's own robots line says the same. Both come out when the
+    // page is listed (the last step left in src/red-bag/switch.ts).
+    res.setHeader("X-Robots-Tag", "noindex, nofollow");
     res.type("html").send(html);
   }
 }

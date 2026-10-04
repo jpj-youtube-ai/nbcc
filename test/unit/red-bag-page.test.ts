@@ -380,7 +380,9 @@ describe("the site's shell and its accessibility floor", () => {
   });
 });
 
-describe("hidden from the world until it goes live", () => {
+// Public, but deliberately unlinked and unlisted for now (Jaimie, 4 October 2026): people reach it
+// only if they are given the address. These pin "unlinked", so a link cannot creep in unnoticed.
+describe("public, but linked from nowhere and listed nowhere", () => {
   it("tells search engines to leave it alone", () => {
     expect(doc.querySelector('meta[name="robots"]')?.getAttribute("content")).toBe("noindex, nofollow");
     expect(doc.querySelector('link[rel="canonical"]')).toBeNull();
@@ -393,15 +395,47 @@ describe("hidden from the world until it goes live", () => {
   });
 
   it("is linked from no page, the donate page included", () => {
-    const pages = readdirSync(ROOT).filter((f) => f.endsWith(".html") && f !== "fill-a-red-bag.html" && f !== "admin.html");
+    const pages = readdirSync(ROOT).filter((f) => f.endsWith(".html") && f !== "fill-a-red-bag.html");
     expect(pages).toContain("donate.html");
+    expect(pages).toContain("index.html");
+    expect(pages.length).toBeGreaterThan(20);
     for (const f of pages) expect(read(f), f).not.toMatch(/fill-a-red-bag/);
   });
 
-  it("is remembered in the staff's own list of pages, as staff only", () => {
+  it("is in no menu, no footer and nothing a page is drawn from", () => {
+    // What adds links to pages as they are served, and what draws the pages the server builds.
+    const sources = [
+      "src/ball/nav-link.ts",
+      "src/events/nav-link.ts",
+      "src/fundraising/footer-link.ts",
+      "src/ball/home-promo.ts",
+      "src/events/render.ts",
+      "src/fundraising/render.ts",
+      "src/fundraising/impact-render.ts",
+      "src/pledges/render.ts",
+      "src/tickets/render.ts",
+      "assets/js/main.js",
+      "assets/js/fundraiser.js",
+      "assets/js/events.js",
+    ];
+    for (const f of sources) expect(read(f), f).not.toMatch(/fill-a-red-bag/);
+  });
+
+  it("links to itself only for sharing after a donation, never from its own menu or footer", () => {
+    const d = new DOMParser().parseFromString(html, "text/html");
+    for (const a of d.querySelectorAll("header a, footer a")) expect(a.getAttribute("href")).not.toMatch(/fill-a-red-bag/);
+    const own = [...d.querySelectorAll("a[href*='fill-a-red-bag']")];
+    expect(own.length).toBeGreaterThan(0);
+    for (const a of own) expect(a.closest("[data-rb-share]"), a.outerHTML).not.toBeNull();
+  });
+
+  it("is in the staff's own list of pages as public but not listed, in plain words", () => {
     const entry = PRIVATE_PAGES.find((p) => p.path === "/fill-a-red-bag");
-    expect(entry?.reach).toBe("staff");
-    expect(entry?.note).toMatch(/not public yet/i);
+    // "unlisted" is the admin's "Not listed: a real page, but nothing links to it".
+    expect(entry?.reach).toBe("unlisted");
+    expect(entry?.note).toBe(
+      "A new way to give. Public, but not linked from anywhere yet and hidden from search engines: people reach it only if they are given the address.",
+    );
   });
 
   it("cannot be taken by a spare address", () => {
@@ -493,7 +527,41 @@ describe("GET /fill-a-red-bag", () => {
     expect(res.statusCode).toBe(200);
     expect(res.body).toContain("rb-paper");
     expect(res.body).not.toContain("Staff preview");
+    expect(res.body).not.toContain("data-rb-preview");
+    expect(res.body).not.toContain("red-bag-preview.js");
     expect(res.body).toContain("decorated");
+    expect(isStaff).not.toHaveBeenCalled();
+    // An ordinary public page: it may be kept like any other.
+    expect(res.headers["cache-control"]).toBeUndefined();
+  });
+
+  // Public, but not listed yet: the page's own robots line says so, and the header says it again
+  // for anything that reads headers only. Both come out when the page is listed.
+  it("switched on, still tells search engines to leave it alone while it is unlisted", async () => {
+    const { res } = await ask({ live: true });
+    expect(res.headers["x-robots-tag"]).toBe("noindex, nofollow");
+    expect(res.body).toContain('<meta name="robots" content="noindex, nofollow" />');
+  });
+
+  it("as it ships now (the real switch): the page, for anyone, with no strip and no 404", async () => {
+    const res = {
+      statusCode: 200,
+      headers: {} as Record<string, string>,
+      body: "",
+      status(c: number) { this.statusCode = c; return this; },
+      setHeader(k: string, v: string) { this.headers[k.toLowerCase()] = v; return this; },
+      type() { return this; },
+      send(b: string) { this.body = b; return this; },
+    };
+    const isStaff = vi.fn(async () => false);
+    const handler = redBagPageHandler({ template: () => template, notFound: () => read("404.html"), decorate: async (h) => h, isStaff });
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await handler({ headers: {} } as any, res as any, vi.fn());
+    expect(res.statusCode).toBe(200);
+    expect(res.body).toContain("Pop these in the bag");
+    expect(res.body).not.toContain("Staff preview");
+    expect(res.body).not.toContain("We cannot find that page");
+    expect(res.body).not.toContain("red-bag-preview.js");
     expect(isStaff).not.toHaveBeenCalled();
   });
 });

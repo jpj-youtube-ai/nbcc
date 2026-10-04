@@ -1371,7 +1371,7 @@ hosted-Checkout redirect stays the default fallback and no-JS safety net.
 | `GET /media/fundraiser-profile/:photoId` | **implemented** | Profile pictures (public; an approved round photo on a page that is up, otherwise 404) |
 | `GET /api/admin/fundraising/pictures-waiting`, `GET /api/admin/fundraisers/:id/pictures`, `.../pictures/:pictureId/photo`, `POST .../pictures/:pictureId/approve` \| `decline` \| `remove` | **implemented** | Profile pictures (staff check the photos organisers send: fundraising view to look, edit to decide; audited) |
 | `POST /api/fundraisers/:slug/pledges` | **implemented** | Sponsor pledges (public; "Sponsor now, pay after" on a sponsorship fundraiser's page: a promise, never money, and unconfirmed until the sponsor confirms by email. See **Sponsor pledges**) |
-| `GET /fill-a-red-bag` | **implemented, switched off** | Fill a Red Bag (a new way to give: fill a list of example items, watch a red bag fill, give the total. Switched off as it ships: the site's 404 to the public, a preview to signed in staff. `POST /api/checkout-session` takes an optional `redBag: true` for it. See **Fill a Red Bag (switched off)**) |
+| `GET /fill-a-red-bag` | **implemented, public but unlinked** | Fill a Red Bag (a new way to give: fill a list of example items, watch a red bag fill, give the total. Public since 4 October 2026, but linked from nowhere, on no site map and `noindex`: people reach it only if they are given the address. `POST /api/checkout-session` takes an optional `redBag: true` for it. See **Fill a Red Bag (public, unlinked)**) |
 | `GET` \| `POST /pledge/confirm`, `/pledge/pay`, `/pledge/cancel` | **implemented** | Sponsor pledges (the sponsor, by the signed link in an email: confirm the pledge, pay it through Stripe Checkout, or cancel it quietly. Each link only asks; a button does the thing) |
 | `GET /api/fundraise/manage/pledges`, `POST /api/fundraise/manage/fundraisers/:id/pledges/:pledgeId/cash` \| `hide` | **implemented** | Sponsor pledges (the signed in organiser: confirmed pledges by name, never emails; "Paid me in cash"; hide one from their page) |
 | `GET /api/admin/fundraising/emails/summary`, `GET /api/admin/fundraising/emails`, `GET /api/admin/fundraising/emails/:id/:version` | **implemented** | All emails (staff with fundraising view: every fundraising, pledge, ticket and Festive Ball email, listed from one catalogue and rendered with the real builders and invented sample data. Read only: approving stays with the three endpoints that already did it. See **All emails, in Admin > Get involved**) |
@@ -12112,7 +12112,7 @@ covers recipient, name and subject; dropdowns filter by kind and status; paginat
   301s, shadow refusal, editor-gets-403 on writes, /sitemap noindex, sitemap.xml honouring the
   visibility ticks).
 
-### Fill a Red Bag (switched off)
+### Fill a Red Bag (public, unlinked)
 
 A new, playful way to give money, at `/fill-a-red-bag`. The donor fills a list of example items on a
 sheet of lined paper, a red bag fills towards £50, and they give the total. Nothing is bought item
@@ -12121,8 +12121,24 @@ funds. Design: `docs/superpowers/specs/2026-10-04-fill-a-red-bag-design.md`. Thi
 public page; half 2 (staff editing the list in the admin, a Red Bag receipt email, a report figure)
 is not built.
 
-**It ships switched off.** The switch is one constant, `RED_BAG_LIVE` in `src/red-bag/switch.ts`
-(no config value, no database row, no infrastructure). While it is off:
+**It is public, but linked from nowhere** (Jaimie, 4 October 2026: "make it public but don't link
+anywhere to it right now"). The switch is one constant, `RED_BAG_LIVE` in `src/red-bag/switch.ts`
+(no config value, no database row, no infrastructure), and it is **on**:
+
+- `GET /fill-a-red-bag` is the page, for anyone who has the address.
+- `POST /api/checkout-session` takes a Red Bag donation from anyone.
+- Nothing on the site links to it: not `/donate`, not the menu, not the footer. It is on no site
+  map (`/sitemap`, `sitemap.xml`), and it tells search engines to leave it alone, twice over: the
+  `noindex, nofollow` robots line in `fill-a-red-bag.html` and the `X-Robots-Tag` header the route
+  sends. It is in Admin > Site pages > Every page as "Not listed". Tests hold all of this in place
+  (`test/unit/red-bag-page.test.ts`, "public, but linked from nowhere and listed nowhere").
+
+**What is left, when Jaimie says:** add the link from `/donate`; then list the page (add it to
+`SITE_PAGES` in `src/site/pages.ts`, take it out of `PRIVATE_PAGES`, take the `noindex` line out of
+`fill-a-red-bag.html` and the `X-Robots-Tag` line for the live page out of `src/routes/red-bag.ts`).
+
+**To take it down again:** set `RED_BAG_LIVE` to `false`. That one line is enough, and the path is
+kept and tested for it. Switched off:
 
 - `GET /fill-a-red-bag` is the site's ordinary page not found page, with a real `404`, to the
   public. Nothing of the page is in what they are sent.
@@ -12132,13 +12148,7 @@ is not built.
   address carries a small script, `assets/js/red-bag-preview.js`; when the tab holds an admin
   session it asks for the page again with the session and shows it. With no session it does nothing.
   The server checks the session against the user's live row, so a disabled account is refused.)
-- The page is linked from nowhere (not `/donate`, not the menu), is on no site map, and is
-  `noindex`. It is listed for staff in Admin > Site pages > Every page, as "Staff only".
 - `POST /api/checkout-session` refuses a Red Bag donation (`403`) from anyone but signed in staff.
-
-**Going live** is one small change: set `RED_BAG_LIVE` to `true`; add the link from `/donate`; list
-the page (add it to `SITE_PAGES` in `src/site/pages.ts`, take it out of `PRIVATE_PAGES`, and take
-the `noindex` line out of `fill-a-red-bag.html`).
 
 **The one list.** `assets/js/red-bag-catalogue.js` holds the items and their prices (the printed
 sheet's four headings: Home comforts, Play & downtime, Books & creativity, Clothing), the four
@@ -12185,11 +12195,11 @@ a normal one and sends the normal receipt.
 
 | Method + path | Who | Answers |
 |---|---|---|
-| `GET /fill-a-red-bag` | the public, switched off | the site's 404 page, `404`, `noindex` |
-| `GET /fill-a-red-bag` | signed in staff (`Authorization: Bearer`), switched off | the page with the preview strip; `Cache-Control: private, no-store` |
-| `GET /fill-a-red-bag` | anyone, switched on | the page |
-| `POST /api/checkout-session` with `redBag: true` | the public, switched off | `403 { error: "Fill a Red Bag is not open yet" }` |
-| `POST /api/checkout-session` with `redBag: true` | staff, or anyone once switched on | `200`, as any donation; `400` under £2 or with `fundraiserId` |
+| `GET /fill-a-red-bag` | anyone, switched on (as it is now) | the page, `200`, `X-Robots-Tag: noindex, nofollow` while unlisted |
+| `POST /api/checkout-session` with `redBag: true` | anyone, switched on (as it is now) | `200`, as any donation; `400` under £2 or with `fundraiserId` |
+| `GET /fill-a-red-bag` | the public, if switched off | the site's 404 page, `404`, `noindex` |
+| `GET /fill-a-red-bag` | signed in staff (`Authorization: Bearer`), if switched off | the page with the preview strip; `Cache-Control: private, no-store` |
+| `POST /api/checkout-session` with `redBag: true` | the public, if switched off | `403 { error: "Fill a Red Bag is not open yet" }` |
 
 - Code: `src/red-bag/` (`switch.ts`, `staff.ts`, `catalogue.ts`, `render.ts`), `src/routes/red-bag.ts`
   (added to the site router in `src/routes/site.ts`), the marker in `src/routes/api.ts`, the page
@@ -12206,4 +12216,5 @@ a normal one and sends the normal receipt.
   keeps the focus.
 - Unit tests: `test/unit/red-bag-*.test.ts` (the catalogue and sums, the switch, the checkout, the
   page as drawn and who is given it, the page's script, the preview script). BDD:
-  `features/fill-a-red-bag.feature` (the 404 while off; a Red Bag donation under £2 refused).
+  `features/fill-a-red-bag.feature` (the page for anyone, on no site map and not linked from
+  `/donate`; a Red Bag donation from the public taken; under £2 refused).

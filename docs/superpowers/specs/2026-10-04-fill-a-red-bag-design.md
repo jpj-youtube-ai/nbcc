@@ -103,7 +103,13 @@ One of everything is £54.10.
 
 ## Switched off until Jaimie says
 
-One constant in code (default off). While off: the public gets the site's normal 404; a signed-in
+**4 October 2026: made public but unlinked, at Jaimie's request** ("make it public but don't link
+anywhere to it right now"). The constant is now ON: anyone with the address gets the page and can
+give. It is still linked from nowhere (not /donate, not the menu or footer), on no site map, and
+`noindex`. What is left for when Jaimie says: add the /donate link, then list the page and take the
+`noindex` out. Setting the constant back to off takes it down again exactly as described below.
+
+As first shipped: one constant in code (default off). While off: the public gets the site's normal 404; a signed-in
 member of staff sees the page with a plain "Staff preview: not public yet" strip. Not linked from
 /donate or the menu, not in the sitemap, `noindex`. The checkout refuses a Red Bag gift from the
 public while off. Going live later is one small change: flip the constant, add the /donate link,

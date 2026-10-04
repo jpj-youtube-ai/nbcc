@@ -197,6 +197,13 @@
       box.addEventListener("blur", function () {
         set(box.value, true);
       });
+      // Up and down arrows step it, as a number box would.
+      box.addEventListener("keydown", function (e) {
+        var step = e.key === "ArrowUp" ? 1 : e.key === "ArrowDown" ? -1 : 0;
+        if (!step) return;
+        e.preventDefault();
+        set(rb.clampQuantity(box.value) + step, true);
+      });
       box.addEventListener("focus", function () {
         if (typeof box.select === "function") {
           try {

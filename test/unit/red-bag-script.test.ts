@@ -141,6 +141,16 @@ describe("the steppers", () => {
     expect(box.value).toBe("0");
   });
 
+  it("step with the up and down arrow keys in the box", () => {
+    const box = document.getElementById("rb-qty-book") as HTMLInputElement;
+    box.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowUp", bubbles: true, cancelable: true }));
+    box.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowUp", bubbles: true, cancelable: true }));
+    expect(box.value).toBe("2");
+    box.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true, cancelable: true }));
+    expect(box.value).toBe("1");
+    expect(text("[data-rb-total]")).toBe("£3");
+  });
+
   it("add up one of everything to £54.10", () => {
     for (const i of catalogue.items()) plus(i.key);
     expect(text("[data-rb-total]")).toBe("£54.10");

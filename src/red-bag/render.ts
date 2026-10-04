@@ -120,7 +120,7 @@ export function renderRedBagDetails(): string {
     '<form id="rbDetailsForm" class="rb-form" novalidate>' +
     '<p class="form-error-summary" role="alert" data-rb-error hidden></p>' +
     // who
-    '<fieldset class="give-contact rb-ask"><legend class="give-contact-legend">Your details</legend>' +
+    '<fieldset class="give-contact rb-ask"><legend class="give-contact-legend">About you</legend>' +
     '<div class="give-name-row">' +
     '<div class="give-field"><label for="rbFirstName">First name <span class="give-req" aria-hidden="true">*</span></label>' +
     '<input class="give-field-input" id="rbFirstName" name="rbFirstName" type="text" autocomplete="given-name" required aria-required="true" data-invalid-message="Please tell us your first name" /></div>' +

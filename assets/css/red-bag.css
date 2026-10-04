@@ -168,6 +168,8 @@
 .rb-elves{margin:18px 0 0;font-size:.9rem;line-height:1.55;color:var(--slate)}
 
 /* ---- whenever the need comes: four plain groups ---- */
+/* the themes follow straight on from the bag: one thought, not a new chapter */
+.rb-need{padding-top:clamp(8px,2vw,28px)}
 .rb-need__head{max-width:62ch;margin-bottom:clamp(24px,3vw,40px)}
 .rb-need__head h2{font-size:clamp(1.7rem,1.4rem + 1.4vw,2.4rem)}
 .rb-need__head p{margin:12px 0 0}
@@ -199,7 +201,7 @@
 .rb-real strong{color:var(--maroon)}
 
 /* ---- the details step ---- */
-.rb-details{max-width:720px;margin-inline:auto;padding:clamp(22px,4vw,42px)}
+.rb-details{scroll-margin-top:calc(var(--nav-h) + 1rem);max-width:720px;margin-inline:auto;padding:clamp(22px,4vw,42px)}
 .rb-details__title{font-size:clamp(1.6rem,1.35rem + 1vw,2.1rem)}
 .rb-details__sum{margin:10px 0 18px}
 .rb-details__sum strong{color:var(--maroon)}
@@ -207,14 +209,22 @@
   min-height:44px;padding:0 2px;border:0;background:none;color:var(--maroon);
   font-family:var(--font-body);font-size:1rem;font-weight:600;text-decoration:underline;cursor:pointer;
 }
+/* the shared stylesheet draws every form as a card; this one already sits in one */
+.rb-form{background:none;border:0;border-radius:0;box-shadow:none;padding:0}
 .rb-form .rb-ask{margin:0;padding:22px 0 8px;border-top:1px solid var(--line)}
+.rb-form .form-error-summary + .rb-ask{border-top:0;padding-top:4px}
 .rb-form .give-check{min-height:44px;margin:2px 0;padding:10px 0}
 .rb-form .give-contact-legend{padding:0}
+/* a tick's own error goes under it, full width, not squeezed beside its words */
+.rb-form .give-check{flex-wrap:wrap}
+.rb-form .give-check-text{flex:1 1 0;min-width:0}
+.rb-form .give-check .validation-msg{flex:1 0 100%;margin:0}
 .rb-declaration{margin-top:18px;padding:18px;border:1px solid var(--line);border-radius:var(--radius);background:var(--card)}
 .rb-form .give-cta-row{margin-top:24px}
 
 /* ---- the thank you ---- */
 .rb-thanks__panel{
+  scroll-margin-top:calc(var(--nav-h) + 1rem);
   display:grid;grid-template-columns:minmax(0,150px) minmax(0,1fr);gap:clamp(20px,4vw,48px);align-items:start;
   max-width:860px;margin-inline:auto;padding:clamp(24px,4vw,48px);
 }
@@ -262,5 +272,4 @@
 @media (prefers-reduced-motion:reduce){
   .rb-bag.is-new{animation:none}
   .rb-bag__fill,.rb-bag__tissue,.rb-step,.rb-example,.rb-remove{transition:none}
-  .rb-paper{transform:none}
 }

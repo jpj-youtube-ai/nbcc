@@ -391,6 +391,7 @@ describe("the private area", () => {
     const f = ((await run(getManageSession, { cookie: SAM })).body as { fundraisers: Array<Record<string, unknown>> }).fundraisers[0];
     expect(f).toMatchObject({ pageUrl: "https://nbcc.test/event/sqn", qrUrl: "/event/sqn/qr.svg" });
     expect((f.materials as Record<string, unknown>).qrPng).toBe("/event/sqn/qr.png");
+    expect((f.materials as Record<string, unknown>).qrSheet).toBe(`/api/fundraise/manage/fundraisers/${f.id}/materials/qr-code`);
   });
 
   // Event clarity review: whether it shares with another cause, for the pay in box's words.
@@ -754,6 +755,8 @@ describe("your materials", () => {
       sponsorForm: at(9, "sponsor-form"),
       certificate: null,
       qrPng: "/fundraise/sams-walk/qr.png",
+      // The page's QR code on one A4 page, to print.
+      qrSheet: at(9, "qr-code"),
     });
   });
 

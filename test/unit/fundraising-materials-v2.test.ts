@@ -14,6 +14,7 @@ import {
   renderCertificate,
   renderEverything,
   renderPoster,
+  renderQrSheet,
   renderSocial,
   renderSponsorForm,
   type MaterialAssets,
@@ -349,5 +350,74 @@ describe("the charity statement's printed size", () => {
   it("every size's own rule is on the everything page too", () => {
     const all = renderEverything(facts(), ASSETS, { date: "1 January 2027", script: "" });
     for (const size of ["a5", "a4", "a3"] as const) expect(all).toContain(`.size-${size} .p-foot .legal{font-size:${statementPt(size)}pt}`);
+  });
+});
+
+// "Print the QR code": one clean A4 page for a noticeboard, a table or a till: the name, the page's
+// QR code large, the web address in words under it, and the charity statement. Staff and hosts asked
+// for a simple way to print an event's code.
+describe("the QR code to print", () => {
+  const EVENT_PAGE = "https://nbcc.test/event/quiz-night";
+  const eventFacts = (over: Partial<FundraiserRecord> = {}) => {
+    const f = record({ path: "event", slug: "quiz-night", title: "Exampleton Quiz Night", ...over });
+    return materialFacts(f, f.meter, { pageUrl: EVENT_PAGE, getInvolvedUrl: INVOLVED });
+  };
+  const sheet = (d = eventFacts()) => renderQrSheet(d, ASSETS) as string;
+
+  it("is one A4 page with the event's name, its page's QR code, the address in words and the charity statement", () => {
+    const html = sheet();
+    expect(html).toContain("@page{size:A4 portrait;margin:0}");
+    expect(html.match(/class="page /g)).toHaveLength(1);
+    expect(html).toContain('<h1 class="q-title"');
+    expect(html).toContain(">Exampleton Quiz Night</h1>");
+    // The page's own code: the same link the QR code in the private area carries.
+    expect(html).toContain(qrPath(EVENT_PAGE));
+    expect(html).toContain('<div class="q-address"');
+    expect(html).toContain("nbcc.test/event/quiz-night</div>");
+    expect(html).toContain(escapedStatement);
+    expect(html).toContain("Print or save as PDF");
+  });
+
+  it("draws the code large: at least 110mm across", () => {
+    const mm = Number(/\.q-qr svg\{[^}]*width:(\d+)mm/.exec(sheet())?.[1]);
+    expect(mm).toBeGreaterThanOrEqual(110);
+  });
+
+  it("never scrolls inside a box", () => {
+    expect(sheet()).not.toMatch(/overflow(-[xy])?:\s*(auto|scroll)/);
+  });
+
+  it("escapes the name", () => {
+    const html = sheet(eventFacts({ title: "<b>Quiz</b> & chips" }));
+    expect(html).not.toContain("<b>Quiz</b>");
+    expect(html).toContain("&lt;b&gt;Quiz&lt;/b&gt; &amp; chips");
+  });
+
+  it("says what a scan does: the details and giving for an event, giving for a fundraiser", () => {
+    expect(sheet()).toContain("Scan for the details, and to give");
+    expect(sheet(facts())).toContain("Scan to give");
+  });
+
+  it("is gentle for a page in memory of someone", () => {
+    const html = sheet(facts({ inMemory: true, memoryName: "Jean Example" } as Partial<FundraiserRecord>));
+    expect(html).toContain(">In memory of Jean Example</h1>");
+    expect(html).toContain("Give in their memory");
+    expect(html).not.toContain("Scan to give");
+  });
+
+  it("carries the sharing statement when what is raised is shared with another cause", () => {
+    const html = sheet(eventFacts({ sharesWithOther: true, nbccSharePercent: 60, otherCauseName: "The Exampleton Lifeboat" } as Partial<FundraiserRecord>));
+    expect(html).toContain("60% of what we raise goes to the Night Before Christmas Campaign");
+  });
+
+  it("is not made for one with no page of its own", () => {
+    expect(renderQrSheet(eventFacts({ public: false }), ASSETS)).toBeNull();
+    const listedOnly = record({ path: "event", public: true });
+    expect(renderQrSheet(materialFacts(listedOnly, listedOnly.meter, { pageUrl: null, getInvolvedUrl: INVOLVED }), ASSETS)).toBeNull();
+  });
+
+  it("keeps a long name on the page by drawing it smaller", () => {
+    const size = (title: string) => Number(/class="q-title" style="font-size:(\d+)pt"/.exec(sheet(eventFacts({ title })))?.[1]);
+    expect(size("Quiz")).toBeGreaterThan(size("The Exampleton and District Community Association Grand Christmas Quiz Night and Raffle"));
   });
 });

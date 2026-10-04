@@ -410,6 +410,12 @@
           png.setAttribute("download", "nbcc-" + f.slug + "-qr-code.png");
         }
       }
+      // "Print your QR code": the code on one A4 page, with the page's name and address.
+      var qrPrint = q("[data-f-qr-print]");
+      if (qrPrint) {
+        qrPrint.hidden = !(mats && mats.qrSheet);
+        if (mats && mats.qrSheet) qrPrint.setAttribute("href", mats.qrSheet);
+      }
       var matsPart = q("[data-f-materials]");
       if (matsPart) {
         matsPart.hidden = !mats;

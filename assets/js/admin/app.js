@@ -9696,7 +9696,11 @@
         H.escapeHtml("qr-" + f.slug + ".svg") + '">Download its QR code</a>' +
         // TASK-504: the same code as a print size PNG.
         '<a class="fr-qr-link" id="frQrPngLink" href="' + H.escapeHtml(pageBase) + '/qr.png" download="' +
-        H.escapeHtml("qr-" + f.slug + ".png") + '">Print size PNG</a>';
+        H.escapeHtml("qr-" + f.slug + ".png") + '">Print size PNG</a>' +
+        // The code on one A4 page, with the name, the address and the charity statement (frOpenMaterial).
+        (f.status === "approved" || f.status === "finished"
+          ? '<button class="admin-btn admin-btn--small fr-btn-quiet" type="button" data-frmaterial="qr-code">Print the QR code</button>'
+          : "");
     } else {
       page = frNone("No page on the website.");
     }

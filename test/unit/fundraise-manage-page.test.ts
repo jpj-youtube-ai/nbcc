@@ -613,6 +613,17 @@ describe("your materials", () => {
     expect(link(7, "certificate").getAttribute("href")).toBe(at(7, "certificate"));
   });
 
+  it("offers the QR code on one page to print, in a new tab, only where there is one", async () => {
+    await load("", signedIn(raising({ materials: materials(7, { qrSheet: at(7, "qr-code") }) })));
+    const print = $<HTMLAnchorElement>("a[data-f-qr-print]", card(7));
+    expect(print.hidden).toBe(false);
+    expect(print.textContent).toContain("Print your QR code");
+    expect(print.getAttribute("href")).toBe(at(7, "qr-code"));
+    expect(print.getAttribute("target")).toBe("_blank");
+    await load("", signedIn(raising({ materials: materials(7) })));
+    expect($<HTMLAnchorElement>("a[data-f-qr-print]", card(7)).hidden).toBe(true);
+  });
+
   it("offers the print size QR code beside the SVG", async () => {
     await load("", signedIn(raising({ materials: materials(7) })));
     const png = $<HTMLAnchorElement>("a[data-f-qr-png]", card(7));

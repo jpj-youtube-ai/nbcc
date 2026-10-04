@@ -182,14 +182,48 @@ describe("the family's marks", () => {
 
   it("says each door's marks in words for a screen reader", () => {
     const cells = [...page().querySelectorAll(".elf-marks li")];
-    expect(cells[0].getAttribute("aria-label")).toBe("Door 1: cracked and visited");
-    expect(cells[1].getAttribute("aria-label")).toBe("Door 2: cracked");
-    expect(cells[3].getAttribute("aria-label")).toBe("Door 4: visited");
-    expect(cells[8].getAttribute("aria-label")).toBe("Door 9: not done yet");
+    const said = (cell: Element) => words(cell.querySelector(".sr-only"));
+    expect(said(cells[0])).toBe("Door 1: cracked and visited");
+    expect(said(cells[1])).toBe("Door 2: cracked");
+    expect(said(cells[3])).toBe("Door 4: visited");
+    expect(said(cells[8])).toBe("Door 9: not done yet");
+    expect(cells[0].hasAttribute("aria-label")).toBe(false);
   });
 
   it("adds them up", () => {
     expect(words(page().querySelector(".elf-marks__sum"))).toBe("2 cracked and 2 visited so far");
+  });
+});
+
+describe("data that is not what it should be", () => {
+  it("still draws the page when today's clue time is not a real date", () => {
+    const view = today({ state: "shut", clueAt: new Date("not a date"), clue: null, options: [] });
+    const card = page(view).querySelector(".elf-case")!;
+    expect(words(card.querySelector("h2"))).toBe("Today's clue is on its way");
+    expect(card.querySelector(".elf-cd")).toBeNull();
+    expect(() => renderHqPage(hqView({ now: new Date("nonsense") }))).not.toThrow();
+    expect(() => renderHqPage({ ...view, now: new Date("nonsense") })).not.toThrow();
+  });
+
+  it("offers no empty form when there is nothing left to guess", () => {
+    const doc = page(today({ options: [] }));
+    expect(doc.querySelector("form.elf-guess")).toBeNull();
+    expect(words(doc.querySelector(".elf-case"))).toContain("nothing left to guess");
+  });
+
+  it("writes counts as whole numbers, even when a database hands them over as text", () => {
+    const view = hqView();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    view.detectives[0] = { ...view.detectives[0], doorsDone: '7"><b>x' as any, newThings: "2<i>" as any };
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    view.today = { ...view.today!, door: '7"><b>x' as any };
+    const doc = page(view);
+    expect(doc.querySelector("main b > b, main i")).toBeNull();
+    expect(doc.querySelector<HTMLInputElement>('input[name="door"]')!.value).toBe("0");
+  });
+
+  it("names the progress bar for a screen reader", () => {
+    expect(page().querySelector("progress")!.getAttribute("aria-label")).toBe("4 doors done");
   });
 });
 

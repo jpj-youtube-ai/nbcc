@@ -27,7 +27,8 @@
   function initWardrobe(doc, win, opts) {
     var elf = (opts && opts.elf) || win.NBCCElf;
     var form = doc.querySelector("form.elf-wd");
-    if (!form || !elf) return null;
+    // With no wardrobe file or no fetch the page is left as it is: a form with a Save button.
+    if (!form || !elf || typeof win.fetch !== "function") return null;
 
     var mirror = form.querySelector(".elf-wd-mirror");
     var wearing = form.querySelector(".elf-wd-wearing span");
@@ -100,6 +101,17 @@
     // What has been tried on and not yet told to the server.
     var tried = [];
 
+    function request(told) {
+      return win.fetch(form.getAttribute("data-api"), {
+        method: "POST",
+        credentials: "same-origin",
+        // So that a save sent as the page is left still arrives.
+        keepalive: true,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ detectiveId: detective ? detective.value : "", look: readLook(), tried: told })
+      });
+    }
+
     function save() {
       if (timer) {
         win.clearTimeout(timer);
@@ -111,15 +123,7 @@
       }
       sending = true;
       var told = tried.slice();
-      win
-        .fetch(form.getAttribute("data-api"), {
-          method: "POST",
-          credentials: "same-origin",
-          // So that a save sent as the page is left still arrives.
-          keepalive: true,
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ detectiveId: detective ? detective.value : "", look: readLook(), tried: told })
-        })
+      request(told)
         .then(function (res) {
           return res
             .json()
@@ -157,8 +161,28 @@
       timer = win.setTimeout(save, opts && typeof opts.settle === "number" ? opts.settle : SETTLE);
     }
 
+    // The page is going. Anything not yet sent goes now, straight to the server: a save already
+    // on its way cannot be waited for, because nothing runs once the page has gone.
     function leaving() {
-      if (timer) save();
+      if (!timer && !again) return;
+      if (timer) win.clearTimeout(timer);
+      timer = null;
+      again = false;
+      try {
+        request(tried.slice()).catch(function () {});
+      } catch (err) {
+        // Nothing more can be done from a page that is closing.
+      }
+    }
+
+    // A phone app swiped away never says "pagehide": being hidden is the last sure sign.
+    function hidden() {
+      if (doc.visibilityState === "hidden") leaving();
+    }
+
+    // A page brought back by the Back button may hold choices the mirror has not drawn.
+    function shown(event) {
+      if (event && event.persisted) draw();
     }
 
     // ---- the sections, as tabs ---------------------------------------------------------------
@@ -202,8 +226,9 @@
       });
       tab.addEventListener("keydown", function (event) {
         var key = event.key;
-        if (key === "ArrowRight" || key === "ArrowDown") step(index, 1);
-        else if (key === "ArrowLeft" || key === "ArrowUp") step(index, -1);
+        // Left and right only: up and down stay free to scroll the page.
+        if (key === "ArrowRight") step(index, 1);
+        else if (key === "ArrowLeft") step(index, -1);
         else if (key === "Home") step(0, 0);
         else if (key === "End") step(tabs.length - 1, 0);
         else if (key === " " || key === "Spacebar") show(panelOf(tab), false);
@@ -288,7 +313,8 @@
       var tile = closest(event.target, ".elf-wd-tile.is-locked");
       if (!tile) return;
       var said = tile.querySelector(".sr-only");
-      if (said) say(said.textContent + ".", false);
+      // A failed save keeps its warning: this must not paint over it.
+      if (said && !(status && status.classList.contains("is-error"))) say(said.textContent + ".", false);
       tile.classList.remove("is-rattled");
       void tile.offsetWidth;
       tile.classList.add("is-rattled");
@@ -303,6 +329,15 @@
     form.addEventListener("click", tapped);
     form.addEventListener("submit", submitted);
     win.addEventListener("pagehide", leaving);
+    win.addEventListener("pageshow", shown);
+    doc.addEventListener("visibilitychange", hidden);
+
+    // A browser can put back the choices from before a reload. If they are not what the mirror
+    // shows, draw them and save them, so the picture, the choices and the server agree.
+    if (wearing && wearing.textContent !== elf.lookWords(readLook(), state)) {
+      draw();
+      saveSoon();
+    }
 
     // The look saves itself from here on, so the button is only wanted when a save has failed.
     if (button) button.hidden = true;
@@ -318,6 +353,8 @@
         if (timer) win.clearTimeout(timer);
         timer = null;
         win.removeEventListener("pagehide", leaving);
+        win.removeEventListener("pageshow", shown);
+        doc.removeEventListener("visibilitychange", hidden);
       }
     };
   }

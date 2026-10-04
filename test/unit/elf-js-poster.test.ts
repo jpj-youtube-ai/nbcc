@@ -237,6 +237,22 @@ describe("checking in with the phone's location", () => {
     expect($<HTMLButtonElement>(".elf-stamp__location button").disabled).toBe(false);
   });
 
+  it("gives up on a phone that never answers, and leaves the photo on offer all the while", async () => {
+    vi.useFakeTimers();
+    const silent = { getCurrentPosition: () => undefined };
+    load(posterView(OPEN), { geolocation: silent });
+    tick("form.elf-stamp", "d1");
+    $(".elf-stamp__location button").click();
+    expect($<HTMLButtonElement>('form.elf-stamp button[type="submit"]').disabled).toBe(false);
+    expect(words($("form.elf-stamp .elf-form-status"))).toBe("Finding where you are");
+    vi.advanceTimersByTime(21000);
+    expect(words($("form.elf-stamp .elf-form-status"))).toBe("We could not find where your phone is. You can take a photo here instead.");
+    expect($<HTMLButtonElement>(".elf-stamp__location button").disabled).toBe(false);
+    // The claim form on the same page is not left frozen either.
+    vi.useRealTimers();
+    expect(calls).toEqual([]);
+  });
+
   it("shows the server's words when the phone is too far away", async () => {
     answer = { status: 409, body: { ok: false, reason: "too-far", message: stampRefusalWords("too-far") } };
     load(posterView(OPEN));
@@ -281,6 +297,38 @@ describe("checking in with a photo", () => {
     await flush();
     expect(words($("form.elf-stamp .elf-form-status"))).toBe("Choose a photo first.");
     expect(calls).toEqual([]);
+  });
+});
+
+describe("things that only go wrong on a real phone", () => {
+  it("keeps the gold card when another detective then checks in: the candy cane goes under it", async () => {
+    answer = { status: 200, body: { ok: true, html: claimWinHtml(claimWin()) } };
+    load(posterView({ open: true, claimable: true }));
+    tick("form.elf-claim", "d1");
+    await claim("SNOWBALL 472");
+    answer = { status: 200, body: { ok: true, html: stampWinHtml(stampWin()) } };
+    tick("form.elf-stamp", "d2");
+    $(".elf-stamp__location button").click();
+    await flush();
+    expect($$("#elf-result h2").map(words)).toEqual(["You're first!", "Candy cane collected!"]);
+  });
+
+  it("treats an answer that is not JSON as a problem, not a win", async () => {
+    load();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (window as any).fetch = vi.fn(() => Promise.resolve({ ok: true, status: 200, json: () => Promise.reject(new Error("not json")) }));
+    tick("form.elf-claim", "d1");
+    await claim("SNOWBALL 472");
+    expect(words($("form.elf-claim .elf-form-status"))).toBe("Something went wrong. Refresh the page and try again.");
+  });
+
+  it("ticks the gold card's clock by itself", () => {
+    vi.useFakeTimers();
+    load(posterView(OPEN), {}, { form: "claim", ok: true, win: claimWin() });
+    clock += 5000;
+    vi.advanceTimersByTime(1000);
+    expect(words($(".elf-clock"))).toBe("5:47:18pm");
+    vi.useRealTimers();
   });
 });
 

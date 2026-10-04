@@ -36,6 +36,10 @@ export function posterState(doorState: DoorState): Pick<PosterView, "open" | "cl
 
 const UNKNOWN = "Something went wrong. Refresh the page and try again.";
 
+const real = (d: Date): boolean => d instanceof Date && Number.isFinite(d.getTime());
+/** A count as a whole number that is safe to write into the page, whatever a database hands over. */
+const count = (n: unknown): number => Math.max(0, Math.floor(Number(n)) || 0);
+
 /** What to tell a family whose claim was refused. `triesLeft` is how many wrong words they may
  *  still type at this place, when the server knows. */
 export function claimRefusalWords(reason: ClaimRefusal, triesLeft?: number): string {
@@ -99,13 +103,13 @@ export function claimWinHtml(win: ClaimWin): string {
     .join("");
   return (
     `<section class="elf-win" aria-labelledby="elf-win-heading">` +
-    `<p class="elf-win__door">${icon("rosette", 18)} Door ${win.door}</p>` +
+    `<p class="elf-win__door">${icon("rosette", 18)} Door ${count(win.door)}</p>` +
     `<h2 id="elf-win-heading">You're first!</h2>` +
-    `<p class="elf-win__who">${escapeHtml(names)} found ${elf} at ${escapeHtml(win.placeName)}.</p>` +
+    `<p class="elf-win__who">${names ? `${escapeHtml(names)} found ${elf}` : `${elf} has been found`} at ${escapeHtml(win.placeName)}.</p>` +
     `<ul class="elf-win__badges">${badges}</ul>` +
-    `<p class="elf-win__when">Found at ${clockWords(win.at)} on ${longDayWords(win.at)}</p>` +
+    (real(win.at) ? `<p class="elf-win__when">Found at ${clockWords(win.at)} on ${longDayWords(win.at)}</p>` : "") +
     // A clock that ticks tells the real card from a picture of one. The script shows it.
-    `<p class="elf-win__now" hidden>The time now is <b class="elf-clock" data-now="${win.now.toISOString()}"></b></p>` +
+    (real(win.now) ? `<p class="elf-win__now" hidden>The time now is <b class="elf-clock" data-now="${win.now.toISOString()}"></b></p>` : "") +
     `<p class="elf-win__staff"><b>Show this screen to the staff.</b> They will hand over ${elf} and the prize.</p>` +
     `<p class="elf-win__note">Your candy cane for this place has been added too.</p>` +
     `<p class="elf-win__links">${link(win.hqUrl, "Back to Detective HQ", "btn btn-primary")} ${link(win.calendarUrl, "See the calendar")}</p>` +
@@ -118,9 +122,9 @@ export function stampWinHtml(win: StampWin): string {
   const names = listWords(win.detectives.map((d) => d.name));
   const rows = win.detectives
     .map((d) => {
-      const bits = [`<b>${escapeHtml(d.name)}</b>: ${things(d.doorsDone, "door")} done.`];
+      const bits = [`<b>${escapeHtml(d.name)}</b>: ${things(count(d.doorsDone), "door")} done.`];
       if (d.promotedTo) bits.push(`<span class="elf-stamped__up">Promoted to ${escapeHtml(d.promotedTo)}!</span>`);
-      if (d.newThings > 0) bits.push(`${things(d.newThings, "new thing")} in the wardrobe. ${link(d.wardrobeUrl, "Dress the elf")}`);
+      if (count(d.newThings) > 0) bits.push(`${things(count(d.newThings), "new thing")} in the wardrobe. ${link(d.wardrobeUrl, "Dress the elf")}`);
       return `<li>${bits.join(" ")}</li>`;
     })
     .join("");
@@ -224,6 +228,13 @@ export function renderPosterPage(view: PosterView, outcome?: PosterOutcome): str
       `<p>From 1 to 24 December a cheeky elf hides at a different place each day. Detectives crack the clue, race to find the elf, and collect a candy cane at every place they visit.</p>` +
       `<p class="elf-poster__actions">${link(view.joinUrl, "Join Elf Detective School", "btn btn-primary")} ${link(view.signInUrl, "I am already a detective", "btn btn-ghost")}</p>` +
       `</div>`;
+  } else if (view.detectives.length === 0) {
+    // Signed in, but nobody to tick: the forms would be empty.
+    lede = `${place} is one of this year's hiding places.`;
+    body =
+      `<div class="elf-case elf-join-card"><h2>Add a detective first</h2>` +
+      `<p>Your family has no detectives yet. Add one at Detective HQ, then scan this poster again.</p>` +
+      `<p class="elf-poster__actions">${link(view.hqUrl, "Detective HQ", "btn btn-primary")}</p></div>`;
   } else {
     const claiming = view.claimable && !(won && outcome?.form === "claim");
     lede = !view.open

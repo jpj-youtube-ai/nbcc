@@ -48,9 +48,12 @@
       var list = doc.querySelectorAll(".elf-cd[data-until]");
       var due = false;
       for (var i = 0; i < list.length; i++) {
-        var left = Date.parse(list[i].getAttribute("data-until")) - (clock() + skew);
+        var until = Date.parse(list[i].getAttribute("data-until"));
+        var left = until - (clock() + skew);
         list[i].textContent = countdownWords(left);
-        if (!(left > 0)) due = true;
+        // A time that had already passed when the page was drawn is not a reason to fetch the page
+        // again: it would be drawn the same way, and fetched again, for ever.
+        if (!(left > 0) && !(until <= served)) due = true;
       }
       // The clue is out. It was never in this page, so fetch the page again, once.
       if (due && !fetched) {
@@ -72,7 +75,8 @@
       else status.classList.remove("is-error");
     }
 
-    if (form) {
+    // With no fetch the form is left alone, and posts like any form.
+    if (form && typeof win.fetch === "function") {
       form.addEventListener("submit", function (event) {
         event.preventDefault();
         if (sending) return;

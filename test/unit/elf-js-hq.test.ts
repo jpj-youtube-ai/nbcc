@@ -53,6 +53,33 @@ async function choose(placeId: string): Promise<void> {
   await flush();
 }
 
+describe("things that only go wrong on a real phone", () => {
+  it("ticks by itself, a second at a time", () => {
+    vi.useFakeTimers();
+    load(hqView({ today: { ...hqView().today!, state: "shut", clueAt: at("2026-12-07T19:00:00.000Z"), clue: null, options: [] } }));
+    const before = words($(".elf-cd"));
+    clock += 3000;
+    vi.advanceTimersByTime(1000);
+    expect(words($(".elf-cd"))).not.toBe(before);
+    vi.useRealTimers();
+  });
+
+  it("does not fetch the page again and again when the clue time had passed before the page was drawn", () => {
+    const h = load(hqView({ today: { ...hqView().today!, state: "shut", clueAt: at("2026-12-07T17:00:00.000Z"), clue: null, options: [] } }));
+    h.tick();
+    h.tick();
+    expect(reloads).toBe(0);
+  });
+
+  it("treats an answer that is not JSON as not saved", async () => {
+    load();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (window as any).fetch = vi.fn(() => Promise.resolve({ ok: true, status: 200, json: () => Promise.reject(new Error("not json")) }));
+    await choose("p-books");
+    expect(words($(".elf-guess__status"))).toBe("We could not save your guess. Check your signal and try again.");
+  });
+});
+
 afterEach(() => {
   hq?.stop();
   hq = null;

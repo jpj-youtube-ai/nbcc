@@ -254,6 +254,66 @@ describe("saving", () => {
     expect(calls.length).toBe(1);
   });
 
+  it("sends the latest change straight away when the page is left while an earlier save is on its way", () => {
+    load();
+    choice("elf:green").click();
+    wd!.save();
+    choice("elf:blue").click();
+    wd!.save();
+    expect(calls.length).toBe(1);
+    window.dispatchEvent(new Event("pagehide"));
+    expect(calls.length).toBe(2);
+    expect((calls[1].body.look as { pieces: { hat: string[] } }).pieces.hat).toEqual(["elf", "blue"]);
+    expect(calls[1].keepalive).toBe(true);
+  });
+
+  it("saves when the page is hidden too, which is all a phone says when an app is swiped away", () => {
+    vi.useFakeTimers();
+    load();
+    choice("elf:green").click();
+    Object.defineProperty(document, "visibilityState", { value: "hidden", configurable: true });
+    document.dispatchEvent(new Event("visibilitychange"));
+    Object.defineProperty(document, "visibilityState", { value: "visible", configurable: true });
+    expect(calls.length).toBe(1);
+  });
+
+  it("treats an answer that is not JSON as not saved", async () => {
+    load();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (window as any).fetch = vi.fn(() => Promise.resolve({ ok: true, status: 200, json: () => Promise.reject(new Error("not json")) }));
+    choice("elf:green").click();
+    wd!.save();
+    await flush();
+    expect($(".elf-wd-status").classList.contains("is-error")).toBe(true);
+  });
+
+  it("keeps the warning about a failed save when a locked thing is tapped", async () => {
+    answer = { status: 500, body: {} };
+    load();
+    choice("elf:green").click();
+    wd!.save();
+    await flush();
+    document.querySelector<HTMLElement>(`label[for="${choice("bobble:red").id}"]`)!.click();
+    expect(words($(".elf-wd-status"))).toBe("We could not save this look. Check your signal and try again.");
+  });
+
+  it("draws and saves choices the browser put back that the mirror does not show", () => {
+    vi.useFakeTimers();
+    const html = renderWardrobePage(wardrobeView());
+    document.documentElement.innerHTML = new DOMParser().parseFromString(html, "text/html").documentElement.innerHTML;
+    choice("elf:green").checked = true;
+    calls = [];
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (window as any).fetch = vi.fn((url: string, init?: RequestInit) => {
+      calls.push({ url, body: JSON.parse(String(init?.body)), keepalive: init?.keepalive });
+      return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve({ ok: true }) });
+    });
+    wd = initWardrobe(document, window, { elf }) as Wardrobe;
+    expect(words($(".elf-wd-wearing"))).toContain("Green elf hat");
+    vi.advanceTimersByTime(1000);
+    expect(calls.length).toBe(1);
+  });
+
   it("sends nothing when the page is left with nothing changed", () => {
     load();
     window.dispatchEvent(new Event("pagehide"));

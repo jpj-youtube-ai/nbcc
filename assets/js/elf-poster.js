@@ -46,6 +46,10 @@
     var stamp = doc.querySelector("form.elf-stamp");
     var busy = false;
     var ticker = null;
+    // With no fetch both forms are left alone, and post like any form.
+    var canSend = typeof win.fetch === "function";
+    // How long to wait for the phone to say where it is, in milliseconds.
+    var patience = opts && typeof opts.patience === "number" ? opts.patience : 20000;
 
     // ---- small helpers ---------------------------------------------------------------------
 
@@ -110,7 +114,9 @@
     function show(html, form) {
       if (!result) return;
       // The server's own card, drawn by src/elf/pages/poster.ts, which makes everything in it safe.
-      result.innerHTML = html;
+      // A candy cane card goes under a gold card, never over it: the staff may still need to see it.
+      if (form === stamp && result.querySelector(".elf-win")) result.insertAdjacentHTML("beforeend", html);
+      else result.innerHTML = html;
       cardOf(form).hidden = true;
       var later = doc.querySelector(".elf-poster__later");
       if (later) later.hidden = true;
@@ -153,7 +159,7 @@
 
     // ---- claiming the elf ---------------------------------------------------------------------
 
-    if (claim) {
+    if (claim && canSend) {
       claim.addEventListener("submit", function (event) {
         event.preventDefault();
         if (busy) return;
@@ -169,10 +175,12 @@
 
     // ---- checking in ----------------------------------------------------------------------------
 
-    if (stamp) {
+    if (stamp && canSend) {
       var locate = stamp.querySelector(".elf-stamp__location");
       var here = locate ? locate.querySelector("button") : null;
       var photo = stamp.querySelector('input[type="file"]');
+      // While the phone is being asked where it is, this calls the asking off.
+      var callOff = null;
 
       if (locate && here && geo && typeof geo.getCurrentPosition === "function") {
         locate.hidden = false;
@@ -180,17 +188,40 @@
           if (busy) return;
           var who = chosen(stamp);
           if (!who.length) return say(stamp, "Tick who is here.", true);
-          hold(stamp, true);
+          // Only this button waits. The photo stays on offer: a phone can leave its question
+          // about sharing a location unanswered for ever, and call neither answer below.
+          busy = true;
+          here.disabled = true;
           say(stamp, "Finding where you are", false);
+          var answered = false;
+          var giveUp = function () {
+            if (answered) return;
+            answered = true;
+            busy = false;
+            here.disabled = false;
+            say(stamp, NO_LOCATION, true);
+          };
+          var watchdog = win.setTimeout(giveUp, patience);
+          callOff = function () {
+            answered = true;
+            win.clearTimeout(watchdog);
+            busy = false;
+            here.disabled = false;
+          };
           // Asked once, used once. The position goes to the server and is kept nowhere here.
           geo.getCurrentPosition(
             function (position) {
+              if (answered) return;
+              answered = true;
+              win.clearTimeout(watchdog);
+              busy = false;
+              here.disabled = false;
               say(stamp, "", false);
               send(stamp, json({ code: code(stamp), detectiveIds: who, location: { lat: position.coords.latitude, lng: position.coords.longitude } }));
             },
             function () {
-              hold(stamp, false);
-              say(stamp, NO_LOCATION, true);
+              win.clearTimeout(watchdog);
+              giveUp();
             },
             { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
           );
@@ -199,6 +230,8 @@
 
       stamp.addEventListener("submit", function (event) {
         event.preventDefault();
+        // A photo may be sent while the phone is still being asked where it is: the photo wins.
+        if (callOff && here && here.disabled) callOff();
         if (busy) return;
         var who = chosen(stamp);
         var file = photo && photo.files && photo.files.length ? photo.files[0] : null;

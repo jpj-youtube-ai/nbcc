@@ -21,12 +21,20 @@ import type { DetectiveView, FamilyMarks, HqView, TodayView } from "./types";
 
 const line = (html: string, cls = ""): string => `<p${cls ? ` class="${cls}"` : ""}>${html}</p>`;
 
+/** Is this a real moment? A date built from a missing or mangled value is not, and must never
+ *  bring the whole page down. */
+const real = (d: Date): boolean => d instanceof Date && Number.isFinite(d.getTime());
+
+/** A count as a whole number that is safe to write into the page, whatever a database hands over. */
+const count = (n: unknown): number => Math.max(0, Math.floor(Number(n)) || 0);
+
 /** The clue as staff wrote it, with its line breaks kept. */
 function clueHtml(clue: string): string {
   return escapeHtml(clue).replace(/\r?\n/g, "<br />\n");
 }
 
 function guessForm(today: TodayView, guessUrl: string): string {
+  if (today.options.length === 0) return line("There is nothing left to guess just now. Keep an eye on the calendar.");
   const choices = today.options
     .map((place, i) => {
       const id = `guess-${i + 1}`;
@@ -43,7 +51,7 @@ function guessForm(today: TodayView, guessUrl: string): string {
     : "";
   return (
     `<form class="elf-guess" method="post" action="${sitePath(guessUrl) ?? "/"}" data-api="/api/elf/guess">` +
-    `<input type="hidden" name="door" value="${today.door}" />` +
+    `<input type="hidden" name="door" value="${count(today.door)}" />` +
     `<fieldset><legend>Where is ${escapeHtml(today.elfName)} hiding?</legend><ul class="elf-guess__choices">${choices}</ul></fieldset>` +
     `<p class="elf-guess__status" role="status">${status}</p>` +
     `<button class="btn btn-primary" type="submit">${today.guess ? "Change my guess" : "Lock in my guess"}</button>` +
@@ -84,8 +92,12 @@ function caseCard(view: HqView): string {
       line(`${things(sleepsUntil(view.now, view.nextClueAt), "sleep")} to go`, "elf-case__count")
     );
   }
-  const head = `<p class="elf-case__door">Door ${today.door}</p>`;
+  const head = `<p class="elf-case__door">Door ${count(today.door)}</p>`;
   if (today.state === "shut") {
+    // A door whose clue time is not a real date stays shut (src/elf/doors.ts). Say so plainly.
+    if (!real(today.clueAt) || !real(view.now)) {
+      return head + `<h2 id="elf-case-heading">Today's clue is on its way</h2>` + line("Come back later to read it and lock in your guess.");
+    }
     const left = today.clueAt.getTime() - view.now.getTime();
     return (
       head +
@@ -114,8 +126,9 @@ function detectiveCard(d: DetectiveView): string {
   const name = escapeHtml(d.name);
   const elf = sitePath(d.elfUrl);
   const wardrobe = sitePath(d.wardrobeUrl) ?? "/";
-  const done = d.graduate ? `All ${DOOR_COUNT} doors done` : `${things(d.doorsDone, "door")} done`;
-  const next = d.next ? `${d.next.toGo} more to ${escapeHtml(d.next.rank)}` : "";
+  const doors = Math.min(DOOR_COUNT, count(d.doorsDone));
+  const done = d.graduate ? `All ${DOOR_COUNT} doors done` : `${things(doors, "door")} done`;
+  const next = d.next ? `${count(d.next.toGo)} more to ${escapeHtml(d.next.rank)}` : "";
   const picture = elf
     ? `<img class="elf-detective__elf" src="${elf}" alt="${name}'s elf" width="96" height="125" loading="lazy" decoding="async" />`
     : "";
@@ -126,13 +139,13 @@ function detectiveCard(d: DetectiveView): string {
     `<h3>${name}</h3>` +
     `<p class="elf-detective__rank">Badge ${escapeHtml(d.badgeNumber)} &middot; <b>${escapeHtml(d.rank)}</b>` +
     `${d.goldSeal ? ' <span class="elf-pill elf-pill--big">Gold seal</span>' : ""}</p>` +
-    `<progress max="${DOOR_COUNT}" value="${Math.max(0, Math.min(DOOR_COUNT, d.doorsDone))}">${d.doorsDone} of ${DOOR_COUNT}</progress>` +
+    `<progress max="${DOOR_COUNT}" value="${doors}" aria-label="${done}">${doors} of ${DOOR_COUNT}</progress>` +
     `<p class="elf-detective__progress">${done}${next ? `. ${next}.` : "."}</p>` +
     (d.nameApproved
       ? ""
       : line("On the public calendar this name shows as its first letter until our team has checked it.", "elf-detective__note")) +
     `<p class="elf-detective__actions"><a class="btn btn-ghost" href="${wardrobe}">Dress the elf</a>` +
-    `${d.newThings > 0 ? ` <span class="elf-new">${d.newThings} new</span>` : ""}</p>` +
+    `${count(d.newThings) > 0 ? ` <span class="elf-new">${count(d.newThings)} new</span>` : ""}</p>` +
     `</div></article>`
   );
 }
@@ -150,7 +163,8 @@ function marksBoard(marks: FamilyMarks): string {
     if (isVisited) visited += 1;
     const said = isCracked && isVisited ? "cracked and visited" : isCracked ? "cracked" : isVisited ? "visited" : "not done yet";
     cells +=
-      `<li aria-label="Door ${door}: ${said}"${isCracked || isVisited ? ' class="is-done"' : ""}>` +
+      // The words go in the page, not in aria-label: a label on a plain list item is not always read.
+      `<li${isCracked || isVisited ? ' class="is-done"' : ""}><span class="sr-only">Door ${door}: ${said}</span>` +
       `<span class="elf-marks__num" aria-hidden="true">${door}</span>` +
       (isCracked ? `<span class="elf-mark elf-mark--cracked">${icon("cracked", 14)}</span>` : "") +
       (isVisited ? `<span class="elf-mark">${candyCane(14)}</span>` : "") +
@@ -175,7 +189,7 @@ export function renderHqPage(view: HqView): string {
 
   <section class="elf-hq-case" aria-labelledby="elf-case-heading">
     <div class="wrap">
-      <div class="elf-case elf-case--${view.today ? view.today.state : "none"}" data-now="${view.now.toISOString()}">
+      <div class="elf-case elf-case--${view.today ? view.today.state : "none"}" data-now="${real(view.now) ? view.now.toISOString() : ""}">
         ${caseCard(view)}
       </div>
     </div>

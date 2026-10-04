@@ -304,8 +304,11 @@ describe("the gold card for the first to find an elf", () => {
       detectives: [{ name: "<img src=x onerror=alert(1)>", badgeNumber: "<i>", rank: "Trainee", elfUrl: "javascript:alert(1)" }],
       hqUrl: "https://example.com",
     });
-    const card = piece(claimWinHtml(win));
-    expect(card.querySelector("script, b > b, i, [onerror]")).toBeNull();
+    const html = claimWinHtml(win);
+    expect(html).toContain("&lt;b&gt;Bauble&lt;/b&gt;");
+    const card = piece(html);
+    expect(card.querySelector("script, b > b, p > b > b, i, [onerror]")).toBeNull();
+    expect(card.querySelector(".elf-win__who b")).toBeNull();
     expect(card.querySelector("img")).toBeNull();
     expect(card.querySelectorAll("a").length).toBeGreaterThan(0);
     for (const a of card.querySelectorAll("a")) expect(a.getAttribute("href")).toMatch(/^\/(?!\/)/);
@@ -374,6 +377,31 @@ describe("the page drawn again after a form was posted with no script", () => {
     const doc = page(posterView({ open: true, claimable: false }), { form: "stamp", ok: false, reason: "no-proof" });
     expect(words(doc.querySelector("form.elf-stamp .elf-form-status"))).toBe("We need your location or a photo taken here.");
     expect(doc.querySelector("form.elf-stamp .elf-form-status")!.classList.contains("is-error")).toBe(true);
+  });
+});
+
+describe("data that is not what it should be", () => {
+  it("draws the gold card without a time, rather than failing, when the time is not real", () => {
+    const html = claimWinHtml(claimWin({ at: new Date("x"), now: new Date("x") }));
+    expect(html).not.toContain("Found at");
+    expect(piece(html).querySelector(".elf-clock")).toBeNull();
+  });
+
+  it("does not start a sentence with nobody", () => {
+    expect(words(piece(claimWinHtml(claimWin({ detectives: [] }))).querySelector(".elf-win__who"))).toBe("Bauble has been found at The Toy Shop.");
+  });
+
+  it("sends a family with no detectives to add one, not to an empty form", () => {
+    const doc = page(posterView({ detectives: [] }));
+    expect(doc.querySelector("form")).toBeNull();
+    expect(words(doc.querySelector("main"))).toContain("Add a detective first");
+  });
+
+  it("makes the town safe on the page a visitor who is not signed in sees", () => {
+    const html = renderPosterPage(posterView({ signedIn: false, detectives: [], placeTown: "<b>Troon</b>", joinUrl: "javascript:1", signInUrl: "//x" }));
+    expect(html).toContain("&lt;b&gt;Troon&lt;/b&gt;");
+    const doc = new DOMParser().parseFromString(html, "text/html");
+    for (const a of doc.querySelectorAll("main a")) expect(a.getAttribute("href")).toMatch(/^\/(?!\/)/);
   });
 });
 

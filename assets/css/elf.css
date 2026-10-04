@@ -421,11 +421,16 @@
   width: 20px;
   height: 20px;
   margin: -10px 0 0;
+  padding: 0;
   accent-color: var(--holly);
 }
+/* The site gives every label a margin, a size and a weight of its own: put them back to the row's. */
 .elf-guess__choices label {
   display: block;
   min-height: 48px;
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 400;
   padding: 12px 14px 12px 46px;
   border: 1.6px solid var(--line);
   border-radius: 12px;
@@ -670,6 +675,10 @@ form.elf-wd { display: grid; gap: 16px; padding: 0; background: none; border: 0;
 .elf-wd-tile--swatch .elf-wd-art svg { width: 36px; height: 36px; }
 .elf-wd-tile--outfit label { min-height: 150px; }
 
+/* A phone on its side has no height to spare: the mirror scrolls away with the page there. */
+@media (max-height: 520px) {
+  .elf-wd-preview { position: static; }
+}
 @media (min-width: 560px) {
   .elf-wd-tabs { gap: 8px; }
   .elf-wd-tab { padding: 8px 16px; font-size: 0.92rem; }

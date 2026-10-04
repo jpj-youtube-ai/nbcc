@@ -19,8 +19,10 @@ export const MASTER_FILE = "partials/footer.html";
 
 // A site footer, however its attributes are written; and one starting its own line, which is the
 // only kind the copier places (it re-indents the master to match).
-const SITE_FOOTER = /<footer\b[^>]*\bsite-footer\b/;
-const FOOTER = /^([ \t]*)<footer\b[^>]*\bsite-footer\b[\s\S]*?<\/footer>/m;
+// The class is matched whole: "site-footer", never "site-footer-mini".
+const CLASS = String.raw`<footer\b[^>]*(?<![\w-])site-footer(?![\w-])`;
+const SITE_FOOTER = new RegExp(CLASS);
+const FOOTER = new RegExp(String.raw`^([ \t]*)${CLASS}[\s\S]*?<\/footer>`, "m");
 
 /** Whether the page has a site footer at all. */
 export function hasSiteFooter(html) {

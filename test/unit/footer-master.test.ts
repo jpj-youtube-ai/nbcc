@@ -75,6 +75,7 @@ describe("copying the master into a page", () => {
     expect(hasSiteFooter(other)).toBe(true);
     expect(syncPage(other, tiny)).toBe('  <footer class="site-footer" data-region="footer">\n    <p>New</p>\n  </footer>\n');
     expect(hasSiteFooter("<footer><p>Some other footer</p></footer>")).toBe(false);
+    expect(hasSiteFooter('<footer class="site-footer-mini"></footer>')).toBe(false);
   });
 
   it("is not thrown by blank lines around the master", () => {

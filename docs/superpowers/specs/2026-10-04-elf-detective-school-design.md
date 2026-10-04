@@ -144,10 +144,16 @@ These are the rules the pure logic in `src/elf/` implements. Times are Europe/Lo
   doors done, or for the Gold seal, or for a race win. A look is valid only if everything in it is
   unlocked for that detective.
 - **Names.** A detective name is a first name plus a festive surname from the fixed list. The first
-  name is one word of 1 to 20 characters: letters, with hyphens and apostrophes inside it. A space
-  is refused, so a surname typed after the first name is never shown. It must pass the blocked-word
-  filter however it is hyphenated or accented. This matters because a detective name goes on the
-  public calendar the moment an elf is found, before any member of staff has looked.
+  name is one word of 1 to 20 characters in the letters A to Z, accents allowed, with at most one
+  hyphen or apostrophe inside it. A space is refused, so a surname typed after the first name is
+  never shown. It must pass the rude word checks however it is hyphenated, accented or dressed up in
+  look alike letters.
+- **Names in public.** A first name is shown in full only once a member of staff has ticked it.
+  Until then the public sees its first letter: "Detective R. Tinselfoot". No list of words can stop
+  every rude or revealing name, and a detective name goes on the calendar the moment an elf is
+  found, so this is how "staff approve all public content" holds. A family always sees its own
+  detectives' names in full. (Added after review; to confirm with Jaimie, since it adds one tick for
+  each new detective.)
 
 ## What the website already has that this reuses
 

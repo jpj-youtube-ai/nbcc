@@ -37,7 +37,9 @@ The audience is a parent on a phone, often outside on a December evening with ch
 
 ## Views: what a screen is given
 
-Defined in `src/elf/pages/types.ts`. Stage B builds these from the database; the stand-in builds them from pretend data. A screen never works a rule out for itself: the view already holds the answer.
+Defined in `src/elf/pages/types.ts`, which is the last word where it and this summary differ (it has since gained a few fields, such as each detective's `wardrobeUrl`). Stage B builds these from the database; the stand-in builds them from pretend data. A screen never works a rule out for itself: the view already holds the answer.
+
+A door's detail is in the page, straight after its door, for all 24 doors. With no script the stylesheet shows the one a door links to (`:target`); with the script a tap opens it in place. So there is no `?door=` and no server round trip to open a door.
 
 ```ts
 import type { Door } from "../calendar";
@@ -59,7 +61,8 @@ export interface DoorView {
   elfName: string;
   /** Where it was hiding. Null until the door is open. */
   place: { name: string; town: string } | null;
-  /** Who found it. Null until it is found. */
+  /** Who found it. Null until it is found. `by` comes from `detectiveNames` in src/elf/names.ts, so
+   *  a first name staff have not ticked yet is only its first letter. */
   found: { at: Date; by: string; elfUrl: string; photoUrl: string | null } | null;
   /** How many detectives cracked it and how many have visited. Null until the door is open. */
   counts: { cracked: number; visited: number } | null;
@@ -71,8 +74,6 @@ export interface CalendarView {
   year: number;
   now: Date;
   doors: DoorView[]; // all 24, door 1 first
-  /** The door to show opened out when the page loads, from `?door=`. */
-  selected: Door | null;
   /** Every hiding place, public from the start, without its day. */
   places: { name: string; town: string; found: boolean }[];
   /** What the price words say: "from £1" and "£5". Set in the admin. */
@@ -83,7 +84,7 @@ export interface CalendarView {
 
 /** A family's own marks on the calendar. Private, small, fetched by the page's script. */
 export interface FamilyMarks {
-  doors: { door: Door; cracked: boolean; visited: boolean; guessed: boolean }[];
+  doors: { door: Door; cracked: boolean; visited: boolean }[];
 }
 
 export interface DetectiveView {
@@ -118,7 +119,6 @@ export interface HqView {
   detectives: DetectiveView[];
   today: TodayView | null; // null outside 1 to 24 December
   marks: FamilyMarks;
-  doors: DoorView[];
   calendarUrl: string;
 }
 

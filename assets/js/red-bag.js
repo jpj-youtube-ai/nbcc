@@ -95,6 +95,16 @@
     var summary = form ? form.querySelector("[data-rb-error]") : null;
     var payBtn = form ? form.querySelector("[data-rb-pay]") : null;
     var preview = !!(doc.body && doc.body.getAttribute("data-rb-preview") === "true");
+    var monthlyLabel = doc.querySelector("[data-rb-monthly-label]");
+    // The phone bar: the total and a Donate button at the foot of the screen (phones only, by the
+    // stylesheet), shown while the real ones are out of sight.
+    var bar = doc.querySelector("[data-rb-bar]");
+    var barTotal = doc.querySelector("[data-rb-bar-total]");
+    var barDonate = doc.querySelector("[data-rb-bar-donate]");
+    var step = "bag";
+    var canWatch = false;
+    var realOnScreen = false;
+    var footerOnScreen = false;
 
     var quantities = {};
     var tapped = []; // example keys, in the order they were tapped
@@ -170,7 +180,26 @@
       setText(totalEl, rb.pounds(pence));
       if (perMonth) perMonth.hidden = !isMonthly();
       if (nudge && pence >= rb.MIN_PENCE) nudge.hidden = true;
+      // The tick names the amount it would make monthly: "Give £31 every month".
+      setText(monthlyLabel, pence ? "Give " + rb.pounds(pence) + " every month" : "Give this amount every month");
+      setText(barTotal, rb.pounds(pence));
+      refreshBar();
       refreshDetails();
+    }
+
+    // The bar shows only when it is of use and nothing would be doubled: on the bag step, with
+    // something in the bag, while the real total and Donate are off screen, and never over the
+    // footer (the charity's details). Where the browser
+    // cannot say what is on screen it never shows. While it shows, the page is a little longer
+    // (body.rb-bar-on), so it can never rest on the last of the footer.
+    function refreshBar() {
+      if (!bar) return;
+      var show = canWatch && step === "bag" && !realOnScreen && !footerOnScreen && total() > 0;
+      bar.hidden = !show;
+      if (doc.body) {
+        if (show) doc.body.classList.add("rb-bar-on");
+        else doc.body.classList.remove("rb-bar-on");
+      }
     }
 
     // --- the steppers ---------------------------------------------------------------------------
@@ -286,7 +315,8 @@
     if (monthly) monthly.addEventListener("change", refresh);
 
     // --- Donate: the nudge, or on to the details step ----------------------------------------------
-    function showStep(step) {
+    function showStep(to) {
+      step = to;
       builder.hidden = step !== "bag";
       if (need) need.hidden = step !== "bag";
       if (details) details.hidden = step !== "details";
@@ -295,20 +325,50 @@
       // the line goes: the heading stays, and its section still clears the fixed header.
       var lede = doc.querySelector("[data-rb-lede]");
       if (lede) lede.hidden = step === "thanks";
+      refreshBar();
     }
 
+    // One Donate, two buttons: the real one, and the phone bar's. Under £2 the nudge shows; from
+    // the bar it is also brought into view, since the bar only shows while the nudge's place is
+    // off screen.
+    function pressDonate(fromBar) {
+      if (total() < rb.MIN_PENCE) {
+        if (nudge) {
+          nudge.hidden = false;
+          if (fromBar && typeof nudge.scrollIntoView === "function") nudge.scrollIntoView({ block: "center" });
+        }
+        return;
+      }
+      if (!details) return;
+      showStep("details");
+      refreshDetails();
+      ensureStripeJs(doc, win);
+      focusOn(doc.getElementById("rb-details-title"));
+    }
     if (donateBtn) {
       donateBtn.addEventListener("click", function () {
-        if (total() < rb.MIN_PENCE) {
-          if (nudge) nudge.hidden = false;
-          return;
-        }
-        if (!details) return;
-        showStep("details");
-        refreshDetails();
-        ensureStripeJs(doc, win);
-        focusOn(doc.getElementById("rb-details-title"));
+        pressDonate(false);
       });
+    }
+    if (barDonate) {
+      barDonate.addEventListener("click", function () {
+        pressDonate(true);
+      });
+    }
+    var watched = doc.querySelector("[data-rb-watch]");
+    if (bar && watched && typeof win.IntersectionObserver === "function") {
+      canWatch = true;
+      new win.IntersectionObserver(function (entries) {
+        realOnScreen = !!(entries.length && entries[entries.length - 1].isIntersecting);
+        refreshBar();
+      }).observe(watched);
+      var footer = doc.querySelector("footer");
+      if (footer) {
+        new win.IntersectionObserver(function (entries) {
+          footerOnScreen = !!(entries.length && entries[entries.length - 1].isIntersecting);
+          refreshBar();
+        }).observe(footer);
+      }
     }
     var back = doc.querySelector("[data-rb-back]");
     if (back) {

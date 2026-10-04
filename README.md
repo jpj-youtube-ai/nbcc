@@ -11956,10 +11956,18 @@ JavaScript; and the tests read it too. To change a price or a word, change it th
 
 **The page** (`fill-a-red-bag.html`, `assets/css/red-bag.css`, `assets/js/red-bag.js`): the list
 with a minus button, a number box and a plus button for each item (0 to 99; typing counts at once);
-the bags, the status line, the total, a "Fill this bag every month" tick and one Donate button;
+the bags, the status line, the total, a monthly tick that names the amount ("Give £31 every
+month", following the total; "Give this amount every month" while the bag is empty) and one Donate
+button;
 "Whenever the need comes", four themes of three examples that go into the same bag when tapped; and
-"Prefer to give the real thing?" (the drop off address is one constant, `DROP_OFF_URL` in
-`src/red-bag/render.ts`, shown without a link until `DROP_OFF_LIVE` is set). Under £2 the Donate
+"Prefer to give the real thing? We would love that. Find a drop-off point near you." (the last
+sentence links to `DROP_OFF_URL`, https://drop.nbcc.scot, in `src/red-bag/render.ts`, in a new tab;
+`DROP_OFF_LIVE` is `true` since Jaimie confirmed the address on 4 October 2026, and set to `false`
+the note shows the phone number and no link). **On a phone** the bag sits below the list, so a slim
+bar fixed to the foot of the screen shows "Your bag £18" and a Donate button while the list is
+scrolled: it hides once the real total and Donate are on screen, over the footer, on the details
+step and the thank you, and while the total is £0; its Donate does what the main one does; it is
+never drawn at desktop widths and is not a live region. Under £2 the Donate
 button stays enabled and shows a friendly nudge. Donate opens a details step with the same asks as
 the give form on a fundraiser's page (name, email, the newsletter tick, Gift Aid, covering the card
 fee for a one off; a monthly donation asks for the 18 or over tick instead, as `/donate` does), then

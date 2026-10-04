@@ -17,11 +17,12 @@ export const BAG_MARKER = "<!-- red-bag:bag -->";
 export const REAL_MARKER = "<!-- red-bag:real -->";
 
 /**
- * "Prefer to give the real thing?" points here. The address did not resolve on 3 October 2026, so
- * the note is shown WITHOUT the link until Jaimie confirms it is live: then set DROP_OFF_LIVE true.
+ * "Prefer to give the real thing?" points here. The address did not resolve on 3 October 2026;
+ * Jaimie confirmed it live on 4 October 2026, so the note carries the link. Set DROP_OFF_LIVE back
+ * to false and the note shows the phone number instead, with no link.
  */
 export const DROP_OFF_URL = "https://drop.nbcc.scot";
-export const DROP_OFF_LIVE = false;
+export const DROP_OFF_LIVE = true;
 
 /** The phone number the site already prints (contact.html, donate.html). */
 const PHONE = '<a href="tel:+441292811015">01292 811 015</a>';
@@ -200,8 +201,10 @@ export function renderRedBagDetails(): string {
 
 /** "Prefer to give the real thing?": with the drop off link once it is live, the phone until then. */
 export function renderRealThing(dropOffLive: boolean): string {
+  // Jaimie's words (4 October 2026). Another site, so it opens the way the site's other outside
+  // links do: a new tab, and a screen reader is told so.
   const how = dropOffLive
-    ? `See what we need and where to bring it at <a href="${DROP_OFF_URL}">drop.nbcc.scot</a>.`
+    ? `We would love that. <a href="${DROP_OFF_URL}" target="_blank" rel="noopener">Find a drop-off point near you<span class="sr-only">, opens in a new tab</span></a>.`
     : `We would love that. Get in touch on ${PHONE} and we can tell you what we need and where to bring it.`;
   return `<p class="rb-real"><strong>Prefer to give the real thing?</strong> ${how}</p>`;
 }

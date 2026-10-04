@@ -96,7 +96,9 @@ describe("beside the list", () => {
   });
 
   it("has the monthly tick, one Donate button and the nudge", () => {
-    expect(norm(doc.querySelector('label[for="rbMonthly"]')?.textContent)).toBe("Fill this bag every month");
+    // With nothing in the bag the tick names no amount; the script names it as the bag fills.
+    expect(norm(doc.querySelector('label[for="rbMonthly"]')?.textContent)).toBe("Give this amount every month");
+    expect(doc.querySelector('label[for="rbMonthly"] [data-rb-monthly-label]')).not.toBeNull();
     const buttons = main.querySelectorAll("[data-rb-donate]");
     expect(buttons.length).toBe(1);
     expect(norm(buttons[0].textContent)).toBe("Donate");
@@ -118,6 +120,34 @@ describe("beside the list", () => {
     const nojs = main.querySelector("[data-nojs]")!;
     expect(nojs.querySelector('a[href="/donate"]')).not.toBeNull();
     expect(main.querySelector("[data-rb-donate]")!.closest("[data-needs-js]")?.hasAttribute("hidden")).toBe(true);
+  });
+});
+
+// On a phone the bag and Donate sit below a long list. A slim bar at the foot of the screen keeps
+// the total and a Donate button in reach while the list is scrolled (assets/js/red-bag.js shows it).
+describe("the phone bar", () => {
+  const bar = main.querySelector("[data-rb-bar]")!;
+
+  it("is in the page, hidden until the script shows it", () => {
+    expect(bar).not.toBeNull();
+    expect(bar.hasAttribute("hidden")).toBe(true);
+    expect(norm(bar.querySelector(".rb-bar__total")?.textContent)).toBe("Your bag £0");
+    const button = bar.querySelector("button[data-rb-bar-donate]")!;
+    expect(norm(button.textContent)).toBe("Donate");
+    expect(button.getAttribute("type")).toBe("button");
+    expect(button.classList.contains("btn")).toBe(true); // the site's button, with its arrow
+  });
+
+  it("is not a live region: the status line already says each change", () => {
+    expect(bar.hasAttribute("aria-live")).toBe(false);
+    expect(bar.hasAttribute("role")).toBe(false);
+    expect(bar.querySelector("[aria-live], [role='status'], [role='alert']")).toBeNull();
+    expect(bar.closest("[aria-live]")).toBeNull();
+  });
+
+  it("is not a section of its own, so the page's shell is as it was", () => {
+    expect(bar.tagName).toBe("DIV");
+    expect(bar.parentElement).toBe(main);
   });
 });
 
@@ -151,22 +181,34 @@ describe("whenever the need comes", () => {
 });
 
 describe("prefer to give the real thing", () => {
-  it("keeps the drop off address in one constant, not yet live", () => {
+  it("keeps the drop off address in one constant, live since Jaimie confirmed it (4 October 2026)", () => {
     expect(DROP_OFF_URL).toBe("https://drop.nbcc.scot");
-    expect(DROP_OFF_LIVE).toBe(false);
+    expect(DROP_OFF_LIVE).toBe(true);
   });
 
-  it("shows the note without the link until it is, with the phone number the site prints", () => {
+  it("says it in Jaimie's words, with the link on the last sentence", () => {
     const note = main.querySelector(".rb-real")!;
-    expect(norm(note.textContent)).toContain("Prefer to give the real thing?");
-    expect(html).not.toContain("drop.nbcc.scot");
-    expect(note.querySelector('a[href="tel:+441292811015"]')?.textContent).toBe("01292 811 015");
-    expect(read("contact.html")).toContain('href="tel:+441292811015"');
+    const link = note.querySelector("a")!;
+    expect(link.getAttribute("href")).toBe("https://drop.nbcc.scot");
+    expect(norm(link.firstChild?.textContent)).toBe("Find a drop-off point near you");
+    // As seen: the words for a screen reader about the new tab are apart from the sentence.
+    const seen = note.cloneNode(true) as Element;
+    seen.querySelectorAll(".sr-only").forEach((el) => el.remove());
+    expect(norm(seen.textContent)).toBe("Prefer to give the real thing? We would love that. Find a drop-off point near you.");
   });
 
-  it("links to it once it is", () => {
-    const live = renderRedBagPage(template, { preview: false, dropOffLive: true });
-    expect(live).toContain('href="https://drop.nbcc.scot"');
+  it("opens the other site the way the site's other outside links do", () => {
+    const link = main.querySelector(".rb-real a")!;
+    expect(link.getAttribute("target")).toBe("_blank");
+    expect(link.getAttribute("rel")).toBe("noopener");
+    expect(norm(link.querySelector(".sr-only")?.textContent)).toBe(", opens in a new tab");
+  });
+
+  it("would show the phone number, and no link, if the address went away again", () => {
+    const off = renderRedBagPage(template, { preview: false, dropOffLive: false });
+    expect(off).not.toContain("drop.nbcc.scot");
+    expect(off).toContain('href="tel:+441292811015"');
+    expect(read("contact.html")).toContain('href="tel:+441292811015"');
   });
 });
 
@@ -239,8 +281,10 @@ describe("the thank you", () => {
     expect(thanks.querySelector("[data-rb-thanks-plain]")?.hasAttribute("hidden")).toBe(false);
   });
 
-  it("carries the reassurance line", () => {
+  it("carries the reassurance line, and says the receipt is coming, in Jaimie's words", () => {
     expect(norm(thanks.textContent)).toContain(rb.WORDS.elves);
+    expect(norm(thanks.textContent)).toContain(`${rb.WORDS.elves} Your receipt is on its way to your inbox. Thank you for being part of this.`);
+    expect(norm(thanks.textContent)).not.toContain("We have emailed your receipt");
   });
 
   it("offers a picture to share that names no amount, and never a list of items", () => {
@@ -271,12 +315,16 @@ describe("the wording rules", () => {
   it("has no en dash or em dash, and no hyphenated words", () => {
     const all = visibleCopy(html);
     expect(all.match(/[–—]/g) ?? []).toEqual([]);
-    expect(all.match(/\w-\w/g) ?? []).toEqual([]);
+    // "drop-off" is Jaimie's own wording for the real items note (4 October 2026): the one hyphen allowed.
+    expect(all.replace(/\bdrop-off\b/g, " ").match(/\w-\w/g) ?? []).toEqual([]);
     expect(html).not.toContain("NB4CC");
   });
 
   it("is plainly all year round, not a Christmas list", () => {
     expect(norm(main.querySelector("#rb-themes-title")?.textContent)).toBe("Whenever the need comes");
+    expect(norm(main.querySelector(".rb-need__head p")?.textContent)).toBe(
+      "Christmas is our big night, and the need comes all year round. Tap an example to add it to your bag, and tap it again to take it out.",
+    );
     expect(copy).not.toMatch(/santa/i);
     expect(copy).toContain("all year round");
   });
@@ -552,6 +600,20 @@ describe("the page's own stylesheet", () => {
     const reduced = /@media\s*\(prefers-reduced-motion:\s*reduce\)\s*\{([\s\S]*?\})\s*\}/.exec(rules)?.[1] ?? "";
     expect(reduced).toMatch(/animation:none/);
     expect(reduced).toMatch(/transition:none/);
+  });
+
+  it("draws the phone bar only where the bag sits below the list, fixed to the foot, clear of the home bar", () => {
+    const outside = rules.replace(/@media[^{]*\{(?:[^{}]*\{[^{}]*\})*[^{}]*\}/g, "");
+    expect(outside).toMatch(/\.rb-bar\{[^}]*display:none/);
+    const stacked = /@media \(max-width:860px\)\{((?:[^{}]*\{[^{}]*\})*)/.exec(rules)?.[1] ?? "";
+    const rule = /\.rb-bar\{([^}]*)\}/.exec(stacked)?.[1] ?? "";
+    expect(rule).toMatch(/display:flex/);
+    expect(rule).toMatch(/position:fixed/);
+    expect(rule).toMatch(/bottom:0/);
+    expect(rule).toMatch(/env\(safe-area-inset-bottom\)/);
+    expect(stacked).toMatch(/\.rb-bar__donate\{[^}]*min-height:44px/);
+    // While it shows, the page is longer by its height, so it never sits over the end of the footer.
+    expect(stacked).toMatch(/body\.rb-bar-on\{[^}]*padding-bottom:[^}]*env\(safe-area-inset-bottom\)/);
   });
 
   it("shows a pressed example in holly green", () => {

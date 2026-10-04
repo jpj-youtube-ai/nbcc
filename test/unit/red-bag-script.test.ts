@@ -47,11 +47,15 @@ let store: Map<string, string>;
 let history: { replaceState: ReturnType<typeof vi.fn> };
 let api: ReturnType<typeof initRedBag>;
 let listeners: Record<string, (e: unknown) => void>;
+// The stand in for the browser's IntersectionObserver: what was watched, and a way to say it is on screen.
+let watcher: { el: Element | null; say: (onScreen: boolean) => void } | null;
+let watchers: Array<{ el: Element | null; say: (onScreen: boolean) => void }>;
 
-function start(opts: { preview?: boolean; search?: string; answer?: Answer; kept?: Record<string, string>; stripe?: unknown } = {}) {
+function start(opts: { preview?: boolean; search?: string; answer?: Answer; kept?: Record<string, string>; stripe?: unknown; noObserver?: boolean } = {}) {
   const html = renderRedBagPage(template, { preview: !!opts.preview });
   const parsed = new DOMParser().parseFromString(html, "text/html");
   document.body.innerHTML = parsed.body.innerHTML;
+  document.body.classList.remove("rb-bar-on");
   if (opts.preview) document.body.setAttribute("data-rb-preview", "true");
   else document.body.removeAttribute("data-rb-preview");
   const answer = opts.answer ?? { status: 200, body: { url: "https://checkout.stripe.test/pay" } };
@@ -60,7 +64,21 @@ function start(opts: { preview?: boolean; search?: string; answer?: Answer; kept
   store = new Map(Object.entries(opts.kept ?? {}));
   history = { replaceState: vi.fn() };
   listeners = {};
+  watcher = null;
+  watchers = [];
+  class Observer {
+    me: { el: Element | null; say: (onScreen: boolean) => void };
+    constructor(cb: (entries: Array<{ isIntersecting: boolean }>) => void) {
+      this.me = { el: null, say: (onScreen) => cb([{ isIntersecting: onScreen }]) };
+      watchers.push(this.me);
+      if (!watcher) watcher = this.me; // the first is the one on the real total and Donate
+    }
+    observe(el: Element) {
+      this.me.el = el;
+    }
+  }
   const win = {
+    IntersectionObserver: opts.noObserver ? undefined : Observer,
     NBCCRedBag: catalogue,
     Stripe: opts.stripe,
     addEventListener: (type: string, fn: (e: unknown) => void) => void (listeners[type] = fn),
@@ -281,6 +299,32 @@ describe("the bags and the status line", () => {
 });
 
 describe("the monthly tick", () => {
+  const label = () => text('label[for="rbMonthly"]');
+
+  it("names the amount, and keeps up as the bag changes", () => {
+    expect(label()).toBe("Give this amount every month");
+    plus("blanket");
+    expect(label()).toBe("Give £8 every month");
+    plus("pencil");
+    expect(label()).toBe("Give £8.10 every month");
+    example("hand-150").click();
+    expect(label()).toBe("Give £158.10 every month");
+    minus("blanket");
+    minus("pencil");
+    example("hand-150").click();
+    expect(label()).toBe("Give this amount every month");
+    plus("pencil", 7);
+    expect(label()).toBe("Give 70p every month");
+  });
+
+  it("still makes the pay button say a month", () => {
+    plus("blanket", 2);
+    tick("rbMonthly");
+    expect(label()).toBe("Give £16 every month");
+    donate();
+    expect(text("[data-rb-pay]")).toBe("Donate £16 a month");
+  });
+
   it("turns the total into a monthly donation", () => {
     plus("blanket");
     tick("rbMonthly");
@@ -736,5 +780,102 @@ describe("the postcode", () => {
     pay();
     await flush();
     expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+});
+
+// On a phone the bag, the total and Donate are below a long list. A slim bar fixed to the foot of the
+// screen carries the total and a Donate button while they are out of sight, and goes the moment the
+// real ones come on screen, so nothing is ever shown twice.
+describe("the phone bar", () => {
+  const bar = () => $("[data-rb-bar]");
+  const barDonate = () => $<HTMLButtonElement>("[data-rb-bar-donate]").click();
+  const padded = () => document.body.classList.contains("rb-bar-on");
+
+  it("stays away while the bag is empty", () => {
+    expect(bar().hidden).toBe(true);
+    expect(padded()).toBe(false);
+  });
+
+  it("shows the total once there is something in the bag, and keeps up with it", () => {
+    plus("blanket", 2);
+    expect(bar().hidden).toBe(false);
+    expect(text(".rb-bar__total")).toBe("Your bag £16");
+    plus("socks", 2);
+    expect(text(".rb-bar__total")).toBe("Your bag £18");
+    expect(padded()).toBe(true);
+  });
+
+  it("goes when the bag is emptied again", () => {
+    plus("blanket");
+    minus("blanket");
+    expect(bar().hidden).toBe(true);
+    expect(padded()).toBe(false);
+  });
+
+  it("watches the real total and Donate, and hides while they are on screen", () => {
+    expect(watcher!.el).toBe($("[data-rb-watch]"));
+    expect(watcher!.el!.contains($("[data-rb-total]"))).toBe(true);
+    expect(watcher!.el!.contains($("[data-rb-donate]"))).toBe(true);
+    plus("blanket");
+    watcher!.say(true);
+    expect(bar().hidden).toBe(true);
+    expect(padded()).toBe(false);
+    watcher!.say(false);
+    expect(bar().hidden).toBe(false);
+  });
+
+  it("goes while the footer is on screen, so it never sits over the charity's details", () => {
+    const foot = watchers.find((w) => w.el === document.querySelector("footer"))!;
+    expect(foot).toBeTruthy();
+    plus("blanket");
+    expect(bar().hidden).toBe(false);
+    foot.say(true);
+    expect(bar().hidden).toBe(true);
+    expect(padded()).toBe(false);
+    foot.say(false);
+    expect(bar().hidden).toBe(false);
+  });
+
+  it("does what the real Donate does: from £2, on to the details step, and it goes", () => {
+    plus("blanket");
+    barDonate();
+    expect($("[data-rb-details]").hidden).toBe(false);
+    expect(document.activeElement).toBe(document.getElementById("rb-details-title"));
+    expect(bar().hidden).toBe(true);
+    expect(padded()).toBe(false);
+    $<HTMLButtonElement>("[data-rb-back]").click();
+    expect(bar().hidden).toBe(false);
+  });
+
+  it("does what the real Donate does: under £2, the nudge, brought into view", () => {
+    const nudge = $("[data-rb-nudge]");
+    const seen = vi.fn();
+    (nudge as unknown as { scrollIntoView: unknown }).scrollIntoView = seen;
+    plus("socks");
+    barDonate();
+    expect(nudge.hidden).toBe(false);
+    expect(seen).toHaveBeenCalledWith({ block: "center" });
+    expect($("[data-rb-details]").hidden).toBe(true);
+  });
+
+  it("does not bring the nudge into view for the real Donate, which is beside it already", () => {
+    const seen = vi.fn();
+    ($("[data-rb-nudge]") as unknown as { scrollIntoView: unknown }).scrollIntoView = seen;
+    plus("socks");
+    donate();
+    expect(seen).not.toHaveBeenCalled();
+  });
+
+  it("is never there on the thank you", () => {
+    start({ search: "?thanks=1", kept: { nbcc_red_bag_gift: JSON.stringify({ pence: 5410, giftAid: false, monthly: false }) } });
+    expect(bar().hidden).toBe(true);
+    expect(padded()).toBe(false);
+  });
+
+  it("never shows where the browser cannot tell what is on screen", () => {
+    start({ noObserver: true });
+    plus("blanket", 3);
+    expect(bar().hidden).toBe(true);
+    expect(padded()).toBe(false);
   });
 });

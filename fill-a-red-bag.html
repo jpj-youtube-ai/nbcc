@@ -74,7 +74,7 @@
               <p class="rb-thanks__lead" data-rb-thanks-plain>Your donation is on its way to NBCC.</p>
               <p data-rb-thanks-giftaid hidden>With Gift Aid, NBCC can claim another <strong data-rb-thanks-giftaid-amount></strong> at no cost to you.</p>
               <p>Our elves use your gift wherever it's needed most, so the items are a taste of what it could do, not a shopping list.</p>
-              <p>We have emailed your receipt. There is nothing more for you to do.</p>
+              <p>Your receipt is on its way to your inbox. Thank you for being part of this.</p>
               <div class="rb-share" data-rb-share>
                 <h3>Share: I filled a Red Bag</h3>
                 <p>A picture to post or send, to show a friend how to fill one too. It says nothing about how much you gave.</p>
@@ -109,6 +109,8 @@
             <h2 class="sr-only" id="rb-panel-title">Your bag</h2>
             <div class="rb-bags" data-rb-bags data-count="1" aria-hidden="true"><!-- red-bag:bag --></div>
             <p class="rb-more" data-rb-more hidden></p>
+            <!-- The phone bar (below) shows only while this block, the real total and Donate, is off screen. -->
+            <div data-rb-watch>
             <!-- ONE polite region, read whole: a tap is announced once, the status and the total together. -->
             <div class="rb-said" role="status" aria-live="polite" aria-atomic="true">
               <p class="rb-status" data-rb-status>Your bag is empty. Pop something in.</p>
@@ -116,9 +118,10 @@
             </div>
             <p class="rb-nojs" data-nojs>Filling a bag needs JavaScript switched on. You can still donate on our <a href="/donate">donate page</a>.</p>
             <div class="rb-give" data-needs-js hidden>
-              <label class="give-check rb-monthly" for="rbMonthly"><input class="give-check-box" id="rbMonthly" name="rbMonthly" type="checkbox" /><span class="give-check-text">Fill this bag every month</span></label>
+              <label class="give-check rb-monthly" for="rbMonthly"><input class="give-check-box" id="rbMonthly" name="rbMonthly" type="checkbox" /><span class="give-check-text" data-rb-monthly-label>Give this amount every month</span></label>
               <button class="btn btn-primary rb-donate" type="button" data-rb-donate aria-describedby="rbNudge">Donate</button>
               <p class="rb-nudge" id="rbNudge" data-rb-nudge role="alert" hidden>Add a little more to reach £2. Maybe some socks?</p>
+            </div>
             </div>
             <p class="rb-elves">Our elves use your gift wherever it's needed most, so the items are a taste of what it could do, not a shopping list.</p>
           </div>
@@ -129,7 +132,7 @@
         <div class="wrap">
           <div class="rb-need__head">
             <h2 id="rb-themes-title">Whenever the need comes</h2>
-            <p>Christmas is our focus, not the only moment. Tap an example to add it to your bag, and tap it again to take it out.</p>
+            <p>Christmas is our big night, and the need comes all year round. Tap an example to add it to your bag, and tap it again to take it out.</p>
           </div>
           <!-- red-bag:themes -->
           <!-- red-bag:real -->
@@ -140,6 +143,14 @@
       <section class="section flush-top rb-details-step" data-rb-details aria-labelledby="rb-details-title" hidden>
         <div class="wrap"><!-- red-bag:details --></div>
       </section>
+
+      <!-- Phones only (assets/css/red-bag.css): a slim bar at the foot of the screen with the total and
+           a Donate button, shown by the script while the real ones above are out of sight, so nothing
+           is ever shown twice. Not a live region: the status line already says each change. -->
+      <div class="rb-bar" data-rb-bar hidden>
+        <p class="rb-bar__total">Your bag <strong data-rb-bar-total>£0</strong></p>
+        <button class="btn btn-primary rb-bar__donate" type="button" data-rb-bar-donate>Donate</button>
+      </div>
 
       <template id="rbBagTemplate"><!-- red-bag:bag --></template>
     </main>

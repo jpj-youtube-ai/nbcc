@@ -30,16 +30,29 @@ Address: `/fill-a-red-bag`. Name: "Fill a Red Bag". Layout as the signed-off cha
    button, a number box you can also type in, a big plus button. Typing updates the total at once;
    no Enter needed. Quantities 0 to 99.
 3. Beside the list (below it on a phone): the bags, a status line, the total, a tick
-   "Fill this bag every month", the Donate button, the nudge line, and the elves line.
-4. "Whenever the need comes": four themes, three examples each. Tapping an example adds it to the
+   "Give £31 every month" (the live total, shown as the total is; "Give this amount every month"
+   while the bag is empty), the Donate button, the nudge line, and the elves line. Ticked, the pay
+   button still reads "Donate £31 a month".
+   On a phone the bag is below a long list, so a slim bar fixed to the foot of the screen shows
+   "Your bag £18" and a Donate button while the list is scrolled. It hides once the real total and
+   Donate are on screen (nothing is doubled), over the footer, on the details step and the thank
+   you, and while the total is £0. Its Donate does exactly what the main Donate does (under £2 it
+   shows the nudge and brings it into view). Never at desktop widths; not a live region.
+4. "Whenever the need comes", introduced word for word: "Christmas is our big night, and the need
+   comes all year round. Tap an example to add it to your bag, and tap it again to take it out."
+   Four themes, three examples each. Tapping an example adds it to the
    same list as a line under "Also in your bag", with a remove control; tapping again takes it off.
-5. A small note: "Prefer to give the real thing?" pointing to drop.nbcc.scot. That address did not
-   resolve on 3 October 2026: keep the link in one constant, and until Jaimie confirms it is live
-   show the note without a link ("get in touch" with the phone number the site already prints).
+5. A small note, word for word: "Prefer to give the real thing? We would love that. Find a
+   drop-off point near you." with "Find a drop-off point near you" linking to https://drop.nbcc.scot
+   (opening as the site's other outside links do). That address did not resolve on 3 October 2026;
+   Jaimie confirmed it live on 4 October 2026. The link is kept in one constant with a switch
+   beside it: switched off, the note shows the phone number the site already prints and no link.
 6. After Donate: a short "your details" step, the same asks as the fundraiser page give form (name,
    email, Gift Aid declaration, cover the card fee for one-off gifts, email consent). Then Stripe.
 7. Back from Stripe: "Thank you for filling a Red Bag" with the total, a Gift Aid line when they
-   added Gift Aid, the reassurance line, and a "Share: I filled a Red Bag" picture with no amount.
+   added Gift Aid, the reassurance line (the elves line), then word for word "Your receipt is on
+   its way to your inbox. Thank you for being part of this.", and a "Share: I filled a Red Bag"
+   picture with no amount.
    No itemised list anywhere (it would read as a shopping receipt).
 
 ### The bags

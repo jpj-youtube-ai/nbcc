@@ -11973,8 +11973,12 @@ the give form on a fundraiser's page (name, email, the newsletter tick, Gift Aid
 fee for a one off; a monthly donation asks for the 18 or over tick instead, as `/donate` does), then
 Stripe. Back from Stripe (`?thanks=1`) it says thank you with the total (remembered by the browser
 tab, for show only), a Gift Aid line when Gift Aid was added, and a picture to share that names no
-amount. No list of items is ever sent or shown after paying. The handwriting is only on the paper
-and uses faces already on the visitor's device: no font is downloaded. Nothing scrolls inside a box.
+amount. No list of items is ever sent or shown after paying. The handwriting is only on the paper:
+Caveat (SIL Open Font License), self hosted as `assets/fonts/caveat-latin.woff2` (the Latin subset,
+weights 400 to 700 in one file) with its licence beside it (`assets/fonts/caveat-OFL.txt`). It is
+declared in `assets/css/red-bag.css` and preloaded by `fill-a-red-bag.html`, so only this page ever
+loads it and the two font budget of the shared stylesheet is untouched; if it cannot load, the
+device's own handwriting faces stand in. Nothing scrolls inside a box.
 
 **The checkout change.** `POST /api/checkout-session` gains one optional marker, `redBag: true`.
 Only with it: the amount is at least 200 pence; it may not come with `fundraiserId`; the session's

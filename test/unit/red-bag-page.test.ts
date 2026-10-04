@@ -572,15 +572,65 @@ describe("the page's own stylesheet", () => {
     expect(rules).not.toMatch(/\brgba?\(/);
   });
 
-  it("uses the handwriting only on the paper, from faces already on the device", () => {
-    expect(rules).not.toMatch(/@font-face|@import|url\(/);
+  // NBCC's printed sheet is handwritten, so the paper is too: Caveat (SIL Open Font License), kept
+  // with the site's other fonts, its licence beside it. Jaimie approved it on 4 October 2026.
+  it("carries the handwriting face itself: one file, from our own address, never another site's", () => {
+    const faces = rules.match(/@font-face\s*\{[^}]*\}/g) ?? [];
+    expect(faces.length).toBe(1);
+    const face = faces[0];
+    expect(face).toMatch(/font-family:\s*"Caveat"/);
+    expect(face).toMatch(/src:\s*url\(\/assets\/fonts\/caveat-latin\.woff2\)\s*format\("woff2"\)/);
+    expect(face).toMatch(/font-weight:\s*400 700/);
+    expect(face).toMatch(/font-display:\s*swap/);
+    // The Latin subset, as Google publishes it: it has the pound sign (U+00A3) and the ampersand (U+0026).
+    expect(face).toMatch(/unicode-range:\s*U\+0000-00FF,/);
+    expect(rules.match(/url\(/g)?.length).toBe(1);
+    expect(rules).not.toMatch(/@import|https?:/);
+  });
+
+  it("ships the font file and its licence together", () => {
+    const font = readFileSync(resolve(ROOT, "assets/fonts/caveat-latin.woff2"));
+    expect(font.subarray(0, 4).toString("latin1")).toBe("wOF2");
+    expect(font.length).toBeGreaterThan(10_000);
+    expect(font.length).toBeLessThan(120_000);
+    const licence = read("assets/fonts/caveat-OFL.txt");
+    expect(licence).toContain("The Caveat Project Authors");
+    expect(licence).toContain("SIL Open Font License, Version 1.1");
+  });
+
+  it("uses the handwriting only on the paper, with the device's own hands to fall back on", () => {
+    const hand = /--rb-hand:([^;]+);/.exec(rules)?.[1] ?? "";
+    expect(hand).toMatch(/^"Caveat",/);
+    expect(hand).toMatch(/"Segoe Print"/);
+    expect(hand).toMatch(/cursive$/);
     const uses = [...rules.matchAll(/([^{}]+)\{[^{}]*font-family\s*:\s*var\(--rb-hand\)[^{}]*\}/g)].map((m) => m[1].trim());
     expect(uses.length).toBeGreaterThan(0);
     for (const selector of uses) {
       for (const part of selector.split(",")) expect(part.trim(), part).toMatch(/^\.rb-paper\b/);
     }
-    const families = [...rules.matchAll(/font-family\s*:\s*([^;}]+)/g)].map((m) => m[1].trim());
+    const families = [...rules.replace(/@font-face\s*\{[^}]*\}/g, "").matchAll(/font-family\s*:\s*([^;}]+)/g)].map((m) => m[1].trim());
     for (const f of families) expect(f).toMatch(/^var\(--(rb-hand|font-head|font-body)\)$/);
+  });
+
+  it("is loaded by this page alone: no other page, and not the shared stylesheet, knows of it", () => {
+    expect(read("assets/css/styles.css")).not.toMatch(/caveat-latin|"Caveat"/i);
+    for (const f of readdirSync(ROOT).filter((x) => x.endsWith(".html") && x !== "fill-a-red-bag.html")) {
+      expect(read(f), f).not.toMatch(/caveat-latin|"Caveat"|red-bag\.css/i);
+    }
+    for (const f of readdirSync(resolve(ROOT, "assets/css")).filter((x) => x !== "red-bag.css")) {
+      expect(read(`assets/css/${f}`), f).not.toMatch(/caveat-latin|"Caveat"/i);
+    }
+    // Asked for early here, so the list is not drawn twice.
+    expect(template).toContain('<link rel="preload" href="/assets/fonts/caveat-latin.woff2" as="font" type="font/woff2" crossorigin />');
+  });
+
+  // Caveat is narrow with a small x-height: at the body's size it reads small. On the paper the
+  // item names and prices are set large enough to read as easily as the page's 16px body text.
+  it("sets the handwriting large enough to read easily", () => {
+    const size = (selector: string) => Number(new RegExp(`[.]${selector.slice(1)}[{][^}]*font-size:([0-9.]+)rem`).exec(rules)?.[1] ?? 0);
+    expect(size(".rb-item__name")).toBeGreaterThanOrEqual(1.45);
+    expect(size(".rb-item__price")).toBeGreaterThanOrEqual(1.4);
+    expect(size(".rb-also__words")).toBeGreaterThanOrEqual(1.4);
   });
 
   it("keeps tap targets at 44px or more", () => {

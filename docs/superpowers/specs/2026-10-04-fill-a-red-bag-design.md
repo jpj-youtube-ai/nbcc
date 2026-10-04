@@ -26,7 +26,8 @@ Address: `/fill-a-red-bag`. Name: "Fill a Red Bag". Layout as the signed-off cha
 
 1. Intro: eyebrow, heading, one short lede.
 2. The list, drawn as lined paper (handwriting only on the paper, like NBCC's printed Donation
-   ideas sheet). Items grouped under the sheet's own headings. Each row: name, price, a big minus
+   ideas sheet: Caveat, self hosted with its licence, loaded by this page alone; Jaimie approved it
+   on 4 October 2026). Items grouped under the sheet's own headings. Each row: name, price, a big minus
    button, a number box you can also type in, a big plus button. Typing updates the total at once;
    no Enter needed. Quantities 0 to 99.
 3. Beside the list (below it on a phone): the bags, a status line, the total, a tick

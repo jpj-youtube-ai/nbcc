@@ -109,9 +109,11 @@ beforeEach(() => {
 });
 
 describe("the Sponsor pledges card", () => {
-  it("is in Admin > Fundraising, folded, after the automatic emails", () => {
-    expect(admin.indexOf('id="frPledges"')).toBeGreaterThan(admin.indexOf('id="frTouch"'));
-    expect(admin.indexOf('id="frPledges"')).toBeLessThan(admin.indexOf('id="frFilter"'));
+  it("is in Admin > Get involved, under Tickets and pledges, folded, after Event tickets", () => {
+    const part = admin.slice(admin.indexOf('data-gi-part="tickets"'), admin.indexOf('data-gi-part="emails"'));
+    expect(part.indexOf('id="frPledges"')).toBeGreaterThan(part.indexOf('id="etAdmin"'));
+    expect(part.indexOf('id="etAdmin"')).toBeGreaterThan(0);
+    expect(admin.indexOf('id="frPledges"')).toBeGreaterThan(admin.indexOf('id="view-fundraising"'));
     expect(card).toContain('<details class="fr-fold"');
   });
 

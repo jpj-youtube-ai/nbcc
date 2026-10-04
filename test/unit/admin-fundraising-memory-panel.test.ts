@@ -1,10 +1,14 @@
 // @vitest-environment jsdom
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, vi } from "vitest";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { createRequire } from "node:module";
 import { signAdminSession } from "../../src/admin/session";
 import { effectivePermissions, type PermissionMap } from "../../src/admin/permissions";
+
+// Each test loads the whole admin page afresh in jsdom: quick alone, but past the usual 5 seconds
+// under a full parallel run (as admin-fundraising-page.test.ts).
+vi.setConfig({ testTimeout: 20_000 });
 
 // In memory pages (Jaimie, 2026-10-03) on Admin > Fundraising, in the admin's jsdom harness (as
 // admin-fundraising-thanks-panel.test.ts): an in memory page is marked on the list, with its messages
@@ -115,7 +119,7 @@ async function openFundraising() {
   (el("adminPassword") as HTMLInputElement).value = "pw";
   el("loginForm").dispatchEvent(new Event("submit", { cancelable: true, bubbles: true }));
   await settle();
-  (q('.admin-nav-link[data-view="fundraising"]') as HTMLElement).click();
+  (q('.admin-nav-link[data-view="get-involved"]') as HTMLElement).click();
   await settle();
 }
 async function openRow(id: number) {
@@ -154,10 +158,12 @@ beforeEach(() => {
 describe("an in memory page on the list", () => {
   it("is marked In memory, with its messages to check and the reminder a year on", async () => {
     await openFundraising();
-    expect(text(row(1)!.querySelector(".fr-memory-pill"))).toBe("In memory");
+    // The large kind pill says In memory; there is no second, small one.
+    expect(text(row(1)!.querySelector(".fr-kind"))).toBe("In memory");
+    expect(row(1)!.querySelector(".fr-memory-pill")).toBeNull();
     expect(text(row(1)!.querySelector(".fr-memory-msgs-pill"))).toBe("Messages to check");
     expect(text(row(1)!.querySelector(".fr-memory-yearon-pill"))).toBe("A year on");
-    expect(row(2)!.querySelector(".fr-memory-pill")).toBeNull();
+    expect(text(row(2)!.querySelector(".fr-kind"))).not.toBe("In memory");
   });
 });
 

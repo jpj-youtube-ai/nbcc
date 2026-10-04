@@ -1,10 +1,14 @@
 // @vitest-environment jsdom
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, vi } from "vitest";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { createRequire } from "node:module";
 import { signAdminSession } from "../../src/admin/session";
 import { effectivePermissions, type PermissionMap } from "../../src/admin/permissions";
+
+// Each test loads the whole admin page afresh in jsdom: quick alone, but past the usual 5 seconds
+// under a full parallel run (as admin-fundraising-page.test.ts).
+vi.setConfig({ testTimeout: 20_000 });
 
 // TASK-503: the team's tools on Admin > Fundraising, in the admin's jsdom harness (as
 // admin-fundraising-page.test.ts): invite someone, the invites not taken up, Time to call and the
@@ -192,7 +196,13 @@ async function openFundraising() {
   (el("adminPassword") as HTMLInputElement).value = "pw";
   el("loginForm").dispatchEvent(new Event("submit", { cancelable: true, bubbles: true }));
   await settle();
-  (q('.admin-nav-link[data-view="fundraising"]') as HTMLElement).click();
+  (q('.admin-nav-link[data-view="get-involved"]') as HTMLElement).click();
+  await settle();
+}
+// The Weekly summary is in the Settings section of Get involved, and loads when that is shown.
+async function openSettings() {
+  await openFundraising();
+  (q('#giSections [data-gi-section="settings"]') as HTMLElement).click();
   await settle();
 }
 async function openRow(id: number) {
@@ -847,20 +857,20 @@ describe("Take off Get involved?", () => {
 describe("the Weekly summary card", () => {
   it("is for admins only", async () => {
     asRole("editor");
-    await openFundraising();
+    await openSettings();
     expect(el("frSummary").hidden).toBe(true);
     expect(sent("GET", "/api/admin/fundraising/summary")).toHaveLength(0);
   });
 
   it("shows who gets it and when it last went", async () => {
-    await openFundraising();
+    await openSettings();
     expect(el("frSummary").hidden).toBe(false);
     expect(text(el("frSummaryState"))).toBe("On. It goes to 1 person at 8am on Mondays. The last one went on 30/11/2026.");
     expect(text(el("frSummaryList"))).toContain("fern@example.com");
   });
 
   it("adds an address and saves the list", async () => {
-    await openFundraising();
+    await openSettings();
     setValue("#frSummaryEmail", "Rowan@Example.com");
     (q("#frSummaryAdd") as HTMLElement).click();
     await settle();
@@ -870,7 +880,7 @@ describe("the Weekly summary card", () => {
   });
 
   it("refuses an address that is not whole, or already there", async () => {
-    await openFundraising();
+    await openSettings();
     setValue("#frSummaryEmail", "rowan@");
     (q("#frSummaryAdd") as HTMLElement).click();
     await settle();
@@ -883,7 +893,7 @@ describe("the Weekly summary card", () => {
   });
 
   it("removes an address after asking", async () => {
-    await openFundraising();
+    await openSettings();
     (q('[data-frsummaryremove="fern@example.com"]') as HTMLElement).click();
     await settle();
     expect(confirmed.pop()).toBe("Stop sending the Monday summary to fern@example.com?");
@@ -892,7 +902,7 @@ describe("the Weekly summary card", () => {
   });
 
   it("sends a test to the admin asking", async () => {
-    await openFundraising();
+    await openSettings();
     (q("#frSummaryTest") as HTMLElement).click();
     await settle();
     expect(sent("POST", "/api/admin/fundraising/summary/test")).toHaveLength(1);

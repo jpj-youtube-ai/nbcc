@@ -674,14 +674,26 @@
     card.addEventListener("toggle", fitAll, true);
     if (win.addEventListener) win.addEventListener("resize", fitAll);
 
-    // The count whenever the Fundraising section is shown (app.js un-hides it).
-    var Observer = win.MutationObserver;
-    if (view && Observer) {
-      new Observer(function () {
-        if (!view.hidden) loadSummary();
-      }).observe(view, { attributes: true, attributeFilter: ["hidden"] });
+    // The fundraisers under "Show it for" come from app.js's list of sign ups, which can arrive after
+    // an email has been opened (Emails shown first, after a refresh): every open picker is filled again.
+    if (view) {
+      view.addEventListener("nbcc:fundraisers-loaded", function () {
+        Object.keys(rows).forEach(function (key) {
+          if (rows[key].built) fillFor(rows[key]);
+        });
+      });
     }
-    return { loadSummary: loadSummary, open: open };
+
+    // The count whenever the card's part of Get involved is shown (app.js un-hides it): Emails.
+    // Without such a part round it, the whole box is watched.
+    var shown = (card.closest && card.closest("[data-gi-part]")) || view;
+    var Observer = win.MutationObserver;
+    if (shown && Observer) {
+      new Observer(function () {
+        if (!shown.hidden) loadSummary();
+      }).observe(shown, { attributes: true, attributeFilter: ["hidden"] });
+    }
+    return { loadSummary: loadSummary, open: open, shown: shown };
   }
 
   if (typeof module !== "undefined" && module.exports) {
@@ -689,7 +701,6 @@
   } else if (typeof document !== "undefined") {
     var api = initAdminAllEmails(document, window);
     window.AdminAllEmails = api;
-    var view = document.getElementById("view-fundraising");
-    if (api && view && !view.hidden) api.loadSummary();
+    if (api && api.shown && !api.shown.hidden) api.loadSummary();
   }
 })();

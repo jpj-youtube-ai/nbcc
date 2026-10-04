@@ -13,7 +13,11 @@ describe("remembering where you were", () => {
     expect(app).toContain("function rememberView(name)");
     // Written inside selectView, so it cannot drift from what is actually on screen: every route
     // into a section goes through there, including the ones that jump programmatically.
-    expect(app).toMatch(/function selectView\(name\) \{\s*rememberView\(name\);/);
+    // Get involved: an old tab's name (events, fundraising) becomes the tab's own first, so what is
+    // remembered is a section that still has a menu entry. Nothing else comes before it.
+    const start = app.slice(app.indexOf("function selectView(name)"), app.indexOf("closeNav(\"chosen\")"));
+    expect(start).toMatch(/name = GI_VIEW;\s*\}\s*rememberView\(name\);/);
+    expect(start.replace(/\/\/.*$/gm, "")).toMatch(/function selectView\(name\) \{\s*var wanted = null;\s*if \(GI_OLD_VIEWS\[name\]\) \{/);
   });
 
   it("returns you there on sign-in, rather than always the overview", () => {

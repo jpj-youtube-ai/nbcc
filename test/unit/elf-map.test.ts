@@ -51,10 +51,15 @@ describe("the About us map's projection", () => {
     }
   });
 
-  it("knows what is on the map and what is off it", () => {
+  it("knows what is on the map and what is off it, on every side", () => {
     expect(onMap(town("Ayr"))).toBe(true);
     expect(onMap({ lat: 55.95, lng: -3.19 })).toBe(false); // far to the east
     expect(onMap({ lat: 57.5, lng: -4.6 })).toBe(false); // far to the north
+    expect(onMap({ lat: 54.9, lng: -4.6 })).toBe(false); // far to the south
+    expect(onMap({ lat: 55.5, lng: -5.9 })).toBe(false); // far to the west
+    expect(onMap(fromMap(0, 0))).toBe(true);
+    expect(onMap(fromMap(MAP.width, MAP.height))).toBe(true);
+    expect(onMap({ lat: Number.NaN, lng: -4.6 })).toBe(false);
   });
 });
 
@@ -88,5 +93,19 @@ describe("the gaps staff need to see", () => {
 
   it("uses the distance staff choose", () => {
     expect(farFromAll(town("Maybole"), [town("Ayr")], 5)).toBe(true);
+  });
+
+  it("goes back to ten miles when the distance is not a real one", () => {
+    for (const miles of [0, -3, Number.NaN, Number.POSITIVE_INFINITY]) {
+      expect(farFromAll(town("Girvan"), [town("Ayr")], miles), String(miles)).toBe(true);
+      expect(farFromAll(town("Maybole"), [town("Ayr")], miles), String(miles)).toBe(false);
+    }
+  });
+
+  it("takes no notice of a hiding place that has no position yet, so one unfinished place cannot hide every gap", () => {
+    const unfinished = [{}, null, { lat: "55.4", lng: "-4.6" }, { lat: Number.NaN, lng: -4.6 }] as unknown as { lat: number; lng: number }[];
+    expect(farFromAll(town("Girvan"), [town("Ayr"), ...unfinished])).toBe(true);
+    expect(farFromAll(town("Maybole"), [town("Ayr"), ...unfinished])).toBe(false);
+    expect(farFromAll(town("Girvan"), unfinished)).toBe(true);
   });
 });

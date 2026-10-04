@@ -6,8 +6,9 @@ import {
   cleanFirstName,
   detectiveName,
   detectiveNames,
+  familyDetectiveName,
   isFestiveSurname,
-  secretWordFrom,
+  secretWord,
 } from "../../src/elf/names";
 import { isUsableSecretWord, normaliseWord } from "../../src/elf/claim";
 import { containsBlockedWord } from "../../src/donors/display-name-filter";
@@ -65,23 +66,28 @@ describe("secret word ideas", () => {
 });
 
 describe("a secret word for a tag", () => {
+  /** A source of chance that gives these answers in turn. */
+  const chance = (...answers: number[]) => {
+    let i = 0;
+    return () => answers[i++ % answers.length];
+  };
+
   it("is an idea and a three digit number that never starts with a nought", () => {
-    expect(secretWordFrom(0, 372)).toBe("SNOWBALL 472");
-    expect(secretWordFrom(1, 0)).toBe(`${SECRET_WORD_IDEAS[1]} 100`);
-    expect(secretWordFrom(2, 899)).toBe(`${SECRET_WORD_IDEAS[2]} 999`);
-  });
-
-  it("wraps whatever numbers it is given, so it always answers", () => {
     const last = SECRET_WORD_IDEAS[SECRET_WORD_IDEAS.length - 1];
-    expect(secretWordFrom(SECRET_WORD_IDEAS.length, 900)).toBe("SNOWBALL 100");
-    expect(secretWordFrom(-1, -1)).toBe(`${last} 999`);
-    expect(secretWordFrom(Number.NaN, Number.POSITIVE_INFINITY)).toBe("SNOWBALL 100");
-    expect(secretWordFrom(0.9, 372.9)).toBe("SNOWBALL 472");
+    expect(secretWord(chance(0, 0))).toBe("SNOWBALL 100");
+    expect(secretWord(chance(0.999999, 0.999999))).toBe(`${last} 999`);
+    expect(secretWord(chance(0, 0.4134))).toBe("SNOWBALL 472");
   });
 
-  it("can always go on a tag", () => {
-    for (let pick = 0; pick < SECRET_WORD_IDEAS.length; pick++) {
-      for (const number of [0, 450, 899]) expect(isUsableSecretWord(secretWordFrom(pick, number))).toBe(true);
+  it("is different almost every time when it is given real chance, and always fit for a tag", () => {
+    const made = Array.from({ length: 200 }, () => secretWord(Math.random));
+    expect(new Set(made).size).toBeGreaterThan(150);
+    for (const word of made) expect(isUsableSecretWord(word ?? "")).toBe(true);
+  });
+
+  it("makes nothing, never a made up word, when the source of chance is not one", () => {
+    for (const broken of [1, 1.5, -0.1, Number.NaN, "0.5", undefined]) {
+      expect(secretWord(() => broken as unknown as number), String(broken)).toBeNull();
     }
   });
 });
@@ -141,21 +147,101 @@ describe("a detective's first name", () => {
     expect(cleanFirstName("Bol-locks")).toEqual({ ok: false, reason: "blocked" });
     expect(cleanFirstName("Bol'locks")).toEqual({ ok: false, reason: "blocked" });
     expect(cleanFirstName(accented)).toEqual({ ok: false, reason: "blocked" });
+    expect(cleanFirstName("Bollocks-Ruby")).toEqual({ ok: false, reason: "blocked" });
+  });
+
+  it("refuses the worst words wherever they sit in a name", () => {
+    expect(cleanFirstName("Rubybitch")).toEqual({ ok: false, reason: "blocked" });
+    expect(cleanFirstName("Twatty")).toEqual({ ok: false, reason: "blocked" });
+    expect(cleanFirstName("Hitler")).toEqual({ ok: false, reason: "blocked" });
+  });
+
+  it("still takes real names that only look as if they hold a rude word", () => {
+    for (const name of ["Harshit", "Akshita", "Ishita", "Nigel", "Nazia", "Scarlett", "Cassandra"]) {
+      expect(cleanFirstName(name), name).toEqual({ ok: true, name });
+    }
+  });
+
+  it("allows one hyphen or apostrophe, so a sentence cannot be strung together", () => {
+    expect(cleanFirstName("Santa-is-fake")).toEqual({ ok: false, reason: "letters-only" });
+    expect(cleanFirstName("Ruby-Smith-Annbank")).toEqual({ ok: false, reason: "letters-only" });
+    expect(cleanFirstName("O'Neil")).toEqual({ ok: true, name: "O'Neil" });
+  });
+
+  it("takes names from across Europe, accents and all", () => {
+    const names = ["Seán", "Zoë", "Łukasz", "Michał", "Søren", "Ngọc", "François", "Björn", "Æsa"];
+    for (const name of names) expect(cleanFirstName(name), name).toEqual({ ok: true, name });
+  });
+
+  it("asks for the letters A to Z when a name is in another alphabet, which the checks cannot read", () => {
+    const cyrillic = `Fu${String.fromCharCode(0x0441)}k`; // looks like a rude word, with one Russian letter
+    const russian = String.fromCharCode(0x0420, 0x0443, 0x0431, 0x0438);
+    const chinese = String.fromCharCode(0x7ea2, 0x5b9d);
+    const smallCapitals = String.fromCharCode(0xa730, 0x1d1c, 0x1d04, 0x1d0b);
+    for (const name of [cyrillic, russian, chinese, smallCapitals]) {
+      expect(cleanFirstName(name), name).toEqual({ ok: false, reason: "a-to-z" });
+    }
+  });
+
+  it("reads wide and fancy letters as the plain ones, then checks them like any other", () => {
+    const wide = String.fromCharCode(0xff32, 0xff55, 0xff42, 0xff59); // "Ruby" in wide letters
+    const boldRude = [0x1d41f, 0x1d42e, 0x1d41c, 0x1d424].map((c) => String.fromCodePoint(c)).join("");
+    const dotless = `Sh${String.fromCharCode(0x0131)}t`;
+    expect(cleanFirstName(wide)).toEqual({ ok: true, name: "Ruby" });
+    expect(cleanFirstName(boldRude)).toEqual({ ok: false, reason: "blocked" });
+    expect(cleanFirstName(dotless)).toEqual({ ok: false, reason: "blocked" });
+  });
+
+  it("refuses a letter that draws as nothing, alone or hidden inside a name", () => {
+    const blank = String.fromCharCode(0x3164);
+    expect(cleanFirstName(blank).ok).toBe(false);
+    expect(cleanFirstName(`Ruby${blank}Smith`).ok).toBe(false);
   });
 });
 
-describe("how a detective appears", () => {
-  it("is Detective, the first name, then the festive surname", () => {
-    expect(detectiveName("Ruby", "Tinselfoot")).toBe("Detective Ruby Tinselfoot");
+describe("how a detective appears in public", () => {
+  const ruby = { firstName: "Ruby", surname: "Tinselfoot", approved: true };
+  const sam = { firstName: "Sam", surname: "Snowsleuth", approved: true };
+  const mia = { firstName: "Mia", surname: "Gingersnap", approved: true };
+
+  it("is Detective, the first name, then the festive surname, once staff have ticked the name", () => {
+    expect(detectiveName(ruby)).toBe("Detective Ruby Tinselfoot");
+  });
+
+  it("is only the first letter until staff have ticked the name", () => {
+    expect(detectiveName({ ...ruby, approved: false })).toBe("Detective R. Tinselfoot");
+    expect(detectiveName({ firstName: "mike-hunt", surname: "Snowsleuth", approved: false })).toBe("Detective M. Snowsleuth");
+    expect(detectiveName({ ...ruby, approved: "yes" as unknown as boolean })).toBe("Detective R. Tinselfoot");
+  });
+
+  it("checks the first name again, whatever was saved, and shows none of one that fails", () => {
+    expect(detectiveName({ firstName: "Ruby Smith", surname: "Tinselfoot", approved: true })).toBe("Detective Tinselfoot");
+    expect(detectiveName({ firstName: "<b>Ruby</b>", surname: "Tinselfoot", approved: true })).toBe("Detective Tinselfoot");
+    expect(detectiveName({ firstName: "", surname: "Tinselfoot", approved: true })).toBe("Detective Tinselfoot");
+  });
+
+  it("shows no surname that is not on the list", () => {
+    expect(detectiveName({ firstName: "Ruby", surname: "Smith", approved: true })).toBe("Detective Ruby");
+    expect(detectiveName({ firstName: "Ruby", surname: "Smith", approved: false })).toBe("Detective R.");
+    expect(detectiveName({ firstName: "", surname: "", approved: true })).toBe("A detective");
   });
 
   it("joins a family's detectives into one line", () => {
-    const ruby = { firstName: "Ruby", surname: "Tinselfoot" };
-    const sam = { firstName: "Sam", surname: "Snowsleuth" };
-    const mia = { firstName: "Mia", surname: "Gingersnap" };
     expect(detectiveNames([ruby])).toBe("Detective Ruby Tinselfoot");
     expect(detectiveNames([ruby, sam])).toBe("Detectives Ruby Tinselfoot and Sam Snowsleuth");
     expect(detectiveNames([ruby, sam, mia])).toBe("Detectives Ruby Tinselfoot, Sam Snowsleuth and Mia Gingersnap");
+    expect(detectiveNames([ruby, { ...sam, approved: false }])).toBe("Detectives Ruby Tinselfoot and S. Snowsleuth");
     expect(detectiveNames([])).toBe("");
+    expect(detectiveNames([{ firstName: "", surname: "", approved: true }])).toBe("A detective");
+  });
+});
+
+describe("how a detective appears to their own family", () => {
+  it("is the whole name, ticked or not, because the family typed it", () => {
+    expect(familyDetectiveName({ firstName: "Ruby", surname: "Tinselfoot", approved: false })).toBe("Detective Ruby Tinselfoot");
+  });
+
+  it("still shows nothing of a first name that fails the checks", () => {
+    expect(familyDetectiveName({ firstName: "Ruby Smith", surname: "Tinselfoot", approved: false })).toBe("Detective Tinselfoot");
   });
 });

@@ -192,6 +192,10 @@ export const FACTS: readonly ElfFact[] = [
   },
 ];
 
+// Approved wording must not be changed by anything that reads it.
+for (const fact of FACTS) Object.freeze(fact);
+Object.freeze(FACTS);
+
 /** The fact for a door, or null if the number is not a door. */
 export function factFor(door: number): ElfFact | null {
   return FACTS.find((f) => f.door === door) ?? null;

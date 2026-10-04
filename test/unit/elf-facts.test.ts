@@ -2,7 +2,8 @@ import { describe, it, expect } from "vitest";
 import { FACTS, factFor } from "../../src/elf/facts";
 
 // NBCC Elf Detective School: the 24 facts Jaimie approved on 4 October 2026, one for each door, with
-// a short line for children. These tests hold the house style, not the wording itself.
+// a short line for children. These tests hold the house style, and a fingerprint of the wording so
+// that it cannot change by accident.
 
 describe("the 24 facts", () => {
   it("has one for each door, in order", () => {
@@ -25,12 +26,30 @@ describe("the 24 facts", () => {
     for (const f of FACTS) expect(f.grownUp.length, `door ${f.door}`).toBeLessThanOrEqual(320);
   });
 
-  it("uses no dashes, and no hyphen between words", () => {
+  it("uses no dash or hyphen of any kind, anywhere", () => {
     for (const f of FACTS) {
       const text = `${f.title} ${f.grownUp} ${f.doorLine}`;
-      expect(text, `door ${f.door}`).not.toMatch(/[–—]/);
-      expect(text, `door ${f.door}`).not.toMatch(/[A-Za-z0-9]-[A-Za-z0-9]/);
+      expect(text, `door ${f.door}`).not.toMatch(/\p{Pd}/u);
     }
+  });
+
+  it("is the wording Jaimie approved, to the letter", () => {
+    // A fingerprint of every word of every fact. If this fails, the wording has changed. Change the
+    // wording only with Jaimie's yes, and then put the new fingerprint here in the same commit.
+    let hash = 0x811c9dc5;
+    for (const ch of JSON.stringify(FACTS.map((f) => [f.door, f.title, f.grownUp, f.doorLine]))) {
+      hash ^= ch.codePointAt(0) ?? 0;
+      hash = Math.imul(hash, 0x01000193) >>> 0;
+    }
+    expect(hash.toString(16)).toBe("cb11c500");
+  });
+
+  it("cannot be changed by anything that reads it", () => {
+    expect(Object.isFrozen(FACTS)).toBe(true);
+    expect(() => {
+      (factFor(1) as { title: string }).title = "x";
+    }).toThrow();
+    expect(factFor(1)?.title).toBe("It started with a question");
   });
 
   it("writes the building one way", () => {

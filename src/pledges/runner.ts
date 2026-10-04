@@ -2,7 +2,7 @@ import { config } from "../config";
 import { sendFundraisePledge, sendFundraisePledgeStaff, type FundraiseEmailMessage } from "../clients/email";
 import { londonToday } from "../events/model";
 import { buildPledgeConfirmEmail, buildPledgeEmail, buildPledgeStaffEmail, pledgesPaidTwiceNote } from "./emails";
-import { payLinkRefusal, pledgeEmailDue, pounds, retentionAction, type PledgeEmailKind } from "./model";
+import { payLinkRefusal, pledgeEmailDue, retentionAction, type PledgeEmailKind } from "./model";
 import { signPledgeToken } from "./token";
 import type { PledgeRecord, PledgeWithFundraiser } from "../db/pledges";
 

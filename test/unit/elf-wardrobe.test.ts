@@ -93,9 +93,19 @@ describe("pieces unlocking", () => {
     expect(pieceUnlocked("elf", "purple", EVERYTHING)).toBe(false);
   });
 
-  it("treats a missing or silly count as no doors, and more than 24 as 24", () => {
-    expect(pieceUnlocked("mag", "brass", { doorsDone: Number.NaN })).toBe(false);
-    expect(pieceUnlocked("mag", "brass", { doorsDone: -3 })).toBe(false);
+  it("treats a missing or silly count as no doors, so the starter kit is still there", () => {
+    for (const silly of [Number.NaN, -3, Number.POSITIVE_INFINITY, undefined, null, "6"]) {
+      const state = { doorsDone: silly as unknown as number };
+      expect(pieceUnlocked("elf", "red", state), String(silly)).toBe(true);
+      expect(pieceUnlocked("mag", "brass", state), String(silly)).toBe(false);
+      expect(outfitUnlocked("workshop", state), String(silly)).toBe(true);
+      expect(normaliseLook({ outfit: "workshop" }, state).outfit, String(silly)).toBe("workshop");
+    }
+  });
+
+  it("counts whole doors only, and more than 24 as 24", () => {
+    expect(pieceUnlocked("mag", "brass", { doorsDone: 1.9 })).toBe(true);
+    expect(pieceUnlocked("stripe", "red", { doorsDone: 1.9 })).toBe(false);
     expect(pieceUnlocked("crown", "gold", { doorsDone: 99 })).toBe(true);
   });
 });
@@ -132,6 +142,13 @@ describe("outfits", () => {
     expect(outfitUnlocked("nessie", { doorsDone: 0, wonRace: true })).toBe(true);
   });
 
+  it("takes only a plain true for the gold seal and the race win", () => {
+    for (const said of ["false", "true", "0", 1, [], {}]) {
+      expect(outfitUnlocked("golden", { doorsDone: 24, goldSeal: said as unknown as boolean }), String(said)).toBe(false);
+      expect(outfitUnlocked("nessie", { doorsDone: 24, wonRace: said as unknown as boolean }), String(said)).toBe(false);
+    }
+  });
+
   it("knows nothing of an outfit that does not exist", () => {
     expect(outfitUnlocked("robot", EVERYTHING)).toBe(false);
   });
@@ -157,6 +174,10 @@ describe("what a door unlocks", () => {
 
   it("lists nothing when nothing has changed", () => {
     expect(newlyUnlocked({ doorsDone: 7 }, { doorsDone: 7 })).toEqual({ pieces: [], outfits: [] });
+  });
+
+  it("does not call the starter kit new when the count before was not a number", () => {
+    expect(newlyUnlocked({ doorsDone: Number.NaN }, { doorsDone: 0 })).toEqual({ pieces: [], outfits: [] });
   });
 
   it("lists Nessie when a race is won and the golden detective when the gold seal is earned", () => {
@@ -272,6 +293,20 @@ describe("drawing", () => {
     const svg = drawElf(evil, EVERYTHING);
     expect(svg).not.toMatch(/<script|onload|<b>|<img/);
     expect(svg).toBe(drawElf(defaultLook(), EVERYTHING));
+  });
+
+  it("reads each part of a look once, so a look that changes as it is read cannot slip through", () => {
+    let reads = 0;
+    const shifty = {
+      get skin() {
+        reads += 1;
+        return reads === 1 ? "s5" : { toString: () => "<script>" };
+      },
+    };
+    const svg = drawElf(shifty, EVERYTHING);
+    expect(svg).not.toMatch(/object Object|<script/);
+    expect(svg).toBe(drawElf({ skin: "s5" }, EVERYTHING));
+    expect(reads).toBe(1);
   });
 
   it("does not draw what has not been earned", () => {

@@ -24,6 +24,10 @@ The drawings were made first and judged by eye: every outfit, every piece in eve
 
 The tests still caught one real thing the eye had missed. The Workshop elf outfit drew exactly the same picture as the starter pieces, so putting it on would have seemed to do nothing. It was redrawn as the starter kit dressed for work: a tool apron with a pencil in the pocket, a toy mallet and a bell on the hat. The test "draws every outfit, worn and as a tile" keeps every outfit different from the starter look.
 
+An independent review then found a second thing of the same kind. A hat is always worn, and it hid short hair completely, so choosing a hair colour seemed to do nothing. Short hair now comes down beside the face. A test draws every hat with every hair style in two hair colours and counts the pixels that change, so the colour a child picks always shows.
+
+The same review tightened three rules: a count of doors that is not a number counts as none (before, it locked even the starter kit); the gold seal and the race win count only as a plain `true`; and each part of a look is read once, so a look that answers differently the second time it is asked cannot get past the check. `elf-png.ts` now treats `sharp` as carefully as the photo code does: cache off, one thread, one picture at a time.
+
 ## The catalogue
 
 Seven slots. A hat, a top and shoes are always worn; the rest can be left off.
@@ -78,9 +82,9 @@ Also: five skin tones (`s1` to `s5`), five hair colours (`dark`, `brown`, `ginge
 
 ## Rules, precisely
 
-- `doorsDone` is read as a whole number from 0 to 24. Anything missing or silly counts as 0; more than 24 counts as 24.
+- `doorsDone` is read as a whole number from 0 to 24. Anything missing, or that is not a real number, counts as 0; more than 24 counts as 24.
 - A colour of a style is unlocked when `doorsDone` is at least its door number.
-- An outfit is unlocked by its number of doors, or by `goldSeal`, or by `wonRace`. The golden detective and Nessie cannot be had any other way.
+- An outfit is unlocked by its number of doors, or by `goldSeal`, or by `wonRace`, each of which counts only as a plain `true`. The golden detective and Nessie cannot be had any other way.
 - A look is `{ skin, hair, hairStyle, outfit, pieces }` with one entry per slot. `normaliseLook(look, state)` returns a look that is safe to keep and to draw: an unknown, locked or wrong slot piece becomes the starter piece in a slot that is always worn and nothing in a slot that can be left off; an outfit that is unknown or not earned comes off; an unknown skin, hair colour or hair style becomes the default.
 - `newlyUnlocked(before, after)` lists the pieces and outfits that the change brings, in catalogue order. It is what the "you unlocked" moment and the email read.
 - `drawElf(look, state, opts)` returns one `<svg viewBox="0 0 200 260">` string, 1.3 times as tall as it is wide, `size` pixels wide (kept between 16 and 2000). `drawPiece` and `drawOutfit` draw the small tiles for the wardrobe screen.
@@ -91,9 +95,9 @@ Also: five skin tones (`s1` to `s5`), five hair colours (`dark`, `brown`, `ginge
 |---|---|
 | `assets/js/elf-wardrobe.js` | The catalogue, the rules and the drawings. The only place any of them live. |
 | `src/elf/wardrobe.ts` | Loads that file for the server and gives it types. Adds nothing else. |
-| `test/unit/elf-wardrobe.test.ts` | 33 tests, through the wrapper, so they hold the real file. |
-| `src/elf/elf-png.ts` | `elfPngWidth(asked)` and `elfPng(look, state, width)`: the elf as a PNG on a see through background. |
-| `test/unit/elf-png.test.ts` | 5 tests, with the real `sharp`. |
+| `test/unit/elf-wardrobe.test.ts` | 37 tests, through the wrapper, so they hold the real file. |
+| `src/elf/elf-png.ts` | `elfPngWidth(asked)` and `elfPng(look, state, width)`: the elf as a PNG on a see through background, made one at a time (`inTurn`). |
+| `test/unit/elf-png.test.ts` | 9 tests, with the real `sharp`, including the one that holds the hair colour in view. |
 
 `assets/` is copied into the image whole (`COPY assets ./assets` in the `Dockerfile`), so the new script ships without touching the `Dockerfile`.
 
@@ -111,7 +115,7 @@ Also: five skin tones (`s1` to `s5`), five hair colours (`dark`, `brown`, `ginge
 - [ ] **Step 2: Run the tests**
 
 Run: `npm run test:unit -- test/unit/elf-wardrobe.test.ts`
-Expected: PASS, 33 tests.
+Expected: PASS, 37 tests.
 
 - [ ] **Step 3: Build**
 
@@ -136,7 +140,7 @@ git commit -m "Elf Detective School: the elf wardrobe, one file for the browser 
 - [ ] **Step 2: Run the tests**
 
 Run: `npm run test:unit -- test/unit/elf-png.test.ts`
-Expected: PASS, 5 tests.
+Expected: PASS, 9 tests.
 
 - [ ] **Step 3: Build**
 

@@ -173,8 +173,10 @@
     return typeof id === "string" ? find(OUTFITS, id) : null;
   }
 
+  // Whole doors, from none to 24. Anything that is not a real number counts as none, so the starter
+  // kit is always there and nothing else is.
   function doorsOf(state) {
-    var n = state && typeof state.doorsDone === "number" ? Math.floor(state.doorsDone) : 0;
+    var n = state && typeof state.doorsDone === "number" && isFinite(state.doorsDone) ? Math.floor(state.doorsDone) : 0;
     return n < 0 ? 0 : n > DOORS ? DOORS : n;
   }
 
@@ -186,12 +188,13 @@
     return !!colour && colour.door <= doorsOf(state);
   }
 
-  /** Can this detective wear this outfit? `state` is { doorsDone, goldSeal, wonRace }. */
+  /** Can this detective wear this outfit? `state` is { doorsDone, goldSeal, wonRace }. The gold seal
+   *  and the race win count only as a plain true, never as text such as "false". */
   function outfitUnlocked(outfitId, state) {
     var outfit = outfitOf(outfitId);
     if (!outfit) return false;
-    if (outfit.special === "gold-seal") return !!(state && state.goldSeal);
-    if (outfit.special === "race-win") return !!(state && state.wonRace);
+    if (outfit.special === "gold-seal") return !!state && state.goldSeal === true;
+    if (outfit.special === "race-win") return !!state && state.wonRace === true;
     return outfit.doors <= doorsOf(state);
   }
 
@@ -243,17 +246,26 @@
   function normaliseLook(look, state) {
     var out = defaultLook();
     var given = look && typeof look === "object" ? look : {};
-    if (find(SKIN_TONES, given.skin)) out.skin = given.skin;
-    if (find(HAIR_COLOURS, given.hair)) out.hair = given.hair;
-    if (find(HAIR_STYLES, given.hairStyle)) out.hairStyle = given.hairStyle;
-    if (outfitUnlocked(given.outfit, state)) out.outfit = given.outfit;
-    var pieces = given.pieces && typeof given.pieces === "object" ? given.pieces : {};
+    // Each part is read ONCE into a variable and only that is checked and kept, so a look that
+    // answers differently the second time it is asked cannot slip something past the check.
+    var skin = given.skin;
+    var hair = given.hair;
+    var hairStyle = given.hairStyle;
+    var outfit = given.outfit;
+    var worn = given.pieces;
+    if (typeof skin === "string" && find(SKIN_TONES, skin)) out.skin = skin;
+    if (typeof hair === "string" && find(HAIR_COLOURS, hair)) out.hair = hair;
+    if (typeof hairStyle === "string" && find(HAIR_STYLES, hairStyle)) out.hairStyle = hairStyle;
+    if (typeof outfit === "string" && outfitUnlocked(outfit, state)) out.outfit = outfit;
+    var pieces = worn && typeof worn === "object" ? worn : {};
     for (var i = 0; i < SLOTS.length; i++) {
       var slot = SLOTS[i];
       var choice = pieces[slot.id];
-      var style = Array.isArray(choice) ? styleOf(choice[0]) : null;
-      if (style && style.slot === slot.id && pieceUnlocked(choice[0], choice[1], state)) {
-        out.pieces[slot.id] = [choice[0], choice[1]];
+      var styleId = Array.isArray(choice) ? choice[0] : null;
+      var colourId = Array.isArray(choice) ? choice[1] : null;
+      var style = styleOf(styleId);
+      if (style && style.slot === slot.id && typeof colourId === "string" && pieceUnlocked(styleId, colourId, state)) {
+        out.pieces[slot.id] = [styleId, colourId];
       } else if (slot.optional) {
         out.pieces[slot.id] = null;
       }
@@ -327,7 +339,10 @@
     if (style === "bunches") {
       return fringe + '<circle cx="57" cy="112" r="5" fill="' + RED + '"/><circle cx="143" cy="112" r="5" fill="' + RED + '"/>';
     }
-    return fringe;
+    // Short hair comes down beside the face. A hat is always worn and covers the fringe, so without
+    // these two tufts the hair colour a child picks would not show at all.
+    return fringe +
+      '<path d="M55.5 88h13q1 16-6 28-6-9-7-28z" fill="' + fill + '"/><path d="M144.5 88h-13q-1 16 6 28 6-9 7-28z" fill="' + fill + '"/>';
   }
 
   function star(x, y, fill, stroke) {

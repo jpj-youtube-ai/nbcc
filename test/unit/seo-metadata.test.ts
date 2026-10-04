@@ -21,6 +21,8 @@ const PAGES = [
   { file: "thank-you.html", label: "Thank you", url: `${BASE}/donate/thank-you` },
   { file: "portal.html", label: "Donor portal", url: `${BASE}/donor-portal` },
   { file: "privacy.html", label: "Privacy notice", url: `${BASE}/privacy` },
+  // Joining the mailing list.
+  { file: "newsletter.html", label: "Join our mailing list", url: `${BASE}/newsletter` },
 ] as const;
 
 function read(file: string): string {

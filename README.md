@@ -56,6 +56,7 @@ Each page is served at a clean, canonical URL (no `.html`):
 | `/donor-portal` | `portal.html` |
 | `/business/thank-you` | `business-thank-you.html` |
 | `/privacy` | `privacy.html` |
+| `/newsletter` | `newsletter.html` (joining the mailing list) |
 | `/my-story` | `my-story.html` |
 
 `/donate/thank-you` is the post-payment confirmation page Stripe returns the
@@ -1245,6 +1246,35 @@ future marketing sit inside the regulatory framework:
   reassurance states it to the donor. This is a standing **requirement**, not an assumption, for any
   monthly-gift or plan-change comms.
 Both lines are guarded by `test/unit/fundraising-governance.test.ts`.
+
+### Joining the mailing list (`/newsletter`)
+
+`newsletter.html` is a public page at the clean URL `/newsletter`: the footer's "Keep in touch" form
+(TASK-261) given a page of its own, so there is somewhere to send people who want to join. A short
+heading, two lines on what they will get (occasional news, a few emails a year, unsubscribe at any
+time), the form, and under it "Who we are": the charity's own sentence, word for word. It is on the
+site map, and not in the main menu.
+
+**Nothing on the server is new.** The form asks for exactly what the footer form asks for (first
+name, surname, email, an optional mobile number, and the same consent tick box, never ticked for
+them, in the same words), has the same hidden `website` box for robots, and sends the same payload
+to the same existing `POST /api/subscribe`. That endpoint and `subscribeSelf`
+(`src/newsletter/self-signup.ts`) are unchanged, so someone joining here is added to the newsletter's
+list at once with `consent_source` `footer` and gets the usual welcome email, exactly as from the
+footer. There is no confirm by email step, no new route, table, email or daily pass.
+
+What the page adds is only how it looks: visible labels (not placeholders), what is missing said
+beside each box and the tick box (never an alert box), and "You're signed up" in place of the form.
+A refusal from the server (its 400 and 429 messages) is shown in the server's own words. The short
+footer form is not added to this page as well (it is unchanged on every other page).
+
+Files: `newsletter.html`, `assets/js/newsletter-signup.js`, `assets/css/newsletter.css` (its own
+small script and stylesheet, so the shared bundle that `donate.html`'s weight budget counts does not
+grow). Tests: `test/unit/newsletter-signup-page.test.ts` (the page in jsdom: the boxes, the consent,
+what is sent, the signed up and error states, and its Dockerfile, clean URL and site map checks);
+the page is also in the sitewide SEO, accessibility, copy, footer, clean URL and pulse guards, is
+held to the same weight budget as the four main pages (`test/unit/perf-budget.test.ts`), and
+`features/site.feature` serves it. The privacy notice says what joining the mailing list uses.
 
 ### Checkout contract (REQ-028)
 

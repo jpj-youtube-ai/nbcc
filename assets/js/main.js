@@ -2133,7 +2133,7 @@
       '<input type="text" id="fsFirstName" name="firstName" placeholder="First name" autocomplete="given-name" required aria-label="First name" />' +
       '<input type="text" id="fsSurname" name="surname" placeholder="Surname" autocomplete="family-name" required aria-label="Surname" />' +
       '<input type="email" id="fsEmail" name="email" placeholder="Your email" autocomplete="email" required aria-label="Your email" />' +
-      '<input type="tel" id="fsPhone" name="phone" placeholder="Mobile (optional, for texts)" autocomplete="tel" aria-label="Mobile number, optional" />' +
+      '<input type="tel" id="fsPhone" name="phone" placeholder="Mobile (optional)" autocomplete="tel" aria-label="Mobile number, optional" />' +
       "</div>" +
       '<input type="text" id="fsWebsite" name="website" tabindex="-1" autocomplete="off" aria-hidden="true" />' +
       '<label class="foot-signup-consent" for="fsConsent">' +

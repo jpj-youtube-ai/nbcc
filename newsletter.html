@@ -1,0 +1,173 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <!-- SEO -->
+    <title>Join our mailing list | Night Before Christmas Campaign</title>
+    <meta name="description" content="Join the Night Before Christmas Campaign mailing list for occasional news about the difference your support makes and what is coming up across South West Scotland." />
+    <link rel="canonical" href="https://nbcc.scot/newsletter" />
+
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Night Before Christmas Campaign" />
+    <meta property="og:title" content="Join our mailing list | Night Before Christmas Campaign" />
+    <meta property="og:description" content="Join the Night Before Christmas Campaign mailing list for occasional news about the difference your support makes and what is coming up across South West Scotland." />
+    <meta property="og:url" content="https://nbcc.scot/newsletter" />
+    <meta property="og:image" content="https://nbcc.scot/assets/img/og-image.png" />
+
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Join our mailing list | Night Before Christmas Campaign" />
+    <meta name="twitter:description" content="Join the Night Before Christmas Campaign mailing list for occasional news about the difference your support makes and what is coming up across South West Scotland." />
+    <meta name="twitter:image" content="https://nbcc.scot/assets/img/og-image.png" />
+
+    <link rel="stylesheet" href="/assets/css/styles.css" />
+    <!-- Its own small stylesheet and script, rather than growing the shared bundle that
+         donate.html's page weight budget counts. -->
+    <link rel="stylesheet" href="/assets/css/newsletter.css" />
+    <link rel="preload" href="/assets/fonts/playfair-var.woff2" as="font" type="font/woff2" crossorigin />
+    <link rel="preload" href="/assets/fonts/poppins-400.woff2" as="font" type="font/woff2" crossorigin />
+    <script defer src="/assets/js/main.js"></script>
+    <script defer src="/assets/js/pulse.js"></script>
+    <script defer src="/assets/js/newsletter-signup.js"></script>
+  </head>
+  <body>
+    <a class="skip-link" href="#main">Skip to content</a>
+    <header class="nav" id="nav" data-region="nav">
+      <div class="wrap">
+        <a class="brand" href="/"><img src="/assets/img/nbcc-logo.png" alt="Night Before Christmas Campaign" width="50" height="50" loading="lazy" /></a>
+        <nav aria-label="Primary">
+          <ul class="nav-links" id="navLinks">
+            <li><a href="/">Home</a></li>
+            <li><a href="/about-us">About</a></li>
+            <li><a href="/donate">Donate</a></li>
+            <li><a href="/contact">Contact</a></li>
+            <li><a href="/supporters">Supporters</a></li>
+          </ul>
+        </nav>
+        <a class="nav-cta" href="/donate">Donate</a>
+        <button class="burger" id="burger" aria-label="Open menu" aria-expanded="false" aria-controls="navLinks"><span></span><span></span><span></span></button>
+      </div>
+    </header>
+
+    <main class="site-main" id="main" tabindex="-1">
+      <!-- Joining the mailing list. This is the footer's "Keep in touch" form given a page of its
+           own: the same boxes, the same unticked consent and the same hidden box for robots, sent
+           by assets/js/newsletter-signup.js to the same existing POST /api/subscribe, which joins
+           them at once and sends the usual welcome email. Nothing on the server is new. -->
+      <section class="page-top nl-intro" aria-labelledby="newsletter-heading">
+        <div class="wrap">
+          <div class="intro-hero">
+            <span class="eyebrow">Mailing list</span>
+            <h1 id="newsletter-heading">Keep in touch with NBCC.</h1>
+            <div class="rule"><i></i></div>
+            <p class="lede">Join our mailing list for occasional news about the difference your support makes and what is coming up across South West Scotland. We send a few emails a year, and you can unsubscribe at any time.</p>
+          </div>
+        </div>
+      </section>
+
+      <section class="section flush-top" aria-label="Join our mailing list">
+        <div class="wrap">
+          <div class="nl-narrow">
+            <form id="nlForm" class="nl-form" action="/api/subscribe" method="post" novalidate>
+              <!-- The same hidden box as the footer form: people never see it, robots fill it, and
+                   the server quietly drops those. -->
+              <div hidden aria-hidden="true">
+                <label for="nlWebsite">Leave blank
+                  <input type="text" id="nlWebsite" name="website" tabindex="-1" autocomplete="off" />
+                </label>
+              </div>
+              <div class="give-name-row">
+                <div class="field">
+                  <label for="nlFirstName">First name <span class="req" aria-hidden="true">*</span></label>
+                  <input id="nlFirstName" name="firstName" type="text" autocomplete="given-name" maxlength="60" required aria-required="true" aria-describedby="nlFirstName-error" />
+                  <span class="err" id="nlFirstName-error" hidden>Please enter your first name.</span>
+                </div>
+                <div class="field">
+                  <label for="nlSurname">Surname <span class="req" aria-hidden="true">*</span></label>
+                  <input id="nlSurname" name="surname" type="text" autocomplete="family-name" maxlength="60" required aria-required="true" aria-describedby="nlSurname-error" />
+                  <span class="err" id="nlSurname-error" hidden>Please enter your surname.</span>
+                </div>
+              </div>
+              <div class="field">
+                <label for="nlEmail">Email <span class="req" aria-hidden="true">*</span></label>
+                <input id="nlEmail" name="email" type="email" autocomplete="email" required aria-required="true" aria-describedby="nlEmail-error" />
+                <span class="err" id="nlEmail-error" hidden>Please enter a valid email address.</span>
+              </div>
+              <div class="field">
+                <label for="nlPhone">Mobile (optional)</label>
+                <input id="nlPhone" name="phone" type="tel" autocomplete="tel" maxlength="30" />
+              </div>
+              <!-- The legal bit: never ticked for them. The words are the footer form's, word for word. -->
+              <div class="field nl-consent">
+                <label class="give-check" for="nlConsent">
+                  <input class="give-check-box" id="nlConsent" name="consent" type="checkbox" required aria-required="true" aria-describedby="nlConsent-error" />
+                  <span class="give-check-text">Yes, I'd like to hear from NBCC by email. We'll never share your details, and every email has an unsubscribe link.</span>
+                </label>
+                <span class="err" id="nlConsent-error" hidden>Please tick the box to confirm you'd like to hear from us.</span>
+              </div>
+              <noscript><p class="form-privacy">This form needs JavaScript switched on. You can email us at <a href="mailto:info@nbcc.scot">info@nbcc.scot</a> and ask to join instead.</p></noscript>
+              <button class="btn btn-holly" type="submit" id="nlSubmit">Join our mailing list</button>
+              <p class="form-privacy">We handle your details as set out in our <a href="/privacy">Privacy notice</a>.</p>
+              <p class="form-status" id="nlStatus" role="status" aria-live="polite" tabindex="-1"></p>
+            </form>
+            <div class="card card-lg nl-panel" id="nlDone" role="status" aria-labelledby="nlDoneTitle" hidden>
+              <h2 id="nlDoneTitle" tabindex="-1">You're signed up</h2>
+              <p>Thank you. Look out for us in your inbox.</p>
+              <p>You can unsubscribe at any time, using the link at the bottom of any email we send you.</p>
+            </div>
+            <div class="nl-who">
+              <h2>Who we are</h2>
+              <p>NBCC is a volunteer led charity here all year for children, young people and vulnerable adults across South West Scotland, with school clothing and crisis support whenever it is needed, and every December a full bag for those who would otherwise wake up on Christmas morning with nothing to open.</p>
+              <a href="/about-us">More about us</a>
+            </div>
+            <!-- This page IS the sign up, so the short "Keep in touch" form that main.js adds to
+                 every other page's footer is not added here: it looks for this id first. -->
+            <div id="footSignup" hidden></div>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="site-footer" data-region="footer">
+      <div class="wrap">
+        <div class="foot-brand">
+          <img src="/assets/img/nbcc-logo-white.svg" alt="Night Before Christmas Campaign" width="74" height="74" loading="lazy" />
+          <p>A volunteer run Scottish charity in Annbank, Ayrshire, bringing comfort, dignity and joy to children, young people and vulnerable adults across South West Scotland, here all year.</p>
+          <div class="socials">
+            <a href="https://www.instagram.com/nbcc.scot" target="_blank" rel="noopener" aria-label="Instagram"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#F8F5EE" stroke-width="1.8" aria-hidden="true"><rect x="2" y="2" width="20" height="20" rx="5"/><circle cx="12" cy="12" r="4"/><circle cx="17.5" cy="6.5" r="1.2" fill="#F8F5EE" stroke="none"/></svg></a>
+            <a href="https://www.facebook.com/nbcc.scot" target="_blank" rel="noopener" aria-label="Facebook"><svg width="20" height="20" viewBox="0 0 24 24" fill="#F8F5EE" aria-hidden="true"><path d="M14 9h3V6h-3c-2.2 0-4 1.8-4 4v2H7v3h3v6h3v-6h3l1-3h-4v-2c0-.6.4-1 1-1z"/></svg></a>
+            <a href="https://x.com/Nightbeforechr1" target="_blank" rel="noopener" aria-label="X"><svg width="18" height="18" viewBox="0 0 24 24" fill="#F8F5EE" aria-hidden="true"><path d="M18 2h3l-7 8 8 12h-6l-5-7-5 7H3l8-9L3 2h6l4 6z"/></svg></a>
+          </div>
+          <p class="handle">Find us at <b>nbcc.scot</b></p>
+        </div>
+        <div class="foot-col">
+          <h4>Explore</h4>
+          <ul>
+            <li><a href="/">Home</a></li>
+            <li><a href="/about-us">About us</a></li>
+            <li><a href="/donate">Donate</a></li>
+            <li><a href="/contact">Contact</a></li>
+            <li><a href="/supporters">Supporters</a></li>
+            <li><a href="/my-story">Share your story</a></li>
+          </ul>
+        </div>
+        <div class="foot-col">
+          <h4>Ways to give</h4>
+          <ul>
+            <li><a href="/donate">Donate money</a></li>
+            <li><a href="/contact">Donate items</a></li>
+            <li><a href="/contact">Fundraise for us</a></li>
+          </ul>
+        </div>
+      </div>
+      <div class="legal">
+        <div class="wrap">
+          <span>Night Before Christmas Campaign, known as NBCC, is a Scottish Charitable Incorporated Organisation.</span>
+          <span>Scottish Charity Number <a href="https://www.oscr.org.uk/about-charities/search-the-register/charity-details?number=SC047995" target="_blank" rel="noopener">SC047995</a>. Regulated by the Scottish Charity Regulator, OSCR.</span>
+          <span>The Elves' Workshop, Annbank Village Hall, Weston Avenue, Annbank, KA6 5EE</span>
+        </div>
+      </div>
+    </footer>
+  </body>
+</html>

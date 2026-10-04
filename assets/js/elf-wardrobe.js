@@ -37,11 +37,11 @@
   // `dark` is the edge drawn round the hair. It is chosen to stand out from every skin tone above,
   // because the hair's own colour does not always: brown hair and a brown face are close.
   var HAIR_COLOURS = [
-    { id: "dark", hex: "#3A2416", dark: "#1E110A" },
-    { id: "brown", hex: "#7A4B2E", dark: "#4A2C1A" },
-    { id: "ginger", hex: "#C9772F", dark: "#8E4F1C" },
-    { id: "blonde", hex: "#E8C46A", dark: "#A67C1F" },
-    { id: "black", hex: "#2B2A33", dark: "#111016" }
+    { id: "dark", name: "Dark brown", hex: "#3A2416", dark: "#1E110A" },
+    { id: "brown", name: "Brown", hex: "#7A4B2E", dark: "#4A2C1A" },
+    { id: "ginger", name: "Ginger", hex: "#C9772F", dark: "#8E4F1C" },
+    { id: "blonde", name: "Blonde", hex: "#E8C46A", dark: "#A67C1F" },
+    { id: "black", name: "Black", hex: "#2B2A33", dark: "#111016" }
   ];
 
   var HAIR_STYLES = [
@@ -221,14 +221,29 @@
     return { pieces: pieces, outfits: outfits };
   }
 
-  /** The words for a piece: "Grey detective's hat". Proper nouns keep their capital. */
+  // ---- words ------------------------------------------------------------------------------
+
+  // A name keeps its capital wherever it comes in a sentence.
+  var NAMES = /^(Christmas|Santa|Highland|Nessie)\b/;
+
+  /** Words as they read in the middle of a sentence: "red snow boots", "Christmas tree outfit". */
+  function inSentence(words) {
+    var text = typeof words === "string" ? words : "";
+    return NAMES.test(text) ? text : text.charAt(0).toLowerCase() + text.slice(1);
+  }
+
+  /** The words for a piece: "Grey detective's hat". Empty for anything unknown. */
   function pieceWords(styleId, colourId) {
     var style = styleOf(styleId);
     var colour = colourOf(style, colourId);
     if (!style || !colour) return "";
-    var name = style.name;
-    var lower = /^(Christmas|Santa)\b/.test(name) ? name : name.charAt(0).toLowerCase() + name.slice(1);
-    return colour.name + " " + lower;
+    return colour.name + " " + inSentence(style.name);
+  }
+
+  /** The words for an outfit: "Christmas tree outfit". Empty for anything unknown. */
+  function outfitWords(outfitId) {
+    var outfit = outfitOf(outfitId);
+    return outfit ? outfit.name + " outfit" : "";
   }
 
   // ---- a look -----------------------------------------------------------------------------
@@ -274,6 +289,23 @@
       }
     }
     return out;
+  }
+
+  /** What a look is wearing, as one line: "Tan detective's hat, black round glasses and red elf
+   *  tunic", or "The Christmas tree outfit" when an outfit covers everything else. The look is made
+   *  safe first, the way drawElf does, so the words always match the drawing. */
+  function lookWords(look, state) {
+    var safe = normaliseLook(look, state);
+    if (safe.outfit) return "The " + inSentence(outfitWords(safe.outfit));
+    var parts = [];
+    for (var i = 0; i < SLOTS.length; i++) {
+      var choice = safe.pieces[SLOTS[i].id];
+      if (!choice) continue;
+      var words = pieceWords(choice[0], choice[1]);
+      parts.push(parts.length ? inSentence(words) : words);
+    }
+    if (parts.length < 2) return parts.join("");
+    return parts.slice(0, -1).join(", ") + " and " + parts[parts.length - 1];
   }
 
   // ---- drawing: shared parts ---------------------------------------------------------------
@@ -707,6 +739,9 @@
     outfitUnlocked: outfitUnlocked,
     newlyUnlocked: newlyUnlocked,
     pieceWords: pieceWords,
+    outfitWords: outfitWords,
+    inSentence: inSentence,
+    lookWords: lookWords,
     defaultLook: defaultLook,
     normaliseLook: normaliseLook,
     drawElf: drawElf,

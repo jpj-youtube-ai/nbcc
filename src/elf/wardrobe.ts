@@ -58,6 +58,8 @@ export interface WardrobeOutfit {
 /** A hair colour: its fill, and the darker edge drawn round it so it shows against any skin. */
 export interface HairColour {
   readonly id: string;
+  /** The word people read: "Ginger". */
+  readonly name: string;
   readonly hex: string;
   readonly dark: string;
 }
@@ -122,6 +124,9 @@ interface WardrobeApi {
   outfitUnlocked(outfitId: string, state: WardrobeState): boolean;
   newlyUnlocked(before: WardrobeState, after: WardrobeState): Unlocks;
   pieceWords(styleId: string, colourId: string): string;
+  outfitWords(outfitId: string): string;
+  inSentence(words: string): string;
+  lookWords(look: unknown, state: WardrobeState): string;
   defaultLook(): ElfLook;
   normaliseLook(look: unknown, state: WardrobeState): ElfLook;
   drawElf(look: unknown, state: WardrobeState, opts?: DrawOptions): string;
@@ -147,6 +152,12 @@ export const outfitUnlocked = api.outfitUnlocked;
 export const newlyUnlocked = api.newlyUnlocked;
 /** The words for a piece: "Grey detective's hat". */
 export const pieceWords = api.pieceWords;
+/** The words for an outfit: "Christmas tree outfit". */
+export const outfitWords = api.outfitWords;
+/** Words as they read in the middle of a sentence: a name keeps its capital, nothing else does. */
+export const inSentence = api.inSentence;
+/** What a look is wearing, as one line. The look is made safe first, so the words match the drawing. */
+export const lookWords = api.lookWords;
 /** What a brand new detective's elf wears. */
 export const defaultLook = api.defaultLook;
 /** A look made safe to keep and to draw: anything unknown or still locked falls back to the starter kit. */

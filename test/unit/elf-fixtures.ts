@@ -1,6 +1,46 @@
 import { isDoor } from "../../src/elf/calendar";
 import { ELF_NAMES } from "../../src/elf/names";
-import type { CalendarView, DoorView, HqView } from "../../src/elf/pages/types";
+import type { CalendarView, DoorView, HqView, WardrobeView } from "../../src/elf/pages/types";
+
+/** Ruby's wardrobe with six doors done: the Christmas jumper and the tree outfit have just arrived. */
+export function wardrobeView(over: Partial<WardrobeView> = {}): WardrobeView {
+  return {
+    detective: {
+      id: "d1",
+      name: "Detective Ruby Tinselfoot",
+      nameApproved: true,
+      badgeNumber: "0427",
+      rank: "Junior Detective",
+      doorsDone: 6,
+      next: { rank: "Detective", toGo: 6 },
+      graduate: false,
+      goldSeal: false,
+      elfUrl: "/elf/pic/d1.svg",
+      newThings: 4,
+      wardrobeUrl: "/elf/hq/wardrobe/d1",
+    },
+    look: {
+      skin: "s3",
+      hair: "ginger",
+      hairStyle: "bunches",
+      outfit: null,
+      pieces: {
+        hat: ["deer", "tan"],
+        face: ["specs", "black"],
+        neck: ["stripe", "red"],
+        top: ["tunic", "red"],
+        feet: ["boots", "brown"],
+        hand: ["mag", "brass"],
+        extra: null,
+      },
+    },
+    state: { doorsDone: 6, goldSeal: false, wonRace: false },
+    fresh: ["jumper:red", "jumper:green", "boots:red", "tree"],
+    hqUrl: "/elf/hq",
+    saveUrl: "/elf/hq/wardrobe/d1",
+    ...over,
+  };
+}
 
 // NBCC Elf Detective School: pretend views for the screen tests. Every business and detective here
 // is invented: the repository is public, and no real family's name belongs in it.

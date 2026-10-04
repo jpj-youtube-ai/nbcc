@@ -10,9 +10,12 @@ import {
   drawElf,
   drawOutfit,
   drawPiece,
+  inSentence,
+  lookWords,
   newlyUnlocked,
   normaliseLook,
   outfitUnlocked,
+  outfitWords,
   pieceUnlocked,
   pieceWords,
   wardrobeState,
@@ -67,7 +70,14 @@ describe("what there is to wear", () => {
   });
 
   it("names everything in plain words, with no dashes and no hyphenated words", () => {
-    const names = [...SLOTS.map((s) => s.name), ...STYLES.map((s) => s.name), ...STYLES.flatMap((s) => s.colours.map((c) => c.name)), ...OUTFITS.map((o) => o.name)];
+    const names = [
+      ...SLOTS.map((s) => s.name),
+      ...STYLES.map((s) => s.name),
+      ...STYLES.flatMap((s) => s.colours.map((c) => c.name)),
+      ...OUTFITS.map((o) => o.name),
+      ...HAIR_COLOURS.map((h) => h.name),
+      ...HAIR_STYLES.map((h) => h.name),
+    ];
     for (const name of names) {
       expect(name.trim()).not.toBe("");
       expect(name).not.toMatch(/[–—]/);
@@ -192,6 +202,65 @@ describe("what a door unlocks", () => {
     expect(pieceWords("jumper", "red")).toBe("Red Christmas jumper");
     expect(pieceWords("santa", "blue")).toBe("Blue Santa hat");
     expect(pieceWords("cape", "red")).toBe("");
+  });
+
+  it("words an outfit the way people read it", () => {
+    expect(outfitWords("tree")).toBe("Christmas tree outfit");
+    expect(outfitWords("workshop")).toBe("Workshop elf outfit");
+    expect(outfitWords("cape")).toBe("");
+  });
+
+  it("drops the capital in the middle of a sentence, except from a name", () => {
+    expect(inSentence("Red snow boots")).toBe("red snow boots");
+    expect(inSentence("Workshop elf outfit")).toBe("workshop elf outfit");
+    expect(inSentence("Christmas tree outfit")).toBe("Christmas tree outfit");
+    expect(inSentence("Santa hat")).toBe("Santa hat");
+    expect(inSentence("Highland piper outfit")).toBe("Highland piper outfit");
+    expect(inSentence("Nessie outfit")).toBe("Nessie outfit");
+    expect(inSentence("")).toBe("");
+  });
+});
+
+describe("what an elf is wearing, in words", () => {
+  const SIX = { doorsDone: 6 };
+  const dressed = {
+    ...defaultLook(),
+    pieces: {
+      hat: ["deer", "tan"],
+      face: ["specs", "black"],
+      neck: ["stripe", "red"],
+      top: ["jumper", "red"],
+      feet: ["boots", "brown"],
+      hand: ["mag", "brass"],
+      extra: null,
+    },
+  };
+
+  it("lists the pieces from the hat down, as one sentence", () => {
+    expect(lookWords(dressed, SIX)).toBe(
+      "Tan detective's hat, black round glasses, red striped scarf, red Christmas jumper, brown snow boots and brass magnifying glass",
+    );
+    expect(lookWords(defaultLook(), { doorsDone: 0 })).toBe("Red elf hat, green elf tunic and maroon curly shoes");
+  });
+
+  it("names the outfit alone when one is worn, since it covers everything else", () => {
+    expect(lookWords({ ...dressed, outfit: "tree" }, SIX)).toBe("The Christmas tree outfit");
+    expect(lookWords({ ...dressed, outfit: "workshop" }, SIX)).toBe("The workshop elf outfit");
+  });
+
+  it("says only what has been earned, so the words always match the drawing", () => {
+    expect(lookWords({ ...dressed, outfit: "nessie" }, SIX)).toContain("Tan detective's hat");
+    expect(lookWords(dressed, { doorsDone: 0 })).toBe("Red elf hat, green elf tunic and maroon curly shoes");
+    expect(lookWords(null, { doorsDone: 0 })).toBe("Red elf hat, green elf tunic and maroon curly shoes");
+  });
+
+  it("has no dashes and no hyphenated words, whatever is worn", () => {
+    for (const style of STYLES) {
+      for (const colour of style.colours) {
+        expect(pieceWords(style.id, colour.id)).not.toMatch(/[–—]|[A-Za-z0-9]-[A-Za-z0-9]/);
+      }
+    }
+    for (const outfit of OUTFITS) expect(outfitWords(outfit.id)).not.toMatch(/[–—]|[A-Za-z0-9]-[A-Za-z0-9]/);
   });
 });
 

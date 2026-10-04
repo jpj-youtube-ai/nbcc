@@ -27,6 +27,19 @@ export function icon(name: IconName, size = 18): string {
   );
 }
 
+/** A wrapped present, for the news that something has arrived in the wardrobe. The lid is a group
+ *  of its own so that it can lift when the page opens. */
+export function gift(size = 40): string {
+  return (
+    `<svg class="elf-gift" width="${size}" height="${size}" viewBox="0 0 24 24" aria-hidden="true" focusable="false">` +
+    `<rect x="4.5" y="11" width="15" height="10" rx="1.5" fill="#C02238"/>` +
+    `<rect x="10.75" y="11" width="2.5" height="10" fill="#F1DA9A"/>` +
+    `<g class="elf-gift__lid"><rect x="3" y="7" width="18" height="4.6" rx="1.2" fill="#800000"/>` +
+    `<rect x="10.75" y="7" width="2.5" height="4.6" fill="#F1DA9A"/>` +
+    `<path d="M12 7C10.8 4 7.4 3.8 7.2 5.4 7 7 9.6 7.2 12 7zm0 0c1.2-3 4.6-3.2 4.8-1.6C17 7 14.4 7.2 12 7z" fill="#C9A24A"/></g></svg>`
+  );
+}
+
 /** The candy cane that marks a visit. It keeps its own red and white whatever it sits on. */
 export function candyCane(size = 18): string {
   const cane = "M5.5 15V6.5a3 3 0 0 1 6 0V8";

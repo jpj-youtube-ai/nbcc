@@ -108,11 +108,15 @@ export interface HqView {
 
 export interface WardrobeView {
   detective: DetectiveView;
+  /** The look as saved. It is made safe again before it is drawn. */
   look: ElfLook;
+  /** What the detective has earned. Build it with wardrobeState in src/elf/wardrobe.ts. */
   state: WardrobeState;
-  /** What has not been tried on yet: "style colour" for a piece, the id for an outfit. */
+  /** What has not been tried on yet: "style:colour" for a piece, the id for an outfit. */
   fresh: string[];
   hqUrl: string;
+  /** Where the form posts when there is no script. */
+  saveUrl: string;
 }
 
 export interface PosterView {

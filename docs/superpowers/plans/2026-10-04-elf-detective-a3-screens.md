@@ -153,7 +153,7 @@ export interface PosterView {
 | `GET /api/elf/door/:n` | `{ tile: string, panel: string }`: that door's HTML, drawn by the same functions as the page. | calendar script, only for a door whose `v` changed |
 | `GET /api/elf/me` | `FamilyMarks`, or 401 when nobody is signed in. | calendar script |
 | `POST /api/elf/guess` | `{ ok: true }` or `{ ok: false, reason }` (`decideGuess`). | HQ script |
-| `POST /api/elf/look` | `{ ok: true, look }`: the look as saved, after `normaliseLook`. | wardrobe script |
+| `POST /api/elf/look` | Sent `{ detectiveId, look, tried }` (`tried`: what has just been tried on, so its "New" tag can go). Answers `{ ok: true, look }`: the look as saved, after `normaliseLook` against what the detective has earned in the database, never what the page says. | wardrobe script, by itself once the choices settle |
 | `POST /api/elf/claim` | `{ ok: true, html }` (the "You're first!" card) or `{ ok: false, reason, triesLeft? }`. | poster script |
 | `POST /api/elf/stamp` | `{ ok: true, html }` or `{ ok: false, reason }`. | poster script |
 

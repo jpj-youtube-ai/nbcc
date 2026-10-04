@@ -1,11 +1,14 @@
 // @vitest-environment jsdom
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi, afterEach } from "vitest";
+import express from "express";
+import type { Server } from "node:http";
+import type { AddressInfo } from "node:net";
 import { readFileSync, readdirSync } from "node:fs";
 import { resolve } from "node:path";
 import { redBag } from "../../src/red-bag/catalogue";
 import { DROP_OFF_LIVE, DROP_OFF_URL, PREVIEW_STRIP, postcodePattern, renderRedBagPage } from "../../src/red-bag/render";
 import { UK_POSTCODE_RE } from "../../src/declarations/fields";
-import { redBagPageHandler } from "../../src/routes/red-bag";
+import { RED_BAG_FORWARDS, addRedBagPageRoutes, redBagPageHandler } from "../../src/routes/red-bag";
 import { ALL_PAGES, PRIVATE_PAGES, RESERVED_PREFIXES, SITE_PAGES, aliasFromProblem, renderSitemapTree, renderSitemapXml } from "../../src/site/pages";
 import { ALL_DONATIONS_WORDING, SINGLE_DONATION_WORDING } from "../../src/declarations/wording";
 
@@ -165,9 +168,9 @@ describe("beside the list", () => {
   });
 });
 
-// On a phone the bag and Donate sit below a long list. A slim bar at the foot of the screen keeps
-// the total and a Donate button in reach while the list is scrolled (assets/js/red-bag.js shows it).
-describe("the phone bar", () => {
+// The bag and Donate scroll out of sight down a long list. A slim bar at the foot of the screen keeps
+// the total and a Donate button in reach, at every width (assets/js/red-bag.js shows it).
+describe("the bottom bar", () => {
   const bar = main.querySelector("[data-rb-bar]")!;
 
   it("is in the page, hidden until the script shows it", () => {
@@ -305,6 +308,12 @@ describe("the details step", () => {
     const monthly = step.querySelector('[data-rb-wording="monthly"]')!;
     expect(norm(monthly.textContent)).toBe(ALL_DONATIONS_WORDING.wording_snapshot);
     expect(monthly.hasAttribute("hidden")).toBe(true);
+  });
+
+  it("words a monthly amount as every month, never a month", () => {
+    expect(norm(main.querySelector("[data-rb-per-month]")?.textContent)).toBe("every month");
+    expect(norm(step.querySelector("[data-rb-details-monthly]")?.textContent)).toBe("every month");
+    expect(visibleCopy(html, [".giftaid-statement"])).not.toMatch(/a month/);
   });
 
   it("asks a monthly giver to confirm they are 18 or over, in the donate page's words", () => {
@@ -637,6 +646,107 @@ describe("GET /fill-a-red-bag", () => {
   });
 });
 
+// The short addresses, /fill and /fill-a-bag (Jaimie, 4 October 2026): the ways people type it.
+// They forward to the page for good, as /getinvolved and /involved do to Get involved (TASK-496),
+// through the real Express router, so case and a trailing slash are checked as Express matches them.
+describe("the short addresses, /fill and /fill-a-bag", () => {
+  let server: Server | null = null;
+  afterEach(() => {
+    if (server) server.close();
+    server = null;
+  });
+  async function site(live: boolean | undefined) {
+    const app = express();
+    const router = express.Router();
+    addRedBagPageRoutes(router, ROOT, { decorate: async (h) => h, ...(live === undefined ? {} : { live: () => live }) });
+    // What the site's own catch-all does with anything not taken: the 404.
+    router.use((_req, res) => void res.status(404).type("html").send("We cannot find that page"));
+    app.use(router);
+    server = app.listen(0);
+    await new Promise((r) => server!.once("listening", r));
+    const base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+    return (path: string) => fetch(`${base}${path}`, { redirect: "manual" });
+  }
+
+  it("are these two, and only these", () => {
+    expect(RED_BAG_FORWARDS).toEqual(["/fill", "/fill-a-bag"]);
+  });
+
+  for (const path of ["/fill", "/fill-a-bag", "/Fill", "/FILL-A-BAG", "/fill/", "/fill-a-bag/"]) {
+    it(`${path} goes to Fill a Red Bag for good`, async () => {
+      const res = await (await site(true))(path);
+      expect(res.status).toBe(301);
+      expect(res.headers.get("location")).toBe("/fill-a-red-bag");
+    });
+  }
+
+  it("keep the query string, so a poster's or an email's tags still count", async () => {
+    const get = await site(true);
+    const a = await get("/fill?utm_source=poster&utm_medium=qr");
+    expect(a.status).toBe(301);
+    expect(a.headers.get("location")).toBe("/fill-a-red-bag?utm_source=poster&utm_medium=qr");
+    const b = await get("/fill-a-bag/?utm_source=radio");
+    expect(b.status).toBe(301);
+    expect(b.headers.get("location")).toBe("/fill-a-red-bag?utm_source=radio");
+  });
+
+  it("do not swallow the page itself, or anything else that starts the same way", async () => {
+    const get = await site(true);
+    const page = await get("/fill-a-red-bag");
+    expect(page.status).toBe(200);
+    expect(page.headers.get("location")).toBeNull();
+    expect(await page.text()).toContain("Pop these in the bag");
+    for (const other of ["/filling", "/fill-a", "/fill-a-bag-now", "/fill/anything", "/fill-a-bag/more", "/fills"]) {
+      const res = await get(other);
+      expect(res.status, other).toBe(404);
+      expect(res.headers.get("location"), other).toBeNull();
+    }
+  });
+
+  // They follow the switch. Switched off the page is the 404 to the public, so its short addresses
+  // are too: a forward would say there is a page there.
+  it("switched off, are the site's ordinary 404, and send nobody anywhere", async () => {
+    const get = await site(false);
+    for (const path of ["/fill", "/fill-a-bag", "/fill?utm_source=poster"]) {
+      const res = await get(path);
+      expect(res.status, path).toBe(404);
+      expect(res.headers.get("location"), path).toBeNull();
+      const body = await res.text();
+      expect(body, path).toContain("We cannot find that page");
+      expect(body, path).not.toContain("red-bag");
+    }
+  });
+
+  it("as it ships now (the real switch), forward", async () => {
+    const res = await (await site(undefined))("/fill");
+    expect(res.status).toBe(301);
+    expect(res.headers.get("location")).toBe("/fill-a-red-bag");
+  });
+
+  it("cannot be taken by a spare address, and take no other address with them", () => {
+    for (const path of RED_BAG_FORWARDS) {
+      expect(RESERVED_PREFIXES, path).toContain(path);
+      expect(aliasFromProblem(path), path).not.toBeNull();
+    }
+    // Reserving /fill reserves /fill and what sits under it, not every address that begins "fill".
+    expect(aliasFromProblem("/fill-the-van")).toBeNull();
+    expect(aliasFromProblem("/filling")).toBeNull();
+  });
+
+  it("are on no site map, in no list of pages, and linked from nowhere", () => {
+    for (const path of RED_BAG_FORWARDS) {
+      expect(ALL_PAGES.some((p) => p.path === path), path).toBe(false);
+      expect(PRIVATE_PAGES.some((p) => p.path === path), path).toBe(false);
+    }
+    const xml = renderSitemapXml(SITE_PAGES, "https://nbcc.scot", new Map(), true, true, true);
+    const tree = renderSitemapTree(SITE_PAGES, true, true, true);
+    for (const text of [xml, tree]) expect(text).not.toMatch(/[/]fill(-a-bag)?["<\s/]/);
+    for (const f of readdirSync(ROOT).filter((x) => x.endsWith(".html"))) {
+      expect(read(f), f).not.toMatch(/href="[/]fill(-a-bag)?[/]?["?]/);
+    }
+  });
+});
+
 // Express 4 does not catch what an async handler throws: the request would hang. Whatever cannot be
 // read, the visitor is handed on to the site's own 404 (the router's catch-all), and it is logged.
 describe("GET /fill-a-red-bag when something cannot be read", () => {
@@ -799,7 +909,7 @@ describe("the page's own stylesheet", () => {
     expect(outside).not.toMatch(/grid-row|grid-column:[12]/);
   });
 
-  it("has no sticky panel: nothing follows the reader down the page but the phone bar", () => {
+  it("has no sticky panel: nothing follows the reader down the page but the bottom bar", () => {
     expect(rules).not.toMatch(/position:\s*sticky/);
     expect(rules.match(/position:fixed/g)?.length).toBe(1);
   });
@@ -830,18 +940,30 @@ describe("the page's own stylesheet", () => {
     expect(reduced).toMatch(/transition:none/);
   });
 
-  it("draws the phone bar only where the bag sits below the list, fixed to the foot, clear of the home bar", () => {
+  // The bar is at EVERY width (Jaimie, 4 October 2026): on a computer too the total and Donate
+  // scroll out of sight down a long list.
+  it("draws the bottom bar at every width, fixed to the foot, clear of the home bar", () => {
     const outside = rules.replace(/@media[^{]*\{(?:[^{}]*\{[^{}]*\})*[^{}]*\}/g, "");
-    expect(outside).toMatch(/\.rb-bar\{[^}]*display:none/);
-    const stacked = /@media \(max-width:860px\)\{((?:[^{}]*\{[^{}]*\})*)/.exec(rules)?.[1] ?? "";
-    const rule = /\.rb-bar\{([^}]*)\}/.exec(stacked)?.[1] ?? "";
+    const rule = /\.rb-bar\{([^}]*)\}/.exec(outside)?.[1] ?? "";
     expect(rule).toMatch(/display:flex/);
     expect(rule).toMatch(/position:fixed/);
     expect(rule).toMatch(/bottom:0/);
     expect(rule).toMatch(/env\(safe-area-inset-bottom\)/);
-    expect(stacked).toMatch(/\.rb-bar__donate\{[^}]*min-height:44px/);
+    expect(rules).not.toMatch(/\.rb-bar\{[^}]*display:none/);
+    expect(outside).toMatch(/\.rb-bar__donate\{[^}]*min-height:44px/);
     // While it shows, the page is longer by its height, so it never sits over the end of the footer.
-    expect(stacked).toMatch(/body\.rb-bar-on\{[^}]*padding-bottom:[^}]*env\(safe-area-inset-bottom\)/);
+    expect(outside).toMatch(/body\.rb-bar-on\{[^}]*padding-bottom:[^}]*env\(safe-area-inset-bottom\)/);
+  });
+
+  it("keeps the bar's contents within the page's width, in line with the page, not edge to edge", () => {
+    const outside = rules.replace(/@media[^{]*\{(?:[^{}]*\{[^{}]*\})*[^{}]*\}/g, "");
+    const rule = /\.rb-bar\{([^}]*)\}/.exec(outside)?.[1] ?? "";
+    // The strip itself spans the screen; its padding is the page's own gutter, growing with the
+    // screen beyond the page's widest, so the total and the button sit under the page's content.
+    expect(rule).toMatch(/left:0;right:0/);
+    expect(rule).toMatch(/padding-inline:max\(var\(--pad\),calc\(\(100% - var\(--maxw\)\) \/ 2 \+ var\(--pad\)\)\)/);
+    // On a computer the total sits beside its button, under the bag's column, not far across the page.
+    expect(desktopRules()).toMatch(/\.rb-bar\{[^}]*justify-content:flex-end/);
   });
 
   it("shows a pressed example in holly green", () => {

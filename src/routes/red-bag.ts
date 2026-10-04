@@ -14,6 +14,15 @@ import { RED_BAG_PATH, redBagAccess, redBagIsLive } from "../red-bag/switch";
 //                            - a signed in member of staff: the page, under a plain strip saying
 //                              "Staff preview: not public yet". Never kept by a browser or a cache.
 //
+//   GET /fill, /fill-a-bag  the short ways people type it (Jaimie, 4 October 2026). Switched ON:
+//                          301 to /fill-a-red-bag, for good, keeping the query string (Express
+//                          matches them in any case, with or without a trailing slash, and only
+//                          exactly: /fill does not take /fill-a-red-bag or anything else).
+//                          Switched OFF: handed on to the site's own 404, as if they were not here.
+//                          A forward would say there is a page there; no preview loader either.
+//                          Fixed in code like /getinvolved and /involved (TASK-496): not rows in the
+//                          spare address table, on no site map, linked from nowhere.
+//
 // How staff are recognised. The admin keeps its session as a bearer token in the tab's
 // sessionStorage, not in a cookie, so an ordinary visit to this address never carries it: every
 // plain visit while switched off is the 404, staff included. The 404 served HERE (and only here)
@@ -97,15 +106,29 @@ export function redBagPageHandler(deps: RedBagPageDeps) {
   }
 }
 
-export function addRedBagPageRoutes(router: Router, siteRoot: string, page: Pick<RedBagPageDeps, "decorate">): void {
+/** The short addresses that forward to the page. Reserved in src/site/pages.ts (RESERVED_PREFIXES). */
+export const RED_BAG_FORWARDS = ["/fill", "/fill-a-bag"];
+
+/** /fill and /fill-a-bag: a permanent redirect to the page while it is public; otherwise not here. */
+export function redBagForwardHandler(live: () => boolean = redBagIsLive) {
+  return function forwardToRedBag(req: Request, res: Response, next: NextFunction): void {
+    if (!live()) return next();
+    const at = req.originalUrl.indexOf("?");
+    res.redirect(301, `${RED_BAG_PATH}${at === -1 ? "" : req.originalUrl.slice(at)}`);
+  };
+}
+
+export function addRedBagPageRoutes(router: Router, siteRoot: string, page: Pick<RedBagPageDeps, "decorate" | "live">): void {
   const file = join(siteRoot, "fill-a-red-bag.html");
   const notFoundFile = join(siteRoot, "404.html");
+  router.get(RED_BAG_FORWARDS, redBagForwardHandler(page.live));
   router.get(
     RED_BAG_PATH,
     redBagPageHandler({
       template: () => readFileSync(file, "utf8"),
       notFound: () => readFileSync(notFoundFile, "utf8"),
       decorate: page.decorate,
+      ...(page.live ? { live: page.live } : {}),
     }),
   );
 }

@@ -3,7 +3,8 @@
 // One constant, and it is ON: the page is PUBLIC (Jaimie, 4 October 2026: "make it public but don't
 // link anywhere to it right now").
 //   - /fill-a-red-bag is the page, for everyone (src/routes/red-bag.ts);
-//   - POST /api/checkout-session takes a Red Bag gift from anyone (src/routes/api.ts).
+//   - POST /api/checkout-session takes a Red Bag gift from anyone (src/routes/api.ts);
+//   - /fill and /fill-a-bag forward to the page (src/routes/red-bag.ts).
 //
 // Public, but deliberately UNLINKED and UNLISTED for now. Nothing on the site links to it (not
 // /donate, not the menu, not the footer), it is on no site map, and it tells search engines to
@@ -18,8 +19,9 @@
 //      live page out of src/routes/red-bag.ts.
 //
 // TO TAKE IT DOWN AGAIN: set RED_BAG_LIVE to false. That one line is enough: the public gets the
-// site's ordinary 404 at the address, a signed in member of staff gets a preview under a "Staff
-// preview: not public yet" strip, and the checkout refuses a Red Bag gift from anyone but staff.
+// site's ordinary 404 at the address (and at /fill and /fill-a-bag, which stop forwarding), a
+// signed in member of staff gets a preview under a "Staff preview: not public yet" strip, and the
+// checkout refuses a Red Bag gift from anyone but staff.
 // That path is kept and tested for exactly this.
 //
 // Deliberately a constant in code and not a config value or a database row: nothing here needs

@@ -179,6 +179,10 @@ export const RESERVED_PREFIXES: string[] = [
   "/contact",
   // Fill a Red Bag: a real page (public, unlisted for now), so no spare address may shadow it.
   "/fill-a-red-bag",
+  // The short ways people type it; both redirect there (src/routes/red-bag.ts). Reserving "/fill"
+  // takes /fill and what sits under it, not every address that begins "fill".
+  "/fill",
+  "/fill-a-bag",
   "/festive-ball",
   "/a-night-to-remember",
   "/set-password",

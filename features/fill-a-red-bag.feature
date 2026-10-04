@@ -25,6 +25,20 @@ Feature: Fill a Red Bag, public but linked from nowhere
     And the site response noindex header should be set
     And the site response should contain "noindex, nofollow"
 
+  Scenario: the short address /fill forwards to the page for good
+    When I request the site path "/fill"
+    Then the site response should redirect permanently to "/fill-a-red-bag"
+
+  Scenario: the short address /fill-a-bag forwards to the page for good
+    When I request the site path "/fill-a-bag"
+    Then the site response should redirect permanently to "/fill-a-red-bag"
+
+  Scenario: the short addresses keep the query string
+    When I request the site path "/fill?utm_source=bdd&utm_medium=poster"
+    Then the site response should redirect permanently to "/fill-a-red-bag?utm_source=bdd&utm_medium=poster"
+    When I request the site path "/fill-a-bag?utm_source=bdd"
+    Then the site response should redirect permanently to "/fill-a-red-bag?utm_source=bdd"
+
   Scenario: the page's own file is not served
     When I request the site path "/fill-a-red-bag.html"
     Then the site response status should be 404

@@ -130,7 +130,7 @@ beforeEach(() => {
   team.listOpenInvites.mockResolvedValue([]);
   team.listFundraiserCalls.mockResolvedValue([]);
   team.listSigners.mockResolvedValue([{ id: 3, firstName: "Fern" }, { id: 5, firstName: "Rowan" }]);
-  team.getSigner.mockImplementation(async (id: number) => (id === 3 ? { id: 3, firstName: "Fern" } : id === 5 ? { id: 5, firstName: "Rowan" } : null));
+  team.getSigner.mockImplementation(async (id: number) => (id === 3 ? { id: 3, firstName: "Fern", email: "fern@example.com" } : id === 5 ? { id: 5, firstName: "Rowan", email: "rowan@example.com" } : null));
   team.countRecentInvites.mockResolvedValue(0);
   team.createInvite.mockImplementation(async (i: Record<string, unknown>) =>
     invite({ name: `${i.firstName} ${i.lastName}`, firstName: i.firstName, lastName: i.lastName, email: i.email, note: i.note, signedBy: i.signedBy }),
@@ -246,16 +246,33 @@ describe("inviting someone", () => {
     expect(res.body).toMatchObject({ emailed: true, invite: { id: 4 } });
   });
 
-  // Jaimie 2026-10-03: the member of staff who sends it gets a copy. The person signed in, from the
-  // admin session, not whoever it is signed by (here Rowan signs it and Fern sends it).
-  it("copies in the member of staff who sent it, not the person it is signed by, and records the copy", async () => {
+  // Jaimie 2026-10-04: the copy goes to whoever the invite is signed by, whoever is signed in (here
+  // Rowan signs it and Fern, signed in, sends it). The record still says Fern pressed send.
+  it("copies in the person it is signed by, not whoever is signed in, and records the copy", async () => {
     await run(routes.postInvite, { token: tokenFor("editor"), body: GOOD_INVITE });
-    expect(sendFundraiseInvite.mock.calls[0][1].cc).toBe("fern@example.com");
-    expect(team.createInvite.mock.calls[0][0].cc).toBe("fern@example.com");
+    expect(sendFundraiseInvite.mock.calls[0][1].cc).toBe("rowan@example.com");
+    expect(team.createInvite.mock.calls[0][0].cc).toBe("rowan@example.com");
+    expect(team.createInvite.mock.calls[0][1]).toBe("admin:fern@example.com");
   });
 
-  it("sends with no copy when the sender is the person invited, and records none", async () => {
-    await run(routes.postInvite, { token: tokenFor("editor"), body: { ...GOOD_INVITE, email: "Fern@Example.com" } });
+  it("copies in the person signed in when they sign it themselves", async () => {
+    await run(routes.postInvite, { token: tokenFor("editor"), body: { ...GOOD_INVITE, signedBy: 3 } });
+    expect(sendFundraiseInvite.mock.calls[0][1].cc).toBe("fern@example.com");
+  });
+
+  it("falls back to the person signed in when the signer has no usable address, so a copy is never lost", async () => {
+    for (const email of ["", "rowan@", undefined]) {
+      sendFundraiseInvite.mockClear();
+      team.createInvite.mockClear();
+      team.getSigner.mockResolvedValue({ id: 5, firstName: "Rowan", email });
+      await run(routes.postInvite, { token: tokenFor("editor"), body: GOOD_INVITE });
+      expect(sendFundraiseInvite.mock.calls[0][1].cc).toBe("fern@example.com");
+      expect(team.createInvite.mock.calls[0][0].cc).toBe("fern@example.com");
+    }
+  });
+
+  it("sends with no copy when the signer is the person invited, and records none", async () => {
+    await run(routes.postInvite, { token: tokenFor("editor"), body: { ...GOOD_INVITE, email: "Rowan@Example.com" } });
     expect(sendFundraiseInvite).toHaveBeenCalledTimes(1);
     expect(sendFundraiseInvite.mock.calls[0][1].cc).toBeUndefined();
     expect(team.createInvite.mock.calls[0][0].cc).toBeNull();
@@ -325,11 +342,24 @@ describe("resending and removing an invite", () => {
     expect(sendFundraiseInvite.mock.calls[0][1].text).toContain("Hi Alex,");
   });
 
-  it("copies in the member of staff who resends it, and passes them on for the record", async () => {
-    team.resendInvite.mockResolvedValue(invite({ signedBy: "Rowan" }));
-    await run(routes.postResendInvite, { token: tokenFor("editor"), params: { id: "4" } });
-    expect(sendFundraiseInvite.mock.calls[0][1].cc).toBe("fern@example.com");
+  // Who that is comes back from the database with the invite (the address kept when it was sent),
+  // with the person signed in passed on only as the fallback.
+  it("copies in the person it was signed by, not whoever resends it", async () => {
+    team.resendInvite.mockResolvedValue(invite({ signedBy: "Rowan", cc: "rowan@example.com" }));
+    const res = await run(routes.postResendInvite, { token: tokenFor("editor"), params: { id: "4" } });
+    expect(sendFundraiseInvite.mock.calls[0][1].cc).toBe("rowan@example.com");
     expect(team.resendInvite.mock.calls[0][3]).toBe("fern@example.com");
+    expect(team.resendInvite.mock.calls[0][2]).toBe("admin:fern@example.com");
+    // The address is for the email only: it does not go back to the page.
+    expect((res.body as { invite: Record<string, unknown> }).invite).not.toHaveProperty("cc");
+    expect(JSON.stringify(res.body)).not.toContain("rowan@example.com");
+  });
+
+  it("resends with no copy when there is nobody to copy in", async () => {
+    team.resendInvite.mockResolvedValue(invite({ cc: null }));
+    await run(routes.postResendInvite, { token: tokenFor("editor"), params: { id: "4" } });
+    expect(sendFundraiseInvite).toHaveBeenCalledTimes(1);
+    expect(sendFundraiseInvite.mock.calls[0][1].cc).toBeUndefined();
   });
 
   it("counts towards the day's 50", async () => {
@@ -451,11 +481,11 @@ describe("saying what someone is invited to do", () => {
     }
   });
 
-  it("sends the words for that type, still from the events inbox, copied to the sender and signed as chosen", async () => {
+  it("sends the words for that type, still from the events inbox, copied to and signed by who was chosen", async () => {
     typed("event");
     await run(routes.postInvite, { token: tokenFor("editor"), body: { ...GOOD_INVITE, type: "event" } });
     const mail = sendFundraiseInvite.mock.calls[0][1];
-    expect(mail).toMatchObject({ email: "mary@example.com", from: "events@nbcc.test", replyTo: "events@nbcc.test", cc: "fern@example.com" });
+    expect(mail).toMatchObject({ email: "mary@example.com", from: "events@nbcc.test", replyTo: "events@nbcc.test", cc: "rowan@example.com" });
     expect(mail.subject).toBe("We'd love to help with your event");
     expect(mail.text).toContain("Your event gets its own page on our website, with a meter, posters and a QR code.");
     expect(mail.text).toContain("Hi Mary Jane,");
@@ -500,7 +530,7 @@ describe("the in memory invite waits for sign off", () => {
     expect(team.createInvite.mock.calls[0][0].inviteType).toBe("memory");
     const mail = sendFundraiseInvite.mock.calls[0][1];
     expect(mail.subject).toBe("A page in memory of someone you love");
-    expect(mail).toMatchObject({ from: "events@nbcc.test", replyTo: "events@nbcc.test", cc: "fern@example.com" });
+    expect(mail).toMatchObject({ from: "events@nbcc.test", replyTo: "events@nbcc.test", cc: "rowan@example.com" });
     expect(mail.text).toContain("Dear Mary Jane,");
     expect(mail.text).toContain("With warmest thoughts,\nRowan\nNBCC Team");
     expect(mail.text).not.toContain("!");

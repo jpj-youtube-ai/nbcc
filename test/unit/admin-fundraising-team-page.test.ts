@@ -276,6 +276,14 @@ describe("Invite someone", () => {
     expect(select.value).toBe("3");
   });
 
+  // Jaimie 2026-10-04: the copy of the invite goes to whoever it is signed by, and the form says so.
+  it("says under Signed by that a copy goes to whoever it is signed by", async () => {
+    await openFundraising();
+    expect(text(el("frInviteSigner")!.closest(".fr-field")!.querySelector(".fr-field-hint"))).toBe(
+      "The email is signed with this first name, so they know who they spoke to. A copy goes to whoever it is signed by.",
+    );
+  });
+
   // Jaimie 2026-10-03: a First name box and a Surname box, in place of one "Their name" box.
   it("has a First name box and a Surname box, and no single name box", async () => {
     await openFundraising();

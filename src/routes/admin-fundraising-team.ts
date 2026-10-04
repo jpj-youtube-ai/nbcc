@@ -119,13 +119,13 @@ function failed(res: Response, what: string, err: unknown, notFound = "That no l
 
 const base = () => config.PORTAL_BASE_URL.replace(/\/+$/, "");
 
-// Email the invite with a fresh token, greeting them by first name and copying in the member of
-// staff sending it (`senderEmail`, from their session; left off when missing, never failing the
+// Email the invite with a fresh token, greeting them by first name and copying in `cc`: whoever it
+// is signed by, already chosen by inviteCc (left off when there is nobody, never failing the
 // invite). Best effort: the invite stands either way; true when it went.
 async function emailInvite(
   inv: Pick<InviteRow, "name" | "firstName" | "email" | "note" | "signedBy"> & Partial<Pick<InviteRow, "type">>,
   token: string,
-  senderEmail: string | null | undefined,
+  cc: string | null | undefined,
 ): Promise<boolean> {
   try {
     const mail = buildInviteEmail({
@@ -135,7 +135,6 @@ async function emailInvite(
       url: inviteUrl(base(), token),
       type: inviteTypeOf(inv.type),
     });
-    const cc = inviteCc(senderEmail, inv.email);
     await sendFundraiseInvite(inv.name, {
       email: inv.email,
       ...(cc ? { cc } : {}),
@@ -221,6 +220,9 @@ export async function postInvite(req: Request, res: Response): Promise<Response 
     if (inviteWordingKey(parsed.data.type) && !inviteMaySend(parsed.data.type, await approvedWordingKeys())) return res.status(409).json(WAITING);
     if ((await countRecentInvites(actorOf(claims))) >= INVITES_PER_DAY) return res.status(429).json(TOO_MANY);
     const token = newInviteToken();
+    // The copy goes to whoever it is signed by; to the person signed in only when the signer has no
+    // usable address. The audit row's actor is still who pressed send.
+    const cc = inviteCc(signer.email, parsed.data.email, claims.email) ?? null;
     const inv = await createInvite(
       {
         firstName: parsed.data.firstName,
@@ -228,13 +230,13 @@ export async function postInvite(req: Request, res: Response): Promise<Response 
         email: parsed.data.email,
         note: parsed.data.note,
         signedBy: signer.firstName,
-        cc: inviteCc(claims.email, parsed.data.email) ?? null,
+        cc,
         tokenHash: hashInviteToken(token),
         inviteType: parsed.data.type,
       },
       actorOf(claims),
     );
-    const emailed = await emailInvite(inv, token, claims.email);
+    const emailed = await emailInvite(inv, token, cc);
     return res.status(201).json({ invite: inv, emailed });
   } catch (err) {
     return failed(res, "invite", err);
@@ -251,8 +253,10 @@ export async function postResendInvite(req: Request, res: Response): Promise<Res
     const token = newInviteToken();
     // The type stays as it was. One whose wording is waiting for sign off is held (wording_waiting,
     // checked inside the transaction), changing nothing.
-    const inv = await resendInvite(id, hashInviteToken(token), actorOf(claims), claims.email);
-    const emailed = await emailInvite(inv, token, claims.email);
+    // Copied to whoever was copied in when it was sent (the signer); the address is for the email
+    // only and does not go back to the page.
+    const { cc, ...inv } = await resendInvite(id, hashInviteToken(token), actorOf(claims), claims.email);
+    const emailed = await emailInvite(inv, token, cc);
     return res.status(200).json({ invite: inv, emailed });
   } catch (err) {
     return failed(res, "invite resend", err, "That invite has been taken up or removed");

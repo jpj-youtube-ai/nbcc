@@ -85,8 +85,11 @@ export function decideClaim(ctx: ClaimContext, attempt: ClaimAttempt): ClaimDeci
   const chosen = chosenDetectives(attempt.detectiveIds);
   if (chosen.length === 0) return { ok: false, reason: "no-detectives" };
   if (!allInFamily(chosen, ctx.familyDetectiveIds)) return { ok: false, reason: "not-your-detective" };
-  // Written this way round so that a count that is missing or not a number refuses, not allows.
-  if (!(ctx.wrongTries < MAX_WRONG_WORDS)) return { ok: false, reason: "too-many-tries" };
+  // A count that is missing, or is not a number, refuses. A database hands a count over as text, so
+  // whoever calls this must turn it into a number first.
+  if (typeof ctx.wrongTries !== "number" || !(ctx.wrongTries < MAX_WRONG_WORDS)) {
+    return { ok: false, reason: "too-many-tries" };
+  }
   // The word comes before the door's state: see the note at the top of this file.
   const want = normaliseWord(ctx.secretWord);
   if (want === "" || normaliseWord(attempt.word) !== want) return { ok: false, reason: "wrong-word" };

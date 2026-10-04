@@ -11,17 +11,22 @@
 //
 // Pure: no pool, no config, no clock. Unit tested in test/unit/elf-detectives.test.ts.
 
+/** The most detectives one form can name. No family has this many, so a longer list is not a family
+ *  ticking boxes, and it is not worth the site's time to read it. */
+export const MAX_CHOSEN = 50;
+
 /** The detectives ticked on a form, each once, as text, in the order they were ticked. Anything that
- *  is not an id is dropped. */
+ *  is not an id is dropped, and a list longer than MAX_CHOSEN is nobody at all. */
 export function chosenDetectives(sent: unknown): string[] {
   const list: unknown[] = Array.isArray(sent) ? sent : sent === undefined || sent === null ? [] : [sent];
-  const ids: string[] = [];
+  if (list.length > MAX_CHOSEN) return [];
+  const ids = new Set<string>();
   for (const value of list) {
     const isId = typeof value === "string" || (typeof value === "number" && Number.isFinite(value));
     const id = isId ? String(value).trim() : "";
-    if (id !== "" && !ids.includes(id)) ids.push(id);
+    if (id !== "") ids.add(id);
   }
-  return ids;
+  return [...ids];
 }
 
 /** Are all of these detectives in the family? Ask only once someone has been chosen: nobody at all

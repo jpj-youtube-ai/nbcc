@@ -185,6 +185,12 @@ describe("the moment a door's place closes", () => {
     expect(closingInstant(SEASON, 23, "22:00", "21:00")?.toISOString()).toBe("2026-12-24T20:00:00.000Z");
   });
 
+  it("is nothing for a clue at or after 8pm on Christmas Eve, which cannot work and must be refused", () => {
+    expect(closingInstant(SEASON, 24, "20:00", null)).toBeNull();
+    expect(closingInstant(SEASON, 24, "21:30", "23:00")).toBeNull();
+    expect(closingInstant(SEASON, 24, "19:59", "23:00")?.toISOString()).toBe("2026-12-24T20:00:00.000Z");
+  });
+
   it("is nothing when the door or its clue time is not real", () => {
     expect(closingInstant(SEASON, 25, "17:30", "21:00")).toBeNull();
     expect(closingInstant(SEASON, 7, "teatime", "21:00")).toBeNull();

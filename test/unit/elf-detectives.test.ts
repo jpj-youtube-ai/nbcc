@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { allInFamily, chosenDetectives } from "../../src/elf/detectives";
+import { MAX_CHOSEN, allInFamily, chosenDetectives } from "../../src/elf/detectives";
 
 // NBCC Elf Detective School: which detectives a form is talking about. Every id is invented.
 
@@ -28,6 +28,13 @@ describe("the detectives ticked on a form", () => {
   it("drops anything that is not an id", () => {
     expect(chosenDetectives(["d1", {}, null, Number.NaN, true, ["d2"]])).toEqual(["d1"]);
     expect(chosenDetectives({ 0: "d1" })).toEqual([]);
+  });
+
+  it("is nobody for a list far longer than any family, so a huge request cannot tie the site up", () => {
+    const many = Array.from({ length: MAX_CHOSEN + 1 }, (_, i) => `d${i}`);
+    expect(MAX_CHOSEN).toBe(50);
+    expect(chosenDetectives(many)).toEqual([]);
+    expect(chosenDetectives(many.slice(0, MAX_CHOSEN)).length).toBe(MAX_CHOSEN);
   });
 });
 

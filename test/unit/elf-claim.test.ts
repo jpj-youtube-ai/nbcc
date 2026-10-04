@@ -117,9 +117,10 @@ describe("claiming an elf", () => {
   });
 
   it("refuses when the count of wrong tries is missing, rather than allowing any number of tries", () => {
-    const missing = undefined as unknown as number;
-    expect(decideClaim({ ...ctx, wrongTries: Number.NaN }, right)).toEqual({ ok: false, reason: "too-many-tries" });
-    expect(decideClaim({ ...ctx, wrongTries: missing }, right)).toEqual({ ok: false, reason: "too-many-tries" });
+    for (const missing of [undefined, null, Number.NaN, "2"]) {
+      const got = decideClaim({ ...ctx, wrongTries: missing as unknown as number }, right);
+      expect(got, String(missing)).toEqual({ ok: false, reason: "too-many-tries" });
+    }
   });
 
   it("refuses a family that has already won an elf, but only once they show the right word", () => {

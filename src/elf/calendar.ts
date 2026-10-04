@@ -116,8 +116,9 @@ export const LAST_REVEAL_TIME = "20:00";
  * its clue must compare the two clock times itself: this function has already moved it on a day.
  *
  * Whatever the times, the answer is never later than 8pm on Christmas Eve. Every door has to be open
- * by then, or nobody could finish. (A clue set later than that on Christmas Eve is a mistake the
- * admin must refuse.) Null if the door or its clue time is not real.
+ * by then, or nobody could finish. A clue at 8pm or later on Christmas Eve leaves no time to hunt at
+ * all, so the answer is null and the admin must refuse it. Null too if the door or its clue time is
+ * not real.
  */
 export function closingInstant(
   season: Pick<ElfSeason, "year">,
@@ -131,5 +132,6 @@ export function closingInstant(
   if (!clue || !sameDay || !last) return null;
   // December has no clock change, so a day later is the same time on the clock.
   const close = sameDay.getTime() > clue.getTime() ? sameDay.getTime() : sameDay.getTime() + DAY_MS;
-  return new Date(Math.min(close, last.getTime()));
+  const capped = Math.min(close, last.getTime());
+  return capped > clue.getTime() ? new Date(capped) : null;
 }

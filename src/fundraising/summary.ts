@@ -8,6 +8,7 @@ import { requestTotals, type RequestRow } from "./requests";
 import type { PromptCounts } from "./call-prompts";
 import { isCurrentMember, NUDGE_DAYS } from "./teams";
 import { memoryYearOnDue } from "./in-memory";
+import { packCounts } from "./welcome-pack";
 
 // TASK-503: the Monday summary (email 11), at 8am on Mondays to the people chosen in Admin >
 // Fundraising. Pure: the runner (./summary-runner.ts) reads the rows and the clock, and every count
@@ -35,6 +36,10 @@ import { memoryYearOnDue } from "./in-memory";
 //                  Get involved; and those who say they've finished
 //                  Team pages: team member sign ups to approve (on their own line), and teams live
 //                  10 days or more that nobody has joined
+//                  Welcome packs, each page in one line only: packs waiting for a T-shirt size
+//                  (never a sign up still new); packs to send (approved more than 2 days ago, not
+//                  yet sent, or sent with a T-shirt left out whose size has since come in); and in
+//                  memory pages with things to send
 //   coming up      approved fundraisers dated in the next four weeks
 
 export const SUMMARY_MAX_RECIPIENTS = 10;
@@ -97,6 +102,12 @@ export interface SummaryInputs {
   pledgesUnpaid?: number;
   /** Sponsor pledges paid twice (or paid online after cash) that nobody has checked yet. */
   pledgesPaidTwice?: number;
+  /**
+   * Welcome packs: the fundraisers whose pack has gone with nothing more owed (packSettled). Null or
+   * missing when it could not be read: the summary then says nothing of packs to send, rather than
+   * counting every one.
+   */
+  packsSent?: number[] | null;
 }
 
 export interface Materials {
@@ -158,6 +169,10 @@ export interface SummaryCounts {
   pledgesUnpaid: number;
   /** Sponsor pledges paid twice, to check and refund. */
   pledgesPaidTwice: number;
+  /** Welcome packs: packs to send, those waiting for a T-shirt size, and in memory pages with things to send. */
+  packsToSend: number;
+  tshirtWaiting: number;
+  memoryToSend: number;
   /** Every thing in "Waiting on us", added up. */
   waiting: number;
 }
@@ -261,6 +276,10 @@ export function summaryCounts(i: SummaryInputs): SummaryCounts {
   const memoryYearOn = i.fundraisers.filter((f) => memoryYearOnDue(f, today)).length;
   const pledgesUnpaid = whole(i.pledgesUnpaid);
   const pledgesPaidTwice = whole(i.pledgesPaidTwice);
+  // Welcome packs (Jaimie, 2026-10-03; ./welcome-pack.ts).
+  const packs = packCounts(i.fundraisers, new Set(i.packsSent ?? []), today);
+  // Not read: no lines at all, rather than every pack ever sent counted as waiting.
+  const { packsToSend, tshirtWaiting, memoryToSend } = i.packsSent ? packs : { packsToSend: 0, tshirtWaiting: 0, memoryToSend: 0 };
 
   return {
     week,
@@ -303,9 +322,15 @@ export function summaryCounts(i: SummaryInputs): SummaryCounts {
     memoryYearOn,
     pledgesUnpaid,
     pledgesPaidTwice,
+    packsToSend,
+    tshirtWaiting,
+    memoryToSend,
     waiting:
       pledgesPaidTwice +
       pledgesUnpaid +
+      packsToSend +
+      tshirtWaiting +
+      memoryToSend +
       messagesToCheck +
       memoryYearOn +
       toApprove +
@@ -383,6 +408,10 @@ export function summaryLines(c: SummaryCounts): SummaryLines {
   if (c.memoryYearOn) {
     waiting.push(`${plural(c.memoryYearOn, "in memory page", "in memory pages")} a year on: decide whether to get in touch`);
   }
+  // Welcome packs
+  if (c.packsToSend) waiting.push(plural(c.packsToSend, "welcome pack to send", "welcome packs to send"));
+  if (c.tshirtWaiting) waiting.push(plural(c.tshirtWaiting, "welcome pack waiting for a T-shirt size", "welcome packs waiting for a T-shirt size"));
+  if (c.memoryToSend) waiting.push(plural(c.memoryToSend, "in memory page with things to send", "in memory pages with things to send"));
   const m = c.materials;
   const posted = [
     m.posters ? `posters (${m.posters})` : "",

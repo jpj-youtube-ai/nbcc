@@ -72,6 +72,7 @@ vi.mock("../../src/db/fundraiser-memory", async () => {
 });
 vi.mock("../../src/db/fundraiser-sign-in", () => signIn);
 vi.mock("../../src/db/fundraising-requests", () => ({ listRequestRowsFor: vi.fn(async () => []) }));
+vi.mock("../../src/db/welcome-packs", () => ({ getPack: vi.fn(async () => null) }));
 vi.mock("../../src/db/fundraiser-materials", () => ({ lastPrintAsks: vi.fn(async () => []), materialScans: vi.fn(), askToPrint: vi.fn(), PrintAskError: Error }));
 vi.mock("../../src/fundraising/thanks-send", () => ({ sendQueuedThanks: vi.fn(async () => ({ sent: 0, skipped: 0, failed: 0 })) }));
 vi.mock("../../src/fundraising/send", () => ({

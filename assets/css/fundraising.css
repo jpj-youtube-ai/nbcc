@@ -499,6 +499,8 @@ fieldset.is-invalid .fr-option { border-color: var(--crimson); }
 .fr-area > .form-status:empty { display: none; }
 .fr-mine h2 { overflow-wrap: anywhere; }
 .fr-mine__status { margin: 10px 0 0; font-weight: 600; color: var(--holly-dark); }
+/* Welcome packs: one small line once theirs has been posted. */
+.fr-mine__pack { margin: 6px 0 0; font-size: 0.95rem; color: var(--slate); overflow-wrap: anywhere; }
 .fr-mine__page { margin: 6px 0 0; }
 .fr-mine__page a { font-weight: 600; text-underline-offset: 3px; }
 .fr-mine .fr-waiting { margin: 18px 0 0; }

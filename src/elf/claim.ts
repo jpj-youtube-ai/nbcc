@@ -1,3 +1,4 @@
+import { allInFamily, chosenDetectives } from "./detectives";
 import { isClaimable, type DoorState } from "./doors";
 
 // NBCC Elf Detective School: claiming an elf. The design is
@@ -63,7 +64,7 @@ export interface ClaimContext {
   /** The word on this elf's tag. */
   secretWord: string;
   /** Every detective in the claiming family. */
-  familyDetectiveIds: readonly string[];
+  familyDetectiveIds: readonly (string | number)[];
   /** Has this family already won an elf this year? */
   familyHasWon: boolean;
   /** How many wrong words this family has already typed at this place. */
@@ -71,19 +72,19 @@ export interface ClaimContext {
 }
 
 export interface ClaimAttempt {
-  /** The detectives who are there. */
-  detectiveIds: readonly string[];
+  /** The detectives ticked on the form, as it arrived. Made safe by chosenDetectives. */
+  detectiveIds: unknown;
   /** The word they typed. */
   word: string;
 }
 
-/** Is this claim valid? When it is, the answer names the detectives who made it, each once. */
+/** Is this claim valid? When it is, the answer names the detectives who made it, as text ids, each once. */
 export function decideClaim(ctx: ClaimContext, attempt: ClaimAttempt): ClaimDecision {
   // A found door is public knowledge, so saying so gives nothing away.
   if (ctx.doorState === "found") return { ok: false, reason: "already-found" };
-  const chosen = [...new Set(attempt.detectiveIds)];
+  const chosen = chosenDetectives(attempt.detectiveIds);
   if (chosen.length === 0) return { ok: false, reason: "no-detectives" };
-  if (!chosen.every((id) => ctx.familyDetectiveIds.includes(id))) return { ok: false, reason: "not-your-detective" };
+  if (!allInFamily(chosen, ctx.familyDetectiveIds)) return { ok: false, reason: "not-your-detective" };
   // Written this way round so that a count that is missing or not a number refuses, not allows.
   if (!(ctx.wrongTries < MAX_WRONG_WORDS)) return { ok: false, reason: "too-many-tries" };
   // The word comes before the door's state: see the note at the top of this file.

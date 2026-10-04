@@ -34,9 +34,19 @@ export interface Progress {
   next: { rank: Rank; at: number; toGo: number } | null;
 }
 
-const doorSet = (doors: readonly number[]): Set<number> => new Set(doors.filter(isDoor));
+/** The doors a detective has done, as two named lists. A list that is missing counts as empty, which
+ *  is what a database gives for no rows. */
+export interface DoorsDone {
+  /** The doors whose place the family guessed before the door opened. */
+  cracked: readonly number[] | null | undefined;
+  /** The doors whose place the detective has a stamp for. */
+  visited: readonly number[] | null | undefined;
+}
 
-/** The rank a number of doors done has earned. */
+const doorSet = (doors: readonly number[] | null | undefined): Set<number> => new Set((doors ?? []).filter(isDoor));
+
+/** The rank a number of doors done has earned. A count below nothing, or that is not a number, is a
+ *  Trainee; a count above 24 is still a Graduate. */
 export function rankAt(doorsDone: number): Rank {
   let rank: Rank = RANKS[0].rank;
   for (const r of RANKS) {
@@ -45,10 +55,11 @@ export function rankAt(doorsDone: number): Rank {
   return rank;
 }
 
-/** Everything about a detective's progress, from the doors they have cracked and the doors they have visited. */
-export function progressOf(crackedDoors: readonly number[], visitedDoors: readonly number[]): Progress {
-  const cracked = doorSet(crackedDoors);
-  const visited = doorSet(visitedDoors);
+/** Everything about a detective's progress. The two lists are named, not passed in order, so they
+ *  cannot be swapped by mistake: swapped, 24 cracked doors would look like the gold seal. */
+export function progressOf(doors: DoorsDone): Progress {
+  const cracked = doorSet(doors.cracked);
+  const visited = doorSet(doors.visited);
   const doorsDone = new Set([...cracked, ...visited]).size;
   const upcoming = RANKS.find((r) => r.at > doorsDone) ?? null;
   return {
@@ -62,7 +73,8 @@ export function progressOf(crackedDoors: readonly number[], visitedDoors: readon
   };
 }
 
-/** The ranks newly reached going from one count of doors done to another, in order. */
+/** The ranks newly reached going from one count of doors done to another, in order. Both counts are
+ *  `progressOf(...).doorsDone`. Trainee is never listed: every detective starts as one. */
 export function promotionsBetween(before: number, after: number): Rank[] {
-  return RANKS.filter((r) => r.at > before && r.at <= after).map((r) => r.rank);
+  return RANKS.filter((r) => r.at > 0 && r.at > before && r.at <= after).map((r) => r.rank);
 }

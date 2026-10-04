@@ -1,7 +1,8 @@
 import { describe, it, expect } from "vitest";
-import { NEAR_METRES, isLatLng, isNear, metresBetween } from "../../src/elf/distance";
+import { MAX_NEAR_METRES, NEAR_METRES, isLatLng, isNear, metresBetween, nearRadius } from "../../src/elf/distance";
 
-// NBCC Elf Detective School: how far a phone is from a hiding place. The points are invented.
+// NBCC Elf Detective School: how far a phone is from a hiding place. The points are town centres,
+// not anybody's address.
 
 const PLACE = { lat: 55.458, lng: -4.629 };
 // One degree of latitude is 111,195 metres on the sphere this uses, so this many degrees north is N metres.
@@ -43,6 +44,7 @@ describe("being near a hiding place", () => {
     expect(NEAR_METRES).toBe(300);
     expect(isNear(PLACE, north(200))).toBe(true);
     expect(isNear(PLACE, north(299))).toBe(true);
+    expect(isNear(PLACE, north(301))).toBe(false);
     expect(isNear(PLACE, north(400))).toBe(false);
   });
 
@@ -50,6 +52,27 @@ describe("being near a hiding place", () => {
     expect(isNear(PLACE, north(400), 500)).toBe(true);
     expect(isNear(PLACE, north(15), 20)).toBe(true);
     expect(isNear(PLACE, north(50), 20)).toBe(false);
+  });
+
+  it("takes the distance staff set as a number or as the text a database gives", () => {
+    expect(nearRadius(500)).toBe(500);
+    expect(nearRadius("500")).toBe(500);
+    expect(nearRadius("62.5")).toBe(62.5);
+  });
+
+  it("goes back to 300 metres when the distance set is not a sensible one", () => {
+    for (const set of [0, -20, Number.NaN, Number.POSITIVE_INFINITY, "", "   ", "far", null, undefined, {}, true]) {
+      expect(nearRadius(set), String(set)).toBe(300);
+    }
+    expect(isNear(PLACE, north(200), 0)).toBe(true);
+    expect(isNear(PLACE, north(5000), Number.POSITIVE_INFINITY)).toBe(false);
+  });
+
+  it("never stretches further than 2,000 metres", () => {
+    expect(MAX_NEAR_METRES).toBe(2000);
+    expect(nearRadius(50_000)).toBe(2000);
+    expect(isNear(PLACE, north(1900), 50_000)).toBe(true);
+    expect(isNear(PLACE, north(2100), 50_000)).toBe(false);
   });
 
   it("takes no notice of how unsure the phone says it is, because the phone supplies that figure", () => {

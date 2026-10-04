@@ -7,7 +7,7 @@ const doors = (from: number, to: number) => Array.from({ length: to - from + 1 }
 
 describe("doors done", () => {
   it("starts a new detective as a Trainee with six doors to the first promotion", () => {
-    expect(progressOf([], [])).toEqual({
+    expect(progressOf({ cracked: [], visited: [] })).toEqual({
       doorsDone: 0,
       cracked: 0,
       visited: 0,
@@ -19,17 +19,22 @@ describe("doors done", () => {
   });
 
   it("counts a door once whether it was cracked, visited or both", () => {
-    const p = progressOf([1, 2, 3], [3, 4]);
+    const p = progressOf({ cracked: [1, 2, 3], visited: [3, 4] });
     expect(p.doorsDone).toBe(4);
     expect(p.cracked).toBe(3);
     expect(p.visited).toBe(2);
   });
 
   it("ignores repeats and anything that is not a door", () => {
-    const p = progressOf([1, 1, 0, 25, 2.5], [1, 99]);
+    const p = progressOf({ cracked: [1, 1, 0, 25, 2.5], visited: [1, 99] });
     expect(p.doorsDone).toBe(1);
     expect(p.cracked).toBe(1);
     expect(p.visited).toBe(1);
+  });
+
+  it("treats a list that is missing, as a database gives for no rows, as empty", () => {
+    expect(progressOf({ cracked: null, visited: undefined }).doorsDone).toBe(0);
+    expect(progressOf({ cracked: null, visited: doors(1, 6) }).rank).toBe("Junior Detective");
   });
 });
 
@@ -51,29 +56,36 @@ describe("ranks", () => {
     expect(rankAt(24)).toBe("Graduate");
   });
 
+  it("makes a count that is not a real count of doors a Trainee, and stops at Graduate", () => {
+    expect(rankAt(-5)).toBe("Trainee");
+    expect(rankAt(Number.NaN)).toBe("Trainee");
+    expect(rankAt(1000)).toBe("Graduate");
+  });
+
   it("says what comes next and how many doors away it is", () => {
-    expect(progressOf(doors(1, 7), []).next).toEqual({ rank: "Detective", at: 12, toGo: 5 });
-    expect(progressOf(doors(1, 24), []).next).toBeNull();
+    expect(progressOf({ cracked: doors(1, 7), visited: [] }).next).toEqual({ rank: "Detective", at: 12, toGo: 5 });
+    expect(progressOf({ cracked: doors(1, 24), visited: [] }).next).toBeNull();
   });
 });
 
 describe("the two finishes", () => {
   it("graduates a detective with all 24 doors done, cracked or visited", () => {
-    const p = progressOf(doors(1, 20), doors(18, 24));
+    const p = progressOf({ cracked: doors(1, 20), visited: doors(18, 24) });
     expect(p.doorsDone).toBe(24);
     expect(p.graduate).toBe(true);
     expect(p.rank).toBe("Graduate");
     expect(p.goldSeal).toBe(false);
   });
 
-  it("gives the gold seal only for visiting all 24 places", () => {
-    expect(progressOf(doors(1, 24), doors(1, 23)).goldSeal).toBe(false);
-    expect(progressOf([], doors(1, 24)).goldSeal).toBe(true);
-    expect(progressOf([], doors(1, 24)).graduate).toBe(true);
+  it("gives the gold seal only for visiting all 24 places, never for cracking them", () => {
+    expect(progressOf({ cracked: doors(1, 24), visited: doors(1, 23) }).goldSeal).toBe(false);
+    expect(progressOf({ cracked: doors(1, 24), visited: [] }).goldSeal).toBe(false);
+    expect(progressOf({ cracked: [], visited: doors(1, 24) }).goldSeal).toBe(true);
+    expect(progressOf({ cracked: [], visited: doors(1, 24) }).graduate).toBe(true);
   });
 
   it("does not graduate at 23", () => {
-    const p = progressOf(doors(1, 23), []);
+    const p = progressOf({ cracked: doors(1, 23), visited: [] });
     expect(p.graduate).toBe(false);
     expect(p.rank).toBe("Senior Detective");
   });
@@ -90,5 +102,11 @@ describe("promotions between two counts", () => {
     expect(promotionsBetween(6, 6)).toEqual([]);
     expect(promotionsBetween(6, 11)).toEqual([]);
     expect(promotionsBetween(12, 7)).toEqual([]);
+  });
+
+  it("never lists Trainee, which every detective starts as, whatever the counts", () => {
+    expect(promotionsBetween(-1, 0)).toEqual([]);
+    expect(promotionsBetween(Number.NaN, 6)).toEqual([]);
+    expect(promotionsBetween(-10, 6)).toEqual(["Junior Detective"]);
   });
 });

@@ -73,8 +73,13 @@ describe("claiming an elf", () => {
     expect(decideClaim({ ...ctx, doorState: "found" }, wrong)).toEqual({ ok: false, reason: "already-found" });
   });
 
-  it("refuses with no detective chosen", () => {
+  it("takes one ticked box, which a form sends as a single value", () => {
+    expect(decideClaim(ctx, { detectiveIds: "d1", word: "snowball 472" })).toEqual({ ok: true, detectiveIds: ["d1"] });
+  });
+
+  it("refuses with no detective chosen, which a form sends as nothing at all", () => {
     expect(decideClaim(ctx, { detectiveIds: [], word: "snowball 472" })).toEqual({ ok: false, reason: "no-detectives" });
+    expect(decideClaim(ctx, { detectiveIds: undefined, word: "snowball 472" })).toEqual({ ok: false, reason: "no-detectives" });
   });
 
   it("refuses a detective from another family", () => {

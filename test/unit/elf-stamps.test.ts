@@ -1,7 +1,9 @@
 import { describe, it, expect } from "vitest";
 import { decideStamp, type StampContext } from "../../src/elf/stamps";
+import type { LatLng } from "../../src/elf/distance";
 
-// NBCC Elf Detective School: earning a candy cane stamp for visiting. Every id and place is invented.
+// NBCC Elf Detective School: earning a candy cane stamp for visiting. Every id is invented, and the
+// points are a town centre, not anybody's address.
 
 const PLACE = { lat: 55.458, lng: -4.629 };
 const HERE = { lat: 55.4585, lng: -4.629 }; // about 55 metres north
@@ -57,9 +59,43 @@ describe("earning a stamp", () => {
     expect(got).toEqual({ ok: true, detectiveIds: ["d2"], proof: "location" });
   });
 
+  it("takes one ticked box, which a form sends as a single value", () => {
+    expect(decideStamp(ctx, { detectiveIds: "d1", location: HERE, hasPhoto: false })).toEqual({
+      ok: true,
+      detectiveIds: ["d1"],
+      proof: "location",
+    });
+  });
+
+  it("matches ids that are numbers in the database with the same ids from a form", () => {
+    const numbered = { ...ctx, familyDetectiveIds: [14, 15], alreadyStamped: [14] };
+    expect(decideStamp(numbered, { detectiveIds: ["14", "15"], location: HERE, hasPhoto: false })).toEqual({
+      ok: true,
+      detectiveIds: ["15"],
+      proof: "location",
+    });
+  });
+
   it("uses the distance staff have set", () => {
     const tight = decideStamp({ ...ctx, radiusMetres: 20 }, { detectiveIds: ["d1"], location: HERE, hasPhoto: false });
     expect(tight).toEqual({ ok: false, reason: "too-far" });
+  });
+
+  it("goes back to 300 metres when the distance set is not a sensible one", () => {
+    for (const radiusMetres of [0, -5, Number.NaN, null]) {
+      const got = decideStamp({ ...ctx, radiusMetres }, { detectiveIds: ["d1"], location: HERE, hasPhoto: false });
+      expect(got, String(radiusMetres)).toEqual({ ok: true, detectiveIds: ["d1"], proof: "location" });
+    }
+    const everywhere = decideStamp(
+      { ...ctx, radiusMetres: Number.POSITIVE_INFINITY },
+      { detectiveIds: ["d1"], location: FAR, hasPhoto: false },
+    );
+    expect(everywhere).toEqual({ ok: false, reason: "too-far" });
+  });
+
+  it("treats a family with no stamps recorded yet as having none", () => {
+    const none = { ...ctx, alreadyStamped: null };
+    expect(decideStamp(none, { detectiveIds: ["d1"], location: HERE, hasPhoto: false }).ok).toBe(true);
   });
 });
 
@@ -75,8 +111,12 @@ describe("not earning a stamp", () => {
     });
   });
 
-  it("refuses with no detective chosen", () => {
+  it("refuses with no detective chosen, which a form sends as nothing at all", () => {
     expect(decideStamp(ctx, { detectiveIds: [], location: HERE, hasPhoto: false })).toEqual({
+      ok: false,
+      reason: "no-detectives",
+    });
+    expect(decideStamp(ctx, { detectiveIds: undefined, location: HERE, hasPhoto: false })).toEqual({
       ok: false,
       reason: "no-detectives",
     });
@@ -107,6 +147,39 @@ describe("not earning a stamp", () => {
     expect(decideStamp(ctx, { detectiveIds: ["d1"], location: null, hasPhoto: false })).toEqual({
       ok: false,
       reason: "no-proof",
+    });
+  });
+
+  it("counts a photo only when the server says, with a plain true, that it received one", () => {
+    for (const said of ["false", "true", "0", 1, {}]) {
+      const got = decideStamp(ctx, { detectiveIds: ["d1"], location: null, hasPhoto: said as unknown as boolean });
+      expect(got, String(said)).toEqual({ ok: false, reason: "no-proof" });
+    }
+  });
+
+  it("treats a position that is not on the globe as not shared", () => {
+    const nowhere = { lat: 999, lng: 0 };
+    expect(decideStamp(ctx, { detectiveIds: ["d1"], location: nowhere, hasPhoto: false })).toEqual({
+      ok: false,
+      reason: "no-proof",
+    });
+    expect(decideStamp(ctx, { detectiveIds: ["d1"], location: nowhere, hasPhoto: true })).toEqual({
+      ok: true,
+      detectiveIds: ["d1"],
+      proof: "photo",
+    });
+  });
+
+  it("says the place is unknown, not that the phone is too far, when the place has no real position", () => {
+    const asText = { lat: "55.458", lng: "-4.629" } as unknown as LatLng;
+    expect(decideStamp({ ...ctx, place: asText }, { detectiveIds: ["d1"], location: HERE, hasPhoto: false })).toEqual({
+      ok: false,
+      reason: "place-unknown",
+    });
+    expect(decideStamp({ ...ctx, place: asText }, { detectiveIds: ["d1"], location: HERE, hasPhoto: true })).toEqual({
+      ok: true,
+      detectiveIds: ["d1"],
+      proof: "photo",
     });
   });
 });

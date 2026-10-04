@@ -22,6 +22,9 @@ const EARTH_RADIUS_METRES = 6_371_000;
 /** How close counts as being there. */
 export const NEAR_METRES = 300;
 
+/** The furthest that staff can stretch it to. */
+export const MAX_NEAR_METRES = 2000;
+
 /** Is this a real position: two finite numbers within the globe? */
 export function isLatLng(value: unknown): value is LatLng {
   if (typeof value !== "object" || value === null) return false;
@@ -46,7 +49,16 @@ export function metresBetween(a: LatLng, b: LatLng): number {
   return 2 * EARTH_RADIUS_METRES * Math.asin(Math.min(1, Math.sqrt(h)));
 }
 
+/** The distance that counts as near: the one staff set, as a number or as the text a database gives,
+ *  when it is a real distance above nothing, and never more than 2,000 metres. Otherwise 300. So a
+ *  setting left empty cannot switch the check off, and a huge one cannot let everyone in. */
+export function nearRadius(setting: unknown): number {
+  const set = typeof setting === "string" && setting.trim() !== "" ? Number(setting) : setting;
+  if (typeof set !== "number" || !Number.isFinite(set) || set <= 0) return NEAR_METRES;
+  return Math.min(set, MAX_NEAR_METRES);
+}
+
 /** Is the phone near the place? Only a real position within the radius counts. */
-export function isNear(place: LatLng, phone: LatLng, radiusMetres: number = NEAR_METRES): boolean {
-  return isLatLng(place) && isLatLng(phone) && metresBetween(place, phone) <= radiusMetres;
+export function isNear(place: LatLng, phone: LatLng, radiusMetres?: unknown): boolean {
+  return isLatLng(place) && isLatLng(phone) && metresBetween(place, phone) <= nearRadius(radiusMetres);
 }

@@ -56,7 +56,7 @@
             <span class="eyebrow">A new way to give</span>
             <h1 id="rb-title">Fill a Red Bag</h1>
             <div class="rule center"><i></i></div>
-            <p class="lede">Pop a few things in the bag and watch it fill. Your donation could help NBCC bring comfort, dignity and joy to children, young people and vulnerable adults, all year round.</p>
+            <p class="lede" data-rb-lede>Pop a few things in the bag and watch it fill. Your donation could help NBCC bring comfort, dignity and joy to children, young people and vulnerable adults, all year round.</p>
           </div>
         </div>
       </section>
@@ -109,8 +109,11 @@
             <h2 class="sr-only" id="rb-panel-title">Your bag</h2>
             <div class="rb-bags" data-rb-bags data-count="1" aria-hidden="true"><!-- red-bag:bag --></div>
             <p class="rb-more" data-rb-more hidden></p>
-            <p class="rb-status" data-rb-status role="status" aria-live="polite">Your bag is empty. Pop something in.</p>
-            <p class="rb-total" aria-live="polite"><span class="rb-total__label">Your total</span> <strong class="rb-total__sum"><span data-rb-total>£0</span><span class="rb-total__per" data-rb-per-month hidden> a month</span></strong></p>
+            <!-- ONE polite region, read whole: a tap is announced once, the status and the total together. -->
+            <div class="rb-said" role="status" aria-live="polite" aria-atomic="true">
+              <p class="rb-status" data-rb-status>Your bag is empty. Pop something in.</p>
+              <p class="rb-total"><span class="rb-total__label">Your total</span> <strong class="rb-total__sum"><span data-rb-total>£0</span><span class="rb-total__per" data-rb-per-month hidden> a month</span></strong></p>
+            </div>
             <p class="rb-nojs" data-nojs>Filling a bag needs JavaScript switched on. You can still donate on our <a href="/donate">donate page</a>.</p>
             <div class="rb-give" data-needs-js hidden>
               <label class="give-check rb-monthly" for="rbMonthly"><input class="give-check-box" id="rbMonthly" name="rbMonthly" type="checkbox" /><span class="give-check-text">Fill this bag every month</span></label>

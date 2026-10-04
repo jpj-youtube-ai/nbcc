@@ -1,3 +1,4 @@
+import { UK_POSTCODE_RE } from "../declarations/fields";
 import { ALL_DONATIONS_WORDING, SINGLE_DONATION_WORDING } from "../declarations/wording";
 import { redBag, type RedBagCatalogue } from "./catalogue";
 
@@ -55,6 +56,22 @@ export const BAG_SVG =
   '<path class="rb-bag__twist" d="M32 40C32 12 76 12 76 40"/>' +
   '<circle class="rb-bag__eyelet" cx="32" cy="41" r="2.2"/><circle class="rb-bag__eyelet" cx="76" cy="41" r="2.2"/>' +
   "</svg>";
+
+/**
+ * The postcode box's `pattern`: the SERVER's rule (UK_POSTCODE_RE in src/declarations/fields.ts),
+ * so the page refuses exactly what the checkout would refuse and no more. That rule ignores case
+ * with a flag, which an HTML pattern cannot carry, so every class of capitals is given its small
+ * letters too; nothing else is changed. Built from the rule itself, never copied out by hand, and
+ * test/unit/red-bag-page.test.ts holds the two together.
+ */
+export function postcodePattern(): string {
+  return UK_POSTCODE_RE.source
+    .replace(/^\^/, "")
+    .replace(/\$$/, "")
+    .replace("GIR ?0AA", "[Gg][Ii][Rr] ?0[Aa][Aa]")
+    .replace(/\[A-Z\]/g, "[A-Za-z]")
+    .replace(/\[A-HJ-Y\]/g, "[A-HJ-Ya-hj-y]");
+}
 
 /** The list on the paper: the sheet's headings, and a row for each item with its stepper. */
 export function renderRedBagList(rb: RedBagCatalogue = redBag()): string {
@@ -158,7 +175,7 @@ export function renderRedBagDetails(): string {
     '<input class="give-field-input" id="rbAddress" name="rbAddress" type="text" autocomplete="street-address" required aria-required="true" placeholder="Street and town" data-invalid-message="Please give your street and town" /></div>' +
     '<div class="give-field" id="rbPostcodeField"><label for="rbPostcode">Postcode <span class="give-req" aria-hidden="true">*</span></label>' +
     '<input class="give-field-input" id="rbPostcode" name="rbPostcode" type="text" autocomplete="postal-code" required aria-required="true" placeholder="e.g. KA1 1AA" ' +
-    'pattern="[A-Za-z]{1,2}[0-9][A-Za-z0-9]? ?[0-9][A-Za-z]{2}" data-invalid-message="Please give a UK postcode, like KA1 1AA" /></div>' +
+    `pattern="${escapeHtml(postcodePattern())}" data-invalid-message="Please give a UK postcode, like KA1 1AA" /></div>` +
     '<label class="give-check" for="rbNonUk"><input class="give-check-box" id="rbNonUk" name="rbNonUk" type="checkbox" />' +
     '<span class="give-check-text">My home address is outside the UK</span></label>' +
     "</fieldset>" +

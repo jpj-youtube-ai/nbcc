@@ -1,4 +1,4 @@
-import type { Request, Response, Router } from "express";
+import type { NextFunction, Request, Response, Router } from "express";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { renderRedBagPage } from "../red-bag/render";
@@ -23,6 +23,10 @@ import { RED_BAG_PATH, redBagAccess, redBagIsLive } from "../red-bag/switch";
 //
 // Added to the site router (src/routes/site.ts) before its catch-all. No database of its own: the
 // list comes from the catalogue file, and the staff check reads one row only when a token is sent.
+//
+// Nothing here may hang or crash a request (Express 4 does not catch what an async handler throws).
+// If the page's file, the 404's file or the catalogue cannot be read, or the menu cannot be added,
+// it is logged and the request is handed on (next) to that same catch-all: the site's own 404.
 
 /** The one line added to the 404 page served at this address while switched off. */
 export const PREVIEW_LOADER = '<script defer src="/assets/js/red-bag-preview.js"></script>\n';
@@ -44,7 +48,16 @@ export function redBagPageHandler(deps: RedBagPageDeps) {
   const live = deps.live ?? redBagIsLive;
   const isStaff = deps.isStaff ?? isStaffRequest;
 
-  return async function getRedBagPage(req: Request, res: Response): Promise<void> {
+  return async function getRedBagPage(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      await answer(req, res);
+    } catch (err) {
+      console.error("fill a red bag page failed:", err instanceof Error ? err.message : err);
+      next();
+    }
+  };
+
+  async function answer(req: Request, res: Response): Promise<void> {
     const on = live();
     let staff = false;
     if (!on) {
@@ -57,13 +70,18 @@ export function redBagPageHandler(deps: RedBagPageDeps) {
     const access = redBagAccess(on, staff);
 
     if (access === "closed") {
-      // Exactly the catch-all's 404 (src/routes/site.ts), plus the staff preview's loader.
+      // Exactly the catch-all's 404 (src/routes/site.ts), plus the staff preview's loader. Read
+      // BEFORE anything is set on the response, so a failure hands on a clean one.
+      const page = deps.notFound().replace("</head>", `${PREVIEW_LOADER}</head>`);
       res.status(404);
       res.setHeader("X-Robots-Tag", "noindex, nofollow");
       res.setHeader("Cache-Control", "no-store");
-      res.type("html").send(deps.notFound().replace("</head>", `${PREVIEW_LOADER}</head>`));
+      res.type("html").send(page);
       return;
     }
+
+    // Drawn BEFORE anything is set on the response, for the same reason.
+    const html = await deps.decorate(renderRedBagPage(deps.template(), { preview: access === "preview" }), req.headers.cookie);
 
     if (access === "preview") {
       // Never let a shared cache hand a preview to the public.
@@ -73,9 +91,8 @@ export function redBagPageHandler(deps: RedBagPageDeps) {
     // Switched off, nothing here is ever indexed. (Switched on, the page's own robots line decides:
     // it comes out when the page is listed, the last go live step in src/red-bag/switch.ts.)
     if (!on) res.setHeader("X-Robots-Tag", "noindex, nofollow");
-    const html = renderRedBagPage(deps.template(), { preview: access === "preview" });
-    res.type("html").send(await deps.decorate(html, req.headers.cookie));
-  };
+    res.type("html").send(html);
+  }
 }
 
 export function addRedBagPageRoutes(router: Router, siteRoot: string, page: Pick<RedBagPageDeps, "decorate">): void {

@@ -39,6 +39,9 @@
     check: "Please check the highlighted answers below and try again.",
     opening: "Opening secure payment…",
     refused: "Something in the form needs another look. Please check it and try again.",
+    // Only ever met by staff: while the page is switched off the checkout takes a Red Bag donation
+    // from a signed in member of staff alone, and says this when their session has run out.
+    notOpen: "Fill a Red Bag is not open yet. If you are staff, please sign in again at /admin, then come back to this page.",
     down: "Payment is not working just now. Please try again in a few minutes, or give on our donate page.",
   };
 
@@ -182,8 +185,10 @@
         var q = rb.clampQuantity(n);
         quantities[key] = q;
         if (write) box.value = String(q);
-        if (minus) minus.disabled = q <= 0;
-        if (plus) plus.disabled = q >= rb.MAX_QUANTITY;
+        // They SAY they are off, and stay focusable: a button that switched itself off while it
+        // held the focus would drop a keyboard user out of the list.
+        if (minus) minus.setAttribute("aria-disabled", q <= 0 ? "true" : "false");
+        if (plus) plus.setAttribute("aria-disabled", q >= rb.MAX_QUANTITY ? "true" : "false");
         if (q > 0) row.classList.add("is-in");
         else row.classList.remove("is-in");
         refresh();
@@ -215,11 +220,13 @@
       });
       if (minus) {
         minus.addEventListener("click", function () {
+          if (minus.getAttribute("aria-disabled") === "true") return;
           set(rb.clampQuantity(box.value) - 1, true);
         });
       }
       if (plus) {
         plus.addEventListener("click", function () {
+          if (plus.getAttribute("aria-disabled") === "true") return;
           set(rb.clampQuantity(box.value) + 1, true);
         });
       }
@@ -284,6 +291,10 @@
       if (need) need.hidden = step !== "bag";
       if (details) details.hidden = step !== "details";
       if (thanks) thanks.hidden = step !== "thanks";
+      // "Pop a few things in the bag" is no thing to say to someone who has just filled one. Only
+      // the line goes: the heading stays, and its section still clears the fixed header.
+      var lede = doc.querySelector("[data-rb-lede]");
+      if (lede) lede.hidden = step === "thanks";
     }
 
     if (donateBtn) {
@@ -468,7 +479,7 @@
     function handle(r) {
       if (r.status === 200) return true;
       setBusy(false);
-      showError(r.status === 400 ? MSG.refused : MSG.down);
+      showError(r.status === 400 ? MSG.refused : r.status === 403 ? MSG.notOpen : MSG.down);
       return false;
     }
 
@@ -536,6 +547,14 @@
         embeddedThenHosted(payload());
       });
       wireModal(doc);
+      // Back from Stripe's own page with the Back button: the browser brings this page out of its
+      // back and forward cache exactly as it was left, the pay button still switched off and
+      // saying "Opening secure payment". Make it ready again.
+      if (typeof win.addEventListener === "function") {
+        win.addEventListener("pageshow", function (e) {
+          if (e && e.persisted) setBusy(false);
+        });
+      }
     }
 
     refresh();

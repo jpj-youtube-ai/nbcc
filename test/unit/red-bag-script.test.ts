@@ -46,8 +46,9 @@ let nav: { assign: ReturnType<typeof vi.fn> };
 let store: Map<string, string>;
 let history: { replaceState: ReturnType<typeof vi.fn> };
 let api: ReturnType<typeof initRedBag>;
+let listeners: Record<string, (e: unknown) => void>;
 
-function start(opts: { preview?: boolean; search?: string; answer?: Answer; kept?: Record<string, string> } = {}) {
+function start(opts: { preview?: boolean; search?: string; answer?: Answer; kept?: Record<string, string>; stripe?: unknown } = {}) {
   const html = renderRedBagPage(template, { preview: !!opts.preview });
   const parsed = new DOMParser().parseFromString(html, "text/html");
   document.body.innerHTML = parsed.body.innerHTML;
@@ -58,8 +59,11 @@ function start(opts: { preview?: boolean; search?: string; answer?: Answer; kept
   nav = { assign: vi.fn() };
   store = new Map(Object.entries(opts.kept ?? {}));
   history = { replaceState: vi.fn() };
+  listeners = {};
   const win = {
     NBCCRedBag: catalogue,
+    Stripe: opts.stripe,
+    addEventListener: (type: string, fn: (e: unknown) => void) => void (listeners[type] = fn),
     fetch: fetchMock,
     location: { href: "", pathname: "/fill-a-red-bag", search: opts.search ?? "" },
     history,
@@ -92,7 +96,7 @@ describe("when the script starts", () => {
     expect(text("[data-rb-status]")).toBe("Your bag is empty. Pop something in.");
     expect(text("[data-rb-total]")).toBe("£0");
     expect(document.querySelectorAll("[data-rb-bags] .rb-bag").length).toBe(1);
-    for (const b of document.querySelectorAll<HTMLButtonElement>("[data-rb-minus]")) expect(b.disabled).toBe(true);
+    for (const b of document.querySelectorAll<HTMLButtonElement>("[data-rb-minus]")) expect(b.getAttribute("aria-disabled")).toBe("true");
   });
 
   it("does nothing on a page that is not Fill a Red Bag", () => {
@@ -111,7 +115,30 @@ describe("the steppers", () => {
     minus("blanket");
     expect(text("[data-rb-total]")).toBe("£0");
     expect(row("blanket").classList.contains("is-in")).toBe(false);
-    expect((row("blanket").querySelector("[data-rb-minus]") as HTMLButtonElement).disabled).toBe(true);
+    expect(row("blanket").querySelector("[data-rb-minus]")!.getAttribute("aria-disabled")).toBe("true");
+  });
+
+  // A button that switched itself off while it had the focus would drop a keyboard user out of
+  // the list. So the buttons at 0 and 99 only SAY they are off: they keep the focus and do nothing.
+  it("keep the focus on a button that has reached its end, which then does nothing", () => {
+    const less = row("blanket").querySelector("[data-rb-minus]") as HTMLButtonElement;
+    const more = row("blanket").querySelector("[data-rb-plus]") as HTMLButtonElement;
+    plus("blanket");
+    expect(less.getAttribute("aria-disabled")).toBe("false");
+    less.focus();
+    less.click();
+    expect(less.getAttribute("aria-disabled")).toBe("true");
+    expect(less.disabled).toBe(false);
+    expect(document.activeElement).toBe(less);
+    less.click();
+    expect(api!.total()).toBe(0);
+    type("rb-qty-blanket", "99");
+    more.focus();
+    more.click();
+    expect(more.disabled).toBe(false);
+    expect(more.getAttribute("aria-disabled")).toBe("true");
+    expect(document.activeElement).toBe(more);
+    expect(api!.total()).toBe(99 * 800);
   });
 
   it("update the total as a number is typed, with no Enter", () => {
@@ -124,7 +151,7 @@ describe("the steppers", () => {
   it("keep a quantity between 0 and 99", () => {
     type("rb-qty-socks", "250");
     expect(api!.total()).toBe(9900);
-    expect((row("socks").querySelector("[data-rb-plus]") as HTMLButtonElement).disabled).toBe(true);
+    expect(row("socks").querySelector("[data-rb-plus]")!.getAttribute("aria-disabled")).toBe("true");
     type("rb-qty-socks", "abc");
     expect(api!.total()).toBe(0);
     type("rb-qty-socks", "");
@@ -232,7 +259,17 @@ describe("the bags and the status line", () => {
 
   it("keep the bags for the eye only: the words carry the meaning", () => {
     expect($("[data-rb-bags]").getAttribute("aria-hidden")).toBe("true");
-    expect($("[data-rb-status]").getAttribute("aria-live")).toBe("polite");
+    expect($("[data-rb-status]").closest("[aria-live]")?.getAttribute("aria-live")).toBe("polite");
+  });
+
+  it("are announced once for each change: the status and the total together, not one after the other", () => {
+    const regions = document.querySelectorAll("[data-rb-builder] [aria-live]");
+    expect(regions.length).toBe(1);
+    expect(regions[0].getAttribute("aria-atomic")).toBe("true");
+    expect(regions[0].contains($("[data-rb-status]"))).toBe(true);
+    expect(regions[0].contains($("[data-rb-total]"))).toBe(true);
+    expect($("[data-rb-status]").hasAttribute("aria-live")).toBe(false);
+    expect($("[data-rb-status]").hasAttribute("role")).toBe(false);
   });
 
   it("only write the status when its words change, so it is heard once", () => {
@@ -473,6 +510,40 @@ describe("going to pay", () => {
     expect(text("[data-rb-error]")).toBe("Payment is not working just now. Please try again in a few minutes, or give on our donate page.");
   });
 
+  // Switched off, the checkout takes a Red Bag donation only from signed in staff. A session that
+  // has run out is not "payment is broken": say what to do.
+  it("tells staff to sign in again when the checkout says it is not open (their session ran out)", async () => {
+    start({ preview: true, answer: { status: 403, body: { error: "Fill a Red Bag is not open yet" } } });
+    plus("blanket", 5);
+    donate();
+    fillDetails();
+    pay();
+    await flush();
+    expect(nav.assign).not.toHaveBeenCalled();
+    expect(text("[data-rb-error]")).toBe("Fill a Red Bag is not open yet. If you are staff, please sign in again at /admin, then come back to this page.");
+    expect($<HTMLButtonElement>("[data-rb-pay]").disabled).toBe(false);
+    expect(store.has("nbcc_red_bag_gift")).toBe(false);
+  });
+
+  // Going to Stripe's page leaves the button saying "Opening secure payment". Pressing Back brings
+  // this page out of the browser's back and forward cache exactly as it was left: stuck.
+  it("is ready again when they come back from Stripe's page with the Back button", async () => {
+    donate();
+    fillDetails();
+    pay();
+    await flush();
+    const button = $<HTMLButtonElement>("[data-rb-pay]");
+    expect(button.disabled).toBe(true);
+    listeners.pageshow({ persisted: false });
+    expect(button.disabled).toBe(true); // an ordinary first showing changes nothing
+    listeners.pageshow({ persisted: true });
+    expect(button.disabled).toBe(false);
+    expect(text("[data-rb-pay]")).toBe("Donate £40");
+    pay();
+    await flush();
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
   it("cannot be sent twice while it is opening", async () => {
     donate();
     fillDetails();
@@ -525,6 +596,14 @@ describe("back from paying", () => {
     expect(store.has("nbcc_red_bag_gift")).toBe(false);
   });
 
+  it("puts the invitation to fill a bag away: they have just filled one", () => {
+    start({ search: "?thanks=1", kept: kept({ pence: 5410, giftAid: false, monthly: false }) });
+    expect($("[data-rb-lede]").hidden).toBe(true);
+    expect($("#rb-title").closest("section")!.hidden).toBe(false); // the heading stays, and clears the header
+    start();
+    expect($("[data-rb-lede]").hidden).toBe(false);
+  });
+
   it("never lists the items", () => {
     start({ search: "?thanks=1", kept: kept({ pence: 5410, giftAid: false, monthly: false }) });
     expect(text("[data-rb-thanks]")).not.toMatch(/Blanket|Socks|Pencil/);
@@ -534,5 +613,128 @@ describe("back from paying", () => {
     start({ kept: kept({ pence: 5410, giftAid: false, monthly: false }) });
     expect($("[data-rb-thanks]").hidden).toBe(true);
     expect($("[data-rb-builder]").hidden).toBe(false);
+  });
+});
+
+describe("Stripe opening on the page", () => {
+  const embeddedAnswer = { status: 200, body: { clientSecret: "cs_test_secret_abc", publishableKey: "pk_test_dummy_pk" } };
+  function stripeThat(init: () => Promise<unknown>) {
+    const checkout = { mount: vi.fn(), destroy: vi.fn() };
+    const initEmbeddedCheckout = vi.fn(init === undefined ? async () => checkout : init);
+    const Stripe = vi.fn(() => ({ initEmbeddedCheckout }));
+    return { Stripe, initEmbeddedCheckout, checkout };
+  }
+  const ready = () => {
+    plus("blanket", 5);
+    donate();
+    fillDetails();
+    pay();
+  };
+  const modal = () => $("#rbCheckoutModal");
+
+  it("asks for the on page checkout, opens the panel and puts Stripe in it", async () => {
+    const s = stripeThat(undefined as never);
+    s.initEmbeddedCheckout.mockImplementation(async () => s.checkout);
+    start({ stripe: s.Stripe, answer: embeddedAnswer });
+    ready();
+    await flush();
+    expect(sent()).toMatchObject({ uiMode: "embedded", redBag: true, amount: 4000 });
+    expect(s.Stripe).toHaveBeenCalledWith("pk_test_dummy_pk");
+    expect(s.initEmbeddedCheckout).toHaveBeenCalledWith({ clientSecret: "cs_test_secret_abc" });
+    expect(modal().hidden).toBe(false);
+    expect(modal().getAttribute("aria-hidden")).toBe("false");
+    expect(document.body.classList.contains("give-embedded-open")).toBe(true);
+    expect(s.checkout.mount).toHaveBeenCalledWith(document.getElementById("rbEmbeddedCheckout"));
+    expect(document.activeElement).toBe(document.getElementById("rbCheckoutClose"));
+    expect(nav.assign).not.toHaveBeenCalled();
+    // The total is remembered for the thank you, and the button is ready again behind the panel.
+    expect(JSON.parse(store.get("nbcc_red_bag_gift")!)).toEqual({ pence: 4000, giftAid: false, monthly: false });
+    expect($<HTMLButtonElement>("[data-rb-pay]").disabled).toBe(false);
+  });
+
+  it("closes with the Close button: Stripe is taken down and the focus goes back to the pay button", async () => {
+    const s = stripeThat(undefined as never);
+    s.initEmbeddedCheckout.mockImplementation(async () => s.checkout);
+    start({ stripe: s.Stripe, answer: embeddedAnswer });
+    ready();
+    await flush();
+    document.getElementById("rbEmbeddedCheckout")!.innerHTML = "<iframe></iframe>";
+    (document.getElementById("rbCheckoutClose") as HTMLButtonElement).click();
+    expect(modal().hidden).toBe(true);
+    expect(modal().getAttribute("aria-hidden")).toBe("true");
+    expect(document.body.classList.contains("give-embedded-open")).toBe(false);
+    expect(s.checkout.destroy).toHaveBeenCalledTimes(1);
+    expect(document.getElementById("rbEmbeddedCheckout")!.innerHTML).toBe("");
+    expect(document.activeElement).toBe($("[data-rb-pay]"));
+  });
+
+  it("closes with the Escape key, and Escape does nothing while it is shut", async () => {
+    const s = stripeThat(undefined as never);
+    s.initEmbeddedCheckout.mockImplementation(async () => s.checkout);
+    start({ stripe: s.Stripe, answer: embeddedAnswer });
+    document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+    expect(s.checkout.destroy).not.toHaveBeenCalled();
+    ready();
+    await flush();
+    expect(modal().hidden).toBe(false);
+    document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+    expect(modal().hidden).toBe(true);
+    expect(s.checkout.destroy).toHaveBeenCalledTimes(1);
+  });
+
+  it("goes to Stripe's own page when the server does not offer the on page checkout", async () => {
+    const s = stripeThat(undefined as never);
+    start({ stripe: s.Stripe, answer: { status: 200, body: { url: "https://checkout.stripe.test/pay" } } });
+    ready();
+    await flush();
+    expect(s.Stripe).not.toHaveBeenCalled();
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(sent().uiMode).toBeUndefined();
+    expect(nav.assign).toHaveBeenCalledWith("https://checkout.stripe.test/pay");
+    expect(modal().hidden).toBe(true);
+  });
+
+  it("goes to Stripe's own page when Stripe cannot start on the page", async () => {
+    const s = stripeThat(undefined as never);
+    s.initEmbeddedCheckout.mockImplementation(async () => {
+      throw new Error("blocked");
+    });
+    start({ stripe: s.Stripe, answer: embeddedAnswer });
+    ready();
+    await flush();
+    await flush();
+    expect(modal().hidden).toBe(true);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(sent().uiMode).toBeUndefined();
+  });
+
+  it("says what is wrong, and opens nothing, when the checkout refuses the form", async () => {
+    const s = stripeThat(undefined as never);
+    start({ stripe: s.Stripe, answer: { status: 400, body: {} } });
+    ready();
+    await flush();
+    expect(s.Stripe).not.toHaveBeenCalled();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(modal().hidden).toBe(true);
+    expect(text("[data-rb-error]")).toBe("Something in the form needs another look. Please check it and try again.");
+  });
+});
+
+describe("the postcode", () => {
+  it("is held to the server's rule on the page, so nothing the page lets through is refused later", async () => {
+    plus("blanket", 5);
+    donate();
+    fillDetails();
+    tick("rbGiftAid");
+    type("rbHouse", "12");
+    type("rbAddress", "Example Street, Exampleton");
+    type("rbPostcode", "KI1 1AA"); // I is never the second letter of a UK postcode
+    pay();
+    await flush();
+    expect(fetchMock).not.toHaveBeenCalled();
+    type("rbPostcode", "ka1 1aa");
+    pay();
+    await flush();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 });

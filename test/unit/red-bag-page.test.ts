@@ -3,7 +3,8 @@ import { describe, it, expect, vi } from "vitest";
 import { readFileSync, readdirSync } from "node:fs";
 import { resolve } from "node:path";
 import { redBag } from "../../src/red-bag/catalogue";
-import { DROP_OFF_LIVE, DROP_OFF_URL, PREVIEW_STRIP, renderRedBagPage } from "../../src/red-bag/render";
+import { DROP_OFF_LIVE, DROP_OFF_URL, PREVIEW_STRIP, postcodePattern, renderRedBagPage } from "../../src/red-bag/render";
+import { UK_POSTCODE_RE } from "../../src/declarations/fields";
 import { redBagPageHandler } from "../../src/routes/red-bag";
 import { ALL_PAGES, PRIVATE_PAGES, RESERVED_PREFIXES, SITE_PAGES, aliasFromProblem, renderSitemapTree, renderSitemapXml } from "../../src/site/pages";
 import { ALL_DONATIONS_WORDING, SINGLE_DONATION_WORDING } from "../../src/declarations/wording";
@@ -79,13 +80,18 @@ describe("beside the list", () => {
     expect(doc.querySelector("template#rbBagTemplate")).not.toBeNull();
   });
 
-  it("says the status and the total out loud as they change", () => {
+  // ONE polite region holds both, read whole, so a tap is announced once ("...half full. Your total
+  // £31") and not twice over.
+  it("says the status and the total out loud as they change, together, once", () => {
     const status = main.querySelector("[data-rb-status]")!;
-    expect(status.getAttribute("role")).toBe("status");
-    expect(status.getAttribute("aria-live")).toBe("polite");
-    expect(norm(status.textContent)).toBe("Your bag is empty. Pop something in.");
     const total = main.querySelector("[data-rb-total]")!;
-    expect(total.closest("[aria-live]")?.getAttribute("aria-live")).toBe("polite");
+    const region = status.closest("[aria-live]")!;
+    expect(region.getAttribute("aria-live")).toBe("polite");
+    expect(region.getAttribute("role")).toBe("status");
+    expect(region.getAttribute("aria-atomic")).toBe("true");
+    expect(total.closest("[aria-live]")).toBe(region);
+    expect(main.querySelectorAll("[data-rb-builder] [aria-live]").length).toBe(1);
+    expect(norm(status.textContent)).toBe("Your bag is empty. Pop something in.");
     expect(norm(total.textContent)).toBe("£0");
   });
 
@@ -193,6 +199,23 @@ describe("the details step", () => {
     expect(age.hasAttribute("hidden")).toBe(true);
     expect(norm(age.textContent)).toBe("I confirm I am aged 18 or over. Monthly giving is set up by adults.");
     expect(norm(read("donate.html"))).toContain("I confirm I am aged 18 or over. Monthly giving is set up by adults.");
+  });
+
+  // The page must refuse exactly what the server refuses (src/declarations/fields.ts), or a postcode
+  // the page lets through comes back as a bare "something needs another look".
+  it("holds the postcode to the server's own rule", () => {
+    const pattern = step.querySelector("#rbPostcode")!.getAttribute("pattern")!;
+    expect(pattern).toBe(postcodePattern());
+    const page = new RegExp(`^(?:${pattern})$`);
+    const samples = [
+      "KA1 1AA", "ka1 1aa", "KA11AA", "KA6 5EE", "M1 1AE", "SW1A 1AA", "W1A 0AX", "EC1A 1BB", "B33 8TH", "CR2 6XH", "DN55 1PT", "GIR 0AA", "gir0aa",
+      "KI1 1AA", "QI1 1AA", "KA1 1A", "KA1  1AA", "1KA 1AA", "KA1 AAA", "K 1AA", "KAA1 1AA", "ABCDE", "12345", "KA1-1AA", "KA1 1AAA", "",
+    ];
+    for (const s of samples) expect(page.test(s), s).toBe(UK_POSTCODE_RE.test(s));
+    expect(page.test("KI1 1AA")).toBe(false);
+    expect(page.test("ka1 1aa")).toBe(true);
+    // Built from the server's rule, letter for letter: no class of capitals is left without its small letters.
+    expect(pattern).not.toMatch(/\[A-Z\]|\[A-HJ-Y\]|GIR/);
   });
 
   it("has a way back to the bag, and a place for Stripe to open on the page", () => {
@@ -355,7 +378,7 @@ describe("the staff preview strip", () => {
 
 // --- who is given the page -----------------------------------------------------------------------
 
-function ask(opts: { live: boolean; staff?: boolean | Error; authorization?: string }) {
+function ask(opts: { live: boolean; staff?: boolean | Error; authorization?: string; template?: () => string; notFound?: () => string; decorate?: () => Promise<string> }) {
   const res = {
     statusCode: 200,
     headers: {} as Record<string, string>,
@@ -370,15 +393,16 @@ function ask(opts: { live: boolean; staff?: boolean | Error; authorization?: str
     if (opts.staff instanceof Error) throw opts.staff;
     return opts.staff === true;
   });
+  const next = vi.fn();
   const handler = redBagPageHandler({
-    template: () => template,
-    notFound: () => read("404.html"),
-    decorate: async (h) => h.replace("</body>", "<!-- decorated --></body>"),
+    template: opts.template ?? (() => template),
+    notFound: opts.notFound ?? (() => read("404.html")),
+    decorate: opts.decorate ?? (async (h) => h.replace("</body>", "<!-- decorated --></body>")),
     live: () => opts.live,
     isStaff,
   });
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  return handler({ headers: { authorization: opts.authorization, cookie: undefined } } as any, res as any).then(() => ({ res, isStaff }));
+  return handler({ headers: { authorization: opts.authorization, cookie: undefined } } as any, res as any, next).then(() => ({ res, isStaff, next }));
 }
 
 describe("GET /fill-a-red-bag", () => {
@@ -423,6 +447,54 @@ describe("GET /fill-a-red-bag", () => {
     expect(res.body).not.toContain("Staff preview");
     expect(res.body).toContain("decorated");
     expect(isStaff).not.toHaveBeenCalled();
+  });
+});
+
+// Express 4 does not catch what an async handler throws: the request would hang. Whatever cannot be
+// read, the visitor is handed on to the site's own 404 (the router's catch-all), and it is logged.
+describe("GET /fill-a-red-bag when something cannot be read", () => {
+  const broken = () => {
+    throw new Error("ENOENT: no such file");
+  };
+  const quietly = async (run: () => Promise<Awaited<ReturnType<typeof ask>>>) => {
+    const log = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+      const out = await run();
+      return { ...out, logged: log.mock.calls.map((c) => c.join(" ")) };
+    } finally {
+      log.mockRestore();
+    }
+  };
+
+  it("hands on to the site's 404 when the page's file cannot be read (switched on)", async () => {
+    const { res, next, logged } = await quietly(() => ask({ live: true, template: broken }));
+    expect(next).toHaveBeenCalledTimes(1);
+    expect(next).toHaveBeenCalledWith();
+    expect(res.body).toBe("");
+    expect(logged.join(" ")).toMatch(/fill a red bag page failed: ENOENT/);
+  });
+
+  it("hands on to the site's 404 when the page's file cannot be read on a staff preview", async () => {
+    const { res, next } = await quietly(() => ask({ live: false, staff: true, authorization: "Bearer a-token", template: broken }));
+    expect(next).toHaveBeenCalledTimes(1);
+    expect(res.body).toBe("");
+  });
+
+  it("hands on to the site's 404 when the 404 page itself cannot be read (switched off, the public)", async () => {
+    const { res, next } = await quietly(() => ask({ live: false, notFound: broken }));
+    expect(next).toHaveBeenCalledTimes(1);
+    expect(res.body).toBe("");
+  });
+
+  it("hands on to the site's 404 when the menu cannot be added", async () => {
+    const { res, next } = await quietly(() => ask({ live: true, decorate: async () => { throw new Error("database down"); } }));
+    expect(next).toHaveBeenCalledTimes(1);
+    expect(res.body).toBe("");
+  });
+
+  it("never calls next when all is well", async () => {
+    expect((await ask({ live: true })).next).not.toHaveBeenCalled();
+    expect((await ask({ live: false })).next).not.toHaveBeenCalled();
   });
 });
 

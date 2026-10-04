@@ -81,8 +81,11 @@
 }
 .rb-step:hover{background:var(--maroon);color:var(--cream)}
 .rb-step:active{transform:scale(.92)}
-.rb-step[disabled]{opacity:.35;cursor:default}
-.rb-step[disabled]:hover{background:var(--card);color:var(--maroon)}
+/* at 0 and at 99 a button SAYS it is off (aria-disabled) and stays focusable, so a keyboard user
+   who has just pressed it is not dropped out of the list */
+.rb-step[aria-disabled="true"]{opacity:.35;cursor:default}
+.rb-step[aria-disabled="true"]:hover{background:var(--card);color:var(--maroon)}
+.rb-step[aria-disabled="true"]:active{transform:none}
 .rb-step svg{display:block}
 .rb-qty{
   min-height:44px;width:50px;padding:0 4px;text-align:center;

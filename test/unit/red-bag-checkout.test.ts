@@ -215,3 +215,81 @@ describe("once it is switched on", () => {
     expect(getUserAuthRow).not.toHaveBeenCalled();
   });
 });
+
+// The marker adds rules; it takes none away. A company or a partnership filling a Red Bag is held
+// to exactly what the donate page holds them to.
+describe("a Red Bag gift keeps every existing rule for who is giving", () => {
+  const company = {
+    legalName: "Example Widgets Ltd",
+    contactName: "Alex Example",
+    contactEmail: "accounts@example.com",
+    billingAddress: "1 Example Street, Exampleton",
+    billingPostcode: "KA1 1AA",
+    considerationGiven: false,
+  };
+  const partner = (sharePence: number, firstName: string) => ({
+    firstName,
+    lastName: "Example",
+    houseNameNumber: "12",
+    address: "Example Street, Exampleton",
+    postcode: "KA1 1AA",
+    nonUk: false,
+    sharePence,
+  });
+
+  beforeEach(() => {
+    live.value = true;
+  });
+
+  it("a company: takes one with its company details, and stamps them as the donate page does", async () => {
+    const res = await run({ mode: "once", plan: null, amount: 5000, giftAid: false, donorType: "company", company, redBag: true });
+    expect(res.statusCode).toBe(200);
+    expect(params().metadata).toMatchObject({ redBag: "true", donorType: "company", companyLegalName: "Example Widgets Ltd", companyContactEmail: "accounts@example.com", giftAid: "false" });
+    expect(params().success_url).toBe(THANKS);
+  });
+
+  it("a company: still needs its company details", async () => {
+    const res = await run({ mode: "once", plan: null, amount: 5000, giftAid: false, donorType: "company", redBag: true });
+    expect(res.statusCode).toBe(400);
+    expect(JSON.stringify(res.body)).toContain("a company donation requires company details");
+    expect(create).not.toHaveBeenCalled();
+  });
+
+  it("a company: still cannot claim Gift Aid", async () => {
+    const res = await run({ mode: "once", plan: null, amount: 5000, giftAid: true, donorType: "company", company, redBag: true });
+    expect(res.statusCode).toBe(400);
+    expect(JSON.stringify(res.body)).toContain("a company donation cannot claim Gift Aid");
+    expect(create).not.toHaveBeenCalled();
+  });
+
+  it("a company: is still held to £2", async () => {
+    expect((await run({ mode: "once", plan: null, amount: 150, giftAid: false, donorType: "company", company, redBag: true })).statusCode).toBe(400);
+  });
+
+  it("a partnership: takes one whose partners' shares add up to the gift", async () => {
+    const res = await run({ ...bag, amount: 5000, giftAid: true, donorType: "partnership", partners: [partner(3000, "Alex"), partner(2000, "Sam")] });
+    expect(res.statusCode).toBe(200);
+    expect(params().metadata.redBag).toBe("true");
+    expect(params().metadata.donorType).toBe("partnership");
+    expect(JSON.parse(params().metadata.partners)).toHaveLength(2);
+  });
+
+  it("a partnership: still refuses shares that do not add up, or no partners at all", async () => {
+    expect((await run({ ...bag, amount: 5000, giftAid: true, donorType: "partnership", partners: [partner(3000, "Alex"), partner(1000, "Sam")] })).statusCode).toBe(400);
+    expect((await run({ ...bag, amount: 5000, giftAid: true, donorType: "partnership" })).statusCode).toBe(400);
+    expect(create).not.toHaveBeenCalled();
+  });
+
+  it("a partnership: still needs an email", async () => {
+    const res = await run({ mode: "once", plan: null, amount: 5000, giftAid: false, donorType: "partnership", redBag: true });
+    expect(res.statusCode).toBe(400);
+    expect(JSON.stringify(res.body)).toContain("a valid email is required");
+  });
+
+  it("a company or partnership is refused from the public like anyone else while it is switched off", async () => {
+    live.value = false;
+    expect((await run({ mode: "once", plan: null, amount: 5000, giftAid: false, donorType: "company", company, redBag: true })).statusCode).toBe(403);
+    expect((await run({ ...bag, amount: 5000, giftAid: true, donorType: "partnership", partners: [partner(5000, "Alex")] })).statusCode).toBe(403);
+    expect(create).not.toHaveBeenCalled();
+  });
+});

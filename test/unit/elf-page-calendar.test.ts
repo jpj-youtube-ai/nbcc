@@ -1,0 +1,198 @@
+// @vitest-environment jsdom
+import { describe, it, expect } from "vitest";
+import { calendarStatus, renderCalendarPage } from "../../src/elf/pages/calendar";
+import type { CalendarView, DoorView } from "../../src/elf/pages/types";
+import { isDoor } from "../../src/elf/calendar";
+import { ELF_NAMES } from "../../src/elf/names";
+
+// NBCC Elf Detective School: the public calendar. Every business and detective here is invented.
+
+const at = (iso: string) => new Date(iso);
+const pad = (n: number) => String(n).padStart(2, "0");
+
+/** A calendar on the given day: doors before it found, the day's own door as asked, later ones shut. */
+function view(now: Date, today: Partial<DoorView> = {}, over: Partial<CalendarView> = {}): CalendarView {
+  const dayOfMonth = now.getUTCMonth() === 11 ? now.getUTCDate() : 0;
+  const doors: DoorView[] = [];
+  for (let n = 1; n <= 24; n++) {
+    if (!isDoor(n)) continue;
+    const base: DoorView = {
+      door: n,
+      state: "shut",
+      clueAt: at(`2026-12-${pad(n)}T17:30:00.000Z`),
+      shapeUrl: null,
+      bigPrize: n === 12,
+      teaser: n === 12 ? "Something with two wheels" : null,
+      elfName: ELF_NAMES[n - 1],
+      place: null,
+      found: null,
+      counts: null,
+      factLine: null,
+    };
+    if (n < dayOfMonth) {
+      doors.push({
+        ...base,
+        state: "found",
+        place: { name: `Shop number ${n}`, town: "Ayr" },
+        found: { at: at(`2026-12-${pad(n)}T18:05:00.000Z`), by: "Detective Ruby Tinselfoot", elfUrl: `/elf/pic/${n}.svg`, photoUrl: null },
+        counts: { cracked: 10 + n, visited: n },
+        factLine: "NBCC began with a question from a girl aged 12 in Annbank.",
+      });
+    } else if (n === dayOfMonth) {
+      doors.push({ ...base, ...today });
+    } else {
+      doors.push(base);
+    }
+  }
+  return {
+    year: 2026,
+    now,
+    doors,
+    places: [
+      { name: "Shop number 1", town: "Ayr", found: true },
+      { name: "The Toy Shop", town: "Troon", found: false },
+      { name: "The Corner Bakery", town: "Kilmarnock", found: false },
+    ],
+    price: { from: "£1", suggested: "£5" },
+    joinUrl: "/elf/join",
+    hqUrl: "/elf/hq",
+    ...over,
+  };
+}
+
+const AFTERNOON = at("2026-12-07T15:00:00.000Z");
+const page = (v: CalendarView) => new DOMParser().parseFromString(renderCalendarPage(v), "text/html");
+const words = (el: Element | null) => (el?.textContent ?? "").replace(/\s+/g, " ").trim();
+
+describe("the calendar page", () => {
+  it("is a whole page with one heading, the site's styles and its own", () => {
+    const doc = page(view(AFTERNOON));
+    expect(doc.querySelectorAll("h1").length).toBe(1);
+    expect(words(doc.querySelector("h1"))).toBe("Elf Detective School");
+    expect(doc.title).toBe("Elf Detective School | Night Before Christmas Campaign");
+    const sheets = [...doc.querySelectorAll('link[rel="stylesheet"]')].map((l) => l.getAttribute("href"));
+    expect(sheets).toEqual(["/assets/css/styles.css", "/assets/css/elf.css"]);
+    expect(doc.querySelector('script[src="/assets/js/elf-calendar.js"]')).not.toBeNull();
+  });
+
+  it("tells the story in one line, with the building spelt the one way", () => {
+    expect(words(page(view(AFTERNOON)).querySelector(".lede"))).toBe(
+      "24 cheeky elves have escaped from the Elves' Workshop. Find them all by the Night Before Christmas.",
+    );
+  });
+
+  it("shows all 24 doors in order, each followed by its own detail", () => {
+    const board = page(view(AFTERNOON)).querySelector("#elf-board")!;
+    const doors = [...board.querySelectorAll("a.elf-door")];
+    expect(doors.map((a) => a.getAttribute("data-door"))).toEqual(Array.from({ length: 24 }, (_, i) => String(i + 1)));
+    for (const a of doors) {
+      const next = a.nextElementSibling!;
+      expect(next.id).toBe(`case-${a.getAttribute("data-door")}`);
+      expect(a.getAttribute("href")).toBe(`#${next.id}`);
+    }
+    expect(board.children.length).toBe(48);
+  });
+
+  it("tells the script where to ask for news, and nothing private", () => {
+    const board = page(view(AFTERNOON)).querySelector("#elf-board")!;
+    expect(board.getAttribute("data-feed")).toBe("/api/elf/calendar");
+    expect(board.getAttribute("data-door-api")).toBe("/api/elf/door/");
+    expect(board.getAttribute("data-me")).toBe("/api/elf/me");
+  });
+
+  it("counts the elves found so far", () => {
+    expect(words(page(view(AFTERNOON)).querySelector(".elf-tally"))).toBe("6 of 24 elves found");
+    expect(words(page(view(at("2026-12-01T09:00:00.000Z"))).querySelector(".elf-tally"))).toBe("0 of 24 elves found");
+  });
+
+  it("lists every hiding place with its town, never its day, and marks the ones found", () => {
+    const list = page(view(AFTERNOON)).querySelector(".elf-places")!;
+    const items = [...list.querySelectorAll("li")].map(words);
+    expect(items).toEqual(["Shop number 1, Ayr Found", "The Toy Shop, Troon", "The Corner Bakery, Kilmarnock"]);
+    expect(words(list)).not.toMatch(/\bDec\b|\bDoor\b/);
+  });
+
+  it("asks people to join, with the price in the words the admin set", () => {
+    const join = page(view(AFTERNOON, {}, { price: { from: "£2", suggested: "£6" } })).querySelector(".elf-join")!;
+    expect(words(join)).toContain("Pay what you can");
+    expect(words(join)).toContain("£6");
+    expect(words(join)).toContain("£2");
+    expect(join.querySelector('a[href="/elf/join"]')).not.toBeNull();
+  });
+
+  it("explains how it works in four steps", () => {
+    const steps = page(view(AFTERNOON)).querySelectorAll(".elf-steps > li");
+    expect(steps.length).toBe(4);
+    expect(words(steps[2])).toContain("secret word");
+  });
+
+  it("can be listed by search engines", () => {
+    expect(page(view(AFTERNOON)).querySelector('meta[name="robots"]')).toBeNull();
+  });
+});
+
+describe("today's news at the top of the calendar", () => {
+  it("counts the sleeps before the hunt starts", () => {
+    const status = calendarStatus(view(at("2026-11-08T09:00:00.000Z")));
+    expect(status.title).toBe("The hunt starts on Tuesday 1 December");
+    expect(status.html).toContain("23 sleeps to go");
+  });
+
+  it("says one sleep, not one sleeps", () => {
+    expect(calendarStatus(view(at("2026-11-30T20:00:00.000Z"))).html).toContain("1 sleep to go");
+  });
+
+  it("counts down to today's clue", () => {
+    const status = calendarStatus(view(AFTERNOON));
+    expect(status.title).toBe("Door 7 opens today");
+    expect(status.html).toContain("Clue out at 5:30pm");
+    expect(status.html).toContain('data-until="2026-12-07T17:30:00.000Z"');
+    expect(status.html).toContain("2:30:00");
+  });
+
+  it("says the hunt is on, and names the elf but never the place", () => {
+    const hunting = view(at("2026-12-07T18:00:00.000Z"), { state: "hunting", place: { name: "The Secret Cinema", town: "Ayr" } });
+    const status = calendarStatus(hunting);
+    expect(status.title).toBe("The hunt is on!");
+    expect(status.html).toContain("Bauble");
+    expect(renderCalendarPage(hunting)).not.toContain("Secret Cinema");
+  });
+
+  it("says who found today's elf and when the next clue comes", () => {
+    const found = view(at("2026-12-07T19:00:00.000Z"), {
+      state: "found",
+      place: { name: "The Toy Shop", town: "Troon" },
+      found: { at: at("2026-12-07T17:52:00.000Z"), by: "Detective Sam Snowsleuth", elfUrl: "/elf/pic/9.svg", photoUrl: null },
+      counts: { cracked: 3, visited: 1 },
+    });
+    const status = calendarStatus(found);
+    expect(status.title).toBe("Bauble has been found!");
+    expect(status.html).toContain("Detective Sam Snowsleuth");
+    expect(status.html).toContain("The Toy Shop, Troon");
+    expect(status.html).toContain("Next clue: Tue 8 Dec at 5:30pm");
+  });
+
+  it("says a revealed elf is still waiting", () => {
+    const revealed = view(at("2026-12-07T21:30:00.000Z"), { state: "revealed", place: { name: "The Toy Shop", town: "Troon" } });
+    const status = calendarStatus(revealed);
+    expect(status.title).toBe("Bauble is still waiting");
+    expect(status.html).toContain("The Toy Shop, Troon");
+  });
+
+  it("looks ahead to the next clue on a morning before today's is out, when yesterday's is done", () => {
+    const status = calendarStatus(view(at("2026-12-08T08:00:00.000Z")));
+    expect(status.title).toBe("Door 8 opens today");
+  });
+
+  it("thanks everyone once every door is open", () => {
+    const done = view(at("2026-12-25T10:00:00.000Z"));
+    done.doors = done.doors.map((d) => ({
+      ...d,
+      state: "found" as const,
+      place: { name: "Shop", town: "Ayr" },
+      found: { at: d.clueAt, by: "Detective Ruby Tinselfoot", elfUrl: "/elf/pic/1.svg", photoUrl: null },
+      counts: { cracked: 1, visited: 1 },
+    }));
+    expect(calendarStatus(done).title).toBe("Every elf is home");
+  });
+});

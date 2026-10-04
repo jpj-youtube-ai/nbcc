@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { clockWords, countdownWords, dayWords, listWords, longDayWords, sleepsUntil, things } from "../../src/elf/words";
+import { clockWords, countdownWords, dayWords, listWords, longDayWords, sameDay, sleepsUntil, things } from "../../src/elf/words";
 
 // NBCC Elf Detective School: times, dates and lists as people read them. December is winter time in
 // London, so a time on the clock there is the same as in UTC; one summer case checks the clocks.
@@ -80,6 +80,21 @@ describe("sleeps to go", () => {
     expect(sleepsUntil(at("2026-12-01T00:05:00.000Z"), at("2026-12-01T17:30:00.000Z"))).toBe(0);
     expect(sleepsUntil(at("2026-12-03T10:00:00.000Z"), at("2026-12-01T17:30:00.000Z"))).toBe(0);
     expect(sleepsUntil(new Date(Number.NaN), at("2026-12-01T17:30:00.000Z"))).toBe(0);
+  });
+});
+
+describe("the same day", () => {
+  it("is the same date in London, whatever the time", () => {
+    expect(sameDay(at("2026-12-07T00:05:00.000Z"), at("2026-12-07T23:55:00.000Z"))).toBe(true);
+    expect(sameDay(at("2026-12-07T23:55:00.000Z"), at("2026-12-08T00:05:00.000Z"))).toBe(false);
+  });
+
+  it("goes by London's clocks in summer too", () => {
+    expect(sameDay(at("2026-07-01T23:30:00.000Z"), at("2026-07-02T10:00:00.000Z"))).toBe(true);
+  });
+
+  it("is never true of a date that is not a date", () => {
+    expect(sameDay(new Date(Number.NaN), new Date(Number.NaN))).toBe(false);
   });
 });
 

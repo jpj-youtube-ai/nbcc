@@ -67,6 +67,11 @@ function londonDayNumber(at: Date): number {
   return Math.round(Date.UTC(year, month - 1, day) / 86_400_000);
 }
 
+/** Are these two moments on the same day in London? */
+export function sameDay(a: Date, b: Date): boolean {
+  return isRealDate(a) && isRealDate(b) && londonDayNumber(a) === londonDayNumber(b);
+}
+
 /** How many nights there are between now and a day to come, in London. None on the day itself. */
 export function sleepsUntil(now: Date, then: Date): number {
   if (!isRealDate(now) || !isRealDate(then)) return 0;

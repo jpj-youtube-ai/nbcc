@@ -51,12 +51,17 @@
    menu: that link is the only way across, so it stays. */
 .elf-page .nav-cta { display: inline-block; }
 @media (max-width: 680px) {
-  .elf-page .nav-cta { padding: 9px 18px; font-size: 0.9rem; }
+  .elf-page .nav-cta { padding: 11px 18px; font-size: 0.9rem; }
 }
 
 .elf-page .elf-icon { vertical-align: -0.18em; flex: none; }
 
 .elf-page .elf-link { color: var(--maroon); text-underline-offset: 3px; }
+/* A link that stands by itself is tall enough for a thumb. */
+.elf-poster__links .elf-link,
+.elf-win__links .elf-link,
+.elf-stamped__links .elf-link,
+.elf-wd-back .elf-link { display: inline-flex; align-items: center; min-height: 44px; }
 
 /* ---------- the top of the calendar page ---------- */
 .elf-top { padding-bottom: clamp(20px, 3vw, 36px); }
@@ -252,9 +257,9 @@
 /* ---------- pills ---------- */
 .elf-pill {
   display: inline-block;
-  padding: 3px 6px;
+  padding: 3px 5px;
   border-radius: var(--radius-pill);
-  font-size: 0.66rem;
+  font-size: 0.7rem;
   font-weight: 600;
   line-height: 1.2;
   white-space: nowrap;
@@ -652,7 +657,7 @@ form.elf-wd { display: grid; gap: 16px; padding: 0; background: none; border: 0;
   border-radius: var(--radius-pill);
   background: var(--crimson);
   color: var(--cream);
-  font-size: 0.68rem;
+  font-size: 0.75rem;
   font-weight: 600;
   line-height: 1.4;
 }

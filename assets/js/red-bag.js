@@ -120,6 +120,386 @@
     var roundLine = null; // its line under "Also in your bag", made once and kept
     var busy = false;
 
+    // --- the feel good layer -------------------------------------------------------------------
+    // Decoration only, and all of it hidden from screen readers: a drawing of the item drops into
+    // the bag (or into the bottom bar's total while the bag is off screen), things peek out of the
+    // bag's top, the bag wobbles, a full bag is tied with a ribbon and a tag, a little snow falls at
+    // half a bag and at each full one, and an elf scribbles a note on the paper. WHAT to show comes
+    // from the catalogue's pure functions (peekSlots, milestoneCrossed, strains, noteFor); this only
+    // applies it. It changes no sum and no word, takes no tap and never moves the focus. Everything
+    // made here is cleared away by a timer, so nothing builds up however fast the donor taps.
+    //
+    // It can NEVER stop the page working. Two guards: (1) the whole layer is switched off unless the
+    // catalogue has every part of it (a donor can be handed this file with the OLD catalogue while a
+    // new version is going out); (2) every way in from the page's own code goes through safe(), so
+    // anything that goes wrong in here is swallowed, said once in the console, and the sums, the
+    // status line, Donate and the checkout carry on untouched.
+    var delightOn =
+      !!rb.NOTES &&
+      !!rb.TAG_LINES &&
+      ["art", "peekSlots", "strains", "milestoneCrossed", "noteKind", "noteFor"].every(function (name) {
+        return typeof rb[name] === "function";
+      });
+    var delightSaid = false;
+    function safe(fn) {
+      return function () {
+        if (!delightOn) return undefined;
+        try {
+          return fn.apply(null, arguments);
+        } catch (e) {
+          if (!delightSaid && typeof console !== "undefined" && console && typeof console.error === "function") {
+            delightSaid = true;
+            console.error("Fill a Red Bag: a decoration failed and was skipped.", e);
+          }
+          return undefined;
+        }
+      };
+    }
+    var panel = doc.querySelector(".rb-panel");
+    var NAV_HEIGHT = 80; // the site's fixed header: a bag under it is not "on screen"
+    var MAX_DROPS = 3; // in the air at once; a tap beyond that simply plays no drop
+    var DROP_MS = 600; // as in the stylesheet
+    var TYPING_MS = 450; // a typed number is finished when the typing stops this long
+    var NOTE_MS = 3200;
+    var NOTE_HOLD_MS = 900; // a note on one row is left alone this long before the next replaces it
+    var FLURRY_MS = 2150;
+    // Where the three peeks sit along the bag's top, and their tilt: [across, degrees].
+    var PEEK_AT = [
+      [25, -11],
+      [57, 3],
+      [92, 12],
+    ];
+    // The snow and stars: [across %, wait s, fall s, drift px, turn deg, size px]. Fixed, so every
+    // flurry is the same gentle one, and the last piece has landed within two seconds.
+    var FLAKES = [
+      [6, 0, 1.5, 14, 80, 18],
+      [15, 0.28, 1.45, -10, -120, 14],
+      [24, 0.1, 1.6, 8, 140, 20],
+      [33, 0.46, 1.4, -14, 90, 15],
+      [42, 0.04, 1.55, 10, -100, 17],
+      [51, 0.36, 1.5, -8, 160, 21],
+      [60, 0.16, 1.45, 12, -80, 14],
+      [69, 0.5, 1.5, -12, 110, 18],
+      [78, 0.08, 1.6, 6, -150, 16],
+      [87, 0.32, 1.4, -10, 100, 20],
+      [94, 0.2, 1.5, -16, -90, 15],
+      [47, 0.55, 1.45, 14, 130, 14],
+    ];
+    var SNOW =
+      '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path class="rb-flake__snow" d="M12 1.5l2.6 6 6.5-.75-3.9 5.25 3.9 5.25-6.5-.75-2.6 6-2.6-6-6.5.75L6.8 12 2.9 6.75l6.5.75z"/></svg>';
+    var STAR =
+      '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path class="rb-flake__star" d="M12 2.5l2.8 6 6.5.8-4.8 4.5 1.3 6.5L12 17l-5.8 3.3 1.3-6.5-4.8-4.5 6.5-.8z"/></svg>';
+
+    var ready = false; // nothing plays while the page is being set up
+    var order = []; // the items in the bag, the newest first
+    var slots = [null, null, null]; // what peeks out of the bag that is filling
+    var seen = {}; // each item's quantity when it was last celebrated
+    var typing = {}; // a timer for each number box still being typed in
+    var inTheAir = 0;
+    var flurryBox = null;
+    var lastPence = 0;
+    var noteEl = null;
+    var noteTimer = null;
+    var noteRow = null;
+    var noteAt = 0;
+    var lastNote = "";
+    var noteWait = null; // the newest change on a row whose note is still having its moment
+    var bumpTimer = null;
+
+    // Where a drop flies: one layer over the builder. It takes no tap and clips what leaves it.
+    var fx = null;
+    if (delightOn) {
+      fx = doc.createElement("div");
+      fx.className = "rb-fx";
+      fx.setAttribute("aria-hidden", "true");
+      builder.appendChild(fx);
+    }
+
+    /** Has this person asked for less motion? Asked each time, so a change of setting is kept to. */
+    function calm() {
+      try {
+        return !!(typeof win.matchMedia === "function" && win.matchMedia("(prefers-reduced-motion: reduce)").matches);
+      } catch (e) {
+        return false;
+      }
+    }
+    function later(fn, ms) {
+      return setTimeout(fn, ms);
+    }
+    function gone(el) {
+      if (el && el.parentNode) el.parentNode.removeChild(el);
+    }
+    /** Drawn shapes for inside a bag (our own fixed markup, never anything typed). */
+    function shapes(markup) {
+      var holder = doc.createElement("div");
+      holder.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg">' + markup + "</svg>";
+      return holder.firstChild.firstChild;
+    }
+
+    // Every bag carries a place for the peeks, BEHIND its own paper so they look inside it, and the
+    // ribbon and tag, which the stylesheet shows once the bag is full.
+    function dress(svg) {
+      if (svg.querySelector(".rb-bag__peeks")) return;
+      var paper = svg.querySelector(".rb-bag__paper");
+      var peeks = shapes('<g class="rb-bag__peeks"></g>');
+      if (paper) svg.insertBefore(peeks, paper);
+      else svg.appendChild(peeks);
+      svg.appendChild(
+        shapes(
+          '<g class="rb-bag__tie">' +
+            '<g class="rb-bag__tag"><path class="rb-bag__string" d="M60 20c-3 9 3 21 0 31"/>' +
+            '<path class="rb-bag__card" d="M41 44h38l11 11v35a4 4 0 0 1-4 4H34a4 4 0 0 1-4-4V55z"/>' +
+            '<circle class="rb-bag__hole" cx="60" cy="51.5" r="2.6"/>' +
+            '<text class="rb-bag__tag-words"><tspan x="60" y="73">' +
+            rb.TAG_LINES[0] +
+            '</tspan> <tspan x="60" y="88">' +
+            rb.TAG_LINES[1] +
+            "</tspan></text></g>" +
+            '<g class="rb-bag__bow"><path class="rb-bag__ribbon" d="M57.5 20l-8 12 5.5-.5 2 4.5 3.5-15zM62.5 20l8 12-5.5-.5-2 4.5-3.5-15z"/>' +
+            '<path class="rb-bag__ribbon" d="M60 18c-5-8-17-9-17-1s12 6 17 1zM60 18c5-8 17-9 17-1s-12 6-17 1z"/>' +
+            '<rect class="rb-bag__knot" x="56" y="14" width="8" height="8" rx="2.5"/></g>' +
+            "</g>",
+        ),
+      );
+    }
+
+    function peek(key, at) {
+      var g = shapes(
+        '<g class="rb-peek" transform="translate(' +
+          PEEK_AT[at][0] +
+          " 36) rotate(" +
+          PEEK_AT[at][1] +
+          ')"><g class="rb-peek__in">' +
+          rb.art(key, "", 28).replace("<svg ", '<svg x="-14" y="-16" ') +
+          "</g></g>",
+      );
+      g.setAttribute("data-rb-peek", key);
+      g.setAttribute("data-rb-slot", String(at));
+      return g;
+    }
+
+    // The bags as they stand: the peeks in the one that is filling, the handles straining when it
+    // is nearly full, and the tag's words on the newest full bag while the bags are big enough.
+    function dressBags(state) {
+      var filling = state.drawn.length && state.drawn[state.drawn.length - 1] < 1 ? state.drawn.length - 1 : -1;
+      var fill = filling === -1 ? 1 : state.drawn[filling];
+      var newestFull = -1;
+      state.drawn.forEach(function (f, n) {
+        if (f >= 1) newestFull = n;
+      });
+      slots = rb.peekSlots(slots, order, fill);
+      each(bagsBox.querySelectorAll(".rb-bag"), function (svg, n) {
+        dress(svg);
+        var holder = svg.querySelector(".rb-bag__peeks");
+        for (var i = 0; i < slots.length; i += 1) {
+          var want = n === filling ? slots[i] : null;
+          var have = holder.querySelector('[data-rb-slot="' + i + '"]');
+          if (have && have.getAttribute("data-rb-peek") !== want) {
+            holder.removeChild(have);
+            have = null;
+          }
+          if (want && !have) holder.appendChild(peek(want, i));
+        }
+        if (n === filling && rb.strains(fill)) svg.classList.add("is-heavy");
+        else svg.classList.remove("is-heavy");
+        if (n === newestFull && state.drawn.length <= 3) svg.classList.add("is-latest");
+        else svg.classList.remove("is-latest");
+      });
+    }
+
+    /** Keep the list of what is in the bag, the newest first. */
+    function track(key, was, now) {
+      var at = order.indexOf(key);
+      if (now > 0 && was === 0) {
+        if (at !== -1) order.splice(at, 1);
+        order.unshift(key);
+      } else if (now === 0 && at !== -1) order.splice(at, 1);
+    }
+
+    // A small happy wobble of the bag that is filling, after `wait` seconds (as a drop lands).
+    function wobble(wait) {
+      if (calm() || !bagsBox) return;
+      var bag = bagsBox.lastElementChild;
+      if (!bag || bag.classList.contains("is-wobbling")) return;
+      // Its arrival is over: two animations on one bag would restart the arrival when this one ends.
+      bag.classList.remove("is-new");
+      bag.style.setProperty("--rb-wait", (wait || 0) + "s");
+      bag.classList.add("is-wobbling");
+      later(
+        function () {
+          bag.classList.remove("is-wobbling");
+        },
+        (wait || 0) * 1000 + 420,
+      );
+    }
+
+    // One drawing of the item hops from its row and drops into the bag. With the bag off screen (a
+    // phone, part way down the list) it drops into the bottom bar's total instead, and with neither
+    // to hand it gives a small hop where it is. Says whether it went to the bag.
+    function drop(key, row) {
+      if (calm() || inTheAir >= MAX_DROPS) return false;
+      var from = (row.querySelector(".rb-qty") || row).getBoundingClientRect();
+      var home = fx;
+      var x = from.left + from.width / 2;
+      var y = from.top + from.height / 2;
+      var to = { x: x, y: y + 46 };
+      var where = "hop";
+      var bag = bagsBox ? bagsBox.lastElementChild : null;
+      var box = bag ? bag.getBoundingClientRect() : null;
+      var screen = win.innerHeight || (doc.documentElement && doc.documentElement.clientHeight) || 0;
+      if (box && box.width > 0 && box.bottom > NAV_HEIGHT && box.top < screen) {
+        to = { x: box.left + box.width / 2, y: box.top + box.height * 0.3 };
+        where = "bag";
+      } else if (bar && !bar.hidden && barTotal) {
+        var sum = barTotal.getBoundingClientRect();
+        to = { x: sum.left + sum.width / 2, y: sum.top + sum.height / 2 };
+        where = "bar";
+        // It flies inside the bar itself (which is fixed to the screen), so it is drawn above the
+        // bar and is seen to land on the total, not lost behind it.
+        home = bar;
+        barTotal.classList.add("is-bumped");
+        // ONE timer, so an earlier tap's timer never cuts a later nod short.
+        clearTimeout(bumpTimer);
+        bumpTimer = later(function () {
+          barTotal.classList.remove("is-bumped");
+        }, DROP_MS + 400);
+      }
+      var layer = home.getBoundingClientRect();
+      var el = doc.createElement("span");
+      el.className = "rb-drop rb-drop--" + where;
+      el.setAttribute("aria-hidden", "true");
+      el.style.left = Math.round(x - layer.left) + "px";
+      el.style.top = Math.round(y - layer.top) + "px";
+      el.style.setProperty("--rb-dx", Math.round(to.x - x) + "px");
+      el.style.setProperty("--rb-dy", Math.round(to.y - y) + "px");
+      el.innerHTML = '<span class="rb-drop__y"><span class="rb-drop__hop">' + rb.art(key) + "</span></span>";
+      home.appendChild(el);
+      inTheAir += 1;
+      later(function () {
+        gone(el);
+        inTheAir -= 1;
+      }, DROP_MS + 80);
+      return where === "bag";
+    }
+
+    // The snow and stars over the bag's panel: one flurry at a time, gone in about two seconds.
+    function flurry() {
+      if (calm() || !panel || flurryBox || step !== "bag") return;
+      var box = doc.createElement("div");
+      box.className = "rb-flurry";
+      box.setAttribute("aria-hidden", "true");
+      FLAKES.forEach(function (f, n) {
+        var piece = doc.createElement("span");
+        piece.className = "rb-flake";
+        piece.style.setProperty("--rb-x", f[0] + "%");
+        piece.style.setProperty("--rb-d", f[1] + "s");
+        piece.style.setProperty("--rb-t", f[2] + "s");
+        piece.style.setProperty("--rb-s", f[3] + "px");
+        piece.style.setProperty("--rb-r", f[4] + "deg");
+        piece.style.setProperty("--rb-w", f[5] + "px");
+        piece.innerHTML = n % 2 ? STAR : SNOW;
+        box.appendChild(piece);
+      });
+      panel.appendChild(box);
+      flurryBox = box;
+      later(function () {
+        gone(box);
+        flurryBox = null;
+      }, FLURRY_MS);
+    }
+
+    // The snow and stars: only when a milestone is newly crossed on the way up.
+    function milestone(pence) {
+      var crossed = rb.milestoneCrossed(lastPence, pence);
+      lastPence = pence;
+      if (crossed && ready) flurry();
+    }
+
+    /** The example's own small drawing at the start of its line; the line's words are unchanged. */
+    function alsoIcon(span, key) {
+      span.insertAdjacentHTML("afterbegin", rb.art(key, "rb-also__icon", 26));
+    }
+
+    // The elf's note: ONE at a time, on the row just changed. Quick taps on one row keep the note
+    // that is there rather than flickering through several.
+    function scribble(row, change) {
+      clearTimeout(noteWait);
+      noteWait = null;
+      if (!row || step !== "bag") return;
+      var now = Date.now();
+      var kind = rb.noteKind(change);
+      // A note on this row is still having its moment (quick taps, a held key): leave it be, with no
+      // rewrite and no reflow, and write the NEWEST change once the moment is up.
+      if (kind !== "first" && kind !== "example" && noteEl && noteRow === row && noteEl.parentNode === row && now - noteAt < NOTE_HOLD_MS) {
+        noteWait = later(
+          safe(function () {
+            noteWait = null;
+            scribble(row, change);
+          }),
+          NOTE_HOLD_MS - (now - noteAt),
+        );
+        return;
+      }
+      var words = rb.noteFor(change, lastNote, Math.random());
+      if (!words) return;
+      if (!noteEl) {
+        noteEl = doc.createElement("span");
+        noteEl.className = "rb-note";
+        noteEl.setAttribute("aria-hidden", "true");
+      }
+      clearTimeout(noteTimer);
+      noteEl.classList.remove("is-on");
+      noteEl.textContent = words;
+      row.appendChild(noteEl);
+      // Read once so the fade begins from nothing each time.
+      void noteEl.offsetWidth;
+      noteEl.classList.add("is-on");
+      lastNote = words;
+      noteRow = row;
+      noteAt = now;
+      noteTimer = later(function () {
+        noteEl.classList.remove("is-on");
+        noteTimer = later(function () {
+          gone(noteEl);
+        }, 320);
+      }, NOTE_MS);
+    }
+
+    // An item's quantity has settled (a plus or minus, an arrow key, a box left, or the typing
+    // stopped): ONE drop however far it jumped, the wobble, and a note.
+    function celebrate(key, row) {
+      if (typing[key]) {
+        clearTimeout(typing[key]);
+        typing[key] = null;
+      }
+      var before = seen[key] || 0;
+      var after = quantities[key] || 0;
+      seen[key] = after;
+      if (!ready || step !== "bag" || after === before) return;
+      if (after > before) {
+        var price = Number(row.getAttribute("data-pence")) || 0;
+        wobble(drop(key, row) ? 0.4 : 0);
+        scribble(row, { kind: "in", key: key, quantity: after, step: after - before, first: rb.totalPence(quantities, tapped) - (after - before) * price <= 0 });
+      } else scribble(row, { kind: "out", key: key, quantity: after, step: before - after });
+    }
+    function celebrateSoon(key, row) {
+      if (typing[key]) clearTimeout(typing[key]);
+      typing[key] = later(function () {
+        typing[key] = null;
+        celebrate(key, row);
+      }, TYPING_MS);
+    }
+
+    // Every way in from the page's own code, made safe (see the top of this block).
+    dressBags = safe(dressBags);
+    track = safe(track);
+    wobble = safe(wobble);
+    milestone = safe(milestone);
+    alsoIcon = safe(alsoIcon);
+    scribble = safe(scribble);
+    celebrate = safe(celebrate);
+    celebrateSoon = safe(celebrateSoon);
+
     // The working parts ship hidden; the script that can work them shows them.
     each(doc.querySelectorAll("[data-needs-js]"), function (n) {
       n.hidden = false;
@@ -163,6 +543,18 @@
       return svg;
     }
 
+    // A bag added after the page loaded "arrives" (is-new) ONCE. It lets go of that when its own
+    // animation ends (or shortly after, where the browser never says so): left on, any later
+    // animation on the bag would end by starting the arrival again, and the bag would blink.
+    function arrived(bag) {
+      var done = function (e) {
+        if (e && e.target !== bag) return;
+        bag.classList.remove("is-new");
+      };
+      bag.addEventListener("animationend", done);
+      setTimeout(done, 520);
+    }
+
     function drawBags(pence) {
       if (!bagsBox) return;
       var state = rb.bags(pence);
@@ -173,6 +565,7 @@
         if (!bag) break;
         bag.classList.add("is-new");
         bagsBox.appendChild(bag);
+        arrived(bag);
       }
       have = bagsBox.querySelectorAll(".rb-bag");
       for (var j = have.length - 1; j >= state.drawn.length; j -= 1) bagsBox.removeChild(have[j]);
@@ -185,6 +578,7 @@
         else svg.classList.remove("is-full");
       });
       bagsBox.setAttribute("data-count", String(state.drawn.length));
+      dressBags(state);
       if (more) {
         more.hidden = state.more === 0;
         setText(more, state.more ? "and " + state.more + " more" : "");
@@ -206,6 +600,7 @@
       }
       var pence = total();
       drawBags(pence);
+      milestone(pence);
       setText(status, rb.statusLine(pence));
       setText(totalEl, rb.pounds(pence));
       if (perMonth) perMonth.hidden = !isMonthly();
@@ -243,6 +638,7 @@
 
       function set(n, write) {
         var q = rb.clampQuantity(n);
+        track(key, quantities[key] || 0, q);
         quantities[key] = q;
         if (write) box.value = String(q);
         // They SAY they are off, and stay focusable: a button that switched itself off while it
@@ -252,6 +648,9 @@
         if (q > 0) row.classList.add("is-in");
         else row.classList.remove("is-in");
         refresh(!write);
+        // The drop, the wobble and the note wait for a FINISHED change, so a typed jump plays once.
+        if (write) celebrate(key, row);
+        else celebrateSoon(key, row);
       }
 
       // Typing counts at once, with no Enter; the box is only tidied when it is left, so a number
@@ -361,6 +760,7 @@
         if (!offer) return;
         roundTarget = offer.target;
         refresh();
+        wobble(0);
       });
     }
 
@@ -376,6 +776,7 @@
         var span = doc.createElement("span");
         span.className = "rb-also__words";
         span.textContent = words;
+        alsoIcon(span, key);
         var remove = doc.createElement("button");
         remove.type = "button";
         remove.className = "rb-remove";
@@ -402,6 +803,11 @@
       if (btn) btn.setAttribute("aria-pressed", on ? "true" : "false");
       drawAlso();
       refresh();
+      if (on && ready) {
+        wobble(0);
+        var line = alsoList ? alsoList.querySelector('[data-rb-remove="' + key + '"]') : null;
+        scribble(line ? line.parentNode : null, { kind: "example", key: key });
+      }
     }
 
     each(doc.querySelectorAll("[data-rb-example]"), function (btn) {
@@ -726,6 +1132,8 @@
     each(doc.querySelectorAll("[data-rb-bags] .rb-bag"), function (b) {
       b.classList.remove("is-new");
     });
+    // From here on, a change is the donor's own, and may be celebrated.
+    ready = true;
 
     return { total: total, payload: payload };
   }

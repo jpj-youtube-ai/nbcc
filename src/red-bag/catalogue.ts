@@ -76,6 +76,8 @@ export interface RedBagCatalogue {
   /** What a round-up adds: the gap between the donor's own items and the target they chose. */
   roundUpPence(ownPence: number, targetPence: number): number;
   pounds(pence: number): string;
+  /** A drawing for an item or an example, as an inline picture for the eye only; "" if there is none. */
+  art(key: string, cls?: string, size?: number): string;
 }
 
 // This file compiles to dist/red-bag/catalogue.js, so ../.. is the app root (as ./signers.ts).

@@ -12231,7 +12231,8 @@ sheet's four headings: Home comforts, Play & downtime, Books & creativity, Cloth
 themes and their examples (After a crisis; Clothing & school; A hand at rock bottom), the £50 bag
 value, the £2 minimum, and the pure sums: the total in whole pence, how many bags to draw and how
 full (five at most, then "and N more"), the status line, and the round-up (`nextMilestone`,
-`roundUpOffer`, `roundUpPence`).
+`roundUpOffer`, `roundUpPence`). It also holds the feel good layer's drawings, notes and pure
+functions (below).
 The page loads that file; the server reads the same file to draw the list into the page
 (`src/red-bag/catalogue.ts`, `src/red-bag/render.ts`), so the list is in the HTML without
 JavaScript; and the tests read it too. To change a price or a word, change it there.
@@ -12291,7 +12292,32 @@ pointing at https://nbcc.scot/fill; and a quieter "Fill another bag" button back
 payment's id is taken out of the address bar at once. No list, no bag panel, no themes, and the
 bottom bar is never here.
 
-**The handwriting is only on the paper:
+**The feel good layer** (4 October 2026; decoration only, agreed idea by idea, design in the spec
+under "The feel good layer"). When a quantity goes up a small drawing of the item drops into the
+bag (one drop for a typed jump; three in the air at most; into the bottom bar's total while the bag
+is off screen), up to three things that are in the bag peek out of its top, the bag gives a small
+wobble and its handles tighten when nearly full, a full bag is tied with a gold ribbon and a tag
+reading "Packed with love", a two second flurry of paper snow and gold stars falls over the bag's
+panel when half a bag or a full bag is newly reached, and an elf scribbles a short note on the paper
+beside the row just changed. Each example button carries a small icon, drawn in by the server, shown
+again on its line under "Also in your bag". **To read or change the elf's notes, edit `NOTES` in
+`assets/js/red-bag-catalogue.js`**: one list, and `test/unit/red-bag-delight.test.ts` holds every
+note to the rules (never "will", nothing bought, nobody receiving, no pressure, no dashes or
+hyphens, British, 32 characters at most). The 22 drawings are `ART` in the same file (inline SVG,
+coloured by `.rb-art` in the stylesheet from the site's tokens), and the choices are its pure
+functions (`peekSlots`, `milestoneCrossed`, `strains`, `noteFor`); `assets/js/red-bag.js` only
+applies them. It changes no price, total, wording or checkout field, makes no network request, and
+adds no file to load. Everything decorative is `aria-hidden`, out of the tab order and removed by a
+timer; the one live region is untouched; motion is transform and opacity only and is off under
+`prefers-reduced-motion` (the peeks, ribbon, tag and note still appear, at once). **It can never
+stop the page working:** the whole layer is off unless the catalogue has every part of it (a donor
+can be handed the new script with the old catalogue while a version is going out), and every way
+into it is wrapped, so a failure in it is swallowed and said once in the console while the sums,
+Donate and the checkout carry on. Nothing plays on
+the details step or the thank you page. Tests: `test/unit/red-bag-delight.test.ts` and
+`test/unit/red-bag-delight-script.test.ts`.
+
+**The handwriting is only on the paper, and on the gift tag of a full bag:
 Caveat (SIL Open Font License), self hosted as `assets/fonts/caveat-latin.woff2` (the Latin subset,
 weights 400 to 700 in one file) with its licence beside it (`assets/fonts/caveat-OFL.txt`). It is
 declared in `assets/css/red-bag.css` (which the giving page and its thank you alone load) and

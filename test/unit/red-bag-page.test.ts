@@ -1114,7 +1114,8 @@ describe("the page's own stylesheet", () => {
     const uses = [...rules.matchAll(/([^{}]+)\{[^{}]*font-family\s*:\s*var\(--rb-hand\)[^{}]*\}/g)].map((m) => m[1].trim());
     expect(uses.length).toBeGreaterThan(0);
     for (const selector of uses) {
-      for (const part of selector.split(",")) expect(part.trim(), part).toMatch(/^\.rb-paper\b/);
+      // The one place off the paper: the gift tag on a full bag, "Packed with love" (4 October 2026).
+      for (const part of selector.split(",")) expect(part.trim(), part).toMatch(/^\.rb-(paper|bag__tag-words)\b/);
     }
     const families = [...rules.replace(/@font-face\s*\{[^}]*\}/g, "").matchAll(/font-family\s*:\s*([^;}]+)/g)].map((m) => m[1].trim());
     for (const f of families) expect(f).toMatch(/^var\(--(rb-hand|font-head|font-body)\)$/);

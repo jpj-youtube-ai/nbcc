@@ -256,7 +256,323 @@
     return rest ? "£" + shown + "." + (rest < 10 ? "0" : "") + rest : "£" + shown;
   }
 
+  // ---------------------------------------------------------------------------------------------
+  // The feel good layer (4 October 2026). Decoration only: none of it changes a price, a total or
+  // a word the donor already reads, and none of it says anything is bought or goes to anyone.
+  // ---------------------------------------------------------------------------------------------
+
+  // The drawings: one for every item on the list and every example, all in ONE place. Each is the
+  // inside of a 40 by 40 picture, drawn with simple shapes. They carry no colour of their own: the
+  // stylesheet (assets/css/red-bag.css, .rb-art) gives the classes the site's colours.
+  //   r crimson, d maroon, t tan, s pale tan, c cream, w white, h holly, g gold, e slate (fills);
+  //   n no outline; l a cream line; q a crimson line; x a thicker line.
+  var ART = {
+    // --- the list ---
+    blanket:
+      '<rect class="r" x="4" y="19" width="32" height="13" rx="4"/><path class="c" d="M23 19h6v13h-6z"/>' +
+      '<rect class="r" x="4" y="8" width="30" height="13" rx="5.5"/><path class="c" d="M21.5 8h6v13h-6z"/>' +
+      '<path class="l" d="M9 14.5h8M9 25.5h9"/><path d="M9 32v3.5M15 32v3.5M21 32v3.5M27 32v3.5M32.5 31.5v3.5"/>',
+    "insulated-cup":
+      '<path class="h" d="M11 13h18l-2 21a2 2 0 0 1-2 2H15a2 2 0 0 1-2-2z"/><path class="c" d="M11.7 20h16.6l-.8 8H12.5z"/>' +
+      '<path class="t" d="M10 8h20a1.5 1.5 0 0 1 1.5 1.5V13h-23V9.5A1.5 1.5 0 0 1 10 8z"/><path class="t" d="M16 8V5.5h8V8"/>' +
+      '<path class="r n" d="M20 22.2c1.2-1.6 3.4-.3 2.6 1.4-.5 1-1.6 1.7-2.6 2.6-1-.9-2.1-1.6-2.6-2.6-.8-1.7 1.4-3 2.6-1.4z"/>',
+    "toiletry-set":
+      '<rect class="s" x="5" y="18" width="18" height="18" rx="4"/><path class="r" d="M5 27h18v5a4 4 0 0 1-4 4H9a4 4 0 0 1-4-4z"/>' +
+      '<rect class="g" x="11" y="13.5" width="6" height="4.5"/><rect class="d" x="9" y="7.5" width="10" height="6" rx="1.5"/><path class="x" d="M19 10.5h2.5"/>' +
+      '<path class="q" d="M25 10.5h4M24.8 7.5l3.4-2.2M24.8 13.5l3.4 2.2"/>' +
+      '<circle class="g n" cx="32.5" cy="10.5" r="1.1"/><circle class="g n" cx="31" cy="4" r="1"/><circle class="g n" cx="31" cy="17" r="1"/><circle class="g n" cx="35.5" cy="6.5" r=".9"/><circle class="g n" cx="35.5" cy="14.5" r=".9"/>' +
+      '<path class="l" d="M9.5 22v2.5"/>',
+    toy:
+      '<circle class="w" cx="12" cy="5" r="2.3"/><circle class="w" cx="17" cy="3" r="1.6"/>' +
+      '<rect class="t" x="9.5" y="11" width="5" height="7"/><rect class="d" x="8" y="9" width="8" height="3" rx="1"/>' +
+      '<rect class="h" x="5" y="17" width="19" height="11" rx="3"/><path class="g" d="M17 17a2.6 2.6 0 0 1 5.2 0z"/>' +
+      '<rect class="r" x="22" y="10" width="13" height="18" rx="2"/><rect class="c" x="25.5" y="13.5" width="6" height="6" rx="1"/><rect class="d" x="20.5" y="7.5" width="16" height="3.5" rx="1.5"/>' +
+      '<rect class="d" x="3" y="26.5" width="33" height="3.5" rx="1.5"/><path class="l" d="M9 22.5h8"/>' +
+      '<circle class="g" cx="10" cy="32.5" r="4.3"/><circle class="g" cx="20" cy="32.5" r="4.3"/><circle class="g" cx="30" cy="32.5" r="4.3"/>' +
+      '<circle class="d n" cx="10" cy="32.5" r="1.2"/><circle class="d n" cx="20" cy="32.5" r="1.2"/><circle class="d n" cx="30" cy="32.5" r="1.2"/>',
+    "soft-toy":
+      '<circle class="t" cx="11.5" cy="8" r="4.3"/><circle class="t" cx="28.5" cy="8" r="4.3"/><circle class="c n" cx="11.5" cy="8" r="1.9"/><circle class="c n" cx="28.5" cy="8" r="1.9"/>' +
+      '<ellipse class="t" cx="9.5" cy="27.5" rx="3.2" ry="4.6"/><ellipse class="t" cx="30.5" cy="27.5" rx="3.2" ry="4.6"/><ellipse class="t" cx="20" cy="30" rx="9" ry="7.5"/>' +
+      '<circle class="t" cx="13" cy="36" r="3.2"/><circle class="t" cx="27" cy="36" r="3.2"/>' +
+      '<circle class="t" cx="20" cy="14" r="9.5"/><ellipse class="c" cx="20" cy="17" rx="4.2" ry="3.2"/>' +
+      '<circle class="d n" cx="16.2" cy="12" r="1"/><circle class="d n" cx="23.8" cy="12" r="1"/><path class="d n" d="M18.7 15.5h2.6L20 17.1z"/><path d="M20 17.1v1.4"/>' +
+      '<path class="r" d="M20 25l-5.5-2.8v5.6zM20 25l5.5-2.8v5.6z"/><circle class="r" cx="20" cy="25" r="1.6"/>',
+    headphones:
+      '<path class="x" d="M9 24v-4a11 11 0 0 1 22 0v4"/><rect class="r" x="4.5" y="21.5" width="8" height="13.5" rx="3.5"/>' +
+      '<rect class="r" x="27.5" y="21.5" width="8" height="13.5" rx="3.5"/><path class="l" d="M8.5 25.5v5.5M31.5 25.5v5.5"/>',
+    book:
+      '<path class="w" d="M12 9h21v25H12z"/><path d="M33 12.5h-3M33 16h-3M33 30h-3"/><path class="h" d="M8 6h20a2 2 0 0 1 2 2v24a2 2 0 0 1-2 2H8z"/>' +
+      '<path d="M12.5 6v28"/><path class="l" d="M16.5 13h9.5M16.5 17.5h6.5"/><path class="g n" d="M21 23l1 2.5 2.5 1-2.5 1-1 2.5-1-2.5-2.5-1 2.5-1z"/>',
+    "colouring-book":
+      '<rect class="c" x="4" y="7" width="23" height="28" rx="2"/><path d="M8.5 7v28"/><circle class="g" cx="17.5" cy="17" r="3.5"/>' +
+      '<path d="M17.5 10.5v1.5M17.5 22v1.5M11 17h1.5M23 17h1.5M13 12.5l1 1M22 12.5l-1 1M13 21.5l1-1M22 21.5l-1-1"/>' +
+      '<path class="q" d="M11.5 29c1.5-2.5 3 2.5 4.5 0s3 2.5 4.5 0 2 1 3.5 0"/>' +
+      '<path class="r" d="M30 15h6v19a1.5 1.5 0 0 1-1.5 1.5h-3A1.5 1.5 0 0 1 30 34z"/><path class="r" d="M30 15l3-6.5 3 6.5z"/><path class="l" d="M30 21h6M30 29h6"/>',
+    pencil:
+      '<path class="g" d="M14.5 13h11v19h-11z"/><path d="M18.2 13v19M21.8 13v19"/><path class="s" d="M14.5 13L20 3l5.5 10z"/><path class="d n" d="M18.2 6.3L20 3l1.8 3.3z"/>' +
+      '<rect class="c" x="14.5" y="32" width="11" height="2.8"/><path class="t" d="M14.5 34.8h11V36a2 2 0 0 1-2 2h-7a2 2 0 0 1-2-2z"/>',
+    notebook:
+      '<rect class="r" x="7" y="8" width="26" height="29" rx="2.5"/><rect class="c" x="12" y="16" width="16" height="9" rx="1.5"/><path d="M15 20.5h10"/>' +
+      '<path class="x" d="M12 5v6M17.3 5v6M22.7 5v6M28 5v6"/><path class="l" d="M12 30.5h16"/>',
+    pyjamas:
+      '<path class="c" d="M14 6L5 10.5l2.5 7.5 4.5-2v19.5h16V16l4.5 2 2.5-7.5L26 6l-6 6.5z"/><path d="M20 12.5v23"/>' +
+      '<path class="q" d="M15.5 15v20.5M24.5 15v20.5M8.3 11.5l2.2 5.3M31.7 11.5l-2.2 5.3"/>' +
+      '<circle class="r n" cx="22.2" cy="18" r="1.1"/><circle class="r n" cx="22.2" cy="24" r="1.1"/><circle class="r n" cx="22.2" cy="30" r="1.1"/>' +
+      '<path class="g n" d="M15.8 21.5a3.3 3.3 0 1 0 3.4 4.6 2.8 2.8 0 0 1-3.4-4.6z"/>',
+    socks:
+      '<path class="h" d="M21 4h8v14l7 5.5a4.5 4.5 0 0 1-2.7 8.1H31a8 8 0 0 1-5.7-2.4L22.5 26.5A5 5 0 0 1 21 23z"/><path class="c" d="M21 4h8v4.5h-8z"/>' +
+      '<path class="r" d="M7 8h9v14l8 6a4.5 4.5 0 0 1-2.7 8.1H18a8 8 0 0 1-5.7-2.4L8.5 30A5 5 0 0 1 7 26.5z"/><path class="c" d="M7 8h9v5H7z"/>' +
+      '<path class="l" d="M7 17.5h9M7 21h9"/><path class="l" d="M21 12.5h8"/>',
+    "hat-gloves":
+      '<circle class="c" cx="16" cy="8" r="4.5"/><path class="r" d="M4.5 26a11.5 11.5 0 0 1 23 0z"/><path class="l" d="M8 21.5l2.7-3 2.7 3 2.6-3 2.7 3 2.6-3 2.7 3"/>' +
+      '<rect class="c" x="2.5" y="25" width="27" height="7.5" rx="3"/><path d="M9 25v7.5M16 25v7.5M23 25v7.5"/>' +
+      '<path class="h" d="M26.5 21.5l-2.3 1.5a2.3 2.3 0 0 0 2.3 4"/><path class="h" d="M26.5 18.5a4.5 4.5 0 0 1 9 0V31h-9z"/><rect class="c" x="25.5" y="31" width="11" height="5.5" rx="1.5"/>',
+    // --- the examples under "Whenever the need comes" ---
+    "crisis-15":
+      '<circle class="t" cx="11.5" cy="8.5" r="4.2"/><circle class="t" cx="28.5" cy="8.5" r="4.2"/><circle class="s n" cx="11.5" cy="8.5" r="1.8"/><circle class="s n" cx="28.5" cy="8.5" r="1.8"/>' +
+      '<ellipse class="t" cx="9.5" cy="26" rx="3.3" ry="4.8"/><ellipse class="t" cx="30.5" cy="26" rx="3.3" ry="4.8"/>' +
+      '<ellipse class="t" cx="20" cy="29.5" rx="9" ry="8"/><ellipse class="s n" cx="20" cy="30.5" rx="4.8" ry="5"/>' +
+      '<circle class="t" cx="13" cy="36" r="3.3"/><circle class="t" cx="27" cy="36" r="3.3"/>' +
+      '<circle class="t" cx="20" cy="14.5" r="9.5"/><ellipse class="s" cx="20" cy="17.5" rx="4.2" ry="3.2"/>' +
+      '<circle class="d n" cx="16.2" cy="12.5" r="1"/><circle class="d n" cx="23.8" cy="12.5" r="1"/><path class="d n" d="M18.7 16h2.6L20 17.6z"/><path d="M20 17.6v1.4"/>',
+    "crisis-30":
+      '<rect class="t" x="3" y="9" width="4.5" height="26" rx="1.5"/><rect class="t" x="33" y="18" width="4" height="17" rx="1.5"/>' +
+      '<rect class="w" x="9" y="15.5" width="10" height="6" rx="2.5"/><path class="r" d="M7.5 21.5H33V30H7.5z"/><path class="c" d="M7.5 21.5h8l3 8.5h-11z"/>' +
+      '<path class="l" d="M22 25.8h7.5"/><path d="M7.5 30H33"/>',
+    "crisis-60":
+      '<path d="M14.5 7c-1.3-1.5 1.3-2.5 0-4M20 6c-1.3-1.5 1.3-2.5 0-4M25.5 7c-1.3-1.5 1.3-2.5 0-4"/>' +
+      '<path class="r" d="M8 19h24v12a4 4 0 0 1-4 4H12a4 4 0 0 1-4-4z"/><path class="x" d="M8 23.5H4.5M32 23.5h3.5"/>' +
+      '<path class="t" d="M6.5 19a13.5 6.5 0 0 1 27 0z"/><circle class="g" cx="20" cy="11" r="2.2"/><path class="l" d="M13 26v4"/>',
+    "school-25":
+      '<path class="e" d="M11 18.5v-7c0-1 .8-1.8 1.8-1.8H18l5 5 7.5 1.4c2.8.5 4.5 1.8 4.5 3.400z"/><rect class="t" x="10" y="18.5" width="26" height="3" rx="1.5"/>' +
+      '<path class="e" d="M4.5 31.5v-8.3c0-1.1.9-2 2-2h5.8l5.5 5.6 8.2 1.5c3 .5 5 2 5 3.7z"/><rect class="t" x="3.5" y="31.5" width="28.5" height="3.5" rx="1.7"/>' +
+      '<path class="l" d="M12.5 23.5l3.8 4.8M16.5 26.3l2.5-2M19.3 28l2.2-1.8"/>',
+    "school-35":
+      '<path class="h" d="M11.5 14.5a8.5 8.5 0 0 1 17 0z"/><path class="c" d="M15.2 14.5a4.8 4.8 0 0 1 9.6 0z"/>' +
+      '<path class="h" d="M12.5 14c-4.2 1-7.3 4.8-7.8 9.3L4 30.5h6.6l1.9-6z"/><path class="h" d="M27.5 14c4.2 1 7.3 4.8 7.8 9.3l.7 7.2h-6.6l-1.9-6z"/>' +
+      '<rect class="c" x="3.6" y="30" width="7.2" height="3.2" rx="1.4"/><rect class="c" x="29.2" y="30" width="7.2" height="3.2" rx="1.4"/>' +
+      '<rect class="h" x="11.5" y="13.5" width="17" height="22.5" rx="3.5"/><path class="l" d="M11.5 19.5h17M11.5 25h17M11.5 30.5h17M5.2 24.5h5.6M29.2 24.5h5.6"/>' +
+      '<path d="M20 13.5V36"/><circle class="g n" cx="20" cy="16.6" r="1.4"/>',
+    "school-40":
+      '<path class="d" d="M14 7l-8 4-2.5 18.5h5.5l1.5-9V36h19V20.5l1.5 9h5.5L34 11l-8-4-6 8.5z"/><path class="w" d="M14 7l6 8.5L26 7l-2.5-2h-7z"/>' +
+      '<path class="r" d="M20 8l1.8 2.2L20 15.5l-1.8-5.3z"/><path class="l" d="M10.5 32.5h19M4.7 26.5h4.6M30.7 26.5h4.6"/>',
+    "hand-20":
+      '<rect class="s" x="3.5" y="22.5" width="21" height="12.5" rx="4.5"/><rect x="8" y="26" width="12" height="5.5" rx="2.7"/>' +
+      '<circle class="w" cx="8.5" cy="16" r="2.8"/><circle class="w" cx="15.5" cy="11.5" r="3.8"/><circle class="w" cx="21.5" cy="17.5" r="2.2"/>' +
+      '<rect class="h" x="29.5" y="15" width="4.5" height="21.5" rx="2.2"/><rect class="w" x="28.5" y="3.5" width="6.5" height="10" rx="1.8"/><path d="M28.5 7h6.5M28.5 10h6.5"/>',
+    "hand-75":
+      '<path class="x" d="M13.5 16v-3.5a3 3 0 0 1 3-3h7a3 3 0 0 1 3 3V16"/><rect class="r" x="4" y="16" width="32" height="19" rx="2.5"/><path d="M4 23h32"/>' +
+      '<rect class="g" x="17" y="20.5" width="6" height="5" rx="1"/><path class="l" d="M8.5 29.5h6M25.5 29.5h6"/>',
+    "hand-150":
+      '<path class="h" d="M10.5 8V5h8v3"/><path d="M18.5 6h3"/><rect class="c" x="6" y="8" width="28" height="29" rx="2.5"/><path d="M6 15.5h28"/>' +
+      '<circle class="r" cx="12" cy="11.8" r="1.5"/><circle class="r" cx="20" cy="11.8" r="1.5"/><circle class="r" cx="28" cy="11.8" r="1.5"/>' +
+      '<rect class="s" x="10" y="19" width="20" height="13.5" rx="1.5"/><path class="x" d="M13.5 22h13"/><rect class="t" x="13.5" y="25" width="13" height="5" rx="1"/>',
+  };
+
+  /**
+   * One drawing as an inline picture, for the eye only: never read out and never in the tab order.
+   * Nothing for a key with no drawing. `cls` adds a class, `size` sets its width and height.
+   */
+  function art(key, cls, size) {
+    if (!Object.prototype.hasOwnProperty.call(ART, key)) return "";
+    var px = size || 40;
+    return (
+      '<svg class="rb-art' + (cls ? " " + cls : "") + '" viewBox="0 0 40 40" width="' + px + '" height="' + px + '" aria-hidden="true" focusable="false">' +
+      ART[key] +
+      "</svg>"
+    );
+  }
+
+  // What the gift tag on a full bag reads, a line at a time.
+  var TAG_LINES = ["Packed", "with love"];
+
+  // How many things may peek out of the top of a bag: more as it fills, three at most. A full bag is
+  // tied and tagged, so nothing peeks from it.
+  var MAX_PEEKS = 3;
+  function peekCount(fill) {
+    var f = Number(fill) || 0;
+    if (f <= 0 || f >= 1) return 0;
+    if (f < 0.25) return 1;
+    return f < 0.5 ? 2 : 3;
+  }
+
+  /**
+   * Which items peek out of the bag that is filling, as three places (an item's key, or null).
+   * `previous` is what peeked before, `keys` the items in the bag with the newest first, `fill` how
+   * full that bag is (0 to 1). Only things in the bag ever peek; what was peeking stays where it
+   * was; a free place goes to the newest item not yet showing; an item taken out loses its peek.
+   */
+  function peekSlots(previous, keys, fill) {
+    var inBag = (keys || []).filter(function (k) {
+      return Object.prototype.hasOwnProperty.call(ART, k);
+    });
+    var allowed = peekCount(fill);
+    var out = [];
+    var shown = 0;
+    var i;
+    for (i = 0; i < MAX_PEEKS; i += 1) {
+      var was = previous ? previous[i] : null;
+      if (was && shown < allowed && inBag.indexOf(was) !== -1 && out.indexOf(was) === -1) {
+        out.push(was);
+        shown += 1;
+      } else out.push(null);
+    }
+    for (i = 0; i < inBag.length && shown < allowed; i += 1) {
+      if (out.indexOf(inBag[i]) !== -1) continue;
+      out[out.indexOf(null)] = inBag[i];
+      shown += 1;
+    }
+    return out;
+  }
+
+  /** The handles strain a touch when the bag is nearly full (as the status line says it is). */
+  function strains(fill) {
+    var f = Number(fill) || 0;
+    return f >= 0.88 && f < 1;
+  }
+
+  /**
+   * The milestone a change has just crossed on the way UP, in pence: half a bag (£25), then every
+   * full bag. The highest one when several are passed at once. Nothing (0) on the way down or
+   * standing still, so a milestone comes again only after the total has dropped below it.
+   */
+  function milestoneCrossed(beforePence, afterPence) {
+    var before = Math.max(0, Math.floor(beforePence || 0));
+    var after = Math.max(0, Math.floor(afterPence || 0));
+    if (after <= before) return 0;
+    var top = Math.floor(after / BAG_VALUE_PENCE) * BAG_VALUE_PENCE;
+    if (top > before) return top;
+    return before < HALF_BAG_PENCE && after >= HALF_BAG_PENCE ? HALF_BAG_PENCE : 0;
+  }
+
+  // The elf's notes: short lines scribbled on the paper beside the row just changed, as if an elf
+  // were reading over the donor's shoulder. ALL of them are here, in this ONE list, so they are easy
+  // to read through and change. The rules (test/unit/red-bag-delight.test.ts holds them):
+  //   - never say anything is bought, or that a particular person receives it; never "will";
+  //   - no pressure, no guilt, nobody ranked; kind when something is taken out;
+  //   - no dashes or hyphens, British spelling, 32 characters at most so a note fits on one line.
+  // In `several`, {n} is how many and {things} is the item's plural from `things`.
+  var NOTES = {
+    items: {
+      blanket: ["Ooh, a blanket. Cosy.", "A blanket. A hug you can fold."],
+      "insulated-cup": ["Tea that stays hot. Magic.", "A warm cup. Lovely."],
+      "toiletry-set": ["Smelling lovely. Nice touch.", "A little bit of pampering."],
+      toy: ["A toy! The elves are jealous.", "Playtime. Our favourite."],
+      "soft-toy": ["Something to cuddle. Aww.", "Soft toys give great hugs."],
+      headphones: ["Headphones. Tunes on!", "Music to our pointy ears."],
+      book: ["A book! Elves love a story.", "Once upon a time..."],
+      "colouring-book": ["Colouring in. Pure calm.", "Outside the lines? Go for it."],
+      pencil: ["A pencil! Small but mighty.", "Sharp thinking."],
+      notebook: ["A notebook. Big ideas welcome.", "Blank pages. Endless plans."],
+      pyjamas: ["Pyjamas! Snug as a bug.", "Fresh jammies. The dream."],
+      socks: ["Socks! A classic.", "Warm toes. Happy days."],
+      "hat-gloves": ["Hat and gloves. Toasty!", "Wrapped up warm. Lovely."],
+    },
+    general: ["Lovely choice.", "Oh, nice one.", "The elves are impressed.", "You're good at this.", "That's the spirit.", "Elf approved."],
+    first: ["And we're off! Great start.", "First thing in. Lovely.", "Here we go! Elves are cheering."],
+    several: ["{n} {things}? You legend.", "{n} {things}! Brilliant.", "{n} {things}. What a pile!"],
+    things: {
+      blanket: "blankets",
+      "insulated-cup": "cups",
+      "toiletry-set": "gift sets",
+      toy: "toys",
+      "soft-toy": "soft toys",
+      headphones: "headphones",
+      book: "books",
+      "colouring-book": "colouring books",
+      pencil: "pencils",
+      notebook: "notebooks",
+      pyjamas: "pyjamas",
+      socks: "pairs of socks",
+      "hat-gloves": "hats and gloves",
+    },
+    out: ["No bother. Back on the shelf.", "Changed your mind? That's fine.", "Out it comes. No worries.", "Easy done. Your bag, your call."],
+    example: ["That's a lovely one.", "A kind thought, that.", "All year round. Love that.", "Thoughtful. Elves noticed."],
+  };
+
+  function several(template, key, n) {
+    return template.replace("{n}", String(n)).replace("{things}", NOTES.things[key] || "of those");
+  }
+
+  /**
+   * What kind of note a change earns. A change is { kind: "in" | "out" | "example", key, quantity
+   * (what the item is at now), step (how many it went up by), first (the bag was empty before) }.
+   * "several" is a typed jump to three or more, or reaching 3, 5, 10, 15 and so on one at a time.
+   */
+  function noteKind(change) {
+    if (!change) return "";
+    if (change.kind === "out") return "out";
+    if (change.kind === "example") return "example";
+    if (change.kind !== "in") return "";
+    if (change.first) return "first";
+    var q = change.quantity || 0;
+    var step = change.step || 1;
+    if (q >= 3 && NOTES.things[change.key] && (step > 1 || q === 3 || q % 5 === 0)) return "several";
+    return "item";
+  }
+
+  /**
+   * The note for a change. `last` is the note shown before, which is never chosen again straight
+   * away; `roll` is a number from 0 to 1 that picks among the alternatives (the page passes a
+   * random one, so this stays a pure function). An empty string for a change it does not know.
+   */
+  function noteFor(change, last, roll) {
+    var kind = noteKind(change);
+    if (!kind) return "";
+    var r = Number(roll) || 0;
+    r = r < 0 ? 0 : r >= 1 ? 0.999999 : r;
+    var list;
+    if (kind === "several") {
+      list = NOTES.several.map(function (t) {
+        return several(t, change.key, change.quantity);
+      });
+    } else if (kind === "item") {
+      // Mostly about the item itself; something general now and then.
+      var own = NOTES.items[change.key] || [];
+      if (own.length && r < 0.7) {
+        list = own;
+        r = r / 0.7;
+      } else {
+        list = NOTES.general;
+        r = own.length ? (r - 0.7) / 0.3 : r;
+      }
+    } else list = NOTES[kind];
+    var pool = list.filter(function (n) {
+      return n !== last;
+    });
+    if (!pool.length) pool = list;
+    return pool[Math.min(pool.length - 1, Math.floor(r * pool.length))] || "";
+  }
+
+  /** Every note that can ever be shown, the "several" ones written out for each item (3 and 99). */
+  function allNotes() {
+    var out = [];
+    Object.keys(NOTES.items).forEach(function (k) {
+      out = out.concat(NOTES.items[k]);
+    });
+    out = out.concat(NOTES.general, NOTES.first, NOTES.out, NOTES.example);
+    Object.keys(NOTES.things).forEach(function (k) {
+      NOTES.several.forEach(function (t) {
+        out.push(several(t, k, 3));
+        out.push(several(t, k, 99));
+      });
+    });
+    return out;
+  }
+
   var api = {
+    ART: ART,
+    art: art,
+    TAG_LINES: TAG_LINES,
+    MAX_PEEKS: MAX_PEEKS,
+    peekCount: peekCount,
+    peekSlots: peekSlots,
+    strains: strains,
+    milestoneCrossed: milestoneCrossed,
+    NOTES: NOTES,
+    noteKind: noteKind,
+    noteFor: noteFor,
+    allNotes: allNotes,
     BAG_VALUE_PENCE: BAG_VALUE_PENCE,
     MIN_PENCE: MIN_PENCE,
     MAX_QUANTITY: MAX_QUANTITY,

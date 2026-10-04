@@ -138,12 +138,36 @@ export async function createInvite(
   );
 }
 
+// Who a resend copies in, read inside its transaction from the invite's `fundraiser_invite.sent`
+// audit row. A null cc there means the send chose no copy (the signer was the person invited), so
+// the resend has none either. An address there is used only while it still belongs to someone who
+// can sign in (not disabled, as getSigner decides), so nobody who has left is sent the invitee's
+// details. Otherwise (no row, a row from before the copy was recorded, an address that is not whole
+// or is no longer staff) the copy goes to the person resending it.
+async function resendCopy(client: PoolClient, id: number, recipient: string, senderEmail: string | null | undefined): Promise<string | null> {
+  const r = await client.query(
+    `SELECT data ? 'cc' AS has_cc, data->>'cc' AS cc FROM audit_log
+      WHERE entity = 'fundraiser_invite' AND entity_id = $1 AND action = 'fundraiser_invite.sent'
+      ORDER BY id DESC LIMIT 1`,
+    [id],
+  );
+  const row = r.rows[0] as { has_cc?: boolean; cc?: string | null } | undefined;
+  const fallback = () => inviteCc(senderEmail, recipient) ?? null;
+  if (!row || !row.has_cc) return fallback();
+  if (row.cc === null || row.cc === undefined) return null;
+  const kept = inviteCc(row.cc, "");
+  if (!kept) return fallback();
+  const live = await client.query("SELECT 1 FROM users WHERE lower(email) = $1 AND status <> 'disabled' LIMIT 1", [kept]);
+  return live.rows[0] ? (inviteCc(kept, recipient) ?? null) : fallback();
+}
+
 /**
  * A new token and a new date for an invite not taken up. Throws not_found otherwise. The `cc` that
  * comes back is who the email copies in, and the audit row says so: whoever was copied in when the
  * invite was sent (the address on its `fundraiser_invite.sent` audit row: the signer, or for an
- * invite from before 2026-10-04 whoever sent it). senderEmail, the member of staff resending it, is
- * used only when no address was kept. `actor` is who pressed Resend. The type stays as it was. An
+ * invite from before 2026-10-04 whoever sent it), while they can still sign in; see resendCopy.
+ * senderEmail, the member of staff resending it, is used only when no address was kept or it is no
+ * longer staff's. `actor` is who pressed Resend. The type stays as it was. An
  * invite whose wording is waiting for sign off (an in memory one whose approval was withdrawn)
  * throws wording_waiting and nothing changes: the transaction is rolled back, so the link in the
  * first email still works.
@@ -163,13 +187,7 @@ export async function resendInvite(
     if (!r.rows[0]) throw new TeamError("not_found");
     const inv = toInvite(r.rows[0]);
     await requireSignOff(client, inv.type);
-    const kept = await client.query(
-      `SELECT data->>'cc' AS cc FROM audit_log
-        WHERE entity = 'fundraiser_invite' AND entity_id = $1 AND action = 'fundraiser_invite.sent'
-        ORDER BY id DESC LIMIT 1`,
-      [id],
-    );
-    const cc = inviteCc((kept.rows[0]?.cc as string | null | undefined) ?? null, inv.email, senderEmail) ?? null;
+    const cc = await resendCopy(client, id, inv.email, senderEmail);
     await insertAudit(client, {
       actor,
       action: "fundraiser_invite.resent",

@@ -8087,8 +8087,9 @@ sign in to the admin with, whoever is signed in and sending it (since 2026-10-04
 that the copy went to the person signed in). A Resend copies in the same address again: the one
 kept on the invite's `fundraiser_invite.sent` audit row, so an invite sent before the change still
 copies in whoever sent it. The person signed in gets the copy only when the signer has no usable
-address, or no address was kept; when the address is the person invited, it goes with no copy and
-the invite still stands. Who was copied in (or `null`) is on the `fundraiser_invite.sent` and
+address, no address was kept, or (on a Resend) the address kept no longer belongs to someone who can
+sign in to the admin; when the address is the person invited, it goes with no copy, a Resend of it
+goes with none too, and the invite still stands. Who was copied in (or `null`) is on the `fundraiser_invite.sent` and
 `.resent` audit rows, whose actor is always whoever pressed Send or Resend.
 For a while, an admin page loaded before the two boxes can still send one `name`: it is split at its
 first space, and a single word gets `400 { error: "Please refresh the page and try again." }`. Its button opens `/fundraise?invite=<token>`, and the form fills in their first name,

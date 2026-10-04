@@ -187,26 +187,53 @@ describe("invites", () => {
 
   // Jaimie 2026-10-04: a resend copies in whoever was copied in when it was sent (the address on its
   // `fundraiser_invite.sent` record): the signer for an invite sent since, and for one sent before,
-  // whoever sent it. The record of the resend still names who pressed Resend as its actor.
-  const KEPT = /SELECT data->>'cc' AS cc FROM audit_log/;
-  const resendWith = (kept: unknown[]) =>
-    useClient((sql) => (/UPDATE fundraiser_invites/.test(sql) ? { rows: [inviteRow()] } : KEPT.test(sql) ? { rows: kept } : undefined));
+  // whoever sent it. Only while that address still belongs to someone who can sign in, as a send
+  // only takes a signer who can. The record of the resend still names who pressed Resend.
+  const KEPT = /FROM audit_log/;
+  const STAFF = /FROM users WHERE lower\(email\) = \$1 AND status <> 'disabled'/;
+  // kept: the sent record's answer (none, one with no cc key, a null cc, or an address). staff: the
+  // addresses that still belong to someone who can sign in.
+  const resendWith = (kept: unknown[], staff: string[] = []) =>
+    useClient((sql, params) =>
+      /UPDATE fundraiser_invites/.test(sql)
+        ? { rows: [inviteRow()] }
+        : KEPT.test(sql)
+          ? { rows: kept }
+          : STAFF.test(sql)
+            ? { rows: staff.includes(String(params[0])) ? [{ "?column?": 1 }] : [] }
+            : undefined,
+    );
 
   it("copies in on a resend whoever was copied in when it was sent, whoever resends it", async () => {
-    const calls = resendWith([{ cc: "fern@example.com" }]);
+    const calls = resendWith([{ has_cc: true, cc: "fern@example.com" }], ["fern@example.com"]);
     const inv = await resendInvite(4, "n".repeat(64), "admin:rowan@example.com", "rowan@example.com");
     expect(inv.cc).toBe("fern@example.com");
     const read = sqlIn(calls, KEPT)!;
     expect(read[0]).toMatch(/action = 'fundraiser_invite\.sent'/);
     expect(read[0]).toMatch(/entity = 'fundraiser_invite' AND entity_id = \$1/);
     expect(read[1]).toEqual([4]);
+    expect(sqlIn(calls, STAFF)![1]).toEqual(["fern@example.com"]);
     const audit = audits(calls)[0];
     expect(audit[0]).toBe("admin:rowan@example.com");
     expect(audit[4]).toEqual({ email: "alex@example.com", cc: "fern@example.com" });
   });
 
-  it("falls back on a resend to the person resending when no address was kept, never the person invited", async () => {
-    for (const kept of [[], [{ cc: null }], [{ cc: "fern@" }]]) {
+  // Someone who signed an invite and has since left (disabled, or removed) is not sent the invitee's
+  // details and a fresh link.
+  it("kept address no longer belongs to current staff: the copy goes to the resender", async () => {
+    const calls = resendWith([{ has_cc: true, cc: "fern@example.com" }], ["rowan@example.com"]);
+    const inv = await resendInvite(4, "n".repeat(64), "admin:rowan@example.com", "rowan@example.com");
+    expect(inv.cc).toBe("rowan@example.com");
+    expect(sqlIn(calls, STAFF)![1]).toEqual(["fern@example.com"]);
+    expect(audits(calls)[0][4]).toEqual({ email: "alex@example.com", cc: "rowan@example.com" });
+    // In the one transaction, before it commits.
+    const order = calls.map((c) => c[0]);
+    expect(order.findIndex((s) => STAFF.test(s))).toBeLessThan(order.indexOf("COMMIT"));
+  });
+
+  it("falls back on a resend to the person resending when nothing was kept, never the person invited", async () => {
+    // No sent record, one from before the copy was recorded (no cc key), or an address that is not whole.
+    for (const kept of [[], [{ has_cc: false, cc: null }], [{ has_cc: true, cc: "fern@" }]]) {
       const calls = resendWith(kept);
       const inv = await resendInvite(4, "n".repeat(64), "admin:rowan@example.com", "Rowan@Example.com");
       expect(inv.cc).toBe("rowan@example.com");
@@ -215,6 +242,16 @@ describe("invites", () => {
     const calls = resendWith([]);
     const inv = await resendInvite(4, "n".repeat(64), "admin:alex@example.com", "alex@example.com");
     expect(inv.cc).toBeNull();
+    expect(audits(calls)[0][4]).toEqual({ email: "alex@example.com", cc: null });
+  });
+
+  // The signer was the person invited, so the send chose no copy and recorded cc: null. A resend
+  // keeps to that: it does not copy in whoever resends it.
+  it("sends no copy on a resend of an invite that was sent with none on purpose", async () => {
+    const calls = resendWith([{ has_cc: true, cc: null }], ["rowan@example.com"]);
+    const inv = await resendInvite(4, "n".repeat(64), "admin:rowan@example.com", "rowan@example.com");
+    expect(inv.cc).toBeNull();
+    expect(sqlIn(calls, KEPT)![0]).toMatch(/data \? 'cc' AS has_cc/);
     expect(audits(calls)[0][4]).toEqual({ email: "alex@example.com", cc: null });
   });
 

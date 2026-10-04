@@ -134,7 +134,7 @@ describe("an invite's name", () => {
 
 describe("who is copied in on an invite", () => {
   // With one address offered, that address (the two address rule is below).
-  it("is the sender's email, tidied", () => {
+  it("is the signer's email, tidied", () => {
     expect(inviteCc(" Fern@Example.com ", "morag@example.com")).toBe("fern@example.com");
   });
 

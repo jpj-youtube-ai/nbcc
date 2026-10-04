@@ -12131,7 +12131,10 @@ don't mind if Google crawls it"). The switch is one constant, `RED_BAG_LIVE` in
 - `GET /fill` is the giving page, for anyone. It is in `SITE_PAGES` (`src/site/pages.ts`), so it is
   on `/sitemap` and in `sitemap.xml`, in Admin > Site pages with the usual search visibility
   choice, and offered where staff make QR codes for site pages. It carries what a listed page here
-  carries: a title, a meta description, a canonical link to `https://nbcc.scot/fill`, and the Open
+  carries: a title ("Fill a Red Bag | Night Before Christmas Campaign"), a meta description ("Pop a
+  few things in a Red Bag and watch it fill. A new way to give to NBCC, showing what your donation
+  could do for children, young people and vulnerable adults, all year round."), a canonical link to
+  `https://nbcc.scot/fill`, and the Open
   Graph and Twitter share card with the site's one share picture (`assets/img/og-image.png`). It
   has no `noindex` line and the route sends no `X-Robots-Tag`.
 - `GET /fill/thank-you` is the thank you, a page of its own (`fill-thank-you.html`), where Stripe

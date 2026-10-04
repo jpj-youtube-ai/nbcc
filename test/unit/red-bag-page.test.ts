@@ -584,7 +584,7 @@ describe("the site's shell and its accessibility floor", () => {
 describe("listed for search engines, but linked from nowhere", () => {
   const head = (key: string) => doc.querySelector(`meta[name="${key}"], meta[property="${key}"]`)?.getAttribute("content");
   const TITLE = "Fill a Red Bag | Night Before Christmas Campaign";
-  const DESCRIPTION = "Fill a Red Bag with examples of what your donation could do for children, young people and vulnerable adults, all year round.";
+  const DESCRIPTION = "Pop a few things in a Red Bag and watch it fill. A new way to give to NBCC, showing what your donation could do for children, young people and vulnerable adults, all year round.";
 
   it("does not tell search engines to stay away", () => {
     expect(doc.querySelector('meta[name="robots"]')).toBeNull();

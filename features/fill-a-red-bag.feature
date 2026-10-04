@@ -74,6 +74,7 @@ Feature: Fill a Red Bag, listed for search engines but linked from nowhere
     When I request the site path "/donate"
     Then the site response status should be 200
     And the site response should not contain "fill-a-red-bag"
+    And the site response should not contain 'href="/fill"'
 
   Scenario: a Red Bag gift under £2 is refused
     When I POST "/api/checkout-session" with JSON:

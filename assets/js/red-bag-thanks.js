@@ -17,6 +17,9 @@
 
   // What the giving page left in this tab's memory. Display only.
   var GIFT_KEY = "nbcc_red_bag_gift";
+  // The most a remembered total may be and still be shown: £100,000. The figure is only what the
+  // tab kept, for show; anything above this is not believed, and the plain thank you stays.
+  var MAX_SHOWN_PENCE = 10000000;
   // The giving page's public address, for sharing.
   var PAGE_URL = "https://nbcc.scot/fill";
 
@@ -70,7 +73,7 @@
         gift = null;
       }
     }
-    var ok = gift && typeof gift.pence === "number" && isFinite(gift.pence) && gift.pence >= rb.MIN_PENCE && Math.floor(gift.pence) === gift.pence;
+    var ok = gift && typeof gift.pence === "number" && isFinite(gift.pence) && gift.pence >= rb.MIN_PENCE && gift.pence <= MAX_SHOWN_PENCE && Math.floor(gift.pence) === gift.pence;
     var totalLine = thanks.querySelector("[data-rb-thanks-total]");
     var plain = thanks.querySelector("[data-rb-thanks-plain]");
     var aid = thanks.querySelector("[data-rb-thanks-giftaid]");

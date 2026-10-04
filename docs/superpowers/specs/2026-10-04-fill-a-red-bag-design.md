@@ -184,8 +184,9 @@ Search engines may list the giving page from the day it is live (Jaimie, 4 Octob
 pushed and live I don't mind if Google crawls it"). So `/fill` is in the site's page list (on the
 site map page and in `sitemap.xml`, with staff's usual per page search visibility choice), carries
 no `noindex`, and has what the site's other listed pages have: a title ("Fill a Red Bag | Night
-Before Christmas Campaign"), a description ("Fill a Red Bag with examples of what your donation
-could do for children, young people and vulnerable adults, all year round."), a canonical link to
+Before Christmas Campaign"), a description (Jaimie's choice: "Pop a few things in a Red Bag and watch it
+fill. A new way to give to NBCC, showing what your donation could do for children, young people and
+vulnerable adults, all year round."), a canonical link to
 https://nbcc.scot/fill, and the share card with the site's one share picture. The thank you page is
 never indexed and on no site map. The forwards stay 301s.
 

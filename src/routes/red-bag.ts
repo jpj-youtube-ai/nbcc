@@ -30,7 +30,7 @@ import { RED_BAG_PATH, RED_BAG_THANKS_PATH, redBagAccess, redBagIsLive } from ".
 // plain visit while switched off is the 404, staff included. The 404 served at these two pages (and only there)
 // carries one extra small script, assets/js/red-bag-preview.js: if the tab holds an admin session it
 // asks for this same address again WITH the token, and shows the page that comes back. So a member
-// of staff signs in at /admin, then goes to /fill-a-red-bag in the same tab. Without a session the
+// of staff signs in at /admin, then goes to /fill (or /fill/thank-you) in the same tab. Without a session the
 // script does nothing, and the public sees the ordinary 404. (The script asks for whichever address
 // it is on, so it serves /fill and /fill/thank-you alike.)
 //

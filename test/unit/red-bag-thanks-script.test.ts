@@ -84,6 +84,19 @@ describe("arriving back from paying", () => {
     }
   });
 
+  // The figure is only what the tab remembered, and is for show. An absurd one is not shown.
+  it("is a plain thank you when the remembered total is beyond belief: above £100,000", () => {
+    start({ kept: kept({ pence: 10000001, giftAid: true, monthly: false }) });
+    expect($("[data-rb-thanks-total]").hidden).toBe(true);
+    expect($("[data-rb-thanks-plain]").hidden).toBe(false);
+    expect($("[data-rb-thanks-giftaid]").hidden).toBe(true);
+    start({ kept: kept({ pence: 1e21, giftAid: false, monthly: false }) });
+    expect($("[data-rb-thanks-total]").hidden).toBe(true);
+    // Exactly £100,000 is still a total.
+    start({ kept: kept({ pence: 10000000, giftAid: false, monthly: false }) });
+    expect(text("[data-rb-thanks-total]")).toBe("Your donation of £100,000 is on its way to NBCC.");
+  });
+
   it("is a plain thank you where the browser keeps nothing for the tab", () => {
     start({ noStorage: true });
     expect($("[data-rb-thanks-plain]").hidden).toBe(false);

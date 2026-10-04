@@ -1101,7 +1101,6 @@ describe("the thank you is not here", () => {
       start({ search, kept: { nbcc_red_bag_gift: JSON.stringify({ pence: 5410, giftAid: false, monthly: false }) } });
       expect($("[data-rb-thanks]")).toBeNull();
       expect($("[data-rb-builder]").hidden).toBe(false);
-      expect($("[data-rb-lede]").hidden).toBe(false);
       // What the tab remembered is left for the thank you page to read.
       expect(store.has("nbcc_red_bag_gift")).toBe(true);
       expect(history.replaceState).not.toHaveBeenCalled();

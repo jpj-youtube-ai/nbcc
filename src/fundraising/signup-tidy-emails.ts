@@ -61,16 +61,18 @@ export function buildTshirtAskEmail(typedName: string | null | undefined, url: s
 
 /**
  * An email about a member page set up for someone under 18 goes to their parent or guardian, so it
- * says hello to them and whose page it is about: "Hi Sarah, this is about Jack's page." Any other
+ * says hello to them and whose page it is about: "Hi Sarah, this is about Jack's page." (With a
+ * parent's name we cannot greet by, "Hi there, this is about Jack's page.": never "Hi Jack,".) Any other
  * email comes back untouched. Applied where the emails are sent (send.ts, team-send.ts, touch-runner.ts).
  */
 export function greetGuardian<T extends { html: string; text?: string }>(
   mail: T,
   f: { name: string; firstName?: string | null; guardianFirstName?: string | null },
 ): T {
-  const guardian = safeFirstName(f.guardianFirstName);
+  if (!String(f.guardianFirstName ?? "").trim()) return mail;
+  const guardian = safeFirstName(f.guardianFirstName) ?? "there";
   const child = firstWord(f.firstName ?? f.name);
-  if (!guardian || !child) return mail;
+  if (!child) return mail;
   // The greeting is built here from what is stored, and takes the place of the email's own opening
   // "Hi ...," whatever name and capitals that used.
   const to = `Hi ${guardian}, this is about ${child}'s page.`;

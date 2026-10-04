@@ -457,6 +457,18 @@ describe("the welcome letter", () => {
       expect(coveringNote(f, signer).greeting).toBe("Hello,");
     }
   });
+  // Review: the same care as the emails. A title is skipped, and a group or a business (the name
+  // its page is credited to) has no first name to use, whatever its first word.
+  it("skips a title, and says Hello to a business whose name does not start with The", () => {
+    const dr = subject({ firstName: null, lastName: null, name: "Dr Sam Example" });
+    expect(welcomeLetter(dr, packItems(dr), signer, page).greeting).toBe("Dear Sam,");
+    const ltd = { ...subject({ firstName: null, lastName: null, name: "Example Arms Ltd" }), creditName: "Example Arms Ltd" };
+    expect(welcomeLetter(ltd, packItems(ltd), signer, page).greeting).toBe("Hello,");
+    expect(coveringNote(ltd, signer).greeting).toBe("Hello,");
+    // A first name of two words stays whole.
+    const two = subject({ firstName: "Mary Jane", name: "Mary Jane Example" });
+    expect(welcomeLetter(two, packItems(two), signer, page).greeting).toBe("Dear Mary Jane,");
+  });
   it("never calls the people NBCC supports families", () => {
     const f = subject();
     expect(JSON.stringify(welcomeLetter(f, packItems(f), signer, page))).not.toMatch(/families/i);
@@ -650,6 +662,19 @@ describe("the requests a pack looks after", () => {
     // The same press on one the pack itself last changed does put the count right.
     const byPack = [row("posters", { status: "sent", quantity: 8, ...BY_PACK })];
     expect(packRequestSync(both, byPack, pressed("tick", "posters_a4", true))).toEqual([{ kind: "posters", input: { action: "count", from: "sent", quantity: 12 } }]);
+  });
+  // Review: both sizes ticked (Sent, 12). Staff press Undo in Requests. The A4 posters are unticked
+  // and ticked again: the request staff undid by hand stays To send.
+  it("never sends again a request staff undid by hand, when its thing is ticked again", () => {
+    const both = packView(f, pack({ items: [ticked("posters_a4", 10), ticked("posters_a3", 2)] }), sizes)!;
+    const undone = [row("posters", { status: "to_send", ...BY_HAND })];
+    expect(packRequestSync(both, undone, pressed("tick", "posters_a4", true))).toEqual([]);
+    expect(packRequestSync(both, undone, pressed("skip", "posters_a3", true))).toEqual([]);
+    // One the pack itself opened again (a tick came off) is sent again when the tick goes back.
+    const byPack = [row("posters", { status: "to_send", ...BY_PACK })];
+    expect(packRequestSync(both, byPack, pressed("tick", "posters_a4", false)).map((s) => s.input.action)).toEqual(["send"]);
+    // And one the pack never marked is marked as before, whoever touched it last.
+    expect(packRequestSync(both, undone, pressed("tick", "posters_a4", false)).map((s) => s.input.action)).toEqual(["send"]);
   });
   it("never opens again a request staff sent again by hand, when a tick comes off", () => {
     const one = packView(f, pack({ items: [ticked("posters_a3", 2)] }), sizes)!;

@@ -74,6 +74,20 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 type Fields = Record<string, string>;
 
 const text = (v: unknown): string => (typeof v === "string" ? v.trim() : "");
+// A name is one plain line: line breaks, tabs and other control characters become spaces, and one
+// space between words, so it can never break an email's subject or heading.
+const isControl = (ch: string): boolean => {
+  const c = ch.charCodeAt(0);
+  return c < 32 || (c >= 127 && c <= 159) || c === 0x2028 || c === 0x2029;
+};
+const nameText = (v: unknown): string =>
+  typeof v === "string"
+    ? Array.from(v, (ch) => (isControl(ch) ? " " : ch)).join("").replace(/\s+/g, " ").trim()
+    : "";
+/** One live invite per address on a team (the database keeps it so). */
+export const TEAM_EMAIL_TWICE = "That email is already on the list.";
+/** The same, for someone under 18: two children at one parent's email. */
+export const TEAM_EMAIL_TWICE_CHILD = `${TEAM_EMAIL_TWICE} If two children share a parent’s email, add one here and the other can join with the team link.`;
 const EMAIL = z.string().email().max(254);
 
 // --- Just me, or a team? ---------------------------------------------------------------------------
@@ -131,8 +145,8 @@ export function checkTeamSignUp(body: unknown): { team: TeamSignUp | null; field
   } else {
     rows.forEach((r, i) => {
       const o = (r && typeof r === "object" ? r : {}) as Record<string, unknown>;
-      const firstName = text(o.firstName);
-      const lastName = text(o.lastName);
+      const firstName = nameText(o.firstName);
+      const lastName = nameText(o.lastName);
       const email = text(o.email).toLowerCase();
       if (!firstName && !lastName && !email) return;
       const at = `teamMembers.${i}`;
@@ -141,7 +155,7 @@ export function checkTeamSignUp(body: unknown): { team: TeamSignUp | null; field
       if (!lastName) fields[`${at}.lastName`] = "Add their surname.";
       else if (lastName.length > NAME_PART_MAX) fields[`${at}.lastName`] = `Keep this to ${NAME_PART_MAX} characters or fewer.`;
       if (!EMAIL.safeParse(email).success) fields[`${at}.email`] = "Check this email address.";
-      else if (seen.has(email)) fields[`${at}.email`] = "That email is already on the list.";
+      else if (seen.has(email)) fields[`${at}.email`] = o.under18 === true ? TEAM_EMAIL_TWICE_CHILD : TEAM_EMAIL_TWICE;
       seen.add(email);
       members.push({ firstName, lastName, email, ...(o.under18 === true ? { under18: true as const } : {}) });
     });

@@ -248,6 +248,21 @@ describe("the invite for someone under 18, to their parent or guardian", () => {
     expect(buildTeamInviteEmail({ ...o, firstName: "<i>J</i>" }).html).not.toContain("<i>J</i>");
   });
 
+  // Review: the name the team organiser typed goes in a subject line, so only a safe first name
+  // does (one word of letters); anything else is "your child", and the email still goes.
+  it("never puts a strange name in the subject or the heading", () => {
+    for (const odd of ["Jack123", "http://x.example", "J".repeat(30), "<b>"]) {
+      const x = buildTeamInviteEmail({ ...o, firstName: odd });
+      const y = buildTeamInviteReminderEmail({ ...o, firstName: odd });
+      expect(x.subject).toBe("Robin has invited your child to join Exampleton Juniors");
+      expect(x.html).toContain("Your child is invited to join a team!");
+      expect(y.subject).toBe("A gentle reminder: your child is invited to join Exampleton Juniors");
+      expect(y.html).toContain("Still keen for your child to join Exampleton Juniors?");
+    }
+    // The first word of a name of two words, with its first letter a capital.
+    expect(buildTeamInviteEmail({ ...o, firstName: "mary jane" }).subject).toBe("Robin has invited Mary to join Exampleton Juniors");
+  });
+
   it("leaves an adult's invite as it was", () => {
     const a = buildTeamInviteEmail({ ...o, under18: false });
     expect(a.subject).toBe("Robin has invited you to join Exampleton Juniors");

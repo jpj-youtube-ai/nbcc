@@ -208,6 +208,16 @@ describe("a subject on a page for someone under 18", () => {
     for (const kind of TOUCH_KINDS) expect(buildTouchEmail(kind, child()).subject).not.toMatch(/, Jack[!?]/);
   });
 
+  // Review: a child's page is one with a parent or guardian on it, whatever their name looks like.
+  it("never speaks to the child when the parent's name is not one we can greet by", () => {
+    for (const guardianFirstName of ["Sarah2", "S.", "Sarah-Jane Example-Smith the Third"]) {
+      expect(buildTouchEmail("week_before", child({ guardianFirstName })).subject).toBe("One week to go for Jack!");
+      expect(buildTouchEmail("on_track", child({ guardianFirstName })).subject).toBe("Jack is doing great!");
+    }
+    // No parent or guardian on the page: an adult's.
+    expect(buildTouchEmail("week_before", child({ guardianFirstName: "  " })).subject).toBe("One week to go, Jack!");
+  });
+
   it("leaves an adult's subjects as they were", () => {
     const adult = data({ name: "Jack Example", firstName: "Jack" });
     expect(buildTouchEmail("week_before", adult).subject).toBe("One week to go, Jack!");

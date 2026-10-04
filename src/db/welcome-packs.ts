@@ -35,7 +35,8 @@ import {
 // comes off, by the Requests' own rules and with their own audit line (changeRequestIn,
 // src/db/fundraising-requests.ts). A row keeps marked_request once the pack has marked its request,
 // and only such a request is ever opened again or has its count put right, so what staff did by
-// hand in Requests is never overwritten. The request itself says who changed it last: the pack writes
+// hand in Requests is never overwritten. (An untick of a thing whose request the pack marked keeps
+// its row, cleared, while staff hold that request, so the mark is not lost with the tick.) The request itself says who changed it last: the pack writes
 // "pack:" before the staff member there (PACK_HANDLED), so a request staff changed by hand since the
 // pack marked it (undone, then sent again with their own count) is told apart and left alone.
 
@@ -224,7 +225,16 @@ export async function changePack(fundraiserId: number, input: PackActionInput, a
       data.label = c.label;
       data.quantity = c.quantity;
     } else if (c.type === "untick") {
-      await client.query("DELETE FROM welcome_pack_items WHERE pack_id = $1 AND key = $2", [packId, c.key]);
+      // The pack's mark on this thing's request must outlive the untick while staff hold the request
+      // (they undid it, or sent it again, by hand): else the next tick would find no mark and send
+      // it again. So a marked thing's row is kept, cleared (no tick, no reason: the list reads it as
+      // untouched); it goes below once the pack itself has opened the request again.
+      const keepsMark = (before?.pack.items ?? []).some((i) => i.key === c.key && i.markedRequest === true);
+      if (keepsMark) {
+        await client.query("UPDATE welcome_pack_items SET ticked_at = NULL, ticked_by = NULL, skipped_reason = NULL, updated_at = now() WHERE pack_id = $1 AND key = $2", [packId, c.key]);
+      } else {
+        await client.query("DELETE FROM welcome_pack_items WHERE pack_id = $1 AND key = $2", [packId, c.key]);
+      }
     } else if (c.type === "send") {
       await client.query("UPDATE welcome_packs SET sent_at = now(), sent_by = $2, updated_at = now() WHERE id = $1", [packId, actor]);
     } else if (c.type === "undo") {
@@ -270,6 +280,14 @@ export async function changePack(fundraiserId: number, input: PackActionInput, a
           // is: the tick still stands. Anything else stops the whole press.
           if (!(err instanceof RequestError)) throw err;
         }
+      }
+      // An unticked thing's cleared row has done its work once its mark is gone (the pack opened the
+      // request again): removed, as an untick always left it.
+      if (c.type === "untick") {
+        await client.query(
+          "DELETE FROM welcome_pack_items WHERE pack_id = $1 AND key = $2 AND ticked_at IS NULL AND skipped_reason IS NULL AND marked_request = false",
+          [packId, c.key],
+        );
       }
     }
     return { view: fresh, words: result.words, requestWords, fundraiser: f };

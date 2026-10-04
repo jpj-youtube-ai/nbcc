@@ -180,9 +180,18 @@ function askUs(o: InviteWords): string {
   return `Any questions about the team? Ask ${organiserShort(o)}, or ask us: just reply to this email, email ${FUNDRAISING_EMAIL} or call ${PHONE_DISPLAY}.`;
 }
 
+/**
+ * Who is invited, where a subject line or a heading names them: only ever a safe first name (one
+ * word of letters, safeFirstName), and "your child" for anything else, so a strange name can never
+ * break the send. The body keeps the name as the team organiser typed it, escaped.
+ */
+const invitedChild = (o: InviteWords): string => safeFirstName(o.firstName) ?? "your child";
+const capital = (s: string): string => s.charAt(0).toUpperCase() + s.slice(1);
+
 export function buildTeamInviteEmail(o: InviteWords): BuiltEmail {
   const organiser = organiserShort(o);
   const name = o.firstName.trim();
+  const who = invitedChild(o);
   const role = o.under18
     ? `${organiser} is the team organiser. Joining takes a couple of minutes: ${name} gets a page with a meter, and everything it raises counts towards the team’s total too.`
     : `${organiser} is the team organiser. Joining takes a couple of minutes: you get your own page with a meter, and everything you raise counts towards the team’s total too.`;
@@ -191,7 +200,7 @@ export function buildTeamInviteEmail(o: InviteWords): BuiltEmail {
     : "Setting this up for someone under 18? A parent or guardian sets up their page, and can name them on it.";
   const body =
     EYEBROW +
-    heading(o.under18 ? `${escapeHtml(name)} is invited to join a team!` : "You’re invited to join a team!") +
+    heading(o.under18 ? `${escapeHtml(capital(who))} is invited to join a team!` : "You’re invited to join a team!") +
     bodyP("Hello,") +
     bodyP(escapeHtml(why(o))) +
     bodyP(escapeHtml(role)) +
@@ -201,18 +210,18 @@ export function buildTeamInviteEmail(o: InviteWords): BuiltEmail {
     bodyP(escapeHtml(askUs(o))) +
     note(escapeHtml(INVITE_NOT_FOR_YOU));
   const text = ["Hello,", "", why(o), "", role, "", `Join the team: ${o.joinUrl}`, "", child, "", WHO_WE_ARE, "", askUs(o), "", INVITE_NOT_FOR_YOU];
-  return toPerson(`${organiser} has invited ${o.under18 ? name : "you"} to join ${o.team.title}`, body, text, "Hope to see you on the team,");
+  return toPerson(`${organiser} has invited ${o.under18 ? who : "you"} to join ${o.team.title}`, body, text, "Hope to see you on the team,");
 }
 
 export function buildTeamInviteReminderEmail(o: InviteWords): BuiltEmail {
   const organiser = organiserShort(o);
-  const name = o.firstName.trim();
+  const who = invitedChild(o);
   const lead = "Just a gentle reminder about the team invite we sent a few days ago.";
   const role = `${organiser} is the team organiser, and it only takes a couple of minutes to join.`;
   const once = "This is the only reminder we’ll send.";
   const body =
     EYEBROW +
-    heading(`Still keen ${o.under18 ? `for ${escapeHtml(name)} to join` : "to join"} ${escapeHtml(o.team.title)}?`) +
+    heading(`Still keen ${o.under18 ? `for ${escapeHtml(who)} to join` : "to join"} ${escapeHtml(o.team.title)}?`) +
     bodyP("Hello,") +
     bodyP(escapeHtml(lead)) +
     bodyP(escapeHtml(why(o))) +
@@ -221,7 +230,7 @@ export function buildTeamInviteReminderEmail(o: InviteWords): BuiltEmail {
     bodyP(escapeHtml(askUs(o))) +
     note(`${escapeHtml(once)} ${NOT_FOR_YOU}`);
   const text = ["Hello,", "", lead, "", why(o), "", role, "", `Join the team: ${o.joinUrl}`, "", askUs(o), "", once, NOT_FOR_YOU];
-  return toPerson(`A gentle reminder: ${o.under18 ? `${name} is invited to join` : "join"} ${o.team.title}`, body, text, "Hope to see you on the team,");
+  return toPerson(`A gentle reminder: ${o.under18 ? `${who} is invited to join` : "join"} ${o.team.title}`, body, text, "Hope to see you on the team,");
 }
 
 // --- the nudges to the team organiser -----------------------------------------------------------

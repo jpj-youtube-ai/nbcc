@@ -9220,7 +9220,12 @@ Everything below is off while fundraising is switched off, like the rest of fund
   cleared with their name and email), staff see "under 18, parent or guardian's email" beside them in
   the admin, the invite and its one reminder speak to the parent ("Robin has invited Jack to join
   Exampleton Juniors"), and the invite's link opens the join form with "Is the person joining under
-  18?" already answered Yes (they can change it). They are **held**: nothing is sent until staff approve the team. Sharing with another
+  18?" already answered Yes (they can change it). A name is kept to one plain line (no line breaks
+  or other control characters, one space between words), and where a subject line or a heading names
+  the child it is only ever a safe first name, or "your child". One address can be on a team's list
+  once (the database keeps it so), so two children at one parent's email cannot both be added: the
+  form says "That email is already on the list. If two children share a parent's email, add one here
+  and the other can join with the team link." They are **held**: nothing is sent until staff approve the team. Sharing with another
   cause asks one more question, "Just you, or the whole team?". A sign up sent without the question
   (a page opened before it, or the API) is just me, as before.
 - **Approval.** Staff approve the team as any sign up. Then (after it commits, best effort) each
@@ -9753,13 +9758,21 @@ as it would be by hand (posters, leaflets, QR codes and envelopes **Sent** by po
 opens again a request **the pack marked**; re-ticking a thing (they asked for a different number)
 puts right how many went on one the pack marked. **Pack sent** only catches up requests still To
 send that the pack never marked: never a count, never an undo, and never one the pack marked once
-that staff then undid by hand. Leaving out one of two things of a kind after both went (the A3
+that staff then undid by hand; and ticking its thing again never sends such a request again either,
+so a deliberate hand undo is never re-sent by any press (one the pack itself opened again, because a
+tick came off, is sent again when the tick goes back). Leaving out one of two things of a kind after both went (the A3
 posters, say) puts how many went right too. And a request staff changed by hand **after** the pack
 marked it is theirs from then on: the request says who changed it last (the pack writes `pack:`
 before the staff member in `fundraiser_requests.updated_by`; a change by hand writes the staff
 member alone), and the pack only puts a count right, or opens a request again, while it was the last
 to change it. So a request staff undid and then sent again by hand, with their own count, is never
-changed by a tick or an untick. So a count staff corrected in Requests, or a request they undid
+changed by a tick or an untick. The two things the pack keeps (its mark on its rows, and who the
+request says changed it last) are read together in one place, `requestOwner` in
+`src/fundraising/welcome-pack.ts`. Requests the pack changed before the `pack:` mark existed are
+marked once by `migrations/1791200000240_team-invite-under-18.js`: a pack's press writes its own
+History line and changes the request in one transaction, so a request whose `updated_at` equals the
+time of a `fundraiser.pack_updated` line for its fundraiser was last changed by the pack. Its down
+takes every `pack:` mark off again. So a count staff corrected in Requests, or a request they undid
 there, is never put back by a press on something else. Whether the pack marked a request is kept on
 the pack's own rows (`welcome_pack_items.marked_request`), never read from the request's note. It
 uses the Requests' own rules and audit line (`changeRequestIn`, `src/db/fundraising-requests.ts`).

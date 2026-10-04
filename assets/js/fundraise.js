@@ -1197,11 +1197,14 @@
             if (name === "path") applyAll();
           });
           var target = typeof data.targetPence === "number" && data.targetPence > 0 ? String(data.targetPence % 100 === 0 ? data.targetPence / 100 : (data.targetPence / 100).toFixed(2)) : "";
+          // Last year's was a page in memory of someone, but another path was already chosen here
+          // before its details arrived: who it remembers, their dates and its name stay out of it.
+          var memoryElsewhere = data.path === "memory" && path() !== "memory";
           [
-            ["title", data.title], ["description", data.description], ["target", target], ["venue", data.venue], ["town", data.town],
+            ["title", memoryElsewhere ? "" : data.title], ["description", data.description], ["target", target], ["venue", data.venue], ["town", data.town],
             ["kindOther", data.kindOther], ["instagram", data.instagram], ["facebook", data.facebook], ["firstName", data.firstName],
             ["lastName", data.lastName], ["email", data.email], ["phone", data.phone],
-            ["memoryName", data.memoryName], ["memoryDates", data.memoryDates],
+            ["memoryName", path() === "memory" ? data.memoryName : ""], ["memoryDates", path() === "memory" ? data.memoryDates : ""],
           ].forEach(function (pair) {
             var box = el(pair[0]);
             if (box && !String(box.value || "").trim() && typeof pair[1] === "string" && pair[1]) box.value = pair[1];

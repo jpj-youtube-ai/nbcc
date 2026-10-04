@@ -14,7 +14,7 @@ import {
   questionsText,
 } from "../email/brand";
 import { FOOTER_TEXT, POSTAL_ADDRESS } from "../legal/registration";
-import { FUNDRAISING_EMAIL, organiserFirstName, organiserGreeting, pounds, safeFirstName, type BuiltEmail } from "./emails";
+import { FUNDRAISING_EMAIL, organiserFirstName, organiserGreeting, pounds, type BuiltEmail } from "./emails";
 import { pagePath, type FundraiserRecord, type Meter } from "./model";
 import type { TouchKind } from "./touch-rules";
 
@@ -381,5 +381,8 @@ const BUILDERS: Record<TouchKind, Builder> = {
 
 /** One automatic email, ready to send. */
 export function buildTouchEmail(kind: TouchKind, d: TouchEmailData): BuiltEmail {
-  return BUILDERS[kind](d, organiserGreeting(d), escapeHtml(d.title), organiserFirstName(d), safeFirstName(d.guardianFirstName) !== null);
+  // A child's page is one with a parent or guardian on it, whatever their name looks like: the email
+  // goes to them, so no subject ever speaks to the child.
+  const child = String(d.guardianFirstName ?? "").trim() !== "";
+  return BUILDERS[kind](d, organiserGreeting(d), escapeHtml(d.title), organiserFirstName(d), child);
 }

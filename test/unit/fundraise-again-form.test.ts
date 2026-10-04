@@ -115,6 +115,25 @@ describe("a form opened from Do it again", () => {
     expect(form.payload()).toMatchObject({ path: "raising", inMemory: true, memoryName: "Jean Example", again: TOKEN });
   });
 
+  // Review: they had already chosen raising money before last year's details arrived. Nothing of
+  // the in memory page (who it remembers, their dates, its name) goes into that form.
+  it("fills in nothing of an in memory page when another path is already chosen", async () => {
+    answer = {
+      status: 200,
+      body: { ...LAST_YEAR, path: "memory", kind: "other", title: "Remembering Jean", memoryName: "Jean Example", memoryDates: "1948 to 2026" },
+    };
+    load(`?again=${TOKEN}`, () => {
+      ($('input[name="path"][value="raising"]') as HTMLInputElement).checked = true;
+    }, true);
+    await settle();
+    expect($('input[name="path"][value="raising"]').checked).toBe(true);
+    expect($("#memoryName").value).toBe("");
+    expect($("#memoryDates").value).toBe("");
+    expect($("#title").value).toBe("");
+    // Their own details still come.
+    expect($("#firstName").value).toBe("Sam");
+  });
+
   it("takes the token out of the address at once, keeping the rest", async () => {
     const form = load(`?ref=email&again=${TOKEN}`);
     expect(window.location.search).toBe("?ref=email");

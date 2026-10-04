@@ -61,3 +61,37 @@ Feature: Small fixes to community fundraising
     And the posters request for "Robin's Smallfix Walk (bdd-fr)" stands as staff left it: "sent" with 7
     When "e1.smallfix.fr.bdd@example.com" unticks "posters_a4" in the pack for "Robin's Smallfix Walk (bdd-fr)"
     Then the posters request for "Robin's Smallfix Walk (bdd-fr)" stands as staff left it: "sent" with 7
+
+  Scenario: a tick never sends again a request staff undid by hand
+    Given fundraising is switched on
+    And a fundraising staff member "e2.smallfix.fr.bdd@example.com" with role "editor"
+    And an approved sporting fundraiser "Sam's Smallfix Dash (bdd-fr)" with the T-shirt size "adult_m" asking for 6 posters
+    When "e2.smallfix.fr.bdd@example.com" ticks "posters_a4" in the pack for "Sam's Smallfix Dash (bdd-fr)"
+    Then the posters request for "Sam's Smallfix Dash (bdd-fr)" is stored as "sent" with 6
+    When "e2.smallfix.fr.bdd@example.com" undoes the posters sent to "Sam's Smallfix Dash (bdd-fr)" by hand in Requests
+    And "e2.smallfix.fr.bdd@example.com" unticks "posters_a4" in the pack for "Sam's Smallfix Dash (bdd-fr)"
+    And "e2.smallfix.fr.bdd@example.com" ticks "posters_a4" in the pack for "Sam's Smallfix Dash (bdd-fr)"
+    Then the fundraising answer is 200
+    And the posters request for "Sam's Smallfix Dash (bdd-fr)" is stored as "to_send" with none
+
+  Scenario: a request the pack marked before the pack mark existed is marked once, and still opens again on an untick
+    Given fundraising is switched on
+    And a fundraising staff member "e3.smallfix.fr.bdd@example.com" with role "editor"
+    And an approved sporting fundraiser "Fern's Smallfix Hike (bdd-fr)" with the T-shirt size "adult_s" asking for 4 posters
+    When "e3.smallfix.fr.bdd@example.com" ticks "posters_a4" in the pack for "Fern's Smallfix Hike (bdd-fr)"
+    Then the posters request for "Fern's Smallfix Hike (bdd-fr)" is last changed by the pack
+    Given the posters request for "Fern's Smallfix Hike (bdd-fr)" is as the pack left it before the pack mark existed
+    When the one-off marking of pack requests runs
+    Then the posters request for "Fern's Smallfix Hike (bdd-fr)" is last changed by the pack
+    When the one-off marking of pack requests runs
+    Then the posters request for "Fern's Smallfix Hike (bdd-fr)" is last changed by the pack
+    When "e3.smallfix.fr.bdd@example.com" unticks "posters_a4" in the pack for "Fern's Smallfix Hike (bdd-fr)"
+    Then the posters request for "Fern's Smallfix Hike (bdd-fr)" is stored as "to_send" with none
+
+  Scenario: the one-off marking leaves alone a request staff changed by hand
+    Given fundraising is switched on
+    And a fundraising staff member "e4.smallfix.fr.bdd@example.com" with role "editor"
+    And an approved sporting fundraiser "Kim's Smallfix Run (bdd-fr)" with the T-shirt size "adult_l" asking for 5 posters
+    When "e4.smallfix.fr.bdd@example.com" marks 3 posters as sent to "Kim's Smallfix Run (bdd-fr)" by hand in Requests
+    And the one-off marking of pack requests runs
+    Then the posters request for "Kim's Smallfix Run (bdd-fr)" is last changed by "admin:e4.smallfix.fr.bdd@example.com"

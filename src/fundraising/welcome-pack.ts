@@ -91,7 +91,9 @@ export type PackSubject = Pick<
   | "memoryName"
   | "memorySetupBy"
   | "memoryDirectorBusiness"
->;
+> &
+  // The name a page is credited to: a group's or a business's has no first name to greet by.
+  Partial<Pick<FundraiserRecord, "creditName">>;
 
 /** A welcome pack, things to send (in memory), or no pack at all. */
 export function packKind(f: PackSubject): PackKind | null {
@@ -468,7 +470,9 @@ export function applyPackAction(view: PackView, input: PackActionInput): PackAct
 //       different number) and how many went, on a request the pack marked, is put right.
 //   Pack sent   only catches up requests still at their first step that the pack never marked.
 //       Never a count, never an undo. One the pack marked once and staff then undid by hand in
-//       Requests is left To send: a deliberate hand undo is never re-sent by any press.
+//       Requests is left To send: a deliberate hand undo is never re-sent by any press, not by
+//       Pack sent and not by ticking its thing again. (One the pack itself opened again, because a
+//       tick came off, is sent again when the tick goes back.)
 //
 //   a leave out   of one of two things of a kind after both went (the A3 posters, say) puts how many
 //       went right too, on a request the pack marked.
@@ -508,6 +512,24 @@ export const PACK_HANDLED = "pack:";
 /** Was the pack the last to change this request? False once staff change it by hand in Requests. */
 const packHandled = (row: RequestRow | null): boolean => !!row?.updatedBy?.startsWith(PACK_HANDLED);
 
+/**
+ * Whose is this request, as far as the pack goes? The ONE place the two things the pack keeps are
+ * read together: its own mark on its rows (`marked`: the pack marked this request at some point)
+ * and who the request says changed it last (packHandled).
+ *
+ *   "pack"    the pack marked it and nobody has touched it by hand since: the pack may put its
+ *             count right, and open it again when a tick comes off.
+ *   "staff"   the pack marked it, and staff have changed it by hand since (undone, sent again, a
+ *             count corrected): theirs from then on. No press changes it.
+ *   "open"    the pack has no mark on it: at its first step the pack marks it; further on (staff
+ *             dealt with it themselves) it is left alone.
+ */
+type RequestOwner = "pack" | "staff" | "open";
+function requestOwner(marked: boolean, row: RequestRow | null): RequestOwner {
+  if (!marked) return "open";
+  return packHandled(row) ? "pack" : "staff";
+}
+
 export interface PackRequestStep {
   kind: RequestKind;
   input: RequestActionInput;
@@ -538,23 +560,25 @@ export function packRequestSync(
     const status = row?.status ?? flow[0];
     const quantity = going.reduce((n, i) => n + (i.quantity ?? 0), 0);
     const note = PACK_REQUEST_NOTES[view.kind];
+    // The pack's mark on this request: for Pack sent, on any of its things; else on the thing pressed.
+    const owner = requestOwner(o.press.type === "send" ? !!o.markedKinds?.has(kind) : o.marked, row);
+    // Staff changed it by hand since the pack marked it (undone, sent again, corrected): left as it is.
+    if (owner === "staff") continue;
     if (allIn && status === flow[0]) {
       if (quantity < 1) continue;
-      // Pack sent: the pack marked this one before and it stands To send, so staff undid it by hand.
-      if (o.press.type === "send" && o.markedKinds?.has(kind)) continue;
       steps.push(
         group === "lent"
           ? { kind, input: { action: "out", from: "to_send", on: o.today, quantity, by: o.by, note } }
           : { kind, input: { action: "send", from: "to_send", on: o.today, how: "post", by: o.by, quantity, note } },
       );
-    } else if (!packHandled(row)) {
-      // Staff changed it by hand since the pack marked it (or it never was the pack's): left as it is.
+    } else if (owner !== "pack") {
+      // Never the pack's, and already dealt with in Requests: left as it is.
       continue;
-    } else if ((o.press.type === "tick" || o.press.type === "skip") && allIn && o.marked && group === "printed" && status === "sent" && quantity > 0 && row!.quantity !== quantity) {
+    } else if ((o.press.type === "tick" || o.press.type === "skip") && allIn && group === "printed" && status === "sent" && quantity > 0 && row!.quantity !== quantity) {
       // This press re-ticked a thing of this kind, or left one of them out after it went: how many
       // went, on a request the pack marked, is put right.
       steps.push({ kind, input: { action: "count", from: "sent", quantity } });
-    } else if (o.press.type !== "send" && !allIn && o.marked && status === flow[1]) {
+    } else if (o.press.type !== "send" && !allIn && status === flow[1]) {
       steps.push({ kind, input: { action: "undo", from: status } });
     }
   }
@@ -588,10 +612,18 @@ export function packFirstName(f: Pick<PackSubject, "firstName" | "name">): strin
   return String(f.firstName ?? "").trim() || String(f.name ?? "").trim().split(/\s+/)[0] || "";
 }
 
-/** "Dear Robin," or, for a group's or a business's name or none, "Hello,": never "Dear The,". */
-function packGreeting(f: Pick<PackSubject, "firstName" | "name">): string {
-  const first = organiserFirstName({ name: String(f.name ?? ""), firstName: packFirstName(f) });
-  return first ? `Dear ${packFirstName(f)},` : "Hello,";
+/**
+ * "Dear Robin," or, for a group's or a business's name or none, "Hello,": never "Dear The,". The
+ * same rule as the emails (organiserFirstName): the first name they gave; else the first word of
+ * their name, past a title ("Dr Sam Example" is "Dear Sam,"), unless the name is a group's or a
+ * business's (it starts with "The", or it is the name their page is credited to).
+ */
+function packGreeting(f: Pick<PackSubject, "firstName" | "name" | "creditName">): string {
+  const given = String(f.firstName ?? "").trim().replace(/\s+/g, " ");
+  const first = organiserFirstName({ name: String(f.name ?? ""), firstName: f.firstName ?? null, creditName: f.creditName ?? null });
+  if (!first) return "Hello,";
+  // A first name of two words ("Mary Jane") stays whole.
+  return `Dear ${given && given.toLowerCase().startsWith(first.toLowerCase()) ? given : first},`;
 }
 
 function signerLines(signer: Signer): string[] {

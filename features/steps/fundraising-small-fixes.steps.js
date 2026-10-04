@@ -1,4 +1,4 @@
-const { When, Then } = require("@cucumber/cucumber");
+const { Given, When, Then } = require("@cucumber/cucumber");
 const assert = require("node:assert/strict");
 const { Pool } = require("pg");
 
@@ -204,4 +204,38 @@ Then("the posters request for {string} stands as staff left it: {string} with {i
   assert.equal(r.rows[0].status, status);
   assert.equal(r.rows[0].quantity, quantity);
   assert.equal(r.rows[0].how, "dropped_off");
+});
+
+// ---- the one-off marking of the requests a pack changed (migration 1791200000240) ----
+
+// The very statement the migration runs, so what is tested is what production ran.
+const { BACKFILL_SQL } = require("../../migrations/1791200000240_team-invite-under-18.js");
+
+async function postersChangedBy(title) {
+  const r = await pool.query("SELECT updated_by FROM fundraiser_requests WHERE fundraiser_id = $1 AND kind = 'posters'", [(await fundraiser(title)).id]);
+  assert.ok(r.rows[0], "no posters request is stored");
+  return r.rows[0].updated_by;
+}
+
+// As the code before the mark left it: only the staff member, with its time untouched.
+Given("the posters request for {string} is as the pack left it before the pack mark existed", async function (title) {
+  const r = await pool.query(
+    "UPDATE fundraiser_requests SET updated_by = substr(updated_by, 6) WHERE fundraiser_id = $1 AND kind = 'posters' AND updated_by LIKE 'pack:%' RETURNING updated_by",
+    [(await fundraiser(title)).id],
+  );
+  assert.equal(r.rows.length, 1, "the posters request was not marked by the pack");
+  assert.ok(!String(r.rows[0].updated_by).startsWith("pack:"));
+});
+
+When("the one-off marking of pack requests runs", async function () {
+  await pool.query(BACKFILL_SQL);
+});
+
+Then("the posters request for {string} is last changed by the pack", async function (title) {
+  const by = await postersChangedBy(title);
+  assert.match(String(by), /^pack:admin:[^:]+$/, `it says ${by}`);
+});
+
+Then("the posters request for {string} is last changed by {string}", async function (title, actor) {
+  assert.equal(await postersChangedBy(title), actor);
 });

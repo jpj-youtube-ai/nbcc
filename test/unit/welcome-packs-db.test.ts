@@ -74,7 +74,14 @@ function db(o: { fundraiser?: Record<string, unknown> | null; pack?: Record<stri
         .filter((i) => i.key !== params[1])
         .concat(itemRow(String(params[1]), { label: params[2], quantity: params[3], ticked_at: params[4] ? new Date("2026-10-03T10:00:00Z") : null, ticked_by: params[5], skipped_reason: params[6] }));
     }
-    if (/DELETE FROM welcome_pack_items/.test(sql)) items = items.filter((i) => i.key !== params[1]);
+    // An untick of a thing whose request the pack marked keeps its row, cleared, so the mark is kept.
+    if (/UPDATE welcome_pack_items SET ticked_at = NULL/.test(sql)) {
+      items = items.map((i) => (i.key === params[1] ? { ...i, ticked_at: null, ticked_by: null, skipped_reason: null } : i));
+    }
+    if (/DELETE FROM welcome_pack_items/.test(sql)) {
+      const onlyUnmarked = /marked_request = false/.test(sql);
+      items = items.filter((i) => i.key !== params[1] || (onlyUnmarked && (i.marked_request === true || i.ticked_at || i.skipped_reason)));
+    }
     if (/UPDATE welcome_pack_items SET marked_request/.test(sql)) {
       items = items.map((i) => ((params[2] as string[]).includes(String(i.key)) ? { ...i, marked_request: params[1] } : i));
     }
@@ -355,6 +362,44 @@ describe("the requests a pack looks after", () => {
       expect(find(calls, /INSERT INTO fundraiser_requests/)).toBeUndefined();
       expect(requestAudits(calls)).toEqual([]);
       expect(out.requestWords).toEqual([]);
+    });
+
+    // Staff Undo in Requests, the A4 posters are unticked, then ticked again: it stays To send.
+    it("is not sent again by a tick once staff have undone it by hand", async () => {
+      const undone = [requestRow("posters", { status: "to_send", updated_by: "admin:ash@example.com" })];
+      const { calls } = db({ pack: packRow(), items: [a3], sizes: SIZES, requests: undone });
+      const out = await changePack(9, { action: "tick", key: "posters_a4", words: "10 A4 posters", quantity: 10 }, "admin:fern@example.com", TODAY);
+      expect(out.view.items.find((i) => i.key === "posters_a4")!.ticked).toBe(true);
+      expect(find(calls, /INSERT INTO fundraiser_requests/)).toBeUndefined();
+      expect(out.requestWords).toEqual([]);
+    });
+
+    // The usual pack: one poster size, so the unticked thing is the only one of its kind. The
+    // pack's mark must outlive the untick, or the tick that follows would send the request again.
+    it("is not sent again by a tick once staff have undone it by hand, with only one size in the pack", async () => {
+      const undone = [requestRow("posters", { status: "to_send", updated_by: "admin:ash@example.com" })];
+      const { calls } = db({ pack: packRow(), items: [itemRow("posters_a4", { quantity: 12, marked_request: true })], requests: undone });
+      const off = await changePack(9, { action: "untick", key: "posters_a4" }, "admin:fern@example.com", TODAY);
+      expect(off.view.items.find((i) => i.key === "posters_a4")).toMatchObject({ ticked: false, done: false, changeNote: null });
+      expect(find(calls, /INSERT INTO fundraiser_requests/)).toBeUndefined();
+      const on = await changePack(9, TICK_POSTERS, "admin:fern@example.com", TODAY);
+      expect(on.view.items.find((i) => i.key === "posters_a4")!.ticked).toBe(true);
+      expect(find(calls, /INSERT INTO fundraiser_requests/)).toBeUndefined();
+      expect(on.requestWords).toEqual([]);
+    });
+
+    it("keeps no cleared row once the pack itself has opened the request again", async () => {
+      const { calls } = db({
+        pack: packRow(),
+        items: [itemRow("posters_a4", { quantity: 12, marked_request: true })],
+        requests: [requestRow("posters", { status: "sent", quantity: 12, how: "post", sent_on: "2026-10-03", updated_by: "pack:admin:fern@example.com" })],
+      });
+      const off = await changePack(9, { action: "untick", key: "posters_a4" }, "admin:fern@example.com", TODAY);
+      expect(off.requestWords).toHaveLength(1);
+      // The row is gone, as an untick always left it: read again, nothing is stored for the posters.
+      const again = await changePack(9, { action: "untick", key: "posters_a4" }, "admin:fern@example.com", TODAY);
+      expect(again.words).toBe("");
+      expect(calls.filter((c) => /DELETE FROM welcome_pack_items/.test(c[0])).length).toBeGreaterThan(0);
     });
 
     it("is not opened again when a tick comes off", async () => {

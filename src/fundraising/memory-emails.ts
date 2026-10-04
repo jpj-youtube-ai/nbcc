@@ -1,7 +1,7 @@
-import { bodyP, button, emailShell, eyebrow, heading, questionsBox, questionsText, signOff, signOffText } from "../email/brand";
+import { bodyP, button, emailShell, eyebrow, heading, questionsBox, questionsText, signOffAs, signOffAsText } from "../email/brand";
 import { FOOTER_TEXT, POSTAL_ADDRESS } from "../legal/registration";
 import { raiseOrdinals } from "../email/dates";
-import { MEMORY_EMAIL, MEMORY_EYEBROW, MEMORY_SIGN_OFF, dearGreeting, organiserFirstName, type BuiltEmail } from "./emails";
+import { MEMORY_EMAIL, MEMORY_EYEBROW, MEMORY_SIGNER, MEMORY_SIGN_OFF, dearGreeting, organiserFirstName, type BuiltEmail } from "./emails";
 
 // In memory pages (Jaimie, 2026-10-03): email 19, "When you approve an in memory page (gentler, no
 // fun sign off)", in the words Jaimie approved on 2026-10-02 (memory:
@@ -58,7 +58,7 @@ export function buildInMemoryApprovedEmail(
     button(o.pageUrl, "See the page") +
     middle.map((m) => bodyP(m)).join("") +
     bodyP(anything);
-  const html = shell(body + signOff(SIGN_OFF) + questionsBox(MEMORY_EMAIL));
+  const html = shell(body + signOffAs(SIGN_OFF, MEMORY_SIGNER) + questionsBox(MEMORY_EMAIL));
   const text = [
     hi,
     "",
@@ -70,7 +70,7 @@ export function buildInMemoryApprovedEmail(
     "",
     anything,
     "",
-    signOffText(SIGN_OFF),
+    signOffAsText(SIGN_OFF, MEMORY_SIGNER),
     "",
     questionsText(MEMORY_EMAIL),
     "",

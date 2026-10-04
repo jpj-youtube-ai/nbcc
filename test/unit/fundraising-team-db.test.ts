@@ -161,6 +161,33 @@ describe("invites", () => {
     expect(calls.map((c) => c[0])).toContain("COMMIT");
   });
 
+  // The charity, 2026-10-04: an in memory invite copies in Jodie and nobody else, on a resend too.
+  // The address kept when it was first sent (a signer, or whoever sent it) is not even read.
+  it("copies in Jodie alone on a resend of an in memory invite, whoever was copied in before", async () => {
+    const calls = useClient((sql) =>
+      SIGN_OFF.test(sql)
+        ? { rows: [{ "?column?": 1 }] }
+        : /UPDATE fundraiser_invites/.test(sql)
+          ? { rows: [inviteRow({ invite_type: "memory" })] }
+          : /fundraiser_invite\.sent/.test(sql)
+            ? { rows: [{ has_cc: true, cc: "fern@example.com" }] }
+            : undefined,
+    );
+    const inv = await resendInvite(4, "n".repeat(64), "admin:rowan@example.com", "rowan@example.com");
+    expect(inv.cc).toBe("jodie@nbcc.scot");
+    expect(calls.some((c) => /fundraiser_invite\.sent/.test(c[0]))).toBe(false);
+    expect(calls.some((c) => /FROM users/.test(c[0]))).toBe(false);
+    // The audit row says who was copied (Jodie) and, as its actor, who pressed Resend.
+    expect(audits(calls)[0]).toEqual(["admin:rowan@example.com", "fundraiser_invite.resent", "fundraiser_invite", 4, { email: "alex@example.com", cc: "jodie@nbcc.scot" }]);
+  });
+
+  it("copies in nobody on a resend of an in memory invite to Jodie herself", async () => {
+    useClient((sql) =>
+      SIGN_OFF.test(sql) ? { rows: [{ "?column?": 1 }] } : /UPDATE fundraiser_invites/.test(sql) ? { rows: [inviteRow({ invite_type: "memory", email: "jodie@nbcc.scot" })] } : undefined,
+    );
+    expect((await resendInvite(4, "n".repeat(64), "admin:rowan@example.com", "rowan@example.com")).cc).toBeNull();
+  });
+
   it("holds a resend whose wording is waiting for sign off, changing nothing", async () => {
     const calls = useClient((sql) => (/UPDATE fundraiser_invites/.test(sql) ? { rows: [inviteRow({ invite_type: "memory" })] } : undefined));
     await expect(resendInvite(4, "n".repeat(64), "admin:fern@example.com", "fern@example.com")).rejects.toMatchObject({ reason: "wording_waiting" });

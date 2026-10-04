@@ -146,13 +146,13 @@ describe("an ordinary fundraiser's emails", () => {
 describe("the in memory invite, as SES gets it", () => {
   const MAIL = { email: "morag@example.com", ...memorySender(), subject: "A page in memory of someone you love", html: "<p>x</p>", text: "x" };
 
-  it("is from Jodie, replies to Jodie, and still copies in whoever signed it", async () => {
-    await sendFundraiseInvite("Morag Example", { ...MAIL, cc: "fern@example.com" });
+  it("is from Jodie, replies to Jodie, and copies in Jodie", async () => {
+    await sendFundraiseInvite("Morag Example", { ...MAIL, cc: "jodie@nbcc.scot" });
     const msg = sent()[0];
     expect(buildSesSendRequest(msg)).toMatchObject({
       FromEmailAddress: JODIE_FROM,
       ReplyToAddresses: [JODIE],
-      Destination: { ToAddresses: ["morag@example.com"], CcAddresses: ["fern@example.com"] },
+      Destination: { ToAddresses: ["morag@example.com"], CcAddresses: ["jodie@nbcc.scot"] },
       ConfigurationSetName: "transactional",
     });
     expect(logged()).toContainEqual(expect.objectContaining({ kind: "fundraiseInvite", recipient: "morag@example.com", status: "sent" }));

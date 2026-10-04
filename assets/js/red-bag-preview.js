@@ -1,13 +1,14 @@
 // Fill a Red Bag: the staff preview's way in, while the page is switched off.
 //
-// /fill-a-red-bag is the site's ordinary 404 to every plain visit (src/routes/red-bag.ts). The admin
+// /fill (and its thank you, /fill/thank-you) is the site's ordinary 404 to every plain visit
+// (src/routes/red-bag.ts). The admin
 // keeps its session as a token in the tab (sessionStorage), not in a cookie, so the server cannot
 // see it on an ordinary visit. This script, which only that 404 carries, bridges the two: if THIS
 // tab is signed in to the admin, it asks for the same address again with the token, and shows the
 // page that comes back. The server checks the token; a wrong or expired one just gets the 404 again.
 //
 // With no admin session in the tab it does nothing at all: the public sees the 404, untouched.
-// So staff: sign in at /admin, then go to /fill-a-red-bag in the same tab.
+// So staff: sign in at /admin, then go to /fill in the same tab.
 (function () {
   "use strict";
 

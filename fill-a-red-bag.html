@@ -4,13 +4,27 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
 
-    <!-- Fill a Red Bag ships SWITCHED OFF (src/red-bag/switch.ts): the public is given the 404 at
-         this address and only signed in staff see this page. Until it goes live it is never
-         indexed and has no canonical address or share card. Take the robots line out, and add
-         those, when the page is listed. -->
+    <!-- Fill a Red Bag, /fill (4 October 2026; src/red-bag/switch.ts). Search engines may list it,
+         so it carries what the site's other listed pages carry: a canonical address and a share
+         card, and no robots line. (A staff preview has one added as it is drawn.) It is still
+         LINKED from nowhere on the site: not the Donate page, the menu or the footer. -->
     <title>Fill a Red Bag | Night Before Christmas Campaign</title>
-    <meta name="description" content="Fill a Red Bag with examples of what your donation could do for children, young people and vulnerable adults, all year round." />
-    <meta name="robots" content="noindex, nofollow" />
+    <meta name="description" content="Pop a few things in a Red Bag and watch it fill. A new way to give to NBCC, showing what your donation could do for children, young people and vulnerable adults, all year round." />
+    <!-- Canonical/og:url use the production domain (https://nbcc.scot). -->
+    <link rel="canonical" href="https://nbcc.scot/fill" />
+    <!-- Open Graph -->
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Night Before Christmas Campaign" />
+    <meta property="og:title" content="Fill a Red Bag | Night Before Christmas Campaign" />
+    <meta property="og:description" content="Pop a few things in a Red Bag and watch it fill. A new way to give to NBCC, showing what your donation could do for children, young people and vulnerable adults, all year round." />
+    <meta property="og:url" content="https://nbcc.scot/fill" />
+    <!-- The site's one share picture, as on the donate page. -->
+    <meta property="og:image" content="https://nbcc.scot/assets/img/og-image.png" />
+    <!-- Twitter -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Fill a Red Bag | Night Before Christmas Campaign" />
+    <meta name="twitter:description" content="Pop a few things in a Red Bag and watch it fill. A new way to give to NBCC, showing what your donation could do for children, young people and vulnerable adults, all year round." />
+    <meta name="twitter:image" content="https://nbcc.scot/assets/img/og-image.png" />
 
     <link rel="stylesheet" href="/assets/css/styles.css" />
     <!-- Its OWN stylesheet and scripts rather than growing the shared bundle, which donate.html's
@@ -50,7 +64,12 @@
            where the markers are (src/red-bag/render.ts), from the one catalogue
            (assets/js/red-bag-catalogue.js), so the list reads without JavaScript;
            assets/js/red-bag.js makes it work. The items are EXAMPLES of what a donation could do:
-           every line says "could", never "will", and nothing is bought item by item. -->
+           every line says "could", never "will", and nothing is bought item by item.
+
+           The order here is the PHONE's: the list, then "Whenever the need comes", then the bag
+           with the total and Donate, then the real items note. On a desktop the stylesheet
+           (assets/css/red-bag.css) puts the bag at the top of the right hand column and the themes
+           under it, beside the long paper; nothing is moved by script. -->
       <section class="page-top rb-intro" aria-labelledby="rb-title">
         <div class="wrap">
           <!-- red-bag:preview -->
@@ -58,39 +77,7 @@
             <span class="eyebrow">A new way to give</span>
             <h1 id="rb-title">Fill a Red Bag</h1>
             <div class="rule center"><i></i></div>
-            <p class="lede" data-rb-lede>Pop a few things in the bag and watch it fill. Your donation could help NBCC bring comfort, dignity and joy to children, young people and vulnerable adults, all year round.</p>
-          </div>
-        </div>
-      </section>
-
-      <!-- Back from paying (?thanks=1): shown by the script, which hides the rest. The total comes
-           from this tab's own memory and is for show only; with none, the plain line stays. No
-           list of items anywhere: it would read as a shopping receipt. -->
-      <section class="section flush-top rb-thanks" data-rb-thanks aria-labelledby="rb-thanks-title" hidden>
-        <div class="wrap">
-          <div class="card card-lg rb-thanks__panel" data-rb-thanks-panel tabindex="-1">
-            <div class="rb-thanks__bag" aria-hidden="true"><!-- red-bag:bag --></div>
-            <div class="rb-thanks__words">
-              <h2 id="rb-thanks-title">Thank you for filling a Red Bag</h2>
-              <p class="rb-thanks__lead" data-rb-thanks-total hidden>Your donation of <strong data-rb-thanks-amount></strong> is on its way to NBCC.</p>
-              <p class="rb-thanks__lead" data-rb-thanks-plain>Your donation is on its way to NBCC.</p>
-              <p data-rb-thanks-giftaid hidden>With Gift Aid, NBCC can claim another <strong data-rb-thanks-giftaid-amount></strong> at no cost to you.</p>
-              <p>Our elves use your gift wherever it's needed most, so the items are a taste of what it could do, not a shopping list.</p>
-              <p>Your receipt is on its way to your inbox. Thank you for being part of this.</p>
-              <div class="rb-share" data-rb-share>
-                <h3>Share: I filled a Red Bag</h3>
-                <p>A picture to post or send, to show a friend how to fill one too. It says nothing about how much you gave.</p>
-                <canvas class="rb-share__picture" data-rb-share-picture width="1080" height="1080" role="img" aria-label="A red paper gift bag on cream, with the words: I filled a Red Bag. Night Before Christmas Campaign."></canvas>
-                <div class="rb-share__actions">
-                  <button class="btn btn-primary" type="button" data-rb-share-send hidden>Share the picture</button>
-                  <a class="btn btn-ghost" data-rb-share-save download="i-filled-a-red-bag.png" href="#rb-thanks-title" hidden>Save the picture</a>
-                  <button class="btn btn-ghost" type="button" data-rb-copy-link hidden>Copy the link</button>
-                  <a class="btn btn-ghost" href="https://www.facebook.com/sharer/sharer.php?u=https%3A%2F%2Fnbcc.scot%2Ffill-a-red-bag" target="_blank" rel="noopener">Facebook<span class="sr-only">, opens in a new tab</span></a>
-                  <a class="btn btn-ghost" href="https://wa.me/?text=I%20filled%20a%20Red%20Bag%20with%20NBCC.%20You%20can%20fill%20one%20too%3A%20https%3A%2F%2Fnbcc.scot%2Ffill-a-red-bag" target="_blank" rel="noopener">WhatsApp<span class="sr-only">, opens in a new tab</span></a>
-                </div>
-                <p class="rb-share__status" role="status" aria-live="polite" data-rb-share-status></p>
-              </div>
-            </div>
+            <p class="lede">Pop a few things in the bag and watch it fill. Your donation could help NBCC bring comfort, dignity and joy to children, young people and vulnerable adults, all year round.</p>
           </div>
         </div>
       </section>
@@ -107,36 +94,45 @@
             </div>
           </div>
 
+          <div class="rb-need" data-rb-need role="region" aria-labelledby="rb-themes-title">
+            <div class="rb-need__head">
+              <h2 id="rb-themes-title">Whenever the need comes</h2>
+              <p>Christmas is our big night, and the need comes all year round. Tap an example to add it to your bag, and tap it again to take it out.</p>
+            </div>
+            <!-- red-bag:themes -->
+          </div>
+
           <div class="rb-panel" role="region" aria-labelledby="rb-panel-title">
             <h2 class="sr-only" id="rb-panel-title">Your bag</h2>
             <div class="rb-bags" data-rb-bags data-count="1" aria-hidden="true"><!-- red-bag:bag --></div>
             <p class="rb-more" data-rb-more hidden></p>
-            <!-- The phone bar (below) shows only while this block, the real total and Donate, is off screen. -->
+            <!-- The bottom bar (below) shows only while this block, the real total and Donate, is off screen. -->
             <div data-rb-watch>
             <!-- ONE polite region, read whole: a tap is announced once, the status and the total together. -->
             <div class="rb-said" role="status" aria-live="polite" aria-atomic="true">
               <p class="rb-status" data-rb-status>Your bag is empty. Pop something in.</p>
-              <p class="rb-total"><span class="rb-total__label">Your total</span> <strong class="rb-total__sum"><span data-rb-total>£0</span><span class="rb-total__per" data-rb-per-month hidden> a month</span></strong></p>
+              <p class="rb-total"><span class="rb-total__label">Your total</span> <strong class="rb-total__sum"><span data-rb-total>£0</span><span class="rb-total__per" data-rb-per-month hidden> every month</span></strong></p>
             </div>
             <p class="rb-nojs" data-nojs>Filling a bag needs JavaScript switched on. You can still donate on our <a href="/donate">donate page</a>.</p>
             <div class="rb-give" data-needs-js hidden>
-              <label class="give-check rb-monthly" for="rbMonthly"><input class="give-check-box" id="rbMonthly" name="rbMonthly" type="checkbox" /><span class="give-check-text" data-rb-monthly-label>Give this amount every month</span></label>
+              <!-- The round-up: ONE button, offering the next milestone only (half a bag, a full bag,
+                   then the next whole bag). The script writes its words and shows it once there is
+                   something to round up. It is simply extra money: it buys nothing. -->
+              <button class="rb-round" type="button" data-rb-round hidden><span class="rb-round__amount" data-rb-round-amount></span> <span class="rb-round__words" data-rb-round-words>Round up</span></button>
+              <!-- Once or monthly: two buttons, as on the donate page (its .give-toggle). -->
+              <div class="rb-often">
+                <p class="rb-often__label" id="rbOftenLabel">How often?</p>
+                <div class="rb-toggle" role="group" aria-labelledby="rbOftenLabel">
+                  <button class="rb-mode" type="button" data-rb-mode="once" aria-pressed="true">Give once</button>
+                  <button class="rb-mode" type="button" data-rb-mode="monthly" aria-pressed="false">Give monthly</button>
+                </div>
+              </div>
               <button class="btn btn-primary rb-donate" type="button" data-rb-donate aria-describedby="rbNudge">Donate</button>
               <p class="rb-nudge" id="rbNudge" data-rb-nudge role="alert" hidden>Add a little more to reach £2. Maybe some socks?</p>
             </div>
             </div>
             <p class="rb-elves">Our elves use your gift wherever it's needed most, so the items are a taste of what it could do, not a shopping list.</p>
           </div>
-        </div>
-      </section>
-
-      <section class="section rb-need" data-rb-need aria-labelledby="rb-themes-title">
-        <div class="wrap">
-          <div class="rb-need__head">
-            <h2 id="rb-themes-title">Whenever the need comes</h2>
-            <p>Christmas is our big night, and the need comes all year round. Tap an example to add it to your bag, and tap it again to take it out.</p>
-          </div>
-          <!-- red-bag:themes -->
           <!-- red-bag:real -->
         </div>
       </section>
@@ -146,9 +142,9 @@
         <div class="wrap"><!-- red-bag:details --></div>
       </section>
 
-      <!-- Phones only (assets/css/red-bag.css): a slim bar at the foot of the screen with the total and
-           a Donate button, shown by the script while the real ones above are out of sight, so nothing
-           is ever shown twice. Not a live region: the status line already says each change. -->
+      <!-- At every width: a slim bar at the foot of the screen with the total and a Donate button,
+           shown by the script while the real ones above are out of sight, so nothing is ever shown
+           twice. Not a live region: the status line already says each change. -->
       <div class="rb-bar" data-rb-bar hidden>
         <p class="rb-bar__total">Your bag <strong data-rb-bar-total>£0</strong></p>
         <button class="btn btn-primary rb-bar__donate" type="button" data-rb-bar-donate>Donate</button>

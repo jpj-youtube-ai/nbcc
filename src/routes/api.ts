@@ -24,7 +24,7 @@ import { insertEnquiry } from "../db/contact";
 import { createRateLimiter } from "../portal/request-limiter";
 import { captchaEnabled, captchaSiteKey, verifyCaptcha } from "../clients/turnstile";
 import { GIFT_MIN_PENCE, MESSAGE_MAX } from "../fundraising/model";
-import { RED_BAG_PATH } from "../red-bag/switch";
+import { RED_BAG_PATH, RED_BAG_THANKS_PATH } from "../red-bag/switch";
 import { redBagOpenTo } from "../red-bag/staff";
 
 // Marketing-site API endpoints, both implemented.
@@ -117,7 +117,7 @@ const checkoutBodySchema = z
     supporterMessage: z.string().trim().max(MESSAGE_MAX).optional(),
     showName: z.boolean().optional(),
     showAmount: z.boolean().optional(),
-    // Fill a Red Bag (/fill-a-red-bag): an optional marker on an otherwise ordinary donation. Absent
+    // Fill a Red Bag (/fill): an optional marker on an otherwise ordinary donation. Absent
     // (every donate page gift), nothing below applies and the session is exactly what it always was.
     redBag: z.boolean().optional(),
   })
@@ -510,11 +510,11 @@ function fundraiserReturnUrls(
   return embedded ? { ui_mode: "embedded_page", return_url: thanks } : { success_url: thanks, cancel_url: page };
 }
 
-// Fill a Red Bag: where a gift made on /fill-a-red-bag comes back to. Worked out HERE, from the
+// Fill a Red Bag: where a gift made on /fill comes back to. Worked out HERE, from the
 // site's own address (config.PORTAL_BASE_URL, the public address the fundraiser pages use too), and
-// never taken from the browser. The thank you is the page with ?thanks=1 and Stripe's
+// never taken from the browser. The thank you is a page of its own, /fill/thank-you, with Stripe's
 // {CHECKOUT_SESSION_ID} template (Stripe fills it in, so the braces must NOT be encoded); a cancel on
-// Stripe's own page goes back to the page itself.
+// Stripe's own page goes back to the giving page.
 export function redBagPageUrl(): string {
   return `${config.PORTAL_BASE_URL.replace(/\/+$/, "")}${RED_BAG_PATH}`;
 }
@@ -523,7 +523,7 @@ function redBagReturnUrls(
   embedded: boolean,
 ): Pick<StripeNS.Checkout.SessionCreateParams, "ui_mode" | "return_url" | "success_url" | "cancel_url"> {
   const page = redBagPageUrl();
-  const thanks = `${page}?thanks=1&session_id={CHECKOUT_SESSION_ID}`;
+  const thanks = `${config.PORTAL_BASE_URL.replace(/\/+$/, "")}${RED_BAG_THANKS_PATH}?session_id={CHECKOUT_SESSION_ID}`;
   return embedded ? { ui_mode: "embedded_page", return_url: thanks } : { success_url: thanks, cancel_url: page };
 }
 

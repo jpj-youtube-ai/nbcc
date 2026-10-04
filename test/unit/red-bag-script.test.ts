@@ -7,8 +7,8 @@ import { renderRedBagPage } from "../../src/red-bag/render";
 
 // Fill a Red Bag: the page's script (assets/js/red-bag.js), driven in jsdom over the page exactly as
 // the server draws it. It makes the steppers and the examples work, keeps the bags, the status line
-// and the total in step, opens the details step, sends the gift to the checkout the donate page
-// uses (with the redBag marker), and says thank you on the way back. Every name here is invented.
+// and the total in step, opens the details step, and sends the gift to the checkout the donate page
+// uses (with the redBag marker). Every name here is invented.
 
 const ROOT = resolve(__dirname, "../..");
 const require = createRequire(import.meta.url);
@@ -39,6 +39,10 @@ const tick = (id: string, on = true) => {
   el.dispatchEvent(new Event("change", { bubbles: true }));
 };
 const example = (key: string) => $<HTMLButtonElement>(`[data-rb-example="${key}"]`);
+/** Choose once or monthly with its button. */
+const often = (mode: "once" | "monthly") => $<HTMLButtonElement>(`[data-rb-mode="${mode}"]`).click();
+const round = () => $<HTMLButtonElement>("[data-rb-round]");
+const roundLine = () => $("[data-rb-also-list] [data-rb-round-line]");
 
 type Answer = { status: number; body: unknown };
 let fetchMock: ReturnType<typeof vi.fn>;
@@ -83,7 +87,7 @@ function start(opts: { preview?: boolean; search?: string; answer?: Answer; kept
     Stripe: opts.stripe,
     addEventListener: (type: string, fn: (e: unknown) => void) => void (listeners[type] = fn),
     fetch: fetchMock,
-    location: { href: "", pathname: "/fill-a-red-bag", search: opts.search ?? "" },
+    location: { href: "", pathname: "/fill", search: opts.search ?? "" },
     history,
     sessionStorage: { getItem: (k: string) => store.get(k) ?? null, setItem: (k: string, v: string) => void store.set(k, v), removeItem: (k: string) => void store.delete(k) },
     matchMedia: () => ({ matches: false }),
@@ -205,19 +209,19 @@ describe("the steppers", () => {
 
 describe("the examples", () => {
   it("go into the same bag when tapped, as a line under Also in your bag", () => {
-    example("joy-10").click();
-    expect(example("joy-10").getAttribute("aria-pressed")).toBe("true");
-    expect(text("[data-rb-total]")).toBe("£10");
+    example("hand-20").click();
+    expect(example("hand-20").getAttribute("aria-pressed")).toBe("true");
+    expect(text("[data-rb-total]")).toBe("£20");
     expect($("[data-rb-also]").hidden).toBe(false);
     const line = $("[data-rb-also-list] li");
-    expect(line.textContent).toContain("£10 could help with cosy essentials like a hat, gloves and socks");
-    expect(line.querySelector("button")?.getAttribute("aria-label")).toBe("Remove from your bag: £10 could help with cosy essentials like a hat, gloves and socks");
+    expect(line.textContent).toContain("£20 could help with toiletries and warm clothes in a hard moment");
+    expect(line.querySelector("button")?.getAttribute("aria-label")).toBe("Remove from your bag: £20 could help with toiletries and warm clothes in a hard moment");
   });
 
   it("come out when tapped again", () => {
-    example("joy-10").click();
-    example("joy-10").click();
-    expect(example("joy-10").getAttribute("aria-pressed")).toBe("false");
+    example("hand-20").click();
+    example("hand-20").click();
+    expect(example("hand-20").getAttribute("aria-pressed")).toBe("false");
     expect(api!.total()).toBe(0);
     expect($("[data-rb-also]").hidden).toBe(true);
     expect(document.querySelectorAll("[data-rb-also-list] li").length).toBe(0);
@@ -298,40 +302,529 @@ describe("the bags and the status line", () => {
   });
 });
 
-describe("the monthly tick", () => {
-  const label = () => text('label[for="rbMonthly"]');
+// Once or monthly: two buttons side by side, "Give once" (chosen to begin with) and "Give monthly",
+// in place of the tick. What follows from the choice is exactly what the tick did.
+describe("once or monthly", () => {
+  const pressed = () => [...document.querySelectorAll("[data-rb-mode]")].map((b) => `${b.getAttribute("data-rb-mode")}:${b.getAttribute("aria-pressed")}`);
+  const button = () => text("[data-rb-donate]");
 
-  it("names the amount, and keeps up as the bag changes", () => {
-    expect(label()).toBe("Give this amount every month");
+  it("starts on Give once", () => {
+    expect(pressed()).toEqual(["once:true", "monthly:false"]);
+    expect($("[data-rb-per-month]").hidden).toBe(true);
+  });
+
+  it("says which is chosen, one at a time", () => {
+    often("monthly");
+    expect(pressed()).toEqual(["once:false", "monthly:true"]);
+    often("monthly"); // pressing the chosen one again changes nothing
+    expect(pressed()).toEqual(["once:false", "monthly:true"]);
+    often("once");
+    expect(pressed()).toEqual(["once:true", "monthly:false"]);
+  });
+
+  it("names the amount on the Donate button, and keeps up as the bag changes", () => {
+    expect(button()).toBe("Donate");
     plus("blanket");
-    expect(label()).toBe("Give £8 every month");
+    expect(button()).toBe("Donate £8");
     plus("pencil");
-    expect(label()).toBe("Give £8.10 every month");
+    expect(button()).toBe("Donate £8.10");
     example("hand-150").click();
-    expect(label()).toBe("Give £158.10 every month");
+    expect(button()).toBe("Donate £158.10");
     minus("blanket");
     minus("pencil");
     example("hand-150").click();
-    expect(label()).toBe("Give this amount every month");
+    expect(button()).toBe("Donate");
     plus("pencil", 7);
-    expect(label()).toBe("Give 70p every month");
+    expect(button()).toBe("Donate 70p");
   });
 
-  it("still makes the pay button say a month", () => {
+  it("says every month on the Donate button for a monthly donation", () => {
+    plus("blanket", 3);
+    plus("toy");
+    plus("socks", 2);
+    expect(button()).toBe("Donate £31");
+    often("monthly");
+    expect(button()).toBe("Donate £31 every month");
+    plus("socks");
+    expect(button()).toBe("Donate £32 every month");
+    often("once");
+    expect(button()).toBe("Donate £32");
+  });
+
+  it("names no amount on an empty bag, whichever is chosen", () => {
+    often("monthly");
+    expect(button()).toBe("Donate");
+  });
+
+  it("leaves the phone bar's button as it was", () => {
+    plus("blanket");
+    often("monthly");
+    expect(text("[data-rb-bar-donate]")).toBe("Donate");
+  });
+
+  // "every month" wherever the monthly amount is worded on this page, never "a month" (Jaimie,
+  // 4 October 2026): the total, Donate, the details step's summary, the pay button, the thank you.
+  it("says every month on the details step too: its summary and its pay button", () => {
     plus("blanket", 2);
-    tick("rbMonthly");
-    expect(label()).toBe("Give £16 every month");
+    often("monthly");
     donate();
-    expect(text("[data-rb-pay]")).toBe("Donate £16 a month");
+    expect(text("[data-rb-pay]")).toBe("Donate £16 every month");
+    expect(text(".rb-details__sum")).toMatch(/^Your Red Bag donation: £16 every month[.]/);
+    expect($("[data-rb-details-monthly]").hidden).toBe(false);
+  });
+
+  it("never says a month anywhere a donor reads, once or monthly", () => {
+    plus("blanket", 2);
+    for (const mode of ["once", "monthly"] as const) {
+      often(mode);
+      expect(document.querySelector("main")!.textContent).not.toMatch(/a month/);
+      donate();
+      expect(document.querySelector("main")!.textContent).not.toMatch(/a month/);
+      $<HTMLButtonElement>("[data-rb-back]").click();
+    }
   });
 
   it("turns the total into a monthly donation", () => {
     plus("blanket");
-    tick("rbMonthly");
+    often("monthly");
     expect($("[data-rb-per-month]").hidden).toBe(false);
-    expect(text(".rb-total__sum")).toBe("£8 a month");
-    tick("rbMonthly", false);
+    expect(text(".rb-total__sum")).toBe("£8 every month");
+    often("once");
     expect($("[data-rb-per-month]").hidden).toBe(true);
+  });
+
+  it("is kept when they come back from the details step", () => {
+    plus("blanket", 2);
+    often("monthly");
+    donate();
+    $<HTMLButtonElement>("[data-rb-back]").click();
+    expect(pressed()).toEqual(["once:false", "monthly:true"]);
+    expect(button()).toBe("Donate £16 every month");
+    expect(text(".rb-total__sum")).toBe("£16 every month");
+    donate();
+    expect($("[data-rb-age]").hidden).toBe(false);
+  });
+
+  it("works from the keyboard: they are ordinary buttons, in the tab order", () => {
+    for (const b of document.querySelectorAll<HTMLButtonElement>("[data-rb-mode]")) {
+      expect(b.tagName).toBe("BUTTON");
+      expect(b.disabled).toBe(false);
+      expect(b.hasAttribute("tabindex")).toBe(false);
+    }
+  });
+});
+
+// The round-up: one button by the total, offering the NEXT milestone only (half a bag, a full bag,
+// then the next whole bag). It keeps its target: the extra shrinks and grows so the total stays put.
+describe("the round-up", () => {
+  const fills = () => [...document.querySelectorAll<SVGElement>("[data-rb-bags] .rb-bag")].map((b) => Number(b.style.getPropertyValue("--rb-fill")));
+  const eighteen = () => {
+    plus("blanket", 2);
+    plus("socks", 2);
+  };
+
+  it("is not offered on an empty bag", () => {
+    expect(round().hidden).toBe(true);
+    plus("socks");
+    expect(round().hidden).toBe(false);
+    minus("socks");
+    expect(round().hidden).toBe(true);
+  });
+
+  it("offers half a bag under £25, and says what it adds", () => {
+    eighteen();
+    expect(text("[data-rb-round]")).toBe("+ £7 Round up to half a bag");
+    expect(text("[data-rb-round-amount]")).toBe("+ £7");
+    expect(text("[data-rb-round-words]")).toBe("Round up to half a bag");
+    plus("pencil", 9);
+    expect(text("[data-rb-round]")).toBe("+ £6.10 Round up to half a bag");
+  });
+
+  it("offers a full bag from £25, and the next whole bag from £50", () => {
+    type("rb-qty-toy", "5"); // £25 exactly, their own items
+    expect(text("[data-rb-round]")).toBe("+ £25 Round up to a full bag");
+    plus("socks");
+    expect(text("[data-rb-round]")).toBe("+ £24 Round up to a full bag");
+    type("rb-qty-toy", "10"); // £51
+    expect(text("[data-rb-round]")).toBe("+ £49 Round up to 2 full bags");
+    for (const i of catalogue.items()) type(`rb-qty-${i.key}`, "1"); // £54.10
+    expect(text("[data-rb-round]")).toBe("+ £45.90 Round up to 2 full bags");
+    type("rb-qty-headphones", "40"); // £405.10
+    expect(text("[data-rb-round]")).toBe("+ £44.90 Round up to 9 full bags");
+  });
+
+  it("when pressed, adds a line under Also in your bag, with its amount and a way out", () => {
+    eighteen();
+    round().click();
+    expect(api!.total()).toBe(2500);
+    expect(text("[data-rb-total]")).toBe("£25");
+    expect($("[data-rb-also]").hidden).toBe(false);
+    const line = roundLine();
+    expect(line.closest(".rb-paper")).not.toBeNull();
+    expect(text("[data-rb-round-line] .rb-also__words")).toBe("A little extra to round up");
+    expect(text("[data-rb-round-line] [data-rb-round-sum]")).toBe("£7");
+    const remove = line.querySelector("button")!;
+    expect(remove.textContent).toBe("Remove");
+    expect(remove.getAttribute("aria-label")).toBe("Remove from your bag: A little extra to round up, £7");
+    expect(document.querySelectorAll("[data-rb-also-list] li").length).toBe(1);
+  });
+
+  it("fills the bag and the status line with it: half a bag is a half full bag", () => {
+    eighteen();
+    round().click();
+    expect(text("[data-rb-status]")).toBe("Your bag is about half full.");
+    expect(fills()[0]).toBeCloseTo(0.5, 3);
+  });
+
+  it("then offers the next step, and pressing that replaces the round-up, never stacks two", () => {
+    eighteen();
+    round().click();
+    expect(text("[data-rb-round]")).toBe("+ £25 Round up to a full bag");
+    round().click();
+    expect(api!.total()).toBe(5000);
+    expect(document.querySelectorAll("[data-rb-round-line]").length).toBe(1);
+    expect(text("[data-rb-round-line] [data-rb-round-sum]")).toBe("£32");
+    expect(text("[data-rb-status]")).toBe("That's around the value of a whole Red Bag Full of Joy.");
+    expect(fills()).toEqual([1]);
+    expect(text("[data-rb-round]")).toBe("+ £50 Round up to 2 full bags");
+    round().click();
+    expect(api!.total()).toBe(10000);
+    expect(text("[data-rb-round-line] [data-rb-round-sum]")).toBe("£82");
+    expect(text("[data-rb-round]")).toBe("+ £50 Round up to 3 full bags");
+  });
+
+  it("keeps its target: the extra shrinks as items go in, so the total stays where it is", () => {
+    eighteen();
+    round().click();
+    plus("socks");
+    expect(api!.total()).toBe(2500);
+    expect(text("[data-rb-round-line] [data-rb-round-sum]")).toBe("£6");
+    expect(roundLine().querySelector("button")!.getAttribute("aria-label")).toBe("Remove from your bag: A little extra to round up, £6");
+    plus("pencil");
+    expect(api!.total()).toBe(2500);
+    expect(text("[data-rb-round-line] [data-rb-round-sum]")).toBe("£5.90");
+    expect(text("[data-rb-total]")).toBe("£25");
+  });
+
+  it("keeps its target: the extra grows back as items come out", () => {
+    eighteen();
+    round().click();
+    minus("blanket");
+    expect(api!.total()).toBe(2500);
+    expect(text("[data-rb-round-line] [data-rb-round-sum]")).toBe("£15");
+  });
+
+  it("keeps the same line on the paper while its amount changes, so a Remove in hand is not lost", () => {
+    eighteen();
+    round().click();
+    const line = roundLine();
+    plus("socks");
+    expect(roundLine()).toBe(line);
+  });
+
+  it("goes when their own items reach or pass the target, and the button offers the next step", () => {
+    eighteen();
+    round().click();
+    plus("blanket"); // £26 of their own
+    expect(roundLine()).toBeNull();
+    expect($("[data-rb-also]").hidden).toBe(true);
+    expect(api!.total()).toBe(2600);
+    expect(text("[data-rb-round]")).toBe("+ £24 Round up to a full bag");
+  });
+
+  it("goes when their own items land exactly on the target", () => {
+    eighteen();
+    round().click();
+    plus("socks", 7); // £25 of their own
+    expect(roundLine()).toBeNull();
+    expect(api!.total()).toBe(2500);
+    expect(text("[data-rb-round]")).toBe("+ £25 Round up to a full bag");
+  });
+
+  // Jaimie: "if their items pass £25 on their own, the top-up disappears and the button offers the
+  // next step". Passed, the target is forgotten: it does not come back when things are taken out.
+  it("is forgotten once passed: taking that item out again does not bring it back", () => {
+    eighteen();
+    round().click();
+    plus("blanket"); // £26 of their own: passed
+    minus("blanket");
+    expect(api!.total()).toBe(1800);
+    expect(roundLine()).toBeNull();
+    expect($("[data-rb-also]").hidden).toBe(true);
+    expect(text("[data-rb-round]")).toBe("+ £7 Round up to half a bag");
+  });
+
+  it("is forgotten once reached exactly, too", () => {
+    eighteen();
+    round().click();
+    plus("socks", 7); // £25 of their own
+    minus("socks");
+    expect(api!.total()).toBe(2400);
+    expect(roundLine()).toBeNull();
+  });
+
+  it("is forgotten when an example takes them past it", () => {
+    eighteen();
+    round().click();
+    example("crisis-15").click(); // £33 of their own
+    example("crisis-15").click();
+    expect(api!.total()).toBe(1800);
+    expect(roundLine()).toBeNull();
+  });
+
+  // Typing in a number box is not finished until the box is left. A box emptied on the way to a
+  // new number, or a number half typed, must not throw the round-up away.
+  describe("while a number is being typed", () => {
+    const leave = (id: string) => document.getElementById(id)!.dispatchEvent(new Event("blur"));
+
+    it("keeps the round-up when the only box is emptied and a new number typed", () => {
+      type("rb-qty-socks", "5"); // £5
+      leave("rb-qty-socks");
+      round().click();
+      expect(api!.total()).toBe(2500);
+      type("rb-qty-socks", ""); // mid edit: nothing of their own, so nothing to round up just now
+      expect(api!.total()).toBe(0);
+      expect(roundLine()).toBeNull();
+      type("rb-qty-socks", "3");
+      expect(api!.total()).toBe(2500);
+      expect(text("[data-rb-round-line] [data-rb-round-sum]")).toBe("£22");
+      leave("rb-qty-socks");
+      expect(api!.total()).toBe(2500);
+    });
+
+    it("clears the round-up when the box is left empty", () => {
+      type("rb-qty-socks", "5");
+      leave("rb-qty-socks");
+      round().click();
+      type("rb-qty-socks", "");
+      leave("rb-qty-socks");
+      expect(api!.total()).toBe(0);
+      type("rb-qty-socks", "3");
+      leave("rb-qty-socks");
+      expect(api!.total()).toBe(300);
+      expect(roundLine()).toBeNull();
+    });
+
+    it("keeps the round-up from 10 to 20, through the 2 on the way", () => {
+      type("rb-qty-socks", "10");
+      leave("rb-qty-socks");
+      round().click();
+      expect(text("[data-rb-round-line] [data-rb-round-sum]")).toBe("£15");
+      type("rb-qty-socks", "");
+      type("rb-qty-socks", "2");
+      type("rb-qty-socks", "20");
+      leave("rb-qty-socks");
+      expect(api!.total()).toBe(2500);
+      expect(text("[data-rb-round-line] [data-rb-round-sum]")).toBe("£5");
+    });
+
+    it("keeps the round-up when a number typed too big on the way is put right before leaving", () => {
+      type("rb-qty-socks", "3");
+      leave("rb-qty-socks");
+      round().click();
+      type("rb-qty-socks", "30"); // past the target, mid edit
+      expect(roundLine()).toBeNull();
+      type("rb-qty-socks", "3");
+      expect(api!.total()).toBe(2500);
+      leave("rb-qty-socks");
+      expect(text("[data-rb-round-line] [data-rb-round-sum]")).toBe("£22");
+    });
+
+    it("forgets the target when the box is left past it", () => {
+      type("rb-qty-socks", "3");
+      leave("rb-qty-socks");
+      round().click();
+      type("rb-qty-socks", "30");
+      leave("rb-qty-socks");
+      type("rb-qty-socks", "3");
+      leave("rb-qty-socks");
+      expect(api!.total()).toBe(300);
+    });
+  });
+
+  it("is cleared by its own Remove, and the round-up button is where you land", () => {
+    eighteen();
+    round().click();
+    (roundLine().querySelector("button") as HTMLButtonElement).click();
+    expect(roundLine()).toBeNull();
+    expect($("[data-rb-also]").hidden).toBe(true);
+    expect(api!.total()).toBe(1800);
+    expect(text("[data-rb-round]")).toBe("+ £7 Round up to half a bag");
+    expect(document.activeElement).toBe(round());
+    // Cleared for good: taking an item out does not bring it back.
+    minus("socks");
+    expect(api!.total()).toBe(1700);
+  });
+
+  // Jaimie, 4 October 2026: a round-up never stands alone. Once the donor's own choices (items and
+  // examples) come to nothing, the round-up is cleared, and it does not come back.
+  it("is cleared when the bag is emptied: the total is £0, with no line and no offer", () => {
+    eighteen();
+    round().click();
+    minus("blanket");
+    minus("blanket");
+    minus("socks");
+    expect(api!.total()).toBe(2500); // one pair of socks left: still holding its target
+    expect(text("[data-rb-round-line] [data-rb-round-sum]")).toBe("£24");
+    minus("socks");
+    expect(api!.total()).toBe(0);
+    expect(text("[data-rb-total]")).toBe("£0");
+    expect(roundLine()).toBeNull();
+    expect($("[data-rb-also]").hidden).toBe(true);
+    expect(round().hidden).toBe(true);
+    expect(text("[data-rb-status]")).toBe("Your bag is empty. Pop something in.");
+    expect(text("[data-rb-donate]")).toBe("Donate");
+    expect($("[data-rb-bar]").hidden).toBe(true);
+  });
+
+  it("does not come back after the bag has been emptied", () => {
+    eighteen();
+    round().click();
+    minus("blanket");
+    minus("blanket");
+    minus("socks");
+    minus("socks");
+    expect(api!.total()).toBe(0);
+    plus("socks");
+    expect(api!.total()).toBe(100);
+    expect(roundLine()).toBeNull();
+    expect(text("[data-rb-round]")).toBe("+ £24 Round up to half a bag");
+    plus("blanket", 2);
+    expect(api!.total()).toBe(1700);
+  });
+
+  it("is cleared when the last thing to go is an example", () => {
+    example("crisis-15").click();
+    round().click();
+    expect(api!.total()).toBe(2500);
+    example("crisis-15").click();
+    expect(api!.total()).toBe(0);
+    expect(roundLine()).toBeNull();
+    expect($("[data-rb-also]").hidden).toBe(true);
+    example("crisis-15").click();
+    expect(api!.total()).toBe(1500);
+  });
+
+  it("cannot be sent on its own: an emptied bag gets the nudge, not the details step", () => {
+    eighteen();
+    round().click();
+    minus("blanket");
+    minus("blanket");
+    minus("socks");
+    minus("socks");
+    donate();
+    expect($("[data-rb-details]").hidden).toBe(true);
+    expect($("[data-rb-nudge]").hidden).toBe(false);
+    expect(api!.payload().amount).toBe(0);
+  });
+
+  it("sits with the examples under Also in your bag, last, and shrinks when an example goes in", () => {
+    plus("socks", 3);
+    example("crisis-15").click(); // £18
+    round().click();
+    const lines = [...document.querySelectorAll("[data-rb-also-list] li")];
+    expect(lines.length).toBe(2);
+    expect(lines[1]).toBe(roundLine());
+    expect(text("[data-rb-round-line] [data-rb-round-sum]")).toBe("£7");
+    round().click(); // a full bag: £32 extra
+    example("hand-20").click();
+    expect(api!.total()).toBe(5000);
+    expect(text("[data-rb-round-line] [data-rb-round-sum]")).toBe("£12");
+    const after = [...document.querySelectorAll("[data-rb-also-list] li")];
+    expect(after.length).toBe(3);
+    expect(after[2]).toBe(roundLine());
+    // Taking an example out with its own Remove leaves the round-up holding its target.
+    ($('[data-rb-also-list] [data-rb-remove="crisis-15"]') as HTMLButtonElement).click();
+    expect(api!.total()).toBe(5000);
+    expect(text("[data-rb-round-line] [data-rb-round-sum]")).toBe("£27");
+  });
+
+  it("works from under £2: a round-up from 10p to £25 is fine, and Donate goes on", () => {
+    plus("pencil");
+    expect(text("[data-rb-status]")).toBe("Add a little more to reach £2. Maybe some socks?");
+    expect(text("[data-rb-round]")).toBe("+ £24.90 Round up to half a bag");
+    donate();
+    expect($("[data-rb-nudge]").hidden).toBe(false);
+    round().click();
+    expect($("[data-rb-nudge]").hidden).toBe(true);
+    expect(text("[data-rb-total]")).toBe("£25");
+    donate();
+    expect($("[data-rb-details]").hidden).toBe(false);
+    expect(text("[data-rb-details-total]")).toBe("£25");
+  });
+
+  it("sends exactly the total shown, round-up and all, and still no list of items", async () => {
+    eighteen();
+    plus("pencil", 9); // £18.90
+    round().click();
+    expect(text("[data-rb-total]")).toBe("£25");
+    donate();
+    expect(text("[data-rb-pay]")).toBe("Donate £25");
+    fillDetails();
+    pay();
+    await flush();
+    expect(sent()).toEqual({
+      mode: "once",
+      plan: null,
+      amount: 2500,
+      giftAid: false,
+      coverFee: false,
+      donorType: "individual",
+      fullName: "Alex Example",
+      email: "alex@example.com",
+      emailConsent: false,
+      redBag: true,
+    });
+    expect(api!.payload().amount).toBe(api!.total());
+    expect(JSON.parse(store.get("nbcc_red_bag_gift")!)).toEqual({ pence: 2500, giftAid: false, monthly: false });
+  });
+
+  it("works with monthly: the rounded total is the monthly donation", async () => {
+    eighteen();
+    round().click();
+    often("monthly");
+    expect(text("[data-rb-donate]")).toBe("Donate £25 every month");
+    expect(text(".rb-total__sum")).toBe("£25 every month");
+    donate();
+    fillDetails();
+    tick("rbAgeConfirmed");
+    pay();
+    await flush();
+    expect(sent()).toMatchObject({ mode: "monthly", amount: 2500, coverFee: false, ageConfirmed: true, redBag: true });
+  });
+
+  it("is in the phone bar's total too", () => {
+    eighteen();
+    expect(text(".rb-bar__total")).toBe("Your bag £18");
+    round().click();
+    expect(text(".rb-bar__total")).toBe("Your bag £25");
+  });
+
+  it("is kept when they come back from the details step", () => {
+    eighteen();
+    round().click();
+    donate();
+    $<HTMLButtonElement>("[data-rb-back]").click();
+    expect(text("[data-rb-total]")).toBe("£25");
+    expect(text("[data-rb-round-line] [data-rb-round-sum]")).toBe("£7");
+  });
+
+  it("is said once: by the status line and the total, not by a region of its own", () => {
+    eighteen();
+    round().click();
+    expect(round().closest("[aria-live]")).toBeNull();
+    expect(roundLine().closest("[aria-live]")).toBeNull();
+    expect(document.querySelectorAll("[data-rb-builder] [aria-live]").length).toBe(1);
+    // (The region also holds " every month", hidden unless Give monthly is chosen.)
+    expect(text("[data-rb-status]")).toBe("Your bag is about half full.");
+    expect(text(".rb-total")).toMatch(/^Your total £25/);
+  });
+
+  it("stays a button the keyboard can reach, and is never switched off", () => {
+    eighteen();
+    expect(round().disabled).toBe(false);
+    expect(round().hasAttribute("tabindex")).toBe(false);
+    expect(round().getAttribute("type")).toBe("button");
   });
 });
 
@@ -367,7 +860,8 @@ describe("pressing Donate", () => {
     donate();
     expect($("[data-rb-details]").hidden).toBe(false);
     expect($("[data-rb-builder]").hidden).toBe(true);
-    expect($("[data-rb-need]").hidden).toBe(true);
+    // The themes are part of the bag's own section now, so they go with it.
+    expect($("[data-rb-need]").closest("[data-rb-builder]")).toBe($("[data-rb-builder]"));
     expect(text("[data-rb-details-total]")).toBe("£2");
     expect(document.activeElement).toBe(document.getElementById("rb-details-title"));
   });
@@ -380,6 +874,7 @@ describe("pressing Donate", () => {
     expect($("[data-rb-builder]").hidden).toBe(false);
     expect($("[data-rb-need]").hidden).toBe(false);
     expect(text("[data-rb-total]")).toBe("£9");
+    expect(document.activeElement).toBe($("[data-rb-donate]"));
   });
 });
 
@@ -401,7 +896,7 @@ describe("the details step", () => {
   });
 
   it("for a monthly one: no fee offer, the all donations declaration, and the 18 or over tick", () => {
-    tick("rbMonthly");
+    often("monthly");
     donate();
     expect($("[data-rb-fee]").hidden).toBe(true);
     expect($("[data-rb-age]").hidden).toBe(false);
@@ -409,7 +904,7 @@ describe("the details step", () => {
     expect($('[data-rb-wording="once"]').hidden).toBe(true);
     expect($('[data-rb-wording="monthly"]').hidden).toBe(false);
     expect($("[data-rb-details-monthly]").hidden).toBe(false);
-    expect(text("[data-rb-pay]")).toBe("Donate £40 a month");
+    expect(text("[data-rb-pay]")).toBe("Donate £40 every month");
   });
 
   it("shows the home address only when Gift Aid is ticked, and no postcode for an address abroad", () => {
@@ -434,7 +929,7 @@ describe("the details step", () => {
 describe("what is sent to the checkout", () => {
   it("is the donate page's body with the Red Bag marker, and never a list of items", async () => {
     plus("blanket", 5);
-    example("joy-10").click();
+    example("crisis-15").click();
     donate();
     fillDetails();
     tick("rbEmailConsent");
@@ -448,7 +943,7 @@ describe("what is sent to the checkout", () => {
     expect(sent()).toEqual({
       mode: "once",
       plan: null,
-      amount: 5000,
+      amount: 5500,
       giftAid: false,
       coverFee: false,
       donorType: "individual",
@@ -477,10 +972,10 @@ describe("what is sent to the checkout", () => {
     });
   });
 
-  it("is monthly when the tick is on: the 18 or over answer, and never a fee cover", async () => {
+  it("is monthly when Give monthly is chosen: the 18 or over answer, and never a fee cover", async () => {
     plus("blanket", 5);
     tick("rbCoverFee");
-    tick("rbMonthly");
+    often("monthly");
     donate();
     fillDetails();
     pay();
@@ -598,65 +1093,18 @@ describe("going to pay", () => {
   });
 });
 
-describe("back from paying", () => {
-  const kept = (gift: unknown) => ({ nbcc_red_bag_gift: JSON.stringify(gift) });
-
-  it("says thank you, with the total, and hides the bag builder", () => {
-    start({ search: "?thanks=1&session_id=cs_test_abc", kept: kept({ pence: 5410, giftAid: false, monthly: false }) });
-    expect($("[data-rb-thanks]").hidden).toBe(false);
-    expect($("[data-rb-builder]").hidden).toBe(true);
-    expect($("[data-rb-need]").hidden).toBe(true);
-    expect($("[data-rb-details]").hidden).toBe(true);
-    expect(text("[data-rb-thanks-total]")).toBe("Your donation of £54.10 is on its way to NBCC.");
-    expect($("[data-rb-thanks-plain]").hidden).toBe(true);
-    expect($("[data-rb-thanks-giftaid]").hidden).toBe(true);
-    expect(document.activeElement).toBe($("[data-rb-thanks-panel]"));
-  });
-
-  it("adds the Gift Aid line when they added Gift Aid: a quarter more", () => {
-    start({ search: "?thanks=1", kept: kept({ pence: 4000, giftAid: true, monthly: false }) });
-    expect($("[data-rb-thanks-giftaid]").hidden).toBe(false);
-    expect(text("[data-rb-thanks-giftaid]")).toBe("With Gift Aid, NBCC can claim another £10 at no cost to you.");
-  });
-
-  it("says a month for a monthly donation", () => {
-    start({ search: "?thanks=1", kept: kept({ pence: 1000, giftAid: false, monthly: true }) });
-    expect(text("[data-rb-thanks-total]")).toBe("Your donation of £10 a month is on its way to NBCC.");
-  });
-
-  it("is a plain thank you when the total is not there, or is not a total", () => {
-    for (const k of [{}, { nbcc_red_bag_gift: "not json" }, kept({ pence: "lots" }), kept({ pence: -5 })]) {
-      start({ search: "?thanks=1", kept: k as Record<string, string> });
-      expect($("[data-rb-thanks]").hidden).toBe(false);
-      expect($("[data-rb-thanks-total]").hidden).toBe(true);
-      expect($("[data-rb-thanks-plain]").hidden).toBe(false);
-      expect($("[data-rb-thanks-giftaid]").hidden).toBe(true);
+// Back from paying, the donor lands on a page of its own, /fill/thank-you
+// (assets/js/red-bag-thanks.js; test/unit/red-bag-thanks-script.test.ts). This page has no thank you.
+describe("the thank you is not here", () => {
+  it("has no thank you step, with or without the old flag in the address", () => {
+    for (const search of ["", "?thanks=1", "?thanks=1&session_id=cs_test_abc"]) {
+      start({ search, kept: { nbcc_red_bag_gift: JSON.stringify({ pence: 5410, giftAid: false, monthly: false }) } });
+      expect($("[data-rb-thanks]")).toBeNull();
+      expect($("[data-rb-builder]").hidden).toBe(false);
+      // What the tab remembered is left for the thank you page to read.
+      expect(store.has("nbcc_red_bag_gift")).toBe(true);
+      expect(history.replaceState).not.toHaveBeenCalled();
     }
-  });
-
-  it("takes the payment's id out of the address bar at once, and forgets the total", () => {
-    start({ search: "?thanks=1&session_id=cs_test_abc", kept: kept({ pence: 5410, giftAid: false, monthly: false }) });
-    expect(history.replaceState).toHaveBeenCalledWith(null, "", "/fill-a-red-bag?thanks=1");
-    expect(store.has("nbcc_red_bag_gift")).toBe(false);
-  });
-
-  it("puts the invitation to fill a bag away: they have just filled one", () => {
-    start({ search: "?thanks=1", kept: kept({ pence: 5410, giftAid: false, monthly: false }) });
-    expect($("[data-rb-lede]").hidden).toBe(true);
-    expect($("#rb-title").closest("section")!.hidden).toBe(false); // the heading stays, and clears the header
-    start();
-    expect($("[data-rb-lede]").hidden).toBe(false);
-  });
-
-  it("never lists the items", () => {
-    start({ search: "?thanks=1", kept: kept({ pence: 5410, giftAid: false, monthly: false }) });
-    expect(text("[data-rb-thanks]")).not.toMatch(/Blanket|Socks|Pencil/);
-  });
-
-  it("is the ordinary page without the thanks flag", () => {
-    start({ kept: kept({ pence: 5410, giftAid: false, monthly: false }) });
-    expect($("[data-rb-thanks]").hidden).toBe(true);
-    expect($("[data-rb-builder]").hidden).toBe(false);
   });
 });
 
@@ -783,10 +1231,11 @@ describe("the postcode", () => {
   });
 });
 
-// On a phone the bag, the total and Donate are below a long list. A slim bar fixed to the foot of the
-// screen carries the total and a Donate button while they are out of sight, and goes the moment the
-// real ones come on screen, so nothing is ever shown twice.
-describe("the phone bar", () => {
+// The total and Donate are in the bag's panel, which a long list soon scrolls out of sight, on a
+// phone and on a computer alike. A slim bar fixed to the foot of the screen carries the total and a
+// Donate button while they are out of sight, at every width (Jaimie, 4 October 2026), and goes the
+// moment the real ones come on screen, so nothing is ever shown twice.
+describe("the bottom bar", () => {
   const bar = () => $("[data-rb-bar]");
   const barDonate = () => $<HTMLButtonElement>("[data-rb-bar-donate]").click();
   const padded = () => document.body.classList.contains("rb-bar-on");
@@ -858,18 +1307,22 @@ describe("the phone bar", () => {
     expect($("[data-rb-details]").hidden).toBe(true);
   });
 
+  // The bar hides the moment the real Donate is on screen, and its button with it: the focus must
+  // not be left on a button that has gone.
+  it("under £2, hands the focus to the real Donate button, beside the nudge", () => {
+    ($("[data-rb-nudge]") as unknown as { scrollIntoView: unknown }).scrollIntoView = vi.fn();
+    plus("socks");
+    $<HTMLButtonElement>("[data-rb-bar-donate]").focus();
+    barDonate();
+    expect(document.activeElement).toBe($("[data-rb-donate]"));
+  });
+
   it("does not bring the nudge into view for the real Donate, which is beside it already", () => {
     const seen = vi.fn();
     ($("[data-rb-nudge]") as unknown as { scrollIntoView: unknown }).scrollIntoView = seen;
     plus("socks");
     donate();
     expect(seen).not.toHaveBeenCalled();
-  });
-
-  it("is never there on the thank you", () => {
-    start({ search: "?thanks=1", kept: { nbcc_red_bag_gift: JSON.stringify({ pence: 5410, giftAid: false, monthly: false }) } });
-    expect(bar().hidden).toBe(true);
-    expect(padded()).toBe(false);
   });
 
   it("never shows where the browser cannot tell what is on screen", () => {

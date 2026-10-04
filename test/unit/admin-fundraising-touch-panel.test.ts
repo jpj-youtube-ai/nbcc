@@ -53,6 +53,8 @@ const ZERO_KINDS = ["week_after", "finished", "year_on"];
 const keysOf = (kind: string) => [...(NEW_KINDS.includes(kind) ? [kind] : []), ...(ZERO_KINDS.includes(kind) ? [kind + "_zero"] : [])];
 let approved: Record<string, { approvedAt: string; approvedBy: string }> = {};
 let approvalsUnavailable = false;
+// What one preview says about the sign offs, when it differs from the card (null: the same).
+let previewUnavailable: boolean | null = null;
 let touchFails = false;
 
 const BEHIND = {
@@ -123,7 +125,7 @@ function respond(url: string, init?: { method?: string; body?: string }) {
       newWording: key !== null,
       wordingKey: key,
       approval: (key && approved[key]) || null,
-      approvalsUnavailable,
+      approvalsUnavailable: previewUnavailable === null ? approvalsUnavailable : previewUnavailable,
       sample: !forId,
       title,
       subject: "Subject for " + pv[1],
@@ -191,6 +193,7 @@ beforeEach(() => {
   records = [fundraiser(1), fundraiser(2), fundraiser(3, { path: "event", title: "Test Coffee Morning" })];
   touchOn = false;
   approvalsUnavailable = false;
+  previewUnavailable = null;
   touchFails = false;
   approved = Object.fromEntries(["target", "need_a_hand", "on_track"].map((k) => [k, { approvedAt: "2026-10-03T11:00:00.000Z", approvedBy: "Jaimie" }]));
   asRole("admin");
@@ -525,6 +528,50 @@ describe("making the version that is waiting easy to find", () => {
     await openFundraising();
     await pickKind("finished");
     expect(other()).toBeNull();
+  });
+
+  it("does not point at another version when the card could not check them, whatever the preview says", async () => {
+    approvalsUnavailable = true;
+    previewUnavailable = false;
+    await openFundraising();
+    await pickKind("finished");
+    expect(other()).toBeNull();
+    expect(showBtn()).toBeNull();
+  });
+
+  it("stays on the usual example when the sign offs could not be checked", async () => {
+    approvalsUnavailable = true;
+    await openFundraising();
+    await pickKind("year_on");
+    expect(shown()).toBe("");
+    expect(lastPreview("year_on").query).toBe("");
+  });
+
+  it("keeps the line in a block of its own, so it never sits against the Approved by line", async () => {
+    asRole("editor");
+    approved.finished = { approvedAt: "2026-12-01T09:00:00.000Z", approvedBy: "admin:fern@example.com" };
+    await openFundraising();
+    await pickKind("finished");
+    await showFor("");
+    const approvedLine = q("#frTouchMeta .fr-touch-approved")!;
+    const wrap = other()!.parentElement!;
+    expect(wrap.tagName).toBe("DIV");
+    expect(wrap.id).toBe("");
+    expect(wrap.contains(approvedLine)).toBe(false);
+    expect(approvedLine.nextElementSibling).toBe(wrap);
+  });
+
+  it("clears the note and its buttons as soon as another preview starts, so a stale one cannot be pressed", async () => {
+    await openFundraising();
+    await pickKind("year_on");
+    await showFor("");
+    expect(showBtn()).not.toBeNull();
+    (q('[data-frtouchkind="finished"]') as HTMLElement).click(); // not waited for
+    expect(showBtn()).toBeNull();
+    expect(q("[data-frtouchapprove]")).toBeNull();
+    expect(text(el("frTouchMeta"))).toBe("");
+    await settle();
+    expect(q("[data-frtouchapprove]")!.getAttribute("data-frtouchapprove")).toBe("finished");
   });
 });
 

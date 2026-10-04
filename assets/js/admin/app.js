@@ -11938,6 +11938,8 @@
     frTouchShown = kind + "|" + frTouchFor;
     var info = frTouchKindInfo(kind);
     frTeamSay("frTouchStatus", "", false);
+    // The note and its buttons belong to the preview being replaced: gone until the new one is in.
+    el("frTouchMeta").innerHTML = "";
     var path = "/api/admin/fundraising/touch/preview/" + encodeURIComponent(kind) +
       (frTouchFor === "zero" ? "?sample=zero" : frTouchFor ? "?fundraiserId=" + encodeURIComponent(frTouchFor) : "");
     return authFetch(path)
@@ -12000,14 +12002,17 @@
   }
 
   function frTouchOtherHtml(d) {
+    // With the sign offs unread, the card cannot say what is waiting: it says nothing here.
+    if (!frTouch || frTouch.approvalsUnavailable) return "";
     var info = frTouchKindInfo((d && d.kind) || frTouchKind);
     var others = ((info && info.waiting) || []).filter(function (key) { return key !== d.wordingKey; });
     if (!others.length) return "";
     var zero = /_zero$/.test(others[0]);
     var mine = isAdmin() && frCanWrite() ? "your sign off." : "sign off.";
-    return '<p class="fr-touch-signoff" data-frtouchother>' +
+    // In a block of its own, so it never sits beside the line above it (an editor has no button between).
+    return '<div><p class="fr-touch-signoff" data-frtouchother>' +
       (zero ? "The version for a page that has raised nothing yet is still waiting for " : "The usual version is still waiting for ") + mine + "</p>" +
-      '<div class="fx-call-row"><button class="admin-btn admin-btn--small fr-btn-quiet" type="button" data-frtouchshow="' + (zero ? "zero" : "") + '">Show that version</button></div>';
+      '<div class="fx-call-row"><button class="admin-btn admin-btn--small fr-btn-quiet" type="button" data-frtouchshow="' + (zero ? "zero" : "") + '">Show that version</button></div></div>';
   }
 
   function frTouchApproval(key, approve) {

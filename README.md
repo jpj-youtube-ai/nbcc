@@ -10943,7 +10943,7 @@ lines (with buyers' names, emails and phones), the refunds and the refund reques
 welcome packs: each page's pack and the things ticked in it),
 but `STORIES_DATABASE_URL` and `CONTACT_DATABASE_URL` are separate databases
 (deliberately, so the public story and contact forms can never reach donor
-data). A `pg_dump $DATABASE_URL` captures 85 of **88** tables and silently
+data). A `pg_dump $DATABASE_URL` captures 86 of **89** tables and silently
 drops every My Story submission (and, since TASK-475, the fingerprints in
 `erased_stories` that keep erased stories from coming back) and every contact
 enquiry, while producing a

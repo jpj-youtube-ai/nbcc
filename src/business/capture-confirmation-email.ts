@@ -158,7 +158,7 @@ export function buildCaptureConfirmationEmail(input: CaptureConfirmationInput): 
 
   // Shared, dash-free copy carried verbatim into both parts.
   const p1 =
-    "Thank you for telling us how you would like to be thanked. Your support means so much to a small, volunteer run charity, and to the children, young people and vulnerable adults we are here for across South West Scotland.";
+    "Thank you for telling us how you would like to be thanked. Your support means so much to a small, volunteer led charity, and to the children, young people and vulnerable adults we are here for across South West Scotland.";
   const p2 = "Here is what you chose:";
   const impact =
     "Your monthly support could help provide Red Bags Full of Joy, thoughtful presents that carry comfort, dignity and a moment of real joy at Christmas.";

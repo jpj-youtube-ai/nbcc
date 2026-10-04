@@ -466,8 +466,11 @@ export function teamInviteUrl(base: string, slug: string, token: string): string
  */
 export function forwardMessage(team: { title: string }, link: string): string {
   return (
-    `I've set up a team, ${team.title}, to raise money for the Night Before Christmas Campaign (NBCC), ` +
-    "a Scottish charity supporting children, young people and vulnerable adults. Would you like to join? " +
+    // Who NBCC is, in the words of the charity's own short description (ABOUT_NBCC_SHORT,
+    // src/email/brand.ts), run into the sentence so it reads as a chat message. The name is given in
+    // full first: this is pasted to people who may never have heard of NBCC.
+    `I've set up a team, ${team.title}, to raise money for the Night Before Christmas Campaign (NBCC), a volunteer led ` +
+    "charity here all year for children, young people and vulnerable adults across South West Scotland. Would you like to join? " +
     `You get your own page, and everything you raise counts towards our team total too. Join here: ${link}`
   );
 }

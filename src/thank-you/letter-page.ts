@@ -161,7 +161,7 @@ export function buildThankYouLetterPage(d: ThankYouLetterPageData): string {
           ${giftCallout(d)}
           ${personal}
           <p>Donations like yours become Red Bags Full of Joy: thoughtful presents that bring dignity, comfort and a moment of joy. In 2025 our volunteers delivered 7,657 of them across South West Scotland, and the need grows every year.</p>
-          <p>We are volunteer-run and here all year round, not just at Christmas. If you would like to fundraise, volunteer, or ask a question, reply to this letter or call the number below.</p>
+          <p>We are volunteer led and here all year round, not just at Christmas. If you would like to fundraise, volunteer, or ask a question, reply to this letter or call the number below.</p>
         </div>
         <div class="signoff">
           <p>With warmest thanks,</p>

@@ -210,8 +210,16 @@ The charity's own words, used exactly (`test/unit/charity-description.test.ts`):
   included. The 404 page and the Gift Aid declaration page go out undecorated (no extra database
   read on a page not found, or in the middle of a declaration), so there the link stays on the
   contact page, which is where it goes when fundraising is off.
-- Still to follow: the Festive Ball page's "Who you're supporting" paragraph (after the Ball), and
-  the emails and letters that say who NBCC is.
+- **In emails and letters** (TASK-548, `test/unit/charity-description-emails.test.ts`): the two
+  versions are `ABOUT_NBCC_SHORT` and `ABOUT_NBCC_FULL` in `src/email/brand.ts`, which the emails
+  import. The newsletter welcome opens with the short one; the team invite people paste into a chat
+  gives the charity's full name and then the short one's words; the business invitation's own
+  sentence says "a full red bag"; the business supporter emails say "a small, volunteer led
+  charity"; the donor thank you letter (email, page and the admin's preview) says "We are volunteer
+  led"; the donate page says "NBCC is volunteer led". That test also reads every email, letter and
+  page as source and fails if "volunteer run", "run entirely by volunteers" or "a full bag for
+  those" comes back.
+- Still to follow: the Festive Ball page's "Who you're supporting" paragraph (after the Ball).
 
 ### Accessibility floor — skip link & landmarks (REQ-032)
 

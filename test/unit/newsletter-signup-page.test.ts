@@ -24,7 +24,7 @@ const { initNewsletterSignup } = require_(resolve(ROOT, "assets/js/newsletter-si
 };
 
 const WHO_WE_ARE =
-  "NBCC is a volunteer led charity here all year for children, young people and vulnerable adults across South West Scotland, with school clothing and crisis support whenever it is needed, and every December a full bag for those who would otherwise wake up on Christmas morning with nothing to open.";
+  "NBCC is a volunteer led charity here all year for children, young people and vulnerable adults across South West Scotland, with school clothing and crisis support whenever it is needed, and every December a full red bag for those who would otherwise wake up on Christmas morning with nothing to open.";
 const CONSENT = "Yes, I'd like to hear from NBCC by email. We'll never share your details, and every email has an unsubscribe link.";
 
 const body = () => HTML.slice(HTML.indexOf("<body>") + 6, HTML.indexOf("</body>"));

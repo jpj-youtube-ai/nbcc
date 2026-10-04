@@ -158,7 +158,7 @@ describe("the invite form", () => {
     const parsed = inviteSchema.safeParse(ok);
     expect(parsed.success).toBe(true);
     if (parsed.success) {
-      expect(parsed.data).toEqual({ firstName: "Morag Ann", lastName: "Fyfe", email: "morag@example.com", note: "Great to chat!", signedBy: 3 });
+      expect(parsed.data).toEqual({ firstName: "Morag Ann", lastName: "Fyfe", email: "morag@example.com", note: "Great to chat!", signedBy: 3, type: null });
     }
   });
 
@@ -193,7 +193,7 @@ describe("the invite form", () => {
     const parsed = inviteSchema.safeParse({ name: " Mary Jane  Smith ", email: "mary@example.com", note: "Hi", signedBy: 3 });
     expect(parsed.success).toBe(true);
     if (parsed.success) {
-      expect(parsed.data).toEqual({ firstName: "Mary", lastName: "Jane Smith", email: "mary@example.com", note: "Hi", signedBy: 3 });
+      expect(parsed.data).toEqual({ firstName: "Mary", lastName: "Jane Smith", email: "mary@example.com", note: "Hi", signedBy: 3, type: null });
       expect(parsed.data).not.toHaveProperty("name");
     }
   });

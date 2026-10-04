@@ -77,8 +77,9 @@ describe("invites", () => {
     const insert = sqlIn(calls, /INSERT INTO fundraiser_invites/)!;
     expect(insert[0]).toMatch(/token_hash/);
     // Jaimie 2026-10-03: the two boxes are kept as typed, and `name` still has the two joined.
-    expect(insert[0]).toMatch(/\(name, first_name, last_name, email, note, signed_by, sent_by, token_hash\)/);
-    expect(insert[1]).toEqual(["Morag Ann Fyfe", "Morag Ann", "Fyfe", "morag@example.com", "Lovely to chat", "Fern", "admin:fern@example.com", "h".repeat(64)]);
+    expect(insert[0]).toMatch(/\(name, first_name, last_name, email, note, signed_by, sent_by, token_hash, invite_type\)/);
+    // No type given (an admin page loaded before the drop-down): none is kept.
+    expect(insert[1]).toEqual(["Morag Ann Fyfe", "Morag Ann", "Fyfe", "morag@example.com", "Lovely to chat", "Fern", "admin:fern@example.com", "h".repeat(64), null]);
     // Who was copied in is on the record too.
     expect(audits(calls)[0]).toEqual([
       "admin:fern@example.com",
@@ -89,6 +90,89 @@ describe("invites", () => {
     ]);
     expect(inv).toMatchObject({ id: 4, name: "Morag Ann Fyfe", firstName: "Morag Ann", lastName: "Fyfe", signedBy: "Fern", createdAt: "2026-10-01T09:00:00.000Z" });
     expect(JSON.stringify(inv)).not.toContain("hhhh");
+  });
+
+  // Invite types (Jaimie, B1 + I1).
+  it("keeps what they were invited to do, and gives it back", async () => {
+    const calls = useClient((sql) =>
+      /touch_wording_approvals/.test(sql) ? { rows: [{ "?column?": 1 }] } : /INSERT INTO fundraiser_invites/.test(sql) ? { rows: [inviteRow({ invite_type: "memory" })] } : undefined,
+    );
+    const inv = await createInvite(
+      { firstName: "Alex", lastName: "Example", email: "alex@example.com", note: null, signedBy: "Fern", cc: null, tokenHash: "h".repeat(64), inviteType: "memory" },
+      "admin:fern@example.com",
+    );
+    expect(sqlIn(calls, /INSERT INTO fundraiser_invites/)![1][8]).toBe("memory");
+    expect(inv.type).toBe("memory");
+    expect(audits(calls)[0][4]).toEqual({ email: "alex@example.com", signedBy: "Fern", cc: null, type: "memory" });
+  });
+
+  it("reads an invite from before, with no type, as none", async () => {
+    query.mockResolvedValueOnce({ rows: [inviteRow(), inviteRow({ id: 5, invite_type: "team" })] });
+    expect((await listOpenInvites()).map((i) => i.type)).toEqual([null, "team"]);
+    query.mockResolvedValueOnce({ rows: [inviteRow({ invite_type: "event" })] });
+    expect((await findInviteByHash("h".repeat(64)))!.inviteType).toBe("event");
+    query.mockResolvedValueOnce({ rows: [inviteRow()] });
+    expect((await findInviteByHash("h".repeat(64)))!.inviteType).toBeNull();
+  });
+
+  // The sign off is checked again inside the transaction, with a lock on its row, so a withdrawal
+  // cannot slip in between the check and the send.
+  const SIGN_OFF = /SELECT 1 FROM touch_wording_approvals WHERE key = \$1 FOR SHARE/;
+  const memoryInvite = { firstName: "Alex", lastName: "Example", email: "alex@example.com", note: null, signedBy: "Fern", cc: null, tokenHash: "h".repeat(64), inviteType: "memory" as const };
+
+  it("checks the in memory wording's sign off in the same transaction, before storing the invite", async () => {
+    const calls = useClient((sql) =>
+      SIGN_OFF.test(sql) ? { rows: [{ "?column?": 1 }] } : /INSERT INTO fundraiser_invites/.test(sql) ? { rows: [inviteRow({ invite_type: "memory" })] } : undefined,
+    );
+    await createInvite(memoryInvite, "admin:fern@example.com");
+    const order = calls.map((c) => c[0]);
+    const check = order.findIndex((q) => SIGN_OFF.test(q));
+    expect(calls[check][1]).toEqual(["invite_memory"]);
+    expect(order.indexOf("BEGIN")).toBeLessThan(check);
+    expect(check).toBeLessThan(order.findIndex((q) => /INSERT INTO fundraiser_invites/.test(q)));
+    expect(order).toContain("COMMIT");
+  });
+
+  it("stores nothing when that sign off has gone", async () => {
+    const calls = useClient(() => undefined);
+    await expect(createInvite(memoryInvite, "admin:fern@example.com")).rejects.toMatchObject({ reason: "wording_waiting" });
+    expect(sqlIn(calls, /INSERT INTO fundraiser_invites/)).toBeUndefined();
+    expect(audits(calls)).toHaveLength(0);
+    expect(calls.some((c) => c[0] === "ROLLBACK")).toBe(true);
+  });
+
+  it("asks about no sign off for the other types", async () => {
+    for (const inviteType of ["raising", "team", "event", null] as const) {
+      const calls = useClient((sql) => (/INSERT INTO fundraiser_invites/.test(sql) ? { rows: [inviteRow({ invite_type: inviteType })] } : undefined));
+      await createInvite({ ...memoryInvite, inviteType }, "admin:fern@example.com");
+      expect(sqlIn(calls, SIGN_OFF)).toBeUndefined();
+    }
+  });
+
+  it("keeps the type on a resend, checking an in memory one's sign off in the same transaction", async () => {
+    const calls = useClient((sql) =>
+      SIGN_OFF.test(sql) ? { rows: [{ "?column?": 1 }] } : /UPDATE fundraiser_invites/.test(sql) ? { rows: [inviteRow({ invite_type: "memory" })] } : undefined,
+    );
+    const inv = await resendInvite(4, "n".repeat(64), "admin:fern@example.com", "fern@example.com");
+    expect(inv.type).toBe("memory");
+    expect(sqlIn(calls, /UPDATE fundraiser_invites/)![0]).not.toMatch(/invite_type =/);
+    expect(sqlIn(calls, SIGN_OFF)![1]).toEqual(["invite_memory"]);
+    expect(calls.map((c) => c[0])).toContain("COMMIT");
+  });
+
+  it("holds a resend whose wording is waiting for sign off, changing nothing", async () => {
+    const calls = useClient((sql) => (/UPDATE fundraiser_invites/.test(sql) ? { rows: [inviteRow({ invite_type: "memory" })] } : undefined));
+    await expect(resendInvite(4, "n".repeat(64), "admin:fern@example.com", "fern@example.com")).rejects.toMatchObject({ reason: "wording_waiting" });
+    // Rolled back: the old link still works, and nothing is recorded.
+    expect(calls.some((c) => /ROLLBACK/.test(c[0]))).toBe(true);
+    expect(calls.some((c) => /COMMIT/.test(c[0]))).toBe(false);
+    expect(audits(calls)).toHaveLength(0);
+  });
+
+  it("asks about no sign off on a resend of another type", async () => {
+    const calls = useClient((sql) => (/UPDATE fundraiser_invites/.test(sql) ? { rows: [inviteRow({ invite_type: "team" })] } : undefined));
+    await resendInvite(4, "n".repeat(64), "admin:fern@example.com", "fern@example.com");
+    expect(sqlIn(calls, SIGN_OFF)).toBeUndefined();
   });
 
   it("records no copy on an invite sent with none", async () => {
@@ -149,6 +233,7 @@ describe("invites", () => {
       sentBy: "admin:fern@example.com",
       createdAt: "2026-10-01T09:00:00.000Z",
       resentAt: null,
+      type: null,
     });
   });
 
@@ -343,7 +428,7 @@ describe("what the summary reads", () => {
     expect(i.now).toBe(now);
     expect(i.gifts).toEqual([{ fundraiserId: 1, amountPence: 2000, refundedPence: 0, giftAid: true, paidIn: false, paidAt: "2026-12-01T10:00:00.000Z" }]);
     expect(i.cash).toEqual([{ fundraiserId: 1, amountPence: 1000, recordedAt: "2026-12-02T15:00:00.000Z" }]);
-    expect(i.invites).toEqual([{ name: "Alex Example", firstName: "Alex", signedBy: "Fern", createdAt: "2026-10-01T09:00:00.000Z", resentAt: null }]);
+    expect(i.invites).toEqual([{ name: "Alex Example", firstName: "Alex", signedBy: "Fern", createdAt: "2026-10-01T09:00:00.000Z", resentAt: null, type: null }]);
     const giftSql = query.mock.calls.map((c) => String(c[0])).find((s) => /AS paid_at/.test(s))!;
     expect(giftSql).toMatch(/d\.payment_status = 'paid'/);
     expect(giftSql).toMatch(/d\.fundraiser_id IS NOT NULL/);

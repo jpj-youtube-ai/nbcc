@@ -1454,12 +1454,29 @@
                 <h3 class="admin-subhead" id="frInviteHead">Invite someone</h3>
                 <p class="fr-card-intro">Spoken to someone who'd like to fundraise for us? Send them an invite from the events inbox. The button in it opens the Fundraise for us form with their name and email already filled in.</p>
                 <form class="fr-form fr-invite-form" id="frInviteForm" novalidate>
+                  <!-- Invite types (Jaimie, B1 + I1): what they are invited to do, with nothing chosen
+                       for staff. It decides the email's words and where their form opens. -->
+                  <div class="fr-field fr-field--wide fr-invite-type-field"><label class="fx-call-label" for="frInviteType">What are you inviting them to do?</label><select class="fx-call-input" id="frInviteType" name="type" required aria-required="true"><option value="" selected disabled>Choose one</option><option value="raising">Raising money</option><option value="team">A team</option><option value="event">Hosting an event</option><option value="memory">In memory</option></select><span class="fr-field-hint">The email has the right words for it, and their form opens at the right place. They can still change it.</span></div>
                   <div class="fr-field"><label class="fx-call-label" for="frInviteFirstName">First name</label><input class="fx-call-input" id="frInviteFirstName" name="firstName" type="text" maxlength="50" autocomplete="off" /><span class="fr-field-hint">The email says hello with this. Both boxes fill in their form exactly as you type them.</span></div>
                   <div class="fr-field"><label class="fx-call-label" for="frInviteLastName">Surname</label><input class="fx-call-input" id="frInviteLastName" name="lastName" type="text" maxlength="50" autocomplete="off" /></div>
                   <div class="fr-field"><label class="fx-call-label" for="frInviteEmail">Their email</label><input class="fx-call-input" id="frInviteEmail" name="email" type="email" maxlength="254" autocomplete="off" spellcheck="false" /></div>
                   <div class="fr-field fr-field--wide"><label class="fx-call-label" for="frInviteNote">A personal note (optional)</label><textarea class="fx-call-input fr-input" id="frInviteNote" name="note" rows="6" maxlength="5000"></textarea><span class="fr-field-hint">Up to 5,000 characters, so it can be a proper letter. It shows in the email, under a friendly hello.</span></div>
                   <div class="fr-field"><label class="fx-call-label" for="frInviteSigner">Signed by</label><select class="fx-call-input" id="frInviteSigner" name="signedBy"></select><span class="fr-field-hint">The email is signed with this first name, so they know who they spoke to.</span></div>
+                  <!-- The email for the type chosen, to read before sending. The in memory invite is new
+                       wording: it opens by itself, with Approve this wording for an admin, and cannot
+                       be sent until it is approved. As tall as the email is: the page grows. -->
+                  <div class="fr-field--wide fr-invite-wording" id="frInviteWording" hidden>
+                    <div class="fr-touch-meta" id="frInviteWordingMeta"></div>
+                    <details class="fr-invite-read" id="frInviteRead">
+                      <summary>Read the email they will get</summary>
+                      <p class="fr-field-hint">An example, to Mary. Theirs says hello with their first name, shows your note and is signed as you choose.</p>
+                      <div class="fr-touch-preview-wrap" id="frInviteWordingWrap">
+                        <iframe id="frInviteWordingFrame" class="fr-touch-preview" title="The invite email, as they would see it" sandbox="allow-same-origin" scrolling="no"></iframe>
+                      </div>
+                    </details>
+                  </div>
                   <div class="fx-call-row fr-field--wide"><button class="admin-btn" type="submit" id="frInviteSend">Send the invite</button></div>
+                  <p class="fr-field-hint fr-field--wide fr-invite-held" id="frInviteHeld" hidden>The in memory invite wording is waiting for sign off. Read it and approve it first.</p>
                   <p class="ty-status fr-field--wide" id="frInviteStatus" role="status" aria-live="polite"></p>
                 </form>
                 <h4 class="fr-card-subhead">Invites not taken up yet</h4>

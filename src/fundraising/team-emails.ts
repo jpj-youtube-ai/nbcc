@@ -16,9 +16,11 @@ import {
   questionsText,
   HEAD,
   MAROON,
+  PHONE_DISPLAY,
 } from "../email/brand";
 import { FOOTER_TEXT, POSTAL_ADDRESS } from "../legal/registration";
 import { FUNDRAISING_EMAIL, type BuiltEmail } from "./emails";
+import type { InviteType } from "./invite";
 import type { SummaryLines } from "./summary";
 
 // TASK-503: emails 7 (the invite) and 11 (the Monday summary), in the words Jaimie signed off on
@@ -44,38 +46,112 @@ const INVITE_START =
   "We’ve given you a head start: press the button below and your page is already filled in with what we talked about. It only takes a couple of minutes.";
 const INVITE_PAGE =
   "You’ll get your very own fundraising page, with a meter that fills as gifts come in, a wall for your supporters’ messages and your own QR code for posters.";
+// Invite types (Jaimie, B1 + I1): the same email for a team, with only this line adapted.
+const INVITE_PAGE_TEAM =
+  "You’ll get a team page with a meter for the whole team, and a page for everyone who joins, with a wall for your supporters’ messages and your own QR code for posters.";
+// For someone hosting an event (Jaimie's wording): about their event throughout, in the same shape.
+const EVENT_SUBJECT = "We'd love to help with your event";
+const EVENT_HEADING = "We’d love to help with your event!";
+const EVENT_CHAT = "It was so lovely to chat with you about your plans for your event. Thank you, it honestly means the world to us.";
+const EVENT_START = "We’ve given you a head start: press the button below and the form is already started for you. It only takes a few minutes.";
+const EVENT_BUTTON = "Set up my event";
+const INVITE_PAGE_EVENT = "Your event gets its own page on our website, with a meter, posters and a QR code.";
 const INVITE_ASK = "Need posters, leaflets, a collection bucket or a shout out on our social media? Just ask, we’re here to help.";
 const INVITE_CLOSE = "Warmest wishes,";
 
+// The in memory invite: gentle, with no exclamation marks and none of the cheerful invite's words.
+// NEW wording, so it is only sent once an admin has approved it (INVITE_WORDING_KEYS in ./invite.ts).
+const MEMORY_SUBJECT = "A page in memory of someone you love";
+const MEMORY_EYEBROW = "In memory";
+const MEMORY_HEADING = "A page in their memory";
+const MEMORY_START =
+  "Thank you for talking with us. If you would like to set up a page in memory of someone you love, the button below opens it with your details already filled in. Take your time: we will go through it all with you on the phone before anything goes live.";
+const MEMORY_BUTTON = "Start the page";
+const MEMORY_PAGE =
+  "It is a quiet page where family and friends can give in their memory, and we can send collection envelopes for the service if you would like them.";
+const MEMORY_CALL = `If you would rather we filled it in with you, call us on ${PHONE_DISPLAY}.`;
+const MEMORY_CLOSE = "With warmest thoughts,";
+
+export interface InviteEmailInput {
+  firstName: string;
+  note: string | null;
+  signer: string;
+  url: string;
+  /** What they are invited to do; none (an invite from before) reads as raising money. */
+  type?: InviteType | null;
+}
+
+// Greeted "Dear", not "Hi" (Jaimie): the other invites keep "Hi".
+function buildMemoryInviteEmail(o: InviteEmailInput): BuiltEmail {
+  const hi = `Dear ${String(o.firstName).trim()},`;
+  const body =
+    eyebrow(MEMORY_EYEBROW) +
+    heading(MEMORY_HEADING) +
+    bodyP(escapeHtml(hi)) +
+    bodyP(MEMORY_START) +
+    (o.note ? quoteBox(o.note) : "") +
+    button(o.url, MEMORY_BUTTON) +
+    bodyP(MEMORY_PAGE) +
+    bodyP(MEMORY_CALL) +
+    signOffAs(MEMORY_CLOSE, o.signer);
+  const text = [
+    MEMORY_EYEBROW,
+    MEMORY_HEADING,
+    "",
+    hi,
+    "",
+    MEMORY_START,
+    ...(o.note ? ["", o.note] : []),
+    "",
+    `${MEMORY_BUTTON}: ${o.url}`,
+    "",
+    MEMORY_PAGE,
+    "",
+    MEMORY_CALL,
+    "",
+    signOffAsText(MEMORY_CLOSE, o.signer),
+    "",
+    FOOTER_TEXT,
+  ].join("\n");
+  return { subject: MEMORY_SUBJECT, html: shell(body), text };
+}
+
 // Greeted by the first name staff typed in its own box (Jaimie 2026-10-03), so "Mary Jane" stays whole.
-export function buildInviteEmail(o: { firstName: string; note: string | null; signer: string; url: string }): BuiltEmail {
+export function buildInviteEmail(o: InviteEmailInput): BuiltEmail {
   const hi = `Hi ${String(o.firstName).trim()},`;
+  if (o.type === "memory") return buildMemoryInviteEmail(o);
+  const event = o.type === "event";
+  const page = o.type === "team" ? INVITE_PAGE_TEAM : event ? INVITE_PAGE_EVENT : INVITE_PAGE;
+  const headingWords = event ? EVENT_HEADING : "We’d love you to fundraise with us!";
+  const chat = event ? EVENT_CHAT : INVITE_CHAT;
+  const start = event ? EVENT_START : INVITE_START;
+  const buttonWords = event ? EVENT_BUTTON : "Make my page";
   const body =
     eyebrow("Fundraising for NBCC") +
-    heading("We’d love you to fundraise with us!") +
+    heading(headingWords) +
     bodyP(escapeHtml(hi)) +
-    bodyP(INVITE_CHAT) +
+    bodyP(chat) +
     (o.note ? quoteBox(o.note) : "") +
-    bodyP(INVITE_START) +
-    button(o.url, "Make my page") +
-    bodyP(INVITE_PAGE) +
+    bodyP(start) +
+    button(o.url, buttonWords) +
+    bodyP(page) +
     bodyP(INVITE_ASK) +
     signOffAs(INVITE_CLOSE, o.signer) +
     questionsBox(FUNDRAISING_EMAIL);
   const text = [
     "Fundraising for NBCC",
-    "We’d love you to fundraise with us!",
+    headingWords,
     "",
     hi,
     "",
-    INVITE_CHAT,
+    chat,
     ...(o.note ? ["", o.note] : []),
     "",
-    INVITE_START,
+    start,
     "",
-    `Make my page: ${o.url}`,
+    `${buttonWords}: ${o.url}`,
     "",
-    INVITE_PAGE,
+    page,
     "",
     INVITE_ASK,
     "",
@@ -85,7 +161,7 @@ export function buildInviteEmail(o: { firstName: string; note: string | null; si
     "",
     FOOTER_TEXT,
   ].join("\n");
-  return { subject: "We'd love you to fundraise with us", html: shell(body), text };
+  return { subject: event ? EVENT_SUBJECT : "We'd love you to fundraise with us", html: shell(body), text };
 }
 
 // --- email 11, the Monday summary -------------------------------------------------------------------

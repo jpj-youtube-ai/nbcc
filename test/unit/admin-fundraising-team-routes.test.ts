@@ -19,6 +19,13 @@ const team = vi.hoisted(() => ({
   getSummarySettings: vi.fn(),
   saveSummaryRecipients: vi.fn(),
 }));
+// Invite types: the in memory invite's sign off, kept with the automatic emails' (touch_wording_approvals).
+const touch = vi.hoisted(() => ({
+  approvedWordingKeys: vi.fn(),
+  listWordingApprovals: vi.fn(),
+  approveWording: vi.fn(),
+  withdrawWording: vi.fn(),
+}));
 const { getUserAuthRowMock, listAllFundraisers, sendFundraiseInvite, sendSummaryTest } = vi.hoisted(() => ({
   getUserAuthRowMock: vi.fn(),
   listAllFundraisers: vi.fn(),
@@ -35,6 +42,7 @@ vi.mock("../../src/db/fundraising-team", () => {
   return { ...team, TeamError };
 });
 vi.mock("../../src/db/fundraisers", () => ({ listAllFundraisers }));
+vi.mock("../../src/db/fundraising-touch", () => touch);
 vi.mock("../../src/clients/email", () => ({ sendFundraiseInvite }));
 vi.mock("../../src/fundraising/summary-runner", () => ({ sendSummaryTest }));
 vi.mock("../../src/db/admin-users", () => ({ getUserAuthRow: getUserAuthRowMock }));
@@ -76,14 +84,14 @@ function mockRes(): MockRes {
   };
   return res;
 }
-type Opts = { token?: string | null; body?: unknown; params?: Record<string, string> };
+type Opts = { token?: string | null; body?: unknown; params?: Record<string, string>; query?: Record<string, string> };
 /* eslint-disable @typescript-eslint/no-explicit-any */
 type Handler = (req: any, res: any) => Promise<unknown>;
 async function run(handler: Handler, o: Opts = {}) {
   const res = mockRes();
   const headers: Record<string, string> = {};
   if (o.token) headers.authorization = `Bearer ${o.token}`;
-  await handler({ headers, body: o.body ?? {}, params: o.params ?? {} } as any, res as any);
+  await handler({ headers, body: o.body ?? {}, params: o.params ?? {}, query: o.query ?? {} } as any, res as any);
   return res;
 }
 /* eslint-enable @typescript-eslint/no-explicit-any */
@@ -129,6 +137,9 @@ beforeEach(() => {
   );
   team.resendInvite.mockResolvedValue(invite({ resentAt: "2026-10-08T09:00:00.000Z" }));
   team.getSummarySettings.mockResolvedValue({ recipients: ["fern@example.com"], lastWeek: null });
+  for (const fn of Object.values(touch)) fn.mockReset();
+  touch.approvedWordingKeys.mockResolvedValue(new Set());
+  touch.listWordingApprovals.mockResolvedValue([]);
   vi.spyOn(console, "error").mockImplementation(() => undefined);
 });
 
@@ -417,5 +428,218 @@ describe("the Monday summary's list", () => {
   it("says when the test did not go", async () => {
     sendSummaryTest.mockRejectedValue(new Error("SES said no"));
     expect((await run(routes.postSummaryTest, { token: tokenFor("admin") })).statusCode).toBe(502);
+  });
+});
+
+// ---- invite types (Jaimie, B1 + I1) ----------------------------------------------------------------
+
+const WAITING = "The in memory invite wording is waiting for sign off. Read it and approve it first.";
+const APPROVAL = { key: "invite_memory", approvedAt: "2026-10-03T12:00:00.000Z", approvedBy: "admin:fern@example.com" };
+const typed = (type: string | null) =>
+  team.createInvite.mockImplementation(async (i: Record<string, unknown>) =>
+    invite({ name: `${i.firstName} ${i.lastName}`, firstName: i.firstName, lastName: i.lastName, email: i.email, note: i.note, signedBy: i.signedBy, type }),
+  );
+
+describe("saying what someone is invited to do", () => {
+  it("keeps the type on the invite", async () => {
+    for (const type of ["raising", "team", "event"]) {
+      team.createInvite.mockClear();
+      typed(type);
+      const res = await run(routes.postInvite, { token: tokenFor("editor"), body: { ...GOOD_INVITE, type } });
+      expect(res.statusCode).toBe(201);
+      expect(team.createInvite.mock.calls[0][0].inviteType).toBe(type);
+    }
+  });
+
+  it("sends the words for that type, still from the events inbox, copied to the sender and signed as chosen", async () => {
+    typed("event");
+    await run(routes.postInvite, { token: tokenFor("editor"), body: { ...GOOD_INVITE, type: "event" } });
+    const mail = sendFundraiseInvite.mock.calls[0][1];
+    expect(mail).toMatchObject({ email: "mary@example.com", from: "events@nbcc.test", replyTo: "events@nbcc.test", cc: "fern@example.com" });
+    expect(mail.subject).toBe("We'd love to help with your event");
+    expect(mail.text).toContain("Your event gets its own page on our website, with a meter, posters and a QR code.");
+    expect(mail.text).toContain("Hi Mary Jane,");
+    expect(mail.text).toContain("Lovely to chat");
+    expect(mail.text).toContain("Warmest wishes,\nRowan\nNBCC Team");
+    sendFundraiseInvite.mockClear();
+    typed("team");
+    await run(routes.postInvite, { token: tokenFor("editor"), body: { ...GOOD_INVITE, type: "team" } });
+    expect(sendFundraiseInvite.mock.calls[0][1].text).toContain("You’ll get a team page with a meter for the whole team, and a page for everyone who joins");
+  });
+
+  it("takes an invite with no type from a page loaded before the drop-down, and sends it as it always was", async () => {
+    const res = await run(routes.postInvite, { token: tokenFor("editor"), body: GOOD_INVITE });
+    expect(res.statusCode).toBe(201);
+    expect(team.createInvite.mock.calls[0][0].inviteType).toBeNull();
+    expect(sendFundraiseInvite.mock.calls[0][1].subject).toBe("We'd love you to fundraise with us");
+    expect(sendFundraiseInvite.mock.calls[0][1].text).toContain("your very own fundraising page");
+  });
+
+  it("refuses a type that is not one of the four, naming the drop-down", async () => {
+    const res = await run(routes.postInvite, { token: tokenFor("editor"), body: { ...GOOD_INVITE, type: "wedding" } });
+    expect(res.statusCode).toBe(400);
+    expect(res.body).toMatchObject({ fields: { type: "Choose what you are inviting them to do." } });
+    expect(team.createInvite).not.toHaveBeenCalled();
+  });
+});
+
+describe("the in memory invite waits for sign off", () => {
+  it("is refused, stored nowhere and emailed to nobody, until its wording is approved", async () => {
+    const res = await run(routes.postInvite, { token: tokenFor("admin"), body: { ...GOOD_INVITE, type: "memory" } });
+    expect(res.statusCode).toBe(409);
+    expect(res.body).toEqual({ error: WAITING });
+    expect(team.createInvite).not.toHaveBeenCalled();
+    expect(sendFundraiseInvite).not.toHaveBeenCalled();
+  });
+
+  it("is sent, in the gentle words, once it is approved", async () => {
+    touch.approvedWordingKeys.mockResolvedValue(new Set(["invite_memory"]));
+    typed("memory");
+    const res = await run(routes.postInvite, { token: tokenFor("editor"), body: { ...GOOD_INVITE, type: "memory" } });
+    expect(res.statusCode).toBe(201);
+    expect(team.createInvite.mock.calls[0][0].inviteType).toBe("memory");
+    const mail = sendFundraiseInvite.mock.calls[0][1];
+    expect(mail.subject).toBe("A page in memory of someone you love");
+    expect(mail).toMatchObject({ from: "events@nbcc.test", replyTo: "events@nbcc.test", cc: "fern@example.com" });
+    expect(mail.text).toContain("Dear Mary Jane,");
+    expect(mail.text).toContain("With warmest thoughts,\nRowan\nNBCC Team");
+    expect(mail.text).not.toContain("!");
+  });
+
+  it("does not ask about sign off for the other types", async () => {
+    await run(routes.postInvite, { token: tokenFor("editor"), body: { ...GOOD_INVITE, type: "raising" } });
+    expect(team.createInvite).toHaveBeenCalledTimes(1);
+  });
+
+  // The check is made again inside the transaction (src/db/fundraising-team.ts), so an approval
+  // withdrawn in between still stops it: nothing is stored, and nobody is emailed.
+  it("is refused when the approval is withdrawn between the check and the send", async () => {
+    touch.approvedWordingKeys.mockResolvedValue(new Set(["invite_memory"]));
+    team.createInvite.mockRejectedValue(new TeamError("wording_waiting" as never));
+    const res = await run(routes.postInvite, { token: tokenFor("editor"), body: { ...GOOD_INVITE, type: "memory" } });
+    expect(res.statusCode).toBe(409);
+    expect(res.body).toEqual({ error: WAITING });
+    expect(sendFundraiseInvite).not.toHaveBeenCalled();
+  });
+
+  it("holds a resend of one too, when the approval has been withdrawn", async () => {
+    team.resendInvite.mockRejectedValue(new TeamError("wording_waiting" as never));
+    const res = await run(routes.postResendInvite, { token: tokenFor("editor"), params: { id: "4" } });
+    expect(res.statusCode).toBe(409);
+    expect(res.body).toEqual({ error: WAITING });
+    expect(sendFundraiseInvite).not.toHaveBeenCalled();
+  });
+});
+
+describe("resending keeps the type", () => {
+  it("sends the same words again", async () => {
+    touch.approvedWordingKeys.mockResolvedValue(new Set(["invite_memory"]));
+    team.resendInvite.mockResolvedValue(invite({ type: "memory" }));
+    await run(routes.postResendInvite, { token: tokenFor("editor"), params: { id: "4" } });
+    expect(sendFundraiseInvite.mock.calls[0][1].subject).toBe("A page in memory of someone you love");
+    sendFundraiseInvite.mockClear();
+    team.resendInvite.mockResolvedValue(invite({ type: "team" }));
+    await run(routes.postResendInvite, { token: tokenFor("editor"), params: { id: "4" } });
+    expect(sendFundraiseInvite.mock.calls[0][1].text).toContain("a team page with a meter for the whole team");
+  });
+
+  it("sends an invite from before, with no type, as it always was", async () => {
+    await run(routes.postResendInvite, { token: tokenFor("editor"), params: { id: "4" } });
+    expect(sendFundraiseInvite.mock.calls[0][1].subject).toBe("We'd love you to fundraise with us");
+  });
+});
+
+describe("reading and signing off the invite wording", () => {
+  it("tells the page whether the in memory wording is approved, with the team's tools", async () => {
+    let body = (await run(routes.getFundraisingTeam, { token: tokenFor("editor") })).body as Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
+    expect(body.inviteWording).toEqual({ approvals: {}, unavailable: false });
+    touch.listWordingApprovals.mockResolvedValue([APPROVAL, { key: "target", approvedAt: "2026-10-03T11:00:00.000Z", approvedBy: "Jaimie" }]);
+    body = (await run(routes.getFundraisingTeam, { token: tokenFor("editor") })).body as Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
+    // Only the invite wordings: the automatic emails' sign offs have their own card.
+    expect(body.inviteWording).toEqual({ approvals: { invite_memory: { approvedAt: APPROVAL.approvedAt, approvedBy: APPROVAL.approvedBy } }, unavailable: false });
+  });
+
+  it("reads as not approved, and says so, when the sign offs cannot be read", async () => {
+    touch.listWordingApprovals.mockRejectedValue(new Error("database away"));
+    const res = await run(routes.getFundraisingTeam, { token: tokenFor("editor") });
+    expect(res.statusCode).toBe(200);
+    expect((res.body as Record<string, unknown>).inviteWording).toEqual({ approvals: {}, unavailable: true });
+  });
+
+  it("shows each type's email as it would go, with the in memory one marked as needing sign off", async () => {
+    const res = await run(routes.getInviteWording, { token: tokenFor("viewer"), params: { type: "memory" } });
+    expect(res.statusCode).toBe(200);
+    const body = res.body as Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
+    expect(body).toMatchObject({ type: "memory", label: "In memory", subject: "A page in memory of someone you love", wordingKey: "invite_memory", approval: null, approvalsUnavailable: false });
+    expect(body.html).toContain("A page in their memory");
+    expect(body.html).toContain(">Start the page</a>");
+    // An example: never a real link.
+    expect(body.html).not.toMatch(/invite=/);
+    const other = (await run(routes.getInviteWording, { token: tokenFor("viewer"), params: { type: "event" } })).body as Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
+    expect(other).toMatchObject({ type: "event", label: "Hosting an event", wordingKey: null, approval: null });
+    expect(other.html).toContain("Your event gets its own page on our website");
+  });
+
+  // "Signed as you choose": the example is signed by the signer chosen in the form, checked as a
+  // send checks it.
+  it("signs the example as the signer chosen in the form", async () => {
+    const chosen = (await run(routes.getInviteWording, { token: tokenFor("editor"), params: { type: "raising" }, query: { signedBy: "5" } })).body as Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
+    expect(team.getSigner).toHaveBeenCalledWith(5);
+    expect(chosen.text).toContain("Warmest wishes,\nRowan\nNBCC Team");
+    const memory = (await run(routes.getInviteWording, { token: tokenFor("editor"), params: { type: "memory" }, query: { signedBy: "5" } })).body as Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
+    expect(memory.text).toContain("With warmest thoughts,\nRowan\nNBCC Team");
+  });
+
+  it("signs it as whoever is reading when no signer is chosen yet", async () => {
+    const res = await run(routes.getInviteWording, { token: tokenFor("editor"), params: { type: "raising" } });
+    expect((res.body as Record<string, string>).text).toContain("Warmest wishes,\nFern\nNBCC Team");
+    expect(team.getSigner).not.toHaveBeenCalled();
+  });
+
+  it("refuses a signer who is not on the team, or is not a number, as a send does", async () => {
+    for (const signedBy of ["99", "Rowan", "0", "5.5"]) {
+      const res = await run(routes.getInviteWording, { token: tokenFor("editor"), params: { type: "raising" }, query: { signedBy } });
+      expect(res.statusCode).toBe(400);
+      expect(res.body).toEqual({ error: "Some of it needs another look", fields: { signedBy: "Choose who it is from." } });
+    }
+  });
+
+  it("says who approved it and when", async () => {
+    touch.listWordingApprovals.mockResolvedValue([APPROVAL]);
+    const res = await run(routes.getInviteWording, { token: tokenFor("editor"), params: { type: "memory" } });
+    expect((res.body as Record<string, unknown>).approval).toEqual({ approvedAt: APPROVAL.approvedAt, approvedBy: APPROVAL.approvedBy });
+  });
+
+  it("has no email for a type that is not one", async () => {
+    expect((await run(routes.getInviteWording, { token: tokenFor("editor"), params: { type: "wedding" } })).statusCode).toBe(404);
+    expect((await run(routes.getInviteWording, { token: null, params: { type: "memory" } })).statusCode).toBe(401);
+  });
+
+  it("is approved by an admin only, and recorded", async () => {
+    expect((await run(routes.postInviteWordingApproval, { token: tokenFor("editor"), params: { key: "invite_memory" } })).statusCode).toBe(403);
+    expect(touch.approveWording).not.toHaveBeenCalled();
+    touch.approveWording.mockResolvedValue(APPROVAL);
+    const res = await run(routes.postInviteWordingApproval, { token: tokenFor("admin"), params: { key: "invite_memory" } });
+    expect(res.statusCode).toBe(200);
+    expect(res.body).toEqual({ approval: APPROVAL });
+    // Its own History action: invite wording, not an automatic email's.
+    expect(touch.approveWording).toHaveBeenCalledWith("invite_memory", "admin:fern@example.com", "fundraising.invite_wording_approved");
+  });
+
+  it("has its approval withdrawn by an admin only", async () => {
+    expect((await run(routes.deleteInviteWordingApproval, { token: tokenFor("editor"), params: { key: "invite_memory" } })).statusCode).toBe(403);
+    touch.withdrawWording.mockResolvedValue(true);
+    const res = await run(routes.deleteInviteWordingApproval, { token: tokenFor("admin"), params: { key: "invite_memory" } });
+    expect(res.body).toEqual({ withdrawn: true });
+    expect(touch.withdrawWording).toHaveBeenCalledWith("invite_memory", "admin:fern@example.com", "fundraising.invite_wording_withdrawn");
+  });
+
+  it("signs off only invite wording here, never an automatic email's or anything unknown", async () => {
+    for (const key of ["target", "finished_zero", "nonsense"]) {
+      expect((await run(routes.postInviteWordingApproval, { token: tokenFor("admin"), params: { key } })).statusCode).toBe(404);
+      expect((await run(routes.deleteInviteWordingApproval, { token: tokenFor("admin"), params: { key } })).statusCode).toBe(404);
+    }
+    expect(touch.approveWording).not.toHaveBeenCalled();
+    expect(touch.withdrawWording).not.toHaveBeenCalled();
   });
 });

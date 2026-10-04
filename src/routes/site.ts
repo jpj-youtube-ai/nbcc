@@ -303,9 +303,9 @@ export function createSiteRouter(siteRoot: string): Router {
   addTeamPageRoutes(router, siteRoot, { decorate: decorateNav });
   // Sponsor pledges: the pay and "can't pay after all" pages an emailed link opens (src/routes/pledges.ts).
   addPledgePageRoutes(router, siteRoot, { decorate: decorateNav });
-  // Fill a Red Bag: /fill-a-red-bag. Public, but linked from nowhere (the switch is
-  // src/red-bag/switch.ts); switched off it is the 404 to the public and a preview to signed in
-  // staff (src/routes/red-bag.ts).
+  // Fill a Red Bag: /fill and its thank you, /fill/thank-you. Public, but linked from nowhere (the
+  // switch is src/red-bag/switch.ts); switched off they are the 404 to the public and a preview to
+  // signed in staff (src/routes/red-bag.ts).
   addRedBagPageRoutes(router, siteRoot, { decorate: decorateNav });
 
   // Apply each rule: 301 -> permanent redirect to the clean URL; 200 -> serve

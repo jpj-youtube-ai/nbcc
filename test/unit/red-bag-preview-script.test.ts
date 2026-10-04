@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from "vitest";
 import { createRequire } from "node:module";
 import { resolve } from "node:path";
 
-// Fill a Red Bag: the small script the 404 at /fill-a-red-bag carries while the page is switched
+// Fill a Red Bag: the small script the 404 at /fill (and /fill/thank-you) carries while the page is switched
 // off (assets/js/red-bag-preview.js). With an admin session in the tab it asks for the page again
 // with the token and shows it; with none it does nothing, so the public's 404 is left alone.
 
@@ -18,7 +18,7 @@ function world(opts: { token?: string | null; status?: number; throws?: boolean;
   });
   const win = {
     fetch,
-    location: { pathname: "/fill-a-red-bag", search: "?thanks=1" },
+    location: { pathname: "/fill/thank-you", search: "?session_id=cs_test_abc" },
     sessionStorage: {
       getItem: (k: string) => {
         if (opts.storageBlocked) throw new Error("blocked");
@@ -46,7 +46,7 @@ describe("the staff preview's way in", () => {
   it("asks for the same address with the staff session, and shows the page that comes back", async () => {
     const { doc, win, fetch } = world({ token: "a-staff-token" });
     expect(await start(doc, win)).toBe(true);
-    expect(fetch).toHaveBeenCalledWith("/fill-a-red-bag?thanks=1", { headers: { Authorization: "Bearer a-staff-token" }, cache: "no-store" });
+    expect(fetch).toHaveBeenCalledWith("/fill/thank-you?session_id=cs_test_abc", { headers: { Authorization: "Bearer a-staff-token" }, cache: "no-store" });
     expect(doc.open).toHaveBeenCalled();
     expect(doc.write).toHaveBeenCalledWith("<html>the page</html>");
     expect(doc.close).toHaveBeenCalled();

@@ -216,10 +216,36 @@ export interface RedBagPageOptions {
   dropOffLive?: boolean;
 }
 
+/**
+ * The line that tells search engines to leave a page alone. The giving page does not carry it
+ * (search engines may list it); a staff preview of it does, and the thank you page always does.
+ */
+export const NOINDEX_META = '<meta name="robots" content="noindex, nofollow" />';
+
+/** What a staff preview adds to either page: the strip's mark on the body, and never indexed. */
+function markPreview(html: string): string {
+  // The script sends the staff session with the checkout only on a preview (assets/js/red-bag.js).
+  let out = html.replace("<body>", '<body data-rb-preview="true">');
+  if (!out.includes(NOINDEX_META)) out = out.replace("</head>", `    ${NOINDEX_META}\n  </head>`);
+  return out;
+}
+
+/**
+ * The thank you page, /fill/thank-you (fill-thank-you.html): the tied red bag drawn in, and the
+ * staff strip on a preview. Everything else on it is in the file, and reads without JavaScript.
+ */
+export function renderRedBagThanksPage(template: string, opts: Pick<RedBagPageOptions, "preview">): string {
+  const html = template
+    .split(BAG_MARKER)
+    .join(BAG_SVG)
+    .replace(PREVIEW_MARKER, opts.preview ? PREVIEW_STRIP : "");
+  return opts.preview ? markPreview(html) : html;
+}
+
 /** The whole page: the template with every marker filled in. */
 export function renderRedBagPage(template: string, opts: RedBagPageOptions): string {
   const rb = redBag();
-  let html = template
+  const html = template
     .replace(LIST_MARKER, renderRedBagList(rb))
     .replace(THEMES_MARKER, renderRedBagThemes(rb))
     .replace(DETAILS_MARKER, renderRedBagDetails())
@@ -227,7 +253,5 @@ export function renderRedBagPage(template: string, opts: RedBagPageOptions): str
     .join(BAG_SVG)
     .replace(REAL_MARKER, renderRealThing(opts.dropOffLive ?? DROP_OFF_LIVE))
     .replace(PREVIEW_MARKER, opts.preview ? PREVIEW_STRIP : "");
-  // The script sends the staff session with the checkout only on a preview (assets/js/red-bag.js).
-  if (opts.preview) html = html.replace("<body>", '<body data-rb-preview="true">');
-  return html;
+  return opts.preview ? markPreview(html) : html;
 }

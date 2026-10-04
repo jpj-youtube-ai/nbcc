@@ -43,8 +43,9 @@ const staffToken = (over: { secret?: string; now?: Date } = {}) =>
 
 const gift = { mode: "once", plan: null, amount: 5410, giftAid: false, email: "alex@example.com", fullName: "Alex Example" };
 const bag = { ...gift, redBag: true };
-const PAGE = "https://nbcc.test/fill-a-red-bag";
-const THANKS = `${PAGE}?thanks=1&session_id={CHECKOUT_SESSION_ID}`;
+const PAGE = "https://nbcc.test/fill";
+// The thank you is a page of its own; Stripe fills in the session id.
+const THANKS = "https://nbcc.test/fill/thank-you?session_id={CHECKOUT_SESSION_ID}";
 
 beforeEach(() => {
   live.value = false;
@@ -108,7 +109,7 @@ describe("what a Red Bag gift's Stripe session carries", () => {
     expect(marked.customer_email).toBe("alex@example.com");
   });
 
-  it("comes back to the page with a thank you, and cancels back to the page (Stripe's own page)", async () => {
+  it("comes back to the thank you page, and cancels back to the giving page (Stripe's own page)", async () => {
     await run(bag);
     expect(params().success_url).toBe(THANKS);
     expect(params().cancel_url).toBe(PAGE);

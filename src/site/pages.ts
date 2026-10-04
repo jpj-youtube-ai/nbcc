@@ -2,6 +2,7 @@
 // sitemap.xml feed, the admin "Site pages" panel and the alias validators all read, so a page
 // added here appears everywhere at once and nothing can go stale independently. Pure — no DB,
 // no config, no fs — so every rule is unit-tested directly.
+import { RED_BAG_LIVE } from "../red-bag/switch";
 
 export interface SitePage {
   path: string;
@@ -33,6 +34,10 @@ export const SITE_PAGES: SitePage[] = [
     listedByDefault: true,
     children: [{ path: "/donate/thank-you", title: "Thank you", listedByDefault: false }],
   },
+  // Fill a Red Bag: listed for search engines while its switch is on (src/red-bag/switch.ts), so it
+  // is on the site map; it is still linked from no menu, no footer and no page. Switched off the
+  // address is a 404, so it is on no map. Its thank you, /fill/thank-you, is never here.
+  ...(RED_BAG_LIVE ? [{ path: "/fill", title: "Fill a Red Bag", listedByDefault: true }] : []),
   { path: "/my-story", title: "Share your story", listedByDefault: true },
   { path: "/supporters", title: "Supporters", listedByDefault: true },
   { path: "/hub", title: "Hub", listedByDefault: true },
@@ -124,10 +129,10 @@ export const PRIVATE_PAGES: PrivatePage[] = [
     note: "Where a volunteer who has forgotten their password sets a new one.",
   },
   {
-    path: "/fill-a-red-bag",
-    title: "Fill a Red Bag",
-    reach: "unlisted",
-    note: "A new way to give. Public, but not linked from anywhere yet and hidden from search engines: people reach it only if they are given the address.",
+    path: "/fill/thank-you",
+    title: "Fill a Red Bag: thank you",
+    reach: "link-only",
+    note: "Where a donor lands after giving on Fill a Red Bag. Nothing links to it and search engines are told to skip it.",
   },
   {
     path: "/admin",
@@ -177,11 +182,13 @@ export const RESERVED_PREFIXES: string[] = [
   "/unsubscribe",
   "/about-us",
   "/contact",
-  // Fill a Red Bag: a real page (public, unlisted for now), so no spare address may shadow it.
-  "/fill-a-red-bag",
-  // The short ways people type it; both redirect there (src/routes/red-bag.ts). Reserving "/fill"
-  // takes /fill and what sits under it, not every address that begins "fill".
+  // Fill a Red Bag: a real page at /fill, with its thank you under it (/fill/thank-you), so no
+  // spare address may shadow either. Reserving "/fill" takes /fill and what sits under it, not
+  // every address that begins "fill".
   "/fill",
+  // The address it first had, and the other way people type it: both redirect to /fill
+  // (src/routes/red-bag.ts).
+  "/fill-a-red-bag",
   "/fill-a-bag",
   "/festive-ball",
   "/a-night-to-remember",

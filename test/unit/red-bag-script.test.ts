@@ -7,8 +7,8 @@ import { renderRedBagPage } from "../../src/red-bag/render";
 
 // Fill a Red Bag: the page's script (assets/js/red-bag.js), driven in jsdom over the page exactly as
 // the server draws it. It makes the steppers and the examples work, keeps the bags, the status line
-// and the total in step, opens the details step, sends the gift to the checkout the donate page
-// uses (with the redBag marker), and says thank you on the way back. Every name here is invented.
+// and the total in step, opens the details step, and sends the gift to the checkout the donate page
+// uses (with the redBag marker). Every name here is invented.
 
 const ROOT = resolve(__dirname, "../..");
 const require = createRequire(import.meta.url);
@@ -87,7 +87,7 @@ function start(opts: { preview?: boolean; search?: string; answer?: Answer; kept
     Stripe: opts.stripe,
     addEventListener: (type: string, fn: (e: unknown) => void) => void (listeners[type] = fn),
     fetch: fetchMock,
-    location: { href: "", pathname: "/fill-a-red-bag", search: opts.search ?? "" },
+    location: { href: "", pathname: "/fill", search: opts.search ?? "" },
     history,
     sessionStorage: { getItem: (k: string) => store.get(k) ?? null, setItem: (k: string, v: string) => void store.set(k, v), removeItem: (k: string) => void store.delete(k) },
     matchMedia: () => ({ matches: false }),
@@ -541,13 +541,105 @@ describe("the round-up", () => {
     expect(text("[data-rb-round]")).toBe("+ £25 Round up to a full bag");
   });
 
-  it("comes back if they take that item out again: plus then minus leaves the bag as it was", () => {
+  // Jaimie: "if their items pass £25 on their own, the top-up disappears and the button offers the
+  // next step". Passed, the target is forgotten: it does not come back when things are taken out.
+  it("is forgotten once passed: taking that item out again does not bring it back", () => {
     eighteen();
     round().click();
-    plus("blanket");
+    plus("blanket"); // £26 of their own: passed
     minus("blanket");
-    expect(api!.total()).toBe(2500);
-    expect(text("[data-rb-round-line] [data-rb-round-sum]")).toBe("£7");
+    expect(api!.total()).toBe(1800);
+    expect(roundLine()).toBeNull();
+    expect($("[data-rb-also]").hidden).toBe(true);
+    expect(text("[data-rb-round]")).toBe("+ £7 Round up to half a bag");
+  });
+
+  it("is forgotten once reached exactly, too", () => {
+    eighteen();
+    round().click();
+    plus("socks", 7); // £25 of their own
+    minus("socks");
+    expect(api!.total()).toBe(2400);
+    expect(roundLine()).toBeNull();
+  });
+
+  it("is forgotten when an example takes them past it", () => {
+    eighteen();
+    round().click();
+    example("crisis-15").click(); // £33 of their own
+    example("crisis-15").click();
+    expect(api!.total()).toBe(1800);
+    expect(roundLine()).toBeNull();
+  });
+
+  // Typing in a number box is not finished until the box is left. A box emptied on the way to a
+  // new number, or a number half typed, must not throw the round-up away.
+  describe("while a number is being typed", () => {
+    const leave = (id: string) => document.getElementById(id)!.dispatchEvent(new Event("blur"));
+
+    it("keeps the round-up when the only box is emptied and a new number typed", () => {
+      type("rb-qty-socks", "5"); // £5
+      leave("rb-qty-socks");
+      round().click();
+      expect(api!.total()).toBe(2500);
+      type("rb-qty-socks", ""); // mid edit: nothing of their own, so nothing to round up just now
+      expect(api!.total()).toBe(0);
+      expect(roundLine()).toBeNull();
+      type("rb-qty-socks", "3");
+      expect(api!.total()).toBe(2500);
+      expect(text("[data-rb-round-line] [data-rb-round-sum]")).toBe("£22");
+      leave("rb-qty-socks");
+      expect(api!.total()).toBe(2500);
+    });
+
+    it("clears the round-up when the box is left empty", () => {
+      type("rb-qty-socks", "5");
+      leave("rb-qty-socks");
+      round().click();
+      type("rb-qty-socks", "");
+      leave("rb-qty-socks");
+      expect(api!.total()).toBe(0);
+      type("rb-qty-socks", "3");
+      leave("rb-qty-socks");
+      expect(api!.total()).toBe(300);
+      expect(roundLine()).toBeNull();
+    });
+
+    it("keeps the round-up from 10 to 20, through the 2 on the way", () => {
+      type("rb-qty-socks", "10");
+      leave("rb-qty-socks");
+      round().click();
+      expect(text("[data-rb-round-line] [data-rb-round-sum]")).toBe("£15");
+      type("rb-qty-socks", "");
+      type("rb-qty-socks", "2");
+      type("rb-qty-socks", "20");
+      leave("rb-qty-socks");
+      expect(api!.total()).toBe(2500);
+      expect(text("[data-rb-round-line] [data-rb-round-sum]")).toBe("£5");
+    });
+
+    it("keeps the round-up when a number typed too big on the way is put right before leaving", () => {
+      type("rb-qty-socks", "3");
+      leave("rb-qty-socks");
+      round().click();
+      type("rb-qty-socks", "30"); // past the target, mid edit
+      expect(roundLine()).toBeNull();
+      type("rb-qty-socks", "3");
+      expect(api!.total()).toBe(2500);
+      leave("rb-qty-socks");
+      expect(text("[data-rb-round-line] [data-rb-round-sum]")).toBe("£22");
+    });
+
+    it("forgets the target when the box is left past it", () => {
+      type("rb-qty-socks", "3");
+      leave("rb-qty-socks");
+      round().click();
+      type("rb-qty-socks", "30");
+      leave("rb-qty-socks");
+      type("rb-qty-socks", "3");
+      leave("rb-qty-socks");
+      expect(api!.total()).toBe(300);
+    });
   });
 
   it("is cleared by its own Remove, and the round-up button is where you land", () => {
@@ -588,8 +680,10 @@ describe("the round-up", () => {
   it("does not come back after the bag has been emptied", () => {
     eighteen();
     round().click();
-    type("rb-qty-blanket", "0");
-    type("rb-qty-socks", "0");
+    minus("blanket");
+    minus("blanket");
+    minus("socks");
+    minus("socks");
     expect(api!.total()).toBe(0);
     plus("socks");
     expect(api!.total()).toBe(100);
@@ -614,8 +708,10 @@ describe("the round-up", () => {
   it("cannot be sent on its own: an emptied bag gets the nudge, not the details step", () => {
     eighteen();
     round().click();
-    type("rb-qty-blanket", "0");
-    type("rb-qty-socks", "0");
+    minus("blanket");
+    minus("blanket");
+    minus("socks");
+    minus("socks");
     donate();
     expect($("[data-rb-details]").hidden).toBe(true);
     expect($("[data-rb-nudge]").hidden).toBe(false);
@@ -997,64 +1093,19 @@ describe("going to pay", () => {
   });
 });
 
-describe("back from paying", () => {
-  const kept = (gift: unknown) => ({ nbcc_red_bag_gift: JSON.stringify(gift) });
-
-  it("says thank you, with the total, and hides the bag builder", () => {
-    start({ search: "?thanks=1&session_id=cs_test_abc", kept: kept({ pence: 5410, giftAid: false, monthly: false }) });
-    expect($("[data-rb-thanks]").hidden).toBe(false);
-    expect($("[data-rb-builder]").hidden).toBe(true);
-    expect($("[data-rb-details]").hidden).toBe(true);
-    expect(text("[data-rb-thanks-total]")).toBe("Your donation of £54.10 is on its way to NBCC.");
-    expect($("[data-rb-thanks-plain]").hidden).toBe(true);
-    expect($("[data-rb-thanks-giftaid]").hidden).toBe(true);
-    expect(document.activeElement).toBe($("[data-rb-thanks-panel]"));
-  });
-
-  it("adds the Gift Aid line when they added Gift Aid: a quarter more", () => {
-    start({ search: "?thanks=1", kept: kept({ pence: 4000, giftAid: true, monthly: false }) });
-    expect($("[data-rb-thanks-giftaid]").hidden).toBe(false);
-    expect(text("[data-rb-thanks-giftaid]")).toBe("With Gift Aid, NBCC can claim another £10 at no cost to you.");
-  });
-
-  it("says every month for a monthly donation", () => {
-    start({ search: "?thanks=1", kept: kept({ pence: 1000, giftAid: false, monthly: true }) });
-    expect(text("[data-rb-thanks-total]")).toBe("Your donation of £10 every month is on its way to NBCC.");
-  });
-
-  it("is a plain thank you when the total is not there, or is not a total", () => {
-    for (const k of [{}, { nbcc_red_bag_gift: "not json" }, kept({ pence: "lots" }), kept({ pence: -5 })]) {
-      start({ search: "?thanks=1", kept: k as Record<string, string> });
-      expect($("[data-rb-thanks]").hidden).toBe(false);
-      expect($("[data-rb-thanks-total]").hidden).toBe(true);
-      expect($("[data-rb-thanks-plain]").hidden).toBe(false);
-      expect($("[data-rb-thanks-giftaid]").hidden).toBe(true);
+// Back from paying, the donor lands on a page of its own, /fill/thank-you
+// (assets/js/red-bag-thanks.js; test/unit/red-bag-thanks-script.test.ts). This page has no thank you.
+describe("the thank you is not here", () => {
+  it("has no thank you step, with or without the old flag in the address", () => {
+    for (const search of ["", "?thanks=1", "?thanks=1&session_id=cs_test_abc"]) {
+      start({ search, kept: { nbcc_red_bag_gift: JSON.stringify({ pence: 5410, giftAid: false, monthly: false }) } });
+      expect($("[data-rb-thanks]")).toBeNull();
+      expect($("[data-rb-builder]").hidden).toBe(false);
+      expect($("[data-rb-lede]").hidden).toBe(false);
+      // What the tab remembered is left for the thank you page to read.
+      expect(store.has("nbcc_red_bag_gift")).toBe(true);
+      expect(history.replaceState).not.toHaveBeenCalled();
     }
-  });
-
-  it("takes the payment's id out of the address bar at once, and forgets the total", () => {
-    start({ search: "?thanks=1&session_id=cs_test_abc", kept: kept({ pence: 5410, giftAid: false, monthly: false }) });
-    expect(history.replaceState).toHaveBeenCalledWith(null, "", "/fill-a-red-bag?thanks=1");
-    expect(store.has("nbcc_red_bag_gift")).toBe(false);
-  });
-
-  it("puts the invitation to fill a bag away: they have just filled one", () => {
-    start({ search: "?thanks=1", kept: kept({ pence: 5410, giftAid: false, monthly: false }) });
-    expect($("[data-rb-lede]").hidden).toBe(true);
-    expect($("#rb-title").closest("section")!.hidden).toBe(false); // the heading stays, and clears the header
-    start();
-    expect($("[data-rb-lede]").hidden).toBe(false);
-  });
-
-  it("never lists the items", () => {
-    start({ search: "?thanks=1", kept: kept({ pence: 5410, giftAid: false, monthly: false }) });
-    expect(text("[data-rb-thanks]")).not.toMatch(/Blanket|Socks|Pencil/);
-  });
-
-  it("is the ordinary page without the thanks flag", () => {
-    start({ kept: kept({ pence: 5410, giftAid: false, monthly: false }) });
-    expect($("[data-rb-thanks]").hidden).toBe(true);
-    expect($("[data-rb-builder]").hidden).toBe(false);
   });
 });
 
@@ -1257,18 +1308,22 @@ describe("the bottom bar", () => {
     expect($("[data-rb-details]").hidden).toBe(true);
   });
 
+  // The bar hides the moment the real Donate is on screen, and its button with it: the focus must
+  // not be left on a button that has gone.
+  it("under £2, hands the focus to the real Donate button, beside the nudge", () => {
+    ($("[data-rb-nudge]") as unknown as { scrollIntoView: unknown }).scrollIntoView = vi.fn();
+    plus("socks");
+    $<HTMLButtonElement>("[data-rb-bar-donate]").focus();
+    barDonate();
+    expect(document.activeElement).toBe($("[data-rb-donate]"));
+  });
+
   it("does not bring the nudge into view for the real Donate, which is beside it already", () => {
     const seen = vi.fn();
     ($("[data-rb-nudge]") as unknown as { scrollIntoView: unknown }).scrollIntoView = seen;
     plus("socks");
     donate();
     expect(seen).not.toHaveBeenCalled();
-  });
-
-  it("is never there on the thank you", () => {
-    start({ search: "?thanks=1", kept: { nbcc_red_bag_gift: JSON.stringify({ pence: 5410, giftAid: false, monthly: false }) } });
-    expect(bar().hidden).toBe(true);
-    expect(padded()).toBe(false);
   });
 
   it("never shows where the browser cannot tell what is on screen", () => {

@@ -1,4 +1,4 @@
-// Fill a Red Bag, /fill-a-red-bag (docs/superpowers/specs/2026-10-04-fill-a-red-bag-design.md).
+// Fill a Red Bag, /fill (docs/superpowers/specs/2026-10-04-fill-a-red-bag-design.md).
 //
 // The page is drawn by the server and its list reads fine without this file. This makes it work:
 //   - the steppers on the paper (minus, a number box you can type in, plus; 0 to 99) and the
@@ -16,8 +16,9 @@
 //     as the give form on a fundraiser's page (assets/js/fundraiser.js), then the donate page's
 //     checkout: POST /api/checkout-session with the donate page's body plus redBag: true. Stripe
 //     opens on the page when it can and on Stripe's own page when it cannot;
-//   - the thank you on the way back (?thanks=1), with the total this tab remembered (for show only;
-//     the server never trusts it) and a picture to share that names no amount.
+//   - before leaving for Stripe, it leaves the total in this tab's memory for the thank you, which
+//     is a page of its own: /fill/thank-you (assets/js/red-bag-thanks.js). For show only; the
+//     server never trusts it.
 //
 // Only the total is ever sent: no list of items leaves the page, because the items are examples of
 // what a donation could do, not things being bought.
@@ -33,13 +34,11 @@
   var CARD_FEE_BP = 120;
   var CARD_FEE_FIXED_PENCE = 20;
 
-  // What this tab remembers across the trip to Stripe, for the thank you: the total, and whether
-  // Gift Aid and monthly were chosen. Display only.
+  // What this tab remembers across the trip to Stripe, for the thank you page: the total, and
+  // whether Gift Aid and monthly were chosen. Display only. (assets/js/red-bag-thanks.js reads it.)
   var GIFT_KEY = "nbcc_red_bag_gift";
   // The admin's session, kept by admin.html for the tab. Read ONLY on a staff preview.
   var ADMIN_TOKEN_KEY = "nbcc_admin_token";
-  // The page's public address, for sharing.
-  var PAGE_URL = "https://nbcc.scot/fill-a-red-bag";
 
   var MSG = {
     check: "Please check the highlighted answers below and try again.",
@@ -84,7 +83,6 @@
     nav = nav || { assign: function (u) { win.location.href = u; } };
 
     var details = doc.querySelector("[data-rb-details]");
-    var thanks = doc.querySelector("[data-rb-thanks]");
     var bagsBox = doc.querySelector("[data-rb-bags]");
     var bagTemplate = doc.getElementById("rbBagTemplate");
     var more = doc.querySelector("[data-rb-more]");
@@ -194,10 +192,18 @@
     }
 
     // --- everything that follows the total ------------------------------------------------------
-    function refresh() {
-      // A round-up never stands alone: once their own choices come to nothing it is cleared, for
-      // good, so it does not come back when something goes in again.
-      if (roundTarget && own() === 0) roundTarget = 0;
+    // `typing` is true only while a number box is still being typed in (its `input` event). The
+    // round-up's target is let go only on a FINISHED change (a plus or minus, an arrow key, a box
+    // left, an example, Remove): a box emptied on the way to a new number, or a number half typed,
+    // must not throw it away. Mid edit the sums simply follow what is in the box.
+    function refresh(typing) {
+      if (roundTarget && typing !== true) {
+        var mine = own();
+        // A round-up never stands alone: once their own choices come to nothing it is cleared.
+        // And once their own choices reach or pass its target it has done its job and is
+        // forgotten: taking things out later does not bring it back.
+        if (mine === 0 || mine >= roundTarget) roundTarget = 0;
+      }
       var pence = total();
       drawBags(pence);
       setText(status, rb.statusLine(pence));
@@ -245,7 +251,7 @@
         if (plus) plus.setAttribute("aria-disabled", q >= rb.MAX_QUANTITY ? "true" : "false");
         if (q > 0) row.classList.add("is-in");
         else row.classList.remove("is-in");
-        refresh();
+        refresh(!write);
       }
 
       // Typing counts at once, with no Enter; the box is only tidied when it is left, so a number
@@ -421,11 +427,6 @@
       // The list, the themes and the bag are one section: they go and come back together.
       builder.hidden = step !== "bag";
       if (details) details.hidden = step !== "details";
-      if (thanks) thanks.hidden = step !== "thanks";
-      // "Pop a few things in the bag" is no thing to say to someone who has just filled one. Only
-      // the line goes: the heading stays, and its section still clears the fixed header.
-      var lede = doc.querySelector("[data-rb-lede]");
-      if (lede) lede.hidden = step === "thanks";
       refreshBar();
     }
 
@@ -438,6 +439,8 @@
           nudge.hidden = false;
           if (fromBar && typeof nudge.scrollIntoView === "function") nudge.scrollIntoView({ block: "center" });
         }
+        // The bar goes once the real Donate is on screen, and its button with it: hand the focus on.
+        if (fromBar) focusOn(donateBtn);
         return;
       }
       if (!details) return;
@@ -724,206 +727,7 @@
       b.classList.remove("is-new");
     });
 
-    // --- back from paying ---------------------------------------------------------------------------
-    var search = String((win.location && win.location.search) || "");
-    if (thanks && /[?&]thanks=1(&|$)/.test(search)) {
-      showStep("thanks");
-      initThanks(doc, win, rb, thanks);
-    }
-
     return { total: total, payload: payload };
-  }
-
-  // The thank you. The payment's id (session_id, which Stripe filled in) comes straight out of the
-  // address bar, so it is never copied, shared, bookmarked or kept in the history. The total is what
-  // this tab remembered before leaving for Stripe; missing or odd, the plain thank you stays.
-  function initThanks(doc, win, rb, thanks) {
-    var loc = win.location;
-    if (/[?&]session_id=/.test(String(loc.search || "")) && win.history && typeof win.history.replaceState === "function") {
-      try {
-        win.history.replaceState(null, "", loc.pathname + "?thanks=1");
-      } catch (e) {
-        /* the address stays as it is */
-      }
-    }
-    var gift = null;
-    var s = storage(win);
-    if (s) {
-      try {
-        gift = JSON.parse(s.getItem(GIFT_KEY) || "null");
-        s.removeItem(GIFT_KEY);
-      } catch (e) {
-        gift = null;
-      }
-    }
-    var ok = gift && typeof gift.pence === "number" && isFinite(gift.pence) && gift.pence >= rb.MIN_PENCE && Math.floor(gift.pence) === gift.pence;
-    var totalLine = thanks.querySelector("[data-rb-thanks-total]");
-    var plain = thanks.querySelector("[data-rb-thanks-plain]");
-    var aid = thanks.querySelector("[data-rb-thanks-giftaid]");
-    if (ok && totalLine) {
-      setText(thanks.querySelector("[data-rb-thanks-amount]"), rb.pounds(gift.pence) + (gift.monthly ? " every month" : ""));
-      totalLine.hidden = false;
-      if (plain) plain.hidden = true;
-      if (aid && gift.giftAid === true) {
-        setText(thanks.querySelector("[data-rb-thanks-giftaid-amount]"), rb.pounds(Math.round(gift.pence * 0.25)));
-        aid.hidden = false;
-      }
-    }
-    each(thanks.querySelectorAll(".rb-bag"), function (b) {
-      b.classList.add("is-full");
-    });
-    focusOn(thanks.querySelector("[data-rb-thanks-panel]"));
-    initShare(doc, win, thanks);
-  }
-
-  // --- the picture to share: "I filled a Red Bag", and never an amount -----------------------------
-  // Drawn on a canvas in the browser, the way the fundraisers' social pictures are
-  // (assets/js/fundraise-social.js): no image library on the server, and nothing leaves the page
-  // until the giver chooses to share or save it.
-  var C = { cream: "#F8F5EE", crimson: "#C02238", maroon: "#800000", tan: "#D29C8A", tanSoft: "#F3E4DD", slate: "#333333", holly: "#1A531A" };
-
-  function drawPicture(canvas, win) {
-    var ctx = null;
-    try {
-      ctx = canvas.getContext("2d");
-    } catch (e) {
-      ctx = null;
-    }
-    if (!ctx || typeof win.Path2D !== "function") return false;
-    var W = canvas.width;
-    var H = canvas.height;
-    ctx.fillStyle = C.cream;
-    ctx.fillRect(0, 0, W, H);
-    ctx.strokeStyle = C.maroon;
-    ctx.lineWidth = 6;
-    ctx.strokeRect(36, 36, W - 72, H - 72);
-
-    // The bag: the page's own drawing (src/red-bag/render.ts), full, four times the size.
-    var k = 4.3;
-    ctx.save();
-    ctx.translate((W - 120 * k) / 2, 96);
-    ctx.scale(k, k);
-    ctx.lineCap = "round";
-    ctx.lineJoin = "round";
-    ctx.strokeStyle = C.maroon;
-    ctx.globalAlpha = 0.5;
-    ctx.lineWidth = 3.4;
-    ctx.stroke(new win.Path2D("M44 36C44 10 88 10 88 36"));
-    ctx.globalAlpha = 1;
-    ctx.fillStyle = C.cream;
-    ctx.strokeStyle = C.tan;
-    ctx.lineWidth = 1.2;
-    var tissue = new win.Path2D("M22 38l9-13 8 9 9-14 9 13 9-12 8 11 9-9 7 15z");
-    ctx.fill(tissue);
-    ctx.stroke(tissue);
-    var body = new win.Path2D("M12 36h96v88a4 4 0 0 1-4 4H16a4 4 0 0 1-4-4z");
-    ctx.fillStyle = C.crimson;
-    ctx.fill(body);
-    ctx.fillStyle = C.maroon;
-    ctx.globalAlpha = 0.16;
-    ctx.fill(new win.Path2D("M92 36h16v88a4 4 0 0 1-4 4H92z"));
-    ctx.globalAlpha = 0.12;
-    ctx.fill(new win.Path2D("M12 36h96v10H12z"));
-    ctx.globalAlpha = 0.4;
-    ctx.strokeStyle = C.maroon;
-    ctx.lineWidth = 1;
-    ctx.stroke(new win.Path2D("M12 46h96M92 46v82"));
-    ctx.globalAlpha = 1;
-    ctx.strokeStyle = C.crimson;
-    ctx.lineWidth = 3.4;
-    ctx.stroke(new win.Path2D("M32 40C32 12 76 12 76 40"));
-    ctx.fillStyle = C.maroon;
-    ctx.beginPath();
-    ctx.arc(32, 41, 2.2, 0, Math.PI * 2);
-    ctx.arc(76, 41, 2.2, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.restore();
-
-    ctx.textAlign = "center";
-    ctx.fillStyle = C.crimson;
-    ctx.font = '800 96px "Playfair Display", Georgia, serif';
-    ctx.fillText("I filled a Red Bag", W / 2, 800);
-    ctx.fillStyle = C.holly;
-    ctx.fillRect(W / 2 - 150, 838, 300, 4);
-    ctx.fillStyle = C.slate;
-    ctx.font = '400 40px "Poppins", system-ui, sans-serif';
-    ctx.fillText("Fill one too at nbcc.scot/fill-a-red-bag", W / 2, 912);
-    ctx.font = '400 26px "Poppins", system-ui, sans-serif';
-    ctx.fillText("Night Before Christmas Campaign (NBCC). Scottish Charity SC047995.", W / 2, 984);
-    return true;
-  }
-
-  function initShare(doc, win, thanks) {
-    var box = thanks.querySelector("[data-rb-share]");
-    var canvas = box ? box.querySelector("[data-rb-share-picture]") : null;
-    if (!box || !canvas) return null;
-    var status = box.querySelector("[data-rb-share-status]");
-    var save = box.querySelector("[data-rb-share-save]");
-    var send = box.querySelector("[data-rb-share-send]");
-    var words = "I filled a Red Bag with NBCC. You can fill one too: " + PAGE_URL;
-
-    function finish() {
-      if (!drawPicture(canvas, win)) {
-        canvas.hidden = true;
-        return;
-      }
-      var url = "";
-      try {
-        url = canvas.toDataURL("image/png");
-      } catch (e) {
-        url = "";
-      }
-      if (save && url) {
-        save.href = url;
-        save.hidden = false;
-      }
-      var nav = win.navigator || {};
-      if (send && typeof nav.share === "function" && typeof canvas.toBlob === "function" && typeof win.File === "function") {
-        send.hidden = false;
-        send.addEventListener("click", function () {
-          canvas.toBlob(function (blob) {
-            if (!blob) return;
-            var file = new win.File([blob], "i-filled-a-red-bag.png", { type: "image/png" });
-            var data = { text: words };
-            if (typeof nav.canShare === "function" && nav.canShare({ files: [file] })) data.files = [file];
-            nav.share(data).then(
-              function () {
-                setText(status, "Thank you for sharing.");
-              },
-              function () {
-                /* they closed the share sheet: nothing to say */
-              },
-            );
-          }, "image/png");
-        });
-      }
-    }
-
-    // The words are drawn in the page's own faces, so wait for them where the browser can say.
-    var fonts = doc.fonts;
-    if (fonts && typeof fonts.load === "function") {
-      Promise.all([fonts.load('800 96px "Playfair Display"'), fonts.load('400 40px "Poppins"')]).then(finish, finish);
-    } else {
-      finish();
-    }
-
-    // Copy the link, shown only where copying works (as on a fundraiser's page).
-    var copy = box.querySelector("[data-rb-copy-link]");
-    var clip = win.navigator && win.navigator.clipboard;
-    if (copy && clip && typeof clip.writeText === "function") {
-      copy.hidden = false;
-      copy.addEventListener("click", function () {
-        clip.writeText(PAGE_URL).then(
-          function () {
-            setText(status, "Link copied. You can paste it anywhere.");
-          },
-          function () {
-            setText(status, "Copying did not work here. The link is " + PAGE_URL);
-          },
-        );
-      });
-    }
-    return box;
   }
 
   // --- Stripe on the page: the donate page's modal, driven from here ---------------------------------

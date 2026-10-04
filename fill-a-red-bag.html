@@ -4,13 +4,27 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
 
-    <!-- Fill a Red Bag is PUBLIC but deliberately UNLINKED and UNLISTED for now (4 October 2026;
-         src/red-bag/switch.ts): nothing on the site links here and people reach it only if they
-         are given the address. So it is not to be indexed, and has no canonical address or share
-         card yet. Take the robots line out, and add those, when the page is listed. -->
+    <!-- Fill a Red Bag, /fill (4 October 2026; src/red-bag/switch.ts). Search engines may list it,
+         so it carries what the site's other listed pages carry: a canonical address and a share
+         card, and no robots line. (A staff preview has one added as it is drawn.) It is still
+         LINKED from nowhere on the site: not the Donate page, the menu or the footer. -->
     <title>Fill a Red Bag | Night Before Christmas Campaign</title>
     <meta name="description" content="Fill a Red Bag with examples of what your donation could do for children, young people and vulnerable adults, all year round." />
-    <meta name="robots" content="noindex, nofollow" />
+    <!-- Canonical/og:url use the production domain (https://nbcc.scot). -->
+    <link rel="canonical" href="https://nbcc.scot/fill" />
+    <!-- Open Graph -->
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Night Before Christmas Campaign" />
+    <meta property="og:title" content="Fill a Red Bag | Night Before Christmas Campaign" />
+    <meta property="og:description" content="Fill a Red Bag with examples of what your donation could do for children, young people and vulnerable adults, all year round." />
+    <meta property="og:url" content="https://nbcc.scot/fill" />
+    <!-- The site's one share picture, as on the donate page. -->
+    <meta property="og:image" content="https://nbcc.scot/assets/img/og-image.png" />
+    <!-- Twitter -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Fill a Red Bag | Night Before Christmas Campaign" />
+    <meta name="twitter:description" content="Fill a Red Bag with examples of what your donation could do for children, young people and vulnerable adults, all year round." />
+    <meta name="twitter:image" content="https://nbcc.scot/assets/img/og-image.png" />
 
     <link rel="stylesheet" href="/assets/css/styles.css" />
     <!-- Its OWN stylesheet and scripts rather than growing the shared bundle, which donate.html's
@@ -64,38 +78,6 @@
             <h1 id="rb-title">Fill a Red Bag</h1>
             <div class="rule center"><i></i></div>
             <p class="lede" data-rb-lede>Pop a few things in the bag and watch it fill. Your donation could help NBCC bring comfort, dignity and joy to children, young people and vulnerable adults, all year round.</p>
-          </div>
-        </div>
-      </section>
-
-      <!-- Back from paying (?thanks=1): shown by the script, which hides the rest. The total comes
-           from this tab's own memory and is for show only; with none, the plain line stays. No
-           list of items anywhere: it would read as a shopping receipt. -->
-      <section class="section flush-top rb-thanks" data-rb-thanks aria-labelledby="rb-thanks-title" hidden>
-        <div class="wrap">
-          <div class="card card-lg rb-thanks__panel" data-rb-thanks-panel tabindex="-1">
-            <div class="rb-thanks__bag" aria-hidden="true"><!-- red-bag:bag --></div>
-            <div class="rb-thanks__words">
-              <h2 id="rb-thanks-title">Thank you for filling a Red Bag</h2>
-              <p class="rb-thanks__lead" data-rb-thanks-total hidden>Your donation of <strong data-rb-thanks-amount></strong> is on its way to NBCC.</p>
-              <p class="rb-thanks__lead" data-rb-thanks-plain>Your donation is on its way to NBCC.</p>
-              <p data-rb-thanks-giftaid hidden>With Gift Aid, NBCC can claim another <strong data-rb-thanks-giftaid-amount></strong> at no cost to you.</p>
-              <p>Our elves use your gift wherever it's needed most, so the items are a taste of what it could do, not a shopping list.</p>
-              <p>Your receipt is on its way to your inbox. Thank you for being part of this.</p>
-              <div class="rb-share" data-rb-share>
-                <h3>Share: I filled a Red Bag</h3>
-                <p>A picture to post or send, to show a friend how to fill one too. It says nothing about how much you gave.</p>
-                <canvas class="rb-share__picture" data-rb-share-picture width="1080" height="1080" role="img" aria-label="A red paper gift bag on cream, with the words: I filled a Red Bag. Night Before Christmas Campaign."></canvas>
-                <div class="rb-share__actions">
-                  <button class="btn btn-primary" type="button" data-rb-share-send hidden>Share the picture</button>
-                  <a class="btn btn-ghost" data-rb-share-save download="i-filled-a-red-bag.png" href="#rb-thanks-title" hidden>Save the picture</a>
-                  <button class="btn btn-ghost" type="button" data-rb-copy-link hidden>Copy the link</button>
-                  <a class="btn btn-ghost" href="https://www.facebook.com/sharer/sharer.php?u=https%3A%2F%2Fnbcc.scot%2Ffill-a-red-bag" target="_blank" rel="noopener">Facebook<span class="sr-only">, opens in a new tab</span></a>
-                  <a class="btn btn-ghost" href="https://wa.me/?text=I%20filled%20a%20Red%20Bag%20with%20NBCC.%20You%20can%20fill%20one%20too%3A%20https%3A%2F%2Fnbcc.scot%2Ffill-a-red-bag" target="_blank" rel="noopener">WhatsApp<span class="sr-only">, opens in a new tab</span></a>
-                </div>
-                <p class="rb-share__status" role="status" aria-live="polite" data-rb-share-status></p>
-              </div>
-            </div>
           </div>
         </div>
       </section>

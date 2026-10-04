@@ -1,19 +1,18 @@
-/* Joining the mailing list: /newsletter and the pages its emailed link opens. Its own small
-   stylesheet on top of styles.css, rather than growing the shared bundle that donate.html's page
-   weight budget counts. Only what styles.css does not already give: one narrow column, the notice
-   card, and the quiet "Who we are" lines. Site tokens only; nothing scrolls inside a box. */
+/* Joining the mailing list: /newsletter. Its own small stylesheet on top of styles.css, rather than
+   growing the shared bundle that donate.html's page weight budget counts. Only what styles.css does
+   not already give: one narrow column, the signed up card, and the quiet "Who we are" lines. Site
+   tokens only; nothing scrolls inside a box. */
 
-.nl-narrow{max-width:560px;margin-inline:auto}
-.nl-form .btn,.nl-confirm .btn{width:100%;justify-content:center;white-space:normal;text-align:center}
-.nl-consent{font-size:.95rem;line-height:1.6;color:var(--slate);margin:4px 0 16px}
+.nl-narrow{max-width:600px;margin-inline:auto}
+.nl-form .btn{width:100%;justify-content:center;white-space:normal;text-align:center}
+.nl-consent .give-check{margin:4px 0 0;font-size:.95rem;font-weight:400}
 .nl-form .form-status:empty{display:none}
 .nl-form .field.invalid .err{display:block}
 .nl-panel{padding:clamp(24px,4vw,38px);overflow-wrap:anywhere}
 .nl-panel:focus{outline:none}
 .nl-panel h2,.nl-who h2{font-size:clamp(1.45rem,1.25rem + .8vw,1.9rem);color:var(--maroon)}
 .nl-panel p{margin-top:12px;color:var(--slate);line-height:1.7}
-.nl-panel p:first-child{margin-top:0}
-.nl-actions{margin-top:22px}
 .nl-who{margin-top:clamp(28px,5vw,44px);text-align:center}
-.nl-who p{margin-top:10px;color:var(--slate-soft);line-height:1.7}
+.nl-who p{margin:10px 0 14px;color:var(--slate-soft);line-height:1.7}
 .nl-who a{color:var(--maroon);font-weight:600}
+.nl-form .give-name-row{margin-bottom:0}

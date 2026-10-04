@@ -763,13 +763,3 @@ export async function sendBackupAlert(message: BackupAlertEmail): Promise<void> 
     text: message.body,
   });
 }
-
-// --- Joining the mailing list from /newsletter ------------------------------------------------
-// The one email asking someone to confirm they want to join (src/mailing-list/confirm-email.ts).
-// It is NOT a newsletter: it answers something the person has just done on the site, so it goes
-// from the main nbcc.scot address on the transactional configuration set (no click tracking), like
-// a receipt or a sign in link, and never from the newsletter's sending address (news.nbcc.scot).
-// The log keeps no name. Its link carries a token, so the link tagging leaves it alone.
-export async function sendNewsletterSignupConfirm(message: FundraiseEmailMessage): Promise<void> {
-  await sendVerbatim("newsletterSignupConfirm", null, message);
-}

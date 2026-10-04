@@ -51,20 +51,17 @@
     </header>
 
     <main class="site-main" id="main" tabindex="-1">
-      <!-- Joining the mailing list, with a confirm by email step. This file is the sign up page at
-           /newsletter, and also the frame for the three pages the emailed link opens (confirm, thank
-           you, link no longer works): the server swaps what is between each pair of markers
-           (src/mailing-list/render.ts). Nobody is on the list until they press the button behind
-           the link in the email. -->
+      <!-- Joining the mailing list. This is the footer's "Keep in touch" form given a page of its
+           own: the same boxes, the same unticked consent and the same hidden box for robots, sent
+           by assets/js/newsletter-signup.js to the same existing POST /api/subscribe, which joins
+           them at once and sends the usual welcome email. Nothing on the server is new. -->
       <section class="page-top nl-intro" aria-labelledby="newsletter-heading">
         <div class="wrap">
           <div class="intro-hero">
-            <!-- newsletter:intro -->
             <span class="eyebrow">Mailing list</span>
             <h1 id="newsletter-heading">Keep in touch with NBCC.</h1>
             <div class="rule"><i></i></div>
             <p class="lede">Join our mailing list for occasional news about the difference your support makes and what is coming up across South West Scotland. We send a few emails a year, and you can unsubscribe at any time.</p>
-            <!-- /newsletter:intro -->
           </div>
         </div>
       </section>
@@ -72,44 +69,58 @@
       <section class="section flush-top" aria-label="Join our mailing list">
         <div class="wrap">
           <div class="nl-narrow">
-            <!-- newsletter:page -->
-            <form id="nlForm" class="nl-form" action="/api/newsletter/signup" method="post" novalidate>
+            <form id="nlForm" class="nl-form" action="/api/subscribe" method="post" novalidate>
+              <!-- The same hidden box as the footer form: people never see it, robots fill it, and
+                   the server quietly drops those. -->
               <div hidden aria-hidden="true">
-                <label for="nlCompany">Leave blank
-                  <input type="text" id="nlCompany" name="company" tabindex="-1" autocomplete="off" />
+                <label for="nlWebsite">Leave blank
+                  <input type="text" id="nlWebsite" name="website" tabindex="-1" autocomplete="off" />
                 </label>
               </div>
-              <div class="field">
-                <label for="nlFirstName">First name <span class="req" aria-hidden="true">*</span></label>
-                <input id="nlFirstName" name="firstName" type="text" autocomplete="given-name" maxlength="60" required aria-required="true" aria-describedby="nlFirstName-error" />
-                <span class="err" id="nlFirstName-error" hidden>Please enter your first name.</span>
+              <div class="give-name-row">
+                <div class="field">
+                  <label for="nlFirstName">First name <span class="req" aria-hidden="true">*</span></label>
+                  <input id="nlFirstName" name="firstName" type="text" autocomplete="given-name" maxlength="60" required aria-required="true" aria-describedby="nlFirstName-error" />
+                  <span class="err" id="nlFirstName-error" hidden>Please enter your first name.</span>
+                </div>
+                <div class="field">
+                  <label for="nlSurname">Surname <span class="req" aria-hidden="true">*</span></label>
+                  <input id="nlSurname" name="surname" type="text" autocomplete="family-name" maxlength="60" required aria-required="true" aria-describedby="nlSurname-error" />
+                  <span class="err" id="nlSurname-error" hidden>Please enter your surname.</span>
+                </div>
               </div>
               <div class="field">
                 <label for="nlEmail">Email <span class="req" aria-hidden="true">*</span></label>
-                <input id="nlEmail" name="email" type="email" autocomplete="email" maxlength="254" required aria-required="true" aria-describedby="nlEmail-error" />
+                <input id="nlEmail" name="email" type="email" autocomplete="email" required aria-required="true" aria-describedby="nlEmail-error" />
                 <span class="err" id="nlEmail-error" hidden>Please enter a valid email address.</span>
               </div>
-              <!-- Cloudflare Turnstile's box, drawn by assets/js/newsletter-signup.js only when the
-                   server says the check is on. The hidden field carries its pass. -->
-              <div class="field" id="nlCaptcha" hidden></div>
-              <input type="hidden" id="nlCaptchaToken" name="captchaToken" value="" />
-              <noscript><p class="form-privacy">This form needs JavaScript to check you're not a robot. You can email us at <a href="mailto:info@nbcc.scot">info@nbcc.scot</a> and ask to join instead.</p></noscript>
-              <p class="nl-consent" id="nlConsent">By pressing the button you are asking NBCC to email you our news a few times a year. We will send you one email first, with a link to confirm it is really you.</p>
-              <button class="btn btn-holly" type="submit" id="nlSubmit" aria-describedby="nlConsent">Join our mailing list</button>
-              <p class="form-privacy">We will never share your details, and every email has an unsubscribe link. We handle your details as set out in our <a href="/privacy">Privacy notice</a>.</p>
+              <div class="field">
+                <label for="nlPhone">Mobile (optional, for texts)</label>
+                <input id="nlPhone" name="phone" type="tel" autocomplete="tel" maxlength="30" />
+              </div>
+              <!-- The legal bit: never ticked for them. The words are the footer form's, word for word. -->
+              <div class="field nl-consent">
+                <label class="give-check" for="nlConsent">
+                  <input class="give-check-box" id="nlConsent" name="consent" type="checkbox" required aria-required="true" aria-describedby="nlConsent-error" />
+                  <span class="give-check-text">Yes, I'd like to hear from NBCC by email. We'll never share your details, and every email has an unsubscribe link.</span>
+                </label>
+                <span class="err" id="nlConsent-error" hidden>Please tick the box to confirm you'd like to hear from us.</span>
+              </div>
+              <noscript><p class="form-privacy">This form needs JavaScript switched on. You can email us at <a href="mailto:info@nbcc.scot">info@nbcc.scot</a> and ask to join instead.</p></noscript>
+              <button class="btn btn-holly" type="submit" id="nlSubmit">Join our mailing list</button>
+              <p class="form-privacy">We handle your details as set out in our <a href="/privacy">Privacy notice</a>.</p>
               <p class="form-status" id="nlStatus" role="status" aria-live="polite"></p>
             </form>
             <div class="card card-lg nl-panel" id="nlDone" tabindex="-1" hidden>
-              <h2>Check your email</h2>
-              <p>We have sent you an email with a button to press. You will be on our mailing list as soon as you press it.</p>
-              <p>No email in a few minutes? Please look in your junk folder. The link works for 7 days.</p>
+              <h2>You're signed up</h2>
+              <p>Thank you. Look out for us in your inbox.</p>
+              <p>You can unsubscribe at any time, using the link at the bottom of any email we send you.</p>
             </div>
             <div class="nl-who">
               <h2>Who we are</h2>
               <p>NBCC is a volunteer led charity here all year for children, young people and vulnerable adults across South West Scotland, with school clothing and crisis support whenever it is needed, and every December a full bag for those who would otherwise wake up on Christmas morning with nothing to open.</p>
-              <p><a href="/about-us">More about us</a></p>
+              <a href="/about-us">More about us</a>
             </div>
-            <!-- /newsletter:page -->
             <!-- This page IS the sign up, so the short "Keep in touch" form that main.js adds to
                  every other page's footer is not added here: it looks for this id first. -->
             <div id="footSignup" hidden></div>

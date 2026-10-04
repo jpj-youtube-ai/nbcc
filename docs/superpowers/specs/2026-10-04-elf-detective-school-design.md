@@ -11,7 +11,7 @@ the website tells them what to post and when.
 
 ## The game in one paragraph
 
-24 cheeky elves have escaped from the Elves Workshop in Annbank. A grown-up enrols each detective at
+24 cheeky elves have escaped from the Elves' Workshop in Annbank. A grown-up enrols each detective at
 NBCC Elf Detective School. Each day from 1 to 24 December one elf hides in a local business. A clue
 comes out, families lock in a guess, and the first detective to reach the business and read the
 secret word on the elf wins it. Everyone else can still visit to collect a stamp. Doors add up to

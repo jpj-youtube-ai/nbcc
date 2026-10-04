@@ -22,12 +22,15 @@ and gives the total. Nothing is bought item by item: the items are examples of w
 
 ## The page
 
-Address: `/fill-a-red-bag`. Name: "Fill a Red Bag". Two short addresses, `/fill` and `/fill-a-bag`
-(4 October 2026), forward to it for good (301), keeping any query string, in any case and with or
-without a trailing slash, and only exactly (`/fill` takes nothing else that begins "fill"). They are
-fixed in code like `/getinvolved` and `/involved`, not rows in the spare address table; both are
-reserved so a spare address cannot take them; they are on no site map and linked from nowhere. They
-follow the switch: switched off they are the site's ordinary 404, like the page.
+Address: `/fill` (Jaimie, 4 October 2026). Name: "Fill a Red Bag". The thank you is a page of its
+own under it, `/fill/thank-you`. The address the page first had, `/fill-a-red-bag`, and the other
+way people type it, `/fill-a-bag`, forward to `/fill` for good (301), keeping any query string, in
+any case and with or without a trailing slash, and only exactly; an old return from paying
+(`/fill-a-red-bag?thanks=1&session_id=...`) goes to `/fill/thank-you` instead, so that donor still
+lands on a thank you. `/fill` is exact too: it takes nothing else that begins "fill". The forwards
+are fixed in code like `/getinvolved` and `/involved`, not rows in the spare address table; all
+three addresses are reserved so a spare address cannot take them. Everything follows the switch:
+switched off, all of them are the site's ordinary 404 to the public.
 
 Layout as the signed-off chat mock-up:
 
@@ -55,7 +58,9 @@ Layout as the signed-off chat mock-up:
    into view). The strip spans the screen, but what is in it stays within the page's width, in
    line with the page; on a computer the total sits beside its button at the right, under the
    bag's column. While it shows the page is longer by its height, so it never covers the end of
-   the page. Not a live region.
+   the page. A keyboard tabbing down the list never has the control it is on brought to rest under
+   the bar (the stylesheet's scroll padding), and pressing the bar's Donate under £2 hands the
+   focus to the real Donate button. Not a live region.
 4. "Whenever the need comes", introduced word for word: "Christmas is our big night, and the need
    comes all year round. Tap an example to add it to your bag, and tap it again to take it out."
    Three themes, three examples each. Tapping an example adds it to the
@@ -74,10 +79,20 @@ Layout as the signed-off chat mock-up:
    beside it: switched off, the note shows the phone number the site already prints and no link.
 6. After Donate: a short "your details" step, the same asks as the fundraiser page give form (name,
    email, Gift Aid declaration, cover the card fee for one-off gifts, email consent). Then Stripe.
-7. Back from Stripe: "Thank you for filling a Red Bag" with the total, a Gift Aid line when they
-   added Gift Aid, the reassurance line (the elves line), then word for word "Your receipt is on
-   its way to your inbox. Thank you for being part of this.", and a "Share: I filled a Red Bag"
-   picture with no amount.
+7. Back from Stripe: the thank you, which is a PAGE OF ITS OWN at `/fill/thank-you` (Jaimie, 4
+   October 2026: "surely there should be a thank you page"). The site's header and footer; the
+   eyebrow "Thank you"; the page's one big heading IS "Thank you for filling a Red Bag", and the
+   focus lands on it. Nothing of the giving page: no list, no bag panel, no themes, no "A new way
+   to give", no bottom bar. Then, in this order, in a calm centred column (a moment, not a card):
+   the tied red bag; "Your donation of £54.10 is on its way to NBCC." (monthly: "£31 every
+   month"); the Gift Aid line when they added Gift Aid; the elves line word for word; word for
+   word "Your receipt is on its way to your inbox. Thank you for being part of this."; "Share: I
+   filled a Red Bag", a picture with no amount and the share controls, all pointing at
+   https://nbcc.scot/fill; and a "Fill another bag" button back to `/fill`, quieter than the share.
+   The total and the Gift Aid figure come across in the browser tab's memory, for show only;
+   missing or odd, or opened without paying, it is the plain "Your donation is on its way to
+   NBCC." The same rules as the giving page (the switch, the staff preview), except that it is
+   never indexed, on no site map and linked from nowhere but Stripe's return.
    No itemised list anywhere (it would read as a shopping receipt).
 
 ### The bags
@@ -108,14 +123,20 @@ Remove. It is simply extra money: it is never described as buying anything.
 
 The round-up keeps its TARGET, not an amount. If the donor adds items or examples the extra shrinks
 so the total stays at the target; if they take things out it grows back. When their own items reach
-or pass the target the line goes and the button offers the next step; if they then take that item
-out again the line comes back (a plus followed by a minus leaves the bag as it was). After rounding
+or pass the target the line goes, the button offers the next step, and the target is FORGOTTEN
+(Jaimie: "if their items pass £25 on their own, the top-up disappears and the button offers the
+next step"): taking things out afterwards does not bring the old round-up back. After rounding
 up, the button offers the step after it, and pressing that REPLACES the round-up: two are never
 stacked. Remove clears it for good.
 
 A round-up never stands alone (4 October 2026). When the donor's own choices (list items plus
 tapped examples) come to £0 the round-up is cleared and the total is £0; it does not come back when
 something goes in again, and the button is not offered on an empty bag.
+
+Both lettings go (emptied, and passed) happen on a FINISHED change only: a plus or minus, an arrow
+key, a number box left, an example, Remove. While a number is still being typed the sums follow
+what is in the box, but the target is kept, so emptying a box on the way to a new number, or a
+number half typed, does not throw the round-up away. Leaving the box empty clears it.
 
 The bags, the status line, the Donate button, the phone bar and the amount sent to the checkout
 all follow the total including the round-up. The sums are whole pence, pure functions in the one
@@ -154,19 +175,27 @@ Three, in this order. A fourth, "Red Bags Full of Joy" (£10, £25, £50), was t
   a hard moment; £75 could help a young person take their first step into their own business; £150
   could help towards a bed or cooker for someone moving into a home with nothing.
 
-## Switched off until Jaimie says
+## The switch, and what search engines see
 
-**4 October 2026: made public but unlinked, at Jaimie's request** ("make it public but don't link
-anywhere to it right now"). The constant is now ON: anyone with the address gets the page and can
-give. It is still linked from nowhere (not /donate, not the menu or footer), on no site map, and
-`noindex`. What is left for when Jaimie says: add the /donate link, then list the page and take the
-`noindex` out. Setting the constant back to off takes it down again exactly as described below.
+One constant in code, `RED_BAG_LIVE`. It is ON (4 October 2026: "make it public but don't link
+anywhere to it right now").
 
-As first shipped: one constant in code (default off). While off: the public gets the site's normal 404; a signed-in
-member of staff sees the page with a plain "Staff preview: not public yet" strip. Not linked from
-/donate or the menu, not in the sitemap, `noindex`. The checkout refuses a Red Bag gift from the
-public while off. Going live later is one small change: flip the constant, add the /donate link,
-list the page.
+Search engines may list the giving page from the day it is live (Jaimie, 4 October 2026: "once it's
+pushed and live I don't mind if Google crawls it"). So `/fill` is in the site's page list (on the
+site map page and in `sitemap.xml`, with staff's usual per page search visibility choice), carries
+no `noindex`, and has what the site's other listed pages have: a title ("Fill a Red Bag | Night
+Before Christmas Campaign"), a description ("Fill a Red Bag with examples of what your donation
+could do for children, young people and vulnerable adults, all year round."), a canonical link to
+https://nbcc.scot/fill, and the share card with the site's one share picture. The thank you page is
+never indexed and on no site map. The forwards stay 301s.
+
+It is still LINKED from nowhere: not /donate, not the menu, not the footer, not any page. What is
+left for when Jaimie says: add the link from /donate and the menu. Nothing else.
+
+Setting the constant back to off takes it down again: the public gets the site's normal 404 at
+every one of its addresses, the page leaves the site map, a signed-in member of staff sees either
+page with a plain "Staff preview: not public yet" strip (never indexed), and the checkout refuses a
+Red Bag gift from the public.
 
 ## What half 1 must NOT touch (other sessions are working there)
 
@@ -183,8 +212,9 @@ list the page.
 
 - only then: amount at least 200 pence; never together with `fundraiserId`;
 - the session's metadata gains `redBag: "true"` (a /donate session gains no keys at all);
-- the return addresses are worked out by the server (back to `/fill-a-red-bag` with a thank-you
-  flag and the session id; cancel returns to the page), never taken from the browser;
+- the return addresses are worked out by the server (success, and the embedded checkout's return,
+  to `/fill/thank-you` with the session id; cancel returns to `/fill`), never taken from the
+  browser;
 - while switched off, accepted only from a signed-in member of staff.
 
 The webhook records the gift exactly as a normal donation and sends the normal receipt. Half 2 adds

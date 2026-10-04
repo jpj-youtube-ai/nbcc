@@ -1,13 +1,14 @@
 @fill-a-red-bag
-Feature: Fill a Red Bag, public but linked from nowhere
-  /fill-a-red-bag is a new way to give: fill a list of example items, watch a red bag fill, and give
-  the total. It is public (one constant, src/red-bag/switch.ts), but for now nothing links to it,
-  it is on no site map and it tells search engines to leave it alone: people reach it only if they
-  are given the address. The checkout takes a Red Bag gift from anyone. A Red Bag gift is never
-  less than £2, and is never also a gift on a fundraising page.
+Feature: Fill a Red Bag, listed for search engines but linked from nowhere
+  /fill is a new way to give: fill a list of example items, watch a red bag fill, and give the
+  total. It is public (one constant, src/red-bag/switch.ts) and search engines may list it, so it is
+  on the site map; but nothing on the site links to it yet. Its thank you is a page of its own,
+  /fill/thank-you, which is never indexed. The address it first had, /fill-a-red-bag, and
+  /fill-a-bag forward to /fill. The checkout takes a Red Bag gift from anyone. A Red Bag gift is
+  never less than £2, and is never also a gift on a fundraising page.
 
-  Scenario: the page is there for anyone who has the address
-    When I request the site path "/fill-a-red-bag"
+  Scenario: the page is there for anyone, at /fill
+    When I request the site path "/fill"
     Then the site response status should be 200
     And the site response should contain "Fill a Red Bag"
     And the site response should contain "Pop these in the bag"
@@ -19,37 +20,55 @@ Feature: Fill a Red Bag, public but linked from nowhere
     And the site response should not contain "We cannot find that page"
     And the site response should not contain "red-bag-preview.js"
 
-  Scenario: it tells search engines to leave it alone while it is unlisted
-    When I request the site path "/fill-a-red-bag"
+  Scenario: search engines may list it
+    When I request the site path "/fill"
     Then the site response status should be 200
+    And the site response should not contain "noindex"
+    And the site response should contain "https://nbcc.scot/fill"
+
+  Scenario: the thank you is a page of its own, and is never indexed
+    When I request the site path "/fill/thank-you"
+    Then the site response status should be 200
+    And the site response should contain "Thank you for filling a Red Bag"
+    And the site response should contain "Fill another bag"
     And the site response noindex header should be set
     And the site response should contain "noindex, nofollow"
+    And the site response should not contain "Pop these in the bag"
 
-  Scenario: the short address /fill forwards to the page for good
-    When I request the site path "/fill"
-    Then the site response should redirect permanently to "/fill-a-red-bag"
+  Scenario: the address it first had forwards to /fill for good
+    When I request the site path "/fill-a-red-bag"
+    Then the site response should redirect permanently to "/fill"
 
-  Scenario: the short address /fill-a-bag forwards to the page for good
+  Scenario: the other way people type it forwards to /fill for good
     When I request the site path "/fill-a-bag"
-    Then the site response should redirect permanently to "/fill-a-red-bag"
+    Then the site response should redirect permanently to "/fill"
 
-  Scenario: the short addresses keep the query string
-    When I request the site path "/fill?utm_source=bdd&utm_medium=poster"
-    Then the site response should redirect permanently to "/fill-a-red-bag?utm_source=bdd&utm_medium=poster"
+  Scenario: the forwarding addresses keep the query string
+    When I request the site path "/fill-a-red-bag?utm_source=bdd&utm_medium=poster"
+    Then the site response should redirect permanently to "/fill?utm_source=bdd&utm_medium=poster"
     When I request the site path "/fill-a-bag?utm_source=bdd"
-    Then the site response should redirect permanently to "/fill-a-red-bag?utm_source=bdd"
+    Then the site response should redirect permanently to "/fill?utm_source=bdd"
 
-  Scenario: the page's own file is not served
+  Scenario: an old return from paying still lands on a thank you
+    When I request the site path "/fill-a-red-bag?thanks=1&session_id=cs_test_bdd"
+    Then the site response should redirect permanently to "/fill/thank-you?thanks=1&session_id=cs_test_bdd"
+
+  Scenario: the pages' own files are not served
     When I request the site path "/fill-a-red-bag.html"
     Then the site response status should be 404
+    When I request the site path "/fill-thank-you.html"
+    Then the site response status should be 404
 
-  Scenario: it is on no site map
+  Scenario: it is on the site map, and its thank you is not
     When I request the site path "/sitemap.xml"
     Then the site response status should be 200
+    And the site response should contain "https://nbcc.scot/fill</loc>"
+    And the site response should not contain "fill/thank-you"
     And the site response should not contain "fill-a-red-bag"
     When I request the site path "/sitemap"
     Then the site response status should be 200
-    And the site response should not contain "fill-a-red-bag"
+    And the site response should contain "Fill a Red Bag"
+    And the site response should not contain "fill/thank-you"
 
   Scenario: the donate page does not link to it yet
     When I request the site path "/donate"

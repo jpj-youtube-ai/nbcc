@@ -1,6 +1,6 @@
 import { escapeHtml } from "../events/render";
 import { SINGLE_DONATION_WORDING } from "../declarations/wording";
-import { MATERIALS_STATEMENT, POSTAL_ADDRESS_LINES } from "../legal/registration";
+import { MATERIALS_STATEMENT, POSTAL_ADDRESS } from "../legal/registration";
 import { hasPage, splitStatement, type FundraiserRecord } from "./model";
 import { CHARITY_NAME, shell, type MaterialAssets } from "./materials";
 import { qrSvg } from "./qr";
@@ -33,12 +33,10 @@ export const ENVELOPE_CHANGES =
 
 // Review fix: how the envelopes come back. The giver seals theirs and hands it back; whoever is
 // collecting posts them to us unopened (or hands them in), so each declaration stays with its money
-// and we can claim the Gift Aid. Our address is the registered one, written with the apostrophe the
-// printed pieces use ("The Elves' Workshop").
+// and we can claim the Gift Aid. Our address is the registered one.
 export const ENVELOPE_RETURN =
   "Please seal your envelope and hand it back to the person collecting. All envelopes are posted to NBCC unopened, so we can claim Gift Aid.";
-const POST_TO = ["The Elves' Workshop", ...POSTAL_ADDRESS_LINES.slice(1)].join(", ");
-export const ENVELOPE_POST_BACK = `Please post the sealed envelopes to us unopened at ${POST_TO} (or hand them in), rather than paying the cash in online, so we can claim Gift Aid on them.`;
+export const ENVELOPE_POST_BACK = `Please post the sealed envelopes to us unopened at ${POSTAL_ADDRESS} (or hand them in), rather than paying the cash in online, so we can claim Gift Aid on them.`;
 /** By the declaration: Gift Aid is only for a giver's own money. */
 export const ENVELOPE_OWN_MONEY = "This gift is my own money. It is not from a collection, a company or a group.";
 

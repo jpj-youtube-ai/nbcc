@@ -405,7 +405,7 @@ matters"), an emotive `<h2>` ("Every pound reminds someone they have not been
 forgotten."), the `.rule` divider under it, two leaflet paragraphs, and a
 **Support NBCC** `.btn-primary` linking to `/donate`. The photo column is a
 `.photo-slot` `<figure>` holding the real consented photo
-(`assets/img/home-red-bags-handover.jpg`, NBCC volunteers at the Elves Workshop,
+(`assets/img/home-red-bags-handover.jpg`, NBCC volunteers at the Elves' Workshop,
 `loading="lazy"` with descriptive alt text; provenance in `assets/img/CREDITS.md`).
 `.photo-slot` drops the placeholder chrome and cover-fits the image to the 4:5 slot.
 Token-only colours, reusing `.btn`/`.rule`/`.reveal`/`.card` tokens. Verified by
@@ -11442,13 +11442,20 @@ it, because the two places need different answers:
 
 **Registered postal address everywhere (TASK-293).** Microsoft and the other large filters look for a
 real postal address in bulk email; its absence is a small but real spam signal, and every legitimate
-charity newsletter carries one. **The Elves Workshop, Annbank Village Hall, Weston Avenue, Annbank,
+charity newsletter carries one. **The Elves' Workshop, Annbank Village Hall, Weston Avenue, Annbank,
 KA6 5EE** now appears in the site footer on all 11 pages, in the newsletter frame (so the live
 preview and every send carry it), in the thank-you letter, and in the donation receipt and
 confirmation emails.
 
 - **One source of truth.** It lives in `src/legal/registration.ts` beside the charity number, so the
   footer, the newsletter and the letters cannot drift apart.
+- **The building is written one way: The Elves' Workshop.** Plural, apostrophe after the s, and a
+  straight apostrophe (not a curly one, not an HTML entity), because `contact-address.test.ts` holds
+  `contact.html` to the constant letter for letter. In the middle of a sentence it is "the Elves'
+  Workshop". The thank-you letterhead, the sponsor form, the envelopes, the welcome pack and the
+  disclosure all read the address from `src/legal/registration.ts` now, where some used to keep
+  their own copy with a different spelling. `test/unit/elves-workshop-name.test.ts` reads every
+  top-level page and everything under `src/` and fails on any other spelling.
 - **`FOOTER_TEXT` / `FOOTER_HTML` are new, and `REGISTRATION_TEXT` / `REGISTRATION_HTML` are
   unchanged.** The footer block is registration *plus* address; the registration constants keep
   meaning the mandated statement alone. A constant called `REGISTRATION_TEXT` that quietly contained

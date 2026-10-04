@@ -1,5 +1,6 @@
 import { OUTCOME_LABELS } from "./outcomes";
 import { DETAILS_SOURCES } from "./invitation-email";
+import { POSTAL_ADDRESS } from "../legal/registration";
 
 // TASK-412: everything we hold about one business, written out so a person can read it.
 //
@@ -101,7 +102,7 @@ export function buildDisclosure(
     "",
     "Night Before Christmas Campaign is a Scottish Charitable Incorporated Organisation,",
     "charity number SC047995, regulated by the Scottish Charity Regulator, OSCR.",
-    "The Elves Workshop, Annbank Village Hall, Weston Avenue, Annbank, KA6 5EE.",
+    `${POSTAL_ADDRESS}.`,
     "",
     "YOUR DETAILS",
     ...held.map((l) => `  ${l}`),

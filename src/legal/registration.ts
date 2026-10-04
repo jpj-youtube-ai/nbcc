@@ -17,7 +17,7 @@ export const OSCR_REGISTER_URL =
 // newsletter carries one. Declared here with the rest of the registration details so the site
 // footer, the newsletter frame and the thank-you letter cannot drift apart.
 export const POSTAL_ADDRESS_LINES: readonly string[] = [
-  "The Elves Workshop",
+  "The Elves' Workshop",
   "Annbank Village Hall",
   "Weston Avenue",
   "Annbank",
@@ -54,10 +54,8 @@ export const FOOTER_HTML = `<p class="charity-registration">${REGISTRATION_LINES
 // certificate). Section 52 of the Charities and Trustee Investment (Scotland) Act 2005 and OSCR's
 // guidance for a SCIO ask for the name, "Scottish Charitable Incorporated Organisation" in full and
 // the charity number on adverts, notices, campaign and fundraising documents. Word for word as Jaimie
-// gave it, the registered address included; pinned in test/unit/materials-statement.test.ts. (The
-// address keeps the apostrophe Jaimie wrote, "Elves' Workshop"; the site footer's lines above do not
-// have it.)
-export const MATERIALS_STATEMENT = `${REGISTRATION_LINES[0]} ${REGISTRATION_LINES[1]} The Elves' Workshop, Annbank Village Hall, Weston Avenue, Annbank, KA6 5EE`;
+// gave it, the registered address included; pinned in test/unit/materials-statement.test.ts.
+export const MATERIALS_STATEMENT = `${REGISTRATION_LINES[0]} ${REGISTRATION_LINES[1]} ${POSTAL_ADDRESS}`;
 
 // TASK-512: the shorter line for the social media pictures, where the whole statement would be too
 // small to read. It still has all three parts the law asks for: the name, the legal form in full,

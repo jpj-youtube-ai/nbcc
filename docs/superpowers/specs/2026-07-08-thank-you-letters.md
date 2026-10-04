@@ -38,7 +38,7 @@ of every letter sent. Works for monetary gifts and gifts in kind.
 ## Letter design (locked)
 
 Branded A4, tokens/fonts only from `styles.css`. Deep-maroon frame, cream sheet;
-Elves Workshop letterhead (no recipient postal address — often unknown); large
+The Elves' Workshop letterhead (no recipient postal address — often unknown); large
 `nbcc-logo.png` top-right with "HERE ALL YEAR" set beneath in the site font; crimson
 Playfair title; slate Poppins body; tan/crimson gift callout (+ holly Gift-Aid
 uplift note); italic personal message; **full-name script signature** + typed role;

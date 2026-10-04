@@ -93,7 +93,7 @@ describe("review: posting the envelopes back", () => {
   it("tells them to post the sealed envelopes to us unopened", async () => {
     await load(fundraiser());
     const item = card(9).querySelector<HTMLElement>('[data-f-mat="envelopes"]')!;
-    expect(item.textContent).toContain("Please post the sealed envelopes to us unopened at The Elves’ Workshop");
+    expect(item.textContent).toContain("Please post the sealed envelopes to us unopened at The Elves' Workshop");
   });
 });
 

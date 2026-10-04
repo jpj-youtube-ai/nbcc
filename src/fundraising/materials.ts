@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { dateParts, escapeHtml, time12 } from "../events/render";
-import { MATERIALS_STATEMENT, MATERIALS_STATEMENT_SHORT } from "../legal/registration";
+import { MATERIALS_STATEMENT, MATERIALS_STATEMENT_SHORT, POSTAL_ADDRESS } from "../legal/registration";
 import { ALL_TO_NBCC, hasPage, splitStatement, type FundraiserRecord, type FundraiserStatus, type Meter } from "./model";
 import { TRACKED_PIECES, trackedPath, type TrackedPiece } from "./material-codes";
 import { qrSvg } from "./qr";
@@ -858,7 +858,7 @@ function sponsorPages(d: MaterialFacts | null, a: MaterialAssets): string {
     </div>`;
   const foot = (page: number) => `<div class="sf-foot">
       <div><div class="back">${SEND_IT_BACK}</div>
-      <div class="how">${payIn} from your private area at nbcc.scot/fundraise/manage, then post this form to Elves Workshop, Annbank Village Hall, Weston Avenue, Annbank, KA6 5EE, or email a clear photo of it to events@nbcc.scot. ${EVERY_POUND}</div></div>
+      <div class="how">${payIn} from your private area at nbcc.scot/fundraise/manage, then post this form to ${POSTAL_ADDRESS}, or email a clear photo of it to events@nbcc.scot. ${EVERY_POUND}</div></div>
       <div class="pg">Page ${page} of 2</div>
     </div>
     <div class="sf-legal">${escapeHtml(MATERIALS_STATEMENT)}</div>`;

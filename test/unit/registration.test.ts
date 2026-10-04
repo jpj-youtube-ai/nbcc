@@ -51,7 +51,7 @@ describe("charity registration (TASK-126)", () => {
 describe("email footer block (TASK-293)", () => {
   it("carries the registration statement AND the postal address", () => {
     expect(FOOTER_TEXT).toContain("Scottish Charity Number SC047995");
-    expect(FOOTER_TEXT).toContain("The Elves Workshop");
+    expect(FOOTER_TEXT).toContain("The Elves' Workshop");
     expect(FOOTER_TEXT).toContain("KA6 5EE");
   });
 

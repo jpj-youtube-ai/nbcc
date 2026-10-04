@@ -36,7 +36,7 @@ export interface ReminderDetails {
    * (daysToBall in ./run-up.ts). 7, or not given, is the email exactly as it always was: "A week to
    * go". Any other number says so truthfully (the charity, 2026-10-04): "4 days to go" and "In 4 days
    * you'll be with us", "Tomorrow" the day before, and "Today" on the day itself (only the staff button
-   * can send it then; after the Ball the button refuses, so a number below 0 never reaches here).
+   * can send it then). After the Ball the button refuses; a number below 0, or not a number, throws.
    */
   daysToGo?: number;
 }
@@ -44,9 +44,12 @@ export interface ReminderDetails {
 /** The three places the email says how long there is to go. A week is the wording it always had. */
 function timeToGo(daysToGo: number | undefined): { label: string; shout: string; lead: string } {
   const n = daysToGo === undefined ? 7 : Math.round(daysToGo);
+  // After the Ball, or not a number at all: there is nothing true to say, so nothing is built (and
+  // so nothing false can be sent). The button refuses before it gets here; the daily run never asks.
+  if (!Number.isFinite(n) || n < 0) throw new Error(`The Ball reminder cannot be built for ${String(daysToGo)} days to go.`);
   if (n === 1) return { label: "Tomorrow", shout: "TOMORROW", lead: "Tomorrow" };
   if (n === 0) return { label: "Today", shout: "TODAY", lead: "Today" };
-  if (n === 7 || n < 0) return { label: "A week to go", shout: "A WEEK TO GO", lead: "A week on Saturday" };
+  if (n === 7) return { label: "A week to go", shout: "A WEEK TO GO", lead: "A week on Saturday" };
   return { label: `${n} days to go`, shout: `${n} DAYS TO GO`, lead: `In ${n} days` };
 }
 

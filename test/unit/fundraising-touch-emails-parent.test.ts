@@ -142,11 +142,28 @@ describe("an automatic email about a page for someone under 18", () => {
     expect(jack("year_on", { raisedPence: 0 }).text).toContain("...Jack did Jack's walk for NBCC. We still smile thinking about it!");
   });
 
-  it("escapes the child's name wherever it goes in the HTML", () => {
-    for (const kind of TOUCH_KINDS) {
-      const m = buildTouchEmail(kind, data({ name: "<b>Jack</b> Example", firstName: "<b>Jack</b>" }));
-      expect(m.html).not.toContain("<b>Jack</b>");
+  // Review, 2026-10-04: only a safe first name (one word of letters) ever goes in a subject or a
+  // heading. Anything else is "your child", so a strange name can never carry a link or other words.
+  it("says your child when the child's name is not a plain first name", () => {
+    for (const odd of [{ name: "<b>Jack</b> Example", firstName: "<b>Jack</b>" }, { name: "J4ck Example", firstName: "J4ck" }, { name: "http://bad.example now", firstName: "http://bad.example" }]) {
+      for (const kind of TOUCH_KINDS) {
+        const m = buildTouchEmail(kind, data(odd));
+        expect(m.subject + m.html + m.text).not.toMatch(/<b>Jack<\/b>|J4ck is|J4ck's|J4ck has|J4ck did|bad\.example/i);
+        expect(m.text.split("\n")[0]).toBe("Hi Sarah, this is about your child's page.");
+      }
     }
+    const m = buildTouchEmail("on_track", data({ name: "J4ck Example", firstName: "J4ck" }));
+    expect(heading(m.html)).toBe("Your child is doing great!");
+    // The subject drops the name, as it does for anyone with no first name to use.
+    expect(m.subject).toBe("You're doing great!");
+    expect(m.text).toContain("and we just had to say: your child is right on track for the £500 target!");
+    expect(m.text).toContain("Share your child's page again");
+    expect(heading(buildTouchEmail("halfway", data({ firstName: "J4ck" })).html)).toBe("Your child is halfway there!");
+    expect(buildTouchEmail("finished", data({ firstName: "J4ck" })).text).toContain("Your child has made a real difference");
+  });
+
+  it("writes the name as the page shows it, whatever capitals were typed", () => {
+    expect(buildTouchEmail("on_track", data({ name: "JACK example", firstName: "JACK" })).subject).toBe("Jack is doing great!");
   });
 });
 

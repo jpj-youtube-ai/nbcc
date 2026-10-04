@@ -3102,7 +3102,20 @@ of the Ball it says "Today" ("Today you'll be with us at The Park Hotel"), never
 pressed AFTER the Ball it is refused (409, "The Ball has been and gone, so the reminder was not
 sent.") and sends nothing. The automatic run still never sends on the day or after. Nobody gets it
 twice: both ways of sending write and check the one `reminder_sent_at` stamp. All emails shows each
-of these as a version of "A week to go".
+of these as a version of "A week to go". A number of days that cannot be said truthfully (below 0,
+or not a number) makes the builder throw, so nothing false can be sent.
+
+**Everything due on the same morning goes** (`stagesFor` in `src/ball/run-up.ts`). The pass used to
+send one email per booking per morning, the reminder first. That was safe while the reminder only
+went in the last three days; from a week before, it could swallow the last call for guest details,
+which is only due for the day after the guest list closes (one morning's run). Now a booking gets
+its guest list email (the last call, or the nudge) first and then the reminder, on the same morning
+when both are due, each with its own stamp, so neither goes twice and a failure of one neither
+stops nor stamps the other. On a morning when only one is due nothing changed.
+`test/unit/ball-run-up-both-stages.test.ts` simulates every morning from 20 October to 8 November
+for nine closing dates and nine kinds of booking against origin/main's rule: every booking gets at
+least everything it got before, and nothing twice (`SHOW_RUN_UP_TABLE=1` prints the table). The
+"Email everyone outstanding" button runs the same pass, so it too sends both when both are due.
 
 It carries the practical details **and reads back what the booker told us** — guest names,
 allergies, access needs. That is the point of it: a coeliac note that never saved is caught a week
@@ -9028,7 +9041,9 @@ for by `postManageRequest` when any of their pages is in memory); everyone else'
 
 **A page for someone under 18**: the automatic emails go to the parent or guardian, and
 `buildTouchEmail` now writes them for the parent throughout ("Jack's page", "Jack has raised",
-"Jack is doing great!"; "the page for James" for a name ending in s). It builds the greeting itself
+"Jack is doing great!"; "the page for James" for a name ending in s, which `greetGuardian` now
+says in the other under-18 emails too). The child's name is only ever a safe first name (one word of
+letters, as their page shows it); anything else reads "your child", and the subject drops the name. It builds the greeting itself
 ("Hi Sarah, this is about Jack's page."). `touchEmailAsSent` is still the ONE function the daily
 run, Mark finished, the admin preview and All emails call; it no longer adds the greeting itself
 (the builder has written it), so it can never be put on twice. An adult's emails are byte for byte
@@ -9044,7 +9059,10 @@ sign off" number until approved). `GET /api/admin/fundraising/touch` also lists 
 `GET .../touch/preview/team_joined` is always the invented example; `POST` and `DELETE
 .../touch/approvals/team_joined` approve and withdraw, admins only, in History as the other
 wordings are). It is an automatic email, so it also waits for the Automatic emails switch and for
-fundraising to be on. While it is held nothing is sent and nothing is logged, and it is not sent
+fundraising to be on. It goes on a page's FIRST approval only: a page approved, declined and
+approved again does not tell the team organiser twice (a page keeps its approved date through a
+decline, which is how the route tells; a page waiting for fundraising to be switched on counts as a
+first approval). While it is held nothing is sent and nothing is logged, and it is not sent
 later. Never to the team organiser about their own page, never for a page in memory of someone,
 never to an address that asked us to stop. A member under 18 is named by the child's first name as
 their page shows it; the parent's name and email are never in it. No migration: the approvals

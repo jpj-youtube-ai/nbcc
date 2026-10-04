@@ -1186,7 +1186,7 @@ const STAFF: CatalogueEmail[] = [
   ]),
   staff("staff-team-joined", "New team member", "when someone joins a team.", "fundraiseTeamJoinStaff", [
     v("usual", USUAL, joinNotice(20000, "No, all of it comes to NBCC")),
-    v("sharing", "No target, and sharing with another cause as the whole team does", joinNotice(null, "60% to NBCC, the rest to Example Hospice (the whole team’s split)")),
+    v("sharing", "No target, and sharing with another cause as the whole team does", joinNotice(null, "60% to NBCC, the rest to Example Hospice (the whole team's split)")),
   ]),
   staff("staff-team-removed", "Someone was taken off a team", "when a team organiser removes a member.", "fundraiseTeamMemberRemoved", [
     v("usual", USUAL, (b) => buildMemberRemovedStaffEmail({ memberName: "Alex Example", teamTitle: TEAM_TITLE, organiserName: SAM.name }, admin(b))),

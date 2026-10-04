@@ -103,6 +103,27 @@ describe("the staff notices", () => {
   });
 });
 
+// The one style: straight apostrophes in every email of this pass. The Festive Ball's emails and the
+// two donation receipts are not part of it (held until after the Ball; receipts are donations').
+describe("every non-Ball email, in every version", () => {
+  const inScope = CATALOGUE.filter((e) => e.group !== "ball" && !e.logKinds.some((k) => k === "donation" || k.startsWith("ball")));
+
+  it("covers the fundraising, team, in memory, pledge, ticket and staff emails", () => {
+    expect(inScope.length).toBeGreaterThan(50);
+  });
+
+  it("has no curly apostrophe, in the subject or the body", () => {
+    const curly: string[] = [];
+    for (const e of inScope) {
+      for (const v of e.versions) {
+        const mail = v.render(BASE);
+        if (/[\u2018\u2019]/.test(mail.subject + mail.html)) curly.push(`${e.id}/${v.id}`);
+      }
+    }
+    expect(curly).toEqual([]);
+  });
+});
+
 describe("the Ball reminder", () => {
   it("has a version for each thing it can say about the time to go", () => {
     expect(version("ball-week-to-go", "usual").mail.subject).toMatch(/^A week to go: /);

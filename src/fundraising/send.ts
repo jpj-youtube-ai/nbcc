@@ -118,7 +118,7 @@ async function sendSignUpThanks(f: FundraiserRecord): Promise<void> {
  * while fundraising is off is marked as waiting instead (moveFundraiser), and sendWaitingLiveEmails
  * sends theirs at the switch. True when the email went.
  */
-export async function sendApprovedEmail(f: FundraiserRecord): Promise<boolean> {
+export async function sendApprovedEmail(f: FundraiserRecord, o: { reapproved?: boolean } = {}): Promise<boolean> {
   // In memory: email 19, the gentle one, and only with a page to link to; otherwise staff write.
   if (isInMemory(f)) return sendInMemoryApprovedEmail(f);
   // Team pages: a team's own "your team page is live" (always with the join link), after inviting
@@ -144,7 +144,9 @@ export async function sendApprovedEmail(f: FundraiserRecord): Promise<boolean> {
   // ("[First name] has joined [team name]"). Only once the member's own email has gone, so a member
   // tried again at the next switch on is never announced twice. Held until its wording is approved;
   // every guard is sendTeamMemberJoined's own. Best effort: it never changes what is returned.
-  if (f.teamId) {
+  // `reapproved`: the page had been approved before (then declined, and now approved again), so the
+  // team organiser was told the first time and is not told again.
+  if (f.teamId && o.reapproved !== true) {
     try {
       const { sendTeamMemberJoined } = await import("./team-send");
       await sendTeamMemberJoined(f);

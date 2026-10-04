@@ -85,19 +85,13 @@ export function outstanding(booking: RunUpBooking): boolean {
   return booking.guestsNamed < booking.seats;
 }
 
-// What this booking is due RIGHT NOW, or null.
+// The guest list email this booking is due RIGHT NOW (the nudge or the last call), or null.
 //
-// One stage per pass, most urgent first. A booking that has crossed both the chase point and the
-// lock date gets the final call and never the chase it missed: sending the softer "a fortnight to
-// go" email after the deadline has passed would be worse than sending nothing.
-export function stageFor(booking: RunUpBooking, window: RunUpWindow): RunUpStage | null {
-  if (!booking.buyerEmail) return null;
+// A booking that has crossed both the chase point and the lock date gets the final call and never
+// the chase it missed: sending the softer "a fortnight to go" email after the deadline has passed
+// would be worse than sending nothing.
+function guestStageFor(booking: RunUpBooking, window: RunUpWindow): "chase" | "final-call" | null {
   const now = window.now.getTime();
-
-  // The practical email goes to EVERYONE, a week out (or the morning after a later booking), whether
-  // or not they ever sent guest details. It is the one that says where to go and when, so it is not conditional
-  // on them having done their bit.
-  if (practicalDue(booking, window)) return "practical";
 
   // A chase whose whole point is a link, with no link in it, is worse than silence.
   if (!booking.guestToken) return null;
@@ -121,6 +115,32 @@ export function stageFor(booking: RunUpBooking, window: RunUpWindow): RunUpStage
   return null;
 }
 
+/**
+ * EVERYTHING this booking is due right now, in the order to send it: its guest list email (the nudge
+ * or the last call) first, then the practical reminder.
+ *
+ * It used to be one email per booking per pass, the reminder first. That was safe while the reminder
+ * only went in the last three days. Now it is due from a week before, and the last call is only due
+ * for the day after the guest list closes (one morning's run): a booking due both on the same
+ * morning got the reminder and never the last call. So both go that morning. Each has its own stamp,
+ * written only after its own send, so neither can go twice and a failure of one neither stops nor
+ * stamps the other. On a morning when only one is due, this is exactly what it always was.
+ */
+export function stagesFor(booking: RunUpBooking, window: RunUpWindow): RunUpStage[] {
+  if (!booking.buyerEmail) return [];
+  const guest = guestStageFor(booking, window);
+  // The practical email goes to EVERYONE, a week out (or the morning after a later booking), whether
+  // or not they ever sent guest details. It is the one that says where to go and when, so it is not
+  // conditional on them having done their bit.
+  return [...(guest ? [guest] : []), ...(practicalDue(booking, window) ? (["practical"] as const) : [])];
+}
+
+/** The most pressing one thing this booking is due right now (the reminder, if it is due), or null. */
+export function stageFor(booking: RunUpBooking, window: RunUpWindow): RunUpStage | null {
+  const due = stagesFor(booking, window);
+  return due.includes("practical") ? "practical" : (due[0] ?? null);
+}
+
 export interface RunUpPlanned {
   booking: RunUpBooking;
   stage: RunUpStage;
@@ -129,8 +149,7 @@ export interface RunUpPlanned {
 export function planRunUp(bookings: RunUpBooking[], window: RunUpWindow): RunUpPlanned[] {
   const planned: RunUpPlanned[] = [];
   for (const booking of bookings) {
-    const stage = stageFor(booking, window);
-    if (stage) planned.push({ booking, stage });
+    for (const stage of stagesFor(booking, window)) planned.push({ booking, stage });
   }
   return planned;
 }

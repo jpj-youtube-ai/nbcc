@@ -144,17 +144,21 @@ export function sampleTouchData(kind: TouchKind, base: string): TouchEmailData {
 // "You're doing great!" is "Jack is doing great!". A name ending in s never gets a possessive: it is
 // "the page for James". On any other page `kid` is null, and every word is as it always was.
 interface Kid {
-  /** The child's first name, as their page shows it. */
+  /** The child's first name, as their page shows it; "your child" when it is not a plain first name. */
   name: string;
+  /** The same, to start a sentence: "Jack", "Your child". */
+  Name: string;
   /** "Jack's page", "the page for James". */
   page: string;
   /** The same, to start a sentence: "Jack's page", "The page for James". */
   Page: string;
 }
 
-function kidOf(name: string): Kid {
+function kidOf(first: string | null): Kid {
+  const name = first ?? "your child";
+  const up = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
   const page = /s$/i.test(name) ? `the page for ${name}` : `${name}'s page`;
-  return { name, page, Page: page.charAt(0).toUpperCase() + page.slice(1) };
+  return { name, Name: up(name), page, Page: up(page) };
 }
 
 type Builder = (d: TouchEmailData, hi: string, t: string, first: string | null, kid: Kid | null) => BuiltEmail;
@@ -204,9 +208,9 @@ const BUILDERS: Record<TouchKind, Builder> = {
   halfway: (d, hi, t, _first, kid) => {
     const of = `has raised ${pounds(d.raisedPence)} of ${kid ? "the" : "your"} ${pounds(d.targetPence ?? 0)} target. That's amazing! Thank you, and a huge thank you to everyone who has given.`;
     const keep = kid
-      ? `The second half often goes faster than the first, so keep sharing. ${kid.name} has got this!`
+      ? `The second half often goes faster than the first, so keep sharing. ${kid.Name} has got this!`
       : "The second half often goes faster than the first, so keep sharing. You've got this!";
-    const title = kid ? `${kid.name} is halfway there!` : "You're halfway there!";
+    const title = kid ? `${kid.Name} is halfway there!` : "You're halfway there!";
     const see = kid ? "See the page" : "See my page";
     const body =
       EYEBROW +
@@ -232,7 +236,7 @@ const BUILDERS: Record<TouchKind, Builder> = {
     const check = kid
       ? `We check every change before it goes on ${kid.page}, so the new target may take a day or so to show.`
       : "We check every change before it goes on your page, so your new target may take a day or so to show.";
-    const title = kid ? `${kid.name} did it!` : "You did it!";
+    const title = kid ? `${kid.Name} did it!` : "You did it!";
     const label = kid ? "Raise the target" : "Raise my target";
     const body =
       EYEBROW +
@@ -321,7 +325,7 @@ const BUILDERS: Record<TouchKind, Builder> = {
   // 17, approved, with the certificate (TASK-504). With nothing raised, the amount is left out.
   finished: (d, hi, t, _first, kid) => {
     const thanks = kid
-      ? `Thank you for every step, every share and every ask. ${kid.name} has made a real difference to the children, young people and vulnerable adults we support.`
+      ? `Thank you for every step, every share and every ask. ${kid.Name} has made a real difference to the children, young people and vulnerable adults we support.`
       : "Thank you for every step, every share and every ask. You've made a real difference to the children, young people and vulnerable adults we support.";
     const thanksHtml = kid ? h(thanks) : thanks;
     const and = (s: string) => s.replace("Thank you for every", "and for every");
@@ -413,7 +417,7 @@ const BUILDERS: Record<TouchKind, Builder> = {
     const tip = kid
       ? `keep the momentum going. Share ${kid.page} again, or post a news update from your private area so supporters can see how it's going. People love to see progress!`
       : "keep the momentum going. Share your page again, or post a news update from your private area so your supporters can see how it's going. People love to see progress!";
-    const title = kid ? `${kid.name} is doing great!` : "You're doing great!";
+    const title = kid ? `${kid.Name} is doing great!` : "You're doing great!";
     const see = kid ? "See the page" : "See my page";
     const body =
       EYEBROW +
@@ -447,9 +451,11 @@ export function buildTouchEmail(kind: TouchKind, d: TouchEmailData): BuiltEmail 
   // goes to them, so it never speaks to the child. It greets the parent and says whose page it is
   // about ("Hi Sarah, this is about Jack's page."; "Hi there," with a parent's name we cannot greet by).
   const child = String(d.guardianFirstName ?? "").trim() !== "";
-  // The child's first name as their page shows it (firstWord: "JACK sample" is "Jack").
-  const name = child ? firstWord(d.firstName ?? d.name) : "";
-  if (!name) return BUILDERS[kind](d, organiserGreeting(d), escapeHtml(d.title), organiserFirstName(d), null);
+  if (!child) return BUILDERS[kind](d, organiserGreeting(d), escapeHtml(d.title), organiserFirstName(d), null);
+  // The child's first name as their page shows it (firstWord: "JACK sample" is "Jack"), and only when
+  // it is a safe first name (safeFirstName: one word of letters), because it goes in the subject and
+  // the heading. Anything else is "your child", and the subject then drops the name.
+  const name = safeFirstName(firstWord(d.firstName ?? d.name));
   const kid = kidOf(name);
   const hi = `Hi ${safeFirstName(d.guardianFirstName) ?? "there"}, this is about ${kid.page}.`;
   return BUILDERS[kind](d, hi, escapeHtml(d.title), name, kid);

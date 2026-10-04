@@ -83,7 +83,9 @@ export function greetGuardian<T extends { html: string; text?: string }>(
   if (!child) return mail;
   // The greeting is built here from what is stored, and takes the place of the email's own opening
   // "Hi ...," whatever name and capitals that used.
-  const to = `Hi ${guardian}, this is about ${child}'s page.`;
+  // No awkward possessive after a name ending in s: "the page for James", as the automatic emails
+  // say it (./touch-emails.ts). Any other name is as it always was: "Jack's page".
+  const to = `Hi ${guardian}, this is about ${/s$/i.test(child) ? `the page for ${child}` : `${child}'s page`}.`;
   const opening = /Hi [^,<\n]{1,60},/;
   return {
     ...mail,

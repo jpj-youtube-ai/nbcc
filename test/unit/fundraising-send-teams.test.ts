@@ -52,6 +52,17 @@ describe("approving a team member's page", () => {
     expect(await sendApprovedEmail(record({ id: 41, teamId: 40 }))).toBe(true);
   });
 
+  // Approved, declined, approved again: the member still hears their page is live, but the team
+  // organiser was told the first time and is not told again.
+  it("does not tell the team organiser again when the page is approved a second time", async () => {
+    const member = record({ id: 41, slug: "ava", title: "Ava's page", name: "Ava Example", email: "ava@example.com", teamId: 40 });
+    expect(await sendApprovedEmail(member, { reapproved: false })).toBe(true);
+    expect(team.sendTeamMemberJoined).toHaveBeenCalledTimes(1);
+    expect(await sendApprovedEmail(member, { reapproved: true })).toBe(true);
+    expect(mail.sendFundraiseApproved).toHaveBeenCalledTimes(2);
+    expect(team.sendTeamMemberJoined).toHaveBeenCalledTimes(1);
+  });
+
   it("tells nobody for a page that is on no team", async () => {
     await sendApprovedEmail(record());
     expect(team.sendTeamMemberJoined).not.toHaveBeenCalled();

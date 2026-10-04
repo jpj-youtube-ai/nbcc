@@ -209,6 +209,33 @@ describe("who may do what", () => {
   });
 });
 
+// Review, 2026-10-04: a team member's page approved, declined, then approved again must not tell the
+// team organiser "[First name] has joined" a second time. A page that has been approved before keeps
+// its approved date through a decline, so that is how a second approval is told from a first.
+describe("approve, decline, approve", () => {
+  it("says it is the first approval the first time, and a second approval after a decline", async () => {
+    const fresh = record({ status: "new", approvedAt: null });
+    db.moveFundraiser.mockResolvedValueOnce({ before: fresh, after: record({ status: "approved", approvedAt: "2026-10-04T09:00:00.000Z" }), livePending: false });
+    await run(routes.postApproveFundraiser, { params: P, token: tokenFor("editor") });
+    expect(sendApprovedEmail).toHaveBeenLastCalledWith(expect.objectContaining({ status: "approved" }), { reapproved: false });
+
+    db.moveFundraiser.mockResolvedValueOnce({ before: record({ status: "approved", approvedAt: "2026-10-04T09:00:00.000Z" }), after: record({ status: "declined", approvedAt: "2026-10-04T09:00:00.000Z" }) });
+    await run(routes.postDeclineFundraiser, { params: P, token: tokenFor("editor"), body: {} });
+    expect(sendApprovedEmail).toHaveBeenCalledTimes(1);
+
+    db.moveFundraiser.mockResolvedValueOnce({ before: record({ status: "declined", approvedAt: "2026-10-04T09:00:00.000Z" }), after: record({ status: "approved", approvedAt: "2026-10-05T09:00:00.000Z" }), livePending: false });
+    await run(routes.postApproveFundraiser, { params: P, token: tokenFor("editor") });
+    expect(sendApprovedEmail).toHaveBeenCalledTimes(2);
+    expect(sendApprovedEmail).toHaveBeenLastCalledWith(expect.objectContaining({ status: "approved" }), { reapproved: true });
+  });
+
+  it("counts a page declined before it was ever approved as a first approval", async () => {
+    db.moveFundraiser.mockResolvedValueOnce({ before: record({ status: "declined", approvedAt: null }), after: record({ status: "approved" }), livePending: false });
+    await run(routes.postApproveFundraiser, { params: P, token: tokenFor("editor") });
+    expect(sendApprovedEmail).toHaveBeenLastCalledWith(expect.anything(), { reapproved: false });
+  });
+});
+
 describe("approving and the rest", () => {
   it("approves, and then emails the organiser", async () => {
     const after = record({ status: "approved" });
@@ -216,7 +243,7 @@ describe("approving and the rest", () => {
     const res = await run(routes.postApproveFundraiser, { params: P, token: tokenFor("editor") });
     expect(res.statusCode).toBe(200);
     expect(db.moveFundraiser).toHaveBeenCalledWith(9, "approve", `admin:${EMAIL}`, null);
-    expect(sendApprovedEmail).toHaveBeenCalledWith(after);
+    expect(sendApprovedEmail).toHaveBeenCalledWith(after, { reapproved: false });
     expect((res.body as { fundraiser: { pageUrl: string } }).fundraiser.pageUrl).toBe("https://nbcc.test/fundraise/sams-sponsored-walk");
   });
 

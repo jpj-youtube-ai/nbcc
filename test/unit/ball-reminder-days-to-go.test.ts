@@ -81,6 +81,13 @@ describe("the reminder sent on any other day", () => {
     expect(m.subject + m.html + m.text).not.toMatch(/a week|days to go|tomorrow/i);
   });
 
+  // After the Ball, or a number that is not one: nothing false can be built, so nothing false can be sent.
+  it("refuses a number of days it cannot say truthfully", () => {
+    for (const bad of [-1, -30, Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY]) {
+      expect(() => at(bad), String(bad)).toThrow("The Ball reminder cannot be built");
+    }
+  });
+
   it("changes nothing else in the email", () => {
     const swap = (s: string) => s.replace(/4 days to go/g, "A week to go").replace(/4 DAYS TO GO/g, "A WEEK TO GO").replace(/In 4 days you'll/g, "A week on Saturday you'll");
     const four = at(4);

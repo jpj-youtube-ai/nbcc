@@ -109,6 +109,9 @@ export function renderRedBagThemes(rb: RedBagCatalogue = redBag()): string {
       .map(
         (e) =>
           `<li><button class="rb-example" type="button" data-rb-example="${e.key}" data-pence="${e.pence}" aria-pressed="false">` +
+          // A small drawing for the eye only (the one catalogue's, as the list's are): the button's
+          // name stays its words.
+          rb.art(e.key, "rb-example__icon", 30) +
           `<span class="rb-example__amount">${rb.pounds(e.pence)}</span> <span class="rb-example__words">${escapeHtml(e.words)}</span></button></li>`,
       )
       .join("");

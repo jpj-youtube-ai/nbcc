@@ -1372,6 +1372,7 @@ hosted-Checkout redirect stays the default fallback and no-JS safety net.
 | `GET /api/admin/fundraising/pictures-waiting`, `GET /api/admin/fundraisers/:id/pictures`, `.../pictures/:pictureId/photo`, `POST .../pictures/:pictureId/approve` \| `decline` \| `remove` | **implemented** | Profile pictures (staff check the photos organisers send: fundraising view to look, edit to decide; audited) |
 | `POST /api/fundraisers/:slug/pledges` | **implemented** | Sponsor pledges (public; "Sponsor now, pay after" on a sponsorship fundraiser's page: a promise, never money, and unconfirmed until the sponsor confirms by email. See **Sponsor pledges**) |
 | `GET /fill-a-red-bag` | **implemented, public but unlinked** | Fill a Red Bag (a new way to give: fill a list of example items, watch a red bag fill, give the total. Public since 4 October 2026, but linked from nowhere, on no site map and `noindex`: people reach it only if they are given the address. `POST /api/checkout-session` takes an optional `redBag: true` for it. See **Fill a Red Bag (public, unlinked)**) |
+| `GET /fill`, `GET /fill-a-bag` | **implemented** | Short addresses for Fill a Red Bag: a permanent redirect (`301`) to `/fill-a-red-bag`, query string kept, while the page is switched on; the 404 if it were switched off. Fixed in code, reserved, on no site map |
 | `GET` \| `POST /pledge/confirm`, `/pledge/pay`, `/pledge/cancel` | **implemented** | Sponsor pledges (the sponsor, by the signed link in an email: confirm the pledge, pay it through Stripe Checkout, or cancel it quietly. Each link only asks; a button does the thing) |
 | `GET /api/fundraise/manage/pledges`, `POST /api/fundraise/manage/fundraisers/:id/pledges/:pledgeId/cash` \| `hide` | **implemented** | Sponsor pledges (the signed in organiser: confirmed pledges by name, never emails; "Paid me in cash"; hide one from their page) |
 | `GET /api/admin/fundraising/emails/summary`, `GET /api/admin/fundraising/emails`, `GET /api/admin/fundraising/emails/:id/:version` | **implemented** | All emails (staff with fundraising view: every fundraising, pledge, ticket and Festive Ball email, listed from one catalogue and rendered with the real builders and invented sample data. Read only: approving stays with the three endpoints that already did it. See **All emails, in Admin > Get involved**) |
@@ -12126,6 +12127,12 @@ anywhere to it right now"). The switch is one constant, `RED_BAG_LIVE` in `src/r
 (no config value, no database row, no infrastructure), and it is **on**:
 
 - `GET /fill-a-red-bag` is the page, for anyone who has the address.
+- `GET /fill` and `GET /fill-a-bag` forward to it for good (`301`), keeping any query string, in
+  any case and with or without a trailing slash, and only exactly (`/fill` takes nothing else that
+  begins "fill"). Fixed in code in `src/routes/red-bag.ts` (`RED_BAG_FORWARDS`), like `/getinvolved`
+  and `/involved`: not rows in the spare address table. Both are in `RESERVED_PREFIXES`
+  (`src/site/pages.ts`) so a spare address cannot take them; they are on no site map and linked
+  from nowhere. They follow the switch: switched off they are the site's ordinary 404.
 - `POST /api/checkout-session` takes a Red Bag donation from anyone.
 - Nothing on the site links to it: not `/donate`, not the menu, not the footer. It is on no site
   map (`/sitemap`, `sitemap.xml`), and it tells search engines to leave it alone, twice over: the
@@ -12179,14 +12186,18 @@ full bags" and so on from £50 (always the next whole bag; no button at £0). Pr
 little extra to round up" with its amount and a Remove under "Also in your bag". It keeps its
 target, not an amount: the extra shrinks as things go in and grows back as they come out, the line
 goes once the donor's own items reach the target (and the button offers the next step), pressing
-the button again replaces the round-up and never stacks two, and Remove clears it. It is simply
+the button again replaces the round-up and never stacks two, and Remove clears it. It never stands
+alone: when the donor's own choices come to £0 it is cleared, the total is £0, and it does not come
+back. A monthly amount is worded "£31 every month" everywhere on the page (the total, Donate, the
+details step and its pay button, the thank you), never "a month". It is simply
 extra money and is never described as buying anything. The bags, the status line, the phone bar and
 the amount sent to the checkout all follow the total including it.
-**On a phone** the bag sits below the list and the themes, so a slim
-bar fixed to the foot of the screen shows "Your bag £18" and a Donate button while the list is
-scrolled: it hides once the real total and Donate are on screen, over the footer, on the details
-step and the thank you, and while the total is £0; its Donate does what the main one does; it is
-never drawn at desktop widths and is not a live region. Under £2 the Donate
+**The bottom bar:** the total and Donate scroll out of sight down a long list, so a slim
+bar fixed to the foot of the screen shows "Your bag £18" and a Donate button, at every width,
+computers included: it hides once the real total and Donate are on screen, over the footer, on the
+details step and the thank you, and while the total is £0; its Donate does what the main one does;
+what is in it stays within the page's width (on a computer the total sits beside its button, under
+the bag's column); while it shows the page is longer by its height; and it is not a live region. Under £2 the Donate
 button stays enabled and shows a friendly nudge. Donate opens a details step with the same asks as
 the give form on a fundraiser's page (name, email, the newsletter tick, Gift Aid, covering the card
 fee for a one off; a monthly donation asks for the 18 or over tick instead, as `/donate` does), then
@@ -12212,6 +12223,8 @@ a normal one and sends the normal receipt.
 |---|---|---|
 | `GET /fill-a-red-bag` | anyone, switched on (as it is now) | the page, `200`, `X-Robots-Tag: noindex, nofollow` while unlisted |
 | `POST /api/checkout-session` with `redBag: true` | anyone, switched on (as it is now) | `200`, as any donation; `400` under £2 or with `fundraiserId` |
+| `GET /fill`, `GET /fill-a-bag` | anyone, switched on (as it is now) | `301` to `/fill-a-red-bag`, query string kept |
+| `GET /fill`, `GET /fill-a-bag` | anyone, if switched off | the site's 404 page, `404` |
 | `GET /fill-a-red-bag` | the public, if switched off | the site's 404 page, `404`, `noindex` |
 | `GET /fill-a-red-bag` | signed in staff (`Authorization: Bearer`), if switched off | the page with the preview strip; `Cache-Control: private, no-store` |
 | `POST /api/checkout-session` with `redBag: true` | the public, if switched off | `403 { error: "Fill a Red Bag is not open yet" }` |

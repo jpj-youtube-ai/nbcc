@@ -22,7 +22,14 @@ and gives the total. Nothing is bought item by item: the items are examples of w
 
 ## The page
 
-Address: `/fill-a-red-bag`. Name: "Fill a Red Bag". Layout as the signed-off chat mock-up:
+Address: `/fill-a-red-bag`. Name: "Fill a Red Bag". Two short addresses, `/fill` and `/fill-a-bag`
+(4 October 2026), forward to it for good (301), keeping any query string, in any case and with or
+without a trailing slash, and only exactly (`/fill` takes nothing else that begins "fill"). They are
+fixed in code like `/getinvolved` and `/involved`, not rows in the spare address table; both are
+reserved so a spare address cannot take them; they are on no site map and linked from nowhere. They
+follow the switch: switched off they are the site's ordinary 404, like the page.
+
+Layout as the signed-off chat mock-up:
 
 1. Intro: eyebrow, heading, one short lede.
 2. The list, drawn as lined paper (handwriting only on the paper, like NBCC's printed Donation
@@ -36,13 +43,19 @@ Address: `/fill-a-red-bag`. Name: "Fill a Red Bag". Layout as the signed-off cha
    tick on 4 October 2026 and follow the donate page's once or monthly buttons (a named group, each
    button saying whether it is pressed, the chosen one in holly green with a tick). Donate reads
    "Donate £31" for once and "Donate £31 every month" for monthly ("Donate" while the bag is
-   empty). Everything after it is what the tick did: the pay button still reads "Donate £31 a
-   month". The choice is kept when coming back from the details step.
-   On a phone the bag is below a long list, so a slim bar fixed to the foot of the screen shows
-   "Your bag £18" and a Donate button while the list is scrolled. It hides once the real total and
-   Donate are on screen (nothing is doubled), over the footer, on the details step and the thank
-   you, and while the total is £0. Its Donate does exactly what the main Donate does (under £2 it
-   shows the nudge and brings it into view). Never at desktop widths; not a live region.
+   empty). Everything after it is what the tick did. A monthly amount is worded "£31 every
+   month" wherever the donor reads it on this page, never "a month" (4 October 2026): the total,
+   Donate, the details step's summary, the pay button ("Donate £31 every month") and the thank
+   you. The choice is kept when coming back from the details step.
+   The bottom bar: the total and Donate scroll out of sight down a long list, so a slim bar fixed
+   to the foot of the screen shows "Your bag £18" and a Donate button. At EVERY width, computers
+   included (4 October 2026). It hides once the real total and Donate are on screen (nothing is
+   doubled), over the footer, on the details step and the thank you, and while the total is £0.
+   Its Donate does exactly what the main Donate does (under £2 it shows the nudge and brings it
+   into view). The strip spans the screen, but what is in it stays within the page's width, in
+   line with the page; on a computer the total sits beside its button at the right, under the
+   bag's column. While it shows the page is longer by its height, so it never covers the end of
+   the page. Not a live region.
 4. "Whenever the need comes", introduced word for word: "Christmas is our big night, and the need
    comes all year round. Tap an example to add it to your bag, and tap it again to take it out."
    Three themes, three examples each. Tapping an example adds it to the
@@ -99,6 +112,10 @@ or pass the target the line goes and the button offers the next step; if they th
 out again the line comes back (a plus followed by a minus leaves the bag as it was). After rounding
 up, the button offers the step after it, and pressing that REPLACES the round-up: two are never
 stacked. Remove clears it for good.
+
+A round-up never stands alone (4 October 2026). When the donor's own choices (list items plus
+tapped examples) come to £0 the round-up is cleared and the total is £0; it does not come back when
+something goes in again, and the button is not offered on an empty bag.
 
 The bags, the status line, the Donate button, the phone bar and the amount sent to the checkout
 all follow the total including the round-up. The sums are whole pence, pure functions in the one
@@ -183,7 +200,8 @@ source of truth and half 2 can move the data to the admin without touching the p
 
 - Unit: totals in pence (no float drift: 10p pencils), bag count and fill at the edges (0, 199, 200,
   4999, 5000, 5410, 25000+), the round-up at its edges (1p, 199, 200, 2499, 2500, 2501, 4999, 5000,
-  5001, 9999, 10000; shrink, grow, go, replace; what is sent equals what is shown), status wording, the checkout schema rules, the off/on/staff gate, the
+  5001, 9999, 10000; shrink, grow, go, replace, cleared by an emptied bag; what is sent equals what
+  is shown), the short addresses (301, query kept, exact, following the switch), status wording, the checkout schema rules, the off/on/staff gate, the
   server-built return addresses, the wording rules (no "will", the elves line and the audience
   phrase present word for word).
 - BDD: the page is a 404 to the public while off; a Red Bag checkout under £2 is refused.

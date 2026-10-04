@@ -600,6 +600,24 @@ describe("the in memory invite's sign off", () => {
     }
   });
 
+  // The signer chosen is not lost by a look at In memory: back on another type, it is still sent.
+  it("keeps the signer chosen through a switch to In memory and back", async () => {
+    approveMemory();
+    await openFundraising();
+    setValue("#frInviteSigner", "5");
+    fillInvite("memory");
+    await settle();
+    expect((el("frInviteSigner")!.closest(".fr-field") as HTMLElement).hidden).toBe(true);
+    setValue("#frInviteType", "team");
+    await settle();
+    expect((el("frInviteSigner")!.closest(".fr-field") as HTMLElement).hidden).toBe(false);
+    expect((el("frInviteSigner") as HTMLSelectElement).value).toBe("5");
+    submit("#frInviteForm");
+    await settle();
+    expect(confirmed.pop()).toBe("Send a team invite to Mary Smith at mary@example.com, signed by Rowan?");
+    expect(sent("POST", "/api/admin/fundraising/invites")[0].body).toMatchObject({ type: "team", signedBy: 5 });
+  });
+
   it("reads the in memory email without a signer, as it is signed by Jodie", async () => {
     approveMemory();
     await openFundraising();

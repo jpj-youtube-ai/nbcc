@@ -10629,7 +10629,8 @@ and says "In memory invites come from Jodie, are signed by her, and a copy goes 
 confirm question ends "It comes from Jodie.", and the server neither needs nor reads `signedBy` for
 type `memory` (`inviteSchema`), storing "Jodie" as who signed it. The other three invite types are
 exactly as before: `signedBy` required and checked, signed by and copied to that person. The audit
-row records who was copied and, as its actor, who pressed the button. Staff notices are unchanged,
+row records who was copied and, as its actor, who pressed the button. The admin's list of invites and
+the Monday summary's "not taken up" line name nobody as inviting an in memory invitee. Staff notices are unchanged,
 and every other email is byte for byte as it was. **Why this is safe to send:** the SES identity is the whole domain
 `nbcc.scot` (`aws_sesv2_email_identity.apex`), not a single address, so any address at it is signed
 with the same Easy DKIM keys (`d=nbcc.scot`, aligned for DMARC) and leaves on the same

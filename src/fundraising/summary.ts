@@ -456,7 +456,9 @@ export function summaryLines(c: SummaryCounts): SummaryLines {
   if (c.invitesNotTaken.length) {
     waiting.push(
       `${plural(c.invitesNotTaken.length, "invite", "invites")} not taken up after a week: ` +
-        c.invitesNotTaken.map((i) => `${i.name}${i.type ? ` (${INVITE_TYPE_SUMMARY[i.type]})` : ""}, invited by ${i.signedBy}`).join("; "),
+        // An in memory invite is signed by Jodie whoever sent it, so it names nobody as inviting them
+        // (as the admin's list of invites does).
+        c.invitesNotTaken.map((i) => `${i.name}${i.type ? ` (${INVITE_TYPE_SUMMARY[i.type]})` : ""}${i.type === "memory" ? "" : `, invited by ${i.signedBy}`}`).join("; "),
     );
   }
   // Sponsor pledges: promises still not paid a fortnight after the event.

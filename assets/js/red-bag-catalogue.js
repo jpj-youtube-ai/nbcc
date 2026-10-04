@@ -269,8 +269,9 @@
   var ART = {
     // --- the list ---
     blanket:
-      '<rect class="r" x="4" y="10" width="32" height="22" rx="4"/><path class="c" d="M10 10h6v22h-6z"/><path d="M4 21h32"/>' +
-      '<path class="l" d="M21 15.5h10M21 26.5h10"/><path d="M8 32v3.5M14 32v3.5M20 32v3.5M26 32v3.5M32 32v3.5"/>',
+      '<rect class="r" x="4" y="19" width="32" height="13" rx="4"/><path class="c" d="M23 19h6v13h-6z"/>' +
+      '<rect class="r" x="4" y="8" width="30" height="13" rx="5.5"/><path class="c" d="M21.5 8h6v13h-6z"/>' +
+      '<path class="l" d="M9 14.5h8M9 25.5h9"/><path d="M9 32v3.5M15 32v3.5M21 32v3.5M27 32v3.5M32.5 31.5v3.5"/>',
     "insulated-cup":
       '<path class="h" d="M11 13h18l-2 21a2 2 0 0 1-2 2H15a2 2 0 0 1-2-2z"/><path class="c" d="M11.7 20h16.6l-.8 8H12.5z"/>' +
       '<path class="t" d="M10 8h20a1.5 1.5 0 0 1 1.5 1.5V13h-23V9.5A1.5 1.5 0 0 1 10 8z"/><path class="t" d="M16 8V5.5h8V8"/>' +

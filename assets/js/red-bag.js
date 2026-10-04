@@ -137,9 +137,9 @@
     var FLURRY_MS = 2150;
     // Where the three peeks sit along the bag's top, and their tilt: [across, degrees].
     var PEEK_AT = [
-      [37, -9],
-      [60, 3],
-      [82, 11],
+      [25, -11],
+      [57, 3],
+      [92, 12],
     ];
     // The snow and stars: [across %, wait s, fall s, drift px, turn deg, size px]. Fixed, so every
     // flurry is the same gentle one, and the last piece has landed within two seconds.
@@ -158,7 +158,7 @@
       [47, 0.55, 1.45, 14, 130, 14],
     ];
     var SNOW =
-      '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path class="rb-flake__snow" d="M12 1.5l2 4.3 4-2.2-.6 4.6 4.6.6-3.3 3.2 3.3 3.2-4.6.6.6 4.6-4-2.2-2 4.3-2-4.3-4 2.2.6-4.6-4.6-.6L4.3 12 1 8.8l4.6-.6L5 3.6l4 2.2z"/></svg>';
+      '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path class="rb-flake__snow" d="M12 1.5l2.6 6 6.5-.75-3.9 5.25 3.9 5.25-6.5-.75-2.6 6-2.6-6-6.5.75L6.8 12 2.9 6.75l6.5.75z"/></svg>';
     var STAR =
       '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path class="rb-flake__star" d="M12 2.5l2.8 6 6.5.8-4.8 4.5 1.3 6.5L12 17l-5.8 3.3 1.3-6.5-4.8-4.5 6.5-.8z"/></svg>';
 
@@ -237,7 +237,7 @@
           " 36) rotate(" +
           PEEK_AT[at][1] +
           ')"><g class="rb-peek__in">' +
-          rb.art(key, "", 34).replace("<svg ", '<svg x="-17" y="-21" ') +
+          rb.art(key, "", 28).replace("<svg ", '<svg x="-14" y="-16" ') +
           "</g></g>",
       );
       g.setAttribute("data-rb-peek", key);

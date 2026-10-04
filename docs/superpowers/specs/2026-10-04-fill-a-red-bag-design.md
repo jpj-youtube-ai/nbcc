@@ -35,7 +35,8 @@ switched off, all of them are the site's ordinary 404 to the public.
 Layout as the signed-off chat mock-up:
 
 1. Intro: eyebrow, heading, one short lede.
-2. The list, drawn as lined paper (handwriting only on the paper, like NBCC's printed Donation
+2. The list, drawn as lined paper (handwriting only on the paper and, since the feel good layer,
+   on the gift tag of a full bag, like NBCC's printed Donation
    ideas sheet: Caveat, self hosted with its licence, loaded by this page alone; Jaimie approved it
    on 4 October 2026). Items grouped under the sheet's own headings. Each row: name, price, a big minus
    button, a number box you can also type in, a big plus button. Typing updates the total at once;
@@ -142,6 +143,60 @@ The bags, the status line, the Donate button, the phone bar and the amount sent 
 all follow the total including the round-up. The sums are whole pence, pure functions in the one
 catalogue module (`nextMilestone`, `roundUpOffer`, `roundUpPence`).
 
+### The feel good layer (4 October 2026)
+
+Agreed with Jaimie idea by idea. The aim, in her words: "make people feel great for giving". The
+rules that override everything: never imply the items are actually bought or go to a particular
+person; no pressure, guilt or urgency; nobody is ranked or given a title; dignity for the people
+NBCC helps. It is ALL decoration: no price, total, round-up sum, minimum, checkout field or existing
+word changes, and it makes no network request and loads no file of its own.
+
+1. The item drops into the bag. When a quantity goes up, a small drawing of that item hops from its
+   row and drops into the bag that is filling. One drop for a typed jump (0 to 10 is one, played
+   when the typing stops or the box is left). Three in the air at most: a tap beyond that plays no
+   drop, so nothing queues. While the bag is off screen (a phone part way down the list) the drop
+   heads into the bottom bar's total instead, which gives a small nod. Examples and the round-up
+   drop no picture: they are money, not items. Things then peek out of the top of the bag that is
+   filling: only things that are in the bag, one under a quarter full, two under half, three from
+   half; each stays where it is, a free place goes to the newest item, and taking an item out
+   removes its peek. They are drawn behind the bag's front so they look inside it.
+2. An elf scribbles on the paper: a short handwritten note (Caveat, holly green, a slight tilt) on
+   the ruled line above the row just changed (below it for the first row under a heading), or beside
+   the new line under "Also in your bag" for an example. One at a time; it fades after about three
+   seconds or when the next one appears; it lies over empty paper only, takes no tap and shifts
+   nothing. Quick taps on one row keep the note that is there. ALL the notes are one list, `NOTES`
+   in the catalogue: at least two per item, general ones, the first thing in, several of one thing
+   ("10 pencils? You legend."), taking something out (kind, never guilt), and an example. They never
+   say anything is bought or that anyone receives it, never "will", never press, have no dashes or
+   hyphens, are British, and are 32 characters at most (so each fits on one line at 320px).
+3. The bag reacts: a small wobble when something goes in, and the handles pull a touch tighter when
+   it is nearly full (from 88%, as the status line says "nearly full").
+4. At a full bag: a gold ribbon ties the handles and a gift tag swings out reading "Packed with
+   love" (Caveat). Every full bag keeps its ribbon and tag; the words are on the newest full bag
+   only, and on none once four or five bags are drawn (too small to read). Below a full bag they
+   come off.
+5. A burst of snow and stars: twelve paper snowflakes and gold stars fall over the bag's panel for
+   about two seconds at half a bag and at each full bag, then are removed. Only when a milestone is
+   newly crossed on the way up (so again only after the total has dropped below it), one at a time,
+   taking no tap.
+
+A small icon sits in each of the nine example buttons (Jaimie: "an icon next to each of the after
+crisis/clothing/rock bottom items: teddy bear, bed, shoes, coat etc"), drawn into the page by the
+server, and again at the start of the example's line under "Also in your bag": a teddy bear, a bed,
+a cooking pot; a pair of shoes, a coat, a school jumper with a collar and tie; soap and a
+toothbrush, a toolbox, a cooker. Pressed, its lines turn light on the green. The button's words and
+name are unchanged.
+
+How it is built. The 22 drawings (13 items, 9 examples) are inline SVG in ONE place, `ART` in the
+catalogue, with no colour of their own (the stylesheet gives them the site's tokens; the gold is
+`--gold-ink`). The choices are pure functions in the catalogue (`peekSlots`, `peekCount`,
+`milestoneCrossed`, `strains`, `noteKind`, `noteFor`, `allNotes`); the page script only applies
+them. Everything decorative is `aria-hidden`, out of the tab order, and never takes the focus; the
+one live region is untouched. Motion is transform and opacity only, nothing loops, every animated
+thing is removed by a timer, and under `prefers-reduced-motion` nothing moves: no drop, wobble,
+flurry or swing, while the peeks, the ribbon and tag and the note still appear at once. Nothing
+plays on the details step. The thank you page is untouched.
+
 ### Money rules
 
 - One running total: items plus tapped examples plus the round-up. One Donate button.
@@ -234,7 +289,9 @@ source of truth and half 2 can move the data to the admin without touching the p
   5001, 9999, 10000; shrink, grow, go, replace, cleared by an emptied bag; what is sent equals what
   is shown), the short addresses (301, query kept, exact, following the switch), status wording, the checkout schema rules, the off/on/staff gate, the
   server-built return addresses, the wording rules (no "will", the elves line and the audience
-  phrase present word for word).
+  phrase present word for word). The feel good layer: its pure functions, every note against the
+  wording rules, and the script in jsdom (`test/unit/red-bag-delight.test.ts`,
+  `test/unit/red-bag-delight-script.test.ts`).
 - BDD: the page is a 404 to the public while off; a Red Bag checkout under £2 is refused.
 - By hand in a real browser: phone (390 and 320) and desktop, keyboard only, reduced motion, no
   inner scrollbars. Screenshots for Jaimie before anything ships.

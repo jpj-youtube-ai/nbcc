@@ -394,9 +394,12 @@ body.rb-bar-on{padding-bottom:calc(64px + env(safe-area-inset-bottom))}
 
 /* ---- the icon in each example's button: it keeps its size when the words wrap, and sits in the
    middle of them. Pressed, its lines turn light so it still reads on the green. ---- */
-.rb-example__icon{flex:0 0 auto;align-self:center;width:30px;height:30px}
+.rb-example__icon{flex:0 0 auto;align-self:center;width:30px;height:30px;margin:-4px 0}
 .rb-example[aria-pressed="true"] .rb-art{stroke:var(--cream)}
 .rb-example[aria-pressed="true"] .rb-art .h{fill:color-mix(in srgb,var(--holly) 45%,var(--cream))}
+.rb-example[aria-pressed="true"] .rb-art .c,
+.rb-example[aria-pressed="true"] .rb-art .w,
+.rb-example[aria-pressed="true"] .rb-art .s{fill:color-mix(in srgb,var(--holly) 72%,var(--cream))}
 .rb-example[aria-pressed="true"] .rb-art .e,
 .rb-example[aria-pressed="true"] .rb-art .d{fill:color-mix(in srgb,var(--maroon) 70%,var(--cream))}
 /* and the same small icon at the start of its line under "Also in your bag" */
@@ -466,7 +469,7 @@ body.rb-bar-on{padding-bottom:calc(64px + env(safe-area-inset-bottom))}
 .rb-paper .rb-item{position:relative}
 .rb-paper .rb-note{
   position:absolute;right:164px;top:0;z-index:2;pointer-events:none;
-  font-family:var(--rb-hand);font-size:1.2rem;font-weight:700;line-height:1.2;letter-spacing:.01em;
+  font-family:var(--rb-hand);font-size:1.3rem;font-weight:700;line-height:1.2;letter-spacing:.01em;
   color:var(--holly);white-space:nowrap;
   text-shadow:0 0 2px var(--card),0 0 2px var(--card),0 0 3px var(--card),0 0 5px var(--card);
   transform:translateY(calc(-100% + .27em + 2px)) rotate(-2deg);transform-origin:100% 100%;
@@ -474,9 +477,17 @@ body.rb-bar-on{padding-bottom:calc(64px + env(safe-area-inset-bottom))}
 }
 .rb-paper .rb-item:first-child > .rb-note{top:100%}
 .rb-paper .rb-note.is-on{opacity:1}
-/* where the paper is narrow the note runs to the paper's edge, between one row's buttons and the next */
-@media (max-width:520px),(min-width:861px) and (max-width:1000px){
-  .rb-paper .rb-note{right:2px;font-size:1.02rem}
+/* a line under "Also in your bag" is full of words, so there the note always lies across the rule */
+.rb-paper .rb-also__list .rb-note{font-size:1.02rem;transform:translateY(calc(-100% + .27em + 4px)) rotate(-1deg)}
+/* where the paper is narrow (and a long name may wrap) the note is smaller and lies across the rule,
+   in the few pixels every row keeps clear above and below it */
+@media (max-width:700px),(min-width:861px) and (max-width:1200px){
+  .rb-paper .rb-note{font-size:1.02rem;transform:translateY(calc(-100% + .27em + 4px)) rotate(-1deg)}
+}
+/* and on a phone, where the price sits under the name and the rows are taller, it runs to the
+   paper's edge, in the gap between one row's buttons and the next */
+@media (max-width:520px){
+  .rb-paper .rb-note{right:2px}
 }
 
 /* ---- less motion: nothing moves. What changes still changes, at once: the peeks, the ribbon and

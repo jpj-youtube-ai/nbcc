@@ -1,6 +1,7 @@
 import { emailShell, eyebrow, heading, bodyP, note, button, signOff, signOffText, questionsBox, questionsText } from "../email/brand";
 import { FOOTER_TEXT, POSTAL_ADDRESS } from "../legal/registration";
-import { FUNDRAISING_EMAIL, safeFirstName, type BuiltEmail } from "../fundraising/emails";
+import { emailDate, raiseOrdinals } from "../email/dates";
+import { FUNDRAISING_EMAIL, STAFF_SIGN_OFF, safeFirstName, type BuiltEmail } from "../fundraising/emails";
 import { pounds, type PledgeEmailKind } from "./model";
 
 // Sponsor pledges (Jaimie, 2026-10-03): the two emails to a sponsor. Pure, in the same shell as the
@@ -47,12 +48,11 @@ export const PLEDGE_EMAIL_WHEN: Record<PledgeEmailKind, string> = {
 const escapeHtml = (s: string): string =>
   s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
 
-const shell = (body: string) => emailShell(body, { contactEmail: FUNDRAISING_EMAIL, registration: true, postalAddress: POSTAL_ADDRESS });
+// Every date in the body has its ending raised ("7th" as 7<sup>th</sup>): ../email/dates.ts.
+const shell = (body: string) => emailShell(raiseOrdinals(body), { contactEmail: FUNDRAISING_EMAIL, registration: true, postalAddress: POSTAL_ADDRESS });
 
-const DAY = new Intl.DateTimeFormat("en-GB", { timeZone: "Europe/London", day: "numeric", month: "long", year: "numeric" });
-
-/** "Robin’s", "James’". */
-const whose = (name: string) => `${name}${/s$/i.test(name) ? "’" : "’s"}`;
+/** "Robin's", "James'". */
+const whose = (name: string) => `${name}${/s$/i.test(name) ? "'" : "'s"}`;
 
 interface Words {
   subject: string;
@@ -69,23 +69,23 @@ interface Words {
 function words(kind: PledgeEmailKind, d: PledgeEmailData): Words {
   const organiser = safeFirstName(d.organiserName);
   const who = organiser ?? "the organiser";
-  const their = organiser ? whose(organiser) : "the organiser’s";
+  const their = organiser ? whose(organiser) : "the organiser's";
   const amount = pounds(d.amountPence);
   const buttonLabel = `Pay my ${amount} pledge`;
   const giftAid = d.giftAid
-    ? ["You asked us to add Gift Aid when you pledged. We’ll claim it once you’ve paid, at no cost to you. If you’re no longer a UK taxpayer, you can take it off before you pay."]
+    ? ["You asked us to add Gift Aid when you pledged. We'll claim it once you've paid, at no cost to you. If you're no longer a UK taxpayer, you can take it off before you pay."]
     : [];
-  const cash = `Already paid ${who} in cash? You don’t need to pay again. Just let ${who} know, and it will be marked as paid.`;
-  const cancel = "Can’t pay this after all? That’s okay.";
+  const cash = `Already paid ${who} in cash? You don't need to pay again. Just let ${who} know, and it will be marked as paid.`;
+  const cancel = "Can't pay this after all? That's okay.";
   if (kind === "pledge_reminder") {
     return {
       subject: `A reminder: your ${amount} pledge for ${d.title}`,
       title: "Your pledge is still waiting",
-      before: [`A week ago we sent you a link to pay the ${amount} you pledged for {title}. It hasn’t been paid yet, so here it is again.`],
+      before: [`A week ago we sent you a link to pay the ${amount} you pledged for {title}. It hasn't been paid yet, so here it is again.`],
       buttonLabel,
-      after: ["This is the only reminder we’ll send.", ...giftAid, cash],
+      after: ["This is the only reminder we'll send.", ...giftAid, cash],
       cancel,
-      why: `Why you’re getting this: you made a pledge on ${their} fundraising page at nbcc.scot. We won’t email you about it again.`,
+      why: `Why you're getting this: you made a pledge on ${their} fundraising page at nbcc.scot. We won't email you about it again.`,
       close: "With thanks,",
     };
   }
@@ -95,17 +95,17 @@ function words(kind: PledgeEmailKind, d: PledgeEmailData): Words {
       : `${d.title} has finished! Here's your link to pay your ${amount} pledge`,
     title: organiser ? `${organiser} finished!` : "They finished!",
     before: [
-      `Great news: ${organiser ?? "The organiser"} has finished {title}. Thank you for cheering ${organiser ?? "them"} on!`,
-      `On ${DAY.format(new Date(d.pledgedAt))} you pledged ${amount} on ${their} fundraising page. Here is your link to pay it. It takes about a minute, and you can give more if you would like to.`,
+      `Great news: ${organiser ?? "the organiser"} has finished {title}. Thank you for cheering ${organiser ?? "them"} on!`,
+      `On ${emailDate(new Date(d.pledgedAt), { weekday: false, year: true })} you pledged ${amount} on ${their} fundraising page. Here is your link to pay it. It takes about a minute, and you can give more if you would like to.`,
     ],
     buttonLabel,
     after: [
-      `Your payment goes straight to the Night Before Christmas Campaign (NBCC) and counts towards ${their} total. We’ll email you a receipt.`,
+      `Your payment goes straight to the Night Before Christmas Campaign (NBCC) and counts towards ${their} total. We'll email you a receipt.`,
       ...giftAid,
       cash,
     ],
     cancel,
-    why: `Why you’re getting this: you made a pledge on ${their} fundraising page at nbcc.scot. If it isn’t paid we’ll send one reminder in a week, and nothing after that.`,
+    why: `Why you're getting this: you made a pledge on ${their} fundraising page at nbcc.scot. If it isn't paid we'll send one reminder in a week, and nothing after that.`,
     close: "With thanks,",
   };
 }
@@ -122,7 +122,7 @@ export function buildPledgeEmail(kind: PledgeEmailKind, d: PledgeEmailData): Bui
       w.before.map((p) => bodyP(withTitle(escapeHtml(p), `<b>${escapeHtml(d.title)}</b>`))).join("") +
       button(d.payUrl, w.buttonLabel) +
       w.after.map((p) => bodyP(escapeHtml(p))).join("") +
-      bodyP(`${escapeHtml(w.cancel)} <a href="${escapeHtml(d.cancelUrl)}" style="color:#C02238">Tell us here</a> and we won’t email you about it again.`) +
+      bodyP(`${escapeHtml(w.cancel)} <a href="${escapeHtml(d.cancelUrl)}" style="color:#C02238">Tell us here</a> and we won't email you about it again.`) +
       note(escapeHtml(w.why)) +
       signOff(w.close) +
       questionsBox(FUNDRAISING_EMAIL),
@@ -136,7 +136,7 @@ export function buildPledgeEmail(kind: PledgeEmailKind, d: PledgeEmailData): Bui
     `${w.buttonLabel}: ${d.payUrl}`,
     "",
     ...w.after.flatMap((p) => [p, ""]),
-    `${w.cancel} Tell us here and we won’t email you about it again: ${d.cancelUrl}`,
+    `${w.cancel} Tell us here and we won't email you about it again: ${d.cancelUrl}`,
     "",
     w.why,
     "",
@@ -192,8 +192,8 @@ export function buildPledgeConfirmEmail(d: PledgeConfirmData): BuiltEmail {
   const hello = first ? `Hello ${first},` : "Hello,";
   const thanks = (title: string) => `Thank you for pledging ${amount} to sponsor ${who} for ${title}. Please press the button to confirm it was you.`;
   const label = `Confirm my ${amount} pledge`;
-  const next = `There is nothing to pay today. Once ${organiser ?? "the organiser"} has finished, we’ll email you a link to pay.`;
-  const notYou = "If this wasn’t you, you don’t need to do anything. A pledge that isn’t confirmed is deleted after 7 days, and we won’t email you again.";
+  const next = `There is nothing to pay today. Once ${organiser ?? "the organiser"} has finished, we'll email you a link to pay.`;
+  const notYou = "If this wasn't you, you don't need to do anything. A pledge that isn't confirmed is deleted after 7 days, and we won't email you again.";
   const close = "With thanks,";
   const html = shell(
     eyebrow("Fundraising for NBCC") +
@@ -236,9 +236,10 @@ export function buildPledgeStaffEmail(o: { subject: string; lines: string[]; adm
     eyebrow("Sponsor pledges") +
       heading(escapeHtml(o.subject)) +
       o.lines.map((l) => bodyP(escapeHtml(l))).join("") +
-      button(o.adminUrl, "Open Admin, Fundraising"),
+      button(o.adminUrl, "Open Admin, Fundraising") +
+      signOff(STAFF_SIGN_OFF),
   );
-  const text = [o.subject, "", ...o.lines, "", `Open Admin, Fundraising: ${o.adminUrl}`, "", FOOTER_TEXT].join("\n");
+  const text = [o.subject, "", ...o.lines, "", `Open Admin, Fundraising: ${o.adminUrl}`, "", signOffText(STAFF_SIGN_OFF), "", FOOTER_TEXT].join("\n");
   return { subject: o.subject, html, text };
 }
 

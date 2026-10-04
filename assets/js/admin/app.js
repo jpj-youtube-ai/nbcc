@@ -2697,6 +2697,7 @@
     ["fundraiseTeamInviteReminder", "Team invite reminder"], ["fundraiseTeamNudge", "Team automatic: did you send the invite?"],
     ["fundraiseTeamJoined", "Team member joined (thank you)"], ["fundraiseTeamJoinStaff", "Team member to approve (to events@)"],
     ["fundraiseTeamMemberRemoved", "Team member taken off (to events@)"], ["fundraiseTeamHandoverCode", "Team organiser handover code"],
+    ["fundraiseTeamMemberJoined", "Team member approved (to the team organiser)"],
     // Event tickets: the buyer's tickets and refund, and the two to events@.
     ["eventTickets", "Event tickets (to the buyer)"], ["eventTicketsRefund", "Event tickets refund (to the buyer)"],
     ["eventTicketsRefundAsked", "Event tickets refund asked for (to events@)"], ["eventTicketsToApprove", "Event tickets to approve (to events@)"],

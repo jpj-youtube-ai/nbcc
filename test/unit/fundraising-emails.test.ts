@@ -70,7 +70,7 @@ describe("the questions box", () => {
 
   it("asks, then offers a call and an email side by side, equally", () => {
     expect(html).toContain("Got any questions?");
-    expect(html).toContain("We’d love to hear from you. Give us a ring or drop us a line, whichever suits you.");
+    expect(html).toContain("We'd love to hear from you. Give us a ring or drop us a line, whichever suits you.");
     expect(html).toContain('<table role="presentation"');
     expect(html).toContain("Call us");
     expect(html).toContain(`<a href="${PHONE_HREF}"`);
@@ -152,15 +152,15 @@ describe("thanks for signing up", () => {
   it("says the words Jaimie signed off", () => {
     expect(mail.subject).toBe("Thank you for fundraising for NBCC!");
     expect(mail.html).toContain("Fundraising for NBCC");
-    expect(mail.html).toContain("Thank you, you’ve made our day!");
-    expect(mail.html).toContain("We’re so excited that you want to raise money for NBCC. Every pound you raise helps the children, young people and vulnerable adults we support, all year round, and we can’t wait to cheer you on.");
+    expect(mail.html).toContain("Thank you, you've made our day!");
+    expect(mail.html).toContain("We're so excited that you want to raise money for NBCC. Every pound you raise helps the children, young people and vulnerable adults we support, all year round, and we can't wait to cheer you on.");
     expect(mail.html).toContain("What happens next");
     expect(mail.html).toContain("<ol");
     for (const step of [
-      "Someone from our team will look at what you’ve sent us.",
-      "We’ll be in touch within a few days, usually with a quick, friendly call, to say hello and talk through your plans.",
-      "Once we’ve spoken, we’ll get you set up with everything you need.",
-      "Nothing goes on our website until we’ve spoken. If this wasn’t you, don’t worry, you can ignore this email.",
+      "Someone from our team will look at what you've sent us.",
+      "We'll be in touch within a few days, usually with a quick, friendly call, to say hello and talk through your plans.",
+      "Once we've spoken, we'll get you set up with everything you need.",
+      "Nothing goes on our website until we've spoken. If this wasn't you, don't worry, you can ignore this email.",
     ]) {
       expect(mail.html).toContain(step);
       expect(mail.text).toContain(step);
@@ -224,9 +224,11 @@ describe("the summary to the events inbox", () => {
     expect(mail.html).toContain(">Open the admin</a>");
   });
 
-  it("signs off Go team!, with no questions box: it is for the team", () => {
-    expect(mail.html).toContain("Go team!<br>");
-    expect(mail.text).toContain("Go team!\nNBCC Team");
+  // Every staff notice signs off the same way (Jaimie, 2026-10-04).
+  it("signs off Thank you!, with no questions box: it is for the team", () => {
+    expect(mail.html).toContain("Thank you!<br>");
+    expect(mail.text).toContain("Thank you!\nNBCC Team");
+    expect(mail.html + mail.text).not.toContain("Go team!");
     expect(mail.html).not.toContain("Got any questions?");
     expect(mail.text).not.toContain("Got any questions?");
   });
@@ -258,7 +260,7 @@ describe("your page is live", () => {
     expect(mail.subject).toBe("Your fundraising page is live: Sam's <Santa> Dash");
     expect(mail.html).toContain("Your page is live!");
     expect(mail.text).toContain("Hi Sam,");
-    expect(mail.html).toContain("Brilliant news: <b>Sam&#39;s &lt;Santa&gt; Dash</b> is approved and your very own NBCC fundraising page is live. We can’t wait to watch your meter fill up!");
+    expect(mail.html).toContain("Brilliant news: <b>Sam&#39;s &lt;Santa&gt; Dash</b> is approved and your very own NBCC fundraising page is live. We can't wait to watch your meter fill up!");
     expect(mail.html).toContain(`href="${PAGE}"`);
     expect(mail.html).toContain(">See my page</a>");
     expect(mail.text).toContain(PAGE);
@@ -281,13 +283,13 @@ describe("you're on our list", () => {
 
   it("says the words Jaimie signed off, with no page link", () => {
     expect(mail.subject).toBe("You're on our list: Sam's <Santa> Dash");
-    expect(mail.html).toContain("You’re on our list!");
-    expect(mail.html).toContain("Thank you so much for doing <b>Sam&#39;s &lt;Santa&gt; Dash</b> for NBCC. It’s all approved, and you’re officially part of the NBCC family.");
-    expect(mail.html).toContain("If you asked us to show it, you’ll find it on our Get involved page at <b>nbcc.scot/get-involved</b>. We’ll be in touch about anything you asked us for.");
+    expect(mail.html).toContain("You're on our list!");
+    expect(mail.html).toContain("Thank you so much for doing <b>Sam&#39;s &lt;Santa&gt; Dash</b> for NBCC. It's all approved, and you're officially part of the NBCC family.");
+    expect(mail.html).toContain("If you asked us to show it, you'll find it on our Get involved page at <b>nbcc.scot/get-involved</b>. We'll be in touch about anything you asked us for.");
     expect(mail.text).not.toContain("/fundraise/");
   });
 
-  it("is signed, with the questions box", () => expectSignedWithQuestions(mail, "You’re a star. Thank you,"));
+  it("is signed, with the questions box", () => expectSignedWithQuestions(mail, "You're a star. Thank you,"));
   it("is plain English", () => expectPlainEnglish(mail.text));
 });
 
@@ -299,21 +301,21 @@ describe("the sign in code", () => {
   it("says the approved words, with the code in its box and in the subject", () => {
     expect(mail.subject).toBe("Your NBCC sign in code: 482 915");
     expect(mail.html).toContain("Fundraising for NBCC");
-    expect(mail.html).toContain("Here’s your code");
+    expect(mail.html).toContain("Here's your code");
     expect(mail.html).toContain("Hi Sam,");
-    expect(mail.html).toContain("Here’s your code to open your private fundraising area. It works for 10 minutes.");
+    expect(mail.html).toContain("Here's your code to open your private fundraising area. It works for 10 minutes.");
     expect(mail.html).toContain(codeBox("482915"));
     expect(mail.html).toContain(
-      "Inside you’ll find your QR code, your latest gifts and messages, and everything you need to update your page or pay in what you’ve collected.",
+      "Inside you'll find your QR code, your latest gifts and messages, and everything you need to update your page or pay in what you've collected.",
     );
-    expect(mail.html).toContain("Didn’t ask for this? No problem, just ignore this email. Nobody can get in without the code.");
+    expect(mail.html).toContain("Didn't ask for this? No problem, just ignore this email. Nobody can get in without the code.");
   });
 
   it("has a plain text part with the same words and the code", () => {
     expect(mail.text).toContain("Hi Sam,");
-    expect(mail.text).toContain("Here’s your code to open your private fundraising area. It works for 10 minutes.");
+    expect(mail.text).toContain("Here's your code to open your private fundraising area. It works for 10 minutes.");
     expect(mail.text).toContain("482915");
-    expect(mail.text).toContain("Didn’t ask for this? No problem, just ignore this email. Nobody can get in without the code.");
+    expect(mail.text).toContain("Didn't ask for this? No problem, just ignore this email. Nobody can get in without the code.");
   });
 
   it("greets anyone without a safe first name as Hi there", () => {
@@ -363,8 +365,8 @@ describe("your update is live", () => {
     expect(mail.subject).toBe("Your update is live: Sam's <Santa> Dash");
     expect(mail.html).toContain("Your update is live!");
     expect(mail.text).toContain("Hi Sam,");
-    expect(mail.html).toContain("Good news: we’ve checked your changes to <b>Sam&#39;s &lt;Santa&gt; Dash</b> and they’re now on your page.");
-    expect(mail.html).toContain("Why not share it again so everyone sees what’s new? A fresh share often brings in a few more gifts.");
+    expect(mail.html).toContain("Good news: we've checked your changes to <b>Sam&#39;s &lt;Santa&gt; Dash</b> and they're now on your page.");
+    expect(mail.html).toContain("Why not share it again so everyone sees what's new? A fresh share often brings in a few more gifts.");
     expect(mail.html).toContain(`href="${PAGE}"`);
     expect(mail.text).toContain(PAGE);
   });
@@ -375,7 +377,7 @@ describe("your update is live", () => {
     const noPage = buildEditApprovedEmail(who, { pageUrl: null });
     expect(noPage.subject).toBe("Your update is saved: Sam's <Santa> Dash");
     expect(noPage.html).toContain("Your update is saved!");
-    expect(noPage.html).toContain("Good news: we’ve checked your changes to <b>Sam&#39;s &lt;Santa&gt; Dash</b> and they’re all saved.");
+    expect(noPage.html).toContain("Good news: we've checked your changes to <b>Sam&#39;s &lt;Santa&gt; Dash</b> and they're all saved.");
     expect(noPage.text).not.toContain("on your page");
     expect(noPage.text).not.toContain("/fundraise/");
     expect(noPage.html).not.toContain("See my page");
@@ -405,7 +407,7 @@ describe("about your update", () => {
     expect(mail.subject).toBe("About your update to Sam's <Santa> Dash");
     expect(mail.html).toContain("About your update");
     expect(mail.text).toContain("Hi Sam,");
-    expect(mail.html).toContain("Thank you for updating <b>Sam&#39;s &lt;Santa&gt; Dash</b>. We haven’t put this change on your page just yet, and someone from our team will give you a quick ring to talk it through.");
+    expect(mail.html).toContain("Thank you for updating <b>Sam&#39;s &lt;Santa&gt; Dash</b>. We haven't put this change on your page just yet, and someone from our team will give you a quick ring to talk it through.");
     expect(mail.html).toContain("Nothing to worry about: your page is still live, just as it was, and gifts are still coming in.");
     expect(mail.html).not.toContain("<Santa>");
   });
@@ -464,7 +466,8 @@ describe("the summary to the events inbox, with the new answers", () => {
   it("shows every event answer", () => {
     for (const line of [
       "Front of the card: Eight rounds and a raffle.",
-      "When: 2026-12-04 at 19:30 to 22:30, the time is still to be confirmed",
+      // The stored day, written as every email writes a date (Jaimie, 2026-10-04).
+      "When: Friday 4th December 2026 at 19:30 to 22:30, the time is still to be confirmed",
       "Full address: Main Street, Exampleton, KA1 1AA",
       "Access: Step free entry, Hearing loop",
       "Price: £5 on the door",

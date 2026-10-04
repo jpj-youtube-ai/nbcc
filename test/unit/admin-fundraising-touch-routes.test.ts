@@ -141,8 +141,9 @@ describe("the overview", () => {
     const res = await run(routes.getTouch, { token: tokenFor("viewer") });
     const body = res.body as Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
     expect(body.settings).toEqual({ on: false, updatedAt: null, updatedBy: null });
+    // The nine to an organiser, then the one to a team organiser about a new member (Jaimie, 2026-10-04).
     expect(body.kinds.map((k: { kind: string }) => k.kind)).toEqual([
-      "first_gift", "halfway", "target", "week_before", "week_after", "finished", "year_on", "need_a_hand", "on_track",
+      "first_gift", "halfway", "target", "week_before", "week_after", "finished", "year_on", "need_a_hand", "on_track", "team_joined",
     ]);
     expect(body.kinds.find((k: { kind: string }) => k.kind === "need_a_hand").newWording).toBe(true);
     expect(body.kinds.find((k: { kind: string }) => k.kind === "halfway").newWording).toBe(false);
@@ -273,6 +274,8 @@ describe("signing off the new wording (Jaimie, 2026-10-03)", () => {
     expect(waiting).toEqual({
       first_gift: [], halfway: [], target: [], week_before: [], week_after: ["week_after_zero"],
       finished: ["finished", "finished_zero"], year_on: ["year_on_zero"], need_a_hand: [], on_track: [],
+      // New wording, never seeded as approved: it waits for an admin.
+      team_joined: ["team_joined"],
     });
     expect(body.approvals.target).toEqual({ approvedAt: "2026-10-03T11:00:00.000Z", approvedBy: "Jaimie" });
     expect(body.approvals.finished).toBeUndefined();
@@ -302,6 +305,66 @@ describe("signing off the new wording (Jaimie, 2026-10-03)", () => {
     expect(zero).toMatchObject({ newWording: true, wordingKey: "year_on_zero", approval: null });
     const old = (await run(routes.getTouchPreview, { token: t, params: { kind: "halfway" } })).body as Record<string, unknown>;
     expect(old).toMatchObject({ newWording: false, wordingKey: null, approval: null });
+  });
+});
+
+// Jaimie, 2026-10-04: the email to a team organiser when a new member's page is approved is new
+// wording. It is read and approved here, with the others, under the key "team_joined".
+describe("the new team member email, read and signed off with the others", () => {
+  it("is listed with when it goes, as new wording waiting for sign off", async () => {
+    const body = (await run(routes.getTouch, { token: tokenFor("viewer") })).body as Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
+    const k = body.kinds.find((x: { kind: string }) => x.kind === "team_joined");
+    expect(k).toEqual({
+      kind: "team_joined",
+      label: "A new member has joined your team",
+      when: "To the team organiser, when you approve a new team member's page. Never about their own page.",
+      newWording: true,
+      waiting: ["team_joined"],
+    });
+  });
+
+  it("is no longer waiting once it is approved", async () => {
+    touch.listWordingApprovals.mockResolvedValue([{ key: "team_joined", approvedAt: "2026-10-05T09:00:00.000Z", approvedBy: "admin:fern@example.com" }]);
+    const body = (await run(routes.getTouch, { token: tokenFor("viewer") })).body as Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
+    expect(body.kinds.find((x: { kind: string }) => x.kind === "team_joined").waiting).toEqual([]);
+    expect(body.approvals.team_joined).toEqual({ approvedAt: "2026-10-05T09:00:00.000Z", approvedBy: "admin:fern@example.com" });
+  });
+
+  it("can be read by anyone who can see Fundraising, as an invented example, with its sign off", async () => {
+    const res = await run(routes.getTouchPreview, { token: tokenFor("viewer"), params: { kind: "team_joined" } });
+    expect(res.statusCode).toBe(200);
+    const body = res.body as Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
+    expect(body).toMatchObject({ kind: "team_joined", label: "A new member has joined your team", newWording: true, wordingKey: "team_joined", approval: null, sample: true });
+    expect(body.subject).toBe("Alex has joined Team Tinsel");
+    expect(body.html).toContain("Alex has joined your team!");
+    expect(body.html).toContain('href="https://nbcc.test/fundraise/team-tinsel"');
+    // It is always the example, whoever is picked in "Show it for".
+    const picked = await run(routes.getTouchPreview, { token: tokenFor("viewer"), params: { kind: "team_joined" }, query: { fundraiserId: "12" } });
+    expect((picked.body as Record<string, unknown>).subject).toBe("Alex has joined Team Tinsel");
+    expect(touch.touchFundraiser).not.toHaveBeenCalled();
+  });
+
+  it("says in the preview who approved it and when", async () => {
+    touch.listWordingApprovals.mockResolvedValue([{ key: "team_joined", approvedAt: "2026-10-05T09:00:00.000Z", approvedBy: "admin:fern@example.com" }]);
+    const res = await run(routes.getTouchPreview, { token: tokenFor("viewer"), params: { kind: "team_joined" } });
+    expect((res.body as Record<string, unknown>).approval).toEqual({ approvedAt: "2026-10-05T09:00:00.000Z", approvedBy: "admin:fern@example.com" });
+  });
+
+  it("is approved and withdrawn by an admin only, recorded like the others", async () => {
+    for (const r of ["viewer", "editor"]) {
+      const t = tokenFor(r);
+      expect((await run(routes.postWordingApproval, { token: t, params: { key: "team_joined" } })).statusCode).toBe(403);
+      expect((await run(routes.deleteWordingApproval, { token: t, params: { key: "team_joined" } })).statusCode).toBe(403);
+    }
+    expect(touch.approveWording).not.toHaveBeenCalled();
+    touch.approveWording.mockResolvedValue({ key: "team_joined", approvedAt: "2026-10-05T09:00:00.000Z", approvedBy: "admin:fern@example.com" });
+    const res = await run(routes.postWordingApproval, { token: tokenFor("admin"), params: { key: "team_joined" } });
+    expect(res.statusCode).toBe(200);
+    expect(touch.approveWording).toHaveBeenCalledWith("team_joined", "admin:fern@example.com");
+    touch.withdrawWording.mockResolvedValue(true);
+    const gone = await run(routes.deleteWordingApproval, { token: tokenFor("admin"), params: { key: "team_joined" } });
+    expect(gone.statusCode).toBe(200);
+    expect(touch.withdrawWording).toHaveBeenCalledWith("team_joined", "admin:fern@example.com");
   });
 });
 

@@ -44,6 +44,7 @@ import { ballSettingsUpdateSchema } from "../ball/settings";
 import { hashPassword } from "../admin/password";
 import { bookingsCsv, cateringCsv, doorListCsv } from "../ball/exports";
 import { buildBallReminderEmail } from "../ball/reminder-email";
+import { daysToBall } from "../ball/run-up";
 import { sendBallReminder, sendBallRunUp } from "../clients/email";
 import { availability } from "../ball/capacity";
 import { holdCreateSchema, seatsForHold } from "../ball/holds";
@@ -4049,6 +4050,8 @@ export async function postAdminBallReminders(req: Request, res: Response): Promi
       getBallSettings(),
     ]);
     const base = config.BALL_BASE_URL.replace(/\/+$/, "");
+    const { BALL_EVENT_DATE } = await import("../ball/run-up-runner");
+    const daysToGo = daysToBall(new Date(), BALL_EVENT_DATE);
 
     let sent = 0;
     const failed: string[] = [];
@@ -4060,6 +4063,9 @@ export async function postAdminBallReminders(req: Request, res: Response): Promi
           arrivalTime: settings.arrivalTime,
           includedNote: settings.includedNote,
           guestLink: t.guestToken ? `${base}/ball/guests/${t.guestToken}` : null,
+          // The true time to go today, so the button is never wrong either: "A week to go" only a
+          // week before, otherwise "10 days to go", "4 days to go" or "Tomorrow".
+          daysToGo,
         },
       );
       try {

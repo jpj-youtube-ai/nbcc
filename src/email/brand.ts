@@ -172,7 +172,7 @@ export const signOff = (line: string): string =>
 export const signOffText = (line: string): string => `${line}\nNBCC Team`;
 
 export const QUESTIONS_HEADING = "Got any questions?";
-export const QUESTIONS_LINE = "We’d love to hear from you. Give us a ring or drop us a line, whichever suits you.";
+export const QUESTIONS_LINE = "We'd love to hear from you. Give us a ring or drop us a line, whichever suits you.";
 
 // One of the two equal tiles. A table cell, because a mail client's idea of a flex box is none at
 // all. The value wraps rather than overflows, so a long address still fits a phone.
@@ -219,7 +219,8 @@ export const signOffAsText = (line: string, name: string): string => `${line}\n$
 // approved them on 2026-10-02: the total large in the serif maroon, "raised of" the target, and a
 // tan bar filled in crimson. Additive; nothing else moves.
 
-const poundsOf = (pence: number): string => {
+/** £10, £10.50, £1,000: whole pounds without pence, and pence only when the amount is not whole. */
+export const pounds = (pence: number): string => {
   const whole = pence % 100 === 0;
   return `£${(pence / 100).toLocaleString("en-GB", { minimumFractionDigits: whole ? 0 : 2, maximumFractionDigits: 2 })}`;
 };
@@ -227,14 +228,14 @@ const poundsOf = (pence: number): string => {
 /** "£250 raised of £500" over a bar filled to the percentage (held at 100), or the total alone. */
 export const meterBar = (raisedPence: number, targetPence: number | null): string => {
   const raised = Math.max(0, Math.floor(raisedPence));
-  const total = `<b style="font-family:${HEAD};font-size:20px;color:${MAROON}">${poundsOf(raised)}</b>`;
+  const total = `<b style="font-family:${HEAD};font-size:20px;color:${MAROON}">${pounds(raised)}</b>`;
   if (!targetPence || targetPence <= 0) {
     return `<div style="margin:6px 0 18px;font-family:${BODY_FONT};font-size:14px;color:${SLATE}">${total} raised so far</div>`;
   }
   const pc = Math.min(100, Math.round((raised * 100) / targetPence));
   return (
     `<div style="margin:6px 0 18px"><div style="font-family:${BODY_FONT};font-size:14px;color:${SLATE};margin:0 0 6px">` +
-    `${total} raised of ${poundsOf(targetPence)}</div>` +
+    `${total} raised of ${pounds(targetPence)}</div>` +
     `<div style="background:${TAN_SOFT};border-radius:999px;height:12px;overflow:hidden"><div style="background:${CRIMSON};width:${pc}%;height:12px"></div></div></div>`
   );
 };

@@ -8,7 +8,11 @@
 // press it, and anyone who booked afterwards never got one.
 
 export const CHASE_DAYS_BEFORE_LOCK = 14;
-export const PRACTICAL_DAYS_BEFORE_EVENT = 3;
+// Jaimie, 2026-10-04: the practical email says "A week to go" and "A week on Saturday you'll be with
+// us", so it goes a week before the Ball. It went 3 days before, which made its own words wrong.
+// Sent on any other day (to someone who booked in the last week, or early with the staff button) it
+// says the true number of days instead: daysToBall below, and ./reminder-email.ts.
+export const PRACTICAL_DAYS_BEFORE_EVENT = 7;
 
 export type RunUpStage = "chase" | "final-call" | "practical";
 
@@ -40,6 +44,43 @@ export interface RunUpWindow {
 
 const days = (n: number) => n * 24 * 60 * 60 * 1000;
 
+// The practical email is timed by the DAY in the UK, not by counting hours back from the 7pm start:
+// the morning run a week before is hours short of seven whole days, and would otherwise wait until
+// the next morning.
+const UK_DAY = new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/London", year: "numeric", month: "2-digit", day: "2-digit" });
+const ukDay = (at: Date): string => UK_DAY.format(at);
+function daysBefore(day: string, n: number): string {
+  const d = new Date(`${day}T12:00:00Z`);
+  d.setUTCDate(d.getUTCDate() - n);
+  return d.toISOString().slice(0, 10);
+}
+
+/**
+ * How many days it is to the Ball, counted by the day in the UK: 7 on the Saturday before, 1 the day
+ * before, 0 on the day, below 0 after it. The reminder says this number when it is not a week.
+ */
+export function daysToBall(now: Date, eventDate: Date): number {
+  const at = (day: string) => new Date(`${day}T12:00:00Z`).getTime();
+  return Math.round((at(ukDay(eventDate)) - at(ukDay(now))) / days(1));
+}
+
+/**
+ * Is the practical reminder due for this booking today?
+ *
+ * From the day a week before the Ball, up to the day before it, for any paid booking that has not
+ * had it. So everyone booked in good time gets it on the morning a week before, and someone who
+ * books inside the last week gets it on the next morning's run (as they always did), saying the true
+ * number of days. A send that failed is not stamped, so a later morning tries again. Never on the
+ * day of the Ball or after it: a booking first seen by that morning's run (paid the day before after
+ * the run, or on the day) gets no reminder; its confirmation, hours old, has the same details.
+ */
+function practicalDue(booking: RunUpBooking, window: RunUpWindow): boolean {
+  if (booking.reminderSentAt !== null) return false;
+  const today = ukDay(window.now);
+  const eventDay = ukDay(window.eventDate);
+  return today >= daysBefore(eventDay, PRACTICAL_DAYS_BEFORE_EVENT) && today < eventDay;
+}
+
 export function outstanding(booking: RunUpBooking): boolean {
   return booking.guestsNamed < booking.seats;
 }
@@ -53,15 +94,10 @@ export function stageFor(booking: RunUpBooking, window: RunUpWindow): RunUpStage
   if (!booking.buyerEmail) return null;
   const now = window.now.getTime();
 
-  // The practical email goes to EVERYONE a few days out, whether or not they ever sent guest
-  // details. It is the one that says where to go and when, so it is not conditional on them
-  // having done their bit.
-  if (
-    booking.reminderSentAt === null &&
-    now >= window.eventDate.getTime() - days(PRACTICAL_DAYS_BEFORE_EVENT)
-  ) {
-    return "practical";
-  }
+  // The practical email goes to EVERYONE, a week out (or the morning after a later booking), whether
+  // or not they ever sent guest details. It is the one that says where to go and when, so it is not conditional
+  // on them having done their bit.
+  if (practicalDue(booking, window)) return "practical";
 
   // A chase whose whole point is a link, with no link in it, is worse than silence.
   if (!booking.guestToken) return null;

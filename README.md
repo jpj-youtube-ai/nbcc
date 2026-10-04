@@ -3015,7 +3015,7 @@ Then, per paid booking:
 | On every guest-form save | A read-back of exactly what we now hold | That buyer |
 | 14 days before the lock date | "We still need your guest list", with the date | Anyone outstanding |
 | On the lock date | Last call | Anyone still outstanding |
-| 3 days before the ball | The practical email, with their guests read back | Everyone |
+| A week before the Ball (the morning of Saturday 31 October); the morning after, for a booking paid in the last week | The practical "A week to go" email, with their guests read back; it says the true days to go when it is not a week | Everyone |
 
 The schedule is pure (`src/ball/run-up.ts`) and unit-tested without a clock or a database; the
 wiring is `src/ball/run-up-runner.ts`. It rides the **existing** daily EventBridge task
@@ -3082,7 +3082,23 @@ report off and remove everyone from it.
 
 `POST /api/admin/ball/reminders` (Editor+ with the ball section). The original staff-triggered
 button, kept because it is still the way to send this early or re-send it. Since TASK-338 the same
-email also goes out automatically three days before the ball, to anyone who has not had it.
+email also goes out automatically a week before the Ball, to anyone who has not had it. It went
+three days before until Jaimie changed it on 2026-10-04: the email says "A week to go", so it now
+goes when that is true. It is timed by the day in the UK (`daysToBall` in `src/ball/run-up.ts`), so
+the morning run on Saturday 31 October sends it. From then until the day before the Ball, each
+morning's run sends it to any paid booking that has not had it: a send that failed, or a booking
+paid in the last week (the morning after it is paid, as before). It is never sent on the day of the
+Ball or after, so a booking first seen by that morning's run (paid on 6 November after the run, or
+on the 7th) gets none: its confirmation, hours old, has the same details.
+
+**It says the true time to go** (`daysToGo` in `buildBallReminderEmail`). Exactly a week before,
+or with no number given, it is word for word as it always was (a fixture of origin/main's output is
+compared byte for byte in `test/unit/ball-reminder-days-to-go.test.ts`). On any other day the three
+places that say "a week" say the real number instead: the subject and the small line above the
+heading read "4 days to go" (or "Tomorrow" the day before), and "A week on Saturday you'll be with
+us" reads "In 4 days you'll be with us" ("Tomorrow you'll be with us"). The staff button passes
+today's number too, so it is right when pressed early ("10 days to go") or late. Nobody gets it
+twice: both ways of sending write and check the one `reminder_sent_at` stamp.
 
 It carries the practical details **and reads back what the booker told us** — guest names,
 allergies, access needs. That is the point of it: a coeliac note that never saved is caught a week
@@ -8973,6 +8989,66 @@ where each is up to (`print` in `GET /api/fundraise/manage/me`: `{ canAsk, poste
 | Naming the scans in Analytics | `src/db/analytics-report.ts`, `src/site/qr.ts` (`labelQrScans`) |
 | The five pictures and the zip | `assets/js/fundraise-social.js` |
 | Tests | `test/unit/materials-statement.test.ts`, `fundraising-material-codes.test.ts`, `fundraising-materials-v2.test.ts`, `fundraise-materials-v2-routes.test.ts`, `fundraising-print-requests.test.ts`, `fundraiser-materials-db.test.ts`, and additions to the TASK-504 tests, the private area, admin, logo pack, Analytics label and social picture tests; BDD `features/fundraising-materials-v2.feature` |
+
+## The fundraising and events emails: one style, and the agreed wording changes (2026-10-04)
+
+Jaimie read all 69 fundraising and events emails and agreed a set of changes. They cover the
+fundraising, team, in memory, pledge, event page and ticket emails, and the staff notices about
+them. **The Festive Ball emails (46 to 56) and the Ball's staff notice (69) are deliberately left
+exactly as they were until after the Ball on 7 November 2026**, apart from the "A week to go"
+reminder (55): when it is sent, and that it says the true time to go when it is not a week (see
+"The week-before reminder" under the Festive Ball). The newsletter, donation
+receipts, Gift Aid emails and business outreach are not touched.
+
+**One style** (guarded by `test/unit/email-one-style.test.ts`, which builds every email in scope):
+
+- **Apostrophes are straight (`'`) everywhere**: subjects, HTML and plain text. The names and titles
+  people type, the footer's postal address and the ready-made team message are always straight, so
+  this is the one rule under which a whole email is one kind, and it is the safest in a subject and a
+  plain text part.
+- **Money**: whole pounds with no pence (£10), pence only when the amount is not whole (£10.50).
+- **Dates** are written by ONE helper, `src/email/dates.ts`: `emailDate()` gives "Saturday 7th
+  November" (with the year where one is shown), plain, for a subject, a plain text part and anything
+  else that cannot carry markup; each email's shell passes its body through `raiseOrdinals()`, which
+  raises the st, nd, rd or th (`7<sup>th</sup>`) wherever a day is followed by its month, and never
+  inside a tag. A staff notice that showed a stored date ("2026-12-05 at 10:00") uses it too.
+- **Staff notices (57 to 68)** sign off "Thank you!" then "NBCC Team" (`STAFF_SIGN_OFF`), except 58,
+  the notice about a new page in memory of someone, which stays deliberately quiet: "Thank you."
+
+**In memory emails** (the invite, the receipt, the two "page is live" emails, the thank you to a
+giver on an in memory page, and the sign in code): open "Dear [first name]," (`dearGreeting`;
+"Hello," when there is no first name we can use), have "In memory" above the heading, sign off
+"With warmest thoughts,", and have no exclamation marks. The **sign in code** has a gentle version
+for anyone with a page in memory of someone (`buildSignInCodeEmail(..., { gentle: true })`, asked
+for by `postManageRequest` when any of their pages is in memory); everyone else's is unchanged.
+
+**A page for someone under 18**: the automatic emails go to the parent or guardian, and
+`buildTouchEmail` now writes them for the parent throughout ("Jack's page", "Jack has raised",
+"Jack is doing great!"; "the page for James" for a name ending in s). It builds the greeting itself
+("Hi Sarah, this is about Jack's page."), so the daily run no longer applies `greetGuardian` to
+them. An adult's emails are byte for byte as they were.
+
+**A new email, "[First name] has joined [team name]"** (`buildTeamMemberJoinedEmail`, sent by
+`sendTeamMemberJoined` in `src/fundraising/team-send.ts`, logged as `fundraiseTeamMemberJoined`):
+to the team organiser when staff approve a new team member's page, once the member's own "Your page
+is live" has gone. It is new wording, so it is **held until an admin approves it**: key
+`team_joined` in `touch_wording_approvals`, read and approved in Admin > Fundraising > Automatic
+emails with the others (`GET /api/admin/fundraising/touch` lists it as a tenth kind, `team_joined`;
+`GET .../touch/preview/team_joined` is always the invented example; `POST` and `DELETE
+.../touch/approvals/team_joined` approve and withdraw, admins only, in History as the other
+wordings are). It is an automatic email, so it also waits for the Automatic emails switch and for
+fundraising to be on. While it is held nothing is sent and nothing is logged, and it is not sent
+later. Never to the team organiser about their own page, never for a page in memory of someone,
+never to an address that asked us to stop. A member under 18 is named by the child's first name as
+their page shows it; the parent's name and email are never in it. No migration: the approvals
+table takes any key, and no row means not approved.
+
+**Approvals are by key, not by wording**, so rewording an approved email leaves it approved. The
+approved or approvable emails whose words changed here, which the charity should read again:
+`invite_memory` (13), `target` (25), `on_track` (26), `need_a_hand` (27), `year_on_zero` (29),
+`week_after_zero` (30), `finished` and `finished_zero` (31), `pledge_pay` (38) and
+`pledge_reminder` (39). For most the only change is straight apostrophes; the parent versions of 25
+to 31 are new words under the same keys.
 
 ## Community fundraising, keeping in touch (TASK-515)
 

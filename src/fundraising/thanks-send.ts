@@ -72,7 +72,8 @@ async function sendOne(g: QueuedThanksGift, tally: Tally): Promise<void> {
       outcome = "skipped";
       reason = verdict.reason;
     } else if (verdict && verdict.send && g.email) {
-      const mail = buildSupporterThanksEmail({ organiserName: g.organiserName, title: g.title, message: g.message, inMemory: g.inMemory === true });
+      // The giver's name is only used to greet them on a page in memory of someone ("Dear Sam,").
+      const mail = buildSupporterThanksEmail({ organiserName: g.organiserName, title: g.title, message: g.message, inMemory: g.inMemory === true, giverName: g.donorName });
       await sendFundraiseSupporterThanks(g.donorName, { email: g.email, from: config.BALL_FROM_EMAIL, replyTo: config.BALL_FROM_EMAIL, ...mail });
       outcome = "sent";
     }

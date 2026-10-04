@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   stageFor,
+  PRACTICAL_DAYS_BEFORE_EVENT,
   planRunUp,
   runRunUpPass,
   outstanding,
@@ -90,10 +91,38 @@ describe("the final call", () => {
   });
 });
 
-describe("the practical email a few days out", () => {
-  it("waits until three days before", () => {
-    expect(stageFor(booking({ guestsNamed: 10 }), at("2026-11-02T09:00:00Z"))).toBeNull();
-    expect(stageFor(booking({ guestsNamed: 10 }), at("2026-11-05T09:00:00Z"))).toBe("practical");
+// Jaimie, 2026-10-04: the email says "A week to go", so it goes a week before the Ball (it went 3
+// days before). The Ball is on Saturday 7 November 2026, so that is Saturday 31 October.
+describe("the practical email, a week before", () => {
+  it("waits until seven days before", () => {
+    expect(PRACTICAL_DAYS_BEFORE_EVENT).toBe(7);
+    expect(stageFor(booking({ guestsNamed: 10 }), at("2026-10-30T09:00:00Z"))).toBeNull();
+    expect(stageFor(booking({ guestsNamed: 10 }), at("2026-10-31T08:00:00Z"))).toBe("practical");
+  });
+
+  // The morning run is hours before the Ball's 7pm start, a week on. Counting hours would hold it
+  // until the next morning, a day late for "a week on Saturday".
+  it("goes by the day in the UK, not by counting hours back from the start", () => {
+    expect(stageFor(booking(), at("2026-10-31T00:30:00Z"))).toBe("practical");
+    // 23:30 UTC on Friday 30 October is still the 30th in the UK (the clocks went back on the 25th).
+    expect(stageFor(booking(), at("2026-10-30T23:30:00Z"))).toBeNull();
+  });
+
+  // The charity's decision: someone who books inside the last week still gets it, on the next
+  // morning's run, as they always did. The email then says the true time to go ("4 days to go",
+  // "Tomorrow": test/unit/ball-reminder-days-to-go.test.ts), never "A week to go".
+  it("goes, the next morning, to a booking made in the last week", () => {
+    for (const now of ["2026-11-01T08:00:00Z", "2026-11-03T08:00:00Z", "2026-11-06T08:00:00Z"]) {
+      expect(stageFor(booking({ guestsNamed: 10 }), at(now)), now).toBe("practical");
+    }
+  });
+
+  // A send that failed is not stamped, so the next morning tries again, up to the day before.
+  it("is tried again on a later morning if it did not go, but never on the day of the Ball or after", () => {
+    expect(stageFor(booking({ guestsNamed: 10 }), at("2026-11-02T08:00:00Z"))).toBe("practical");
+    expect(stageFor(booking({ guestsNamed: 10 }), at("2026-11-06T08:00:00Z"))).toBe("practical");
+    expect(stageFor(booking({ guestsNamed: 10 }), at("2026-11-07T08:00:00Z"))).toBeNull();
+    expect(stageFor(booking({ guestsNamed: 10 }), at("2026-11-09T08:00:00Z"))).toBeNull();
   });
 
   // It says where to go and when. Someone who never sent their guest list still has to be able

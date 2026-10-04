@@ -1,8 +1,9 @@
 import { emailShell, heading, subheading, eyebrow, bodyP, bodyList, note, button, card, signOff, signOffText, questionsBox, questionsText } from "../email/brand";
 import { CHARITY_NAME, FOOTER_TEXT, OSCR_NUMBER, POSTAL_ADDRESS } from "../legal/registration";
 import { dateParts, timeText } from "../events/render";
+import { emailDate, raiseOrdinals } from "../email/dates";
 import { safeFirstName } from "../fundraising/emails";
-import { pounds, ticketsWords, type OrderLine, type ProposedType } from "./model";
+import { closeWords, pounds, ticketsWords, type OrderLine, type ProposedType } from "./model";
 
 // Event tickets: the emails, built here and sent by src/tickets/send.ts, From and Reply-To the events
 // inbox (events@nbcc.scot), like every fundraising email. Pure: no pool, no config, no clock.
@@ -29,7 +30,8 @@ export interface BuiltEmail {
 const escapeHtml = (s: string): string =>
   s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
 
-const shell = (body: string) => emailShell(body, { contactEmail: TICKETS_EMAIL, registration: true, postalAddress: POSTAL_ADDRESS });
+// Every date in the body has its ending raised ("7th" as 7<sup>th</sup>): ../email/dates.ts.
+const shell = (body: string) => emailShell(raiseOrdinals(body), { contactEmail: TICKETS_EMAIL, registration: true, postalAddress: POSTAL_ADDRESS });
 
 function toBuyer(subject: string, bodyHtml: string, textLines: string[], line: string): BuiltEmail {
   const html = shell(bodyHtml + signOff(line) + questionsBox(TICKETS_EMAIL));
@@ -62,6 +64,13 @@ export function whenWords(e: Pick<TicketEmailEvent, "eventDate" | "startTime" | 
   return `${p.dayName} ${p.day} ${p.month} ${p.year}${time ? `, ${time}` : ""}`;
 }
 
+/** The same in an email: "Saturday 5th December 2026, 7.30pm to 10.30pm" (../email/dates.ts). */
+function emailWhenWords(e: Pick<TicketEmailEvent, "eventDate" | "startTime" | "endTime" | "timeTbc">): string {
+  if (!e.eventDate) return "";
+  const time = timeText({ start: e.startTime, end: e.endTime, timeTbc: e.timeTbc }, true);
+  return `${emailDate(e.eventDate, { year: true })}${time ? `, ${time}` : ""}`;
+}
+
 const lineWords = (l: OrderLine) => (l.unitPence === 0 ? `${l.quantity} × ${l.typeName}, free` : `${l.quantity} × ${l.typeName} at ${pounds(l.unitPence)} each`);
 
 const NOT_A_GIFT = "Tickets are not donations, so Gift Aid does not apply to them.";
@@ -79,7 +88,7 @@ export function buildTicketConfirmationEmail(
   e: TicketEmailEvent,
   o: { reference: string; firstName: string; lines: OrderLine[]; ticketsPence: number; feeCoverPence: number; totalPence: number },
 ): BuiltEmail {
-  const when = whenWords(e);
+  const when = emailWhenWords(e);
   const lines = o.lines.filter((l) => l.quantity > 0);
   // A free booking (every ticket £0) paid nothing, so it says so, and says nothing about ticket money.
   const free = o.totalPence === 0;
@@ -88,7 +97,7 @@ export function buildTicketConfirmationEmail(
   const doorLine = `Show this email at the door. Your booking reference is ${o.reference}, for ${count} ${count === 1 ? "ticket" : "tickets"}.`;
   const body =
     eyebrow("Your tickets") +
-    heading("You’re booked in!") +
+    heading("You're booked in!") +
     bodyP(`${escapeHtml(hi(o.firstName))} thank you for booking <b>${escapeHtml(e.title)}</b>. Your tickets are below.`) +
     card(
       factRow("Reference", `<b style="font-size:18px;letter-spacing:.06em;color:#800000">${escapeHtml(o.reference)}</b>`) +
@@ -101,7 +110,7 @@ export function buildTicketConfirmationEmail(
     bodyP(`<b>${escapeHtml(doorLine)}</b> On your phone or printed, either is fine.`) +
     (free ? "" : bodyP(escapeHtml(WHERE_IT_GOES)) + note(escapeHtml(NOT_A_GIFT))) +
     button(e.pageUrl, "See the event page") +
-    bodyP("Can’t come after all? Reply to this email and we’ll help.");
+    bodyP("Can't come after all? Reply to this email and we'll help.");
   const text = [
     hi(o.firstName),
     "",
@@ -120,7 +129,7 @@ export function buildTicketConfirmationEmail(
     ...(free ? [] : [WHERE_IT_GOES, NOT_A_GIFT, ""]),
     `See the event page: ${e.pageUrl}`,
     "",
-    "Can’t come after all? Reply to this email and we’ll help.",
+    "Can't come after all? Reply to this email and we'll help.",
   ];
   return toBuyer(`Your tickets for ${e.title}`, body, text, "See you there!");
 }
@@ -147,7 +156,7 @@ export function buildTicketRefundEmail(
 /** The buyer's free booking has been cancelled by the organiser or staff. */
 export function buildBookingCancelledEmail(e: Pick<TicketEmailEvent, "title">, b: { reference: string; firstName: string; tickets: string }): BuiltEmail {
   const what = `Your booking ${b.reference} (${b.tickets}) for ${e.title} has been cancelled, so please do not come along on these tickets.`;
-  const why = "If you were not expecting this, reply to this email and we’ll look into it.";
+  const why = "If you were not expecting this, reply to this email and we'll look into it.";
   const body = eyebrow("Your tickets") + heading("Your booking is cancelled") + bodyP(escapeHtml(hi(b.firstName))) + bodyP(escapeHtml(what)) + bodyP(escapeHtml(why));
   const text = [hi(b.firstName), "", "Your booking is cancelled", "", what, "", why];
   return toBuyer(`Your booking is cancelled: ${e.title}`, body, text, "Thank you.");
@@ -157,7 +166,7 @@ export function buildBookingCancelledEmail(e: Pick<TicketEmailEvent, "title">, b
 export function buildTicketsReleasedEmail(e: Pick<TicketEmailEvent, "title">, b: { reference: string; firstName: string; released: string; standing: string }): BuiltEmail {
   const what = `These tickets on your booking ${b.reference} for ${e.title} have been cancelled: ${b.released}.`;
   const after = b.standing ? `You still have ${b.standing}. Show your tickets email at the door as before.` : "There are no tickets left on this booking, so it is now cancelled.";
-  const why = "If you were not expecting this, reply to this email and we’ll look into it.";
+  const why = "If you were not expecting this, reply to this email and we'll look into it.";
   const body = eyebrow("Your tickets") + heading("Some of your tickets are cancelled") + bodyP(escapeHtml(hi(b.firstName))) + bodyP(escapeHtml(what)) + bodyP(escapeHtml(after)) + bodyP(escapeHtml(why));
   const text = [hi(b.firstName), "", what, "", after, "", why];
   return toBuyer(`Tickets cancelled: ${e.title}`, body, text, "Thank you.");
@@ -224,13 +233,14 @@ const typeWords = (t: ProposedType) => `${t.name} ${t.pricePence === 0 ? "free" 
 /** To the events inbox: an organiser proposed tickets from their private area. */
 export function buildTicketsProposedStaffEmail(
   e: { title: string; organiserName: string },
-  p: { types: ProposedType[]; salesLimit: number | null | undefined; closeWords?: string },
+  /** `close`: when sales close, as the organiser chose it; its date is written the emails' way. */
+  p: { types: ProposedType[]; salesLimit: number | null | undefined; close?: { mode: string; at: string | null } },
   o: { adminUrl: string },
 ): BuiltEmail {
   const items = [
     ...p.types.map(typeWords),
     ...(p.salesLimit === undefined ? [] : [p.salesLimit === null ? "No limit on tickets in all" : `At most ${p.salesLimit} tickets in all`]),
-    ...(p.closeWords ? [p.closeWords] : []),
+    ...(p.close ? [closeWords(p.close, (at) => emailDate(at, { year: true }))].filter(Boolean) : []),
   ];
   const line = "Thank you!";
   const lead = `${e.organiserName} would like these for ${e.title}. Nothing goes on sale until you approve it.`;
@@ -250,11 +260,16 @@ export function buildOrderFlagStaffEmail(
   e: { title: string },
   b: { reference: string; buyerName: string; tickets: string; paid: string },
   flags: string[],
-  o: { adminUrl: string },
+  /** `refundFailed`: it is about a refund that failed at the bank (the booking may be cancelled). */
+  o: { adminUrl: string; refundFailed?: boolean },
 ): BuiltEmail {
   const what = `Booking ${b.reference} for ${e.title} needs a look (${b.buyerName}, ${b.tickets || "no tickets left"}, paid ${b.paid}).`;
   const steps = [
-    "The payment is recorded and the buyer has their tickets email.",
+    // A failed refund: their tickets may be cancelled, so never "the buyer has their tickets email".
+    // The buyer is never emailed about a failure (./send.ts tellAfterReconcile): staff contact them.
+    o.refundFailed
+      ? "The refund did not go through, and the buyer has not been told. Please get in touch with them."
+      : "The payment is recorded and the buyer has their tickets email.",
     "Open the booking in Admin > Fundraising > Event tickets and check it against Stripe.",
     "If the event is over its limit, speak to the organiser: you can refund this booking there, or raise the limit.",
   ];

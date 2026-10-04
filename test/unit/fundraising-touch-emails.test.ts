@@ -67,8 +67,8 @@ describe("the approved words", () => {
   it("13, halfway", () => {
     const mail = buildTouchEmail("halfway", data({ raisedPence: 25000, targetPence: 50000 }));
     expect(mail.subject).toBe("You're halfway there!");
-    expect(strip(mail.html)).toContain("Sam&#39;s Santa Dash has raised £250 of your £500 target. That’s amazing! Thank you, and a huge thank you to everyone who has given.");
-    expect(mail.html).toContain("The second half often goes faster than the first, so keep sharing. You’ve got this!");
+    expect(strip(mail.html)).toContain("Sam&#39;s Santa Dash has raised £250 of your £500 target. That's amazing! Thank you, and a huge thank you to everyone who has given.");
+    expect(mail.html).toContain("The second half often goes faster than the first, so keep sharing. You've got this!");
     expect(mail.html).toContain("Onwards and upwards,");
   });
 
@@ -87,16 +87,17 @@ describe("the approved words", () => {
     const mail = buildTouchEmail("week_before", data());
     expect(mail.subject).toBe("One week to go, Sam!");
     expect(mail.html).toContain(
-      "<b>Sam&#39;s Santa Dash</b> is just a week away, and we’re so excited for you! Everything you need is ready in your private area: your QR code, your poster and your sponsor form.",
+      "<b>Sam&#39;s Santa Dash</b> is just a week away, and we're so excited for you! Everything you need is ready in your private area: your QR code, your poster and your sponsor form.",
     );
     expect(mail.html).toContain(">Open my private area</a>");
-    expect(mail.html).toContain("Good luck, you’ve got this!");
+    expect(mail.html).toContain("Good luck, you&#39;ve got this!");
+    expect(mail.text).toContain("Good luck, you've got this!\nNBCC Team");
   });
 
   it("16, a week after, asking them to pay in", () => {
     const mail = buildTouchEmail("week_after", data({ raisedPence: 54000 }));
     expect(mail.subject).toBe("How did it go?");
-    expect(mail.html).toContain("We hope <b>Sam&#39;s Santa Dash</b> was a brilliant day! So far you’ve raised <b>£540</b> for NBCC, which is just fantastic.");
+    expect(mail.html).toContain("We hope <b>Sam&#39;s Santa Dash</b> was a brilliant day! So far you've raised <b>£540</b> for NBCC, which is just fantastic.");
     expect(mail.html).toContain("Collected some cash or sponsor money?");
     expect(mail.html).toContain(">Pay in what I collected</a>");
     expect(mail.html).toContain("Please send us any paper sponsor forms too, so we can claim Gift Aid on them.");
@@ -112,7 +113,7 @@ describe("the approved words", () => {
     const mail = buildTouchEmail("finished", data({ raisedPence: 61200 }));
     expect(mail.subject).toBe("Thank you from all of us at NBCC");
     expect(mail.html).toContain(
-      "<b>Sam&#39;s Santa Dash</b> raised an incredible <b>£612</b> for NBCC. Thank you for every step, every share and every ask. You’ve made a real difference to the children, young people and vulnerable adults we support.",
+      "<b>Sam&#39;s Santa Dash</b> raised an incredible <b>£612</b> for NBCC. Thank you for every step, every share and every ask. You've made a real difference to the children, young people and vulnerable adults we support.",
     );
     expect(mail.html).toContain(">See my certificate</a>");
     expect(mail.html).toContain('href="https://nbcc.test/api/fundraise/manage/fundraisers/7/materials/certificate"');
@@ -127,8 +128,17 @@ describe("the approved words", () => {
 
   it("18, a year on", () => {
     const mail = buildTouchEmail("year_on", data({ raisedPence: 61200 }));
+    // Three plain dots, the same in the subject, the heading and the line that follows (Jaimie, 2026-10-04).
     expect(mail.subject).toBe("A year ago today...");
-    expect(mail.html).toContain("&hellip;you did <b>Sam&#39;s Santa Dash</b> and raised <b>£612</b> for NBCC. We still smile thinking about it!");
+    expect(mail.html).toContain(">A year ago today...</h1>");
+    expect(mail.html).toContain("...you did <b>Sam&#39;s Santa Dash</b> and raised <b>£612</b> for NBCC. We still smile thinking about it!");
+    expect(mail.text).toContain("...you did Sam's Santa Dash and raised £612 for NBCC.");
+    expect(mail.html + mail.text).not.toMatch(/&hellip;|\u2026/);
+    // The button opens the form filled in from last year; they still check it and send it.
+    for (const part of [mail.html, mail.text]) {
+      expect(part).toContain("Fancy doing it again? We've kept your page details, so it only takes a minute to set up a new one.");
+      expect(part).not.toContain("one click");
+    }
     expect(mail.html).toContain(">Do it again</a>");
     expect(mail.html).toContain("Here all year, and here for you,");
   });
@@ -185,7 +195,7 @@ describe("the details from a real fundraiser", () => {
   });
 });
 
-// A page for someone under 18: the email goes to their parent or guardian (greetGuardian says hello
+// A page for someone under 18: the email goes to their parent or guardian (the email says hello
 // to them), so a subject must not speak to the child by name. Invented names.
 describe("a subject on a page for someone under 18", () => {
   const child = (over: Partial<TouchEmailData> = {}) => data({ name: "Jack Example", firstName: "Jack", guardianFirstName: "Sarah", ...over });
@@ -200,7 +210,7 @@ describe("a subject on a page for someone under 18", () => {
     for (const kind of ["week_before", "need_a_hand", "on_track"] as const) {
       const subject = buildTouchEmail(kind, child({ name: "James Example", firstName: "James" })).subject;
       expect(subject).toContain("James");
-      expect(subject).not.toMatch(/James['’]/);
+      expect(subject).not.toMatch(/James['']/);
     }
   });
 

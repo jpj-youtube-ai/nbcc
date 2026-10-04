@@ -31,8 +31,8 @@ describe("the confirm email", () => {
   });
 
   it("says nothing is paid today, and what happens if it was not them", () => {
-    expect(mail.text).toContain("There is nothing to pay today. Once Robin has finished, we’ll email you a link to pay.");
-    expect(mail.text).toContain("If this wasn’t you, you don’t need to do anything. A pledge that isn’t confirmed is deleted after 7 days, and we won’t email you again.");
+    expect(mail.text).toContain("There is nothing to pay today. Once Robin has finished, we'll email you a link to pay.");
+    expect(mail.text).toContain("If this wasn't you, you don't need to do anything. A pledge that isn't confirmed is deleted after 7 days, and we won't email you again.");
   });
 
   it("carries nothing else a stranger typed: no message, no surname, and only a safe first name", () => {

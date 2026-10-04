@@ -494,7 +494,7 @@ describe("saying what someone is invited to do", () => {
     sendFundraiseInvite.mockClear();
     typed("team");
     await run(routes.postInvite, { token: tokenFor("editor"), body: { ...GOOD_INVITE, type: "team" } });
-    expect(sendFundraiseInvite.mock.calls[0][1].text).toContain("You’ll get a team page with a meter for the whole team, and a page for everyone who joins");
+    expect(sendFundraiseInvite.mock.calls[0][1].text).toContain("You'll get a team page with a meter for the whole team, and a page for everyone who joins");
   });
 
   it("takes an invite with no type from a page loaded before the drop-down, and sends it as it always was", async () => {

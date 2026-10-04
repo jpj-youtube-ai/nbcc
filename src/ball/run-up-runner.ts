@@ -8,7 +8,7 @@ import {
 import { sendBallRunUp } from "../clients/email";
 import { buildGuestChaseEmail } from "./run-up-email";
 import { buildBallReminderEmail } from "./reminder-email";
-import { runRunUpPass, type RunUpBooking, type RunUpStage, type RunUpPassResult } from "./run-up";
+import { daysToBall, runRunUpPass, type RunUpBooking, type RunUpStage, type RunUpPassResult } from "./run-up";
 
 // TASK-338: the wiring for the daily run-up pass. The schedule itself is the pure ./run-up.ts;
 // this file only connects it to the pool, the mailer and the config, the same split as
@@ -21,7 +21,7 @@ export const BALL_EVENT_DATE = new Date("2026-11-07T19:00:00Z");
 const guestLink = (token: string) =>
   `${config.BALL_BASE_URL.replace(/\/+$/, "")}/ball/guests/${token}`;
 
-export async function sendRunUpEmail(booking: RunUpBooking, stage: RunUpStage): Promise<void> {
+export async function sendRunUpEmail(booking: RunUpBooking, stage: RunUpStage, now = new Date()): Promise<void> {
   const settings = await getSettings();
 
   // The practical email a few days out is the existing week-before template — same content, same
@@ -44,6 +44,9 @@ export async function sendRunUpEmail(booking: RunUpBooking, stage: RunUpStage): 
             arrivalTime: settings.arrivalTime,
             includedNote: settings.includedNote,
             guestLink: booking.guestToken ? guestLink(booking.guestToken) : null,
+            // The true time to go on the day it is sent: "A week to go" a week before, otherwise
+            // "4 days to go" or "Tomorrow" (a booking made in the last week).
+            daysToGo: daysToBall(now, BALL_EVENT_DATE),
           },
         )
       : buildGuestChaseEmail({
@@ -71,7 +74,7 @@ export async function runBallRunUp(now = new Date()): Promise<RunUpPassResult> {
   const settings = await getSettings();
   return runRunUpPass({
     listBookings: listBookingsForRunUp,
-    send: sendRunUpEmail,
+    send: (booking, stage) => sendRunUpEmail(booking, stage, now),
     markSent: markRunUpSent,
     window: {
       now,

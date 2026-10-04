@@ -417,6 +417,18 @@ export function teamMemberList(rows: TeamMemberRow[], photos: ReadonlyMap<number
     });
 }
 
+// --- "[First name] has joined [team name]" (Jaimie, 2026-10-04) ---------------------------------------
+//
+// The email to the team organiser when staff approve a new team member's page. NEW wording, so it is
+// only sent once an admin has approved it, with the same sign off as the other new wording
+// (touch_wording_approvals, key "team_joined"), read and approved in Admin > Fundraising > Automatic
+// emails. No row, not approved: nothing is sent and nothing is logged.
+export const TEAM_JOINED_KEY = "team_joined";
+export const TEAM_WORDING_KEYS = [TEAM_JOINED_KEY] as const;
+export type TeamWordingKey = (typeof TEAM_WORDING_KEYS)[number];
+export const TEAM_JOINED_LABEL = "A new member has joined your team";
+export const TEAM_JOINED_WHEN = "To the team organiser, when you approve a new team member's page. Never about their own page.";
+
 // --- the join link ---------------------------------------------------------------------------------
 
 export function joinUrl(base: string, slug: string): string {

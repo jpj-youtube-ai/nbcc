@@ -161,7 +161,7 @@ describe("after staff decide a change", () => {
     expect(sent.from).toBe("events@nbcc.test");
     expect(sent.replyTo).toBe("events@nbcc.test");
     expect(sent.subject).toBe("Your update is live: Sam's Walk");
-    expect(sent.text).toContain("they’re now on your page");
+    expect(sent.text).toContain("they're now on your page");
     expect(sent.text).toContain("https://nbcc.test/fundraise/sams-walk");
   });
 
@@ -178,7 +178,7 @@ describe("after staff decide a change", () => {
     await sendEditDecisionEmail(record({ title: "Sam's Walk", ...over }), true, on);
     const sent = mail.sendFundraiseEditApproved.mock.calls[0][1];
     expect(sent.subject).toBe("Your update is saved: Sam's Walk");
-    expect(sent.text).toContain("they’re all saved");
+    expect(sent.text).toContain("they're all saved");
     expect(sent.text).not.toContain("on your page");
     expect(sent.text).not.toContain("/fundraise/sams-walk");
     mail.sendFundraiseEditRejected.mockClear();

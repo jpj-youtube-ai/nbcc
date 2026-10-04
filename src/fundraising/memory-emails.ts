@@ -1,6 +1,7 @@
 import { bodyP, button, emailShell, eyebrow, heading, questionsBox, questionsText, signOff, signOffText } from "../email/brand";
 import { FOOTER_TEXT, POSTAL_ADDRESS } from "../legal/registration";
-import { FUNDRAISING_EMAIL, organiserGreeting, type BuiltEmail } from "./emails";
+import { raiseOrdinals } from "../email/dates";
+import { FUNDRAISING_EMAIL, MEMORY_EYEBROW, MEMORY_SIGN_OFF, dearGreeting, organiserFirstName, type BuiltEmail } from "./emails";
 
 // In memory pages (Jaimie, 2026-10-03): email 19, "When you approve an in memory page (gentler, no
 // fun sign off)", in the words Jaimie approved on 2026-10-02 (memory:
@@ -14,10 +15,11 @@ import { FUNDRAISING_EMAIL, organiserGreeting, type BuiltEmail } from "./emails"
 const escapeHtml = (s: string): string =>
   s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
 
+// Every date in the body has its ending raised ("7th" as 7<sup>th</sup>): ../email/dates.ts.
 const shell = (body: string) =>
-  emailShell(body, { contactEmail: FUNDRAISING_EMAIL, registration: true, postalAddress: POSTAL_ADDRESS });
+  emailShell(raiseOrdinals(body), { contactEmail: FUNDRAISING_EMAIL, registration: true, postalAddress: POSTAL_ADDRESS });
 
-const SIGN_OFF = "With warmest thoughts,";
+const SIGN_OFF = MEMORY_SIGN_OFF;
 
 // Jaimie's decision (A2, 2026-10-03): a funeral director gets a professional version, with no
 // "sorry for your loss": thanked for setting the page up for the family, and the practical lines
@@ -35,19 +37,19 @@ export function buildInMemoryApprovedEmail(
   o: { pageUrl: string },
 ): BuiltEmail {
   const who = f.memoryName.trim();
-  // "Hi there," for a business's name or none (organiserGreeting), never "Hi The,".
-  const hi = organiserGreeting(f);
+  // "Dear Sam," (Jaimie, 2026-10-04); "Hello," for a business's name or none, never "Dear The,".
+  const hi = dearGreeting(organiserFirstName(f));
   const director = f.setupBy === "funeral_director";
   const thanks = (n: string) =>
     director
       ? `Thank you for setting up this page for the family of ${n}. It is now live on our website, ready to share with everyone who would like to give in their memory.`
-      : `Thank you for choosing to remember ${n} by raising money for NBCC. We’re honoured to be part of it, and we’re so sorry for your loss.`;
-  const live = (n: string) => `Your page is now live. It’s a quiet place where family and friends can give and leave a message in ${n}’s memory.`;
-  const anything = "If there’s anything you’d like changed, or anything we can do, please just let us know. There’s no rush at all.";
+      : `Thank you for choosing to remember ${n} by raising money for NBCC. We're honoured to be part of it, and we're so sorry for your loss.`;
+  const live = (n: string) => `Your page is now live. It's a quiet place where family and friends can give and leave a message in ${n}'s memory.`;
+  const anything = "If there's anything you'd like changed, or anything we can do, please just let us know. There's no rush at all.";
   const safe = escapeHtml(who);
   const middle = director ? [DIRECTOR_ENVELOPES, DIRECTOR_MESSAGES] : [];
   const body =
-    eyebrow("Fundraising for NBCC") +
+    eyebrow(MEMORY_EYEBROW) +
     heading(`In memory of ${safe}`) +
     bodyP(escapeHtml(hi)) +
     bodyP(thanks(safe)) +

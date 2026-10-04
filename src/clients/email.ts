@@ -691,7 +691,8 @@ export type FundraiseTeamKind =
   | "fundraiseTeamJoined"
   | "fundraiseTeamJoinStaff"
   | "fundraiseTeamMemberRemoved"
-  | "fundraiseTeamHandoverCode";
+  | "fundraiseTeamHandoverCode"
+  | "fundraiseTeamMemberJoined";
 
 export async function sendFundraiseTeam(kind: FundraiseTeamKind, name: string | null, message: FundraiseEmailMessage): Promise<void> {
   switch (kind) {
@@ -709,6 +710,9 @@ export async function sendFundraiseTeam(kind: FundraiseTeamKind, name: string | 
       return sendVerbatim("fundraiseTeamJoinStaff", name, message);
     case "fundraiseTeamMemberRemoved":
       return sendVerbatim("fundraiseTeamMemberRemoved", name, message);
+    // Jaimie, 2026-10-04: to the team organiser, when staff approve a new team member's page.
+    case "fundraiseTeamMemberJoined":
+      return sendVerbatim("fundraiseTeamMemberJoined", name, message);
     case "fundraiseTeamHandoverCode":
       // The code is in the body only, never the subject, so the log's subject is the email's own.
       return sendVerbatim("fundraiseTeamHandoverCode", name, message);

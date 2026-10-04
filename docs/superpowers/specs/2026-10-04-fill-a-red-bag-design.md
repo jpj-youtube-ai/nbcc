@@ -158,8 +158,18 @@ word changes, and it makes no network request and loads no file of its own.
    heads into the bottom bar's total instead, which gives a small nod. Examples and the round-up
    drop no picture: they are money, not items. Things then peek out of the top of the bag that is
    filling: only things that are in the bag, one under a quarter full, two under half, three from
-   half; each stays where it is, a free place goes to the newest item, and taking an item out
-   removes its peek. They are drawn behind the bag's front so they look inside it.
+   half. They are drawn behind the bag's front so they look inside it.
+   Changed 5 October 2026 (Jaimie: "the prizes at the top of the bag should be the last (latest)
+   item(s) to be added, not the first"): the peeks are the MOST RECENTLY added things. The newest
+   is in the front place (the left hand one, a touch taller, and drawn on top), then the one before
+   it, then the one before that. "Added" is a quantity going up: a plus, an arrow key, or a typed
+   number once the typing has stopped or the box is left. Adding more of an item already in the bag
+   makes it the latest again. Taking one out of an item that still has some left changes nothing;
+   taking the last one out removes its peek and the next most recent takes the free place. Each
+   item peeks once at most. The bags are one bag: when a new one starts filling after a full one,
+   it shows the latest things overall. When a new thing arrives it pops up in the front place, the
+   ones that stay slide along one place, and the oldest sinks back into the bag (transform and
+   opacity, under 300ms; at once under reduced motion).
 2. An elf scribbles on the paper: a short handwritten note (Caveat, holly green, a slight tilt) on
    the ruled line above the row just changed (below it for the first row under a heading), or beside
    the new line under "Also in your bag" for an example. One at a time; it fades after about three
@@ -175,10 +185,25 @@ word changes, and it makes no network request and loads no file of its own.
    love" (Caveat). Every full bag keeps its ribbon and tag; the words are on the newest full bag
    only, and on none once four or five bags are drawn (too small to read). Below a full bag they
    come off.
-5. A burst of snow and stars: twelve paper snowflakes and gold stars fall over the bag's panel for
-   about two seconds at half a bag and at each full bag, then are removed. Only when a milestone is
-   newly crossed on the way up (so again only after the total has dropped below it), one at a time,
-   taking no tap.
+5. A burst of snow and stars at half a bag and at each full bag, then removed. Only when a
+   milestone is newly crossed on the way up (so again only after the total has dropped below it),
+   one at a time, taking no tap.
+   Changed 5 October 2026 (Jaimie: "make the star moment across the entire page: a bigger
+   moment"): it falls over the WHOLE screen, not the bag's panel. One layer on the page's body,
+   fixed to the screen above the page, the site's header and the bottom bar (and under the payment
+   window), `pointer-events: none`, `aria-hidden`, taken out of the page when it ends. So it is
+   seen on a phone too, where the bag is usually off screen, and it can never block a tap, a scroll
+   or Donate. Paper white snowflakes and gold stars fall from the top of the screen to the bottom,
+   spread across the full width, each with its own size, drift, turn and short wait, with a few
+   larger stars. A FULL bag (and each further full bag) is the big moment: 56 pieces, the last gone
+   by about 2.9 seconds, 5 larger stars. HALF a bag is a lighter one of the same kind: 24 pieces,
+   about 2 seconds, 2 larger stars. On a screen under 600px wide: 34 and 16, a little smaller.
+   Never more than sixty. A full bag reached while half a bag's snow is still falling takes its
+   place; otherwise a second one never starts while one is falling. A cooldown: the same milestone
+   cannot snow again within 20 seconds (someone stepping back and forth across £25), though a
+   different milestone still can. Each piece is one CSS animation of transform and opacity, easing
+   out with no bounce; no canvas, no loop, no sound. It stops at once if the donor moves on to
+   their details. Under reduced motion there is none at all.
 
 A small icon sits in each of the nine example buttons (Jaimie: "an icon next to each of the after
 crisis/clothing/rock bottom items: teddy bear, bed, shoes, coat etc"), drawn into the page by the
@@ -189,9 +214,10 @@ name are unchanged.
 
 How it is built. The 22 drawings (13 items, 9 examples) are inline SVG in ONE place, `ART` in the
 catalogue, with no colour of their own (the stylesheet gives them the site's tokens; the gold is
-`--gold-ink`). The choices are pure functions in the catalogue (`peekSlots`, `peekCount`,
-`milestoneCrossed`, `strains`, `noteKind`, `noteFor`, `allNotes`); the page script only applies
-them. Everything decorative is `aria-hidden`, out of the tab order, and never takes the focus; the
+`--gold-ink`). The choices are pure functions in the catalogue (`peekOrder`, `latestPeeks`,
+`peekCount`, `milestoneCrossed`, `flurryKind`, `flurryDue`, `flurryPlan`, `strains`, `noteKind`,
+`noteFor`, `allNotes`); the page script only applies them. (`peekSlots`, which kept the earliest
+things peeking, went on 5 October 2026.) Everything decorative is `aria-hidden`, out of the tab order, and never takes the focus; the
 one live region is untouched. Motion is transform and opacity only, nothing loops, every animated
 thing is removed by a timer, and under `prefers-reduced-motion` nothing moves: no drop, wobble,
 flurry or swing, while the peeks, the ribbon and tag and the note still appear at once. Nothing

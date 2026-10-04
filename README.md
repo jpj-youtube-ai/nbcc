@@ -12297,19 +12297,30 @@ under "The feel good layer"). When a quantity goes up a small drawing of the ite
 bag (one drop for a typed jump; three in the air at most; into the bottom bar's total while the bag
 is off screen), up to three things that are in the bag peek out of its top, the bag gives a small
 wobble and its handles tighten when nearly full, a full bag is tied with a gold ribbon and a tag
-reading "Packed with love", a two second flurry of paper snow and gold stars falls over the bag's
-panel when half a bag or a full bag is newly reached, and an elf scribbles a short note on the paper
-beside the row just changed. Each example button carries a small icon, drawn in by the server, shown
+reading "Packed with love", paper snow and gold stars fall across the whole screen when half a bag
+or a full bag is newly reached, and an elf scribbles a short note on the paper beside the row just
+changed. **The peeks are the latest things added** (5 October 2026): the newest in the front
+(left hand) place and drawn on top, then the one before it, then the one before that; adding more
+of an item makes it the latest again, taking the last one out brings back the next most recent,
+and a new bag after a full one shows the latest too. A new peek pops up, the others slide along one
+place and the oldest sinks (under 300ms). **The snow and stars are a whole screen moment** (5
+October 2026): one layer fixed to the screen, above the header and the bottom bar, that takes no
+tap and is taken out of the page when it ends. A full bag (and each further one) is the big moment,
+56 pieces over about 2.9 seconds (34 on a screen under 600px wide); half a bag is a lighter one, 24
+pieces over about 2 seconds (16 on a small screen). The same milestone cannot snow again within 20
+seconds; a different one can. Those numbers are `FLURRIES` and `FLURRY_COOLDOWN_MS` in the
+catalogue. Each example button carries a small icon, drawn in by the server, shown
 again on its line under "Also in your bag". **To read or change the elf's notes, edit `NOTES` in
 `assets/js/red-bag-catalogue.js`**: one list, and `test/unit/red-bag-delight.test.ts` holds every
 note to the rules (never "will", nothing bought, nobody receiving, no pressure, no dashes or
 hyphens, British, 32 characters at most). The 22 drawings are `ART` in the same file (inline SVG,
 coloured by `.rb-art` in the stylesheet from the site's tokens), and the choices are its pure
-functions (`peekSlots`, `milestoneCrossed`, `strains`, `noteFor`); `assets/js/red-bag.js` only
-applies them. It changes no price, total, wording or checkout field, makes no network request, and
+functions (`peekOrder`, `latestPeeks`, `milestoneCrossed`, `flurryKind`, `flurryDue`,
+`flurryPlan`, `strains`, `noteFor`); `assets/js/red-bag.js` only applies them. It changes no price, total, wording or checkout field, makes no network request, and
 adds no file to load. Everything decorative is `aria-hidden`, out of the tab order and removed by a
 timer; the one live region is untouched; motion is transform and opacity only and is off under
-`prefers-reduced-motion` (the peeks, ribbon, tag and note still appear, at once). **It can never
+`prefers-reduced-motion` (the peeks, ribbon, tag and note still appear, at once; there is no snow
+at all). **It can never
 stop the page working:** the whole layer is off unless the catalogue has every part of it (a donor
 can be handed the new script with the old catalogue while a version is going out), and every way
 into it is wrapped, so a failure in it is swallowed and said once in the console while the sums,

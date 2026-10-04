@@ -157,7 +157,7 @@ export const FACTS: readonly ElfFact[] = [
   {
     door: 19,
     title: "Not forgotten",
-    grownUp: "Every pound helps remind someone that they have not been forgotten.",
+    grownUp: "Every pound could help remind someone that they have not been forgotten.",
     doorLine: "Every Red Bag says: you have not been forgotten.",
   },
   {

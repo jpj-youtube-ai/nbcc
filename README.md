@@ -1346,6 +1346,7 @@ hosted-Checkout redirect stays the default fallback and no-JS safety net.
 | `GET /api/admin/fundraising/pledges`, `.../pledges/preview/:key`, `POST` \| `DELETE .../pledges/approvals/:key`, `POST .../pledges/send-pay-links`, `POST /api/admin/pledges/:id/send-pay-link` \| `cancel` \| `message` \| `checked` | **implemented** | Sponsor pledges (staff with fundraising: view to look, edit to act, admin to approve the two emails' wording and to send new pay links to everyone unpaid) |
 | `GET /api/fundraise/manage/fundraisers/:id/materials/:piece` | **implemented** | TASK-504 (the signed in organiser's poster, pictures to share, sponsor form or certificate, as a whole print page; only their own, approved or finished, and the certificate once finished; anyone else's is a 404, no session a `401` page, and a 404 while fundraising is off. See **Community fundraising, materials**) |
 | `GET /api/admin/fundraisers/:id/materials/:piece` | **implemented** | TASK-504 (the same pages for staff with fundraising: view, for any approved or finished fundraiser whether or not fundraising is on; the certificate as a marked preview before it is finished) |
+| `GET /api/fundraise/manage/fundraisers/:id/materials/qr-code` and `GET /api/admin/fundraisers/:id/materials/qr-code` | **implemented** | "Print the QR code": the page's own QR code on one clean A4 page, with the name (or "In memory of ..."), the code 120mm across, the web address in words under it and the charity statement (and the sharing statement, when shared). For a fundraiser or an event that has a page, approved or finished; a 404 for one with no page. From "Print your QR code" in the private area and "Print the QR code" beside the code in Admin > Fundraising (`renderQrSheet`, `src/fundraising/materials.ts`) |
 | `GET /api/admin/fundraisers/:id/materials/everything` | **implemented** | TASK-512 (Download everything: every printed piece on one print page, each on its own paper size, plus every picture to share as a zip made in the browser; staff with fundraising: view; approved or finished; the certificate only once finished. See **Community fundraising, materials round two**) |
 | `GET /api/admin/fundraisers/:id/scans` | **implemented** | TASK-512 (each printed piece's QR code scans, `{ scans: [{ piece, code, label, scans, link }], total }`, counted once per person per day from the visit counter; staff with fundraising: view; `no-store`) |
 | `POST /api/fundraise/manage/fundraisers/:id/print-request` | **implemented** | TASK-512 (Ask us to print these: `{ kind: "posters", a4, a3 }` or `{ kind: "leaflets", a5 }`; the signed in organiser's own, from our own page, 10 an hour; makes the posters or leaflets request To send; `400` with `fields`, `401`, `403`, `404`, `409` too late, `429`) |
@@ -7368,7 +7369,13 @@ Two more yes or no questions on the sign up form, on both paths, with nothing ch
   and the team organiser's) greets by the first name they gave, skips a title (Mr, Mrs, Ms, Miss, Dr,
   Rev, Sir, Cllr), and says "Hi there," to a group or a business; the automatic emails' subjects then
   drop the name ("One week to go!") (`organiserFirstName` and `organiserGreeting` in
-  `src/fundraising/emails.ts`). Posters always fit the paper: `posterLogoMm` is the most the logo may
+  `src/fundraising/emails.ts`). The same care is taken in the in memory email 19 (a funeral
+  director's business name, or no name, is "Hi there,"), the welcome letter and the in memory covering
+  note ("Hello," in place of "Dear The,"), and the lines to staff ("Give The Example Arms a ring").
+  On a page for someone under 18 the automatic emails go to their parent or guardian, so a subject
+  talks about the child, never to them: "One week to go for Jack!", "Can we give you and Jack a
+  hand?" and "Jack is doing great!" (an adult's are "One week to go, Jack!", "Need a hand, Jack?" and
+  "You're doing great, Jack!"). Approvals are kept by email, not by its words, so these stay approved. Posters always fit the paper: `posterLogoMm` is the most the logo may
   be and the page gives the logo up (to 10mm at the least) before anything else moves; the QR code is
   66mm on the design and a little smaller only for a shared event, a long way in, or a shared or event
   leaflet (`posterQrMm`); a page address over 52 characters is drawn smaller so it stays on one line
@@ -9031,7 +9038,9 @@ year on email carries a fresh link, `/fundraise?again=<token>`: 32 random bytes,
 sha256 with its own prefix (`fundraiser_again_tokens.token_hash`, like TASK-503's invites), working
 for 60 days and once. The form asks `POST /api/fundraise/again { token }`, takes the token out of the
 address bar at once, and fills in only boxes still empty (and a choice not yet made) with last year's
-safe details: raising money or an event, the kind (and its own words for "something else"), the name
+safe details: raising money or an event (or, should a link ever open a page in memory of someone,
+which never gets email 18, the gentle in memory path with who it remembers and their dates, its name
+left exactly as the family wrote it), the kind (and its own words for "something else"), the name
 (a year in it earlier than this year becomes this year), the description, the target, the venue and
 town, the Instagram and Facebook links, the organiser's first and last name, email and phone. Never
 the date, the address, what they asked us for, anything staff noted, or anything about anyone who
@@ -9160,8 +9169,14 @@ Everything below is off while fundraising is switched off, like the rest of fund
 - **The sign up.** "Just me, or a team?" comes straight after "Are you 18 or over?", for someone
   raising money only, with nothing chosen. A team asks the team's name and target (in place of the
   page's), says who the team organiser is, and may add people: a first name, surname and email each
-  ("If they're under 18, give their parent or guardian's email"), up to 30, added and removed a row
-  at a time. They are **held**: nothing is sent until staff approve the team. Sharing with another
+  ("If someone is under 18, tick the box in their row and give their parent or guardian's email"),
+  up to 30, added and removed a row at a time. Each row has a tick, **"This person is under 18"**:
+  ticked, the email box in that row is labelled "Parent or guardian's email", the tick is kept with
+  the held person (`team_invites.under_18`, `migrations/1791200000240_team-invite-under-18.js`,
+  cleared with their name and email), staff see "under 18, parent or guardian's email" beside them in
+  the admin, the invite and its one reminder speak to the parent ("Robin has invited Jack to join
+  Exampleton Juniors"), and the invite's link opens the join form with "Is the person joining under
+  18?" already answered Yes (they can change it). They are **held**: nothing is sent until staff approve the team. Sharing with another
   cause asks one more question, "Just you, or the whole team?". A sign up sent without the question
   (a page opened before it, or the API) is just me, as before.
 - **Approval.** Staff approve the team as any sign up. Then (after it commits, best effort) each
@@ -9170,7 +9185,12 @@ Everything below is off while fundraising is switched off, like the rest of fund
   chat. An invite says why they got it ("[team organiser] gave us your email so we could invite you,
   or [first name] if this is a parent or guardian's email, to join [team] for their [kind] on
   [date]"), that that person is the team organiser, and that questions can still come to NBCC (a
-  reply, events@ or 01292 811 015); its button opens the join form filled in. Every email to an
+  reply, events@ or 01292 811 015); its button opens the join form filled in. For someone the team
+  organiser ticked as under 18 the invite is to their parent or guardian, with no maybe: "[team
+  organiser] gave us your email, as the parent or guardian of [first name], so we could invite [first
+  name] to join [team]", and "As [first name] is under 18, you set up the page as the parent or
+  guardian". A team organiser whose name is a group's or a business's is named in full ("The Example
+  Arms has invited you"), never by its first word. Every email to an
   invitee ends "Not for you? Ignore this and we won't email again." An address on the suppression or
   opt out list is never invited. A team approved while fundraising is off waits for the switch, as
   every "Your page is live" does.
@@ -9689,7 +9709,13 @@ as it would be by hand (posters, leaflets, QR codes and envelopes **Sent** by po
 opens again a request **the pack marked**; re-ticking a thing (they asked for a different number)
 puts right how many went on one the pack marked. **Pack sent** only catches up requests still To
 send that the pack never marked: never a count, never an undo, and never one the pack marked once
-that staff then undid by hand. So a count staff corrected in Requests, or a request they undid
+that staff then undid by hand. Leaving out one of two things of a kind after both went (the A3
+posters, say) puts how many went right too. And a request staff changed by hand **after** the pack
+marked it is theirs from then on: the request says who changed it last (the pack writes `pack:`
+before the staff member in `fundraiser_requests.updated_by`; a change by hand writes the staff
+member alone), and the pack only puts a count right, or opens a request again, while it was the last
+to change it. So a request staff undid and then sent again by hand, with their own count, is never
+changed by a tick or an untick. So a count staff corrected in Requests, or a request they undid
 there, is never put back by a press on something else. Whether the pack marked a request is kept on
 the pack's own rows (`welcome_pack_items.marked_request`), never read from the request's note. It
 uses the Requests' own rules and audit line (`changeRequestIn`, `src/db/fundraising-requests.ts`).
@@ -9731,7 +9757,8 @@ the covering note is quiet: cream and tan, no QR code, no exclamation marks.
 
 - **The Monday summary** (`src/fundraising/summary.ts`): "N welcome packs to send" (pages approved
   more than 2 days ago whose welcome pack is not sent, or sent with a T-shirt left out whose size
-  has since come in), "N welcome packs waiting for a T-shirt size" (never a sign up still new) and
+  has since come in), "N welcome packs waiting for a T-shirt size" (never a sign up still new, and
+  never a pack whose waiting T-shirt staff left out with a reason: that one is a pack to send) and
   "N in memory pages with things to send", all in Waiting on us. Each page is in one line only: a
   pack waiting for a size is not also a pack to send. If the packs cannot be read the summary still
   goes, without them.

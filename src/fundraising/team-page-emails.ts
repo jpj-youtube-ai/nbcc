@@ -285,7 +285,7 @@ export function buildJoinStaffEmail(
     ["Why", m.description],
     ["Sharing with another cause", o.split],
   ];
-  const steps = ["Approve or decline it in Admin > Fundraising. Nothing shows until you do.", `Replying to this email replies to ${firstName(m.name)}.`];
+  const steps = ["Approve or decline it in Admin > Fundraising. Nothing shows until you do.", `Replying to this email replies to ${organiserFirstName(m) ?? m.name.trim()}.`];
   const rows = facts
     .map(
       ([label, value]) =>

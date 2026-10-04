@@ -1,7 +1,6 @@
 import { bodyP, button, emailShell, eyebrow, heading, questionsBox, questionsText, signOff, signOffText } from "../email/brand";
 import { FOOTER_TEXT, POSTAL_ADDRESS } from "../legal/registration";
-import { FUNDRAISING_EMAIL, type BuiltEmail } from "./emails";
-import { shortName } from "./model";
+import { FUNDRAISING_EMAIL, organiserGreeting, type BuiltEmail } from "./emails";
 
 // In memory pages (Jaimie, 2026-10-03): email 19, "When you approve an in memory page (gentler, no
 // fun sign off)", in the words Jaimie approved on 2026-10-02 (memory:
@@ -32,11 +31,12 @@ const DIRECTOR_MESSAGES = "Our team reads every message before it shows on the p
  * funeral director, it is the professional version (see above).
  */
 export function buildInMemoryApprovedEmail(
-  f: { name: string; memoryName: string; setupBy?: string | null },
+  f: { name: string; firstName?: string | null; memoryName: string; setupBy?: string | null },
   o: { pageUrl: string },
 ): BuiltEmail {
   const who = f.memoryName.trim();
-  const hi = `Hi ${shortName(f.name).split(" ")[0]},`;
+  // "Hi there," for a business's name or none (organiserGreeting), never "Hi The,".
+  const hi = organiserGreeting(f);
   const director = f.setupBy === "funeral_director";
   const thanks = (n: string) =>
     director

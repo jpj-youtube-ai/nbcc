@@ -54,6 +54,20 @@ beforeEach(() => {
   db.fundraisingIsOn.mockResolvedValue(true);
 });
 
+// Jaimie, 2026-10-03: "Hi The," for a pub. A funeral director's business name, or no name, is the same.
+describe("email 19's greeting", () => {
+  const hi = (f: { name: string; firstName?: string | null }) => buildInMemoryApprovedEmail({ ...f, memoryName: "Jean" }, { pageUrl: "p" }).text.split(String.fromCharCode(10))[0];
+
+  it("never says Hi The, or Hi with no name", () => {
+    expect(hi({ name: "The Example Funeral Home" })).toBe("Hi there,");
+    expect(hi({ name: "" })).toBe("Hi there,");
+  });
+
+  it("uses the first name they gave on the form", () => {
+    expect(hi({ name: "S Example", firstName: "Sam" })).toBe("Hi Sam,");
+  });
+});
+
 describe("email 19, when staff approve an in memory page", () => {
   const mailOut = buildInMemoryApprovedEmail({ name: "Sam Example", memoryName: "Jean" }, { pageUrl: "https://nbcc.test/fundraise/ime" });
 

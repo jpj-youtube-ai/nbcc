@@ -5,6 +5,7 @@ import { addDays } from "./follow-up";
 import { FLOW, KIND_INFO, parseWants, type RequestActionInput, type RequestKind, type RequestRow } from "./requests";
 import { tshirtLabel } from "./signup-tidy";
 import type { FundraiserRecord } from "./model";
+import { organiserFirstName } from "./emails";
 
 // Welcome packs (Jaimie, 2026-10-03). Pure: no pool, no clock. The SQL is in src/db/welcome-packs.ts,
 // the routes in src/routes/admin-welcome-packs.ts, the printed letter in ./welcome-pack-print.ts.
@@ -568,6 +569,12 @@ export function packFirstName(f: Pick<PackSubject, "firstName" | "name">): strin
   return String(f.firstName ?? "").trim() || String(f.name ?? "").trim().split(/\s+/)[0] || "";
 }
 
+/** "Dear Robin," or, for a group's or a business's name or none, "Hello,": never "Dear The,". */
+function packGreeting(f: Pick<PackSubject, "firstName" | "name">): string {
+  const first = organiserFirstName({ name: String(f.name ?? ""), firstName: packFirstName(f) });
+  return first ? `Dear ${packFirstName(f)},` : "Hello,";
+}
+
 function signerLines(signer: Signer): string[] {
   const role = String(signer.role ?? "").trim();
   if (!role) return [CHARITY];
@@ -594,7 +601,7 @@ export function welcomeLetter(f: PackSubject, items: PackItem[], signer: Signer,
     opening.push(`Your ${event ? "event's page" : "page"} is live at ${pageWords}. Scan the code to see it, and share it with everyone you know.`);
   }
   return {
-    greeting: `Dear ${packFirstName(f)},`,
+    greeting: packGreeting(f),
     heading: f.title,
     opening,
     packIntro: packList.length ? "In this pack you'll find:" : null,
@@ -624,7 +631,7 @@ export interface NoteWords {
 export function coveringNote(f: PackSubject, signer: Signer): NoteWords {
   const name = String(f.memoryName ?? "").trim();
   return {
-    greeting: `Dear ${packFirstName(f)},`,
+    greeting: packGreeting(f),
     paragraphs: [
       name ? `Here are the things you asked for, for ${name}'s page.` : "Here are the things you asked for.",
       `If there is anything else we can do, please call us on ${PHONE} or email ${EMAIL}.`,

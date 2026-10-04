@@ -346,7 +346,8 @@ export function buildSignUpStaffEmail(f: StaffSummary, o: { adminUrl: string }):
   // The sign up tidy (the appropriateness audit): a page in memory of someone has a gentle summary.
   if (f.inMemory === true) return memoryStaffEmail(f, o);
   const facts = staffFacts(f);
-  const first = firstName(f.name);
+  // A group's or a business's whole name, never "Give The a ring".
+  const first = organiserFirstName(f) ?? f.name.trim();
   const rows = facts
     .map(
       ([label, value]) =>
@@ -398,7 +399,7 @@ function memoryStaffEmail(f: StaffSummary, o: { adminUrl: string }): BuiltEmail 
     )
     .join("");
   const ring = "No thank you email has gone to them, only a short note to say we have their details. Please give them a ring.";
-  const steps = ["Approve or decline in Admin > Fundraising.", `Replying to this email replies to ${firstName(f.name)}.`];
+  const steps = ["Approve or decline in Admin > Fundraising.", `Replying to this email replies to ${organiserFirstName(f) ?? f.name.trim()}.`];
   const line = "Thank you.";
   const body =
     eyebrow("For the team") +
@@ -594,7 +595,7 @@ export function buildFinishedStaffEmail(
   f: { id: number; name: string; title: string; email: string; raisedPence: number },
   o: { adminUrl: string },
 ): BuiltEmail {
-  const first = firstName(f.name);
+  const first = organiserFirstName(f) ?? f.name.trim();
   const raised = pounds(f.raisedPence);
   const steps = [
     `Give ${first} a ring to say thank you, and to check any cash or sponsor money is on its way.`,

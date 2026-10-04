@@ -447,6 +447,15 @@ describe("the welcome letter", () => {
     const f = subject({ firstName: null, lastName: null, name: "Sam Sample" });
     expect(welcomeLetter(f, packItems(f), signer, page).greeting).toBe("Dear Sam,");
   });
+  // Jaimie, 2026-10-03: "Hi The," for a pub. The letter and the covering note take the same care.
+  it("never says Dear The, or Dear with no name", () => {
+    const group = subject({ firstName: null, lastName: null, name: "The Example Arms" });
+    const blank = subject({ firstName: null, lastName: null, name: "" });
+    for (const f of [group, blank]) {
+      expect(welcomeLetter(f, packItems(f), signer, page).greeting).toBe("Hello,");
+      expect(coveringNote(f, signer).greeting).toBe("Hello,");
+    }
+  });
   it("never calls the people NBCC supports families", () => {
     const f = subject();
     expect(JSON.stringify(welcomeLetter(f, packItems(f), signer, page))).not.toMatch(/families/i);

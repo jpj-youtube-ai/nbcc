@@ -122,6 +122,12 @@ export const PRIVATE_PAGES: PrivatePage[] = [
     note: "Where a volunteer who has forgotten their password sets a new one.",
   },
   {
+    path: "/fill-a-red-bag",
+    title: "Fill a Red Bag",
+    reach: "staff",
+    note: "A new way to give, built and waiting: not public yet. To look at it, sign in here, then type nbcc.scot/fill-a-red-bag into this same tab. Everyone else sees the page not found page.",
+  },
+  {
     path: "/admin",
     title: "Admin",
     reach: "staff",
@@ -169,6 +175,8 @@ export const RESERVED_PREFIXES: string[] = [
   "/unsubscribe",
   "/about-us",
   "/contact",
+  // Fill a Red Bag: a real page (switched off as it ships), so no spare address may shadow it.
+  "/fill-a-red-bag",
   "/festive-ball",
   "/a-night-to-remember",
   "/set-password",

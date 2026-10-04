@@ -1341,6 +1341,7 @@ hosted-Checkout redirect stays the default fallback and no-JS safety net.
 | `GET /media/fundraiser-profile/:photoId` | **implemented** | Profile pictures (public; an approved round photo on a page that is up, otherwise 404) |
 | `GET /api/admin/fundraising/pictures-waiting`, `GET /api/admin/fundraisers/:id/pictures`, `.../pictures/:pictureId/photo`, `POST .../pictures/:pictureId/approve` \| `decline` \| `remove` | **implemented** | Profile pictures (staff check the photos organisers send: fundraising view to look, edit to decide; audited) |
 | `POST /api/fundraisers/:slug/pledges` | **implemented** | Sponsor pledges (public; "Sponsor now, pay after" on a sponsorship fundraiser's page: a promise, never money, and unconfirmed until the sponsor confirms by email. See **Sponsor pledges**) |
+| `GET /fill-a-red-bag` | **implemented, switched off** | Fill a Red Bag (a new way to give: fill a list of example items, watch a red bag fill, give the total. Switched off as it ships: the site's 404 to the public, a preview to signed in staff. `POST /api/checkout-session` takes an optional `redBag: true` for it. See **Fill a Red Bag (switched off)**) |
 | `GET` \| `POST /pledge/confirm`, `/pledge/pay`, `/pledge/cancel` | **implemented** | Sponsor pledges (the sponsor, by the signed link in an email: confirm the pledge, pay it through Stripe Checkout, or cancel it quietly. Each link only asks; a button does the thing) |
 | `GET /api/fundraise/manage/pledges`, `POST /api/fundraise/manage/fundraisers/:id/pledges/:pledgeId/cash` \| `hide` | **implemented** | Sponsor pledges (the signed in organiser: confirmed pledges by name, never emails; "Paid me in cash"; hide one from their page) |
 | `GET /api/admin/fundraising/emails/summary`, `GET /api/admin/fundraising/emails`, `GET /api/admin/fundraising/emails/:id/:version` | **implemented** | All emails (staff with fundraising view: every fundraising, pledge, ticket and Festive Ball email, listed from one catalogue and rendered with the real builders and invented sample data. Read only: approving stays with the three endpoints that already did it. See **All emails, in Admin > Fundraising**) |
@@ -11916,3 +11917,99 @@ covers recipient, name and subject; dropdowns filter by kind and status; paginat
   `features/site-pages.feature` (404 status + brand, JSON API 404, seeded + admin-added alias
   301s, shadow refusal, editor-gets-403 on writes, /sitemap noindex, sitemap.xml honouring the
   visibility ticks).
+
+### Fill a Red Bag (switched off)
+
+A new, playful way to give money, at `/fill-a-red-bag`. The donor fills a list of example items on a
+sheet of lined paper, a red bag fills towards £50, and they give the total. Nothing is bought item
+by item: the items are examples of what a donation **could** do, and every donation goes to general
+funds. Design: `docs/superpowers/specs/2026-10-04-fill-a-red-bag-design.md`. This is half 1, the
+public page; half 2 (staff editing the list in the admin, a Red Bag receipt email, a report figure)
+is not built.
+
+**It ships switched off.** The switch is one constant, `RED_BAG_LIVE` in `src/red-bag/switch.ts`
+(no config value, no database row, no infrastructure). While it is off:
+
+- `GET /fill-a-red-bag` is the site's ordinary page not found page, with a real `404`, to the
+  public. Nothing of the page is in what they are sent.
+- A **signed in member of staff** sees the page under a plain strip, "Staff preview: not public
+  yet". The admin keeps its session in the browser tab (not in a cookie), so: sign in at `/admin`,
+  then type `/fill-a-red-bag` into the address bar of **the same tab**. (The 404 served at this one
+  address carries a small script, `assets/js/red-bag-preview.js`; when the tab holds an admin
+  session it asks for the page again with the session and shows it. With no session it does nothing.
+  The server checks the session against the user's live row, so a disabled account is refused.)
+- The page is linked from nowhere (not `/donate`, not the menu), is on no site map, and is
+  `noindex`. It is listed for staff in Admin > Site pages > Every page, as "Staff only".
+- `POST /api/checkout-session` refuses a Red Bag donation (`403`) from anyone but signed in staff.
+
+**Going live** is one small change: set `RED_BAG_LIVE` to `true`; add the link from `/donate`; list
+the page (add it to `SITE_PAGES` in `src/site/pages.ts`, take it out of `PRIVATE_PAGES`, and take
+the `noindex` line out of `fill-a-red-bag.html`).
+
+**The one list.** `assets/js/red-bag-catalogue.js` holds the items and their prices (the printed
+sheet's four headings: Home comforts, Play & downtime, Books & creativity, Clothing), the four
+themes and their examples, the £50 bag value, the £2 minimum, and the pure sums: the total in whole
+pence, how many bags to draw and how full (five at most, then "and N more"), and the status line.
+The page loads that file; the server reads the same file to draw the list into the page
+(`src/red-bag/catalogue.ts`, `src/red-bag/render.ts`), so the list is in the HTML without
+JavaScript; and the tests read it too. To change a price or a word, change it there.
+
+**The page** (`fill-a-red-bag.html`, `assets/css/red-bag.css`, `assets/js/red-bag.js`): the list
+with a minus button, a number box and a plus button for each item (0 to 99; typing counts at once);
+the bags, the status line, the total, a monthly tick that names the amount ("Give £31 every
+month", following the total; "Give this amount every month" while the bag is empty) and one Donate
+button;
+"Whenever the need comes", four themes of three examples that go into the same bag when tapped; and
+"Prefer to give the real thing? We would love that. Find a drop-off point near you." (the last
+sentence links to `DROP_OFF_URL`, https://drop.nbcc.scot, in `src/red-bag/render.ts`, in a new tab;
+`DROP_OFF_LIVE` is `true` since Jaimie confirmed the address on 4 October 2026, and set to `false`
+the note shows the phone number and no link). **On a phone** the bag sits below the list, so a slim
+bar fixed to the foot of the screen shows "Your bag £18" and a Donate button while the list is
+scrolled: it hides once the real total and Donate are on screen, over the footer, on the details
+step and the thank you, and while the total is £0; its Donate does what the main one does; it is
+never drawn at desktop widths and is not a live region. Under £2 the Donate
+button stays enabled and shows a friendly nudge. Donate opens a details step with the same asks as
+the give form on a fundraiser's page (name, email, the newsletter tick, Gift Aid, covering the card
+fee for a one off; a monthly donation asks for the 18 or over tick instead, as `/donate` does), then
+Stripe. Back from Stripe (`?thanks=1`) it says thank you with the total (remembered by the browser
+tab, for show only), a Gift Aid line when Gift Aid was added, and a picture to share that names no
+amount. No list of items is ever sent or shown after paying. The handwriting is only on the paper:
+Caveat (SIL Open Font License), self hosted as `assets/fonts/caveat-latin.woff2` (the Latin subset,
+weights 400 to 700 in one file) with its licence beside it (`assets/fonts/caveat-OFL.txt`). It is
+declared in `assets/css/red-bag.css` and preloaded by `fill-a-red-bag.html`, so only this page ever
+loads it and the two font budget of the shared stylesheet is untouched; if it cannot load, the
+device's own handwriting faces stand in. Nothing scrolls inside a box.
+
+**The checkout change.** `POST /api/checkout-session` gains one optional marker, `redBag: true`.
+Only with it: the amount is at least 200 pence; it may not come with `fundraiserId`; the session's
+metadata gains `redBag: "true"`; and the return addresses are worked out by the server
+(`<site>/fill-a-red-bag?thanks=1&session_id={CHECKOUT_SESSION_ID}`, cancel back to the page; the
+embedded checkout gets the same as its `return_url`), never taken from the browser. Without the
+marker nothing changes: a `/donate` session gains no keys (`test/unit/red-bag-checkout.test.ts` and
+`test/unit/donate-checkout-pinned.test.ts` hold that). The webhook records the donation exactly as
+a normal one and sends the normal receipt.
+
+| Method + path | Who | Answers |
+|---|---|---|
+| `GET /fill-a-red-bag` | the public, switched off | the site's 404 page, `404`, `noindex` |
+| `GET /fill-a-red-bag` | signed in staff (`Authorization: Bearer`), switched off | the page with the preview strip; `Cache-Control: private, no-store` |
+| `GET /fill-a-red-bag` | anyone, switched on | the page |
+| `POST /api/checkout-session` with `redBag: true` | the public, switched off | `403 { error: "Fill a Red Bag is not open yet" }` |
+| `POST /api/checkout-session` with `redBag: true` | staff, or anyone once switched on | `200`, as any donation; `400` under £2 or with `fundraiserId` |
+
+- Code: `src/red-bag/` (`switch.ts`, `staff.ts`, `catalogue.ts`, `render.ts`), `src/routes/red-bag.ts`
+  (added to the site router in `src/routes/site.ts`), the marker in `src/routes/api.ts`, the page
+  list in `src/site/pages.ts`, and `fill-a-red-bag.html` in the `Dockerfile`'s COPY line.
+- No migration, no table or column, no config value, no email, nothing in the admin's files.
+- If the page's file, the 404's file or the catalogue cannot be read, the handler logs it and hands
+  the request on to the site's ordinary 404; it never hangs. A `403` from the checkout (a staff
+  session that has run out during a preview) tells staff to sign in again at `/admin`.
+- The Gift Aid postcode box uses the server's own rule (`UK_POSTCODE_RE` in
+  `src/declarations/fields.ts`, turned into an HTML `pattern` by `postcodePattern()`), so the page
+  refuses exactly what the checkout would.
+- Accessibility: the status line and the total share ONE polite live region, read whole, so each
+  change is announced once; a plus or minus button at its end says it is off (`aria-disabled`) and
+  keeps the focus.
+- Unit tests: `test/unit/red-bag-*.test.ts` (the catalogue and sums, the switch, the checkout, the
+  page as drawn and who is given it, the page's script, the preview script). BDD:
+  `features/fill-a-red-bag.feature` (the 404 while off; a Red Bag donation under £2 refused).

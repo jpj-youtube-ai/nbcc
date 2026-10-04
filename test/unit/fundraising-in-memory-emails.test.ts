@@ -176,12 +176,12 @@ describe("the summary to the events inbox", () => {
 describe("review: the thank you to a giver on an in memory page", () => {
   it("is gentle: In memory, and With warmest thoughts, as every in memory email signs off", async () => {
     const { buildSupporterThanksEmail } = await import("../../src/fundraising/thanks-email");
-    const m = buildSupporterThanksEmail({ organiserName: "Sam Example", title: "In memory of Jean", message: "Thank you.", inMemory: true });
+    const m = buildSupporterThanksEmail({ organiserName: "Sam Example", title: "In memory of Jean", message: "Thank you.", inMemory: true, baseUrl: "https://nbcc.test" });
     expect(m.text).toContain("In memory");
     expect(m.text).not.toContain("Fundraising for NBCC");
     expect(m.text).toContain("With warmest thoughts,");
     expect(m.text).not.toContain("Thanks so much,");
-    const other = buildSupporterThanksEmail({ organiserName: "Sam Example", title: "Sam's Walk", message: "Thank you." });
+    const other = buildSupporterThanksEmail({ organiserName: "Sam Example", title: "Sam's Walk", message: "Thank you.", baseUrl: "https://nbcc.test" });
     expect(other.text).toContain("Fundraising for NBCC");
     expect(other.text).toContain("Thanks so much,");
   });

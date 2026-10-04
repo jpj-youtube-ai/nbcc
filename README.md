@@ -7799,7 +7799,7 @@ and email) and the sign off. Plain English, no dashes, every stored value escape
 | `fundraiseNewsApproved` | the organiser | staff approve a news update they posted (TASK-506) | "Your news update is live!" with the page link while their page is up; otherwise "Your news update is saved!". "Thanks so much," and the questions box |
 | `fundraiseNewsRejected` | the organiser | staff do not use a news update (TASK-506) | "About your news update": not on the page, we'll give you a ring; never the internal reason. "Speak soon," and the questions box |
 | `fundraiseSummary` | each address on the Weekly summary list | Mondays at 8am (TASK-503, email 11), or Send a test now (to the admin pressing it, marked as a test) | "Good morning, team!": last week's money, new sign ups, Waiting on us, Coming up, Open the admin, "Have a brilliant week,". Staff only: no questions box, never link tagged. Subject like "Fundraising this week: £1,240 raised, 10 things waiting" |
-| `fundraiseSupporterThanks` | a giver the organiser picked, who can be emailed | staff approve the organiser's thank you (TASK-507, email 20), in the background, one at a time | "A thank you from Sam": the organiser's message in a quote box, "And from all of us: thank you too.", "Thanks so much,", the questions box. From and Reply-To the events inbox. See **Thank your supporters (TASK-507)** |
+| `fundraiseSupporterThanks` | a giver the organiser picked, who can be emailed | staff approve the organiser's thank you (TASK-507, email 20), in the background, one at a time | "A thank you from Sam": the organiser's message in a quote box, "And from all of us: thank you too.", the charity's description, "We'd love to keep in touch" with a "Join our mailing list" button (`/newsletter`) and a link to `/get-involved`, "Thanks so much,", the questions box (in memory: the one closing line, no keep in touch). From and Reply-To the events inbox. See **Thank your supporters (TASK-507)** |
 
 **Approved while fundraising is off.** The old "you're approved, your page will appear when our pages
 open" email is retired. A page holder approved while fundraising is off gets no email then: the
@@ -8935,9 +8935,21 @@ donations), so none says "Sending now" for good.
 audit), in the approved words: "A thank you from Sam" (the organiser's first name only, and only if
 it is one plain word of letters; otherwise "A thank you for your gift"), "Hello,", "Sam asked us to
 pass this on to you, for your gift to **title**:", the message in a quote box, "And from all of us:
-thank you too. Your gift helps the children, young people and vulnerable adults we support, all year round.", "Thanks so much, NBCC
-Team", and the "Got any questions?" box with the events inbox. Nothing about any other giver, and
-never the organiser's address.
+thank you too.", then (2026-10-04) the charity's own description as its own paragraph
+(`ABOUT_NBCC_FULL` in `src/email/brand.ts`, once), a small heading "We'd love to keep in touch", "If
+you'd like to hear how your gift helps, join our mailing list. It's a few emails a year, and you can
+unsubscribe at any time.", the standard button "Join our mailing list" to `/newsletter`, and
+"There's lots going on, too. See what's coming up, and support the people fundraising for NBCC, on
+our Get involved page." linked to `/get-involved`. Then "Thanks so much, NBCC Team", and the "Got
+any questions?" box with the events inbox. Nothing about any other giver, and never the organiser's
+address.
+
+The keep in touch part is an invitation only: the email adds nobody to any list, and the two links
+are the plain public pages built on `PORTAL_BASE_URL` (passed in as `baseUrl`), the same for every
+giver, with no token, no query string and nothing about the person. It is the same for an event
+page or a team page. A page in memory of someone has none of it: that version, from Jodie, keeps
+the single closing line "And from all of us: thank you too. Your gift helps the children, young
+people and vulnerable adults we support across South West Scotland, all year round."
 
 **The Monday summary** adds "N thank yous to check" to Waiting on us (one thing waiting each). If
 they cannot be counted, the summary still goes, without that line.
@@ -10653,7 +10665,9 @@ one; its "where the money goes" line no longer repeats who NBCC helps). The dona
 the short one too, on every variant (one builder, `buildDonationConfirmation`): its closing line is
 now "Kindness like yours makes a real difference, at Christmas and all year round.", then the
 description as its own paragraph, so the people NBCC helps are named once. The Corporation Tax
-receipt and the refund email are untouched.
+receipt and the refund email are untouched. The giver's thank you from a fundraiser has the full one
+(in place of its old "Your gift helps..." sentence), followed by an invitation to keep in touch:
+see **Thank your supporters (TASK-507)**. Its in memory version does not.
 
 **Staff notices name the Get involved tab** and its section: "Admin > Get involved > Sign ups",
 "Admin > Get involved > Tickets and pledges > Event tickets", "Open Admin, Get involved", "Admin,

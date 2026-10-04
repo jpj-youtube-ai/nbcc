@@ -31,10 +31,19 @@ describe("across South West Scotland", () => {
     );
   });
 
-  it("the giver's thank you from the fundraiser", () => {
-    expect(buildSupporterThanksEmail({ organiserName: "Sam Example", title: "Sam's Santa Dash", message: "Thank you!" }).text).toContain(
+  it("the giver's thank you from the fundraiser says it in the charity's own description, and only there", () => {
+    const text = buildSupporterThanksEmail({ organiserName: "Sam Example", title: "Sam's Santa Dash", message: "Thank you!", baseUrl: "https://nbcc.test" }).text;
+    expect(text).toContain(`And from all of us: thank you too.\n\n${ABOUT_NBCC_FULL}\n`);
+    expect(text).not.toContain("Your gift helps the children");
+    expect(count(text, WHO)).toBe(1);
+  });
+
+  it("the giver's thank you on a page in memory of someone keeps its own closing line", () => {
+    const text = buildSupporterThanksEmail({ organiserName: "Sam Example", title: "In memory of Mary Example", message: "Thank you!", inMemory: true, baseUrl: "https://nbcc.test" }).text;
+    expect(text).toContain(
       "And from all of us: thank you too. Your gift helps the children, young people and vulnerable adults we support across South West Scotland, all year round.",
     );
+    expect(text).not.toContain("volunteer led");
   });
 
   it("the target reached email says it once: in the first sentence, and not again two lines later", () => {
@@ -76,7 +85,7 @@ describe("across South West Scotland", () => {
   it("is never said twice in one email", () => {
     const mails = [
       buildSignUpThanksEmail("Sam Example"),
-      buildSupporterThanksEmail({ organiserName: "Sam Example", title: "Sam's Santa Dash", message: "Thank you!" }),
+      buildSupporterThanksEmail({ organiserName: "Sam Example", title: "Sam's Santa Dash", message: "Thank you!", baseUrl: "https://nbcc.test" }),
       ...(["target", "finished", "need_a_hand", "on_track"] as const).map((k) => buildTouchEmail(k, sampleTouchData(k, BASE))),
     ];
     for (const m of mails) expect(count(m.text, PLACE)).toBe(1);
@@ -213,12 +222,20 @@ Night Before Christmas Campaign, known as NBCC,`);
     });
   });
 
-  it("is not in the emails it was not asked for: in memory, the pay link, the giver's thank you", () => {
+  it("is in the giver's thank you from the fundraiser, in full, once (2026-10-04)", () => {
+    const m = buildSupporterThanksEmail({ organiserName: "Sam Example", title: "Sam's Santa Dash", message: "Thank you!", baseUrl: "https://nbcc.test" });
+    expect(count(m.text, ABOUT_NBCC_FULL)).toBe(1);
+    expect(count(m.html, ABOUT_NBCC_FULL)).toBe(1);
+    expect(count(m.text, WHO)).toBe(1);
+    expect(count(m.html, WHO)).toBe(1);
+  });
+
+  it("is not in the emails it was not asked for: in memory, the pay link, the giver's thank you in memory", () => {
     const others = [
       buildInMemoryApprovedEmail({ name: "Sam Example", memoryName: "Mary Example" }, { pageUrl: `${BASE}/fundraise/x` }),
       buildPledgeEmail("pledge_pay", samplePledgeEmailData(BASE)),
       buildPledgeEmail("pledge_reminder", samplePledgeEmailData(BASE)),
-      buildSupporterThanksEmail({ organiserName: "Sam Example", title: "Sam's Santa Dash", message: "Thank you!" }),
+      buildSupporterThanksEmail({ organiserName: "Sam Example", title: "In memory of Mary Example", message: "Thank you!", inMemory: true, baseUrl: "https://nbcc.test" }),
     ];
     for (const m of others) expect(m.html + m.text).not.toContain("volunteer led");
   });

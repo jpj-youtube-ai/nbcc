@@ -28,7 +28,7 @@ const MEMORY_MAILS: Array<[string, Built]> = [
   ["the note after an in memory sign up", buildMemoryReceiptEmail("Sam Example")],
   ["your page in memory (family)", buildInMemoryApprovedEmail({ name: "Sam Example", firstName: "Sam", memoryName: "Mary Example", setupBy: "family" }, { pageUrl: `${BASE}/fundraise/x` })],
   ["your page in memory (funeral director)", buildInMemoryApprovedEmail({ name: "The Example Funeral Directors", memoryName: "Mary Example", setupBy: "funeral_director" }, { pageUrl: `${BASE}/fundraise/x` })],
-  ["the giver's thank you, in memory", buildSupporterThanksEmail({ organiserName: "Sam Example", title: "In memory of Mary Example", message: "Thank you.", inMemory: true, giverName: "Alex Example" })],
+  ["the giver's thank you, in memory", buildSupporterThanksEmail({ organiserName: "Sam Example", title: "In memory of Mary Example", message: "Thank you.", inMemory: true, giverName: "Alex Example", baseUrl: "https://nbcc.test" })],
   ["the gentle sign in code", buildSignInCodeEmail("Sam Example", "123456", { gentle: true })],
 ];
 
@@ -61,7 +61,7 @@ describe("emails that are not in memory", () => {
   });
 
   it("the giver's thank you and the sign in code are signed as they were, with no name", () => {
-    expect(buildSupporterThanksEmail({ organiserName: "Sam Example", title: "Sam's Santa Dash", message: "Thank you!" }).text).toContain("Thanks so much,\nNBCC Team");
+    expect(buildSupporterThanksEmail({ organiserName: "Sam Example", title: "Sam's Santa Dash", message: "Thank you!", baseUrl: "https://nbcc.test" }).text).toContain("Thanks so much,\nNBCC Team");
     expect(buildSignInCodeEmail("Sam Example", "123456").text).toContain("Happy fundraising!\nNBCC Team");
   });
 });

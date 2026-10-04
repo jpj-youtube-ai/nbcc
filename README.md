@@ -11989,6 +11989,15 @@ a normal one and sends the normal receipt.
   (added to the site router in `src/routes/site.ts`), the marker in `src/routes/api.ts`, the page
   list in `src/site/pages.ts`, and `fill-a-red-bag.html` in the `Dockerfile`'s COPY line.
 - No migration, no table or column, no config value, no email, nothing in the admin's files.
+- If the page's file, the 404's file or the catalogue cannot be read, the handler logs it and hands
+  the request on to the site's ordinary 404; it never hangs. A `403` from the checkout (a staff
+  session that has run out during a preview) tells staff to sign in again at `/admin`.
+- The Gift Aid postcode box uses the server's own rule (`UK_POSTCODE_RE` in
+  `src/declarations/fields.ts`, turned into an HTML `pattern` by `postcodePattern()`), so the page
+  refuses exactly what the checkout would.
+- Accessibility: the status line and the total share ONE polite live region, read whole, so each
+  change is announced once; a plus or minus button at its end says it is off (`aria-disabled`) and
+  keeps the focus.
 - Unit tests: `test/unit/red-bag-*.test.ts` (the catalogue and sums, the switch, the checkout, the
   page as drawn and who is given it, the page's script, the preview script). BDD:
   `features/fill-a-red-bag.feature` (the 404 while off; a Red Bag donation under £2 refused).

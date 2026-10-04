@@ -125,7 +125,9 @@ describe("rendering", () => {
       for (const v of e.versions) {
         const mail = renderVersion(e, v, BASE);
         const seen = (mail.subject + " " + mail.html.replace(/<style[\s\S]*?<\/style>/gi, "").replace(/<[^>]+>/g, " "));
-        expect(seen, `${e.id}/${v.id}`).not.toMatch(/undefined|NaN|\[object Object\]|null/);
+        expect(seen, `${e.id}/${v.id}`).not.toMatch(/\bundefined\b|\bNaN\b|\[object Object\]|\bnull\b/);
+        // A list with a gap in it joins to ", ,".
+        expect(seen, `${e.id}/${v.id}`).not.toMatch(/,\s*,/);
       }
     }
   });

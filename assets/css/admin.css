@@ -2377,7 +2377,7 @@ textarea.fx-call-input{min-height:88px;line-height:1.5;resize:vertical;field-siz
 #view-fundraising .fr-card--fold { padding: 0; }
 #view-fundraising .fr-fold-bar { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; padding: 12px 20px; cursor: pointer; list-style: none; border-radius: 16px; }
 #view-fundraising .fr-fold-bar::-webkit-details-marker { display: none; }
-#view-fundraising .fr-fold-bar::before { content: "B8"; color: var(--maroon); transition: transform 160ms ease; }
+#view-fundraising .fr-fold-bar::before { content: "\25B8"; color: var(--maroon); transition: transform 160ms ease; }
 #view-fundraising .fr-fold[open] > .fr-fold-bar::before { transform: rotate(90deg); }
 #view-fundraising .fr-fold-bar:focus-visible { outline: 3px solid var(--holly); outline-offset: 2px; }
 #view-fundraising .fr-fold-title { margin: 0; }
@@ -2880,7 +2880,7 @@ textarea.fx-call-input{min-height:88px;line-height:1.5;resize:vertical;field-siz
 #view-fundraising .fr-emails-groups { display: grid; gap: 8px; margin: 12px 0 4px; min-width: 0; }
 #view-fundraising .fr-emails-group { min-width: 0; border: 1px solid var(--line); border-radius: 12px; background: var(--card); }
 #view-fundraising .fr-emails-group-bar { align-items: center; min-height: 44px; padding: 8px 14px; border-radius: 12px; }
-#view-fundraising .fr-emails-group-name { font-family: var(--font-head); font-weight: 700; color: var(--maroon); }
+#view-fundraising .fr-emails-group-name { max-width: calc(100% - 28px); font-family: var(--font-head); font-weight: 700; color: var(--maroon); overflow-wrap: anywhere; }
 #view-fundraising .fr-emails-group-count { font-size: 0.85rem; color: var(--slate-soft); }
 #view-fundraising .fr-emails-rows { list-style: none; display: grid; gap: 6px; margin: 0; padding: 0 10px 10px; }
 #view-fundraising .fr-emails-item { min-width: 0; border: 1px solid var(--line); border-radius: 10px; background: color-mix(in srgb, var(--tan) 8%, var(--card)); }
@@ -2889,7 +2889,7 @@ textarea.fx-call-input{min-height:88px;line-height:1.5;resize:vertical;field-siz
 #view-fundraising .fr-emails-row:focus-visible { outline: 3px solid var(--holly); outline-offset: 2px; }
 #view-fundraising .fr-emails-row-top { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; }
 #view-fundraising .fr-emails-row-name { font-weight: 700; color: var(--maroon); overflow-wrap: anywhere; }
-#view-fundraising .fr-emails-row-name::before { content: "B8"; display: inline-block; margin-right: 8px; transition: transform 160ms ease; }
+#view-fundraising .fr-emails-row-name::before { content: "\25B8"; display: inline-block; margin-right: 8px; transition: transform 160ms ease; }
 #view-fundraising .fr-emails-row[aria-expanded="true"] .fr-emails-row-name::before { transform: rotate(90deg); }
 #view-fundraising .fr-emails-row-version { font-size: 0.82rem; font-weight: 700; color: var(--crimson); }
 #view-fundraising .fr-emails-row-subject, #view-fundraising .fr-emails-row-who { font-size: 0.9rem; overflow-wrap: anywhere; }

@@ -11,7 +11,7 @@ import { hasPage, pagePath, type FundraiserRecord } from "../fundraising/model";
 import { safeFirstName } from "../fundraising/emails";
 import type { PledgeRecord, PledgeWithFundraiser } from "../db/pledges";
 import type { PledgeCheckoutInput } from "../pledges/checkout";
-import { buildPledgeEmail, PLEDGE_EMAIL_LABELS, PLEDGE_EMAIL_WHEN, pledgeHiddenNote, samplePledgeEmailData } from "../pledges/emails";
+import { PLEDGE_EMAIL_LABELS, PLEDGE_EMAIL_WHEN, pledgeHiddenNote } from "../pledges/emails";
 import {
   PLEDGE_WORDING_KEYS,
   canPledge,
@@ -60,7 +60,7 @@ import { newPledgeNonce, pledgeIdOfToken, verifyPledgeToken, type PledgeLinkPurp
 //
 // Staff, Admin > Fundraising (section "fundraising"):
 //   GET    /api/admin/fundraising/pledges                 every fundraiser's pledges, with emails   view
-//   GET    /api/admin/fundraising/pledges/preview/:key    one of the two emails, rendered           view
+//   (the two emails to sponsors are read in All emails: src/routes/admin-fundraising-emails.ts)
 //   POST   /api/admin/fundraising/pledges/approvals/:key  approve its wording                       admin
 //   DELETE /api/admin/fundraising/pledges/approvals/:key  withdraw that approval                    admin
 //   POST   /api/admin/fundraising/pledges/send-pay-links  new pay links to everyone unpaid          admin
@@ -672,20 +672,6 @@ export function makePledgeHandlers(deps: PledgeRouteDeps) {
     }
   }
 
-  async function getAdminPreview(req: Request, res: Response): Promise<Response | void> {
-    if (!(await deps.authorize(req, res, "view"))) return;
-    const key = req.params.key;
-    if (!isKey(key)) return res.status(404).json({ error: "There is no pledge email of that kind" });
-    try {
-      const approvals = await approvalsByKey();
-      const mail = buildPledgeEmail(key, samplePledgeEmailData(deps.baseUrl));
-      return res.status(200).json({ key, label: PLEDGE_EMAIL_LABELS[key], when: PLEDGE_EMAIL_WHEN[key], approval: approvals.map[key] ?? null, approvalsUnavailable: approvals.unavailable, ...mail });
-    } catch (err) {
-      console.error("admin pledge email preview failed:", why(err));
-      return res.status(500).json(UNAVAILABLE);
-    }
-  }
-
   async function postApproval(req: Request, res: Response): Promise<Response | void> {
     const claims = await deps.authorizeAdmin(req, res);
     if (!claims) return;
@@ -807,7 +793,6 @@ export function makePledgeHandlers(deps: PledgeRouteDeps) {
     postOrganiserCash,
     postOrganiserHide,
     getAdminPledges,
-    getAdminPreview,
     postApproval,
     deleteApproval,
     postAdminSend,
@@ -939,7 +924,6 @@ export const pledgesRouter = Router();
   pledgesRouter.post("/api/fundraise/manage/fundraisers/:id/pledges/:pledgeId/cash", h.postOrganiserCash);
   pledgesRouter.post("/api/fundraise/manage/fundraisers/:id/pledges/:pledgeId/hide", h.postOrganiserHide);
   pledgesRouter.get("/api/admin/fundraising/pledges", h.getAdminPledges);
-  pledgesRouter.get("/api/admin/fundraising/pledges/preview/:key", h.getAdminPreview);
   pledgesRouter.post("/api/admin/fundraising/pledges/approvals/:key", h.postApproval);
   pledgesRouter.delete("/api/admin/fundraising/pledges/approvals/:key", h.deleteApproval);
   pledgesRouter.post("/api/admin/fundraising/pledges/send-pay-links", h.postAdminSendAll);

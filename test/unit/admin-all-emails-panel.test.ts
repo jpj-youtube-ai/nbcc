@@ -579,6 +579,13 @@ describe("the styles", () => {
     expect(mine.length).toBeGreaterThan(200);
   });
 
+  // The arrow was once written as a control character and showed as "B8" on every folded card.
+  it("draws the fold arrows with a real arrow", () => {
+    expect(css).toContain('.fr-fold-bar::before { content: "\\25B8";');
+    expect(mine).toContain('.fr-emails-row-name::before { content: "\\25B8";');
+    expect(css).not.toContain(String.fromCharCode(0x15));
+  });
+
   it("never scrolls inside a box: the page grows", () => {
     expect(mine).not.toMatch(/overflow(-x|-y)?\s*:\s*(auto|scroll)/);
     expect(mine).not.toMatch(/max-height/);

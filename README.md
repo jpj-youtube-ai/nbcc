@@ -12292,6 +12292,52 @@ pointing at https://nbcc.scot/fill; and a quieter "Fill another bag" button back
 payment's id is taken out of the address bar at once. No list, no bag panel, no themes, and the
 bottom bar is never here.
 
+**The thank you's feel good pieces** (5 October 2026; design in the spec under "The thank you's feel
+good pieces"). Three additions, all the script's, each behind a guard (`safe()` in
+`assets/js/red-bag-thanks.js`) so that none can stop the thank you above from working. Their styles
+are in a stylesheet of the page's own, `assets/css/red-bag-thanks.css`, which no other page loads.
+
+- **Watch it leave the Workshop.** In place of the still bag, one inline drawing of the Elves'
+  Workshop (`assets/js/red-bag-workshop.js`, loaded by this page alone): a wooden shelf with tied
+  Red Bags on it, a hanging lamp, the donor's bag with its gold ribbon and "Packed with love" tag,
+  and a small elf seen from behind. On arrival after a gift it plays ONCE, about four seconds: the
+  elf lifts the bag into the gap on the shelf and steps back down, the lamp goes down to a glow, and
+  the line under it fades in, in the paper's hand: "Bag packed. The elves will take it from here."
+  (Jaimie's words; the page's only "will", and it is about the elves, not about what the money
+  buys.) Then it rests. Transform and opacity only, nothing loops, and for anyone who asked for less
+  motion, or opened without a remembered gift, it is simply shown at rest. The drawing is hidden
+  from screen readers; the line is ordinary text, in the page from the start, read once. One of the
+  donor's bags is on the shelf for each full £50 of the total the tab remembered (the bag's total,
+  before any card fee), one at least and five at most. Without the script, or if the scene's file
+  is missing or throws, the still bag stays.
+- **A name on the picture.** Above the picture, "Add a name to your picture (optional)", 30
+  characters at most (letters, numbers, spaces and plain punctuation; anything else is dropped). As
+  it is typed the picture reads "Fern filled a Red Bag", or "Fern filled 2 Red Bags" on the same
+  £50 rule; a long name takes a line of its own and shrinks to fit; no name, the plain "I filled a
+  Red Bag". Never an amount. **The name never leaves the browser**: the box belongs to no form, has
+  no `name`, and nothing in either script makes a request or stores anything. Because the picture
+  carries NBCC's name, the name is screened against the supporter wall's own list
+  (`src/donors/display-name-filter.ts`, now exporting `BLOCKED_NAME_LISTS`), which the server draws
+  into the page as JSON (`renderNameFilter` in `src/red-bag/render.ts`, at the
+  `<!-- red-bag:name-filter -->` mark) so the script applies the same two passes as
+  `containsBlockedWord` with no new endpoint. A refused name shows "Please choose a different name."
+  and the picture stays plain. If the list is not in the page, the box and the certificate button
+  stay put away: closed, not open.
+- **A certificate to print.** "Print your certificate" fills in the page's own hidden certificate
+  (the name from the box; "for filling a Red Bag Full of Joy", or "for filling 2 Red Bags Full of
+  Joy"; today's date as "5 October 2026"; "Thank you for being part of this." signed "The Elves" in
+  the handwriting; and the statement every printed piece carries, `MATERIALS_STATEMENT`, drawn in by
+  the server at `<!-- red-bag:statement -->`) and opens the browser's own print window. No amount on
+  it, no new route and no PDF library: while `<html>` carries `rb-print-cert` the print rules show
+  the certificate alone on one upright A4 sheet (`@page rbcert`, no paper margin, so the browser has
+  no room for its own header and footer; the white edge is in the drawing). With no name it asks for
+  one ("Add a name above first, and it goes on your certificate.") with the box in hand. Printing the
+  page any other way prints the page as before.
+
+Tests: `test/unit/red-bag-thanks-extras.test.ts` (the scene, the name, the picture's words, the
+certificate, nothing sent anywhere, and that a broken piece never stops the thank you) and
+`test/unit/red-bag-thanks-page.test.ts` (the page as drawn, and the stylesheet's rules).
+
 **The feel good layer** (4 October 2026; decoration only, agreed idea by idea, design in the spec
 under "The feel good layer"). When a quantity goes up a small drawing of the item drops into the
 bag (one drop for a typed jump; three in the air at most; into the bottom bar's total while the bag

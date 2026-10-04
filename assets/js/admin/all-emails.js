@@ -461,6 +461,12 @@
       if (r.shown === want) return Promise.resolve();
       var mine = ++r.seq;
       say(r.status, "", false);
+      // The sign off on screen belongs to the email on screen. While another loads (or if it cannot),
+      // it is put away, so Approve is never offered beside wording that is not the one it approves.
+      r.shown = "";
+      r.real = null;
+      r.subject = "";
+      clear(r.meta);
       var path = real
         ? "/api/admin/fundraising/touch/preview/" + encodeURIComponent(e.touchKind) + "?fundraiserId=" + encodeURIComponent(real)
         : "/api/admin/fundraising/emails/" + encodeURIComponent(e.id) + "/" + encodeURIComponent(r.version);

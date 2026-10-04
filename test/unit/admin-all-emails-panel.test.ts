@@ -495,6 +495,29 @@ describe("approving", () => {
     await click(rowBtn("pledge-pay"));
     expect(words(panel("pledge-pay").querySelector("[data-emails-signoff]"))).toBe("Couldn't check sign-offs just now, so this wording is held.");
     expect(panel("pledge-pay").querySelector("[data-emails-approve],[data-emails-withdraw]")).toBeNull();
+    // And it never points at another version to approve: nothing can be approved just now.
+    await click(rowBtn("touch-finished"));
+    expect(panel("touch-finished").querySelector("[data-emails-other],[data-emails-show-version]")).toBeNull();
+  });
+
+  it("clears the sign off when another version starts to load, so Approve is never beside the wrong email", async () => {
+    await opened("admin");
+    await click(rowBtn("touch-finished"));
+    expect(panel("touch-finished").querySelector("[data-emails-approve]")).not.toBeNull();
+    fail["/api/admin/fundraising/emails/touch-finished/usual"] = 500;
+    const pick = panel("touch-finished").querySelector("select[data-emails-version]") as HTMLSelectElement;
+    pick.value = "usual";
+    pick.dispatchEvent(new Event("change", { bubbles: true }));
+    await flush();
+    expect(panel("touch-finished").querySelector("[data-emails-signoff],[data-emails-approve],[data-emails-withdraw],.fr-touch-subject")).toBeNull();
+    expect(words(panel("touch-finished").querySelector("[data-emails-status]"))).toBe("That email could not be shown just now. The others are not affected.");
+    // Going back to the version that did load reads it again, with its sign off.
+    fail = {};
+    pick.value = "nothing-raised";
+    pick.dispatchEvent(new Event("change", { bubbles: true }));
+    await flush();
+    expect(words(panel("touch-finished").querySelector("[data-emails-approve]"))).toBe("Approve this wording");
+    expect(gets.filter((u) => u.endsWith("/touch-finished/nothing-raised")).length).toBe(2);
   });
 });
 

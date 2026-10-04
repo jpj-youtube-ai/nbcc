@@ -17,22 +17,36 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 
 export const MASTER_FILE = "partials/footer.html";
 
-const FOOTER = /^([ \t]*)<footer class="site-footer"[\s\S]*?<\/footer>/m;
+// A site footer, however its attributes are written; and one starting its own line, which is the
+// only kind the copier places (it re-indents the master to match).
+const SITE_FOOTER = /<footer\b[^>]*\bsite-footer\b/;
+const FOOTER = /^([ \t]*)<footer\b[^>]*\bsite-footer\b[\s\S]*?<\/footer>/m;
+
+/** Whether the page has a site footer at all. */
+export function hasSiteFooter(html) {
+  return SITE_FOOTER.test(html);
+}
 
 /** The master's lines, indented as the page indents its footer, with the page's line endings. */
 export function footerFor(master, indent, newline) {
   return master
     .replace(/\r\n/g, "\n")
-    .trimEnd()
+    .trim()
     .split("\n")
     .map((line) => (line ? indent + line : line))
     .join(newline);
 }
 
-/** The page with its footer replaced by the master. A page with no site footer comes back as it was. */
+/**
+ * The page with its footer replaced by the master. A page with no site footer comes back as it was;
+ * one whose site footer does not start its own line is an error, never a page quietly left stale.
+ */
 export function syncPage(html, master) {
   const found = FOOTER.exec(html);
-  if (!found) return html;
+  if (!found) {
+    if (hasSiteFooter(html)) throw new Error("The site footer must start on its own line for the master to be copied in.");
+    return html;
+  }
   const newline = html.includes("\r\n") ? "\r\n" : "\n";
   return html.slice(0, found.index) + footerFor(master, found[1], newline) + html.slice(found.index + found[0].length);
 }
@@ -44,7 +58,13 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
   const changed = [];
   for (const file of readdirSync(root).filter((f) => f.endsWith(".html"))) {
     const html = readFileSync(resolve(root, file), "latin1");
-    const next = syncPage(html, master);
+    let next;
+    try {
+      next = syncPage(html, master);
+    } catch (err) {
+      console.error(`${file}: ${err.message}`);
+      process.exit(1);
+    }
     if (next === html) continue;
     changed.push(file);
     if (!check) writeFileSync(resolve(root, file), Buffer.from(next, "latin1"));

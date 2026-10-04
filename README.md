@@ -205,6 +205,11 @@ The charity's own words, used exactly (`test/unit/charity-description.test.ts`):
   needed, and every December a full red bag for those who would otherwise wake up on Christmas
   morning with nothing to open." Used as the About page's opening line, followed by "We are based
   in Annbank, Ayrshire, and reach from Girvan to Largs."
+- **"Fundraise for us" on three pages.** While fundraising is on, the server points the footer's
+  link at the sign up (`src/fundraising/footer-link.ts`) on every page it decorates, the sitemap
+  included. The 404 page and the Gift Aid declaration page go out undecorated (no extra database
+  read on a page not found, or in the middle of a declaration), so there the link stays on the
+  contact page, which is where it goes when fundraising is off.
 - Still to follow: the Festive Ball page's "Who you're supporting" paragraph (after the Ball), and
   the emails and letters that say who NBCC is.
 
@@ -399,9 +404,9 @@ components (REQ-009), the `.rule` divider + logo lockup (REQ-007), `.reveal`
 hero-specific layout (two-column grid stacking ≤680px, `.eyebrow`, the emphasised
 `em`/`.allyear` headline treatment, proof-card positioning) — token-only colours.
 
-Content: a crimson eyebrow ("Volunteer run Scottish charity · Annbank, Ayrshire"),
+Content: a crimson eyebrow ("Volunteer led Scottish charity · Annbank, Ayrshire"),
 an emotive H1 ("You know us at Christmas. We're here all year.") with an emphasised
-element, a lede on the volunteer run, year round mission, two CTAs (**Donate now**
+element, the charity's short description as the lede, two CTAs (**Donate now**
 `.btn-primary` → `/donate`, **What we do all year** `.btn-ghost` → `/about-us`), the
 logo lockup as the illustration, and a floating proof card (`.card`) reading "7,657
 Red Bags Full of Joy delivered in 2025". Honours the copy rules (REQ-031, no dashes)
@@ -420,7 +425,7 @@ background, `--radius-lg`) holds four `.card` pillars in a responsive grid
 (4-across → 2-col ≤900px → 1-col ≤680px). Each pillar is an `<article class="card
 pillar reveal">` with a decorative `aria-hidden` inline-SVG icon (crimson via
 `currentColor` — the contrast guard forbids holly text), an `<h2>` title and a
-one-line of leaflet copy: **Volunteer run**, **South West Scotland**, **Red Bags
+one-line of leaflet copy: **Volunteer led**, **South West Scotland**, **Red Bags
 Full of Joy**, **7,657 delivered in 2025**. Reuses `.card`/`.reveal`/tokens only —
 no `<img>`, no new fonts, token-only colours. Verified by
 `test/unit/home-pillars.test.ts`.
@@ -5653,7 +5658,7 @@ The 2025 NBCC donation leaflet is the **source of truth** for page content, and
 the marketing copy follows a small house style:
 
 - **No dashes in visible copy.** Reword rather than hyphenate — "one off",
-  "year round", "volunteer run", "post Christmas", "South West Scotland" — and use
+  "year round", "volunteer led", "post Christmas", "South West Scotland" — and use
   commas, parentheses or restructured sentences instead of en/em dashes.
 - **Write "NBCC"** in full (never a mistyped variant such as "NB4CC").
 - **Beneficiaries** are always the full phrase **"children, young people and

@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import { readdirSync, readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { footerFor, syncPage, MASTER_FILE } from "../../scripts/sync-footer.mjs";
+import { footerFor, hasSiteFooter, syncPage, MASTER_FILE } from "../../scripts/sync-footer.mjs";
 
 // One footer, kept in one place. partials/footer.html is the master; scripts/sync-footer.mjs copies
 // it into every page. This test is what stops a page drifting: a footer changed by hand in one page
@@ -11,7 +11,7 @@ import { footerFor, syncPage, MASTER_FILE } from "../../scripts/sync-footer.mjs"
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 const read = (f: string) => readFileSync(resolve(ROOT, f), "latin1");
 const master = read(MASTER_FILE);
-const pages = readdirSync(ROOT).filter((f) => f.endsWith(".html") && read(f).includes('<footer class="site-footer"'));
+const pages = readdirSync(ROOT).filter((f) => f.endsWith(".html") && hasSiteFooter(read(f)));
 
 describe("the master footer", () => {
   it("describes the charity in its short form, word for word", () => {
@@ -62,6 +62,23 @@ describe("copying the master into a page", () => {
     expect(syncPage("<main>No footer</main>", tiny)).toBe("<main>No footer</main>");
     const page = "  <footer class=\"site-footer\" data-region=\"footer\">\n  </footer>\n";
     expect(syncPage(syncPage(page, tiny), tiny)).toBe(syncPage(page, tiny));
+  });
+
+  // The guard must not have a way round it: a footer the copier cannot place is an error, never a
+  // page quietly left alone.
+  it("refuses a site footer it cannot place, rather than leaving it stale", () => {
+    expect(() => syncPage('<main>Hi</main><footer class="site-footer" data-region="footer">\n<p>Old</p>\n</footer>', tiny)).toThrow(/own line/);
+  });
+
+  it("finds a site footer however its attributes are written", () => {
+    const other = '  <footer data-region="footer" class="site-footer wide">\n    <p>Old</p>\n  </footer>\n';
+    expect(hasSiteFooter(other)).toBe(true);
+    expect(syncPage(other, tiny)).toBe('  <footer class="site-footer" data-region="footer">\n    <p>New</p>\n  </footer>\n');
+    expect(hasSiteFooter("<footer><p>Some other footer</p></footer>")).toBe(false);
+  });
+
+  it("is not thrown by blank lines around the master", () => {
+    expect(footerFor(`\n\n${tiny}\n`, "", "\n")).toBe(footerFor(tiny, "", "\n"));
   });
 
   it("indents the master for a page", () => {

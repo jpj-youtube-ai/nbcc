@@ -8,7 +8,7 @@ import { countPendingPictures } from "./fundraiser-pictures";
 import { countPendingThanks } from "./fundraiser-thanks";
 import { countHeldMessages } from "./fundraiser-memory";
 import { readPromptCounts } from "./fundraising-touch";
-import { settledPackIds } from "./welcome-packs";
+import { summaryPackIds } from "./welcome-packs";
 import { INVITE_TTL_DAYS, inviteCc, inviteFullName, inviteNameParts, staffFirstName } from "../fundraising/invite";
 import { summaryRecipientsSchema, type SummaryInputs } from "../fundraising/summary";
 import type { CallRecord, CallWhich } from "../fundraising/follow-up";
@@ -467,12 +467,13 @@ export async function readSummaryInputs(now: Date): Promise<SummaryInputs> {
       }),
     // Welcome packs: whose pack has gone, with nothing more owed. If they cannot be read, the
     // summary still goes, without its welcome pack lines.
-    packsSent: await settledPackIds(fundraisers)
-      .then((ids) => [...ids])
+    // And whose waiting T-shirt staff left out with a reason: a pack to send, not one waiting for a size.
+    ...(await summaryPackIds(fundraisers)
+      .then((p) => ({ packsSent: [...p.settled], packsTshirtLeftOut: [...p.tshirtLeftOut] }))
       .catch((err: unknown) => {
         console.error("fundraising summary welcome packs read failed:", err instanceof Error ? err.message : err);
-        return null;
-      }),
+        return { packsSent: null, packsTshirtLeftOut: null };
+      })),
     // In memory: messages waiting for staff. Only one line of the summary: if they cannot be counted,
     // the summary still goes, without it.
     messagesToCheck: await countHeldMessages().catch((err: unknown) => {

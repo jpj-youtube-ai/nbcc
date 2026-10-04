@@ -470,10 +470,20 @@ export function applyPackAction(view: PackView, input: PackActionInput): PackAct
 //       Never a count, never an undo. One the pack marked once and staff then undid by hand in
 //       Requests is left To send: a deliberate hand undo is never re-sent by any press.
 //
+//   a leave out   of one of two things of a kind after both went (the A3 posters, say) puts how many
+//       went right too, on a request the pack marked.
+//
 // So a count staff corrected in Requests, or a request they undid there, is never put back by a
 // press on something else. "The pack marked it" is kept on the pack's own rows
 // (welcome_pack_items.marked_request), never read from the request's note. Pure: the SQL applies each
 // step with the Requests' own rules and audit (src/db/welcome-packs.ts).
+//
+// And a request staff changed by hand AFTER the pack marked it is theirs from then on (review): the
+// pack marked Posters Sent, staff undid it in Requests and later sent it again by hand, with their
+// own count. The pack's mark is still on its rows, so the mark alone cannot tell. The request says
+// who changed it last: the pack writes itself there (PACK_HANDLED before the staff member), a change
+// by hand writes the staff member alone. The pack only puts a count right, or opens a request again,
+// while it was the last to change it.
 
 /** Which request each thing in a pack belongs to. Both poster sizes are the one posters request. */
 export const PACK_REQUEST_KIND: Readonly<Record<string, RequestKind>> = {
@@ -492,6 +502,11 @@ export const PACK_REQUEST_NOTES: Record<PackKind, string> = {
   welcome: "Sent with the welcome pack.",
   memory: "Sent with the things they asked for.",
 };
+
+/** On a request the pack changed, before who pressed: "pack:admin:fern@example.com" (fundraiser_requests.updated_by). */
+export const PACK_HANDLED = "pack:";
+/** Was the pack the last to change this request? False once staff change it by hand in Requests. */
+const packHandled = (row: RequestRow | null): boolean => !!row?.updatedBy?.startsWith(PACK_HANDLED);
 
 export interface PackRequestStep {
   kind: RequestKind;
@@ -532,8 +547,12 @@ export function packRequestSync(
           ? { kind, input: { action: "out", from: "to_send", on: o.today, quantity, by: o.by, note } }
           : { kind, input: { action: "send", from: "to_send", on: o.today, how: "post", by: o.by, quantity, note } },
       );
-    } else if (o.press.type === "tick" && allIn && o.marked && group === "printed" && status === "sent" && quantity > 0 && row!.quantity !== quantity) {
-      // This press re-ticked a thing of this kind: how many went, on a request the pack marked, is put right.
+    } else if (!packHandled(row)) {
+      // Staff changed it by hand since the pack marked it (or it never was the pack's): left as it is.
+      continue;
+    } else if ((o.press.type === "tick" || o.press.type === "skip") && allIn && o.marked && group === "printed" && status === "sent" && quantity > 0 && row!.quantity !== quantity) {
+      // This press re-ticked a thing of this kind, or left one of them out after it went: how many
+      // went, on a request the pack marked, is put right.
       steps.push({ kind, input: { action: "count", from: "sent", quantity } });
     } else if (o.press.type !== "send" && !allIn && o.marked && status === flow[1]) {
       steps.push({ kind, input: { action: "undo", from: status } });
@@ -667,6 +686,17 @@ export interface PackCounts {
   memoryToSend: number;
 }
 
+/**
+ * Has staff left this pack's waiting T-shirt out with a reason? Then the pack no longer waits on the
+ * organiser: it is a pack to send. Not once the size has come in (the leave out no longer counts, and
+ * the T-shirt is there to tick), nor once the pack is sent.
+ */
+export function tshirtLeftOut(f: PackSubject, stored: StoredPack | null, sizes?: PosterSizes | null): boolean {
+  const view = packView(f, stored, sizes);
+  if (!view || view.state === "sent") return false;
+  return view.items.some((i) => i.key === "tshirt" && i.waiting && !!i.skippedReason);
+}
+
 /** Is this page's pack still to send? Approved (a finished one is past it), with a pack, not sent. */
 export function packToSend(f: PackSubject, sent: ReadonlySet<number>): boolean {
   return f.status === "approved" && packKind(f) !== null && !sent.has(f.id);
@@ -674,9 +704,10 @@ export function packToSend(f: PackSubject, sent: ReadonlySet<number>): boolean {
 
 /**
  * Each page with something to send is in exactly one count. `sent` holds the pages whose pack has
- * gone with nothing more owed (packSettled).
+ * gone with nothing more owed (packSettled); `leftOut` those whose waiting T-shirt staff left out
+ * with a reason (tshirtLeftOut), which are packs to send, not packs waiting for a size.
  */
-export function packCounts(list: PackSubject[], sent: ReadonlySet<number>, today: string): PackCounts {
+export function packCounts(list: PackSubject[], sent: ReadonlySet<number>, today: string, leftOut: ReadonlySet<number> = new Set()): PackCounts {
   const before = addDays(today, -PACK_OVERDUE_DAYS);
   const counts: PackCounts = { packsToSend: 0, tshirtWaiting: 0, memoryToSend: 0 };
   for (const f of list) {
@@ -685,7 +716,7 @@ export function packCounts(list: PackSubject[], sent: ReadonlySet<number>, today
     const overdue = !!f.approvedAt && londonToday(new Date(f.approvedAt)) < before;
     if (packKind(f) === "memory") {
       if (overdue) counts.memoryToSend += 1;
-    } else if (sportApplies(f) && f.isSporting === true && !tshirtLabel(f.tshirtSize)) {
+    } else if (sportApplies(f) && f.isSporting === true && !tshirtLabel(f.tshirtSize) && !leftOut.has(f.id)) {
       // Waiting on them, not on us: its own line, and never also a pack to send.
       counts.tshirtWaiting += 1;
     } else if (overdue) {

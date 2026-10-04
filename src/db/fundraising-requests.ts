@@ -125,7 +125,9 @@ export async function lockRequestRows(client: PoolClient, fundraiserId: number):
 /**
  * The change itself, inside a transaction that already holds the fundraiser's row (changeRequest
  * above; and a welcome pack's tick, which marks the matching request with the same rules and the
- * same audit line: src/db/welcome-packs.ts). Throws RequestError, writing nothing.
+ * same audit line: src/db/welcome-packs.ts). Throws RequestError, writing nothing. `updatedBy` is
+ * who the row says changed it last: the actor, unless the pack made the change (it says so there, so
+ * a later change by hand is told apart).
  */
 export async function changeRequestIn(
   client: PoolClient,
@@ -135,6 +137,7 @@ export async function changeRequestIn(
   input: RequestActionInput,
   actor: string,
   today: string,
+  updatedBy: string = actor,
 ): Promise<{ row: RequestRow; words: string }> {
   {
     const cur = await client.query(`SELECT ${COLUMNS} FROM fundraiser_requests WHERE fundraiser_id = $1 AND kind = $2 FOR UPDATE`, [
@@ -171,7 +174,7 @@ export async function changeRequestIn(
         s.note,
         s.backNote,
         s.link,
-        actor,
+        updatedBy,
       ],
     );
     const { action, from, ...entered } = input;

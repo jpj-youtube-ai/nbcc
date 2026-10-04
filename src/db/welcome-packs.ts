@@ -6,11 +6,13 @@ import { RequestError, changeRequestIn, lockRequestRows } from "./fundraising-re
 import { parseWants } from "../fundraising/requests";
 import type { FundraiserRecord } from "../fundraising/model";
 import {
+  PACK_HANDLED,
   PACK_REQUEST_KIND,
   applyPackAction,
   packRequestSync,
   packSettled,
   packView,
+  tshirtLeftOut,
   type PackPress,
   type PackSubject,
   type PackActionInput,
@@ -33,7 +35,9 @@ import {
 // comes off, by the Requests' own rules and with their own audit line (changeRequestIn,
 // src/db/fundraising-requests.ts). A row keeps marked_request once the pack has marked its request,
 // and only such a request is ever opened again or has its count put right, so what staff did by
-// hand in Requests is never overwritten.
+// hand in Requests is never overwritten. The request itself says who changed it last: the pack writes
+// "pack:" before the staff member there (PACK_HANDLED), so a request staff changed by hand since the
+// pack marked it (undone, then sent again with their own count) is told apart and left alone.
 
 export class PackError extends Error {
   constructor(
@@ -124,8 +128,19 @@ export async function posterSizesFor(fundraiserId: number, client: Pick<PoolClie
  * summary then counts that page as having something to send.
  */
 export async function settledPackIds(fundraisers: Array<PackSubject & { id: number }>): Promise<Set<number>> {
+  return (await summaryPackIds(fundraisers)).settled;
+}
+
+/**
+ * What the Monday summary needs of the packs, in one read: the pages whose pack has gone with nothing
+ * more owed (above), and those whose waiting T-shirt staff left out with a reason, which are packs to
+ * send rather than packs waiting for a size.
+ */
+export async function summaryPackIds(fundraisers: Array<PackSubject & { id: number }>): Promise<{ settled: Set<number>; tshirtLeftOut: Set<number> }> {
   const [stored, sizes] = await Promise.all([listPacks(), listPosterSizes()]);
-  return new Set(fundraisers.filter((f) => packSettled(f, stored.get(f.id) ?? null, sizes.get(f.id) ?? null)).map((f) => f.id));
+  const ids = (test: (f: PackSubject, pack: StoredPack | null, s: PosterSizes | null) => boolean) =>
+    new Set(fundraisers.filter((f) => test(f, stored.get(f.id) ?? null, sizes.get(f.id) ?? null)).map((f) => f.id));
+  return { settled: ids(packSettled), tshirtLeftOut: ids(tshirtLeftOut) };
 }
 
 /** Who this staff member last chose to sign a letter: offered first on their next one. */
@@ -245,7 +260,8 @@ export async function changePack(fundraiserId: number, input: PackActionInput, a
       const subject = { status: f.status, wants: parseWants(f.wants), socialOk: f.socialOk, eventDate: f.eventDate };
       for (const step of steps) {
         try {
-          requestWords.push((await changeRequestIn(client, fundraiserId, subject, step.kind, step.input, actor, today)).words);
+          // Kept on the request as changed by the pack; its History line still says who pressed.
+          requestWords.push((await changeRequestIn(client, fundraiserId, subject, step.kind, step.input, actor, today, PACK_HANDLED + actor)).words);
           // The pack's own record of what it marked: set when it marks, cleared when it opens again.
           const keys = Object.keys(PACK_REQUEST_KIND).filter((k) => PACK_REQUEST_KIND[k] === step.kind);
           await client.query("UPDATE welcome_pack_items SET marked_request = $2 WHERE pack_id = $1 AND key = ANY($3::text[])", [packId, step.input.action !== "undo", keys]);

@@ -6,6 +6,7 @@ import {
   packActionSchema,
   packAddress,
   packCounts,
+  tshirtLeftOut,
   packItems,
   packKind,
   packRequestSync,
@@ -523,6 +524,26 @@ describe("the counts", () => {
     ];
     expect(packCounts(list, new Set([3, 9, 10]), today)).toEqual({ packsToSend: 2, tshirtWaiting: 2, memoryToSend: 1 });
   });
+  // Review: staff left the waiting T-shirt out with a reason, so the pack no longer waits on the
+  // organiser. It is a pack to send (once approved for more than 2 days), not one waiting for a size.
+  it("counts a pack whose waiting T-shirt was left out as a pack to send, never as waiting for a size", () => {
+    const list = [
+      row(5, { approvedAt: "2026-09-01T09:00:00.000Z", isSporting: true }), // left out: to send
+      row(11, { approvedAt: "2026-10-05T09:00:00.000Z", isSporting: true }), // left out, approved yesterday: not yet
+      row(13, { approvedAt: "2026-09-01T09:00:00.000Z", isSporting: true }), // still waiting
+    ];
+    expect(packCounts(list, new Set(), today, new Set([5, 11]))).toEqual({ packsToSend: 1, tshirtWaiting: 1, memoryToSend: 0 });
+  });
+  it("knows a waiting T-shirt left out with a reason, until the pack is sent or the size comes in", () => {
+    const waiting = subject({ isSporting: true });
+    const leftOut = pack({ items: [{ key: "tshirt", label: "Waiting for T-shirt size", quantity: null, tickedAt: null, tickedBy: "admin:fern@example.com", skippedReason: "They do not want one" }] });
+    expect(tshirtLeftOut(waiting, leftOut)).toBe(true);
+    expect(tshirtLeftOut(waiting, null)).toBe(false);
+    expect(tshirtLeftOut(waiting, pack({ items: [ticked("letter")] }))).toBe(false);
+    // The size has come in: the leave out no longer counts, and the pack shows it to be ticked.
+    expect(tshirtLeftOut(subject({ isSporting: true, tshirtSize: "adult_m" }), leftOut)).toBe(false);
+    expect(tshirtLeftOut(subject(), leftOut)).toBe(false);
+  });
 });
 
 describe("the requests a pack looks after", () => {
@@ -536,6 +557,9 @@ describe("the requests a pack looks after", () => {
   const sizes = { a4: 10, a3: 2 };
   const pressed = (type: "tick" | "untick" | "skip", key: string, marked = false) => ({ ...base, press: { type, key }, marked });
   const sendPressed = { ...base, press: { type: "send" as const }, marked: false };
+  // Who last changed a request: the pack itself, or a member of staff by hand in Requests.
+  const BY_PACK = { updatedBy: "pack:admin:fern@example.com" };
+  const BY_HAND = { updatedBy: "admin:ash@example.com" };
 
   it("marks a request as sent once everything of its kind is ticked, with how many went", () => {
     const one = packView(f, pack({ items: [ticked("posters_a4", 10)] }), sizes)!;
@@ -602,7 +626,7 @@ describe("the requests a pack looks after", () => {
   });
   it("opens the request again when its tick is taken off, but only one the pack marked", () => {
     const v = packView(f, pack({ items: [ticked("posters_a4", 10)] }), sizes)!;
-    const sent = [row("posters", { status: "sent", quantity: 12, note: "Sent with the welcome pack." })];
+    const sent = [row("posters", { status: "sent", quantity: 12, note: "Sent with the welcome pack.", ...BY_PACK })];
     expect(packRequestSync(v, sent, pressed("untick", "posters_a3", true))).toEqual([{ kind: "posters", input: { action: "undo", from: "sent" } }]);
     // Whatever its note says, one the pack did not mark stays as staff left it.
     expect(packRequestSync(v, sent, pressed("untick", "posters_a3", false))).toEqual([]);
@@ -610,11 +634,41 @@ describe("the requests a pack looks after", () => {
   it("puts how many went right when the press re-ticks a thing of that kind, and only then", () => {
     const more = subject({ wants: { ...NONE, posterCount: 12 } });
     const v = packView(more, pack({ items: [ticked("posters_a4", 12)] }))!;
-    const marked = [row("posters", { status: "sent", quantity: 10, note: "Sent with the welcome pack." })];
+    const marked = [row("posters", { status: "sent", quantity: 10, note: "Sent with the welcome pack.", ...BY_PACK })];
     expect(packRequestSync(v, marked, pressed("tick", "posters_a4", true))).toEqual([{ kind: "posters", input: { action: "count", from: "sent", quantity: 12 } }]);
     expect(packRequestSync(v, [row("posters", { status: "sent", quantity: 12 })], pressed("tick", "posters_a4", true))).toEqual([]);
     // Never one the pack did not mark.
     expect(packRequestSync(v, marked, pressed("tick", "posters_a4", false))).toEqual([]);
+  });
+  // Review: both sizes ticked (the pack marked Posters Sent, 12). Staff pressed Undo in Requests,
+  // unticked the A4 posters, then marked Posters Sent by hand, with 8. The pack's mark is still on its
+  // rows, but the request as it stands is staff's own: the pack never changes it.
+  it("never changes the count of a request staff sent again by hand, when its thing is ticked again", () => {
+    const both = packView(f, pack({ items: [ticked("posters_a4", 10), ticked("posters_a3", 2)] }), sizes)!;
+    const byHand = [row("posters", { status: "sent", quantity: 8, how: "dropped_off", ...BY_HAND })];
+    expect(packRequestSync(both, byHand, pressed("tick", "posters_a4", true))).toEqual([]);
+    // The same press on one the pack itself last changed does put the count right.
+    const byPack = [row("posters", { status: "sent", quantity: 8, ...BY_PACK })];
+    expect(packRequestSync(both, byPack, pressed("tick", "posters_a4", true))).toEqual([{ kind: "posters", input: { action: "count", from: "sent", quantity: 12 } }]);
+  });
+  it("never opens again a request staff sent again by hand, when a tick comes off", () => {
+    const one = packView(f, pack({ items: [ticked("posters_a3", 2)] }), sizes)!;
+    const byHand = [row("posters", { status: "sent", quantity: 8, ...BY_HAND })];
+    expect(packRequestSync(one, byHand, pressed("untick", "posters_a4", true))).toEqual([]);
+    // Nor one from before the pack said who last changed it: left as it is.
+    expect(packRequestSync(one, [row("posters", { status: "sent", quantity: 8 })], pressed("untick", "posters_a4", true))).toEqual([]);
+  });
+  // Review: A4 10 and A3 2 both ticked (Sent, 12). Staff then leave the A3 posters out: 10 went.
+  it("puts how many went right when one size is left out after both went", () => {
+    const left = { key: "posters_a3", label: "2 A3 posters", quantity: 2, tickedAt: null, tickedBy: "admin:fern@example.com", skippedReason: "No A3 paper" };
+    const v = packView(f, pack({ items: [ticked("posters_a4", 10), left] }), sizes)!;
+    const sent = [row("posters", { status: "sent", quantity: 12, ...BY_PACK })];
+    expect(packRequestSync(v, sent, pressed("skip", "posters_a3", true))).toEqual([{ kind: "posters", input: { action: "count", from: "sent", quantity: 10 } }]);
+    // Never on one the pack did not mark, or one staff changed by hand since.
+    expect(packRequestSync(v, sent, pressed("skip", "posters_a3", false))).toEqual([]);
+    expect(packRequestSync(v, [row("posters", { status: "sent", quantity: 12, ...BY_HAND })], pressed("skip", "posters_a3", true))).toEqual([]);
+    // Leaving out something else changes nothing.
+    expect(packRequestSync(v, sent, pressed("skip", "sponsor_form", true))).toEqual([]);
   });
   it("in memory says what it went with", () => {
     const m = subject({ inMemory: true, wants: { ...NONE, envelopeCount: 30 } });

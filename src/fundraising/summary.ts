@@ -37,7 +37,8 @@ import { packCounts } from "./welcome-pack";
 //                  Team pages: team member sign ups to approve (on their own line), and teams live
 //                  10 days or more that nobody has joined
 //                  Welcome packs, each page in one line only: packs waiting for a T-shirt size
-//                  (never a sign up still new); packs to send (approved more than 2 days ago, not
+//                  (never a sign up still new, and never one whose waiting T-shirt staff left out
+//                  with a reason: that is a pack to send); packs to send (approved more than 2 days ago, not
 //                  yet sent, or sent with a T-shirt left out whose size has since come in); and in
 //                  memory pages with things to send
 //   coming up      approved fundraisers dated in the next four weeks
@@ -108,6 +109,8 @@ export interface SummaryInputs {
    * counting every one.
    */
   packsSent?: number[] | null;
+  /** Welcome packs: the fundraisers whose waiting T-shirt staff left out with a reason (tshirtLeftOut). */
+  packsTshirtLeftOut?: number[] | null;
 }
 
 export interface Materials {
@@ -277,7 +280,7 @@ export function summaryCounts(i: SummaryInputs): SummaryCounts {
   const pledgesUnpaid = whole(i.pledgesUnpaid);
   const pledgesPaidTwice = whole(i.pledgesPaidTwice);
   // Welcome packs (Jaimie, 2026-10-03; ./welcome-pack.ts).
-  const packs = packCounts(i.fundraisers, new Set(i.packsSent ?? []), today);
+  const packs = packCounts(i.fundraisers, new Set(i.packsSent ?? []), today, new Set(i.packsTshirtLeftOut ?? []));
   // Not read: no lines at all, rather than every pack ever sent counted as waiting.
   const { packsToSend, tshirtWaiting, memoryToSend } = i.packsSent ? packs : { packsToSend: 0, tshirtWaiting: 0, memoryToSend: 0 };
 

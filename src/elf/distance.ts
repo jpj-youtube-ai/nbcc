@@ -58,7 +58,8 @@ export function nearRadius(setting: unknown): number {
   return Math.min(set, MAX_NEAR_METRES);
 }
 
-/** Is the phone near the place? Only a real position within the radius counts. */
+/** Is the phone near the place? Only a real position within the radius counts. The radius is put
+ *  through `nearRadius` first: 300 metres unless a real distance is given, and never beyond 2,000. */
 export function isNear(place: LatLng, phone: LatLng, radiusMetres?: unknown): boolean {
   return isLatLng(place) && isLatLng(phone) && metresBetween(place, phone) <= nearRadius(radiusMetres);
 }

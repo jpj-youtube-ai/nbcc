@@ -106,7 +106,11 @@ describe("promotions between two counts", () => {
 
   it("never lists Trainee, which every detective starts as, whatever the counts", () => {
     expect(promotionsBetween(-1, 0)).toEqual([]);
-    expect(promotionsBetween(Number.NaN, 6)).toEqual([]);
     expect(promotionsBetween(-10, 6)).toEqual(["Junior Detective"]);
+  });
+
+  it("lists nothing when a count is not a number, rather than guess at what is new", () => {
+    expect(promotionsBetween(Number.NaN, 6)).toEqual([]);
+    expect(promotionsBetween(5, Number.NaN)).toEqual([]);
   });
 });

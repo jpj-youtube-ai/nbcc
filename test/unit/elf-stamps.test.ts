@@ -7,6 +7,7 @@ import type { LatLng } from "../../src/elf/distance";
 
 const PLACE = { lat: 55.458, lng: -4.629 };
 const HERE = { lat: 55.4585, lng: -4.629 }; // about 55 metres north
+const A_KILOMETRE = { lat: 55.467, lng: -4.629 }; // about 1 kilometre north
 const FAR = { lat: 55.5, lng: -4.629 }; // about 4.7 kilometres north
 
 const ctx: StampContext = {
@@ -85,6 +86,8 @@ describe("earning a stamp", () => {
     for (const radiusMetres of [0, -5, Number.NaN, null]) {
       const got = decideStamp({ ...ctx, radiusMetres }, { detectiveIds: ["d1"], location: HERE, hasPhoto: false });
       expect(got, String(radiusMetres)).toEqual({ ok: true, detectiveIds: ["d1"], proof: "location" });
+      const kilometre = decideStamp({ ...ctx, radiusMetres }, { detectiveIds: ["d1"], location: A_KILOMETRE, hasPhoto: false });
+      expect(kilometre, String(radiusMetres)).toEqual({ ok: false, reason: "too-far" });
     }
     const everywhere = decideStamp(
       { ...ctx, radiusMetres: Number.POSITIVE_INFINITY },
@@ -180,6 +183,13 @@ describe("not earning a stamp", () => {
       ok: true,
       detectiveIds: ["d1"],
       proof: "photo",
+    });
+  });
+
+  it("says the place is unknown when staff have not given it a position yet", () => {
+    expect(decideStamp({ ...ctx, place: null }, { detectiveIds: ["d1"], location: HERE, hasPhoto: false })).toEqual({
+      ok: false,
+      reason: "place-unknown",
     });
   });
 });

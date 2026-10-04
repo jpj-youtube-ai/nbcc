@@ -40,9 +40,11 @@ export type StampDecision =
 export interface StampContext {
   /** The state of the door for this place, worked out at the moment of the visit. */
   doorState: DoorState;
-  /** Where the place is, as two numbers. A database can hand a position over as text: that is not
-   *  a position, and a location shared against it is answered `place-unknown`. */
-  place: LatLng;
+  /** Where the place is, as two numbers, or null when staff have not given it a position yet. Never
+   *  turn a missing position into numbers (that gives 0, 0, which is a real place in the sea), and
+   *  never pass the text a database hands over: neither is a position, and a location shared
+   *  against a place that has none is answered `place-unknown`. */
+  place: LatLng | null;
   /** Every detective in the visiting family. */
   familyDetectiveIds: readonly (string | number)[];
   /** The family's detectives who already have this stamp. */
@@ -72,11 +74,11 @@ export function decideStamp(ctx: StampContext, attempt: StampAttempt): StampDeci
   if (fresh.length === 0) return { ok: false, reason: "nothing-new" };
   // A position that is not on the globe counts as not shared.
   const shared = isLatLng(attempt.location) ? attempt.location : null;
-  const placeKnown = isLatLng(ctx.place);
-  if (shared && placeKnown && isNear(ctx.place, shared, ctx.radiusMetres)) {
+  const place = isLatLng(ctx.place) ? ctx.place : null;
+  if (shared && place && isNear(place, shared, ctx.radiusMetres)) {
     return { ok: true, detectiveIds: fresh, proof: "location" };
   }
   if (attempt.hasPhoto === true) return { ok: true, detectiveIds: fresh, proof: "photo" };
   if (!shared) return { ok: false, reason: "no-proof" };
-  return { ok: false, reason: placeKnown ? "too-far" : "place-unknown" };
+  return { ok: false, reason: place ? "too-far" : "place-unknown" };
 }

@@ -29,9 +29,9 @@ export function chosenDetectives(sent: unknown): string[] {
   return [...ids];
 }
 
-/** Are all of these detectives in the family? Ask only once someone has been chosen: nobody at all
- *  is in every family. */
+/** Is somebody chosen, and are they all in the family? Nobody chosen is a no, so a gate built on this
+ *  fails shut. */
 export function allInFamily(chosen: readonly string[], family: readonly (string | number)[] | null | undefined): boolean {
   const own = new Set((family ?? []).map((id) => String(id)));
-  return chosen.every((id) => own.has(id));
+  return chosen.length > 0 && chosen.every((id) => own.has(id));
 }

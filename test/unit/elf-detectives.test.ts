@@ -52,4 +52,8 @@ describe("belonging to the family", () => {
     expect(allInFamily(["d1"], [])).toBe(false);
     expect(allInFamily(["d1"], null)).toBe(false);
   });
+
+  it("is false when nobody is chosen, so a gate built on it fails shut", () => {
+    expect(allInFamily([], ["d1", "d2"])).toBe(false);
+  });
 });

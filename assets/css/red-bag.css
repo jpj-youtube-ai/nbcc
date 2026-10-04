@@ -410,7 +410,7 @@ body.rb-bar-on{padding-bottom:calc(64px + env(safe-area-inset-bottom))}
 .rb-builder{position:relative}
 .rb-fx{position:absolute;inset:0;z-index:3;overflow:hidden;pointer-events:none}
 /* four plain moves, one inside another: across, down (or up), a small hop, and the fade */
-.rb-drop{position:absolute;width:34px;height:34px;margin:-17px 0 0 -17px;animation:rb-drop-x .6s cubic-bezier(.33,.2,.55,1) both}
+.rb-drop{position:absolute;z-index:1;pointer-events:none;width:34px;height:34px;margin:-17px 0 0 -17px;animation:rb-drop-x .6s cubic-bezier(.33,.2,.55,1) both}
 .rb-drop__y{display:block;animation:rb-drop-y .6s cubic-bezier(.5,0,.75,.75) both}
 .rb-drop__hop{display:block;animation:rb-drop-hop .6s cubic-bezier(.3,0,.7,1) both}
 .rb-drop .rb-art{width:100%;height:100%;animation:rb-drop-show .6s linear both}

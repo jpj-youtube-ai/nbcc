@@ -451,7 +451,7 @@
       "toiletry-set": ["Smelling lovely. Nice touch.", "A little bit of pampering."],
       toy: ["A toy! The elves are jealous.", "Playtime. Our favourite."],
       "soft-toy": ["Something to cuddle. Aww.", "Soft toys give great hugs."],
-      headphones: ["Headphones. Tunes on!", "Good choice. Very cool."],
+      headphones: ["Headphones. Tunes on!", "Music to our pointy ears."],
       book: ["A book! Elves love a story.", "Once upon a time..."],
       "colouring-book": ["Colouring in. Pure calm.", "Outside the lines? Go for it."],
       pencil: ["A pencil! Small but mighty.", "Sharp thinking."],
@@ -461,7 +461,7 @@
       "hat-gloves": ["Hat and gloves. Toasty!", "Wrapped up warm. Lovely."],
     },
     general: ["Lovely choice.", "Oh, nice one.", "The elves are impressed.", "You're good at this.", "That's the spirit.", "Elf approved."],
-    first: ["And we're off! Great start.", "First thing in. Lovely.", "Here we go! Elves are watching."],
+    first: ["And we're off! Great start.", "First thing in. Lovely.", "Here we go! Elves are cheering."],
     several: ["{n} {things}? You legend.", "{n} {things}! Brilliant.", "{n} {things}. What a pile!"],
     things: {
       blanket: "blankets",
@@ -479,7 +479,7 @@
       "hat-gloves": "hats and gloves",
     },
     out: ["No bother. Back on the shelf.", "Changed your mind? That's fine.", "Out it comes. No worries.", "Easy done. Your bag, your call."],
-    example: ["That's a big hearted one.", "A kind thought, that.", "All year round. Love that.", "Thoughtful. Elves noticed."],
+    example: ["That's a lovely one.", "A kind thought, that.", "All year round. Love that.", "Thoughtful. Elves noticed."],
   };
 
   function several(template, key, n) {

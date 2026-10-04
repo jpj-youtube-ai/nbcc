@@ -239,6 +239,14 @@ describe("the elf's notes", () => {
     }
   });
 
+  it("carries the owner's own changes (4 October 2026)", () => {
+    expect(rb.NOTES.first).toContain("Here we go! Elves are cheering.");
+    expect(rb.NOTES.items.headphones).toEqual(["Headphones. Tunes on!", "Music to our pointy ears."]);
+    expect(rb.NOTES.example).toContain("That's a lovely one.");
+    expect(rb.NOTES.several).toContain("{n} {things}? You legend.");
+    for (const gone of ["Here we go! Elves are watching.", "Good choice. Very cool.", "That's a big hearted one."]) expect(all).not.toContain(gone);
+  });
+
   it("say how many, with the item's own plural, when there are several", () => {
     for (const t of rb.NOTES.several) {
       expect(t).toContain("{n}");

@@ -43,7 +43,7 @@ let fetchMock: ReturnType<typeof vi.fn>;
 let api: ReturnType<typeof initRedBag>;
 let watchers: Array<{ el: Element | null; say: (onScreen: boolean) => void }>;
 
-function start(opts: { reduce?: boolean } = {}) {
+function start(opts: { reduce?: boolean; catalogue?: Record<string, unknown> } = {}) {
   const html = renderRedBagPage(template, { preview: false });
   const parsed = new DOMParser().parseFromString(html, "text/html");
   document.body.innerHTML = parsed.body.innerHTML;
@@ -63,7 +63,7 @@ function start(opts: { reduce?: boolean } = {}) {
   const store = new Map<string, string>();
   const win = {
     IntersectionObserver: Observer,
-    NBCCRedBag: catalogue,
+    NBCCRedBag: opts.catalogue ?? catalogue,
     addEventListener: () => undefined,
     fetch: fetchMock,
     innerHeight: 800,
@@ -102,6 +102,7 @@ describe("the layer itself", () => {
 
 describe("the item drops into the bag", () => {
   it("makes one small drawing of the item when its quantity goes up, and clears it away after", () => {
+    watchers[0].say(true); // the real total is on screen, so the bar is not showing
     plus("socks");
     expect(drops().length).toBe(1);
     const d = drops()[0];
@@ -170,8 +171,25 @@ describe("the item drops into the bag", () => {
     plus("socks");
     expect($("[data-rb-bar]").hidden).toBe(false);
     expect(drops()[0].classList.contains("rb-drop--bar")).toBe(true);
+    // It flies inside the bar itself, so it is seen to land on the total and is never behind it.
+    expect(drops()[0].parentElement).toBe($("[data-rb-bar]"));
+    expect(drops()[0].getAttribute("aria-hidden")).toBe("true");
     expect($("[data-rb-bar-total]").classList.contains("is-bumped")).toBe(true);
     vi.advanceTimersByTime(2000);
+    expect($("[data-rb-bar-total]").classList.contains("is-bumped")).toBe(false);
+    expect(drops().length).toBe(0);
+    expect($("[data-rb-bar]").querySelectorAll(".rb-drop").length).toBe(0);
+  });
+
+  it("lets a later nod of the bar's total run its course: an earlier timer never cuts it short", () => {
+    watchers[0].say(false);
+    plus("socks");
+    vi.advanceTimersByTime(700);
+    plus("socks");
+    vi.advanceTimersByTime(400);
+    // The first tap's timer would have ended it here (1000ms after the first tap).
+    expect($("[data-rb-bar-total]").classList.contains("is-bumped")).toBe(true);
+    vi.advanceTimersByTime(700);
     expect($("[data-rb-bar-total]").classList.contains("is-bumped")).toBe(false);
   });
 
@@ -408,7 +426,22 @@ describe("the elf's note", () => {
     plus("socks");
     expect(note().textContent).toBe(words);
     plus("socks");
+    minus("socks");
+    plus("socks");
+    // Still the first note: a held key or quick taps never flicker through several.
+    expect(note().textContent).toBe(words);
+    expect($$(".rb-note").length).toBe(1);
+    // Once it has had its moment, the newest change is the one written.
+    vi.advanceTimersByTime(900);
     expect(note().textContent).toContain("3 pairs of socks");
+    vi.advanceTimersByTime(5000);
+    expect(note()).toBeNull();
+  });
+
+  it("writes on another row at once", () => {
+    plus("blanket");
+    plus("socks");
+    expect(note().closest("[data-rb-item]")).toBe(row("socks"));
   });
 
   it("says how many after a typed jump", () => {
@@ -581,4 +614,111 @@ describe("it is all decoration", () => {
     expect(note()).toBeNull();
     expect($("[data-rb-details] .rb-note, [data-rb-details] .rb-drop, [data-rb-details] .rb-flurry")).toBeNull();
   });
+});
+
+// A second bag "arrives" (the is-new class). It must let go of that once it has arrived: left on, the
+// wobble's animation would replace it, and when the wobble ended the bag would arrive all over again,
+// vanishing and fading back in after every tap.
+describe("a bag that has arrived stays put", () => {
+  it("lets go of its arrival once it has played", () => {
+    type("socks", "60");
+    expect(bags().length).toBe(2);
+    expect(bags()[1].classList.contains("is-new")).toBe(true);
+    vi.advanceTimersByTime(600);
+    expect(bags()[1].classList.contains("is-new")).toBe(false);
+  });
+
+  it("lets go of it when the arrival's own animation ends", () => {
+    type("socks", "60");
+    const bag = bags()[1];
+    const done = new Event("animationend", { bubbles: true });
+    bag.dispatchEvent(done);
+    expect(bag.classList.contains("is-new")).toBe(false);
+  });
+
+  it("never wobbles a bag that is still arriving: the wobble takes the arrival off first", () => {
+    type("socks", "49");
+    leave("socks");
+    vi.advanceTimersByTime(2000);
+    plus("blanket");
+    const bag = bags()[1];
+    expect(bag.classList.contains("is-wobbling")).toBe(true);
+    expect(bag.classList.contains("is-new")).toBe(false);
+    vi.advanceTimersByTime(2000);
+    expect(bag.classList.contains("is-wobbling")).toBe(false);
+    expect(bag.classList.contains("is-new")).toBe(false);
+  });
+});
+
+// The feel good layer must never be able to stop the page working. During a deploy a donor can be
+// given the new page script with the OLD catalogue, which has none of the layer's functions.
+describe("the page works whatever happens to the feel good layer", () => {
+  const giving = () => {
+    plus("blanket", 2);
+    type("socks", "5");
+    leave("socks");
+    example("crisis-15").click();
+    $<HTMLButtonElement>("[data-rb-round]").click();
+    minus("blanket");
+    vi.advanceTimersByTime(5000);
+  };
+  const stillWorks = () => {
+    // 8 + 5 + 15 = 28, rounded up to 50, then a blanket out: the round-up grows back to keep 50.
+    expect(api!.total()).toBe(5000);
+    expect(text("[data-rb-total]")).toBe("£50");
+    expect(text("[data-rb-status]")).toBe(catalogue.statusLine(5000));
+    expect(text("[data-rb-donate]")).toBe("Donate £50");
+    expect(text("[data-rb-bar-total]")).toBe("£50");
+    expect(bags()[0].classList.contains("is-full")).toBe(true);
+    expect($("[data-rb-also-list] li .rb-also__words").textContent).toBe("£15 could help replace a child's favourite cuddly toy");
+    $<HTMLButtonElement>("[data-rb-donate]").click();
+    expect($("[data-rb-details]").hidden).toBe(false);
+    expect(api!.payload()).toMatchObject({ mode: "once", amount: 5000, redBag: true });
+  };
+  const old = () => {
+    const stub: Record<string, unknown> = { ...catalogue };
+    for (const k of ["ART", "art", "TAG_LINES", "MAX_PEEKS", "peekCount", "peekSlots", "strains", "milestoneCrossed", "NOTES", "noteKind", "noteFor", "allNotes"]) delete stub[k];
+    return stub;
+  };
+
+  it("with the old catalogue: the whole layer is off, and the total, status, Donate and checkout all work", () => {
+    const spy = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    start({ catalogue: old() });
+    expect(api).not.toBeNull();
+    giving();
+    expect($(".rb-fx, .rb-drop, .rb-note, .rb-flurry, .rb-bag__peeks, .rb-bag__tie, .rb-also__icon")).toBeNull();
+    expect($(".rb-bag.is-wobbling")).toBeNull();
+    stillWorks();
+    expect(spy).not.toHaveBeenCalled();
+    spy.mockRestore();
+  });
+
+  it("with only some of the layer's functions: it is all off, not half on", () => {
+    const stub = old();
+    stub.art = catalogue.art;
+    stub.ART = catalogue.ART;
+    start({ catalogue: stub });
+    giving();
+    expect($(".rb-fx, .rb-drop, .rb-note, .rb-flurry, .rb-bag__peeks, .rb-also__icon")).toBeNull();
+    stillWorks();
+  });
+
+  for (const broken of ["peekSlots", "milestoneCrossed", "strains", "noteKind", "noteFor", "art"]) {
+    it(`when ${broken} throws: it is swallowed, said once in the console, and the page carries on`, () => {
+      const spy = vi.spyOn(console, "error").mockImplementation(() => undefined);
+      start({
+        catalogue: {
+          ...catalogue,
+          [broken]: () => {
+            throw new Error("invented failure");
+          },
+        },
+      });
+      expect(api).not.toBeNull();
+      giving();
+      stillWorks();
+      expect(spy).toHaveBeenCalledTimes(1);
+      spy.mockRestore();
+    });
+  }
 });

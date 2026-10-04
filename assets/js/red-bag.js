@@ -128,12 +128,40 @@
     // from the catalogue's pure functions (peekSlots, milestoneCrossed, strains, noteFor); this only
     // applies it. It changes no sum and no word, takes no tap and never moves the focus. Everything
     // made here is cleared away by a timer, so nothing builds up however fast the donor taps.
+    //
+    // It can NEVER stop the page working. Two guards: (1) the whole layer is switched off unless the
+    // catalogue has every part of it (a donor can be handed this file with the OLD catalogue while a
+    // new version is going out); (2) every way in from the page's own code goes through safe(), so
+    // anything that goes wrong in here is swallowed, said once in the console, and the sums, the
+    // status line, Donate and the checkout carry on untouched.
+    var delightOn =
+      !!rb.NOTES &&
+      !!rb.TAG_LINES &&
+      ["art", "peekSlots", "strains", "milestoneCrossed", "noteKind", "noteFor"].every(function (name) {
+        return typeof rb[name] === "function";
+      });
+    var delightSaid = false;
+    function safe(fn) {
+      return function () {
+        if (!delightOn) return undefined;
+        try {
+          return fn.apply(null, arguments);
+        } catch (e) {
+          if (!delightSaid && typeof console !== "undefined" && console && typeof console.error === "function") {
+            delightSaid = true;
+            console.error("Fill a Red Bag: a decoration failed and was skipped.", e);
+          }
+          return undefined;
+        }
+      };
+    }
     var panel = doc.querySelector(".rb-panel");
     var NAV_HEIGHT = 80; // the site's fixed header: a bag under it is not "on screen"
     var MAX_DROPS = 3; // in the air at once; a tap beyond that simply plays no drop
     var DROP_MS = 600; // as in the stylesheet
     var TYPING_MS = 450; // a typed number is finished when the typing stops this long
     var NOTE_MS = 3200;
+    var NOTE_HOLD_MS = 900; // a note on one row is left alone this long before the next replaces it
     var FLURRY_MS = 2150;
     // Where the three peeks sit along the bag's top, and their tilt: [across, degrees].
     var PEEK_AT = [
@@ -175,12 +203,17 @@
     var noteRow = null;
     var noteAt = 0;
     var lastNote = "";
+    var noteWait = null; // the newest change on a row whose note is still having its moment
+    var bumpTimer = null;
 
     // Where a drop flies: one layer over the builder. It takes no tap and clips what leaves it.
-    var fx = doc.createElement("div");
-    fx.className = "rb-fx";
-    fx.setAttribute("aria-hidden", "true");
-    builder.appendChild(fx);
+    var fx = null;
+    if (delightOn) {
+      fx = doc.createElement("div");
+      fx.className = "rb-fx";
+      fx.setAttribute("aria-hidden", "true");
+      builder.appendChild(fx);
+    }
 
     /** Has this person asked for less motion? Asked each time, so a change of setting is kept to. */
     function calm() {
@@ -288,6 +321,8 @@
       if (calm() || !bagsBox) return;
       var bag = bagsBox.lastElementChild;
       if (!bag || bag.classList.contains("is-wobbling")) return;
+      // Its arrival is over: two animations on one bag would restart the arrival when this one ends.
+      bag.classList.remove("is-new");
       bag.style.setProperty("--rb-wait", (wait || 0) + "s");
       bag.classList.add("is-wobbling");
       later(
@@ -304,7 +339,7 @@
     function drop(key, row) {
       if (calm() || inTheAir >= MAX_DROPS) return false;
       var from = (row.querySelector(".rb-qty") || row).getBoundingClientRect();
-      var layer = fx.getBoundingClientRect();
+      var home = fx;
       var x = from.left + from.width / 2;
       var y = from.top + from.height / 2;
       var to = { x: x, y: y + 46 };
@@ -319,19 +354,26 @@
         var sum = barTotal.getBoundingClientRect();
         to = { x: sum.left + sum.width / 2, y: sum.top + sum.height / 2 };
         where = "bar";
+        // It flies inside the bar itself (which is fixed to the screen), so it is drawn above the
+        // bar and is seen to land on the total, not lost behind it.
+        home = bar;
         barTotal.classList.add("is-bumped");
-        later(function () {
+        // ONE timer, so an earlier tap's timer never cuts a later nod short.
+        clearTimeout(bumpTimer);
+        bumpTimer = later(function () {
           barTotal.classList.remove("is-bumped");
         }, DROP_MS + 400);
       }
+      var layer = home.getBoundingClientRect();
       var el = doc.createElement("span");
       el.className = "rb-drop rb-drop--" + where;
+      el.setAttribute("aria-hidden", "true");
       el.style.left = Math.round(x - layer.left) + "px";
       el.style.top = Math.round(y - layer.top) + "px";
       el.style.setProperty("--rb-dx", Math.round(to.x - x) + "px");
       el.style.setProperty("--rb-dy", Math.round(to.y - y) + "px");
       el.innerHTML = '<span class="rb-drop__y"><span class="rb-drop__hop">' + rb.art(key) + "</span></span>";
-      fx.appendChild(el);
+      home.appendChild(el);
       inTheAir += 1;
       later(function () {
         gone(el);
@@ -366,12 +408,38 @@
       }, FLURRY_MS);
     }
 
+    // The snow and stars: only when a milestone is newly crossed on the way up.
+    function milestone(pence) {
+      var crossed = rb.milestoneCrossed(lastPence, pence);
+      lastPence = pence;
+      if (crossed && ready) flurry();
+    }
+
+    /** The example's own small drawing at the start of its line; the line's words are unchanged. */
+    function alsoIcon(span, key) {
+      span.insertAdjacentHTML("afterbegin", rb.art(key, "rb-also__icon", 26));
+    }
+
     // The elf's note: ONE at a time, on the row just changed. Quick taps on one row keep the note
     // that is there rather than flickering through several.
     function scribble(row, change) {
+      clearTimeout(noteWait);
+      noteWait = null;
       if (!row || step !== "bag") return;
       var now = Date.now();
-      if (rb.noteKind(change) === "item" && noteEl && noteRow === row && noteEl.parentNode === row && now - noteAt < 900) return;
+      var kind = rb.noteKind(change);
+      // A note on this row is still having its moment (quick taps, a held key): leave it be, with no
+      // rewrite and no reflow, and write the NEWEST change once the moment is up.
+      if (kind !== "first" && kind !== "example" && noteEl && noteRow === row && noteEl.parentNode === row && now - noteAt < NOTE_HOLD_MS) {
+        noteWait = later(
+          safe(function () {
+            noteWait = null;
+            scribble(row, change);
+          }),
+          NOTE_HOLD_MS - (now - noteAt),
+        );
+        return;
+      }
       var words = rb.noteFor(change, lastNote, Math.random());
       if (!words) return;
       if (!noteEl) {
@@ -422,6 +490,16 @@
       }, TYPING_MS);
     }
 
+    // Every way in from the page's own code, made safe (see the top of this block).
+    dressBags = safe(dressBags);
+    track = safe(track);
+    wobble = safe(wobble);
+    milestone = safe(milestone);
+    alsoIcon = safe(alsoIcon);
+    scribble = safe(scribble);
+    celebrate = safe(celebrate);
+    celebrateSoon = safe(celebrateSoon);
+
     // The working parts ship hidden; the script that can work them shows them.
     each(doc.querySelectorAll("[data-needs-js]"), function (n) {
       n.hidden = false;
@@ -465,6 +543,18 @@
       return svg;
     }
 
+    // A bag added after the page loaded "arrives" (is-new) ONCE. It lets go of that when its own
+    // animation ends (or shortly after, where the browser never says so): left on, any later
+    // animation on the bag would end by starting the arrival again, and the bag would blink.
+    function arrived(bag) {
+      var done = function (e) {
+        if (e && e.target !== bag) return;
+        bag.classList.remove("is-new");
+      };
+      bag.addEventListener("animationend", done);
+      setTimeout(done, 520);
+    }
+
     function drawBags(pence) {
       if (!bagsBox) return;
       var state = rb.bags(pence);
@@ -475,6 +565,7 @@
         if (!bag) break;
         bag.classList.add("is-new");
         bagsBox.appendChild(bag);
+        arrived(bag);
       }
       have = bagsBox.querySelectorAll(".rb-bag");
       for (var j = have.length - 1; j >= state.drawn.length; j -= 1) bagsBox.removeChild(have[j]);
@@ -509,9 +600,7 @@
       }
       var pence = total();
       drawBags(pence);
-      // The snow and stars: only when a milestone is newly crossed on the way up.
-      if (rb.milestoneCrossed(lastPence, pence) && ready) flurry();
-      lastPence = pence;
+      milestone(pence);
       setText(status, rb.statusLine(pence));
       setText(totalEl, rb.pounds(pence));
       if (perMonth) perMonth.hidden = !isMonthly();
@@ -687,8 +776,7 @@
         var span = doc.createElement("span");
         span.className = "rb-also__words";
         span.textContent = words;
-        // The example's own small drawing, for the eye only; the line's words are unchanged.
-        span.insertAdjacentHTML("afterbegin", rb.art(key, "rb-also__icon", 26));
+        alsoIcon(span, key);
         var remove = doc.createElement("button");
         remove.type = "button";
         remove.className = "rb-remove";

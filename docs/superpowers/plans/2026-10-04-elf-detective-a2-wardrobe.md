@@ -14,9 +14,17 @@
 
 ---
 
+## Changed since this plan was written (read this first)
+
+The code and its tests are the last word. Since this plan: `src/elf/wardrobe.ts` also has `wardrobeState(progress, wonRace)`; `elfPng` takes a background ("clear" or "cream") and answers null when it is busy; `drawElf` takes `key` and `label`, and every drawing carries only its own patterns under ids of its own (give each elf a `key` when several share a page, or elves with the same look would share ids); the wardrobe file has the words too (`pieceWords`, `outfitWords`, `inSentence`, `lookWords`) and a name for each hair colour. The test counts given below have grown.
+
 ## Why one file for the browser and the server
 
 The wardrobe screen draws the elf in the browser as a child tries things on. The server draws the same elf for the public calendar, the certificate and the picture in an email, and it is the server that decides what a detective has earned. Two copies of the catalogue would drift, and then a child could be shown a hat the server refuses to save. So there is one file. The server never trusts a look sent by a browser: `normaliseLook` puts the starter kit back for anything unknown or not yet earned, and `drawElf` always calls it first. Only ids from the catalogue ever reach a drawing, so nothing typed can carry markup into the SVG.
+
+## Changed since this plan was written (read this first)
+
+The code and its tests are the last word. Since this plan: `src/elf/wardrobe.ts` also has `wardrobeState(progress, wonRace)`; `elfPng` takes a background ("clear" or "cream") and answers null when it is busy; `drawElf` takes `key` and `label`, and every drawing carries only its own patterns under ids of its own (give each elf a `key` when several share a page, or elves with the same look would share ids); the wardrobe file has the words too (`pieceWords`, `outfitWords`, `inSentence`, `lookWords`) and a name for each hair colour. The test counts given below have grown.
 
 ## How this was built
 
@@ -27,6 +35,10 @@ The tests still caught one real thing the eye had missed. The Workshop elf outfi
 An independent review then found a second thing of the same kind. A hat is always worn, and it hid short hair completely, so choosing a hair colour seemed to do nothing. Short hair now comes down beside the face. A test draws every hat with every hair style in two hair colours and counts the pixels that change, so the colour a child picks always shows.
 
 The same review tightened three rules: a count of doors that is not a number counts as none (before, it locked even the starter kit); the gold seal and the race win count only as a plain `true`; and each part of a look is read once, so a look that answers differently the second time it is asked cannot get past the check. `elf-png.ts` now treats `sharp` as carefully as the photo code does: cache off, one thread, one picture at a time.
+
+## Changed since this plan was written (read this first)
+
+The code and its tests are the last word. Since this plan: `src/elf/wardrobe.ts` also has `wardrobeState(progress, wonRace)`; `elfPng` takes a background ("clear" or "cream") and answers null when it is busy; `drawElf` takes `key` and `label`, and every drawing carries only its own patterns under ids of its own (give each elf a `key` when several share a page, or elves with the same look would share ids); the wardrobe file has the words too (`pieceWords`, `outfitWords`, `inSentence`, `lookWords`) and a name for each hair colour. The test counts given below have grown.
 
 ## The catalogue
 
@@ -80,6 +92,10 @@ An outfit is one whole costume that replaces the pieces while it is worn. The pi
 
 Also: five skin tones (`s1` to `s5`), five hair colours (`dark`, `brown`, `ginger`, `blonde`, `black`) and three hair styles (`short`, `bunches`, `curly`). These are free from the start.
 
+## Changed since this plan was written (read this first)
+
+The code and its tests are the last word. Since this plan: `src/elf/wardrobe.ts` also has `wardrobeState(progress, wonRace)`; `elfPng` takes a background ("clear" or "cream") and answers null when it is busy; `drawElf` takes `key` and `label`, and every drawing carries only its own patterns under ids of its own (give each elf a `key` when several share a page, or elves with the same look would share ids); the wardrobe file has the words too (`pieceWords`, `outfitWords`, `inSentence`, `lookWords`) and a name for each hair colour. The test counts given below have grown.
+
 ## Rules, precisely
 
 - `doorsDone` is read as a whole number from 0 to 24. Anything missing, or that is not a real number, counts as 0; more than 24 counts as 24.
@@ -88,6 +104,10 @@ Also: five skin tones (`s1` to `s5`), five hair colours (`dark`, `brown`, `ginge
 - A look is `{ skin, hair, hairStyle, outfit, pieces }` with one entry per slot. `normaliseLook(look, state)` returns a look that is safe to keep and to draw: an unknown, locked or wrong slot piece becomes the starter piece in a slot that is always worn and nothing in a slot that can be left off; an outfit that is unknown or not earned comes off; an unknown skin, hair colour or hair style becomes the default.
 - `newlyUnlocked(before, after)` lists the pieces and outfits that the change brings, in catalogue order. It is what the "you unlocked" moment and the email read.
 - `drawElf(look, state, opts)` returns one `<svg viewBox="0 0 200 260">` string, 1.3 times as tall as it is wide, `size` pixels wide (kept between 16 and 2000). `drawPiece` and `drawOutfit` draw the small tiles for the wardrobe screen.
+
+## Changed since this plan was written (read this first)
+
+The code and its tests are the last word. Since this plan: `src/elf/wardrobe.ts` also has `wardrobeState(progress, wonRace)`; `elfPng` takes a background ("clear" or "cream") and answers null when it is busy; `drawElf` takes `key` and `label`, and every drawing carries only its own patterns under ids of its own (give each elf a `key` when several share a page, or elves with the same look would share ids); the wardrobe file has the words too (`pieceWords`, `outfitWords`, `inSentence`, `lookWords`) and a name for each hair colour. The test counts given below have grown.
 
 ## File structure
 
@@ -175,6 +195,10 @@ Expected: both exit 0.
 
 Run: `git diff --stat origin/main...HEAD`
 Expected: only `docs/superpowers/`, `src/elf/`, `test/unit/elf-*` and `assets/js/elf-wardrobe.js`.
+
+## Changed since this plan was written (read this first)
+
+The code and its tests are the last word. Since this plan: `src/elf/wardrobe.ts` also has `wardrobeState(progress, wonRace)`; `elfPng` takes a background ("clear" or "cream") and answers null when it is busy; `drawElf` takes `key` and `label`, and every drawing carries only its own patterns under ids of its own (give each elf a `key` when several share a page, or elves with the same look would share ids); the wardrobe file has the words too (`pieceWords`, `outfitWords`, `inSentence`, `lookWords`) and a name for each hair colour. The test counts given below have grown.
 
 ## Not in this plan
 

@@ -231,6 +231,13 @@ describe("a door's detail", () => {
     }
   });
 
+  it("still draws a door whose clue time is not a real date, with no countdown", () => {
+    const broken = door({ door: 7, clueAt: new Date("not a date"), elfName: "Bauble" });
+    expect(() => doorTile(broken, NOW)).not.toThrow();
+    expect(() => doorDetail(broken, CTX)).not.toThrow();
+    expect(doorTile(broken, NOW)).not.toContain("elf-cd");
+  });
+
   it("counts down to today's clue and explains the race", () => {
     const html = doorDetail(TODAY, CTX);
     expect(text(html)).toContain("Today's elf is hiding");

@@ -13,12 +13,13 @@ const words = (el: Element | null) => (el?.textContent ?? "").replace(/\s+/g, " 
 /** Everything a person reads on the paper itself (the toolbar and the on screen note are not printed). */
 const paper = (html: string) => words(parse(html).querySelector(".page"));
 
-const PLACE: PlacePrint = { placeName: "The Toy Shop", placeTown: "Troon", posterUrl: "https://nbcc.scot/elf/p/toy-shop-k4f9" };
-const CARD: StaffCardPrint = { ...PLACE, door: 7, elfName: "Bauble", clueAt: new Date("2026-12-07T17:30:00.000Z"), phone: "01632 960 123" };
+const PLACE: PlacePrint = { placeName: "The Toy Shop", placeTown: "Troon", siteOrigin: "https://nbcc.scot", posterUrl: "https://nbcc.scot/elf/p/toy-shop-k4f9" };
+const CARD: StaffCardPrint = { placeName: "The Toy Shop", door: 7, elfName: "Bauble", clueAt: new Date("2026-12-07T17:30:00.000Z"), phone: "01632 960 123" };
 const SIX = { doorsDone: 24, goldSeal: true, wonRace: false };
 const LOOK = { ...defaultLook(), outfit: "grad" };
-const CERT: CertificatePrint = { name: "Detective Ruby Tinselfoot", badgeNumber: "0427", year: 2026, goldSeal: true, look: LOOK, state: SIX, awardedOn: new Date("2026-12-24T18:00:00.000Z") };
-const SHARE: ShareCardPrint = { publicName: "Detective R. Tinselfoot", rank: "Junior Detective", doorsDone: 6, look: defaultLook(), state: { doorsDone: 6 }, year: 2026 };
+const CERT: CertificatePrint = { name: "Detective Ruby Tinselfoot", badgeNumber: "0427", year: 2026, look: LOOK, state: SIX, awardedOn: new Date("2026-12-24T18:00:00.000Z") };
+const RUBY = { firstName: "Ruby", surname: "Tinselfoot", approved: false };
+const SHARE: ShareCardPrint = { detective: RUBY, rank: "Junior Detective", doorsDone: 6, look: defaultLook(), state: { doorsDone: 6 }, year: 2026 };
 
 describe("the poster for a hiding place", () => {
   const html = renderElfPoster(PLACE);
@@ -59,6 +60,25 @@ describe("the poster for a hiding place", () => {
     for (const bad of ["http://nbcc.scot/elf/p/toy-shop", "https://nbcc.scot/elf/hq", "/elf/p/toy-shop", "https://nbcc.scot/elf/p/toy shop", "javascript:alert(1)", ""]) {
       expect(() => renderElfPoster({ ...PLACE, posterUrl: bad }), bad).toThrow();
     }
+  });
+
+  it("refuses a poster page on any site but this one", () => {
+    for (const bad of ["https://elsewhere.example/elf/p/toy-shop", "https://localhost/elf/p/toy-shop", "https://nbcc.scot.elsewhere.example/elf/p/toy-shop"]) {
+      expect(() => renderElfPoster({ ...PLACE, posterUrl: bad }), bad).toThrow();
+    }
+    expect(() => renderElfPoster({ ...PLACE, siteOrigin: "http://nbcc.scot", posterUrl: "http://nbcc.scot/elf/p/toy-shop" })).toThrow();
+    expect(() => renderElfPoster({ ...PLACE, siteOrigin: "", posterUrl: "/elf/p/toy-shop" })).toThrow();
+  });
+
+  it("sets a long name smaller, so the charity's statement is never pushed off the page", () => {
+    const size = (html: string) => Number(/class="where" style="font-size:(\d+)pt"/.exec(html)![1]);
+    expect(size(html)).toBe(26);
+    const long = renderElfPoster({ ...PLACE, placeName: "The Very Long Named Emporium of Toys, Games and Christmas Curiosities", placeTown: "Troon" });
+    expect(size(long)).toBeLessThan(18);
+  });
+
+  it("reads properly aloud: the two parts of the scan line do not run together", () => {
+    expect(paper(html)).toContain("Detectives, scan here with a phone's camera.");
   });
 
   it("makes the place's name safe", () => {
@@ -103,6 +123,17 @@ describe("the card for a hiding place's staff", () => {
   it("is not drawn without a real clue time", () => {
     expect(() => renderStaffCard({ ...CARD, clueAt: new Date("x") })).toThrow();
   });
+
+  it("is not drawn when the door and the date disagree, so no shop is told the wrong day", () => {
+    expect(() => renderStaffCard({ ...CARD, door: 9 })).toThrow();
+    expect(() => renderStaffCard({ ...CARD, clueAt: new Date("2026-11-07T17:30:00.000Z") })).toThrow();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    expect(() => renderStaffCard({ ...CARD, door: "7" as any })).toThrow();
+  });
+
+  it("carries the charity's statement", () => {
+    expect(text).toContain(MATERIALS_STATEMENT);
+  });
 });
 
 describe("the tag an elf wears", () => {
@@ -111,6 +142,14 @@ describe("the tag an elf wears", () => {
     expect(text).toContain("I am Bauble");
     expect(text).toContain("SNOWBALL 472");
     expect(text).toContain("type my secret word");
+  });
+
+  it("tidies the spaces round and inside the word", () => {
+    expect(paper(renderElfTag({ elfName: "Bauble", secretWord: "  Snowball    472 " }))).toContain("word: SNOWBALL 472 The first");
+  });
+
+  it("carries the charity's statement", () => {
+    expect(paper(renderElfTag({ elfName: "Bauble", secretWord: "Snowball 472" }))).toContain(MATERIALS_STATEMENT);
   });
 
   it("refuses a word that could be guessed from home", () => {
@@ -145,9 +184,19 @@ describe("the graduate's certificate", () => {
 
   it("shows the gold seal only when it has been earned", () => {
     expect(text).toContain("Gold seal");
-    expect(paper(renderElfCertificate({ ...CERT, goldSeal: false }))).not.toContain("Gold seal");
+    expect(paper(renderElfCertificate({ ...CERT, state: { doorsDone: 24, goldSeal: false } }))).not.toContain("Gold seal");
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    expect(paper(renderElfCertificate({ ...CERT, goldSeal: "true" as any }))).not.toContain("Gold seal");
+    expect(paper(renderElfCertificate({ ...CERT, state: { doorsDone: 24, goldSeal: "true" as any } }))).not.toContain("Gold seal");
+  });
+
+  it("is not drawn for a detective who has not done all 24 doors", () => {
+    expect(() => renderElfCertificate({ ...CERT, state: { doorsDone: 23, goldSeal: true } })).toThrow();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    expect(() => renderElfCertificate({ ...CERT, state: { doorsDone: "24" as any } })).toThrow();
+  });
+
+  it("takes the year of the date from the date itself", () => {
+    expect(paper(renderElfCertificate({ ...CERT, awardedOn: new Date("2027-01-02T12:00:00.000Z") }))).toContain("Saturday 2 January 2027");
   });
 
   it("spells the workshop the one way, and carries the charity's statement", () => {
@@ -167,9 +216,16 @@ describe("the share card", () => {
     expect(doc.documentElement.getAttribute("height")).toBe("630");
   });
 
-  it("shows the name as the public may see it, the rank and the doors done", () => {
+  it("works out the public form of the name itself: a first letter until staff have ticked the name", () => {
+    expect(words(doc.documentElement)).toContain("Detective R. Tinselfoot");
+    expect(svg).not.toContain("Ruby");
+    expect(shareCardSvg({ ...SHARE, detective: { ...RUBY, approved: true } })).toContain("Detective Ruby Tinselfoot");
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    expect(shareCardSvg({ ...SHARE, detective: { ...RUBY, approved: "true" as any } })).not.toContain("Ruby");
+  });
+
+  it("shows the rank and the doors done", () => {
     const text = words(doc.documentElement);
-    expect(text).toContain("Detective R. Tinselfoot");
     expect(text).toContain("Junior Detective");
     expect(text).toContain("6 of 24 doors done");
     expect(text).toContain("NBCC Elf Detective School 2026");
@@ -177,10 +233,12 @@ describe("the share card", () => {
 
   it("sets a long name smaller so that it stays on the card", () => {
     const size = (svg: string) => Number(/font-size="(\d+)" fill="#800000"/.exec(svg)![1]);
-    expect(size(shareCardSvg({ ...SHARE, publicName: "Detective Jo Fir" }))).toBe(58);
-    const long = size(shareCardSvg({ ...SHARE, publicName: "Detective Christopher Sparkleboots" }));
-    expect(long).toBeLessThan(40);
-    expect(long * 0.56 * "Detective Christopher Sparkleboots".length).toBeLessThanOrEqual(620);
+    expect(size(svg)).toBeGreaterThan(40);
+    const name = "Detective Christopher Tinselfoot";
+    const card = shareCardSvg({ ...SHARE, detective: { firstName: "Christopher", surname: "Tinselfoot", approved: true } });
+    expect(card).toContain(name);
+    expect(size(card)).toBeLessThan(40);
+    expect(size(card) * 0.56 * name.length).toBeLessThanOrEqual(620);
   });
 
   it("shows the elf, never a photo", () => {
@@ -189,7 +247,7 @@ describe("the share card", () => {
   });
 
   it("makes the name safe", () => {
-    const bad = shareCardSvg({ ...SHARE, publicName: '<script>x</script>"&' });
+    const bad = shareCardSvg({ ...SHARE, detective: { firstName: '<script>x</script>"&', surname: "<b>", approved: true } });
     expect(new DOMParser().parseFromString(bad, "image/svg+xml").querySelector("parsererror, script")).toBeNull();
   });
 });

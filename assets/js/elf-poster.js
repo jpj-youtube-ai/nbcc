@@ -197,12 +197,14 @@
           var giveUp = function () {
             if (answered) return;
             answered = true;
+            callOff = null;
             busy = false;
             here.disabled = false;
             say(stamp, NO_LOCATION, true);
           };
           var watchdog = win.setTimeout(giveUp, patience);
           callOff = function () {
+            callOff = null;
             answered = true;
             win.clearTimeout(watchdog);
             busy = false;
@@ -213,6 +215,7 @@
             function (position) {
               if (answered) return;
               answered = true;
+              callOff = null;
               win.clearTimeout(watchdog);
               busy = false;
               here.disabled = false;

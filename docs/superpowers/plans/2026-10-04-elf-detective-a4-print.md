@@ -27,12 +27,21 @@ Wording rules as for the screens: plain English, no dashes, no hyphenated words,
 ## Views (in `src/elf/print.ts`)
 
 ```ts
-export interface PlacePrint { placeName: string; placeTown: string; posterUrl: string /* absolute https URL of /elf/p/<code> */ }
-export interface StaffCardPrint extends PlacePrint { door: Door; elfName: string; clueAt: Date; phone: string }
+export interface PlacePrint { placeName: string; placeTown: string; siteOrigin: string /* from config: "https://nbcc.scot" */; posterUrl: string /* that site's /elf/p/<code> */ }
+export interface StaffCardPrint { placeName: string; door: Door; elfName: string; clueAt: Date; phone: string }
 export interface TagPrint { elfName: string; secretWord: string }
-export interface CertificatePrint { name: string; badgeNumber: string; year: number; goldSeal: boolean; look: unknown; state: WardrobeState; awardedOn: Date }
-export interface ShareCardPrint { publicName: string; rank: Rank; doorsDone: number; look: unknown; state: WardrobeState; year: number }
+export interface CertificatePrint { name: string; badgeNumber: string; year: number; look: unknown; state: WardrobeState; awardedOn: Date }
+export interface ShareCardPrint { detective: DetectiveNameParts; rank: Rank; doorsDone: number; look: unknown; state: WardrobeState; year: number }
 ```
+
+## Changed after the final review (read this first)
+
+- The poster is refused unless its address is a poster page on `siteOrigin`, which Stage B takes from config and never from a request. Any other host throws.
+- The staff card throws unless the door is 1 to 24 and the clue comes out on that day of December in London, so no shop is told the wrong day. It no longer takes a poster address.
+- The certificate throws unless `state.doorsDone` is 24, and takes the gold seal from `state.goldSeal === true` only. Its heading is "Graduate Elf Detective" under "Class of 2026". The year beside the date comes from the date.
+- The share card takes the detective's name in parts and calls `detectiveName` itself, so a first name staff have not ticked cannot be shared in full by mistake.
+- A long place name is set smaller on the poster, and a long name on the share card.
+- For Stage B: the site's print shell adds NBCC's fundraising "Need something else" box on screen (never on paper); decide whether a family's certificate should show it. Stamp photos must be kept until judging (Jaimie, 4 October: staff check gold seal finishers' photos first).
 
 ## Tasks
 

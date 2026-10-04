@@ -336,6 +336,7 @@
     // shows, draw them and save them, so the picture, the choices and the server agree.
     if (wearing && wearing.textContent !== elf.lookWords(readLook(), state)) {
       draw();
+      drawOutfits();
       saveSoon();
     }
 

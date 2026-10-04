@@ -14,6 +14,20 @@
 
 ---
 
+## Changed since this plan was written (read this first)
+
+`src/elf/pages/types.ts` and the code are the last word. Where this plan differs:
+
+- `shell.ts` is `elfPage({ title, description, cta, main, scripts, listed })`.
+- A door's detail is `doorDetail(d, ctx)`, and a door links to its own detail at `#case-N`. There is no `?door=N` and no `selected`.
+- A thing in the wardrobe unlocks at a number of doors DONE, so its padlock says "12 doors", not the door that opens it.
+- The scripts hold a few words of their own, for things only the page can know: nothing ticked, nothing typed, no signal, no location. Every refusal from the server arrives as the server's words.
+- `elf-hq.js` also ticks the countdown and fetches the page again when the clue is due.
+- `icons.ts` has line icons (clock, cracked, rosette, pin, camera, padlock, tick) with `candyCane` and `gift` as functions of their own.
+- `words.ts` also has `longDayWords`, `sameDay` and `sleepsUntil`.
+- Jaimie's choices of 4 October: on a phone today's door shows its countdown; "Under 16? Bring a grown up with you to every hiding place." is in How it works and on the poster page; after six wrong words the staff phone NBCC; the judge of the grand prize is Jodie, Head Elf; staff check the check in photos of gold seal finishers before judging.
+- Not built in Stage A: a badge to print (decision 13; Detective HQ shows the badge number and rank), and photo cleaning (it needs the upload it belongs to).
+
 ## What Jaimie has already seen
 
 The calendar and the wardrobe were sketched on the plan page Jaimie signed off (decisions 12 to 14). These screens keep that look: a walnut board of 24 oak doors with a shape carved into each; a found door opens to cream paper; marks for "you cracked it" (magnifying glass) and "you've been there" (candy cane); pills for Today, Tomorrow and Big prize; the wardrobe with Pieces and Outfits, colour dots, a faint drawing and a padlock for anything still locked, and "New" tags.

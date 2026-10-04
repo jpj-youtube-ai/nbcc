@@ -80,6 +80,9 @@ function winnerPicture(d: DoorView, width: number): string {
 }
 
 function countdown(d: DoorView, now: Date): string {
+  // A door whose clue time is not a real date stays shut (src/elf/doors.ts): it has no countdown,
+  // and it must never bring the whole calendar down.
+  if (!Number.isFinite(d.clueAt.getTime()) || !Number.isFinite(now.getTime())) return "";
   const left = d.clueAt.getTime() - now.getTime();
   return `<span class="elf-cd" data-until="${d.clueAt.toISOString()}">${countdownWords(left)}</span>`;
 }

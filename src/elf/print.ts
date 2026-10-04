@@ -2,8 +2,9 @@ import { escapeHtml } from "../events/render";
 import { materialAssets, shell } from "../fundraising/materials";
 import { qrSvg } from "../fundraising/qr";
 import { MATERIALS_STATEMENT } from "../legal/registration";
-import { DOOR_COUNT, type Door } from "./calendar";
+import { DOOR_COUNT, isDoor, type Door } from "./calendar";
 import { isUsableSecretWord } from "./claim";
+import { detectiveName, type DetectiveNameParts } from "./names";
 import type { Rank } from "./progress";
 import { drawElf, type WardrobeState } from "./wardrobe";
 import { clockWords, longDayWords } from "./words";
@@ -22,14 +23,18 @@ import { clockWords, longDayWords } from "./words";
 //
 // Pure: no pool, no config, no clock. Unit tested in test/unit/elf-print.test.ts.
 
-/** A hiding place, as its poster needs it. `posterUrl` is the whole address of its poster page. */
+/** A hiding place, as its poster needs it. */
 export interface PlacePrint {
   placeName: string;
   placeTown: string;
+  /** The site's own address, from config and never from a request: "https://nbcc.scot". */
+  siteOrigin: string;
+  /** The whole address of the place's poster page, which must be on that site. */
   posterUrl: string;
 }
 
-export interface StaffCardPrint extends PlacePrint {
+export interface StaffCardPrint {
+  placeName: string;
   door: Door;
   elfName: string;
   clueAt: Date;
@@ -46,16 +51,19 @@ export interface CertificatePrint {
   /** The detective's name as their own family sees it. */
   name: string;
   badgeNumber: string;
+  /** The campaign year, for "Class of 2026". */
   year: number;
-  goldSeal: boolean;
   look: unknown;
+  /** What the detective has earned, built with wardrobeState. The certificate is only drawn for
+   *  all 24 doors done, and the gold seal comes from here and nowhere else. */
   state: WardrobeState;
   awardedOn: Date;
 }
 
 export interface ShareCardPrint {
-  /** The name as the PUBLIC may see it: from detectiveName in src/elf/names.ts, never the family's own. */
-  publicName: string;
+  /** The detective's name in its parts. The card works the PUBLIC form out itself with
+   *  detectiveName, so a first name staff have not ticked can never be shared in full by mistake. */
+  detective: DetectiveNameParts;
   rank: Rank;
   doorsDone: number;
   look: unknown;
@@ -69,12 +77,19 @@ const count = (n: unknown): number => Math.max(0, Math.floor(Number(n)) || 0);
 
 /** Only the address of a poster page on a secure site may go into a code that will be printed and
  *  taped to a shop window for a month. Anything else is a mistake worth stopping for. */
-function posterAddress(url: string): string {
-  if (typeof url !== "string" || !/^https:\/\/[a-z0-9.-]+\/elf\/p\/[a-z0-9-]+$/.test(url)) {
-    throw new Error("The poster needs the https address of a poster page, such as https://nbcc.scot/elf/p/the-code");
+function posterAddress(url: string, origin: string): string {
+  const site = typeof origin === "string" && /^https:\/\/[a-z0-9.-]+$/.test(origin) ? origin : null;
+  const page = typeof url === "string" && site !== null && url.startsWith(`${site}/elf/p/`) ? url.slice(site.length) : "";
+  if (!/^\/elf\/p\/[a-z0-9-]+$/.test(page)) {
+    throw new Error("The poster needs the https address of a poster page on this site, such as https://nbcc.scot/elf/p/the-code");
   }
   return url;
 }
+
+/** The year of a moment, in London. */
+const londonYear = (d: Date): string => new Intl.DateTimeFormat("en-GB", { timeZone: "Europe/London", year: "numeric" }).format(d);
+/** The day of the month and the month of a moment, in London: "7 December". */
+const londonDay = (d: Date): string => new Intl.DateTimeFormat("en-GB", { timeZone: "Europe/London", day: "numeric", month: "long" }).format(d);
 
 const BASE_CSS = `
   .page{background:var(--cream);color:var(--slate);display:flex;flex-direction:column}
@@ -96,7 +111,10 @@ const statement = `<p class="elf-statement">${escapeHtml(MATERIALS_STATEMENT)}</
 /** The poster a hiding place puts in its window. */
 export function renderElfPoster(p: PlacePrint): string {
   const assets = materialAssets();
-  const url = posterAddress(p.posterUrl);
+  const url = posterAddress(p.posterUrl, p.siteOrigin);
+  // A long name is set smaller, so that it never pushes the charity's statement off the page.
+  const whereLength = p.placeName.length + p.placeTown.length;
+  const wherePt = whereLength > 60 ? 15 : whereLength > 40 ? 19 : 26;
   const place = escapeHtml(p.placeName);
   const css = `${BASE_CSS}
   .poster h1{font-size:43pt;margin-top:2mm}
@@ -112,10 +130,10 @@ export function renderElfPoster(p: PlacePrint): string {
 ${band(assets.logoOnDark)}
 <div class="elf-body">
   <h1>This is a hiding place</h1>
-  <p class="where">${place}, ${escapeHtml(p.placeTown)}</p>
+  <p class="where" style="font-size:${wherePt}pt">${place}, ${escapeHtml(p.placeTown)}</p>
   <div class="scan">
     <div class="p-qr">${qrSvg(url, { title: `QR code for ${p.placeName}'s Elf Detective School page` })}</div>
-    <p><b>Detectives, scan here</b>with a phone's camera.</p>
+    <p><b>Detectives, scan here</b> with a phone's camera.</p>
   </div>
   <div class="how">
     <p>Found the elf? Scan, then type the secret word on its tag.</p>
@@ -132,8 +150,11 @@ ${statement}
 /** The card for the staff of a hiding place. It names their day: for the shop only. */
 export function renderStaffCard(c: StaffCardPrint): string {
   if (!real(c.clueAt)) throw new Error("The staff card needs the real time the clue comes out");
+  // The card tells a shop its day. A door and a date that disagree would send them the wrong one.
+  if (!isDoor(c.door) || londonDay(c.clueAt) !== `${c.door} December`) {
+    throw new Error("The staff card needs a door from 1 to 24 whose clue comes out on that day of December");
+  }
   const assets = materialAssets();
-  posterAddress(c.posterUrl);
   const place = escapeHtml(c.placeName);
   const elf = escapeHtml(c.elfName);
   const css = `${BASE_CSS}
@@ -192,7 +213,7 @@ ${band(assets.logoOnDark)}
   <div class="tag">
     <p class="hello">You found me! I am ${elf}.</p>
     <p>Scan the poster here and type my secret word:</p>
-    <p class="word">${escapeHtml(t.secretWord.toUpperCase())}</p>
+    <p class="word">${escapeHtml(t.secretWord.trim().replace(/\s+/g, " ").toUpperCase())}</p>
     <p>The first detective to type it wins me.</p>
   </div>
 </div>
@@ -203,12 +224,16 @@ ${statement}
 
 /** The certificate for a detective who has done all 24 doors. */
 export function renderElfCertificate(c: CertificatePrint): string {
+  // It says "has done all 24 doors". It must not be printed for anyone who has not.
+  if (!(c.state && typeof c.state.doorsDone === "number" && c.state.doorsDone >= DOOR_COUNT)) {
+    throw new Error("A certificate is only for a detective who has done all 24 doors");
+  }
   const assets = materialAssets();
   const name = escapeHtml(c.name);
   const year = count(c.year);
-  const when = real(c.awardedOn) ? `${longDayWords(c.awardedOn)} ${year}` : "";
+  const when = real(c.awardedOn) ? `${longDayWords(c.awardedOn)} ${londonYear(c.awardedOn)}` : "";
   const seal =
-    c.goldSeal === true
+    c.state.goldSeal === true
       ? `<div class="cert-seal"><b>Gold seal</b><span>Visited all ${DOOR_COUNT} hiding places</span></div>`
       : "";
   const css = `
@@ -253,17 +278,18 @@ ${statement}
 export function shareCardSvg(s: ShareCardPrint): string {
   const serif = "Georgia, 'Times New Roman', serif";
   const sans = "Verdana, Arial, sans-serif";
+  const publicName = detectiveName(s.detective);
   const elf = drawElf(s.look, s.state, { size: 380, backdrop: true, label: false, key: "share" });
   // A picture cannot wrap its words, so a long name or rank is set smaller until it fits the
   // 620 units beside the elf. A bold serif letter is a little over half as wide as it is tall.
   const fit = (words: string, biggest: number): number => Math.max(24, Math.min(biggest, Math.floor(620 / (Math.max(1, words.length) * 0.56))));
   return (
-    `<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630" role="img" aria-label="${escapeHtml(`${s.publicName}, ${s.rank}`)}">` +
+    `<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630" role="img" aria-label="${escapeHtml(`${publicName}, ${s.rank}`)}">` +
     `<rect width="1200" height="630" fill="#F8F5EE"/>` +
     `<rect x="24" y="24" width="1152" height="582" rx="28" fill="none" stroke="#C02238" stroke-width="6"/>` +
     `<g transform="translate(70 68)">${elf}</g>` +
     `<text x="510" y="170" font-family="${sans}" font-size="30" letter-spacing="5" fill="#1A531A">NBCC Elf Detective School ${count(s.year)}</text>` +
-    `<text x="510" y="270" font-family="${serif}" font-weight="700" font-size="${fit(s.publicName, 58)}" fill="#800000">${escapeHtml(s.publicName)}</text>` +
+    `<text x="510" y="270" font-family="${serif}" font-weight="700" font-size="${fit(publicName, 58)}" fill="#800000">${escapeHtml(publicName)}</text>` +
     `<text x="510" y="360" font-family="${serif}" font-weight="700" font-size="${fit(s.rank, 76)}" fill="#C02238">${escapeHtml(s.rank)}</text>` +
     `<text x="510" y="440" font-family="${sans}" font-size="34" fill="#333333">${Math.min(DOOR_COUNT, count(s.doorsDone))} of ${DOOR_COUNT} doors done</text>` +
     `</svg>`

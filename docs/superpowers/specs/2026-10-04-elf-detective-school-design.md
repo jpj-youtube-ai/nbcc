@@ -2,7 +2,7 @@
 
 Date: 2026-10-04. The idea is the head trustee's. Jaimie answered every question below one at a time
 on 2 to 4 October and signed the plan off on 3 October ("Signed off as it is"). The plan page Jaimie
-signed off, with the sketches, is https://claude.ai/artifact/8v1KUN9qE8HpLDg8BPE3vS (private).
+signed off, with the sketches, is a private page: its link is in Jaimie's own notes, not here.
 
 The point, in Jaimie's words: a new way to raise money once the Festive Ball is over, aimed at
 children but open to everyone, fun and exciting, which also tells families who have never heard of

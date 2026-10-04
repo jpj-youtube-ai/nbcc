@@ -29,6 +29,16 @@
   --elf-carve-lo: #9A6640;
   --elf-ink: #3A2416;
   --elf-brass: #C9A24A;
+  /* Paler and warmer oak for today's door, and the shade at a door's foot. */
+  --elf-oak-pale: #F2DDBD;
+  --elf-oak-warm: #DDB98C;
+  --elf-oak-shade: #CDA57A;
+  /* The gold of the "You're first!" card, and the ink that reads on it. */
+  --elf-gold-pale: #FBEFC4;
+  --elf-gold: #F1D888;
+  --elf-gold-deep: #E0BC5A;
+  --elf-gold-ink: #3A2A07;
+  --elf-gold-ink-soft: #5C4308;
 
   /* Things slow to a stop the way real objects do. No bounce. */
   --elf-ease: cubic-bezier(0.25, 1, 0.5, 1);
@@ -147,7 +157,7 @@
   padding: 6px 5px 7px;
   border-radius: 9px;
   border: 1px solid var(--elf-oak-edge);
-  background: linear-gradient(180deg, var(--elf-oak-light) 0%, var(--elf-oak) 46%, #CDA57A 100%);
+  background: linear-gradient(180deg, var(--elf-oak-light) 0%, var(--elf-oak) 46%, var(--elf-oak-shade) 100%);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4), 0 2px 0 rgba(0, 0, 0, 0.24);
   color: var(--elf-ink);
   text-decoration: none;
@@ -190,8 +200,8 @@
 .elf-door--today.has-pill .elf-door__foot { display: block; font-variant-numeric: tabular-nums; }
 .elf-door--today .elf-pill { display: none; }
 
-.elf-door--today { background: linear-gradient(180deg, #F2DDBD 0%, var(--elf-oak-light) 60%, #DDB98C 100%); box-shadow: inset 0 0 0 2px var(--holly), 0 2px 0 rgba(0, 0, 0, 0.24); }
-.elf-door--hunting { background: linear-gradient(180deg, #F2DDBD 0%, var(--elf-oak-light) 60%, #DDB98C 100%); box-shadow: inset 0 0 0 2px var(--crimson), 0 2px 0 rgba(0, 0, 0, 0.24); }
+.elf-door--today { background: linear-gradient(180deg, var(--elf-oak-pale) 0%, var(--elf-oak-light) 60%, var(--elf-oak-warm) 100%); box-shadow: inset 0 0 0 2px var(--holly), 0 2px 0 rgba(0, 0, 0, 0.24); }
+.elf-door--hunting { background: linear-gradient(180deg, var(--elf-oak-pale) 0%, var(--elf-oak-light) 60%, var(--elf-oak-warm) 100%); box-shadow: inset 0 0 0 2px var(--crimson), 0 2px 0 rgba(0, 0, 0, 0.24); }
 .elf-door.is-open { background: var(--elf-paper); border-color: #E2D3BC; box-shadow: inset 0 2px 6px rgba(110, 68, 41, 0.18); }
 
 .elf-door:focus-visible { outline: 3px solid var(--cream); outline-offset: 2px; border-radius: 9px; }
@@ -299,7 +309,7 @@
 .elf-detail p { margin: 0 0 8px; }
 .elf-detail__media { justify-self: center; }
 .elf-detail__wood,
-.elf-detail__paper { display: grid; place-items: center; width: 150px; min-height: 150px; padding: 12px; border-radius: 10px; }
+.elf-detail__paper { display: grid; place-items: center; width: 150px; min-height: 150px; padding: 12px; border-radius: 12px; }
 .elf-detail__wood { background: linear-gradient(180deg, var(--elf-oak-light), var(--elf-oak)); border: 1px solid var(--elf-oak-edge); }
 .elf-detail__wood .elf-carve { width: 104px; height: 104px; }
 .elf-detail__paper { background: var(--elf-paper-deep); }
@@ -313,7 +323,7 @@
 .elf-detail__by .elf-icon { color: var(--gold-ink); }
 .elf-detail__counts { list-style: none; margin: 0 0 10px; padding: 0; display: grid; gap: 6px; }
 .elf-detail__fact,
-.elf-detail__mine { background: var(--holly-soft); color: var(--holly-dark); border-radius: 10px; padding: 9px 12px; }
+.elf-detail__mine { background: var(--holly-soft); color: var(--holly-dark); border-radius: 12px; padding: 9px 12px; }
 .elf-detail__hint { color: var(--slate-soft); font-size: 0.94rem; }
 .elf-detail__actions { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 18px; margin-top: 12px; }
 .elf-detail .elf-cd { font-weight: 600; font-variant-numeric: tabular-nums; }
@@ -408,7 +418,7 @@
 .elf-clue {
   margin: 0 0 clamp(16px, 3vw, 24px);
   padding: clamp(16px, 3vw, 24px);
-  border-radius: 14px;
+  border-radius: 12px;
   background: var(--tan-soft);
   color: var(--elf-ink);
   font-size: clamp(1.12rem, 1.05rem + 0.5vw, 1.35rem);
@@ -469,7 +479,7 @@
   border-radius: var(--radius);
   box-shadow: var(--shadow-sm);
 }
-.elf-detective__elf { width: 84px; height: auto; background: var(--holly-soft); border-radius: 14px; }
+.elf-detective__elf { width: 84px; height: auto; background: var(--holly-soft); border-radius: 12px; }
 .elf-detective h3 { font-size: 1.25rem; color: var(--maroon); overflow-wrap: anywhere; }
 .elf-detective p { margin: 6px 0 0; }
 .elf-detective__rank { color: var(--slate-soft); }
@@ -507,7 +517,7 @@
   gap: 3px;
   min-height: 62px;
   padding: 6px 2px;
-  border-radius: 10px;
+  border-radius: 12px;
   border: 1px solid var(--line);
   background: var(--white);
 }
@@ -764,16 +774,16 @@ form.elf-wd { display: grid; gap: 16px; padding: 0; background: none; border: 0;
   padding: clamp(22px, 5vw, 40px);
   border: 2px solid var(--elf-brass);
   border-radius: var(--radius-lg);
-  background: linear-gradient(155deg, #FBEFC4 0%, #F1D888 44%, #E0BC5A 100%);
+  background: linear-gradient(155deg, var(--elf-gold-pale) 0%, var(--elf-gold) 44%, var(--elf-gold-deep) 100%);
   box-shadow: inset 0 0 0 5px rgba(255, 253, 250, 0.55), var(--shadow);
-  color: #3A2A07;
+  color: var(--elf-gold-ink);
   text-align: center;
   overflow: hidden;
 }
 .elf-win > * { position: relative; }
 .elf-win p { margin: 0 0 10px; }
 .elf-win h2 { margin: 6px 0 12px; font-size: clamp(2.6rem, 2rem + 4vw, 4.2rem); line-height: 1; color: var(--maroon); }
-.elf-win__door { font-size: var(--fs-eyebrow); font-weight: 600; letter-spacing: 0.2em; text-transform: uppercase; color: #5C4308; }
+.elf-win__door { font-size: var(--fs-eyebrow); font-weight: 600; letter-spacing: 0.2em; text-transform: uppercase; color: var(--elf-gold-ink-soft); }
 .elf-win__who { font-size: 1.15rem; overflow-wrap: anywhere; }
 .elf-win__badges { list-style: none; margin: 16px 0; padding: 0; display: flex; flex-wrap: wrap; justify-content: center; gap: 12px; }
 .elf-win__badges li { display: grid; justify-items: center; gap: 6px; min-width: 132px; padding: 12px; border-radius: 12px; background: var(--card); box-shadow: var(--shadow-sm); font-size: 0.9rem; line-height: 1.35; color: var(--slate); overflow-wrap: anywhere; }
@@ -781,7 +791,7 @@ form.elf-wd { display: grid; gap: 16px; padding: 0; background: none; border: 0;
 .elf-win__now b { display: block; font-family: var(--font-head); font-weight: 800; font-size: 1.7rem; line-height: 1.2; font-variant-numeric: lining-nums tabular-nums; }
 .elf-win .elf-win__staff { max-width: 44ch; margin: 14px auto; padding: 12px 14px; border-radius: 12px; background: rgba(255, 253, 250, 0.72); }
 .elf-win__links { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 10px 22px; margin-top: 16px; }
-.elf-win .elf-link { color: #3A2A07; }
+.elf-win .elf-link { color: var(--elf-gold-ink); }
 
 /* A candy cane collected. */
 .elf-stamped { max-width: 760px; padding: clamp(20px, 4vw, 36px); border-radius: var(--radius-lg); background: var(--holly-soft); color: var(--holly-dark); }

@@ -299,7 +299,8 @@ export function packView(f: PackSubject, stored: StoredPack | null, sizes?: Post
     const skippedReason = wasLeftOut && (sent || same) ? s!.skippedReason : null;
     let changeNote: string | null = null;
     if (sent) {
-      if (!s) changeNote = "Asked for since it was sent.";
+      // A row kept cleared (an untick that kept the pack's mark) is neither: as if there were none.
+      if (!s || (!wasTicked && !wasLeftOut)) changeNote = "Asked for since it was sent.";
       else if (wasTicked && !same) changeNote = `Changed since it was sent: it went as ${s.label}.`;
       else if (wasLeftOut && !same) changeNote = leftOutChanged(item, s.label, true);
     } else if (wasTicked && !item.waiting && !same) {
@@ -521,13 +522,25 @@ const packHandled = (row: RequestRow | null): boolean => !!row?.updatedBy?.start
  *             count right, and open it again when a tick comes off.
  *   "staff"   the pack marked it, and staff have changed it by hand since (undone, sent again, a
  *             count corrected): theirs from then on. No press changes it.
- *   "open"    the pack has no mark on it: at its first step the pack marks it; further on (staff
- *             dealt with it themselves) it is left alone.
+ *   "open"    the pack has no mark on it, or the ORGANISER has asked afresh since the pack marked
+ *             it: at its first step the pack marks it; further on (staff dealt with it themselves)
+ *             it is left alone.
+ *
+ * Who a request says changed it last (fundraiser_requests.updated_by), each decided on purpose:
+ *   "pack:admin:<email>"  the pack, for that staff member (src/db/welcome-packs.ts): the pack's.
+ *   "admin:<email>"       a staff member, by hand in Requests (changeRequest): staff's.
+ *   "organiser"           their own "Ask us to print these" (askToPrint), which opens the request
+ *                         again with what they now want: a fresh ask, so open. The tick no longer
+ *                         counts (the number changed), and ticking it again, or Pack sent, marks it.
+ *   nobody, or anything else   never written today. Not a staff member's change, so open: at its
+ *                         first step the pack marks it, further on it is left alone.
  */
 type RequestOwner = "pack" | "staff" | "open";
+const STAFF_HANDLED = "admin:";
 function requestOwner(marked: boolean, row: RequestRow | null): RequestOwner {
   if (!marked) return "open";
-  return packHandled(row) ? "pack" : "staff";
+  if (packHandled(row)) return "pack";
+  return row?.updatedBy?.startsWith(STAFF_HANDLED) ? "staff" : "open";
 }
 
 export interface PackRequestStep {

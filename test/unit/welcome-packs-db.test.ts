@@ -427,6 +427,32 @@ describe("the requests a pack looks after", () => {
     expect(out.requestWords).toEqual(["Posters: count sent changed from 12 to 10"]);
   });
 
+  // Re-check: ticked (Sent, 10); the organiser then asks us to print 12, which opens the request
+  // again as "organiser". The tick no longer counts; ticked again, the request is Sent with 12.
+  it("marks again a request the organiser asked for afresh, when its thing is ticked again", async () => {
+    const { calls } = db({
+      pack: packRow(),
+      items: [itemRow("posters_a4", { label: "10 A4 posters", quantity: 10, marked_request: true })],
+      requests: [requestRow("posters", { status: "to_send", quantity: 10, updated_by: "organiser" })],
+    });
+    const out = await changePack(9, TICK_POSTERS, "admin:fern@example.com", TODAY);
+    const req = find(calls, /INSERT INTO fundraiser_requests/)!;
+    expect(req[1].slice(0, 4)).toEqual([9, "posters", "sent", 12]);
+    expect(req[1][req[1].length - 1]).toBe("pack:admin:fern@example.com");
+    expect(out.requestWords).toEqual(["Posters: sent (by post)"]);
+  });
+
+  it("catches up on Pack sent a request the organiser asked for afresh", async () => {
+    const { calls } = db({
+      pack: packRow(),
+      items: [itemRow("letter"), ...everything({ marked_request: true })],
+      requests: [requestRow("posters", { status: "to_send", quantity: 12, updated_by: "organiser" })],
+    });
+    const out = await changePack(9, { action: "send" }, "admin:fern@example.com", TODAY);
+    expect(out.view.state).toBe("sent");
+    expect(find(calls, /INSERT INTO fundraiser_requests/)![1].slice(0, 4)).toEqual([9, "posters", "sent", 12]);
+  });
+
   it("does not touch the requests for a change of signer", async () => {
     const { calls } = db({ pack: packRow(), items: [itemRow("posters_a4", { quantity: 12 })] });
     await changePack(9, { action: "signer", name: "Fern Example", role: null }, "admin:fern@example.com", TODAY);

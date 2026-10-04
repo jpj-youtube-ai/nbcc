@@ -510,6 +510,15 @@ describe("the organiser's own line, in their private area", () => {
       "The things you asked for are on their way. We posted them on 4 October 2026.",
     );
   });
+  // Re-check: a row kept cleared (neither ticked nor left out) reads as no row at all.
+  it("says a thing was asked for since the pack was sent, though a cleared row is kept for it", () => {
+    const f = subject({ wants: { ...NONE, posterCount: 12 } });
+    const cleared = { key: "posters_a3", label: "2 A3 posters", quantity: 2, tickedAt: null, tickedBy: null, skippedReason: null, markedRequest: true };
+    const sent = pack({ sentAt: "2026-10-04T09:00:00.000Z", sentBy: "admin:fern@example.com", items: [ticked("letter"), ticked("posters_a4", 10), ticked("sponsor_form"), cleared] });
+    const v = packView(f, sent, { a4: 10, a3: 2 })!;
+    expect(v.items.find((i) => i.key === "posters_a3")!.changeNote).toBe("Asked for since it was sent.");
+    expect(v.changedSinceSent).toBe(true);
+  });
   it("says nothing for a page with no pack, and never who sent it", () => {
     expect(organiserPackLine(subject({ teamId: 3 }), pack({ sentAt: "2026-10-04T09:00:00.000Z", sentBy: "admin:fern@example.com" }))).toBeNull();
     expect(organiserPackLine(subject(), pack({ sentAt: "2026-10-04T09:00:00.000Z", sentBy: "admin:fern@example.com" }))).not.toContain("fern");
@@ -626,7 +635,7 @@ describe("the requests a pack looks after", () => {
   it("on Pack sent never sends again a request the pack marked once and staff then undid by hand", () => {
     // Posters ticked (the pack marked the request Sent); staff pressed Undo in Requests, so it stands To send.
     const all = packView(f, pack({ items: [ticked("letter"), ticked("posters_a4", 10), ticked("posters_a3", 2), ticked("buckets", 2), ticked("sponsor_form")] }), sizes)!;
-    const undone = [row("posters", { status: "to_send" })];
+    const undone = [row("posters", { status: "to_send", ...BY_HAND })];
     const steps = packRequestSync(all, undone, { ...sendPressed, markedKinds: new Set(["posters"]) } as never);
     // The buckets, which the pack never marked, are still caught up.
     expect(steps.map((s) => s.kind)).toEqual(["buckets"]);
@@ -675,6 +684,22 @@ describe("the requests a pack looks after", () => {
     expect(packRequestSync(both, byPack, pressed("tick", "posters_a4", false)).map((s) => s.input.action)).toEqual(["send"]);
     // And one the pack never marked is marked as before, whoever touched it last.
     expect(packRequestSync(both, undone, pressed("tick", "posters_a4", false)).map((s) => s.input.action)).toEqual(["send"]);
+  });
+  // Re-check: the pack marked Posters Sent; then the ORGANISER asked us to print a different number
+  // ("Ask us to print these"), which opens the request again and says "organiser" changed it last.
+  // That is a fresh ask, not staff changing it by hand: the pack marks it again.
+  it("marks again a request the organiser asked for afresh, on the re-tick or on Pack sent", () => {
+    const BY_ORGANISER = { updatedBy: "organiser" };
+    const more = subject({ wants: { ...NONE, posterCount: 12 } });
+    const reticked = packView(more, pack({ items: [ticked("posters_a4", 12)] }))!;
+    const asked = [row("posters", { status: "to_send", quantity: 10, ...BY_ORGANISER })];
+    expect(packRequestSync(reticked, asked, pressed("tick", "posters_a4", true))).toEqual([
+      { kind: "posters", input: { action: "send", from: "to_send", on: "2026-10-03", how: "post", by: "fern@example.com", quantity: 12, note: "Sent with the welcome pack." } },
+    ]);
+    // Not ticked one by one again: Pack sent catches it up, though the pack had marked it before.
+    expect(packRequestSync(reticked, asked, { ...sendPressed, markedKinds: new Set(["posters"]) } as never).map((s) => [s.kind, s.input.action])).toEqual([["posters", "send"]]);
+    // A staff member's own undo is still never sent again.
+    expect(packRequestSync(reticked, [row("posters", { status: "to_send", ...BY_HAND })], pressed("tick", "posters_a4", true))).toEqual([]);
   });
   it("never opens again a request staff sent again by hand, when a tick comes off", () => {
     const one = packView(f, pack({ items: [ticked("posters_a3", 2)] }), sizes)!;

@@ -10,7 +10,9 @@
 //   - money is whole pence, always, so 10p pencils never drift;
 //   - the items are EXAMPLES of what a donation could do. Every example says "could", never "will"
 //     (Code of Fundraising Practice; OSCR): the donation is for NBCC's general funds;
-//   - one Red Bag Full of Joy is around £50, as the donate page says.
+//   - one Red Bag Full of Joy is around £50, as the donate page says;
+//   - a round-up is simply extra money towards the next milestone (half a bag, a full bag, the next
+//     whole bag). It buys nothing and is never described as buying anything.
 //
 // No DOM, no clock, nothing but data and pure functions. A classic script, exported under a
 // CommonJS guard so the server and the unit tests can load it.
@@ -21,6 +23,8 @@
   var MIN_PENCE = 200;
   var MAX_QUANTITY = 99;
   var MAX_BAGS_DRAWN = 5;
+  // The first milestone a round-up offers: half a bag. After it, every whole bag.
+  var HALF_BAG_PENCE = BAG_VALUE_PENCE / 2;
 
   // The headings are the printed "Donation ideas" sheet's own, in its order.
   var GROUPS = [
@@ -63,19 +67,10 @@
     },
   ];
 
-  // "Whenever the need comes": four themes, three examples each. `words` follows the amount:
-  // "£10 could help with cosy essentials like a hat, gloves and socks".
+  // "Whenever the need comes": three themes, three examples each. `words` follows the amount:
+  // "£15 could help replace a child's favourite cuddly toy". (A fourth theme, "Red Bags Full of
+  // Joy", came out on 4 October 2026: the donor is already filling a bag from the list.)
   var THEMES = [
-    {
-      key: "joy",
-      title: "Red Bags Full of Joy",
-      sub: "For those going without at Christmas",
-      examples: [
-        { key: "joy-10", pence: 1000, words: "could help with cosy essentials like a hat, gloves and socks" },
-        { key: "joy-25", pence: 2500, words: "could help fill half a Red Bag Full of Joy" },
-        { key: "joy-50", pence: 5000, words: "could help fill a whole Red Bag Full of Joy" },
-      ],
-    },
     {
       key: "crisis",
       title: "After a crisis",
@@ -115,6 +110,8 @@
     empty: "Your bag is empty. Pop something in.",
     nudge: "Add a little more to reach £2. Maybe some socks?",
     another: "Another one is filling.",
+    // The line a round-up adds under "Also in your bag". Extra money, plainly.
+    roundUp: "A little extra to round up",
   };
 
   // How full one bag looks in words, by the share of £50 reached (from £2 up).
@@ -204,6 +201,51 @@
     return total % BAG_VALUE_PENCE ? line + " " + WORDS.another : line;
   }
 
+  /**
+   * The next milestone above a total, in pence: half a bag (£25), then a full bag (£50), then every
+   * whole bag after it. Always ABOVE the total, so a total sitting exactly on one is offered the
+   * next. Nothing (0) for an empty bag.
+   */
+  function nextMilestone(pence) {
+    var total = Math.max(0, Math.floor(pence || 0));
+    if (total === 0) return 0;
+    if (total < HALF_BAG_PENCE) return HALF_BAG_PENCE;
+    return (Math.floor(total / BAG_VALUE_PENCE) + 1) * BAG_VALUE_PENCE;
+  }
+
+  /** A milestone in words: "half a bag", "a full bag", "2 full bags". */
+  function milestoneWords(targetPence) {
+    var target = Math.max(0, Math.floor(targetPence || 0));
+    if (target === HALF_BAG_PENCE) return "half a bag";
+    var n = Math.round(target / BAG_VALUE_PENCE);
+    return n <= 1 ? "a full bag" : n + " full bags";
+  }
+
+  /**
+   * The round-up on offer for a total (the total as shown, any round-up already in it): the next
+   * milestone, what pressing it would add to that total, and the button's words. Null for an empty
+   * bag: there is nothing to round up.
+   */
+  function roundUpOffer(pence) {
+    var total = Math.max(0, Math.floor(pence || 0));
+    var target = nextMilestone(total);
+    if (!target) return null;
+    return { target: target, add: target - total, words: "Round up to " + milestoneWords(target) };
+  }
+
+  /**
+   * The top-up a round-up adds: whatever takes the donor's own items (and examples) up to the
+   * target they chose. So it shrinks as they add things, grows back as they take things out, and
+   * is nothing once their own items reach or pass the target. It never stands alone: with none of
+   * their own choices in the bag there is nothing to round up, and it is nothing. Whole pence.
+   */
+  function roundUpPence(ownPence, targetPence) {
+    var own = Math.max(0, Math.floor(ownPence || 0));
+    var target = Math.max(0, Math.floor(targetPence || 0));
+    if (own === 0) return 0;
+    return target > own ? target - own : 0;
+  }
+
   /** £8, £54.10, £1,250; and 10p for anything under a pound. */
   function pounds(pence) {
     var p = Math.max(0, Math.floor(pence || 0));
@@ -228,6 +270,11 @@
     totalPence: totalPence,
     bags: bags,
     statusLine: statusLine,
+    HALF_BAG_PENCE: HALF_BAG_PENCE,
+    nextMilestone: nextMilestone,
+    milestoneWords: milestoneWords,
+    roundUpOffer: roundUpOffer,
+    roundUpPence: roundUpPence,
     pounds: pounds,
   };
 

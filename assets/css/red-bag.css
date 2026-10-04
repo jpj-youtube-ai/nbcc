@@ -1,5 +1,5 @@
 /* =================================================================
-   Fill a Red Bag (/fill-a-red-bag)
+   Fill a Red Bag (/fill, and its thank you, /fill/thank-you)
 
    Its own stylesheet: nothing here is added to the shared bundle, which
    donate.html's page weight budget counts. Every colour is one of the
@@ -33,10 +33,13 @@
   font-size:.9rem;font-weight:600;line-height:1.4;text-align:center;
 }
 
-/* ---- the two columns: paper on the left, the bag on the right ---- */
+/* ---- the layout. The page's order is the phone's: the list, "Whenever the need comes", the bag
+   with the total and Donate, then the real items note, one under another. On a desktop (the
+   min-width block near the end) the bag is placed at the top of a right hand column, with the
+   themes under it, beside the long paper. ---- */
 .rb-layout{
-  display:grid;grid-template-columns:minmax(0,1.2fr) minmax(0,.8fr);
-  gap:clamp(32px,5vw,72px);align-items:start;
+  display:grid;grid-template-columns:minmax(0,1fr);
+  gap:clamp(32px,6vw,48px);align-items:start;
 }
 
 /* ---- the lined paper ---- */
@@ -105,9 +108,11 @@
 }
 .rb-item.is-in .rb-qty{border-color:var(--holly);background:var(--holly-soft)}
 
-/* "Also in your bag": the examples tapped below, each with its own way out */
+/* "Also in your bag": the examples tapped, and the round-up, each with its own way out */
 .rb-also{margin-top:clamp(18px,2.4vw,28px)}
 .rb-also__list .rb-item{grid-template-columns:minmax(0,1fr) auto}
+/* the round-up's line has an amount of its own, as an item's row has a price */
+.rb-also__list .rb-item--round{grid-template-columns:minmax(0,1fr) auto auto}
 .rb-also__words{font-size:1.55rem;line-height:1.15;color:var(--slate);overflow-wrap:anywhere}
 .rb-remove{
   min-height:44px;padding:0 16px;border:1.6px solid var(--maroon);border-radius:var(--radius-pill);
@@ -171,27 +176,49 @@
 }
 .rb-total__per{font-family:var(--font-body);font-weight:600;font-size:1rem;color:var(--slate)}
 .rb-nojs{margin:16px 0 0;font-size:.95rem}
-.rb-give{margin-top:8px}
-.rb-give .rb-monthly{min-height:44px;align-items:center;margin:6px 0 12px;font-size:1rem;font-weight:600}
-.rb-donate{width:100%;justify-content:center;font-size:1.08rem;padding:16px 28px}
+.rb-give{margin-top:14px}
+/* the round-up: one quiet button under the total, the amount it adds first */
+.rb-round{
+  display:flex;flex-wrap:wrap;align-items:baseline;justify-content:center;gap:2px 10px;
+  width:100%;min-height:44px;margin:0 0 16px;padding:10px 15px;
+  background:var(--card);color:var(--slate);border:1.6px solid var(--maroon);border-radius:14px;
+  font-family:var(--font-body);font-size:.94rem;font-weight:600;line-height:1.35;text-align:center;cursor:pointer;
+  transition:transform .15s ease,background-color .18s ease,color .18s ease;
+}
+.rb-round__amount{font-weight:700;color:var(--maroon);font-variant-numeric:tabular-nums;white-space:nowrap}
+.rb-round:hover{background:var(--maroon);color:var(--cream)}
+.rb-round:hover .rb-round__amount{color:var(--cream)}
+.rb-round:active{transform:scale(.985)}
+/* once or monthly: the donate page's two buttons (.give-toggle), in this page's own stylesheet */
+.rb-often__label{margin:0 0 6px;font-size:.92rem;font-weight:600;line-height:1.3;color:var(--slate)}
+.rb-toggle{
+  display:grid;grid-template-columns:1fr 1fr;gap:6px;margin:0 0 14px;padding:5px;
+  background:var(--card);border:1px solid var(--line);border-radius:var(--radius-pill);
+}
+.rb-mode{
+  min-height:44px;padding:8px 10px;border:0;border-radius:var(--radius-pill);
+  background:transparent;color:var(--slate);
+  font-family:var(--font-body);font-size:.95rem;font-weight:600;line-height:1.2;text-align:center;cursor:pointer;
+  transition:background-color .2s ease,color .2s ease;
+}
+.rb-mode:hover{background:var(--holly-soft)}
+.rb-mode[aria-pressed="true"]{background:var(--holly);color:var(--cream);box-shadow:var(--shadow-sm)}
+/* chosen is never colour alone: a tick as well */
+.rb-mode[aria-pressed="true"]::before{content:"\2713";margin-right:6px;font-weight:700}
+.rb-donate{width:100%;justify-content:center;font-size:1.08rem;padding:16px 22px;text-align:center}
 .rb-nudge{
   margin:12px 0 0;padding:11px 15px;background:var(--tan-soft);border:1px solid var(--maroon);border-radius:12px;
   color:var(--maroon);font-size:.95rem;font-weight:600;line-height:1.45;
 }
 .rb-elves{margin:18px 0 0;font-size:.9rem;line-height:1.55;color:var(--slate)}
 
-/* ---- whenever the need comes: four plain groups ---- */
-/* the themes follow straight on from the bag: one thought, not a new chapter */
-.rb-need{padding-top:clamp(8px,2vw,28px)}
-.rb-need__head{max-width:62ch;margin-bottom:clamp(24px,3vw,40px)}
-.rb-need__head h2{font-size:clamp(1.7rem,1.4rem + 1.4vw,2.4rem)}
-.rb-need__head p{margin:12px 0 0}
-.rb-themes{
-  display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,238px),1fr));
-  gap:clamp(26px,3vw,40px) clamp(20px,2.4vw,32px);
-}
+/* ---- whenever the need comes: three plain groups, one under another ---- */
+.rb-need__head{max-width:62ch;margin-bottom:clamp(20px,3vw,28px)}
+.rb-need__head h2{font-size:clamp(1.55rem,1.35rem + 1vw,1.9rem);line-height:1.2;text-wrap:balance}
+.rb-need__head p{margin:10px 0 0}
+.rb-themes{display:grid;grid-template-columns:minmax(0,1fr);gap:clamp(24px,3vw,30px)}
 .rb-theme h3{font-size:1.28rem;line-height:1.2}
-.rb-theme__sub{margin:6px 0 14px;font-size:.92rem;line-height:1.45;color:var(--slate)}
+.rb-theme__sub{margin:4px 0 12px;font-size:.92rem;line-height:1.45;color:var(--slate)}
 .rb-examples{list-style:none;margin:0;padding:0;display:grid;gap:10px}
 .rb-example{
   display:flex;align-items:baseline;gap:10px;width:100%;min-height:44px;padding:11px 15px;text-align:left;
@@ -208,9 +235,7 @@
 .rb-example[aria-pressed="true"] .rb-example__amount{color:var(--cream)}
 /* pressed is never colour alone: a tick as well */
 .rb-example[aria-pressed="true"]::after{content:"\2713";flex:0 0 auto;font-weight:700}
-.rb-real{
-  max-width:68ch;margin:clamp(32px,4vw,52px) 0 0;padding-top:20px;border-top:1px solid var(--line);
-}
+.rb-real{max-width:68ch;margin:0;padding-top:20px;border-top:1px solid var(--line)}
 .rb-real strong{color:var(--maroon)}
 
 /* ---- the details step ---- */
@@ -235,56 +260,80 @@
 .rb-declaration{margin-top:18px;padding:18px;border:1px solid var(--line);border-radius:var(--radius);background:var(--card)}
 .rb-form .give-cta-row{margin-top:24px}
 
-/* ---- the thank you ---- */
-.rb-thanks__panel{
-  scroll-margin-top:calc(var(--nav-h) + 1rem);
-  display:grid;grid-template-columns:minmax(0,150px) minmax(0,1fr);gap:clamp(20px,4vw,48px);align-items:start;
-  max-width:860px;margin-inline:auto;padding:clamp(24px,4vw,48px);
-}
+/* ---- the thank you: a page of its own (/fill/thank-you). A calm, centred column under the page's
+   own heading: the tied bag, the few lines, then the picture to share. No card: it is a moment. ---- */
+/* the heading takes the focus on arrival so a screen reader starts there; it is not a control */
+.rb-thanks h1:focus{outline:none}
+.rb-thanks h1{text-wrap:balance}
+.rb-thanks__bag{width:clamp(132px,24vw,176px);margin:clamp(24px,4vw,36px) auto 0}
 .rb-thanks__bag .rb-bag{width:100%;--rb-fill:1}
-.rb-thanks__words h2{font-size:clamp(1.7rem,1.4rem + 1.4vw,2.4rem);text-wrap:balance}
-.rb-thanks__words>p{max-width:60ch;margin:14px 0 0}
-.rb-thanks__lead{font-size:1.1rem}
+.rb-thanks .rb-thanks__lead{margin-top:clamp(18px,3vw,26px)}
 .rb-thanks__lead strong{color:var(--maroon)}
-.rb-share{margin-top:clamp(24px,3vw,36px);padding-top:22px;border-top:1px solid var(--line)}
-.rb-share h3{font-size:1.25rem}
-.rb-share p{margin:8px 0 0;max-width:56ch}
+.rb-thanks__line{max-width:56ch;margin:14px auto 0;text-wrap:balance}
+.rb-thanks__line strong{color:var(--maroon)}
+.rb-share{
+  max-width:560px;margin-inline:auto;padding-top:clamp(24px,4vw,36px);
+  border-top:1px solid var(--line);text-align:center;
+}
+.rb-share h2{font-size:clamp(1.35rem,1.2rem + .7vw,1.65rem)}
+.rb-share p{margin:8px auto 0;max-width:46ch}
 .rb-share__picture{
-  display:block;width:min(100%,300px);height:auto;margin:16px 0 0;
+  display:block;width:min(100%,300px);height:auto;margin:18px auto 0;
   border:1px solid var(--line);border-radius:var(--radius);background:var(--cream);
 }
-.rb-share__actions{display:flex;flex-wrap:wrap;gap:12px;margin-top:16px}
-.rb-share__status{min-height:1.5em;font-size:.92rem;color:var(--holly-dark)}
+.rb-share__actions{display:flex;flex-wrap:wrap;justify-content:center;gap:12px;margin-top:18px}
+.rb-share .rb-share__status{min-height:1.5em;font-size:.92rem;color:var(--holly-dark)}
+/* the way back to fill another: quieter than the share, which is the thing to do here */
+.rb-again{margin:clamp(20px,3vw,28px) 0 0;text-align:center}
 
-/* ---- desktop only: the paper sits at a slight tilt, and the bag follows you down the list ---- */
+/* ---- the bottom bar, at every width: the total and a Donate button, in reach while the real ones
+   are scrolled out of sight; the script hides it once they are on screen. The strip spans the
+   screen, and its padding is the page's own gutter (growing beyond the page's widest), so what is
+   in it sits in line with the page. Clear of the phone's home bar. ---- */
+.rb-bar{
+  display:flex;position:fixed;left:0;right:0;bottom:0;z-index:90;
+  align-items:center;justify-content:space-between;gap:12px;
+  padding-block:9px calc(9px + env(safe-area-inset-bottom));
+  padding-inline:max(var(--pad),calc((100% - var(--maxw)) / 2 + var(--pad)));
+  background:var(--card);border-top:1px solid color-mix(in srgb,var(--maroon) 24%,transparent);
+}
+.rb-bar__total{margin:0;min-width:0;font-weight:600;line-height:1.2;color:var(--slate)}
+.rb-bar__total strong{
+  margin-left:4px;font-family:var(--font-head);font-weight:800;font-size:1.45rem;
+  color:var(--crimson);font-variant-numeric:tabular-nums;white-space:nowrap;
+}
+.rb-bar__donate{flex:0 0 auto;min-height:44px;padding:10px 22px;box-shadow:none}
+/* and when the browser scrolls to a control that takes the focus (a keyboard tabbing down the
+   list), it stops short of the bar, so that control is never under it. This stylesheet is loaded
+   by the Fill a Red Bag pages alone, so this touches no other page. */
+html{scroll-padding-bottom:calc(72px + env(safe-area-inset-bottom))}
+/* while it shows, the page is longer by its height, so it never rests on the end of the footer */
+body.rb-bar-on{padding-bottom:calc(64px + env(safe-area-inset-bottom))}
+
+/* ---- desktop: two columns. The paper, at a slight tilt, down the left; on the right the bag at
+   the top and the themes under it. The second row takes what is left, so the themes start straight
+   under the bag however long the paper is. Nothing sticks and nothing scrolls inside a box. ---- */
 @media (min-width:861px){
-  .rb-paper{transform:rotate(-.7deg)}
-  .rb-panel{position:sticky;top:calc(var(--nav-h) + 20px)}
+  .rb-layout{grid-template-columns:minmax(0,1.2fr) minmax(0,.8fr);grid-template-rows:auto 1fr;gap:clamp(32px,4vw,44px) clamp(32px,5vw,72px)}
+  .rb-paper{grid-column:1;grid-row:1 / span 2;transform:rotate(-.7deg)}
+  .rb-panel{grid-column:2;grid-row:1}
+  .rb-need{grid-column:2;grid-row:2}
+  .rb-real{grid-column:1 / -1}
+  .rb-themes{grid-template-columns:minmax(0,1fr);gap:24px}
+  .rb-need__head{margin-bottom:20px}
+  /* the bar's total sits beside its button, under the bag's column, not far across the page */
+  .rb-bar{justify-content:flex-end;gap:20px}
+  .rb-need__head h2{font-size:clamp(1.45rem,1.1rem + .9vw,1.75rem)}
 }
 
-/* ---- the phone bar: never drawn at desktop widths, where the bag is beside the list ---- */
-.rb-bar{display:none}
-
-/* ---- stacked: the bag goes below the list ---- */
-@media (max-width:860px){
-  .rb-layout{grid-template-columns:minmax(0,1fr)}
-  /* the total and a Donate button, in reach while the list is scrolled; the script hides it once
-     the real ones are on screen. Clear of the phone's home bar. */
-  .rb-bar{
-    display:flex;position:fixed;left:0;right:0;bottom:0;z-index:90;
-    align-items:center;justify-content:space-between;gap:12px;
-    padding:9px clamp(16px,5vw,28px) calc(9px + env(safe-area-inset-bottom));
-    background:var(--card);border-top:1px solid color-mix(in srgb,var(--maroon) 24%,transparent);
-  }
-  .rb-bar__total{margin:0;min-width:0;font-weight:600;line-height:1.2;color:var(--slate)}
-  .rb-bar__total strong{
-    margin-left:4px;font-family:var(--font-head);font-weight:800;font-size:1.45rem;
-    color:var(--crimson);font-variant-numeric:tabular-nums;white-space:nowrap;
-  }
-  .rb-bar__donate{flex:0 0 auto;min-height:44px;padding:10px 22px;box-shadow:none}
-  /* while it shows, the page is longer by its height, so it never rests on the end of the footer */
-  body.rb-bar-on{padding-bottom:calc(64px + env(safe-area-inset-bottom))}
+/* ---- the narrowest two column widths: the right hand column is as slim as a small phone, so the
+   bag's panel gets the same extra room and "Give once" and "Give monthly" stay on one line ---- */
+@media (min-width:861px) and (max-width:1000px){
+  .rb-panel{padding:20px 14px}
+  .rb-mode{padding:8px 4px;font-size:.875rem}
+  .rb-mode[aria-pressed="true"]::before{margin-right:4px}
 }
+
 @media (max-width:520px){
   /* the price drops under the name, so a long name has room beside the stepper */
   .rb-item{grid-template-columns:minmax(0,1fr) auto;column-gap:10px}
@@ -295,11 +344,9 @@
   .rb-item .rb-stepper{grid-column:2;grid-row:1 / span 2}
   .rb-stepper{gap:4px}
   .rb-qty{width:44px}
-  .rb-also__list .rb-item{grid-template-columns:minmax(0,1fr)}
+  .rb-also__list .rb-item,.rb-also__list .rb-item--round{grid-template-columns:minmax(0,1fr)}
   .rb-also__list .rb-remove{justify-self:start;margin-top:6px}
-  .rb-thanks__panel{grid-template-columns:minmax(0,1fr)}
-  .rb-thanks__bag{max-width:110px}
-  .rb-share__actions .btn{width:100%;justify-content:center}
+  .rb-share__actions .btn,.rb-again .btn{width:100%;justify-content:center}
 }
 
 /* ---- the narrowest phones: a little more room on the paper and a slightly smaller hand, so no
@@ -310,10 +357,14 @@
   .rb-item{column-gap:6px}
   .rb-item__name{font-size:1.35rem}
   .rb-stepper{gap:3px}
+  /* a little more room in the bag's panel, so "Give monthly" and its tick stay on one line */
+  .rb-panel{padding:20px 14px}
+  .rb-mode{padding:8px 4px;font-size:.875rem}
+  .rb-mode[aria-pressed="true"]::before{margin-right:4px}
 }
 
 /* ---- less motion: nothing moves ---- */
 @media (prefers-reduced-motion:reduce){
   .rb-bag.is-new{animation:none}
-  .rb-bag__fill,.rb-bag__tissue,.rb-step,.rb-example,.rb-remove{transition:none}
+  .rb-bag__fill,.rb-bag__tissue,.rb-step,.rb-example,.rb-remove,.rb-round,.rb-mode{transition:none}
 }

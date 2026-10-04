@@ -152,8 +152,9 @@ These are the rules the pure logic in `src/elf/` implements. Times are Europe/Lo
   Until then the public sees its first letter: "Detective R. Tinselfoot". No list of words can stop
   every rude or revealing name, and a detective name goes on the calendar the moment an elf is
   found, so this is how "staff approve all public content" holds. A family always sees its own
-  detectives' names in full. (Added after review; to confirm with Jaimie, since it adds one tick for
-  each new detective.)
+  detectives' names in full. (Added after review. Jaimie chose it on 4 October 2026, over showing
+  only the first letter for ever and over showing names straight away. It adds one tick for each
+  new detective.)
 
 ## What the website already has that this reuses
 

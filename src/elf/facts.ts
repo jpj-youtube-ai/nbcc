@@ -9,8 +9,13 @@
 // (2015, Tygan aged twelve, 90 boxes, 593 bags). Every number comes from the public About us, home
 // and donate pages. Change the wording only with Jaimie's yes.
 //
-// Pure data. Unit tested in test/unit/elf-facts.test.ts, which holds the house style: no dashes, no
-// hyphenated words, and the building written one way.
+// Two facts were corrected later the same day, each with Jaimie's yes, after an independent check
+// against the public pages. Fact 9 had said 4 to 7 year olds were the second biggest group; they
+// were third. Fact 22 had said what a monthly gift "is"; it now says what it "could" do, in the
+// donate page's own words.
+//
+// Pure data. Unit tested in test/unit/elf-facts.test.ts, which holds the house style (no dashes, no
+// hyphenated words, the building written one way) and a fingerprint of the wording.
 
 export interface ElfFact {
   /** The door this fact belongs to, 1 to 24. */
@@ -83,7 +88,7 @@ export const FACTS: readonly ElfFact[] = [
     door: 9,
     title: "The biggest group",
     grownUp:
-      "Children aged 8 to 11 were the biggest group NBCC reached in 2025, with 1,990 Red Bags. Next came 4 to 7 year olds, with 1,663.",
+      "Children aged 8 to 11 were the biggest group NBCC reached in 2025, with 1,990 Red Bags. Another 1,663 went to 4 to 7 year olds.",
     doorLine: "Last year, 1,990 children aged 8 to 11 got a Red Bag.",
   },
   {
@@ -173,7 +178,7 @@ export const FACTS: readonly ElfFact[] = [
     door: 22,
     title: "A little every month",
     grownUp:
-      "Monthly gifts help NBCC all year round. £25 a month is halfway to a Red Bag Full of Joy, and £50 a month is one Christmas made brighter.",
+      "Monthly gifts help NBCC all year round. £50 a month could help provide support around the value of one Red Bag Full of Joy each month.",
     doorLine: "Some grown ups give a little every month to fill Red Bags.",
   },
   {

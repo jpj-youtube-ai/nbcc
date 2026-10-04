@@ -41,7 +41,7 @@ describe("the 24 facts", () => {
       hash ^= ch.codePointAt(0) ?? 0;
       hash = Math.imul(hash, 0x01000193) >>> 0;
     }
-    expect(hash.toString(16)).toBe("cb11c500");
+    expect(hash.toString(16)).toBe("36171bdc");
   });
 
   it("cannot be changed by anything that reads it", () => {

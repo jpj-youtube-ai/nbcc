@@ -10,6 +10,16 @@
 //   - lands the focus on the heading;
 //   - makes the picture to share, "I filled a Red Bag", which names no amount.
 //
+// And the feel good pieces (5 October 2026), each behind a guard so that none of them can stop the
+// thank you above from working:
+//   - the Elves' Workshop scene in place of the still bag (assets/js/red-bag-workshop.js draws and
+//     plays it; if that file is missing or breaks, the still bag stays);
+//   - a name for the picture, "Fern filled a Red Bag". What is typed NEVER leaves the browser: the
+//     box belongs to no form, and nothing here makes a request. Because the picture carries NBCC's
+//     name, the name is screened against the supporter wall's own list, which the server draws into
+//     the page (src/donors/display-name-filter.ts); with no list, the box is put away;
+//   - a certificate to print, with that name, what for and the date, and never an amount.
+//
 // Its own small file, so the thank you does not load the giving page's script. A classic
 // <script defer>, exported under a CommonJS guard so it can be unit tested in jsdom.
 (function () {
@@ -38,6 +48,73 @@
     } catch (e) {
       /* focus unavailable */
     }
+  }
+
+  // How many Red Bags the gift filled: one for each full bag's worth of what the tab remembered
+  // (the bag's total, before any card fee: assets/js/red-bag.js keeps exactly that), and never fewer
+  // than one. One, too, when nothing believable was remembered. For the words and the shelf only.
+  function believed(gift, rb) {
+    return !!gift && typeof gift.pence === "number" && isFinite(gift.pence) && gift.pence >= rb.MIN_PENCE && gift.pence <= MAX_SHOWN_PENCE && Math.floor(gift.pence) === gift.pence;
+  }
+  function bagsFilled(gift, rb) {
+    var worth = rb && rb.BAG_VALUE_PENCE;
+    if (!rb || !believed(gift, rb) || !(worth > 0)) return 1;
+    return Math.max(1, Math.floor(gift.pence / worth));
+  }
+
+  // --- a name for the picture and the certificate ---------------------------------------------------
+  // Up to 30 characters: letters, numbers, spaces and plain punctuation. Anything else is dropped.
+  var NAME_MAX = 30;
+  var NOT_KEPT;
+  try {
+    NOT_KEPT = new RegExp("[^\\p{L}\\p{N} '\u2019.,&!-]", "gu");
+  } catch (e) {
+    NOT_KEPT = /[^A-Za-z0-9\u00C0-\u024F '\u2019.,&!-]/g;
+  }
+  /** What is typed, without what a name may not have. Spaces stay, so a second word can be typed. */
+  function keepChars(raw) {
+    return String(raw == null ? "" : raw)
+      .replace(/\s/g, " ")
+      .replace(NOT_KEPT, "");
+  }
+  /** The name as it is shown: trimmed, runs of spaces closed up, 30 characters at most. */
+  function cleanName(raw) {
+    return keepChars(raw).replace(/ +/g, " ").trim().slice(0, NAME_MAX).trim();
+  }
+
+  /**
+   * Is this name one NBCC would not put its own name beside? The supporter wall's rule
+   * (containsBlockedWord, src/donors/display-name-filter.ts), with its lists as the server drew
+   * them into the page: whole words, and a very few that are refused anywhere in the letters.
+   * With no lists it answers yes: closed, not open.
+   */
+  function nameBlocked(name, lists) {
+    if (!lists || !Array.isArray(lists.words) || !Array.isArray(lists.inside)) return true;
+    var lower = String(name || "").toLowerCase();
+    if (!lower) return false;
+    var tokens = lower.split(/[^a-z]+/);
+    var i;
+    for (i = 0; i < lists.words.length; i += 1) if (tokens.indexOf(lists.words[i]) !== -1) return true;
+    var letters = lower.replace(/[^a-z]/g, "");
+    for (i = 0; i < lists.inside.length; i += 1) if (lists.inside[i] && letters.indexOf(lists.inside[i]) !== -1) return true;
+    return false;
+  }
+
+  /** The words across the picture. With no name it is the plain one, however many bags. */
+  function pictureHeadline(name, bags) {
+    return name ? name + " " + filledWords(bags) : "I filled a Red Bag";
+  }
+  function filledWords(bags) {
+    return bags >= 2 ? "filled " + bags + " Red Bags" : "filled a Red Bag";
+  }
+  /** The certificate's "what for". Never an amount. */
+  function certificateFor(bags) {
+    return bags >= 2 ? "for filling " + bags + " Red Bags Full of Joy" : "for filling a Red Bag Full of Joy";
+  }
+  var MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+  /** "5 October 2026", as the site's printed pieces write a date. */
+  function longDate(d) {
+    return d.getDate() + " " + MONTHS[d.getMonth()] + " " + d.getFullYear();
   }
 
   function storage(win) {
@@ -73,7 +150,7 @@
         gift = null;
       }
     }
-    var ok = gift && typeof gift.pence === "number" && isFinite(gift.pence) && gift.pence >= rb.MIN_PENCE && gift.pence <= MAX_SHOWN_PENCE && Math.floor(gift.pence) === gift.pence;
+    var ok = believed(gift, rb);
     var totalLine = thanks.querySelector("[data-rb-thanks-total]");
     var plain = thanks.querySelector("[data-rb-thanks-plain]");
     var aid = thanks.querySelector("[data-rb-thanks-giftaid]");
@@ -91,8 +168,152 @@
     });
     // The page's one big heading is the thank you: the focus lands there on arrival.
     focusOn(doc.getElementById("rb-thanks-title"));
-    initShare(doc, win, doc);
+
+    // The feel good pieces. Each goes through safe(): whatever goes wrong in one is swallowed, said
+    // once in the console, and everything above and the share below carry on untouched.
+    var said = false;
+    function safe(fn) {
+      return function () {
+        try {
+          return fn.apply(null, arguments);
+        } catch (e) {
+          if (!said && typeof console !== "undefined" && console && typeof console.error === "function") {
+            said = true;
+            console.error("Fill a Red Bag: a part of the thank you failed and was skipped.", e);
+          }
+          return undefined;
+        }
+      };
+    }
+    // What the pieces share: the bags filled, the name as it may be shown, and how to redraw.
+    var st = {
+      bags: bagsFilled(ok ? gift : null, rb),
+      name: "",
+      redraw: function () {},
+      changed: [],
+    };
+    safe(showWorkshop)(doc, win, thanks, { count: st.bags, play: !!ok });
+    var named = safe(initName)(doc, st);
+    initShare(doc, win, doc, st);
+    if (named) safe(initCertificate)(doc, win, st, named);
     return thanks;
+  }
+
+  // --- the Workshop scene, in place of the still bag ---------------------------------------------------
+  // Drawn and played by assets/js/red-bag-workshop.js. Without it, the still bag stays.
+  function showWorkshop(doc, win, thanks, opts) {
+    var shop = win.NBCCRedBagWorkshop;
+    var box = thanks.querySelector("[data-rb-workshop]");
+    if (!box || !shop || typeof shop.mount !== "function") return false;
+    try {
+      return shop.mount(box, { count: opts.count, play: opts.play, win: win });
+    } catch (e) {
+      // Half drawn is worse than not drawn: back to the still bag, then say so once.
+      var holder = box.querySelector("[data-rb-workshop-scene]");
+      var still = box.querySelector(".rb-thanks__bag");
+      if (holder) {
+        holder.hidden = true;
+        holder.innerHTML = "";
+      }
+      if (still) still.hidden = false;
+      box.classList.remove("is-playing");
+      throw e;
+    }
+  }
+
+  // --- the name box --------------------------------------------------------------------------------------
+  // Shown only when the filter's lists are in the page. Returns what the certificate needs from it.
+  function initName(doc, st) {
+    var box = doc.querySelector("[data-rb-name]");
+    var input = box ? box.querySelector("input") : null;
+    var holder = box ? box.querySelector("[data-rb-name-filter]") : null;
+    if (!box || !input || !holder) return null;
+    var lists = null;
+    try {
+      lists = JSON.parse(holder.textContent || "null");
+    } catch (e) {
+      lists = null;
+    }
+    if (nameBlocked("a", lists)) return null; // no list: closed
+    var error = box.querySelector("[data-rb-name-error]");
+    var blocked = false;
+
+    function read() {
+      var kept = keepChars(input.value);
+      if (kept !== input.value) input.value = kept;
+      var name = cleanName(kept);
+      blocked = nameBlocked(name, lists);
+      st.name = blocked ? "" : name;
+      if (error) error.hidden = !blocked;
+      if (blocked) input.setAttribute("aria-invalid", "true");
+      else input.removeAttribute("aria-invalid");
+      st.redraw();
+      each(st.changed, function (fn) {
+        fn();
+      });
+    }
+    input.addEventListener("input", read);
+    box.hidden = false;
+    return {
+      input: input,
+      isBlocked: function () {
+        return blocked;
+      },
+    };
+  }
+
+  // --- the certificate to print ---------------------------------------------------------------------------
+  // The page's own hidden certificate (fill-thank-you.html), filled in and printed by the browser:
+  // while <html> carries rb-print-cert, the print stylesheet shows the certificate alone on one A4
+  // sheet. No file is made and nothing is sent.
+  var PRINT_CLASS = "rb-print-cert";
+  function initCertificate(doc, win, st, named) {
+    var ask = doc.querySelector("[data-rb-cert-ask]");
+    var button = ask ? ask.querySelector("[data-rb-cert-print]") : null;
+    var cert = doc.querySelector("[data-rb-cert]");
+    if (!ask || !button || !cert || typeof win.print !== "function") return null;
+    var status = ask.querySelector("[data-rb-cert-status]");
+    var root = doc.documentElement;
+
+    // A tied bag on it, where the Workshop's drawing is there to borrow.
+    var shop = win.NBCCRedBagWorkshop;
+    var bag = cert.querySelector("[data-rb-cert-bag]");
+    if (bag && shop && typeof shop.bagPicture === "function") {
+      try {
+        bag.innerHTML = shop.bagPicture();
+      } catch (e) {
+        bag.innerHTML = "";
+      }
+    }
+
+    st.changed.push(function () {
+      setText(status, "");
+    });
+    button.addEventListener("click", function () {
+      if (named.isBlocked()) {
+        focusOn(named.input);
+        return;
+      }
+      if (!st.name) {
+        setText(status, "Add a name above first, and it goes on your certificate.");
+        focusOn(named.input);
+        return;
+      }
+      setText(status, "");
+      setText(cert.querySelector("[data-rb-cert-name]"), st.name);
+      setText(cert.querySelector("[data-rb-cert-for]"), certificateFor(st.bags));
+      setText(cert.querySelector("[data-rb-cert-date]"), longDate(new Date()));
+      root.classList.add(PRINT_CLASS);
+      win.print();
+    });
+    // Printed, or the print window closed: the page prints as a page again.
+    if (typeof win.addEventListener === "function") {
+      win.addEventListener("afterprint", function () {
+        root.classList.remove(PRINT_CLASS);
+      });
+    }
+    ask.hidden = false;
+    return ask;
   }
 
   // --- the picture to share: "I filled a Red Bag", and never an amount -----------------------------
@@ -102,7 +323,23 @@
   // until the giver chooses to share or save it.
   var C = { cream: "#F8F5EE", crimson: "#C02238", maroon: "#800000", tan: "#D29C8A", tanSoft: "#F3E4DD", slate: "#333333", holly: "#1A531A" };
 
-  function drawPicture(canvas, win) {
+  // The widest the words may be, and their face.
+  var WORDS_WIDE = 900;
+  function headFace(size) {
+    return "800 " + size + 'px "Playfair Display", Georgia, serif';
+  }
+  /** The biggest size, from `from` down to `least`, at which the words fit across the picture. */
+  function fitSize(ctx, words, from, least) {
+    var size = from;
+    for (; size > least; size -= 4) {
+      ctx.font = headFace(size);
+      if (ctx.measureText(words).width <= WORDS_WIDE) break;
+    }
+    ctx.font = headFace(size);
+    return size;
+  }
+
+  function drawPicture(canvas, win, name, bags) {
     var ctx = null;
     try {
       ctx = canvas.getContext("2d");
@@ -161,10 +398,29 @@
 
     ctx.textAlign = "center";
     ctx.fillStyle = C.crimson;
-    ctx.font = '800 96px "Playfair Display", Georgia, serif';
-    ctx.fillText("I filled a Red Bag", W / 2, 800);
+    var rule = 838;
+    if (!name) {
+      ctx.font = headFace(96);
+      ctx.fillText("I filled a Red Bag", W / 2, 800);
+    } else {
+      // With a name: on one line while it fits at a good size; a longer name has a line of its
+      // own, as small as it needs to be to fit. The last argument is the browser's own squeeze, for
+      // the rare name that is still too wide.
+      var whole = pictureHeadline(name, bags);
+      ctx.font = headFace(68);
+      if (ctx.measureText(whole).width <= WORDS_WIDE) {
+        fitSize(ctx, whole, 96, 68);
+        ctx.fillText(whole, W / 2, 800, WORDS_WIDE);
+      } else {
+        fitSize(ctx, name, 76, 40);
+        ctx.fillText(name, W / 2, 740, WORDS_WIDE);
+        ctx.font = headFace(68);
+        ctx.fillText(filledWords(bags), W / 2, 816, WORDS_WIDE);
+        rule = 852;
+      }
+    }
     ctx.fillStyle = C.holly;
-    ctx.fillRect(W / 2 - 150, 838, 300, 4);
+    ctx.fillRect(W / 2 - 150, rule, 300, 4);
     ctx.fillStyle = C.slate;
     ctx.font = '400 40px "Poppins", system-ui, sans-serif';
     ctx.fillText("Fill one too at nbcc.scot/fill", W / 2, 912);
@@ -173,7 +429,7 @@
     return true;
   }
 
-  function initShare(doc, win, thanks) {
+  function initShare(doc, win, thanks, st) {
     var box = thanks.querySelector("[data-rb-share]");
     var canvas = box ? box.querySelector("[data-rb-share-picture]") : null;
     if (!box || !canvas) return null;
@@ -182,11 +438,20 @@
     var send = box.querySelector("[data-rb-share-send]");
     var words = "I filled a Red Bag with NBCC. You can fill one too: " + PAGE_URL;
 
-    function finish() {
-      if (!drawPicture(canvas, win)) {
-        canvas.hidden = true;
-        return;
+    // Draw the picture as it now stands (with the name, where one may be shown), and point "Save
+    // the picture" at it. Should the named one ever fail to draw, the plain one is drawn instead.
+    function paint() {
+      var name = (st && st.name) || "";
+      var bags = (st && st.bags) || 1;
+      var done = false;
+      try {
+        done = drawPicture(canvas, win, name, bags);
+      } catch (e) {
+        name = "";
+        done = drawPicture(canvas, win, "", 1);
       }
+      if (!done) return false;
+      canvas.setAttribute("aria-label", "A red paper gift bag on cream, with the words: " + pictureHeadline(name, bags) + ". Night Before Christmas Campaign.");
       var url = "";
       try {
         url = canvas.toDataURL("image/png");
@@ -197,6 +462,15 @@
         save.href = url;
         save.hidden = false;
       }
+      return true;
+    }
+
+    function finish() {
+      if (!paint()) {
+        canvas.hidden = true;
+        return;
+      }
+      if (st) st.redraw = paint;
       var nav = win.navigator || {};
       if (send && typeof nav.share === "function" && typeof canvas.toBlob === "function" && typeof win.File === "function") {
         send.hidden = false;
@@ -247,7 +521,15 @@
   }
 
   if (typeof module !== "undefined" && module.exports) {
-    module.exports = { initThanks: initThanks };
+    module.exports = {
+      initThanks: initThanks,
+      bagsFilled: bagsFilled,
+      cleanName: cleanName,
+      nameBlocked: nameBlocked,
+      pictureHeadline: pictureHeadline,
+      certificateFor: certificateFor,
+      longDate: longDate,
+    };
   } else {
     initThanks(document, window);
   }

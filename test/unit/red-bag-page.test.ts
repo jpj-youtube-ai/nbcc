@@ -460,14 +460,20 @@ describe("the thank you page", () => {
 
   it("loads the catalogue, then its own small script, and not the giving page's", () => {
     const scripts = [...tdoc.querySelectorAll("script[src]")].map((s) => s.getAttribute("src"));
-    expect(scripts).toEqual(["/assets/js/main.js", "/assets/js/red-bag-catalogue.js", "/assets/js/red-bag-thanks.js", "/assets/js/pulse.js"]);
+    expect(scripts).toEqual(["/assets/js/main.js", "/assets/js/red-bag-catalogue.js", "/assets/js/red-bag-workshop.js", "/assets/js/red-bag-thanks.js", "/assets/js/pulse.js"]);
     for (const l of tdoc.querySelectorAll("link[href]")) expect(l.getAttribute("href")).toMatch(/^\/assets\//);
-    // No handwriting here, so the handwriting face is not asked for early.
-    expect(thanksTemplate).not.toContain("caveat-latin");
+    // The Workshop's line is in the paper's hand (test/unit/red-bag-thanks-page.test.ts), so the
+    // handwriting face is asked for early, as on the giving page.
+    expect(thanksTemplate).toContain('<link rel="preload" href="/assets/fonts/caveat-latin.woff2" as="font" type="font/woff2" crossorigin />');
   });
 
   it("keeps the wording rules: could, never will; no dashes; British", () => {
-    const copy = visibleCopy(thanksHtml);
+    // One line is the owner's own, word for word (5 October 2026), and is about the elves, not about
+    // what the money buys: "Bag packed. The elves will take it from here." It is the only "will".
+    const line = "Bag packed. The elves will take it from here.";
+    const whole = visibleCopy(thanksHtml);
+    expect(whole.split(line).length - 1).toBe(1);
+    const copy = whole.replace(line, "");
     expect(copy).not.toMatch(/\bwill\b/i);
     expect(copy.match(/[–—]/g) ?? []).toEqual([]);
     expect(copy.match(/\w-\w/g) ?? []).toEqual([]);
@@ -1123,14 +1129,16 @@ describe("the page's own stylesheet", () => {
 
   it("is loaded by this page alone: no other page, and not the shared stylesheet, knows of it", () => {
     expect(read("assets/css/styles.css")).not.toMatch(/caveat-latin|"Caveat"/i);
-    for (const f of readdirSync(ROOT).filter((x) => x.endsWith(".html") && x !== "fill-a-red-bag.html")) {
+    // Fill a Red Bag's two pages only: the giving page's paper, and (since 5 October 2026) the line
+    // under the Workshop on the thank you, which has a stylesheet of its own beside this one.
+    for (const f of readdirSync(ROOT).filter((x) => x.endsWith(".html") && !OWN_PAGES.includes(x))) {
       expect(read(f), f).not.toMatch(/caveat-latin|"Caveat"/i);
-      if (f !== "fill-thank-you.html") expect(read(f), f).not.toMatch(/red-bag\.css/i);
+      expect(read(f), f).not.toMatch(/red-bag\.css/i);
     }
-    // The thank you wears the same stylesheet, and has no handwriting on it.
+    // The thank you wears the same stylesheet, and has no paper on it.
     expect(thanksTemplate).toContain('href="/assets/css/red-bag.css"');
     expect(tdoc.querySelector(".rb-paper")).toBeNull();
-    for (const f of readdirSync(resolve(ROOT, "assets/css")).filter((x) => x !== "red-bag.css")) {
+    for (const f of readdirSync(resolve(ROOT, "assets/css")).filter((x) => x !== "red-bag.css" && x !== "red-bag-thanks.css")) {
       expect(read(`assets/css/${f}`), f).not.toMatch(/caveat-latin|"Caveat"/i);
     }
     // Asked for early here, so the list is not drawn twice.

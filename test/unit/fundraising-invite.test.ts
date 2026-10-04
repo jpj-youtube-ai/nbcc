@@ -133,7 +133,7 @@ describe("an invite's name", () => {
 });
 
 describe("who is copied in on an invite", () => {
-  // Jaimie 2026-10-03: the member of staff who sends it, so they have a copy.
+  // With one address offered, that address (the two address rule is below).
   it("is the sender's email, tidied", () => {
     expect(inviteCc(" Fern@Example.com ", "morag@example.com")).toBe("fern@example.com");
   });
@@ -148,6 +148,23 @@ describe("who is copied in on an invite", () => {
 
   it("is nobody when the sender is the person invited", () => {
     expect(inviteCc("Morag@Example.com", "morag@example.com")).toBeUndefined();
+  });
+
+  // Jaimie 2026-10-04: the copy goes to whoever the invite is signed by, whoever is signed in. The
+  // person signed in is only the fallback, so a copy is never silently lost.
+  it("is the first address when there is one, whoever else is offered", () => {
+    expect(inviteCc(" Rowan@Example.com ", "morag@example.com", "fern@example.com")).toBe("rowan@example.com");
+  });
+
+  it("falls back to the second address when the first is missing or not a whole address", () => {
+    expect(inviteCc(null, "morag@example.com", " Fern@Example.com ")).toBe("fern@example.com");
+    expect(inviteCc("", "morag@example.com", "fern@example.com")).toBe("fern@example.com");
+    expect(inviteCc("rowan@", "morag@example.com", "fern@example.com")).toBe("fern@example.com");
+    expect(inviteCc(undefined, "morag@example.com", "fern@")).toBeUndefined();
+  });
+
+  it("is nobody when the first address is the person invited: no copy to somebody else instead", () => {
+    expect(inviteCc("Morag@Example.com", "morag@example.com", "fern@example.com")).toBeUndefined();
   });
 });
 

@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-// Jaimie 2026-10-03: the invite from Admin > Fundraising copies in the member of staff who sent it.
+// The invite from Admin > Fundraising copies in whoever it is signed by (Jaimie 2026-10-04).
 // The route chooses who (src/fundraising/invite.ts, inviteCc); this checks the copy reaches SES on
 // the Cc line, and that an invite with no copy goes with no Cc line at all. Every address here is
 // invented.

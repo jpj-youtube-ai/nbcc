@@ -8082,10 +8082,14 @@ its first space until 2026-10-03), their email, an optional personal note (up to
 and **Signed by**, which starts as the person signed in and lists everyone who can sign in to the
 admin, by first name. Send the invite asks first, then emails them (email 7, `fundraiseInvite`)
 from and replying to the events inbox, like every other fundraising email, greeting them by the
-first name typed. The member of staff who sends it (the person signed in, from their admin session,
-not whoever it is signed by) is copied in on the email (Cc), and so is whoever presses Resend; when
-their address is missing, or is the person invited, it goes with no copy and the invite still
-stands. Who was copied in (or `null`) is on the `fundraiser_invite.sent` and `.resent` audit rows.
+first name typed. Whoever it is **signed by** is copied in on the email (Cc), at the address they
+sign in to the admin with, whoever is signed in and sending it (since 2026-10-04; for one day before
+that the copy went to the person signed in). A Resend copies in the same address again: the one
+kept on the invite's `fundraiser_invite.sent` audit row, so an invite sent before the change still
+copies in whoever sent it. The person signed in gets the copy only when the signer has no usable
+address, or no address was kept; when the address is the person invited, it goes with no copy and
+the invite still stands. Who was copied in (or `null`) is on the `fundraiser_invite.sent` and
+`.resent` audit rows, whose actor is always whoever pressed Send or Resend.
 For a while, an admin page loaded before the two boxes can still send one `name`: it is split at its
 first space, and a single word gets `400 { error: "Please refresh the page and try again." }`. Its button opens `/fundraise?invite=<token>`, and the form fills in their first name,
 surname and email exactly as typed, and nothing else (a box they have already typed in is left alone). Below the form,
@@ -8216,7 +8220,7 @@ list against entity `fundraiser`, so it shows in that fundraiser's History).
 | Route | Who | Body | Answer |
 |---|---|---|---|
 | `GET /api/admin/fundraising/team` | view | | `{ today, me, calls: { <id>: { before, after, due, dueWhich } }, prompts: { <id>: "date" \| "finished" }, invites, signers: [{ id, firstName }], inviteWording: { approvals: { invite_memory?: { approvedAt, approvedBy } }, unavailable } }` (each invite carries `type`, or `null`) |
-| `POST /api/admin/fundraising/invites` | edit | `{ firstName, lastName, email, note?, signedBy: <user id>, type?: "raising" \| "team" \| "event" \| "memory" }` | `201 { invite, emailed }`, the sender copied in; `400` with `fields` (`firstName`, `lastName`, `type`, ...); `409` for an in memory invite whose wording is waiting for sign off; `429` after 50 in a day |
+| `POST /api/admin/fundraising/invites` | edit | `{ firstName, lastName, email, note?, signedBy: <user id>, type?: "raising" \| "team" \| "event" \| "memory" }` | `201 { invite, emailed }`, the signer copied in; `400` with `fields` (`firstName`, `lastName`, `type`, ...); `409` for an in memory invite whose wording is waiting for sign off; `429` after 50 in a day |
 | `POST /api/admin/fundraising/invites/:id/resend` | edit | | `{ invite, emailed }`, the type kept; `404` once taken up or removed; `409` for an in memory invite whose wording is waiting for sign off |
 | `GET /api/admin/fundraising/invite-wording/:type?signedBy=<user id>` | view | | `{ type, label, subject, html, text, wordingKey: "invite_memory" \| null, approval, approvalsUnavailable }`: that type's invite email as an example, signed by that signer (or by whoever is reading it when none is given); `400` with `fields.signedBy` for a signer who is not on the team; `404` for a type that is not one |
 | `POST /api/admin/fundraising/invite-wording/:key/approval` | admin | | `{ approval }`; only `invite_memory`, `404` otherwise |

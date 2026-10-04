@@ -179,16 +179,21 @@ export function invitePrefill(row: {
 
 const WHOLE_EMAIL = z.string().email();
 
+const wholeAddress = (email: string | null | undefined): string | undefined => {
+  const tidy = String(email ?? "").trim().toLowerCase();
+  return tidy && WHOLE_EMAIL.safeParse(tidy).success ? tidy : undefined;
+};
+
 /**
- * Who is copied in on an invite (Jaimie 2026-10-03): the member of staff who sends it, from the
- * admin session, so they have a copy. Not whoever it is signed by, unless that is them. Nobody when
- * their email is missing or not one whole address, or is the person invited, so the invite always
- * goes.
+ * Who is copied in on an invite (Jaimie 2026-10-04): whoever it is signed by, whoever is signed in,
+ * so the person the email is from has the copy. `email` is their address; `fallback` is the person
+ * signed in, used only when `email` is missing or not one whole address, so a copy is never
+ * silently lost. Nobody when neither is a whole address, or when the one chosen is the person
+ * invited, so the invite always goes.
  */
-export function inviteCc(senderEmail: string | null | undefined, recipient: string): string | undefined {
-  const cc = String(senderEmail ?? "").trim().toLowerCase();
-  if (!cc || !WHOLE_EMAIL.safeParse(cc).success) return undefined;
-  if (cc === String(recipient).trim().toLowerCase()) return undefined;
+export function inviteCc(email: string | null | undefined, recipient: string, fallback?: string | null): string | undefined {
+  const cc = wholeAddress(email) ?? wholeAddress(fallback);
+  if (!cc || cc === String(recipient).trim().toLowerCase()) return undefined;
   return cc;
 }
 

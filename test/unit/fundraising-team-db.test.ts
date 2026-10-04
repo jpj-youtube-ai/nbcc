@@ -14,6 +14,7 @@ import {
   countRecentInvites,
   createInvite,
   findInviteByHash,
+  getSigner,
   getSummarySettings,
   listFundraiserCalls,
   listOpenInvites,
@@ -184,12 +185,36 @@ describe("invites", () => {
     expect(audits(calls)[0][4]).toEqual({ email: "alex@example.com", signedBy: "Fern", cc: null });
   });
 
-  it("records who was copied in on a resend: the person resending, never the person invited", async () => {
-    let calls = useClient((sql) => (/UPDATE fundraiser_invites/.test(sql) ? { rows: [inviteRow()] } : undefined));
-    await resendInvite(4, "n".repeat(64), "admin:rowan@example.com", "Rowan@Example.com");
-    expect(audits(calls)[0][4]).toEqual({ email: "alex@example.com", cc: "rowan@example.com" });
-    calls = useClient((sql) => (/UPDATE fundraiser_invites/.test(sql) ? { rows: [inviteRow()] } : undefined));
-    await resendInvite(4, "n".repeat(64), "admin:alex@example.com", "alex@example.com");
+  // Jaimie 2026-10-04: a resend copies in whoever was copied in when it was sent (the address on its
+  // `fundraiser_invite.sent` record): the signer for an invite sent since, and for one sent before,
+  // whoever sent it. The record of the resend still names who pressed Resend as its actor.
+  const KEPT = /SELECT data->>'cc' AS cc FROM audit_log/;
+  const resendWith = (kept: unknown[]) =>
+    useClient((sql) => (/UPDATE fundraiser_invites/.test(sql) ? { rows: [inviteRow()] } : KEPT.test(sql) ? { rows: kept } : undefined));
+
+  it("copies in on a resend whoever was copied in when it was sent, whoever resends it", async () => {
+    const calls = resendWith([{ cc: "fern@example.com" }]);
+    const inv = await resendInvite(4, "n".repeat(64), "admin:rowan@example.com", "rowan@example.com");
+    expect(inv.cc).toBe("fern@example.com");
+    const read = sqlIn(calls, KEPT)!;
+    expect(read[0]).toMatch(/action = 'fundraiser_invite\.sent'/);
+    expect(read[0]).toMatch(/entity = 'fundraiser_invite' AND entity_id = \$1/);
+    expect(read[1]).toEqual([4]);
+    const audit = audits(calls)[0];
+    expect(audit[0]).toBe("admin:rowan@example.com");
+    expect(audit[4]).toEqual({ email: "alex@example.com", cc: "fern@example.com" });
+  });
+
+  it("falls back on a resend to the person resending when no address was kept, never the person invited", async () => {
+    for (const kept of [[], [{ cc: null }], [{ cc: "fern@" }]]) {
+      const calls = resendWith(kept);
+      const inv = await resendInvite(4, "n".repeat(64), "admin:rowan@example.com", "Rowan@Example.com");
+      expect(inv.cc).toBe("rowan@example.com");
+      expect(audits(calls)[0][4]).toEqual({ email: "alex@example.com", cc: "rowan@example.com" });
+    }
+    const calls = resendWith([]);
+    const inv = await resendInvite(4, "n".repeat(64), "admin:alex@example.com", "alex@example.com");
+    expect(inv.cc).toBeNull();
     expect(audits(calls)[0][4]).toEqual({ email: "alex@example.com", cc: null });
   });
 
@@ -285,6 +310,16 @@ describe("invites", () => {
       { id: 5, firstName: "Rowan" },
     ]);
     expect(String(query.mock.calls[0][0])).toMatch(/status <> 'disabled'/);
+  });
+
+  // Their address is for the copy of the invite only: the list the page gets (above) never has it.
+  it("finds one signer with their own email address, never anyone disabled", async () => {
+    query.mockResolvedValueOnce({ rows: [{ id: 5, full_name: "", email: "rowan.test@example.com" }] });
+    expect(await getSigner(5)).toEqual({ id: 5, firstName: "Rowan", email: "rowan.test@example.com" });
+    expect(String(query.mock.calls[0][0])).toMatch(/status <> 'disabled'/);
+    expect(query.mock.calls[0][1]).toEqual([5]);
+    query.mockResolvedValueOnce({ rows: [] });
+    expect(await getSigner(6)).toBeNull();
   });
 });
 

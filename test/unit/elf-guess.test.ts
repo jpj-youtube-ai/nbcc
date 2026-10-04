@@ -42,12 +42,31 @@ describe("locking in a guess", () => {
 });
 
 describe("cracking the case", () => {
-  it("counts a guess that names the door's real place", () => {
-    expect(cracked("cinema", "cinema")).toBe(true);
+  const OPENED = new Date("2026-12-07T17:47:00.000Z");
+  const BEFORE = new Date("2026-12-07T17:40:00.000Z");
+  const open = { state: "found", placeId: "cinema", openedAt: OPENED } as const;
+
+  it("counts a guess saved before the door opened that names the door's real place", () => {
+    expect(cracked(open, { placeId: "cinema", at: BEFORE })).toBe(true);
+    expect(cracked({ ...open, state: "revealed" }, { placeId: "cinema", at: BEFORE })).toBe(true);
   });
 
   it("does not count a wrong guess, or no guess at all", () => {
-    expect(cracked("bakery", "cinema")).toBe(false);
-    expect(cracked(null, "cinema")).toBe(false);
+    expect(cracked(open, { placeId: "bakery", at: BEFORE })).toBe(false);
+    expect(cracked(open, null)).toBe(false);
+  });
+
+  it("never says yes while the elf is still hidden, so a screen cannot confirm a guess early", () => {
+    expect(cracked({ state: "hunting", placeId: "cinema", openedAt: null }, { placeId: "cinema", at: BEFORE })).toBe(false);
+    expect(cracked({ state: "shut", placeId: "cinema", openedAt: null }, { placeId: "cinema", at: BEFORE })).toBe(false);
+  });
+
+  it("does not count a guess saved at or after the moment the door opened", () => {
+    expect(cracked(open, { placeId: "cinema", at: OPENED })).toBe(false);
+    expect(cracked(open, { placeId: "cinema", at: new Date("2026-12-07T17:50:00.000Z") })).toBe(false);
+  });
+
+  it("does not count anything for an open door with no opening moment", () => {
+    expect(cracked({ ...open, openedAt: null }, { placeId: "cinema", at: BEFORE })).toBe(false);
   });
 });

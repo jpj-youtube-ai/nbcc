@@ -10,8 +10,8 @@ import { londonToInstant } from "../tickets/model";
 // One rule about bad input, for the whole file. A `Door` can only be had by checking a number with
 // `isDoor`, or by writing a number from 1 to 24 in the code, so the functions that take a `Door`
 // trust it. The functions that take whatever arrived from a form, an address or a settings row
-// (`isDoor`, `isClockTime`, `doorOn`, `clueTimeFor`, `doorInstant`) check it, and answer null or the
-// usual time, never a made up date.
+// (`isDoor`, `isClockTime`, `doorOn`, `clueTimeFor`, `doorInstant`, `closingInstant`) check it, and
+// answer null or the usual time, never a made up date.
 //
 // Pure: no pool, no config, no clock (times are passed in). Unit tested in
 // test/unit/elf-calendar.test.ts.
@@ -87,11 +87,38 @@ export function clueTimeFor(season: ElfSeason, door: Door, staffTime: string | n
 }
 
 /**
- * The moment a London clock time happens on a door's day. It is how a clue time, and the time a
- * place closes, become a moment to compare with now. Null if the door or the time is not real.
+ * The moment a London clock time happens on a door's day. It is how a clue time becomes a moment to
+ * compare with now. For the time a place closes use `closingInstant`, which knows that a place can
+ * close after midnight. Null if the door or the time is not real.
  */
 export function doorInstant(season: Pick<ElfSeason, "year">, door: number, time: string): Date | null {
   if (!isDoor(door) || !isClockTime(time)) return null;
   const iso = londonToInstant(`${doorDate(season, door)}T${time.slice(0, 5)}`);
   return iso ? new Date(iso) : null;
+}
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * The moment a door's place closes, which is when an unfound elf's place is shown. `clueTime` is the
+ * door's clue time and `closingTime` is the time staff gave for the place.
+ *
+ * A closing time that is not after the clue cannot mean that day: the place is open past midnight,
+ * or it shut before the clue came out and the hunt carries on when it opens again. Either way it is
+ * taken as that time on the next day. A place with no closing time, or one that is not a real time,
+ * closes at midnight at the end of the door's day. Null if the door or its clue time is not real.
+ */
+export function closingInstant(
+  season: Pick<ElfSeason, "year">,
+  door: number,
+  clueTime: string,
+  closingTime: string | null | undefined,
+): Date | null {
+  const clue = doorInstant(season, door, clueTime);
+  const dayStart = doorInstant(season, door, "00:00");
+  if (!clue || !dayStart) return null;
+  const close = isClockTime(closingTime) ? doorInstant(season, door, closingTime) : null;
+  // December has no clock change, so a day later is the same time on the clock.
+  if (!close) return new Date(dayStart.getTime() + DAY_MS);
+  return close.getTime() > clue.getTime() ? close : new Date(close.getTime() + DAY_MS);
 }

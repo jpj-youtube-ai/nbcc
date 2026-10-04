@@ -3,8 +3,12 @@
 //
 // A stamp needs proof of being there, because every business keeps its poster up all month and a
 // photo of it could be passed round online. The phone's position is checked once against the place
-// and then thrown away: nothing about where anyone is gets stored. Phones are often vague indoors,
-// so the phone's own estimate of how rough its position is widens the allowance, up to a cap.
+// and then thrown away: nothing about where anyone is gets stored.
+//
+// A phone also says how sure it is of its position. That figure is deliberately not used. The phone
+// supplies it, so trusting it would let a phone that claims to be unsure check in from across town,
+// and would undo a tighter distance set by staff. A phone that cannot get a good fix sends a photo
+// instead.
 //
 // Pure: no pool, no config, no clock. Unit tested in test/unit/elf-distance.test.ts.
 
@@ -17,9 +21,6 @@ const EARTH_RADIUS_METRES = 6_371_000;
 
 /** How close counts as being there. */
 export const NEAR_METRES = 300;
-
-/** The most a phone's own uncertainty can add to that. */
-export const MAX_ACCURACY_ALLOWANCE_METRES = 500;
 
 /** Is this a real position: two finite numbers within the globe? */
 export function isLatLng(value: unknown): value is LatLng {
@@ -45,12 +46,7 @@ export function metresBetween(a: LatLng, b: LatLng): number {
   return 2 * EARTH_RADIUS_METRES * Math.asin(Math.min(1, Math.sqrt(h)));
 }
 
-/** Is the phone near the place? Within the radius, widened by the phone's own uncertainty up to the cap. */
-export function isNear(
-  place: LatLng,
-  phone: LatLng & { accuracyMetres?: number },
-  radiusMetres: number = NEAR_METRES,
-): boolean {
-  const allowance = Math.min(Math.max(phone.accuracyMetres ?? 0, 0), MAX_ACCURACY_ALLOWANCE_METRES);
-  return metresBetween(place, phone) <= radiusMetres + allowance;
+/** Is the phone near the place? Only a real position within the radius counts. */
+export function isNear(place: LatLng, phone: LatLng, radiusMetres: number = NEAR_METRES): boolean {
+  return isLatLng(place) && isLatLng(phone) && metresBetween(place, phone) <= radiusMetres;
 }

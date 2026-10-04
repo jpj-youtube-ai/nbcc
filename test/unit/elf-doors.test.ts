@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { doorState, isClaimable, isOpen, type DoorFacts } from "../../src/elf/doors";
+import { doorState, isClaimable, isOpen, openedAt, type DoorFacts } from "../../src/elf/doors";
 
 // NBCC Elf Detective School: where a door is up to. Pure, checked here without a clock.
 
@@ -31,14 +31,53 @@ describe("where a door is up to", () => {
     expect(doorState(door(), at("2026-12-08T09:00:00.000Z"))).toBe("revealed");
   });
 
-  it("stays hunting overnight when the place has no closing time set", () => {
-    expect(doorState(door({ revealAt: null }), at("2026-12-08T09:00:00.000Z"))).toBe("hunting");
-  });
-
   it("is found, not revealed, once someone claims a revealed elf", () => {
     const late = door({ foundAt: at("2026-12-08T10:15:00.000Z") });
     expect(doorState(late, at("2026-12-08T10:00:00.000Z"))).toBe("revealed");
     expect(doorState(late, at("2026-12-08T10:15:00.000Z"))).toBe("found");
+  });
+
+  it("does not trust a closing time that is not after the clue, and reveals a day after the clue instead", () => {
+    const odd = door({ revealAt: at("2026-12-07T16:00:00.000Z") });
+    expect(doorState(odd, CLUE)).toBe("hunting");
+    expect(doorState(odd, at("2026-12-08T17:29:59.000Z"))).toBe("hunting");
+    expect(doorState(odd, at("2026-12-08T17:30:00.000Z"))).toBe("revealed");
+    expect(doorState(door({ revealAt: CLUE }), CLUE)).toBe("hunting");
+  });
+
+  it("stays shut when its clue time is not a real date", () => {
+    const broken = door({ clueAt: new Date(Number.NaN) });
+    expect(doorState(broken, at("2026-12-07T18:00:00.000Z"))).toBe("shut");
+    expect(doorState(broken, at("2026-12-20T18:00:00.000Z"))).toBe("shut");
+  });
+});
+
+describe("the moment a door opened", () => {
+  it("is nothing while the door is shut or the elf is still hunted", () => {
+    expect(openedAt(door(), at("2026-12-07T17:00:00.000Z"))).toBeNull();
+    expect(openedAt(door(), at("2026-12-07T18:00:00.000Z"))).toBeNull();
+  });
+
+  it("is the winning claim when the elf is found before the place closes", () => {
+    const found = door({ foundAt: at("2026-12-07T17:47:00.000Z") });
+    expect(openedAt(found, at("2026-12-07T17:46:00.000Z"))).toBeNull();
+    expect(openedAt(found, at("2026-12-07T19:00:00.000Z"))?.toISOString()).toBe("2026-12-07T17:47:00.000Z");
+    expect(openedAt(found, at("2026-12-20T12:00:00.000Z"))?.toISOString()).toBe("2026-12-07T17:47:00.000Z");
+  });
+
+  it("is the closing time when the place closed with the elf still hiding", () => {
+    expect(openedAt(door(), at("2026-12-08T09:00:00.000Z"))?.toISOString()).toBe("2026-12-07T21:00:00.000Z");
+  });
+
+  it("stays the closing time when a revealed elf is found later", () => {
+    const late = door({ foundAt: at("2026-12-08T10:15:00.000Z") });
+    expect(openedAt(late, at("2026-12-08T11:00:00.000Z"))?.toISOString()).toBe("2026-12-07T21:00:00.000Z");
+  });
+
+  it("is a day after the clue when the closing time is not after the clue", () => {
+    const odd = door({ revealAt: at("2026-12-07T16:00:00.000Z") });
+    expect(openedAt(odd, at("2026-12-08T17:00:00.000Z"))).toBeNull();
+    expect(openedAt(odd, at("2026-12-09T09:00:00.000Z"))?.toISOString()).toBe("2026-12-08T17:30:00.000Z");
   });
 });
 

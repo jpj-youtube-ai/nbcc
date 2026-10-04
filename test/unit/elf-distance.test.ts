@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { MAX_ACCURACY_ALLOWANCE_METRES, NEAR_METRES, isLatLng, isNear, metresBetween } from "../../src/elf/distance";
+import { NEAR_METRES, isLatLng, isNear, metresBetween } from "../../src/elf/distance";
 
 // NBCC Elf Detective School: how far a phone is from a hiding place. The points are invented.
 
@@ -46,22 +46,20 @@ describe("being near a hiding place", () => {
     expect(isNear(PLACE, north(400))).toBe(false);
   });
 
-  it("allows for a phone that says its own position is rough", () => {
-    expect(isNear(PLACE, { ...north(400), accuracyMetres: 150 })).toBe(true);
-    expect(isNear(PLACE, { ...north(400), accuracyMetres: 50 })).toBe(false);
-  });
-
-  it("caps that allowance, so a wildly unsure phone cannot check in from across town", () => {
-    expect(MAX_ACCURACY_ALLOWANCE_METRES).toBe(500);
-    expect(isNear(PLACE, { ...north(700), accuracyMetres: 5000 })).toBe(true);
-    expect(isNear(PLACE, { ...north(900), accuracyMetres: 5000 })).toBe(false);
-  });
-
-  it("ignores a negative accuracy", () => {
-    expect(isNear(PLACE, { ...north(400), accuracyMetres: -200 })).toBe(false);
-  });
-
-  it("uses the distance staff have set", () => {
+  it("uses the distance staff have set, wider or tighter", () => {
     expect(isNear(PLACE, north(400), 500)).toBe(true);
+    expect(isNear(PLACE, north(15), 20)).toBe(true);
+    expect(isNear(PLACE, north(50), 20)).toBe(false);
+  });
+
+  it("takes no notice of how unsure the phone says it is, because the phone supplies that figure", () => {
+    const unsure = (metres: number) => ({ ...north(metres), accuracyMetres: 5000 });
+    expect(isNear(PLACE, unsure(400))).toBe(false);
+    expect(isNear(PLACE, unsure(50), 20)).toBe(false);
+  });
+
+  it("does not count a position that is not on the globe", () => {
+    expect(isNear(PLACE, { lat: PLACE.lat + 360, lng: PLACE.lng })).toBe(false);
+    expect(isNear(PLACE, { lat: Number.NaN, lng: PLACE.lng })).toBe(false);
   });
 });

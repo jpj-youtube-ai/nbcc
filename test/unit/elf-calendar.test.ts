@@ -3,6 +3,7 @@ import {
   DOOR_COUNT,
   DEFAULT_MORNING_CLUE_TIME,
   DEFAULT_SCHOOL_CLUE_TIME,
+  closingInstant,
   clueTimeFor,
   dayKind,
   defaultClueTime,
@@ -146,5 +147,33 @@ describe("the moment a London time happens on a door's day", () => {
     expect(doorInstant(SEASON, 7, "")).toBeNull();
     expect(doorInstant(SEASON, 25, "10:00")).toBeNull();
     expect(doorInstant(SEASON, 0, "10:00")).toBeNull();
+  });
+});
+
+describe("the moment a door's place closes", () => {
+  it("is the closing time on the door's day when that is after the clue", () => {
+    expect(closingInstant(SEASON, 7, "17:30", "21:00")?.toISOString()).toBe("2026-12-07T21:00:00.000Z");
+    expect(closingInstant(SEASON, 5, "10:00", "17:00:00")?.toISOString()).toBe("2026-12-05T17:00:00.000Z");
+  });
+
+  it("is the next day for a place that is open past midnight", () => {
+    expect(closingInstant(SEASON, 7, "17:30", "01:00")?.toISOString()).toBe("2026-12-08T01:00:00.000Z");
+    expect(closingInstant(SEASON, 24, "10:00", "00:30")?.toISOString()).toBe("2026-12-25T00:30:00.000Z");
+  });
+
+  it("is the next day for a place that shut before the clue came out, so the hunt carries on when it opens again", () => {
+    expect(closingInstant(SEASON, 7, "17:30", "17:00")?.toISOString()).toBe("2026-12-08T17:00:00.000Z");
+    expect(closingInstant(SEASON, 7, "17:30", "17:30")?.toISOString()).toBe("2026-12-08T17:30:00.000Z");
+  });
+
+  it("is midnight at the end of the door's day when no closing time is set, or it is not a real time", () => {
+    expect(closingInstant(SEASON, 7, "17:30", null)?.toISOString()).toBe("2026-12-08T00:00:00.000Z");
+    expect(closingInstant(SEASON, 7, "17:30", undefined)?.toISOString()).toBe("2026-12-08T00:00:00.000Z");
+    expect(closingInstant(SEASON, 7, "17:30", "late")?.toISOString()).toBe("2026-12-08T00:00:00.000Z");
+  });
+
+  it("is nothing when the door or its clue time is not real", () => {
+    expect(closingInstant(SEASON, 25, "17:30", "21:00")).toBeNull();
+    expect(closingInstant(SEASON, 7, "teatime", "21:00")).toBeNull();
   });
 });

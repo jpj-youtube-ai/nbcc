@@ -33,7 +33,7 @@ export interface StampAttempt {
   /** The detectives who are there. */
   detectiveIds: readonly string[];
   /** The phone's position if it was shared, checked here and never kept. */
-  location: (LatLng & { accuracyMetres?: number }) | null;
+  location: LatLng | null;
   /** Was a photo taken at the place sent with it? */
   hasPhoto: boolean;
 }

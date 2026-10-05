@@ -94,15 +94,15 @@ describe("what a list may hold", () => {
     const cases: Array<[string, string]> = [
       ["A toy that will last", 'Say "could", never "will": these are examples, not promises.'],
       ["Buy a toy", 'Leave out "buy", "buys" and "bought": nothing is bought item by item.'],
-      ["Toy — wooden", "Use a comma or a full stop, not a long dash."],
-      ["Toy – wooden", "Use a comma or a full stop, not a long dash."],
+      ["Toy \u2014 wooden", "Use a comma or a full stop, not a long dash."],
+      ["Toy \u2013 wooden", "Use a comma or a full stop, not a long dash."],
     ];
     for (const [name, message] of cases) {
       const list = original();
       item(list, "toy").name = name;
       expect(problems(list), name).toEqual([message]);
     }
-    for (const words of ["could help and will buy a coat", "could help buy a coat", "could help with what a family bought", "could help — with a coat"]) {
+    for (const words of ["could help and will buy a coat", "could help buy a coat", "could help with what a family bought", "could help \u2014 with a coat"]) {
       const list = original();
       example(list, "school-35").words = words;
       expect(problems(list).length, words).toBe(1);
@@ -117,7 +117,7 @@ describe("what a list may hold", () => {
     expect(L.wordingProblem("could help with a warm coat")).toBe("");
     expect(L.wordingProblem("this will help")).toMatch(/never "will"/);
     expect(L.wordingProblem("it buys a coat")).toMatch(/Leave out "buy"/);
-    expect(L.wordingProblem("a coat — warm")).toMatch(/long dash/);
+    expect(L.wordingProblem("a coat \u2014 warm")).toMatch(/long dash/);
     // Every word the public page already says passes them.
     for (const i of rb.items()) expect(L.wordingProblem(i.name), i.name).toBe("");
     for (const e of rb.examples()) expect(L.wordingProblem(e.words), e.words).toBe("");
@@ -301,7 +301,7 @@ describe("what differs between the website's list and the draft", () => {
   it("says a changed price as old then new", () => {
     const d = original();
     item(d, "toy").pence = 1200;
-    expect(lines(d)).toEqual(["Toy £15 → £12"]);
+    expect(lines(d)).toEqual(["Toy £15 \u2192 £12"]);
   });
 
   it("says a new item with its price", () => {
@@ -330,7 +330,7 @@ describe("what differs between the website's list and the draft", () => {
     const at = d.items.findIndex((i) => i.key === "socks");
     const [socks] = d.items.splice(at, 1);
     d.items.splice(d.items.findIndex((i) => i.key === "pyjamas"), 0, socks);
-    expect(lines(d)).toEqual(["Renamed: Toy → Wooden toy", "Picture changed: Book", "Order changed: Clothing"]);
+    expect(lines(d)).toEqual(["Renamed: Toy \u2192 Wooden toy", "Picture changed: Book", "Order changed: Clothing"]);
   });
 
   it("does not call it a new order when an item only joins or leaves a heading", () => {
@@ -350,7 +350,7 @@ describe("what differs between the website's list and the draft", () => {
     const d = original();
     example(d, "crisis-30").pence = 3500;
     example(d, "crisis-30").words = "could help with warm bedding for a child";
-    expect(lines(d)).toEqual(["Example changed: £30 could help with fresh bedding for a child → £35 could help with warm bedding for a child"]);
+    expect(lines(d)).toEqual(["Example changed: £30 could help with fresh bedding for a child \u2192 £35 could help with warm bedding for a child"]);
   });
 
   it("says a new, hidden, shown again, removed, re-pictured and re-ordered example", () => {
@@ -378,7 +378,7 @@ describe("what differs between the website's list and the draft", () => {
 
   it("sums them up in one line for the history", () => {
     expect(L.summary([])).toBe("No changes");
-    expect(L.summary([{ kind: "price", text: "Toy £15 → £12" }])).toBe("Toy £15 → £12");
+    expect(L.summary([{ kind: "price", text: "Toy £15 \u2192 £12" }])).toBe("Toy £15 \u2192 £12");
     const four = ["a", "b", "c", "d"].map((text) => ({ kind: "x", text }));
     expect(L.summary(four)).toBe("a; b; c; and 1 more");
   });

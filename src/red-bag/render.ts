@@ -3,6 +3,7 @@ import { ALL_DONATIONS_WORDING, SINGLE_DONATION_WORDING } from "../declarations/
 import { BLOCKED_NAME_LISTS } from "../donors/display-name-filter";
 import { MATERIALS_STATEMENT } from "../legal/registration";
 import { redBag, type RedBagCatalogue } from "./catalogue";
+import { redBagList, type RedBagList, type RedBagListForPage } from "./list";
 
 // Fill a Red Bag: the parts of the page the server draws into fill-a-red-bag.html, where its
 // markers are. The list and the themes come from the one catalogue (./catalogue.ts), so they are in
@@ -34,6 +35,15 @@ const PHONE = '<a href="tel:+441292811015">01292 811 015</a>';
 
 /** What staff see across the top while the page is switched off. Plain on purpose. */
 export const PREVIEW_STRIP = '<p class="rb-preview" role="note">Staff preview: not public yet</p>';
+
+/** What staff see across the top of the page drawn from the DRAFT list (Admin > Fill a Red Bag). */
+export const DRAFT_STRIP = '<p class="rb-preview" role="note">Draft preview: not on the website yet</p>';
+/** What Donate says in a draft preview, and what stands where the details form would be. */
+export const DRAFT_OFF_WORDS = "This is a preview. Giving is switched off here.";
+
+/** The id of the block of data a published list is drawn into the page as (the catalogue's LIST_DATA_ID). */
+export const LIST_DATA_ID = "rb-list-data";
+const CATALOGUE_SCRIPT = '<script defer src="/assets/js/red-bag-catalogue.js"></script>';
 
 const escapeHtml = (s: string): string =>
   s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
@@ -80,14 +90,15 @@ export function postcodePattern(): string {
 }
 
 /** The list on the paper: the sheet's headings, and a row for each item with its stepper. */
-export function renderRedBagList(rb: RedBagCatalogue = redBag()): string {
+export function renderRedBagList(rb: RedBagListView = redBag()): string {
   return rb.GROUPS.map((g) => {
     const rows = g.items
       .map((i) => {
         const name = escapeHtml(i.name);
-        const id = `rb-qty-${i.key}`;
+        const key = escapeHtml(i.key);
+        const id = `rb-qty-${key}`;
         return (
-          `<li class="rb-item" data-rb-item="${i.key}" data-pence="${i.pence}">` +
+          `<li class="rb-item" data-rb-item="${key}" data-pence="${i.pence}">` +
           `<span class="rb-item__name">${name}</span>` +
           `<span class="rb-item__price">${rb.pounds(i.pence)}</span>` +
           '<span class="rb-stepper">' +
@@ -108,12 +119,12 @@ export function renderRedBagList(rb: RedBagCatalogue = redBag()): string {
 }
 
 /** "Whenever the need comes": three plain groups of examples, each a button that is pressed or not. */
-export function renderRedBagThemes(rb: RedBagCatalogue = redBag()): string {
+export function renderRedBagThemes(rb: RedBagListView = redBag()): string {
   const themes = rb.THEMES.map((t) => {
     const examples = t.examples
       .map(
         (e) =>
-          `<li><button class="rb-example" type="button" data-rb-example="${e.key}" data-pence="${e.pence}" aria-pressed="false">` +
+          `<li><button class="rb-example" type="button" data-rb-example="${escapeHtml(e.key)}" data-pence="${e.pence}" aria-pressed="false">` +
           // A small drawing for the eye only (the one catalogue's, as the list's are): the button's
           // name stays its words.
           rb.art(e.key, "rb-example__icon", 30) +
@@ -222,6 +233,74 @@ export interface RedBagPageOptions {
   preview: boolean;
   /** For tests: the drop off link as it is once live. Defaults to DROP_OFF_LIVE. */
   dropOffLive?: boolean;
+  /**
+   * The list to draw: the one staff published (or, with `draft`, their draft). Null or left out:
+   * the list written in the catalogue, and the page is exactly what it was before staff could edit
+   * it, with nothing added.
+   */
+  list?: RedBagList | null;
+  /**
+   * The draft preview (Admin > Fill a Red Bag > Preview the page): the strip, never indexed, and
+   * GIVING SWITCHED OFF. The details form is not drawn at all, so there is nothing to send a gift
+   * with, and the page's script makes Donate say so (assets/js/red-bag.js).
+   */
+  draft?: boolean;
+}
+
+/** What drawing the list and the themes needs of a catalogue: the built-in one, or a list's view. */
+export type RedBagListView = Pick<RedBagCatalogue, "GROUPS" | "THEMES" | "pounds" | "art">;
+
+/**
+ * A list as the page draws it: what is showing, under the catalogue's own four headings and three
+ * themes (a list cannot rename them). A heading or a theme with nothing showing is left out. Each
+ * item and example is drawn with the picture chosen for it.
+ */
+export function redBagListView(forPage: RedBagListForPage, rb: RedBagCatalogue = redBag()): RedBagListView {
+  const artOf = new Map<string, string>();
+  const GROUPS = rb.BUILT_IN.groups
+    .map((own) => {
+      const items = (forPage.groups.find((g) => g.key === own.key)?.items ?? []).map((i) => {
+        artOf.set(i.key, i.art);
+        return { key: i.key, name: i.name, pence: i.pence };
+      });
+      return { key: own.key, heading: own.heading, items };
+    })
+    .filter((g) => g.items.length > 0);
+  const THEMES = rb.BUILT_IN.themes
+    .map((own) => {
+      const examples = (forPage.themes.find((t) => t.key === own.key)?.examples ?? []).map((e) => {
+        artOf.set(e.key, e.art);
+        return { key: e.key, pence: e.pence, words: e.words };
+      });
+      return { key: own.key, title: own.title, sub: own.sub, examples };
+    })
+    .filter((t) => t.examples.length > 0);
+  return { GROUPS, THEMES, pounds: rb.pounds, art: (key, cls, size) => rb.art(artOf.get(key) ?? key, cls, size) };
+}
+
+/**
+ * The list as a block of data for the catalogue script, which reads it as it starts so its sums
+ * agree with the rows drawn here. Not a script that runs (type application/json), and "<" is
+ * written as its escape so nothing in a name can end the element early.
+ */
+export function renderRedBagListData(forPage: RedBagListForPage): string {
+  const json = JSON.stringify(forPage)
+    .replace(/</g, "\\u003c")
+    .replace(/>/g, "\\u003e")
+    .replace(/&/g, "\\u0026")
+    .replace(/\u2028/g, "\\u2028")
+    .replace(/\u2029/g, "\\u2029");
+  return `<script type="application/json" id="${LIST_DATA_ID}">${json}</script>`;
+}
+
+/** What stands in place of the details form in a draft preview: giving is switched off. */
+export function renderDraftDetails(): string {
+  return (
+    '<div class="card card-lg rb-details">' +
+    '<h2 class="rb-details__title" id="rb-details-title" tabindex="-1">Draft preview</h2>' +
+    `<p class="rb-details__sum">${DRAFT_OFF_WORDS} <button class="rb-link" type="button" data-rb-back>Back to my bag</button></p>` +
+    "</div>"
+  );
 }
 
 /**
@@ -230,10 +309,15 @@ export interface RedBagPageOptions {
  */
 export const NOINDEX_META = '<meta name="robots" content="noindex, nofollow" />';
 
-/** What a staff preview adds to either page: the strip's mark on the body, and never indexed. */
-function markPreview(html: string): string {
-  // The script sends the staff session with the checkout only on a preview (assets/js/red-bag.js).
-  let out = html.replace("<body>", '<body data-rb-preview="true">');
+/**
+ * What a staff preview adds to either page: the strip's mark on the body, and never indexed.
+ * `preview`: the page is switched off and a member of staff is looking; the script then sends their
+ * session with the checkout (assets/js/red-bag.js). `draft`: the page is drawn from the draft list;
+ * the script then switches giving off. A draft is never marked as the first kind unless it is both.
+ */
+function markPreview(html: string, marks: { preview: boolean; draft?: boolean } = { preview: true }): string {
+  const attrs = (marks.preview ? ' data-rb-preview="true"' : "") + (marks.draft ? ' data-rb-draft="true"' : "");
+  let out = html.replace("<body>", `<body${attrs}>`);
   if (!out.includes(NOINDEX_META)) out = out.replace("</head>", `    ${NOINDEX_META}\n  </head>`);
   return out;
 }
@@ -268,14 +352,29 @@ export function renderRedBagThanksPage(template: string, opts: Pick<RedBagPageOp
 
 /** The whole page: the template with every marker filled in. */
 export function renderRedBagPage(template: string, opts: RedBagPageOptions): string {
-  const rb = redBag();
-  const html = template
-    .replace(LIST_MARKER, renderRedBagList(rb))
-    .replace(THEMES_MARKER, renderRedBagThemes(rb))
-    .replace(DETAILS_MARKER, renderRedBagDetails())
+  const catalogue = redBag();
+  // With no list: the catalogue itself, and not one byte of the page differs from before.
+  const forPage = opts.list ? redBagList().toCatalogue(opts.list) : null;
+  const rb: RedBagListView = forPage ? redBagListView(forPage, catalogue) : catalogue;
+  const draft = opts.draft === true;
+  const strip = (opts.preview ? PREVIEW_STRIP : "") + (draft ? DRAFT_STRIP : "");
+  // Functions, not strings: nothing drawn in is ever read as a replacement pattern ("$&").
+  let html = template
+    .replace(LIST_MARKER, () => renderRedBagList(rb))
+    .replace(THEMES_MARKER, () => renderRedBagThemes(rb))
+    .replace(DETAILS_MARKER, () => (draft ? renderDraftDetails() : renderRedBagDetails()))
     .split(BAG_MARKER)
     .join(BAG_SVG)
-    .replace(REAL_MARKER, renderRealThing(opts.dropOffLive ?? DROP_OFF_LIVE))
-    .replace(PREVIEW_MARKER, opts.preview ? PREVIEW_STRIP : "");
-  return opts.preview ? markPreview(html) : html;
+    .replace(REAL_MARKER, () => renderRealThing(opts.dropOffLive ?? DROP_OFF_LIVE))
+    .replace(PREVIEW_MARKER, () => strip);
+  if (forPage) {
+    // The list as data, just before the catalogue script that reads it (or, on a page without that
+    // line, at the end of the body: the script is deferred, so it finds the block either way).
+    const block = renderRedBagListData(forPage);
+    html = html.includes(CATALOGUE_SCRIPT) ? html.replace(CATALOGUE_SCRIPT, () => `${block}\n    ${CATALOGUE_SCRIPT}`) : html.replace("</body>", () => `${block}</body>`);
+    // No example showing at all: the whole "Whenever the need comes" part is put away, not left as
+    // a heading over nothing.
+    if (rb.THEMES.length === 0) html = html.replace('<div class="rb-need" data-rb-need ', '<div class="rb-need" data-rb-need hidden ');
+  }
+  return opts.preview || draft ? markPreview(html, { preview: opts.preview, draft }) : html;
 }

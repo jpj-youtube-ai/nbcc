@@ -40,8 +40,8 @@ const publishedRow = (id: number, data: unknown, over: Record<string, unknown> =
   status: "published",
   data,
   version: 3,
-  summary: "Toy £15 → £12",
-  changes: ["Toy £15 → £12"],
+  summary: "Toy £15 \u2192 £12",
+  changes: ["Toy £15 \u2192 £12"],
   restored_from: null,
   restored_original: false,
   updated_at: "2026-10-05T09:00:00Z",
@@ -373,10 +373,10 @@ describe("publishing", () => {
     const update = calls.find(([sql]) => /^\s*UPDATE red_bag_lists/.test(sql))!;
     expect(update[0]).toMatch(/status = 'published'/);
     expect(update[0]).toMatch(/published_at = now\(\)/);
-    expect(update[1]).toEqual([9, "admin:jodie@nbcc.test", "Jodie Example", "Toy £15 → £12; Hidden: Hat & gloves", JSON.stringify(["Toy £15 → £12", "Hidden: Hat & gloves"])]);
-    expect(v).toMatchObject({ id: 9, publishedByName: "Jodie Example", changes: ["Toy £15 → £12", "Hidden: Hat & gloves"] });
+    expect(update[1]).toEqual([9, "admin:jodie@nbcc.test", "Jodie Example", "Toy £15 \u2192 £12; Hidden: Hat & gloves", JSON.stringify(["Toy £15 \u2192 £12", "Hidden: Hat & gloves"])]);
+    expect(v).toMatchObject({ id: 9, publishedByName: "Jodie Example", changes: ["Toy £15 \u2192 £12", "Hidden: Hat & gloves"] });
     expect(audits(calls)).toEqual([
-      ["admin:jodie@nbcc.test", "red_bag.list_published", "red_bag_list", 9, { summary: "Toy £15 → £12; Hidden: Hat & gloves", changes: ["Toy £15 → £12", "Hidden: Hat & gloves"], replaced: null }],
+      ["admin:jodie@nbcc.test", "red_bag.list_published", "red_bag_list", 9, { summary: "Toy £15 \u2192 £12; Hidden: Hat & gloves", changes: ["Toy £15 \u2192 £12", "Hidden: Hat & gloves"], replaced: null }],
     ]);
     expect(committed(calls)).toBe(true);
   });
@@ -385,7 +385,7 @@ describe("publishing", () => {
     const { calls } = publishing(draftRow(edited((l) => (l.items.find((i) => i.key === "toy")!.pence = 1000)), 2), publishedRow(4, edited()));
     query.mockResolvedValue({ rows: [] });
     await publishRedBagDraft(2, WHO);
-    expect(audits(calls)[0][4]).toMatchObject({ changes: ["Toy £12 → £10"], replaced: 4 });
+    expect(audits(calls)[0][4]).toMatchObject({ changes: ["Toy £12 \u2192 £10"], replaced: 4 });
   });
 
   it("has this server read the list again at once, so the page shows it", async () => {
@@ -449,7 +449,7 @@ describe("throwing the draft away", () => {
     const del = calls.find(([sql]) => /^\s*DELETE FROM red_bag_lists/.test(sql))!;
     expect(del[0]).toMatch(/status = 'draft'/);
     expect(del[1]).toEqual([9]);
-    expect(audits(calls)).toEqual([["admin:jodie@nbcc.test", "red_bag.draft_thrown_away", "red_bag_list", 9, { summary: "Toy £15 → £12", changes: ["Toy £15 → £12"] }]]);
+    expect(audits(calls)).toEqual([["admin:jodie@nbcc.test", "red_bag.draft_thrown_away", "red_bag_list", 9, { summary: "Toy £15 \u2192 £12", changes: ["Toy £15 \u2192 £12"] }]]);
     expect(committed(calls)).toBe(true);
   });
 

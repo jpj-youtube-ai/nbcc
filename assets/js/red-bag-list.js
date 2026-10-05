@@ -183,7 +183,7 @@
     var t = String(text === undefined || text === null ? "" : text);
     if (/\bwill\b/i.test(t)) return MESSAGES.will;
     if (/\b(buy|buys|buying|bought)\b/i.test(t)) return MESSAGES.buy;
-    if (/[–—]/.test(t)) return MESSAGES.dash;
+    if (/[\u2013\u2014]/.test(t)) return MESSAGES.dash;
     return "";
   }
   function isPlain(text) {
@@ -326,7 +326,7 @@
     return RB.pounds(e.pence) + " " + e.words;
   }
 
-  var ARROW = " → ";
+  var ARROW = " \u2192 ";
 
   function byKey(list) {
     var map = {};

@@ -11,6 +11,7 @@ import vm from "node:vm";
 const ROOT = resolve(__dirname, "../..");
 const SOURCE = readFileSync(resolve(ROOT, "assets/js/red-bag-catalogue.js"), "utf8");
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Rb = Record<string, any>;
 
 /** Run the script as a page would: `block` is the text of the data block, or undefined for none. */

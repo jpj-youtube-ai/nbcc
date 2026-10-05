@@ -91,7 +91,8 @@ async function sendAndLog(
 ): Promise<void> {
   const msg = links ? withTrackedLinks(original, links) : original;
   // One audit row per person the message went to: almost always just `to`, but the Festive Ball
-  // ticket report (TASK-464) is one message to a small group, and the log lists each of them.
+  // ticket report (TASK-464) and the Monday fundraising summary are each one message to a small
+  // group, and the log lists each of them.
   const everyone = [msg.to, ...(msg.alsoTo ?? [])];
   const logEach = async (error: string | null, messageId: string | null = null) => {
     for (const to of everyone) await logAttempt(kind, to, name, logSubject ?? msg.subject, error, messageId);
@@ -601,10 +602,28 @@ export async function sendFundraiseInvite(name: string, message: FundraiseEmailM
   await sendVerbatim("fundraiseInvite", name, message);
 }
 
-// TASK-503: the Monday summary (email 11), one email to each person chosen in the admin. Staff only,
-// so never tagged.
-export async function sendFundraiseSummary(message: FundraiseEmailMessage): Promise<void> {
-  await sendVerbatim("fundraiseSummary", null, message);
+// TASK-503: the Monday summary (email 11). Staff only, so never tagged.
+//
+// ONE message with everyone on the To line (`email` first, then `alsoTo`), so Reply all reaches the
+// whole team (Jaimie, 2026-10-05), exactly as the Festive Ball ticket report above does it: the same
+// `alsoTo` on the SES message, and so the same email log, one row for each person, all carrying the
+// one SES message id (a bounce or delivery event finds its own row by that id and the address,
+// src/db/email-log.ts). It is the only fundraising email that takes `alsoTo`; every other kind
+// still goes to one person through sendVerbatim. The runner (src/fundraising/summary-runner.ts)
+// only ever puts nbcc.scot addresses on it, and a test from the admin has no `alsoTo` at all.
+export type FundraiseSummaryMessage = FundraiseEmailMessage & { alsoTo?: string[] };
+
+export async function sendFundraiseSummary(message: FundraiseSummaryMessage): Promise<void> {
+  await sendAndLog("fundraiseSummary", null, {
+    to: message.email,
+    ...(message.alsoTo?.length ? { alsoTo: message.alsoTo } : {}),
+    from: message.from,
+    replyTo: message.replyTo,
+    subject: message.subject,
+    html: message.html,
+    text: message.text,
+    configurationSet: config.SES_TRANSACTIONAL_CONFIGURATION_SET || undefined,
+  });
 }
 
 // TASK-507: email 20, an organiser's thank you passed on to a giver once staff have checked it. From

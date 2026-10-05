@@ -6,6 +6,9 @@ import {
   summaryDue,
   summaryLines,
   summaryRecipientsSchema,
+  isSummaryAddress,
+  summaryOutsiderAdded,
+  SUMMARY_DOMAIN_REFUSAL,
   type SummaryFundraiser,
   type SummaryInputs,
 } from "../../src/fundraising/summary";
@@ -519,5 +522,33 @@ describe("who it goes to", () => {
     expect(summaryRecipientsSchema.safeParse(["fern@"]).success).toBe(false);
     expect(summaryRecipientsSchema.safeParse(Array.from({ length: 11 }, (_, i) => `p${i}@example.com`)).success).toBe(false);
     expect(summaryRecipientsSchema.safeParse([]).success).toBe(true);
+  });
+});
+
+// The summary is one email to the whole team, so only the charity's own addresses may be on it.
+describe("only nbcc.scot addresses get it", () => {
+  it("knows an nbcc.scot address, whatever its capitals", () => {
+    expect(isSummaryAddress("fern@nbcc.scot")).toBe(true);
+    expect(isSummaryAddress(" Fern@NBCC.Scot ")).toBe(true);
+  });
+
+  it("refuses every other domain, a subdomain included", () => {
+    for (const e of ["fern@example.com", "fern@news.nbcc.scot", "fern@nbcc.scot.example.com", "fern@notnbcc.scot", "fern@nbcc.scot@example.com", "nbcc.scot", "@nbcc.scot", ""]) {
+      expect(isSummaryAddress(e), e).toBe(false);
+    }
+  });
+
+  it("says so in plain words", () => {
+    expect(SUMMARY_DOMAIN_REFUSAL).toBe("Only nbcc.scot addresses can get the weekly summary.");
+  });
+
+  it("finds the first address from elsewhere that is being added", () => {
+    expect(summaryOutsiderAdded(["fern@nbcc.scot", "rowan@nbcc.scot"], [])).toBe(-1);
+    expect(summaryOutsiderAdded(["fern@nbcc.scot", "rowan@example.com"], [])).toBe(1);
+  });
+
+  it("lets an old address from elsewhere stay until it is removed, so the rest of the list can still be changed", () => {
+    expect(summaryOutsiderAdded(["fern@nbcc.scot", "old@example.com"], ["old@example.com", "older@example.com"])).toBe(-1);
+    expect(summaryOutsiderAdded(["new@example.com", "old@example.com"], ["old@example.com"])).toBe(0);
   });
 });

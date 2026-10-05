@@ -502,3 +502,34 @@ export const summaryRecipientsSchema = z
     });
   })
   .transform((list) => [...list].sort());
+
+// The summary is ONE email with everyone on the To line, so that Reply all reaches the whole team
+// (Jaimie, 2026-10-05). Everyone on it sees everyone else's address and every reply, so only the
+// charity's own addresses may be on it: nbcc.scot exactly, never a subdomain (news.nbcc.scot is the
+// newsletter's send only sender) and never anywhere else.
+//
+// The rule is kept apart from summaryRecipientsSchema on purpose. The stored list is READ through
+// that schema, and a list that fails it reads as nobody: with the rule in there, one old address
+// from elsewhere would silently switch the summary off for everyone. So:
+//   - saving refuses any address from elsewhere that is being ADDED (summaryOutsiderAdded); one
+//     already on the list from before the rule may stay until an admin removes it, so the rest of
+//     the list can still be changed, and the admin screen marks it as left off;
+//   - sending leaves every address from elsewhere off the To line (the runner, isSummaryAddress).
+export const SUMMARY_DOMAIN = "nbcc.scot";
+export const SUMMARY_DOMAIN_REFUSAL = "Only nbcc.scot addresses can get the weekly summary.";
+
+/** Is this an address at nbcc.scot itself? Capitals do not matter; a subdomain does not count. */
+export function isSummaryAddress(email: string): boolean {
+  const e = String(email ?? "").trim().toLowerCase();
+  const at = e.indexOf("@");
+  return at > 0 && at === e.lastIndexOf("@") && e.slice(at + 1) === SUMMARY_DOMAIN;
+}
+
+/**
+ * Where in the list being saved is the first address from elsewhere that is not already stored?
+ * -1 when there is none. Both lists are as the schema tidies them (trimmed, lower case).
+ */
+export function summaryOutsiderAdded(next: string[], stored: string[]): number {
+  const was = new Set(stored);
+  return next.findIndex((e) => !isSummaryAddress(e) && !was.has(e));
+}

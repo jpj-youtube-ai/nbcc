@@ -13334,17 +13334,28 @@
       });
   }
 
+  // The summary is one email with everyone on the To line, so only nbcc.scot addresses get it
+  // (the rule itself: isSummaryAddress in src/fundraising/summary.ts, which the server goes by).
+  function frSummaryGets(email) {
+    return /^[^@]+@nbcc\.scot$/i.test(String(email || "").trim());
+  }
+
   function frRenderSummary() {
     var d = frSummaryData;
-    var n = d.recipients.length;
+    var all = d.recipients.length;
+    // An address from elsewhere, on the list from before the rule, is left off the email.
+    var n = d.recipients.filter(frSummaryGets).length;
     el("frSummary").classList.toggle("is-on", n > 0);
     el("frSummaryState").innerHTML = n
       ? "<b>On.</b> It goes to " + (n === 1 ? "1 person" : n + " people") + " at 8am on Mondays." +
         (d.lastWeek ? " The last one went on " + H.escapeHtml(H.fmtDate(d.lastWeek)) + "." : "")
-      : "<b>Off.</b> Nobody is on the list, so no summary goes.";
-    el("frSummaryList").innerHTML = n
+      : all
+        ? "<b>Off.</b> Nobody on the list has an nbcc.scot address, so no summary goes."
+        : "<b>Off.</b> Nobody is on the list, so no summary goes.";
+    el("frSummaryList").innerHTML = all
       ? d.recipients.map(function (e) {
-          return '<li><span class="fr-people-who">' + H.escapeHtml(e) + "</span>" +
+          return '<li><span class="fr-people-who">' + H.escapeHtml(e) +
+            (frSummaryGets(e) ? "" : '<span class="fr-people-when">Not an nbcc.scot address, so it is left off the email.</span>') + "</span>" +
             '<button class="fr-link-btn" type="button" data-frsummaryremove="' + H.escapeHtml(e) + '" aria-label="' + H.escapeHtml("Remove " + e) + '">Remove</button></li>';
         }).join("")
       : '<li class="fr-people-empty">Nobody on the list yet.</li>';
@@ -13381,6 +13392,7 @@
     var email = String(box.value || "").trim().toLowerCase();
     var list = frSummaryData.recipients.slice();
     if (!FR_EMAIL.test(email)) return frTeamSay("frSummaryStatus", "That isn't a whole email address.", true);
+    if (!frSummaryGets(email)) return frTeamSay("frSummaryStatus", "Only nbcc.scot addresses can get the weekly summary.", true);
     if (list.indexOf(email) !== -1) return frTeamSay("frSummaryStatus", "That address is already on the list.", true);
     if (list.length >= 10) return frTeamSay("frSummaryStatus", "The summary can go to up to 10 people. Remove someone to add another.", true);
     return frSummarySave(list.concat([email]).sort(), "Saved. " + email + " gets the next one.").then(function (ok) {

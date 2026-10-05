@@ -41,7 +41,7 @@ import {
   staffFirstName,
 } from "../fundraising/invite";
 import { CALL_WHICH, callStates, followUpToday, offListPrompt, type CallRecord, type CallStates } from "../fundraising/follow-up";
-import { summaryRecipientsSchema } from "../fundraising/summary";
+import { SUMMARY_DOMAIN_REFUSAL, summaryOutsiderAdded, summaryRecipientsSchema } from "../fundraising/summary";
 import { buildInviteEmail } from "../fundraising/team-emails";
 import { MEMORY_SIGNER, memorySender } from "../fundraising/emails";
 import { sendSummaryTest } from "../fundraising/summary-runner";
@@ -62,7 +62,7 @@ import { sendSummaryTest } from "../fundraising/summary-runner";
 //   POST   /api/admin/fundraisers/:id/off-list             take it off Get involved              edit
 //   POST   /api/admin/fundraisers/:id/on-list              put it back                           edit
 //   GET    /api/admin/fundraising/summary                  who gets the Monday summary           admin
-//   PUT    /api/admin/fundraising/summary                  { recipients: [emails] }              admin
+//   PUT    /api/admin/fundraising/summary                  { recipients: [emails] }, nbcc.scot   admin
 //   POST   /api/admin/fundraising/summary/test             the summary, to the admin asking      admin
 //
 // An invite's token goes only in the email, never back to the page, and only its hash is kept.
@@ -415,6 +415,11 @@ export async function putSummary(req: Request, res: Response): Promise<Response 
     return res.status(400).json({ error: issue?.message ?? "Check the list of email addresses.", path: issue?.path ?? [] });
   }
   try {
+    // nbcc.scot addresses only: the summary is one email with everyone on the To line. An address
+    // from elsewhere already on the list (from before the rule) may stay until it is removed, so
+    // the rest of the list can still be changed; it is left off the email either way.
+    const outsider = summaryOutsiderAdded(list.data, (await getSummarySettings()).recipients);
+    if (outsider !== -1) return res.status(400).json({ error: SUMMARY_DOMAIN_REFUSAL, path: [outsider] });
     await saveSummaryRecipients(list.data, actorOf(claims));
     return res.status(200).json(await getSummarySettings());
   } catch (err) {

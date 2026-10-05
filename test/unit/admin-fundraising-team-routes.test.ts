@@ -435,17 +435,42 @@ describe("the Monday summary's list", () => {
   });
 
   it("is saved tidied, by an admin", async () => {
-    const res = await run(routes.putSummary, { token: tokenFor("admin"), body: { recipients: [" Rowan@Example.com", "fern@example.com"] } });
+    const res = await run(routes.putSummary, { token: tokenFor("admin"), body: { recipients: [" Rowan@NBCC.scot", "fern@nbcc.scot"] } });
     expect(res.statusCode).toBe(200);
-    expect(team.saveSummaryRecipients).toHaveBeenCalledWith(["fern@example.com", "rowan@example.com"], "admin:fern@example.com");
+    expect(team.saveSummaryRecipients).toHaveBeenCalledWith(["fern@nbcc.scot", "rowan@nbcc.scot"], "admin:fern@example.com");
   });
 
   it("refuses an address that is not whole, or one twice", async () => {
-    for (const recipients of [["fern@"], ["fern@example.com", "FERN@example.com"]]) {
+    for (const recipients of [["fern@"], ["fern@nbcc.scot", "FERN@nbcc.scot"]]) {
       const res = await run(routes.putSummary, { token: tokenFor("admin"), body: { recipients } });
       expect(res.statusCode).toBe(400);
     }
     expect((await run(routes.putSummary, { token: tokenFor("admin"), body: { recipients: [], extra: 1 } })).statusCode).toBe(400);
+    expect(team.saveSummaryRecipients).not.toHaveBeenCalled();
+  });
+
+  it("refuses an address that is not nbcc.scot, a subdomain included, and says why", async () => {
+    for (const outsider of ["rowan@example.org", "rowan@news.nbcc.scot", "rowan@nbcc.scot.example.org"]) {
+      const res = await run(routes.putSummary, { token: tokenFor("admin"), body: { recipients: ["fern@nbcc.scot", outsider] } });
+      expect(res.statusCode, outsider).toBe(400);
+      expect(res.body).toEqual({ error: "Only nbcc.scot addresses can get the weekly summary.", path: [1] });
+    }
+    expect(team.saveSummaryRecipients).not.toHaveBeenCalled();
+  });
+
+  it("lets an old address from elsewhere stay while the list is changed, and be removed", async () => {
+    // The stored list (from before the rule) is fern@example.com.
+    let res = await run(routes.putSummary, { token: tokenFor("admin"), body: { recipients: ["fern@example.com", "rowan@nbcc.scot"] } });
+    expect(res.statusCode).toBe(200);
+    expect(team.saveSummaryRecipients).toHaveBeenLastCalledWith(["fern@example.com", "rowan@nbcc.scot"], "admin:fern@example.com");
+    res = await run(routes.putSummary, { token: tokenFor("admin"), body: { recipients: ["rowan@nbcc.scot"] } });
+    expect(res.statusCode).toBe(200);
+  });
+
+  it("saves nothing when the list it has cannot be read", async () => {
+    team.getSummarySettings.mockRejectedValue(new Error("database away"));
+    const res = await run(routes.putSummary, { token: tokenFor("admin"), body: { recipients: ["fern@nbcc.scot"] } });
+    expect(res.statusCode).toBeGreaterThanOrEqual(500);
     expect(team.saveSummaryRecipients).not.toHaveBeenCalled();
   });
 

@@ -1,5 +1,10 @@
 # Ball bank transfer, stage 3 (TASK-486): invoices, implementation plan
 
+> **Status (5 October 2026):** shipped as TASK-486 (#609) on 1 October 2026. One part was replaced
+> afterwards: the accounts team is no longer copied on the buyer's paid confirmation, which carries
+> the guest details link. TASK-489 (#612) sends them their own "Payment received" email instead. The
+> other bank transfer emails still copy them, as planned below.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
 **Goal:** the invoice decisions from `docs/superpowers/specs/2026-10-01-ball-bank-transfer-design.md`.

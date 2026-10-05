@@ -53,10 +53,13 @@ Each line names its screen ("Festive Ball", "Contact form"…) on its button, wh
 ## How it works
 
 - **One request:** `GET /api/admin/overview` (any signed-in person) returns `{ updatedAt, needs: [...],
-  failed: [...] }`. For each source it first checks the person may see that section (the same
-  permission map `/api/admin/me` uses); a source they cannot see is skipped silently, never counted.
-- **Sources are independent:** each reads its count with its own query, all at once. One that fails is
-  listed in `failed` by name, and the screen says "Could not check: Festive Ball", while the rest show.
+  numbers: [...], comingUp: [...], failed: [...] }` (`numbers` from stage 2, `comingUp` from stage 3).
+  For each source it first checks the person may see that section (the same permission map
+  `/api/admin/me` uses); a source they cannot see is skipped silently, never counted.
+- **Sources are independent:** each reads its count with its own query, three at a time (as built:
+  the database pool takes five connections, and an Overview must not hold them all while a donor is
+  paying). One that fails is listed in `failed` by name, and the screen says "Could not check:
+  Festive Ball", while the rest show.
 - **Pure rules:** turning counts into lines (the words, the singular and plural, the level, the order,
   leaving out zeros) is a pure function, `needsLines(counts)`, tested on its own.
 - **The screen:** the "Needs you" card replaces the five Gift Aid cards (those counts become lines in

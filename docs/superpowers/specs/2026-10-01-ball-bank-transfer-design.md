@@ -4,6 +4,14 @@ Date: 2026-10-01. First task: TASK-484 (stage 1). Each later stage takes its own
 The client answered every question below one at a time on 2026-10-01 and approved the design, with
 one change: only admins may mark a booking paid.
 
+**Status (5 October 2026): all of it is live, and switched on.** The five stages shipped on
+1 October 2026 as TASK-484 (#607, bookings), TASK-485 (#608, deadlines), TASK-486 (#609, invoices),
+TASK-487 (#610, telling the team) and TASK-488 (#611, staff bookings). One change came after the
+design: TASK-489 (#612) sends a company's accounts team their own "Payment received" email instead
+of copying them on the buyer's paid confirmation, because that confirmation carries the guest
+details link. The other bank transfer emails still copy them, as designed. Bank transfer was
+switched on in the admin on 1 October 2026; `/api/ball/availability` answers `transferOpen: true`.
+
 ## Why
 
 Today the Ball takes cards only (Stripe Checkout). A company wanting an invoice emails or phones, a

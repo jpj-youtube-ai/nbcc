@@ -1037,6 +1037,15 @@ contact points with the enquiry form:
   (REQ-032): required **First name**, optional **Last name**, required **Email**,
   required **Message** `<textarea>`; required fields carry `required` +
   `aria-required` and a `*` marker.
+- **Phone number (optional)** (TASK-565) — between Email and Message, with the line "Only if you
+  would like us to call you back." Left empty, the message is sent as before. One that is typed
+  must pass the site's one phone rule (`normalisePhone` in `src/business/call-due.ts`: digits,
+  spaces, `+ ( ) -`, at least 7 digits, up to 40 characters), checked in the browser and again by
+  `contactEnquirySchema`; otherwise "Please check your phone number. Use digits and spaces, for
+  example 07700 900123." It is stored in `contact_enquiries.phone` (nullable, added by
+  `migrations-contact/1791300000000_contact-phone.js`; no number is NULL, never an empty string)
+  and shown as a **Phone** line under Email when a message is opened in Admin > Contact, only when
+  one was given. The list of messages has no phone column, so it still fits a phone.
 
 `initContactForm()` in the shared `assets/js/main.js` (exported alongside
 `initNav`/`initReveal`/`initGiveToggle`) validates the required fields and the

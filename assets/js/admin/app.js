@@ -2968,6 +2968,8 @@
       '<dl class="admin-dl">' +
       dl("Name", ((c.first_name || "") + " " + (c.last_name || "")).trim()) +
       dl("Email", c.email) +
+      // Optional on the form, so only a line when the sender gave one.
+      (c.phone ? dl("Phone", c.phone) : "") +
       dl("Received", window.formatReceived(c.created_at)) +
       dl("Status", c.status === "replied" ? "Replied" : "New") +
       (c.status === "replied"

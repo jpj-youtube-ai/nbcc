@@ -12,6 +12,23 @@ Feature: Contact endpoint (REQ-030, 2026-07-10 contact-inbox)
     Then the response status should be 200
     And the response field "status" should be "sent"
 
+  # TASK-565: the phone number is optional. One that is given is stored; one that is not a phone
+  # number is refused, and nothing is stored.
+  Scenario: an enquiry with a phone number is accepted
+    When I POST "/api/contact" with JSON:
+      """
+      { "firstName": "Ada", "lastName": "Example", "email": "ada@example.com", "phone": "07700 900123", "message": "Please call me back." }
+      """
+    Then the response status should be 200
+    And the response field "status" should be "sent"
+
+  Scenario: an enquiry whose phone number is not a phone number is rejected
+    When I POST "/api/contact" with JSON:
+      """
+      { "firstName": "Ada", "lastName": "Example", "email": "ada@example.com", "phone": "call me", "message": "Please call me back." }
+      """
+    Then the response status should be 400
+
   Scenario: an enquiry missing required fields is rejected
     When I POST "/api/contact" with JSON:
       """

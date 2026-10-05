@@ -18,7 +18,7 @@ import { fileURLToPath } from "node:url";
 //    be narrower than its content, so the 500px mark set the width of the whole text column. The
 //    column must be `minmax(0, 1fr)`, as the two column layout already is, and the credit capped
 //    at the column it is in. Without that second cap it also ran off the screen wherever the two
-//    columns were each narrower than the mark, about 821px to 1040px wide.
+//    columns were each narrower than the mark, 821px to about 1070px wide.
 //
 // jsdom lays nothing out, so these hold the rules themselves, as the other Ball style tests do.
 // The widths were measured on the real pages with the rules applied: 320, 375, 414, 560, 768, 835,
@@ -30,9 +30,13 @@ const read = (f: string) => readFileSync(resolve(ROOT, f), "utf8");
 const ballCss = read("assets/css/ball.css");
 const promo = read("src/ball/home-promo.ts");
 
+// Comments out first: a comment may say `max-width: 100%`, or hold a `}`, and neither is the rule.
+const bare = (css: string) => css.replace(/\/\*[\s\S]*?\*\//g, "");
+
 // Both brace styles, as in ball-lines-and-logo.test.ts: ball.css writes `.sel {`, the promotion's
-// inline styles write `.sel{`. The first rule with that selector.
-function rule(css: string, selector: string): string {
+// inline styles write `.sel{`. The first rule with that selector, without its comments.
+function rule(source: string, selector: string): string {
+  const css = bare(source);
   let start = css.indexOf(selector + " {");
   if (start === -1) start = css.indexOf(selector + "{");
   if (start === -1) return "";
@@ -40,6 +44,17 @@ function rule(css: string, selector: string): string {
   return end === -1 ? "" : css.slice(start, end);
 }
 const tight = (css: string) => css.replace(/\s+/g, "");
+
+describe("the guard itself", () => {
+  // A rule's own comment must never be able to satisfy a check. .ball-credit's comment explains the
+  // fault in the words `max-width: 100%`, and the first version of this file read that comment as
+  // the declaration: with the declaration deleted it still passed (found by review, TASK-556).
+  it("reads a rule's declarations, never its comments", () => {
+    const css = ".x {\n  /* the mark's own `max-width: 100%` needs a real width */\n  margin: 0;\n}\n.y{/* } */max-width:100%}";
+    expect(tight(rule(css, ".x"))).toBe(".x{margin:0;");
+    expect(tight(rule(css, ".y"))).toBe(".y{max-width:100%");
+  });
+});
 
 describe("the sponsor's mark fits a phone: the Ball page and its thank-you page", () => {
   it.each([
@@ -61,7 +76,7 @@ describe("the sponsor's mark fits a phone: the Ball page and its thank-you page"
 
 describe("the sponsor's mark fits a phone: the home page's Ball promotion", () => {
   it("lets the one column layout be as narrow as the screen", () => {
-    const css = tight(promo);
+    const css = tight(bare(promo));
     expect(css).toContain("@media(max-width:820px){.ball-home-feature.wrap{grid-template-columns:minmax(0,1fr)}}");
     // A bare 1fr is the fault: it may not shrink below its content.
     expect(css).not.toContain("grid-template-columns:1fr}");

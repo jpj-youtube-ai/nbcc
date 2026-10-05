@@ -43,7 +43,10 @@ const PROMO_STYLES = `<style>
     padding:clamp(40px,6vw,72px) 0}
   .ball-home-feature .wrap{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);
     gap:clamp(24px,4vw,56px);align-items:center}
-  @media(max-width:820px){.ball-home-feature .wrap{grid-template-columns:1fr}}
+  /* minmax(0,1fr), not a bare 1fr: a 1fr column may not be narrower than its content, and the
+     sponsor's 500px mark is in it, so on a phone the whole text column was 470px wide and the
+     home page 504px (measured at 375px). */
+  @media(max-width:820px){.ball-home-feature .wrap{grid-template-columns:minmax(0,1fr)}}
   .ball-home-feature img{display:block;width:100%;height:auto}
   .ball-home-copy{display:flex;flex-direction:column;gap:14px;align-items:flex-start}
   .ball-home-copy .eyebrow{color:#E4C87A}
@@ -59,6 +62,11 @@ const PROMO_STYLES = `<style>
     color:rgba(242,238,228,.72);max-width:62ch}
   .ball-home-credit{display:flex;flex-direction:column;gap:8px;align-items:flex-start;
     margin:22px 0 0;padding-top:18px;border-top:1px solid rgba(233,210,150,.22)}
+  /* The credit is never wider than the column it is in. It is a paragraph, so its measure is
+     the paragraphs' 46ch above; this repeats that and adds the column, which wins where there
+     is less room: a phone, and the two column layout from about 821px to 1040px, where each
+     column is narrower than the mark and it ran off the screen. */
+  .ball-home-copy .ball-home-credit{max-width:min(46ch,100%)}
   .ball-home-credit span{font-size:.7rem;letter-spacing:.16em;text-transform:uppercase;
     color:rgba(242,238,228,.7)}
   .ball-home-credit a{display:block;width:500px;max-width:100%}

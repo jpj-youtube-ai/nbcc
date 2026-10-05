@@ -280,6 +280,11 @@
   gap: 8px;
   align-items: flex-start;
   margin: 0 0 4px;
+  /* Never wider than the page column, so the mark's own `max-width: 100%` below has something
+     real to be a percentage of. This box is an item in the hero's centred column, as wide as its
+     content needs; while that is worked out the mark's percentage cap counts as no cap, so on a
+     phone the box came out at the mark's 500px and the page with it (453px wide at 375px). */
+  max-width: 100%;
 }
 .ball-credit-label {
   font-size: 0.7rem;
@@ -1004,6 +1009,10 @@
    paper knocked out and the strokes painted cream. See the README for how it was derived. */
 .ball-sponsor-name {
   margin: 0 0 18px;
+  /* Never wider than the page column, for the same reason as .ball-credit above: an item in the
+     band's centred column, which otherwise takes the mark's 500px on a phone. The thank-you page
+     ends on this same band. */
+  max-width: 100%;
 }
 /* TASK-334: block with a DEFINITE width, centred by auto margins — the same shape .ball-credit
    above already uses, and for the same reason.

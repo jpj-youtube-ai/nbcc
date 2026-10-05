@@ -266,8 +266,9 @@
 
   /**
    * The whole scene as one inline picture. `count` is how many bags the donor filled (one to five
-   * are drawn). `art` is the catalogue's art(), where it is there to lend the teddy and the toy
-   * train; without it a present stands in each one's place. Drawn AT REST: the bags on the shelf,
+   * are drawn). `art` is the catalogue's art(), where it is there to lend the teddy, the folded
+   * blanket and the toy train; without it a present stands in for the teddy and for the train, and
+   * the scene's own plain blanket for the blanket. Drawn AT REST: the bags on the shelf,
    * the elf stepped down, the snow settled. The stylesheet plays it from the start while the page
    * says so (.is-playing), and dims the lamp.
    */
@@ -294,7 +295,8 @@
       bagAt(SHELF_LEFT + 6, top, 0.3, "rbw-bag--other", { tag: false }) +
       (borrowed(art, "soft-toy", 147, top - 30.5, 30) || present(150, top, 24, 21, "gold")) +
       books(188, top) +
-      blanket(226, top, true) +
+      // the catalogue's own folded blanket (the giving page's), or the scene's plain one without it
+      (borrowed(art, "blanket", 222, top - 26.5, 30) ? '<g class="rbw-extra">' + borrowed(art, "blanket", 222, top - 26.5, 30) + "</g>" : blanket(226, top, true)) +
       present(259, top, 15, 18, "holly", true) +
       bagAt(SHELF_LEFT + SHELF_WIDTH - 36, top, 0.3, "rbw-bag--other", { tag: false });
 

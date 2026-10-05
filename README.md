@@ -12301,8 +12301,9 @@ are in a stylesheet of the page's own, `assets/css/red-bag-thanks.css`, which no
   Workshop (`assets/js/red-bag-workshop.js`, loaded by this page alone), the page's centrepiece:
   as wide as the column (620px at most, 16 to 10). The Workshop the night before, well stocked
   (Jaimie, 5 October 2026: "bigger and richer"; no clock): three wooden shelves of tied Red Bags and
-  gifts (the catalogue's own teddy and toy train where the catalogue is there to lend them, books, a
-  folded blanket, wrapped presents), a window with the night outside (the one colour that is not a
+  gifts (the catalogue's own teddy, folded tartan blanket and toy train where the catalogue is there
+  to lend them, with a present or a plain blanket in their place where it is not; books; wrapped
+  presents), a window with the night outside (the one colour that is not a
   site token, `--rbw-night: #26355C`, named once in the stylesheet) and snow that drifts down once
   and settles, a Christmas tree whose fairy lights stay softly lit when the lamp goes down, a
   hanging lamp, the donor's bag with its gold ribbon and "Packed with love" tag, and a small elf

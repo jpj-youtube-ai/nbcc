@@ -180,9 +180,12 @@ describe("the Workshop scene's drawing", () => {
     expect(d.querySelectorAll(".rbw-shelf").length).toBeLessThanOrEqual(3);
     expect(d.querySelectorAll(".rbw-present").length).toBeGreaterThanOrEqual(3);
     expect(d.querySelector(".rbw-books")).not.toBeNull();
-    expect(d.querySelector(".rbw-blanket")).not.toBeNull();
-    // the catalogue's own teddy and toy train, where the catalogue is there to lend them
-    expect(d.querySelectorAll("svg svg").length).toBe(2);
+    // the catalogue's own teddy, folded blanket and toy train, where the catalogue is there to lend them
+    expect(d.querySelectorAll("svg svg").length).toBe(3);
+    expect(d.querySelector(".rbw-extra svg")).not.toBeNull(); // the blanket is one of the finer things
+    // and the scene's own blanket only when the catalogue's is not there
+    expect(d.querySelector(".rbw-blanket")).toBeNull();
+    expect(new DOMParser().parseFromString(workshop.scene(1), "image/svg+xml").querySelector(".rbw-blanket")).not.toBeNull();
     const win = d.querySelector(".rbw-window")!;
     expect(win.querySelector(".rbw-night")).not.toBeNull();
     expect(win.querySelectorAll(".rbw-star").length).toBeGreaterThanOrEqual(3);

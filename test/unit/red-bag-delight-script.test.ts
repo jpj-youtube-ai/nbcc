@@ -49,7 +49,7 @@ let fetchMock: ReturnType<typeof vi.fn>;
 let api: ReturnType<typeof initRedBag>;
 let watchers: Array<{ el: Element | null; say: (onScreen: boolean) => void }>;
 
-function start(opts: { reduce?: boolean; catalogue?: Record<string, unknown>; width?: number } = {}) {
+function start(opts: { reduce?: boolean; catalogue?: Record<string, unknown>; width?: number; layout?: boolean } = {}) {
   const html = renderRedBagPage(template, { preview: false });
   const parsed = new DOMParser().parseFromString(html, "text/html");
   document.body.innerHTML = parsed.body.innerHTML;
@@ -81,6 +81,15 @@ function start(opts: { reduce?: boolean; catalogue?: Record<string, unknown>; wi
     matchMedia: (q: string) => ({ matches: !!opts.reduce && /prefers-reduced-motion/.test(q) }),
     navigator: {},
   };
+  // A browser that can measure (jsdom has no layout of its own): see "the note never lies over...".
+  if (opts.layout) {
+    Object.assign(win, {
+      DOMMatrix: class {
+        a = 1; b = 0; c = 0; d = 1; e = 0; f = 0;
+      },
+      getComputedStyle: () => ({ fontStyle: "normal", fontWeight: "700", fontSize: "16px", fontFamily: "Caveat", transform: "none" }),
+    });
+  }
   api = initRedBag(document, win, { assign: vi.fn() });
 }
 
@@ -426,6 +435,46 @@ describe("what peeks out of the bag", () => {
     expect(peeks(bags()[0])).toEqual(["book", "socks", "notebook"]);
     vi.advanceTimersByTime(300);
     expect(bags()[0].querySelectorAll(".rb-peek").length).toBe(3);
+  });
+
+  // The owner, 5 October 2026: "make items a bit bigger and stand out a bit more".
+  it("draws them clearly bigger (about a third or more), the newest the biggest and standing tallest", () => {
+    type("pyjamas", "5");
+    leave("pyjamas");
+    plus("socks");
+    plus("book");
+    const els = peekEls(bags()[0]) as HTMLElement[];
+    expect(peeks(bags()[0])).toEqual(["book", "socks", "pyjamas"]);
+    const was = 28;
+    const shape = els.map((g) => {
+      const art = g.querySelector("svg.rb-art")!;
+      const t = g.style.transform;
+      const scale = Number(/scale\(([\d.]+)\)/.exec(t)?.[1] ?? 1);
+      const [, x, y] = /translate\(([\d.]+)px,\s*([\d.]+)px\)/.exec(t)!.map(Number);
+      const size = Number(art.getAttribute("width")) * scale;
+      // How far its top stands above the bag's rim (y = 36 in the bag's own picture).
+      const rise = 36 - (y + Number(art.getAttribute("y")) * scale);
+      return { x, y, size, rise, left: x - size / 2, right: x + size / 2 };
+    });
+    for (const p of shape) {
+      expect(p.size / was).toBeGreaterThanOrEqual(1.28);
+      expect(p.size / was).toBeLessThanOrEqual(1.45);
+      // Higher out of the bag than before (16), and never out of the top of the bag's own picture.
+      expect(p.rise).toBeGreaterThan(20);
+      expect(p.rise).toBeLessThanOrEqual(34);
+      // Inside the bag's width (12 to 108), give or take its tilt: it must look INSIDE the bag.
+      expect(p.left).toBeGreaterThanOrEqual(6);
+      expect(p.right).toBeLessThanOrEqual(114);
+    }
+    expect(shape[0].size).toBeGreaterThan(shape[1].size);
+    expect(shape[0].size).toBeGreaterThan(shape[2].size);
+    expect(shape[0].rise).toBeGreaterThan(shape[1].rise);
+    expect(shape[0].rise).toBeGreaterThan(shape[2].rise);
+    // Still behind the bag's own paper, so the bag's front edge covers their lower part.
+    const holder = bags()[0].querySelector(".rb-bag__peeks")!;
+    expect(holder.compareDocumentPosition(bags()[0].querySelector(".rb-bag__paper")!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    // And nothing about them sizes the bag or the panel: they are drawn inside the bag's own picture.
+    expect(bags()[0].getAttribute("viewBox")).toBe("0 0 120 132");
   });
 
   it("shows nothing for examples or a round-up alone", () => {
@@ -777,6 +826,109 @@ describe("the elf's note", () => {
   });
 });
 
+// An existing fault, found by measuring in a real browser (5 October 2026): a long note could lie
+// over the words of a neighbouring row. The page now measures where the note's words fall and tries
+// each place in turn (the catalogue's notePlacements); if none is clear, it writes no note at all.
+// jsdom has no layout, so these give it one: every row 400 by 60, the note 100 by 20.
+describe("the note never lies over a name, a price or a control", () => {
+  type Box = { left: number; top: number; width: number; height: number };
+  let boxes: (el: Element) => Box | null;
+  const restore: Array<() => void> = [];
+  const prop = (proto: object, name: string, get: (this: HTMLElement) => number) => {
+    const old = Object.getOwnPropertyDescriptor(proto, name);
+    Object.defineProperty(proto, name, { configurable: true, get });
+    restore.push(() => (old ? Object.defineProperty(proto, name, old) : delete (proto as Record<string, unknown>)[name]));
+  };
+  const rowTop = (el: Element) => $$("[data-rb-builder] .rb-paper .rb-item").indexOf(el as HTMLElement) * 60;
+
+  beforeEach(() => {
+    boxes = () => null;
+    const rect = vi.spyOn(Element.prototype, "getBoundingClientRect").mockImplementation(function (this: Element) {
+      const own = boxes(this);
+      const b = own ?? (this.classList.contains("rb-paper") ? { left: 0, top: -100, width: 400, height: 5000 } : this.classList.contains("rb-item") ? { left: 0, top: rowTop(this), width: 400, height: 60 } : { left: 0, top: 0, width: 0, height: 0 });
+      return { ...b, x: b.left, y: b.top, right: b.left + b.width, bottom: b.top + b.height, toJSON: () => b } as DOMRect;
+    });
+    restore.push(() => rect.mockRestore());
+    const isNote = (el: HTMLElement) => el.classList.contains("rb-note");
+    prop(HTMLElement.prototype, "offsetWidth", function () { return isNote(this) ? 100 : 0; });
+    prop(HTMLElement.prototype, "offsetHeight", function () { return isNote(this) ? 20 : 0; });
+    prop(HTMLElement.prototype, "offsetLeft", function () { return isNote(this) ? 200 : 0; });
+    // As the stylesheet places it: across the rule above the row, or across the one below it.
+    prop(HTMLElement.prototype, "offsetTop", function () { return isNote(this) ? (this.classList.contains("rb-note--below") ? 50 : -10) : 0; });
+    const ctx = vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockImplementation((() => ({ font: "", measureText: () => ({ width: 100, fontBoundingBoxAscent: 14, fontBoundingBoxDescent: 6, actualBoundingBoxAscent: 12, actualBoundingBoxDescent: 4 }) })) as never);
+    restore.push(() => ctx.mockRestore());
+    const old = Range.prototype.getClientRects;
+    Range.prototype.getClientRects = (() => []) as never;
+    restore.push(() => void (Range.prototype.getClientRects = old));
+    start({ layout: true });
+  });
+  afterEach(() => {
+    while (restore.length) restore.pop()!();
+  });
+
+  it("is written above the row when nothing is in the way", () => {
+    plus("blanket");
+    plus("socks");
+    expect(note().parentElement).toBe(row("socks"));
+    expect(note().classList.contains("is-on")).toBe(true);
+    expect(note().classList.contains("rb-note--above")).toBe(true);
+    expect(note().className).not.toMatch(/--small|--flat|--below/);
+  });
+
+  it("goes below the row when something is in the way above it", () => {
+    // The minus button of the row above, hanging low: across the rule the note would lie on.
+    const above = row("socks").previousElementSibling!.querySelector("[data-rb-minus]")!;
+    boxes = (el) => (el === above ? { left: 210, top: rowTop(row("socks")) - 14, width: 44, height: 20 } : null);
+    plus("blanket");
+    plus("socks");
+    expect(note().parentElement).toBe(row("socks"));
+    expect(note().classList.contains("rb-note--below")).toBe(true);
+    expect(note().classList.contains("is-on")).toBe(true);
+  });
+
+  it("is only ever below the first row of a group: the heading is above it", () => {
+    plus("socks");
+    plus("blanket");
+    expect(note().parentElement).toBe(row("blanket"));
+    expect(note().classList.contains("rb-note--below")).toBe(true);
+  });
+
+  it("writes NO note when there is nowhere clear, and the page carries on", () => {
+    const spy = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    // Every number box, made to cover the whole paper.
+    boxes = (el) => (el.tagName === "INPUT" ? { left: 0, top: -100, width: 400, height: 5000 } : null);
+    plus("blanket");
+    plus("socks", 3);
+    expect(note()).toBeNull();
+    expect($(".rb-paper")!.style.transform).toBe("");
+    expect(api!.total()).toBe(1100);
+    expect(text("[data-rb-total]")).toBe("£11");
+    expect(api!.payload()).toMatchObject({ amount: 1100, redBag: true });
+    // And a clear row gets its note again.
+    boxes = () => null;
+    plus("book");
+    expect(note().parentElement).toBe(row("book"));
+    expect(spy).not.toHaveBeenCalled();
+    spy.mockRestore();
+  });
+
+  it("puts the paper's tilt back after measuring, even if the measuring fails", () => {
+    const spy = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    $(".rb-paper")!.style.transform = "rotate(-1deg)";
+    plus("blanket");
+    expect($(".rb-paper")!.style.transform).toBe("rotate(-1deg)");
+    boxes = (el) => {
+      if (el.tagName === "BUTTON") throw new Error("invented failure");
+      return null;
+    };
+    plus("socks");
+    expect($(".rb-paper")!.style.transform).toBe("rotate(-1deg)");
+    expect(api!.total()).toBe(900);
+    expect(spy).toHaveBeenCalledTimes(1);
+    spy.mockRestore();
+  });
+});
+
 describe("the icon on a line under Also in your bag", () => {
   it("is the example's own, for the eye only, and the line's words are as they were", () => {
     example("hand-20").click();
@@ -995,7 +1147,7 @@ describe("the page works whatever happens to the feel good layer", () => {
   };
   const old = () => {
     const stub: Record<string, unknown> = { ...catalogue };
-    for (const k of ["ART", "art", "TAG_LINES", "MAX_PEEKS", "peekCount", "peekOrder", "latestPeeks", "strains", "milestoneCrossed", "FLURRY_COOLDOWN_MS", "flurryKind", "flurryDue", "flurryPlan", "NOTES", "noteKind", "noteFor", "allNotes"]) delete stub[k];
+    for (const k of ["ART", "art", "TAG_LINES", "MAX_PEEKS", "peekCount", "peekOrder", "latestPeeks", "strains", "milestoneCrossed", "FLURRY_COOLDOWN_MS", "flurryKind", "flurryDue", "flurryPlan", "NOTES", "noteKind", "noteFor", "allNotes", "notePlacements", "quadTouches"]) delete stub[k];
     return stub;
   };
 

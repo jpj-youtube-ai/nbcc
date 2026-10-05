@@ -12303,7 +12303,12 @@ changed. **The peeks are the latest things added** (5 October 2026): the newest 
 (left hand) place and drawn on top, then the one before it, then the one before that; adding more
 of an item makes it the latest again, taking the last one out brings back the next most recent,
 and a new bag after a full one shows the latest too. A new peek pops up, the others slide along one
-place and the oldest sinks (under 300ms). **The snow and stars are a whole screen moment** (5
+place and the oldest sinks (under 300ms). The peeks are drawn about a third bigger than they first
+were and stand higher out of the bag, with a heavier outline so the pale drawings show against the
+pale panel; the newest is the biggest and tallest (`PEEK_SIZE`, `PEEK_RISE` and `PEEK_AT` in
+`assets/js/red-bag.js`). They stay inside the bag's own picture, so they never reach a neighbouring
+bag, the words below or the panel's edge, and never change the panel's height. The blanket drawing
+was redrawn the same day: a folded blanket in a check with a fringe. **The snow and stars are a whole screen moment** (5
 October 2026): one layer fixed to the screen, above the header and the bottom bar, that takes no
 tap and is taken out of the page when it ends. A full bag (and each further one) is the big moment,
 56 pieces over about 2.9 seconds (34 on a screen under 600px wide); half a bag is a lighter one, 24
@@ -12316,8 +12321,12 @@ note to the rules (never "will", nothing bought, nobody receiving, no pressure, 
 hyphens, British, 32 characters at most). The 22 drawings are `ART` in the same file (inline SVG,
 coloured by `.rb-art` in the stylesheet from the site's tokens), and the choices are its pure
 functions (`peekOrder`, `latestPeeks`, `milestoneCrossed`, `flurryKind`, `flurryDue`,
-`flurryPlan`, `strains`, `noteFor`); `assets/js/red-bag.js` only applies them. It changes no price, total, wording or checkout field, makes no network request, and
-adds no file to load. Everything decorative is `aria-hidden`, out of the tab order and removed by a
+`flurryPlan`, `strains`, `noteFor`); `assets/js/red-bag.js` only applies them. **The elf's note never lies over a name, a price, a heading or a control**
+(5 October 2026): the script measures where the note's words would fall (their real ink, and the
+boxes of the buttons and number boxes, with 2px to spare) and tries each place in the catalogue's
+`notePlacements` in turn (across the rule above the row, the one below, then smaller, then
+smallest and level); if nowhere is clear it writes no note that time. It changes no price, total,
+wording or checkout field, makes no network request, and adds no file to load. Everything decorative is `aria-hidden`, out of the tab order and removed by a
 timer; the one live region is untouched; motion is transform and opacity only and is off under
 `prefers-reduced-motion` (the peeks, ribbon, tag and note still appear, at once; there is no snow
 at all). **It can never

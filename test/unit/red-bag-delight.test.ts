@@ -2,6 +2,7 @@
 import { describe, it, expect } from "vitest";
 import { createRequire } from "node:module";
 import { readFileSync } from "node:fs";
+import { createHash } from "node:crypto";
 import { resolve } from "node:path";
 import { renderRedBagPage, renderRedBagThanksPage } from "../../src/red-bag/render";
 
@@ -55,6 +56,53 @@ describe("the drawings", () => {
   it("is nothing for a key it does not know, and takes a class and a size", () => {
     expect(rb.art("no-such-thing")).toBe("");
     expect(rb.art("socks", "rb-x", 30)).toMatch(/^<svg class="rb-art rb-x" viewBox="0 0 40 40" width="30" height="30"/);
+  });
+});
+
+// The owner, 5 October 2026, did not like the first blanket (two rolled red shapes with a fringe):
+// it is now a neatly FOLDED blanket in a simple check, its fringe down one side.
+describe("the blanket drawing", () => {
+  const blanket = new DOMParser().parseFromString(rb.art("blanket"), "text/html").body.firstElementChild!;
+  const all = (sel: string) => [...blanket.querySelectorAll(sel)];
+  const cls = (el: Element) => (el.getAttribute("class") ?? "").split(/\s+/);
+
+  it("is one soft folded stack: a red body with rounded folds, not two rolls", () => {
+    const red = all("path, rect").filter((el) => cls(el).includes("r"));
+    expect(red.length).toBe(1);
+    // The folds are curves down one side of the one body (arcs or curves in its outline).
+    expect((red[0].getAttribute("d") ?? "").match(/[aAcCqQ]/g)?.length ?? 0).toBeGreaterThanOrEqual(3);
+    // No rounded red rectangles (that was the pair of drums).
+    expect(all("rect").filter((el) => cls(el).includes("r")).length).toBe(0);
+    // The lines between one fold and the next.
+    expect(rb.ART.blanket).toMatch(/<path d="[^"]*"\/>/);
+  });
+
+  it("has a simple check: cream both ways, and a little gold or green", () => {
+    const cream = all("*").filter((el) => cls(el).includes("c") || cls(el).includes("l"));
+    expect(cream.length).toBeGreaterThanOrEqual(2);
+    expect(all("*").filter((el) => cls(el).includes("g") || cls(el).includes("h")).length).toBeGreaterThanOrEqual(1);
+  });
+
+  it("has a fringe down one side, high enough to show when the blanket peeks out of the bag", () => {
+    const fringe = all("path").find((el) => cls(el).includes("f"));
+    expect(fringe, "the fringe").toBeTruthy();
+    const strands = (fringe!.getAttribute("d") ?? "").match(/M/g)?.length ?? 0;
+    expect(strands).toBeGreaterThanOrEqual(6);
+    // Some of it is in the top half of the picture: the part that shows above the bag's rim.
+    const ys = [...(fringe!.getAttribute("d") ?? "").matchAll(/M[\d.]+[ ,]([\d.]+)/g)].map((m) => Number(m[1]));
+    expect(ys.filter((y) => y < 20).length).toBeGreaterThanOrEqual(3);
+  });
+
+  it("stays inside its 40 by 40 picture, in the page's colours", () => {
+    const nums = [...rb.ART.blanket.matchAll(/(?:x|y|cx|cy)="([\d.]+)"/g)].map((m: RegExpMatchArray) => Number(m[1]));
+    for (const n of nums) expect(n).toBeLessThanOrEqual(40);
+    expect(rb.ART.blanket).not.toMatch(/#[0-9a-fA-F]{3,8}\b|rgb|url\(|style=|fill=|stroke=/);
+  });
+
+  it("is the ONLY drawing that changed", () => {
+    const rest: Record<string, string> = {};
+    for (const key of Object.keys(rb.ART).sort()) if (key !== "blanket") rest[key] = rb.ART[key];
+    expect(createHash("sha256").update(JSON.stringify(rest)).digest("hex")).toBe("2597528e1117e0003e25b73472be30e4e8e733a2f67ec78f676f037b2f55855a");
   });
 });
 
@@ -455,6 +503,58 @@ describe("which note the elf writes", () => {
   });
 });
 
+// The note must never lie over an item's name, a price or a control. The page measures where the
+// note's words are and tries these places in turn; these are the pure parts of that.
+describe("where the elf's note may go", () => {
+  it("tries above the row, then below it, then smaller, then smallest and level; a first row only below", () => {
+    expect(rb.notePlacements(false)).toEqual([
+      { below: false, size: "" },
+      { below: true, size: "" },
+      { below: false, size: "small" },
+      { below: true, size: "small" },
+      { below: false, size: "flat" },
+      { below: true, size: "flat" },
+    ]);
+    // Above the first row of a group is the group's heading.
+    expect(rb.notePlacements(true)).toEqual([
+      { below: true, size: "" },
+      { below: true, size: "small" },
+      { below: true, size: "flat" },
+    ]);
+  });
+
+  // A rectangle turned a little, as the note is: its four corners in order.
+  const level = [[10, 10], [110, 10], [110, 30], [10, 30]];
+  const turned = [[10, 14], [110, 10], [111, 30], [11, 34]];
+  const table: Array<[string, number[][], Record<string, unknown>, boolean]> = [
+    ["a box well away", level, { x: 200, y: 200, w: 50, h: 20 }, false],
+    ["a box it lies over", level, { x: 50, y: 20, w: 50, h: 50 }, true],
+    ["a box wholly inside it", level, { x: 50, y: 15, w: 10, h: 5 }, true],
+    ["a box it is wholly inside", level, { x: 0, y: 0, w: 300, h: 300 }, true],
+    ["a box just under it, a hair apart", level, { x: 10, y: 30.5, w: 100, h: 20 }, false],
+    ["a box sharing only an edge", level, { x: 10, y: 30, w: 100, h: 20 }, false],
+    ["a box over its right hand end", level, { x: 105, y: 0, w: 40, h: 40 }, true],
+    ["the turn matters: a box under the low corner of a turned note", turned, { x: 10, y: 31, w: 30, h: 10 }, true],
+    ["the turn matters: the same box under the high corner", turned, { x: 80, y: 32, w: 30, h: 10 }, false],
+    ["the turn matters: a box in the corner its square outline would cover", turned, { x: 10, y: 5, w: 20, h: 6 }, false],
+    ["a round button whose square corner it crosses but whose circle it misses", level, { x: 100, y: 28, w: 44, h: 44, round: true }, false],
+    ["the same button as a square", level, { x: 100, y: 28, w: 44, h: 44 }, true],
+    ["a round button it does cross", level, { x: 80, y: 20, w: 44, h: 44, round: true }, true],
+    ["a round button it lies wholly inside", [[40, 40], [50, 40], [50, 45], [40, 45]], { x: 20, y: 20, w: 50, h: 50, round: true }, true],
+    ["a round button wholly inside it", [[0, 0], [200, 0], [200, 200], [0, 200]], { x: 80, y: 80, w: 20, h: 20, round: true }, true],
+    ["nothing at all", level, { x: 50, y: 20, w: 0, h: 0 }, false],
+  ];
+  it.each(table)("%s", (_name, quad, box, want) => {
+    expect(rb.quadTouches(quad, box)).toBe(want);
+  });
+
+  it("is safe with nonsense", () => {
+    expect(rb.quadTouches(null, { x: 0, y: 0, w: 10, h: 10 })).toBe(false);
+    expect(rb.quadTouches(level, null)).toBe(false);
+    expect(rb.quadTouches([[1, 1]], { x: 0, y: 0, w: 10, h: 10 })).toBe(false);
+  });
+});
+
 describe("the tag on a full bag", () => {
   it("reads Packed with love", () => {
     expect(rb.TAG_LINES.join(" ")).toBe("Packed with love");
@@ -513,6 +613,28 @@ describe("the stylesheet for the feel good layer", () => {
   it("shows no snow at all to someone who asked for less motion, whatever the script does", () => {
     const reduced = /@media\s*\(prefers-reduced-motion:\s*reduce\)\s*\{([\s\S]*?\})\s*\}/.exec(css)?.[1] ?? "";
     expect(reduced).toMatch(/\.rb-flurry\{display:none\}/);
+  });
+
+  it("makes the peeks stand out: a heavier outline than the drawings have elsewhere, and no glow or gradient", () => {
+    const base = Number(/\.rb-art\{[^}]*stroke-width:([\d.]+)/.exec(css)?.[1]);
+    const peek = Number(/\.rb-peek \.rb-art\{[^}]*stroke-width:([\d.]+)/.exec(css)?.[1]);
+    expect(base).toBe(1.5);
+    expect(peek).toBeGreaterThan(base + 0.3);
+    expect(peek).toBeLessThanOrEqual(2.4);
+    const rules = [...css.matchAll(/\.rb-peek[^{]*\{([^}]*)\}/g)].map((m) => m[1]).join(";");
+    expect(rules).not.toMatch(/gradient|filter|blur|box-shadow|text-shadow/);
+  });
+
+  it("gives the note its places: below a row, smaller, and smallest and level", () => {
+    expect(css).toMatch(/\.rb-paper \.rb-note\.rb-note--below\{[^}]*top:100%/);
+    expect(css).toMatch(/\.rb-paper \.rb-note\.rb-note--above\{[^}]*top:0/);
+    const small = Number(/\.rb-paper \.rb-note\.rb-note--small\{[^}]*font-size:([\d.]+)rem/.exec(css)?.[1]);
+    const flat = Number(/\.rb-paper \.rb-note\.rb-note--flat\{[^}]*font-size:([\d.]+)rem/.exec(css)?.[1]);
+    expect(small).toBeLessThan(1.02);
+    expect(flat).toBeLessThan(small);
+    // Still readable: never under 13px.
+    expect(flat * 16).toBeGreaterThanOrEqual(13);
+    expect(/\.rb-paper \.rb-note\.rb-note--flat\{[^}]*\}/.exec(css)?.[0]).not.toMatch(/rotate/);
   });
 
   it("loops nothing forever", () => {

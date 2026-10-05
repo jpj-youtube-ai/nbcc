@@ -391,6 +391,7 @@ body.rb-bar-on{padding-bottom:calc(64px + env(safe-area-inset-bottom))}
 .rb-art .l{stroke:var(--cream)}
 .rb-art .q{stroke:var(--crimson)}
 .rb-art .x{stroke-width:2.6}
+.rb-art .f{stroke-width:1.2}
 
 /* ---- the icon in each example's button: it keeps its size when the words wrap, and sits in the
    middle of them. Pressed, its lines turn light so it still reads on the green. ---- */
@@ -440,6 +441,11 @@ body.rb-bar-on{padding-bottom:calc(64px + env(safe-area-inset-bottom))}
    oldest sinks back into the bag and is cleared away. A peek's place is a transform the script
    sets, so the slide is a transform and nothing else. ---- */
 .rb-peek{transition:transform .26s cubic-bezier(.22,1,.36,1)}
+/* bigger, and standing out (5 October 2026): a heavier outline than the drawings have elsewhere, so
+   the pale ones (cream pyjamas, a white page) still read against the pale panel. The size and the
+   place of each peek are the script's (PEEK_AT): the newest is the biggest and stands tallest. */
+.rb-peek .rb-art{stroke-width:2}
+.rb-peek .rb-art .x{stroke-width:3}
 .rb-peek.is-leaving .rb-peek__in{animation:rb-peek-out .2s cubic-bezier(.5,0,.75,.4) both}
 @keyframes rb-peek-out{from{opacity:1;transform:none}to{opacity:0;transform:translateY(14px)}}
 
@@ -493,6 +499,11 @@ body.rb-bar-on{padding-bottom:calc(64px + env(safe-area-inset-bottom))}
 }
 .rb-paper .rb-item:first-child > .rb-note{top:100%}
 .rb-paper .rb-note.is-on{opacity:1}
+/* the note never lies over a name, a price or a control: the script measures where its words fall
+   and tries these places in turn (the catalogue's notePlacements) until one is clear: across the
+   rule above the row or the one below it, then smaller, then smallest and level */
+.rb-paper .rb-note.rb-note--above{top:0}
+.rb-paper .rb-note.rb-note--below{top:100%}
 /* a line under "Also in your bag" is full of words, so there the note always lies across the rule */
 .rb-paper .rb-also__list .rb-note{font-size:1.02rem;transform:translateY(calc(-100% + .27em + 4px)) rotate(-1deg)}
 /* where the paper is narrow (and a long name may wrap) the note is smaller and lies across the rule,
@@ -505,6 +516,10 @@ body.rb-bar-on{padding-bottom:calc(64px + env(safe-area-inset-bottom))}
 @media (max-width:520px){
   .rb-paper .rb-note{right:2px}
 }
+
+/* the note's smaller sizes (see above), after the widths' own sizes so that they win */
+.rb-paper .rb-note.rb-note--small{font-size:.94rem;transform:translateY(calc(-100% + .27em + 4px)) rotate(-1deg)}
+.rb-paper .rb-note.rb-note--flat{font-size:.86rem;transform:translateY(calc(-100% + .3em + 3px))}
 
 /* ---- less motion: nothing moves. What changes still changes, at once: the peeks, the ribbon and
    the tag appear, and the note is simply there. ---- */

@@ -268,10 +268,16 @@
   //   n no outline; l a cream line; q a crimson line; x a thicker line.
   var ART = {
     // --- the list ---
+    // A neatly folded blanket (5 October 2026): three soft folds, their rounded edges down the left,
+    // in a simple check (thin cream lines both ways and a gold one), a bound edge and its fringe
+    // down the right.
     blanket:
-      '<rect class="r" x="4" y="19" width="32" height="13" rx="4"/><path class="c" d="M23 19h6v13h-6z"/>' +
-      '<rect class="r" x="4" y="8" width="30" height="13" rx="5.5"/><path class="c" d="M21.5 8h6v13h-6z"/>' +
-      '<path class="l" d="M9 14.5h8M9 25.5h9"/><path d="M9 32v3.5M15 32v3.5M21 32v3.5M27 32v3.5M32.5 31.5v3.5"/>',
+      '<path class="f" d="M30.5 8.6h4.6M30.5 11h4.9M30.5 13.4h4.6M32.5 18.2h4.6M32.5 20.6h4.9M32.5 23h4.6M31.5 27.8h4.6M31.5 30.2h4.9M31.5 32.6h4.6"/>' +
+      '<path class="r" d="M9.5 6.2H29a1.6 1.6 0 0 1 1.6 1.6v6.4a1.6 1.6 0 0 1-1.6 1.6H9.5a4.8 4.8 0 0 1 0-9.6zM9.5 15.8H31a1.6 1.6 0 0 1 1.6 1.6v6.4a1.6 1.6 0 0 1-1.6 1.6H9.5a4.8 4.8 0 0 1 0-9.6zM9.5 25.4H30a1.6 1.6 0 0 1 1.6 1.6v6.4a1.6 1.6 0 0 1-1.6 1.6H9.5a4.8 4.8 0 0 1 0-9.6z"/>' +
+      '<path class="c n" d="M12.4 7h1.7v8h-1.7zM18.2 7h1.7v8h-1.7zM12.4 16.6h1.7v8h-1.7zM18.2 16.6h1.7v8h-1.7zM12.4 26.2h1.7v8h-1.7zM18.2 26.2h1.7v8h-1.7z"/>' +
+      '<path class="g n" d="M23.6 7h1.2v8h-1.2zM23.6 16.6h1.2v8h-1.2zM23.6 26.2h1.2v8h-1.2z"/>' +
+      '<path class="l f" d="M6.5 9.6h21M6.5 12.6h21M6.5 19.2h23M6.5 22.2h23M6.5 28.8h22M6.5 31.8h22"/>' +
+      '<path d="M27.6 6.6v8.8M29.6 16.2v8.8M28.6 25.8v8.8"/>',
     "insulated-cup":
       '<path class="h" d="M11 13h18l-2 21a2 2 0 0 1-2 2H15a2 2 0 0 1-2-2z"/><path class="c" d="M11.7 20h16.6l-.8 8H12.5z"/>' +
       '<path class="t" d="M10 8h20a1.5 1.5 0 0 1 1.5 1.5V13h-23V9.5A1.5 1.5 0 0 1 10 8z"/><path class="t" d="M16 8V5.5h8V8"/>' +
@@ -583,6 +589,91 @@
     example: ["That's a lovely one.", "A kind thought, that.", "All year round. Love that.", "Thoughtful. Elves noticed."],
   };
 
+  /**
+   * The places the elf's note may be written, in the order they are tried: above the row (across
+   * the rule over it) or below it, at its usual size, then smaller, then smallest and level. The
+   * first row of a group can only have it below: its heading is above. The page measures where the
+   * note's words would fall and takes the first place where they touch nothing; if there is none,
+   * it writes no note.
+   */
+  function notePlacements(firstRow) {
+    var out = [];
+    ["", "small", "flat"].forEach(function (size) {
+      if (!firstRow) out.push({ below: false, size: size });
+      out.push({ below: true, size: size });
+    });
+    return out;
+  }
+
+  /**
+   * Does a note's ink touch a thing on the paper? `quad` is the note's words as a rectangle that
+   * may be turned a little: its four corners, in order, as [x, y]. `box` is the thing: { x, y, w,
+   * h }, with `round: true` for a round button (the circle inside that square). Sharing an edge
+   * is not touching.
+   */
+  function quadTouches(quad, box) {
+    if (!quad || quad.length !== 4 || !box || !(box.w > 0) || !(box.h > 0)) return false;
+    var i;
+    if (box.round) {
+      var cx = box.x + box.w / 2;
+      var cy = box.y + box.h / 2;
+      var r = Math.min(box.w, box.h) / 2;
+      var side = 0;
+      var inside = true;
+      for (i = 0; i < 4; i += 1) {
+        var a = quad[i];
+        var b = quad[(i + 1) % 4];
+        var ex = b[0] - a[0];
+        var ey = b[1] - a[1];
+        var cross = ex * (cy - a[1]) - ey * (cx - a[0]);
+        if (cross !== 0) {
+          if (side === 0) side = cross > 0 ? 1 : -1;
+          else if (cross > 0 !== side > 0) inside = false;
+        }
+        // The nearest point of this edge to the circle's middle.
+        var len = ex * ex + ey * ey;
+        var t = len ? Math.max(0, Math.min(1, ((cx - a[0]) * ex + (cy - a[1]) * ey) / len)) : 0;
+        var dx = a[0] + t * ex - cx;
+        var dy = a[1] + t * ey - cy;
+        if (dx * dx + dy * dy < r * r) return true;
+      }
+      return inside;
+    }
+    var rect = [
+      [box.x, box.y],
+      [box.x + box.w, box.y],
+      [box.x + box.w, box.y + box.h],
+      [box.x, box.y + box.h],
+    ];
+    // Two shapes with straight sides are apart if, seen along some side of either, they do not
+    // overlap. The square's sides are level and upright; the note's are its first two.
+    var axes = [
+      [1, 0],
+      [0, 1],
+      [quad[0][1] - quad[1][1], quad[1][0] - quad[0][0]],
+      [quad[1][1] - quad[2][1], quad[2][0] - quad[1][0]],
+    ];
+    for (i = 0; i < axes.length; i += 1) {
+      var ax = axes[i][0];
+      var ay = axes[i][1];
+      if (!ax && !ay) continue;
+      var lo1 = Infinity;
+      var hi1 = -Infinity;
+      var lo2 = Infinity;
+      var hi2 = -Infinity;
+      for (var j = 0; j < 4; j += 1) {
+        var p = quad[j][0] * ax + quad[j][1] * ay;
+        var q = rect[j][0] * ax + rect[j][1] * ay;
+        if (p < lo1) lo1 = p;
+        if (p > hi1) hi1 = p;
+        if (q < lo2) lo2 = q;
+        if (q > hi2) hi2 = q;
+      }
+      if (hi1 <= lo2 || hi2 <= lo1) return false;
+    }
+    return true;
+  }
+
   function several(template, key, n) {
     return template.replace("{n}", String(n)).replace("{things}", NOTES.things[key] || "of those");
   }
@@ -671,6 +762,8 @@
     noteKind: noteKind,
     noteFor: noteFor,
     allNotes: allNotes,
+    notePlacements: notePlacements,
+    quadTouches: quadTouches,
     BAG_VALUE_PENCE: BAG_VALUE_PENCE,
     MIN_PENCE: MIN_PENCE,
     MAX_QUANTITY: MAX_QUANTITY,

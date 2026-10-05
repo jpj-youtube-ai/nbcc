@@ -138,7 +138,7 @@
     var delightOn =
       !!rb.NOTES &&
       !!rb.TAG_LINES &&
-      ["art", "peekOrder", "latestPeeks", "strains", "milestoneCrossed", "flurryKind", "flurryDue", "flurryPlan", "noteKind", "noteFor"].every(function (name) {
+      ["art", "peekOrder", "latestPeeks", "strains", "milestoneCrossed", "flurryKind", "flurryDue", "flurryPlan", "noteKind", "noteFor", "notePlacements", "quadTouches"].every(function (name) {
         return typeof rb[name] === "function";
       });
     var delightSaid = false;
@@ -163,12 +163,18 @@
     var NOTE_MS = 3200;
     var NOTE_HOLD_MS = 900; // a note on one row is left alone this long before the next replaces it
     var PEEK_OUT_MS = 240; // a peek that is leaving sinks for this long (as in the stylesheet), then goes
-    // Where the three peeks sit along the bag's top, and their tilt: [across, down, degrees]. The
-    // first is the FRONT place, for the newest thing: it stands a little taller than the others.
+    // Where the three peeks sit along the bag's top, their tilt and their size: [across, down,
+    // degrees, scale], in the bag's own picture (120 wide, its rim at 36). The first is the FRONT
+    // place, for the newest thing: the biggest, and standing tallest. A peek is drawn PEEK_SIZE
+    // across (5 October 2026: about a third bigger than the 28 it was, and higher out of the bag),
+    // with PEEK_RISE of it above the place it is seated. They stay inside the bag's own picture, so
+    // they can never reach a neighbouring bag, the words below, or change the panel's height.
+    var PEEK_SIZE = 38;
+    var PEEK_RISE = 24;
     var PEEK_AT = [
-      [25, 34, -11],
-      [57, 36, 3],
-      [92, 37, 12],
+      [31, 33, -8, 1.05],
+      [60, 36, 3, 0.97],
+      [92, 37, 11, 0.95],
     ];
     var SNOW =
       '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path class="rb-flake__snow" d="M12 1.5l2.6 6 6.5-.75-3.9 5.25 3.9 5.25-6.5-.75-2.6 6-2.6-6-6.5.75L6.8 12 2.9 6.75l6.5.75z"/></svg>';
@@ -252,11 +258,11 @@
 
     /** Put a peek in its place. The place is a style, so a move from one to the next can slide. */
     function seat(g, at) {
-      g.style.transform = "translate(" + PEEK_AT[at][0] + "px," + PEEK_AT[at][1] + "px) rotate(" + PEEK_AT[at][2] + "deg)";
+      g.style.transform = "translate(" + PEEK_AT[at][0] + "px," + PEEK_AT[at][1] + "px) rotate(" + PEEK_AT[at][2] + "deg) scale(" + PEEK_AT[at][3] + ")";
       g.setAttribute("data-rb-slot", String(at));
     }
     function peek(key, at) {
-      var g = shapes('<g class="rb-peek"><g class="rb-peek__in">' + rb.art(key, "", 28).replace("<svg ", '<svg x="-14" y="-16" ') + "</g></g>");
+      var g = shapes('<g class="rb-peek"><g class="rb-peek__in">' + rb.art(key, "", PEEK_SIZE).replace("<svg ", '<svg x="' + -PEEK_SIZE / 2 + '" y="' + -PEEK_RISE + '" ') + "</g></g>");
       g.setAttribute("data-rb-peek", key);
       seat(g, at);
       return g;
@@ -459,6 +465,108 @@
       span.insertAdjacentHTML("afterbegin", rb.art(key, "rb-also__icon", 26));
     }
 
+    // --- where the note may lie: never over a name, a price, a heading or a control ---
+    // Measured, not assumed. The words of everything on the paper are found as INK (how far the
+    // letters really reach, from a canvas that is never added to the page or drawn on), the buttons
+    // and number boxes as their boxes, and the note is tried in each place the catalogue lists
+    // (above the row, below it, smaller, smallest) until its own ink touches none of them. If there
+    // is nowhere clear, no note is written. Where a browser cannot measure, the note is as it was.
+    var NOTE_GAP = 2; // px of clear paper kept between the note and anything else
+    var inkCtx = null;
+    var inkSeen = {};
+    /** How far a line of these words reaches above and below, within its line of type. */
+    function inkOf(el, words) {
+      var cs = win.getComputedStyle(el);
+      var font = cs.fontStyle + " " + cs.fontWeight + " " + cs.fontSize + " " + cs.fontFamily;
+      var known = inkSeen[font + "|" + words];
+      if (known) return known;
+      if (!inkCtx) inkCtx = doc.createElement("canvas").getContext("2d");
+      if (!inkCtx) return null;
+      inkCtx.font = font;
+      var m = inkCtx.measureText(words);
+      if (typeof m.fontBoundingBoxAscent !== "number" || typeof m.actualBoundingBoxAscent !== "number") return null;
+      known = { box: m.fontBoundingBoxAscent + m.fontBoundingBoxDescent, top: m.fontBoundingBoxAscent - m.actualBoundingBoxAscent, bottom: m.fontBoundingBoxAscent + m.actualBoundingBoxDescent };
+      inkSeen[font + "|" + words] = known;
+      return known;
+    }
+    /** Everything on the paper a note must keep off, as boxes. Null where it cannot be measured. */
+    function inTheWay(paper) {
+      var out = [];
+      var ok = true;
+      each(paper.querySelectorAll(".rb-item__name, .rb-item__price, .rb-also__words, .rb-group__title, h2, h3"), function (el) {
+        var words = (el.textContent || "").replace(/\s+/g, " ").trim();
+        if (!words || !ok) return;
+        var ink = inkOf(el, words);
+        if (!ink) {
+          ok = false;
+          return;
+        }
+        var range = doc.createRange();
+        range.selectNodeContents(el);
+        each(range.getClientRects(), function (q) {
+          if (q.width > 0) out.push({ x: q.left - NOTE_GAP, y: q.top + (q.height - ink.box) / 2 + ink.top - NOTE_GAP, w: q.width + 2 * NOTE_GAP, h: ink.bottom - ink.top + 2 * NOTE_GAP });
+        });
+      });
+      each(paper.querySelectorAll("button, input"), function (el) {
+        var q = el.getBoundingClientRect();
+        if (q.width > 0) out.push({ x: q.left - NOTE_GAP, y: q.top - NOTE_GAP, w: q.width + 2 * NOTE_GAP, h: q.height + 2 * NOTE_GAP, round: el.classList.contains("rb-step") });
+      });
+      return ok ? out : null;
+    }
+    /** The note's own ink as it lies now: four corners, turned as the stylesheet turns it. */
+    function noteInk(row) {
+      var ink = inkOf(noteEl, noteEl.textContent);
+      if (!ink) return null;
+      var at = row.getBoundingClientRect();
+      var x = at.left + (row.clientLeft || 0) + noteEl.offsetLeft;
+      var y = at.top + (row.clientTop || 0) + noteEl.offsetTop;
+      var w = noteEl.offsetWidth;
+      var h = noteEl.offsetHeight;
+      var top = y + (h - ink.box) / 2;
+      // It turns about its bottom right corner (as in the stylesheet).
+      var t = new win.DOMMatrix(win.getComputedStyle(noteEl).transform);
+      function turn(px, py) {
+        var dx = px - (x + w);
+        var dy = py - (y + h);
+        return [x + w + t.a * dx + t.c * dy + t.e, y + h + t.b * dx + t.d * dy + t.f];
+      }
+      return [turn(x, top + ink.top), turn(x + w, top + ink.top), turn(x + w, top + ink.bottom), turn(x, top + ink.bottom)];
+    }
+    /** Put the note where it touches nothing. Says false if there is nowhere: then none is shown. */
+    function fitNote(row) {
+      noteEl.className = "rb-note";
+      var paper = typeof row.closest === "function" ? row.closest(".rb-paper") : null;
+      if (!paper || typeof win.DOMMatrix !== "function" || typeof win.getComputedStyle !== "function" || !(row.getBoundingClientRect().width > 0)) return true;
+      // The paper lies at a slight tilt on a wide screen. It is measured square on, and put back
+      // before the browser draws anything, so nothing is seen to move.
+      var tilt = paper.style.transform;
+      paper.style.transform = "none";
+      try {
+        var things = inTheWay(paper);
+        if (!things) return true;
+        var edge = paper.getBoundingClientRect();
+        var ways = rb.notePlacements(row.parentNode && row.parentNode.firstElementChild === row);
+        for (var i = 0; i < ways.length; i += 1) {
+          noteEl.className = "rb-note rb-note--" + (ways[i].below ? "below" : "above") + (ways[i].size ? " rb-note--" + ways[i].size : "");
+          var quad = noteInk(row);
+          if (!quad) {
+            noteEl.className = "rb-note";
+            return true;
+          }
+          var clear = quad.every(function (p) {
+            return p[0] >= edge.left + 1 && p[0] <= edge.right - 1;
+          });
+          for (var j = 0; clear && j < things.length; j += 1) {
+            if (rb.quadTouches(quad, things[j])) clear = false;
+          }
+          if (clear) return true;
+        }
+        return false;
+      } finally {
+        paper.style.transform = tilt;
+      }
+    }
+
     // The elf's note: ONE at a time, on the row just changed. Quick taps on one row keep the note
     // that is there rather than flickering through several.
     function scribble(row, change) {
@@ -490,6 +598,11 @@
       noteEl.classList.remove("is-on");
       noteEl.textContent = words;
       row.appendChild(noteEl);
+      // Nowhere clear of the names, prices and buttons: no note this time, rather than one over them.
+      if (!fitNote(row)) {
+        gone(noteEl);
+        return;
+      }
       // Read once so the fade begins from nothing each time.
       void noteEl.offsetWidth;
       noteEl.classList.add("is-on");

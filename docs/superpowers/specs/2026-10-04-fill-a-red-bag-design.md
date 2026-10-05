@@ -170,11 +170,29 @@ word changes, and it makes no network request and loads no file of its own.
    it shows the latest things overall. When a new thing arrives it pops up in the front place, the
    ones that stay slide along one place, and the oldest sinks back into the bag (transform and
    opacity, under 300ms; at once under reduced motion).
+   Bigger, the same day (Jaimie: "make items a bit bigger and stand out a bit more"): each peek is
+   drawn about a third bigger than the 28 units it was (the newest about 40, the others about 37
+   and 36, in a bag 120 wide) and stands higher out of the bag (the newest 28 units above the rim,
+   the others 23 and 22; it was 16), with a heavier outline (2, where the drawings elsewhere have
+   1.5) so cream pyjamas or a white page still show against the pale panel. No shadow, glow or
+   gradient. They are still drawn behind the bag's front, and stay inside the bag's own picture, so
+   they cannot reach a neighbouring bag's ribbon or tag, the status line or the panel's edge, and
+   the panel is the same height with or without them (measured at 320, 390, 860, 861, 1024 and
+   1280). The blanket was redrawn too (Jaimie did not like two rolled red shapes): a neatly folded
+   blanket, three soft folds with their rounded edges down the left, in a simple check (thin cream
+   lines both ways and a gold one), a bound edge and a fringe down the right, which is the side that
+   shows when it peeks. No other drawing changed.
 2. An elf scribbles on the paper: a short handwritten note (Caveat, holly green, a slight tilt) on
    the ruled line above the row just changed (below it for the first row under a heading), or beside
    the new line under "Also in your bag" for an example. One at a time; it fades after about three
    seconds or when the next one appears; it lies over empty paper only, takes no tap and shifts
-   nothing. Quick taps on one row keep the note that is there. ALL the notes are one list, `NOTES`
+   nothing. Quick taps on one row keep the note that is there. It never lies over an item's name,
+   a price, a heading or a control (5 October 2026, after measuring in a real browser showed a long
+   note could touch a neighbouring row's words where a name wraps, an example's line runs to two
+   lines, or the rows are tight on a small phone): the script measures the real ink of the words on
+   the paper and the boxes of the buttons, and tries the note across the rule above the row, then
+   the one below, then smaller (0.94rem), then smallest and level (0.86rem), keeping 2px clear; the
+   first row of a group only ever has it below. If nowhere is clear, no note is written that time. ALL the notes are one list, `NOTES`
    in the catalogue: at least two per item, general ones, the first thing in, several of one thing
    ("10 pencils? You legend."), taking something out (kind, never guilt), and an example. They never
    say anything is bought or that anyone receives it, never "will", never press, have no dashes or
@@ -216,7 +234,7 @@ How it is built. The 22 drawings (13 items, 9 examples) are inline SVG in ONE pl
 catalogue, with no colour of their own (the stylesheet gives them the site's tokens; the gold is
 `--gold-ink`). The choices are pure functions in the catalogue (`peekOrder`, `latestPeeks`,
 `peekCount`, `milestoneCrossed`, `flurryKind`, `flurryDue`, `flurryPlan`, `strains`, `noteKind`,
-`noteFor`, `allNotes`); the page script only applies them. (`peekSlots`, which kept the earliest
+`noteFor`, `allNotes`, `notePlacements`, `quadTouches`); the page script only applies them. (`peekSlots`, which kept the earliest
 things peeking, went on 5 October 2026.) Everything decorative is `aria-hidden`, out of the tab order, and never takes the focus; the
 one live region is untouched. Motion is transform and opacity only, nothing loops, every animated
 thing is removed by a timer, and under `prefers-reduced-motion` nothing moves: no drop, wobble,

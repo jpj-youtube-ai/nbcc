@@ -319,7 +319,7 @@ describe("ticking a story", () => {
 - [ ] **Step 2: Run the tests and see them fail**
 
 Run: `npx vitest run test/unit/admin-stories-read-tick.test.ts`
-Expected: the first five of the new tests fail (no PATCH is sent, and `#storiesListStatus` is `null`). The viewer test already passes: Task 1 locks the ticks.
+Expected: four of the new tests fail (no PATCH is sent, and `#storiesListStatus` is `null`). Two pass already: the viewer test, because Task 1 locks the ticks, and "does not draw the list again", because nothing happens yet. That one becomes a real guard once a tick saves.
 
 - [ ] **Step 3: Add the status line**
 

@@ -2179,6 +2179,42 @@
       loadStories();
     });
   });
+  // TASK-NNN: one listener on the list's box, which stays while the table inside it is drawn again
+  // on every load. A tick saves at once and the row stays where it is, so the next story does not
+  // move under the pointer and the tick can come straight back off.
+  if (el("storiesTable")) {
+    el("storiesTable").addEventListener("change", function (e) {
+      var box = e.target;
+      if (box && box.hasAttribute && box.hasAttribute("data-story-read")) setStoryRead(box);
+    });
+  }
+  function setStoryRead(box) {
+    var status = box.checked ? "reviewed" : "new";
+    var line = el("storiesListStatus");
+    line.textContent = "";
+    line.className = "ty-status";
+    box.disabled = true;
+    authFetch("/api/admin/stories/" + box.getAttribute("data-story-read"), {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ status: status }),
+    })
+      .then(okJson)
+      .then(function (updated) {
+        box.checked = storyIsRead(updated.status);
+        var row = box.closest("tr");
+        var pill = row && row.querySelector("[data-story-status]");
+        if (pill) pill.textContent = H.storyLabel("status", updated.status);
+        box.disabled = false;
+      })
+      .catch(function (err) {
+        if (err && err.message === "unauthorized") return;
+        box.checked = status !== "reviewed";
+        box.disabled = false;
+        line.textContent = "Could not mark that story as " + (status === "reviewed" ? "read" : "new") + ". Please try again.";
+        line.className = "ty-status is-error";
+      });
+  }
   function scopeConsentBadges(r) {
     var scopeClass = r.use_scope === "public" ? "is-public" : "is-internal";
     var badges = '<span class="admin-pill ' + scopeClass + '">' + H.escapeHtml(H.storyLabel("useScope", r.use_scope)) + "</span>";

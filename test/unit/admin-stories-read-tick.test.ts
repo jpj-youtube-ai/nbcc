@@ -134,3 +134,66 @@ describe("the Read column on the Stories list", () => {
     expect(el("view-story").hidden).toBe(true);
   });
 });
+
+describe("ticking a story", () => {
+  it("makes a New story Reviewed, in place, and the tick can come straight back off", async () => {
+    await openStories();
+    await press(tick(4));
+    expect(patches()).toEqual([{ method: "PATCH", path: "/api/admin/stories/4", body: '{"status":"reviewed"}' }]);
+    expect(tick(4).checked).toBe(true);
+    expect(tick(4).disabled).toBe(false);
+    expect(statusOf(4)).toBe("Reviewed");
+    await press(tick(4));
+    expect(patches()[1]).toEqual({ method: "PATCH", path: "/api/admin/stories/4", body: '{"status":"new"}' });
+    expect(tick(4).checked).toBe(false);
+    expect(statusOf(4)).toBe("New");
+  });
+
+  it("does not draw the list again, so nothing jumps", async () => {
+    await openStories();
+    const row = tick(4).closest("tr");
+    await press(tick(4));
+    expect(tick(4).closest("tr")).toBe(row);
+    expect(calls.filter((c) => c.method === "GET" && c.path === "/api/admin/stories")).toHaveLength(1);
+  });
+
+  it("puts the tick back and says so when the save fails", async () => {
+    patchStatus = 500;
+    await openStories();
+    await press(tick(4));
+    expect(tick(4).checked).toBe(false);
+    expect(tick(4).disabled).toBe(false);
+    expect(statusOf(4)).toBe("New");
+    expect(el("storiesListStatus").textContent).toBe("Could not mark that story as read. Please try again.");
+    expect(el("storiesListStatus").className).toBe("ty-status is-error");
+  });
+
+  it("says as new when unticking fails, and clears the line on the next try", async () => {
+    patchStatus = 500;
+    await openStories();
+    await press(tick(3));
+    expect(tick(3).checked).toBe(true);
+    expect(el("storiesListStatus").textContent).toBe("Could not mark that story as new. Please try again.");
+    patchStatus = 200;
+    await press(tick(3));
+    expect(el("storiesListStatus").textContent).toBe("");
+    expect(el("storiesListStatus").className).toBe("ty-status");
+  });
+
+  it("cannot be pressed again while it is saving", async () => {
+    await openStories();
+    const box = tick(4);
+    box.checked = true;
+    box.dispatchEvent(new Event("change", { bubbles: true }));
+    expect(box.disabled).toBe(true);
+    await settle();
+    expect(box.disabled).toBe(false);
+  });
+
+  it("is locked for someone who can only view Stories, and sends nothing", async () => {
+    perms = effectivePermissions({ role: "viewer", permissions: null });
+    await openStories();
+    expect([tick(4).disabled, tick(3).disabled]).toEqual([true, true]);
+    expect(patches()).toEqual([]);
+  });
+});

@@ -360,7 +360,7 @@ describe("the donations table becomes labelled cards wherever it is narrow", () 
   });
 });
 
-// TASK-NNN: the Stories list becomes labelled cards wherever it is narrow, as the donations table
+// TASK-561: the Stories list becomes labelled cards wherever it is narrow, as the donations table
 // did, and by the same rule (it measures itself, and the cards start below 760px). At 390px its
 // eight columns were about 42px each, rows were 262 to 548px tall, and every word was stacked a
 // letter or two a line.

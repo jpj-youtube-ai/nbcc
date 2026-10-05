@@ -2370,7 +2370,7 @@
     // it has been erased, this person may no longer change stories). All in the story's own row,
     // beside the tick that was pressed however long the list is.
     //
-    // TASK-NNN: where the list is narrow each story is a labelled card (admin.css, .st-list), as
+    // TASK-561: where the list is narrow each story is a labelled card (admin.css, .st-list), as
     // a donation is. So every cell carries its column's name, and the wrapper is what the
     // stylesheet measures. The cards put the ID at the top and fit the tick by position, so
     // admin-fits-a-phone.test.ts checks these columns and their order. A card's line is a row, a

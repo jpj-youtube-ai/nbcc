@@ -2234,7 +2234,7 @@ counts the live stories still at New. Design:
 every way a save can fail, somebody else getting there first, a viewer, the open story, and the
 styles), `test/unit/stories-admin-model.test.ts` and `test/unit/admin-stories-api.test.ts` (the
 condition), and end to end in `features/admin-stories.feature` and `features/admin-overview.feature`.
-On a phone the list is cards, not this table: see **The Stories list on a phone (TASK-NNN)**.
+On a phone the list is cards, not this table: see **The Stories list on a phone (TASK-561)**.
 
 **Public unsubscribe route (REQ-069 · TASK-161 · TASK-297).** `/unsubscribe/:token`
 (`src/routes/unsubscribe.ts`, mounted in `src/app.ts`) is the link every newsletter email carries.
@@ -6634,7 +6634,7 @@ screen, the Overview's recent donations and donation search results, so all thre
 - **Tests:** `admin-fits-a-phone.test.ts` pins the CSS. `admin-app.test.ts` checks every cell's label
   on all three lists.
 
-## The Stories list on a phone (TASK-NNN)
+## The Stories list on a phone (TASK-561)
 
 At 390px the Stories table could not be read. Its seven columns were about 51px each before the Read
 tick (TASK-560) and about 42px with it, rows were 262 to 548px tall, and every word was stacked a

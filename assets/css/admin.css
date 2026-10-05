@@ -248,7 +248,7 @@
 .admin-read-bar{display:flex;flex-wrap:wrap;align-items:center;gap:6px 14px;margin:16px 0 0}
 .admin-read-bar .admin-btn,.admin-read-bar .admin-link{min-height:44px}
 .admin-read-done{font-weight:600;color:var(--holly-dark)}
-/* TASK-NNN: where the list is narrow each story is a labelled card, as a donation is (TASK-483),
+/* TASK-561: where the list is narrow each story is a labelled card, as a donation is (TASK-483),
    and by the same rule: the list measures itself (.st-list), and the cards start below 760px.
    At 390px the table's eight columns were about 42px each, its rows 262 to 548px tall, and every
    word stacked a letter or two a line. Measured, the table starts to split its dates at a list of

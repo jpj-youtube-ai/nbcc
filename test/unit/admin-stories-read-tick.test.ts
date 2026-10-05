@@ -181,7 +181,7 @@ describe("the Read column on the Stories list", () => {
     expect(el("view-story").hidden).toBe(true);
   });
 
-  // TASK-NNN: where the list is narrow each story is a card (admin.css, .st-list), every line
+  // TASK-561: where the list is narrow each story is a card (admin.css, .st-list), every line
   // labelled by its cell's data-label, and the wrapper is what the stylesheet measures.
   it("wraps the table in the box the stylesheet measures, and labels every cell for its card", async () => {
     await openStories();

@@ -181,6 +181,32 @@ describe("the Read column on the Stories list", () => {
     expect(el("view-story").hidden).toBe(true);
   });
 
+  // TASK-NNN: where the list is narrow each story is a card (admin.css, .st-list), every line
+  // labelled by its cell's data-label, and the wrapper is what the stylesheet measures.
+  it("wraps the table in the box the stylesheet measures, and labels every cell for its card", async () => {
+    await openStories();
+    expect(document.querySelector("#storiesTable > .st-list > table.stories-table")).not.toBeNull();
+    const labels = Array.from(rowOf(4).children).map((td) => td.getAttribute("data-label"));
+    expect(labels).toEqual(["Read", "ID", "Role", "Scope / consent", "Status", "Consent age", "Submitted", ""]);
+    // Every row, not only the first.
+    expect(document.querySelectorAll("#storiesTable tbody td:not([data-label])")).toHaveLength(0);
+  });
+
+  // A card's line is a row: a label, then its value. Without one box around them, each pill
+  // would be its own piece of that row and the sentence would sit beside the status, not under it.
+  it("keeps a cell's pills, and the status with its sentence, in one box each", async () => {
+    stories[0] = { ...story(4, "new"), use_scope: "public", consent_share_first_name: true, consent_share_town: true };
+    await openStories();
+    const scope = rowOf(4).children[3];
+    expect(scope.children).toHaveLength(1);
+    expect(scope.children[0].className).toBe("st-value");
+    expect(scope.children[0].querySelectorAll(".admin-pill")).toHaveLength(3);
+    const status = rowOf(4).children[4];
+    expect(status.children).toHaveLength(1);
+    expect(status.children[0].className).toBe("st-value");
+    expect(Array.from(status.children[0].children)).toEqual([statusPill(4), unsavedOf(4), rowOf(4).querySelector("[data-story-note]")]);
+  });
+
   it("has no line above the list for what could not be saved: that is said in the story's own row", async () => {
     await openStories();
     expect(el("storiesListStatus")).toBeNull();
@@ -755,9 +781,9 @@ describe("its styles", () => {
     expect(unsaved).toMatch(/white-space:\s*nowrap/);
     // Maroon on the failed pills' tint: 7.8 to 1. The crimson those pills use is 4.2 to 1.
     expect(unsaved).toMatch(/color:\s*var\(--maroon\)/);
-    // Except on a phone, where the column is narrower than the pill and one line would run over
-    // the next column's words.
-    expect(css).toMatch(/@media \(max-width:700px\)\{\.admin-read-unsaved\{white-space:normal\}\}/);
+    // At every width: on a phone the story is a card now (admin-fits-a-phone.test.ts), with room
+    // for the pill, so nothing lets it wrap any more.
+    expect(css).not.toContain(".admin-read-unsaved{white-space:normal}");
   });
 
   // Measured in Chrome: a line above the list pushed every row down 35px the moment a save failed,

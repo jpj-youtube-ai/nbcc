@@ -2435,8 +2435,9 @@ wordmark next to the same words set in our own face reads as a mistake. It sits 
 lifting on hover — present and legible, never louder than the ball's own lockup a few sections
 above. It is a guest's mark on NBCC's page.
 
-**The mark fits the screen it is on (TASK-553).** It is 500px wide wherever it appears (the Ball
-page's hero and foot, the thank-you page, the home page's Ball promotion), each with
+**The mark fits the screen it is on (TASK-553).** It is set 500px wide wherever it appears (the Ball
+page's hero and foot, the thank-you page, the home page's Ball promotion, where the paragraphs'
+46ch measure makes it a fraction under), each with
 `max-width: 100%`, and on a phone that cap did nothing: at 375px the Ball and thank-you pages
 measured 453px wide and the home page 504px, with the mark cut off at both edges. Two causes, both
 "a percentage of a box that is still being sized by its own content":
@@ -2449,12 +2450,17 @@ measured 453px wide and the home page 504px, with the mark cut off at both edges
   narrower than its content, so the mark set the width of the whole text column. It is now
   `minmax(0,1fr)`, as the two column layout already was, and the credit is capped at
   `min(46ch,100%)`: the paragraphs' own measure, or its column where that is narrower. The second
-  part also cures the two column layout from about 821px to 1040px, where each column is narrower
-  than the mark and it ran off the screen.
+  part also cures the two column layout from 821px to about 1070px, where each column is narrower
+  than the mark and it ran off the screen (the comment beside the rule says about 1040px, an early
+  estimate).
 
 The mark's own rules are untouched, so TASK-337's "one size everywhere" still holds, and from
 1280px up nothing moves. `test/unit/sponsor-mark-fits-phones.test.ts` holds the rules; jsdom lays
-nothing out, so the widths were measured on the live pages with the rules applied (320 to 1600px).
+nothing out, so the widths were measured on the live pages with the rules applied (320 to 1600px),
+and an independent review laid the live pages out at every width from 240px to 2000px. That test
+reads rules with their comments taken out (TASK-556): its first version could be satisfied by a
+comment that mentioned `max-width: 100%`, so it passed with the hero's fix deleted. Each of its four
+guards has now been seen to fail with its rule removed.
 `assets/css/ball.css` is committed with mixed line endings: change it byte for byte (an editor that
 tidies them rewrites every line), and check `git diff --numstat` shows only your lines.
 

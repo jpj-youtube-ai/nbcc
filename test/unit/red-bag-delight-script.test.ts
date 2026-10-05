@@ -833,6 +833,8 @@ describe("the elf's note", () => {
 describe("the note never lies over a name, a price or a control", () => {
   type Box = { left: number; top: number; width: number; height: number };
   let boxes: (el: Element) => Box | null;
+  let fits = 0; // how many times the paper has been measured for a note
+  let measure: ReturnType<typeof vi.fn>;
   const restore: Array<() => void> = [];
   const prop = (proto: object, name: string, get: (this: HTMLElement) => number) => {
     const old = Object.getOwnPropertyDescriptor(proto, name);
@@ -843,7 +845,10 @@ describe("the note never lies over a name, a price or a control", () => {
 
   beforeEach(() => {
     boxes = () => null;
+    fits = 0;
     const rect = vi.spyOn(Element.prototype, "getBoundingClientRect").mockImplementation(function (this: Element) {
+      // The paper's own edge is read once each time a note is fitted.
+      if (this.classList.contains("rb-paper")) fits += 1;
       const own = boxes(this);
       const b = own ?? (this.classList.contains("rb-paper") ? { left: 0, top: -100, width: 400, height: 5000 } : this.classList.contains("rb-item") ? { left: 0, top: rowTop(this), width: 400, height: 60 } : { left: 0, top: 0, width: 0, height: 0 });
       return { ...b, x: b.left, y: b.top, right: b.left + b.width, bottom: b.top + b.height, toJSON: () => b } as DOMRect;
@@ -855,11 +860,15 @@ describe("the note never lies over a name, a price or a control", () => {
     prop(HTMLElement.prototype, "offsetLeft", function () { return isNote(this) ? 200 : 0; });
     // As the stylesheet places it: across the rule above the row, or across the one below it.
     prop(HTMLElement.prototype, "offsetTop", function () { return isNote(this) ? (this.classList.contains("rb-note--below") ? 50 : -10) : 0; });
-    const ctx = vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockImplementation((() => ({ font: "", measureText: () => ({ width: 100, fontBoundingBoxAscent: 14, fontBoundingBoxDescent: 6, actualBoundingBoxAscent: 12, actualBoundingBoxDescent: 4 }) })) as never);
+    measure = vi.fn(() => ({ width: 100, fontBoundingBoxAscent: 14, fontBoundingBoxDescent: 6, actualBoundingBoxAscent: 12, actualBoundingBoxDescent: 4 }));
+    const ctx = vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockImplementation((() => ({ font: "", measureText: measure })) as never);
+    // The names on the paper have words to measure (one line each, well clear of the note).
+    Range.prototype.getClientRects = (() => [{ left: 0, top: 5000, width: 50, height: 20 }]) as never;
     restore.push(() => ctx.mockRestore());
-    const old = Range.prototype.getClientRects;
-    Range.prototype.getClientRects = (() => []) as never;
-    restore.push(() => void (Range.prototype.getClientRects = old));
+    restore.push(() => {
+      delete (Range.prototype as unknown as Record<string, unknown>).getClientRects;
+      delete (document as unknown as Record<string, unknown>).fonts;
+    });
     start({ layout: true });
   });
   afterEach(() => {
@@ -910,6 +919,104 @@ describe("the note never lies over a name, a price or a control", () => {
     expect(note().parentElement).toBe(row("book"));
     expect(spy).not.toHaveBeenCalled();
     spy.mockRestore();
+  });
+
+  // Review, 5 October 2026: a row where nothing fits was measured afresh on every tap or key repeat.
+  it("does not measure again and again for a row where nothing fits: once, then once more when the taps stop", () => {
+    boxes = (el) => (el.tagName === "INPUT" ? { left: 0, top: -100, width: 400, height: 5000 } : null);
+    plus("socks");
+    expect(note()).toBeNull();
+    expect(fits).toBe(1);
+    // Nine more, quickly, as a held key or fast taps would be.
+    for (let i = 0; i < 9; i += 1) {
+      vi.advanceTimersByTime(30);
+      plus("socks");
+    }
+    expect(fits).toBe(1);
+    expect(note()).toBeNull();
+    // The moment is up: the NEWEST change is tried once, and that is all.
+    vi.advanceTimersByTime(900);
+    expect(fits).toBe(2);
+    vi.advanceTimersByTime(5000);
+    expect(fits).toBe(2);
+    // Taking one out and putting it back is held in the same way.
+    minus("socks");
+    plus("socks");
+    minus("socks");
+    expect(fits).toBe(3);
+    expect(api!.total()).toBe(900);
+    // Another row is not held back by it.
+    boxes = () => null;
+    plus("book");
+    expect(fits).toBe(4);
+    expect(note().parentElement).toBe(row("book"));
+  });
+
+  // Review: a note that cannot be written must not pull off one that is still showing elsewhere.
+  it("leaves a note that is showing on another row to finish, when the new row cannot take one", () => {
+    plus("blanket");
+    const showing = note();
+    expect(showing.parentElement).toBe(row("blanket"));
+    expect(showing.classList.contains("is-on")).toBe(true);
+    const words = showing.textContent;
+    vi.advanceTimersByTime(1000);
+    boxes = (el) => (el.tagName === "INPUT" ? { left: 0, top: -100, width: 400, height: 5000 } : null);
+    plus("socks");
+    // Still there, on its own row, the same words, and still the only note.
+    expect($$(".rb-note").length).toBe(1);
+    expect(note()).toBe(showing);
+    expect(showing.parentElement).toBe(row("blanket"));
+    expect(showing.classList.contains("is-on")).toBe(true);
+    expect(showing.textContent).toBe(words);
+    expect(row("socks").querySelector(".rb-note")).toBeNull();
+    // And it goes in its own time: about three seconds after it was written, not cut short.
+    vi.advanceTimersByTime(2000);
+    expect(showing.classList.contains("is-on")).toBe(true);
+    vi.advanceTimersByTime(300);
+    expect(showing.classList.contains("is-on")).toBe(false);
+    vi.advanceTimersByTime(400);
+    expect(note()).toBeNull();
+  });
+
+  it("still replaces the note that is showing when the new row CAN take one: never two at once", () => {
+    plus("blanket");
+    plus("socks");
+    expect($$(".rb-note").length).toBe(1);
+    expect(note().parentElement).toBe(row("socks"));
+    vi.advanceTimersByTime(5000);
+    expect(note()).toBeNull();
+  });
+
+  // Review: measurements taken before the handwriting font arrives are of the wrong letters.
+  it("does not keep a measurement taken before the fonts have loaded, and keeps them once they have", () => {
+    const listeners: Record<string, () => void> = {};
+    const fonts = { status: "loading", addEventListener: (name: string, fn: () => void) => void (listeners[name] = fn) };
+    (document as unknown as Record<string, unknown>).fonts = fonts;
+    start({ layout: true });
+    const asked = (words: string) => measure.mock.calls.filter((c) => c[0] === words).length;
+    plus("book");
+    expect(asked("Blanket")).toBe(1);
+    vi.advanceTimersByTime(5000);
+    plus("book");
+    // Still loading: measured afresh, not remembered.
+    expect(asked("Blanket")).toBe(2);
+    fonts.status = "loaded";
+    vi.advanceTimersByTime(5000);
+    plus("book");
+    expect(asked("Blanket")).toBe(3);
+    vi.advanceTimersByTime(5000);
+    plus("book");
+    // Loaded: remembered now.
+    expect(asked("Blanket")).toBe(3);
+    // A font arriving later (the browser says so): what was remembered is thrown away.
+    expect(typeof listeners.loadingdone).toBe("function");
+    listeners.loadingdone();
+    vi.advanceTimersByTime(5000);
+    plus("book");
+    expect(asked("Blanket")).toBe(4);
+    vi.advanceTimersByTime(5000);
+    plus("book");
+    expect(asked("Blanket")).toBe(4);
   });
 
   it("puts the paper's tilt back after measuring, even if the measuring fails", () => {

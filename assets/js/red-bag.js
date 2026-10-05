@@ -197,6 +197,8 @@
     var noteAt = 0;
     var lastNote = "";
     var noteWait = null; // the newest change on a row whose note is still having its moment
+    var skipRow = null; // the row last found to have no clear place for a note, and when
+    var skipAt = 0;
     var bumpTimer = null;
 
     // Where a drop flies: one layer over the builder. It takes no tap and clips what leaves it.
@@ -473,7 +475,18 @@
     // is nowhere clear, no note is written. Where a browser cannot measure, the note is as it was.
     var NOTE_GAP = 2; // px of clear paper kept between the note and anything else
     var inkCtx = null;
+    // Measurements are remembered (the same words in the same type), but only once the page's
+    // fonts have arrived: before that the letters measured are a stand-in's, in a font of the very
+    // same name. And if the browser says a font has arrived since, they are all forgotten.
     var inkSeen = {};
+    function fontsIn() {
+      return !doc.fonts || typeof doc.fonts.status !== "string" || doc.fonts.status === "loaded";
+    }
+    if (delightOn && doc.fonts && typeof doc.fonts.addEventListener === "function") {
+      doc.fonts.addEventListener("loadingdone", function () {
+        inkSeen = {};
+      });
+    }
     /** How far a line of these words reaches above and below, within its line of type. */
     function inkOf(el, words) {
       var cs = win.getComputedStyle(el);
@@ -486,7 +499,7 @@
       var m = inkCtx.measureText(words);
       if (typeof m.fontBoundingBoxAscent !== "number" || typeof m.actualBoundingBoxAscent !== "number") return null;
       known = { box: m.fontBoundingBoxAscent + m.fontBoundingBoxDescent, top: m.fontBoundingBoxAscent - m.actualBoundingBoxAscent, bottom: m.fontBoundingBoxAscent + m.actualBoundingBoxDescent };
-      inkSeen[font + "|" + words] = known;
+      if (fontsIn()) inkSeen[font + "|" + words] = known;
       return known;
     }
     /** Everything on the paper a note must keep off, as boxes. Null where it cannot be measured. */
@@ -513,18 +526,18 @@
       });
       return ok ? out : null;
     }
-    /** The note's own ink as it lies now: four corners, turned as the stylesheet turns it. */
-    function noteInk(row) {
-      var ink = inkOf(noteEl, noteEl.textContent);
+    /** A note's own ink as it lies now: four corners, turned as the stylesheet turns it. */
+    function noteInk(row, el) {
+      var ink = inkOf(el, el.textContent);
       if (!ink) return null;
       var at = row.getBoundingClientRect();
-      var x = at.left + (row.clientLeft || 0) + noteEl.offsetLeft;
-      var y = at.top + (row.clientTop || 0) + noteEl.offsetTop;
-      var w = noteEl.offsetWidth;
-      var h = noteEl.offsetHeight;
+      var x = at.left + (row.clientLeft || 0) + el.offsetLeft;
+      var y = at.top + (row.clientTop || 0) + el.offsetTop;
+      var w = el.offsetWidth;
+      var h = el.offsetHeight;
       var top = y + (h - ink.box) / 2;
       // It turns about its bottom right corner (as in the stylesheet).
-      var t = new win.DOMMatrix(win.getComputedStyle(noteEl).transform);
+      var t = new win.DOMMatrix(win.getComputedStyle(el).transform);
       function turn(px, py) {
         var dx = px - (x + w);
         var dy = py - (y + h);
@@ -532,9 +545,9 @@
       }
       return [turn(x, top + ink.top), turn(x + w, top + ink.top), turn(x + w, top + ink.bottom), turn(x, top + ink.bottom)];
     }
-    /** Put the note where it touches nothing. Says false if there is nowhere: then none is shown. */
-    function fitNote(row) {
-      noteEl.className = "rb-note";
+    /** Put a note where it touches nothing. Says false if there is nowhere: then none is shown. */
+    function fitNote(row, el) {
+      el.className = "rb-note";
       var paper = typeof row.closest === "function" ? row.closest(".rb-paper") : null;
       if (!paper || typeof win.DOMMatrix !== "function" || typeof win.getComputedStyle !== "function" || !(row.getBoundingClientRect().width > 0)) return true;
       // The paper lies at a slight tilt on a wide screen. It is measured square on, and put back
@@ -547,10 +560,10 @@
         var edge = paper.getBoundingClientRect();
         var ways = rb.notePlacements(row.parentNode && row.parentNode.firstElementChild === row);
         for (var i = 0; i < ways.length; i += 1) {
-          noteEl.className = "rb-note rb-note--" + (ways[i].below ? "below" : "above") + (ways[i].size ? " rb-note--" + ways[i].size : "");
-          var quad = noteInk(row);
+          el.className = "rb-note rb-note--" + (ways[i].below ? "below" : "above") + (ways[i].size ? " rb-note--" + ways[i].size : "");
+          var quad = noteInk(row, el);
           if (!quad) {
-            noteEl.className = "rb-note";
+            el.className = "rb-note";
             return true;
           }
           var clear = quad.every(function (p) {
@@ -576,43 +589,60 @@
       var now = Date.now();
       var kind = rb.noteKind(change);
       // A note on this row is still having its moment (quick taps, a held key): leave it be, with no
-      // rewrite and no reflow, and write the NEWEST change once the moment is up.
-      if (kind !== "first" && kind !== "example" && noteEl && noteRow === row && noteEl.parentNode === row && now - noteAt < NOTE_HOLD_MS) {
+      // rewrite and no reflow, and write the NEWEST change once the moment is up. The same goes for
+      // a row that has just been found to have no clear place for a note: it is not measured again
+      // on every tap, only once more when the moment is up.
+      var since = 0;
+      if (kind !== "first" && kind !== "example" && noteEl && noteRow === row && noteEl.parentNode === row && now - noteAt < NOTE_HOLD_MS) since = noteAt;
+      else if (skipRow === row && now - skipAt < NOTE_HOLD_MS) since = skipAt;
+      if (since) {
         noteWait = later(
           safe(function () {
             noteWait = null;
             scribble(row, change);
           }),
-          NOTE_HOLD_MS - (now - noteAt),
+          NOTE_HOLD_MS - (now - since),
         );
         return;
       }
       var words = rb.noteFor(change, lastNote, Math.random());
       if (!words) return;
-      if (!noteEl) {
-        noteEl = doc.createElement("span");
-        noteEl.className = "rb-note";
-        noteEl.setAttribute("aria-hidden", "true");
+      // The new note is written and fitted as a note of its own, so that one still showing on
+      // another row is not touched unless this one really has somewhere to go.
+      var fresh = doc.createElement("span");
+      fresh.className = "rb-note";
+      fresh.setAttribute("aria-hidden", "true");
+      fresh.textContent = words;
+      row.appendChild(fresh);
+      // Nowhere clear of the names, prices and buttons: no note this time, rather than one over
+      // them. Any note already showing is left to finish in its own time.
+      var fits = false;
+      try {
+        fits = fitNote(row, fresh);
+      } finally {
+        if (!fits) {
+          gone(fresh);
+          skipRow = row;
+          skipAt = now;
+        }
       }
+      if (!fits) return;
+      skipRow = null;
+      // ONE note at a time: the one that was showing gives way to this one.
       clearTimeout(noteTimer);
-      noteEl.classList.remove("is-on");
-      noteEl.textContent = words;
-      row.appendChild(noteEl);
-      // Nowhere clear of the names, prices and buttons: no note this time, rather than one over them.
-      if (!fitNote(row)) {
-        gone(noteEl);
-        return;
-      }
+      if (noteEl && noteEl !== fresh) gone(noteEl);
+      noteEl = fresh;
       // Read once so the fade begins from nothing each time.
-      void noteEl.offsetWidth;
-      noteEl.classList.add("is-on");
+      void fresh.offsetWidth;
+      fresh.classList.add("is-on");
       lastNote = words;
       noteRow = row;
       noteAt = now;
       noteTimer = later(function () {
-        noteEl.classList.remove("is-on");
+        fresh.classList.remove("is-on");
         noteTimer = later(function () {
-          gone(noteEl);
+          gone(fresh);
+          if (noteEl === fresh) noteEl = null;
         }, 320);
       }, NOTE_MS);
     }

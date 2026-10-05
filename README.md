@@ -12325,7 +12325,9 @@ functions (`peekOrder`, `latestPeeks`, `milestoneCrossed`, `flurryKind`, `flurry
 (5 October 2026): the script measures where the note's words would fall (their real ink, and the
 boxes of the buttons and number boxes, with 2px to spare) and tries each place in the catalogue's
 `notePlacements` in turn (across the rule above the row, the one below, then smaller, then
-smallest and level); if nowhere is clear it writes no note that time. It changes no price, total,
+smallest and level); if nowhere is clear it writes no note that time, leaves any note still
+showing on another row to finish, and does not measure that row again until the usual 900ms hold
+is up. Measurements are only remembered once the page's fonts have loaded. It changes no price, total,
 wording or checkout field, makes no network request, and adds no file to load. Everything decorative is `aria-hidden`, out of the tab order and removed by a
 timer; the one live region is untouched; motion is transform and opacity only and is off under
 `prefers-reduced-motion` (the peeks, ribbon, tag and note still appear, at once; there is no snow

@@ -78,6 +78,14 @@ export interface RedBagCatalogue {
   pounds(pence: number): string;
   /** A drawing for an item or an example, as an inline picture for the eye only; "" if there is none. */
   art(key: string, cls?: string, size?: number): string;
+  /** Every drawing, by key: one for each built-in item and example, and the plain present. */
+  ART: Record<string, string>;
+  /** The elf's notes (only what the list's rules need of them: which keys they are written for). */
+  NOTES: { items: Record<string, string[]>; things: Record<string, string> };
+  /** The list as it is written in the file, whatever list is in use: "The original list". */
+  BUILT_IN: { groups: RedBagGroup[]; themes: RedBagTheme[] };
+  /** The id of the block of data the server draws a published list into the page as. */
+  LIST_DATA_ID: string;
 }
 
 // This file compiles to dist/red-bag/catalogue.js, so ../.. is the app root (as ./signers.ts).

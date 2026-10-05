@@ -73,6 +73,8 @@ describe("admin dashboard shell (REQ-066 · TASK-115)", () => {
       "overview",
       "search",
       "donations",
+      // Fill a Red Bag: the list's editor, under Giving after Donations.
+      "red-bag",
       "claims",
       "gasds",
       "subscriptions",

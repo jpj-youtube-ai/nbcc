@@ -416,6 +416,80 @@ One module holding the items, groups, themes and the £50 bag value, with pure f
 total, the bag count and fill, and the status line, so the page script and the tests share one
 source of truth and half 2 can move the data to the admin without touching the page's behaviour.
 
+## Staff editing of the list (5 October 2026)
+
+Agreed with Jaimie point by point, and built as half 2's first piece. The README section "Fill a
+Red Bag: staff edit the list" is the full account of how it works; this is what was decided.
+
+**What staff can change.** An item's price, name, order under its heading, which of the four
+headings it sits under, its picture, and whether it shows. New items: a name, a price, a heading and
+a picture chosen from the drawings there already are or a plain wrapped present (one new drawing,
+`present`; no uploading). Under each of the three themes, each example's amount and words, its
+order, its picture, whether it shows, and new examples. The page always writes the amount and
+"could help" itself: staff type only what follows, so nothing can be published that does not read
+"£X could help ...".
+
+**What they cannot.** The £50 bag, the £2 minimum, the four headings, the three themes and their
+descriptions, the elf's notes, the drawings themselves, and any other wording on the page.
+
+**Draft, preview, publish, history.**
+
+- Every change is saved to ONE shared draft. Nothing changes for the public until someone presses
+  Publish.
+- The editor says plainly what differs between the draft and the website, and how many changes
+  there are.
+- Preview the page opens the real `/fill`, drawn from the draft, for signed in staff with view of
+  this section only. It carries a strip, "Draft preview: not on the website yet", is never cached
+  and never indexed, and GIVING IS SWITCHED OFF in it: Donate does nothing but say "This is a
+  preview. Giving is switched off here.", so a preview can never take money for a list the public
+  cannot see.
+- Publish makes the draft the website's list, after a confirm that repeats the changes. Throw away
+  changes drops the draft, after a confirm.
+- Every publish is kept, with who, when and what changed. Any earlier list can be looked at and put
+  back AS A DRAFT, so it is still previewed and published like any change. The list written in the
+  code is always at the foot of the history as "The original list", and can be put back too.
+- Two people at once: the draft carries a stamp. A save against a stale stamp is refused with
+  "Someone else has changed the draft. Reload to see their changes." and nothing is lost on the
+  server.
+
+**Who.** A new access section, "Fill a Red Bag", on Team > Manage access: view to see the editor,
+the differences, the history and the preview; edit to save, publish, throw away or put back. Admins
+have it. Nobody else does until it is given to them, and nobody's other access changes.
+
+**Guard rails**, on the server on every save and again on publish, and in the browser as it is
+typed. A price is whole pence from 10p to £500; an example's amount from £1 to £1,000. A name is 1
+to 40 characters; what follows "could help" up to 90. Plain text only. Never "will", never "buy",
+"buys" or "bought", no en or em dash. At least one item showing; no two items showing with the same
+name; 30 items at most and 6 examples in a theme. Keys are unique and never change. A heading with
+nothing showing is not drawn on the page, nor is a theme.
+
+**Storage, and the safety of the public page.** One additive migration: a table of list versions
+(one draft at most; every published list kept). No row is seeded: until someone publishes, the page
+uses the list in the code exactly as before. The page's read of the list is kept for a minute, is
+read again at once after a publish, and never throws: if the database cannot answer, or what is
+stored fails the rules, the page uses the last good list, or the list in the code. The server
+draws the list into the page as rows, as before, and beside them a small block of data that the
+catalogue script reads as it starts; with no block, or a wrong one, the script keeps its own list.
+The checkout is not changed: it still checks only the total. Publish, throw away and put back are
+each written to the audit log; saving the draft is not.
+
+**Chosen along the way** (each for Jaimie to overrule):
+
+- The section's key is `red-bag` (the other keys use hyphens), and it is admins only by role, like
+  Analytics: editors and viewers do not get it with their role.
+- An item or example on the website can be hidden but not deleted, so its key and its history are
+  never lost. Something added and not yet published can be removed. The server enforces it on every
+  save and on publish ("An item that is on the website can be hidden, not removed."); putting an
+  earlier list back is the one way anything leaves the website's list.
+- Every item, not only a new one, can be given another picture.
+- An item staff have renamed gets the elf's general notes only, not the ones written about its old
+  name.
+- The 90 characters are counted on what staff type, after "could help".
+- A draft is never started from a website list that someone has replaced since the screen was
+  opened: that save is refused as stale too.
+- The preview's own address, `/fill?preview=draft`, is never cached or indexed even on a plain
+  visit, because one address answers two ways.
+
 ## Testing
 
 - Unit: totals in pence (no float drift: 10p pencils), bag count and fill at the edges (0, 199, 200,

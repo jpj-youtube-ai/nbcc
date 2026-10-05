@@ -200,10 +200,10 @@ describe("the steppers", () => {
     expect(text("[data-rb-total]")).toBe("£3");
   });
 
-  it("add up one of everything to £54.10", () => {
+  it("add up one of everything to £64.10", () => {
     for (const i of catalogue.items()) plus(i.key);
-    expect(text("[data-rb-total]")).toBe("£54.10");
-    expect(api!.total()).toBe(5410);
+    expect(text("[data-rb-total]")).toBe("£64.10");
+    expect(api!.total()).toBe(6410);
   });
 });
 
@@ -249,7 +249,7 @@ describe("the bags and the status line", () => {
   const fills = () => bags().map((b) => Number(b.style.getPropertyValue("--rb-fill")));
 
   it("fill one bag towards £50, and say how full it is", () => {
-    type("rb-qty-toy", "5");
+    type("rb-qty-pyjamas", "5"); // £25
     expect(text("[data-rb-status]")).toBe("Your bag is about half full.");
     expect(bags().length).toBe(1);
     expect(fills()[0]).toBeCloseTo(0.5, 2);
@@ -262,7 +262,10 @@ describe("the bags and the status line", () => {
   });
 
   it("keep a full bag and start the next beside it", () => {
-    for (const i of catalogue.items()) plus(i.key);
+    // A full bag and a little over: one of everything but the toy, and a second pair of pyjamas.
+    for (const i of catalogue.items()) if (i.key !== "toy") plus(i.key);
+    plus("pyjamas");
+    expect(api!.total()).toBe(5410);
     expect(bags().length).toBe(2);
     expect($("[data-rb-bags]").getAttribute("data-count")).toBe("2");
     expect(bags()[0].classList.contains("is-full")).toBe(true);
@@ -295,7 +298,7 @@ describe("the bags and the status line", () => {
   });
 
   it("only write the status when its words change, so it is heard once", () => {
-    plus("toy", 5);
+    plus("pyjamas", 5);
     const node = $("[data-rb-status]").firstChild;
     plus("pencil");
     expect($("[data-rb-status]").firstChild).toBe(node);
@@ -340,7 +343,7 @@ describe("once or monthly", () => {
 
   it("says every month on the Donate button for a monthly donation", () => {
     plus("blanket", 3);
-    plus("toy");
+    plus("pyjamas");
     plus("socks", 2);
     expect(button()).toBe("Donate £31");
     often("monthly");
@@ -441,16 +444,16 @@ describe("the round-up", () => {
   });
 
   it("offers a full bag from £25, and the next whole bag from £50", () => {
-    type("rb-qty-toy", "5"); // £25 exactly, their own items
+    type("rb-qty-pyjamas", "5"); // £25 exactly, their own items
     expect(text("[data-rb-round]")).toBe("+ £25 Round up to a full bag");
     plus("socks");
     expect(text("[data-rb-round]")).toBe("+ £24 Round up to a full bag");
-    type("rb-qty-toy", "10"); // £51
+    type("rb-qty-pyjamas", "10"); // £51
     expect(text("[data-rb-round]")).toBe("+ £49 Round up to 2 full bags");
-    for (const i of catalogue.items()) type(`rb-qty-${i.key}`, "1"); // £54.10
-    expect(text("[data-rb-round]")).toBe("+ £45.90 Round up to 2 full bags");
-    type("rb-qty-headphones", "40"); // £405.10
-    expect(text("[data-rb-round]")).toBe("+ £44.90 Round up to 9 full bags");
+    for (const i of catalogue.items()) type(`rb-qty-${i.key}`, "1"); // one of everything: £64.10
+    expect(text("[data-rb-round]")).toBe("+ £35.90 Round up to 2 full bags");
+    type("rb-qty-headphones", "40"); // £415.10
+    expect(text("[data-rb-round]")).toBe("+ £34.90 Round up to 9 full bags");
   });
 
   it("when pressed, adds a line under Also in your bag, with its amount and a way out", () => {

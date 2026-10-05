@@ -309,14 +309,15 @@ toiletry set a perfume bottle with its spray, and the winter coat a child's hood
   as on /donate).
 - Gift Aid as on the other give forms.
 
-## The list (starting prices, agreed)
+## The list (prices, agreed)
 
 Home comforts: Blanket £8; Insulated cup £7; Toiletry & fragrance gift set £5.
-Play & downtime: Toy £5; Soft toy £4; Headphones £9.
+Play & downtime: Toy £15; Soft toy £4; Headphones £9.
 Books & creativity: Book £3; Colouring book £2; Pencil 10p; Notebook £1.
 Clothing: Pyjamas (ages 13 & under) £5; Socks (pair) £1; Hat & gloves £4.
 
-One of everything is £54.10.
+One of everything is £64.10. (The Toy started at £5 and became £15 on 5 October 2026; every other
+price is as first agreed.)
 
 ## The themes (agreed)
 

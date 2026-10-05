@@ -50,6 +50,7 @@ export const FEATURES: ReadonlyArray<{ area: Area; added: Date; what: string }> 
   { area: "analytics", added: new Date("2026-10-01T12:00:00Z"), what: "Admin > Analytics: where visitors come from and what they look at (TASK-482)" },
   { area: "qr", added: new Date("2026-10-02T12:00:00Z"), what: "QR codes for every page, to print or share (TASK-492)" },
   { area: "fundraising", added: new Date("2026-10-02T12:00:00Z"), what: "Admin > Fundraising: approve sign ups, check changes, record cash and look after the supporter wall (TASK-495)" },
+  { area: "donations", added: new Date("2026-10-05T10:00:00Z"), what: "Donations: Fill a Red Bag against the Donate page, a Red Bag label on each gift and a Fill a Red Bag only filter" },
 ];
 
 // When the pills went live. Someone who has never opened a section is counted as having seen it

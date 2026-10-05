@@ -9,6 +9,7 @@ import { adminEventsRouter } from "./routes/admin-events";
 import { adminFundraisingRouter } from "./routes/admin-fundraising";
 import { adminFundraisingCategoriesRouter } from "./routes/admin-fundraising-categories";
 import { adminImpactExamplesRouter } from "./routes/admin-impact-examples";
+import { adminRedBagListRouter } from "./routes/admin-red-bag-list";
 import { adminFundraisingTeamRouter } from "./routes/admin-fundraising-team";
 import { adminFundraisingRequestsRouter } from "./routes/admin-fundraising-requests";
 import { adminWelcomePacksRouter } from "./routes/admin-welcome-packs";
@@ -142,6 +143,8 @@ export function createApp() {
   app.use(adminFundraisingCategoriesRouter);
   // What gifts could do: the shared "could" examples on fundraiser, event and team pages; admins edit them.
   app.use(adminImpactExamplesRouter);
+  // Fill a Red Bag: the editor for the list on /fill (a shared draft, publish, history).
+  app.use(adminRedBagListRouter);
   // TASK-503: the fundraising team's tools (invite, calls, Get involved, the Monday summary), and
   // the sign up form's invite lookup.
   app.use(adminFundraisingTeamRouter);

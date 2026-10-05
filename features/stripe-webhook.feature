@@ -257,6 +257,156 @@ Feature: Stripe webhook handler (REQ-036)
     And there should be exactly 1 donation with payment intent "pi_bdd_bacs"
     And the donation with payment intent "pi_bdd_bacs" should have claim status "eligible"
 
+  # Recording where a gift was started on the website (donations.source). The checkout stamps
+  # metadata.redBag = "true" on a Fill a Red Bag session and on no other; the webhook saves the
+  # donation exactly as it always has, and then, after that has committed, marks its source.
+  Scenario: a completed Fill a Red Bag checkout records a donation whose source is red_bag
+    When I POST a signed Stripe "checkout.session.completed" webhook event:
+      """
+      {
+        "id": "cs_bdd_redbag",
+        "object": "checkout.session",
+        "amount_total": 5410,
+        "currency": "gbp",
+        "mode": "payment",
+        "payment_intent": "pi_bdd_redbag",
+        "subscription": null,
+        "metadata": { "mode": "once", "plan": "", "giftAid": "false", "redBag": "true" },
+        "customer_details": { "name": "Robin Redbag", "email": "robin.redbag.bdd@example.com" }
+      }
+      """
+    Then the response status should be 200
+    And there should be exactly 1 donation with payment intent "pi_bdd_redbag"
+    And the donation with payment intent "pi_bdd_redbag" should have amount 5410
+    And the donation with payment intent "pi_bdd_redbag" should have gift aid false
+    And the donation with payment intent "pi_bdd_redbag" should have source "red_bag"
+    And there should be a "donation.created" audit row for the donation with payment intent "pi_bdd_redbag"
+
+  Scenario: the same checkout without the Red Bag mark records a donation with no source
+    When I POST a signed Stripe "checkout.session.completed" webhook event:
+      """
+      {
+        "id": "cs_bdd_noredbag",
+        "object": "checkout.session",
+        "amount_total": 5410,
+        "currency": "gbp",
+        "mode": "payment",
+        "payment_intent": "pi_bdd_noredbag",
+        "subscription": null,
+        "metadata": { "mode": "once", "plan": "", "giftAid": "false" },
+        "customer_details": { "name": "Robin Plain", "email": "robin.plain.bdd@example.com" }
+      }
+      """
+    Then the response status should be 200
+    And there should be exactly 1 donation with payment intent "pi_bdd_noredbag"
+    And the donation with payment intent "pi_bdd_noredbag" should have amount 5410
+    And the donation with payment intent "pi_bdd_noredbag" should have no source
+
+  Scenario: a Fill a Red Bag checkout delivered twice is recorded once, and keeps its source
+    When I POST a signed Stripe "checkout.session.completed" webhook event with id "evt_bdd_redbag_again":
+      """
+      {
+        "id": "cs_bdd_redbag_again",
+        "object": "checkout.session",
+        "amount_total": 5410,
+        "currency": "gbp",
+        "mode": "payment",
+        "payment_intent": "pi_bdd_redbag_again",
+        "subscription": null,
+        "metadata": { "mode": "once", "plan": "", "giftAid": "false", "redBag": "true" },
+        "customer_details": { "name": "Robin Again", "email": "robin.again.bdd@example.com" }
+      }
+      """
+    Then the response status should be 200
+    And there should be exactly 1 donation with payment intent "pi_bdd_redbag_again"
+    And the donation with payment intent "pi_bdd_redbag_again" should have source "red_bag"
+
+    # Resending the IDENTICAL event id is answered 200 and records nothing a second time.
+    When I POST a signed Stripe "checkout.session.completed" webhook event with id "evt_bdd_redbag_again":
+      """
+      {
+        "id": "cs_bdd_redbag_again",
+        "object": "checkout.session",
+        "amount_total": 5410,
+        "currency": "gbp",
+        "mode": "payment",
+        "payment_intent": "pi_bdd_redbag_again",
+        "subscription": null,
+        "metadata": { "mode": "once", "plan": "", "giftAid": "false", "redBag": "true" },
+        "customer_details": { "name": "Robin Again", "email": "robin.again.bdd@example.com" }
+      }
+      """
+    Then the response status should be 200
+    And there should be exactly 1 donation with payment intent "pi_bdd_redbag_again"
+    And there should be exactly 1 donor for payment intent "pi_bdd_redbag_again"
+    And the donation with payment intent "pi_bdd_redbag_again" should have source "red_bag"
+
+  Scenario: a monthly Fill a Red Bag gift's later charges carry its source, and an ordinary monthly gift's do not
+    When I POST a signed Stripe "checkout.session.completed" webhook event:
+      """
+      {
+        "id": "cs_bdd_redbag_month",
+        "object": "checkout.session",
+        "amount_total": 1000,
+        "currency": "gbp",
+        "mode": "subscription",
+        "payment_intent": null,
+        "subscription": "sub_bdd_redbag_month",
+        "metadata": { "mode": "monthly", "plan": "", "giftAid": "false", "redBag": "true" },
+        "customer_details": { "name": "Robin Monthly", "email": "robin.monthly.bdd@example.com" }
+      }
+      """
+    Then the response status should be 200
+    When I POST a signed Stripe "invoice.paid" webhook event:
+      """
+      {
+        "id": "in_bdd_redbag_month",
+        "object": "invoice",
+        "amount_paid": 1000,
+        "currency": "gbp",
+        "subscription": "sub_bdd_redbag_month",
+        "payment_intent": "pi_bdd_redbag_month",
+        "charge": "ch_bdd_redbag_month",
+        "billing_reason": "subscription_cycle"
+      }
+      """
+    Then the response status should be 200
+    And there should be exactly 1 donation with payment intent "pi_bdd_redbag_month"
+    And the donation with payment intent "pi_bdd_redbag_month" should have amount 1000
+    And the donation with payment intent "pi_bdd_redbag_month" should have source "red_bag"
+
+    When I POST a signed Stripe "checkout.session.completed" webhook event:
+      """
+      {
+        "id": "cs_bdd_noredbag_month",
+        "object": "checkout.session",
+        "amount_total": 1000,
+        "currency": "gbp",
+        "mode": "subscription",
+        "payment_intent": null,
+        "subscription": "sub_bdd_noredbag_month",
+        "metadata": { "mode": "monthly", "plan": "", "giftAid": "false" },
+        "customer_details": { "name": "Robin Ordinary", "email": "robin.ordinary.bdd@example.com" }
+      }
+      """
+    Then the response status should be 200
+    When I POST a signed Stripe "invoice.paid" webhook event:
+      """
+      {
+        "id": "in_bdd_noredbag_month",
+        "object": "invoice",
+        "amount_paid": 1000,
+        "currency": "gbp",
+        "subscription": "sub_bdd_noredbag_month",
+        "payment_intent": "pi_bdd_noredbag_month",
+        "charge": "ch_bdd_noredbag_month",
+        "billing_reason": "subscription_cycle"
+      }
+      """
+    Then the response status should be 200
+    And there should be exactly 1 donation with payment intent "pi_bdd_noredbag_month"
+    And the donation with payment intent "pi_bdd_noredbag_month" should have no source
+
   Scenario: an invalid signature is rejected
     When I POST a Stripe "charge.refunded" webhook event with an invalid signature:
       """

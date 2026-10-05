@@ -5318,6 +5318,12 @@ ONE transaction, **idempotent by event id** (a `stripe_webhook_events` ledger wi
   metadata rather than re-authoring it: in stub mode only, the checkout endpoint echoes
   the built session on its 200 body, and the step feeds that verbatim into the webhook —
   so a drift between what the checkout stamps and what the webhook reads fails the test.
+  **Where the gift was started** is recorded separately and afterwards: once the transaction has
+  committed and the emails have gone, a session whose metadata has `redBag: "true"` gets
+  `donations.source = 'red_bag'` by one best-effort `UPDATE` that never throws
+  (`tagDonationSource`; a monthly gift's later charges take it the same way). The donation's own
+  `INSERT` does not name the column. See **Recording where a gift came from** under **Fill a Red
+  Bag**.
 - **`invoice.paid` / `invoice.payment_succeeded`** → records each recurring
   monthly charge as a further donation against the SAME donor (found via the
   subscription id), carrying the Gift Aid flag + declaration from the original.
@@ -12225,7 +12231,8 @@ sheet of lined paper, a red bag fills towards £50, and they give the total. Not
 by item: the items are examples of what a donation **could** do, and every donation goes to general
 funds. Design: `docs/superpowers/specs/2026-10-04-fill-a-red-bag-design.md`. This is half 1, the
 public pages; half 2 (staff editing the list in the admin, a Red Bag receipt email, a report figure)
-is not built.
+is not built. What a report figure will need is already being kept: each donation records that it
+came from here (**Recording where a gift came from**, below).
 
 **It is public, search engines may list it, and it is linked from nowhere** (Jaimie, 4 October
 2026: "make it public but don't link anywhere to it right now", then "once it's pushed and live I
@@ -12486,7 +12493,62 @@ metadata gains `redBag: "true"`; and the return addresses are worked out by the 
 `<site>/fill`; the embedded checkout gets the thank you page as its `return_url`), never taken from the browser. Without the
 marker nothing changes: a `/donate` session gains no keys (`test/unit/red-bag-checkout.test.ts` and
 `test/unit/donate-checkout-pinned.test.ts` hold that). The webhook records the donation exactly as
-a normal one and sends the normal receipt.
+a normal one and sends the normal receipt, and afterwards marks where it came from (below).
+
+**Recording where a gift came from.** So Fill a Red Bag gifts can be compared with gifts on the
+ordinary Donate page later, each donation can carry where it was started: `donations.source`, a
+nullable text column (migration `1791200000250_donation-source.js`, with a small index over the
+rows that have one). `'red_bag'` is a gift started on Fill a Red Bag; empty (`NULL`) is every other
+gift, and every gift recorded before this. The allowed values are one list, `DONATION_SOURCES` in
+`src/db/stripe-webhook-model.ts`. **Nothing reads the column yet**: no admin figure, no report, no
+email. This is the record keeping only.
+
+- **How it is written.** The webhook saves the donation exactly as it always has: the donation's
+  own `INSERT`, its transaction, the idempotency ledger, Gift Aid and the emails do not know the
+  column exists. Then, **after** that has committed and after every email has been sent, and only
+  when the session's metadata has `redBag: "true"` (`sourceFromCheckoutSession`), one separate
+  statement marks the row: `UPDATE donations SET source = $2 WHERE stripe_session_id = $1 AND
+  source IS NULL` (`tagDonationSource` in `src/db/stripe-webhook.ts`).
+- **It can never cost a donation.** Anything that goes wrong writing the source (the column not
+  there yet, the database unreachable) is caught, logged once as "donation source not recorded"
+  with the Stripe event id and the database's error code (no message text, no session id, nothing
+  about the donor), and goes no further: Stripe is answered exactly as it would have been, nothing
+  is retried, and the donation stays as saved. The gift is then simply left without a source.
+- **It can never hold the answer up for long.** The statement is given 2 seconds
+  (`SOURCE_TAG_TIMEOUT_MS`). If it is still waiting then (on a lock, say), the webhook stops
+  waiting, logs "donation source not recorded ... gave up after 2000 ms" once, and answers Stripe
+  as normal. The `pg` driver cannot take back a statement already sent, so that one database
+  connection is not reused: it is released with an error (`client.release(err)`), which makes the
+  pool close it and open a fresh one when next needed. The abandoned statement either finishes
+  anyway (harmless, it only fills in an empty source) or ends with the connection. No other query
+  has a time limit, and the donation's transaction is untouched.
+- **A redelivered event** saves nothing twice (the ledger sees to that) and tries the source once
+  more, in case the first delivery stopped between saving the donation and marking it. The
+  statement only fills in a source that is still empty, so on a donation already marked it changes
+  nothing.
+- **Monthly gifts.** The first donation is recorded from the checkout and marked as above. Each
+  later charge is its own donation row with the subscription id on it; once one is recorded, every
+  row of that subscription still without a source takes `'red_bag'`, but only when the
+  subscription's first donation has it (one `UPDATE`, also after commit, also best effort). Should
+  one ever be missed, a report can still reach it by joining on `stripe_subscription_id`.
+- **Rolling the code back is safe**: older code neither reads nor writes the column.
+- **Gifts made before this** (from 4 October 2026) are not marked. Stripe's event payloads are not
+  kept in the database, so they can only be found from Stripe: list the Checkout Sessions created
+  since 4 October 2026 whose metadata has `redBag` = `true` and that completed (the Stripe
+  dashboard's export of Checkout Sessions with their metadata, or the read only command
+  `stripe checkout sessions list --limit 100 -d "created[gte]=1791072000"` (1791072000 is 4 October 2026, 00:00 UTC), page by page, keeping the
+  ones with `metadata.redBag == "true"` and `status == "complete"`), then run this once with each
+  session id: `UPDATE donations SET source = 'red_bag' WHERE stripe_session_id = $1 AND source IS
+  NULL`. Their later monthly charges, if any: `UPDATE donations d SET source = 'red_bag' FROM
+  donations f WHERE f.stripe_session_id = $1 AND f.stripe_subscription_id IS NOT NULL AND
+  d.stripe_subscription_id = f.stripe_subscription_id AND d.source IS NULL`. Both are safe to run
+  twice. Not done by this change, and nothing here reads Stripe.
+- Tests: `test/unit/donation-source.test.ts` (the reading of the mark, and the migration: additive,
+  and sorting after everything production had already run), `test/unit/stripe-webhook-source.test.ts` (the donation is saved by the very
+  same statements with and without the mark; the source is written after the commit and the thank
+  you; every failure is swallowed; a statement that hangs is given up at 2 seconds and its
+  connection closed; redelivery; monthly charges), and four scenarios in
+  `features/stripe-webhook.feature`.
 
 | Method + path | Who | Answers |
 |---|---|---|
@@ -12503,7 +12565,9 @@ a normal one and sends the normal receipt.
   (added to the site router in `src/routes/site.ts`), the marker in `src/routes/api.ts`, the page
   list in `src/site/pages.ts`, and `fill-a-red-bag.html` (the giving page; the file keeps its first
   name) and `fill-thank-you.html` in the `Dockerfile`'s COPY line.
-- No migration, no table or column, no config value, no email, nothing in the admin's files.
+- The pages themselves needed no migration, table or column. The one column there is,
+  `donations.source`, came later (**Recording where a gift came from**, above). No config value, no
+  email, nothing in the admin's files.
 - If the page's file, the 404's file or the catalogue cannot be read, the handler logs it and hands
   the request on to the site's ordinary 404; it never hangs. A `403` from the checkout (a staff
   session that has run out during a preview) tells staff to sign in again at `/admin`.

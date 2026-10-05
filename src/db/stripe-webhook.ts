@@ -33,6 +33,8 @@ import {
   refundedPenceFromCharge,
   refundedPenceFromDispute,
   confirmationEmailFor,
+  sourceFromCheckoutSession,
+  type DonationSource,
   type DonationConfirmationEmail,
 } from "./stripe-webhook-model";
 import { recalculateClaimOnRefund } from "../claims/refund";
@@ -75,6 +77,11 @@ export interface WebhookResult {
 
 export async function processWebhookEvent(event: Stripe.Event): Promise<WebhookResult> {
   const client = await pool.connect();
+  // Set only when the source statement (tagDonationSource) was abandoned at its time limit. That
+  // statement may still be running on this connection, so the connection must not go back into the
+  // pool for the next caller to queue behind: it is released with this error, which makes the pool
+  // close it and open a fresh one when next needed.
+  let abandoned: Error | undefined;
   try {
     await client.query("BEGIN");
     // Idempotency: claim this event id. A conflict means Stripe redelivered an
@@ -85,6 +92,12 @@ export async function processWebhookEvent(event: Stripe.Event): Promise<WebhookR
     );
     if (claim.rowCount === 0) {
       await client.query("COMMIT");
+      // Where the gift was started: tried once more on a redelivery, in case the first delivery
+      // saved the donation and then stopped before the source was written. It can only fill in a
+      // source that is still empty, so on a donation already tagged it changes nothing.
+      if (await tagDonationSource(event, (sql, params) => client.query(sql, params))) {
+        abandoned = new Error("donation source statement abandoned at its time limit");
+      }
       return { processed: false, action: "duplicate" };
     }
     const { action, email, declaration, receipt, lapse, refundNotice, refundConfirmation, businessInvite, ballConfirmation, afterCommit } =
@@ -131,12 +144,115 @@ export async function processWebhookEvent(event: Stripe.Event): Promise<WebhookR
     await sendBallConfirmationEmail(ballConfirmation ?? null);
     // Event tickets: the buyer's tickets (or refund) email, post-commit and best-effort like the rest.
     await runAfterCommit(afterCommit ?? null);
+    // Where the gift was started (Fill a Red Bag): LAST, so it is after the commit and after every
+    // email, and can hold none of them up. Only when a donation row was just recorded. Best effort:
+    // it never throws, so it cannot change the answer Stripe is given.
+    if (action === "donation.created" || action === "donation.recurring") {
+      if (await tagDonationSource(event, (sql, params) => client.query(sql, params))) {
+        abandoned = new Error("donation source statement abandoned at its time limit");
+      }
+    }
     return { processed: true, action };
   } catch (err) {
     await client.query("ROLLBACK");
     throw err;
   } finally {
-    client.release();
+    // Released exactly once, as ever. With the error (only after an abandoned source statement) the
+    // pool closes the connection instead of reusing it.
+    if (abandoned) client.release(abandoned);
+    else client.release();
+  }
+}
+
+// Recording where a gift was started on the website (donations.source), for comparing Fill a Red Bag
+// gifts with the ordinary Donate page later. Deliberately NOT part of saving the donation: the
+// donation's INSERT, its transaction and the idempotency ledger do not know this column exists. It
+// is one separate statement, run after COMMIT, that can only fill in a source that is still empty.
+
+// A checkout's own donation row, found by its session id. $1 = session id, $2 = the source.
+export const TAG_CHECKOUT_SOURCE_SQL = `UPDATE donations SET source = $2 WHERE stripe_session_id = $1 AND source IS NULL`;
+
+// A monthly gift's later charges. Each is its own donation row with the subscription id on it
+// (handleRecurring), so once one is recorded, every row of that subscription still without a source
+// takes it, but only when the subscription's FIRST donation (the one its checkout recorded) has that
+// source. $1 = subscription id, $2 = the source.
+export const TAG_RENEWAL_SOURCE_SQL = `UPDATE donations SET source = $2
+  WHERE stripe_subscription_id = $1 AND source IS NULL
+    AND (SELECT first.source FROM donations first
+          WHERE first.stripe_subscription_id = $1 ORDER BY first.id ASC LIMIT 1) = $2`;
+
+// The one source a monthly gift can carry on to its later charges today.
+const RENEWAL_SOURCE: DonationSource = "red_bag";
+
+type SourceQuery = (sql: string, params: unknown[]) => unknown;
+
+// How long the source statement may take. Nothing else in the pool has a time limit and this is the
+// one statement that runs before Stripe is answered purely for record keeping, so if it ever waits
+// (on a lock, say) it gives up rather than hold the answer and one of the pool's few connections.
+export const SOURCE_TAG_TIMEOUT_MS = 2000;
+
+class SourceTagTimeout extends Error {}
+
+// Run the statement, but stop waiting at the limit. The timer is always cleared. Stopping waiting
+// does not stop the statement: the pg driver has no way to take back a query already sent, so it
+// may still finish (harmless: it only fills in an empty source) or fail later. Either way its late
+// outcome is taken here and dropped, so it can never surface as an unhandled rejection.
+async function withinSourceLimit(run: () => unknown, limitMs: number): Promise<void> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const statement = Promise.resolve().then(run);
+  statement.catch(() => {});
+  const limit = new Promise<never>((_resolve, reject) => {
+    timer = setTimeout(() => reject(new SourceTagTimeout()), limitMs);
+  });
+  try {
+    await Promise.race([statement, limit]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+// Post-commit and best effort, like the emails: ANY failure (the column not there yet because the
+// migration has not run, the database unreachable, an event with nothing in it) is caught here,
+// logged once, and goes no further, so it can never fail the webhook, make Stripe redeliver, or undo
+// a recorded gift. The log line carries the Stripe event id and the database's error code only: no
+// message text, no session id, nothing about the donor. Safe to run any number of times.
+//
+// Answers true ONLY when the statement was abandoned at its time limit and may still be running on
+// the connection it was sent on; the caller must then not reuse that connection. False otherwise.
+// Exported so it is unit-testable with a stand-in query function.
+export async function tagDonationSource(event: Stripe.Event, query: SourceQuery): Promise<boolean> {
+  try {
+    if (event.type === "checkout.session.completed") {
+      const session = event.data.object;
+      const source = sourceFromCheckoutSession(session);
+      if (!source || typeof session.id !== "string" || session.id === "") return false;
+      const sessionId = session.id;
+      await withinSourceLimit(() => query(TAG_CHECKOUT_SOURCE_SQL, [sessionId, source]), SOURCE_TAG_TIMEOUT_MS);
+    } else if (event.type === "invoice.paid" || event.type === "invoice.payment_succeeded") {
+      const charge = recurringChargeFromInvoice(event.data.object);
+      if (!charge) return false;
+      await withinSourceLimit(
+        () => query(TAG_RENEWAL_SOURCE_SQL, [charge.subscriptionId, RENEWAL_SOURCE]),
+        SOURCE_TAG_TIMEOUT_MS,
+      );
+    }
+    return false;
+  } catch (err) {
+    if (err instanceof SourceTagTimeout) {
+      console.error(
+        "donation source not recorded (the donation itself is saved and unaffected):",
+        `event ${typeof event?.id === "string" ? event.id : "unknown"},`,
+        `gave up after ${SOURCE_TAG_TIMEOUT_MS} ms`,
+      );
+      return true;
+    }
+    const code = (err as { code?: unknown } | null)?.code;
+    console.error(
+      "donation source not recorded (the donation itself is saved and unaffected):",
+      `event ${typeof event?.id === "string" ? event.id : "unknown"},`,
+      typeof code === "string" ? `database error code ${code}` : "no database error code",
+    );
+    return false;
   }
 }
 

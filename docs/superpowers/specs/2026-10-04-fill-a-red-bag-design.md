@@ -379,6 +379,36 @@ Red Bag gift from the public.
 The webhook records the gift exactly as a normal donation and sends the normal receipt. Half 2 adds
 the Red Bag receipt wording and a "came from Fill a Red Bag" figure in the admin.
 
+## Recording where a gift came from (5 October 2026)
+
+The record keeping for that figure, built ahead of it. No admin screen, report, email or page change.
+
+- **One additive column**: `donations.source`, nullable text, no default, no check constraint
+  (migration `1791200000250_donation-source.js`). `'red_bag'` for a gift started on Fill a Red Bag;
+  empty for every other gift and for every gift recorded before. The allowed values are one list in
+  the code (`DONATION_SOURCES`), for the figure to share.
+- **Saving a donation does not change.** The donation's `INSERT`, its transaction, the idempotency
+  ledger, Gift Aid, the fundraiser logic and the emails are as they were, and do not name the
+  column. After the transaction has committed and the emails have gone, and only when the
+  session's metadata has `redBag: "true"`, one separate statement marks the row by its Stripe
+  session id, and only if it has no source yet.
+- **Best effort, always.** Any failure writing the source is caught and logged once (the Stripe
+  event id and the database's error code, nothing personal), and never changes the webhook's
+  answer, so Stripe never retries because of it and no donation can be lost to it. The cost of a
+  failure is one gift without a source.
+- **Two seconds at most.** A source statement still waiting after 2 seconds is given up: logged
+  once, Stripe answered as normal, and that one database connection closed rather than reused
+  (the statement may still be running on it).
+- **Redelivery**: nothing is saved twice; the source is tried once more, which heals a first
+  delivery that stopped between saving and marking, and changes nothing otherwise.
+- **Monthly gifts**: the first donation is marked from its checkout. When a later charge is
+  recorded, every donation of that subscription still without a source takes `'red_bag'`, if the
+  subscription's first donation has it. A report that wants to be certain can also join on
+  `stripe_subscription_id`.
+- **Earlier gifts** (4 October 2026 onwards) are not marked: Stripe's payloads are not stored, so
+  they can only be listed from Stripe (Checkout Sessions with metadata `redBag: "true"`) and
+  marked by session id with the same statement. Written up in the README; not run.
+
 ## Where the list lives
 
 One module holding the items, groups, themes and the £50 bag value, with pure functions for the

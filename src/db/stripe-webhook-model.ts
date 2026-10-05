@@ -28,6 +28,23 @@ export function giftAidFromMetadata(metadata: Stripe.Metadata | null | undefined
   return metadata?.giftAid === "true";
 }
 
+// Where a gift was started on the website (donations.source). The ONE list of allowed values, for
+// the webhook that writes it and for anything that later reads it. A gift with no source is an
+// ordinary one (the Donate page and every other route), or one recorded before sources were kept.
+export const DONATION_SOURCES = ["red_bag"] as const;
+export type DonationSource = (typeof DONATION_SOURCES)[number];
+
+// checkout.session.completed → where the gift was started, or null. The checkout stamps
+// metadata.redBag as the string "true" on a Fill a Red Bag session and on no other
+// (src/routes/api.ts). Anything else at all is null. Never throws, whatever it is handed.
+export function sourceFromCheckoutSession(
+  session: Pick<Stripe.Checkout.Session, "metadata"> | null | undefined,
+): DonationSource | null {
+  const metadata: unknown = session?.metadata;
+  if (typeof metadata !== "object" || metadata === null) return null;
+  return (metadata as Record<string, unknown>).redBag === "true" ? "red_bag" : null;
+}
+
 const asString = (v: string | { id: string } | null | undefined): string | null =>
   typeof v === "string" ? v : v && typeof v === "object" ? v.id : null;
 

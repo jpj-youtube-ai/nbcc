@@ -1204,7 +1204,7 @@ const STAFF: CatalogueEmail[] = [
       v("quiet", "A quiet week with nothing waiting", summary(QUIET)),
       v("test", "A test sent from the admin", summary(COUNTS, true)),
     ], NUMBERS_NOTE),
-    who: "Goes to the people chosen in Weekly summary, on Mondays at 8am.",
+    who: "One email to everyone chosen in Weekly summary (nbcc.scot addresses only), on Mondays at 8am, so Reply all reaches the whole team.",
   },
   staff("staff-pledge-hidden", "A pledge was hidden by its organiser", "when a fundraiser hides a pledge from their page.", "fundraisePledgeStaff", [
     v("usual", USUAL, pledgeNote(pledgeHiddenNote({ title: PAGE, pledgeId: 42, amountPence: 1000 }))),

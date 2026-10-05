@@ -7841,7 +7841,7 @@ and email) and the sign off. Plain English, no dashes, every stored value escape
 | `fundraiseInvite` | the person invited | staff send or resend an invite from Admin > Get involved (TASK-503, email 7) | "We'd love you to fundraise with us!", the personal note in a quote box, **Make my page** to the form filled in with their name and email, signed "Warmest wishes," with the first name chosen under Signed by, then "NBCC Team", and the questions box. Subject "We'd love you to fundraise with us" |
 | `fundraiseNewsApproved` | the organiser | staff approve a news update they posted (TASK-506) | "Your news update is live!" with the page link while their page is up; otherwise "Your news update is saved!". "Thanks so much," and the questions box |
 | `fundraiseNewsRejected` | the organiser | staff do not use a news update (TASK-506) | "About your news update": not on the page, we'll give you a ring; never the internal reason. "Speak soon," and the questions box |
-| `fundraiseSummary` | each address on the Weekly summary list | Mondays at 8am (TASK-503, email 11), or Send a test now (to the admin pressing it, marked as a test) | "Good morning, team!": last week's money, new sign ups, Waiting on us, Coming up, Open the admin, "Have a brilliant week,". Staff only: no questions box, never link tagged. Subject like "Fundraising this week: £1,240 raised, 10 things waiting" |
+| `fundraiseSummary` | everyone on the Weekly summary list, in one email with all of them on the To line (nbcc.scot addresses only) | Mondays at 8am (TASK-503, email 11), or Send a test now (to the admin pressing it, marked as a test) | "Good morning, team!": last week's money, new sign ups, Waiting on us, Coming up, Open the admin, "Have a brilliant week,". Staff only: no questions box, never link tagged. Subject like "Fundraising this week: £1,240 raised, 10 things waiting" |
 | `fundraiseSupporterThanks` | a giver the organiser picked, who can be emailed | staff approve the organiser's thank you (TASK-507, email 20), in the background, one at a time | "A thank you from Sam": the organiser's message in a quote box, "And from all of us: thank you too.", the charity's description, "We'd love to keep in touch" with a "Join our mailing list" button (`/newsletter`) and a link to `/get-involved`, "Thanks so much,", the questions box (in memory: the one closing line, no keep in touch). From and Reply-To the events inbox. See **Thank your supporters (TASK-507)** |
 
 **Approved while fundraising is off.** The old "you're approved, your page will appear when our pages
@@ -8381,7 +8381,27 @@ before.
 (after a question) and **Send a test now**, which sends this week's real summary marked as a test
 to the admin pressing it, and nobody else. Editors and viewers do not see the card. At 8am UK time
 on a Monday, the daily task (`npm run reminders`, the same scheduled run as the reminders) sends
-email 11 (`fundraiseSummary`), one email to each address, from and replying to the events inbox:
+email 11 (`fundraiseSummary`) as **one email with everyone on the To line**, from and replying to
+the events inbox, so **Reply all** reaches the whole team (it goes to the events inbox and to
+everyone else on the To line).
+
+**nbcc.scot addresses only.** Everyone on that email sees everyone else's address and every reply,
+so only the charity's own addresses may be on it: `nbcc.scot` exactly, whatever the capitals, never
+a subdomain (`news.nbcc.scot`) and never anywhere else (`isSummaryAddress` in
+`src/fundraising/summary.ts`). It is kept in two places:
+
+- **Saving.** Adding any other address is refused, on the screen and by the server (`400`), with
+  "Only nbcc.scot addresses can get the weekly summary." An address from elsewhere that was on the
+  list before this rule may stay until an admin removes it, so the rest of the list can still be
+  changed; the card marks it "Not an nbcc.scot address, so it is left off the email." and does not
+  count it in "It goes to N people". With only such addresses on the list the card says "Off.
+  Nobody on the list has an nbcc.scot address, so no summary goes." No stored list was changed.
+- **Sending.** Any stored address from elsewhere is left off the To line. The daily task logs how
+  many were left off, never which. If that leaves nobody it is "nobody to send to", and the week is
+  not claimed.
+
+The email log has one row for each person on the To line, all carrying the one SES message id, so
+each person can still be found under Email audit and a bounce finds its own row. The email says:
 
 - last week's money (Monday to Sunday): online gifts less refunds, what organisers paid in and the
   cash staff recorded, the Gift Aid to claim on last week's gifts (a quarter of each gift after any
@@ -8404,9 +8424,11 @@ email 11 (`fundraiseSummary`), one email to each address, from and replying to t
 - **Coming up**: approved fundraisers dated in the next four weeks.
 
 It goes on Mondays only, and never twice for the same Monday: the week is claimed under a row lock
-before anything is sent (`fundraising_settings.summary_last_week`), and given back if no email
-went, so a rerun can try again. With nobody on the list nothing happens. A failed email is logged
-and the rest still go; nothing in it can stop the passes after it in the daily task.
+before anything is sent (`fundraising_settings.summary_last_week`), and given back if the email
+did not go, so a rerun can try again. With nobody on the list nothing happens. As it is one email,
+it goes to everyone on it or to nobody: the audit row (`fundraising.summary_sent`) keeps its shape,
+with `sent` the number of people on the To line when it went and `failed` that number when it did
+not. A failure is logged; nothing in it can stop the passes after it in the daily task.
 
 ### Routes
 
@@ -8426,7 +8448,7 @@ list against entity `fundraiser`, so it shows in that fundraiser's History).
 | `POST /api/admin/fundraisers/:id/calls` | edit | `{ which: "before" \| "after", note? }` | `{ call }`; `404` with no date |
 | `POST /api/admin/fundraisers/:id/off-list` and `/on-list` | edit | | `{ offListAt }`; `409` unless approved |
 | `GET /api/admin/fundraising/summary` | admin | | `{ recipients, lastWeek }` |
-| `PUT /api/admin/fundraising/summary` | admin | `{ recipients: [emails] }` | `{ recipients, lastWeek }`; `400` naming the address that needs another look |
+| `PUT /api/admin/fundraising/summary` | admin | `{ recipients: [emails] }` | `{ recipients, lastWeek }`; `400` naming the address that needs another look, and `400` "Only nbcc.scot addresses can get the weekly summary." for an address from elsewhere being added |
 | `POST /api/admin/fundraising/summary/test` | admin | | `{ sentTo }`, always the admin asking; `502` if it did not go |
 | `POST /api/fundraise/invite` | anyone | `{ token }` | `200 { name, firstName, lastName, email, path?, team? }` (`path` and `team` only for an invite with a type: where the form opens; `name` is the two joined, for a page loaded before the two boxes; an invite from before them has its one name split at the first space); `404` for any token that does not work |
 
@@ -8457,12 +8479,13 @@ Routes: `src/routes/admin-fundraising-team.ts` and `src/routes/fundraise-invite.
 the end of `assets/css/admin.css`; the form's lookup is in `assets/js/fundraise.js`. Unit tests:
 `fundraising-invite`, `fundraise-invite-routes`, `fundraise-invite-form`, `fundraising-follow-up`
 (including the clocks changing), `fundraising-summary` and `fundraising-summary-runner` (fixed
-clocks: Mondays only, once a week, nobody to send to, failures), `fundraising-team-emails` (emails 7
+clocks: Mondays only, once a week, nobody to send to, one email to everyone, nbcc.scot only,
+failures), `fundraising-summary-send` (one message, a log row each), `fundraising-team-emails` (emails 7
 and 11, html and text), `fundraising-team-db`, `admin-fundraising-team-routes` (admin, editor and
 viewer), `admin-fundraising-team-page` (the jsdom admin harness), `fundraising-team-migration` and
 `backup-plan`. BDD: `features/fundraising-team.feature` (an invite fills in the form and the sign up
 uses it up; taking a fundraiser off Get involved keeps its page; a viewer cannot record a call; only
-an admin chooses who gets the summary).
+an admin chooses who gets the summary, and only nbcc.scot addresses).
 
 ## Community fundraising, requests tracked to done (TASK-505)
 

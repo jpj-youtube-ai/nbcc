@@ -238,7 +238,7 @@ beforeEach(() => {
     signers: [{ id: 3, firstName: "Fern" }, { id: 5, firstName: "Rowan" }],
     inviteWording: { approvals: {}, unavailable: false },
   };
-  summary = { recipients: ["fern@example.com"], lastWeek: "2026-11-30" };
+  summary = { recipients: ["fern@nbcc.scot"], lastWeek: "2026-11-30" };
   asRole("admin");
   calls = [];
   answers = {};
@@ -928,17 +928,27 @@ describe("the Weekly summary card", () => {
     await openSettings();
     expect(el("frSummary").hidden).toBe(false);
     expect(text(el("frSummaryState"))).toBe("On. It goes to 1 person at 8am on Mondays. The last one went on 30/11/2026.");
-    expect(text(el("frSummaryList"))).toContain("fern@example.com");
+    expect(text(el("frSummaryList"))).toContain("fern@nbcc.scot");
+  });
+
+  it("says it is one email to everyone, and nbcc.scot addresses only", async () => {
+    await openSettings();
+    const intro = text(q("#frSummary .fr-card-intro") as HTMLElement);
+    expect(intro).toContain("one email to everyone on this list");
+    expect(intro).toContain("Reply all");
+    expect(intro).toContain("Only nbcc.scot addresses can be on the list.");
+    expect(intro).not.toContain("each person");
+    expect(intro).not.toMatch(/—/);
   });
 
   it("adds an address and saves the list", async () => {
     await openSettings();
-    setValue("#frSummaryEmail", "Rowan@Example.com");
+    setValue("#frSummaryEmail", "Rowan@NBCC.scot");
     (q("#frSummaryAdd") as HTMLElement).click();
     await settle();
-    expect(sent("PUT", "/api/admin/fundraising/summary")[0].body).toEqual({ recipients: ["fern@example.com", "rowan@example.com"] });
-    expect(text(el("frSummaryList"))).toContain("rowan@example.com");
-    expect(text(el("frSummaryStatus"))).toBe("Saved. rowan@example.com gets the next one.");
+    expect(sent("PUT", "/api/admin/fundraising/summary")[0].body).toEqual({ recipients: ["fern@nbcc.scot", "rowan@nbcc.scot"] });
+    expect(text(el("frSummaryList"))).toContain("rowan@nbcc.scot");
+    expect(text(el("frSummaryStatus"))).toBe("Saved. rowan@nbcc.scot gets the next one.");
   });
 
   it("refuses an address that is not whole, or already there", async () => {
@@ -947,18 +957,47 @@ describe("the Weekly summary card", () => {
     (q("#frSummaryAdd") as HTMLElement).click();
     await settle();
     expect(text(el("frSummaryStatus"))).toBe("That isn't a whole email address.");
-    setValue("#frSummaryEmail", "fern@example.com");
+    setValue("#frSummaryEmail", "fern@nbcc.scot");
     (q("#frSummaryAdd") as HTMLElement).click();
     await settle();
     expect(text(el("frSummaryStatus"))).toBe("That address is already on the list.");
     expect(sent("PUT", "/api/admin/fundraising/summary")).toHaveLength(0);
   });
 
+  it("refuses an address that is not nbcc.scot, a subdomain included, and keeps what was typed", async () => {
+    await openSettings();
+    for (const outsider of ["rowan@example.com", "rowan@news.nbcc.scot"]) {
+      setValue("#frSummaryEmail", outsider);
+      (q("#frSummaryAdd") as HTMLElement).click();
+      await settle();
+      expect(text(el("frSummaryStatus")), outsider).toBe("Only nbcc.scot addresses can get the weekly summary.");
+      expect((q("#frSummaryEmail") as HTMLInputElement).value).toBe(outsider);
+    }
+    expect(sent("PUT", "/api/admin/fundraising/summary")).toHaveLength(0);
+  });
+
+  it("marks an old address from elsewhere as left off, and does not count it", async () => {
+    summary = { recipients: ["fern@nbcc.scot", "old@example.com"], lastWeek: null };
+    await openSettings();
+    expect(text(el("frSummaryState"))).toBe("On. It goes to 1 person at 8am on Mondays.");
+    const rows = qa("#frSummaryList li").map((li) => text(li as HTMLElement));
+    expect(rows[0]).not.toContain("left off");
+    expect(rows[1]).toContain("old@example.com");
+    expect(rows[1]).toContain("Not an nbcc.scot address, so it is left off the email.");
+  });
+
+  it("says it is off when nobody on the list has an nbcc.scot address", async () => {
+    summary = { recipients: ["old@example.com"], lastWeek: null };
+    await openSettings();
+    expect(text(el("frSummaryState"))).toBe("Off. Nobody on the list has an nbcc.scot address, so no summary goes.");
+    expect(el("frSummary").classList.contains("is-on")).toBe(false);
+  });
+
   it("removes an address after asking", async () => {
     await openSettings();
-    (q('[data-frsummaryremove="fern@example.com"]') as HTMLElement).click();
+    (q('[data-frsummaryremove="fern@nbcc.scot"]') as HTMLElement).click();
     await settle();
-    expect(confirmed.pop()).toBe("Stop sending the Monday summary to fern@example.com?");
+    expect(confirmed.pop()).toBe("Stop sending the Monday summary to fern@nbcc.scot?");
     expect(sent("PUT", "/api/admin/fundraising/summary")[0].body).toEqual({ recipients: [] });
     expect(text(el("frSummaryState"))).toBe("Off. Nobody is on the list, so no summary goes.");
   });

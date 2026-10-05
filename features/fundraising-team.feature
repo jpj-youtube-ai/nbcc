@@ -61,6 +61,11 @@ Feature: The fundraising team's tools (TASK-503)
     When "e4.team.fr.bdd@example.com" sets the Monday summary to go to "e4.team.fr.bdd@example.com"
     Then the fundraising answer is 403
     When "a4.team.fr.bdd@example.com" sets the Monday summary to go to "a4.team.fr.bdd@example.com"
+    Then the fundraising answer is 400
+    And the fundraising answer says "Only nbcc.scot addresses can get the weekly summary."
+    When "a4.team.fr.bdd@example.com" sets the Monday summary to go to "a4.team.fr.bdd@news.nbcc.scot"
+    Then the fundraising answer is 400
+    When "a4.team.fr.bdd@example.com" sets the Monday summary to go to "a4.team.fr.bdd@nbcc.scot"
     Then the fundraising answer is 200
     When "a4.team.fr.bdd@example.com" sends a test of the Monday summary
     Then the fundraising answer is 200

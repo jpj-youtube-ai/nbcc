@@ -2270,7 +2270,7 @@ function pageArgs(req: Request): { limit?: number; offset?: number } {
   };
 }
 
-// GET /api/admin/donations?limit&offset&status&channel — browse all donations. Viewer and up.
+// GET /api/admin/donations?limit&offset&status&channel&source — browse all donations. Viewer and up.
 export async function getAdminDonations(req: Request, res: Response): Promise<Response | void> {
   if (!(await authorizeSection(req, res, "donations", "view"))) return;
   try {
@@ -2279,7 +2279,9 @@ export async function getAdminDonations(req: Request, res: Response): Promise<Re
     const channel = typeof req.query.channel === "string" ? req.query.channel : undefined;
     const paymentStatus = typeof req.query.paymentStatus === "string" ? req.query.paymentStatus : undefined;
     const mode = typeof req.query.mode === "string" ? req.query.mode : undefined;
-    return res.status(200).json(await listDonations({ limit, offset, status, channel, paymentStatus, mode }));
+    // ?source=red_bag: Fill a Red Bag only. listDonations checks it against the list of sources.
+    const source = typeof req.query.source === "string" ? req.query.source : undefined;
+    return res.status(200).json(await listDonations({ limit, offset, status, channel, paymentStatus, mode, source }));
   } catch (err) {
     console.error("admin donations list failed:", err instanceof Error ? err.message : err);
     return res.status(500).json({ error: "Admin is temporarily unavailable" });

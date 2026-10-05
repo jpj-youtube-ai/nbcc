@@ -30,6 +30,7 @@ const m = vi.hoisted(() => ({
   sumDonations: vi.fn(),
   sumFundraisingCash: vi.fn(),
   sumBallTaken: vi.fn(),
+  sumGiftsBySource: vi.fn(),
   readWebsiteGlance: vi.fn(),
   listAllEvents: vi.fn(),
   listInflightJobs: vi.fn(),
@@ -48,7 +49,7 @@ vi.mock("../../src/db/ball-report", () => ({
 vi.mock("../../src/db/events", () => ({ listAllEvents: m.listAllEvents }));
 vi.mock("../../src/db/newsletter-send-jobs", () => ({ listInflightJobs: m.listInflightJobs }));
 vi.mock("../../src/db/newsletters", () => ({ getNewsletter: m.getNewsletter }));
-vi.mock("../../src/db/overview-numbers", () => ({ sumDonations: m.sumDonations, sumFundraisingCash: m.sumFundraisingCash, sumBallTaken: m.sumBallTaken }));
+vi.mock("../../src/db/overview-numbers", () => ({ sumDonations: m.sumDonations, sumFundraisingCash: m.sumFundraisingCash, sumBallTaken: m.sumBallTaken, sumGiftsBySource: m.sumGiftsBySource }));
 vi.mock("../../src/db/analytics-report", () => ({ readWebsiteGlance: m.readWebsiteGlance }));
 // The Ball's night, without the run up's email sending behind it.
 vi.mock("../../src/ball/run-up-runner", () => ({ BALL_EVENT_DATE: new Date("2099-11-07T19:00:00Z") }));
@@ -137,6 +138,10 @@ beforeEach(() => {
   m.sumDonations.mockImplementation(async (_p: unknown, pages: boolean) => (pages ? { now: 10_000, before: 5_000 } : { now: 200_000, before: 150_000 }));
   m.sumFundraisingCash.mockResolvedValue({ now: 2_000, before: 0 });
   m.sumBallTaken.mockResolvedValue({ now: 50_000, before: 70_000 });
+  m.sumGiftsBySource.mockResolvedValue({
+    redBag: { month: { pence: 41_200, gifts: 19 }, all: { pence: 196_000, gifts: 87 } },
+    donatePage: { month: { pence: 213_000, gifts: 64 }, all: { pence: 3_140_000, gifts: 902 } },
+  });
   m.readSalesInputs.mockResolvedValue({ seatsSold: 212, totalSeats: 300, awaitingTransferSeats: 16 });
   m.getDashboard.mockResolvedValue({ totalPence: 1_840_000 });
   m.readWebsiteGlance.mockResolvedValue({ visitors: 1_240, visitorsBefore: 1_100, onNow: 3, topChannel: "search" });
@@ -214,7 +219,7 @@ describe("GET /api/admin/overview", () => {
 describe("GET /api/admin/overview: the numbers (TASK-509)", () => {
   it("tells an admin how we are doing: money in, monthly givers, the Ball and the website", async () => {
     const answer = (await call(tokenFor("admin"))).body as Answer;
-    expect(answer.numbers.map((n) => n.key)).toEqual(["money", "monthly", "ball", "website"]);
+    expect(answer.numbers.map((n) => n.key)).toEqual(["money", "redBag", "monthly", "ball", "website"]);
     const line = (key: string) => answer.numbers.find((n) => n.key === key);
     // Donations £2,000; fundraising pages £100 online and £20 cash paid in; the Ball £500.
     expect(line("money")).toMatchObject({
@@ -254,7 +259,7 @@ describe("GET /api/admin/overview: the numbers (TASK-509)", () => {
     m.readWebsiteGlance.mockRejectedValue(new Error("down"));
     const res = await call(tokenFor("admin"));
     expect((res.body as Answer).failed).toEqual(["Analytics"]);
-    expect(numberKeys(res)).toEqual(["money", "monthly", "ball"]);
+    expect(numberKeys(res)).toEqual(["money", "redBag", "monthly", "ball"]);
   });
 
   // One source takes one of the 3 slots, so it may hold only one database connection at a time.
@@ -282,7 +287,7 @@ describe("GET /api/admin/overview: the numbers (TASK-509)", () => {
     vi.spyOn(console, "error").mockImplementation(() => {});
     m.sumDonations.mockRejectedValue(new Error("down"));
     const res = await call(tokenFor("admin"));
-    expect(numberKeys(res)).toEqual(["monthly", "ball", "website"]);
+    expect(numberKeys(res)).toEqual(["redBag", "monthly", "ball", "website"]);
     expect((res.body as Answer).failed).toContain("Donations");
   });
 
@@ -375,5 +380,47 @@ describe("GET /api/admin/overview: Coming up (TASK-510)", () => {
     const res = await call(tokenFor("admin"));
     expect((res.body as Answer).failed).toEqual(["Newsletter"]);
     expect(texts(res)).toEqual(["Quiz night", "Bake sale (a fundraiser)"]);
+  });
+});
+
+// Fill a Red Bag this month, beside the other numbers: the same read as the top of the Donations
+// screen, behind the same gate (Donations: view). Invented figures.
+describe("Fill a Red Bag on the Overview", () => {
+  const line = (res: MockRes) => (res.body as Answer).numbers.find((x) => x.key === "redBag");
+
+  it("says what Fill a Red Bag brought in this month, with the Donate page beside it, straight after Money in", async () => {
+    const res = await call(tokenFor("admin"));
+    expect(numberKeys(res).slice(0, 2)).toEqual(["money", "redBag"]);
+    expect(line(res)).toMatchObject({
+      title: "Fill a Red Bag",
+      headline: "£412 from 19 gifts this month",
+      detail: "Donate page: £2,130 from 64 gifts this month.",
+      view: "donations",
+    });
+    expect(m.sumGiftsBySource).toHaveBeenCalledTimes(1);
+    expect(m.sumGiftsBySource.mock.calls[0][0]).toMatchObject({ from: expect.stringMatching(/^\d{4}-\d{2}-01$/) });
+  });
+
+  it("shows a real zero as a zero", async () => {
+    const none = { month: { pence: 0, gifts: 0 }, all: { pence: 0, gifts: 0 } };
+    m.sumGiftsBySource.mockResolvedValue({ redBag: none, donatePage: none });
+    const res = await call(tokenFor("admin"));
+    expect(line(res)?.headline).toBe("£0 from 0 gifts this month");
+    expect((res.body as Answer).failed).toEqual([]);
+  });
+
+  it("never asks for it, or shows it, for someone who cannot see Donations", async () => {
+    const res = await call(tokenFor("editor", { ball: "view" }));
+    expect(line(res)).toBeUndefined();
+    expect(m.sumGiftsBySource).not.toHaveBeenCalled();
+  });
+
+  it("is left out and named when it could not be read, never shown as zero, and the rest still show", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    m.sumGiftsBySource.mockRejectedValue(new Error("down"));
+    const res = await call(tokenFor("admin"));
+    expect(line(res)).toBeUndefined();
+    expect((res.body as Answer).failed).toEqual(["Donations"]);
+    expect(numberKeys(res)).toEqual(["money", "monthly", "ball", "website"]);
   });
 });

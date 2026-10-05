@@ -2186,6 +2186,23 @@ same person, sent at a different moment, is a different story and is not blocked
 `test/unit/erased-stories-migration.test.ts` and `test/unit/stories-old-site-import.test.ts`, and end
 to end in `features/stories-import.feature`.
 
+**A Read tick on Stories (TASK-NNN).** The Stories list has a **Read** column, one tick box a story,
+and an open story has **Mark as read** under its words. "Read" is the status that already existed,
+**Reviewed**: a tick sends `{ "status": "reviewed" }` to `PATCH /api/admin/stories/:id`, and unticking
+sends `"new"`, so it counts for the whole team and nothing new is stored. Used and Withdrawn show as
+read with the tick locked, because those statuses say more and a stray click must never undo them.
+It needs stories edit, like every other change to a story; someone who can only view sees the ticks
+locked. The tick saves at once and the row stays where it is (`setStoryRead` in
+`assets/js/admin/app.js`), so the tick can come straight back off, even on a list filtered to New.
+If the save fails the tick goes back and a line above the table says so; that line keeps its room
+when empty, so its words never move a row under the pointer. A story ticked here stops counting in
+the Overview's "new stories are waiting to be read", which counts the live stories still at New.
+Design: `docs/superpowers/specs/2026-10-05-stories-read-tick-design.md`. Tested in
+`test/unit/admin-stories-read-tick.test.ts` (the admin's jsdom harness: the four statuses, saving,
+a failed save, a viewer, the open story's two buttons, and the styles) and end to end in
+`features/admin-overview.feature`. Still to do, and not part of this: on a phone the Stories table
+is seven or eight columns of about 45px, as it was before the tick, and wants to be cards.
+
 **Public unsubscribe route (REQ-069 · TASK-161 · TASK-297).** `/unsubscribe/:token`
 (`src/routes/unsubscribe.ts`, mounted in `src/app.ts`) is the link every newsletter email carries.
 The token is a stateless HMAC of the donor id (`verifyUnsubscribeToken`, signed with
@@ -6272,7 +6289,7 @@ numbers, one line each, and **Coming up** the next 14 days. The design is in
      - contact messages;
      - fundraising sign ups, changes to check, fundraisers who say they've finished, requests to do,
        and fundraisers due a call;
-     - new stories;
+     - new stories (a story ticked Read on the Stories screen is Reviewed, so it leaves this count);
      - businesses due a thank you call;
      - your own business outreach to-dos;
      - generous donors not yet thanked who can be emailed (as the Thank you screen counts them);

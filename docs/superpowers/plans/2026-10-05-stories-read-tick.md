@@ -770,12 +770,14 @@ read with the tick locked, because those statuses say more and a stray click mus
 It needs stories edit, like every other change to a story; someone who can only view sees the ticks
 locked. The tick saves at once and the row stays where it is (`setStoryRead` in
 `assets/js/admin/app.js`), so the tick can come straight back off, even on a list filtered to New.
-A story ticked here stops counting in the Overview's "new stories are waiting to be read", which
-counts the live stories still at New. Design:
-`docs/superpowers/specs/2026-10-05-stories-read-tick-design.md`. Tested in
+If the save fails the tick goes back and a line above the table says so; that line keeps its room
+when empty, so its words never move a row under the pointer. A story ticked here stops counting in
+the Overview's "new stories are waiting to be read", which counts the live stories still at New.
+Design: `docs/superpowers/specs/2026-10-05-stories-read-tick-design.md`. Tested in
 `test/unit/admin-stories-read-tick.test.ts` (the admin's jsdom harness: the four statuses, saving,
 a failed save, a viewer, the open story's two buttons, and the styles) and end to end in
-`features/admin-overview.feature`.
+`features/admin-overview.feature`. Still to do, and not part of this: on a phone the Stories table
+is seven or eight columns of about 45px, as it was before the tick, and wants to be cards.
 
 ```
 

@@ -35,13 +35,15 @@ not a new idea to store. Three approaches were considered:
 - Ticking saves at once. The row stays where it is, its Status changes in place, and the tick can
   be taken straight back off: nothing jumps, even when the list is filtered to New.
 - If the save fails the tick goes back to how it was, and a line under the filters says
-  "Could not mark that story as read. Please try again." (or "as new").
+  "Could not mark that story as read. Please try again." (or "as new"). That line keeps its room
+  while it is empty, so its words never move a row under the pointer.
 - While a tick is saving it cannot be pressed again.
 - Each tick box is named for a screen reader: "Story 12 read".
 
 **An open story** gains one button, directly under the story's words, where reading ends:
 
-- New: **Mark as read**. Reviewed: the line "Marked as read." with **Mark as new** beside it.
+- New: **Mark as read**, the admin's small button. Reviewed: the line "Marked as read." with
+  **Mark as new** beside it as a plain link, so Save changes stays the one loud button.
 - Used and Withdrawn: no button. The Status row above already says where the story is.
 
 **Who.** Only someone who can edit Stories, as for every other change to a story. Someone who can

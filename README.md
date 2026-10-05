@@ -12342,13 +12342,19 @@ audit has two things to press on each:
 
 One of the charity's own addresses (`isCharityAddress`, `src/email/audit-removals.ts`: nbcc.scot or
 a subdomain) can be tidied away and is never blocked, on the screen or by the route: blocking
-events@ would stop the charity's own notes to itself.
+events@ would stop the charity's own notes to itself. Nor can a row that no longer has an address
+(a cleared team invite reads "deleted team invitee"): it can be tidied, and there is nothing there
+to block. Everything else the log holds as an address can be blocked, however badly formed
+(`looksLikeAddress`, the same loose shape addresses are let into the site by). An address with a
+trailing full stop or two dots is refused by the email provider on every send, never gets a bounce
+that would block it by itself, and so is the one most in need of removing.
 
 **Nothing is deleted.** The full list keeps every row for its six years. A problem that was removed
 says so under its status, with who and when, and **Put back**, which undoes it. Put back also
 unblocks the address, but only when Remove and stop emails is what blocked it and that block is
-still the one there. An address that was already blocked for its own reason (its mail bounced, or
-it marked us as spam) stays blocked, and the screen says so and where to unblock it.
+still the one there, so for a removal that stopped emails it asks first, as stopping did. An
+address that was already blocked for its own reason (its mail bounced, or it marked us as spam)
+stays blocked, and the screen says which reason and where to unblock it.
 
 How it works:
 
@@ -12362,6 +12368,15 @@ How it works:
   and the address is still blocked. So unblocking an address under Newsletter brings its later
   failures back, with no code there knowing about this. The Overview counts through the same
   function, and `listEmailLog` marks the rows the same rule hides, so the three cannot disagree.
+  Two details of the rule (`REMOVAL_HIDES`):
+  - **A problem is dated by when it went wrong, not when the email was sent.** A bounce or a spam
+    report is stamped on its row later, with its own time (`delivery_at`), sometimes days after the
+    send. A newsletter sent on Tuesday and marked as spam on Thursday is not something staff
+    tidied away on Wednesday: it shows. A send that failed on our side has no later event, so its
+    own time counts.
+  - **"Still blocked" means by the block of that time**: the one staff made by pressing stop, or
+    an older bounce that was already there. An address unblocked under Newsletter and blocked
+    again weeks later by a new bounce has a block made after the removal, and what follows shows.
 - **What still goes to a blocked address:** receipts, booking confirmations and sign in codes, as
   for an address blocked for bouncing. Those do not consult the block list, and this does not
   change the path any email takes when it is sent.
@@ -12369,7 +12384,17 @@ How it works:
   emails on an address already blocked for a bounce adds no "Blocked by staff" row: the removal
   itself is the record of what staff decided, with `blocked` false.
 - **Routes**, both needing email-audit edit: `POST /api/admin/email-log/remove` `{ email, stop }`
-  and `POST /api/admin/email-log/put-back` `{ email }`.
+  and `POST /api/admin/email-log/put-back` `{ email }`. Remove takes only an address the log has a
+  problem for (404 otherwise: it is not a way to block anyone at all), and refuses `stop` for one
+  of the charity's own addresses or for something that is not an address (400). Put back answers
+  `blockedBecause` (`bounced`, `complained`, `manual` or null) so the screen can say why an
+  address is still blocked. The screen says what a refusal is ("You can no longer change the
+  Email audit", "That address had already been put back") and keeps "Please try again" for what
+  trying again could fix; a Put back that fails keeps its Put back.
+- **Newsletter > Blocked addresses** lists a staff block as "Blocked by staff", with who removed
+  it on the line under, and its Unblock asks about staff rather than a bounce.
+  `POST /api/admin/newsletters/suppressions/lift` now takes any address on the block list, not
+  only a well formed one, so a badly formed address that staff blocked can come off it there.
 - **Retention and erasure** follow the log's: removals made on or before the log's cutoff go with
   it (`pruneEmailLog`), and `eraseEmailLogFor(email)` takes an address's removals with its rows.
   The same daily run also clears any removal whose address no longer has a single row in the log.

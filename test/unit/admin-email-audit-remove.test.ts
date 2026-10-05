@@ -5,10 +5,11 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 // database modules are mocked, as admin-stories-api.test.ts does, so these pin who may, what is
 // refused, and what each press writes. Every address here is invented.
 
-const { recordMock, putBackMock, blockedReasonMock, suppressMock, unsuppressMock, getUserAuthRowMock } = vi.hoisted(() => ({
+const { recordMock, putBackMock, blockedReasonMock, hasProblemMock, suppressMock, unsuppressMock, getUserAuthRowMock } = vi.hoisted(() => ({
   recordMock: vi.fn(),
   putBackMock: vi.fn(),
   blockedReasonMock: vi.fn(),
+  hasProblemMock: vi.fn(),
   suppressMock: vi.fn(),
   unsuppressMock: vi.fn(),
   getUserAuthRowMock: vi.fn(), // authorizeSection's fresh row for each request
@@ -17,6 +18,7 @@ vi.mock("../../src/db/email-audit-removals", () => ({
   recordAuditRemoval: recordMock,
   putBackAuditRemovals: putBackMock,
   blockedReason: blockedReasonMock,
+  hasEmailProblem: hasProblemMock,
 }));
 vi.mock("../../src/db/email-suppressions", async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
@@ -35,7 +37,7 @@ vi.mock("../../src/config", () => ({
 }));
 vi.mock("../../src/db/pool", () => ({ pool: { query: vi.fn(), connect: vi.fn() } }));
 
-import { postAdminEmailLogRemove, postAdminEmailLogPutBack } from "../../src/routes/admin";
+import { postAdminEmailLogRemove, postAdminEmailLogPutBack, postAdminSuppressionLift } from "../../src/routes/admin";
 import { signAdminSession } from "../../src/admin/session";
 
 const SECRET = "test-admin-secret";
@@ -62,6 +64,7 @@ function req(opts: { who?: Who; token?: string; body?: unknown }) {
 /* eslint-disable @typescript-eslint/no-explicit-any */
 const remove = async (o: any) => { const res = mockRes(); await postAdminEmailLogRemove(req(o) as any, res as any); return res; };
 const putBack = async (o: any) => { const res = mockRes(); await postAdminEmailLogPutBack(req(o) as any, res as any); return res; };
+const lift = async (o: any) => { const res = mockRes(); await postAdminSuppressionLift(req(o) as any, res as any); return res; };
 /* eslint-enable @typescript-eslint/no-explicit-any */
 
 const ADMIN: Who = { role: "admin" };
@@ -76,7 +79,8 @@ const nothingWritten = () => {
 };
 
 beforeEach(() => {
-  for (const m of [recordMock, putBackMock, blockedReasonMock, suppressMock, unsuppressMock, getUserAuthRowMock]) m.mockReset();
+  for (const m of [recordMock, putBackMock, blockedReasonMock, hasProblemMock, suppressMock, unsuppressMock, getUserAuthRowMock]) m.mockReset();
+  hasProblemMock.mockResolvedValue(true);
   recordMock.mockResolvedValue(undefined);
   putBackMock.mockResolvedValue({ putBack: 1, blocked: false });
   blockedReasonMock.mockResolvedValue(null);
@@ -111,13 +115,53 @@ describe("POST /api/admin/email-log/remove", () => {
 
   it.each([
     ["no address", { stop: false }],
-    ["something that is not an address", { email: "not an address", stop: false }],
+    ["an empty one", { email: "   ", stop: false }],
+    ["one far too long to be one", { email: "a".repeat(310) + "@example.org", stop: false }],
     ["no word on whether to stop", { email: "ada@example.org" }],
     ["a stop that is not yes or no", { email: "ada@example.org", stop: "yes" }],
     ["anything more than the two", { email: "ada@example.org", stop: false, kind: "stop" }],
   ])("400s %s, and writes nothing", async (_what, body) => {
     const res = await remove({ who: ADMIN, body });
     expect(res.statusCode).toBe(400);
+    nothingWritten();
+  });
+
+  // Addresses come in through a loose check, so the log holds some a strict one would refuse. A
+  // send that the provider refuses outright gets no bounce, so nothing ever blocks it by itself
+  // and it comes back to the band on every send: these are the ones most in need of removing.
+  it.each(["ada@example.org.", "ada..b@example.org", "<ada@example.org>"])(
+    "removes and stops %s, which a stricter check would have refused",
+    async (email) => {
+      const res = await remove({ who: ADMIN, body: { email, stop: true } });
+      expect(res.statusCode).toBe(200);
+      expect(suppressMock).toHaveBeenCalledWith(email, "manual", `Removed from the Email audit by ${ACTOR}`);
+      expect(recordMock).toHaveBeenCalledWith(email, "stop", ACTOR, true);
+    },
+  );
+
+  // A cleared team invite's rows read "deleted team invitee" where the address was. They can be
+  // tidied out of the band; there is nothing there to block.
+  it("tidies away rows that no longer have an address", async () => {
+    const res = await remove({ who: ADMIN, body: { email: "deleted team invitee", stop: false } });
+    expect(res.statusCode).toBe(200);
+    expect(recordMock).toHaveBeenCalledWith("deleted team invitee", "tidy", ACTOR, false);
+  });
+
+  it("refuses to block something that is not an address, and writes nothing", async () => {
+    const res = await remove({ who: ADMIN, body: { email: "deleted team invitee", stop: true } });
+    expect(res.statusCode).toBe(400);
+    expect(res.body).toEqual({ error: "Only an email address can be blocked" });
+    nothingWritten();
+  });
+
+  // What the band offers is an address with a problem. Without this, the route would block any
+  // address handed to it.
+  it.each([true, false])("404s an address the log has no problem for (stop %s), and writes nothing", async (stop) => {
+    hasProblemMock.mockResolvedValueOnce(false);
+    const res = await remove({ who: ADMIN, body: { email: "calum@example.com", stop } });
+    expect(res.statusCode).toBe(404);
+    expect(res.body).toEqual({ error: "That address has no problem in the Email audit" });
+    expect(hasProblemMock).toHaveBeenCalledWith("calum@example.com");
     nothingWritten();
   });
 
@@ -188,8 +232,8 @@ describe("POST /api/admin/email-log/put-back", () => {
     nothingWritten();
   });
 
-  it("400s without a valid address, and writes nothing", async () => {
-    const res = await putBack({ who: ADMIN, body: { email: "nope" } });
+  it.each([{}, { email: "   " }, { email: "ada@example.org", stop: true }])("400s %j, and writes nothing", async (body) => {
+    const res = await putBack({ who: ADMIN, body });
     expect(res.statusCode).toBe(400);
     nothingWritten();
   });
@@ -205,7 +249,7 @@ describe("POST /api/admin/email-log/put-back", () => {
   it("puts back a tidy and touches no block", async () => {
     const res = await putBack({ who: ADMIN, body: { email: "Ada@Example.org" } });
     expect(res.statusCode).toBe(200);
-    expect(res.body).toEqual({ putBack: true, unblocked: false, stillBlocked: false });
+    expect(res.body).toEqual({ putBack: true, unblocked: false, blockedBecause: null });
     expect(putBackMock).toHaveBeenCalledWith("Ada@Example.org", ACTOR);
     expect(unsuppressMock).not.toHaveBeenCalled();
   });
@@ -214,15 +258,26 @@ describe("POST /api/admin/email-log/put-back", () => {
     putBackMock.mockResolvedValueOnce({ putBack: 1, blocked: true });
     blockedReasonMock.mockResolvedValueOnce("manual");
     const res = await putBack({ who: ADMIN, body: { email: "ada@example.org" } });
-    expect(res.body).toEqual({ putBack: true, unblocked: true, stillBlocked: false });
+    expect(res.body).toEqual({ putBack: true, unblocked: true, blockedBecause: null });
     expect(unsuppressMock).toHaveBeenCalledWith("ada@example.org", ACTOR);
   });
 
-  it("leaves a block that was there for its own reason, and says the address is still blocked", async () => {
+  it("leaves a block that was there for its own reason, and says why the address is still blocked", async () => {
     putBackMock.mockResolvedValueOnce({ putBack: 1, blocked: false });
     blockedReasonMock.mockResolvedValueOnce("bounced");
     const res = await putBack({ who: ADMIN, body: { email: "ada@example.org" } });
-    expect(res.body).toEqual({ putBack: true, unblocked: false, stillBlocked: true });
+    expect(res.body).toEqual({ putBack: true, unblocked: false, blockedBecause: "bounced" });
+    expect(unsuppressMock).not.toHaveBeenCalled();
+  });
+
+  // A staff block this removal did not make (the block was written and the removal then failed,
+  // and the second try found the address blocked already). It is left, and the answer says it is
+  // staff's, so the screen does not put it down to a bounce.
+  it("leaves a staff block that it did not make, and says it is staff's", async () => {
+    putBackMock.mockResolvedValueOnce({ putBack: 1, blocked: false });
+    blockedReasonMock.mockResolvedValueOnce("manual");
+    const res = await putBack({ who: ADMIN, body: { email: "ada@example.org" } });
+    expect(res.body).toEqual({ putBack: true, unblocked: false, blockedBecause: "manual" });
     expect(unsuppressMock).not.toHaveBeenCalled();
   });
 
@@ -232,7 +287,7 @@ describe("POST /api/admin/email-log/put-back", () => {
     putBackMock.mockResolvedValueOnce({ putBack: 1, blocked: true });
     blockedReasonMock.mockResolvedValueOnce("complained");
     const res = await putBack({ who: ADMIN, body: { email: "ada@example.org" } });
-    expect(res.body).toEqual({ putBack: true, unblocked: false, stillBlocked: true });
+    expect(res.body).toEqual({ putBack: true, unblocked: false, blockedBecause: "complained" });
     expect(unsuppressMock).not.toHaveBeenCalled();
   });
 
@@ -241,5 +296,45 @@ describe("POST /api/admin/email-log/put-back", () => {
     const res = await putBack({ who: ADMIN, body: { email: "ada@example.org" } });
     expect(res.statusCode).toBe(500);
     expect(res.body).toEqual({ error: "Admin is temporarily unavailable" });
+  });
+});
+
+// Newsletter, Blocked addresses, Unblock: the older route that lifts a block. Staff can now block,
+// from the Email audit, an address a strict check refuses. Whatever is on the block list has to be
+// able to come off it here, or it would sit under Blocked addresses with an Unblock that never works.
+describe("POST /api/admin/newsletters/suppressions/lift", () => {
+  it.each(["ada@example.org.", "ada..b@example.org", "<ada@example.org>"])(
+    "unblocks %s, which a stricter check would have refused",
+    async (email) => {
+      const res = await lift({ who: ADMIN, body: { email } });
+      expect(res.statusCode).toBe(200);
+      expect(res.body).toEqual({ lifted: true });
+      expect(unsuppressMock).toHaveBeenCalledWith(email, ACTOR);
+    },
+  );
+
+  it("unblocks an ordinary address as it always did", async () => {
+    const res = await lift({ who: ADMIN, body: { email: "  ada@example.org " } });
+    expect(res.statusCode).toBe(200);
+    expect(unsuppressMock).toHaveBeenCalledWith("ada@example.org", ACTOR);
+  });
+
+  it.each([{}, { email: "   " }, { email: "a".repeat(310) + "@example.org" }])("400s %j, and lifts nothing", async (body) => {
+    const res = await lift({ who: ADMIN, body });
+    expect(res.statusCode).toBe(400);
+    expect(unsuppressMock).not.toHaveBeenCalled();
+  });
+
+  it("404s an address that is not blocked", async () => {
+    unsuppressMock.mockResolvedValueOnce(false);
+    const res = await lift({ who: ADMIN, body: { email: "ada@example.org" } });
+    expect(res.statusCode).toBe(404);
+    expect(res.body).toEqual({ error: "That address is not blocked" });
+  });
+
+  it("403s someone who may change the Email audit but not the Newsletter, and lifts nothing", async () => {
+    const res = await lift({ who: EDIT_ONLY, body: { email: "ada@example.org" } });
+    expect(res.statusCode).toBe(403);
+    expect(unsuppressMock).not.toHaveBeenCalled();
   });
 });

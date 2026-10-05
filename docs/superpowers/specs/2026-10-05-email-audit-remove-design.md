@@ -28,14 +28,20 @@ Email audit:
   changes. If the address fails again, it comes back.
 
 One of the charity's own addresses (@nbcc.scot) can be tidied away and is never blocked: blocking
-it would stop the charity's own notes to itself.
+it would stop the charity's own notes to itself. A row that no longer has an address (a cleared
+team invite reads "deleted team invitee") can be tidied away too, and there is nothing there to
+block. Anything else the log holds as an address can be blocked, however badly formed: an address
+with a trailing full stop is refused by the provider every time and never bounces, so nothing
+else would ever block it.
 
 **Nothing is deleted.** The full list below keeps every row for its six years. A row that was
 removed says so under its status ("Removed, emails stopped, by ... on ..." or "Tidied away by ...
 on ...") with **Put back**, which undoes it: the problems return to the band and, if Remove and
-stop emails was what blocked the address, it is unblocked. An address that was already blocked for
-its own reason (its mail bounced, or it marked us as spam) stays blocked, and the message says so.
-Straight after either press, the line that says what was done has Put back too.
+stop emails was what blocked the address, it is unblocked. Because that can start emails to the
+address again, putting back a removal that stopped emails asks first. An address that was already
+blocked for its own reason (its mail bounced, or it marked us as spam) stays blocked, and the
+message says which and where to unblock it. Straight after either press, the line that says what
+was done has Put back too.
 
 **What does not change.** Receipts, booking confirmations and sign in codes still go to a blocked
 address, as they do today for an address blocked for bouncing. Changing that would change the
@@ -55,8 +61,13 @@ A removal is never deleted: putting back stamps it.
 failed, or the mailbox bounced it or marked it as spam) is hidden when its address has a removal
 that has not been put back, and either:
 
-- the row is older than that removal, or
-- the removal is a `stop` and the address is still blocked.
+- the problem is older than that removal, or
+- the removal is a `stop` and the address is still blocked, by the block of that time.
+
+A problem is dated by when it went wrong: a bounce or a spam report by its own time, which can be
+days after the send, and a send that failed on our side by the send. "The block of that time" is
+the one staff made by pressing stop, or an older bounce already there: a block made after the
+removal (unblocked under Newsletter, then a new bounce weeks later) does not keep hiding things.
 
 So unblocking an address under Newsletter makes its later failures show again, with no code there
 knowing about this. `listRecentEmailFailures` (`src/db/email-log.ts`) carries the rule, and both the
@@ -71,9 +82,16 @@ active block is still that manual one.
 
 **Two routes**, both needing email-audit edit:
 
-- `POST /api/admin/email-log/remove` `{ email, stop }`. 400 for a bad address, and for `stop` on one
-  of the charity's own addresses.
-- `POST /api/admin/email-log/put-back` `{ email }`.
+- `POST /api/admin/email-log/remove` `{ email, stop }`. `email` is whatever the log holds for the
+  row, not a checked address. 400 for none; 400 for `stop` on one of the charity's own addresses or
+  on something that is not an address; 404 for an address the log has no problem for, so the route
+  cannot be used to block anyone at all.
+- `POST /api/admin/email-log/put-back` `{ email }`. Answers `blockedBecause` (`bounced`,
+  `complained`, `manual` or null) so the screen can say why an address is still blocked.
+
+The older `POST /api/admin/newsletters/suppressions/lift` (Newsletter > Blocked addresses >
+Unblock) takes any address on the block list, not only a well formed one: whatever staff can
+block must be able to come off the list where it is listed.
 
 **The screen** (`loadEmailAudit` in `assets/js/admin/app.js`): the band's rows are grouped by
 address into blocks; the two controls and the status line; the mark and Put back in the full list.
@@ -89,7 +107,9 @@ address into blocks; the two controls and the status line; the mark and Put back
   address, a viewer, the mark and Put back, what is said when it could not be done.
 - **BDD**: tidy away and it leaves the band; fail again and it is back; remove and stop, and a
   later failure stays out and the address is blocked; put back; a person who can only view cannot
-  remove.
+  remove; a bounce that arrives after a tidy shows; an address unblocked under Newsletter shows the
+  next time it fails; a badly formed address can be stopped and unblocked; an address with no
+  problem cannot be removed; a removal goes once its address has no email left in the log.
 - **Real browser**: the band and the list at 1280px and 390px, nothing scrolling sideways. Pictures
   to Jaimie before it is live.
 

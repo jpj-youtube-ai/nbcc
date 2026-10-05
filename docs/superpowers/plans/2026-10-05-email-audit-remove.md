@@ -189,6 +189,53 @@ Where this differs from the tasks above, this is what was built.
 - Two older paths forget a person in the log without `eraseEmailLogFor`: a sponsor's unpaid pledge
   (`src/db/pledges.ts`) and a cleared team invite (`src/db/fundraising-teams.ts`). The daily prune
   now also deletes any removal whose address no longer has a row in the log.
-- Another session's unpushed branch also has a migration numbered 1791200000260. Mine sorts before
-  it by name. If theirs reaches main first, this one must be renumbered above it before merging:
-  check `ls migrations | sort | tail` against main at merge time.
+- Another session's unpushed branch also had a migration numbered 1791200000260. It has since
+  renumbered its own to 1791200000270, so the names no longer tie. The order still matters: if
+  theirs reaches main first, this one (260) would sort before a migration production has already
+  run, and node-pg-migrate refuses that. So at merge time check `ls migrations | sort | tail`
+  against main, and if 270 is there, renumber this one above it. Whichever merges second also
+  takes the backup plan's counts to 90 tables in all and 87 in the main database.
+
+**From the code review** (verdict: with fixes; two important, the rest smaller; all taken):
+
+- **Addresses a strict check refuses.** The routes took `z.string().email()`, and the log holds
+  addresses that fails: a trailing full stop, two dots, an address in angle brackets. Those are
+  refused by the provider on every send and never bounce, so they are the ones most in need of
+  removing, and the buttons on them answered 400. The routes now take whatever the log holds
+  (`auditAddress`), and only `stop` asks that it could be an address (`looksLikeAddress`, the loose
+  shape addresses come into the site by). A cleared team invite's rows ("deleted team invitee")
+  can be tidied and not blocked, on the screen and by the route.
+- **A problem is dated by when it went wrong.** The rule compared the removal with the send's
+  time (`created_at`). A bounce or a spam report lands on its row later with its own time
+  (`delivery_at`), so a newsletter sent on Tuesday, tidied away on Wednesday and marked as spam on
+  Thursday stayed hidden. The rule now uses `COALESCE(delivery_at, created_at)`.
+- **Still blocked means by the block of that time.** A stopped address that was unblocked under
+  Newsletter and blocked again later by a new bounce went back to hiding everything. The rule now
+  asks that the block was made on or before the removal.
+- **Only an address with a problem can be removed** (`hasEmailProblem`, 404 otherwise). Before,
+  the route would block any address handed to it.
+- **Put back** asks first when the removal stopped emails, since it can start them again. Its
+  answer carries `blockedBecause` in place of `stillBlocked`, and the screen says which reason.
+  When a Put back fails, the line that says so keeps a Put back, with the keyboard on the line.
+- **Refusals say what they are.** 403, "You can no longer change the Email audit."; a 404 on Put
+  back, "That address had already been put back." and the list is drawn again; "Please try again"
+  only where that could work. The lock is checked before the question is asked, so a press made
+  while another is being saved asks nothing.
+- **Newsletter > Blocked addresses.** Its Unblock asked as if every block were a bounce or a spam
+  report; for a staff block it now says staff. The count's label names staff too. Its route
+  (`postAdminSuppressionLift`) took only a well formed address, so a badly formed one that staff
+  had blocked could never come off the list there: it takes any address now. Measured in Chrome,
+  the reason and its detail ran together ("Blocked by staffRemoved from the Email audit by ...");
+  the detail takes a line of its own in that list.
+- **Not taken as code: one transaction for the block and the removal.** The two writes are in
+  that order on purpose (blocked before hidden), and a failure between them leaves the address
+  blocked with its problems still showing, which staff can see and press again. The second press
+  finds it blocked already and records `blocked` false, so that Put back would leave the staff
+  block in place and say "It is still blocked by staff", with where to unblock it.
+- **Fixtures.** The acting staff address in the tests was on the charity's real domain. It is on
+  `nbcc.test` now (`staff@nbcc.test`, `kenny@nbcc.test`).
+- **End to end**, on real PostgreSQL: a bounce a minute after a tidy shows (its time is worked out
+  by the database from the removal, so the scenario does not depend on two clocks agreeing); an
+  address unblocked under Newsletter shows the next time it fails; a badly formed address is
+  stopped and then unblocked; an address with no problem is a 404; the daily prune forgets a
+  removal whose address has no email left in the log and keeps one that has.

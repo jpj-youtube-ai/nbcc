@@ -159,17 +159,28 @@ const rowOf = (r: RawRow): EmailLogRow => ({
 // TASK-562: staff can remove an address from the red band (email_audit_removals). What that hides
 // is decided HERE, each time the band or the list is read, and never when an email is sent: for a
 // log row `l` and a removal `r` of its address that has not been put back, the row is hidden when
-// it is older than the removal, or the removal is a 'stop' and the address is still blocked. So a
-// tidied address comes back the next time it fails; a stopped one stays out for as long as it is
-// blocked; and unblocking it under Newsletter brings its later failures back with no code there
-// knowing about this. One fragment, used by both readers, so the band and the list's "Removed by"
-// mark can never disagree.
+// its problem is older than the removal, or the removal is a 'stop' and the address is still
+// blocked by the block of that time. So a tidied address comes back the next time it fails; a
+// stopped one stays out for as long as it is blocked; and unblocking it under Newsletter brings
+// its later failures back with no code there knowing about this. One fragment, used by both
+// readers, so the band and the list's "Removed by" mark can never disagree.
+//
+// Two things in it are easy to get wrong:
+// - A problem is dated by when it WENT WRONG, not when the email was sent. A bounce or a spam
+//   complaint is stamped on the row later, by markEmailDelivery, with the event's own time
+//   (delivery_at), sometimes days later: a newsletter sent on Tuesday and marked as spam on
+//   Thursday is not something staff tidied away on Wednesday. A send that failed on our side has
+//   no event, so its own time counts.
+// - "Still blocked" means by a block that was already there when staff pressed stop (their own,
+//   made a moment before, or an older bounce). An address unblocked under Newsletter and blocked
+//   again weeks later by a new bounce has a block made AFTER the removal: what follows it shows.
 const PROBLEM = `(l.status = 'failed' OR l.delivery_status IN ('bounced', 'complained'))`;
 const REMOVAL_HIDES = `r.email = l.recipient AND r.put_back_at IS NULL
-           AND (l.created_at <= r.removed_at
+           AND (COALESCE(l.delivery_at, l.created_at) <= r.removed_at
                 OR (r.kind = 'stop' AND EXISTS (
                       SELECT 1 FROM email_suppressions s
-                       WHERE lower(s.email) = l.recipient AND s.removed_at IS NULL)))`;
+                       WHERE lower(s.email) = l.recipient AND s.removed_at IS NULL
+                         AND s.created_at <= r.removed_at)))`;
 
 // The main list: newest first, filterable by kind and status, searchable across recipient /
 // name / subject. A status filter of 'failed' means OUR attempt failed; 'bounced'/'complained'/

@@ -162,11 +162,22 @@ describe("listRecentEmailFailures (the red band)", () => {
     );
   });
 
-  it("hides what is older than the removal, and what came later only for a stop on an address still blocked", async () => {
+  // A problem is dated by when it WENT WRONG, not when the email was sent. A bounce or a spam
+  // complaint is stamped on its row later (delivery_at, the event's own time), sometimes days
+  // later: a newsletter sent on Tuesday and marked as spam on Thursday is not something staff
+  // tidied away on Wednesday. A send that failed on our side has no event, so its own time counts.
+  it("dates a problem by when it went wrong: the mailbox's verdict if there is one, else the send", async () => {
     await listRecentEmailFailures();
-    const sql = flat(sqlOf(/from email_log/i));
-    expect(sql).toMatch(
-      /l\.created_at <= r\.removed_at or \( ?r\.kind = 'stop' and exists \( ?select 1 from email_suppressions s where lower\(s\.email\) = l\.recipient and s\.removed_at is null ?\) ?\)/i,
+    expect(flat(sqlOf(/from email_log/i))).toMatch(/\(coalesce\(l\.delivery_at, l\.created_at\) <= r\.removed_at or /i);
+  });
+
+  // Later problems stay hidden only for a stop, and only while the block that was there when staff
+  // pressed it is still the one in force. Unblocked under Newsletter and blocked again weeks later
+  // by a bounce is a new block, made after the removal: what follows it shows.
+  it("hides what came later only for a stop, on an address still blocked by the block of that time", async () => {
+    await listRecentEmailFailures();
+    expect(flat(sqlOf(/from email_log/i))).toMatch(
+      /or \(r\.kind = 'stop' and exists \(select 1 from email_suppressions s where lower\(s\.email\) = l\.recipient and s\.removed_at is null and s\.created_at <= r\.removed_at\)\)\)/i,
     );
   });
 
@@ -195,7 +206,7 @@ describe("listEmailLog marks what staff removed from the band", () => {
     queryMock.mockClear();
     await listEmailLog({ limit: 50, offset: 0 });
     const list = flat(sqlOf(/select id, kind/i));
-    const rule = /r\.email = l\.recipient and r\.put_back_at is null and \(l\.created_at <= r\.removed_at or \(r\.kind = 'stop' and exists \(select 1 from email_suppressions s where lower\(s\.email\) = l\.recipient and s\.removed_at is null\)\)\)/i;
+    const rule = /r\.email = l\.recipient and r\.put_back_at is null and \(coalesce\(l\.delivery_at, l\.created_at\) <= r\.removed_at or \(r\.kind = 'stop' and exists \(select 1 from email_suppressions s where lower\(s\.email\) = l\.recipient and s\.removed_at is null and s\.created_at <= r\.removed_at\)\)\)/i;
     expect(band).toMatch(rule);
     expect(list).toMatch(rule);
   });
@@ -207,13 +218,13 @@ describe("listEmailLog marks what staff removed from the band", () => {
       .mockResolvedValueOnce({ rows: [{ n: "2" }], rowCount: 1 })
       .mockResolvedValueOnce({
         rows: [
-          { ...row, removed_at: "2026-10-05T10:00:00Z", removed_by: "staff@nbcc.scot", removed_kind: "stop" },
+          { ...row, removed_at: "2026-10-05T10:00:00Z", removed_by: "staff@nbcc.test", removed_kind: "stop" },
           { ...row, id: 2, delivery_status: "delivered", removed_at: null, removed_by: null, removed_kind: null },
         ],
         rowCount: 2,
       });
     const out = await listEmailLog({ limit: 50, offset: 0 });
-    expect(out.rows[0]).toMatchObject({ id: 1, removedAt: "2026-10-05T10:00:00Z", removedBy: "staff@nbcc.scot", removedKind: "stop" });
+    expect(out.rows[0]).toMatchObject({ id: 1, removedAt: "2026-10-05T10:00:00Z", removedBy: "staff@nbcc.test", removedKind: "stop" });
     expect(out.rows[1]).toMatchObject({ id: 2, removedAt: null, removedBy: null, removedKind: null });
   });
 

@@ -1,5 +1,6 @@
 const { Given, When, Then, Before } = require("@cucumber/cucumber");
 const assert = require("node:assert/strict");
+const path = require("node:path");
 const { Pool } = require("pg");
 
 // Steps for email-audit.feature. Reuses the newsletter steps' "a newsletter admin … with role …"
@@ -25,9 +26,11 @@ Before({ tags: "@email-audit" }, async function () {
     "DELETE FROM users WHERE email LIKE '%.audit.bdd@example.com' OR email LIKE 'audit.%.bdd@example.com'",
   );
   // TASK-562: what the removal scenarios leave behind: the removals themselves, and the blocks
-  // that "Remove and stop emails" (or a scenario's own seeding) puts on these addresses.
-  await pool.query("DELETE FROM email_audit_removals WHERE email LIKE '%.audit.bdd@example.com'");
-  await pool.query("DELETE FROM email_suppressions WHERE lower(email) LIKE '%.audit.bdd@example.com'");
+  // that "Remove and stop emails" (or a scenario's own seeding) puts on these addresses. With a
+  // "%" at the end too: one scenario's address is badly formed on purpose, with a trailing full stop.
+  await pool.query("DELETE FROM email_log WHERE recipient LIKE '%.audit.bdd@example.com.'");
+  await pool.query("DELETE FROM email_audit_removals WHERE email LIKE '%.audit.bdd@example.com%'");
+  await pool.query("DELETE FROM email_suppressions WHERE lower(email) LIKE '%.audit.bdd@example.com%'");
 });
 
 When("I invite {string} named {string} to the team", async function (email, fullName) {
@@ -65,30 +68,48 @@ Given(
 // Through the REAL webhook, exactly as SNS delivers it, rather than by importing the app's
 // database module into this process: that would open a second pool nothing closes, and it would
 // test a copy of the path rather than the path.
+async function bounceArrives(messageId, email, at) {
+  const sesEvent = {
+    eventType: "Bounce",
+    mail: { timestamp: at, destination: [email], messageId },
+    bounce: { timestamp: at, bounceType: "Permanent", bounceSubType: "General" },
+  };
+  const res = await fetch(
+    `${BASE_URL}/api/webhooks/ses/${process.env.SES_WEBHOOK_TOKEN || "ci-ses-webhook-token"}`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "text/plain; charset=UTF-8" },
+      body: JSON.stringify({
+        Type: "Notification",
+        MessageId: `sns-${messageId}`,
+        TopicArn: "arn:aws:sns:eu-west-1:000000000000:bdd-ses-events",
+        Message: JSON.stringify(sesEvent),
+        Timestamp: at,
+      }),
+    },
+  );
+  assert.strictEqual(res.status, 200, "expected the SES webhook to accept the event");
+}
+
 When(
   "a bounce arrives for message id {string} to {string}",
   async function (messageId, email) {
-    const now = new Date().toISOString();
-    const sesEvent = {
-      eventType: "Bounce",
-      mail: { timestamp: now, destination: [email], messageId },
-      bounce: { timestamp: now, bounceType: "Permanent", bounceSubType: "General" },
-    };
-    const res = await fetch(
-      `${BASE_URL}/api/webhooks/ses/${process.env.SES_WEBHOOK_TOKEN || "ci-ses-webhook-token"}`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "text/plain; charset=UTF-8" },
-        body: JSON.stringify({
-          Type: "Notification",
-          MessageId: `sns-${messageId}`,
-          TopicArn: "arn:aws:sns:eu-west-1:000000000000:bdd-ses-events",
-          Message: JSON.stringify(sesEvent),
-          Timestamp: now,
-        }),
-      },
+    await bounceArrives(messageId, email, new Date().toISOString());
+  },
+);
+
+// TASK-562: a bounce carries its own time, and that time is what dates the problem. Here it is a
+// minute after the address was removed, worked out by the database from the removal itself, so
+// the scenario does not hang on this process's clock and the database's agreeing to the millisecond.
+When(
+  "a minute later a bounce arrives for message id {string} to {string}",
+  async function (messageId, email) {
+    const { rows } = await pool.query(
+      "SELECT max(removed_at) + interval '1 minute' AS at FROM email_audit_removals WHERE email = lower($1)",
+      [email],
     );
-    assert.strictEqual(res.status, 200, "expected the SES webhook to accept the event");
+    assert.ok(rows[0].at, `${email} has not been removed`);
+    await bounceArrives(messageId, email, new Date(rows[0].at).toISOString());
   },
 );
 
@@ -303,4 +324,49 @@ Then("{string} is still blocked because its mail bounced", async function (email
   const found = await activeBlock(email);
   assert.equal(found.rowCount, 1, `${email} is no longer blocked`);
   assert.equal(found.rows[0].reason, "bounced");
+});
+
+// A bounced row is a problem too: "sent" by us, "bounced" by the mailbox, some time later.
+Then("the email audit failures should include a bounce to {string}", function (email) {
+  const hit = (this.eaBody.failures || []).find((r) => r.recipient === email.toLowerCase() && r.deliveryStatus === "bounced");
+  assert.ok(hit, `expected a bounce to ${email} in the red band: ${JSON.stringify(this.eaBody.failures)}`);
+});
+
+Then("the email audit failures should not include a failed send to {string}", function (email) {
+  const hit = (this.eaBody.failures || []).find((r) => r.recipient === email.toLowerCase() && r.status === "failed");
+  assert.equal(hit, undefined, `the failed send to ${email} is back in the red band`);
+});
+
+// Newsletter > Blocked addresses > Unblock, as the screen does it. Code that knows nothing of
+// removals: what the band shows afterwards is decided when the band is read.
+When("I unblock {string} under Newsletter", async function (email) {
+  const res = await fetch(`${BASE_URL}/api/admin/newsletters/suppressions/lift`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${this.token}` },
+    body: JSON.stringify({ email }),
+  });
+  assert.equal(res.status, 200, "expected the address to be unblocked");
+});
+
+// The two older paths that forget a person in the log delete or overwrite its rows directly.
+When("every email to {string} is deleted from the log", async function (email) {
+  await pool.query("DELETE FROM email_log WHERE recipient = lower($1)", [email]);
+});
+
+// The daily task's own prune. No route runs it, so unlike the bounce above it cannot go through
+// the app: it is run from the compiled app (dist/, built before the BDD step in CI) in this
+// process against the same database, as the fundraising steps run their daily passes.
+When("the daily email log prune runs", async function () {
+  const { pruneEmailLog } = require(path.resolve(__dirname, "../../dist/db/email-log.js"));
+  await pruneEmailLog(new Date());
+});
+
+const removalsFor = (email) => pool.query("SELECT 1 FROM email_audit_removals WHERE email = lower($1)", [email]);
+
+Then("the email audit keeps no removal for {string}", async function (email) {
+  assert.equal((await removalsFor(email)).rowCount, 0, `a removal for ${email} outlived its emails`);
+});
+
+Then("the email audit still keeps a removal for {string}", async function (email) {
+  assert.ok((await removalsFor(email)).rowCount > 0, `the removal for ${email} was pruned though its emails are still in the log`);
 });

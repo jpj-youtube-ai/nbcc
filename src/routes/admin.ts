@@ -199,8 +199,8 @@ import {
   type SubscriberListRef,
 } from "../db/subscriber-lists";
 import { listSuppressions, suppressEmail, unsuppressEmail } from "../db/email-suppressions";
-import { blockedReason, putBackAuditRemovals, recordAuditRemoval } from "../db/email-audit-removals";
-import { isCharityAddress } from "../email/audit-removals";
+import { blockedReason, hasEmailProblem, putBackAuditRemovals, recordAuditRemoval } from "../db/email-audit-removals";
+import { isCharityAddress, looksLikeAddress } from "../email/audit-removals";
 import {
   createSendJob,
   getJobForNewsletter,
@@ -625,8 +625,11 @@ export async function getAdminSuppressions(req: Request, res: Response): Promise
 export async function postAdminSuppressionLift(req: Request, res: Response): Promise<Response | void> {
   const claims = await authorizeSection(req, res, "newsletter", "edit");
   if (!claims) return;
-  const parsed = z.object({ email: z.string().trim().email() }).safeParse(req.body);
-  if (!parsed.success) return res.status(400).json({ error: "A valid email address is needed" });
+  // TASK-562: any address, not only a well formed one. Staff can block a badly formed address from
+  // the Email audit (the log holds some, and they fail on every send), and whatever is on the block
+  // list must be able to come off it here. One that is not blocked is the 404 below.
+  const parsed = z.object({ email: z.string().trim().min(1).max(320) }).safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: "Say which address to unblock" });
   const lifted = await unsuppressEmail(parsed.data.email, claims.email);
   if (!lifted) return res.status(404).json({ error: "That address is not blocked" });
   return res.status(200).json({ lifted: true });
@@ -2380,18 +2383,32 @@ export async function getAdminEmailLog(req: Request, res: Response): Promise<Res
 //     of the band for as long as it is blocked. Refused for one of the charity's own addresses.
 // Nothing here stops a receipt, a booking confirmation or a sign in code: those do not consult
 // the block list, and this does not change the path any email takes when it is sent.
-const emailLogRemoveSchema = z.object({ email: z.string().trim().email(), stop: z.boolean() }).strict();
+//
+// `email` is whatever the log holds for the row, not a checked address. Addresses come into the
+// site through a loose check, so the log has some a strict one refuses (a trailing full stop, two
+// dots): the provider refuses those outright, no bounce ever blocks them, and they are the ones
+// most in need of removing. A cleared team invite's rows read "deleted team invitee": those can be
+// tidied, and there is nothing there to block. And only an address the log has a problem for can
+// be removed, which is what the band offers: the route is not a way to block anyone at all.
+const auditAddress = z.string().trim().min(1).max(320);
+const emailLogRemoveSchema = z.object({ email: auditAddress, stop: z.boolean() }).strict();
 
 export async function postAdminEmailLogRemove(req: Request, res: Response): Promise<Response | void> {
   const claims = await authorizeSection(req, res, "email-audit", "edit");
   if (!claims) return;
   const parsed = emailLogRemoveSchema.safeParse(req.body);
-  if (!parsed.success) return res.status(400).json({ error: "A valid email address is needed" });
+  if (!parsed.success) return res.status(400).json({ error: "Say which address to remove" });
   const { email, stop } = parsed.data;
+  if (stop && !looksLikeAddress(email)) {
+    return res.status(400).json({ error: "Only an email address can be blocked" });
+  }
   if (stop && isCharityAddress(email)) {
     return res.status(400).json({ error: "The charity's own addresses are never blocked" });
   }
   try {
+    if (!(await hasEmailProblem(email))) {
+      return res.status(404).json({ error: "That address has no problem in the Email audit" });
+    }
     // Blocked BEFORE it is hidden. If the second write fails the address is blocked and its
     // problems still show, which staff can see and try again; the other way round would hide the
     // problems of an address that is still being emailed. suppressEmail answers whether this call
@@ -2408,19 +2425,20 @@ export async function postAdminEmailLogRemove(req: Request, res: Response): Prom
 // POST /api/admin/email-log/put-back { email }: undo a removal. Its problems return to the band.
 // If Remove and stop emails is what blocked the address, and the block there now is still that
 // one, it is unblocked too. A block that was there for its own reason (its mail bounced, or it
-// marked us as spam) is left alone, and the answer says the address is still blocked.
+// marked us as spam) is left alone, and the answer says why the address is still blocked
+// (blockedBecause: 'bounced', 'complained' or 'manual'; null when it is not blocked).
 export async function postAdminEmailLogPutBack(req: Request, res: Response): Promise<Response | void> {
   const claims = await authorizeSection(req, res, "email-audit", "edit");
   if (!claims) return;
-  const parsed = z.object({ email: z.string().trim().email() }).strict().safeParse(req.body);
-  if (!parsed.success) return res.status(400).json({ error: "A valid email address is needed" });
+  const parsed = z.object({ email: auditAddress }).strict().safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: "Say which address to put back" });
   const { email } = parsed.data;
   try {
     const undone = await putBackAuditRemovals(email, claims.email);
     if (!undone.putBack) return res.status(404).json({ error: "That address has not been removed" });
     const reason = await blockedReason(email);
     const unblocked = undone.blocked && reason === "manual" ? await unsuppressEmail(email, claims.email) : false;
-    return res.status(200).json({ putBack: true, unblocked, stillBlocked: reason !== null && !unblocked });
+    return res.status(200).json({ putBack: true, unblocked, blockedBecause: unblocked ? null : reason });
   } catch (err) {
     console.error("admin email log put back failed:", err instanceof Error ? err.message : err);
     return res.status(500).json({ error: "Admin is temporarily unavailable" });

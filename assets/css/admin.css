@@ -511,6 +511,10 @@
 .nl-sub-count { margin: 0 0 8px; font-size: .78rem; font-weight: 600; color: var(--slate-soft); }
 .nl-sub-remove { color: var(--maroon); }
 .nl-sub-remove:hover { color: var(--crimson); }
+/* Blocked addresses: why an address is blocked, then the detail of it, in one cell. The detail
+   takes a line of its own (TASK-562: measured in Chrome, "Blocked by staff" ran straight on into
+   who removed it). Only this list: .admin-sub is also used inside sentences elsewhere. */
+#suppressionList .admin-sub { display: block; font-size: .82rem; color: var(--slate-soft); }
 
 /* Delivery-outcome failure badge in the newsletter list. */
 .nl-fail-badge { display: inline-block; font-size: .72rem; font-weight: 600; padding: 1px 8px; border-radius: 999px; background: #fbe9e9; color: var(--crimson); margin-left: 6px; }

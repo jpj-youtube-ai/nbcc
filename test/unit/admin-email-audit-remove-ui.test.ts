@@ -76,7 +76,9 @@ function respond(method: string, path: string, body?: string) {
     if (postAnswer !== "ok") return j({ error: "Admin is temporarily unavailable" }, postAnswer);
     const sent = JSON.parse(body || "{}") as { email: string; stop?: boolean };
     if (path.endsWith("/remove")) {
+      if (sent.stop && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(sent.email)) return j({ error: "Only an email address can be blocked" }, 400);
       if (sent.stop && isOwn(sent.email)) return j({ error: "The charity's own addresses are never blocked" }, 400);
+      if (!log.some((r) => r.recipient === sent.email && isProblem(r))) return j({ error: "That address has no problem in the Email audit" }, 404);
       const blockedNow = Boolean(sent.stop) && !blocked[sent.email];
       if (blockedNow) blocked[sent.email] = "manual";
       removals[sent.email] = { kind: sent.stop ? "stop" : "tidy", by: "admin@nbcc", at: REMOVED_AT, blocked: blockedNow };
@@ -87,7 +89,10 @@ function respond(method: string, path: string, body?: string) {
     delete removals[sent.email];
     const unblocked = rm.blocked && blocked[sent.email] === "manual";
     if (unblocked) delete blocked[sent.email];
-    return j({ putBack: true, unblocked, stillBlocked: Boolean(blocked[sent.email]) });
+    return j({ putBack: true, unblocked, blockedBecause: blocked[sent.email] || null });
+  }
+  if (path === "/api/admin/newsletters/suppressions") {
+    return j(Object.entries(blocked).map(([email, reason], i) => ({ id: i + 1, email, reason, detail: null, createdAt: REMOVED_AT })));
   }
   return j({ results: [] });
 }
@@ -214,6 +219,29 @@ describe("the red band, one block an address", () => {
     expect(own.textContent).toContain("One of the charity's own addresses, so it is never blocked.");
   });
 
+  // A cleared team invite's rows read "deleted team invitee" where the address was. They can be
+  // tidied out of the band; there is nothing there to block.
+  it("offers rows that no longer have an address Tidy away only, and says why", async () => {
+    log.unshift(row(9, "deleted team invitee", { kind: "fundraiseTeamInvite", subject: "Team invite: Ceilidh", deliveryStatus: "bounced" }));
+    await openAudit();
+    const gone = blockOf("deleted team invitee");
+    expect(gone.querySelector("[data-audit-stop]")).toBeNull();
+    expect((gone.querySelector("[data-audit-tidy]") as HTMLElement).textContent).toBe("Tidy away");
+    expect(gone.textContent).toContain("Not an email address, so there is nothing to block.");
+    await press(gone.querySelector("[data-audit-tidy]") as HTMLElement);
+    expect(posts()[0].body).toBe('{"email":"deleted team invitee","stop":false}');
+    expect(blocks().map((b) => b.getAttribute("data-audit-address"))).not.toContain("deleted team invitee");
+  });
+
+  // The log holds addresses a strict check would refuse. They are offered both, like any other.
+  it("offers a badly formed address both, since those are the ones that fail every time", async () => {
+    log.unshift(row(9, "ada@example.org.", { status: "failed", error: "SES send responded 400" }));
+    await openAudit();
+    expect(blockOf("ada@example.org.").querySelector("[data-audit-stop]")).not.toBeNull();
+    await press(blockOf("ada@example.org.").querySelector("[data-audit-stop]") as HTMLElement);
+    expect(posts()[0].body).toBe('{"email":"ada@example.org.","stop":true}');
+  });
+
   it("shows the blocks and nothing to press to someone who may only view the Email audit", async () => {
     perms = { overview: "view", "email-audit": "view" };
     await openAudit();
@@ -264,6 +292,28 @@ describe("Just tidy away", () => {
     expect(said().className).toBe("ty-status is-error");
     expect(saidUndo()).toBeNull();
     expect(blocks()).toHaveLength(3);
+  });
+
+  // "Please try again" is only said when trying again could work.
+  it("says they can no longer change the Email audit when that is why, not to try again", async () => {
+    postAnswer = 403;
+    await openAudit();
+    await press(tidyBtn("ada@example.org"));
+    expect(saidWords()).toBe("You can no longer change the Email audit.");
+    expect(said().className).toBe("ty-status is-error");
+  });
+
+  // Somebody else erased its emails while this screen sat open: the server's own words, and the
+  // band is drawn again, since it was out of date.
+  it("says what the server said when the address is no longer one with a problem, and draws the list again", async () => {
+    await openAudit();
+    log = log.filter((r) => r.recipient !== "bo@example.org");
+    const loads = calls.filter((c) => c.method === "GET" && c.path === "/api/admin/email-log").length;
+    await press(tidyBtn("bo@example.org"));
+    expect(saidWords()).toBe("That address has no problem in the Email audit.");
+    expect(said().className).toBe("ty-status is-error");
+    expect(calls.filter((c) => c.method === "GET" && c.path === "/api/admin/email-log")).toHaveLength(loads + 1);
+    expect(blocks().map((b) => b.getAttribute("data-audit-address"))).not.toContain("bo@example.org");
   });
 
   it("sends one request for a double press, and shows the screen is busy until the answer", async () => {
@@ -331,6 +381,20 @@ describe("Remove and stop emails", () => {
     expect(saidWords()).toBe("Removed ada@example.org. Emails to it were already stopped.");
   });
 
+  // Asked and answered, and then nothing happening and nothing said, is worse than not asking.
+  it("does not ask its question while another press is still being saved", async () => {
+    await openAudit();
+    holdPosts();
+    tidyBtn("bo@example.org").click();
+    await settle();
+    stopBtn("ada@example.org").click();
+    await settle();
+    expect(confirmSays).toEqual([]);
+    openGate();
+    await settle();
+    expect(posts()).toHaveLength(1);
+  });
+
   it("moves the keyboard to the line that says what was done, since the button pressed is gone", async () => {
     await openAudit();
     stopBtn("ada@example.org").focus();
@@ -356,6 +420,7 @@ describe("the full list keeps everything", () => {
     expect(first.textContent).toContain(`Removed, emails stopped, by admin@nbcc on ${helpers.fmtDate(REMOVED_AT)}`);
     expect((first.querySelector("[data-audit-putback]") as HTMLElement).textContent).toBe("Put back");
     expect((first.querySelector("[data-audit-putback]") as HTMLElement).getAttribute("data-audit-putback")).toBe("ada@example.org");
+    expect((first.querySelector("[data-audit-putback]") as HTMLElement).getAttribute("data-audit-kind")).toBe("stop");
   });
 
   it("says Tidied away for a tidy", async () => {
@@ -408,17 +473,46 @@ describe("Put back", () => {
     expect(saidWords()).toBe("Put back ada@example.org. Emails to it are no longer stopped.");
   });
 
-  it("says the address is still blocked, and where to unblock it, when the block was not this removal's", async () => {
-    blocked["ada@example.org"] = "bounced";
+  // Putting back a stop can start emails to the address again, so it asks, as stopping did.
+  // Putting back a tidy changes nothing but the band, and does not.
+  it("asks first when what is being put back stopped emails, and does nothing on no", async () => {
+    await openAudit();
+    await press(stopBtn("ada@example.org"));
+    confirmSays = [];
+    confirmAnswer = false;
+    await press(saidUndo() as HTMLElement);
+    expect(confirmSays).toHaveLength(1);
+    expect(confirmSays[0]).toContain("Put ada@example.org back?");
+    expect(confirmSays[0]).toContain("Its problems return to the list at the top.");
+    expect(confirmSays[0]).toContain("newsletters and fundraising emails will go to it again");
+    expect(posts()).toHaveLength(1);
+    expect(blocks().map((b) => b.getAttribute("data-audit-address"))).not.toContain("ada@example.org");
+  });
+
+  it("does not ask when a tidy is put back", async () => {
+    await openAudit();
+    await press(tidyBtn("ada@example.org"));
+    confirmSays = [];
+    await press(saidUndo() as HTMLElement);
+    expect(confirmSays).toEqual([]);
+    expect(posts()).toHaveLength(2);
+  });
+
+  it.each([
+    ["bounced", "It is still blocked, because its mail bounced."],
+    ["complained", "It is still blocked, because it marked us as spam."],
+    ["manual", "It is still blocked by staff."],
+  ])("says the address is still blocked and why (%s), and where to unblock it, when the block was not this removal's", async (why, words) => {
+    blocked["ada@example.org"] = why;
     await openAudit();
     await press(stopBtn("ada@example.org"));
     await press(saidUndo() as HTMLElement);
-    expect(saidWords()).toBe(
-      "Put back ada@example.org. It is still blocked, because its mail bounced or it marked us as spam. To unblock it, go to Newsletter, Blocked addresses.",
-    );
+    expect(saidWords()).toBe(`Put back ada@example.org. ${words} To unblock it, go to Newsletter, Blocked addresses.`);
   });
 
-  it("says so when it could not be put back", async () => {
+  // The line that said what was done held the only Put back on the screen for it. If the try
+  // fails, the line says so and still has it, with the keyboard on the line.
+  it("says so when it could not be put back, and keeps Put back for another try", async () => {
     await openAudit();
     await press(tidyBtn("ada@example.org"));
     postAnswer = 500;
@@ -426,6 +520,55 @@ describe("Put back", () => {
     expect(saidWords()).toBe("Could not do that. Please try again.");
     expect(said().className).toBe("ty-status is-error");
     expect(blocks()).toHaveLength(2);
+    expect((saidUndo() as HTMLElement).getAttribute("data-audit-putback")).toBe("ada@example.org");
+    expect(document.activeElement).toBe(said());
+    postAnswer = "ok";
+    await press(saidUndo() as HTMLElement);
+    expect(saidWords()).toBe("Put back ada@example.org.");
+    expect(blocks()).toHaveLength(3);
+  });
+
+  // Somebody else put it back first, on another screen.
+  it("says it had already been put back, and draws the list again, when somebody else got there first", async () => {
+    await openAudit();
+    await press(tidyBtn("ada@example.org"));
+    delete removals["ada@example.org"];
+    await press(saidUndo() as HTMLElement);
+    expect(saidWords()).toBe("That address had already been put back.");
+    expect(saidUndo()).toBeNull();
+    expect(blocks().map((b) => b.getAttribute("data-audit-address"))).toContain("ada@example.org");
+  });
+});
+
+// A staff block is listed under Newsletter > Blocked addresses with the rest. Its Unblock used to
+// ask as if every block there were a bounce or a spam report.
+describe("unblocking a staff block under Newsletter", () => {
+  async function openBlocked() {
+    await openAudit();
+    (document.querySelector('.admin-nav-link[data-view="newsletter"]') as HTMLElement).click();
+    await settle();
+    await settle();
+  }
+
+  it("lists it as Blocked by staff, and asks about staff, not a bounce", async () => {
+    blocked["ada@example.org"] = "manual";
+    confirmAnswer = false;
+    await openBlocked();
+    const rowFor = Array.from(document.querySelectorAll("#suppressionList tbody tr")).find((tr) => (tr.textContent || "").includes("ada@example.org")) as HTMLElement;
+    expect(rowFor.textContent).toContain("Blocked by staff");
+    (rowFor.querySelector("[data-unblock]") as HTMLElement).click();
+    expect(confirmSays).toHaveLength(1);
+    expect(confirmSays[0]).toContain("Start emailing ada@example.org again?");
+    expect(confirmSays[0]).toContain("A member of staff stopped emails to this address from the Email audit.");
+    expect(confirmSays[0]).not.toContain("bounced");
+  });
+
+  it("still asks about a bounce or a spam report for those", async () => {
+    blocked["bo@example.org"] = "bounced";
+    confirmAnswer = false;
+    await openBlocked();
+    (document.querySelector('#suppressionList [data-unblock="bo@example.org"]') as HTMLElement).click();
+    expect(confirmSays[0]).toContain("their mail bounced permanently or they marked us as spam");
   });
 });
 
@@ -461,6 +604,13 @@ describe("its styles", () => {
 
   it("breaks a long address rather than pushing the band wider", () => {
     expect(rule(".email-fail-address")).toMatch(/overflow-wrap:\s*anywhere/);
+  });
+
+  // Under Newsletter, why an address is blocked and the detail of it are one cell: "Blocked by
+  // staff", then who removed it and from where. Measured in Chrome, the two ran together as
+  // "Blocked by staffRemoved from the Email audit by ...". The detail takes a line of its own.
+  it("puts a block's detail on a line of its own in the Blocked addresses list", () => {
+    expect(rule("#suppressionList .admin-sub")).toMatch(/display:\s*block/);
   });
 
   it("gives both controls a target a thumb can hit", () => {

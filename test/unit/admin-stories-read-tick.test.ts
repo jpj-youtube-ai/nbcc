@@ -249,15 +249,23 @@ describe("ticking a story", () => {
     expect(noteOf(3)).toBe("");
   });
 
-  it("shows the status again on the next try", async () => {
+  // At the press, not at the answer: a second failure then shows the pill afresh, which is what
+  // makes a screen reader say it again, and nobody watches "Not saved" sit beside a save in flight.
+  it("shows the status again the moment the next try is pressed", async () => {
     patchAnswer = 500;
     await openStories();
     await press(tick(4));
     expect(saysNotSaved(4)).toBe(true);
     patchAnswer = "ok";
-    await press(tick(4));
+    holdPatches();
+    tick(4).click();
+    await settle();
     expect(saysNotSaved(4)).toBe(false);
     expect(statusPill(4).hidden).toBe(false);
+    expect(statusOf(4)).toBe("New");
+    openGate();
+    await settle();
+    expect(saysNotSaved(4)).toBe(false);
     expect(statusOf(4)).toBe("Reviewed");
   });
 
@@ -735,10 +743,14 @@ describe("its styles", () => {
     expect(btn).toMatch(/cursor:\s*progress/);
   });
 
-  // An author's display on a class beats the browser's own rule for [hidden], so a pill would
-  // stay on show. The two pills in a row's status take turns; both showing would add a line.
-  it("hides a pill that is marked hidden, and keeps Not saved to one line", () => {
-    expect(rule(".admin-pill[hidden]")).toMatch(/display:\s*none/);
+  // The two pills in a row's status take turns by the hidden attribute; both showing would add a
+  // line. A class's own display would beat the browser's rule for [hidden], so this leans on the
+  // site's stylesheet, which hides anything marked hidden and is loaded before the admin's.
+  it("hides whichever pill is marked hidden, and keeps Not saved to one line", () => {
+    const site = readFileSync(resolve(ROOT, "assets/css/styles.css"), "utf8");
+    expect(site).toMatch(/(^|\})\s*\[hidden\]\{display:none !important\}/m);
+    expect(html.indexOf("/assets/css/styles.css")).toBeGreaterThan(-1);
+    expect(html.indexOf("/assets/css/styles.css")).toBeLessThan(html.indexOf("/assets/css/admin.css"));
     const unsaved = rule(".admin-read-unsaved");
     expect(unsaved).toMatch(/white-space:\s*nowrap/);
     // Maroon on the failed pills' tint: 7.8 to 1. The crimson those pills use is 4.2 to 1.

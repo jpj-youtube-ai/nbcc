@@ -231,8 +231,8 @@
    press landed on the tick of the story above, and above a long list it was off the screen. A
    sentence under the status left the pressed tick where it was but made its row 61px taller, so on
    a quick run down the list the press after next could land on the wrong story. One line, never
-   wrapped. The failed pills' tint with maroon words (7.8 to 1; their crimson is 4.2 to 1). */
-.admin-pill[hidden]{display:none}
+   wrapped. The failed pills' tint with maroon words (7.8 to 1; their crimson is 4.2 to 1). The two
+   pills take turns by the hidden attribute, which styles.css hides for the whole site. */
 .admin-read-unsaved{background:color-mix(in srgb,var(--crimson) 16%,var(--cream));color:var(--maroon);white-space:nowrap}
 /* On a phone the table's columns are narrower than the pill (the list is to become cards there),
    and one line would run over the next column's words. It wraps like everything else in that row,

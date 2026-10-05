@@ -901,8 +901,11 @@ the wrong story. The line above the table was dropped for exactly this.
   saved" to the eye, "Story 12: Not saved. Please try again." to a screen reader (two `.sr-only`
   spans), the sentence in its `title`. `saveStoryRead` answers `{ unsaved: true }` for it.
   `storyRowShows` shows one pill or the other, never both, so the row keeps its height.
-- `.admin-pill[hidden]{display:none}`: a class's `display` beats the browser's own rule for
-  `[hidden]`, so the pill would otherwise have stayed on show.
+- The two pills take turns by the `hidden` attribute. A class's `display` beats the browser's own
+  rule for `[hidden]`, but the site's stylesheet already has `[hidden]{display:none !important}`
+  and is loaded before the admin's, so no rule of this feature's is needed. (One was written first,
+  on a search that was cut short, and the third review pass caught that it changed nothing.) The
+  test checks the site's rule is there and loaded first.
 - `.admin-read-unsaved`: the failed pills' tint with maroon words (7.8 to 1), one line, never
   wrapped. Below 700px it may wrap: the table's columns are narrower than the pill there, and the
   row's taller cells already set its height.
@@ -931,3 +934,10 @@ does not update the list behind it: going Back loads the list again.
 
 **Checks.** `npm run lint`, `npm run build`, ten affected test files (507 tests, 54 of them the
 screen's), and real Chrome as above.
+
+**The third pass**, on that one commit: still Ready. Two things came of it. The rule for hidden
+pills went, as above. And the test for "the status shows again on the next try" passed whether or
+not the row was cleared at the press, because a good answer hides "Not saved" anyway: it now holds
+the request and looks at the row before the answer arrives. Left as it is: at 861px wide the pill
+ends 0.6px short of the next column's words, which a different machine's fonts could close. It is
+only in a failed state, and it goes when the list becomes cards below 760px.

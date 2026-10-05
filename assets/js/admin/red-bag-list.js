@@ -460,7 +460,7 @@
         return c.text;
       });
       var dirty = isDirty();
-      var out = '<section class="rbl-card rbl-summary" aria-labelledby="rblSummaryHead"><h3 class="admin-subhead" id="rblSummaryHead">Changes not yet on the website</h3>';
+      var out = '<section class="rbl-card rbl-summary" aria-labelledby="rblSummaryHead"><h3 class="admin-subhead" id="rblSummaryHead">Changes</h3>';
       out += '<p class="rbl-count" data-rbl-count>' + esc(L.countLine(lines.length)) + "</p>";
       if (lines.length) out += changeList(lines);
       if (server.draft && !dirty) {

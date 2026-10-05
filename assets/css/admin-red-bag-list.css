@@ -188,9 +188,6 @@
 
 /* Save draft: always in reach at the foot of the screen while the list above it is being edited. */
 #view-red-bag .rbl-bar {
-  position: sticky;
-  bottom: 0;
-  z-index: 5;
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -203,7 +200,8 @@
   background: var(--card);
   box-shadow: var(--shadow-sm);
 }
-#view-red-bag .rbl-bar.is-dirty { background: var(--tan-soft); border-color: var(--tan); }
+/* It keeps to the foot of the screen only while there is something to save. */
+#view-red-bag .rbl-bar.is-dirty { position: sticky; bottom: 8px; z-index: 5; background: var(--tan-soft); border-color: var(--tan); }
 #view-red-bag .rbl-bar-state { flex: 1 1 14rem; margin: 0; min-width: 0; font-size: 0.9rem; font-weight: 600; color: var(--slate); }
 
 /* History. */
@@ -272,40 +270,53 @@
   #view-red-bag .rbl-rows { display: grid; gap: 10px; }
   #view-red-bag .rbl-row,
   #view-red-bag .rbl-row--example {
-    grid-template-columns: 44px minmax(0, 1fr);
+    grid-template-columns: 44px 2.25rem minmax(0, 1fr);
     grid-template-areas:
-      "pic name"
-      "price price"
-      "group group"
-      "show moves"
-      "links links"
-      "chooser chooser";
-    padding: 12px;
+      "pic name name"
+      "price price group"
+      "show show moves"
+      "links links links"
+      "chooser chooser chooser";
+    padding: 12px 12px 4px;
     border: 1px solid var(--line);
     border-radius: 12px;
     background: var(--cream);
   }
   #view-red-bag .rbl-row--example {
     grid-template-areas:
-      "pic price"
-      "words words"
-      "show moves"
-      "links links"
-      "chooser chooser";
+      "pic price price"
+      "words words words"
+      "show show moves"
+      "links links links"
+      "chooser chooser chooser";
   }
   #view-red-bag .rbl-row:last-child { border-bottom: 1px solid var(--line); }
   #view-red-bag .rbl-row .fx-call-input { background: var(--card); }
   #view-red-bag .rbl-chooser { background: var(--card); }
-  #view-red-bag .rbl-row--read,
-  #view-red-bag .rbl-row--read.rbl-row--example {
+  #view-red-bag .rbl-row--read {
     grid-template-columns: 44px minmax(0, 1fr) auto;
     grid-template-areas:
       "pic name price"
       "pic state state";
+    padding: 10px 12px;
   }
   #view-red-bag .rbl-none { padding: 12px; border: 1px solid var(--line); border-radius: 12px; }
   #view-red-bag .rbl-bar { padding: 10px 12px; }
   #view-red-bag .rbl-bar .admin-btn { flex: 1 1 auto; }
+}
+
+/* The narrowest phones: the heading's box needs the whole width to show its words. */
+@container rbl (max-width: 339px) {
+  #view-red-bag .rbl-row:not(.rbl-row--example):not(.rbl-row--read) {
+    grid-template-areas:
+      "pic name name"
+      "price price price"
+      "group group group"
+      "show show moves"
+      "links links links"
+      "chooser chooser chooser";
+  }
+  #view-red-bag .rbl-row:not(.rbl-row--example) .rbl-field--price { max-width: 9rem; }
 }
 
 @media (prefers-reduced-motion: no-preference) {

@@ -15,12 +15,13 @@ describe("the list, as agreed", () => {
     expect(rb.GROUPS.map((g) => g.heading)).toEqual(["Home comforts", "Play & downtime", "Books & creativity", "Clothing"]);
   });
 
-  it("has the thirteen items at their starting prices", () => {
+  // The Toy is £15 from 5 October 2026 (it started at £5). Every other price is as first agreed.
+  it("has the thirteen items at their agreed prices", () => {
     expect(rb.items().map((i) => [i.name, i.pence])).toEqual([
       ["Blanket", 800],
       ["Insulated cup", 700],
       ["Toiletry & fragrance gift set", 500],
-      ["Toy", 500],
+      ["Toy", 1500],
       ["Soft toy", 400],
       ["Headphones", 900],
       ["Book", 300],
@@ -86,8 +87,8 @@ describe("the total, in pence", () => {
     expect(rb.totalPence({}, [])).toBe(0);
   });
 
-  it("is £54.10 for one of everything", () => {
-    expect(rb.totalPence(oneOfEverything(), [])).toBe(5410);
+  it("is £64.10 for one of everything", () => {
+    expect(rb.totalPence(oneOfEverything(), [])).toBe(6410);
   });
 
   it("never drifts: 99 pencils at 10p are exactly £9.90, and three are 30p", () => {

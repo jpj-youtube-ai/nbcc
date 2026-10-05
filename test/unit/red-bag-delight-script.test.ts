@@ -391,11 +391,11 @@ describe("what peeks out of the bag", () => {
     expect(bags().length).toBe(2);
     expect(peeks(bags()[0])).toEqual([]);
     expect(peeks(bags()[1])).toEqual(["soft-toy"]);
-    type("toy", "4");
-    leave("toy");
+    type("toiletry-set", "4");
+    leave("toiletry-set");
     plus("blanket");
     expect(api!.total()).toBe(8100);
-    expect(peeks(bags()[1])).toEqual(["blanket", "toy", "soft-toy"]);
+    expect(peeks(bags()[1])).toEqual(["blanket", "toiletry-set", "soft-toy"]);
   });
 
   it("swaps naturally: the new one pops up, the oldest sinks and is cleared away, and the others slide along", () => {
@@ -1099,8 +1099,8 @@ describe("it is all decoration", () => {
   const busy = () => {
     plus("socks", 3);
     plus("blanket");
-    type("toy", "5");
-    leave("toy");
+    type("pyjamas", "5");
+    leave("pyjamas");
     example("crisis-15").click();
     $<HTMLButtonElement>("[data-rb-round]").click();
   };

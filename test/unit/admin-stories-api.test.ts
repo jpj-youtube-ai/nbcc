@@ -258,6 +258,58 @@ describe("PATCH /api/admin/stories/:id (editor+ gate)", () => {
     expect(res.statusCode).toBe(400);
     expect(updateStoryMock).not.toHaveBeenCalled();
   });
+
+  // TASK-NNN: the Read tick sends what its screen showed (ifStatus). A list left open while somebody
+  // else withdraws a story must not be able to put that story back to Reviewed or New.
+  it("hands ifStatus to updateStory as the condition, never as a field to save", async () => {
+    updateStoryMock.mockResolvedValueOnce({ id: 7, status: "reviewed" });
+    const res = await runPatch({ role: "editor", body: { status: "reviewed", ifStatus: "new" } });
+    expect(res.statusCode).toBe(200);
+    expect(res.body).toMatchObject({ id: 7, status: "reviewed" });
+    expect(updateStoryMock).toHaveBeenCalledWith(7, { status: "reviewed" }, "new");
+  });
+
+  it("409s with the story as it is now when it is no longer what the screen showed", async () => {
+    updateStoryMock.mockResolvedValueOnce(null);
+    getStoryMock.mockResolvedValueOnce({ id: 7, status: "withdrawn" });
+    const res = await runPatch({ role: "editor", body: { status: "reviewed", ifStatus: "new" } });
+    expect(res.statusCode).toBe(409);
+    expect(res.body).toMatchObject({ error: "Story has changed", story: { id: 7, status: "withdrawn" } });
+    expect(getStoryMock).toHaveBeenCalledWith(7);
+  });
+
+  it("404s a conditional update when the story is no longer there at all", async () => {
+    updateStoryMock.mockResolvedValueOnce(null);
+    getStoryMock.mockResolvedValueOnce(null);
+    const res = await runPatch({ role: "editor", body: { status: "reviewed", ifStatus: "new" } });
+    expect(res.statusCode).toBe(404);
+  });
+
+  it("does not look the story up again when a plain update finds nothing (still a 404)", async () => {
+    updateStoryMock.mockResolvedValueOnce(null);
+    const res = await runPatch({ role: "editor", body: { status: "reviewed" } });
+    expect(res.statusCode).toBe(404);
+    expect(getStoryMock).not.toHaveBeenCalled();
+  });
+
+  it("rejects ifStatus on its own: it is a condition, not a change (400)", async () => {
+    const res = await runPatch({ role: "editor", body: { ifStatus: "new" } });
+    expect(res.statusCode).toBe(400);
+    expect(updateStoryMock).not.toHaveBeenCalled();
+  });
+
+  it("rejects an ifStatus that is not a status (400)", async () => {
+    const res = await runPatch({ role: "editor", body: { status: "reviewed", ifStatus: "bogus" } });
+    expect(res.statusCode).toBe(400);
+    expect(updateStoryMock).not.toHaveBeenCalled();
+  });
+
+  it("403s a Viewer before the condition is even looked at", async () => {
+    const res = await runPatch({ role: "viewer", body: { status: "reviewed", ifStatus: "new" } });
+    expect(res.statusCode).toBe(403);
+    expect(updateStoryMock).not.toHaveBeenCalled();
+    expect(getStoryMock).not.toHaveBeenCalled();
+  });
 });
 
 // G2 item 6: DELETE /api/admin/stories/:id — real hard-delete (erasure), distinct from the

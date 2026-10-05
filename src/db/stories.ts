@@ -192,7 +192,11 @@ export async function deleteStory(id: number): Promise<boolean> {
   }
 }
 
-export async function updateStory(id: number, patch: StoryPatch): Promise<StoryRow | null> {
+// TASK-NNN: ifStatus is what the caller's screen showed. Given, the row changes only while its status
+// is still that, in the one statement, so a Stories list left open cannot undo a status somebody else
+// set in the meantime (Withdrawn above all: it records that consent was taken back). Null then means
+// either "no such story" or "it has moved on"; the route tells the two apart.
+export async function updateStory(id: number, patch: StoryPatch, ifStatus?: string): Promise<StoryRow | null> {
   const sets: string[] = [];
   const params: unknown[] = [];
   if (patch.status !== undefined) {
@@ -208,8 +212,13 @@ export async function updateStory(id: number, patch: StoryPatch): Promise<StoryR
     sets.push(`admin_notes = $${params.length}`);
   }
   params.push(id);
+  let where = `id = $${params.length}`;
+  if (ifStatus !== undefined) {
+    params.push(ifStatus);
+    where += ` AND status = $${params.length}`;
+  }
   const result = await storiesPool.query<StoryRow>(
-    `UPDATE stories SET ${sets.join(", ")} WHERE id = $${params.length} RETURNING *`,
+    `UPDATE stories SET ${sets.join(", ")} WHERE ${where} RETURNING *`,
     params,
   );
   return result.rows[0] ?? null;

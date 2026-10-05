@@ -61,9 +61,10 @@ describe("knowing how many tables to expect", () => {
   // photos and round profile photos organisers send; 84 since event tickets added the six ticket
   // tables (types, settings, orders, lines, refunds, requests); 86 with sponsor pledges ("Sponsor now,
   // pay after") and when their Gift Aid declarations were made; 88 since welcome packs added each
-  // page's pack and the things in it that staff have ticked.
-  it("counts 88 across the three databases", () => {
-    expect(expectedTableCount(ROOT)).toBe(88);
+  // page's pack and the things in it that staff have ticked; 89 with the Fill a Red Bag list's
+  // versions (the draft and every list published).
+  it("counts 89 across the three databases", () => {
+    expect(expectedTableCount(ROOT)).toBe(89);
   });
 
   it("finds the three tables that live outside the main database", () => {
@@ -148,7 +149,9 @@ describe("knowing how many tables to expect", () => {
     // Welcome packs: when each was sent and who signs its letter, and what staff have ticked in it.
     expect(main).toContain("welcome_packs");
     expect(main).toContain("welcome_pack_items");
-    expect(main.length).toBe(85);
+    // Fill a Red Bag: the list staff edit, its draft and every list published.
+    expect(main).toContain("red_bag_lists");
+    expect(main.length).toBe(86);
   });
 
   it("returns nothing for a directory that does not exist, rather than throwing", () => {

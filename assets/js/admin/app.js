@@ -34,7 +34,7 @@
   var SECTIONS = [
     "overview", "search", "donations", "claims", "gasds", "subscriptions", "stories",
     "ticker", "ball", "events", "fundraising", "contact", "newsletter", "thank-you", "audit", "email-audit", "site", "outreach",
-    "business-supporters", "analytics", "team",
+    "business-supporters", "analytics", "red-bag", "team",
   ];
   // KEEP IN SYNC with OPERATIONAL_EDITOR_SECTIONS there as well. Not cosmetic either: Manage access
   // pre-fills from this copy and Save stores what it shows, so a section missing here is silently
@@ -83,7 +83,7 @@
     // email-audit mirrors team: donor-identifying send data never arrives with a role below
     // admin — it is granted per person (matches roleToPermissions in src/admin/permissions.ts).
     SECTIONS.forEach(function (s) {
-      perms[s] = s === "team" || s === "email-audit" || s === "business-supporters" || s === "analytics" ? "none" : "view";
+      perms[s] = s === "team" || s === "email-audit" || s === "business-supporters" || s === "analytics" || s === "red-bag" ? "none" : "view";
     });
     return perms;
   }
@@ -616,6 +616,8 @@
     else if (name === "audit") loadAudit();
     else if (name === "email-audit") loadEmailAudit();
     else if (name === "analytics") loadAnalytics();
+    // Fill a Red Bag: the list's editor is its own file (assets/js/admin/red-bag-list.js).
+    else if (name === "red-bag") { if (window.AdminRedBagList) window.AdminRedBagList.open(); }
     else if (name === "site") loadSite();
     else if (name === "qr") loadQr();
     else if (name === "team") loadTeam();

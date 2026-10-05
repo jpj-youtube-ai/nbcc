@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { createRequire } from "node:module";
+import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import vm from "node:vm";
@@ -61,7 +62,31 @@ function catalogueFor(doc: Document): Rb {
 describe("with nothing published", () => {
   const today = renderRedBagPage(template, { preview: false });
 
-  it("is the page exactly as it was, byte for byte, with no block of data", () => {
+  // The page as the renderer drew it BEFORE staff could edit the list: main at f8ce4522, rendered
+  // from that commit's own src/red-bag/render.ts, catalogue and fill-a-red-bag.html (not from the
+  // code under test), with line endings as the repository stores them (LF). Pinned by length and
+  // SHA-256, so any change to the no-list path, however small, is caught here.
+  // IF THIS FAILS because the page's template, the built-in list or the fixed wording was changed
+  // on purpose: check that nothing else moved, then re-pin both from the new output.
+  const AS_IT_WAS = {
+    public: { bytes: 42784, sha256: "1b78a4f3eb7513aea917760677a5420d5cdf216261c767f3ae6814b37744c97d" },
+    staffPreview: { bytes: 42931, sha256: "1438acb71763712193f0259119a933f934edb56c47f0066e6d508780f60d66a0" },
+  };
+  const measure = (html: string) => ({ bytes: Buffer.byteLength(html, "utf8"), sha256: createHash("sha256").update(html, "utf8").digest("hex") });
+  const stored = template.replace(/\r\n/g, "\n");
+
+  it("is byte for byte the page main drew before any of this: the public page", () => {
+    expect(measure(renderRedBagPage(stored, { preview: false }))).toEqual(AS_IT_WAS.public);
+    expect(measure(renderRedBagPage(stored, { preview: false, list: null }))).toEqual(AS_IT_WAS.public);
+    expect(measure(renderRedBagPage(stored, { preview: false, list: undefined, draft: false }))).toEqual(AS_IT_WAS.public);
+  });
+
+  it("is byte for byte the page main drew before any of this: the staff preview while switched off", () => {
+    expect(measure(renderRedBagPage(stored, { preview: true }))).toEqual(AS_IT_WAS.staffPreview);
+    expect(measure(renderRedBagPage(stored, { preview: true, list: null }))).toEqual(AS_IT_WAS.staffPreview);
+  });
+
+  it("is the same page whether no list is handed over or none is named, with no block of data", () => {
     expect(renderRedBagPage(template, { preview: false, list: null })).toBe(today);
     expect(renderRedBagPage(template, { preview: false, list: undefined })).toBe(today);
     expect(today).not.toContain(LIST_DATA_ID);

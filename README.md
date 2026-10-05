@@ -6521,7 +6521,7 @@ Names and words are tidied before they are stored (trimmed, runs of space made o
 is escaped wherever it is written. A heading with nothing showing is not drawn on the page, nor a
 theme; with no example showing at all, the whole "Whenever the need comes" part is put away.
 
-**Where it is kept.** One new table, `red_bag_lists` (migration `1791200000260_red-bag-lists.js`,
+**Where it is kept.** One new table, `red_bag_lists` (migration `1791200000270_red-bag-lists.js`,
 additive). A row is a whole list in `data` (jsonb):
 
 - `status = 'draft'`: the one shared draft. A partial unique index allows one at most. `version` is

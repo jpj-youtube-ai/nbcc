@@ -21,7 +21,7 @@ const API = "/api/admin/red-bag-list";
 const HOOK_ADMIN = "hook.redbaglist.admin.bdd@example.com";
 const HOOK_PASSWORD = "redbag-list-hook-pw-1";
 const PASSWORD = "redbag-list-pw-1";
-const MIGRATION = path.resolve(__dirname, "../../migrations/1791200000260_red-bag-lists.js");
+const MIGRATION = path.resolve(__dirname, "../../migrations/1791200000270_red-bag-lists.js");
 // The sections that existed when saved matrices arrived (as admin-permissions-backfill.steps.js).
 const SECTIONS_BEFORE = ["overview", "search", "donations", "claims", "gasds", "subscriptions", "stories", "ticker", "contact", "newsletter", "thank-you", "audit", "team"];
 

@@ -4,7 +4,7 @@ import { insertAudit } from "./donations";
 import { redBagList, type RedBagList, type RedBagListProblem } from "../red-bag/list";
 
 // Fill a Red Bag: the versions of the list staff edit, in the red_bag_lists table
-// (migrations/1791200000260_red-bag-lists.js). A row is a whole list: the ONE shared draft
+// (migrations/1791200000270_red-bag-lists.js). A row is a whole list: the ONE shared draft
 // (status 'draft', at most one, with a stamp that moves on with every save), or a list that was
 // published (status 'published', kept for ever: the history). The website's list is the one
 // published last. With none published, the website uses the list written in the catalogue.

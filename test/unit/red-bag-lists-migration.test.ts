@@ -10,7 +10,7 @@ import { roleToPermissions } from "../../src/admin/permissions";
 // denied, admins included). Additive only. Checked against a fake pgm, without a database.
 
 const ROOT = resolve(__dirname, "../..");
-const NAME = "1791200000260_red-bag-lists.js";
+const NAME = "1791200000270_red-bag-lists.js";
 const migration = createRequire(import.meta.url)(resolve(ROOT, "migrations", NAME)) as {
   up: (pgm: unknown) => void;
   down: (pgm: unknown) => void;
@@ -48,10 +48,13 @@ describe("the red bag lists migration", () => {
   const sql = calls.filter((c) => c.op === "sql").map((c) => String(c.args[0]));
 
   // node-pg-migrate refuses, on production, to run a migration that sorts before one already run.
-  it("sorts last of all, after 1791200000250", () => {
+  // Not "sorts last", and nothing about its neighbour: a later migration must not break this. What
+  // matters is that it runs after the ones production had already run when it was written.
+  it("sorts after the donation source's 250", () => {
     const all = readdirSync(resolve(ROOT, "migrations")).filter((f) => f.endsWith(".js")).sort();
-    expect(all[all.length - 1]).toBe(NAME);
-    expect(all[all.length - 2]).toBe("1791200000250_donation-source.js");
+    expect(all).toContain(NAME);
+    expect(NAME > "1791200000250").toBe(true);
+    expect(all.indexOf(NAME)).toBeGreaterThan(all.indexOf("1791200000250_donation-source.js"));
   });
 
   it("creates one new table, and touches no table that exists", () => {

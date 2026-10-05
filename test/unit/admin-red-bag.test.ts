@@ -178,6 +178,20 @@ describe("the totals at the top of the Donations screen", () => {
     expect(el("donationsSources").querySelector(".admin-unavailable")).not.toBeNull();
   });
 
+  it("says Loading while it reads again, rather than leaving the last visit's figures on show", async () => {
+    await openDonations();
+    expect(document.querySelectorAll("#donationsSources .dn-source")).toHaveLength(2);
+    (document.querySelector('.admin-nav-link[data-view="overview"]') as HTMLElement).click();
+    await settle();
+    (document.querySelector('.admin-nav-link[data-view="donations"]') as HTMLElement).click();
+    // Before the answer has come back.
+    expect(el("donationsSources").querySelector(".admin-loading")?.textContent).toBe("Loading…");
+    expect(document.querySelectorAll("#donationsSources .dn-source")).toHaveLength(0);
+    await settle();
+    expect(document.querySelectorAll("#donationsSources .dn-source")).toHaveLength(2);
+    expect(el("donationsSources").querySelector(".admin-loading")).toBeNull();
+  });
+
   it("is read when the screen opens, not again for every filter or page", async () => {
     await openDonations();
     expect(totalsAsked).toBe(1);

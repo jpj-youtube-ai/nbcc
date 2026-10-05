@@ -1146,6 +1146,8 @@
   function loadDonationSources() {
     var box = el("donationsSources");
     if (!box) return;
+    // Loading, as the list beside it says: the last visit's figures are never shown as current.
+    box.innerHTML = '<p class="admin-loading">Loading…</p>';
     authFetch("/api/admin/donations/source-totals")
       .then(okJson)
       .then(function (d) {

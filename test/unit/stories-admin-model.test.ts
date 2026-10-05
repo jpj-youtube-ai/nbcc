@@ -103,7 +103,7 @@ describe("updateStory", () => {
     expect(row).toBeNull();
   });
 
-  // TASK-NNN: the Read tick says what its screen showed, so a list left open cannot undo a status
+  // TASK-560: the Read tick says what its screen showed, so a list left open cannot undo a status
   // somebody else set in the meantime. Withdrawn above all: it records that consent was taken back.
   it("changes a story only while its status is still the one the screen showed", async () => {
     queryMock.mockResolvedValueOnce({ rows: [{ id: 3, status: "reviewed" }] });

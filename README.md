@@ -2187,7 +2187,7 @@ same person, sent at a different moment, is a different story and is not blocked
 `test/unit/erased-stories-migration.test.ts` and `test/unit/stories-old-site-import.test.ts`, and end
 to end in `features/stories-import.feature`.
 
-**A Read tick on Stories (TASK-NNN).** The Stories list has a **Read** column, one tick box a story,
+**A Read tick on Stories (TASK-560).** The Stories list has a **Read** column, one tick box a story,
 and an open story has **Mark as read** under its words. "Read" is the status that already existed,
 **Reviewed**: a tick asks `PATCH /api/admin/stories/:id` for `"reviewed"`, and unticking asks for
 `"new"`, so it counts for the whole team and nothing new is stored. Used and Withdrawn show as read

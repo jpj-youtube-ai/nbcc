@@ -2222,7 +2222,7 @@
       loadStories();
     });
   });
-  // TASK-NNN: one listener on the list's box, which stays while the table inside it is drawn again
+  // TASK-560: one listener on the list's box, which stays while the table inside it is drawn again
   // on every load. A tick saves at once and the row stays where it is, so the next story does not
   // move under the pointer and the tick can come straight back off.
   if (el("storiesTable")) {
@@ -2338,7 +2338,7 @@
     if (r.third_party_consent) badges += ' <span class="admin-pill">3rd-party OK</span>';
     return badges;
   }
-  // TASK-NNN: "read" is the status that already says so. New is unread. Reviewed is read and can be
+  // TASK-560: "read" is the status that already says so. New is unread. Reviewed is read and can be
   // unticked. Used and Withdrawn say more than read, so their tick is locked: a stray click must
   // never undo them. The attribute is data-story-read, never data-story, which opens the story.
   function storyIsRead(status) {
@@ -2670,7 +2670,7 @@
       "</dl>" +
       '<h3 class="admin-subhead">Story</h3><p class="admin-story-text">' + H.escapeHtml(s.story_text || "") + "</p>" +
       (s.short_quote ? '<h3 class="admin-subhead">Short quote</h3><p class="admin-story-text">' + H.escapeHtml(s.short_quote) + "</p>" : "");
-    // TASK-NNN: where reading ends, under the story's words. Its own box, so pressing its button
+    // TASK-560: where reading ends, under the story's words. Its own box, so pressing its button
     // draws this box again and nothing else: see showStoryReadBar.
     var readBar = canWrite ? '<div id="storyReadBar"></div>' : "";
     var actions = "";
@@ -2715,7 +2715,7 @@
       wireStoryActions(s);
     }
   }
-  // TASK-NNN: Mark as read while the story is New, and the way back while it is Reviewed. Used and
+  // TASK-560: Mark as read while the story is New, and the way back while it is Reviewed. Used and
   // Withdrawn say more than read, so they get no button. The admin's small button and its text
   // link: Save changes, below, stays the one loud button. Under them, room for what could not be
   // saved, right where the button was pressed and not at the foot of the page past the whole form.

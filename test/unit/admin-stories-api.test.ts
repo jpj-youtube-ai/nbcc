@@ -259,7 +259,7 @@ describe("PATCH /api/admin/stories/:id (editor+ gate)", () => {
     expect(updateStoryMock).not.toHaveBeenCalled();
   });
 
-  // TASK-NNN: the Read tick sends what its screen showed (ifStatus). A list left open while somebody
+  // TASK-560: the Read tick sends what its screen showed (ifStatus). A list left open while somebody
   // else withdraws a story must not be able to put that story back to Reviewed or New.
   it("hands ifStatus to updateStory as the condition, never as a field to save", async () => {
     updateStoryMock.mockResolvedValueOnce({ id: 7, status: "reviewed" });

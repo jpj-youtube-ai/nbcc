@@ -40,7 +40,7 @@ Feature: Admin manages My Story submissions (Task C)
     When I PATCH the admin story status to "not_a_real_status" as "editor.admin.bdd@example.com" with password "edit-pw-123"
     Then the admin response status should be 400
 
-  # TASK-NNN: the Read tick on the Stories list says what its screen showed. A list opened before a
+  # TASK-560: the Read tick on the Stories list says what its screen showed. A list opened before a
   # story was withdrawn must not be able to put that story back to Reviewed: Withdrawn records that
   # consent was taken back.
   Scenario: a Read tick marks a story that is still New as Reviewed

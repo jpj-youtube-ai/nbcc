@@ -192,7 +192,7 @@ export async function deleteStory(id: number): Promise<boolean> {
   }
 }
 
-// TASK-NNN: ifStatus is what the caller's screen showed. Given, the row changes only while its status
+// TASK-560: ifStatus is what the caller's screen showed. Given, the row changes only while its status
 // is still that, in the one statement, so a Stories list left open cannot undo a status somebody else
 // set in the meantime (Withdrawn above all: it records that consent was taken back). Null then means
 // either "no such story" or "it has moved on"; the route tells the two apart.

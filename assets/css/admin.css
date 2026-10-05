@@ -207,7 +207,7 @@
 .admin-edit{max-width:480px;margin-top:22px;background:var(--card);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow-sm);padding:20px 24px}
 .admin-check{display:flex;align-items:center;gap:8px;font-size:.9rem;margin:10px 0;cursor:pointer}
 .admin-check input{width:18px;height:18px;accent-color:var(--crimson)}
-/* TASK-NNN: the Read tick on the Stories list, and Mark as read on an open story. The column is
+/* TASK-560: the Read tick on the Stories list, and Mark as read on an open story. The column is
    narrow and fixed (60px, in rem so it grows with someone's larger text, as its heading does), so
    the other seven keep their share of a fixed-layout table. The label is a 44px target: its
    negative margins take that back out of the row's height, and line the box up under the heading.

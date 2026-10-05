@@ -60,7 +60,7 @@ Feature: The admin Overview says what needs us (TASK-508)
     Then the overview answer is 200
     And it shows no numbers
 
-  # TASK-NNN: the Read tick on Stories sends the status Reviewed. A story that is Reviewed is no
+  # TASK-560: the Read tick on Stories sends the status Reviewed. A story that is Reviewed is no
   # longer waiting to be read, so the Overview stops counting it.
   @admin-stories
   Scenario: a story marked as read is no longer waiting to be read

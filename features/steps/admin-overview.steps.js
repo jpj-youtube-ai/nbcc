@@ -231,7 +231,7 @@ Then("it shows no numbers", function () {
   assert.deepEqual(this.ovBody.failed, []);
 });
 
-// TASK-NNN: stories waiting to be read. Other scenarios may leave New stories of their own, so the
+// TASK-560: stories waiting to be read. Other scenarios may leave New stories of their own, so the
 // second reading is compared with the first, not with a number.
 const storiesWaiting = (world) => {
   const line = (world.ovBody.needs || []).find((n) => n.key === "storiesNew");

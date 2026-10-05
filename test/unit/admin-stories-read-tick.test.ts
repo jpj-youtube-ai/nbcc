@@ -6,7 +6,7 @@ import { createRequire } from "node:module";
 import { signAdminSession } from "../../src/admin/session";
 import { effectivePermissions, type PermissionMap } from "../../src/admin/permissions";
 
-// TASK-NNN: the Read tick on Admin > Stories, in the admin's jsdom harness (admin.html's <body>, a
+// TASK-560: the Read tick on Admin > Stories, in the admin's jsdom harness (admin.html's <body>, a
 // fake fetch, app.js evaluated against it). "Read" is the status Reviewed, so a tick sends a status
 // to the PATCH the screen already had, with the status its screen showed (ifStatus), so it can never
 // undo what somebody else did in the meantime. Every story here is invented.

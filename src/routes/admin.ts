@@ -3149,7 +3149,7 @@ const STORY_STATUSES = ["new", "reviewed", "used", "withdrawn"] as const;
 // adminNotes/adminTags are capped (2000 chars / 50 tags of up to 100 chars each) so a
 // staff PATCH can never smuggle an unbounded payload into the stories DB — mirrors the
 // story submission schema's own length caps (src/stories/schema.ts).
-// TASK-NNN: ifStatus is the status the caller's screen showed. It is a condition on the update, not
+// TASK-560: ifStatus is the status the caller's screen showed. It is a condition on the update, not
 // a field to save, so it does not count as something to update.
 const storyPatchSchema = z
   .object({
@@ -3163,7 +3163,7 @@ const storyPatchSchema = z
 
 // PATCH /api/admin/stories/:id — update status / admin_tags / admin_notes (e.g. Withdraw). Editor/
 // Admin only (mirrors patchAdminDonor). No audit_log row — see src/db/stories.ts's comment.
-// TASK-NNN: with ifStatus, a story that is no longer what the screen showed is left alone and the
+// TASK-560: with ifStatus, a story that is no longer what the screen showed is left alone and the
 // answer is 409 with the story as it is now, so the screen can show the truth instead of undoing it.
 export async function patchAdminStory(req: Request, res: Response): Promise<Response | void> {
   if (!(await authorizeSection(req, res, "stories", "edit"))) return;

@@ -213,7 +213,7 @@ When(
   },
 );
 
-// TASK-NNN: what the Read tick sends. ifStatus is the status its screen showed.
+// TASK-560: what the Read tick sends. ifStatus is the status its screen showed.
 When(
   "I PATCH the admin story status to {string} only if it is {string} as {string} with password {string}",
   async function (status, ifStatus, email, password) {

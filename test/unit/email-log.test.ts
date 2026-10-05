@@ -26,6 +26,8 @@ import { emailLogPruneCutoff } from "../../src/email/log-retention";
 const sqlOf = (re: RegExp): string => queryMock.mock.calls.map((c) => String(c[0])).find((s) => re.test(s)) ?? "";
 const paramsOf = (re: RegExp): unknown[] =>
   (queryMock.mock.calls.find((c) => re.test(String(c[0]))) || [])[1] as unknown[];
+// One line, one space between words, none just inside brackets: the SQL is laid out over many.
+const flat = (sql: string): string => sql.replace(/\s+/g, " ").replace(/\( /g, "(").replace(/ \)/g, ")").trim();
 
 beforeEach(() => {
   queryMock.mockReset();
@@ -146,6 +148,84 @@ describe("listRecentEmailFailures (the red band)", () => {
     expect(sql).toMatch(/interval/i);
     expect(sql).toMatch(/limit/i);
   });
+
+  // TASK-NNN: staff can remove an address from the band. Hiding is decided here, when the band is
+  // read, and never when an email is sent: a problem is left out when its address has a removal
+  // still in force and the problem is older than it, or the removal is a "stop" and the address
+  // is still blocked. Unblocking an address therefore brings its later failures back by itself.
+  it("leaves out a problem whose address staff removed, while that removal is in force", async () => {
+    await listRecentEmailFailures();
+    const sql = flat(sqlOf(/from email_log/i));
+    expect(sql).toMatch(/from email_log l where/i);
+    expect(sql).toMatch(
+      /and not exists \( ?select 1 from email_audit_removals r where r\.email = l\.recipient and r\.put_back_at is null and \(/i,
+    );
+  });
+
+  it("hides what is older than the removal, and what came later only for a stop on an address still blocked", async () => {
+    await listRecentEmailFailures();
+    const sql = flat(sqlOf(/from email_log/i));
+    expect(sql).toMatch(
+      /l\.created_at <= r\.removed_at or \( ?r\.kind = 'stop' and exists \( ?select 1 from email_suppressions s where lower\(s\.email\) = l\.recipient and s\.removed_at is null ?\) ?\)/i,
+    );
+  });
+
+  // The Overview counts this same list (14 days, up to 200), so its number drops with the band's.
+  it("still takes the days and the cap as its two parameters", async () => {
+    await listRecentEmailFailures(14, 200);
+    expect(paramsOf(/from email_log/i)).toEqual([14, 200]);
+  });
+});
+
+// TASK-NNN: nothing is deleted when an address is removed from the band. The full list keeps every
+// row and says, on the ones the band is hiding, who removed them and when.
+describe("listEmailLog marks what staff removed from the band", () => {
+  it("joins the newest removal that hides the row, for problem rows only", async () => {
+    await listEmailLog({ limit: 50, offset: 0 });
+    const sql = flat(sqlOf(/select id, kind/i));
+    expect(sql).toMatch(/from email_log l left join lateral \( ?select r\.removed_at, r\.removed_by, r\.kind as removed_kind from email_audit_removals r where/i);
+    expect(sql).toMatch(/and \(l\.status = 'failed' or l\.delivery_status in \('bounced', 'complained'\)\)/i);
+    expect(sql).toMatch(/order by r\.removed_at desc limit 1 ?\) rm on true/i);
+    expect(sql).toMatch(/delivery_detail, created_at, removed_at, removed_by, removed_kind from email_log l/i);
+  });
+
+  it("uses the band's own rule, so the mark and the band can never disagree", async () => {
+    await listRecentEmailFailures();
+    const band = flat(sqlOf(/from email_log/i));
+    queryMock.mockClear();
+    await listEmailLog({ limit: 50, offset: 0 });
+    const list = flat(sqlOf(/select id, kind/i));
+    const rule = /r\.email = l\.recipient and r\.put_back_at is null and \(l\.created_at <= r\.removed_at or \(r\.kind = 'stop' and exists \(select 1 from email_suppressions s where lower\(s\.email\) = l\.recipient and s\.removed_at is null\)\)\)/i;
+    expect(band).toMatch(rule);
+    expect(list).toMatch(rule);
+  });
+
+  it("hands each row who removed it, when and how, or nulls", async () => {
+    const row = { id: 1, kind: "newsletter", recipient: "ada@example.org", recipient_name: null, subject: "S", status: "sent",
+      error: null, delivery_status: "bounced", delivery_at: null, delivery_detail: null, created_at: "2026-10-01T09:00:00Z" };
+    queryMock
+      .mockResolvedValueOnce({ rows: [{ n: "2" }], rowCount: 1 })
+      .mockResolvedValueOnce({
+        rows: [
+          { ...row, removed_at: "2026-10-05T10:00:00Z", removed_by: "staff@nbcc.scot", removed_kind: "stop" },
+          { ...row, id: 2, delivery_status: "delivered", removed_at: null, removed_by: null, removed_kind: null },
+        ],
+        rowCount: 2,
+      });
+    const out = await listEmailLog({ limit: 50, offset: 0 });
+    expect(out.rows[0]).toMatchObject({ id: 1, removedAt: "2026-10-05T10:00:00Z", removedBy: "staff@nbcc.scot", removedKind: "stop" });
+    expect(out.rows[1]).toMatchObject({ id: 2, removedAt: null, removedBy: null, removedKind: null });
+  });
+
+  // The count needs no join, and the filters name their columns plainly: the join exposes only
+  // removed_at, removed_by and removed_kind, so "kind", "status" and the rest still mean the log's.
+  it("keeps the count free of the join, and the filters unambiguous", async () => {
+    await listEmailLog({ kind: "newsletter", status: "bounced", q: "ada", limit: 50, offset: 0 });
+    expect(flat(sqlOf(/select count/i))).not.toMatch(/email_audit_removals/i);
+    const sql = flat(sqlOf(/select id, kind/i));
+    expect(sql).toMatch(/rm on true where kind = \$1 and delivery_status = \$2 and \(recipient like \$3/i);
+    expect(sql).not.toMatch(/r\.kind(?! as removed_kind| = 'stop')/i);
+  });
 });
 
 describe("retention + erasure", () => {
@@ -162,6 +242,32 @@ describe("retention + erasure", () => {
     queryMock.mockResolvedValueOnce({ rows: [], rowCount: 3 });
     expect(await eraseEmailLogFor("Gone@Example.com")).toBe(3);
     expect(sqlOf(/delete from email_log where recipient/i)).toMatch(/lower\(\$1\)/i);
+  });
+
+  // TASK-NNN: a removal from the band names an address too, so it follows the log's own rules: it
+  // does not outlive the rows it was about, and it goes when the address is erased.
+  it("prunes the removals made on or before the same cutoff, after the log's own rows", async () => {
+    queryMock.mockResolvedValueOnce({ rows: [], rowCount: 7 });
+    const now = new Date("2026-09-01T12:00:00Z");
+    expect(await pruneEmailLog(now)).toBe(7);
+    const order = queryMock.mock.calls.map((c) => String(c[0]));
+    expect(order[0]).toMatch(/delete from email_log where created_at/i);
+    expect(order[1]).toMatch(/delete from email_audit_removals where removed_at <= \$1::timestamptz/i);
+    expect(paramsOf(/delete from email_audit_removals/i)).toEqual([emailLogPruneCutoff(now).toISOString()]);
+  });
+
+  it("erases an address's removals with its rows", async () => {
+    queryMock.mockResolvedValueOnce({ rows: [], rowCount: 3 });
+    expect(await eraseEmailLogFor("Gone@Example.com")).toBe(3);
+    expect(sqlOf(/delete from email_audit_removals/i)).toMatch(/where email = lower\(\$1\)/i);
+    expect(paramsOf(/delete from email_audit_removals/i)).toEqual(["Gone@Example.com"]);
+  });
+
+  // A sponsor's pledge erases only the emails about that pledge: the address still has other rows,
+  // so what staff decided about the address stays.
+  it("keeps the removals when only some kinds of an address's emails are erased", async () => {
+    await eraseEmailLogFor("Gone@Example.com", ["fundraisePledgePay"]);
+    expect(sqlOf(/delete from email_audit_removals/i)).toBe("");
   });
 });
 

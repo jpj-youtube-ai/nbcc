@@ -108,6 +108,10 @@ export interface EmailLogRow {
   deliveryAt: string | null;
   deliveryDetail: string | null;
   createdAt: string;
+  /** TASK-NNN: set on a problem row staff removed from the red band: when, who, 'stop' or 'tidy'. */
+  removedAt: string | null;
+  removedBy: string | null;
+  removedKind: string | null;
 }
 
 export interface EmailLogQuery {
@@ -130,6 +134,9 @@ interface RawRow {
   delivery_at: string | null;
   delivery_detail: string | null;
   created_at: string;
+  removed_at?: string | null;
+  removed_by?: string | null;
+  removed_kind?: string | null;
 }
 
 const rowOf = (r: RawRow): EmailLogRow => ({
@@ -144,7 +151,25 @@ const rowOf = (r: RawRow): EmailLogRow => ({
   deliveryAt: r.delivery_at,
   deliveryDetail: r.delivery_detail,
   createdAt: r.created_at,
+  removedAt: r.removed_at ?? null,
+  removedBy: r.removed_by ?? null,
+  removedKind: r.removed_kind ?? null,
 });
+
+// TASK-NNN: staff can remove an address from the red band (email_audit_removals). What that hides
+// is decided HERE, each time the band or the list is read, and never when an email is sent: for a
+// log row `l` and a removal `r` of its address that has not been put back, the row is hidden when
+// it is older than the removal, or the removal is a 'stop' and the address is still blocked. So a
+// tidied address comes back the next time it fails; a stopped one stays out for as long as it is
+// blocked; and unblocking it under Newsletter brings its later failures back with no code there
+// knowing about this. One fragment, used by both readers, so the band and the list's "Removed by"
+// mark can never disagree.
+const PROBLEM = `(l.status = 'failed' OR l.delivery_status IN ('bounced', 'complained'))`;
+const REMOVAL_HIDES = `r.email = l.recipient AND r.put_back_at IS NULL
+           AND (l.created_at <= r.removed_at
+                OR (r.kind = 'stop' AND EXISTS (
+                      SELECT 1 FROM email_suppressions s
+                       WHERE lower(s.email) = l.recipient AND s.removed_at IS NULL)))`;
 
 // The main list: newest first, filterable by kind and status, searchable across recipient /
 // name / subject. A status filter of 'failed' means OUR attempt failed; 'bounced'/'complained'/
@@ -170,10 +195,24 @@ export async function listEmailLog(query: EmailLogQuery): Promise<{ rows: EmailL
   const clause = where.length ? `WHERE ${where.join(" AND ")}` : "";
 
   const total = await pool.query(`SELECT count(*) AS n FROM email_log ${clause}`, params);
+  // TASK-NNN: each row with the newest removal that is hiding it from the red band, if one is, so
+  // the page can say who removed it and when. Only a problem row can be hidden. The join hands on
+  // three names of its own and nothing else, so the filters above, which name the log's columns
+  // plainly ("kind", "status"), still mean the log's.
   const rows = await pool.query(
     `SELECT id, kind, recipient, recipient_name, subject, status, error,
-            delivery_status, delivery_at, delivery_detail, created_at
-       FROM email_log ${clause}
+            delivery_status, delivery_at, delivery_detail, created_at,
+            removed_at, removed_by, removed_kind
+       FROM email_log l
+       LEFT JOIN LATERAL (
+         SELECT r.removed_at, r.removed_by, r.kind AS removed_kind
+           FROM email_audit_removals r
+          WHERE ${REMOVAL_HIDES}
+            AND ${PROBLEM}
+          ORDER BY r.removed_at DESC
+          LIMIT 1
+       ) rm ON true
+       ${clause}
       ORDER BY created_at DESC, id DESC
       LIMIT ${arg(query.limit)} OFFSET ${arg(query.offset)}`,
     params,
@@ -183,14 +222,19 @@ export async function listEmailLog(query: EmailLogQuery): Promise<{ rows: EmailL
 
 // The red band: everything that went wrong recently — our attempt failed, or the mailbox side
 // bounced/complained — newest first, capped (the band is a warning light, not a second table).
+// TASK-NNN: less what staff have removed from it (REMOVAL_HIDES above). The Overview counts this
+// same list, so its number drops with the band's.
 export async function listRecentEmailFailures(days = 14, limit = 25): Promise<EmailLogRow[]> {
   const { rows } = await pool.query(
     `SELECT id, kind, recipient, recipient_name, subject, status, error,
             delivery_status, delivery_at, delivery_detail, created_at
-       FROM email_log
-      WHERE created_at > now() - ($1 || ' days')::interval
-        AND (status = 'failed' OR delivery_status IN ('bounced', 'complained'))
-      ORDER BY created_at DESC, id DESC
+       FROM email_log l
+      WHERE l.created_at > now() - ($1 || ' days')::interval
+        AND ${PROBLEM}
+        AND NOT EXISTS (
+          SELECT 1 FROM email_audit_removals r
+           WHERE ${REMOVAL_HIDES})
+      ORDER BY l.created_at DESC, l.id DESC
       LIMIT $2`,
     [days, limit],
   );
@@ -204,6 +248,9 @@ export async function pruneEmailLog(now: Date = new Date()): Promise<number> {
   const { rowCount } = await pool.query(`DELETE FROM email_log WHERE created_at <= $1::timestamptz`, [
     cutoff.toISOString(),
   ]);
+  // TASK-NNN: a removal from the red band names an address too, and is about rows that have now
+  // gone: it does not outlive them.
+  await pool.query(`DELETE FROM email_audit_removals WHERE removed_at <= $1::timestamptz`, [cutoff.toISOString()]);
   return rowCount ?? 0;
 }
 
@@ -214,9 +261,13 @@ export async function pruneEmailLog(now: Date = new Date()): Promise<number> {
 //
 // Sponsor pledges call it with `kinds`: when an unpaid pledge's details are removed, the log rows for
 // the emails about that pledge go too, and nothing else sent to that address is touched.
+//
+// TASK-NNN: without `kinds`, what staff decided about the address in the Email audit
+// (email_audit_removals) goes with its rows. With `kinds` it stays: the address still has others.
 export async function eraseEmailLogFor(email: string, kinds?: readonly string[]): Promise<number> {
   const { rowCount } = kinds
     ? await pool.query(`DELETE FROM email_log WHERE recipient = lower($1) AND kind = ANY($2)`, [email, [...kinds]])
     : await pool.query(`DELETE FROM email_log WHERE recipient = lower($1)`, [email]);
+  if (!kinds) await pool.query(`DELETE FROM email_audit_removals WHERE email = lower($1)`, [email]);
   return rowCount ?? 0;
 }

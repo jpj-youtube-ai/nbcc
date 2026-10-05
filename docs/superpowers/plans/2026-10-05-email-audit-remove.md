@@ -135,7 +135,8 @@ tidied and never blocked; put back unblocks only what Remove blocked; a failure 
   goes, and how many problems leave.
 - While a press is being saved the band is `aria-busy` and ignores presses; then the audit loads
   again.
-- `#emailAuditStatus` in `admin.html` (a `.ty-status`, which keeps a line of room when empty) says
+- `#emailAuditSaid` in `admin.html` (a `.ty-status`, which keeps a line of room when empty; not
+  `#emailAuditStatus`, which is the Status filter) says
   what was done, with Put back; or "Could not do that. Please try again."
 - In the full list a removed row says "Removed, emails stopped, by ... on ..." or "Tidied away by
   ... on ..." under its status, with Put back for someone who may edit.

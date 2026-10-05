@@ -3167,10 +3167,152 @@
     var who = H.escapeHtml(r.recipient) + (r.recipientName ? "<br><small>" + H.escapeHtml(r.recipientName) + "</small>" : "");
     var detail = r.error || r.deliveryDetail;
     var status = emailStatusPill(r) + (detail ? "<br><small>" + H.escapeHtml(String(detail)) + "</small>" : "");
+    // TASK-NNN: nothing leaves this list. A problem staff removed from the red band says so here,
+    // with who and when, and the way to undo it for someone who may edit.
+    if (r.removedAt) {
+      status +=
+        "<br><small>" +
+        H.escapeHtml((r.removedKind === "stop" ? "Removed, emails stopped, by " : "Tidied away by ") + (r.removedBy || "staff") + " on " + H.fmtDate(r.removedAt)) +
+        "</small>" +
+        (canEdit("email-audit")
+          ? ' <button class="admin-link" type="button" data-audit-putback="' + H.escapeHtml(r.recipient) + '">Put back</button>'
+          : "");
+    }
     return (
       "<tr><td>" + H.fmtDate(r.createdAt) + "</td><td>" + H.escapeHtml(emailKindLabel(r.kind)) +
       "</td><td>" + who + "</td><td>" + H.escapeHtml(r.subject) + "</td><td>" + status + "</td></tr>"
     );
+  }
+  // TASK-NNN: the red band, one block an address. What staff decide here is about an address (is
+  // it dead?), not about one email, so its problems are listed under it and it is dealt with once:
+  // "Remove and stop emails" (its problems leave the band and the address is blocked) or "Just tidy
+  // away" (they leave the band and nothing else changes). One of the charity's own addresses can
+  // only be tidied: blocking events@ would stop the charity's own notes to itself. The server
+  // refuses that too. Blocks, not a table, so the band wraps to fit a phone.
+  function emailIsCharitys(email) {
+    return /@([a-z0-9-]+\.)*nbcc\.scot$/i.test(String(email || "").trim());
+  }
+  function emailFailBandHtml(failures) {
+    if (!failures.length) return "";
+    var canWrite = canEdit("email-audit");
+    var groups = [];
+    var at = {};
+    failures.forEach(function (r) {
+      if (!Object.prototype.hasOwnProperty.call(at, r.recipient)) {
+        at[r.recipient] = groups.length;
+        groups.push({ email: r.recipient, name: r.recipientName, rows: [] });
+      }
+      groups[at[r.recipient]].rows.push(r);
+    });
+    var items = groups
+      .map(function (g) {
+        var email = H.escapeHtml(g.email);
+        var own = emailIsCharitys(g.email);
+        var actions = "";
+        if (canWrite) {
+          actions =
+            '<p class="email-fail-actions">' +
+            (own ? "" : '<button class="admin-btn" type="button" data-audit-stop="' + email + '">Remove and stop emails</button>') +
+            '<button class="admin-link" type="button" data-audit-tidy="' + email + '">' + (own ? "Tidy away" : "Just tidy away") + "</button></p>";
+        }
+        var problems = g.rows
+          .map(function (r) {
+            var detail = r.error || r.deliveryDetail;
+            return (
+              "<li>" + emailStatusPill(r) + " " + H.escapeHtml(emailKindLabel(r.kind)) + ": " + H.escapeHtml(r.subject) +
+              ", " + H.fmtDate(r.createdAt) + (detail ? "<small>" + H.escapeHtml(String(detail)) + "</small>" : "") + "</li>"
+            );
+          })
+          .join("");
+        return (
+          '<li class="email-fail-item" data-audit-address="' + email + '"><div class="email-fail-who">' +
+          '<p class="email-fail-address">' + email + (g.name ? " <small>" + H.escapeHtml(g.name) + "</small>" : "") + "</p>" +
+          actions + "</div>" +
+          (own ? '<p class="email-fail-own">One of the charity\'s own addresses, so it is never blocked.</p>' : "") +
+          '<ul class="email-fail-problems">' + problems + "</ul></li>"
+        );
+      })
+      .join("");
+    return (
+      '<div class="email-fail-band"><h3>Needs a look: ' + failures.length + " problem" + (failures.length === 1 ? "" : "s") +
+      ' in the last 14 days</h3><ul class="email-fail-list">' + items + "</ul></div>"
+    );
+  }
+  // What was just done, said on one line above the band, with Put back beside it when the thing
+  // done can be undone. The line is in the page from the start and keeps its room when empty
+  // (.ty-status), so its words do not push the band down under the pointer.
+  function emailAuditSay(text, cls, undoEmail) {
+    var line = el("emailAuditSaid");
+    if (!line) return;
+    line.className = "ty-status" + (cls ? " " + cls : "");
+    line.textContent = text || "";
+    if (undoEmail) {
+      var undo = doc.createElement("button");
+      undo.type = "button";
+      undo.className = "admin-link";
+      undo.setAttribute("data-audit-putback", undoEmail);
+      undo.textContent = "Put back";
+      line.appendChild(doc.createTextNode(" "));
+      line.appendChild(undo);
+    }
+  }
+  var emailAuditSaving = false;
+  // One press at a time: until the answer is in and the list drawn again, a second press (a double
+  // click, or the next address, which is about to move up under the pointer) does nothing.
+  function emailAuditPost(path, body, done) {
+    if (emailAuditSaving) return;
+    emailAuditSaving = true;
+    var view = el("view-email-audit");
+    view.setAttribute("aria-busy", "true");
+    authFetch(path, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    })
+      .then(okJson)
+      .then(function (d) {
+        done(d);
+        // The button that was pressed goes with the list. The keyboard goes to the line that says
+        // what happened, which has Put back in it, without moving the page.
+        el("emailAuditSaid").focus({ preventScroll: true });
+        return loadEmailAudit(true);
+      })
+      .catch(function (err) {
+        if (err && err.message === "unauthorized") return;
+        emailAuditSay("Could not do that. Please try again.", "is-error");
+      })
+      .then(function () {
+        emailAuditSaving = false;
+        view.removeAttribute("aria-busy");
+      });
+  }
+  function emailAuditRemove(email, stop, problems) {
+    if (stop) {
+      var asked = window.confirm(
+        "Stop emailing " + email + "?\n\nNewsletters and fundraising emails will no longer go to this address. " +
+          "Receipts, booking confirmations and sign in codes still will.\n\nIts " + problems + " problem" +
+          (problems === 1 ? " leaves" : "s leave") + " this list. You can put it back from the full list below.",
+      );
+      if (!asked) return;
+    }
+    emailAuditPost("/api/admin/email-log/remove", { email: email, stop: stop }, function (d) {
+      var words = !stop
+        ? "Tidied away " + email + "."
+        : d.blockedNow
+          ? "Removed " + email + " and stopped emails to it."
+          : "Removed " + email + ". Emails to it were already stopped.";
+      emailAuditSay(words, "is-ok", email);
+    });
+  }
+  function emailAuditPutBack(email) {
+    emailAuditPost("/api/admin/email-log/put-back", { email: email }, function (d) {
+      var words = "Put back " + email + ".";
+      if (d.unblocked) words += " Emails to it are no longer stopped.";
+      else if (d.stillBlocked) {
+        words += " It is still blocked, because its mail bounced or it marked us as spam. To unblock it, go to Newsletter, Blocked addresses.";
+      }
+      emailAuditSay(words, "is-ok");
+    });
   }
   function emailAuditTableHtml(rows) {
     return (
@@ -3211,9 +3353,26 @@
       emailAuditOffset += EMAIL_AUDIT_PAGE;
       loadEmailAudit();
     });
+    // TASK-NNN: one listener for the band's two controls and every Put back, on the screen's own
+    // box, which stays while the band and the list inside it are drawn again.
+    el("view-email-audit").addEventListener("click", function (e) {
+      var t = e.target && e.target.closest && e.target.closest("[data-audit-stop],[data-audit-tidy],[data-audit-putback]");
+      if (!t) return;
+      if (t.hasAttribute("data-audit-putback")) return emailAuditPutBack(t.getAttribute("data-audit-putback"));
+      var stop = t.hasAttribute("data-audit-stop");
+      var block = t.closest(".email-fail-item");
+      emailAuditRemove(
+        t.getAttribute(stop ? "data-audit-stop" : "data-audit-tidy"),
+        stop,
+        block ? block.querySelectorAll(".email-fail-problems > li").length : 0,
+      );
+    });
   }
-  function loadEmailAudit() {
+  // keepSaid: the list is being drawn again because of a press here, so the line that says what
+  // that press did stays. Any other load (opening the screen, a filter, a page) clears it.
+  function loadEmailAudit(keepSaid) {
     wireEmailAudit();
+    if (!keepSaid) emailAuditSay("");
     var wrap = el("emailAuditTable");
     var band = el("emailAuditFailures");
     wrap.innerHTML = '<p class="admin-loading">Loading…</p>';
@@ -3224,15 +3383,10 @@
     if (q) params += "&q=" + encodeURIComponent(q);
     if (type) params += "&type=" + encodeURIComponent(type);
     if (status) params += "&status=" + encodeURIComponent(status);
-    authFetch("/api/admin/email-log" + params)
+    return authFetch("/api/admin/email-log" + params)
       .then(okJson)
       .then(function (d) {
-        var failures = d.failures || [];
-        band.innerHTML = failures.length
-          ? '<div class="email-fail-band"><h3>Needs a look: ' + failures.length +
-            " problem" + (failures.length === 1 ? "" : "s") + ' in the last 14 days</h3><div class="admin-table-wrap">' +
-            emailAuditTableHtml(failures) + "</div></div>"
-          : "";
+        band.innerHTML = emailFailBandHtml(d.failures || []);
         var rows = d.results || [];
         wrap.innerHTML = rows.length
           ? emailAuditTableHtml(rows)

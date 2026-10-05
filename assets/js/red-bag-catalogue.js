@@ -41,7 +41,7 @@
       key: "play",
       heading: "Play & downtime",
       items: [
-        { key: "toy", name: "Toy", pence: 500 },
+        { key: "toy", name: "Toy", pence: 1500 },
         { key: "soft-toy", name: "Soft toy", pence: 400 },
         { key: "headphones", name: "Headphones", pence: 900 },
       ],

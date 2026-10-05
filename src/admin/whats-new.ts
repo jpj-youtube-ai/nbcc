@@ -15,7 +15,8 @@ export type Area =
   | "events"
   | "analytics"
   | "qr"
-  | "fundraising";
+  | "fundraising"
+  | "red-bag";
 
 // Each is the menu section (its data-view) and the gate its menu link uses in admin.html, so a pill
 // never sits on a section the person cannot open. Every one except events and analytics also has
@@ -35,6 +36,8 @@ export const AREAS: ReadonlyArray<{ area: Area; section: Section; level: "view" 
   { area: "qr", section: "site", level: "view" },
   // TASK-493: Admin > Fundraising. Each new sign up at /fundraise is an arrival.
   { area: "fundraising", section: "fundraising", level: "view" },
+  // Fill a Red Bag: the list's editor. New as a screen only: nothing arrives in it.
+  { area: "red-bag", section: "red-bag", level: "view" },
 ];
 
 export function isArea(value: unknown): value is Area {
@@ -51,6 +54,7 @@ export const FEATURES: ReadonlyArray<{ area: Area; added: Date; what: string }> 
   { area: "qr", added: new Date("2026-10-02T12:00:00Z"), what: "QR codes for every page, to print or share (TASK-492)" },
   { area: "fundraising", added: new Date("2026-10-02T12:00:00Z"), what: "Admin > Fundraising: approve sign ups, check changes, record cash and look after the supporter wall (TASK-495)" },
   { area: "donations", added: new Date("2026-10-05T10:00:00Z"), what: "Donations: Fill a Red Bag against the Donate page, a Red Bag label on each gift and a Fill a Red Bag only filter" },
+  { area: "red-bag", added: new Date("2026-10-05T13:00:00Z"), what: "Fill a Red Bag: change the items, prices and examples on the page, preview them, and publish" },
 ];
 
 // When the pills went live. Someone who has never opened a section is counted as having seen it

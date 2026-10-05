@@ -2,7 +2,8 @@ import type { NextFunction, Request, Response, Router } from "express";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { renderRedBagPage, renderRedBagThanksPage } from "../red-bag/render";
-import { isStaffRequest } from "../red-bag/staff";
+import { isStaffRequest, mayViewRedBagDraft } from "../red-bag/staff";
+import { redBagList, type RedBagList } from "../red-bag/list";
 import { RED_BAG_PATH, RED_BAG_THANKS_PATH, redBagAccess, redBagIsLive } from "../red-bag/switch";
 
 // Fill a Red Bag: its pages (docs/superpowers/specs/2026-10-04-fill-a-red-bag-design.md).
@@ -34,8 +35,32 @@ import { RED_BAG_PATH, RED_BAG_THANKS_PATH, redBagAccess, redBagIsLive } from ".
 // script does nothing, and the public sees the ordinary 404. (The script asks for whichever address
 // it is on, so it serves /fill and /fill/thank-you alike.)
 //
-// Added to the site router (src/routes/site.ts) before its catch-all. No database of its own: the
-// list comes from the catalogue file, and the staff check reads one row only when a token is sent.
+// WHICH LIST the giving page draws (5 October 2026: staff edit the list in Admin > Fill a Red Bag).
+//
+//   GET /fill                 the list published last, read through loadPublishedRedBagList
+//                             (src/db/red-bag-lists.ts): kept for a minute, and it never throws and
+//                             never waits long. Nothing published, the database down, or a stored
+//                             list that fails the list's rules: the list written in the catalogue,
+//                             and the page is byte for byte what it was before any of this.
+//   GET /fill?preview=draft   "Preview the page" in the admin. ONE address that answers two ways:
+//                               - a plain visit (no Authorization header, which is every visit a
+//                                 browser makes by itself): the ordinary published page, plus the
+//                                 same small loader script the switched-off preview uses. In a tab
+//                                 signed in to the admin, the loader asks for this address again
+//                                 WITH the session token;
+//                               - with a token that is a signed in member of staff holding VIEW of
+//                                 the "red-bag" access section (mayViewRedBagDraft, which fails
+//                                 closed): the page drawn from the DRAFT, under a strip saying
+//                                 "Draft preview: not on the website yet", with giving switched
+//                                 off. Anyone else with a token gets the published page, and no
+//                                 loader (so the page can never fetch itself in a loop).
+//                             Either way it is never kept by a browser or a cache (no-store, Vary:
+//                             Authorization) and never indexed. If the draft cannot be read, or
+//                             fails the rules, the answer is the published page.
+//   The thank you page takes no list: it uses only the catalogue's constants.
+//
+// Added to the site router (src/routes/site.ts) before its catch-all. The staff checks read one
+// row only when a token is sent.
 //
 // Nothing here may hang or crash a request (Express 4 does not catch what an async handler throws).
 // If the page's file, the 404's file or the catalogue cannot be read, or the menu cannot be added,
@@ -62,12 +87,55 @@ export interface RedBagPageDeps {
   live?: () => boolean;
   /** Is this Authorization header a signed in member of staff? Defaults to the admin's own session. */
   isStaff?: (authorization: string | undefined) => Promise<boolean>;
+  /**
+   * The giving page only: the list published last, or null for the built-in list. Left out (the
+   * thank you page): no list is read and the page is drawn as it always was. It must not throw; if
+   * it does anyway, the built-in list is drawn.
+   */
+  list?: () => Promise<RedBagList | null>;
+  /** The giving page only: the draft list for ?preview=draft, or null when there is no draft. */
+  draft?: () => Promise<RedBagList | null>;
+  /** May this Authorization header see the draft? Staff with view of the "red-bag" section. */
+  mayViewDraft?: (authorization: string | undefined) => Promise<boolean>;
 }
+
+/** The query that asks for the draft preview: /fill?preview=draft. */
+export const DRAFT_PREVIEW_QUERY = "preview=draft";
 
 export function redBagPageHandler(deps: RedBagPageDeps) {
   const live = deps.live ?? redBagIsLive;
   const isStaff = deps.isStaff ?? isStaffRequest;
   const render = deps.render ?? renderRedBagPage;
+  const mayViewDraft = deps.mayViewDraft ?? mayViewRedBagDraft;
+
+  /** The list published last; the built-in list (null) if it cannot be had. Never throws. */
+  async function publishedList(): Promise<RedBagList | null> {
+    if (!deps.list) return null;
+    try {
+      return await deps.list();
+    } catch (err) {
+      console.error("fill a red bag list could not be read, drawing the built-in list:", err instanceof Error ? err.message : err);
+      return null;
+    }
+  }
+
+  /**
+   * The draft for a preview: { list } when this request may see it (list null: there is no draft,
+   * so the website's list is shown under the strip), or null when it may not, or when anything at
+   * all goes wrong. Fails closed, and never throws.
+   */
+  async function draftFor(authorization: string | undefined): Promise<{ list: RedBagList | null } | null> {
+    if (!deps.draft || !authorization) return null;
+    try {
+      if (!(await mayViewDraft(authorization))) return null;
+      const list = await deps.draft();
+      if (list && redBagList().validate(list).length) throw new Error("the draft does not pass the list's rules");
+      return { list };
+    } catch (err) {
+      console.error("fill a red bag draft preview could not be drawn:", err instanceof Error ? err.message : err);
+      return null;
+    }
+  }
 
   return async function getRedBagPage(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
@@ -101,18 +169,38 @@ export function redBagPageHandler(deps: RedBagPageDeps) {
       return;
     }
 
-    // Drawn BEFORE anything is set on the response, for the same reason.
-    const html = await deps.decorate(render(deps.template(), { preview: access === "preview" }), req.headers.cookie);
+    // Which list (see the top of this file). Only the giving page is handed one.
+    const wantsDraft = !!deps.draft && req.query?.preview === "draft";
+    const authorization = req.headers.authorization;
+    let list = await publishedList();
+    let draft = false;
+    if (wantsDraft) {
+      const found = await draftFor(authorization);
+      if (found) {
+        draft = true;
+        list = found.list ?? list;
+      }
+    }
 
-    if (access === "preview") {
-      // Never let a shared cache hand a preview to the public.
+    // Drawn BEFORE anything is set on the response, for the same reason. With no list and no draft
+    // the options are exactly what they always were.
+    const opts = { preview: access === "preview", ...(list ? { list } : {}), ...(draft ? { draft: true } : {}) };
+    let page = render(deps.template(), opts);
+    // A plain visit to the draft preview's address: the published page, plus the loader that asks
+    // again with the tab's admin session. Never on an answer to a request that carried a session,
+    // or the page it brings in would go and fetch itself again.
+    if (wantsDraft && !authorization) page = page.replace("</head>", `${PREVIEW_LOADER}</head>`);
+    const html = await deps.decorate(page, req.headers.cookie);
+
+    if (access === "preview" || wantsDraft) {
+      // Never let a shared cache hand a preview to the public, or the public page to a preview.
       res.setHeader("Cache-Control", "private, no-store");
       res.setHeader("Vary", "Authorization");
     }
     // Public, the giving page may be listed by search engines: no header (and no robots line in
-    // its file). A staff preview is never indexed, and neither is a page not meant for listing
-    // (the thank you), whose file says the same.
-    if (access === "preview" || deps.indexable !== true) res.setHeader("X-Robots-Tag", "noindex, nofollow");
+    // its file). A staff preview is never indexed, nor is the draft preview's address, and neither
+    // is a page not meant for listing (the thank you), whose file says the same.
+    if (access === "preview" || wantsDraft || deps.indexable !== true) res.setHeader("X-Robots-Tag", "noindex, nofollow");
     res.type("html").send(html);
   }
 }
@@ -137,7 +225,11 @@ export function redBagForwardHandler(live: () => boolean = redBagIsLive) {
   };
 }
 
-export function addRedBagPageRoutes(router: Router, siteRoot: string, page: Pick<RedBagPageDeps, "decorate" | "live" | "isStaff">): void {
+export function addRedBagPageRoutes(
+  router: Router,
+  siteRoot: string,
+  page: Pick<RedBagPageDeps, "decorate" | "live" | "isStaff" | "list" | "draft" | "mayViewDraft">,
+): void {
   const file = join(siteRoot, "fill-a-red-bag.html");
   const thanksFile = join(siteRoot, "fill-thank-you.html");
   const notFoundFile = join(siteRoot, "404.html");
@@ -148,7 +240,14 @@ export function addRedBagPageRoutes(router: Router, siteRoot: string, page: Pick
     ...(page.isStaff ? { isStaff: page.isStaff } : {}),
   };
   router.get(RED_BAG_FORWARDS, redBagForwardHandler(page.live));
-  router.get(RED_BAG_PATH, redBagPageHandler({ ...shared, template: () => readFileSync(file, "utf8"), indexable: true }));
+  // The giving page alone reads the list. The database is reached only when a page is asked for
+  // (never as this file loads), and through the read that cannot throw.
+  const lists = {
+    list: page.list ?? (async () => (await import("../db/red-bag-lists")).loadPublishedRedBagList()),
+    draft: page.draft ?? (async () => (await (await import("../db/red-bag-lists")).readRedBagDraft())?.data ?? null),
+    ...(page.mayViewDraft ? { mayViewDraft: page.mayViewDraft } : {}),
+  };
+  router.get(RED_BAG_PATH, redBagPageHandler({ ...shared, ...lists, template: () => readFileSync(file, "utf8"), indexable: true }));
   router.get(
     RED_BAG_THANKS_PATH,
     redBagPageHandler({ ...shared, template: () => readFileSync(thanksFile, "utf8"), render: renderRedBagThanksPage, indexable: false }),

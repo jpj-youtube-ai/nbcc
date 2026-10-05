@@ -7,6 +7,11 @@
 // tab is signed in to the admin, it asks for the same address again with the token, and shows the
 // page that comes back. The server checks the token; a wrong or expired one just gets the 404 again.
 //
+// The draft preview of the list (Admin > Fill a Red Bag > Preview the page) uses it too: a plain
+// visit to /fill?preview=draft is the ordinary published page carrying this script, and in a signed
+// in tab it asks again with the token and shows the draft that comes back. The server never puts
+// this script on a page it sent in answer to a token, so it cannot ask twice.
+//
 // With no admin session in the tab it does nothing at all: the public sees the 404, untouched.
 // So staff: sign in at /admin, then go to /fill in the same tab.
 (function () {

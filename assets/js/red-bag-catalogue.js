@@ -3,8 +3,10 @@
 // The ONE place these live (docs/superpowers/specs/2026-10-04-fill-a-red-bag-design.md). The page
 // loads this file in the browser (assets/js/red-bag.js uses it as window.NBCCRedBag); the server
 // reads the very same file to draw the list into the page (src/red-bag/catalogue.ts), and the tests
-// read it too, so the three can never disagree. When staff can edit the list in the admin (half 2),
-// only the data below moves; the sums and the words stay.
+// read it too, so the three can never disagree. Staff can edit the list in the admin (5 October
+// 2026: Admin > Fill a Red Bag). The list written below is "The original list": the page uses it
+// until an edited one is published, and falls back to it whenever a published one cannot be read.
+// A published list reaches this file as data (useList, at the foot); the sums and the words stay.
 //
 // The rules it keeps:
 //   - money is whole pence, always, so 10p pencils never drift;
@@ -102,6 +104,23 @@
       ],
     },
   ];
+
+  // The list as it is written above, kept apart: staff can publish an edited list from the admin
+  // (5 October 2026), and the page then hands it to useList below, which changes GROUPS and THEMES
+  // in place. This copy never changes: it is "The original list", and what the page falls back to.
+  var BUILT_IN = {
+    groups: GROUPS.map(function (g) {
+      return { key: g.key, heading: g.heading, items: g.items.map(function (i) { return { key: i.key, name: i.name, pence: i.pence }; }) };
+    }),
+    themes: THEMES.map(function (t) {
+      return { key: t.key, title: t.title, sub: t.sub, examples: t.examples.map(function (e) { return { key: e.key, pence: e.pence, words: e.words }; }) };
+    }),
+  };
+  // Which drawing an item or an example uses when it is not the one of its own name (a new item, or
+  // one staff gave another picture): { key: a key of ART }. And the built-in items staff have
+  // renamed: the elf's notes about "a blanket" are not written beside something no longer called one.
+  var ART_OF = {};
+  var RENAMED = {};
 
   // Word for word where the design says so (the elves line, who it is for, the nudge).
   var WORDS = {
@@ -373,18 +392,33 @@
       '<path class="h" d="M10.5 8V5h8v3"/><path d="M18.5 6h3"/><rect class="c" x="6" y="8" width="28" height="29" rx="2.5"/><path d="M6 15.5h28"/>' +
       '<circle class="r" cx="12" cy="11.8" r="1.5"/><circle class="r" cx="20" cy="11.8" r="1.5"/><circle class="r" cx="28" cy="11.8" r="1.5"/>' +
       '<rect class="s" x="10" y="19" width="20" height="13.5" rx="1.5"/><path class="x" d="M13.5 22h13"/><rect class="t" x="13.5" y="25" width="13" height="5" rx="1"/>',
+    // --- for anything staff add in the admin that has no drawing of its own (5 October 2026) ---
+    // A plain wrapped present: a crimson box under a maroon lid, a gold ribbon round both and a bow.
+    present:
+      '<rect class="r" x="6.5" y="18" width="27" height="18.5" rx="2"/><rect class="d" x="4.5" y="12" width="31" height="6.5" rx="1.5"/>' +
+      '<path class="g n" d="M17.6 12h4.8v24.5h-4.8z"/><path d="M17.6 18.5v18M22.4 18.5v18"/>' +
+      '<path class="g" d="M20 11.6c-1.8-5.2-8.6-7.4-9.6-3.9-.9 3.2 4.6 4.4 9.6 3.9zM20 11.6c1.8-5.2 8.6-7.4 9.6-3.9.9 3.2-4.6 4.4-9.6 3.9z"/>' +
+      '<circle class="g" cx="20" cy="11.2" r="1.9"/><path class="l" d="M10.5 23v5.5"/>',
   };
+
+  /** The key of the drawing an item or an example uses: the one staff chose, or its own; "" for none. */
+  function artKey(key) {
+    var k = String(key);
+    if (Object.prototype.hasOwnProperty.call(ART_OF, k) && Object.prototype.hasOwnProperty.call(ART, ART_OF[k])) return ART_OF[k];
+    return Object.prototype.hasOwnProperty.call(ART, k) ? k : "";
+  }
 
   /**
    * One drawing as an inline picture, for the eye only: never read out and never in the tab order.
    * Nothing for a key with no drawing. `cls` adds a class, `size` sets its width and height.
    */
   function art(key, cls, size) {
-    if (!Object.prototype.hasOwnProperty.call(ART, key)) return "";
+    var which = artKey(key);
+    if (!which) return "";
     var px = size || 40;
     return (
       '<svg class="rb-art' + (cls ? " " + cls : "") + '" viewBox="0 0 40 40" width="' + px + '" height="' + px + '" aria-hidden="true" focusable="false">' +
-      ART[key] +
+      ART[which] +
       "</svg>"
     );
   }
@@ -434,7 +468,7 @@
     var allowed = peekCount(fill);
     var out = [];
     (order || []).forEach(function (k) {
-      if (out.length < allowed && out.indexOf(k) === -1 && Object.prototype.hasOwnProperty.call(ART, k)) out.push(k);
+      if (out.length < allowed && out.indexOf(k) === -1 && artKey(k)) out.push(k);
     });
     while (out.length < MAX_PEEKS) out.push(null);
     return out;
@@ -674,8 +708,20 @@
     return true;
   }
 
+  /** An item's own notes and its plural: none for an item the notes do not know, or one renamed. */
+  function ownNotes(key) {
+    var k = String(key);
+    if (RENAMED[k] === true || !Object.prototype.hasOwnProperty.call(NOTES.items, k)) return [];
+    return NOTES.items[k] || [];
+  }
+  function thingsOf(key) {
+    var k = String(key);
+    if (RENAMED[k] === true || !Object.prototype.hasOwnProperty.call(NOTES.things, k)) return "";
+    return NOTES.things[k] || "";
+  }
+
   function several(template, key, n) {
-    return template.replace("{n}", String(n)).replace("{things}", NOTES.things[key] || "of those");
+    return template.replace("{n}", String(n)).replace("{things}", thingsOf(key) || "of those");
   }
 
   /**
@@ -691,7 +737,7 @@
     if (change.first) return "first";
     var q = change.quantity || 0;
     var step = change.step || 1;
-    if (q >= 3 && NOTES.things[change.key] && (step > 1 || q === 3 || q % 5 === 0)) return "several";
+    if (q >= 3 && thingsOf(change.key) && (step > 1 || q === 3 || q % 5 === 0)) return "several";
     return "item";
   }
 
@@ -712,7 +758,7 @@
       });
     } else if (kind === "item") {
       // Mostly about the item itself; something general now and then.
-      var own = NOTES.items[change.key] || [];
+      var own = ownNotes(change.key);
       if (own.length && r < 0.7) {
         list = own;
         r = r / 0.7;
@@ -744,7 +790,152 @@
     return out;
   }
 
+  // ---------------------------------------------------------------------------------------------
+  // The list staff publish (5 October 2026). The server draws the list it is using into the page as
+  // rows, as ever, and beside them a small block of data (LIST_DATA_ID) saying the same thing; this
+  // file reads the block as it starts, so the sums agree with the rows. With no block, or one that
+  // is not exactly right, nothing changes: the list written at the top of this file stands.
+  // ---------------------------------------------------------------------------------------------
+  var LIST_DATA_ID = "rb-list-data";
+  var KEY_RE = /^[a-z0-9]+(-[a-z0-9]+)*$/;
+
+  function isPence(n, max) {
+    return typeof n === "number" && isFinite(n) && Math.floor(n) === n && n >= 1 && n <= max;
+  }
+  function isWords(s, max) {
+    return typeof s === "string" && s.length >= 1 && s.length <= max && !/[<>\u0000-\u001f\u007f]/.test(s);
+  }
+  function isKey(k) {
+    return typeof k === "string" && k.length <= 64 && KEY_RE.test(k);
+  }
+  function find(list, key) {
+    for (var i = 0; i < list.length; i += 1) if (list[i].key === key) return list[i];
+    return null;
+  }
+
+  /**
+   * Use a published list: { groups: [{ key, items: [{ key, name, pence, art }] }], themes: [{ key,
+   * examples: [{ key, pence, words, art }] }] }. The headings, the themes' names and everything
+   * else stay this file's own: the data can only say which items sit under which of the four
+   * headings, and which examples under which of the three themes. It is checked whole BEFORE
+   * anything is changed; anything wrong and it is refused (false) with the list left as it was.
+   * A heading or a theme with nothing in it is left out.
+   */
+  function useList(data) {
+    try {
+      if (!data || typeof data !== "object" || !Array.isArray(data.groups) || !Array.isArray(data.themes)) return false;
+      var seen = {};
+      var artOf = {};
+      var renamed = {};
+      var groups = [];
+      var themes = [];
+      var count = 0;
+      var ok = true;
+      var fresh = function (key) {
+        if (!isKey(key) || seen["k:" + key]) return false;
+        seen["k:" + key] = true;
+        return true;
+      };
+      var picture = function (x) {
+        if (x.art === undefined || x.art === null || x.art === "") return true;
+        if (typeof x.art !== "string" || !Object.prototype.hasOwnProperty.call(ART, x.art)) return false;
+        artOf[x.key] = x.art;
+        return true;
+      };
+      data.groups.forEach(function (g) {
+        var own = g && typeof g === "object" ? find(BUILT_IN.groups, g.key) : null;
+        if (!own || seen["g:" + own.key] || !Array.isArray(g.items)) {
+          ok = false;
+          return;
+        }
+        seen["g:" + own.key] = true;
+        var items = [];
+        g.items.forEach(function (i) {
+          if (!i || typeof i !== "object" || !fresh(i.key) || !isWords(i.name, 80) || !isPence(i.pence, 1000000) || !picture(i)) {
+            ok = false;
+            return;
+          }
+          items.push({ key: i.key, name: i.name, pence: i.pence });
+          count += 1;
+        });
+        if (items.length) groups.push({ key: own.key, heading: own.heading, items: items });
+      });
+      data.themes.forEach(function (t) {
+        var own = t && typeof t === "object" ? find(BUILT_IN.themes, t.key) : null;
+        if (!own || seen["t:" + own.key] || !Array.isArray(t.examples)) {
+          ok = false;
+          return;
+        }
+        seen["t:" + own.key] = true;
+        var examples = [];
+        t.examples.forEach(function (e) {
+          if (!e || typeof e !== "object" || !fresh(e.key) || !isWords(e.words, 200) || !/^could help \S/.test(e.words) || !isPence(e.pence, 1000000) || !picture(e)) {
+            ok = false;
+            return;
+          }
+          examples.push({ key: e.key, pence: e.pence, words: e.words });
+        });
+        if (examples.length) themes.push({ key: own.key, title: own.title, sub: own.sub, examples: examples });
+      });
+      if (!ok || count < 1) return false;
+      // In the order this file has them, whatever order they came in.
+      var order = function (list, own) {
+        return own
+          .map(function (o) {
+            return find(list, o.key);
+          })
+          .filter(function (x) {
+            return !!x;
+          });
+      };
+      groups = order(groups, BUILT_IN.groups);
+      themes = order(themes, BUILT_IN.themes);
+      BUILT_IN.groups.forEach(function (g) {
+        g.items.forEach(function (i) {
+          groups.forEach(function (now) {
+            var same = find(now.items, i.key);
+            if (same && same.name !== i.name) renamed[i.key] = true;
+          });
+        });
+      });
+      // All of it is good: only now is anything changed, and in place, so GROUPS and THEMES stay
+      // the very arrays everything else here (and the page's script) already holds.
+      GROUPS.length = 0;
+      groups.forEach(function (g) {
+        GROUPS.push(g);
+      });
+      THEMES.length = 0;
+      themes.forEach(function (t) {
+        THEMES.push(t);
+      });
+      var k;
+      for (k in ART_OF) if (Object.prototype.hasOwnProperty.call(ART_OF, k)) delete ART_OF[k];
+      for (k in artOf) if (Object.prototype.hasOwnProperty.call(artOf, k)) ART_OF[k] = artOf[k];
+      for (k in RENAMED) if (Object.prototype.hasOwnProperty.call(RENAMED, k)) delete RENAMED[k];
+      for (k in renamed) if (Object.prototype.hasOwnProperty.call(renamed, k)) RENAMED[k] = true;
+      return true;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  /** The page's block of data, read and used. False (and nothing changed) if it is missing or wrong. */
+  function useListFrom(doc) {
+    try {
+      var block = doc && typeof doc.getElementById === "function" ? doc.getElementById(LIST_DATA_ID) : null;
+      if (!block) return false;
+      return useList(JSON.parse(block.textContent || ""));
+    } catch (e) {
+      return false;
+    }
+  }
+
   var api = {
+    BUILT_IN: BUILT_IN,
+    LIST_DATA_ID: LIST_DATA_ID,
+    useList: useList,
+    useListFrom: useListFrom,
+    artKey: artKey,
     ART: ART,
     art: art,
     TAG_LINES: TAG_LINES,
@@ -786,5 +977,9 @@
   };
 
   if (typeof module !== "undefined" && module.exports) module.exports = api;
-  else window.NBCCRedBag = api;
+  else {
+    // In the browser: the list the server drew into this page, if it drew one.
+    useListFrom(typeof document !== "undefined" ? document : null);
+    window.NBCCRedBag = api;
+  }
 })();

@@ -48,6 +48,8 @@
     // from a signed in member of staff alone, and says this when their session has run out.
     notOpen: "Fill a Red Bag is not open yet. If you are staff, please sign in again at /admin, then come back to this page.",
     down: "Payment is not working just now. Please try again in a few minutes, or give on our donate page.",
+    // Only ever met by staff, on the draft preview of the list (src/red-bag/render.ts says the same).
+    draftOff: "This is a preview. Giving is switched off here.",
   };
 
   function each(list, fn) {
@@ -101,6 +103,10 @@
     var summary = form ? form.querySelector("[data-rb-error]") : null;
     var payBtn = form ? form.querySelector("[data-rb-pay]") : null;
     var preview = !!(doc.body && doc.body.getAttribute("data-rb-preview") === "true");
+    // The draft preview (Admin > Fill a Red Bag > Preview the page): the page drawn from a list the
+    // public cannot see yet. GIVING IS SWITCHED OFF in it: Donate only says so. The server draws no
+    // details form on that page either (src/red-bag/render.ts), so there is nothing to send.
+    var draft = !!(doc.body && doc.body.getAttribute("data-rb-draft") === "true");
     // The bottom bar: the total and a Donate button at the foot of the screen, at every width,
     // shown while the real ones are out of sight.
     var bar = doc.querySelector("[data-rb-bar]");
@@ -1025,6 +1031,15 @@
     // the bar it is also brought into view, since the bar only shows while the nudge's place is
     // off screen.
     function pressDonate(fromBar) {
+      if (draft) {
+        if (nudge) {
+          setText(nudge, MSG.draftOff);
+          nudge.hidden = false;
+          if (fromBar && typeof nudge.scrollIntoView === "function") nudge.scrollIntoView({ block: "center" });
+        }
+        if (fromBar) focusOn(donateBtn);
+        return;
+      }
       if (total() < rb.MIN_PENCE) {
         if (nudge) {
           nudge.hidden = false;

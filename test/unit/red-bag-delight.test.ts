@@ -25,8 +25,10 @@ const itemKeys: string[] = rb.items().map((i: { key: string }) => i.key);
 const exampleKeys: string[] = rb.examples().map((e: { key: string }) => e.key);
 
 describe("the drawings", () => {
-  it("has one for every item on the list and every example, and nothing else", () => {
-    expect(Object.keys(rb.ART).sort()).toEqual([...itemKeys, ...exampleKeys].sort());
+  // And one more since 5 October 2026: the plain wrapped present, for anything staff add in the
+  // admin that has no drawing of its own (test/unit/red-bag-catalogue-list.test.ts).
+  it("has one for every item on the list and every example, the present, and nothing else", () => {
+    expect(Object.keys(rb.ART).sort()).toEqual([...itemKeys, ...exampleKeys, "present"].sort());
     expect(itemKeys.length).toBe(13);
     expect(exampleKeys.length).toBe(9);
   });
@@ -101,7 +103,7 @@ describe("the blanket drawing", () => {
 
   it("is the ONLY drawing that changed", () => {
     const rest: Record<string, string> = {};
-    for (const key of Object.keys(rb.ART).sort()) if (key !== "blanket") rest[key] = rb.ART[key];
+    for (const key of Object.keys(rb.ART).sort()) if (key !== "blanket" && key !== "present") rest[key] = rb.ART[key];
     expect(createHash("sha256").update(JSON.stringify(rest)).digest("hex")).toBe("2597528e1117e0003e25b73472be30e4e8e733a2f67ec78f676f037b2f55855a");
   });
 });

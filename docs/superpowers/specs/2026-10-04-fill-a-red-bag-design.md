@@ -396,6 +396,9 @@ The record keeping for that figure, built ahead of it. No admin screen, report, 
   event id and the database's error code, nothing personal), and never changes the webhook's
   answer, so Stripe never retries because of it and no donation can be lost to it. The cost of a
   failure is one gift without a source.
+- **Two seconds at most.** A source statement still waiting after 2 seconds is given up: logged
+  once, Stripe answered as normal, and that one database connection closed rather than reused
+  (the statement may still be running on it).
 - **Redelivery**: nothing is saved twice; the source is tried once more, which heals a first
   delivery that stopped between saving and marking, and changes nothing otherwise.
 - **Monthly gifts**: the first donation is marked from its checkout. When a later charge is

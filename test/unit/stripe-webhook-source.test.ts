@@ -35,6 +35,7 @@ vi.mock("../../src/config", () => ({
 import {
   processWebhookEvent,
   tagDonationSource,
+  SOURCE_TAG_TIMEOUT_MS,
   TAG_CHECKOUT_SOURCE_SQL,
   TAG_RENEWAL_SOURCE_SQL,
 } from "../../src/db/stripe-webhook";
@@ -50,11 +51,15 @@ let claimed: Set<string>;
 let parentRow: Record<string, unknown> | undefined;
 let failOn: RegExp | null;
 let tagError: Error | null;
+// When set, the source statement is handed this promise instead of an answer: one that never
+// settles is a statement stuck waiting on a lock.
+let tagStuck: Promise<unknown> | null;
 
 function installQuery() {
   claimed = new Set();
   failOn = null;
   tagError = null;
+  tagStuck = null;
   parentRow = {
     donor_id: DONOR_ID,
     gift_aid: false,
@@ -70,6 +75,7 @@ function installQuery() {
     if (isTag(sql)) {
       order.push("tag");
       if (tagError) throw tagError;
+      if (tagStuck) return tagStuck;
       return { rowCount: 1, rows: [] };
     }
     if (failOn && failOn.test(sql)) throw new Error("the database fell over");
@@ -258,7 +264,7 @@ describe("when recording the source goes wrong", () => {
       tagDonationSource(checkout({ redBag: "true" }), async () => {
         throw "nope";
       }),
-    ).resolves.toBeUndefined();
+    ).resolves.toBe(false);
     expect(errorLog).toHaveBeenCalledTimes(1);
   });
 
@@ -267,15 +273,147 @@ describe("when recording the source goes wrong", () => {
       tagDonationSource(checkout({ redBag: "true" }), () => {
         throw new Error("no connection");
       }),
-    ).resolves.toBeUndefined();
+    ).resolves.toBe(false);
     expect(errorLog).toHaveBeenCalledTimes(1);
   });
 
   it("is swallowed for an event with nothing in it", async () => {
     const query = vi.fn();
-    await expect(tagDonationSource({ id: "evt_empty", type: "checkout.session.completed" } as unknown as Stripe.Event, query)).resolves.toBeUndefined();
-    await expect(tagDonationSource(null as unknown as Stripe.Event, query)).resolves.toBeUndefined();
+    await expect(tagDonationSource({ id: "evt_empty", type: "checkout.session.completed" } as unknown as Stripe.Event, query)).resolves.toBe(false);
+    await expect(tagDonationSource(null as unknown as Stripe.Event, query)).resolves.toBe(false);
     expect(query).not.toHaveBeenCalled();
+  });
+});
+
+describe("when recording the source hangs", () => {
+  const never = (): Promise<unknown> => new Promise(() => {});
+  let unhandled: ReturnType<typeof vi.fn>;
+
+  beforeEach(() => {
+    vi.useFakeTimers();
+    unhandled = vi.fn();
+    process.on("unhandledRejection", unhandled);
+  });
+
+  afterEach(() => {
+    process.off("unhandledRejection", unhandled);
+    vi.useRealTimers();
+  });
+
+  it("is given two seconds", () => {
+    expect(SOURCE_TAG_TIMEOUT_MS).toBe(2000);
+  });
+
+  it("is still waiting just before the limit, and given up at it", async () => {
+    let settled: boolean | "pending" = "pending";
+    const tagging = tagDonationSource(checkout({ redBag: "true" }), never).then((abandoned) => {
+      settled = abandoned;
+    });
+    await vi.advanceTimersByTimeAsync(SOURCE_TAG_TIMEOUT_MS - 1);
+    expect(settled).toBe("pending");
+    await vi.advanceTimersByTimeAsync(1);
+    await tagging;
+    expect(settled).toBe(true);
+  });
+
+  it("says so once, with the event and the limit, and nothing about the donor or the session", async () => {
+    const tagging = tagDonationSource(checkout({ redBag: "true" }), never);
+    await vi.advanceTimersByTimeAsync(SOURCE_TAG_TIMEOUT_MS);
+    await tagging;
+    expect(errorLog).toHaveBeenCalledTimes(1);
+    const logged = errorLog.mock.calls[0].map(String).join(" ");
+    expect(logged).toMatch(/donation source not recorded/i);
+    expect(logged).toContain("evt_test_redbag");
+    expect(logged).toMatch(/2000 ms/);
+    expect(logged).not.toContain(SESSION_ID);
+    expect(logged).not.toContain("robin@example.com");
+  });
+
+  it("answers false, and leaves no timer running, when the statement answers in time or fails", async () => {
+    await expect(tagDonationSource(checkout({ redBag: "true" }), async () => ({ rowCount: 1 }))).resolves.toBe(false);
+    expect(vi.getTimerCount()).toBe(0);
+    await expect(
+      tagDonationSource(checkout({ redBag: "true" }), async () => {
+        throw new Error("blip");
+      }),
+    ).resolves.toBe(false);
+    expect(vi.getTimerCount()).toBe(0);
+    await expect(tagDonationSource(checkout({}), never)).resolves.toBe(false);
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it("leaves no timer running after giving up", async () => {
+    const tagging = tagDonationSource(checkout({ redBag: "true" }), never);
+    await vi.advanceTimersByTimeAsync(SOURCE_TAG_TIMEOUT_MS);
+    await tagging;
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it.each([
+    ["fails", (settle: { reject: (e: Error) => void }) => settle.reject(new Error("Connection terminated"))],
+    ["answers", (settle: { resolve: (v: unknown) => void }) => settle.resolve({ rowCount: 1 })],
+  ])("makes no noise when the abandoned statement finally %s", async (_what, finish) => {
+    const settle = {} as { resolve: (v: unknown) => void; reject: (e: Error) => void };
+    const slow = new Promise((resolve, reject) => Object.assign(settle, { resolve, reject }));
+    const tagging = tagDonationSource(checkout({ redBag: "true" }), () => slow);
+    await vi.advanceTimersByTimeAsync(SOURCE_TAG_TIMEOUT_MS);
+    await expect(tagging).resolves.toBe(true);
+    finish(settle);
+    vi.useRealTimers();
+    await new Promise((r) => setTimeout(r, 20));
+    expect(unhandled).not.toHaveBeenCalled();
+    expect(errorLog).toHaveBeenCalledTimes(1);
+  });
+
+  it("gives the webhook's usual answer, and hands the connection back once, to be closed", async () => {
+    tagStuck = never();
+    const processing = processWebhookEvent(checkout({ redBag: "true" }));
+    await vi.advanceTimersByTimeAsync(SOURCE_TAG_TIMEOUT_MS);
+    await expect(processing).resolves.toEqual({ processed: true, action: "donation.created" });
+    expect(sendDonationConfirmation).toHaveBeenCalledTimes(1);
+    expect(calls().some(([sql]) => /^\s*rollback/i.test(sql))).toBe(false);
+    expect(errorLog).toHaveBeenCalledTimes(1);
+    // release(err) is how pg-pool is told to close a connection rather than hand it to the next
+    // caller: the abandoned statement may still be running on it.
+    expect(mockClient.release).toHaveBeenCalledTimes(1);
+    expect(mockClient.release.mock.calls[0][0]).toBeInstanceOf(Error);
+  });
+
+  it("does the same for a later monthly charge", async () => {
+    tagStuck = never();
+    const processing = processWebhookEvent(renewal());
+    await vi.advanceTimersByTimeAsync(SOURCE_TAG_TIMEOUT_MS);
+    await expect(processing).resolves.toEqual({ processed: true, action: "donation.recurring" });
+    expect(mockClient.release).toHaveBeenCalledTimes(1);
+    expect(mockClient.release.mock.calls[0][0]).toBeInstanceOf(Error);
+  });
+
+  it("does the same on a redelivery, which is still answered as a duplicate", async () => {
+    await processWebhookEvent(checkout({ redBag: "true" }));
+    mockClient.release.mockClear();
+    tagStuck = never();
+    const processing = processWebhookEvent(checkout({ redBag: "true" }));
+    await vi.advanceTimersByTimeAsync(SOURCE_TAG_TIMEOUT_MS);
+    await expect(processing).resolves.toEqual({ processed: false, action: "duplicate" });
+    expect(mockClient.release).toHaveBeenCalledTimes(1);
+    expect(mockClient.release.mock.calls[0][0]).toBeInstanceOf(Error);
+  });
+});
+
+describe("the connection, when nothing hangs", () => {
+  it.each([
+    ["a Red Bag gift", () => checkout({ redBag: "true" })],
+    ["an ordinary gift", () => checkout({})],
+    ["a later monthly charge", () => renewal()],
+  ])("is handed back once, to be used again, after %s", async (_what, event) => {
+    await processWebhookEvent(event());
+    expect(mockClient.release.mock.calls).toEqual([[]]);
+  });
+
+  it("is handed back to be used again when the source statement simply fails", async () => {
+    tagError = new Error("blip");
+    await processWebhookEvent(checkout({ redBag: "true" }));
+    expect(mockClient.release.mock.calls).toEqual([[]]);
   });
 });
 

@@ -71,8 +71,9 @@ describe("where a checkout session's gift came from", () => {
   });
 });
 
-// The migration that adds the column. Additive only (golden rule 2), and it must sort LAST: one that
-// sorts before a migration production has already run stops the whole deploy, and CI cannot see it.
+// The migration that adds the column. Additive only (golden rule 2). It must sort after everything
+// production had already run when it was written: one that sorts before stops the whole deploy, and
+// CI cannot see it. Later migrations rightly come after it.
 describe("the donation source migration", () => {
   const dir = join(__dirname, "..", "..", "migrations");
   const name = "1791200000250_donation-source.js";
@@ -93,9 +94,9 @@ describe("the donation source migration", () => {
     return { pgm, calls };
   };
 
-  it("sorts after every other migration", () => {
+  it("sorts after everything production had already run, so production never sees it run out of order", () => {
     const all = readdirSync(dir).filter((f) => f.endsWith(".js")).sort();
-    expect(all[all.length - 1]).toBe(name);
+    expect(all.indexOf(name)).toBeGreaterThan(all.indexOf("1791200000240_team-invite-under-18.js"));
   });
 
   it("adds one nullable text column with no default, and a small index over the rows that have one", () => {

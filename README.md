@@ -12511,6 +12511,14 @@ email. This is the record keeping only.
   with the Stripe event id and the database's error code (no message text, no session id, nothing
   about the donor), and goes no further: Stripe is answered exactly as it would have been, nothing
   is retried, and the donation stays as saved. The gift is then simply left without a source.
+- **It can never hold the answer up for long.** The statement is given 2 seconds
+  (`SOURCE_TAG_TIMEOUT_MS`). If it is still waiting then (on a lock, say), the webhook stops
+  waiting, logs "donation source not recorded ... gave up after 2000 ms" once, and answers Stripe
+  as normal. The `pg` driver cannot take back a statement already sent, so that one database
+  connection is not reused: it is released with an error (`client.release(err)`), which makes the
+  pool close it and open a fresh one when next needed. The abandoned statement either finishes
+  anyway (harmless, it only fills in an empty source) or ends with the connection. No other query
+  has a time limit, and the donation's transaction is untouched.
 - **A redelivered event** saves nothing twice (the ledger sees to that) and tries the source once
   more, in case the first delivery stopped between saving the donation and marking it. The
   statement only fills in a source that is still empty, so on a donation already marked it changes
@@ -12533,9 +12541,10 @@ email. This is the record keeping only.
   d.stripe_subscription_id = f.stripe_subscription_id AND d.source IS NULL`. Both are safe to run
   twice. Not done by this change, and nothing here reads Stripe.
 - Tests: `test/unit/donation-source.test.ts` (the reading of the mark, and the migration: additive,
-  and sorting last), `test/unit/stripe-webhook-source.test.ts` (the donation is saved by the very
+  and sorting after everything production had already run), `test/unit/stripe-webhook-source.test.ts` (the donation is saved by the very
   same statements with and without the mark; the source is written after the commit and the thank
-  you; every failure is swallowed; redelivery; monthly charges), and four scenarios in
+  you; every failure is swallowed; a statement that hangs is given up at 2 seconds and its
+  connection closed; redelivery; monthly charges), and four scenarios in
   `features/stripe-webhook.feature`.
 
 | Method + path | Who | Answers |

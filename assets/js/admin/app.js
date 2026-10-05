@@ -599,6 +599,7 @@
     } else if (name === "donations") {
       donationsOffset = 0;
       loadDonations();
+      loadDonationSources();
     } else if (name === "claims") loadClaims();
     else if (name === "gasds") loadGasds();
     else if (name === "subscriptions") loadSubs();
@@ -874,10 +875,12 @@
   // donor to the top by position, so admin-fits-a-phone.test.ts checks these columns and their order.
   function donationsTable(rows, opts) {
     opts = opts || {};
-    if (!rows.length) return '<p class="admin-empty">No donations yet.</p>';
+    if (!rows.length) return '<p class="admin-empty">' + H.escapeHtml(opts.empty || "No donations yet.") + "</p>";
     var body = rows
       .map(function (d) {
         var gift = d.plan ? H.escapeHtml(d.mode) + " · " + H.escapeHtml(d.plan) : H.escapeHtml(d.mode);
+        // A gift started on Fill a Red Bag (donations.source) says so beside the gift, in all three lists.
+        if (d.source === "red_bag") gift += ' <span class="admin-pill dn-source-pill">Red Bag</span>';
         // TASK-241: one Payment pill combining payment_status + any refund (see helpers.paymentLabel).
         var pay = H.paymentLabel(d);
         return (
@@ -1106,14 +1109,21 @@
     // question you can ask - which is the one worth asking when a standing order stops.
     var modeFilter = el("donationsModeFilter");
     var mode = modeFilter ? modeFilter.value : "";
+    // Fill a Red Bag only: the server narrows the list (it pages it), together with the two above.
+    var redBagFilter = el("donationsRedBagFilter");
+    var redBag = !!(redBagFilter && redBagFilter.checked);
     authFetch(
       "/api/admin/donations?limit=25&offset=" + donationsOffset +
         (pay ? "&paymentStatus=" + encodeURIComponent(pay) : "") +
-        (mode ? "&mode=" + encodeURIComponent(mode) : ""),
+        (mode ? "&mode=" + encodeURIComponent(mode) : "") +
+        (redBag ? "&source=red_bag" : ""),
     )
       .then(okJson)
       .then(function (d) {
-        wrap.innerHTML = donationsTable(d.results || [], { newPills: true });
+        wrap.innerHTML = donationsTable(d.results || [], {
+          newPills: true,
+          empty: !redBag ? "" : pay || mode ? "No Fill a Red Bag gifts match these filters." : "No Fill a Red Bag gifts yet.",
+        });
         var total = d.total || 0;
         el("donationsPager").hidden = total <= 25;
         el("donationsInfo").textContent = total
@@ -1129,9 +1139,42 @@
         donationsOffset = donationsShownOffset;
       });
   }
+  // Fill a Red Bag against the Donate page, at the top of the Donations screen: this month and in
+  // all, worded by the server (src/admin/gift-sources.ts). Read when the screen opens, on its own, so
+  // the list works whatever happens here. A failure, or an answer with no lines in it, says it could
+  // not load: never a zero, and never the last visit's figures.
+  function loadDonationSources() {
+    var box = el("donationsSources");
+    if (!box) return;
+    // Loading, as the list beside it says: the last visit's figures are never shown as current.
+    box.innerHTML = '<p class="admin-loading">Loading…</p>';
+    authFetch("/api/admin/donations/source-totals")
+      .then(okJson)
+      .then(function (d) {
+        var lines = d && Array.isArray(d.lines) ? d.lines : [];
+        if (!lines.length) throw new Error("no totals");
+        var esc = H.escapeHtml;
+        box.innerHTML =
+          '<dl class="dn-sources-list">' +
+          lines
+            .map(function (l) {
+              return (
+                '<div class="dn-source"><dt>' + esc(l.name) + "</dt><dd>" +
+                esc(l.month) + " this month, " + esc(l.all) + " in all</dd></div>"
+              );
+            })
+            .join("") +
+          "</dl>" +
+          (d.note ? '<p class="dn-sources-note">' + esc(d.note) + "</p>" : "");
+      })
+      .catch(function (err) {
+        if (err && err.message === "unauthorized") return;
+        box.innerHTML = unavailableHtml("The Fill a Red Bag and Donate page totals could not load.");
+      });
+  }
   // Both filters behave the same way: change it, go back to page one. Staying on page 4 of a
   // different list shows you an empty table and looks like the filter found nothing.
-  ["donationsPaymentFilter", "donationsModeFilter"].forEach(function (id) {
+  ["donationsPaymentFilter", "donationsModeFilter", "donationsRedBagFilter"].forEach(function (id) {
     var control = el(id);
     if (control)
       control.addEventListener("change", function () {

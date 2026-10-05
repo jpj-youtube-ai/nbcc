@@ -50,6 +50,7 @@ import { ballTransferRouter } from "./routes/ball-transfer";
 import { adminBallTransferRouter } from "./routes/admin-ball-transfer";
 import { adminQrRouter } from "./routes/admin-qr";
 import { adminOverviewRouter } from "./routes/admin-overview";
+import { adminDonationSourcesRouter } from "./routes/admin-donation-sources";
 import { createSiteRouter } from "./routes/site";
 
 export function createApp() {
@@ -178,6 +179,8 @@ export function createApp() {
   app.use(adminQrRouter);
   // The admin Overview's "Needs you" (TASK-508).
   app.use(adminOverviewRouter);
+  // Fill a Red Bag against the Donate page, at the top of the admin's Donations screen.
+  app.use(adminDonationSourcesRouter);
   app.use(healthRouter);
   // Public newsletter unsubscribe (TASK-161/REQ-069). Must be mounted before the site
   // catch-all router below, otherwise its wildcard route would shadow /unsubscribe/:token.

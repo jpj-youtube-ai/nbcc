@@ -112,3 +112,26 @@ describe("is a section new to a person", () => {
     expect(isNew({ ...base, features, area: "events", seenAt: null, latestArrival: null })).toBe(true);
   });
 });
+
+// The Donations pill for Fill a Red Bag. Opening a section stamps it as seen now, and a part is new
+// while it was added after that: so an entry dated ahead of the clock comes straight back after
+// staff open Donations, and cannot be cleared until its date arrives. This one entry only.
+describe("the Fill a Red Bag pill on Donations", () => {
+  const entry = FEATURES.find((f) => f.area === "donations" && /Fill a Red Bag/.test(f.what));
+
+  it("is announced on Donations", () => {
+    expect(entry).toBeDefined();
+  });
+
+  it("is dated in the past, so it is never ahead of the clock", () => {
+    expect(entry!.added.getTime()).toBeLessThanOrEqual(Date.now());
+    // The day it shipped, and no later.
+    expect(entry!.added.getTime()).toBeLessThanOrEqual(at("2026-10-05T23:59:59Z").getTime());
+  });
+
+  it("shows for an older account, and is cleared by opening Donations", () => {
+    const account = at("2026-01-01T00:00:00Z");
+    expect(featureIsNew("donations", null, account)).toBe(true);
+    expect(featureIsNew("donations", new Date(), account)).toBe(false);
+  });
+});

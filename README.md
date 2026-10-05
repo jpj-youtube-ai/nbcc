@@ -1459,6 +1459,7 @@ hosted-Checkout redirect stays the default fallback and no-JS safety net.
 | `GET /api/admin/queues/awaiting-declaration` | **implemented** | REQ-049 (awaiting-declaration queue) |
 | `GET /api/admin/queues/gasds-pool` | **implemented** | REQ-050 (annual GASDS pool report) |
 | `GET /api/admin/donations` | **implemented** | REQ-066 (browse all donations, paginated) |
+| `GET /api/admin/donations/source-totals` | **implemented** | Fill a Red Bag against the Donate page, this month and in all (Donations: view) |
 | `GET /api/admin/claim-batches` | **implemented** | REQ-066 (list claim batches) |
 | `GET /api/admin/claim-batches/:id/export` | **implemented** | REQ-052/REQ-066 (Charities Online CSV export) |
 | `GET /api/admin/audit` | **implemented** | REQ-066 (append-only audit trail) |
@@ -6329,6 +6330,12 @@ by `numbersLines` in `src/admin/overview-numbers.ts`:
   first of their screens. The parts are rounded and the headline is their sum, so they add up. If a
   part they may see cannot be read, Money in is left out (a short total would read as all of it) and
   "Could not check" names that part.
+- **Fill a Red Bag** (Donations: view): "£412 from 19 gifts this month", with the Donate page's
+  figure for the same month under it. The same read and the same words as the top of the Donations
+  screen (see
+  [Fill a Red Bag against the Donate page, in the admin](#fill-a-red-bag-against-the-donate-page-in-the-admin)).
+  A real zero shows as "£0 from 0 gifts this month". If it cannot be read the line is left out and
+  "Could not check" names Donations.
 - **Monthly givers** (Donations: view): how many give and what they give a month, as the Monthly
   givers screen counts them, and who joined and stopped this month. One read serves this and the
   Needs you line for failing gifts.
@@ -6419,6 +6426,57 @@ than passed through. Passing it on would quietly return an empty list, which rea
 donations" — a much worse answer to give somebody looking at their own charity's income. Changing
 either filter returns to page one, because staying on page 4 of a different list shows an empty
 table and looks like the filter found nothing.
+
+## Fill a Red Bag against the Donate page, in the admin
+
+Staff can see how much is given through the Fill a Red Bag page compared with the ordinary Donate
+page. Four small things, all reading `donations.source` (written by the Stripe webhook since
+TASK-555; see **Recording where a gift came from** under **Fill a Red Bag**). No new permission:
+each is behind the gate of the screen it sits on, and nothing here changes the database, the
+checkout, the webhook or any public page.
+
+- **Totals at the top of the Donations screen.** Two lines, above the filters:
+  "Fill a Red Bag: £412 from 19 gifts this month, £1,960 from 87 gifts in all" and the same for
+  "Donate page", with the note "Fill a Red Bag gifts are counted from 5 October 2026." (earlier
+  Fill a Red Bag gifts were never labelled, so they sit in the Donate page's figures).
+  - `GET /api/admin/donations/source-totals` (Donations: view, as the list is;
+    `src/routes/admin-donation-sources.ts`) answers
+    `{ totals: { redBag, donatePage: { month: { pence, gifts }, all: { pence, gifts } } }, lines: [{ key, name, month, all }], note }`.
+    The words are the server's (`src/admin/gift-sources.ts`).
+  - **One grouped read**, `sumGiftsBySource` in `src/db/overview-numbers.ts`, beside the Overview's
+    money and counted the same way: `payment_status = 'paid'`, each gift less its refunds
+    (`GREATEST(amount_pence - refunded_amount_pence, 0)`), the gift alone (the card fee top up is
+    its own column and Gift Aid is never added in), no currency test (the Overview has none). This
+    month is the Overview's month: UK days from the 1st up to now (`monthSoFar`).
+  - **Fill a Red Bag** is `source = 'red_bag'`. **Donate page** is a gift with no source, paid
+    online (`payment_channel = 'online'`, so not a card reader) and not on a fundraiser's page
+    (`fundraiser_id IS NULL`, which also leaves out money an organiser paid in). Each payment of a
+    monthly gift is its own row, so each counts as a gift. A gift refunded in full is not counted
+    as a gift.
+  - Whole pounds with commas, as the Overview's numbers are. A real zero is "£0 from 0 gifts". If
+    the read fails the block says "The Fill a Red Bag and Donate page totals could not load.",
+    never a zero, and the list underneath still works. It is read when the screen opens, not on
+    every filter or page.
+- **A "Red Bag" label on each gift**, beside "once" or "monthly", wherever the donations table is
+  drawn: the Donations screen, the Overview's recent donations and donation search results, as a
+  table and as cards. `listDonations` and `searchDonations` (`src/db/admin.ts`) return `source`
+  for each row; nothing else about them changed.
+- **A "Fill a Red Bag only" tick box** beside the Payment status and Type filters. The list is
+  paged by the server, so the server narrows it: `GET /api/admin/donations?source=red_bag`,
+  together with the other filters, and back to page one when it changes. The value is checked
+  against `DONATION_SOURCES`; anything else is ignored and returns everything, as an unrecognised
+  `mode` does (TASK-446). With nothing to show it says "No Fill a Red Bag gifts yet.", or "No Fill
+  a Red Bag gifts match these filters." when another filter is also set. The Donations screen has
+  no export.
+- **A line on the Overview**, straight after Money in (see **How we are doing** above).
+
+The Donations menu item has a New pill for it (`FEATURES` in `src/admin/whats-new.ts`).
+
+**Tests:** `gift-sources.test.ts` (the buckets and the words), `gift-sources-db.test.ts` (the SQL of
+the read, the list's field and its filter), `admin-donation-sources-route.test.ts` (who may read
+it, what it answers, a failure), `admin-overview-route.test.ts` (the Overview's line) and
+`admin-red-bag.test.ts` (the real `admin.html` and `app.js` in jsdom). `features/admin-red-bag.feature`
+runs the read and the filter against a real database in CI.
 
 ## Nothing in the admin scrolls sideways (TASK-442)
 
@@ -12538,8 +12596,8 @@ ordinary Donate page later, each donation can carry where it was started: `donat
 nullable text column (migration `1791200000250_donation-source.js`, with a small index over the
 rows that have one). `'red_bag'` is a gift started on Fill a Red Bag; empty (`NULL`) is every other
 gift, and every gift recorded before this. The allowed values are one list, `DONATION_SOURCES` in
-`src/db/stripe-webhook-model.ts`. **Nothing reads the column yet**: no admin figure, no report, no
-email. This is the record keeping only.
+`src/db/stripe-webhook-model.ts`. The admin reads it, and nothing else does: no report, no email
+(see [Fill a Red Bag against the Donate page, in the admin](#fill-a-red-bag-against-the-donate-page-in-the-admin)).
 
 - **How it is written.** The webhook saves the donation exactly as it always has: the donation's
   own `INSERT`, its transaction, the idempotency ledger, Gift Aid and the emails do not know the

@@ -10,6 +10,8 @@ const { query } = vi.hoisted(() => ({ query: vi.fn() }));
 vi.mock("../../src/db/contact-pool", () => ({ contactPool: { query } }));
 
 import { insertEnquiry, listEnquiries, getEnquiry, markReplied } from "../../src/db/contact";
+import { CONTACT_PHONE_INVALID } from "../../src/contact/schema";
+import { PHONE_MAX } from "../../src/business/call-due";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 const read = (f: string) => readFileSync(resolve(ROOT, f), "utf8");
@@ -55,5 +57,23 @@ describe("the admin's open message", () => {
   it("shows a Phone line under Email, only when a number was given", () => {
     const js = read("assets/js/admin/app.js").replace(/\s+/g, " ");
     expect(js).toContain('dl("Email", c.email) + // Optional on the form, so only a line when the sender gave one. (c.phone ? dl("Phone", c.phone) : "") + dl("Received"');
+  });
+});
+
+describe("the browser and the server check a number by one rule", () => {
+  // main.js cannot import from src/, so its copy of the rule is held to the server's here: the same
+  // characters, the same least number of digits, the same greatest length, the same words.
+  const js = read("assets/js/main.js");
+  const rule = read("src/business/call-due.ts");
+
+  it("allows the same characters, at least 7 digits and at most 40 characters", () => {
+    expect(rule).toContain("const PHONE_CHARS = /^[0-9 +()-]+$/;");
+    expect(rule).toContain("const PHONE_MIN_DIGITS = 7;");
+    expect(PHONE_MAX).toBe(40);
+    expect(js).toContain('phone.length > 40 || !/^[0-9 +()-]+$/.test(phone) || phone.replace(/\\D/g, "").length < 7');
+  });
+
+  it("says the same thing when a number is refused", () => {
+    expect(js).toContain(JSON.stringify(CONTACT_PHONE_INVALID));
   });
 });

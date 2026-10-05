@@ -3127,3 +3127,20 @@ textarea.fx-call-input{min-height:88px;line-height:1.5;resize:vertical;field-siz
   #view-fundraising .fr-emails-row, #view-fundraising .fr-emails-row-name::before { transition: none; }
 }
 /* end All emails */
+
+/* Fill a Red Bag against the Donate page, at the top of the Donations screen, and the tick box that
+   narrows the list. Quiet text above the filters, in the Overview's own sizes: a name, then its
+   line. Tokens only, nothing that scrolls: the lines wrap and the page grows. */
+.dn-sources{margin:0 0 18px}
+.dn-sources-list{margin:0;display:grid;gap:6px}
+.dn-source{display:grid;grid-template-columns:8.5rem minmax(0,1fr);gap:2px 16px;align-items:baseline}
+.dn-source dt{font-size:.82rem;font-weight:600;letter-spacing:.02em;color:var(--slate-soft)}
+.dn-source dd{margin:0;font-size:.95rem;color:var(--slate);overflow-wrap:anywhere}
+.dn-sources-note{margin:8px 0 0;font-size:.85rem;color:var(--slate-soft)}
+.dn-sources .admin-loading,.dn-sources .admin-unavailable{padding:0}
+@media (max-width:560px){
+  .dn-source{grid-template-columns:minmax(0,1fr)}
+}
+.dn-redbag-filter{margin-left:8px}
+.dn-source-pill{margin-left:2px}
+/* end Fill a Red Bag */

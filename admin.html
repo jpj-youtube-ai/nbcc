@@ -205,6 +205,8 @@
             <!-- Browse all donations (paginated). -->
             <section class="admin-view" id="view-donations" aria-labelledby="donations-heading" hidden>
               <h2 id="donations-heading">Donations</h2>
+              <!-- Fill a Red Bag against the Donate page, this month and in all (loadDonationSources). -->
+              <div class="dn-sources" id="donationsSources" aria-live="polite"><p class="admin-loading">Loading…</p></div>
               <label class="admin-inline-filter" for="donationsPaymentFilter">Payment status
                 <select id="donationsPaymentFilter">
                   <option value="">All</option>
@@ -220,6 +222,9 @@
                   <option value="monthly">Monthly</option>
                   <option value="once">One off</option>
                 </select>
+              </label>
+              <label class="admin-inline-filter dn-redbag-filter" for="donationsRedBagFilter">
+                <input type="checkbox" id="donationsRedBagFilter"> Fill a Red Bag only
               </label>
               <div class="admin-table-wrap" id="donationsTable" aria-live="polite"><p class="admin-loading">Loading…</p></div>
               <div class="admin-pager" id="donationsPager" hidden>

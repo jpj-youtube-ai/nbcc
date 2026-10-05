@@ -2241,8 +2241,7 @@ counts the live stories still at New. Design:
 every way a save can fail, somebody else getting there first, a viewer, the open story, and the
 styles), `test/unit/stories-admin-model.test.ts` and `test/unit/admin-stories-api.test.ts` (the
 condition), and end to end in `features/admin-stories.feature` and `features/admin-overview.feature`.
-Still to do, and not part of this: on a phone the Stories table cannot be read. Its seven columns
-were about 51px each before the tick and are about 42px with it, and it wants to be cards.
+On a phone the list is cards, not this table: see **The Stories list on a phone (TASK-561)**.
 
 **Public unsubscribe route (REQ-069 · TASK-161 · TASK-297).** `/unsubscribe/:token`
 (`src/routes/unsubscribe.ts`, mounted in `src/app.ts`) is the link every newsletter email carries.
@@ -6847,6 +6846,59 @@ screen, the Overview's recent donations and donation search results, so all thre
   equalled the viewport at every phone and tablet width, and no box scrolled.
 - **Tests:** `admin-fits-a-phone.test.ts` pins the CSS. `admin-app.test.ts` checks every cell's label
   on all three lists.
+
+## The Stories list on a phone (TASK-561)
+
+At 390px the Stories table could not be read. Its seven columns were about 51px each before the Read
+tick (TASK-560) and about 42px with it, rows were 262 to 548px tall, and every word was stacked a
+letter or two a line. Where the list is narrower than 760px, each story is now a card, as a donation
+is:
+- **"Story 40"** heads the card: the ID, with the word in front of it;
+- **every other fact** is on its own labelled line: Read (the tick), Role, Scope / consent, Status,
+  Consent age and Submitted;
+- **the View button** comes last, at least 44px each way;
+- **the tick** keeps its 44px target and behaves as on the table. A failed save still shows "Not
+  saved" in the status's place and moves no card.
+
+This was the client's choice ("Yes, cards on a phone"). Wide, the table is unchanged: measured at
+1040 and 1280px, every row is the height it was, to a tenth of a pixel.
+
+**760px, the same as donations.** Measured, the stories table starts to break sooner than that: its
+dates begin to split at a list of about 845px, and all of them are split at 805px. It stays a table
+down to 760px so that the two lists change together, and because between the two it is cramped but
+every cell can still be read. Cards there would make twelve stories about three times as long to
+scroll. Because the change measures the list, not the screen, a screen up to about 1025px wide with
+the side menu showing also gets cards.
+
+**How it works:**
+- **It measures the list itself:** `storiesTable` in `assets/js/admin/app.js` wraps its table in
+  `.st-list`, a container (`stlist`).
+- **Every cell carries a `data-label`.** The cards show it with `::before`, and the headings are
+  hidden in a way screen readers still read.
+- **Three differences from the donations cards:**
+  - The labels are 6.75rem wide, not 6rem. "Scope / consent" measures 102px and broke onto two
+    lines on every card at 6rem. At 320px that still leaves a value 140px.
+  - The heading is the ID with a word in front (`content:"Story "`), because a story has no name.
+    The cards depend on the column order for this, and for the tick: `admin-fits-a-phone.test.ts`
+    checks the headings `app.js` draws.
+  - The Scope / consent and Status cells keep what they hold in one box (`.st-value`). A card's
+    line is a row, a label then a value. Without the box each pill would be its own piece of the
+    row and could not wrap with the others, and the sentence would sit beside the status, not
+    under it. On the table the box changes nothing.
+- **The Read line.** On the table the first column is a fixed 3.75rem and the tick's label pulls
+  itself up and down by 11px, both to fit a 44px target into a table row. In a card the line takes
+  the card's width and the label pulls itself 10px each way, which leaves the line the height of a
+  line of text with the target still 44px.
+- **"Not saved" no longer needs to wrap on a phone.** That rule existed because the table's columns
+  there were narrower than the pill; it is gone.
+
+**Checked:**
+- **Browser:** 320, 375, 390, 768 and 1024px (cards; the list is 751px at 1024) and 1040 and 1280px
+  (the table). `scrollWidth` equalled the viewport at every width and no box scrolled. On a phone,
+  with real presses: a tick saved and no card moved; a failed save showed "Not saved" and no card
+  moved or grew; View opened the story.
+- **Tests:** `admin-fits-a-phone.test.ts` pins the CSS. `admin-stories-read-tick.test.ts` checks the
+  wrapper, every cell's label and the two value boxes, and presses the tick on the new markup.
 
 ## The Events switch fits the smallest phones (TASK-455)
 

@@ -2371,26 +2371,34 @@
     // Under it, room for the three answers that need a sentence (somebody else changed the story,
     // it has been erased, this person may no longer change stories). All in the story's own row,
     // beside the tick that was pressed however long the list is.
+    //
+    // TASK-561: where the list is narrow each story is a labelled card (admin.css, .st-list), as
+    // a donation is. So every cell carries its column's name, and the wrapper is what the
+    // stylesheet measures. The cards put the ID at the top and fit the tick by position, so
+    // admin-fits-a-phone.test.ts checks these columns and their order. A card's line is a row, a
+    // label then a value: the two cells that hold more than one thing keep it in one box
+    // (.st-value), so pills wrap together and the sentence sits under the status, not beside it.
     var body = rows
       .map(function (r) {
         return (
-          "<tr><td>" + storyReadTick(r) + "</td><td>" + r.id + "</td><td>" +
+          '<tr><td data-label="Read">' + storyReadTick(r) + '</td><td data-label="ID">' + r.id + '</td><td data-label="Role">' +
           H.escapeHtml(H.storyLabel("submitterRole", r.submitter_role)) +
-          "</td><td>" + scopeConsentBadges(r) + '</td><td><span class="admin-pill" data-story-status>' +
+          '</td><td data-label="Scope / consent"><div class="st-value">' + scopeConsentBadges(r) + "</div></td>" +
+          '<td data-label="Status"><div class="st-value"><span class="admin-pill" data-story-status>' +
           H.escapeHtml(H.storyLabel("status", r.status)) + "</span>" +
           '<span class="admin-pill admin-read-unsaved" data-story-unsaved hidden title="' + STORY_NOT_SAVED + '">' +
           '<span class="sr-only">Story ' + r.id + ": </span>Not saved" +
           '<span class="sr-only">. Please try again.</span></span>' +
-          '<span class="admin-read-note" data-story-note></span></td><td>' +
-          H.escapeHtml(H.consentAge(r.consent_captured_at)) + "</td><td>" + H.fmtDate(r.created_at) +
-          '</td><td><button class="admin-link" type="button" data-story="' + r.id + '">View</button></td></tr>'
+          '<span class="admin-read-note" data-story-note></span></div></td><td data-label="Consent age">' +
+          H.escapeHtml(H.consentAge(r.consent_captured_at)) + '</td><td data-label="Submitted">' + H.fmtDate(r.created_at) +
+          '</td><td data-label=""><button class="admin-link" type="button" data-story="' + r.id + '">View</button></td></tr>'
         );
       })
       .join("");
     return (
-      '<table class="admin-table stories-table"><thead><tr><th>Read</th><th>ID</th><th>Role</th><th>Scope / consent</th>' +
+      '<div class="st-list"><table class="admin-table stories-table"><thead><tr><th>Read</th><th>ID</th><th>Role</th><th>Scope / consent</th>' +
       "<th>Status</th><th>Consent age</th><th>Submitted</th><th></th></tr></thead><tbody>" +
-      body + "</tbody></table>"
+      body + "</tbody></table></div>"
     );
   }
   function loadStories() {

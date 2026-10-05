@@ -360,6 +360,117 @@ describe("the donations table becomes labelled cards wherever it is narrow", () 
   });
 });
 
+// TASK-561: the Stories list becomes labelled cards wherever it is narrow, as the donations table
+// did, and by the same rule (it measures itself, and the cards start below 760px). At 390px its
+// eight columns were about 42px each, rows were 262 to 548px tall, and every word was stacked a
+// letter or two a line.
+describe("the stories table becomes labelled cards wherever it is narrow", () => {
+  const NARROW = "@container stlist (max-width:759px)";
+
+  it("measures the list itself, not the screen, and starts where the donations cards do", () => {
+    expect(rule(".st-list")).toContain("container:stlist / inline-size");
+    expect(RULES.some((r) => r.media === NARROW)).toBe(true);
+  });
+
+  it("stops laying the stories out as a table", () => {
+    expect(rule(".stories-table", NARROW)).toContain("display:block");
+    expect(rule(".stories-table tbody", NARROW)).toContain("display:block");
+    expect(rule(".stories-table tr", NARROW)).toContain("display:flex");
+    expect(rule(".stories-table tr", NARROW)).toContain("flex-direction:column");
+  });
+
+  it("labels every fact with its column's name, its value beside it", () => {
+    expect(rule(".stories-table td", NARROW)).toContain("display:flex");
+    const label = rule(".stories-table td::before", NARROW);
+    expect(label).toContain("content:attr(data-label)");
+    // 6.75rem (108px), not the donations cards' 6rem: the longest label here, "Scope / consent",
+    // measures 102px, and at 6rem it broke onto two lines on every card (seen at 390px). Not wider:
+    // at 320px this leaves a value 140px, which is what "Public" and "First name" need side by side.
+    expect(label).toContain("flex:0 0 6.75rem");
+  });
+
+  // A story has no name to head its card as a donor heads a donation's, so its number does, with
+  // the word in front: "Story 40", which is also how the tick is named to a screen reader.
+  it("heads the card with the story's number, with the word Story in front of it", () => {
+    const id = rule(".stories-table td:nth-child(2)", NARROW);
+    expect(id).toContain("order:-1");
+    expect(id).toContain("font-weight:600");
+    const word = rule(".stories-table td:nth-child(2)::before", NARROW);
+    expect(word).toContain('content:"Story "');
+    // The word is part of the heading, not a small grey label beside it.
+    expect(word).toContain("font-size:inherit");
+    expect(word).toContain("color:inherit");
+  });
+
+  it("keeps the headings for screen readers rather than removing them", () => {
+    const head = rule(".stories-table thead", NARROW);
+    expect(head).toContain("clip:rect(0 0 0 0)");
+    expect(head).not.toContain("display:none");
+  });
+
+  // On the table the first column is a fixed 3.75rem with no padding on its right, and the tick's
+  // label pulls itself up and down by 11px: both fit a 44px target into a table row. A card's
+  // line is another shape. Left alone, the Read line would be 60px wide and 14px taller than the
+  // lines around it.
+  it("gives the Read line the card's width, and the tick the margins a card's line needs", () => {
+    const line = rule(".stories-table td:first-child", NARROW);
+    expect(line).toContain("width:auto");
+    expect(line).toContain("padding-right:14px");
+    // The box and the word Read line up by their middles: a tick box has no baseline to share.
+    expect(line).toContain("align-items:center");
+    // 44px less 10px above and below is 24px, a line of text; 12px to the left lines the box up
+    // with the values under it (the box sits 12px inside its 44px target).
+    expect(rule(".stories-table .admin-read-tick", NARROW)).toContain("margin:-10px 0 -10px -12px");
+    // The table's own rule must come first, or it would win: same weight, so the later one does.
+    const table = css.indexOf(".stories-table th:first-child,.stories-table td:first-child{");
+    expect(table).toBeGreaterThan(-1);
+    expect(css.indexOf(NARROW)).toBeGreaterThan(table);
+  });
+
+  // A line is a row: its label, then its value. Several pills, or a pill and a sentence, are one
+  // value, in one box that takes the rest of the line and wraps inside itself.
+  it("gives a line's value the rest of the line, to wrap inside", () => {
+    const value = rule(".stories-table .st-value", NARROW);
+    expect(value).toContain("flex:1");
+    expect(value).toContain("min-width:0");
+  });
+
+  // Both ways: .admin-link has no padding, so on its own the button is only as wide as "View".
+  it("gives each story's View button a target a thumb can hit", () => {
+    const view = rule(".stories-table [data-story]", NARROW);
+    expect(view).toContain("min-height:44px");
+    expect(view).toContain("min-width:44px");
+  });
+
+  // There is a card where the table's columns were too narrow for the pill, so the rule that let
+  // "Not saved" wrap on a phone has nothing left to do.
+  it("no longer needs Not saved to wrap on a phone", () => {
+    expect(RULES.some((r) => r.media !== null && r.selectors.includes(".admin-read-unsaved"))).toBe(false);
+    expect(rule(".admin-read-unsaved")).toContain("white-space:nowrap");
+  });
+
+  // The heading is the second cell and the tick the first, by position.
+  it("depends on the columns app.js draws, in the order it draws them", () => {
+    const app = readFileSync(resolve(ROOT, "assets/js/admin/app.js"), "utf8").replace(/\r\n/g, "\n");
+    expect(app).toContain("<thead><tr><th>Read</th><th>ID</th><th>Role</th><th>Scope / consent</th>' +\n");
+  });
+
+  // Only the cards may say how the rows and cells lay out. One rule outside them is known and
+  // meant: the table's first column, which the cards put right above.
+  it("lets no other rule, at any width, change how the rows and cells lay out", () => {
+    const reaches = /\.stories-table[ >]+(tbody|tr|td)|#storiesTable\b/;
+    const layout = RULES.filter((r) => r.selectors.some((s) => reaches.test(s) && !s.includes("::before")));
+    const known = ".stories-table th:first-child,.stories-table td:first-child";
+    const offenders = [
+      ...layout.filter((r) => r.media !== NARROW && /(^|;)display:/.test(r.body)),
+      ...layout.filter(
+        (r) => r.media !== NARROW && r.selectors.join(",") !== known && /(^|;)((min-|max-)?width:(?!auto)|flex(-basis)?:)/.test(r.body),
+      ),
+    ].map((r) => `${r.media ?? ""} ${r.selectors.join(",")}{${r.body}}`);
+    expect(offenders).toEqual([]);
+  });
+});
+
 // TASK-484: the Festive Ball's bookings awaiting a bank transfer. At 375px its five columns were
 // 44-106px and the box scrolled 106px sideways to reach "Mark as paid". Narrow, each booking is a
 // labelled card, measured on the list itself like the Donations table.

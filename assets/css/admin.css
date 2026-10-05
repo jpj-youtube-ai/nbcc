@@ -234,11 +234,6 @@
    wrapped. The failed pills' tint with maroon words (7.8 to 1; their crimson is 4.2 to 1). The two
    pills take turns by the hidden attribute, which styles.css hides for the whole site. */
 .admin-read-unsaved{background:color-mix(in srgb,var(--crimson) 16%,var(--cream));color:var(--maroon);white-space:nowrap}
-/* On a phone the table's columns are narrower than the pill (the list is to become cards there),
-   and one line would run over the next column's words. It wraps like everything else in that row,
-   whose height its taller cells already set. Wider than this the pill fits, by 0.6px at the
-   narrowest (a list of 596px, at 861px wide with the menu beside it). */
-@media (max-width:700px){.admin-read-unsaved{white-space:normal}}
 /* The three answers that need a sentence (somebody else changed the story, it has been erased,
    this person may no longer change stories): under the row's status, and under the button on an
    open story. These do make the row taller. They are rare, each one changes what the row is, and
@@ -253,6 +248,38 @@
 .admin-read-bar{display:flex;flex-wrap:wrap;align-items:center;gap:6px 14px;margin:16px 0 0}
 .admin-read-bar .admin-btn,.admin-read-bar .admin-link{min-height:44px}
 .admin-read-done{font-weight:600;color:var(--holly-dark)}
+/* TASK-561: where the list is narrow each story is a labelled card, as a donation is (TASK-483),
+   and by the same rule: the list measures itself (.st-list), and the cards start below 760px.
+   At 390px the table's eight columns were about 42px each, its rows 262 to 548px tall, and every
+   word stacked a letter or two a line. Measured, the table starts to split its dates at a list of
+   about 845px. It stays a table down to 760px so that Stories and Donations change together, and
+   because between the two it is cramped but can be read, as it always could.
+   The donations cards' rules, with what a story needs:
+   - the labels are 6.75rem (108px) wide, not 6rem: "Scope / consent" measures 102px and broke
+     onto two lines on every card. Not wider: at 320px this leaves a value 140px, which is what
+     "Public" and "First name" need side by side;
+   - its number heads the card, with the word in front ("Story 40"): a story has no name to do it;
+   - the Read line. On the table the first column is a fixed 3.75rem and the tick's label pulls
+     itself 11px up and down, both to fit a 44px target into a table row. Here the line takes the
+     card's width, and 10px each way leaves it the height of a line of text (44 less 20 is 24)
+     with the target still 44px. The box and the word Read line up by their middles;
+   - .st-value, the one box round a cell's pills or its status and sentence, takes the rest of the
+     line and wraps inside itself. */
+.st-list{container:stlist / inline-size}
+@container stlist (max-width:759px){
+  .stories-table,.stories-table tbody{display:block}
+  .stories-table thead{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+  .stories-table tr{display:flex;flex-direction:column;border-bottom:1px solid var(--line);padding:10px 0}
+  .stories-table tr:last-child{border-bottom:0}
+  .stories-table td{border-bottom:0;padding:3px 14px;display:flex;gap:10px;align-items:baseline;text-align:left}
+  .stories-table td::before{content:attr(data-label);flex:0 0 6.75rem;font-size:.78rem;color:var(--slate-soft)}
+  .stories-table td:first-child{width:auto;padding-right:14px;align-items:center}
+  .stories-table .admin-read-tick{margin:-10px 0 -10px -12px}
+  .stories-table td:nth-child(2){order:-1;display:block;font-weight:600;font-size:1rem;padding-bottom:6px}
+  .stories-table td:nth-child(2)::before{content:"Story ";font-size:inherit;color:inherit}
+  .stories-table .st-value{flex:1;min-width:0}
+  .stories-table [data-story]{min-height:44px;min-width:44px}
+}
 .admin-donor-actions{display:flex;flex-wrap:wrap;gap:12px;margin-top:18px}
 .admin-action-status{margin-top:14px;font-weight:600;color:var(--holly)}
 

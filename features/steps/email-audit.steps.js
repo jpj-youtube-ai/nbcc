@@ -24,6 +24,10 @@ Before({ tags: "@email-audit" }, async function () {
   await pool.query(
     "DELETE FROM users WHERE email LIKE '%.audit.bdd@example.com' OR email LIKE 'audit.%.bdd@example.com'",
   );
+  // TASK-NNN: what the removal scenarios leave behind: the removals themselves, and the blocks
+  // that "Remove and stop emails" (or a scenario's own seeding) puts on these addresses.
+  await pool.query("DELETE FROM email_audit_removals WHERE email LIKE '%.audit.bdd@example.com'");
+  await pool.query("DELETE FROM email_suppressions WHERE lower(email) LIKE '%.audit.bdd@example.com'");
 });
 
 When("I invite {string} named {string} to the team", async function (email, fullName) {
@@ -209,4 +213,94 @@ Then("every email audit result should be to {string}", function (email) {
 
 Then("every email audit result should be of type {string}", function (kind) {
   for (const r of this.eaBody.results || []) assert.equal(r.kind, kind, JSON.stringify(this.eaBody.results));
+});
+
+// ---- TASK-NNN: removing an address from the red band, and putting it back ----
+
+async function postEmailAudit(world, action, body) {
+  const res = await fetch(`${BASE_URL}/api/admin/email-log/${action}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${world.token}` },
+    body: JSON.stringify(body),
+  });
+  world.eaStatus = res.status;
+  world.eaBody = await res.json().catch(() => ({}));
+}
+
+When("I tidy {string} away in the email audit", async function (email) {
+  await postEmailAudit(this, "remove", { email, stop: false });
+});
+
+When("I remove {string} from the email audit and stop emails to it", async function (email) {
+  await postEmailAudit(this, "remove", { email, stop: true });
+});
+
+When("I put {string} back in the email audit", async function (email) {
+  await postEmailAudit(this, "put-back", { email });
+});
+
+Then("the email audit failures should not include {string}", function (email) {
+  const hit = (this.eaBody.failures || []).find((r) => r.recipient === email.toLowerCase());
+  assert.equal(hit, undefined, `${email} is still in the red band: ${JSON.stringify(this.eaBody.failures)}`);
+});
+
+// Nothing is deleted: the row is still in the full list, and says who removed it and how.
+Then(
+  "the email audit log still lists {string}, marked as removed by {string}, kind {string}",
+  function (email, by, kind) {
+    const rows = (this.eaBody.results || []).filter((r) => r.recipient === email.toLowerCase());
+    assert.ok(rows.length > 0, `expected ${email} in the full list: ${JSON.stringify(this.eaBody.results)}`);
+    for (const r of rows) {
+      assert.equal(r.removedKind, kind, JSON.stringify(r));
+      assert.equal(r.removedBy, by, JSON.stringify(r));
+      assert.ok(r.removedAt, "a removed row says when");
+    }
+  },
+);
+
+// The Overview counts the red band's rows ("N emails failed or bounced in the last 2 weeks"), and
+// says nothing at all when there are none. Other scenarios may leave problems of their own, so the
+// count is compared with what it was, not with a number.
+async function overviewEmailProblems(world) {
+  const res = await fetch(`${BASE_URL}/api/admin/overview`, { headers: { Authorization: `Bearer ${world.token}` } });
+  assert.equal(res.status, 200, "expected the overview to answer");
+  const body = await res.json();
+  assert.ok(!(body.failed || []).includes("Email audit"), `the overview could not count the emails: ${JSON.stringify(body.failed)}`);
+  const need = (body.needs || []).find((n) => n.key === "emailFailures");
+  return need ? Number.parseInt(need.text, 10) : 0;
+}
+
+Given("I note how many email problems the Overview counts", async function () {
+  this.eaOverviewBefore = await overviewEmailProblems(this);
+  assert.ok(this.eaOverviewBefore >= 1, "the seeded failure should already be counted");
+});
+
+Then("the Overview counts {int} fewer email problem", async function (fewer) {
+  assert.equal(await overviewEmailProblems(this), this.eaOverviewBefore - fewer);
+});
+
+const activeBlock = (email) =>
+  pool.query("SELECT reason FROM email_suppressions WHERE lower(email) = lower($1) AND removed_at IS NULL", [email]);
+
+Given("{string} is already blocked because its mail bounced", async function (email) {
+  await pool.query(
+    "INSERT INTO email_suppressions (email, reason, detail) VALUES (lower($1), 'bounced', '550 5.1.1 user unknown')",
+    [email],
+  );
+});
+
+Then("{string} is blocked by staff", async function (email) {
+  const found = await activeBlock(email);
+  assert.equal(found.rowCount, 1, `${email} is not blocked`);
+  assert.equal(found.rows[0].reason, "manual");
+});
+
+Then("{string} is not blocked", async function (email) {
+  assert.equal((await activeBlock(email)).rowCount, 0, `${email} is blocked`);
+});
+
+Then("{string} is still blocked because its mail bounced", async function (email) {
+  const found = await activeBlock(email);
+  assert.equal(found.rowCount, 1, `${email} is no longer blocked`);
+  assert.equal(found.rows[0].reason, "bounced");
 });

@@ -51,3 +51,62 @@ Feature: Email audit page (email-audit feature)
     Given a newsletter admin "audit.editor.bdd@example.com" with role "editor" and password "pw-ea3"
     When I fetch the email audit log
     Then the email audit response status should be 403
+
+  # TASK-NNN: staff can remove an address from the red band, so a dead one stops coming back into
+  # it and into the Overview's count. Nothing is deleted: the full list still has every row, and
+  # says on the ones that were removed who removed them.
+  Scenario: tidying an address away takes its problems out of the band and the Overview's count, until it fails again
+    Given a newsletter admin "audit.tidy.bdd@example.com" with role "admin" and password "pw-ea4"
+    And a failed "newsletter" email to "tidied.audit.bdd@example.com" is on record
+    And I note how many email problems the Overview counts
+    When I tidy "tidied.audit.bdd@example.com" away in the email audit
+    Then the email audit response status should be 200
+    And the Overview counts 1 fewer email problem
+    And "tidied.audit.bdd@example.com" is not blocked
+    When I fetch the email audit log
+    Then the email audit failures should not include "tidied.audit.bdd@example.com"
+    And the email audit log still lists "tidied.audit.bdd@example.com", marked as removed by "audit.tidy.bdd@example.com", kind "tidy"
+    When a failed "newsletter" email to "tidied.audit.bdd@example.com" is on record
+    And I fetch the email audit log
+    Then the email audit failures should include "tidied.audit.bdd@example.com"
+
+  Scenario: removing an address and stopping emails blocks it, and its later failures stay out of the band
+    Given a newsletter admin "audit.stop.bdd@example.com" with role "admin" and password "pw-ea5"
+    And a failed "newsletter" email to "stopped.audit.bdd@example.com" is on record
+    When I remove "stopped.audit.bdd@example.com" from the email audit and stop emails to it
+    Then the email audit response status should be 200
+    And "stopped.audit.bdd@example.com" is blocked by staff
+    When a failed "newsletter" email to "stopped.audit.bdd@example.com" is on record
+    And I fetch the email audit log
+    Then the email audit failures should not include "stopped.audit.bdd@example.com"
+
+  Scenario: putting an address back returns its problems to the band and lifts the block that removing it made
+    Given a newsletter admin "audit.back.bdd@example.com" with role "admin" and password "pw-ea6"
+    And a failed "newsletter" email to "back.audit.bdd@example.com" is on record
+    When I remove "back.audit.bdd@example.com" from the email audit and stop emails to it
+    And I put "back.audit.bdd@example.com" back in the email audit
+    Then the email audit response status should be 200
+    And "back.audit.bdd@example.com" is not blocked
+    When I fetch the email audit log
+    Then the email audit failures should include "back.audit.bdd@example.com"
+
+  # The block list keeps the first reason an address was blocked. Removing such an address did not
+  # block it, so putting it back must not unblock it.
+  Scenario: an address whose mail had already bounced stays blocked when it is put back
+    Given a newsletter admin "audit.kept.bdd@example.com" with role "admin" and password "pw-ea7"
+    And a failed "newsletter" email to "kept.audit.bdd@example.com" is on record
+    And "kept.audit.bdd@example.com" is already blocked because its mail bounced
+    When I remove "kept.audit.bdd@example.com" from the email audit and stop emails to it
+    And I put "kept.audit.bdd@example.com" back in the email audit
+    Then the email audit response status should be 200
+    And "kept.audit.bdd@example.com" is still blocked because its mail bounced
+
+  Scenario: one of the charity's own addresses is never blocked
+    Given a newsletter admin "audit.own.bdd@example.com" with role "admin" and password "pw-ea8"
+    When I remove "events@nbcc.scot" from the email audit and stop emails to it
+    Then the email audit response status should be 400
+
+  Scenario: someone without the Email audit cannot remove anything
+    Given a newsletter admin "audit.noremove.bdd@example.com" with role "editor" and password "pw-ea9"
+    When I tidy "anyone.audit.bdd@example.com" away in the email audit
+    Then the email audit response status should be 403

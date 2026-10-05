@@ -6377,6 +6377,9 @@ slides and social posts. The design is in `docs/superpowers/specs/2026-10-02-adm
   - Its "QR codes scanned" list names the page whose code was scanned (`labelQrScans`).
   - Migration `1791200000030_analytics-qr-channel.js` only widens the `analytics_views` channel
     check to allow `qr`.
+- **Its styles** (`#view-qr` in `assets/css/admin.css`) were deleted along with Analytics' on
+  3 October and put back in TASK-557; `test/unit/admin-screen-styles.test.ts` now guards both. See
+  **The styles came back** under Admin > Analytics.
 
 ## Monthly or one off, on the donations list (TASK-446)
 
@@ -7483,6 +7486,18 @@ credit, Show all, Check again on its own, and counting off), and `test/unit/what
 analytics area). BDD: `features/analytics-admin.feature` against Postgres (the permission, the
 audited switch, and the figures from seeded page views, including a gap of over 30 minutes that
 splits a visit and one of exactly 30 that does not).
+
+**The styles came back (TASK-557).** From 3 to 5 October 2026 this screen and **QR codes** drew as
+unstyled text: no cards, no bars, the visitors line a black shape. TASK-513 restyled the Fundraising
+switch by replacing everything between two copies of one comment in `assets/css/admin.css`
+(`/* ---- the switch, as the Events page's ---- */`, once above the Analytics switch and once above
+the Fundraising one), and the 183 lines between them went with it: every `#view-analytics` rule,
+every `#view-qr` rule and the Fundraising section's heading. No check failed, because no test read
+the stylesheet. The lines are back exactly as they were (107 selectors, each scoped to one of the two
+screens, so no other screen changed), and `test/unit/admin-screen-styles.test.ts` now reads it: every
+`an-` and `qr-` class the page or `app.js` uses must have a rule scoped to its screen, and across the
+whole admin no family of five or more classes (`an-`, `qr-`, `fr-`, `nl-`, `fx-`…) may be left with
+most of its names unstyled, which is what a deleted block looks like on any screen.
 
 ## Community fundraising (TASK-493)
 

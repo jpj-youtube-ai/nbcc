@@ -886,3 +886,48 @@ Both are older than this work.
 **Checks after the fixes.** `npm run lint`, `npm run build`, the eight affected test files (456
 tests), `npx cucumber-js --dry-run` (642 scenarios, every step resolves), and the list and an open
 story again in real Chrome with the stand-in answering as the server does, 409 included.
+
+## After the second review
+
+The same reviewer read the fixes: **Ready**, nothing Critical or Important, six optional points.
+One of them was worth more than optional, and this section is what was built for all six.
+
+**A note under the status made its row taller, so the rows beneath it moved.** Measured: 61px for
+"Could not save. Please try again." in the Status column. On a quick run down the list, a save
+that fails a moment late moves the next rows just as the next press is aimed, and a tick lands on
+the wrong story. The line above the table was dropped for exactly this.
+
+- A failed save is now a pill, `[data-story-unsaved]`, that takes the status pill's place: "Not
+  saved" to the eye, "Story 12: Not saved. Please try again." to a screen reader (two `.sr-only`
+  spans), the sentence in its `title`. `saveStoryRead` answers `{ unsaved: true }` for it.
+  `storyRowShows` shows one pill or the other, never both, so the row keeps its height.
+- `.admin-pill[hidden]{display:none}`: a class's `display` beats the browser's own rule for
+  `[hidden]`, so the pill would otherwise have stayed on show.
+- `.admin-read-unsaved`: the failed pills' tint with maroon words (7.8 to 1), one line, never
+  wrapped. Below 700px it may wrap: the table's columns are narrower than the pill there, and the
+  row's taller cells already set its height.
+- The three answers that need a sentence (409 with a different status, 404, 403) keep the note and
+  do grow the row.
+- "Not saved" is not shown on a row drawn again since the press: that row already shows what the
+  story is, and the press was on a list that is gone.
+- Measured in Chrome at 1280, 1040, 880 and 861px: a failed tick and a failed untick move no row
+  and change no row's height; the pill is 76 by 24px and stops 1px or more short of the next
+  column's words.
+
+**The other five.**
+
+- The 401 test now checks that nothing is said in the row.
+- `focus({ preventScroll: true })` in both places. Measured: with a slow answer and the page wheeled
+  down to the form, the page stays where it was put.
+- The reason a tick is locked is on the box as well as its label (a `title` on the box is its
+  description to a screen reader).
+- A save on its way shows: `[aria-busy="true"]` dims the box and the open story's button, with a
+  third of a second's wait first, so a save that answers at once never flickers.
+- On an open story, 404 and 403 take the button away (`showStoryReadBar(s, note, gone)`).
+
+**Not done, on purpose.** A time limit on the request: a save with no answer at all holds that
+story's tick until the browser gives up, which the dimmed box now shows. An open story's answer
+does not update the list behind it: going Back loads the list again.
+
+**Checks.** `npm run lint`, `npm run build`, ten affected test files (507 tests, 54 of them the
+screen's), and real Chrome as above.

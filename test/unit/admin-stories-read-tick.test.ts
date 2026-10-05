@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, vi } from "vitest";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { createRequire } from "node:module";
@@ -92,6 +92,10 @@ const rowOf = (id: number) => tick(id).closest("tr") as HTMLElement;
 const statusOf = (id: number) => (rowOf(id).querySelector("[data-story-status]") as HTMLElement).textContent;
 const noteOf = (id: number) => (rowOf(id).querySelector("[data-story-note]") as HTMLElement).textContent;
 const viewOf = (id: number) => rowOf(id).querySelector("[data-story]") as HTMLElement;
+const statusPill = (id: number) => rowOf(id).querySelector("[data-story-status]") as HTMLElement;
+// The "Not saved" pill that takes the status pill's place when a save fails.
+const unsavedOf = (id: number) => rowOf(id).querySelector("[data-story-unsaved]") as HTMLElement;
+const saysNotSaved = (id: number) => !unsavedOf(id).hidden && statusPill(id).hidden;
 const patches = () => calls.filter((c) => c.method === "PATCH");
 
 async function openStories() {
@@ -163,6 +167,9 @@ describe("the Read column on the Stories list", () => {
     const label = (id: number) => tick(id).closest("label") as HTMLElement;
     expect(label(2).title).toBe("Used stories count as read.");
     expect(label(1).title).toBe("Withdrawn stories count as read.");
+    // On the box as well as its label: a screen reader reads a box's title as its description.
+    expect([tick(2).title, tick(1).title]).toEqual(["Used stories count as read.", "Withdrawn stories count as read."]);
+    expect([tick(4).hasAttribute("title"), tick(3).hasAttribute("title")]).toEqual([false, false]);
     expect([label(2).classList.contains("is-locked"), label(1).classList.contains("is-locked")]).toEqual([true, true]);
     expect([label(4).hasAttribute("title"), label(3).hasAttribute("title")]).toEqual([false, false]);
     expect([label(4).classList.contains("is-locked"), label(3).classList.contains("is-locked")]).toEqual([false, false]);
@@ -179,6 +186,9 @@ describe("the Read column on the Stories list", () => {
     expect(el("storiesListStatus")).toBeNull();
     expect(document.querySelectorAll("#storiesTable [data-story-note]")).toHaveLength(4);
     expect(noteOf(4)).toBe("");
+    expect(document.querySelectorAll("#storiesTable [data-story-unsaved]")).toHaveLength(4);
+    expect([saysNotSaved(4), saysNotSaved(3), saysNotSaved(2), saysNotSaved(1)]).toEqual([false, false, false, false]);
+    expect(statusPill(4).hidden).toBe(false);
   });
 });
 
@@ -209,15 +219,24 @@ describe("ticking a story", () => {
     expect(calls.filter((c) => c.method === "GET" && c.path === "/api/admin/stories")).toHaveLength(1);
   });
 
-  it("puts the tick back and says so in the story's own row when the save fails", async () => {
+  // A sentence under the status made the row taller, so every row beneath it moved: on a quick
+  // run down the list a press could land on the story above the one it was aimed at. A failed
+  // save is now two words in a pill, in the status pill's place, so the row keeps its height.
+  it("puts the tick back and says Not saved in the status's place when the save fails, adding no line to the row", async () => {
     patchAnswer = 500;
     await openStories();
     await press(tick(4));
     expect(tick(4).checked).toBe(false);
     expect(tick(4).disabled).toBe(false);
+    expect(saysNotSaved(4)).toBe(true);
+    // Read aloud whole, with the story's number; seen as two words; the sentence on hover.
+    expect(unsavedOf(4).textContent).toBe("Story 4: Not saved. Please try again.");
+    expect(Array.from(unsavedOf(4).childNodes).filter((n) => n.nodeType === 3).map((n) => n.textContent)).toEqual(["Not saved"]);
+    expect(unsavedOf(4).title).toBe("Could not save. Please try again.");
+    expect(noteOf(4)).toBe("");
+    // The status underneath is unchanged, and no other row says anything.
     expect(statusOf(4)).toBe("New");
-    expect(noteOf(4)).toBe("Could not save. Please try again.");
-    expect(noteOf(3)).toBe("");
+    expect(saysNotSaved(3)).toBe(false);
   });
 
   it("says the same when the request never arrives", async () => {
@@ -226,18 +245,33 @@ describe("ticking a story", () => {
     await press(tick(3));
     expect(tick(3).checked).toBe(true);
     expect(statusOf(3)).toBe("Reviewed");
-    expect(noteOf(3)).toBe("Could not save. Please try again.");
+    expect(saysNotSaved(3)).toBe(true);
+    expect(noteOf(3)).toBe("");
   });
 
-  it("clears the row's note on the next try", async () => {
+  it("shows the status again on the next try", async () => {
     patchAnswer = 500;
     await openStories();
     await press(tick(4));
-    expect(noteOf(4)).not.toBe("");
+    expect(saysNotSaved(4)).toBe(true);
     patchAnswer = "ok";
     await press(tick(4));
-    expect(noteOf(4)).toBe("");
+    expect(saysNotSaved(4)).toBe(false);
+    expect(statusPill(4).hidden).toBe(false);
     expect(statusOf(4)).toBe("Reviewed");
+  });
+
+  it("shows the status again, not Not saved, when the next answer is that somebody else changed the story", async () => {
+    patchAnswer = 500;
+    await openStories();
+    await press(tick(4));
+    expect(saysNotSaved(4)).toBe(true);
+    patchAnswer = "ok";
+    inDb(4).status = "used";
+    await press(tick(4));
+    expect(saysNotSaved(4)).toBe(false);
+    expect(statusOf(4)).toBe("Used");
+    expect(noteOf(4)).toBe("Someone else changed this story. It is now Used.");
   });
 
   // Disabling the box for the wait would drop the keyboard's place in the list (a disabled box
@@ -276,7 +310,9 @@ describe("ticking a story", () => {
     expect(statusOf(4)).toBe("Withdrawn");
     expect([tick(4).checked, tick(4).disabled]).toEqual([true, true]);
     expect((tick(4).closest("label") as HTMLElement).title).toBe("Withdrawn stories count as read.");
+    expect(tick(4).title).toBe("Withdrawn stories count as read.");
     expect(noteOf(4)).toBe("Someone else changed this story. It is now Withdrawn.");
+    expect(saysNotSaved(4)).toBe(false);
   });
 
   it("says the same when it is the untick that somebody else got ahead of", async () => {
@@ -298,13 +334,15 @@ describe("ticking a story", () => {
     expect(noteOf(4)).toBe("");
   });
 
-  it("moves the keyboard to the row's View when the tick it was on becomes locked", async () => {
+  it("moves the keyboard to the row's View when the tick it was on becomes locked, without moving the page", async () => {
     await openStories();
     inDb(4).status = "withdrawn";
     tick(4).focus();
+    const focus = vi.spyOn(viewOf(4), "focus");
     await press(tick(4));
     expect(tick(4).disabled).toBe(true);
     expect(document.activeElement).toBe(viewOf(4));
+    expect(focus).toHaveBeenCalledWith({ preventScroll: true });
   });
 
   it("says a story is no longer here when it has been erased, and locks its tick", async () => {
@@ -314,6 +352,8 @@ describe("ticking a story", () => {
     expect([tick(4).checked, tick(4).disabled]).toEqual([false, true]);
     expect(statusOf(4)).toBe("New");
     expect(noteOf(4)).toBe("This story is no longer here.");
+    expect(tick(4).title).toBe("This story is no longer here.");
+    expect(saysNotSaved(4)).toBe(false);
   });
 
   it("says so when this person may no longer change stories, and locks the tick", async () => {
@@ -324,12 +364,15 @@ describe("ticking a story", () => {
     expect(noteOf(3)).toBe("You can no longer change stories.");
   });
 
-  it("goes back to signing in, with nothing else said, when the session has ended", async () => {
+  it("goes back to signing in, with nothing said in the row, when the session has ended", async () => {
     patchAnswer = 401;
     await openStories();
     await press(tick(4));
     expect(el("loginView").hidden).toBe(false);
     expect(el("appView").hidden).toBe(true);
+    // A session that has ended is not a save that failed: the sign in screen says what is needed.
+    expect(saysNotSaved(4)).toBe(false);
+    expect(noteOf(4)).toBe("");
   });
 
   it("lands its answer on the row that is on screen when the list was drawn again in the meantime", async () => {
@@ -364,6 +407,10 @@ describe("ticking a story", () => {
     await settle();
     expect(statusOf(4)).toBe("Used");
     expect([tick(4).checked, tick(4).disabled]).toEqual([true, true]);
+    // Nor is it told "Not saved": that press was on a list that is no longer on screen, and this
+    // row already shows what the story is.
+    expect(saysNotSaved(4)).toBe(false);
+    expect(noteOf(4)).toBe("");
   });
 
   it("is locked for someone who can only view Stories, says why, and a press sends nothing", async () => {
@@ -371,6 +418,7 @@ describe("ticking a story", () => {
     await openStories();
     expect([tick(4).disabled, tick(3).disabled]).toEqual([true, true]);
     expect((tick(4).closest("label") as HTMLElement).title).toBe("You can view stories but not change them.");
+    expect(tick(4).title).toBe("You can view stories but not change them.");
     await press(tick(4));
     await press(tick(3));
     expect([tick(4).checked, tick(3).checked]).toEqual([false, true]);
@@ -446,6 +494,19 @@ describe("an open story", () => {
     expect(document.activeElement).toBe(el("storyReadBtn"));
   });
 
+  // Someone who pressed the button and then scrolled down to the form must not be pulled back up
+  // when the answer arrives.
+  it("moves the keyboard without moving the page", async () => {
+    await open(4);
+    el("storyReadBtn").focus(); // as a real press leaves it
+    const focus = vi.spyOn(HTMLElement.prototype, "focus");
+    el("storyReadBtn").click();
+    await settle();
+    expect(document.activeElement).toBe(el("storyUnreadBtn"));
+    expect(focus).toHaveBeenCalledWith({ preventScroll: true });
+    focus.mockRestore();
+  });
+
   // The whole story used to be drawn again, which threw away anything typed in Tags or Notes and
   // not yet saved. Only what the status changes is drawn again now, so the form is never touched.
   it("keeps what was typed in Tags and Notes and not yet saved", async () => {
@@ -517,17 +578,31 @@ describe("an open story", () => {
     expect(statusLine()).toBe("Reviewed");
   });
 
+  it("says the same when the request never arrives, and keeps the button for another try", async () => {
+    await open(4);
+    patchAnswer = "down";
+    el("storyReadBtn").click();
+    await settle();
+    expect(readNote()).toBe("Could not save. Please try again.");
+    expect(el("storyReadBtn")).not.toBeNull();
+    expect(statusLine()).toBe("New");
+  });
+
+  // Pressing again could only say the same thing, so the button goes, as the list's tick locks.
   it.each([
     [404, "This story is no longer here."],
     [403, "You can no longer change stories."],
-    ["down" as const, "Could not save. Please try again."],
-  ])("says what happened when the answer is %s", async (answer, said) => {
+  ])("says so and takes the button away when the answer is %s", async (answer, said) => {
     await open(4);
     patchAnswer = answer;
+    el("storyReadBtn").focus();
     el("storyReadBtn").click();
     await settle();
     expect(readNote()).toBe(said);
+    expect(el("storyReadBtn")).toBeNull();
+    expect(el("storyUnreadBtn")).toBeNull();
     expect(statusLine()).toBe("New");
+    expect(document.activeElement).toBe(el("storyReadNote"));
   });
 
   it("does not undo a status somebody else set while the story was open: it shows what the story is now", async () => {
@@ -647,11 +722,37 @@ describe("its styles", () => {
     expect(rule(".admin-read-tick.is-locked")).toMatch(/cursor:\s*default/);
   });
 
+  // aria-busy alone shows nothing. On a slow connection the box dims and the pointer says wait,
+  // which is also why a second press seems to do nothing. After a pause, so a save that answers
+  // at once never flickers.
+  it("shows that a save is on its way, on the tick and on the open story's button, only once it has taken a moment", () => {
+    const box = rule('.admin-body .admin-read-tick input[type="checkbox"][aria-busy="true"]');
+    expect(box).toMatch(/opacity:\s*\.\d+/);
+    expect(box).toMatch(/cursor:\s*progress/);
+    expect(box).toMatch(/transition:\s*opacity [\d.]+s linear \.[3-9]\d*s/);
+    const btn = rule('.admin-read-bar [aria-busy="true"]');
+    expect(btn).toMatch(/opacity:\s*\.\d+/);
+    expect(btn).toMatch(/cursor:\s*progress/);
+  });
+
+  // An author's display on a class beats the browser's own rule for [hidden], so a pill would
+  // stay on show. The two pills in a row's status take turns; both showing would add a line.
+  it("hides a pill that is marked hidden, and keeps Not saved to one line", () => {
+    expect(rule(".admin-pill[hidden]")).toMatch(/display:\s*none/);
+    const unsaved = rule(".admin-read-unsaved");
+    expect(unsaved).toMatch(/white-space:\s*nowrap/);
+    // Maroon on the failed pills' tint: 7.8 to 1. The crimson those pills use is 4.2 to 1.
+    expect(unsaved).toMatch(/color:\s*var\(--maroon\)/);
+    // Except on a phone, where the column is narrower than the pill and one line would run over
+    // the next column's words.
+    expect(css).toMatch(/@media \(max-width:700px\)\{\.admin-read-unsaved\{white-space:normal\}\}/);
+  });
+
   // Measured in Chrome: a line above the list pushed every row down 35px the moment a save failed,
   // so a second press landed on the tick of the story above. The note sits in the story's own row
   // now, under its status: cells are top aligned, so the tick that was pressed does not move, and
   // an empty note takes no room at all.
-  it("says what could not be saved in the story's own row, in a note that takes no room while empty", () => {
+  it("says what somebody else changed in the story's own row, in a note that takes no room while empty", () => {
     expect(css).not.toContain("#storiesListStatus");
     expect(html).not.toContain("storiesListStatus");
     const note = rule(".admin-read-note");

@@ -34,12 +34,14 @@ not a new idea to store. Three approaches were considered:
 
 - Ticking saves at once. The row stays where it is, its Status changes in place, and the tick can
   be taken straight back off: nothing jumps, even when the list is filtered to New.
-- If the save fails the tick goes back to how it was, and the story's own row says "Could not save.
-  Please try again." under its status. (As first built this was a line above the table. The review
-  and a measurement in Chrome ended that: it moved every row the moment it had words, and above a
-  long list it was off the screen.)
+- If the save fails the tick goes back to how it was, and the story's status gives way to a pill
+  that says "Not saved" until the next try. The row keeps its height, so no row moves. (As first
+  built this was a line above the table, then a sentence under the status. Two reviews and
+  measurements in Chrome ended both: the first moved every row the moment it had words, and the
+  second made its own row taller, which moved every row beneath it.)
 - While a tick is saving a second press is put back, not sent. The box is not disabled for the
-  wait, which would drop the keyboard's place in the list.
+  wait, which would drop the keyboard's place in the list. If the wait is more than a third of a
+  second the box dims.
 - Each tick box is named for a screen reader: "Story 12 read". A locked one says why on hover.
 
 **An open story** gains one button, directly under the story's words, where reading ends:
@@ -57,6 +59,8 @@ shows what the story is now with "Someone else changed this story. It is now Wit
 matters most for Withdrawn, which records that consent was taken back: a tick from a stale list
 must never put such a story back to Reviewed. If the other person had already made the story what
 was asked for, nothing is said. A story erased in the meantime says "This story is no longer here."
+These sentences sit under the row's status and do make the row taller: they are rare, each changes
+what the row is, and two words would not say them.
 
 **Who.** Only someone who can edit Stories, as for every other change to a story. Someone who can
 only view Stories sees the ticks, locked, and no button.
@@ -91,7 +95,7 @@ Requests without it behave exactly as before. There is no migration and no new t
 - **The screen, in jsdom** (the admin's own harness: `admin.html`, a fake `fetch`, `app.js`):
   - the tick for each of the four statuses;
   - ticking and unticking send the right status to the right story, and the row's Status follows;
-  - a failed save puts the tick back and says so, in the story's own row;
+  - a failed save puts the tick back and says Not saved in the status's place, adding no line;
   - somebody else getting there first: the story is not changed and the row shows what it is now;
   - a viewer's ticks are locked and a press sends nothing;
   - the open story's button for New and for Reviewed, none for Used or Withdrawn, none for a viewer,

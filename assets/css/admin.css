@@ -220,12 +220,30 @@
 .admin-body .admin-read-tick input[type="checkbox"]:disabled{cursor:default}
 .admin-read-tick.is-locked{cursor:default}
 .admin-read-tick input:focus-visible{outline:3px solid var(--crimson);outline-offset:2px}
-/* What a tick could not save, or what somebody else changed: in the story's own row under its
-   status, and under the button on an open story. A line above the list was tried first. Measured in
-   Chrome, it pushed every row down 35px the moment a save failed, so a second press landed on the
-   tick of the story above; and above a long list it was off the screen altogether. Cells are top
-   aligned, so a note in the row never moves the tick that was pressed, and an empty one takes no
-   room at all. */
+/* While a save is on its way (aria-busy) the box dims and the pointer says wait, as the Get involved
+   screen's buttons do. Only once it has taken a third of a second: a save that answers at once
+   never flickers. It is not disabled, which would drop the keyboard's place in the list. */
+.admin-body .admin-read-tick input[type="checkbox"][aria-busy="true"]{opacity:.55;cursor:progress;transition:opacity .15s linear .3s}
+.admin-read-bar [aria-busy="true"]{opacity:.6;cursor:progress;transition:opacity .15s linear .3s}
+/* A save that failed: "Not saved", a pill in the status pill's place, so the row keeps its height
+   and no row beneath it moves under the next press. Two things were tried first, both measured in
+   Chrome. A line above the list pushed every row down 35px the moment it had words, so a second
+   press landed on the tick of the story above, and above a long list it was off the screen. A
+   sentence under the status left the pressed tick where it was but made its row 61px taller, so on
+   a quick run down the list the press after next could land on the wrong story. One line, never
+   wrapped. The failed pills' tint with maroon words (7.8 to 1; their crimson is 4.2 to 1). */
+.admin-pill[hidden]{display:none}
+.admin-read-unsaved{background:color-mix(in srgb,var(--crimson) 16%,var(--cream));color:var(--maroon);white-space:nowrap}
+/* On a phone the table's columns are narrower than the pill (the list is to become cards there),
+   and one line would run over the next column's words. It wraps like everything else in that row,
+   whose height its taller cells already set. Wider than this the pill fits, by 0.6px at the
+   narrowest (a list of 596px, at 861px wide with the menu beside it). */
+@media (max-width:700px){.admin-read-unsaved{white-space:normal}}
+/* The three answers that need a sentence (somebody else changed the story, it has been erased,
+   this person may no longer change stories): under the row's status, and under the button on an
+   open story. These do make the row taller. They are rare, each one changes what the row is, and
+   two words would not say them. Cells are top aligned, so the tick that was pressed stays put; an
+   empty note takes no room at all. */
 .admin-read-note{display:block;margin:0;font-size:.82rem;line-height:1.4;color:var(--crimson)}
 .admin-read-note:not(:empty){margin-top:6px}
 /* On an open story it speaks as that screen's own status line does (.admin-action-status), not at a

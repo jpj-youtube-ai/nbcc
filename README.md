@@ -2208,14 +2208,24 @@ the ticks locked.
 - **The row stays where it is.** The tick saves at once and nothing is drawn again (`setStoryRead`
   in `assets/js/admin/app.js`), so the tick can come straight back off, even on a list filtered to
   New. The box is never disabled while it saves, which would drop the keyboard's place in the list;
-  a second press in that time is put back, not sent.
-- **What could not be saved is said in the story's own row**, under its status, and the tick goes
-  back. A line above the table was tried first: it pushed every row down the moment it had words,
-  so a second press landed on the story above, and above a long list it was off the screen.
+  a second press in that time is put back, not sent. A save that takes more than a third of a
+  second dims the box (`aria-busy`), so a slow connection does not look like a tick that ignores
+  you.
+- **A save that fails moves nothing.** The tick goes back and the story's status pill gives way to a
+  pill that says **Not saved** (a screen reader hears "Story 12: Not saved. Please try again.", and
+  hovering shows the sentence). The row keeps its height, so no row beneath it moves under the next
+  press. Two other places were tried first and measured in Chrome. A line above the table pushed
+  every row down the moment it had words, and above a long list it was off the screen. A sentence
+  under the status left the pressed tick alone but made its row 61px taller, so on a quick run down
+  the list the press after next could land on the wrong story.
+- **Three rarer answers get a sentence under the status**, and their row does grow: somebody else
+  changed the story, it has been erased ("This story is no longer here."), or this person may no
+  longer change stories. The last two lock the tick.
 - **On an open story only the status is drawn again** (`markStoryRead`): the Status line, the
   button, and the form's Status when it had not been touched. Anything typed in Tags or Notes and
-  not yet saved stays, cursor and all. An answer that arrives after a different story was opened is
-  ignored.
+  not yet saved stays, cursor and all. What could not be saved is said right under the button. An
+  answer that arrives after a different story was opened is ignored, and the keyboard is moved
+  without scrolling the page.
 
 A story ticked here stops counting in the Overview's "new stories are waiting to be read", which
 counts the live stories still at New. Design:

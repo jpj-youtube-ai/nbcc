@@ -79,7 +79,7 @@ export async function runFundraisingSummary(now = new Date(), deps: SummaryDeps 
   const to = settings.recipients.filter(isSummaryAddress);
   const leftOut = settings.recipients.length - to.length;
   // A count only: the addresses themselves are never logged.
-  if (leftOut > 0) console.error(`fundraising summary: ${leftOut} ${leftOut === 1 ? "address" : "addresses"} left out, not nbcc.scot`);
+  if (leftOut > 0) console.log(`fundraising summary: ${leftOut} ${leftOut === 1 ? "address" : "addresses"} left out, not nbcc.scot`);
   if (to.length === 0) return { sent: 0, failed: 0, skipped: "nobody to send to" };
 
   let claim: { previous: string | null } | null;

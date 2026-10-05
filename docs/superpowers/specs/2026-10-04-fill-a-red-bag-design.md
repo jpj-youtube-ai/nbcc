@@ -477,8 +477,10 @@ each written to the audit log; saving the draft is not.
 
 - The section's key is `red-bag` (the other keys use hyphens), and it is admins only by role, like
   Analytics: editors and viewers do not get it with their role.
-- An item on the website can be hidden but not deleted, so its key and its history are never lost.
-  Something added and not yet published can be removed.
+- An item or example on the website can be hidden but not deleted, so its key and its history are
+  never lost. Something added and not yet published can be removed. The server enforces it on every
+  save and on publish ("An item that is on the website can be hidden, not removed."); putting an
+  earlier list back is the one way anything leaves the website's list.
 - Every item, not only a new one, can be given another picture.
 - An item staff have renamed gets the elf's general notes only, not the ones written about its old
   name.

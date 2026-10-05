@@ -386,6 +386,100 @@ describe("saving the draft", () => {
   });
 });
 
+describe("what is on the website can be hidden, never removed: checked on the server", () => {
+  const boxed = (): RedBagList => edited((l) => l.items.push({ key: "n-selection-box-a1b2c", name: "Selection box", pence: 300, group: "play", art: "present", hidden: false }));
+  const lacking = (l: RedBagList, key: string): RedBagList => ({ ...l, items: l.items.filter((i) => i.key !== key) });
+  const REMOVED = "An item that is on the website can be hidden, not removed.";
+  const stored = (calls: Array<[string, unknown[]]>) => sqls(calls).some((s) => /^(UPDATE|INSERT INTO) red_bag_lists/.test(s));
+  /** A version to be found by its id (the list a draft was put back from). */
+  const versions = (found: Record<number, unknown>): Answer => (sql, params) =>
+    /WHERE id = \$1/.test(sql) && /^\s*SELECT/.test(sql) ? { rows: found[Number(params[0])] ? [{ id: params[0], data: found[Number(params[0])] }] : [] } : undefined;
+
+  it("a save that drops an item the published list has is refused, and nothing is stored", async () => {
+    const { calls } = useClient(holding(null, publishedRow(4, boxed())));
+    const err = await saveRedBagDraft(lacking(boxed(), "toy"), { version: 0, publishedId: 4 }, WHO).catch((e) => e);
+    expect(err).toBeInstanceOf(RedBagListError);
+    expect(err.reason).toBe("invalid");
+    expect(err.problems).toEqual([{ kind: "item", key: "toy", field: "", message: REMOVED }]);
+    expect(stored(calls)).toBe(false);
+    expect(rolledBack(calls)).toBe(true);
+  });
+
+  it("with nothing published, a save that drops a built-in item is refused", async () => {
+    const { calls } = useClient(holding(null, null));
+    const err = await saveRedBagDraft(lacking(L.builtIn(), "socks"), { version: 0, publishedId: null }, WHO).catch((e) => e);
+    expect(err.problems[0]).toMatchObject({ key: "socks", message: REMOVED });
+    expect(stored(calls)).toBe(false);
+  });
+
+  it("hiding it instead is fine, and so is removing something that was never published", async () => {
+    useClient(holding(null, publishedRow(4, edited())));
+    const hidden = edited((l) => (l.items.find((i) => i.key === "toy")!.hidden = true));
+    await expect(saveRedBagDraft(hidden, { version: 0, publishedId: 4 }, WHO)).resolves.toMatchObject({ version: 1 });
+    // The draft had a new item; this save takes it out again. The website never had it.
+    useClient(holding(draftRow(boxed(), 2), publishedRow(4, edited()), (sql) => (/^\s*UPDATE red_bag_lists/.test(sql) ? { rows: [draftRow(edited(), 3)] } : undefined)));
+    await expect(saveRedBagDraft(edited(), { version: 2, publishedId: 4 }, WHO)).resolves.toMatchObject({ version: 3 });
+  });
+
+  it("a draft that was put back from an earlier list can be saved and published without what that list lacked", async () => {
+    // The website (4) has the box; version 2, put back, did not.
+    const putBack = draftRow(edited(), 3, { restored_from: 2 });
+    const first = useClient(holding(putBack, publishedRow(4, boxed()), (sql, params) => versions({ 2: edited() })(sql, params) ?? (/^\s*UPDATE red_bag_lists/.test(sql) ? { rows: [draftRow(edited(), 4, { restored_from: 2 })] } : undefined)));
+    await expect(saveRedBagDraft(edited((l) => (l.items[0].pence = 900)), { version: 3, publishedId: 4 }, WHO)).resolves.toMatchObject({ version: 4 });
+    // A plain save keeps the note of where the draft came from, so the next save is let through too.
+    expect(sqls(first.calls).find((s) => /^UPDATE red_bag_lists/.test(s))).not.toMatch(/restored_from =/);
+
+    query.mockResolvedValue({ rows: [] });
+    const second = useClient(
+      holding(putBack, publishedRow(4, boxed()), (sql, params) =>
+        versions({ 2: edited() })(sql, params) ?? (/^\s*UPDATE red_bag_lists/.test(sql) ? { rows: [publishedRow(9, edited(), { summary: params[3], changes: JSON.parse(String(params[4])) })] } : undefined),
+      ),
+    );
+    const v = await publishRedBagDraft(3, WHO);
+    expect(v.changes).toContain("Removed: Selection box");
+    expect(committed(second.calls)).toBe(true);
+  });
+
+  it("the original list put back may lack everything added since, and nothing the original has", async () => {
+    const fromOriginal = draftRow(L.builtIn(), 3, { restored_original: true });
+    useClient(holding(fromOriginal, publishedRow(4, boxed()), (sql) => (/^\s*UPDATE red_bag_lists/.test(sql) ? { rows: [draftRow(L.builtIn(), 4, { restored_original: true })] } : undefined)));
+    await expect(saveRedBagDraft(L.builtIn(), { version: 3, publishedId: 4 }, WHO)).resolves.toMatchObject({ version: 4 });
+    const { calls } = useClient(holding(fromOriginal, publishedRow(4, boxed())));
+    const err = await saveRedBagDraft(lacking(L.builtIn(), "toy"), { version: 3, publishedId: 4 }, WHO).catch((e) => e);
+    expect(err.problems).toEqual([{ kind: "item", key: "toy", field: "", message: REMOVED }]);
+    expect(stored(calls)).toBe(false);
+  });
+
+  it("a put back draft may not drop something the list it came from has", async () => {
+    const { calls } = useClient(holding(draftRow(edited(), 3, { restored_from: 2 }), publishedRow(4, boxed()), versions({ 2: edited() })));
+    const err = await saveRedBagDraft(lacking(edited(), "book"), { version: 3, publishedId: 4 }, WHO).catch((e) => e);
+    expect(err.problems.map((p: { key: string }) => p.key)).toEqual(["book"]);
+    expect(stored(calls)).toBe(false);
+  });
+
+  it("an ordinary draft gets no exception: put back is the only way a draft may lack what the website has", async () => {
+    const { calls } = useClient(holding(draftRow(boxed(), 3), publishedRow(4, boxed()), versions({ 2: edited() })));
+    const err = await saveRedBagDraft(edited(), { version: 3, publishedId: 4 }, WHO).catch((e) => e);
+    expect(err.problems.map((p: { key: string }) => p.key)).toEqual(["n-selection-box-a1b2c"]);
+    expect(stored(calls)).toBe(false);
+  });
+
+  it("publish checks it again: a stored draft that drops what the website has is never published", async () => {
+    const { calls } = useClient(holding(draftRow(lacking(boxed(), "toy"), 4), publishedRow(4, boxed())));
+    const err = await publishRedBagDraft(4, WHO).catch((e) => e);
+    expect(err.reason).toBe("invalid");
+    expect(err.problems[0]).toMatchObject({ key: "toy", message: REMOVED });
+    expect(sqls(calls).some((s) => /^UPDATE red_bag_lists/.test(s))).toBe(false);
+    expect(audits(calls)).toEqual([]);
+  });
+
+  it("putting a list back is itself never refused for what it lacks", async () => {
+    const { calls } = useClient(holding(null, publishedRow(4, boxed())));
+    await expect(restoreRedBagList("original", { version: 0, publishedId: 4 }, WHO)).resolves.toMatchObject({ version: 1 });
+    expect(sqls(calls).some((s) => /^INSERT INTO red_bag_lists/.test(s))).toBe(true);
+  });
+});
+
 describe("publishing", () => {
   const publishing = (draft: Record<string, unknown> | null, published: Record<string, unknown> | null) =>
     useClient(

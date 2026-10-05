@@ -116,6 +116,15 @@ async function saveDraft(world, email, key, pence, stamp) {
   return world.rbl;
 }
 
+// The whole list as the editor has it, with one item taken out altogether (not hidden).
+When("{string} saves a draft without the item {string}", async function (email, key) {
+  const token = await login(email);
+  const state = (await call("GET", API, token)).body;
+  const data = JSON.parse(JSON.stringify(state.draft ? state.draft.data : state.website));
+  data.items = data.items.filter((i) => i.key !== key);
+  this.rbl = await call("PUT", `${API}/draft`, token, { data, ...stampOf(state) });
+});
+
 When("{string} saves a draft pricing {string} at {int} pence", async function (email, key, pence) {
   await saveDraft(this, email, key, pence);
 });

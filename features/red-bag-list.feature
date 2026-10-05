@@ -59,6 +59,13 @@ Feature: Staff edit the Fill a Red Bag list, as a draft, and publish it
     When "ada.redbaglist.admin.bdd@example.com" reads the Fill a Red Bag list editor
     Then the Fill a Red Bag list editor has no draft
 
+  Scenario: an item that is on the website can be hidden, but a draft that drops it is refused
+    When "ada.redbaglist.admin.bdd@example.com" saves a draft without the item "socks"
+    Then the Fill a Red Bag list answer is 400
+    And the Fill a Red Bag list answer says "An item that is on the website can be hidden, not removed."
+    When "ada.redbaglist.admin.bdd@example.com" reads the Fill a Red Bag list editor
+    Then the Fill a Red Bag list editor has no draft
+
   Scenario: a save against a draft someone else has changed is refused, and theirs is kept
     Given "ada.redbaglist.admin.bdd@example.com" has saved a draft pricing "toy" at 1200 pence
     When "ada.redbaglist.admin.bdd@example.com" saves a draft pricing "toy" at 1100 pence against the stamp from before that save

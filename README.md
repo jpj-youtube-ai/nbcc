@@ -6516,6 +6516,14 @@ file on **every save and again on publish**, whatever the screen did:
 | No two items showing with the same name | "Two items showing cannot have the same name." |
 | 30 items at most; 6 examples in a theme at most | "The list can have 30 items at most." / "A theme can have 6 examples at most." |
 | Keys unique, every heading, theme and picture a real one | "Something in the list is not right. Reload the page and try again." |
+| Everything on the website is still in the draft, hidden or not (server, on save and on publish) | "An item that is on the website can be hidden, not removed." / "An example that is on the website can be hidden, not removed." |
+
+**Hidden, never removed.** That last rule is checked on the server (`refuseRemovals` in
+`src/db/red-bag-lists.ts`, with `removed` from the rules file), against the list published last, or
+the built-in list when none is. The one exception is **Put back**: a draft that was put back from an
+earlier list (its row says which, and a plain save keeps that note) may lack what that earlier list
+lacked, and nothing else, and its differences say "Removed: ...". Put back is the only way anything
+leaves the website's list.
 
 Names and words are tidied before they are stored (trimmed, runs of space made one), and every one
 is escaped wherever it is written. A heading with nothing showing is not drawn on the page, nor a
@@ -6538,7 +6546,9 @@ changes nothing on `/fill` until somebody publishes.
 
 - `GET /fill` asks `loadPublishedRedBagList()`. That read is kept for a minute
   (`RED_BAG_LIST_CACHE_MS`), is read again at once on this server after a publish (another server
-  sees it within the minute), and **never throws and never waits long**: it gives up after 1.5
+  sees it within the minute; the list as last read is kept, not forgotten, while that fresh read
+  runs, so a blip then shows the last good list; and reads are numbered as they start, so a slow
+  read begun before the publish can never put the earlier list back afterwards), and **never throws and never waits long**: it gives up after 1.5
   seconds (`RED_BAG_LIST_READ_TIMEOUT_MS`), page views arriving together share one read, and after
   a failure the database is left alone for 10 seconds (`RED_BAG_LIST_RETRY_MS`) rather than asked
   again by every page view.

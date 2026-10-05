@@ -70,6 +70,11 @@ export interface RedBagListRules {
   wordingProblem(text: string): string;
   /** Everything wrong with a list. Empty: it may be saved and published. */
   validate(raw: unknown): RedBagListProblem[];
+  /**
+   * What the draft has dropped that the website has (it may be hidden, never removed). A draft put
+   * back from an earlier list (`putBackFrom`) may lack what that list lacked. Empty: nothing dropped.
+   */
+  removed(website: unknown, draft: unknown, putBackFrom?: unknown): RedBagListProblem[];
   newKey(name: string, taken: readonly string[], random?: () => number): string;
   parsePounds(typed: string): number | null;
   poundsBox(pence: number): string;

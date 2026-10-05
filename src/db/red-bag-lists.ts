@@ -316,6 +316,26 @@ function stillCurrent(held: Held, stamp: RedBagListStamp): boolean {
   return stamp.version === 0 && held.publishedId === stamp.publishedId;
 }
 
+/**
+ * What is on the website can be hidden, never removed. Checked HERE, on the server, on every save
+ * and again on publish, whatever the screen sent: every item and example in the website's list
+ * must still be in the draft. The one exception is a draft that was put back from an earlier list
+ * (the note of that is on the draft's own row, and a plain save keeps it): it may lack what that
+ * list lacked, and nothing else. So Put back is the only way anything leaves the website's list.
+ */
+async function refuseRemovals(client: PoolClient, held: Held, data: unknown): Promise<void> {
+  const rules = redBagList();
+  let putBackFrom: RedBagList | null = null;
+  if (held.draft?.restored_original) putBackFrom = rules.builtIn();
+  else if (held.draft && held.draft.restored_from != null) {
+    const r = await client.query("SELECT id, data FROM red_bag_lists WHERE id = $1 AND status = 'published'", [held.draft.restored_from]);
+    const found = r.rows[0] as Row | undefined;
+    putBackFrom = found ? rules.clean(found.data) : null;
+  }
+  const dropped = rules.removed(held.website, data, putBackFrom);
+  if (dropped.length) throw new RedBagListError("invalid", dropped);
+}
+
 const isUniqueViolation = (err: unknown): boolean => typeof err === "object" && err !== null && (err as { code?: string }).code === "23505";
 
 /** Write `data` as the draft: over the one there is (its stamp moves on by one), or as a new one. */
@@ -376,6 +396,7 @@ export async function saveRedBagDraft(raw: unknown, stamp: RedBagListStamp, who:
   return inTransaction(async (client) => {
     const held = await hold(client);
     if (!stillCurrent(held, stamp)) throw new RedBagListError("stale");
+    await refuseRemovals(client, held, data);
     return toDraft(await writeDraft(client, held, data, who, null));
   });
 }
@@ -392,6 +413,7 @@ export async function publishRedBagDraft(version: number, who: RedBagListWho): P
     if (!held.draft || Number(held.draft.version) !== version) throw new RedBagListError("stale");
     const problems = rules.validate(held.draft.data);
     if (problems.length) throw new RedBagListError("invalid", problems);
+    await refuseRemovals(client, held, held.draft.data);
     const changes = rules.diff(held.website, held.draft.data);
     if (!changes.length) throw new RedBagListError("nothing");
     const lines = changes.map((c) => c.text);

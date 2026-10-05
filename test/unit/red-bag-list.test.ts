@@ -240,6 +240,54 @@ describe("what a list may hold", () => {
   });
 });
 
+describe("what is on the website can be hidden, never removed", () => {
+  const withBox = () => {
+    const l = original();
+    l.items.push(added());
+    l.examples.push({ key: "n-ex-1", theme: "school", pence: 2000, words: "could help with a school bag", art: "present", hidden: false });
+    return l;
+  };
+  const without = (l: RedBagList, key: string) => ({ ...l, items: l.items.filter((i) => i.key !== key), examples: l.examples.filter((e) => e.key !== key) });
+  const said = (website: unknown, draft: unknown, from?: unknown) => L.removed(website, draft, from).map((p) => [p.kind, p.key, p.message]);
+
+  it("is content when every item and example on the website is still in the draft, hidden or not", () => {
+    const draft = withBox();
+    draft.items.forEach((i) => (i.hidden = true));
+    draft.items.push(added({ key: "n-another-zzzzz", name: "Another" }));
+    expect(said(withBox(), draft)).toEqual([]);
+    expect(said(original(), original())).toEqual([]);
+  });
+
+  it("refuses a draft that drops an item or an example the website has, in plain words", () => {
+    expect(said(withBox(), without(withBox(), "toy"))).toEqual([["item", "toy", "An item that is on the website can be hidden, not removed."]]);
+    expect(said(withBox(), without(withBox(), "n-selection-box-a1b2c"))).toEqual([["item", "n-selection-box-a1b2c", "An item that is on the website can be hidden, not removed."]]);
+    expect(said(withBox(), without(withBox(), "crisis-15"))).toEqual([["example", "crisis-15", "An example that is on the website can be hidden, not removed."]]);
+    expect(said(withBox(), without(withBox(), "n-ex-1"))).toEqual([["example", "n-ex-1", "An example that is on the website can be hidden, not removed."]]);
+  });
+
+  it("goes by the built-in list when nothing is published", () => {
+    expect(said(null, without(original(), "socks")).map((p) => p[1])).toEqual(["socks"]);
+  });
+
+  it("lets something not yet on the website come and go", () => {
+    expect(said(original(), withBox())).toEqual([]);
+    expect(said(original(), original())).toEqual([]);
+  });
+
+  it("the one exception: a draft put back from an earlier list may lack what that list lacked, and nothing else", () => {
+    // The website has the box; the original list, put back, never did.
+    expect(said(withBox(), original(), original())).toEqual([]);
+    // But it may not also drop something the list it was put back from HAS.
+    expect(said(withBox(), without(original(), "toy"), original()).map((p) => p[1])).toEqual(["toy"]);
+    // And with no list it was put back from, there is no exception at all.
+    expect(said(withBox(), original()).map((p) => p[1])).toEqual(["n-selection-box-a1b2c", "n-ex-1"]);
+  });
+
+  it("refuses a draft that is not a list", () => {
+    expect(said(original(), "nope")).toEqual([["list", "", L.MESSAGES.broken]]);
+  });
+});
+
 describe("tidying what was sent", () => {
   it("keeps only what a list holds, trims names and words, and turns runs of space into one", () => {
     const raw = {

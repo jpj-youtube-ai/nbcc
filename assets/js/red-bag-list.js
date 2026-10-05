@@ -62,6 +62,8 @@
     noneShowing: "At least one item must be showing.",
     tooMany: "The list can have 30 items at most.",
     tooManyExamples: "A theme can have 6 examples at most.",
+    removedItem: "An item that is on the website can be hidden, not removed.",
+    removedExample: "An example that is on the website can be hidden, not removed.",
     // Something no screen of ours could have sent: a key, a heading or a picture that does not exist.
     broken: "Something in the list is not right. Reload the page and try again.",
   };
@@ -282,6 +284,36 @@
   }
 
   /**
+   * What is on the website can be HIDDEN, never removed: its key, and so its place in the history,
+   * is never lost. Every item and example in the website's list must still be in the draft, hidden
+   * or not. The problems, as validate gives them; empty when nothing has been dropped.
+   *
+   * The one exception is a draft that was PUT BACK from an earlier list (`putBackFrom`: that list):
+   * it may lack what that earlier list lacked, and nothing else. The server checks this on every
+   * save and again on publish (src/db/red-bag-lists.ts); the editor simply offers no Remove on
+   * anything the website has.
+   */
+  function removed(website, draft, putBackFrom) {
+    var was = clean(website) || builtIn();
+    var now = clean(draft);
+    if (!now) return [{ kind: "list", key: "", field: "", message: MESSAGES.broken }];
+    var from = putBackFrom ? clean(putBackFrom) : null;
+    var out = [];
+    function check(kind, before, after, source, message) {
+      var have = byKey(after);
+      var had = source ? byKey(source) : null;
+      before.forEach(function (x) {
+        if (has(have, x.key)) return;
+        if (had && !has(had, x.key)) return;
+        out.push({ kind: kind, key: x.key, field: "", message: message });
+      });
+    }
+    check("item", was.items, now.items, from ? from.items : null, MESSAGES.removedItem);
+    check("example", was.examples, now.examples, from ? from.examples : null, MESSAGES.removedExample);
+    return out;
+  }
+
+  /**
    * A key for something new, from its name: "n-selection-box-k3x9a". Never one in `taken`. `random`
    * is Math.random unless a test hands in its own.
    */
@@ -472,6 +504,7 @@
     priceProblem: priceProblem,
     amountProblem: amountProblem,
     validate: validate,
+    removed: removed,
     newKey: newKey,
     parsePounds: parsePounds,
     poundsBox: poundsBox,

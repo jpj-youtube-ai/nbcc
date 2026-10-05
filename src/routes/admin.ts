@@ -83,7 +83,7 @@ import { buildMenuReadyEmail } from "../ball/menu-email";
 import { parseMenu } from "../ball/menu";
 import { archiveStory, restoreStory } from "../db/stories";
 import { recordErasure, listErasures } from "../db/erasure-log";
-import { listEmailLog, listRecentEmailFailures } from "../db/email-log";
+import { hasProblemToRemove, listEmailLog, listRecentEmailFailures } from "../db/email-log";
 import {
   listKnownBusinesses,
   createOutreach,
@@ -198,7 +198,9 @@ import {
   setListVisibility,
   type SubscriberListRef,
 } from "../db/subscriber-lists";
-import { listSuppressions, unsuppressEmail } from "../db/email-suppressions";
+import { listSuppressions, suppressEmail, unsuppressEmail } from "../db/email-suppressions";
+import { blockedReason, putBackAuditRemovals, recordAuditRemoval } from "../db/email-audit-removals";
+import { isCharityAddress, looksLikeAddress } from "../email/audit-removals";
 import {
   createSendJob,
   getJobForNewsletter,
@@ -623,8 +625,11 @@ export async function getAdminSuppressions(req: Request, res: Response): Promise
 export async function postAdminSuppressionLift(req: Request, res: Response): Promise<Response | void> {
   const claims = await authorizeSection(req, res, "newsletter", "edit");
   if (!claims) return;
-  const parsed = z.object({ email: z.string().trim().email() }).safeParse(req.body);
-  if (!parsed.success) return res.status(400).json({ error: "A valid email address is needed" });
+  // TASK-562: any address, not only a well formed one. Staff can block a badly formed address from
+  // the Email audit (the log holds some, and they fail on every send), and whatever is on the block
+  // list must be able to come off it here. One that is not blocked is the 404 below.
+  const parsed = z.object({ email: z.string().trim().min(1).max(320) }).safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: "Say which address to unblock" });
   const lifted = await unsuppressEmail(parsed.data.email, claims.email);
   if (!lifted) return res.status(404).json({ error: "That address is not blocked" });
   return res.status(200).json({ lifted: true });
@@ -2367,6 +2372,80 @@ export async function getAdminEmailLog(req: Request, res: Response): Promise<Res
   }
 }
 
+// TASK-562: remove an address from the red band, so a dead one stops coming back into it and into
+// the Overview's count. Both routes need EDIT on the email-audit section.
+//
+// POST /api/admin/email-log/remove { email, stop }
+//   stop false ("Just tidy away"): its problems so far leave the band. Nothing else changes, and it
+//     comes back if it fails again.
+//   stop true ("Remove and stop emails"): the address is also blocked, as staff ('manual', which
+//     Newsletter > Blocked addresses shows as "Blocked by staff"), and its later failures stay out
+//     of the band for as long as it is blocked. Refused for one of the charity's own addresses.
+// Nothing here stops a receipt, a booking confirmation or a sign in code: those do not consult
+// the block list, and this does not change the path any email takes when it is sent.
+//
+// `email` is whatever the log holds for the row, not a checked address. Addresses come into the
+// site through a loose check, so the log has some a strict one refuses (a trailing full stop, two
+// dots): the provider refuses those outright, no bounce ever blocks them, and they are the ones
+// most in need of removing. A cleared team invite's rows read "deleted team invitee": those can be
+// tidied, and there is nothing there to block. And only an address with a problem that nobody has
+// removed yet can be removed, which is what the band offers: the route is not a way to block
+// anyone at all, and a screen that is out of date cannot remove an address a second time.
+const auditAddress = z.string().trim().min(1).max(320);
+const emailLogRemoveSchema = z.object({ email: auditAddress, stop: z.boolean() }).strict();
+
+export async function postAdminEmailLogRemove(req: Request, res: Response): Promise<Response | void> {
+  const claims = await authorizeSection(req, res, "email-audit", "edit");
+  if (!claims) return;
+  const parsed = emailLogRemoveSchema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: "Say which address to remove" });
+  const { email, stop } = parsed.data;
+  if (stop && !looksLikeAddress(email)) {
+    return res.status(400).json({ error: "Only an email address can be blocked" });
+  }
+  if (stop && isCharityAddress(email)) {
+    return res.status(400).json({ error: "The charity's own addresses are never blocked" });
+  }
+  try {
+    if (!(await hasProblemToRemove(email))) {
+      return res.status(404).json({ error: "That address has nothing left to remove" });
+    }
+    // Blocked BEFORE it is hidden. If the second write fails the address is blocked and its
+    // problems still show, which staff can see and try again; the other way round would hide the
+    // problems of an address that is still being emailed. suppressEmail answers whether this call
+    // is what blocked it (false when it was blocked already, for its own reason, which stays).
+    const blockedNow = stop ? await suppressEmail(email, "manual", `Removed from the Email audit by ${claims.email}`) : false;
+    await recordAuditRemoval(email, stop ? "stop" : "tidy", claims.email, blockedNow);
+    return res.status(200).json({ removed: true, stopped: stop, blockedNow });
+  } catch (err) {
+    console.error("admin email log remove failed:", err instanceof Error ? err.message : err);
+    return res.status(500).json({ error: "Admin is temporarily unavailable" });
+  }
+}
+
+// POST /api/admin/email-log/put-back { email }: undo a removal. Its problems return to the band.
+// If Remove and stop emails is what blocked the address, and the block there now is still that
+// one, it is unblocked too. A block that was there for its own reason (its mail bounced, or it
+// marked us as spam) is left alone, and the answer says why the address is still blocked
+// (blockedBecause: 'bounced', 'complained' or 'manual'; null when it is not blocked).
+export async function postAdminEmailLogPutBack(req: Request, res: Response): Promise<Response | void> {
+  const claims = await authorizeSection(req, res, "email-audit", "edit");
+  if (!claims) return;
+  const parsed = z.object({ email: auditAddress }).strict().safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: "Say which address to put back" });
+  const { email } = parsed.data;
+  try {
+    const undone = await putBackAuditRemovals(email, claims.email);
+    if (!undone.putBack) return res.status(404).json({ error: "That address has not been removed" });
+    const reason = await blockedReason(email);
+    const unblocked = undone.blocked && reason === "manual" ? await unsuppressEmail(email, claims.email) : false;
+    return res.status(200).json({ putBack: true, unblocked, blockedBecause: unblocked ? null : reason });
+  } catch (err) {
+    console.error("admin email log put back failed:", err instanceof Error ? err.message : err);
+    return res.status(500).json({ error: "Admin is temporarily unavailable" });
+  }
+}
+
 // --- Site addressing (site-pages feature): spare addresses + search visibility -------------
 // GET  /api/admin/site-pages          — the registry pages (with effective listed flags) + aliases
 // POST /api/admin/site-aliases        — add a spare address (validated, friendly refusals)
@@ -2467,6 +2546,8 @@ adminRouter.get("/api/admin/claim-batches", getAdminClaimBatches);
 adminRouter.get("/api/admin/claim-batches/:id/export", getAdminClaimBatchExport);
 adminRouter.get("/api/admin/audit", getAdminAuditLog);
 adminRouter.get("/api/admin/email-log", getAdminEmailLog);
+adminRouter.post("/api/admin/email-log/remove", postAdminEmailLogRemove);
+adminRouter.post("/api/admin/email-log/put-back", postAdminEmailLogPutBack);
 adminRouter.get("/api/admin/site-pages", getAdminSitePages);
 adminRouter.post("/api/admin/site-aliases", postAdminSiteAlias);
 adminRouter.delete("/api/admin/site-aliases/:id", deleteAdminSiteAlias);

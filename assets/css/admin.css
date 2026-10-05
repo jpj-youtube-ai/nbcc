@@ -511,6 +511,10 @@
 .nl-sub-count { margin: 0 0 8px; font-size: .78rem; font-weight: 600; color: var(--slate-soft); }
 .nl-sub-remove { color: var(--maroon); }
 .nl-sub-remove:hover { color: var(--crimson); }
+/* Blocked addresses: why an address is blocked, then the detail of it, in one cell. The detail
+   takes a line of its own (TASK-562: measured in Chrome, "Blocked by staff" ran straight on into
+   who removed it). Only this list: .admin-sub is also used inside sentences elsewhere. */
+#suppressionList .admin-sub { display: block; font-size: .82rem; color: var(--slate-soft); }
 
 /* Delivery-outcome failure badge in the newsletter list. */
 .nl-fail-badge { display: inline-block; font-size: .72rem; font-weight: 600; padding: 1px 8px; border-radius: 999px; background: #fbe9e9; color: var(--crimson); margin-left: 6px; }
@@ -1510,6 +1514,30 @@ tr.nl-click:hover { background: var(--tint); }
 .email-fail-band { border: 1px solid var(--crimson, #C02238); border-radius: 10px; background: rgba(192, 34, 56, 0.06); padding: .75rem 1rem 1rem; margin: 0 0 1.2rem; }
 .email-fail-band h3 { color: var(--crimson, #C02238); margin: 0 0 .5rem; font-size: 1rem; }
 .email-fail-band .admin-table-wrap { margin: 0; }
+/* TASK-562: the band is one block an address, not a table: what staff decide here is about an
+   address (is it dead?), so its problems sit under it and it is dealt with once. A block is a row
+   that wraps: the address, then what can be pressed. On a phone the two sit one above the other,
+   a long address breaks rather than pushing the band wider, and both controls are 44px to press.
+   While a press is being saved the screen is aria-busy and its controls say wait: the answer
+   draws the band again, and the next address is about to move up under the pointer. */
+.email-fail-list { list-style: none; margin: 0; padding: 0; }
+.email-fail-item { padding: 10px 0; border-top: 1px solid color-mix(in srgb, var(--crimson) 22%, transparent); }
+.email-fail-item:first-child { border-top: 0; padding-top: 2px; }
+.email-fail-item:last-child { padding-bottom: 0; }
+.email-fail-who { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 2px 18px; }
+.email-fail-address { margin: 0; min-width: 0; font-weight: 600; color: var(--slate); overflow-wrap: anywhere; }
+.email-fail-address small { margin-left: 6px; font-weight: 400; color: var(--slate-soft); }
+.email-fail-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 18px; margin: 0; }
+.email-fail-actions .admin-btn, .email-fail-actions .admin-link { min-height: 44px; }
+.email-fail-own { margin: 0 0 4px; font-size: .82rem; color: var(--slate-soft); }
+.email-fail-problems { list-style: none; margin: 2px 0 0; padding: 0; font-size: .9rem; }
+.email-fail-problems li { padding: 3px 0; overflow-wrap: anywhere; }
+.email-fail-problems small { display: block; color: var(--slate-soft); }
+#view-email-audit[aria-busy="true"] [data-audit-stop], #view-email-audit[aria-busy="true"] [data-audit-tidy], #view-email-audit[aria-busy="true"] [data-audit-putback] { opacity: .6; cursor: progress; }
+/* The line above the band that says what a press did, with Put back in it. As tall empty as full:
+   measured in Chrome, .ty-status keeps 14px while empty and the line with words in it is 22px, so
+   the band moved down 8px at the first press. */
+#emailAuditSaid { line-height: 1.7; min-height: 1.7em; margin: 0 0 8px; }
 /* Fit the card: the shared .admin-table sets nowrap on every cell, so one long subject would
    scroll the whole card sideways (same fix the newsletter tables carry). Fixed layout, wrapping
    cells, and the date/type/status columns pinned so the subject takes what is left. */

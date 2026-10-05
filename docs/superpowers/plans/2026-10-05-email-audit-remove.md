@@ -23,7 +23,7 @@ screen), Cucumber for the end to end scenarios (CI only: there is no database on
 | File | Change |
 |---|---|
 | `src/email/audit-removals.ts` | new: `isCharityAddress` |
-| `migrations/1791200000260_email-audit-removals.js` | new table and its index |
+| `migrations/1791200000280_email-audit-removals.js` (written as 260, see As built) | new table and its index |
 | `src/db/email-audit-removals.ts` | new: record a removal, put back, why an address is blocked |
 | `src/db/email-log.ts` | the band's rule, the mark in the list, retention and erasure for the new table |
 | `src/routes/admin.ts` | `POST /api/admin/email-log/remove` and `/put-back` |
@@ -47,7 +47,7 @@ Test `test/unit/email-audit-removals-rules.test.ts`: `events@nbcc.scot`, `Events
 
 ## Task 2: the table
 
-`migrations/1791200000260_email-audit-removals.js` (must sort last: check at merge time).
+`migrations/1791200000280_email-audit-removals.js` (written as 260; must sort last: check at merge time).
 
 ```js
 pgm.createTable("email_audit_removals", {
@@ -189,12 +189,13 @@ Where this differs from the tasks above, this is what was built.
 - Two older paths forget a person in the log without `eraseEmailLogFor`: a sponsor's unpaid pledge
   (`src/db/pledges.ts`) and a cleared team invite (`src/db/fundraising-teams.ts`). The daily prune
   now also deletes any removal whose address no longer has a row in the log.
-- Another session's unpushed branch also had a migration numbered 1791200000260. It has since
-  renumbered its own to 1791200000270, so the names no longer tie. The order still matters: if
-  theirs reaches main first, this one (260) would sort before a migration production has already
-  run, and node-pg-migrate refuses that. So at merge time check `ls migrations | sort | tail`
-  against main, and if 270 is there, renumber this one above it. Whichever merges second also
-  takes the backup plan's counts to 90 tables in all and 87 in the main database.
+- Another session's branch also had a migration numbered 1791200000260, which it renumbered to
+  1791200000270 so the names would not tie. That one (the Fill a Red Bag lists, TASK-563) then
+  reached main and production first, while this was in review. A migration that sorts before one
+  production has already run stops every deploy at the migrate step, and CI's empty database
+  cannot show it. So this one became `1791200000280_email-audit-removals.js` before merging, its
+  test asserts that it sorts after 270, and the backup plan counts both new tables: 90 in all, 87
+  in the main database.
 
 **From the code review** (verdict: with fixes; two important, the rest smaller; all taken):
 

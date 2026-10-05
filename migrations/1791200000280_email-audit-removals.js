@@ -26,7 +26,9 @@
 // The index holds only the removals still in force, by address: that is the lookup the band makes.
 //
 // Additive only (golden rule 2), so a code rollback is safe: old code never reads the table.
-// Numbered 1791200000260: after the 250 on main.
+// Numbered 1791200000280: after the Fill a Red Bag lists' 270, which reached main and production
+// while this was in review. Written as 260; a migration that sorts before one production has
+// already run stops every deploy at the migrate step, and CI's empty database cannot show it.
 
 exports.shorthands = undefined;
 

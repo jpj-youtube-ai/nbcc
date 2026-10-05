@@ -11,17 +11,19 @@ import { fileURLToPath } from "node:url";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 const DIR = resolve(ROOT, "migrations");
-const FILE = "1791200000260_email-audit-removals.js";
+const FILE = "1791200000280_email-audit-removals.js";
 const src = readFileSync(resolve(DIR, FILE), "utf8");
 const up = src.slice(src.indexOf("exports.up"), src.indexOf("exports.down"));
 
 describe("email-audit-removals migration", () => {
-  // After the newest one on main when this was written. Not "is the last file": that would turn
-  // red for whoever adds the next migration.
-  it("sorts after the migration that was newest when it was written", () => {
+  // After the newest one production had run when this merged. It was written as 260; the Fill a
+  // Red Bag lists (270) reached main and production while it was in review, and a migration that
+  // sorts before one already run stops every deploy, so it became 280. Not "is the last file":
+  // that would turn red for whoever adds the next migration.
+  it("sorts after the newest migration production had run before it", () => {
     const names = readdirSync(DIR).filter((n) => n.endsWith(".js")).sort();
-    expect(names.indexOf("1791200000250_donation-source.js")).toBeGreaterThan(-1);
-    expect(names.indexOf(FILE)).toBeGreaterThan(names.indexOf("1791200000250_donation-source.js"));
+    expect(names.indexOf("1791200000270_red-bag-lists.js")).toBeGreaterThan(-1);
+    expect(names.indexOf(FILE)).toBeGreaterThan(names.indexOf("1791200000270_red-bag-lists.js"));
   });
 
   it("creates email_audit_removals: the address, the kind, who and when, and who put it back", () => {

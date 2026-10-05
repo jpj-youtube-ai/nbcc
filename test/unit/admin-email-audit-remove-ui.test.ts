@@ -78,7 +78,10 @@ function respond(method: string, path: string, body?: string) {
     if (path.endsWith("/remove")) {
       if (sent.stop && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(sent.email)) return j({ error: "Only an email address can be blocked" }, 400);
       if (sent.stop && isOwn(sent.email)) return j({ error: "The charity's own addresses are never blocked" }, 400);
-      if (!log.some((r) => r.recipient === sent.email && isProblem(r))) return j({ error: "That address has no problem in the Email audit" }, 404);
+      // Only an address with a problem that nobody has removed yet, as the route has it.
+      if (removals[sent.email] || !log.some((r) => r.recipient === sent.email && isProblem(r))) {
+        return j({ error: "That address has nothing left to remove" }, 404);
+      }
       const blockedNow = Boolean(sent.stop) && !blocked[sent.email];
       if (blockedNow) blocked[sent.email] = "manual";
       removals[sent.email] = { kind: sent.stop ? "stop" : "tidy", by: "admin@nbcc", at: REMOVED_AT, blocked: blockedNow };
@@ -304,16 +307,37 @@ describe("Just tidy away", () => {
   });
 
   // Somebody else erased its emails while this screen sat open: the server's own words, and the
-  // band is drawn again, since it was out of date.
-  it("says what the server said when the address is no longer one with a problem, and draws the list again", async () => {
+  // band is drawn again, since it was out of date. The button that was pressed goes with the
+  // band, so the keyboard goes to the line that says why.
+  it("says what the server said when the address has nothing left to remove, and draws the list again", async () => {
     await openAudit();
     log = log.filter((r) => r.recipient !== "bo@example.org");
     const loads = calls.filter((c) => c.method === "GET" && c.path === "/api/admin/email-log").length;
-    await press(tidyBtn("bo@example.org"));
-    expect(saidWords()).toBe("That address has no problem in the Email audit.");
+    const btn = tidyBtn("bo@example.org");
+    btn.focus();
+    await press(btn);
+    expect(saidWords()).toBe("That address has nothing left to remove.");
     expect(said().className).toBe("ty-status is-error");
     expect(calls.filter((c) => c.method === "GET" && c.path === "/api/admin/email-log")).toHaveLength(loads + 1);
     expect(blocks().map((b) => b.getAttribute("data-audit-address"))).not.toContain("bo@example.org");
+    expect(document.activeElement).toBe(said());
+  });
+
+  // A colleague pressed Remove and stop emails on it a moment ago, and this screen has not been
+  // drawn since. A tidy from here would be a second removal on top of theirs, with a Put back that
+  // undoes both and asks about neither. It is refused, and the band drawn again shows their stop.
+  it("does not remove again an address a colleague has just removed, and shows what they did", async () => {
+    await openAudit();
+    removals["ada@example.org"] = { kind: "stop", by: "colleague@nbcc.test", at: REMOVED_AT, blocked: true };
+    blocked["ada@example.org"] = "manual";
+    await press(tidyBtn("ada@example.org"));
+    expect(saidWords()).toBe("That address has nothing left to remove.");
+    expect(saidUndo()).toBeNull();
+    expect(removals["ada@example.org"].kind).toBe("stop");
+    expect(blocked["ada@example.org"]).toBe("manual");
+    expect(blocks().map((b) => b.getAttribute("data-audit-address"))).not.toContain("ada@example.org");
+    const theirs = listRows().find((tr) => (tr.textContent || "").includes("Removed, emails stopped, by colleague@nbcc.test")) as HTMLElement;
+    expect((theirs.querySelector("[data-audit-putback]") as HTMLElement).getAttribute("data-audit-kind")).toBe("stop");
   });
 
   it("sends one request for a double press, and shows the screen is busy until the answer", async () => {
@@ -483,7 +507,8 @@ describe("Put back", () => {
     await press(saidUndo() as HTMLElement);
     expect(confirmSays).toHaveLength(1);
     expect(confirmSays[0]).toContain("Put ada@example.org back?");
-    expect(confirmSays[0]).toContain("Its problems return to the list at the top.");
+    // The band holds 14 days: "its problems return" would not be true of an older removal.
+    expect(confirmSays[0]).toContain("Any problems it had in the last 14 days return to the list at the top.");
     expect(confirmSays[0]).toContain("newsletters and fundraising emails will go to it again");
     expect(posts()).toHaveLength(1);
     expect(blocks().map((b) => b.getAttribute("data-audit-address"))).not.toContain("ada@example.org");
@@ -533,10 +558,14 @@ describe("Put back", () => {
     await openAudit();
     await press(tidyBtn("ada@example.org"));
     delete removals["ada@example.org"];
-    await press(saidUndo() as HTMLElement);
+    const undo = saidUndo() as HTMLElement;
+    undo.focus(); // as a real press does
+    await press(undo);
     expect(saidWords()).toBe("That address had already been put back.");
     expect(saidUndo()).toBeNull();
     expect(blocks().map((b) => b.getAttribute("data-audit-address"))).toContain("ada@example.org");
+    // The Put back that was pressed has gone from the line: the keyboard stays on the line.
+    expect(document.activeElement).toBe(said());
   });
 });
 

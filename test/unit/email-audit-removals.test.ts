@@ -9,7 +9,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 const { queryMock } = vi.hoisted(() => ({ queryMock: vi.fn() }));
 vi.mock("../../src/db/pool", () => ({ pool: { query: queryMock, connect: vi.fn() } }));
 
-import { recordAuditRemoval, putBackAuditRemovals, blockedReason, hasEmailProblem } from "../../src/db/email-audit-removals";
+import { recordAuditRemoval, putBackAuditRemovals, blockedReason } from "../../src/db/email-audit-removals";
 
 const sqls = (): string[] => queryMock.mock.calls.map((c) => String(c[0]).replace(/\s+/g, " ").trim());
 
@@ -75,22 +75,5 @@ describe("blockedReason", () => {
   it("only ever reads the block list", async () => {
     await blockedReason("ada@example.org");
     expect(sqls().every((s) => /^select /i.test(s))).toBe(true);
-  });
-});
-
-// The routes remove only an address the log has a problem for: what the red band offers. Without
-// this the route would block any address handed to it.
-describe("hasEmailProblem", () => {
-  it("is true when the log holds a failed, bounced or complained email to the address", async () => {
-    queryMock.mockResolvedValueOnce({ rows: [{ "?column?": 1 }], rowCount: 1 });
-    expect(await hasEmailProblem("Ada@Example.org")).toBe(true);
-    expect(sqls()[0]).toMatch(
-      /^select 1 from email_log where recipient = lower\(\$1\) and \(status = 'failed' or delivery_status in \('bounced', 'complained'\)\) limit 1$/i,
-    );
-    expect(queryMock.mock.calls[0][1]).toEqual(["Ada@Example.org"]);
-  });
-
-  it("is false when every email to it arrived, or there are none", async () => {
-    expect(await hasEmailProblem("ada@example.org")).toBe(false);
   });
 });

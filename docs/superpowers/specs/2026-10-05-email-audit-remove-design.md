@@ -84,8 +84,9 @@ active block is still that manual one.
 
 - `POST /api/admin/email-log/remove` `{ email, stop }`. `email` is whatever the log holds for the
   row, not a checked address. 400 for none; 400 for `stop` on one of the charity's own addresses or
-  on something that is not an address; 404 for an address the log has no problem for, so the route
-  cannot be used to block anyone at all.
+  on something that is not an address; 404 for an address with no problem left to remove (none at
+  all, or all of them removed already), so the route cannot be used to block anyone at all and a
+  screen that is out of date cannot remove an address twice.
 - `POST /api/admin/email-log/put-back` `{ email }`. Answers `blockedBecause` (`bounced`,
   `complained`, `manual` or null) so the screen can say why an address is still blocked.
 

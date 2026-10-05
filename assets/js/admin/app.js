@@ -3304,7 +3304,9 @@
         if (status === 403) return emailAuditSay("You can no longer change the Email audit.", "is-error");
         if (status === 404) {
           // The screen was out of date: somebody else got there first, or the emails have gone.
-          emailAuditSay(retry ? "That address had already been put back." : (err.said || "That address is no longer in the list") + ".", "is-error");
+          // What was pressed goes when the list is drawn again, so the keyboard goes to the line.
+          emailAuditSay(retry ? "That address had already been put back." : (err.said || "That address has nothing left to remove") + ".", "is-error");
+          said.focus({ preventScroll: true });
           return loadEmailAudit(true);
         }
         if (status >= 400 && status < 500 && err.said) return emailAuditSay(err.said + ".", "is-error");
@@ -3338,13 +3340,14 @@
     });
   }
   // Putting back a stop can start emails to the address again, so it asks, as stopping did.
-  // Putting back a tidy changes nothing but the band.
+  // Putting back a tidy changes nothing but the band. The band holds 14 days, so the question
+  // promises no more than that: nothing comes back from a removal older than it.
   function emailAuditPutBack(email, kind) {
     if (emailAuditSaving) return;
     if (kind === "stop") {
       var asked = window.confirm(
-        "Put " + email + " back?\n\nIts problems return to the list at the top. If removing it is what stopped " +
-          "emails to it, newsletters and fundraising emails will go to it again.",
+        "Put " + email + " back?\n\nAny problems it had in the last 14 days return to the list at the top. If removing " +
+          "it is what stopped emails to it, newsletters and fundraising emails will go to it again.",
       );
       if (!asked) return;
     }

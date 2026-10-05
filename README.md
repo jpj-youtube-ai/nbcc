@@ -12384,9 +12384,12 @@ How it works:
   emails on an address already blocked for a bounce adds no "Blocked by staff" row: the removal
   itself is the record of what staff decided, with `blocked` false.
 - **Routes**, both needing email-audit edit: `POST /api/admin/email-log/remove` `{ email, stop }`
-  and `POST /api/admin/email-log/put-back` `{ email }`. Remove takes only an address the log has a
-  problem for (404 otherwise: it is not a way to block anyone at all), and refuses `stop` for one
-  of the charity's own addresses or for something that is not an address (400). Put back answers
+  and `POST /api/admin/email-log/put-back` `{ email }`. Remove takes only an address with a problem
+  that nobody has removed yet (`hasProblemToRemove`, the band's own rule; 404 otherwise). So it is
+  not a way to block anyone at all, and a screen that is out of date cannot remove an address a
+  second time: a tidy on top of a colleague's stop would leave a Put back that undoes both and
+  asks about neither. It refuses `stop` for one of the charity's own addresses or for something
+  that is not an address (400). Put back answers
   `blockedBecause` (`bounced`, `complained`, `manual` or null) so the screen can say why an
   address is still blocked. The screen says what a refusal is ("You can no longer change the
   Email audit", "That address had already been put back") and keeps "Please try again" for what

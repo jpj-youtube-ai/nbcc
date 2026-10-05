@@ -41,19 +41,6 @@ export async function putBackAuditRemovals(
   return { putBack: rows.length, blocked: rows.some((r) => r.blocked) };
 }
 
-// Does the log hold a problem for this address: a send that failed, bounced or was marked as spam?
-// That is what the red band offers for removal, and the routes remove nothing else, so they
-// cannot be used to block an address that has never had one.
-export async function hasEmailProblem(email: string): Promise<boolean> {
-  const { rows } = await pool.query(
-    `SELECT 1 FROM email_log
-      WHERE recipient = lower($1) AND (status = 'failed' OR delivery_status IN ('bounced', 'complained'))
-      LIMIT 1`,
-    [email],
-  );
-  return rows.length > 0;
-}
-
 // Why an address is blocked now ('bounced', 'complained' or 'manual'), or null when it is not.
 // Read here rather than added to src/db/email-suppressions.ts, which every newsletter send loads.
 export async function blockedReason(email: string): Promise<string | null> {

@@ -91,10 +91,14 @@ async function bounceArrives(messageId, email, at) {
   assert.strictEqual(res.status, 200, "expected the SES webhook to accept the event");
 }
 
+// The bounce's own time is the database's clock, not this process's. TASK-562 compares that time
+// with times the database stamps (when an address was removed from the band), and the two clocks
+// need not agree to the millisecond: a database in a container can run behind or ahead.
 When(
   "a bounce arrives for message id {string} to {string}",
   async function (messageId, email) {
-    await bounceArrives(messageId, email, new Date().toISOString());
+    const { rows } = await pool.query("SELECT now() AS at");
+    await bounceArrives(messageId, email, new Date(rows[0].at).toISOString());
   },
 );
 
@@ -320,11 +324,15 @@ Then("{string} is not blocked", async function (email) {
   assert.equal((await activeBlock(email)).rowCount, 0, `${email} is blocked`);
 });
 
-Then("{string} is still blocked because its mail bounced", async function (email) {
+async function blockedForBouncing(email) {
   const found = await activeBlock(email);
-  assert.equal(found.rowCount, 1, `${email} is no longer blocked`);
+  assert.equal(found.rowCount, 1, `${email} is not blocked`);
   assert.equal(found.rows[0].reason, "bounced");
-});
+}
+
+Then("{string} is still blocked because its mail bounced", blockedForBouncing);
+
+Then("{string} is blocked because its mail bounced", blockedForBouncing);
 
 // A bounced row is a problem too: "sent" by us, "bounced" by the mailbox, some time later.
 Then("the email audit failures should include a bounce to {string}", function (email) {

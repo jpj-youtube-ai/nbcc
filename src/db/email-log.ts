@@ -252,6 +252,27 @@ export async function listRecentEmailFailures(days = 14, limit = 25): Promise<Em
   return (rows as RawRow[]).map(rowOf);
 }
 
+// TASK-562: does this address have a problem that no removal already hides? That is what the band
+// offers for removal, and the routes remove nothing else. Asked with the band's own rule, and
+// without its 14 days: a problem that has aged out of the band since the screen was drawn is
+// harmless to remove. So the route cannot be used to block an address that never had a problem,
+// and a screen that is out of date cannot remove an address a second time (a "Just tidy away" on
+// top of a colleague's "Remove and stop emails" would leave a Put back that undoes both and asks
+// about neither).
+export async function hasProblemToRemove(email: string): Promise<boolean> {
+  const { rows } = await pool.query(
+    `SELECT 1 FROM email_log l
+      WHERE l.recipient = lower($1)
+        AND ${PROBLEM}
+        AND NOT EXISTS (
+          SELECT 1 FROM email_audit_removals r
+           WHERE ${REMOVAL_HIDES})
+      LIMIT 1`,
+    [email],
+  );
+  return rows.length > 0;
+}
+
 // Retention (6 years past tax-year-end — src/email/log-retention.ts). Called from the daily
 // runner; returns how many rows left, for its one-line summary.
 export async function pruneEmailLog(now: Date = new Date()): Promise<number> {

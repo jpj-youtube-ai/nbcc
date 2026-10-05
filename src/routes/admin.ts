@@ -83,7 +83,7 @@ import { buildMenuReadyEmail } from "../ball/menu-email";
 import { parseMenu } from "../ball/menu";
 import { archiveStory, restoreStory } from "../db/stories";
 import { recordErasure, listErasures } from "../db/erasure-log";
-import { listEmailLog, listRecentEmailFailures } from "../db/email-log";
+import { hasProblemToRemove, listEmailLog, listRecentEmailFailures } from "../db/email-log";
 import {
   listKnownBusinesses,
   createOutreach,
@@ -199,7 +199,7 @@ import {
   type SubscriberListRef,
 } from "../db/subscriber-lists";
 import { listSuppressions, suppressEmail, unsuppressEmail } from "../db/email-suppressions";
-import { blockedReason, hasEmailProblem, putBackAuditRemovals, recordAuditRemoval } from "../db/email-audit-removals";
+import { blockedReason, putBackAuditRemovals, recordAuditRemoval } from "../db/email-audit-removals";
 import { isCharityAddress, looksLikeAddress } from "../email/audit-removals";
 import {
   createSendJob,
@@ -2388,8 +2388,9 @@ export async function getAdminEmailLog(req: Request, res: Response): Promise<Res
 // site through a loose check, so the log has some a strict one refuses (a trailing full stop, two
 // dots): the provider refuses those outright, no bounce ever blocks them, and they are the ones
 // most in need of removing. A cleared team invite's rows read "deleted team invitee": those can be
-// tidied, and there is nothing there to block. And only an address the log has a problem for can
-// be removed, which is what the band offers: the route is not a way to block anyone at all.
+// tidied, and there is nothing there to block. And only an address with a problem that nobody has
+// removed yet can be removed, which is what the band offers: the route is not a way to block
+// anyone at all, and a screen that is out of date cannot remove an address a second time.
 const auditAddress = z.string().trim().min(1).max(320);
 const emailLogRemoveSchema = z.object({ email: auditAddress, stop: z.boolean() }).strict();
 
@@ -2406,8 +2407,8 @@ export async function postAdminEmailLogRemove(req: Request, res: Response): Prom
     return res.status(400).json({ error: "The charity's own addresses are never blocked" });
   }
   try {
-    if (!(await hasEmailProblem(email))) {
-      return res.status(404).json({ error: "That address has no problem in the Email audit" });
+    if (!(await hasProblemToRemove(email))) {
+      return res.status(404).json({ error: "That address has nothing left to remove" });
     }
     // Blocked BEFORE it is hidden. If the second write fails the address is blocked and its
     // problems still show, which staff can see and try again; the other way round would hide the

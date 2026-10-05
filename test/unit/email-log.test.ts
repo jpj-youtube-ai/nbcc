@@ -18,6 +18,7 @@ import {
   markEmailDelivery,
   listEmailLog,
   listRecentEmailFailures,
+  hasProblemToRemove,
   pruneEmailLog,
   eraseEmailLogFor,
 } from "../../src/db/email-log";
@@ -28,6 +29,10 @@ const paramsOf = (re: RegExp): unknown[] =>
   (queryMock.mock.calls.find((c) => re.test(String(c[0]))) || [])[1] as unknown[];
 // One line, one space between words, none just inside brackets: the SQL is laid out over many.
 const flat = (sql: string): string => sql.replace(/\s+/g, " ").replace(/\( /g, "(").replace(/ \)/g, ")").trim();
+// TASK-562: what a removal hides, in full. The band, the list's mark and the check before a
+// removal all carry this one rule, so none of the three can disagree with another.
+const REMOVAL_RULE =
+  /r\.email = l\.recipient and r\.put_back_at is null and \(coalesce\(l\.delivery_at, l\.created_at\) <= r\.removed_at or \(r\.kind = 'stop' and exists \(select 1 from email_suppressions s where lower\(s\.email\) = l\.recipient and s\.removed_at is null and s\.created_at <= r\.removed_at\)\)\)/i;
 
 beforeEach(() => {
   queryMock.mockReset();
@@ -188,6 +193,39 @@ describe("listRecentEmailFailures (the red band)", () => {
   });
 });
 
+// TASK-562: what a route may remove is what the band offers: an address with a problem that no
+// removal already hides. Asked with the band's own rule. So the route cannot be used to block an
+// address that never had a problem, and a screen that is out of date cannot remove an address a
+// second time: a "Just tidy away" on top of a colleague's "Remove and stop emails" would leave a
+// Put back that undoes both and asks about neither.
+describe("hasProblemToRemove", () => {
+  it("is true when the address has a problem that no removal hides", async () => {
+    queryMock.mockResolvedValueOnce({ rows: [{ "?column?": 1 }], rowCount: 1 });
+    expect(await hasProblemToRemove("Ada@Example.org")).toBe(true);
+    const sql = flat(sqlOf(/from email_log/i));
+    expect(sql).toMatch(
+      /^select 1 from email_log l where l\.recipient = lower\(\$1\) and \(l\.status = 'failed' or l\.delivery_status in \('bounced', 'complained'\)\) and not exists \(select 1 from email_audit_removals r where /i,
+    );
+    expect(sql).toMatch(/\) limit 1$/i);
+    expect(paramsOf(/from email_log/i)).toEqual(["Ada@Example.org"]);
+  });
+
+  it("uses the band's own rule for what is already hidden", async () => {
+    await hasProblemToRemove("ada@example.org");
+    expect(flat(sqlOf(/from email_log/i))).toMatch(REMOVAL_RULE);
+  });
+
+  it("is false when every problem it has is already removed, or it never had one", async () => {
+    expect(await hasProblemToRemove("ada@example.org")).toBe(false);
+  });
+
+  it("only reads", async () => {
+    await hasProblemToRemove("ada@example.org");
+    expect(queryMock).toHaveBeenCalledTimes(1);
+    expect(flat(String(queryMock.mock.calls[0][0]))).toMatch(/^select /i);
+  });
+});
+
 // TASK-562: nothing is deleted when an address is removed from the band. The full list keeps every
 // row and says, on the ones the band is hiding, who removed them and when.
 describe("listEmailLog marks what staff removed from the band", () => {
@@ -206,9 +244,8 @@ describe("listEmailLog marks what staff removed from the band", () => {
     queryMock.mockClear();
     await listEmailLog({ limit: 50, offset: 0 });
     const list = flat(sqlOf(/select id, kind/i));
-    const rule = /r\.email = l\.recipient and r\.put_back_at is null and \(coalesce\(l\.delivery_at, l\.created_at\) <= r\.removed_at or \(r\.kind = 'stop' and exists \(select 1 from email_suppressions s where lower\(s\.email\) = l\.recipient and s\.removed_at is null and s\.created_at <= r\.removed_at\)\)\)/i;
-    expect(band).toMatch(rule);
-    expect(list).toMatch(rule);
+    expect(band).toMatch(REMOVAL_RULE);
+    expect(list).toMatch(REMOVAL_RULE);
   });
 
   it("hands each row who removed it, when and how, or nulls", async () => {

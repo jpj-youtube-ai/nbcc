@@ -18,7 +18,10 @@ vi.mock("../../src/db/email-audit-removals", () => ({
   recordAuditRemoval: recordMock,
   putBackAuditRemovals: putBackMock,
   blockedReason: blockedReasonMock,
-  hasEmailProblem: hasProblemMock,
+}));
+vi.mock("../../src/db/email-log", async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  hasProblemToRemove: hasProblemMock,
 }));
 vi.mock("../../src/db/email-suppressions", async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
@@ -154,13 +157,14 @@ describe("POST /api/admin/email-log/remove", () => {
     nothingWritten();
   });
 
-  // What the band offers is an address with a problem. Without this, the route would block any
-  // address handed to it.
-  it.each([true, false])("404s an address the log has no problem for (stop %s), and writes nothing", async (stop) => {
+  // What the band offers is an address with a problem that nobody has removed yet. Without this
+  // the route would block any address handed to it, and a screen that is out of date could remove
+  // an address a second time: a tidy on top of a colleague's stop, whose Put back then undoes both.
+  it.each([true, false])("404s an address with nothing left to remove (stop %s), and writes nothing", async (stop) => {
     hasProblemMock.mockResolvedValueOnce(false);
     const res = await remove({ who: ADMIN, body: { email: "calum@example.com", stop } });
     expect(res.statusCode).toBe(404);
-    expect(res.body).toEqual({ error: "That address has no problem in the Email audit" });
+    expect(res.body).toEqual({ error: "That address has nothing left to remove" });
     expect(hasProblemMock).toHaveBeenCalledWith("calum@example.com");
     nothingWritten();
   });

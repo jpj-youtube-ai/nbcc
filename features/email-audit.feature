@@ -80,17 +80,32 @@ Feature: Email audit page (email-audit feature)
     And I fetch the email audit log
     Then the email audit failures should not include "stopped.audit.bdd@example.com"
 
-  # Several removals of one address are all undone by one put back.
+  # Several removals of one address are all undone by one put back. The second removal needs a new
+  # problem to remove: the first one's are already out of the band.
   Scenario: putting an address back returns its problems to the band and lifts the block that removing it made
     Given a newsletter admin "audit.back.bdd@example.com" with role "admin" and password "pw-ea6"
     And a failed "newsletter" email to "back.audit.bdd@example.com" is on record
     When I tidy "back.audit.bdd@example.com" away in the email audit
+    And a failed "newsletter" email to "back.audit.bdd@example.com" is on record
     And I remove "back.audit.bdd@example.com" from the email audit and stop emails to it
     And I put "back.audit.bdd@example.com" back in the email audit
     Then the email audit response status should be 200
     And "back.audit.bdd@example.com" is not blocked
     When I fetch the email audit log
     Then the email audit failures should include "back.audit.bdd@example.com"
+
+  # The commonest case: the mailbox bounced an email, staff saw it in the band, and tidied the
+  # address away.
+  Scenario: tidying an address away takes its bounce out of the band
+    Given a newsletter admin "audit.bounce.bdd@example.com" with role "admin" and password "pw-ea16"
+    And two sends to "bounced.audit.bdd@example.com" are on record, ids "msg-bounced-001" and "msg-bounced-002"
+    When a bounce arrives for message id "msg-bounced-001" to "bounced.audit.bdd@example.com"
+    And I fetch the email audit log
+    Then the email audit failures should include a bounce to "bounced.audit.bdd@example.com"
+    When I tidy "bounced.audit.bdd@example.com" away in the email audit
+    Then the email audit response status should be 200
+    When I fetch the email audit log
+    Then the email audit failures should not include "bounced.audit.bdd@example.com"
 
   # A problem is dated by when it went wrong, not when the email was sent. A bounce can arrive
   # hours or days after its email: one that arrives after the address was tidied away is new.
@@ -115,6 +130,22 @@ Feature: Email audit page (email-audit feature)
     And I fetch the email audit log
     Then the email audit failures should include "lifted.audit.bdd@example.com"
 
+  # And it holds only for the block of that time. Unblocked under Newsletter and then blocked again
+  # by a new bounce is a new block, made after the removal: what goes wrong from then on shows, as
+  # it does for any other address whose mail bounced.
+  Scenario: an address unblocked under Newsletter and then blocked again by a bounce still shows what follows
+    Given a newsletter admin "audit.again.bdd@example.com" with role "admin" and password "pw-ea15"
+    And a failed "newsletter" email to "again.audit.bdd@example.com" is on record
+    And two sends to "again.audit.bdd@example.com" are on record, ids "msg-again-001" and "msg-again-002"
+    When I remove "again.audit.bdd@example.com" from the email audit and stop emails to it
+    And I unblock "again.audit.bdd@example.com" under Newsletter
+    And a minute later a bounce arrives for message id "msg-again-001" to "again.audit.bdd@example.com"
+    Then "again.audit.bdd@example.com" is blocked because its mail bounced
+    When a failed "newsletter" email to "again.audit.bdd@example.com" is on record
+    And I fetch the email audit log
+    Then the email audit failures should include "again.audit.bdd@example.com"
+    And the email audit failures should include a bounce to "again.audit.bdd@example.com"
+
   # Addresses come in through a loose check, so the log holds some that a strict one refuses.
   # The provider refuses those outright, no bounce ever blocks them, and they come back to the
   # band on every send: these are the ones most in need of removing. And whatever is on the block
@@ -135,6 +166,20 @@ Feature: Email audit page (email-audit feature)
     When I remove "nobody.audit.bdd@example.com" from the email audit and stop emails to it
     Then the email audit response status should be 404
     And "nobody.audit.bdd@example.com" is not blocked
+
+  # Two members of staff have the same band open. One presses Remove and stop emails; the other's
+  # screen still shows the address. A second removal from there is refused, as there is nothing
+  # left to remove: a tidy on top of the stop would leave a Put back that undoes both and asks
+  # about neither.
+  Scenario: an address that has already been removed cannot be removed again from a screen that is out of date
+    Given a newsletter admin "audit.stale.bdd@example.com" with role "admin" and password "pw-ea17"
+    And a failed "newsletter" email to "stale.audit.bdd@example.com" is on record
+    When I remove "stale.audit.bdd@example.com" from the email audit and stop emails to it
+    And I tidy "stale.audit.bdd@example.com" away in the email audit
+    Then the email audit response status should be 404
+    And "stale.audit.bdd@example.com" is blocked by staff
+    When I fetch the email audit log
+    Then the email audit log still lists "stale.audit.bdd@example.com", marked as removed by "audit.stale.bdd@example.com", kind "stop"
 
   # Two older paths forget a person in the log directly, and know nothing of removals. The daily
   # task clears a removal once its address has no email left in the log.

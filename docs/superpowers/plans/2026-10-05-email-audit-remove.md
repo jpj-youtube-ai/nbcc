@@ -212,7 +212,8 @@ Where this differs from the tasks above, this is what was built.
 - **Still blocked means by the block of that time.** A stopped address that was unblocked under
   Newsletter and blocked again later by a new bounce went back to hiding everything. The rule now
   asks that the block was made on or before the removal.
-- **Only an address with a problem can be removed** (`hasEmailProblem`, 404 otherwise). Before,
+- **Only an address with a problem can be removed** (404 otherwise; the check was tightened again
+  in the second pass, below, and is `hasProblemToRemove` now). Before,
   the route would block any address handed to it.
 - **Put back** asks first when the removal stopped emails, since it can start them again. Its
   answer carries `blockedBecause` in place of `stillBlocked`, and the screen says which reason.
@@ -239,3 +240,33 @@ Where this differs from the tasks above, this is what was built.
   address unblocked under Newsletter shows the next time it fails; a badly formed address is
   stopped and then unblocked; an address with no problem is a 404; the daily prune forgets a
   removal whose address has no email left in the log and keeps one that has.
+
+**From the code review's second pass** (verdict: ready; six smaller points):
+
+- **Only what is still showing can be removed.** The check before a removal asked whether the log
+  had ever held a problem for the address. So a second member of staff, on a screen drawn before a
+  colleague pressed Remove and stop emails, could still press Just tidy away on the same address:
+  two removals in force, the list marked with the newer one (the tidy), and a Put back that undid
+  both, lifted the colleague's block, and asked nothing because it took itself for a tidy. The
+  check is now `hasProblemToRemove` (`src/db/email-log.ts`): a problem that no removal already
+  hides, by the band's own rule. The second press is a 404, "That address has nothing left to
+  remove.", and the band drawn again shows what the colleague did. Two presses that land in the
+  same instant can still both pass the check; that is left.
+- **The stop that outlived its block, proven end to end.** The scenario for an address unblocked
+  under Newsletter passed with or without the new condition, since nothing blocked the address
+  again in it. A second scenario blocks it again with a bounce and asks that what follows shows.
+- **A bounce hidden by a tidy made after it** had no scenario, and is the commonest case. It has
+  one. The bounce step takes its time from the database's clock, which is the clock a removal is
+  stamped by.
+- **The Put back question** said "Its problems return to the list at the top." The band holds 14
+  days, so for an older removal nothing returns. It says "Any problems it had in the last 14 days
+  return".
+- **The keyboard after a refusal.** On a 404 the list is drawn again and the button that was
+  pressed goes with it. The keyboard now goes to the line that says why, as it does on success.
+- **Known and left: Put back is two writes too.** The removals are stamped as put back, then the
+  block is read and lifted. If the database fails between the two, the screen says "Could not do
+  that. Please try again.", the second press is told "That address had already been put back.",
+  and the staff block is still there. Newsletter > Blocked addresses shows it and lifts it. It
+  takes a database error between two statements, so it is written down here and not built round.
+- **Known and left: the block list is never pruned.** A staff block stays on it for good, as a
+  bounce's does. How long a block is kept is a question for the block list as a whole.

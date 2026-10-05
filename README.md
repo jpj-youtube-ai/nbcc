@@ -194,6 +194,21 @@ ship. Every page now has the same full footer: the seven pages that once had a s
 its footer link to itself. The Festive Ball's server-built pages (guest details, thank you) carry
 only the legal strip and are not part of this.
 
+### Pages served below the top level use absolute asset addresses (TASK-564)
+
+Three pages are reached from an email at an address two or more levels deep: `portal.html` at
+`/portal/access`, `business-thank-you.html` at `/business/thank-you`, and `gift-aid.html` at
+`/api/gift-aid/<token>`. A relative `href="assets/css/styles.css"` there is asked for under
+`/portal/`, `/business/` or `/api/gift-aid/` and answers 404, so until 5 October 2026 all three
+opened with no styles and no scripts. They now ask for `/assets/...`, as `404.html` always has, and
+`test/unit/deep-pages-find-their-styles.test.ts` fails if any of them asks for anything by a
+relative address. A new page served at a deep address belongs in that test's list.
+
+The same test holds `.supporter-name{overflow-wrap:anywhere}` in `assets/css/styles.css`: a
+partner's name with no break point (place names joined by slashes) made the Supporters page 510px
+wide on a phone. `anywhere`, not `break-word`, because it also lets the card's grid column be
+narrower than the name.
+
 ### How NBCC describes itself
 
 The charity's own words, used exactly (`test/unit/charity-description.test.ts`): "volunteer led"

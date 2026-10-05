@@ -37,8 +37,10 @@
     />
     <meta name="twitter:image" content="https://nbcc.scot/assets/img/og-image.png" />
 
-    <link rel="stylesheet" href="assets/css/styles.css" />
-    <script defer src="assets/js/main.js"></script>
+    <!-- Absolute addresses, as 404.html: the emailed link opens this page at /portal/access,
+         where a relative one is asked for under /portal/ and is not found. -->
+    <link rel="stylesheet" href="/assets/css/styles.css" />
+    <script defer src="/assets/js/main.js"></script>
   </head>
   <body>
     <!-- Skip link (REQ-032): first focusable element; jumps to <main id="main">. -->

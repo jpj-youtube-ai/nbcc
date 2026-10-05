@@ -57,6 +57,9 @@ let timers: Array<() => void>;
 let listeners: Record<string, Array<() => void>>;
 let errors: ReturnType<typeof vi.spyOn>;
 let blobs: string[];
+let cleared: number[];
+/** The timers still set: asked for and not taken back. */
+const liveTimers = () => timers.filter((_, i) => !cleared.includes(i + 1));
 let revoked: string[];
 
 function fakeCanvas() {
@@ -90,6 +93,8 @@ function start(opts: Opts = {}) {
   const parsed = new DOMParser().parseFromString(opts.body ?? page, "text/html");
   document.body.innerHTML = parsed.body.innerHTML;
   document.documentElement.className = "";
+  // what an earlier test's page left in the head while its certificate was "printing"
+  document.head.querySelectorAll("style[data-rb-print-page]").forEach((el) => el.remove());
   const store = new Map(Object.entries(opts.kept ?? {}));
   if (opts.canvas) fakeCanvas();
   print = vi.fn();
@@ -99,6 +104,7 @@ function start(opts: Opts = {}) {
   listeners = {};
   blobs = [];
   revoked = [];
+  cleared = [];
   const win: Record<string, unknown> = {
     NBCCRedBag: catalogue,
     NBCCRedBagWorkshop: "workshop" in opts ? opts.workshop : workshop,
@@ -120,7 +126,10 @@ function start(opts: Opts = {}) {
     fetch: winFetch,
     addEventListener: (name: string, fn: () => void) => void (listeners[name] = listeners[name] ?? []).push(fn),
   };
-  if (opts.timers) win.setTimeout = (fn: () => void) => timers.push(fn);
+  if (opts.timers) {
+    win.setTimeout = (fn: () => void) => timers.push(fn);
+    win.clearTimeout = (id: number) => void cleared.push(id);
+  }
   return initThanks(document, win);
 }
 const kept = (gift: unknown) => ({ nbcc_red_bag_gift: JSON.stringify(gift) });
@@ -457,7 +466,8 @@ describe("the name field on the page", () => {
     expect(text('label[for="rbShareName"]')).toBe("Add a name to your picture (optional)");
     expect($('label[for="rbShareName"]').classList.contains("sr-only")).toBe(false);
     expect(input.type).toBe("text");
-    expect(input.maxLength).toBe(30);
+    // The script keeps it to 30 whole characters; the box's own limit would count half characters.
+    expect(input.hasAttribute("maxlength")).toBe(false);
     expect(input.hasAttribute("name")).toBe(false);
     expect(input.closest("form")).toBeNull();
     expect(input.required).toBe(false);
@@ -581,7 +591,12 @@ describe("the name field on the page", () => {
     expect(blobs.length).toBe(2);
     expect(save.getAttribute("href")).toBe(blobs[1]);
     expect(revoked).toEqual([blobs[0]]);
-    expect(navigated).toHaveBeenCalledTimes(1); // and the fresh one is
+    expect(navigated).toHaveBeenCalledTimes(1); // and the fresh one is,
+    // through a link of its own that is not in the page: the press is one click, not two
+    expect(navigated.mock.contexts[0]).not.toBe(save);
+    expect((navigated.mock.contexts[0] as HTMLAnchorElement).isConnected).toBe(false);
+    expect((navigated.mock.contexts[0] as HTMLAnchorElement).getAttribute("href")).toBe(blobs[1]);
+    expect((navigated.mock.contexts[0] as HTMLAnchorElement).getAttribute("download")).toBe("i-filled-a-red-bag.png");
     // Pressed again with nothing changed, it is simply saved.
     const again = new MouseEvent("click", { bubbles: true, cancelable: true });
     save.dispatchEvent(again);
@@ -604,14 +619,86 @@ describe("the name field on the page", () => {
     expect(press.defaultPrevented).toBe(false);
   });
 
-  it("says in the share's own words what the picture shows: no amount, and how many bags only when it does", () => {
+  it("says in the share's own words what the picture shows: how many bags only while the picture says so", () => {
+    const ONE = "It shows no amount, only that you filled a Red Bag.";
+    const MANY = "It shows no amount, only how many bags you filled.";
     start({ kept: gift(5410), canvas: true });
-    expect(text("[data-rb-share-note]")).toBe("It shows no amount, only that you filled a Red Bag.");
+    expect(text("[data-rb-share-note]")).toBe(ONE);
+    type("Fern");
+    expect(text("[data-rb-share-note]")).toBe(ONE);
     start({ canvas: true });
-    expect(text("[data-rb-share-note]")).toBe("It shows no amount, only that you filled a Red Bag.");
+    expect(text("[data-rb-share-note]")).toBe(ONE);
+    // Two bags, but no name: the picture reads "I filled a Red Bag", with no count on it.
     start({ kept: gift(10000), canvas: true });
-    expect(text("[data-rb-share-note]")).toBe("It shows no amount, only how many bags you filled.");
+    expect(drawn).toContain("I filled a Red Bag");
+    expect(text("[data-rb-share-note]")).toBe(ONE);
+    // With a name it counts the bags, and the sentence says so; and goes back when the name goes.
+    type("Fern");
+    expect(drawn).toContain("Fern filled 2 Red Bags");
+    expect(text("[data-rb-share-note]")).toBe(MANY);
+    type("");
+    expect(text("[data-rb-share-note]")).toBe(ONE);
+    type("shit");
+    expect(text("[data-rb-share-note]")).toBe(ONE);
     expect(text("[data-rb-share]")).not.toMatch(/says nothing about how much/);
+  });
+
+  it("keeps the box itself to 30 whole characters", () => {
+    start({ canvas: true });
+    expect(type("The Willowbank Street Knitting Circle of Friends").value).toBe("The Willowbank Street Knitting");
+    expect(Array.from(type("\u{1D4D0}".repeat(34)).value).length).toBe(30);
+  });
+
+  it("never hands over a picture that has been redrawn since the file was made", () => {
+    start({ canvas: true });
+    const save = $<HTMLAnchorElement>("[data-rb-share-save]");
+    // From here the browser takes its time to make the file.
+    const waiting: Array<() => void> = [];
+    HTMLCanvasElement.prototype.toBlob = function (cb: BlobCallback) {
+      const words = drawn.join("|");
+      waiting.push(() => cb(new Blob(["PNG:" + words], { type: "image/png" })));
+    };
+    const first = save.getAttribute("href");
+    type("Fern");
+    save.dispatchEvent(new Event("pointerenter")); // a file of "Fern" is being made
+    expect(waiting.length).toBe(1);
+    type("Fern Maplewood"); // and the picture is redrawn before it lands
+    waiting.shift()!();
+    // The late one is not used: Save still points at the old file, and a new one is being made.
+    expect(save.getAttribute("href")).toBe(first);
+    expect(blobs.length).toBe(1);
+    expect(waiting.length).toBe(1);
+    const press = new MouseEvent("click", { bubbles: true, cancelable: true });
+    save.dispatchEvent(press);
+    expect(press.defaultPrevented).toBe(true);
+    while (waiting.length) waiting.shift()!();
+    expect(blobs.length).toBe(2);
+    expect(save.getAttribute("href")).toBe(blobs[1]);
+    const again = new MouseEvent("click", { bubbles: true, cancelable: true });
+    save.dispatchEvent(again);
+    expect(again.defaultPrevented).toBe(false);
+  });
+
+  it("says so plainly when the file cannot be made", () => {
+    start({ canvas: true });
+    const save = $<HTMLAnchorElement>("[data-rb-share-save]");
+    type("Fern");
+    HTMLCanvasElement.prototype.toBlob = function (cb: BlobCallback) {
+      cb(null);
+    };
+    const press = new MouseEvent("click", { bubbles: true, cancelable: true });
+    save.dispatchEvent(press);
+    expect(press.defaultPrevented).toBe(true);
+    expect(text("[data-rb-share-status]")).toBe("Sorry, that didn't work. Please try again.");
+    // and when the browser throws instead
+    start({ canvas: true });
+    type("Fern");
+    HTMLCanvasElement.prototype.toBlob = function () {
+      throw new Error("no");
+    };
+    $<HTMLAnchorElement>("[data-rb-share-save]").dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
+    expect(text("[data-rb-share-status]")).toBe("Sorry, that didn't work. Please try again.");
+    expect(errors).not.toHaveBeenCalled();
   });
 
   it("waits while a letter with an accent is being put together, then reads it", () => {
@@ -725,19 +812,89 @@ describe("the certificate to print", () => {
     expect(text("[data-rb-cert]")).not.toMatch(/£|150/);
   });
 
-  it("lets go of the print mark by the clock and when the window is looked at again, where printing does nothing", () => {
+  const marked = () => document.documentElement.classList.contains("rb-print-cert");
+  const pageRule = () => document.querySelector("style[data-rb-print-page]");
+  const fire = (name: string) => {
+    for (const fn of listeners[name] ?? []) fn();
+  };
+
+  it("prints on a sheet with no margin, by a rule that is in the page only while the certificate prints", () => {
+    start({ canvas: true });
+    expect(pageRule()).toBeNull();
+    type("Fern");
+    $<HTMLButtonElement>("[data-rb-cert-print]").click();
+    expect(marked()).toBe(true);
+    expect(pageRule()!.textContent!.replace(/\s+/g, "")).toBe("@page{size:A4portrait;margin:0}");
+    expect(pageRule()!.parentNode).toBe(document.head);
+    fire("afterprint");
+    expect(marked()).toBe(false);
+    expect(pageRule()).toBeNull();
+    // and only ever one of them
+    $<HTMLButtonElement>("[data-rb-cert-print]").click();
+    $<HTMLButtonElement>("[data-rb-cert-print]").click();
+    expect(document.querySelectorAll("style[data-rb-print-page]").length).toBe(1);
+    fire("afterprint");
+    expect(pageRule()).toBeNull();
+  });
+
+  it("holds the mark for as long as the print window is open: no clock takes it away", () => {
     start({ canvas: true, timers: true });
     type("Fern");
-    const before = timers.length;
+    // a browser whose print() says "before print" at once and comes straight back (a phone)
+    print.mockImplementation(() => fire("beforeprint"));
     $<HTMLButtonElement>("[data-rb-cert-print]").click();
-    expect(document.documentElement.classList.contains("rb-print-cert")).toBe(true);
-    expect(timers.length).toBe(before + 1);
-    timers[timers.length - 1]();
-    expect(document.documentElement.classList.contains("rb-print-cert")).toBe(false);
+    expect(marked()).toBe(true);
+    // however long the donor takes, nothing set by the page unmarks it
+    for (const t of liveTimers()) t();
+    expect(marked()).toBe(true);
+    expect(pageRule()).not.toBeNull();
+    fire("afterprint");
+    expect(marked()).toBe(false);
+  });
+
+  it("prints the page, not the certificate, on a later ordinary print where the button's print did nothing", () => {
+    start({ canvas: true, timers: true });
+    type("Fern");
+    $<HTMLButtonElement>("[data-rb-cert-print]").click(); // print() is a silent no-op here
+    expect(marked()).toBe(true);
+    for (const t of liveTimers()) t(); // a moment passes
+    expect(marked()).toBe(true);
+    fire("beforeprint"); // the donor's own Ctrl+P, later
+    expect(marked()).toBe(false);
+    expect(pageRule()).toBeNull();
+  });
+
+  it("does not take the button's own print for an ordinary one, even where it is announced a moment late", () => {
+    start({ canvas: true, timers: true });
+    type("Fern");
     $<HTMLButtonElement>("[data-rb-cert-print]").click();
-    expect(document.documentElement.classList.contains("rb-print-cert")).toBe(true);
-    for (const fn of listeners.focus ?? []) fn();
-    expect(document.documentElement.classList.contains("rb-print-cert")).toBe(false);
+    fire("beforeprint"); // this print, announced after print() came back
+    expect(marked()).toBe(true);
+    fire("afterprint");
+    expect(marked()).toBe(false);
+  });
+
+  it("leaves no timers piling up when the button is pressed again and again", () => {
+    start({ canvas: true, timers: true });
+    type("Fern");
+    const before = liveTimers().length;
+    $<HTMLButtonElement>("[data-rb-cert-print]").click();
+    $<HTMLButtonElement>("[data-rb-cert-print]").click();
+    $<HTMLButtonElement>("[data-rb-cert-print]").click();
+    expect(liveTimers().length - before).toBeLessThanOrEqual(1);
+    expect(marked()).toBe(true);
+  });
+
+  it("lets go of the mark when the window is looked at again, but not in the moment the print window opens", () => {
+    start({ canvas: true });
+    type("Fern");
+    // a browser that says the window has the focus while print() is still being called
+    print.mockImplementation(() => fire("focus"));
+    $<HTMLButtonElement>("[data-rb-cert-print]").click();
+    expect(marked()).toBe(true);
+    fire("focus");
+    expect(marked()).toBe(false);
+    expect(pageRule()).toBeNull();
   });
 
   it("sets a long name a little smaller, so the page is always one page", () => {
@@ -854,7 +1011,8 @@ describe("the site's visit counter never learns the name, or anything made from 
     save.dispatchEvent(new Event("pointerenter"));
     save.click();
     const clicks = sent.map((s) => JSON.parse(s)).filter((p) => p.t === "click");
-    expect(clicks.length).toBeGreaterThanOrEqual(2);
+    // one press, one click told: the stale press, then the fresh one
+    expect(clicks.length).toBe(2);
     for (const c of clicks) {
       expect(c.k).toBe("download");
       // a made up id for the blob, or the page's own address: nothing else

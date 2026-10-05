@@ -69,7 +69,7 @@ describe("the thank you page, with its feel good pieces", () => {
     expect(norm(name.querySelector("label")?.textContent)).toBe("Add a name to your picture (optional)");
     const input = name.querySelector("input")!;
     expect(name.querySelector("label")!.getAttribute("for")).toBe(input.id);
-    expect(input.getAttribute("maxlength")).toBe("30");
+    expect(input.hasAttribute("maxlength")).toBe(false); // the script keeps it to 30 whole characters
     expect(input.getAttribute("autocomplete")).toBe("off");
     expect(norm(name.querySelector(".rb-name__hint")?.textContent)).toBe("A first name, a family, a class or a workplace. It goes on your certificate too, and it never leaves this page.");
     const error = name.querySelector("[data-rb-name-error]")!;
@@ -122,7 +122,13 @@ describe("the thank you page, with its feel good pieces", () => {
     // browser's own header and footer (the address and the date).
     expect(rules).toMatch(/\.rb-cert\{[^}]*display:none/);
     expect(rules).toMatch(/@media print\{[\s\S]*\.rb-print-cert \.rb-cert\{[^}]*display:flex/);
-    expect(rules).toMatch(/@page rbcert\{size:A4 portrait;margin:0\}/);
+    // One page whatever the browser's margins and whether or not it knows named pages (Safari does
+    // not): no named page, and every size on the certificate is a share of the printable page.
+    expect(rules).not.toMatch(/@page|page:\s*rbcert/);
+    expect(rules).toMatch(/\.rb-cert\{[^}]*--u:min\(calc\(100vw \/ 210\),calc\(100vh \/ 297\)\)/);
+    expect(rules).toMatch(/\.rb-print-cert \.rb-cert\{[^}]*break-inside:avoid;[^}]*break-after:avoid/);
+    const certRules = [...rules.matchAll(/(\.rb-cert[^{]*)\{([^}]*)\}/g)].filter((m) => !/rb-cert-ask/.test(m[1])).map((m) => m[2]).join(";");
+    expect(certRules.match(/\d(mm|pt|px|cm|in)\b/g) ?? []).toEqual([]);
   });
 
   it("says honestly what the picture shows: no amount, only the bag", () => {

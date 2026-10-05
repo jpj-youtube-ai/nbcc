@@ -208,54 +208,62 @@
 }
 
 /* ---- the certificate: never on the screen. "Print your certificate" marks the page
-   (.rb-print-cert on <html>) and the print rules below show it alone, on one upright A4 sheet.
-   The sheet's own edge is in the drawing (12mm of white), so the paper needs no margin, which also
-   leaves the browser no room to print its own header and footer (the address and the date).
-   Sizes are a printer's: millimetres and points. ---- */
-.rb-cert{display:none}
-.rb-cert__frame{flex:1;display:flex;padding:5mm;background:var(--maroon);border-radius:3mm}
+   (.rb-print-cert on <html>) and the print rules below show it alone, on one upright sheet.
+
+   ONE page, whatever the browser does with the paper. The script asks for A4 with no margin while
+   the certificate prints (an ordinary @page rule it puts in and takes out: assets/js/
+   red-bag-thanks.js), and the certificate draws its own white edge. But it does not depend on
+   that: every size here is a share of the printable page, --u, which is a millimetre on A4 with
+   no margin and a little less on a page with the browser's own margins or on other paper. So
+   where the paper rule is ignored (Safari and older Firefox handle @page differently) the same
+   certificate prints a touch smaller, whole, on one sheet. ---- */
+.rb-cert{display:none;--u:min(calc(100vw / 210),calc(100vh / 297))}
+.rb-cert__frame{flex:1;display:flex;min-height:0;padding:calc(5 * var(--u));background:var(--maroon);border-radius:calc(3 * var(--u))}
 .rb-cert__sheet{
   --rbw-hand:"Caveat","Bradley Hand","Segoe Print","Noteworthy","Chalkboard SE","Ink Free","Comic Sans MS",cursive;
   --rbw-gold-edge:color-mix(in srgb,var(--gold-ink) 60%,var(--maroon));
   flex:1;position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;
-  padding:13mm 18mm 11mm;text-align:center;min-height:0;
-  background:var(--cream);border-radius:1.5mm;
+  padding:calc(12 * var(--u)) calc(18 * var(--u)) calc(11 * var(--u));text-align:center;min-height:0;
+  background:var(--cream);border-radius:calc(1.5 * var(--u));
   font-family:var(--font-body);color:var(--slate);
 }
 /* two fine gold lines inside the maroon, as on the fundraisers' certificate */
-.rb-cert__sheet::before{content:"";position:absolute;inset:4.5mm;border:.45mm solid var(--gold-ink);border-radius:2mm}
-.rb-cert__sheet::after{content:"";position:absolute;inset:6.5mm;border:.2mm solid var(--gold-ink);border-radius:1.5mm;opacity:.55}
-.rb-cert__sheet p{margin:0;max-width:none}
-.rb-cert__logo{display:block;width:34mm;height:auto}
-.rb-cert .rb-cert__title{margin-top:5mm;font-family:var(--font-head);font-weight:700;font-size:36pt;line-height:1.05;letter-spacing:.01em;color:var(--maroon)}
-.rb-cert .rb-cert__orn{display:flex;align-items:center;gap:4mm;margin-top:4.5mm;font-size:11pt;line-height:1;color:var(--gold-ink)}
-.rb-cert__orn::before,.rb-cert__orn::after{content:"";width:30mm;height:.25mm;background:var(--gold-ink);opacity:.7}
-.rb-cert .rb-cert__to{margin-top:8mm;padding-left:.24em;font-size:9.5pt;font-weight:600;letter-spacing:.24em;text-transform:uppercase;color:var(--slate-soft)}
-.rb-cert .rb-cert__name.is-long{font-size:26pt}
-.rb-cert .rb-cert__name{max-width:150mm;margin-top:3.5mm;font-family:var(--font-head);font-weight:700;font-size:32pt;line-height:1.12;color:var(--maroon);overflow-wrap:anywhere;text-wrap:balance}
-.rb-cert .rb-cert__for{margin-top:4mm;font-family:var(--font-head);font-style:italic;font-size:17pt;line-height:1.3;color:var(--crimson)}
-.rb-cert__bag{width:36mm;margin-top:7mm}
-.rb-cert .rb-cert__hand{margin-top:6mm;font-family:var(--rbw-hand);font-weight:700;font-size:25pt;line-height:1.1;color:var(--maroon)}
+.rb-cert__sheet::before{content:"";position:absolute;inset:calc(4.5 * var(--u));border:calc(0.45 * var(--u)) solid var(--gold-ink);border-radius:calc(2 * var(--u))}
+.rb-cert__sheet::after{content:"";position:absolute;inset:calc(6.5 * var(--u));border:calc(0.2 * var(--u)) solid var(--gold-ink);border-radius:calc(1.5 * var(--u));opacity:.55}
+.rb-cert__sheet p{margin:0;max-width:100%}
+.rb-cert__logo{display:block;width:calc(34 * var(--u));height:auto}
+.rb-cert .rb-cert__title{margin-top:calc(5 * var(--u));font-family:var(--font-head);font-weight:700;font-size:calc(12.7 * var(--u));line-height:1.05;letter-spacing:.01em;color:var(--maroon)}
+.rb-cert .rb-cert__orn{display:flex;align-items:center;gap:calc(4 * var(--u));margin-top:calc(4 * var(--u));font-size:calc(3.88 * var(--u));line-height:1;color:var(--gold-ink)}
+.rb-cert__orn::before,.rb-cert__orn::after{content:"";width:calc(30 * var(--u));height:calc(0.25 * var(--u));background:var(--gold-ink);opacity:.7}
+.rb-cert .rb-cert__to{margin-top:calc(7 * var(--u));padding-left:.24em;font-size:calc(3.35 * var(--u));font-weight:600;letter-spacing:.24em;text-transform:uppercase;color:var(--slate-soft)}
+/* the name: smaller as it gets longer, so two lines of the widest letters still leave room */
+.rb-cert .rb-cert__name{max-width:100%;margin-top:calc(3 * var(--u));font-family:var(--font-head);font-weight:700;font-size:calc(11.29 * var(--u));line-height:1.12;color:var(--maroon);overflow-wrap:anywhere;text-wrap:balance}
+.rb-cert .rb-cert__name.is-long{font-size:calc(9.17 * var(--u))}
+.rb-cert .rb-cert__name.is-longer{font-size:calc(7.41 * var(--u))}
+.rb-cert .rb-cert__for{margin-top:calc(3.5 * var(--u));font-family:var(--font-head);font-style:italic;font-size:calc(6 * var(--u));line-height:1.3;color:var(--crimson)}
+.rb-cert__bag{width:calc(33 * var(--u));margin-top:calc(6 * var(--u))}
+.rb-cert .rb-cert__hand{margin-top:calc(5 * var(--u));font-family:var(--rbw-hand);font-weight:700;font-size:calc(8.82 * var(--u));line-height:1.1;color:var(--maroon)}
 /* two signatures in the same hand, side by side, and the date centred under them */
-.rb-cert__sign{display:flex;justify-content:space-between;align-items:flex-end;width:100%;max-width:140mm;margin-top:6mm}
-.rb-cert__signed{display:flex;flex-direction:column;width:64mm}
+.rb-cert__sign{display:flex;justify-content:space-between;align-items:flex-end;width:100%;margin-top:calc(5 * var(--u))}
+.rb-cert__signed{display:flex;flex-direction:column;width:48%}
 .rb-cert__signed span,.rb-cert__dated span{display:flex;align-items:flex-end;justify-content:center}
-.rb-cert__signed span{min-height:12mm}
-.rb-cert__hand-name{font-family:var(--rbw-hand);font-weight:700;font-size:30pt;line-height:.9;color:var(--crimson)}
-.rb-cert__signed i,.rb-cert__dated i{display:block;height:.3mm;margin:1.5mm 0;background:var(--maroon);opacity:.45}
-.rb-cert__signed small,.rb-cert__dated small{font-size:7pt;font-weight:600;letter-spacing:.14em;text-transform:uppercase;white-space:nowrap;color:var(--slate-soft)}
-.rb-cert__dated{display:flex;flex-direction:column;width:46mm;margin-top:4mm}
-.rb-cert__date{font-family:var(--font-head);font-weight:700;font-size:12.5pt;color:var(--slate)}
-.rb-cert .rb-cert__legal{max-width:150mm;margin-top:8mm;font-size:7.5pt;line-height:1.5;color:var(--slate-soft);text-wrap:balance}
+.rb-cert__signed span{min-height:calc(12 * var(--u))}
+.rb-cert__hand-name{font-family:var(--rbw-hand);font-weight:700;font-size:calc(10.58 * var(--u));line-height:.9;color:var(--crimson)}
+.rb-cert__signed i,.rb-cert__dated i{display:block;height:calc(0.3 * var(--u));margin:calc(1.5 * var(--u)) 0;background:var(--maroon);opacity:.45}
+.rb-cert__signed small,.rb-cert__dated small{font-size:calc(2.4 * var(--u));font-weight:600;letter-spacing:.1em;text-transform:uppercase;white-space:nowrap;color:var(--slate-soft)}
+.rb-cert__dated{display:flex;flex-direction:column;width:34%;margin-top:calc(3 * var(--u))}
+.rb-cert__date{font-family:var(--font-head);font-weight:700;font-size:calc(4.41 * var(--u));color:var(--slate)}
+.rb-cert .rb-cert__legal{max-width:100%;margin-top:calc(6 * var(--u));font-size:calc(2.65 * var(--u));line-height:1.5;color:var(--slate-soft);text-wrap:balance}
 
-@page rbcert{size:A4 portrait;margin:0}
 @media print{
   .rb-print-cert,.rb-print-cert body{margin:0;padding:0;background:var(--white)}
   .rb-print-cert body>:not(main),.rb-print-cert main>:not(.rb-cert){display:none !important}
   .rb-print-cert main{margin:0;padding:0}
   .rb-print-cert .rb-cert{
-    display:flex;page:rbcert;box-sizing:border-box;width:210mm;height:296mm;padding:12mm;
-    break-inside:avoid;-webkit-print-color-adjust:exact;print-color-adjust:exact;
+    display:flex;box-sizing:border-box;margin:0 auto;
+    width:calc(210 * var(--u));height:calc(296 * var(--u));padding:calc(12 * var(--u));
+    break-inside:avoid;break-after:avoid;overflow:hidden;
+    -webkit-print-color-adjust:exact;print-color-adjust:exact;
   }
 }
 

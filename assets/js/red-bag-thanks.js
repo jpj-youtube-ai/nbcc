@@ -256,7 +256,9 @@
       // compositionend reads it once it is whole.
       if (e && e.type === "input" && e.isComposing) return;
       var typed = input.value;
-      var kept = keepChars(typed);
+      // What is kept, and no more than 30 whole characters of it (the box has no limit of its own:
+      // that would count half characters).
+      var kept = chars(keepChars(typed)).slice(0, NAME_MAX).join("");
       if (kept !== typed) {
         // Something typed is not kept. Put the caret back where it was, not at the end.
         var caret = null;
@@ -300,11 +302,17 @@
   }
 
   // --- what the picture shows, said honestly ---------------------------------------------------------------
-  // The page says "only that you filled a Red Bag". Where the picture and the certificate can say
-  // how many bags, the sentence says so. Never an amount either way.
+  // The page says "only that you filled a Red Bag". While the picture itself says how many bags
+  // (a name, and two bags or more), the sentence says so. Never an amount either way.
   function sayWhatItShows(doc, st) {
     var note = doc.querySelector("[data-rb-share-note]");
-    if (note && st.bags >= 2) setText(note, "It shows no amount, only how many bags you filled.");
+    if (!note) return;
+    function say() {
+      // The picture counts the bags only beside a name ("Fern filled 2 Red Bags").
+      setText(note, st.name && st.bags >= 2 ? "It shows no amount, only how many bags you filled." : "It shows no amount, only that you filled a Red Bag.");
+    }
+    st.changed.push(say);
+    say();
   }
 
   // --- the certificate to print ---------------------------------------------------------------------------
@@ -312,10 +320,19 @@
   // while <html> carries rb-print-cert, the print stylesheet shows the certificate alone on one A4
   // sheet. No file is made and nothing is sent.
   var PRINT_CLASS = "rb-print-cert";
-  // Long enough for a phone's print preview to have been drawn; print() itself holds the clock
-  // while a desktop's print window is open.
-  var PRINT_LET_GO_MS = 30000;
-  var LONG_NAME = 20;
+  // The paper for the certificate: A4, upright, no margin (the certificate draws its own white
+  // edge, and with no margin the browser has no room for its own header and footer). An ordinary
+  // @page rule, which every browser that honours @page understands, put in the page only while the
+  // certificate prints so that an ordinary print of the page keeps the browser's own margins. The
+  // certificate sizes itself to whatever page it is given, so it is one page even where this rule
+  // is ignored.
+  var PAGE_RULE = "@page{size:A4 portrait;margin:0}";
+  // How long after the button a "before print" is taken to be the button's own. It only tells the
+  // button's print from a later ordinary one; it never takes the mark away.
+  var OWN_PRINT_MS = 2000;
+  // Names longer than these are set smaller, so the certificate is always one page.
+  var LONG_NAME = 16;
+  var LONGER_NAME = 24;
   function initCertificate(doc, win, st, named) {
     var ask = doc.querySelector("[data-rb-cert-ask]");
     var button = ask ? ask.querySelector("[data-rb-cert-print]") : null;
@@ -351,24 +368,67 @@
       setText(status, "");
       var nameEl = cert.querySelector("[data-rb-cert-name]");
       setText(nameEl, st.name);
-      // A long name is set a little smaller, so the certificate is always one page.
-      if (nameEl) nameEl.classList[chars(st.name).length > LONG_NAME ? "add" : "remove"]("is-long");
+      if (nameEl) {
+        var length = chars(st.name).length;
+        nameEl.classList[length > LONG_NAME ? "add" : "remove"]("is-long");
+        nameEl.classList[length > LONGER_NAME ? "add" : "remove"]("is-longer");
+      }
       setText(cert.querySelector("[data-rb-cert-for]"), certificateFor(st.bags));
       setText(cert.querySelector("[data-rb-cert-date]"), longDate(new Date()));
-      root.classList.add(PRINT_CLASS);
-      win.print();
-      // Where printing quietly does nothing (some browsers inside apps), nothing ever says it is
-      // over: let go of the mark by the clock too, so a later ordinary print prints the page.
-      if (typeof win.setTimeout === "function") win.setTimeout(unmark, PRINT_LET_GO_MS);
+      mark();
+      // This print is the button's own. Some browsers say "before print" inside print(), some a
+      // moment after it has come back; either way that one is not an ordinary print.
+      own = true;
+      if (ownTimer !== null && typeof win.clearTimeout === "function") win.clearTimeout(ownTimer);
+      ownTimer = typeof win.setTimeout === "function" ? win.setTimeout(disown, OWN_PRINT_MS) : null;
+      opening = true;
+      try {
+        win.print();
+      } finally {
+        opening = false;
+      }
     });
-    // Printed, or the print window closed, or the window looked at again: the page prints as a
-    // page again.
+
+    // The mark (and the paper rule with it) stays for as long as the print window may be open: no
+    // clock takes it away, because on a phone print() comes straight back while the donor is still
+    // looking at the preview. It comes off when the browser says printing is over, when the window
+    // is looked at again, and when an ordinary print starts (so that, where the button's print
+    // quietly did nothing, a later print of the page prints the page).
+    var own = false;
+    var ownTimer = null;
+    var opening = false;
+    var pageRule = null;
+    function mark() {
+      root.classList.add(PRINT_CLASS);
+      if (!pageRule && doc.head) {
+        pageRule = doc.createElement("style");
+        pageRule.setAttribute("data-rb-print-page", "");
+        pageRule.textContent = PAGE_RULE;
+        doc.head.appendChild(pageRule);
+      }
+    }
     function unmark() {
       root.classList.remove(PRINT_CLASS);
+      if (pageRule && pageRule.parentNode) pageRule.parentNode.removeChild(pageRule);
+      pageRule = null;
+    }
+    function disown() {
+      own = false;
+      ownTimer = null;
     }
     if (typeof win.addEventListener === "function") {
+      win.addEventListener("beforeprint", function () {
+        if (own) {
+          own = false;
+          return;
+        }
+        unmark();
+      });
       win.addEventListener("afterprint", unmark);
-      win.addEventListener("focus", unmark);
+      win.addEventListener("focus", function () {
+        // not in the moment the button is opening the print window
+        if (!opening) unmark();
+      });
     }
     ask.hidden = false;
     return ask;
@@ -510,7 +570,7 @@
       }
       if (!done) return false;
       canvas.setAttribute("aria-label", "A red paper gift bag on cream, with the words: " + pictureHeadline(name, bags) + ". Night Before Christmas Campaign.");
-      fresh = false; // the file to save is now behind the picture
+      drawnAt += 1; // the file to save is now behind the picture
       return true;
     }
 
@@ -519,34 +579,65 @@
     // anything that reads link addresses, as the site's visit counter does for downloads.) The
     // file is made when it is wanted (the pointer or the keyboard reaches Save, or it is pressed),
     // not for every letter typed, and the one before it is let go.
-    var fresh = false;
+    var drawnAt = 0; // counts the picture's redraws
+    var madeAt = -1; // the redraw the file to save was made from
     var saveUrl = "";
+    function fresh() {
+      return !!saveUrl && madeAt === drawnAt;
+    }
     var urls = win.URL;
     var canSave = !!save && typeof canvas.toBlob === "function" && !!urls && typeof urls.createObjectURL === "function";
-    function makeFile(then) {
-      if (!canSave || fresh) return;
-      canvas.toBlob(function (blob) {
-        if (!blob) return;
-        var next = "";
-        try {
-          next = urls.createObjectURL(blob);
-        } catch (e) {
-          next = "";
-        }
-        if (!next) return;
-        if (saveUrl && typeof urls.revokeObjectURL === "function") {
-          try {
-            urls.revokeObjectURL(saveUrl);
-          } catch (e) {
-            /* it is let go with the page */
-          }
-        }
-        saveUrl = next;
-        save.href = next;
-        save.hidden = false;
-        fresh = true;
+    // Make the file from the picture as it now is. The browser hands the file back a moment later;
+    // if the picture has been redrawn by then (another letter typed), that file is of the old
+    // picture: it is not used, and one is made again. `then` runs once Save points at a file of the
+    // picture as it stands; `failed` if no file could be made.
+    function makeFile(then, failed) {
+      if (!canSave) return;
+      if (fresh()) {
         if (then) then();
-      }, "image/png");
+        return;
+      }
+      var at = drawnAt;
+      function gaveUp() {
+        if (failed) failed();
+      }
+      try {
+        canvas.toBlob(function (blob) {
+          // Another asking got there first, with the picture as it stands: use that one.
+          if (fresh()) {
+            if (then) then();
+            return;
+          }
+          if (at !== drawnAt) {
+            makeFile(then, failed);
+            return;
+          }
+          var next = "";
+          try {
+            next = blob ? urls.createObjectURL(blob) : "";
+          } catch (e) {
+            next = "";
+          }
+          if (!next) {
+            gaveUp();
+            return;
+          }
+          if (saveUrl && typeof urls.revokeObjectURL === "function") {
+            try {
+              urls.revokeObjectURL(saveUrl);
+            } catch (e) {
+              /* it is let go with the page */
+            }
+          }
+          saveUrl = next;
+          madeAt = at;
+          save.href = next;
+          save.hidden = false;
+          if (then) then();
+        }, "image/png");
+      } catch (e) {
+        gaveUp();
+      }
     }
     if (canSave) {
       each(["pointerenter", "focus", "touchstart"], function (name) {
@@ -555,12 +646,23 @@
         });
       });
       save.addEventListener("click", function (e) {
-        if (fresh) return;
-        // What it points at is behind the picture: make the file, then save that.
+        // Pointing at the picture as it stands: the browser saves it, and that is the one click.
+        if (fresh()) return;
+        // Behind the picture: this press is not followed. The file is made, then saved through a
+        // link of its own that is never put in the page, so the press stays one click to anything
+        // that counts clicks, and Save itself is not pressed a second time.
         e.preventDefault();
-        makeFile(function () {
-          save.click();
-        });
+        makeFile(
+          function () {
+            var link = doc.createElement("a");
+            link.href = saveUrl;
+            link.setAttribute("download", save.getAttribute("download") || "i-filled-a-red-bag.png");
+            link.click();
+          },
+          function () {
+            setText(status, "Sorry, that didn't work. Please try again.");
+          },
+        );
       });
     }
 

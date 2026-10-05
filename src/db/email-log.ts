@@ -108,7 +108,7 @@ export interface EmailLogRow {
   deliveryAt: string | null;
   deliveryDetail: string | null;
   createdAt: string;
-  /** TASK-NNN: set on a problem row staff removed from the red band: when, who, 'stop' or 'tidy'. */
+  /** TASK-562: set on a problem row staff removed from the red band: when, who, 'stop' or 'tidy'. */
   removedAt: string | null;
   removedBy: string | null;
   removedKind: string | null;
@@ -156,7 +156,7 @@ const rowOf = (r: RawRow): EmailLogRow => ({
   removedKind: r.removed_kind ?? null,
 });
 
-// TASK-NNN: staff can remove an address from the red band (email_audit_removals). What that hides
+// TASK-562: staff can remove an address from the red band (email_audit_removals). What that hides
 // is decided HERE, each time the band or the list is read, and never when an email is sent: for a
 // log row `l` and a removal `r` of its address that has not been put back, the row is hidden when
 // it is older than the removal, or the removal is a 'stop' and the address is still blocked. So a
@@ -195,7 +195,7 @@ export async function listEmailLog(query: EmailLogQuery): Promise<{ rows: EmailL
   const clause = where.length ? `WHERE ${where.join(" AND ")}` : "";
 
   const total = await pool.query(`SELECT count(*) AS n FROM email_log ${clause}`, params);
-  // TASK-NNN: each row with the newest removal that is hiding it from the red band, if one is, so
+  // TASK-562: each row with the newest removal that is hiding it from the red band, if one is, so
   // the page can say who removed it and when. Only a problem row can be hidden. The join hands on
   // three names of its own and nothing else, so the filters above, which name the log's columns
   // plainly ("kind", "status"), still mean the log's.
@@ -222,7 +222,7 @@ export async function listEmailLog(query: EmailLogQuery): Promise<{ rows: EmailL
 
 // The red band: everything that went wrong recently — our attempt failed, or the mailbox side
 // bounced/complained — newest first, capped (the band is a warning light, not a second table).
-// TASK-NNN: less what staff have removed from it (REMOVAL_HIDES above). The Overview counts this
+// TASK-562: less what staff have removed from it (REMOVAL_HIDES above). The Overview counts this
 // same list, so its number drops with the band's.
 export async function listRecentEmailFailures(days = 14, limit = 25): Promise<EmailLogRow[]> {
   const { rows } = await pool.query(
@@ -248,9 +248,16 @@ export async function pruneEmailLog(now: Date = new Date()): Promise<number> {
   const { rowCount } = await pool.query(`DELETE FROM email_log WHERE created_at <= $1::timestamptz`, [
     cutoff.toISOString(),
   ]);
-  // TASK-NNN: a removal from the red band names an address too, and is about rows that have now
+  // TASK-562: a removal from the red band names an address too, and is about rows that have now
   // gone: it does not outlive them.
   await pool.query(`DELETE FROM email_audit_removals WHERE removed_at <= $1::timestamptz`, [cutoff.toISOString()]);
+  // And a removal whose address no longer has a single row in the log. Two older paths forget a
+  // person here without coming through eraseEmailLogFor (a sponsor's unpaid pledge in
+  // src/db/pledges.ts, a cleared team invite in src/db/fundraising-teams.ts) and neither knows
+  // about removals: without this the removal would be the last place the address was kept.
+  await pool.query(
+    `DELETE FROM email_audit_removals r WHERE NOT EXISTS (SELECT 1 FROM email_log l WHERE l.recipient = r.email)`,
+  );
   return rowCount ?? 0;
 }
 
@@ -262,7 +269,7 @@ export async function pruneEmailLog(now: Date = new Date()): Promise<number> {
 // Sponsor pledges call it with `kinds`: when an unpaid pledge's details are removed, the log rows for
 // the emails about that pledge go too, and nothing else sent to that address is touched.
 //
-// TASK-NNN: without `kinds`, what staff decided about the address in the Email audit
+// TASK-562: without `kinds`, what staff decided about the address in the Email audit
 // (email_audit_removals) goes with its rows. With `kinds` it stays: the address still has others.
 export async function eraseEmailLogFor(email: string, kinds?: readonly string[]): Promise<number> {
   const { rowCount } = kinds

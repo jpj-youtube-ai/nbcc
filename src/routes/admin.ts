@@ -2369,7 +2369,7 @@ export async function getAdminEmailLog(req: Request, res: Response): Promise<Res
   }
 }
 
-// TASK-NNN: remove an address from the red band, so a dead one stops coming back into it and into
+// TASK-562: remove an address from the red band, so a dead one stops coming back into it and into
 // the Overview's count. Both routes need EDIT on the email-audit section.
 //
 // POST /api/admin/email-log/remove { email, stop }

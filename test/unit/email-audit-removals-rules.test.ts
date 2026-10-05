@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { isCharityAddress } from "../../src/email/audit-removals";
 
-// TASK-NNN: removing an address from the Email audit can also block it. One of the charity's own
+// TASK-562: removing an address from the Email audit can also block it. One of the charity's own
 // addresses is never blocked: that would stop the charity's own notes to itself (a fundraiser has
 // signed up, a pledge needs approving), which go to events@ and the like. Every address here is
 // invented.

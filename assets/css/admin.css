@@ -1510,7 +1510,7 @@ tr.nl-click:hover { background: var(--tint); }
 .email-fail-band { border: 1px solid var(--crimson, #C02238); border-radius: 10px; background: rgba(192, 34, 56, 0.06); padding: .75rem 1rem 1rem; margin: 0 0 1.2rem; }
 .email-fail-band h3 { color: var(--crimson, #C02238); margin: 0 0 .5rem; font-size: 1rem; }
 .email-fail-band .admin-table-wrap { margin: 0; }
-/* TASK-NNN: the band is one block an address, not a table: what staff decide here is about an
+/* TASK-562: the band is one block an address, not a table: what staff decide here is about an
    address (is it dead?), so its problems sit under it and it is dealt with once. A block is a row
    that wraps: the address, then what can be pressed. On a phone the two sit one above the other,
    a long address breaks rather than pushing the band wider, and both controls are 44px to press.

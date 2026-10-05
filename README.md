@@ -11205,7 +11205,7 @@ lives in; the Drive copy is not immutable.
 
 ### There are THREE databases, not one
 
-This is the trap this feature was built around. `DATABASE_URL` holds 85 tables
+This is the trap this feature was built around. `DATABASE_URL` holds 86 tables
 (42 when this was built; the Events page added three in TASK-453, the Festive Ball ticket
 report one in TASK-464, the admin's New pills one, `admin_seen`, in TASK-478, site analytics
 four in TASK-479, the business supporter call log in TASK-491, community fundraising five
@@ -11217,11 +11217,12 @@ fundraiser has had and the Do it again links two in TASK-515, the team invites a
 organiser handovers two for team pages, the approved automatic email wordings one, the impact
 examples one for what gifts could do, and the photos organisers send one for profile pictures, six
 for event tickets: the ticket types, each event's limit and sales switch, the orders and their
-lines (with buyers' names, emails and phones), the refunds and the refund requests, and two for
-welcome packs: each page's pack and the things ticked in it),
+lines (with buyers' names, emails and phones), the refunds and the refund requests, two for
+welcome packs: each page's pack and the things ticked in it, and one, in TASK-562, for the
+addresses staff have removed from the Email audit's red band),
 but `STORIES_DATABASE_URL` and `CONTACT_DATABASE_URL` are separate databases
 (deliberately, so the public story and contact forms can never reach donor
-data). A `pg_dump $DATABASE_URL` captures 85 of **88** tables and silently
+data). A `pg_dump $DATABASE_URL` captures 86 of **89** tables and silently
 drops every My Story submission (and, since TASK-475, the fingerprints in
 `erased_stories` that keep erased stories from coming back) and every contact
 enquiry, while producing a
@@ -12326,7 +12327,7 @@ covers recipient, name and subject; dropdowns filter by kind and status; paginat
   (a real send appearing in the list, a failure in the red band, search + type filter, and the
   editor-gets-403 gate).
 
-**Email audit: removing an address that is dead (TASK-NNN).** The red band could only be looked at.
+**Email audit: removing an address that is dead (TASK-562).** The red band could only be looked at.
 A dead address sat in it for two weeks and came back whenever something was sent to it, so the
 band, and the Overview's "N emails failed or bounced in the last 2 weeks", never reached nought.
 The band is now one block an address, its problems under it, and someone who may **edit** the Email
@@ -12371,6 +12372,14 @@ How it works:
   and `POST /api/admin/email-log/put-back` `{ email }`.
 - **Retention and erasure** follow the log's: removals made on or before the log's cutoff go with
   it (`pruneEmailLog`), and `eraseEmailLogFor(email)` takes an address's removals with its rows.
+  The same daily run also clears any removal whose address no longer has a single row in the log.
+  That covers the two older paths that forget a person in the log directly (a sponsor's unpaid
+  pledge, `src/db/pledges.ts`; a cleared team invite, `src/db/fundraising-teams.ts`), so a removal
+  is never the last place an address is kept for more than a day.
+- **Backups:** the new table is in the main database, so the nightly backup's count goes from 88
+  tables to 89 (`test/unit/backup-plan.test.ts`). As with any new table, if the code were rolled
+  back after a backup that included it, the older image's backup would refuse to upload ("tables
+  missing") until the code rolled forward again; the last good archive stays untouched.
 
 Design: `docs/superpowers/specs/2026-10-05-email-audit-remove-design.md`. Tested in
 `test/unit/email-audit-removals-rules.test.ts`, `email-audit-removals-migration.test.ts`,

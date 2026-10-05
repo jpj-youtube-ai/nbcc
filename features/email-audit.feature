@@ -52,7 +52,7 @@ Feature: Email audit page (email-audit feature)
     When I fetch the email audit log
     Then the email audit response status should be 403
 
-  # TASK-NNN: staff can remove an address from the red band, so a dead one stops coming back into
+  # TASK-562: staff can remove an address from the red band, so a dead one stops coming back into
   # it and into the Overview's count. Nothing is deleted: the full list still has every row, and
   # says on the ones that were removed who removed them.
   Scenario: tidying an address away takes its problems out of the band and the Overview's count, until it fails again

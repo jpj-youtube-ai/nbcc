@@ -149,7 +149,7 @@ describe("listRecentEmailFailures (the red band)", () => {
     expect(sql).toMatch(/limit/i);
   });
 
-  // TASK-NNN: staff can remove an address from the band. Hiding is decided here, when the band is
+  // TASK-562: staff can remove an address from the band. Hiding is decided here, when the band is
   // read, and never when an email is sent: a problem is left out when its address has a removal
   // still in force and the problem is older than it, or the removal is a "stop" and the address
   // is still blocked. Unblocking an address therefore brings its later failures back by itself.
@@ -177,7 +177,7 @@ describe("listRecentEmailFailures (the red band)", () => {
   });
 });
 
-// TASK-NNN: nothing is deleted when an address is removed from the band. The full list keeps every
+// TASK-562: nothing is deleted when an address is removed from the band. The full list keeps every
 // row and says, on the ones the band is hiding, who removed them and when.
 describe("listEmailLog marks what staff removed from the band", () => {
   it("joins the newest removal that hides the row, for problem rows only", async () => {
@@ -244,7 +244,7 @@ describe("retention + erasure", () => {
     expect(sqlOf(/delete from email_log where recipient/i)).toMatch(/lower\(\$1\)/i);
   });
 
-  // TASK-NNN: a removal from the band names an address too, so it follows the log's own rules: it
+  // TASK-562: a removal from the band names an address too, so it follows the log's own rules: it
   // does not outlive the rows it was about, and it goes when the address is erased.
   it("prunes the removals made on or before the same cutoff, after the log's own rows", async () => {
     queryMock.mockResolvedValueOnce({ rows: [], rowCount: 7 });
@@ -254,6 +254,21 @@ describe("retention + erasure", () => {
     expect(order[0]).toMatch(/delete from email_log where created_at/i);
     expect(order[1]).toMatch(/delete from email_audit_removals where removed_at <= \$1::timestamptz/i);
     expect(paramsOf(/delete from email_audit_removals/i)).toEqual([emailLogPruneCutoff(now).toISOString()]);
+  });
+
+  // Two older paths forget a person in the log without coming through eraseEmailLogFor: a
+  // sponsor's unpaid pledge (src/db/pledges.ts deletes the rows about it) and a team invite that
+  // is cleared (src/db/fundraising-teams.ts puts "deleted team invitee" in place of the address).
+  // Neither knows about removals. So the same daily run clears any removal whose address no longer
+  // has a single row in the log: it is then about nothing, and would be the last place the address
+  // was kept.
+  it("prunes a removal whose address no longer appears in the log at all", async () => {
+    await pruneEmailLog(new Date("2026-09-01T12:00:00Z"));
+    const last = flat(String(queryMock.mock.calls[2][0]));
+    expect(last).toMatch(
+      /^delete from email_audit_removals r where not exists \(select 1 from email_log l where l\.recipient = r\.email\)$/i,
+    );
+    expect(queryMock).toHaveBeenCalledTimes(3);
   });
 
   it("erases an address's removals with its rows", async () => {

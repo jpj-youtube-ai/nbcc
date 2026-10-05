@@ -1,4 +1,4 @@
-// TASK-NNN: removing an address from the Email audit's red band (Admin > Email audit). The rules
+// TASK-562: removing an address from the Email audit's red band (Admin > Email audit). The rules
 // that need no database live here.
 
 // "stop": the address's problems leave the band and the address is blocked. "tidy": they leave the

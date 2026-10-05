@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-// TASK-NNN: the two routes behind the Email audit's "Remove and stop emails", "Just tidy away"
+// TASK-562: the two routes behind the Email audit's "Remove and stop emails", "Just tidy away"
 // and "Put back". Both need edit on the Email audit, which only admins carry by role. The
 // database modules are mocked, as admin-stories-api.test.ts does, so these pin who may, what is
 // refused, and what each press writes. Every address here is invented.

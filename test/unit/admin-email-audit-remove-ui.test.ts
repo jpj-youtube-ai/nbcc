@@ -6,7 +6,7 @@ import { createRequire } from "node:module";
 import { signAdminSession } from "../../src/admin/session";
 import { effectivePermissions, type PermissionMap } from "../../src/admin/permissions";
 
-// TASK-NNN: removing an address from the Email audit's red band, in the admin's jsdom harness
+// TASK-562: removing an address from the Email audit's red band, in the admin's jsdom harness
 // (admin.html's <body>, a fake fetch, app.js evaluated against it). The fake server answers as
 // the two routes do: a removal hides an address's problems from the band, a stop blocks it unless
 // it was blocked already, and a put back undoes only what the removal did. Every address, name

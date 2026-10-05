@@ -3,11 +3,11 @@ import { readFileSync, readdirSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-// TASK-NNN: the table that remembers which addresses staff removed from the Email audit's red
+// TASK-562: the table that remembers which addresses staff removed from the Email audit's red
 // band. A new table and nothing else: email_log is written by every email the site sends, the
 // Festive Ball's included, and email_suppressions is read by every newsletter send, so neither is
-// altered. Additive only (golden rule 2), and it must sort last in its directory or production
-// refuses to migrate (CLAUDE.md, "A migration").
+// altered. Additive only (golden rule 2), and it must sort after every migration production has
+// already run, or production refuses to migrate (CLAUDE.md, "A migration").
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 const DIR = resolve(ROOT, "migrations");
@@ -16,9 +16,12 @@ const src = readFileSync(resolve(DIR, FILE), "utf8");
 const up = src.slice(src.indexOf("exports.up"), src.indexOf("exports.down"));
 
 describe("email-audit-removals migration", () => {
-  it("sorts last among the migrations", () => {
+  // After the newest one on main when this was written. Not "is the last file": that would turn
+  // red for whoever adds the next migration.
+  it("sorts after the migration that was newest when it was written", () => {
     const names = readdirSync(DIR).filter((n) => n.endsWith(".js")).sort();
-    expect(names[names.length - 1]).toBe(FILE);
+    expect(names.indexOf("1791200000250_donation-source.js")).toBeGreaterThan(-1);
+    expect(names.indexOf(FILE)).toBeGreaterThan(names.indexOf("1791200000250_donation-source.js"));
   });
 
   it("creates email_audit_removals: the address, the kind, who and when, and who put it back", () => {

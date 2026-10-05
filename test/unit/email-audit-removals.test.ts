@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-// TASK-NNN: the removals staff make from the Email audit's red band. The pool is mocked at the
+// TASK-562: the removals staff make from the Email audit's red band. The pool is mocked at the
 // boundary, as email-log.test.ts does, to pin the SQL that carries the promises: a removal is one
 // row with who and when; putting back stamps it and deletes nothing; and the question "why is this
 // address blocked now" is asked of the block list, which this module never writes to. Every

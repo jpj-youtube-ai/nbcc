@@ -1,8 +1,8 @@
 import { pool } from "./pool";
 import type { AuditRemovalKind } from "../email/audit-removals";
 
-// TASK-NNN: the addresses staff have removed from the Email audit's red band. A removal hides
-// nothing by being here: the band's own query decides, each time it is read (HIDDEN_FROM_BAND,
+// TASK-562: the addresses staff have removed from the Email audit's red band. A removal hides
+// nothing by being here: the band's own query decides, each time it is read (REMOVAL_HIDES,
 // src/db/email-log.ts). This module only writes down what staff did, and undoes it.
 //
 // Single statements over the pool, as src/db/email-log.ts and src/db/email-suppressions.ts are.

@@ -24,7 +24,7 @@ Before({ tags: "@email-audit" }, async function () {
   await pool.query(
     "DELETE FROM users WHERE email LIKE '%.audit.bdd@example.com' OR email LIKE 'audit.%.bdd@example.com'",
   );
-  // TASK-NNN: what the removal scenarios leave behind: the removals themselves, and the blocks
+  // TASK-562: what the removal scenarios leave behind: the removals themselves, and the blocks
   // that "Remove and stop emails" (or a scenario's own seeding) puts on these addresses.
   await pool.query("DELETE FROM email_audit_removals WHERE email LIKE '%.audit.bdd@example.com'");
   await pool.query("DELETE FROM email_suppressions WHERE lower(email) LIKE '%.audit.bdd@example.com'");
@@ -215,7 +215,7 @@ Then("every email audit result should be of type {string}", function (kind) {
   for (const r of this.eaBody.results || []) assert.equal(r.kind, kind, JSON.stringify(this.eaBody.results));
 });
 
-// ---- TASK-NNN: removing an address from the red band, and putting it back ----
+// ---- TASK-562: removing an address from the red band, and putting it back ----
 
 async function postEmailAudit(world, action, body) {
   const res = await fetch(`${BASE_URL}/api/admin/email-log/${action}`, {

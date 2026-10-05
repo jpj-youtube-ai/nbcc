@@ -160,3 +160,35 @@ The Email audit section (what the band does now, the rule, the table) and the ro
 Lint, build, the affected tests, `npx cucumber-js --dry-run`. Real Chrome with a stand-in at 1280
 and 390px. The migration-safety reviewer and an independent review. Pictures to Jaimie. Then
 `/ship`: the number at PR time, and check the migration still sorts last against main.
+
+---
+
+## As built
+
+Where this differs from the tasks above, this is what was built.
+
+- **Names.** The band's rule is two fragments in `src/db/email-log.ts`, `PROBLEM` and
+  `REMOVAL_HIDES` (the plan called it `HIDDEN_FROM_BAND`). The line that says what was done is
+  `#emailAuditSaid`: `#emailAuditStatus` was already the Status filter's select.
+- **The line above the band is as tall empty as full.** Measured in Chrome, `.ty-status` keeps
+  14px while empty and the line with words and Put back in it is 22px, so the band moved 8px at
+  the first press. `#emailAuditSaid` is 22px in both.
+- **The phone.** The band as blocks fits a phone. The full list under it does not, and did not
+  before this: its three fixed columns are wider than the screen. Raised as its own task.
+
+**From the migration-safety review** (verdict: safe with changes; all taken):
+
+- `test/unit/backup-plan.test.ts` counts the tables in the three databases, and the README's
+  "There are THREE databases" paragraph states the same numbers: 88 and 85 became 89 and 86. The
+  first push failed CI on exactly this; it is not a file an "affected tests" list would name.
+- The migration's table comment is stored in the database for good, so the task number went into
+  it, and into every other line of this branch, before anything merged.
+- The migration test asserted that its file was the LAST migration. That turns red for whoever
+  adds the next one. It now asserts that it sorts after `1791200000250_donation-source.js`, as the
+  other migration tests do.
+- Two older paths forget a person in the log without `eraseEmailLogFor`: a sponsor's unpaid pledge
+  (`src/db/pledges.ts`) and a cleared team invite (`src/db/fundraising-teams.ts`). The daily prune
+  now also deletes any removal whose address no longer has a row in the log.
+- Another session's unpushed branch also has a migration numbered 1791200000260. Mine sorts before
+  it by name. If theirs reaches main first, this one must be renumbered above it before merging:
+  check `ls migrations | sort | tail` against main at merge time.

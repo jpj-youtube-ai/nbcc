@@ -3167,7 +3167,7 @@
     var who = H.escapeHtml(r.recipient) + (r.recipientName ? "<br><small>" + H.escapeHtml(r.recipientName) + "</small>" : "");
     var detail = r.error || r.deliveryDetail;
     var status = emailStatusPill(r) + (detail ? "<br><small>" + H.escapeHtml(String(detail)) + "</small>" : "");
-    // TASK-NNN: nothing leaves this list. A problem staff removed from the red band says so here,
+    // TASK-562: nothing leaves this list. A problem staff removed from the red band says so here,
     // with who and when, and the way to undo it for someone who may edit.
     if (r.removedAt) {
       status +=
@@ -3183,7 +3183,7 @@
       "</td><td>" + who + "</td><td>" + H.escapeHtml(r.subject) + "</td><td>" + status + "</td></tr>"
     );
   }
-  // TASK-NNN: the red band, one block an address. What staff decide here is about an address (is
+  // TASK-562: the red band, one block an address. What staff decide here is about an address (is
   // it dead?), not about one email, so its problems are listed under it and it is dealt with once:
   // "Remove and stop emails" (its problems leave the band and the address is blocked) or "Just tidy
   // away" (they leave the band and nothing else changes). One of the charity's own addresses can
@@ -3353,7 +3353,7 @@
       emailAuditOffset += EMAIL_AUDIT_PAGE;
       loadEmailAudit();
     });
-    // TASK-NNN: one listener for the band's two controls and every Put back, on the screen's own
+    // TASK-562: one listener for the band's two controls and every Put back, on the screen's own
     // box, which stays while the band and the list inside it are drawn again.
     el("view-email-audit").addEventListener("click", function (e) {
       var t = e.target && e.target.closest && e.target.closest("[data-audit-stop],[data-audit-tidy],[data-audit-putback]");

@@ -1,6 +1,6 @@
 /* eslint-disable camelcase */
 
-// TASK-NNN: which addresses staff have removed from the Email audit's red band ("Needs a look"),
+// TASK-562: which addresses staff have removed from the Email audit's red band ("Needs a look"),
 // so a dead address stops coming back into it, and into the Overview's count, every time
 // something is sent to it.
 //
@@ -43,7 +43,7 @@ exports.up = (pgm) => {
       put_back_at: { type: "timestamptz" },
       put_back_by: { type: "text" },
     },
-    { comment: "Addresses staff removed from the Email audit's red band (TASK-NNN). Stamped, never deleted, when put back." },
+    { comment: "Addresses staff removed from the Email audit's red band (TASK-562). Stamped, never deleted, when put back." },
   );
   pgm.createIndex("email_audit_removals", "email", { where: "put_back_at IS NULL" });
 };

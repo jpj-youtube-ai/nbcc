@@ -18,6 +18,13 @@
     <script defer src="/assets/js/admin/pledges.js"></script>
     <!-- All emails: every fundraising and events email to read, and the few to approve. Its own card. -->
     <script defer src="/assets/js/admin/all-emails.js"></script>
+    <!-- Fill a Red Bag: the editor for the list on /fill. Its own stylesheet and script
+         (assets/js/admin/red-bag-list.js), beside the page's catalogue and the list's rules, which
+         the server checks with too. -->
+    <link rel="stylesheet" href="/assets/css/admin-red-bag-list.css" />
+    <script defer src="/assets/js/red-bag-catalogue.js"></script>
+    <script defer src="/assets/js/red-bag-list.js"></script>
+    <script defer src="/assets/js/admin/red-bag-list.js"></script>
     <!-- app.js is a classic script; bridge the ES-module gmail-reply.js helpers onto window
          so app.js (Contact form tab) can call them (2026-07-10 contact-inbox spec, Task 8). -->
     <script type="module">
@@ -205,6 +212,15 @@
             </section>
 
             <!-- Browse all donations (paginated). -->
+            <!-- Fill a Red Bag: the list on the public page /fill (red-bag:view to look,
+                 red-bag:edit to change). Drawn by assets/js/admin/red-bag-list.js; nothing here
+                 scrolls inside a box, and nothing changes on the website until Publish. -->
+            <section class="admin-view" id="view-red-bag" aria-labelledby="red-bag-heading" hidden>
+              <h2 id="red-bag-heading">Fill a Red Bag</h2>
+              <p class="admin-view-intro">The items, prices and examples on the Fill a Red Bag page. Your changes are saved as a draft that the whole team shares. Nothing changes on the website until someone presses Publish.</p>
+              <div id="rblRoot"><p class="admin-loading">Loading&hellip;</p></div>
+            </section>
+
             <section class="admin-view" id="view-donations" aria-labelledby="donations-heading" hidden>
               <h2 id="donations-heading">Donations</h2>
               <!-- Fill a Red Bag against the Donate page, this month and in all (loadDonationSources). -->

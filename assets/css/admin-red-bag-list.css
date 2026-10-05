@@ -1,0 +1,315 @@
+/* Admin > Fill a Red Bag: the editor for the list on /fill (assets/js/admin/red-bag-list.js).
+   Its own stylesheet, so admin.css stays as it is. NBCC's own tokens and the admin's own shapes
+   (the cards, buttons and fields are the Fundraising screen's, restated here because its rules are
+   scoped to that screen). Nothing scrolls inside a box: every row wraps or stacks, and the page
+   grows. The rows answer to the width of the editor itself (a container query), not the screen:
+   from 861px the admin's side menu takes 210px of it. */
+
+#view-red-bag #rblRoot { container: rbl / inline-size; min-width: 0; max-width: 980px; }
+#view-red-bag #rblRoot.is-busy { cursor: progress; }
+
+#view-red-bag .rbl-card {
+  margin: 14px 0 6px;
+  padding: 16px 20px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: var(--card);
+  box-shadow: var(--shadow-sm);
+  min-width: 0;
+}
+#view-red-bag .rbl-card > .admin-subhead { margin: 0 0 4px; }
+#view-red-bag .rbl-intro { margin: 0 0 4px; max-width: 72ch; font-size: 0.92rem; line-height: 1.55; color: var(--slate-soft); text-wrap: pretty; }
+#view-red-bag .rbl-hint { margin: 8px 0 0; font-size: 0.82rem; line-height: 1.45; color: var(--slate-soft); }
+#view-red-bag .rbl-readonly { margin: 14px 0; font-size: 0.92rem; }
+
+/* A heading (or a theme) and its rows. */
+#view-red-bag .rbl-group { margin-top: 18px; min-width: 0; }
+#view-red-bag .rbl-group-title { margin: 0; font-family: var(--font-head); font-size: 1.05rem; color: var(--maroon); }
+#view-red-bag .rbl-group-sub { margin: 2px 0 0; font-size: 0.85rem; color: var(--slate-soft); }
+#view-red-bag .rbl-rows { list-style: none; margin: 8px 0 10px; padding: 0; }
+#view-red-bag .rbl-none { padding: 12px 0; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); font-size: 0.9rem; color: var(--slate-soft); }
+
+#view-red-bag .rbl-row {
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr) 7rem 12.5rem auto auto;
+  grid-template-areas:
+    "pic name price group show moves"
+    "pic links links links links links"
+    "chooser chooser chooser chooser chooser chooser";
+  align-items: start;
+  gap: 0 12px;
+  padding: 12px 0 4px;
+  border-top: 1px solid var(--line);
+  min-width: 0;
+}
+#view-red-bag .rbl-row:last-child { border-bottom: 1px solid var(--line); }
+#view-red-bag .rbl-row--example {
+  grid-template-columns: 44px 7rem minmax(0, 1fr) auto auto;
+  grid-template-areas:
+    "pic price words show moves"
+    "pic links links links links"
+    "chooser chooser chooser chooser chooser";
+}
+#view-red-bag .rbl-pic {
+  grid-area: pic;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  margin-top: 22px;
+  border-radius: 10px;
+  background: var(--cream);
+  box-shadow: inset 0 0 0 1px var(--line);
+}
+#view-red-bag .rbl-row.is-hidden .rbl-pic { opacity: 0.45; }
+#view-red-bag .rbl-field { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+#view-red-bag .rbl-field--name { grid-area: name; }
+#view-red-bag .rbl-field--price { grid-area: price; }
+#view-red-bag .rbl-field--group { grid-area: group; }
+#view-red-bag .rbl-field--words { grid-area: words; }
+#view-red-bag .rbl-field .fx-call-input { min-height: 44px; }
+#view-red-bag .rbl-field .fx-call-input[aria-invalid="true"] { border-color: var(--crimson); }
+#view-red-bag .rbl-field select.fx-call-input { padding-right: 8px; text-overflow: ellipsis; }
+/* "could help" is the page's own: it stands before the box, and staff type what follows. */
+#view-red-bag .rbl-could { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; min-width: 0; }
+#view-red-bag .rbl-could-fixed { flex: none; font-size: 0.95rem; font-weight: 600; color: var(--slate); }
+#view-red-bag .rbl-could .fx-call-input { flex: 1 1 12rem; width: auto; }
+
+#view-red-bag .rbl-error { margin: 0; font-size: 0.82rem; font-weight: 600; line-height: 1.4; color: var(--crimson); }
+#view-red-bag .rbl-error--list { margin: 10px 0 0; }
+
+#view-red-bag .rbl-show {
+  grid-area: show;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  margin-top: 22px;
+  font-size: 0.9rem;
+  color: var(--slate);
+  cursor: pointer;
+}
+#view-red-bag .rbl-show input { width: 20px; height: 20px; margin: 0; accent-color: var(--holly); }
+#view-red-bag .rbl-show span { min-width: 4.2em; }
+#view-red-bag .rbl-moves { grid-area: moves; display: inline-flex; gap: 6px; margin-top: 22px; }
+#view-red-bag .rbl-icon-btn {
+  display: inline-grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 0;
+  border-radius: 10px;
+  background: var(--card);
+  color: var(--maroon);
+  box-shadow: inset 0 0 0 1.6px var(--line);
+  cursor: pointer;
+}
+#view-red-bag .rbl-icon-btn:hover:not(:disabled) { background: var(--tan-soft); }
+#view-red-bag .rbl-icon-btn:disabled { opacity: 0.35; cursor: default; }
+#view-red-bag .rbl-links { grid-area: links; display: flex; flex-wrap: wrap; gap: 0 16px; }
+#view-red-bag .rbl-link-btn {
+  flex: none;
+  min-height: 44px;
+  padding: 0 4px;
+  background: none;
+  border: 0;
+  color: var(--maroon);
+  font-family: var(--font-body);
+  font-weight: 600;
+  font-size: 0.85rem;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+#view-red-bag .rbl-link-btn:hover { color: var(--crimson); }
+#view-red-bag .rbl-link-btn:disabled { opacity: 0.5; cursor: default; }
+#view-red-bag .rbl-link-btn:focus-visible,
+#view-red-bag .rbl-icon-btn:focus-visible,
+#view-red-bag .rbl-art-btn:focus-visible,
+#view-red-bag .admin-btn:focus-visible { outline: 3px solid var(--crimson); outline-offset: 2px; }
+#view-red-bag .rbl-show input:focus-visible { outline: 3px solid var(--crimson); outline-offset: 2px; }
+
+#view-red-bag .admin-btn { min-height: 44px; }
+#view-red-bag .admin-btn:disabled { opacity: 0.55; cursor: default; }
+#view-red-bag .admin-btn:disabled:hover { background: var(--holly); }
+#view-red-bag .rbl-quiet { background: var(--card); color: var(--maroon); box-shadow: inset 0 0 0 1.6px var(--line); }
+#view-red-bag .rbl-quiet:hover { background: var(--tan-soft); }
+#view-red-bag .rbl-quiet:disabled:hover { background: var(--card); }
+#view-red-bag .rbl-add + .rbl-hint { display: inline-block; margin: 0 0 0 12px; }
+
+/* The picture chooser: opens under its row, and the page grows. */
+#view-red-bag .rbl-chooser { grid-area: chooser; margin: 4px 0 10px; padding: 12px 14px; border: 1px solid var(--line); border-radius: 12px; background: var(--cream); min-width: 0; }
+#view-red-bag .rbl-chooser-title { margin: 0 0 10px; font-size: 0.88rem; font-weight: 600; color: var(--slate); }
+#view-red-bag .rbl-arts { display: flex; flex-wrap: wrap; gap: 8px; }
+#view-red-bag .rbl-art-btn {
+  display: inline-grid;
+  place-items: center;
+  width: 52px;
+  height: 52px;
+  padding: 0;
+  border: 0;
+  border-radius: 12px;
+  background: var(--card);
+  box-shadow: inset 0 0 0 1.6px var(--line);
+  cursor: pointer;
+}
+#view-red-bag .rbl-art-btn:hover { background: var(--tan-soft); }
+#view-red-bag .rbl-art-btn[aria-pressed="true"] { box-shadow: inset 0 0 0 2.4px var(--holly); background: var(--holly-soft); }
+
+/* Read only: the same rows, as words. */
+#view-red-bag .rbl-row--read {
+  grid-template-columns: 44px minmax(0, 1fr) auto auto;
+  grid-template-areas: "pic name price state";
+  align-items: center;
+  gap: 4px 14px;
+  padding: 8px 0;
+}
+#view-red-bag .rbl-row--read .rbl-pic { margin-top: 0; }
+#view-red-bag .rbl-read-name { grid-area: name; min-width: 0; overflow-wrap: anywhere; font-size: 0.95rem; }
+#view-red-bag .rbl-read-price { grid-area: price; font-weight: 600; font-variant-numeric: lining-nums tabular-nums; }
+#view-red-bag .rbl-read-state { grid-area: state; min-width: 4.5em; font-size: 0.85rem; color: var(--slate-soft); }
+#view-red-bag .rbl-row--read.is-hidden .rbl-read-name,
+#view-red-bag .rbl-row--read.is-hidden .rbl-read-price { color: var(--slate-soft); }
+
+/* What differs, and what to do about it. */
+#view-red-bag .rbl-count { margin: 6px 0 0; font-weight: 600; color: var(--slate); }
+#view-red-bag .rbl-changes { margin: 8px 0 0; padding: 0 0 0 1.2em; max-width: 72ch; font-size: 0.92rem; line-height: 1.55; }
+#view-red-bag .rbl-changes li { overflow-wrap: anywhere; }
+#view-red-bag .rbl-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; margin-top: 14px; }
+#view-red-bag .rbl-confirm { margin-top: 14px; padding: 14px 16px; border: 1px solid color-mix(in srgb, var(--holly) 30%, var(--line)); border-radius: 12px; background: var(--holly-soft); min-width: 0; }
+#view-red-bag .rbl-confirm p { margin: 0 0 6px; font-size: 0.92rem; }
+#view-red-bag .rbl-confirm-title { font-family: var(--font-head); font-size: 1.05rem; font-weight: 700; color: var(--maroon); }
+#view-red-bag .rbl-confirm-title:focus { outline: none; }
+#view-red-bag .rbl-status { overflow-wrap: anywhere; font-size: 0.92rem; font-weight: 600; }
+#view-red-bag .rbl-status:empty { display: none; }
+#view-red-bag .rbl-status:focus { outline: none; }
+#view-red-bag .rbl-stale { margin: 8px 0 0; }
+
+/* Save draft: always in reach at the foot of the screen while the list above it is being edited. */
+#view-red-bag .rbl-bar {
+  position: sticky;
+  bottom: 0;
+  z-index: 5;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 16px;
+  margin: 14px 0 6px;
+  padding: 10px 16px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--card);
+  box-shadow: var(--shadow-sm);
+}
+#view-red-bag .rbl-bar.is-dirty { background: var(--tan-soft); border-color: var(--tan); }
+#view-red-bag .rbl-bar-state { flex: 1 1 14rem; margin: 0; min-width: 0; font-size: 0.9rem; font-weight: 600; color: var(--slate); }
+
+/* History. */
+#view-red-bag .rbl-versions { list-style: none; margin: 10px 0 0; padding: 0; }
+#view-red-bag .rbl-version { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0 16px; padding: 10px 0; border-top: 1px solid var(--line); min-width: 0; }
+#view-red-bag .rbl-version-head { flex: 1 1 18rem; min-width: 0; }
+#view-red-bag .rbl-version-title { margin: 0; font-weight: 600; font-size: 0.95rem; overflow-wrap: anywhere; }
+#view-red-bag .rbl-version-title .admin-pill { margin-left: 6px; vertical-align: 1px; }
+#view-red-bag .rbl-version-sub { margin: 2px 0 0; font-size: 0.85rem; color: var(--slate-soft); overflow-wrap: anywhere; }
+#view-red-bag .rbl-version-actions { display: flex; flex-wrap: wrap; gap: 0 16px; }
+#view-red-bag .rbl-version .rbl-confirm,
+#view-red-bag .rbl-version > .rbl-error,
+#view-red-bag .rbl-version > .admin-loading,
+#view-red-bag .rbl-version-list { flex: 1 1 100%; }
+#view-red-bag .rbl-version .rbl-confirm { margin: 8px 0 4px; }
+#view-red-bag .rbl-version-list { margin: 6px 0 8px; padding: 12px 14px 12px 2em; border-radius: 12px; background: var(--cream); font-size: 0.88rem; line-height: 1.6; }
+#view-red-bag .rbl-version-list li { overflow-wrap: anywhere; }
+
+/* The drawings: the page's own (assets/css/red-bag.css, .rb-art), which the admin does not load. */
+#view-red-bag .rb-art { display: block; overflow: visible; fill: none; stroke: var(--maroon); stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
+#view-red-bag .rb-art .r { fill: var(--crimson); }
+#view-red-bag .rb-art .d { fill: var(--maroon); }
+#view-red-bag .rb-art .t { fill: var(--tan); }
+#view-red-bag .rb-art .s { fill: var(--tan-soft); }
+#view-red-bag .rb-art .c { fill: var(--cream); }
+#view-red-bag .rb-art .w { fill: var(--white); }
+#view-red-bag .rb-art .h { fill: var(--holly); }
+#view-red-bag .rb-art .g { fill: var(--gold-ink); }
+#view-red-bag .rb-art .e { fill: var(--slate); }
+#view-red-bag .rb-art .n { stroke: none; }
+#view-red-bag .rb-art .l { stroke: var(--cream); }
+#view-red-bag .rb-art .q { stroke: var(--crimson); }
+#view-red-bag .rb-art .x { stroke-width: 2.6; }
+#view-red-bag .rb-art .f { stroke-width: 1.2; }
+
+/* A narrower editor (a tablet, or a laptop with the side menu): the heading drops under the name. */
+@container rbl (max-width: 760px) {
+  #view-red-bag .rbl-row {
+    grid-template-columns: 44px minmax(0, 1fr) 7rem;
+    grid-template-areas:
+      "pic name price"
+      "pic group group"
+      "show show moves"
+      "links links links"
+      "chooser chooser chooser";
+    gap: 6px 12px;
+  }
+  #view-red-bag .rbl-row--example {
+    grid-template-columns: 44px minmax(0, 1fr);
+    grid-template-areas:
+      "pic price"
+      "words words"
+      "show moves"
+      "links links"
+      "chooser chooser";
+  }
+  #view-red-bag .rbl-row--example .rbl-field--price { max-width: 9rem; }
+  #view-red-bag .rbl-show,
+  #view-red-bag .rbl-moves { margin-top: 0; }
+  #view-red-bag .rbl-moves { justify-self: end; }
+}
+
+/* A phone: each row is a small card of its own, one thing under another. */
+@container rbl (max-width: 460px) {
+  #view-red-bag .rbl-card { padding: 14px 14px; }
+  #view-red-bag .rbl-rows { display: grid; gap: 10px; }
+  #view-red-bag .rbl-row,
+  #view-red-bag .rbl-row--example {
+    grid-template-columns: 44px minmax(0, 1fr);
+    grid-template-areas:
+      "pic name"
+      "price price"
+      "group group"
+      "show moves"
+      "links links"
+      "chooser chooser";
+    padding: 12px;
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    background: var(--cream);
+  }
+  #view-red-bag .rbl-row--example {
+    grid-template-areas:
+      "pic price"
+      "words words"
+      "show moves"
+      "links links"
+      "chooser chooser";
+  }
+  #view-red-bag .rbl-row:last-child { border-bottom: 1px solid var(--line); }
+  #view-red-bag .rbl-row .fx-call-input { background: var(--card); }
+  #view-red-bag .rbl-chooser { background: var(--card); }
+  #view-red-bag .rbl-row--read,
+  #view-red-bag .rbl-row--read.rbl-row--example {
+    grid-template-columns: 44px minmax(0, 1fr) auto;
+    grid-template-areas:
+      "pic name price"
+      "pic state state";
+  }
+  #view-red-bag .rbl-none { padding: 12px; border: 1px solid var(--line); border-radius: 12px; }
+  #view-red-bag .rbl-bar { padding: 10px 12px; }
+  #view-red-bag .rbl-bar .admin-btn { flex: 1 1 auto; }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  #view-red-bag .rbl-icon-btn,
+  #view-red-bag .rbl-art-btn,
+  #view-red-bag .rbl-quiet { transition: background-color 0.15s ease; }
+}

@@ -18,7 +18,7 @@ const ROOT = resolve(__dirname, "../..");
 const require = createRequire(import.meta.url);
 const catalogue = require(resolve(ROOT, "assets/js/red-bag-catalogue.js"));
 const workshop = require(resolve(ROOT, "assets/js/red-bag-workshop.js")) as {
-  scene: (count: number) => string;
+  scene: (count: number, art?: unknown) => string;
   tiedBag: (opts?: { words?: boolean }) => string;
   mount: (...a: unknown[]) => unknown;
 };
@@ -56,6 +56,8 @@ let beacon: ReturnType<typeof vi.fn>;
 let timers: Array<() => void>;
 let listeners: Record<string, Array<() => void>>;
 let errors: ReturnType<typeof vi.spyOn>;
+let blobs: string[];
+let revoked: string[];
 
 function fakeCanvas() {
   drawn = [];
@@ -78,6 +80,10 @@ function fakeCanvas() {
   );
   vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue(ctx as unknown as CanvasRenderingContext2D);
   vi.spyOn(HTMLCanvasElement.prototype, "toDataURL").mockReturnValue("data:image/png;base64,AAAA");
+  // The picture's own bytes: here they carry the words drawn, so a test can see where they go.
+  HTMLCanvasElement.prototype.toBlob = function (cb: BlobCallback) {
+    cb(new Blob(["PNG:" + drawn.join("|")], { type: "image/png" }));
+  };
 }
 
 function start(opts: Opts = {}) {
@@ -91,6 +97,8 @@ function start(opts: Opts = {}) {
   beacon = vi.fn();
   timers = [];
   listeners = {};
+  blobs = [];
+  revoked = [];
   const win: Record<string, unknown> = {
     NBCCRedBag: catalogue,
     NBCCRedBagWorkshop: "workshop" in opts ? opts.workshop : workshop,
@@ -101,6 +109,14 @@ function start(opts: Opts = {}) {
     matchMedia: "matchMedia" in opts ? opts.matchMedia : (q: string) => ({ matches: /reduce/.test(q) && !!opts.reduce }),
     Path2D: function Path2D() {},
     print,
+    atob: (s: string) => atob(s),
+    URL: {
+      createObjectURL: () => {
+        blobs.push(`blob:http://localhost/${"0000000" + (blobs.length + 1)}-made-up-id`);
+        return blobs[blobs.length - 1];
+      },
+      revokeObjectURL: (u: string) => void revoked.push(u),
+    },
     fetch: winFetch,
     addEventListener: (name: string, fn: () => void) => void (listeners[name] = listeners[name] ?? []).push(fn),
   };
@@ -149,6 +165,45 @@ describe("the Workshop scene's drawing", () => {
     expect(svg).toMatch(/viewBox="0 0 \d+ \d+"/);
   });
 
+  it("is a well stocked Workshop: shelves of bags and gifts, a window with snow, a tree with lights, and no clock", () => {
+    const d = new DOMParser().parseFromString(workshop.scene(1, catalogue.art), "image/svg+xml");
+    expect(d.querySelectorAll(".rbw-shelf").length).toBeGreaterThanOrEqual(2);
+    expect(d.querySelectorAll(".rbw-shelf").length).toBeLessThanOrEqual(3);
+    expect(d.querySelectorAll(".rbw-present").length).toBeGreaterThanOrEqual(3);
+    expect(d.querySelector(".rbw-books")).not.toBeNull();
+    expect(d.querySelector(".rbw-blanket")).not.toBeNull();
+    // the catalogue's own teddy and toy train, where the catalogue is there to lend them
+    expect(d.querySelectorAll("svg svg").length).toBe(2);
+    const win = d.querySelector(".rbw-window")!;
+    expect(win.querySelector(".rbw-night")).not.toBeNull();
+    expect(win.querySelectorAll(".rbw-star").length).toBeGreaterThanOrEqual(3);
+    expect(win.querySelectorAll(".rbw-flake").length).toBeGreaterThanOrEqual(5);
+    const tree = d.querySelector(".rbw-tree")!;
+    expect(tree).not.toBeNull();
+    expect(d.querySelectorAll(".rbw-fairy").length).toBeGreaterThanOrEqual(6);
+    expect(d.querySelectorAll(".rbw-fairy-glow").length).toBe(d.querySelectorAll(".rbw-fairy").length);
+    expect(workshop.scene(1, catalogue.art)).not.toMatch(/clock/i);
+    // wider than it is tall, about 16 to 10
+    const [, , w, h] = d.documentElement.getAttribute("viewBox")!.split(" ").map(Number);
+    expect(w / h).toBeGreaterThan(1.5);
+    expect(w / h).toBeLessThan(1.7);
+  });
+
+  it("draws without the catalogue too: presents where the teddy and the train would be", () => {
+    for (const art of [undefined, null, "x", () => "", () => { throw new Error("no art"); }]) {
+      const d = new DOMParser().parseFromString(workshop.scene(1, art), "image/svg+xml");
+      expect(d.querySelector("parsererror")).toBeNull();
+      expect(d.querySelectorAll("svg svg").length).toBe(0);
+      expect(d.querySelectorAll(".rbw-bag--yours").length).toBe(1);
+    }
+  });
+
+  it("marks the finer things, so a small screen can leave them out", () => {
+    const d = new DOMParser().parseFromString(workshop.scene(1, catalogue.art), "image/svg+xml");
+    expect(d.querySelectorAll(".rbw-extra").length).toBeGreaterThanOrEqual(3);
+    for (const e of d.querySelectorAll(".rbw-extra")) expect(e.querySelector(".rbw-bag--yours, .rbw-elf, .rbw-lamp")).toBeNull();
+  });
+
   it("has a shelf with a few tied bags on it, a hanging lamp, the donor's tied bag with its tag, and an elf", () => {
     const d = new DOMParser().parseFromString(workshop.scene(1), "image/svg+xml");
     expect(d.querySelector(".rbw-shelf")).not.toBeNull();
@@ -180,9 +235,31 @@ describe("the Workshop scene's drawing", () => {
     }
   });
 
-  it("does not use the catalogue's drawings' class, so the giving page's styles stay its own", () => {
+  it("has no drawing class of the giving page's in its own shapes", () => {
     expect(workshop.scene(1)).not.toContain("rb-art");
-    expect(workshop.scene(1)).not.toContain('class="rb-bag');
+    expect(workshop.scene(1, catalogue.art)).not.toContain('class="rb-bag');
+  });
+
+  it("keeps a gap that reads naturally however many bags: the donor's bags side by side, on the reaching shelf", () => {
+    for (const n of [1, 2, 3, 4, 5]) {
+      const d = new DOMParser().parseFromString(workshop.scene(n, catalogue.art), "image/svg+xml");
+      const at = (el: Element) => /translate\(([\d.]+) ([\d.]+)\) scale\(([\d.]+)\)/.exec(el.getAttribute("transform")!)!.slice(1).map(Number);
+      const yours = [...d.querySelectorAll(".rbw-bag--yours")].map(at);
+      expect(yours.length).toBe(n);
+      // one row, one size, evenly spaced, nothing of another's between them
+      for (const b of yours) expect(b[1]).toBe(yours[0][1]);
+      const xs = yours.map((b) => b[0]).sort((a, b) => a - b);
+      const step = 120 * yours[0][2];
+      for (let i = 1; i < xs.length; i += 1) {
+        expect(xs[i] - xs[i - 1]).toBeGreaterThan(step);
+        expect(xs[i] - xs[i - 1]).toBeLessThan(step + 14);
+      }
+      // no bag on that shelf overlaps another
+      const row = [...d.querySelectorAll(".rbw-bag")].map(at).filter((b) => b[1] === yours[0][1]).map((b) => b[0]).sort((a, b) => a - b);
+      for (let i = 1; i < row.length; i += 1) expect(row[i] - row[i - 1]).toBeGreaterThan(step);
+      // big enough to be a bag
+      expect(yours[0][2]).toBeGreaterThanOrEqual(0.28);
+    }
   });
 });
 
@@ -312,6 +389,21 @@ describe("a name for the picture: what is kept of what is typed", () => {
     expect(cleanName("a\nb\tc")).toBe("a b c");
   });
 
+  it("keeps the marks that letters are built from in other scripts, and decomposed accents", () => {
+    // invented names: Hindi, Bengali, Tamil, Thai, and an e with its accent as a separate mark
+    for (const n of ["\u0915\u093f\u0930\u0923 \u0915\u0915\u094d\u0937\u093e", "\u09ae\u09bf\u09a4\u09be \u09aa\u09b0\u09bf\u09ac\u09be\u09b0", "\u0ba8\u0bbf\u0bb2\u0bbe \u0b95\u0bc1\u0b9f\u0bc1\u0bae\u0bcd\u0baa\u0bae\u0bcd", "\u0e19\u0e49\u0e33\u0e1d\u0e19", "Zoe\u0308"]) {
+      expect(cleanName(n), n).toBe(n);
+    }
+  });
+
+  it("counts whole characters, never half of one", () => {
+    const astral = "\u{1D4D0}".repeat(31); // letters outside the first plane: two units each
+    const kept = cleanName(astral);
+    expect(Array.from(kept).length).toBe(30);
+    expect(kept).toBe("\u{1D4D0}".repeat(30));
+    expect(/[\uD800-\uDBFF]$/.test(kept)).toBe(false);
+  });
+
   it("stops at 30 characters", () => {
     const long = "The Willowbank Street Knitting Circle of Friends";
     expect(cleanName(long)).toBe("The Willowbank Street Knitting");
@@ -320,7 +412,7 @@ describe("a name for the picture: what is kept of what is typed", () => {
 });
 
 describe("a name for the picture: screening", () => {
-  const lists = JSON.parse(new DOMParser().parseFromString(page, "text/html").querySelector("script[data-rb-name-filter]")!.textContent!);
+  const lists = JSON.parse(atob(new DOMParser().parseFromString(page, "text/html").querySelector("script[data-rb-name-filter]")!.textContent!.trim()));
 
   it("uses the supporter wall's own filter, drawn into the page: the same answer for every name", () => {
     const names = ["Maple Class", "Scunthorpe Juniors", "The Cockburn family", "Dickens Reading Group", "Assisi House", "", "shit", "Total SHIT ltd", "best4n1gger", "a.s.s", "fag", "Fagan's", "what the fuck", "f u c k", "Essex Pass Club", "nigga please"];
@@ -369,7 +461,9 @@ describe("the name field on the page", () => {
     expect(input.hasAttribute("name")).toBe(false);
     expect(input.closest("form")).toBeNull();
     expect(input.required).toBe(false);
-    const hint = document.getElementById(input.getAttribute("aria-describedby")!.split(" ")[0])!;
+    // Only the hint describes it while the name is fine: the refusal is not read out on a good name.
+    expect(input.getAttribute("aria-describedby")).toBe("rbShareNameHint");
+    const hint = document.getElementById("rbShareNameHint")!;
     expect(hint.textContent!.replace(/\s+/g, " ").trim()).toBe("A first name, a family, a class or a workplace. It goes on your certificate too, and it never leaves this page.");
     // Above the picture.
     expect(input.compareDocumentPosition($("[data-rb-share-picture]")) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
@@ -440,6 +534,7 @@ describe("the name field on the page", () => {
     expect(text("[data-rb-name-error]")).toBe("Please choose a different name.");
     expect($("[data-rb-name-error]").hidden).toBe(false);
     expect(input.getAttribute("aria-invalid")).toBe("true");
+    expect(input.getAttribute("aria-describedby")).toBe("rbShareNameHint rbShareNameError");
     expect(drawn).toContain("I filled a Red Bag");
     expect(drawn.join(" ")).not.toMatch(/shit/i);
     expect($("[data-rb-share-picture]").getAttribute("aria-label")).not.toMatch(/shit/i);
@@ -448,6 +543,7 @@ describe("the name field on the page", () => {
     type("Fern");
     expect($("[data-rb-name-error]").hidden).toBe(true);
     expect(input.hasAttribute("aria-invalid")).toBe(false);
+    expect(input.getAttribute("aria-describedby")).toBe("rbShareNameHint");
     expect(drawn).toContain("Fern filled a Red Bag");
   });
 
@@ -463,21 +559,100 @@ describe("the name field on the page", () => {
     expect(drawn.join(" ")).not.toMatch(/£|123|\b45\b|30\.86/);
   });
 
-  it("saves the picture as it is now shown", () => {
+  it("saves the picture as it is now shown, from an address that says nothing about it", () => {
     start({ canvas: true });
     const save = $<HTMLAnchorElement>("[data-rb-share-save]");
     expect(save.hidden).toBe(false);
-    expect(save.getAttribute("href")).toBe("data:image/png;base64,AAAA");
-    (HTMLCanvasElement.prototype.toDataURL as unknown as ReturnType<typeof vi.fn>).mockReturnValue("data:image/png;base64,BBBB");
-    type("Fern");
-    expect(save.getAttribute("href")).toBe("data:image/png;base64,BBBB");
     expect(save.getAttribute("download")).toBe("i-filled-a-red-bag.png");
+    // Made once for the plain picture, as a blob: never the picture's own bytes in the address.
+    expect(blobs.length).toBe(1);
+    expect(save.getAttribute("href")).toBe(blobs[0]);
+    expect(HTMLCanvasElement.prototype.toDataURL).not.toHaveBeenCalled();
+    // Typing does not make a file for every letter.
+    type("F");
+    type("Fe");
+    type("Fern");
+    expect(blobs.length).toBe(1);
+    // Asked for, it is made from the picture as it now is, and the old one is let go.
+    const navigated = vi.spyOn(HTMLAnchorElement.prototype, "click");
+    const press = new MouseEvent("click", { bubbles: true, cancelable: true });
+    save.dispatchEvent(press);
+    expect(press.defaultPrevented).toBe(true); // the stale one is not saved
+    expect(blobs.length).toBe(2);
+    expect(save.getAttribute("href")).toBe(blobs[1]);
+    expect(revoked).toEqual([blobs[0]]);
+    expect(navigated).toHaveBeenCalledTimes(1); // and the fresh one is
+    // Pressed again with nothing changed, it is simply saved.
+    const again = new MouseEvent("click", { bubbles: true, cancelable: true });
+    save.dispatchEvent(again);
+    expect(again.defaultPrevented).toBe(false);
+    expect(blobs.length).toBe(2);
+    expect(HTMLCanvasElement.prototype.toDataURL).not.toHaveBeenCalled();
+  });
+
+  it("makes the file ready as soon as the pointer or the keyboard reaches Save", () => {
+    start({ canvas: true });
+    const save = $<HTMLAnchorElement>("[data-rb-share-save]");
+    type("Fern");
+    save.dispatchEvent(new Event("pointerenter"));
+    expect(blobs.length).toBe(2);
+    save.dispatchEvent(new Event("focus"));
+    save.dispatchEvent(new Event("touchstart"));
+    expect(blobs.length).toBe(2);
+    const press = new MouseEvent("click", { bubbles: true, cancelable: true });
+    save.dispatchEvent(press);
+    expect(press.defaultPrevented).toBe(false);
+  });
+
+  it("says in the share's own words what the picture shows: no amount, and how many bags only when it does", () => {
+    start({ kept: gift(5410), canvas: true });
+    expect(text("[data-rb-share-note]")).toBe("It shows no amount, only that you filled a Red Bag.");
+    start({ canvas: true });
+    expect(text("[data-rb-share-note]")).toBe("It shows no amount, only that you filled a Red Bag.");
+    start({ kept: gift(10000), canvas: true });
+    expect(text("[data-rb-share-note]")).toBe("It shows no amount, only how many bags you filled.");
+    expect(text("[data-rb-share]")).not.toMatch(/says nothing about how much/);
+  });
+
+  it("waits while a letter with an accent is being put together, then reads it", () => {
+    start({ canvas: true });
+    const input = $<HTMLInputElement>("#rbShareName");
+    drawn.length = 0;
+    input.value = "Zo`";
+    const composing = new Event("input", { bubbles: true });
+    Object.defineProperty(composing, "isComposing", { value: true });
+    input.dispatchEvent(composing);
+    expect(input.value).toBe("Zo`"); // left alone
+    expect(drawn.length).toBe(0);
+    input.value = "Zo\u00eb";
+    input.dispatchEvent(new Event("compositionend", { bubbles: true }));
+    expect(drawn).toContain("Zo\u00eb filled a Red Bag");
+  });
+
+  it("keeps the caret where it was when a character typed mid name is dropped", () => {
+    start({ canvas: true });
+    const input = $<HTMLInputElement>("#rbShareName");
+    input.value = "Ma#ple";
+    input.setSelectionRange(3, 3); // just after the dropped one
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+    expect(input.value).toBe("Maple");
+    expect(input.selectionStart).toBe(2);
+    expect(input.selectionEnd).toBe(2);
+    // and nothing is rewritten, nor the caret moved, when nothing was dropped
+    input.value = "Maple Class";
+    input.setSelectionRange(4, 4);
+    const set = vi.spyOn(input, "setSelectionRange");
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+    expect(set).not.toHaveBeenCalled();
+    expect(input.selectionStart).toBe(4);
   });
 
   it("is put away, with the certificate, when the filter's list is not in the page: closed, not open", () => {
-    start({ body: page.replace(/<script type="application\/json" data-rb-name-filter>[\s\S]*?<\/script>/, '<script type="application/json" data-rb-name-filter>not json</script>'), kept: gift(5410), canvas: true });
-    expect($("[data-rb-name]").hidden).toBe(true);
-    expect($("[data-rb-cert-ask]").hidden).toBe(true);
+    for (const bad of ["not base64 !!", btoa("not json"), btoa(JSON.stringify({ words: "x" })), ""]) {
+      start({ body: page.replace(/(<script type="text\/plain" data-rb-name-filter>)[\s\S]*?(<\/script>)/, `$1${bad}$2`), kept: gift(5410), canvas: true });
+      expect($("[data-rb-name]").hidden, bad).toBe(true);
+      expect($("[data-rb-cert-ask]").hidden, bad).toBe(true);
+    }
     // The rest of the page is as it was.
     expect(text("[data-rb-thanks-total]")).toBe("Your donation of £54.10 is on its way to NBCC.");
     expect(drawn).toContain("I filled a Red Bag");
@@ -526,6 +701,7 @@ describe("the certificate to print", () => {
     expect(text("[data-rb-cert-date]")).toMatch(/^\d{1,2} (January|February|March|April|May|June|July|August|September|October|November|December) \d{4}$/);
     expect(text("[data-rb-cert] .rb-cert__hand")).toBe("Thank you for being part of this.");
     expect(text("[data-rb-cert] .rb-cert__elves")).toBe("The Elves");
+    expect([...document.querySelectorAll("[data-rb-cert] .rb-cert__signed")].map((s) => s.textContent!.replace(/\s+/g, " ").trim())).toEqual(["The Elves The Elves' Workshop", "NBCC Team Night Before Christmas Campaign"]);
     expect(text("[data-rb-cert] .rb-cert__legal")).toBe(MATERIALS_STATEMENT);
     const logo = $<HTMLImageElement>("[data-rb-cert] img");
     expect(logo.getAttribute("src")).toBe("/assets/img/nbcc-logo.png");
@@ -547,6 +723,31 @@ describe("the certificate to print", () => {
     $<HTMLButtonElement>("[data-rb-cert-print]").click();
     expect(text("[data-rb-cert-for]")).toBe("for filling 3 Red Bags Full of Joy");
     expect(text("[data-rb-cert]")).not.toMatch(/£|150/);
+  });
+
+  it("lets go of the print mark by the clock and when the window is looked at again, where printing does nothing", () => {
+    start({ canvas: true, timers: true });
+    type("Fern");
+    const before = timers.length;
+    $<HTMLButtonElement>("[data-rb-cert-print]").click();
+    expect(document.documentElement.classList.contains("rb-print-cert")).toBe(true);
+    expect(timers.length).toBe(before + 1);
+    timers[timers.length - 1]();
+    expect(document.documentElement.classList.contains("rb-print-cert")).toBe(false);
+    $<HTMLButtonElement>("[data-rb-cert-print]").click();
+    expect(document.documentElement.classList.contains("rb-print-cert")).toBe(true);
+    for (const fn of listeners.focus ?? []) fn();
+    expect(document.documentElement.classList.contains("rb-print-cert")).toBe(false);
+  });
+
+  it("sets a long name a little smaller, so the page is always one page", () => {
+    start({ canvas: true });
+    type("Fern");
+    $<HTMLButtonElement>("[data-rb-cert-print]").click();
+    expect($("[data-rb-cert-name]").classList.contains("is-long")).toBe(false);
+    type("The Willowbank Street Knitting");
+    $<HTMLButtonElement>("[data-rb-cert-print]").click();
+    expect($("[data-rb-cert-name]").classList.contains("is-long")).toBe(true);
   });
 
   it("writes the date the long way", () => {
@@ -631,5 +832,37 @@ describe("the new pieces can never stop the thank you", () => {
     expect($("[data-rb-workshop-scene] svg.rbw")).not.toBeNull();
     expect(document.activeElement).toBe($("h1"));
     expect(errors).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("the site's visit counter never learns the name, or anything made from it", () => {
+  // The real assets/js/pulse.js, which this page loads: it reports a click on a link that downloads
+  // with the last part of the link's address. That address must say nothing about the picture.
+  it("sends nothing of the name or the picture when Save the picture is pressed", () => {
+    const sent: string[] = [];
+    Object.defineProperty(navigator, "sendBeacon", { configurable: true, value: (_u: string, body: string) => (sent.push(String(body)), true) });
+    vi.stubGlobal("fetch", (_u: string, o: { body?: string }) => void sent.push(String(o?.body)));
+    start({ kept: gift(10000), canvas: true });
+    new Function(readFileSync(resolve(ROOT, "assets/js/pulse.js"), "utf8"))();
+    const save = $<HTMLAnchorElement>("[data-rb-share-save]");
+    vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(function (this: HTMLAnchorElement) {
+      this.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
+    });
+    type("Fern Maplewood");
+    save.click();
+    type("Juniper");
+    save.dispatchEvent(new Event("pointerenter"));
+    save.click();
+    const clicks = sent.map((s) => JSON.parse(s)).filter((p) => p.t === "click");
+    expect(clicks.length).toBeGreaterThanOrEqual(2);
+    for (const c of clicks) {
+      expect(c.k).toBe("download");
+      // a made up id for the blob, or the page's own address: nothing else
+      expect(c.l).toMatch(/^(0000000\d-made-up-id|thank-you)$/);
+    }
+    const all = sent.join(" ");
+    expect(all).not.toMatch(/Fern|Maplewood|Juniper|filled|Red Bag|PNG:|base64|data:|AAAA/i);
+    delete (navigator as unknown as Record<string, unknown>).sendBeacon;
+    vi.unstubAllGlobals();
   });
 });

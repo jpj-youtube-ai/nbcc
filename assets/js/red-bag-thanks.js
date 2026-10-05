@@ -67,9 +67,15 @@
   var NAME_MAX = 30;
   var NOT_KEPT;
   try {
-    NOT_KEPT = new RegExp("[^\\p{L}\\p{N} '\u2019.,&!-]", "gu");
+    // Letters with the marks they are built from (so Hindi, Bengali, Tamil, Thai and an accent
+    // typed as a separate mark all stay whole), and numbers.
+    NOT_KEPT = new RegExp("[^\\p{L}\\p{M}\\p{N} '\u2019.,&!-]", "gu");
   } catch (e) {
-    NOT_KEPT = /[^A-Za-z0-9\u00C0-\u024F '\u2019.,&!-]/g;
+    NOT_KEPT = /[^A-Za-z0-9\u00C0-\u024F\u0300-\u036F '\u2019.,&!-]/g;
+  }
+  /** Whole characters, never half of one (a letter outside the first plane is two units). */
+  function chars(s) {
+    return typeof Array.from === "function" ? Array.from(s) : s.split("");
   }
   /** What is typed, without what a name may not have. Spaces stay, so a second word can be typed. */
   function keepChars(raw) {
@@ -79,7 +85,7 @@
   }
   /** The name as it is shown: trimmed, runs of spaces closed up, 30 characters at most. */
   function cleanName(raw) {
-    return keepChars(raw).replace(/ +/g, " ").trim().slice(0, NAME_MAX).trim();
+    return chars(keepChars(raw).replace(/ +/g, " ").trim()).slice(0, NAME_MAX).join("").trim();
   }
 
   /**
@@ -193,7 +199,8 @@
       changed: [],
     };
     safe(showWorkshop)(doc, win, thanks, { count: st.bags, play: !!ok });
-    var named = safe(initName)(doc, st);
+    var named = safe(initName)(doc, win, st);
+    safe(sayWhatItShows)(doc, st);
     initShare(doc, win, doc, st);
     if (named) safe(initCertificate)(doc, win, st, named);
     return thanks;
@@ -206,7 +213,7 @@
     var box = thanks.querySelector("[data-rb-workshop]");
     if (!box || !shop || typeof shop.mount !== "function") return false;
     try {
-      return shop.mount(box, { count: opts.count, play: opts.play, win: win });
+      return shop.mount(box, { count: opts.count, play: opts.play, win: win, art: win.NBCCRedBag && win.NBCCRedBag.art });
     } catch (e) {
       // Half drawn is worse than not drawn: back to the still bag, then say so once.
       var holder = box.querySelector("[data-rb-workshop-scene]");
@@ -223,14 +230,17 @@
 
   // --- the name box --------------------------------------------------------------------------------------
   // Shown only when the filter's lists are in the page. Returns what the certificate needs from it.
-  function initName(doc, st) {
+  function initName(doc, win, st) {
     var box = doc.querySelector("[data-rb-name]");
     var input = box ? box.querySelector("input") : null;
     var holder = box ? box.querySelector("[data-rb-name-filter]") : null;
     if (!box || !input || !holder) return null;
+    // The lists come as base64 of their JSON (src/red-bag/render.ts), so the page's source does not
+    // show the words. Missing or not readable: no lists, and the box stays put away.
     var lists = null;
     try {
-      lists = JSON.parse(holder.textContent || "null");
+      var decode = typeof win.atob === "function" ? win.atob : atob;
+      lists = JSON.parse(decode(String(holder.textContent || "").replace(/\s+/g, "")));
     } catch (e) {
       lists = null;
     }
@@ -238,21 +248,48 @@
     var error = box.querySelector("[data-rb-name-error]");
     var blocked = false;
 
-    function read() {
-      var kept = keepChars(input.value);
-      if (kept !== input.value) input.value = kept;
+    // The refusal describes the box only while a name is refused: on a good name a screen reader
+    // hears the hint alone.
+    var hintId = (input.getAttribute("aria-describedby") || "").split(/\s+/)[0];
+    function read(e) {
+      // A letter still being put together (an accent, or a keyboard that composes): leave it be.
+      // compositionend reads it once it is whole.
+      if (e && e.type === "input" && e.isComposing) return;
+      var typed = input.value;
+      var kept = keepChars(typed);
+      if (kept !== typed) {
+        // Something typed is not kept. Put the caret back where it was, not at the end.
+        var caret = null;
+        try {
+          caret = input.selectionStart;
+        } catch (err) {
+          caret = null;
+        }
+        input.value = kept;
+        if (typeof caret === "number") {
+          var at = keepChars(typed.slice(0, caret)).length;
+          try {
+            input.setSelectionRange(at, at);
+          } catch (err) {
+            /* the caret stays where the browser put it */
+          }
+        }
+      }
       var name = cleanName(kept);
       blocked = nameBlocked(name, lists);
       st.name = blocked ? "" : name;
       if (error) error.hidden = !blocked;
       if (blocked) input.setAttribute("aria-invalid", "true");
       else input.removeAttribute("aria-invalid");
+      var described = blocked && error && error.id ? [hintId, error.id] : [hintId];
+      input.setAttribute("aria-describedby", described.filter(Boolean).join(" "));
       st.redraw();
       each(st.changed, function (fn) {
         fn();
       });
     }
     input.addEventListener("input", read);
+    input.addEventListener("compositionend", read);
     box.hidden = false;
     return {
       input: input,
@@ -262,11 +299,23 @@
     };
   }
 
+  // --- what the picture shows, said honestly ---------------------------------------------------------------
+  // The page says "only that you filled a Red Bag". Where the picture and the certificate can say
+  // how many bags, the sentence says so. Never an amount either way.
+  function sayWhatItShows(doc, st) {
+    var note = doc.querySelector("[data-rb-share-note]");
+    if (note && st.bags >= 2) setText(note, "It shows no amount, only how many bags you filled.");
+  }
+
   // --- the certificate to print ---------------------------------------------------------------------------
   // The page's own hidden certificate (fill-thank-you.html), filled in and printed by the browser:
   // while <html> carries rb-print-cert, the print stylesheet shows the certificate alone on one A4
   // sheet. No file is made and nothing is sent.
   var PRINT_CLASS = "rb-print-cert";
+  // Long enough for a phone's print preview to have been drawn; print() itself holds the clock
+  // while a desktop's print window is open.
+  var PRINT_LET_GO_MS = 30000;
+  var LONG_NAME = 20;
   function initCertificate(doc, win, st, named) {
     var ask = doc.querySelector("[data-rb-cert-ask]");
     var button = ask ? ask.querySelector("[data-rb-cert-print]") : null;
@@ -300,17 +349,26 @@
         return;
       }
       setText(status, "");
-      setText(cert.querySelector("[data-rb-cert-name]"), st.name);
+      var nameEl = cert.querySelector("[data-rb-cert-name]");
+      setText(nameEl, st.name);
+      // A long name is set a little smaller, so the certificate is always one page.
+      if (nameEl) nameEl.classList[chars(st.name).length > LONG_NAME ? "add" : "remove"]("is-long");
       setText(cert.querySelector("[data-rb-cert-for]"), certificateFor(st.bags));
       setText(cert.querySelector("[data-rb-cert-date]"), longDate(new Date()));
       root.classList.add(PRINT_CLASS);
       win.print();
+      // Where printing quietly does nothing (some browsers inside apps), nothing ever says it is
+      // over: let go of the mark by the clock too, so a later ordinary print prints the page.
+      if (typeof win.setTimeout === "function") win.setTimeout(unmark, PRINT_LET_GO_MS);
     });
-    // Printed, or the print window closed: the page prints as a page again.
+    // Printed, or the print window closed, or the window looked at again: the page prints as a
+    // page again.
+    function unmark() {
+      root.classList.remove(PRINT_CLASS);
+    }
     if (typeof win.addEventListener === "function") {
-      win.addEventListener("afterprint", function () {
-        root.classList.remove(PRINT_CLASS);
-      });
+      win.addEventListener("afterprint", unmark);
+      win.addEventListener("focus", unmark);
     }
     ask.hidden = false;
     return ask;
@@ -452,17 +510,58 @@
       }
       if (!done) return false;
       canvas.setAttribute("aria-label", "A red paper gift bag on cream, with the words: " + pictureHeadline(name, bags) + ". Night Before Christmas Campaign.");
-      var url = "";
-      try {
-        url = canvas.toDataURL("image/png");
-      } catch (e) {
-        url = "";
-      }
-      if (save && url) {
-        save.href = url;
-        save.hidden = false;
-      }
+      fresh = false; // the file to save is now behind the picture
       return true;
+    }
+
+    // "Save the picture" points at a blob: an address made of a random id, which says nothing about
+    // the picture. (The picture's own bytes in the address would hand a trace of the name to
+    // anything that reads link addresses, as the site's visit counter does for downloads.) The
+    // file is made when it is wanted (the pointer or the keyboard reaches Save, or it is pressed),
+    // not for every letter typed, and the one before it is let go.
+    var fresh = false;
+    var saveUrl = "";
+    var urls = win.URL;
+    var canSave = !!save && typeof canvas.toBlob === "function" && !!urls && typeof urls.createObjectURL === "function";
+    function makeFile(then) {
+      if (!canSave || fresh) return;
+      canvas.toBlob(function (blob) {
+        if (!blob) return;
+        var next = "";
+        try {
+          next = urls.createObjectURL(blob);
+        } catch (e) {
+          next = "";
+        }
+        if (!next) return;
+        if (saveUrl && typeof urls.revokeObjectURL === "function") {
+          try {
+            urls.revokeObjectURL(saveUrl);
+          } catch (e) {
+            /* it is let go with the page */
+          }
+        }
+        saveUrl = next;
+        save.href = next;
+        save.hidden = false;
+        fresh = true;
+        if (then) then();
+      }, "image/png");
+    }
+    if (canSave) {
+      each(["pointerenter", "focus", "touchstart"], function (name) {
+        save.addEventListener(name, function () {
+          makeFile();
+        });
+      });
+      save.addEventListener("click", function (e) {
+        if (fresh) return;
+        // What it points at is behind the picture: make the file, then save that.
+        e.preventDefault();
+        makeFile(function () {
+          save.click();
+        });
+      });
     }
 
     function finish() {
@@ -470,6 +569,7 @@
         canvas.hidden = true;
         return;
       }
+      makeFile();
       if (st) st.redraw = paint;
       var nav = win.navigator || {};
       if (send && typeof nav.share === "function" && typeof canvas.toBlob === "function" && typeof win.File === "function") {

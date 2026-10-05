@@ -5,7 +5,10 @@
    2026: the Elves' Workshop scene, the name box for the picture, and
    the certificate to print. Nothing here styles the giving page.
 
-   Every colour is one of the site's tokens (styles.css). The hand is
+   Every colour is one of the site's tokens (styles.css), but one: the
+   night in the Workshop's window, --rbw-night, named once below (the
+   site has no blue; a deep, slightly warm navy that sits beside the
+   maroon and the holly). The hand is
    Caveat, declared in red-bag.css, and used only for the line under
    the Workshop, the gift tag, and the elves' hand on the certificate.
 
@@ -18,14 +21,19 @@
   --rbw-hand:"Caveat","Bradley Hand","Segoe Print","Noteworthy","Chalkboard SE","Ink Free","Comic Sans MS",cursive;
   /* gold, a shade deeper, for the lines round gold things */
   --rbw-gold-edge:color-mix(in srgb,var(--gold-ink) 60%,var(--maroon));
+  /* the night outside the Workshop's window */
+  --rbw-night:#26355C;
+  /* wood, a shade deeper than the shelf's top */
+  --rbw-wood:color-mix(in srgb,var(--tan) 82%,var(--maroon));
   margin:clamp(24px,4vw,36px) auto 0;
 }
 /* the still bag keeps its own width; the box above gives the space */
 .rb-workshop .rb-thanks__bag{margin-top:0}
 
-/* ---- the scene: one drawing, a window into the Workshop ---- */
+/* ---- the scene: one drawing, the page's centrepiece. It takes the column's width (16 to 10), so
+   on a phone it is as wide as the words under it. ---- */
 .rb-workshop__scene{
-  width:min(100%,420px);margin:0 auto;
+  width:min(100%,620px);margin:0 auto;
   border-radius:var(--radius);overflow:hidden;
   box-shadow:var(--shadow-sm);
 }
@@ -54,7 +62,46 @@
 
 /* the shelf */
 .rbw-plank{fill:var(--tan)}
-.rbw-bracket{fill:color-mix(in srgb,var(--tan) 82%,var(--maroon))}
+.rbw-bracket{fill:var(--rbw-wood)}
+
+/* the window: night outside, a few stars, snow that drifts down once and settles */
+.rbw-frame,.rbw-sill{fill:var(--tan)}
+.rbw-night{fill:var(--rbw-night);stroke-width:1.2}
+.rbw-star{fill:color-mix(in srgb,var(--gold-ink) 45%,var(--cream));stroke:none}
+.rbw-flake,.rbw-drift{fill:var(--cream);stroke:none}
+.rbw-bar{stroke:var(--rbw-wood);stroke-width:3}
+
+/* the tree, and its fairy lights: they stay lit when the lamp goes down */
+.rbw-fir{fill:var(--holly)}
+.rbw-trunk{fill:var(--rbw-wood)}
+.rbw-pot{fill:var(--crimson)}
+.rbw-garland{stroke:var(--cream);stroke-width:1;opacity:.6}
+.rbw-topper{fill:var(--gold-ink);stroke:var(--rbw-gold-edge);stroke-width:1.1}
+.rbw-fairy{stroke:var(--rbw-gold-edge);stroke-width:.6}
+.rbw-fairy--a{fill:color-mix(in srgb,var(--gold-ink) 45%,var(--white))}
+.rbw-fairy--b{fill:var(--cream)}
+.rbw-fairy--c{fill:color-mix(in srgb,var(--crimson) 55%,var(--white))}
+.rbw-fairy-glow{stroke:none;fill:color-mix(in srgb,var(--gold-ink) 55%,var(--cream));opacity:.42}
+
+/* the gifts on the shelves: presents, books, a folded blanket */
+.rbw-present--holly .rbw-box{fill:var(--holly)}
+.rbw-present--holly .rbw-band,.rbw-present--holly .rbw-loop{fill:var(--gold-ink)}
+.rbw-present--cream .rbw-box{fill:var(--cream)}
+.rbw-present--cream .rbw-band,.rbw-present--cream .rbw-loop{fill:var(--crimson)}
+.rbw-present--gold .rbw-box{fill:color-mix(in srgb,var(--gold-ink) 70%,var(--cream))}
+.rbw-present--gold .rbw-band,.rbw-present--gold .rbw-loop{fill:var(--maroon)}
+.rbw-present--crimson .rbw-box{fill:var(--crimson)}
+.rbw-present--crimson .rbw-band,.rbw-present--crimson .rbw-loop{fill:var(--cream)}
+.rbw-band{stroke:none}
+.rbw-loop{stroke-width:1}
+.rbw-book--a{fill:var(--holly)}
+.rbw-book--b{fill:var(--tan)}
+.rbw-book--c{fill:var(--crimson)}
+.rbw-page{stroke:var(--cream);stroke-width:1.2}
+.rbw-fold-a{fill:var(--tan-light)}
+.rbw-stripe{stroke:var(--cream);stroke-width:1.8}
+/* the catalogue's own teddy and train (red-bag.css colours them): a line to suit their size here */
+.rbw .rb-art{stroke-width:1.9}
 .rbw-grain{stroke:color-mix(in srgb,var(--maroon) 34%,var(--tan));stroke-width:1}
 
 /* a tied Red Bag: the page's own bag (src/red-bag/render.ts), full, with its bow */
@@ -86,22 +133,24 @@
 .rbw-sleeve{stroke:var(--holly);stroke-width:8.5}
 .rbw-sleeve--edge{stroke:var(--maroon);stroke-width:11.5}
 .rbw-mitt{fill:var(--cream)}
-.rbw-elf__body{transform:translateY(47px)}
+.rbw-elf__body{transform:translateY(46px)}
 .rbw-elf__arms{transform:translateY(150px);opacity:0}
 
 /* ---- the line under it, in the paper's hand ---- */
 .rb-workshop__line{
-  max-width:26ch;margin:14px auto 0;
+  max-width:min(100%,620px);margin:14px auto 0;
   font-family:var(--rbw-hand);font-size:clamp(1.6rem,1.45rem + .8vw,1.95rem);font-weight:700;
   line-height:1.15;letter-spacing:.01em;color:var(--maroon);text-wrap:balance;
 }
 
 /* ---- playing, once (assets/js/red-bag-workshop.js adds .is-playing on arrival after a gift, and
    takes it off when the line has faded in). About four seconds:
+     0.1s  snow drifts down past the window, and settles   (3.7s)
      0.3s  the elf lifts the bag onto the shelf            (1.25s)
      1.75s the arms come down, and the elf steps back down (0.8s)
      2.75s a tug on the lamp's cord                        (0.45s)
-     2.9s  the light goes down to a glow                   (0.9s)
+     2.9s  the light goes down to a glow; the fairy lights
+           twinkle once and their glow comes up            (0.9s, 1.1s)
      3.4s  the line fades in                               (0.6s)
    Each thing ends where it rests, so stopping early is never a wrong picture. ---- */
 .rb-workshop.is-playing .rbw-lift{animation:rbw-lift 1.25s cubic-bezier(.22,1,.36,1) .3s both}
@@ -112,14 +161,29 @@
 .rb-workshop.is-playing .rbw-pool--mid,
 .rb-workshop.is-playing .rbw-bulb--lit{animation:rbw-was-on .9s cubic-bezier(.25,1,.5,1) 2.9s both}
 .rb-workshop.is-playing .rbw-dusk{animation:rbw-was-off .9s cubic-bezier(.25,1,.5,1) 2.9s both}
+.rb-workshop.is-playing .rbw-fairy-glow{animation:rbw-was-off .9s cubic-bezier(.25,1,.5,1) 2.9s both}
+.rb-workshop.is-playing .rbw-fairy{animation:rbw-twinkle 1.1s cubic-bezier(.25,1,.5,1) 2.9s both}
+.rb-workshop.is-playing .rbw-flake--a{animation:rbw-snow-a 3.7s cubic-bezier(.3,.3,.6,1) .1s both}
+.rb-workshop.is-playing .rbw-flake--b{animation:rbw-snow-b 3.7s cubic-bezier(.3,.3,.6,1) .1s both}
+.rb-workshop.is-playing .rbw-flake--c{animation:rbw-snow-c 3.7s cubic-bezier(.3,.3,.6,1) .1s both}
 .rb-workshop.is-playing .rb-workshop__line{animation:rbw-line .6s cubic-bezier(.22,1,.36,1) 3.4s both}
-@keyframes rbw-lift{from{opacity:1;transform:translateY(104px)}to{opacity:1;transform:translateY(0)}}
-@keyframes rbw-step{from{transform:translateY(0)}to{transform:translateY(47px)}}
+@keyframes rbw-lift{from{opacity:1;transform:translateY(98px)}to{opacity:1;transform:translateY(0)}}
+@keyframes rbw-step{from{transform:translateY(0)}to{transform:translateY(46px)}}
+@keyframes rbw-twinkle{0%{opacity:.55}35%{opacity:1}60%{opacity:.7}100%{opacity:1}}
+@keyframes rbw-snow-a{from{transform:translate(-5px,-38px)}}
+@keyframes rbw-snow-b{from{transform:translate(4px,-27px)}}
+@keyframes rbw-snow-c{from{transform:translate(-2px,-46px)}}
 @keyframes rbw-arms{from{opacity:1;transform:translateY(0)}to{opacity:1;transform:translateY(150px)}}
 @keyframes rbw-tug{0%{transform:translateY(0)}40%{transform:translateY(6px)}100%{transform:translateY(0)}}
 @keyframes rbw-was-on{from{opacity:1}}
 @keyframes rbw-was-off{from{opacity:0}}
 @keyframes rbw-line{from{opacity:0;transform:translateY(6px)}}
+
+/* ---- a small screen: the finer things are left out, so what is there stays clear ---- */
+@media (max-width:440px){
+  .rbw-extra{display:none}
+  .rbw-words{display:none}
+}
 
 /* ---- a name for the picture: one box, with its label and a hint ---- */
 .rb-name{max-width:340px;margin:22px auto 0;text-align:left}
@@ -167,17 +231,21 @@
 .rb-cert .rb-cert__orn{display:flex;align-items:center;gap:4mm;margin-top:4.5mm;font-size:11pt;line-height:1;color:var(--gold-ink)}
 .rb-cert__orn::before,.rb-cert__orn::after{content:"";width:30mm;height:.25mm;background:var(--gold-ink);opacity:.7}
 .rb-cert .rb-cert__to{margin-top:8mm;padding-left:.24em;font-size:9.5pt;font-weight:600;letter-spacing:.24em;text-transform:uppercase;color:var(--slate-soft)}
+.rb-cert .rb-cert__name.is-long{font-size:26pt}
 .rb-cert .rb-cert__name{max-width:150mm;margin-top:3.5mm;font-family:var(--font-head);font-weight:700;font-size:32pt;line-height:1.12;color:var(--maroon);overflow-wrap:anywhere;text-wrap:balance}
 .rb-cert .rb-cert__for{margin-top:4mm;font-family:var(--font-head);font-style:italic;font-size:17pt;line-height:1.3;color:var(--crimson)}
 .rb-cert__bag{width:36mm;margin-top:7mm}
 .rb-cert .rb-cert__hand{margin-top:6mm;font-family:var(--rbw-hand);font-weight:700;font-size:25pt;line-height:1.1;color:var(--maroon)}
-.rb-cert__sign{display:flex;justify-content:space-between;align-items:flex-end;width:100%;max-width:142mm;margin-top:7mm}
-.rb-cert__signed{display:flex;flex-direction:column;width:60mm}
-.rb-cert__signed span{display:flex;align-items:flex-end;justify-content:center;min-height:12mm}
-.rb-cert__date{font-family:var(--font-head);font-weight:700;font-size:13pt;color:var(--slate)}
-.rb-cert__elves{font-family:var(--rbw-hand);font-weight:700;font-size:30pt;line-height:.9;color:var(--crimson)}
-.rb-cert__signed i{display:block;height:.3mm;margin:1.5mm 0;background:var(--maroon);opacity:.45}
-.rb-cert__signed small{font-size:7.5pt;font-weight:600;letter-spacing:.16em;text-transform:uppercase;color:var(--slate-soft)}
+/* two signatures in the same hand, side by side, and the date centred under them */
+.rb-cert__sign{display:flex;justify-content:space-between;align-items:flex-end;width:100%;max-width:140mm;margin-top:6mm}
+.rb-cert__signed{display:flex;flex-direction:column;width:64mm}
+.rb-cert__signed span,.rb-cert__dated span{display:flex;align-items:flex-end;justify-content:center}
+.rb-cert__signed span{min-height:12mm}
+.rb-cert__hand-name{font-family:var(--rbw-hand);font-weight:700;font-size:30pt;line-height:.9;color:var(--crimson)}
+.rb-cert__signed i,.rb-cert__dated i{display:block;height:.3mm;margin:1.5mm 0;background:var(--maroon);opacity:.45}
+.rb-cert__signed small,.rb-cert__dated small{font-size:7pt;font-weight:600;letter-spacing:.14em;text-transform:uppercase;white-space:nowrap;color:var(--slate-soft)}
+.rb-cert__dated{display:flex;flex-direction:column;width:46mm;margin-top:4mm}
+.rb-cert__date{font-family:var(--font-head);font-weight:700;font-size:12.5pt;color:var(--slate)}
 .rb-cert .rb-cert__legal{max-width:150mm;margin-top:8mm;font-size:7.5pt;line-height:1.5;color:var(--slate-soft);text-wrap:balance}
 
 @page rbcert{size:A4 portrait;margin:0}

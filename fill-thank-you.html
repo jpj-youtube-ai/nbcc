@@ -80,16 +80,17 @@
         <div class="wrap">
           <div class="rb-share" data-rb-share>
             <h2 id="rb-share-title">Share: I filled a Red Bag</h2>
-            <p>A picture to post or send, to show a friend how to fill one too. It says nothing about how much you gave.</p>
+            <p>A picture to post or send, to show a friend how to fill one too. <span data-rb-share-note>It shows no amount, only that you filled a Red Bag.</span></p>
             <!-- A name for the picture and the certificate. It belongs to no form and has no name of
                  its own, so it cannot be sent; the script screens it against the supporter wall's
-                 list, which the server draws in just below (src/donors/display-name-filter.ts). -->
+                 list, which the server draws in just below, encoded
+                 (src/donors/display-name-filter.ts). -->
             <div class="rb-name" data-rb-name hidden>
               <label class="rb-name__label" for="rbShareName">Add a name to your picture (optional)</label>
-              <input class="rb-name__input" id="rbShareName" type="text" maxlength="30" autocomplete="off" autocapitalize="words" spellcheck="false" aria-describedby="rbShareNameHint rbShareNameError" />
+              <input class="rb-name__input" id="rbShareName" type="text" maxlength="30" autocomplete="off" autocapitalize="words" spellcheck="false" aria-describedby="rbShareNameHint" />
               <p class="rb-name__hint" id="rbShareNameHint">A first name, a family, a class or a workplace. It goes on your certificate too, and it never leaves this page.</p>
               <p class="rb-name__error" id="rbShareNameError" role="alert" data-rb-name-error hidden>Please choose a different name.</p>
-              <script type="application/json" data-rb-name-filter><!-- red-bag:name-filter --></script>
+              <script type="text/plain" data-rb-name-filter><!-- red-bag:name-filter --></script>
             </div>
             <canvas class="rb-share__picture" data-rb-share-picture width="1080" height="1080" role="img" aria-label="A red paper gift bag on cream, with the words: I filled a Red Bag. Night Before Christmas Campaign."></canvas>
             <div class="rb-share__actions">
@@ -116,7 +117,7 @@
       <div class="rb-cert" data-rb-cert aria-hidden="true">
         <div class="rb-cert__frame">
           <div class="rb-cert__sheet">
-            <img class="rb-cert__logo" src="/assets/img/nbcc-logo.png" alt="Night Before Christmas Campaign" width="150" height="150" loading="lazy" />
+            <img class="rb-cert__logo" src="/assets/img/nbcc-logo.png" alt="Night Before Christmas Campaign" width="150" height="150" />
             <p class="rb-cert__title">Certificate of thanks</p>
             <p class="rb-cert__orn">&#10022;</p>
             <p class="rb-cert__to">This certificate is presented to</p>
@@ -125,9 +126,10 @@
             <div class="rb-cert__bag" data-rb-cert-bag></div>
             <p class="rb-cert__hand">Thank you for being part of this.</p>
             <div class="rb-cert__sign">
-              <div class="rb-cert__signed"><span class="rb-cert__date" data-rb-cert-date></span><i></i><small>Date</small></div>
-              <div class="rb-cert__signed"><span class="rb-cert__elves">The Elves</span><i></i><small>The Elves' Workshop</small></div>
+              <div class="rb-cert__signed"><span class="rb-cert__hand-name rb-cert__elves">The Elves</span><i></i> <small>The Elves' Workshop</small></div>
+              <div class="rb-cert__signed"><span class="rb-cert__hand-name">NBCC Team</span><i></i> <small>Night Before Christmas Campaign</small></div>
             </div>
+            <div class="rb-cert__dated"><span class="rb-cert__date" data-rb-cert-date></span><i></i> <small>Date</small></div>
             <p class="rb-cert__legal"><!-- red-bag:statement --></p>
           </div>
         </div>

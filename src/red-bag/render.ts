@@ -239,13 +239,14 @@ function markPreview(html: string): string {
 }
 
 /**
- * The supporter wall's bad word lists (src/donors/display-name-filter.ts), as JSON for the thank
- * you page's script: a donor may add a name to the picture and the certificate there, and that name
- * never leaves the browser, so it is screened in the browser, against the site's one list. Our own
- * fixed words, and "<" is written so that nothing here can end the element it sits in.
+ * The supporter wall's bad word lists (src/donors/display-name-filter.ts), for the thank you
+ * page's script: a donor may add a name to the picture and the certificate there, and that name
+ * never leaves the browser, so it is screened in the browser, against the site's one list. Written
+ * as base64 of the JSON, so nobody reading the page's source meets the words in plain sight; the
+ * script decodes it (assets/js/red-bag-thanks.js). Base64 has no "<", so it cannot end its element.
  */
 export function renderNameFilter(): string {
-  return JSON.stringify({ words: BLOCKED_NAME_LISTS.words, inside: BLOCKED_NAME_LISTS.inside }).replace(/</g, "\u003c");
+  return Buffer.from(JSON.stringify({ words: BLOCKED_NAME_LISTS.words, inside: BLOCKED_NAME_LISTS.inside }), "utf8").toString("base64");
 }
 
 /**
@@ -258,8 +259,9 @@ export function renderRedBagThanksPage(template: string, opts: Pick<RedBagPageOp
   const html = template
     .split(BAG_MARKER)
     .join(BAG_SVG)
-    .replace(STATEMENT_MARKER, escapeHtml(MATERIALS_STATEMENT))
-    .replace(NAME_FILTER_MARKER, renderNameFilter())
+    // Functions, not strings: nothing drawn in is ever read as a replacement pattern ("$&").
+    .replace(STATEMENT_MARKER, () => escapeHtml(MATERIALS_STATEMENT))
+    .replace(NAME_FILTER_MARKER, () => renderNameFilter())
     .replace(PREVIEW_MARKER, opts.preview ? PREVIEW_STRIP : "");
   return opts.preview ? markPreview(html) : html;
 }

@@ -75,14 +75,23 @@ describe("the thank you page, with its feel good pieces", () => {
     const error = name.querySelector("[data-rb-name-error]")!;
     expect(norm(error.textContent)).toBe("Please choose a different name.");
     expect(error.hasAttribute("hidden")).toBe(true);
+    // The refusal is not part of the box's description until a name is refused (the script adds it).
+    expect(input.getAttribute("aria-describedby")).toBe("rbShareNameHint");
+    expect(name.querySelector(".rb-name__hint")!.id).toBe("rbShareNameHint");
+    expect(error.id).toBe("rbShareNameError");
     expect(main.querySelector("[data-rb-cert-ask]")?.hasAttribute("hidden")).toBe(true);
   });
 
   it("draws the supporter wall's filter into the page, and the charity's statement onto the certificate", () => {
     expect(html).not.toContain("<!-- red-bag:");
     const holder = doc.querySelector("script[data-rb-name-filter]")!;
-    expect(holder.getAttribute("type")).toBe("application/json");
-    expect(JSON.parse(holder.textContent!)).toEqual({ words: [...BLOCKED_NAME_LISTS.words], inside: [...BLOCKED_NAME_LISTS.inside] });
+    // Not for running, and not in plain words: nobody reading the page's source meets the list.
+    expect(holder.getAttribute("type")).toBe("text/plain");
+    expect(holder.textContent).toMatch(/^[A-Za-z0-9+/=]+$/);
+    expect(JSON.parse(atob(holder.textContent!))).toEqual({ words: [...BLOCKED_NAME_LISTS.words], inside: [...BLOCKED_NAME_LISTS.inside] });
+    for (const w of [...BLOCKED_NAME_LISTS.words, ...BLOCKED_NAME_LISTS.inside]) expect(new RegExp(`\\b${w}\\b`, "i").test(html), "a listed word, in the page's source").toBe(false);
+    // A "$" in what is drawn in is never read as a pattern.
+    expect(renderRedBagThanksPage("a <!-- red-bag:statement --> b", { preview: false })).toBe(`a ${MATERIALS_STATEMENT.replace(/'/g, "&#39;")} b`);
     expect(norm(main.querySelector(".rb-cert__legal")?.textContent)).toBe(MATERIALS_STATEMENT);
   });
 
@@ -95,8 +104,18 @@ describe("the thank you page, with its feel good pieces", () => {
     expect(norm(cert.querySelector("[data-rb-cert-for]")?.textContent)).toBe("for filling a Red Bag Full of Joy");
     expect(norm(cert.querySelector(".rb-cert__hand")?.textContent)).toBe("Thank you for being part of this.");
     expect(norm(cert.querySelector(".rb-cert__elves")?.textContent)).toBe("The Elves");
+    // Two signatures in the same hand (Jaimie, 5 October 2026), and the date.
+    const signed = [...cert.querySelectorAll(".rb-cert__signed")];
+    expect(signed.map((s) => [norm(s.querySelector(".rb-cert__hand-name")?.textContent), norm(s.querySelector("small")?.textContent)])).toEqual([
+      ["The Elves", "The Elves' Workshop"],
+      ["NBCC Team", "Night Before Christmas Campaign"],
+    ]);
+    expect(cert.querySelector("[data-rb-cert-date]")).not.toBeNull();
+    expect(norm(cert.querySelector(".rb-cert__dated small")?.textContent)).toBe("Date");
     expect(cert.querySelector("h1, h2, h3, a, button, input")).toBeNull();
     const logo = cert.querySelector("img")!;
+    // In a block that is not displayed, a lazy picture might never be fetched for the printer.
+    expect(logo.hasAttribute("loading")).toBe(false);
     expect(logo.getAttribute("src")).toBe("/assets/img/nbcc-logo.png");
     expect(logo.hasAttribute("width") && logo.hasAttribute("height")).toBe(true);
     // Off the screen; on the printed page only, one A4 sheet, upright, with no room for the
@@ -104,6 +123,13 @@ describe("the thank you page, with its feel good pieces", () => {
     expect(rules).toMatch(/\.rb-cert\{[^}]*display:none/);
     expect(rules).toMatch(/@media print\{[\s\S]*\.rb-print-cert \.rb-cert\{[^}]*display:flex/);
     expect(rules).toMatch(/@page rbcert\{size:A4 portrait;margin:0\}/);
+  });
+
+  it("says honestly what the picture shows: no amount, only the bag", () => {
+    const share = main.querySelector("[data-rb-share]")!;
+    expect(norm(share.querySelector("[data-rb-share-note]")?.textContent)).toBe("It shows no amount, only that you filled a Red Bag.");
+    expect(norm(share.querySelector("h2 + p")?.textContent)).toBe("A picture to post or send, to show a friend how to fill one too. It shows no amount, only that you filled a Red Bag.");
+    expect(html).not.toContain("says nothing about how much");
   });
 
   it("ranks nobody and presses nobody: no title for the giver, no ask", () => {
@@ -114,8 +140,10 @@ describe("the thank you page, with its feel good pieces", () => {
 });
 
 describe("the thank you page's own stylesheet", () => {
-  it("takes every colour from the site's tokens, and brings no font or file of its own", () => {
-    expect(rules.match(/#[0-9a-fA-F]{3,8}\b/g) ?? []).toEqual([]);
+  it("takes every colour from the site's tokens, but one: the night in the Workshop's window", () => {
+    // The site has no blue. The one new colour is named once, at the top, and used by name.
+    expect(rules.match(/#[0-9a-fA-F]{3,8}\b/g) ?? []).toEqual(["#26355C"]);
+    expect(rules).toMatch(/--rbw-night:#26355C;/);
     expect(rules).not.toMatch(/\brgba?\(|@font-face|@import|url\(|https?:/);
   });
 
@@ -153,9 +181,15 @@ describe("the thank you page's own stylesheet", () => {
     expect(rules).toMatch(/@media \(prefers-reduced-motion:\s*reduce\)\{[^}]*\.rb-workshop[^}]*animation:none !important/);
   });
 
+  it("makes the scene the centrepiece: the column's width, and simpler on a small screen", () => {
+    expect(rules).toMatch(/\.rb-workshop__scene\{[^}]*width:min\(100%,6[0-4]0px\)/);
+    expect(rules).toMatch(/@media \(max-width:\d+px\)\{[^}]*\.rbw-extra\{display:none\}/);
+  });
+
   it("gives the name box a focus ring and room for a thumb, and styles nothing of the giving page", () => {
     expect(rules).toMatch(/\.rb-name__input:focus-visible\{[^}]*outline:/);
     expect(rules).toMatch(/\.rb-name__input\{[^}]*min-height:(4[4-9]|5\d)px/);
-    expect(rules).not.toMatch(/\.rb-(paper|panel|item|example|bar|layout|bags|art|bag)\b/);
+    // (but for the catalogue's teddy and train where they stand IN the scene: a line to suit their size)
+    expect(rules.replace(/\.rbw \.rb-art\{[^}]*\}/, "")).not.toMatch(/\.rb-(paper|panel|item|example|bar|layout|bags|art|bag)\b/);
   });
 });

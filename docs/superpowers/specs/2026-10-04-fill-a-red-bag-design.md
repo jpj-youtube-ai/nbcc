@@ -128,7 +128,8 @@ people NBCC helps. Nothing typed is sent anywhere; no new endpoint, table, libra
    own word list, drawn into the page by the server; refused: "Please choose a different name." and
    the plain picture. The share controls are unchanged and share the picture as shown. The sentence
    over the picture is honest about it: "It shows no amount, only that you filled a Red Bag.", or
-   for two bags or more "It shows no amount, only how many bags you filled." Nothing made from the
+   only while the picture itself counts the bags (a name, and two bags or more) "It shows no
+   amount, only how many bags you filled." Nothing made from the
    name may reach the site's visit counter either: "Save the picture" points at a blob, never at
    the picture's own bytes.
 3. **A certificate to print.** "Print your certificate": one upright A4 page, printed by the
@@ -138,7 +139,8 @@ people NBCC helps. Nothing typed is sent anywhere; no new endpoint, table, libra
    signatures in that hand, "The Elves" over "The Elves' Workshop" and "NBCC Team" over "Night
    Before Christmas Campaign" (the second added by Jaimie); the date ("5 October 2026"); the charity's
    statement as on every printed piece. No amount. No name yet: "Add a name above first, and it goes
-   on your certificate."
+   on your certificate." One page whatever the browser: it sizes itself to the printable page, and
+   no clock ends the print (a phone's preview may be open for a long time).
 
 Order on the page: eyebrow and heading; the Workshop and its line; the donation, Gift Aid, elves
 and receipt lines; the share (name box, picture, controls); "Print your certificate"; "Fill another

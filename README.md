@@ -12331,8 +12331,13 @@ are in a stylesheet of the page's own, `assets/css/red-bag-thanks.css`, which no
   not for every letter: the picture's own bytes are never in a link's address, because the site's
   visit counter (`assets/js/pulse.js`) reports the last part of a download link's address, and a
   `data:` address would hand it a trace of the name (a test runs the real `pulse.js` to hold this).
+  A file is only used if the picture has not been redrawn since it was asked for; a press on a
+  stale Save makes the file and saves it through a link that is never in the page (one click
+  counted, not two); if no file can be made the status line says "Sorry, that didn't work. Please
+  try again."
   The sentence above the picture says what it shows: "It shows no amount, only that you filled a
-  Red Bag.", or "It shows no amount, only how many bags you filled." for two bags or more. Because
+  Red Bag.", or, only while the picture itself counts the bags (a name, and two bags or more), "It
+  shows no amount, only how many bags you filled." Because
   the picture
   carries NBCC's name, the name is screened against the supporter wall's own list
   (`src/donors/display-name-filter.ts`, now exporting `BLOCKED_NAME_LISTS`), which the server draws
@@ -12347,15 +12352,23 @@ are in a stylesheet of the page's own, `assets/css/red-bag-thanks.css`, which no
   (the name from the box; "for filling a Red Bag Full of Joy", or "for filling 2 Red Bags Full of
   Joy"; "Thank you for being part of this." in the handwriting; two signatures in the same hand,
   "The Elves" over "The Elves' Workshop" and "NBCC Team" over "Night Before Christmas Campaign";
-  today's date as "5 October 2026" centred under them; a name over 20 characters is set a little
-  smaller so it is always one page; and the statement every printed piece carries, `MATERIALS_STATEMENT`, drawn in by
+  today's date as "5 October 2026" centred under them; a name over 16 characters is set smaller, and
+  over 24 smaller again, so two lines of the widest letters still leave room; and the statement every printed piece carries, `MATERIALS_STATEMENT`, drawn in by
   the server at `<!-- red-bag:statement -->`) and opens the browser's own print window. No amount on
   it, no new route and no PDF library: while `<html>` carries `rb-print-cert` the print rules show
-  the certificate alone on one upright A4 sheet (`@page rbcert`, no paper margin, so the browser has
-  no room for its own header and footer; the white edge is in the drawing). With no name it asks for
+  the certificate alone on one upright sheet. The script asks for A4 with no margin by putting an
+  ordinary `@page{size:A4 portrait;margin:0}` rule in the page only while the certificate prints
+  (so the browser has no room for its own header and footer; the white edge is in the drawing), but
+  the certificate does not depend on it: every size on it is a share of the printable page (`--u`,
+  a millimetre on A4 with no margin), so where that rule is ignored, or on other paper or with the
+  browser's own margins, the same certificate prints a little smaller, whole, on ONE page (no named
+  page: Safari does not know them). With no name it asks for
   one ("Add a name above first, and it goes on your certificate.") with the box in hand. Printing the
-  page any other way prints the page as before: the mark comes off after printing, when the window
-  is looked at again, and after 30 seconds (for browsers inside apps where printing does nothing).
+  page any other way prints the page as before: the mark and the paper rule come off when the
+  browser says printing is over, when the window is looked at again, and when an ordinary print
+  starts (a "before print" that is not the button's own, for browsers inside apps where the
+  button's print did nothing). No clock takes the mark away, because on a phone `print()` comes
+  straight back while the donor is still looking at the preview.
 
 Tests: `test/unit/red-bag-thanks-extras.test.ts` (the scene, the name, the picture's words, the
 certificate, nothing sent anywhere, and that a broken piece never stops the thank you) and

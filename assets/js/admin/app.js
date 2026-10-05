@@ -2535,6 +2535,15 @@
       "</dl>" +
       '<h3 class="admin-subhead">Story</h3><p class="admin-story-text">' + H.escapeHtml(s.story_text || "") + "</p>" +
       (s.short_quote ? '<h3 class="admin-subhead">Short quote</h3><p class="admin-story-text">' + H.escapeHtml(s.short_quote) + "</p>" : "");
+    // TASK-NNN: where reading ends. Used and Withdrawn say more than read, so they get no button.
+    var readBar = "";
+    if (canWrite && s.status === "new") {
+      readBar = '<p class="admin-read-bar"><button class="btn btn-primary" type="button" id="storyReadBtn">Mark as read</button></p>';
+    } else if (canWrite && s.status === "reviewed") {
+      readBar =
+        '<p class="admin-read-bar"><span class="admin-read-done">Marked as read.</span> ' +
+        '<button class="btn btn-ghost" type="button" id="storyUnreadBtn">Mark as new</button></p>';
+    }
     var actions = "";
     if (canWrite) {
       var statusOptions = ["new", "reviewed", "used", "withdrawn"]
@@ -2571,7 +2580,7 @@
             '<button class="btn" type="button" id="archiveStoryBtn">Archive</button>' +
             "</div>");
     }
-    el("storyDetail").innerHTML = info + actions;
+    el("storyDetail").innerHTML = info + readBar + actions;
     if (canWrite) wireStoryActions(s);
   }
   function patchStory(body, okMsg, errMsg) {
@@ -2607,6 +2616,18 @@
         patchStory(body, "Saved.", "Could not save the changes.");
       });
     }
+    // TASK-NNN: the same status the list's tick sends. The story is drawn again with the other
+    // button, which takes the keyboard's place so it is not left on nothing.
+    bindClick("storyReadBtn", function () {
+      patchStory({ status: "reviewed" }, "", "Could not mark the story as read.").then(function () {
+        if (el("storyUnreadBtn")) el("storyUnreadBtn").focus();
+      });
+    });
+    bindClick("storyUnreadBtn", function () {
+      patchStory({ status: "new" }, "", "Could not mark the story as new.").then(function () {
+        if (el("storyReadBtn")) el("storyReadBtn").focus();
+      });
+    });
     bindClick("withdrawStoryBtn", function () {
       if (!window.confirm("Withdraw this story? It will no longer be treated as usable.")) return;
       patchStory({ status: "withdrawn" }, "Story withdrawn.", "Could not withdraw the story.");

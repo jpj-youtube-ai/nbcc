@@ -197,3 +197,66 @@ describe("ticking a story", () => {
     expect(patches()).toEqual([]);
   });
 });
+
+describe("an open story", () => {
+  async function open(id: number) {
+    await openStories();
+    (document.querySelector(`#storiesTable [data-story="${id}"]`) as HTMLElement).click();
+    await settle();
+  }
+
+  it("has Mark as read under the story's words while it is New, and it makes the story Reviewed", async () => {
+    await open(4);
+    const btn = el("storyReadBtn");
+    expect(btn.textContent).toBe("Mark as read");
+    expect(el("storyUnreadBtn")).toBeNull();
+    // Under the words: it comes after the story's text in the page.
+    const words = document.querySelector("#storyDetail .admin-story-text") as HTMLElement;
+    expect(words.compareDocumentPosition(btn) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    btn.click();
+    await settle();
+    expect(patches()).toEqual([{ method: "PATCH", path: "/api/admin/stories/4", body: '{"status":"reviewed"}' }]);
+    expect(el("storyReadBtn")).toBeNull();
+    expect(el("storyDetail").textContent).toContain("Marked as read.");
+    expect(el("storyUnreadBtn").textContent).toBe("Mark as new");
+  });
+
+  it("has Mark as new while it is Reviewed, and it makes the story New again", async () => {
+    await open(3);
+    expect(el("storyReadBtn")).toBeNull();
+    el("storyUnreadBtn").click();
+    await settle();
+    expect(patches()).toEqual([{ method: "PATCH", path: "/api/admin/stories/3", body: '{"status":"new"}' }]);
+    expect(el("storyReadBtn").textContent).toBe("Mark as read");
+  });
+
+  it("keeps the keyboard on the button that took its place", async () => {
+    await open(4);
+    el("storyReadBtn").click();
+    await settle();
+    expect(document.activeElement).toBe(el("storyUnreadBtn"));
+  });
+
+  it("says so when it could not be saved, and keeps the button", async () => {
+    await open(4);
+    patchStatus = 500;
+    el("storyReadBtn").click();
+    await settle();
+    expect(el("storyActionStatus").textContent).toBe("Could not mark the story as read.");
+    expect(el("storyReadBtn")).not.toBeNull();
+  });
+
+  it.each([2, 1])("has neither button for a Used or Withdrawn story (story %i)", async (id) => {
+    await open(id);
+    expect(el("storyReadBtn")).toBeNull();
+    expect(el("storyUnreadBtn")).toBeNull();
+  });
+
+  it("has neither button for someone who can only view Stories", async () => {
+    perms = effectivePermissions({ role: "viewer", permissions: null });
+    await open(4);
+    expect(el("storyDetail").textContent).toContain("A bag of presents arrived on Christmas Eve.");
+    expect(el("storyReadBtn")).toBeNull();
+    expect(el("storyUnreadBtn")).toBeNull();
+  });
+});

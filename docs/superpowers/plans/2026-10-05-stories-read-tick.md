@@ -515,7 +515,7 @@ In `wireStoryActions`, directly before `bindClick("withdrawStoryBtn", function (
 - [ ] **Step 4: Run the tests and see them pass**
 
 Run: `npx vitest run test/unit/admin-stories-read-tick.test.ts`
-Expected: 18 passed.
+Expected: 17 passed.
 
 - [ ] **Step 5: Run the existing Stories tests**
 
@@ -596,7 +596,7 @@ In `assets/css/admin.css`, directly after the line `.admin-check input{width:18p
 - [ ] **Step 4: Run the tests and see them pass**
 
 Run: `npx vitest run test/unit/admin-stories-read-tick.test.ts test/unit/admin-screen-styles.test.ts test/unit/admin-no-sideways-scroll.test.ts test/unit/admin-fits-a-phone.test.ts`
-Expected: all pass (22 in the new file).
+Expected: all pass (21 in the new file).
 
 - [ ] **Step 5: Look at it in a real browser**
 

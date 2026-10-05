@@ -3141,6 +3141,12 @@ textarea.fx-call-input{min-height:88px;line-height:1.5;resize:vertical;field-siz
 @media (max-width:560px){
   .dn-source{grid-template-columns:minmax(0,1fr)}
 }
-.dn-redbag-filter{margin-left:8px}
-.dn-source-pill{margin-left:2px}
+/* The tick box: as tall as the selects beside it, so it is as easy to press, in the admin's own
+   green (as the newsletter's tick boxes are). On the narrowest phones it wraps to a line of its
+   own, where a gap on its left would read as an indent. */
+.dn-redbag-filter{margin-left:8px;padding:7px 0;cursor:pointer}
+.dn-redbag-filter input{width:18px;height:18px;accent-color:var(--holly);cursor:pointer}
+@media (max-width:360px){
+  .dn-redbag-filter{margin-left:0}
+}
 /* end Fill a Red Bag */

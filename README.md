@@ -12298,41 +12298,64 @@ good pieces"). Three additions, all the script's, each behind a guard (`safe()` 
 are in a stylesheet of the page's own, `assets/css/red-bag-thanks.css`, which no other page loads.
 
 - **Watch it leave the Workshop.** In place of the still bag, one inline drawing of the Elves'
-  Workshop (`assets/js/red-bag-workshop.js`, loaded by this page alone): a wooden shelf with tied
-  Red Bags on it, a hanging lamp, the donor's bag with its gold ribbon and "Packed with love" tag,
-  and a small elf seen from behind. On arrival after a gift it plays ONCE, about four seconds: the
-  elf lifts the bag into the gap on the shelf and steps back down, the lamp goes down to a glow, and
+  Workshop (`assets/js/red-bag-workshop.js`, loaded by this page alone), the page's centrepiece:
+  as wide as the column (620px at most, 16 to 10). The Workshop the night before, well stocked
+  (Jaimie, 5 October 2026: "bigger and richer"; no clock): three wooden shelves of tied Red Bags and
+  gifts (the catalogue's own teddy and toy train where the catalogue is there to lend them, books, a
+  folded blanket, wrapped presents), a window with the night outside (the one colour that is not a
+  site token, `--rbw-night: #26355C`, named once in the stylesheet) and snow that drifts down once
+  and settles, a Christmas tree whose fairy lights stay softly lit when the lamp goes down, a
+  hanging lamp, the donor's bag with its gold ribbon and "Packed with love" tag, and a small elf
+  seen from behind. On a small screen the finer things are left out (`.rbw-extra`) so it stays
+  clear. On arrival after a gift it plays ONCE, about four seconds: the
+  elf lifts the bag into the gap on the shelf and steps back down, the lamp goes down to a glow (the
+  fairy lights twinkle once; the tree and the window are the warm points in the dusk), and
   the line under it fades in, in the paper's hand: "Bag packed. The elves will take it from here."
   (Jaimie's words; the page's only "will", and it is about the elves, not about what the money
   buys.) Then it rests. Transform and opacity only, nothing loops, and for anyone who asked for less
   motion, or opened without a remembered gift, it is simply shown at rest. The drawing is hidden
   from screen readers; the line is ordinary text, in the page from the start, read once. One of the
   donor's bags is on the shelf for each full £50 of the total the tab remembered (the bag's total,
-  before any card fee), one at least and five at most. Without the script, or if the scene's file
+  before any card fee), one at least and five at most, side by side on the reaching shelf (the
+  middle one is the one lifted in). Without the script, or if the scene's file
   is missing or throws, the still bag stays.
 - **A name on the picture.** Above the picture, "Add a name to your picture (optional)", 30
-  characters at most (letters, numbers, spaces and plain punctuation; anything else is dropped). As
+  characters at most, counted as whole characters (letters in any script with the marks they are
+  built from, numbers, spaces and plain punctuation; anything else is dropped, with the caret left
+  where it was, and a letter still being composed is left alone until it is whole). As
   it is typed the picture reads "Fern filled a Red Bag", or "Fern filled 2 Red Bags" on the same
   £50 rule; a long name takes a line of its own and shrinks to fit; no name, the plain "I filled a
   Red Bag". Never an amount. **The name never leaves the browser**: the box belongs to no form, has
-  no `name`, and nothing in either script makes a request or stores anything. Because the picture
+  no `name`, and nothing in either script makes a request or stores anything. "Save the picture"
+  points at a blob (an address that is only a random id), made when Save is reached or pressed and
+  not for every letter: the picture's own bytes are never in a link's address, because the site's
+  visit counter (`assets/js/pulse.js`) reports the last part of a download link's address, and a
+  `data:` address would hand it a trace of the name (a test runs the real `pulse.js` to hold this).
+  The sentence above the picture says what it shows: "It shows no amount, only that you filled a
+  Red Bag.", or "It shows no amount, only how many bags you filled." for two bags or more. Because
+  the picture
   carries NBCC's name, the name is screened against the supporter wall's own list
   (`src/donors/display-name-filter.ts`, now exporting `BLOCKED_NAME_LISTS`), which the server draws
-  into the page as JSON (`renderNameFilter` in `src/red-bag/render.ts`, at the
-  `<!-- red-bag:name-filter -->` mark) so the script applies the same two passes as
+  into the page as base64 of its JSON, so the words are not in plain sight in the page's source
+  (`renderNameFilter` in `src/red-bag/render.ts`, at the `<!-- red-bag:name-filter -->` mark); the
+  script decodes it and applies the same two passes as
   `containsBlockedWord` with no new endpoint. A refused name shows "Please choose a different name."
-  and the picture stays plain. If the list is not in the page, the box and the certificate button
-  stay put away: closed, not open.
+  (it joins the box's description only while a name is refused)
+  and the picture stays plain. If the list is not in the page, or cannot be read, the box and the
+  certificate button stay put away: closed, not open.
 - **A certificate to print.** "Print your certificate" fills in the page's own hidden certificate
   (the name from the box; "for filling a Red Bag Full of Joy", or "for filling 2 Red Bags Full of
-  Joy"; today's date as "5 October 2026"; "Thank you for being part of this." signed "The Elves" in
-  the handwriting; and the statement every printed piece carries, `MATERIALS_STATEMENT`, drawn in by
+  Joy"; "Thank you for being part of this." in the handwriting; two signatures in the same hand,
+  "The Elves" over "The Elves' Workshop" and "NBCC Team" over "Night Before Christmas Campaign";
+  today's date as "5 October 2026" centred under them; a name over 20 characters is set a little
+  smaller so it is always one page; and the statement every printed piece carries, `MATERIALS_STATEMENT`, drawn in by
   the server at `<!-- red-bag:statement -->`) and opens the browser's own print window. No amount on
   it, no new route and no PDF library: while `<html>` carries `rb-print-cert` the print rules show
   the certificate alone on one upright A4 sheet (`@page rbcert`, no paper margin, so the browser has
   no room for its own header and footer; the white edge is in the drawing). With no name it asks for
   one ("Add a name above first, and it goes on your certificate.") with the box in hand. Printing the
-  page any other way prints the page as before.
+  page any other way prints the page as before: the mark comes off after printing, when the window
+  is looked at again, and after 30 seconds (for browsers inside apps where printing does nothing).
 
 Tests: `test/unit/red-bag-thanks-extras.test.ts` (the scene, the name, the picture's words, the
 certificate, nothing sent anywhere, and that a broken piece never stops the thank you) and

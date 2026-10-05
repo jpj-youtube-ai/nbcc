@@ -296,7 +296,7 @@
       (borrowed(art, "soft-toy", 147, top - 30.5, 30) || present(150, top, 24, 21, "gold")) +
       books(188, top) +
       // the catalogue's own folded blanket (the giving page's), or the scene's plain one without it
-      (borrowed(art, "blanket", 222, top - 26.5, 30) ? '<g class="rbw-extra">' + borrowed(art, "blanket", 222, top - 26.5, 30) + "</g>" : blanket(226, top, true)) +
+      (borrowed(art, "blanket", 224, top - 21.2, 24) ? '<g class="rbw-extra">' + borrowed(art, "blanket", 224, top - 21.2, 24) + "</g>" : blanket(226, top, true)) +
       present(259, top, 15, 18, "holly", true) +
       bagAt(SHELF_LEFT + SHELF_WIDTH - 36, top, 0.3, "rbw-bag--other", { tag: false });
 

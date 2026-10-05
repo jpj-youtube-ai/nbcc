@@ -259,4 +259,62 @@ describe("an open story", () => {
     expect(el("storyReadBtn")).toBeNull();
     expect(el("storyUnreadBtn")).toBeNull();
   });
+
+  // One loud button a screen: Save changes is the form's. These are the admin's own small button
+  // and its text link, so the undo is the quietest thing in the bar.
+  it("uses the admin's small button to mark as read, and a plain link to undo it", async () => {
+    await open(4);
+    expect(el("storyReadBtn").className).toBe("admin-btn");
+    el("storyReadBtn").click();
+    await settle();
+    expect(el("storyUnreadBtn").className).toBe("admin-link");
+  });
+});
+
+describe("its styles", () => {
+  const css = readFileSync(resolve(ROOT, "assets/css/admin.css"), "utf8");
+  const rule = (selector: string) => {
+    const at = css.indexOf(selector + "{");
+    return at < 0 ? "" : css.slice(at, css.indexOf("}", at));
+  };
+
+  // In rem, not px: the heading's word grows with someone's larger text, and so must its column.
+  it("gives the Read column a fixed, narrow width, so the other columns keep their room", () => {
+    expect(rule(".stories-table th:first-child,.stories-table td:first-child")).toMatch(/[;{]width:\s*[\d.]+rem/);
+  });
+
+  it("makes the tick a target a finger can hit, 44px each way", () => {
+    expect(rule(".admin-read-tick")).toMatch(/[;{]width:\s*44px/);
+    expect(rule(".admin-read-tick")).toMatch(/min-height:\s*44px/);
+  });
+
+  // .admin-body input[type="checkbox"] resets every tick box's width to the browser's own (13px),
+  // and outranks a plain class. Measured in Chrome: 13px until the rule named the same things.
+  it("sizes the box with a rule that outranks the admin's tick box reset", () => {
+    const box = rule('.admin-body .admin-read-tick input[type="checkbox"]');
+    expect(box).toMatch(/width:\s*20px/);
+    expect(box).toMatch(/height:\s*20px/);
+  });
+
+  it("shows where the keyboard is on the tick", () => {
+    expect(rule(".admin-read-tick input:focus-visible")).toContain("outline:");
+  });
+
+  // Measured in Chrome: a status line that took no room while empty pushed the table down 35px the
+  // moment a save failed, so a second press landed on the tick of the story above. The line keeps
+  // one line of room always (its height when empty is its line's height), so its words never move
+  // a row, and it is never collapsed or taken out of the page.
+  it("keeps one line of room for the list's status line, so a message never moves the rows", () => {
+    const line = rule("#storiesListStatus");
+    const lineHeight = (line.match(/line-height:\s*([\d.]+)/) || [])[1];
+    const minHeight = (line.match(/min-height:\s*([\d.]+)em/) || [])[1];
+    expect(lineHeight).toBeTruthy();
+    expect(minHeight).toBe(lineHeight);
+    expect(css).not.toContain("#storiesListStatus:empty");
+  });
+
+  it("lets the open story's bar wrap on a narrow screen, with 44px targets", () => {
+    expect(rule(".admin-read-bar")).toMatch(/flex-wrap:\s*wrap/);
+    expect(rule(".admin-read-bar .admin-btn,.admin-read-bar .admin-link")).toMatch(/min-height:\s*44px/);
+  });
 });

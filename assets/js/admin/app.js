@@ -2536,13 +2536,14 @@
       '<h3 class="admin-subhead">Story</h3><p class="admin-story-text">' + H.escapeHtml(s.story_text || "") + "</p>" +
       (s.short_quote ? '<h3 class="admin-subhead">Short quote</h3><p class="admin-story-text">' + H.escapeHtml(s.short_quote) + "</p>" : "");
     // TASK-NNN: where reading ends. Used and Withdrawn say more than read, so they get no button.
+    // The admin's small button and its text link: Save changes, below, stays the one loud button.
     var readBar = "";
     if (canWrite && s.status === "new") {
-      readBar = '<p class="admin-read-bar"><button class="btn btn-primary" type="button" id="storyReadBtn">Mark as read</button></p>';
+      readBar = '<p class="admin-read-bar"><button class="admin-btn" type="button" id="storyReadBtn">Mark as read</button></p>';
     } else if (canWrite && s.status === "reviewed") {
       readBar =
         '<p class="admin-read-bar"><span class="admin-read-done">Marked as read.</span> ' +
-        '<button class="btn btn-ghost" type="button" id="storyUnreadBtn">Mark as new</button></p>';
+        '<button class="admin-link" type="button" id="storyUnreadBtn">Mark as new</button></p>';
     }
     var actions = "";
     if (canWrite) {

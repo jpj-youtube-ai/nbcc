@@ -207,6 +207,25 @@
 .admin-edit{max-width:480px;margin-top:22px;background:var(--card);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow-sm);padding:20px 24px}
 .admin-check{display:flex;align-items:center;gap:8px;font-size:.9rem;margin:10px 0;cursor:pointer}
 .admin-check input{width:18px;height:18px;accent-color:var(--crimson)}
+/* TASK-NNN: the Read tick on the Stories list, and Mark as read on an open story. The column is
+   narrow and fixed (60px, in rem so it grows with someone's larger text, as its heading does), so
+   the other seven keep their share of a fixed-layout table. The label is a 44px target: its
+   negative margins take that back out of the row's height, and line the box up under the heading.
+   Holly, the admin's colour for something settled (Replied, Public). */
+.stories-table th:first-child,.stories-table td:first-child{width:3.75rem;padding-right:0}
+.admin-read-tick{display:flex;align-items:center;justify-content:center;width:44px;min-height:44px;margin:-11px 0 -11px -12px;cursor:pointer}
+/* Named as the .admin-body tick box reset names them (it only needs to undo the public forms'
+   100% width, but it outranks a plain class), so the box is 20px and not the browser's 13px. */
+.admin-body .admin-read-tick input[type="checkbox"]{width:20px;height:20px;margin:0;accent-color:var(--holly);cursor:pointer}
+.admin-body .admin-read-tick input[type="checkbox"]:disabled{cursor:default}
+.admin-read-tick input:focus-visible{outline:3px solid var(--crimson);outline-offset:2px}
+/* The list's own status line keeps one line of room always, as tall empty as with words in it.
+   Measured in Chrome: one that took no room until a save failed pushed the table down 35px under
+   the pointer, so a second press landed on the tick of the story above. */
+#storiesListStatus{line-height:1.4;min-height:1.4em}
+.admin-read-bar{display:flex;flex-wrap:wrap;align-items:center;gap:6px 14px;margin:16px 0 0}
+.admin-read-bar .admin-btn,.admin-read-bar .admin-link{min-height:44px}
+.admin-read-done{font-weight:600;color:var(--holly-dark)}
 .admin-donor-actions{display:flex;flex-wrap:wrap;gap:12px;margin-top:18px}
 .admin-action-status{margin-top:14px;font-weight:600;color:var(--holly)}
 

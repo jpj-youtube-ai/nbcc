@@ -473,13 +473,14 @@ In `assets/js/admin/app.js`, in `renderStory`, directly before the line `var act
 
 ```js
     // TASK-NNN: where reading ends. Used and Withdrawn say more than read, so they get no button.
+    // The admin's small button and its text link: Save changes, below, stays the one loud button.
     var readBar = "";
     if (canWrite && s.status === "new") {
-      readBar = '<p class="admin-read-bar"><button class="btn btn-primary" type="button" id="storyReadBtn">Mark as read</button></p>';
+      readBar = '<p class="admin-read-bar"><button class="admin-btn" type="button" id="storyReadBtn">Mark as read</button></p>';
     } else if (canWrite && s.status === "reviewed") {
       readBar =
         '<p class="admin-read-bar"><span class="admin-read-done">Marked as read.</span> ' +
-        '<button class="btn btn-ghost" type="button" id="storyUnreadBtn">Mark as new</button></p>';
+        '<button class="admin-link" type="button" id="storyUnreadBtn">Mark as new</button></p>';
     }
 ```
 
@@ -539,9 +540,23 @@ git commit -m "Stories read tick: Mark as read on an open story"
 
 Before writing any CSS, load the design skills the user's hook asks for (`redesign-existing-projects`, since this changes an existing screen; then `polish` and `audit` on the result). They are a check on the choices below, not a licence to restyle the screen: the admin has its own tokens and parts, and these rules use only those.
 
-- [ ] **Step 1: Write the failing test**
+- [ ] **Step 1: Write the failing tests**
 
-Add to `test/unit/admin-stories-read-tick.test.ts`, at the end:
+Add to `test/unit/admin-stories-read-tick.test.ts`. First, at the end of the `describe("an open story", …)` block:
+
+```ts
+  // One loud button a screen: Save changes is the form's. These are the admin's own small button
+  // and its text link, so the undo is the quietest thing in the bar.
+  it("uses the admin's small button to mark as read, and a plain link to undo it", async () => {
+    await open(4);
+    expect(el("storyReadBtn").className).toBe("admin-btn");
+    el("storyReadBtn").click();
+    await settle();
+    expect(el("storyUnreadBtn").className).toBe("admin-link");
+  });
+```
+
+Then, at the end of the file:
 
 ```ts
 describe("its styles", () => {
@@ -551,52 +566,91 @@ describe("its styles", () => {
     return at < 0 ? "" : css.slice(at, css.indexOf("}", at));
   };
 
+  // In rem, not px: the heading's word grows with someone's larger text, and so must its column.
   it("gives the Read column a fixed, narrow width, so the other columns keep their room", () => {
-    expect(rule(".stories-table th:first-child,.stories-table td:first-child")).toMatch(/width:\s*\d+px/);
+    expect(rule(".stories-table th:first-child,.stories-table td:first-child")).toMatch(/[;{]width:\s*[\d.]+rem/);
   });
 
   it("makes the tick a target a finger can hit, 44px each way", () => {
-    expect(rule(".admin-read-tick")).toMatch(/min-width:\s*44px/);
+    expect(rule(".admin-read-tick")).toMatch(/[;{]width:\s*44px/);
     expect(rule(".admin-read-tick")).toMatch(/min-height:\s*44px/);
+  });
+
+  // .admin-body input[type="checkbox"] resets every tick box's width to the browser's own (13px),
+  // and outranks a plain class. Measured in Chrome: 13px until the rule named the same things.
+  it("sizes the box with a rule that outranks the admin's tick box reset", () => {
+    const box = rule('.admin-body .admin-read-tick input[type="checkbox"]');
+    expect(box).toMatch(/width:\s*20px/);
+    expect(box).toMatch(/height:\s*20px/);
   });
 
   it("shows where the keyboard is on the tick", () => {
     expect(rule(".admin-read-tick input:focus-visible")).toContain("outline:");
   });
 
-  it("lets the button's bar wrap on a narrow screen", () => {
+  // Measured in Chrome: a status line that took no room while empty pushed the table down 35px the
+  // moment a save failed, so a second press landed on the tick of the story above. The line keeps
+  // one line of room always (its height when empty is its line's height), so its words never move
+  // a row, and it is never collapsed or taken out of the page.
+  it("keeps one line of room for the list's status line, so a message never moves the rows", () => {
+    const line = rule("#storiesListStatus");
+    const lineHeight = (line.match(/line-height:\s*([\d.]+)/) || [])[1];
+    const minHeight = (line.match(/min-height:\s*([\d.]+)em/) || [])[1];
+    expect(lineHeight).toBeTruthy();
+    expect(minHeight).toBe(lineHeight);
+    expect(css).not.toContain("#storiesListStatus:empty");
+  });
+
+  it("lets the open story's bar wrap on a narrow screen, with 44px targets", () => {
     expect(rule(".admin-read-bar")).toMatch(/flex-wrap:\s*wrap/);
+    expect(rule(".admin-read-bar .admin-btn,.admin-read-bar .admin-link")).toMatch(/min-height:\s*44px/);
   });
 });
 ```
 
-- [ ] **Step 2: Run it and see it fail**
+- [ ] **Step 2: Run them and see them fail**
 
 Run: `npx vitest run test/unit/admin-stories-read-tick.test.ts`
-Expected: the 4 new tests fail (each rule is the empty string).
+Expected: the 7 new tests fail (the button still has the site's big button classes, and each rule is the empty string).
 
-- [ ] **Step 3: Add the rules**
+- [ ] **Step 3: Add the rules, and the button's classes**
+
+In `assets/js/admin/app.js`, in `renderStory`, the two buttons are `class="admin-btn"` (Mark as read) and `class="admin-link"` (Mark as new), as Task 3 Step 3 now shows.
 
 In `assets/css/admin.css`, directly after the line `.admin-check input{width:18px;height:18px;accent-color:var(--crimson)}`, add:
 
 ```css
 /* TASK-NNN: the Read tick on the Stories list, and Mark as read on an open story. The column is
-   narrow and fixed, so the other seven keep their share of a fixed-layout table. The label is a
-   44px target; its negative margins take that back out of the row's height, which stays as it
-   was. Holly, the admin's colour for something settled (Replied, Public). */
-.stories-table th:first-child,.stories-table td:first-child{width:64px}
-.admin-read-tick{display:inline-flex;align-items:center;justify-content:center;min-width:44px;min-height:44px;margin:-11px 0 -11px -12px;cursor:pointer}
-.admin-read-tick input{width:20px;height:20px;margin:0;accent-color:var(--holly);cursor:pointer}
-.admin-read-tick input:disabled{cursor:default}
+   narrow and fixed (60px, in rem so it grows with someone's larger text, as its heading does), so
+   the other seven keep their share of a fixed-layout table. The label is a 44px target: its
+   negative margins take that back out of the row's height, and line the box up under the heading.
+   Holly, the admin's colour for something settled (Replied, Public). */
+.stories-table th:first-child,.stories-table td:first-child{width:3.75rem;padding-right:0}
+.admin-read-tick{display:flex;align-items:center;justify-content:center;width:44px;min-height:44px;margin:-11px 0 -11px -12px;cursor:pointer}
+/* Named as the .admin-body tick box reset names them (it only needs to undo the public forms'
+   100% width, but it outranks a plain class), so the box is 20px and not the browser's 13px. */
+.admin-body .admin-read-tick input[type="checkbox"]{width:20px;height:20px;margin:0;accent-color:var(--holly);cursor:pointer}
+.admin-body .admin-read-tick input[type="checkbox"]:disabled{cursor:default}
 .admin-read-tick input:focus-visible{outline:3px solid var(--crimson);outline-offset:2px}
-.admin-read-bar{display:flex;flex-wrap:wrap;align-items:center;gap:10px 14px;margin:18px 0 0}
+/* The list's own status line keeps one line of room always, as tall empty as with words in it.
+   Measured in Chrome: one that took no room until a save failed pushed the table down 35px under
+   the pointer, so a second press landed on the tick of the story above. */
+#storiesListStatus{line-height:1.4;min-height:1.4em}
+.admin-read-bar{display:flex;flex-wrap:wrap;align-items:center;gap:6px 14px;margin:16px 0 0}
+.admin-read-bar .admin-btn,.admin-read-bar .admin-link{min-height:44px}
 .admin-read-done{font-weight:600;color:var(--holly-dark)}
 ```
+
+What the real browser taught, so nobody undoes it:
+- A plain `.admin-read-tick input{width:20px}` loses to `.admin-body input[type="checkbox"]{width:auto}`: the box measured 13px.
+- `display:flex` with a set `width`, not `inline-flex`: an inline box sits on a text line and makes the row taller.
+- The button is `.admin-btn`, not `.btn.btn-primary`: the site's big button measured 183 by 53 and competed with Save changes.
+- The status line keeps its room. Collapsing it while empty moved the table 35px when a save failed.
 
 - [ ] **Step 4: Run the tests and see them pass**
 
 Run: `npx vitest run test/unit/admin-stories-read-tick.test.ts test/unit/admin-screen-styles.test.ts test/unit/admin-no-sideways-scroll.test.ts test/unit/admin-fits-a-phone.test.ts`
-Expected: all pass (21 in the new file).
+Expected: all pass (24 in the new file).
 
 - [ ] **Step 5: Look at it in a real browser**
 
@@ -604,12 +658,17 @@ There is no local database, so use a stand-in for the admin API (a small `node:h
 
 Check, at 1280px and at 390px (as a phone):
 - `document.documentElement.scrollWidth === clientWidth` on the list and on an open story, and no element inside `#view-stories` has `scrollWidth > clientWidth`;
-- the first column measures 64px, and a row is no taller than before the change (for "before", have the stand-in serve `git show origin/main:assets/js/admin/app.js` and `origin/main:assets/css/admin.css`, saved to the scratchpad, in place of the worktree's);
+- the first column measures 60px, and on a desktop a row is no taller than before the change (for "before", have the stand-in serve `git show origin/main:assets/js/admin/app.js`, `admin.css` and `admin.html`, saved to the scratchpad, in place of the worktree's);
+- with the stand-in answering 500 to every PATCH: the tick goes back, the line says "Could not mark that story as read. Please try again.", and the row has not moved by a pixel;
 - the label measures at least 44 by 44;
 - a real click on a New story's tick sends one PATCH, the row's Status reads Reviewed, and the row has not moved;
 - the open story shows Mark as read under the story's words, and pressing it swaps to "Marked as read." and Mark as new.
 
 Save a picture of the list and of an open story at both widths. Fix anything that fails before going on, and adjust the rules in Step 3 here if a value changes.
+
+Measured on 2026-10-05 (headless Chrome, `stories-shots.mjs` in the session scratchpad): at 1280px the columns are 60px and seven of 135px, the first four rows are 125, 49, 49 and 74px tall exactly as on `main`, the tick is a 44 by 44 target with a 20 by 20 box, one press sends one PATCH and the row does not move; the open story's button is 126 by 44, 16px under the story's words, and pressing it leaves the keyboard on Mark as new. With every PATCH failing, the tick goes back, the line says so and no row moves. Nothing scrolls sideways at either width.
+
+Known and not this plan's to fix: at 390px the Stories table was already unreadable on `main` (seven columns of 51px, rows 262 to 548px tall, words stacked a letter or two a line). The Read column makes each of the others 42px. Shown to Jaimie with a before picture, and offered as its own task (cards on a phone, as Donations has).
 
 - [ ] **Step 6: Commit**
 

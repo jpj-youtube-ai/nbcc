@@ -123,10 +123,11 @@
     // --- the feel good layer -------------------------------------------------------------------
     // Decoration only, and all of it hidden from screen readers: a drawing of the item drops into
     // the bag (or into the bottom bar's total while the bag is off screen), things peek out of the
-    // bag's top, the bag wobbles, a full bag is tied with a ribbon and a tag, a little snow falls at
-    // half a bag and at each full one, and an elf scribbles a note on the paper. WHAT to show comes
-    // from the catalogue's pure functions (peekSlots, milestoneCrossed, strains, noteFor); this only
-    // applies it. It changes no sum and no word, takes no tap and never moves the focus. Everything
+    // bag's top (the latest added, the newest in front), the bag wobbles, a full bag is tied with a
+    // ribbon and a tag, paper snow and gold stars fall over the whole screen at half a bag and (the
+    // big moment) at each full one, and an elf scribbles a note on the paper. WHAT to show comes
+    // from the catalogue's pure functions (peekOrder, latestPeeks, milestoneCrossed, flurryDue,
+    // flurryPlan, strains, noteFor); this only applies it. It changes no sum and no word, takes no tap and never moves the focus. Everything
     // made here is cleared away by a timer, so nothing builds up however fast the donor taps.
     //
     // It can NEVER stop the page working. Two guards: (1) the whole layer is switched off unless the
@@ -137,7 +138,7 @@
     var delightOn =
       !!rb.NOTES &&
       !!rb.TAG_LINES &&
-      ["art", "peekSlots", "strains", "milestoneCrossed", "noteKind", "noteFor"].every(function (name) {
+      ["art", "peekOrder", "latestPeeks", "strains", "milestoneCrossed", "flurryKind", "flurryDue", "flurryPlan", "noteKind", "noteFor", "notePlacements", "quadTouches"].every(function (name) {
         return typeof rb[name] === "function";
       });
     var delightSaid = false;
@@ -155,35 +156,25 @@
         }
       };
     }
-    var panel = doc.querySelector(".rb-panel");
     var NAV_HEIGHT = 80; // the site's fixed header: a bag under it is not "on screen"
     var MAX_DROPS = 3; // in the air at once; a tap beyond that simply plays no drop
     var DROP_MS = 600; // as in the stylesheet
     var TYPING_MS = 450; // a typed number is finished when the typing stops this long
     var NOTE_MS = 3200;
     var NOTE_HOLD_MS = 900; // a note on one row is left alone this long before the next replaces it
-    var FLURRY_MS = 2150;
-    // Where the three peeks sit along the bag's top, and their tilt: [across, degrees].
+    var PEEK_OUT_MS = 240; // a peek that is leaving sinks for this long (as in the stylesheet), then goes
+    // Where the three peeks sit along the bag's top, their tilt and their size: [across, down,
+    // degrees, scale], in the bag's own picture (120 wide, its rim at 36). The first is the FRONT
+    // place, for the newest thing: the biggest, and standing tallest. A peek is drawn PEEK_SIZE
+    // across (5 October 2026: about a third bigger than the 28 it was, and higher out of the bag),
+    // with PEEK_RISE of it above the place it is seated. They stay inside the bag's own picture, so
+    // they can never reach a neighbouring bag, the words below, or change the panel's height.
+    var PEEK_SIZE = 38;
+    var PEEK_RISE = 24;
     var PEEK_AT = [
-      [25, -11],
-      [57, 3],
-      [92, 12],
-    ];
-    // The snow and stars: [across %, wait s, fall s, drift px, turn deg, size px]. Fixed, so every
-    // flurry is the same gentle one, and the last piece has landed within two seconds.
-    var FLAKES = [
-      [6, 0, 1.5, 14, 80, 18],
-      [15, 0.28, 1.45, -10, -120, 14],
-      [24, 0.1, 1.6, 8, 140, 20],
-      [33, 0.46, 1.4, -14, 90, 15],
-      [42, 0.04, 1.55, 10, -100, 17],
-      [51, 0.36, 1.5, -8, 160, 21],
-      [60, 0.16, 1.45, 12, -80, 14],
-      [69, 0.5, 1.5, -12, 110, 18],
-      [78, 0.08, 1.6, 6, -150, 16],
-      [87, 0.32, 1.4, -10, 100, 20],
-      [94, 0.2, 1.5, -16, -90, 15],
-      [47, 0.55, 1.45, 14, 130, 14],
+      [31, 33, -8, 1.05],
+      [60, 36, 3, 0.97],
+      [92, 37, 11, 0.95],
     ];
     var SNOW =
       '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path class="rb-flake__snow" d="M12 1.5l2.6 6 6.5-.75-3.9 5.25 3.9 5.25-6.5-.75-2.6 6-2.6-6-6.5.75L6.8 12 2.9 6.75l6.5.75z"/></svg>';
@@ -192,11 +183,13 @@
 
     var ready = false; // nothing plays while the page is being set up
     var order = []; // the items in the bag, the newest first
-    var slots = [null, null, null]; // what peeks out of the bag that is filling
     var seen = {}; // each item's quantity when it was last celebrated
     var typing = {}; // a timer for each number box still being typed in
     var inTheAir = 0;
-    var flurryBox = null;
+    var flurryBox = null; // the one layer of snow and stars, while it falls
+    var flurryKind = ""; // "half" or "full", while it falls
+    var flurryTimer = null;
+    var flurryAt = {}; // when each milestone last had its snow: the cooldown
     var lastPence = 0;
     var noteEl = null;
     var noteTimer = null;
@@ -204,6 +197,8 @@
     var noteAt = 0;
     var lastNote = "";
     var noteWait = null; // the newest change on a row whose note is still having its moment
+    var skipRow = null; // the row last found to have no clear place for a note, and when
+    var skipAt = 0;
     var bumpTimer = null;
 
     // Where a drop flies: one layer over the builder. It takes no tap and clips what leaves it.
@@ -263,19 +258,53 @@
       );
     }
 
-    function peek(key, at) {
-      var g = shapes(
-        '<g class="rb-peek" transform="translate(' +
-          PEEK_AT[at][0] +
-          " 36) rotate(" +
-          PEEK_AT[at][1] +
-          ')"><g class="rb-peek__in">' +
-          rb.art(key, "", 28).replace("<svg ", '<svg x="-14" y="-16" ') +
-          "</g></g>",
-      );
-      g.setAttribute("data-rb-peek", key);
+    /** Put a peek in its place. The place is a style, so a move from one to the next can slide. */
+    function seat(g, at) {
+      g.style.transform = "translate(" + PEEK_AT[at][0] + "px," + PEEK_AT[at][1] + "px) rotate(" + PEEK_AT[at][2] + "deg) scale(" + PEEK_AT[at][3] + ")";
       g.setAttribute("data-rb-slot", String(at));
+    }
+    function peek(key, at) {
+      var g = shapes('<g class="rb-peek"><g class="rb-peek__in">' + rb.art(key, "", PEEK_SIZE).replace("<svg ", '<svg x="' + -PEEK_SIZE / 2 + '" y="' + -PEEK_RISE + '" ') + "</g></g>");
+      g.setAttribute("data-rb-peek", key);
+      seat(g, at);
       return g;
+    }
+    /** A peek leaves: it sinks back into the bag and is cleared away (at once, for less motion). */
+    function sink(g) {
+      g.removeAttribute("data-rb-peek");
+      g.removeAttribute("data-rb-slot");
+      if (calm()) return gone(g);
+      g.classList.add("is-leaving");
+      later(function () {
+        gone(g);
+      }, PEEK_OUT_MS);
+    }
+
+    // What peeks out of one bag: `want` is three places, the front (newest) first. A thing that
+    // stays keeps its own drawing and slides to its new place; a new one pops up; one that is no
+    // longer wanted sinks. They are drawn oldest first, so the newest is the one on top.
+    function dressPeeks(holder, want) {
+      var have = {};
+      each(holder.querySelectorAll("[data-rb-peek]"), function (g) {
+        var key = g.getAttribute("data-rb-peek");
+        if (want.indexOf(key) === -1 || have[key]) sink(g);
+        else have[key] = g;
+      });
+      var under = null;
+      for (var i = want.length - 1; i >= 0; i -= 1) {
+        var key = want[i];
+        if (!key) continue;
+        var g = have[key];
+        if (!g) {
+          g = peek(key, i);
+          holder.insertBefore(g, under ? under.nextSibling : holder.firstChild);
+        } else {
+          if (g.getAttribute("data-rb-slot") !== String(i)) seat(g, i);
+          // Only one that has become newer than its neighbours is moved (and so pops up afresh).
+          if (under && !(under.compareDocumentPosition(g) & 4)) holder.insertBefore(g, under.nextSibling);
+        }
+        under = g;
+      }
     }
 
     // The bags as they stand: the peeks in the one that is filling, the handles straining when it
@@ -287,19 +316,17 @@
       state.drawn.forEach(function (f, n) {
         if (f >= 1) newestFull = n;
       });
-      slots = rb.peekSlots(slots, order, fill);
+      // The latest things added, the newest first, leaving out anything whose number box is empty
+      // just now (half way through being retyped).
+      var slots = rb.latestPeeks(
+        order.filter(function (key) {
+          return quantities[key] > 0;
+        }),
+        fill,
+      );
       each(bagsBox.querySelectorAll(".rb-bag"), function (svg, n) {
         dress(svg);
-        var holder = svg.querySelector(".rb-bag__peeks");
-        for (var i = 0; i < slots.length; i += 1) {
-          var want = n === filling ? slots[i] : null;
-          var have = holder.querySelector('[data-rb-slot="' + i + '"]');
-          if (have && have.getAttribute("data-rb-peek") !== want) {
-            holder.removeChild(have);
-            have = null;
-          }
-          if (want && !have) holder.appendChild(peek(want, i));
-        }
+        dressPeeks(svg.querySelector(".rb-bag__peeks"), n === filling ? slots : []);
         if (n === filling && rb.strains(fill)) svg.classList.add("is-heavy");
         else svg.classList.remove("is-heavy");
         if (n === newestFull && state.drawn.length <= 3) svg.classList.add("is-latest");
@@ -307,13 +334,14 @@
       });
     }
 
-    /** Keep the list of what is in the bag, the newest first. */
+    /**
+     * Keep the list of what is in the bag, the newest first, on a FINISHED change (a plus or minus,
+     * an arrow key, a box left, or the typing stopped), and show the peeks that follow from it.
+     */
     function track(key, was, now) {
-      var at = order.indexOf(key);
-      if (now > 0 && was === 0) {
-        if (at !== -1) order.splice(at, 1);
-        order.unshift(key);
-      } else if (now === 0 && at !== -1) order.splice(at, 1);
+      if (was === now) return;
+      order = rb.peekOrder(order, key, was, now);
+      if (bagsBox) dressBags(rb.bags(total()));
     }
 
     // A small happy wobble of the bag that is filling, after `wait` seconds (as a drop lands).
@@ -382,42 +410,174 @@
       return where === "bag";
     }
 
-    // The snow and stars over the bag's panel: one flurry at a time, gone in about two seconds.
-    function flurry() {
-      if (calm() || !panel || flurryBox || step !== "bag") return;
-      var box = doc.createElement("div");
-      box.className = "rb-flurry";
-      box.setAttribute("aria-hidden", "true");
-      FLAKES.forEach(function (f, n) {
-        var piece = doc.createElement("span");
-        piece.className = "rb-flake";
-        piece.style.setProperty("--rb-x", f[0] + "%");
-        piece.style.setProperty("--rb-d", f[1] + "s");
-        piece.style.setProperty("--rb-t", f[2] + "s");
-        piece.style.setProperty("--rb-s", f[3] + "px");
-        piece.style.setProperty("--rb-r", f[4] + "deg");
-        piece.style.setProperty("--rb-w", f[5] + "px");
-        piece.innerHTML = n % 2 ? STAR : SNOW;
-        box.appendChild(piece);
-      });
-      panel.appendChild(box);
-      flurryBox = box;
-      later(function () {
-        gone(box);
-        flurryBox = null;
-      }, FLURRY_MS);
+    /** Clear the snow and stars away, whatever is left of them. */
+    function endFlurry() {
+      clearTimeout(flurryTimer);
+      flurryTimer = null;
+      gone(flurryBox);
+      flurryBox = null;
+      flurryKind = "";
     }
 
-    // The snow and stars: only when a milestone is newly crossed on the way up.
+    // The snow and stars, over the WHOLE screen: one layer on the page's body, which the stylesheet
+    // fixes to the screen above the header and the bottom bar. It takes no tap, is hidden from
+    // screen readers, and is taken out of the page when its time is up. One at a time: only the big
+    // moment (a full bag) may take the place of the lighter one (half a bag) while that is falling.
+    // Says whether it began.
+    function flurry(kind) {
+      if (calm() || !doc.body || step !== "bag") return false;
+      if (flurryBox && !(kind === "full" && flurryKind === "half")) return false;
+      var plan = rb.flurryPlan(kind, win.innerWidth || (doc.documentElement && doc.documentElement.clientWidth) || 0);
+      if (!plan || !plan.pieces || !plan.pieces.length) return false;
+      var box = doc.createElement("div");
+      box.className = "rb-flurry rb-flurry--" + kind;
+      box.setAttribute("aria-hidden", "true");
+      plan.pieces.forEach(function (p) {
+        var piece = doc.createElement("span");
+        piece.className = "rb-flake rb-flake--" + (p.star ? "star" : "snow") + (p.big ? " rb-flake--big" : "");
+        piece.style.setProperty("--rb-x", p.x + "%");
+        piece.style.setProperty("--rb-d", p.wait + "s");
+        piece.style.setProperty("--rb-t", p.fall + "s");
+        piece.style.setProperty("--rb-s", p.drift + "px");
+        piece.style.setProperty("--rb-r", p.turn + "deg");
+        piece.style.setProperty("--rb-w", p.size + "px");
+        piece.innerHTML = p.star ? STAR : SNOW;
+        box.appendChild(piece);
+      });
+      endFlurry();
+      doc.body.appendChild(box);
+      flurryBox = box;
+      flurryKind = kind;
+      flurryTimer = later(endFlurry, plan.ms + 100);
+      return true;
+    }
+
+    // The snow and stars: only when a milestone is newly crossed on the way up, and not for the
+    // same milestone again within the cooldown (someone stepping back and forth across £25).
     function milestone(pence) {
       var crossed = rb.milestoneCrossed(lastPence, pence);
       lastPence = pence;
-      if (crossed && ready) flurry();
+      if (!crossed || !ready) return;
+      var now = Date.now();
+      if (rb.flurryDue(crossed, flurryAt, now) && flurry(rb.flurryKind(crossed))) flurryAt[crossed] = now;
     }
 
     /** The example's own small drawing at the start of its line; the line's words are unchanged. */
     function alsoIcon(span, key) {
       span.insertAdjacentHTML("afterbegin", rb.art(key, "rb-also__icon", 26));
+    }
+
+    // --- where the note may lie: never over a name, a price, a heading or a control ---
+    // Measured, not assumed. The words of everything on the paper are found as INK (how far the
+    // letters really reach, from a canvas that is never added to the page or drawn on), the buttons
+    // and number boxes as their boxes, and the note is tried in each place the catalogue lists
+    // (above the row, below it, smaller, smallest) until its own ink touches none of them. If there
+    // is nowhere clear, no note is written. Where a browser cannot measure, the note is as it was.
+    var NOTE_GAP = 2; // px of clear paper kept between the note and anything else
+    var inkCtx = null;
+    // Measurements are remembered (the same words in the same type), but only once the page's
+    // fonts have arrived: before that the letters measured are a stand-in's, in a font of the very
+    // same name. And if the browser says a font has arrived since, they are all forgotten.
+    var inkSeen = {};
+    function fontsIn() {
+      return !doc.fonts || typeof doc.fonts.status !== "string" || doc.fonts.status === "loaded";
+    }
+    if (delightOn && doc.fonts && typeof doc.fonts.addEventListener === "function") {
+      doc.fonts.addEventListener("loadingdone", function () {
+        inkSeen = {};
+      });
+    }
+    /** How far a line of these words reaches above and below, within its line of type. */
+    function inkOf(el, words) {
+      var cs = win.getComputedStyle(el);
+      var font = cs.fontStyle + " " + cs.fontWeight + " " + cs.fontSize + " " + cs.fontFamily;
+      var known = inkSeen[font + "|" + words];
+      if (known) return known;
+      if (!inkCtx) inkCtx = doc.createElement("canvas").getContext("2d");
+      if (!inkCtx) return null;
+      inkCtx.font = font;
+      var m = inkCtx.measureText(words);
+      if (typeof m.fontBoundingBoxAscent !== "number" || typeof m.actualBoundingBoxAscent !== "number") return null;
+      known = { box: m.fontBoundingBoxAscent + m.fontBoundingBoxDescent, top: m.fontBoundingBoxAscent - m.actualBoundingBoxAscent, bottom: m.fontBoundingBoxAscent + m.actualBoundingBoxDescent };
+      if (fontsIn()) inkSeen[font + "|" + words] = known;
+      return known;
+    }
+    /** Everything on the paper a note must keep off, as boxes. Null where it cannot be measured. */
+    function inTheWay(paper) {
+      var out = [];
+      var ok = true;
+      each(paper.querySelectorAll(".rb-item__name, .rb-item__price, .rb-also__words, .rb-group__title, h2, h3"), function (el) {
+        var words = (el.textContent || "").replace(/\s+/g, " ").trim();
+        if (!words || !ok) return;
+        var ink = inkOf(el, words);
+        if (!ink) {
+          ok = false;
+          return;
+        }
+        var range = doc.createRange();
+        range.selectNodeContents(el);
+        each(range.getClientRects(), function (q) {
+          if (q.width > 0) out.push({ x: q.left - NOTE_GAP, y: q.top + (q.height - ink.box) / 2 + ink.top - NOTE_GAP, w: q.width + 2 * NOTE_GAP, h: ink.bottom - ink.top + 2 * NOTE_GAP });
+        });
+      });
+      each(paper.querySelectorAll("button, input"), function (el) {
+        var q = el.getBoundingClientRect();
+        if (q.width > 0) out.push({ x: q.left - NOTE_GAP, y: q.top - NOTE_GAP, w: q.width + 2 * NOTE_GAP, h: q.height + 2 * NOTE_GAP, round: el.classList.contains("rb-step") });
+      });
+      return ok ? out : null;
+    }
+    /** A note's own ink as it lies now: four corners, turned as the stylesheet turns it. */
+    function noteInk(row, el) {
+      var ink = inkOf(el, el.textContent);
+      if (!ink) return null;
+      var at = row.getBoundingClientRect();
+      var x = at.left + (row.clientLeft || 0) + el.offsetLeft;
+      var y = at.top + (row.clientTop || 0) + el.offsetTop;
+      var w = el.offsetWidth;
+      var h = el.offsetHeight;
+      var top = y + (h - ink.box) / 2;
+      // It turns about its bottom right corner (as in the stylesheet).
+      var t = new win.DOMMatrix(win.getComputedStyle(el).transform);
+      function turn(px, py) {
+        var dx = px - (x + w);
+        var dy = py - (y + h);
+        return [x + w + t.a * dx + t.c * dy + t.e, y + h + t.b * dx + t.d * dy + t.f];
+      }
+      return [turn(x, top + ink.top), turn(x + w, top + ink.top), turn(x + w, top + ink.bottom), turn(x, top + ink.bottom)];
+    }
+    /** Put a note where it touches nothing. Says false if there is nowhere: then none is shown. */
+    function fitNote(row, el) {
+      el.className = "rb-note";
+      var paper = typeof row.closest === "function" ? row.closest(".rb-paper") : null;
+      if (!paper || typeof win.DOMMatrix !== "function" || typeof win.getComputedStyle !== "function" || !(row.getBoundingClientRect().width > 0)) return true;
+      // The paper lies at a slight tilt on a wide screen. It is measured square on, and put back
+      // before the browser draws anything, so nothing is seen to move.
+      var tilt = paper.style.transform;
+      paper.style.transform = "none";
+      try {
+        var things = inTheWay(paper);
+        if (!things) return true;
+        var edge = paper.getBoundingClientRect();
+        var ways = rb.notePlacements(row.parentNode && row.parentNode.firstElementChild === row);
+        for (var i = 0; i < ways.length; i += 1) {
+          el.className = "rb-note rb-note--" + (ways[i].below ? "below" : "above") + (ways[i].size ? " rb-note--" + ways[i].size : "");
+          var quad = noteInk(row, el);
+          if (!quad) {
+            el.className = "rb-note";
+            return true;
+          }
+          var clear = quad.every(function (p) {
+            return p[0] >= edge.left + 1 && p[0] <= edge.right - 1;
+          });
+          for (var j = 0; clear && j < things.length; j += 1) {
+            if (rb.quadTouches(quad, things[j])) clear = false;
+          }
+          if (clear) return true;
+        }
+        return false;
+      } finally {
+        paper.style.transform = tilt;
+      }
     }
 
     // The elf's note: ONE at a time, on the row just changed. Quick taps on one row keep the note
@@ -429,38 +589,60 @@
       var now = Date.now();
       var kind = rb.noteKind(change);
       // A note on this row is still having its moment (quick taps, a held key): leave it be, with no
-      // rewrite and no reflow, and write the NEWEST change once the moment is up.
-      if (kind !== "first" && kind !== "example" && noteEl && noteRow === row && noteEl.parentNode === row && now - noteAt < NOTE_HOLD_MS) {
+      // rewrite and no reflow, and write the NEWEST change once the moment is up. The same goes for
+      // a row that has just been found to have no clear place for a note: it is not measured again
+      // on every tap, only once more when the moment is up.
+      var since = 0;
+      if (kind !== "first" && kind !== "example" && noteEl && noteRow === row && noteEl.parentNode === row && now - noteAt < NOTE_HOLD_MS) since = noteAt;
+      else if (skipRow === row && now - skipAt < NOTE_HOLD_MS) since = skipAt;
+      if (since) {
         noteWait = later(
           safe(function () {
             noteWait = null;
             scribble(row, change);
           }),
-          NOTE_HOLD_MS - (now - noteAt),
+          NOTE_HOLD_MS - (now - since),
         );
         return;
       }
       var words = rb.noteFor(change, lastNote, Math.random());
       if (!words) return;
-      if (!noteEl) {
-        noteEl = doc.createElement("span");
-        noteEl.className = "rb-note";
-        noteEl.setAttribute("aria-hidden", "true");
+      // The new note is written and fitted as a note of its own, so that one still showing on
+      // another row is not touched unless this one really has somewhere to go.
+      var fresh = doc.createElement("span");
+      fresh.className = "rb-note";
+      fresh.setAttribute("aria-hidden", "true");
+      fresh.textContent = words;
+      row.appendChild(fresh);
+      // Nowhere clear of the names, prices and buttons: no note this time, rather than one over
+      // them. Any note already showing is left to finish in its own time.
+      var fits = false;
+      try {
+        fits = fitNote(row, fresh);
+      } finally {
+        if (!fits) {
+          gone(fresh);
+          skipRow = row;
+          skipAt = now;
+        }
       }
+      if (!fits) return;
+      skipRow = null;
+      // ONE note at a time: the one that was showing gives way to this one.
       clearTimeout(noteTimer);
-      noteEl.classList.remove("is-on");
-      noteEl.textContent = words;
-      row.appendChild(noteEl);
+      if (noteEl && noteEl !== fresh) gone(noteEl);
+      noteEl = fresh;
       // Read once so the fade begins from nothing each time.
-      void noteEl.offsetWidth;
-      noteEl.classList.add("is-on");
+      void fresh.offsetWidth;
+      fresh.classList.add("is-on");
       lastNote = words;
       noteRow = row;
       noteAt = now;
       noteTimer = later(function () {
-        noteEl.classList.remove("is-on");
+        fresh.classList.remove("is-on");
         noteTimer = later(function () {
-          gone(noteEl);
+          gone(fresh);
+          if (noteEl === fresh) noteEl = null;
         }, 320);
       }, NOTE_MS);
     }
@@ -475,6 +657,7 @@
       var before = seen[key] || 0;
       var after = quantities[key] || 0;
       seen[key] = after;
+      track(key, before, after);
       if (!ready || step !== "bag" || after === before) return;
       if (after > before) {
         var price = Number(row.getAttribute("data-pence")) || 0;
@@ -493,6 +676,7 @@
     // Every way in from the page's own code, made safe (see the top of this block).
     dressBags = safe(dressBags);
     track = safe(track);
+    endFlurry = safe(endFlurry);
     wobble = safe(wobble);
     milestone = safe(milestone);
     alsoIcon = safe(alsoIcon);
@@ -638,7 +822,6 @@
 
       function set(n, write) {
         var q = rb.clampQuantity(n);
-        track(key, quantities[key] || 0, q);
         quantities[key] = q;
         if (write) box.value = String(q);
         // They SAY they are off, and stay focusable: a button that switched itself off while it
@@ -833,6 +1016,8 @@
       // The list, the themes and the bag are one section: they go and come back together.
       builder.hidden = step !== "bag";
       if (details) details.hidden = step !== "details";
+      // The snow belongs to the bag: it never falls over the donor's details.
+      if (step !== "bag") endFlurry();
       refreshBar();
     }
 

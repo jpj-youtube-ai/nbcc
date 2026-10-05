@@ -158,13 +158,41 @@ word changes, and it makes no network request and loads no file of its own.
    heads into the bottom bar's total instead, which gives a small nod. Examples and the round-up
    drop no picture: they are money, not items. Things then peek out of the top of the bag that is
    filling: only things that are in the bag, one under a quarter full, two under half, three from
-   half; each stays where it is, a free place goes to the newest item, and taking an item out
-   removes its peek. They are drawn behind the bag's front so they look inside it.
+   half. They are drawn behind the bag's front so they look inside it.
+   Changed 5 October 2026 (Jaimie: "the prizes at the top of the bag should be the last (latest)
+   item(s) to be added, not the first"): the peeks are the MOST RECENTLY added things. The newest
+   is in the front place (the left hand one, a touch taller, and drawn on top), then the one before
+   it, then the one before that. "Added" is a quantity going up: a plus, an arrow key, or a typed
+   number once the typing has stopped or the box is left. Adding more of an item already in the bag
+   makes it the latest again. Taking one out of an item that still has some left changes nothing;
+   taking the last one out removes its peek and the next most recent takes the free place. Each
+   item peeks once at most. The bags are one bag: when a new one starts filling after a full one,
+   it shows the latest things overall. When a new thing arrives it pops up in the front place, the
+   ones that stay slide along one place, and the oldest sinks back into the bag (transform and
+   opacity, under 300ms; at once under reduced motion).
+   Bigger, the same day (Jaimie: "make items a bit bigger and stand out a bit more"): each peek is
+   drawn about a third bigger than the 28 units it was (the newest about 40, the others about 37
+   and 36, in a bag 120 wide) and stands higher out of the bag (the newest 28 units above the rim,
+   the others 23 and 22; it was 16), with a heavier outline (2, where the drawings elsewhere have
+   1.5) so cream pyjamas or a white page still show against the pale panel. No shadow, glow or
+   gradient. They are still drawn behind the bag's front, and stay inside the bag's own picture, so
+   they cannot reach a neighbouring bag's ribbon or tag, the status line or the panel's edge, and
+   the panel is the same height with or without them (measured at 320, 390, 860, 861, 1024 and
+   1280). The blanket was redrawn too (Jaimie did not like two rolled red shapes): a neatly folded
+   blanket, three soft folds with their rounded edges down the left, in a simple check (thin cream
+   lines both ways and a gold one), a bound edge and a fringe down the right, which is the side that
+   shows when it peeks. No other drawing changed.
 2. An elf scribbles on the paper: a short handwritten note (Caveat, holly green, a slight tilt) on
    the ruled line above the row just changed (below it for the first row under a heading), or beside
    the new line under "Also in your bag" for an example. One at a time; it fades after about three
    seconds or when the next one appears; it lies over empty paper only, takes no tap and shifts
-   nothing. Quick taps on one row keep the note that is there. ALL the notes are one list, `NOTES`
+   nothing. Quick taps on one row keep the note that is there. It never lies over an item's name,
+   a price, a heading or a control (5 October 2026, after measuring in a real browser showed a long
+   note could touch a neighbouring row's words where a name wraps, an example's line runs to two
+   lines, or the rows are tight on a small phone): the script measures the real ink of the words on
+   the paper and the boxes of the buttons, and tries the note across the rule above the row, then
+   the one below, then smaller (0.94rem), then smallest and level (0.86rem), keeping 2px clear; the
+   first row of a group only ever has it below. If nowhere is clear, no note is written that time. ALL the notes are one list, `NOTES`
    in the catalogue: at least two per item, general ones, the first thing in, several of one thing
    ("10 pencils? You legend."), taking something out (kind, never guilt), and an example. They never
    say anything is bought or that anyone receives it, never "will", never press, have no dashes or
@@ -175,10 +203,25 @@ word changes, and it makes no network request and loads no file of its own.
    love" (Caveat). Every full bag keeps its ribbon and tag; the words are on the newest full bag
    only, and on none once four or five bags are drawn (too small to read). Below a full bag they
    come off.
-5. A burst of snow and stars: twelve paper snowflakes and gold stars fall over the bag's panel for
-   about two seconds at half a bag and at each full bag, then are removed. Only when a milestone is
-   newly crossed on the way up (so again only after the total has dropped below it), one at a time,
-   taking no tap.
+5. A burst of snow and stars at half a bag and at each full bag, then removed. Only when a
+   milestone is newly crossed on the way up (so again only after the total has dropped below it),
+   one at a time, taking no tap.
+   Changed 5 October 2026 (Jaimie: "make the star moment across the entire page: a bigger
+   moment"): it falls over the WHOLE screen, not the bag's panel. One layer on the page's body,
+   fixed to the screen above the page, the site's header and the bottom bar (and under the payment
+   window), `pointer-events: none`, `aria-hidden`, taken out of the page when it ends. So it is
+   seen on a phone too, where the bag is usually off screen, and it can never block a tap, a scroll
+   or Donate. Paper white snowflakes and gold stars fall from the top of the screen to the bottom,
+   spread across the full width, each with its own size, drift, turn and short wait, with a few
+   larger stars. A FULL bag (and each further full bag) is the big moment: 56 pieces, the last gone
+   by about 2.9 seconds, 5 larger stars. HALF a bag is a lighter one of the same kind: 24 pieces,
+   about 2 seconds, 2 larger stars. On a screen under 600px wide: 34 and 16, a little smaller.
+   Never more than sixty. A full bag reached while half a bag's snow is still falling takes its
+   place; otherwise a second one never starts while one is falling. A cooldown: the same milestone
+   cannot snow again within 20 seconds (someone stepping back and forth across £25), though a
+   different milestone still can. Each piece is one CSS animation of transform and opacity, easing
+   out with no bounce; no canvas, no loop, no sound. It stops at once if the donor moves on to
+   their details. Under reduced motion there is none at all.
 
 A small icon sits in each of the nine example buttons (Jaimie: "an icon next to each of the after
 crisis/clothing/rock bottom items: teddy bear, bed, shoes, coat etc"), drawn into the page by the
@@ -189,9 +232,10 @@ name are unchanged.
 
 How it is built. The 22 drawings (13 items, 9 examples) are inline SVG in ONE place, `ART` in the
 catalogue, with no colour of their own (the stylesheet gives them the site's tokens; the gold is
-`--gold-ink`). The choices are pure functions in the catalogue (`peekSlots`, `peekCount`,
-`milestoneCrossed`, `strains`, `noteKind`, `noteFor`, `allNotes`); the page script only applies
-them. Everything decorative is `aria-hidden`, out of the tab order, and never takes the focus; the
+`--gold-ink`). The choices are pure functions in the catalogue (`peekOrder`, `latestPeeks`,
+`peekCount`, `milestoneCrossed`, `flurryKind`, `flurryDue`, `flurryPlan`, `strains`, `noteKind`,
+`noteFor`, `allNotes`, `notePlacements`, `quadTouches`); the page script only applies them. (`peekSlots`, which kept the earliest
+things peeking, went on 5 October 2026.) Everything decorative is `aria-hidden`, out of the tab order, and never takes the focus; the
 one live region is untouched. Motion is transform and opacity only, nothing loops, every animated
 thing is removed by a timer, and under `prefers-reduced-motion` nothing moves: no drop, wobble,
 flurry or swing, while the peeks, the ribbon and tag and the note still appear at once. Nothing

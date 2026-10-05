@@ -1175,7 +1175,10 @@ describe("the page's own stylesheet", () => {
 
   it("has no sticky panel: nothing follows the reader down the page but the bottom bar", () => {
     expect(rules).not.toMatch(/position:\s*sticky/);
-    expect(rules.match(/position:fixed/g)?.length).toBe(1);
+    // Two things are fixed to the screen: the bottom bar, and the layer the snow and stars fall in
+    // for a couple of seconds at a milestone (decoration only: it takes no tap and is then removed).
+    const fixed = [...rules.matchAll(/([^{}]+)\{[^}]*position:fixed/g)].map((m) => m[1].trim());
+    expect(fixed).toEqual([".rb-bar", ".rb-flurry"]);
   });
 
   it("shows which of once and monthly is chosen by more than colour: a tick as well", () => {

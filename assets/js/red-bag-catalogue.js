@@ -268,10 +268,16 @@
   //   n no outline; l a cream line; q a crimson line; x a thicker line.
   var ART = {
     // --- the list ---
+    // A neatly folded blanket (5 October 2026): three soft folds, their rounded edges down the left,
+    // in a simple check (thin cream lines both ways and a gold one), a bound edge and its fringe
+    // down the right.
     blanket:
-      '<rect class="r" x="4" y="19" width="32" height="13" rx="4"/><path class="c" d="M23 19h6v13h-6z"/>' +
-      '<rect class="r" x="4" y="8" width="30" height="13" rx="5.5"/><path class="c" d="M21.5 8h6v13h-6z"/>' +
-      '<path class="l" d="M9 14.5h8M9 25.5h9"/><path d="M9 32v3.5M15 32v3.5M21 32v3.5M27 32v3.5M32.5 31.5v3.5"/>',
+      '<path class="f" d="M30.5 8.6h4.6M30.5 11h4.9M30.5 13.4h4.6M32.5 18.2h4.6M32.5 20.6h4.9M32.5 23h4.6M31.5 27.8h4.6M31.5 30.2h4.9M31.5 32.6h4.6"/>' +
+      '<path class="r" d="M9.5 6.2H29a1.6 1.6 0 0 1 1.6 1.6v6.4a1.6 1.6 0 0 1-1.6 1.6H9.5a4.8 4.8 0 0 1 0-9.6zM9.5 15.8H31a1.6 1.6 0 0 1 1.6 1.6v6.4a1.6 1.6 0 0 1-1.6 1.6H9.5a4.8 4.8 0 0 1 0-9.6zM9.5 25.4H30a1.6 1.6 0 0 1 1.6 1.6v6.4a1.6 1.6 0 0 1-1.6 1.6H9.5a4.8 4.8 0 0 1 0-9.6z"/>' +
+      '<path class="c n" d="M12.4 7h1.7v8h-1.7zM18.2 7h1.7v8h-1.7zM12.4 16.6h1.7v8h-1.7zM18.2 16.6h1.7v8h-1.7zM12.4 26.2h1.7v8h-1.7zM18.2 26.2h1.7v8h-1.7z"/>' +
+      '<path class="g n" d="M23.6 7h1.2v8h-1.2zM23.6 16.6h1.2v8h-1.2zM23.6 26.2h1.2v8h-1.2z"/>' +
+      '<path class="l f" d="M6.5 9.6h21M6.5 12.6h21M6.5 19.2h23M6.5 22.2h23M6.5 28.8h22M6.5 31.8h22"/>' +
+      '<path d="M27.6 6.6v8.8M29.6 16.2v8.8M28.6 25.8v8.8"/>',
     "insulated-cup":
       '<path class="h" d="M11 13h18l-2 21a2 2 0 0 1-2 2H15a2 2 0 0 1-2-2z"/><path class="c" d="M11.7 20h16.6l-.8 8H12.5z"/>' +
       '<path class="t" d="M10 8h20a1.5 1.5 0 0 1 1.5 1.5V13h-23V9.5A1.5 1.5 0 0 1 10 8z"/><path class="t" d="M16 8V5.5h8V8"/>' +
@@ -397,31 +403,40 @@
   }
 
   /**
-   * Which items peek out of the bag that is filling, as three places (an item's key, or null).
-   * `previous` is what peeked before, `keys` the items in the bag with the newest first, `fill` how
-   * full that bag is (0 to 1). Only things in the bag ever peek; what was peeking stays where it
-   * was; a free place goes to the newest item not yet showing; an item taken out loses its peek.
+   * The items in the bag with the newest first, after ONE item's quantity has settled from `was` to
+   * `now` (5 October 2026: what peeks is the LATEST thing added, not the first). Going up puts the
+   * item at the front, whether it is new to the bag or more of one already there. Coming down with
+   * some left changes nothing. Down to none takes it off the list. A new list: `order` is untouched.
    */
-  function peekSlots(previous, keys, fill) {
-    var inBag = (keys || []).filter(function (k) {
-      return Object.prototype.hasOwnProperty.call(ART, k);
-    });
+  function peekOrder(order, key, was, now) {
+    var before = clampQuantity(was);
+    var after = clampQuantity(now);
+    var out = (order || []).slice();
+    if (after === before) return out;
+    var at = out.indexOf(key);
+    if (after <= 0) {
+      if (at !== -1) out.splice(at, 1);
+    } else if (after > before) {
+      if (at !== -1) out.splice(at, 1);
+      out.unshift(key);
+    }
+    return out;
+  }
+
+  /**
+   * Which items peek out of the bag that is filling, as three places (an item's key, or null).
+   * `order` is the items in the bag with the newest first (peekOrder), `fill` how full that bag is
+   * (0 to 1). Place 0 is the front one and holds the newest, place 1 the one before it, place 2 the
+   * one before that: as many as the bag's fill allows. Each item once, and only what has a drawing.
+   * The bags are one bag in the donor's mind, so a new bag after a full one shows the latest too.
+   */
+  function latestPeeks(order, fill) {
     var allowed = peekCount(fill);
     var out = [];
-    var shown = 0;
-    var i;
-    for (i = 0; i < MAX_PEEKS; i += 1) {
-      var was = previous ? previous[i] : null;
-      if (was && shown < allowed && inBag.indexOf(was) !== -1 && out.indexOf(was) === -1) {
-        out.push(was);
-        shown += 1;
-      } else out.push(null);
-    }
-    for (i = 0; i < inBag.length && shown < allowed; i += 1) {
-      if (out.indexOf(inBag[i]) !== -1) continue;
-      out[out.indexOf(null)] = inBag[i];
-      shown += 1;
-    }
+    (order || []).forEach(function (k) {
+      if (out.length < allowed && out.indexOf(k) === -1 && Object.prototype.hasOwnProperty.call(ART, k)) out.push(k);
+    });
+    while (out.length < MAX_PEEKS) out.push(null);
     return out;
   }
 
@@ -443,6 +458,90 @@
     var top = Math.floor(after / BAG_VALUE_PENCE) * BAG_VALUE_PENCE;
     if (top > before) return top;
     return before < HALF_BAG_PENCE && after >= HALF_BAG_PENCE ? HALF_BAG_PENCE : 0;
+  }
+
+  // The snow and stars (5 October 2026: a moment across the whole screen). A FULL bag, and each
+  // further full one, is the big moment; HALF a bag is a lighter one of the same kind. The numbers
+  // are all here: how many pieces (fewer on a small screen, never more than sixty), and how long.
+  var FLURRY_COOLDOWN_MS = 20000;
+  var FLURRY_SMALL_SCREEN = 600; // px: under this, fewer pieces
+  var FLURRIES = {
+    //       pieces: wide, small; over in (ms); the last piece sets off by (s); a fall takes (s)
+    full: { wide: 56, small: 34, ms: 2900, spread: 0.95, fall: [1.55, 1.95], big: 5, drift: 44 },
+    half: { wide: 24, small: 16, ms: 2000, spread: 0.5, fall: [1.25, 1.5], big: 2, drift: 30 },
+  };
+
+  /** Which flurry a milestone earns: "full" for each whole bag, "half" for half a bag, or "". */
+  function flurryKind(milestonePence) {
+    var m = Math.max(0, Math.floor(milestonePence || 0));
+    if (m === HALF_BAG_PENCE) return "half";
+    return m > 0 && m % BAG_VALUE_PENCE === 0 ? "full" : "";
+  }
+
+  /**
+   * Whether a milestone just crossed should have its flurry now. `firedAt` is when each milestone
+   * last had one ({ pence: time in ms }), `now` the time. The SAME milestone waits out the cooldown,
+   * so someone stepping back and forth across £25 is not snowed on again and again; a different
+   * milestone (the next bag) is not held back by it.
+   */
+  function flurryDue(milestonePence, firedAt, now) {
+    if (!flurryKind(milestonePence)) return false;
+    var last = firedAt ? firedAt[Math.floor(milestonePence)] : undefined;
+    return typeof last !== "number" || now - last >= FLURRY_COOLDOWN_MS;
+  }
+
+  /**
+   * The pieces of one flurry, for a screen `width` px wide: { ms, pieces }. `ms` is when it is all
+   * over. Each piece is { x (how far across, 0 to 100), wait and fall (seconds), drift (px sideways
+   * as it falls), turn (degrees), size (px), star (a gold star, else a paper snowflake), big (one of
+   * the few larger stars) }. Nothing is left to chance: the same numbers every time, from a fixed
+   * sequence, so every flurry is the same gentle one and wait + fall never passes `ms`.
+   */
+  function flurryPlan(kind, width) {
+    var f = Object.prototype.hasOwnProperty.call(FLURRIES, kind) ? FLURRIES[kind] : null;
+    if (!f) return { ms: 0, pieces: [] };
+    var w = Number(width) || 0;
+    var small = w > 0 && w < FLURRY_SMALL_SCREEN;
+    var n = small ? f.small : f.wide;
+    var seed = kind === "full" ? 20261205 : 20261224;
+    function next() {
+      seed = (seed * 1103515245 + 12345) % 2147483648;
+      return seed / 2147483648;
+    }
+    function round(v, to) {
+      return Math.round(v * to) / to;
+    }
+    var bigEvery = Math.floor(n / f.big);
+    var pieces = [];
+    for (var i = 0; i < n; i += 1) {
+      // Across: one in each strip of the width, so the whole screen is covered and nothing clumps.
+      // The strips are visited out of order so that neighbours do not set off together (5 shares
+      // no factor with any of the counts above, so every strip is visited exactly once).
+      var strip = (i * 5 + 3) % n;
+      var big = i % bigEvery === Math.floor(bigEvery / 2) && pieces.filter(isBig).length < f.big;
+      var star = big || i % 2 === 1;
+      var fall = f.fall[0] + next() * (f.fall[1] - f.fall[0]);
+      // The first few set off at once, so the moment answers the tap; the rest follow in a scatter.
+      var wait = i < 3 ? i * 0.02 : next() * f.spread;
+      var drift = (next() * 2 - 1) * (small ? f.drift * 0.6 : f.drift);
+      var turn = (60 + next() * 180) * (next() < 0.5 ? -1 : 1);
+      // A quarter larger on a wide screen, where there is far more room to fill.
+      var size = (big ? 30 + next() * 8 : star ? 13 + next() * 10 : 10 + next() * 12) * (small ? 1 : 1.25);
+      pieces.push({
+        x: round(((strip + 0.15 + next() * 0.7) / n) * 100, 10),
+        wait: round(Math.min(wait, f.ms / 1000 - f.fall[1]), 100),
+        fall: round(Math.min(fall, f.fall[1]), 100),
+        drift: Math.round(drift),
+        turn: Math.round(turn),
+        size: Math.round(size),
+        star: star,
+        big: big,
+      });
+    }
+    return { ms: f.ms, pieces: pieces };
+  }
+  function isBig(piece) {
+    return piece.big;
   }
 
   // The elf's notes: short lines scribbled on the paper beside the row just changed, as if an elf
@@ -489,6 +588,91 @@
     out: ["No bother. Back on the shelf.", "Changed your mind? That's fine.", "Out it comes. No worries.", "Easy done. Your bag, your call."],
     example: ["That's a lovely one.", "A kind thought, that.", "All year round. Love that.", "Thoughtful. Elves noticed."],
   };
+
+  /**
+   * The places the elf's note may be written, in the order they are tried: above the row (across
+   * the rule over it) or below it, at its usual size, then smaller, then smallest and level. The
+   * first row of a group can only have it below: its heading is above. The page measures where the
+   * note's words would fall and takes the first place where they touch nothing; if there is none,
+   * it writes no note.
+   */
+  function notePlacements(firstRow) {
+    var out = [];
+    ["", "small", "flat"].forEach(function (size) {
+      if (!firstRow) out.push({ below: false, size: size });
+      out.push({ below: true, size: size });
+    });
+    return out;
+  }
+
+  /**
+   * Does a note's ink touch a thing on the paper? `quad` is the note's words as a rectangle that
+   * may be turned a little: its four corners, in order, as [x, y]. `box` is the thing: { x, y, w,
+   * h }, with `round: true` for a round button (the circle inside that square). Sharing an edge
+   * is not touching.
+   */
+  function quadTouches(quad, box) {
+    if (!quad || quad.length !== 4 || !box || !(box.w > 0) || !(box.h > 0)) return false;
+    var i;
+    if (box.round) {
+      var cx = box.x + box.w / 2;
+      var cy = box.y + box.h / 2;
+      var r = Math.min(box.w, box.h) / 2;
+      var side = 0;
+      var inside = true;
+      for (i = 0; i < 4; i += 1) {
+        var a = quad[i];
+        var b = quad[(i + 1) % 4];
+        var ex = b[0] - a[0];
+        var ey = b[1] - a[1];
+        var cross = ex * (cy - a[1]) - ey * (cx - a[0]);
+        if (cross !== 0) {
+          if (side === 0) side = cross > 0 ? 1 : -1;
+          else if (cross > 0 !== side > 0) inside = false;
+        }
+        // The nearest point of this edge to the circle's middle.
+        var len = ex * ex + ey * ey;
+        var t = len ? Math.max(0, Math.min(1, ((cx - a[0]) * ex + (cy - a[1]) * ey) / len)) : 0;
+        var dx = a[0] + t * ex - cx;
+        var dy = a[1] + t * ey - cy;
+        if (dx * dx + dy * dy < r * r) return true;
+      }
+      return inside;
+    }
+    var rect = [
+      [box.x, box.y],
+      [box.x + box.w, box.y],
+      [box.x + box.w, box.y + box.h],
+      [box.x, box.y + box.h],
+    ];
+    // Two shapes with straight sides are apart if, seen along some side of either, they do not
+    // overlap. The square's sides are level and upright; the note's are its first two.
+    var axes = [
+      [1, 0],
+      [0, 1],
+      [quad[0][1] - quad[1][1], quad[1][0] - quad[0][0]],
+      [quad[1][1] - quad[2][1], quad[2][0] - quad[1][0]],
+    ];
+    for (i = 0; i < axes.length; i += 1) {
+      var ax = axes[i][0];
+      var ay = axes[i][1];
+      if (!ax && !ay) continue;
+      var lo1 = Infinity;
+      var hi1 = -Infinity;
+      var lo2 = Infinity;
+      var hi2 = -Infinity;
+      for (var j = 0; j < 4; j += 1) {
+        var p = quad[j][0] * ax + quad[j][1] * ay;
+        var q = rect[j][0] * ax + rect[j][1] * ay;
+        if (p < lo1) lo1 = p;
+        if (p > hi1) hi1 = p;
+        if (q < lo2) lo2 = q;
+        if (q > hi2) hi2 = q;
+      }
+      if (hi1 <= lo2 || hi2 <= lo1) return false;
+    }
+    return true;
+  }
 
   function several(template, key, n) {
     return template.replace("{n}", String(n)).replace("{things}", NOTES.things[key] || "of those");
@@ -566,13 +750,20 @@
     TAG_LINES: TAG_LINES,
     MAX_PEEKS: MAX_PEEKS,
     peekCount: peekCount,
-    peekSlots: peekSlots,
+    peekOrder: peekOrder,
+    latestPeeks: latestPeeks,
     strains: strains,
     milestoneCrossed: milestoneCrossed,
+    FLURRY_COOLDOWN_MS: FLURRY_COOLDOWN_MS,
+    flurryKind: flurryKind,
+    flurryDue: flurryDue,
+    flurryPlan: flurryPlan,
     NOTES: NOTES,
     noteKind: noteKind,
     noteFor: noteFor,
     allNotes: allNotes,
+    notePlacements: notePlacements,
+    quadTouches: quadTouches,
     BAG_VALUE_PENCE: BAG_VALUE_PENCE,
     MIN_PENCE: MIN_PENCE,
     MAX_QUANTITY: MAX_QUANTITY,

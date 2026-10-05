@@ -2187,13 +2187,28 @@
     if (r.third_party_consent) badges += ' <span class="admin-pill">3rd-party OK</span>';
     return badges;
   }
+  // TASK-NNN: "read" is the status that already says so. New is unread. Reviewed is read and can be
+  // unticked. Used and Withdrawn say more than read, so their tick is locked: a stray click must
+  // never undo them. The attribute is data-story-read, never data-story, which opens the story.
+  function storyIsRead(status) {
+    return status !== "new";
+  }
+  function storyReadTick(r) {
+    var locked = !canEdit("stories") || r.status === "used" || r.status === "withdrawn";
+    return (
+      '<label class="admin-read-tick"><input type="checkbox" data-story-read="' + r.id + '"' +
+      (storyIsRead(r.status) ? " checked" : "") + (locked ? " disabled" : "") +
+      ' aria-label="Story ' + r.id + ' read" /></label>'
+    );
+  }
   function storiesTable(rows) {
     if (!rows.length) return '<p class="admin-empty">No stories yet.</p>';
     var body = rows
       .map(function (r) {
         return (
-          "<tr><td>" + r.id + "</td><td>" + H.escapeHtml(H.storyLabel("submitterRole", r.submitter_role)) +
-          "</td><td>" + scopeConsentBadges(r) + '</td><td><span class="admin-pill">' +
+          "<tr><td>" + storyReadTick(r) + "</td><td>" + r.id + "</td><td>" +
+          H.escapeHtml(H.storyLabel("submitterRole", r.submitter_role)) +
+          "</td><td>" + scopeConsentBadges(r) + '</td><td><span class="admin-pill" data-story-status>' +
           H.escapeHtml(H.storyLabel("status", r.status)) + "</span></td><td>" +
           H.escapeHtml(H.consentAge(r.consent_captured_at)) + "</td><td>" + H.fmtDate(r.created_at) +
           '</td><td><button class="admin-link" type="button" data-story="' + r.id + '">View</button></td></tr>'
@@ -2201,7 +2216,7 @@
       })
       .join("");
     return (
-      '<table class="admin-table"><thead><tr><th>ID</th><th>Role</th><th>Scope / consent</th>' +
+      '<table class="admin-table stories-table"><thead><tr><th>Read</th><th>ID</th><th>Role</th><th>Scope / consent</th>' +
       "<th>Status</th><th>Consent age</th><th>Submitted</th><th></th></tr></thead><tbody>" +
       body + "</tbody></table>"
     );

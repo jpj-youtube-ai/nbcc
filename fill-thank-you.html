@@ -15,10 +15,15 @@
     <link rel="stylesheet" href="/assets/css/styles.css" />
     <!-- Fill a Red Bag's own stylesheet, shared with the giving page. -->
     <link rel="stylesheet" href="/assets/css/red-bag.css" />
+    <!-- This page's own: the Workshop scene, the name box and the certificate to print. -->
+    <link rel="stylesheet" href="/assets/css/red-bag-thanks.css" />
     <link rel="preload" href="/assets/fonts/playfair-var.woff2" as="font" type="font/woff2" crossorigin />
     <link rel="preload" href="/assets/fonts/poppins-400.woff2" as="font" type="font/woff2" crossorigin />
+    <!-- The handwriting under the Workshop and on the certificate (Caveat, declared in red-bag.css). -->
+    <link rel="preload" href="/assets/fonts/caveat-latin.woff2" as="font" type="font/woff2" crossorigin />
     <script defer src="/assets/js/main.js"></script>
     <script defer src="/assets/js/red-bag-catalogue.js"></script>
+    <script defer src="/assets/js/red-bag-workshop.js"></script>
     <script defer src="/assets/js/red-bag-thanks.js"></script>
     <script defer src="/assets/js/pulse.js"></script>
   </head>
@@ -46,7 +51,10 @@
       <!-- The thank you. Everything here reads without JavaScript, as a plain thank you; the script
            (assets/js/red-bag-thanks.js) adds the total this tab remembered (for show only) and the
            picture to share. The bag is drawn in by the server (src/red-bag/render.ts). No list of
-           items anywhere: it would read as a shopping receipt. -->
+           items anywhere: it would read as a shopping receipt.
+           The feel good pieces (5 October 2026), all the script's: the Elves' Workshop scene in place
+           of the still bag (assets/js/red-bag-workshop.js; for the eye only, it plays once), a name
+           for the picture, and a certificate to print. The name is never sent anywhere. -->
       <section class="page-top rb-thanks" data-rb-thanks aria-labelledby="rb-thanks-title">
         <div class="wrap">
           <!-- red-bag:preview -->
@@ -54,7 +62,11 @@
             <span class="eyebrow">Thank you</span>
             <h1 id="rb-thanks-title" tabindex="-1">Thank you for filling a Red Bag</h1>
             <div class="rule center"><i></i></div>
-            <div class="rb-thanks__bag" aria-hidden="true"><!-- red-bag:bag --></div>
+            <div class="rb-workshop" data-rb-workshop>
+              <div class="rb-workshop__scene" data-rb-workshop-scene aria-hidden="true" hidden></div>
+              <div class="rb-thanks__bag" aria-hidden="true"><!-- red-bag:bag --></div>
+              <p class="rb-workshop__line" data-rb-workshop-line>Bag packed. The elves will take it from here.</p>
+            </div>
             <p class="lede rb-thanks__lead" data-rb-thanks-total hidden>Your donation of <strong data-rb-thanks-amount></strong> is on its way to NBCC.</p>
             <p class="lede rb-thanks__lead" data-rb-thanks-plain>Your donation is on its way to NBCC.</p>
             <p class="rb-thanks__line" data-rb-thanks-giftaid hidden>With Gift Aid, NBCC can claim another <strong data-rb-thanks-giftaid-amount></strong> at no cost to you.</p>
@@ -68,7 +80,18 @@
         <div class="wrap">
           <div class="rb-share" data-rb-share>
             <h2 id="rb-share-title">Share: I filled a Red Bag</h2>
-            <p>A picture to post or send, to show a friend how to fill one too. It says nothing about how much you gave.</p>
+            <p>A picture to post or send, to show a friend how to fill one too. <span data-rb-share-note>It shows no amount, only that you filled a Red Bag.</span></p>
+            <!-- A name for the picture and the certificate. It belongs to no form and has no name of
+                 its own, so it cannot be sent; the script screens it against the supporter wall's
+                 list, which the server draws in just below, encoded
+                 (src/donors/display-name-filter.ts). -->
+            <div class="rb-name" data-rb-name hidden>
+              <label class="rb-name__label" for="rbShareName">Add a name to your picture (optional)</label>
+              <input class="rb-name__input" id="rbShareName" type="text" autocomplete="off" autocapitalize="words" spellcheck="false" aria-describedby="rbShareNameHint" />
+              <p class="rb-name__hint" id="rbShareNameHint">A first name, a family, a class or a workplace. It goes on your certificate too, and it never leaves this page.</p>
+              <p class="rb-name__error" id="rbShareNameError" role="alert" data-rb-name-error hidden>Please choose a different name.</p>
+              <script type="text/plain" data-rb-name-filter><!-- red-bag:name-filter --></script>
+            </div>
             <canvas class="rb-share__picture" data-rb-share-picture width="1080" height="1080" role="img" aria-label="A red paper gift bag on cream, with the words: I filled a Red Bag. Night Before Christmas Campaign."></canvas>
             <div class="rb-share__actions">
               <button class="btn btn-primary" type="button" data-rb-share-send hidden>Share the picture</button>
@@ -79,9 +102,38 @@
             </div>
             <p class="rb-share__status" role="status" aria-live="polite" data-rb-share-status></p>
           </div>
+          <div class="rb-cert-ask" data-rb-cert-ask hidden>
+            <button class="btn btn-ghost" type="button" data-rb-cert-print>Print your certificate</button>
+            <p class="rb-cert-ask__status" role="status" aria-live="polite" data-rb-cert-status></p>
+          </div>
           <p class="rb-again" data-rb-again><a class="btn btn-ghost" href="/fill">Fill another bag</a></p>
         </div>
       </section>
+
+      <!-- The certificate. Never on the screen (assets/css/red-bag-thanks.css): "Print your
+           certificate" fills in the name, what for and the date, and prints this alone on one
+           upright A4 sheet. No amount on it. The charity's statement is drawn in by the server, the
+           one every printed piece carries (MATERIALS_STATEMENT, src/legal/registration.ts). -->
+      <div class="rb-cert" data-rb-cert aria-hidden="true">
+        <div class="rb-cert__frame">
+          <div class="rb-cert__sheet">
+            <img class="rb-cert__logo" src="/assets/img/nbcc-logo.png" alt="Night Before Christmas Campaign" width="150" height="150" />
+            <p class="rb-cert__title">Certificate of thanks</p>
+            <p class="rb-cert__orn">&#10022;</p>
+            <p class="rb-cert__to">This certificate is presented to</p>
+            <p class="rb-cert__name" data-rb-cert-name></p>
+            <p class="rb-cert__for" data-rb-cert-for>for filling a Red Bag Full of Joy</p>
+            <div class="rb-cert__bag" data-rb-cert-bag></div>
+            <p class="rb-cert__hand">Thank you for being part of this.</p>
+            <div class="rb-cert__sign">
+              <div class="rb-cert__signed"><span class="rb-cert__hand-name rb-cert__elves">The Elves</span><i></i> <small>The Elves' Workshop</small></div>
+              <div class="rb-cert__signed"><span class="rb-cert__hand-name">NBCC Team</span><i></i> <small>Night Before Christmas Campaign</small></div>
+            </div>
+            <div class="rb-cert__dated"><span class="rb-cert__date" data-rb-cert-date></span><i></i> <small>Date</small></div>
+            <p class="rb-cert__legal"><!-- red-bag:statement --></p>
+          </div>
+        </div>
+      </div>
     </main>
 
     <footer class="site-footer" data-region="footer">

@@ -69,6 +69,15 @@ const BLOCKED_WORDS: readonly string[] = [
 // obvious evasion without risking the Scunthorpe problem. Kept deliberately minimal and reviewed.
 const BLOCKED_SUBSTRINGS: readonly string[] = ["nigger", "nigga"];
 
+// The two lists, for the one place that must screen a name IN THE BROWSER: the name a donor may add
+// to the "I filled a Red Bag" picture and certificate on /fill/thank-you, which is never sent to the
+// server (src/red-bag/render.ts draws these into that page; assets/js/red-bag-thanks.js applies the
+// same two passes as containsBlockedWord below). One list, kept here, so the two cannot drift.
+export const BLOCKED_NAME_LISTS: { readonly words: readonly string[]; readonly inside: readonly string[] } = {
+  words: BLOCKED_WORDS,
+  inside: BLOCKED_SUBSTRINGS,
+};
+
 // True when `name` contains a blocked word (case-insensitive). Empty / whitespace-only input is never
 // blocked. Whole-word matching for the main list; a tiny substring list for no-benign-use slurs.
 export function containsBlockedWord(name: string): boolean {

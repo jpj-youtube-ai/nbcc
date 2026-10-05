@@ -96,6 +96,56 @@ Layout as the signed-off chat mock-up:
    never indexed, on no site map and linked from nowhere but Stripe's return.
    No itemised list anywhere (it would read as a shopping receipt).
 
+### The thank you's feel good pieces (agreed with Jaimie, 5 October 2026)
+
+Rules over everything: never imply the items were bought or go to a particular person; no pressure,
+guilt or upsell; nobody is ranked or given a title (donor titles were dropped); dignity for the
+people NBCC helps. Nothing typed is sent anywhere; no new endpoint, table, library or sound.
+
+1. **Watch it leave the Workshop.** The top of the thank you is a little scene instead of a still
+   bag: an elf lifts the tied bag onto the shelf beside the others, the Workshop light goes down to
+   a glow (dusk, not dark), and a line appears in the paper's hand, word for word: "Bag packed. The
+   elves will take it from here." One inline drawing, for the eye only; it plays once on arrival
+   after a gift (about four seconds, transform and opacity only), then rests. Less motion asked
+   for, or no remembered gift: shown at rest, no lift. The elf is a small figure seen from behind
+   (pointed red hat, ears, green tunic), in the catalogue drawings' style; not the logo's artwork.
+   The donor's bags on the shelf: one for each full £50 of the remembered total, one to five. No
+   "Play again". The line is the page's one "will": it is about the elves, and promises nothing
+   about what the money buys.
+   Bigger and richer (Jaimie, after the first screenshots, 5 October 2026): the scene is the
+   page's centrepiece, the column's width (about 620px on a desktop, 16 to 10). In it, as she chose:
+   shelves full of bags and gifts (two long shelves and a short one: tied Red Bags, a teddy, a stack
+   of books, a folded blanket, wrapped presents, a toy train), with the gap for the donor's bag on
+   the reaching shelf; a window with snow falling (a night blue, #26355C, a few stars; the snow
+   drifts down once and settles); and a Christmas tree with fairy lights that STAY softly lit when
+   the lamp goes down, twinkling once as it does. No clock. Simpler at phone width, not smaller
+   and muddier.
+2. **A share picture with their name.** An optional box above the picture, "Add a name to your
+   picture (optional)", hint "A first name, a family, a class or a workplace. It goes on your
+   certificate too, and it never leaves this page." The picture reads "<Name> filled a Red Bag" (or
+   "<Name> filled 2 Red Bags" for £100 and up); empty, "I filled a Red Bag". 30 characters, trimmed;
+   a long name shrinks or takes its own line. Screened in the browser against the supporter wall's
+   own word list, drawn into the page by the server; refused: "Please choose a different name." and
+   the plain picture. The share controls are unchanged and share the picture as shown. The sentence
+   over the picture is honest about it: "It shows no amount, only that you filled a Red Bag.", or
+   only while the picture itself counts the bags (a name, and two bags or more) "It shows no
+   amount, only how many bags you filled." Nothing made from the
+   name may reach the site's visit counter either: "Save the picture" points at a blob, never at
+   the picture's own bytes.
+3. **A certificate to print.** "Print your certificate": one upright A4 page, printed by the
+   browser from a hidden part of the page. The NBCC logo; "Certificate of thanks"; "This certificate
+   is presented to"; the name; "for filling a Red Bag Full of Joy" (or "for filling N Red Bags Full
+   of Joy"); a tied bag; "Thank you for being part of this." in the handwriting; two
+   signatures in that hand, "The Elves" over "The Elves' Workshop" and "NBCC Team" over "Night
+   Before Christmas Campaign" (the second added by Jaimie); the date ("5 October 2026"); the charity's
+   statement as on every printed piece. No amount. No name yet: "Add a name above first, and it goes
+   on your certificate." One page whatever the browser: it sizes itself to the printable page, and
+   no clock ends the print (a phone's preview may be open for a long time).
+
+Order on the page: eyebrow and heading; the Workshop and its line; the donation, Gift Aid, elves
+and receipt lines; the share (name box, picture, controls); "Print your certificate"; "Fill another
+bag".
+
 ### The bags
 
 Draw NBCC's real Red Bag: a red paper gift bag with cord handles (see

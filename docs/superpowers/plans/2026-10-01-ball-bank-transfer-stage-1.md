@@ -1,5 +1,9 @@
 # Ball bank transfer, stage 1 (TASK-484): implementation plan
 
+> **Status (5 October 2026):** shipped as TASK-484 (#607) on 1 October 2026. Stages 2 to 5 followed
+> the same day (TASK-485 to TASK-488, #608 to #611), then TASK-489 (#612), so "stages 2 to 5 still to
+> come" further down was true only when this was written. The spec's Status note has the whole picture.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:**

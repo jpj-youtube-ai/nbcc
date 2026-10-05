@@ -1,5 +1,9 @@
 # Admin QR codes Implementation Plan
 
+> **Status (5 October 2026):** shipped as TASK-492 (#616) on 2 October 2026. The migration went out
+> as `migrations/1791200000030_analytics-qr-channel.js`, not the `1791100000000_…` named below:
+> other migrations had landed with later numbers by then, and a new migration must sort last.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** A QR codes screen in the admin that makes a printable (SVG) and on-screen (PNG) QR code for every public page of nbcc.scot, picks up new pages automatically, and counts scans in Analytics.

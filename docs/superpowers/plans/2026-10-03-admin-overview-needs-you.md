@@ -1,5 +1,10 @@
 # Admin Overview stage 1: Needs you — Implementation Plan
 
+> **Status (5 October 2026):** shipped as TASK-508 (#631) on 3 October 2026. Two things differ from
+> the text below. `gatherNeeds` became the general `gather` in stage 2 (TASK-509, #632), which the
+> numbers and Coming up (TASK-510, #633) share. And the sources run three at a time, not all at
+> once: the database pool takes five connections, and an Overview must not hold them all.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** The admin Overview opens with "Needs you": every waiting item the person may see, most urgent first, each one click from its screen.

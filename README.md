@@ -162,14 +162,17 @@ current page's link is marked `class="active" aria-current="page"`. Verified by
 ### Footer
 
 Every page mounts the same maroon footer in its `<footer class="site-footer">`
-slot (REQ-003, ported from the NBCC design), **identical across all five pages**:
-three columns — the logo lockup (74px) + social links (Instagram/Facebook/X),
-**Explore** (the clean URLs `/`, `/about-us`, `/donate`, `/contact`, `/supporters`), and
-**Ways to give** (`/donate`, `/contact`) — plus a legal strip carrying the exact,
-mandated charity-registration statement (TASK-126): *"Night Before Christmas
-Campaign, known as NBCC, is a Scottish Charitable Incorporated Organisation.
+slot (REQ-003, ported from the NBCC design), **identical on every page that has one**:
+three columns — the logo lockup (74px), the charity's short description, the social links
+(Instagram/Facebook/X) and "Find us at nbcc.scot"; **Explore** (the clean URLs `/`, `/about-us`,
+`/donate`, `/contact`, `/supporters`, `/my-story`); and **Ways to give** ("Donate money" to
+`/donate`, "Donate items" and "Fundraise for us" to `/contact`; while fundraising is switched on the
+server points "Fundraise for us" at `/fundraise`, `src/fundraising/footer-link.ts`) — plus a legal
+strip carrying the exact, mandated charity-registration statement (TASK-126): *"Night Before
+Christmas Campaign, known as NBCC, is a Scottish Charitable Incorporated Organisation.
 Scottish Charity Number SC047995. Regulated by the Scottish Charity Regulator,
-OSCR."* — the `SC047995` wrapping the OSCR register link. This exact wording is
+OSCR."* — the `SC047995` wrapping the OSCR register link — and the Elves' Workshop address. The
+registration wording is
 the single source of truth in `src/legal/registration.ts` and also appears in
 every donor-facing receipt and thank-you letter (the Corporation Tax receipt +
 refund notice in `src/donors/receipt.ts`, and the donation- and refund-
@@ -6247,7 +6250,7 @@ numbers, one line each, and **Coming up** the next 14 days. The design is in
 
   Anything at zero is left out. A quiet day says "Nothing needs you right now."
 - **One request**, `GET /api/admin/overview` (any session), answers
-  `{ updatedAt, needs: [{ key, level, text, view, button }], numbers: [{ key, title, headline, detail, view, button }], failed: [screen names] }`
+  `{ updatedAt, needs: [{ key, level, text, view, button }], numbers: [{ key, title, headline, detail, view, button }], comingUp: [{ day, label, items: [{ text, when, view, button }] }], failed: [screen names] }`
   (`src/routes/admin-overview.ts`). Each item has the same gate as its own screen. A section the
   person cannot open is never asked for (`gather`, `src/admin/overview-sources.ts`). Each count
   uses the same database function and rule as that screen, so the two cannot disagree.

@@ -809,7 +809,7 @@ body.give-embedded-open{overflow:hidden}
 .supporter{display:flex;align-items:center;gap:14px;padding:18px 20px}
 .supporter-icon{flex:0 0 auto;width:44px;height:44px;border-radius:12px;background:var(--tan-soft);color:var(--crimson);display:flex;align-items:center;justify-content:center}
 .supporter-meta{display:flex;flex-direction:column;min-width:0}
-.supporter-name{font-family:var(--font-head);font-weight:700;color:var(--maroon);font-size:1.05rem;line-height:1.2}
+.supporter-name{font-family:var(--font-head);font-weight:700;color:var(--maroon);font-size:1.05rem;line-height:1.2;overflow-wrap:anywhere}
 .supporter-kind{font-size:.8rem;color:var(--slate-soft)}
 /* Platinum, the top supporters band (TASK-223), reuses the shared .supporter-tier styling above; the
    only addition is a subtle platinum-grey accent on its heading underline, mirroring the donate page's

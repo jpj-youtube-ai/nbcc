@@ -8,7 +8,8 @@ import { effectivePermissions, type PermissionMap } from "../../src/admin/permis
 
 // TASK-NNN: the Read tick on Admin > Stories, in the admin's jsdom harness (admin.html's <body>, a
 // fake fetch, app.js evaluated against it). "Read" is the status Reviewed, so a tick sends a status
-// to the PATCH the screen already had. Every story here is invented.
+// to the PATCH the screen already had, with the status its screen showed (ifStatus), so it can never
+// undo what somebody else did in the meantime. Every story here is invented.
 
 const require = createRequire(import.meta.url);
 const ROOT = resolve(__dirname, "../..");
@@ -20,12 +21,24 @@ const bodyHtml = (html.match(/<body[^>]*>([\s\S]*)<\/body>/i) || ["", ""])[1];
 const token = signAdminSession({ sub: 3, email: "admin@nbcc", role: "admin", now: new Date(), secret: "s" }).token;
 
 type Call = { method: string; path: string; body?: string };
+type Story = Record<string, unknown> & { id: number; status: string };
 let perms: PermissionMap = {};
-let calls: Call[] = [];
-let patchStatus = 200; // what a PATCH answers
-let stories: Array<Record<string, unknown>> = [];
+let calls: Call[] = []; // every request, noted as it is made
+// What a PATCH answers: "ok" behaves as the server does (it saves, unless the story is no longer
+// what ifStatus says, which is a 409 with the story as it is now); a number is that status with
+// nothing saved; "down" is a request that never arrives.
+let patchAnswer: "ok" | "down" | number = "ok";
+let stories: Story[] = [];
+// A PATCH waits here while a test looks at the screen in between the press and the answer.
+let gate: Promise<void> | null = null;
+let openGate: () => void = () => undefined;
+const holdPatches = () => {
+  gate = new Promise<void>((r) => {
+    openGate = r;
+  });
+};
 
-const story = (id: number, status: string) => ({
+const story = (id: number, status: string): Story => ({
   id, created_at: "2026-06-01T00:00:00Z", consent_captured_at: "2026-06-01T00:00:00Z",
   submitter_role: "family_carer", use_scope: "internal_only", consent_share_first_name: false,
   consent_share_town: false, third_party_consent: false, status, short_quote: null,
@@ -36,43 +49,49 @@ const detail = (id: number, status: string) => ({
   age_band: null, gender: null, recipient_type: null, heard_about: null, confirmed_over_16: true,
   admin_tags: [], admin_notes: null, archived_at: null,
 });
+const inDb = (id: number) => stories.find((s) => s.id === id) as Story;
 
-function respond(url: string, init?: { method?: string; body?: string }) {
-  const j = (body: unknown, status = 200) => ({
+function respond(method: string, path: string, body?: string) {
+  const j = (payload: unknown, status = 200) => ({
     status,
     ok: status >= 200 && status < 300,
-    json: () => Promise.resolve(body),
+    json: () => Promise.resolve(payload),
     text: () => Promise.resolve(""),
     headers: { get: () => "application/json" },
   });
-  const method = (init?.method || "GET").toUpperCase();
-  const path = url.split("?")[0];
-  calls.push({ method, path, body: init?.body });
   if (path === "/api/admin/login") return j({ token, user: { email: "admin@nbcc", role: "admin" } });
   if (path === "/api/admin/me") return j({ email: "admin@nbcc", permissions: perms });
-  if (path === "/api/admin/stories") return j({ results: stories });
+  if (path === "/api/admin/stories") return j({ results: stories.map((s) => ({ ...s })) });
   const one = path.match(/^\/api\/admin\/stories\/(\d+)$/);
   if (one) {
-    const found = stories.find((s) => s.id === Number(one[1]));
+    const id = Number(one[1]);
+    const found = inDb(id);
     if (method === "PATCH") {
-      if (patchStatus !== 200) return j({ error: "Admin is temporarily unavailable" }, patchStatus);
-      const next = JSON.parse(init?.body || "{}").status as string;
-      if (found) found.status = next;
-      return j(detail(Number(one[1]), next));
+      if (patchAnswer === "down") throw new TypeError("Failed to fetch");
+      if (patchAnswer !== "ok") return j({ error: "No" }, patchAnswer);
+      if (!found) return j({ error: "Story not found" }, 404);
+      const sent = JSON.parse(body || "{}") as { status?: string; ifStatus?: string };
+      if (sent.ifStatus && found.status !== sent.ifStatus) {
+        return j({ error: "Story has changed", story: detail(id, found.status) }, 409);
+      }
+      if (sent.status) found.status = sent.status;
+      return j(detail(id, found.status));
     }
-    return j(detail(Number(one[1]), String(found ? found.status : "new")));
+    return found ? j(detail(id, found.status)) : j({ error: "Story not found" }, 404);
   }
   return j({ results: [] });
 }
 
 const flush = () => new Promise((r) => setTimeout(r, 0));
 const settle = async () => {
-  for (let i = 0; i < 5; i++) await flush();
+  for (let i = 0; i < 6; i++) await flush();
 };
 const el = (id: string) => document.getElementById(id) as HTMLElement;
 const tick = (id: number) => document.querySelector(`#storiesTable [data-story-read="${id}"]`) as HTMLInputElement;
-const statusOf = (id: number) =>
-  ((tick(id).closest("tr") as HTMLElement).querySelector("[data-story-status]") as HTMLElement).textContent;
+const rowOf = (id: number) => tick(id).closest("tr") as HTMLElement;
+const statusOf = (id: number) => (rowOf(id).querySelector("[data-story-status]") as HTMLElement).textContent;
+const noteOf = (id: number) => (rowOf(id).querySelector("[data-story-note]") as HTMLElement).textContent;
+const viewOf = (id: number) => rowOf(id).querySelector("[data-story]") as HTMLElement;
 const patches = () => calls.filter((c) => c.method === "PATCH");
 
 async function openStories() {
@@ -83,16 +102,17 @@ async function openStories() {
   (document.querySelector('.admin-nav-link[data-view="stories"]') as HTMLElement).click();
   await settle();
 }
-async function press(box: HTMLInputElement) {
-  box.checked = !box.checked;
-  box.dispatchEvent(new Event("change", { bubbles: true }));
+// A real press: a locked box ignores it, exactly as it does for a person.
+async function press(box: HTMLElement) {
+  box.click();
   await settle();
 }
 
 beforeEach(() => {
   perms = effectivePermissions({ role: "admin", permissions: null });
   calls = [];
-  patchStatus = 200;
+  patchAnswer = "ok";
+  gate = null;
   stories = [story(4, "new"), story(3, "reviewed"), story(2, "used"), story(1, "withdrawn")];
   window.sessionStorage.clear();
   document.body.innerHTML = bodyHtml;
@@ -100,8 +120,19 @@ beforeEach(() => {
   window.confirm = () => true;
   window.alert = () => undefined;
   (window as unknown as { formatReceived: (s: string) => string }).formatReceived = (s) => String(s);
-  (globalThis as unknown as { fetch: unknown }).fetch = (url: unknown, init?: unknown) =>
-    Promise.resolve(respond(String(url), init as { method?: string; body?: string }));
+  (globalThis as unknown as { fetch: unknown }).fetch = (url: unknown, init?: { method?: string; body?: string }) => {
+    const method = (init?.method || "GET").toUpperCase();
+    const path = String(url).split("?")[0];
+    calls.push({ method, path, body: init?.body });
+    const answer = () => {
+      try {
+        return Promise.resolve(respond(method, path, init?.body));
+      } catch (err) {
+        return Promise.reject(err);
+      }
+    };
+    return method === "PATCH" && gate ? gate.then(answer) : answer();
+  };
   // eslint-disable-next-line no-eval
   (0, eval)(appSrc);
 });
@@ -127,11 +158,27 @@ describe("the Read column on the Stories list", () => {
     expect(tick(4).getAttribute("aria-label")).toBe("Story 4 read");
   });
 
+  it("says why a locked tick is locked, and a tick that can be pressed says nothing", async () => {
+    await openStories();
+    const label = (id: number) => tick(id).closest("label") as HTMLElement;
+    expect(label(2).title).toBe("Used stories count as read.");
+    expect(label(1).title).toBe("Withdrawn stories count as read.");
+    expect([label(2).classList.contains("is-locked"), label(1).classList.contains("is-locked")]).toEqual([true, true]);
+    expect([label(4).hasAttribute("title"), label(3).hasAttribute("title")]).toEqual([false, false]);
+    expect([label(4).classList.contains("is-locked"), label(3).classList.contains("is-locked")]).toEqual([false, false]);
+  });
+
   it("does not open the story when its tick is pressed", async () => {
     await openStories();
-    tick(4).click();
-    await settle();
+    await press(tick(4));
     expect(el("view-story").hidden).toBe(true);
+  });
+
+  it("has no line above the list for what could not be saved: that is said in the story's own row", async () => {
+    await openStories();
+    expect(el("storiesListStatus")).toBeNull();
+    expect(document.querySelectorAll("#storiesTable [data-story-note]")).toHaveLength(4);
+    expect(noteOf(4)).toBe("");
   });
 });
 
@@ -139,71 +186,209 @@ describe("ticking a story", () => {
   it("makes a New story Reviewed, in place, and the tick can come straight back off", async () => {
     await openStories();
     await press(tick(4));
-    expect(patches()).toEqual([{ method: "PATCH", path: "/api/admin/stories/4", body: '{"status":"reviewed"}' }]);
+    expect(patches()).toEqual([
+      { method: "PATCH", path: "/api/admin/stories/4", body: '{"status":"reviewed","ifStatus":"new"}' },
+    ]);
     expect(tick(4).checked).toBe(true);
     expect(tick(4).disabled).toBe(false);
     expect(statusOf(4)).toBe("Reviewed");
     await press(tick(4));
-    expect(patches()[1]).toEqual({ method: "PATCH", path: "/api/admin/stories/4", body: '{"status":"new"}' });
+    expect(patches()[1]).toEqual({
+      method: "PATCH", path: "/api/admin/stories/4", body: '{"status":"new","ifStatus":"reviewed"}',
+    });
     expect(tick(4).checked).toBe(false);
     expect(statusOf(4)).toBe("New");
+    expect(noteOf(4)).toBe("");
   });
 
   it("does not draw the list again, so nothing jumps", async () => {
     await openStories();
-    const row = tick(4).closest("tr");
+    const row = rowOf(4);
     await press(tick(4));
-    expect(tick(4).closest("tr")).toBe(row);
+    expect(rowOf(4)).toBe(row);
     expect(calls.filter((c) => c.method === "GET" && c.path === "/api/admin/stories")).toHaveLength(1);
   });
 
-  it("puts the tick back and says so when the save fails", async () => {
-    patchStatus = 500;
+  it("puts the tick back and says so in the story's own row when the save fails", async () => {
+    patchAnswer = 500;
     await openStories();
     await press(tick(4));
     expect(tick(4).checked).toBe(false);
     expect(tick(4).disabled).toBe(false);
     expect(statusOf(4)).toBe("New");
-    expect(el("storiesListStatus").textContent).toBe("Could not mark that story as read. Please try again.");
-    expect(el("storiesListStatus").className).toBe("ty-status is-error");
+    expect(noteOf(4)).toBe("Could not save. Please try again.");
+    expect(noteOf(3)).toBe("");
   });
 
-  it("says as new when unticking fails, and clears the line on the next try", async () => {
-    patchStatus = 500;
+  it("says the same when the request never arrives", async () => {
+    patchAnswer = "down";
     await openStories();
     await press(tick(3));
     expect(tick(3).checked).toBe(true);
-    expect(el("storiesListStatus").textContent).toBe("Could not mark that story as new. Please try again.");
-    patchStatus = 200;
-    await press(tick(3));
-    expect(el("storiesListStatus").textContent).toBe("");
-    expect(el("storiesListStatus").className).toBe("ty-status");
+    expect(statusOf(3)).toBe("Reviewed");
+    expect(noteOf(3)).toBe("Could not save. Please try again.");
   });
 
-  it("cannot be pressed again while it is saving", async () => {
+  it("clears the row's note on the next try", async () => {
+    patchAnswer = 500;
     await openStories();
+    await press(tick(4));
+    expect(noteOf(4)).not.toBe("");
+    patchAnswer = "ok";
+    await press(tick(4));
+    expect(noteOf(4)).toBe("");
+    expect(statusOf(4)).toBe("Reviewed");
+  });
+
+  // Disabling the box for the wait would drop the keyboard's place in the list (a disabled box
+  // cannot hold it), so it stays as it is and a second press in that time is simply put back.
+  it("keeps the keyboard on the tick while it saves, and a second press in that time is put back, not sent", async () => {
+    await openStories();
+    holdPatches();
     const box = tick(4);
-    box.checked = true;
-    box.dispatchEvent(new Event("change", { bubbles: true }));
-    expect(box.disabled).toBe(true);
+    box.focus();
+    box.click();
     await settle();
     expect(box.disabled).toBe(false);
+    expect(document.activeElement).toBe(box);
+    expect(box.getAttribute("aria-busy")).toBe("true");
+    box.click();
+    await settle();
+    expect(box.checked).toBe(true);
+    expect(patches()).toHaveLength(1);
+    openGate();
+    await settle();
+    expect(box.checked).toBe(true);
+    expect(box.hasAttribute("aria-busy")).toBe(false);
+    expect(document.activeElement).toBe(box);
+    expect(statusOf(4)).toBe("Reviewed");
+    expect(patches()).toHaveLength(1);
   });
 
-  it("is locked for someone who can only view Stories, and sends nothing", async () => {
+  // The reason ifStatus exists. Withdrawn records that consent was taken back: a list that was
+  // opened before that happened must not be able to put the story back to Reviewed.
+  it("does not undo a status somebody else set since the list was opened: the row shows what the story is now", async () => {
+    await openStories();
+    inDb(4).status = "withdrawn";
+    await press(tick(4));
+    expect(patches()).toHaveLength(1);
+    expect(inDb(4).status).toBe("withdrawn");
+    expect(statusOf(4)).toBe("Withdrawn");
+    expect([tick(4).checked, tick(4).disabled]).toEqual([true, true]);
+    expect((tick(4).closest("label") as HTMLElement).title).toBe("Withdrawn stories count as read.");
+    expect(noteOf(4)).toBe("Someone else changed this story. It is now Withdrawn.");
+  });
+
+  it("says the same when it is the untick that somebody else got ahead of", async () => {
+    await openStories();
+    inDb(3).status = "used";
+    await press(tick(3));
+    expect(inDb(3).status).toBe("used");
+    expect(statusOf(3)).toBe("Used");
+    expect([tick(3).checked, tick(3).disabled]).toEqual([true, true]);
+    expect(noteOf(3)).toBe("Someone else changed this story. It is now Used.");
+  });
+
+  it("says nothing when somebody else had already made it what was asked for", async () => {
+    await openStories();
+    inDb(4).status = "reviewed";
+    await press(tick(4));
+    expect(statusOf(4)).toBe("Reviewed");
+    expect([tick(4).checked, tick(4).disabled]).toEqual([true, false]);
+    expect(noteOf(4)).toBe("");
+  });
+
+  it("moves the keyboard to the row's View when the tick it was on becomes locked", async () => {
+    await openStories();
+    inDb(4).status = "withdrawn";
+    tick(4).focus();
+    await press(tick(4));
+    expect(tick(4).disabled).toBe(true);
+    expect(document.activeElement).toBe(viewOf(4));
+  });
+
+  it("says a story is no longer here when it has been erased, and locks its tick", async () => {
+    patchAnswer = 404;
+    await openStories();
+    await press(tick(4));
+    expect([tick(4).checked, tick(4).disabled]).toEqual([false, true]);
+    expect(statusOf(4)).toBe("New");
+    expect(noteOf(4)).toBe("This story is no longer here.");
+  });
+
+  it("says so when this person may no longer change stories, and locks the tick", async () => {
+    patchAnswer = 403;
+    await openStories();
+    await press(tick(3));
+    expect([tick(3).checked, tick(3).disabled]).toEqual([true, true]);
+    expect(noteOf(3)).toBe("You can no longer change stories.");
+  });
+
+  it("goes back to signing in, with nothing else said, when the session has ended", async () => {
+    patchAnswer = 401;
+    await openStories();
+    await press(tick(4));
+    expect(el("loginView").hidden).toBe(false);
+    expect(el("appView").hidden).toBe(true);
+  });
+
+  it("lands its answer on the row that is on screen when the list was drawn again in the meantime", async () => {
+    await openStories();
+    holdPatches();
+    const old = tick(4);
+    old.click();
+    await settle();
+    (document.querySelector('.admin-nav-link[data-view="stories"]') as HTMLElement).click();
+    await settle();
+    expect(tick(4)).not.toBe(old);
+    expect(tick(4).checked).toBe(false);
+    openGate();
+    await settle();
+    expect(tick(4).checked).toBe(true);
+    expect(statusOf(4)).toBe("Reviewed");
+    expect(tick(4).hasAttribute("aria-busy")).toBe(false);
+  });
+
+  // A save that failed knows nothing about what the story is now. It must not paint what the old
+  // row showed over a row the list has only just loaded.
+  it("leaves a row drawn again since as the list loaded it when the save then fails", async () => {
+    await openStories();
+    holdPatches();
+    tick(4).click();
+    await settle();
+    inDb(4).status = "used";
+    (document.querySelector('.admin-nav-link[data-view="stories"]') as HTMLElement).click();
+    await settle();
+    patchAnswer = 500;
+    openGate();
+    await settle();
+    expect(statusOf(4)).toBe("Used");
+    expect([tick(4).checked, tick(4).disabled]).toEqual([true, true]);
+  });
+
+  it("is locked for someone who can only view Stories, says why, and a press sends nothing", async () => {
     perms = effectivePermissions({ role: "viewer", permissions: null });
     await openStories();
     expect([tick(4).disabled, tick(3).disabled]).toEqual([true, true]);
+    expect((tick(4).closest("label") as HTMLElement).title).toBe("You can view stories but not change them.");
+    await press(tick(4));
+    await press(tick(3));
+    expect([tick(4).checked, tick(3).checked]).toEqual([false, true]);
     expect(patches()).toEqual([]);
   });
 });
 
 describe("an open story", () => {
-  async function open(id: number) {
-    await openStories();
-    (document.querySelector(`#storiesTable [data-story="${id}"]`) as HTMLElement).click();
+  async function view(id: number) {
+    viewOf(id).click();
     await settle();
   }
+  async function open(id: number) {
+    await openStories();
+    await view(id);
+  }
+  const statusLine = () => el("storyStatusNow").textContent;
+  const readNote = () => el("storyReadNote").textContent;
 
   it("has Mark as read under the story's words while it is New, and it makes the story Reviewed", async () => {
     await open(4);
@@ -215,35 +400,192 @@ describe("an open story", () => {
     expect(words.compareDocumentPosition(btn) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     btn.click();
     await settle();
-    expect(patches()).toEqual([{ method: "PATCH", path: "/api/admin/stories/4", body: '{"status":"reviewed"}' }]);
+    expect(patches()).toEqual([
+      { method: "PATCH", path: "/api/admin/stories/4", body: '{"status":"reviewed","ifStatus":"new"}' },
+    ]);
     expect(el("storyReadBtn")).toBeNull();
     expect(el("storyDetail").textContent).toContain("Marked as read.");
     expect(el("storyUnreadBtn").textContent).toBe("Mark as new");
+    expect(statusLine()).toBe("Reviewed");
   });
 
   it("has Mark as new while it is Reviewed, and it makes the story New again", async () => {
     await open(3);
     expect(el("storyReadBtn")).toBeNull();
+    expect(statusLine()).toBe("Reviewed");
     el("storyUnreadBtn").click();
     await settle();
-    expect(patches()).toEqual([{ method: "PATCH", path: "/api/admin/stories/3", body: '{"status":"new"}' }]);
+    expect(patches()).toEqual([
+      { method: "PATCH", path: "/api/admin/stories/3", body: '{"status":"new","ifStatus":"reviewed"}' },
+    ]);
     expect(el("storyReadBtn").textContent).toBe("Mark as read");
+    expect(statusLine()).toBe("New");
+  });
+
+  it("can be marked as read and as new again, each time from what the story now is", async () => {
+    await open(4);
+    el("storyReadBtn").click();
+    await settle();
+    el("storyUnreadBtn").click();
+    await settle();
+    expect(patches().map((p) => p.body)).toEqual([
+      '{"status":"reviewed","ifStatus":"new"}',
+      '{"status":"new","ifStatus":"reviewed"}',
+    ]);
+    expect(inDb(4).status).toBe("new");
   });
 
   it("keeps the keyboard on the button that took its place", async () => {
     await open(4);
+    el("storyReadBtn").focus();
     el("storyReadBtn").click();
     await settle();
     expect(document.activeElement).toBe(el("storyUnreadBtn"));
+    el("storyUnreadBtn").click();
+    await settle();
+    expect(document.activeElement).toBe(el("storyReadBtn"));
   });
 
-  it("says so when it could not be saved, and keeps the button", async () => {
+  // The whole story used to be drawn again, which threw away anything typed in Tags or Notes and
+  // not yet saved. Only what the status changes is drawn again now, so the form is never touched.
+  it("keeps what was typed in Tags and Notes and not yet saved", async () => {
     await open(4);
-    patchStatus = 500;
+    const tags = el("edit-storyTags") as HTMLInputElement;
+    const notes = el("edit-storyNotes") as HTMLTextAreaElement;
+    tags.value = "christmas, thank you";
+    notes.value = "Ring back about the photo.";
     el("storyReadBtn").click();
     await settle();
-    expect(el("storyActionStatus").textContent).toBe("Could not mark the story as read.");
+    expect(el("edit-storyTags")).toBe(tags);
+    expect(el("edit-storyNotes")).toBe(notes);
+    expect(tags.value).toBe("christmas, thank you");
+    expect(notes.value).toBe("Ring back about the photo.");
+  });
+
+  it("leaves the keyboard where it is when the person has moved on to the notes", async () => {
+    await open(4);
+    holdPatches();
+    el("storyReadBtn").click();
+    await settle();
+    el("edit-storyNotes").focus();
+    openGate();
+    await settle();
+    expect(el("storyUnreadBtn")).not.toBeNull();
+    expect(document.activeElement).toBe(el("edit-storyNotes"));
+  });
+
+  // Save changes sends the form's Status with the tags and notes. Left showing New, it would
+  // quietly make the story New again the next time a note was saved.
+  it("moves the form's Status along with it, so Save changes does not put the story back", async () => {
+    await open(4);
+    const pick = el("edit-storyStatus") as HTMLSelectElement;
+    expect(pick.value).toBe("new");
+    el("storyReadBtn").click();
+    await settle();
+    expect(pick.value).toBe("reviewed");
+    el("storyEditForm").dispatchEvent(new Event("submit", { cancelable: true, bubbles: true }));
+    await settle();
+    expect(JSON.parse(patches()[1].body || "{}").status).toBe("reviewed");
+  });
+
+  it("leaves a Status the person had picked in the form and not yet saved", async () => {
+    await open(4);
+    const pick = el("edit-storyStatus") as HTMLSelectElement;
+    pick.value = "used";
+    el("storyReadBtn").click();
+    await settle();
+    expect(pick.value).toBe("used");
+    expect(statusLine()).toBe("Reviewed");
+  });
+
+  it("says so right under the button when it could not be saved, and keeps the button", async () => {
+    await open(4);
+    patchAnswer = 500;
+    el("storyReadBtn").click();
+    await settle();
+    expect(readNote()).toBe("Could not save. Please try again.");
     expect(el("storyReadBtn")).not.toBeNull();
+    expect(statusLine()).toBe("New");
+    // Right under the button, not at the foot of the page past the whole form.
+    const bar = document.querySelector("#storyDetail .admin-read-bar") as HTMLElement;
+    expect(bar.nextElementSibling).toBe(el("storyReadNote"));
+    expect(el("storyActionStatus").textContent).toBe("");
+    patchAnswer = "ok";
+    el("storyReadBtn").click();
+    await settle();
+    expect(readNote()).toBe("");
+    expect(statusLine()).toBe("Reviewed");
+  });
+
+  it.each([
+    [404, "This story is no longer here."],
+    [403, "You can no longer change stories."],
+    ["down" as const, "Could not save. Please try again."],
+  ])("says what happened when the answer is %s", async (answer, said) => {
+    await open(4);
+    patchAnswer = answer;
+    el("storyReadBtn").click();
+    await settle();
+    expect(readNote()).toBe(said);
+    expect(statusLine()).toBe("New");
+  });
+
+  it("does not undo a status somebody else set while the story was open: it shows what the story is now", async () => {
+    await open(4);
+    inDb(4).status = "withdrawn";
+    el("storyReadBtn").focus();
+    el("storyReadBtn").click();
+    await settle();
+    expect(inDb(4).status).toBe("withdrawn");
+    expect(statusLine()).toBe("Withdrawn");
+    expect(el("storyReadBtn")).toBeNull();
+    expect(el("storyUnreadBtn")).toBeNull();
+    expect(readNote()).toBe("Someone else changed this story. It is now Withdrawn.");
+    // The button that was pressed is gone, so the keyboard goes to the words that say why.
+    expect(document.activeElement).toBe(el("storyReadNote"));
+    expect((el("edit-storyStatus") as HTMLSelectElement).value).toBe("withdrawn");
+  });
+
+  it("says nothing when somebody else had already marked it as read", async () => {
+    await open(4);
+    inDb(4).status = "reviewed";
+    el("storyReadBtn").click();
+    await settle();
+    expect(statusLine()).toBe("Reviewed");
+    expect(el("storyUnreadBtn")).not.toBeNull();
+    expect(readNote()).toBe("");
+  });
+
+  it("sends one request for a double press", async () => {
+    await open(4);
+    holdPatches();
+    const btn = el("storyReadBtn");
+    btn.click();
+    btn.click();
+    await settle();
+    expect(patches()).toHaveLength(1);
+    expect(btn.getAttribute("aria-busy")).toBe("true");
+    openGate();
+    await settle();
+    expect(patches()).toHaveLength(1);
+    expect(statusLine()).toBe("Reviewed");
+  });
+
+  it("ignores an answer that arrives after a different story was opened", async () => {
+    await open(4);
+    holdPatches();
+    el("storyReadBtn").click();
+    await settle();
+    el("storyBack").click();
+    await settle();
+    await view(2);
+    expect(statusLine()).toBe("Used");
+    openGate();
+    await settle();
+    expect(statusLine()).toBe("Used");
+    expect(el("storyUnreadBtn")).toBeNull();
+    expect(el("storyDetail").textContent).not.toContain("Marked as read.");
+    expect(inDb(4).status).toBe("reviewed");
   });
 
   it.each([2, 1])("has neither button for a Used or Withdrawn story (story %i)", async (id) => {
@@ -258,6 +600,7 @@ describe("an open story", () => {
     expect(el("storyDetail").textContent).toContain("A bag of presents arrived on Christmas Eve.");
     expect(el("storyReadBtn")).toBeNull();
     expect(el("storyUnreadBtn")).toBeNull();
+    expect(statusLine()).toBe("New");
   });
 
   // One loud button a screen: Save changes is the form's. These are the admin's own small button
@@ -300,17 +643,31 @@ describe("its styles", () => {
     expect(rule(".admin-read-tick input:focus-visible")).toContain("outline:");
   });
 
-  // Measured in Chrome: a status line that took no room while empty pushed the table down 35px the
-  // moment a save failed, so a second press landed on the tick of the story above. The line keeps
-  // one line of room always (its height when empty is its line's height), so its words never move
-  // a row, and it is never collapsed or taken out of the page.
-  it("keeps one line of room for the list's status line, so a message never moves the rows", () => {
-    const line = rule("#storiesListStatus");
-    const lineHeight = (line.match(/line-height:\s*([\d.]+)/) || [])[1];
-    const minHeight = (line.match(/min-height:\s*([\d.]+)em/) || [])[1];
-    expect(lineHeight).toBeTruthy();
-    expect(minHeight).toBe(lineHeight);
-    expect(css).not.toContain("#storiesListStatus:empty");
+  it("does not offer a hand over a tick that is locked", () => {
+    expect(rule(".admin-read-tick.is-locked")).toMatch(/cursor:\s*default/);
+  });
+
+  // Measured in Chrome: a line above the list pushed every row down 35px the moment a save failed,
+  // so a second press landed on the tick of the story above. The note sits in the story's own row
+  // now, under its status: cells are top aligned, so the tick that was pressed does not move, and
+  // an empty note takes no room at all.
+  it("says what could not be saved in the story's own row, in a note that takes no room while empty", () => {
+    expect(css).not.toContain("#storiesListStatus");
+    expect(html).not.toContain("storiesListStatus");
+    const note = rule(".admin-read-note");
+    expect(note).toMatch(/display:\s*block/);
+    expect(note).toMatch(/[;{]margin:\s*0/);
+    expect(note).toMatch(/color:\s*var\(--crimson\)/);
+    expect(rule(".admin-read-note:not(:empty)")).toMatch(/margin-top:/);
+  });
+
+  // An open story's own status line (.admin-action-status) is body sized and bold. What could not
+  // be saved matters more than "Saved.", so it is not said smaller than that.
+  it("says it at the open story's own size there, and keeps its distance from the words when there is no button", () => {
+    const note = rule("#storyReadBar .admin-read-note");
+    expect(note).toMatch(/font-size:\s*inherit/);
+    expect(note).toMatch(/font-weight:\s*600/);
+    expect(rule("#storyReadBar .admin-read-note:first-child:not(:empty)")).toMatch(/margin-top:\s*16px/);
   });
 
   it("lets the open story's bar wrap on a narrow screen, with 44px targets", () => {

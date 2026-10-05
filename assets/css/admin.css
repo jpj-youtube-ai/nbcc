@@ -218,11 +218,20 @@
    100% width, but it outranks a plain class), so the box is 20px and not the browser's 13px. */
 .admin-body .admin-read-tick input[type="checkbox"]{width:20px;height:20px;margin:0;accent-color:var(--holly);cursor:pointer}
 .admin-body .admin-read-tick input[type="checkbox"]:disabled{cursor:default}
+.admin-read-tick.is-locked{cursor:default}
 .admin-read-tick input:focus-visible{outline:3px solid var(--crimson);outline-offset:2px}
-/* The list's own status line keeps one line of room always, as tall empty as with words in it.
-   Measured in Chrome: one that took no room until a save failed pushed the table down 35px under
-   the pointer, so a second press landed on the tick of the story above. */
-#storiesListStatus{line-height:1.4;min-height:1.4em}
+/* What a tick could not save, or what somebody else changed: in the story's own row under its
+   status, and under the button on an open story. A line above the list was tried first. Measured in
+   Chrome, it pushed every row down 35px the moment a save failed, so a second press landed on the
+   tick of the story above; and above a long list it was off the screen altogether. Cells are top
+   aligned, so a note in the row never moves the tick that was pressed, and an empty one takes no
+   room at all. */
+.admin-read-note{display:block;margin:0;font-size:.82rem;line-height:1.4;color:var(--crimson)}
+.admin-read-note:not(:empty){margin-top:6px}
+/* On an open story it speaks as that screen's own status line does (.admin-action-status), not at a
+   table's size, and keeps the bar's distance from the story's words when there is no bar above it. */
+#storyReadBar .admin-read-note{font-size:inherit;font-weight:600}
+#storyReadBar .admin-read-note:first-child:not(:empty){margin-top:16px}
 .admin-read-bar{display:flex;flex-wrap:wrap;align-items:center;gap:6px 14px;margin:16px 0 0}
 .admin-read-bar .admin-btn,.admin-read-bar .admin-link{min-height:44px}
 .admin-read-done{font-weight:600;color:var(--holly-dark)}

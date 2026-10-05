@@ -828,3 +828,61 @@ Claim the next task number at PR time (GitHub runs, PR titles and `git branch -a
 - [ ] **Step 5: Notes**
 
 Tick the item in `nbcc-open-todos.md` with the PR, the merge SHA and what was checked live.
+
+---
+
+## After the review: what changed, as built
+
+The independent review (Task 7 Step 3) came back "with fixes". Tasks 1 to 6 above are kept as they
+were written; where this section disagrees with them, this section is what was built.
+
+**Important 1: a list left open could undo a status somebody else set, Withdrawn included.** The
+PATCH was unconditional, and the tick made sending one a single press.
+
+- `src/db/stories.ts`: `updateStory(id, patch, ifStatus?)`. Given, the statement ends
+  `WHERE id = $n AND status = $m`, so the check and the change are one statement.
+- `src/routes/admin.ts`: `storyPatchSchema` takes an optional `ifStatus` (one of the four statuses)
+  and still needs something to change beside it. `patchAdminStory` answers 200 with the story; or,
+  when a conditional update changed nothing, 409 `{ error: "Story has changed", story }` with the
+  story as it is now, or 404 when it is gone. A request without `ifStatus` behaves as before and
+  `updateStory` is called with two arguments, as the older tests expect.
+- Tests first, red then green: three in `test/unit/stories-admin-model.test.ts`, seven in
+  `test/unit/admin-stories-api.test.ts`; two scenarios and two steps in
+  `features/admin-stories.feature`.
+
+**Important 2: Mark as read drew the whole story again and threw away unsaved Tags and Notes.**
+It went through `patchStory`, which calls `renderStory`.
+
+- `renderStory` now draws an empty `#storyReadBar` and names the Status line `#storyStatusNow`.
+  `showStoryReadBar(s, note)` fills the bar and binds its button; `markStoryRead(s, want)` changes
+  the Status line, the form's Status (only when it still showed the old status) and the bar, and
+  nothing else. The form is never touched.
+
+**The smaller points, all taken.**
+
+- One request for both screens: `saveStoryRead(id, want, was)` sends `{ status, ifStatus }` and
+  answers `{ status?, note, lock? }`, or null when the session has ended. One map, `storiesSaving`,
+  stops a second request for a story while one is on its way.
+- The tick is never disabled while it saves (that dropped the keyboard). It carries `aria-busy`,
+  and a second press in that time is put back. When an answer locks the tick, the keyboard moves to
+  the row's View.
+- `#storiesListStatus` is gone from `admin.html` and `admin.css`. The note is
+  `<span class="admin-read-note" data-story-note>` under the row's status, inside `#storiesTable`,
+  which is already a polite live region. On an open story it is `#storyReadNote`, right under the
+  bar, inside `#storyDetail`, also already live.
+- 404 says "This story is no longer here." and 403 says "You can no longer change stories."; both
+  lock the tick. Everything else says "Could not save. Please try again."
+- `storyRowShows(id, out)` finds the row by the story's id when the answer arrives, so a list drawn
+  again in the meantime gets the answer on the row that is on screen. A failed save never paints
+  the old row's status over a freshly loaded one.
+- An answer for a story that is no longer the one open is ignored (`currentStoryId`).
+- Locked ticks carry a `title` saying why, and `.admin-read-tick.is-locked` has no hand cursor.
+- The viewer test presses for real (`click()`, which a locked box ignores, as it does for a person).
+
+**Left for its own task.** `openStory` and `patchStory` draw whatever answer arrives without
+checking it is still for the story on screen, and Save changes and Withdraw send no `ifStatus`.
+Both are older than this work.
+
+**Checks after the fixes.** `npm run lint`, `npm run build`, the eight affected test files (456
+tests), `npx cucumber-js --dry-run` (642 scenarios, every step resolves), and the list and an open
+story again in real Chrome with the stand-in answering as the server does, 409 included.

@@ -2231,32 +2231,97 @@
       if (box && box.hasAttribute && box.hasAttribute("data-story-read")) setStoryRead(box);
     });
   }
-  function setStoryRead(box) {
-    var status = box.checked ? "reviewed" : "new";
-    var line = el("storiesListStatus");
-    line.textContent = "";
-    line.className = "ty-status";
-    box.disabled = true;
-    authFetch("/api/admin/stories/" + box.getAttribute("data-story-read"), {
+  var storiesSaving = {}; // story id -> true while its read or new is on its way to the server
+  var STORY_NOT_SAVED = "Could not save. Please try again.";
+  var STORY_GONE = "This story is no longer here.";
+  var STORY_NOT_YOURS = "You can no longer change stories.";
+  // The one request behind the list's tick and the open story's button: make this story `want`,
+  // but only while it is still `was`, which is what the screen showed. A screen left open cannot
+  // then undo what somebody else did in the meantime (Withdrawn above all: it records that consent
+  // was taken back). Answers what to show: the server's word for what the story is now (status)
+  // when it gave one, what to say (note), and whether the story can no longer be changed from here
+  // (lock). Null when the session has ended, and the sign in screen is already up.
+  function saveStoryRead(id, want, was) {
+    storiesSaving[id] = true;
+    return authFetch("/api/admin/stories/" + id, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ status: status }),
+      body: JSON.stringify({ status: want, ifStatus: was }),
     })
-      .then(okJson)
-      .then(function (updated) {
-        box.checked = storyIsRead(updated.status);
-        var row = box.closest("tr");
-        var pill = row && row.querySelector("[data-story-status]");
-        if (pill) pill.textContent = H.storyLabel("status", updated.status);
-        box.disabled = false;
+      .then(function (res) {
+        if (res.ok) {
+          return res.json().then(function (story) {
+            return { status: story.status, note: "" };
+          });
+        }
+        if (res.status === 409) {
+          return res.json().then(function (b) {
+            var now = b && b.story && b.story.status;
+            if (!now) return { note: STORY_NOT_SAVED };
+            // Somebody else got there first. If they made it what was asked for, there is nothing to say.
+            if (now === want) return { status: now, note: "" };
+            return { status: now, note: "Someone else changed this story. It is now " + H.storyLabel("status", now) + "." };
+          });
+        }
+        if (res.status === 404) return { note: STORY_GONE, lock: STORY_GONE };
+        if (res.status === 403) return { note: STORY_NOT_YOURS, lock: STORY_NOT_YOURS };
+        return { note: STORY_NOT_SAVED };
       })
       .catch(function (err) {
-        if (err && err.message === "unauthorized") return;
-        box.checked = status !== "reviewed";
-        box.disabled = false;
-        line.textContent = "Could not mark that story as " + (status === "reviewed" ? "read" : "new") + ". Please try again.";
-        line.className = "ty-status is-error";
+        return err && err.message === "unauthorized" ? null : { note: STORY_NOT_SAVED };
+      })
+      .then(function (out) {
+        delete storiesSaving[id];
+        return out;
       });
+  }
+  function setStoryRead(box) {
+    var id = box.getAttribute("data-story-read");
+    // A second press while the first is on its way is put back, not sent: the first answer decides
+    // what the row shows. The box is never disabled for the wait, which would drop the keyboard's
+    // place in the list.
+    if (storiesSaving[id]) {
+      box.checked = !box.checked;
+      return;
+    }
+    var want = box.checked ? "reviewed" : "new";
+    var was = want === "reviewed" ? "new" : "reviewed";
+    box.setAttribute("aria-busy", "true");
+    storyRowShows(id, { note: "" });
+    saveStoryRead(id, want, was).then(function (out) {
+      box.removeAttribute("aria-busy");
+      if (!out) return;
+      // No word on what the story is now, so the box that was pressed goes back to what it showed.
+      // A row drawn again since is left as the list has just loaded it.
+      if (!out.status && box.isConnected) box.checked = storyIsRead(was);
+      storyRowShows(id, out);
+    });
+  }
+  // What this story's row shows now, found by the story's id at the moment of asking: an answer
+  // that arrives after the list was drawn again lands on the row that is on screen, or nowhere.
+  function storyRowShows(id, out) {
+    var boxes = doc.querySelectorAll("#storiesTable [data-story-read]");
+    var box = null;
+    for (var i = 0; i < boxes.length; i++) if (boxes[i].getAttribute("data-story-read") === String(id)) box = boxes[i];
+    if (!box) return;
+    var row = box.closest("tr");
+    var label = box.closest("label");
+    if (out.status) {
+      box.checked = storyIsRead(out.status);
+      var pill = row.querySelector("[data-story-status]");
+      if (pill) pill.textContent = H.storyLabel("status", out.status);
+    }
+    var why = out.lock || (out.status ? storyTickLocked(out.status) : "");
+    if (why && !box.disabled) {
+      // A locked box cannot hold the keyboard, so it is handed to the row's View, not dropped.
+      var view = row.querySelector("[data-story]");
+      if (doc.activeElement === box && view) view.focus();
+      box.disabled = true;
+      label.classList.add("is-locked");
+      label.title = why;
+    }
+    var note = row.querySelector("[data-story-note]");
+    if (note) note.textContent = out.note || "";
   }
   function scopeConsentBadges(r) {
     var scopeClass = r.use_scope === "public" ? "is-public" : "is-internal";
@@ -2272,23 +2337,33 @@
   function storyIsRead(status) {
     return status !== "new";
   }
+  // Why a story's tick cannot be pressed, in words for whoever hovers over it. Empty when it can.
+  function storyTickLocked(status) {
+    if (!canEdit("stories")) return "You can view stories but not change them.";
+    if (status === "used") return "Used stories count as read.";
+    if (status === "withdrawn") return "Withdrawn stories count as read.";
+    return "";
+  }
   function storyReadTick(r) {
-    var locked = !canEdit("stories") || r.status === "used" || r.status === "withdrawn";
+    var why = storyTickLocked(r.status);
     return (
-      '<label class="admin-read-tick"><input type="checkbox" data-story-read="' + r.id + '"' +
-      (storyIsRead(r.status) ? " checked" : "") + (locked ? " disabled" : "") +
+      '<label class="admin-read-tick' + (why ? ' is-locked" title="' + H.escapeHtml(why) : "") + '">' +
+      '<input type="checkbox" data-story-read="' + r.id + '"' +
+      (storyIsRead(r.status) ? " checked" : "") + (why ? " disabled" : "") +
       ' aria-label="Story ' + r.id + ' read" /></label>'
     );
   }
   function storiesTable(rows) {
     if (!rows.length) return '<p class="admin-empty">No stories yet.</p>';
+    // Under each status, room for what a tick could not save or what somebody else changed. In the
+    // story's own row, so it is beside the tick that was pressed however long the list is.
     var body = rows
       .map(function (r) {
         return (
           "<tr><td>" + storyReadTick(r) + "</td><td>" + r.id + "</td><td>" +
           H.escapeHtml(H.storyLabel("submitterRole", r.submitter_role)) +
           "</td><td>" + scopeConsentBadges(r) + '</td><td><span class="admin-pill" data-story-status>' +
-          H.escapeHtml(H.storyLabel("status", r.status)) + "</span></td><td>" +
+          H.escapeHtml(H.storyLabel("status", r.status)) + '</span><span class="admin-read-note" data-story-note></span></td><td>' +
           H.escapeHtml(H.consentAge(r.consent_captured_at)) + "</td><td>" + H.fmtDate(r.created_at) +
           '</td><td><button class="admin-link" type="button" data-story="' + r.id + '">View</button></td></tr>'
         );
@@ -2563,7 +2638,8 @@
       dl("Share town", s.consent_share_town ? "Yes" : "No") +
       dl("Third-party consent", s.third_party_consent ? "Yes" : "No") +
       dl("Contact for more", s.contact_for_more ? "Yes" : "No") +
-      dl("Status", H.storyLabel("status", s.status)) +
+      // Named, so Mark as read can change this line without drawing the story again.
+      '<dt>Status</dt><dd id="storyStatusNow">' + H.escapeHtml(H.storyLabel("status", s.status)) + "</dd>" +
       dl("Consent captured", H.fmtDate(s.consent_captured_at) + " (" + H.consentAge(s.consent_captured_at) + ")") +
       dl("Submitted", H.fmtDate(s.created_at)) +
       dl("First name", s.submitter_first_name || "Not given") +
@@ -2578,16 +2654,9 @@
       "</dl>" +
       '<h3 class="admin-subhead">Story</h3><p class="admin-story-text">' + H.escapeHtml(s.story_text || "") + "</p>" +
       (s.short_quote ? '<h3 class="admin-subhead">Short quote</h3><p class="admin-story-text">' + H.escapeHtml(s.short_quote) + "</p>" : "");
-    // TASK-NNN: where reading ends. Used and Withdrawn say more than read, so they get no button.
-    // The admin's small button and its text link: Save changes, below, stays the one loud button.
-    var readBar = "";
-    if (canWrite && s.status === "new") {
-      readBar = '<p class="admin-read-bar"><button class="admin-btn" type="button" id="storyReadBtn">Mark as read</button></p>';
-    } else if (canWrite && s.status === "reviewed") {
-      readBar =
-        '<p class="admin-read-bar"><span class="admin-read-done">Marked as read.</span> ' +
-        '<button class="admin-link" type="button" id="storyUnreadBtn">Mark as new</button></p>';
-    }
+    // TASK-NNN: where reading ends, under the story's words. Its own box, so pressing its button
+    // draws this box again and nothing else: see showStoryReadBar.
+    var readBar = canWrite ? '<div id="storyReadBar"></div>' : "";
     var actions = "";
     if (canWrite) {
       var statusOptions = ["new", "reviewed", "used", "withdrawn"]
@@ -2625,7 +2694,60 @@
             "</div>");
     }
     el("storyDetail").innerHTML = info + readBar + actions;
-    if (canWrite) wireStoryActions(s);
+    if (canWrite) {
+      showStoryReadBar(s, "");
+      wireStoryActions(s);
+    }
+  }
+  // TASK-NNN: Mark as read while the story is New, and the way back while it is Reviewed. Used and
+  // Withdrawn say more than read, so they get no button. The admin's small button and its text
+  // link: Save changes, below, stays the one loud button. Under them, room for what could not be
+  // saved, right where the button was pressed and not at the foot of the page past the whole form.
+  function showStoryReadBar(s, note) {
+    var bar = el("storyReadBar");
+    if (!bar) return;
+    var controls = "";
+    if (s.status === "new") {
+      controls = '<p class="admin-read-bar"><button class="admin-btn" type="button" id="storyReadBtn">Mark as read</button></p>';
+    } else if (s.status === "reviewed") {
+      controls =
+        '<p class="admin-read-bar"><span class="admin-read-done">Marked as read.</span> ' +
+        '<button class="admin-link" type="button" id="storyUnreadBtn">Mark as new</button></p>';
+    }
+    bar.innerHTML = controls + '<p class="admin-read-note" id="storyReadNote" tabindex="-1">' + H.escapeHtml(note || "") + "</p>";
+    bindClick("storyReadBtn", function () { markStoryRead(s, "reviewed"); });
+    bindClick("storyUnreadBtn", function () { markStoryRead(s, "new"); });
+  }
+  // The same request as the list's tick. Only what the status changes is drawn again (the Status
+  // line, this bar, and the form's Status when it had not been touched), so anything typed in Tags
+  // or Notes and not yet saved stays exactly as it was, with the cursor where it was.
+  function markStoryRead(s, want) {
+    var id = s.id;
+    if (storiesSaving[id]) return; // a double press sends one request
+    var btn = el("storyReadBtn") || el("storyUnreadBtn");
+    btn.setAttribute("aria-busy", "true");
+    el("storyReadNote").textContent = "";
+    saveStoryRead(id, want, s.status).then(function (out) {
+      btn.removeAttribute("aria-busy");
+      // Not this story's answer any more: a different story has been opened since.
+      if (!out || String(currentStoryId) !== String(id) || !el("storyReadBar")) return;
+      if (!out.status) {
+        el("storyReadNote").textContent = out.note;
+        return;
+      }
+      var now = el("storyStatusNow");
+      if (now) now.textContent = H.storyLabel("status", out.status);
+      // Save changes sends the form's Status too. Left on the old one it would quietly put the
+      // story back the next time a note was saved; one the person picked themselves is theirs.
+      var pick = el("edit-storyStatus");
+      if (pick && pick.value === s.status) pick.value = out.status;
+      // The button that was pressed is about to go. The keyboard follows to what takes its place,
+      // or to the words that say why there is nothing; never when the person has moved on to type.
+      var active = doc.activeElement;
+      var elsewhere = active && active !== doc.body && !el("storyReadBar").contains(active);
+      showStoryReadBar(Object.assign({}, s, { status: out.status }), out.note);
+      if (!elsewhere) (el("storyUnreadBtn") || el("storyReadBtn") || el("storyReadNote")).focus();
+    });
   }
   function patchStory(body, okMsg, errMsg) {
     return authFetch("/api/admin/stories/" + currentStoryId, {
@@ -2660,18 +2782,6 @@
         patchStory(body, "Saved.", "Could not save the changes.");
       });
     }
-    // TASK-NNN: the same status the list's tick sends. The story is drawn again with the other
-    // button, which takes the keyboard's place so it is not left on nothing.
-    bindClick("storyReadBtn", function () {
-      patchStory({ status: "reviewed" }, "", "Could not mark the story as read.").then(function () {
-        if (el("storyUnreadBtn")) el("storyUnreadBtn").focus();
-      });
-    });
-    bindClick("storyUnreadBtn", function () {
-      patchStory({ status: "new" }, "", "Could not mark the story as new.").then(function () {
-        if (el("storyReadBtn")) el("storyReadBtn").focus();
-      });
-    });
     bindClick("withdrawStoryBtn", function () {
       if (!window.confirm("Withdraw this story? It will no longer be treated as usable.")) return;
       patchStory({ status: "withdrawn" }, "Story withdrawn.", "Could not withdraw the story.");

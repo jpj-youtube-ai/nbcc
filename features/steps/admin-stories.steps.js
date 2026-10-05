@@ -213,6 +213,26 @@ When(
   },
 );
 
+// TASK-NNN: what the Read tick sends. ifStatus is the status its screen showed.
+When(
+  "I PATCH the admin story status to {string} only if it is {string} as {string} with password {string}",
+  async function (status, ifStatus, email, password) {
+    const token = await login(email, password);
+    const res = await fetch(`${BASE_URL}/api/admin/stories/${this.adminStoryId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ status, ifStatus }),
+    });
+    this.adminStatus = res.status;
+    this.adminBody = await res.json().catch(() => ({}));
+  },
+);
+
+Then("the refused update says the story is now {string}", function (status) {
+  assert.equal(this.adminBody.story && this.adminBody.story.id, this.adminStoryId);
+  assert.equal(this.adminBody.story.status, status);
+});
+
 Then("the story is withdrawn in the stories database", async function () {
   const row = await storiesPool.query("SELECT status FROM stories WHERE id = $1", [this.adminStoryId]);
   assert.equal(row.rows[0].status, "withdrawn");

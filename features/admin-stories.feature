@@ -40,6 +40,21 @@ Feature: Admin manages My Story submissions (Task C)
     When I PATCH the admin story status to "not_a_real_status" as "editor.admin.bdd@example.com" with password "edit-pw-123"
     Then the admin response status should be 400
 
+  # TASK-NNN: the Read tick on the Stories list says what its screen showed. A list opened before a
+  # story was withdrawn must not be able to put that story back to Reviewed: Withdrawn records that
+  # consent was taken back.
+  Scenario: a Read tick marks a story that is still New as Reviewed
+    When I PATCH the admin story status to "reviewed" only if it is "new" as "editor.admin.bdd@example.com" with password "edit-pw-123"
+    Then the admin response status should be 200
+    And the admin response field "status" should be "reviewed"
+
+  Scenario: a Read tick from a list left open cannot undo a withdrawal
+    When I PATCH the admin story status to "withdrawn" as "editor.admin.bdd@example.com" with password "edit-pw-123"
+    And I PATCH the admin story status to "reviewed" only if it is "new" as "editor.admin.bdd@example.com" with password "edit-pw-123"
+    Then the admin response status should be 409
+    And the refused update says the story is now "withdrawn"
+    And the story is withdrawn in the stories database
+
   Scenario: a Viewer cannot permanently delete a story (403)
     When I DELETE the admin story as "viewer.admin.bdd@example.com" with password "view-pw-123"
     Then the admin response status should be 403

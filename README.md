@@ -1460,6 +1460,13 @@ hosted-Checkout redirect stays the default fallback and no-JS safety net.
 | `GET /api/admin/queues/gasds-pool` | **implemented** | REQ-050 (annual GASDS pool report) |
 | `GET /api/admin/donations` | **implemented** | REQ-066 (browse all donations, paginated) |
 | `GET /api/admin/donations/source-totals` | **implemented** | Fill a Red Bag against the Donate page, this month and in all (Donations: view) |
+| `GET /api/admin/red-bag-list` | **implemented** | Fill a Red Bag: the list editor's state: the website's list, the shared draft, what differs, the history (Fill a Red Bag: view). See **Fill a Red Bag: staff edit the list** |
+| `GET /api/admin/red-bag-list/versions/:id` | **implemented** | one published list, or `original` for the built-in one (Fill a Red Bag: view) |
+| `PUT /api/admin/red-bag-list/draft` | **implemented** | save the shared draft, against its stamp (Fill a Red Bag: edit) |
+| `POST /api/admin/red-bag-list/publish` | **implemented** | the draft becomes the list on `/fill` (Fill a Red Bag: edit) |
+| `POST /api/admin/red-bag-list/discard` | **implemented** | throw the draft away (Fill a Red Bag: edit) |
+| `POST /api/admin/red-bag-list/restore` | **implemented** | put an earlier list, or the original one, back as the draft (Fill a Red Bag: edit) |
+| `GET /fill?preview=draft` | **implemented** | the draft preview: the published page to a plain visit; the draft, under a strip and with giving switched off, to staff with Fill a Red Bag: view |
 | `GET /api/admin/claim-batches` | **implemented** | REQ-066 (list claim batches) |
 | `GET /api/admin/claim-batches/:id/export` | **implemented** | REQ-052/REQ-066 (Charities Online CSV export) |
 | `GET /api/admin/audit` | **implemented** | REQ-066 (append-only audit trail) |
@@ -6459,6 +6466,202 @@ than passed through. Passing it on would quietly return an empty list, which rea
 donations" — a much worse answer to give somebody looking at their own charity's income. Changing
 either filter returns to page one, because staying on page 4 of a different list shows an empty
 table and looks like the filter found nothing.
+
+## Fill a Red Bag: staff edit the list (Admin > Fill a Red Bag)
+
+Staff can change what the public page `/fill` lists, without a code change: the items and their
+prices, and the "Whenever the need comes" examples. Changes go to **one shared draft**; nothing
+changes for the public until someone presses **Publish**. Design:
+`docs/superpowers/specs/2026-10-04-fill-a-red-bag-design.md`, "Staff editing of the list".
+
+**What can be changed, and what cannot.**
+
+- **Items:** name, price, which of the four headings it sits under, its order under that heading,
+  its picture, and whether it shows. **New items** can be added (a name, a price, a heading and a
+  picture). An item on the website is never deleted, only hidden; one added and not yet published
+  can be removed.
+- **Examples** under each of the three themes: the amount, the words, the picture, the order,
+  whether it shows; and new examples. The page writes the amount and "could help" itself and staff
+  type only what follows, so an example always reads "£30 could help with fresh bedding for a child".
+- **Pictures** are chosen from the drawings the page already has (every key of `ART` in
+  `assets/js/red-bag-catalogue.js`) or the plain wrapped present, `present`, added for this.
+  Nothing is uploaded.
+- **Not editable, and not in a list at all:** the four headings (Home comforts, Play & downtime,
+  Books & creativity, Clothing), the three themes and their one-line descriptions, the £50 bag, the
+  £2 minimum, the elf's notes, the drawings themselves and every other word on the page.
+
+**A list** is `{ v: 1, items: [{ key, name, pence, group, art, hidden }], examples: [{ key, theme,
+pence, words, art, hidden }] }`. Order in the arrays is the order on the page, under each heading and
+theme. `group` is `home`, `play`, `books` or `clothing`; `theme` is `crisis`, `school` or `hand`;
+`art` is a key of `ART`; `words` begins "could help". Keys are stable for ever: a built-in item or
+example keeps the key it has in the catalogue, and a new one gets `n-<name>-<five characters>`
+(no built-in key, drawing or elf's note starts `n-`, and a test holds that).
+
+**The rules** live in ONE file, `assets/js/red-bag-list.js` (typed for the server by
+`src/red-bag/list.ts`). The admin screen runs them as staff type; the server runs the very same
+file on **every save and again on publish**, whatever the screen did:
+
+| Rule | Message |
+|---|---|
+| An item's price is whole pence, 10p to £500 | "A price must be between 10p and £500." |
+| An example's amount is whole pence, £1 to £1,000 | "An amount must be between £1 and £1,000." |
+| A name is 1 to 40 characters once trimmed | "Give this item a name." / "A name can be 40 characters at most." |
+| What follows "could help" is 1 to 90 characters | "Say what it could help with." / "This can be 90 characters at most." |
+| An example reads "could help ..." | 'An example must read "could help" and then what with.' |
+| Plain text only: no `<`, `>` or control characters | "Leave out < and > and anything that is not plain text." |
+| Never "will" | 'Say "could", never "will": these are examples, not promises.' |
+| Never "buy", "buys", "buying" or "bought" | 'Leave out "buy", "buys" and "bought": nothing is bought item by item.' |
+| No en or em dash | "Use a comma or a full stop, not a long dash." |
+| At least one item showing | "At least one item must be showing." |
+| No two items showing with the same name | "Two items showing cannot have the same name." |
+| 30 items at most; 6 examples in a theme at most | "The list can have 30 items at most." / "A theme can have 6 examples at most." |
+| Keys unique, every heading, theme and picture a real one | "Something in the list is not right. Reload the page and try again." |
+
+Names and words are tidied before they are stored (trimmed, runs of space made one), and every one
+is escaped wherever it is written. A heading with nothing showing is not drawn on the page, nor a
+theme; with no example showing at all, the whole "Whenever the need comes" part is put away.
+
+**Where it is kept.** One new table, `red_bag_lists` (migration `1791200000260_red-bag-lists.js`,
+additive). A row is a whole list in `data` (jsonb):
+
+- `status = 'draft'`: the one shared draft. A partial unique index allows one at most. `version` is
+  its stamp, one more with every save.
+- `status = 'published'`: a list that was published, kept for ever. The website's list is the one
+  with the latest `published_at`. `summary` and `changes` say, in plain words, what it changed;
+  `published_by` (the audit actor) and `published_by_name` say who.
+
+Publishing turns the draft's own row into a published one. **No row is seeded:** with nothing
+published the website uses the list written in the catalogue, exactly as before, so deploying this
+changes nothing on `/fill` until somebody publishes.
+
+**Which list the public page draws** (`src/routes/red-bag.ts`, `src/db/red-bag-lists.ts`):
+
+- `GET /fill` asks `loadPublishedRedBagList()`. That read is kept for a minute
+  (`RED_BAG_LIST_CACHE_MS`), is read again at once on this server after a publish (another server
+  sees it within the minute), and **never throws and never waits long**: it gives up after 1.5
+  seconds (`RED_BAG_LIST_READ_TIMEOUT_MS`), page views arriving together share one read, and after
+  a failure the database is left alone for 10 seconds (`RED_BAG_LIST_RETRY_MS`) rather than asked
+  again by every page view.
+- The fallbacks, in order: nothing published: the built-in list. The database down, slow or
+  erroring: the last good list read, or the built-in list before any was. A stored list that fails
+  the rules: the same. Each is said **once** in the log ("fill a red bag list read failed, using the
+  last good list"), and once more only after it has recovered and failed afresh. If the read were
+  somehow to throw anyway, the page handler catches it and draws the built-in list.
+- **With the built-in list the page is byte for byte what it was.** With a published list the
+  server draws that list's rows, and just before the catalogue script a block of data,
+  `<script type="application/json" id="rb-list-data">`, saying the same thing (what is showing,
+  under each heading and theme, with each picture). `assets/js/red-bag-catalogue.js` reads the
+  block as it starts (`useListFrom`), so its sums agree with the rows. The block is checked whole
+  before anything is changed; missing or wrong in any way, the catalogue keeps the list written in
+  the file. An older copy of the catalogue script simply never looks for the block; a newer one on
+  an older page finds none. Assets are served to be revalidated on every visit, so a browser does
+  not keep an old script against a new page.
+- The headings and theme names are never in the block: the catalogue keeps its own, by key.
+- The feel good layer keys drawings, peeks and notes by an item's key. A new item uses the picture
+  chosen for it (`artKey`), gets the general notes only and never a "several" note. A built-in item
+  staff have **renamed** also gets the general notes only, so "Ooh, a blanket" is never written
+  beside something no longer called a blanket.
+- The thank you page takes no list; it uses only the catalogue's constants.
+- **The checkout is not changed.** It still checks only the total (£2 at least) and never sees items.
+
+**The draft preview.** "Preview the page" opens `/fill?preview=draft` in a new tab. That ONE
+address answers two ways:
+
+- A plain visit (which is every visit a browser makes by itself: the admin's session is a token in
+  the tab, not a cookie) gets the ordinary published page, plus the small loader the switched-off
+  preview already used (`assets/js/red-bag-preview.js`). In a tab signed in to the admin, the loader
+  asks for the address again with the token. The new tab is opened from the admin, so it carries
+  the tab's session.
+- With a token that is a signed in member of staff holding **view** of the `red-bag` section
+  (`mayViewRedBagDraft` in `src/red-bag/staff.ts`: the account's row read fresh, failing closed),
+  the page is drawn from the draft under a strip, "Draft preview: not on the website yet". Anyone
+  else with a token gets the published page, and no loader, so the page can never fetch itself in
+  a loop. If the draft cannot be read or fails the rules, the answer is the published page.
+- Either way the address is never cached (`Cache-Control: private, no-store`, `Vary:
+  Authorization`) and never indexed (`X-Robots-Tag`, and the preview carries the robots line).
+- **Giving is switched off in the preview.** The details form is not drawn at all (in its place:
+  "This is a preview. Giving is switched off here."), the page is marked `data-rb-draft` and NOT
+  `data-rb-preview` (so the script never sends the staff session to the checkout), and Donate does
+  nothing but show the same words. A preview can never take money for a list the public cannot see.
+
+**The API** (`src/routes/admin-red-bag-list.ts`). The editor's state, which every write answers
+with afresh: `{ mayEdit, website, publishedId, draft: { data, version, updatedAt, updatedByName,
+restoredFrom } | null, changes: [plain words], history: [{ id, publishedAt, publishedByName,
+summary, changes, restoredFrom, restoredOriginal }] }`.
+
+| Route | Needs | Does |
+|---|---|---|
+| `GET /api/admin/red-bag-list` | red-bag view | the editor's state |
+| `GET /api/admin/red-bag-list/versions/:id` | red-bag view | one published version with its list; `original` for the built-in list |
+| `PUT /api/admin/red-bag-list/draft` `{ data, version, publishedId }` | red-bag edit | saves the draft |
+| `POST /api/admin/red-bag-list/publish` `{ version }` | red-bag edit | the draft becomes the website's list |
+| `POST /api/admin/red-bag-list/discard` `{ version }` | red-bag edit | throws the draft away |
+| `POST /api/admin/red-bag-list/restore` `{ from, version, publishedId }` | red-bag edit | copies a published version (its id) or `"original"` into the draft |
+
+`version` is the draft's stamp as the screen last saw it (0: it saw no draft) and `publishedId` the
+website's list it was looking at. **Two people at once:** every write runs in one transaction with
+the draft's row locked, and one sent against a stamp that has moved on is refused, `409 { error:
+"Someone else has changed the draft. Reload to see their changes.", code: "stale" }`, with nothing
+changed on the server. A draft is also never started from a website list that has since been
+replaced. Other answers: `400` with the rule's own words and `problems` when the list fails;
+`400` "There is nothing to publish: the draft says what the website already says."; `404` "That
+version is not there any more."; `401`/`403` as every admin route.
+
+**Audit.** A save of the draft is not audited. Each of these writes an `audit_log` row in the same
+transaction, against entity `red_bag_list`: `red_bag.list_published` (`{ summary, changes,
+replaced }`), `red_bag.draft_thrown_away` (`{ summary, changes }`) and `red_bag.list_put_back`
+(`{ from }`).
+
+**Who.** A new access section, `red-bag`, shown on Team > Manage access as "Fill a Red Bag". View:
+the editor, the differences, the history, any earlier list, and the draft preview. Edit: save,
+publish, throw away, put back. Admins hold it by role; **editors and viewers do not**, and it is
+given per person from Team > Manage access (the same shape as `analytics`). The migration also
+writes the section into the access already saved, the TASK-479 way: admin `edit`, anyone else
+`none`, only where the key is missing, with an `admin_user.permissions_backfilled` audit row each
+(by `migration:red-bag-lists`). Nobody's other access is read or changed, and people with no saved
+access are untouched. It is in the same migration as the table so the screen and the access to it
+arrive together.
+
+**The screen** (`assets/js/admin/red-bag-list.js`, `assets/css/admin-red-bag-list.css`; app.js only
+shows the view and calls `open()`). In the menu under Giving, after Donations, with a New pill
+(`src/admin/whats-new.ts`, area `red-bag`).
+
+- The four headings with their items as rows, then the three themes with their examples: a name (or
+  the words after "could help"), a price, the heading, Showing or Hidden, Move up and Move down (real
+  buttons), Change picture (a chooser that opens under the row), and Remove on anything not yet on
+  the website. "Add an item" under each heading and "Add an example" under each theme.
+- What is wrong is said beside the field as it is typed. A row just added is not scolded until it
+  is touched or a save is tried.
+- **Changes:** what differs between what is on screen and the website, in plain words, as it is
+  typed ("Toy £15 → £12", "New: Selection box £3", "Hidden: Hat & gloves", "Moved: Notebook, from
+  Books & creativity to Home comforts", "Example changed: ... → ..."), under a count ("2 changes
+  not yet on the website").
+- **Save draft** is one button in a bar that says which is true: "You have changes on this screen
+  that are not saved." (the bar then keeps to the foot of the screen), "Everything on this screen
+  is saved in the draft." or "This is the list the website shows. Nothing has been changed."
+  Leaving with unsaved changes asks first (another section, My account, Sign out, closing the tab).
+- **Preview the page**, **Publish** and **Throw away changes** work on the saved draft. Publish and
+  Throw away ask first, on the page, Publish repeating the list of changes.
+- **History:** every publish, newest first ("Jodie published 3 changes, 5 October 2026"), each with
+  Look at this list and Put back as a draft, and "The original list" always last.
+- View access only: every row as words, the differences, the history and the preview, with nothing
+  to type in and no button that changes anything.
+- If it cannot load: "The Fill a Red Bag list could not load. Open it again in a moment." Never an
+  empty editor.
+- Nothing scrolls inside a box. The rows answer to the editor's own width (a container query): one
+  line on a desktop, stacked cards on a phone, every target 44px.
+
+**Tests.** `test/unit/red-bag-list.test.ts` (every rule, the differences, the list as the page
+reads it), `red-bag-catalogue-list.test.ts` (the catalogue script with and without the block, with
+a wrong block, old beside new, an item it has never heard of), `red-bag-lists-db.test.ts` (the
+read that never throws and every fallback; save, stale stamps, publish, throw away, put back,
+audit rows), `red-bag-lists-migration.test.ts`, `red-bag-permissions.test.ts` (existing people's
+access untouched, Manage access, the menu, the New pill), `red-bag-page-list.test.ts` (the page
+from an edited list, the draft preview, giving switched off, who is given which list),
+`red-bag-draft-access.test.ts`, `admin-red-bag-list-routes.test.ts` (who may do what on every
+route) and `admin-red-bag-list-screen.test.ts` (the screen in jsdom). BDD:
+`features/red-bag-list.feature`, which puts the original list back through the API and empties the
+table before and after each scenario, so no other scenario meets a published list.
 
 ## Fill a Red Bag against the Donate page, in the admin
 
@@ -12359,8 +12562,9 @@ A new, playful way to give money, at `/fill`. The donor fills a list of example 
 sheet of lined paper, a red bag fills towards £50, and they give the total. Nothing is bought item
 by item: the items are examples of what a donation **could** do, and every donation goes to general
 funds. Design: `docs/superpowers/specs/2026-10-04-fill-a-red-bag-design.md`. This is half 1, the
-public pages; half 2 (staff editing the list in the admin, a Red Bag receipt email, a report figure)
-is not built. What a report figure will need is already being kept: each donation records that it
+public pages. Of half 2, staff editing the list in the admin is built (see
+[Fill a Red Bag: staff edit the list](#fill-a-red-bag-staff-edit-the-list-admin--fill-a-red-bag));
+a Red Bag receipt email is not. What a report figure will need is already being kept: each donation records that it
 came from here (**Recording where a gift came from**, below).
 
 **It is public, search engines may list it, and it is linked from nowhere** (Jaimie, 4 October

@@ -2432,6 +2432,29 @@ wordmark next to the same words set in our own face reads as a mistake. It sits 
 lifting on hover — present and legible, never louder than the ball's own lockup a few sections
 above. It is a guest's mark on NBCC's page.
 
+**The mark fits the screen it is on (TASK-553).** It is 500px wide wherever it appears (the Ball
+page's hero and foot, the thank-you page, the home page's Ball promotion), each with
+`max-width: 100%`, and on a phone that cap did nothing: at 375px the Ball and thank-you pages
+measured 453px wide and the home page 504px, with the mark cut off at both edges. Two causes, both
+"a percentage of a box that is still being sized by its own content":
+
+- **Ball and thank-you pages.** The mark's wrapper (`.ball-credit`, `.ball-sponsor-name`) is an
+  item in a centred column, so it is as wide as its content asks, and the mark's percentage cap
+  counts as no cap while that is worked out. The wrappers now carry `max-width: 100%` themselves
+  (a percentage of the page column, which is a real width), and the mark's own cap then works.
+- **Home page.** At 820px and under, the promotion's grid was one `1fr` column, which may not be
+  narrower than its content, so the mark set the width of the whole text column. It is now
+  `minmax(0,1fr)`, as the two column layout already was, and the credit is capped at
+  `min(46ch,100%)`: the paragraphs' own measure, or its column where that is narrower. The second
+  part also cures the two column layout from about 821px to 1040px, where each column is narrower
+  than the mark and it ran off the screen.
+
+The mark's own rules are untouched, so TASK-337's "one size everywhere" still holds, and from
+1280px up nothing moves. `test/unit/sponsor-mark-fits-phones.test.ts` holds the rules; jsdom lays
+nothing out, so the widths were measured on the live pages with the rules applied (320 to 1600px).
+`assets/css/ball.css` is committed with mixed line endings: change it byte for byte (an editor that
+tidies them rewrites every line), and check `git diff --numstat` shows only your lines.
+
 ### A deploy proves what it shipped (TASK-332)
 
 `/health` reports `version`: the commit the running image was built from, stamped in by the

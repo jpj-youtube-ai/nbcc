@@ -36,10 +36,12 @@
     <meta name="twitter:image" content="https://nbcc.scot/assets/img/og-image.png" />
 
     <!-- styles.css carries the design tokens; business-thankyou.css adds the page-specific styling. -->
-    <link rel="stylesheet" href="assets/css/styles.css" />
-    <link rel="stylesheet" href="assets/css/business-thankyou.css" />
-    <script defer src="assets/js/main.js"></script>
-    <script defer src="assets/js/business-thankyou.js"></script>
+    <!-- Absolute addresses, as 404.html: the emailed link opens this page at
+         /business/thank-you, where a relative one is asked for under /business/ and is not found. -->
+    <link rel="stylesheet" href="/assets/css/styles.css" />
+    <link rel="stylesheet" href="/assets/css/business-thankyou.css" />
+    <script defer src="/assets/js/main.js"></script>
+    <script defer src="/assets/js/business-thankyou.js"></script>
     <script defer src="/assets/js/pulse.js"></script>
   </head>
   <body>

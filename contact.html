@@ -118,6 +118,11 @@
                   <span class="err" id="email-error" hidden>Please enter a valid email address.</span>
                 </div>
                 <div class="field">
+                  <label for="phone">Phone number (optional)</label>
+                  <input id="phone" name="phone" type="tel" autocomplete="tel" maxlength="40" aria-describedby="phone-hint" />
+                  <p class="form-privacy" id="phone-hint" style="margin-top:6px">Only if you would like us to call you back.</p>
+                </div>
+                <div class="field">
                   <label for="message">Message <span class="req" aria-hidden="true">*</span></label>
                   <textarea id="message" name="message" rows="5" required aria-required="true" aria-describedby="message-error"></textarea>
                   <span class="err" id="message-error" hidden>Please write a short message.</span>

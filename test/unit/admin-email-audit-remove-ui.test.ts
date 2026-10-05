@@ -471,10 +471,15 @@ describe("its styles", () => {
     expect(rule('#view-email-audit[aria-busy="true"] [data-audit-stop],#view-email-audit[aria-busy="true"] [data-audit-tidy],#view-email-audit[aria-busy="true"] [data-audit-putback]')).toMatch(/cursor:\s*progress/);
   });
 
-  // .ty-status keeps a line of room while it is empty, so its words do not push the band down
-  // under the pointer when they arrive.
-  it("keeps room for the line that says what was done, above the band", () => {
+  // Measured in Chrome: .ty-status keeps 14px while it is empty, and a line with words and Put back
+  // in it is 22px, so the band moved down 8px at the first press. This line is as tall empty as
+  // full: its height when empty is its own line's height.
+  it("keeps exactly a line of room for what was done, above the band, so its words never move the band", () => {
     expect(html).toMatch(/<p class="ty-status" id="emailAuditSaid" role="status" aria-live="polite" tabindex="-1"><\/p>\s*<div id="emailAuditFailures"/);
-    expect(rule(".ty-status")).toMatch(/min-height:/);
+    const line = rule("#emailAuditSaid");
+    const lineHeight = (line.match(/line-height:([\d.]+)/) || [])[1];
+    const minHeight = (line.match(/min-height:([\d.]+)em/) || [])[1];
+    expect(lineHeight).toBeTruthy();
+    expect(minHeight).toBe(lineHeight);
   });
 });

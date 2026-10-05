@@ -1530,6 +1530,10 @@ tr.nl-click:hover { background: var(--tint); }
 .email-fail-problems li { padding: 3px 0; overflow-wrap: anywhere; }
 .email-fail-problems small { display: block; color: var(--slate-soft); }
 #view-email-audit[aria-busy="true"] [data-audit-stop], #view-email-audit[aria-busy="true"] [data-audit-tidy], #view-email-audit[aria-busy="true"] [data-audit-putback] { opacity: .6; cursor: progress; }
+/* The line above the band that says what a press did, with Put back in it. As tall empty as full:
+   measured in Chrome, .ty-status keeps 14px while empty and the line with words in it is 22px, so
+   the band moved down 8px at the first press. */
+#emailAuditSaid { line-height: 1.7; min-height: 1.7em; margin: 0 0 8px; }
 /* Fit the card: the shared .admin-table sets nowrap on every cell, so one long subject would
    scroll the whole card sideways (same fix the newsletter tables carry). Fixed layout, wrapping
    cells, and the date/type/status columns pinned so the subject takes what is left. */

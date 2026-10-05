@@ -131,13 +131,23 @@ let cached: { list: RedBagList | null } | null = null; // null: nothing read yet
 let readAt = 0;
 let complained = false;
 let reading: Promise<RedBagList | null> | null = null;
+// Reads are numbered as they START. A read may set the list only if no read started after it has
+// already set it: a slow read begun before a publish can come back after the publish's own fresh
+// read, and must not put the earlier list back for a minute.
+let started = 0;
+let settled = 0;
 
-/** Forget the list as last read, so the next loadPublishedRedBagList reads it again. */
+/**
+ * Forget everything, as if nothing had ever been read (for tests, and nothing else). After a
+ * publish the list is NOT forgotten: it is read afresh, and the last good list stands meanwhile.
+ */
 export function forgetPublishedRedBagList(): void {
   cached = null;
   readAt = 0;
   complained = false;
   reading = null;
+  started = 0;
+  settled = 0;
 }
 
 const copy = (list: RedBagList | null): RedBagList | null => (list ? (JSON.parse(JSON.stringify(list)) as RedBagList) : null);
@@ -160,6 +170,7 @@ function within<T>(work: Promise<T>, ms: number): Promise<T> {
 }
 
 async function readNow(now: number): Promise<RedBagList | null> {
+  const mine = (started += 1);
   try {
     const r = await within(pool.query(LATEST_PUBLISHED), RED_BAG_LIST_READ_TIMEOUT_MS);
     const row = r.rows[0] as Row | undefined;
@@ -169,11 +180,16 @@ async function readNow(now: number): Promise<RedBagList | null> {
       list = rules.clean(row.data);
       if (!list || rules.validate(list).length) throw new Error(`the published list (id ${String(row.id)}) does not pass the list's rules`);
     }
+    // A read that started later has already answered: its list is the newer one, and stands.
+    if (mine < settled && cached) return cached.list;
+    settled = mine;
     cached = { list };
     readAt = now;
     complained = false;
     return list;
   } catch (err) {
+    // An older read failing after a newer one answered changes nothing, and is not worth a word.
+    if (mine < settled && cached) return cached.list;
     if (!complained) {
       console.error("fill a red bag list read failed, using the last good list:", err instanceof Error ? err.message : err);
       complained = true;
@@ -181,7 +197,8 @@ async function readNow(now: number): Promise<RedBagList | null> {
     // The last good list stands (the built-in one, before any was read), and the database is left
     // alone for a short while rather than asked again by every page view.
     if (!cached) cached = { list: null };
-    readAt = now - RED_BAG_LIST_CACHE_MS + RED_BAG_LIST_RETRY_MS;
+    // Only the newest read started may say when to ask next.
+    if (mine === started) readAt = now - RED_BAG_LIST_CACHE_MS + RED_BAG_LIST_RETRY_MS;
     return cached.list;
   }
 }
@@ -397,7 +414,9 @@ export async function publishRedBagDraft(version: number, who: RedBagListWho): P
     });
     return toVersion(row);
   });
-  forgetPublishedRedBagList();
+  // Read afresh, now. The list as last read is deliberately NOT forgotten first: if the database
+  // blips on this very read, the page keeps the last good list (not the built-in one) and asks
+  // again in a few seconds.
   await loadPublishedRedBagList({ fresh: true });
   return published;
 }

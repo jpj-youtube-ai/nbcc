@@ -218,6 +218,37 @@ describe("the public page's read", () => {
     expect(query).toHaveBeenCalledTimes(1);
   });
 
+  it("a slow older read never overwrites a newer one: only the newest read started may set the list", async () => {
+    let answerOld: (v: unknown) => void = () => undefined;
+    query.mockReturnValueOnce(new Promise((r) => (answerOld = r)));
+    const older = loadPublishedRedBagList({ now: 1000 });
+    // A publish happens meanwhile: its fresh read starts later and answers first.
+    query.mockResolvedValueOnce({ rows: [publishedRow(9, edited((l) => (l.items.find((i) => i.key === "toy")!.pence = 1000)))] });
+    const newer = await loadPublishedRedBagList({ now: 1001, fresh: true });
+    expect(newer!.items.find((i) => i.key === "toy")!.pence).toBe(1000);
+    // Now the old read comes back, with the list as it was before the publish.
+    answerOld({ rows: [publishedRow(4, edited())] });
+    expect((await older)!.items.find((i) => i.key === "toy")!.pence).toBe(1000);
+    const asked = query.mock.calls.length;
+    expect((await loadPublishedRedBagList({ now: 1002 }))!.items.find((i) => i.key === "toy")!.pence).toBe(1000);
+    expect((await loadPublishedRedBagList({ now: 1000 + RED_BAG_LIST_CACHE_MS - 1 }))!.items.find((i) => i.key === "toy")!.pence).toBe(1000);
+    expect(query.mock.calls.length).toBe(asked);
+  });
+
+  it("a slow older read that FAILS does not disturb a newer one either", async () => {
+    let failOld: (e: unknown) => void = () => undefined;
+    query.mockReturnValueOnce(new Promise((_r, no) => (failOld = no)));
+    const older = loadPublishedRedBagList({ now: 1000 });
+    query.mockResolvedValueOnce({ rows: [publishedRow(9, edited())] });
+    await loadPublishedRedBagList({ now: 1001, fresh: true });
+    failOld(new Error("gone away"));
+    expect((await older)!.items.find((i) => i.key === "toy")!.pence).toBe(1200);
+    const asked = query.mock.calls.length;
+    // Still the full minute from the good read: the old failure did not bring the next read forward.
+    await loadPublishedRedBagList({ now: 1001 + RED_BAG_LIST_CACHE_MS - 1 });
+    expect(query.mock.calls.length).toBe(asked);
+  });
+
   it("hands each caller its own copy: nothing a page does to it reaches the next", async () => {
     query.mockResolvedValue({ rows: [publishedRow(4, edited())] });
     const a = await loadPublishedRedBagList({ now: 1000 });
@@ -398,6 +429,20 @@ describe("publishing", () => {
     const asked = query.mock.calls.length;
     expect((await loadPublishedRedBagList({ now: 1001 }))!.items.find((i) => i.key === "toy")!.pence).toBe(1200);
     expect(query.mock.calls.length).toBe(asked);
+  });
+
+  it("keeps the last good list if the database blips as it reads again after a publish, and tries again soon", async () => {
+    publishing(draftRow(edited((l) => (l.items.find((i) => i.key === "toy")!.pence = 1000)), 4), publishedRow(4, edited()));
+    query.mockResolvedValueOnce({ rows: [publishedRow(4, edited())] });
+    expect((await loadPublishedRedBagList({ now: Date.now() }))!.items.find((i) => i.key === "toy")!.pence).toBe(1200);
+    query.mockRejectedValueOnce(new Error("blip"));
+    await publishRedBagDraft(4, WHO);
+    // Not the built-in list (£15): the list that was good a moment ago.
+    const now = Date.now();
+    expect((await loadPublishedRedBagList({ now }))!.items.find((i) => i.key === "toy")!.pence).toBe(1200);
+    // And asked again after the short wait, when it has the published one.
+    query.mockResolvedValue({ rows: [publishedRow(9, edited((l) => (l.items.find((i) => i.key === "toy")!.pence = 1000)))] });
+    expect((await loadPublishedRedBagList({ now: now + RED_BAG_LIST_RETRY_MS + 50 }))!.items.find((i) => i.key === "toy")!.pence).toBe(1000);
   });
 
   it("refuses a stale stamp, and publishes nothing", async () => {

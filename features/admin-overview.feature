@@ -59,3 +59,16 @@ Feature: The admin Overview says what needs us (TASK-508)
     When "cal.overview.admin.bdd@example.com" reads the overview
     Then the overview answer is 200
     And it shows no numbers
+
+  # TASK-560: the Read tick on Stories sends the status Reviewed. A story that is Reviewed is no
+  # longer waiting to be read, so the Overview stops counting it.
+  @admin-stories
+  Scenario: a story marked as read is no longer waiting to be read
+    Given a submitted story with text "A story waiting to be read (bdd-admin-stories)."
+    When "ann.overview.admin.bdd@example.com" reads the overview
+    Then the overview answer is 200
+    And it says new stories are waiting to be read, with a button to "Stories"
+    When I PATCH the admin story status to "reviewed" as "ann.overview.admin.bdd@example.com" with password "overview-pw-123"
+    Then the admin response status should be 200
+    When "ann.overview.admin.bdd@example.com" reads the overview
+    Then one fewer story is waiting to be read

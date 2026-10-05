@@ -3149,17 +3149,22 @@ const STORY_STATUSES = ["new", "reviewed", "used", "withdrawn"] as const;
 // adminNotes/adminTags are capped (2000 chars / 50 tags of up to 100 chars each) so a
 // staff PATCH can never smuggle an unbounded payload into the stories DB — mirrors the
 // story submission schema's own length caps (src/stories/schema.ts).
+// TASK-560: ifStatus is the status the caller's screen showed. It is a condition on the update, not
+// a field to save, so it does not count as something to update.
 const storyPatchSchema = z
   .object({
     status: z.enum(STORY_STATUSES).optional(),
     adminTags: z.array(z.string().max(100)).max(50).optional(),
     adminNotes: z.string().max(MAX_ADMIN_NOTES_LENGTH).optional(),
+    ifStatus: z.enum(STORY_STATUSES).optional(),
   })
   .strict()
-  .refine((b) => Object.keys(b).length > 0, { message: "no fields to update" });
+  .refine((b) => Object.keys(b).some((k) => k !== "ifStatus"), { message: "no fields to update" });
 
 // PATCH /api/admin/stories/:id — update status / admin_tags / admin_notes (e.g. Withdraw). Editor/
 // Admin only (mirrors patchAdminDonor). No audit_log row — see src/db/stories.ts's comment.
+// TASK-560: with ifStatus, a story that is no longer what the screen showed is left alone and the
+// answer is 409 with the story as it is now, so the screen can show the truth instead of undoing it.
 export async function patchAdminStory(req: Request, res: Response): Promise<Response | void> {
   if (!(await authorizeSection(req, res, "stories", "edit"))) return;
   const id = storyId(req, res);
@@ -3169,10 +3174,13 @@ export async function patchAdminStory(req: Request, res: Response): Promise<Resp
   if (!parsed.success) {
     return res.status(400).json({ error: "Invalid story update", details: parsed.error.flatten() });
   }
+  const { ifStatus, ...patch } = parsed.data;
   try {
-    const story = await updateStory(id, parsed.data);
-    if (!story) return res.status(404).json({ error: "Story not found" });
-    return res.status(200).json(story);
+    const story = ifStatus ? await updateStory(id, patch, ifStatus) : await updateStory(id, patch);
+    if (story) return res.status(200).json(story);
+    const current = ifStatus ? await getStory(id) : null;
+    if (current) return res.status(409).json({ error: "Story has changed", story: current });
+    return res.status(404).json({ error: "Story not found" });
   } catch (err) {
     console.error("admin story update failed:", err instanceof Error ? err.message : err);
     return res.status(500).json({ error: "Admin update is temporarily unavailable" });

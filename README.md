@@ -2187,6 +2187,56 @@ same person, sent at a different moment, is a different story and is not blocked
 `test/unit/erased-stories-migration.test.ts` and `test/unit/stories-old-site-import.test.ts`, and end
 to end in `features/stories-import.feature`.
 
+**A Read tick on Stories (TASK-560).** The Stories list has a **Read** column, one tick box a story,
+and an open story has **Mark as read** under its words. "Read" is the status that already existed,
+**Reviewed**: a tick asks `PATCH /api/admin/stories/:id` for `"reviewed"`, and unticking asks for
+`"new"`, so it counts for the whole team and nothing new is stored. Used and Withdrawn show as read
+with the tick locked (hover says why), because those statuses say more and a stray click must never
+undo them. It needs stories edit, like every other change to a story; someone who can only view sees
+the ticks locked.
+
+- **It cannot undo what somebody else did.** The request carries the status its screen showed:
+  `{ "status": "reviewed", "ifStatus": "new" }`. `updateStory` (`src/db/stories.ts`) puts that in
+  the `WHERE`, so the change happens only while the story is still that, in the one statement. If it
+  is not, nothing changes and the answer is **409** with the story as it is now (404 if it has been
+  erased). This is for the list left open on one desk while a story is withdrawn at another:
+  Withdrawn records that consent was taken back, and a tick must not put the story back to Reviewed.
+  The screen then shows what the story is now and says "Someone else changed this story. It is now
+  Withdrawn." If somebody else had already made it what was asked for, it says nothing. `ifStatus`
+  is a condition and never a field to save: on its own it is still "no fields to update". Save
+  changes and Withdraw on an open story do not send it, and behave as they always have.
+- **The row stays where it is.** The tick saves at once and nothing is drawn again (`setStoryRead`
+  in `assets/js/admin/app.js`), so the tick can come straight back off, even on a list filtered to
+  New. The box is never disabled while it saves, which would drop the keyboard's place in the list;
+  a second press in that time is put back, not sent. A save that takes more than a third of a
+  second dims the box (`aria-busy`), so a slow connection does not look like a tick that ignores
+  you.
+- **A save that fails moves nothing.** The tick goes back and the story's status pill gives way to a
+  pill that says **Not saved** (a screen reader hears "Story 12: Not saved. Please try again.", and
+  hovering shows the sentence). The row keeps its height, so no row beneath it moves under the next
+  press. Two other places were tried first and measured in Chrome. A line above the table pushed
+  every row down the moment it had words, and above a long list it was off the screen. A sentence
+  under the status left the pressed tick alone but made its row 61px taller, so on a quick run down
+  the list the press after next could land on the wrong story.
+- **Three rarer answers get a sentence under the status**, and their row does grow: somebody else
+  changed the story, it has been erased ("This story is no longer here."), or this person may no
+  longer change stories. The last two lock the tick.
+- **On an open story only the status is drawn again** (`markStoryRead`): the Status line, the
+  button, and the form's Status when it had not been touched. Anything typed in Tags or Notes and
+  not yet saved stays, cursor and all. What could not be saved is said right under the button. An
+  answer that arrives after a different story was opened is ignored, and the keyboard is moved
+  without scrolling the page.
+
+A story ticked here stops counting in the Overview's "new stories are waiting to be read", which
+counts the live stories still at New. Design:
+`docs/superpowers/specs/2026-10-05-stories-read-tick-design.md`. Tested in
+`test/unit/admin-stories-read-tick.test.ts` (the admin's jsdom harness: the four statuses, saving,
+every way a save can fail, somebody else getting there first, a viewer, the open story, and the
+styles), `test/unit/stories-admin-model.test.ts` and `test/unit/admin-stories-api.test.ts` (the
+condition), and end to end in `features/admin-stories.feature` and `features/admin-overview.feature`.
+Still to do, and not part of this: on a phone the Stories table cannot be read. Its seven columns
+were about 51px each before the tick and are about 42px with it, and it wants to be cards.
+
 **Public unsubscribe route (REQ-069 · TASK-161 · TASK-297).** `/unsubscribe/:token`
 (`src/routes/unsubscribe.ts`, mounted in `src/app.ts`) is the link every newsletter email carries.
 The token is a stateless HMAC of the donor id (`verifyUnsubscribeToken`, signed with
@@ -6273,7 +6323,7 @@ numbers, one line each, and **Coming up** the next 14 days. The design is in
      - contact messages;
      - fundraising sign ups, changes to check, fundraisers who say they've finished, requests to do,
        and fundraisers due a call;
-     - new stories;
+     - new stories (a story ticked Read on the Stories screen is Reviewed, so it leaves this count);
      - businesses due a thank you call;
      - your own business outreach to-dos;
      - generous donors not yet thanked who can be emailed (as the Thank you screen counts them);

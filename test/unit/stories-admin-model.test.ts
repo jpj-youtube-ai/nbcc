@@ -103,6 +103,29 @@ describe("updateStory", () => {
     expect(row).toBeNull();
   });
 
+  // TASK-560: the Read tick says what its screen showed, so a list left open cannot undo a status
+  // somebody else set in the meantime. Withdrawn above all: it records that consent was taken back.
+  it("changes a story only while its status is still the one the screen showed", async () => {
+    queryMock.mockResolvedValueOnce({ rows: [{ id: 3, status: "reviewed" }] });
+    const row = await updateStory(3, { status: "reviewed" }, "new");
+    expect(row).toEqual({ id: 3, status: "reviewed" });
+    const [sql, params] = queryMock.mock.calls[0];
+    expect(sql).toMatch(/set status = \$1 where id = \$2 and status = \$3 returning \*/i);
+    expect(params).toEqual(["reviewed", 3, "new"]);
+  });
+
+  it("changes nothing, and returns null, when the story has moved on since", async () => {
+    queryMock.mockResolvedValueOnce({ rows: [] });
+    expect(await updateStory(3, { status: "reviewed" }, "new")).toBeNull();
+    expect(queryMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("asks nothing of the status when no screen said what it showed", async () => {
+    queryMock.mockResolvedValueOnce({ rows: [{ id: 3 }] });
+    await updateStory(3, { status: "withdrawn" });
+    expect(String(queryMock.mock.calls[0][0])).not.toMatch(/and status/i);
+  });
+
   it("never queries the audit_log table (no cross-DB audit for stories)", async () => {
     queryMock.mockResolvedValueOnce({ rows: [{ id: 3 }] });
     await updateStory(3, { status: "withdrawn" });

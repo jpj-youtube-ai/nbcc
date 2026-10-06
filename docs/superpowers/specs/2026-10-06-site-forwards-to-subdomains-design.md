@@ -25,6 +25,8 @@ It was checked first that a path can forward to a subdomain: a forward is an HTT
 | The form | a dropdown | the dropdown gains a last choice, "An NBCC subdomain…", which shows a text box |
 | The list | path | the stored address, with a "Subdomain" pill |
 | /drop | 404 | forwards to `https://drop.nbcc.scot` (seeded by a migration) |
+| /referrals, /referral | 404 | forward to `https://referrals.nbcc.scot` (asked for the same evening; seeded too) |
+| /volunteer, /volunteers | 404 | forward to `https://vol.nbcc.scot` (seeded too) |
 
 - **302, not 301, for a subdomain.** A browser keeps a 301 for good, so a visitor who had used /drop
   would go on reaching the old place after staff changed or removed it. Staff-managed forwards must

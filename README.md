@@ -12753,9 +12753,10 @@ screen, in jsdom), and end to end in `features/email-audit.feature`.
   A subdomain forward is a **302**, not the 301 a page gets (`forwardStatus`,
   `src/site/redirect.ts`), because a browser keeps a 301 for good and staff must be able to change
   or remove these. The arriving query is carried across as before. The site does not check that the
-  subdomain exists; making one is a DNS job. `/drop` to `https://drop.nbcc.scot` is seeded by
-  migration `1791200000290` (only if no /drop exists), and shows in the list with a "Subdomain"
-  pill. When its own box is narrow the list is labelled cards (`.sa-table`, a container query, the
+  subdomain exists; making one is a DNS job. Five are seeded by migration `1791200000290` (each only
+  if that address is not already taken): `/drop` to `drop.nbcc.scot`, `/referrals` and `/referral`
+  to `referrals.nbcc.scot`, `/volunteer` and `/volunteers` to `vol.nbcc.scot`. They show in the list
+  with a "Subdomain" pill. When its own box is narrow the list is labelled cards (`.sa-table`, a container query, the
   shape Donations uses): in four squeezed columns a subdomain address and its pill broke in half.
   The screen's status line now takes `.ty-status`'s own `is-ok` / `is-error`. It used bare `ok` /
   `err`, and the public stylesheet hides `.err`, so from 1 September until this change no refusal

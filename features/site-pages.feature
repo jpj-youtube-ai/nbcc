@@ -64,9 +64,17 @@ Feature: Site addressing (site-pages feature)
     Then the site pages response status should be 400
     When I request the site path "/elsewhere"
     Then the site response status should be 404
-    # The release itself made this one (migration 1791200000290).
+    # The release itself made these (migration 1791200000290).
     When I request the site path "/drop"
     Then the site response should redirect temporarily to "https://drop.nbcc.scot"
+    When I request the site path "/referral"
+    Then the site response should redirect temporarily to "https://referrals.nbcc.scot"
+    When I request the site path "/referrals"
+    Then the site response should redirect temporarily to "https://referrals.nbcc.scot"
+    When I request the site path "/volunteer"
+    Then the site response should redirect temporarily to "https://vol.nbcc.scot"
+    When I request the site path "/Volunteers"
+    Then the site response should redirect temporarily to "https://vol.nbcc.scot"
 
   Scenario: editing site addressing needs the site permission at edit level
     Given a newsletter admin "site.editor.bdd@example.com" with role "editor" and password "pw-sp2"

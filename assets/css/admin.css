@@ -3251,3 +3251,25 @@ textarea.fx-call-input{min-height:88px;line-height:1.5;resize:vertical;field-siz
   .dn-redbag-filter{margin-left:0}
 }
 /* end Fill a Red Bag */
+
+/* TASK-568: the Spare addresses list (Admin > Site pages). A forward to a subdomain is longer than a
+   page's path, and in four squeezed columns on a phone "drop.nbcc.scot" and the word Subdomain broke
+   in half. The pill never breaks, and a long address wraps inside its own box. When the list's own
+   box is narrow it is labelled cards, the same shape as Donations (.dn-table): the heading rides on
+   each cell (data-label), the spare address leads the card, and Remove is a 44px target. */
+.sa-table .admin-pill{white-space:nowrap}
+.sa-to{overflow-wrap:anywhere}
+.sa-list{container:salist / inline-size}
+@container salist (max-width:759px){
+  .sa-table,.sa-table tbody{display:block}
+  .sa-table thead{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+  .sa-table tr{display:flex;flex-direction:column;border-bottom:1px solid var(--line);padding:10px 0}
+  .sa-table tr:last-child{border-bottom:0}
+  .sa-table td{border-bottom:0;padding:3px 14px;display:flex;gap:10px;align-items:baseline;text-align:left}
+  .sa-table td::before{content:attr(data-label);flex:0 0 7.5rem;font-size:.78rem;color:var(--slate-soft)}
+  .sa-table td:empty{display:none}
+  .sa-table td:first-child{display:block;font-weight:600;font-size:1rem;padding-bottom:6px}
+  .sa-table td:first-child::before,.sa-table td:last-child::before{content:none}
+  .sa-table .sa-to{flex:1;min-width:0}
+  .sa-table [data-site-alias-remove]{min-height:44px;min-width:44px;text-align:left}
+}

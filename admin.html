@@ -2346,7 +2346,7 @@
                  write controls for read-only users and the server enforces regardless. -->
             <section class="admin-view" id="view-site" aria-labelledby="site-heading" hidden>
               <h2 id="site-heading">Site pages</h2>
-              <p class="admin-view-intro">Spare addresses quietly send visitors to the right page, so a mistyped or shortened address still lands well. The search engine ticks decide which pages appear in the site's public listing for Google and friends. The <a href="/sitemap" target="_blank" rel="noopener">site map page</a> shows every page as visitors can reach it.</p>
+              <p class="admin-view-intro">Spare addresses quietly send visitors to the right page, so a mistyped or shortened address still lands well. A spare address can also send people on to an NBCC subdomain, so nbcc.scot/drop opens drop.nbcc.scot. The search engine ticks decide which pages appear in the site's public listing for Google and friends. The <a href="/sitemap" target="_blank" rel="noopener">site map page</a> shows every page as visitors can reach it.</p>
               <h3 class="admin-subhead">Every page</h3>
               <p class="admin-help">The whole website in one list, including the pages nobody can find by browsing. If a page is here, it is somebody&rsquo;s to keep up to date.</p>
               <div class="admin-table-wrap" id="siteAllTable" aria-live="polite"><p class="admin-loading">Loading&hellip;</p></div>
@@ -2359,10 +2359,15 @@
                 <label class="ty-inline">Sends people to
                   <select id="siteAliasTo"></select>
                 </label>
+                <!-- TASK-568: shown only when "An NBCC subdomain" is chosen above. -->
+                <label class="ty-inline" id="siteAliasHostWrap" hidden>Subdomain
+                  <input id="siteAliasHost" type="text" placeholder="drop.nbcc.scot" style="width:220px" autocapitalize="none" autocorrect="off" spellcheck="false" inputmode="url" aria-describedby="siteAliasHostHelp" />
+                </label>
                 <button class="btn btn-primary" type="submit" id="siteAliasAdd">Add</button>
               </form>
+              <p class="admin-help" id="siteAliasHostHelp" hidden>The address must end in <b>.nbcc.scot</b>, like drop.nbcc.scot or drop.nbcc.scot/collect. The subdomain has to exist already: this only sends people to it.</p>
               <p class="ty-status" id="siteStatus" role="status" aria-live="polite"></p>
-              <div class="admin-table-wrap" id="siteAliasTable" aria-live="polite"><p class="admin-loading">Loading…</p></div>
+              <div class="admin-table-wrap sa-list" id="siteAliasTable" aria-live="polite"><p class="admin-loading">Loading…</p></div>
               <h3 class="admin-subhead">Search engines</h3>
               <div class="admin-table-wrap" id="siteSeoTable" aria-live="polite"><p class="admin-loading">Loading…</p></div>
             </section>

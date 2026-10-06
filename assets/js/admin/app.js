@@ -3485,7 +3485,10 @@
   function siteStatus(msg, cls) {
     var s = el("siteStatus");
     if (!s) return;
-    s.className = "ty-status" + (cls ? " " + cls : "");
+    // TASK-568: .ty-status has is-ok and is-error. This line used the bare classes "ok" and "err",
+    // and the public stylesheet hides .err (a form's field error until it is needed), so since
+    // 1 September no refusal on this screen had ever been seen.
+    s.className = "ty-status" + (cls === "err" ? " is-error" : cls === "ok" ? " is-ok" : "");
     s.textContent = msg || "";
   }
   function renderSiteAliases(aliases, canWrite) {
@@ -3499,14 +3502,24 @@
         var remove = canWrite
           ? '<button class="admin-link" type="button" data-site-alias-remove="' + a.id + '">Remove</button>'
           : "";
+        // TASK-568: a forward that leaves the main site for one of our subdomains says so. Shown
+        // without its https://, the way staff typed it.
+        var away = a.toPath.indexOf("https://") === 0;
+        var to = away
+          ? H.escapeHtml(a.toPath.slice(8)) + ' <span class="admin-pill">Subdomain</span>'
+          : H.escapeHtml(a.toPath);
+        // Each cell carries its heading, so the list can be labelled cards on a phone (.sa-table in
+        // admin.css), as Donations and Stories are.
         return (
-          "<tr><td>" + H.escapeHtml(a.fromPath) + "</td><td>" + H.escapeHtml(a.toPath) +
-          "</td><td>" + H.escapeHtml(a.createdBy) + "</td><td>" + remove + "</td></tr>"
+          '<tr><td data-label="Spare address">' + H.escapeHtml(a.fromPath) +
+          '</td><td data-label="Sends people to"><span class="sa-to">' + to +
+          '</span></td><td data-label="Added by"><span class="sa-to">' + H.escapeHtml(a.createdBy) +
+          '</span></td><td data-label="">' + remove + "</td></tr>"
         );
       })
       .join("");
     wrap.innerHTML =
-      '<table class="admin-table"><thead><tr><th>Spare address</th><th>Sends people to</th><th>Added by</th><th></th></tr></thead><tbody>' +
+      '<table class="admin-table sa-table"><thead><tr><th>Spare address</th><th>Sends people to</th><th>Added by</th><th></th></tr></thead><tbody>' +
       body + "</tbody></table>";
     if (canWrite) {
       Array.prototype.forEach.call(wrap.querySelectorAll("[data-site-alias-remove]"), function (b) {
@@ -3597,17 +3610,32 @@
       });
     }
   }
+  // TASK-568: "Sends people to" ends with one choice that is not a page: an NBCC subdomain, typed in
+  // a box that only shows (and is only required) while that choice is picked. The server decides
+  // what is allowed (forwardTarget in src/site/pages.ts); this only shows and hides the box.
+  var SITE_SUBDOMAIN = "subdomain";
+  function siteSyncHost() {
+    var on = el("siteAliasTo").value === SITE_SUBDOMAIN;
+    el("siteAliasHostWrap").hidden = !on;
+    el("siteAliasHostHelp").hidden = !on;
+    el("siteAliasHost").required = on;
+  }
   function wireSite() {
     if (siteWired) return;
     siteWired = true;
     var form = el("siteAliasForm");
+    el("siteAliasTo").addEventListener("change", siteSyncHost);
     if (form) form.addEventListener("submit", function (e) {
       e.preventDefault();
       siteStatus("");
+      var toSubdomain = el("siteAliasTo").value === SITE_SUBDOMAIN;
       authFetch("/api/admin/site-aliases", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ from: el("siteAliasFrom").value.trim(), to: el("siteAliasTo").value }),
+        body: JSON.stringify({
+          from: el("siteAliasFrom").value.trim(),
+          to: toSubdomain ? el("siteAliasHost").value.trim() : el("siteAliasTo").value,
+        }),
       })
         .then(function (res) {
           return res.json().then(function (b) { return { ok: res.ok, body: b }; });
@@ -3615,6 +3643,7 @@
         .then(function (r) {
           if (!r.ok) { siteStatus(r.body.error || "Could not add that address.", "err"); return; }
           el("siteAliasFrom").value = "";
+          el("siteAliasHost").value = "";
           siteStatus("Spare address added. It works right away.", "ok");
           loadSite();
         })
@@ -3745,11 +3774,15 @@
       .then(okJson)
       .then(function (d) {
         var sel = el("siteAliasTo");
+        var keep = sel.value;
         sel.innerHTML = (d.pages || [])
           .map(function (p) {
             return '<option value="' + H.escapeHtml(p.path) + '">' + H.escapeHtml(p.title) + " (" + H.escapeHtml(p.path) + ")</option>";
           })
-          .join("");
+          .join("") + '<option value="' + SITE_SUBDOMAIN + '">An NBCC subdomain…</option>';
+        // A reload after adding or removing redraws the list: keep the choice the person had made.
+        if (keep === SITE_SUBDOMAIN) sel.value = keep;
+        siteSyncHost();
         renderSiteAll(d.pages || [], d.privatePages || []);
         renderSiteAliases(d.aliases || [], canWrite);
         renderSiteSeo(d.pages || [], canWrite);

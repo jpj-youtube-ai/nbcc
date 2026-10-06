@@ -3,6 +3,8 @@
 // hop: a QR code's utm_medium=qr, a newsletter's utm_source. Without this a QR code made for a spare
 // address counted its scans as Direct. The target is always one of our own paths, so the query can
 // never change where the visitor goes. Pure, so it is tested without a server.
+// TASK-568: or one of NBCC's own subdomains, chosen by staff (forwardTarget in ./pages); the query is
+// only ever added after that address, so it still cannot change where the visitor goes.
 
 /** `target`, with the query string from `originalUrl` (req.originalUrl) carried across. */
 export function keepQuery(target: string, originalUrl: string): string {
@@ -11,4 +13,29 @@ export function keepQuery(target: string, originalUrl: string): string {
   const query = originalUrl.slice(at + 1).split("#")[0];
   if (!query) return target;
   return target + (target.includes("?") ? "&" : "?") + query;
+}
+
+/**
+ * TASK-568: the kind of forward a spare address gives. A subdomain is one staff can change or
+ * remove, so it is temporary (302): a browser keeps a permanent one (301) for good, and a visitor
+ * who had used it would go on reaching the old place. One of our own pages keeps the 301 it always
+ * had, so the spare address never becomes a second home for the same content.
+ */
+export function forwardStatus(target: string): 301 | 302 {
+  return target.startsWith("https://") ? 302 : 301;
+}
+
+/**
+ * TASK-568: would this forward send the visitor back to the very host they asked? Only
+ * www.nbcc.scot is refused by name when a forward is made, and subdomains are made outside this
+ * repository: if one were ever pointed at this same site, a forward to it would ask for itself for
+ * ever. Checked when forwarding, whatever the name, so that case is a "page not found" instead.
+ */
+export function forwardsToItself(target: string, host: string | undefined): boolean {
+  if (!host || !target.startsWith("https://")) return false;
+  try {
+    return new URL(target).hostname === host.toLowerCase();
+  } catch {
+    return false;
+  }
 }

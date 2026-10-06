@@ -12796,6 +12796,26 @@ screen, in jsdom), and end to end in `features/email-audit.feature`.
   `/mystory`, `/contact-us`, `/donations`, `/give`, `/portal`, `/privacy-policy`, `/supporter`,
   `/story`, `/stories`. Managed live in the new **Site pages** admin view; validation refuses a
   spare address that would shadow a real page or system route (`aliasFromProblem`).
+- **A spare address can forward to an NBCC subdomain (TASK-568).** In Site pages, "Sends people
+  to" ends with **An NBCC subdomain**, which shows a box to type one in, so staff can make
+  nbcc.scot/drop open drop.nbcc.scot themselves. `forwardTarget` (`src/site/pages.ts`) turns
+  what was typed into the one form that is stored and sent: `https://`, the host lowercased, no
+  trailing slash, an optional path. It refuses anything that is not `<name>.nbcc.scot`: the host
+  is read by the URL parser, so a lookalike such as `nbcc.scot.example.com` or
+  `drop.nbcc.scot@example.com` is refused, and so are a port, a user name, a query and a
+  fragment. A misused staff login therefore cannot point an nbcc.scot link at somebody else's
+  website. `www.nbcc.scot` is refused too: it is this site, and a forward to it could loop.
+  A subdomain forward is a **302**, not the 301 a page gets (`forwardStatus`,
+  `src/site/redirect.ts`), because a browser keeps a 301 for good and staff must be able to change
+  or remove these. The arriving query is carried across as before. The site does not check that the
+  subdomain exists; making one is a DNS job. Five are seeded by migration `1791200000290` (each only
+  if that address is not already taken): `/drop` to `drop.nbcc.scot`, `/referrals` and `/referral`
+  to `referrals.nbcc.scot`, `/volunteer` and `/volunteers` to `vol.nbcc.scot`. They show in the list
+  with a "Subdomain" pill. When its own box is narrow the list is labelled cards (`.sa-table`, a container query, the
+  shape Donations uses): in four squeezed columns a subdomain address and its pill broke in half.
+  The screen's status line now takes `.ty-status`'s own `is-ok` / `is-error`. It used bare `ok` /
+  `err`, and the public stylesheet hides `.err`, so from 1 September until this change no refusal
+  on this screen ("That address is already in use") had ever been shown.
 - **`/sitemap`.** A branded, server-rendered tree of every public page (the `/supporters`
   pattern over `sitemap.html`), deliberately unlisted: nothing links to it, and it carries
   noindex in both the file and an `X-Robots-Tag` header. Ball pages appear only while the gate

@@ -63,7 +63,7 @@ describe("alias validation", () => {
         "drop.nbcc.scot@example.com",
         "https://example.com/drop.nbcc.scot",
         "example.com/.nbcc.scot",
-        "drop.nbcc.scot\@example.com",
+        "drop.nbcc.scot\\@example.com",
         "//example.com",
         "javascript:alert(1)",
         "ftp://drop.nbcc.scot",

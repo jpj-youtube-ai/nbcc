@@ -3499,8 +3499,14 @@
         var remove = canWrite
           ? '<button class="admin-link" type="button" data-site-alias-remove="' + a.id + '">Remove</button>'
           : "";
+        // TASK-568: a forward that leaves the main site for one of our subdomains says so. Shown
+        // without its https://, the way staff typed it.
+        var away = a.toPath.indexOf("https://") === 0;
+        var to = away
+          ? H.escapeHtml(a.toPath.slice(8)) + ' <span class="admin-pill">Subdomain</span>'
+          : H.escapeHtml(a.toPath);
         return (
-          "<tr><td>" + H.escapeHtml(a.fromPath) + "</td><td>" + H.escapeHtml(a.toPath) +
+          "<tr><td>" + H.escapeHtml(a.fromPath) + "</td><td>" + to +
           "</td><td>" + H.escapeHtml(a.createdBy) + "</td><td>" + remove + "</td></tr>"
         );
       })
@@ -3597,17 +3603,32 @@
       });
     }
   }
+  // TASK-568: "Sends people to" ends with one choice that is not a page: an NBCC subdomain, typed in
+  // a box that only shows (and is only required) while that choice is picked. The server decides
+  // what is allowed (forwardTarget in src/site/pages.ts); this only shows and hides the box.
+  var SITE_SUBDOMAIN = "subdomain";
+  function siteSyncHost() {
+    var on = el("siteAliasTo").value === SITE_SUBDOMAIN;
+    el("siteAliasHostWrap").hidden = !on;
+    el("siteAliasHostHelp").hidden = !on;
+    el("siteAliasHost").required = on;
+  }
   function wireSite() {
     if (siteWired) return;
     siteWired = true;
     var form = el("siteAliasForm");
+    el("siteAliasTo").addEventListener("change", siteSyncHost);
     if (form) form.addEventListener("submit", function (e) {
       e.preventDefault();
       siteStatus("");
+      var toSubdomain = el("siteAliasTo").value === SITE_SUBDOMAIN;
       authFetch("/api/admin/site-aliases", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ from: el("siteAliasFrom").value.trim(), to: el("siteAliasTo").value }),
+        body: JSON.stringify({
+          from: el("siteAliasFrom").value.trim(),
+          to: toSubdomain ? el("siteAliasHost").value.trim() : el("siteAliasTo").value,
+        }),
       })
         .then(function (res) {
           return res.json().then(function (b) { return { ok: res.ok, body: b }; });
@@ -3615,6 +3636,7 @@
         .then(function (r) {
           if (!r.ok) { siteStatus(r.body.error || "Could not add that address.", "err"); return; }
           el("siteAliasFrom").value = "";
+          el("siteAliasHost").value = "";
           siteStatus("Spare address added. It works right away.", "ok");
           loadSite();
         })
@@ -3745,11 +3767,15 @@
       .then(okJson)
       .then(function (d) {
         var sel = el("siteAliasTo");
+        var keep = sel.value;
         sel.innerHTML = (d.pages || [])
           .map(function (p) {
             return '<option value="' + H.escapeHtml(p.path) + '">' + H.escapeHtml(p.title) + " (" + H.escapeHtml(p.path) + ")</option>";
           })
-          .join("");
+          .join("") + '<option value="' + SITE_SUBDOMAIN + '">An NBCC subdomain…</option>';
+        // A reload after adding or removing redraws the list: keep the choice the person had made.
+        if (keep === SITE_SUBDOMAIN) sel.value = keep;
+        siteSyncHost();
         renderSiteAll(d.pages || [], d.privatePages || []);
         renderSiteAliases(d.aliases || [], canWrite);
         renderSiteSeo(d.pages || [], canWrite);

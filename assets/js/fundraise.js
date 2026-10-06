@@ -1417,7 +1417,9 @@
       if (thanks) {
         thanks.hidden = false;
         try {
-          thanks.focus();
+          // The focus goes to the card without moving the page; the scroll then puts the card's top
+          // just under the fixed menu bar (its scroll-margin-top, fundraising.css).
+          thanks.focus({ preventScroll: true });
           if (thanks.scrollIntoView) thanks.scrollIntoView({ block: "start" });
         } catch (e) {
           /* focus unavailable */

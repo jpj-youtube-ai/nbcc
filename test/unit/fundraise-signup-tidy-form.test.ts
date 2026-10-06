@@ -248,7 +248,7 @@ describe("Next and Back", () => {
   it("says each new step for screen readers, and moves the focus to it", () => {
     tick("pathRaising");
     next();
-    expect($("[data-step-news]").textContent).toBe("Step 1 of 5, Your fundraiser: Are you 18 or over?");
+    expect($("[data-step-news]").textContent).toBe("Step 1 of 5, Your fundraiser, question 2 of 10: Are you 18 or over?");
     expect(document.activeElement).toBe(current());
   });
 

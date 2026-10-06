@@ -10329,6 +10329,30 @@ setting up a page in memory of someone. It replaces the "one question after anot
 (stages, not questions, because the questions branch). The stage they are on is marked
 `aria-current="step"` and says "Step 2 of 5: Your fundraiser" in words, never by colour alone; the
 ones done are ticked; near the end the words lift ("Nearly there!" on stage 4, "Last step!" on 5).
+
+**The bar moves with every question (Jaimie, 2026-10-06).** The five stages and their names stay, and
+inside a stage the bar now moves too, so a long stage no longer looks stuck. The line from the stage
+they are in to the next one (`.fr-progress__fill`, holly green, `aria-hidden`) fills by the share of
+that stage's questions already answered: `fundraise-steps.js` sets `--fill` (0 to 1) on it and the
+CSS scales it, gliding only under `prefers-reduced-motion: no-preference`. The dots are kept from one
+question to the next (rebuilt only when the stage names change), so the glide has something to glide
+from. The words add where they are in the stage: "Step 1 of 5: Your fundraiser, question 3 of 10",
+and with a lift "..., question 2 of 3. Nearly there!". A stage with one question says nothing more
+than it always did ("Step 5 of 5: Check and send Last step!"). On a phone (560px and under) the
+place sits on a short line of its own under the stage ("Question 3 of 10"), so nothing wraps badly.
+The questions counted are the steps **in play now** in that stage, the same list Next walks, so the
+total can grow when an answer brings a question in (a sporting fundraiser adds the T-shirt size: 4 of
+10 becomes 4 of 11). The step showing is always in that list, so the number is never more than the
+total. The bar never goes back on Next or when an answer changes: if the sums would drop it, it is
+held where it was until Next passes that point. Only Back (or a jump back to a problem on Send) moves
+it back. The live region says the place once per step ("Step 1 of 5, Your fundraiser, question 2 of
+10: Are you 18 or over?"), never while typing. Proven by `test/unit/fundraise-signup-progress.test.ts`.
+
+**The thank you lands under the menu bar.** After Send the form is replaced in place by the
+`.fr-thanks` card and scrolled to. The card now has `scroll-margin-top: calc(var(--nav-h) + 1rem)`,
+the same offset the page's other jumps use, and takes the focus with `preventScroll`, so its label
+and heading are in view below the fixed menu bar on a phone and on a desktop.
+
 Nothing goes red while someone types. On Next, anything missing or wrong on that step gets its own
 short warm prompt ("Almost! Just add your first name.", from `data-invalid-message`, through
 `main.js`'s shared highlighting) and the focus moves to it. Back keeps every answer. Each new step is

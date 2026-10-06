@@ -8,6 +8,9 @@
 //     one they are on is marked aria-current="step", and its words say "Step 2 of 5" in text, never
 //     by colour alone. Near the end the words lift ("Nearly there!", "Last step!") where the form
 //     says so.
+//   - Inside a stage the bar moves with every question: the line to the next stage fills by the
+//     questions answered, and the words add "question 3 of 11" (nothing for a stage of one). The
+//     total is the questions in play now, so it can grow; the bar never goes back on Next.
 //   - Next checks only the step showing: nothing goes red while they type, and on Next anything
 //     missing gets its own short, warm prompt (the form's data-invalid-message words, through
 //     main.js's shared highlighting) with the focus moved to it. Back keeps every answer.
@@ -64,42 +67,118 @@
       return opts.stages ? opts.stages() : [];
     }
 
-    function renderProgress() {
-      if (!progress || !current) return;
-      var list = names();
-      var at = stageOf(current);
-      var count = list.length;
-      var stepWords = progress.querySelector("[data-progress-step]");
-      var liftWords = progress.querySelector("[data-progress-lift]");
-      var ol = progress.querySelector("[data-progress-list]");
-      if (stepWords) stepWords.textContent = "Step " + at + " of " + count + ": " + (list[at - 1] || "");
-      var lift = opts.lift ? opts.lift(at, count) || "" : "";
-      if (liftWords) {
-        liftWords.textContent = lift ? " " + lift : "";
-        liftWords.hidden = !lift;
-      }
-      if (!ol) return;
-      ol.style.setProperty("--stages", String(count));
+    /**
+     * Where they are inside the stage: question 3 of 11. The questions counted are the ones in play
+     * now (the same rule Next uses), so the total can grow as answers bring a question in; the one
+     * showing is always among them, so the number they are on is never more than the total.
+     */
+    function placeOf(step) {
+      var at = stageOf(step);
+      var same = inPlay().filter(function (s) {
+        return stageOf(s) === at;
+      });
+      var i = same.indexOf(step);
+      return { at: i < 0 ? 1 : i + 1, of: Math.max(same.length, 1) };
+    }
+
+    function placeWords(place) {
+      return place.of > 1 ? "question " + place.at + " of " + place.of : "";
+    }
+
+    // How far the bar has got, in stages: 1.25 is a quarter of the way through the second. It only
+    // goes down on Back (or a jump back to a problem), never because an answer added a question.
+    var shown = 0;
+    var listKey = null;
+
+    function buildList(ol, list) {
       while (ol.firstChild) ol.removeChild(ol.firstChild);
       list.forEach(function (name, i) {
-        var n = i + 1;
         var li = doc.createElement("li");
-        li.className = "fr-progress__stage" + (n < at ? " is-done" : n === at ? " is-current" : "");
-        if (n === at) li.setAttribute("aria-current", "step");
+        if (i > 0) {
+          // The line from the stage before, filling as its questions are answered. For the eye only:
+          // the words above and the list itself say it for a screen reader.
+          var fill = doc.createElement("span");
+          fill.className = "fr-progress__fill";
+          fill.setAttribute("aria-hidden", "true");
+          li.appendChild(fill);
+        }
         var dot = doc.createElement("span");
         dot.className = "fr-progress__dot";
         dot.setAttribute("aria-hidden", "true");
-        dot.textContent = n < at ? "✓" : String(n);
         var label = doc.createElement("span");
         label.className = "fr-progress__label";
         label.textContent = name;
         var state = doc.createElement("span");
         state.className = "sr-only";
-        state.textContent = n < at ? ", done" : n === at ? ", you are here" : "";
         li.appendChild(dot);
         li.appendChild(label);
         li.appendChild(state);
         ol.appendChild(li);
+      });
+    }
+
+    function renderProgress(canDrop) {
+      if (!progress || !current) return;
+      var list = names();
+      var at = stageOf(current);
+      var count = list.length;
+      var place = placeOf(current);
+      var words = placeWords(place);
+      var stepWords = progress.querySelector("[data-progress-step]");
+      var placeSlot = progress.querySelector("[data-progress-place]");
+      var liftWords = progress.querySelector("[data-progress-lift]");
+      var more = progress.querySelector("[data-progress-more]");
+      var ol = progress.querySelector("[data-progress-list]");
+      if (stepWords) {
+        // "Step 1 of 5: Your fundraiser", the name in a span of its own.
+        stepWords.textContent = "Step " + at + " of " + count;
+        var stageName = doc.createElement("span");
+        stageName.className = "fr-progress__name";
+        stageName.textContent = ": " + (list[at - 1] || "");
+        stepWords.appendChild(stageName);
+      }
+      var lift = opts.lift ? opts.lift(at, count) || "" : "";
+      if (placeSlot) {
+        // ", question 3 of 11", and a full stop before the lift so the line reads as a sentence. A
+        // stage with one question says nothing here.
+        placeSlot.textContent = "";
+        if (words) {
+          var sep = doc.createElement("span");
+          sep.className = "fr-progress__sep";
+          sep.textContent = ", ";
+          placeSlot.appendChild(sep);
+          placeSlot.appendChild(doc.createTextNode(words + (lift ? "." : "")));
+        }
+        placeSlot.hidden = !words;
+      }
+      if (more) more.classList.toggle("has-place", !!words);
+      if (liftWords) {
+        liftWords.textContent = lift ? " " + lift : "";
+        liftWords.hidden = !lift;
+      }
+      // The bar: every stage before this one, and the share of this one's questions already answered.
+      var p = at - 1 + (place.at - 1) / place.of;
+      if (!canDrop && shown > p && shown < at) p = shown;
+      shown = p;
+      if (!ol) return;
+      ol.style.setProperty("--stages", String(count));
+      var key = list.join("|");
+      if (key !== listKey || ol.children.length !== count) {
+        buildList(ol, list);
+        listKey = key;
+      }
+      list.forEach(function (name, i) {
+        var n = i + 1;
+        var li = ol.children[i];
+        li.className = "fr-progress__stage" + (n < at ? " is-done" : n === at ? " is-current" : "");
+        if (n === at) li.setAttribute("aria-current", "step");
+        else li.removeAttribute("aria-current");
+        var fill = li.querySelector(".fr-progress__fill");
+        // The line into stage n covers the stage before it: full once that is done, part way while
+        // they are in it, empty before.
+        if (fill) fill.style.setProperty("--fill", String(Math.max(0, Math.min(1, p - (n - 2)))));
+        li.querySelector(".fr-progress__dot").textContent = n < at ? "✓" : String(n);
+        li.querySelector(".sr-only").textContent = n < at ? ", done" : n === at ? ", you are here" : "";
       });
     }
 
@@ -129,12 +208,13 @@
         step.classList.add("is-arriving");
       }
       if (opts.onShow) opts.onShow(step);
-      renderProgress();
+      renderProgress(!!o.back);
       renderNav();
       if (o.announce && news) {
         var list = names();
         var at = stageOf(step);
-        news.textContent = "Step " + at + " of " + list.length + ", " + (list[at - 1] || "") + ": " + titleOf(step);
+        var where = placeWords(placeOf(step));
+        news.textContent = "Step " + at + " of " + list.length + ", " + (list[at - 1] || "") + (where ? ", " + where : "") + ": " + titleOf(step);
       }
       if (o.focus) {
         if (!step.hasAttribute("tabindex")) step.setAttribute("tabindex", "-1");
@@ -171,7 +251,7 @@
       var i = list.indexOf(current);
       if (i <= 0) return false;
       if (opts.clear) opts.clear(current);
-      show(list[i - 1], { focus: true, announce: true, animate: true });
+      show(list[i - 1], { focus: true, announce: true, animate: true, back: true });
       return true;
     }
 
@@ -188,7 +268,9 @@
         var after = list.filter(function (s) {
           return all.indexOf(s) > from;
         })[0];
-        show(after || list[list.length - 1]);
+        // Nothing after it: falling back to an earlier step is a move back, so the fill follows.
+        if (after) show(after);
+        else show(list[list.length - 1], { back: true });
         return;
       }
       renderProgress();
@@ -198,7 +280,7 @@
     /** Go straight to a step (a problem found on Send, or a server message), without checking. */
     function goTo(step) {
       if (!step || step.hidden) return;
-      show(step, { announce: true });
+      show(step, { announce: true, back: true });
     }
 
     function stepOf(control) {

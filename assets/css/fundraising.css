@@ -192,6 +192,11 @@ fieldset.is-invalid .fr-option { border-color: var(--crimson); }
 .fr-captcha { margin: 24px 0 0; max-width: 100%; }
 
 /* ---------- thank you ---------- */
+/* Shown in place of the form after Send, and scrolled to: its top, label and heading and all, lands
+   under the fixed menu bar, never behind it (as the page's other jumps do). */
+.fr-thanks { scroll-margin-top: calc(var(--nav-h) + 1rem); }
+/* With the supporter ticker showing there is a second fixed band under the menu bar. */
+body.has-ticker .fr-thanks { scroll-margin-top: calc(var(--nav-h) + var(--ticker-h) + 1rem); }
 .fr-thanks:focus { outline: none; }
 .fr-thanks:focus-visible { outline: 3px solid var(--holly); outline-offset: 4px; }
 .fr-thanks .rule { margin-inline: 0; }
@@ -936,8 +941,23 @@ fieldset.is-invalid .fr-option { border-color: var(--crimson); }
   border-radius: var(--radius-pill);
   background: var(--line);
 }
-.fr-progress__stage.is-done + .fr-progress__stage::before,
-.fr-progress__stage.is-current::before { background: var(--holly); }
+/* The same line in holly green, as far as they have got: full for a stage done, and part way for
+   the stage they are in, a little more with every question (fundraise-steps.js sets --fill, 0 to 1). */
+.fr-progress__fill {
+  position: absolute;
+  top: 15px;
+  right: calc(50% + 18px);
+  left: calc(-50% + 18px);
+  height: 3px;
+  border-radius: var(--radius-pill);
+  background: var(--holly);
+  transform: scaleX(var(--fill, 0));
+  transform-origin: left center;
+}
+/* The fill glides to its new place, only for those who have not asked for less motion. */
+@media (prefers-reduced-motion: no-preference) {
+  .fr-progress__fill { transition: transform 0.35s cubic-bezier(0.25, 1, 0.5, 1); }
+}
 .fr-progress__dot {
   position: relative;
   z-index: 1;
@@ -964,6 +984,13 @@ fieldset.is-invalid .fr-option { border-color: var(--crimson); }
 @media (max-width: 560px) {
   .fr-progress { padding: 14px 12px 14px; }
   .fr-progress__label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; }
+  /* The question they are on, and the lift, go on a short line of their own under the stage, so
+     nothing wraps badly: "Step 1 of 5: Your fundraiser", then "Question 3 of 11". */
+  .fr-progress__now { margin-bottom: 12px; }
+  .fr-progress__more { display: block; margin-top: 2px; }
+  .fr-progress__more.has-place { font-size: 0.92rem; color: var(--slate); }
+  .fr-progress__more.has-place::first-letter { text-transform: uppercase; }
+  .fr-progress__sep { display: none; }
 }
 
 /* Back and Next, under the step showing. Back says where it goes, with its arrow first. */

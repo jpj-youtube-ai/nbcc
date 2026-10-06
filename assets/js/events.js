@@ -26,10 +26,12 @@
       document.addEventListener("DOMContentLoaded", function () {
         api.initDeck(document, window);
         api.initChips(document, window);
+        api.initFilm(document, window);
       });
     } else {
       api.initDeck(document, window);
       api.initChips(document, window);
+      api.initFilm(document, window);
     }
   }
 })(typeof self !== "undefined" ? self : this, function () {
@@ -197,5 +199,238 @@
     return { show: show, win: win };
   }
 
-  return { initDeck: initDeck, setFace: setFace, initChips: initChips };
+  /* The one minute film (src/fundraising/film.ts has the markup and what NBCC decided).
+   *
+   * Whether this is a first visit or a later one was settled in the head, before the page was
+   * drawn, as a class on <html>. This reads that class once and never changes it, so the film
+   * cannot fold away part way through a visit when the "seen" note is written.
+   *
+   *   film-first  Full size. Plays by itself with the sound off once it is on screen, pauses when
+   *               scrolled well away or the tab is hidden, and wears a "Play with sound" button
+   *               that starts it again from the beginning with sound and the browser's controls,
+   *               and a quieter "Pause" button beside it (a click on the film does the same). A
+   *               pause the visitor asked for sticks: scrolling back does not start it again.
+   *               The note is written when it is really playing, or when play is pressed. For anyone who has asked their
+   *               device for less motion or to save data, or who is on a slow connection (or
+   *               whose browser refuses to play), it
+   *               shows the still and a "Play the film" button instead, and that counts as seen.
+   *   film-later  A slim strip. Pressing it opens the film in place, with sound; "Close the film"
+   *               folds it away again. Nothing of the film is fetched until then.
+   *   neither     The plain player the markup is without this script. Left alone.
+   */
+  var FILM_SEEN_KEY = "nbcc-film-seen";
+
+  function initFilm(doc, win) {
+    var root = doc.querySelector("[data-film]");
+    var video = root && root.querySelector("[data-film-video]");
+    if (!root || !video) return null;
+    var sound = root.querySelector("[data-film-sound]");
+    var soundWords = root.querySelector("[data-film-sound-words]");
+    var actions = root.querySelector("[data-film-actions]");
+    var pauseButton = root.querySelector("[data-film-pause]");
+    var pauseWords = root.querySelector("[data-film-pause-words]");
+    var strip = root.querySelector("[data-film-open]");
+    var close = root.querySelector("[data-film-close]");
+    var player = root.querySelector("[data-film-player]");
+    var html = doc.documentElement;
+    var mode = html.classList.contains("film-first") ? "first" : html.classList.contains("film-later") ? "later" : "";
+    if (!mode || !sound) return { mode: mode };
+
+    var reduced = typeof win.matchMedia === "function" && win.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    var connection = win.navigator && win.navigator.connection;
+    // Data saving, or a connection the browser itself calls slow: 13 MB is not ours to spend.
+    var saveData = !!(connection && (connection.saveData || /^(slow-2g|2g|3g)$/.test(connection.effectiveType || "")));
+    // "auto": playing by itself, sound off. "still": the picture and a play button. "sound": the
+    // visitor pressed play, and from then on the film is theirs to run with the controls.
+    var state = "";
+    var inView = false;
+    var finished = false;
+    var userPaused = false;
+    var marked = false;
+    var observer = null;
+
+    function markSeen() {
+      if (marked) return;
+      marked = true;
+      try {
+        win.localStorage.setItem(FILM_SEEN_KEY, "1");
+      } catch (e) {
+        /* storage switched off: nothing to remember, and nothing to tell the visitor */
+      }
+    }
+
+    function showStill() {
+      // The frame already wears the still as its background; this is for the browsers that paint a
+      // video with nothing loaded as a black box.
+      var poster = video.getAttribute("data-poster");
+      if (poster && !video.getAttribute("poster")) video.setAttribute("poster", poster);
+    }
+
+    function tryPlay() {
+      var started;
+      try {
+        started = video.play();
+      } catch (e) {
+        return null;
+      }
+      return started && typeof started.then === "function" ? started : null;
+    }
+
+    function still() {
+      state = "still";
+      if (observer) observer.disconnect();
+      video.controls = false;
+      if (soundWords) soundWords.textContent = "Play the film";
+      if (actions) actions.classList.add("gi-film__actions--centre");
+      if (pauseButton) pauseButton.hidden = true;
+      sound.hidden = false;
+      markSeen();
+    }
+
+    function withSound() {
+      state = "sound";
+      if (observer) observer.disconnect();
+      // Pressing play is seeing it, even if the first frame has not arrived yet.
+      markSeen();
+      sound.hidden = true;
+      if (pauseButton) pauseButton.hidden = true;
+      video.muted = false;
+      video.controls = true;
+      try {
+        video.currentTime = 0;
+      } catch (e) {
+        /* nothing loaded yet: it starts from the beginning anyway */
+      }
+      var started = tryPlay();
+      if (started) started.catch(function () {});
+      // The button that was pressed has just gone, so focus goes to the player it started.
+      video.focus({ preventScroll: true });
+      // Not every browser lets a video take focus; the button after it is the next best place.
+      if (doc.activeElement !== video && close && root.classList.contains("is-open")) {
+        close.focus({ preventScroll: true });
+      }
+    }
+
+    function auto() {
+      state = "auto";
+      video.muted = true;
+      video.controls = false;
+      sound.hidden = false;
+      video.addEventListener("playing", function () {
+        if (state === "auto") markSeen();
+      });
+      video.addEventListener("ended", function () {
+        finished = true;
+        if (pauseButton) pauseButton.hidden = true;
+      });
+      function start() {
+        var started = tryPlay();
+        if (started) {
+          started.catch(function (err) {
+            // AbortError is our own pause() cutting a play() short (scrolled past, tab hidden,
+            // Pause pressed) before it had begun. That is not the browser refusing: the film stays
+            // ready to start when they come back, and nothing is noted as seen.
+            if (err && err.name === "AbortError") return;
+            if (state === "auto") still();
+          });
+        }
+      }
+      function resume() {
+        if (state !== "auto" || finished || userPaused || !inView || doc.visibilityState === "hidden") return;
+        start();
+      }
+      // Anything that moves by itself for more than a few seconds needs a way to stop it.
+      function togglePause() {
+        if (state !== "auto" || finished) return;
+        userPaused = !userPaused;
+        if (pauseButton) pauseButton.classList.toggle("is-paused", userPaused);
+        if (pauseWords) pauseWords.textContent = userPaused ? "Play" : "Pause";
+        if (userPaused) video.pause();
+        else start();
+      }
+      if (pauseButton) {
+        pauseButton.hidden = false;
+        pauseButton.addEventListener("click", togglePause);
+      }
+      video.addEventListener("click", togglePause);
+      observer = new win.IntersectionObserver(
+        function (entries) {
+          if (state !== "auto") return;
+          entries.forEach(function (entry) {
+            var ratio = entry.intersectionRatio;
+            if (ratio >= 0.5 && !inView) {
+              inView = true;
+              resume();
+            } else if (ratio < 0.25 && inView) {
+              inView = false;
+              video.pause();
+            }
+          });
+        },
+        { threshold: [0, 0.25, 0.5, 0.75] },
+      );
+      observer.observe(video);
+      doc.addEventListener("visibilitychange", function () {
+        if (state !== "auto" || !inView) return;
+        if (doc.visibilityState === "hidden") video.pause();
+        else resume();
+      });
+    }
+
+    sound.addEventListener("click", withSound);
+
+    if (mode === "first") {
+      showStill();
+      if (reduced || saveData || !win.IntersectionObserver) still();
+      else auto();
+    } else {
+      if (strip) {
+        strip.addEventListener("click", function () {
+          showStill();
+          root.classList.add("is-open");
+          // Bring the whole film into view (events.css keeps it clear of the fixed menu bar).
+          if (player && typeof player.scrollIntoView === "function") {
+            player.scrollIntoView({ block: "nearest", behavior: reduced ? "auto" : "smooth" });
+          }
+          // Unfold from nothing, unless the visitor has asked for less motion.
+          if (!reduced && player && typeof player.animate === "function") {
+            var height = player.getBoundingClientRect().height;
+            if (height > 0) {
+              player.classList.add("is-opening");
+              var unfold = player.animate(
+                [
+                  { height: "0px", opacity: 0 },
+                  { height: height + "px", opacity: 1 },
+                ],
+                { duration: 380, easing: "cubic-bezier(0.25, 1, 0.5, 1)" },
+              );
+              var done = function () {
+                player.classList.remove("is-opening");
+              };
+              unfold.onfinish = done;
+              unfold.oncancel = done;
+            }
+          }
+          withSound();
+        });
+      }
+      if (close) {
+        close.addEventListener("click", function () {
+          video.pause();
+          state = "";
+          root.classList.remove("is-open");
+          if (strip) strip.focus({ preventScroll: true });
+        });
+      }
+    }
+
+    return {
+      mode: mode,
+      state: function () {
+        return state;
+      },
+    };
+  }
+
+  return { initDeck: initDeck, setFace: setFace, initChips: initChips, initFilm: initFilm, FILM_SEEN_KEY: FILM_SEEN_KEY };
 });

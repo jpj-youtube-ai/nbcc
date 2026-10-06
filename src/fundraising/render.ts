@@ -20,6 +20,7 @@ import { NONE as NO_IMPACT, impactParts, type ImpactParts } from "./impact-rende
 import type { ImpactExample } from "../impact/examples";
 import { avatarHtml, isProfilePhotoSrc } from "./pictures";
 import { NBCC_FACT_HTML, nbccCardBooking } from "../tickets/render";
+import { FILM_HEAD, FILM_HEAD_MARKER, FILM_MARKER, FILM_SECTION } from "./film";
 
 // TASK-494: the public fundraising pages, drawn on the server.
 //
@@ -378,6 +379,9 @@ export function renderGetInvolvedPage(template: string, input: GetInvolvedInput)
     .replace(HINT_ALL, () => (on ? HINT_EVENTS : HINT_ALL))
     .replace(CHIPS_MARKER, () => (on ? CHIPS : ""))
     .replace(PANEL_MARKER, () => (on ? PANEL : ""))
+    // The one minute film (src/fundraising/film.ts): it is about fundraising, so it goes with the switch.
+    .replace(FILM_HEAD_MARKER, () => (on ? FILM_HEAD : ""))
+    .replace(FILM_MARKER, () => (on ? FILM_SECTION : ""))
     .replace(DECK_MARKER, () => deck);
 }
 

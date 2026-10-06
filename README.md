@@ -12755,7 +12755,11 @@ screen, in jsdom), and end to end in `features/email-audit.feature`.
   or remove these. The arriving query is carried across as before. The site does not check that the
   subdomain exists; making one is a DNS job. `/drop` to `https://drop.nbcc.scot` is seeded by
   migration `1791200000290` (only if no /drop exists), and shows in the list with a "Subdomain"
-  pill.
+  pill. When its own box is narrow the list is labelled cards (`.sa-table`, a container query, the
+  shape Donations uses): in four squeezed columns a subdomain address and its pill broke in half.
+  The screen's status line now takes `.ty-status`'s own `is-ok` / `is-error`. It used bare `ok` /
+  `err`, and the public stylesheet hides `.err`, so from 1 September until this change no refusal
+  on this screen ("That address is already in use") had ever been shown.
 - **`/sitemap`.** A branded, server-rendered tree of every public page (the `/supporters`
   pattern over `sitemap.html`), deliberately unlisted: nothing links to it, and it carries
   noindex in both the file and an `X-Robots-Tag` header. Ball pages appear only while the gate

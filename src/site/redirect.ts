@@ -24,3 +24,18 @@ export function keepQuery(target: string, originalUrl: string): string {
 export function forwardStatus(target: string): 301 | 302 {
   return target.startsWith("https://") ? 302 : 301;
 }
+
+/**
+ * TASK-568: would this forward send the visitor back to the very host they asked? Only
+ * www.nbcc.scot is refused by name when a forward is made, and subdomains are made outside this
+ * repository: if one were ever pointed at this same site, a forward to it would ask for itself for
+ * ever. Checked when forwarding, whatever the name, so that case is a "page not found" instead.
+ */
+export function forwardsToItself(target: string, host: string | undefined): boolean {
+  if (!host || !target.startsWith("https://")) return false;
+  try {
+    return new URL(target).hostname === host.toLowerCase();
+  } catch {
+    return false;
+  }
+}

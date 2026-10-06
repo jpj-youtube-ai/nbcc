@@ -230,7 +230,7 @@ export function aliasFromProblem(from: string): string | null {
 // in a circle, and the page list is the way to point at a page here.
 const FORWARD_HOST = /^(?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)+nbcc\.scot$/;
 const FORWARD_PATH = /^(?:\/[A-Za-z0-9._~-]+)*\/?$/;
-const OWN_HOSTS = ["www.nbcc.scot"];
+const LOOP_HOSTS = ["www.nbcc.scot"];
 export const FORWARD_HELP =
   "Type an NBCC subdomain, like drop.nbcc.scot or drop.nbcc.scot/collect. It must end in .nbcc.scot.";
 
@@ -247,6 +247,10 @@ export function forwardTarget(typed: string): string | null {
     if (raw.includes("://") || raw.startsWith("/")) return null;
     address = `https://${raw}`;
   }
+  // What is stored is what was typed: after the scheme, only plain letters, numbers and . / _ ~ -.
+  // That refuses every port and user name outright (the parser quietly drops a default port and an
+  // empty user name), and anything the parser would rewrite: %-codes, accents, lookalike letters.
+  if (!/^[A-Za-z0-9._~/-]+$/.test(address.replace(/^https?:\/\//i, ""))) return null;
   let url: URL;
   try {
     url = new URL(address);
@@ -255,7 +259,7 @@ export function forwardTarget(typed: string): string | null {
   }
   if (url.username || url.password || url.port || url.search || url.hash) return null;
   const host = url.hostname.toLowerCase();
-  if (!FORWARD_HOST.test(host) || OWN_HOSTS.includes(host)) return null;
+  if (!FORWARD_HOST.test(host) || LOOP_HOSTS.includes(host)) return null;
   if (!FORWARD_PATH.test(url.pathname)) return null;
   return `https://${host}${url.pathname.replace(/\/$/, "")}`;
 }

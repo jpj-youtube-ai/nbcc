@@ -1,7 +1,7 @@
 import express, { Router } from "express";
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import { forwardStatus, keepQuery } from "../site/redirect";
+import { forwardStatus, forwardsToItself, keepQuery } from "../site/redirect";
 import { addFundraisePageRoutes } from "./fundraise-pages";
 import { addTeamPageRoutes } from "./team-pages";
 import { addPledgePageRoutes } from "./pledges";
@@ -422,7 +422,10 @@ export function createSiteRouter(siteRoot: string): Router {
       // TASK-492: with the query it arrived with, so a QR code made for a spare address still
       // counts its scans as QR code rather than Direct.
       // TASK-568: a subdomain staff chose is a temporary forward; our own pages stay permanent.
-      if (target) return res.redirect(forwardStatus(target), keepQuery(target, req.originalUrl));
+      // A forward that points back at the host being asked would loop: that one is a 404.
+      if (target && !forwardsToItself(target, req.hostname)) {
+        return res.redirect(forwardStatus(target), keepQuery(target, req.originalUrl));
+      }
     } catch (err) {
       console.error("alias lookup failed:", err instanceof Error ? err.message : err);
     }

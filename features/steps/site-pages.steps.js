@@ -12,7 +12,7 @@ const BASE_URL = process.env.BASE_URL || "http://localhost:3000";
 // before each scenario. The seeded day-one aliases are left alone — they are what the
 // spare-address scenario asserts.
 Before({ tags: "@site-pages" }, async function () {
-  await pool.query("DELETE FROM site_aliases WHERE from_path IN ('/festive', '/blocked')");
+  await pool.query("DELETE FROM site_aliases WHERE from_path IN ('/festive', '/blocked', '/parcels')");
   await pool.query("DELETE FROM site_page_seo WHERE page_path = '/about-us'");
   await pool.query("DELETE FROM users WHERE email LIKE 'site.%.bdd@example.com'");
 });

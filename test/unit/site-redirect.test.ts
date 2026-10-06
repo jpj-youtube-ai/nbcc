@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { keepQuery, forwardStatus } from "../../src/site/redirect";
+import { keepQuery, forwardStatus, forwardsToItself } from "../../src/site/redirect";
 
 // TASK-492: a spare address (or an old address) sends its visitor on to the page with the query
 // string it arrived with, so the tags that say where a visit came from survive the hop: a QR
@@ -38,5 +38,23 @@ describe("forwardStatus", () => {
     expect(keepQuery("https://drop.nbcc.scot/collect", "/drop?utm_medium=qr")).toBe(
       "https://drop.nbcc.scot/collect?utm_medium=qr",
     );
+  });
+});
+
+// Found in review: only www.nbcc.scot is refused by name when a forward is made, and subdomains are
+// made outside this repository. If one were ever pointed at this same site, a forward to it would ask
+// for itself for ever. Checked at the moment of forwarding, whatever the name: the host being asked
+// is never forwarded to.
+describe("forwardsToItself", () => {
+  it("is true when a subdomain forward points at the host that was asked", () => {
+    expect(forwardsToItself("https://drop.nbcc.scot/drop", "drop.nbcc.scot")).toBe(true);
+    expect(forwardsToItself("https://drop.nbcc.scot", "DROP.nbcc.scot")).toBe(true);
+  });
+
+  it("is false for another host, for one of our own pages, and with no host at all", () => {
+    expect(forwardsToItself("https://drop.nbcc.scot", "nbcc.scot")).toBe(false);
+    expect(forwardsToItself("/donate", "nbcc.scot")).toBe(false);
+    expect(forwardsToItself("https://drop.nbcc.scot", undefined)).toBe(false);
+    expect(forwardsToItself("https://not a url", "nbcc.scot")).toBe(false);
   });
 });

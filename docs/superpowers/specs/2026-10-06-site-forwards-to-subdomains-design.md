@@ -53,7 +53,7 @@ It was checked first that a path can forward to a subdomain: a forward is an HTT
 
 - `test/unit/site-pages.test.ts`: what `forwardTarget` accepts, normalises and refuses (lookalikes,
   www, ports, credentials, queries), and `aliasToProblem` for both kinds.
-- `test/unit/admin-app.test.ts`: choosing the subdomain option shows the box and posts what was typed.
+- `test/unit/admin-site-forward-ui.test.ts`: choosing the subdomain option shows the box and posts what was typed.
 - A migration test for the /drop row.
 - `features/site-pages.feature`: an admin adds a subdomain forward and it answers 302 with the query
   kept; a lookalike is refused.

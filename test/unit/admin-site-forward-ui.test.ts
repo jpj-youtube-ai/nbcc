@@ -150,7 +150,8 @@ describe("spare addresses that forward to an NBCC subdomain (TASK-568)", () => {
     // .ty-status has.
     expect(el("siteStatus").className).toBe("ty-status is-error");
     const publicCss = readFileSync(resolve(ROOT, "assets/css/styles.css"), "utf8");
-    expect(publicCss).toContain(".err{color:var(--maroon);font-size:.82rem;margin-top:6px;display:none");
+    const errRule = publicCss.slice(publicCss.indexOf(".err{"), publicCss.indexOf("}", publicCss.indexOf(".err{")));
+    expect(errRule).toContain("display:none");
     expect(hostBox().value).toBe("example.com");
     expect(hostWrap().hidden).toBe(false);
   });

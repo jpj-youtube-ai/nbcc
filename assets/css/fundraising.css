@@ -195,6 +195,8 @@ fieldset.is-invalid .fr-option { border-color: var(--crimson); }
 /* Shown in place of the form after Send, and scrolled to: its top, label and heading and all, lands
    under the fixed menu bar, never behind it (as the page's other jumps do). */
 .fr-thanks { scroll-margin-top: calc(var(--nav-h) + 1rem); }
+/* With the supporter ticker showing there is a second fixed band under the menu bar. */
+body.has-ticker .fr-thanks { scroll-margin-top: calc(var(--nav-h) + var(--ticker-h) + 1rem); }
 .fr-thanks:focus { outline: none; }
 .fr-thanks:focus-visible { outline: 3px solid var(--holly); outline-offset: 4px; }
 .fr-thanks .rule { margin-inline: 0; }

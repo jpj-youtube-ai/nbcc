@@ -268,7 +268,9 @@
         var after = list.filter(function (s) {
           return all.indexOf(s) > from;
         })[0];
-        show(after || list[list.length - 1]);
+        // Nothing after it: falling back to an earlier step is a move back, so the fill follows.
+        if (after) show(after);
+        else show(list[list.length - 1], { back: true });
         return;
       }
       renderProgress();

@@ -26,10 +26,12 @@
       document.addEventListener("DOMContentLoaded", function () {
         api.initDeck(document, window);
         api.initChips(document, window);
+        api.initFilm(document, window);
       });
     } else {
       api.initDeck(document, window);
       api.initChips(document, window);
+      api.initFilm(document, window);
     }
   }
 })(typeof self !== "undefined" ? self : this, function () {
@@ -197,5 +199,200 @@
     return { show: show, win: win };
   }
 
-  return { initDeck: initDeck, setFace: setFace, initChips: initChips };
+  /* The one minute film (src/fundraising/film.ts has the markup and what NBCC decided).
+   *
+   * Whether this is a first visit or a later one was settled in the head, before the page was
+   * drawn, as a class on <html>. This reads that class once and never changes it, so the film
+   * cannot fold away part way through a visit when the "seen" note is written.
+   *
+   *   film-first  Full size. Plays by itself with the sound off once it is on screen, pauses when
+   *               scrolled well away or the tab is hidden, and wears a "Play with sound" button
+   *               that starts it again from the beginning with sound and the browser's controls.
+   *               The note is written when it is really playing. For anyone who has asked their
+   *               device for less motion or to save data (or whose browser refuses to play), it
+   *               shows the still and a "Play the film" button instead, and that counts as seen.
+   *   film-later  A slim strip. Pressing it opens the film in place, with sound; "Close the film"
+   *               folds it away again. Nothing of the film is fetched until then.
+   *   neither     The plain player the markup is without this script. Left alone.
+   */
+  var FILM_SEEN_KEY = "nbcc-film-seen";
+
+  function initFilm(doc, win) {
+    var root = doc.querySelector("[data-film]");
+    var video = root && root.querySelector("[data-film-video]");
+    if (!root || !video) return null;
+    var sound = root.querySelector("[data-film-sound]");
+    var soundWords = root.querySelector("[data-film-sound-words]");
+    var strip = root.querySelector("[data-film-open]");
+    var close = root.querySelector("[data-film-close]");
+    var player = root.querySelector("[data-film-player]");
+    var html = doc.documentElement;
+    var mode = html.classList.contains("film-first") ? "first" : html.classList.contains("film-later") ? "later" : "";
+    if (!mode || !sound) return { mode: mode };
+
+    var reduced = typeof win.matchMedia === "function" && win.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    var connection = win.navigator && win.navigator.connection;
+    var saveData = !!(connection && connection.saveData);
+    // "auto": playing by itself, sound off. "still": the picture and a play button. "sound": the
+    // visitor pressed play, and from then on the film is theirs to run with the controls.
+    var state = "";
+    var inView = false;
+    var finished = false;
+    var marked = false;
+    var observer = null;
+
+    function markSeen() {
+      if (marked) return;
+      marked = true;
+      try {
+        win.localStorage.setItem(FILM_SEEN_KEY, "1");
+      } catch (e) {
+        /* storage switched off: nothing to remember, and nothing to tell the visitor */
+      }
+    }
+
+    function showStill() {
+      // The frame already wears the still as its background; this is for the browsers that paint a
+      // video with nothing loaded as a black box.
+      var poster = video.getAttribute("data-poster");
+      if (poster && !video.getAttribute("poster")) video.setAttribute("poster", poster);
+    }
+
+    function tryPlay() {
+      var started;
+      try {
+        started = video.play();
+      } catch (e) {
+        return null;
+      }
+      return started && typeof started.then === "function" ? started : null;
+    }
+
+    function still() {
+      state = "still";
+      if (observer) observer.disconnect();
+      video.controls = false;
+      if (soundWords) soundWords.textContent = "Play the film";
+      sound.classList.add("gi-film__sound--centre");
+      sound.hidden = false;
+      markSeen();
+    }
+
+    function withSound() {
+      state = "sound";
+      if (observer) observer.disconnect();
+      sound.hidden = true;
+      video.muted = false;
+      video.controls = true;
+      try {
+        video.currentTime = 0;
+      } catch (e) {
+        /* nothing loaded yet: it starts from the beginning anyway */
+      }
+      var started = tryPlay();
+      if (started) started.catch(function () {});
+      // The button that was pressed has just gone, so focus goes to the player it started.
+      video.focus({ preventScroll: true });
+      // Not every browser lets a video take focus; the button after it is the next best place.
+      if (doc.activeElement !== video && close && root.classList.contains("is-open")) {
+        close.focus({ preventScroll: true });
+      }
+    }
+
+    function auto() {
+      state = "auto";
+      video.muted = true;
+      video.controls = false;
+      sound.hidden = false;
+      video.addEventListener("playing", function () {
+        if (state === "auto") markSeen();
+      });
+      video.addEventListener("ended", function () {
+        finished = true;
+      });
+      function resume() {
+        if (state !== "auto" || finished || !inView || doc.visibilityState === "hidden") return;
+        var started = tryPlay();
+        if (started) {
+          started.catch(function () {
+            if (state === "auto") still();
+          });
+        }
+      }
+      observer = new win.IntersectionObserver(
+        function (entries) {
+          if (state !== "auto") return;
+          entries.forEach(function (entry) {
+            var ratio = entry.intersectionRatio;
+            if (ratio >= 0.5 && !inView) {
+              inView = true;
+              resume();
+            } else if (ratio < 0.25 && inView) {
+              inView = false;
+              video.pause();
+            }
+          });
+        },
+        { threshold: [0, 0.25, 0.5, 0.75] },
+      );
+      observer.observe(video);
+      doc.addEventListener("visibilitychange", function () {
+        if (state !== "auto" || !inView) return;
+        if (doc.visibilityState === "hidden") video.pause();
+        else resume();
+      });
+    }
+
+    sound.addEventListener("click", withSound);
+
+    if (mode === "first") {
+      showStill();
+      if (reduced || saveData || !win.IntersectionObserver) still();
+      else auto();
+    } else {
+      if (strip) {
+        strip.addEventListener("click", function () {
+          showStill();
+          root.classList.add("is-open");
+          // Unfold from nothing, unless the visitor has asked for less motion.
+          if (!reduced && player && typeof player.animate === "function") {
+            var height = player.getBoundingClientRect().height;
+            if (height > 0) {
+              player.classList.add("is-opening");
+              var unfold = player.animate(
+                [
+                  { height: "0px", opacity: 0 },
+                  { height: height + "px", opacity: 1 },
+                ],
+                { duration: 380, easing: "cubic-bezier(0.25, 1, 0.5, 1)" },
+              );
+              var done = function () {
+                player.classList.remove("is-opening");
+              };
+              unfold.onfinish = done;
+              unfold.oncancel = done;
+            }
+          }
+          withSound();
+        });
+      }
+      if (close) {
+        close.addEventListener("click", function () {
+          video.pause();
+          state = "";
+          root.classList.remove("is-open");
+          if (strip) strip.focus({ preventScroll: true });
+        });
+      }
+    }
+
+    return {
+      mode: mode,
+      state: function () {
+        return state;
+      },
+    };
+  }
+
+  return { initDeck: initDeck, setFace: setFace, initChips: initChips, initFilm: initFilm, FILM_SEEN_KEY: FILM_SEEN_KEY };
 });

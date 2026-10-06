@@ -630,3 +630,168 @@
 
 /* Event pages: a community event's own page, under any booking button on its back. */
 .ev-book--page { margin-top: 10px; }
+
+/* =================================================================
+   THE ONE MINUTE FILM, between the intro and the cards. The markup is
+   src/fundraising/film.ts and the behaviour is initFilm in events.js.
+
+   A few lines in the head put .film-first or .film-later on <html>
+   before anything is drawn, and everything here hangs off that class:
+
+     .film-first   the film, full size
+     .film-later   a slim strip; .is-open on the section once it is pressed
+     neither       (no JavaScript) the film, full size, as a plain player
+
+   The frame keeps its 16:9 room whether or not the film has loaded, so
+   nothing below it ever jumps. The still is the frame's background and
+   not the video's poster, so a folded away film asks for no big picture.
+   ================================================================= */
+/* The intro's own space underneath is for a page whose cards come next; with the film next, less. */
+.events-intro:has(+ .gi-film) { padding-bottom: clamp(26px, 3.4vw, 40px); }
+.gi-film { padding: 0 0 clamp(30px, 4.5vw, 54px); }
+.film-later .gi-film:not(.is-open) { padding-bottom: clamp(22px, 3vw, 32px); }
+.gi-film .wrap { display: flex; flex-direction: column; align-items: center; }
+
+.gi-film__player { width: 100%; max-width: 880px; }
+.film-later .gi-film:not(.is-open) .gi-film__player { display: none; }
+.gi-film__player.is-opening { overflow: hidden; }
+.gi-film__frame {
+  position: relative;
+  aspect-ratio: 16 / 9;
+  border-radius: var(--radius-lg);
+  background: var(--maroon) url("/assets/video/get-involved-film-poster.jpg") center / cover no-repeat;
+  box-shadow: var(--shadow);
+  overflow: hidden;
+}
+.gi-film__video { display: block; width: 100%; height: 100%; }
+/* The frame clips its corners, so a ring on the video itself would be cut off: the frame wears it. */
+.gi-film__video:focus-visible { outline: 3px solid var(--cream); outline-offset: -6px; }
+@supports selector(:has(*)) {
+  .gi-film__video:focus-visible { outline: none; }
+  .gi-film__frame:has(.gi-film__video:focus-visible) { outline: 3px solid var(--holly); outline-offset: 3px; }
+}
+
+/* "Play with sound": on the film, in the top corner, clear of the captions along the bottom. */
+.gi-film__sound {
+  position: absolute;
+  top: clamp(10px, 2vw, 18px);
+  right: clamp(10px, 2vw, 18px);
+  min-height: 44px;
+  padding: 10px 20px 10px 16px;
+  font-size: 0.95rem;
+  box-shadow: 0 10px 26px -12px rgba(11, 16, 32, 0.7);
+}
+.gi-film__sound::after { content: none; }
+.gi-film__sound:focus-visible { outline-color: var(--cream); }
+/* With no film playing behind it (less motion, data saving) it is the play button, in the middle
+   along the bottom, under the still's own words. */
+.gi-film__sound--centre { inset: auto 0 8% 0; width: fit-content; margin-inline: auto; padding: 14px 26px 14px 22px; font-size: 1rem; }
+
+/* ---------- a later visit: the strip ---------- */
+.gi-film__strip { display: none; }
+.film-later .gi-film:not(.is-open) .gi-film__strip { display: flex; }
+.gi-film__strip {
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+  max-width: 430px;
+  min-height: 70px;
+  padding: 8px 20px 8px 8px;
+  border: 1.6px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--card);
+  box-shadow: var(--shadow-sm);
+  color: var(--maroon);
+  font-family: var(--font-body);
+  font-size: 1.02rem;
+  font-weight: 600;
+  line-height: 1.3;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.2s, box-shadow 0.2s, transform 0.15s;
+}
+.gi-film__strip:hover { border-color: var(--maroon); box-shadow: var(--shadow); }
+.gi-film__strip:active { transform: translateY(1px); }
+.gi-film__thumb {
+  position: relative;
+  flex: 0 0 auto;
+  width: 96px;
+  aspect-ratio: 16 / 9;
+  border-radius: 9px;
+  background: var(--maroon);
+  overflow: hidden;
+}
+.gi-film__thumb img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.gi-film__badge {
+  position: absolute;
+  right: 4px;
+  bottom: 4px;
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--cream);
+  color: var(--crimson);
+  box-shadow: 0 4px 12px -4px rgba(11, 16, 32, 0.6);
+}
+.gi-film__badge svg { width: 11px; height: 11px; margin-left: 1px; }
+.gi-film__strip-words { min-width: 0; text-wrap: balance; }
+
+/* "Close the film": only once the strip has been opened. */
+.gi-film__close-row { display: none; margin: 12px 0 0; text-align: right; }
+.film-later .gi-film.is-open .gi-film__close-row { display: block; }
+.gi-film__close {
+  min-height: 44px;
+  padding: 9px 20px;
+  border: 1.6px solid var(--line);
+  border-radius: var(--radius-pill);
+  background: none;
+  color: var(--maroon);
+  font-family: var(--font-body);
+  font-size: 0.95rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: border-color 0.2s;
+}
+.gi-film__close:hover { border-color: var(--maroon); }
+
+/* ---------- "Read what the film says" ---------- */
+.gi-film__words { width: 100%; max-width: 880px; margin-top: 8px; text-align: center; }
+.gi-film__words summary {
+  display: inline-block;
+  padding: 11px 10px;
+  color: var(--slate-soft);
+  font-size: 0.92rem;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+  list-style: none;
+}
+.gi-film__words summary::-webkit-details-marker { display: none; }
+.gi-film__words summary:hover { color: var(--maroon); }
+.gi-film__lines {
+  max-width: 62ch;
+  margin: 6px auto 0;
+  padding: clamp(18px, 3vw, 26px) clamp(18px, 3.4vw, 30px);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--card);
+  text-align: left;
+  overflow-wrap: anywhere;
+}
+.gi-film__lines p { margin: 0 0 0.6em; }
+.gi-film__lines p:last-child { margin-bottom: 0; }
+
+@media (max-width: 560px) {
+  .gi-film__frame { border-radius: var(--radius); }
+  .gi-film__sound { padding: 8px 16px 8px 12px; font-size: 0.88rem; }
+  .gi-film__sound--centre { bottom: 6%; padding: 10px 20px 10px 16px; font-size: 0.95rem; }
+}
+@media (max-width: 360px) {
+  .gi-film__strip { gap: 12px; padding-right: 14px; font-size: 0.98rem; }
+  .gi-film__thumb { width: 84px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .gi-film__strip, .gi-film__strip:active, .gi-film__close { transition: none; transform: none; }
+}

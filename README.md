@@ -8343,6 +8343,52 @@ sign off in both parts), `fundraising-send`, `fundraisers-db`, `admin-fundraisin
 What the public sees of community fundraising (stage 1), built on the API above. Design:
 `docs/superpowers/specs/2026-10-02-community-fundraising-design.md`.
 
+**The one minute film on Get involved.** While fundraising is switched on, the page carries NBCC's
+one minute film, "Got an idea?", between the intro and the cards (`src/fundraising/film.ts` holds the
+markup; `renderGetInvolvedPage` puts it where `events.html` has `<!-- getinvolved:film -->`, and a
+few lines of script where it has `<!-- getinvolved:film-head -->`). With fundraising off, neither is
+in the page.
+
+- **A first visit:** the film is full size and plays by itself with the sound off (no browser allows
+  anything else) once at least half of it is on screen, with captions showing and a **Play with
+  sound** button on it. That button starts it again from the beginning with sound and the browser's
+  own controls. While it is playing by itself it pauses when scrolled well away or when the tab is
+  hidden, and it does not start again once it has played to the end.
+- **Any later visit:** a slim strip in the same place, a small picture and **Watch our one minute
+  film**, so the events are seen straight away. Pressing it opens the film there and plays it from
+  the start with sound and controls; **Close the film** folds it away again.
+- **Which of the two** is decided before the page is drawn: the script in the head puts
+  `film-first` or `film-later` on `<html>`, and `events.css` shows the film or the strip from that
+  class alone, so the film never appears and then folds away. `initFilm` in `assets/js/events.js`
+  reads the class once and never changes it, so the film stays full size for the whole of a first
+  visit. Without JavaScript the film is a plain player with the browser's controls.
+- **"Seen"** is one note in the visitor's own browser: local storage, key `nbcc-film-seen`, written
+  when the film is really playing. It is not a cookie and it is never sent to the server
+  (`privacy.html` says so, under What we collect). A browser with storage switched off gets the strip.
+- **Less motion, or data saving** (`prefers-reduced-motion`, `navigator.connection.saveData`), or a
+  browser that refuses to play: a first visit shows the still with a **Play the film** button
+  instead, nothing plays by itself, and it counts as seen.
+- **Nothing of the film is downloaded until it plays.** The video is `preload="none"` with no
+  `poster` of its own (the still is a background of the frame, so a folded away film asks for no big
+  picture; `initFilm` gives the video its poster when the film is shown). The frame keeps its 16:9
+  room, so nothing below it jumps.
+- **Captions and the words.** `assets/video/get-involved-film.en.vtt` is the voice-over script as
+  NBCC supplied it, each caption timed to its speech in the film's own sound. The same words are
+  under the film as a folded away **Read what the film says**. `FILM_LINES` in
+  `src/fundraising/film.ts` and the captions file must say the same thing;
+  `test/unit/get-involved-film.test.ts` holds both to the script.
+- **The files** are in `assets/video/`: `get-involved-film.mp4` (13.3 MB, 1920 by 1080, H.264, its
+  index at the front so it plays as it arrives), `get-involved-film-poster.jpg` (the frame at 4
+  seconds, 1280 wide), `get-involved-film-thumb.jpg` (the strip's picture) and the captions. The
+  Dockerfile's `COPY assets ./assets` takes them into the image. `express.static` serves them with
+  byte ranges; `assetHeaders` in `src/routes/site.ts` lets a browser keep anything in
+  `/assets/video` for a week (every other asset is still checked on each visit), so **a changed
+  film must ship under a new file name**. `test/unit/get-involved-film-served.test.ts` checks the
+  type, the ranges, the cache header and the image.
+- **Not counted.** The visit counter (`assets/js/pulse.js`) only records the kinds of click in
+  `CLICK_KINDS` (`src/analytics/payload.ts`); counting "film played" would need a new kind there, so
+  it is left out for now.
+
 **Get involved (`/get-involved`).** The Events page, renamed and widened. The menu item reads "Get
 involved" everywhere it is added (`src/events/nav-link.ts`), and `/events` redirects for good,
 keeping its query string, so old links and newsletter utm tags still land. The Events switch still

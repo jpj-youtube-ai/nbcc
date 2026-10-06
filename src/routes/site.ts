@@ -184,6 +184,19 @@ async function decorateNav(html: string, cookieHeader: string | undefined): Prom
   return out;
 }
 
+/**
+ * Headers for the files under /assets. Everything is as express.static leaves it (checked with the
+ * server on every visit, so a changed stylesheet is picked up at once) except the film folder: the
+ * Get involved film is 13 MB, and its still and captions go with it, so a browser keeps those for a
+ * week rather than asking again. A changed film must therefore ship under a NEW file name.
+ * express.static already answers byte range requests, which is how a browser plays a film as it
+ * arrives (and an iPhone will not play one without).
+ */
+const FILM_FOLDER = /[\\/]assets[\\/]video[\\/]/;
+export function assetHeaders(res: { setHeader(name: string, value: string): unknown }, path: string): void {
+  if (FILM_FOLDER.test(path)) res.setHeader("Cache-Control", "public, max-age=604800");
+}
+
 export function createSiteRouter(siteRoot: string): Router {
   const router = Router();
   const redirectsFile = join(siteRoot, "_redirects");
@@ -347,7 +360,7 @@ export function createSiteRouter(siteRoot: string): Router {
   }
 
   // Shared CSS/JS/fonts/images — the only directory exposed wholesale.
-  router.use("/assets", express.static(join(siteRoot, "assets")));
+  router.use("/assets", express.static(join(siteRoot, "assets"), { setHeaders: assetHeaders }));
 
   // --- Site addressing (site-pages feature) ------------------------------------------------
 

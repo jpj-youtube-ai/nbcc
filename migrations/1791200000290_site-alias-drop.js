@@ -16,7 +16,7 @@ exports.shorthands = undefined;
 exports.up = (pgm) => {
   pgm.sql(
     `INSERT INTO site_aliases (from_path, to_path, created_by)
-     VALUES ('/drop', 'https://drop.nbcc.scot', 'system:TASK-568')
+     VALUES ('/drop', 'https://drop.nbcc.scot', 'seed')
      ON CONFLICT (from_path) DO NOTHING`,
   );
 };
@@ -25,6 +25,6 @@ exports.up = (pgm) => {
 exports.down = (pgm) => {
   pgm.sql(
     `DELETE FROM site_aliases
-      WHERE from_path = '/drop' AND to_path = 'https://drop.nbcc.scot' AND created_by = 'system:TASK-568'`,
+      WHERE from_path = '/drop' AND to_path = 'https://drop.nbcc.scot' AND created_by = 'seed'`,
   );
 };

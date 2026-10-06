@@ -87,7 +87,7 @@ beforeEach(() => {
   perms = effectivePermissions({ role: "admin", permissions: null });
   aliases = [
     { id: 1, fromPath: "/give", toPath: "/donate", createdBy: "seed", createdAt: "2026-09-01T09:00:00Z" },
-    { id: 2, fromPath: "/drop", toPath: "https://drop.nbcc.scot", createdBy: "system:TASK-568", createdAt: "2026-10-06T09:00:00Z" },
+    { id: 2, fromPath: "/drop", toPath: "https://drop.nbcc.scot", createdBy: "seed", createdAt: "2026-10-06T09:00:00Z" },
   ];
   posted = [];
   postAnswer = { status: 201, body: { ok: true } };
@@ -128,6 +128,7 @@ describe("spare addresses that forward to an NBCC subdomain (TASK-568)", () => {
     expect(posted).toEqual([{ from: "/parcels", to: "parcels.nbcc.scot/in" }]);
     expect(hostBox().value).toBe("");
     expect(el("siteStatus").textContent).toContain("works right away");
+    expect(el("siteStatus").className).toBe("ty-status is-ok");
   });
 
   it("still sends a chosen page exactly as before", async () => {
@@ -144,6 +145,12 @@ describe("spare addresses that forward to an NBCC subdomain (TASK-568)", () => {
     hostBox().value = "example.com";
     await add("/elsewhere");
     expect(el("siteStatus").textContent).toContain("must end in .nbcc.scot");
+    // Since 1 September this line carried the class "err", which the public stylesheet hides
+    // (.err{display:none}), so no refusal on this screen was ever seen. It takes the classes
+    // .ty-status has.
+    expect(el("siteStatus").className).toBe("ty-status is-error");
+    const publicCss = readFileSync(resolve(ROOT, "assets/css/styles.css"), "utf8");
+    expect(publicCss).toContain(".err{color:var(--maroon);font-size:.82rem;margin-top:6px;display:none");
     expect(hostBox().value).toBe("example.com");
     expect(hostWrap().hidden).toBe(false);
   });
@@ -157,6 +164,26 @@ describe("spare addresses that forward to an NBCC subdomain (TASK-568)", () => {
     expect(drop.textContent).toContain("drop.nbcc.scot");
     expect(drop.querySelector(".admin-pill")?.textContent).toBe("Subdomain");
     expect(give.querySelector(".admin-pill")).toBeNull();
+  });
+
+  // On a phone the list is labelled cards, as Donations and Stories are: four squeezed columns broke
+  // "drop.nbcc.scot" and the word Subdomain in half. The labels ride on the cells; the stylesheet
+  // turns the table into cards when its own box is narrow.
+  it("labels every cell of the list, so it can be cards on a phone", async () => {
+    await openSitePages();
+    expect(el("siteAliasTable").classList.contains("sa-list")).toBe(true);
+    const table = document.querySelector("#siteAliasTable table") as HTMLElement;
+    expect(table.classList.contains("sa-table")).toBe(true);
+    const first = Array.from(table.querySelectorAll("tbody tr")[0].children) as HTMLElement[];
+    expect(first.map((c) => c.getAttribute("data-label"))).toEqual(["Spare address", "Sends people to", "Added by", ""]);
+    const css = readFileSync(resolve(ROOT, "assets/css/admin.css"), "utf8");
+    expect(css).toContain(".sa-list{container:salist / inline-size}");
+    const cards = css.slice(css.indexOf("@container salist (max-width:759px){"));
+    expect(cards.startsWith("@container salist")).toBe(true);
+    expect(cards.slice(0, 1200)).toContain(".sa-table td::before{content:attr(data-label)");
+    // The pill is one word and never breaks; a long address may wrap inside its own box.
+    expect(css).toContain(".sa-table .admin-pill{white-space:nowrap}");
+    expect(css).toContain(".sa-to{overflow-wrap:anywhere}");
   });
 
   it("shows no form at all to someone who can only view Site pages", async () => {

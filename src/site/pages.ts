@@ -222,9 +222,54 @@ export function aliasFromProblem(from: string): string | null {
   return null;
 }
 
-/** May `to` be an alias destination? Only a canonical page from the registry. */
+// TASK-568: a spare address may also forward to one of NBCC's own subdomains (nbcc.scot/drop to
+// drop.nbcc.scot). Only ours: if a staff login were misused, an nbcc.scot link still could not be
+// pointed at somebody else's website. The host is read by the URL parser, never by a pattern on what
+// was typed, so a lookalike (nbcc.scot.example.com, drop.nbcc.scot@example.com) is seen for what it
+// is. www.nbcc.scot and bare nbcc.scot are THIS site: a forward to them could send a visitor round
+// in a circle, and the page list is the way to point at a page here.
+const FORWARD_HOST = /^(?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)+nbcc\.scot$/;
+const FORWARD_PATH = /^(?:\/[A-Za-z0-9._~-]+)*\/?$/;
+const OWN_HOSTS = ["www.nbcc.scot"];
+export const FORWARD_HELP =
+  "Type an NBCC subdomain, like drop.nbcc.scot or drop.nbcc.scot/collect. It must end in .nbcc.scot.";
+
+/**
+ * What staff typed as a subdomain destination, in the form it is stored and sent: always https,
+ * host lowercased, no trailing slash. Null when it is not an NBCC subdomain, or carries a port, a
+ * user name, a query or a fragment.
+ */
+export function forwardTarget(typed: string): string | null {
+  const raw = typed.trim();
+  if (!raw || raw.length > 200 || /[\s\\<>"'?#]/.test(raw)) return null;
+  let address = raw;
+  if (!/^https?:\/\//i.test(raw)) {
+    if (raw.includes("://") || raw.startsWith("/")) return null;
+    address = `https://${raw}`;
+  }
+  let url: URL;
+  try {
+    url = new URL(address);
+  } catch {
+    return null;
+  }
+  if (url.username || url.password || url.port || url.search || url.hash) return null;
+  const host = url.hostname.toLowerCase();
+  if (!FORWARD_HOST.test(host) || OWN_HOSTS.includes(host)) return null;
+  if (!FORWARD_PATH.test(url.pathname)) return null;
+  return `https://${host}${url.pathname.replace(/\/$/, "")}`;
+}
+
+/** Is this stored destination a forward to a subdomain (rather than one of the site's pages)? */
+export function isForward(to: string): boolean {
+  return to.startsWith("https://");
+}
+
+/** May `to` be an alias destination? A canonical page from the registry, or an NBCC subdomain in
+ *  its stored form (see forwardTarget). */
 export function aliasToProblem(to: string): string | null {
   if (to === "/") return null;
+  if (isForward(to)) return forwardTarget(to) === to ? null : FORWARD_HELP;
   if (!isKnownPage(to)) return "The destination must be one of the site's real pages.";
   return null;
 }

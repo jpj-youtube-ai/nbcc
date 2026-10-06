@@ -2481,8 +2481,13 @@ export async function postAdminSiteAlias(req: Request, res: Response): Promise<R
   if (!claims) return;
   try {
     const from = typeof req.body?.from === "string" ? req.body.from.trim().toLowerCase() : "";
-    const to = typeof req.body?.to === "string" ? req.body.to.trim() : "";
-    const { aliasFromProblem, aliasToProblem } = await import("../site/pages");
+    const typedTo = typeof req.body?.to === "string" ? req.body.to.trim() : "";
+    const { aliasFromProblem, aliasToProblem, forwardTarget, FORWARD_HELP } = await import("../site/pages");
+    // TASK-568: a destination that is not one of our paths is an NBCC subdomain staff typed. It is
+    // stored in one exact form (https, lowercased host), and refused here if it is anything else.
+    const isPath = typedTo.startsWith("/");
+    const to = isPath ? typedTo : forwardTarget(typedTo);
+    if (to === null) return res.status(400).json({ error: FORWARD_HELP });
     const problem = aliasFromProblem(from) ?? aliasToProblem(to);
     if (problem) return res.status(400).json({ error: problem });
     const { addAlias } = await import("../db/site-pages");

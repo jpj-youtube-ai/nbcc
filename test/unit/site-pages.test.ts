@@ -5,6 +5,7 @@ import {
   DEFAULT_ALIASES,
   aliasFromProblem,
   aliasToProblem,
+  forwardTarget,
   isKnownPage,
   renderSitemapTree,
   renderSitemapXml,
@@ -38,6 +39,69 @@ describe("alias validation", () => {
     expect(aliasToProblem("/donate")).toBeNull();
     expect(aliasToProblem("/")).toBeNull();
     expect(aliasToProblem("/nowhere")).not.toBeNull();
+  });
+
+  // TASK-568: a spare address may also forward to an NBCC subdomain (nbcc.scot/drop to drop.nbcc.scot).
+  // Only our own subdomains: if a staff login were misused, an nbcc.scot link still could not be
+  // pointed at somebody else's website.
+  describe("forwarding to an NBCC subdomain", () => {
+    it("stores what staff type as an https address", () => {
+      expect(forwardTarget("drop.nbcc.scot")).toBe("https://drop.nbcc.scot");
+      expect(forwardTarget("  Drop.NBCC.scot/  ")).toBe("https://drop.nbcc.scot");
+      expect(forwardTarget("drop.nbcc.scot/collect/today")).toBe("https://drop.nbcc.scot/collect/today");
+      expect(forwardTarget("https://drop.nbcc.scot/collect")).toBe("https://drop.nbcc.scot/collect");
+      expect(forwardTarget("http://drop.nbcc.scot")).toBe("https://drop.nbcc.scot");
+      expect(forwardTarget("shop.events.nbcc.scot")).toBe("https://shop.events.nbcc.scot");
+    });
+
+    it("refuses anything that is not an NBCC subdomain, lookalikes included", () => {
+      for (const bad of [
+        "example.com",
+        "nbcc.scot.example.com",
+        "evilnbcc.scot",
+        "drop.nbcc.scot.example.com",
+        "drop.nbcc.scot@example.com",
+        "https://example.com/drop.nbcc.scot",
+        "example.com/.nbcc.scot",
+        "drop.nbcc.scot\@example.com",
+        "//example.com",
+        "javascript:alert(1)",
+        "ftp://drop.nbcc.scot",
+        "",
+        "drop",
+      ]) {
+        expect(forwardTarget(bad), bad).toBeNull();
+      }
+    });
+
+    it("refuses this site itself, which could send a visitor round in a circle", () => {
+      for (const bad of ["nbcc.scot", "www.nbcc.scot", "https://www.nbcc.scot/drop", ".nbcc.scot"]) {
+        expect(forwardTarget(bad), bad).toBeNull();
+      }
+    });
+
+    it("refuses a port, a user name, a query, a fragment and odd characters", () => {
+      for (const bad of [
+        "drop.nbcc.scot:8080",
+        "user@drop.nbcc.scot",
+        "user:pw@drop.nbcc.scot",
+        "drop.nbcc.scot/a?x=1",
+        "drop.nbcc.scot/#top",
+        "drop.nbcc.scot/a b",
+        "drop.nbcc.scot/<script>",
+        "drop.nbcc.scot/" + "a".repeat(300),
+      ]) {
+        expect(forwardTarget(bad), bad).toBeNull();
+      }
+    });
+
+    it("accepts a stored subdomain address as a destination, and nothing unstored", () => {
+      expect(aliasToProblem("https://drop.nbcc.scot")).toBeNull();
+      expect(aliasToProblem("https://drop.nbcc.scot/collect")).toBeNull();
+      expect(aliasToProblem("drop.nbcc.scot")).not.toBeNull(); // not yet in its stored form
+      expect(aliasToProblem("https://example.com")).not.toBeNull();
+      expect(aliasToProblem("http://drop.nbcc.scot")).not.toBeNull();
+    });
   });
 
   it("every seeded day-one alias passes its own validators", () => {

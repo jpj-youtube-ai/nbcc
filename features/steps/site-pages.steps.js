@@ -47,6 +47,12 @@ Then("the site response should redirect permanently to {string}", function (targ
   assert.equal(this.siteLocation, target);
 });
 
+// TASK-568: a forward to a subdomain is temporary, so staff can change where it goes.
+Then("the site response should redirect temporarily to {string}", function (target) {
+  assert.equal(this.siteStatus, 302, `expected a 302, got ${this.siteStatus}`);
+  assert.equal(this.siteLocation, target);
+});
+
 Then("the site response noindex header should be set", function () {
   assert.match(String(this.siteRobots), /noindex/);
 });

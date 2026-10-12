@@ -16826,7 +16826,8 @@
   }
 
   // ---- the Festive Ball ticket report (TASK-464) ----
-  // A card under the page switch. Counts only, on Monday and Thursday mornings, to the people running
+  // A card under the page switch. Counts, and who has booked a whole table, on Monday and Thursday
+  // mornings, to the people running
   // the Ball with us. The list is edited here and saved together with the switch; "Send a test to me"
   // sends the real email, marked as a test, to the signed-in person only. The preview frame is sized
   // to the email, and sized again when the window changes, so nothing scrolls inside the page.
@@ -16943,6 +16944,8 @@
       n.hidden = !canWrite;
     });
     if (!brDirty) el("evReportOn").checked = !!brData.reportOn;
+    // Only on a day the morning's report has gone, and only until it has been sent again.
+    el("evReportResend").hidden = !(canWrite && brData.canResend);
     brRenderState();
     brRenderList();
     brRenderLast();
@@ -17076,6 +17079,43 @@
         b.disabled = false;
       });
   }
+  // Today's report to the whole list a second time, with the numbers as they stand now. It asks
+  // first, since it goes outside the charity, and the server lets it go once a day.
+  function brResend() {
+    if (!brData) return;
+    var asked = window.confirm(
+      "Send today’s report again to all " + brPeople(brData.recipients.length) + " on the saved list?\n\n" +
+        "It goes now, with the latest numbers, and says at the top that it has been sent again. " +
+        "It can be sent again once a day.",
+    );
+    if (!asked) return;
+    var b = el("evReportResend");
+    b.disabled = true;
+    brSay("Sending today’s report again…");
+    authFetch("/api/admin/ball-report/resend", { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" })
+      .then(function (res) {
+        return brJson(res, "The report could not be sent again. Please try again.");
+      })
+      .then(function (d) {
+        // The card comes back with the answer; if it could not be read, the email still went.
+        if (d.preview) brTake(d);
+        else {
+          el("evReportResend").hidden = true;
+          loadBallReport();
+        }
+        brSay(
+          "Sent again to " + brPeople(d.resentTo) + "." + (brDirty ? " Your changes to the list are not saved yet." : ""),
+        );
+      })
+      .catch(function (err) {
+        brFailed(err);
+        // A refusal means the card is out of date (someone else sent it again): read it afresh.
+        loadBallReport();
+      })
+      .then(function () {
+        b.disabled = false;
+      });
+  }
   function brWire() {
     if (brWired) return;
     brWired = true;
@@ -17106,6 +17146,7 @@
     el("evReportOn").addEventListener("change", brMarkDirty);
     el("evReportSave").addEventListener("click", brSave);
     el("evReportTest").addEventListener("click", brTest);
+    el("evReportResend").addEventListener("click", brResend);
     window.addEventListener("resize", brFitPreview);
   }
   // ---- Analytics (TASK-482) ----

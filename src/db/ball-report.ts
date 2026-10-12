@@ -2,7 +2,14 @@ import { pool } from "./pool";
 import { insertAudit, recordAudit } from "./donations";
 import { getCapacityState } from "./ball";
 import { availability } from "../ball/capacity";
-import { countAwaitingTransfers, countSales, recipientsSchema, type Recipient, type SalesInputs } from "../ball/sales-report";
+import {
+  countAwaitingTransfers,
+  countSales,
+  recipientsSchema,
+  type Recipient,
+  type SalesInputs,
+  type TableBookingRow,
+} from "../ball/sales-report";
 
 // TASK-464: the Festive Ball ticket report's settings, its numbers, and the record of what went out.
 // The decisions (is it due, what does it say) are in the pure src/ball/sales-report.ts; this file
@@ -248,4 +255,98 @@ export async function recordTestSend(
   } finally {
     client.release();
   }
+}
+
+/**
+ * Every whole table booking, for the report's list of who has booked one. Which of them count, and
+ * how they are put together, is the pure tableBookers. Read fresh for each report: the names are
+ * never copied into ball_report_sends, whose figures stay counts only.
+ */
+export async function readTableBookings(): Promise<TableBookingRow[]> {
+  const r = await pool.query<{
+    buyer_first_name: string | null;
+    buyer_surname: string | null;
+    buyer_name: string;
+    buyer_email: string;
+    invoice_company: string | null;
+    quantity: number;
+    status: string;
+    paid_at: Date | null;
+    payment_method: string;
+  }>(
+    `SELECT buyer_first_name, buyer_surname, buyer_name, buyer_email, invoice_company, quantity, status, paid_at,
+            payment_method
+       FROM ball_bookings WHERE kind = 'table' ORDER BY id`,
+  );
+  return r.rows.map((b) => ({
+    firstName: b.buyer_first_name,
+    surname: b.buyer_surname,
+    name: b.buyer_name,
+    email: b.buyer_email,
+    company: b.invoice_company,
+    quantity: Number(b.quantity),
+    status: b.status,
+    paidAt: b.paid_at,
+    paymentMethod: b.payment_method,
+  }));
+}
+
+/** The moment the scheduled report before `day`'s counted to, or null when `day`'s was the first. */
+export async function countedToBefore(day: string): Promise<Date | null> {
+  const r = await pool.query<{ at: Date | null }>(
+    `SELECT max(counted_to) AS at FROM ball_report_sends
+      WHERE kind = 'scheduled' AND status = 'sent' AND sent_on < $1::date`,
+    [day],
+  );
+  return r.rows[0]?.at ?? null;
+}
+
+// Sending the day's report again is recorded in the audit log alone: who asked, for which day, and
+// to how many people. A go that failed is recorded too, and gives the day's one go back.
+const RESENT = "ball_report.resent";
+const RESEND_FAILED = "ball_report.resend_failed";
+const RESEND_DONE = `SELECT count(*) FILTER (WHERE action = $2) > count(*) FILTER (WHERE action = $3) AS done
+       FROM audit_log WHERE action IN ($2, $3) AND data->>'sentOn' = $1`;
+
+/** Whether `day`'s report has already been sent again. */
+export async function resendDone(day: string): Promise<boolean> {
+  const r = await pool.query<{ done: boolean }>(RESEND_DONE, [day, RESENT, RESEND_FAILED]);
+  return Boolean(r.rows[0]?.done);
+}
+
+/**
+ * Claims `day`'s one go at sending the report again, and records who asked. False when it has
+ * already gone again. The check and the record are one transaction under a lock of their own, so
+ * two presses at the same moment cannot both win.
+ */
+export async function claimResend(day: string, actor: string, recipients: number): Promise<boolean> {
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    await client.query("SELECT pg_advisory_xact_lock(hashtext('ball_report.resend'))");
+    const r = await client.query<{ done: boolean }>(RESEND_DONE, [day, RESENT, RESEND_FAILED]);
+    if (r.rows[0]?.done) {
+      await client.query("ROLLBACK");
+      return false;
+    }
+    await insertAudit(client, {
+      actor,
+      action: RESENT,
+      entity: "ball_report",
+      entityId: null,
+      data: { sentOn: day, recipients },
+    });
+    await client.query("COMMIT");
+    return true;
+  } catch (err) {
+    await client.query("ROLLBACK").catch(() => undefined);
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
+/** The report could not be sent again: the day's one go is given back. */
+export async function recordResendFailure(day: string, actor: string): Promise<void> {
+  await recordAudit({ actor, action: RESEND_FAILED, entity: "ball_report", entityId: null, data: { sentOn: day } });
 }

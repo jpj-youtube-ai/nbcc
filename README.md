@@ -3224,8 +3224,14 @@ Twice a week, on Monday and Thursday mornings (Tuesday until TASK-467), the peop
 the sponsor and our own staff) get one email with its ticket numbers: seats sold of 400 and how
 full, whole tables and single seats, what sold since the last update and in the last 7 days against
 the 7 before, what is still available and kept back for guests, the people still waiting (anyone
-already offered a place is not counted) and the seats they want, and the days to go. Counts only:
-no names, no booking details, no money. Sold means paid; seats booked to pay by bank transfer and
+already offered a place is not counted) and the seats they want, and the days to go. Under the
+numbers is **Tables booked** (Jaimie, 12 October 2026): a table of who has booked a whole table,
+with first name, surname, the company an invoice was asked for, and how many tables, in surname
+order. One line a person, their bookings added together; a bank transfer still waiting for its
+money is a line of its own marked "awaiting payment"; a card checkout under way, a refund or a
+cancellation is not listed, and nor is anyone who bought single seats (`tableBookers` in
+`src/ball/sales-report.ts`). The names are read fresh for every report and are never stored with
+its numbers. Nothing else about anyone: no email addresses, no phone numbers, no money. Sold means paid; seats booked to pay by bank transfer and
 still waiting for the money get a line of their own (TASK-487). It opens with when the next
 update comes and how to reach us (01292 811 015, events@nbcc.scot), comes From and Reply-To
 `BALL_FROM_EMAIL` in the Ball's own frame (`ballEmailShell`), and goes as ONE email with everyone
@@ -3234,8 +3240,14 @@ reaches beyond that group, send separately instead).
 
 It is set up on Admin → Events, in the **Festive Ball ticket report** card under the page switch:
 the list (a name and an address each, kept in alphabetical order, up to 10), the switch, **Send a
-test to me** (the real email marked "[Test]", to the signed-in person only) and a preview with
-today's numbers. Anyone who can edit Events can change it; viewers can look. Both also need at
+test to me** (the real email marked "[Test]", to the signed-in person only), **Send today's
+report again** and a preview with today's numbers and names. Send today's report again shows only
+on a day when the morning's report has gone; it asks first, then sends the report to the whole
+saved list with the numbers as they stand now, ", sent again" on the subject and a line at the top
+saying so. It goes once a day (`POST /api/admin/ball-report/resend`, 409 when refused). It writes
+nothing to `ball_report_sends`, so the next scheduled report still counts "since the last update"
+from the morning's; who pressed it is in the audit log (`ball_report.resent`, and
+`ball_report.resend_failed` when the email did not go, which gives the day's one go back). Anyone who can edit Events can change it; viewers can look. Both also need at
 least view on the Festive Ball, since the numbers are the Ball's (every role has that by default).
 It ships switched off, and saving it on with nobody to send to is refused. The routes:
 `GET /api/admin/ball-report` (`events:view`), `PUT /api/admin/ball-report` and

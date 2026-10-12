@@ -823,8 +823,15 @@ const SALES = {
 };
 type SalesIn = Parameters<typeof renderReport>[0];
 type ReportCtx = Parameters<typeof renderReport>[1];
+// Made up people, for the report's list of who has booked a whole table.
+const REPORT_TABLES: ReportCtx["tables"] = [
+  { firstName: "Morag", surname: "Example", company: "Example Joinery Ltd", tables: 2, awaiting: false },
+  { firstName: "Callum", surname: "Madeup", company: "", tables: 1, awaiting: false },
+  { firstName: "Isla", surname: "Sample", company: "Sample and Co", tables: 1, awaiting: true },
+];
+const REPORT_NOTE = "The numbers and the names here are made up. The real one counts what has really happened, and names who has really booked a whole table.";
 const report = (i: Record<string, unknown> = {}, c: Partial<ReportCtx> = {}) => () =>
-  renderReport({ ...SALES, ...i } as unknown as SalesIn, { today: "2026-10-05", eventDate: "2026-11-07", test: false, ...c } as ReportCtx);
+  renderReport({ ...SALES, ...i } as unknown as SalesIn, { today: "2026-10-05", eventDate: "2026-11-07", test: false, tables: REPORT_TABLES, ...c });
 
 const STAFF_WORDS_NOTE = "The arrival time and the note about what is included are typed by staff. Pick that version to see them, with example words.";
 const BALL_KIND = ["ballTransfer"];
@@ -966,12 +973,14 @@ const BALL: CatalogueEmail[] = [
     who: "Goes to the people on the report list, on Mondays and Thursdays at 8am.",
     audience: "staff",
     logKinds: ["ballReport"],
-    note: NUMBERS_NOTE,
+    note: REPORT_NOTE,
     versions: [
       v("usual", USUAL, report()),
       v("first", "The first report, with a waiting list", report({ soldSinceLast: null, awaitingTransfers: 0, awaitingTransferSeats: 0, waitingList: 3, waitingSeats: 8, tablesRemaining: 0, heldSeats: 0 })),
       v("sold-out", "Sold out, and the last report before the Ball", report({ seatsRemaining: 0, tablesRemaining: 0 }, { today: "2026-11-05" })),
       v("test", "A test sent from the admin", report({}, { test: true })),
+      v("sent-again", "Sent again on the same day (staff pressed the button)", report({}, { resend: true })),
+      v("no-tables", "Before any whole table is booked", report({ tablesSold: 0 }, { tables: [] })),
     ],
   },
 ];

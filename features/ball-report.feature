@@ -1,7 +1,7 @@
 @admin @ball-report @db
 Feature: The Festive Ball ticket report, set up from the Events page (TASK-464)
-  Twice a week the people running the Ball get one email with its ticket numbers: counts only, no
-  one's details and no money. Staff who can edit Events choose who gets it and switch it on; it
+  Twice a week the people running the Ball get one email with its ticket numbers and who has booked
+  a whole table: no contact details and no money. Staff who can edit Events choose who gets it and switch it on; it
   ships switched off, and a test goes only to the person who asked for it.
 
   Background:
@@ -45,9 +45,9 @@ Feature: The Festive Ball ticket report, set up from the Events page (TASK-464)
     And the report records a test sent by "editor.report.admin.bdd@example.com"
     And the audit log records a test sent by "editor.report.admin.bdd@example.com"
 
-  Scenario: the settings carry a preview of the email, with no one's details and no money in it
+  Scenario: the settings carry a preview of the email, with no contact details and no money in it
     When "editor.report.admin.bdd@example.com" reads the ticket report settings
-    Then the preview is the Festive Ball ticket report, with no money and no one's details in it
+    Then the preview is the Festive Ball ticket report, with no money and no contact details in it
 
   # The numbers are what the organiser and the sponsor read, so they are checked against real
   # bookings: sold means paid, and "since the last update" counts on from where that one counted to.
@@ -105,3 +105,47 @@ Feature: The Festive Ball ticket report, set up from the Events page (TASK-464)
     Given the last ticket report counted up to 0 days ago
     When "editor.report.admin.bdd@example.com" reads the ticket report settings
     Then the card shows no failed report
+
+  # Jaimie, 12 October 2026: the report names who has booked a whole table, and how many. Paid is
+  # booked; a bank transfer still waiting is marked; nobody else is listed. Every person is invented.
+  Scenario: the report lists who has booked a whole table, and how many
+    Given the ball is reset to 40 tables of 10 with 0 held back
+    And these whole tables are booked for the Festive Ball:
+      | first name | surname | company            | quantity | status    | payment  |
+      | Morag      | Archer  | Archer Joinery Ltd | 2        | paid      | card     |
+      | Morag      | Archer  | Archer Joinery Ltd | 1        | paid      | transfer |
+      | Callum     | Young   |                    | 1        | pending   | transfer |
+      | Isla       | Refund  |                    | 1        | refunded  | card     |
+      | Euan       | Basket  |                    | 1        | pending   | card     |
+      | Ross       | Gone    |                    | 1        | cancelled | transfer |
+    When "editor.report.admin.bdd@example.com" reads the ticket report settings
+    Then the report status should be 200
+    And the preview says "Tables booked"
+    And the preview lists "Morag", "Archer", "Archer Joinery Ltd" with 3 tables
+    And the preview lists "Callum", "Young", "" with 1 table, awaiting payment
+    And the preview does not say "Refund"
+    And the preview does not say "Basket"
+    And the preview does not say "Gone"
+    And the preview is the Festive Ball ticket report, with no money and no contact details in it
+
+  Scenario: today's report cannot be sent again on a day when none has gone, or by a viewer
+    When "editor.report.admin.bdd@example.com" saves the ticket report for "Alex <alex.report.bdd@example.com>" switched on
+    And "editor.report.admin.bdd@example.com" reads the ticket report settings
+    Then the card does not offer to send the report again
+    When "editor.report.admin.bdd@example.com" sends today's ticket report again
+    Then the report status should be 409
+    When "viewer.report.admin.bdd@example.com" sends today's ticket report again
+    Then the report status should be 403
+
+  Scenario: today's report can be sent again once, to the whole list, and it is recorded
+    Given the last ticket report counted up to 0 days ago
+    When "editor.report.admin.bdd@example.com" saves the ticket report for "Alex <alex.report.bdd@example.com>, Cal <cal.report.bdd@example.com>" switched on
+    Then the card offers to send the report again
+    When "editor.report.admin.bdd@example.com" sends today's ticket report again
+    Then the report status should be 200
+    And the report was sent again to 2 people
+    And the email log shows a ticket report sent again to "alex.report.bdd@example.com" and "cal.report.bdd@example.com"
+    And the audit log records the report sent again by "editor.report.admin.bdd@example.com" to 2 people
+    And the card does not offer to send the report again
+    When "editor.report.admin.bdd@example.com" sends today's ticket report again
+    Then the report status should be 409

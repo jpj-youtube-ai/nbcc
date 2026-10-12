@@ -60,6 +60,15 @@ async function reset() {
 }
 
 Before({ tags: "@ball-report" }, reset);
+
+// The day in the UK, as the server reads it (the report's days are the charity's, not UTC's).
+const UK_DAY = new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/London", year: "numeric", month: "2-digit", day: "2-digit" });
+const ukDay = (at) => UK_DAY.format(at);
+// The Festive Ball is on Saturday 7 November 2026 (BALL_EVENT_DATE): reports stop after it.
+Before({ tags: "@until-the-ball" }, function () {
+  if (ukDay(new Date()) > "2026-11-07") return "skipped";
+  return undefined;
+});
 After({ tags: "@ball-report" }, reset);
 AfterAll(async function () {
   await pool.end();
@@ -201,7 +210,7 @@ Given("the last ticket report counted up to {int} days ago", async function (day
   await pool.query(
     `INSERT INTO ball_report_sends (sent_on, kind, status, recipients, figures, counted_to, sent_at, sent_by)
      VALUES ($1::date, 'scheduled', 'sent', '{}', '{}'::jsonb, $2, $2, 'system:schedule.report.admin.bdd@example.com')`,
-    [at.toISOString().slice(0, 10), at],
+    [ukDay(at), at],
   );
 });
 

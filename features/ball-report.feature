@@ -137,6 +137,8 @@ Feature: The Festive Ball ticket report, set up from the Events page (TASK-464)
     When "viewer.report.admin.bdd@example.com" sends today's ticket report again
     Then the report status should be 403
 
+  # After the Ball there are no more reports, so there is nothing to send again.
+  @until-the-ball
   Scenario: today's report can be sent again once, to the whole list, and it is recorded
     Given the last ticket report counted up to 0 days ago
     When "editor.report.admin.bdd@example.com" saves the ticket report for "Alex <alex.report.bdd@example.com>, Cal <cal.report.bdd@example.com>" switched on

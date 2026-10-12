@@ -111,9 +111,9 @@ adminBallReportRouter.post("/api/admin/ball-report/test", async (req: Request, r
 adminBallReportRouter.post("/api/admin/ball-report/resend", async (req: Request, res: Response) => {
   const claims = await authorizeSections(req, res, EDIT);
   if (!claims) return;
+  let recipients: number;
   try {
-    const { recipients } = await resendTodaysReport({ actor: actorOf(claims), now: new Date() });
-    res.json({ ...(await reportPayload()), resentTo: recipients });
+    ({ recipients } = await resendTodaysReport({ actor: actorOf(claims), now: new Date() }));
   } catch (err) {
     if (err instanceof ResendRefused) {
       res.status(409).json({ error: err.message });
@@ -121,5 +121,13 @@ adminBallReportRouter.post("/api/admin/ball-report/resend", async (req: Request,
     }
     console.error("ball report resend failed:", err instanceof Error ? err.message : err);
     res.status(500).json({ error: "The report could not be sent again. Please try again." });
+    return;
+  }
+  // It went. If the card cannot be read back, say it went all the same: the admin reloads the card.
+  try {
+    res.json({ ...(await reportPayload()), resentTo: recipients });
+  } catch (err) {
+    console.error("ball report went again, but the card could not be read:", err instanceof Error ? err.message : err);
+    res.json({ resentTo: recipients });
   }
 });

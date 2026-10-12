@@ -17097,12 +17097,21 @@
         return brJson(res, "The report could not be sent again. Please try again.");
       })
       .then(function (d) {
-        brTake(d);
+        // The card comes back with the answer; if it could not be read, the email still went.
+        if (d.preview) brTake(d);
+        else {
+          el("evReportResend").hidden = true;
+          loadBallReport();
+        }
         brSay(
           "Sent again to " + brPeople(d.resentTo) + "." + (brDirty ? " Your changes to the list are not saved yet." : ""),
         );
       })
-      .catch(brFailed)
+      .catch(function (err) {
+        brFailed(err);
+        // A refusal means the card is out of date (someone else sent it again): read it afresh.
+        loadBallReport();
+      })
       .then(function () {
         b.disabled = false;
       });

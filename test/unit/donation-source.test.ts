@@ -29,14 +29,26 @@ const session = (metadata: unknown): Stripe.Checkout.Session =>
 const base = { mode: "once", plan: "", giftAid: "false", donorType: "individual", fullName: "Robin Example", email: "robin@example.com" };
 
 describe("the allowed sources", () => {
-  it("is one list, holding red_bag", () => {
-    expect(DONATION_SOURCES).toEqual(["red_bag"]);
+  it("is one list, holding red_bag and ball (the Festive Ball's donate page)", () => {
+    expect(DONATION_SOURCES).toEqual(["red_bag", "ball"]);
   });
 });
 
 describe("where a checkout session's gift came from", () => {
   it('is red_bag when the checkout marked it "true"', () => {
     expect(sourceFromCheckoutSession(session({ ...base, redBag: "true" }))).toBe("red_bag");
+  });
+
+  it('is ball when the Ball\'s donate page marked it "true"', () => {
+    expect(sourceFromCheckoutSession(session({ ...base, ball: "true" }))).toBe("ball");
+  });
+
+  it.each([
+    ['a ball mark of "false"', { ...base, ball: "false" }],
+    ["a ball mark that is a real boolean", { ...base, ball: true }],
+    ['a ball mark of "1"', { ...base, ball: "1" }],
+  ])("is not recorded for %s", (_what, md) => {
+    expect(sourceFromCheckoutSession(session(md))).toBeNull();
   });
 
   it.each([

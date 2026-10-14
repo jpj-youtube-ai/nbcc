@@ -40,6 +40,7 @@ const call = async (handler: Handler, token: string | null, query: Record<string
 const totals = (token: string | null) => call(getAdminDonationSourceTotals as Handler, token);
 const TOTALS = {
   redBag: { month: { pence: 41_200, gifts: 19 }, all: { pence: 196_000, gifts: 87 } },
+  ball: { month: { pence: 7_500, gifts: 3 }, all: { pence: 7_500, gifts: 3 } },
   donatePage: { month: { pence: 213_000, gifts: 64 }, all: { pence: 3_140_000, gifts: 902 } },
 };
 
@@ -68,15 +69,16 @@ describe("who may read the totals: exactly who may read the donations list", () 
 });
 
 describe("what the totals answer", () => {
-  it("gives the figures, the two worded lines and the note", async () => {
+  it("gives the figures, the worded lines and the note", async () => {
     const res = await totals(tokenFor("viewer"));
     expect(res.body).toEqual({
       totals: TOTALS,
       lines: [
         { key: "redBag", name: "Fill a Red Bag", month: "£412 from 19 gifts", all: "£1,960 from 87 gifts" },
+        { key: "ball", name: "Festive Ball", month: "£75 from 3 gifts", all: "£75 from 3 gifts" },
         { key: "donatePage", name: "Donate page", month: "£2,130 from 64 gifts", all: "£31,400 from 902 gifts" },
       ],
-      note: "Fill a Red Bag gifts are counted from 5 October 2026.",
+      note: "Fill a Red Bag gifts are counted from 5 October 2026. Festive Ball gifts are those made on the Ball's own donate page.",
     });
   });
 

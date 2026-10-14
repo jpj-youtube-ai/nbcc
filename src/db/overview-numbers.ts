@@ -72,13 +72,14 @@ export async function sumBallTaken(p: Months): Promise<NowAndBefore> {
  * refunded in full is no longer a gift received, so it is not counted as one.
  *
  *   Fill a Red Bag   source = 'red_bag' (written by the Stripe webhook since TASK-555).
+ *   Festive Ball     source = 'ball' (the Ball's own donate page, /ball/donate).
  *   Donate page      no source, paid online (not a card reader), and not on a fundraiser's page.
  *                    A gift started anywhere else that later gets a source of its own is in neither.
  */
 export async function sumGiftsBySource(month: SoFar): Promise<SourceTotals> {
   const kept = "GREATEST(amount_pence - refunded_amount_pence, 0)";
   const r = await pool.query<SourceTotalsRow>(
-    `SELECT CASE WHEN source = $3 THEN 'redBag' ELSE 'donatePage' END AS bucket,
+    `SELECT CASE WHEN source = $3 THEN 'redBag' WHEN source = $4 THEN 'ball' ELSE 'donatePage' END AS bucket,
             COALESCE(SUM(${kept}) FILTER (WHERE ${IN_MONTH("created_at")}), 0) AS month_pence,
             COUNT(*) FILTER (WHERE ${IN_MONTH("created_at")}) AS month_gifts,
             COALESCE(SUM(${kept}), 0) AS all_pence,
@@ -86,9 +87,9 @@ export async function sumGiftsBySource(month: SoFar): Promise<SourceTotals> {
        FROM donations
       WHERE payment_status = 'paid'
         AND amount_pence > refunded_amount_pence
-        AND (source = $3 OR (source IS NULL AND payment_channel = 'online' AND fundraiser_id IS NULL))
+        AND (source IN ($3, $4) OR (source IS NULL AND payment_channel = 'online' AND fundraiser_id IS NULL))
       GROUP BY 1`,
-    [month.from, month.until, DONATION_SOURCES[0]],
+    [month.from, month.until, DONATION_SOURCES[0], DONATION_SOURCES[1]],
   );
   return sourceTotalsFrom(r.rows);
 }

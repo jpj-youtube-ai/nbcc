@@ -883,6 +883,8 @@
         var gift = d.plan ? H.escapeHtml(d.mode) + " · " + H.escapeHtml(d.plan) : H.escapeHtml(d.mode);
         // A gift started on Fill a Red Bag (donations.source) says so beside the gift, in all three lists.
         if (d.source === "red_bag") gift += ' <span class="admin-pill dn-source-pill">Red Bag</span>';
+        // And one from the Festive Ball's own donate page (/ball/donate).
+        if (d.source === "ball") gift += ' <span class="admin-pill dn-source-pill">Festive Ball</span>';
         // TASK-241: one Payment pill combining payment_status + any refund (see helpers.paymentLabel).
         var pay = H.paymentLabel(d);
         return (
@@ -1114,17 +1116,25 @@
     // Fill a Red Bag only: the server narrows the list (it pages it), together with the two above.
     var redBagFilter = el("donationsRedBagFilter");
     var redBag = !!(redBagFilter && redBagFilter.checked);
+    // Festive Ball only, the same way. The two never go together (oneSourceFilter).
+    var ballFilter = el("donationsBallFilter");
+    var ball = !redBag && !!(ballFilter && ballFilter.checked);
     authFetch(
       "/api/admin/donations?limit=25&offset=" + donationsOffset +
         (pay ? "&paymentStatus=" + encodeURIComponent(pay) : "") +
         (mode ? "&mode=" + encodeURIComponent(mode) : "") +
-        (redBag ? "&source=red_bag" : ""),
+        (redBag ? "&source=red_bag" : "") +
+        (ball ? "&source=ball" : ""),
     )
       .then(okJson)
       .then(function (d) {
         wrap.innerHTML = donationsTable(d.results || [], {
           newPills: true,
-          empty: !redBag ? "" : pay || mode ? "No Fill a Red Bag gifts match these filters." : "No Fill a Red Bag gifts yet.",
+          empty: redBag
+            ? pay || mode ? "No Fill a Red Bag gifts match these filters." : "No Fill a Red Bag gifts yet."
+            : ball
+              ? pay || mode ? "No Festive Ball gifts match these filters." : "No Festive Ball gifts yet."
+              : "",
         });
         var total = d.total || 0;
         el("donationsPager").hidden = total <= 25;
@@ -1176,7 +1186,21 @@
   }
   // Both filters behave the same way: change it, go back to page one. Staying on page 4 of a
   // different list shows you an empty table and looks like the filter found nothing.
-  ["donationsPaymentFilter", "donationsModeFilter", "donationsRedBagFilter"].forEach(function (id) {
+  // A gift has one source, so "Fill a Red Bag only" and "Festive Ball only" never go together:
+  // ticking one unticks the other.
+  function oneSourceFilter(id) {
+    var other = el(id === "donationsRedBagFilter" ? "donationsBallFilter" : "donationsRedBagFilter");
+    var self = el(id);
+    if (self && other && self.checked) other.checked = false;
+  }
+  ["donationsRedBagFilter", "donationsBallFilter"].forEach(function (id) {
+    var control = el(id);
+    if (control)
+      control.addEventListener("change", function () {
+        oneSourceFilter(id);
+      });
+  });
+  ["donationsPaymentFilter", "donationsModeFilter", "donationsRedBagFilter", "donationsBallFilter"].forEach(function (id) {
     var control = el(id);
     if (control)
       control.addEventListener("change", function () {

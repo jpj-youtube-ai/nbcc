@@ -46,6 +46,11 @@ const DONOR_TYPES = ["individual", "company", "partnership"] as const;
 // Fill a Red Bag: the smallest gift, in pence (the page says the same: assets/js/red-bag-catalogue.js).
 export const RED_BAG_MIN_PENCE = 200;
 
+// The Festive Ball's "Can't make it? Donate" page: the smallest gift, in pence, and the page itself
+// (Back from Stripe's own page returns there). assets/js/ball-donate.js says the same.
+export const BALL_GIFT_MIN_PENCE = 200;
+export const BALL_DONATE_PATH = "/ball/donate";
+
 const checkoutBodySchema = z
   .object({
     mode: z.enum(["once", "monthly"]),
@@ -120,6 +125,9 @@ const checkoutBodySchema = z
     // Fill a Red Bag (/fill): an optional marker on an otherwise ordinary donation. Absent
     // (every donate page gift), nothing below applies and the session is exactly what it always was.
     redBag: z.boolean().optional(),
+    // The Festive Ball's donate page (/ball/donate): the same kind of optional marker. Absent, nothing
+    // below applies.
+    ball: z.boolean().optional(),
   })
   // Fill a Red Bag: £2 at least, and never also a gift on a fundraiser's page. Only with the marker.
   .refine((b) => b.redBag !== true || (b.amount ?? 0) >= RED_BAG_MIN_PENCE, {
@@ -129,6 +137,19 @@ const checkoutBodySchema = z
   .refine((b) => b.redBag !== true || b.fundraiserId === undefined, {
     message: "a Fill a Red Bag gift is not a gift on a fundraising page",
     path: ["fundraiserId"],
+  })
+  // The Ball's donate page: once only (Jaimie's choice), £2 at least, and only ever a Ball gift.
+  .refine((b) => b.ball !== true || b.mode === "once", {
+    message: "a Festive Ball gift is a one off gift",
+    path: ["mode"],
+  })
+  .refine((b) => b.ball !== true || (b.amount ?? 0) >= BALL_GIFT_MIN_PENCE, {
+    message: "the smallest Festive Ball gift is £2",
+    path: ["amount"],
+  })
+  .refine((b) => b.ball !== true || (b.fundraiserId === undefined && b.redBag !== true), {
+    message: "a Festive Ball gift is not a gift on a fundraising page or a Red Bag",
+    path: ["ball"],
   })
   // TASK-493: giving on a fundraiser's page is one off only, and £2 at least, as the design asks.
   // Monthly gifts there are not built yet (they would need the wall and meter to follow renewals).
@@ -343,6 +364,8 @@ export function buildSessionParams(
   // Fill a Red Bag: one key, only for a gift made on that page, so a donate page session gains no
   // keys at all. The webhook records the gift as the ordinary donation it is.
   if (body.redBag === true) metadata.redBag = "true";
+  // The Ball's donate page: likewise one key, only for a gift made there.
+  if (body.ball === true) metadata.ball = "true";
 
   // The declaration scope defaults from the gift's frequency (REQ-041): monthly is
   // enduring — one declaration covers all the donor's gifts — while a one-off covers just
@@ -428,6 +451,8 @@ export function buildSessionParams(
     // supporter recognition lookup). cancel_url is unchanged (a cancel is not a thank-you).
     ...(body.redBag === true
       ? redBagReturnUrls(embeddedRequested(body))
+      : body.ball === true
+      ? ballGiftReturnUrls(body)
       : fundraiserPage
       ? fundraiserReturnUrls(fundraiserPage, Boolean(body.supporterMessage), embeddedRequested(body))
       : embeddedRequested(body)
@@ -525,6 +550,19 @@ function redBagReturnUrls(
   const page = redBagPageUrl();
   const thanks = `${config.PORTAL_BASE_URL.replace(/\/+$/, "")}${RED_BAG_THANKS_PATH}?session_id={CHECKOUT_SESSION_ID}`;
   return embedded ? { ui_mode: "embedded_page", return_url: thanks } : { success_url: thanks, cancel_url: page };
+}
+
+/**
+ * The Ball's donate page: the donate page's own thank you either way; Back from Stripe's own page
+ * returns to /ball/donate rather than to the donate page.
+ */
+function ballGiftReturnUrls(
+  body: CheckoutBody,
+): Pick<StripeNS.Checkout.SessionCreateParams, "ui_mode" | "return_url" | "success_url" | "cancel_url"> {
+  const thanks = thankYouReturnUrl(body.mode, body.donorType);
+  return embeddedRequested(body)
+    ? { ui_mode: "embedded_page", return_url: thanks }
+    : { success_url: thanks, cancel_url: `${config.PORTAL_BASE_URL.replace(/\/+$/, "")}${BALL_DONATE_PATH}` };
 }
 
 /**

@@ -128,6 +128,8 @@ describe("the registry", () => {
   it("flattens children and answers isKnownPage", () => {
     expect(isKnownPage("/donate/thank-you")).toBe(true);
     expect(isKnownPage("/ball/terms")).toBe(true);
+    // The Ball's donate page (Jaimie, 14 October 2026).
+    expect(isKnownPage("/ball/donate")).toBe(true);
     expect(isKnownPage("/made-up")).toBe(false);
   });
 

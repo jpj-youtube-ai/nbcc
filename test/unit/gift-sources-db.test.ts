@@ -28,10 +28,11 @@ describe("the totals: one grouped read", () => {
     queryMock.mockResolvedValue({ rows: [] });
     await sumGiftsBySource(MONTH);
     expect(queryMock).toHaveBeenCalledTimes(1);
-    expect(call().params).toEqual(["2026-10-01", "2026-10-05T09:30:00.000Z", "red_bag"]);
+    expect(call().params).toEqual(["2026-10-01", "2026-10-05T09:30:00.000Z", "red_bag", "ball"]);
     expect(call().sql).toMatch(/GROUP BY 1/);
     // The source is a parameter, never written into the SQL itself.
     expect(call().sql).not.toMatch(/red_bag/);
+    expect(call().sql).not.toMatch(/source (=|IN) \(?'/);
   });
 
   it("counts money as the Overview does: paid gifts, less refunds, the gift alone", async () => {
@@ -52,12 +53,12 @@ describe("the totals: one grouped read", () => {
     );
   });
 
-  it("puts a gift in Fill a Red Bag by its source, and in the Donate page only when it is an online gift with no source and no fundraiser's page", async () => {
+  it("puts a gift in Fill a Red Bag or the Festive Ball by its source, and in the Donate page only when it is an online gift with no source and no fundraiser's page", async () => {
     queryMock.mockResolvedValue({ rows: [] });
     await sumGiftsBySource(MONTH);
     const { sql } = call();
-    expect(sql).toMatch(/CASE WHEN source = \$3 THEN 'redBag' ELSE 'donatePage' END/);
-    expect(sql).toMatch(/\(source = \$3 OR \(source IS NULL AND payment_channel = 'online' AND fundraiser_id IS NULL\)\)/);
+    expect(sql).toMatch(/CASE WHEN source = \$3 THEN 'redBag' WHEN source = \$4 THEN 'ball' ELSE 'donatePage' END/);
+    expect(sql).toMatch(/\(source IN \(\$3, \$4\) OR \(source IS NULL AND payment_channel = 'online' AND fundraiser_id IS NULL\)\)/);
   });
 
   it("does not count a gift that was refunded in full", async () => {
@@ -66,12 +67,13 @@ describe("the totals: one grouped read", () => {
     expect(call().sql).toMatch(/amount_pence > refunded_amount_pence/);
   });
 
-  it("hands back both buckets, a real zero where there were no gifts", async () => {
+  it("hands back every bucket, a real zero where there were no gifts", async () => {
     queryMock.mockResolvedValue({
       rows: [{ bucket: "redBag", month_pence: "2500", month_gifts: "2", all_pence: "4000", all_gifts: "3" }],
     });
     expect(await sumGiftsBySource(MONTH)).toEqual({
       redBag: { month: { pence: 2500, gifts: 2 }, all: { pence: 4000, gifts: 3 } },
+      ball: { month: { pence: 0, gifts: 0 }, all: { pence: 0, gifts: 0 } },
       donatePage: { month: { pence: 0, gifts: 0 }, all: { pence: 0, gifts: 0 } },
     });
   });

@@ -49,6 +49,10 @@ describe("the page", () => {
     expect(page).toMatch(/Giving as a business\?/);
   });
 
+  it("says what £50 could do in the site's own approved words", () => {
+    expect(page).toContain("£50 could help fill a whole Red Bag Full of Joy");
+  });
+
   it("says what a gift could do with 'could', never 'will'", () => {
     const words = page.replace(/<[^>]+>/g, " ");
     expect(words).toMatch(/could/);
@@ -79,6 +83,10 @@ describe("the form", () => {
     expect(form).toContain(SINGLE_DONATION_WORDING.wording_snapshot.replace(/'/g, "&#39;").replace(/"/g, "&quot;"));
     for (const id of ["bdGiftAid", "bdHouse", "bdAddress", "bdPostcode", "bdNonUk"]) expect(form).toContain(`id="${id}"`);
     expect(form).toMatch(/id="bdDeclaration"[^>]*hidden/);
+  });
+
+  it("marks its button as a donate button, so Analytics counts the click as the donate page's is", () => {
+    expect(form).toMatch(/<button[^>]*data-give-submit[^>]*data-give-pay/);
   });
 
   it("offers to cover the card fee, unticked", () => {

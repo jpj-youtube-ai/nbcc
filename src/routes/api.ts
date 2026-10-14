@@ -147,6 +147,11 @@ const checkoutBodySchema = z
     message: "the smallest Festive Ball gift is £2",
     path: ["amount"],
   })
+  // A person's gift: the page asks nothing a company or partnership gift needs (the donate page does).
+  .refine((b) => b.ball !== true || b.donorType === "individual", {
+    message: "a Festive Ball gift is a gift from a person",
+    path: ["donorType"],
+  })
   .refine((b) => b.ball !== true || (b.fundraiserId === undefined && b.redBag !== true), {
     message: "a Festive Ball gift is not a gift on a fundraising page or a Red Bag",
     path: ["ball"],

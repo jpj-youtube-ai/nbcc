@@ -130,6 +130,8 @@ describe("the registry", () => {
     expect(isKnownPage("/ball/terms")).toBe(true);
     // The Ball's donate page (Jaimie, 14 October 2026).
     expect(isKnownPage("/ball/donate")).toBe(true);
+    // Not offered to search engines: the page says noindex, and it redirects after the Ball.
+    expect(ALL_PAGES.find((p) => p.path === "/ball/donate")?.listedByDefault).toBe(false);
     expect(isKnownPage("/made-up")).toBe(false);
   });
 

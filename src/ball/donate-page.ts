@@ -107,7 +107,8 @@ export function renderBallDonateForm(): string {
     '<span class="give-check-text"><strong>Add <span data-cover-fee-amount>a little</span> to cover the card fee.</strong> Card payments cost NBCC a small fee. Cover it and your donation funds our work rather than the card company. Gift Aid still applies to your donation only.</span></label>' +
     "</div>" +
     '<div class="give-cta-row">' +
-    '<button class="btn btn-primary give-cta" type="submit" data-give-submit>Give now</button>' +
+    // data-give-pay: Analytics counts a click on it as a donate click (assets/js/pulse.js).
+    '<button class="btn btn-primary give-cta" type="submit" data-give-submit data-give-pay>Give now</button>' +
     '<p class="give-pay-note">Secure payment by Stripe. Card, Apple Pay and Direct Debit.</p>' +
     "</div>" +
     "</form>" +

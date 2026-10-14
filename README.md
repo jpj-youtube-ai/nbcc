@@ -6774,7 +6774,7 @@ Bag's are.
   Ball, UK time; `ballDonateOpen` in `src/ball/donate-page.ts`) it answers 302 to `/donate`.
   The file itself is not served at any other address. Listed in the site's page tree
   (`src/site/pages.ts`) under the Festive Ball, Ball gated, for the site map, QR codes and
-  Analytics.
+  Analytics, but not offered in `sitemap.xml` (it says noindex, and redirects after the Ball).
 - **The form.** Drawn by the server (`renderBallDonateForm`, `src/ball/donate-page.ts`) so the
   Gift Aid declaration is word for word `SINGLE_DONATION_WORDING`. It is the fundraiser pages'
   give form with its own ids (`bd...`) and their styles (`assets/css/fundraising.css`, plus the
@@ -6784,7 +6784,8 @@ Bag's are.
   makes it work: Stripe's own checkout opens on the page, or the giver goes to Stripe's page.
 - **The checkout.** The donate page's own, `POST /api/checkout-session`, with the optional marker
   `ball: true` (`src/routes/api.ts`). With the marker: once only, £2 at least
-  (`BALL_GIFT_MIN_PENCE`), never with a fundraiser or a Red Bag (400 otherwise), one metadata key
+  (`BALL_GIFT_MIN_PENCE`), a person's gift (`donorType` individual), never with a fundraiser or a
+  Red Bag (400 otherwise), one metadata key
   `ball: "true"`, and Back from Stripe's page returns to `/ball/donate`. The thank you page and the
   receipt email are the donate page's own. A gift without the marker is exactly as it was.
 - **Recording it.** The Stripe webhook reads the key (`sourceFromCheckoutSession`,

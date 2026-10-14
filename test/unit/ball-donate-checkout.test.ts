@@ -62,6 +62,12 @@ describe("a Ball gift's rules", () => {
     expect(create).not.toHaveBeenCalled();
   });
 
+  it("is a gift from a person: a company or a partnership gives on the donate page", async () => {
+    expect((await run({ ...ballGift, donorType: "company" })).statusCode).toBe(400);
+    expect((await run({ ...ballGift, donorType: "partnership" })).statusCode).toBe(400);
+    expect(create).not.toHaveBeenCalled();
+  });
+
   it("is open to everyone, with no look at who is signed in", async () => {
     expect((await run(ballGift)).statusCode).toBe(200);
   });

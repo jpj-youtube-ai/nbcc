@@ -1,0 +1,8 @@
+/* The Festive Ball's "Can't make it? Donate" page (/ball/donate, ball-donate.html). The give form is the
+ * fundraiser pages' (assets/css/fundraising.css); this only sets the column it sits in. Words wrap,
+ * nothing scrolls sideways. */
+.ball-donate-wrap { max-width: 760px; }
+/* The heading and the form share one column, with the form close under the words. */
+.ball-donate-top { padding-bottom: 8px; }
+.section.ball-donate { padding-top: 16px; }
+.ball-donate-business { margin: 24px 4px 0; color: var(--slate-soft); line-height: 1.55; }

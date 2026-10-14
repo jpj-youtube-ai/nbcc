@@ -6759,6 +6759,44 @@ it, what it answers, a failure), `admin-overview-route.test.ts` (the Overview's 
 `admin-red-bag.test.ts` (the real `admin.html` and `app.js` in jsdom). `features/admin-red-bag.feature`
 runs the read and the filter against a real database in CI.
 
+## The Festive Ball's donate page (/ball/donate)
+
+Jaimie asked on 14 October 2026 for a way for people who cannot come to the Ball to give instead,
+with the gift marked as coming from the Ball. Her choices: a page of its own in the Ball's look,
+once only, a button at the top of the Ball page, and the gifts shown in the admin as Fill a Red
+Bag's are.
+
+- **The button.** A third button in the Ball page's hero, after "Book tickets" and "What's the
+  night about?": **Can't make it? Donate**, to `/ball/donate`.
+- **The page.** `ball-donate.html`, served by `GET /ball/donate` in `src/routes/ball.ts`. Gated
+  exactly like `/ball` (the lock page while the gate is shut, unless the preview cookie is held),
+  `Cache-Control: public, max-age=0`, `noindex`. From Sunday 8 November 2026 (the day after the
+  Ball, UK time; `ballDonateOpen` in `src/ball/donate-page.ts`) it answers 302 to `/donate`.
+  The file itself is not served at any other address. Listed in the site's page tree
+  (`src/site/pages.ts`) under the Festive Ball, Ball gated, for the site map, QR codes and
+  Analytics, but not offered in `sitemap.xml` (it says noindex, and redirects after the Ball).
+- **The form.** Drawn by the server (`renderBallDonateForm`, `src/ball/donate-page.ts`) so the
+  Gift Aid declaration is word for word `SINGLE_DONATION_WORDING`. It is the fundraiser pages'
+  give form with its own ids (`bd...`) and their styles (`assets/css/fundraising.css`, plus the
+  small `assets/css/ball-donate.css`): £10, £25, £50, £100 or your own amount (£2 or more), name
+  and email, the newsletter tick, Gift Aid with the home address, and the card fee. Once only;
+  businesses are pointed to `/donate`, which takes company gifts. `assets/js/ball-donate.js`
+  makes it work: Stripe's own checkout opens on the page, or the giver goes to Stripe's page.
+- **The checkout.** The donate page's own, `POST /api/checkout-session`, with the optional marker
+  `ball: true` (`src/routes/api.ts`). With the marker: once only, £2 at least
+  (`BALL_GIFT_MIN_PENCE`), a person's gift (`donorType` individual), never with a fundraiser or a
+  Red Bag (400 otherwise), one metadata key
+  `ball: "true"`, and Back from Stripe's page returns to `/ball/donate`. The thank you page and the
+  receipt email are the donate page's own. A gift without the marker is exactly as it was.
+- **Recording it.** The Stripe webhook reads the key (`sourceFromCheckoutSession`,
+  `src/db/stripe-webhook-model.ts`) and writes `donations.source = 'ball'`. `DONATION_SOURCES` is
+  now `["red_bag", "ball"]`. No migration: the column has no check constraint, on purpose.
+- **In the admin.** A **Festive Ball** label on each gift in the donations tables, a **Festive Ball
+  only** filter beside Fill a Red Bag only (ticking one unticks the other; `?source=ball`), and a
+  **Festive Ball** line in the totals at the top of Donations, between Fill a Red Bag and Donate
+  page (`sumGiftsBySource` has a third bucket, `ball`). The Overview's Fill a Red Bag line is
+  unchanged.
+
 ## Nothing in the admin scrolls sideways (TASK-442)
 
 Reported twice, and it was one line causing all of it: `.admin-table th, .admin-table td` carried

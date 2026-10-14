@@ -39,6 +39,7 @@ import {
   verifyGateToken,
 } from "../ball/gate";
 import { renderBallPage } from "../ball/page";
+import { ballDonateOpen, renderBallDonatePage } from "../ball/donate-page";
 import { renderBallLockPage } from "../ball/lock-page";
 import { guestSubmissionSchema, makeGuestToken, guestsFromForm } from "../ball/guests";
 import { renderGuestNotFound, renderGuestPage } from "../ball/guest-page";
@@ -383,6 +384,36 @@ ballRouter.get("/ball/terms", async (req, res, next) => {
       return;
     }
     res.type("html").send(decorateBallPage(readFileSync(file, "utf8"), { ballItem: false, eventsOn: false, fundraisingOn: true }));
+  } catch (err) {
+    next(err);
+  }
+});
+
+// The Festive Ball's "Can't make it? Donate" page (Jaimie, 14 October 2026; src/ball/donate-page.ts).
+// Gated like the Ball page itself, and from the day after the Ball it sends people to the donate
+// page, so nobody reads "Can't make the Ball?" once it has happened. Served max-age=0, as /ball is.
+ballRouter.get("/ball/donate", async (req, res, next) => {
+  try {
+    if (!ballDonateOpen(new Date())) {
+      res.redirect(302, "/donate");
+      return;
+    }
+    const { allowed } = await canView(req);
+    if (!allowed) {
+      res.status(401).type("html").send(renderBallLockPage());
+      return;
+    }
+    const file = join(SITE_ROOT, "ball-donate.html");
+    if (!existsSync(file)) {
+      res.status(404).send("Not found");
+      return;
+    }
+    res.setHeader("Cache-Control", "public, max-age=0");
+    const page = renderBallDonatePage(readFileSync(file, "utf8"));
+    // While fundraising is on, the footer's "Fundraise for us" goes to the sign up, as on every page.
+    res
+      .type("html")
+      .send((await fundraisingIsOn()) ? decorateBallPage(page, { ballItem: false, eventsOn: false, fundraisingOn: true }) : page);
   } catch (err) {
     next(err);
   }

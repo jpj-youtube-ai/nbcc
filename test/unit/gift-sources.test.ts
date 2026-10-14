@@ -19,6 +19,7 @@ describe("the two buckets", () => {
     const t = sourceTotalsFrom([row("redBag", [41_200, 19], [196_000, 87]), row("donatePage", [213_000, 64], [3_140_000, 902])]);
     expect(t).toEqual({
       redBag: { month: { pence: 41_200, gifts: 19 }, all: { pence: 196_000, gifts: 87 } },
+      ball: { month: { pence: 0, gifts: 0 }, all: { pence: 0, gifts: 0 } },
       donatePage: { month: { pence: 213_000, gifts: 64 }, all: { pence: 3_140_000, gifts: 902 } },
     });
   });
@@ -32,6 +33,7 @@ describe("the two buckets", () => {
   it("ignores a bucket it does not know", () => {
     const t = sourceTotalsFrom([row("something_else", [900, 9], [900, 9])]);
     expect(t.redBag.all.gifts).toBe(0);
+    expect(t.ball.all.gifts).toBe(0);
     expect(t.donatePage.all.gifts).toBe(0);
   });
 });
@@ -50,10 +52,23 @@ describe("the words", () => {
     expect(giftsWords({ pence: 0, gifts: 0 })).toBe("£0 from 0 gifts");
   });
 
-  it("names the two lines exactly, Fill a Red Bag first", () => {
+  it("adds the Festive Ball's donate page as a third line, after Fill a Red Bag", () => {
+    const t = sourceTotalsFrom([row("ball", [7_500, 3], [12_000, 5]), row("donatePage", [500, 1], [500, 1])]);
+    expect(t.ball).toEqual({ month: { pence: 7_500, gifts: 3 }, all: { pence: 12_000, gifts: 5 } });
+    expect(t.redBag.all.gifts).toBe(0);
+    expect(sourceLines(t).map((l) => [l.key, l.name])).toEqual([
+      ["redBag", "Fill a Red Bag"],
+      ["ball", "Festive Ball"],
+      ["donatePage", "Donate page"],
+    ]);
+    expect(sourceLines(t)[1]).toMatchObject({ month: "£75 from 3 gifts", all: "£120 from 5 gifts" });
+  });
+
+  it("names the lines exactly, Fill a Red Bag first", () => {
     const lines = sourceLines(sourceTotalsFrom([row("redBag", [41_200, 19], [196_000, 87]), row("donatePage", [213_000, 64], [3_140_000, 902])]));
     expect(lines).toEqual([
       { key: "redBag", name: "Fill a Red Bag", month: "£412 from 19 gifts", all: "£1,960 from 87 gifts" },
+      { key: "ball", name: "Festive Ball", month: "£0 from 0 gifts", all: "£0 from 0 gifts" },
       { key: "donatePage", name: "Donate page", month: "£2,130 from 64 gifts", all: "£31,400 from 902 gifts" },
     ]);
   });

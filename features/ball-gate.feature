@@ -88,6 +88,26 @@ Feature: The Festive Ball password gate (TASK-313)
     When I request "/ball/terms"
     Then the ball page status should be 401
 
+  # Jaimie, 14 October 2026: "Can't make it? Donate", for anyone who cannot come.
+  @until-the-ball
+  Scenario: the Ball's donate page is gated too, and cannot be reached as a file
+    Given the ball gate is closed
+    When I request "/ball/donate"
+    Then the ball page status should be 401
+    When I request "/ball-donate.html"
+    Then the ball page should not contain "make the Ball"
+
+  @until-the-ball
+  Scenario: with the gate open, the Ball's donate page has its give form
+    Given the ball gate is open
+    When I request "/ball/donate"
+    Then the ball page status should be 200
+    And the ball page should contain "You can still help."
+    And the ball page should contain "id=\"bdGiveForm\""
+    And the ball page should not contain "ball-donate:form"
+    When I request the ball page
+    Then the ball page should contain "href=\"/ball/donate\""
+
   Scenario: a confirmed arrival time is published on the page
     Given the ball gate is open
     And the ball arrival time is set to "7pm for 7.30pm"

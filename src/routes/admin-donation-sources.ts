@@ -1,7 +1,7 @@
 import { Router, type Request, type Response } from "express";
 import { authorizeSection } from "./admin-authz";
 import { monthSoFar } from "../admin/overview-numbers";
-import { RED_BAG_COUNTED_FROM_NOTE, sourceLines } from "../admin/gift-sources";
+import { BALL_GIFTS_NOTE, RED_BAG_COUNTED_FROM_NOTE, sourceLines } from "../admin/gift-sources";
 import { sumGiftsBySource } from "../db/overview-numbers";
 
 // GET /api/admin/donations/source-totals: Fill a Red Bag against the Donate page, this UK month so
@@ -12,7 +12,7 @@ export async function getAdminDonationSourceTotals(req: Request, res: Response):
   if (!(await authorizeSection(req, res, "donations", "view"))) return;
   try {
     const totals = await sumGiftsBySource(monthSoFar(new Date()).current);
-    return res.status(200).json({ totals, lines: sourceLines(totals), note: RED_BAG_COUNTED_FROM_NOTE });
+    return res.status(200).json({ totals, lines: sourceLines(totals), note: `${RED_BAG_COUNTED_FROM_NOTE} ${BALL_GIFTS_NOTE}` });
   } catch (err) {
     console.error("admin donation source totals failed:", err instanceof Error ? err.message : err);
     return res.status(500).json({ error: "Admin is temporarily unavailable" });

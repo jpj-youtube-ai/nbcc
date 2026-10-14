@@ -65,7 +65,12 @@ export const SITE_PAGES: SitePage[] = [
     title: "Festive Ball",
     listedByDefault: true,
     ballGated: true,
-    children: [{ path: "/ball/terms", title: "Ticket terms", listedByDefault: true, ballGated: true }],
+    children: [
+      { path: "/ball/terms", title: "Ticket terms", listedByDefault: true, ballGated: true },
+      // Jaimie, 14 October 2026: for anyone who cannot come (src/ball/donate-page.ts).
+      // Not offered to search engines: it says noindex, and redirects to /donate after the Ball.
+      { path: "/ball/donate", title: "Can't make it? Donate", listedByDefault: false, ballGated: true },
+    ],
   },
 ];
 

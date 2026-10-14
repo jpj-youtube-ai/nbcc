@@ -130,8 +130,12 @@ Then("the Donate page has gone up by £{int} from {int} gift(s), this month and 
 });
 
 Then("the totals say when Fill a Red Bag gifts are counted from", function () {
-  assert.equal(this.rbBody.note, "Fill a Red Bag gifts are counted from 5 October 2026.");
-  assert.deepEqual(this.rbBody.lines.map((l) => l.name), ["Fill a Red Bag", "Donate page"]);
+  // The Festive Ball's donate page (14 October 2026) added its own line and a sentence to the note.
+  assert.equal(
+    this.rbBody.note,
+    "Fill a Red Bag gifts are counted from 5 October 2026. Festive Ball gifts are those made on the Ball's own donate page.",
+  );
+  assert.deepEqual(this.rbBody.lines.map((l) => l.name), ["Fill a Red Bag", "Festive Ball", "Donate page"]);
 });
 
 // The newest gifts first, so the ones just made are on the first page.

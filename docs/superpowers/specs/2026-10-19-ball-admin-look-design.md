@@ -88,3 +88,23 @@ test first:
 - Awaiting transfer is cards up to 819px, not 599px: "Mark as paid" needs 182px, which its column
   only has from 808px, so the list scrolled sideways on a 900 to 1080px laptop. The one existing
   test changed is that threshold in `admin-fits-a-phone.test.ts`.
+
+## After the independent review (before merging)
+
+The review found nothing lost: every id, form, request and handler survives. It found things the
+sections would otherwise have hidden, all fixed test first:
+
+- Set up's seats line counts named holds as well as the Held back number, as capacity does.
+- Awaiting transfer says when Bookings' no phone number filter is on, with Show all.
+- The Bookings and Awaiting transfer buttons say New when their lists hold a booking made since
+  the last visit, as Get involved's do.
+- The seats bar is out of the whole room, as the main Overview counts it.
+- Cancel and Release are 44px tall; Set up's seats held back list is cards on a phone.
+- Needs you's buttons move focus to the section's button and land you where the section starts.
+- Past dates read "closed"; a failed numbers load says so; the band can never stop the screen.
+- No section is hidden in the markup, so an older script meeting the new page shows everything.
+
+Set aside, with reasons, in the pull request: headings inside the drop downs' summaries (valid
+HTML, and every drop down is still reached and named by keyboard), find in page not reaching a
+hidden section (comes with one section at a time, which was asked for), and older dashes in text
+the script writes that this change does not touch.

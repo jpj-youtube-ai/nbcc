@@ -1744,7 +1744,7 @@
                 <div class="ball-needs" id="ballNeeds" aria-live="polite"><p class="admin-loading">Loading&hellip;</p></div>
               </div>
 
-              <div class="ball-part" data-ball-part="bookings" role="region" aria-label="Bookings" hidden>
+              <div class="ball-part" data-ball-part="bookings" role="region" aria-label="Bookings">
                 <p class="ball-part-intro">Everyone who has booked, and the three lists you can download.</p>
                 <div class="ball-downloads" id="ballExports">
                   <a class="ball-download" id="ballDoorList" href="#" download><b>Door list</b><span>For the welcome desk, alphabetical by surname.</span><em>Download CSV</em></a>
@@ -1762,7 +1762,7 @@
 
               <!-- TASK-484: bookings made to pay by bank transfer, holding their seats until the money
                    arrives. Marking one paid is for admins; more time and cancelling for Festive Ball edit. -->
-              <div class="ball-part" data-ball-part="transfers" role="region" aria-label="Awaiting transfer" hidden>
+              <div class="ball-part" data-ball-part="transfers" role="region" aria-label="Awaiting transfer">
                 <h3 class="admin-subhead">Awaiting transfer</h3>
                 <p class="admin-note">Booked to pay by bank transfer and holding their seats. When the money is in the bank, <b>Mark as paid</b> sends them their confirmation and the link to tell us who&rsquo;s coming. Only an admin can mark one paid.</p>
                 <div class="ball-toolbar">
@@ -1808,12 +1808,15 @@
                   </p>
                 </form>
                 <p class="ty-status" id="ballAddStatus" role="status" aria-live="polite"></p>
+                <!-- Bookings' "Show only bookings with no phone number" covers this list too (app.js,
+                     filterBallTransfers). It is ticked in another section, so this says when it is on. -->
+                <p class="admin-note ball-filtered" id="ballTransfersFiltered" hidden>Showing only the bookings with no phone number, as ticked in Bookings. <button type="button" class="admin-link" id="ballShowAllTransfers">Show all</button></p>
                 <div id="ballTransfers" aria-live="polite"><p class="admin-loading">Loading…</p></div>
               </div>
 
               <!-- The two chase lists, together: who still has guests to name, then who still has dinners
                    to choose. Names first, because nobody can choose a dinner for a guest nobody has named. -->
-              <div class="ball-part" data-ball-part="guests" role="region" aria-label="Guests and menu" hidden>
+              <div class="ball-part" data-ball-part="guests" role="region" aria-label="Guests and menu">
                 <section class="ball-panel" aria-labelledby="ballGuestsHead">
                   <h3 class="admin-subhead" id="ballGuestsHead">Guest details still to come</h3>
                   <p class="admin-note">Guest names, dietary requirements and access needs come from the person who booked, through the link in their confirmation email. Most of a table of ten arrives because the buyer chased nine other people, so this is who has not replied yet, biggest gap first. <b>Their link</b> opens the same page they were emailed, so you can resend it rather than asking them to find an old email.</p>
@@ -1833,7 +1836,7 @@
                 </section>
               </div>
 
-              <div class="ball-part" data-ball-part="emails" role="region" aria-label="Emails" hidden>
+              <div class="ball-part" data-ball-part="emails" role="region" aria-label="Emails">
                 <p class="ball-part-intro">Each of these emails everyone who has paid. Nothing sends until you press it, and anyone already sent one is skipped.</p>
                 <div class="ball-emails">
                   <article class="ball-email" aria-labelledby="ballReminderHead">
@@ -1859,7 +1862,7 @@
 
               <!-- Everything the ticket page and the emails read from. Each drop down says on its closed
                    line what it is set to now (app.js, ballSetupNow), so most visits need none opened. -->
-              <div class="ball-part" data-ball-part="setup" role="region" aria-label="Set up" hidden>
+              <div class="ball-part" data-ball-part="setup" role="region" aria-label="Set up">
                 <p class="ball-part-intro">Everything the ticket page and the emails read from. Open one to change it, and the change shows on the public page straight away. The prices are fixed in the code, because &pound;100 and &pound;1,000 are printed in the advert.</p>
 
                 <details class="ball-setting">

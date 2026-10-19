@@ -1900,6 +1900,20 @@ textarea.fx-call-input{min-height:88px;line-height:1.5;resize:vertical;field-siz
   .ball-cell .admin-pill{white-space:nowrap}
 }
 
+/* Set up's seats held back list: narrow, each hold is a labelled card too. As five columns in a
+   drop down on a phone, Release was squeezed into a button 39px wide and 154px tall. */
+#ballHolds{container:bhlist / inline-size}
+@container bhlist (max-width:599px){
+  .ball-holds-table,.ball-holds-table tbody{display:block}
+  .ball-holds-table thead{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+  .ball-holds-table tr{display:flex;flex-direction:column;border-bottom:1px solid var(--line);padding:10px 0}
+  .ball-holds-table tr:last-child{border-bottom:0}
+  .ball-holds-table td{border-bottom:0;padding:3px 0;display:flex;gap:10px;align-items:baseline;text-align:left}
+  .ball-holds-table td::before{content:attr(data-label);flex:0 0 5.5rem;font-size:.78rem;color:var(--slate-soft)}
+  .ball-holds-table td:last-child{padding-top:8px}
+  .ball-holds-table td:last-child::before{content:none}
+}
+
 /* The two chase lists in Guests and menu: who booked gets the room an email address needs. */
 .ball-chase-table th:nth-child(1),.ball-chase-table td:nth-child(1){width:17%}  /* Reference */
 .ball-chase-table th:nth-child(2),.ball-chase-table td:nth-child(2){width:39%}  /* Who booked */
@@ -2001,6 +2015,8 @@ textarea.fx-call-input{min-height:88px;line-height:1.5;resize:vertical;field-siz
 #view-ball .ball-seg-n{min-width:22px;padding:1px 7px;border-radius:999px;background:var(--card);color:var(--crimson);
   font-size:.74rem;font-weight:700;line-height:1.5;font-variant-numeric:tabular-nums}
 #view-ball .admin-seg.is-active .ball-seg-n{background:var(--cream);color:var(--crimson)}
+/* New, as Get involved's section buttons carry it; the button's gap spaces it. */
+#view-ball .ball-sections .admin-new-pill{margin-left:0}
 
 #view-ball .ball-part{scroll-margin-top:132px}
 #view-ball .ball-part-intro{margin:0 0 20px;max-width:66ch;color:var(--slate-soft)}
@@ -2058,7 +2074,7 @@ textarea.fx-call-input{min-height:88px;line-height:1.5;resize:vertical;field-siz
 
 /* In the lists, the exception is a quiet outline button, not the loudest thing on the row: Cancel
    on a booking, Release on a hold. Mark as paid, which is the job, keeps the full button. */
-#view-ball .ball-bookings-table .btn-danger,#view-ball #ballHolds .btn{min-height:40px;padding:6px 14px;font-size:.85rem;
+#view-ball .ball-bookings-table .btn-danger,#view-ball #ballHolds .btn{min-height:44px;padding:6px 14px;font-size:.85rem;
   background:transparent;color:var(--crimson);border:1.6px solid var(--line);box-shadow:none}
 #view-ball .ball-bookings-table .btn-danger::after,#view-ball #ballHolds .btn::after{content:none}
 #view-ball .ball-bookings-table .btn-danger:hover,#view-ball #ballHolds .btn:hover{background:var(--tan-soft);border-color:var(--crimson);color:var(--maroon);transform:none}
@@ -2067,6 +2083,9 @@ textarea.fx-call-input{min-height:88px;line-height:1.5;resize:vertical;field-siz
 #view-ball .ball-toolbar{display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;gap:12px 20px;margin:6px 0 14px}
 #view-ball .ball-search{flex-direction:column;align-items:stretch;gap:6px;font-weight:600;font-size:.88rem}
 #view-ball .ball-search input{width:min(100%,320px)}
+/* When Bookings' no phone number box is ticked: what it hides here, and the way to show it all. */
+#view-ball .ball-filtered{display:flex;flex-wrap:wrap;align-items:center;gap:0 12px;margin:0 0 12px}
+#view-ball .ball-filtered .admin-link{min-height:44px}
 
 /* Guests and menu: two groups, the second under a rule. Not cards: the lists in them already are.
    In each, the numbers, then room, then the list they come from. */
@@ -2134,7 +2153,8 @@ textarea.fx-call-input{min-height:88px;line-height:1.5;resize:vertical;field-siz
   #view-ball .ball-hero{grid-template-columns:1fr;gap:14px;padding:18px 18px 16px}
   #view-ball .ball-hero h2{font-size:1.75rem;margin-bottom:4px}
   #view-ball .ball-hero-when{font-size:.92rem;line-height:1.45}
-  #view-ball .ball-hero-facts{gap:10px 18px}
+  /* At 320px the band has 250px across, too little for two columns of at least 124px. */
+  #view-ball .ball-hero-facts{grid-template-columns:repeat(2,minmax(0,auto));gap:10px 18px}
   #view-ball .ball-hero-facts li{padding-top:8px}
   #view-ball .ball-hero-facts b{font-size:1.1rem}
   /* Two by two: three even rows of buttons the same width, rather than rows of one, two and three. */

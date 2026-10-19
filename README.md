@@ -3586,9 +3586,32 @@ downs, and for nothing it does to change. TASK-422's three bands and jump bar be
 | **Emails** | The week before reminder and the menu is here email, on their own, after the sections that tell you whether to press them. |
 | **Set up** | Seven drop downs (`details.ball-setting`), each saying on its closed line what it is set to now (`data-ball-now`, filled by `ballSetupNow`), so most visits need none opened. |
 
-The bar's buttons carry counts (transfers waiting, bookings with guests to chase), and the main
-Overview's Festive Ball lines open the section that deals with them (`ballAsk`,
-`BALL_NEED_SECTIONS`) rather than the top of the screen.
+The bar's buttons carry counts (transfers waiting, bookings with guests to chase), and **New**
+where the list behind them holds a booking made since this person last opened Festive Ball
+(TASK-487's row pill, as Get involved's section buttons carry it): without it, a visit spent on
+Overview would use up the New without anyone seeing the rows. The main Overview's Festive Ball
+lines open the section that deals with them (`ballAsk`, `BALL_NEED_SECTIONS`) rather than the top
+of the screen, and so do Needs you's buttons here: focus moves to that section's button, and from
+far down a long list you land where the section starts, under the pinned bar.
+
+Three things the sections would otherwise have hidden are said where they are seen:
+
+- **Seats held back**, on Set up's closed line, is the Held back number plus every named hold
+  still standing (TASK-324), as the seats on sale count them (`readCapacityState`). Until the holds
+  have loaded, or if they could not be, it says "at least".
+- **Bookings' "Show only bookings with no phone number"** has always covered the bank transfer
+  list too. That list is in another section now, so Awaiting transfer says when the filter is on
+  (`#ballTransfersFiltered`), with **Show all** to turn it off.
+- **The bar of seats sold** is out of the whole room, as the main Overview counts it ("312 of 400
+  seats sold"), so a booking held for its bank transfer does not move it when nothing has sold.
+
+Dates that have passed read in the past tense ("sales closed", "Closed"), and if the numbers could
+not load the Overview says so rather than showing a blank or a made up zero.
+
+No section is hidden by the markup: the script shows the chosen one before the screen is first
+drawn (`selectView` then `loadBall`, in one go). So a browser that meets the new page with the old
+script, for the minutes a deploy takes to roll out, gets every section on one long page, as the
+screen used to be, rather than five it cannot reach.
 
 **Nothing it does changed.** Every control kept its id, its element and its type. The bar, the
 counts, the band and Needs you are drawn from the answers the screen already fetched; they ask the
@@ -3604,15 +3627,20 @@ How the tests prove it:
   the six sections in order and where each control lives, the seven drop downs, that only the
   three band headings were retired, and that nothing on screen has a dash.
 - `test/unit/admin-ball-sections.test.ts` drives the real `app.js` in jsdom: switching, coming back
-  after a refresh, the band, the numbers, Needs you, the counts, the closed line summaries, the main
-  Overview's links, and that opening the screen asks for exactly the seven things, in the same
-  order, it asked for before, and nothing more when a section is chosen.
+  after a refresh or a save, the band, the numbers, Needs you (still loading, could not check, and
+  only then nothing), the counts and New, the closed line summaries with named holds, the no phone
+  number notice, the main Overview's links, the phone card cells, and that opening the screen asks
+  for exactly the seven things, in the same order, it asked for before, and nothing more when a
+  section is chosen.
 
 **Phones and smaller laptops.** Lists become labelled cards when they are narrow: the two chase
-lists now too (`bclist`, under 600px), and Awaiting transfer from 819px rather than 599px, since
+lists and Set up's seats held back now too (`bclist` and `bhlist`, under 600px; as five columns,
+Release had been squeezed into a button 39px wide and 154px tall), and Awaiting transfer from
+819px rather than 599px, since
 "Mark as paid" is 182px on one line and its 26% column only holds that from 808px (at 900px wide
 with the side menu the list scrolled 35px sideways, and a 1024px laptop did the same). Tick boxes
-are 20px with a 44px target, a date box is as wide as a date rather than the site wide 100%, and
+are 20px with a 44px target, Cancel and Release are 44px tall, a date box is as wide as a date
+rather than the site wide 100%, and
 the forms inside the drop downs are drawn flat, since the drop down is already the card. Verified
 in a real browser at 320, 390, 600, 768, 820, 861, 900, 960, 1024, 1100, 1280 and 1366px: nothing
 scrolls sideways and no box has a scrollbar of its own.

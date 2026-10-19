@@ -175,11 +175,14 @@ describe("six sections, one on screen at a time", () => {
     expect(row).toMatch(/data-ball-section="overview"[^>]*aria-pressed="true"/);
   });
 
-  it("has one part for each, all but the first hidden until chosen", () => {
+  // None is hidden by the markup. The script shows the chosen one before the screen is first drawn
+  // (selectView, then loadBall, in one go; admin-ball-sections.test.ts checks only one shows). And a
+  // browser that meets this page with the script from before it, for the minutes a deploy takes to
+  // roll out, gets every section on one long page, as the screen used to be, not five it cannot reach.
+  it("has one part for each, none hidden by the markup itself", () => {
     for (const [key] of SECTIONS) {
       const tag = view.slice(view.lastIndexOf("<", view.indexOf(`data-ball-part="${key}"`)), view.indexOf(">", view.indexOf(`data-ball-part="${key}"`)) + 1);
-      if (key === "overview") expect(tag).not.toMatch(/\shidden[\s>]/);
-      else expect(tag).toMatch(/\shidden[\s>]/);
+      expect(tag, key).not.toMatch(/\shidden[\s>]/);
     }
     expect((view.match(/data-ball-part="/g) || []).length).toBe(SECTIONS.length);
   });
@@ -200,7 +203,7 @@ describe("six sections, one on screen at a time", () => {
     const where: Record<string, readonly string[]> = {
       overview: ["ballStats", "ballNeeds"],
       bookings: ["ballExports", "ballDoorList", "ballCatering", "ballBookingsCsv", "ballNoPhone", "ballNoPhoneOnly", "ballBookings"],
-      transfers: ["ballTransferSearch", "ballAddTransferOpen", "ballAddTransferForm", "ballAddStatus", "ballTransfers"],
+      transfers: ["ballTransferSearch", "ballAddTransferOpen", "ballAddTransferForm", "ballAddStatus", "ballTransfersFiltered", "ballShowAllTransfers", "ballTransfers"],
       guests: ["ballGuestProgress", "ballOutstanding", "ballChase", "ballChaseStatus", "ballMenuProgress", "ballMenuOutstanding"],
       emails: ["ballSendReminders", "ballReminderCount", "ballReminderStatus", "ballSendMenuEmail", "ballMenuEmailCount", "ballMenuEmailStatus"],
       setup: [
@@ -314,6 +317,26 @@ describe("the stylesheet", () => {
     expect(narrow).toMatch(/\.ball-chase-table td::before\{content:attr\(data-label\)/);
     expect(narrow).toMatch(/\.ball-chase-table thead\{[^}]*clip:rect\(0 0 0 0\)/);
     expect(narrow).toMatch(/\.ball-chase-table td:nth-child\(n\)\{width:auto\}/);
+  });
+
+  it("keeps Cancel and Release 44px tall, the size a thumb can hit", () => {
+    expect(css).toMatch(/#view-ball \.ball-bookings-table \.btn-danger,#view-ball #ballHolds \.btn\{min-height:44px/);
+  });
+
+  // At 320px the band has 250px across, and two columns of at least 124px do not fit in it.
+  it("lets the band's facts share a small phone's width", () => {
+    const phone = css.slice(css.indexOf("@media (max-width:760px)", css.indexOf("Festive Ball: the new look")));
+    expect(phone).toMatch(/#view-ball \.ball-hero-facts\{[^}]*grid-template-columns:repeat\(2,minmax\(0,auto\)\)/);
+  });
+
+  it("turns the seats held back list into labelled cards when it is narrow", () => {
+    expect(css).toContain("#ballHolds{container:bhlist / inline-size}");
+    const at = css.indexOf("@container bhlist (max-width:599px)");
+    expect(at).toBeGreaterThan(-1);
+    const narrow = css.slice(at, css.indexOf("\n}", at));
+    expect(narrow).toMatch(/\.ball-holds-table td::before\{content:attr\(data-label\)/);
+    expect(narrow).toMatch(/\.ball-holds-table thead\{[^}]*clip:rect\(0 0 0 0\)/);
+    expect(narrow).toMatch(/\.ball-holds-table td\{[^}]*display:flex/);
   });
 
   it("makes every tick box on the screen a 44px target", () => {

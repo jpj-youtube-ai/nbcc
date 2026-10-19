@@ -31,6 +31,11 @@ let calls: Call[] = [];
 let fail: Set<string> = new Set();
 let ball: Record<string, unknown> = {};
 let overview: Record<string, unknown> = {};
+// What /api/admin/whats-new answers (TASK-478): which areas hold something new, and since when.
+let whatsNewAnswer: Record<string, unknown> = { areas: [] };
+// Answers held back until a test lets them go, to see the screen while one is still on its way.
+let pending: Set<string> = new Set();
+let release: Record<string, () => void> = {};
 
 const SETTINGS = {
   gateOpensAt: null, totalTables: 40, seatsPerTable: 10, heldSeats: 12, salesCloseAt: "2026-10-30T23:00:00Z",
@@ -43,7 +48,7 @@ function freshBall(): Record<string, unknown> {
   return {
     "/api/admin/ball": {
       settings: { ...SETTINGS }, gateOpen: true,
-      availability: { seatsRemaining: 76, tablesRemaining: 5 },
+      availability: { totalSeats: 400, seatsRemaining: 76, tablesRemaining: 5 },
       dashboard: { seatsSold: 312, totalPence: 3120000, donationsPence: 124050, giftAidablePence: 98000, newsletterOptIns: 57 },
     },
     "/api/admin/ball/bookings": { results: [], abandoned: 0, noPhone: 2 },
@@ -78,6 +83,7 @@ function respond(method: string, path: string) {
   if (path === "/api/admin/login") return j({ token, user: { email: "admin@nbcc", role: "admin" } });
   if (path === "/api/admin/me") return j({ email: "admin@nbcc", permissions: perms });
   if (path === "/api/admin/overview") return j(overview);
+  if (method === "GET" && path === "/api/admin/whats-new") return j(whatsNewAnswer);
   if (method === "GET" && path in ball) {
     if (fail.has(path)) return j({ error: "Admin is temporarily unavailable" }, 500);
     return j(ball[path]);
@@ -96,6 +102,8 @@ const shown = () =>
     .filter((p) => !(p as HTMLElement).hidden)
     .map((p) => p.getAttribute("data-ball-part"));
 const now = (key: string) => (document.querySelector(`[data-ball-now="${key}"]`) as HTMLElement).textContent;
+const when = (iso: string) =>
+  new Date(iso).toLocaleString("en-GB", { weekday: "short", day: "numeric", month: "short", hour: "numeric", minute: "2-digit" });
 const needs = () => Array.from(el("ballNeeds").querySelectorAll("li")) as HTMLElement[];
 const ballGets = () => calls.filter((c) => c.method === "GET" && c.path.startsWith("/api/admin/ball")).map((c) => c.path);
 
@@ -109,6 +117,7 @@ function boot() {
     const method = (init?.method || "GET").toUpperCase();
     const path = String(url).split("?")[0];
     calls.push({ method, path });
+    if (pending.has(path)) return new Promise((r) => (release[path] = () => r(respond(method, path))));
     return Promise.resolve(respond(method, path));
   };
   // eslint-disable-next-line no-eval
@@ -138,11 +147,15 @@ beforeEach(() => {
   fail = new Set();
   ball = freshBall();
   overview = { needs: [], failed: [], numbers: [], coming: [] };
+  whatsNewAnswer = { areas: [] };
+  pending = new Set();
+  release = {};
   window.sessionStorage.clear();
   boot();
 });
 afterEach(() => {
   vi.useRealTimers();
+  vi.restoreAllMocks();
 });
 
 describe("six sections, one on screen at a time", () => {
@@ -170,15 +183,43 @@ describe("six sections, one on screen at a time", () => {
     expect(shown()).toEqual(["setup"]);
   });
 
-  it("stays on its section when a save or a send reloads the screen", async () => {
+  it("stays on its section when you leave the screen and come back", async () => {
     await openBall();
     await press(sectionButton("transfers"));
-    // Any of the screen's reloads: here, leaving for another screen and coming back.
     (document.querySelector('.admin-nav-link[data-view="overview"]') as HTMLElement).click();
     await settle();
     (document.querySelector('.admin-nav-link[data-view="ball"]') as HTMLElement).click();
     await settle();
     expect(shown()).toEqual(["transfers"]);
+  });
+
+  it("stays on its section when a save reloads the screen", async () => {
+    await openBall();
+    await press(sectionButton("setup"));
+    (el("ballCardFeePercent") as HTMLInputElement).value = "1.5";
+    (el("ballCardFeeFixed") as HTMLInputElement).value = "20";
+    el("ballFeeForm").dispatchEvent(new Event("submit", { cancelable: true, bubbles: true }));
+    await settle();
+    expect(calls.some((c) => c.method === "PATCH" && c.path === "/api/admin/ball")).toBe(true);
+    expect(calls.filter((c) => c.method === "GET" && c.path === "/api/admin/ball")).toHaveLength(2);
+    expect(shown()).toEqual(["setup"]);
+  });
+
+  it("still works where the browser keeps nothing, as some private windows do", async () => {
+    const realGet = Storage.prototype.getItem;
+    const realSet = Storage.prototype.setItem;
+    vi.spyOn(Storage.prototype, "getItem").mockImplementation(function (this: Storage, k: string) {
+      if (k === "nbccAdminBallSection") throw new Error("denied");
+      return realGet.call(this, k);
+    });
+    vi.spyOn(Storage.prototype, "setItem").mockImplementation(function (this: Storage, k: string, v: string) {
+      if (k === "nbccAdminBallSection") throw new Error("denied");
+      return realSet.call(this, k, v);
+    });
+    await openBall();
+    expect(shown()).toEqual(["overview"]);
+    await press(sectionButton("guests"));
+    expect(shown()).toEqual(["guests"]);
   });
 
   it("moves along the buttons with the arrow keys, Home and End", async () => {
@@ -212,6 +253,15 @@ describe("the band", () => {
     expect(el("ballHeroPage").textContent).toContain("Public");
   });
 
+  // The band is decoration on top of the screen: a slip in its markup must not stop the screen
+  // asking for anything, or blank the numbers.
+  it("never stops the screen loading, whatever happens to its markup", async () => {
+    document.querySelectorAll("#ballHeroCountdown b, #ballHeroPage b").forEach((b) => b.remove());
+    await openBall();
+    expect(ballGets()).toHaveLength(7);
+    expect(el("ballStats").textContent).toContain("312 of 400 seats sold");
+  });
+
   it("says when it is private", async () => {
     (ball["/api/admin/ball"] as { gateOpen: boolean }).gateOpen = false;
     await openBall();
@@ -239,8 +289,9 @@ describe("Overview: the numbers at a glance", () => {
   it("shows the seats sold against what was on sale, and the money", async () => {
     await openBall();
     const glance = el("ballStats").textContent || "";
-    expect(glance).toContain("312");
-    expect(glance).toContain("seats sold");
+    // Out of the whole room, as the main Overview counts it ("312 of 400 seats sold"), so a booking
+    // waiting for its bank transfer does not move the bar when nothing has been sold.
+    expect(glance).toContain("312 of 400 seats sold");
     // Big numbers with their commas, and pence only when there are some.
     expect(glance).toContain("£31,200 taken");
     // Each card lists the rest the same way, one line each: what it is, then the number.
@@ -260,13 +311,15 @@ describe("Overview: the numbers at a glance", () => {
     ]);
     // The bar says in words what it shows.
     const bar = el("ballStats").querySelector('[role="img"]') as HTMLElement;
-    expect(bar.getAttribute("aria-label")).toBe("312 of 388 seats on sale sold");
+    expect(bar.getAttribute("aria-label")).toBe("312 of 400 seats sold");
+    expect((bar.firstElementChild as HTMLElement).style.width).toBe("78%");
   });
 
-  it("shows nothing, rather than a made up zero, when the numbers could not load", async () => {
+  it("says it could not load the numbers, rather than showing a made up zero", async () => {
     fail.add("/api/admin/ball");
     await openBall();
-    expect(el("ballStats").textContent).toBe("");
+    expect(el("ballStats").textContent).toContain("Could not load the numbers. Open Festive Ball again in a moment.");
+    expect(el("ballStats").textContent).not.toMatch(/\d/);
   });
 });
 
@@ -335,6 +388,29 @@ describe("Overview: Needs you", () => {
     expect(el("ballNeeds").textContent).toContain("Could not check the bank transfers");
     expect(el("ballNeeds").textContent).not.toContain("Nothing needs you");
   });
+
+  it("says it is still loading while one part has not answered, and only then that nothing needs you", async () => {
+    (ball["/api/admin/ball/transfers"] as { results: unknown[] }).results = [];
+    (ball["/api/admin/ball/bookings"] as { noPhone: number }).noPhone = 0;
+    (ball["/api/admin/ball/guest-progress"] as { summary: Record<string, number> }).summary.guestsMissing = 0;
+    (ball["/api/admin/ball/menu-progress"] as { summary: Record<string, number> }).summary.outstanding = 0;
+    pending.add("/api/admin/ball/menu-progress");
+    await openBall();
+    expect(el("ballNeeds").textContent).toContain("Loading");
+    expect(el("ballNeeds").textContent).not.toContain("Nothing needs you");
+    release["/api/admin/ball/menu-progress"]();
+    await settle();
+    expect(el("ballNeeds").textContent).toContain("Nothing needs you right now.");
+  });
+
+  it("takes keyboard focus to the section it opens, not to nowhere", async () => {
+    await openBall();
+    const go = needs()[0].querySelector("[data-ball-go]") as HTMLElement;
+    go.focus();
+    await press(go);
+    expect(shown()).toEqual(["transfers"]);
+    expect(document.activeElement).toBe(sectionButton("transfers"));
+  });
 });
 
 describe("the section buttons carry their counts", () => {
@@ -348,6 +424,58 @@ describe("the section buttons carry their counts", () => {
     (ball["/api/admin/ball/transfers"] as { results: unknown[] }).results = [];
     await openBall();
     expect(sectionButton("transfers").textContent!.trim()).toBe("Awaiting transfer");
+  });
+
+  // TASK-487's New pill marks a booking made since this person last opened Festive Ball. Those rows
+  // sit behind the Bookings and Awaiting transfer buttons now, so the buttons say New too, as Get
+  // involved's do, or a visit spent on Overview would use up the New without anyone seeing it.
+  it("says New on a section whose list holds a booking made since the last visit", async () => {
+    whatsNewAnswer = { areas: [{ area: "ball", new: true, since: "2026-10-17T00:00:00Z" }] };
+    (ball["/api/admin/ball/bookings"] as { results: unknown[] }).results = [
+      {
+        reference: "BALL-K2WD9F", buyerName: "Eilidh Ross", buyerEmail: "eilidh@example.net", buyerPhone: "07700 900456",
+        kind: "seat", quantity: 2, status: "paid", paymentMethod: "card", totalPence: 20000, donationPence: 0,
+        giftAid: false, newsletterOptIn: false, paidAt: "2026-10-18T09:00:00Z", createdAt: "2026-10-18T08:55:00Z",
+      },
+    ];
+    await openBall();
+    expect(sectionButton("bookings").querySelector(".admin-new-pill")).not.toBeNull();
+    // BALL-Q8D2LT was made on 18 October, after the last visit.
+    expect(sectionButton("transfers").querySelector(".admin-new-pill")).not.toBeNull();
+    expect(sectionButton("transfers").textContent).toMatch(/Awaiting transfer\s*,?\s*3\s*,?\s*New/);
+    expect(sectionButton("overview").querySelector(".admin-new-pill")).toBeNull();
+  });
+
+  it("says New nowhere when nothing arrived since the last visit", async () => {
+    whatsNewAnswer = { areas: [{ area: "ball", new: false, since: "2026-10-19T09:00:00Z" }] };
+    await openBall();
+    expect(document.querySelector("#ballSections .admin-new-pill")).toBeNull();
+  });
+});
+
+// "Show only bookings with no phone number" is ticked in Bookings, and it has always covered the bank
+// transfer list too. The two lists are in different sections now, so Awaiting transfer says when it
+// is on, and can turn it off: a payment must never just seem to be missing.
+describe("Awaiting transfer says when the no phone number filter from Bookings is on", () => {
+  const rowsShown = () =>
+    Array.from(document.querySelectorAll("#ballTransfers tbody tr")).filter((r) => !(r as HTMLElement).hidden).length;
+
+  it("says nothing until the box is ticked, then says so, and can show them all again", async () => {
+    await openBall();
+    expect(el("ballTransfersFiltered").hidden).toBe(true);
+    expect(rowsShown()).toBe(3);
+    const only = el("ballNoPhoneOnly") as HTMLInputElement;
+    only.checked = true;
+    only.dispatchEvent(new Event("change", { bubbles: true }));
+    await settle();
+    // BALL-3HXW9P is the one with no phone number.
+    expect(rowsShown()).toBe(1);
+    expect(el("ballTransfersFiltered").hidden).toBe(false);
+    expect(el("ballTransfersFiltered").textContent).toContain("Showing only the bookings with no phone number");
+    await press(el("ballShowAllTransfers"));
+    expect(only.checked).toBe(false);
+    expect(rowsShown()).toBe(3);
+    expect(el("ballTransfersFiltered").hidden).toBe(true);
   });
 });
 
@@ -396,6 +524,25 @@ describe("Guests and menu: the chase lists label their cells for a phone", () =>
   });
 });
 
+// Set up's seats held back list too: as five columns in a drop down on a phone, Release was
+// squeezed into a button 39px wide and 154px tall, a letter or two to a line.
+describe("Set up: the seats held back list labels its cells for a phone", () => {
+  it("names each cell, keeps the name and its note in one block, and says the same as before", async () => {
+    (ball["/api/admin/ball/holds"] as { results: unknown[] }).results = [
+      { id: 7, name: "The sponsor's guests", kind: "table", quantity: 1, seats: 10, note: "Top table", expiresAt: null, createdBy: "admin@nbcc", createdAt: "2026-10-12T10:00:00Z" },
+    ];
+    await openBall();
+    const cells = Array.from(el("ballHolds").querySelectorAll("tbody tr:first-child td"));
+    expect(cells.map((td) => td.getAttribute("data-label"))).toEqual(["For", "Held", "Until", "Placed by", ""]);
+    expect(el("ballHolds").querySelector("table")?.classList.contains("ball-holds-table")).toBe(true);
+    expect(cells[0].children).toHaveLength(1);
+    expect(cells[0].firstElementChild?.className).toBe("ball-who");
+    expect(el("ballHolds").querySelector("tbody tr")?.textContent).toBe(
+      "The sponsor's guestsTop table1 table (10 seats)until releasedadmin@nbccRelease",
+    );
+  });
+});
+
 describe("Set up: each drop down says what it is set to", () => {
   it("on its closed line", async () => {
     await openBall();
@@ -423,6 +570,30 @@ describe("Set up: each drop down says what it is set to", () => {
     expect(now("details")).toBe("Arrival time to be confirmed");
     expect(now("menu")).toBe("Not set yet");
     expect(now("lock")).toBe("Not set, so nobody is chased");
+  });
+
+  // What the ticket page sells against counts the Held back number AND every named hold still standing
+  // (src/db/ball.ts, readCapacityState), so the closed line counts both.
+  it("counts the seats held for someone by name in the seats held back", async () => {
+    (ball["/api/admin/ball/holds"] as { results: unknown[] }).results = [
+      { id: 7, name: "The sponsor's guests", kind: "table", quantity: 3, seats: 30, note: "", expiresAt: null, createdBy: "admin@nbcc", createdAt: "2026-10-12T10:00:00Z" },
+    ];
+    await openBall();
+    expect(now("seats")).toBe("40 tables of 10, 42 seats held back, sales close " + when("2026-10-30T23:00:00Z"));
+  });
+
+  it("says at least, when the named holds could not be checked", async () => {
+    fail.add("/api/admin/ball/holds");
+    await openBall();
+    expect(now("seats")).toBe("40 tables of 10, at least 12 seats held back, sales close " + when("2026-10-30T23:00:00Z"));
+  });
+
+  it("says closed, not close, once the date has passed", async () => {
+    const d = ball["/api/admin/ball"] as { settings: Record<string, unknown> };
+    Object.assign(d.settings, { salesCloseAt: "2026-10-18T23:00:00Z", guestDetailsLockAt: "2026-10-18T17:00:00Z" });
+    await openBall();
+    expect(now("seats")).toBe("40 tables of 10, 12 seats held back, sales closed " + when("2026-10-18T23:00:00Z"));
+    expect(now("lock")).toBe("Closed " + when("2026-10-18T17:00:00Z"));
   });
 
   it("keeps every setting closed until opened", async () => {
@@ -459,6 +630,12 @@ describe("the main Overview's Festive Ball lines open their own section", () => 
   it("missing guest details open Guests and menu", async () => {
     await fromOverview("ballGuestsMissing", "4 Festive Ball bookings still have guest details missing");
     expect(shown()).toEqual(["guests"]);
+  });
+
+  it("any other Festive Ball line opens the screen where it was left", async () => {
+    await fromOverview("constructor", "Something else about the Festive Ball");
+    expect(el("view-ball").hidden).toBe(false);
+    expect(shown()).toEqual(["overview"]);
   });
 });
 

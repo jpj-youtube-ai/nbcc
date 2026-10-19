@@ -3501,7 +3501,8 @@ reads and the menu chase needed the same link off a different shape.
 
 Under **Content → Festive Ball**. Stats (seats and tables sold, remaining, money taken,
 donations, Gift Aid eligible, newsletter opt-ins), the gate control, capacity and the sales
-window, the late-confirmed details, and the bookings list.
+window, the late-confirmed details, and the bookings list, in six sections chosen from one bar
+(see [The new look](#the-new-look-task-571)).
 
 The gate button says what it will DO rather than what state it is in, and confirms first, naming
 the consequence: publishing shows the ticket page to the whole internet **and** puts the ball on
@@ -3520,7 +3521,8 @@ reports and send-buttons interleaved, so there was no way to predict where anyth
 of those buttons email everyone who has paid and cannot be taken back, and they sat mid-page
 between harmless settings.
 
-It is now three bands, in the order the job is actually done:
+It became three bands, in the order the job is actually done (**replaced in TASK-571** by six
+sections chosen from one bar: see [The new look](#the-new-look-task-571)):
 
 | Band | `id` | What it holds |
 |---|---|---|
@@ -3550,14 +3552,98 @@ things had to be true for that to work, each of which failed first:
 - `.admin-band`'s `scroll-margin-top` must clear **both** sticky bars, not just the nav. At 110px
   the heading you jumped to landed 41px behind the jump bar, so the click read as an overshoot.
 
-That last one is an invariant with no natural guard, so the test asserts it from the CSS at both
-widths, and separately checks the comment and brace counts balance — one stray `*/` silently
-kills every rule after it, which is how that bug got in.
+That last one is an invariant with no natural guard, so the test asserted it from the CSS at both
+widths (the bands went in TASK-571, and that check with them), and separately checks the comment
+and brace counts balance — one stray `*/` silently kills every rule after it, which is how that
+bug got in. That check stays.
 
 Two pre-existing overflows were fixed in the same breakpoint, since they made every view scroll
 sideways on a phone: the `style="width:420px"` fields are capped (on the label as well as the
 field, or `max-width:100%` resolves against a label already sized to its 420px content), and
 `.admin-segmented` may wrap. Measured across all 24 views at 375px: no sideways scroll anywhere.
+
+#### The new look (TASK-571)
+
+Jaimie, 19 October 2026: "it's just one big list of everything ... really hard to scroll through
+and it's not very clear what anything does". She asked for it to feel like the website, with drop
+downs, and for nothing it does to change. TASK-422's three bands and jump bar became:
+
+- **A band** in the public /ball page's own night blue and gold (`.ball-hero`, gold only there, as
+  on the poster): the date and venue, the two advertised prices, how many days are left
+  (`#ballHeroCountdown`, counted in whole days from its `data-ball-date`), and whether the ticket
+  page is public (`#ballHeroPage`, from the same answer the gate button reads).
+- **Six sections, one on screen at a time**, chosen from one bar (`#ballSections`). It is the Get
+  involved tab's pattern: `.admin-segmented`, `aria-pressed`, the arrow keys, Home and End, and the
+  section kept in `sessionStorage` as `nbccAdminBallSection`, so a refresh, or a save that reloads
+  the screen, comes back to it. Pinned under the top bar on a laptop; two by two on a phone.
+
+| Section | What it holds |
+|---|---|
+| **Overview** | The numbers at a glance: seats sold against the seats that were on sale, with a bar, then money taken, donations, Gift Aid eligible and newsletter sign ups. Then **Needs you**: bank transfers waiting (and how many are past their pay by date), bookings with no phone number, guests still to be named, dinners still to choose. Each line's button opens the section that deals with it. |
+| **Bookings** | The three downloads as cards that say what each list is for, the no phone number filter, and the bookings list. |
+| **Awaiting transfer** | The search, Add a bank transfer booking, and the list. |
+| **Guests and menu** | The two chase lists together: guest details still to come, then who has chosen. |
+| **Emails** | The week before reminder and the menu is here email, on their own, after the sections that tell you whether to press them. |
+| **Set up** | Seven drop downs (`details.ball-setting`), each saying on its closed line what it is set to now (`data-ball-now`, filled by `ballSetupNow`), so most visits need none opened. |
+
+The bar's buttons carry counts (transfers waiting, bookings with guests to chase), and **New**
+where the list behind them holds a booking made since this person last opened Festive Ball
+(TASK-487's row pill, as Get involved's section buttons carry it): without it, a visit spent on
+Overview would use up the New without anyone seeing the rows. The main Overview's Festive Ball
+lines open the section that deals with them (`ballAsk`, `BALL_NEED_SECTIONS`) rather than the top
+of the screen, and so do Needs you's buttons here: focus moves to that section's button, and from
+far down a long list you land where the section starts, under the pinned bar.
+
+Three things the sections would otherwise have hidden are said where they are seen:
+
+- **Seats held back**, on Set up's closed line, is the Held back number plus every named hold
+  still standing (TASK-324), as the seats on sale count them (`readCapacityState`). Until the holds
+  have loaded, or if they could not be, it says "at least".
+- **Bookings' "Show only bookings with no phone number"** has always covered the bank transfer
+  list too. That list is in another section now, so Awaiting transfer says when the filter is on
+  (`#ballTransfersFiltered`), with **Show all** to turn it off.
+- **The bar of seats sold** is out of the whole room, as the main Overview counts it ("312 of 400
+  seats sold"), so a booking held for its bank transfer does not move it when nothing has sold.
+
+Dates that have passed read in the past tense ("sales closed", "Closed"), and if the numbers could
+not load the Overview says so rather than showing a blank or a made up zero.
+
+No section is hidden by the markup: the script shows the chosen one before the screen is first
+drawn (`selectView` then `loadBall`, in one go). So a browser that meets the new page with the old
+script, for the minutes a deploy takes to roll out, gets every section on one long page, as the
+screen used to be, rather than five it cannot reach.
+
+**Nothing it does changed.** Every control kept its id, its element and its type. The bar, the
+counts, the band and Needs you are drawn from the answers the screen already fetched; they ask the
+server for nothing of their own. Two section names stay because other text points at them: the
+server tells staff to "Enter the bank details under Set up first", and the email to events@ says an
+admin marks a booking paid "under Festive Ball, Awaiting transfer". Needs you never says "Nothing
+needs you right now" while one of its four parts could not be checked (TASK-476's rule).
+
+How the tests prove it:
+
+- `test/unit/admin-ball-layout.test.ts` holds the 100 ids the screen had beforehand, each control
+  with its tag and type, and fails by name if one goes missing or changes. It pins the ten forms,
+  the six sections in order and where each control lives, the seven drop downs, that only the
+  three band headings were retired, and that nothing on screen has a dash.
+- `test/unit/admin-ball-sections.test.ts` drives the real `app.js` in jsdom: switching, coming back
+  after a refresh or a save, the band, the numbers, Needs you (still loading, could not check, and
+  only then nothing), the counts and New, the closed line summaries with named holds, the no phone
+  number notice, the main Overview's links, the phone card cells, and that opening the screen asks
+  for exactly the seven things, in the same order, it asked for before, and nothing more when a
+  section is chosen.
+
+**Phones and smaller laptops.** Lists become labelled cards when they are narrow: the two chase
+lists and Set up's seats held back now too (`bclist` and `bhlist`, under 600px; as five columns,
+Release had been squeezed into a button 39px wide and 154px tall), and Awaiting transfer from
+819px rather than 599px, since
+"Mark as paid" is 182px on one line and its 26% column only holds that from 808px (at 900px wide
+with the side menu the list scrolled 35px sideways, and a 1024px laptop did the same). Tick boxes
+are 20px with a 44px target, Cancel and Release are 44px tall, a date box is as wide as a date
+rather than the site wide 100%, and
+the forms inside the drop downs are drawn flat, since the drop down is already the card. Verified
+in a real browser at 320, 390, 600, 768, 820, 861, 900, 960, 1024, 1100, 1280 and 1366px: nothing
+scrolls sideways and no box has a scrollbar of its own.
 
 ### Every page wears the same shell (TASK-402)
 
@@ -6843,6 +6929,7 @@ admin scrolls sideways, inside a box or otherwise:
 - **The menu was a line of twenty buttons that scrolled sideways** below 760px: 2,247px of buttons
   in a 366px strip.
 - **So was the Festive Ball's jump bar**: 381px in 358px, with "Send something" off the edge.
+  (The jump bar went in TASK-571: see [The new look](#the-new-look-task-571).)
 
 Below **860px** (it was 760px) the menu leaves its 210px column and becomes one pinned **Menu**
 button that opens the whole list, wrapped into its five groups, every button at least 44px tall.
@@ -6870,6 +6957,8 @@ Two details are deliberate, and each was found by measuring:
 
 The jump bar wraps (two rows, 101px, at 390px) and sits at `top:61px` under the menu, and
 `.admin-band`'s `scroll-margin-top` is 177px there, so a jumped-to heading clears both bars.
+(Both went in TASK-571. The Festive Ball's section bar pins at `top:61px` from 761 to 860px;
+narrower it is not pinned, since its three rows would cover a third of a phone's screen.)
 
 Verified in a real browser on all 21 screens at 320, 360, 375, 390, 768, 860, 861 and 1280px, and
 again in headless Chrome emulating a 390px phone (the ticket's own method): `scrollWidth` equals the

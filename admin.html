@@ -1704,264 +1704,344 @@
             <!-- Festive Ball 2026 (TASK-313). The launch controls: the gate that publishes the
                  ticket page and the home-page promotion, capacity, the sales window, and the
                  details the venue confirmed after the page was written. There is deliberately NO
-                 ticket price field: £100 is printed in a magazine that cannot be recalled. -->
+                 ticket price field: £100 is printed in a magazine that cannot be recalled.
+                 October 2026 (Jaimie: "make it look almost like a website", "don't change any of the
+                 functionality"): a band in the Ball's own colours, then six sections, one on screen at
+                 a time, chosen with the row of buttons the Get involved tab uses (app.js, "Festive
+                 Ball: six sections"), and Set up as drop downs. A move, not a rewrite: every control
+                 keeps its id, its element and its code (test/unit/admin-ball-layout.test.ts lists them
+                 all). Two names stay as they are because other words point at them: the server says
+                 "Enter the bank details under Set up first", and the email to events@ says an admin
+                 "marks it paid under Festive Ball, Awaiting transfer". -->
             <section class="admin-view" id="view-ball" aria-labelledby="ball-heading" hidden>
-              <h2 id="ball-heading">Festive Ball</h2>
-              <p class="admin-view-intro">A Night to Remember, Saturday 7 November 2026 at The Park Hotel, Kilmarnock. Tickets are &pound;100 and a table of ten is &pound;1,000; those prices are fixed in the code because they are printed in the advert. Everything here takes effect on the public page immediately.</p>
+              <header class="ball-hero">
+                <div class="ball-hero-main">
+                  <h2 id="ball-heading">Festive Ball</h2>
+                  <p class="ball-hero-when">A Night to Remember, Saturday 7 November 2026 at The Park Hotel, Kilmarnock</p>
+                </div>
+                <ul class="ball-hero-facts" aria-label="The Ball at a glance">
+                  <li><span>A ticket</span><b>&pound;100</b></li>
+                  <li><span>A table of ten</span><b>&pound;1,000</b></li>
+                  <li id="ballHeroCountdown" data-ball-date="2026-11-07"><span>The night</span><b></b></li>
+                  <li id="ballHeroPage"><span>Ticket page</span><b>Checking&hellip;</b></li>
+                </ul>
+              </header>
 
-              <div class="admin-stats" id="ballStats" aria-live="polite"></div>
+              <div class="admin-segmented ball-sections" id="ballSections" role="group" aria-label="Which part of the Festive Ball to show">
+                <button class="admin-seg is-active" type="button" data-ball-section="overview" aria-pressed="true">Overview</button>
+                <button class="admin-seg" type="button" data-ball-section="bookings" aria-pressed="false">Bookings</button>
+                <button class="admin-seg" type="button" data-ball-section="transfers" aria-pressed="false">Awaiting transfer</button>
+                <button class="admin-seg" type="button" data-ball-section="guests" aria-pressed="false">Guests and menu</button>
+                <button class="admin-seg" type="button" data-ball-section="emails" aria-pressed="false">Emails</button>
+                <button class="admin-seg" type="button" data-ball-section="setup" aria-pressed="false">Set up</button>
+              </div>
 
-              <nav class="admin-jump" aria-label="Sections of this page">
-                <a href="#ball-setup">Set up</a>
-                <a href="#ball-state">Where things stand</a>
-                <a href="#ball-send">Send something</a>
-              </nav>
-              <h3 class="admin-band" id="ball-setup">Set up</h3>
-              <p class="admin-note admin-band-note">Everything the ticket page and the emails read from. Set once, change when the venue tells you something new.</p>
-              <h3 class="admin-subhead">Is the page public?</h3>
-              <p class="admin-note" id="ballGateState" aria-live="polite">Checking…</p>
-              <form id="ballGateForm" class="ty-controls" autocomplete="off">
-                <button class="btn btn-primary" type="submit" id="ballGateToggle">Loading…</button>
-                <label class="ty-inline">or open it automatically at
-                  <input id="ballGateOpensAt" type="datetime-local" />
-                </label>
-                <button class="btn btn-ghost" type="button" id="ballGateSchedule">Save schedule</button>
-              </form>
-              <p class="ty-status" id="ballGateStatus" role="status" aria-live="polite"></p>
+              <!-- What is happening: the numbers, and what needs someone. Drawn by app.js from the
+                   same answers the sections below are drawn from; it asks for nothing of its own. -->
+              <div class="ball-part" data-ball-part="overview" role="region" aria-label="Overview">
+                <div class="ball-glance admin-stats" id="ballStats" aria-live="polite"></div>
+                <h3 class="admin-subhead">Needs you</h3>
+                <div class="ball-needs" id="ballNeeds" aria-live="polite"><p class="admin-loading">Loading&hellip;</p></div>
+              </div>
 
-              <h3 class="admin-subhead">Preview password</h3>
-              <p class="admin-note">What you give trustees and the sponsor so they can see the page before it's public. Changing it signs out anyone using the old one, which is usually the point. You never need to touch AWS for this.</p>
-              <form id="ballPasswordForm" class="ty-controls" autocomplete="off">
-                <label class="ty-inline">New password
-                  <input id="ballPreviewPassword" type="text" minlength="8" maxlength="200" autocomplete="new-password" placeholder="at least 8 characters" style="width:240px" />
-                </label>
-                <button class="btn btn-primary" type="submit" id="ballPasswordSave">Set password</button>
-              </form>
-              <p class="ty-status" id="ballPasswordStatus" role="status" aria-live="polite"></p>
+              <div class="ball-part" data-ball-part="bookings" role="region" aria-label="Bookings">
+                <p class="ball-part-intro">Everyone who has booked, and the three lists you can download.</p>
+                <div class="ball-downloads" id="ballExports">
+                  <a class="ball-download" id="ballDoorList" href="#" download><b>Door list</b><span>For the welcome desk, alphabetical by surname.</span><em>Download CSV</em></a>
+                  <a class="ball-download" id="ballCatering" href="#" download><b>Catering list</b><span>The one to send the venue: food and access notes only, no emails, no references, no money.</span><em>Download CSV</em></a>
+                  <a class="ball-download" id="ballBookingsCsv" href="#" download><b>Bookings</b><span>Every booking, for your own records.</span><em>Download CSV</em></a>
+                </div>
+                <!-- Jaimie 2026-10-03: the ticket page asks for the booker's phone number, for menu choices.
+                     Bookings made before that have none; staff ring or email for it and add it here. -->
+                <div class="ball-no-phone" id="ballNoPhone" hidden>
+                  <p class="admin-note"><b id="ballNoPhoneCount"></b> <span id="ballNoPhoneHow">Bookings made before the ticket page asked for one have none. Ask them by email, then press <b>Add phone</b> beside their booking.</span></p>
+                  <p class="ty-controls" id="ballNoPhoneOnlyLabel"><label class="ty-inline ball-add-check"><input id="ballNoPhoneOnly" type="checkbox" /> <span>Show only bookings with no phone number</span></label></p>
+                </div>
+                <div class="admin-table-wrap" id="ballBookings" aria-live="polite"><p class="admin-loading">Loading…</p></div>
+              </div>
 
-              <h3 class="admin-subhead">Capacity and sales</h3>
-              <form id="ballCapacityForm" class="ty-controls" autocomplete="off">
-                <label class="ty-inline">Tables
-                  <input id="ballTotalTables" type="number" min="1" max="200" step="1" style="width:90px" />
-                </label>
-                <label class="ty-inline">Seats per table
-                  <input id="ballSeatsPerTable" type="number" min="1" max="20" step="1" style="width:90px" />
-                </label>
-                <label class="ty-inline">Held back
-                  <input id="ballHeldSeats" type="number" min="0" max="2000" step="1" style="width:90px" />
-                </label>
-                <label class="ty-inline">Sales close
-                  <input id="ballSalesCloseAt" type="datetime-local" />
-                </label>
-                <label class="ty-inline"><input id="ballSalesClosed" type="checkbox" /> Close sales now</label>
-                <button class="btn btn-primary" type="submit" id="ballCapacitySave">Save</button>
-              </form>
-              <p class="admin-note">Seats held back never go on sale — use it for comps, the sponsor&rsquo;s guests and the top table. Individual tickets share tables, so a table only stays sellable while nobody has been seated at it.</p>
-              <p class="ty-status" id="ballCapacityStatus" role="status" aria-live="polite"></p>
-
-              <h3 class="admin-subhead">Seats held back</h3>
-              <p class="admin-note">Take seats or tables off sale for someone by name &mdash; a company waiting on an invoice, the sponsor&rsquo;s guests, the top table. Give it a date and the seats go back on sale by themselves if nothing comes of it, so a forgotten hold cannot quietly shrink the room.</p>
-              <form id="ballHoldForm" class="ty-controls" autocomplete="off">
-                <label class="ty-inline">For
-                  <input id="ballHoldName" type="text" maxlength="200" placeholder="e.g. Ayrshire Bakery (invoice 1042)" style="width:260px" required />
-                </label>
-                <label class="ty-inline">How many
-                  <input id="ballHoldQuantity" type="number" min="1" max="400" step="1" value="1" style="width:80px" />
-                </label>
-                <label class="ty-inline">of
-                  <select id="ballHoldKind">
-                    <option value="table">tables</option>
-                    <option value="seat">seats</option>
-                  </select>
-                </label>
-                <label class="ty-inline">Hold until
-                  <input id="ballHoldExpires" type="datetime-local" />
-                </label>
-                <label class="ty-inline">Note
-                  <input id="ballHoldNote" type="text" maxlength="500" style="width:200px" />
-                </label>
-                <button class="btn btn-primary" type="submit" id="ballHoldSave">Hold</button>
-              </form>
-              <p class="admin-note">Leave &ldquo;hold until&rdquo; empty to hold the seats until someone releases them by hand.</p>
-              <p class="ty-status" id="ballHoldStatus" role="status" aria-live="polite"></p>
-              <div id="ballHolds"></div>
-
-              <h3 class="admin-subhead">Card fee</h3>
-              <p class="admin-note">What Stripe charges NBCC. The ticket page offers buyers the chance to cover it, so this must be the rate you are <em>actually</em> on &mdash; check it against a real payment in the Stripe dashboard, not a price list. Stripe charges this <b>once per booking</b>, not per ticket.</p>
-              <form id="ballFeeForm" class="ty-controls" autocomplete="off">
-                <label class="ty-inline">Percentage
-                  <input id="ballCardFeePercent" type="number" min="0" max="10" step="0.01" style="width:90px" /> %
-                </label>
-                <label class="ty-inline">Plus, per booking
-                  <input id="ballCardFeeFixed" type="number" min="0" max="500" step="1" style="width:90px" /> p
-                </label>
-                <button class="btn btn-primary" type="submit" id="ballFeeSave">Save</button>
-              </form>
-              <p class="admin-note" id="ballFeeExample"></p>
-              <p class="ty-status" id="ballFeeStatus" role="status" aria-live="polite"></p>
-
-              <!-- TASK-484: the account bank transfer buyers pay into, and the switch that puts the
-                   choice on the ticket page. Admins only, enforced by the server. -->
-              <h3 class="admin-subhead">Bank transfer</h3>
-              <p class="admin-note">The account buyers pay into when they choose bank transfer. They see these only after booking, never on the open page. Only an admin can change them.</p>
-              <form id="ballTransferForm" class="ty-controls" autocomplete="off">
-                <label class="ty-inline">Account name
-                  <input id="ballTransferAccountName" type="text" maxlength="70" style="width:260px" />
-                </label>
-                <label class="ty-inline">Sort code
-                  <input id="ballTransferSortCode" type="text" inputmode="numeric" maxlength="8" placeholder="12-34-56" style="width:110px" />
-                </label>
-                <label class="ty-inline">Account number
-                  <input id="ballTransferAccountNumber" type="text" inputmode="numeric" maxlength="8" style="width:120px" />
-                </label>
-                <!-- TASK-485: every booking's pay-by date shortens to fit this, and after it the
-                     ticket page offers card only. Empty means no last day. -->
-                <label class="ty-inline">Last day for transfers to arrive
-                  <input id="ballTransferLastDay" type="date" />
-                </label>
-                <label class="ty-inline"><input id="ballTransferOn" type="checkbox" /> Offer bank transfer on the ticket page</label>
-                <button class="btn btn-primary" type="submit" id="ballTransferSave">Save</button>
-              </form>
-              <p class="ty-status" id="ballTransferStatus" role="status" aria-live="polite"></p>
-
-              <h3 class="admin-subhead">Details the venue confirms later</h3>
-              <p class="admin-note">Leave these empty and the page says &ldquo;to be confirmed&rdquo; rather than guessing. Fill one in and it appears on the ticket page and in every booking email from then on.</p>
-              <form id="ballDetailsForm" class="ty-controls admin-stack" autocomplete="off">
-                <label class="ty-inline">Arrival time
-                  <input id="ballArrivalTime" type="text" maxlength="120" placeholder="e.g. 7pm for 7.30pm" style="width:240px" />
-                </label>
-                <label class="ty-inline">What else is included
-                  <input id="ballIncludedNote" type="text" maxlength="1000" placeholder="e.g. Arrival drink and a three-course dinner." style="width:420px" />
-                </label>
-                <label class="ty-inline">Line-up note
-                  <input id="ballLineUpNote" type="text" maxlength="1000" placeholder="e.g. Special guest announced soon." style="width:420px" />
-                </label>
-                <button class="btn btn-primary" type="submit" id="ballDetailsSave">Save details</button>
-              </form>
-              <p class="ty-status" id="ballDetailsStatus" role="status" aria-live="polite"></p>
-
-              <h3 class="admin-subhead">The menu</h3>
-              <p class="admin-note">Paste what the venue sends, <b>one course per line</b>, options separated by a vertical bar. A line with no options is a course everybody gets. Leave this empty and guests see no menu section at all &mdash; which is how it ships, because the menu is not confirmed yet.</p>
-              <p class="admin-note"><code>Starter: Cullen skink | Haggis bon bons | Melon</code><br /><code>Main: Steak pie | Salmon | Mushroom wellington</code><br /><code>Dessert: Cranachan | Cheesecake</code></p>
-              <p class="admin-note">A course offering only one dish is <b>not a question</b> &mdash; write it as <code>To start: Soup</code> and guests are shown it as "served to everyone" rather than being asked to choose soup from a list containing soup.</p>
-              <form id="ballMenuForm" class="ty-controls admin-stack" autocomplete="off">
-                <label class="ty-inline" style="align-items:flex-start">Menu
-                  <textarea id="ballMenuOptions" rows="5" maxlength="4000" style="width:min(100%,520px)" placeholder="Leave empty until the venue confirms it"></textarea>
-                </label>
-                <label class="ty-inline" style="align-items:flex-start">Dietary key
-                  <textarea id="ballMenuNote" rows="2" maxlength="500" style="width:min(100%,520px)" placeholder="Paste the key exactly as the venue wrote it"></textarea>
-                </label>
-                <button class="btn btn-primary" type="submit">Save the menu</button>
-                <span class="ty-status" id="ballMenuStatus" role="status" aria-live="polite"></span>
-              </form>
-
-              <h3 class="admin-subhead">When guest details close</h3>
-              <p class="admin-note">The date the venue needs final numbers by. <b>Nothing is chased until you set this</b> &mdash; an email asking for names with no date in it is just nagging, and it spends the one message people actually read. Once it is set, anyone still outstanding gets a reminder a fortnight before, and a last call on the day itself.</p>
-              <form id="ballLockForm" class="ty-controls admin-stack" autocomplete="off">
-                <label class="ty-inline">Guest details close
-                  <input id="ballLockAt" type="datetime-local" style="width:240px" />
-                </label>
-                <button class="btn btn-primary" type="submit">Save the date</button>
-                <span class="ty-status" id="ballLockStatus" role="status" aria-live="polite"></span>
-              </form>
-
-              <h3 class="admin-band" id="ball-state">Where things stand</h3>
-              <p class="admin-note admin-band-note">Who has booked, who still owes you an answer, and the lists the venue needs. Read these before you send anything.</p>
               <!-- TASK-484: bookings made to pay by bank transfer, holding their seats until the money
                    arrives. Marking one paid is for admins; more time and cancelling for Festive Ball edit. -->
-              <h3 class="admin-subhead">Awaiting transfer</h3>
-              <p class="admin-note">Booked to pay by bank transfer and holding their seats. When the money is in the bank, <b>Mark as paid</b> sends them their confirmation and the link to tell us who&rsquo;s coming. Only an admin can mark one paid.</p>
-              <!-- TASK-488: staff add a booking by hand for a phone or email order. Festive Ball edit;
-                   shown by app.js. The same booking and emails as the ticket page's. -->
-              <p class="ty-controls">
-                <button type="button" class="btn btn-ghost" id="ballAddTransferOpen" aria-expanded="false" aria-controls="ballAddTransferForm" hidden>Add a bank transfer booking</button>
-              </p>
-              <form id="ballAddTransferForm" class="ball-add-transfer" autocomplete="off" hidden>
-                <p class="admin-note">For a phone or email order. The buyer gets the bank details and their reference by email, exactly as if they had booked on the ticket page, and events@ hears about it. This works before the ticket page offers bank transfer, once the bank details are in. There is no Gift Aid or newsletter sign-up here: those need the buyer&rsquo;s own declaration.</p>
-                <p class="ty-controls">
-                  <label class="ty-inline">How many
-                    <input id="ballAddQuantity" type="number" min="1" max="9" step="1" value="1" style="width:70px" />
+              <div class="ball-part" data-ball-part="transfers" role="region" aria-label="Awaiting transfer">
+                <h3 class="admin-subhead">Awaiting transfer</h3>
+                <p class="admin-note">Booked to pay by bank transfer and holding their seats. When the money is in the bank, <b>Mark as paid</b> sends them their confirmation and the link to tell us who&rsquo;s coming. Only an admin can mark one paid.</p>
+                <div class="ball-toolbar">
+                  <label class="ty-inline ball-search">Find a payment by reference, name or amount
+                    <input id="ballTransferSearch" type="search" autocomplete="off" />
                   </label>
-                  <label class="ty-inline">of
-                    <select id="ballAddKind">
-                      <option value="table">tables of 10 (up to 4)</option>
-                      <option value="seat">tickets (up to 9)</option>
-                    </select>
-                  </label>
-                  <label class="ty-inline">Donation &pound;
-                    <input id="ballAddDonation" type="number" min="0" step="0.01" inputmode="decimal" style="width:90px" />
-                  </label>
-                </p>
-                <div class="ty-field"><label for="ballAddFirstName">First name</label><input id="ballAddFirstName" type="text" maxlength="60" /></div>
-                <div class="ty-field"><label for="ballAddSurname">Surname</label><input id="ballAddSurname" type="text" maxlength="60" /></div>
-                <div class="ty-field"><label for="ballAddEmail">Email</label><input id="ballAddEmail" type="email" maxlength="254" /></div>
-                <div class="ty-field"><label for="ballAddBuyerPhone">Phone number (optional)</label><input id="ballAddBuyerPhone" type="tel" inputmode="tel" maxlength="40" autocomplete="off" /></div>
-                <p class="ty-controls"><label class="ty-inline ball-add-check"><input id="ballAddInvoice" type="checkbox" /> <span>Their company needs an invoice (14 days to pay)</span></label></p>
-                <div id="ballAddInvoiceFields" hidden>
-                  <div class="ty-field"><label for="ballAddCompany">Company name</label><input id="ballAddCompany" type="text" maxlength="120" /></div>
-                  <div class="ty-field"><label for="ballAddAddress">Company address</label><textarea id="ballAddAddress" rows="3" maxlength="400"></textarea></div>
-                  <div class="ty-field"><label for="ballAddPo">Purchase order number (optional)</label><input id="ballAddPo" type="text" maxlength="60" /></div>
-                  <div class="ty-field"><label for="ballAddAccountsEmail">Accounts team email (optional, copied on every email)</label><input id="ballAddAccountsEmail" type="email" maxlength="254" /></div>
-                  <div class="ty-field"><label for="ballAddPhone">Phone number (optional)</label><input id="ballAddPhone" type="tel" maxlength="40" /></div>
+                  <!-- TASK-488: staff add a booking by hand for a phone or email order. Festive Ball edit;
+                       shown by app.js. The same booking and emails as the ticket page's. -->
+                  <button type="button" class="btn btn-ghost" id="ballAddTransferOpen" aria-expanded="false" aria-controls="ballAddTransferForm" hidden>Add a bank transfer booking</button>
                 </div>
-                <p class="ty-controls"><label class="ty-inline ball-add-check"><input id="ballAddTerms" type="checkbox" /> <span><b>Required:</b> the buyer has agreed to the <a href="/ball/terms" target="_blank" rel="noopener">ticket terms</a>, including that tickets are non-refundable and it is an over 18s event.</span></label></p>
-                <p class="ty-controls">
-                  <button class="btn btn-primary" type="submit" id="ballAddSave">Add the booking</button>
-                  <button class="btn btn-ghost" type="button" id="ballAddCancel">Cancel</button>
-                </p>
-              </form>
-              <p class="ty-status" id="ballAddStatus" role="status" aria-live="polite"></p>
-              <label class="ty-inline">Find a payment by reference, name or amount
-                <input id="ballTransferSearch" type="search" autocomplete="off" style="width:220px" />
-              </label>
-              <div id="ballTransfers" aria-live="polite"><p class="admin-loading">Loading…</p></div>
-              <h3 class="admin-subhead">Bookings</h3>
-              <p class="admin-note">Three lists. The <b>door list</b> is alphabetical by surname for the welcome desk. The <b>catering list</b> is the one you send the venue: it has food and access notes only, no emails, no references, no money. The <b>bookings list</b> is for your own records.</p>
-              <p class="ty-controls" id="ballExports">
-                <a class="btn btn-ghost" id="ballDoorList" href="#" download>Door list (CSV)</a>
-                <a class="btn btn-ghost" id="ballCatering" href="#" download>Catering list for the venue (CSV)</a>
-                <a class="btn btn-ghost" id="ballBookingsCsv" href="#" download>Bookings (CSV)</a>
-              </p>
-              <!-- Jaimie 2026-10-03: the ticket page asks for the booker's phone number, for menu choices.
-                   Bookings made before that have none; staff ring or email for it and add it here. -->
-              <div class="ball-no-phone" id="ballNoPhone" hidden>
-                <p class="admin-note"><b id="ballNoPhoneCount"></b> <span id="ballNoPhoneHow">Bookings made before the ticket page asked for one have none. Ask them by email, then press <b>Add phone</b> beside their booking.</span></p>
-                <p class="ty-controls" id="ballNoPhoneOnlyLabel"><label class="ty-inline ball-add-check"><input id="ballNoPhoneOnly" type="checkbox" /> <span>Show only bookings with no phone number</span></label></p>
+                <form id="ballAddTransferForm" class="ball-add-transfer" autocomplete="off" hidden>
+                  <p class="admin-note">For a phone or email order. The buyer gets the bank details and their reference by email, exactly as if they had booked on the ticket page, and events@ hears about it. This works before the ticket page offers bank transfer, once the bank details are in. There is no Gift Aid or newsletter sign-up here: those need the buyer&rsquo;s own declaration.</p>
+                  <p class="ty-controls">
+                    <label class="ty-inline">How many
+                      <input id="ballAddQuantity" type="number" min="1" max="9" step="1" value="1" style="width:70px" />
+                    </label>
+                    <label class="ty-inline">of
+                      <select id="ballAddKind">
+                        <option value="table">tables of 10 (up to 4)</option>
+                        <option value="seat">tickets (up to 9)</option>
+                      </select>
+                    </label>
+                    <label class="ty-inline">Donation &pound;
+                      <input id="ballAddDonation" type="number" min="0" step="0.01" inputmode="decimal" style="width:90px" />
+                    </label>
+                  </p>
+                  <div class="ty-field"><label for="ballAddFirstName">First name</label><input id="ballAddFirstName" type="text" maxlength="60" /></div>
+                  <div class="ty-field"><label for="ballAddSurname">Surname</label><input id="ballAddSurname" type="text" maxlength="60" /></div>
+                  <div class="ty-field"><label for="ballAddEmail">Email</label><input id="ballAddEmail" type="email" maxlength="254" /></div>
+                  <div class="ty-field"><label for="ballAddBuyerPhone">Phone number (optional)</label><input id="ballAddBuyerPhone" type="tel" inputmode="tel" maxlength="40" autocomplete="off" /></div>
+                  <p class="ty-controls"><label class="ty-inline ball-add-check"><input id="ballAddInvoice" type="checkbox" /> <span>Their company needs an invoice (14 days to pay)</span></label></p>
+                  <div id="ballAddInvoiceFields" hidden>
+                    <div class="ty-field"><label for="ballAddCompany">Company name</label><input id="ballAddCompany" type="text" maxlength="120" /></div>
+                    <div class="ty-field"><label for="ballAddAddress">Company address</label><textarea id="ballAddAddress" rows="3" maxlength="400"></textarea></div>
+                    <div class="ty-field"><label for="ballAddPo">Purchase order number (optional)</label><input id="ballAddPo" type="text" maxlength="60" /></div>
+                    <div class="ty-field"><label for="ballAddAccountsEmail">Accounts team email (optional, copied on every email)</label><input id="ballAddAccountsEmail" type="email" maxlength="254" /></div>
+                    <div class="ty-field"><label for="ballAddPhone">Phone number (optional)</label><input id="ballAddPhone" type="tel" maxlength="40" /></div>
+                  </div>
+                  <p class="ty-controls"><label class="ty-inline ball-add-check"><input id="ballAddTerms" type="checkbox" /> <span><b>Required:</b> the buyer has agreed to the <a href="/ball/terms" target="_blank" rel="noopener">ticket terms</a>, including that tickets are non-refundable and it is an over 18s event.</span></label></p>
+                  <p class="ty-controls">
+                    <button class="btn btn-primary" type="submit" id="ballAddSave">Add the booking</button>
+                    <button class="btn btn-ghost" type="button" id="ballAddCancel">Cancel</button>
+                  </p>
+                </form>
+                <p class="ty-status" id="ballAddStatus" role="status" aria-live="polite"></p>
+                <!-- Bookings' "Show only bookings with no phone number" covers this list too (app.js,
+                     filterBallTransfers). It is ticked in another section, so this says when it is on. -->
+                <p class="admin-note ball-filtered" id="ballTransfersFiltered" hidden>Showing only the bookings with no phone number, as ticked in Bookings. <button type="button" class="admin-link" id="ballShowAllTransfers">Show all</button></p>
+                <div id="ballTransfers" aria-live="polite"><p class="admin-loading">Loading…</p></div>
               </div>
-              <div class="admin-table-wrap" id="ballBookings" aria-live="polite"><p class="admin-loading">Loading…</p></div>
-              <h3 class="admin-subhead">Who has chosen</h3>
-              <p class="admin-note">Counted against the guests who have been <b>named</b>, not the seats bought: you cannot pick a dinner for somebody whose name nobody has given you yet. That gap is the guest-details list above, and a different email fixes it.</p>
-              <div id="ballMenuProgress"></div>
-              <div id="ballMenuOutstanding"></div>
 
-              <h3 class="admin-subhead">Guest details still to come</h3>
-              <p class="admin-note">Guest names, dietary requirements and access needs come from the person who booked, through the link in their confirmation email. Most of a table of ten arrives because the buyer chased nine other people, so this is who has not replied yet &mdash; biggest gap first. <b>Their link</b> opens the same page they were emailed, so you can resend it rather than asking them to find an old email.</p>
-              <div class="admin-stats" id="ballGuestProgress" aria-live="polite"><p class="admin-loading">Loading&hellip;</p></div>
-              <div class="admin-table-wrap" id="ballOutstanding" aria-live="polite"></div>
-              <p class="ty-controls">
-                <button class="btn btn-ghost" type="button" id="ballChase">Email everyone outstanding</button>
-                <span class="ty-status" id="ballChaseStatus" role="status" aria-live="polite"></span>
-              </p>
-              <p class="admin-note">Sends the same reminder the daily job sends, right now. Anyone already emailed at this stage is skipped, so pressing it twice is safe.</p>
+              <!-- The two chase lists, together: who still has guests to name, then who still has dinners
+                   to choose. Names first, because nobody can choose a dinner for a guest nobody has named. -->
+              <div class="ball-part" data-ball-part="guests" role="region" aria-label="Guests and menu">
+                <section class="ball-panel" aria-labelledby="ballGuestsHead">
+                  <h3 class="admin-subhead" id="ballGuestsHead">Guest details still to come</h3>
+                  <p class="admin-note">Guest names, dietary requirements and access needs come from the person who booked, through the link in their confirmation email. Most of a table of ten arrives because the buyer chased nine other people, so this is who has not replied yet, biggest gap first. <b>Their link</b> opens the same page they were emailed, so you can resend it rather than asking them to find an old email.</p>
+                  <div class="admin-stats" id="ballGuestProgress" aria-live="polite"><p class="admin-loading">Loading&hellip;</p></div>
+                  <div class="admin-table-wrap" id="ballOutstanding" aria-live="polite"></div>
+                  <p class="ty-controls">
+                    <button class="btn btn-ghost" type="button" id="ballChase">Email everyone outstanding</button>
+                    <span class="ty-status" id="ballChaseStatus" role="status" aria-live="polite"></span>
+                  </p>
+                  <p class="admin-note">Sends the same reminder the daily job sends, right now. Anyone already emailed at this stage is skipped, so pressing it twice is safe.</p>
+                </section>
+                <section class="ball-panel" aria-labelledby="ballChosenHead">
+                  <h3 class="admin-subhead" id="ballChosenHead">Who has chosen</h3>
+                  <p class="admin-note">Counted against the guests who have been <b>named</b>, not the seats bought: you cannot pick a dinner for somebody whose name nobody has given you yet. That gap is the guest details list above, and a different email fixes it.</p>
+                  <div class="admin-stats" id="ballMenuProgress"></div>
+                  <div class="admin-table-wrap" id="ballMenuOutstanding"></div>
+                </section>
+              </div>
 
-              <h3 class="admin-band" id="ball-send">Send something</h3>
-              <p class="admin-note admin-band-note">Each of these emails everyone who has paid. Nothing sends until you press it, and anyone already sent one is skipped.</p>
-              <h3 class="admin-subhead">The week-before reminder</h3>
-              <p class="admin-note">One email to everyone who has paid: the practical details, plus a read-back of the guests and dietary notes they gave us, so a mistake gets caught while there is still time to fix it. Anyone already sent one is skipped, so pressing this twice is safe.</p>
-              <p class="ty-controls">
-                <button class="btn btn-primary" type="button" id="ballSendReminders">Send the reminder</button>
-                <span class="ty-count" id="ballReminderCount" aria-live="polite"></span>
-              </p>
-              <p class="ty-status" id="ballReminderStatus" role="status" aria-live="polite"></p>
+              <div class="ball-part" data-ball-part="emails" role="region" aria-label="Emails">
+                <p class="ball-part-intro">Each of these emails everyone who has paid. Nothing sends until you press it, and anyone already sent one is skipped.</p>
+                <div class="ball-emails">
+                  <article class="ball-email" aria-labelledby="ballReminderHead">
+                    <h3 class="admin-subhead" id="ballReminderHead">The reminder a week before</h3>
+                    <p class="admin-note">One email to everyone who has paid: the practical details, plus a read-back of the guests and dietary notes they gave us, so a mistake gets caught while there is still time to fix it. Anyone already sent one is skipped, so pressing this twice is safe.</p>
+                    <p class="ty-controls">
+                      <button class="btn btn-primary" type="button" id="ballSendReminders">Send the reminder</button>
+                      <span class="ty-count" id="ballReminderCount" aria-live="polite"></span>
+                    </p>
+                    <p class="ty-status" id="ballReminderStatus" role="status" aria-live="polite"></p>
+                  </article>
+                  <article class="ball-email" aria-labelledby="ballMenuEmailHead">
+                    <h3 class="admin-subhead" id="ballMenuEmailHead">Telling everyone the menu is here</h3>
+                    <p class="admin-note">One email to everyone who has paid: the menu itself, so they can read it without clicking anything, the hotel's room rate, and their own link to choose. <b>Nothing sends until you press this</b>, anyone already sent one is skipped, and it refuses while the menu in Set up is empty: an email headed "the menu is here" carrying no menu would burn the one send each booking gets.</p>
+                    <p class="ty-controls">
+                      <button class="btn btn-primary" type="button" id="ballSendMenuEmail">Send the menu email</button>
+                      <span class="ty-count" id="ballMenuEmailCount" aria-live="polite"></span>
+                    </p>
+                    <p class="ty-status" id="ballMenuEmailStatus" role="status" aria-live="polite"></p>
+                  </article>
+                </div>
+              </div>
 
-              <h3 class="admin-subhead">Telling everyone the menu is here</h3>
-              <p class="admin-note">One email to everyone who has paid: the menu itself, so they can read it without clicking anything, the hotel's room rate, and their own link to choose. <b>Nothing sends until you press this</b>, anyone already sent one is skipped, and it refuses while the menu above is empty &mdash; an email headed "the menu is here" carrying no menu would burn the one send each booking gets.</p>
-              <p class="ty-controls">
-                <button class="btn btn-primary" type="button" id="ballSendMenuEmail">Send the menu email</button>
-                <span class="ty-count" id="ballMenuEmailCount" aria-live="polite"></span>
-              </p>
-              <p class="ty-status" id="ballMenuEmailStatus" role="status" aria-live="polite"></p>
+              <!-- Everything the ticket page and the emails read from. Each drop down says on its closed
+                   line what it is set to now (app.js, ballSetupNow), so most visits need none opened. -->
+              <div class="ball-part" data-ball-part="setup" role="region" aria-label="Set up">
+                <p class="ball-part-intro">Everything the ticket page and the emails read from. Open one to change it, and the change shows on the public page straight away. The prices are fixed in the code, because &pound;100 and &pound;1,000 are printed in the advert.</p>
 
+                <details class="ball-setting">
+                  <summary><h3 class="ball-setting-name">The ticket page</h3><span class="ball-setting-now" data-ball-now="page"></span></summary>
+                  <div class="ball-setting-body">
+                    <h4 class="admin-subhead">Is the page public?</h4>
+                    <p class="admin-note" id="ballGateState" aria-live="polite">Checking…</p>
+                    <form id="ballGateForm" class="ty-controls" autocomplete="off">
+                      <button class="btn btn-primary" type="submit" id="ballGateToggle">Loading…</button>
+                      <label class="ty-inline">or open it automatically at
+                        <input id="ballGateOpensAt" type="datetime-local" />
+                      </label>
+                      <button class="btn btn-ghost" type="button" id="ballGateSchedule">Save schedule</button>
+                    </form>
+                    <p class="ty-status" id="ballGateStatus" role="status" aria-live="polite"></p>
+
+                    <h4 class="admin-subhead">Preview password</h4>
+                    <p class="admin-note">What you give trustees and the sponsor so they can see the page before it's public. Changing it signs out anyone using the old one, which is usually the point. You never need to touch AWS for this.</p>
+                    <form id="ballPasswordForm" class="ty-controls" autocomplete="off">
+                      <label class="ty-inline">New password
+                        <input id="ballPreviewPassword" type="text" minlength="8" maxlength="200" autocomplete="new-password" placeholder="at least 8 characters" style="width:240px" />
+                      </label>
+                      <button class="btn btn-primary" type="submit" id="ballPasswordSave">Set password</button>
+                    </form>
+                    <p class="ty-status" id="ballPasswordStatus" role="status" aria-live="polite"></p>
+                  </div>
+                </details>
+
+                <details class="ball-setting">
+                  <summary><h3 class="ball-setting-name">Seats and sales</h3><span class="ball-setting-now" data-ball-now="seats"></span></summary>
+                  <div class="ball-setting-body">
+                    <h4 class="admin-subhead">Capacity and sales</h4>
+                    <form id="ballCapacityForm" class="ty-controls" autocomplete="off">
+                      <label class="ty-inline">Tables
+                        <input id="ballTotalTables" type="number" min="1" max="200" step="1" style="width:90px" />
+                      </label>
+                      <label class="ty-inline">Seats per table
+                        <input id="ballSeatsPerTable" type="number" min="1" max="20" step="1" style="width:90px" />
+                      </label>
+                      <label class="ty-inline">Held back
+                        <input id="ballHeldSeats" type="number" min="0" max="2000" step="1" style="width:90px" />
+                      </label>
+                      <label class="ty-inline">Sales close
+                        <input id="ballSalesCloseAt" type="datetime-local" />
+                      </label>
+                      <label class="ty-inline"><input id="ballSalesClosed" type="checkbox" /> Close sales now</label>
+                      <button class="btn btn-primary" type="submit" id="ballCapacitySave">Save</button>
+                    </form>
+                    <p class="admin-note">Seats held back never go on sale: use it for comps, the sponsor&rsquo;s guests and the top table. Individual tickets share tables, so a table only stays sellable while nobody has been seated at it.</p>
+                    <p class="ty-status" id="ballCapacityStatus" role="status" aria-live="polite"></p>
+
+                    <h4 class="admin-subhead">Seats held back</h4>
+                    <p class="admin-note">Take seats or tables off sale for someone by name: a company waiting on an invoice, the sponsor&rsquo;s guests, the top table. Give it a date and the seats go back on sale by themselves if nothing comes of it, so a forgotten hold cannot quietly shrink the room.</p>
+                    <form id="ballHoldForm" class="ty-controls" autocomplete="off">
+                      <label class="ty-inline">For
+                        <input id="ballHoldName" type="text" maxlength="200" placeholder="e.g. Ayrshire Bakery (invoice 1042)" style="width:260px" required />
+                      </label>
+                      <label class="ty-inline">How many
+                        <input id="ballHoldQuantity" type="number" min="1" max="400" step="1" value="1" style="width:80px" />
+                      </label>
+                      <label class="ty-inline">of
+                        <select id="ballHoldKind">
+                          <option value="table">tables</option>
+                          <option value="seat">seats</option>
+                        </select>
+                      </label>
+                      <label class="ty-inline">Hold until
+                        <input id="ballHoldExpires" type="datetime-local" />
+                      </label>
+                      <label class="ty-inline">Note
+                        <input id="ballHoldNote" type="text" maxlength="500" style="width:200px" />
+                      </label>
+                      <button class="btn btn-primary" type="submit" id="ballHoldSave">Hold</button>
+                    </form>
+                    <p class="admin-note">Leave &ldquo;hold until&rdquo; empty to hold the seats until someone releases them by hand.</p>
+                    <p class="ty-status" id="ballHoldStatus" role="status" aria-live="polite"></p>
+                    <div id="ballHolds"></div>
+                  </div>
+                </details>
+
+                <details class="ball-setting">
+                  <summary><h3 class="ball-setting-name">Card fee</h3><span class="ball-setting-now" data-ball-now="fee"></span></summary>
+                  <div class="ball-setting-body">
+                    <p class="admin-note">What Stripe charges NBCC. The ticket page offers buyers the chance to cover it, so this must be the rate you are <em>actually</em> on. Check it against a real payment in the Stripe dashboard, not a price list. Stripe charges this <b>once per booking</b>, not per ticket.</p>
+                    <form id="ballFeeForm" class="ty-controls" autocomplete="off">
+                      <label class="ty-inline">Percentage
+                        <input id="ballCardFeePercent" type="number" min="0" max="10" step="0.01" style="width:90px" /> %
+                      </label>
+                      <label class="ty-inline">Plus, per booking
+                        <input id="ballCardFeeFixed" type="number" min="0" max="500" step="1" style="width:90px" /> p
+                      </label>
+                      <button class="btn btn-primary" type="submit" id="ballFeeSave">Save</button>
+                    </form>
+                    <p class="admin-note" id="ballFeeExample"></p>
+                    <p class="ty-status" id="ballFeeStatus" role="status" aria-live="polite"></p>
+                  </div>
+                </details>
+
+                <!-- TASK-484: the account bank transfer buyers pay into, and the switch that puts the
+                     choice on the ticket page. Admins only, enforced by the server. -->
+                <details class="ball-setting">
+                  <summary><h3 class="ball-setting-name">Bank transfer</h3><span class="ball-setting-now" data-ball-now="transfer"></span></summary>
+                  <div class="ball-setting-body">
+                    <p class="admin-note">The account buyers pay into when they choose bank transfer. They see these only after booking, never on the open page. Only an admin can change them.</p>
+                    <form id="ballTransferForm" class="ty-controls" autocomplete="off">
+                      <label class="ty-inline">Account name
+                        <input id="ballTransferAccountName" type="text" maxlength="70" style="width:260px" />
+                      </label>
+                      <label class="ty-inline">Sort code
+                        <input id="ballTransferSortCode" type="text" inputmode="numeric" maxlength="8" placeholder="12-34-56" style="width:110px" />
+                      </label>
+                      <label class="ty-inline">Account number
+                        <input id="ballTransferAccountNumber" type="text" inputmode="numeric" maxlength="8" style="width:120px" />
+                      </label>
+                      <!-- TASK-485: every booking's pay-by date shortens to fit this, and after it the
+                           ticket page offers card only. Empty means no last day. -->
+                      <label class="ty-inline">Last day for transfers to arrive
+                        <input id="ballTransferLastDay" type="date" />
+                      </label>
+                      <label class="ty-inline"><input id="ballTransferOn" type="checkbox" /> Offer bank transfer on the ticket page</label>
+                      <button class="btn btn-primary" type="submit" id="ballTransferSave">Save</button>
+                    </form>
+                    <p class="ty-status" id="ballTransferStatus" role="status" aria-live="polite"></p>
+                  </div>
+                </details>
+
+                <details class="ball-setting">
+                  <summary><h3 class="ball-setting-name">Details the venue confirms later</h3><span class="ball-setting-now" data-ball-now="details"></span></summary>
+                  <div class="ball-setting-body">
+                    <p class="admin-note">Leave these empty and the page says &ldquo;to be confirmed&rdquo; rather than guessing. Fill one in and it appears on the ticket page and in every booking email from then on.</p>
+                    <form id="ballDetailsForm" class="ty-controls admin-stack" autocomplete="off">
+                      <label class="ty-inline">Arrival time
+                        <input id="ballArrivalTime" type="text" maxlength="120" placeholder="e.g. 7pm for 7.30pm" style="width:240px" />
+                      </label>
+                      <label class="ty-inline">What else is included
+                        <input id="ballIncludedNote" type="text" maxlength="1000" placeholder="e.g. Arrival drink and a three-course dinner." style="width:420px" />
+                      </label>
+                      <label class="ty-inline">Line-up note
+                        <input id="ballLineUpNote" type="text" maxlength="1000" placeholder="e.g. Special guest announced soon." style="width:420px" />
+                      </label>
+                      <button class="btn btn-primary" type="submit" id="ballDetailsSave">Save details</button>
+                    </form>
+                    <p class="ty-status" id="ballDetailsStatus" role="status" aria-live="polite"></p>
+                  </div>
+                </details>
+
+                <details class="ball-setting">
+                  <summary><h3 class="ball-setting-name">The menu</h3><span class="ball-setting-now" data-ball-now="menu"></span></summary>
+                  <div class="ball-setting-body">
+                    <p class="admin-note">Paste what the venue sends, <b>one course per line</b>, options separated by a vertical bar. A line with no options is a course everybody gets. Leave this empty and guests see no menu section at all, which is how it ships, because the menu is not confirmed yet.</p>
+                    <p class="admin-note"><code>Starter: Cullen skink | Haggis bon bons | Melon</code><br /><code>Main: Steak pie | Salmon | Mushroom wellington</code><br /><code>Dessert: Cranachan | Cheesecake</code></p>
+                    <p class="admin-note">A course offering only one dish is <b>not a question</b>: write it as <code>To start: Soup</code> and guests are shown it as "served to everyone" rather than being asked to choose soup from a list containing soup.</p>
+                    <form id="ballMenuForm" class="ty-controls admin-stack" autocomplete="off">
+                      <label class="ty-inline" style="align-items:flex-start">Menu
+                        <textarea id="ballMenuOptions" rows="5" maxlength="4000" style="width:min(100%,520px)" placeholder="Leave empty until the venue confirms it"></textarea>
+                      </label>
+                      <label class="ty-inline" style="align-items:flex-start">Dietary key
+                        <textarea id="ballMenuNote" rows="2" maxlength="500" style="width:min(100%,520px)" placeholder="Paste the key exactly as the venue wrote it"></textarea>
+                      </label>
+                      <button class="btn btn-primary" type="submit">Save the menu</button>
+                      <span class="ty-status" id="ballMenuStatus" role="status" aria-live="polite"></span>
+                    </form>
+                  </div>
+                </details>
+
+                <details class="ball-setting">
+                  <summary><h3 class="ball-setting-name">When guest details close</h3><span class="ball-setting-now" data-ball-now="lock"></span></summary>
+                  <div class="ball-setting-body">
+                    <p class="admin-note">The date the venue needs final numbers by. <b>Nothing is chased until you set this.</b> An email asking for names with no date in it is just nagging, and it spends the one message people actually read. Once it is set, anyone still outstanding gets a reminder a fortnight before, and a last call on the day itself.</p>
+                    <form id="ballLockForm" class="ty-controls admin-stack" autocomplete="off">
+                      <label class="ty-inline">Guest details close
+                        <input id="ballLockAt" type="datetime-local" style="width:240px" />
+                      </label>
+                      <button class="btn btn-primary" type="submit">Save the date</button>
+                      <span class="ty-status" id="ballLockStatus" role="status" aria-live="polite"></span>
+                    </form>
+                  </div>
+                </details>
+              </div>
             </section>
 
             <!-- Audit trail (append-only governance log). -->

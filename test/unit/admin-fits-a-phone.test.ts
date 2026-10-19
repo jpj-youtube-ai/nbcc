@@ -474,8 +474,11 @@ describe("the stories table becomes labelled cards wherever it is narrow", () =>
 // TASK-484: the Festive Ball's bookings awaiting a bank transfer. At 375px its five columns were
 // 44-106px and the box scrolled 106px sideways to reach "Mark as paid". Narrow, each booking is a
 // labelled card, measured on the list itself like the Donations table.
+// Cards up to 819px, not 599px (October 2026): "Mark as paid" is 182px on one line, which its 26%
+// column only holds from 808px. Measured at 900px wide with the side menu, the list was 621px and
+// the box scrolled 35px sideways; a 1024px laptop did the same.
 describe("the bookings awaiting a transfer become labelled cards wherever they are narrow", () => {
-  const NARROW = "@container btlist (max-width:599px)";
+  const NARROW = "@container btlist (max-width:819px)";
 
   it("measures the list itself", () => {
     expect(rule("#ballTransfers")).toContain("container:btlist / inline-size");

@@ -929,7 +929,7 @@
               '<li class="ov-need" data-level="' + Number(n.level) + '">' +
               '<span class="ov-dot" aria-hidden="true"></span>' +
               '<span class="ov-text"><span class="sr-only">' + (NEED_LEVEL_WORDS[n.level] || "") + "</span>" + esc(n.text) + "</span>" +
-              '<button type="button" class="admin-btn admin-btn--small ov-go" data-ov-view="' + esc(n.view) + '">' + esc(ovButtonWords(n)) + "</button>" +
+              '<button type="button" class="admin-btn admin-btn--small ov-go" data-ov-view="' + esc(n.view) + '" data-ov-key="' + esc(n.key) + '">' + esc(ovButtonWords(n)) + "</button>" +
               "</li>"
             );
           })
@@ -1014,7 +1014,10 @@
       // Delegated, and attached once: the list is drawn again on every visit.
       var openView = function (e) {
         var btn = e.target.closest && e.target.closest("[data-ov-view]");
-        if (btn) selectView(btn.getAttribute("data-ov-view"));
+        if (!btn) return;
+        // A Festive Ball line opens the section of that screen that deals with it (ballAsk).
+        if (btn.getAttribute("data-ov-view") === "ball") ballAsk(BALL_NEED_SECTIONS[btn.getAttribute("data-ov-key")]);
+        selectView(btn.getAttribute("data-ov-view"));
       };
       el("overviewNeeds").addEventListener("click", openView);
       el("overviewNumbers").addEventListener("click", openView);
@@ -14959,6 +14962,334 @@
   var ballWired = false;
   var ballSettings = null;
 
+  // ---- Festive Ball: six sections (October 2026) ----
+  // Jaimie asked for this screen to read like a website and stop being "one big list of
+  // everything", and, twice, for nothing it does to change. So this part only decides what is on
+  // screen: which of the six sections shows, the band's two facts, the numbers at a glance, Needs
+  // you, the counts on the section buttons, and what each Set up drop down says on its closed line.
+  // It asks the server for nothing. Everything it draws comes from the answers loadBall already
+  // fetches, as they arrive, and it draws inside its own try: a summary going wrong must never stop
+  // the forms and lists it sits beside, which say all of it themselves.
+  var BALL_SECTIONS = ["overview", "bookings", "transfers", "guests", "emails", "setup"];
+  var BALL_SECTION_KEY = "nbccAdminBallSection";
+  var ballSection = null; // the section on screen
+  var ballAsked = null; // the section the main Overview's button asked for, for the next opening
+  // The main Overview's Festive Ball lines (src/admin/overview.ts), by key, and the section of this
+  // screen that deals with each. Its other Ball buttons open the screen where it was left.
+  var BALL_NEED_SECTIONS = { transfersOverdue: "transfers", transfersWaiting: "transfers", ballGuestsMissing: "guests" };
+
+  function ballAsk(section) {
+    if (BALL_SECTIONS.indexOf(section) !== -1) ballAsked = section;
+  }
+  function ballSectionButtons() {
+    return Array.prototype.slice.call(document.querySelectorAll("#ballSections [data-ball-section]"));
+  }
+  function ballShow(section) {
+    if (BALL_SECTIONS.indexOf(section) === -1) return;
+    ballSection = section;
+    try {
+      sessionStorage.setItem(BALL_SECTION_KEY, section);
+    } catch {
+      // Private mode: the section is not remembered through a refresh, and nothing else is lost.
+    }
+    ballSectionButtons().forEach(function (b) {
+      var on = b.getAttribute("data-ball-section") === section;
+      b.classList.toggle("is-active", on);
+      b.setAttribute("aria-pressed", on ? "true" : "false");
+    });
+    Array.prototype.forEach.call(document.querySelectorAll("#view-ball [data-ball-part]"), function (p) {
+      p.hidden = p.getAttribute("data-ball-part") !== section;
+    });
+  }
+  // Every time the screen loads: the section the Overview asked for, else the one on screen (a save
+  // or a send reloads the screen and must not move you), else the one this browser tab was last on.
+  function ballOpenSection() {
+    var remembered = null;
+    try {
+      remembered = sessionStorage.getItem(BALL_SECTION_KEY);
+    } catch {
+      remembered = null;
+    }
+    var section = [ballAsked, ballSection, remembered, "overview"].filter(function (s) {
+      return BALL_SECTIONS.indexOf(s) !== -1;
+    })[0];
+    ballAsked = null;
+    ballShow(section);
+  }
+  function ballWireSections() {
+    var row = el("ballSections");
+    if (!row) return;
+    row.addEventListener("click", function (e) {
+      var b = e.target && e.target.closest ? e.target.closest("[data-ball-section]") : null;
+      if (b) ballShow(b.getAttribute("data-ball-section"));
+    });
+    // Arrow keys, Home and End move along the buttons and show that section, as in Get involved.
+    row.addEventListener("keydown", function (e) {
+      var keys = { ArrowRight: 1, ArrowDown: 1, ArrowLeft: -1, ArrowUp: -1, Home: "first", End: "last" };
+      var move = keys[e.key];
+      var from = e.target && e.target.closest ? e.target.closest("[data-ball-section]") : null;
+      if (!move || !from) return;
+      var all = ballSectionButtons();
+      var at = all.indexOf(from);
+      if (at === -1) return;
+      e.preventDefault();
+      var next = move === "first" ? all[0] : move === "last" ? all[all.length - 1]
+        : all[(at + move + all.length) % all.length];
+      next.focus();
+      ballShow(next.getAttribute("data-ball-section"));
+    });
+    // Needs you's buttons, and any other button on the screen that names a section. Focus moves to
+    // that section's own button, since the one pressed has just been hidden with its section. From
+    // further down the page you are taken up to where the section starts: just under the bar where
+    // it is pinned (a laptop), or to the bar itself where it is not (a phone).
+    el("view-ball").addEventListener("click", function (e) {
+      var go = e.target && e.target.closest ? e.target.closest("[data-ball-go]") : null;
+      if (!go) return;
+      var key = go.getAttribute("data-ball-go");
+      if (BALL_SECTIONS.indexOf(key) === -1) return;
+      ballShow(key);
+      var button = ballSectionButtons().filter(function (b) { return b.getAttribute("data-ball-section") === key; })[0];
+      if (button) button.focus({ preventScroll: true });
+      var part = document.querySelector('#view-ball [data-ball-part="' + key + '"]');
+      if (!part || !part.scrollIntoView) return;
+      var pinned = window.getComputedStyle(row).position === "sticky";
+      if (pinned && part.getBoundingClientRect().top < row.getBoundingClientRect().bottom) part.scrollIntoView({ block: "start" });
+      else if (!pinned && row.getBoundingClientRect().top < 0) row.scrollIntoView({ block: "start" });
+    });
+    // TASK-571: Awaiting transfer's "Show all" turns off Bookings' no phone number filter, which
+    // covers both lists (filterBallNoPhone), as unticking the box there does.
+    var showAll = el("ballShowAllTransfers");
+    if (showAll) {
+      showAll.addEventListener("click", function () {
+        var only = el("ballNoPhoneOnly");
+        if (only) only.checked = false;
+        filterBallNoPhone();
+      });
+    }
+  }
+
+  // What Needs you and the counts are drawn from: one answer each, null until it arrives and false
+  // if it could not be had. Never "nothing needs you" while one is missing (TASK-476).
+  var ballGlance = { transfers: null, noPhone: null, guests: null, menu: null };
+  function ballGlanceReset() {
+    ballGlance = { transfers: null, noPhone: null, guests: null, menu: null };
+    ballGlanceDraw();
+  }
+  function ballGlanceSet(key, value) {
+    ballGlance[key] = value;
+    ballGlanceDraw();
+  }
+  function ballGlanceDraw() {
+    try {
+      ballNeedsDraw();
+      ballCountsDraw();
+    } catch {
+      // The sections hold every one of these numbers themselves.
+    }
+  }
+  function ballPlural(n, one, many) {
+    return n + " " + (n === 1 ? one : many);
+  }
+  // "£31,245", or "£1,240.50" when there are pence: a number this size wants its commas.
+  function ballMoney(pence) {
+    var p = pence || 0;
+    return "£" + (p / 100).toLocaleString("en-GB", { minimumFractionDigits: p % 100 ? 2 : 0, maximumFractionDigits: 2 });
+  }
+  function ballAnd(list) {
+    return list.length < 2 ? list.join("") : list.slice(0, -1).join(", ") + " and " + list[list.length - 1];
+  }
+  function ballNeedsDraw() {
+    var box = el("ballNeeds");
+    if (!box) return;
+    var g = ballGlance;
+    var lines = [];
+    var unknown = [];
+    if (g.transfers === false) unknown.push("the bank transfers");
+    else if (g.transfers && g.transfers.length) {
+      var waiting = g.transfers.length;
+      var overdue = g.transfers.filter(function (t) { return t.overdue; }).length;
+      lines.push({
+        level: overdue ? 1 : 2,
+        go: "transfers",
+        button: "Awaiting transfer",
+        text: (waiting === 1 ? "1 bank transfer is waiting for its money" : waiting + " bank transfers are waiting for their money") +
+          (overdue ? ", " + overdue + (overdue === 1 ? " is past its" : " are past their") + " pay by date" : ""),
+      });
+    }
+    if (g.noPhone === false) unknown.push("the phone numbers");
+    else if (g.noPhone > 0) {
+      lines.push({
+        level: 2,
+        go: "bookings",
+        button: "Bookings",
+        text: g.noPhone === 1 ? "1 booking has no phone number yet" : g.noPhone + " bookings have no phone number yet",
+      });
+    }
+    if (g.guests === false) unknown.push("the guest details");
+    else if (g.guests && g.guests.guestsMissing > 0) {
+      lines.push({
+        level: 3,
+        go: "guests",
+        button: "Guests and menu",
+        text: ballPlural(g.guests.guestsMissing, "guest", "guests") + " still to be named, across " +
+          ballPlural(g.guests.bookingsOutstanding || 0, "booking", "bookings"),
+      });
+    }
+    if (g.menu === false) unknown.push("the dinner choices");
+    else if (g.menu && g.menu.asking && g.menu.outstanding > 0) {
+      lines.push({
+        level: 3,
+        go: "guests",
+        button: "Guests and menu",
+        text: ballPlural(g.menu.outstanding, "guest", "guests") + " still to choose their dinner",
+      });
+    }
+    var esc = H.escapeHtml;
+    var html = lines.length
+      ? '<ul class="ov-needs">' +
+        lines
+          .map(function (n) {
+            return (
+              '<li class="ov-need" data-level="' + n.level + '">' +
+              '<span class="ov-dot" aria-hidden="true"></span>' +
+              '<span class="ov-text"><span class="sr-only">' + (NEED_LEVEL_WORDS[n.level] || "") + "</span>" + esc(n.text) + "</span>" +
+              '<button type="button" class="admin-btn admin-btn--small ov-go" data-ball-go="' + n.go + '">' + esc(n.button) + "</button>" +
+              "</li>"
+            );
+          })
+          .join("") +
+        "</ul>"
+      : "";
+    var stillComing = g.transfers === null || g.noPhone === null || g.guests === null || g.menu === null;
+    if (unknown.length) {
+      html += '<p class="ov-failed">Could not check ' + esc(ballAnd(unknown)) + ". Open Festive Ball again in a moment.</p>";
+    } else if (!lines.length) {
+      html += stillComing ? '<p class="admin-loading">Loading…</p>' : '<p class="ov-clear">Nothing needs you right now.</p>';
+    }
+    box.innerHTML = html;
+  }
+  // The section buttons carry the two counts worth knowing before you open them, and New where the
+  // list inside holds a booking made since this person last opened Festive Ball (TASK-487's pill).
+  // Those rows are behind these buttons now, as Get involved's are behind its own, so without it a
+  // visit spent on Overview would use up the New without anyone seeing it.
+  function ballCountsDraw() {
+    var counts = {
+      transfers: ballGlance.transfers ? ballGlance.transfers.length : 0,
+      guests: ballGlance.guests ? ballGlance.guests.bookingsOutstanding || 0 : 0,
+    };
+    var fresh = {
+      bookings: !!document.querySelector("#ballBookings .admin-new-pill"),
+      transfers: !!document.querySelector("#ballTransfers .admin-new-pill"),
+    };
+    ballSectionButtons().forEach(function (b) {
+      Array.prototype.forEach.call(b.querySelectorAll(".ball-seg-n, .admin-new-pill"), function (old) { old.remove(); });
+      var key = b.getAttribute("data-ball-section");
+      var n = counts[key];
+      // The comma is for a screen reader, so the button reads as "Awaiting transfer, 3".
+      if (n > 0) b.insertAdjacentHTML("beforeend", '<span class="ball-seg-n"><span class="sr-only">, </span>' + n + "</span>");
+      if (fresh[key]) b.insertAdjacentHTML("beforeend", NEW_PILL);
+    });
+  }
+
+  // The band: whether the ticket page is public, and how long is left. Each draws inside its own
+  // try: the band only repeats what the screen says below it, so a slip in its markup must never
+  // stop the screen loading or blank the numbers.
+  function ballHeroDraw(gateOpen) {
+    try {
+      var page = el("ballHeroPage");
+      var b = page && page.querySelector("b");
+      if (!b) return;
+      page.classList.toggle("is-public", gateOpen === true);
+      b.textContent = gateOpen === true ? "Public" : gateOpen === false ? "Private" : "Could not check";
+    } catch {
+      // Set up says whether the page is public, in words.
+    }
+  }
+  // Whole days on the calendar, so the evening before says "Tomorrow" whatever the time of day.
+  function ballCountdownDraw() {
+    try {
+      var box = el("ballHeroCountdown");
+      var b = box && box.querySelector("b");
+      if (!b) return;
+      var p = String(box.getAttribute("data-ball-date") || "").split("-").map(Number);
+      if (p.length !== 3 || p.some(isNaN)) return;
+      var today = new Date();
+      var days = Math.round(
+        (Date.UTC(p[0], p[1] - 1, p[2]) - Date.UTC(today.getFullYear(), today.getMonth(), today.getDate())) / 86400000,
+      );
+      // "Been and gone": the server's own words for it, when it refuses a reminder afterwards.
+      b.textContent = days > 1 ? days + " days to go" : days === 1 ? "Tomorrow" : days === 0 ? "Tonight" : "Been and gone";
+    } catch {
+      // The date is in the band's own words beside it.
+    }
+  }
+
+  // What each Set up drop down says on its closed line: what it is set to now.
+  function ballWhen(iso) {
+    var d = new Date(iso);
+    if (isNaN(d.getTime())) return "";
+    return d.toLocaleString("en-GB", { weekday: "short", day: "numeric", month: "short", hour: "numeric", minute: "2-digit" });
+  }
+  function ballNow(key, text) {
+    var n = document.querySelector('[data-ball-now="' + key + '"]');
+    if (n) n.textContent = text;
+  }
+  // A time that has been and gone reads in the past tense: "sales closed", not "sales close".
+  function ballPast(iso) {
+    var t = new Date(iso).getTime();
+    return !isNaN(t) && t <= Date.now();
+  }
+  // The named holds still standing, from loadBallHolds: null until they are known.
+  var ballHoldRows = null;
+  // Seats and sales. Held back is the Held back number plus every named hold still standing, as the
+  // seats on sale count it (src/db/ball.ts, readCapacityState); until the holds are known, at least.
+  function ballSeatsNow() {
+    try {
+      var st = ballSettings;
+      if (!st) return;
+      var named = ballHoldRows
+        ? ballHoldRows.reduce(function (n, h) { return n + (h.seats || 0); }, 0)
+        : null;
+      var held = named === null
+        ? (st.heldSeats ? ", at least " + ballPlural(st.heldSeats, "seat", "seats") + " held back" : "")
+        : ", " + ballPlural((st.heldSeats || 0) + named, "seat", "seats") + " held back";
+      var sales = st.salesClosed
+        ? ", sales closed"
+        : st.salesCloseAt
+          ? (ballPast(st.salesCloseAt) ? ", sales closed " : ", sales close ") + ballWhen(st.salesCloseAt)
+          : "";
+      ballNow("seats", ballPlural(st.totalTables, "table", "tables") + " of " + st.seatsPerTable + held + sales);
+    } catch {
+      // The forms inside the drop down say all of this themselves.
+    }
+  }
+  function ballSetupNow(gateOpen) {
+    try {
+      var st = ballSettings || {};
+      ballNow("page", gateOpen ? "Public" : st.gateOpensAt ? "Private, opens " + ballWhen(st.gateOpensAt) : "Private");
+      ballSeatsNow();
+      ballNow("fee", (st.cardFeePercentBp / 100).toFixed(2) + "% plus " + st.cardFeeFixedPence + "p a booking");
+      ballNow("details", st.arrivalTime ? "Arrival " + st.arrivalTime : "Arrival time to be confirmed");
+      var courses = String(st.menuOptions || "").split("\n").filter(function (l) { return l.trim(); }).length;
+      ballNow("menu", courses ? "Set, " + ballPlural(courses, "course", "courses") : "Not set yet");
+      ballNow(
+        "lock",
+        st.guestDetailsLockAt
+          ? (ballPast(st.guestDetailsLockAt) ? "Closed " : "Close ") + ballWhen(st.guestDetailsLockAt)
+          : "Not set, so nobody is chased",
+      );
+    } catch {
+      // The forms inside the drop downs say all of this themselves.
+    }
+  }
+  function ballTransferNow(s) {
+    try {
+      ballNow("transfer", s.on ? (s.lastDay ? "On, last day " + shortDay(s.lastDay) : "On") : "Off");
+    } catch {
+      // As above: the form says it.
+    }
+  }
+
   function ballStatus(id, msg) {
     var n = el(id);
     if (n) n.textContent = msg || "";
@@ -15054,12 +15385,13 @@
               : "") +
             "</small>"
           : "") +
-        '</span></td><td data-label="Amount">' + exactMoney(t.totalPence) + "<br /><small>" + what +
-        '</small></td><td data-label="Pay by">' + H.escapeHtml(shortDay(t.payBy)) +
+        // One block each too, so on a phone the amount stays over what it bought and Overdue stays whole.
+        '</span></td><td data-label="Amount"><span class="ball-cell">' + exactMoney(t.totalPence) + "<br /><small>" + what +
+        '</small></span></td><td data-label="Pay by"><span class="ball-cell">' + H.escapeHtml(shortDay(t.payBy)) +
         // TASK-485: past its date, for staff to decide on; and whether the reminder has gone.
         (t.overdue ? ' <span class="admin-pill is-new">Overdue</span>' : "") +
         (t.reminded ? "<br /><small>Reminder sent</small>" : "") +
-        '</td><td data-label=""><span class="ball-transfer-actions">' + actions + "</span></td></tr>";
+        '</span></td><td data-label=""><span class="ball-transfer-actions">' + actions + "</span></td></tr>";
     }).join("");
     return '<div class="admin-table-wrap"><table class="admin-table ball-transfers-table"><thead><tr><th>Reference</th><th>Who</th><th>Amount</th>' +
       "<th>Pay by</th><th></th></tr></thead><tbody>" + body + "</tbody></table></div>";
@@ -15081,6 +15413,9 @@
       var byAmount = digits.length > 0 && String(t.totalPence).indexOf(digits) === 0;
       tr.hidden = phoneHidden || !(text.indexOf(q) !== -1 || byAmount);
     });
+    // TASK-571: that box is ticked in Bookings, another section now, so this list says when it is on.
+    var filtered = el("ballTransfersFiltered");
+    if (filtered) filtered.hidden = !ballNoPhoneOnly();
   }
 
   // TASK-488: staff add a bank transfer booking by hand, for a phone or email order. The server
@@ -15197,9 +15532,11 @@
         ballTransferRows = d.results || [];
         el("ballTransfers").innerHTML = ballTransfersTable(ballTransferRows);
         filterBallTransfers();
+        ballGlanceSet("transfers", ballTransferRows);
       })
       .catch(function () {
         el("ballTransfers").innerHTML = '<p class="admin-empty">Could not load the bookings awaiting a transfer.</p>';
+        ballGlanceSet("transfers", false);
       });
   }
 
@@ -15215,6 +15552,7 @@
         var admin = isAdmin();
         ["ballTransferAccountName", "ballTransferSortCode", "ballTransferAccountNumber", "ballTransferLastDay", "ballTransferOn", "ballTransferSave"]
           .forEach(function (id) { el(id).disabled = !admin; });
+        ballTransferNow(s);
       })
       .catch(function () {
         ballStatus("ballTransferStatus", "Could not load the bank details.");
@@ -15292,11 +15630,14 @@
       var release = canEdit("ball")
         ? '<button type="button" class="btn btn-small" data-release-hold="' + h.id + '">Release</button>'
         : "";
-      return "<tr><td>" + H.escapeHtml(h.name) + (h.note ? "<br /><small>" + H.escapeHtml(h.note) + "</small>" : "") +
-        "</td><td>" + what + " (" + h.seats + " seats)</td><td>" + until +
-        "</td><td>" + H.escapeHtml(h.createdBy) + "</td><td>" + release + "</td></tr>";
+      // Labelled cells, so a narrow list is cards (admin.css, bhlist), and the name and its note one
+      // block, so the card's flex cell keeps them stacked.
+      return '<tr><td data-label="For"><span class="ball-who">' + H.escapeHtml(h.name) +
+        (h.note ? "<br /><small>" + H.escapeHtml(h.note) + "</small>" : "") +
+        '</span></td><td data-label="Held">' + what + " (" + h.seats + ' seats)</td><td data-label="Until">' + until +
+        '</td><td data-label="Placed by">' + H.escapeHtml(h.createdBy) + '</td><td data-label="">' + release + "</td></tr>";
     }).join("");
-    return '<table class="admin-table"><thead><tr><th>For</th><th>Held</th><th>Until</th>' +
+    return '<table class="admin-table ball-holds-table"><thead><tr><th>For</th><th>Held</th><th>Until</th>' +
       "<th>Placed by</th><th></th></tr></thead><tbody>" + body + "</tbody></table>";
   }
 
@@ -15305,9 +15646,14 @@
       .then(okJson)
       .then(function (d) {
         el("ballHolds").innerHTML = ballHoldsTable(d.results || []);
+        // Set up's closed line counts them in the seats held back (ballSeatsNow).
+        ballHoldRows = d.results || [];
+        ballSeatsNow();
       })
       .catch(function () {
         el("ballHolds").innerHTML = '<p class="admin-empty">Could not load holds.</p>';
+        ballHoldRows = null;
+        ballSeatsNow();
       });
   }
 
@@ -15453,13 +15799,15 @@
       var link = b.guestLink
         ? '<a href="' + H.escapeHtml(b.guestLink) + '" target="_blank" rel="noopener">Their link</a>'
         : "<small>No link yet</small>";
-      return "<tr><td>" + H.escapeHtml(b.reference) + "</td><td>" + H.escapeHtml(b.buyerName) +
+      // Labelled cells, so a narrow list is cards, as the payments are (admin.css, bclist).
+      return '<tr><td data-label="Reference">' + H.escapeHtml(b.reference) +
+        '</td><td data-label="Who booked"><span class="ball-who">' + H.escapeHtml(b.buyerName) +
         '<br /><small><a href="mailto:' + H.escapeHtml(b.buyerEmail) + '">' +
-        H.escapeHtml(b.buyerEmail) + "</a></small></td>" +
-        '<td class="admin-num">' + b.guestsNamed + " of " + b.seats +
-        '</td><td class="admin-num">' + b.missing + "</td><td>" + link + "</td></tr>";
+        H.escapeHtml(b.buyerEmail) + "</a></small></span></td>" +
+        '<td class="admin-num" data-label="Named">' + b.guestsNamed + " of " + b.seats +
+        '</td><td class="admin-num" data-label="Still missing">' + b.missing + '</td><td data-label="">' + link + "</td></tr>";
     }).join("");
-    return '<table class="admin-table"><thead><tr><th>Reference</th><th>Who booked</th>' +
+    return '<table class="admin-table ball-chase-table"><thead><tr><th>Reference</th><th>Who booked</th>' +
       "<th>Named</th><th>Still missing</th><th></th></tr></thead><tbody>" + body + "</tbody></table>";
   }
 
@@ -15473,6 +15821,7 @@
       statCard(s.bookingsOutstanding || 0, "Bookings to chase", s.bookingsOutstanding > 0) +
       statCard(s.needsGiven || 0, "Dietary or access needs");
     el("ballOutstanding").innerHTML = ballOutstandingTable(d.outstanding || []);
+    ballGlanceSet("guests", s);
   }
 
   // TASK-418: the same shape as the guest-details chase above it, because it answers the same
@@ -15485,18 +15834,20 @@
       var link = b.guestLink
         ? '<a href="' + H.escapeHtml(b.guestLink) + '" target="_blank" rel="noopener">Their link</a>'
         : "<small>No link yet</small>";
-      return "<tr><td>" + H.escapeHtml(b.reference) + "</td><td>" + H.escapeHtml(b.buyerName) +
+      return '<tr><td data-label="Reference">' + H.escapeHtml(b.reference) +
+        '</td><td data-label="Who booked"><span class="ball-who">' + H.escapeHtml(b.buyerName) +
         '<br /><small><a href="mailto:' + H.escapeHtml(b.buyerEmail) + '">' +
-        H.escapeHtml(b.buyerEmail) + "</a></small></td>" +
-        '<td class="admin-num">' + b.chosen + " of " + b.guestsNamed +
-        '</td><td class="admin-num">' + b.missing + "</td><td>" + link + "</td></tr>";
+        H.escapeHtml(b.buyerEmail) + "</a></small></span></td>" +
+        '<td class="admin-num" data-label="Chosen">' + b.chosen + " of " + b.guestsNamed +
+        '</td><td class="admin-num" data-label="Still to choose">' + b.missing + '</td><td data-label="">' + link + "</td></tr>";
     }).join("");
-    return '<table class="admin-table"><thead><tr><th>Reference</th><th>Who booked</th>' +
+    return '<table class="admin-table ball-chase-table"><thead><tr><th>Reference</th><th>Who booked</th>' +
       "<th>Chosen</th><th>Still to choose</th><th></th></tr></thead><tbody>" + body + "</tbody></table>";
   }
 
   function ballMenuProgressRender(d) {
     var s = d.summary || {};
+    ballGlanceSet("menu", s);
     // Before the venue confirms a menu there is nothing outstanding and nothing to chase. Say
     // that, rather than showing a confident "0%" against a menu that does not exist.
     if (!s.asking) {
@@ -15517,14 +15868,31 @@
     var a = d.availability || {};
     var s = d.dashboard || {};
 
+    // The numbers at a glance (Overview): the same seven figures the tiles here used to show, laid
+    // out so the one that matters most is the one you see first. The bar is the seats sold out of the
+    // whole room, as the main Overview counts them (src/admin/overview-numbers.ts), so a booking held
+    // for its bank transfer does not move it when nothing has been sold; it says so in words for a
+    // screen reader. Under each big number, the rest as one list per card, a line each.
+    var sold = s.seatsSold || 0;
+    var stillOn = a.seatsRemaining || 0;
+    var room = a.totalSeats || sold + stillOn;
+    var soldPercent = room > 0 ? Math.min(100, Math.round((sold / room) * 1000) / 10) : 0;
     el("ballStats").innerHTML =
-      statCard(s.seatsSold || 0, "Seats sold") +
-      statCard(a.seatsRemaining || 0, "Seats left") +
-      statCard(a.tablesRemaining || 0, "Whole tables left") +
-      statCard(H.formatPence(s.totalPence || 0), "Taken") +
-      statCard(H.formatPence(s.donationsPence || 0), "Donations") +
-      statCard(H.formatPence(s.giftAidablePence || 0), "Gift Aid eligible") +
-      statCard(s.newsletterOptIns || 0, "Newsletter opt-ins");
+      '<div class="ball-seats">' +
+      '<p class="ball-glance-head"><b class="ball-big">' + sold + "</b> of " + room + " seats sold</p>" +
+      '<div class="ball-meter" role="img" aria-label="' + sold + " of " + room + ' seats sold">' +
+      '<span style="width:' + soldPercent + '%"></span></div>' +
+      '<dl class="ball-glance-list">' +
+      "<div><dt>Seats still on sale</dt><dd>" + stillOn + "</dd></div>" +
+      "<div><dt>Whole tables still on sale</dt><dd>" + (a.tablesRemaining || 0) + "</dd></div>" +
+      "</dl></div>" +
+      '<div class="ball-money">' +
+      '<p class="ball-glance-head"><b class="ball-big">' + ballMoney(s.totalPence) + "</b> taken</p>" +
+      '<dl class="ball-glance-list">' +
+      "<div><dt>Donations</dt><dd>" + ballMoney(s.donationsPence) + "</dd></div>" +
+      "<div><dt>Gift Aid eligible</dt><dd>" + ballMoney(s.giftAidablePence) + "</dd></div>" +
+      "<div><dt>Newsletter sign ups</dt><dd>" + (s.newsletterOptIns || 0) + "</dd></div>" +
+      "</dl></div>";
 
     // Say what IS, then the button says what it will DO.
     el("ballGateState").textContent = d.gateOpen
@@ -15567,6 +15935,8 @@
       var n = el(id);
       if (n) n.hidden = !canWrite;
     });
+    ballHeroDraw(d.gateOpen);
+    ballSetupNow(d.gateOpen);
   }
 
   // Mirrors stripeFeePence in src/ball/pricing.ts, including the round-UP.
@@ -15606,6 +15976,9 @@
 
   function loadBall() {
     ballWire();
+    ballOpenSection();
+    ballGlanceReset();
+    ballCountdownDraw();
     el("ballBookings").innerHTML = '<p class="admin-loading">Loading…</p>';
     loadBallHolds();
     loadBallTransfers();
@@ -15615,8 +15988,11 @@
       .then(ballRender)
       .catch(function () {
         el("ballGateState").textContent = "Could not load the ball settings.";
-        // No seats sold and £0 taken would be a claim nobody could make (TASK-476).
-        el("ballStats").innerHTML = "";
+        // No seats sold and £0 taken would be a claim nobody could make (TASK-476), and a blank
+        // space says nothing at all: say what happened, in Needs you's words.
+        el("ballStats").innerHTML =
+          '<p class="admin-unavailable ov-failed">Could not load the numbers. Open Festive Ball again in a moment.</p>';
+        ballHeroDraw(null);
       });
     authFetch("/api/admin/ball/bookings")
       .then(okJson)
@@ -15640,10 +16016,12 @@
               "</details>"
             : "");
         ballNoPhoneRender(d.noPhone);
+        ballGlanceSet("noPhone", typeof d.noPhone === "number" ? d.noPhone : false);
       })
       .catch(function () {
         el("ballBookings").innerHTML = '<p class="admin-empty">Could not load bookings.</p>';
         ballNoPhoneRender(null);
+        ballGlanceSet("noPhone", false);
       });
     authFetch("/api/admin/ball/guest-progress")
       .then(okJson)
@@ -15652,6 +16030,7 @@
         el("ballGuestProgress").innerHTML =
           '<p class="admin-empty">Could not load guest details.</p>';
         el("ballOutstanding").innerHTML = "";
+        ballGlanceSet("guests", false);
       });
     authFetch("/api/admin/ball/menu-progress")
       .then(okJson)
@@ -15660,6 +16039,7 @@
         el("ballMenuProgress").innerHTML =
           '<p class="admin-empty">Could not load menu choices.</p>';
         el("ballMenuOutstanding").innerHTML = "";
+        ballGlanceSet("menu", false);
       });
   }
 
@@ -15706,6 +16086,7 @@
   function ballWire() {
     if (ballWired) return;
     ballWired = true;
+    ballWireSections();
 
     // Delegated, because the tables are re-rendered on every load, and attached HERE, once. They
     // used to be added inside each load, so every reload stacked another copy and a single click on

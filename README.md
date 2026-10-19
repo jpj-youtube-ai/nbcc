@@ -6915,6 +6915,48 @@ report `scrollWidth === clientWidth`, and the page itself has no horizontal scro
 `test/unit/admin-no-sideways-scroll.test.ts` guards it, because the next person to add a table will
 copy whatever the base rule says.
 
+## The banner across the top (October 2026)
+
+Jaimie, 19 October 2026: "a banner across the top that has drop downs for each of the sections ...
+It frees up more horizontal space, and it means that you don't have to keep scrolling down all the
+way". Wider than 860px the menu was a 210px column beside every screen, pinned, but taller than a
+laptop's screen, so its last groups came into reach only at the foot of the page.
+
+Now, wider than 860px:
+
+- **One banner across the top**, pinned, 60px tall (59 and its rule): the height the top bar had
+  when it was the bar pinned at the top, so everything already pinned under 60px (the Festive Ball's
+  sections, the newsletter's composer bar) pins under the banner as it was. The top bar (the logo,
+  who is signed in, My account, Sign out) scrolls away, as it always has on a phone.
+- **A drop down for each of the five groups**, Monitor, Giving, Content, Governance and Admin, each
+  screen in its group as before. It opens on a click from any device, and on hover for a mouse only
+  (`(hover: hover) and (pointer: fine)`: a finger's tap fires mouseenter and then click, which would
+  open it and close it at once), one at a time. A click on the head of one that hover opened keeps it
+  open. It closes on a second click, on Escape (the keyboard goes back to its head), on a click
+  anywhere else, when the keyboard moves on out of it, and when a screen in it is chosen. The down
+  arrow on a head opens it on its first screen.
+- **New** on a group's head when any screen shown in it is new (TASK-478), and beside that screen
+  inside, as before.
+- **The group holding the screen on view** is marked: its name in crimson, underlined as a tab is
+  (`:has(.admin-nav-link.is-active)`, so the detail screens that clear the active link clear it too).
+- **The content takes the width**, up to 1280px, the banner's words lined up with its heading. Lists
+  that become cards measure their own width (container queries), so each simply has 210px more
+  before it does.
+
+A group shows while any screen in it does, its label in the phone menu and its drop down on the
+banner. It used to be the Admin label alone, shown for Team or Analytics (TASK-482), so Site pages
+and QR codes could sit under no label. A closed drop down is hidden with `visibility`, never
+`display:none`: restorableView (TASK-443) reads a link with no offsetParent as a screen your
+permissions hide, and a refresh would land on the Overview.
+
+At 860px and below nothing changed: the Menu button opens the same five groups. Each group's label
+is a `span.admin-nav-grouplabel` now, and the banner's `button.admin-nav-grouphead` is hidden there.
+Every screen's link kept its `data-view`, its gate and its words. `test/unit/admin-top-banner.test.ts`
+holds the list of links as they were and drives the drop downs in jsdom; the phone menu's tests did
+not change. Verified in headless Chrome at 1280, 1024, 900 and 390px: the banner 60px and pinned,
+each drop down inside the screen, the Festive Ball's sections pinned under the banner, nothing
+sideways, no inner scrollbars, every target at least 44px.
+
 ## The admin fits a phone (TASK-454)
 
 At 390px every screen of the admin was wider than the phone (535px as reported, 556px when measured
@@ -6933,6 +6975,8 @@ admin scrolls sideways, inside a box or otherwise:
 
 Below **860px** (it was 760px) the menu leaves its 210px column and becomes one pinned **Menu**
 button that opens the whole list, wrapped into its five groups, every button at least 44px tall.
+(Wider than 860px there is no column since October 2026: the menu is the banner across the top, see
+[The banner across the top](#the-banner-across-the-top-october-2026).)
 Pinned, because the complaint that pinned it in TASK-422 still stands: changing section should
 never mean scrolling back up a long page. Where closing leaves you depends on why it closed:
 

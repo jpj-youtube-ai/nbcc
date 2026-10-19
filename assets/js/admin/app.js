@@ -232,10 +232,12 @@
       }
       b.hidden = editGate ? !canEdit(editGate) : !canView(viewGate || section);
     });
-    var teamNavGroup = el("teamNavGroup");
-    // The Admin group's label shows over any link in it that is shown: Analytics (TASK-482) can be
-    // given to someone who cannot see Team.
-    if (teamNavGroup) teamNavGroup.hidden = !canView("team") && !canView("analytics");
+    // A group shows while any screen in it does: its label in the phone menu, its drop down on the
+    // banner (October 2026). It used to be the Admin label alone, shown for Team or Analytics
+    // (TASK-482), so Site pages and QR codes could sit under the group before.
+    Array.prototype.forEach.call(doc.querySelectorAll("#adminNavList .admin-nav-group"), function (g) {
+      g.hidden = !g.querySelector(".admin-nav-link:not([hidden])");
+    });
   }
 
   // Fetch an admin API path with the bearer token; a 401 means the session is gone -> back to login.
@@ -478,6 +480,15 @@
       b.insertAdjacentHTML("beforeend", NEW_PILL);
       any = true;
     });
+    // On the banner (October 2026), a group's head says New when a screen shown in it does, so it
+    // can be seen without opening the drop down; the screen inside says it too.
+    Array.prototype.forEach.call(doc.querySelectorAll("#adminNavList .admin-nav-group"), function (g) {
+      var head = g.querySelector(".admin-nav-grouphead");
+      if (!head) return;
+      var old = head.querySelector(".admin-new-pill");
+      if (old) old.remove();
+      if (!g.hidden && g.querySelector(".admin-nav-link:not([hidden]) .admin-new-pill")) head.insertAdjacentHTML("beforeend", NEW_PILL);
+    });
     // Inside Get involved, the section holding what is new says so too: Sign ups or Our events.
     Array.prototype.forEach.call(doc.querySelectorAll("#giSections [data-gi-section]"), function (b) {
       var old = b.querySelector(".admin-new-pill");
@@ -583,6 +594,8 @@
     });
     // TASK-454: choosing a section from the phone menu closes it, so what you chose is what you see.
     closeNav("chosen");
+    // And on the banner, the drop down it was chosen from.
+    navGroupsClose();
     showOnly("view-" + name);
     refreshEnquiryNotice();
     // TASK-478: the section you open loses its pill at once; the rest are asked about afresh.
@@ -858,9 +871,97 @@
     if (phoneWidth && phoneWidth.addEventListener) {
       phoneWidth.addEventListener("change", function (e) {
         if (!e.matches) closeNav("passed");
+        // The other way, narrowed to a phone's width, the banner's heads are hidden (October 2026):
+        // nothing may be left open behind them.
+        else navGroupsClose();
       });
     }
   }
+
+  // ---- The banner's drop downs (October 2026) ----
+  // Wider than 860px the menu is one banner across the top with a drop down for each group
+  // (admin.css), so the screens get the width the side menu took and no one scrolls to reach it.
+  // A drop down opens on a click, from any device, and on hover for a mouse; one at a time. It closes
+  // on a second click, on Escape, on a click anywhere else, when the keyboard moves on out of it, and
+  // when a screen in it is chosen. At 860px and below the heads are hidden (the phone menu shows the
+  // groups' labels instead), so none of this is ever reached there.
+  var navGroups = Array.prototype.slice.call(doc.querySelectorAll("#adminNavList .admin-nav-group"));
+  // A finger has no hover: a tap fires mouseenter and then click, which would open and at once close.
+  var navMouse = window.matchMedia ? window.matchMedia("(hover: hover) and (pointer: fine)") : null;
+  // At a phone's width the heads are hidden and the groups are the Menu's labels.
+  var navNarrow = window.matchMedia ? window.matchMedia("(max-width:860px)") : null;
+  var navLeaving = null; // the moment's grace after a mouse leaves, so a stray edge does not lose it
+  function navGroupHead(g) {
+    return g.querySelector(".admin-nav-grouphead");
+  }
+  function navGroupClose(g) {
+    if (!g.classList.contains("is-open")) return;
+    var head = navGroupHead(g);
+    // A keyboard on a screen in a drop down that is closing goes back to its head, not to nowhere.
+    var onAScreen = g.contains(doc.activeElement) && doc.activeElement !== head;
+    g.classList.remove("is-open");
+    g.removeAttribute("data-open-by");
+    if (head) {
+      head.setAttribute("aria-expanded", "false");
+      if (onAScreen) head.focus({ preventScroll: true });
+    }
+  }
+  function navGroupsClose(except) {
+    (navGroups || []).forEach(function (g) {
+      if (g !== except) navGroupClose(g);
+    });
+  }
+  // how: "click" stays open until something closes it; "hover" closes again when the mouse leaves.
+  function navGroupOpen(g, how) {
+    clearTimeout(navLeaving);
+    navGroupsClose(g);
+    g.classList.add("is-open");
+    g.setAttribute("data-open-by", how);
+    var head = navGroupHead(g);
+    if (head) head.setAttribute("aria-expanded", "true");
+  }
+  navGroups.forEach(function (g) {
+    var head = navGroupHead(g);
+    if (!head) return;
+    head.addEventListener("click", function () {
+      if (!g.classList.contains("is-open")) navGroupOpen(g, "click");
+      // Opened by hovering, a click on its head keeps it open, rather than closing what was just seen.
+      else if (g.getAttribute("data-open-by") === "hover") g.setAttribute("data-open-by", "click");
+      else navGroupClose(g);
+    });
+    head.addEventListener("keydown", function (e) {
+      if (e.key !== "ArrowDown") return;
+      e.preventDefault();
+      navGroupOpen(g, "click");
+      var first = Array.prototype.filter.call(g.querySelectorAll(".admin-nav-link"), function (b) {
+        return !b.hidden;
+      })[0];
+      if (first) first.focus();
+    });
+    g.addEventListener("mouseenter", function () {
+      if (!navMouse || !navMouse.matches || (navNarrow && navNarrow.matches)) return;
+      clearTimeout(navLeaving);
+      if (!g.classList.contains("is-open")) navGroupOpen(g, "hover");
+    });
+    g.addEventListener("mouseleave", function () {
+      if (!navMouse || !navMouse.matches || g.getAttribute("data-open-by") !== "hover") return;
+      navLeaving = setTimeout(function () {
+        if (g.getAttribute("data-open-by") === "hover") navGroupClose(g);
+      }, 150);
+    });
+    g.addEventListener("keydown", function (e) {
+      if (e.key !== "Escape" || !g.classList.contains("is-open")) return;
+      navGroupClose(g);
+      head.focus();
+    });
+    g.addEventListener("focusout", function (e) {
+      if (e.relatedTarget && !g.contains(e.relatedTarget)) navGroupClose(g);
+    });
+  });
+  doc.addEventListener("click", function (e) {
+    var inside = e.target && e.target.closest ? e.target.closest("#adminNavList .admin-nav-group") : null;
+    navGroupsClose(inside);
+  });
 
   // ---- overview ----
   function statCard(n, label, warn) {

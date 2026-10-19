@@ -99,43 +99,72 @@
                  than that), which opens the whole list wrapped into its groups. It replaces a line of
                  twenty buttons that scrolled sideways. -->
             <button class="admin-nav-toggle" id="adminNavToggle" type="button" aria-expanded="false" aria-controls="adminNavList">Menu</button>
+            <!-- Five groups. Wider than 860px (October 2026) the nav is a banner across the top: each
+                 group's head opens its own list as a drop down (app.js), and the phone label is hidden.
+                 At 860px and below the head is hidden and the label is shown, so the Menu button opens
+                 the same five groups as before. A group shows while any screen in it does (app.js). -->
             <ul id="adminNavList">
-              <li class="admin-nav-group" aria-hidden="true">Monitor</li>
-              <li><button class="admin-nav-link is-active" type="button" data-view="overview">Overview</button></li>
-              <li><button class="admin-nav-link" type="button" data-view="search">Search</button></li>
-              <li class="admin-nav-group" aria-hidden="true">Giving</li>
-              <li><button class="admin-nav-link" type="button" data-view="donations">Donations</button></li>
-              <!-- Fill a Red Bag: the editor for the list on /fill. Its own permission, "red-bag". -->
-              <li><button class="admin-nav-link" type="button" data-view="red-bag">Fill a Red Bag</button></li>
-              <li><button class="admin-nav-link" type="button" data-view="claims">Claims</button></li>
-              <li><button class="admin-nav-link" type="button" data-view="gasds">GASDS</button></li>
-              <li><button class="admin-nav-link" type="button" data-view="subscriptions">Subscriptions</button></li>
-              <li><button class="admin-nav-link" type="button" data-view="fulfilments" data-edit-gate="business-supporters">Business supporters</button></li>
-              <!-- data-view-gate (TASK-457): there is no "monthly" permission. The screen's data comes
-                   from the donations list and its route is gated on donations:view, so the link is
-                   too. Gated on "monthly" it was hidden from everyone, admins included. -->
-              <li><button class="admin-nav-link" type="button" data-view="monthly" data-view-gate="donations">Monthly givers</button></li>
-              <li class="admin-nav-group" aria-hidden="true">Content</li>
-              <li><button class="admin-nav-link" type="button" data-view="stories">Stories</button></li>
-              <li><button class="admin-nav-link" type="button" data-view="ticker">Partners</button></li>
-              <!-- Get involved: NBCC's own events and community fundraising in one tab. It has no permission of
-                   its own: app.js shows it to anyone who may see Events or Fundraising, and inside it only
-                   the sections that person may see. -->
-              <li><button class="admin-nav-link" type="button" data-view="get-involved" data-view-gate-any="events fundraising">Get involved</button></li>
-              <li><button class="admin-nav-link" type="button" data-view="ball">Festive Ball</button></li>
-              <li><button class="admin-nav-link" type="button" data-view="contact">Contact form</button></li>
-              <li><button class="admin-nav-link" type="button" data-view="newsletter">Newsletter</button></li>
-              <li><button class="admin-nav-link" type="button" data-view="thank-you">Thank you</button></li>
-              <li><button class="admin-nav-link" type="button" data-view="outreach">Contact businesses</button></li>
-              <li class="admin-nav-group" aria-hidden="true">Governance</li>
-              <li><button class="admin-nav-link" type="button" data-view="audit">Audit</button></li>
-              <li><button class="admin-nav-link" type="button" data-view="email-audit">Email audit</button></li>
-              <li class="admin-nav-group" id="teamNavGroup" aria-hidden="true">Admin</li>
-              <li><button class="admin-nav-link" type="button" data-view="analytics">Analytics</button></li>
-              <li><button class="admin-nav-link" type="button" data-view="site">Site pages</button></li>
-              <!-- TASK-492: QR codes for every page. Anyone who can view Site pages. -->
-              <li><button class="admin-nav-link" type="button" data-view="qr" data-view-gate="site">QR codes</button></li>
-              <li><button class="admin-nav-link" type="button" data-view="team">Team</button></li>
+              <li class="admin-nav-group" data-nav-group="monitor">
+                <span class="admin-nav-grouplabel" aria-hidden="true">Monitor</span>
+                <button class="admin-nav-grouphead" type="button" aria-expanded="false" aria-controls="adminNavMonitor">Monitor</button>
+                <ul class="admin-nav-panel" id="adminNavMonitor">
+                  <li><button class="admin-nav-link is-active" type="button" data-view="overview">Overview</button></li>
+                  <li><button class="admin-nav-link" type="button" data-view="search">Search</button></li>
+                </ul>
+              </li>
+              <li class="admin-nav-group" data-nav-group="giving">
+                <span class="admin-nav-grouplabel" aria-hidden="true">Giving</span>
+                <button class="admin-nav-grouphead" type="button" aria-expanded="false" aria-controls="adminNavGiving">Giving</button>
+                <ul class="admin-nav-panel" id="adminNavGiving">
+                  <li><button class="admin-nav-link" type="button" data-view="donations">Donations</button></li>
+                  <!-- Fill a Red Bag: the editor for the list on /fill. Its own permission, "red-bag". -->
+                  <li><button class="admin-nav-link" type="button" data-view="red-bag">Fill a Red Bag</button></li>
+                  <li><button class="admin-nav-link" type="button" data-view="claims">Claims</button></li>
+                  <li><button class="admin-nav-link" type="button" data-view="gasds">GASDS</button></li>
+                  <li><button class="admin-nav-link" type="button" data-view="subscriptions">Subscriptions</button></li>
+                  <li><button class="admin-nav-link" type="button" data-view="fulfilments" data-edit-gate="business-supporters">Business supporters</button></li>
+                  <!-- data-view-gate (TASK-457): there is no "monthly" permission. The screen's data comes
+                       from the donations list and its route is gated on donations:view, so the link is
+                       too. Gated on "monthly" it was hidden from everyone, admins included. -->
+                  <li><button class="admin-nav-link" type="button" data-view="monthly" data-view-gate="donations">Monthly givers</button></li>
+                </ul>
+              </li>
+              <li class="admin-nav-group" data-nav-group="content">
+                <span class="admin-nav-grouplabel" aria-hidden="true">Content</span>
+                <button class="admin-nav-grouphead" type="button" aria-expanded="false" aria-controls="adminNavContent">Content</button>
+                <ul class="admin-nav-panel" id="adminNavContent">
+                  <li><button class="admin-nav-link" type="button" data-view="stories">Stories</button></li>
+                  <li><button class="admin-nav-link" type="button" data-view="ticker">Partners</button></li>
+                  <!-- Get involved: NBCC's own events and community fundraising in one tab. It has no permission of
+                       its own: app.js shows it to anyone who may see Events or Fundraising, and inside it only
+                       the sections that person may see. -->
+                  <li><button class="admin-nav-link" type="button" data-view="get-involved" data-view-gate-any="events fundraising">Get involved</button></li>
+                  <li><button class="admin-nav-link" type="button" data-view="ball">Festive Ball</button></li>
+                  <li><button class="admin-nav-link" type="button" data-view="contact">Contact form</button></li>
+                  <li><button class="admin-nav-link" type="button" data-view="newsletter">Newsletter</button></li>
+                  <li><button class="admin-nav-link" type="button" data-view="thank-you">Thank you</button></li>
+                  <li><button class="admin-nav-link" type="button" data-view="outreach">Contact businesses</button></li>
+                </ul>
+              </li>
+              <li class="admin-nav-group" data-nav-group="governance">
+                <span class="admin-nav-grouplabel" aria-hidden="true">Governance</span>
+                <button class="admin-nav-grouphead" type="button" aria-expanded="false" aria-controls="adminNavGovernance">Governance</button>
+                <ul class="admin-nav-panel" id="adminNavGovernance">
+                  <li><button class="admin-nav-link" type="button" data-view="audit">Audit</button></li>
+                  <li><button class="admin-nav-link" type="button" data-view="email-audit">Email audit</button></li>
+                </ul>
+              </li>
+              <li class="admin-nav-group" id="teamNavGroup" data-nav-group="admin">
+                <span class="admin-nav-grouplabel" aria-hidden="true">Admin</span>
+                <button class="admin-nav-grouphead" type="button" aria-expanded="false" aria-controls="adminNavAdmin">Admin</button>
+                <ul class="admin-nav-panel" id="adminNavAdmin">
+                  <li><button class="admin-nav-link" type="button" data-view="analytics">Analytics</button></li>
+                  <li><button class="admin-nav-link" type="button" data-view="site">Site pages</button></li>
+                  <!-- TASK-492: QR codes for every page. Anyone who can view Site pages. -->
+                  <li><button class="admin-nav-link" type="button" data-view="qr" data-view-gate="site">QR codes</button></li>
+                  <li><button class="admin-nav-link" type="button" data-view="team">Team</button></li>
+                </ul>
+              </li>
             </ul>
           </nav>
 

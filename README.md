@@ -6917,7 +6917,7 @@ copy whatever the base rule says.
 
 ## The banner across the top (October 2026)
 
-Jaimie, 19 October 2026: "a banner across the top that has drop downs for each of the sections ...
+TASK-572. Jaimie, 19 October 2026: "a banner across the top that has drop downs for each of the sections ...
 It frees up more horizontal space, and it means that you don't have to keep scrolling down all the
 way". Wider than 860px the menu was a 210px column beside every screen, pinned, but taller than a
 laptop's screen, so its last groups came into reach only at the foot of the page.

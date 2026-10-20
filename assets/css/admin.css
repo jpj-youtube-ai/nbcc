@@ -24,7 +24,9 @@
 /* flex-wrap (TASK-454): as one row that could not wrap, the email, role and both buttons came to
    459px on their own with a 26-character address, and took every screen of the admin 166px past
    the edge of a 390px phone, which zoomed the whole admin out to fit. */
-.admin-topbar{position:sticky;top:0;z-index:20;display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:10px 16px;
+/* Not pinned (October 2026): the nav below it is the one bar pinned at the top, at every width, so
+   the top bar scrolls away as it always has on a phone. */
+.admin-topbar{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:10px 16px;
   background:var(--maroon);color:var(--cream);padding:12px clamp(16px,3vw,28px)}
 .admin-brand{display:flex;align-items:center;gap:10px;text-decoration:none;color:var(--cream);font-family:var(--font-head);font-weight:700;font-size:1.1rem}
 /* Two groups, who is signed in and what they can do, so a narrow screen breaks between them rather
@@ -37,19 +39,74 @@
 .admin-logout{background:none;border:1.6px solid var(--cream-24);color:var(--cream);border-radius:999px;padding:7px 16px;font-family:var(--font-body);font-weight:600;font-size:.85rem;cursor:pointer;transition:background .2s}
 .admin-logout:hover{background:var(--cream-12)}
 
-.admin-body-grid{display:grid;grid-template-columns:210px 1fr;align-items:start;max-width:1280px;margin-inline:auto}
-.admin-nav{position:sticky;top:60px;padding:18px 12px}
-/* The phone menu's button (TASK-454). Wider than 860px the list is always open beside the content. */
+/* The nav is one bar pinned at the top at every width (October 2026): a banner of five drop downs
+   wider than 860px (the block below), the Menu button at 860px and below (TASK-454).
+   It used to be a 210px column beside the content, taller than a laptop's screen, so its last
+   groups came into reach only at the foot of the page. The content has the width now, to 1280px. */
+.admin-body-grid{display:block}
+.admin-nav{position:sticky;top:0;z-index:20;background:var(--cream);border-bottom:1px solid var(--line)}
+/* The phone menu's button (TASK-454). Wider than 860px the banner shows every group instead. */
 .admin-nav-toggle{display:none}
 .admin-nav ul{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:3px}
 .admin-nav-link{width:100%;text-align:left;background:none;border:0;border-radius:10px;padding:10px 14px;font-family:var(--font-body);font-weight:600;font-size:.93rem;color:var(--slate);cursor:pointer;transition:background .15s,color .15s}
 .admin-nav-link:hover{background:var(--card)}
 .admin-nav-link.is-active{background:var(--crimson);color:var(--cream)}
-/* Clearly separated, always-expanded groups: a hairline rule plus its own spacing sets
-   each labelled section apart, so the nav reads as distinct groups, not one long list. */
-.admin-nav-group{margin:20px 0 8px;padding:16px 14px 0;border-top:1px solid var(--line);font-family:var(--font-body);font-weight:700;font-size:.7rem;letter-spacing:.09em;text-transform:uppercase;color:var(--slate)}
-.admin-nav-group:first-child{margin-top:2px;padding-top:0;border-top:0}
-.admin-content{padding:clamp(20px,3vw,36px) clamp(16px,3vw,32px)}
+/* A group's name as the phone menu shows it, over its screens. On the banner its head says it. */
+.admin-nav-grouplabel{display:block;font-family:var(--font-body);font-weight:700;font-size:.7rem;letter-spacing:.09em;text-transform:uppercase;color:var(--slate)}
+.admin-content{max-width:1280px;margin-inline:auto;padding:clamp(20px,3vw,36px) clamp(16px,3vw,32px)}
+
+/* ---- The banner (October 2026) ----
+   Jaimie: "a banner across the top that has drop downs for each of the sections ... It frees up more
+   horizontal space, and it means that you don't have to keep scrolling down all the way". 60px tall
+   (59 and its rule), the height the top bar had when it was the bar pinned at the top, so everything
+   that pins under that (the Festive Ball's sections, the newsletter's composer bar) pins under this as
+   it was. app.js opens and closes the drop downs; a closed one is hidden with visibility, never
+   display:none, because restorableView (TASK-443) reads a link with no offsetParent as a screen your
+   permissions hide, and a refresh would land on the Overview.
+   "not all and (max-width:860px)" is exactly the phone menu's width turned round. As (min-width:861px)
+   a window 860.5px wide (a zoom, or Windows display scaling) matched neither block, and the whole menu
+   opened out over the page. */
+@media not all and (max-width:860px){
+  .admin-nav{position:sticky;top:0;padding:0;box-shadow:0 12px 24px -22px rgba(128,0,0,.5)}
+  /* The same width and side padding as the content below, and the first group's name pulled out by
+     its head's own padding, so the banner's words line up with the screen's heading. */
+  #adminNavList{flex-direction:row;flex-wrap:wrap;align-items:center;gap:4px;max-width:1280px;min-height:59px;margin-inline:auto;
+    padding-inline:clamp(16px,3vw,32px);box-sizing:border-box}
+  #adminNavList > .admin-nav-group:first-child .admin-nav-grouphead{margin-left:-14px}
+  .admin-nav-grouplabel{display:none}
+  .admin-nav-group{position:relative}
+  .admin-nav-grouphead{display:inline-flex;align-items:center;gap:8px;min-height:44px;padding:8px 14px;border:0;border-radius:10px;
+    background-color:transparent;font-family:var(--font-body);font-weight:600;font-size:.93rem;color:var(--slate);cursor:pointer;
+    transition:background-color .15s,color .15s}
+  /* Its chevron: down while closed, up while open. */
+  .admin-nav-grouphead::after{content:"";width:7px;height:7px;margin-left:2px;border-right:2px solid currentColor;border-bottom:2px solid currentColor;
+    transform:translateY(-2px) rotate(45deg);transition:transform .2s cubic-bezier(.25,1,.5,1)}
+  .admin-nav-group.is-open .admin-nav-grouphead::after{transform:translateY(2px) rotate(-135deg)}
+  .admin-nav-grouphead:hover,.admin-nav-group.is-open .admin-nav-grouphead{background-color:var(--card);color:var(--maroon)}
+  .admin-nav-grouphead:focus-visible{outline:3px solid var(--crimson);outline-offset:2px}
+  .admin-nav-grouphead .admin-new-pill{margin-left:0}
+  /* The group holding the screen on view: its name in crimson, underlined as a tab is. */
+  .admin-nav-group:has(.admin-nav-link.is-active) .admin-nav-grouphead{color:var(--crimson);
+    background-image:linear-gradient(var(--crimson),var(--crimson));background-size:calc(100% - 28px) 3px;
+    background-position:50% 100%;background-repeat:no-repeat}
+  /* #adminNavList, to outrank .admin-nav ul, which set the padding to 0 unseen. 260px, so a screen's
+     name and its New stay on one line ("Business supporters, New" wrapped at 240px). */
+  #adminNavList .admin-nav-panel{position:absolute;top:calc(100% + 6px);left:0;z-index:2;min-width:260px;flex-direction:column;gap:2px;padding:8px;
+    background:var(--card);border:1px solid var(--line);border-radius:14px;box-shadow:var(--shadow);
+    visibility:hidden;opacity:0;transform:translateY(-4px);
+    transition:opacity .15s ease-out,transform .15s ease-out,visibility 0s linear .15s}
+  #adminNavList .admin-nav-group.is-open .admin-nav-panel{visibility:visible;opacity:1;transform:none;transition:opacity .15s ease-out,transform .15s ease-out}
+  /* The first group's drop down under its name (pulled out with its head); the last group's opens to
+     its left, so with New on several heads it cannot hang off the screen, even closed. */
+  #adminNavList > .admin-nav-group:first-child .admin-nav-panel{left:-14px}
+  #adminNavList > .admin-nav-group:last-child .admin-nav-panel{left:auto;right:0}
+  .admin-nav-panel .admin-nav-link{display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:44px}
+  .admin-nav-panel .admin-nav-link:hover{background:var(--tan-soft)}
+  .admin-nav-panel .admin-nav-link.is-active:hover{background:var(--crimson)}
+}
+@media (prefers-reduced-motion:reduce){
+  .admin-nav-grouphead,.admin-nav-grouphead::after,#adminNavList .admin-nav-panel,#adminNavList .admin-nav-group.is-open .admin-nav-panel{transition:none}
+}
 .admin-view h2{font-size:clamp(1.5rem,1.3rem + 1vw,2rem);margin-bottom:18px}
 .admin-subhead{font-size:1.15rem;color:var(--maroon);margin:28px 0 12px}
 
@@ -277,8 +334,9 @@
 .btn-danger:hover{background:var(--maroon);border-color:var(--maroon)}
 
 /* ---- the shell on a phone or small tablet (TASK-454) ----
-   Below 860px the menu leaves its 210px column, which left too little room for the content beside
-   it, and becomes one pinned Menu button that opens the whole list. What it replaced below 760px was
+   At 860px and below the menu is one pinned Menu button that opens the whole list. (Wider, it was a
+   210px column beside the content until October 2026, and is the banner across the top since: the
+   block above.) What it replaced below 760px was
    one line of twenty buttons that scrolled sideways inside its own strip: 2247px of buttons in 366px
    at 390px wide. The client's standing rule for this admin is that nothing scrolls sideways, inside a
    box or otherwise, because a section you have to swipe to find is a section nobody opens. */
@@ -286,11 +344,12 @@
   /* display:block, not a one-column grid. As a grid the nav gets its OWN ROW, and a sticky
      element can only travel inside its containing block, so a row exactly as tall as the nav
      gives it nowhere to go and position:sticky silently does nothing. As blocks both children
-     share the parent's full height and the nav sticks as intended. (On desktop the two columns
-     are in the SAME row, which is why sticky has always worked there.) */
+     share the parent's full height and the nav sticks as intended. (The grid is a block at every
+     width since October 2026; this stays as the phone's own statement of it.) */
   .admin-body-grid{display:block}
-  /* The topbar stops competing for the top edge here. It wraps at this width, so pinned it would
-     either cover the menu or need a magic offset that breaks on a narrower phone. */
+  /* The topbar does not compete for the top edge. It wraps at this width, so pinned it would either
+     cover the menu or need a magic offset that breaks on a narrower phone. (Since October 2026 it is
+     not pinned at any width; this stays as the phone's own statement of it.) */
   .admin-topbar{position:static}
   /* Pinned rather than static. The complaint was that changing view meant scrolling back up
      through a long page to reach the nav at all. 61px tall: 8 + the 44px button + 8 + the 1px
@@ -318,8 +377,14 @@
   .admin-nav:not(.is-open) ul{height:0;overflow:hidden;visibility:hidden}
   .admin-nav-link{width:auto;min-height:44px}
   /* Each group starts its own line under its label, so the open menu reads as the same five
-     groups as the desktop column rather than one long run of buttons. */
-  .admin-nav-group{flex-basis:100%;margin:10px 0 0;padding:10px 2px 0}
+     groups as the banner rather than one long run of buttons. A hairline sets each apart. */
+  .admin-nav-group{flex-basis:100%;margin:10px 0 0;padding:10px 0 0;border-top:1px solid var(--line)}
+  .admin-nav-group:first-child{margin-top:2px;padding-top:0;border-top:0}
+  /* The banner's heads are a laptop's; here each group's label names it (October 2026), 2px in and
+     6px over its screens, as the label was when it sat in the same list as them. */
+  .admin-nav-grouphead{display:none}
+  .admin-nav-grouplabel{padding:0 2px}
+  .admin-nav.is-open .admin-nav-panel{margin-top:6px}
 }
 
 @media (max-width:760px){
@@ -1292,8 +1357,9 @@ tr.nl-click:hover { background: var(--tint); }
 
 /* =================================================================
    TASK-286 — four layout faults, all from designing against the wrong
-   width. The real content column is ~1006px (1280 max-width minus the
-   210px nav and padding), and the overview's main column ~620px of that.
+   width. The real content column was ~1006px (1280 max-width minus the
+   210px nav and padding; up to 1280px since the banner, October 2026),
+   and the overview's main column ~620px of that.
    ================================================================= */
 
 /* ---- 1. Recent sends: FIT the card, never scroll inside it. Horizontal scroll in a box that
@@ -1878,7 +1944,7 @@ textarea.fx-call-input{min-height:88px;line-height:1.5;resize:vertical;field-siz
 
 /* Narrow, each booking is a labelled card, as the donations table is (TASK-483): at 375px the five
    columns were 44-106px and the box scrolled 106px sideways to reach Mark as paid. Measured on the
-   list itself, since the side menu takes its share above 860px. Up to 819px, because Mark as paid
+   list itself, whatever around it takes a share. Up to 819px, because Mark as paid
    is 182px on one line and its 26% column only holds that from 808px: at 900px wide with the side
    menu the list was 621px and scrolled 35px sideways (October 2026). */
 #ballTransfers{container:btlist / inline-size}
@@ -1963,7 +2029,7 @@ textarea.fx-call-input{min-height:88px;line-height:1.5;resize:vertical;field-siz
    (admin-no-sideways-scroll.test.ts). Instead Status and Paid take width from Who, so "cancelled"
    and the amount stay whole, and below the width that needs the list is cards (next rule). */
 
-/* Narrower than eight whole columns can sit in (1000px: a laptop with the side menu open), each
+/* Narrower than eight whole columns can sit in (1000px; it was a laptop with the old side menu), each
    booking is a labelled card, as the transfers above are on a phone. */
 #ballBookings{container:bblist / inline-size}
 @container bblist (max-width:999px){

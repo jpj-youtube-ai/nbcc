@@ -198,7 +198,7 @@ describe("the Events page switch fits the smallest phones", () => {
 });
 
 // TASK-460: the Events list is a five-column table that needs about 850px. Wherever the list is
-// narrower (phones, most tablets, and laptops up to about 1150px, where the side menu takes 210px)
+// narrower (phones, most tablets, and, while the side menu took 210px, laptops up to about 1150px)
 // its buttons broke their own labels ("Ed / it"), times broke mid-word, the day and time ran into
 // the event's name, and on a phone the list scrolled sideways inside its box. There, each event is
 // now a compact row instead. The switch is measured on the list's own width, because that is what

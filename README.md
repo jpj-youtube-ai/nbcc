@@ -6915,6 +6915,61 @@ report `scrollWidth === clientWidth`, and the page itself has no horizontal scro
 `test/unit/admin-no-sideways-scroll.test.ts` guards it, because the next person to add a table will
 copy whatever the base rule says.
 
+## The banner across the top (October 2026)
+
+TASK-572. Jaimie, 19 October 2026: "a banner across the top that has drop downs for each of the sections ...
+It frees up more horizontal space, and it means that you don't have to keep scrolling down all the
+way". Wider than 860px the menu was a 210px column beside every screen, pinned, but taller than a
+laptop's screen, so its last groups came into reach only at the foot of the page.
+
+Now, wider than 860px:
+
+- **One banner across the top**, pinned, 60px tall (59 and its rule): the height the top bar had
+  when it was the bar pinned at the top, so everything already pinned under 60px (the Festive Ball's
+  sections, the newsletter's composer bar) pins under the banner as it was. The top bar (the logo,
+  who is signed in, My account, Sign out) scrolls away, as it always has on a phone.
+- **A drop down for each of the five groups**, Monitor, Giving, Content, Governance and Admin, each
+  screen in its group as before. It opens on a click from any device, and on hover for a mouse only
+  (`(hover: hover) and (pointer: fine)`: a finger's tap fires mouseenter and then click, which would
+  open it and close it at once), one at a time. A mouse opens it after resting 100ms (so one crossing
+  the banner does not flash each group open) and closes it 300ms after leaving (so one that strays
+  off the edge does not lose it). A click on the head of one that hover opened keeps it open. It
+  closes on a second click, on Escape wherever the keyboard is, on a click anywhere else, when the
+  keyboard moves on out of it (but not when the focus goes to `<main>`, which holds the nav: that is a
+  click on a gap inside it), and when a screen in it is chosen. The down arrow on a head opens it on
+  its first screen, and the up and down arrows move along its screens.
+- **Choosing a screen** with the mouse lets go of the focus, so the arrow keys scroll the new screen
+  (Chrome gives a clicked button the focus, and left on the group's head the down arrow opened the
+  drop down again). Chosen from the keyboard (a click with `detail` 0), the focus goes back to the
+  group's head.
+- **New** on a group's head when any screen shown in it is new (TASK-478), and beside that screen
+  inside, as before.
+- **The group holding the screen on view** is marked: its name in crimson, underlined as a tab is
+  (`:has(.admin-nav-link.is-active)`, so the detail screens that clear the active link clear it too).
+- **The content takes the width**, up to 1280px, the banner's words lined up with its heading. Lists
+  that become cards measure their own width (container queries), so each simply has 210px more
+  before it does.
+
+The banner's block is `@media not all and (max-width:860px)`, exactly the phone menu's width turned
+round. As `(min-width:861px)` a window 860.5px wide (a zoom, or Windows display scaling) matched
+neither block, and the whole menu opened out over the page (found by the independent review). The
+last group's drop down opens to its left, so with New on several heads it cannot hang off an 861px
+screen even closed.
+
+A group shows while any screen in it does, its label in the phone menu and its drop down on the
+banner. It used to be the Admin label alone, shown for Team or Analytics (TASK-482), so Site pages
+and QR codes could sit under no label. A closed drop down is hidden with `visibility`, never
+`display:none`: restorableView (TASK-443) reads a link with no offsetParent as a screen your
+permissions hide, and a refresh would land on the Overview.
+
+At 860px and below nothing changed: the Menu button opens the same five groups. Each group's label
+is a `span.admin-nav-grouplabel` now, and the banner's `button.admin-nav-grouphead` is hidden there.
+Every screen's link kept its `data-view`, its gate and its words. `test/unit/admin-top-banner.test.ts`
+holds the list of links as they were and drives the drop downs in jsdom; the phone menu's tests did
+not change. Verified in headless Chrome at 1280, 1024, 900 and 390px: the banner 60px and pinned,
+each drop down inside the screen, the Festive Ball's sections pinned under the banner, nothing
+sideways, no inner scrollbars, every target at least 44px.
+
 ## The admin fits a phone (TASK-454)
 
 At 390px every screen of the admin was wider than the phone (535px as reported, 556px when measured
@@ -6933,6 +6988,8 @@ admin scrolls sideways, inside a box or otherwise:
 
 Below **860px** (it was 760px) the menu leaves its 210px column and becomes one pinned **Menu**
 button that opens the whole list, wrapped into its five groups, every button at least 44px tall.
+(Wider than 860px there is no column since October 2026: the menu is the banner across the top, see
+[The banner across the top](#the-banner-across-the-top-october-2026).)
 Pinned, because the complaint that pinned it in TASK-422 still stands: changing section should
 never mean scrolling back up a long page. Where closing leaves you depends on why it closed:
 

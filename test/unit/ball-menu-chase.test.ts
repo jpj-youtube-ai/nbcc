@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { parseMenu } from "../../src/ball/menu";
-import { bookingMenuProgress, summariseMenuProgress } from "../../src/ball/menu-progress";
+import { bookingMenuProgress, hasChosenAlready, summariseMenuProgress } from "../../src/ball/menu-progress";
 import { buildMenuReadyEmail } from "../../src/ball/menu-email";
 
 // TASK-418: the two halves of "the menu has landed, now go and get the answers".
@@ -31,6 +31,39 @@ const booking = (over: Record<string, unknown> = {}) => ({
   guestToken: "tok",
   choices: [] as Array<string | null>,
   ...over,
+});
+
+// Jaimie, 20 October 2026: "skip the ones who have already chosen", and, for a table with seats
+// nobody has named yet, still send it: the email asks them to name and choose for the rest. So a
+// booking is left out only when every seat it paid for is named and every one of them has chosen.
+describe("who the menu email leaves out, as already chosen", () => {
+  it("leaves out a booking whose every seat is named, and every guest has chosen", () => {
+    expect(hasChosenAlready(booking({ seats: 2, choices: [BOTH, BOTH] }), MENU)).toBe(true);
+  });
+
+  it("still emails a table with seats nobody has named yet, even when everyone named has chosen", () => {
+    expect(hasChosenAlready(booking({ seats: 10, choices: [BOTH] }), MENU)).toBe(false);
+  });
+
+  it("still emails a booking with a named guest who has not chosen", () => {
+    expect(hasChosenAlready(booking({ seats: 2, choices: [BOTH, null] }), MENU)).toBe(false);
+  });
+
+  it("still emails a booking with a guest who has answered only some of the courses", () => {
+    expect(hasChosenAlready(booking({ seats: 2, choices: [BOTH, ONLY_MAIN] }), MENU)).toBe(false);
+  });
+
+  // Nobody named yet is nobody who has chosen: they have not even seen the menu.
+  it("still emails a booking with nobody named yet", () => {
+    expect(hasChosenAlready(booking({ choices: [] }), MENU)).toBe(false);
+  });
+
+  // A menu with nothing to choose: nobody can have chosen, and the email is how everyone learns
+  // what is being served.
+  it("leaves nobody out when the menu asks nothing", () => {
+    const fixed = parseMenu("To start: Soup\nMain: Roast");
+    expect(hasChosenAlready(booking({ seats: 1, choices: [null] }), fixed)).toBe(false);
+  });
 });
 
 describe("how far off a complete kitchen order one booking is", () => {

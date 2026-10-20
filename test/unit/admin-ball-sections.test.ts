@@ -33,6 +33,8 @@ let ball: Record<string, unknown> = {};
 let overview: Record<string, unknown> = {};
 // What /api/admin/whats-new answers (TASK-478): which areas hold something new, and since when.
 let whatsNewAnswer: Record<string, unknown> = { areas: [] };
+// What POST /api/admin/ball/menu-email answers, for the Emails section's status line.
+let menuEmailAnswer: unknown = { sent: 0, failed: [] };
 // Answers held back until a test lets them go, to see the screen while one is still on its way.
 let pending: Set<string> = new Set();
 let release: Record<string, () => void> = {};
@@ -84,6 +86,7 @@ function respond(method: string, path: string) {
   if (path === "/api/admin/me") return j({ email: "admin@nbcc", permissions: perms });
   if (path === "/api/admin/overview") return j(overview);
   if (method === "GET" && path === "/api/admin/whats-new") return j(whatsNewAnswer);
+  if (method === "POST" && path === "/api/admin/ball/menu-email") return j(menuEmailAnswer);
   if (method === "GET" && path in ball) {
     if (fail.has(path)) return j({ error: "Admin is temporarily unavailable" }, 500);
     return j(ball[path]);
@@ -148,6 +151,7 @@ beforeEach(() => {
   ball = freshBall();
   overview = { needs: [], failed: [], numbers: [], coming: [] };
   whatsNewAnswer = { areas: [] };
+  menuEmailAnswer = { sent: 0, failed: [] };
   pending = new Set();
   release = {};
   window.sessionStorage.clear();
@@ -601,6 +605,79 @@ describe("Set up: each drop down says what it is set to", () => {
     const groups = Array.from(document.querySelectorAll("#view-ball details.ball-setting")) as HTMLDetailsElement[];
     expect(groups).toHaveLength(7);
     for (const g of groups) expect(g.open).toBe(false);
+  });
+});
+
+// Jaimie, 20 October 2026: "skip the ones who have already chosen". The server leaves those
+// bookings out (src/routes/admin.ts, postAdminBallMenuEmail) and says how many; the screen says so.
+describe("Emails: the menu email says who it left out as already chosen", () => {
+  let asked = "";
+  const send = async (answer: unknown) => {
+    menuEmailAnswer = answer;
+    window.confirm = (message?: string) => {
+      asked = String(message);
+      return true;
+    };
+    await press(el("ballSendMenuEmail"));
+  };
+
+  it("asks first in words that say who it goes to", async () => {
+    await openBall();
+    await send({ sent: 0, failed: [] });
+    expect(asked).toContain("everyone who has paid and not already chosen");
+  });
+
+  it("says how many had already chosen, so were not emailed", async () => {
+    await openBall();
+    await send({ sent: 2, failed: [], alreadyChosen: 3 });
+    expect(el("ballMenuEmailStatus").textContent).toBe("Sent to 2 bookings. 3 bookings had already chosen, so were not emailed.");
+  });
+
+  it("says it in the singular", async () => {
+    await openBall();
+    await send({ sent: 1, failed: [], alreadyChosen: 1 });
+    expect(el("ballMenuEmailStatus").textContent).toBe("Sent to 1 booking. 1 booking had already chosen, so was not emailed.");
+  });
+
+  it("says nobody needed it, and how many had chosen, when everyone had been told or had chosen", async () => {
+    await openBall();
+    await send({ sent: 0, failed: [], alreadyChosen: 4 });
+    expect(el("ballMenuEmailStatus").textContent).toBe(
+      "Nobody needed it: 4 bookings had already chosen, and everyone else who has paid has already been told.",
+    );
+    await send({ sent: 0, failed: [], alreadyChosen: 1 });
+    expect(el("ballMenuEmailStatus").textContent).toBe(
+      "Nobody needed it: 1 booking had already chosen, and everyone else who has paid has already been told.",
+    );
+  });
+
+  // Before, every send failing read as "Nobody needed it", and the operator would think it done.
+  it("says so when none could be sent, rather than that nobody needed it", async () => {
+    await openBall();
+    await send({ sent: 0, failed: ["BALL-AAA111", "BALL-BBB222", "BALL-CCC333"], alreadyChosen: 0 });
+    expect(el("ballMenuEmailStatus").textContent).toBe("Could not send any of them: 3 failed and will be retried next time.");
+  });
+
+  it("says so when none could be sent, and how many had already chosen", async () => {
+    await openBall();
+    await send({ sent: 0, failed: ["BALL-EEE555", "BALL-FFF666"], alreadyChosen: 2 });
+    expect(el("ballMenuEmailStatus").textContent).toBe(
+      "Could not send any of them: 2 failed and will be retried next time. 2 bookings had already chosen, so were not emailed.",
+    );
+  });
+
+  it("says all three at once: sent, already chosen, and could not be sent", async () => {
+    await openBall();
+    await send({ sent: 2, failed: ["BALL-DDD444"], alreadyChosen: 3 });
+    expect(el("ballMenuEmailStatus").textContent).toBe(
+      "Sent to 2 bookings. 3 bookings had already chosen, so were not emailed. 1 could not be sent and will be retried next time.",
+    );
+  });
+
+  it("says what it said before when nobody had chosen", async () => {
+    await openBall();
+    await send({ sent: 0, failed: [] });
+    expect(el("ballMenuEmailStatus").textContent).toBe("Nobody needed it: everyone who has paid has already been told.");
   });
 });
 

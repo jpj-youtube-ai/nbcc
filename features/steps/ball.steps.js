@@ -759,6 +759,12 @@ Given("a paid ball booking for {int} table with guest token {string}", async fun
   await seedBooking(token, "paid", "table", n, n * 10);
 });
 
+// Single tickets, so a booking can have every seat named with one guest (TASK-573).
+Given("a paid ball booking for {int} ticket(s) with guest token {string}", async function (n, token) {
+  await withDb((db) => db.query("DELETE FROM ball_bookings WHERE guest_token = $1", [token]));
+  await seedBooking(token, "paid", "seat", n, n);
+});
+
 Given("a pending ball booking with guest token {string}", async function (token) {
   await withDb((db) => db.query("DELETE FROM ball_bookings WHERE guest_token = $1", [token]));
   await seedBooking(token, "pending", "table", 1, 10);
@@ -825,6 +831,15 @@ When(
       vegetarian1: "yes",
       menu1_0: main,
     });
+  },
+);
+
+// Both of the test menu's questions answered (the main and the pudding), so the guest counts as
+// having chosen. menu{guest}_{question}: the questions numbered as the menu asks them.
+When(
+  "I save a guest {string} choosing {string} and {string} on {string}",
+  async function (name, main, pudding, token) {
+    await postGuests(this, token, { ...nameFields(name, 1), menu1_0: main, menu1_1: pudding });
   },
 );
 
@@ -984,6 +999,19 @@ Then("the ball menu email status should be {int}", function (expected) {
 
 Then("the ball menu email should report {int} sent", function (n) {
   assert.strictEqual(this.ballMenuEmailBody.sent, n);
+});
+
+Then("the ball menu email should report {int} already chosen", function (n) {
+  assert.strictEqual(this.ballMenuEmailBody.alreadyChosen, n);
+});
+
+// TASK-573: the audit row keeps the count too, so a later look can see why someone was not emailed.
+Then("the ball menu email audit should record {int} already chosen", async function (n) {
+  const r = await withDb((db) =>
+    db.query(`SELECT data FROM audit_log WHERE action = 'ball.menu_email_sent' ORDER BY id DESC LIMIT 1`),
+  );
+  assert.strictEqual(r.rows.length, 1, "no audit row for the menu email");
+  assert.strictEqual(r.rows[0].data.alreadyChosen, n);
 });
 
 When(

@@ -16421,7 +16421,7 @@
     if (menuBtn) {
       menuBtn.hidden = !canEdit("ball");
       menuBtn.addEventListener("click", function () {
-        if (!window.confirm("Email everyone who has paid to say the menu is confirmed? This emails real people, and each booking only gets it once.")) return;
+        if (!window.confirm("Email everyone who has paid and not already chosen, to say the menu is confirmed? This emails real people, and each booking only gets it once.")) return;
         menuBtn.disabled = true;
         ballStatus("ballMenuEmailStatus", "Sending…");
         authFetch("/api/admin/ball/menu-email", { method: "POST" })
@@ -16437,13 +16437,24 @@
               return;
             }
             var failed = (d.failed || []).length;
-            ballStatus(
-              "ballMenuEmailStatus",
-              d.sent === 0
-                ? "Nobody needed it: everyone who has paid has already been told."
-                : "Sent to " + d.sent + (d.sent === 1 ? " booking." : " bookings.") +
-                    (failed ? " " + failed + " could not be sent and will be retried next time." : "")
-            );
+            // Jaimie, 20 October 2026: a booking whose every seat is named and chosen is left out,
+            // and the screen says how many.
+            var chose = d.alreadyChosen || 0;
+            var choseHad = chose === 1 ? "1 booking had already chosen" : chose + " bookings had already chosen";
+            var choseWords = chose ? " " + choseHad + (chose === 1 ? ", so was not emailed." : ", so were not emailed.") : "";
+            var said;
+            if (d.sent > 0) {
+              said = "Sent to " + d.sent + (d.sent === 1 ? " booking." : " bookings.") + choseWords +
+                (failed ? " " + failed + " could not be sent and will be retried next time." : "");
+            } else if (failed) {
+              // Every send failing must never read as "Nobody needed it": nobody has been told.
+              said = "Could not send any of them: " + failed + " failed and will be retried next time." + choseWords;
+            } else {
+              said = chose
+                ? "Nobody needed it: " + choseHad + ", and everyone else who has paid has already been told."
+                : "Nobody needed it: everyone who has paid has already been told.";
+            }
+            ballStatus("ballMenuEmailStatus", said);
             loadBall();
           })
           .catch(function () {

@@ -3503,7 +3503,7 @@ with it, read as the menu progress reads them, and `hasChosenAlready` (`src/ball
 leaves a booking out when the menu asks something, **every seat it paid for has a guest named**,
 and every guest has answered every course that asks (`hasChosen`, the same test the "Who has chosen"
 list uses). A table with seats nobody has named yet still gets it, even when everyone named has
-chosen: she chose that, since the email asks them to name and choose for the rest, and missing it
+chosen: Jaimie chose that, since the email asks them to name and choose for the rest, and missing it
 costs them the one "come and choose" email. A booking with nobody named still gets it, and so does
 everyone when the menu asks nothing (that email is how they learn what is served). A booking left
 out is **not stamped**, so once someone in it has not chosen (a guest changed or added) the next

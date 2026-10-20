@@ -273,19 +273,50 @@ describe("the drop downs", () => {
     expect(document.activeElement).toBe(link("donations"));
   });
 
-  it("opens to a mouse that hovers, closes a moment after it leaves, and one at a time", async () => {
+  // A short pause before opening (a mouse crossing the banner does not flash every group open on its
+  // way) and a longer grace before closing (a mouse that strays off the edge does not lose it).
+  const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+  it("opens to a mouse that rests on it, closes a moment after it leaves, and one at a time", async () => {
     hoverMouse = true;
     boot();
     await signIn();
     group("giving").dispatchEvent(new MouseEvent("mouseenter"));
+    expect(openGroups()).toEqual([]);
+    await wait(140);
     expect(openGroups()).toEqual(["giving"]);
-    // Crossing to the next head: that one opens and the first closes at once.
+    // On to the next head: that one opens and the first closes at once.
     group("content").dispatchEvent(new MouseEvent("mouseenter"));
+    await wait(140);
     expect(openGroups()).toEqual(["content"]);
     group("content").dispatchEvent(new MouseEvent("mouseleave"));
+    await wait(140);
     expect(isOpen("content")).toBe(true);
-    await new Promise((r) => setTimeout(r, 260));
+    await wait(300);
     expect(isOpen("content")).toBe(false);
+  });
+
+  it("does not flash open under a mouse just passing across it", async () => {
+    hoverMouse = true;
+    boot();
+    await signIn();
+    group("giving").dispatchEvent(new MouseEvent("mouseenter"));
+    group("giving").dispatchEvent(new MouseEvent("mouseleave"));
+    await wait(140);
+    expect(openGroups()).toEqual([]);
+  });
+
+  it("stays open for a mouse that leaves and comes back within the moment's grace", async () => {
+    hoverMouse = true;
+    boot();
+    await signIn();
+    group("content").dispatchEvent(new MouseEvent("mouseenter"));
+    await wait(140);
+    group("content").dispatchEvent(new MouseEvent("mouseleave"));
+    await wait(120);
+    group("content").dispatchEvent(new MouseEvent("mouseenter"));
+    await wait(400);
+    expect(isOpen("content")).toBe(true);
   });
 
   it("stays open when a mouse that opened it by hovering then clicks its head", async () => {
@@ -293,11 +324,73 @@ describe("the drop downs", () => {
     boot();
     await signIn();
     group("admin").dispatchEvent(new MouseEvent("mouseenter"));
+    await wait(140);
     head("admin").click();
     expect(isOpen("admin")).toBe(true);
     group("admin").dispatchEvent(new MouseEvent("mouseleave"));
-    await new Promise((r) => setTimeout(r, 260));
+    await wait(450);
     expect(isOpen("admin")).toBe(true);
+  });
+
+  it("closes on Escape wherever the keyboard is, as one a mouse opened has no focus in it", async () => {
+    hoverMouse = true;
+    boot();
+    await signIn();
+    group("giving").dispatchEvent(new MouseEvent("mouseenter"));
+    await wait(140);
+    key(document.body, "Escape");
+    expect(openGroups()).toEqual([]);
+  });
+
+  // In Chrome and Edge a button takes focus when clicked. Sent to the head after a mouse choice, the
+  // down arrow would open the drop down again rather than scroll the screen just chosen.
+  it("leaves the keyboard off the head after a screen is chosen with the mouse", async () => {
+    await signIn();
+    head("giving").click();
+    link("claims").focus();
+    link("claims").dispatchEvent(new MouseEvent("click", { bubbles: true, detail: 1 }));
+    await settle();
+    expect(openGroups()).toEqual([]);
+    expect(el("view-claims").hidden).toBe(false);
+    expect(document.activeElement).not.toBe(head("giving"));
+  });
+
+  it("puts the keyboard back on the head after a screen is chosen from the keyboard", async () => {
+    await signIn();
+    head("giving").click();
+    link("claims").focus();
+    // Enter or Space on a button is a click with no mouse in it: detail 0.
+    link("claims").dispatchEvent(new MouseEvent("click", { bubbles: true, detail: 0 }));
+    await settle();
+    expect(openGroups()).toEqual([]);
+    expect(document.activeElement).toBe(head("giving"));
+  });
+
+  it("moves along its screens with the up and down arrows, and up from the first to its head", async () => {
+    perms = { ...effectivePermissions({ role: "admin", permissions: null }), "red-bag": "none" };
+    boot();
+    await signIn();
+    head("giving").focus();
+    key(head("giving"), "ArrowDown");
+    expect(document.activeElement).toBe(link("donations"));
+    // Fill a Red Bag is hidden for this person, so the next is Claims.
+    key(link("donations"), "ArrowDown");
+    expect(document.activeElement).toBe(link("claims"));
+    key(link("claims"), "ArrowUp");
+    expect(document.activeElement).toBe(link("donations"));
+    key(link("donations"), "ArrowUp");
+    expect(document.activeElement).toBe(head("giving"));
+    expect(isOpen("giving")).toBe(true);
+  });
+
+  // A click on a gap between its screens moves the focus to <main tabindex="-1">, which holds the
+  // whole nav. That is not the keyboard leaving the drop down.
+  it("stays open when focus goes to something that holds it, as a near miss inside it does", async () => {
+    await signIn();
+    head("content").click();
+    link("ball").focus();
+    el("admin-main").focus();
+    expect(isOpen("content")).toBe(true);
   });
 
   // Narrowed to a phone's width, the heads are hidden: nothing may be left open behind them. One
@@ -326,6 +419,7 @@ describe("the drop downs", () => {
     hoverMouse = false;
     await signIn();
     group("giving").dispatchEvent(new MouseEvent("mouseenter"));
+    await new Promise((r) => setTimeout(r, 140));
     expect(openGroups()).toEqual([]);
     head("giving").click();
     expect(isOpen("giving")).toBe(true);
@@ -335,7 +429,9 @@ describe("the drop downs", () => {
 });
 
 describe("the stylesheet", () => {
-  const WIDE = "@media (min-width:861px)";
+  // Exactly the phone menu's width turned round. As (min-width:861px) a window 860.5px wide (a zoom,
+  // or Windows display scaling) matched neither, and the whole menu opened out over the page.
+  const WIDE = "@media not all and (max-width:860px)";
   const wide = () => {
     const at = css.indexOf(WIDE);
     return at === -1 ? "" : css.slice(at, css.indexOf("\n}", at));
@@ -345,8 +441,25 @@ describe("the stylesheet", () => {
     return css.slice(at, css.indexOf("\n}", at));
   };
 
-  it("has one block for the banner, wider than a phone", () => {
+  it("has one block for the banner, at every width the phone menu's does not cover", () => {
     expect(css.indexOf(WIDE)).toBeGreaterThan(-1);
+    expect(css).not.toMatch(/@media \(min-width:861px\)/);
+  });
+
+  // .admin-nav ul is the more specific selector, and set the drop down's padding to 0 unseen.
+  it("pads the drop down, wide enough that a screen's name and its New stay on one line", () => {
+    expect(wide()).toMatch(/#adminNavList \.admin-nav-panel\{[^}]*padding:8px/);
+    expect(wide()).toMatch(/#adminNavList \.admin-nav-panel\{[^}]*min-width:260px/);
+  });
+
+  it("opens the last group's drop down to its left, so it cannot hang off the screen, and lines up the first's", () => {
+    expect(wide()).toMatch(/#adminNavList > \.admin-nav-group:last-child \.admin-nav-panel\{[^}]*left:auto[^}]*right:0/);
+    expect(wide()).toMatch(/#adminNavList > \.admin-nav-group:first-child \.admin-nav-panel\{[^}]*left:-14px/);
+  });
+
+  it("spaces the phone menu as it was: 6px under each label, the screens not inset", () => {
+    expect(phone()).toMatch(/\.admin-nav\.is-open \.admin-nav-panel\{[^}]*margin-top:6px/);
+    expect(phone()).toMatch(/\.admin-nav-group\{flex-basis:100%;[^}]*padding:10px 0 0/);
   });
 
   // The banner is the one pinned bar, the height the top bar was, so everything already pinned under

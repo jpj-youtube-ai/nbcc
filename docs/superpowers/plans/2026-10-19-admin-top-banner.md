@@ -4,7 +4,7 @@
 
 **Goal:** On a laptop, the admin's left side menu becomes one pinned banner across the top with a drop down per group, freeing the width it took and never needing a scroll to reach.
 
-**Architecture:** The same `<nav class="admin-nav">` and the same 25 `.admin-nav-link` buttons, regrouped in the markup into five `li.admin-nav-group` items, each with a phone label, a laptop head button and a panel. Wider than 860px the stylesheet makes the nav a 60px banner pinned at the top (the top bar scrolls away, as on a phone) and the panels drop downs; app.js opens and closes them. At 860px and below nothing changes: the Menu button, its list, its tests.
+**Architecture:** The same `<nav class="admin-nav">` and the same 23 `.admin-nav-link` buttons, regrouped in the markup into five `li.admin-nav-group` items, each with a phone label, a laptop head button and a panel. Wider than 860px the stylesheet makes the nav a 60px banner pinned at the top (the top bar scrolls away, as on a phone) and the panels drop downs; app.js opens and closes them. At 860px and below nothing changes: the Menu button, its list, its tests.
 
 **Tech Stack:** Plain HTML, CSS and the admin's classic script (`assets/js/admin/app.js`); Vitest with jsdom.
 

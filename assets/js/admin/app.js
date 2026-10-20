@@ -205,7 +205,7 @@
       });
   }
 
-  // Hide every nav link (and the Team-only group label) for a section the signed-in user cannot even
+  // Hide every nav link (and any group left with none) for a section the signed-in user cannot even
   // view. Overview always stays visible - it has no gated route of its own; its widgets call section
   // routes that enforce their own gate. UX only: the server is the real enforcement on every route.
   function applyNavFiltering() {
@@ -595,7 +595,7 @@
     // TASK-454: choosing a section from the phone menu closes it, so what you chose is what you see.
     closeNav("chosen");
     // And on the banner, the drop down it was chosen from.
-    navGroupsClose();
+    navGroupsChosen();
     showOnly("view-" + name);
     refreshEnquiryNotice();
     // TASK-478: the section you open loses its pill at once; the rest are asked about afresh.
@@ -890,30 +890,53 @@
   var navMouse = window.matchMedia ? window.matchMedia("(hover: hover) and (pointer: fine)") : null;
   // At a phone's width the heads are hidden and the groups are the Menu's labels.
   var navNarrow = window.matchMedia ? window.matchMedia("(max-width:860px)") : null;
-  var navLeaving = null; // the moment's grace after a mouse leaves, so a stray edge does not lose it
+  // A mouse that rests on a head opens it after a short pause, so one crossing the banner does not
+  // flash each group open on its way; one that leaves has a longer grace, so a mouse that strays off
+  // the edge on its way down does not lose it. Each group keeps its own leaving timer.
+  var navResting = null;
+  var NAV_REST_MS = 100;
+  var NAV_GRACE_MS = 300;
+  // Whether the screen being chosen was chosen from the keyboard: a click with no mouse in it (Enter
+  // or Space on a button) has detail 0. Set on the way down, before the link's own handler runs.
+  var navChosenByKeyboard = false;
   function navGroupHead(g) {
     return g.querySelector(".admin-nav-grouphead");
   }
-  function navGroupClose(g) {
+  function navGroupLinks(g) {
+    return Array.prototype.filter.call(g.querySelectorAll(".admin-nav-link"), function (b) {
+      return !b.hidden;
+    });
+  }
+  // refocus: a keyboard on a screen in a drop down that is closing goes back to its head rather than
+  // to nowhere. Without it (a mouse's choice) the screen's button lets go of the focus, so the arrow
+  // keys scroll the screen just chosen instead of working the closed drop down.
+  function navGroupClose(g, refocus) {
+    clearTimeout(g.navLeaving);
     if (!g.classList.contains("is-open")) return;
     var head = navGroupHead(g);
-    // A keyboard on a screen in a drop down that is closing goes back to its head, not to nowhere.
     var onAScreen = g.contains(doc.activeElement) && doc.activeElement !== head;
     g.classList.remove("is-open");
     g.removeAttribute("data-open-by");
-    if (head) {
-      head.setAttribute("aria-expanded", "false");
-      if (onAScreen) head.focus({ preventScroll: true });
+    if (head) head.setAttribute("aria-expanded", "false");
+    if (onAScreen) {
+      if (refocus && head) head.focus({ preventScroll: true });
+      else if (!refocus) doc.activeElement.blur();
     }
   }
-  function navGroupsClose(except) {
+  function navGroupsClose(except, refocus) {
     (navGroups || []).forEach(function (g) {
-      if (g !== except) navGroupClose(g);
+      if (g !== except) navGroupClose(g, refocus);
     });
+  }
+  // From selectView: a screen has been chosen, so whatever drop down it was in closes.
+  function navGroupsChosen() {
+    var byKeyboard = navChosenByKeyboard;
+    navChosenByKeyboard = false;
+    navGroupsClose(null, byKeyboard);
   }
   // how: "click" stays open until something closes it; "hover" closes again when the mouse leaves.
   function navGroupOpen(g, how) {
-    clearTimeout(navLeaving);
+    clearTimeout(g.navLeaving);
     navGroupsClose(g);
     g.classList.add("is-open");
     g.setAttribute("data-open-by", how);
@@ -933,34 +956,66 @@
       if (e.key !== "ArrowDown") return;
       e.preventDefault();
       navGroupOpen(g, "click");
-      var first = Array.prototype.filter.call(g.querySelectorAll(".admin-nav-link"), function (b) {
-        return !b.hidden;
-      })[0];
+      var first = navGroupLinks(g)[0];
       if (first) first.focus();
     });
     g.addEventListener("mouseenter", function () {
       if (!navMouse || !navMouse.matches || (navNarrow && navNarrow.matches)) return;
-      clearTimeout(navLeaving);
-      if (!g.classList.contains("is-open")) navGroupOpen(g, "hover");
+      clearTimeout(g.navLeaving);
+      if (g.classList.contains("is-open")) return;
+      clearTimeout(navResting);
+      navResting = setTimeout(function () {
+        navGroupOpen(g, "hover");
+      }, NAV_REST_MS);
     });
     g.addEventListener("mouseleave", function () {
-      if (!navMouse || !navMouse.matches || g.getAttribute("data-open-by") !== "hover") return;
-      navLeaving = setTimeout(function () {
+      // Only passing: it never opens.
+      clearTimeout(navResting);
+      if (g.getAttribute("data-open-by") !== "hover") return;
+      g.navLeaving = setTimeout(function () {
         if (g.getAttribute("data-open-by") === "hover") navGroupClose(g);
-      }, 150);
+      }, NAV_GRACE_MS);
     });
     g.addEventListener("keydown", function (e) {
-      if (e.key !== "Escape" || !g.classList.contains("is-open")) return;
-      navGroupClose(g);
-      head.focus();
+      if (!g.classList.contains("is-open")) return;
+      if (e.key === "Escape") {
+        navGroupClose(g);
+        head.focus();
+        return;
+      }
+      // The up and down arrows move along its screens, and up from the first goes back to its head.
+      // On the head itself the down arrow is the head's own (above).
+      if (e.key !== "ArrowDown" && e.key !== "ArrowUp") return;
+      var links = navGroupLinks(g);
+      var at = links.indexOf(e.target);
+      if (at === -1) return;
+      e.preventDefault();
+      if (e.key === "ArrowDown") {
+        if (at < links.length - 1) links[at + 1].focus();
+      } else if (at > 0) links[at - 1].focus();
+      else head.focus();
     });
     g.addEventListener("focusout", function (e) {
-      if (e.relatedTarget && !g.contains(e.relatedTarget)) navGroupClose(g);
+      var to = e.relatedTarget;
+      // Focus going to something that holds the whole nav (<main tabindex="-1">, after a click on a
+      // gap inside the drop down) is not the keyboard leaving it; a click outside is the document's.
+      if (to && !g.contains(to) && !to.contains(g)) navGroupClose(g);
     });
   });
+  var navList = el("adminNavList");
+  if (navList) {
+    navList.addEventListener("click", function (e) {
+      var chosen = e.target && e.target.closest ? e.target.closest(".admin-nav-link") : null;
+      navChosenByKeyboard = !!chosen && e.detail === 0;
+    }, true);
+  }
   doc.addEventListener("click", function (e) {
     var inside = e.target && e.target.closest ? e.target.closest("#adminNavList .admin-nav-group") : null;
     navGroupsClose(inside);
+  });
+  // Escape closes an open drop down wherever the keyboard is: one a mouse opened has no focus in it.
+  doc.addEventListener("keydown", function (e) {
+    if (e.key === "Escape") navGroupsClose();
   });
 
   // ---- overview ----

@@ -3,7 +3,8 @@
    (the cards, buttons and fields are the Fundraising screen's, restated here because its rules are
    scoped to that screen). Nothing scrolls inside a box: every row wraps or stacks, and the page
    grows. The rows answer to the width of the editor itself (a container query), not the screen:
-   from 861px the admin's side menu takes 210px of it. */
+   whatever is beside it takes its share (from 861px the admin's side menu took 210px, until the
+   banner across the top replaced it in October 2026). */
 
 #view-red-bag #rblRoot { container: rbl / inline-size; min-width: 0; max-width: 980px; }
 #view-red-bag #rblRoot.is-busy { cursor: progress; }

@@ -6931,10 +6931,17 @@ Now, wider than 860px:
 - **A drop down for each of the five groups**, Monitor, Giving, Content, Governance and Admin, each
   screen in its group as before. It opens on a click from any device, and on hover for a mouse only
   (`(hover: hover) and (pointer: fine)`: a finger's tap fires mouseenter and then click, which would
-  open it and close it at once), one at a time. A click on the head of one that hover opened keeps it
-  open. It closes on a second click, on Escape (the keyboard goes back to its head), on a click
-  anywhere else, when the keyboard moves on out of it, and when a screen in it is chosen. The down
-  arrow on a head opens it on its first screen.
+  open it and close it at once), one at a time. A mouse opens it after resting 100ms (so one crossing
+  the banner does not flash each group open) and closes it 300ms after leaving (so one that strays
+  off the edge does not lose it). A click on the head of one that hover opened keeps it open. It
+  closes on a second click, on Escape wherever the keyboard is, on a click anywhere else, when the
+  keyboard moves on out of it (but not when the focus goes to `<main>`, which holds the nav: that is a
+  click on a gap inside it), and when a screen in it is chosen. The down arrow on a head opens it on
+  its first screen, and the up and down arrows move along its screens.
+- **Choosing a screen** with the mouse lets go of the focus, so the arrow keys scroll the new screen
+  (Chrome gives a clicked button the focus, and left on the group's head the down arrow opened the
+  drop down again). Chosen from the keyboard (a click with `detail` 0), the focus goes back to the
+  group's head.
 - **New** on a group's head when any screen shown in it is new (TASK-478), and beside that screen
   inside, as before.
 - **The group holding the screen on view** is marked: its name in crimson, underlined as a tab is
@@ -6942,6 +6949,12 @@ Now, wider than 860px:
 - **The content takes the width**, up to 1280px, the banner's words lined up with its heading. Lists
   that become cards measure their own width (container queries), so each simply has 210px more
   before it does.
+
+The banner's block is `@media not all and (max-width:860px)`, exactly the phone menu's width turned
+round. As `(min-width:861px)` a window 860.5px wide (a zoom, or Windows display scaling) matched
+neither block, and the whole menu opened out over the page (found by the independent review). The
+last group's drop down opens to its left, so with New on several heads it cannot hang off an 861px
+screen even closed.
 
 A group shows while any screen in it does, its label in the phone menu and its drop down on the
 banner. It used to be the Admin label alone, shown for Team or Analytics (TASK-482), so Site pages

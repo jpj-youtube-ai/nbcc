@@ -828,6 +828,15 @@ When(
   },
 );
 
+// Both of the test menu's questions answered (the main and the pudding), so the guest counts as
+// having chosen. menu{guest}_{question}: the questions numbered as the menu asks them.
+When(
+  "I save a guest {string} choosing {string} and {string} on {string}",
+  async function (name, main, pudding, token) {
+    await postGuests(this, token, { ...nameFields(name, 1), menu1_0: main, menu1_1: pudding });
+  },
+);
+
 When("I save guests {string} on {string}", async function (names, token) {
   const form = {};
   names.split(",").forEach(function (name, i) { Object.assign(form, nameFields(name, i + 1)); });
@@ -984,6 +993,10 @@ Then("the ball menu email status should be {int}", function (expected) {
 
 Then("the ball menu email should report {int} sent", function (n) {
   assert.strictEqual(this.ballMenuEmailBody.sent, n);
+});
+
+Then("the ball menu email should report {int} already chosen", function (n) {
+  assert.strictEqual(this.ballMenuEmailBody.alreadyChosen, n);
 });
 
 When(

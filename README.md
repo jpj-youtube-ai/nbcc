@@ -3497,6 +3497,17 @@ carrying no menu would burn the single send each booking gets. `guestLinkFor` no
 `Pick<GuestProgressRow, "guestToken">` rather than the whole row, since that is the only field it
 reads and the menu chase needed the same link off a different shape.
 
+**It leaves out a booking that has already chosen** (Jaimie, 20 October 2026: "skip the ones who
+have already chosen"). The send query brings each booking's guests' choices with it, read as the
+menu progress reads them, and `hasChosenAlready` (`src/ball/menu-progress.ts`) leaves a booking out
+when the menu asks something, at least one guest is named, and every named guest has answered every
+course that asks (`hasChosen`, the same test the "Who has chosen" list uses). A booking with nobody
+named yet still gets it, and so does everyone when the menu asks nothing (that email is how they
+learn what is served). A booking left out is **not stamped**, so a guest named later who has not
+chosen brings it back in on the next press. The answer says how many it left out
+(`alreadyChosen`), the screen says so ("3 bookings had already chosen, so were not emailed."), and
+the audit row records it.
+
 ### The admin Festive Ball screen
 
 Under **Content → Festive Ball**. Stats (seats and tables sold, remaining, money taken,

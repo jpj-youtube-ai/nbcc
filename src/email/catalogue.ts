@@ -939,7 +939,7 @@ const BALL: CatalogueEmail[] = [
     id: "ball-menu",
     group: "ball",
     name: "The menu is here",
-    who: "Goes to everyone who has paid, when staff press “Send the menu email”.",
+    who: "Goes to everyone who has paid, when staff press “Send the menu email”, except a booking whose named guests have all chosen already.",
     audience: "public",
     logKinds: ["ballRunUp"],
     note: "The menu and the note under it are typed by staff. The ones here are an example.",

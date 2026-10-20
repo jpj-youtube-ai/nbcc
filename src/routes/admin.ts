@@ -78,7 +78,7 @@ import {
   outstandingBookings,
   guestLinkFor,
 } from "../ball/guest-progress";
-import { summariseMenuProgress, outstandingMenuBookings } from "../ball/menu-progress";
+import { summariseMenuProgress, outstandingMenuBookings, hasChosenAlready } from "../ball/menu-progress";
 import { buildMenuReadyEmail } from "../ball/menu-email";
 import { parseMenu } from "../ball/menu";
 import { archiveStory, restoreStory } from "../db/stories";
@@ -4246,7 +4246,12 @@ export async function postAdminBallMenuEmail(req: Request, res: Response): Promi
       return res.status(409).json({ error: "Set the menu before telling anyone it is here" });
     }
 
-    const targets = await listBookingsNeedingMenuEmail();
+    // Jaimie, 20 October 2026: "skip the ones who have already chosen". A booking whose named
+    // guests have all chosen is left out and NOT stamped, so a guest named later who has not
+    // chosen brings it back in on the next press. The count is said back, so staff can see why.
+    const due = await listBookingsNeedingMenuEmail();
+    const targets = due.filter((t) => !hasChosenAlready(t, menu));
+    const alreadyChosen = due.length - targets.length;
     const base = config.BALL_BASE_URL.replace(/\/+$/, "");
 
     let sent = 0;
@@ -4281,9 +4286,9 @@ export async function postAdminBallMenuEmail(req: Request, res: Response): Promi
       action: "ball.menu_email_sent",
       entity: "ball_bookings",
       entityId: null,
-      data: { sent, failed: failed.length },
+      data: { sent, failed: failed.length, alreadyChosen },
     });
-    return res.status(200).json({ sent, failed });
+    return res.status(200).json({ sent, failed, alreadyChosen });
   } catch (err) {
     console.error("ball menu email failed:", err instanceof Error ? err.message : err);
     return res.status(500).json({ error: "Admin is temporarily unavailable" });

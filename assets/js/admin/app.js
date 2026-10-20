@@ -16421,7 +16421,7 @@
     if (menuBtn) {
       menuBtn.hidden = !canEdit("ball");
       menuBtn.addEventListener("click", function () {
-        if (!window.confirm("Email everyone who has paid to say the menu is confirmed? This emails real people, and each booking only gets it once.")) return;
+        if (!window.confirm("Email everyone who has paid and not already chosen, to say the menu is confirmed? This emails real people, and each booking only gets it once.")) return;
         menuBtn.disabled = true;
         ballStatus("ballMenuEmailStatus", "Sending…");
         authFetch("/api/admin/ball/menu-email", { method: "POST" })
@@ -16437,11 +16437,16 @@
               return;
             }
             var failed = (d.failed || []).length;
+            // Jaimie, 20 October 2026: a booking whose guests have all chosen is left out, and said.
+            var chose = d.alreadyChosen || 0;
+            var choseWords = chose
+              ? " " + chose + (chose === 1 ? " booking had already chosen, so was not emailed." : " bookings had already chosen, so were not emailed.")
+              : "";
             ballStatus(
               "ballMenuEmailStatus",
               d.sent === 0
-                ? "Nobody needed it: everyone who has paid has already been told."
-                : "Sent to " + d.sent + (d.sent === 1 ? " booking." : " bookings.") +
+                ? "Nobody needed it: everyone who has paid has already been told" + (chose ? ", or has already chosen." : ".")
+                : "Sent to " + d.sent + (d.sent === 1 ? " booking." : " bookings.") + choseWords +
                     (failed ? " " + failed + " could not be sent and will be retried next time." : "")
             );
             loadBall();

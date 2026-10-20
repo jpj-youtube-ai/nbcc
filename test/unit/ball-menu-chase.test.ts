@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { parseMenu } from "../../src/ball/menu";
-import { bookingMenuProgress, summariseMenuProgress } from "../../src/ball/menu-progress";
+import { bookingMenuProgress, hasChosenAlready, summariseMenuProgress } from "../../src/ball/menu-progress";
 import { buildMenuReadyEmail } from "../../src/ball/menu-email";
 
 // TASK-418: the two halves of "the menu has landed, now go and get the answers".
@@ -31,6 +31,34 @@ const booking = (over: Record<string, unknown> = {}) => ({
   guestToken: "tok",
   choices: [] as Array<string | null>,
   ...over,
+});
+
+// Jaimie, 20 October 2026: "skip the ones who have already chosen". The menu email asks a booking
+// to choose; one whose named guests have all chosen has nothing left to do, so it is left out.
+describe("who the menu email leaves out, as already chosen", () => {
+  it("leaves out a booking whose named guests have all chosen", () => {
+    expect(hasChosenAlready(booking({ choices: [BOTH, BOTH] }), MENU)).toBe(true);
+  });
+
+  it("still emails a booking with a named guest who has not chosen", () => {
+    expect(hasChosenAlready(booking({ choices: [BOTH, null] }), MENU)).toBe(false);
+  });
+
+  it("still emails a booking with a guest who has answered only some of the courses", () => {
+    expect(hasChosenAlready(booking({ choices: [BOTH, ONLY_MAIN] }), MENU)).toBe(false);
+  });
+
+  // Nobody named yet is nobody who has chosen: they have not even seen the menu.
+  it("still emails a booking with nobody named yet", () => {
+    expect(hasChosenAlready(booking({ choices: [] }), MENU)).toBe(false);
+  });
+
+  // A menu with nothing to choose: nobody can have chosen, and the email is how everyone learns
+  // what is being served.
+  it("leaves nobody out when the menu asks nothing", () => {
+    const fixed = parseMenu("To start: Soup\nMain: Roast");
+    expect(hasChosenAlready(booking({ choices: [null] }), fixed)).toBe(false);
+  });
 });
 
 describe("how far off a complete kitchen order one booking is", () => {

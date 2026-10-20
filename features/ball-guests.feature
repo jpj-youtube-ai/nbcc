@@ -131,6 +131,30 @@ Feature: Festive Ball guest details (TASK-313)
     When I send the ball menu email as "ball14.admin.bdd@example.com" with password "pw-ball14"
     Then the ball menu email should report 0 sent
 
+  # Jaimie, 20 October 2026: "skip the ones who have already chosen". Not stamped as sent, so a
+  # guest named later who has not chosen brings the booking back in on the next press.
+  Scenario: the menu email leaves out a booking whose guests have all chosen
+    Given a ball admin "ball28.admin.bdd@example.com" with role "admin" and password "pw-ball28"
+    And the ball is reset to 40 tables of 10 with 0 held back
+    And the ball menu is set
+    And a paid ball booking for 1 table with guest token "guest-menu-7"
+    When I save a guest "Sam Bryce" choosing "Turkey" and "Mousse" on "guest-menu-7"
+    And I send the ball menu email as "ball28.admin.bdd@example.com" with password "pw-ball28"
+    Then the ball menu email status should be 200
+    And the ball menu email should report 0 sent
+    And the ball menu email should report 1 already chosen
+
+  Scenario: a booking with a guest still to choose still gets the menu email
+    Given a ball admin "ball29.admin.bdd@example.com" with role "admin" and password "pw-ball29"
+    And the ball is reset to 40 tables of 10 with 0 held back
+    And the ball menu is set
+    And a paid ball booking for 1 table with guest token "guest-menu-8"
+    When I save a vegetarian guest "Sam Bryce" choosing "Vegetarian wellington" on "guest-menu-8"
+    And I send the ball menu email as "ball29.admin.bdd@example.com" with password "pw-ball29"
+    Then the ball menu email status should be 200
+    And the ball menu email should report 1 sent
+    And the ball menu email should report 0 already chosen
+
   Scenario: an editor cannot email four hundred people about the menu either
     Given a ball admin "ball15.admin.bdd@example.com" with role "editor" and password "pw-ball15"
     When I send the ball menu email as "ball15.admin.bdd@example.com" with password "pw-ball15"

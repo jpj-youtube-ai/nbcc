@@ -259,3 +259,14 @@ describe("agreeing to the ticket terms (TASK-331)", () => {
     expect(box).toContain('href="/ball/terms"');
   });
 });
+
+// TASK-574, Jaimie, 20 October 2026: "contact the hotel directly" said who but not how. The Park
+// Hotel's own number (checked against its listings: not the stadium's line), tappable on a phone
+// and kept on one line, as the menu email gives it.
+describe("Staying over gives the hotel's number to book on", () => {
+  it("links the number so a phone can call it", () => {
+    expect(ballHtml).toContain(
+      'please contact the hotel directly on <a href="tel:+441563545999">01563&nbsp;545999</a>.',
+    );
+  });
+});

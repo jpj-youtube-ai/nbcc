@@ -759,6 +759,12 @@ Given("a paid ball booking for {int} table with guest token {string}", async fun
   await seedBooking(token, "paid", "table", n, n * 10);
 });
 
+// Single tickets, so a booking can have every seat named with one guest (TASK-573).
+Given("a paid ball booking for {int} ticket(s) with guest token {string}", async function (n, token) {
+  await withDb((db) => db.query("DELETE FROM ball_bookings WHERE guest_token = $1", [token]));
+  await seedBooking(token, "paid", "seat", n, n);
+});
+
 Given("a pending ball booking with guest token {string}", async function (token) {
   await withDb((db) => db.query("DELETE FROM ball_bookings WHERE guest_token = $1", [token]));
   await seedBooking(token, "pending", "table", 1, 10);

@@ -16437,18 +16437,24 @@
               return;
             }
             var failed = (d.failed || []).length;
-            // Jaimie, 20 October 2026: a booking whose guests have all chosen is left out, and said.
+            // Jaimie, 20 October 2026: a booking whose every seat is named and chosen is left out,
+            // and the screen says how many.
             var chose = d.alreadyChosen || 0;
-            var choseWords = chose
-              ? " " + chose + (chose === 1 ? " booking had already chosen, so was not emailed." : " bookings had already chosen, so were not emailed.")
-              : "";
-            ballStatus(
-              "ballMenuEmailStatus",
-              d.sent === 0
-                ? "Nobody needed it: everyone who has paid has already been told" + (chose ? ", or has already chosen." : ".")
-                : "Sent to " + d.sent + (d.sent === 1 ? " booking." : " bookings.") + choseWords +
-                    (failed ? " " + failed + " could not be sent and will be retried next time." : "")
-            );
+            var choseHad = chose === 1 ? "1 booking had already chosen" : chose + " bookings had already chosen";
+            var choseWords = chose ? " " + choseHad + (chose === 1 ? ", so was not emailed." : ", so were not emailed.") : "";
+            var said;
+            if (d.sent > 0) {
+              said = "Sent to " + d.sent + (d.sent === 1 ? " booking." : " bookings.") + choseWords +
+                (failed ? " " + failed + " could not be sent and will be retried next time." : "");
+            } else if (failed) {
+              // Every send failing must never read as "Nobody needed it": nobody has been told.
+              said = "Could not send any of them: " + failed + " failed and will be tried again next time." + choseWords;
+            } else {
+              said = chose
+                ? "Nobody needed it: " + choseHad + ", and everyone else who has paid has already been told."
+                : "Nobody needed it: everyone who has paid has already been told.";
+            }
+            ballStatus("ballMenuEmailStatus", said);
             loadBall();
           })
           .catch(function () {

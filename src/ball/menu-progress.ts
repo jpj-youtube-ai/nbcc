@@ -82,14 +82,16 @@ export function summariseMenuProgress(
 }
 
 /**
- * Whether "the menu is here" would tell this booking nothing it has not already acted on: the menu
- * asks something, at least one guest is named, and every named guest has chosen. Jaimie, 20 October
- * 2026: "skip the ones who have already chosen". Nobody named yet is nobody who has chosen, and a
- * menu that asks nothing leaves nobody out, since that email is how they learn what is served.
+ * Whether "the menu is here" would tell this booking nothing it has not already done: the menu asks
+ * something, every seat it paid for has a guest named, and every guest has chosen. Jaimie, 20 October
+ * 2026: "skip the ones who have already chosen", but a table with seats nobody has named yet still
+ * gets it, since the email asks them to name and choose for the rest. Nobody named yet is nobody who
+ * has chosen, and a menu that asks nothing leaves nobody out (that email is how they learn what is
+ * served).
  */
-export function hasChosenAlready(row: Pick<MenuProgressRow, "choices">, menu: MenuCourse[]): boolean {
+export function hasChosenAlready(row: Pick<MenuProgressRow, "choices" | "seats">, menu: MenuCourse[]): boolean {
   if (choosableCourses(menu).length === 0) return false;
-  return row.choices.length > 0 && row.choices.every((c) => hasChosen(c, menu));
+  return row.choices.length > 0 && row.choices.length >= row.seats && row.choices.every((c) => hasChosen(c, menu));
 }
 
 /** The bookings worth an email, oldest first, with the rest of the row for the chase list. */

@@ -639,10 +639,31 @@ describe("Emails: the menu email says who it left out as already chosen", () => 
     expect(el("ballMenuEmailStatus").textContent).toBe("Sent to 1 booking. 1 booking had already chosen, so was not emailed.");
   });
 
-  it("says nobody needed it when everyone had been told or had chosen", async () => {
+  it("says nobody needed it, and how many had chosen, when everyone had been told or had chosen", async () => {
     await openBall();
     await send({ sent: 0, failed: [], alreadyChosen: 4 });
-    expect(el("ballMenuEmailStatus").textContent).toBe("Nobody needed it: everyone who has paid has already been told, or has already chosen.");
+    expect(el("ballMenuEmailStatus").textContent).toBe(
+      "Nobody needed it: 4 bookings had already chosen, and everyone else who has paid has already been told.",
+    );
+    await send({ sent: 0, failed: [], alreadyChosen: 1 });
+    expect(el("ballMenuEmailStatus").textContent).toBe(
+      "Nobody needed it: 1 booking had already chosen, and everyone else who has paid has already been told.",
+    );
+  });
+
+  // Before, every send failing read as "Nobody needed it", and the operator would think it done.
+  it("says so when none could be sent, rather than that nobody needed it", async () => {
+    await openBall();
+    await send({ sent: 0, failed: ["BALL-AAA111", "BALL-BBB222", "BALL-CCC333"], alreadyChosen: 0 });
+    expect(el("ballMenuEmailStatus").textContent).toBe("Could not send any of them: 3 failed and will be tried again next time.");
+  });
+
+  it("says all three at once: sent, already chosen, and could not be sent", async () => {
+    await openBall();
+    await send({ sent: 2, failed: ["BALL-DDD444"], alreadyChosen: 3 });
+    expect(el("ballMenuEmailStatus").textContent).toBe(
+      "Sent to 2 bookings. 3 bookings had already chosen, so were not emailed. 1 could not be sent and will be retried next time.",
+    );
   });
 
   it("says what it said before when nobody had chosen", async () => {

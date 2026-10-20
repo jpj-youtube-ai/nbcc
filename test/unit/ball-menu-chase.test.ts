@@ -33,19 +33,24 @@ const booking = (over: Record<string, unknown> = {}) => ({
   ...over,
 });
 
-// Jaimie, 20 October 2026: "skip the ones who have already chosen". The menu email asks a booking
-// to choose; one whose named guests have all chosen has nothing left to do, so it is left out.
+// Jaimie, 20 October 2026: "skip the ones who have already chosen", and, for a table with seats
+// nobody has named yet, still send it: the email asks them to name and choose for the rest. So a
+// booking is left out only when every seat it paid for is named and every one of them has chosen.
 describe("who the menu email leaves out, as already chosen", () => {
-  it("leaves out a booking whose named guests have all chosen", () => {
-    expect(hasChosenAlready(booking({ choices: [BOTH, BOTH] }), MENU)).toBe(true);
+  it("leaves out a booking whose every seat is named, and every guest has chosen", () => {
+    expect(hasChosenAlready(booking({ seats: 2, choices: [BOTH, BOTH] }), MENU)).toBe(true);
+  });
+
+  it("still emails a table with seats nobody has named yet, even when everyone named has chosen", () => {
+    expect(hasChosenAlready(booking({ seats: 10, choices: [BOTH] }), MENU)).toBe(false);
   });
 
   it("still emails a booking with a named guest who has not chosen", () => {
-    expect(hasChosenAlready(booking({ choices: [BOTH, null] }), MENU)).toBe(false);
+    expect(hasChosenAlready(booking({ seats: 2, choices: [BOTH, null] }), MENU)).toBe(false);
   });
 
   it("still emails a booking with a guest who has answered only some of the courses", () => {
-    expect(hasChosenAlready(booking({ choices: [BOTH, ONLY_MAIN] }), MENU)).toBe(false);
+    expect(hasChosenAlready(booking({ seats: 2, choices: [BOTH, ONLY_MAIN] }), MENU)).toBe(false);
   });
 
   // Nobody named yet is nobody who has chosen: they have not even seen the menu.
@@ -57,7 +62,7 @@ describe("who the menu email leaves out, as already chosen", () => {
   // what is being served.
   it("leaves nobody out when the menu asks nothing", () => {
     const fixed = parseMenu("To start: Soup\nMain: Roast");
-    expect(hasChosenAlready(booking({ choices: [null] }), fixed)).toBe(false);
+    expect(hasChosenAlready(booking({ seats: 1, choices: [null] }), fixed)).toBe(false);
   });
 });
 

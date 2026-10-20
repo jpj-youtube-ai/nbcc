@@ -16448,7 +16448,7 @@
                 (failed ? " " + failed + " could not be sent and will be retried next time." : "");
             } else if (failed) {
               // Every send failing must never read as "Nobody needed it": nobody has been told.
-              said = "Could not send any of them: " + failed + " failed and will be tried again next time." + choseWords;
+              said = "Could not send any of them: " + failed + " failed and will be retried next time." + choseWords;
             } else {
               said = chose
                 ? "Nobody needed it: " + choseHad + ", and everyone else who has paid has already been told."

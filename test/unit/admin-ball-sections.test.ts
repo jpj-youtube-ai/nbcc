@@ -655,7 +655,15 @@ describe("Emails: the menu email says who it left out as already chosen", () => 
   it("says so when none could be sent, rather than that nobody needed it", async () => {
     await openBall();
     await send({ sent: 0, failed: ["BALL-AAA111", "BALL-BBB222", "BALL-CCC333"], alreadyChosen: 0 });
-    expect(el("ballMenuEmailStatus").textContent).toBe("Could not send any of them: 3 failed and will be tried again next time.");
+    expect(el("ballMenuEmailStatus").textContent).toBe("Could not send any of them: 3 failed and will be retried next time.");
+  });
+
+  it("says so when none could be sent, and how many had already chosen", async () => {
+    await openBall();
+    await send({ sent: 0, failed: ["BALL-EEE555", "BALL-FFF666"], alreadyChosen: 2 });
+    expect(el("ballMenuEmailStatus").textContent).toBe(
+      "Could not send any of them: 2 failed and will be retried next time. 2 bookings had already chosen, so were not emailed.",
+    );
   });
 
   it("says all three at once: sent, already chosen, and could not be sent", async () => {

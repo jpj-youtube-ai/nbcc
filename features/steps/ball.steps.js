@@ -1005,6 +1005,15 @@ Then("the ball menu email should report {int} already chosen", function (n) {
   assert.strictEqual(this.ballMenuEmailBody.alreadyChosen, n);
 });
 
+// TASK-573: the audit row keeps the count too, so a later look can see why someone was not emailed.
+Then("the ball menu email audit should record {int} already chosen", async function (n) {
+  const r = await withDb((db) =>
+    db.query(`SELECT data FROM audit_log WHERE action = 'ball.menu_email_sent' ORDER BY id DESC LIMIT 1`),
+  );
+  assert.strictEqual(r.rows.length, 1, "no audit row for the menu email");
+  assert.strictEqual(r.rows[0].data.alreadyChosen, n);
+});
+
 When(
   "I read the ball menu progress as {string} with password {string}",
   async function (email, password) {

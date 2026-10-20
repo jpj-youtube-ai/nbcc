@@ -4246,9 +4246,10 @@ export async function postAdminBallMenuEmail(req: Request, res: Response): Promi
       return res.status(409).json({ error: "Set the menu before telling anyone it is here" });
     }
 
-    // Jaimie, 20 October 2026: "skip the ones who have already chosen". A booking whose named
-    // guests have all chosen is left out and NOT stamped, so a guest named later who has not
-    // chosen brings it back in on the next press. The count is said back, so staff can see why.
+    // Jaimie, 20 October 2026: "skip the ones who have already chosen". Left out only when every
+    // seat it paid for is named and every guest has chosen (hasChosenAlready), so a table with
+    // seats still to name still gets it. One left out is NOT stamped, so once someone in it has
+    // not chosen, the next press reaches it. The count is said back, so staff can see why.
     const due = await listBookingsNeedingMenuEmail();
     const targets = due.filter((t) => !hasChosenAlready(t, menu));
     const alreadyChosen = due.length - targets.length;

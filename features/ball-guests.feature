@@ -144,10 +144,12 @@ Feature: Festive Ball guest details (TASK-313)
     Then the ball menu email status should be 200
     And the ball menu email should report 0 sent
     And the ball menu email should report 1 already chosen
+    And the ball menu email audit should record 1 already chosen
     When I save guests "Pat Brown" on "guest-menu-7"
     And I send the ball menu email as "ball28.admin.bdd@example.com" with password "pw-ball28"
     Then the ball menu email should report 1 sent
     And the ball menu email should report 0 already chosen
+    And the ball menu email audit should record 0 already chosen
 
   Scenario: a table with seats still to name gets the menu email, even when everyone named has chosen
     Given a ball admin "ball29.admin.bdd@example.com" with role "admin" and password "pw-ball29"

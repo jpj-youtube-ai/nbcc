@@ -207,6 +207,18 @@ describe("the email that tells people the menu exists", () => {
     expect(mail.text).toMatch(/contact the hotel directly/i);
   });
 
+  // TASK-574, Jaimie, 20 October 2026: the hotel's own number, so "contact the hotel directly"
+  // says how. A link a phone can call, kept on one line, as the Ball page gives it.
+  it("gives the hotel's number to book on, as a link a phone can call", () => {
+    expect(mail.html).toContain("please contact the hotel directly on <a ");
+    expect(mail.html).toContain('href="tel:+441563545999"');
+    expect(mail.html).toContain(">01563&nbsp;545999</a>.");
+  });
+
+  it("gives the hotel's number in the plain-text part too", () => {
+    expect(mail.text).toContain("please contact the hotel directly on 01563 545999.");
+  });
+
   it("escapes a name so it cannot break the markup", () => {
     const evil = buildMenuReadyEmail({
       buyerFirstName: 'Jo <img src=x onerror="alert(1)">',

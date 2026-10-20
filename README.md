@@ -3513,6 +3513,10 @@ failing says "Could not send any of them", never "Nobody needed it".
 
 The Park Hotel's £110 rate used to be only in this email, so a booking left out would never hear
 it: the Festive Ball page's Staying over line gives it too now (it said a rate might be arranged).
+Both say how to book it, with the hotel's own number, **01563 545999** (TASK-574; Jaimie, 20
+October 2026), checked against the hotel's listings and not Rugby Park's stadium line. It is a
+`tel:` link in the email and on the page, kept on one line with `&nbsp;`, and `HOTEL_PHONE` in
+`src/ball/menu-email.ts` is the email's one copy of it.
 
 ### The admin Festive Ball screen
 

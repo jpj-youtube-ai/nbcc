@@ -339,13 +339,20 @@ under it cannot be read at 16 pixels.
 - **Every page's head** names them in four lines straight after the viewport line: the
   icon, the apple-touch-icon, the manifest (`/assets/icons/site.webmanifest`), and
   `apple-mobile-web-app-title` "NBCC" (the name under the icon on an iPhone). `test/unit/site-icons.test.ts` checks every page the
-  Dockerfile ships, so a new page cannot be added without them. The three Festive Ball
+  Dockerfile ships, so a new page file cannot be added without them (pages built in
+  TypeScript, like an emailed letter or the preferences page, rely on the root addresses
+  above). The three Festive Ball
   pages (`ball.html`, `ball-terms.html`, `ball-donate.html`) are left alone until after
   the Ball on 7 November 2026.
 - **The manifest** sets `display: "browser"`, so a saved page stays a shortcut that opens
-  in the normal browser, never an app window, and Android offers no "install" prompt.
-- The donate page had 147 bytes left under its weight budget, so two of its developer
-  comments were shortened to make room for the four lines.
+  in the normal browser, never an app window, and Android offers no "install" prompt. It
+  deliberately has **no `start_url`**: without one, a shortcut opens the page it was saved
+  from, as a bookmark does. With one, Android opens that address whichever page was saved.
+  (Not `"."` either: that would resolve against `/assets/icons/`.)
+- The donate page had 147 bytes left under its weight budget, so three of its developer
+  comments were shortened to make room for the four lines. It now has about 13 bytes left:
+  the next addition to that page, `styles.css` or `main.js` will need the deferred weight
+  review (or a deliberate budget raise).
 
 ### Brand colour system (REQ-004)
 

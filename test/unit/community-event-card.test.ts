@@ -17,6 +17,9 @@ import { lf, nbccCases, OLD_BOOKING_LINE, OLD_COMMUNITY, RAISING, TEMPLATE, TODA
 // NBCC's own events are drawn by the same renderer, and must not change by a single byte:
 // helpers/card-golden.json holds them exactly as they were drawn before this change. Every name here
 // is invented.
+//
+// The three page: hashes were re-pinned for TASK-575 (the site's icon: four lines in events.html's
+// head). With those four lines taken out, the pages hashed exactly as pinned before.
 
 const GOLDEN = JSON.parse(readFileSync(resolve(__dirname, "helpers/card-golden.json"), "utf8")) as Record<string, string>;
 const sha = (s: string) => `sha256:${createHash("sha256").update(s).digest("hex")}`;

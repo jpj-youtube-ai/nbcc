@@ -113,7 +113,10 @@ describe("the icon files (TASK-575)", () => {
     expect(manifest.name).toBe("Night Before Christmas Campaign");
     // "browser" keeps it a shortcut that opens in the normal browser, never an app window.
     expect(manifest.display).toBe("browser");
-    expect(manifest.start_url).toBe("/");
+    // No start address: a shortcut opens the page it was saved from, as a bookmark does. With one,
+    // Android opens that address instead, whichever page was saved (Donate, the admin...).
+    expect(manifest).not.toHaveProperty("start_url");
+    expect(manifest.scope).toBe("/");
     const purposes: string[] = [];
     for (const icon of manifest.icons) {
       const file = "assets/icons/" + String(icon.src).replace(/^\/assets\/icons\//, "");
@@ -151,5 +154,12 @@ describe("the site answers at the addresses browsers ask for by themselves (TASK
     expect(res.status).toBe(200);
     expect(res.headers.get("content-type")).toContain(type);
     expect(Buffer.from(await res.arrayBuffer()).equals(read(file))).toBe(true);
+  });
+
+  it("answers a HEAD request with the headers only", async () => {
+    const res = await fetch(base + "/favicon.ico", { method: "HEAD" });
+    expect(res.status).toBe(200);
+    expect(res.headers.get("content-type")).toContain("image/x-icon");
+    expect((await res.arrayBuffer()).byteLength).toBe(0);
   });
 });

@@ -1,7 +1,6 @@
 {
   "name": "Night Before Christmas Campaign",
   "short_name": "NBCC",
-  "start_url": "/",
   "scope": "/",
   "display": "browser",
   "background_color": "#FFFFFF",

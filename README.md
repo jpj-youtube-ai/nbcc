@@ -319,6 +319,34 @@ above; no title/description/canonical is duplicated across pages. Verified by
 > `test/unit/seo-metadata.test.ts`. The share image (`/assets/img/og-image.png`)
 > ships in `assets/img/` (REQ-034).
 
+### The site's icon (TASK-575)
+
+A browser tab shows the NBCC elf, and a page saved to a phone's home screen shows the
+whole logo on white, named "NBCC". The elf alone is used in the tab because the word NBCC
+under it cannot be read at 16 pixels.
+
+- **Files:** `assets/icons/`, made from `assets/img/nbcc-logo.png` by
+  `node scripts/make-site-icons.mjs` (run it again only if the logo changes):
+  `favicon.ico` (the elf at 16, 32 and 48px), `apple-touch-icon.png` (180px),
+  `icon-192.png`, `icon-512.png` and `icon-maskable-512.png` (more room round it, for
+  Android's round masks). The home screen icons are solid white behind the logo, because an
+  iPhone fills see-through corners with black.
+- **Addresses:** page heads point at `/assets/icons/...`, like everything else a page
+  loads. `src/routes/site.ts` also serves the icons where browsers ask by themselves:
+  `/favicon.ico`, `/apple-touch-icon.png` and `/apple-touch-icon-precomposed.png`. So a
+  page whose head does not name them (an emailed letter page, the Festive Ball pages) still
+  gets the logo in the tab and on an iPhone's home screen.
+- **Every page's head** names them in four lines straight after the viewport line: the
+  icon, the apple-touch-icon, the manifest (`/assets/icons/site.webmanifest`), and
+  `apple-mobile-web-app-title` "NBCC" (the name under the icon on an iPhone). `test/unit/site-icons.test.ts` checks every page the
+  Dockerfile ships, so a new page cannot be added without them. The three Festive Ball
+  pages (`ball.html`, `ball-terms.html`, `ball-donate.html`) are left alone until after
+  the Ball on 7 November 2026.
+- **The manifest** sets `display: "browser"`, so a saved page stays a shortcut that opens
+  in the normal browser, never an app window, and Android offers no "install" prompt.
+- The donate page had 147 bytes left under its weight budget, so two of its developer
+  comments were shortened to make room for the four lines.
+
 ### Brand colour system (REQ-004)
 
 All colours are defined once as CSS custom properties in a single `:root` block in

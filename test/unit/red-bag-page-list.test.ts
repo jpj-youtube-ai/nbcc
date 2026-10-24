@@ -68,9 +68,11 @@ describe("with nothing published", () => {
   // SHA-256, so any change to the no-list path, however small, is caught here.
   // IF THIS FAILS because the page's template, the built-in list or the fixed wording was changed
   // on purpose: check that nothing else moved, then re-pin both from the new output.
+  // Re-pinned for TASK-575, the site's icon: four lines in the template's head. With those four
+  // lines taken out, the page measured exactly the old pins (42784 / 1b78a4f3…, 42931 / 1438acb7…).
   const AS_IT_WAS = {
-    public: { bytes: 42784, sha256: "1b78a4f3eb7513aea917760677a5420d5cdf216261c767f3ae6814b37744c97d" },
-    staffPreview: { bytes: 42931, sha256: "1438acb71763712193f0259119a933f934edb56c47f0066e6d508780f60d66a0" },
+    public: { bytes: 43047, sha256: "f79dec65c6d5b3aa0c58696f88b11a23f66b77d6db4741880c6c42d687b532b0" },
+    staffPreview: { bytes: 43194, sha256: "69c1915f33020d352a9d40815716d177176b1f76e2c373a3472f1186169f5dd4" },
   };
   const measure = (html: string) => ({ bytes: Buffer.byteLength(html, "utf8"), sha256: createHash("sha256").update(html, "utf8").digest("hex") });
   const stored = template.replace(/\r\n/g, "\n");

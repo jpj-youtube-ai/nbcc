@@ -362,6 +362,20 @@ export function createSiteRouter(siteRoot: string): Router {
   // Shared CSS/JS/fonts/images — the only directory exposed wholesale.
   router.use("/assets", express.static(join(siteRoot, "assets"), { setHeaders: assetHeaders }));
 
+  // TASK-575: the site's icons also at the addresses browsers and iPhones ask for by themselves, so
+  // a page whose head does not name them (an emailed letter, the Ball pages) still gets the logo.
+  // The files live in assets/icons/ (made by scripts/make-site-icons.mjs), where page heads point.
+  const ICONS: Record<string, [file: string, type: string]> = {
+    "/favicon.ico": ["favicon.ico", "image/x-icon"],
+    "/apple-touch-icon.png": ["apple-touch-icon.png", "image/png"],
+    "/apple-touch-icon-precomposed.png": ["apple-touch-icon.png", "image/png"],
+  };
+  for (const [path, [file, type]] of Object.entries(ICONS)) {
+    router.get(path, (_req, res) => {
+      res.type(type).sendFile(join(siteRoot, "assets", "icons", file));
+    });
+  }
+
   // --- Site addressing (site-pages feature) ------------------------------------------------
 
   // /sitemap: the branded page tree, server-rendered into sitemap.html's .sitemap-tree

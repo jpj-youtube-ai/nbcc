@@ -23,7 +23,8 @@ whom to ring for the rest.
 - Reminders go **every other day** to bookings still missing guest names or meal choices, each with
   a **countdown** to the deadline.
 - The deadline is **10am, Wednesday 4 November 2026** ("is it safer to say 10am": yes).
-- **Nothing closes automatically and nothing is chosen for anyone.** "Admin can still call and add
+- **Nothing closes automatically, and the site chooses nothing by itself.** The emails say "we'll
+  choose for you"; after the deadline staff do that choosing. "Admin can still call and add
   their options, our discretion when the cut off is." The guest page keeps taking names, meals and
   dietary notes after the deadline; staff enter choices after a phone call through the booking's
   own link, as they can today.
@@ -92,7 +93,12 @@ stages are switched off in this release, and the deadline is set in Set up only 
 ### What the reminder says
 
 Built on the existing Ball email shell (`src/ball/email-shell.ts`), with a plain-text part, like
-every Ball email. For each booking:
+every Ball email.
+
+**The action comes first** (Jaimie, 26 October 2026: "be clear there's an action at top of
+email"). The very top of the email, above any greeting or explanation, is a box that says what to
+do and by when, what is missing, and the button to do it. Everything else sits below it. For each
+booking:
 
 - **The countdown**, worked out on the morning it is sent: "7 days to go", "5 days to go",
   "3 days to go", then "Last chance: we need everything by 10am tomorrow". Always the exact deadline
@@ -101,8 +107,10 @@ every Ball email. For each booking:
 - **Exactly what this booking is missing**: "4 of your 10 seats still need a name" and/or "2 of
   your guests still need to choose their meals".
 - **Their own link**, as a button, to fill it in.
-- A friendly line about after the deadline: "If we haven't heard from you by then, one of our team
-  will give you a ring." No threat, no default meal.
+- A plain line about after the deadline: "If we haven't heard from you by 10am on Wednesday 4th
+  November, we'll choose for you." (Jaimie, 26 October 2026: "say we'll choose for you. we might
+  not have their number".) No promise of a phone call. The choosing is done by staff after the
+  deadline, at their discretion; the site does not pick a meal for anyone by itself.
 - The Ball's contact panel, as the other Ball emails have.
 
 Subjects carry the countdown too, for example "7 days to go: your Festive Ball guests and meals",

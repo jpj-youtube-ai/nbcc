@@ -43,51 +43,27 @@ describe("who still owes us guest details", () => {
   });
 });
 
-describe("the chase", () => {
-  it("says nothing before the fortnight-out point", () => {
-    expect(stageFor(booking(), at("2026-10-05T09:00:00Z"))).toBeNull();
+// TASK-576: the fortnight-out chase and the final call are retired. The every-other-day reminders and
+// the volunteers' list (src/ball/chase.ts, run by src/ball/chase-runner.ts) replaced them, so this
+// pass never sends either, on any morning, whatever is outstanding or has been stamped. The stamps
+// stay on the booking so old rows still read.
+describe("the retired chase and final call", () => {
+  it("never fire, on any morning from a month out to a week after the deadline", () => {
+    const days = ["2026-10-05", "2026-10-11", "2026-10-18", "2026-10-24", "2026-10-25", "2026-10-26", "2026-10-27"];
+    for (const day of days) {
+      expect(stageFor(booking(), at(`${day}T09:00:00Z`)), day).toBeNull();
+      expect(planRunUp([booking()], at(`${day}T09:00:00Z`)), day).toEqual([]);
+    }
   });
 
-  it("chases once the fortnight-out point passes", () => {
-    expect(stageFor(booking(), at("2026-10-11T09:00:00Z"))).toBe("chase");
+  it("do not come back for a booking that never had them stamped", () => {
+    expect(stageFor(booking({ guestChaseSentAt: null }), at("2026-10-11T09:00:00Z"))).toBeNull();
+    expect(stageFor(booking({ guestFinalCallSentAt: null }), at("2026-10-25T09:00:00Z"))).toBeNull();
   });
 
-  it("does not chase the same booking twice", () => {
-    const done = booking({ guestChaseSentAt: "2026-10-11T09:00:00Z" });
-    expect(stageFor(done, at("2026-10-12T09:00:00Z"))).toBeNull();
-  });
-
-  it("leaves alone anyone who has already told us everything", () => {
-    expect(stageFor(booking({ guestsNamed: 10 }), at("2026-10-11T09:00:00Z"))).toBeNull();
-  });
-
-  // A chase with no date in it is just nagging, and it spends the one message people actually
-  // read before there is anything useful to say.
-  it("sends nothing at all while no lock date has been agreed", () => {
+  it("stay quiet with a deadline set, or with none", () => {
+    expect(stageFor(booking(), at("2026-10-11T09:00:00Z", LOCK))).toBeNull();
     expect(stageFor(booking(), at("2026-10-11T09:00:00Z", null))).toBeNull();
-  });
-});
-
-describe("the final call", () => {
-  it("goes out once the lock date arrives", () => {
-    expect(stageFor(booking(), at("2026-10-25T09:00:00Z"))).toBe("final-call");
-  });
-
-  // Someone who booked late crosses both points at once. Sending the gentle "a fortnight to go"
-  // note after the deadline has passed would be worse than sending nothing.
-  it("skips straight past a chase that was never sent, rather than sending it late", () => {
-    const late = booking({ guestChaseSentAt: null });
-    expect(stageFor(late, at("2026-10-25T09:00:00Z"))).toBe("final-call");
-  });
-
-  it("is not repeated", () => {
-    const done = booking({ guestFinalCallSentAt: "2026-10-25T09:00:00Z" });
-    expect(stageFor(done, at("2026-10-25T18:00:00Z"))).toBeNull();
-  });
-
-  // The alternative is a job that emails the same people every morning until the ball.
-  it("stops chasing once the deadline is properly past", () => {
-    expect(stageFor(booking(), at("2026-10-27T09:00:00Z"))).toBeNull();
   });
 });
 
@@ -151,14 +127,19 @@ describe("bookings with no email", () => {
 describe("a whole pass", () => {
   const bookings = [
     booking({ id: 1, guestsNamed: 0 }),
-    booking({ id: 2, guestsNamed: 10 }),
+    booking({ id: 2, guestsNamed: 10, reminderSentAt: "2026-10-31T08:00:00Z" }),
     booking({ id: 3, guestsNamed: 4 }),
   ];
+  const DAY = "2026-11-02T09:00:00Z";
 
   it("plans only what is due", () => {
-    const planned = planRunUp(bookings, at("2026-10-11T09:00:00Z"));
+    const planned = planRunUp(bookings, at(DAY));
     expect(planned.map((p) => p.booking.id)).toEqual([1, 3]);
-    expect(planned.every((p) => p.stage === "chase")).toBe(true);
+    expect(planned.every((p) => p.stage === "practical")).toBe(true);
+  });
+
+  it("plans nothing in the weeks before the practical email, whoever is outstanding", () => {
+    expect(planRunUp(bookings, at("2026-10-11T09:00:00Z"))).toEqual([]);
   });
 
   it("sends, then records, and counts by stage", async () => {
@@ -172,13 +153,13 @@ describe("a whole pass", () => {
       markSent: async (id, s) => {
         marked.push([id, s]);
       },
-      window: at("2026-10-11T09:00:00Z"),
+      window: at(DAY),
     });
     expect(result).toEqual({
       considered: 3,
       sent: 2,
       failed: 0,
-      byStage: { chase: 2, "final-call": 0, practical: 0 },
+      byStage: { chase: 0, "final-call": 0, practical: 2 },
     });
     expect(sent).toEqual(marked);
   });
@@ -195,7 +176,7 @@ describe("a whole pass", () => {
       markSent: async (id) => {
         marked.push(id);
       },
-      window: at("2026-10-11T09:00:00Z"),
+      window: at(DAY),
     });
     expect(result.sent).toBe(0);
     expect(result.failed).toBe(1);
@@ -212,7 +193,7 @@ describe("a whole pass", () => {
         if (calls === 1) throw new Error("bad address");
       },
       markSent: async () => undefined,
-      window: at("2026-10-11T09:00:00Z"),
+      window: at(DAY),
     });
     expect(result.sent).toBe(2);
     expect(result.failed).toBe(1);

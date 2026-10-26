@@ -7,13 +7,14 @@
 // The shape it replaces: one manual button that sent one email once. Someone had to remember to
 // press it, and anyone who booked afterwards never got one.
 
-export const CHASE_DAYS_BEFORE_LOCK = 14;
 // Jaimie, 2026-10-04: the practical email says "A week to go" and "A week on Saturday you'll be with
 // us", so it goes a week before the Ball. It went 3 days before, which made its own words wrong.
 // Sent on any other day (to someone who booked in the last week, or early with the staff button) it
 // says the true number of days instead: daysToBall below, and ./reminder-email.ts.
 export const PRACTICAL_DAYS_BEFORE_EVENT = 7;
 
+// "chase" and "final-call" are retired (TASK-576); only "practical" is ever planned. They stay in the
+// type so the stamps of emails already sent still map to a stage.
 export type RunUpStage = "chase" | "final-call" | "practical";
 
 export interface RunUpBooking {
@@ -36,9 +37,8 @@ export interface RunUpBooking {
 export interface RunUpWindow {
   now: Date;
   eventDate: Date;
-  // NULL until NBCC agrees it with the venue. While it is null NOTHING is chased: an email
-  // asking for names "as soon as possible" is nagging, and it burns the one message people will
-  // actually read when there IS a date.
+  // NULL until NBCC agrees it with the venue. No longer read here: the nudge and the last call it
+  // used to time are retired (TASK-576), and the chase works from it in ./chase.ts instead.
   lockAt: Date | null;
 }
 
@@ -85,54 +85,22 @@ export function outstanding(booking: RunUpBooking): boolean {
   return booking.guestsNamed < booking.seats;
 }
 
-// The guest list email this booking is due RIGHT NOW (the nudge or the last call), or null.
-//
-// A booking that has crossed both the chase point and the lock date gets the final call and never
-// the chase it missed: sending the softer "a fortnight to go" email after the deadline has passed
-// would be worse than sending nothing.
-function guestStageFor(booking: RunUpBooking, window: RunUpWindow): "chase" | "final-call" | null {
-  const now = window.now.getTime();
-
-  // A chase whose whole point is a link, with no link in it, is worse than silence.
-  if (!booking.guestToken) return null;
-  if (!outstanding(booking) || window.lockAt === null) return null;
-  const lock = window.lockAt.getTime();
-
-  // Past the deadline there is nothing left to ask for, so the chase stops rather than running
-  // forever. Staff chase the stragglers by hand at that point, from the outstanding list.
-  if (now > lock + days(1)) return null;
-
-  // Past the lock date the chase window is CLOSED, not merely already used. Testing the two
-  // flags independently let a late booking take the final call and then, the next morning, the
-  // gentle "a fortnight to go" note it had never been sent — arriving after the deadline it was
-  // warning about. Caught by the test, not by reading it.
-  if (now >= lock) {
-    return booking.guestFinalCallSentAt === null ? "final-call" : null;
-  }
-  if (now >= lock - days(CHASE_DAYS_BEFORE_LOCK) && booking.guestChaseSentAt === null) {
-    return "chase";
-  }
-  return null;
-}
+// TASK-576: the guest list nudge ("chase", a fortnight before the deadline) and the last call
+// ("final-call", the day it closes) are RETIRED. The every-other-day reminders and the volunteers'
+// list (./chase.ts, sent by ./chase-runner.ts) replaced them, so this pass never sends either. The
+// stage names, the types and the two stamps stay, so old rows and old stamps still read.
 
 /**
- * EVERYTHING this booking is due right now, in the order to send it: its guest list email (the nudge
- * or the last call) first, then the practical reminder.
+ * EVERYTHING this booking is due right now, in the order to send it. Since TASK-576 that is the
+ * practical reminder or nothing.
  *
- * It used to be one email per booking per pass, the reminder first. That was safe while the reminder
- * only went in the last three days. Now it is due from a week before, and the last call is only due
- * for the day after the guest list closes (one morning's run): a booking due both on the same
- * morning got the reminder and never the last call. So both go that morning. Each has its own stamp,
- * written only after its own send, so neither can go twice and a failure of one neither stops nor
- * stamps the other. On a morning when only one is due, this is exactly what it always was.
+ * The practical email goes to EVERYONE, a week out (or the morning after a later booking), whether
+ * or not they ever sent guest details. It is the one that says where to go and when, so it is not
+ * conditional on them having done their bit, and it does not depend on the guest details deadline.
  */
 export function stagesFor(booking: RunUpBooking, window: RunUpWindow): RunUpStage[] {
   if (!booking.buyerEmail) return [];
-  const guest = guestStageFor(booking, window);
-  // The practical email goes to EVERYONE, a week out (or the morning after a later booking), whether
-  // or not they ever sent guest details. It is the one that says where to go and when, so it is not
-  // conditional on them having done their bit.
-  return [...(guest ? [guest] : []), ...(practicalDue(booking, window) ? (["practical"] as const) : [])];
+  return practicalDue(booking, window) ? ["practical"] : [];
 }
 
 /** The most pressing one thing this booking is due right now (the reminder, if it is due), or null. */

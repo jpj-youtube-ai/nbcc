@@ -474,9 +474,10 @@ export async function sendBallReminder(message: BallConfirmationMessage): Promis
   await sendVerbatim("ballReminder", null, message);
 }
 
-// TASK-338: the run-up emails (guest read-back, chase, last call). Its own function for the same
-// reason as sendBallReminder above: so the three can be told apart in logs and in a bounce
-// report, and so a change to one cannot silently alter another.
+// TASK-338: the run-up emails (the guest read-back, the week-to-go practical email and, since
+// TASK-576, the every-other-day guest chase reminder). Its own function for the same reason as
+// sendBallReminder above: so they can be told apart in logs and in a bounce report, and so a change
+// to one cannot silently alter another.
 export async function sendBallRunUp(message: BallConfirmationMessage): Promise<void> {
   await sendVerbatim("ballRunUp", null, message);
 }
@@ -510,6 +511,23 @@ export async function sendBallReport(message: BallReportMessage): Promise<void> 
   const [first, ...rest] = message.to;
   if (!first) throw new Error("The ticket report has nobody to go to.");
   await sendAndLog("ballReport", null, {
+    to: first,
+    alsoTo: rest,
+    from: message.from,
+    replyTo: message.replyTo,
+    subject: message.subject,
+    html: message.html,
+    text: message.text,
+    configurationSet: config.SES_TRANSACTIONAL_CONFIGURATION_SET || undefined,
+  });
+}
+
+// TASK-576: the chase list for the volunteers who phone people about guest names and meals. Same
+// shape as the ticket report above, to the volunteers' @nbcc.scot addresses only.
+export async function sendBallChaseList(message: BallReportMessage): Promise<void> {
+  const [first, ...rest] = message.to;
+  if (!first) throw new Error("The chase list has nobody to go to.");
+  await sendAndLog("ballChaseList", null, {
     to: first,
     alsoTo: rest,
     from: message.from,

@@ -665,14 +665,8 @@ describe("the ball: a change the server refused is never reported as done (TASK-
     expect(alerts).toEqual(["Could not cancel NBCC-TEST1. Nothing has been changed."]);
   });
 
-  it("guest reminders that could not be sent", async () => {
-    failing["POST /api/admin/ball/chase"] = { status: 500, body: { error: "Could not send the chase emails" } };
-    await signIn();
-    await open("ball");
-    el("ballChase").click();
-    await settle();
-    expect(el("ballChaseStatus").textContent).toBe("Could not send the reminders.");
-  });
+  // TASK-576: "Email everyone outstanding" is gone from the screen, so there is no button to fail.
+  // The route behind it stays, and features/ball-admin.feature covers it.
 
   it("week before reminders that could not be sent", async () => {
     failing["POST /api/admin/ball/reminders"] = SERVER_DOWN;

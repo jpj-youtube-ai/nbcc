@@ -51,12 +51,30 @@ if (require.main === module) {
       try {
         const { runBallRunUp } = await import("../ball/run-up-runner");
         const ball = await runBallRunUp();
+        // The guest chase and last call are retired (TASK-576), so practical is the only stage left.
         console.error(
           `ball run-up: considered=${ball.considered} sent=${ball.sent} failed=${ball.failed} ` +
-            `chase=${ball.byStage.chase} finalCall=${ball.byStage["final-call"]} practical=${ball.byStage.practical}`,
+            `practical=${ball.byStage.practical}`,
         );
       } catch (err) {
         console.error("ball run-up failed:", err instanceof Error ? err.message : err);
+      }
+      // TASK-576: the Festive Ball guest chase. In the last week before the guest details close, every
+      // other day, a reminder to each booker still missing guest names or meal choices, and the list of
+      // everyone to phone to the volunteers. Runs AFTER the run-up pass on purpose: the week-to-go email
+      // stamps its booking there, and a booking sent that email this morning is left out of today's
+      // reminder. It checks the day itself and sends nothing on any other morning. Its own try/catch,
+      // like every pass here.
+      try {
+        const { runBallChase } = await import("../ball/chase-runner");
+        const chase = await runBallChase();
+        console.error(
+          chase.day === null
+            ? "ball chase: not a chase day"
+            : `ball chase: daysToDeadline=${chase.day} reminders=${chase.reminders} failed=${chase.failed} list=${chase.listSent ? "sent" : "not sent"}`,
+        );
+      } catch (err) {
+        console.error("ball chase failed:", err instanceof Error ? err.message : err);
       }
       // TASK-464: the Festive Ball ticket report, to the organiser and the sponsor on Monday and
       // Thursday mornings. The pass checks the day itself, so on every other morning it does

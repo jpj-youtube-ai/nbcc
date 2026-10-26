@@ -9,12 +9,30 @@
 // seventh calendar day before the deadline.
 
 import { choosableCourses, hasChosen, type MenuCourse } from "./menu";
-import { londonDate } from "./sales-report";
+import { londonDate, recipientsSchema } from "./sales-report";
 
 /** The days before the deadline day (0) that bookers get a reminder email. */
 export const REMINDER_DAYS = [7, 5, 3, 1];
 /** The days the volunteers get their chase list: the reminder days, and the deadline day itself. */
 export const LIST_DAYS = [7, 5, 3, 1, 0];
+
+/**
+ * Who the volunteers' chase list goes to: the ticket report's list rules (tidied, no address twice,
+ * in order by name, at most ten), and only nbcc.scot addresses, because the list carries people's
+ * phone numbers. Lives here, not in the database file, so the admin route and the tests can import
+ * it without a pool.
+ */
+export const chaseRecipientsSchema = recipientsSchema.superRefine((list, ctx) => {
+  list.forEach((r, i) => {
+    if (!r.email.endsWith("@nbcc.scot")) {
+      ctx.addIssue({
+        code: "custom",
+        path: [i, "email"],
+        message: "Only nbcc.scot addresses: this list carries people's phone numbers.",
+      });
+    }
+  });
+});
 
 export interface ChaseBooking {
   id: number;

@@ -1,7 +1,8 @@
 import { describe, it, expect } from "vitest";
 import { buildBallConfirmationEmail } from "../../src/ball/confirmation-email";
 import { buildBallReminderEmail } from "../../src/ball/reminder-email";
-import { buildGuestSummaryEmail, buildGuestChaseEmail } from "../../src/ball/run-up-email";
+import { buildGuestSummaryEmail } from "../../src/ball/run-up-email";
+import { buildChaseReminderEmail, buildChaseListEmail, exampleChaseList, exampleReminderGroup } from "../../src/ball/chase-email";
 import { TICKET_INCLUDES } from "../../src/ball/page";
 
 // The ball emails were the only NBCC family that did not wear the house shell. They were built
@@ -52,28 +53,23 @@ const EMAILS: Array<[string, { subject: string; html: string; text: string }]> =
       lockAt: null,
     }),
   ],
+  // TASK-575: the nudge and the last call are retired; these two took their place.
   [
-    "guest chase",
-    buildGuestChaseEmail({
-      buyerFirstName: "Jo",
-      reference: "BALL-K7M2PQ",
-      seats: 10,
-      guestsNamed: 2,
-      guestLink: "https://nbcc.scot/ball/guests/tok",
-      lockAt: new Date("2026-10-24T00:00:00Z"),
-      finalCall: false,
+    "chase reminder",
+    buildChaseReminderEmail({
+      group: exampleReminderGroup(),
+      daysToDeadline: 7,
+      deadline: new Date("2026-11-04T10:00:00Z"),
+      guestLink: (token) => `https://nbcc.scot/ball/guests/${token}`,
     }),
   ],
   [
-    "final call",
-    buildGuestChaseEmail({
-      buyerFirstName: "Jo",
-      reference: "BALL-K7M2PQ",
-      seats: 10,
-      guestsNamed: 2,
-      guestLink: "https://nbcc.scot/ball/guests/tok",
-      lockAt: new Date("2026-10-24T00:00:00Z"),
-      finalCall: true,
+    "chase list",
+    buildChaseListEmail({
+      list: exampleChaseList(),
+      daysToDeadline: 7,
+      deadline: new Date("2026-11-04T10:00:00Z"),
+      guestLink: (token) => `https://nbcc.scot/ball/guests/${token}`,
     }),
   ],
 ];

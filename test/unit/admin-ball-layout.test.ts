@@ -65,7 +65,7 @@ const BEFORE: ReadonlyArray<readonly [string, string, string]> = [
   ["ballNoPhoneCount", "b", ""], ["ballNoPhoneHow", "span", ""], ["ballNoPhoneOnlyLabel", "p", ""],
   ["ballNoPhoneOnly", "input", "checkbox"], ["ballBookings", "div", ""], ["ballMenuProgress", "div", ""],
   ["ballMenuOutstanding", "div", ""], ["ballGuestProgress", "div", ""], ["ballOutstanding", "div", ""],
-  ["ballChase", "button", "button"], ["ballChaseStatus", "span", ""], ["ballSendReminders", "button", "button"],
+  ["ballSendReminders", "button", "button"],
   ["ballReminderCount", "span", ""], ["ballReminderStatus", "p", ""], ["ballSendMenuEmail", "button", "button"],
   ["ballMenuEmailCount", "span", ""], ["ballMenuEmailStatus", "p", ""],
 ];
@@ -91,7 +91,22 @@ describe("nothing was lost in the overhaul", () => {
   const now = new Map(idsNow(view).map(([id, tag, type]) => [id, { tag, type }]));
 
   it("captured the whole screen as it stood", () => {
-    expect(BEFORE.length + RETIRED.length).toBe(103);
+    // 103 at the overhaul, less the two ids of "Email everyone outstanding" (TASK-575, below).
+    expect(BEFORE.length + RETIRED.length).toBe(101);
+  });
+
+  // TASK-575: the every-other-day reminders and the volunteers' list replaced the old chase, so the
+  // button that sent it by hand, its status line and its note are gone. The route behind it stays
+  // (it now sends only the week-to-go email), but nothing on the screen presses it.
+  it("no longer has the Email everyone outstanding button, its status or its note", () => {
+    const body = part(view, "guests");
+    expect(body).not.toContain('id="ballChase"');
+    expect(body).not.toContain('id="ballChaseStatus"');
+    expect(view).not.toContain("Email everyone outstanding");
+    expect(view).not.toContain("Sends the same reminder the daily job sends");
+    const code = read("assets/js/admin/app.js");
+    expect(code).not.toContain('el("ballChase")');
+    expect(code).not.toContain('el("ballChaseStatus")');
   });
 
   it.each(BEFORE.map(([id]) => [id]))("still has #%s", (id) => {
@@ -204,7 +219,7 @@ describe("six sections, one on screen at a time", () => {
       overview: ["ballStats", "ballNeeds"],
       bookings: ["ballExports", "ballDoorList", "ballCatering", "ballBookingsCsv", "ballNoPhone", "ballNoPhoneOnly", "ballBookings"],
       transfers: ["ballTransferSearch", "ballAddTransferOpen", "ballAddTransferForm", "ballAddStatus", "ballTransfersFiltered", "ballShowAllTransfers", "ballTransfers"],
-      guests: ["ballGuestProgress", "ballOutstanding", "ballChase", "ballChaseStatus", "ballMenuProgress", "ballMenuOutstanding"],
+      guests: ["ballGuestProgress", "ballOutstanding", "ballMenuProgress", "ballMenuOutstanding"],
       emails: ["ballSendReminders", "ballReminderCount", "ballReminderStatus", "ballSendMenuEmail", "ballMenuEmailCount", "ballMenuEmailStatus"],
       setup: [
         "ballGateForm", "ballGateState", "ballGateStatus", "ballPasswordForm", "ballPasswordStatus", "ballCapacityForm",

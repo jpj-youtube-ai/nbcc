@@ -1,9 +1,5 @@
 import { describe, it, expect } from "vitest";
-import {
-  buildGuestSummaryEmail,
-  buildGuestChaseEmail,
-  readableDate,
-} from "../../src/ball/run-up-email";
+import { buildGuestSummaryEmail, readableDate } from "../../src/ball/run-up-email";
 
 // TASK-338: the run-up emails.
 
@@ -22,18 +18,6 @@ const summary = (over = {}) =>
     ],
     guestLink: LINK,
     lockAt: LOCK,
-    ...over,
-  });
-
-const chase = (over = {}) =>
-  buildGuestChaseEmail({
-    buyerFirstName: "Jo",
-    reference: "NBCC-BALL-0001",
-    seats: 10,
-    guestsNamed: 4,
-    guestLink: LINK,
-    lockAt: LOCK,
-    finalCall: false,
     ...over,
   });
 
@@ -111,54 +95,10 @@ describe("the read-back after someone saves their guest list", () => {
   });
 });
 
-describe("the chase", () => {
-  it("gives the deadline, and does not sound like a telling-off", () => {
-    const mail = chase();
-    expect(mail.html).toContain("Saturday 24 October");
-    expect(mail.html).toMatch(/nudge rather than anything to worry about/i);
-    expect(mail.subject).toMatch(/still need/i);
-  });
-
-  it("says how far along they are when they have started", () => {
-    expect(chase().html).toContain("4 of 10");
-  });
-
-  it("does not say '0 of 10' to someone who has not begun", () => {
-    const mail = chase({ guestsNamed: 0 });
-    expect(mail.html).not.toContain("0 of 10");
-    expect(mail.html).toMatch(/do not have any names yet/i);
-  });
-
-  it("counts a single ticket as a ticket, not a place", () => {
-    expect(chase({ seats: 1, guestsNamed: 0 }).html).toMatch(/your ticket/i);
-  });
-
-  it("suggests passing the link on, since a table is rarely filled in by one person", () => {
-    expect(chase().html).toMatch(/pass them the link/i);
-  });
-});
-
-describe("the last call", () => {
-  const mail = chase({ finalCall: true });
-
-  it("says today, and says it in the subject line", () => {
-    expect(mail.html).toMatch(/<b>today<\/b>/i);
-    expect(mail.subject).toMatch(/last call/i);
-    expect(mail.subject).toMatch(/closes today/i);
-  });
-
-  it("still asks for the same thing, with the same link", () => {
-    expect(mail.html).toContain(LINK);
-    expect(mail.html).toMatch(/add your guests/i);
-  });
-
-  it("does not also describe itself as a gentle nudge", () => {
-    expect(mail.html).not.toMatch(/nothing to worry about/i);
-  });
-});
-
+// TASK-575: the nudge and the last call (buildGuestChaseEmail) are gone. Their replacements, the
+// reminder and the volunteers' list, are tested in ball-chase-email.test.ts.
 describe("every run-up email", () => {
-  const all = [summary(), chase(), chase({ finalCall: true })];
+  const all = [summary()];
 
   it("carries the charity's registration details", () => {
     for (const mail of all) {

@@ -5,15 +5,13 @@ import { SLATE, SLATE_SOFT, TAN_SOFT, HEAD, BODY_FONT, CRIMSON } from "../email/
 // TASK-338: the emails the run-up sends. Pure — no pool, no config, no clock — like
 // ./confirmation-email.ts, so every one is unit-tested without a database or a provider.
 //
-// Three of them, and each has a different job:
-//   summary     — you have just saved your guest list; here is what we now hold
-//   chase       — we still need your guests, and here is the date we need them by
-//   final-call  — that date is today
+// One of them is left: the summary, sent when you have just saved your guest list, saying what we
+// now hold. The chase and the last call that used to sit beside it are retired (TASK-575): their
+// replacements, the every-other-day reminder and the volunteers' list, are in ./chase-email.ts.
 //
-// All three carry the buyer's own guest link, because "find the email from October" is the step
-// where people give up. All three now wear the shared NBCC shell (./email-shell.ts) rather than
-// the bare cream div they were written with, so they arrive looking like the confirmation the
-// same person already has.
+// It carries the buyer's own guest link, because "find the email from October" is the step where
+// people give up, and wears the shared NBCC shell (./email-shell.ts) so it arrives looking like the
+// confirmation the same person already has.
 
 export interface RunUpGuest {
   fullName: string;
@@ -130,74 +128,6 @@ ${BALL_TEXT_FOOTER}`;
 
   return {
     subject: `Your guest list for the ball (${input.reference})`,
-    html: ballEmailShell(body),
-    text,
-  };
-}
-
-// --- the chase, and the last call --------------------------------------------------------
-
-export interface ChaseInput {
-  buyerFirstName: string;
-  reference: string;
-  seats: number;
-  guestsNamed: number;
-  guestLink: string;
-  lockAt: Date;
-  finalCall: boolean;
-}
-
-export function buildGuestChaseEmail(input: ChaseInput): RunUpEmail {
-  const missing = Math.max(0, input.seats - input.guestsNamed);
-  const some = input.guestsNamed > 0;
-  const by = readableDate(input.lockAt);
-
-  // Two registers from one builder, because the difference between them is genuinely small: the
-  // ask is identical and only the urgency changes. Two separate templates would drift.
-  const opening = input.finalCall
-    ? `We close the guest list for the ball <b>today</b>, so this is the last chance to tell us who is coming.`
-    : `The venue needs the final guest list by <b>${by}</b>, so this is a nudge rather than anything to worry about.`;
-
-  const where = some
-    ? `You have given us ${input.guestsNamed} of ${input.seats}. We still need <b>${missing}</b> more.`
-    : `We do not have any names yet for your ${input.seats === 1 ? "ticket" : `${input.seats} places`}.`;
-
-  const body = `${eyebrow(input.finalCall ? "Closing today" : "A nudge")}
-  <h1 ${H1}>${input.finalCall ? "Last call for your guest list" : "We still need your guest list"}</h1>
-  <p ${P}>Hello ${escapeHtml(input.buyerFirstName)}. ${opening}</p>
-  <p ${P}>${where}</p>
-  <p ${P}><a href="${escapeHtml(input.guestLink)}" ${LINK}>Add your guests</a></p>
-  <p ${P}>It takes a couple of minutes, you can save what you know and come back, and it is what lets the venue cater for allergies properly.</p>
-  <p ${SMALL}>Booking ${escapeHtml(input.reference)}. If someone else in your party is filling this in, just pass them the link.</p>
-  ${contactPanel("Stuck, or easier to just tell us?")}`;
-
-  const text = `${input.finalCall ? "LAST CALL FOR YOUR GUEST LIST" : "WE STILL NEED YOUR GUEST LIST"}
-
-Hello ${input.buyerFirstName}. ${
-    input.finalCall
-      ? "We close the guest list for the ball today, so this is the last chance to tell us who is coming."
-      : `The venue needs the final guest list by ${by}, so this is a nudge rather than anything to worry about.`
-  }
-
-${
-    some
-      ? `You have given us ${input.guestsNamed} of ${input.seats}. We still need ${missing} more.`
-      : `We do not have any names yet for your ${input.seats === 1 ? "ticket" : `${input.seats} places`}.`
-  }
-
-Add your guests: ${input.guestLink}
-
-It takes a couple of minutes, you can save what you know and come back, and it is what lets
-the venue cater for allergies properly.
-
-Booking ${input.reference}. If someone else in your party is filling this in, just pass them the link.
-
-${BALL_TEXT_FOOTER}`;
-
-  return {
-    subject: input.finalCall
-      ? `Last call: your ball guest list closes today`
-      : `We still need your guest list for the ball`,
     html: ballEmailShell(body),
     text,
   };

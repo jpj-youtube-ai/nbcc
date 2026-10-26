@@ -3195,13 +3195,18 @@ instead of leaving it to somebody remembering.
 **nothing is chased at all** — an email asking for names with no date in it is nagging, and it
 spends the one message people actually read before there is anything useful to say.
 
+**The fortnight-out nudge and the last call are retired (TASK-575).** The every-other-day
+reminders in the last week, and the volunteers' list that goes with them (`src/ball/chase.ts`,
+`src/ball/chase-runner.ts`, run by the same daily task straight after this pass), replaced them. This
+pass now sends only the read-back and the practical email below. `guestStageFor` is gone and
+`stagesFor` plans the practical email or nothing; the `chase` and `final-call` stage names and
+their two stamp columns stay, so old rows still read.
+
 Then, per paid booking:
 
 | When | What | To whom |
 |---|---|---|
 | On every guest-form save | A read-back of exactly what we now hold | That buyer |
-| 14 days before the lock date | "We still need your guest list", with the date | Anyone outstanding |
-| On the lock date | Last call | Anyone still outstanding |
 | A week before the Ball (the morning of Saturday 31 October); the morning after, for a booking paid in the last week | The practical "A week to go" email, with their guests read back; it says the true days to go when it is not a week | Everyone |
 
 The schedule is pure (`src/ball/run-up.ts`) and unit-tested without a clock or a database; the
@@ -3213,10 +3218,12 @@ in either pass cannot stop the other.
 Each stage stamps its own column **only after a successful send**, so a re-run never double-sends
 and a failed send is retried tomorrow rather than silently recorded as done. `POST
 /api/admin/ball/chase` (Editor+) runs the same pass on demand — anyone already emailed at that
-stage is skipped, so pressing the button twice is safe.
+stage is skipped, so pressing it twice is safe. It now sends only the week-to-go email, and the
+admin no longer has a button for it (the "Email everyone outstanding" button went with the old
+chase, TASK-575); the route stays.
 
-Past the lock date the chase stops entirely rather than running to the event: staff work the
-remaining stragglers by hand from the outstanding list.
+After the deadline day nothing is chased: staff work the remaining stragglers by hand from the
+outstanding list.
 
 ### The ticket report (TASK-464)
 
@@ -3304,17 +3311,13 @@ twice: both ways of sending write and check the one `reminder_sent_at` stamp. Al
 of these as a version of "A week to go". A number of days that cannot be said truthfully (below 0,
 or not a number) makes the builder throw, so nothing false can be sent.
 
-**Everything due on the same morning goes** (`stagesFor` in `src/ball/run-up.ts`). The pass used to
-send one email per booking per morning, the reminder first. That was safe while the reminder only
-went in the last three days; from a week before, it could swallow the last call for guest details,
-which is only due for the day after the guest list closes (one morning's run). Now a booking gets
-its guest list email (the last call, or the nudge) first and then the reminder, on the same morning
-when both are due, each with its own stamp, so neither goes twice and a failure of one neither
-stops nor stamps the other. On a morning when only one is due nothing changed.
-`test/unit/ball-run-up-both-stages.test.ts` simulates every morning from 20 October to 8 November
-for nine closing dates and nine kinds of booking against origin/main's rule: every booking gets at
-least everything it got before, and nothing twice (`SHOW_RUN_UP_TABLE=1` prints the table). The
-"Email everyone outstanding" button runs the same pass, so it too sends both when both are due.
+**The practical email goes once, whatever the deadline** (`stagesFor` in `src/ball/run-up.ts`). Until
+TASK-575 a booking could be due the last call for guest details and the practical email on the same
+morning, and the pass sent both, each with its own stamp. With the last call and the nudge retired
+there is one email left to plan. `test/unit/ball-run-up-both-stages.test.ts` simulates every morning
+from 20 October to 8 November for several closing dates and kinds of booking: the practical email
+goes once, on the morning it is due, a failed send is not stamped and is tried the next morning, and
+the closing date changes nothing about it. The retired stages never fire (`test/unit/ball-run-up.test.ts`).
 
 It carries the practical details **and reads back what the booker told us** — guest names,
 allergies, access needs. That is the point of it: a coeliac note that never saved is caught a week
@@ -3603,7 +3606,7 @@ downs, and for nothing it does to change. TASK-422's three bands and jump bar be
 | **Overview** | The numbers at a glance: seats sold against the seats that were on sale, with a bar, then money taken, donations, Gift Aid eligible and newsletter sign ups. Then **Needs you**: bank transfers waiting (and how many are past their pay by date), bookings with no phone number, guests still to be named, dinners still to choose. Each line's button opens the section that deals with it. |
 | **Bookings** | The three downloads as cards that say what each list is for, the no phone number filter, and the bookings list. |
 | **Awaiting transfer** | The search, Add a bank transfer booking, and the list. |
-| **Guests and menu** | The two chase lists together: guest details still to come, then who has chosen. |
+| **Guests and menu** | The two chase lists together: guest details still to come, then who has chosen. The reminders and the volunteers' list go out by themselves (TASK-575), so there is no button here. |
 | **Emails** | The week before reminder and the menu is here email, on their own, after the sections that tell you whether to press them. |
 | **Set up** | Seven drop downs (`details.ball-setting`), each saying on its closed line what it is set to now (`data-ball-now`, filled by `ballSetupNow`), so most visits need none opened. |
 
@@ -4171,7 +4174,7 @@ receipt. A failed send is logged, never thrown: the booking is already paid and 
 Stripe redeliver.
 
 **The five ball emails share the NBCC shell and the sponsor band.** The confirmation, the
-week-to-go reminder and the three run-up emails (guest-list read-back, chase, last call) all
+week-to-go reminder and the run-up emails (guest-list read-back; the nudge and last call are retired) all
 render through `ballEmailShell` (`src/ball/email-shell.ts`), which wraps `emailShell` from
 `src/email/brand.ts` with the ball's own settings: `events@nbcc.scot` in the footer bar rather
 than the giving inbox, the registered postal address (its absence is a small but real spam

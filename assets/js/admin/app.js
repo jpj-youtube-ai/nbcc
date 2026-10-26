@@ -16521,30 +16521,8 @@
       );
     });
 
-    el("ballChase").addEventListener("click", function () {
-      var btn = el("ballChase");
-      var status = el("ballChaseStatus");
-      btn.disabled = true;
-      status.textContent = "Sending…";
-      authFetch("/api/admin/ball/chase", { method: "POST" })
-        .then(okJson)
-        .then(function (r) {
-          // Count what was SENT, not what was outstanding: the two differ whenever somebody has
-          // already been chased at this stage, and reporting the larger number would claim we
-          // emailed people we deliberately skipped.
-          status.textContent =
-            r.sent === 0
-              ? "Nobody was due a reminder just now."
-              : "Sent " + r.sent + (r.sent === 1 ? " email." : " emails.") +
-                (r.failed ? " " + r.failed + " could not be sent." : "");
-          btn.disabled = false;
-          loadBall();
-        })
-        .catch(function () {
-          status.textContent = "Could not send the reminders.";
-          btn.disabled = false;
-        });
-    });
+    // TASK-575: there is no "Email everyone outstanding" button any more. The guest chase goes out
+    // by itself every other day in the last week, and the volunteers get the list.
 
     el("ballDetailsForm").addEventListener("submit", function (e) {
       e.preventDefault();

@@ -474,9 +474,10 @@ export async function sendBallReminder(message: BallConfirmationMessage): Promis
   await sendVerbatim("ballReminder", null, message);
 }
 
-// TASK-338: the run-up emails (guest read-back, chase, last call). Its own function for the same
-// reason as sendBallReminder above: so the three can be told apart in logs and in a bounce
-// report, and so a change to one cannot silently alter another.
+// TASK-338: the run-up emails (the guest read-back, the week-to-go practical email and, since
+// TASK-575, the every-other-day guest chase reminder). Its own function for the same reason as
+// sendBallReminder above: so they can be told apart in logs and in a bounce report, and so a change
+// to one cannot silently alter another.
 export async function sendBallRunUp(message: BallConfirmationMessage): Promise<void> {
   await sendVerbatim("ballRunUp", null, message);
 }

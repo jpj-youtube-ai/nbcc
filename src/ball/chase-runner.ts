@@ -57,8 +57,9 @@ export async function runBallChase(now = new Date()): Promise<ChaseRunResult> {
           replyTo: config.BALL_FROM_EMAIL,
           ...mail,
         });
-      } catch {
+      } catch (err) {
         await releaseChaseClaim(claim).catch(() => undefined);
+        console.error("ball chase reminder failed:", err instanceof Error ? err.message : err);
         result.failed += 1;
         continue;
       }

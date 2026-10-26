@@ -148,7 +148,7 @@ describe("the card", () => {
     expect(first.getAttribute("aria-labelledby")).toBe("ballChaseHead");
     expect(el("ballChaseHead").textContent).toBe("Chasing guests and meals");
     expect(first.querySelector(".admin-note")!.textContent).toBe(
-      "Automatic. At 8am on the 7th, 5th, 3rd and last day before the guest details deadline, everyone who has paid and still has a seat without a name or a guest who hasn't chosen gets a reminder with a countdown. The chase list goes to the people below on those mornings and on the deadline morning.",
+      "Automatic. At 8am, 7, 5, 3 and 1 days before the guest details deadline, everyone who has paid and still has a seat without a name or a guest who hasn't chosen gets a reminder with a countdown. The chase list goes to the people below on those mornings and on the deadline morning.",
     );
   });
 

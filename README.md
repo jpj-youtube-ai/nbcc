@@ -3238,7 +3238,7 @@ chase straight after the run-up pass: the pure planner is `src/ball/chase.ts`, t
 existing guest details setting (Festive Ball → Set up → *When guest details close*), and days are
 counted by the date in the UK, never by subtracting hours. A booker is reminded on the days 7, 5, 3
 and 1 before the deadline day. The volunteers' list goes on those four days and also on the deadline
-morning itself ("2 hours to go", so the last list before 10am). With the deadline at 10am on
+morning itself (the last list before 10am). With the deadline at 10am on
 Wednesday 4 November that is Wednesday 28 and Friday 30 October, Sunday 1 and Tuesday 3 November,
 and the list again on the 4th. Nothing goes with no deadline set, after the deadline day, or on or
 after the Ball day (`BALL_DAY`). A round that is missed is not caught up the next morning. Moving
@@ -3283,9 +3283,11 @@ guest link yet), and bank transfers awaiting payment (their link starts working 
 `1791200000300_ball-chase.js`, additive: the table and one `chase_recipients` column on the Ball
 settings). The table is unique on kind, day and address, so there is one claim per address per day
 for reminders and one per day for the list (`claimChaseSend` in `src/db/ball-chase.ts`). A second
-run the same morning, or the staff pressing anything, sends nothing more. A failed send gives its
+run of the daily task the same morning sends nothing more. The week-to-go and menu email buttons are
+separate: pressing either after 8am on a round morning would send chased bookers a second email that
+day, so leave them alone on those mornings. A failed send gives its
 claim back so a rerun can try again; a send that went keeps its claim even if recording it then
-fails. The table holds booking ids only, never anyone's details.
+fails. It holds the address each email went to and the booking ids it covered, nothing else.
 
 **The retired button.** The old TASK-338 chase and last call no longer exist, so the admin's "Email
 everyone outstanding" button is gone. `POST /api/admin/ball/chase` stays and now sends only the week

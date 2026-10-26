@@ -115,8 +115,16 @@ describe("a round day", () => {
       booking({ id: 2, buyerEmail: "two@example.com", guestToken: "tok-2" }),
     ]);
     m.sendBallRunUp.mockRejectedValueOnce(new Error("provider down"));
+    const log = vi.spyOn(console, "error").mockImplementation(() => undefined);
     const result = await runBallChase(SEVEN_DAYS);
+    const lines = log.mock.calls.map((call) => call.join(" "));
+    log.mockRestore();
     expect(result).toEqual({ day: 7, reminders: 1, failed: 1, listSent: false });
+    // The failure is logged, and the line names no address.
+    expect(lines).toHaveLength(1);
+    expect(lines[0]).toContain("ball chase reminder failed:");
+    expect(lines[0]).toContain("provider down");
+    expect(lines[0]).not.toContain("@");
     expect(m.releaseChaseClaim).toHaveBeenCalledWith(101);
     expect(m.markChaseSent).toHaveBeenCalledTimes(1);
     expect(m.markChaseSent).toHaveBeenCalledWith(102, [2]);

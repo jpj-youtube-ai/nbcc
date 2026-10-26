@@ -943,7 +943,7 @@ const BALL: CatalogueEmail[] = [
     id: "ball-chase-reminder",
     group: "ball",
     name: "Your guests and meals",
-    who: "Goes to the person who booked, at 8am on the 7th, 5th, 3rd and last day before the guest details deadline, while a seat has no name or a named guest has not chosen.",
+    who: "Goes to the person who booked, at 8am, 7, 5, 3 and 1 days before the guest details deadline, while a seat has no name or a named guest has not chosen.",
     audience: "public",
     logKinds: ["ballRunUp"],
     note: CHASE_NOTE,

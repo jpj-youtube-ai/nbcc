@@ -65,6 +65,13 @@ When("the old run-up pass runs at {string}", async function (iso) {
   this.runUpResult = await runBallRunUp(new Date(iso));
 });
 
+// The run-up pass stamps a booking with the database's own clock (now()), not the time it was given,
+// so after running it for a chosen morning the stamp is moved to that morning, which is what it would
+// be on the real day.
+When("the week-to-go stamps are moved to {string}", async function (iso) {
+  await pool.query("UPDATE ball_bookings SET reminder_sent_at = $1 WHERE reminder_sent_at IS NOT NULL AND guest_token LIKE 'chase-%'", [iso]);
+});
+
 Then("the chase pass should say it is not a chase day", function () {
   assert.equal(this.chaseResult.day, null, JSON.stringify(this.chaseResult));
 });

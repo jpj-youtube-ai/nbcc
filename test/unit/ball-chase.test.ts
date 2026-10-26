@@ -179,17 +179,43 @@ describe("planReminders", () => {
     expect(groups.map((g) => g.email)).toEqual(["ada@example.com", "ben@example.com"]);
   });
 
-  it("leaves out a booking whose reminder went today", () => {
+  it("leaves out a booker whose week-to-go email went today, and keeps one whose went earlier", () => {
     const groups = planReminders(
       [
-        incomplete({ id: 1, reminderSentOn: TODAY }),
-        incomplete({ id: 2, reference: "BALL-0002", reminderSentOn: "2026-10-28" }),
+        incomplete({ id: 1, buyerEmail: "ada@example.com", reminderSentOn: TODAY }),
+        incomplete({ id: 2, reference: "BALL-0002", buyerEmail: "ben@example.com", reminderSentOn: "2026-10-28" }),
       ],
       MENU,
       TODAY,
     );
     expect(groups).toHaveLength(1);
     expect(groups[0].bookings.map((b) => b.id)).toEqual([2]);
+  });
+
+  // The rule is per ADDRESS, not per booking: one booker must never get two Ball emails in a morning.
+  it("leaves out the whole address when any of its bookings had the week-to-go email today", () => {
+    const groups = planReminders(
+      [
+        // Booking A: still incomplete, its week-to-go email went earlier.
+        incomplete({ id: 1, buyerEmail: "ada@example.com", reminderSentOn: "2026-10-28" }),
+        // Booking B: complete, its week-to-go email went this morning, with a different spelling of the address.
+        booking({ id: 2, reference: "BALL-0002", buyerEmail: " ADA@example.com ", reminderSentOn: TODAY }),
+        // Someone else at another address is unaffected.
+        incomplete({ id: 3, reference: "BALL-0003", buyerEmail: "ben@example.com" }),
+      ],
+      MENU,
+      TODAY,
+    );
+    expect(groups.map((g) => g.email)).toEqual(["ben@example.com"]);
+  });
+
+  it("still leaves out the address when the booking stamped today is incomplete itself, and the other is not stamped", () => {
+    const groups = planReminders(
+      [incomplete({ id: 1, reminderSentOn: TODAY }), incomplete({ id: 2, reference: "BALL-0002" })],
+      MENU,
+      TODAY,
+    );
+    expect(groups).toEqual([]);
   });
 
   it("never includes pending, no-email or no-token bookings", () => {

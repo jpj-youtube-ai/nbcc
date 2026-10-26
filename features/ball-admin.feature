@@ -20,9 +20,10 @@ Feature: Festive Ball admin controls (TASK-313)
     And the guest progress should report 0 seats booked
     And the guest progress should list 0 bookings to chase
 
-  # TASK-338: the chase runs the same pass the daily task runs, so pressing it twice is safe.
-  # With no lock date agreed it must send NOTHING rather than chase people towards a deadline
-  # nobody has set.
+  # TASK-338: this route runs the same run-up pass the daily task runs, so calling it twice is safe.
+  # Since TASK-575 that pass sends only the week-to-go email, and the admin has no button for it
+  # (the route stays). With the room reset to no bookings and no lock date agreed, it must send
+  # NOTHING.
   Scenario: the chase sends nothing while no lock date has been agreed
     Given a ball admin "ball10.admin.bdd@example.com" with role "admin" and password "pw-ball10"
     And the ball is reset to 40 tables of 10 with 0 held back

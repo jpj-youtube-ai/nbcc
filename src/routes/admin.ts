@@ -4051,12 +4051,16 @@ export async function getAdminBallGuestProgress(
 adminRouter.get("/api/admin/ball/bookings", getAdminBallBookings);
 adminRouter.get("/api/admin/ball/guest-progress", getAdminBallGuestProgress);
 
-// POST /api/admin/ball/chase — email everyone whose guest details are still outstanding, now.
+// POST /api/admin/ball/chase — run the daily run-up pass now.
+//
+// Since TASK-575 that pass sends only the week-to-go email: the guest list nudge and last call are
+// retired, and the every-other-day guest chase is a separate pass (src/ball/chase-runner.ts) that
+// this route does not run. The admin has no button for it any more (the "Email everyone
+// outstanding" button went with the old chase); the route stays.
 //
 // Editor+, not Viewer: it sends real email to real buyers. It runs the same pass the daily task
-// runs, so a booking already chased today is skipped rather than emailed twice — pressing this
-// button twice is safe, which is the property that matters for something staff will press when
-// they are not sure whether it worked the first time.
+// runs, so a booking already sent the week-to-go email is skipped rather than emailed twice, which
+// makes calling it twice safe.
 export async function postAdminBallChase(req: Request, res: Response): Promise<Response | void> {
   if (!(await authorizeSection(req, res, "ball", "edit"))) return;
   try {

@@ -109,15 +109,25 @@ function firstNameOf(b: ChaseBooking): string {
 
 /**
  * Who gets a reminder today: paid bookings with an address and a guest link that are still
- * incomplete, and whose week-to-go email did not go today. One group per lower-cased address, so a
- * booker with two bookings gets one email covering both (in the order the bookings were given).
+ * incomplete, for bookers whose week-to-go email did not go today. One group per lower-cased
+ * address, so a booker with two bookings gets one email covering both (in the order the bookings
+ * were given).
+ *
+ * The week-to-go rule is per ADDRESS, not per booking: if ANY paid booking at an address (complete
+ * or not) had its week-to-go email today, that address gets no reminder today, so one booker never
+ * receives two Ball emails in a morning. Their other incomplete bookings are chased on the next round.
  */
 export function planReminders(bookings: ChaseBooking[], menu: MenuCourse[], today: string): ReminderGroup[] {
+  const emailedToday = new Set(
+    bookings
+      .filter((b) => b.status === "paid" && b.reminderSentOn === today)
+      .map((b) => b.buyerEmail.trim().toLowerCase()),
+  );
   const groups = new Map<string, ReminderGroup>();
   for (const b of bookings) {
     const email = b.buyerEmail.trim().toLowerCase();
     if (b.status !== "paid" || email === "" || !b.guestToken) continue;
-    if (b.reminderSentOn === today) continue;
+    if (emailedToday.has(email)) continue;
     if (!isIncomplete(b, menu)) continue;
     const group = groups.get(email);
     if (group) group.bookings.push(withMissing(b, menu));

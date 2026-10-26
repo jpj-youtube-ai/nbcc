@@ -59,6 +59,18 @@ Feature: Festive Ball chase reminders (TASK-575)
     Then the chase pass should say it is not a chase day
     And no chase email should have been logged
 
+  # The week-to-go email goes a week before the Ball (Saturday 31 October). When that is also a round
+  # day, a booker sent it that morning must not get a chase reminder too: one Ball email a morning.
+  Scenario: a booker sent the week-to-go email this morning is not chased the same morning
+    Given the guest details close at "2026-11-05T10:00:00Z"
+    And a paid ball booking for 1 ticket with guest token "chase-open-1"
+    And the booker of "chase-open-1" is "open.chase.bdd@example.com"
+    And the chase emails logged so far are cleared
+    When the old run-up pass runs at "2026-10-31T08:00:00Z"
+    And the week-to-go stamps are moved to "2026-10-31T08:00:00Z"
+    And the daily chase pass runs at "2026-10-31T08:00:00Z"
+    Then the email log should hold 1 "ballRunUp" email to "open.chase.bdd@example.com"
+
   Scenario: the old guest chase and last call are retired
     Given the guest details close at "2026-10-25T10:00:00Z"
     And a paid ball booking for 1 ticket with guest token "chase-open-1"

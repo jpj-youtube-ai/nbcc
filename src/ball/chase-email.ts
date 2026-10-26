@@ -32,7 +32,9 @@ const SMALL = `style="color:${SLATE_SOFT};font-family:${BODY_FONT};font-size:13p
 const CARD = `style="background:${CREAM};border:1px solid ${TAN_SOFT};border-radius:10px;padding:14px 16px;margin:0 0 12px"`;
 const LINE = `style="color:${SLATE};font-family:${BODY_FONT};font-size:14px;line-height:1.5;margin:0"`;
 // Links in the volunteers' list are tapped with a thumb: a block at least 44px tall.
-const TAP = `style="display:inline-block;min-height:44px;line-height:44px;color:${MAROON};font-weight:700"`;
+// Padding rather than a tall line, so a long address that wraps stays tidy; it wraps rather than
+// pushing the page sideways.
+const TAP = `style="display:inline-block;padding:11px 0;line-height:22px;color:${MAROON};font-weight:700;word-break:break-word;overflow-wrap:anywhere"`;
 
 /** "10am", "10.30am", "4pm": the time a person would say, in London. */
 export function timeWords(at: Date): string {
@@ -168,11 +170,15 @@ const telHref = (phone: string) => `tel:${phone.replace(/[^\d+]/g, "")}`;
 const mealsChosen = (r: ChaseRow) => `${r.choices.length - r.unchosen} of ${r.choices.length} ${r.choices.length === 1 ? "meal" : "meals"} chosen`;
 
 function rowHtml(r: ChaseRow, guestLink: (token: string) => string): string {
-  const phone = r.buyerPhone?.trim()
-    ? `<a href="${escapeHtml(telHref(r.buyerPhone))}" ${TAP}>${escapeHtml(r.buyerPhone)}</a>`
-    : `<span style="color:${SLATE_SOFT}">no phone given</span>`;
+  const typed = r.buyerPhone?.trim() ?? "";
+  // Something typed with no digits in it ("n/a") is shown as it was typed, but is not a link.
+  const phone = !typed
+    ? `<span style="color:${SLATE_SOFT}">no phone given</span>`
+    : /\d/.test(typed)
+      ? `<a href="${escapeHtml(telHref(typed))}" ${TAP}>${escapeHtml(typed)}</a>`
+      : `<span style="word-break:break-word;overflow-wrap:anywhere">${escapeHtml(typed)}</span>`;
   const email = r.buyerEmail.trim()
-    ? `<a href="mailto:${escapeHtml(r.buyerEmail)}" style="color:${MAROON}">${escapeHtml(r.buyerEmail)}</a>`
+    ? `<a href="mailto:${escapeHtml(r.buyerEmail)}" ${TAP}>${escapeHtml(r.buyerEmail)}</a>`
     : `<span style="color:${SLATE_SOFT}">no email address</span>`;
   const named = `${r.choices.length} of ${r.seats}`;
   const meals = r.choices.length > 0 ? `<p ${LINE}>${mealsChosen(r)}</p>` : "";
@@ -225,7 +231,7 @@ export function buildChaseListEmail(i: {
   const intro =
     days === 0
       ? `This is the last list before ${time} on ${date}, when the guest details close.`
-      : `The guest details close at ${time} on ${date}, so there are ${countdown}.`;
+      : `The guest details close at ${time} on ${date} (${countdown}).`;
   const ask = "Please phone the people below, most missing first. Each has their own link, so you can type in what they tell you while you talk.";
   const privacy = "This list has people's names and phone numbers, so please keep it to yourselves and do not forward it.";
   const testNote = "This is a test with made-up bookings. Nobody on it is real.";

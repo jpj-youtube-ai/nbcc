@@ -253,6 +253,30 @@ describe("the volunteers' list", () => {
     expect(chaseList(emptyList({ toChase: [row()] }), 7).text).not.toContain("the last list");
   });
 
+  it("reads correctly on every day, including the last but one", () => {
+    const list = emptyList({ toChase: [row()] });
+    const one = chaseList(list, 1);
+    for (const part of [one.html, one.text]) {
+      expect(part).toContain("The guest details close at 10am on Wednesday 4");
+      expect(part).toContain("(1 day to go).");
+      expect(part).not.toContain("there are 1 day");
+    }
+    expect(chaseList(list, 3).text).toContain("(3 days to go).");
+  });
+
+  it("lets a long address wrap, and does not link a phone with no digits", () => {
+    const long = `${"a".repeat(60)}@example.com`;
+    const { html, text } = chaseList(emptyList({ toChase: [row({ buyerEmail: long, buyerPhone: "n/a" })] }));
+    expect(html).toContain(`href="mailto:${long}"`);
+    expect(html).toContain("overflow-wrap:anywhere");
+    expect(html).toContain("word-break:break-word");
+    // The only tel: links are the Ball's own number in the shell and the contact panel.
+    expect(html).not.toContain('href="tel:"');
+    expect(html.match(/href="tel:/g)).toHaveLength(chaseList(emptyList({ toChase: [row({ buyerPhone: null })] })).html.match(/href="tel:/g)!.length);
+    expect(html).toContain("n/a");
+    expect(text).toContain("Phone: n/a");
+  });
+
   it("marks a test, and only a test", () => {
     const list = emptyList({ toChase: [row()] });
     for (const part of [chaseList(list, 7, true).html, chaseList(list, 7, true).text]) {

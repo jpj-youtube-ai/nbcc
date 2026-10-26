@@ -53,7 +53,9 @@ import {
 import { flagWords } from "../tickets/model";
 import { buildBallConfirmationEmail } from "../ball/confirmation-email";
 import { buildBallReminderEmail } from "../ball/reminder-email";
-import { buildGuestChaseEmail, buildGuestSummaryEmail } from "../ball/run-up-email";
+import { buildGuestSummaryEmail } from "../ball/run-up-email";
+import { buildChaseListEmail, buildChaseReminderEmail, exampleChaseList, exampleReminderGroup } from "../ball/chase-email";
+import type { ReminderGroup } from "../ball/chase";
 import { buildMenuReadyEmail } from "../ball/menu-email";
 import { buildInvoicePaidEmail, buildTransferCancelledEmail, buildTransferDetailsEmail, buildTransferReminderEmail } from "../ball/transfer-email";
 import { buildTransferStaffEmail } from "../ball/transfer-staff-email";
@@ -789,9 +791,23 @@ const LOCK = new Date("2026-10-23T12:00:00Z");
 type SummaryIn = Parameters<typeof buildGuestSummaryEmail>[0];
 const guestSummary = (o: Partial<SummaryIn> = {}) => (b: string) =>
   buildGuestSummaryEmail({ buyerFirstName: "Alex", reference: BALL_REF, seats: 2, guests: GUESTS, guestLink: guestLink(b), lockAt: LOCK, ...o } as SummaryIn);
-type ChaseIn = Parameters<typeof buildGuestChaseEmail>[0];
-const chase = (o: Partial<ChaseIn> = {}) => (b: string) =>
-  buildGuestChaseEmail({ buyerFirstName: "Alex", reference: BALL_REF, seats: 10, guestsNamed: 4, guestLink: guestLink(b), lockAt: LOCK, finalCall: false, ...o } as ChaseIn);
+// TASK-575: the last-week chase. The deadline is fixed, so the words do not move with the calendar.
+const CHASE_DEADLINE = new Date("2026-11-04T10:00:00Z");
+const CHASE_NOTE = "The people, numbers and links here are made up. The real one lists the bookings that are really still open.";
+const chaseGuestLink = (b: string) => (token: string) => `${b}/ball/guests/${token}`;
+const chaseReminder = (group: ReminderGroup = exampleReminderGroup(), days = 7) => (b: string) =>
+  buildChaseReminderEmail({ group, daysToDeadline: days, deadline: CHASE_DEADLINE, guestLink: chaseGuestLink(b) });
+const namesOnlyGroup = (): ReminderGroup => {
+  const g = exampleReminderGroup();
+  return { ...g, bookings: g.bookings.map((r) => ({ ...r, unchosen: 0 })) };
+};
+const twoBookingsGroup = (): ReminderGroup => {
+  const g = exampleReminderGroup();
+  const [first] = g.bookings;
+  return { ...g, bookings: [first, { ...first, id: first.id + 1, reference: "BALL-0002", guestToken: "example-2", seats: 4, choices: ["Main: Example roast"], unnamed: 3, unchosen: 0 }] };
+};
+const chaseListEmail = (days = 7, test = false) => (b: string) =>
+  buildChaseListEmail({ list: exampleChaseList(), daysToDeadline: days, deadline: CHASE_DEADLINE, guestLink: chaseGuestLink(b), test });
 type MenuIn = Parameters<typeof buildMenuReadyEmail>[0];
 const MENU = [
   { name: "Starter", options: ["Example soup (v)", "Example pâté"] },
@@ -914,28 +930,6 @@ const BALL: CatalogueEmail[] = [
     ],
   },
   {
-    id: "ball-guest-chase",
-    group: "ball",
-    name: "We still need your guest list",
-    who: "Goes to the person who booked, from 14 days before the guest list closes, if places still have no name.",
-    audience: "public",
-    logKinds: ["ballRunUp"],
-    versions: [
-      v("usual", "Some guests named", chase()),
-      v("nobody", "They have not named anyone yet", chase({ guestsNamed: 0 })),
-      v("nobody-one-ticket", "They have not named anyone, and booked one ticket", chase({ guestsNamed: 0, seats: 1 })),
-    ],
-  },
-  {
-    id: "ball-guest-last-call",
-    group: "ball",
-    name: "Last call for your guest list",
-    who: "Goes to the person who booked, on the day the guest list closes, if places still have no name.",
-    audience: "public",
-    logKinds: ["ballRunUp"],
-    versions: [v("usual", "Some guests named", chase({ finalCall: true })), v("nobody", "They have not named anyone yet", chase({ finalCall: true, guestsNamed: 0 }))],
-  },
-  {
     id: "ball-menu",
     group: "ball",
     name: "The menu is here",
@@ -944,6 +938,35 @@ const BALL: CatalogueEmail[] = [
     logKinds: ["ballRunUp"],
     note: "The menu and the note under it are typed by staff. The ones here are an example.",
     versions: [v("usual", "A menu with choices", menu()), v("fixed", "A menu with nothing to choose", menu([{ name: "Main", options: ["Example roast"] }], null))],
+  },
+  {
+    id: "ball-chase-reminder",
+    group: "ball",
+    name: "Your guests and meals",
+    who: "Goes to the person who booked, at 8am on the 7th, 5th, 3rd and last day before the guest details deadline, while a seat has no name or a named guest has not chosen.",
+    audience: "public",
+    logKinds: ["ballRunUp"],
+    note: CHASE_NOTE,
+    versions: [
+      v("usual", "7 days to go, some names and meals missing", chaseReminder()),
+      v("last-chance", "The last chance, the day before the deadline", chaseReminder(exampleReminderGroup(), 1)),
+      v("names-only", "Only names are missing", chaseReminder(namesOnlyGroup())),
+      v("two-bookings", "The same person has two bookings", chaseReminder(twoBookingsGroup())),
+    ],
+  },
+  {
+    id: "ball-chase-list",
+    group: "ball",
+    name: "Festive Ball chase list",
+    who: "Goes to the people on the chase list, at 8am on the same mornings and on the deadline morning.",
+    audience: "staff",
+    logKinds: ["ballChaseList"],
+    note: CHASE_NOTE,
+    versions: [
+      v("usual", USUAL, chaseListEmail()),
+      v("deadline-morning", "The deadline morning, the last list", chaseListEmail(0)),
+      v("test", "A test sent from the admin", chaseListEmail(7, true)),
+    ],
   },
   {
     id: "ball-week-to-go",

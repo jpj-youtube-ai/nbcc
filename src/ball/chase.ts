@@ -72,7 +72,8 @@ export function isIncomplete(b: ChaseBooking, menu: MenuCourse[]): boolean {
   return m.unnamed > 0 || m.unchosen > 0;
 }
 
-type Row = ChaseBooking & { unnamed: number; unchosen: number };
+export type ChaseRow = ChaseBooking & { unnamed: number; unchosen: number };
+type Row = ChaseRow;
 
 export interface ReminderGroup {
   email: string;

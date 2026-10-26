@@ -521,6 +521,23 @@ export async function sendBallReport(message: BallReportMessage): Promise<void> 
   });
 }
 
+// TASK-575: the chase list for the volunteers who phone people about guest names and meals. Same
+// shape as the ticket report above, to the volunteers' @nbcc.scot addresses only.
+export async function sendBallChaseList(message: BallReportMessage): Promise<void> {
+  const [first, ...rest] = message.to;
+  if (!first) throw new Error("The chase list has nobody to go to.");
+  await sendAndLog("ballChaseList", null, {
+    to: first,
+    alsoTo: rest,
+    from: message.from,
+    replyTo: message.replyTo,
+    subject: message.subject,
+    html: message.html,
+    text: message.text,
+    configurationSet: config.SES_TRANSACTIONAL_CONFIGURATION_SET || undefined,
+  });
+}
+
 // TASK-401: the cold approach to a local business. Its own kind, like every other sender here, so
 // it can be told apart in the email audit log and in a bounce report - which matters more for
 // this one than most. A bounce on cold outreach means the address was wrong, and the volunteer

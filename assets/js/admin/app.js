@@ -3304,6 +3304,8 @@
     ["ballReminder", "Ball reminder"], ["ballRunUp", "Ball run-up"], ["ballReport", "Ball ticket report"],
     // TASK-487: every kind the server sends has a name here (test/unit/admin-email-kinds.test.ts).
     ["ballTransfer", "Ball bank transfer"], ["ballTransferStaff", "Ball bank transfer (to events@)"],
+    // TASK-575: the volunteers' list of bookings to chase for guest names and meals.
+    ["ballChaseList", "Ball chase list"],
     ["outreach", "Business outreach"], ["backupAlert", "Backup alert"],
     // TASK-493: community fundraising.
     ["fundraiseThanks", "Fundraiser sign up thanks"], ["fundraiseStaff", "Fundraiser sign up (to events@)"],

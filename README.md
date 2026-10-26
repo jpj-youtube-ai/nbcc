@@ -11802,7 +11802,7 @@ lives in; the Drive copy is not immutable.
 
 ### There are THREE databases, not one
 
-This is the trap this feature was built around. `DATABASE_URL` holds 87 tables
+This is the trap this feature was built around. `DATABASE_URL` holds 88 tables
 (42 when this was built; the Events page added three in TASK-453, the Festive Ball ticket
 report one in TASK-464, the admin's New pills one, `admin_seen`, in TASK-478, site analytics
 four in TASK-479, the business supporter call log in TASK-491, community fundraising five
@@ -11817,10 +11817,11 @@ for event tickets: the ticket types, each event's limit and sales switch, the or
 lines (with buyers' names, emails and phones), the refunds and the refund requests, two for
 welcome packs: each page's pack and the things ticked in it, one, in TASK-563, for the Fill a
 Red Bag list's versions, and one, in TASK-562, for the addresses staff have removed from the
-Email audit's red band),
+Email audit's red band, and one, in TASK-575, for which Festive Ball reminders and chase lists
+have gone, per address and day),
 but `STORIES_DATABASE_URL` and `CONTACT_DATABASE_URL` are separate databases
 (deliberately, so the public story and contact forms can never reach donor
-data). A `pg_dump $DATABASE_URL` captures 87 of **90** tables and silently
+data). A `pg_dump $DATABASE_URL` captures 88 of **91** tables and silently
 drops every My Story submission (and, since TASK-475, the fingerprints in
 `erased_stories` that keep erased stories from coming back) and every contact
 enquiry, while producing a

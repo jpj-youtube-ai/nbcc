@@ -39,7 +39,7 @@ export const STAFF_ONLY_KINDS: ReadonlySet<string> = new Set([
   "loginCode",
   "lapsedAdmin",
   "ballReport",
-  // TASK-575: the volunteers' list of who to phone about guest names and meals.
+  // TASK-576: the volunteers' list of who to phone about guest names and meals.
   "ballChaseList",
   "ballTransferStaff",
   // TASK-493: the events@ summary of each new fundraising sign up.

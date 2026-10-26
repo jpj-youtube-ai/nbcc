@@ -316,7 +316,7 @@ describe("staff only emails are never tagged", () => {
       // Team pages: fundraiseTeamJoinStaff and fundraiseTeamMemberRemoved, both to events@.
       // Event tickets: a refund an organiser asked for, and tickets to approve, both to events@.
       // Sponsor pledges: fundraisePledgeStaff, the events@ note about a pledge paid twice or hidden.
-      // TASK-575: ballChaseList, the volunteers' list of who to phone about guest names and meals.
+      // TASK-576: ballChaseList, the volunteers' list of who to phone about guest names and meals.
       [
         "adminInvite", "adminReset", "backupAlert", "ballChaseList", "ballReport", "ballTransferStaff", "fundraiseFinishedStaff", "fundraisePledgeStaff", "fundraiseStaff", "fundraiseSummary",
         "fundraiseTeamJoinStaff", "fundraiseTeamMemberRemoved", "lapsedAdmin", "loginCode",

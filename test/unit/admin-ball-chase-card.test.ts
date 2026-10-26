@@ -6,7 +6,7 @@ import { createRequire } from "node:module";
 import { signAdminSession } from "../../src/admin/session";
 import { effectivePermissions, type PermissionMap } from "../../src/admin/permissions";
 
-// TASK-575: the Festive Ball admin's "Chasing guests and meals" card, first in the Emails section. It
+// TASK-576: the Festive Ball admin's "Chasing guests and meals" card, first in the Emails section. It
 // shows when the next reminder goes, edits the volunteers' chase list, and sends the signed-in person
 // a test of each email. Driven in the admin's jsdom harness (admin.html's <body>, a fake fetch, app.js
 // evaluated against it), as admin-ball-sections.test.ts does. Every name and address is invented.

@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
-// TASK-575: reading the volunteers' list back. A stored list that no longer passes the rules goes to
+// TASK-576: reading the volunteers' list back. A stored list that no longer passes the rules goes to
 // nobody, and says so in the logs (without any address in the message). Invented addresses only.
 
 const m = vi.hoisted(() => ({ query: vi.fn() }));

@@ -9,7 +9,7 @@ import { parseMenu } from "./menu";
 import { chaseDay, planList, planReminders } from "./chase";
 import { buildChaseListEmail, buildChaseReminderEmail } from "./chase-email";
 
-// TASK-575: the wiring for the Festive Ball guest chase. It rides the daily 8am task
+// TASK-576: the wiring for the Festive Ball guest chase. It rides the daily 8am task
 // (npm run reminders, src/scripts/send-reminders.ts) right after the run-up pass, like the ticket
 // report does; the pure ./chase.ts decides whether today is a round day and who is still missing
 // something, and ./chase-email.ts writes both emails.

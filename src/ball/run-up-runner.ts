@@ -21,7 +21,7 @@ export const guestLink = (token: string) =>
   `${config.BALL_BASE_URL.replace(/\/+$/, "")}/ball/guests/${token}`;
 
 export async function sendRunUpEmail(booking: RunUpBooking, stage: RunUpStage, now = new Date()): Promise<void> {
-  // TASK-575: the guest list nudge and the last call are retired, and the planner never asks for
+  // TASK-576: the guest list nudge and the last call are retired, and the planner never asks for
   // them. If one ever arrives here it is a mistake to hear about (the pass counts it as failed and
   // stamps nothing), not something to send as if it were the week-to-go email.
   if (stage !== "practical") throw new Error(`The ${stage} email is retired.`);

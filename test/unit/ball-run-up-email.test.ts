@@ -95,7 +95,7 @@ describe("the read-back after someone saves their guest list", () => {
   });
 });
 
-// TASK-575: the nudge and the last call (buildGuestChaseEmail) are gone. Their replacements, the
+// TASK-576: the nudge and the last call (buildGuestChaseEmail) are gone. Their replacements, the
 // reminder and the volunteers' list, are tested in ball-chase-email.test.ts.
 describe("every run-up email", () => {
   const all = [summary()];

@@ -12,7 +12,7 @@ import { parseMenu } from "../ball/menu";
 import { chaseRecipientsSchema, nextChaseRound, planReminders } from "../ball/chase";
 import { buildChaseListEmail, buildChaseReminderEmail, exampleChaseList, exampleReminderGroup } from "../ball/chase-email";
 
-// TASK-575: the "Chasing guests and meals" card in the Festive Ball admin's Emails section.
+// TASK-576: the "Chasing guests and meals" card in the Festive Ball admin's Emails section.
 //
 //   GET  /api/admin/ball-chase        who the chase list goes to, the deadline, the next round, what went   ball: view
 //   PUT  /api/admin/ball-chase        { recipients }, the volunteers' list                                  ball: edit

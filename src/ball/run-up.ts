@@ -13,7 +13,7 @@
 // says the true number of days instead: daysToBall below, and ./reminder-email.ts.
 export const PRACTICAL_DAYS_BEFORE_EVENT = 7;
 
-// "chase" and "final-call" are retired (TASK-575); only "practical" is ever planned. They stay in the
+// "chase" and "final-call" are retired (TASK-576); only "practical" is ever planned. They stay in the
 // type so the stamps of emails already sent still map to a stage.
 export type RunUpStage = "chase" | "final-call" | "practical";
 
@@ -38,7 +38,7 @@ export interface RunUpWindow {
   now: Date;
   eventDate: Date;
   // NULL until NBCC agrees it with the venue. No longer read here: the nudge and the last call it
-  // used to time are retired (TASK-575), and the chase works from it in ./chase.ts instead.
+  // used to time are retired (TASK-576), and the chase works from it in ./chase.ts instead.
   lockAt: Date | null;
 }
 
@@ -85,13 +85,13 @@ export function outstanding(booking: RunUpBooking): boolean {
   return booking.guestsNamed < booking.seats;
 }
 
-// TASK-575: the guest list nudge ("chase", a fortnight before the deadline) and the last call
+// TASK-576: the guest list nudge ("chase", a fortnight before the deadline) and the last call
 // ("final-call", the day it closes) are RETIRED. The every-other-day reminders and the volunteers'
 // list (./chase.ts, sent by ./chase-runner.ts) replaced them, so this pass never sends either. The
 // stage names, the types and the two stamps stay, so old rows and old stamps still read.
 
 /**
- * EVERYTHING this booking is due right now, in the order to send it. Since TASK-575 that is the
+ * EVERYTHING this booking is due right now, in the order to send it. Since TASK-576 that is the
  * practical reminder or nothing.
  *
  * The practical email goes to EVERYONE, a week out (or the morning after a later booking), whether

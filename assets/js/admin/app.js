@@ -3305,7 +3305,7 @@
     ["ballReminder", "Ball reminder"], ["ballRunUp", "Ball run-up"], ["ballReport", "Ball ticket report"],
     // TASK-487: every kind the server sends has a name here (test/unit/admin-email-kinds.test.ts).
     ["ballTransfer", "Ball bank transfer"], ["ballTransferStaff", "Ball bank transfer (to events@)"],
-    // TASK-575: the volunteers' list of bookings to chase for guest names and meals.
+    // TASK-576: the volunteers' list of bookings to chase for guest names and meals.
     ["ballChaseList", "Ball chase list"],
     ["outreach", "Business outreach"], ["backupAlert", "Backup alert"],
     // TASK-493: community fundraising.
@@ -16200,7 +16200,7 @@
         el("ballMenuOutstanding").innerHTML = "";
         ballGlanceSet("menu", false);
       });
-    // TASK-575: the chasing card in Emails. Last, after everything the screen already asked for.
+    // TASK-576: the chasing card in Emails. Last, after everything the screen already asked for.
     loadBallChase();
   }
 
@@ -16524,7 +16524,7 @@
       );
     });
 
-    // TASK-575: there is no "Email everyone outstanding" button any more. The guest chase goes out
+    // TASK-576: there is no "Email everyone outstanding" button any more. The guest chase goes out
     // by itself every other day in the last week, and the volunteers get the list.
 
     el("ballDetailsForm").addEventListener("submit", function (e) {
@@ -17704,7 +17704,7 @@
     el("evReportResend").addEventListener("click", brResend);
     window.addEventListener("resize", brFitPreview);
   }
-  // ---- the Festive Ball chase card (TASK-575) ----
+  // ---- the Festive Ball chase card (TASK-576) ----
   // First card in Festive Ball > Emails. The chasing itself is automatic (the 8am daily task); this
   // shows when the next reminder goes, edits the volunteers' chase list, and sends the signed-in person
   // a test of each email. The list is edited here and saved together with Save the list, as the ticket

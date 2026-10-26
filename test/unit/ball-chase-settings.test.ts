@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { chaseRecipientsSchema } from "../../src/ball/chase";
 
-// TASK-575: who the volunteers' chase list goes to. It carries people's phone numbers, so only
+// TASK-576: who the volunteers' chase list goes to. It carries people's phone numbers, so only
 // nbcc.scot addresses are allowed. Every address and name here is invented.
 
 const SAVED_MESSAGE = "Only nbcc.scot addresses: this list carries people's phone numbers.";

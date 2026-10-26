@@ -791,7 +791,7 @@ const LOCK = new Date("2026-10-23T12:00:00Z");
 type SummaryIn = Parameters<typeof buildGuestSummaryEmail>[0];
 const guestSummary = (o: Partial<SummaryIn> = {}) => (b: string) =>
   buildGuestSummaryEmail({ buyerFirstName: "Alex", reference: BALL_REF, seats: 2, guests: GUESTS, guestLink: guestLink(b), lockAt: LOCK, ...o } as SummaryIn);
-// TASK-575: the last-week chase. The deadline is fixed, so the words do not move with the calendar.
+// TASK-576: the last-week chase. The deadline is fixed, so the words do not move with the calendar.
 const CHASE_DEADLINE = new Date("2026-11-04T10:00:00Z");
 const CHASE_NOTE = "The people, numbers and links here are made up. The real one lists the bookings that are really still open.";
 const chaseGuestLink = (b: string) => (token: string) => `${b}/ball/guests/${token}`;

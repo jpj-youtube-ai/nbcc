@@ -3195,23 +3195,13 @@ instead of leaving it to somebody remembering.
 **nothing is chased at all** — an email asking for names with no date in it is nagging, and it
 spends the one message people actually read before there is anything useful to say.
 
-**The fortnight-out nudge and the last call are retired (TASK-575).** The every-other-day
-reminders in the last week, and the volunteers' list that goes with them (`src/ball/chase.ts`,
-`src/ball/chase-runner.ts`, run by the same daily task straight after this pass), replaced them. This
-pass now sends only the read-back and the practical email below. `guestStageFor` is gone and
-`stagesFor` plans the practical email or nothing; the `chase` and `final-call` stage names and
-their two stamp columns stay, so old rows still read.
+**The fortnight-out nudge and the last call are retired (TASK-576).** The every other day reminders
+in the last week replaced them; they have their own section, **The Festive Ball chase (TASK-576)**,
+straight after this one. This pass now sends only the read-back and the practical email below.
+`guestStageFor` is gone and `stagesFor` plans the practical email or nothing; the `chase` and
+`final-call` stage names and their two stamp columns stay, so old rows still read.
 
-**The admin card** is the first card in Festive Ball → Emails, "Chasing guests and meals"
-(`src/routes/admin-ball-chase.ts`, `GET`/`PUT /api/admin/ball-chase`, `POST /api/admin/ball-chase/test`;
-view and edit follow the Ball section). It shows the next reminder day and how many bookers it would
-reach (`nextChaseRound` in `src/ball/chase.ts`: today counts only until the 8am run), edits the
-volunteers' list (nbcc.scot addresses only, at most ten, every change audited), and lists what went
-lately (`ball_chase_sends`, sent rows only). *Send me a test reminder* and *Send me a test chase list*
-send the invented examples from `src/ball/chase-email.ts` to the signed-in person only; they never read
-a real booking and never write to `ball_chase_sends`, so a test cannot stop a real send.
-
-Then, per paid booking:
+Per paid booking, this pass sends:
 
 | When | What | To whom |
 |---|---|---|
@@ -3229,10 +3219,93 @@ and a failed send is retried tomorrow rather than silently recorded as done. `PO
 /api/admin/ball/chase` (Editor+) runs the same pass on demand — anyone already emailed at that
 stage is skipped, so pressing it twice is safe. It now sends only the week-to-go email, and the
 admin no longer has a button for it (the "Email everyone outstanding" button went with the old
-chase, TASK-575); the route stays.
+chase, TASK-576); the route stays.
 
 After the deadline day nothing is chased: staff work the remaining stragglers by hand from the
 outstanding list.
+
+### The Festive Ball chase (TASK-576)
+
+Jaimie, 26 October 2026: send reminders every other day to anyone who has not chosen meals and
+guests, with the deadline at 10am on Wednesday 4th November. The design is
+`docs/superpowers/specs/2026-10-26-ball-chase-reminders-design.md`. It replaced the old TASK-338
+chase and last call (see the run-up above), which asked for the same names and would have sent two
+emails on some mornings.
+
+**The rounds.** The daily 8am task (`npm run reminders`, `src/scripts/send-reminders.ts`) runs the
+chase straight after the run-up pass: the pure planner is `src/ball/chase.ts`, the wiring is
+`src/ball/chase-runner.ts`, the two emails are `src/ball/chase-email.ts`. The deadline is the
+existing guest details setting (Festive Ball → Set up → *When guest details close*), and days are
+counted by the date in the UK, never by subtracting hours. A booker is reminded on the days 7, 5, 3
+and 1 before the deadline day. The volunteers' list goes on those four days and also on the deadline
+morning itself ("2 hours to go", so the last list before 10am). With the deadline at 10am on
+Wednesday 4 November that is Wednesday 28 and Friday 30 October, Sunday 1 and Tuesday 3 November,
+and the list again on the 4th. Nothing goes with no deadline set, after the deadline day, or on or
+after the Ball day (`BALL_DAY`). A round that is missed is not caught up the next morning. Moving
+the deadline moves every round with it.
+
+**Who is reminded.** A booking with status `paid`, a buyer email and a guest link that is still
+incomplete: fewer guests named than seats paid for, or a named guest who has not answered every
+course the menu asks (`hasChosen`, the test the *Who has chosen* list already uses; with no choosable
+course only names count). It is **one email per address**, not per booking: someone with a table and
+extra seats gets one reminder listing each booking's gaps and link. A booking that is complete drops
+out of every later round, and one that becomes incomplete again comes back in.
+
+**The week to go morning rule.** An address that was sent the practical "A week to go" email that
+morning (`reminder_sent_at` falls on today's date in the UK) is skipped for that whole day, every
+booking of theirs, because that email already carries their guest link. The next round reaches them
+if they are still incomplete.
+
+**What the reminder says.** The action comes first (Jaimie: "be clear there's an action at top of
+email"): the top of the email is a box saying what to do, by when, what is missing, and the button
+to their own guest page, with everything else below it. The countdown is worked out on the morning
+it is sent ("7 days to go", then "Last chance" on day 1), and the deadline is always given in words,
+"10am on Wednesday 4th November", with the time and date taken from the setting. The line about
+what happens after the deadline follows Jaimie's "say we'll choose for you": "If we haven't heard from you by 10am
+on Wednesday 4th November, we'll choose for you." It promises no phone call, because we might not
+have their number. Subjects carry the countdown: "7 days to go: your Festive Ball guests and
+meals", and on day 1 "Last chance: your Festive Ball guests and meals by 10am tomorrow". Nothing
+closes by itself and the site never picks a meal for anyone: the guest page keeps taking names and
+meals after the deadline, and staff do the choosing, at their discretion, through the booking's own
+link.
+
+**The volunteers' list.** Sent after that morning's reminders to the addresses typed into the admin
+(the card below). The repository is public, so no address is written into the code. Only
+`@nbcc.scot` addresses are accepted, at most ten, checked on save, because the email carries
+people's names and phone numbers. It shows the counts (complete, still to chase, seats unnamed,
+guests still to choose) and, for each booking still to chase with the most missing first, the booker,
+phone number or "no phone given", email, reference, seats named and meals chosen, and the guest
+link so a volunteer can enter choices after a call. Two extra sections cover people only a phone
+call reaches, and neither gets a reminder email: paid bookings we cannot email (no address, or no
+guest link yet), and bank transfers awaiting payment (their link starts working once they pay).
+
+**Never twice.** Each email is claimed before it is sent in `ball_chase_sends` (migration
+`1791200000300_ball-chase.js`, additive: the table and one `chase_recipients` column on the Ball
+settings). The table is unique on kind, day and address, so there is one claim per address per day
+for reminders and one per day for the list (`claimChaseSend` in `src/db/ball-chase.ts`). A second
+run the same morning, or the staff pressing anything, sends nothing more. A failed send gives its
+claim back so a rerun can try again; a send that went keeps its claim even if recording it then
+fails. The table holds booking ids only, never anyone's details.
+
+**The retired button.** The old TASK-338 chase and last call no longer exist, so the admin's "Email
+everyone outstanding" button is gone. `POST /api/admin/ball/chase` stays and now sends only the week
+to go email. The menu is here email and its button are unchanged.
+
+**The admin card** is the first card in Festive Ball → Emails, "Chasing guests and meals"
+(`src/routes/admin-ball-chase.ts`, `GET`/`PUT /api/admin/ball-chase`, `POST /api/admin/ball-chase/test`;
+view and edit follow the Ball section). It shows the next reminder day and how many bookers it would
+reach (`nextChaseRound` in `src/ball/chase.ts`: today counts only until the 8am run), edits the
+volunteers' list (every change audited), and lists what went lately (`ball_chase_sends`, sent rows
+only). *Send me a test reminder* and *Send me a test chase list* send the invented examples from
+`src/ball/chase-email.ts` to the signed-in person only. They use example data, never a real booking,
+because admin logins are not all nbcc.scot addresses and a test must never carry real names or phone
+numbers; they never write to `ball_chase_sends`, so a test cannot stop a real send. Both emails are
+also in the All emails section.
+
+**Release order.** The old chase window was already open for a 4 November deadline, so this release
+switches the old stages off first. Set the guest details deadline in Set up only once this is live,
+and by the evening before the first round (Tuesday 27 October for Wednesday 28th): nothing is sent
+until it is set.
 
 ### The ticket report (TASK-464)
 
@@ -3321,7 +3394,7 @@ of these as a version of "A week to go". A number of days that cannot be said tr
 or not a number) makes the builder throw, so nothing false can be sent.
 
 **The practical email goes once, whatever the deadline** (`stagesFor` in `src/ball/run-up.ts`). Until
-TASK-575 a booking could be due the last call for guest details and the practical email on the same
+TASK-576 a booking could be due the last call for guest details and the practical email on the same
 morning, and the pass sent both, each with its own stamp. With the last call and the nudge retired
 there is one email left to plan. `test/unit/ball-run-up-both-stages.test.ts` simulates every morning
 from 20 October to 8 November for several closing dates and kinds of booking: the practical email
@@ -3615,7 +3688,7 @@ downs, and for nothing it does to change. TASK-422's three bands and jump bar be
 | **Overview** | The numbers at a glance: seats sold against the seats that were on sale, with a bar, then money taken, donations, Gift Aid eligible and newsletter sign ups. Then **Needs you**: bank transfers waiting (and how many are past their pay by date), bookings with no phone number, guests still to be named, dinners still to choose. Each line's button opens the section that deals with it. |
 | **Bookings** | The three downloads as cards that say what each list is for, the no phone number filter, and the bookings list. |
 | **Awaiting transfer** | The search, Add a bank transfer booking, and the list. |
-| **Guests and menu** | The two chase lists together: guest details still to come, then who has chosen. The reminders and the volunteers' list go out by themselves (TASK-575), so there is no button here. |
+| **Guests and menu** | The two chase lists together: guest details still to come, then who has chosen. The reminders and the volunteers' list go out by themselves (TASK-576), so there is no button here. |
 | **Emails** | The week before reminder and the menu is here email, on their own, after the sections that tell you whether to press them. |
 | **Set up** | Seven drop downs (`details.ball-setting`), each saying on its closed line what it is set to now (`data-ball-now`, filled by `ballSetupNow`), so most visits need none opened. |
 
@@ -11817,7 +11890,7 @@ for event tickets: the ticket types, each event's limit and sales switch, the or
 lines (with buyers' names, emails and phones), the refunds and the refund requests, two for
 welcome packs: each page's pack and the things ticked in it, one, in TASK-563, for the Fill a
 Red Bag list's versions, and one, in TASK-562, for the addresses staff have removed from the
-Email audit's red band, and one, in TASK-575, for which Festive Ball reminders and chase lists
+Email audit's red band, and one, in TASK-576, for which Festive Ball reminders and chase lists
 have gone, per address and day),
 but `STORIES_DATABASE_URL` and `CONTACT_DATABASE_URL` are separate databases
 (deliberately, so the public story and contact forms can never reach donor

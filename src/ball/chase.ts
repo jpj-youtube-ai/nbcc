@@ -1,4 +1,4 @@
-// TASK-575: who to chase for guest names and meal choices in the last week before the deadline, and
+// TASK-576: who to chase for guest names and meal choices in the last week before the deadline, and
 // what the volunteers' list says.
 //
 // Pure - no pool, no network, no clock of its own (the time is always passed in) - so the whole

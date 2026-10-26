@@ -91,11 +91,11 @@ describe("nothing was lost in the overhaul", () => {
   const now = new Map(idsNow(view).map(([id, tag, type]) => [id, { tag, type }]));
 
   it("captured the whole screen as it stood", () => {
-    // 103 at the overhaul, less the two ids of "Email everyone outstanding" (TASK-575, below).
+    // 103 at the overhaul, less the two ids of "Email everyone outstanding" (TASK-576, below).
     expect(BEFORE.length + RETIRED.length).toBe(101);
   });
 
-  // TASK-575: the every-other-day reminders and the volunteers' list replaced the old chase, so the
+  // TASK-576: the every-other-day reminders and the volunteers' list replaced the old chase, so the
   // button that sent it by hand, its status line and its note are gone. The route behind it stays
   // (it now sends only the week-to-go email), but nothing on the screen presses it.
   it("no longer has the Email everyone outstanding button, its status or its note", () => {
@@ -239,7 +239,7 @@ describe("six sections, one on screen at a time", () => {
   it("keeps the two sends on their own, after the sections that tell you whether to send", () => {
     const body = part(view, "emails");
     const buttons = [...body.matchAll(/<button\b[^>]*\sid="([^"]+)"/g)].map((m) => m[1]);
-    // TASK-575: the automatic chasing card comes first, with its own list editor and test buttons. It
+    // TASK-576: the automatic chasing card comes first, with its own list editor and test buttons. It
     // sends nothing to anyone but the person pressing a test, and the two real sends stay last.
     expect(buttons).toEqual([
       "ballChaseAdd",

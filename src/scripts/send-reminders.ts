@@ -51,7 +51,7 @@ if (require.main === module) {
       try {
         const { runBallRunUp } = await import("../ball/run-up-runner");
         const ball = await runBallRunUp();
-        // The guest chase and last call are retired (TASK-575), so practical is the only stage left.
+        // The guest chase and last call are retired (TASK-576), so practical is the only stage left.
         console.error(
           `ball run-up: considered=${ball.considered} sent=${ball.sent} failed=${ball.failed} ` +
             `practical=${ball.byStage.practical}`,
@@ -59,7 +59,7 @@ if (require.main === module) {
       } catch (err) {
         console.error("ball run-up failed:", err instanceof Error ? err.message : err);
       }
-      // TASK-575: the Festive Ball guest chase. In the last week before the guest details close, every
+      // TASK-576: the Festive Ball guest chase. In the last week before the guest details close, every
       // other day, a reminder to each booker still missing guest names or meal choices, and the list of
       // everyone to phone to the volunteers. Runs AFTER the run-up pass on purpose: the week-to-go email
       // stamps its booking there, and a booking sent that email this morning is left out of today's

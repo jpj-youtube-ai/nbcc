@@ -118,7 +118,7 @@
 **Files:**
 - Create: `src/ball/chase-runner.ts`
 - Modify: `src/scripts/send-reminders.ts` (a new try/catch block right after the run-up pass, same shape as its neighbours, logging a one-line summary)
-- Modify: `src/ball/run-up.ts` (`guestStageFor` returns null: the chase and final-call stages are retired, comment saying TASK-575 replaced them; keep the types so old stamps still read)
+- Modify: `src/ball/run-up.ts` (`guestStageFor` returns null: the chase and final-call stages are retired, comment saying TASK-576 replaced them; keep the types so old stamps still read)
 - Modify: `test/unit/` tests that pin the retired stages (find with `grep -rln "final-call\|stageFor\|guestStageFor" test/unit`), updating them to assert the stages never fire
 - Modify: `features/ball-guests.feature` or create `features/ball-chase.feature` + steps in `features/steps/ball.steps.js`
 - Modify: `admin.html` + `assets/js/admin/app.js`: remove the "Email everyone outstanding" button and its note from the Guests and menu section (the route stays, now sending only the week-to-go email); update `test/unit/admin-ball-*.test.ts` that reference `#ballChase`

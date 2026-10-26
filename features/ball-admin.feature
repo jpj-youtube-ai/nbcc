@@ -21,7 +21,7 @@ Feature: Festive Ball admin controls (TASK-313)
     And the guest progress should list 0 bookings to chase
 
   # TASK-338: this route runs the same run-up pass the daily task runs, so calling it twice is safe.
-  # Since TASK-575 that pass sends only the week-to-go email, and the admin has no button for it
+  # Since TASK-576 that pass sends only the week-to-go email, and the admin has no button for it
   # (the route stays). With the room reset to no bookings and no lock date agreed, it must send
   # NOTHING.
   Scenario: the chase sends nothing while no lock date has been agreed

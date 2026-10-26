@@ -1,9 +1,9 @@
 import { describe, it, expect } from "vitest";
 import { planRunUp, runRunUpPass, stagesFor, type RunUpBooking, type RunUpStage, type RunUpWindow } from "../../src/ball/run-up";
 
-// Review of the wording pass (2026-10-04), then TASK-575. The reminder goes a week before the Ball, so
+// Review of the wording pass (2026-10-04), then TASK-576. The reminder goes a week before the Ball, so
 // it is due on many mornings, and the pass used to send the guest list nudge and the last call as well:
-// a booking got everything due that morning, each with its own stamp. TASK-575 retired the nudge and
+// a booking got everything due that morning, each with its own stamp. TASK-576 retired the nudge and
 // the last call (the every-other-day reminders and the volunteers' list in src/ball/chase.ts replaced
 // them), so the only stage left is the practical reminder. These tests keep what still matters: it goes
 // exactly once, a failed send is not stamped so a later morning tries again, and the deadline setting

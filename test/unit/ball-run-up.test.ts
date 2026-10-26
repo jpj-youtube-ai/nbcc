@@ -43,7 +43,7 @@ describe("who still owes us guest details", () => {
   });
 });
 
-// TASK-575: the fortnight-out chase and the final call are retired. The every-other-day reminders and
+// TASK-576: the fortnight-out chase and the final call are retired. The every-other-day reminders and
 // the volunteers' list (src/ball/chase.ts, run by src/ball/chase-runner.ts) replaced them, so this
 // pass never sends either, on any morning, whatever is outstanding or has been stamped. The stamps
 // stay on the booking so old rows still read.

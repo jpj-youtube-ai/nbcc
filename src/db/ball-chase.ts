@@ -3,7 +3,7 @@ import { insertAudit } from "./donations";
 import { chaseRecipientsSchema, type ChaseBooking } from "../ball/chase";
 import type { Recipient } from "../ball/sales-report";
 
-// TASK-575: the Festive Ball chase's reads and writes. What to send, and to whom, is decided by the
+// TASK-576: the Festive Ball chase's reads and writes. What to send, and to whom, is decided by the
 // pure src/ball/chase.ts; this file only reads the bookings, keeps the volunteers' list, and records
 // which chase emails have gone so a second run of the daily job sends nothing twice.
 

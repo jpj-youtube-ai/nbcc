@@ -475,7 +475,7 @@ export async function sendBallReminder(message: BallConfirmationMessage): Promis
 }
 
 // TASK-338: the run-up emails (the guest read-back, the week-to-go practical email and, since
-// TASK-575, the every-other-day guest chase reminder). Its own function for the same reason as
+// TASK-576, the every-other-day guest chase reminder). Its own function for the same reason as
 // sendBallReminder above: so they can be told apart in logs and in a bounce report, and so a change
 // to one cannot silently alter another.
 export async function sendBallRunUp(message: BallConfirmationMessage): Promise<void> {
@@ -522,7 +522,7 @@ export async function sendBallReport(message: BallReportMessage): Promise<void> 
   });
 }
 
-// TASK-575: the chase list for the volunteers who phone people about guest names and meals. Same
+// TASK-576: the chase list for the volunteers who phone people about guest names and meals. Same
 // shape as the ticket report above, to the volunteers' @nbcc.scot addresses only.
 export async function sendBallChaseList(message: BallReportMessage): Promise<void> {
   const [first, ...rest] = message.to;

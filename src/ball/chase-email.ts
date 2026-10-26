@@ -4,7 +4,7 @@ import type { ChaseList, ChaseRow, ReminderGroup } from "./chase";
 import { emailDate, raiseOrdinals } from "../email/dates";
 import { button, subheading, CRIMSON, MAROON, SLATE, SLATE_SOFT, TAN_SOFT, CREAM, HEAD, BODY_FONT } from "../email/brand";
 
-// TASK-575: the two emails of the last-week chase for guest names and meal choices.
+// TASK-576: the two emails of the last-week chase for guest names and meal choices.
 //
 //   reminder    to the person who booked: what is still missing, by when, and a button to fix it
 //   chase list  to the volunteers who phone people: everyone still to chase, with a number and a link

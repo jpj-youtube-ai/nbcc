@@ -1,5 +1,5 @@
 @ball @db @ball-chase
-Feature: Festive Ball chase reminders (TASK-575)
+Feature: Festive Ball chase reminders (TASK-576)
   In the last week before the guest details close, every other day, the people who booked and are
   still missing guest names or meal choices get one reminder, and the volunteers get a list of
   everyone to phone. It rides the 8am daily task, so each scenario runs the pass with a chosen

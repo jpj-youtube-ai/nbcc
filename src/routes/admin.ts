@@ -4053,7 +4053,7 @@ adminRouter.get("/api/admin/ball/guest-progress", getAdminBallGuestProgress);
 
 // POST /api/admin/ball/chase — run the daily run-up pass now.
 //
-// Since TASK-575 that pass sends only the week-to-go email: the guest list nudge and last call are
+// Since TASK-576 that pass sends only the week-to-go email: the guest list nudge and last call are
 // retired, and the every-other-day guest chase is a separate pass (src/ball/chase-runner.ts) that
 // this route does not run. The admin has no button for it any more (the "Email everyone
 // outstanding" button went with the old chase); the route stays.

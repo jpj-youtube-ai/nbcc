@@ -6,7 +6,7 @@ import { SLATE, SLATE_SOFT, TAN_SOFT, HEAD, BODY_FONT, CRIMSON } from "../email/
 // ./confirmation-email.ts, so every one is unit-tested without a database or a provider.
 //
 // One of them is left: the summary, sent when you have just saved your guest list, saying what we
-// now hold. The chase and the last call that used to sit beside it are retired (TASK-575): their
+// now hold. The chase and the last call that used to sit beside it are retired (TASK-576): their
 // replacements, the every-other-day reminder and the volunteers' list, are in ./chase-email.ts.
 //
 // It carries the buyer's own guest link, because "find the email from October" is the step where

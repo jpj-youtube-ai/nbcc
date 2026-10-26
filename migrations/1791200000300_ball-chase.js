@@ -1,6 +1,6 @@
 /* eslint-disable camelcase */
 
-// TASK-575: the Festive Ball chase. Every other day in the last week before the guest details
+// TASK-576: the Festive Ball chase. Every other day in the last week before the guest details
 // deadline, bookers still missing guest names or meal choices get a reminder, and the volunteers get
 // a list of who to phone.
 //

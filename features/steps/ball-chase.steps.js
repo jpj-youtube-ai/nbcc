@@ -3,7 +3,7 @@ const assert = require("node:assert/strict");
 const path = require("node:path");
 const { Pool } = require("pg");
 
-// Steps for ball-chase.feature (TASK-575). The seeding, the menu, the ball reset and saving guests are
+// Steps for ball-chase.feature (TASK-576). The seeding, the menu, the ball reset and saving guests are
 // ball.steps.js's; this file adds what the chase needs on top: the deadline and the volunteers' list
 // written straight into ball_settings, the two passes run as the 8am task runs them (the compiled app,
 // with a chosen time, as the team pass steps do), and the email log read back. Every address is

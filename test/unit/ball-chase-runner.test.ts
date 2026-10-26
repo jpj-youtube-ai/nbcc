@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import type { ChaseBooking } from "../../src/ball/chase";
 
-// TASK-575: the wiring of the Festive Ball guest chase. The 8am job claims each email before it
+// TASK-576: the wiring of the Festive Ball guest chase. The 8am job claims each email before it
 // sends it, so a second run the same morning sends nothing; a failed send gives its claim back; and
 // a send that went is never un-claimed. The database and the email client are mocked at their
 // boundaries; the rules of who is chased are ball-chase.test.ts's. Every name and address is invented.

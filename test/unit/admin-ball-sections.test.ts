@@ -109,7 +109,7 @@ const when = (iso: string) =>
   new Date(iso).toLocaleString("en-GB", { weekday: "short", day: "numeric", month: "short", hour: "numeric", minute: "2-digit" });
 const needs = () => Array.from(el("ballNeeds").querySelectorAll("li")) as HTMLElement[];
 // The Ball screen's own data: /api/admin/ball and what sits under it. The chasing card in Emails has its
-// own route (/api/admin/ball-chase, TASK-575), pinned in admin-ball-chase-card.test.ts.
+// own route (/api/admin/ball-chase, TASK-576), pinned in admin-ball-chase-card.test.ts.
 const ballGets = () =>
   calls
     .filter((c) => c.method === "GET" && (c.path === "/api/admin/ball" || c.path.startsWith("/api/admin/ball/")))

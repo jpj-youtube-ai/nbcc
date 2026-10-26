@@ -4,6 +4,7 @@ import {
   isIncomplete,
   LIST_DAYS,
   missing,
+  nextChaseRound,
   planList,
   planReminders,
   REMINDER_DAYS,
@@ -107,6 +108,42 @@ describe("chaseDay", () => {
       reminder: true,
       list: true,
     });
+  });
+});
+
+describe("nextChaseRound", () => {
+  const next = (iso: string, lock: Date | null = LOCK) => nextChaseRound(new Date(iso), lock, BALL);
+
+  it("is the next day a reminder goes", () => {
+    expect(next("2026-10-26T10:00:00Z")).toEqual({ day: "2026-10-28", daysToDeadline: 7 });
+    expect(next("2026-10-29T10:00:00Z")).toEqual({ day: "2026-10-30", daysToDeadline: 5 });
+    expect(next("2026-11-02T10:00:00Z")).toEqual({ day: "2026-11-03", daysToDeadline: 1 });
+  });
+
+  it("counts today only until the morning's run has gone", () => {
+    expect(next("2026-10-28T06:59:00Z")).toEqual({ day: "2026-10-28", daysToDeadline: 7 });
+    // 08:30 London on the 28th (GMT, the clocks went back on the 25th): this morning's has gone.
+    expect(next("2026-10-28T08:30:00Z")).toEqual({ day: "2026-10-30", daysToDeadline: 5 });
+  });
+
+  it("goes by the London day while summer time is on", () => {
+    // 23:30 UTC on the 6th is 00:30 on the 7th in London (BST), so a reminder 7 days out is still to come.
+    const lock = new Date("2026-10-14T09:00:00Z");
+    expect(nextChaseRound(new Date("2026-10-06T23:30:00Z"), lock, "2026-10-17")).toEqual({
+      day: "2026-10-07",
+      daysToDeadline: 7,
+    });
+  });
+
+  it("is null with no deadline, and once the last reminder has gone", () => {
+    expect(next("2026-10-26T10:00:00Z", null)).toBeNull();
+    expect(next("2026-11-03T10:00:00Z")).toBeNull();
+    expect(next("2026-11-04T07:00:00Z")).toBeNull();
+  });
+
+  it("is null once the Ball is here, whatever the deadline", () => {
+    const late = new Date("2026-11-08T10:00:00Z");
+    expect(nextChaseRound(new Date("2026-11-07T07:00:00Z"), late, BALL)).toBeNull();
   });
 });
 

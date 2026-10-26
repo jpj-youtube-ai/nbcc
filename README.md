@@ -3202,6 +3202,15 @@ pass now sends only the read-back and the practical email below. `guestStageFor`
 `stagesFor` plans the practical email or nothing; the `chase` and `final-call` stage names and
 their two stamp columns stay, so old rows still read.
 
+**The admin card** is the first card in Festive Ball → Emails, "Chasing guests and meals"
+(`src/routes/admin-ball-chase.ts`, `GET`/`PUT /api/admin/ball-chase`, `POST /api/admin/ball-chase/test`;
+view and edit follow the Ball section). It shows the next reminder day and how many bookers it would
+reach (`nextChaseRound` in `src/ball/chase.ts`: today counts only until the 8am run), edits the
+volunteers' list (nbcc.scot addresses only, at most ten, every change audited), and lists what went
+lately (`ball_chase_sends`, sent rows only). *Send me a test reminder* and *Send me a test chase list*
+send the invented examples from `src/ball/chase-email.ts` to the signed-in person only; they never read
+a real booking and never write to `ball_chase_sends`, so a test cannot stop a real send.
+
 Then, per paid booking:
 
 | When | What | To whom |

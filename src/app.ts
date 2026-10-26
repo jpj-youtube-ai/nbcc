@@ -30,6 +30,7 @@ import { eventTicketsRouter } from "./routes/event-tickets";
 import { adminEventTicketsRouter } from "./routes/admin-event-tickets";
 import { pledgesRouter } from "./routes/pledges";
 import { adminBallReportRouter } from "./routes/admin-ball-report";
+import { adminBallChaseRouter } from "./routes/admin-ball-chase";
 import { adminAnalyticsRouter } from "./routes/admin-analytics";
 import { adminStoriesImportRouter, STORIES_IMPORT_BODY_LIMIT, STORIES_IMPORT_PATH } from "./routes/admin-stories-import";
 import { adminWhatsNewRouter } from "./routes/admin-whats-new";
@@ -170,6 +171,7 @@ export function createApp() {
   app.use(adminEventTicketsRouter);
   // The Festive Ball ticket report, set up from the Events page (TASK-464).
   app.use(adminBallReportRouter);
+  app.use(adminBallChaseRouter);
   // Admin > Analytics (TASK-482): the numbers and the collecting switch.
   app.use(adminAnalyticsRouter);
   // The admin side of paying for the Ball by bank transfer (TASK-484).

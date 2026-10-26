@@ -16,8 +16,9 @@ const KINDS = ["ballRunUp", "ballChaseList"];
 async function reset() {
   await pool.query("UPDATE ball_settings SET guest_details_lock_at = NULL, chase_recipients = '[]'::jsonb, menu_options = NULL, menu_note = NULL WHERE id = 1");
   await pool.query("DELETE FROM ball_chase_sends");
-  await pool.query("DELETE FROM email_log WHERE recipient LIKE '%.chase.bdd@example.com' OR recipient LIKE '%.chase.bdd@nbcc.scot'");
-  await pool.query("DELETE FROM ball_bookings WHERE guest_token LIKE 'chase-%'");
+  await pool.query(
+    "DELETE FROM email_log WHERE recipient LIKE '%.chase.bdd@example.com' OR recipient LIKE '%.chase.bdd@nbcc.scot' OR recipient LIKE '%.chase.admin.bdd@example.com'",
+  );  await pool.query("DELETE FROM ball_bookings WHERE guest_token LIKE 'chase-%'");
 }
 
 Before({ tags: "@ball-chase" }, reset);
@@ -83,6 +84,115 @@ async function countFor(kind, email) {
 
 Then("the email log should hold {int} {string} email(s) to {string}", async function (n, kind, email) {
   assert.equal(await countFor(kind, email), n, `${kind} emails to ${email}`);
+});
+
+// --- the admin card (Festive Ball > Emails) ---------------------------------------------------
+//
+// The staff are seeded by the shared "an admin user {string} with role {string} and password {string}"
+// step; their addresses end ".chase.admin.bdd@example.com", which the @admin hooks and reset() remove.
+
+const BASE_URL = process.env.BASE_URL || "http://localhost:3000";
+const PASSWORD = "chase-pw-123";
+
+async function login(email) {
+  const res = await fetch(`${BASE_URL}/api/admin/login`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email, password: PASSWORD }),
+  });
+  const body = await res.json().catch(() => ({}));
+  if (body.token) return body.token;
+  if (body.step === "2fa" && body.devCode) {
+    const res2 = await fetch(`${BASE_URL}/api/admin/login/2fa`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, code: body.devCode }),
+    });
+    return (await res2.json().catch(() => ({}))).token;
+  }
+  throw new Error(`could not sign in as ${email}: ${JSON.stringify(body)}`);
+}
+
+async function call(world, token, method, path, body) {
+  const res = await fetch(`${BASE_URL}${path}`, {
+    method,
+    headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+    body: body === undefined ? undefined : JSON.stringify(body),
+  });
+  world.chaseCardStatus = res.status;
+  world.chaseCardBody = await res.json().catch(() => ({}));
+}
+
+// "Amy Example <amy@nbcc.scot>, Zed Example <zed@nbcc.scot>" as the list the admin form sends.
+function people(list) {
+  if (!list.trim()) return [];
+  return list.split(/,\s*(?=[^,]*<)/).map((entry) => {
+    const m = entry.match(/^\s*(.*?)\s*<(.*)>\s*$/);
+    return { name: m[1], email: m[2] };
+  });
+}
+
+When("the chase card is read without a session", async function () {
+  await call(this, null, "GET", "/api/admin/ball-chase");
+});
+
+When("{string} reads the chase card", async function (email) {
+  await call(this, await login(email), "GET", "/api/admin/ball-chase");
+});
+
+When("{string} saves the chase list for {string}", async function (email, list) {
+  await call(this, await login(email), "PUT", "/api/admin/ball-chase", { recipients: people(list) });
+});
+
+When("{string} sends a test {string} from the chase card", async function (email, which) {
+  await call(this, await login(email), "POST", "/api/admin/ball-chase/test", { which });
+});
+
+Then("the chase card status should be {int}", function (status) {
+  assert.equal(this.chaseCardStatus, status, JSON.stringify(this.chaseCardBody));
+});
+
+Then("the chase list goes to {string} in that order", function (list) {
+  assert.deepEqual(
+    this.chaseCardBody.recipients.map((r) => r.email),
+    list.split(", "),
+  );
+});
+
+Then("the chase card refusal says {string}", function (message) {
+  assert.equal(this.chaseCardBody.error, message);
+});
+
+Then("the chase card has no deadline and no next round", function () {
+  assert.equal(this.chaseCardBody.deadline, null);
+  assert.equal(this.chaseCardBody.nextRound, null);
+  assert.ok(Array.isArray(this.chaseCardBody.lastSends), "lastSends should be a list");
+});
+
+Then("the volunteers' list is stored as {string}", async function (list) {
+  const r = await pool.query("SELECT chase_recipients FROM ball_settings WHERE id = 1");
+  assert.deepEqual(
+    r.rows[0].chase_recipients.map((p) => p.email),
+    list === "" ? [] : list.split(", "),
+  );
+});
+
+Then("the audit log records the chase list saved by {string}, adding {int} people", async function (email, count) {
+  const r = await pool.query(
+    "SELECT actor, data FROM audit_log WHERE action = 'ball_chase.recipients_saved' ORDER BY id DESC LIMIT 1",
+  );
+  assert.equal(r.rows.length, 1, "no audit row for the chase list");
+  assert.equal(r.rows[0].actor, `admin:${email}`);
+  assert.equal(r.rows[0].data.added.length, count);
+});
+
+Then("the chase test went only to {string}", function (email) {
+  assert.deepEqual(this.chaseCardBody.sentTo, [email]);
+});
+
+Then("no chase send should have been recorded", async function () {
+  const r = await pool.query("SELECT count(*)::int AS n FROM ball_chase_sends");
+  assert.equal(r.rows[0].n, 0, "a test must never be recorded as a send");
 });
 
 Then("no chase email should have been logged", async function () {

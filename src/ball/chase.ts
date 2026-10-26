@@ -8,11 +8,14 @@
 // at a different hour of the day when the clocks change, and "7 days to go" must still mean the
 // seventh calendar day before the deadline.
 
+import { z } from "zod";
 import { choosableCourses, hasChosen, type MenuCourse } from "./menu";
-import { londonDate, recipientsSchema } from "./sales-report";
+import { londonDate, MAX_RECIPIENTS, recipientsSchema } from "./sales-report";
 
 /** The days before the deadline day (0) that bookers get a reminder email. */
 export const REMINDER_DAYS = [7, 5, 3, 1];
+/** The London hour the daily task runs (8am): a round day's reminders have gone by then. */
+export const CHASE_HOUR = 8;
 /** The days the volunteers get their chase list: the reminder days, and the deadline day itself. */
 export const LIST_DAYS = [7, 5, 3, 1, 0];
 
@@ -22,17 +25,22 @@ export const LIST_DAYS = [7, 5, 3, 1, 0];
  * phone numbers. Lives here, not in the database file, so the admin route and the tests can import
  * it without a pool.
  */
-export const chaseRecipientsSchema = recipientsSchema.superRefine((list, ctx) => {
-  list.forEach((r, i) => {
-    if (!r.email.endsWith("@nbcc.scot")) {
-      ctx.addIssue({
-        code: "custom",
-        path: [i, "email"],
-        message: "Only nbcc.scot addresses: this list carries people's phone numbers.",
-      });
-    }
+export const chaseRecipientsSchema = z
+  .array(z.unknown())
+  // The ticket report's wording says "The report ..."; this list is not that report, so it says its own.
+  .max(MAX_RECIPIENTS, `The chase list can go to up to ${MAX_RECIPIENTS} people.`)
+  .pipe(recipientsSchema)
+  .superRefine((list, ctx) => {
+    list.forEach((r, i) => {
+      if (!r.email.endsWith("@nbcc.scot")) {
+        ctx.addIssue({
+          code: "custom",
+          path: [i, "email"],
+          message: "Only nbcc.scot addresses: this list carries people's phone numbers.",
+        });
+      }
+    });
   });
-});
 
 export interface ChaseBooking {
   id: number;
@@ -72,6 +80,30 @@ export function chaseDay(
   const daysToDeadline = Math.round((midday(londonDate(lockAt)) - midday(today)) / (24 * 60 * 60 * 1000));
   if (!LIST_DAYS.includes(daysToDeadline)) return null;
   return { daysToDeadline, reminder: REMINDER_DAYS.includes(daysToDeadline), list: true };
+}
+
+const LONDON_HOUR = new Intl.DateTimeFormat("en-GB", { timeZone: "Europe/London", hour: "numeric", hourCycle: "h23" });
+
+/**
+ * The next day a reminder goes, for the admin card: from today (London) on, the first day `chaseDay`
+ * says has a reminder. Today counts only until the morning's run, at CHASE_HOUR, so a card read after
+ * it does not promise a reminder that has already gone. Null with no deadline, or when no round is left.
+ */
+export function nextChaseRound(
+  now: Date,
+  lockAt: Date | null,
+  ballDay: string,
+): { day: string; daysToDeadline: number } | null {
+  if (lockAt === null) return null;
+  const hour = Number(LONDON_HOUR.formatToParts(now).find((p) => p.type === "hour")?.value ?? 0) % 24;
+  const first = midday(londonDate(now)) + (hour >= CHASE_HOUR ? 24 * 60 * 60 * 1000 : 0);
+  // A round is at most a week and a half apart, and the deadline sets the last: a month is plenty.
+  for (let i = 0; i < 31; i++) {
+    const at = new Date(first + i * 24 * 60 * 60 * 1000);
+    const plan = chaseDay(at, lockAt, ballDay);
+    if (plan?.reminder) return { day: londonDate(at), daysToDeadline: plan.daysToDeadline };
+  }
+  return null;
 }
 
 /**

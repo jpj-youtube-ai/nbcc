@@ -239,7 +239,16 @@ describe("six sections, one on screen at a time", () => {
   it("keeps the two sends on their own, after the sections that tell you whether to send", () => {
     const body = part(view, "emails");
     const buttons = [...body.matchAll(/<button\b[^>]*\sid="([^"]+)"/g)].map((m) => m[1]);
-    expect(buttons).toEqual(["ballSendReminders", "ballSendMenuEmail"]);
+    // TASK-575: the automatic chasing card comes first, with its own list editor and test buttons. It
+    // sends nothing to anyone but the person pressing a test, and the two real sends stay last.
+    expect(buttons).toEqual([
+      "ballChaseAdd",
+      "ballChaseSave",
+      "ballChaseTestReminder",
+      "ballChaseTestList",
+      "ballSendReminders",
+      "ballSendMenuEmail",
+    ]);
     expect(body).not.toMatch(/<form\b/);
     expect(view.indexOf('data-ball-part="guests"')).toBeLessThan(view.indexOf('data-ball-part="emails"'));
   });

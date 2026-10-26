@@ -2173,6 +2173,33 @@ textarea.fx-call-input{min-height:88px;line-height:1.5;resize:vertical;field-siz
 #view-ball .ball-email .admin-subhead{margin-top:0}
 #view-ball .ball-email .ty-controls{margin-top:auto}
 
+/* TASK-575: the chasing card. Its list and add form are the ticket report's (Events, ev-report-list),
+   which that page scopes to itself; everything wraps and the card grows, so nothing scrolls sideways
+   or inside itself, and every button is 44px tall. */
+#view-ball .ball-chase .ty-controls{margin-top:0}
+#view-ball .ball-chase .btn{min-height:44px;justify-content:center}
+#view-ball .ball-chase-next{margin:0 0 4px;font-weight:600;color:var(--maroon);overflow-wrap:anywhere}
+#view-ball .ball-chase-list{list-style:none;margin:12px 0;padding:0}
+#view-ball .ball-chase-list li{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:4px 16px;
+  padding:8px 0;border-top:1px solid var(--line)}
+#view-ball .ball-chase-list li:last-child{border-bottom:1px solid var(--line)}
+/* Remove: the same quiet outline button as Release on a hold, just above. */
+#view-ball .ball-chase-list .btn{padding:6px 14px;font-size:.85rem;background:transparent;color:var(--crimson);
+  border:1.6px solid var(--line);box-shadow:none}
+#view-ball .ball-chase-list .btn::after{content:none}
+#view-ball .ball-chase-who{min-width:0;overflow-wrap:anywhere}
+#view-ball .ball-chase-who span{margin-left:6px;color:var(--slate-soft)}
+#view-ball .ball-chase-empty{color:var(--slate-soft)}
+#view-ball .ball-chase-add{display:flex;flex-wrap:wrap;align-items:flex-end;gap:10px 12px;margin:4px 0 14px}
+#view-ball .ball-chase-f{flex:1 1 200px;min-width:0;display:grid;gap:6px}
+#view-ball .ball-chase-f label{font-weight:600;font-size:.9rem;color:var(--slate)}
+#view-ball .ball-chase-f input{width:100%;min-width:0;min-height:44px;box-sizing:border-box;font-family:var(--font-body);font-size:.97rem;
+  color:var(--slate);background:var(--cream);border:1.6px solid var(--line);border-radius:12px;padding:10px 12px}
+#view-ball .ball-chase-f input:focus{border-color:var(--holly);outline:none}
+#view-ball .ball-chase .ty-status,#view-ball .ball-chase-last{overflow-wrap:anywhere}
+#view-ball .ball-chase-last{margin:6px 0 0;font-size:.85rem;color:var(--slate-soft)}
+#view-ball .ball-chase-last:empty{display:none}
+
 /* Set up: one drop down each, saying on its closed line what it is set to now. */
 #view-ball .ball-setting{border:1px solid var(--line);border-radius:var(--radius);background:var(--card);margin:0 0 12px;
   transition:box-shadow .2s,border-color .2s}

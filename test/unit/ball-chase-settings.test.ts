@@ -35,7 +35,10 @@ describe("chaseRecipientsSchema", () => {
 
   it("refuses more than ten addresses", () => {
     const eleven = Array.from({ length: 11 }, (_, i) => ({ email: `person${i}@nbcc.scot`, name: `Person ${i}` }));
-    expect(chaseRecipientsSchema.safeParse(eleven).success).toBe(false);
+    const r = chaseRecipientsSchema.safeParse(eleven);
+    expect(r.success).toBe(false);
+    // The chase list's own words, not the ticket report's ("The report can go to up to 10 people.").
+    if (!r.success) expect(r.error.issues.map((i) => i.message)).toContain("The chase list can go to up to 10 people.");
     expect(chaseRecipientsSchema.safeParse(eleven.slice(0, 10)).success).toBe(true);
   });
 

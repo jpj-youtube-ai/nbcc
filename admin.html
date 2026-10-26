@@ -1861,8 +1861,30 @@
               </div>
 
               <div class="ball-part" data-ball-part="emails" role="region" aria-label="Emails">
-                <p class="ball-part-intro">Each of these goes to the people who have paid. Nothing sends until you press it, and anyone already sent one is skipped.</p>
+                <p class="ball-part-intro">Each of these goes to the people who have paid. Anyone already sent one is skipped. The chasing below is automatic; the others send only when you press them.</p>
                 <div class="ball-emails">
+                  <!-- TASK-575: the automatic chase for guest names and meal choices. app.js (loadBallChase) fills it in; the
+                       write controls are marked data-chasewrite and hidden from anyone who can only view the Ball. -->
+                  <article class="ball-email ball-chase" id="ballChaseCard" aria-labelledby="ballChaseHead">
+                    <h3 class="admin-subhead" id="ballChaseHead">Chasing guests and meals</h3>
+                    <p class="admin-note">Automatic. At 8am on the 7th, 5th, 3rd and last day before the guest details deadline, everyone who has paid and still has a seat without a name or a guest who hasn't chosen gets a reminder with a countdown. The chase list goes to the people below on those mornings and on the deadline morning.</p>
+                    <p class="ball-chase-next" id="ballChaseNext" aria-live="polite">Checking&hellip;</p>
+                    <ul class="ball-chase-list" id="ballChaseList"></ul>
+                    <div class="ball-chase-add" data-chasewrite>
+                      <div class="ball-chase-f"><label for="ballChaseName">Name</label><input type="text" id="ballChaseName" maxlength="60" autocomplete="off" /></div>
+                      <div class="ball-chase-f"><label for="ballChaseEmail">Email</label><input type="email" id="ballChaseEmail" autocomplete="off" /></div>
+                      <button class="btn btn-ghost" type="button" id="ballChaseAdd">Add</button>
+                    </div>
+                    <p class="ty-controls ball-chase-actions" data-chasewrite>
+                      <button class="btn btn-primary" type="button" id="ballChaseSave">Save the list</button>
+                    </p>
+                    <p class="ty-controls ball-chase-actions" data-chasewrite>
+                      <button class="btn btn-ghost" type="button" id="ballChaseTestReminder">Send me a test reminder</button>
+                      <button class="btn btn-ghost" type="button" id="ballChaseTestList">Send me a test chase list</button>
+                    </p>
+                    <p class="ty-status" id="ballChaseMsg" role="status" aria-live="polite"></p>
+                    <p class="ball-chase-last" id="ballChaseLast"></p>
+                  </article>
                   <article class="ball-email" aria-labelledby="ballReminderHead">
                     <h3 class="admin-subhead" id="ballReminderHead">The reminder a week before</h3>
                     <p class="admin-note">One email to everyone who has paid: the practical details, plus a read-back of the guests and dietary notes they gave us, so a mistake gets caught while there is still time to fix it. Anyone already sent one is skipped, so pressing this twice is safe.</p>

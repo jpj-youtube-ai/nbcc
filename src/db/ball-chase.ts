@@ -48,7 +48,34 @@ export async function listChaseBookings(): Promise<ChaseBooking[]> {
 export async function getChaseRecipients(): Promise<Recipient[]> {
   const s = await pool.query<{ chase_recipients: unknown }>("SELECT chase_recipients FROM ball_settings WHERE id = 1");
   const parsed = chaseRecipientsSchema.safeParse(s.rows[0]?.chase_recipients ?? []);
-  return parsed.success ? parsed.data : [];
+  if (parsed.success) return parsed.data;
+  // The list carries people's phone numbers, so a stored list that no longer passes goes to nobody
+  // rather than to someone it should not. Said out loud (no addresses in the message), so a list
+  // that quietly stopped arriving is found by the logs and not by a volunteer wondering where it is.
+  console.error(
+    `ball chase: the stored volunteers' list failed its checks, so the chase list goes to nobody (${parsed.error.issues.length} problem${parsed.error.issues.length === 1 ? "" : "s"}). Save the list again in Festive Ball, Emails.`,
+  );
+  return [];
+}
+
+export interface ChaseSendSummary {
+  kind: string;
+  sentOn: string;
+  count: number;
+}
+
+/** What has gone lately, newest first: one line per kind and day, with how many emails it was. Sent ones only. */
+export async function listRecentChaseSends(limit = 5): Promise<ChaseSendSummary[]> {
+  const r = await pool.query<{ kind: string; sent_on: string; n: number }>(
+    `SELECT kind, to_char(sent_on, 'YYYY-MM-DD') AS sent_on, count(*)::int AS n
+       FROM ball_chase_sends
+      WHERE status = 'sent'
+      GROUP BY kind, sent_on
+      ORDER BY sent_on DESC, kind ASC
+      LIMIT $1`,
+    [limit],
+  );
+  return r.rows.map((row) => ({ kind: row.kind, sentOn: row.sent_on, count: row.n }));
 }
 
 /** Saves the volunteers' list, with an audit row saying who was added and who was taken off. */

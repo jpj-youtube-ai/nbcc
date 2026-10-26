@@ -144,6 +144,7 @@
   function showLogin() {
     storiesImportReset("");
     brReset();
+    bcReset();
     frKindReset();
     el("appView").hidden = true;
     el("loginView").hidden = false;
@@ -16199,6 +16200,8 @@
         el("ballMenuOutstanding").innerHTML = "";
         ballGlanceSet("menu", false);
       });
+    // TASK-575: the chasing card in Emails. Last, after everything the screen already asked for.
+    loadBallChase();
   }
 
   // Cancelling hands the seats back to the public pool. It does NOT refund: money moves in
@@ -17700,6 +17703,241 @@
     el("evReportTest").addEventListener("click", brTest);
     el("evReportResend").addEventListener("click", brResend);
     window.addEventListener("resize", brFitPreview);
+  }
+  // ---- the Festive Ball chase card (TASK-575) ----
+  // First card in Festive Ball > Emails. The chasing itself is automatic (the 8am daily task); this
+  // shows when the next reminder goes, edits the volunteers' chase list, and sends the signed-in person
+  // a test of each email. The list is edited here and saved together with Save the list, as the ticket
+  // report's is (above), and shares its tidying (brSorted) and its address rule (BR_EMAIL, brJson).
+  // Anyone who can only view the Ball sees the card with none of its write controls, and a card that
+  // could not load hides them too, so nobody saves over a list they never saw.
+  var BC_MAX = 10;
+  var BC_ONLY_NBCC = "Only nbcc.scot addresses: this list carries people's phone numbers.";
+  var bcData = null;
+  var bcDraft = [];
+  var bcDirty = false;
+  var bcWired = false;
+  var BC_DAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+  var BC_MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+
+  // kind is "ok", "error", or nothing for a plain note: the classes the admin's status lines use.
+  function bcSay(msg, kind) {
+    var s = el("ballChaseMsg");
+    if (!s) return;
+    s.textContent = msg || "";
+    s.classList.toggle("is-ok", kind === "ok");
+    s.classList.toggle("is-error", kind === "error");
+  }
+  // "2026-10-28" as "Wednesday 28 October".
+  function bcDayWords(day) {
+    var d = new Date(day + "T12:00:00Z");
+    return BC_DAYS[d.getUTCDay()] + " " + d.getUTCDate() + " " + BC_MONTHS[d.getUTCMonth()];
+  }
+  function bcWriteControls(show) {
+    Array.prototype.forEach.call(doc.querySelectorAll("#ballChaseCard [data-chasewrite]"), function (n) {
+      n.hidden = !show;
+    });
+  }
+  function bcRenderNext() {
+    var next = bcData.nextRound;
+    var text;
+    if (!next) {
+      text = bcData.deadline
+        ? "There are no more reminders before the deadline."
+        : "Set the guest details deadline in Set up to start the reminders.";
+    } else if (!next.reminders) {
+      text = "Next reminder: " + bcDayWords(next.day) + ". Nobody needs one right now.";
+    } else {
+      text = "Next reminder: " + bcDayWords(next.day) + ", to " + next.reminders + (next.reminders === 1 ? " booker." : " bookers.");
+    }
+    el("ballChaseNext").textContent = text;
+  }
+  function bcRenderLast() {
+    var parts = (bcData.lastSends || []).map(function (s) {
+      return s.kind === "list"
+        ? "the chase list on " + bcDayWords(s.sentOn)
+        : s.count + (s.count === 1 ? " reminder" : " reminders") + " on " + bcDayWords(s.sentOn);
+    });
+    el("ballChaseLast").textContent = parts.length ? "Sent lately: " + parts.join("; ") + "." : "";
+  }
+  function bcRenderList() {
+    var canWrite = canEdit("ball");
+    var ul = el("ballChaseList");
+    if (!bcDraft.length) {
+      ul.innerHTML = '<li class="ball-chase-empty">Nobody on the list yet.</li>';
+      return;
+    }
+    ul.innerHTML = bcDraft
+      .map(function (r, i) {
+        return (
+          '<li><span class="ball-chase-who"><b>' + H.escapeHtml(r.name) + "</b> <span>" + H.escapeHtml(r.email) + "</span></span>" +
+          (canWrite
+            ? '<button class="btn btn-danger" type="button" data-chaseremove="' + i + '" aria-label="Remove ' + H.escapeHtml(r.name) + '">Remove</button>'
+            : "") +
+          "</li>"
+        );
+      })
+      .join("");
+  }
+  function bcRender() {
+    bcWriteControls(canEdit("ball"));
+    bcRenderNext();
+    bcRenderList();
+    bcRenderLast();
+  }
+  function bcTake(d) {
+    bcData = d;
+    // Loading the screen again reloads the card: changes nobody has saved yet are kept, not lost.
+    if (!bcDirty) bcDraft = brSorted(d.recipients || []);
+    bcRender();
+  }
+  // Signing out forgets the card, so the next person to sign in never sees someone else's edits.
+  function bcReset() {
+    bcData = null;
+    bcDraft = [];
+    bcDirty = false;
+  }
+  function loadBallChase() {
+    bcWire();
+    var failed = function () {
+      bcData = null;
+      bcWriteControls(false);
+      el("ballChaseNext").textContent = "Could not load the chasing settings. Open Festive Ball again in a moment.";
+      el("ballChaseList").innerHTML = "";
+      el("ballChaseLast").textContent = "";
+    };
+    authFetch("/api/admin/ball-chase")
+      .then(function (res) {
+        return res.ok ? res.json() : null;
+      })
+      .then(function (d) {
+        if (d && Array.isArray(d.recipients)) bcTake(d);
+        else failed();
+      })
+      .catch(function (err) {
+        if (err && err.message === "unauthorized") return;
+        failed();
+      });
+  }
+  function bcMarkDirty() {
+    bcDirty = true;
+    bcSay("Press Save the list to keep these changes.");
+  }
+  function bcAdd() {
+    var nameBox = el("ballChaseName");
+    var emailBox = el("ballChaseEmail");
+    var name = nameBox.value.trim();
+    var email = emailBox.value.trim().toLowerCase();
+    if (!name) {
+      bcSay("Add their name.", "error");
+      nameBox.focus();
+      return;
+    }
+    if (!BR_EMAIL.test(email)) {
+      bcSay("That isn't a whole email address.", "error");
+      emailBox.focus();
+      return;
+    }
+    if (!/@nbcc\.scot$/.test(email)) {
+      bcSay(BC_ONLY_NBCC, "error");
+      emailBox.focus();
+      return;
+    }
+    if (bcDraft.some(function (r) { return r.email === email; })) {
+      bcSay("That address is already on the list.", "error");
+      emailBox.focus();
+      return;
+    }
+    if (bcDraft.length >= BC_MAX) {
+      bcSay("The chase list can go to up to " + BC_MAX + " people. Remove someone to add another.", "error");
+      return;
+    }
+    bcDraft = brSorted(bcDraft.concat([{ name: name, email: email }]));
+    nameBox.value = "";
+    emailBox.value = "";
+    bcRenderList();
+    bcMarkDirty();
+    nameBox.focus();
+  }
+  function bcFailed(err) {
+    if (!err || err.message === "unauthorized") return;
+    // A refused list says which entry: name the person, so the fix is obvious.
+    var who = err.path && typeof err.path[0] === "number" ? bcDraft[err.path[0]] : null;
+    bcSay(who ? who.name + " (" + who.email + "): " + err.message : err.message, "error");
+  }
+  function bcSave() {
+    var b = el("ballChaseSave");
+    b.disabled = true;
+    bcSay("Saving…");
+    authFetch("/api/admin/ball-chase", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ recipients: bcDraft }),
+    })
+      .then(function (res) {
+        return brJson(res, "The list could not be saved. Please try again.");
+      })
+      .then(function (d) {
+        bcDirty = false;
+        bcTake(d);
+        bcSay("Saved.", "ok");
+      })
+      .catch(bcFailed)
+      .then(function () {
+        b.disabled = false;
+      });
+  }
+  // One example email to the signed-in person, from made up bookings: it never reaches a booker or a
+  // volunteer, and never counts as a send.
+  function bcTest(which, button) {
+    button.disabled = true;
+    bcSay("Sending a test to you…");
+    authFetch("/api/admin/ball-chase/test", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ which: which }),
+    })
+      .then(function (res) {
+        return brJson(res, "The test could not be sent. Please try again.");
+      })
+      .then(function (d) {
+        bcSay(
+          "Sent to " + (d.sentTo || []).join(", ") + ". Have a look in your inbox." +
+            (bcDirty ? " Your changes to the list are not saved yet." : ""),
+          "ok",
+        );
+      })
+      .catch(bcFailed)
+      .then(function () {
+        button.disabled = false;
+      });
+  }
+  function bcWire() {
+    if (bcWired) return;
+    bcWired = true;
+    el("ballChaseAdd").addEventListener("click", bcAdd);
+    ["ballChaseName", "ballChaseEmail"].forEach(function (id) {
+      el(id).addEventListener("keydown", function (e) {
+        if (e.key === "Enter") {
+          e.preventDefault();
+          bcAdd();
+        }
+      });
+    });
+    el("ballChaseList").addEventListener("click", function (e) {
+      var btn = e.target.closest ? e.target.closest("[data-chaseremove]") : null;
+      if (!btn) return;
+      bcDraft.splice(Number(btn.getAttribute("data-chaseremove")), 1);
+      bcRenderList();
+      bcMarkDirty();
+    });
+    el("ballChaseSave").addEventListener("click", bcSave);
+    el("ballChaseTestReminder").addEventListener("click", function () {
+      bcTest("reminder", this);
+    });
+    el("ballChaseTestList").addEventListener("click", function () {
+      bcTest("list", this);
+    });
   }
   // ---- Analytics (TASK-482) ----
   // Admin > Analytics: the collecting switch, then how many people visited, where they came from,

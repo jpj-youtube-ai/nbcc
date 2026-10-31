@@ -258,9 +258,11 @@ describe("?at=after-ball", () => {
 });
 
 describe("the footer's Fill a Red Bag", () => {
-  const PAGES = ["/", "/about-us", "/whats-on", "/get-involved", "/get-involved/volunteer", "/supporters", "/fundraise", "/sitemap", "/fill"];
+  const PAGES = ["/", "/about-us", "/whats-on", "/get-involved", "/get-involved/volunteer", "/supporters", "/sitemap", "/fill"];
+  // Where a family may be, and the page cannot tell as it is drawn: see fundraiser-page-impact-route.test.ts.
+  const QUIET_PAGES = ["/fundraise", "/fundraise/manage"];
 
-  it.each(PAGES)("is not on %s before the moment", async (path) => {
+  it.each([...PAGES, ...QUIET_PAGES])("is not on %s before the moment", async (path) => {
     expect(footer(await body(path))).not.toContain('href="/fill"');
   });
 
@@ -269,6 +271,13 @@ describe("the footer's Fill a Red Bag", () => {
     const html = await body(path);
     expect(waysToGive(html)).toContain(FILL_FOOTER_ITEM);
     expect(count(footer(html), 'href="/fill"')).toBe(1);
+  });
+
+  it.each(QUIET_PAGES)("stays off %s after it", async (path) => {
+    state.now = AFTER;
+    const html = await body(path);
+    expect(footer(html)).toContain("Ways to give");
+    expect(footer(html)).not.toContain('href="/fill"');
   });
 
   it("comes straight after Donate money", async () => {
@@ -304,6 +313,12 @@ describe("the footer's Fill a Red Bag", () => {
   it("is safe to add twice", () => {
     const html = read("about.html");
     expect(addFillFooterLink(addFillFooterLink(html))).toBe(addFillFooterLink(html));
+  });
+
+  it("is left off a page that says it is quiet", () => {
+    const html = read("about.html");
+    expect(addFillFooterLink(html, { quiet: true })).toBe(html);
+    expect(addFillFooterLink(html, { quiet: false })).toContain(FILL_FOOTER_ITEM);
   });
 
   it("only touches the footer's list", () => {

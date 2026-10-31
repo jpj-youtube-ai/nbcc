@@ -553,12 +553,18 @@ it: `createSiteRouter(root, { now })` holds the only reading of the clock for it
 |---|---|
 | The Fill a Red Bag stage on the home page, between the hero and the four tags | the home route, as the page goes out (`addFillStageToHome`): `index.html` does not change |
 | The same stage on Get involved, after What's on | `fillStage`, at the page's own marker |
-| "Fill a Red Bag" under "Ways to give" in the footer, on every page the site router draws (never a Ball page) | `addFillFooterLink`, `src/red-bag/fill-links.ts`, like the fundraising link |
+| "Fill a Red Bag" under "Ways to give" in the footer, on every page the site router draws (never a Ball page, and never a quiet page: see below) | `addFillFooterLink`, `src/red-bag/fill-links.ts`, like the fundraising link |
 | "You can still fill a Red Bag online, or make a donation." and a button, on Drop-off points | `addFillToDropOff`, the same file |
 | The night on `/fill`: the sky, the snow, the lights, the bag in the snow and the sum | `renderNight`, `src/red-bag/render.ts` |
 
 All of these stay down while Fill a Red Bag is switched off (`src/red-bag/switch.ts`), because `/fill` is
 then a 404.
+
+The charity is very careful about pages in memory of someone, so the footer's link stays off them, either
+side of the moment: a fundraiser's or an event's page that `isQuietFundraiser` recognises, with the thank you
+that is the same page, and a team's join page likewise. It also stays off `/fundraise` and `/fundraise/manage`,
+which are one address for everyone: the in memory path is chosen in the browser, and whose area it is is only
+known there, so as they are drawn a family may be on either (`QUIET_PAGE`, `src/red-bag/fill-links.ts`).
 
 **The stage** is `src/red-bag/stage.ts` (the band), `assets/js/red-bag-stage.js` and
 `assets/css/red-bag-stage.css`. The last two are new files that only a page drawing the stage loads, so no
@@ -589,7 +595,9 @@ cooldown holds across every full bag rather than for each one, so a big bag does
 over and over. `history.replaceState` takes `bag` out of the address at once and keeps the rest (utm tags,
 `preview`, `at`), so a refresh adds nothing. The moment the visitor reaches for a control, or presses
 Donate on the page or in the bottom bar, the rest goes in first, so a tap lands on top of it, a number is
-never rewritten under a finger and nobody pays for half a bag. It touches nothing else:
+never rewritten under a finger and nobody pays for half a bag. A box counts as reached for when it takes
+focus, a button only when it is clicked: a mouse press focuses a button before the release, and finishing
+there moved the panel, so the release landed elsewhere and the press was lost. It touches nothing else:
 `test/unit/red-bag-carry.test.ts` shows a carried bag and a tapped bag post the same bytes to
 `/api/checkout-session`. A plain visit to `/fill?preview=draft&bag=...` in a tab signed in to the admin
 leaves the bag in the address for the draft that is about to replace the page, so the draft's rows decide.
@@ -13355,8 +13363,8 @@ public pages. Of half 2, staff editing the list in the admin is built (see
 a Red Bag receipt email is not. What a report figure will need is already being kept: each donation records that it
 came from here (**Recording where a gift came from**, below).
 
-**It is public, search engines may list it, and it is linked from nowhere** (Jaimie, 4 October
-2026: "make it public but don't link anywhere to it right now", then "once it's pushed and live I
+**It is public, search engines may list it, and it is linked from nowhere until the Ball's moment**
+(Jaimie, 4 October 2026: "make it public but don't link anywhere to it right now", then "once it's pushed and live I
 don't mind if Google crawls it"). The switch is one constant, `RED_BAG_LIVE` in
 `src/red-bag/switch.ts` (no config value, no database row, no infrastructure), and it is **on**:
 
@@ -13381,9 +13389,10 @@ don't mind if Google crawls it"). The switch is one constant, `RED_BAG_LIVE` in
   `/fill`, `/fill-a-red-bag` and `/fill-a-bag` are in `RESERVED_PREFIXES`, so a spare address
   cannot take them or anything under `/fill`.
 - `POST /api/checkout-session` takes a Red Bag donation from anyone.
-- Nothing on the site links to it: not `/donate`, not the menu, not the footer, not any other page.
-  Tests hold all of this in place (`test/unit/red-bag-page.test.ts`, "listed for search engines,
-  but linked from nowhere").
+- Until the Ball's moment nothing on the site links to it: not `/donate`, not the menu, not the
+  footer, not any other page. The page files never do; from the moment the links go in as a page
+  goes out (`src/red-bag/fill-links.ts`). Tests hold all of this in place
+  (`test/unit/red-bag-page.test.ts`, "listed for search engines, but linked from nowhere").
 
 **What is left, when Jaimie says:** add the link from `/donate` and the menu. Nothing else.
 

@@ -7,7 +7,7 @@ import { addShortPageRoutes } from "./get-involved-pages";
 import { addTeamPageRoutes } from "./team-pages";
 import { addPledgePageRoutes } from "./pledges";
 import { addRedBagPageRoutes } from "./red-bag";
-import { addFillFooterLink } from "../red-bag/fill-links";
+import { addFillFooterLink, type FillLinkPage } from "../red-bag/fill-links";
 import { addFillStageToHome, loadFillStage } from "../red-bag/stage";
 import { markAfterBallCheck, showAfterBall } from "../site/after-ball";
 import {
@@ -187,14 +187,14 @@ async function addEventsItems(html: string): Promise<string> {
 // the contact page (TASK-494). Each is idempotent, so a page that already carries one is left as it is.
 // After the Ball's moment (`after`, src/site/after-ball.ts) the Festive Ball's item comes down, and
 // the footer gains Fill a Red Bag: the gate is still asked exactly as it was, and the answer is
-// simply not acted on.
-async function decorateNav(html: string, cookieHeader: string | undefined, after: boolean): Promise<string> {
+// simply not acted on. `page`: a quiet page never gains Fill a Red Bag (src/red-bag/fill-links.ts).
+async function decorateNav(html: string, cookieHeader: string | undefined, after: boolean, page?: FillLinkPage): Promise<string> {
   const [ball, events, fundraising] = await Promise.all([ballIsPublished(cookieHeader), eventsPageIsOn(), fundraisingIsOn()]);
   let out = html;
   if (ball && !after) out = (await import("../ball/nav-link")).addBallNavLink(out);
   if (events) out = await addEventsItems(out);
   if (fundraising) out = (await import("../fundraising/footer-link")).addFundraiseFooterLink(out);
-  if (after) out = addFillFooterLink(out);
+  if (after) out = addFillFooterLink(out, page);
   return out;
 }
 
@@ -227,8 +227,8 @@ export function createSiteRouter(siteRoot: string, opts: SiteRouterOptions = {})
   // spec names as one to check before the night passes its query, so ?at=after-ball can answer yes.
   const clock = opts.now ?? (() => new Date());
   const isAfterBall = (query?: unknown): boolean => showAfterBall(clock(), query);
-  const decorate = (html: string, cookieHeader: string | undefined, query?: unknown): Promise<string> =>
-    decorateNav(html, cookieHeader, isAfterBall(query));
+  const decorate = (html: string, cookieHeader: string | undefined, query?: unknown, page?: FillLinkPage): Promise<string> =>
+    decorateNav(html, cookieHeader, isAfterBall(query), page);
 
   // `/` serves the home page (no `_redirects` rule — served automatically).
   //
@@ -357,8 +357,8 @@ export function createSiteRouter(siteRoot: string, opts: SiteRouterOptions = {})
   addTeamPageRoutes(router, siteRoot, { decorate });
   // Sponsor pledges: the pay and "can't pay after all" pages an emailed link opens (src/routes/pledges.ts).
   addPledgePageRoutes(router, siteRoot, { decorate });
-  // Fill a Red Bag: /fill and its thank you, /fill/thank-you. Public, but linked from nowhere (the
-  // switch is src/red-bag/switch.ts); switched off they are the 404 to the public and a preview to
+  // Fill a Red Bag: /fill and its thank you, /fill/thank-you. Public, but linked from nowhere until the
+  // Ball's moment (the switch is src/red-bag/switch.ts); switched off they are the 404 to the public and a preview to
   // signed in staff (src/routes/red-bag.ts).
   addRedBagPageRoutes(router, siteRoot, { decorate, isAfterBall });
 

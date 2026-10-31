@@ -5,6 +5,20 @@ import { redBagIsLive } from "./switch";
 // not in the page files: partials/footer.html is copied to every page, Ball pages included, and Ball
 // pages keep their old footer. So these never run over a Ball page (src/ball/page-decor.ts), and while
 // Fill a Red Bag is switched off (src/red-bag/switch.ts) /fill is a 404, so they add nothing.
+//
+// Nor do they ever reach a quiet page: the charity is very careful about pages in memory of someone.
+// That is a fundraiser's page (isQuietFundraiser, src/fundraising/touch-rules.ts, with its thank you,
+// which is the same page) or a team's join page, and the two pages a family may be on that cannot tell
+// as they are drawn, because each is one address for everyone: the sign up, where the in memory path
+// is chosen in the browser, and the organiser's private area (QUIET_PAGE).
+
+/** What a page going out knows about itself. */
+export interface FillLinkPage {
+  /** A page in memory of someone, or one a family may be on: no Fill a Red Bag. */
+  quiet?: boolean;
+}
+
+export const QUIET_PAGE: FillLinkPage = { quiet: true };
 
 export const FILL_FOOTER_ITEM = '<li><a href="/fill">Fill a Red Bag</a></li>';
 
@@ -16,10 +30,10 @@ const DROP_OFF_BUTTON = '<div class="row"><a class="btn paper" href="/donate">Do
 
 /**
  * The footer's "Ways to give", with Fill a Red Bag straight after its first link. Only inside the
- * footer; safe to run twice; no footer, or no such list, no change.
+ * footer; safe to run twice; no footer, or no such list, no change; a quiet page, no change.
  */
-export function addFillFooterLink(html: string): string {
-  if (!redBagIsLive()) return html;
+export function addFillFooterLink(html: string, page: FillLinkPage = {}): string {
+  if (page.quiet || !redBagIsLive()) return html;
   const start = html.indexOf("<footer");
   const end = start === -1 ? -1 : html.indexOf("</footer>", start);
   if (end === -1) return html;

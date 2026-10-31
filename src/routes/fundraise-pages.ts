@@ -2,6 +2,7 @@ import type { Request, Response, NextFunction, Router } from "express";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { EVENT_PAGE_PREFIX, pagePath, type FundraiserRecord } from "../fundraising/model";
+import { QUIET_PAGE, type FillLinkPage } from "../red-bag/fill-links";
 import { addFillStageStyles, loadFillStage } from "../red-bag/stage";
 import { BALL_CARD_SLUG, markAfterBallCheck } from "../site/after-ball";
 
@@ -43,9 +44,10 @@ import { BALL_CARD_SLUG, markAfterBallCheck } from "../site/after-ball";
 export interface FundraisePageDeps {
   /**
    * Adds the menu items switched on elsewhere (the ball, Get involved). Given a query, it answers for
-   * that view of the page (src/site/after-ball.ts).
+   * that view of the page (src/site/after-ball.ts). Given `page`, a quiet page stays quiet
+   * (src/red-bag/fill-links.ts).
    */
-  decorate: (html: string, cookieHeader: string | undefined, query?: unknown) => Promise<string>;
+  decorate: (html: string, cookieHeader: string | undefined, query?: unknown, page?: FillLinkPage) => Promise<string>;
   eventsPageIsOn: () => Promise<boolean>;
   /** Is this view after the Ball's moment? */
   isAfterBall: (query?: unknown) => boolean;
@@ -375,7 +377,8 @@ export function addFundraisePageRoutes(router: Router, siteRoot: string, deps: F
         res.setHeader("Referrer-Policy", "strict-origin");
         res.setHeader("X-Robots-Tag", "noindex, nofollow");
       }
-      res.type("html").send(await deps.decorate(html, req.headers.cookie));
+      // The in memory path is chosen in the browser, so this page cannot tell: quiet for everyone.
+      res.type("html").send(await deps.decorate(html, req.headers.cookie, undefined, QUIET_PAGE));
     } catch (err) {
       console.error("fundraise page failed:", err instanceof Error ? err.message : err);
       next();
@@ -392,7 +395,9 @@ export function addFundraisePageRoutes(router: Router, siteRoot: string, deps: F
       res.setHeader("X-Robots-Tag", "noindex, nofollow");
       res.setHeader("Referrer-Policy", "no-referrer");
       res.setHeader("Cache-Control", "no-store");
-      res.type("html").send(await deps.decorate(readFileSync(manageFile, "utf8"), req.headers.cookie));
+      // Whose area this is, and whether a page in it is in memory of someone, is only known in the
+      // browser: quiet for everyone.
+      res.type("html").send(await deps.decorate(readFileSync(manageFile, "utf8"), req.headers.cookie, undefined, QUIET_PAGE));
     } catch (err) {
       console.error("fundraise manage page failed:", err instanceof Error ? err.message : err);
       next();
@@ -582,7 +587,8 @@ ${title}`, () => qrSvg(url, { title, size: 1024 })));
       const unlisted = Boolean(f.offListAt);
       if (unlisted && !withSession) res.setHeader("X-Robots-Tag", "noindex");
       const out = unlisted ? html.replace("</head>", '    <meta name="robots" content="noindex" />\n  </head>') : html;
-      res.type("html").send(await deps.decorate(out, req.headers.cookie));
+      const { isQuietFundraiser } = await import("../fundraising/touch-rules");
+      res.type("html").send(await deps.decorate(out, req.headers.cookie, undefined, { quiet: isQuietFundraiser(f) }));
     } catch (err) {
       console.error("fundraiser page failed:", err instanceof Error ? err.message : err);
       next();

@@ -193,7 +193,9 @@ as it is. Because Ball pages draw their own menu, they keep the Ball item.
 - The Fill a Red Bag stage on the home page, between the hero and the four tags.
 - The same stage on Get involved, after What's on.
 - "Fill a Red Bag" links: in the footer ("Ways to give"), added as the page goes out, non-Ball pages only;
-  and on Drop-off points, in "Can't get to a drop-off point?".
+  and on Drop-off points, in "Can't get to a drop-off point?". Never on a page in memory of someone, or on
+  the sign up or the organiser's area, where a family may be and the page cannot tell as it is drawn (a
+  decision from the final review: those pages stay quiet).
 - The night treatment on `/fill` itself.
 - On the Donate tag nothing changes: the bag has its own stage.
 

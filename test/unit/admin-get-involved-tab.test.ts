@@ -953,10 +953,10 @@ describe("the wording that still said Events page", () => {
     expect(text(q("#evSwitch h3"))).toBe("Is the Get involved page on the website?");
   });
 
-  it("says Our events are NBCC's own events on the Get involved page", () => {
+  it("says Our events are NBCC's own events on the What's on page", () => {
     const line = text(q('[data-gi-intro="events"]'));
     expect(line).toContain("NBCC’s own events");
-    expect(line).toContain("Get involved page");
+    expect(line).toContain("What’s on page");
   });
 
   it("has no “Events page” left on the screen or in what the script says", () => {

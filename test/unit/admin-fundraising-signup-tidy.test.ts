@@ -235,7 +235,7 @@ describe("what they told us", () => {
     records[0] = fundraiser(1, { path: "event", status: "approved", eventDate: null, dateTbc: true, slugSetAt: "2026-10-03T09:00:00.000Z" });
     await openFundraising();
     await openRow(1);
-    expect(told("On the NBCC website")).toBe("Not listed yet: no date. Its page is up; its card joins Get involved once it has a date");
+    expect(told("On the NBCC website")).toBe("Not listed yet: no date. Its page is up; its card joins What’s on once it has a date");
   });
 
   it("shows a child, a business and Get involved", async () => {

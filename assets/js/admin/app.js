@@ -10607,7 +10607,7 @@
     }
     if (!f.public) return "Approved. They only wanted to let us know, or wanted materials, so it is not on the website.";
     // Event pages: an approved public event has its own page as well as its card.
-    if (f.path === "event") return "Approved. Its page is on the website, and it is listed on Get involved as an event, while fundraising is switched on.";
+    if (f.path === "event") return "Approved. Its page is on the website, and it is listed on What’s on as an event, while fundraising is switched on.";
     return "Approved. Its page is on the website while fundraising is switched on.";
   }
 
@@ -14368,7 +14368,7 @@
     if (!f.public) return "Not on the website";
     if (f.offListBy === "organiser") return "A page of its own, but not on Get involved: only people they send the link to";
     // An event's card needs a date: until it has one it has its page, but is not on the list.
-    if (f.path === "event" && !f.eventDate) return "Not listed yet: no date. Its page is up; its card joins Get involved once it has a date";
+    if (f.path === "event" && !f.eventDate) return "Not listed yet: no date. Its page is up; its card joins What’s on once it has a date";
     return "Show it on our website";
   }
   // The new answers, in What they told us. A sign up from before has none, and shows nothing.

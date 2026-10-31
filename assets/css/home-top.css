@@ -34,8 +34,8 @@
   .home .hero .wrap{grid-template-columns:1.06fr .94fr;gap:clamp(24px,4vw,56px)}
 }
 /* styles.css stacks the hero here with the logo first. These centre what is under it. On a phone
-   the logo is a little smaller than the prototype's, which had no buttons: this keeps "Donate now"
-   on the first screen at 375 and 320 wide. */
+   the logo is a little smaller than the prototype's, which had no buttons, to bring "Donate now" up.
+   It is on the first screen at 375 by 667 with no banner; the Ball banner pushes it just below. */
 @media (max-width:980px){
   .home .hero .wrap{grid-template-columns:minmax(0,1fr);text-align:center}
   .home .hero .lede{margin-inline:auto}
@@ -119,7 +119,7 @@
 
 /* ---- narrower ---- */
 @media (max-width:1040px){
-  .gifts{grid-template-columns:1fr 1fr;row-gap:18px;padding-bottom:10px}
+  .gifts{grid-template-columns:minmax(0,1fr) minmax(0,1fr);row-gap:18px;padding-bottom:10px}
   .gift:nth-child(n+3)::before{display:none}
   .gift:nth-child(1){--s:0px;--r:-.5deg}
   .gift:nth-child(2){--s:0px;--r:.5deg}

@@ -534,6 +534,33 @@ until scrolled. The drift is the page's cream in both states: it runs into "What
 and with the Ball's navy feature below it, it lies as a line of snow along the top of the night.
 `test/unit/home-top.test.ts` runs the real `renderHomePromo` on the real `index.html` to pin all of this.
 
+### The Ball's moment: 20:00 on Saturday 7 November 2026
+
+At 20:00 UK time on the night of the Ball (20:00 UTC, the clocks have gone back) the promotion comes
+down by itself, with no deploy and nobody at a computer. Every page in question is drawn per visit, so
+the check is one pure function, `afterBall(now)` in `src/site/after-ball.ts`, and the time is handed to
+it: `createSiteRouter(root, { now })` holds the only reading of the clock for it, which is how
+`test/unit/after-ball.test.ts` stands either side.
+
+| Comes down | Where the check is |
+|---|---|
+| The Festive Ball item in the menu, on every page but the Ball's own | `decorateNav`, and the loop over `_redirects`, in `src/routes/site.ts` |
+| The banner and the feature on the home page, and the page's preview for staff | the home route, before it asks anything of the Ball |
+| The Festive Ball's card (slug `festive-ball-2026`) on `/whats-on` and `/get-involved`, even though the 7th is still today | `deckInput` in `src/routes/fundraise-pages.ts` |
+
+**What stays:** `/ball`, its terms, its donate page, guest links and thank you pages all keep working, and
+draw their own menu (`decorateBallPage`), so they keep the Festive Ball item. No file in `src/ball` knows
+about the moment, and the admin's Ball switch is read as it always was and never written. `/ball` stays on
+`/sitemap` and in `/sitemap.xml`, which follow the gate alone.
+
+**Checking it before the night:** `?at=after-ball` on `/`, `/whats-on`, `/get-involved`,
+`/get-involved/drop-off-points` or `/fill` shows that one view as it will be after the moment. Only that
+exact value counts (an array, or anything else, is an ordinary visit). The view answers `noindex` and
+`no-store`, and the next view is back to normal. Other pages ignore it.
+
+BDD runs against the real clock, so scenarios about the Ball's promotion are tagged `@until-the-ball` and
+are skipped from the moment on (`features/steps/after-ball.steps.js`).
+
 ### Home pillars (REQ-011)
 
 Below the hero, a tinted band (`HOME PILLARS` CSS block, `var(--holly-soft)`

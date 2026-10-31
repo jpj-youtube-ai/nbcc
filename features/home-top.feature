@@ -3,6 +3,7 @@ Feature: The top of the home page
   The big logo and "Where would you like to start?" with its four gift tags. The printed advert's QR
   code lands here, so the Festive Ball's banner and feature have to carry on landing around them.
 
+  @until-the-ball
   Scenario: with the gate open the Ball's promotion lands around the new top
     Given the ball gate is open
     When I request "/"

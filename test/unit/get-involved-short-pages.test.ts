@@ -57,7 +57,8 @@ let base = "";
 
 beforeAll(async () => {
   const app = express();
-  app.use(createSiteRouter(ROOT));
+  // A fixed time before the Ball's moment (src/site/after-ball.ts): this file tests the menu with it up.
+  app.use(createSiteRouter(ROOT, { now: () => new Date("2026-11-01T12:00:00Z") }));
   server = app.listen(0);
   await new Promise((r) => server.once("listening", r));
   base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;

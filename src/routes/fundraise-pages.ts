@@ -2,6 +2,7 @@ import type { Request, Response, NextFunction, Router } from "express";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { EVENT_PAGE_PREFIX, pagePath, type FundraiserRecord } from "../fundraising/model";
+import { BALL_CARD_SLUG, markAfterBallCheck } from "../site/after-ball";
 
 // TASK-494: the public pages of community fundraising, What's on and Get involved.
 //
@@ -39,9 +40,14 @@ import { EVENT_PAGE_PREFIX, pagePath, type FundraiserRecord } from "../fundraisi
 // falls through too, so a broken read shows the 404 rather than a broken page.
 
 export interface FundraisePageDeps {
-  /** Adds the menu items switched on elsewhere (the ball, Get involved). */
-  decorate: (html: string, cookieHeader: string | undefined) => Promise<string>;
+  /**
+   * Adds the menu items switched on elsewhere (the ball, Get involved). Given a query, it answers for
+   * that view of the page (src/site/after-ball.ts).
+   */
+  decorate: (html: string, cookieHeader: string | undefined, query?: unknown) => Promise<string>;
   eventsPageIsOn: () => Promise<boolean>;
+  /** Is this view after the Ball's moment? */
+  isAfterBall: (query?: unknown) => boolean;
 }
 
 async function fundraisingOn(): Promise<boolean> {
@@ -267,9 +273,10 @@ async function pledgePageExtras(
 /**
  * What What's on and Get involved are drawn from. One read, so the two pages can never disagree.
  * A failed fundraiser read must not take NBCC's own events down with it: the page goes out without
- * the fundraisers rather than not at all.
+ * the fundraisers rather than not at all. After the Ball's moment its card comes down, even though
+ * the 7th is still today (`after`, src/site/after-ball.ts).
  */
-async function deckInput(): Promise<import("../fundraising/render").GetInvolvedInput> {
+async function deckInput(after: boolean): Promise<import("../fundraising/render").GetInvolvedInput> {
   const [{ listPageEvents }, { londonToday }] = await Promise.all([import("../db/events"), import("../events/model")]);
   const today = londonToday(new Date());
   const on = await fundraisingOn();
@@ -287,7 +294,8 @@ async function deckInput(): Promise<import("../fundraising/render").GetInvolvedI
       console.error("deck fundraisers failed:", err instanceof Error ? err.message : err);
     }
   }
-  return { events: await listPageEvents(today), fundraisers, fundraisingOn: on, today };
+  const events = await listPageEvents(today);
+  return { events: after ? events.filter((e) => e.slug !== BALL_CARD_SLUG) : events, fundraisers, fundraisingOn: on, today };
 }
 
 export function addFundraisePageRoutes(router: Router, siteRoot: string, deps: FundraisePageDeps): void {
@@ -314,9 +322,10 @@ export function addFundraisePageRoutes(router: Router, siteRoot: string, deps: F
     try {
       if (!(await deps.eventsPageIsOn())) return next();
       const { renderWhatsOnPage } = await import("../fundraising/render");
-      const html = renderWhatsOnPage(readFileSync(whatsOnFile, "utf8"), await deckInput());
+      const html = renderWhatsOnPage(readFileSync(whatsOnFile, "utf8"), await deckInput(deps.isAfterBall(req.query)));
       fresh(res);
-      res.type("html").send(await deps.decorate(html, req.headers.cookie));
+      markAfterBallCheck(res, req.query);
+      res.type("html").send(await deps.decorate(html, req.headers.cookie, req.query));
     } catch (err) {
       console.error("what's on page failed:", err instanceof Error ? err.message : err);
       next();
@@ -327,9 +336,10 @@ export function addFundraisePageRoutes(router: Router, siteRoot: string, deps: F
     try {
       if (!(await deps.eventsPageIsOn())) return next();
       const { renderNewGetInvolvedPage } = await import("../fundraising/get-involved-page");
-      const html = renderNewGetInvolvedPage(readFileSync(getInvolvedFile, "utf8"), await deckInput());
+      const html = renderNewGetInvolvedPage(readFileSync(getInvolvedFile, "utf8"), await deckInput(deps.isAfterBall(req.query)));
       fresh(res);
-      res.type("html").send(await deps.decorate(html, req.headers.cookie));
+      markAfterBallCheck(res, req.query);
+      res.type("html").send(await deps.decorate(html, req.headers.cookie, req.query));
     } catch (err) {
       console.error("get involved page failed:", err instanceof Error ? err.message : err);
       next();

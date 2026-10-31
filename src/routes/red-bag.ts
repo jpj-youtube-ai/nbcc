@@ -5,6 +5,7 @@ import { renderRedBagPage, renderRedBagThanksPage } from "../red-bag/render";
 import { isStaffRequest, mayViewRedBagDraft } from "../red-bag/staff";
 import { redBagList, type RedBagList } from "../red-bag/list";
 import { RED_BAG_PATH, RED_BAG_THANKS_PATH, redBagAccess, redBagIsLive } from "../red-bag/switch";
+import { markAfterBallCheck } from "../site/after-ball";
 
 // Fill a Red Bag: its pages (docs/superpowers/specs/2026-10-04-fill-a-red-bag-design.md).
 //
@@ -81,8 +82,11 @@ export interface RedBagPageDeps {
   indexable?: boolean;
   /** 404.html. */
   notFound: () => string;
-  /** Adds the menu items switched on elsewhere (the ball, Get involved). */
-  decorate: (html: string, cookieHeader: string | undefined) => Promise<string>;
+  /**
+   * Adds the menu items switched on elsewhere (the ball, Get involved). Given a query, it answers for
+   * that view of the page (src/site/after-ball.ts).
+   */
+  decorate: (html: string, cookieHeader: string | undefined, query?: unknown) => Promise<string>;
   /** The switch. Defaults to the constant in src/red-bag/switch.ts. */
   live?: () => boolean;
   /** Is this Authorization header a signed in member of staff? Defaults to the admin's own session. */
@@ -190,7 +194,11 @@ export function redBagPageHandler(deps: RedBagPageDeps) {
     // again with the tab's admin session. Never on an answer to a request that carried a session,
     // or the page it brings in would go and fetch itself again.
     if (wantsDraft && !authorization) page = page.replace("</head>", `${PREVIEW_LOADER}</head>`);
-    const html = await deps.decorate(page, req.headers.cookie);
+    // ?at=after-ball shows the giving page as it will be after the Ball's moment. It reads a list, the
+    // thank you page does not, and the thank you page is left as it is.
+    const query = deps.list ? req.query : undefined;
+    const html = await deps.decorate(page, req.headers.cookie, query);
+    markAfterBallCheck(res, query);
 
     if (access === "preview" || wantsDraft) {
       // Never let a shared cache hand a preview to the public, or the public page to a preview.

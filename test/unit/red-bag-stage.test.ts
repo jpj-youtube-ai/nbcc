@@ -158,6 +158,15 @@ describe("what the server draws", () => {
     expect(STAGE_CSS).toContain("@media (max-width:1090px)");
   });
 
+  it("breaks a long unbroken name inside its tile: staff can type any name, and it must not spill over the next", () => {
+    expect(STAGE_CSS).toMatch(/\.fb-tile-name\{[^}]*overflow-wrap:break-word/);
+    // Up to the tile's own edge, so a normal word that only fits by using the padding stays whole.
+    expect(STAGE_CSS).toMatch(/\.fb-tile-name\{[^}]*max-width:calc\(100% \+ 8px\)/);
+    expect(STAGE_CSS).toMatch(/\.fb-tile\{padding:8px 2px 7px[^}]*\}\s*\.fb-tile-name\{[^}]*max-width:calc\(100% \+ 4px\)/);
+    // On a phone the name is a flex box to centre it: in a row, its text would not shrink to break.
+    expect(STAGE_CSS).toMatch(/\.fb-tile-name\{[^}]*display:flex;flex-direction:column/);
+  });
+
   it("scrolls inside nothing, and stops moving for people who ask for less motion", () => {
     expect(STAGE_CSS).not.toMatch(/overflow(-[xy])?:\s*(auto|scroll)/);
     expect(STAGE_CSS).toContain("@media (prefers-reduced-motion:reduce)");

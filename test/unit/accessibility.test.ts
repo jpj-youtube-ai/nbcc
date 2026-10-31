@@ -34,7 +34,7 @@ const PAGES = [
   "404.html",
   "sitemap.html",
   // TASK-494
-  "events.html",
+  "whats-on.html",
   "fundraise.html",
   "fundraise-manage.html",
   // TASK-498

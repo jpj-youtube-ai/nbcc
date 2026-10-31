@@ -33,7 +33,7 @@ Feature: Every approved public event has its own page, at /event/<short name>
     When a visitor opens the page for "The Event Page Quiz (bdd-fr)"
     Then the visitor gets status 302
     And the visitor is sent to the event page of "The Event Page Quiz (bdd-fr)"
-    When a visitor opens "/get-involved"
+    When a visitor opens "/whats-on"
     Then the card for "The Event Page Quiz (bdd-fr)" links to its event page
 
   Scenario: an event's page is not found while fundraising is switched off

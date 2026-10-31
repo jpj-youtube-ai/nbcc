@@ -170,16 +170,22 @@ async function fundraisingIsOn(): Promise<boolean> {
   }
 }
 
+// Get involved and What's on, the two menu items the events switch governs. Two helpers, and not one,
+// because Ball pages take the first (src/ball/page-decor.ts) and keep their old menu without the second.
+async function addEventsItems(html: string): Promise<string> {
+  const [{ addEventsNavLink }, { addWhatsOnNavLink }] = await Promise.all([import("../events/nav-link"), import("../events/whats-on-link")]);
+  return addWhatsOnNavLink(addEventsNavLink(html));
+}
+
 // The menu items a page gets on top of what is in its file: the Festive Ball's while the ball is
-// published (or being previewed), and Get involved (TASK-494, was Events) while that page is switched
-// on. And while fundraising is switched on, the footer's "Fundraise for us" goes to the sign up
-// rather than the contact page (TASK-494). Each is idempotent, so a page that already carries one
-// is left as it is.
+// published (or being previewed), and Get involved and What's on while the events switch is on. And
+// while fundraising is switched on, the footer's "Fundraise for us" goes to the sign up rather than
+// the contact page (TASK-494). Each is idempotent, so a page that already carries one is left as it is.
 async function decorateNav(html: string, cookieHeader: string | undefined): Promise<string> {
   const [ball, events, fundraising] = await Promise.all([ballIsPublished(cookieHeader), eventsPageIsOn(), fundraisingIsOn()]);
   let out = html;
   if (ball) out = (await import("../ball/nav-link")).addBallNavLink(out);
-  if (events) out = (await import("../events/nav-link")).addEventsNavLink(out);
+  if (events) out = await addEventsItems(out);
   if (fundraising) out = (await import("../fundraising/footer-link")).addFundraiseFooterLink(out);
   return out;
 }
@@ -235,12 +241,13 @@ export function createSiteRouter(siteRoot: string): Router {
       // hidden in it.
       const preview = gateOpen ? false : await holdsPreviewCookie(req.headers.cookie);
       if (!gateOpen && !preview) {
-        // TASK-453: the changes this branch can need are the Get involved menu item and (TASK-494)
-        // the footer's fundraising link. With both switched off, the file goes out byte for byte.
+        // TASK-453: the changes this branch can need are the menu items for Get involved and What's
+        // on, and (TASK-494) the footer's fundraising link. With both switched off, the file goes out
+        // byte for byte.
         const [events, fundraising] = await Promise.all([eventsPageIsOn(), fundraisingIsOn()]);
         if (events || fundraising) {
           let html = readFileSync(homeFile, "utf8");
-          if (events) html = (await import("../events/nav-link")).addEventsNavLink(html);
+          if (events) html = await addEventsItems(html);
           if (fundraising) html = (await import("../fundraising/footer-link")).addFundraiseFooterLink(html);
           res.type("html").send(html);
           return;
@@ -257,9 +264,9 @@ export function createSiteRouter(siteRoot: string): Router {
         res.setHeader("Vary", "Cookie");
       }
       const template = readFileSync(homeFile, "utf8");
-      // renderHomePromo adds the Festive Ball item itself; the Events item is ours to add.
+      // renderHomePromo adds the Festive Ball item itself; Get involved and What's on are ours to add.
       let html = renderHomePromo(template, { gateOpen: true });
-      if (await eventsPageIsOn()) html = (await import("../events/nav-link")).addEventsNavLink(html);
+      if (await eventsPageIsOn()) html = await addEventsItems(html);
       if (await fundraisingIsOn()) html = (await import("../fundraising/footer-link")).addFundraiseFooterLink(html);
       res.type("html").send(html);
     } catch (err) {
@@ -307,10 +314,11 @@ export function createSiteRouter(siteRoot: string): Router {
     res.redirect(302, `/api/gift-aid/${encodeURIComponent(req.params.token)}`);
   });
 
-  // TASK-453 built /events from the events table; TASK-494 renamed it Get involved, at
-  // /get-involved, and added the public fundraising pages. /events now redirects for good. Get
-  // involved is served only while an admin has the page switched on; switched off it falls through to
-  // the catch-all below exactly as if the route were not here. src/routes/fundraise-pages.ts.
+  // TASK-453 built /events from the events table; TASK-494 widened it and added the public fundraising
+  // pages. It lives at /whats-on now, /events redirects there for good, and /get-involved is the page
+  // of every way to help. Both are served only while an admin has the events switch on; switched off
+  // they fall through to the catch-all below exactly as if the routes were not here.
+  // src/routes/fundraise-pages.ts.
   addFundraisePageRoutes(router, siteRoot, { decorate: decorateNav, eventsPageIsOn });
   // Team pages: the join form at /fundraise/<team>/join (src/routes/team-pages.ts).
   addTeamPageRoutes(router, siteRoot, { decorate: decorateNav });
@@ -349,7 +357,7 @@ export function createSiteRouter(siteRoot: string): Router {
       try {
         let html = readFileSync(file, "utf8");
         if (ball) html = (await import("../ball/nav-link")).addBallNavLink(html);
-        if (events) html = (await import("../events/nav-link")).addEventsNavLink(html);
+        if (events) html = await addEventsItems(html);
         if (fundraising) html = (await import("../fundraising/footer-link")).addFundraiseFooterLink(html);
         res.type("html").send(html);
       } catch (err) {

@@ -144,8 +144,10 @@ Every page mounts the same sticky top nav in its `<header class="nav">` slot
 (REQ-002, ported from the NBCC design): the logo lockup (50px) linking to `/`,
 links to `/`, `/about-us`, `/donate`, `/contact`, `/supporters`, a persistent
 Donate button, and a mobile burger. Two items are added by the server rather than written into
-the files: "Festive Ball" while the ball is published (TASK-326) and "Get involved" (called Events
-until TASK-494), after About, while the Events page is switched on (TASK-453).
+the files: "Festive Ball" while the ball is published (TASK-326), and "Get involved" (called Events
+until TASK-494) after About and "What's on" after that, while the events switch is on (TASK-453).
+What's on has its own helper (`src/events/whats-on-link.ts`), not a part of `addEventsNavLink`,
+because Ball pages call that one and keep their old menu until after the Ball.
 Behaviour lives in the one shared `assets/js/main.js` (`initNav`): a passive +
 `requestAnimationFrame`-throttled scroll listener flips the bar from transparent
 to a cream/hairline/shadow state past 24px; the burger toggles the link panel
@@ -1522,8 +1524,9 @@ hosted-Checkout redirect stays the default fallback and no-JS safety net.
 | `GET /ball` | **implemented** | TASK-313 (the ticket page; password-gated until staff open the gate, then public and indexable) |
 | `POST /ball/unlock` | **implemented** | TASK-313 (checks the preview password, sets a signed 14-day cookie) |
 | `GET /ball/terms` | **implemented** | TASK-313 (ticket terms; gated alongside the page) |
-| `GET /get-involved` | **implemented** | TASK-453, renamed in TASK-494 (Get involved: the events from the `events` table, and while fundraising is switched on every approved public fundraiser too. Served only while an admin has the Events page switched on; otherwise falls through to the 404 / spare-address catch-all) |
-| `GET /events` | **implemented** | TASK-494 (301 to `/get-involved`, query string kept, whether or not the page is on) |
+| `GET /whats-on` | **implemented** | TASK-453, moved here from `/get-involved` (What's on: the events from the `events` table, and while fundraising is switched on every approved public fundraiser too. Served only while an admin has the events switch on; otherwise falls through to the 404 / spare-address catch-all) |
+| `GET /get-involved` | **implemented** | Every way to help, with the first six of What's on's cards. The events switch governs it too |
+| `GET /events` | **implemented** | 301 to `/whats-on`, query string kept, whether or not the page is on. Not the page's address: this one has answered 301 since TASK-494, and a browser keeps a 301 for good |
 | `GET /getinvolved`, `GET /involved` | **implemented** | TASK-496 (301 to `/get-involved` too, query string kept: the ways people type it from a poster) |
 | `GET /fundraise` | **implemented** | TASK-494 (the fundraising sign up form; a gentle "not open yet" while fundraising is switched off) |
 | `GET /fundraise/manage` | **implemented** | TASK-501 (the organiser's private area, signed in with an emailed code; was TASK-494's `?token=` link page; `noindex`, `no-store`, `Referrer-Policy: no-referrer`; 404 while fundraising is switched off) |
@@ -1539,7 +1542,7 @@ hosted-Checkout redirect stays the default fallback and no-JS safety net.
 | `GET /api/admin/events` | **implemented** | TASK-453 (events: view; the page switch and every event) |
 | `POST /api/admin/events`, `PUT/DELETE /api/admin/events/:id` | **implemented** | TASK-453 (events: edit; drafts may be half finished, live or scheduled events must pass `publishProblems`. Audited as `events.created` / `events.updated` / `events.deleted`) |
 | `PATCH /api/admin/events/settings` | **implemented** | TASK-453 (events: edit **and** the admin role; `{pageOn}` switches the whole page. Audited as `events.page_switched`) |
-| `POST /api/admin/events/preview` | **implemented** | TASK-453 (events: view; the card and the whole page as HTML documents, from the same renderer as `/events`) |
+| `POST /api/admin/events/preview` | **implemented** | TASK-453 (events: view; the card and the whole page as HTML documents, from the same renderer as `/whats-on`) |
 | `POST /api/admin/event-images` | **implemented** | TASK-453 (events: edit; base64 upload, raster only, 2 MB, returns `/media/events/<uuid>`) |
 | `GET /api/admin/analytics?days=7\|30\|90` | **implemented** | TASK-482 (analytics: view; every panel of Admin > Analytics for the period and the one before, in one payload) |
 | `GET/PUT /api/admin/analytics/settings` | **implemented** | TASK-482 (analytics: view / edit; `{collecting}` switches counting on or off. Audited as `analytics.collecting_switched`) |
@@ -7905,9 +7908,9 @@ a name we supplied ourselves — and "no such table" is reported as exactly that
 
 ## The Events page (TASK-453)
 
-**Renamed Get involved in TASK-494**, at `/get-involved`, with community fundraisers alongside the
-events: see **Community fundraising, the public pages (TASK-494)**. `/events` is now a permanent
-redirect there. What follows describes the events part, which is unchanged.
+**Widened in TASK-494** with community fundraisers alongside the events: see **Community fundraising,
+the public pages (TASK-494)**. It lives at `/whats-on` now, and `/events` is a permanent redirect
+there. What follows describes the events part, which is unchanged.
 
 A public page at **`/events`**: every upcoming event as a card in a deck, soonest first, with a face
 down "more on the way" card last. The front of a card is the picture and the gist, with the date in
@@ -7943,14 +7946,14 @@ layer and the page:
   link (unless there is nothing to book) and, for someone else's event, their name;
 - an event is on the page up to and including its own day (UK time), then moves to Past.
 
-**One renderer**, `src/events/render.ts`, fills `events.html` (the template's deck holds a
+**One renderer**, `src/events/render.ts`, fills `whats-on.html` (the template's deck holds a
 `<!-- events:deck -->` marker) and produces the admin's previews, so staff see exactly what the
 public will. Everything typed is escaped; `*stars*` become bold only after escaping.
 
 **Data.** Three new tables (additive): `events_settings` (one row, the switch, off by default),
 `events` (a column per form field, with CHECK constraints matching the validation) and
 `event_images`. Every change writes its `audit_log` row in the same transaction. The seed migration
-adds EmpowHer '26 and the Festive Ball as live events, with the switch still off. `events.html` is
+adds EmpowHer '26 and the Festive Ball as live events, with the switch still off. `whats-on.html` is
 in the Dockerfile's explicit page list.
 
 **EmpowHer's leaflet (TASK-456, taken off in TASK-472).** `1789100000003_events-empowher-leaflet.js` puts the organiser's
@@ -8819,13 +8822,13 @@ site maps under `/fundraise` while fundraising is on.
 
 **Where it lives.** Drawing: `src/fundraising/render.ts` (pure, unit tested). Routes:
 `src/routes/fundraise-pages.ts`, added to the site router before its catch-all. Templates:
-`events.html` (Get involved), `fundraise.html`, `fundraiser.html`, `fundraise-manage.html`, `fundraise-help.html` (all in
+`whats-on.html` (What's on), `fundraise.html`, `fundraiser.html`, `fundraise-manage.html`, `fundraise-help.html` (all in
 the Dockerfile's page list). Scripts: `assets/js/fundraise.js`, `fundraiser.js`,
-`fundraise-manage.js`; styles: `assets/css/fundraising.css` and the Get involved part of
+`fundraise-manage.js`; styles: `assets/css/fundraising.css` and the What's on part of
 `events.css`. None of it touches `main.js` or `styles.css`, so donate.html's page weight budget is
 unchanged. Text boxes grow with what is typed rather than scroll.
 
-**Tests.** `fundraising-render`, `fundraise-pages-routes`, `get-involved-page`,
+**Tests.** `fundraising-render`, `fundraise-pages-routes`, `whats-on-page`, `whats-on-chips`,
 `fundraise-signup-page`, `fundraiser-page`, `fundraise-manage-page`, `fundraise-help-page` and
 `fundraiser-checkout-contract` (unit, jsdom), and `features/fundraising-pages.feature` (the
 redirect, Get involved with fundraising on and off, a fundraiser's page (no QR code since TASK-501,

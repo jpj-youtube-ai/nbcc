@@ -4,7 +4,7 @@ import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { renderCard, renderEventsPage } from "../../src/events/render";
-import { fundraiserEventRecord, renderGetInvolvedPage } from "../../src/fundraising/render";
+import { fundraiserEventRecord, renderWhatsOnPage } from "../../src/fundraising/render";
 import type { PublicCard } from "../../src/fundraising/model";
 import { SEED_EVENTS } from "./helpers/events-seed";
 import { lf, nbccCases, OLD_BOOKING_LINE, OLD_COMMUNITY, RAISING, TEMPLATE, TODAY } from "./helpers/card-golden-cases";
@@ -37,13 +37,13 @@ describe("NBCC's own events are drawn exactly as before", () => {
     expect(sha(renderEventsPage(TEMPLATE, SEED_EVENTS))).toBe(GOLDEN["page:events"]);
   });
 
-  it("Get involved, with fundraising off and on", () => {
+  it("What's on, with fundraising off and on", () => {
     const fundraisers = [RAISING as PublicCard];
-    expect(sha(renderGetInvolvedPage(TEMPLATE, { events: SEED_EVENTS, fundraisers, fundraisingOn: false, today: TODAY }))).toBe(
-      GOLDEN["page:get-involved-off"],
+    expect(sha(renderWhatsOnPage(TEMPLATE, { events: SEED_EVENTS, fundraisers, fundraisingOn: false, today: TODAY }))).toBe(
+      GOLDEN["page:whats-on-off"],
     );
-    expect(sha(renderGetInvolvedPage(TEMPLATE, { events: SEED_EVENTS, fundraisers, fundraisingOn: true, today: TODAY }))).toBe(
-      GOLDEN["page:get-involved-on"],
+    expect(sha(renderWhatsOnPage(TEMPLATE, { events: SEED_EVENTS, fundraisers, fundraisingOn: true, today: TODAY }))).toBe(
+      GOLDEN["page:whats-on-on"],
     );
   });
 });

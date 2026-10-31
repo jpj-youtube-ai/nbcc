@@ -41,8 +41,10 @@ export const SITE_PAGES: SitePage[] = [
   { path: "/my-story", title: "Share your story", listedByDefault: true },
   { path: "/supporters", title: "Supporters", listedByDefault: true },
   { path: "/hub", title: "Hub", listedByDefault: true },
-  // TASK-494: the Events page renamed; /events redirects here.
+  // Every way to help, with the first six of What's on's cards. The events switch governs both.
   { path: "/get-involved", title: "Get involved", listedByDefault: true, eventsGated: true },
+  // The Events page, at its own address; /events redirects here.
+  { path: "/whats-on", title: "What's on", listedByDefault: true, eventsGated: true },
   {
     path: "/fundraise",
     title: "Fundraise for us",
@@ -160,8 +162,10 @@ export const RESERVED_PREFIXES: string[] = [
   "/donate",
   "/donor-portal",
   // TASK-453: a real page (switched on and off from the admin), so no spare address may shadow it.
-  // TASK-494 renamed it /get-involved; the old address stays reserved because it redirects there.
+  // It lives at /whats-on now; the old address stays reserved because it redirects there.
   "/events",
+  "/whats-on",
+  // Get involved, and the short pages under it.
   "/get-involved",
   // TASK-496: the ways people type Get involved from a poster; both redirect there.
   "/getinvolved",

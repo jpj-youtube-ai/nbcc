@@ -34,7 +34,7 @@ describe("the master footer", () => {
 describe("every page carries the master footer", () => {
   it("finds the public pages", () => {
     expect(pages.length).toBeGreaterThanOrEqual(26);
-    for (const f of ["index.html", "about.html", "donate.html", "events.html", "privacy.html", "404.html"]) expect(pages).toContain(f);
+    for (const f of ["index.html", "about.html", "donate.html", "whats-on.html", "privacy.html", "404.html"]) expect(pages).toContain(f);
   });
 
   it.each(pages)("%s is in step (if not, run: node scripts/sync-footer.mjs)", (file) => {

@@ -3,11 +3,12 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { EVENT_PAGE_PREFIX, pagePath, type FundraiserRecord } from "../fundraising/model";
 
-// TASK-494: the public pages of community fundraising, and Get involved (the Events page, renamed).
+// TASK-494: the public pages of community fundraising, What's on and Get involved.
 //
-//   GET /events                    301 to /get-involved, query string kept (old links, newsletters)
-//   GET /getinvolved, /involved    301 to /get-involved too, the ways people type it from a poster
-//   GET /get-involved              NBCC's events, plus fundraisers while fundraising is switched on
+//   GET /events                    301 to /whats-on, query string kept (old links, newsletters)
+//   GET /getinvolved, /involved    301 to /get-involved, the ways people type it from a poster
+//   GET /whats-on                  NBCC's events, plus fundraisers while fundraising is switched on
+//   GET /get-involved              every way to help, with the first six of those same cards
 //   GET /fundraise                 the sign up form, or "not open yet" while switched off; its
 //                                  categories drawn from the database's list, A to Z
 //   GET /fundraise/manage          change your page, by the emailed link (?token=); never indexed
@@ -263,8 +264,34 @@ async function pledgePageExtras(
   }
 }
 
+/**
+ * What What's on and Get involved are drawn from. One read, so the two pages can never disagree.
+ * A failed fundraiser read must not take NBCC's own events down with it: the page goes out without
+ * the fundraisers rather than not at all.
+ */
+async function deckInput(): Promise<import("../fundraising/render").GetInvolvedInput> {
+  const [{ listPageEvents }, { londonToday }] = await Promise.all([import("../db/events"), import("../events/model")]);
+  const today = londonToday(new Date());
+  const on = await fundraisingOn();
+  let fundraisers: import("../fundraising/model").PublicCard[] = [];
+  if (on) {
+    try {
+      // Team pages: a team once, with its combined meter; its member pages are on the team page.
+      const [{ listApprovedPublic }, { isListed, publicCard }, { teamsOnGetInvolved }] = await Promise.all([
+        import("../db/fundraisers"),
+        import("../fundraising/model"),
+        import("./team-pages"),
+      ]);
+      fundraisers = (await teamsOnGetInvolved(await listApprovedPublic())).filter((f) => isListed(f, today)).map((f) => publicCard(f, f.meter));
+    } catch (err) {
+      console.error("deck fundraisers failed:", err instanceof Error ? err.message : err);
+    }
+  }
+  return { events: await listPageEvents(today), fundraisers, fundraisingOn: on, today };
+}
+
 export function addFundraisePageRoutes(router: Router, siteRoot: string, deps: FundraisePageDeps): void {
-  const getInvolvedFile = join(siteRoot, "events.html");
+  const whatsOnFile = join(siteRoot, "whats-on.html");
   const signUpFile = join(siteRoot, "fundraise.html");
   const manageFile = join(siteRoot, "fundraise-manage.html");
   const tshirtFile = join(siteRoot, "fundraise-tshirt.html");
@@ -272,57 +299,30 @@ export function addFundraisePageRoutes(router: Router, siteRoot: string, deps: F
   const helpFile = join(siteRoot, "fundraise-help.html");
   const logosFile = join(siteRoot, "fundraise-logos.html");
 
-  // The page was /events until TASK-494. Links in old newsletters and on Facebook still point there,
-  // so it is a permanent redirect whether or not the page is on (switched off, /get-involved is the
-  // 404 the old address would have been). The query string goes too: newsletter links carry their
-  // utm tags on it.
-  // Said aloud, on a poster or on the radio, people type it without the dash, or just "involved", so
-  // those go there too (Express matches them in any case and with or without a trailing slash).
-  router.get(["/events", "/getinvolved", "/involved"], (req, res) => {
-    const at = req.originalUrl.indexOf("?");
-    res.redirect(301, `/get-involved${at === -1 ? "" : req.originalUrl.slice(at)}`);
-  });
+  // The page was /events until TASK-494, and /get-involved until What's on got an address of its own.
+  // It could not go back to /events: a browser keeps a 301 for good, so anyone who had followed that
+  // one would never reach it. Links in old newsletters and on Facebook still point at /events, so it
+  // is a permanent redirect whether or not the page is on (switched off, /whats-on is the 404 the old
+  // address would have been). The query string goes too: newsletter links carry their utm tags on it.
+  router.get("/events", (req, res) => res.redirect(301, `/whats-on${queryOf(req)}`));
+  // Said aloud, on a poster or on the radio, people type it without the dash, or just "involved"
+  // (Express matches them in any case and with or without a trailing slash).
+  router.get(["/getinvolved", "/involved"], (req, res) => res.redirect(301, `/get-involved${queryOf(req)}`));
 
-  router.get("/get-involved", async (req: Request, res: Response, next: NextFunction) => {
-    try {
-      if (!(await deps.eventsPageIsOn())) return next();
-      const [{ listPageEvents }, { londonToday }, { renderGetInvolvedPage }] = await Promise.all([
-        import("../db/events"),
-        import("../events/model"),
-        import("../fundraising/render"),
-      ]);
-      const today = londonToday(new Date());
-      const on = await fundraisingOn();
-      let fundraisers: import("../fundraising/model").PublicCard[] = [];
-      if (on) {
-        // A failed fundraiser read must not take NBCC's own events down with it: the page goes out
-        // without the fundraisers rather than not at all.
-        try {
-          // Team pages: a team once, with its combined meter; its member pages are on the team page.
-          const [{ listApprovedPublic }, { isListed, publicCard }, { teamsOnGetInvolved }] = await Promise.all([
-            import("../db/fundraisers"),
-            import("../fundraising/model"),
-            import("./team-pages"),
-          ]);
-          fundraisers = (await teamsOnGetInvolved(await listApprovedPublic())).filter((f) => isListed(f, today)).map((f) => publicCard(f, f.meter));
-        } catch (err) {
-          console.error("get involved fundraisers failed:", err instanceof Error ? err.message : err);
-        }
+  for (const path of ["/whats-on", "/get-involved"]) {
+    router.get(path, async (req: Request, res: Response, next: NextFunction) => {
+      try {
+        if (!(await deps.eventsPageIsOn())) return next();
+        const { renderWhatsOnPage } = await import("../fundraising/render");
+        const html = renderWhatsOnPage(readFileSync(whatsOnFile, "utf8"), await deckInput());
+        fresh(res);
+        res.type("html").send(await deps.decorate(html, req.headers.cookie));
+      } catch (err) {
+        console.error("what's on page failed:", err instanceof Error ? err.message : err);
+        next();
       }
-      const events = await listPageEvents(today);
-      const html = renderGetInvolvedPage(readFileSync(getInvolvedFile, "utf8"), {
-        events,
-        fundraisers,
-        fundraisingOn: on,
-        today,
-      });
-      fresh(res);
-      res.type("html").send(await deps.decorate(html, req.headers.cookie));
-    } catch (err) {
-      console.error("get involved page failed:", err instanceof Error ? err.message : err);
-      next();
-    }
-  });
+    });
+  }
 
   router.get("/fundraise", async (req, res, next) => {
     try {

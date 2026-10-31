@@ -3,7 +3,7 @@ import { describe, it, expect, beforeEach } from "vitest";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { createRequire } from "node:module";
-import { renderGetInvolvedPage } from "../../src/fundraising/render";
+import { renderWhatsOnPage } from "../../src/fundraising/render";
 import { meter, type PublicCard } from "../../src/fundraising/model";
 import { SEED_EVENTS } from "./helpers/events-seed";
 
@@ -15,7 +15,7 @@ const ROOT = resolve(__dirname, "../..");
 const require = createRequire(import.meta.url);
 const { initChips } = require(resolve(ROOT, "assets/js/events.js"));
 const eventsCss = readFileSync(resolve(ROOT, "assets/css/events.css"), "utf8").replace(/\/\*[\s\S]*?\*\//g, "");
-const template = readFileSync(resolve(ROOT, "events.html"), "utf8");
+const template = readFileSync(resolve(ROOT, "whats-on.html"), "utf8");
 
 const fundraiser = (slug: string, title: string): PublicCard => ({
   id: slug.length,
@@ -36,7 +36,7 @@ const fundraiser = (slug: string, title: string): PublicCard => ({
 });
 
 function load(fundraisers: PublicCard[]) {
-  const html = renderGetInvolvedPage(template, { events: SEED_EVENTS, fundraisers, fundraisingOn: true, today: "2026-10-02" });
+  const html = renderWhatsOnPage(template, { events: SEED_EVENTS, fundraisers, fundraisingOn: true, today: "2026-10-02" });
   document.documentElement.innerHTML = new DOMParser().parseFromString(html, "text/html").documentElement.innerHTML;
   return initChips(document, window);
 }
@@ -102,7 +102,7 @@ describe("with no fundraisers yet", () => {
 
 describe("without the chips (fundraising switched off)", () => {
   it("does nothing at all", () => {
-    const html = renderGetInvolvedPage(template, { events: SEED_EVENTS, fundraisers: [], fundraisingOn: false, today: "2026-10-02" });
+    const html = renderWhatsOnPage(template, { events: SEED_EVENTS, fundraisers: [], fundraisingOn: false, today: "2026-10-02" });
     document.documentElement.innerHTML = new DOMParser().parseFromString(html, "text/html").documentElement.innerHTML;
     expect(initChips(document, window)).toBeNull();
     expect(shown()).toHaveLength(cards().length);

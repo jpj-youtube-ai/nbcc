@@ -33,7 +33,7 @@ const PAGES = [
   "privacy.html",
   "404.html",
   "sitemap.html",
-  "events.html",
+  "whats-on.html",
   // TASK-494: the fundraising pages (a fundraiser's page is checked as drawn, in fundraising-render.test.ts).
   "fundraise.html",
   "fundraise-manage.html",

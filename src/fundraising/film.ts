@@ -1,15 +1,18 @@
-// The one minute film on Get involved ("Got an idea?"), shown only while fundraising is switched
-// on: the film is about fundraising for NBCC, and with fundraising off the page says nothing of it.
+// The one minute film on Get involved ("Got an idea?"), in the Fundraise section (./get-involved-page.ts),
+// so it is shown only while fundraising is switched on: the film is about fundraising for NBCC, and
+// with fundraising off the page says nothing of it. It plays on that one page and no other, so it
+// never starts by itself in two places.
 //
 // What NBCC decided (Jaimie, 2026-10-06):
-//   - a first visit: full size above the cards, playing by itself with the sound OFF (no browser
+//   - a first visit: full size, playing by itself with the sound OFF (no browser
 //     allows anything else), captions showing, and a "Play with sound" button on it, with a
 //     quieter "Pause" beside it (anything that moves by itself must be stoppable);
 //   - any later visit: a slim strip in the same place, "Watch our one minute film", so the events
-//     are seen straight away. Pressing it opens the film there and plays it with sound.
+//     are not held up. Pressing it opens the film there and plays it with sound.
 //
 // Which of the two is decided before the page is drawn, by FILM_HEAD below, so nobody sees the film
-// appear and then fold away. The rest is assets/js/events.js (initFilm) and assets/css/events.css.
+// appear and then fold away. The rest is assets/js/events.js (initFilm), assets/css/events.css and,
+// for how it sits on the crimson, assets/css/get-involved.css.
 // "Seen" is one note in the visitor's own browser (local storage, key nbcc-film-seen). It is not a
 // cookie and it is never sent to the server. privacy.html says so.
 //
@@ -17,7 +20,6 @@
 // anything in /assets/video for a week (assetHeaders, src/routes/site.ts).
 
 export const FILM_HEAD_MARKER = "<!-- getinvolved:film-head -->";
-export const FILM_MARKER = "<!-- getinvolved:film -->";
 
 /**
  * Runs in the head, before anything is drawn. A browser with no note is a first visit, as long as
@@ -84,6 +86,7 @@ export const FILM_SECTION =
   "</div>" +
   '<p class="gi-film__close-row"><button class="gi-film__close" type="button" data-film-close>Close the film</button></p>' +
   "</div>" +
+  '<p class="gi-film__caption">Got an idea? Let&rsquo;s make it happen.</p>' +
   '<details class="gi-film__words">' +
   "<summary>Read what the film says</summary>" +
   '<div class="gi-film__lines">' +

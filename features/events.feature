@@ -3,12 +3,15 @@ Feature: The Events page, built in the admin and switched on and off from it (TA
   Staff build events in the admin. The page ships switched off: until an admin turns it on,
   it is a real 404 and no page offers it in the menu or the site map. Switched on, it shows
   every live event soonest first, and nothing that is a draft, already over, or not due up yet.
-  TASK-494 renamed it Get involved, at /get-involved; /events redirects there for good.
+  It lives at /whats-on now; /events redirects there for good. The switch governs What's on and
+  Get involved together.
 
   # ---- the switch ----
 
   Scenario: switched off, the page does not exist and nothing points at it
     Given the events page is switched off
+    When a visitor opens "/whats-on"
+    Then the visitor gets status 404
     When a visitor opens "/get-involved"
     Then the visitor gets status 404
     When a visitor opens "/"
@@ -20,7 +23,7 @@ Feature: The Events page, built in the admin and switched on and off from it (TA
     Given the events page is switched on
     And a live event "Later night (bdd-events)" 12 days from now
     And a live event "Sooner night (bdd-events)" 10 days from now
-    When a visitor opens "/get-involved"
+    When a visitor opens "/whats-on"
     Then the visitor gets status 200
     And "Sooner night (bdd-events)" comes before "Later night (bdd-events)" on the page
     And the last card on the page is the face down card
@@ -29,10 +32,13 @@ Feature: The Events page, built in the admin and switched on and off from it (TA
     Given the events page is switched on
     When a visitor opens "/"
     Then the menu offers Events straight after About
+    And the menu offers What's on straight after Get involved
     When a visitor opens "/contact"
     Then the menu offers Events straight after About
+    And the menu offers What's on straight after Get involved
     When a visitor opens "/supporters"
     Then the menu offers Events straight after About
+    And the menu offers What's on straight after Get involved
     When a visitor opens "/sitemap.xml"
     Then the site map lists the events page
 
@@ -42,7 +48,7 @@ Feature: The Events page, built in the admin and switched on and off from it (TA
     And a live event "Over and done (bdd-events)" 1 day ago
     And an event "Not up yet (bdd-events)" 20 days from now scheduled to go up in 5 days
     And an event "Up today (bdd-events)" 20 days from now scheduled to go up today
-    When a visitor opens "/get-involved"
+    When a visitor opens "/whats-on"
     Then the page does not show "Still a draft (bdd-events)"
     And the page does not show "Over and done (bdd-events)"
     And the page does not show "Not up yet (bdd-events)"
@@ -81,7 +87,7 @@ Feature: The Events page, built in the admin and switched on and off from it (TA
     When "a2.events.bdd@example.com" switches the events page on
     Then the events admin status should be 200
     And the audit log records the page being switched on by "a2.events.bdd@example.com"
-    When a visitor opens "/get-involved"
+    When a visitor opens "/whats-on"
     Then the visitor gets status 200
 
   Scenario: a booking link that could run script is refused, and the field is named

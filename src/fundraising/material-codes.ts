@@ -7,7 +7,7 @@ import { hasPage, isValidSlug, pagePath, type FundraiserRecord } from "./model";
 //                           Short, so the code stays small and easy to scan, and it never has to
 //                           change: it is looked up by the fundraiser's id, never its address, so a
 //                           page whose address staff change is still found, for good.
-//   where it goes           a 302 to the fundraiser's page as it is called now (or Get involved, for
+//   where it goes           a 302 to the fundraiser's page as it is called now (or What's on, for
 //                           a listed event), with utm_medium=qr&utm_campaign=f12-a4 on it.
 //   how it is counted       by the site's own visit counter (TASK-479), which counts utm_medium=qr
 //                           as a QR code scan (TASK-492), so it shows in Admin > Analytics under QR
@@ -67,8 +67,8 @@ export function parseScanCampaign(raw: unknown): { id: number; code: MaterialCod
 }
 
 /**
- * Where a scan of this fundraiser's piece goes now: its page under its CURRENT address, or Get
- * involved for a listed event; null when there is nowhere to send anyone (declined, new, or not on
+ * Where a scan of this fundraiser's piece goes now: its page under its CURRENT address, or What's
+ * on for a listed event; null when there is nowhere to send anyone (declined, new, or not on
  * the website). Always a path on our own site: a stored address that is not a valid one goes
  * nowhere, so the link can never be turned into a way off the site.
  */
@@ -78,10 +78,10 @@ export function scanTarget(
 ): string | null {
   const tag = `?utm_medium=qr&utm_campaign=${scanCampaign(f.id, code)}`;
   // Event pages: an event's page is /event/<short name> (pagePath). An event whose stored address is
-  // not a valid one falls through to Get involved below, as before event pages (review fix).
+  // not a valid one falls through to What's on below, as before event pages (review fix).
   if (hasPage(f) && isValidSlug(f.slug)) return `${pagePath(f)}${tag}`;
   if (hasPage(f) && f.path !== "event") return null;
-  if (f.path === "event" && f.public && (f.status === "approved" || f.status === "finished")) return `/get-involved${tag}`;
+  if (f.path === "event" && f.public && (f.status === "approved" || f.status === "finished")) return `/whats-on${tag}`;
   return null;
 }
 

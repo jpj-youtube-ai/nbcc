@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import type { FundraiserRecord, Meter } from "../fundraising/model";
 import type { TeamExtras } from "../fundraising/team-render";
+import type { FillLinkPage } from "../red-bag/fill-links";
 
 // Team pages (Jaimie, 2026-10-03): the public pages a team adds.
 //
@@ -16,7 +17,7 @@ import type { TeamExtras } from "../fundraising/team-render";
 // lazily, like the rest of the site router, and a failure only leaves the extras out.
 
 export interface TeamPageDeps {
-  decorate: (html: string, cookieHeader: string | undefined) => Promise<string>;
+  decorate: (html: string, cookieHeader: string | undefined, query?: unknown, page?: FillLinkPage) => Promise<string>;
 }
 
 async function fundraisingOn(): Promise<boolean> {
@@ -109,11 +110,12 @@ export function addTeamPageRoutes(router: Router, siteRoot: string, deps: TeamPa
   router.get("/fundraise/:slug/join", async (req: Request, res: Response, next: NextFunction) => {
     try {
       if (!(await fundraisingOn())) return next();
-      const [{ getBySlug }, { shortName, kindLabelOf }, { membersAskedToShare }, { renderJoinPage, teamShareNote }] = await Promise.all([
+      const [{ getBySlug }, { shortName, kindLabelOf }, { membersAskedToShare }, { renderJoinPage, teamShareNote }, { isQuietFundraiser }] = await Promise.all([
         import("../db/fundraisers"),
         import("../fundraising/model"),
         import("../fundraising/teams"),
         import("../fundraising/team-render"),
+        import("../fundraising/touch-rules"),
       ]);
       const t = await getBySlug(String(req.params.slug));
       if (!t || !t.isTeam || (t.status !== "approved" && t.status !== "finished")) return next();
@@ -126,7 +128,7 @@ export function addTeamPageRoutes(router: Router, siteRoot: string, deps: TeamPa
       res.setHeader("Cache-Control", "no-store");
       res.setHeader("X-Robots-Tag", "noindex, nofollow");
       res.setHeader("Referrer-Policy", "strict-origin");
-      res.type("html").send(await deps.decorate(html, req.headers.cookie));
+      res.type("html").send(await deps.decorate(html, req.headers.cookie, undefined, { quiet: isQuietFundraiser(t) }));
     } catch (err) {
       console.error("team join page failed:", err instanceof Error ? err.message : err);
       next();

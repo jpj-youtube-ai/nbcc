@@ -84,7 +84,7 @@ Feature: The sign up tidy: the welcome pack, sport and the T-shirt, the split ch
     When "a3.tidy.fr.bdd@example.com" approves "Link Only Walk (bdd-fr)"
     And a visitor opens the page for "Link Only Walk (bdd-fr)"
     Then the visitor gets status 200
-    When a visitor opens "/get-involved"
+    When a visitor opens "/whats-on"
     Then the page does not show "Link Only Walk (bdd-fr)"
 
   Scenario: an event's date may be not decided yet, but only with the tick

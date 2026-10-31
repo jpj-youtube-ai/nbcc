@@ -20,14 +20,14 @@ import { NONE as NO_IMPACT, impactParts, type ImpactParts } from "./impact-rende
 import type { ImpactExample } from "../impact/examples";
 import { avatarHtml, isProfilePhotoSrc } from "./pictures";
 import { NBCC_FACT_HTML, nbccCardBooking } from "../tickets/render";
-import { FILM_HEAD, FILM_HEAD_MARKER, FILM_MARKER, FILM_SECTION } from "./film";
 
 // TASK-494: the public fundraising pages, drawn on the server.
 //
-//   - Get involved (/get-involved): the Events page widened. NBCC's events as before, and while
+//   - What's on (/whats-on): the Events page widened. NBCC's events as before, and while
 //     fundraising is switched on, every approved public fundraiser as a card with its meter, the
 //     "holding an event" sign ups as ordinary event cards, the All / Events / Fundraisers chips and
-//     the Fundraise for us panel.
+//     the Fundraise for us panel. Get involved (/get-involved, ./get-involved-page.ts) shows the
+//     first six of the same cards.
 //   - A fundraiser's own page (/fundraise/<slug>): the story, the meter, the give form, the
 //     supporter wall and the share links. (TASK-501 moved its QR code to the organiser's private
 //     area; /fundraise/<slug>/qr.svg still answers, it is just not shown or linked here.)
@@ -137,7 +137,7 @@ export function renderMeter(m: Meter, opts: { large?: boolean } = {}): string {
   );
 }
 
-// --- Get involved ----------------------------------------------------------------------------------
+// --- What's on and Get involved's cards ------------------------------------------------------------
 
 function cardArt(c: PublicCard): string {
   if (c.imageSrc) {
@@ -298,26 +298,32 @@ export function fundraiserEventRecord(c: PublicCard): CardRecord | null {
 
 export const CHIPS_MARKER = "<!-- getinvolved:chips -->";
 export const STYLES_MARKER = "<!-- getinvolved:styles -->";
-const FUNDRAISING_STYLES = '<link rel="stylesheet" href="/assets/css/fundraising.css" />';
+export const FUNDRAISING_STYLES = '<link rel="stylesheet" href="/assets/css/fundraising.css" />';
 // The hint above the deck: fundraiser cards have one face, so once they are among the cards only
 // the event cards are promised to turn over.
-const HINT_ALL = "Turn any card over for the full details.";
-const HINT_EVENTS = "Turn any event card over for the full details.";
+export const HINT_ALL = "Turn any card over for the full details.";
+export const HINT_EVENTS = "Turn any event card over for the full details.";
 export const PANEL_MARKER = "<!-- getinvolved:panel -->";
 const INTRO_BLOCK = /<!-- getinvolved:intro -->([\s\S]*?)<!-- \/getinvolved:intro -->/;
 
-const CHIPS =
+/** The All, Events and Fundraisers buttons. They ship hidden, so with no script every card shows. */
+export const CHIP_BUTTONS =
   '<div class="gi-chips" role="group" aria-label="Show on the page" data-chips hidden>' +
   '<button class="gi-chip" type="button" aria-pressed="true" data-show="all">All</button>' +
   '<button class="gi-chip" type="button" aria-pressed="false" data-show="event">Events</button>' +
   '<button class="gi-chip" type="button" aria-pressed="false" data-show="fundraiser">Fundraisers</button>' +
-  "</div>" +
-  '<p class="sr-only" role="status" aria-live="polite" data-chips-status></p>' +
+  "</div>";
+/** Tells a screen reader what the chips are showing. */
+export const CHIP_STATUS = '<p class="sr-only" role="status" aria-live="polite" data-chips-status></p>';
+/** What an empty Fundraisers view says when there are no fundraisers anywhere. */
+export const NO_FUNDRAISERS =
   '<p class="gi-empty" data-chips-empty="fundraiser" hidden>No fundraisers on the page just now. Could yours be the first? ' +
   '<a href="/fundraise">Fundraise for us</a></p>';
 
+const CHIPS = CHIP_BUTTONS + CHIP_STATUS + NO_FUNDRAISERS;
+
 const INTRO_ON =
-  '<span class="eyebrow">Get involved</span>' +
+  '<span class="eyebrow">What&rsquo;s on</span>' +
   '<h1 id="events-heading">Join in, or raise money your way.</h1>' +
   '<div class="rule"><i></i></div>' +
   '<p class="lede">Nights out, workshops and gatherings for NBCC, and local people raising money in their own way. Come along, give to a fundraiser, or start your own.</p>' +
@@ -354,34 +360,40 @@ export interface GetInvolvedInput {
 }
 
 /**
- * The Get involved page. With fundraising switched off it is the Events page exactly as it was (the
+ * The deck: one card each for the events and the community events, soonest first, then the raising
+ * money fundraisers. Both What's on and Get involved draw from this one list, so they can never
+ * disagree. With fundraising switched off it is NBCC's own events and nothing else.
+ */
+export function deckCards(input: GetInvolvedInput): { kind: "event" | "fundraiser"; html: string }[] {
+  const asEvent = (ev: CardRecord) => ({ kind: "event" as const, html: renderCard(ev) });
+  if (!input.fundraisingOn) return input.events.map(asEvent);
+  const community = input.fundraisers
+    .filter((f) => f.path === "event")
+    .map(fundraiserEventRecord)
+    .filter((ev): ev is CardRecord => ev !== null && ev.date >= input.today);
+  const raising = input.fundraisers.filter((f) => f.path === "raising");
+  return [
+    ...sortForPage([...input.events, ...community]).map(asEvent),
+    ...raising.map((f) => ({ kind: "fundraiser" as const, html: renderFundraiserCard(f, input.today) })),
+  ];
+}
+
+/** The face down card that ends the deck: its invitation is the sign up while fundraising is on. */
+export const deckEnd = (fundraisingOn: boolean): string => (fundraisingOn ? renderMoreCard("", "/fundraise") : renderMoreCard());
+
+/**
+ * The What's on page. With fundraising switched off it is the Events page exactly as it was (the
  * deck of events and the face down card), with nothing about fundraising anywhere in it.
  */
-export function renderGetInvolvedPage(template: string, input: GetInvolvedInput): string {
+export function renderWhatsOnPage(template: string, input: GetInvolvedInput): string {
   const on = input.fundraisingOn;
-  let deck: string;
-  if (!on) {
-    deck = input.events.map((ev) => renderCard(ev)).join("") + renderMoreCard();
-  } else {
-    const community = input.fundraisers
-      .filter((f) => f.path === "event")
-      .map(fundraiserEventRecord)
-      .filter((ev): ev is CardRecord => ev !== null && ev.date >= input.today);
-    const raising = input.fundraisers.filter((f) => f.path === "raising");
-    deck =
-      sortForPage([...input.events, ...community]).map((ev) => renderCard(ev)).join("") +
-      raising.map((f) => renderFundraiserCard(f, input.today)).join("") +
-      renderMoreCard("", "/fundraise");
-  }
+  const deck = deckCards(input).map((c) => c.html).join("") + deckEnd(on);
   return template
     .replace(INTRO_BLOCK, (_all, inner: string) => (on ? INTRO_ON : inner))
     .replace(STYLES_MARKER, () => (on ? FUNDRAISING_STYLES : ""))
     .replace(HINT_ALL, () => (on ? HINT_EVENTS : HINT_ALL))
     .replace(CHIPS_MARKER, () => (on ? CHIPS : ""))
     .replace(PANEL_MARKER, () => (on ? PANEL : ""))
-    // The one minute film (src/fundraising/film.ts): it is about fundraising, so it goes with the switch.
-    .replace(FILM_HEAD_MARKER, () => (on ? FILM_HEAD : ""))
-    .replace(FILM_MARKER, () => (on ? FILM_SECTION : ""))
     .replace(DECK_MARKER, () => deck);
 }
 

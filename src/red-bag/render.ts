@@ -4,6 +4,7 @@ import { BLOCKED_NAME_LISTS } from "../donors/display-name-filter";
 import { MATERIALS_STATEMENT } from "../legal/registration";
 import { redBag, type RedBagCatalogue } from "./catalogue";
 import { redBagList, type RedBagList, type RedBagListForPage } from "./list";
+import { DRIFT, renderLights } from "./scene";
 
 // Fill a Red Bag: the parts of the page the server draws into fill-a-red-bag.html, where its
 // markers are. The list and the themes come from the one catalogue (./catalogue.ts), so they are in
@@ -240,6 +241,11 @@ export interface RedBagPageOptions {
    */
   list?: RedBagList | null;
   /**
+   * The page at night, from the Ball's moment (src/site/after-ball.ts): see renderNight. Left out
+   * before it, and the page is byte for byte what it was.
+   */
+  night?: boolean;
+  /**
    * The draft preview (Admin > Fill a Red Bag > Preview the page): the strip, never indexed, and
    * GIVING SWITCHED OFF. The details form is not drawn at all, so there is nothing to send a gift
    * with, and the page's script makes Donate say so (assets/js/red-bag.js).
@@ -350,6 +356,44 @@ export function renderRedBagThanksPage(template: string, opts: Pick<RedBagPageOp
   return opts.preview ? markPreview(html) : html;
 }
 
+// The night, from the Ball's moment: the night sky, the snow, the ten lights, the bag standing in the
+// snow, the sum on the bag and the elf. A dressing and nothing more, added here and only here, as the
+// page is drawn: it wraps what is on the page and adds to it, and it changes no list, no stepper, no
+// total, no details step and nothing that is sent. assets/css/fill-night.css and assets/js/fill-night.js
+// do the rest; the script comes before the page's own so that it hears the page's first word.
+const PAGE_STYLES = '<link rel="stylesheet" href="/assets/css/red-bag.css" />';
+const PAGE_SCRIPT = '<script defer src="/assets/js/red-bag.js"></script>';
+const NIGHT_STYLES = '<link rel="stylesheet" href="/assets/css/fill-night.css" />';
+const NIGHT_SCRIPT = '<script defer src="/assets/js/fill-night.js"></script>';
+const INTRO = '<section class="page-top rb-intro" aria-labelledby="rb-title">';
+const HEADING = '<h1 id="rb-title">Fill a Red Bag</h1>';
+const PANEL = '<div class="rb-panel" role="region" aria-labelledby="rb-panel-title">';
+const DETAILS_STEP = '<section class="section flush-top rb-details-step"';
+const UNDERLINE =
+  '<svg viewBox="0 0 300 18" preserveAspectRatio="none" aria-hidden="true" focusable="false"><path pathLength="1" d="M4 12C60 3 120 15 176 8s86-3 120 2"/></svg>';
+
+/** The page dressed for the night. If any place it needs is missing: the page as it came, not half dressed. */
+function renderNight(html: string, rb: RedBagCatalogue): string {
+  if (![PAGE_STYLES, PAGE_SCRIPT, INTRO, HEADING, PANEL, DETAILS_STEP].every((place) => html.includes(place))) return html;
+  const open =
+    '<div class="fn-night" id="fnNight">' +
+    '<canvas class="fn-sky" aria-hidden="true"></canvas>' +
+    renderLights() +
+    `<div class="fn-edge">${DRIFT}</div>`;
+  const close = `<div class="wrap fn-still"><button class="fn-pause" id="fnPause" type="button" hidden>Pause the snow</button></div>${DRIFT}</div><div class="fn-ground"></div>`;
+  // The sum is the script's to show, so a page whose script did not arrive never shows a wrong one.
+  const sum = `<p class="fn-sum" id="fnSum" aria-hidden="true" hidden><b>${rb.pounds(0)}</b><span>of ${rb.pounds(rb.BAG_VALUE_PENCE)}</span></p>`;
+  const elf = '<img class="fn-elf" src="/assets/img/nbcc-elf.png" alt="" width="150" height="98" loading="lazy" decoding="async" />';
+  // Functions, not strings: nothing drawn in is ever read as a replacement pattern ("$&").
+  return html
+    .replace(PAGE_STYLES, () => `${PAGE_STYLES}\n    ${NIGHT_STYLES}`)
+    .replace(PAGE_SCRIPT, () => `${NIGHT_SCRIPT}\n    ${PAGE_SCRIPT}`)
+    .replace(INTRO, () => `${open}${INTRO}`)
+    .replace(HEADING, () => `<h1 id="rb-title">Fill a <span class="fn-under">Red Bag${UNDERLINE}</span></h1>`)
+    .replace(PANEL, () => `${PANEL}${elf}${sum}`)
+    .replace(DETAILS_STEP, () => `${close}${DETAILS_STEP}`);
+}
+
 /** The whole page: the template with every marker filled in. */
 export function renderRedBagPage(template: string, opts: RedBagPageOptions): string {
   const catalogue = redBag();
@@ -376,5 +420,6 @@ export function renderRedBagPage(template: string, opts: RedBagPageOptions): str
     // a heading over nothing.
     if (rb.THEMES.length === 0) html = html.replace('<div class="rb-need" data-rb-need ', '<div class="rb-need" data-rb-need hidden ');
   }
+  if (opts.night === true) html = renderNight(html, catalogue);
   return opts.preview || draft ? markPreview(html, { preview: opts.preview, draft }) : html;
 }

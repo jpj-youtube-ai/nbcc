@@ -133,6 +133,7 @@ Feature: The Festive Ball password gate (TASK-313)
     When I request "/donate"
     Then the nav should not mention the Festive Ball
 
+  @until-the-ball
   Scenario: opening the gate puts the ball in the nav on EVERY page, not just the home page
     # The nav used to differ depending on which page you were on, because the link was added
     # only to the home page. supporters.html is the one that matters most here: its own nav
@@ -149,6 +150,7 @@ Feature: The Festive Ball password gate (TASK-313)
     When I request "/contact"
     Then the nav should offer the Festive Ball
 
+  @until-the-ball
   Scenario: a staff preview shows the ball in the nav too, not just on the home page
     # Without this the preview contradicted itself: a cookie holder saw the promotion band on
     # the home page while the nav on every page pretended the ball did not exist, so the thing
@@ -160,6 +162,7 @@ Feature: The Festive Ball password gate (TASK-313)
     When I request "/about-us"
     Then the nav should offer the Festive Ball
 
+  @until-the-ball
   Scenario: staff preview the launch-morning home page without publishing it
     # "How do we see what the home page looks like before it goes live?" Anyone holding a
     # preview cookie -- which you only get by typing the ball password -- sees the promotion
@@ -182,6 +185,7 @@ Feature: The Festive Ball password gate (TASK-313)
     And the ball page should not contain "Festive Ball"
     And the ball page should not contain "ball-banner"
 
+  @until-the-ball
   Scenario: opening the gate puts the ball on the home page too
     Given the ball gate is open
     When I request "/"

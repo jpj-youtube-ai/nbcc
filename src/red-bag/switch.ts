@@ -11,8 +11,10 @@
 // map and in sitemap.xml, and carries a canonical address and a share card. The thank you page is
 // never indexed.
 //
-// It is still LINKED from nowhere: not /donate, not the menu, not the footer.
-// test/unit/red-bag-page.test.ts holds all of that in place.
+// It is still LINKED from nowhere in any page's file: not /donate, not the menu, not the footer.
+// test/unit/red-bag-page.test.ts holds all of that in place. From the Ball's moment
+// (src/site/after-ball.ts) the stage and the links in src/red-bag/fill-links.ts are added as pages go
+// out, and only while this switch is on.
 //
 // WHAT IS LEFT, when Jaimie says: add the link from /donate and the menu. Nothing else.
 //

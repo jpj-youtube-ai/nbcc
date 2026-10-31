@@ -5,6 +5,7 @@ import { renderRedBagPage, renderRedBagThanksPage } from "../red-bag/render";
 import { isStaffRequest, mayViewRedBagDraft } from "../red-bag/staff";
 import { redBagList, type RedBagList } from "../red-bag/list";
 import { RED_BAG_PATH, RED_BAG_THANKS_PATH, redBagAccess, redBagIsLive } from "../red-bag/switch";
+import { markAfterBallCheck } from "../site/after-ball";
 
 // Fill a Red Bag: its pages (docs/superpowers/specs/2026-10-04-fill-a-red-bag-design.md).
 //
@@ -59,6 +60,9 @@ import { RED_BAG_PATH, RED_BAG_THANKS_PATH, redBagAccess, redBagIsLive } from ".
 //                             fails the rules, the answer is the published page.
 //   The thank you page takes no list: it uses only the catalogue's constants.
 //
+// From the Ball's moment, or for ?at=after-ball, the giving page goes out dressed for the night
+// (renderNight in src/red-bag/render.ts). The thank you page never does.
+//
 // Added to the site router (src/routes/site.ts) before its catch-all. The staff checks read one
 // row only when a token is sent.
 //
@@ -81,8 +85,16 @@ export interface RedBagPageDeps {
   indexable?: boolean;
   /** 404.html. */
   notFound: () => string;
-  /** Adds the menu items switched on elsewhere (the ball, Get involved). */
-  decorate: (html: string, cookieHeader: string | undefined) => Promise<string>;
+  /**
+   * Adds the menu items switched on elsewhere (the ball, Get involved). Given a query, it answers for
+   * that view of the page (src/site/after-ball.ts).
+   */
+  decorate: (html: string, cookieHeader: string | undefined, query?: unknown) => Promise<string>;
+  /**
+   * The giving page only: has the Ball's moment come for this view (src/site/after-ball.ts)? Yes, and
+   * the page is drawn at night. Left out (the thank you page, which stays as it is): never.
+   */
+  isAfterBall?: (query: unknown) => boolean;
   /** The switch. Defaults to the constant in src/red-bag/switch.ts. */
   live?: () => boolean;
   /** Is this Authorization header a signed in member of staff? Defaults to the admin's own session. */
@@ -182,15 +194,20 @@ export function redBagPageHandler(deps: RedBagPageDeps) {
       }
     }
 
-    // Drawn BEFORE anything is set on the response, for the same reason. With no list and no draft
-    // the options are exactly what they always were.
-    const opts = { preview: access === "preview", ...(list ? { list } : {}), ...(draft ? { draft: true } : {}) };
+    // Drawn BEFORE anything is set on the response, for the same reason. With no list, no draft and
+    // before the moment the options are exactly what they always were.
+    const night = deps.isAfterBall?.(req.query) === true;
+    const opts = { preview: access === "preview", ...(list ? { list } : {}), ...(draft ? { draft: true } : {}), ...(night ? { night: true } : {}) };
     let page = render(deps.template(), opts);
     // A plain visit to the draft preview's address: the published page, plus the loader that asks
     // again with the tab's admin session. Never on an answer to a request that carried a session,
     // or the page it brings in would go and fetch itself again.
     if (wantsDraft && !authorization) page = page.replace("</head>", `${PREVIEW_LOADER}</head>`);
-    const html = await deps.decorate(page, req.headers.cookie);
+    // ?at=after-ball shows the giving page as it will be after the Ball's moment. It reads a list, the
+    // thank you page does not, and the thank you page is left as it is.
+    const query = deps.list ? req.query : undefined;
+    const html = await deps.decorate(page, req.headers.cookie, query);
+    markAfterBallCheck(res, query);
 
     if (access === "preview" || wantsDraft) {
       // Never let a shared cache hand a preview to the public, or the public page to a preview.
@@ -228,7 +245,7 @@ export function redBagForwardHandler(live: () => boolean = redBagIsLive) {
 export function addRedBagPageRoutes(
   router: Router,
   siteRoot: string,
-  page: Pick<RedBagPageDeps, "decorate" | "live" | "isStaff" | "list" | "draft" | "mayViewDraft">,
+  page: Pick<RedBagPageDeps, "decorate" | "live" | "isStaff" | "list" | "draft" | "mayViewDraft" | "isAfterBall">,
 ): void {
   const file = join(siteRoot, "fill-a-red-bag.html");
   const thanksFile = join(siteRoot, "fill-thank-you.html");
@@ -240,12 +257,13 @@ export function addRedBagPageRoutes(
     ...(page.isStaff ? { isStaff: page.isStaff } : {}),
   };
   router.get(RED_BAG_FORWARDS, redBagForwardHandler(page.live));
-  // The giving page alone reads the list. The database is reached only when a page is asked for
-  // (never as this file loads), and through the read that cannot throw.
+  // The giving page alone reads the list, and alone goes out at night. The database is reached only
+  // when a page is asked for (never as this file loads), and through the read that cannot throw.
   const lists = {
     list: page.list ?? (async () => (await import("../db/red-bag-lists")).loadPublishedRedBagList()),
     draft: page.draft ?? (async () => (await (await import("../db/red-bag-lists")).readRedBagDraft())?.data ?? null),
     ...(page.mayViewDraft ? { mayViewDraft: page.mayViewDraft } : {}),
+    ...(page.isAfterBall ? { isAfterBall: page.isAfterBall } : {}),
   };
   router.get(RED_BAG_PATH, redBagPageHandler({ ...shared, ...lists, template: () => readFileSync(file, "utf8"), indexable: true }));
   router.get(

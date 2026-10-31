@@ -10607,7 +10607,7 @@
     }
     if (!f.public) return "Approved. They only wanted to let us know, or wanted materials, so it is not on the website.";
     // Event pages: an approved public event has its own page as well as its card.
-    if (f.path === "event") return "Approved. Its page is on the website, and it is listed on Get involved as an event, while fundraising is switched on.";
+    if (f.path === "event") return "Approved. Its page is on the website, and it is listed on What’s on as an event, while fundraising is switched on.";
     return "Approved. Its page is on the website while fundraising is switched on.";
   }
 
@@ -14368,7 +14368,7 @@
     if (!f.public) return "Not on the website";
     if (f.offListBy === "organiser") return "A page of its own, but not on Get involved: only people they send the link to";
     // An event's card needs a date: until it has one it has its page, but is not on the list.
-    if (f.path === "event" && !f.eventDate) return "Not listed yet: no date. Its page is up; its card joins Get involved once it has a date";
+    if (f.path === "event" && !f.eventDate) return "Not listed yet: no date. Its page is up; its card joins What’s on once it has a date";
     return "Show it on our website";
   }
   // The new answers, in What they told us. A sign up from before has none, and shows nothing.
@@ -16694,8 +16694,8 @@
     var box = el("evSwitch");
     box.classList.toggle("is-on", on);
     el("evSwitchState").innerHTML = on
-      ? "<b>Yes.</b> The page is at nbcc.scot/get-involved, and every page’s menu offers it as Get involved. Visitors see every event marked “On the website”."
-      : "<b>No.</b> The page is switched off: nobody can see it and no menu mentions it. Build and check events here, then switch it on when you are ready.";
+      ? "<b>Yes.</b> This switch is for two pages, nbcc.scot/get-involved and nbcc.scot/whats-on, and every page’s menu offers them as Get involved and What’s on. Visitors see every event marked “On the website”."
+      : "<b>No.</b> This switch is for two pages, Get involved and What’s on, and both are switched off: nobody can see them and no menu mentions them. Build and check events here, then switch them on when you are ready.";
     el("evSwitchWho").textContent = evData && evData.updatedBy && evData.updatedBy.indexOf("admin:") === 0
       ? "Last " + (on ? "switched on" : "switched off") + " by " + evData.updatedBy.slice(6) + " on " + H.fmtDate(evData.updatedAt) + "."
       : "";
@@ -16711,8 +16711,8 @@
   function evFlipSwitch() {
     var on = !!(evData && evData.pageOn);
     var question = on
-      ? "Take the Get involved page off the website? It will disappear from the site and from every page’s menu straight away."
-      : "Put the Get involved page on the website? Everyone will be able to see it, and every page’s menu will offer it, straight away.";
+      ? "Take the Get involved page off the website, and What’s on with it? Both will disappear from the site and from every page’s menu straight away."
+      : "Put the Get involved page on the website, and What’s on with it? Everyone will be able to see both, and every page’s menu will offer them, straight away.";
     if (!window.confirm(question)) return;
     var btn = el("evSwitchBtn");
     var status = el("evSwitchStatus");
@@ -16738,7 +16738,7 @@
         evData.updatedAt = r.body.updatedAt;
         evData.updatedBy = r.body.updatedBy;
         status.className = "ty-status is-ok";
-        status.textContent = r.body.pageOn ? "The Get involved page is now on the website." : "The Get involved page is now off the website.";
+        status.textContent = r.body.pageOn ? "The Get involved page is now on the website, and What’s on with it." : "The Get involved page is now off the website, and What’s on with it.";
         evRenderSwitch();
         evSchedulePreview(0);
       })

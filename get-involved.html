@@ -8,7 +8,7 @@
     <title>Get involved | Night Before Christmas Campaign</title>
     <meta
       name="description"
-      content="Get involved with NBCC: nights out, workshops and gatherings, and local people raising money for children, young people and vulnerable adults across South West Scotland."
+      content="Fundraise, come along to an event, volunteer or bring a donation: every way to help NBCC support children, young people and vulnerable adults across South West Scotland."
     />
     <link rel="canonical" href="https://nbcc.scot/get-involved" />
 
@@ -17,7 +17,7 @@
     <meta property="og:title" content="Get involved | Night Before Christmas Campaign" />
     <meta
       property="og:description"
-      content="Get involved with NBCC: nights out, workshops and gatherings, and local people raising money for children, young people and vulnerable adults across South West Scotland."
+      content="Fundraise, come along to an event, volunteer or bring a donation: every way to help NBCC support children, young people and vulnerable adults across South West Scotland."
     />
     <meta property="og:url" content="https://nbcc.scot/get-involved" />
     <meta property="og:image" content="https://nbcc.scot/assets/img/og-image.png" />
@@ -26,24 +26,23 @@
     <meta name="twitter:title" content="Get involved | Night Before Christmas Campaign" />
     <meta
       name="twitter:description"
-      content="Get involved with NBCC: nights out, workshops and gatherings, and local people raising money for children, young people and vulnerable adults across South West Scotland."
+      content="Fundraise, come along to an event, volunteer or bring a donation: every way to help NBCC support children, young people and vulnerable adults across South West Scotland."
     />
     <meta name="twitter:image" content="https://nbcc.scot/assets/img/og-image.png" />
 
     <!-- getinvolved:film-head --><link rel="stylesheet" href="/assets/css/styles.css" />
-    <!-- Get involved (TASK-494: the events page, renamed and widened) ships its OWN stylesheets rather
-         than growing the shared bundle (see the note at the top of events.css). While fundraising is
-         switched on the server adds the fundraising stylesheet (the meter) where the marker is; off,
-         the page loads exactly what the Events page did. -->
+    <!-- The cards and the film keep the styles they have on What's on (events.css). While fundraising
+         is switched on the server adds the fundraising stylesheet (the meter) where the marker is. -->
     <link rel="stylesheet" href="/assets/css/events.css" />
     <!-- getinvolved:styles -->
+    <link rel="stylesheet" href="/assets/css/get-involved.css" />
     <link rel="preload" href="/assets/fonts/playfair-var.woff2" as="font" type="font/woff2" crossorigin />
     <link rel="preload" href="/assets/fonts/poppins-400.woff2" as="font" type="font/woff2" crossorigin />
     <script defer src="/assets/js/main.js"></script>
     <script defer src="/assets/js/events.js"></script>
     <script defer src="/assets/js/pulse.js"></script>
   </head>
-  <body>
+  <body class="page-hub">
     <a class="skip-link" href="#main">Skip to content</a>
     <header class="nav" id="nav" data-region="nav">
       <div class="wrap">
@@ -53,6 +52,7 @@
             <li><a href="/">Home</a></li>
             <li><a href="/about-us">About</a></li>
             <li><a href="/get-involved" class="active" aria-current="page">Get involved</a></li>
+            <li><a href="/whats-on">What's on</a></li>
             <li><a href="/donate">Donate</a></li>
             <li><a href="/contact">Contact</a></li>
             <li><a href="/supporters">Supporters</a></li>
@@ -64,36 +64,86 @@
     </header>
 
     <main class="site-main" id="main" tabindex="-1">
-      <section class="page-top events-intro" aria-labelledby="events-heading">
-        <div class="wrap">
-          <div class="intro-hero">
-            <!-- getinvolved:intro --><span class="eyebrow">Get involved</span>
-            <h1 id="events-heading">Dates for your diary.</h1>
-            <div class="rule"><i></i></div>
-            <p class="lede">Nights out, workshops and gatherings raising money for NBCC. Some we run ourselves, and some are run for us by the local businesses who back us. The soonest is always first.</p><!-- /getinvolved:intro -->
+      <section class="page-top band band-hub" aria-labelledby="hub-heading">
+        <div class="wrap hub-top">
+          <div class="hub-words">
+            <span class="eyebrow on-dark">Get involved</span>
+            <h1 id="hub-heading">What can<br />I do?</h1>
+            <p class="proof">Last Christmas, <strong class="num">7,657</strong> <span class="numline">children, young people and vulnerable adults</span> woke up to a Red Bag Full of Joy. None of it happens without people like you.</p>
           </div>
+          <figure class="snap hub-snap"><img src="/assets/img/home-red-bags-handover.jpg" alt="NBCC elves in maroon jumpers handing out Red Bags Full of Joy beside a Christmas tree" width="1400" height="732" decoding="async" /><figcaption>Packed with love</figcaption></figure>
         </div>
-      </section><!-- getinvolved:film -->
+        <!-- getinvolved:edge -->
+      </section>
+      <!-- getinvolved:fundraise -->
 
-      <!-- The deck. The server puts the cards where the marker is (src/fundraising/render.ts, using
-           src/events/render.ts): one <li> per event on the page, soonest first, then (while
-           fundraising is switched on) each fundraiser's card, then the face down "more on the way"
-           card. Past events drop off by themselves; drafts never appear. The intro, the chips and
-           the Fundraise for us panel are filled in only while fundraising is switched on. The page is
-           only served while an admin has the Events page switched on. -->
-      <section class="section flush-top events-deck" aria-labelledby="deck-heading">
+      <!-- The first six cards of What's on, from the same list (src/fundraising/get-involved-page.ts). -->
+      <section class="evs events-deck" id="whats-on" aria-labelledby="deck-heading">
         <div class="wrap">
-          <h2 class="sr-only" id="deck-heading">Upcoming events and fundraisers</h2>
-          <!-- getinvolved:chips -->
+          <div class="evs-head">
+            <div>
+              <span class="eyebrow">What&rsquo;s on</span>
+              <h2 id="deck-heading">Upcoming events and fundraisers</h2>
+            </div>
+            <!-- getinvolved:chips -->
+          </div>
+          <!-- getinvolved:chip-notes -->
           <p class="deck-hint" data-deck-hint hidden>
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 12a8 8 0 0 0-14.2-5"/><path d="M5 3v4h4"/><path d="M4 12a8 8 0 0 0 14.2 5"/><path d="M19 21v-4h-4"/></svg>
             Turn any card over for the full details.
           </p>
 
           <ol class="deck" role="list" data-deck><!-- events:deck --></ol>
+          <p class="evs-more"><a class="btn btn-ghost" href="/whats-on">See everything that&rsquo;s on</a></p>
         </div>
       </section>
-      <!-- getinvolved:panel -->
+      <!-- getinvolved:fill-stage -->
+
+      <section class="band band-holly together-band" aria-label="Other ways to help">
+        <div class="wrap as-group">
+          <div>
+            <h2>Coming as a business, school or group?</h2>
+            <p>There&rsquo;s lots you can do together, from sponsorship and staff fundraising to jumper days and talks.</p>
+          </div>
+          <nav class="labels" aria-label="Ways to help together">
+            <a class="label" href="/get-involved/business">Your business</a>
+            <a class="label" href="/get-involved/schools">Your school</a>
+            <a class="label" href="/get-involved/groups">Your club or group</a>
+          </nav>
+        </div>
+        <div class="wrap as-group as-more">
+          <div>
+            <h2>More ways to help</h2>
+            <p>Give your time, bring a donation, refer someone who needs us, or tell us your story.</p>
+          </div>
+          <nav class="labels" aria-label="More ways to help">
+            <a class="label" href="/get-involved/volunteer">Volunteer</a>
+            <a class="label" href="/get-involved/drop-off-points">Drop-off points</a>
+            <a class="label" href="/get-involved/referrals">Referrals</a>
+            <a class="label" href="/my-story">Share your story</a>
+          </nav>
+        </div>
+      </section>
+
+      <section class="stay-sec" aria-label="Stay in touch">
+        <div class="wrap stay-grid">
+          <div class="paper-note">
+            <span class="tape" aria-hidden="true"></span>
+            <h2 class="hand">Not ready yet? Stay close.</h2>
+            <p>Hear what&rsquo;s happening, and be the first to know when we need a hand.</p>
+            <div class="row">
+              <a class="btn btn-primary" href="/newsletter">Join our mailing list</a>
+              <a class="btn btn-ghost" href="https://www.facebook.com/nbcc.scot" target="_blank" rel="noopener">Facebook<span class="sr-only">, opens in a new tab</span></a>
+              <a class="btn btn-ghost" href="https://www.instagram.com/nbcc.scot" target="_blank" rel="noopener">Instagram<span class="sr-only">, opens in a new tab</span></a>
+            </div>
+          </div>
+          <div class="closing">
+            <p class="together">Together, we make sure nobody is forgotten, at Christmas and all year round.</p>
+            <div class="rule"><i></i></div>
+            <p class="helpline"><b>Need a little help yourself?</b> Speak to your school, health visitor or support worker, and they can refer you to us, at Christmas and all year round.</p>
+          </div>
+        </div>
+      </section>
     </main>
 
     <footer class="site-footer" data-region="footer">

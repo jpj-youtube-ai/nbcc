@@ -8,7 +8,7 @@ import {
   renderMeter,
   renderFundraiserCard,
   fundraiserEventRecord,
-  renderGetInvolvedPage,
+  renderWhatsOnPage,
   renderFundraiserPage,
   renderFundraiseSignUp,
   WALL_FIRST,
@@ -189,11 +189,11 @@ describe("a holding an event sign up, shown as an event", () => {
 });
 
 describe("Get involved", () => {
-  const template = read("events.html");
+  const template = read("whats-on.html");
   const today = "2026-10-02";
 
   it("with fundraising switched off is the events page as it was: no chips, no fundraisers, no panel", () => {
-    const html = renderGetInvolvedPage(template, { events: SEED_EVENTS, fundraisers: [card()], fundraisingOn: false, today });
+    const html = renderWhatsOnPage(template, { events: SEED_EVENTS, fundraisers: [card()], fundraisingOn: false, today });
     const doc = parse(html);
     expect(doc.querySelector("[data-chips]")).toBeNull();
     expect(doc.querySelector(".ev-card--fundraiser")).toBeNull();
@@ -204,7 +204,7 @@ describe("Get involved", () => {
   });
 
   it("with fundraising on: the chips, every fundraiser's card and the Fundraise for us panel", () => {
-    const html = renderGetInvolvedPage(template, { events: SEED_EVENTS, fundraisers: [card()], fundraisingOn: true, today });
+    const html = renderWhatsOnPage(template, { events: SEED_EVENTS, fundraisers: [card()], fundraisingOn: true, today });
     const doc = parse(html);
     const chips = doc.querySelector("[data-chips]")!;
     expect([...chips.querySelectorAll("button")].map((b) => b.textContent)).toEqual(["All", "Events", "Fundraisers"]);
@@ -218,7 +218,7 @@ describe("Get involved", () => {
 
   it("puts a community event among NBCC's own events by date, and the face down card last", () => {
     const bake = card({ path: "event", title: "Kim's Bake Sale (early)", eventDate: "2026-10-03", url: null, slug: "kims-bake-sale" });
-    const html = renderGetInvolvedPage(template, { events: SEED_EVENTS, fundraisers: [bake, card()], fundraisingOn: true, today });
+    const html = renderWhatsOnPage(template, { events: SEED_EVENTS, fundraisers: [bake, card()], fundraisingOn: true, today });
     const cards = [...parse(html).querySelectorAll(".deck > .ev-card")];
     expect(cards[0].textContent).toContain("Kim's Bake Sale (early)");
     expect(cards[0].getAttribute("data-kind")).toBe("event");
@@ -228,14 +228,14 @@ describe("Get involved", () => {
   });
 
   it("every card says which chip it belongs to", () => {
-    const html = renderGetInvolvedPage(template, { events: SEED_EVENTS, fundraisers: [card()], fundraisingOn: true, today });
+    const html = renderWhatsOnPage(template, { events: SEED_EVENTS, fundraisers: [card()], fundraisingOn: true, today });
     for (const li of parse(html).querySelectorAll(".deck > .ev-card")) {
       expect(["event", "fundraiser"]).toContain(li.getAttribute("data-kind"));
     }
   });
 
   it("has a kind word ready for an empty Fundraisers chip", () => {
-    const html = renderGetInvolvedPage(template, { events: SEED_EVENTS, fundraisers: [], fundraisingOn: true, today });
+    const html = renderWhatsOnPage(template, { events: SEED_EVENTS, fundraisers: [], fundraisingOn: true, today });
     const empty = parse(html).querySelector('[data-chips-empty="fundraiser"]')!;
     expect(empty.hasAttribute("hidden")).toBe(true);
     expect(empty.querySelector("a[href='/fundraise']")).not.toBeNull();
@@ -393,7 +393,7 @@ describe("the words on the drawn pages", () => {
   }
   const fundraiserHtml = renderFundraiserPage(read("fundraiser.html"), page({ wall: [] }), { pageUrl: PAGE_URL, now: NOW });
   const pages: Array<[string, string]> = [
-    ["Get involved", renderGetInvolvedPage(read("events.html"), { events: SEED_EVENTS, fundraisers: [card(), card({ path: "event", eventDate: "2026-11-01", slug: "e" })], fundraisingOn: true, today: "2026-10-02" })],
+    ["Get involved", renderWhatsOnPage(read("whats-on.html"), { events: SEED_EVENTS, fundraisers: [card(), card({ path: "event", eventDate: "2026-11-01", slug: "e" })], fundraisingOn: true, today: "2026-10-02" })],
     ["a fundraiser's page", fundraiserHtml],
     ["the sign up", renderFundraiseSignUp(read("fundraise.html"), true)],
     ["the manage page", read("fundraise-manage.html")],

@@ -1,31 +1,55 @@
 @fundraising @events @db
-Feature: Get involved and the public fundraising pages (TASK-494)
-  The Events page is now Get involved, at /get-involved, and /events goes there for good. While
+Feature: What's on and the public fundraising pages (TASK-494)
+  The Events page is now What's on, at /whats-on, and /events goes there for good. While
   fundraising is switched on it also shows every approved, public fundraiser with its meter, and
   each raising money fundraiser has its own page. Its QR code moved to the organiser's private
   area (TASK-501): the address still answers, but the page no longer shows or links it, and ends
   with a quiet line for its organiser. Nothing about fundraising shows while it is switched off, and
   a fundraiser that is not approved has no page.
 
-  Scenario: the old Events address goes to Get involved, keeping its query string
+  Scenario: the old Events address goes to What's on, keeping its query string
     When a visitor opens "/events?utm_source=bdd&utm_medium=email"
     Then the visitor gets status 301
-    And the visitor is sent to "/get-involved?utm_source=bdd&utm_medium=email"
+    And the visitor is sent to "/whats-on?utm_source=bdd&utm_medium=email"
 
-  Scenario: an approved fundraiser shows on Get involved only while fundraising is on
+  Scenario: the ways people type Get involved from a poster still go there
+    When a visitor opens "/involved?utm_source=bdd"
+    Then the visitor gets status 301
+    And the visitor is sent to "/get-involved?utm_source=bdd"
+
+  Scenario: an approved fundraiser shows on What's on only while fundraising is on
     Given the events page is switched on
     And fundraising is switched on
     And an approved fundraiser "Sams Sponsored Swim (bdd-fr)" raising 50000 pence
-    When a visitor opens "/get-involved"
+    When a visitor opens "/whats-on"
     Then the visitor gets status 200
     And the page shows "Sams Sponsored Swim (bdd-fr)"
     And the page shows "Fundraise for us"
     And the menu offers Events straight after About
     Given fundraising is switched off
-    When a visitor opens "/get-involved"
+    When a visitor opens "/whats-on"
     Then the visitor gets status 200
     And the page does not show "Sams Sponsored Swim (bdd-fr)"
     And the page does not show "data-chips"
+
+  Scenario: Get involved leads with fundraising, and shows What's on's cards
+    Given the events page is switched on
+    And fundraising is switched on
+    And an approved fundraiser "Lees Long Cycle (bdd-fr)" raising 50000 pence
+    When a visitor opens "/get-involved"
+    Then the visitor gets status 200
+    And the page shows "What can"
+    And the page shows "Raise money your way, and we will help."
+    And the page shows "data-film"
+    And the page shows 'href="/whats-on"'
+    And the menu offers What's on straight after Get involved
+    Given fundraising is switched off
+    When a visitor opens "/get-involved"
+    Then the visitor gets status 200
+    And the page shows "What can"
+    And the page does not show "Raise money your way, and we will help."
+    And the page does not show "data-film"
+    And the page does not show "Lees Long Cycle (bdd-fr)"
 
   Scenario: a fundraiser's page, its meter, no QR code, and a quiet link for its organiser
     Given fundraising is switched on
@@ -123,7 +147,7 @@ Feature: Get involved and the public fundraising pages (TASK-494)
     And the fundraiser "The BDD Quiz (bdd-fr)" is stored with its event answers
     When "a5.fr.bdd@example.com" keeps the short name of "The BDD Quiz (bdd-fr)"
     And "a5.fr.bdd@example.com" approves "The BDD Quiz (bdd-fr)"
-    And a visitor opens "/get-involved"
+    And a visitor opens "/whats-on"
     Then the visitor gets status 200
     And the card for "The BDD Quiz (bdd-fr)" shows "Eight rounds and a raffle (bdd-fr)."
     And the card for "The BDD Quiz (bdd-fr)" shows "£5 a head"
@@ -138,7 +162,7 @@ Feature: Get involved and the public fundraising pages (TASK-494)
     Given the events page is switched on
     And fundraising is switched on
     And an approved event "Old Style Bake Sale (bdd-fr)" signed up before the event questions
-    When a visitor opens "/get-involved"
+    When a visitor opens "/whats-on"
     Then the visitor gets status 200
     And the card for "Old Style Bake Sale (bdd-fr)" shows "Old Style Bake Sale (bdd-fr)"
     And the card for "Old Style Bake Sale (bdd-fr)" does not show "No need to book"

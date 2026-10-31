@@ -15,8 +15,8 @@ const ABOUT = 'href="/about-us"';
 
 /**
  * Add the item after About in the main nav. Returns the page UNCHANGED when there is no nav
- * (hub.html, set-password.html) or when the nav already offers the page (events.html, the Get involved
- * template, itself; or an old copy still pointing at /events), so it is safe to run over any page and
+ * (hub.html, set-password.html) or when the nav already offers the page (get-involved.html and
+ * whats-on.html; or an old copy still pointing at /events), so it is safe to run over any page and
  * safe to run twice. With no About item it goes last.
  */
 export function addEventsNavLink(html: string): string {

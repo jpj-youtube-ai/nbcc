@@ -3,9 +3,13 @@ import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { forwardStatus, forwardsToItself, keepQuery } from "../site/redirect";
 import { addFundraisePageRoutes } from "./fundraise-pages";
+import { addShortPageRoutes } from "./get-involved-pages";
 import { addTeamPageRoutes } from "./team-pages";
 import { addPledgePageRoutes } from "./pledges";
 import { addRedBagPageRoutes } from "./red-bag";
+import { addFillFooterLink, type FillLinkPage } from "../red-bag/fill-links";
+import { addFillStageToHome, loadFillStage } from "../red-bag/stage";
+import { markAfterBallCheck, showAfterBall } from "../site/after-ball";
 import {
   SUPPORTER_TIERS,
   type SupporterTier,
@@ -170,17 +174,27 @@ async function fundraisingIsOn(): Promise<boolean> {
   }
 }
 
+// Get involved and What's on, the two menu items the events switch governs. Two helpers, and not one,
+// because Ball pages take the first (src/ball/page-decor.ts) and keep their old menu without the second.
+async function addEventsItems(html: string): Promise<string> {
+  const [{ addEventsNavLink }, { addMenuFit, addWhatsOnNavLink }] = await Promise.all([import("../events/nav-link"), import("../events/whats-on-link")]);
+  return addMenuFit(addWhatsOnNavLink(addEventsNavLink(html)));
+}
+
 // The menu items a page gets on top of what is in its file: the Festive Ball's while the ball is
-// published (or being previewed), and Get involved (TASK-494, was Events) while that page is switched
-// on. And while fundraising is switched on, the footer's "Fundraise for us" goes to the sign up
-// rather than the contact page (TASK-494). Each is idempotent, so a page that already carries one
-// is left as it is.
-async function decorateNav(html: string, cookieHeader: string | undefined): Promise<string> {
+// published (or being previewed), and Get involved and What's on while the events switch is on. And
+// while fundraising is switched on, the footer's "Fundraise for us" goes to the sign up rather than
+// the contact page (TASK-494). Each is idempotent, so a page that already carries one is left as it is.
+// After the Ball's moment (`after`, src/site/after-ball.ts) the Festive Ball's item comes down, and
+// the footer gains Fill a Red Bag: the gate is still asked exactly as it was, and the answer is
+// simply not acted on. `page`: a quiet page never gains Fill a Red Bag (src/red-bag/fill-links.ts).
+async function decorateNav(html: string, cookieHeader: string | undefined, after: boolean, page?: FillLinkPage): Promise<string> {
   const [ball, events, fundraising] = await Promise.all([ballIsPublished(cookieHeader), eventsPageIsOn(), fundraisingIsOn()]);
   let out = html;
-  if (ball) out = (await import("../ball/nav-link")).addBallNavLink(out);
-  if (events) out = (await import("../events/nav-link")).addEventsNavLink(out);
+  if (ball && !after) out = (await import("../ball/nav-link")).addBallNavLink(out);
+  if (events) out = await addEventsItems(out);
   if (fundraising) out = (await import("../fundraising/footer-link")).addFundraiseFooterLink(out);
+  if (after) out = addFillFooterLink(out, page);
   return out;
 }
 
@@ -197,12 +211,24 @@ export function assetHeaders(res: { setHeader(name: string, value: string): unkn
   if (FILM_FOLDER.test(path)) res.setHeader("Cache-Control", "public, max-age=604800");
 }
 
-export function createSiteRouter(siteRoot: string): Router {
+export interface SiteRouterOptions {
+  /** The time, for the Ball's moment (src/site/after-ball.ts). Left out: the real clock. */
+  now?: () => Date;
+}
+
+export function createSiteRouter(siteRoot: string, opts: SiteRouterOptions = {}): Router {
   const router = Router();
   const redirectsFile = join(siteRoot, "_redirects");
   const rules = existsSync(redirectsFile)
     ? parseRedirects(readFileSync(redirectsFile, "utf8"))
     : [];
+
+  // The one reading of the clock for the Ball's moment, at the edge. Is this view after it? A page the
+  // spec names as one to check before the night passes its query, so ?at=after-ball can answer yes.
+  const clock = opts.now ?? (() => new Date());
+  const isAfterBall = (query?: unknown): boolean => showAfterBall(clock(), query);
+  const decorate = (html: string, cookieHeader: string | undefined, query?: unknown, page?: FillLinkPage): Promise<string> =>
+    decorateNav(html, cookieHeader, isAfterBall(query), page);
 
   // `/` serves the home page (no `_redirects` rule — served automatically).
   //
@@ -215,9 +241,20 @@ export function createSiteRouter(siteRoot: string): Router {
   // ball modules are imported lazily so this router stays import-safe for the DB-free
   // parseRedirects tests, and any failure falls back to the plain home page: a broken ball
   // promo must never take the front page down with it.
+  //
+  // After the Ball's moment none of that is asked: there is no promotion for anyone, preview cookie or
+  // not, and the page needs nothing of the Ball's, so a failed read of its settings costs nothing.
+  // Fill a Red Bag's stage goes in instead, as the page goes out (left out if it cannot be drawn).
   const homeFile = join(siteRoot, "index.html");
   router.get("/", async (req, res) => {
     try {
+      if (isAfterBall(req.query)) {
+        const [html, stage] = await Promise.all([decorateNav(readFileSync(homeFile, "utf8"), req.headers.cookie, true), loadFillStage()]);
+        markAfterBallCheck(res, req.query);
+        res.type("html").send(addFillStageToHome(html, stage));
+        return;
+      }
+
       const [{ getSettings }, { isGateOpen }, { renderHomePromo }, { holdsPreviewCookie }] =
         await Promise.all([
           import("../db/ball"),
@@ -235,12 +272,13 @@ export function createSiteRouter(siteRoot: string): Router {
       // hidden in it.
       const preview = gateOpen ? false : await holdsPreviewCookie(req.headers.cookie);
       if (!gateOpen && !preview) {
-        // TASK-453: the changes this branch can need are the Get involved menu item and (TASK-494)
-        // the footer's fundraising link. With both switched off, the file goes out byte for byte.
+        // TASK-453: the changes this branch can need are the menu items for Get involved and What's
+        // on, and (TASK-494) the footer's fundraising link. With both switched off, the file goes out
+        // byte for byte.
         const [events, fundraising] = await Promise.all([eventsPageIsOn(), fundraisingIsOn()]);
         if (events || fundraising) {
           let html = readFileSync(homeFile, "utf8");
-          if (events) html = (await import("../events/nav-link")).addEventsNavLink(html);
+          if (events) html = await addEventsItems(html);
           if (fundraising) html = (await import("../fundraising/footer-link")).addFundraiseFooterLink(html);
           res.type("html").send(html);
           return;
@@ -257,9 +295,9 @@ export function createSiteRouter(siteRoot: string): Router {
         res.setHeader("Vary", "Cookie");
       }
       const template = readFileSync(homeFile, "utf8");
-      // renderHomePromo adds the Festive Ball item itself; the Events item is ours to add.
+      // renderHomePromo adds the Festive Ball item itself; Get involved and What's on are ours to add.
       let html = renderHomePromo(template, { gateOpen: true });
-      if (await eventsPageIsOn()) html = (await import("../events/nav-link")).addEventsNavLink(html);
+      if (await eventsPageIsOn()) html = await addEventsItems(html);
       if (await fundraisingIsOn()) html = (await import("../fundraising/footer-link")).addFundraiseFooterLink(html);
       res.type("html").send(html);
     } catch (err) {
@@ -284,7 +322,7 @@ export function createSiteRouter(siteRoot: string): Router {
       // `_redirects` loop below and needs the nav items adding here too (TASK-326, TASK-453).
       // This is also the page where getting the anchor wrong shows: its own nav item carries
       // class="active", so matching the link rather than the list finds the FOOTER first.
-      res.type("html").send(await decorateNav(html, req.headers.cookie));
+      res.type("html").send(await decorate(html, req.headers.cookie));
     } catch (err) {
       if (existsSync(supportersFile)) {
         res.sendFile(supportersFile);
@@ -307,19 +345,22 @@ export function createSiteRouter(siteRoot: string): Router {
     res.redirect(302, `/api/gift-aid/${encodeURIComponent(req.params.token)}`);
   });
 
-  // TASK-453 built /events from the events table; TASK-494 renamed it Get involved, at
-  // /get-involved, and added the public fundraising pages. /events now redirects for good. Get
-  // involved is served only while an admin has the page switched on; switched off it falls through to
-  // the catch-all below exactly as if the route were not here. src/routes/fundraise-pages.ts.
-  addFundraisePageRoutes(router, siteRoot, { decorate: decorateNav, eventsPageIsOn });
+  // TASK-453 built /events from the events table; TASK-494 widened it and added the public fundraising
+  // pages. It lives at /whats-on now, /events redirects there for good, and /get-involved is the page
+  // of every way to help. Both are served only while an admin has the events switch on; switched off
+  // they fall through to the catch-all below exactly as if the routes were not here.
+  // src/routes/fundraise-pages.ts.
+  addFundraisePageRoutes(router, siteRoot, { decorate, eventsPageIsOn, isAfterBall });
+  // The short pages under /get-involved/ (src/routes/get-involved-pages.ts). No switch of their own.
+  addShortPageRoutes(router, siteRoot, { decorate, isAfterBall });
   // Team pages: the join form at /fundraise/<team>/join (src/routes/team-pages.ts).
-  addTeamPageRoutes(router, siteRoot, { decorate: decorateNav });
+  addTeamPageRoutes(router, siteRoot, { decorate });
   // Sponsor pledges: the pay and "can't pay after all" pages an emailed link opens (src/routes/pledges.ts).
-  addPledgePageRoutes(router, siteRoot, { decorate: decorateNav });
-  // Fill a Red Bag: /fill and its thank you, /fill/thank-you. Public, but linked from nowhere (the
-  // switch is src/red-bag/switch.ts); switched off they are the 404 to the public and a preview to
+  addPledgePageRoutes(router, siteRoot, { decorate });
+  // Fill a Red Bag: /fill and its thank you, /fill/thank-you. Public, but linked from nowhere until the
+  // Ball's moment (the switch is src/red-bag/switch.ts); switched off they are the 404 to the public and a preview to
   // signed in staff (src/routes/red-bag.ts).
-  addRedBagPageRoutes(router, siteRoot, { decorate: decorateNav });
+  addRedBagPageRoutes(router, siteRoot, { decorate, isAfterBall });
 
   // Apply each rule: 301 -> permanent redirect to the clean URL; 200 -> serve
   // the target file in place (the address bar keeps the clean URL).
@@ -336,21 +377,25 @@ export function createSiteRouter(siteRoot: string): Router {
         return;
       }
       // While the ball is unpublished and the Events page is switched off this is byte-for-byte
-      // the old behaviour: the file is sent as-is and no page mentions either.
-      const [ball, events, fundraising] = await Promise.all([
+      // the old behaviour: the file is sent as-is and no page mentions either. These pages take no
+      // ?at=after-ball: only the real moment takes the Festive Ball's item off them.
+      const [published, events, fundraising] = await Promise.all([
         ballIsPublished(req.headers.cookie),
         eventsPageIsOn(),
         fundraisingIsOn(),
       ]);
-      if (!ball && !events && !fundraising) {
+      const after = isAfterBall();
+      const ball = published && !after;
+      if (!ball && !events && !fundraising && !after) {
         res.sendFile(file);
         return;
       }
       try {
         let html = readFileSync(file, "utf8");
         if (ball) html = (await import("../ball/nav-link")).addBallNavLink(html);
-        if (events) html = (await import("../events/nav-link")).addEventsNavLink(html);
+        if (events) html = await addEventsItems(html);
         if (fundraising) html = (await import("../fundraising/footer-link")).addFundraiseFooterLink(html);
+        if (after) html = addFillFooterLink(html);
         res.type("html").send(html);
       } catch (err) {
         console.error("nav link failed:", err instanceof Error ? err.message : err);
@@ -385,6 +430,7 @@ export function createSiteRouter(siteRoot: string): Router {
       );
       // The footer's "Fundraise for us", as on every other page (TASK-545: this page now has it).
       if (fundraisingOn) html = (await import("../fundraising/footer-link")).addFundraiseFooterLink(html);
+      if (isAfterBall()) html = addFillFooterLink(html);
       res.type("html").send(html);
     } catch (err) {
       console.error("sitemap render failed:", err instanceof Error ? err.message : err);

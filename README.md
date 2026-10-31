@@ -144,8 +144,13 @@ Every page mounts the same sticky top nav in its `<header class="nav">` slot
 (REQ-002, ported from the NBCC design): the logo lockup (50px) linking to `/`,
 links to `/`, `/about-us`, `/donate`, `/contact`, `/supporters`, a persistent
 Donate button, and a mobile burger. Two items are added by the server rather than written into
-the files: "Festive Ball" while the ball is published (TASK-326) and "Get involved" (called Events
-until TASK-494), after About, while the Events page is switched on (TASK-453).
+the files: "Festive Ball" while the ball is published (TASK-326), and "Get involved" (called Events
+until TASK-494) after About and "What's on" after that, while the events switch is on (TASK-453).
+What's on has its own helper (`src/events/whats-on-link.ts`), not a part of `addEventsNavLink`,
+because Ball pages call that one and keep their old menu until after the Ball. The item goes out
+with a few lines of style (`MENU_FIT`, the same file) that tighten the menu between the burger and
+1040px, where it would otherwise wrap and, with the Ball's item up, push Donate off the screen. They
+are not in `styles.css` because donate.html has 147 bytes of its page weight left.
 Behaviour lives in the one shared `assets/js/main.js` (`initNav`): a passive +
 `requestAnimationFrame`-throttled scroll listener flips the bar from transparent
 to a cream/hairline/shadow state past 24px; the burger toggles the link panel
@@ -208,6 +213,59 @@ The same test holds `.supporter-name{overflow-wrap:anywhere}` in `assets/css/sty
 partner's name with no break point (place names joined by slashes) made the Supporters page 510px
 wide on a phone. `anywhere`, not `break-word`, because it also lets the card's grid column be
 narrower than the name.
+
+### The short pages under /get-involved/
+
+Six plain pages, each its own file, served by `src/routes/get-involved-pages.ts` with the menu items
+of the day added as they go out, and listed in `SHORT_PAGES` in `src/site/pages.ts`:
+
+| Address | File | Heading |
+|---|---|---|
+| `/get-involved/drop-off-points` | `get-involved-drop-off-points.html` | Drop-off points |
+| `/get-involved/referrals` | `get-involved-referrals.html` | Referrals |
+| `/get-involved/volunteer` | `get-involved-volunteer.html` | Volunteer |
+| `/get-involved/business` | `get-involved-business.html` | Let's make Christmas happen together. |
+| `/get-involved/schools` | `get-involved-schools.html` | Schools are at the heart of what we do. |
+| `/get-involved/groups` | `get-involved-groups.html` | Do something brilliant, together. |
+
+- **Not at `/volunteer` and `/referrals`.** Those are live forwards to `vol.nbcc.scot` and
+  `referrals.nbcc.scot` in the spare address table (migration `1791200000290`). A page there would
+  silently replace them, so neither is reserved and neither is a page.
+- **The events switch does not govern them.** They are about helping, not events. With it off they
+  stay, and the menu loses Get involved and What's on as every page does. That is also why they sit
+  beside Get involved in `SITE_PAGES` and not as its children: a child drops off `/sitemap` with its
+  parent. Get involved lights up in the menu on these pages (`aria-current="true"`: the section, not
+  the page).
+- **Styles.** Each page loads `styles.css`, then `get-involved.css` for the bands, the drift, the taped
+  photographs and the lined paper (`body.page-hub`), then `assets/css/short-pages.css` for what only
+  these six add. `short-pages.css` adds no movement of its own.
+- **Left out until Jaimie sends the details, each to go in as a small change:** what to bring and
+  what we can't take (Drop-off points); the Christmas referrals closing date (Referrals); a
+  volunteer's quote (Volunteer); payroll giving and its tick (Your business). The five films are not
+  in the repo and have no captions, so each "New to..." section is words and a picture.
+- **Nothing about Fill a Red Bag before the 8pm switch.** "Fill Red Bags as a team", "Fill a Red Bag as
+  a class" and "Fill Red Bags together" and their ticks are out until online group bags exist.
+  "Can't get to a drop-off point?" offers Donate alone until the Ball's moment, when Fill a Red Bag joins
+  it (see "The Ball's moment" below).
+  So that the word does not show at all, "Fill in the sign up" reads "Complete the sign up" and "helps
+  fill a Red Bag" reads "helps pack a Red Bag".
+- **Pictures** are the charity's one real handover photo (`home-red-bags-handover.jpg`) and four crops
+  of it (`assets/img/crop-*.jpg`). Your business, Your school and Your club or group use the elf on a
+  quilted card, where the plan was a photo nobody has yet: a picture of a volunteer there would read
+  as a business, a class or a club. Never `why-packing.jpg`, which is a drawing of a camera.
+- **The Tell us forms** on the last three send through the contact form's own path. The form is
+  `#contactForm`, so `main.js`'s `initContactForm` checks it, sends it to `POST /api/contact` and says
+  thank you, and `contact-captcha.js` does the spam check, unchanged. That path takes a name, an email,
+  a phone number and one message, so `assets/js/tell-us.js` writes the message into a hidden field on
+  submit, before `main.js` reads it: the page, the business or school, the role, the ticks and anything
+  else, one to a line, which is how the admin's inbox shows it. Each field that goes in the message
+  carries `data-tell` with its label. **The business's field is not called `company`:** that name is
+  the form's trap for robots, and the server quietly drops any message with it filled in.
+
+Tests: `test/unit/get-involved-short-pages.test.ts` (serving, the menu, the forwards, the site map),
+`test/unit/get-involved-short-pages-content.test.ts` (what is on each page and left off it, the
+links, the pictures, the forms with the real `main.js` and spam check) and
+`features/get-involved-short-pages.feature`.
 
 ### How NBCC describes itself
 
@@ -443,6 +501,151 @@ and accessibility floor (REQ-032: alt text, keyboard-focusable CTAs). Verified b
 > brand-colours contrast guard forbids holly text on light surfaces; `.hero-emph`
 > italic is synthesised (only Playfair 700 normal is self-hosted). The hi-res hero
 > logo asset is REQ-034.
+
+### The top of the home page: the big logo and the four tags
+
+The hero (`.hero`) keeps its words and its two buttons, "Donate now" and "What we do all year". Its
+picture is now the full vector logo, `assets/img/nbcc-logo-full.svg` (`nbcc-logo-white.svg` with its
+letters in the logo's maroon and its white outline removed), on plain cream: the hero's tan glow and the
+logo's shadow are switched off on this page. Below 980px the hero stacks with the logo first and
+everything centred.
+
+Directly under it, "Where would you like to start?" (`section.home-lane`) hangs four gift tags from a
+gold ribbon on the site's quilted card back, and ends with the snow drift:
+
+| Tag | Main link | Small line |
+|---|---|---|
+| Donate | `/donate` | empty |
+| Drop-off points | `https://drop.nbcc.scot/` | `https://drop.nbcc.scot/sign-up`, `/get-involved/drop-off-points` |
+| Referrals | `https://referrals.nbcc.scot/` | `https://referrals.nbcc.scot/sign-in`, `/get-involved/referrals` |
+| Volunteer | `https://vol.nbcc.scot/sign-up` | `https://vol.nbcc.scot/sign-in`, `/get-involved/volunteer` |
+
+The styles are in `assets/css/home-top.css`, a file of its own because `index.html` is under the first
+paint budget and `styles.css` is shared with `donate.html`, which has almost nothing spare. The tags
+are in the page, so they need no script. Their entrance (`hang`) is CSS and holds nothing back if a
+script fails; it and the swing under the pointer are off for less motion.
+
+**What this must not disturb.** The Festive Ball's promotion (`src/ball/home-promo.ts`) finds two exact
+strings in `index.html`, `MAIN_ANCHOR` and `AFTER_HERO_ANCHOR` (the "What we do" section), and both stay
+byte for byte. The tags sit before the second, so until the promotion comes down the page reads: banner,
+hero, four tags, Ball feature, then the rest. The promotion's `.ball-banner + .hero` rule also needs the
+hero straight after the banner, and it is inline, so it comes after `home-top.css`: keep hero padding on
+`.home .hero` and no heavier, or the double gap under the nav comes back. The nav stays transparent
+until scrolled. The drift is the page's cream in both states: it runs into "What we do" with no join,
+and with the Ball's navy feature below it, it lies as a line of snow along the top of the night.
+`test/unit/home-top.test.ts` runs the real `renderHomePromo` on the real `index.html` to pin all of this.
+
+### The Ball's moment: 20:00 on Saturday 7 November 2026
+
+At 20:00 UK time on the night of the Ball (20:00 UTC, the clocks have gone back) the promotion comes
+down by itself, with no deploy and nobody at a computer. Every page in question is drawn per visit, so
+the check is one pure function, `afterBall(now)` in `src/site/after-ball.ts`, and the time is handed to
+it: `createSiteRouter(root, { now })` holds the only reading of the clock for it, which is how
+`test/unit/after-ball.test.ts` stands either side.
+
+| Comes down | Where the check is |
+|---|---|
+| The Festive Ball item in the menu, on every page but the Ball's own | `decorateNav`, and the loop over `_redirects`, in `src/routes/site.ts` |
+| The banner and the feature on the home page, and the page's preview for staff | the home route, before it asks anything of the Ball |
+| The Festive Ball's card (slug `festive-ball-2026`) on `/whats-on` and `/get-involved`, even though the 7th is still today | `deckInput` in `src/routes/fundraise-pages.ts` |
+
+| Goes up | Where it is added |
+|---|---|
+| The Fill a Red Bag stage on the home page, between the hero and the four tags | the home route, as the page goes out (`addFillStageToHome`): `index.html` does not change |
+| The same stage on Get involved, after What's on | `fillStage`, at the page's own marker |
+| "Fill a Red Bag" under "Ways to give" in the footer, on every page the site router draws (never a Ball page, and never a quiet page: see below) | `addFillFooterLink`, `src/red-bag/fill-links.ts`, like the fundraising link |
+| "You can still fill a Red Bag online, or make a donation." and a button, on Drop-off points | `addFillToDropOff`, the same file |
+| The night on `/fill`: the sky, the snow, the lights, the bag in the snow and the sum | `renderNight`, `src/red-bag/render.ts` |
+
+All of these stay down while Fill a Red Bag is switched off (`src/red-bag/switch.ts`), because `/fill` is
+then a 404.
+
+The charity is very careful about pages in memory of someone, so the footer's link stays off them, either
+side of the moment: a fundraiser's or an event's page that `isQuietFundraiser` recognises, with the thank you
+that is the same page, and a team's join page likewise. It also stays off `/fundraise` and `/fundraise/manage`,
+which are one address for everyone: the in memory path is chosen in the browser, and whose area it is is only
+known there, so as they are drawn a family may be on either (`QUIET_PAGE`, `src/red-bag/fill-links.ts`).
+
+**The stage** is `src/red-bag/stage.ts` (the band), `assets/js/red-bag-stage.js` and
+`assets/css/red-bag-stage.css`. The last two are new files that only a page drawing the stage loads, so no
+budgeted page pays for them. It reads the list `/fill` reads, through `loadPublishedRedBagList`, so a price
+here is the price on the real page: the band carries it in the same `rb-list-data` block, and with nothing
+published it has none and the catalogue's list stands, as on `/fill`. If the block cannot be used it shows
+no tiles and never the built-in prices. The script chooses up to eight tiles from what is on the list and
+has a drawing: the eight the design names first, then the rest in the list's order. So a hidden item
+leaves no gap, and the order is the same on every visit. If anything goes wrong drawing it, the stage is
+left out and the page goes on (`loadFillStage` never throws).
+
+It plays itself once it is on the screen and goes round until the bag is full, whatever the prices. The
+demonstration never carries. After a first tap the bag is the visitor's: the button reads "Carry on with
+this bag" and links to `/fill?bag=toy:2,socks:1` (an address, so it survives a new tab and blocked storage,
+and it holds nothing personal), "Start again" clears it, and a tap after a full bag starts another without
+losing what went before. Pause holds the demonstration, the snow and the twinkling; while it holds it
+reads "Play", and because its words change it carries no `aria-pressed`, so a screen reader does not hear
+both. With less motion asked for nothing moves by itself, there is no Pause, and taps work.
+
+**The carried bag** arrives in `assets/js/red-bag.js`, before or after the moment, because only the stage
+makes such an address. The value is read once, after the rows are wired: a key counts only if a row with
+that key was drawn on this page (so a staff draft's list decides, and `__proto__` or `constructor` is
+nothing), a number counts only if it is digits, and both go through `clampQuantity`, added up if a key
+comes twice. Anything else is ignored and never written anywhere. Each thing then goes in through that
+row's own plus, one at a time, 380ms apart, or all at once with less motion, so the notes, the drops and
+the snow come by themselves: while it pours a showing note keeps its whole moment, and the page's 20 second
+cooldown holds across every full bag rather than for each one, so a big bag does not snow on the screen
+over and over. `history.replaceState` takes `bag` out of the address at once and keeps the rest (utm tags,
+`preview`, `at`), so a refresh adds nothing. The moment the visitor reaches for a control, or presses
+Donate on the page or in the bottom bar, the rest goes in first, so a tap lands on top of it, a number is
+never rewritten under a finger and nobody pays for half a bag. A box counts as reached for when it takes
+focus, a button only when it is clicked: a mouse press focuses a button before the release, and finishing
+there moved the panel, so the release landed elsewhere and the press was lost. It touches nothing else:
+`test/unit/red-bag-carry.test.ts` shows a carried bag and a tapped bag post the same bytes to
+`/api/checkout-session`. A plain visit to `/fill?preview=draft&bag=...` in a tab signed in to the admin
+leaves the bag in the address for the draft that is about to replace the page, so the draft's rows decide.
+
+**The night on `/fill`** is a dressing and nothing more. `renderRedBagPage` adds it, with `night: true`,
+which the route passes only after the moment or for `?at=after-ball`; `renderNight` in
+`src/red-bag/render.ts` is the only code that adds anything, and if any place it needs is missing the page
+goes out plain rather than half dressed. Before the moment the page is byte for byte the render from
+commit `d17f9856`, headers included (`test/unit/red-bag-night.test.ts` holds hashes of that render: if the
+page is changed on purpose before the night, take the new hash from the failure). The list, the examples,
+the steppers, once or monthly, the round-up, the details step, the bottom bar and the template are the
+same bytes in every state, and `/fill/thank-you` is never dressed. A draft preview goes on working, drawn
+at night after the moment, with no-store and noindex.
+
+The dressing is `assets/css/fill-night.css` and `assets/js/fill-night.js`, loaded by the night page alone.
+The stylesheet carries all it needs and does not lean on the stage's. The wrapper, `#fnNight`, holds the
+heading and the list and stops before the details step, so the bottom bar and the details step are
+outside it. The ten lights (one for each £5 of the first £50) and the sum on the bag come from the page's
+own state: `assets/js/red-bag.js` says the total and how many bags are drawn in a small `rb:bag` event on
+the document, which goes nowhere with nobody listening, and which is the one thing added to that file for
+the night. The script comes before `red-bag.js` so that it hears the first word. The sum is hidden in the
+file and shown by the script, so a page whose script did not arrive never shows a wrong one; it is hidden
+for a full bag or several. The snow is on a canvas that stops off screen, is held by "Pause the snow"
+(which reads "Start the snow" while held, with no `aria-pressed`), is kept to five million pixels however
+long the page, and does not run with less motion or without a canvas.
+
+One bag stands a little left of the middle, with the elf beside it. The elf's picture is cut above the
+logo's line, and it has a small heap of snow of its own in front of it (`.rb-panel::after`), so wherever
+the panel's curve falls at a given width the cut edge is behind snow: measured every 7px from 320px to
+1720px. Several bags fill the width, so the elf and its heap go. Where the layout stacks, at 860px and
+under, the glow is dimmer, because the words are over it.
+
+The stacked layout starts at 1090px wide. Beside the words the note sits close to the sum on the bag, so
+from 1091px to 1240px the note is narrower, and the note and elf run out into the gutter only as far as
+`.wrap`'s real gutter allows. Measured every 3px from 320px to 1700px, the note never meets the sum.
+
+**What stays:** `/ball`, its terms, its donate page, guest links and thank you pages all keep working, and
+draw their own menu (`decorateBallPage`), so they keep the Festive Ball item. No file in `src/ball` knows
+about the moment, and the admin's Ball switch is read as it always was and never written. `/ball` stays on
+`/sitemap` and in `/sitemap.xml`, which follow the gate alone.
+
+**Checking it before the night:** `?at=after-ball` on `/`, `/whats-on`, `/get-involved`,
+`/get-involved/drop-off-points` or `/fill` shows that one view as it will be after the moment. Only that
+exact value counts (an array, or anything else, is an ordinary visit). The view answers `noindex` and
+`no-store`, and the next view is back to normal. Other pages ignore it.
+
+BDD runs against the real clock, so scenarios about the Ball's promotion are tagged `@until-the-ball` and
+are skipped from the moment on (`features/steps/after-ball.steps.js`).
 
 ### Home pillars (REQ-011)
 
@@ -1522,8 +1725,10 @@ hosted-Checkout redirect stays the default fallback and no-JS safety net.
 | `GET /ball` | **implemented** | TASK-313 (the ticket page; password-gated until staff open the gate, then public and indexable) |
 | `POST /ball/unlock` | **implemented** | TASK-313 (checks the preview password, sets a signed 14-day cookie) |
 | `GET /ball/terms` | **implemented** | TASK-313 (ticket terms; gated alongside the page) |
-| `GET /get-involved` | **implemented** | TASK-453, renamed in TASK-494 (Get involved: the events from the `events` table, and while fundraising is switched on every approved public fundraiser too. Served only while an admin has the Events page switched on; otherwise falls through to the 404 / spare-address catch-all) |
-| `GET /events` | **implemented** | TASK-494 (301 to `/get-involved`, query string kept, whether or not the page is on) |
+| `GET /whats-on` | **implemented** | TASK-453, moved here from `/get-involved` (What's on: the events from the `events` table, and while fundraising is switched on every approved public fundraiser too. Served only while an admin has the events switch on; otherwise falls through to the 404 / spare-address catch-all) |
+| `GET /get-involved` | **implemented** | Every way to help: the Fundraise section and film (left out while fundraising is off), the first six of What's on's cards, the ways to help together and the rest. The events switch governs it too: off, it is the 404 |
+| `GET /get-involved/drop-off-points`, `/referrals`, `/volunteer`, `/business`, `/schools`, `/groups` | **implemented** | The short pages (`src/routes/get-involved-pages.ts`). The events switch does not govern them. See [The short pages](#the-short-pages-under-get-involved) |
+| `GET /events` | **implemented** | 301 to `/whats-on`, query string kept, whether or not the page is on. Not the page's address: this one has answered 301 since TASK-494, and a browser keeps a 301 for good |
 | `GET /getinvolved`, `GET /involved` | **implemented** | TASK-496 (301 to `/get-involved` too, query string kept: the ways people type it from a poster) |
 | `GET /fundraise` | **implemented** | TASK-494 (the fundraising sign up form; a gentle "not open yet" while fundraising is switched off) |
 | `GET /fundraise/manage` | **implemented** | TASK-501 (the organiser's private area, signed in with an emailed code; was TASK-494's `?token=` link page; `noindex`, `no-store`, `Referrer-Policy: no-referrer`; 404 while fundraising is switched off) |
@@ -1539,7 +1744,7 @@ hosted-Checkout redirect stays the default fallback and no-JS safety net.
 | `GET /api/admin/events` | **implemented** | TASK-453 (events: view; the page switch and every event) |
 | `POST /api/admin/events`, `PUT/DELETE /api/admin/events/:id` | **implemented** | TASK-453 (events: edit; drafts may be half finished, live or scheduled events must pass `publishProblems`. Audited as `events.created` / `events.updated` / `events.deleted`) |
 | `PATCH /api/admin/events/settings` | **implemented** | TASK-453 (events: edit **and** the admin role; `{pageOn}` switches the whole page. Audited as `events.page_switched`) |
-| `POST /api/admin/events/preview` | **implemented** | TASK-453 (events: view; the card and the whole page as HTML documents, from the same renderer as `/events`) |
+| `POST /api/admin/events/preview` | **implemented** | TASK-453 (events: view; the card and the whole page as HTML documents, from the same renderer as `/whats-on`) |
 | `POST /api/admin/event-images` | **implemented** | TASK-453 (events: edit; base64 upload, raster only, 2 MB, returns `/media/events/<uuid>`) |
 | `GET /api/admin/analytics?days=7\|30\|90` | **implemented** | TASK-482 (analytics: view; every panel of Admin > Analytics for the period and the one before, in one payload) |
 | `GET/PUT /api/admin/analytics/settings` | **implemented** | TASK-482 (analytics: view / edit; `{collecting}` switches counting on or off. Audited as `analytics.collecting_switched`) |
@@ -4683,7 +4888,8 @@ off. `src/clients/turnstile.ts` asks Cloudflare's siteverify (5 second timeout) 
 or our secret rejected: the message is **kept** and a warning logged, so a genuine enquiry is never
 lost to the checker). Cloudflare's error codes decide whatever the HTTP status, because it sends a
 rejected secret as a 400 naming `invalid-input-secret`. The page learns the site key from
-`GET /api/contact/captcha`. `assets/js/contact-captcha.js`, loaded by `contact.html` only, fetches
+`GET /api/contact/captcha`. `assets/js/contact-captcha.js`, loaded by `contact.html` and the three
+Tell us forms ([The short pages](#the-short-pages-under-get-involved)), fetches
 Cloudflare's script once the visitor starts on the form (a tap or a key in a field) or presses
 Send, so someone who only reads the page never contacts Cloudflare. It draws the box (Flexible when
 the form is 300px wide or more, Compact below that, and again at the size that fits if the form gets
@@ -7915,9 +8121,9 @@ a name we supplied ourselves — and "no such table" is reported as exactly that
 
 ## The Events page (TASK-453)
 
-**Renamed Get involved in TASK-494**, at `/get-involved`, with community fundraisers alongside the
-events: see **Community fundraising, the public pages (TASK-494)**. `/events` is now a permanent
-redirect there. What follows describes the events part, which is unchanged.
+**Widened in TASK-494** with community fundraisers alongside the events: see **Community fundraising,
+the public pages (TASK-494)**. It lives at `/whats-on` now, and `/events` is a permanent redirect
+there. What follows describes the events part, which is unchanged.
 
 A public page at **`/events`**: every upcoming event as a card in a deck, soonest first, with a face
 down "more on the way" card last. The front of a card is the picture and the gist, with the date in
@@ -7953,14 +8159,14 @@ layer and the page:
   link (unless there is nothing to book) and, for someone else's event, their name;
 - an event is on the page up to and including its own day (UK time), then moves to Past.
 
-**One renderer**, `src/events/render.ts`, fills `events.html` (the template's deck holds a
+**One renderer**, `src/events/render.ts`, fills `whats-on.html` (the template's deck holds a
 `<!-- events:deck -->` marker) and produces the admin's previews, so staff see exactly what the
 public will. Everything typed is escaped; `*stars*` become bold only after escaping.
 
 **Data.** Three new tables (additive): `events_settings` (one row, the switch, off by default),
 `events` (a column per form field, with CHECK constraints matching the validation) and
 `event_images`. Every change writes its `audit_log` row in the same transaction. The seed migration
-adds EmpowHer '26 and the Festive Ball as live events, with the switch still off. `events.html` is
+adds EmpowHer '26 and the Festive Ball as live events, with the switch still off. `whats-on.html` is
 in the Dockerfile's explicit page list.
 
 **EmpowHer's leaflet (TASK-456, taken off in TASK-472).** `1789100000003_events-empowher-leaflet.js` puts the organiser's
@@ -8606,7 +8812,7 @@ and email) and the sign off. Plain English, no dashes, every stored value escape
 | `fundraiseNewsApproved` | the organiser | staff approve a news update they posted (TASK-506) | "Your news update is live!" with the page link while their page is up; otherwise "Your news update is saved!". "Thanks so much," and the questions box |
 | `fundraiseNewsRejected` | the organiser | staff do not use a news update (TASK-506) | "About your news update": not on the page, we'll give you a ring; never the internal reason. "Speak soon," and the questions box |
 | `fundraiseSummary` | everyone on the Weekly summary list, in one email with all of them on the To line (nbcc.scot addresses only) | Mondays at 8am (TASK-503, email 11), or Send a test now (to the admin pressing it, marked as a test) | "Good morning, team!": last week's money, new sign ups, Waiting on us, Coming up, Open the admin, "Have a brilliant week,". Staff only: no questions box, never link tagged. Subject like "Fundraising this week: £1,240 raised, 10 things waiting" |
-| `fundraiseSupporterThanks` | a giver the organiser picked, who can be emailed | staff approve the organiser's thank you (TASK-507, email 20), in the background, one at a time | "A thank you from Sam": the organiser's message in a quote box, "And from all of us: thank you too.", the charity's description, "We'd love to keep in touch" with a "Join our mailing list" button (`/newsletter`) and a link to `/get-involved`, "Thanks so much,", the questions box (in memory: the one closing line, no keep in touch). From and Reply-To the events inbox. See **Thank your supporters (TASK-507)** |
+| `fundraiseSupporterThanks` | a giver the organiser picked, who can be emailed | staff approve the organiser's thank you (TASK-507, email 20), in the background, one at a time | "A thank you from Sam": the organiser's message in a quote box, "And from all of us: thank you too.", the charity's description, "We'd love to keep in touch" with a "Join our mailing list" button (`/newsletter`) and a link to `/whats-on`, "Thanks so much,", the questions box (in memory: the one closing line, no keep in touch). From and Reply-To the events inbox. See **Thank your supporters (TASK-507)** |
 
 **Approved while fundraising is off.** The old "you're approved, your page will appear when our pages
 open" email is retired. A page holder approved while fundraising is off gets no email then: the
@@ -8658,10 +8864,10 @@ What the public sees of community fundraising (stage 1), built on the API above.
 `docs/superpowers/specs/2026-10-02-community-fundraising-design.md`.
 
 **The one minute film on Get involved.** While fundraising is switched on, the page carries NBCC's
-one minute film, "Got an idea?", between the intro and the cards (`src/fundraising/film.ts` holds the
-markup; `renderGetInvolvedPage` puts it where `events.html` has `<!-- getinvolved:film -->`, and a
-few lines of script where it has `<!-- getinvolved:film-head -->`). With fundraising off, neither is
-in the page.
+one minute film, "Got an idea?", in the Fundraise section (`src/fundraising/film.ts` holds the markup;
+`renderNewGetInvolvedPage` puts it in that section, and a few lines of script where `get-involved.html`
+has `<!-- getinvolved:film-head -->`). With fundraising off, neither is in the page. It plays on that
+page only, so it never starts by itself in two places: What's on has no film.
 
 - **A first visit:** the film is full size and plays by itself with the sound off (no browser allows
   anything else) once at least half of it is on screen, with captions showing and a **Play with
@@ -8829,13 +9035,13 @@ site maps under `/fundraise` while fundraising is on.
 
 **Where it lives.** Drawing: `src/fundraising/render.ts` (pure, unit tested). Routes:
 `src/routes/fundraise-pages.ts`, added to the site router before its catch-all. Templates:
-`events.html` (Get involved), `fundraise.html`, `fundraiser.html`, `fundraise-manage.html`, `fundraise-help.html` (all in
+`whats-on.html` (What's on), `get-involved.html` (Get involved, drawn by `src/fundraising/get-involved-page.ts`, styles `assets/css/get-involved.css`), `fundraise.html`, `fundraiser.html`, `fundraise-manage.html`, `fundraise-help.html` (all in
 the Dockerfile's page list). Scripts: `assets/js/fundraise.js`, `fundraiser.js`,
-`fundraise-manage.js`; styles: `assets/css/fundraising.css` and the Get involved part of
+`fundraise-manage.js`; styles: `assets/css/fundraising.css` and the What's on part of
 `events.css`. None of it touches `main.js` or `styles.css`, so donate.html's page weight budget is
 unchanged. Text boxes grow with what is typed rather than scroll.
 
-**Tests.** `fundraising-render`, `fundraise-pages-routes`, `get-involved-page`,
+**Tests.** `fundraising-render`, `fundraise-pages-routes`, `whats-on-page`, `whats-on-chips`, `get-involved-page`,
 `fundraise-signup-page`, `fundraiser-page`, `fundraise-manage-page`, `fundraise-help-page` and
 `fundraiser-checkout-contract` (unit, jsdom), and `features/fundraising-pages.feature` (the
 redirect, Get involved with fundraising on and off, a fundraiser's page (no QR code since TASK-501,
@@ -9825,7 +10031,7 @@ thank you too.", then (2026-10-04) the charity's own description as its own para
 you'd like to hear how your gift helps, join our mailing list. It's a few emails a year, and you can
 unsubscribe at any time.", the standard button "Join our mailing list" to `/newsletter`, and
 "There's lots going on, too. See what's coming up, and support the people fundraising for NBCC, on
-our Get involved page." linked to `/get-involved`. Then "Thanks so much, NBCC Team", and the "Got
+our What's on page." linked to `/whats-on`. Then "Thanks so much, NBCC Team", and the "Got
 any questions?" box with the events inbox. Nothing about any other giver, and never the organiser's
 address.
 
@@ -9961,7 +10167,7 @@ line the forms allow.
 `https://nbcc.scot/q/<fundraiser id>-<a4|a3|a5>` (`src/fundraising/material-codes.ts`), about 26
 characters, so the code stays small and easy to scan. `GET /q/:code` answers with a `302` to wherever
 the fundraiser is now, found by its **id**, never its address, so a printed code keeps working for
-good whatever its page's address becomes: its page, or Get involved for a listed event, with
+good whatever its page's address becomes: its page, or What's on for a listed event, with
 `utm_medium=qr&utm_campaign=f<id>-<size>`. It is `no-store` (an address change is followed at once)
 and `noindex`. Anything else (not one of ours, no such fundraiser, one that is new, declined or not on
 the website, fundraising switched off) falls through to the site's own 404; the target is always a
@@ -10318,7 +10524,7 @@ own page. The Get involved card links to it ("See the event page and give", on t
   to the page on the day, and reply for help; no sponsorship tips. The change and news emails link
   the event's page. News photos show on an event's page as on a fundraiser's.
 - **QR codes on printed pieces** (`/q/<id>-<size>`) go to the event's page; an event whose stored
-  address cannot be linked goes to Get involved, as before.
+  address cannot be linked goes to What's on.
 - **Switched off**, an event's page is the site's 404, like every fundraising page. `/event` is in
   `RESERVED_PREFIXES`. Fundraiser pages are not in the sitemap, so event pages are not either.
 - **Data:** `migrations/1791200000185_event-pages.js`, additive: one nullable column,
@@ -10759,7 +10965,7 @@ What is asked, and why:
   first name (shown on the page) and the parent's or guardian's tick.
 - **A business, school or group**: its name (the page says "Organised by" it) and, optionally,
   whether the employer will match what is raised.
-- **Get involved.** "Shall we list it on our Get involved page?" Every sign up now gets a page
+- **What's on.** "Shall we list it on our What's on page?" Every sign up now gets a page
   (`public` is always true); a No keeps it off the list (`off_list_at`, `off_list_by = 'organiser'`,
   the mechanism staff already use). A team is always listed.
 - **Social media** is one question: a shout out, a mention, or no thanks (`socialOk` and
@@ -13157,8 +13363,8 @@ public pages. Of half 2, staff editing the list in the admin is built (see
 a Red Bag receipt email is not. What a report figure will need is already being kept: each donation records that it
 came from here (**Recording where a gift came from**, below).
 
-**It is public, search engines may list it, and it is linked from nowhere** (Jaimie, 4 October
-2026: "make it public but don't link anywhere to it right now", then "once it's pushed and live I
+**It is public, search engines may list it, and it is linked from nowhere until the Ball's moment**
+(Jaimie, 4 October 2026: "make it public but don't link anywhere to it right now", then "once it's pushed and live I
 don't mind if Google crawls it"). The switch is one constant, `RED_BAG_LIVE` in
 `src/red-bag/switch.ts` (no config value, no database row, no infrastructure), and it is **on**:
 
@@ -13183,9 +13389,10 @@ don't mind if Google crawls it"). The switch is one constant, `RED_BAG_LIVE` in
   `/fill`, `/fill-a-red-bag` and `/fill-a-bag` are in `RESERVED_PREFIXES`, so a spare address
   cannot take them or anything under `/fill`.
 - `POST /api/checkout-session` takes a Red Bag donation from anyone.
-- Nothing on the site links to it: not `/donate`, not the menu, not the footer, not any other page.
-  Tests hold all of this in place (`test/unit/red-bag-page.test.ts`, "listed for search engines,
-  but linked from nowhere").
+- Until the Ball's moment nothing on the site links to it: not `/donate`, not the menu, not the
+  footer, not any other page. The page files never do; from the moment the links go in as a page
+  goes out (`src/red-bag/fill-links.ts`). Tests hold all of this in place
+  (`test/unit/red-bag-page.test.ts`, "listed for search engines, but linked from nowhere").
 
 **What is left, when Jaimie says:** add the link from `/donate` and the menu. Nothing else.
 

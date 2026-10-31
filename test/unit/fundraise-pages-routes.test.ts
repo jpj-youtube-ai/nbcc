@@ -125,16 +125,16 @@ const get = (path: string) => fetch(`${base}${path}`, { redirect: "manual" });
 const navList = (html: string) => html.match(/<ul class="nav-links"[\s\S]*?<\/ul>/)?.[0] ?? "";
 
 describe("the old Events address", () => {
-  it("goes to Get involved for good, keeping its query string", async () => {
+  it("goes to What's on for good, keeping its query string", async () => {
     const res = await get("/events?utm_source=newsletter&month=december");
     expect(res.status).toBe(301);
-    expect(res.headers.get("location")).toBe("/get-involved?utm_source=newsletter&month=december");
+    expect(res.headers.get("location")).toBe("/whats-on?utm_source=newsletter&month=december");
   });
 
   it("goes there even without one", async () => {
     const res = await get("/events");
     expect(res.status).toBe(301);
-    expect(res.headers.get("location")).toBe("/get-involved");
+    expect(res.headers.get("location")).toBe("/whats-on");
   });
 });
 
@@ -155,14 +155,14 @@ describe("the easy to type addresses", () => {
   });
 });
 
-describe("Get involved", () => {
+describe("What's on", () => {
   it("is a 404 while the events page is switched off", async () => {
     state.eventsOn = false;
-    expect((await get("/get-involved")).status).toBe(404);
+    expect((await get("/whats-on")).status).toBe(404);
   });
 
   it("shows the fundraisers, the chips and the panel while fundraising is on", async () => {
-    const html = await (await get("/get-involved")).text();
+    const html = await (await get("/whats-on")).text();
     expect(html).toContain("Robin&#39;s Santa Dash");
     expect(html).toContain("data-chips");
     expect(html).toContain('id="fundraise-panel"');
@@ -174,7 +174,7 @@ describe("Get involved", () => {
 
   it("shows nothing about fundraising while it is switched off", async () => {
     state.fundraisingOn = false;
-    const html = await (await get("/get-involved")).text();
+    const html = await (await get("/whats-on")).text();
     expect(html).not.toContain("Robin&#39;s Santa Dash");
     expect(html).not.toContain("data-chips");
     expect(html).not.toContain('href="/fundraise"');
@@ -182,9 +182,44 @@ describe("Get involved", () => {
 
   it("leaves out a fundraiser that is not approved or not public", async () => {
     state.fundraisers = [record({ status: "new" }), record({ slug: "private-one", title: "Private One", public: false })];
-    const html = await (await get("/get-involved")).text();
+    const html = await (await get("/whats-on")).text();
     expect(html).not.toContain("Robin&#39;s Santa Dash");
     expect(html).not.toContain("Private One");
+  });
+});
+
+describe("Get involved", () => {
+  it("is a 404 while the events page is switched off", async () => {
+    state.eventsOn = false;
+    expect((await get("/get-involved")).status).toBe(404);
+  });
+
+  it("answers while the events page is on, kept fresh, with a fundraiser's card", async () => {
+    const res = await get("/get-involved");
+    expect(res.status).toBe(200);
+    expect(res.headers.get("cache-control")).toBe("public, max-age=0");
+    const html = await res.text();
+    expect(html).toContain("What can");
+    expect(html).toContain("Robin&#39;s Santa Dash");
+    expect(html).toContain('id="fundraise"');
+    expect(html).not.toContain("robin.quill@example.com");
+  });
+
+  it("still answers while fundraising is off, without the Fundraise section", async () => {
+    state.fundraisingOn = false;
+    const res = await get("/get-involved");
+    expect(res.status).toBe(200);
+    const html = await res.text();
+    expect(html).toContain("What can");
+    expect(html).not.toContain('id="fundraise"');
+    expect(html).not.toContain("<video");
+    expect(html).not.toContain("Robin&#39;s Santa Dash");
+  });
+
+  it("has the What's on item beside its own, marked as the page you are on", async () => {
+    const nav = navList(await (await get("/get-involved")).text());
+    expect(nav).toContain('<a href="/get-involved" class="active" aria-current="page">Get involved</a>');
+    expect(nav).toContain('<a href="/whats-on">What\'s on</a>');
   });
 });
 
@@ -429,7 +464,7 @@ describe("the image", () => {
     const { readFileSync } = await import("node:fs");
     const docker = readFileSync(resolve(ROOT, "Dockerfile"), "utf8");
     const copy = docker.split(/\r?\n/).find((l) => l.startsWith("COPY index.html")) ?? "";
-    for (const f of ["events.html", "fundraise.html", "fundraiser.html", "fundraise-manage.html", "fundraise-help.html", "fundraise-logos.html"]) expect(copy.split(/\s+/), f).toContain(f);
+    for (const f of ["whats-on.html", "get-involved.html", "fundraise.html", "fundraiser.html", "fundraise-manage.html", "fundraise-help.html", "fundraise-logos.html"]) expect(copy.split(/\s+/), f).toContain(f);
   });
 });
 
@@ -484,9 +519,9 @@ describe("a finished fundraiser's page (TASK-502)", () => {
     expect(html).toContain("+ £5 Gift Aid");
   });
 
-  it("is not listed on Get involved", async () => {
+  it("is not listed on What's on", async () => {
     state.fundraisers = [record({ status: "finished" })];
-    const html = await (await get("/get-involved")).text();
+    const html = await (await get("/whats-on")).text();
     expect(html).not.toContain("Robin&#39;s Santa Dash");
   });
 

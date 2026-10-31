@@ -19,7 +19,7 @@ describe("the privacy notice explains the contact form's spam check", () => {
 
   // assets/js/contact-captcha.js loads Cloudflare's script only once the visitor starts on the form.
   it("says Cloudflare is involved only once you start on the form", () => {
-    expect(text).toContain("When you start filling in our contact form, it uses Cloudflare Turnstile");
+    expect(text).toContain("When you start filling in one of our contact forms, it uses Cloudflare Turnstile");
   });
 
   it("gives the lawful basis", () => {

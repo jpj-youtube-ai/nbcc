@@ -1,9 +1,9 @@
 /* =================================================================
    EVENTS: page stylesheet
 
-   Loaded ONLY by /events, for the same reason ball.css is separate: the
-   shared bundle is on an enforced first-paint budget and donate.html, the
-   money path, sits just under it.
+   Loaded ONLY by /whats-on and /get-involved, for the same reason ball.css
+   is separate: the shared bundle is on an enforced first-paint budget and
+   donate.html, the money path, sits just under it.
 
    The idea is a hand of playing cards. Each event is a card: its picture on
    top, the gist underneath, and the date in the corner where a playing card
@@ -628,6 +628,12 @@
 }
 
 
+/* The line at the foot of What's on, to everything else you can do. */
+.wo-more { max-width: 62ch; margin: 0 auto; padding: 0 clamp(20px, 5vw, 48px) clamp(48px, 7vw, 88px); text-align: center; color: var(--slate-soft); }
+.wo-more b { color: var(--slate); }
+.wo-more a { color: var(--crimson); font-weight: 600; text-underline-offset: 3px; }
+.wo-more a:hover { color: var(--maroon); }
+
 /* Event pages: a community event's own page, under any booking button on its back. */
 .ev-book--page { margin-top: 10px; }
 
@@ -803,7 +809,7 @@
   .gi-film__frame { border-radius: var(--radius); }
   .gi-film__actions { top: 8px; right: 8px; gap: 6px; }
   .gi-film__sound, .gi-film__pause { padding: 8px 14px 8px 11px; gap: 0.4em; font-size: 0.86rem; }
-  .gi-film__actions--centre { bottom: 6%; }
+  .gi-film__actions--centre { inset: auto 0 6% 0; }
   .gi-film__actions--centre .gi-film__sound { padding: 10px 20px 10px 16px; font-size: 0.95rem; }
 }
 @media (max-width: 360px) {

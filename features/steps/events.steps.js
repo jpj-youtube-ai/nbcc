@@ -202,6 +202,7 @@ Then("the menu does not offer Events", function () {
   assert.ok(nav.length > 0, "no nav list on the page");
   // TASK-494: the page is Get involved now; neither its new nor its old address may be offered.
   assert.ok(!nav.includes('href="/get-involved"'), "the menu offered a page that is switched off");
+  assert.ok(!nav.includes('href="/whats-on"'), "the menu offered a page that is switched off");
   assert.ok(!nav.includes('href="/events"'), "the menu offered the old address");
 });
 
@@ -215,13 +216,21 @@ Then("the menu offers Events straight after About", function () {
   assert.ok(nav.includes(">Get involved</a>"), "the menu item does not read Get involved");
 });
 
+Then("the menu offers What's on straight after Get involved", function () {
+  const nav = navList(this.visitorBody);
+  const hrefs = [...nav.matchAll(/href="([^"]+)"/g)].map((m) => m[1]);
+  assert.equal(hrefs[hrefs.indexOf("/get-involved") + 1], "/whats-on", `What's on did not follow Get involved: ${hrefs.join(" ")}`);
+});
+
 Then("the site map does not list the events page", function () {
   assert.ok(!this.visitorBody.includes("/get-involved</loc>"), "sitemap.xml listed a switched off page");
+  assert.ok(!this.visitorBody.includes("/whats-on</loc>"), "sitemap.xml listed a switched off page");
   assert.ok(!this.visitorBody.includes("/events</loc>"), "sitemap.xml listed the old address");
 });
 
 Then("the site map lists the events page", function () {
   assert.ok(this.visitorBody.includes("/get-involved</loc>"), "sitemap.xml did not list the Get involved page");
+  assert.ok(this.visitorBody.includes("/whats-on</loc>"), "sitemap.xml did not list the What's on page");
 });
 
 Then("{string} comes before {string} on the page", function (first, second) {

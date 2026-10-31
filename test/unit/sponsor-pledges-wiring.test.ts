@@ -19,7 +19,7 @@ describe("where sponsor pledges plug in", () => {
 
   it("the pay and cancel pages are on the site router, before its catch all", () => {
     const site = read("src/routes/site.ts");
-    expect(site).toContain("addPledgePageRoutes(router, siteRoot, { decorate: decorateNav });");
+    expect(site).toContain("addPledgePageRoutes(router, siteRoot, { decorate });");
     const routes = read("src/routes/pledges.ts");
     for (const path of ["/pledge/confirm", "/pledge/pay", "/pledge/cancel"]) {
       expect(routes).toContain(`router.get("${path}"`);

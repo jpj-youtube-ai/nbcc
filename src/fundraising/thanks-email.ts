@@ -27,8 +27,8 @@ const CLOSE = "Thanks so much,";
 
 // Keep in touch (Jaimie, 2026-10-04). Many of these givers have never dealt with NBCC, so after the
 // fundraiser's message the email says who the charity is, in its own words (ABOUT_NBCC_FULL, once),
-// and invites them to stay in touch: a button to the mailing list page and a link to the Get
-// involved page. It is an invitation and nothing more: this email adds nobody to any list, and the
+// and invites them to stay in touch: a button to the mailing list page and a link to the What's on
+// page. It is an invitation and nothing more: this email adds nobody to any list, and the
 // two links are the plain public pages, the same for every giver, with no token, nothing to track
 // and nothing about the person in them. Built on the public site address the other fundraising
 // emails use (the sender passes config.PORTAL_BASE_URL). The same on an event page or a team page.
@@ -36,12 +36,12 @@ const KEEP_HEADING = "We'd love to keep in touch";
 const KEEP = "If you'd like to hear how your gift helps, join our mailing list. It's a few emails a year, and you can unsubscribe at any time.";
 const JOIN = "Join our mailing list";
 const MORE = "There's lots going on, too. See what's coming up, and support the people fundraising for NBCC, on our";
-const MORE_LINK = "Get involved page";
+const MORE_LINK = "What's on page";
 
 function keepInTouch(baseUrl: string): { html: string; text: string[] } {
   const base = baseUrl.replace(/\/+$/, "");
   const newsletterUrl = `${base}/newsletter`;
-  const getInvolvedUrl = `${base}/get-involved`;
+  const whatsOnUrl = `${base}/whats-on`;
   return {
     html:
       bodyP(THANKS_TOO) +
@@ -49,8 +49,8 @@ function keepInTouch(baseUrl: string): { html: string; text: string[] } {
       subheading(KEEP_HEADING) +
       bodyP(KEEP) +
       button(newsletterUrl, JOIN) +
-      bodyP(`${MORE} <a href="${escapeHtml(getInvolvedUrl)}" style="color:inherit">${MORE_LINK}</a>.`),
-    text: [THANKS_TOO, "", ABOUT_NBCC_FULL, "", KEEP_HEADING, KEEP, `${JOIN}: ${newsletterUrl}`, "", `${MORE} ${MORE_LINK}: ${getInvolvedUrl}`],
+      bodyP(`${MORE} <a href="${escapeHtml(whatsOnUrl)}" style="color:inherit">${MORE_LINK}</a>.`),
+    text: [THANKS_TOO, "", ABOUT_NBCC_FULL, "", KEEP_HEADING, KEEP, `${JOIN}: ${newsletterUrl}`, "", `${MORE} ${MORE_LINK}: ${whatsOnUrl}`],
   };
 }
 

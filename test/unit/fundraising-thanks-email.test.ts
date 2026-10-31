@@ -24,12 +24,12 @@ import { FOOTER_TEXT, POSTAL_ADDRESS } from "../../src/legal/registration";
 //
 // 2026-10-04: many of these givers have never dealt with NBCC, so the ordinary version now says who
 // the charity is (its own description, once) and invites them to keep in touch: a button to the
-// mailing list page and a link to the Get involved page. An invitation only. The in memory version
+// mailing list page and a link to the What's on page. An invitation only. The in memory version
 // is exactly as it was.
 
 const BASE = "https://nbcc.test";
 const NEWSLETTER = "https://nbcc.test/newsletter";
-const GET_INVOLVED = "https://nbcc.test/get-involved";
+const WHATS_ON = "https://nbcc.test/whats-on";
 const shell = (body: string) => emailShell(body, { contactEmail: "events@nbcc.scot", registration: true, postalAddress: POSTAL_ADDRESS });
 const MESSAGE = "Thank you so much for sponsoring me! I’ll be running in my Santa suit.";
 const LAST = "And from all of us: thank you too.";
@@ -61,7 +61,7 @@ describe("email 20, a thank you passed on to a giver", () => {
           subheading(KEEP_HEADING) +
           bodyP(KEEP) +
           button(NEWSLETTER, JOIN) +
-          bodyP(`${MORE} <a href="${GET_INVOLVED}" style="color:inherit">Get involved page</a>.`) +
+          bodyP(`${MORE} <a href="${WHATS_ON}" style="color:inherit">What's on page</a>.`) +
           signOff("Thanks so much,") +
           questionsBox("events@nbcc.scot"),
       ),
@@ -88,7 +88,7 @@ describe("email 20, a thank you passed on to a giver", () => {
         KEEP,
         `${JOIN}: ${NEWSLETTER}`,
         "",
-        `${MORE} Get involved page: ${GET_INVOLVED}`,
+        `${MORE} What's on page: ${WHATS_ON}`,
         "",
         signOffText("Thanks so much,"),
         "",
@@ -147,21 +147,21 @@ describe("email 20 introduces NBCC and invites the giver to keep in touch", () =
     expect(count(mail.html, `href="${NEWSLETTER}"`)).toBe(1);
   });
 
-  it("links the Get involved page", () => {
-    expect(mail.html).toContain(`<a href="${GET_INVOLVED}" style="color:inherit">Get involved page</a>.`);
-    expect(count(mail.html, `href="${GET_INVOLVED}"`)).toBe(1);
+  it("links the What's on page", () => {
+    expect(mail.html).toContain(`<a href="${WHATS_ON}" style="color:inherit">What's on page</a>.`);
+    expect(count(mail.html, `href="${WHATS_ON}"`)).toBe(1);
   });
 
   it("writes both addresses out in the plain text part", () => {
     expect(mail.text).toContain(`${JOIN}: ${NEWSLETTER}\n`);
-    expect(mail.text).toContain(`Get involved page: ${GET_INVOLVED}\n`);
+    expect(mail.text).toContain(`What's on page: ${WHATS_ON}\n`);
   });
 
   it("is an invitation only: the two links carry no token, no query string and nothing about the giver", () => {
     const named = buildSupporterThanksEmail({ organiserName: "Sam Example", title: "Sam's Santa Dash", message: MESSAGE, baseUrl: BASE, giverName: "Alex Example" });
     expect(named).toEqual(mail);
     const site = hrefs(mail.html).filter((h) => h.startsWith(BASE));
-    expect(site.sort()).toEqual([GET_INVOLVED, NEWSLETTER]);
+    expect(site.sort()).toEqual([NEWSLETTER, WHATS_ON]);
     for (const part of [mail.html, mail.text]) {
       expect(part).not.toMatch(/nbcc\.test\/[^\s"<]*[?#&=]/);
       expect(part).not.toMatch(/token|utm_/i);
@@ -172,7 +172,7 @@ describe("email 20 introduces NBCC and invites the giver to keep in touch", () =
   it("builds the links on the base it is given, with or without a trailing slash", () => {
     const m = buildSupporterThanksEmail({ organiserName: "Sam", title: "Dash", message: "Thanks", baseUrl: "https://nbcc.test/" });
     expect(m.html).toContain(`href="${NEWSLETTER}"`);
-    expect(m.html).toContain(`href="${GET_INVOLVED}"`);
+    expect(m.html).toContain(`href="${WHATS_ON}"`);
     expect(m.text).not.toContain("nbcc.test//");
   });
 

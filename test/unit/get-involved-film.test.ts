@@ -3,13 +3,13 @@ import { describe, it, expect, vi } from "vitest";
 import { readFileSync, statSync } from "node:fs";
 import { resolve } from "node:path";
 import { createRequire } from "node:module";
-import { renderGetInvolvedPage } from "../../src/fundraising/render";
+import { renderNewGetInvolvedPage } from "../../src/fundraising/get-involved-page";
 import { SEED_EVENTS } from "./helpers/events-seed";
 
 // The one minute film on Get involved.
 //
 // What NBCC decided, and what must not quietly break:
-//   - a first visit: the film is full size above the cards and plays by itself with the sound OFF
+//   - a first visit: the film is full size in the Fundraise section and plays by itself with the sound OFF
 //     (a browser refuses anything else), with captions showing and a "Play with sound" button on it;
 //   - every later visit: a slim strip in the same place, "Watch our one minute film", so the events
 //     are seen straight away. Pressing it opens the film there and plays it with sound;
@@ -20,12 +20,12 @@ import { SEED_EVENTS } from "./helpers/events-seed";
 
 const ROOT = resolve(__dirname, "../..");
 const require = createRequire(import.meta.url);
-const template = readFileSync(resolve(ROOT, "events.html"), "utf8");
+const template = readFileSync(resolve(ROOT, "get-involved.html"), "utf8");
 const css = readFileSync(resolve(ROOT, "assets/css/events.css"), "utf8").replace(/\/\*[\s\S]*?\*\//g, "");
 const { initFilm, FILM_SEEN_KEY } = require(resolve(ROOT, "assets/js/events.js"));
 
 const pageHtml = (fundraisingOn: boolean) =>
-  renderGetInvolvedPage(template, { events: SEED_EVENTS, fundraisers: [], fundraisingOn, today: "2026-10-06" });
+  renderNewGetInvolvedPage(template, { events: SEED_EVENTS, fundraisers: [], fundraisingOn, today: "2026-10-06" });
 
 type Mode = "film-first" | "film-later" | "";
 
@@ -120,7 +120,7 @@ function setUp(opts: Options) {
 const flush = () => new Promise((r) => setTimeout(r, 0));
 
 describe("the film in the page", () => {
-  it("sits after the page heading and before the cards", () => {
+  it("sits in the Fundraise section, after the page heading and before the cards", () => {
     const doc = new DOMParser().parseFromString(pageHtml(true), "text/html");
     const film = doc.querySelector("[data-film]")!;
     const h1 = doc.querySelector("h1")!;
@@ -128,9 +128,7 @@ describe("the film in the page", () => {
     expect(film).not.toBeNull();
     expect(h1.compareDocumentPosition(film) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(film.compareDocumentPosition(deck) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    // Straight after the intro, and above the chips: nothing else comes between it and the heading.
-    expect(film.previousElementSibling?.classList.contains("events-intro")).toBe(true);
-    expect(film.nextElementSibling?.classList.contains("events-deck")).toBe(true);
+    expect(film.closest("#fundraise")).not.toBeNull();
     expect(film.closest("main")).not.toBeNull();
   });
 
@@ -156,7 +154,6 @@ describe("the film in the page", () => {
   it("is not in the template itself: the server adds it", () => {
     expect(template).not.toContain("<video");
     expect(template).not.toContain("<script>");
-    expect(template.split("<!-- getinvolved:film -->")).toHaveLength(2);
     expect(template.split("<!-- getinvolved:film-head -->")).toHaveLength(2);
   });
 
@@ -225,6 +222,13 @@ describe("the film in the page", () => {
     const rules = css.match(/\.gi-film[^{]*\{[^}]*\}/g) || [];
     expect(rules.length).toBeGreaterThan(5);
     for (const rule of rules) expect(rule).not.toMatch(/overflow(-[xy])?:\s*(auto|scroll)/);
+  });
+
+  // The phone rule moves the actions to the top corner. Without this the play button, pinned to the
+  // top and the bottom at once, stretches into a blob over the film's words.
+  it("keeps the play button along the bottom of the still on a phone", () => {
+    const phone = css.slice(css.indexOf("@media (max-width: 560px)"));
+    expect(phone).toMatch(/\.gi-film__actions--centre\s*\{[^}]*inset:\s*auto 0 6% 0/);
   });
 
   it("has no em dashes in its words", () => {

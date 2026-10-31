@@ -115,7 +115,7 @@ export function buildMaterial(piece: MaterialPiece | "everything", f: Loaded, wh
 export function buildMaterial(piece: Piece, f: Loaded, who: Who, now?: Date): string | null;
 export function buildMaterial(piece: Piece, f: Loaded, who: Who, now: Date = new Date()): string | null {
   // Event pages: an event's pieces carry its own page, /event/<short name>.
-  const facts = materialFacts(f, f.meter, { pageUrl: pageUrlFor(f), getInvolvedUrl: siteUrl("/get-involved") });
+  const facts = materialFacts(f, f.meter, { pageUrl: pageUrlFor(f), whatsOnUrl: siteUrl("/whats-on") });
   const assets = materialAssets();
   switch (piece) {
     case "poster":

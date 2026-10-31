@@ -21,6 +21,18 @@ export interface SitePage {
   children?: SitePage[];
 }
 
+// The short pages under /get-involved/, served by src/routes/get-involved-pages.ts. They are listed
+// beside Get involved, not as children of it, because the events switch does not govern them: a child
+// would drop off the /sitemap page along with its parent while the page itself stayed up.
+export const SHORT_PAGES: SitePage[] = [
+  { path: "/get-involved/drop-off-points", title: "Drop-off points", listedByDefault: true },
+  { path: "/get-involved/referrals", title: "Referrals", listedByDefault: true },
+  { path: "/get-involved/volunteer", title: "Volunteer", listedByDefault: true },
+  { path: "/get-involved/business", title: "Your business", listedByDefault: true },
+  { path: "/get-involved/schools", title: "Your school", listedByDefault: true },
+  { path: "/get-involved/groups", title: "Your club or group", listedByDefault: true },
+];
+
 // The tree the /sitemap page renders. Paths are the CANONICAL clean URLs from _redirects.
 // /donate/thank-you and /donor-portal are real public pages (so the tree shows them) but are
 // unlisted by default: one is a post-payment landing, the other a personal-access entry —
@@ -41,8 +53,11 @@ export const SITE_PAGES: SitePage[] = [
   { path: "/my-story", title: "Share your story", listedByDefault: true },
   { path: "/supporters", title: "Supporters", listedByDefault: true },
   { path: "/hub", title: "Hub", listedByDefault: true },
-  // TASK-494: the Events page renamed; /events redirects here.
+  // Every way to help, with the first six of What's on's cards. The events switch governs both.
   { path: "/get-involved", title: "Get involved", listedByDefault: true, eventsGated: true },
+  // The Events page, at its own address; /events redirects here.
+  { path: "/whats-on", title: "What's on", listedByDefault: true, eventsGated: true },
+  ...SHORT_PAGES,
   {
     path: "/fundraise",
     title: "Fundraise for us",
@@ -160,8 +175,10 @@ export const RESERVED_PREFIXES: string[] = [
   "/donate",
   "/donor-portal",
   // TASK-453: a real page (switched on and off from the admin), so no spare address may shadow it.
-  // TASK-494 renamed it /get-involved; the old address stays reserved because it redirects there.
+  // It lives at /whats-on now; the old address stays reserved because it redirects there.
   "/events",
+  "/whats-on",
+  // Get involved, and the short pages under it.
   "/get-involved",
   // TASK-496: the ways people type Get involved from a poster; both redirect there.
   "/getinvolved",

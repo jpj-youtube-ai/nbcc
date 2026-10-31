@@ -953,10 +953,10 @@ describe("the wording that still said Events page", () => {
     expect(text(q("#evSwitch h3"))).toBe("Is the Get involved page on the website?");
   });
 
-  it("says Our events are NBCC's own events on the Get involved page", () => {
+  it("says Our events are NBCC's own events on the What's on page", () => {
     const line = text(q('[data-gi-intro="events"]'));
     expect(line).toContain("NBCC’s own events");
-    expect(line).toContain("Get involved page");
+    expect(line).toContain("What’s on page");
   });
 
   it("has no “Events page” left on the screen or in what the script says", () => {
@@ -972,13 +972,22 @@ describe("the wording that still said Events page", () => {
     await go("settings");
     el("evSwitchBtn").click();
     await settle();
-    expect(confirmed[0]).toMatch(/^Put the Get involved page on the website\?/);
-    expect(text(el("evSwitchStatus"))).toBe("The Get involved page is now on the website.");
+    expect(confirmed[0]).toMatch(/^Put the Get involved page on the website, and What’s on with it\?/);
+    expect(text(el("evSwitchStatus"))).toBe("The Get involved page is now on the website, and What’s on with it.");
     expect(calls.filter((c) => c.method === "PATCH" && c.path === "/api/admin/events/settings").map((c) => c.body)).toEqual([{ pageOn: true }]);
     el("evSwitchBtn").click();
     await settle();
-    expect(confirmed[1]).toMatch(/^Take the Get involved page off the website\?/);
-    expect(text(el("evSwitchStatus"))).toBe("The Get involved page is now off the website.");
+    expect(confirmed[1]).toMatch(/^Take the Get involved page off the website, and What’s on with it\?/);
+    expect(text(el("evSwitchStatus"))).toBe("The Get involved page is now off the website, and What’s on with it.");
+  });
+
+  it("says the switch is for both pages, and where they are", async () => {
+    await openTab();
+    await go("settings");
+    expect(text(el("evSwitchState"))).toContain("two pages, Get involved and What’s on");
+    el("evSwitchBtn").click();
+    await settle();
+    expect(text(el("evSwitchState"))).toContain("nbcc.scot/get-involved and nbcc.scot/whats-on");
   });
 
   it("does not rename anything about the Festive Ball", () => {

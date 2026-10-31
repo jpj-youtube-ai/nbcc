@@ -148,9 +148,9 @@ describe("a thank you from the fundraiser, as All emails shows it (2026-10-04)",
       expect(read).toContain("If you'd like to hear how your gift helps, join our mailing list. It's a few emails a year, and you can unsubscribe at any time.");
       expect(read).not.toContain("Your gift helps the children");
       expect(mail.html).toContain(`<a href="${BASE}/newsletter"`);
-      expect(mail.html).toContain(`<a href="${BASE}/get-involved"`);
+      expect(mail.html).toContain(`<a href="${BASE}/whats-on"`);
       expect(mail.text).toContain(`Join our mailing list: ${BASE}/newsletter`);
-      expect(mail.text).toContain(`Get involved page: ${BASE}/get-involved`);
+      expect(mail.text).toContain(`What's on page: ${BASE}/whats-on`);
       expect(mail.html + mail.text).not.toMatch(/nbcc\.test\/[^\s"<]*[?#&=]/);
     }
   });
@@ -163,7 +163,7 @@ describe("a thank you from the fundraiser, as All emails shows it (2026-10-04)",
         expect(part).not.toContain("volunteer led");
         expect(part).not.toContain("keep in touch");
         expect(part).not.toContain("/newsletter");
-        expect(part).not.toContain("/get-involved");
+        expect(part).not.toContain("/whats-on");
       }
     }
   });

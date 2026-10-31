@@ -2,12 +2,16 @@ import type { Request, Response, NextFunction, Router } from "express";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { EVENT_PAGE_PREFIX, pagePath, type FundraiserRecord } from "../fundraising/model";
+import { QUIET_PAGE, type FillLinkPage } from "../red-bag/fill-links";
+import { addFillStageStyles, loadFillStage } from "../red-bag/stage";
+import { BALL_CARD_SLUG, markAfterBallCheck } from "../site/after-ball";
 
-// TASK-494: the public pages of community fundraising, and Get involved (the Events page, renamed).
+// TASK-494: the public pages of community fundraising, What's on and Get involved.
 //
-//   GET /events                    301 to /get-involved, query string kept (old links, newsletters)
-//   GET /getinvolved, /involved    301 to /get-involved too, the ways people type it from a poster
-//   GET /get-involved              NBCC's events, plus fundraisers while fundraising is switched on
+//   GET /events                    301 to /whats-on, query string kept (old links, newsletters)
+//   GET /getinvolved, /involved    301 to /get-involved, the ways people type it from a poster
+//   GET /whats-on                  NBCC's events, plus fundraisers while fundraising is switched on
+//   GET /get-involved              every way to help, with the first six of those same cards
 //   GET /fundraise                 the sign up form, or "not open yet" while switched off; its
 //                                  categories drawn from the database's list, A to Z
 //   GET /fundraise/manage          change your page, by the emailed link (?token=); never indexed
@@ -38,9 +42,15 @@ import { EVENT_PAGE_PREFIX, pagePath, type FundraiserRecord } from "../fundraisi
 // falls through too, so a broken read shows the 404 rather than a broken page.
 
 export interface FundraisePageDeps {
-  /** Adds the menu items switched on elsewhere (the ball, Get involved). */
-  decorate: (html: string, cookieHeader: string | undefined) => Promise<string>;
+  /**
+   * Adds the menu items switched on elsewhere (the ball, Get involved). Given a query, it answers for
+   * that view of the page (src/site/after-ball.ts). Given `page`, a quiet page stays quiet
+   * (src/red-bag/fill-links.ts).
+   */
+  decorate: (html: string, cookieHeader: string | undefined, query?: unknown, page?: FillLinkPage) => Promise<string>;
   eventsPageIsOn: () => Promise<boolean>;
+  /** Is this view after the Ball's moment? */
+  isAfterBall: (query?: unknown) => boolean;
 }
 
 async function fundraisingOn(): Promise<boolean> {
@@ -263,8 +273,37 @@ async function pledgePageExtras(
   }
 }
 
+/**
+ * What What's on and Get involved are drawn from. One read, so the two pages can never disagree.
+ * A failed fundraiser read must not take NBCC's own events down with it: the page goes out without
+ * the fundraisers rather than not at all. After the Ball's moment its card comes down, even though
+ * the 7th is still today (`after`, src/site/after-ball.ts).
+ */
+async function deckInput(after: boolean): Promise<import("../fundraising/render").GetInvolvedInput> {
+  const [{ listPageEvents }, { londonToday }] = await Promise.all([import("../db/events"), import("../events/model")]);
+  const today = londonToday(new Date());
+  const on = await fundraisingOn();
+  let fundraisers: import("../fundraising/model").PublicCard[] = [];
+  if (on) {
+    try {
+      // Team pages: a team once, with its combined meter; its member pages are on the team page.
+      const [{ listApprovedPublic }, { isListed, publicCard }, { teamsOnGetInvolved }] = await Promise.all([
+        import("../db/fundraisers"),
+        import("../fundraising/model"),
+        import("./team-pages"),
+      ]);
+      fundraisers = (await teamsOnGetInvolved(await listApprovedPublic())).filter((f) => isListed(f, today)).map((f) => publicCard(f, f.meter));
+    } catch (err) {
+      console.error("deck fundraisers failed:", err instanceof Error ? err.message : err);
+    }
+  }
+  const events = await listPageEvents(today);
+  return { events: after ? events.filter((e) => e.slug !== BALL_CARD_SLUG) : events, fundraisers, fundraisingOn: on, today };
+}
+
 export function addFundraisePageRoutes(router: Router, siteRoot: string, deps: FundraisePageDeps): void {
-  const getInvolvedFile = join(siteRoot, "events.html");
+  const whatsOnFile = join(siteRoot, "whats-on.html");
+  const getInvolvedFile = join(siteRoot, "get-involved.html");
   const signUpFile = join(siteRoot, "fundraise.html");
   const manageFile = join(siteRoot, "fundraise-manage.html");
   const tshirtFile = join(siteRoot, "fundraise-tshirt.html");
@@ -272,52 +311,41 @@ export function addFundraisePageRoutes(router: Router, siteRoot: string, deps: F
   const helpFile = join(siteRoot, "fundraise-help.html");
   const logosFile = join(siteRoot, "fundraise-logos.html");
 
-  // The page was /events until TASK-494. Links in old newsletters and on Facebook still point there,
-  // so it is a permanent redirect whether or not the page is on (switched off, /get-involved is the
-  // 404 the old address would have been). The query string goes too: newsletter links carry their
-  // utm tags on it.
-  // Said aloud, on a poster or on the radio, people type it without the dash, or just "involved", so
-  // those go there too (Express matches them in any case and with or without a trailing slash).
-  router.get(["/events", "/getinvolved", "/involved"], (req, res) => {
-    const at = req.originalUrl.indexOf("?");
-    res.redirect(301, `/get-involved${at === -1 ? "" : req.originalUrl.slice(at)}`);
+  // The page was /events until TASK-494, and /get-involved until What's on got an address of its own.
+  // It could not go back to /events: a browser keeps a 301 for good, so anyone who had followed that
+  // one would never reach it. Links in old newsletters and on Facebook still point at /events, so it
+  // is a permanent redirect whether or not the page is on (switched off, /whats-on is the 404 the old
+  // address would have been). The query string goes too: newsletter links carry their utm tags on it.
+  router.get("/events", (req, res) => res.redirect(301, `/whats-on${queryOf(req)}`));
+  // Said aloud, on a poster or on the radio, people type it without the dash, or just "involved"
+  // (Express matches them in any case and with or without a trailing slash).
+  router.get(["/getinvolved", "/involved"], (req, res) => res.redirect(301, `/get-involved${queryOf(req)}`));
+
+  router.get("/whats-on", async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      if (!(await deps.eventsPageIsOn())) return next();
+      const { renderWhatsOnPage } = await import("../fundraising/render");
+      const html = renderWhatsOnPage(readFileSync(whatsOnFile, "utf8"), await deckInput(deps.isAfterBall(req.query)));
+      fresh(res);
+      markAfterBallCheck(res, req.query);
+      res.type("html").send(await deps.decorate(html, req.headers.cookie, req.query));
+    } catch (err) {
+      console.error("what's on page failed:", err instanceof Error ? err.message : err);
+      next();
+    }
   });
 
   router.get("/get-involved", async (req: Request, res: Response, next: NextFunction) => {
     try {
       if (!(await deps.eventsPageIsOn())) return next();
-      const [{ listPageEvents }, { londonToday }, { renderGetInvolvedPage }] = await Promise.all([
-        import("../db/events"),
-        import("../events/model"),
-        import("../fundraising/render"),
-      ]);
-      const today = londonToday(new Date());
-      const on = await fundraisingOn();
-      let fundraisers: import("../fundraising/model").PublicCard[] = [];
-      if (on) {
-        // A failed fundraiser read must not take NBCC's own events down with it: the page goes out
-        // without the fundraisers rather than not at all.
-        try {
-          // Team pages: a team once, with its combined meter; its member pages are on the team page.
-          const [{ listApprovedPublic }, { isListed, publicCard }, { teamsOnGetInvolved }] = await Promise.all([
-            import("../db/fundraisers"),
-            import("../fundraising/model"),
-            import("./team-pages"),
-          ]);
-          fundraisers = (await teamsOnGetInvolved(await listApprovedPublic())).filter((f) => isListed(f, today)).map((f) => publicCard(f, f.meter));
-        } catch (err) {
-          console.error("get involved fundraisers failed:", err instanceof Error ? err.message : err);
-        }
-      }
-      const events = await listPageEvents(today);
-      const html = renderGetInvolvedPage(readFileSync(getInvolvedFile, "utf8"), {
-        events,
-        fundraisers,
-        fundraisingOn: on,
-        today,
-      });
+      const { renderNewGetInvolvedPage } = await import("../fundraising/get-involved-page");
+      const after = deps.isAfterBall(req.query);
+      // Fill a Red Bag's stage, from the Ball's moment on. "" leaves it out, as before the moment.
+      const fillStage = after ? await loadFillStage() : "";
+      const html = renderNewGetInvolvedPage(readFileSync(getInvolvedFile, "utf8"), { ...(await deckInput(after)), fillStage });
       fresh(res);
-      res.type("html").send(await deps.decorate(html, req.headers.cookie));
+      markAfterBallCheck(res, req.query);
+      res.type("html").send(await deps.decorate(fillStage ? addFillStageStyles(html) : html, req.headers.cookie, req.query));
     } catch (err) {
       console.error("get involved page failed:", err instanceof Error ? err.message : err);
       next();
@@ -349,7 +377,8 @@ export function addFundraisePageRoutes(router: Router, siteRoot: string, deps: F
         res.setHeader("Referrer-Policy", "strict-origin");
         res.setHeader("X-Robots-Tag", "noindex, nofollow");
       }
-      res.type("html").send(await deps.decorate(html, req.headers.cookie));
+      // The in memory path is chosen in the browser, so this page cannot tell: quiet for everyone.
+      res.type("html").send(await deps.decorate(html, req.headers.cookie, undefined, QUIET_PAGE));
     } catch (err) {
       console.error("fundraise page failed:", err instanceof Error ? err.message : err);
       next();
@@ -366,7 +395,9 @@ export function addFundraisePageRoutes(router: Router, siteRoot: string, deps: F
       res.setHeader("X-Robots-Tag", "noindex, nofollow");
       res.setHeader("Referrer-Policy", "no-referrer");
       res.setHeader("Cache-Control", "no-store");
-      res.type("html").send(await deps.decorate(readFileSync(manageFile, "utf8"), req.headers.cookie));
+      // Whose area this is, and whether a page in it is in memory of someone, is only known in the
+      // browser: quiet for everyone.
+      res.type("html").send(await deps.decorate(readFileSync(manageFile, "utf8"), req.headers.cookie, undefined, QUIET_PAGE));
     } catch (err) {
       console.error("fundraise manage page failed:", err instanceof Error ? err.message : err);
       next();
@@ -556,7 +587,8 @@ ${title}`, () => qrSvg(url, { title, size: 1024 })));
       const unlisted = Boolean(f.offListAt);
       if (unlisted && !withSession) res.setHeader("X-Robots-Tag", "noindex");
       const out = unlisted ? html.replace("</head>", '    <meta name="robots" content="noindex" />\n  </head>') : html;
-      res.type("html").send(await deps.decorate(out, req.headers.cookie));
+      const { isQuietFundraiser } = await import("../fundraising/touch-rules");
+      res.type("html").send(await deps.decorate(out, req.headers.cookie, undefined, { quiet: isQuietFundraiser(f) }));
     } catch (err) {
       console.error("fundraiser page failed:", err instanceof Error ? err.message : err);
       next();

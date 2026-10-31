@@ -33,7 +33,15 @@ const PAGES = [
   "privacy.html",
   "404.html",
   "sitemap.html",
-  "events.html",
+  "whats-on.html",
+  "get-involved.html",
+  // The short pages under /get-involved/.
+  "get-involved-drop-off-points.html",
+  "get-involved-referrals.html",
+  "get-involved-volunteer.html",
+  "get-involved-business.html",
+  "get-involved-schools.html",
+  "get-involved-groups.html",
   // TASK-494: the fundraising pages (a fundraiser's page is checked as drawn, in fundraising-render.test.ts).
   "fundraise.html",
   "fundraise-manage.html",
@@ -55,7 +63,9 @@ const FULL_PHRASE = "children, young people and vulnerable adults";
 // "T-shirt" is the one ordinary word allowed its hyphen (Jaimie, 2026-10-03): it is how the word is
 // spelt, and "T shirt" reads as a mistake. Only that whole word (or T-shirts), in either
 // case: "sweat-shirt" and every other hyphen are still caught.
-const ALLOWED_HYPHENATED = ["Lisa-Marie"];
+// "Drop-off points" is the name of a page (Jaimie, 2026-10-31: wording as the prototype), and it reads
+// the same in the middle of a sentence ("a drop-off point near you").
+const ALLOWED_HYPHENATED = ["Lisa-Marie", "Drop-off", "drop-off"];
 const ALLOWED_WORD = /\bT-shirts?\b/gi;
 
 // The rendered, human-visible copy of a page: <body> text (with script / style /

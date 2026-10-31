@@ -804,7 +804,7 @@
       if (where) rows.push(["Where", where]);
       var amount = team ? val("teamTarget") : val("target");
       if (amount) rows.push([m || path() === "event" ? "Hoping to raise" : "Target", "£" + amount]);
-      rows.push(["On Get involved", team ? "Yes, team pages always are" : radio("listed") === "no" ? "No, only people you send the link to" : radio("listed") === "yes" ? "Yes" : ""]);
+      rows.push(["On What\u2019s on", team ? "Yes, team pages always are" : radio("listed") === "no" ? "No, only people you send the link to" : radio("listed") === "yes" ? "Yes" : ""]);
       rows.push([
         "Sharing",
         sharing() ? val("nbccSharePercent") + "% to NBCC, the rest to " + val("otherCauseName") : radio("sharesWithOther") === "no" ? "No, all of it comes to NBCC" : "",
@@ -1301,7 +1301,7 @@
         venue: val("venue"),
         town: m ? "" : val("town"),
         targetPence: wholePence(team ? teamPounds : pounds),
-        // The sign up tidy (C2): every sign up gets a page; listed says whether it goes on Get involved.
+        // The sign up tidy (C2): every sign up gets a page; listed says whether it goes on What's on.
         public: true,
         listed: team ? true : yesNo("listed"),
         firstName: val("firstName"),
@@ -1403,7 +1403,7 @@
       var listed = doc.querySelector("[data-thanks-listed]");
       if (listed) {
         listed.hidden = body.listed === false;
-        // An event with no date yet has its page, but no card on Get involved until it has one.
+        // An event with no date yet has its page, but no card on What's on until it has one.
         if (body.path === "event" && !body.eventDate) listed.textContent = listed.getAttribute("data-say-undated") || listed.textContent;
       }
       var teamLine = doc.querySelector("[data-thanks-team]");

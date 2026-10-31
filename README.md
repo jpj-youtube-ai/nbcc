@@ -577,6 +577,21 @@ losing what went before. Pause holds the demonstration, the snow and the twinkli
 pressed or not, and shows pressed by `aria-pressed`. With less motion asked for nothing moves by itself,
 there is no Pause, and taps work.
 
+**The carried bag** arrives in `assets/js/red-bag.js`, before or after the moment, because only the stage
+makes such an address. The value is read once, after the rows are wired: a key counts only if a row with
+that key was drawn on this page (so a staff draft's list decides, and `__proto__` or `constructor` is
+nothing), a number counts only if it is digits, and both go through `clampQuantity`, added up if a key
+comes twice. Anything else is ignored and never written anywhere. Each thing then goes in through that
+row's own plus, one at a time, 380ms apart, or all at once with less motion, so the notes, the drops and
+the snow come by themselves: while it pours a showing note keeps its whole moment, and the page's 20 second
+cooldown holds across every full bag rather than for each one, so a big bag does not snow on the screen
+over and over. `history.replaceState` takes `bag` out of the address at once and keeps the rest (utm tags,
+`preview`, `at`), so a refresh adds nothing. The moment the visitor reaches for a control, or presses
+Donate on the page or in the bottom bar, the rest goes in first, so a tap lands on top of it, a number is
+never rewritten under a finger and nobody pays for half a bag. It touches nothing else:
+`test/unit/red-bag-carry.test.ts` shows a carried bag and a tapped bag post the same bytes to
+`/api/checkout-session`.
+
 The stacked layout starts at 1090px wide. Beside the words the note sits close to the sum on the bag, so
 from 1091px to 1240px the note is narrower, and the note and elf run out into the gutter only as far as
 `.wrap`'s real gutter allows. Measured every 3px from 320px to 1700px, the note never meets the sum.

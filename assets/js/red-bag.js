@@ -18,7 +18,10 @@
 //     opens on the page when it can and on Stripe's own page when it cannot;
 //   - before leaving for Stripe, it leaves the total in this tab's memory for the thank you, which
 //     is a page of its own: /fill/thank-you (assets/js/red-bag-thanks.js). For show only; the
-//     server never trusts it.
+//     server never trusts it;
+//   - a bag carried from the stage (src/red-bag/stage.ts): /fill?bag=toy:2,socks:1 sets those
+//     quantities on the rows the page drew, by the way the plus button does and no other, one thing
+//     at a time. It touches nothing else: the checkout cannot tell a carried bag from a tapped one.
 //
 // Only the total is ever sent: no list of items leaves the page, because the items are examples of
 // what a donation could do, not things being bought.
@@ -206,6 +209,11 @@
     var skipRow = null; // the row last found to have no clear place for a note, and when
     var skipAt = 0;
     var bumpTimer = null;
+    var POUR_GAP_MS = 380; // between one carried thing dropping in and the next
+    var pour = []; // a key for each carried thing still to come, the next first
+    var pourTimer = null;
+    var pouring = false; // a carried bag is still dropping in
+    var pourFullAt = 0; // when a carried bag last had the big snow
 
     // Where a drop flies: one layer over the builder. It takes no tap and clips what leaves it.
     var fx = null;
@@ -465,7 +473,14 @@
       lastPence = pence;
       if (!crossed || !ready) return;
       var now = Date.now();
-      if (rb.flurryDue(crossed, flurryAt, now) && flurry(rb.flurryKind(crossed))) flurryAt[crossed] = now;
+      var kind = rb.flurryKind(crossed);
+      // A big carried bag crosses a full bag every few seconds: as it pours, the cooldown holds for
+      // every full bag, not only for the same one, so the screen is not snowed on over and over.
+      if (pouring && kind === "full" && pourFullAt && now - pourFullAt < rb.FLURRY_COOLDOWN_MS) return;
+      if (rb.flurryDue(crossed, flurryAt, now) && flurry(kind)) {
+        flurryAt[crossed] = now;
+        if (pouring && kind === "full") pourFullAt = now;
+      }
     }
 
     /** The example's own small drawing at the start of its line; the line's words are unchanged. */
@@ -593,6 +608,8 @@
       noteWait = null;
       if (!row || step !== "bag") return;
       var now = Date.now();
+      // A carried bag pours in faster than a note can be read: the one showing keeps its whole moment.
+      if (pouring && noteEl && now - noteAt < NOTE_MS) return;
       var kind = rb.noteKind(change);
       // A note on this row is still having its moment (quick taps, a held key): leave it be, with no
       // rewrite and no reflow, and write the NEWEST change once the moment is up. The same goes for
@@ -819,6 +836,9 @@
     }
 
     // --- the steppers ---------------------------------------------------------------------------
+    // What each row's plus button does, by key: the one way a carried bag reaches the page. A plain
+    // map, so a key can only be one of the rows drawn here, and never anything an object already has.
+    var adders = Object.create(null);
     each(builder.querySelectorAll("[data-rb-item]"), function (row) {
       var key = row.getAttribute("data-rb-item");
       var box = row.querySelector("input");
@@ -873,10 +893,14 @@
         });
       }
       if (plus) {
-        plus.addEventListener("click", function () {
+        var addMore = function (n) {
           if (plus.getAttribute("aria-disabled") === "true") return;
-          set(rb.clampQuantity(box.value) + 1, true);
+          set(rb.clampQuantity(box.value) + n, true);
+        };
+        plus.addEventListener("click", function () {
+          addMore(1);
         });
+        adders[key] = addMore;
       }
       set(box.value, true);
     });
@@ -1031,6 +1055,7 @@
     // the bar it is also brought into view, since the bar only shows while the nudge's place is
     // off screen.
     function pressDonate(fromBar) {
+      finishPour();
       if (draft) {
         if (nudge) {
           setText(nudge, MSG.draftOff);
@@ -1327,6 +1352,87 @@
       }
     }
 
+    // --- a bag carried from the stage ----------------------------------------------------------------
+    // /fill?bag=toy:2,socks:1. Only ever a key of a row drawn on this page, with a whole number of
+    // them, and only ever through that row's own plus. Whatever else is in the address is ignored and
+    // never written anywhere. It holds nothing personal, and it is an address rather than browser
+    // storage so that it survives a new tab and blocked storage.
+
+    /** What the address asks for, as one key for each thing, in the address's order. */
+    function bagFrom(value) {
+      var wanted = Object.create(null);
+      var keys = [];
+      value.split(",").forEach(function (bit) {
+        var parts = bit.split(":");
+        // Digits only: clampQuantity alone would read "1e2" as a hundred.
+        if (parts.length !== 2 || !Object.prototype.hasOwnProperty.call(adders, parts[0]) || !/^[0-9]+$/.test(parts[1])) return;
+        var n = rb.clampQuantity(parts[1]);
+        if (!n) return;
+        if (!wanted[parts[0]]) keys.push(parts[0]);
+        wanted[parts[0]] = rb.clampQuantity((wanted[parts[0]] || 0) + n);
+      });
+      var out = [];
+      keys.forEach(function (key) {
+        for (var i = 0; i < wanted[key]; i += 1) out.push(key);
+      });
+      return out;
+    }
+
+    // Read once. The bag then leaves the address, whatever it held, so a refresh adds nothing twice;
+    // anything else in the address stays (utm tags, preview, at).
+    function readCarried() {
+      var loc = win.location;
+      if (!loc || !loc.search || typeof URLSearchParams !== "function") return;
+      var query = new URLSearchParams(loc.search);
+      if (!query.has("bag")) return;
+      pour = bagFrom(query.get("bag") || "");
+      query.delete("bag");
+      var rest = query.toString();
+      try {
+        win.history.replaceState(win.history.state, "", loc.pathname + (rest ? "?" + rest : "") + (loc.hash || ""));
+      } catch (e) {
+        /* the address stays as it is; the bag still goes in */
+      }
+      if (!pour.length) return;
+      pouring = true;
+      // The moment the visitor reaches for a control the bag is theirs: the rest goes in first, so a
+      // tap lands on top of it, nothing is lost or doubled, and no number is rewritten under a finger.
+      ["click", "input", "focusin"].forEach(function (type) {
+        builder.addEventListener(type, reachedFor, true);
+      });
+      if (calm()) finishPour();
+      else pourNext();
+    }
+
+    function reachedFor(e) {
+      var t = e.target;
+      if (t && typeof t.closest === "function" && t.closest("button, input")) finishPour();
+    }
+
+    // One thing, then a pause, with never more than one timer waiting, however long the bag.
+    function pourNext() {
+      adders[pour.shift()](1);
+      if (pour.length) pourTimer = later(pourNext, POUR_GAP_MS);
+      else pouring = false;
+    }
+
+    // All that is left, at once: one change for each item, as a typed number would be.
+    function finishPour() {
+      if (!pouring) return;
+      clearTimeout(pourTimer);
+      var left = Object.create(null);
+      var keys = [];
+      pour.forEach(function (key) {
+        if (!left[key]) keys.push(key);
+        left[key] = (left[key] || 0) + 1;
+      });
+      pour = [];
+      keys.forEach(function (key) {
+        adders[key](left[key]);
+      });
+      pouring = false;
+    }
+
     refresh();
     // The first bag was on the page already: it does not "arrive".
     each(doc.querySelectorAll("[data-rb-bags] .rb-bag"), function (b) {
@@ -1334,6 +1440,7 @@
     });
     // From here on, a change is the donor's own, and may be celebrated.
     ready = true;
+    readCarried();
 
     return { total: total, payload: payload };
   }

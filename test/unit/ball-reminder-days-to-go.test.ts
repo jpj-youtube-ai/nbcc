@@ -34,9 +34,10 @@ describe("counting the days to the Ball, by the day in the UK", () => {
 });
 
 describe("the reminder sent a week before", () => {
-  // The fixture is the reminder as origin/main's builder made it (commit 7bd8a698), for this same
-  // booking, written out before the builder was touched.
-  it("is byte for byte the reminder on origin/main", () => {
+  // The fixture is the approved email, for this same booking: first written out from origin/main's
+  // builder (commit 7bd8a698), then re-pinned for TASK-577 with nothing removed and only the drinks
+  // and meals sections added.
+  it("is byte for byte the approved reminder", () => {
     const original = JSON.parse(readFileSync(resolve(__dirname, "fixtures/ball-reminder-week-origin-main.json"), "utf8"));
     expect(at(7)).toEqual(original);
     // With no number given (as any caller from before would call it), the same.

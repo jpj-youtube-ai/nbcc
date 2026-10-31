@@ -458,6 +458,39 @@ describe("tapping while it pours", () => {
     expect($("[data-rb-example]").getAttribute("aria-pressed")).toBe("true");
   });
 
+  // A mouse press gives a button focus at once, before the button is released. Finishing the pour
+  // there moved the panel by about 27px, so the release landed elsewhere and the press was lost.
+  it("lets a press on a button land: focus alone does not finish the pour", () => {
+    start({ search: "?bag=toy:9" });
+    vi.advanceTimersByTime(GAP);
+    const part = api!.total();
+    expect(part).toBeLessThan(9000);
+    const monthly = $<HTMLButtonElement>('[data-rb-mode="monthly"]');
+    monthly.dispatchEvent(new FocusEvent("focusin", { bubbles: true }));
+    expect(api!.total()).toBe(part);
+    monthly.click();
+    expect(api!.total()).toBe(9000);
+    expect(monthly.getAttribute("aria-pressed")).toBe("true");
+    settle();
+    expect(api!.total()).toBe(9000);
+  });
+
+  it("lets the pour run on while a keyboard moves over the buttons, and a press takes it all", () => {
+    start({ search: "?bag=toy:9" });
+    $("[data-rb-donate]").dispatchEvent(new FocusEvent("focusin", { bubbles: true }));
+    vi.advanceTimersByTime(GAP * 3);
+    expect(api!.total()).toBe(4000);
+    donate();
+    expect(api!.total()).toBe(9000);
+    expect(text("[data-rb-details-total]")).toBe("£90");
+  });
+
+  it("finishes the pour the moment a box takes focus, so typing lands on the whole bag", () => {
+    start({ search: "?bag=toy:9" });
+    box("socks").dispatchEvent(new FocusEvent("focusin", { bubbles: true }));
+    expect(api!.total()).toBe(9000);
+  });
+
   it("never writes over a number being typed", () => {
     start({ search: "?bag=toy:9" });
     vi.advanceTimersByTime(GAP);

@@ -1425,6 +1425,8 @@
       pouring = true;
       // The moment the visitor reaches for a control the bag is theirs: the rest goes in first, so a
       // tap lands on top of it, nothing is lost or doubled, and no number is rewritten under a finger.
+      // A button counts on its click, not its focus: a mouse press focuses a button before the release,
+      // and finishing then moves the panel, so the release lands elsewhere and the press is lost.
       ["click", "input", "focusin"].forEach(function (type) {
         builder.addEventListener(type, reachedFor, true);
       });
@@ -1434,7 +1436,7 @@
 
     function reachedFor(e) {
       var t = e.target;
-      if (t && typeof t.closest === "function" && t.closest("button, input")) finishPour();
+      if (t && typeof t.closest === "function" && t.closest(e.type === "focusin" ? "input" : "button, input")) finishPour();
     }
 
     // One thing, then a pause, with never more than one timer waiting, however long the bag.

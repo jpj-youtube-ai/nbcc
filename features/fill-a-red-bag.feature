@@ -1,11 +1,12 @@
 @fill-a-red-bag
-Feature: Fill a Red Bag, listed for search engines but linked from nowhere
+Feature: Fill a Red Bag, listed for search engines, and linked from the Ball's moment
   /fill is a new way to give: fill a list of example items, watch a red bag fill, and give the
   total. It is public (one constant, src/red-bag/switch.ts) and search engines may list it, so it is
-  on the site map; but nothing on the site links to it yet. Its thank you is a page of its own,
-  /fill/thank-you, which is never indexed. The address it first had, /fill-a-red-bag, and
-  /fill-a-bag forward to /fill. The checkout takes a Red Bag gift from anyone. A Red Bag gift is
-  never less than £2, and is never also a gift on a fundraising page.
+  on the site map. Nothing on the site links to it until the Ball's moment (src/site/after-ball.ts);
+  from then the footer, the stage on Home and Get involved, and Drop-off points do. Its thank you is
+  a page of its own, /fill/thank-you, which is never indexed. The address it first had,
+  /fill-a-red-bag, and /fill-a-bag forward to /fill. The checkout takes a Red Bag gift from anyone. A
+  Red Bag gift is never less than £2, and is never also a gift on a fundraising page.
 
   Scenario: the page is there for anyone, at /fill
     When I request the site path "/fill"
@@ -70,11 +71,17 @@ Feature: Fill a Red Bag, listed for search engines but linked from nowhere
     And the site response should contain "Fill a Red Bag"
     And the site response should not contain "fill/thank-you"
 
-  Scenario: the donate page does not link to it yet
+  @until-the-ball
+  Scenario: the donate page does not link to it until the Ball's moment
     When I request the site path "/donate"
     Then the site response status should be 200
     And the site response should not contain "fill-a-red-bag"
     And the site response should not contain 'href="/fill"'
+
+  Scenario: the donate page never links to the old address
+    When I request the site path "/donate"
+    Then the site response status should be 200
+    And the site response should not contain "fill-a-red-bag"
 
   Scenario: a Red Bag gift under £2 is refused
     When I POST "/api/checkout-session" with JSON:

@@ -391,9 +391,16 @@ describe("the Ball's own pages do not know the moment exists", () => {
     state.now = NEXT_DAY;
     expect((await get("/ball")).status).toBe(200);
     expect((await get("/ball/terms")).status).toBe(200);
-    const donate = await get("/ball/donate");
-    expect(donate.status).toBe(200);
-    expect(await donate.text()).toContain("Festive Ball");
+    // /ball/donate reads the real clock, not the one passed in here, and from the day after the Ball it
+    // forwards to /donate: so only for this page, this test stands on a day the page is up.
+    vi.useFakeTimers({ toFake: ["Date"], now: BEFORE });
+    try {
+      const donate = await get("/ball/donate");
+      expect(donate.status).toBe(200);
+      expect(await donate.text()).toContain("Festive Ball");
+    } finally {
+      vi.useRealTimers();
+    }
     expect(await (await get("/ball/guests/an-invented-token")).text()).toContain("<html");
   });
 

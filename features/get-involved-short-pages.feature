@@ -41,4 +41,9 @@ Feature: The short pages under /get-involved/
     And the page does not show "Photo to come"
     When a visitor opens "/get-involved/drop-off-points"
     Then the page does not show "What to bring"
-    And the page does not show 'href="/fill'
+
+  # From the Ball's moment Drop-off points offers Fill a Red Bag (src/red-bag/fill-links.ts).
+  @until-the-ball
+  Scenario: Drop-off points does not offer Fill a Red Bag until the Ball's moment
+    When a visitor opens "/get-involved/drop-off-points"
+    Then the page does not show 'href="/fill'

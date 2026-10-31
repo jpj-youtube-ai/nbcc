@@ -245,7 +245,8 @@ of the day added as they go out, and listed in `SHORT_PAGES` in `src/site/pages.
   in the repo and have no captions, so each "New to..." section is words and a picture.
 - **Nothing about Fill a Red Bag before the 8pm switch.** "Fill Red Bags as a team", "Fill a Red Bag as
   a class" and "Fill Red Bags together" and their ticks are out until online group bags exist.
-  "Can't get to a drop-off point?" offers Donate alone for now; Fill a Red Bag joins it at Stage 2.
+  "Can't get to a drop-off point?" offers Donate alone until the Ball's moment, when Fill a Red Bag joins
+  it (see "The Ball's moment" below).
   So that the word does not show at all, "Fill in the sign up" reads "Complete the sign up" and "helps
   fill a Red Bag" reads "helps pack a Red Bag".
 - **Pictures** are the charity's one real handover photo (`home-red-bags-handover.jpg`) and four crops
@@ -547,6 +548,38 @@ it: `createSiteRouter(root, { now })` holds the only reading of the clock for it
 | The Festive Ball item in the menu, on every page but the Ball's own | `decorateNav`, and the loop over `_redirects`, in `src/routes/site.ts` |
 | The banner and the feature on the home page, and the page's preview for staff | the home route, before it asks anything of the Ball |
 | The Festive Ball's card (slug `festive-ball-2026`) on `/whats-on` and `/get-involved`, even though the 7th is still today | `deckInput` in `src/routes/fundraise-pages.ts` |
+
+| Goes up | Where it is added |
+|---|---|
+| The Fill a Red Bag stage on the home page, between the hero and the four tags | the home route, as the page goes out (`addFillStageToHome`): `index.html` does not change |
+| The same stage on Get involved, after What's on | `fillStage`, at the page's own marker |
+| "Fill a Red Bag" under "Ways to give" in the footer, on every page the site router draws (never a Ball page) | `addFillFooterLink`, `src/red-bag/fill-links.ts`, like the fundraising link |
+| "You can still fill a Red Bag online, or make a donation." and a button, on Drop-off points | `addFillToDropOff`, the same file |
+
+All of these stay down while Fill a Red Bag is switched off (`src/red-bag/switch.ts`), because `/fill` is
+then a 404.
+
+**The stage** is `src/red-bag/stage.ts` (the band), `assets/js/red-bag-stage.js` and
+`assets/css/red-bag-stage.css`. The last two are new files that only a page drawing the stage loads, so no
+budgeted page pays for them. It reads the list `/fill` reads, through `loadPublishedRedBagList`, so a price
+here is the price on the real page: the band carries it in the same `rb-list-data` block, and with nothing
+published it has none and the catalogue's list stands, as on `/fill`. If the block cannot be used it shows
+no tiles and never the built-in prices. The script chooses up to eight tiles from what is on the list and
+has a drawing: the eight the design names first, then the rest in the list's order. So a hidden item
+leaves no gap, and the order is the same on every visit. If anything goes wrong drawing it, the stage is
+left out and the page goes on (`loadFillStage` never throws).
+
+It plays itself once it is on the screen and goes round until the bag is full, whatever the prices. The
+demonstration never carries. After a first tap the bag is the visitor's: the button reads "Carry on with
+this bag" and links to `/fill?bag=toy:2,socks:1` (an address, so it survives a new tab and blocked storage,
+and it holds nothing personal), "Start again" clears it, and a tap after a full bag starts another without
+losing what went before. Pause holds the demonstration, the snow and the twinkling; it reads "Pause"
+pressed or not, and shows pressed by `aria-pressed`. With less motion asked for nothing moves by itself,
+there is no Pause, and taps work.
+
+The stacked layout starts at 1090px wide. Beside the words the note sits close to the sum on the bag, so
+from 1091px to 1240px the note is narrower, and the note and elf run out into the gutter only as far as
+`.wrap`'s real gutter allows. Measured every 3px from 320px to 1700px, the note never meets the sum.
 
 **What stays:** `/ball`, its terms, its donate page, guest links and thank you pages all keep working, and
 draw their own menu (`decorateBallPage`), so they keep the Festive Ball item. No file in `src/ball` knows

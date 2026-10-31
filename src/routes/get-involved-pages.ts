@@ -2,6 +2,7 @@ import type { Router } from "express";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { EVENTS_NAV_ITEM } from "../events/nav-link";
+import { addFillToDropOff } from "../red-bag/fill-links";
 import { markAfterBallCheck } from "../site/after-ball";
 import { SHORT_PAGES } from "../site/pages";
 
@@ -39,8 +40,9 @@ export function addShortPageRoutes(router: Router, siteRoot: string, deps: Short
     const file = join(siteRoot, `get-involved-${path.slice("/get-involved/".length)}.html`);
     router.get(path, async (req, res, next) => {
       try {
-        const page = readFileSync(file, "utf8");
         const query = path === DROP_OFF_PATH ? req.query : undefined;
+        const source = readFileSync(file, "utf8");
+        const page = path === DROP_OFF_PATH && deps.isAfterBall?.(query) ? addFillToDropOff(source) : source;
         // The menu items depend on the database, and the page does not: it goes out without them
         // rather than not at all, as the plain pages do.
         const html = await deps.decorate(page, req.headers.cookie, query).then(markSection, (err: unknown) => {

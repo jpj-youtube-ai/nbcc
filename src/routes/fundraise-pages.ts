@@ -2,6 +2,7 @@ import type { Request, Response, NextFunction, Router } from "express";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { EVENT_PAGE_PREFIX, pagePath, type FundraiserRecord } from "../fundraising/model";
+import { addFillStageStyles, loadFillStage } from "../red-bag/stage";
 import { BALL_CARD_SLUG, markAfterBallCheck } from "../site/after-ball";
 
 // TASK-494: the public pages of community fundraising, What's on and Get involved.
@@ -336,10 +337,13 @@ export function addFundraisePageRoutes(router: Router, siteRoot: string, deps: F
     try {
       if (!(await deps.eventsPageIsOn())) return next();
       const { renderNewGetInvolvedPage } = await import("../fundraising/get-involved-page");
-      const html = renderNewGetInvolvedPage(readFileSync(getInvolvedFile, "utf8"), await deckInput(deps.isAfterBall(req.query)));
+      const after = deps.isAfterBall(req.query);
+      // Fill a Red Bag's stage, from the Ball's moment on. "" leaves it out, as before the moment.
+      const fillStage = after ? await loadFillStage() : "";
+      const html = renderNewGetInvolvedPage(readFileSync(getInvolvedFile, "utf8"), { ...(await deckInput(after)), fillStage });
       fresh(res);
       markAfterBallCheck(res, req.query);
-      res.type("html").send(await deps.decorate(html, req.headers.cookie, req.query));
+      res.type("html").send(await deps.decorate(fillStage ? addFillStageStyles(html) : html, req.headers.cookie, req.query));
     } catch (err) {
       console.error("get involved page failed:", err instanceof Error ? err.message : err);
       next();

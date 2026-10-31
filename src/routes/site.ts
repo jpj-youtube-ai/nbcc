@@ -7,6 +7,8 @@ import { addShortPageRoutes } from "./get-involved-pages";
 import { addTeamPageRoutes } from "./team-pages";
 import { addPledgePageRoutes } from "./pledges";
 import { addRedBagPageRoutes } from "./red-bag";
+import { addFillFooterLink } from "../red-bag/fill-links";
+import { addFillStageToHome, loadFillStage } from "../red-bag/stage";
 import { markAfterBallCheck, showAfterBall } from "../site/after-ball";
 import {
   SUPPORTER_TIERS,
@@ -183,14 +185,16 @@ async function addEventsItems(html: string): Promise<string> {
 // published (or being previewed), and Get involved and What's on while the events switch is on. And
 // while fundraising is switched on, the footer's "Fundraise for us" goes to the sign up rather than
 // the contact page (TASK-494). Each is idempotent, so a page that already carries one is left as it is.
-// After the Ball's moment (`after`, src/site/after-ball.ts) the Festive Ball's item comes down: the
-// gate is still asked exactly as it was, and the answer is simply not acted on.
+// After the Ball's moment (`after`, src/site/after-ball.ts) the Festive Ball's item comes down, and
+// the footer gains Fill a Red Bag: the gate is still asked exactly as it was, and the answer is
+// simply not acted on.
 async function decorateNav(html: string, cookieHeader: string | undefined, after: boolean): Promise<string> {
   const [ball, events, fundraising] = await Promise.all([ballIsPublished(cookieHeader), eventsPageIsOn(), fundraisingIsOn()]);
   let out = html;
   if (ball && !after) out = (await import("../ball/nav-link")).addBallNavLink(out);
   if (events) out = await addEventsItems(out);
   if (fundraising) out = (await import("../fundraising/footer-link")).addFundraiseFooterLink(out);
+  if (after) out = addFillFooterLink(out);
   return out;
 }
 
@@ -240,12 +244,14 @@ export function createSiteRouter(siteRoot: string, opts: SiteRouterOptions = {})
   //
   // After the Ball's moment none of that is asked: there is no promotion for anyone, preview cookie or
   // not, and the page needs nothing of the Ball's, so a failed read of its settings costs nothing.
+  // Fill a Red Bag's stage goes in instead, as the page goes out (left out if it cannot be drawn).
   const homeFile = join(siteRoot, "index.html");
   router.get("/", async (req, res) => {
     try {
       if (isAfterBall(req.query)) {
+        const [html, stage] = await Promise.all([decorateNav(readFileSync(homeFile, "utf8"), req.headers.cookie, true), loadFillStage()]);
         markAfterBallCheck(res, req.query);
-        res.type("html").send(await decorateNav(readFileSync(homeFile, "utf8"), req.headers.cookie, true));
+        res.type("html").send(addFillStageToHome(html, stage));
         return;
       }
 
@@ -378,8 +384,9 @@ export function createSiteRouter(siteRoot: string, opts: SiteRouterOptions = {})
         eventsPageIsOn(),
         fundraisingIsOn(),
       ]);
-      const ball = published && !isAfterBall();
-      if (!ball && !events && !fundraising) {
+      const after = isAfterBall();
+      const ball = published && !after;
+      if (!ball && !events && !fundraising && !after) {
         res.sendFile(file);
         return;
       }
@@ -388,6 +395,7 @@ export function createSiteRouter(siteRoot: string, opts: SiteRouterOptions = {})
         if (ball) html = (await import("../ball/nav-link")).addBallNavLink(html);
         if (events) html = await addEventsItems(html);
         if (fundraising) html = (await import("../fundraising/footer-link")).addFundraiseFooterLink(html);
+        if (after) html = addFillFooterLink(html);
         res.type("html").send(html);
       } catch (err) {
         console.error("nav link failed:", err instanceof Error ? err.message : err);
@@ -422,6 +430,7 @@ export function createSiteRouter(siteRoot: string, opts: SiteRouterOptions = {})
       );
       // The footer's "Fundraise for us", as on every other page (TASK-545: this page now has it).
       if (fundraisingOn) html = (await import("../fundraising/footer-link")).addFundraiseFooterLink(html);
+      if (isAfterBall()) html = addFillFooterLink(html);
       res.type("html").send(html);
     } catch (err) {
       console.error("sitemap render failed:", err instanceof Error ? err.message : err);

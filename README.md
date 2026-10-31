@@ -3578,6 +3578,16 @@ paid in the last week (the morning after it is paid, as before). It is never sen
 Ball or after, so a booking first seen by that morning's run (paid on 6 November after the run, or
 on the 7th) gets none: its confirmation, hours old, has the same details.
 
+**Drinks and meals in that email** (TASK-577; Jaimie, 31 October 2026). It tells everyone about the
+Park Hotel's drinks pre-order and that "Everyone needs to submit their meals", naming vegans and
+vegetarians. Guests send the hotel's form to the hotel, not to us. Its dates are the hotel's: orders
+in by Wednesday 4 November (72 hours before), paid by 12pm on Friday 6 November, by a secure link the
+hotel emails them. The form is `assets/park-hotel-drinks-pre-order.pdf`, a button in the email
+(`DRINKS_SHEET_URL` in `src/ball/reminder-email.ts`), because the site's emails carry no attachments
+on purpose. The drinks section drops out with fewer than 3 days to go, since orders have closed by
+then (a late booking, or the staff button); the meals line stays. The wording lives in the code and
+comes out in the tidy after the Ball.
+
 **It says the true time to go** (`daysToGo` in `buildBallReminderEmail`). Exactly a week before,
 or with no number given, it is word for word as it always was (a fixture of origin/main's output is
 compared byte for byte in `test/unit/ball-reminder-days-to-go.test.ts`). On any other day the three

@@ -140,7 +140,11 @@ describe("rendering", () => {
       for (const v of e.versions) {
         const mail = renderVersion(e, v, BASE);
         const found = (mail.html + " " + mail.subject).match(/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g) || [];
-        const strangers = found.filter((a) => !/@(example\.com|nbcc\.scot|nbcc\.test)$/i.test(a));
+        // TASK-577: one real address outside ours, the Park Hotel's published bookings inbox, which
+        // the week-to-go email gives for drinks orders. A business, not a person, and only this one.
+        const strangers = found.filter(
+          (a) => !/@(example\.com|nbcc\.scot|nbcc\.test)$/i.test(a) && a !== "enquiries@theparkhotelayrshire.co.uk",
+        );
         expect(strangers, `${e.id}/${v.id}`).toEqual([]);
       }
     }

@@ -32,13 +32,13 @@ Feature: The Events page, built in the admin and switched on and off from it (TA
     Given the events page is switched on
     When a visitor opens "/"
     Then the menu offers Events straight after About
-    And the menu offers What's on straight after Get involved
+    And the menu does not offer What's on
     When a visitor opens "/contact"
     Then the menu offers Events straight after About
-    And the menu offers What's on straight after Get involved
+    And the menu does not offer What's on
     When a visitor opens "/supporters"
     Then the menu offers Events straight after About
-    And the menu offers What's on straight after Get involved
+    And the menu does not offer What's on
     When a visitor opens "/sitemap.xml"
     Then the site map lists the events page
 

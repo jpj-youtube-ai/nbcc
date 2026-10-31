@@ -122,10 +122,10 @@ describe("the six addresses", () => {
 });
 
 describe("the menu on a short page", () => {
-  it("offers Get involved and What's on, and marks Get involved as the section you are in", async () => {
+  it("offers Get involved, not What's on, and marks Get involved as the section you are in", async () => {
     const list = navList(await (await get("/get-involved/volunteer")).text());
     expect(list).toContain('<a href="/get-involved" class="active" aria-current="true">Get involved</a>');
-    expect(list).toContain('href="/whats-on"');
+    expect(list).not.toContain('href="/whats-on"');
   });
 
   it("offers neither while the events switch is off, because both are the 404", async () => {

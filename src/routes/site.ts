@@ -174,11 +174,11 @@ async function fundraisingIsOn(): Promise<boolean> {
   }
 }
 
-// Get involved and What's on, the two menu items the events switch governs. Two helpers, and not one,
-// because Ball pages take the first (src/ball/page-decor.ts) and keep their old menu without the second.
+// Get involved, the menu item the events switch governs, and the tighter menu that goes with it. Not in
+// addEventsNavLink, because Ball pages take that one (src/ball/page-decor.ts) and keep their old menu.
 async function addEventsItems(html: string): Promise<string> {
-  const [{ addEventsNavLink }, { addMenuFit, addWhatsOnNavLink }] = await Promise.all([import("../events/nav-link"), import("../events/whats-on-link")]);
-  return addMenuFit(addWhatsOnNavLink(addEventsNavLink(html)));
+  const [{ addEventsNavLink }, { addMenuFit }] = await Promise.all([import("../events/nav-link"), import("../events/menu-fit")]);
+  return addMenuFit(addEventsNavLink(html));
 }
 
 // The menu items a page gets on top of what is in its file: the Festive Ball's while the ball is

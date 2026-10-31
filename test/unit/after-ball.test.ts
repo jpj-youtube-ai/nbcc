@@ -85,7 +85,7 @@ import { ballRouter } from "../../src/routes/ball";
 import { renderHomePromo } from "../../src/ball/home-promo";
 import { addBallNavLink } from "../../src/ball/nav-link";
 import { addEventsNavLink } from "../../src/events/nav-link";
-import { addMenuFit, addWhatsOnNavLink } from "../../src/events/whats-on-link";
+import { addMenuFit } from "../../src/events/menu-fit";
 import { addFundraiseFooterLink } from "../../src/fundraising/footer-link";
 
 const ROOT = resolve(__dirname, "../..");
@@ -213,14 +213,14 @@ describe("before the moment", () => {
 
   it("the home page is exactly the Ball's own promotion on the file, and nothing else", async () => {
     const file = read("index.html");
-    const expected = addFundraiseFooterLink(addMenuFit(addWhatsOnNavLink(addEventsNavLink(renderHomePromo(file, { gateOpen: true })))));
+    const expected = addFundraiseFooterLink(addMenuFit(addEventsNavLink(renderHomePromo(file, { gateOpen: true }))));
     expect(await body("/")).toBe(expected);
   });
 
   it("the home page with the gate shut is exactly the file and its menu items", async () => {
     state.gateOpen = false;
     const file = read("index.html");
-    expect(await body("/")).toBe(addFundraiseFooterLink(addMenuFit(addWhatsOnNavLink(addEventsNavLink(file)))));
+    expect(await body("/")).toBe(addFundraiseFooterLink(addMenuFit(addEventsNavLink(file))));
   });
 
   it("the home page with every switch off is the file, byte for byte", async () => {
@@ -233,7 +233,7 @@ describe("before the moment", () => {
   it("a plain page is exactly the file and its menu items, with the Ball's item", async () => {
     const file = read("about.html");
     const html = await body("/about-us");
-    expect(html).toBe(addFundraiseFooterLink(addMenuFit(addWhatsOnNavLink(addEventsNavLink(addBallNavLink(file))))));
+    expect(html).toBe(addFundraiseFooterLink(addMenuFit(addEventsNavLink(addBallNavLink(file)))));
     expect(navList(html)).toContain('href="/ball"');
   });
 
@@ -295,7 +295,6 @@ describe.each([
   it("the home page keeps its other menu items and footer link", async () => {
     const html = await body("/");
     expect(navList(html)).toContain('href="/get-involved"');
-    expect(navList(html)).toContain('href="/whats-on"');
     expect(html).toContain('<a href="/fundraise">Fundraise for us</a>');
   });
 

@@ -216,10 +216,10 @@ describe("Get involved", () => {
     expect(html).not.toContain("Robin&#39;s Santa Dash");
   });
 
-  it("has the What's on item beside its own, marked as the page you are on", async () => {
+  it("marks its own item as the page you are on, and has no What's on item", async () => {
     const nav = navList(await (await get("/get-involved")).text());
     expect(nav).toContain('<a href="/get-involved" class="active" aria-current="page">Get involved</a>');
-    expect(nav).toContain('<a href="/whats-on">What\'s on</a>');
+    expect(nav).not.toContain('href="/whats-on"');
   });
 });
 

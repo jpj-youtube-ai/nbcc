@@ -46,7 +46,7 @@ vi.mock("../../src/db/fundraising-categories", async () => {
 
 import { createSiteRouter } from "../../src/routes/site";
 import { addEventsNavLink } from "../../src/events/nav-link";
-import { addMenuFit, addWhatsOnNavLink, MENU_FIT, WHATS_ON_NAV_ITEM } from "../../src/events/whats-on-link";
+import { addMenuFit, MENU_FIT } from "../../src/events/menu-fit";
 import { decorateBallPage } from "../../src/ball/page-decor";
 import { RESERVED_PREFIXES, SITE_PAGES, aliasFromProblem, renderSitemapTree, renderSitemapXml } from "../../src/site/pages";
 
@@ -54,7 +54,6 @@ const ROOT = resolve(__dirname, "../..");
 const read = (f: string) => readFileSync(resolve(ROOT, f), "utf8");
 const navList = (html: string) => html.match(/<ul class="nav-links"[\s\S]*?<\/ul>/)?.[0] ?? "";
 const hrefs = (list: string) => [...list.matchAll(/href="([^"]+)"/g)].map((m) => m[1]);
-const footer = (html: string) => html.match(/<footer[\s\S]*?<\/footer>/)?.[0] ?? "";
 
 function fundraiser(over: Partial<FundraiserRecord> = {}): FundraiserRecord & { meter: ReturnType<typeof meter> } {
   return {
@@ -147,10 +146,9 @@ describe("the page at /whats-on", () => {
     expect(html).not.toContain('<span class="eyebrow">Get involved</span>');
   });
 
-  it("marks What's on, not Get involved, as the page you are on", async () => {
+  it("marks Get involved in the menu, as the page it belongs to", async () => {
     const nav = navList(await (await get("/whats-on")).text());
-    expect(nav).toContain('<a href="/whats-on" class="active" aria-current="page">What\'s on</a>');
-    expect(nav).toContain('<a href="/get-involved">Get involved</a>');
+    expect(nav).toContain('<a href="/get-involved" class="active" aria-current="page">Get involved</a>');
   });
 
   it("ends with a line to everything else you can do", async () => {
@@ -227,80 +225,23 @@ describe("the forwards at /volunteer and /referrals", () => {
   });
 });
 
-describe("the What's on item in the menu", () => {
-  const contact = () => addEventsNavLink(read("contact.html"));
-
-  it("goes straight after Get involved", () => {
-    expect(hrefs(navList(addWhatsOnNavLink(contact())))).toEqual(["/", "/about-us", "/get-involved", "/whats-on", "/donate", "/contact", "/supporters"]);
-  });
-
-  it("reads What's on", () => {
-    expect(WHATS_ON_NAV_ITEM).toBe('<li><a href="/whats-on">What\'s on</a></li>');
-  });
-
-  it("is added once however many times it runs", () => {
-    const once = addWhatsOnNavLink(contact());
-    expect(addWhatsOnNavLink(once)).toBe(once);
-    expect(once.split(WHATS_ON_NAV_ITEM)).toHaveLength(2);
-  });
-
-  it("changes nothing when there is no Get involved item", () => {
-    const page = read("contact.html");
-    expect(addWhatsOnNavLink(page)).toBe(page);
-  });
-
-  it("changes nothing on a page with no menu", () => {
-    const hub = read("hub.html");
-    expect(addWhatsOnNavLink(hub)).toBe(hub);
-  });
-
-  it("finds a Get involved item marked as the current page", () => {
-    const active = contact().replace('<a href="/get-involved">', '<a href="/get-involved" class="active" aria-current="page">');
-    expect(hrefs(navList(addWhatsOnNavLink(active)))).toEqual(["/", "/about-us", "/get-involved", "/whats-on", "/donate", "/contact", "/supporters"]);
-  });
-
-  it("keeps the indentation and line endings of the file", () => {
-    const lf = addWhatsOnNavLink(contact().replace(/\r\n/g, "\n"));
-    expect(lf).toMatch(/\n( *)<li><a href="\/get-involved">Get involved<\/a><\/li>\n\1<li><a href="\/whats-on">What's on<\/a><\/li>\n/);
-    const crlf = addWhatsOnNavLink(contact().replace(/\r\n/g, "\n").replace(/\n/g, "\r\n"));
-    expect(crlf).toMatch(/\n( *)<li><a href="\/get-involved">Get involved<\/a><\/li>\r\n\1<li><a href="\/whats-on">What's on<\/a><\/li>\r\n/);
-  });
-
-  it("never touches the footer", () => {
-    expect(footer(addWhatsOnNavLink(contact()))).toBe(footer(contact()));
-  });
-
-  it.each(["/contact", "/supporters", "/about-us", "/fundraise", "/get-involved", "/"])("%s offers it while the events switch is on", async (path) => {
-    const nav = hrefs(navList(await (await get(path)).text()));
-    expect(nav.indexOf("/whats-on")).toBe(nav.indexOf("/get-involved") + 1);
-  });
-
-  it("the home page offers it with the Ball's promotion up too", async () => {
-    state.gateOpen = true;
-    const nav = hrefs(navList(await (await get("/")).text()));
-    expect(nav).toEqual(["/", "/about-us", "/get-involved", "/whats-on", "/donate", "/contact", "/supporters", "/ball"]);
-  });
-
-  it.each(["/contact", "/supporters", "/fundraise", "/"])("%s does not offer it while the events switch is off", async (path) => {
-    state.eventsOn = false;
-    expect(await (await get(path)).text()).not.toContain('href="/whats-on"');
-  });
-
-  it("stays off Ball pages, which keep their old menu", () => {
-    const out = decorateBallPage(read("ball.html"), { ballItem: true, eventsOn: true, fundraisingOn: true });
-    expect(out).toContain('href="/get-involved"');
-    expect(out).not.toContain('href="/whats-on"');
+describe("the menu", () => {
+  // Jaimie, 31 October 2026: What's on and Get involved showed the same cards, so the item came out.
+  it("does not offer What's on, on any page", async () => {
+    for (const path of ["/", "/contact", "/about-us", "/get-involved", "/whats-on", "/donate"]) {
+      expect(hrefs(navList(await (await get(path)).text())), path).not.toContain("/whats-on");
+    }
   });
 });
 
-// One more item than the menu was drawn for. Between the burger and the full width it would wrap, and
-// with the Ball's item up it pushed Donate off the screen. styles.css cannot carry the fix: donate.html
-// has 147 bytes of its page weight left, and Ball pages keep their old menu. So it goes out with the item.
+// Between the burger and the full width the menu would wrap, and with the Ball's item up it pushed Donate
+// off the screen. styles.css cannot carry the fix: donate.html has 147 bytes of its page weight left, and
+// Ball pages keep their old menu. So it goes out with the Get involved item.
 describe("the menu's fit on a tablet", () => {
-  const withItem = () => addWhatsOnNavLink(addEventsNavLink(read("contact.html")));
+  const withItem = () => addEventsNavLink(read("contact.html"));
   const head = (html: string) => html.slice(0, html.indexOf("</head>"));
 
-  it("adds the tighter menu to the head of a page that has What's on", () => {
+  it("adds the tighter menu to the head of a page that has Get involved", () => {
     const out = addMenuFit(withItem());
     expect(head(out)).toContain(MENU_FIT);
     expect(MENU_FIT).toMatch(/@media\(min-width:681px\) and \(max-width:1040px\)/);
@@ -316,7 +257,7 @@ describe("the menu's fit on a tablet", () => {
     expect(addMenuFit(once)).toBe(once);
   });
 
-  it("changes nothing on a page without What's on", () => {
+  it("changes nothing on a page without Get involved", () => {
     const page = read("contact.html");
     expect(addMenuFit(page)).toBe(page);
     const hub = read("hub.html");

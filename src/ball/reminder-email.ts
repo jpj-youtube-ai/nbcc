@@ -1,6 +1,6 @@
 import { escapeHtml, lineUpSentence, TICKET_INCLUDES } from "./page";
 import { ballEmailShell, contactPanel, factsCard, BALL_TEXT_FOOTER } from "./email-shell";
-import { MAROON, SLATE, SLATE_SOFT, TAN_SOFT, HEAD, BODY_FONT, CRIMSON } from "../email/brand";
+import { MAROON, SLATE, SLATE_SOFT, TAN_SOFT, HEAD, BODY_FONT, CRIMSON, button } from "../email/brand";
 import type { GuestRow } from "./guest-page";
 
 // TASK-313 (plan 5): the "a week to go" reminder. Pure — no pool, no config, no clock — so it is
@@ -10,6 +10,12 @@ import type { GuestRow } from "./guest-page";
 // also reads back WHAT THE BOOKER TOLD US — the guest names, the allergies, the access needs — so
 // that a mistake is caught a week out rather than at the table. A guest whose coeliac note never
 // saved finds out now, while there is still time, instead of being handed a bread roll.
+
+// TASK-577: the hotel's own drinks pre-order sheet, hosted and linked (the site's emails carry no
+// attachments, on purpose: src/clients/email.ts). Orders close on Wednesday 4 November, three days
+// before the Ball, so a reminder sent later than that does not offer them.
+export const DRINKS_SHEET_URL = "https://nbcc.scot/assets/park-hotel-drinks-pre-order.pdf";
+const DRINKS_LAST_DAYS_TO_GO = 3;
 
 export interface ReminderBooking {
   reference: string;
@@ -114,6 +120,33 @@ export function buildBallReminderEmail(
   <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;margin:0 0 16px;">${guestRowsHtml}</table>`
     : "";
 
+  const drinksOpen = (details.daysToGo ?? 7) >= DRINKS_LAST_DAYS_TO_GO;
+  const drinksHtml = drinksOpen
+    ? `<h2 ${H2}>Drinks on your table</h2>
+  <p ${P}>The Park Hotel is taking drinks pre-orders: wine, spirits, buckets of beer and soft drinks, brought to your table on the night. If you'd like one, fill in the hotel's form and send it straight to the hotel, not to us, at <a href="mailto:enquiries@theparkhotelayrshire.co.uk" ${LINK}>enquiries@theparkhotelayrshire.co.uk</a>.</p>
+  <p ${P}>Orders must reach them by Wednesday 4th November and be paid by 12pm on Friday 6th November. They'll email you a secure payment link. The minimum is 4 people per party, and spirit bottles include 8 mixers.</p>
+  ${button(DRINKS_SHEET_URL, "Download the hotel's drinks form")}`
+    : "";
+  const drinksText = drinksOpen
+    ? `\n\nDRINKS ON YOUR TABLE
+The Park Hotel is taking drinks pre-orders: wine, spirits, buckets of beer and
+soft drinks, brought to your table on the night. If you'd like one, fill in the
+hotel's form and send it straight to the hotel, not to us, at
+enquiries@theparkhotelayrshire.co.uk.
+Orders must reach them by Wednesday 4th November and be paid by 12pm on Friday
+6th November. They'll email you a secure payment link. The minimum is 4 people
+per party, and spirit bottles include 8 mixers.
+Download the hotel's drinks form:
+${DRINKS_SHEET_URL}`
+    : "";
+
+  const guestPage = details.guestLink
+    ? `<a href="${escapeHtml(details.guestLink)}" ${LINK}>your guest page</a>`
+    : "your guest page";
+  const mealsHtml = `<p ${P}><b>Everyone needs to submit their meals.</b> If anyone at your table is vegan or vegetarian, make sure that's on ${guestPage} so the kitchen has it.</p>`;
+  const mealsText = `\n\nEveryone needs to submit their meals. If anyone at your table is vegan or
+vegetarian, make sure that's on your guest page so the kitchen has it.${details.guestLink ? "\n" + details.guestLink : ""}`;
+
   const body = `<p style="margin:0 0 6px;font-family:${BODY_FONT};font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:${SLATE_SOFT};font-weight:700">${toGo.label}</p>
   <h1 style="color:${CRIMSON};font-family:${HEAD};font-size:26px;font-weight:800;margin:0 0 14px;letter-spacing:-.01em">It's nearly here!</h1>
 
@@ -136,6 +169,9 @@ export function buildBallReminderEmail(
 
   ${guestsHtml}
   ${missingHtml}
+
+  ${drinksHtml}
+  ${mealsHtml}
 
   <h2 ${H2}>On the night</h2>
   <p ${P}>There'll be a charity auction and a raffle, with card machines on hand, so bring a little extra if you'd like to join in. Raffle tickets are sold on the night.</p>
@@ -174,7 +210,7 @@ BOOKING ${booking.reference}${booking.tableName ? " · " + booking.tableName : "
 Give your name at the welcome desk when you arrive. There's no ticket to
 print. Dress to impress. Over 18s only.
 ${includesText}
-Entertainment: ${lineUpSentence()}${guestsText}${missingText}
+Entertainment: ${lineUpSentence()}${guestsText}${missingText}${drinksText}${mealsText}
 
 ON THE NIGHT
 There'll be a charity auction and a raffle, with card machines on hand, so

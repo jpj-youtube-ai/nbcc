@@ -501,6 +501,39 @@ and accessibility floor (REQ-032: alt text, keyboard-focusable CTAs). Verified b
 > italic is synthesised (only Playfair 700 normal is self-hosted). The hi-res hero
 > logo asset is REQ-034.
 
+### The top of the home page: the big logo and the four tags
+
+The hero (`.hero`) keeps its words and its two buttons, "Donate now" and "What we do all year". Its
+picture is now the full vector logo, `assets/img/nbcc-logo-full.svg` (`nbcc-logo-white.svg` with its
+letters in the logo's maroon and its white outline removed), on plain cream: the hero's tan glow and the
+logo's shadow are switched off on this page. Below 980px the hero stacks with the logo first and
+everything centred.
+
+Directly under it, "Where would you like to start?" (`section.home-lane`) hangs four gift tags from a
+gold ribbon on the site's quilted card back, and ends with the snow drift:
+
+| Tag | Main link | Small line |
+|---|---|---|
+| Donate | `/donate` | empty |
+| Drop-off points | `https://drop.nbcc.scot/` | `https://drop.nbcc.scot/sign-up`, `/get-involved/drop-off-points` |
+| Referrals | `https://referrals.nbcc.scot/` | `https://referrals.nbcc.scot/sign-in`, `/get-involved/referrals` |
+| Volunteer | `https://vol.nbcc.scot/sign-up` | `https://vol.nbcc.scot/sign-in`, `/get-involved/volunteer` |
+
+The styles are in `assets/css/home-top.css`, a file of its own because `index.html` is under the first
+paint budget and `styles.css` is shared with `donate.html`, which has almost nothing spare. The tags
+are in the page, so they need no script. Their entrance (`hang`) is CSS and holds nothing back if a
+script fails; it and the swing under the pointer are off for less motion.
+
+**What this must not disturb.** The Festive Ball's promotion (`src/ball/home-promo.ts`) finds two exact
+strings in `index.html`, `MAIN_ANCHOR` and `AFTER_HERO_ANCHOR` (the "What we do" section), and both stay
+byte for byte. The tags sit before the second, so until the promotion comes down the page reads: banner,
+hero, four tags, Ball feature, then the rest. The promotion's `.ball-banner + .hero` rule also needs the
+hero straight after the banner, and it is inline, so it comes after `home-top.css`: keep hero padding on
+`.home .hero` and no heavier, or the double gap under the nav comes back. The nav stays transparent
+until scrolled. The drift is the page's cream in both states: it runs into "What we do" with no join,
+and with the Ball's navy feature below it, it lies as a line of snow along the top of the night.
+`test/unit/home-top.test.ts` runs the real `renderHomePromo` on the real `index.html` to pin all of this.
+
 ### Home pillars (REQ-011)
 
 Below the hero, a tinted band (`HOME PILLARS` CSS block, `var(--holly-soft)`

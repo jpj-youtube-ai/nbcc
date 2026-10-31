@@ -46,7 +46,7 @@ describe("home hero (REQ-010)", () => {
 
   it("uses the logo lockup as the hero illustration with alt + dimensions", () => {
     const img = doc.querySelector(".hero-art img");
-    expect(img?.getAttribute("src")).toMatch(/nbcc-logo\.png/);
+    expect(img?.getAttribute("src")).toMatch(/nbcc-logo-full\.svg/);
     expect((img?.getAttribute("alt") ?? "").trim().length).toBeGreaterThan(0);
     expect(img?.getAttribute("width")).toBeTruthy();
     expect(img?.getAttribute("height")).toBeTruthy();

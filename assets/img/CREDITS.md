@@ -11,6 +11,7 @@ file, the slot uses a clearly-labelled placeholder.
 | File | Source | Consent |
 |---|---|---|
 | `nbcc-logo.png` | NBCC brand logo | NBCC owns; in use across the site |
+| `nbcc-logo-full.svg` | NBCC brand logo: `nbcc-logo-white.svg` with its letters in the logo's maroon and its white outline removed, checked against the master | NBCC owns; the big logo at the top of the home page |
 
 ## Team headshots (REQ-016 / REQ-034)
 

@@ -76,7 +76,6 @@
 .fb-link{background:none;border:0;padding:8px 2px;color:var(--maroon);font:500 .96rem var(--font-body);text-decoration:underline;text-underline-offset:3px;cursor:pointer}
 .fb-link:hover{color:var(--crimson)}
 .fb-link[hidden]{display:none}
-.fb-link[aria-pressed="true"]{font-weight:700;text-decoration-thickness:2px}
 .fb.full .fb-cta{animation:fb-cta-glow 1.4s ease-in-out infinite alternate}
 .fb.held .fb-cta{animation-play-state:paused}
 @keyframes fb-cta-glow{from{box-shadow:0 0 0 0 rgba(192,34,56,.42)}to{box-shadow:0 0 0 13px rgba(192,34,56,0)}}

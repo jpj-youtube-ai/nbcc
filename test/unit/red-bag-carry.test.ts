@@ -69,6 +69,8 @@ interface Start {
   draft?: boolean;
   history?: unknown;
   noLocation?: boolean;
+  loader?: HTMLScriptElement;
+  token?: string;
 }
 
 function start(opts: Start = {}) {
@@ -79,6 +81,7 @@ function start(opts: Start = {}) {
   document.body.removeAttribute("data-rb-draft");
   if (opts.draft) document.body.setAttribute("data-rb-draft", "true");
   document.getElementById("stripe-js-sdk")?.remove();
+  if (opts.loader) document.body.appendChild(opts.loader);
   // The list's block of data is in the page's head; the catalogue is told to read it again here.
   expect(catalogue.useListFrom(parsed)).toBe(true);
   fetchMock = vi.fn(async () => ({ ok: true, status: 200, json: async () => ({ url: "https://checkout.stripe.test/pay" }) }));
@@ -107,7 +110,7 @@ function start(opts: Start = {}) {
         win.location.search = at === -1 ? "" : path.slice(at);
       },
     },
-    sessionStorage: { getItem: () => null, setItem: () => undefined },
+    sessionStorage: { getItem: (k: string) => (k === "nbcc_admin_token" ? (opts.token ?? null) : null), setItem: () => undefined },
     matchMedia: (q: string) => ({ matches: opts.reduce === true && q.includes("reduce") }),
     navigator: {},
   };
@@ -525,6 +528,31 @@ describe("a staff draft preview", () => {
     expect(text("[data-rb-nudge]")).toContain("Giving is switched off here");
     expect($("[data-rb-details]").hidden).toBe(true);
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  // A plain visit to the draft's address is the published page, carrying the loader that asks again
+  // with the tab's session (assets/js/red-bag-preview.js), and it runs after this page's script.
+  describe("on the published page that comes first", () => {
+    const loader = () => {
+      const s = document.createElement("script");
+      s.setAttribute("type", "text/plain");
+      s.setAttribute("src", "/assets/js/red-bag-preview.js");
+      return s;
+    };
+
+    it("leaves the bag in the address for the draft, in a tab signed in to the admin", () => {
+      start({ search: "?preview=draft&bag=toy:2", loader: loader(), token: "invented-session" });
+      settle();
+      expect(replaced).toHaveLength(0);
+      expect(api!.total()).toBe(0);
+    });
+
+    it("reads it as usual in a tab with no session: this page is the one that stays", () => {
+      start({ search: "?preview=draft&bag=toy:2", loader: loader() });
+      settle();
+      expect(api!.total()).toBe(2000);
+      expect(replaced[0][2]).toBe("/fill?preview=draft");
+    });
   });
 });
 

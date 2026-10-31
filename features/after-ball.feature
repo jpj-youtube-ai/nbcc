@@ -26,6 +26,29 @@ Feature: The Ball's moment
     Then the ball page status should be 200
     And the ball page should contain "You can still fill a Red Bag online, or make a donation."
 
+  Scenario: ?at=after-ball shows /fill at night, with everything that takes a gift still there
+    When I request "/fill?at=after-ball"
+    Then the ball page status should be 200
+    And the ball page should contain "id=\"fnNight\""
+    And the ball page should contain "/assets/css/fill-night.css"
+    And the ball page should contain "/assets/js/fill-night.js"
+    And the ball page should contain "data-rb-donate"
+    And the ball page should contain "data-rb-bar"
+    And the ball page should contain "id=\"rbDetailsForm\""
+
+  Scenario: the thank you page is never dressed for the night
+    When I request "/fill/thank-you?at=after-ball"
+    Then the ball page status should be 200
+    And the ball page should not contain "fnNight"
+    And the ball page should not contain "fill-night"
+
+  @until-the-ball
+  Scenario: an ordinary view of /fill is the page as it was
+    When I request "/fill"
+    Then the ball page status should be 200
+    And the ball page should not contain "fnNight"
+    And the ball page should not contain "fill-night"
+
   @until-the-ball
   Scenario: nothing of the stage reaches an ordinary view
     When I request "/"

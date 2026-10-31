@@ -252,7 +252,7 @@
   // the snow carries on, so there is still something to hold. Taps work either way.
   pauseBtn.addEventListener('click', function () {
     paused = !paused;
-    pauseBtn.setAttribute('aria-pressed', paused ? 'true' : 'false');
+    pauseBtn.textContent = paused ? 'Play' : 'Pause';
     band.classList.toggle('held', paused);
     if (!paused) wake();
   });

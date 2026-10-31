@@ -555,6 +555,7 @@ it: `createSiteRouter(root, { now })` holds the only reading of the clock for it
 | The same stage on Get involved, after What's on | `fillStage`, at the page's own marker |
 | "Fill a Red Bag" under "Ways to give" in the footer, on every page the site router draws (never a Ball page) | `addFillFooterLink`, `src/red-bag/fill-links.ts`, like the fundraising link |
 | "You can still fill a Red Bag online, or make a donation." and a button, on Drop-off points | `addFillToDropOff`, the same file |
+| The night on `/fill`: the sky, the snow, the lights, the bag in the snow and the sum | `renderNight`, `src/red-bag/render.ts` |
 
 All of these stay down while Fill a Red Bag is switched off (`src/red-bag/switch.ts`), because `/fill` is
 then a 404.
@@ -573,9 +574,9 @@ It plays itself once it is on the screen and goes round until the bag is full, w
 demonstration never carries. After a first tap the bag is the visitor's: the button reads "Carry on with
 this bag" and links to `/fill?bag=toy:2,socks:1` (an address, so it survives a new tab and blocked storage,
 and it holds nothing personal), "Start again" clears it, and a tap after a full bag starts another without
-losing what went before. Pause holds the demonstration, the snow and the twinkling; it reads "Pause"
-pressed or not, and shows pressed by `aria-pressed`. With less motion asked for nothing moves by itself,
-there is no Pause, and taps work.
+losing what went before. Pause holds the demonstration, the snow and the twinkling; while it holds it
+reads "Play", and because its words change it carries no `aria-pressed`, so a screen reader does not hear
+both. With less motion asked for nothing moves by itself, there is no Pause, and taps work.
 
 **The carried bag** arrives in `assets/js/red-bag.js`, before or after the moment, because only the stage
 makes such an address. The value is read once, after the rows are wired: a key counts only if a row with
@@ -590,7 +591,36 @@ over and over. `history.replaceState` takes `bag` out of the address at once and
 Donate on the page or in the bottom bar, the rest goes in first, so a tap lands on top of it, a number is
 never rewritten under a finger and nobody pays for half a bag. It touches nothing else:
 `test/unit/red-bag-carry.test.ts` shows a carried bag and a tapped bag post the same bytes to
-`/api/checkout-session`.
+`/api/checkout-session`. A plain visit to `/fill?preview=draft&bag=...` in a tab signed in to the admin
+leaves the bag in the address for the draft that is about to replace the page, so the draft's rows decide.
+
+**The night on `/fill`** is a dressing and nothing more. `renderRedBagPage` adds it, with `night: true`,
+which the route passes only after the moment or for `?at=after-ball`; `renderNight` in
+`src/red-bag/render.ts` is the only code that adds anything, and if any place it needs is missing the page
+goes out plain rather than half dressed. Before the moment the page is byte for byte the render from
+commit `d17f9856`, headers included (`test/unit/red-bag-night.test.ts` holds hashes of that render: if the
+page is changed on purpose before the night, take the new hash from the failure). The list, the examples,
+the steppers, once or monthly, the round-up, the details step, the bottom bar and the template are the
+same bytes in every state, and `/fill/thank-you` is never dressed. A draft preview goes on working, drawn
+at night after the moment, with no-store and noindex.
+
+The dressing is `assets/css/fill-night.css` and `assets/js/fill-night.js`, loaded by the night page alone.
+The stylesheet carries all it needs and does not lean on the stage's. The wrapper, `#fnNight`, holds the
+heading and the list and stops before the details step, so the bottom bar and the details step are
+outside it. The ten lights (one for each £5 of the first £50) and the sum on the bag come from the page's
+own state: `assets/js/red-bag.js` says the total and how many bags are drawn in a small `rb:bag` event on
+the document, which goes nowhere with nobody listening, and which is the one thing added to that file for
+the night. The script comes before `red-bag.js` so that it hears the first word. The sum is hidden in the
+file and shown by the script, so a page whose script did not arrive never shows a wrong one; it is hidden
+for a full bag or several. The snow is on a canvas that stops off screen, is held by "Pause the snow"
+(which reads "Start the snow" while held, with no `aria-pressed`), is kept to five million pixels however
+long the page, and does not run with less motion or without a canvas.
+
+One bag stands a little left of the middle, with the elf beside it. The elf's picture is cut above the
+logo's line, and it has a small heap of snow of its own in front of it (`.rb-panel::after`), so wherever
+the panel's curve falls at a given width the cut edge is behind snow: measured every 7px from 320px to
+1720px. Several bags fill the width, so the elf and its heap go. Where the layout stacks, at 860px and
+under, the glow is dimmer, because the words are over it.
 
 The stacked layout starts at 1090px wide. Beside the words the note sits close to the sum on the bag, so
 from 1091px to 1240px the note is narrower, and the note and elf run out into the gutter only as far as

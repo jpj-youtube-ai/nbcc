@@ -122,6 +122,7 @@ describe("what the server draws", () => {
     expect(norm(d.querySelector("#fbAgain")?.textContent)).toBe("Start again");
     expect(norm(d.querySelector("#fbPause")?.textContent)).toBe("Pause");
     expect(STAGE_JS).toContain("Carry on with this bag");
+    expect(STAGE_JS).toContain("'Play'");
   });
 
   it("keeps to the charity's rules on wording, in the page and in the script", () => {
@@ -129,7 +130,6 @@ describe("what the server draws", () => {
     expect(words).not.toMatch(/families/i);
     expect(words).not.toMatch(/\bwill\b/i);
     expect(words).not.toMatch(/\bbuys?\b/i);
-    expect(words).not.toContain("Play");
   });
 
   it("has the elf peeping over the snow, with no alt text: it says nothing", () => {
@@ -351,16 +351,18 @@ describe("the demonstration", () => {
     expect(sum()).not.toBe(held);
   });
 
-  it("keeps the one word on the button, and says when it is pressed", () => {
+  it("reads Play while it holds, and Pause again after, with no pressed state to hear as well", () => {
     start();
     const pause = $("#fbPause");
     expect(pause.hidden).toBe(false);
-    expect(pause.getAttribute("aria-pressed")).toBe("false");
+    expect(pause.textContent).toBe("Pause");
+    expect(pause.hasAttribute("aria-pressed")).toBe(false);
+    pause.click();
+    expect(pause.textContent).toBe("Play");
+    expect(pause.hasAttribute("aria-pressed")).toBe(false);
     pause.click();
     expect(pause.textContent).toBe("Pause");
-    expect(pause.getAttribute("aria-pressed")).toBe("true");
-    pause.click();
-    expect(pause.getAttribute("aria-pressed")).toBe("false");
+    expect(pause.hasAttribute("aria-pressed")).toBe(false);
   });
 
   it("says nothing out loud until it is the visitor's", () => {

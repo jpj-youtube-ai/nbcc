@@ -360,7 +360,7 @@ export function createSiteRouter(siteRoot: string, opts: SiteRouterOptions = {})
   // Fill a Red Bag: /fill and its thank you, /fill/thank-you. Public, but linked from nowhere (the
   // switch is src/red-bag/switch.ts); switched off they are the 404 to the public and a preview to
   // signed in staff (src/routes/red-bag.ts).
-  addRedBagPageRoutes(router, siteRoot, { decorate });
+  addRedBagPageRoutes(router, siteRoot, { decorate, isAfterBall });
 
   // Apply each rule: 301 -> permanent redirect to the clean URL; 200 -> serve
   // the target file in place (the address bar keeps the clean URL).

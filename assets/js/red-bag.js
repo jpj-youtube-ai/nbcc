@@ -40,7 +40,8 @@
   // What this tab remembers across the trip to Stripe, for the thank you page: the total, and
   // whether Gift Aid and monthly were chosen. Display only. (assets/js/red-bag-thanks.js reads it.)
   var GIFT_KEY = "nbcc_red_bag_gift";
-  // The admin's session, kept by admin.html for the tab. Read ONLY on a staff preview.
+  // The admin's session, kept by admin.html for the tab. Read ONLY on a staff preview (and asked after
+  // on the page a draft preview is about to replace, where it is never sent anywhere).
   var ADMIN_TOKEN_KEY = "nbcc_admin_token";
 
   var MSG = {
@@ -818,6 +819,20 @@
       setText(barTotal, rb.pounds(pence));
       refreshBar();
       refreshDetails();
+      if (ready) tell(pence);
+    }
+
+    // A word to whatever dresses the page (the lights and the sum on /fill at night,
+    // assets/js/fill-night.js): the total, and how many bags are drawn, as one small event on the
+    // document. It asks nothing back and changes nothing here. With nobody listening, or no night
+    // script on the page, it goes nowhere, and a listener's trouble cannot reach this code.
+    function tell(pence) {
+      if (typeof win.CustomEvent !== "function") return;
+      try {
+        doc.dispatchEvent(new win.CustomEvent("rb:bag", { detail: { pence: pence, bags: rb.bags(pence).drawn.length } }));
+      } catch (e) {
+        /* decoration only */
+      }
     }
 
     // The bar shows only when it is of use and nothing would be doubled: on the bag step, with
@@ -1378,13 +1393,26 @@
       return out;
     }
 
+    // A plain visit to the draft preview's address in a tab signed in to the admin: this page is about
+    // to be replaced by the draft (assets/js/red-bag-preview.js asks for the same address again), and
+    // the draft's rows are the ones that count, so the bag is left in the address for it.
+    function draftComing() {
+      if (!doc.querySelector('script[src="/assets/js/red-bag-preview.js"]')) return false;
+      var s = storage(win);
+      try {
+        return !!(s && s.getItem(ADMIN_TOKEN_KEY));
+      } catch (e) {
+        return false;
+      }
+    }
+
     // Read once. The bag then leaves the address, whatever it held, so a refresh adds nothing twice;
     // anything else in the address stays (utm tags, preview, at).
     function readCarried() {
       var loc = win.location;
       if (!loc || !loc.search || typeof URLSearchParams !== "function") return;
       var query = new URLSearchParams(loc.search);
-      if (!query.has("bag")) return;
+      if (!query.has("bag") || draftComing()) return;
       pour = bagFrom(query.get("bag") || "");
       query.delete("bag");
       var rest = query.toString();
@@ -1440,6 +1468,7 @@
     });
     // From here on, a change is the donor's own, and may be celebrated.
     ready = true;
+    tell(total());
     readCarried();
 
     return { total: total, payload: payload };

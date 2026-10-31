@@ -36,6 +36,13 @@ const PAGES = [
   // TASK-494
   "whats-on.html",
   "get-involved.html",
+  // The short pages under /get-involved/.
+  "get-involved-drop-off-points.html",
+  "get-involved-referrals.html",
+  "get-involved-volunteer.html",
+  "get-involved-business.html",
+  "get-involved-schools.html",
+  "get-involved-groups.html",
   "fundraise.html",
   "fundraise-manage.html",
   // TASK-498

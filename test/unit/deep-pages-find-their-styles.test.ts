@@ -14,7 +14,18 @@ import { fileURLToPath } from "node:url";
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 const read = (f: string) => readFileSync(resolve(ROOT, f), "utf8");
 
-const DEEP_PAGES = ["portal.html", "business-thank-you.html", "gift-aid.html"];
+const DEEP_PAGES = [
+  "portal.html",
+  "business-thank-you.html",
+  "gift-aid.html",
+  // The short pages, at /get-involved/<name>.
+  "get-involved-drop-off-points.html",
+  "get-involved-referrals.html",
+  "get-involved-volunteer.html",
+  "get-involved-business.html",
+  "get-involved-schools.html",
+  "get-involved-groups.html",
+];
 
 describe.each(DEEP_PAGES)("%s is served below the top level", (page) => {
   const html = read(page);

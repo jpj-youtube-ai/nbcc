@@ -3,6 +3,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { forwardStatus, forwardsToItself, keepQuery } from "../site/redirect";
 import { addFundraisePageRoutes } from "./fundraise-pages";
+import { addShortPageRoutes } from "./get-involved-pages";
 import { addTeamPageRoutes } from "./team-pages";
 import { addPledgePageRoutes } from "./pledges";
 import { addRedBagPageRoutes } from "./red-bag";
@@ -320,6 +321,8 @@ export function createSiteRouter(siteRoot: string): Router {
   // they fall through to the catch-all below exactly as if the routes were not here.
   // src/routes/fundraise-pages.ts.
   addFundraisePageRoutes(router, siteRoot, { decorate: decorateNav, eventsPageIsOn });
+  // The short pages under /get-involved/ (src/routes/get-involved-pages.ts). No switch of their own.
+  addShortPageRoutes(router, siteRoot, { decorate: decorateNav });
   // Team pages: the join form at /fundraise/<team>/join (src/routes/team-pages.ts).
   addTeamPageRoutes(router, siteRoot, { decorate: decorateNav });
   // Sponsor pledges: the pay and "can't pay after all" pages an emailed link opens (src/routes/pledges.ts).

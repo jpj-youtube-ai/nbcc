@@ -214,6 +214,58 @@ partner's name with no break point (place names joined by slashes) made the Supp
 wide on a phone. `anywhere`, not `break-word`, because it also lets the card's grid column be
 narrower than the name.
 
+### The short pages under /get-involved/
+
+Six plain pages, each its own file, served by `src/routes/get-involved-pages.ts` with the menu items
+of the day added as they go out, and listed in `SHORT_PAGES` in `src/site/pages.ts`:
+
+| Address | File | Heading |
+|---|---|---|
+| `/get-involved/drop-off-points` | `get-involved-drop-off-points.html` | Drop-off points |
+| `/get-involved/referrals` | `get-involved-referrals.html` | Referrals |
+| `/get-involved/volunteer` | `get-involved-volunteer.html` | Volunteer |
+| `/get-involved/business` | `get-involved-business.html` | Let's make Christmas happen together. |
+| `/get-involved/schools` | `get-involved-schools.html` | Schools are at the heart of what we do. |
+| `/get-involved/groups` | `get-involved-groups.html` | Do something brilliant, together. |
+
+- **Not at `/volunteer` and `/referrals`.** Those are live forwards to `vol.nbcc.scot` and
+  `referrals.nbcc.scot` in the spare address table (migration `1791200000290`). A page there would
+  silently replace them, so neither is reserved and neither is a page.
+- **The events switch does not govern them.** They are about helping, not events. With it off they
+  stay, and the menu loses Get involved and What's on as every page does. That is also why they sit
+  beside Get involved in `SITE_PAGES` and not as its children: a child drops off `/sitemap` with its
+  parent. Get involved lights up in the menu on these pages (`aria-current="true"`: the section, not
+  the page).
+- **Styles.** Each page loads `styles.css`, then `get-involved.css` for the bands, the drift, the taped
+  photographs and the lined paper (`body.page-hub`), then `assets/css/short-pages.css` for what only
+  these six add. `short-pages.css` adds no movement of its own.
+- **Left out until Jaimie sends the details, each to go in as a small change:** what to bring and
+  what we can't take (Drop-off points); the Christmas referrals closing date (Referrals); a
+  volunteer's quote (Volunteer); payroll giving and its tick (Your business). The five films are not
+  in the repo and have no captions, so each "New to..." section is words and a picture.
+- **Nothing about Fill a Red Bag before the 8pm switch.** "Fill Red Bags as a team", "Fill a Red Bag as
+  a class" and "Fill Red Bags together" and their ticks are out until online group bags exist.
+  "Can't get to a drop-off point?" offers Donate alone for now; Fill a Red Bag joins it at Stage 2.
+  So that the word does not show at all, "Fill in the sign up" reads "Complete the sign up" and "helps
+  fill a Red Bag" reads "helps pack a Red Bag".
+- **Pictures** are the charity's one real handover photo (`home-red-bags-handover.jpg`) and four crops
+  of it (`assets/img/crop-*.jpg`). Your business, Your school and Your club or group use the elf on a
+  quilted card, where the plan was a photo nobody has yet: a picture of a volunteer there would read
+  as a business, a class or a club. Never `why-packing.jpg`, which is a drawing of a camera.
+- **The Tell us forms** on the last three send through the contact form's own path. The form is
+  `#contactForm`, so `main.js`'s `initContactForm` checks it, sends it to `POST /api/contact` and says
+  thank you, and `contact-captcha.js` does the spam check, unchanged. That path takes a name, an email,
+  a phone number and one message, so `assets/js/tell-us.js` writes the message into a hidden field on
+  submit, before `main.js` reads it: the page, the business or school, the role, the ticks and anything
+  else, one to a line, which is how the admin's inbox shows it. Each field that goes in the message
+  carries `data-tell` with its label. **The business's field is not called `company`:** that name is
+  the form's trap for robots, and the server quietly drops any message with it filled in.
+
+Tests: `test/unit/get-involved-short-pages.test.ts` (serving, the menu, the forwards, the site map),
+`test/unit/get-involved-short-pages-content.test.ts` (what is on each page and left off it, the
+links, the pictures, the forms with the real `main.js` and spam check) and
+`features/get-involved-short-pages.feature`.
+
 ### How NBCC describes itself
 
 The charity's own words, used exactly (`test/unit/charity-description.test.ts`): "volunteer led"
@@ -1529,6 +1581,7 @@ hosted-Checkout redirect stays the default fallback and no-JS safety net.
 | `GET /ball/terms` | **implemented** | TASK-313 (ticket terms; gated alongside the page) |
 | `GET /whats-on` | **implemented** | TASK-453, moved here from `/get-involved` (What's on: the events from the `events` table, and while fundraising is switched on every approved public fundraiser too. Served only while an admin has the events switch on; otherwise falls through to the 404 / spare-address catch-all) |
 | `GET /get-involved` | **implemented** | Every way to help: the Fundraise section and film (left out while fundraising is off), the first six of What's on's cards, the ways to help together and the rest. The events switch governs it too: off, it is the 404 |
+| `GET /get-involved/drop-off-points`, `/referrals`, `/volunteer`, `/business`, `/schools`, `/groups` | **implemented** | The short pages (`src/routes/get-involved-pages.ts`). The events switch does not govern them. See [The short pages](#the-short-pages-under-get-involved) |
 | `GET /events` | **implemented** | 301 to `/whats-on`, query string kept, whether or not the page is on. Not the page's address: this one has answered 301 since TASK-494, and a browser keeps a 301 for good |
 | `GET /getinvolved`, `GET /involved` | **implemented** | TASK-496 (301 to `/get-involved` too, query string kept: the ways people type it from a poster) |
 | `GET /fundraise` | **implemented** | TASK-494 (the fundraising sign up form; a gentle "not open yet" while fundraising is switched off) |
@@ -4679,7 +4732,8 @@ off. `src/clients/turnstile.ts` asks Cloudflare's siteverify (5 second timeout) 
 or our secret rejected: the message is **kept** and a warning logged, so a genuine enquiry is never
 lost to the checker). Cloudflare's error codes decide whatever the HTTP status, because it sends a
 rejected secret as a 400 naming `invalid-input-secret`. The page learns the site key from
-`GET /api/contact/captcha`. `assets/js/contact-captcha.js`, loaded by `contact.html` only, fetches
+`GET /api/contact/captcha`. `assets/js/contact-captcha.js`, loaded by `contact.html` and the three
+Tell us forms ([The short pages](#the-short-pages-under-get-involved)), fetches
 Cloudflare's script once the visitor starts on the form (a tap or a key in a field) or presses
 Send, so someone who only reads the page never contacts Cloudflare. It draws the box (Flexible when
 the form is 300px wide or more, Compact below that, and again at the size that fits if the form gets

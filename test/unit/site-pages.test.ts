@@ -199,7 +199,7 @@ describe("the Get involved page in the site maps", () => {
     expect(renderSitemapTree(SITE_PAGES, true, false)).not.toContain('href="/get-involved"');
     expect(
       renderSitemapXml(SITE_PAGES, "https://nbcc.scot", new Map([["/get-involved", true]]), true, false),
-    ).not.toContain("/get-involved");
+    ).not.toContain("<loc>https://nbcc.scot/get-involved</loc>");
   });
 
   it("is in both maps once the page is switched on, named Get involved", () => {

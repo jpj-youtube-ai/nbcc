@@ -34,7 +34,7 @@ const ASSETS: MaterialAssets = {
   logoOnDark: "data:image/png;base64,REFSSw==",
 };
 const PAGE = "https://nbcc.test/fundraise/sams-santa-dash";
-const INVOLVED = "https://nbcc.test/get-involved";
+const WHATS_ON = "https://nbcc.test/whats-on";
 
 function record(over: Partial<FundraiserRecord> = {}) {
   return {
@@ -60,7 +60,7 @@ function record(over: Partial<FundraiserRecord> = {}) {
 
 const facts = (over: Partial<FundraiserRecord> = {}) => {
   const f = record(over);
-  return materialFacts(f, f.meter, { pageUrl: PAGE, getInvolvedUrl: INVOLVED });
+  return materialFacts(f, f.meter, { pageUrl: PAGE, whatsOnUrl: WHATS_ON });
 };
 
 /** The drawing of a QR code for a link, as it appears inside a piece. */
@@ -144,7 +144,7 @@ describe("the poster in three sizes", () => {
   // Event pages: an event's poster carries its own page now (the caller gives its /event/ address).
   it("an event's poster still has a code of its own, which leads to its own page", () => {
     const f = record({ path: "event" });
-    const d = materialFacts(f, f.meter, { pageUrl: "https://nbcc.test/event/sams-santa-dash", getInvolvedUrl: INVOLVED });
+    const d = materialFacts(f, f.meter, { pageUrl: "https://nbcc.test/event/sams-santa-dash", whatsOnUrl: WHATS_ON });
     const html = renderPoster(d, ASSETS, "a3");
     expect(html).toContain(`d="${qrPath("https://nbcc.test/q/12-a3")}"`);
     expect(html).toContain("nbcc.test/event/sams-santa-dash");
@@ -315,7 +315,7 @@ describe("the page address in words", () => {
   // Whatever the page is called NOW: a short initials address (TASK-511) prints as it is.
   it("is the fundraiser's current address on every piece", () => {
     const f = record({ slug: "ssd" });
-    const d = materialFacts(f, f.meter, { pageUrl: "https://nbcc.test/fundraise/ssd", getInvolvedUrl: INVOLVED });
+    const d = materialFacts(f, f.meter, { pageUrl: "https://nbcc.test/fundraise/ssd", whatsOnUrl: WHATS_ON });
     for (const size of ["a5", "a4", "a3"] as const) expect(renderPoster(d, ASSETS, size)).toContain("or visit nbcc.test/fundraise/ssd<");
     const json = /<script type="application\/json" id="socialData">([\s\S]*?)<\/script>/.exec(renderSocial(d, ASSETS, ""))?.[1] ?? "";
     expect(JSON.parse(json).linkWords).toBe("nbcc.test/fundraise/ssd");
@@ -360,7 +360,7 @@ describe("the QR code to print", () => {
   const EVENT_PAGE = "https://nbcc.test/event/quiz-night";
   const eventFacts = (over: Partial<FundraiserRecord> = {}) => {
     const f = record({ path: "event", slug: "quiz-night", title: "Exampleton Quiz Night", ...over });
-    return materialFacts(f, f.meter, { pageUrl: EVENT_PAGE, getInvolvedUrl: INVOLVED });
+    return materialFacts(f, f.meter, { pageUrl: EVENT_PAGE, whatsOnUrl: WHATS_ON });
   };
   const sheet = (d = eventFacts()) => renderQrSheet(d, ASSETS) as string;
 
@@ -413,7 +413,7 @@ describe("the QR code to print", () => {
   it("is not made for one with no page of its own", () => {
     expect(renderQrSheet(eventFacts({ public: false }), ASSETS)).toBeNull();
     const listedOnly = record({ path: "event", public: true });
-    expect(renderQrSheet(materialFacts(listedOnly, listedOnly.meter, { pageUrl: null, getInvolvedUrl: INVOLVED }), ASSETS)).toBeNull();
+    expect(renderQrSheet(materialFacts(listedOnly, listedOnly.meter, { pageUrl: null, whatsOnUrl: WHATS_ON }), ASSETS)).toBeNull();
   });
 
   it("keeps a long name on the page by drawing it smaller", () => {

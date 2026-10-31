@@ -13,6 +13,26 @@ export const WHATS_ON_NAV_ITEM = '<li><a href="/whats-on">What\'s on</a></li>';
 const NAV_LIST = 'class="nav-links"';
 const GET_INVOLVED = 'href="/get-involved"';
 
+// What's on is one more item than the menu was drawn for. Between the burger (680px) and about 1040px
+// the words would wrap onto two lines, and with the Festive Ball's item up as well Donate went off the
+// edge of the screen. This tightens the menu at those widths. It goes out with the item, and not in
+// styles.css, for two reasons: donate.html has 147 bytes of its page weight budget left, and Ball
+// pages keep their old menu exactly as it is. It can move to styles.css in the weight review.
+export const MENU_FIT =
+  "<style>@media(min-width:681px) and (max-width:1040px){.nav .wrap{gap:10px}.brand{flex:none}.nav-links{gap:0}" +
+  ".nav-links a{padding:9px 8px;font-size:.84rem}.nav-cta{padding:10px 14px;font-size:.84rem;white-space:nowrap}}</style>";
+
+/** Add MENU_FIT to the head of a page whose menu has What's on. Safe to run twice. */
+export function addMenuFit(html: string): string {
+  if (!html.includes('href="/whats-on"') || html.includes(MENU_FIT)) return html;
+  const listStart = html.indexOf(NAV_LIST);
+  const listEnd = listStart === -1 ? -1 : html.indexOf("</ul>", listStart);
+  if (listEnd === -1 || !html.slice(listStart, listEnd).includes('href="/whats-on"')) return html;
+  const headEnd = html.indexOf("</head>");
+  if (headEnd === -1) return html;
+  return `${html.slice(0, headEnd)}${MENU_FIT}${html.slice(headEnd)}`;
+}
+
 /** Add the item after Get involved in the main nav. Safe to run over any page, and to run twice. */
 export function addWhatsOnNavLink(html: string): string {
   const listStart = html.indexOf(NAV_LIST);

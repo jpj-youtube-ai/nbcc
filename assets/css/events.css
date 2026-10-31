@@ -809,7 +809,7 @@
   .gi-film__frame { border-radius: var(--radius); }
   .gi-film__actions { top: 8px; right: 8px; gap: 6px; }
   .gi-film__sound, .gi-film__pause { padding: 8px 14px 8px 11px; gap: 0.4em; font-size: 0.86rem; }
-  .gi-film__actions--centre { bottom: 6%; }
+  .gi-film__actions--centre { inset: auto 0 6% 0; }
   .gi-film__actions--centre .gi-film__sound { padding: 10px 20px 10px 16px; font-size: 0.95rem; }
 }
 @media (max-width: 360px) {

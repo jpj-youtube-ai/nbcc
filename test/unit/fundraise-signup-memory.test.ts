@@ -163,7 +163,7 @@ describe("in the page as it is", () => {
       "How will people be giving?",
       "About the page",
       "Is there an amount you hope to raise? (optional)",
-      "Shall we list it on our Get involved page?",
+      "Shall we list it on our What’s on page?",
       "Are you sharing what you raise with another cause?",
       "Sharing the page",
       "Your details",

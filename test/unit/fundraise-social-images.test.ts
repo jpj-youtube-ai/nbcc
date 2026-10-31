@@ -36,7 +36,7 @@ function facts(over: Partial<FundraiserRecord> = {}) {
     ...over,
   } as FundraiserRecord;
   const m = meter({ onlinePence: 44000, cashPence: 10000, targetPence: f.targetPence });
-  return materialFacts(f, m, { pageUrl: "https://nbcc.test/fundraise/sams-santa-dash", getInvolvedUrl: "https://nbcc.test/get-involved" });
+  return materialFacts(f, m, { pageUrl: "https://nbcc.test/fundraise/sams-santa-dash", whatsOnUrl: "https://nbcc.test/whats-on" });
 }
 
 // A stand in 2D context: remembers every piece of text drawn on its canvas.

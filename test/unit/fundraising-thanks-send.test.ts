@@ -102,9 +102,9 @@ describe("sending the approved thank yous", () => {
     await sendQueuedThanks();
     const msg = sendFundraiseSupporterThanks.mock.calls[0][1];
     expect(msg.html).toContain('href="https://nbcc.test/newsletter"');
-    expect(msg.html).toContain('href="https://nbcc.test/get-involved"');
+    expect(msg.html).toContain('href="https://nbcc.test/whats-on"');
     expect(msg.text).toContain("Join our mailing list: https://nbcc.test/newsletter");
-    expect(msg.text).toContain("Get involved page: https://nbcc.test/get-involved");
+    expect(msg.text).toContain("What's on page: https://nbcc.test/whats-on");
     expect(msg.html + msg.text).not.toMatch(/nbcc\.test\/[^\s"<]*[?#&=]/);
     expect(msg.html + msg.text).not.toMatch(/alex|token/i);
   });

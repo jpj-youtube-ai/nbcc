@@ -147,7 +147,10 @@ Donate button, and a mobile burger. Two items are added by the server rather tha
 the files: "Festive Ball" while the ball is published (TASK-326), and "Get involved" (called Events
 until TASK-494) after About and "What's on" after that, while the events switch is on (TASK-453).
 What's on has its own helper (`src/events/whats-on-link.ts`), not a part of `addEventsNavLink`,
-because Ball pages call that one and keep their old menu until after the Ball.
+because Ball pages call that one and keep their old menu until after the Ball. The item goes out
+with a few lines of style (`MENU_FIT`, the same file) that tighten the menu between the burger and
+1040px, where it would otherwise wrap and, with the Ball's item up, push Donate off the screen. They
+are not in `styles.css` because donate.html has 147 bytes of its page weight left.
 Behaviour lives in the one shared `assets/js/main.js` (`initNav`): a passive +
 `requestAnimationFrame`-throttled scroll listener flips the bar from transparent
 to a cream/hairline/shadow state past 24px; the burger toggles the link panel
@@ -1525,7 +1528,7 @@ hosted-Checkout redirect stays the default fallback and no-JS safety net.
 | `POST /ball/unlock` | **implemented** | TASK-313 (checks the preview password, sets a signed 14-day cookie) |
 | `GET /ball/terms` | **implemented** | TASK-313 (ticket terms; gated alongside the page) |
 | `GET /whats-on` | **implemented** | TASK-453, moved here from `/get-involved` (What's on: the events from the `events` table, and while fundraising is switched on every approved public fundraiser too. Served only while an admin has the events switch on; otherwise falls through to the 404 / spare-address catch-all) |
-| `GET /get-involved` | **implemented** | Every way to help, with the first six of What's on's cards. The events switch governs it too |
+| `GET /get-involved` | **implemented** | Every way to help: the Fundraise section and film (left out while fundraising is off), the first six of What's on's cards, the ways to help together and the rest. The events switch governs it too: off, it is the 404 |
 | `GET /events` | **implemented** | 301 to `/whats-on`, query string kept, whether or not the page is on. Not the page's address: this one has answered 301 since TASK-494, and a browser keeps a 301 for good |
 | `GET /getinvolved`, `GET /involved` | **implemented** | TASK-496 (301 to `/get-involved` too, query string kept: the ways people type it from a poster) |
 | `GET /fundraise` | **implemented** | TASK-494 (the fundraising sign up form; a gentle "not open yet" while fundraising is switched off) |
@@ -8599,7 +8602,7 @@ and email) and the sign off. Plain English, no dashes, every stored value escape
 | `fundraiseNewsApproved` | the organiser | staff approve a news update they posted (TASK-506) | "Your news update is live!" with the page link while their page is up; otherwise "Your news update is saved!". "Thanks so much," and the questions box |
 | `fundraiseNewsRejected` | the organiser | staff do not use a news update (TASK-506) | "About your news update": not on the page, we'll give you a ring; never the internal reason. "Speak soon," and the questions box |
 | `fundraiseSummary` | everyone on the Weekly summary list, in one email with all of them on the To line (nbcc.scot addresses only) | Mondays at 8am (TASK-503, email 11), or Send a test now (to the admin pressing it, marked as a test) | "Good morning, team!": last week's money, new sign ups, Waiting on us, Coming up, Open the admin, "Have a brilliant week,". Staff only: no questions box, never link tagged. Subject like "Fundraising this week: £1,240 raised, 10 things waiting" |
-| `fundraiseSupporterThanks` | a giver the organiser picked, who can be emailed | staff approve the organiser's thank you (TASK-507, email 20), in the background, one at a time | "A thank you from Sam": the organiser's message in a quote box, "And from all of us: thank you too.", the charity's description, "We'd love to keep in touch" with a "Join our mailing list" button (`/newsletter`) and a link to `/get-involved`, "Thanks so much,", the questions box (in memory: the one closing line, no keep in touch). From and Reply-To the events inbox. See **Thank your supporters (TASK-507)** |
+| `fundraiseSupporterThanks` | a giver the organiser picked, who can be emailed | staff approve the organiser's thank you (TASK-507, email 20), in the background, one at a time | "A thank you from Sam": the organiser's message in a quote box, "And from all of us: thank you too.", the charity's description, "We'd love to keep in touch" with a "Join our mailing list" button (`/newsletter`) and a link to `/whats-on`, "Thanks so much,", the questions box (in memory: the one closing line, no keep in touch). From and Reply-To the events inbox. See **Thank your supporters (TASK-507)** |
 
 **Approved while fundraising is off.** The old "you're approved, your page will appear when our pages
 open" email is retired. A page holder approved while fundraising is off gets no email then: the
@@ -8651,10 +8654,10 @@ What the public sees of community fundraising (stage 1), built on the API above.
 `docs/superpowers/specs/2026-10-02-community-fundraising-design.md`.
 
 **The one minute film on Get involved.** While fundraising is switched on, the page carries NBCC's
-one minute film, "Got an idea?", between the intro and the cards (`src/fundraising/film.ts` holds the
-markup; `renderGetInvolvedPage` puts it where `events.html` has `<!-- getinvolved:film -->`, and a
-few lines of script where it has `<!-- getinvolved:film-head -->`). With fundraising off, neither is
-in the page.
+one minute film, "Got an idea?", in the Fundraise section (`src/fundraising/film.ts` holds the markup;
+`renderNewGetInvolvedPage` puts it in that section, and a few lines of script where `get-involved.html`
+has `<!-- getinvolved:film-head -->`). With fundraising off, neither is in the page. It plays on that
+page only, so it never starts by itself in two places: What's on has no film.
 
 - **A first visit:** the film is full size and plays by itself with the sound off (no browser allows
   anything else) once at least half of it is on screen, with captions showing and a **Play with
@@ -8822,13 +8825,13 @@ site maps under `/fundraise` while fundraising is on.
 
 **Where it lives.** Drawing: `src/fundraising/render.ts` (pure, unit tested). Routes:
 `src/routes/fundraise-pages.ts`, added to the site router before its catch-all. Templates:
-`whats-on.html` (What's on), `fundraise.html`, `fundraiser.html`, `fundraise-manage.html`, `fundraise-help.html` (all in
+`whats-on.html` (What's on), `get-involved.html` (Get involved, drawn by `src/fundraising/get-involved-page.ts`, styles `assets/css/get-involved.css`), `fundraise.html`, `fundraiser.html`, `fundraise-manage.html`, `fundraise-help.html` (all in
 the Dockerfile's page list). Scripts: `assets/js/fundraise.js`, `fundraiser.js`,
 `fundraise-manage.js`; styles: `assets/css/fundraising.css` and the What's on part of
 `events.css`. None of it touches `main.js` or `styles.css`, so donate.html's page weight budget is
 unchanged. Text boxes grow with what is typed rather than scroll.
 
-**Tests.** `fundraising-render`, `fundraise-pages-routes`, `whats-on-page`, `whats-on-chips`,
+**Tests.** `fundraising-render`, `fundraise-pages-routes`, `whats-on-page`, `whats-on-chips`, `get-involved-page`,
 `fundraise-signup-page`, `fundraiser-page`, `fundraise-manage-page`, `fundraise-help-page` and
 `fundraiser-checkout-contract` (unit, jsdom), and `features/fundraising-pages.feature` (the
 redirect, Get involved with fundraising on and off, a fundraiser's page (no QR code since TASK-501,
@@ -9818,7 +9821,7 @@ thank you too.", then (2026-10-04) the charity's own description as its own para
 you'd like to hear how your gift helps, join our mailing list. It's a few emails a year, and you can
 unsubscribe at any time.", the standard button "Join our mailing list" to `/newsletter`, and
 "There's lots going on, too. See what's coming up, and support the people fundraising for NBCC, on
-our Get involved page." linked to `/get-involved`. Then "Thanks so much, NBCC Team", and the "Got
+our What's on page." linked to `/whats-on`. Then "Thanks so much, NBCC Team", and the "Got
 any questions?" box with the events inbox. Nothing about any other giver, and never the organiser's
 address.
 
@@ -9954,7 +9957,7 @@ line the forms allow.
 `https://nbcc.scot/q/<fundraiser id>-<a4|a3|a5>` (`src/fundraising/material-codes.ts`), about 26
 characters, so the code stays small and easy to scan. `GET /q/:code` answers with a `302` to wherever
 the fundraiser is now, found by its **id**, never its address, so a printed code keeps working for
-good whatever its page's address becomes: its page, or Get involved for a listed event, with
+good whatever its page's address becomes: its page, or What's on for a listed event, with
 `utm_medium=qr&utm_campaign=f<id>-<size>`. It is `no-store` (an address change is followed at once)
 and `noindex`. Anything else (not one of ours, no such fundraiser, one that is new, declined or not on
 the website, fundraising switched off) falls through to the site's own 404; the target is always a
@@ -10311,7 +10314,7 @@ own page. The Get involved card links to it ("See the event page and give", on t
   to the page on the day, and reply for help; no sponsorship tips. The change and news emails link
   the event's page. News photos show on an event's page as on a fundraiser's.
 - **QR codes on printed pieces** (`/q/<id>-<size>`) go to the event's page; an event whose stored
-  address cannot be linked goes to Get involved, as before.
+  address cannot be linked goes to What's on.
 - **Switched off**, an event's page is the site's 404, like every fundraising page. `/event` is in
   `RESERVED_PREFIXES`. Fundraiser pages are not in the sitemap, so event pages are not either.
 - **Data:** `migrations/1791200000185_event-pages.js`, additive: one nullable column,
@@ -10752,7 +10755,7 @@ What is asked, and why:
   first name (shown on the page) and the parent's or guardian's tick.
 - **A business, school or group**: its name (the page says "Organised by" it) and, optionally,
   whether the employer will match what is raised.
-- **Get involved.** "Shall we list it on our Get involved page?" Every sign up now gets a page
+- **What's on.** "Shall we list it on our What's on page?" Every sign up now gets a page
   (`public` is always true); a No keeps it off the list (`off_list_at`, `off_list_by = 'organiser'`,
   the mechanism staff already use). A team is always listed.
 - **Social media** is one question: a shout out, a mention, or no thanks (`socialOk` and

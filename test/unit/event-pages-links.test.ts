@@ -42,7 +42,7 @@ const event = (over: Partial<FundraiserRecord> = {}): FundraiserRecord => ({
   creditName: null, slugSetAt: "2026-10-01T11:00:00.000Z",
   ...over,
 });
-const URLS = { pageUrl: "https://nbcc.test/event/eqn", getInvolvedUrl: "https://nbcc.test/get-involved" };
+const URLS = { pageUrl: "https://nbcc.test/event/eqn", whatsOnUrl: "https://nbcc.test/whats-on" };
 
 beforeEach(() => {
   for (const fn of Object.values(mail)) fn.mockReset().mockResolvedValue(undefined);
@@ -81,7 +81,7 @@ describe("an event's poster, as staff and the organiser open it", () => {
   it("prints the event page's address under its QR code", () => {
     const html = buildMaterial("poster", { ...event(), meter: meter({ onlinePence: 0, cashPence: 0, targetPence: null }) }, "staff");
     expect(html).toContain("nbcc.test/event/eqn");
-    expect(html).not.toContain("nbcc.test/get-involved");
+    expect(html).not.toContain("nbcc.test/whats-on");
   });
 });
 
@@ -120,7 +120,7 @@ describe("after giving on an event's page", () => {
 // still goes somewhere useful: Get involved, where it is listed, as before event pages.
 describe("a printed piece's QR code, for an event whose address cannot be linked", () => {
   it("goes to Get involved, with its tag", () => {
-    expect(scanTarget(event({ slug: "Not A Valid Address" }), "a5")).toBe("/get-involved?utm_medium=qr&utm_campaign=f12-a5");
+    expect(scanTarget(event({ slug: "Not A Valid Address" }), "a5")).toBe("/whats-on?utm_medium=qr&utm_campaign=f12-a5");
   });
 
   it("still goes nowhere for a fundraiser raising money with such an address", () => {

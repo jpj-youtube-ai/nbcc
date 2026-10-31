@@ -138,15 +138,15 @@ describe("without the script", () => {
   });
 
   // The sign up tidy (Jaimie, 2026-10-03): "Shall we show it on the NBCC website?" (publicYes and
-  // publicNo) is now "Shall we list it on our Get involved page?" (listedYes and listedNo): every
+  // publicNo) is now "Shall we list it on our What’s on page?" (listedYes and listedNo): every
   // sign up gets a page, and the answer only says whether it is listed.
   it("says plainly what listing it means, and that it gets a page either way", () => {
     page();
     const q = $("#listedYes").closest("[data-step]")!;
-    expect(legendOf(q)).toBe("Shall we list it on our Get involved page?");
+    expect(legendOf(q)).toBe("Shall we list it on our What’s on page?");
     expect(document.querySelector("#publicYes, #publicNo")).toBeNull();
     const words = (id: string) => $(`label[for=${id}]`).textContent!.replace(/\s+/g, " ").trim();
-    expect(words("listedYes")).toBe("Yes, list it, so anyone can find itOnce we have checked it with you, it goes on our Get involved page at nbcc.scot.");
+    expect(words("listedYes")).toBe("Yes, list it, so anyone can find itOnce we have checked it with you, it goes on our What’s on page at nbcc.scot.");
     expect(words("listedNo")).toBe("No, only people you send the link toIt still gets its own page. We just won’t list it.");
   });
 
@@ -221,7 +221,7 @@ describe("one question at a time", () => {
       "Your target (optional)",
       "Who is doing the fundraising?",
       "Are you fundraising for a business, school or group?",
-      "Shall we list it on our Get involved page?",
+      "Shall we list it on our What’s on page?",
       "Your details",
       "Your address",
       "Are you sharing what you raise with another cause?",
@@ -241,7 +241,7 @@ describe("one question at a time", () => {
       "For your event’s card",
       "Is there an amount you hope to raise? (optional)",
       "Are you fundraising for a business, school or group?",
-      "Shall we list it on our Get involved page?",
+      "Shall we list it on our What’s on page?",
       "Your details",
       "Your address",
       "Are you sharing what you raise with another cause?",

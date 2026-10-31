@@ -61,7 +61,7 @@ function pageOf(f: Pick<FundraiserRecord, "path" | "slug">): string {
   return f.path === "event" ? eventPageUrl(f.slug) : fundraiserPageUrl(f.slug);
 }
 
-/** Any address on the public site, from its path (TASK-504: Get involved, for an event's poster). */
+/** Any address on the public site, from its path (TASK-504: What's on, for an event's poster). */
 export function siteUrl(path: string): string {
   return `${base()}${path}`;
 }

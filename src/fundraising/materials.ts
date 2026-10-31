@@ -116,9 +116,9 @@ export interface MaterialFacts {
   targetPence: number | null;
   raisedPence: number;
   giftAidPence: number;
-  /** What the QR code carries: the public page, Get involved for a listed event, or nothing. */
+  /** What the QR code carries: the public page, What's on for a listed event, or nothing. */
   link: string | null;
-  linkKind: "page" | "get-involved" | null;
+  linkKind: "page" | "whats-on" | null;
   /** The same address, as people would type it. */
   linkWords: string | null;
   /**
@@ -163,7 +163,7 @@ function firstSentence(text: string): string {
 export function materialFacts(
   f: FundraiserRecord,
   m: Meter,
-  urls: { pageUrl: string | null; getInvolvedUrl: string },
+  urls: { pageUrl: string | null; whatsOnUrl: string },
 ): MaterialFacts {
   let when: string | null = null;
   if (f.eventDate) {
@@ -174,12 +174,12 @@ export function materialFacts(
   const source = (f.cardLine ?? "").trim() || firstSentence(f.description ?? "");
   const line = source ? shorten(source, 140) : null;
   // Event pages: an event with a page carries it too, as a fundraiser's does (the caller gives its
-  // /event/ address); one without falls back to Get involved, as before.
+  // /event/ address); one without falls back to What's on.
   const page = hasPage(f) ? urls.pageUrl : null;
   const listed = f.path === "event" && f.public;
-  const link = page ?? (listed ? urls.getInvolvedUrl : null);
-  // The short links sit on the same public site as Get involved.
-  const origin = new URL(urls.getInvolvedUrl).origin;
+  const link = page ?? (listed ? urls.whatsOnUrl : null);
+  // The short links sit on the same public site as What's on.
+  const origin = new URL(urls.whatsOnUrl).origin;
   const qrLinks = link
     ? (Object.fromEntries(TRACKED_PIECES.map((p) => [p, `${origin}${trackedPath(f.id, p)}`])) as Record<TrackedPiece, string>)
     : null;
@@ -197,7 +197,7 @@ export function materialFacts(
     raisedPence: m.raisedPence,
     giftAidPence: m.giftAidPence ?? 0,
     link,
-    linkKind: page ? "page" : link ? "get-involved" : null,
+    linkKind: page ? "page" : link ? "whats-on" : null,
     linkWords: link ? link.replace(/^https?:\/\//, "").replace(/\/+$/, "") : null,
     qrLinks,
     splitStatement: splitStatement(f),

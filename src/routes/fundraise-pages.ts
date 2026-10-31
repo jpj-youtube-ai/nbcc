@@ -292,6 +292,7 @@ async function deckInput(): Promise<import("../fundraising/render").GetInvolvedI
 
 export function addFundraisePageRoutes(router: Router, siteRoot: string, deps: FundraisePageDeps): void {
   const whatsOnFile = join(siteRoot, "whats-on.html");
+  const getInvolvedFile = join(siteRoot, "get-involved.html");
   const signUpFile = join(siteRoot, "fundraise.html");
   const manageFile = join(siteRoot, "fundraise-manage.html");
   const tshirtFile = join(siteRoot, "fundraise-tshirt.html");
@@ -309,20 +310,31 @@ export function addFundraisePageRoutes(router: Router, siteRoot: string, deps: F
   // (Express matches them in any case and with or without a trailing slash).
   router.get(["/getinvolved", "/involved"], (req, res) => res.redirect(301, `/get-involved${queryOf(req)}`));
 
-  for (const path of ["/whats-on", "/get-involved"]) {
-    router.get(path, async (req: Request, res: Response, next: NextFunction) => {
-      try {
-        if (!(await deps.eventsPageIsOn())) return next();
-        const { renderWhatsOnPage } = await import("../fundraising/render");
-        const html = renderWhatsOnPage(readFileSync(whatsOnFile, "utf8"), await deckInput());
-        fresh(res);
-        res.type("html").send(await deps.decorate(html, req.headers.cookie));
-      } catch (err) {
-        console.error("what's on page failed:", err instanceof Error ? err.message : err);
-        next();
-      }
-    });
-  }
+  router.get("/whats-on", async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      if (!(await deps.eventsPageIsOn())) return next();
+      const { renderWhatsOnPage } = await import("../fundraising/render");
+      const html = renderWhatsOnPage(readFileSync(whatsOnFile, "utf8"), await deckInput());
+      fresh(res);
+      res.type("html").send(await deps.decorate(html, req.headers.cookie));
+    } catch (err) {
+      console.error("what's on page failed:", err instanceof Error ? err.message : err);
+      next();
+    }
+  });
+
+  router.get("/get-involved", async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      if (!(await deps.eventsPageIsOn())) return next();
+      const { renderNewGetInvolvedPage } = await import("../fundraising/get-involved-page");
+      const html = renderNewGetInvolvedPage(readFileSync(getInvolvedFile, "utf8"), await deckInput());
+      fresh(res);
+      res.type("html").send(await deps.decorate(html, req.headers.cookie));
+    } catch (err) {
+      console.error("get involved page failed:", err instanceof Error ? err.message : err);
+      next();
+    }
+  });
 
   router.get("/fundraise", async (req, res, next) => {
     try {

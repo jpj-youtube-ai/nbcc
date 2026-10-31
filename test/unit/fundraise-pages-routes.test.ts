@@ -188,6 +188,41 @@ describe("What's on", () => {
   });
 });
 
+describe("Get involved", () => {
+  it("is a 404 while the events page is switched off", async () => {
+    state.eventsOn = false;
+    expect((await get("/get-involved")).status).toBe(404);
+  });
+
+  it("answers while the events page is on, kept fresh, with a fundraiser's card", async () => {
+    const res = await get("/get-involved");
+    expect(res.status).toBe(200);
+    expect(res.headers.get("cache-control")).toBe("public, max-age=0");
+    const html = await res.text();
+    expect(html).toContain("What can");
+    expect(html).toContain("Robin&#39;s Santa Dash");
+    expect(html).toContain('id="fundraise"');
+    expect(html).not.toContain("robin.quill@example.com");
+  });
+
+  it("still answers while fundraising is off, without the Fundraise section", async () => {
+    state.fundraisingOn = false;
+    const res = await get("/get-involved");
+    expect(res.status).toBe(200);
+    const html = await res.text();
+    expect(html).toContain("What can");
+    expect(html).not.toContain('id="fundraise"');
+    expect(html).not.toContain("<video");
+    expect(html).not.toContain("Robin&#39;s Santa Dash");
+  });
+
+  it("has the What's on item beside its own, marked as the page you are on", async () => {
+    const nav = navList(await (await get("/get-involved")).text());
+    expect(nav).toContain('<a href="/get-involved" class="active" aria-current="page">Get involved</a>');
+    expect(nav).toContain('<a href="/whats-on">What\'s on</a>');
+  });
+});
+
 describe("the menu on every page", () => {
   it("reads Get involved, linking the new address, while the events page is on", async () => {
     const nav = navList(await (await get("/contact")).text());
@@ -429,7 +464,7 @@ describe("the image", () => {
     const { readFileSync } = await import("node:fs");
     const docker = readFileSync(resolve(ROOT, "Dockerfile"), "utf8");
     const copy = docker.split(/\r?\n/).find((l) => l.startsWith("COPY index.html")) ?? "";
-    for (const f of ["whats-on.html", "fundraise.html", "fundraiser.html", "fundraise-manage.html", "fundraise-help.html", "fundraise-logos.html"]) expect(copy.split(/\s+/), f).toContain(f);
+    for (const f of ["whats-on.html", "get-involved.html", "fundraise.html", "fundraiser.html", "fundraise-manage.html", "fundraise-help.html", "fundraise-logos.html"]) expect(copy.split(/\s+/), f).toContain(f);
   });
 });
 

@@ -298,11 +298,11 @@ export function fundraiserEventRecord(c: PublicCard): CardRecord | null {
 
 export const CHIPS_MARKER = "<!-- getinvolved:chips -->";
 export const STYLES_MARKER = "<!-- getinvolved:styles -->";
-const FUNDRAISING_STYLES = '<link rel="stylesheet" href="/assets/css/fundraising.css" />';
+export const FUNDRAISING_STYLES = '<link rel="stylesheet" href="/assets/css/fundraising.css" />';
 // The hint above the deck: fundraiser cards have one face, so once they are among the cards only
 // the event cards are promised to turn over.
-const HINT_ALL = "Turn any card over for the full details.";
-const HINT_EVENTS = "Turn any event card over for the full details.";
+export const HINT_ALL = "Turn any card over for the full details.";
+export const HINT_EVENTS = "Turn any event card over for the full details.";
 export const PANEL_MARKER = "<!-- getinvolved:panel -->";
 const INTRO_BLOCK = /<!-- getinvolved:intro -->([\s\S]*?)<!-- \/getinvolved:intro -->/;
 

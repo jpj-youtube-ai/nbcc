@@ -28,7 +28,7 @@ const record = (over: Partial<FundraiserRecord> = {}): FundraiserRecord =>
     memoryDates: "1948 to 2026", memorySetupBy: "family", memoryPermission: true, memoryShowTarget: false, ...over,
   }) as FundraiserRecord;
 
-const URLS = { pageUrl: "https://nbcc.test/fundraise/ime", getInvolvedUrl: "https://nbcc.test/get-involved" };
+const URLS = { pageUrl: "https://nbcc.test/fundraise/ime", whatsOnUrl: "https://nbcc.test/whats-on" };
 const facts = (over: Partial<FundraiserRecord> = {}) => materialFacts(record(over), meter({ onlinePence: 30000, cashPence: 0, targetPence: 150000 }), URLS);
 
 describe("the facts an in memory page's materials are drawn from", () => {

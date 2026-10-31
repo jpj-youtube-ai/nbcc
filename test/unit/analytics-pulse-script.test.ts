@@ -243,7 +243,7 @@ describe("the clicks that matter", () => {
 
 describe("which pages carry it", () => {
   const PUBLIC = [
-    "index.html", "about.html", "donate.html", "whats-on.html", "ball.html", "ball-terms.html", "gift-aid.html",
+    "index.html", "about.html", "donate.html", "whats-on.html", "get-involved.html", "ball.html", "ball-terms.html", "gift-aid.html",
     "contact.html", "my-story.html", "supporters.html", "hub.html", "privacy.html", "sitemap.html",
     "thank-you.html", "business-thank-you.html", "404.html",
     // TASK-494: the fundraising sign up and the template of every fundraiser's page.

@@ -46,7 +46,7 @@ vi.mock("../../src/db/fundraising-categories", async () => {
 
 import { createSiteRouter } from "../../src/routes/site";
 import { addEventsNavLink } from "../../src/events/nav-link";
-import { addWhatsOnNavLink, WHATS_ON_NAV_ITEM } from "../../src/events/whats-on-link";
+import { addMenuFit, addWhatsOnNavLink, MENU_FIT, WHATS_ON_NAV_ITEM } from "../../src/events/whats-on-link";
 import { decorateBallPage } from "../../src/ball/page-decor";
 import { RESERVED_PREFIXES, SITE_PAGES, aliasFromProblem, renderSitemapTree, renderSitemapXml } from "../../src/site/pages";
 
@@ -289,6 +289,53 @@ describe("the What's on item in the menu", () => {
     const out = decorateBallPage(read("ball.html"), { ballItem: true, eventsOn: true, fundraisingOn: true });
     expect(out).toContain('href="/get-involved"');
     expect(out).not.toContain('href="/whats-on"');
+  });
+});
+
+// One more item than the menu was drawn for. Between the burger and the full width it would wrap, and
+// with the Ball's item up it pushed Donate off the screen. styles.css cannot carry the fix: donate.html
+// has 147 bytes of its page weight left, and Ball pages keep their old menu. So it goes out with the item.
+describe("the menu's fit on a tablet", () => {
+  const withItem = () => addWhatsOnNavLink(addEventsNavLink(read("contact.html")));
+  const head = (html: string) => html.slice(0, html.indexOf("</head>"));
+
+  it("adds the tighter menu to the head of a page that has What's on", () => {
+    const out = addMenuFit(withItem());
+    expect(head(out)).toContain(MENU_FIT);
+    expect(MENU_FIT).toMatch(/@media\(min-width:681px\) and \(max-width:1040px\)/);
+  });
+
+  it("comes after the stylesheets, so it wins", () => {
+    const out = addMenuFit(withItem());
+    expect(out.indexOf(MENU_FIT)).toBeGreaterThan(out.lastIndexOf('rel="stylesheet"'));
+  });
+
+  it("is added once however many times it runs", () => {
+    const once = addMenuFit(withItem());
+    expect(addMenuFit(once)).toBe(once);
+  });
+
+  it("changes nothing on a page without What's on", () => {
+    const page = read("contact.html");
+    expect(addMenuFit(page)).toBe(page);
+    const hub = read("hub.html");
+    expect(addMenuFit(hub)).toBe(hub);
+  });
+
+  it("goes out with the item, and only with it", async () => {
+    expect(await (await get("/contact")).text()).toContain(MENU_FIT);
+    expect(await (await get("/")).text()).toContain(MENU_FIT);
+    state.eventsOn = false;
+    expect(await (await get("/contact")).text()).not.toContain(MENU_FIT);
+  });
+
+  it("stays off Ball pages", () => {
+    const out = decorateBallPage(read("ball.html"), { ballItem: true, eventsOn: true, fundraisingOn: true });
+    expect(out).not.toContain(MENU_FIT);
+  });
+
+  it("has left styles.css alone, so the page weight budget is not spent", () => {
+    expect(read("assets/css/styles.css")).not.toContain("max-width:1040px");
   });
 });
 

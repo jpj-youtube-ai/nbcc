@@ -24,7 +24,7 @@ const ASSETS: MaterialAssets = {
   logoOnDark: "data:image/png;base64,REFSSw==",
 };
 const PAGE = "https://nbcc.test/fundraise/sams-santa-dash";
-const INVOLVED = "https://nbcc.test/get-involved";
+const WHATS_ON = "https://nbcc.test/whats-on";
 
 function record(over: Partial<FundraiserRecord> = {}): FundraiserRecord & { meter: ReturnType<typeof meter> } {
   return {
@@ -80,7 +80,7 @@ function record(over: Partial<FundraiserRecord> = {}): FundraiserRecord & { mete
 
 const facts = (over: Partial<FundraiserRecord> = {}) => {
   const f = record(over);
-  return materialFacts(f, f.meter, { pageUrl: PAGE, getInvolvedUrl: INVOLVED });
+  return materialFacts(f, f.meter, { pageUrl: PAGE, whatsOnUrl: WHATS_ON });
 };
 
 const HOSTILE = '<img src=x onerror="alert(1)">&"\'';
@@ -127,7 +127,7 @@ describe("the facts a piece is drawn from", () => {
   // Event pages: a public event has its own page now, and the caller gives its /event/ address.
   it("point a public event's code at its own page, as a fundraiser's", () => {
     const f = record({ path: "event" });
-    const d = materialFacts(f, f.meter, { pageUrl: "https://nbcc.test/event/sams-santa-dash", getInvolvedUrl: INVOLVED });
+    const d = materialFacts(f, f.meter, { pageUrl: "https://nbcc.test/event/sams-santa-dash", whatsOnUrl: WHATS_ON });
     expect(d.link).toBe("https://nbcc.test/event/sams-santa-dash");
     expect(d.linkKind).toBe("page");
     expect(d.linkWords).toBe("nbcc.test/event/sams-santa-dash");
@@ -299,7 +299,7 @@ describe("the thank you certificate", () => {
 
   it("says nothing about Gift Aid when there was none", () => {
     const f = record({ status: "finished", meter: meter({ onlinePence: 30000, cashPence: 0, targetPence: null }) });
-    const none = renderCertificate(materialFacts(f, f.meter, { pageUrl: PAGE, getInvolvedUrl: INVOLVED }), ASSETS, { date: "1 January 2027", preview: false });
+    const none = renderCertificate(materialFacts(f, f.meter, { pageUrl: PAGE, whatsOnUrl: WHATS_ON }), ASSETS, { date: "1 January 2027", preview: false });
     expect(none).toContain("£300");
     expect(none).not.toContain("Gift Aid");
   });

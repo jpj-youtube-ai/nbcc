@@ -32,6 +32,25 @@ Feature: What's on and the public fundraising pages (TASK-494)
     And the page does not show "Sams Sponsored Swim (bdd-fr)"
     And the page does not show "data-chips"
 
+  Scenario: Get involved leads with fundraising, and shows What's on's cards
+    Given the events page is switched on
+    And fundraising is switched on
+    And an approved fundraiser "Lees Long Cycle (bdd-fr)" raising 50000 pence
+    When a visitor opens "/get-involved"
+    Then the visitor gets status 200
+    And the page shows "What can"
+    And the page shows "Raise money your way, and we will help."
+    And the page shows "data-film"
+    And the page shows 'href="/whats-on"'
+    And the menu offers What's on straight after Get involved
+    Given fundraising is switched off
+    When a visitor opens "/get-involved"
+    Then the visitor gets status 200
+    And the page shows "What can"
+    And the page does not show "Raise money your way, and we will help."
+    And the page does not show "data-film"
+    And the page does not show "Lees Long Cycle (bdd-fr)"
+
   Scenario: a fundraiser's page, its meter, no QR code, and a quiet link for its organiser
     Given fundraising is switched on
     And an approved fundraiser "Kims Coastal Walk (bdd-fr)" raising 50000 pence

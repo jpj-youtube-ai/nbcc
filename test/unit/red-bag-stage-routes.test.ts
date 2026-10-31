@@ -176,7 +176,7 @@ describe("the stage on the home page", () => {
     expect(html).not.toContain(STAGE_CSS);
     expect(html).not.toContain(STAGE_SCRIPT);
     expect(html).toContain("Where would you like to start?");
-    expect(html).toContain('href="/whats-on"');
+    expect(html).toContain('href="/get-involved"');
     expect(html).toContain('<a href="/fundraise">Fundraise for us</a>');
     expect(html).not.toContain("ball-banner");
     logged.mockRestore();
@@ -213,7 +213,7 @@ describe("the stage on Get involved", () => {
   it("comes after What's on and before the ways to help together, once", async () => {
     const html = await body("/get-involved");
     expect(count(html, STAGE)).toBe(1);
-    expect(html.indexOf("See everything that&rsquo;s on")).toBeLessThan(html.indexOf(STAGE));
+    expect(html.indexOf("data-deck>")).toBeLessThan(html.indexOf(STAGE));
     expect(html.indexOf(STAGE)).toBeLessThan(html.indexOf("Coming as a business, school or group?"));
   });
 

@@ -216,10 +216,11 @@ Then("the menu offers Events straight after About", function () {
   assert.ok(nav.includes(">Get involved</a>"), "the menu item does not read Get involved");
 });
 
-Then("the menu offers What's on straight after Get involved", function () {
+Then("the menu does not offer What's on", function () {
   const nav = navList(this.visitorBody);
-  const hrefs = [...nav.matchAll(/href="([^"]+)"/g)].map((m) => m[1]);
-  assert.equal(hrefs[hrefs.indexOf("/get-involved") + 1], "/whats-on", `What's on did not follow Get involved: ${hrefs.join(" ")}`);
+  assert.ok(nav.length > 0, "no nav list on the page");
+  assert.ok(nav.includes('href="/get-involved"'), "the menu lost Get involved");
+  assert.ok(!nav.includes('href="/whats-on"'), "the menu offered What's on");
 });
 
 Then("the site map does not list the events page", function () {

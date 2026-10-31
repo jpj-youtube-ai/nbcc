@@ -145,11 +145,12 @@ Every page mounts the same sticky top nav in its `<header class="nav">` slot
 links to `/`, `/about-us`, `/donate`, `/contact`, `/supporters`, a persistent
 Donate button, and a mobile burger. Two items are added by the server rather than written into
 the files: "Festive Ball" while the ball is published (TASK-326), and "Get involved" (called Events
-until TASK-494) after About and "What's on" after that, while the events switch is on (TASK-453).
-What's on has its own helper (`src/events/whats-on-link.ts`), not a part of `addEventsNavLink`,
-because Ball pages call that one and keep their old menu until after the Ball. The item goes out
-with a few lines of style (`MENU_FIT`, the same file) that tighten the menu between the burger and
-1040px, where it would otherwise wrap and, with the Ball's item up, push Donate off the screen. They
+until TASK-494) after About, while the events switch is on (TASK-453). What's on is not in the menu:
+Get involved shows the same cards, and adds "See everything that's on" when there are more than its
+six. Get involved goes out with a few lines of style (`MENU_FIT`, `src/events/menu-fit.ts`, not a part
+of `addEventsNavLink`, because Ball pages call that one and keep their old menu until after the Ball)
+that tighten the menu between the burger and 1040px, where it would otherwise wrap and, with the
+Ball's item up, push Donate off the screen. They
 are not in `styles.css` because donate.html has 147 bytes of its page weight left.
 Behaviour lives in the one shared `assets/js/main.js` (`initNav`): a passive +
 `requestAnimationFrame`-throttled scroll listener flips the bar from transparent
@@ -232,7 +233,7 @@ of the day added as they go out, and listed in `SHORT_PAGES` in `src/site/pages.
   `referrals.nbcc.scot` in the spare address table (migration `1791200000290`). A page there would
   silently replace them, so neither is reserved and neither is a page.
 - **The events switch does not govern them.** They are about helping, not events. With it off they
-  stay, and the menu loses Get involved and What's on as every page does. That is also why they sit
+  stay, and the menu loses Get involved as every page does. That is also why they sit
   beside Get involved in `SITE_PAGES` and not as its children: a child drops off `/sitemap` with its
   parent. Get involved lights up in the menu on these pages (`aria-current="true"`: the section, not
   the page).

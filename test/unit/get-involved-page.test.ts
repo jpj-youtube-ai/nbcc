@@ -220,9 +220,13 @@ describe("What's on, on this page", () => {
     expect(cards(doc({ fundraisers: fundraisers(12) })).some((c) => c.classList.contains("ev-card--more"))).toBe(false);
   });
 
-  it("links to everything that's on", () => {
-    const link = doc().querySelector<HTMLAnchorElement>('#whats-on a[href="/whats-on"]');
-    expect(text(link)).toBe("See everything that’s on");
+  it("links to everything that's on only when there is more to see than the six here", () => {
+    const more = doc({ fundraisers: fundraisers(12) }).querySelector<HTMLAnchorElement>(".evs-more a");
+    expect(more?.getAttribute("href")).toBe("/whats-on");
+    expect(text(more)).toBe("See everything that’s on");
+    expect(doc({ fundraisers: fundraisers(2) }).querySelector(".evs-more")).toBeNull();
+    expect(doc({ fundraisers: fundraisers(12) }).body.innerHTML).not.toContain("getinvolved:see-all");
+    expect(doc({ fundraisers: fundraisers(2) }).body.innerHTML).not.toContain("getinvolved:see-all");
   });
 
   it("has the chips, with the hint that only event cards turn over", () => {

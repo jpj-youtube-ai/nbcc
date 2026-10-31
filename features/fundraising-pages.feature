@@ -41,8 +41,8 @@ Feature: What's on and the public fundraising pages (TASK-494)
     And the page shows "What can"
     And the page shows "Raise money your way, and we will help."
     And the page shows "data-film"
-    And the page shows 'href="/whats-on"'
-    And the menu offers What's on straight after Get involved
+    And the page shows "Lees Long Cycle (bdd-fr)"
+    And the menu does not offer What's on
     Given fundraising is switched off
     When a visitor opens "/get-involved"
     Then the visitor gets status 200

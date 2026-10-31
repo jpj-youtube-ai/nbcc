@@ -62,6 +62,9 @@ const FUNDRAISERS_ELSEWHERE =
   '<p class="gi-empty" data-chips-empty="fundraiser" hidden>Our fundraisers are further down the list. ' +
   '<a href="/whats-on">See everything that&rsquo;s on</a></p>';
 const NO_EVENTS_HERE = '<p class="gi-empty" data-chips-empty="event" hidden>More dates on the way.</p>';
+// Only when there is more to see than the six here: otherwise What's on is the same cards again.
+const SEE_ALL_MARKER = "<!-- getinvolved:see-all -->";
+const SEE_ALL = '<p class="evs-more"><a class="btn btn-ghost" href="/whats-on">See everything that&rsquo;s on</a></p>';
 
 export function renderNewGetInvolvedPage(template: string, input: GetInvolvedInput & { fillStage?: string }): string {
   const on = input.fundraisingOn;
@@ -84,5 +87,6 @@ export function renderNewGetInvolvedPage(template: string, input: GetInvolvedInp
     .replace(CHIP_NOTES_MARKER, () => (on ? CHIP_STATUS + fundraiserNote + eventNote : ""))
     .replace(HINT_ALL, () => (on ? HINT_EVENTS : HINT_ALL))
     .replace(DECK_MARKER, () => deck)
+    .replace(SEE_ALL_MARKER, () => (cards.length > FIRST_CARDS ? SEE_ALL : ""))
     .replace(FILL_STAGE_MARKER, () => input.fillStage ?? "");
 }

@@ -16694,7 +16694,7 @@
     var box = el("evSwitch");
     box.classList.toggle("is-on", on);
     el("evSwitchState").innerHTML = on
-      ? "<b>Yes.</b> This switch is for two pages, nbcc.scot/get-involved and nbcc.scot/whats-on, and every page’s menu offers them as Get involved and What’s on. Visitors see every event marked “On the website”."
+      ? "<b>Yes.</b> This switch is for two pages, nbcc.scot/get-involved and nbcc.scot/whats-on, and every page’s menu offers Get involved. Visitors see every event marked “On the website”."
       : "<b>No.</b> This switch is for two pages, Get involved and What’s on, and both are switched off: nobody can see them and no menu mentions them. Build and check events here, then switch them on when you are ready.";
     el("evSwitchWho").textContent = evData && evData.updatedBy && evData.updatedBy.indexOf("admin:") === 0
       ? "Last " + (on ? "switched on" : "switched off") + " by " + evData.updatedBy.slice(6) + " on " + H.fmtDate(evData.updatedAt) + "."
@@ -16711,8 +16711,8 @@
   function evFlipSwitch() {
     var on = !!(evData && evData.pageOn);
     var question = on
-      ? "Take the Get involved page off the website, and What’s on with it? Both will disappear from the site and from every page’s menu straight away."
-      : "Put the Get involved page on the website, and What’s on with it? Everyone will be able to see both, and every page’s menu will offer them, straight away.";
+      ? "Take the Get involved page off the website, and What’s on with it? Both will disappear from the site, and Get involved from every page’s menu, straight away."
+      : "Put the Get involved page on the website, and What’s on with it? Everyone will be able to see both, and every page’s menu will offer Get involved, straight away.";
     if (!window.confirm(question)) return;
     var btn = el("evSwitchBtn");
     var status = el("evSwitchStatus");

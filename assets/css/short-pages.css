@@ -114,7 +114,10 @@
 .tell-note form{background:none;border:0;border-radius:0;padding:0;box-shadow:none}
 .tell-note form>p{margin:0 0 12px}
 .tell-note .form-privacy{margin:14px 0 0}
+/* styles.css hides .form-status until it has a state; the spam check writes its "one moment" and
+   "press Send again" prompts with no state, and a prompt nobody can see looks like a message sent. */
 .tell-note .form-status{margin:14px 0 0}
+.tell-note .form-status:not(:empty){display:block}
 .fields{display:grid;grid-template-columns:1fr 1fr;gap:12px 18px;margin-top:6px}
 .fields .field{margin:0}
 .tell-note label{font-size:.95rem;margin-bottom:5px}

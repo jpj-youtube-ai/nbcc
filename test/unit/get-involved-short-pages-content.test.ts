@@ -543,3 +543,10 @@ describe("the page's stylesheet", () => {
     expect(read("assets/css/get-involved.css")).toContain("@media (prefers-reduced-motion:reduce)");
   });
 });
+
+describe("the spam check's prompts on a Tell us form", () => {
+  it("are shown, because styles.css hides .form-status until it has a state", () => {
+    const css = readFileSync(resolve(process.cwd(), "assets/css/short-pages.css"), "utf8");
+    expect(css).toContain(".tell-note .form-status:not(:empty){display:block}");
+  });
+});

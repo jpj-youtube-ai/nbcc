@@ -32,7 +32,6 @@ describe("the allowed sources", () => {
   it("is one list, holding red_bag, ball (the Festive Ball's donate page) and ball_bags (red bags at the Ball)", () => {
     expect(DONATION_SOURCES).toEqual(["red_bag", "ball", "ball_bags"]);
   });
-
 });
 
 describe("where a checkout session's gift came from", () => {

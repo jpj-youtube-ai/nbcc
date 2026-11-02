@@ -47,8 +47,8 @@ function isBallBagsMark(mark: unknown): boolean {
 
 // checkout.session.completed → where the gift was started, or null. The checkout stamps
 // metadata.redBag as the string "true" on a Fill a Red Bag session, metadata.ball on a gift from
-// the Festive Ball's donate page, and metadata.ballBags (the number of bags) on red bags at the Ball,
-// and on no other (src/routes/api.ts). The checkout never stamps two. The bags are read before the
+// the Festive Ball's donate page, and metadata.ballBags (the number of bags, "1" to "20" as
+// isBallBagsMark checks) on red bags at the Ball, which is ball_bags, and on no other (src/routes/api.ts). The checkout never stamps two. The bags are read before the
 // Ball's mark all the same, so they could never be counted as Festive Ball money. Anything else at
 // all is null. Never throws, whatever it is handed.
 export function sourceFromCheckoutSession(

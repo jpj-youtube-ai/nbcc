@@ -32,8 +32,8 @@ export function giftAidFromMetadata(metadata: Stripe.Metadata | null | undefined
 // Where a gift was started on the website (donations.source). The ONE list of allowed values, for
 // the webhook that writes it and for anything that later reads it. A gift with no source is an
 // ordinary one (the Donate page and every other route), or one recorded before sources were kept.
-// red_bag and ball stay first: src/db/overview-numbers.ts reads them by place. ball_bags is red bags
-// at the Festive Ball (/bag), a line of its own, never added into the Ball's.
+// src/db/overview-numbers.ts picks each one out by its value, so the order here carries no meaning.
+// ball_bags is red bags at the Festive Ball (/bag), a line of its own, never added into the Ball's.
 export const DONATION_SOURCES = ["red_bag", "ball", "ball_bags"] as const;
 export type DonationSource = (typeof DONATION_SOURCES)[number];
 

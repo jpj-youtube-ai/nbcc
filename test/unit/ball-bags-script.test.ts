@@ -275,6 +275,7 @@ describe("giving", () => {
     await flush();
     const status = $("#bbStatus");
     expect(status.getAttribute("role")).toBe("alert");
+    expect(status.getAttribute("aria-live")).toBe("assertive");
     expect(status.textContent).toContain("Payment is not working just now");
     expect(document.activeElement).toBe(button);
   });

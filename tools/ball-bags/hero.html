@@ -1,0 +1,161 @@
+<!doctype html>
+<html><head><meta charset="utf-8" />
+<style>
+@font-face{font-family:"Caveat";font-weight:400 700;src:url(../../assets/fonts/caveat-latin.woff2) format("woff2")}
+html,body{margin:0;padding:0;background:transparent}
+svg{display:block}
+</style></head>
+<body>
+<svg id="hero" xmlns="http://www.w3.org/2000/svg" width="400" height="440" viewBox="0 0 400 440">
+  <defs>
+    <linearGradient id="face" x1="0" x2="1" y1="0" y2="0">
+      <stop offset="0" stop-color="#D02E45"/>
+      <stop offset=".55" stop-color="#C02238"/>
+      <stop offset="1" stop-color="#A81B30"/>
+    </linearGradient>
+    <linearGradient id="side" x1="0" x2="1">
+      <stop offset="0" stop-color="#8E1426"/>
+      <stop offset="1" stop-color="#A31A2E"/>
+    </linearGradient>
+    <linearGradient id="gold" x1="0" x2="0" y1="0" y2="1">
+      <stop offset="0" stop-color="#F0C766"/>
+      <stop offset=".6" stop-color="#D9A93E"/>
+      <stop offset="1" stop-color="#B8862B"/>
+    </linearGradient>
+    <linearGradient id="goldDeep" x1="0" x2="0" y1="0" y2="1">
+      <stop offset="0" stop-color="#C99A34"/>
+      <stop offset="1" stop-color="#9C7020"/>
+    </linearGradient>
+    <linearGradient id="teddy" x1="0" x2="0" y1="0" y2="1">
+      <stop offset="0" stop-color="#C98E5A"/>
+      <stop offset="1" stop-color="#A86F3F"/>
+    </linearGradient>
+    <pattern id="tartan" width="24" height="24" patternUnits="userSpaceOnUse">
+      <rect width="24" height="24" fill="#1A531A"/>
+      <rect x="0" y="8" width="24" height="8" fill="#C02238" opacity=".9"/>
+      <rect x="8" y="0" width="8" height="24" fill="#C02238" opacity=".55"/>
+      <rect x="0" y="11" width="24" height="2" fill="#E9C46A"/>
+      <rect x="11" y="0" width="2" height="24" fill="#E9C46A" opacity=".85"/>
+      <rect x="0" y="3" width="24" height="1" fill="#F8F5EE" opacity=".5"/>
+    </pattern>
+    <clipPath id="faceClip"><path d="M78 176h214v226a8 8 0 0 1-8 8H86a8 8 0 0 1-8-8z"/></clipPath>
+  </defs>
+
+  <!-- the shadow on the table -->
+  <ellipse cx="208" cy="414" rx="150" ry="14" fill="#800000" opacity=".14"/>
+
+  <!-- the back handle -->
+  <path d="M150 158C150 30 318 30 318 158" fill="none" stroke="#6E0B18" stroke-width="7" stroke-linecap="round"/>
+
+  <!-- the opening: the inside of the bag -->
+  <path d="M78 176L120 152H334L292 176z" fill="#5E0000"/>
+
+  <!-- what is inside, peeking out -->
+  <!-- a rolled tartan blanket -->
+  <g transform="rotate(-14 125 150)">
+    <rect x="96" y="96" width="54" height="120" rx="10" fill="url(#tartan)" stroke="#5E0000" stroke-width="2.5"/>
+    <ellipse cx="123" cy="98" rx="27" ry="10" fill="#C02238" stroke="#5E0000" stroke-width="2.5"/>
+    <path d="M123 98m-18 0a18 6.5 0 1 0 36 0a13 4.5 0 1 0-26 0a8 2.8 0 1 0 16 0" fill="none" stroke="#F8F5EE" stroke-width="2" opacity=".85"/>
+    <path d="M106 112c2 14 2 40 0 72M142 112c-2 14-2 40 0 72" stroke="#F8F5EE" stroke-width="1.5" opacity=".35" fill="none"/>
+  </g>
+  <!-- a book, standing up -->
+  <g transform="rotate(9 262 140)">
+    <rect x="236" y="74" width="44" height="120" rx="3" fill="#F8F5EE" stroke="#5E0000" stroke-width="2.5"/>
+    <rect x="230" y="70" width="44" height="124" rx="4" fill="#1A531A" stroke="#123C12" stroke-width="2.5"/>
+    <rect x="230" y="70" width="9" height="124" rx="3" fill="#123C12"/>
+    <path d="M246 88h20M246 96h14" stroke="#E9C46A" stroke-width="3" stroke-linecap="round"/>
+    <path d="M256 112l3 6.5 7 1-5 4.6 1.3 7-6.3-3.4-6.3 3.4 1.3-7-5-4.6 7-1z" fill="#E9C46A"/>
+  </g>
+  <!-- a teddy, his head and paws over the edge -->
+  <g>
+    <circle cx="172" cy="92" r="15" fill="url(#teddy)" stroke="#5E0000" stroke-width="2.5"/>
+    <circle cx="172" cy="92" r="7.5" fill="#F3D9B8"/>
+    <circle cx="232" cy="92" r="15" fill="url(#teddy)" stroke="#5E0000" stroke-width="2.5"/>
+    <circle cx="232" cy="92" r="7.5" fill="#F3D9B8"/>
+    <circle cx="202" cy="126" r="40" fill="url(#teddy)" stroke="#5E0000" stroke-width="2.5"/>
+    <ellipse cx="202" cy="140" rx="18" ry="14" fill="#F3D9B8" stroke="#5E0000" stroke-width="2"/>
+    <circle cx="187" cy="118" r="4.2" fill="#3A1A10"/>
+    <circle cx="217" cy="118" r="4.2" fill="#3A1A10"/>
+    <circle cx="188.4" cy="116.6" r="1.4" fill="#FFFFFF"/>
+    <circle cx="218.4" cy="116.6" r="1.4" fill="#FFFFFF"/>
+    <path d="M196 133h12l-6 6.5z" fill="#3A1A10"/>
+    <path d="M202 139.5v5M196 146c3 3 9 3 12 0" stroke="#3A1A10" stroke-width="2" fill="none" stroke-linecap="round"/>
+    <ellipse cx="180" cy="135" rx="5" ry="3" fill="#E58A8A" opacity=".55"/>
+    <ellipse cx="224" cy="135" rx="5" ry="3" fill="#E58A8A" opacity=".55"/>
+    <!-- a little red bow at his neck -->
+    <path d="M202 166l-14-8v16zM202 166l14-8v16z" fill="#C02238" stroke="#5E0000" stroke-width="2" stroke-linejoin="round"/>
+    <circle cx="202" cy="166" r="4" fill="#C02238" stroke="#5E0000" stroke-width="2"/>
+  </g>
+  <!-- a wrapped present -->
+  <g transform="rotate(-10 300 150)">
+    <rect x="276" y="118" width="58" height="62" rx="4" fill="#E9C46A" stroke="#7A5512" stroke-width="2.5"/>
+    <rect x="300" y="118" width="10" height="62" fill="#C02238"/>
+    <rect x="276" y="140" width="58" height="10" fill="#C02238"/>
+    <path d="M305 118c-6-16-24-18-24-9 0 8 15 9 24 9zM305 118c6-16 24-18 24-9 0 8-15 9-24 9z" fill="#C02238" stroke="#5E0000" stroke-width="2" stroke-linejoin="round"/>
+    <circle cx="305" cy="117" r="4.5" fill="#A81B30" stroke="#5E0000" stroke-width="2"/>
+    <circle cx="287" cy="130" r="2" fill="#FFFFFF" opacity=".7"/><circle cx="322" cy="165" r="2" fill="#FFFFFF" opacity=".7"/><circle cx="287" cy="168" r="2" fill="#FFFFFF" opacity=".7"/>
+  </g>
+
+  <!-- the side of the bag (its gusset, folded in the middle) -->
+  <path d="M292 176L334 152V384L292 410z" fill="url(#side)"/>
+  <path d="M313 164V397" stroke="#6E0B18" stroke-width="1.5" opacity=".6"/>
+  <path d="M292 176L313 164L334 152" fill="none" stroke="#6E0B18" stroke-width="2"/>
+
+  <!-- the front of the bag -->
+  <path d="M78 176h214v226a8 8 0 0 1-8 8H86a8 8 0 0 1-8-8z" fill="url(#face)"/>
+  <g clip-path="url(#faceClip)">
+    <!-- the folded top -->
+    <rect x="78" y="176" width="214" height="30" fill="#D63A50"/>
+    <rect x="78" y="206" width="214" height="5" fill="#8E1426" opacity=".35"/>
+    <!-- printed snowflakes and stars, in gold -->
+    <g fill="#E9C46A" opacity=".55">
+      <path d="M112 262l2.5 6 6.5.8-5 4.4 1.5 6.5-5.5-3.4-5.5 3.4 1.5-6.5-5-4.4 6.5-.8z"/>
+      <path d="M252 300l2.5 6 6.5.8-5 4.4 1.5 6.5-5.5-3.4-5.5 3.4 1.5-6.5-5-4.4 6.5-.8z"/>
+      <path d="M150 360l2 4.8 5.2.6-4 3.5 1.2 5.2-4.4-2.7-4.4 2.7 1.2-5.2-4-3.5 5.2-.6z"/>
+      <path d="M262 380l2 4.8 5.2.6-4 3.5 1.2 5.2-4.4-2.7-4.4 2.7 1.2-5.2-4-3.5 5.2-.6z"/>
+      <circle cx="200" cy="300" r="2.5"/><circle cx="130" cy="320" r="2"/><circle cx="230" cy="250" r="2"/><circle cx="104" cy="390" r="2"/><circle cx="210" cy="378" r="2.5"/><circle cx="270" cy="236" r="2"/>
+    </g>
+    <g stroke="#E9C46A" stroke-width="2.2" stroke-linecap="round" opacity=".55" fill="none">
+      <path d="M200 340v22M189 351h22M192 343l16 16M208 343l-16 16"/>
+      <path d="M100 300v14M93 307h14M95 302l10 10M105 302l-10 10"/>
+    </g>
+    <!-- light from the left, a crease down the front -->
+    <rect x="78" y="176" width="16" height="234" fill="#FFFFFF" opacity=".08"/>
+    <path d="M280 211v199" stroke="#8E1426" stroke-width="1.5" opacity=".35"/>
+  </g>
+
+  <!-- the front handle: a twisted cord through two gold eyelets -->
+  <path d="M116 190C116 14 268 14 268 190" fill="none" stroke="#800000" stroke-width="8" stroke-linecap="round"/>
+  <path d="M116 190C116 14 268 14 268 190" fill="none" stroke="#C94B5E" stroke-width="8" stroke-linecap="round" stroke-dasharray="3 6"/>
+  <circle cx="116" cy="191" r="6.5" fill="url(#gold)" stroke="#7A5512" stroke-width="1.8"/>
+  <circle cx="268" cy="191" r="6.5" fill="url(#gold)" stroke="#7A5512" stroke-width="1.8"/>
+
+  <!-- the gold bow: two loops, a knot and two tails -->
+  <g stroke="#7A5512" stroke-width="2.2" stroke-linejoin="round">
+    <!-- tails -->
+    <path d="M190 196C182 222 170 242 160 262L170 258L174 270C186 248 196 226 200 200z" fill="url(#goldDeep)"/>
+    <path d="M202 198C210 224 222 244 238 260L240 249L250 252C236 232 222 214 212 194z" fill="url(#goldDeep)"/>
+    <!-- loops -->
+    <path d="M196 190C176 160 134 150 132 174C130 198 172 202 196 194z" fill="url(#gold)"/>
+    <path d="M206 190C226 160 268 150 270 174C272 198 230 202 206 194z" fill="url(#gold)"/>
+    <!-- the fold inside each loop -->
+    <path d="M190 190C174 176 150 170 146 178C150 186 172 192 190 192z" fill="#9C7020" stroke="none" opacity=".55"/>
+    <path d="M212 190C228 176 252 170 256 178C252 186 230 192 212 192z" fill="#9C7020" stroke="none" opacity=".55"/>
+    <!-- knot -->
+    <rect x="190" y="181" width="22" height="20" rx="7" fill="url(#gold)"/>
+  </g>
+  <path d="M146 168c6-6 16-8 24-6M232 162c8-2 18 0 24 6" stroke="#FFF3D0" stroke-width="2.5" stroke-linecap="round" fill="none" opacity=".75"/>
+
+  <!-- the gift tag, on a string from the handle -->
+  <path d="M120 143C104 170 80 200 66 232" fill="none" stroke="#B8862B" stroke-width="2"/>
+  <g transform="translate(66 232) rotate(20) translate(-54 -256)">
+    <path d="M58 226h70a6 6 0 0 1 6 6v48a6 6 0 0 1-6 6H58l-16-15v-30z" fill="#FFFDFA" stroke="#B8862B" stroke-width="2.4" stroke-linejoin="round"/>
+    <path d="M58 230h66a4 4 0 0 1 4 4v44a4 4 0 0 1-4 4H60l-13-12v-27z" fill="none" stroke="#C02238" stroke-width="1" stroke-dasharray="2 3" opacity=".6"/>
+    <circle cx="54" cy="256" r="4" fill="#F3EEE3" stroke="#B8862B" stroke-width="2"/>
+    <path d="M54 252c-4-3-9-1-8 3" fill="none" stroke="#B8862B" stroke-width="2"/>
+    <text x="96" y="252" text-anchor="middle" font-family="Caveat" font-weight="700" font-size="21" fill="#800000">Packed</text>
+    <text x="96" y="273" text-anchor="middle" font-family="Caveat" font-weight="700" font-size="21" fill="#800000">with love</text>
+    <path d="M118 270c-1.6-2.4-5.6-1.6-5.6 1.4 0 2.4 3.4 4 5.6 5.8 2.2-1.8 5.6-3.4 5.6-5.8 0-3-4-3.8-5.6-1.4z" fill="#C02238" transform="translate(4 -26) scale(.9)"/>
+  </g>
+</svg>
+</body></html>

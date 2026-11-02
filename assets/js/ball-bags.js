@@ -274,6 +274,7 @@
     function say(text, isError) {
       if (!status) return;
       status.setAttribute("role", isError ? "alert" : "status");
+      status.setAttribute("aria-live", isError ? "assertive" : "polite");
       status.classList.toggle("is-error", !!isError);
       status.textContent = text;
       if (isError) replay(status, "is-entering", win);

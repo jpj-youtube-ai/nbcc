@@ -153,12 +153,20 @@ describe("the thank you, /bag/thank-you", () => {
     expect(words(renderBallBagsThanks(20))).toContain("You've filled 20 red bags");
   });
 
-  it("thanks the guest in NBCC's words, and offers another quietly", () => {
-    const html = renderBallBagsThanks(2);
+  it("thanks the guest in NBCC's words for one bag, and offers another quietly", () => {
+    const html = renderBallBagsThanks(1);
     expect(words(html)).toContain(
       "Thank you. Someone who would otherwise have nothing to open will wake up to it on Christmas morning. Enjoy the rest of your night.",
     );
     expect(html).toMatch(/<a[^>]*href="\/bag"[^>]*>Fill another<\/a>/);
+  });
+
+  it("thanks the guest for several bags with the number of people, as a numeral", () => {
+    expect(words(renderBallBagsThanks(2))).toContain(
+      "Thank you. 2 people who would otherwise have nothing to open will wake up to one on Christmas morning. Enjoy the rest of your night.",
+    );
+    expect(words(renderBallBagsThanks(20))).toContain("Thank you. 20 people who would otherwise have nothing to open will wake up to one on Christmas morning.");
+    expect(words(renderBallBagsThanks(2))).not.toContain("Someone who would");
   });
 
   it("is a plain thank you, with no number, when the count is not known", () => {

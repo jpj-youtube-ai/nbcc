@@ -28,7 +28,7 @@ export const RED_BAG_COUNTED_FROM_NOTE = "Fill a Red Bag gifts are counted from 
 // The Festive Ball's donate page (/ball/donate) labelled its gifts from the day it opened.
 export const BALL_GIFTS_NOTE = "Festive Ball gifts are those made on the Ball's own donate page.";
 // The red bag cards on the Festive Ball tables (/bag) are their own line, never part of the Ball's.
-export const BALL_BAGS_NOTE = "Gifts from the table cards at the Festive Ball.";
+export const BALL_BAGS_NOTE = "Red bags at the Ball are gifts from the table cards at the Festive Ball.";
 
 const none = (): SourceSums => ({ month: { pence: 0, gifts: 0 }, all: { pence: 0, gifts: 0 } });
 

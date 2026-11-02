@@ -313,13 +313,17 @@ export function renderBallBagsPage(): string {
 export function renderBallBagsThanks(bags: number): string {
   const known = Number.isInteger(bags) && bags >= 1 && bags <= BALL_BAGS_MAX;
   const heading = !known ? "Your gift is in the bag" : bags === 1 ? "You've filled a red bag" : `You've filled ${bags} red bags`;
+  const lede =
+    known && bags >= 2
+      ? `Thank you. ${bags} people who would otherwise have nothing to open will wake up to one on Christmas morning. Enjoy the rest of your night.`
+      : "Thank you. Someone who would otherwise have nothing to open will wake up to it on Christmas morning. Enjoy the rest of your night.";
   const body =
     `<main class="bb-main" id="main" data-bb-thanks data-bags="${known ? bags : 0}">` +
     TOP +
     '<section class="bb-screen bb-thanks" aria-labelledby="bbThanksTitle">' +
     `<div class="bb-celebrate">${bagRow(known ? bags : 1)}${twinkles()}</div>` +
     `<h1 class="bb-title" id="bbThanksTitle" tabindex="-1">${heading}</h1>` +
-    '<p class="bb-lede">Thank you. Someone who would otherwise have nothing to open will wake up to it on Christmas morning. Enjoy the rest of your night.</p>' +
+    `<p class="bb-lede">${lede}</p>` +
     `<p class="bb-again"><a href="${BALL_BAGS_PATH}">Fill another</a></p>` +
     "</section></main>";
   return frame({

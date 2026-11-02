@@ -87,7 +87,7 @@ describe("the words", () => {
     const t = sourceTotalsFrom([row("ball", [7_500, 3], [12_000, 5]), row("ballBags", [10_000, 2], [15_000, 3])]);
     expect(sourceLines(t)[2]).toEqual({ key: "ballBags", name: "Red bags at the Ball", month: "£100 from 2 gifts", all: "£150 from 3 gifts" });
     expect(sourceLines(t)[1]).toMatchObject({ month: "£75 from 3 gifts", all: "£120 from 5 gifts" });
-    expect(BALL_BAGS_NOTE).toBe("Gifts from the table cards at the Festive Ball.");
+    expect(BALL_BAGS_NOTE).toBe("Red bags at the Ball are gifts from the table cards at the Festive Ball.");
     expect(BALL_BAGS_NOTE).not.toMatch(/[–—]/);
   });
 

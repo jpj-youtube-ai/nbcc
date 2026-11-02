@@ -215,7 +215,7 @@ a:focus-visible,button:focus-visible,input:focus-visible{outline:3px solid var(-
 }
 .bb-row__more{
   align-self:center;margin-left:6px;padding:4px 10px;border-radius:999px;
-  background:var(--gold-ink);color:var(--white);font-weight:600;font-size:15px;
+  background:var(--maroon);color:var(--cream);font-weight:600;font-size:15px;
 }
 .bb-row__more.is-bumped{animation:bb-bump .3s var(--spring)}
 

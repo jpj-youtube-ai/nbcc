@@ -63,6 +63,9 @@ export async function sumBallTaken(p: Months): Promise<NowAndBefore> {
   return pair(r.rows[0]);
 }
 
+// A source picked from the one list by its value, so the order of DONATION_SOURCES never matters here.
+const bySource = (s: DonationSource): DonationSource => DONATION_SOURCES.find((x) => x === s) as DonationSource;
+
 /**
  * Fill a Red Bag against the Donate page, this UK month so far and all time, in one grouped read.
  *
@@ -77,9 +80,6 @@ export async function sumBallTaken(p: Months): Promise<NowAndBefore> {
  *   Donate page      no source, paid online (not a card reader), and not on a fundraiser's page.
  *                    A gift started anywhere else that later gets a source of its own is in neither.
  */
-// A source picked from the one list by its value, so the order of DONATION_SOURCES never matters here.
-const bySource = (s: DonationSource): DonationSource => DONATION_SOURCES.find((x) => x === s) as DonationSource;
-
 export async function sumGiftsBySource(month: SoFar): Promise<SourceTotals> {
   const kept = "GREATEST(amount_pence - refunded_amount_pence, 0)";
   const r = await pool.query<SourceTotalsRow>(

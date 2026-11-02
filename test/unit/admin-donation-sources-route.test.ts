@@ -80,7 +80,7 @@ describe("what the totals answer", () => {
         { key: "ballBags", name: "Red bags at the Ball", month: "£100 from 2 gifts", all: "£150 from 3 gifts" },
         { key: "donatePage", name: "Donate page", month: "£2,130 from 64 gifts", all: "£31,400 from 902 gifts" },
       ],
-      note: "Fill a Red Bag gifts are counted from 5 October 2026. Festive Ball gifts are those made on the Ball's own donate page. Gifts from the table cards at the Festive Ball.",
+      note: "Fill a Red Bag gifts are counted from 5 October 2026. Festive Ball gifts are those made on the Ball's own donate page. Red bags at the Ball are gifts from the table cards at the Festive Ball.",
     });
   });
 

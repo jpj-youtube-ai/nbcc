@@ -33,10 +33,6 @@ describe("the allowed sources", () => {
     expect(DONATION_SOURCES).toEqual(["red_bag", "ball", "ball_bags"]);
   });
 
-  it("keeps red_bag and ball first, in the places the admin's totals read them from", () => {
-    expect(DONATION_SOURCES[0]).toBe("red_bag");
-    expect(DONATION_SOURCES[1]).toBe("ball");
-  });
 });
 
 describe("where a checkout session's gift came from", () => {

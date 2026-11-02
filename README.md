@@ -7259,7 +7259,7 @@ optional and an email receipt. Design:
   **Red bags at the Ball only** filter after Festive Ball only (the three source filters untick one
   another; `?source=ball_bags`, already accepted because `DONATION_SOURCES` lists it), and a **Red
   bags at the Ball** line in the totals at the top of Donations, straight after Festive Ball, with
-  the note "Gifts from the table cards at the Festive Ball." (`sumGiftsBySource` has a fourth
+  the note "Red bags at the Ball are gifts from the table cards at the Festive Ball." (`sumGiftsBySource` has a fourth
   bucket, `ballBags`, in `src/db/overview-numbers.ts` and `src/admin/gift-sources.ts`). Never
   folded into the Festive Ball's figures. The Overview is unchanged.
 - **Unchanged.** A donate page gift, a Ball donate page gift and a Fill a Red Bag gift make
@@ -7278,13 +7278,17 @@ optional and an email receipt. Design:
   declaration and address fields, "Give £150"). The script (`assets/js/ball-bags.js`) posts only
   `ballBags`, never an amount, and goes to the `url` the checkout returns; a refusal or an outage
   shows a plain message beside the button (`is-error`, as an alert in a line that is always in the
-  page) and keeps everything typed. While it waits the button says it is busy with `aria-disabled`,
+  page; an error sets `role="alert"` and `aria-live="assertive"`, anything else `status` and `polite`)
+  and keeps everything typed. While it waits the button says it is busy with `aria-disabled`,
   never `disabled`, so the focus stays on it. The snow stops once the guest is past the welcome.
 - **The thank you, `/bag/thank-you`.** `private, no-store`. Reads the bag count from the Stripe
   session (`bagsFromSession`: only a `payment_status` "paid" session counts; then the `ballBags`
   metadata, else `amount_total` / 5000); with no session id, an id not shaped like one, an unpaid
   session, or Stripe out of reach, it is a plain thank you, never an error. The
   bags pop in one after another under a fall of gold stars and hearts; "Fill another" goes back to `/bag`.
+  One bag, or a count it could not read, is thanked with "Someone who would otherwise have nothing to
+  open will wake up to it on Christmas morning"; two or more with "N people who would ... wake up to
+  one" (N a numeral).
   The script takes `session_id` out of the address bar.
 - **Light on a hotel's signal.** No site header, menu, `styles.css` or `main.js`: its own
   stylesheet (`assets/css/ball-bags.css`, with the site's colour tokens and only Playfair Display
@@ -7296,9 +7300,10 @@ optional and an email receipt. Design:
   own, on cream (the site's colour tokens), with Fill a Red Bag's bag, ribbon, tag, snow and stars
   as the model. The hero's source is the SVG drawing in `hero.html` and the baking script
   `bake.cjs` (sharp: Chrome's 3x screenshot of the drawing, cropped and baked to WebP, plus the
-  logo). They are NOT in the repo: they sit in the git ignored `.superpowers/sdd/2026-11-02-ball-table-bags/hero/`
-  folder of the worktree that built the page (credit line in `assets/img/CREDITS.md`). To change
-  the picture, redraw it, bake a new WebP over `ball-bag-hero.webp` and keep it under about 30KB. The four item
+  logo). They are in the repo, outside anything served or built, in `tools/ball-bags/` (with the
+  table card and QR code makers and a README on re-baking the picture and re-making the A6 and A4
+  card PDFs; credit line in `assets/img/CREDITS.md`). To change
+  the picture, redraw it, bake a new WebP, copy it over `ball-bag-hero.webp` and keep it under about 30KB. The four item
   drawings are Fill a Red Bag's own, read on the server from `assets/js/red-bag-catalogue.js`
   (`redBag().art`), so that script is not loaded. The first visit is about 87KB (53KB gzipped
   where it applies) plus the site's two fonts. Every animation is transform and opacity only and

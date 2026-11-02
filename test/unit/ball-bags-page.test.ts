@@ -65,6 +65,22 @@ describe("the page, /bag", () => {
     expect(page).toContain('class="bb-price"');
   });
 
+  it("fits the tag's two words to the tag, whatever handwriting font the phone has", () => {
+    expect(page).toContain('<tspan x="60" y="73" textLength="50" lengthAdjust="spacingAndGlyphs">Packed</tspan>');
+    expect(page).toContain('<tspan x="60" y="88" textLength="50" lengthAdjust="spacingAndGlyphs">with love</tspan>');
+  });
+
+  it("points plus and minus at the announced tally, never at the hidden big number", () => {
+    expect(page).toMatch(/<button[^>]*id="bbLess"[^>]*aria-controls="bbTally"/);
+    expect(page).toMatch(/<button[^>]*id="bbMore"[^>]*aria-controls="bbTally"/);
+    expect(page).not.toContain('aria-controls="bbCount"');
+    expect(page).toMatch(/<div class="bb-tally" id="bbTally" aria-live="polite"/);
+  });
+
+  it("keeps the message line beside the button in the page from the start, so a message in it is announced", () => {
+    expect(page).toMatch(/<p class="bb-status" id="bbStatus" role="status" aria-live="polite"><\/p>/);
+  });
+
   it("starts at one bag, with plus and minus as labelled buttons and the count announced", () => {
     expect(page).toMatch(/<button[^>]*id="bbLess"[^>]*aria-label="One bag fewer"/);
     expect(page).toMatch(/<button[^>]*id="bbMore"[^>]*aria-label="One more bag"/);
@@ -78,6 +94,10 @@ describe("the page, /bag", () => {
     expect(page).toMatch(/id="bbFirstName"[^>]*autocomplete="given-name"/);
     expect(page).toMatch(/id="bbSurname"[^>]*autocomplete="family-name"/);
     expect(page).toMatch(/id="bbEmail"[^>]*type="email"[^>]*autocomplete="email"/);
+  });
+
+  it("asks for an email with a dot after the @, so a slip shows the field's own message", () => {
+    expect(page).toContain('pattern="[^\\s@]+@[^\\s@]+\\.[^\\s@]+"');
   });
 
   it("offers Gift Aid closed, with the Ball's donate page's declaration word for word and its fields", () => {
@@ -147,22 +167,30 @@ describe("the thank you, /bag/thank-you", () => {
 });
 
 describe("how many bags a Stripe session paid for", () => {
-  it("reads the bag count the checkout stamped on it", () => {
-    expect(bagsFromSession({ metadata: { ballBags: "3" }, amount_total: 15000 })).toBe(3);
+  const paid = "paid";
+
+  it("reads the bag count the checkout stamped on a paid session", () => {
+    expect(bagsFromSession({ payment_status: paid, metadata: { ballBags: "3" }, amount_total: 15000 })).toBe(3);
   });
 
   it("works it out from the amount when the count is missing", () => {
-    expect(bagsFromSession({ metadata: {}, amount_total: 10000 })).toBe(2);
-    expect(bagsFromSession({ amount_total: 5000 })).toBe(1);
+    expect(bagsFromSession({ payment_status: paid, metadata: {}, amount_total: 10000 })).toBe(2);
+    expect(bagsFromSession({ payment_status: paid, amount_total: 5000 })).toBe(1);
+  });
+
+  it("counts nothing for a session that is not paid, so the thank you is a plain one", () => {
+    expect(bagsFromSession({ payment_status: "unpaid", metadata: { ballBags: "3" }, amount_total: 15000 })).toBe(0);
+    expect(bagsFromSession({ payment_status: "no_payment_required", metadata: { ballBags: "3" } })).toBe(0);
+    expect(bagsFromSession({ metadata: { ballBags: "3" }, amount_total: 15000 })).toBe(0);
   });
 
   it("gives up, for a plain thank you, on anything else", () => {
     expect(bagsFromSession(null)).toBe(0);
-    expect(bagsFromSession({})).toBe(0);
-    expect(bagsFromSession({ metadata: { ballBags: "lots" } })).toBe(0);
-    expect(bagsFromSession({ metadata: { ballBags: "21" } })).toBe(0);
-    expect(bagsFromSession({ amount_total: 7500 })).toBe(0);
-    expect(bagsFromSession({ amount_total: 0 })).toBe(0);
+    expect(bagsFromSession({ payment_status: paid })).toBe(0);
+    expect(bagsFromSession({ payment_status: paid, metadata: { ballBags: "lots" } })).toBe(0);
+    expect(bagsFromSession({ payment_status: paid, metadata: { ballBags: "21" } })).toBe(0);
+    expect(bagsFromSession({ payment_status: paid, amount_total: 7500 })).toBe(0);
+    expect(bagsFromSession({ payment_status: paid, amount_total: 0 })).toBe(0);
   });
 });
 

@@ -234,11 +234,14 @@
     form.addEventListener("change", refreshGiftAid);
 
     // --- checking and sending --------------------------------------------------------------
+    // The line beside the button is always in the page (empty, it takes no room), so a screen reader
+    // hears what goes in it. A failure is an alert, as on the Ball's donate page; the role is set
+    // before the words, so the words arrive in an alert.
     function say(text, isError) {
       if (!status) return;
-      status.textContent = text;
-      status.hidden = !text;
+      status.setAttribute("role", isError ? "alert" : "status");
       status.classList.toggle("is-error", !!isError);
+      status.textContent = text;
       if (isError) replay(status, "is-entering", win);
     }
 
@@ -301,10 +304,12 @@
       return body;
     }
 
+    // Busy is said with aria-disabled, never `disabled`: a disabled button drops the focus, and a
+    // failure then has nowhere to be heard from. The busy guard on submit stops a second send.
     function setBusy(on) {
       busy = on;
       if (giveBtn) {
-        giveBtn.disabled = on;
+        giveBtn.setAttribute("aria-disabled", String(on));
         giveBtn.classList.toggle("is-busy", on);
         if (on) giveBtn.textContent = MSG.opening;
       }
@@ -357,6 +362,8 @@
       });
     }
 
+    if (giveBtn) giveBtn.setAttribute("aria-disabled", "false");
+    if (doc.body) doc.body.setAttribute("data-bb-at", "welcome");
     refresh();
     refreshGiftAid();
     // Opened at #how-many (a reload part way through): straight to the count.

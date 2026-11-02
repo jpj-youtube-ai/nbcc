@@ -166,7 +166,8 @@ a:focus-visible,button:focus-visible,input:focus-visible{outline:3px solid var(-
 }
 .bb-btn:hover{background:var(--maroon)}
 .bb-btn:active{transform:scale(.97)}
-.bb-btn:disabled{cursor:progress;opacity:.82}
+.bb-btn[aria-disabled="true"]{cursor:progress;opacity:.82}
+.bb-btn[aria-disabled="true"]:active{transform:none}
 .bb-btn.is-busy{animation:bb-breathe 1.2s ease-in-out infinite}
 .bb-back{
   display:inline-flex;align-items:center;min-height:44px;margin:-10px 0 4px -8px;padding:0 10px;
@@ -245,6 +246,8 @@ a:focus-visible,button:focus-visible,input:focus-visible{outline:3px solid var(-
 
 .bb-give{margin-top:8px}
 .bb-status{margin:10px 0 0;padding:10px 14px;border-radius:12px;font-size:15px;text-align:center}
+/* always in the page, so what goes in it is announced; empty, it takes no room */
+.bb-status:empty{padding:0;border:0;margin:0}
 .bb-status.is-error{background:var(--tan-soft);color:var(--maroon);border:1.5px solid var(--crimson);font-weight:600}
 .bb-status.is-entering{animation:bb-enter .26s var(--ease-out) both}
 
@@ -284,6 +287,8 @@ a:focus-visible,button:focus-visible,input:focus-visible{outline:3px solid var(-
 .bb-snow--drift .bb-flake{animation:bb-drift var(--t) linear var(--d) infinite}
 .bb-snow--burst .bb-flake{opacity:0;animation:bb-fall var(--t) cubic-bezier(.3,.3,.6,1) var(--d) both}
 .bb-snow--burst{z-index:3}
+/* the snow is the welcome's: past it, on the form, it stops */
+body[data-bb-at="how-many"] .bb-snow{display:none}
 
 /* ---- arrivals ---- */
 .bb-welcome .bb-hero__bag{animation:bb-drop .9s var(--ease-out) .1s both}

@@ -7251,10 +7251,13 @@ Design: `docs/superpowers/specs/2026-11-02-ball-table-bags-design.md`. This part
   the total, first name, surname and email, optional Gift Aid with the Ball donate page's
   declaration and address fields, "Give £150"). The script (`assets/js/ball-bags.js`) posts only
   `ballBags`, never an amount, and goes to the `url` the checkout returns; a refusal or an outage
-  shows a plain message beside the button (`is-error`) and keeps everything typed.
+  shows a plain message beside the button (`is-error`, as an alert in a line that is always in the
+  page) and keeps everything typed. While it waits the button says it is busy with `aria-disabled`,
+  never `disabled`, so the focus stays on it. The snow stops once the guest is past the welcome.
 - **The thank you, `/bag/thank-you`.** `private, no-store`. Reads the bag count from the Stripe
-  session (`bagsFromSession`: the `ballBags` metadata, else `amount_total` / 5000); with no session
-  id, an id not shaped like one, or Stripe out of reach, it is a plain thank you, never an error. The
+  session (`bagsFromSession`: only a `payment_status` "paid" session counts; then the `ballBags`
+  metadata, else `amount_total` / 5000); with no session id, an id not shaped like one, an unpaid
+  session, or Stripe out of reach, it is a plain thank you, never an error. The
   bags tie their bows one after another under a fall of stars; "Fill another" goes back to `/bag`.
   The script takes `session_id` out of the address bar.
 - **Light on a hotel's signal.** No site header, menu, `styles.css` or `main.js`: its own

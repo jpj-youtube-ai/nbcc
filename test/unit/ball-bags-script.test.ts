@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { createRequire } from "node:module";
+import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { renderBallBagsPage, renderBallBagsThanks } from "../../src/ball/bags-page";
 
@@ -75,6 +76,15 @@ describe("the welcome", () => {
     expect($("#bbWelcome").hidden).toBe(true);
     expect($("#bbHowMany").hidden).toBe(false);
     expect(document.activeElement?.id).toBe("bbHowManyTitle");
+  });
+
+  it("marks which screen the guest is on, so the snow stops once they are past the welcome", () => {
+    click("bbStart");
+    expect(document.body.getAttribute("data-bb-at")).toBe("how-many");
+    click("bbBack");
+    expect(document.body.getAttribute("data-bb-at")).toBe("welcome");
+    const css = readFileSync(resolve(ROOT, "assets/css/ball-bags.css"), "utf8");
+    expect(css).toContain('body[data-bb-at="how-many"] .bb-snow{display:none}');
   });
 });
 
@@ -212,7 +222,48 @@ describe("giving", () => {
     expect(($("#bbEmail") as HTMLInputElement).value).toBe("robin@example.com");
     expect(api?.count()).toBe(2);
     expect(($("#bbGive") as HTMLButtonElement).disabled).toBe(false);
+    expect($("#bbGive").getAttribute("aria-disabled")).toBe("false");
     expect(text("bbGive")).toBe("Give £100");
+  });
+
+  it("announces a failed payment as an alert, with the focus still on the give button", async () => {
+    fetchMock.mockResolvedValue({ status: 503, json: () => Promise.resolve({}) });
+    fillDetails();
+    const button = $<HTMLButtonElement>("#bbGive");
+    button.focus();
+    give();
+    // While it waits the button is never disabled (that would drop the focus): it says it is busy.
+    expect(button.disabled).toBe(false);
+    expect(button.getAttribute("aria-disabled")).toBe("true");
+    expect(document.activeElement).toBe(button);
+    await flush();
+    const status = $("#bbStatus");
+    expect(status.getAttribute("role")).toBe("alert");
+    expect(status.textContent).toContain("Payment is not working just now");
+    expect(document.activeElement).toBe(button);
+  });
+
+  it("sends nothing a second time while the first is still on its way", async () => {
+    let answer: (v: unknown) => void = () => undefined;
+    fetchMock.mockReturnValue(new Promise((r) => (answer = r)));
+    fillDetails();
+    give();
+    give();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    answer({ status: 200, json: () => Promise.resolve({ url: "https://checkout.stripe.test/bags" }) });
+    await flush();
+    expect(assign).toHaveBeenCalledTimes(1);
+  });
+
+  it("shows the email field's own message when the address has no dot after the @", async () => {
+    type("bbFirstName", "Robin");
+    type("bbSurname", "Example");
+    type("bbEmail", "robin@example");
+    give();
+    await flush();
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect($("#bbEmail").getAttribute("aria-invalid")).toBe("true");
+    expect(text("bbEmailError")).toBe("Please give an email address for your receipt");
   });
 
   it("shows a message too when the checkout is down or out of reach", async () => {

@@ -40,11 +40,13 @@ function pounds(pence: number): string {
 
 /**
  * How many bags a paid Stripe session was for: the count the checkout stamped on it (metadata
- * ballBags), else the amount over £50. 0 when neither is a whole number of bags from 1 to 20, and
- * the thank you is then a plain one.
+ * ballBags), else the amount over £50. 0 when the session is not paid, or neither is a whole number
+ * of bags from 1 to 20, and the thank you is then a plain one.
  */
-export function bagsFromSession(session: { metadata?: Record<string, string> | null; amount_total?: number | null } | null): number {
-  if (!session) return 0;
+export function bagsFromSession(
+  session: { payment_status?: string | null; metadata?: Record<string, string> | null; amount_total?: number | null } | null,
+): number {
+  if (!session || session.payment_status !== "paid") return 0;
   const ok = (n: number) => (Number.isInteger(n) && n >= 1 && n <= BALL_BAGS_MAX ? n : 0);
   const stamped = session.metadata?.ballBags;
   if (typeof stamped === "string" && stamped !== "") return /^\d+$/.test(stamped) ? ok(Number(stamped)) : 0;
@@ -66,7 +68,11 @@ function tiedBag(opts: { tag?: boolean; words?: boolean } = {}): string {
       : '<g class="rbw-tag"><path class="rbw-string" d="M60 20c-3 9 3 21 0 31"/>' +
         '<path class="rbw-card" d="M41 44h38l11 11v35a4 4 0 0 1-4 4H34a4 4 0 0 1-4-4V55z"/>' +
         '<circle class="rbw-hole" cx="60" cy="51.5" r="2.6"/>' +
-        (opts.words ? '<text class="rbw-words"><tspan x="60" y="73">Packed</tspan> <tspan x="60" y="88">with love</tspan></text>' : "") +
+        // Each line is fitted to the tag, so it fits whatever handwriting font the phone has.
+        (opts.words
+          ? '<text class="rbw-words"><tspan x="60" y="73" textLength="50" lengthAdjust="spacingAndGlyphs">Packed</tspan> ' +
+            '<tspan x="60" y="88" textLength="50" lengthAdjust="spacingAndGlyphs">with love</tspan></text>'
+          : "") +
         "</g>";
   return (
     '<path class="rbw-cord rbw-cord--back" d="M44 36C44 10 88 10 88 36"/>' +
@@ -228,12 +234,12 @@ export function renderBallBagsPage(): string {
     '<button class="bb-back" id="bbBack" type="button">Back</button>' +
     '<h2 class="bb-title" id="bbHowManyTitle" tabindex="-1">How many bags?</h2>' +
     '<div class="bb-counter">' +
-    `<button class="bb-step" id="bbLess" type="button" aria-label="One bag fewer" aria-controls="bbCount">${MINUS_ICON}</button>` +
+    `<button class="bb-step" id="bbLess" type="button" aria-label="One bag fewer" aria-controls="bbTally">${MINUS_ICON}</button>` +
     '<span class="bb-count" id="bbCount" aria-hidden="true">1</span>' +
-    `<button class="bb-step" id="bbMore" type="button" aria-label="One more bag" aria-controls="bbCount">${PLUS_ICON}</button>` +
+    `<button class="bb-step" id="bbMore" type="button" aria-label="One more bag" aria-controls="bbTally">${PLUS_ICON}</button>` +
     "</div>" +
     bagRow(1, "bbRow") +
-    '<div class="bb-tally" aria-live="polite" aria-atomic="true">' +
+    '<div class="bb-tally" id="bbTally" aria-live="polite" aria-atomic="true">' +
     '<p class="bb-tally__words" id="bbWords">1 full red bag</p>' +
     `<p class="bb-tally__total" id="bbTotal">${pounds(one)}</p>` +
     "</div>" +
@@ -245,7 +251,13 @@ export function renderBallBagsPage(): string {
     field("bbFirstName", "First name", 'type="text" autocomplete="given-name" required', "Please tell us your first name") +
     field("bbSurname", "Surname", 'type="text" autocomplete="family-name" required', "Please tell us your surname") +
     "</div>" +
-    field("bbEmail", "Email", 'type="email" autocomplete="email" inputmode="email" required', "Please give an email address for your receipt") +
+    // The pattern asks for a dot after the @ too, which type="email" alone does not.
+    field(
+      "bbEmail",
+      "Email",
+      'type="email" autocomplete="email" inputmode="email" required pattern="[^\\s@]+@[^\\s@]+\\.[^\\s@]+"',
+      "Please give an email address for your receipt",
+    ) +
     '<p class="bb-help">We only use this to send your receipt and a thank you. We never share it.</p>' +
     "</fieldset>" +
     '<div class="bb-giftaid">' +
@@ -265,7 +277,9 @@ export function renderBallBagsPage(): string {
     '<div class="bb-give">' +
     // data-give-pay: the visit counter counts a tap on it as a donate click (assets/js/pulse.js).
     `<button class="bb-btn" id="bbGive" type="submit" data-give-pay>Give ${pounds(one)}</button>` +
-    '<p class="bb-status" id="bbStatus" role="status" hidden></p>' +
+    // In the page from the start (empty, it takes no room), so what is put in it is announced; a
+    // failure turns it into an alert (assets/js/ball-bags.js).
+    '<p class="bb-status" id="bbStatus" role="status" aria-live="polite"></p>' +
     '<p class="bb-note">Secure payment by Stripe.</p>' +
     "</div>" +
     "</form>" +

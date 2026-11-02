@@ -95,7 +95,7 @@ describe("GET /bag", () => {
 
 describe("GET /bag/thank-you", () => {
   it("says how many bags the session paid for, and is never cached", async () => {
-    state.retrieve.mockResolvedValue({ metadata: { ballBags: "3" }, amount_total: 15000 });
+    state.retrieve.mockResolvedValue({ payment_status: "paid", metadata: { ballBags: "3" }, amount_total: 15000 });
     const res = await get("/bag/thank-you?session_id=cs_test_invented123");
     expect(res.status).toBe(200);
     expect(res.headers.get("cache-control")).toBe("private, no-store");
@@ -103,6 +103,15 @@ describe("GET /bag/thank-you", () => {
     const html = await res.text();
     expect(html).toContain("You've filled 3 red bags");
     expect(html).toContain('<meta name="robots" content="noindex" />');
+  });
+
+  it("is a plain thank you, with no count, for a session that is not paid", async () => {
+    state.retrieve.mockResolvedValue({ payment_status: "unpaid", metadata: { ballBags: "3" }, amount_total: 15000 });
+    const res = await get("/bag/thank-you?session_id=cs_test_invented123");
+    expect(res.status).toBe(200);
+    const html = await res.text();
+    expect(html).not.toContain("You've filled");
+    expect(html).toContain("Enjoy the rest of your night.");
   });
 
   it("is a plain thank you when Stripe cannot be read", async () => {

@@ -171,8 +171,11 @@ export function materialFacts(
     when = `${p.dayName} ${p.day} ${p.month} ${p.year}${f.startTime ? `, ${time12(f.startTime)}` : ""}`;
   }
   const where = [f.venue, f.town].map((s) => (s ?? "").trim()).filter(Boolean).join(", ") || null;
-  const source = (f.cardLine ?? "").trim() || firstSentence(f.description ?? "");
-  const line = source ? shorten(source, 140) : null;
+  // The card line, which is kept short when it is written. Otherwise the description's first sentence,
+  // whole or not at all: a school's poster stopped half way through its first sentence (2 November 2026).
+  const card = (f.cardLine ?? "").trim();
+  const sentence = firstSentence(f.description ?? "");
+  const line = card ? shorten(card, 140) : sentence && sentence.length <= POSTER_LINE_MAX ? sentence : null;
   // Event pages: an event with a page carries it too, as a fundraiser's does (the caller gives its
   // /event/ address); one without falls back to What's on.
   const page = hasPage(f) ? urls.pageUrl : null;
@@ -372,6 +375,19 @@ const ICON_PIN =
 // drawing (the QR code stays a sharp vector), and the page around it is exactly the paper's size, so
 // nothing can spill onto a second sheet.
 
+/**
+ * The longest first sentence a poster shows. A longer one is left off rather than cut: measured to fit
+ * with the longest name, a date, a place, a target and a way in, at A5, A4 and A3.
+ */
+export const POSTER_LINE_MAX = 240;
+
+/** The line's size on the A4 design: as it was up to a card line's length, then smaller, so it stays whole. */
+export function posterLineSize(line: string): string {
+  const n = line.length;
+  if (n <= 140) return "15pt";
+  return n <= 200 ? "13.5pt" : "12pt";
+}
+
 /** Big for a short name, smaller as it grows, so even 100 characters fits the page. */
 function posterTitleSize(title: string): string {
   const n = title.length;
@@ -401,6 +417,9 @@ export function posterLogoMm(
   if (t > 70) mm -= 4;
   if (l > 70) mm -= 6;
   if (l > 110) mm -= 2;
+  // A whole first sentence longer than a card line: two more lines, at most.
+  if (l > 140) mm -= 4;
+  if (l > 200) mm -= 4;
   if (d.when && d.where && d.targetPence) mm -= 2;
   // Review fix: the split statement's lines in the foot. On the leaflet the foot's words are drawn
   // bigger on the design (so they print at 7pt or more: statementPt), so it takes more room there.
@@ -608,7 +627,7 @@ function posterPage(d: MaterialFacts, a: MaterialAssets, size: PosterSize): stri
       <h1 class="p-title" style="font-size:${posterTitleSize(headline)}">${escapeHtml(headline)}</h1>
       ${memory?.dates ? `<div class="p-dates">${escapeHtml(memory.dates)}</div>` : ""}
       ${meta ? `<div class="p-meta">${meta}</div>` : ""}
-      ${d.line ? `<p class="p-line">${escapeHtml(d.line)}</p>` : ""}
+      ${d.line ? `<p class="p-line" style="font-size:${posterLineSize(d.line)}">${escapeHtml(d.line)}</p>` : ""}
       ${target}
       ${d.entry ? `<div class="p-entry">${escapeHtml(d.entry)}</div>` : ""}
       <div class="p-scan">

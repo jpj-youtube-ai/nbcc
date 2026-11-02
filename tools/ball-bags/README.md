@@ -49,6 +49,11 @@ $u = $root -replace '\\','/'
 ```
 
 `qr.mjs` writes `bag-qr.svg` and `bag-qr.png`; `card.mjs` reads the SVG and writes `card-a6.html`
-(105 by 148mm) and `card-a4-four.html` (four to an A4 sheet, with faint cut lines). The pages load
+(105 by 148mm) and `card-a4-four.html` (four to an A4 sheet, with faint cut lines). The card is in
+the new home page's look (TASK-585, after Jaimie said the first cards did not match the new site):
+the quilted maroon band, the gold ribbon and bow, and a white gift tag carrying the QR code, with
+the elf logo (`assets/img/nbcc-logo-full.svg`) on cream at the foot. For PNGs at 300 dots per inch,
+take Chrome screenshots of the same pages with `--force-device-scale-factor=3.125` and
+`--window-size=397,559` (A6) or `794,1123` (A4). The pages load
 Poppins, Playfair Display and Caveat from Google Fonts, so print with the machine online. Check the
 PDFs by eye (the QR scans from a phone, the fonts are right) before they go to the printer.

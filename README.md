@@ -7286,9 +7286,14 @@ optional and an email receipt. Design:
   metadata, else `amount_total` / 5000); with no session id, an id not shaped like one, an unpaid
   session, or Stripe out of reach, it is a plain thank you, never an error. The
   bags pop in one after another under a fall of gold stars and hearts; "Fill another" goes back to `/bag`.
-  One bag, or a count it could not read, is thanked with "Someone who would otherwise have nothing to
-  open will wake up to it on Christmas morning"; two or more with "N people who would ... wake up to
-  one" (N a numeral).
+  The heading is "Your £150 could fill 3 red bags" (or "Your £50 could fill a red bag"); one bag, or a
+  count it could not read, is thanked with "It could mean someone who would otherwise have nothing to
+  open has a red bag to open on Christmas morning"; two or more with "It could mean N people ..."
+  (N a numeral).
+- **Never a promise (TASK-585).** Jaimie, 2 November 2026: "we can't legally say that it's going to
+  fill a bag". So the page, the thank you and the printed card say "£50 could fill a full red bag",
+  never "fills" or "you've filled"; `test/unit/ball-bags-page.test.ts` pins it. "Fill a bag" and
+  "Fill another" stay as buttons: they invite, they do not promise.
   The script takes `session_id` out of the address bar.
 - **Light on a hotel's signal.** No site header, menu, `styles.css` or `main.js`: its own
   stylesheet (`assets/css/ball-bags.css`, with the site's colour tokens and only Playfair Display

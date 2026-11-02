@@ -7208,6 +7208,34 @@ Bag's are.
   page (`sumGiftsBySource` has a third bucket, `ball`). The Overview's Fill a Red Bag line is
   unchanged.
 
+## Red bags at the Festive Ball: the checkout (TASK-584)
+
+At the Ball (Saturday 7 November 2026) guests scan a table card to `/bag` and give £50 a red bag.
+Design: `docs/superpowers/specs/2026-11-02-ball-table-bags-design.md`. This part is the money side.
+
+- **The numbers.** `src/ball/bags.ts` (pure): `BALL_BAG_PENCE` 5000, `BALL_BAGS_MAX` 20,
+  `BALL_BAGS_PATH` `/bag`, `BALL_BAGS_THANKS_PATH` `/bag/thank-you`, and `ballBagsPence(bags)`.
+- **The checkout.** The donate page's own, `POST /api/checkout-session`, with the optional marker
+  `ballBags`, a whole number of bags from 1 to 20 (`src/routes/api.ts`). The server prices it in
+  ONE place, `priceBallBags`, before the body is checked: the amount becomes bags x 5000 pence,
+  whatever amount the browser sent or left out, and the gift is put on Stripe's own page (a
+  `uiMode: "embedded"` request is ignored, so the response is always `{ url }`). With the marker:
+  once only, a person's gift (`donorType` individual), never with `redBag`, `ball` or a
+  `fundraiserId` (400 otherwise); card only (`payment_method_types: ["card"]`, which brings Apple
+  Pay and Google Pay; no Direct Debit); one line, "Red bags at the Festive Ball", for the total;
+  one metadata key `ballBags` (the count as a string); success
+  `PORTAL_BASE_URL/bag/thank-you?session_id={CHECKOUT_SESSION_ID}`, Back to `PORTAL_BASE_URL/bag`.
+  Email, Gift Aid and the card fee work exactly as on any person's one off gift.
+- **Recording it.** `sourceFromCheckoutSession` reads a `ballBags` mark of "1" to "20" (checked
+  before the Ball's own mark) and the webhook writes `donations.source = 'ball_bags'`.
+  `DONATION_SOURCES` is now `["red_bag", "ball", "ball_bags"]` (the first two keep their places,
+  which `sumGiftsBySource` reads). Never added into the Festive Ball line. No migration.
+- **Unchanged.** A donate page gift, a Ball donate page gift and a Fill a Red Bag gift make
+  exactly the session they made before: `test/unit/ball-bags-leaves-others.test.ts` pins them,
+  field for field, from snapshots taken before the marker existed.
+- **Tests.** `test/unit/ball-bags-checkout.test.ts`, `test/unit/donation-source.test.ts`, and
+  `features/ball-bags.feature`.
+
 ## Nothing in the admin scrolls sideways (TASK-442)
 
 Reported twice, and it was one line causing all of it: `.admin-table th, .admin-table td` carried

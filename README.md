@@ -7294,6 +7294,13 @@ optional and an email receipt. Design:
   fill a bag". So the page, the thank you and the printed card say "£50 could fill a full red bag",
   never "fills" or "you've filled"; `test/unit/ball-bags-page.test.ts` pins it. "Fill a bag" and
   "Fill another" stay as buttons: they invite, they do not promise.
+- **The new site's look (TASK-586).** Jaimie, 2 November 2026: "bring /bag into the same look" as the
+  new home page. The welcome and the thank you sit on the home page's quilted maroon band
+  (`.home-lane`), ending in its wave into cream; the gold ribbon and bow run across it, and what is in
+  a bag hangs from the ribbon as four gift tags (card, crimson, holly, tan). On how many, the tally
+  hangs on a white gift tag from the ribbon, as the QR code does on the table card. Headings end on an
+  italic word, the home page's way ("Thank you for being here *tonight.*"). The logo stays on cream,
+  above the band. Only the look changed: the form, the script, checkout and the wording are as before.
   The script takes `session_id` out of the address bar.
 - **Light on a hotel's signal.** No site header, menu, `styles.css` or `main.js`: its own
   stylesheet (`assets/css/ball-bags.css`, with the site's colour tokens and only Playfair Display

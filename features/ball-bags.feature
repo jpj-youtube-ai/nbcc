@@ -67,7 +67,7 @@ Feature: Red bags at the Festive Ball, the checkout
     Given the ball gate is closed
     When I request "/bag"
     Then the ball page status should be 200
-    And the ball page should contain "Thank you for being here tonight"
+    And the ball page should contain "Thank you for being here <em>tonight.</em>"
     And the ball page should contain "<meta name=\"robots\" content=\"noindex\" />"
     And the ball page should contain "id=\"bbForm\""
 

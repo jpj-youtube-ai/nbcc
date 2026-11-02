@@ -101,7 +101,7 @@ describe("GET /bag/thank-you", () => {
     expect(res.headers.get("cache-control")).toBe("private, no-store");
     expect(state.retrieve).toHaveBeenCalledWith("cs_test_invented123");
     const html = await res.text();
-    expect(html).toContain("You've filled 3 red bags");
+    expect(html).toContain("Your £150 could fill 3 red bags");
     expect(html).toContain('<meta name="robots" content="noindex" />');
   });
 
@@ -110,7 +110,7 @@ describe("GET /bag/thank-you", () => {
     const res = await get("/bag/thank-you?session_id=cs_test_invented123");
     expect(res.status).toBe(200);
     const html = await res.text();
-    expect(html).not.toContain("You've filled");
+    expect(html).not.toContain("could fill");
     expect(html).toContain("Enjoy the rest of your night.");
   });
 
@@ -119,7 +119,7 @@ describe("GET /bag/thank-you", () => {
     const res = await get("/bag/thank-you?session_id=cs_test_invented123");
     expect(res.status).toBe(200);
     const html = await res.text();
-    expect(html).not.toContain("You've filled");
+    expect(html).not.toContain("could fill");
     expect(html).toContain("Enjoy the rest of your night.");
   });
 

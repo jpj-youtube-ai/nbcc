@@ -228,7 +228,7 @@ export function renderBallBagsPage(): string {
     twinkles() +
     "</div>" +
     '<h1 class="bb-title" id="bbWelcomeTitle" tabindex="-1">Thank you for being here tonight</h1>' +
-    '<p class="bb-lede">£50 fills a full red bag for children, young people and vulnerable adults across South West Scotland who would otherwise wake up on Christmas morning with nothing to open.</p>' +
+    '<p class="bb-lede">£50 could fill a full red bag for children, young people and vulnerable adults across South West Scotland who would otherwise wake up on Christmas morning with nothing to open.</p>' +
     '<ul class="bb-inside">' +
     INSIDE.map(
       (x, i) =>
@@ -300,7 +300,7 @@ export function renderBallBagsPage(): string {
 
   return frame({
     title: "Fill a red bag | NBCC Festive Ball",
-    description: "£50 fills a full red bag for children, young people and vulnerable adults across South West Scotland.",
+    description: "£50 could fill a full red bag for children, young people and vulnerable adults across South West Scotland.",
     bodyClass: "bb-page--give",
     body: snow({ pieces: 12, seed: 20261107, fall: [10, 16], kind: "drift" }) + `<main class="bb-main" id="main">${TOP}${welcome}${howMany}</main>`,
   });
@@ -312,11 +312,18 @@ export function renderBallBagsPage(): string {
  */
 export function renderBallBagsThanks(bags: number): string {
   const known = Number.isInteger(bags) && bags >= 1 && bags <= BALL_BAGS_MAX;
-  const heading = !known ? "Your gift is in the bag" : bags === 1 ? "You've filled a red bag" : `You've filled ${bags} red bags`;
+  // Jaimie, 2 November 2026: "we can't legally say that it's going to fill a bag", so the gift
+  // could fill one, never has.
+  const pounds = known ? ((bags * BALL_BAG_PENCE) / 100).toLocaleString("en-GB") : "";
+  const heading = !known
+    ? "Your gift is in the bag"
+    : bags === 1
+      ? `Your £${pounds} could fill a red bag`
+      : `Your £${pounds} could fill ${bags} red bags`;
   const lede =
     known && bags >= 2
-      ? `Thank you. ${bags} people who would otherwise have nothing to open will wake up to one on Christmas morning. Enjoy the rest of your night.`
-      : "Thank you. Someone who would otherwise have nothing to open will wake up to it on Christmas morning. Enjoy the rest of your night.";
+      ? `Thank you. It could mean ${bags} people who would otherwise have nothing to open have a red bag to open on Christmas morning. Enjoy the rest of your night.`
+      : "Thank you. It could mean someone who would otherwise have nothing to open has a red bag to open on Christmas morning. Enjoy the rest of your night.";
   const body =
     `<main class="bb-main" id="main" data-bb-thanks data-bags="${known ? bags : 0}">` +
     TOP +
@@ -328,7 +335,7 @@ export function renderBallBagsThanks(bags: number): string {
     "</section></main>";
   return frame({
     title: "Thank you | NBCC Festive Ball",
-    description: "Thank you for filling a red bag at the NBCC Festive Ball.",
+    description: "Thank you for your red bag gift at the NBCC Festive Ball.",
     bodyClass: "bb-page--thanks",
     body: snow({ pieces: 28, seed: 20261224, fall: [2.2, 3.4], kind: "burst" }) + body,
   });

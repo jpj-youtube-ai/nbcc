@@ -52,8 +52,10 @@ describe("the page, /bag", () => {
     expect(text).toContain("Festive Ball");
     expect(text).toContain("Thank you for being here tonight");
     expect(text).toContain(
-      "£50 fills a full red bag for children, young people and vulnerable adults across South West Scotland who would otherwise wake up on Christmas morning with nothing to open.",
+      "£50 could fill a full red bag for children, young people and vulnerable adults across South West Scotland who would otherwise wake up on Christmas morning with nothing to open.",
     );
+    // Jaimie, 2 November 2026: "we can't legally say that it's going to fill a bag". Never a promise.
+    expect(page).not.toContain("£50 fills");
     for (const line of ["A cosy blanket and pyjamas", "Hat, gloves and socks", "A toy and a book", "A few treats to unwrap"]) {
       expect(text, line).toContain(line);
     }
@@ -147,32 +149,37 @@ describe("the page, /bag", () => {
 });
 
 describe("the thank you, /bag/thank-you", () => {
-  it("says how many red bags were filled", () => {
-    expect(words(renderBallBagsThanks(3))).toContain("You've filled 3 red bags");
-    expect(words(renderBallBagsThanks(1))).toContain("You've filled a red bag");
-    expect(words(renderBallBagsThanks(20))).toContain("You've filled 20 red bags");
+  it("says what the gift could fill, never that it has filled a bag", () => {
+    expect(words(renderBallBagsThanks(3))).toContain("Your £150 could fill 3 red bags");
+    expect(words(renderBallBagsThanks(1))).toContain("Your £50 could fill a red bag");
+    expect(words(renderBallBagsThanks(20))).toContain("Your £1,000 could fill 20 red bags");
+    for (const n of [0, 1, 3, 20]) {
+      expect(words(renderBallBagsThanks(n)), String(n)).not.toMatch(/You've filled|will wake/);
+    }
   });
 
   it("thanks the guest in NBCC's words for one bag, and offers another quietly", () => {
     const html = renderBallBagsThanks(1);
     expect(words(html)).toContain(
-      "Thank you. Someone who would otherwise have nothing to open will wake up to it on Christmas morning. Enjoy the rest of your night.",
+      "Thank you. It could mean someone who would otherwise have nothing to open has a red bag to open on Christmas morning. Enjoy the rest of your night.",
     );
     expect(html).toMatch(/<a[^>]*href="\/bag"[^>]*>Fill another<\/a>/);
   });
 
   it("thanks the guest for several bags with the number of people, as a numeral", () => {
     expect(words(renderBallBagsThanks(2))).toContain(
-      "Thank you. 2 people who would otherwise have nothing to open will wake up to one on Christmas morning. Enjoy the rest of your night.",
+      "Thank you. It could mean 2 people who would otherwise have nothing to open have a red bag to open on Christmas morning. Enjoy the rest of your night.",
     );
-    expect(words(renderBallBagsThanks(20))).toContain("Thank you. 20 people who would otherwise have nothing to open will wake up to one on Christmas morning.");
-    expect(words(renderBallBagsThanks(2))).not.toContain("Someone who would");
+    expect(words(renderBallBagsThanks(20))).toContain(
+      "Thank you. It could mean 20 people who would otherwise have nothing to open have a red bag to open on Christmas morning.",
+    );
+    expect(words(renderBallBagsThanks(2))).not.toContain("someone who would");
   });
 
   it("is a plain thank you, with no number, when the count is not known", () => {
     const html = renderBallBagsThanks(0);
-    expect(words(html)).not.toMatch(/You've filled/);
-    expect(words(html)).toContain("Thank you. Someone who would otherwise have nothing to open");
+    expect(words(html)).not.toMatch(/could fill/);
+    expect(words(html)).toContain("Thank you. It could mean someone who would otherwise have nothing to open");
     expect(words(html)).not.toMatch(/error|wrong/i);
   });
 

@@ -63,7 +63,7 @@ const card = `<div class="c">
 <h1>Fill a red bag<br>this Christmas</h1>
 <div class="mid"><div class="bagwrap">${bag}<span class="price">£50</span></div><div class="qrbox">${qr}</div></div>
 <p class="scan">Scan with your phone camera</p>
-<p class="line"><b>£50 fills a full red bag</b> for children, young people and vulnerable adults across South West Scotland who would otherwise wake up on Christmas morning with nothing to open. Give one, or a few.</p>
+<p class="line"><b>£50 could fill a full red bag</b> for children, young people and vulnerable adults across South West Scotland who would otherwise wake up on Christmas morning with nothing to open. Give one, or a few.</p>
 <p class="foot"><b>nbcc.scot/bag</b><br>Night Before Christmas Campaign, a Scottish charity SC047995</p>
 </div>`;
 

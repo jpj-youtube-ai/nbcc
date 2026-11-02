@@ -336,3 +336,54 @@ describe("how it sits on the page", () => {
     expect(block).not.toMatch(/#[0-9a-f]{3,8}\b|rgb\(|hsl\(|font-family/i);
   });
 });
+
+// The red bag cards on the Ball's tables (source ball_bags): shown in the real screen, the filter
+// sends its own source, and it never goes together with the other two.
+describe("the Red bags at the Ball filter and label", () => {
+  const BAGS = gift({ id: 31, donor_id: 9, donor_name: "Cy Example", amount_pence: 5000, source: "ball_bags" });
+  const bagsFilter = () => el("donationsBallBagsFilter") as HTMLInputElement;
+  const tickBags = async (on: boolean) => {
+    bagsFilter().checked = on;
+    bagsFilter().dispatchEvent(new Event("change", { bubbles: true }));
+    await settle();
+  };
+
+  it("labels a table card gift with its own words", async () => {
+    rows = [BAGS, PLAIN];
+    await openDonations();
+    expect(pillsIn("#donationsTable")).toEqual(["Red bags at the Ball", null]);
+  });
+
+  it("is a real tick box with its own label", () => {
+    const label = document.querySelector('label[for="donationsBallBagsFilter"]') as HTMLElement;
+    expect(label.textContent?.trim()).toBe("Red bags at the Ball only");
+    expect(bagsFilter().type).toBe("checkbox");
+  });
+
+  it("asks the server for source=ball_bags, and for nothing extra once cleared", async () => {
+    await openDonations();
+    await tickBags(true);
+    expect(listUrls[listUrls.length - 1]).toContain("&source=ball_bags");
+    await tickBags(false);
+    expect(listUrls[listUrls.length - 1]).not.toContain("source=");
+  });
+
+  it("unticks the other sources when ticked, and is unticked by them", async () => {
+    await openDonations();
+    await tick(true);
+    await tickBags(true);
+    expect(filter().checked).toBe(false);
+    expect(listUrls[listUrls.length - 1]).toContain("&source=ball_bags");
+    expect(listUrls[listUrls.length - 1]).not.toContain("source=red_bag");
+    await tick(true);
+    expect(bagsFilter().checked).toBe(false);
+    expect(listUrls[listUrls.length - 1]).toContain("&source=red_bag");
+  });
+
+  it("says plainly when there are none", async () => {
+    rows = [];
+    await openDonations();
+    await tickBags(true);
+    expect(el("donationsTable").textContent).toBe("No red bag gifts at the Ball yet.");
+  });
+});

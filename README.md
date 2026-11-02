@@ -7228,8 +7228,16 @@ Design: `docs/superpowers/specs/2026-11-02-ball-table-bags-design.md`. This part
   Email, Gift Aid and the card fee work exactly as on any person's one off gift.
 - **Recording it.** `sourceFromCheckoutSession` reads a `ballBags` mark of "1" to "20" (checked
   before the Ball's own mark) and the webhook writes `donations.source = 'ball_bags'`.
-  `DONATION_SOURCES` is now `["red_bag", "ball", "ball_bags"]` (the first two keep their places,
-  which `sumGiftsBySource` reads). Never added into the Festive Ball line. No migration.
+  `DONATION_SOURCES` is now `["red_bag", "ball", "ball_bags"]` (`sumGiftsBySource` picks each
+  source by value, so the order does not matter to it). Never added into the Festive Ball line.
+  No migration.
+- **In the admin.** A **Red bags at the Ball** label on each such gift in the donations tables, a
+  **Red bags at the Ball only** filter after Festive Ball only (the three source filters untick one
+  another; `?source=ball_bags`, already accepted because `DONATION_SOURCES` lists it), and a **Red
+  bags at the Ball** line in the totals at the top of Donations, straight after Festive Ball, with
+  the note "Gifts from the table cards at the Festive Ball." (`sumGiftsBySource` has a fourth
+  bucket, `ballBags`, in `src/db/overview-numbers.ts` and `src/admin/gift-sources.ts`). Never
+  folded into the Festive Ball's figures. The Overview is unchanged.
 - **Unchanged.** A donate page gift, a Ball donate page gift and a Fill a Red Bag gift make
   exactly the session they made before: `test/unit/ball-bags-leaves-others.test.ts` pins them,
   field for field, from snapshots taken before the marker existed.

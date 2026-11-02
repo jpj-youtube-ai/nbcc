@@ -28,7 +28,7 @@ describe("the totals: one grouped read", () => {
     queryMock.mockResolvedValue({ rows: [] });
     await sumGiftsBySource(MONTH);
     expect(queryMock).toHaveBeenCalledTimes(1);
-    expect(call().params).toEqual(["2026-10-01", "2026-10-05T09:30:00.000Z", "red_bag", "ball"]);
+    expect(call().params).toEqual(["2026-10-01", "2026-10-05T09:30:00.000Z", "red_bag", "ball", "ball_bags"]);
     expect(call().sql).toMatch(/GROUP BY 1/);
     // The source is a parameter, never written into the SQL itself.
     expect(call().sql).not.toMatch(/red_bag/);
@@ -53,12 +53,24 @@ describe("the totals: one grouped read", () => {
     );
   });
 
-  it("puts a gift in Fill a Red Bag or the Festive Ball by its source, and in the Donate page only when it is an online gift with no source and no fundraiser's page", async () => {
+  it("puts a gift in Fill a Red Bag, the Festive Ball or the Ball's table bags by its source, and in the Donate page only when it is an online gift with no source and no fundraiser's page", async () => {
     queryMock.mockResolvedValue({ rows: [] });
     await sumGiftsBySource(MONTH);
     const { sql } = call();
-    expect(sql).toMatch(/CASE WHEN source = \$3 THEN 'redBag' WHEN source = \$4 THEN 'ball' ELSE 'donatePage' END/);
-    expect(sql).toMatch(/\(source IN \(\$3, \$4\) OR \(source IS NULL AND payment_channel = 'online' AND fundraiser_id IS NULL\)\)/);
+    expect(sql).toContain("CASE WHEN source = $3 THEN 'redBag' WHEN source = $4 THEN 'ball' WHEN source = $5 THEN 'ballBags' ELSE 'donatePage' END");
+    expect(sql).toContain("(source IN ($3, $4, $5) OR (source IS NULL AND payment_channel = 'online' AND fundraiser_id IS NULL))");
+  });
+
+  it("counts a table bag gift in its own bucket, not the Festive Ball's or the Donate page's", async () => {
+    queryMock.mockResolvedValue({
+      rows: [{ bucket: "ballBags", month_pence: "10000", month_gifts: "2", all_pence: "15000", all_gifts: "3" }],
+    });
+    expect(await sumGiftsBySource(MONTH)).toEqual({
+      redBag: { month: { pence: 0, gifts: 0 }, all: { pence: 0, gifts: 0 } },
+      ball: { month: { pence: 0, gifts: 0 }, all: { pence: 0, gifts: 0 } },
+      ballBags: { month: { pence: 10_000, gifts: 2 }, all: { pence: 15_000, gifts: 3 } },
+      donatePage: { month: { pence: 0, gifts: 0 }, all: { pence: 0, gifts: 0 } },
+    });
   });
 
   it("does not count a gift that was refunded in full", async () => {
@@ -74,6 +86,7 @@ describe("the totals: one grouped read", () => {
     expect(await sumGiftsBySource(MONTH)).toEqual({
       redBag: { month: { pence: 2500, gifts: 2 }, all: { pence: 4000, gifts: 3 } },
       ball: { month: { pence: 0, gifts: 0 }, all: { pence: 0, gifts: 0 } },
+      ballBags: { month: { pence: 0, gifts: 0 }, all: { pence: 0, gifts: 0 } },
       donatePage: { month: { pence: 0, gifts: 0 }, all: { pence: 0, gifts: 0 } },
     });
   });
@@ -119,6 +132,14 @@ describe("the Fill a Red Bag only filter", () => {
     await listDonations({ source: junk });
     expect(call().sql).not.toMatch(/d\.source =/);
     expect(call().params).toEqual([]);
+  });
+
+  it("accepts the Ball's table bags as a source, as a parameter", async () => {
+    await listDonations({ source: "ball_bags" });
+    for (const i of [0, 1]) {
+      expect(call(i).sql).toMatch(/d\.source = \$1/);
+      expect(call(i).params).toEqual(["ball_bags"]);
+    }
   });
 
   it("combines with the payment status and type filters, each placeholder on its own value", async () => {

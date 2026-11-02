@@ -7208,6 +7208,117 @@ Bag's are.
   page (`sumGiftsBySource` has a third bucket, `ball`). The Overview's Fill a Red Bag line is
   unchanged.
 
+## Red bags at the Festive Ball (/bag, TASK-584)
+
+At the Ball (Saturday 7 November 2026) the event organisers asked for a QR code card on each table,
+next to the red bags, that guests scan to give a red bag. It is NOT Fill a Red Bag (nobody builds a
+bag). Jaimie, 2 November 2026: "it's just a one-off £50 donation. They can make as many of them as
+possible ... it's almost like a disposable thing that we use on the night." She approved the
+clickable mockup's flow and asked for it to be animated, in Fill a Red Bag's look, with Gift Aid
+optional and an email receipt. Design:
+`docs/superpowers/specs/2026-11-02-ball-table-bags-design.md`.
+
+- **In one go.** `/bag` is a public page of its own: a guest scans the card, sees the bag and its
+  £50, chooses 1 to 20 bags, gives their first name, surname and email, and pays on Stripe's own
+  page by card (Apple Pay and Google Pay included). Back on `/bag/thank-you` the bags pop in.
+  The gift is one off, £50 (5000 pence) a bag, and is recorded with the source `ball_bags`.
+- **The window.** Live from the day it ships (so the card can be printed and the page tested) until
+  the end of Sunday 8 November 2026, UK time. After that `/bag` and `/bag/thank-you` both answer 302
+  to `/fill`. It is a page of the Ball's folder (`src/ball`, `src/routes/ball.ts`), but NOT behind
+  the Ball's launch gate and untouched by the after the Ball switch (`src/site/after-ball.ts`), so
+  it works all evening.
+- **Wording.** NBCC's own phrase: "children, young people and vulnerable adults across South West
+  Scotland", never "a child" alone. Sentence case, no dashes, no new hyphenated words.
+
+- **The numbers.** `src/ball/bags.ts` (pure): `BALL_BAG_PENCE` 5000, `BALL_BAGS_MAX` 20,
+  `BALL_BAGS_PATH` `/bag`, `BALL_BAGS_THANKS_PATH` `/bag/thank-you`, and `ballBagsPence(bags)`.
+- **The checkout.** The donate page's own, `POST /api/checkout-session`, with the optional marker
+  `ballBags`, a whole number of bags from 1 to 20 (`src/routes/api.ts`). The server prices it in
+  ONE place, `priceBallBags`, before the body is checked: the amount becomes bags x 5000 pence,
+  whatever amount the browser sent or left out, and the gift is put on Stripe's own page (a
+  `uiMode: "embedded"` request is ignored, so the response is always `{ url }`). With the marker:
+  once only, a person's gift (`donorType` individual), never with `redBag`, `ball` or a
+  `fundraiserId` (400 otherwise); card only (`payment_method_types: ["card"]`, which brings Apple
+  Pay and Google Pay; no Direct Debit, which would record as pending and is not tap and pay); on
+  Stripe's hosted Checkout page and not the embedded form, because Apple Pay and Google Pay then
+  work without registering the site's domain with Stripe (so, if Apple Pay or Google Pay is
+  missing on the night, check they are switched on in the charity's Stripe account); one line, "Red bags at the Festive Ball", for the total;
+  one metadata key `ballBags` (the count as a string); success
+  `PORTAL_BASE_URL/bag/thank-you?session_id={CHECKOUT_SESSION_ID}`, Back to `PORTAL_BASE_URL/bag`.
+  Email, Gift Aid and the card fee work exactly as on any person's one off gift. The receipt is the
+  existing donor receipt for a one off gift, with Gift Aid when declared, unchanged (it does not say
+  how many bags: adding that would thread new data through the shared webhook in Ball week). The
+  page asks for first name, surname and email itself, because the webhook reads the receipt email
+  from our own metadata, never from Stripe.
+- **Recording it.** `sourceFromCheckoutSession` reads a `ballBags` mark of "1" to "20" (checked
+  before the Ball's own mark) and the webhook writes `donations.source = 'ball_bags'`.
+  `DONATION_SOURCES` is now `["red_bag", "ball", "ball_bags"]` (`sumGiftsBySource` picks each
+  source by value, so the order does not matter to it). Never added into the Festive Ball line.
+  No migration.
+- **In the admin.** A **Red bags at the Ball** label on each such gift in the donations tables, a
+  **Red bags at the Ball only** filter after Festive Ball only (the three source filters untick one
+  another; `?source=ball_bags`, already accepted because `DONATION_SOURCES` lists it), and a **Red
+  bags at the Ball** line in the totals at the top of Donations, straight after Festive Ball, with
+  the note "Red bags at the Ball are gifts from the table cards at the Festive Ball." (`sumGiftsBySource` has a fourth
+  bucket, `ballBags`, in `src/db/overview-numbers.ts` and `src/admin/gift-sources.ts`). Never
+  folded into the Festive Ball's figures. The Overview is unchanged.
+- **Unchanged.** A donate page gift, a Ball donate page gift and a Fill a Red Bag gift make
+  exactly the session they made before: `test/unit/ball-bags-leaves-others.test.ts` pins them,
+  field for field, from snapshots taken before the marker existed.
+- **The page, `/bag`.** Drawn whole by `renderBallBagsPage()` (`src/ball/bags-page.ts`), served by
+  `src/routes/ball.ts` with `Cache-Control: public, max-age=0`. Public: NOT behind the Ball's launch
+  gate (a guest at a table never sees a password). noindex; in `PRIVATE_PAGES`, and `/bag` is in
+  `RESERVED_PREFIXES`. Open while `ballBagsOpen(now)`: the UK date is on or before Sunday 8 November
+  2026; after that `/bag` and `/bag/thank-you` both 302 to `/fill`. Two screens under NBCC's logo
+  on cream: the welcome (the bag drops in with a springy bounce and its £50, gold sparkles
+  twinkle, what is in a bag with Fill a Red Bag's item drawings, "Fill a bag" throws a burst of
+  sparkles),
+  then how many (plus and minus, 1 to 20, a row of bags that grows with a pop, ten drawn then "+N",
+  the total, first name, surname and email, optional Gift Aid with the Ball donate page's
+  declaration and address fields, "Give £150"). The script (`assets/js/ball-bags.js`) posts only
+  `ballBags`, never an amount, and goes to the `url` the checkout returns; a refusal or an outage
+  shows a plain message beside the button (`is-error`, as an alert in a line that is always in the
+  page; an error sets `role="alert"` and `aria-live="assertive"`, anything else `status` and `polite`)
+  and keeps everything typed. While it waits the button says it is busy with `aria-disabled`,
+  never `disabled`, so the focus stays on it. The snow stops once the guest is past the welcome.
+- **The thank you, `/bag/thank-you`.** `private, no-store`. Reads the bag count from the Stripe
+  session (`bagsFromSession`: only a `payment_status` "paid" session counts; then the `ballBags`
+  metadata, else `amount_total` / 5000); with no session id, an id not shaped like one, an unpaid
+  session, or Stripe out of reach, it is a plain thank you, never an error. The
+  bags pop in one after another under a fall of gold stars and hearts; "Fill another" goes back to `/bag`.
+  One bag, or a count it could not read, is thanked with "Someone who would otherwise have nothing to
+  open will wake up to it on Christmas morning"; two or more with "N people who would ... wake up to
+  one" (N a numeral).
+  The script takes `session_id` out of the address bar.
+- **Light on a hotel's signal.** No site header, menu, `styles.css` or `main.js`: its own
+  stylesheet (`assets/css/ball-bags.css`, with the site's colour tokens and only Playfair Display
+  and Poppins) and script, plus the visit counter. The bag is ONE baked picture,
+  `assets/img/ball-bag-hero.webp` (28KB; the bag, the gold bow, presents peeking out and the
+  "Packed with love" tag, drawn as SVG with Caveat and baked to WebP, so the phone needs no
+  handwriting font); the same picture, small, is each bag in the row and on the thank you. The
+  logo is `assets/img/nbcc-logo-192.webp` (9KB, baked from `nbcc-logo-full.svg`). The look is NBCC's
+  own, on cream (the site's colour tokens), with Fill a Red Bag's bag, ribbon, tag, snow and stars
+  as the model. The hero's source is the SVG drawing in `hero.html` and the baking script
+  `bake.cjs` (sharp: Chrome's 3x screenshot of the drawing, cropped and baked to WebP, plus the
+  logo). They are in the repo, outside anything served or built, in `tools/ball-bags/` (with the
+  table card and QR code makers and a README on re-baking the picture and re-making the A6 and A4
+  card PDFs; credit line in `assets/img/CREDITS.md`). To change
+  the picture, redraw it, bake a new WebP, copy it over `ball-bag-hero.webp` and keep it under about 30KB. The four item
+  drawings are Fill a Red Bag's own, read on the server from `assets/js/red-bag-catalogue.js`
+  (`redBag().art`), so that script is not loaded. The first visit is about 87KB (53KB gzipped
+  where it applies) plus the site's two fonts. Every animation is transform and opacity only and
+  stops under `prefers-reduced-motion` (the sparkles stay, still).
+- **The table card.** An A6 portrait card with the QR code for https://nbcc.scot/bag, a red bag
+  drawing, "Fill a red bag this Christmas", "£50 a bag", "Scan with your phone camera" and NBCC's
+  name and charity number, as a print ready PDF (one card a page, plus four to an A4 sheet). It was
+  made with a one off script outside the app (Chrome printed it to PDF); nothing for it is in the
+  app or the repo, and the QR must point at exactly that address. Check the page and a card scan
+  before printing.
+- **Tests.** `test/unit/ball-bags-checkout.test.ts`, `test/unit/donation-source.test.ts`,
+  `test/unit/ball-bags-page.test.ts`, `test/unit/ball-bags-script.test.ts` (jsdom),
+  `test/unit/ball-bags-routes.test.ts`, and `features/ball-bags.feature` (the page scenarios are
+  tagged `@while-bags-open` and skip themselves after 8 November 2026).
+
 ## Nothing in the admin scrolls sideways (TASK-442)
 
 Reported twice, and it was one line causing all of it: `.admin-table th, .admin-table td` carried

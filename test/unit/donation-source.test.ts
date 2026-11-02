@@ -29,8 +29,8 @@ const session = (metadata: unknown): Stripe.Checkout.Session =>
 const base = { mode: "once", plan: "", giftAid: "false", donorType: "individual", fullName: "Robin Example", email: "robin@example.com" };
 
 describe("the allowed sources", () => {
-  it("is one list, holding red_bag and ball (the Festive Ball's donate page)", () => {
-    expect(DONATION_SOURCES).toEqual(["red_bag", "ball"]);
+  it("is one list, holding red_bag, ball (the Festive Ball's donate page) and ball_bags (red bags at the Ball)", () => {
+    expect(DONATION_SOURCES).toEqual(["red_bag", "ball", "ball_bags"]);
   });
 });
 
@@ -41,6 +41,35 @@ describe("where a checkout session's gift came from", () => {
 
   it('is ball when the Ball\'s donate page marked it "true"', () => {
     expect(sourceFromCheckoutSession(session({ ...base, ball: "true" }))).toBe("ball");
+  });
+
+  // Red bags at the Ball (/bag): the checkout stamps metadata.ballBags as the number of bags, 1 to 20.
+  it.each(["1", "3", "20"])('is ball_bags when the checkout stamped %s bags', (n) => {
+    expect(sourceFromCheckoutSession(session({ ...base, ballBags: n }))).toBe("ball_bags");
+  });
+
+  it("reads the bags before the Ball's donate page mark, so the two are never added together", () => {
+    expect(sourceFromCheckoutSession(session({ ...base, ball: "true", ballBags: "2" }))).toBe("ball_bags");
+  });
+
+  it.each([
+    ['"0"', "0"],
+    ['"21"', "21"],
+    ['"true"', "true"],
+    ['"2.5"', "2.5"],
+    ['"03"', "03"],
+    ['" 3"', " 3"],
+    ["an empty mark", ""],
+    ["a real number", 3],
+    ["a real boolean", true],
+  ])("is not ball_bags for a bags mark of %s", (_what, mark) => {
+    expect(sourceFromCheckoutSession(session({ ...base, ballBags: mark }))).toBeNull();
+  });
+
+  it("leaves the donation and the donor exactly as they are with the bags mark", () => {
+    expect(donationFromCheckoutSession(session({ ...base, ballBags: "2" }))).toEqual(
+      donationFromCheckoutSession(session({ ...base })),
+    );
   });
 
   it.each([

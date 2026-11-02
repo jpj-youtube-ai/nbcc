@@ -26,6 +26,7 @@ import { captchaEnabled, captchaSiteKey, verifyCaptcha } from "../clients/turnst
 import { GIFT_MIN_PENCE, MESSAGE_MAX } from "../fundraising/model";
 import { RED_BAG_PATH, RED_BAG_THANKS_PATH } from "../red-bag/switch";
 import { redBagOpenTo } from "../red-bag/staff";
+import { BALL_BAGS_MAX, BALL_BAGS_PATH, BALL_BAGS_THANKS_PATH, ballBagsPence } from "../ball/bags";
 
 // Marketing-site API endpoints, both implemented.
 // - POST /api/checkout-session (REQ-029): turns the REQ-028 front-end payload into
@@ -51,7 +52,20 @@ export const RED_BAG_MIN_PENCE = 200;
 export const BALL_GIFT_MIN_PENCE = 200;
 export const BALL_DONATE_PATH = "/ball/donate";
 
-const checkoutBodySchema = z
+// Red bags at the Festive Ball (/bag): the ONE place the bags are priced. Before anything else reads
+// the body, a body carrying a whole number of bags has its amount set to bags x £50 (src/ball/bags.ts),
+// whatever amount the browser sent or left out, and is put on Stripe's own page (Apple Pay and Google
+// Pay work there without registering the site with Stripe). Every other body passes through untouched,
+// so the donate page, the Ball's donate page and Fill a Red Bag are checked exactly as before. A count
+// out of range is still priced here and then refused by the schema below.
+function priceBallBags(raw: unknown): unknown {
+  if (typeof raw !== "object" || raw === null) return raw;
+  const bags = (raw as { ballBags?: unknown }).ballBags;
+  if (typeof bags !== "number" || !Number.isInteger(bags)) return raw;
+  return { ...raw, amount: ballBagsPence(bags), uiMode: "hosted" };
+}
+
+const checkoutBodySchema = z.preprocess(priceBallBags, z
   .object({
     mode: z.enum(["once", "monthly"]),
     plan: z.enum(PLANS).nullable(),
@@ -128,6 +142,9 @@ const checkoutBodySchema = z
     // The Festive Ball's donate page (/ball/donate): the same kind of optional marker. Absent, nothing
     // below applies.
     ball: z.boolean().optional(),
+    // Red bags at the Festive Ball (/bag): the number of £50 bags. Absent, nothing below applies. Its
+    // amount is set by priceBallBags above, never taken from the browser.
+    ballBags: z.number().int().min(1).max(BALL_BAGS_MAX).optional(),
   })
   // Fill a Red Bag: £2 at least, and never also a gift on a fundraiser's page. Only with the marker.
   .refine((b) => b.redBag !== true || (b.amount ?? 0) >= RED_BAG_MIN_PENCE, {
@@ -155,6 +172,20 @@ const checkoutBodySchema = z
   .refine((b) => b.ball !== true || (b.fundraiserId === undefined && b.redBag !== true), {
     message: "a Festive Ball gift is not a gift on a fundraising page or a Red Bag",
     path: ["ball"],
+  })
+  // Red bags at the Ball: once only, from a person (the page asks only a person's name), and only ever
+  // a red bags gift. Gift Aid is then exactly a person's one off gift's.
+  .refine((b) => b.ballBags === undefined || b.mode === "once", {
+    message: "Red bags at the Ball are a one off gift",
+    path: ["mode"],
+  })
+  .refine((b) => b.ballBags === undefined || b.donorType === "individual", {
+    message: "Red bags at the Ball are a gift from a person",
+    path: ["donorType"],
+  })
+  .refine((b) => b.ballBags === undefined || (b.fundraiserId === undefined && b.redBag !== true && b.ball !== true), {
+    message: "Red bags at the Ball are not a gift on a fundraising page, a Red Bag or a Ball donate gift",
+    path: ["ballBags"],
   })
   // TASK-493: giving on a fundraiser's page is one off only, and £2 at least, as the design asks.
   // Monthly gifts there are not built yet (they would need the wall and meter to follow renewals).
@@ -259,7 +290,7 @@ const checkoutBodySchema = z
         message: "Please choose different words for your message on the supporter wall.",
       });
     }
-  });
+  }));
 
 type CheckoutBody = z.infer<typeof checkoutBodySchema>;
 
@@ -272,6 +303,10 @@ const PAYMENT_METHODS: StripeNS.Checkout.SessionCreateParams["payment_method_typ
   "card",
   "bacs_debit",
 ];
+
+// Red bags at the Ball: card only, and the name of the one line on Stripe's page.
+const BALL_BAGS_PAYMENT_METHODS: StripeNS.Checkout.SessionCreateParams["payment_method_types"] = ["card"];
+const BALL_BAGS_LINE_NAME = "Red bags at the Festive Ball";
 
 // The on-site landing Stripe returns the donor to after checkout, built on config.STRIPE_SUCCESS_URL
 // (the shared config base). TASK-221 makes it TYPE-AWARE: it carries the gift's `mode` (once|monthly)
@@ -371,6 +406,9 @@ export function buildSessionParams(
   if (body.redBag === true) metadata.redBag = "true";
   // The Ball's donate page: likewise one key, only for a gift made there.
   if (body.ball === true) metadata.ball = "true";
+  // Red bags at the Ball: one key, the number of bags, only for a gift made there. The webhook reads
+  // it as the gift's source (ball_bags) and /bag/thank-you reads it back from the session.
+  if (body.ballBags !== undefined) metadata.ballBags = String(body.ballBags);
 
   // The declaration scope defaults from the gift's frequency (REQ-041): monthly is
   // enduring — one declaration covers all the donor's gifts — while a one-off covers just
@@ -437,7 +475,9 @@ export function buildSessionParams(
   }
 
   const base: StripeNS.Checkout.SessionCreateParams = {
-    payment_method_types: PAYMENT_METHODS,
+    // Red bags at the Ball: card only (which brings Apple Pay and Google Pay), so a gift at the table
+    // is tap and pay; Direct Debit would record as pending. Every other gift keeps both.
+    payment_method_types: body.ballBags !== undefined ? BALL_BAGS_PAYMENT_METHODS : PAYMENT_METHODS,
     metadata,
     // Pre-fill and lock the donor's email on the Stripe Checkout page (TASK-203) so they never
     // retype the address we already captured. Stripe still needs an email for its records, so it is
@@ -454,7 +494,9 @@ export function buildSessionParams(
     // BOTH land the SAME type-aware thank-you page (TASK-221) via thankYouReturnUrl — carrying the
     // gift's mode+donor (which of the four variants to show) and {CHECKOUT_SESSION_ID} (the business
     // supporter recognition lookup). cancel_url is unchanged (a cancel is not a thank-you).
-    ...(body.redBag === true
+    ...(body.ballBags !== undefined
+      ? ballBagsReturnUrls()
+      : body.redBag === true
       ? redBagReturnUrls(embeddedRequested(body))
       : body.ball === true
       ? ballGiftReturnUrls(body)
@@ -500,7 +542,11 @@ export function buildSessionParams(
       price_data: {
         currency: "gbp",
         unit_amount: body.amount as number,
-        ...(donationProduct
+        // Red bags at the Ball: named for the bags, so Stripe's page reads as what the guest chose.
+        // One line for the total (priceBallBags set the amount), rather than a quantity of bags.
+        ...(body.ballBags !== undefined
+          ? { product_data: { name: BALL_BAGS_LINE_NAME } }
+          : donationProduct
           ? { product: donationProduct }
           : { product_data: { name: "Donation to NBCC" } }),
       },
@@ -568,6 +614,17 @@ function ballGiftReturnUrls(
   return embeddedRequested(body)
     ? { ui_mode: "embedded_page", return_url: thanks }
     : { success_url: thanks, cancel_url: `${config.PORTAL_BASE_URL.replace(/\/+$/, "")}${BALL_DONATE_PATH}` };
+}
+
+/**
+ * Red bags at the Ball: always Stripe's own page (priceBallBags never lets our page be asked for).
+ * The thank you is /bag/thank-you with Stripe's {CHECKOUT_SESSION_ID} template (Stripe fills it in,
+ * so the braces must NOT be encoded); Back from Stripe's page returns to /bag. Worked out HERE, from
+ * the site's own address, never taken from the browser.
+ */
+function ballBagsReturnUrls(): Pick<StripeNS.Checkout.SessionCreateParams, "success_url" | "cancel_url"> {
+  const site = config.PORTAL_BASE_URL.replace(/\/+$/, "");
+  return { success_url: `${site}${BALL_BAGS_THANKS_PATH}?session_id={CHECKOUT_SESSION_ID}`, cancel_url: `${site}${BALL_BAGS_PATH}` };
 }
 
 /**

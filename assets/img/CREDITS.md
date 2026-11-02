@@ -12,6 +12,13 @@ file, the slot uses a clearly-labelled placeholder.
 |---|---|---|
 | `nbcc-logo.png` | NBCC brand logo | NBCC owns; in use across the site |
 | `nbcc-logo-full.svg` | NBCC brand logo: `nbcc-logo-white.svg` with its letters in the logo's maroon and its white outline removed, checked against the master | NBCC owns; the big logo at the top of the home page |
+| `nbcc-logo-192.webp` | NBCC brand logo: `nbcc-logo-full.svg` baked small (192 high) with sharp, for the red bags at the Ball page (/bag), which loads on a hotel's mobile signal | NBCC owns |
+
+## Illustrations
+
+| File | Source | Consent |
+|---|---|---|
+| `ball-bag-hero.webp` | Drawn for NBCC (2 November 2026): a red gift bag with a gold bow, presents peeking out and a "Packed with love" tag, in Fill a Red Bag's style; authored as SVG and baked to WebP. The bag on /bag, its row and its thank you | NBCC owns; no people shown |
 
 ## Team headshots (REQ-016 / REQ-034)
 

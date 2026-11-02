@@ -26,15 +26,36 @@ describe("Admin > Donations and the Festive Ball", () => {
   });
 
   it("goes back to page one when it changes, as the other filters do", () => {
-    expect(js).toContain('["donationsPaymentFilter", "donationsModeFilter", "donationsRedBagFilter", "donationsBallFilter"]');
+    expect(js).toContain(
+      '["donationsPaymentFilter", "donationsModeFilter", "donationsRedBagFilter", "donationsBallFilter", "donationsBallBagsFilter"]',
+    );
   });
 
-  it("never asks for both at once: ticking one unticks the other", () => {
+  it("never asks for two at once: ticking one unticks the others", () => {
     const start = js.indexOf("function oneSourceFilter(");
     expect(start).toBeGreaterThan(-1);
-    const fn = js.slice(start, start + 600);
+    const fn = js.slice(start, start + 800);
     expect(fn).toContain("donationsRedBagFilter");
     expect(fn).toContain("donationsBallFilter");
+    expect(fn).toContain("donationsBallBagsFilter");
     expect(fn).toContain(".checked = false");
+  });
+});
+
+// The Ball's table cards (/bag, source ball_bags): their own label, filter and line, never folded
+// into the Festive Ball's.
+describe("Admin > Donations and the Ball's table bags", () => {
+  it("labels a gift from a table card", () => {
+    expect(js).toContain('if (d.source === "ball_bags") gift += \' <span class="admin-pill dn-source-pill">Red bags at the Ball</span>\';');
+  });
+
+  it("has a Red bags at the Ball only filter straight after the Festive Ball one", () => {
+    expect(html).toContain('<input type="checkbox" id="donationsBallBagsFilter"> Red bags at the Ball only');
+    expect(html.indexOf("donationsBallBagsFilter")).toBeGreaterThan(html.indexOf("donationsBallFilter"));
+  });
+
+  it("asks the server for table bag gifts only when it is ticked, and says so when there are none", () => {
+    expect(js).toContain('(ballBags ? "&source=ball_bags" : "")');
+    expect(js).toContain('"No red bag gifts at the Ball yet."');
   });
 });

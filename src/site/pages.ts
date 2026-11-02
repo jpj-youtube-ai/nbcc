@@ -155,6 +155,18 @@ export const PRIVATE_PAGES: PrivatePage[] = [
     note: "Where a donor lands after giving on Fill a Red Bag. Nothing links to it and search engines are told to skip it.",
   },
   {
+    path: "/bag",
+    title: "Red bags at the Festive Ball",
+    reach: "unlisted",
+    note: "Where the QR code on each table card at the Festive Ball goes, to give £50 a red bag. Search engines are told to skip it, and from Monday 9 November 2026 it goes to Fill a Red Bag.",
+  },
+  {
+    path: "/bag/thank-you",
+    title: "Red bags at the Festive Ball: thank you",
+    reach: "link-only",
+    note: "Where a guest lands after giving red bags at the Festive Ball. Nothing links to it and search engines are told to skip it.",
+  },
+  {
     path: "/admin",
     title: "Admin",
     reach: "staff",
@@ -212,6 +224,8 @@ export const RESERVED_PREFIXES: string[] = [
   // (src/routes/red-bag.ts).
   "/fill-a-red-bag",
   "/fill-a-bag",
+  // Red bags at the Festive Ball: the table cards' QR code page and its thank you (src/ball/bags-page.ts).
+  "/bag",
   "/festive-ball",
   "/a-night-to-remember",
   "/set-password",

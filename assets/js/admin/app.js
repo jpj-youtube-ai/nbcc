@@ -1042,6 +1042,8 @@
         if (d.source === "red_bag") gift += ' <span class="admin-pill dn-source-pill">Red Bag</span>';
         // And one from the Festive Ball's own donate page (/ball/donate).
         if (d.source === "ball") gift += ' <span class="admin-pill dn-source-pill">Festive Ball</span>';
+        // And one from the red bag cards on the Ball's tables (/bag): its own label, not the Ball's.
+        if (d.source === "ball_bags") gift += ' <span class="admin-pill dn-source-pill">Red bags at the Ball</span>';
         // TASK-241: one Payment pill combining payment_status + any refund (see helpers.paymentLabel).
         var pay = H.paymentLabel(d);
         return (
@@ -1276,15 +1278,19 @@
     // Fill a Red Bag only: the server narrows the list (it pages it), together with the two above.
     var redBagFilter = el("donationsRedBagFilter");
     var redBag = !!(redBagFilter && redBagFilter.checked);
-    // Festive Ball only, the same way. The two never go together (oneSourceFilter).
+    // Festive Ball only, the same way. The sources never go together (oneSourceFilter).
     var ballFilter = el("donationsBallFilter");
     var ball = !redBag && !!(ballFilter && ballFilter.checked);
+    // Red bags at the Ball only (the table cards), the same again.
+    var ballBagsFilter = el("donationsBallBagsFilter");
+    var ballBags = !redBag && !ball && !!(ballBagsFilter && ballBagsFilter.checked);
     authFetch(
       "/api/admin/donations?limit=25&offset=" + donationsOffset +
         (pay ? "&paymentStatus=" + encodeURIComponent(pay) : "") +
         (mode ? "&mode=" + encodeURIComponent(mode) : "") +
         (redBag ? "&source=red_bag" : "") +
-        (ball ? "&source=ball" : ""),
+        (ball ? "&source=ball" : "") +
+        (ballBags ? "&source=ball_bags" : ""),
     )
       .then(okJson)
       .then(function (d) {
@@ -1294,7 +1300,9 @@
             ? pay || mode ? "No Fill a Red Bag gifts match these filters." : "No Fill a Red Bag gifts yet."
             : ball
               ? pay || mode ? "No Festive Ball gifts match these filters." : "No Festive Ball gifts yet."
-              : "",
+              : ballBags
+                ? pay || mode ? "No red bag gifts at the Ball match these filters." : "No red bag gifts at the Ball yet."
+                : "",
         });
         var total = d.total || 0;
         el("donationsPager").hidden = total <= 25;
@@ -1346,21 +1354,24 @@
   }
   // Both filters behave the same way: change it, go back to page one. Staying on page 4 of a
   // different list shows you an empty table and looks like the filter found nothing.
-  // A gift has one source, so "Fill a Red Bag only" and "Festive Ball only" never go together:
-  // ticking one unticks the other.
+  // A gift has one source, so "Fill a Red Bag only", "Festive Ball only" and "Red bags at the Ball
+  // only" never go together: ticking one unticks the others.
   function oneSourceFilter(id) {
-    var other = el(id === "donationsRedBagFilter" ? "donationsBallFilter" : "donationsRedBagFilter");
     var self = el(id);
-    if (self && other && self.checked) other.checked = false;
+    if (!self || !self.checked) return;
+    ["donationsRedBagFilter", "donationsBallFilter", "donationsBallBagsFilter"].forEach(function (otherId) {
+      var other = el(otherId);
+      if (otherId !== id && other) other.checked = false;
+    });
   }
-  ["donationsRedBagFilter", "donationsBallFilter"].forEach(function (id) {
+  ["donationsRedBagFilter", "donationsBallFilter", "donationsBallBagsFilter"].forEach(function (id) {
     var control = el(id);
     if (control)
       control.addEventListener("change", function () {
         oneSourceFilter(id);
       });
   });
-  ["donationsPaymentFilter", "donationsModeFilter", "donationsRedBagFilter", "donationsBallFilter"].forEach(function (id) {
+  ["donationsPaymentFilter", "donationsModeFilter", "donationsRedBagFilter", "donationsBallFilter", "donationsBallBagsFilter"].forEach(function (id) {
     var control = el(id);
     if (control)
       control.addEventListener("change", function () {

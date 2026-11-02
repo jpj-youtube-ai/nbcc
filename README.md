@@ -7241,8 +7241,32 @@ Design: `docs/superpowers/specs/2026-11-02-ball-table-bags-design.md`. This part
 - **Unchanged.** A donate page gift, a Ball donate page gift and a Fill a Red Bag gift make
   exactly the session they made before: `test/unit/ball-bags-leaves-others.test.ts` pins them,
   field for field, from snapshots taken before the marker existed.
-- **Tests.** `test/unit/ball-bags-checkout.test.ts`, `test/unit/donation-source.test.ts`, and
-  `features/ball-bags.feature`.
+- **The page, `/bag`.** Drawn whole by `renderBallBagsPage()` (`src/ball/bags-page.ts`), served by
+  `src/routes/ball.ts` with `Cache-Control: public, max-age=0`. Public: NOT behind the Ball's launch
+  gate (a guest at a table never sees a password). noindex; in `PRIVATE_PAGES`, and `/bag` is in
+  `RESERVED_PREFIXES`. Open while `ballBagsOpen(now)`: the UK date is on or before Sunday 8 November
+  2026; after that `/bag` and `/bag/thank-you` both 302 to `/fill`. Two screens: the welcome (the
+  tied red bag drops in with its £50 tag, snow and stars drift, what is in a bag, "Fill a bag"),
+  then how many (plus and minus, 1 to 20, a row of bags that grows with a pop, ten drawn then "+N",
+  the total, first name, surname and email, optional Gift Aid with the Ball donate page's
+  declaration and address fields, "Give £150"). The script (`assets/js/ball-bags.js`) posts only
+  `ballBags`, never an amount, and goes to the `url` the checkout returns; a refusal or an outage
+  shows a plain message beside the button (`is-error`) and keeps everything typed.
+- **The thank you, `/bag/thank-you`.** `private, no-store`. Reads the bag count from the Stripe
+  session (`bagsFromSession`: the `ballBags` metadata, else `amount_total` / 5000); with no session
+  id, an id not shaped like one, or Stripe out of reach, it is a plain thank you, never an error. The
+  bags tie their bows one after another under a fall of stars; "Fill another" goes back to `/bag`.
+  The script takes `session_id` out of the address bar.
+- **Light on a hotel's signal.** No site header, menu, `styles.css` or `main.js`: its own
+  stylesheet (`assets/css/ball-bags.css`, with the site's colour tokens and only Playfair Display
+  and Poppins) and script, plus the visit counter. The tied bag (Fill a Red Bag's `tiedBag`) and
+  the seeded snow and stars are drawn by the server, so Fill a Red Bag's shared scripts are not
+  loaded. The gift tag's hand is the phone's own, not Caveat (a 75KB download). Every animation
+  is transform and opacity only and stops under `prefers-reduced-motion`.
+- **Tests.** `test/unit/ball-bags-checkout.test.ts`, `test/unit/donation-source.test.ts`,
+  `test/unit/ball-bags-page.test.ts`, `test/unit/ball-bags-script.test.ts` (jsdom),
+  `test/unit/ball-bags-routes.test.ts`, and `features/ball-bags.feature` (the page scenarios are
+  tagged `@while-bags-open` and skip themselves after 8 November 2026).
 
 ## Nothing in the admin scrolls sideways (TASK-442)
 

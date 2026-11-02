@@ -59,3 +59,21 @@ Feature: Red bags at the Festive Ball, the checkout
       { "mode": "once", "plan": null, "giftAid": false, "email": "donor@example.com" }
       """
     Then the response status should be 400
+
+  # The page a table card's QR code opens, and the thank you Stripe brings a guest back to. Both are
+  # open until the end of Sunday 8 November 2026 in the UK, then forward to /fill.
+  @while-bags-open
+  Scenario: the red bags page is open to anyone, with the Ball's gate shut, and kept from search engines
+    Given the ball gate is closed
+    When I request "/bag"
+    Then the ball page status should be 200
+    And the ball page should contain "Thank you for being here tonight"
+    And the ball page should contain "<meta name=\"robots\" content=\"noindex\" />"
+    And the ball page should contain "id=\"bbForm\""
+
+  @while-bags-open
+  Scenario: the red bags thank you is a plain thank you when the payment cannot be read
+    When I request "/bag/thank-you?session_id=cs_test_invented"
+    Then the ball page status should be 200
+    And the ball page should contain "Enjoy the rest of your night."
+    And the ball page should contain "<meta name=\"robots\" content=\"noindex\" />"

@@ -1,0 +1,352 @@
+/* =================================================================
+   Red bags at the Festive Ball: /bag and /bag/thank-you
+   (src/ball/bags-page.ts draws both; assets/js/ball-bags.js runs them).
+
+   The page each table card's QR code opens, on a phone, at night, in
+   a ballroom, often on a hotel's mobile signal. So it is its own
+   small stylesheet: it does not load the site's styles.css, and
+   carries only the tokens it needs, with the site's own values, and
+   only the site's two text fonts (Playfair Display and Poppins).
+
+   The look is Fill a Red Bag's: its tied red bag (the rbw classes,
+   as in red-bag-thanks.css), the gold bow and "Packed with love"
+   tag, its paper snow and gold stars. The top of the page is the
+   Ball's night (deep maroon, so the screen is not a glare across a
+   dim table); the words sit on the site's cream.
+
+   Motion: transform and opacity only. The bag drops in and settles,
+   the £50 tag swings on, snow drifts behind; each bag added pops into
+   the row; on the thank you the bags tie their bows one after
+   another under a fall of stars. None of it plays for someone who
+   asked for less motion, and nothing waits for it.
+   ================================================================= */
+
+@font-face{font-family:"Playfair Display";font-style:normal;font-weight:400 800;font-display:swap;src:url(/assets/fonts/playfair-var.woff2) format("woff2")}
+@font-face{font-family:"Poppins";font-style:normal;font-weight:400;font-display:swap;src:url(/assets/fonts/poppins-400.woff2) format("woff2")}
+
+:root{
+  /* the site's own colours (assets/css/styles.css) */
+  --crimson:#C02238;
+  --maroon:#800000;
+  --maroon-deep:#5E0000;
+  --cream:#F8F5EE;
+  --card:#FFFDFA;
+  --tint:#F3EEE3;
+  --line:#E9DFD2;
+  --tan:#D29C8A;
+  --tan-soft:#F3E4DD;
+  --slate:#333333;
+  --slate-soft:#6F6A66;
+  --white:#FFFFFF;
+  --gold-ink:#B8862B;
+  --gold-soft:#E9C46A;
+  --holly:#1A531A;
+  --night-glow:rgba(184,134,43,.22);
+  --shadow:0 18px 40px -22px rgba(94,0,0,.55);
+  --shadow-sm:0 2px 10px rgba(128,0,0,.08);
+
+  --serif:"Playfair Display",Georgia,"Times New Roman",serif;
+  --sans:"Poppins",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  /* the gift tag's hand: the phone's own (Fill a Red Bag's Caveat is a 75KB download, too much on a
+     hotel's signal for two words on a tag) */
+  --hand:"Bradley Hand","Noteworthy","Segoe Print","Chalkboard SE","Ink Free",cursive;
+
+  --ease-out:cubic-bezier(.22,1,.36,1);
+  --ease-soft:cubic-bezier(.25,1,.5,1);
+  --radius:18px;
+  --gutter:16px;
+}
+
+*,*::before,*::after{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%;text-size-adjust:100%}
+body{
+  margin:0;min-height:100vh;min-height:100svh;
+  font-family:var(--sans);font-size:16px;line-height:1.55;color:var(--slate);
+  background:var(--maroon-deep);
+  overflow-x:hidden;
+}
+[hidden]{display:none !important}
+a{color:var(--maroon)}
+a:focus-visible,button:focus-visible,input:focus-visible{outline:3px solid var(--gold-ink);outline-offset:3px}
+.bb-title:focus{outline:none}
+.bb-title:focus-visible{outline:3px solid var(--gold-ink);outline-offset:4px;border-radius:6px}
+.bb-shapes{position:absolute;width:0;height:0;overflow:hidden}
+
+/* ---- the frame: the Ball's night above, the cream sheet below ---- */
+.bb-main{position:relative;z-index:1;width:100%;max-width:520px;margin:0 auto;padding:0 var(--gutter)}
+.bb-screen{display:flex;flex-direction:column;min-height:calc(100svh - 120px)}
+.bb-stage{
+  position:relative;padding:28px 0 8px;text-align:center;color:var(--cream);
+}
+.bb-stage::before{
+  /* a warm glow behind the bag, like a lamp on the table */
+  content:"";position:absolute;left:50%;top:40px;width:300px;height:300px;margin-left:-150px;border-radius:50%;
+  background:radial-gradient(closest-side,var(--night-glow),transparent);pointer-events:none;z-index:-1;
+}
+.bb-stage--slim{padding:22px 0 18px}
+.bb-stage--slim::before{display:none}
+/* Playfair's figures are old style by default ("£5o"): prices and counts use lining figures */
+.bb-price,.bb-count,.bb-tally__total,.bb-title{font-variant-numeric:lining-nums tabular-nums}
+.bb-eyebrow{
+  margin:0;font-size:12px;letter-spacing:.18em;text-transform:uppercase;color:var(--gold-soft);
+}
+.bb-sheet{
+  position:relative;margin:0 calc(var(--gutter) * -1);padding:28px 24px 32px;flex:1;
+  background:var(--cream);border-radius:28px 28px 0 0;
+  box-shadow:0 -12px 40px -24px rgba(0,0,0,.5);
+}
+.bb-title{
+  margin:0 0 12px;font-family:var(--serif);font-weight:700;color:var(--maroon);
+  font-size:clamp(28px,8vw,36px);line-height:1.12;letter-spacing:-.01em;text-wrap:balance;
+}
+.bb-lede{margin:0 0 18px;font-size:17px;line-height:1.6;color:var(--slate)}
+.bb-note{margin:12px 0 0;font-size:13px;color:var(--slate-soft);text-align:center}
+.bb-help{margin:4px 0 12px;font-size:13px;color:var(--slate-soft)}
+
+/* ---- the welcome's bag, with its £50 tag ---- */
+.bb-hero{position:relative;width:200px;height:218px;margin:14px auto 0}
+.bb-hero__bag{position:relative;z-index:1;width:200px;height:auto;filter:drop-shadow(0 14px 18px rgba(0,0,0,.3))}
+.bb-hero__shadow{
+  position:absolute;left:30px;right:30px;bottom:2px;height:14px;border-radius:50%;
+  background:radial-gradient(closest-side,rgba(0,0,0,.45),transparent);
+}
+.bb-price{
+  position:absolute;z-index:2;right:-18px;top:62px;width:72px;height:72px;border-radius:50%;
+  display:grid;place-items:center;
+  background:var(--gold-ink);color:var(--white);
+  box-shadow:0 0 0 3px var(--maroon-deep),0 0 0 5px var(--gold-soft),0 10px 18px -8px rgba(0,0,0,.6);
+  font-family:var(--serif);font-weight:800;font-size:24px;letter-spacing:-.01em;
+  transform:rotate(8deg);transform-origin:50% -20px;
+}
+
+/* ---- the bag drawing: Fill a Red Bag's rbw colours (red-bag-thanks.css) ---- */
+.rbw{display:block;fill:none;stroke:var(--maroon);stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round;pointer-events:none;overflow:visible}
+.rbw-paper{fill:var(--crimson)}
+.rbw-gusset{fill:var(--maroon);stroke:none;opacity:.16}
+.rbw-fold{fill:var(--maroon);stroke:none;opacity:.12}
+.rbw-crease{stroke-width:1;opacity:.4}
+.rbw-cord{stroke:var(--crimson);stroke-width:3.4}
+.rbw-cord--back{stroke:var(--maroon);opacity:.5}
+.rbw-tissue{fill:var(--cream);stroke:var(--tan);stroke-width:1.2}
+.rbw-eyelet{fill:var(--maroon);stroke:none}
+.rbw-ribbon{fill:var(--gold-ink);stroke:color-mix(in srgb,var(--gold-ink) 60%,var(--maroon));stroke-width:1.1}
+.rbw-knot{fill:color-mix(in srgb,var(--gold-ink) 80%,var(--white));stroke:color-mix(in srgb,var(--gold-ink) 60%,var(--maroon));stroke-width:1.1}
+.rbw-tag{transform-origin:60px 20px;transform:rotate(4deg)}
+.rbw-string{stroke:color-mix(in srgb,var(--gold-ink) 60%,var(--maroon));stroke-width:1.1}
+.rbw-card{fill:var(--card);stroke:var(--tan);stroke-width:1.3}
+.rbw-hole{fill:var(--tint);stroke:var(--tan);stroke-width:1.1}
+.rbw-words{font-family:var(--hand);font-size:15px;font-weight:700;fill:var(--maroon);stroke:none;text-anchor:middle}
+.rbw-bow{transform-box:fill-box;transform-origin:50% 60%}
+
+/* ---- what is in a bag ---- */
+.bb-inside{
+  list-style:none;margin:0 0 24px;padding:0;
+  display:grid;grid-template-columns:1fr 1fr;gap:8px;
+}
+.bb-inside li{
+  position:relative;padding:10px 12px 10px 34px;border-radius:12px;
+  background:var(--card);border:1px solid var(--line);
+  font-size:14px;line-height:1.35;color:var(--slate);
+}
+.bb-inside li::before{
+  /* a small gold star, drawn in CSS */
+  content:"";position:absolute;left:12px;top:50%;width:13px;height:13px;margin-top:-7px;background:var(--gold-ink);
+  clip-path:polygon(50% 0,61% 35%,98% 35%,68% 57%,79% 91%,50% 70%,21% 91%,32% 57%,2% 35%,39% 35%);
+}
+
+/* ---- buttons ---- */
+.bb-btn{
+  display:flex;align-items:center;justify-content:center;width:100%;min-height:56px;padding:14px 24px;
+  border:0;border-radius:999px;cursor:pointer;
+  background:var(--crimson);color:var(--white);
+  font-family:var(--sans);font-size:18px;font-weight:600;letter-spacing:.01em;
+  box-shadow:0 10px 22px -12px var(--crimson),inset 0 -2px 0 rgba(0,0,0,.14);
+  transition:transform .14s var(--ease-out),background-color .2s ease,box-shadow .2s ease;
+  -webkit-tap-highlight-color:transparent;
+}
+.bb-btn:hover{background:var(--maroon)}
+.bb-btn:active{transform:scale(.97)}
+.bb-btn:disabled{cursor:progress;opacity:.82}
+.bb-btn.is-busy{animation:bb-breathe 1.2s ease-in-out infinite}
+.bb-back{
+  display:inline-flex;align-items:center;min-height:44px;margin:-10px 0 4px -8px;padding:0 10px;
+  border:0;border-radius:999px;background:none;color:var(--maroon);cursor:pointer;
+  font-family:var(--sans);font-size:15px;
+}
+.bb-back::before{content:"";width:8px;height:8px;margin-right:8px;border-left:2px solid currentColor;border-bottom:2px solid currentColor;transform:rotate(45deg)}
+
+/* ---- how many: plus and minus round a big number ---- */
+.bb-counter{display:flex;align-items:center;justify-content:center;gap:22px;margin:8px 0 6px}
+.bb-step{
+  display:grid;place-items:center;width:48px;height:48px;flex:none;border-radius:50%;cursor:pointer;
+  border:2px solid var(--maroon);background:var(--card);color:var(--maroon);
+  transition:transform .14s var(--ease-out),background-color .2s ease,color .2s ease;
+  -webkit-tap-highlight-color:transparent;
+}
+.bb-step svg{fill:none;stroke:currentColor;stroke-width:2.6;stroke-linecap:round}
+.bb-step:hover{background:var(--maroon);color:var(--cream)}
+.bb-step:active{transform:scale(.9)}
+.bb-step[aria-disabled="true"]{opacity:.38;cursor:default}
+.bb-step[aria-disabled="true"]:hover{background:var(--card);color:var(--maroon)}
+.bb-step.is-stuck{animation:bb-stuck .3s var(--ease-out)}
+.bb-count{
+  min-width:2.2ch;text-align:center;font-family:var(--serif);font-weight:800;line-height:1;
+  font-size:64px;color:var(--maroon);
+}
+.bb-count.is-bumped{animation:bb-bump .26s var(--ease-out)}
+
+/* the row of bags: wraps, never scrolls */
+.bb-row{
+  display:flex;flex-wrap:wrap;justify-content:center;align-items:flex-end;gap:4px 2px;
+  min-height:52px;margin:10px auto 4px;max-width:340px;
+}
+.bb-bag{display:block;width:44px;flex:none}
+.bb-bag .rbw{width:100%;height:auto}
+.bb-bag.is-new{animation:bb-pop .42s var(--ease-out) both}
+.bb-row__more{
+  align-self:center;margin-left:6px;padding:4px 10px;border-radius:999px;
+  background:var(--maroon);color:var(--cream);font-weight:600;font-size:15px;
+}
+.bb-row__more.is-bumped{animation:bb-bump .26s var(--ease-out)}
+
+.bb-tally{text-align:center;margin:4px 0 22px}
+.bb-tally__words{margin:0;font-size:16px;color:var(--slate)}
+.bb-tally__total{margin:0;font-family:var(--serif);font-weight:700;font-size:26px;color:var(--crimson)}
+
+/* ---- the form ---- */
+.bb-form{margin:0}
+.bb-group{margin:0 0 16px;padding:0;border:0;min-width:0}
+.bb-group legend{padding:0;margin:0 0 8px;font-weight:600;color:var(--maroon)}
+.bb-names{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.bb-field{margin:0 0 10px;min-width:0}
+.bb-field label{display:block;margin:0 0 4px;font-size:14px;color:var(--slate)}
+.bb-field input{
+  display:block;width:100%;min-height:48px;padding:10px 14px;
+  font:inherit;font-size:16px;color:var(--slate);
+  background:var(--white);border:1.5px solid var(--tan);border-radius:12px;
+  transition:border-color .2s ease,box-shadow .2s ease;
+}
+.bb-field input:focus{border-color:var(--maroon);box-shadow:0 0 0 3px color-mix(in srgb,var(--gold-ink) 30%,transparent);outline:none}
+.bb-field input[aria-invalid="true"]{border-color:var(--crimson);background:var(--tan-soft)}
+.bb-field__error{margin:4px 0 0;font-size:13px;color:var(--crimson);font-weight:600}
+
+.bb-giftaid{
+  display:flex;gap:12px;align-items:flex-start;margin:4px 0 14px;padding:14px;
+  background:var(--card);border:1.5px solid var(--line);border-radius:14px;
+  transition:border-color .2s ease,background-color .2s ease;
+}
+.bb-giftaid:has(.bb-giftaid__box:checked){border-color:var(--gold-ink);background:color-mix(in srgb,var(--gold-ink) 8%,var(--card))}
+.bb-giftaid__box,.bb-check input{flex:none;width:24px;height:24px;margin:0;accent-color:var(--maroon);cursor:pointer}
+.bb-giftaid__label{cursor:pointer;font-size:15px;color:var(--slate)}
+.bb-giftaid__label strong{display:block;color:var(--maroon);margin-bottom:4px}
+.bb-giftaid__statement{display:block;font-size:12.5px;line-height:1.5;color:var(--slate-soft)}
+.bb-declaration.is-entering{animation:bb-enter .3s var(--ease-out) both}
+.bb-check{display:flex;gap:10px;align-items:center;min-height:44px;font-size:14px;cursor:pointer}
+
+.bb-give{margin-top:8px}
+.bb-status{margin:10px 0 0;padding:10px 14px;border-radius:12px;font-size:15px;text-align:center}
+.bb-status.is-error{background:var(--tan-soft);color:var(--maroon);border:1.5px solid var(--crimson);font-weight:600}
+.bb-status.is-entering{animation:bb-enter .26s var(--ease-out) both}
+
+/* ---- the thank you ---- */
+/* the bags are the centrepiece: they fill the night band, and the words sit below at their own height */
+.bb-stage--thanks{flex:1;display:flex;flex-direction:column;justify-content:center;padding:32px 0 36px}
+.bb-thanks .bb-sheet{flex:none}
+.bb-stage--thanks .bb-row{max-width:340px;margin-top:22px;gap:12px 8px}
+.bb-stage--thanks .bb-bag{width:72px;animation:bb-rise .5s var(--ease-out) both;animation-delay:calc(var(--i) * 140ms + 200ms)}
+.bb-stage--thanks .rbw-bow{animation:bb-tie .5s var(--ease-out) both;animation-delay:calc(var(--i) * 140ms + 560ms)}
+.bb-stage--thanks .bb-row--many .bb-bag{width:54px}
+.bb-stage--thanks .bb-row__more{background:var(--gold-ink);color:var(--white);animation:bb-rise .5s var(--ease-out) both;animation-delay:1.6s}
+.bb-thanks .bb-sheet{text-align:center}
+.bb-thanks .bb-title{animation:bb-enter .6s var(--ease-out) both;animation-delay:.3s}
+.bb-thanks .bb-lede{animation:bb-enter .6s var(--ease-out) both;animation-delay:.45s}
+.bb-again{margin:20px 0 0}
+.bb-again a{display:inline-flex;align-items:center;min-height:44px;padding:0 12px;color:var(--maroon);font-weight:600}
+
+/* ---- the footer ---- */
+.bb-foot{
+  position:relative;z-index:1;padding:20px var(--gutter) 28px;text-align:center;
+  background:var(--cream);color:var(--slate-soft);font-size:12px;line-height:1.5;
+  border-top:1px solid var(--line);
+}
+.bb-foot p{margin:0 auto 4px;max-width:440px}
+.bb-foot a{color:var(--maroon)}
+
+/* ---- the snow and stars: behind everything, takes no tap ---- */
+.bb-snow{position:fixed;inset:0;z-index:0;overflow:hidden;pointer-events:none;contain:strict}
+.bb-flake{
+  position:absolute;top:-40px;left:var(--x);width:var(--w);height:var(--w);margin-left:calc(var(--w) / -2);
+  will-change:transform;
+}
+.bb-flake svg{display:block;width:100%;height:100%}
+.bb-flake--snow svg{fill:var(--cream);opacity:.75}
+.bb-flake--star svg{fill:var(--gold-ink)}
+.bb-snow--drift .bb-flake{animation:bb-drift var(--t) linear var(--d) infinite}
+.bb-snow--burst .bb-flake{opacity:0;animation:bb-fall var(--t) cubic-bezier(.3,.3,.6,1) var(--d) both}
+.bb-snow--burst{z-index:3}
+
+/* ---- arrivals ---- */
+.bb-welcome .bb-hero__bag{animation:bb-drop .9s var(--ease-out) .1s both}
+.bb-welcome .bb-hero__shadow{animation:bb-shadow .9s var(--ease-out) .1s both}
+.bb-welcome .bb-price{animation:bb-swing .7s var(--ease-out) .8s both}
+.bb-welcome .bb-sheet > *{animation:bb-enter .5s var(--ease-out) both}
+.bb-welcome .bb-sheet > :nth-child(1){animation-delay:.35s}
+.bb-welcome .bb-sheet > :nth-child(2){animation-delay:.45s}
+.bb-welcome .bb-sheet > :nth-child(3){animation-delay:.55s}
+.bb-welcome .bb-sheet > :nth-child(n+4){animation-delay:.65s}
+.bb-screen.is-entering .bb-sheet{animation:bb-enter .36s var(--ease-out) both}
+.bb-screen.is-entering .bb-sheet > *{animation:none}
+
+/* the bag falls in, lands with a little squash, hops once and settles */
+@keyframes bb-drop{
+  0%{opacity:0;transform:translateY(-120px) rotate(-4deg)}
+  50%{opacity:1;transform:translateY(0) scale(1.04,.95) rotate(0)}
+  68%{transform:translateY(-12px) scale(.99,1.02)}
+  84%{transform:translateY(0) scale(1.01,.99)}
+  100%{opacity:1;transform:none}
+}
+@keyframes bb-shadow{0%{opacity:0;transform:scale(.4)}50%{opacity:1;transform:scale(1.06)}68%{transform:scale(.9)}100%{opacity:1;transform:none}}
+@keyframes bb-swing{
+  0%{opacity:0;transform:rotate(-38deg) scale(.6)}
+  60%{opacity:1;transform:rotate(14deg) scale(1.04)}
+  80%{transform:rotate(4deg)}
+  100%{opacity:1;transform:rotate(8deg)}
+}
+@keyframes bb-enter{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}
+@keyframes bb-rise{from{opacity:0;transform:translateY(18px) scale(.9)}to{opacity:1;transform:none}}
+@keyframes bb-pop{0%{opacity:0;transform:translateY(10px) scale(.3)}60%{opacity:1;transform:translateY(-3px) scale(1.1)}100%{opacity:1;transform:none}}
+@keyframes bb-bump{0%{transform:none}40%{transform:scale(1.14)}100%{transform:none}}
+@keyframes bb-stuck{0%,100%{transform:none}30%{transform:translateX(-4px)}65%{transform:translateX(3px)}}
+@keyframes bb-tie{0%{opacity:0;transform:scale(.2) rotate(-35deg)}60%{opacity:1;transform:scale(1.2) rotate(8deg)}100%{opacity:1;transform:none}}
+@keyframes bb-breathe{0%,100%{opacity:1}50%{opacity:.78}}
+@keyframes bb-drift{
+  0%{transform:translate3d(0,0,0) rotate(0deg)}
+  100%{transform:translate3d(var(--s),calc(100vh + 80px),0) rotate(var(--r))}
+}
+@keyframes bb-fall{
+  0%{opacity:0;transform:translate3d(0,0,0) rotate(0deg)}
+  8%{opacity:1}
+  80%{opacity:1}
+  100%{opacity:0;transform:translate3d(var(--s),calc(100vh + 60px),0) rotate(var(--r))}
+}
+
+/* ---- a wider screen: the same column, a touch more room ---- */
+@media (min-width:600px){
+  .bb-main{padding-top:24px}
+  .bb-sheet{margin:0;border-radius:28px;padding:32px 36px 36px}
+  .bb-screen{min-height:0}
+  .bb-foot{background:transparent;color:var(--tan-soft);border:0}
+  .bb-foot a{color:var(--gold-soft)}
+}
+/* a very narrow phone: one column of names, two of what is in a bag still fit */
+@media (max-width:359px){
+  .bb-names{grid-template-columns:1fr;gap:0}
+  .bb-sheet{padding:24px 18px 28px}
+  .bb-counter{gap:14px}
+}
+
+/* ---- less motion: everything is shown at rest at once, and the snow stays away ---- */
+@media (prefers-reduced-motion:reduce){
+  .bb-snow{display:none}
+  *,*::before,*::after{animation:none !important;transition:none !important}
+}

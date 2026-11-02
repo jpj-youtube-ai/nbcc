@@ -10,6 +10,9 @@
 // On the thank you it takes the payment's id out of the address bar and lands the focus on the
 // heading. The celebration there is the stylesheet's alone.
 //
+// The one bit of motion made here: "Fill a bag" throws a short burst of gold sparkles
+// (sparkleBurst), which takes itself away and which nothing waits for.
+//
 // Every move is the stylesheet's (assets/css/ball-bags.css), with transform and opacity only, and
 // none of it plays for someone who asked for less motion. Nothing here waits for an animation.
 //
@@ -65,6 +68,36 @@
     el.classList.remove(cls);
     void el.offsetWidth;
     el.classList.add(cls);
+  }
+
+  // A short burst of gold sparkles from the middle of `from`, over the page. For the eye only: it
+  // takes no tap, is hidden from screen readers, waits for nothing and takes itself away. None for
+  // someone who asked for less motion.
+  var BURST_PIECES = 12;
+  var BURST_MS = 900;
+  function sparkleBurst(doc, win, from) {
+    if (lessMotion(win) || !doc.body || !from) return null;
+    var box = from.getBoundingClientRect ? from.getBoundingClientRect() : { left: 0, top: 0, width: 0, height: 0 };
+    var burst = doc.createElement("div");
+    burst.className = "bb-burst";
+    burst.setAttribute("aria-hidden", "true");
+    burst.style.setProperty("--bx", Math.round(box.left + box.width / 2) + "px");
+    burst.style.setProperty("--by", Math.round(box.top + box.height / 2) + "px");
+    for (var i = 0; i < BURST_PIECES; i += 1) {
+      var piece = doc.createElement("span");
+      // Round the circle, every other one a little further and a little later.
+      piece.style.setProperty("--a", Math.round((360 / BURST_PIECES) * i) + "deg");
+      piece.style.setProperty("--far", (i % 2 ? 78 : 56) + "px");
+      piece.style.setProperty("--d", (i % 2 ? 60 : 0) + "ms");
+      burst.appendChild(piece);
+    }
+    doc.body.appendChild(burst);
+    if (typeof win.setTimeout === "function") {
+      win.setTimeout(function () {
+        if (burst.parentNode) burst.parentNode.removeChild(burst);
+      }, BURST_MS);
+    }
+    return burst;
   }
 
   // --- the thank you ----------------------------------------------------------------------
@@ -138,6 +171,7 @@
     var start = doc.getElementById("bbStart");
     if (start) {
       start.addEventListener("click", function () {
+        sparkleBurst(doc, win, start);
         // A step in the phone's history, so its Back button returns to the welcome, not away.
         if (win.history && typeof win.history.pushState === "function") {
           try {

@@ -1,4 +1,6 @@
 import { describe, it, expect } from "vitest";
+import { existsSync, readFileSync, statSync } from "node:fs";
+import { resolve } from "node:path";
 import { ballBagsOpen, bagsFromSession, renderBallBagsPage, renderBallBagsThanks } from "../../src/ball/bags-page";
 import { SINGLE_DONATION_WORDING } from "../../src/declarations/wording";
 import { ALL_PAGES, PRIVATE_PAGES, RESERVED_PREFIXES, aliasFromProblem } from "../../src/site/pages";
@@ -8,6 +10,7 @@ import { ALL_PAGES, PRIVATE_PAGES, RESERVED_PREFIXES, aliasFromProblem } from ".
 // are NBCC's own (Jaimie, 2 November 2026: "stick with our usual wording"), so they are held here
 // word for word. Every name here is invented.
 
+const ROOT = resolve(__dirname, "../..");
 const page = renderBallBagsPage();
 // An en or em dash, by code point so this file carries neither.
 const DASHES = new RegExp(`[${String.fromCharCode(0x2013, 0x2014)}]`);
@@ -46,7 +49,7 @@ describe("the page, /bag", () => {
 
   it("welcomes the guest in NBCC's own words", () => {
     const text = words(page);
-    expect(text).toContain("NBCC Festive Ball");
+    expect(text).toContain("Festive Ball");
     expect(text).toContain("Thank you for being here tonight");
     expect(text).toContain(
       "£50 fills a full red bag for children, young people and vulnerable adults across South West Scotland who would otherwise wake up on Christmas morning with nothing to open.",
@@ -57,17 +60,33 @@ describe("the page, /bag", () => {
     expect(page).toMatch(/<button[^>]*id="bbStart"[^>]*>Fill a bag<\/button>/);
   });
 
-  it("draws the tied red bag with its gift tag and the round £50 tag", () => {
-    expect(page).toContain('viewBox="0 0 120 132"');
-    expect(page).toContain("rbw-bow");
-    expect(page).toContain(">Packed</tspan>");
-    expect(page).toContain(">with love</tspan>");
-    expect(page).toContain('class="bb-price"');
+  it("wears NBCC's red logo on the cream page, with the Ball under it", () => {
+    expect(page).toContain('<img class="bb-logo" src="/assets/img/nbcc-logo-192.webp" width="66" height="64" alt="NBCC, Night Before Christmas Campaign"');
+    expect(page).toContain('<p class="bb-eyebrow">Festive Ball</p>');
+    expect(page).toContain('<meta name="theme-color" content="#F8F5EE" />');
+    expect(existsSync(resolve(ROOT, "assets/img/nbcc-logo-192.webp"))).toBe(true);
   });
 
-  it("fits the tag's two words to the tag, whatever handwriting font the phone has", () => {
-    expect(page).toContain('<tspan x="60" y="73" textLength="50" lengthAdjust="spacingAndGlyphs">Packed</tspan>');
-    expect(page).toContain('<tspan x="60" y="88" textLength="50" lengthAdjust="spacingAndGlyphs">with love</tspan>');
+  it("shows the bag as one picture, sized in the page, with words for anyone who cannot see it, and the round £50", () => {
+    expect(page).toContain(
+      '<img class="bb-hero__bag" src="/assets/img/ball-bag-hero.webp" width="280" height="308" alt="A red gift bag full of presents, tied with a gold bow and a gift tag that says Packed with love"',
+    );
+    expect(page).toContain('class="bb-price"');
+    // The gift tag's words are in the picture, so the phone needs no handwriting font.
+    expect(page).not.toContain("<tspan");
+    expect(readFileSync(resolve(ROOT, "assets/css/ball-bags.css"), "utf8")).not.toMatch(/caveat/i);
+  });
+
+  it("keeps the picture small enough for a hotel's signal", () => {
+    expect(statSync(resolve(ROOT, "assets/img/ball-bag-hero.webp")).size).toBeLessThan(60 * 1024);
+    expect(statSync(resolve(ROOT, "assets/img/nbcc-logo-192.webp")).size).toBeLessThan(15 * 1024);
+  });
+
+  it("shows each thing in a bag with Fill a Red Bag's own drawing, in a soft coloured circle", () => {
+    const items = page.match(/<ul class="bb-inside">[\s\S]*?<\/ul>/)?.[0] ?? "";
+    expect((items.match(/<svg class="rb-art bb-art"/g) ?? []).length).toBe(4);
+    for (const tone of ["tan", "holly", "gold", "crimson"]) expect(items, tone).toContain(`bb-tone--${tone}`);
+    expect(items).not.toContain("rb-flake");
   });
 
   it("points plus and minus at the announced tally, never at the hidden big number", () => {
@@ -155,6 +174,14 @@ describe("the thank you, /bag/thank-you", () => {
     expect(count(renderBallBagsThanks(14))).toBe(10);
     expect(words(renderBallBagsThanks(14))).toContain("+4");
     expect(count(renderBallBagsThanks(0))).toBe(1);
+  });
+
+  it("draws each bag as a small copy of the bag's picture, for the eye only, under NBCC's logo, with stars and hearts falling", () => {
+    const html = renderBallBagsThanks(3);
+    expect((html.match(/<span class="bb-bag" style="--i:\d"><img src="\/assets\/img\/ball-bag-hero\.webp" width="48" height="53" alt=""/g) ?? []).length).toBe(3);
+    expect(html).toContain('class="bb-logo"');
+    expect(html).toContain("bb-flake--heart");
+    expect(html).toContain("bb-flake--star");
   });
 
   it("is not for search engines, and has no dashes", () => {

@@ -62,6 +62,8 @@ function load(html: string, reduce = true) {
     location: { pathname: "/bag", search: "", hash: "" },
     history: { pushState: vi.fn(), replaceState: vi.fn() },
     innerWidth: 390,
+    // The page's own clock, looked up when called so a test's fake timers take it over.
+    setTimeout: (fn: () => void, ms: number) => setTimeout(fn, ms),
   };
   api = initBallBags(document, win, { assign });
 }
@@ -69,6 +71,29 @@ function load(html: string, reduce = true) {
 beforeEach(() => load(renderBallBagsPage()));
 
 describe("the welcome", () => {
+  it("throws a short burst of gold sparkles from Fill a bag, which takes itself away, and moves on at once", () => {
+    vi.useFakeTimers();
+    try {
+      load(renderBallBagsPage(), false);
+      click("bbStart");
+      const burst = document.querySelector(".bb-burst");
+      expect(burst).not.toBeNull();
+      expect(burst?.getAttribute("aria-hidden")).toBe("true");
+      expect(burst?.querySelectorAll("span").length).toBe(12);
+      // Nothing waits for it: the next screen is already there.
+      expect($("#bbHowMany").hidden).toBe(false);
+      vi.advanceTimersByTime(1000);
+      expect(document.querySelector(".bb-burst")).toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("throws no sparkles for someone who asked for less motion", () => {
+    click("bbStart");
+    expect(document.querySelector(".bb-burst")).toBeNull();
+  });
+
   it("shows the welcome first and moves to how many on Fill a bag, with the focus there", () => {
     expect($("#bbWelcome").hidden).toBe(false);
     expect($("#bbHowMany").hidden).toBe(true);
@@ -121,6 +146,17 @@ describe("how many bags", () => {
     expect(text("bbGive")).toBe("Give £1,000");
     click("bbLess");
     expect(api?.count()).toBe(19);
+  });
+
+  it("adds each new bag as a small copy of the bag's picture, popping in with a sparkle when motion is welcome", () => {
+    load(renderBallBagsPage(), false);
+    click("bbStart");
+    click("bbMore");
+    const bags = document.querySelectorAll("#bbRow .bb-bag");
+    expect(bags.length).toBe(2);
+    expect(bags[1].querySelector("img")?.getAttribute("src")).toBe("/assets/img/ball-bag-hero.webp");
+    expect(bags[1].querySelector("img")?.getAttribute("alt")).toBe("");
+    expect(bags[1].classList.contains("is-new")).toBe(true);
   });
 
   it("draws a bag for each, ten at most, then says how many more", () => {

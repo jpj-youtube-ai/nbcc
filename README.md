@@ -7245,8 +7245,10 @@ Design: `docs/superpowers/specs/2026-11-02-ball-table-bags-design.md`. This part
   `src/routes/ball.ts` with `Cache-Control: public, max-age=0`. Public: NOT behind the Ball's launch
   gate (a guest at a table never sees a password). noindex; in `PRIVATE_PAGES`, and `/bag` is in
   `RESERVED_PREFIXES`. Open while `ballBagsOpen(now)`: the UK date is on or before Sunday 8 November
-  2026; after that `/bag` and `/bag/thank-you` both 302 to `/fill`. Two screens: the welcome (the
-  tied red bag drops in with its £50 tag, snow and stars drift, what is in a bag, "Fill a bag"),
+  2026; after that `/bag` and `/bag/thank-you` both 302 to `/fill`. Two screens under NBCC's logo
+  on cream: the welcome (the bag drops in with a springy bounce and its £50, gold sparkles
+  twinkle, what is in a bag with Fill a Red Bag's item drawings, "Fill a bag" throws a burst of
+  sparkles),
   then how many (plus and minus, 1 to 20, a row of bags that grows with a pop, ten drawn then "+N",
   the total, first name, surname and email, optional Gift Aid with the Ball donate page's
   declaration and address fields, "Give £150"). The script (`assets/js/ball-bags.js`) posts only
@@ -7258,14 +7260,19 @@ Design: `docs/superpowers/specs/2026-11-02-ball-table-bags-design.md`. This part
   session (`bagsFromSession`: only a `payment_status` "paid" session counts; then the `ballBags`
   metadata, else `amount_total` / 5000); with no session id, an id not shaped like one, an unpaid
   session, or Stripe out of reach, it is a plain thank you, never an error. The
-  bags tie their bows one after another under a fall of stars; "Fill another" goes back to `/bag`.
+  bags pop in one after another under a fall of gold stars and hearts; "Fill another" goes back to `/bag`.
   The script takes `session_id` out of the address bar.
 - **Light on a hotel's signal.** No site header, menu, `styles.css` or `main.js`: its own
   stylesheet (`assets/css/ball-bags.css`, with the site's colour tokens and only Playfair Display
-  and Poppins) and script, plus the visit counter. The tied bag (Fill a Red Bag's `tiedBag`) and
-  the seeded snow and stars are drawn by the server, so Fill a Red Bag's shared scripts are not
-  loaded. The gift tag's hand is the phone's own, not Caveat (a 75KB download). Every animation
-  is transform and opacity only and stops under `prefers-reduced-motion`.
+  and Poppins) and script, plus the visit counter. The bag is ONE baked picture,
+  `assets/img/ball-bag-hero.webp` (28KB; the bag, the gold bow, presents peeking out and the
+  "Packed with love" tag, drawn as SVG with Caveat and baked to WebP, so the phone needs no
+  handwriting font); the same picture, small, is each bag in the row and on the thank you. The
+  logo is `assets/img/nbcc-logo-192.webp` (9KB, baked from `nbcc-logo-full.svg`). The four item
+  drawings are Fill a Red Bag's own, read on the server from `assets/js/red-bag-catalogue.js`
+  (`redBag().art`), so that script is not loaded. The first visit is about 87KB (53KB gzipped
+  where it applies) plus the site's two fonts. Every animation is transform and opacity only and
+  stops under `prefers-reduced-motion` (the sparkles stay, still).
 - **Tests.** `test/unit/ball-bags-checkout.test.ts`, `test/unit/donation-source.test.ts`,
   `test/unit/ball-bags-page.test.ts`, `test/unit/ball-bags-script.test.ts` (jsdom),
   `test/unit/ball-bags-routes.test.ts`, and `features/ball-bags.feature` (the page scenarios are

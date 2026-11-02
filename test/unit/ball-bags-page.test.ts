@@ -91,6 +91,25 @@ describe("the page, /bag", () => {
     expect(items).not.toContain("rb-flake");
   });
 
+  it("welcomes on the new site's quilted band, with the four things in a bag as gift tags on the gold ribbon", () => {
+    const welcome = page.match(/<section class="bb-screen bb-welcome"[\s\S]*?<\/section>/)?.[0] ?? "";
+    const band = welcome.match(/<div class="bb-band bb-band--welcome">[\s\S]*<svg class="bb-wave"/)?.[0] ?? "";
+    expect(band).toContain('id="bbWelcomeTitle"');
+    expect(band).toContain('<p class="bb-eyebrow">Festive Ball</p>');
+    expect(band).toContain('<div class="bb-ribbon" aria-hidden="true"><svg class="bb-bow"');
+    const tags = band.match(/<li class="bb-gift bb-gift--(card|crimson|holly|tan)"/g) ?? [];
+    expect(tags.length).toBe(4);
+    for (const tag of ["card", "crimson", "holly", "tan"]) expect(band, tag).toContain(`bb-gift--${tag}`);
+    // The logo stays on cream, above the band, never on it.
+    expect(band).not.toContain("bb-logo");
+    // "Fill a bag" is below the band, on cream.
+    expect(welcome.indexOf('id="bbStart"')).toBeGreaterThan(welcome.indexOf('class="bb-wave"'));
+  });
+
+  it("hangs the tally on a gift tag from the ribbon on How many bags", () => {
+    expect(page).toMatch(/<div class="bb-ribbon"[^>]*>[\s\S]*?<\/div><div class="bb-wrap"><div class="bb-tag"><div class="bb-card bb-card--count">/);
+  });
+
   it("points plus and minus at the announced tally, never at the hidden big number", () => {
     expect(page).toMatch(/<button[^>]*id="bbLess"[^>]*aria-controls="bbTally"/);
     expect(page).toMatch(/<button[^>]*id="bbMore"[^>]*aria-controls="bbTally"/);

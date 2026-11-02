@@ -9,6 +9,9 @@ import type { Server } from "node:http";
 // The thank you reads the bag count from the Stripe session; when it cannot, it is a plain thank
 // you, never an error. Every id here is invented.
 
+/** A page's words as a guest reads them: tags out, spaces folded. */
+const words = (html: string) => html.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ");
+
 const state = vi.hoisted(() => ({
   retrieve: vi.fn(),
   gateOpen: false,
@@ -77,7 +80,8 @@ describe("GET /bag", () => {
     expect(res.headers.get("cache-control")).toBe("public, max-age=0");
     const html = await res.text();
     expect(html).toContain('<meta name="robots" content="noindex" />');
-    expect(html).toContain("Thank you for being here tonight");
+    // The words as a guest reads them: the heading's last word is in italic (<em>).
+    expect(words(html)).toContain("Thank you for being here tonight");
   });
 
   it("is still there in the last second of Sunday 8 November", async () => {
@@ -101,7 +105,7 @@ describe("GET /bag/thank-you", () => {
     expect(res.headers.get("cache-control")).toBe("private, no-store");
     expect(state.retrieve).toHaveBeenCalledWith("cs_test_invented123");
     const html = await res.text();
-    expect(html).toContain("Your £150 could fill 3 red bags");
+    expect(words(html)).toContain("Your £150 could fill 3 red bags");
     expect(html).toContain('<meta name="robots" content="noindex" />');
   });
 

@@ -39,7 +39,7 @@ It carries noindex: it is for people at the tables, not for Google.
 
 1. **Welcome.** The red bag drops in with a little bounce and a "£50" tag, snow drifts, in the look of
    Fill a Red Bag (reuse its bag drawing, ribbon, "Packed with love" tag, snow and stars, colours and
-   fonts). Words: thank you for being here tonight; £50 fills one red bag for a child this Christmas;
+   fonts). Words, in NBCC's own wording (Jaimie: "stick with our usual wording"; "children, young people and vulnerable adults across South West Scotland", never "a child" alone): thank you for being here tonight; £50 fills a full red bag for those who would otherwise wake up on Christmas morning with nothing to open;
    what is in a bag (from the Fill a Red Bag list: blanket, pyjamas, hat and gloves, socks, a toy, a
    book and a few treats; Claude's wording, Jaimie may change it); a big "Fill a bag" button.
 2. **How many bags.** Plus and minus, 1 to 20 bags (Claude's call: 20 is £1,000). Each extra bag
@@ -69,7 +69,7 @@ can carry a line per source, it says how many red bags; otherwise unchanged.
 account; the page needs no code for them. Check the account before Saturday.
 
 **The table card** (Claude's call on the format): an A6 portrait card with the QR code for
-https://nbcc.scot/bag, a red bag drawing, "Fill a red bag for a child tonight", "£50 a bag",
+https://nbcc.scot/bag, a red bag drawing, "Fill a red bag this Christmas", "£50 a bag",
 "Scan with your phone camera", and NBCC's name and charity number. Delivered as a print-ready PDF,
 one card per page plus four to an A4 sheet, ready before the page itself so printing can start.
 

@@ -1,0 +1,62 @@
+{
+  "skins": {
+    "s1": "very light peach",
+    "s2": "light warm beige",
+    "s3": "warm golden tan",
+    "s4": "medium brown",
+    "s5": "deep brown"
+  },
+  "deeper": ["s4", "s5"],
+  "hairColours": {
+    "dark": "dark brown",
+    "brown": "mid brown",
+    "ginger": "bright ginger orange",
+    "blonde": "golden blonde",
+    "black": "black"
+  },
+  "hairStyles": {
+    "short": "short and tousled, ending above the ears, with a soft fringe",
+    "bunches": "in two short bunches, one each side, tied with small red bobbles",
+    "curly": "short, full and curly, a soft round cloud of curls"
+  },
+  "styles": {
+    "elf": "a tall floppy elf hat that flops over to one side, with a thick fluffy cream fur brim and a fluffy cream bobble on its tip",
+    "deer": "a classic detective's deerstalker hat in soft checked wool, with a peak at the front and the back and its ear flaps tied up on top with a little bow",
+    "bobble": "a chunky knitted bobble hat with a turned up cream ribbed brim and a big fluffy cream bobble",
+    "santa": "a soft velvet Santa hat with a fluffy cream fur brim, its tip curling down to one side with a cream pom pom",
+    "tammy": "a Scottish tam o' shanter: a flat round tartan bonnet, a dark band round its brim and a pom pom on top",
+    "crown": "a paper Christmas cracker crown with zigzag points, a little crumpled, sitting on top of the head",
+    "specs": "round wire framed spectacles, like a wise old detective's",
+    "stars": "fun star shaped party glasses with lightly tinted lenses",
+    "stripe": "a long cosy knitted scarf with cream stripes, wrapped once round the neck, one fringed end hanging down the front",
+    "tartan": "a soft woollen tartan scarf wrapped round the neck, its fringed ends hanging down the front",
+    "tinsel": "a fluffy, sparkly strand of Christmas tinsel draped round the neck",
+    "bow": "a smart little bow tie at the collar",
+    "tunic": "a classic elf tunic with a pointed zigzag collar and a pointed zigzag hem, a dark brown belt with a gold buckle, and long sleeves down to the mittens",
+    "jumper": "a cosy chunky Christmas jumper with a cream knitted pattern of snowflakes and little trees across the chest, and ribbed cuffs and hem",
+    "puffer": "a puffy quilted winter jacket with a zip down the front and a snug high collar",
+    "coat": "a detective's belted trench coat with a wide collar, two rows of buttons and a tied belt, reaching the knees",
+    "curly": "classic elf shoes with long pointed toes that curl up into a loop, each with a little gold bell on the tip",
+    "boots": "chunky snow boots with fluffy cream fur cuffs and thick grippy soles",
+    "wellies": "shiny wellington boots up to the knees",
+    "mag": "a detective's magnifying glass with a metal rim and handle, its glass shining",
+    "torch": "a chunky torch, switched on, with a soft beam of warm light",
+    "notebook": "a small detective's notebook with a pencil tucked into its spiral",
+    "lantern": "an old fashioned lantern with a warm glowing candle inside, held by its handle",
+    "satchel": "a little leather clue satchel worn across the body on a strap, the bag at the hip with a buckled flap",
+    "badge": "a shiny star shaped detective's badge pinned on the chest"
+  },
+  "outfits": {
+    "workshop": "a toymaker elf's work outfit: a green elf tunic with a big tan canvas tool apron over it and a pencil in the apron pocket, a red elf hat with a golden jingle bell on its tip, maroon curly toed elf shoes, and a little wooden toy mallet in the right mitten",
+    "present": "a costume that makes the elf a wrapped Christmas present: a red box round the body with a gold ribbon, and a big gold bow on the head; the arms, legs and face poke out",
+    "tree": "a Christmas tree costume: a layered green fir tree all in one suit dotted with tiny baubles and a garland of little gold lights, with a gold star on top of the head; the face peeks out of the front",
+    "pudding": "a round Christmas pudding costume: a big round dark brown fruity pudding body with white icing dripping over the top, and a sprig of holly with red berries on the head",
+    "snowman": "a snowman costume: a round white fluffy snowball body with coal black buttons, a red knitted scarf, a little black top hat, and a carrot nose on a headband",
+    "ginger": "a gingerbread costume: a gingerbread biscuit suit with white icing squiggles at the wrists and ankles and three sweet buttons down the front, and a gingerbread hood with icing trim round the face",
+    "reindeer": "a cosy reindeer onesie: soft brown fleece all in one suit with a pale cream tummy patch, a hood with soft felt antlers and floppy reindeer ears, the elf's own pointed ears poking out, brown hoof slippers, and a shiny red pom pom on the hood like a reindeer's red nose",
+    "piper": "a Highland piper's outfit: a red tartan kilt with a white sporran, a black jacket with silver buttons, white kilt socks, black shoes, a black glengarry bonnet with ribbons, and a set of bagpipes held under the arm",
+    "grad": "graduation robes: a long black gown with gold trim, a black mortar board cap with a gold tassel, and a rolled certificate tied with a red ribbon in the right mitten",
+    "golden": "a golden detective outfit: a shining gold trench coat, a gold checked deerstalker hat, golden boots, a gold star badge, and a gold magnifying glass in the right mitten",
+    "nessie": "a friendly Loch Ness monster costume: a green onesie with a long neck hood topped with friendly eyes, little spikes down the back, a pale green tummy, a tail, and a blue tartan scarf"
+  }
+}

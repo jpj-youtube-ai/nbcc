@@ -172,6 +172,86 @@ export function isolate(alone, worn, master, opts = {}) {
   return { layer, cover: hidden ? { data: cover, width: master.width, height: master.height } : null };
 }
 
+/**
+ * The picture with stray marks taken away: any painted patch that touches nothing else and is
+ * smaller than `share` of the biggest patch. OpenAI sometimes leaves a faint stroke beside the hair
+ * (found on 3 November 2026); a pair of shoes, being two patches of the same size, both stay.
+ */
+export function keepMainParts(img, share = 0.15) {
+  const { width, height } = img;
+  const label = new Int32Array(width * height).fill(-1);
+  const sizes = [];
+  const queue = new Int32Array(width * height);
+  for (let start = 0; start < width * height; start++) {
+    if (label[start] !== -1 || img.data[start * 4 + 3] === 0) continue;
+    const id = sizes.length;
+    let head = 0;
+    let tail = 0;
+    queue[tail++] = start;
+    label[start] = id;
+    while (head < tail) {
+      const p = queue[head++];
+      const x = p % width;
+      const y = (p - x) / width;
+      for (let dy = -1; dy <= 1; dy++)
+        for (let dx = -1; dx <= 1; dx++) {
+          const nx = x + dx;
+          const ny = y + dy;
+          if (nx < 0 || ny < 0 || nx >= width || ny >= height) continue;
+          const q = ny * width + nx;
+          if (label[q] === -1 && img.data[q * 4 + 3] > 0) {
+            label[q] = id;
+            queue[tail++] = q;
+          }
+        }
+    }
+    sizes.push(tail);
+  }
+  const biggest = Math.max(0, ...sizes);
+  const out = new Uint8ClampedArray(img.data);
+  for (let p = 0; p < width * height; p++) if (label[p] !== -1 && sizes[label[p]] < biggest * share) out[p * 4 + 3] = 0;
+  return { data: out, width, height };
+}
+
+/**
+ * The picture with loose faint paint taken away: a half see through pixel more than `reach` pixels
+ * from any solid one. A true soft edge always lies against the solid paint it softens; OpenAI
+ * sometimes leaves a faint purple stroke a few pixels off the hair instead (found 3 November 2026).
+ */
+export function dropLooseEdges(img, reach = 3, solid = 153) {
+  const { width, height } = img;
+  const near = new Uint8Array(width * height);
+  // Every pixel within `reach` of a solid one, row by row, then column by column.
+  const across = new Uint8Array(width * height);
+  for (let y = 0; y < height; y++) {
+    let last = -Infinity;
+    for (let x = 0; x < width; x++) {
+      if (img.data[(y * width + x) * 4 + 3] >= solid) last = x;
+      if (x - last <= reach) across[y * width + x] = 1;
+    }
+    last = Infinity;
+    for (let x = width - 1; x >= 0; x--) {
+      if (img.data[(y * width + x) * 4 + 3] >= solid) last = x;
+      if (last - x <= reach) across[y * width + x] = 1;
+    }
+  }
+  for (let x = 0; x < width; x++) {
+    let last = -Infinity;
+    for (let y = 0; y < height; y++) {
+      if (across[y * width + x]) last = y;
+      if (y - last <= reach) near[y * width + x] = 1;
+    }
+    last = Infinity;
+    for (let y = height - 1; y >= 0; y--) {
+      if (across[y * width + x]) last = y;
+      if (last - y <= reach) near[y * width + x] = 1;
+    }
+  }
+  const out = new Uint8ClampedArray(img.data);
+  for (let p = 0; p < width * height; p++) if (out[p * 4 + 3] > 0 && out[p * 4 + 3] < solid && !near[p]) out[p * 4 + 3] = 0;
+  return { data: out, width, height };
+}
+
 /** The picture cut down to what is painted, and where that was. */
 export function cropToContent(img) {
   let x0 = img.width;

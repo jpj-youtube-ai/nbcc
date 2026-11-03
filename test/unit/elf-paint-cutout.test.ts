@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import sharp from "sharp";
 // @ts-expect-error a plain JavaScript tool, with no type declarations
-import { backgroundOf, bestShift, cropToContent, isolate, keyOut, writeSizes } from "../../scripts/elf-paint/cutout.mjs";
+import { backgroundOf, bestShift, cropToContent, dropLooseEdges, isolate, keepMainParts, keyOut, writeSizes } from "../../scripts/elf-paint/cutout.mjs";
 
 // NBCC Elf Detective School: the painted dress-up elf (plan Task 2). Turning a painting on flat
 // magenta into a layer that lines up with every other: the background cut out with soft edges, the
@@ -117,6 +117,38 @@ describe("lifting a piece off", () => {
     const worn = rect(elf(), 40, 10, 80, 40, [30, 90, 160]);
     const alone = rect(blank(), 40, 10, 80, 40, [30, 90, 160]);
     expect(isolate(alone, worn, master, { still: [40, 100, 80, 150] }).cover).toBeNull();
+  });
+});
+
+describe("dropping stray marks", () => {
+  it("drops a thin stray line that does not touch the elf, and keeps both shoes of a pair", () => {
+    const img = keyOut(blank());
+    const paint = (x0: number, y0: number, x1: number, y1: number) => {
+      for (let y = y0; y < y1; y++) for (let x = x0; x < x1; x++) img.data.set([200, 40, 40, 255], (y * W + x) * 4);
+    };
+    paint(20, 100, 50, 130); // a shoe
+    paint(70, 100, 100, 130); // the other shoe
+    paint(10, 10, 12, 60); // a stray line, two pixels wide
+    const kept = keepMainParts(img);
+    expect(alphaAt(kept, 30, 110)).toBe(255);
+    expect(alphaAt(kept, 80, 110)).toBe(255);
+    expect(alphaAt(kept, 11, 30)).toBe(0);
+  });
+});
+
+describe("dropping loose edges", () => {
+  it("drops a faint line standing apart from the elf, and keeps the soft edge of an outline", () => {
+    // A half see through purple stroke OpenAI left beside a brother's hair, 3 November 2026: the
+    // colour of a soft edge, but with no solid paint beside it.
+    const img = keyOut(blank());
+    const put = (x: number, y: number, a: number) => img.data.set([107, 25, 26, a], (y * W + x) * 4);
+    for (let y = 40; y < 80; y++) for (let x = 40; x < 60; x++) put(x, y, 255); // an outline, solid
+    for (let y = 40; y < 80; y++) put(60, y, 120); // its soft edge
+    for (let y = 40; y < 80; y++) put(66, y, 120); // a faint line six pixels away
+    const kept = dropLooseEdges(img);
+    expect(alphaAt(kept, 50, 50)).toBe(255);
+    expect(alphaAt(kept, 60, 50)).toBe(120);
+    expect(alphaAt(kept, 66, 50)).toBe(0);
   });
 });
 

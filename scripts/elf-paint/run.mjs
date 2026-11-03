@@ -16,7 +16,7 @@ import { fileURLToPath } from "node:url";
 import sharp from "sharp";
 import { BATCHES, allJobs } from "./jobs.mjs";
 import { paint, spent } from "./openai.mjs";
-import { bestShift, isolate, keyOut, moveBy, writeSizes } from "./cutout.mjs";
+import { bestShift, dropLooseEdges, isolate, keepMainParts, keyOut, moveBy, writeSizes } from "./cutout.mjs";
 import { LAYER_DIR, buildManifest } from "./manifest.mjs";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
@@ -62,11 +62,11 @@ async function cut(jobs) {
       const elf = await load(raw(j.id));
       const { dx, dy } = bestShift(master, elf, LEGS);
       const back = moveBy(elf, -dx, -dy);
-      await writeSizes(LAYER_DIR, j.layer, keyOut(back));
+      await writeSizes(LAYER_DIR, j.layer, keepMainParts(dropLooseEdges(keyOut(back))));
     } else if (j.kind === "alone") {
       const base = await load(raw(j.base));
       const { layer, cover } = isolate(await load(raw(j.id)), await load(raw(j.from)), base, { still: j.still });
-      await writeSizes(LAYER_DIR, j.layer, layer, cover);
+      await writeSizes(LAYER_DIR, j.layer, keepMainParts(dropLooseEdges(layer)), cover && keepMainParts(cover));
     } else continue;
     console.log(`cut ${j.layer}`);
   }

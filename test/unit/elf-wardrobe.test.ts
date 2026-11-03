@@ -502,8 +502,8 @@ describe("drawing from the painted layers", () => {
 });
 
 describe("the painted layers on the site", () => {
-  // Switched on at the end of the painting (plan Task 8), when every elf, piece and outfit is painted.
-  it.skip("has a picture for every sibling, skin, hairstyle, hair colour, style colour and outfit", () => {
+  // Every elf, piece and outfit is painted (Jaimie approved the last batch on 3 November 2026).
+  it("has a picture for every sibling, skin, hairstyle, hair colour, style colour and outfit", () => {
     const missing = Object.keys(PAINT_FIXTURE.layers).filter((name) => !(name in PAINT.layers));
     expect(missing).toEqual([]);
   });

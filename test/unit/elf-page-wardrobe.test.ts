@@ -12,6 +12,7 @@ import { wardrobeView } from "./elf-fixtures";
 // elf-fixtures.ts). The page is one form of choices, so it works with no script: the script only
 // shows the elf changing as things are tried on.
 
+const ROOT = resolve(__dirname, "../..");
 const page = (v: WardrobeView = wardrobeView()) => new DOMParser().parseFromString(renderWardrobePage(v), "text/html");
 const words = (el: Element | null) => (el?.textContent ?? "").replace(/\s+/g, " ").trim();
 const radios = (doc: Document, name: string) => [...doc.querySelectorAll<HTMLInputElement>(`input[type="radio"][name="${name}"]`)];

@@ -213,7 +213,12 @@ describe("GET /q/c<id>: a scan", () => {
     expect((await scan("12-a4")).next).toHaveBeenCalled();
     m.qrCodeTarget.mockResolvedValueOnce(null);
     expect((await scan("c404")).next).toHaveBeenCalled();
+  });
+
+  it("sends a scan to the home page when the code cannot be looked up just then", async () => {
     m.qrCodeTarget.mockRejectedValueOnce(new Error("down"));
-    expect((await scan("c12")).next).toHaveBeenCalled();
+    const { res, next } = await scan("c12");
+    expect(next).not.toHaveBeenCalled();
+    expect(res.redirectedTo).toBe("https://nbcc.scot/?utm_medium=qr&utm_campaign=c12");
   });
 });

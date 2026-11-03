@@ -28,7 +28,8 @@ import { ukDay } from "../analytics/visitor";
 //
 // The target is only ever a value from the Goes to list (isDestination), so a typed address can never
 // break a printed code. A scan is answered first and counted after, so a slow or failed count never
-// holds anyone up; bots and link previews are not counted.
+// holds anyone up; bots and link previews are not counted. A code that cannot be looked up just
+// then (the database is down) sends its scanner to the home page rather than a 404.
 
 const BAD_NAME = `Give the code a name, up to ${NAME_MAX} letters, so you know which one it is.`;
 const BAD_TARGET = "Choose where the code goes from the list.";
@@ -146,8 +147,11 @@ export async function getNamedScan(req: Request, res: Response, next: NextFuncti
   try {
     target = await qrCodeTarget(id);
   } catch (err) {
+    // A printed code must still take its scanner somewhere: the home page, tagged as this code.
     console.error("named qr code: lookup failed:", err instanceof Error ? err.message : err);
-    return next();
+    res.setHeader("Cache-Control", "no-store");
+    res.setHeader("X-Robots-Tag", "noindex, nofollow");
+    return res.redirect(302, namedTarget("/", id));
   }
   if (target === null) return next();
   // Never kept by a browser or a proxy, so a change of where it goes is followed at once.

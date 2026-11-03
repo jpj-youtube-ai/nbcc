@@ -3931,9 +3931,15 @@
       if (!form) return;
       e.preventDefault();
       var status = form.querySelector("[data-qr-edit-status]");
+      var id = Number(form.getAttribute("data-qr-edit-form"));
       var name = form.querySelector("[data-qr-edit-name]").value;
       if (!name.trim()) return qrSay(status, QR_BAD_NAME, true);
-      qrChange(Number(form.getAttribute("data-qr-edit-form")), { name: name, target: form.querySelector("[data-qr-edit-target]").value }, status);
+      // Goes to only when it changed: a code whose page has left the site can still be renamed.
+      var change = { name: name };
+      var target = form.querySelector("[data-qr-edit-target]").value;
+      var code = qrNamedById(id);
+      if (!code || target !== code.target) change.target = target;
+      qrChange(id, change, status);
     });
     el("qrNewForm").addEventListener("submit", function (e) {
       e.preventDefault();

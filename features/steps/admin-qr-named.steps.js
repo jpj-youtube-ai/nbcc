@@ -128,6 +128,13 @@ Then("the new code is listed with {int} scan(s), going to {string}", async funct
     });
     this.qrnBody = await res.json();
   }
+  // The link preview came first, so its count, had it been made, has had longer still to land. Give
+  // anything else in flight a moment, then read once more: the number must be exact, not "at least".
+  await new Promise((r) => setTimeout(r, 400));
+  const again = await fetch(`${BASE_URL}/api/admin/qr-codes/named`, {
+    headers: { Authorization: `Bearer ${this.qrnTokens["ann.qrnamed.admin.bdd@example.com"]}` },
+  });
+  this.qrnBody = await again.json();
   code = (this.qrnBody.codes || []).find((c) => c.id === this.qrnId);
   assert.ok(code, "the new code is listed");
   assert.equal(code.name, this.qrnName);

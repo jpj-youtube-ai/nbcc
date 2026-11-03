@@ -6929,8 +6929,9 @@ billboard or a business card, so staff can see which ones work. The design is in
 - **Routes:** `GET` and `POST /api/admin/qr-codes/named`, `PATCH /api/admin/qr-codes/named/:id`
   (`{ name?, target?, hidden? }`), `GET /api/admin/qr-codes/named/:id/image?format=svg|png`.
 - **Migration** `1791200000305_qr-codes.js` adds `qr_codes` and `qr_code_scans`, additive only. It
-  is numbered below 310, which the open Elf Detective School pull request has taken, so whichever
-  merges first the other still sorts after everything production has run.
+  is numbered below 310, which the open Elf Detective School pull request has taken: right while
+  this merges first. Production refuses a migration that sorts before one it has already run, so
+  if that one lands first, this is renumbered above it before merging.
 
 ## Monthly or one off, on the donations list (TASK-446)
 

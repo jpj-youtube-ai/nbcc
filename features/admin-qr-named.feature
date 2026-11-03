@@ -28,9 +28,9 @@ Feature: Named QR codes, each counting its own scans (TASK-588)
     When "ann.qrnamed.admin.bdd@example.com" makes a named QR code "Billboard" going to "/donate"
     Then the named QR answer is 201
     And the new code's link is its short link
-    When a phone scans the new code
-    Then the scan is forwarded to "https://nbcc.scot/donate" tagged as that code
     When a link preview fetches the new code
+    Then the scan is forwarded to "https://nbcc.scot/donate" tagged as that code
+    When a phone scans the new code
     Then the scan is forwarded to "https://nbcc.scot/donate" tagged as that code
     When "ann.qrnamed.admin.bdd@example.com" lists the named QR codes
     Then the new code is listed with 1 scan, going to "Donate"

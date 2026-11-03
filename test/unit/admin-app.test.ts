@@ -1629,6 +1629,21 @@ describe("admin app integration (jsdom, TASK-118)", () => {
       expect(qrNamedCalls).toEqual([{ url: "/api/admin/qr-codes/named/12", method: "PATCH", body: { name: "Billboard, Main Road", target: "/" } }]);
     });
 
+    // Review of TASK-588: a code whose page has left the site keeps it in the list, and a rename alone
+    // must not send it back, or the server would refuse the rename.
+    it("renames a code without sending Goes to when it did not change, even a page that has gone", async () => {
+      loginToken = tokenFor("admin");
+      qrNamedAnswer = { status: 200, body: { codes: [NAMED({ target: "/old-page", targetTitle: "/old-page" })], destinations: DESTS } };
+      await openQr();
+      (document.querySelector('[data-qr-edit="12"]') as HTMLElement).click();
+      const form = document.querySelector('[data-qr-edit-form="12"]') as HTMLFormElement;
+      expect((form.querySelector("select") as HTMLSelectElement).value).toBe("/old-page");
+      (form.querySelector("input") as HTMLInputElement).value = "Billboard, renamed";
+      form.dispatchEvent(new Event("submit", { cancelable: true, bubbles: true }));
+      await settle();
+      expect(qrNamedCalls).toEqual([{ url: "/api/admin/qr-codes/named/12", method: "PATCH", body: { name: "Billboard, renamed" } }]);
+    });
+
     it("hides a code into Hidden codes, where it can be shown again", async () => {
       loginToken = tokenFor("admin"); // making and changing need Site pages edit, which editors do not have
       qrNamedAnswer = { status: 200, body: { codes: [NAMED(), NAMED({ id: 9, name: "Old leaflet", hidden: true })], destinations: DESTS } };

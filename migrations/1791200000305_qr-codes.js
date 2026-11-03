@@ -9,8 +9,9 @@
 //   - qr_code_scans: one number per code per UK day. Nothing about the person scanning is kept.
 //
 // Numbered 1791200000305: after the Festive Ball chase's 300, the newest production has run, and
-// below 310, which the open Elf Detective School pull request (#711) has taken, so whichever of the
-// two merges first, the other still sorts after everything production has run.
+// below 310, which the open Elf Detective School pull request (#711) has taken. That is right only
+// while this merges first: production refuses a migration that sorts before one it has already run,
+// so if #711 lands first, this must be renumbered above 310 before it merges.
 
 exports.up = (pgm) => {
   pgm.createTable("qr_codes", {

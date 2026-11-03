@@ -14,11 +14,17 @@ import {
   deleteElfSession,
   deleteElfSignInCode,
   findElfSession,
+  familyWithDetectives,
   getElfSettings,
   orderForWelcome,
   saveElfSignInCode,
+  saveLook,
   type ElfSettings,
 } from "../db/elf";
+import { renderHqPage } from "../elf/pages/hq";
+import { renderWardrobePage } from "../elf/pages/wardrobe";
+import { hqViewFor, lookFromForm, wardrobeStateNow, wardrobeViewFor, type FamilyRow } from "../elf/views";
+import { drawElf } from "../elf/wardrobe";
 import { buildElfSignInCodeEmail } from "../elf/emails";
 import { buildElfSessionParams, feeCoverPence, joinBodyFromForm, parseJoin } from "../elf/join";
 import { FESTIVE_SURNAMES } from "../elf/names";
@@ -318,3 +324,72 @@ elfRouter.post("/api/elf/sign-in/request", forms, schoolOn, postSignInRequest);
 elfRouter.post("/api/elf/sign-in", forms, schoolOn, postSignIn);
 elfRouter.post("/api/elf/sign-out", forms, schoolOn, postSignOut);
 elfRouter.get("/elf/welcome", schoolOn, getWelcome);
+
+// --- Detective HQ and the wardrobe ---------------------------------------------------------------------
+//
+//   GET  /elf/hq                       the family's page (signed in; otherwise to the sign in page)
+//   GET  /elf/hq/wardrobe/:detective   dress a detective's elf
+//   GET  /elf/hq/elf/:detective.svg    a detective's elf, as a picture, for their own family only
+//   POST /api/elf/look                 save a look: JSON { detectiveId, look, tried } from the page's
+//                                      script, or the plain form (detective, skin, hair, hairStyle,
+//                                      outfit, piece-<slot>="style:colour")
+
+const detectiveIdOf = (raw: unknown): number | null => {
+  const s = typeof raw === "string" ? raw : typeof raw === "number" ? String(raw) : "";
+  return /^[1-9]\d{0,9}$/.test(s) && Number(s) <= 2147483647 ? Number(s) : null;
+};
+
+async function familyOr(req: Request, res: Response): Promise<FamilyRow | null> {
+  const s = await signedInFamily(req);
+  const family = s ? await familyWithDetectives(s.familyId) : null;
+  if (!family) {
+    res.redirect(303, "/elf/sign-in");
+    return null;
+  }
+  return family;
+}
+
+elfRouter.get("/elf/hq", schoolOn, async (req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+  const family = await familyOr(req, res);
+  if (!family) return;
+  res.type("html").send(renderHqPage(hqViewFor({ family, settings: settingsOf(res), now: new Date() })));
+});
+
+elfRouter.get("/elf/hq/wardrobe/:detective", schoolOn, async (req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+  const family = await familyOr(req, res);
+  if (!family) return;
+  const id = detectiveIdOf(req.params.detective);
+  const detective = family.detectives.find((d) => d.id === id);
+  if (!detective) return res.status(404).type("text/plain").send("Not found");
+  res.type("html").send(renderWardrobePage(wardrobeViewFor({ detective, settings: settingsOf(res) })));
+});
+
+elfRouter.get("/elf/hq/elf/:file", schoolOn, async (req, res) => {
+  res.setHeader("Cache-Control", "private, no-store");
+  const m = /^(\d{1,10})\.svg$/.exec(String(req.params.file));
+  const s = await signedInFamily(req);
+  const family = s ? await familyWithDetectives(s.familyId) : null;
+  const detective = m && family ? family.detectives.find((d) => d.id === Number(m[1])) : undefined;
+  if (!detective) return res.status(404).type("text/plain").send("Not found");
+  res.setHeader("X-Content-Type-Options", "nosniff");
+  res.type("image/svg+xml").send(drawElf(detective.look, wardrobeStateNow(), { size: 240, key: `d${detective.id}`, label: "Elf detective" }));
+});
+
+export async function postLook(req: Request, res: Response): Promise<Response | void> {
+  res.setHeader("Cache-Control", "no-store");
+  const json = wantsJson(req);
+  if (!ourOwnPage(req)) return res.status(403).json({ error: ELF_NOT_OURS });
+  const s = await signedInFamily(req);
+  if (!s) return json ? res.status(401).json({ error: "Please sign in again." }) : res.redirect(303, "/elf/sign-in");
+  const body = (req.body ?? {}) as Record<string, unknown>;
+  const detectiveId = detectiveIdOf(json ? body.detectiveId : body.detective);
+  const look = json ? body.look : lookFromForm(body);
+  const tried = json && Array.isArray(body.tried) ? body.tried.slice(0, 200) : [];
+  const kept = detectiveId === null ? "not-found" : await saveLook({ detectiveId, familyId: s.familyId, look, tried });
+  if (kept === "not-found") return json ? res.status(404).json({ error: "Not found" }) : res.status(404).type("text/plain").send("Not found");
+  return json ? res.status(200).json({ ok: true, look: kept }) : res.redirect(303, `/elf/hq/wardrobe/${detectiveId}`);
+}
+
+elfRouter.post("/api/elf/look", express.urlencoded({ extended: false, limit: "16kb" }), schoolOn, postLook);

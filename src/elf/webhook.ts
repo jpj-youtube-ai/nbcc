@@ -5,9 +5,9 @@ import { sendElfWelcome } from "../clients/email";
 import { SINGLE_DONATION_WORDING } from "../declarations/wording";
 import { expireElfOrder, settleElfOrder } from "../db/elf";
 import { subscribeSelf } from "../newsletter/self-signup";
-import { doorInstant } from "./calendar";
 import { badgeWords, buildElfWelcomeEmail } from "./emails";
 import { familyDetectiveName } from "./names";
+import { firstClueAt } from "./views";
 
 // NBCC Elf Detective School: Stripe's events for the school's payments (wave 1 plan, Task 5).
 // Called first by dispatch in src/db/stripe-webhook.ts, inside its transaction, so an entry is
@@ -25,11 +25,6 @@ export interface ElfWebhookResult {
 type Querier = Pick<PoolClient, "query">;
 
 const isElfSession = (s: { metadata?: Stripe.Metadata | null } | null | undefined): boolean => s?.metadata?.product === "elf_school";
-
-/** When school starts: door 1's first clue, at 5:30pm London time. */
-function firstClueAt(year: number): Date {
-  return doorInstant({ year }, 1, "17:30") ?? new Date(Date.UTC(year, 11, 1, 17, 30));
-}
 
 export async function handleElfEvent(client: Querier, event: Stripe.Event): Promise<ElfWebhookResult | null> {
   if (event.type !== "checkout.session.completed" && event.type !== "checkout.session.expired") return null;

@@ -4,6 +4,8 @@ import { pool } from "./pool";
 import { insertAudit } from "./donations";
 import { ELF_DEFAULTS, type ElfSettings } from "../elf/settings";
 import type { JoinBody } from "../elf/join";
+import { wardrobeStateNow, type FamilyRow } from "../elf/views";
+import { normaliseLook, type ElfLook } from "../elf/wardrobe";
 
 // NBCC Elf Detective School: the data layer (tables in migrations/1791200000310_elf-school.js).
 // Designs: docs/superpowers/specs/2026-10-04-elf-detective-school-design.md and
@@ -325,4 +327,62 @@ export async function orderForWelcome(
   );
   const row = r.rows[0];
   return row ? { familyId: row.family_id, status: row.status, openedFamily: row.opened_family, browserTokenHash: row.browser_token_hash } : null;
+}
+
+// --- Detective HQ and the wardrobe -------------------------------------------------------------------
+
+/** A signed in family and its active detectives, oldest first. */
+export async function familyWithDetectives(familyId: number): Promise<FamilyRow | null> {
+  const f = await pool.query<{ id: number; grown_up_name: string }>("SELECT id, grown_up_name FROM elf_families WHERE id = $1 AND active", [familyId]);
+  if (!f.rows[0]) return null;
+  const d = await pool.query<{ id: number; first_name: string; surname: string; name_approved: boolean; badge_number: number | null; look: unknown; fresh: string[] }>(
+    `SELECT id, first_name, surname, name_approved, badge_number, look, fresh FROM elf_detectives
+      WHERE family_id = $1 AND active ORDER BY id`,
+    [familyId],
+  );
+  return {
+    id: f.rows[0].id,
+    grownUpName: f.rows[0].grown_up_name,
+    detectives: d.rows.map((r) => ({
+      id: r.id,
+      firstName: r.first_name,
+      surname: r.surname,
+      nameApproved: r.name_approved,
+      badgeNumber: r.badge_number,
+      look: r.look,
+      fresh: r.fresh ?? [],
+    })),
+  };
+}
+
+/**
+ * Save a detective's look, for their own family only. What the detective has earned is worked out
+ * here, never taken from the page, and the look is made safe against it (normaliseLook). What was
+ * tried on loses its New tag; a key sent twice, or not a string, does no harm. "not-found" for a
+ * detective that is not this family's.
+ */
+export async function saveLook(o: { detectiveId: number; familyId: number; look: unknown; tried: unknown[] }): Promise<ElfLook | "not-found"> {
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    const r = await client.query<{ id: number; fresh: string[] }>(
+      "SELECT id, fresh FROM elf_detectives WHERE id = $1 AND family_id = $2 AND active FOR UPDATE",
+      [o.detectiveId, o.familyId],
+    );
+    if (!r.rows[0]) {
+      await client.query("ROLLBACK");
+      return "not-found";
+    }
+    const kept = normaliseLook(o.look, wardrobeStateNow());
+    const tried = new Set(o.tried.filter((t): t is string => typeof t === "string"));
+    const fresh = (r.rows[0].fresh ?? []).filter((k) => !tried.has(k));
+    await client.query("UPDATE elf_detectives SET look = $2, fresh = $3 WHERE id = $1", [o.detectiveId, JSON.stringify(kept), fresh]);
+    await client.query("COMMIT");
+    return kept;
+  } catch (err) {
+    await client.query("ROLLBACK");
+    throw err;
+  } finally {
+    client.release();
+  }
 }

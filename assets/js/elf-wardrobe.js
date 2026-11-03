@@ -43,11 +43,12 @@
     { id: "black", name: "Black", hex: "#2B2A33", dark: "#111016" }
   ];
 
-  // A brother or a sister of the school's logo elf (Jaimie, 3 November 2026). Every hairstyle is
+  // A brother or a sister of the school's logo elf, called a boy or a girl on the page (Jaimie,
+  // 3 November 2026; the ids stay sister and brother, as the paintings are named). Every hairstyle is
   // open to both.
   var SIBLINGS = [
-    { id: "sister", name: "Sister" },
-    { id: "brother", name: "Brother" }
+    { id: "sister", name: "Girl" },
+    { id: "brother", name: "Boy" }
   ];
 
   var HAIR_STYLES = [

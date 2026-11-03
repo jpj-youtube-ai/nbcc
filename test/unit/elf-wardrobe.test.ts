@@ -272,10 +272,10 @@ describe("what an elf is wearing, in words", () => {
 });
 
 describe("brother or sister (Jaimie, 3 November 2026)", () => {
-  it("offers a sister and a brother", () => {
+  it("offers a girl and a boy", () => {
     expect(SIBLINGS.map((s) => [s.id, s.name])).toEqual([
-      ["sister", "Sister"],
-      ["brother", "Brother"],
+      ["sister", "Girl"],
+      ["brother", "Boy"],
     ]);
   });
 

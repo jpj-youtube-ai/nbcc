@@ -136,7 +136,7 @@ function lookPanel(look: ElfLook): string {
   const cuts = HAIR_STYLES.map((h) => wordTile("hairStyle", `wd-cut-${h.id}`, h.id, h.name, look.hairStyle === h.id)).join("");
   const siblings = SIBLINGS.map((s) => wordTile("sibling", `wd-sib-${s.id}`, s.id, s.name, look.sibling === s.id)).join("");
   return (
-    `<fieldset class="elf-wd-group"><legend>Brother or sister</legend><div class="elf-wd-row elf-wd-row--words">${siblings}</div></fieldset>` +
+    `<fieldset class="elf-wd-group"><legend>Boy or girl</legend><div class="elf-wd-row elf-wd-row--words">${siblings}</div></fieldset>` +
     `<fieldset class="elf-wd-group"><legend>Skin</legend><div class="elf-wd-row elf-wd-row--swatches">${skins}</div></fieldset>` +
     `<fieldset class="elf-wd-group"><legend>Hair colour</legend><div class="elf-wd-row elf-wd-row--swatches">${hairs}</div></fieldset>` +
     `<fieldset class="elf-wd-group"><legend>Hair style</legend><div class="elf-wd-row elf-wd-row--words">${cuts}</div></fieldset>`

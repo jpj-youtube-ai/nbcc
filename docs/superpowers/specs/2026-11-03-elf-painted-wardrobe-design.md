@@ -46,7 +46,7 @@ the elf and every piece are now **painted by OpenAI** and layered.
    sister (only his face and hair changed; Jaimie chose "Brother B", whose body differs from hers by
    under 1%), so every piece painted on her fits him. That makes **150 elves**: 2 by 5 skin tones by
    3 hairstyles by 5 hair colours. A new detective starts as a sister (my call: she is the master).
-   The words on the page ("Brother or sister", "Sister", "Brother") are drafts for Jaimie's yes.
+   The words on the page are "Boy or girl", "Girl" and "Boy" (Jaimie: "use boy and girl not brother and sister"); the ids stay sister and brother.
 
 The approved base picture is the red haired sister in a cream top, red and cream striped tights and
 cream socks, on flat magenta. It is kept, with the test pictures, in

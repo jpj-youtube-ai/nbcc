@@ -6875,9 +6875,9 @@ slides and social posts. The design is in `docs/superpowers/specs/2026-10-02-adm
   Codes are black on white with the standard margin and error correction M, the most reliable to
   scan in print. They are drawn by the server with the `qrcode` package (`drawQr` in
   `src/site/qr.ts`).
-- **Any other nbcc.scot address** (a spare address from Site pages, say) gets a code from the box
-  under the list. A whole address pasted from the browser is taken too. Only paths on nbcc.scot are
-  allowed (`qrPath`): a code for somebody else's website is refused.
+- **Any other nbcc.scot address:** the box for typing one went in TASK-588 (a typo made a broken
+  printed code); named codes, below, choose where they go from a list instead. The image route
+  still takes any path on nbcc.scot (`qrPath`), and a code for somebody else's website is refused.
 - **Spare and old addresses keep the tags.** A spare address, and an old address in `_redirects`,
   now send the visitor on with the query string they arrived with (`keepQuery`,
   `src/site/redirect.ts`). So a QR code made for /give still counts its scans as QR code, and a
@@ -6896,6 +6896,42 @@ slides and social posts. The design is in `docs/superpowers/specs/2026-10-02-adm
 - **Its styles** (`#view-qr` in `assets/css/admin.css`) were deleted along with Analytics' on
   3 October and put back in TASK-557; `test/unit/admin-screen-styles.test.ts` now guards both. See
   **The styles came back** under Admin > Analytics.
+
+## Named QR codes, each counting its own scans (TASK-588)
+
+Jaimie, 3 November 2026: a code for each place one is printed or shown, such as the Donate
+billboard or a business card, so staff can see which ones work. The design is in
+`docs/superpowers/specs/2026-11-03-named-qr-codes-design.md`.
+
+- **Admin → QR codes, at the top:** "Make a new QR code" takes a **name** (staff only, up to 80
+  letters) and **Goes to**, chosen from a list: every page in `SITE_PAGES`, then our three sign up
+  sites, drop.nbcc.scot, referrals.nbcc.scot and vol.nbcc.scot (`qrDestinations`,
+  `src/site/qr-named.ts`). Nothing is typed, and the server takes only a value from that list
+  (`isDestination`), so a typo can never break a printed code. The page codes stay underneath.
+- **The code holds a short link,** `https://nbcc.scot/q/c12`, the row's id. It is short, so the code
+  is small and easy to scan even on a business card, and it never changes, so staff can **rename a
+  code or change where it goes after it is printed**. `GET /q/c<id>` (`getNamedScan`,
+  `src/routes/qr-codes.ts`) answers a 302, never cached: a page gets
+  `?utm_medium=qr&utm_campaign=c12`, so Admin → Analytics' QR codes list names it too
+  (`labelNamedScans`); a sign up site is sent as it is. Anything else under /q/ falls through to the
+  fundraisers' printed pieces (TASK-512) and then the 404 page.
+- **Scans are counted at the short link:** one number per code per UK day in `qr_code_scans`, and
+  nothing about the person scanning. That is what lets a code for a sign up site count at all.
+  The answer goes first and the count after, so a slow count never holds a scan up; bots and link
+  previews (`isBot`) and HEAD requests are not counted. Each card shows the total, the last 7 days
+  and the last day scanned.
+- **Never deleted:** a printed code must always work. "Hide it" moves a code into Hidden codes,
+  folded, and it still forwards and counts; "Show it again" brings it back.
+- **Who:** anyone who can view Site pages sees and downloads them (SVG and PNG, named after the
+  code: `nbcc-qr-donate-billboard.svg`); making and changing one needs Site pages **edit** (admins,
+  or anyone given it in Manage access; editors have view). Every change is in the audit log
+  (`qr_code.created`, `qr_code.updated`).
+- **Routes:** `GET` and `POST /api/admin/qr-codes/named`, `PATCH /api/admin/qr-codes/named/:id`
+  (`{ name?, target?, hidden? }`), `GET /api/admin/qr-codes/named/:id/image?format=svg|png`.
+- **Migration** `1791200000305_qr-codes.js` adds `qr_codes` and `qr_code_scans`, additive only. It
+  is numbered below 310, which the open Elf Detective School pull request has taken: right while
+  this merges first. Production refuses a migration that sorts before one it has already run, so
+  if that one lands first, this is renumbered above it before merging.
 
 ## Monthly or one off, on the donations list (TASK-446)
 
@@ -12210,7 +12246,7 @@ lives in; the Drive copy is not immutable.
 
 ### There are THREE databases, not one
 
-This is the trap this feature was built around. `DATABASE_URL` holds 88 tables
+This is the trap this feature was built around. `DATABASE_URL` holds 90 tables
 (42 when this was built; the Events page added three in TASK-453, the Festive Ball ticket
 report one in TASK-464, the admin's New pills one, `admin_seen`, in TASK-478, site analytics
 four in TASK-479, the business supporter call log in TASK-491, community fundraising five
@@ -12225,11 +12261,12 @@ for event tickets: the ticket types, each event's limit and sales switch, the or
 lines (with buyers' names, emails and phones), the refunds and the refund requests, two for
 welcome packs: each page's pack and the things ticked in it, one, in TASK-563, for the Fill a
 Red Bag list's versions, and one, in TASK-562, for the addresses staff have removed from the
-Email audit's red band, and one, in TASK-576, for which Festive Ball reminders and chase lists
-have gone, per address and day),
+Email audit's red band, one, in TASK-576, for which Festive Ball reminders and chase lists
+have gone, per address and day, and two, in TASK-588, for the named QR codes and their scans per
+day),
 but `STORIES_DATABASE_URL` and `CONTACT_DATABASE_URL` are separate databases
 (deliberately, so the public story and contact forms can never reach donor
-data). A `pg_dump $DATABASE_URL` captures 88 of **91** tables and silently
+data). A `pg_dump $DATABASE_URL` captures 90 of **93** tables and silently
 drops every My Story submission (and, since TASK-475, the fingerprints in
 `erased_stories` that keep erased stories from coming back) and every contact
 enquiry, while producing a

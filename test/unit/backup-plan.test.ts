@@ -64,9 +64,10 @@ describe("knowing how many tables to expect", () => {
   // page's pack and the things in it that staff have ticked; 89 with the Fill a Red Bag list's
   // versions (the draft and every list published); 90 since TASK-562 added the addresses staff
   // have removed from the Email audit's red band; 91 since the Festive Ball chase added which
-  // reminders and chase lists have gone, per address and day.
-  it("counts 91 across the three databases", () => {
-    expect(expectedTableCount(ROOT)).toBe(91);
+  // reminders and chase lists have gone, per address and day; 93 since TASK-588 added the named QR codes
+  // and their scans per day.
+  it("counts 93 across the three databases", () => {
+    expect(expectedTableCount(ROOT)).toBe(93);
   });
 
   it("finds the three tables that live outside the main database", () => {
@@ -157,7 +158,10 @@ describe("knowing how many tables to expect", () => {
     expect(main).toContain("email_audit_removals");
     // The Festive Ball chase: which reminders and chase lists went, so none goes twice.
     expect(main).toContain("ball_chase_sends");
-    expect(main.length).toBe(88);
+    // TASK-588: the named QR codes and their scans per day. A printed code's link is its row's id.
+    expect(main).toContain("qr_codes");
+    expect(main).toContain("qr_code_scans");
+    expect(main.length).toBe(90);
   });
 
   it("returns nothing for a directory that does not exist, rather than throwing", () => {

@@ -132,6 +132,10 @@ let qrPages: unknown[] = [];
 // TASK-508: what the Overview's "Needs you" answers, or that it fails.
 let overviewAnswer: { status: number; body: unknown } = { status: 200, body: { updatedAt: "2026-10-03T08:41:00.000Z", needs: [], failed: [] } };
 let qrImageUrls: string[] = [];
+// TASK-588: the named QR codes the screen is sent, and every change it asks for.
+let qrNamedAnswer: { status: number; body: unknown } = { status: 200, body: { codes: [], destinations: [] } };
+let qrNamedCalls: Array<{ url: string; method: string; body: unknown }> = [];
+let qrNamedWriteAnswer: { status: number; body: unknown } = { status: 200, body: { id: 1 } };
 
 function respond(url: string, init?: { method?: string; body?: string; headers?: Record<string, string> }) {
   const j = (body: unknown, status = 200) => ({
@@ -225,6 +229,17 @@ function respond(url: string, init?: { method?: string; body?: string; headers?:
     }
     return { ...j({}), text: () => Promise.resolve(QR_SVG), blob: () => Promise.resolve(new Blob([QR_SVG])) };
   }
+  // TASK-588: named codes. Their image, their list, and making or changing one.
+  if (/\/api\/admin\/qr-codes\/named\/\d+\/image/.test(url)) {
+    qrImageUrls.push(url);
+    return { ...j({}), text: () => Promise.resolve(QR_SVG), blob: () => Promise.resolve(new Blob([QR_SVG])) };
+  }
+  if (url.includes("/api/admin/qr-codes/named")) {
+    const method = init?.method || "GET";
+    if (method === "GET") return j(qrNamedAnswer.body, qrNamedAnswer.status);
+    qrNamedCalls.push({ url, method, body: JSON.parse(init?.body || "{}") });
+    return j(qrNamedWriteAnswer.body, qrNamedWriteAnswer.status);
+  }
   if (url.includes("/api/admin/qr-codes")) return j({ pages: qrPages });
   if (url.includes("/api/admin/overview")) return j(overviewAnswer.body, overviewAnswer.status);
   if (url.includes("/api/admin/ball/transfers")) return j({ results: awaitingTransfers });
@@ -279,6 +294,9 @@ describe("admin app integration (jsdom, TASK-118)", () => {
     qrPages = [];
     overviewAnswer = { status: 200, body: { updatedAt: "2026-10-03T08:41:00.000Z", needs: [], failed: [] } };
     qrImageUrls = [];
+    qrNamedAnswer = { status: 200, body: { codes: [], destinations: [] } };
+    qrNamedCalls = [];
+    qrNamedWriteAnswer = { status: 200, body: { id: 1 } };
     window.sessionStorage.clear();
     document.body.innerHTML = bodyHtml;
     (window as unknown as { AdminHelpers: unknown }).AdminHelpers = helpers;
@@ -1487,47 +1505,179 @@ describe("admin app integration (jsdom, TASK-118)", () => {
       expect(saved).toEqual([{ href: "blob:qr", download: "nbcc-qr-ball.png" }]);
     });
 
-    it("makes a code for any other nbcc.scot address", async () => {
+    // TASK-588: the typed address box is gone: Goes to is chosen from a list, so a typo cannot
+    // break a printed code.
+    it("has no box to type an address into", async () => {
       qrPages = PAGES;
       await openQr();
-      (el("qrOtherPath") as HTMLInputElement).value = "/give";
-      el("qrOtherForm").dispatchEvent(new Event("submit", { cancelable: true, bubbles: true }));
-      await settle();
-      const card = document.querySelector("#qrOther .qr-card") as HTMLElement;
-      expect(card.textContent).toContain("nbcc.scot/give");
-      expect((card.querySelector("img") as HTMLImageElement).getAttribute("src")).toMatch(/^data:image\/svg\+xml/);
-      (card.querySelectorAll("button")[0] as HTMLElement).click();
-      await settle();
-      expect(saved).toEqual([{ href: "blob:qr", download: "nbcc-qr-give.svg" }]);
+      expect(document.getElementById("qrOtherForm")).toBeNull();
+      expect(document.querySelector('#view-qr input[placeholder="/give"]')).toBeNull();
     });
 
-    // Staff often paste the address from the browser, whole.
-    it("takes a pasted whole nbcc.scot address", async () => {
-      qrPages = PAGES;
-      await openQr();
-      (el("qrOtherPath") as HTMLInputElement).value = "https://www.nbcc.scot/give";
-      el("qrOtherForm").dispatchEvent(new Event("submit", { cancelable: true, bubbles: true }));
-      await settle();
-      expect(qrImageUrls.some((u) => u.includes("path=%2Fgive&"))).toBe(true);
-      expect((document.querySelector("#qrOther .qr-card") as HTMLElement).textContent).toContain("nbcc.scot/give");
+    // TASK-588: named codes, one for each billboard or card, each with its own scans.
+    const DESTS = [
+      { value: "/", title: "Home", group: "page", live: true },
+      { value: "/donate", title: "Donate", group: "page", live: true },
+      { value: "/ball", title: "Festive Ball", group: "page", live: false },
+      { value: "https://drop.nbcc.scot", title: "Drop-off points (drop.nbcc.scot)", group: "signup", live: true },
+    ];
+    const NAMED = (over: Record<string, unknown> = {}) => ({
+      id: 12,
+      name: "Donate billboard, High Street",
+      target: "/donate",
+      targetTitle: "Donate",
+      targetLive: true,
+      hidden: false,
+      link: "https://nbcc.scot/q/c12",
+      createdAt: "2026-10-12T09:00:00.000Z",
+      scans: { total: 214, week: 38, lastDay: "2026-10-30" },
+      svg: QR_SVG,
+      ...over,
     });
 
-    it("refuses an address that is not on nbcc.scot, before asking", async () => {
+    it("lists each named code with where it goes, its own scans, and both downloads", async () => {
       qrPages = PAGES;
+      qrNamedAnswer = { status: 200, body: { codes: [NAMED(), NAMED({ id: 13, name: "Business card, Sam", scans: { total: 0, week: 0, lastDay: null } })], destinations: DESTS } };
       await openQr();
-      const before = qrImageUrls.length;
-      (el("qrOtherPath") as HTMLInputElement).value = "give";
-      el("qrOtherForm").dispatchEvent(new Event("submit", { cancelable: true, bubbles: true }));
+      const cards = Array.from(document.querySelectorAll("#qrNamedList .qr-card"));
+      expect(cards).toHaveLength(2);
+      expect(cards[0].textContent).toContain("Donate billboard, High Street");
+      expect(cards[0].textContent).toContain("Goes to Donate");
+      expect(cards[0].textContent).toContain("214 scans");
+      expect(cards[0].textContent).toContain("38 in the last 7 days");
+      expect(cards[0].textContent).toContain("nbcc.scot/q/c12");
+      expect(cards[1].textContent).toContain("No scans yet");
+      // The page codes are still there, underneath.
+      expect(document.querySelectorAll("#qrList .qr-card")).toHaveLength(2);
+    });
+
+    it("downloads a named code, named after it", async () => {
+      qrNamedAnswer = { status: 200, body: { codes: [NAMED()], destinations: DESTS } };
+      await openQr();
+      (document.querySelector('#qrNamedList [data-qr-named="12"][data-qr-format="png"]') as HTMLElement).click();
       await settle();
-      expect(el("qrStatus").textContent).toBe("Give an address on nbcc.scot, starting with /");
-      expect(qrImageUrls.length).toBe(before);
-      expect(document.querySelector("#qrOther .qr-card")).toBeNull();
-      // An empty box is not the home page.
-      (el("qrOtherPath") as HTMLInputElement).value = "  ";
-      el("qrOtherForm").dispatchEvent(new Event("submit", { cancelable: true, bubbles: true }));
+      expect(qrImageUrls.some((u) => u.includes("/api/admin/qr-codes/named/12/image?format=png"))).toBe(true);
+      expect(saved).toEqual([{ href: "blob:qr", download: "nbcc-qr-donate-billboard-high-street.png" }]);
+    });
+
+    it("offers Goes to as a list, pages then sign up sites, never a typed address", async () => {
+      qrNamedAnswer = { status: 200, body: { codes: [], destinations: DESTS } };
+      await openQr();
+      const sel = el("qrNewTarget") as HTMLSelectElement;
+      expect(sel.tagName).toBe("SELECT");
+      expect(Array.from(sel.querySelectorAll("optgroup")).map((g) => g.getAttribute("label"))).toEqual(["Pages of nbcc.scot", "Our sign up sites"]);
+      expect(Array.from(sel.options).map((o) => o.textContent)).toContain("Festive Ball (not live yet)");
+      expect(el("qrNamedList").textContent).toMatch(/No named codes yet/);
+    });
+
+    it("makes a code from a name and a choice, then shows it", async () => {
+      loginToken = tokenFor("admin");
+      qrNamedAnswer = { status: 200, body: { codes: [], destinations: DESTS } };
+      await openQr();
+      (el("qrNewName") as HTMLInputElement).value = "Table card, the Ball";
+      (el("qrNewTarget") as HTMLSelectElement).value = "https://drop.nbcc.scot";
+      qrNamedAnswer = { status: 200, body: { codes: [NAMED({ id: 14, name: "Table card, the Ball" })], destinations: DESTS } };
+      el("qrNewForm").dispatchEvent(new Event("submit", { cancelable: true, bubbles: true }));
       await settle();
-      expect(el("qrStatus").textContent).toBe("Give an address on nbcc.scot, starting with /");
-      expect(qrImageUrls.length).toBe(before);
+      expect(qrNamedCalls).toEqual([{ url: "/api/admin/qr-codes/named", method: "POST", body: { name: "Table card, the Ball", target: "https://drop.nbcc.scot" } }]);
+      expect(el("qrNamedList").textContent).toContain("Table card, the Ball");
+      expect(el("qrNewStatus").classList.contains("is-ok")).toBe(true);
+      expect((el("qrNewName") as HTMLInputElement).value).toBe("");
+      expect(el("qrNewForm").hidden).toBe(false);
+    });
+
+    it("asks for a name and a choice before sending anything", async () => {
+      loginToken = tokenFor("admin");
+      qrNamedAnswer = { status: 200, body: { codes: [], destinations: DESTS } };
+      await openQr();
+      el("qrNewForm").dispatchEvent(new Event("submit", { cancelable: true, bubbles: true }));
+      await settle();
+      expect(el("qrNewStatus").textContent).toMatch(/Give the code a name/);
+      expect(el("qrNewStatus").classList.contains("is-error")).toBe(true);
+      (el("qrNewName") as HTMLInputElement).value = "Poster";
+      el("qrNewForm").dispatchEvent(new Event("submit", { cancelable: true, bubbles: true }));
+      await settle();
+      expect(el("qrNewStatus").textContent).toMatch(/Choose where the code goes/);
+      expect(qrNamedCalls).toEqual([]);
+    });
+
+    it("shows the server's reason when it refuses", async () => {
+      loginToken = tokenFor("admin");
+      qrNamedAnswer = { status: 200, body: { codes: [], destinations: DESTS } };
+      await openQr();
+      (el("qrNewName") as HTMLInputElement).value = "Poster";
+      (el("qrNewTarget") as HTMLSelectElement).value = "/donate";
+      qrNamedWriteAnswer = { status: 400, body: { error: "Choose where the code goes from the list." } };
+      el("qrNewForm").dispatchEvent(new Event("submit", { cancelable: true, bubbles: true }));
+      await settle();
+      expect(el("qrNewStatus").textContent).toBe("Choose where the code goes from the list.");
+    });
+
+    it("renames a code and changes where it goes, saying printed copies follow", async () => {
+      loginToken = tokenFor("admin"); // making and changing need Site pages edit, which editors do not have
+      qrNamedAnswer = { status: 200, body: { codes: [NAMED()], destinations: DESTS } };
+      await openQr();
+      (document.querySelector('[data-qr-edit="12"]') as HTMLElement).click();
+      const form = document.querySelector('[data-qr-edit-form="12"]') as HTMLFormElement;
+      expect(form.textContent).toMatch(/already printed goes to the new choice/);
+      const sel = form.querySelector("select") as HTMLSelectElement;
+      expect(sel.value).toBe("/donate");
+      (form.querySelector("input") as HTMLInputElement).value = "Billboard, Main Road";
+      sel.value = "/";
+      form.dispatchEvent(new Event("submit", { cancelable: true, bubbles: true }));
+      await settle();
+      expect(qrNamedCalls).toEqual([{ url: "/api/admin/qr-codes/named/12", method: "PATCH", body: { name: "Billboard, Main Road", target: "/" } }]);
+    });
+
+    // Review of TASK-588: a code whose page has left the site keeps it in the list, and a rename alone
+    // must not send it back, or the server would refuse the rename.
+    it("renames a code without sending Goes to when it did not change, even a page that has gone", async () => {
+      loginToken = tokenFor("admin");
+      qrNamedAnswer = { status: 200, body: { codes: [NAMED({ target: "/old-page", targetTitle: "/old-page" })], destinations: DESTS } };
+      await openQr();
+      (document.querySelector('[data-qr-edit="12"]') as HTMLElement).click();
+      const form = document.querySelector('[data-qr-edit-form="12"]') as HTMLFormElement;
+      expect((form.querySelector("select") as HTMLSelectElement).value).toBe("/old-page");
+      (form.querySelector("input") as HTMLInputElement).value = "Billboard, renamed";
+      form.dispatchEvent(new Event("submit", { cancelable: true, bubbles: true }));
+      await settle();
+      expect(qrNamedCalls).toEqual([{ url: "/api/admin/qr-codes/named/12", method: "PATCH", body: { name: "Billboard, renamed" } }]);
+    });
+
+    it("hides a code into Hidden codes, where it can be shown again", async () => {
+      loginToken = tokenFor("admin"); // making and changing need Site pages edit, which editors do not have
+      qrNamedAnswer = { status: 200, body: { codes: [NAMED(), NAMED({ id: 9, name: "Old leaflet", hidden: true })], destinations: DESTS } };
+      await openQr();
+      expect(document.querySelectorAll("#qrNamedList .qr-card")).toHaveLength(1);
+      expect(el("qrHidden").hidden).toBe(false);
+      expect(el("qrHiddenSummary").textContent).toBe("Hidden codes (1)");
+      expect(el("qrHiddenList").textContent).toContain("Old leaflet");
+      (document.querySelector('[data-qr-hide="12"]') as HTMLElement).click();
+      await settle();
+      (document.querySelector('[data-qr-hide="9"]') as HTMLElement).click();
+      await settle();
+      expect(qrNamedCalls.map((c) => [c.url, c.body])).toEqual([
+        ["/api/admin/qr-codes/named/12", { hidden: true }],
+        ["/api/admin/qr-codes/named/9", { hidden: false }],
+      ]);
+    });
+
+    it("lets someone who can only view Site pages download, but not make or change", async () => {
+      loginToken = tokenFor("viewer");
+      storedPermissions = { ...roleToPermissions("viewer"), site: "view" };
+      qrNamedAnswer = { status: 200, body: { codes: [NAMED()], destinations: DESTS } };
+      await openQr();
+      expect(el("qrNewForm").hidden).toBe(true);
+      expect(document.querySelector('[data-qr-edit="12"]')).toBeNull();
+      expect(document.querySelector('[data-qr-hide="12"]')).toBeNull();
+      expect(document.querySelectorAll('#qrNamedList [data-qr-format]')).toHaveLength(2);
+    });
+
+    it("says so when the named codes cannot load", async () => {
+      qrNamedAnswer = { status: 500, body: { error: "x" } };
+      await openQr();
+      expect(el("qrNamedList").textContent).toMatch(/could not load/i);
+      expect(el("qrNewForm").hidden).toBe(true);
     });
 
     it("says so when the list cannot load", async () => {

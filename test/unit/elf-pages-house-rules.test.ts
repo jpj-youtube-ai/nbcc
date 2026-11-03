@@ -4,6 +4,9 @@ import { readFileSync, readdirSync } from "node:fs";
 import { resolve } from "node:path";
 import { renderCalendarPage } from "../../src/elf/pages/calendar";
 import { renderHqPage } from "../../src/elf/pages/hq";
+import { renderJoinPage } from "../../src/elf/pages/join";
+import { FESTIVE_SURNAMES } from "../../src/elf/names";
+import { ELF_DEFAULTS } from "../../src/elf/settings";
 import { renderPosterPage } from "../../src/elf/pages/poster";
 import { renderWardrobePage } from "../../src/elf/pages/wardrobe";
 import { AFTERNOON, at, calendarView, claimWin, hqView, posterView, stampWin, wardrobeView } from "./elf-fixtures";
@@ -38,6 +41,8 @@ const PAGES: [string, string][] = [
   ["HQ, place shown", renderHqPage(hqView({ today: { ...today, state: "revealed", options: [], outcome: { ...outcome, by: null, at: null, cracked: false } } }))],
   ["HQ, no door today", renderHqPage(hqView({ now: at("2026-11-20T10:00:00.000Z"), today: null, nextClueAt: at("2026-12-01T17:30:00.000Z") }))],
   ["HQ, all over", renderHqPage(hqView({ now: at("2026-12-26T10:00:00.000Z"), today: null, nextClueAt: null }))],
+  ["join", renderJoinPage({ settings: { ...ELF_DEFAULTS, schoolOn: true }, captchaSiteKey: null, surnames: FESTIVE_SURNAMES })],
+  ["join, refused", renderJoinPage({ settings: { ...ELF_DEFAULTS, schoolOn: true }, captchaSiteKey: "1x00000000000000000000AA", surnames: FESTIVE_SURNAMES, errors: ["Please pick a surname from the list for each detective."], values: { grownUpName: "Sam Example" } })],
   ["wardrobe", renderWardrobePage(wardrobeView())],
   ["wardrobe, everything earned", renderWardrobePage(wardrobeView({ state: { doorsDone: 24, goldSeal: true, wonRace: true }, fresh: ["golden", "nessie", "bow:gold"] }))],
   ["wardrobe, nothing earned", renderWardrobePage(wardrobeView({ state: { doorsDone: 0 }, fresh: [] }))],
@@ -191,6 +196,8 @@ describe.each(PAGES)("%s", (_name, html) => {
 
   it('says what money "could" do, never what it does', () => {
     for (const said of readWords(doc)) {
+      // HMRC's model Gift Aid declaration (src/declarations/wording.ts) must be shown word for word.
+      if (said.includes("I am a UK taxpayer")) continue;
       if (/\b(pounds?|pennies|penny|donations?|gifts?)\b[^.]*\b(helps?|pays?|buys?|gives?|will)\b/i.test(said)) expect(said).toMatch(/\bcould\b/);
     }
   });
@@ -324,8 +331,8 @@ describe("the scripts for the elf screens", () => {
   const dir = resolve(ROOT, "assets/js");
   const scripts = readdirSync(dir).filter((name) => /^elf-.*\.js$/.test(name));
 
-  it("are the five expected", () => {
-    expect(scripts.sort()).toEqual(["elf-calendar.js", "elf-hq.js", "elf-poster.js", "elf-wardrobe-ui.js", "elf-wardrobe.js"]);
+  it("are the six expected", () => {
+    expect(scripts.sort()).toEqual(["elf-calendar.js", "elf-hq.js", "elf-join.js", "elf-poster.js", "elf-wardrobe-ui.js", "elf-wardrobe.js"]);
   });
 
   it.each(scripts)("%s is written the way the site's other scripts are, so it runs with no build step", (name) => {

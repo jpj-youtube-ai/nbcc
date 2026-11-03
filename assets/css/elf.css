@@ -877,3 +877,31 @@ form.elf-wd { display: grid; gap: 16px; padding: 0; background: none; border: 0;
   .elf-stamped__cane { animation: elf-stamp 0.5s var(--elf-ease-expo); }
   @keyframes elf-stamp { from { opacity: 0; transform: scale(1.7) rotate(-14deg); } }
 }
+
+/* ---------- the enrol page (src/elf/pages/join.ts) ---------- */
+.elf-join-form { display: grid; gap: clamp(22px, 3vw, 32px); max-width: 720px; }
+.elf-join-form fieldset { margin: 0; padding: 0; border: 0; min-width: 0; display: grid; gap: 14px; }
+.elf-join-form legend { padding: 0; margin-bottom: 6px; }
+.elf-join-form .elf-field { display: grid; gap: 6px; }
+.elf-join-form input[type="text"], .elf-join-form input[type="email"], .elf-join-form select {
+  width: 100%; min-height: 48px; padding: 10px 14px; border: 1.5px solid var(--line); border-radius: 12px; background: var(--card); color: var(--slate); font: inherit;
+}
+.elf-join-detective { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 10px 14px; align-items: end; padding: 14px; border-radius: 16px; background: var(--card); border: 1px solid var(--line); }
+.elf-join-detective[hidden] { display: none; }
+.elf-join-detective__n { grid-column: 1 / -1; margin: 0; font-weight: 600; color: var(--maroon); }
+.elf-join-detective .elf-field:last-child { grid-template-columns: minmax(0, 1fr) auto; }
+.elf-join-detective .elf-field:last-child label { grid-column: 1 / -1; }
+.elf-join-spin { min-height: 48px; padding: 8px 16px; }
+.elf-join-add { justify-self: start; }
+.elf-join-pay, .elf-join-gift { display: grid; gap: 12px; padding: clamp(16px, 3vw, 24px); border-radius: 18px; background: var(--tan-soft); }
+.elf-join-pay p, .elf-join-gift p { margin: 0; }
+.elf-join-declaration[hidden] { display: none; }
+.elf-declaration-words { font-size: .92rem; line-height: 1.55; }
+.elf-tick { display: flex; gap: 10px; align-items: flex-start; margin: 0; }
+.elf-tick input { width: 22px; height: 22px; flex: none; margin: 2px 0 0; accent-color: var(--holly); }
+.elf-hint { margin: 0; font-size: .9rem; color: var(--slate-soft); }
+.elf-join-last { display: grid; gap: 14px; }
+.elf-join-errors { margin: 0 0 22px; padding: 16px 18px; border-radius: 14px; background: #FBE7E9; color: var(--maroon); max-width: 720px; }
+.elf-join-errors ul { margin: 8px 0 0; padding-left: 20px; }
+.elf-trap { position: absolute; left: -10000px; width: 1px; height: 1px; overflow: hidden; }
+@media (max-width: 520px) { .elf-join-detective { grid-template-columns: minmax(0, 1fr); } }

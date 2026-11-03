@@ -125,6 +125,57 @@ export function parseJoin(settings: ElfSettings, sent: unknown): JoinResult {
   return { ok: true, body: { ...body, detectives, declaration: body.giftAid ? body.declaration : undefined } };
 }
 
+/** Pounds as typed ("5", "5.50", "£10") in whole pence. Anything else is NaN, which the schema refuses. */
+export function penceFromPounds(typed: unknown): number {
+  if (typeof typed !== "string" || typed.trim() === "") return 0;
+  const m = /^£?\s*(\d{1,7})(?:\.(\d{1,2}))?$/.exec(typed.trim());
+  if (!m) return Number.NaN;
+  return Number(m[1]) * 100 + Number((m[2] ?? "0").padEnd(2, "0"));
+}
+
+const ticked = (v: unknown) => v === "on" || v === "true" || v === "1" || v === true;
+const text = (v: unknown) => (typeof v === "string" ? v : "");
+
+/** How many detective rows the plain form has. */
+export const FORM_ROWS = MAX_DETECTIVES;
+
+/** An enrolment as the plain form sends it (no script), in the shape parseJoin checks. Detective
+ *  rows left without a first name are skipped. The Gift Aid declaration comes along only when Gift
+ *  Aid is ticked. */
+export function joinBodyFromForm(form: Record<string, unknown>): Record<string, unknown> {
+  const detectives: { firstName: string; surname: string }[] = [];
+  for (let n = 1; n <= FORM_ROWS; n += 1) {
+    const firstName = text(form[`detective-${n}-first`]).trim();
+    if (firstName) detectives.push({ firstName, surname: text(form[`detective-${n}-surname`]) });
+  }
+  const giftAid = ticked(form.giftAid);
+  const body: Record<string, unknown> = {
+    grownUpName: text(form.grownUpName),
+    email: text(form.email),
+    detectives,
+    entryPence: penceFromPounds(form.entry),
+    donationPence: penceFromPounds(form.donation),
+    giftAid,
+    coverFee: ticked(form.coverFee),
+    newsletter: ticked(form.newsletter),
+    agreed: ticked(form.agreed),
+    website: text(form.website),
+    captchaToken: text(form["cf-turnstile-response"]) || undefined,
+  };
+  if (giftAid) {
+    const decl = (k: string) => text(form[`decl-${k}`]).trim() || undefined;
+    body.declaration = {
+      firstName: decl("firstName"),
+      lastName: decl("lastName"),
+      houseNameNumber: decl("houseNameNumber"),
+      address: decl("address"),
+      postcode: decl("postcode"),
+      nonUk: ticked(form["decl-nonUk"]),
+    };
+  }
+  return body;
+}
+
 /** The card fee, covering the entry and the gift together, only when ticked. */
 export function feeCoverPence(body: JoinBody, rate: CardFeeRate): number {
   if (!body.coverFee) return 0;

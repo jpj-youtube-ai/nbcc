@@ -1,7 +1,9 @@
+import { randomBytes } from "node:crypto";
 import type { PoolClient } from "pg";
 import { pool } from "./pool";
 import { insertAudit } from "./donations";
 import { ELF_DEFAULTS, type ElfSettings } from "../elf/settings";
+import type { JoinBody } from "../elf/join";
 
 // NBCC Elf Detective School: the data layer (tables in migrations/1791200000310_elf-school.js).
 // Designs: docs/superpowers/specs/2026-10-04-elf-detective-school-design.md and
@@ -87,4 +89,92 @@ export async function setElfSettings(
     const after = await client.query<SettingsRow>(SETTINGS_SQL);
     return settingsFrom(after.rows[0]);
   });
+}
+
+// --- enrolling, before the payment -----------------------------------------------------------------
+
+export interface PendingJoin {
+  familyId: number;
+  orderId: number;
+  reference: string;
+  detectiveIds: number[];
+}
+
+const REFERENCE_LETTERS = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+
+function newReference(): string {
+  const bytes = randomBytes(6);
+  return `EDS-${[...bytes].map((b) => REFERENCE_LETTERS[b % REFERENCE_LETTERS.length]).join("")}`;
+}
+
+/**
+ * Save an enrolment, checked by parseJoin, before it is paid: one family per email (stored lower
+ * case), its new detectives not yet active, and a pending order for them. A family that already has
+ * paid for detectives must sign in to add more ("sign-in-first", and nothing is saved): otherwise
+ * anyone could add detectives to someone else's family by typing their email. `familyId` is the
+ * signed in family, whose email is then not used.
+ */
+export async function createPendingJoin(o: {
+  body: JoinBody;
+  browserTokenHash: string;
+  feeCoverPence: number;
+  familyId?: number;
+}): Promise<PendingJoin | "sign-in-first"> {
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    let familyId = o.familyId;
+    if (familyId === undefined) {
+      const family = await client.query<{ id: number; active: boolean }>(
+        `INSERT INTO elf_families (email, grown_up_name, newsletter) VALUES ($1, $2, $3)
+         ON CONFLICT (email) DO UPDATE
+           SET grown_up_name = CASE WHEN elf_families.active THEN elf_families.grown_up_name ELSE EXCLUDED.grown_up_name END,
+               newsletter = CASE WHEN elf_families.active THEN elf_families.newsletter ELSE EXCLUDED.newsletter END
+         RETURNING id, active`,
+        [o.body.email.trim().toLowerCase(), o.body.grownUpName, o.body.newsletter],
+      );
+      if (family.rows[0].active) {
+        await client.query("ROLLBACK");
+        return "sign-in-first";
+      }
+      familyId = family.rows[0].id;
+    }
+    const detectiveIds: number[] = [];
+    for (const d of o.body.detectives) {
+      const r = await client.query<{ id: number }>(
+        "INSERT INTO elf_detectives (family_id, first_name, surname) VALUES ($1, $2, $3) RETURNING id",
+        [familyId, d.firstName, d.surname],
+      );
+      detectiveIds.push(r.rows[0].id);
+    }
+    const reference = newReference();
+    const order = await client.query<{ id: number }>(
+      `INSERT INTO elf_orders
+         (reference, family_id, detective_ids, entry_pence, donation_pence, fee_cover_pence, gift_aid, declaration, browser_token_hash)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING id`,
+      [
+        reference,
+        familyId,
+        detectiveIds,
+        o.body.entryPence,
+        o.body.donationPence,
+        o.feeCoverPence,
+        o.body.giftAid,
+        o.body.giftAid && o.body.declaration ? JSON.stringify(o.body.declaration) : null,
+        o.browserTokenHash,
+      ],
+    );
+    await client.query("COMMIT");
+    return { familyId, orderId: order.rows[0].id, reference, detectiveIds };
+  } catch (err) {
+    await client.query("ROLLBACK");
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
+/** Remember which Stripe session pays for an order. */
+export async function attachStripeSession(orderId: number, sessionId: string): Promise<void> {
+  await pool.query("UPDATE elf_orders SET stripe_session_id = $2 WHERE id = $1 AND status = 'pending'", [orderId, sessionId]);
 }

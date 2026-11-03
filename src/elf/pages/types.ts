@@ -4,6 +4,7 @@ import type { DoorState } from "../doors";
 import type { Rank } from "../progress";
 import type { StampRefusal } from "../stamps";
 import type { ElfLook, WardrobeState } from "../wardrobe";
+import type { ElfSettings } from "../settings";
 
 // NBCC Elf Detective School: what each screen is given. The plan is
 // docs/superpowers/plans/2026-10-04-elf-detective-a3-screens.md.
@@ -189,3 +190,13 @@ export type PosterOutcome =
   | { form: "claim"; ok: false; reason: ClaimRefusal; triesLeft?: number }
   | { form: "stamp"; ok: true; win: StampWin }
   | { form: "stamp"; ok: false; reason: StampRefusal };
+
+/** The enrol page (wave 1). `values` are what was typed, put back after a refusal, by form field name. */
+export interface JoinView {
+  settings: ElfSettings;
+  /** The Turnstile site key when the robot check is on, or null. */
+  captchaSiteKey: string | null;
+  surnames: readonly string[];
+  errors?: string[];
+  values?: Record<string, string>;
+}

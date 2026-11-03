@@ -12,7 +12,8 @@
 //                      it. A badge number is given when the payment settles.
 //   elf_orders         one payment: the entry (never Gift Aided), an optional gift (which can be),
 //                      the card fee cover, the Stripe session, and the hash of the token the paying
-//                      browser holds so it can be signed in when Stripe sends it back.
+//                      browser holds so it can be signed in when Stripe sends it back, but only
+//                      when this payment opened the family's account (opened_family).
 //   elf_sign_in_codes  the emailed 6 digit codes, kept only as keyed hashes (as the fundraisers').
 //   elf_sessions       signed in families, kept only as sha256 hashes of the cookie's random id.
 //   elf_badge_seq      badge numbers, EDS 0001 upwards.
@@ -84,6 +85,9 @@ exports.up = (pgm) => {
       stripe_session_id: { type: "text", unique: true },
       status: { type: "text", notNull: true, default: "pending", check: "status IN ('pending', 'paid', 'expired')" },
       browser_token_hash: { type: "text" },
+      // Set when this payment settled while its family had no other paid order: only then may the
+      // paying browser be signed in straight away (src/routes/elf.ts, /elf/welcome).
+      opened_family: { type: "boolean", notNull: true, default: false },
       created_at: { type: "timestamptz", notNull: true, default: pgm.func("now()") },
       paid_at: { type: "timestamptz" },
     },

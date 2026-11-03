@@ -1,28 +1,13 @@
 import type { PoolClient } from "pg";
 import { pool } from "./pool";
 import { insertAudit } from "./donations";
+import { ELF_DEFAULTS, type ElfSettings } from "../elf/settings";
 
 // NBCC Elf Detective School: the data layer (tables in migrations/1791200000310_elf-school.js).
 // Designs: docs/superpowers/specs/2026-10-04-elf-detective-school-design.md and
 // 2026-11-03-elf-detective-secret-places-design.md. The rules themselves are pure, in src/elf/.
 
-export interface ElfSettings {
-  /** The switch. Off: every /elf page and /api/elf route answers 404. */
-  schoolOn: boolean;
-  year: number;
-  /** The least a family pays for each detective. */
-  entryFromPence: number;
-  /** What is suggested for each detective. */
-  entrySuggestedPence: number;
-}
-
-/** What the school reads as when its row cannot be read: switched off, from £1, £5 suggested. */
-export const ELF_DEFAULTS: Readonly<ElfSettings> = Object.freeze({
-  schoolOn: false,
-  year: 2026,
-  entryFromPence: 100,
-  entrySuggestedPence: 500,
-});
+export { ELF_DEFAULTS, type ElfSettings };
 
 interface SettingsRow {
   school_on: boolean;

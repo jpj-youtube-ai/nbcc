@@ -541,23 +541,3 @@ describe("what a detective has earned, for the wardrobe", () => {
     expect(wardrobeState(progress, "yes" as unknown as boolean).wonRace).toBe(false);
   });
 });
-
-describe("the drawing style, matched to the school's logo (Jaimie, 3 November 2026)", () => {
-  const INK_LINE = 'stroke="#4A2A1E" stroke-width="3"';
-
-  it("outlines the whole elf, every outfit and every piece in the logo's dark brown", () => {
-    expect(drawElf(defaultLook(), { doorsDone: 0 })).toContain(INK_LINE);
-    for (const outfit of OUTFITS) expect(drawOutfit(outfit.id, defaultLook(), 58), outfit.id).toContain(INK_LINE);
-    for (const style of STYLES) expect(drawPiece(style.id, style.colours[0].id, 40), style.id).toContain(INK_LINE);
-  });
-
-  it("keeps the pale circle behind the elf free of the outline", () => {
-    const svg = drawElf(defaultLook(), { doorsDone: 0 });
-    expect(svg.indexOf('fill="#EAF0E7"')).toBeLessThan(svg.indexOf(INK_LINE));
-  });
-
-  it("gives the starter elf hat a fluffy brim, not a flat band", () => {
-    const hat = drawPiece("elf", "red", 40);
-    expect(hat).toMatch(/a[\d.]+ [\d.]+ 0 0 1 [\d.]+ 0/);
-  });
-});

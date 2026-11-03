@@ -20,15 +20,8 @@
 
   var CREAM = "#F8F5EE";
   var INK = "#3A2416";
-  // Everything is drawn in the style of the school's logo (Jaimie, 3 November 2026): a thick dark
-  // brown outline round every shape, a soft shadow on one side and a little shine. The outline
-  // comes from one group round the whole drawing (see inked() below), so a shape gets it unless it
-  // says stroke="none" (cheeks, shine, shadows) or draws a line of its own.
-  var LINE = "#4A2A1E";
-  var SHADE = '" fill="' + LINE + '" opacity=".14" stroke="none';
-  var SHINE = '" fill="#FFFDFA" opacity=".4" stroke="none';
-  // Cream trims take the same dark outline as everything else.
-  var TRIM = "";
+  // Cream trims get a fine outline so they still show on a light page.
+  var TRIM = '" stroke="#D9CBB0" stroke-width="1.5';
   var DOORS = 24;
 
   // ---- who the elf is ---------------------------------------------------------------------
@@ -366,59 +359,33 @@
 
   var LEGS = '<rect x="80" y="198" width="14" height="40" fill="url(#ew-stp)"/><rect x="106" y="198" width="14" height="40" fill="url(#ew-stp)"/>';
 
-  // Big round eyes with two shines, rosy cheeks and a small smile, as on the logo.
   var FACE =
-    '<ellipse cx="74" cy="114" rx="8" ry="5" fill="#F2A7A0" opacity=".7" stroke="none"/><ellipse cx="126" cy="114" rx="8" ry="5" fill="#F2A7A0" opacity=".7" stroke="none"/>' +
-    '<ellipse cx="84" cy="101" rx="5.6" ry="6.6" fill="' + INK + '" stroke="none"/><ellipse cx="116" cy="101" rx="5.6" ry="6.6" fill="' + INK + '" stroke="none"/>' +
-    '<circle cx="86.2" cy="98" r="2.2" fill="#FFFDFA" stroke="none"/><circle cx="118.2" cy="98" r="2.2" fill="#FFFDFA" stroke="none"/>' +
-    '<circle cx="82.2" cy="104.4" r="1" fill="#FFFDFA" stroke="none"/><circle cx="114.2" cy="104.4" r="1" fill="#FFFDFA" stroke="none"/>' +
-    '<path d="M93 117q7 6.5 14 0" fill="none" stroke="' + LINE + '" stroke-width="2.8" stroke-linecap="round"/>';
-
-  // A line drawn thick, with the dark outline round it: the outline is the same line drawn a
-  // little wider underneath.
-  function thickLine(d, colour, width) {
-    return '<path d="' + d + '" stroke="' + LINE + '" stroke-width="' + (width + 6) + '" fill="none" stroke-linecap="round"/>' +
-      '<path d="' + d + '" stroke="' + colour + '" stroke-width="' + width + '" fill="none" stroke-linecap="round"/>';
-  }
+    '<circle cx="76" cy="113" r="7" fill="#F2A7A0" opacity=".75"/><circle cx="124" cy="113" r="7" fill="#F2A7A0" opacity=".75"/>' +
+    '<circle cx="84" cy="100" r="5" fill="' + INK + '"/><circle cx="116" cy="100" r="5" fill="' + INK + '"/>' +
+    '<circle cx="86" cy="98" r="1.6" fill="#FFFDFA"/><circle cx="118" cy="98" r="1.6" fill="#FFFDFA"/>' +
+    '<path d="M90 116q10 10 20 0" fill="none" stroke="' + INK + '" stroke-width="3" stroke-linecap="round"/>';
 
   function sleeves(fill, width) {
-    return thickLine("M76 146Q60 160 56 184M124 146Q140 160 144 184", fill, width || 14);
+    return '<path d="M76 146Q60 160 56 184M124 146Q140 160 144 184" stroke="' + fill + '" stroke-width="' + (width || 14) + '" fill="none" stroke-linecap="round"/>';
   }
 
   function hands(skin) {
     return '<circle cx="56" cy="188" r="8" fill="' + skin + '"/><circle cx="144" cy="188" r="8" fill="' + skin + '"/>';
   }
 
-  // Long pointed ears, reaching out and a little up, with a shadow inside.
   function ears(skin) {
-    return '<path d="M64 90Q46 84 31 74q3 26 33 40z" fill="' + skin + '"/><path d="M59 97Q47 92 39 85q4 14 20 21z' + SHADE + '"/>' +
-      '<path d="M136 90q18-6 33-16-3 26-33 40z" fill="' + skin + '"/><path d="M141 97q12-5 20-12-4 14-20 21z' + SHADE + '"/>';
+    return '<path d="M60 92L34 74l22 30z" fill="' + skin + '"/><path d="M140 92l26-18-22 30z" fill="' + skin + '"/>';
   }
 
-  // A wide round head, with a soft shadow down one side.
   function head(skin) {
-    return '<ellipse cx="100" cy="98" rx="46" ry="42" fill="' + skin + '"/>' +
-      '<path d="M132 70Q152 100 128 132Q104 144 80 138Q120 132 132 70z' + SHADE + '"/>';
+    return '<circle cx="100" cy="96" r="44" fill="' + skin + '"/>';
   }
 
   // Hair is drawn in two passes: the part behind the head, then the part in front of the face.
   // `hair` is a hair colour from the catalogue. Every part of the hair is drawn with a darker edge:
   // brown hair on a brown face is nearly one colour, and the edge is what shows the hair is there.
   function hairGroup(hair, shapes) {
-    return '<g fill="' + hair.hex + '" stroke="' + hair.dark + '" stroke-width="2.6" stroke-linejoin="round">' + shapes + "</g>";
-  }
-
-  // A fluffy band, like the fur on a hat: bumps along the top and the bottom. `n` is how many.
-  function fluff(x, y, w, h, n, fill) {
-    var step = w / n;
-    var r = (step / 2).toFixed(1);
-    var bump = (h / 4).toFixed(1);
-    var d = "M" + x + " " + (y + h / 4);
-    var i;
-    for (i = 0; i < n; i++) d += "a" + r + " " + bump + " 0 0 1 " + step.toFixed(1) + " 0";
-    d += "L" + (x + w) + " " + (y + h - h / 4);
-    for (i = 0; i < n; i++) d += "a" + r + " " + bump + " 0 0 1 -" + step.toFixed(1) + " 0";
-    return '<path d="' + d + 'z" fill="' + fill + '"/>';
+    return '<g fill="' + hair.hex + '" stroke="' + hair.dark + '" stroke-width="1.6" stroke-linejoin="round">' + shapes + "</g>";
   }
 
   function hairBack(style, hair) {
@@ -431,10 +398,7 @@
     if (style === "curly") {
       return hairGroup(hair, '<circle cx="62" cy="76" r="13"/><circle cx="76" cy="62" r="13"/><circle cx="92" cy="55" r="13"/><circle cx="108" cy="55" r="13"/><circle cx="124" cy="62" r="13"/><circle cx="138" cy="76" r="13"/>');
     }
-    // The pointed fringe comes just below where every hat's brim ends, so it peeks out under any hat,
-    // as on the logo.
-    var fringe = '<path d="M58 90Q58 52 100 50q42 2 42 40-12-14-28-10-14-12-28 0-16-6-28 10z"/>' +
-      '<path d="M64 84h72l-2 7-8-4-6 7-8-5-6 6-6-6-8 5-6-7-8 4-6 5z"/>';
+    var fringe = '<path d="M58 90Q58 52 100 50q42 2 42 40-12-14-28-10-14-12-28 0-16-6-28 10z"/>';
     if (style === "bunches") {
       return hairGroup(hair, fringe) + '<circle cx="57" cy="112" r="5" fill="' + RED + '"/><circle cx="143" cy="112" r="5" fill="' + RED + '"/>';
     }
@@ -451,10 +415,10 @@
   function faceIn(skin, cx, cy, rx, ry, ring) {
     return '<ellipse cx="' + cx + '" cy="' + cy + '" rx="' + (rx + 5) + '" ry="' + (ry + 5) + '" fill="' + ring + '"/>' +
       '<ellipse cx="' + cx + '" cy="' + cy + '" rx="' + rx + '" ry="' + ry + '" fill="' + skin + '"/>' +
-      '<ellipse cx="' + (cx - 17) + '" cy="' + (cy + 8) + '" rx="6" ry="4" fill="#F2A7A0" opacity=".7" stroke="none"/><ellipse cx="' + (cx + 17) + '" cy="' + (cy + 8) + '" rx="6" ry="4" fill="#F2A7A0" opacity=".7" stroke="none"/>' +
-      '<ellipse cx="' + (cx - 10) + '" cy="' + (cy - 3) + '" rx="4.4" ry="5.2" fill="' + INK + '" stroke="none"/><ellipse cx="' + (cx + 10) + '" cy="' + (cy - 3) + '" rx="4.4" ry="5.2" fill="' + INK + '" stroke="none"/>' +
-      '<circle cx="' + (cx - 8.4) + '" cy="' + (cy - 5.2) + '" r="1.7" fill="#FFFDFA" stroke="none"/><circle cx="' + (cx + 11.6) + '" cy="' + (cy - 5.2) + '" r="1.7" fill="#FFFDFA" stroke="none"/>' +
-      '<path d="M' + (cx - 7) + " " + (cy + 9) + 'q7 7 14 0" fill="none" stroke="' + LINE + '" stroke-width="2.6" stroke-linecap="round"/>';
+      '<circle cx="' + (cx - 17) + '" cy="' + (cy + 8) + '" r="5" fill="#F2A7A0" opacity=".75"/><circle cx="' + (cx + 17) + '" cy="' + (cy + 8) + '" r="5" fill="#F2A7A0" opacity=".75"/>' +
+      '<circle cx="' + (cx - 10) + '" cy="' + (cy - 3) + '" r="4" fill="' + INK + '"/><circle cx="' + (cx + 10) + '" cy="' + (cy - 3) + '" r="4" fill="' + INK + '"/>' +
+      '<circle cx="' + (cx - 8.6) + '" cy="' + (cy - 4.4) + '" r="1.3" fill="#FFFDFA"/><circle cx="' + (cx + 11.4) + '" cy="' + (cy - 4.4) + '" r="1.3" fill="#FFFDFA"/>' +
+      '<path d="M' + (cx - 7) + " " + (cy + 9) + 'q7 7 14 0" fill="none" stroke="' + INK + '" stroke-width="2.6" stroke-linecap="round"/>';
   }
 
   // ---- drawing: the pieces ----------------------------------------------------------------
@@ -462,12 +426,8 @@
 
   var PIECES = {
     // Hats.
-    // A floppy elf hat, its tip falling to one side, with a fluffy brim and bobble.
     elf: function (c) {
-      return '<path d="M60 80Q56 26 104 20q46-2 54 40-10-12-20-6 6 12 2 26z" fill="' + c.fill + '"/>' +
-        '<path d="M126 25q26 8 32 35-10-12-20-6 6 12 2 26h-9q5-32-5-55z' + SHADE + '"/><ellipse cx="80" cy="48" rx="4.5" ry="13" transform="rotate(24 80 48)' + SHINE + '"/>' +
-        '<path d="M138 54q-5-14-16-22" fill="none" stroke-width="2.4"/>' +
-        fluff(52, 68, 96, 20, 6, CREAM) + '<circle cx="158" cy="64" r="10" fill="' + CREAM + '"/>';
+      return '<path d="M60 84Q70 24 142 16q-22 22 0 68z" fill="' + c.fill + '"/><path d="M54 84q46-16 92 0v10q-46-16-92 0z" fill="' + CREAM + TRIM + '"/><circle cx="142" cy="16" r="9" fill="' + CREAM + TRIM + '"/>';
     },
     deer: function (c) {
       return '<path d="M56 78Q56 36 100 34t44 44z" fill="url(#ew-ck-' + c.id + ')"/><path d="M54 76q46 12 92 0l6 6q-52 16-104 0z" fill="' + c.dark + '"/><path d="M92 36q8-10 16 0" fill="none" stroke="#5A3A22" stroke-width="3"/>';
@@ -497,8 +457,7 @@
       return '<g stroke="' + c.fill + '" stroke-width="1.5" stroke-linejoin="round"><path d="M66 132q34 14 68 0v12q-34 14-68 0z" fill="url(#ew-sc-' + c.id + ')"/><path d="M112 142l9 40h-12l-6-38z" fill="url(#ew-sc-' + c.id + ')"/></g>';
     },
     tartan: function (c) {
-      // Edged in its own colour, as the striped scarf is: the scarf is narrow, and a dark outline would hide its colours.
-      return '<g stroke="' + c.fill + '" stroke-width="1.5"><path d="M66 132q34 14 68 0v12q-34 14-68 0z" fill="url(#ew-tt-' + c.id + ')"/><path d="M112 142l9 40h-12l-6-38z" fill="url(#ew-tt-' + c.id + ')"/></g>';
+      return '<path d="M66 132q34 14 68 0v12q-34 14-68 0z" fill="url(#ew-tt-' + c.id + ')"/><path d="M112 142l9 40h-12l-6-38z" fill="url(#ew-tt-' + c.id + ')"/>';
     },
     tinsel: function (c) {
       return '<path d="M64 136l6 8 6-8 6 8 6-8 6 8 6-8 6 8 6-8 6 8 6-8 6 8" fill="none" stroke="' + c.fill + '" stroke-width="6" stroke-linejoin="round" stroke-linecap="round"/><path d="M67 140l6 6 6-6 6 6 6-6 6 6 6-6 6 6 6-6 6 6 6-6" fill="none" stroke="' + c.dark + '" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>';
@@ -507,12 +466,8 @@
       return '<path d="M100 142l-17-10v20zM100 142l17-10v20z" fill="' + c.fill + '"/><circle cx="100" cy="142" r="5" fill="' + c.dark + '"/>';
     },
     // Tops. Sleeves are drawn separately, in the same colour.
-    // A pointed hem and a pointed collar, a belt and a gold buckle.
     tunic: function (c) {
-      return '<path d="M72 138q28-6 56 0l12 62-10-6-10 8-10-8-10 8-10-8-10 8-10-8-10 6z" fill="' + c.fill + '"/>' +
-        '<path d="M120 139l8-1 12 62-10-6-4 3z' + SHADE + '"/>' +
-        '<rect x="63" y="172" width="74" height="10" rx="2" fill="#5A3A22"/><rect x="93" y="170" width="14" height="14" rx="2.5" fill="#E9C46A"/><rect x="97.5" y="174.5" width="5" height="5" fill="#5A3A22" stroke="none"/>' +
-        '<path d="M70 140l12 14 9-8 9 11 9-11 9 8 12-14q-30-8-60 0z" fill="' + c.fill + '"/><path d="M70 140l12 14 9-8 9 11 9-11 9 8 12-14q-30-8-60 0z" fill="#FFFDFA" opacity=".16" stroke="none"/>';
+      return '<path d="M72 138h56l14 66-10-6-10 6-11-6-11 6-11-6-10 6-10-6-11 6z" fill="' + c.fill + '"/><rect x="64" y="174" width="72" height="8" fill="' + INK + '"/><rect x="94" y="172" width="12" height="12" rx="2" fill="none" stroke="#E9C46A" stroke-width="3"/>';
     },
     jumper: function (c) {
       return '<path d="M72 138h56l10 66H62z" fill="' + c.fill + '"/><path d="M70 160l7.5 8 7.5-8 7.5 8 7.5-8 7.5 8 7.5-8 7.5 8 7.5-8" fill="none" stroke="' + CREAM + '" stroke-width="3" stroke-linejoin="round"/><path d="M64 194h72" stroke="' + CREAM + '" stroke-width="4"/>';
@@ -574,7 +529,7 @@
         hands(a.skin) +
         '<path d="M141 198L157 162" stroke="#8B5A3C" stroke-width="5" stroke-linecap="round"/><rect x="142" y="152" width="30" height="15" rx="4" transform="rotate(24 157 159.5)" fill="#B5713A" stroke="#6E4429" stroke-width="2"/>' +
         elfHead(a) + PIECES.elf({ fill: RED }) +
-        '<circle cx="158" cy="64" r="10" fill="#E9C46A"/><path d="M152 66h12" stroke-width="2"/>';
+        '<circle cx="142" cy="16" r="9" fill="#E9C46A" stroke="#B8862B" stroke-width="1.5"/><path d="M137 18h10" stroke="#B8862B" stroke-width="1.5" stroke-linecap="round"/>';
     },
     present: function (a) {
       return LEGS + PIECES.curly({ fill: MAROON }) +
@@ -661,7 +616,7 @@
         '<path d="M80 40l8-16 8 14zM96 34l8-16 8 14zM112 40l8-14 6 16z" fill="#2F6B45"/>' +
         '<circle cx="82" cy="44" r="7" fill="#FFFDFA"/><circle cx="118" cy="44" r="7" fill="#FFFDFA"/><circle cx="83" cy="45" r="3.5" fill="#2B2A33"/><circle cx="119" cy="45" r="3.5" fill="#2B2A33"/>' +
         faceIn(a.skin, 100, 84, 25, 23, "#2F6B45") +
-        PIECES.tartan({ id: "blue", fill: BLUE }) +
+        PIECES.tartan({ id: "blue" }) +
         '<path d="M24 236q10-8 20 0t20 0 20 0 20 0 20 0 20 0 20 0 20 0" fill="none" stroke="' + BLUE + '" stroke-width="4" stroke-linecap="round"/>';
     }
   };
@@ -731,11 +686,6 @@
       (defs ? "<defs>" + defs + "</defs>" : "") + body + "</svg>";
   }
 
-  // The dark outline round every shape inside (see LINE above).
-  function inked(inner) {
-    return '<g stroke="' + LINE + '" stroke-width="3" stroke-linejoin="round" stroke-linecap="round">' + inner + "</g>";
-  }
-
   function sizeOf(value, fallback) {
     var n = typeof value === "number" && isFinite(value) ? Math.round(value) : fallback;
     return n < 16 ? 16 : n > 2000 ? 2000 : n;
@@ -753,7 +703,7 @@
     var safe = normaliseLook(look, state);
     var width = sizeOf(o.size, 210);
     var label = o.label === false ? "" : typeof o.label === "string" && o.label ? o.label : "Elf detective";
-    return svg("0 0 200 260", width, Math.round(width * 1.3), label, (o.backdrop === false ? "" : BACKDROP) + inked(figure(safe)), o.key);
+    return svg("0 0 200 260", width, Math.round(width * 1.3), label, (o.backdrop === false ? "" : BACKDROP) + figure(safe), o.key);
   }
 
   /** One piece on its own, cropped close, for a wardrobe tile. Empty for anything unknown. */
@@ -763,7 +713,7 @@
     if (!style || !colour) return "";
     var inner = PIECES[style.id](colour) + (style.slot === "top" ? sleeves(colour.fill) : "");
     var px = sizeOf(size, 40);
-    return svg(style.box, px, px, "", inked(inner), style.id + "-" + colour.id);
+    return svg(style.box, px, px, "", inner, style.id + "-" + colour.id);
   }
 
   /** One outfit on a plain elf, for a wardrobe tile. Empty for anything unknown. */
@@ -771,7 +721,7 @@
     if (!outfitOf(outfitId)) return "";
     var base = normaliseLook(look, { doorsDone: 0 });
     var px = sizeOf(size, 58);
-    return svg("0 0 200 260", px, Math.round(px * 1.3), "", inked(OUTFIT_DRAW[outfitId](appearance(base))), outfitId);
+    return svg("0 0 200 260", px, Math.round(px * 1.3), "", OUTFIT_DRAW[outfitId](appearance(base)), outfitId);
   }
 
   // Nothing that reads the catalogue can change it: a slip that set one door number to nought

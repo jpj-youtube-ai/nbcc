@@ -293,6 +293,6 @@ export function renderWardrobePage(view: WardrobeView): string {
     cta: { href: view.hqUrl, label: "Detective HQ" },
     home: view.calendarUrl,
     main,
-    scripts: ["elf-wardrobe.js", "elf-wardrobe-ui.js"],
+    scripts: ["elf-paint.js", "elf-wardrobe.js", "elf-wardrobe-ui.js"],
   });
 }

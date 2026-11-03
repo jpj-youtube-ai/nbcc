@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync, statSync } from "node:fs";
 import { resolve } from "node:path";
 import { renderWardrobePage } from "../../src/elf/pages/wardrobe";
 import type { WardrobeView } from "../../src/elf/pages/types";
@@ -33,7 +33,7 @@ describe("the wardrobe page", () => {
     expect(words(doc.querySelector("h1"))).toBe("The wardrobe");
     expect(doc.querySelector('meta[name="robots"]')!.getAttribute("content")).toBe("noindex, nofollow");
     const scripts = [...doc.querySelectorAll("script[src]")].map((s) => s.getAttribute("src"));
-    expect(scripts).toEqual(["/assets/js/elf-wardrobe.js", "/assets/js/elf-wardrobe-ui.js"]);
+    expect(scripts).toEqual(["/assets/js/elf-paint.js", "/assets/js/elf-wardrobe.js", "/assets/js/elf-wardrobe-ui.js"]);
     expect(doc.querySelector('.nav-cta[href="/elf/hq"]')).not.toBeNull();
   });
 
@@ -302,6 +302,28 @@ describe("the style sheet", () => {
     expect(rule![1]).toMatch(/position:\s*absolute/);
     expect(rule![1]).toMatch(/z-index:\s*1\b/);
     expect(css).toMatch(/\.elf-wd-tile input:disabled \{[^}]*pointer-events:\s*none/);
+  });
+});
+
+describe("the painted pictures on the page", () => {
+  it("loads the list of painted layers before the wardrobe script", () => {
+    const html = renderWardrobePage(wardrobeView());
+    const order = [...html.matchAll(/<script[^>]*src="([^"]+)"/g)].map((m) => m[1].replace(/^.*\//, "").replace(/\?.*$/, ""));
+    expect(order.indexOf("elf-paint.js")).toBeGreaterThanOrEqual(0);
+    expect(order.indexOf("elf-paint.js")).toBeLessThan(order.indexOf("elf-wardrobe.js"));
+    expect(order.indexOf("elf-wardrobe.js")).toBeLessThan(order.indexOf("elf-wardrobe-ui.js"));
+  });
+
+  it("never puts a large picture on the wardrobe page", () => {
+    expect(renderWardrobePage(wardrobeView())).not.toContain("/assets/img/elf/lg/");
+  });
+
+  it("keeps every tile on the page, together, under 600 KB, so it is quick on a phone", () => {
+    usePaint(null);
+    const html = renderWardrobePage(wardrobeView({ state: { doorsDone: 24, goldSeal: true, wonRace: true } }));
+    const files = [...new Set([...html.matchAll(/\/assets\/img\/elf\/tile\/[a-z0-9-]+\.webp/g)].map((m) => m[0]))];
+    const bytes = files.reduce((sum, f) => sum + (existsSync(resolve(ROOT, f.slice(1))) ? statSync(resolve(ROOT, f.slice(1))).size : 0), 0);
+    expect(bytes).toBeLessThan(600 * 1024);
   });
 });
 

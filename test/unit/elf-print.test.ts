@@ -4,7 +4,7 @@ import { renderElfCertificate, renderElfPoster, renderElfTag, renderStaffCard, s
 import type { CertificatePrint, PlacePrint, ShareCardPrint, StaffCardPrint } from "../../src/elf/print";
 import { MATERIALS_STATEMENT } from "../../src/legal/registration";
 import { schoolLogoData } from "../../src/elf/logo";
-import { defaultLook, drawElf } from "../../src/elf/wardrobe";
+import { defaultLook } from "../../src/elf/wardrobe";
 
 // NBCC Elf Detective School: the things NBCC prints or a family shares. Every shop, elf, word and
 // detective here is invented, and the phone number is a made up one that cannot be dialled.
@@ -179,6 +179,8 @@ describe("the graduate's certificate", () => {
   it("draws the detective's own elf, made safe first", () => {
     const svg = parse(html).querySelector(".page .cert-elf svg")!;
     expect(svg.getAttribute("aria-label")).toBe("Detective Ruby Tinselfoot's elf");
+    // Printed, so drawn from the large paintings.
+    expect(parse(html).querySelector(".cert-elf")!.innerHTML).not.toContain("/assets/img/elf/sm/");
     const cheat = renderElfCertificate({ ...CERT, look: { ...defaultLook(), outfit: "nessie" } });
     expect(parse(cheat).querySelector(".cert-elf")!.innerHTML).toBe(parse(renderElfCertificate({ ...CERT, look: defaultLook() })).querySelector(".cert-elf")!.innerHTML);
   });
@@ -206,8 +208,10 @@ describe("the graduate's certificate", () => {
   });
 });
 
+const ELF_PNG = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8/5+hHgAHggJ/PchI7wAAAABJRU5ErkJggg==";
+
 describe("the share card", () => {
-  const svg = shareCardSvg(SHARE);
+  const svg = shareCardSvg(SHARE, ELF_PNG);
   const doc = new DOMParser().parseFromString(svg, "image/svg+xml");
 
   it("is one picture of 1200 by 630", () => {
@@ -244,11 +248,21 @@ describe("the share card", () => {
   });
 
   it("shows the elf, never a photo", () => {
-    // The one picture on it is the school's logo.
-    const pictures = svg.match(/<image\b[^>]*>/g) ?? [];
-    expect(pictures.length).toBe(1);
-    expect(pictures[0]).toContain(schoolLogoData("card"));
-    expect(svg).toContain(drawElf(defaultLook(), { doorsDone: 6 }, { size: 380, backdrop: true, label: false, key: "share" }).replace(/^<svg[^>]*>/, "").slice(0, 200));
+    // Two pictures: the school's logo, and the elf as the PNG the server stacked from its paintings.
+    const card = shareCardSvg(SHARE, ELF_PNG);
+    const pictures = card.match(/<image\b[^>]*>/g) ?? [];
+    expect(pictures.length).toBe(2);
+    expect(pictures[0]).toContain(ELF_PNG);
+    expect(pictures[1]).toContain(schoolLogoData("card"));
+  });
+
+  it("takes only a PNG picture for the elf, never an address or markup", () => {
+    for (const bad of ["https://example.com/elf.png", 'data:image/png;base64,AAAA"><script>x</script>', "data:image/svg+xml;base64,AAAA"]) {
+      const card = shareCardSvg(SHARE, bad);
+      expect(card).not.toContain("example.com");
+      expect(card).not.toContain("<script");
+      expect((card.match(/<image\b[^>]*>/g) ?? []).length).toBe(1);
+    }
   });
 
   it("makes the name safe", () => {

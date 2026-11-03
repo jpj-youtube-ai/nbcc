@@ -287,7 +287,7 @@ export function renderElfCertificate(c: CertificatePrint): string {
     <p class="small">With thanks from everyone at the Elves' Workshop, Annbank.</p>
   </div>
   <div>
-    <div class="cert-elf">${drawElf(c.look, c.state, { size: 220, backdrop: false, key: "cert", label: `${c.name}'s elf` })}</div>
+    <div class="cert-elf">${drawElf(c.look, c.state, { size: 220, backdrop: false, key: "cert", label: `${c.name}'s elf`, set: "lg" })}</div>
     ${seal}
   </div>
 </div>
@@ -296,14 +296,19 @@ ${statement}
   return shell({ title: `Elf Detective School certificate for ${name}`, paper: "A4 landscape", fontCss: assets.fontCss, css, toolbar: `<span>Certificate for ${name}</span>`, body });
 }
 
+/** A PNG picture as a data address, and nothing else: no link, no markup. */
+const PNG_DATA = /^data:image\/png;base64,[A-Za-z0-9+/]+={0,2}$/;
+
 /** The card a family can share: the school's logo, the elf and the rank, never a photo, and the public form of the
  *  name. One SVG of 1200 by 630; Stage B turns it into a PNG. It uses fonts every computer has,
- *  because a picture made on the server cannot fetch the site's own. */
-export function shareCardSvg(s: ShareCardPrint): string {
+ *  because a picture made on the server cannot fetch the site's own. `elfPicture` is the elf as a
+ *  PNG data address, made with elfPng (src/elf/elf-png.ts) at 380 wide: a picture made on the server
+ *  cannot fetch the painted layers either. Anything else is left out. */
+export function shareCardSvg(s: ShareCardPrint, elfPicture: string): string {
   const serif = "Georgia, 'Times New Roman', serif";
   const sans = "Verdana, Arial, sans-serif";
   const publicName = detectiveName(s.detective);
-  const elf = drawElf(s.look, s.state, { size: 380, backdrop: true, label: false, key: "share" });
+  const elf = PNG_DATA.test(elfPicture) ? `<image href="${elfPicture}" x="0" y="0" width="380" height="494"/>` : "";
   // A picture cannot wrap its words, so a long name or rank is set smaller until it fits the
   // 620 units beside the elf. A bold serif letter is a little over half as wide as it is tall.
   const fit = (words: string, biggest: number): number => Math.max(24, Math.min(biggest, Math.floor(620 / (Math.max(1, words.length) * 0.56))));

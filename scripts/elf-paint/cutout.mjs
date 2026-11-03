@@ -260,6 +260,43 @@ export function dropLooseEdges(img, reach = 3, solid = 153) {
   return { data: out, width, height };
 }
 
+/**
+ * What a hat hides of any elf: everything above its brim. A hat is painted on one elf (the fitting
+ * elf, with the biggest hair) and worn by all of them, and hair of another style could otherwise poke
+ * out above it (found 3 November 2026). Only the brim's columns are covered (where the hat comes
+ * down to its lowest), so an ear beside a floppy tip still shows.
+ */
+export function hatCover(layer) {
+  const { width, height } = layer;
+  const bottom = new Int32Array(width).fill(-1);
+  let top = height;
+  let lowest = -1;
+  for (let y = 0; y < height; y++)
+    for (let x = 0; x < width; x++)
+      if (layer.data[(y * width + x) * 4 + 3] > 128) {
+        bottom[x] = y;
+        if (y < top) top = y;
+        if (y > lowest) lowest = y;
+      }
+  const out = new Uint8ClampedArray(layer.data.length);
+  if (lowest < 0) return { data: out, width, height };
+  const brimFrom = top + 0.7 * (lowest - top);
+  for (let x = 0; x < width; x++) {
+    if (bottom[x] < brimFrom) continue;
+    for (let y = 0; y <= bottom[x]; y++) out[(y * width + x) * 4 + 3] = 255;
+  }
+  return { data: out, width, height };
+}
+
+/** Two covers as one: hidden where either hides. */
+export function joinCovers(a, b) {
+  if (!a) return b;
+  if (!b) return a;
+  const out = new Uint8ClampedArray(a.data);
+  for (let i = 3; i < out.length; i += 4) out[i] = Math.max(a.data[i], b.data[i]);
+  return { data: out, width: a.width, height: a.height };
+}
+
 /** The picture cut down to what is painted, and where that was. */
 export function cropToContent(img) {
   let x0 = img.width;

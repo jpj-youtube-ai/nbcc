@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import sharp from "sharp";
 // @ts-expect-error a plain JavaScript tool, with no type declarations
-import { backgroundOf, bestShift, cropToContent, dropLooseEdges, isolate, keepMainParts, keyOut, writeSizes } from "../../scripts/elf-paint/cutout.mjs";
+import { backgroundOf, bestShift, cropToContent, dropLooseEdges, hatCover, isolate, keepMainParts, keyOut, writeSizes } from "../../scripts/elf-paint/cutout.mjs";
 
 // NBCC Elf Detective School: the painted dress-up elf (plan Task 2). Turning a painting on flat
 // magenta into a layer that lines up with every other: the background cut out with soft edges, the
@@ -160,6 +160,24 @@ describe("dropping loose edges", () => {
     expect(alphaAt(kept, 50, 50)).toBe(255);
     expect(alphaAt(kept, 60, 50)).toBe(120);
     expect(alphaAt(kept, 66, 50)).toBe(0);
+  });
+});
+
+describe("a hat hides the hair above its brim", () => {
+  it("covers everything above the brim, but not beside the floppy tip", () => {
+    // Hair that poked out above a hat fitted on another elf, 3 November 2026.
+    const hat = keyOut(blank());
+    const put = (x0: number, y0: number, x1: number, y1: number) => {
+      for (let y = y0; y < y1; y++) for (let x = x0; x < x1; x++) hat.data.set([192, 34, 56, 255], (y * W + x) * 4);
+    };
+    put(20, 10, 80, 40); // the hat and its brim, down to y 40
+    put(80, 10, 100, 20); // its floppy tip, out to the side
+    const cover = hatCover(hat);
+    const at = (x: number, y: number) => cover.data[(y * W + x) * 4 + 3];
+    expect(at(30, 2)).toBe(255); // hair above the hat
+    expect(at(30, 39)).toBe(255);
+    expect(at(30, 45)).toBe(0); // the face below the brim
+    expect(at(90, 2)).toBe(0); // beside the tip: an ear may be there
   });
 });
 

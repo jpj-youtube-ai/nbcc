@@ -45,7 +45,9 @@ async function cell(elf, pieces, label) {
   for (const piece of pieces) if (p[piece] && p[piece].cover) parts.push({ ...placed(join(LAYER_DIR, "sm", `${piece}.cover.webp`), p[piece].cover), blend: "dest-out" });
   let picture = await sharp({ create: { width: VIEW_W, height: VIEW_H, channels: 4, background: { r: 0, g: 0, b: 0, alpha: 0 } } }).composite(parts).png().toBuffer();
   const on = pieces.filter(have).map((piece) => placed(join(LAYER_DIR, "sm", `${piece}.webp`), p[piece]));
-  picture = await sharp(picture).composite(on).flatten({ background: CREAM }).resize(CELL_W, CELL_H).png().toBuffer();
+  // Stacked at full size first: sharp resizes before it composites, so the two cannot be one step.
+  picture = await sharp(picture).composite(on).png().toBuffer();
+  picture = await sharp(picture).flatten({ background: CREAM }).resize(CELL_W, CELL_H).png().toBuffer();
   const words = `<svg xmlns="http://www.w3.org/2000/svg" width="${CELL_W}" height="${LABEL}"><rect width="100%" height="100%" fill="#FFFFFF"/><text x="8" y="23" font-family="Verdana, Arial, sans-serif" font-size="15" fill="#3A2416">${label.replace(/&/g, "&amp;").replace(/</g, "&lt;")}</text></svg>`;
   return sharp({ create: { width: CELL_W, height: CELL_H + LABEL, channels: 3, background: "#FFFFFF" } })
     .composite([{ input: picture, top: 0, left: 0 }, { input: Buffer.from(words), top: CELL_H, left: 0 }])

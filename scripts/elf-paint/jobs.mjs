@@ -125,7 +125,7 @@ function pieceJobs() {
               prompt: `Keep this picture exactly the same, everything identical. Change only the colour of the ${name}: it is now ${colourWords(c)}. Keep its design, shape, shading and outline exactly.`,
             },
       );
-      out.push({ id: `alone-${style.id}-${c.id}`, batch, kind: "alone", from: worn, base, still, layer: layerName("piece", style.id, c.id), prompt: alonePrompt(ALONE_WHAT[style.slot](name)) });
+      out.push({ id: `alone-${style.id}-${c.id}`, batch, kind: "alone", slot: style.slot, from: worn, base, still, layer: layerName("piece", style.id, c.id), prompt: alonePrompt(ALONE_WHAT[style.slot](name)) });
     });
   }
   return out;

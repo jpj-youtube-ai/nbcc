@@ -6,7 +6,10 @@
     "s4": "medium brown",
     "s5": "deep brown"
   },
-  "deeper": ["s4", "s5"],
+  "deeper": [
+    "s4",
+    "s5"
+  ],
   "hairColours": {
     "dark": "dark brown",
     "brown": "mid brown",
@@ -20,7 +23,7 @@
     "curly": "short, full and curly, a soft round cloud of curls"
   },
   "styles": {
-    "elf": "a tall floppy elf hat that flops over to one side, with a thick fluffy cream fur brim and a fluffy cream bobble on its tip",
+    "elf": "a classic pointed elf hat that flops over a little at its tip, with a pointed zigzag brim all round in the same colour and a small gold jingle bell on the tip (not a Santa hat: no fur, no bobble)",
     "deer": "a classic detective's deerstalker hat in soft checked wool, with a peak at the front and the back and its ear flaps tied up on top with a little bow",
     "bobble": "a chunky knitted bobble hat with a turned up cream ribbed brim and a big fluffy cream bobble",
     "santa": "a soft velvet Santa hat with a fluffy cream fur brim, its tip curling down to one side with a cream pom pom",

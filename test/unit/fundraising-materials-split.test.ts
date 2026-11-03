@@ -46,7 +46,7 @@ function facts(over: Partial<FundraiserRecord> = {}) {
   } as FundraiserRecord;
   return materialFacts(f, meter({ onlinePence: 1000, cashPence: 0, targetPence: 50000 }), {
     pageUrl: "https://nbcc.test/fundraise/ssd",
-    getInvolvedUrl: "https://nbcc.test/get-involved",
+    whatsOnUrl: "https://nbcc.test/whats-on",
   });
 }
 

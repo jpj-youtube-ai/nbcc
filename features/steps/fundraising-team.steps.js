@@ -11,12 +11,14 @@ const { createHash, randomBytes } = require("node:crypto");
 // those addresses on the Monday summary's list (the rest of the list is left exactly as it was).
 //
 // Everything made here is marked like the rest: titles carry "(bdd-fr)", addresses end
-// "fr.bdd@example.com". Every name and address is invented.
+// "fr.bdd@example.com" (or "fr.bdd@nbcc.scot" on the summary's list). Every name and address is invented.
 
 const BASE_URL = process.env.BASE_URL || "http://localhost:3000";
 const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 
 const STAFF = "%fr.bdd@example.com";
+// The Monday summary takes nbcc.scot addresses only, so the invented ones put on its list end so.
+const SUMMARY = "%fr.bdd@nbcc.scot";
 const PASSWORD = "pw-fundraising-bdd";
 // As src/fundraising/invite.ts: only this hash of the token is ever stored.
 const TOKEN_DOMAIN = "fundraiseinvite.v1:";
@@ -27,10 +29,10 @@ async function clean() {
   await pool.query(
     `UPDATE fundraising_settings
         SET summary_recipients = COALESCE(
-              (SELECT jsonb_agg(e) FROM jsonb_array_elements_text(summary_recipients) AS e WHERE e NOT LIKE $1),
+              (SELECT jsonb_agg(e) FROM jsonb_array_elements_text(summary_recipients) AS e WHERE e NOT LIKE $1 AND e NOT LIKE $2),
               '[]'::jsonb)
       WHERE id = 1`,
-    [STAFF],
+    [STAFF, SUMMARY],
   );
 }
 

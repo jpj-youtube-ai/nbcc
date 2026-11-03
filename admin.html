@@ -18,6 +18,13 @@
     <script defer src="/assets/js/admin/pledges.js"></script>
     <!-- All emails: every fundraising and events email to read, and the few to approve. Its own card. -->
     <script defer src="/assets/js/admin/all-emails.js"></script>
+    <!-- Fill a Red Bag: the editor for the list on /fill. Its own stylesheet and script
+         (assets/js/admin/red-bag-list.js), beside the page's catalogue and the list's rules, which
+         the server checks with too. -->
+    <link rel="stylesheet" href="/assets/css/admin-red-bag-list.css" />
+    <script defer src="/assets/js/red-bag-catalogue.js"></script>
+    <script defer src="/assets/js/red-bag-list.js"></script>
+    <script defer src="/assets/js/admin/red-bag-list.js"></script>
     <!-- app.js is a classic script; bridge the ES-module gmail-reply.js helpers onto window
          so app.js (Contact form tab) can call them (2026-07-10 contact-inbox spec, Task 8). -->
     <script type="module">
@@ -79,7 +86,7 @@
             <span class="admin-user-actions">
               <!-- My account (Admin Phase 4, TASK-197): every signed-in user can manage their own
                    name/password from here, regardless of section permissions - so it lives in the
-                   topbar, not the permission-filtered left nav. -->
+                   topbar, not the permission-filtered nav. -->
               <button class="admin-logout" id="accountBtn" type="button">My account</button>
               <button class="admin-logout" id="logoutBtn" type="button">Sign out</button>
             </span>
@@ -92,39 +99,72 @@
                  than that), which opens the whole list wrapped into its groups. It replaces a line of
                  twenty buttons that scrolled sideways. -->
             <button class="admin-nav-toggle" id="adminNavToggle" type="button" aria-expanded="false" aria-controls="adminNavList">Menu</button>
+            <!-- Five groups. Wider than 860px (October 2026) the nav is a banner across the top: each
+                 group's head opens its own list as a drop down (app.js), and the phone label is hidden.
+                 At 860px and below the head is hidden and the label is shown, so the Menu button opens
+                 the same five groups as before. A group shows while any screen in it does (app.js). -->
             <ul id="adminNavList">
-              <li class="admin-nav-group" aria-hidden="true">Monitor</li>
-              <li><button class="admin-nav-link is-active" type="button" data-view="overview">Overview</button></li>
-              <li><button class="admin-nav-link" type="button" data-view="search">Search</button></li>
-              <li class="admin-nav-group" aria-hidden="true">Giving</li>
-              <li><button class="admin-nav-link" type="button" data-view="donations">Donations</button></li>
-              <li><button class="admin-nav-link" type="button" data-view="claims">Claims</button></li>
-              <li><button class="admin-nav-link" type="button" data-view="gasds">GASDS</button></li>
-              <li><button class="admin-nav-link" type="button" data-view="subscriptions">Subscriptions</button></li>
-              <li><button class="admin-nav-link" type="button" data-view="fulfilments" data-edit-gate="business-supporters">Business supporters</button></li>
-              <!-- data-view-gate (TASK-457): there is no "monthly" permission. The screen's data comes
-                   from the donations list and its route is gated on donations:view, so the link is
-                   too. Gated on "monthly" it was hidden from everyone, admins included. -->
-              <li><button class="admin-nav-link" type="button" data-view="monthly" data-view-gate="donations">Monthly givers</button></li>
-              <li class="admin-nav-group" aria-hidden="true">Content</li>
-              <li><button class="admin-nav-link" type="button" data-view="stories">Stories</button></li>
-              <li><button class="admin-nav-link" type="button" data-view="ticker">Partners</button></li>
-              <li><button class="admin-nav-link" type="button" data-view="events">Events</button></li>
-              <li><button class="admin-nav-link" type="button" data-view="fundraising">Fundraising</button></li>
-              <li><button class="admin-nav-link" type="button" data-view="ball">Festive Ball</button></li>
-              <li><button class="admin-nav-link" type="button" data-view="contact">Contact form</button></li>
-              <li><button class="admin-nav-link" type="button" data-view="newsletter">Newsletter</button></li>
-              <li><button class="admin-nav-link" type="button" data-view="thank-you">Thank you</button></li>
-              <li><button class="admin-nav-link" type="button" data-view="outreach">Contact businesses</button></li>
-              <li class="admin-nav-group" aria-hidden="true">Governance</li>
-              <li><button class="admin-nav-link" type="button" data-view="audit">Audit</button></li>
-              <li><button class="admin-nav-link" type="button" data-view="email-audit">Email audit</button></li>
-              <li class="admin-nav-group" id="teamNavGroup" aria-hidden="true">Admin</li>
-              <li><button class="admin-nav-link" type="button" data-view="analytics">Analytics</button></li>
-              <li><button class="admin-nav-link" type="button" data-view="site">Site pages</button></li>
-              <!-- TASK-492: QR codes for every page. Anyone who can view Site pages. -->
-              <li><button class="admin-nav-link" type="button" data-view="qr" data-view-gate="site">QR codes</button></li>
-              <li><button class="admin-nav-link" type="button" data-view="team">Team</button></li>
+              <li class="admin-nav-group" data-nav-group="monitor">
+                <span class="admin-nav-grouplabel" aria-hidden="true">Monitor</span>
+                <button class="admin-nav-grouphead" type="button" aria-expanded="false" aria-controls="adminNavMonitor">Monitor</button>
+                <ul class="admin-nav-panel" id="adminNavMonitor">
+                  <li><button class="admin-nav-link is-active" type="button" data-view="overview">Overview</button></li>
+                  <li><button class="admin-nav-link" type="button" data-view="search">Search</button></li>
+                </ul>
+              </li>
+              <li class="admin-nav-group" data-nav-group="giving">
+                <span class="admin-nav-grouplabel" aria-hidden="true">Giving</span>
+                <button class="admin-nav-grouphead" type="button" aria-expanded="false" aria-controls="adminNavGiving">Giving</button>
+                <ul class="admin-nav-panel" id="adminNavGiving">
+                  <li><button class="admin-nav-link" type="button" data-view="donations">Donations</button></li>
+                  <!-- Fill a Red Bag: the editor for the list on /fill. Its own permission, "red-bag". -->
+                  <li><button class="admin-nav-link" type="button" data-view="red-bag">Fill a Red Bag</button></li>
+                  <li><button class="admin-nav-link" type="button" data-view="claims">Claims</button></li>
+                  <li><button class="admin-nav-link" type="button" data-view="gasds">GASDS</button></li>
+                  <li><button class="admin-nav-link" type="button" data-view="subscriptions">Subscriptions</button></li>
+                  <li><button class="admin-nav-link" type="button" data-view="fulfilments" data-edit-gate="business-supporters">Business supporters</button></li>
+                  <!-- data-view-gate (TASK-457): there is no "monthly" permission. The screen's data comes
+                       from the donations list and its route is gated on donations:view, so the link is
+                       too. Gated on "monthly" it was hidden from everyone, admins included. -->
+                  <li><button class="admin-nav-link" type="button" data-view="monthly" data-view-gate="donations">Monthly givers</button></li>
+                </ul>
+              </li>
+              <li class="admin-nav-group" data-nav-group="content">
+                <span class="admin-nav-grouplabel" aria-hidden="true">Content</span>
+                <button class="admin-nav-grouphead" type="button" aria-expanded="false" aria-controls="adminNavContent">Content</button>
+                <ul class="admin-nav-panel" id="adminNavContent">
+                  <li><button class="admin-nav-link" type="button" data-view="stories">Stories</button></li>
+                  <li><button class="admin-nav-link" type="button" data-view="ticker">Partners</button></li>
+                  <!-- Get involved: NBCC's own events and community fundraising in one tab. It has no permission of
+                       its own: app.js shows it to anyone who may see Events or Fundraising, and inside it only
+                       the sections that person may see. -->
+                  <li><button class="admin-nav-link" type="button" data-view="get-involved" data-view-gate-any="events fundraising">Get involved</button></li>
+                  <li><button class="admin-nav-link" type="button" data-view="ball">Festive Ball</button></li>
+                  <li><button class="admin-nav-link" type="button" data-view="contact">Contact form</button></li>
+                  <li><button class="admin-nav-link" type="button" data-view="newsletter">Newsletter</button></li>
+                  <li><button class="admin-nav-link" type="button" data-view="thank-you">Thank you</button></li>
+                  <li><button class="admin-nav-link" type="button" data-view="outreach">Contact businesses</button></li>
+                </ul>
+              </li>
+              <li class="admin-nav-group" data-nav-group="governance">
+                <span class="admin-nav-grouplabel" aria-hidden="true">Governance</span>
+                <button class="admin-nav-grouphead" type="button" aria-expanded="false" aria-controls="adminNavGovernance">Governance</button>
+                <ul class="admin-nav-panel" id="adminNavGovernance">
+                  <li><button class="admin-nav-link" type="button" data-view="audit">Audit</button></li>
+                  <li><button class="admin-nav-link" type="button" data-view="email-audit">Email audit</button></li>
+                </ul>
+              </li>
+              <li class="admin-nav-group" id="teamNavGroup" data-nav-group="admin">
+                <span class="admin-nav-grouplabel" aria-hidden="true">Admin</span>
+                <button class="admin-nav-grouphead" type="button" aria-expanded="false" aria-controls="adminNavAdmin">Admin</button>
+                <ul class="admin-nav-panel" id="adminNavAdmin">
+                  <li><button class="admin-nav-link" type="button" data-view="analytics">Analytics</button></li>
+                  <li><button class="admin-nav-link" type="button" data-view="site">Site pages</button></li>
+                  <!-- TASK-492: QR codes for every page. Anyone who can view Site pages. -->
+                  <li><button class="admin-nav-link" type="button" data-view="qr" data-view-gate="site">QR codes</button></li>
+                  <li><button class="admin-nav-link" type="button" data-view="team">Team</button></li>
+                </ul>
+              </li>
             </ul>
           </nav>
 
@@ -200,9 +240,20 @@
               <div class="admin-table-wrap" id="monthlyTable" aria-live="polite"><p class="admin-loading">Loading…</p></div>
             </section>
 
+            <!-- Fill a Red Bag: the list on the public page /fill (red-bag:view to look,
+                 red-bag:edit to change). Drawn by assets/js/admin/red-bag-list.js; nothing here
+                 scrolls inside a box, and nothing changes on the website until Publish. -->
+            <section class="admin-view" id="view-red-bag" aria-labelledby="red-bag-heading" hidden>
+              <h2 id="red-bag-heading">Fill a Red Bag</h2>
+              <p class="admin-view-intro">The items, prices and examples on the Fill a Red Bag page. Your changes are saved as a draft that the whole team shares. Nothing changes on the website until someone presses Publish.</p>
+              <div id="rblRoot"><p class="admin-loading">Loading&hellip;</p></div>
+            </section>
+
             <!-- Browse all donations (paginated). -->
             <section class="admin-view" id="view-donations" aria-labelledby="donations-heading" hidden>
               <h2 id="donations-heading">Donations</h2>
+              <!-- Fill a Red Bag against the Donate page, this month and in all (loadDonationSources). -->
+              <div class="dn-sources" id="donationsSources" aria-live="polite"><p class="admin-loading">Loading…</p></div>
               <label class="admin-inline-filter" for="donationsPaymentFilter">Payment status
                 <select id="donationsPaymentFilter">
                   <option value="">All</option>
@@ -218,6 +269,15 @@
                   <option value="monthly">Monthly</option>
                   <option value="once">One off</option>
                 </select>
+              </label>
+              <label class="admin-inline-filter dn-redbag-filter" for="donationsRedBagFilter">
+                <input type="checkbox" id="donationsRedBagFilter"> Fill a Red Bag only
+              </label>
+              <label class="admin-inline-filter dn-redbag-filter" for="donationsBallFilter">
+                <input type="checkbox" id="donationsBallFilter"> Festive Ball only
+              </label>
+              <label class="admin-inline-filter dn-redbag-filter" for="donationsBallBagsFilter">
+                <input type="checkbox" id="donationsBallBagsFilter"> Red bags at the Ball only
               </label>
               <div class="admin-table-wrap" id="donationsTable" aria-live="polite"><p class="admin-loading">Loading…</p></div>
               <div class="admin-pager" id="donationsPager" hidden>
@@ -589,7 +649,7 @@
                 <details class="nl-manage" id="nlSuppressions">
                   <summary>Blocked addresses</summary>
                   <div class="nl-manage-body">
-                    <p class="admin-help">We stop emailing an address automatically when it bounces permanently (the mailbox doesn't exist) or the person marks us as spam. Continuing to email either one is what gets our emails sent to junk. Unblock only if you know the address works and they want to hear from us.</p>
+                    <p class="admin-help">We stop emailing an address automatically when it bounces permanently (the mailbox doesn't exist) or the person marks us as spam. Continuing to email either one is what gets our emails sent to junk. Staff can also stop emails to an address from the Email audit, when it is clearly dead: it is listed here as Blocked by staff. Unblock only if you know the address works and they want to hear from us.</p>
                     <div id="suppressionList" aria-live="polite"></div>
                     <p id="suppressionMsg" class="nl-sub-msg" aria-live="polite"></p>
                   </div>
@@ -1045,7 +1105,7 @@
                             <div class="ty-callout" id="tyPCallout"></div>
                             <p class="ty-personal" id="tyPPersonal" hidden></p>
                             <p>Donations like yours become Red Bags Full of Joy: thoughtful presents that bring dignity, comfort and a moment of joy. In 2025 our volunteers delivered 7,657 of them across South West Scotland, and the need grows every year.</p>
-                            <p>We are volunteer-run and here all year round, not just at Christmas. If you would like to fundraise, volunteer, or ask a question, reply to this letter or call the number below.</p>
+                            <p>We are volunteer led and here all year round, not just at Christmas. If you would like to fundraise, volunteer, or ask a question, reply to this letter or call the number below.</p>
                           </div>
                           <div class="ty-signoff">
                             <p>With warmest thanks,</p>
@@ -1093,18 +1153,40 @@
               <div class="admin-table-wrap" id="tickerTable" aria-live="polite"><p class="admin-loading">Loading…</p></div>
             </section>
 
-            <!-- Events (TASK-453). The public /events page: a deck of cards, one per event, built here.
-                 The whole page sits behind a switch only an admin can flip; switched off, /events is a
-                 404 and no page's menu mentions it. Everything else here follows the "events" section
-                 of the permission matrix. The previews are the real renderer's output, in frames
-                 sized to their content so nothing scrolls inside them. -->
-            <section class="admin-view" id="view-events" aria-labelledby="events-heading" hidden>
-              <h2 id="events-heading">Events</h2>
-              <p class="admin-view-intro">Everything on the website&rsquo;s Events page. Each event here is one card on the page, in date order, soonest first. The morning after an event happens it moves to Past by itself.</p>
+            <!-- Get involved: the old Events (TASK-453) and Fundraising (TASK-495) tabs as one tab with five
+                 sections, one showing at a time (app.js, "Get involved: one tab, five sections"). A move, not a
+                 rewrite: every card keeps its id and its code. The two boxes below keep the old tabs' ids,
+                 #view-events and #view-fundraising, because admin.css and the card scripts look for them, and
+                 because they are still the two permission sections: app.js shows each box only to someone who
+                 may see that section. Inside them, each [data-gi-part] belongs to one section button; Settings
+                 has a part in both (the Get involved page switch is an Events thing, the rest is Fundraising).
+                 Nothing here scrolls inside a box: the section buttons wrap and the page grows. -->
+            <section class="admin-view" id="view-get-involved" aria-labelledby="get-involved-heading" hidden>
+              <h2 id="get-involved-heading">Get involved</h2>
+              <div class="admin-segmented gi-sections" id="giSections" role="group" aria-label="Which part of Get involved to show">
+                <button class="admin-seg is-active" type="button" data-gi-section="signups" aria-pressed="true">Sign ups</button>
+                <button class="admin-seg" type="button" data-gi-section="events" aria-pressed="false">Our events</button>
+                <button class="admin-seg" type="button" data-gi-section="tickets" aria-pressed="false">Tickets and pledges</button>
+                <button class="admin-seg" type="button" data-gi-section="emails" aria-pressed="false">Emails</button>
+                <button class="admin-seg" type="button" data-gi-section="settings" aria-pressed="false">Settings</button>
+              </div>
+              <!-- One short line for the section showing. -->
+              <p class="admin-view-intro" data-gi-intro="signups">Everyone who has signed up to raise money for NBCC or hold an event for us. Nothing about a sign up is on the website until it is approved here, and every change an organiser asks for waits here for you too.</p>
+              <p class="admin-view-intro" data-gi-intro="events" hidden>NBCC&rsquo;s own events on the What&rsquo;s on page. Each event here is one card on the page, in date order, soonest first. The morning after an event happens it moves to Past by itself.</p>
+              <p class="admin-view-intro" data-gi-intro="tickets" hidden>Tickets sold for supporters&rsquo; events, and sponsors&rsquo; promises to pay after an event.</p>
+              <p class="admin-view-intro" data-gi-intro="emails" hidden>Invite someone to fundraise, and read every email the website sends about fundraising and events.</p>
+              <p class="admin-view-intro" data-gi-intro="settings" hidden>What is switched on, and the lists and examples the fundraising pages use.</p>
+              <!-- For someone who sees only the Get involved page switch here (Events, not Fundraising). -->
+              <p class="admin-view-intro" data-gi-intro="settings" data-gi-only="events" hidden>Whether the Get involved page is on the website.</p>
 
+              <!-- NBCC's own events (TASK-453): the "events" section of the permission matrix. The page switch
+                   is an admin's; switched off, /get-involved and /whats-on are 404s and no page's menu mentions them. The
+                   previews are the real renderer's output, in frames sized to their content. -->
+              <div id="view-events" hidden>
+                <div class="gi-part" data-gi-part="settings" role="group" aria-label="The Get involved page" hidden>
               <div class="ev-switch" id="evSwitch">
                 <div class="ev-switch-text">
-                  <h3 class="admin-subhead">Is the Events page on the website?</h3>
+                  <h3 class="admin-subhead">Is the Get involved page on the website?</h3>
                   <p class="ev-switch-state" id="evSwitchState" aria-live="polite">Checking&hellip;</p>
                   <p class="ev-switch-who" id="evSwitchWho"></p>
                 </div>
@@ -1112,8 +1194,9 @@
                 <p class="ev-switch-note" id="evSwitchNote" hidden>Only an admin can put the page on the website or take it off.</p>
               </div>
               <p class="ty-status" id="evSwitchStatus" role="status" aria-live="polite"></p>
-
-              <!-- TASK-464: the Festive Ball ticket report. Counts only, twice a week, to the people
+                </div>
+                <div class="gi-part" data-gi-part="events" role="group" aria-label="Our events" hidden>
+              <!-- TASK-464: the Festive Ball ticket report. Counts, and who has booked a whole table, twice a week, to the people
                    running the Ball with us. app.js shows it once the settings have loaded, and only
                    those who can edit Events can change it. -->
               <section class="ev-report" id="evReport" aria-labelledby="evReportHead" hidden>
@@ -1125,7 +1208,7 @@
                   <button class="ev-save-ghost" type="button" id="evReportToggle" aria-expanded="false" aria-controls="evReportBody">Open</button>
                 </div>
                 <div class="ev-report-body" id="evReportBody" hidden>
-                  <p class="ev-report-intro">One email on Monday and Thursday mornings at 8am with the Ball's ticket numbers: seats sold and left, what sold lately, the waiting list and the days to go. No names, no booking details and no money.</p>
+                  <p class="ev-report-intro">One email on Monday and Thursday mornings at 8am with the Ball's ticket numbers: seats sold and left, what sold lately, the waiting list and the days to go. It also lists who has booked a whole table: first name, surname, company and how many tables. No contact details and no money.</p>
                   <p class="ev-report-note">It goes as one email, so everyone on this list sees everyone else's address and can reply to all. Only add people who already work together on the Ball.</p>
                   <ul class="ev-report-list" id="evReportList"></ul>
                   <div class="ev-report-add" data-reportwrite>
@@ -1137,6 +1220,7 @@
                   <div class="ev-report-actions" data-reportwrite>
                     <button class="admin-btn" type="button" id="evReportSave">Save</button>
                     <button class="ev-save-ghost" type="button" id="evReportTest">Send a test to me</button>
+                    <button class="ev-save-ghost" type="button" id="evReportResend" hidden>Send today’s report again</button>
                   </div>
                   <p class="ty-status" id="evReportStatus" role="status" aria-live="polite"></p>
                   <p class="ev-report-last" id="evReportLast"></p>
@@ -1397,7 +1481,7 @@
                       <label for="evf-showFrom">Put it on the website on</label>
                       <input type="date" id="evf-showFrom" data-evk="showFrom" class="ev-input-date" />
                     </div>
-                    <p class="ev-step-note ev-step-note--last">It only shows while the Events page itself is switched on (at the top of this screen). Every save goes in the Audit log: who changed what, and when.</p>
+                    <p class="ev-step-note ev-step-note--last">It only shows while the Get involved page itself is switched on (in Settings). Every save goes in the Audit log: who changed what, and when.</p>
                   </fieldset>
 
                   <div class="ev-problems" id="evProblems" role="alert" hidden></div>
@@ -1423,33 +1507,86 @@
               </div>
 
               <section class="ev-page-preview" id="evPagePreviewBox" aria-labelledby="evPagePrevHead" hidden>
-                <h3 id="evPagePrevHead">The Events page, as visitors would see it</h3>
+                <h3 id="evPagePrevHead">Our events on the What&rsquo;s on page, as visitors would see them</h3>
                 <p id="evPagePrevNote">Every event on the page in date order, with the face down card last.</p>
-                <div id="evPageBox"><iframe class="ev-page-frame" id="evPagePreview" title="The Events page, as visitors would see it" scrolling="no"></iframe></div>
+                <div id="evPageBox"><iframe class="ev-page-frame" id="evPagePreview" title="Our events on the What&rsquo;s on page, as visitors would see them" scrolling="no"></iframe></div>
               </section>
-            </section>
-
-            <!-- TASK-495: Admin > Fundraising, community fundraising stage 1 (design:
-                 docs/superpowers/specs/2026-10-02-community-fundraising-design.md; API: README,
-                 "Community fundraising (TASK-493)"). Gated on fundraising:view; changes need
-                 fundraising:edit, and the switch needs an admin as well. app.js draws the list and
-                 opens one sign up below its row, like Business supporters. Nothing here scrolls
-                 inside a box: long lists show their top items and "Show all" grows the page. -->
-            <section class="admin-view" id="view-fundraising" aria-labelledby="fundraising-heading" hidden>
-              <h2 id="fundraising-heading">Fundraising</h2>
-              <p class="admin-view-intro">Everyone who has signed up to raise money for NBCC or hold an event for us. Nothing about a sign up is on the website until it is approved here, and every change an organiser asks for waits here for you too.</p>
-
-              <div class="fr-switch" id="frSwitch">
-                <div class="fr-switch-text">
-                  <h3 class="fr-switch-title">Fundraising on the website</h3>
-                  <p class="fr-switch-state" id="frSwitchState" aria-live="polite">Checking&hellip;</p>
-                  <p class="fr-switch-who" id="frSwitchWho"></p>
                 </div>
-                <button class="btn" type="button" id="frSwitchBtn" hidden>Loading&hellip;</button>
-                <p class="fr-switch-note" id="frSwitchNote" hidden>Only an admin can switch fundraising on or off.</p>
               </div>
-              <p class="ty-status" id="frSwitchStatus" role="status" aria-live="polite"></p>
 
+              <!-- Community fundraising (TASK-495; design: docs/superpowers/specs/2026-10-02-community-fundraising-design.md;
+                   API: README, "Community fundraising (TASK-493)"). Gated on fundraising:view; changes need
+                   fundraising:edit, and the switch needs an admin as well. app.js draws the list and opens one
+                   sign up below its row, like Business supporters. Long lists show their top items and
+                   "Show all" grows the page. -->
+              <div id="view-fundraising" hidden>
+                <div class="gi-part" data-gi-part="signups" role="group" aria-label="Sign ups" hidden>
+                  <!-- What kind of sign up: one list, filtered. app.js counts each kind and draws the same words
+                       on a large pill on every row. It works alongside the status filter under it. -->
+                  <div class="fr-bar fr-bar--kind">
+                    <div class="admin-segmented" id="frKindFilter" role="group" aria-label="Which kind of sign up to list">
+                      <button class="admin-seg is-active" type="button" data-frkind="" aria-pressed="true">All (<span data-frkindcount="all">0</span>)</button>
+                      <button class="admin-seg" type="button" data-frkind="raising" aria-pressed="false">Raising money (<span data-frkindcount="raising">0</span>)</button>
+                      <button class="admin-seg" type="button" data-frkind="team" aria-pressed="false">A team (<span data-frkindcount="team">0</span>)</button>
+                      <button class="admin-seg" type="button" data-frkind="event" aria-pressed="false">Hosting an event (<span data-frkindcount="event">0</span>)</button>
+                      <button class="admin-seg" type="button" data-frkind="memory" aria-pressed="false">In memory (<span data-frkindcount="memory">0</span>)</button>
+                    </div>
+                  </div>
+              <div class="fr-bar">
+                <div class="admin-segmented" id="frFilter" role="group" aria-label="Which sign ups to list">
+                  <button class="admin-seg is-active" type="button" data-frfilter="" aria-pressed="true">All (<span data-frcount="all">0</span>)</button>
+                  <button class="admin-seg" type="button" data-frfilter="new" aria-pressed="false">New (<span data-frcount="new">0</span>)</button>
+                  <button class="admin-seg" type="button" data-frfilter="approved" aria-pressed="false">Approved (<span data-frcount="approved">0</span>)</button>
+                  <button class="admin-seg" type="button" data-frfilter="declined" aria-pressed="false">Declined (<span data-frcount="declined">0</span>)</button>
+                  <button class="admin-seg" type="button" data-frfilter="finished" aria-pressed="false">Finished (<span data-frcount="finished">0</span>)</button>
+                  <button class="admin-seg" type="button" data-frfilter="calls" aria-pressed="false">Calls due (<span data-frcount="calls">0</span>)</button>
+                  <button class="admin-seg" type="button" data-frfilter="requests" aria-pressed="false">Requests to do (<span data-frcount="requests">0</span>)</button>
+                  <button class="admin-seg" type="button" data-frfilter="notback" aria-pressed="false">Buckets not back (<span data-frcount="notback">0</span>)</button>
+                  <button class="admin-seg" type="button" data-frfilter="packs" aria-pressed="false">Packs to send (<span data-frcount="packs">0</span>)</button>
+                </div>
+              </div>
+              <!-- No aria-live on the list: it redraws whenever a sign up opens or saves, and a live
+                   region would read it all out again (TASK-465). Each action speaks through its own
+                   status line inside the sign up. -->
+              <div class="admin-table-wrap fr-list" id="frList"><p class="admin-loading">Loading&hellip;</p></div>
+                </div>
+                <div class="gi-part" data-gi-part="tickets" role="group" aria-label="Tickets and pledges" hidden>
+              <!-- Event tickets (Jaimie, points 23 and 24): events where NBCC sells the tickets. Drawn by its
+                   own script (assets/js/admin/event-tickets.js) and styles, apart from app.js. Approve each
+                   kind of ticket, set the limit, close or open sales, print the guest list, download the
+                   CSV, and (admins only) make a refund. Nothing scrolls inside a box. -->
+              <section class="fr-card et-admin" id="etAdmin" aria-labelledby="etAdminHead" hidden>
+                <h3 class="admin-subhead" id="etAdminHead">Event tickets</h3>
+                <p class="fr-card-intro">Events where NBCC sells the tickets, soonest first. Nothing goes on sale until you approve each kind of ticket here, and the event itself is approved and public. Ticket money is shown apart from gifts and never has Gift Aid. An organiser can only ask for a refund: an admin makes it here, and it goes back to the buyer&rsquo;s card.</p>
+                <div id="etAdminList"><p class="admin-loading">Loading&hellip;</p></div>
+                <p class="ty-status" id="etAdminStatus" role="status" aria-live="polite"></p>
+              </section>
+
+              <!-- Sponsor pledges ("Sponsor now, pay after"): every fundraiser's pledges with the sponsor's
+                   email for staff, send the pay link and cancel. The two emails to sponsors are read and
+                   approved in the All emails card: the button here opens it at "Sponsor pledges". Drawn by
+                   assets/js/admin/pledges.js. Folded, with the totals in its bar. -->
+              <section class="fr-card fr-card--fold" id="frPledges" aria-labelledby="frPledgesHead" hidden>
+                <details class="fr-fold" id="frPledgesFold">
+                  <summary class="fr-fold-bar">
+                    <span class="admin-subhead fr-fold-title" id="frPledgesHead">Sponsor pledges</span>
+                    <span class="fr-summary-state" id="frPledgesState" aria-live="polite">Checking&hellip;</span>
+                  </summary>
+                  <div class="fr-fold-body">
+                    <p class="fr-card-intro">People who chose &ldquo;Sponsor now, pay after&rdquo; on a fundraiser&rsquo;s page. A pledge is a promise, not money: it never counts on the meter until it is paid. A pledge only counts once its sponsor confirms it by email. Each sponsor is emailed a link to pay the day after the event, and one reminder a week later. Unpaid pledges lose their name and email 90 days after the pay link.</p>
+                    <div class="fr-pledges-list" id="frPledgesList"></div>
+                    <div id="frPledgesTools" hidden>
+                      <div class="fx-call-row"><button class="admin-btn admin-btn--small fr-btn-quiet" type="button" id="frPledgesSendAll">Send new pay links to everyone unpaid</button></div>
+                      <p class="fr-field-hint">Only needed if the links we already emailed have stopped working. It sends one new link to each sponsor who has had one and hasn&rsquo;t paid, under the same rules as the daily emails.</p>
+                    </div>
+                    <p class="fr-touch-due" id="frPledgesEmailsState"></p>
+                    <div class="fx-call-row fr-emails-link"><button class="admin-btn admin-btn--small fr-btn-quiet" type="button" data-allemails-open="pledges">Read and approve these in All emails</button></div>
+                    <p class="ty-status" id="frPledgesStatus" role="status" aria-live="polite"></p>
+                  </div>
+                </details>
+              </section>
+                </div>
+                <div class="gi-part" data-gi-part="emails" role="group" aria-label="Emails" hidden>
               <!-- TASK-503: the team's tools. Invite someone (editors and admins), and who gets the
                    Monday summary (admins). Both grow the page; nothing scrolls inside them. -->
               <section class="fr-card" id="frInvite" aria-labelledby="frInviteHead" hidden>
@@ -1464,6 +1601,9 @@
                   <div class="fr-field"><label class="fx-call-label" for="frInviteEmail">Their email</label><input class="fx-call-input" id="frInviteEmail" name="email" type="email" maxlength="254" autocomplete="off" spellcheck="false" /></div>
                   <div class="fr-field fr-field--wide"><label class="fx-call-label" for="frInviteNote">A personal note (optional)</label><textarea class="fx-call-input fr-input" id="frInviteNote" name="note" rows="6" maxlength="5000"></textarea><span class="fr-field-hint">Up to 5,000 characters, so it can be a proper letter. It shows in the email, under a friendly hello.</span></div>
                   <div class="fr-field"><label class="fx-call-label" for="frInviteSigner">Signed by</label><select class="fx-call-input" id="frInviteSigner" name="signedBy"></select><span class="fr-field-hint">The email is signed with this first name, so they know who they spoke to. A copy goes to whoever it is signed by.</span></div>
+                  <!-- In memory invites come from Jodie: "Signed by" does nothing for them, so it is
+                       hidden and this line takes its place (frInviteSync in app.js). -->
+                  <p class="fr-field-hint" id="frInviteMemoryNote" hidden>In memory invites come from Jodie, are signed by her, and a copy goes to her.</p>
                   <!-- The email for the type chosen, to read before sending. The in memory invite is new
                        wording: it opens by itself and cannot be sent until an admin has approved it in
                        the All emails card (the link under Send opens it there). As tall as the email
@@ -1486,25 +1626,53 @@
                 <ul class="fr-people" id="frInvites"><li class="fr-people-empty">Loading&hellip;</li></ul>
               </section>
 
-              <!-- Folded by default (Jaimie): the state line shows in the summary bar; open it to change the list. -->
-              <section class="fr-card fr-card--fold" id="frSummary" aria-labelledby="frSummaryHead" hidden>
-                <details class="fr-fold" id="frSummaryFold">
+              <!-- TASK-515: the automatic emails to organisers. Only an admin can switch them on (they
+                   ship off). Every one is read, and its new wording approved, in the All emails card
+                   below: the button here opens it at "Keeping in touch (automatic)". -->
+              <section class="fr-card" id="frTouch" aria-labelledby="frTouchHead" hidden>
+                <h3 class="admin-subhead" id="frTouchHead">Automatic emails</h3>
+                <p class="fr-summary-state" id="frTouchState" aria-live="polite">Checking&hellip;</p>
+                <p class="fr-touch-due" id="frTouchDue"></p>
+                <p class="fr-card-intro">Friendly emails that go to an organiser by themselves, from the events inbox, at the right moments: their first gift, halfway, their target, a week before and a week after their date, when you mark them finished, and a year on. Each goes once at most, only to a public page raising money, never to anyone who has asked us to stop, and never to a page in memory of someone. Read every one in All emails before switching them on. New wording only sends once it's approved there.</p>
+                <div class="fr-touch-switch">
+                  <button class="admin-btn" type="button" id="frTouchSwitch" hidden>Loading&hellip;</button>
+                  <p class="fr-field-hint" id="frTouchSwitchNote" hidden>Only an admin can switch the automatic emails on or off.</p>
+                </div>
+                <div class="fx-call-row fr-emails-link"><button class="admin-btn admin-btn--small fr-btn-quiet" type="button" data-allemails-open="touch">Read and approve these in All emails</button></div>
+                <p class="fr-field-hint">They are under &ldquo;Keeping in touch (automatic)&rdquo;. The two that go after their date, &ldquo;How did it go?&rdquo; and the thank you when you mark them finished, are under &ldquo;Finishing and paying in&rdquo;.</p>
+                <p class="ty-status" id="frTouchStatus" role="status" aria-live="polite"></p>
+              </section>
+
+              <!-- All emails: every email the fundraising, pledge, ticket and Festive Ball code sends, in
+                   ten folded groups, each one opened exactly as it would arrive. The few that are approval
+                   gated are approved here (admins only). Drawn by assets/js/admin/all-emails.js from the
+                   one catalogue (src/email/catalogue.ts). Folded, with what is waiting in its bar. Each
+                   email is as tall as it is: the page grows, and nothing scrolls inside a box. -->
+              <section class="fr-card fr-card--fold" id="frAllEmails" aria-labelledby="frAllEmailsHead" hidden>
+                <details class="fr-fold" id="frAllEmailsFold">
                   <summary class="fr-fold-bar">
-                    <span class="admin-subhead fr-fold-title" id="frSummaryHead">Weekly summary</span>
-                    <span class="fr-summary-state" id="frSummaryState" aria-live="polite">Checking&hellip;</span>
+                    <span class="admin-subhead fr-fold-title" id="frAllEmailsHead">All emails</span>
+                    <span class="fr-summary-state" id="frAllEmailsState" aria-live="polite">Checking&hellip;</span>
                   </summary>
                   <div class="fr-fold-body">
-                    <p class="fr-card-intro">Every Monday at 8am, one email to each person on this list: last week's money, new sign ups, what is waiting on us and what is coming up.</p>
-                    <ul class="fr-people" id="frSummaryList"></ul>
-                    <div class="fr-summary-add">
-                      <div class="fr-field"><label class="fx-call-label" for="frSummaryEmail">Add an email address</label><input class="fx-call-input" id="frSummaryEmail" type="email" maxlength="254" autocomplete="off" spellcheck="false" /></div>
-                      <button class="admin-btn" type="button" id="frSummaryAdd">Add to the list</button>
-                      <button class="admin-btn fr-btn-quiet" type="button" id="frSummaryTest">Send a test now</button>
-                    </div>
-                    <p class="ty-status" id="frSummaryStatus" role="status" aria-live="polite"></p>
+                    <p class="fr-card-intro">Every email the website sends about fundraising, sponsor pledges, event tickets and the Festive Ball. Open a group, then press an email to read it exactly as it arrives, with made-up names. The wording can&rsquo;t be changed here. A few emails only go once an admin has approved their wording: those say &ldquo;Waiting for sign off&rdquo; or &ldquo;Approved&rdquo;.</p>
+                    <div class="fr-emails-groups" id="frAllEmailsGroups"></div>
+                    <p class="ty-status" id="frAllEmailsStatus" role="status" aria-live="polite"></p>
                   </div>
                 </details>
               </section>
+                </div>
+                <div class="gi-part" data-gi-part="settings" role="group" aria-label="Fundraising settings" hidden>
+              <div class="fr-switch" id="frSwitch">
+                <div class="fr-switch-text">
+                  <h3 class="fr-switch-title">Fundraising on the website</h3>
+                  <p class="fr-switch-state" id="frSwitchState" aria-live="polite">Checking&hellip;</p>
+                  <p class="fr-switch-who" id="frSwitchWho"></p>
+                </div>
+                <button class="btn" type="button" id="frSwitchBtn" hidden>Loading&hellip;</button>
+                <p class="fr-switch-note" id="frSwitchNote" hidden>Only an admin can switch fundraising on or off.</p>
+              </div>
+              <p class="ty-status" id="frSwitchStatus" role="status" aria-live="polite"></p>
 
               <!-- Fundraising categories: what people choose from on the sign up form, one each, A to
                    Z with Other last. Admins only. app.js draws the lists; nothing is ever
@@ -1542,357 +1710,387 @@
                 <p class="ty-status" id="frImpactStatus" role="status" aria-live="polite" tabindex="-1"></p>
               </section>
 
-              <!-- TASK-515: the automatic emails to organisers. Only an admin can switch them on (they
-                   ship off). Every one is read, and its new wording approved, in the All emails card
-                   below: the button here opens it at "Keeping in touch (automatic)". -->
-              <section class="fr-card" id="frTouch" aria-labelledby="frTouchHead" hidden>
-                <h3 class="admin-subhead" id="frTouchHead">Automatic emails</h3>
-                <p class="fr-summary-state" id="frTouchState" aria-live="polite">Checking&hellip;</p>
-                <p class="fr-touch-due" id="frTouchDue"></p>
-                <p class="fr-card-intro">Friendly emails that go to an organiser by themselves, from the events inbox, at the right moments: their first gift, halfway, their target, a week before and a week after their date, when you mark them finished, and a year on. Each goes once at most, only to a public page raising money, never to anyone who has asked us to stop, and never to a page in memory of someone. Read every one in All emails before switching them on. New wording only sends once it's approved there.</p>
-                <div class="fr-touch-switch">
-                  <button class="admin-btn" type="button" id="frTouchSwitch" hidden>Loading&hellip;</button>
-                  <p class="fr-field-hint" id="frTouchSwitchNote" hidden>Only an admin can switch the automatic emails on or off.</p>
-                </div>
-                <div class="fx-call-row fr-emails-link"><button class="admin-btn admin-btn--small fr-btn-quiet" type="button" data-allemails-open="touch">Read and approve these in All emails</button></div>
-                <p class="fr-field-hint">They are under &ldquo;Keeping in touch (automatic)&rdquo;. The two that go after their date, &ldquo;How did it go?&rdquo; and the thank you when you mark them finished, are under &ldquo;Finishing and paying in&rdquo;.</p>
-                <p class="ty-status" id="frTouchStatus" role="status" aria-live="polite"></p>
-              </section>
-
-              <!-- Event tickets (Jaimie, points 23 and 24): events where NBCC sells the tickets. Drawn by its
-                   own script (assets/js/admin/event-tickets.js) and styles, apart from app.js. Approve each
-                   kind of ticket, set the limit, close or open sales, print the guest list, download the
-                   CSV, and (admins only) make a refund. Nothing scrolls inside a box. -->
-              <section class="fr-card et-admin" id="etAdmin" aria-labelledby="etAdminHead" hidden>
-                <h3 class="admin-subhead" id="etAdminHead">Event tickets</h3>
-                <p class="fr-card-intro">Events where NBCC sells the tickets, soonest first. Nothing goes on sale until you approve each kind of ticket here, and the event itself is approved and public. Ticket money is shown apart from gifts and never has Gift Aid. An organiser can only ask for a refund: an admin makes it here, and it goes back to the buyer&rsquo;s card.</p>
-                <div id="etAdminList"><p class="admin-loading">Loading&hellip;</p></div>
-                <p class="ty-status" id="etAdminStatus" role="status" aria-live="polite"></p>
-              </section>
-
-              <!-- Sponsor pledges ("Sponsor now, pay after"): every fundraiser's pledges with the sponsor's
-                   email for staff, send the pay link and cancel. The two emails to sponsors are read and
-                   approved in the All emails card: the button here opens it at "Sponsor pledges". Drawn by
-                   assets/js/admin/pledges.js. Folded, with the totals in its bar. -->
-              <section class="fr-card fr-card--fold" id="frPledges" aria-labelledby="frPledgesHead" hidden>
-                <details class="fr-fold" id="frPledgesFold">
+              <!-- Folded by default (Jaimie): the state line shows in the summary bar; open it to change the list. -->
+              <section class="fr-card fr-card--fold" id="frSummary" aria-labelledby="frSummaryHead" hidden>
+                <details class="fr-fold" id="frSummaryFold">
                   <summary class="fr-fold-bar">
-                    <span class="admin-subhead fr-fold-title" id="frPledgesHead">Sponsor pledges</span>
-                    <span class="fr-summary-state" id="frPledgesState" aria-live="polite">Checking&hellip;</span>
+                    <span class="admin-subhead fr-fold-title" id="frSummaryHead">Weekly summary</span>
+                    <span class="fr-summary-state" id="frSummaryState" aria-live="polite">Checking&hellip;</span>
                   </summary>
                   <div class="fr-fold-body">
-                    <p class="fr-card-intro">People who chose &ldquo;Sponsor now, pay after&rdquo; on a fundraiser&rsquo;s page. A pledge is a promise, not money: it never counts on the meter until it is paid. A pledge only counts once its sponsor confirms it by email. Each sponsor is emailed a link to pay the day after the event, and one reminder a week later. Unpaid pledges lose their name and email 90 days after the pay link.</p>
-                    <div class="fr-pledges-list" id="frPledgesList"></div>
-                    <div id="frPledgesTools" hidden>
-                      <div class="fx-call-row"><button class="admin-btn admin-btn--small fr-btn-quiet" type="button" id="frPledgesSendAll">Send new pay links to everyone unpaid</button></div>
-                      <p class="fr-field-hint">Only needed if the links we already emailed have stopped working. It sends one new link to each sponsor who has had one and hasn&rsquo;t paid, under the same rules as the daily emails.</p>
+                    <p class="fr-card-intro">Every Monday at 8am, one email to everyone on this list, so Reply all reaches the whole team: last week's money, new sign ups, what is waiting on us and what is coming up. Only nbcc.scot addresses can be on the list.</p>
+                    <ul class="fr-people" id="frSummaryList"></ul>
+                    <div class="fr-summary-add">
+                      <div class="fr-field"><label class="fx-call-label" for="frSummaryEmail">Add an email address</label><input class="fx-call-input" id="frSummaryEmail" type="email" maxlength="254" autocomplete="off" spellcheck="false" /></div>
+                      <button class="admin-btn" type="button" id="frSummaryAdd">Add to the list</button>
+                      <button class="admin-btn fr-btn-quiet" type="button" id="frSummaryTest">Send a test now</button>
                     </div>
-                    <p class="fr-touch-due" id="frPledgesEmailsState"></p>
-                    <div class="fx-call-row fr-emails-link"><button class="admin-btn admin-btn--small fr-btn-quiet" type="button" data-allemails-open="pledges">Read and approve these in All emails</button></div>
-                    <p class="ty-status" id="frPledgesStatus" role="status" aria-live="polite"></p>
+                    <p class="ty-status" id="frSummaryStatus" role="status" aria-live="polite"></p>
                   </div>
                 </details>
               </section>
-
-              <!-- All emails: every email the fundraising, pledge, ticket and Festive Ball code sends, in
-                   ten folded groups, each one opened exactly as it would arrive. The few that are approval
-                   gated are approved here (admins only). Drawn by assets/js/admin/all-emails.js from the
-                   one catalogue (src/email/catalogue.ts). Folded, with what is waiting in its bar. Each
-                   email is as tall as it is: the page grows, and nothing scrolls inside a box. -->
-              <section class="fr-card fr-card--fold" id="frAllEmails" aria-labelledby="frAllEmailsHead" hidden>
-                <details class="fr-fold" id="frAllEmailsFold">
-                  <summary class="fr-fold-bar">
-                    <span class="admin-subhead fr-fold-title" id="frAllEmailsHead">All emails</span>
-                    <span class="fr-summary-state" id="frAllEmailsState" aria-live="polite">Checking&hellip;</span>
-                  </summary>
-                  <div class="fr-fold-body">
-                    <p class="fr-card-intro">Every email the website sends about fundraising, sponsor pledges, event tickets and the Festive Ball. Open a group, then press an email to read it exactly as it arrives, with made-up names. The wording can&rsquo;t be changed here. A few emails only go once an admin has approved their wording: those say &ldquo;Waiting for sign off&rdquo; or &ldquo;Approved&rdquo;.</p>
-                    <div class="fr-emails-groups" id="frAllEmailsGroups"></div>
-                    <p class="ty-status" id="frAllEmailsStatus" role="status" aria-live="polite"></p>
-                  </div>
-                </details>
-              </section>
-
-              <div class="fr-bar">
-                <div class="admin-segmented" id="frFilter" role="group" aria-label="Which sign ups to list">
-                  <button class="admin-seg is-active" type="button" data-frfilter="" aria-pressed="true">All (<span data-frcount="all">0</span>)</button>
-                  <button class="admin-seg" type="button" data-frfilter="new" aria-pressed="false">New (<span data-frcount="new">0</span>)</button>
-                  <button class="admin-seg" type="button" data-frfilter="approved" aria-pressed="false">Approved (<span data-frcount="approved">0</span>)</button>
-                  <button class="admin-seg" type="button" data-frfilter="declined" aria-pressed="false">Declined (<span data-frcount="declined">0</span>)</button>
-                  <button class="admin-seg" type="button" data-frfilter="finished" aria-pressed="false">Finished (<span data-frcount="finished">0</span>)</button>
-                  <button class="admin-seg" type="button" data-frfilter="calls" aria-pressed="false">Calls due (<span data-frcount="calls">0</span>)</button>
-                  <button class="admin-seg" type="button" data-frfilter="requests" aria-pressed="false">Requests to do (<span data-frcount="requests">0</span>)</button>
-                  <button class="admin-seg" type="button" data-frfilter="notback" aria-pressed="false">Buckets not back (<span data-frcount="notback">0</span>)</button>
-                  <button class="admin-seg" type="button" data-frfilter="packs" aria-pressed="false">Packs to send (<span data-frcount="packs">0</span>)</button>
                 </div>
               </div>
-              <!-- No aria-live on the list: it redraws whenever a sign up opens or saves, and a live
-                   region would read it all out again (TASK-465). Each action speaks through its own
-                   status line inside the sign up. -->
-              <div class="admin-table-wrap fr-list" id="frList"><p class="admin-loading">Loading&hellip;</p></div>
             </section>
 
             <!-- Festive Ball 2026 (TASK-313). The launch controls: the gate that publishes the
                  ticket page and the home-page promotion, capacity, the sales window, and the
                  details the venue confirmed after the page was written. There is deliberately NO
-                 ticket price field: £100 is printed in a magazine that cannot be recalled. -->
+                 ticket price field: £100 is printed in a magazine that cannot be recalled.
+                 October 2026 (Jaimie: "make it look almost like a website", "don't change any of the
+                 functionality"): a band in the Ball's own colours, then six sections, one on screen at
+                 a time, chosen with the row of buttons the Get involved tab uses (app.js, "Festive
+                 Ball: six sections"), and Set up as drop downs. A move, not a rewrite: every control
+                 keeps its id, its element and its code (test/unit/admin-ball-layout.test.ts lists them
+                 all). Two names stay as they are because other words point at them: the server says
+                 "Enter the bank details under Set up first", and the email to events@ says an admin
+                 "marks it paid under Festive Ball, Awaiting transfer". -->
             <section class="admin-view" id="view-ball" aria-labelledby="ball-heading" hidden>
-              <h2 id="ball-heading">Festive Ball</h2>
-              <p class="admin-view-intro">A Night to Remember, Saturday 7 November 2026 at The Park Hotel, Kilmarnock. Tickets are &pound;100 and a table of ten is &pound;1,000; those prices are fixed in the code because they are printed in the advert. Everything here takes effect on the public page immediately.</p>
+              <header class="ball-hero">
+                <div class="ball-hero-main">
+                  <h2 id="ball-heading">Festive Ball</h2>
+                  <p class="ball-hero-when">A Night to Remember, Saturday 7 November 2026 at The Park Hotel, Kilmarnock</p>
+                </div>
+                <ul class="ball-hero-facts" aria-label="The Ball at a glance">
+                  <li><span>A ticket</span><b>&pound;100</b></li>
+                  <li><span>A table of ten</span><b>&pound;1,000</b></li>
+                  <li id="ballHeroCountdown" data-ball-date="2026-11-07"><span>The night</span><b></b></li>
+                  <li id="ballHeroPage"><span>Ticket page</span><b>Checking&hellip;</b></li>
+                </ul>
+              </header>
 
-              <div class="admin-stats" id="ballStats" aria-live="polite"></div>
+              <div class="admin-segmented ball-sections" id="ballSections" role="group" aria-label="Which part of the Festive Ball to show">
+                <button class="admin-seg is-active" type="button" data-ball-section="overview" aria-pressed="true">Overview</button>
+                <button class="admin-seg" type="button" data-ball-section="bookings" aria-pressed="false">Bookings</button>
+                <button class="admin-seg" type="button" data-ball-section="transfers" aria-pressed="false">Awaiting transfer</button>
+                <button class="admin-seg" type="button" data-ball-section="guests" aria-pressed="false">Guests and menu</button>
+                <button class="admin-seg" type="button" data-ball-section="emails" aria-pressed="false">Emails</button>
+                <button class="admin-seg" type="button" data-ball-section="setup" aria-pressed="false">Set up</button>
+              </div>
 
-              <nav class="admin-jump" aria-label="Sections of this page">
-                <a href="#ball-setup">Set up</a>
-                <a href="#ball-state">Where things stand</a>
-                <a href="#ball-send">Send something</a>
-              </nav>
-              <h3 class="admin-band" id="ball-setup">Set up</h3>
-              <p class="admin-note admin-band-note">Everything the ticket page and the emails read from. Set once, change when the venue tells you something new.</p>
-              <h3 class="admin-subhead">Is the page public?</h3>
-              <p class="admin-note" id="ballGateState" aria-live="polite">Checking…</p>
-              <form id="ballGateForm" class="ty-controls" autocomplete="off">
-                <button class="btn btn-primary" type="submit" id="ballGateToggle">Loading…</button>
-                <label class="ty-inline">or open it automatically at
-                  <input id="ballGateOpensAt" type="datetime-local" />
-                </label>
-                <button class="btn btn-ghost" type="button" id="ballGateSchedule">Save schedule</button>
-              </form>
-              <p class="ty-status" id="ballGateStatus" role="status" aria-live="polite"></p>
+              <!-- What is happening: the numbers, and what needs someone. Drawn by app.js from the
+                   same answers the sections below are drawn from; it asks for nothing of its own. -->
+              <div class="ball-part" data-ball-part="overview" role="region" aria-label="Overview">
+                <div class="ball-glance admin-stats" id="ballStats" aria-live="polite"></div>
+                <h3 class="admin-subhead">Needs you</h3>
+                <div class="ball-needs" id="ballNeeds" aria-live="polite"><p class="admin-loading">Loading&hellip;</p></div>
+              </div>
 
-              <h3 class="admin-subhead">Preview password</h3>
-              <p class="admin-note">What you give trustees and the sponsor so they can see the page before it's public. Changing it signs out anyone using the old one, which is usually the point. You never need to touch AWS for this.</p>
-              <form id="ballPasswordForm" class="ty-controls" autocomplete="off">
-                <label class="ty-inline">New password
-                  <input id="ballPreviewPassword" type="text" minlength="8" maxlength="200" autocomplete="new-password" placeholder="at least 8 characters" style="width:240px" />
-                </label>
-                <button class="btn btn-primary" type="submit" id="ballPasswordSave">Set password</button>
-              </form>
-              <p class="ty-status" id="ballPasswordStatus" role="status" aria-live="polite"></p>
+              <div class="ball-part" data-ball-part="bookings" role="region" aria-label="Bookings">
+                <p class="ball-part-intro">Everyone who has booked, and the three lists you can download.</p>
+                <div class="ball-downloads" id="ballExports">
+                  <a class="ball-download" id="ballDoorList" href="#" download><b>Door list</b><span>For the welcome desk, alphabetical by surname.</span><em>Download CSV</em></a>
+                  <a class="ball-download" id="ballCatering" href="#" download><b>Catering list</b><span>The one to send the venue: food and access notes only, no emails, no references, no money.</span><em>Download CSV</em></a>
+                  <a class="ball-download" id="ballBookingsCsv" href="#" download><b>Bookings</b><span>Every booking, for your own records.</span><em>Download CSV</em></a>
+                </div>
+                <!-- Jaimie 2026-10-03: the ticket page asks for the booker's phone number, for menu choices.
+                     Bookings made before that have none; staff ring or email for it and add it here. -->
+                <div class="ball-no-phone" id="ballNoPhone" hidden>
+                  <p class="admin-note"><b id="ballNoPhoneCount"></b> <span id="ballNoPhoneHow">Bookings made before the ticket page asked for one have none. Ask them by email, then press <b>Add phone</b> beside their booking.</span></p>
+                  <p class="ty-controls" id="ballNoPhoneOnlyLabel"><label class="ty-inline ball-add-check"><input id="ballNoPhoneOnly" type="checkbox" /> <span>Show only bookings with no phone number</span></label></p>
+                </div>
+                <div class="admin-table-wrap" id="ballBookings" aria-live="polite"><p class="admin-loading">Loading…</p></div>
+              </div>
 
-              <h3 class="admin-subhead">Capacity and sales</h3>
-              <form id="ballCapacityForm" class="ty-controls" autocomplete="off">
-                <label class="ty-inline">Tables
-                  <input id="ballTotalTables" type="number" min="1" max="200" step="1" style="width:90px" />
-                </label>
-                <label class="ty-inline">Seats per table
-                  <input id="ballSeatsPerTable" type="number" min="1" max="20" step="1" style="width:90px" />
-                </label>
-                <label class="ty-inline">Held back
-                  <input id="ballHeldSeats" type="number" min="0" max="2000" step="1" style="width:90px" />
-                </label>
-                <label class="ty-inline">Sales close
-                  <input id="ballSalesCloseAt" type="datetime-local" />
-                </label>
-                <label class="ty-inline"><input id="ballSalesClosed" type="checkbox" /> Close sales now</label>
-                <button class="btn btn-primary" type="submit" id="ballCapacitySave">Save</button>
-              </form>
-              <p class="admin-note">Seats held back never go on sale — use it for comps, the sponsor&rsquo;s guests and the top table. Individual tickets share tables, so a table only stays sellable while nobody has been seated at it.</p>
-              <p class="ty-status" id="ballCapacityStatus" role="status" aria-live="polite"></p>
-
-              <h3 class="admin-subhead">Seats held back</h3>
-              <p class="admin-note">Take seats or tables off sale for someone by name &mdash; a company waiting on an invoice, the sponsor&rsquo;s guests, the top table. Give it a date and the seats go back on sale by themselves if nothing comes of it, so a forgotten hold cannot quietly shrink the room.</p>
-              <form id="ballHoldForm" class="ty-controls" autocomplete="off">
-                <label class="ty-inline">For
-                  <input id="ballHoldName" type="text" maxlength="200" placeholder="e.g. Ayrshire Bakery (invoice 1042)" style="width:260px" required />
-                </label>
-                <label class="ty-inline">How many
-                  <input id="ballHoldQuantity" type="number" min="1" max="400" step="1" value="1" style="width:80px" />
-                </label>
-                <label class="ty-inline">of
-                  <select id="ballHoldKind">
-                    <option value="table">tables</option>
-                    <option value="seat">seats</option>
-                  </select>
-                </label>
-                <label class="ty-inline">Hold until
-                  <input id="ballHoldExpires" type="datetime-local" />
-                </label>
-                <label class="ty-inline">Note
-                  <input id="ballHoldNote" type="text" maxlength="500" style="width:200px" />
-                </label>
-                <button class="btn btn-primary" type="submit" id="ballHoldSave">Hold</button>
-              </form>
-              <p class="admin-note">Leave &ldquo;hold until&rdquo; empty to hold the seats until someone releases them by hand.</p>
-              <p class="ty-status" id="ballHoldStatus" role="status" aria-live="polite"></p>
-              <div id="ballHolds"></div>
-
-              <h3 class="admin-subhead">Card fee</h3>
-              <p class="admin-note">What Stripe charges NBCC. The ticket page offers buyers the chance to cover it, so this must be the rate you are <em>actually</em> on &mdash; check it against a real payment in the Stripe dashboard, not a price list. Stripe charges this <b>once per booking</b>, not per ticket.</p>
-              <form id="ballFeeForm" class="ty-controls" autocomplete="off">
-                <label class="ty-inline">Percentage
-                  <input id="ballCardFeePercent" type="number" min="0" max="10" step="0.01" style="width:90px" /> %
-                </label>
-                <label class="ty-inline">Plus, per booking
-                  <input id="ballCardFeeFixed" type="number" min="0" max="500" step="1" style="width:90px" /> p
-                </label>
-                <button class="btn btn-primary" type="submit" id="ballFeeSave">Save</button>
-              </form>
-              <p class="admin-note" id="ballFeeExample"></p>
-              <p class="ty-status" id="ballFeeStatus" role="status" aria-live="polite"></p>
-
-              <!-- TASK-484: the account bank transfer buyers pay into, and the switch that puts the
-                   choice on the ticket page. Admins only, enforced by the server. -->
-              <h3 class="admin-subhead">Bank transfer</h3>
-              <p class="admin-note">The account buyers pay into when they choose bank transfer. They see these only after booking, never on the open page. Only an admin can change them.</p>
-              <form id="ballTransferForm" class="ty-controls" autocomplete="off">
-                <label class="ty-inline">Account name
-                  <input id="ballTransferAccountName" type="text" maxlength="70" style="width:260px" />
-                </label>
-                <label class="ty-inline">Sort code
-                  <input id="ballTransferSortCode" type="text" inputmode="numeric" maxlength="8" placeholder="12-34-56" style="width:110px" />
-                </label>
-                <label class="ty-inline">Account number
-                  <input id="ballTransferAccountNumber" type="text" inputmode="numeric" maxlength="8" style="width:120px" />
-                </label>
-                <!-- TASK-485: every booking's pay-by date shortens to fit this, and after it the
-                     ticket page offers card only. Empty means no last day. -->
-                <label class="ty-inline">Last day for transfers to arrive
-                  <input id="ballTransferLastDay" type="date" />
-                </label>
-                <label class="ty-inline"><input id="ballTransferOn" type="checkbox" /> Offer bank transfer on the ticket page</label>
-                <button class="btn btn-primary" type="submit" id="ballTransferSave">Save</button>
-              </form>
-              <p class="ty-status" id="ballTransferStatus" role="status" aria-live="polite"></p>
-
-              <h3 class="admin-subhead">Details the venue confirms later</h3>
-              <p class="admin-note">Leave these empty and the page says &ldquo;to be confirmed&rdquo; rather than guessing. Fill one in and it appears on the ticket page and in every booking email from then on.</p>
-              <form id="ballDetailsForm" class="ty-controls admin-stack" autocomplete="off">
-                <label class="ty-inline">Arrival time
-                  <input id="ballArrivalTime" type="text" maxlength="120" placeholder="e.g. 7pm for 7.30pm" style="width:240px" />
-                </label>
-                <label class="ty-inline">What else is included
-                  <input id="ballIncludedNote" type="text" maxlength="1000" placeholder="e.g. Arrival drink and a three-course dinner." style="width:420px" />
-                </label>
-                <label class="ty-inline">Line-up note
-                  <input id="ballLineUpNote" type="text" maxlength="1000" placeholder="e.g. Special guest announced soon." style="width:420px" />
-                </label>
-                <button class="btn btn-primary" type="submit" id="ballDetailsSave">Save details</button>
-              </form>
-              <p class="ty-status" id="ballDetailsStatus" role="status" aria-live="polite"></p>
-
-              <h3 class="admin-subhead">The menu</h3>
-              <p class="admin-note">Paste what the venue sends, <b>one course per line</b>, options separated by a vertical bar. A line with no options is a course everybody gets. Leave this empty and guests see no menu section at all &mdash; which is how it ships, because the menu is not confirmed yet.</p>
-              <p class="admin-note"><code>Starter: Cullen skink | Haggis bon bons | Melon</code><br /><code>Main: Steak pie | Salmon | Mushroom wellington</code><br /><code>Dessert: Cranachan | Cheesecake</code></p>
-              <p class="admin-note">A course offering only one dish is <b>not a question</b> &mdash; write it as <code>To start: Soup</code> and guests are shown it as "served to everyone" rather than being asked to choose soup from a list containing soup.</p>
-              <form id="ballMenuForm" class="ty-controls admin-stack" autocomplete="off">
-                <label class="ty-inline" style="align-items:flex-start">Menu
-                  <textarea id="ballMenuOptions" rows="5" maxlength="4000" style="width:min(100%,520px)" placeholder="Leave empty until the venue confirms it"></textarea>
-                </label>
-                <label class="ty-inline" style="align-items:flex-start">Dietary key
-                  <textarea id="ballMenuNote" rows="2" maxlength="500" style="width:min(100%,520px)" placeholder="Paste the key exactly as the venue wrote it"></textarea>
-                </label>
-                <button class="btn btn-primary" type="submit">Save the menu</button>
-                <span class="ty-status" id="ballMenuStatus" role="status" aria-live="polite"></span>
-              </form>
-
-              <h3 class="admin-subhead">When guest details close</h3>
-              <p class="admin-note">The date the venue needs final numbers by. <b>Nothing is chased until you set this</b> &mdash; an email asking for names with no date in it is just nagging, and it spends the one message people actually read. Once it is set, anyone still outstanding gets a reminder a fortnight before, and a last call on the day itself.</p>
-              <form id="ballLockForm" class="ty-controls admin-stack" autocomplete="off">
-                <label class="ty-inline">Guest details close
-                  <input id="ballLockAt" type="datetime-local" style="width:240px" />
-                </label>
-                <button class="btn btn-primary" type="submit">Save the date</button>
-                <span class="ty-status" id="ballLockStatus" role="status" aria-live="polite"></span>
-              </form>
-
-              <h3 class="admin-band" id="ball-state">Where things stand</h3>
-              <p class="admin-note admin-band-note">Who has booked, who still owes you an answer, and the lists the venue needs. Read these before you send anything.</p>
               <!-- TASK-484: bookings made to pay by bank transfer, holding their seats until the money
                    arrives. Marking one paid is for admins; more time and cancelling for Festive Ball edit. -->
-              <h3 class="admin-subhead">Awaiting transfer</h3>
-              <p class="admin-note">Booked to pay by bank transfer and holding their seats. When the money is in the bank, <b>Mark as paid</b> sends them their confirmation and the link to tell us who&rsquo;s coming. Only an admin can mark one paid.</p>
-              <!-- TASK-488: staff add a booking by hand for a phone or email order. Festive Ball edit;
-                   shown by app.js. The same booking and emails as the ticket page's. -->
-              <p class="ty-controls">
-                <button type="button" class="btn btn-ghost" id="ballAddTransferOpen" aria-expanded="false" aria-controls="ballAddTransferForm" hidden>Add a bank transfer booking</button>
-              </p>
-              <form id="ballAddTransferForm" class="ball-add-transfer" autocomplete="off" hidden>
-                <p class="admin-note">For a phone or email order. The buyer gets the bank details and their reference by email, exactly as if they had booked on the ticket page, and events@ hears about it. This works before the ticket page offers bank transfer, once the bank details are in. There is no Gift Aid or newsletter sign-up here: those need the buyer&rsquo;s own declaration.</p>
-                <p class="ty-controls">
-                  <label class="ty-inline">How many
-                    <input id="ballAddQuantity" type="number" min="1" max="9" step="1" value="1" style="width:70px" />
+              <div class="ball-part" data-ball-part="transfers" role="region" aria-label="Awaiting transfer">
+                <h3 class="admin-subhead">Awaiting transfer</h3>
+                <p class="admin-note">Booked to pay by bank transfer and holding their seats. When the money is in the bank, <b>Mark as paid</b> sends them their confirmation and the link to tell us who&rsquo;s coming. Only an admin can mark one paid.</p>
+                <div class="ball-toolbar">
+                  <label class="ty-inline ball-search">Find a payment by reference, name or amount
+                    <input id="ballTransferSearch" type="search" autocomplete="off" />
                   </label>
-                  <label class="ty-inline">of
-                    <select id="ballAddKind">
-                      <option value="table">tables of 10 (up to 4)</option>
-                      <option value="seat">tickets (up to 9)</option>
-                    </select>
-                  </label>
-                  <label class="ty-inline">Donation &pound;
-                    <input id="ballAddDonation" type="number" min="0" step="0.01" inputmode="decimal" style="width:90px" />
-                  </label>
-                </p>
-                <div class="ty-field"><label for="ballAddFirstName">First name</label><input id="ballAddFirstName" type="text" maxlength="60" /></div>
-                <div class="ty-field"><label for="ballAddSurname">Surname</label><input id="ballAddSurname" type="text" maxlength="60" /></div>
-                <div class="ty-field"><label for="ballAddEmail">Email</label><input id="ballAddEmail" type="email" maxlength="254" /></div>
-                <div class="ty-field"><label for="ballAddBuyerPhone">Phone number (optional)</label><input id="ballAddBuyerPhone" type="tel" inputmode="tel" maxlength="40" autocomplete="off" /></div>
-                <p class="ty-controls"><label class="ty-inline ball-add-check"><input id="ballAddInvoice" type="checkbox" /> <span>Their company needs an invoice (14 days to pay)</span></label></p>
-                <div id="ballAddInvoiceFields" hidden>
-                  <div class="ty-field"><label for="ballAddCompany">Company name</label><input id="ballAddCompany" type="text" maxlength="120" /></div>
-                  <div class="ty-field"><label for="ballAddAddress">Company address</label><textarea id="ballAddAddress" rows="3" maxlength="400"></textarea></div>
-                  <div class="ty-field"><label for="ballAddPo">Purchase order number (optional)</label><input id="ballAddPo" type="text" maxlength="60" /></div>
-                  <div class="ty-field"><label for="ballAddAccountsEmail">Accounts team email (optional, copied on every email)</label><input id="ballAddAccountsEmail" type="email" maxlength="254" /></div>
-                  <div class="ty-field"><label for="ballAddPhone">Phone number (optional)</label><input id="ballAddPhone" type="tel" maxlength="40" /></div>
+                  <!-- TASK-488: staff add a booking by hand for a phone or email order. Festive Ball edit;
+                       shown by app.js. The same booking and emails as the ticket page's. -->
+                  <button type="button" class="btn btn-ghost" id="ballAddTransferOpen" aria-expanded="false" aria-controls="ballAddTransferForm" hidden>Add a bank transfer booking</button>
                 </div>
-                <p class="ty-controls"><label class="ty-inline ball-add-check"><input id="ballAddTerms" type="checkbox" /> <span><b>Required:</b> the buyer has agreed to the <a href="/ball/terms" target="_blank" rel="noopener">ticket terms</a>, including that tickets are non-refundable and it is an over 18s event.</span></label></p>
-                <p class="ty-controls">
-                  <button class="btn btn-primary" type="submit" id="ballAddSave">Add the booking</button>
-                  <button class="btn btn-ghost" type="button" id="ballAddCancel">Cancel</button>
-                </p>
-              </form>
-              <p class="ty-status" id="ballAddStatus" role="status" aria-live="polite"></p>
-              <label class="ty-inline">Find a payment by reference, name or amount
-                <input id="ballTransferSearch" type="search" autocomplete="off" style="width:220px" />
-              </label>
-              <div id="ballTransfers" aria-live="polite"><p class="admin-loading">Loading…</p></div>
-              <h3 class="admin-subhead">Bookings</h3>
-              <p class="admin-note">Three lists. The <b>door list</b> is alphabetical by surname for the welcome desk. The <b>catering list</b> is the one you send the venue: it has food and access notes only, no emails, no references, no money. The <b>bookings list</b> is for your own records.</p>
-              <p class="ty-controls" id="ballExports">
-                <a class="btn btn-ghost" id="ballDoorList" href="#" download>Door list (CSV)</a>
-                <a class="btn btn-ghost" id="ballCatering" href="#" download>Catering list for the venue (CSV)</a>
-                <a class="btn btn-ghost" id="ballBookingsCsv" href="#" download>Bookings (CSV)</a>
-              </p>
-              <!-- Jaimie 2026-10-03: the ticket page asks for the booker's phone number, for menu choices.
-                   Bookings made before that have none; staff ring or email for it and add it here. -->
-              <div class="ball-no-phone" id="ballNoPhone" hidden>
-                <p class="admin-note"><b id="ballNoPhoneCount"></b> <span id="ballNoPhoneHow">Bookings made before the ticket page asked for one have none. Ask them by email, then press <b>Add phone</b> beside their booking.</span></p>
-                <p class="ty-controls" id="ballNoPhoneOnlyLabel"><label class="ty-inline ball-add-check"><input id="ballNoPhoneOnly" type="checkbox" /> <span>Show only bookings with no phone number</span></label></p>
+                <form id="ballAddTransferForm" class="ball-add-transfer" autocomplete="off" hidden>
+                  <p class="admin-note">For a phone or email order. The buyer gets the bank details and their reference by email, exactly as if they had booked on the ticket page, and events@ hears about it. This works before the ticket page offers bank transfer, once the bank details are in. There is no Gift Aid or newsletter sign-up here: those need the buyer&rsquo;s own declaration.</p>
+                  <p class="ty-controls">
+                    <label class="ty-inline">How many
+                      <input id="ballAddQuantity" type="number" min="1" max="9" step="1" value="1" style="width:70px" />
+                    </label>
+                    <label class="ty-inline">of
+                      <select id="ballAddKind">
+                        <option value="table">tables of 10 (up to 4)</option>
+                        <option value="seat">tickets (up to 9)</option>
+                      </select>
+                    </label>
+                    <label class="ty-inline">Donation &pound;
+                      <input id="ballAddDonation" type="number" min="0" step="0.01" inputmode="decimal" style="width:90px" />
+                    </label>
+                  </p>
+                  <div class="ty-field"><label for="ballAddFirstName">First name</label><input id="ballAddFirstName" type="text" maxlength="60" /></div>
+                  <div class="ty-field"><label for="ballAddSurname">Surname</label><input id="ballAddSurname" type="text" maxlength="60" /></div>
+                  <div class="ty-field"><label for="ballAddEmail">Email</label><input id="ballAddEmail" type="email" maxlength="254" /></div>
+                  <div class="ty-field"><label for="ballAddBuyerPhone">Phone number (optional)</label><input id="ballAddBuyerPhone" type="tel" inputmode="tel" maxlength="40" autocomplete="off" /></div>
+                  <p class="ty-controls"><label class="ty-inline ball-add-check"><input id="ballAddInvoice" type="checkbox" /> <span>Their company needs an invoice (14 days to pay)</span></label></p>
+                  <div id="ballAddInvoiceFields" hidden>
+                    <div class="ty-field"><label for="ballAddCompany">Company name</label><input id="ballAddCompany" type="text" maxlength="120" /></div>
+                    <div class="ty-field"><label for="ballAddAddress">Company address</label><textarea id="ballAddAddress" rows="3" maxlength="400"></textarea></div>
+                    <div class="ty-field"><label for="ballAddPo">Purchase order number (optional)</label><input id="ballAddPo" type="text" maxlength="60" /></div>
+                    <div class="ty-field"><label for="ballAddAccountsEmail">Accounts team email (optional, copied on every email)</label><input id="ballAddAccountsEmail" type="email" maxlength="254" /></div>
+                    <div class="ty-field"><label for="ballAddPhone">Phone number (optional)</label><input id="ballAddPhone" type="tel" maxlength="40" /></div>
+                  </div>
+                  <p class="ty-controls"><label class="ty-inline ball-add-check"><input id="ballAddTerms" type="checkbox" /> <span><b>Required:</b> the buyer has agreed to the <a href="/ball/terms" target="_blank" rel="noopener">ticket terms</a>, including that tickets are non-refundable and it is an over 18s event.</span></label></p>
+                  <p class="ty-controls">
+                    <button class="btn btn-primary" type="submit" id="ballAddSave">Add the booking</button>
+                    <button class="btn btn-ghost" type="button" id="ballAddCancel">Cancel</button>
+                  </p>
+                </form>
+                <p class="ty-status" id="ballAddStatus" role="status" aria-live="polite"></p>
+                <!-- Bookings' "Show only bookings with no phone number" covers this list too (app.js,
+                     filterBallTransfers). It is ticked in another section, so this says when it is on. -->
+                <p class="admin-note ball-filtered" id="ballTransfersFiltered" hidden>Showing only the bookings with no phone number, as ticked in Bookings. <button type="button" class="admin-link" id="ballShowAllTransfers">Show all</button></p>
+                <div id="ballTransfers" aria-live="polite"><p class="admin-loading">Loading…</p></div>
               </div>
-              <div class="admin-table-wrap" id="ballBookings" aria-live="polite"><p class="admin-loading">Loading…</p></div>
-              <h3 class="admin-subhead">Who has chosen</h3>
-              <p class="admin-note">Counted against the guests who have been <b>named</b>, not the seats bought: you cannot pick a dinner for somebody whose name nobody has given you yet. That gap is the guest-details list above, and a different email fixes it.</p>
-              <div id="ballMenuProgress"></div>
-              <div id="ballMenuOutstanding"></div>
 
-              <h3 class="admin-subhead">Guest details still to come</h3>
-              <p class="admin-note">Guest names, dietary requirements and access needs come from the person who booked, through the link in their confirmation email. Most of a table of ten arrives because the buyer chased nine other people, so this is who has not replied yet &mdash; biggest gap first. <b>Their link</b> opens the same page they were emailed, so you can resend it rather than asking them to find an old email.</p>
-              <div class="admin-stats" id="ballGuestProgress" aria-live="polite"><p class="admin-loading">Loading&hellip;</p></div>
-              <div class="admin-table-wrap" id="ballOutstanding" aria-live="polite"></div>
-              <p class="ty-controls">
-                <button class="btn btn-ghost" type="button" id="ballChase">Email everyone outstanding</button>
-                <span class="ty-status" id="ballChaseStatus" role="status" aria-live="polite"></span>
-              </p>
-              <p class="admin-note">Sends the same reminder the daily job sends, right now. Anyone already emailed at this stage is skipped, so pressing it twice is safe.</p>
+              <!-- The two chase lists, together: who still has guests to name, then who still has dinners
+                   to choose. Names first, because nobody can choose a dinner for a guest nobody has named. -->
+              <div class="ball-part" data-ball-part="guests" role="region" aria-label="Guests and menu">
+                <section class="ball-panel" aria-labelledby="ballGuestsHead">
+                  <h3 class="admin-subhead" id="ballGuestsHead">Guest details still to come</h3>
+                  <p class="admin-note">Guest names, dietary requirements and access needs come from the person who booked, through the link in their confirmation email. Most of a table of ten arrives because the buyer chased nine other people, so this is who has not replied yet, biggest gap first. <b>Their link</b> opens the same page they were emailed, so you can resend it rather than asking them to find an old email.</p>
+                  <div class="admin-stats" id="ballGuestProgress" aria-live="polite"><p class="admin-loading">Loading&hellip;</p></div>
+                  <div class="admin-table-wrap" id="ballOutstanding" aria-live="polite"></div>
+                </section>
+                <section class="ball-panel" aria-labelledby="ballChosenHead">
+                  <h3 class="admin-subhead" id="ballChosenHead">Who has chosen</h3>
+                  <p class="admin-note">Counted against the guests who have been <b>named</b>, not the seats bought: you cannot pick a dinner for somebody whose name nobody has given you yet. That gap is the guest details list above, and a different email fixes it.</p>
+                  <div class="admin-stats" id="ballMenuProgress"></div>
+                  <div class="admin-table-wrap" id="ballMenuOutstanding"></div>
+                </section>
+              </div>
 
-              <h3 class="admin-band" id="ball-send">Send something</h3>
-              <p class="admin-note admin-band-note">Each of these emails everyone who has paid. Nothing sends until you press it, and anyone already sent one is skipped.</p>
-              <h3 class="admin-subhead">The week-before reminder</h3>
-              <p class="admin-note">One email to everyone who has paid: the practical details, plus a read-back of the guests and dietary notes they gave us, so a mistake gets caught while there is still time to fix it. Anyone already sent one is skipped, so pressing this twice is safe.</p>
-              <p class="ty-controls">
-                <button class="btn btn-primary" type="button" id="ballSendReminders">Send the reminder</button>
-                <span class="ty-count" id="ballReminderCount" aria-live="polite"></span>
-              </p>
-              <p class="ty-status" id="ballReminderStatus" role="status" aria-live="polite"></p>
+              <div class="ball-part" data-ball-part="emails" role="region" aria-label="Emails">
+                <p class="ball-part-intro">Each of these goes to the people who have paid. Anyone already sent one is skipped. The chasing below is automatic; the others send only when you press them.</p>
+                <div class="ball-emails">
+                  <!-- TASK-576: the automatic chase for guest names and meal choices. app.js (loadBallChase) fills it in; the
+                       write controls are marked data-chasewrite and hidden from anyone who can only view the Ball. -->
+                  <article class="ball-email ball-chase" id="ballChaseCard" aria-labelledby="ballChaseHead">
+                    <h3 class="admin-subhead" id="ballChaseHead">Chasing guests and meals</h3>
+                    <p class="admin-note">Automatic. At 8am, 7, 5, 3 and 1 days before the guest details deadline, everyone who has paid and still has a seat without a name or a guest who hasn't chosen gets a reminder with a countdown. The chase list goes to the people below on those mornings and on the deadline morning.</p>
+                    <p class="ball-chase-next" id="ballChaseNext" aria-live="polite">Checking&hellip;</p>
+                    <ul class="ball-chase-list" id="ballChaseList"></ul>
+                    <div class="ball-chase-add" data-chasewrite>
+                      <div class="ball-chase-f"><label for="ballChaseName">Name</label><input type="text" id="ballChaseName" maxlength="60" autocomplete="off" /></div>
+                      <div class="ball-chase-f"><label for="ballChaseEmail">Email</label><input type="email" id="ballChaseEmail" autocomplete="off" /></div>
+                      <button class="btn btn-ghost" type="button" id="ballChaseAdd">Add</button>
+                    </div>
+                    <p class="ty-controls ball-chase-actions" data-chasewrite>
+                      <button class="btn btn-primary" type="button" id="ballChaseSave">Save the list</button>
+                    </p>
+                    <p class="ty-controls ball-chase-actions" data-chasewrite>
+                      <button class="btn btn-ghost" type="button" id="ballChaseTestReminder">Send me a test reminder</button>
+                      <button class="btn btn-ghost" type="button" id="ballChaseTestList">Send me a test chase list</button>
+                    </p>
+                    <p class="ty-status" id="ballChaseMsg" role="status" aria-live="polite"></p>
+                    <p class="ball-chase-last" id="ballChaseLast"></p>
+                  </article>
+                  <article class="ball-email" aria-labelledby="ballReminderHead">
+                    <h3 class="admin-subhead" id="ballReminderHead">The reminder a week before</h3>
+                    <p class="admin-note">One email to everyone who has paid: the practical details, plus a read-back of the guests and dietary notes they gave us, so a mistake gets caught while there is still time to fix it. Anyone already sent one is skipped, so pressing this twice is safe.</p>
+                    <p class="ty-controls">
+                      <button class="btn btn-primary" type="button" id="ballSendReminders">Send the reminder</button>
+                      <span class="ty-count" id="ballReminderCount" aria-live="polite"></span>
+                    </p>
+                    <p class="ty-status" id="ballReminderStatus" role="status" aria-live="polite"></p>
+                  </article>
+                  <article class="ball-email" aria-labelledby="ballMenuEmailHead">
+                    <h3 class="admin-subhead" id="ballMenuEmailHead">Telling everyone the menu is here</h3>
+                    <p class="admin-note">One email to everyone who has paid: the menu itself, so they can read it without clicking anything, the hotel's room rate, and their own link to choose. <b>Nothing sends until you press this</b>. Anyone already sent one is skipped, and so is a booking that has named every seat and whose guests have all chosen. It refuses while the menu in Set up is empty: an email headed "the menu is here" carrying no menu would burn the one send each booking gets.</p>
+                    <p class="ty-controls">
+                      <button class="btn btn-primary" type="button" id="ballSendMenuEmail">Send the menu email</button>
+                      <span class="ty-count" id="ballMenuEmailCount" aria-live="polite"></span>
+                    </p>
+                    <p class="ty-status" id="ballMenuEmailStatus" role="status" aria-live="polite"></p>
+                  </article>
+                </div>
+              </div>
 
-              <h3 class="admin-subhead">Telling everyone the menu is here</h3>
-              <p class="admin-note">One email to everyone who has paid: the menu itself, so they can read it without clicking anything, the hotel's room rate, and their own link to choose. <b>Nothing sends until you press this</b>, anyone already sent one is skipped, and it refuses while the menu above is empty &mdash; an email headed "the menu is here" carrying no menu would burn the one send each booking gets.</p>
-              <p class="ty-controls">
-                <button class="btn btn-primary" type="button" id="ballSendMenuEmail">Send the menu email</button>
-                <span class="ty-count" id="ballMenuEmailCount" aria-live="polite"></span>
-              </p>
-              <p class="ty-status" id="ballMenuEmailStatus" role="status" aria-live="polite"></p>
+              <!-- Everything the ticket page and the emails read from. Each drop down says on its closed
+                   line what it is set to now (app.js, ballSetupNow), so most visits need none opened. -->
+              <div class="ball-part" data-ball-part="setup" role="region" aria-label="Set up">
+                <p class="ball-part-intro">Everything the ticket page and the emails read from. Open one to change it, and the change shows on the public page straight away. The prices are fixed in the code, because &pound;100 and &pound;1,000 are printed in the advert.</p>
 
+                <details class="ball-setting">
+                  <summary><h3 class="ball-setting-name">The ticket page</h3><span class="ball-setting-now" data-ball-now="page"></span></summary>
+                  <div class="ball-setting-body">
+                    <h4 class="admin-subhead">Is the page public?</h4>
+                    <p class="admin-note" id="ballGateState" aria-live="polite">Checking…</p>
+                    <form id="ballGateForm" class="ty-controls" autocomplete="off">
+                      <button class="btn btn-primary" type="submit" id="ballGateToggle">Loading…</button>
+                      <label class="ty-inline">or open it automatically at
+                        <input id="ballGateOpensAt" type="datetime-local" />
+                      </label>
+                      <button class="btn btn-ghost" type="button" id="ballGateSchedule">Save schedule</button>
+                    </form>
+                    <p class="ty-status" id="ballGateStatus" role="status" aria-live="polite"></p>
+
+                    <h4 class="admin-subhead">Preview password</h4>
+                    <p class="admin-note">What you give trustees and the sponsor so they can see the page before it's public. Changing it signs out anyone using the old one, which is usually the point. You never need to touch AWS for this.</p>
+                    <form id="ballPasswordForm" class="ty-controls" autocomplete="off">
+                      <label class="ty-inline">New password
+                        <input id="ballPreviewPassword" type="text" minlength="8" maxlength="200" autocomplete="new-password" placeholder="at least 8 characters" style="width:240px" />
+                      </label>
+                      <button class="btn btn-primary" type="submit" id="ballPasswordSave">Set password</button>
+                    </form>
+                    <p class="ty-status" id="ballPasswordStatus" role="status" aria-live="polite"></p>
+                  </div>
+                </details>
+
+                <details class="ball-setting">
+                  <summary><h3 class="ball-setting-name">Seats and sales</h3><span class="ball-setting-now" data-ball-now="seats"></span></summary>
+                  <div class="ball-setting-body">
+                    <h4 class="admin-subhead">Capacity and sales</h4>
+                    <form id="ballCapacityForm" class="ty-controls" autocomplete="off">
+                      <label class="ty-inline">Tables
+                        <input id="ballTotalTables" type="number" min="1" max="200" step="1" style="width:90px" />
+                      </label>
+                      <label class="ty-inline">Seats per table
+                        <input id="ballSeatsPerTable" type="number" min="1" max="20" step="1" style="width:90px" />
+                      </label>
+                      <label class="ty-inline">Held back
+                        <input id="ballHeldSeats" type="number" min="0" max="2000" step="1" style="width:90px" />
+                      </label>
+                      <label class="ty-inline">Sales close
+                        <input id="ballSalesCloseAt" type="datetime-local" />
+                      </label>
+                      <label class="ty-inline"><input id="ballSalesClosed" type="checkbox" /> Close sales now</label>
+                      <button class="btn btn-primary" type="submit" id="ballCapacitySave">Save</button>
+                    </form>
+                    <p class="admin-note">Seats held back never go on sale: use it for comps, the sponsor&rsquo;s guests and the top table. Individual tickets share tables, so a table only stays sellable while nobody has been seated at it.</p>
+                    <p class="ty-status" id="ballCapacityStatus" role="status" aria-live="polite"></p>
+
+                    <h4 class="admin-subhead">Seats held back</h4>
+                    <p class="admin-note">Take seats or tables off sale for someone by name: a company waiting on an invoice, the sponsor&rsquo;s guests, the top table. Give it a date and the seats go back on sale by themselves if nothing comes of it, so a forgotten hold cannot quietly shrink the room.</p>
+                    <form id="ballHoldForm" class="ty-controls" autocomplete="off">
+                      <label class="ty-inline">For
+                        <input id="ballHoldName" type="text" maxlength="200" placeholder="e.g. Ayrshire Bakery (invoice 1042)" style="width:260px" required />
+                      </label>
+                      <label class="ty-inline">How many
+                        <input id="ballHoldQuantity" type="number" min="1" max="400" step="1" value="1" style="width:80px" />
+                      </label>
+                      <label class="ty-inline">of
+                        <select id="ballHoldKind">
+                          <option value="table">tables</option>
+                          <option value="seat">seats</option>
+                        </select>
+                      </label>
+                      <label class="ty-inline">Hold until
+                        <input id="ballHoldExpires" type="datetime-local" />
+                      </label>
+                      <label class="ty-inline">Note
+                        <input id="ballHoldNote" type="text" maxlength="500" style="width:200px" />
+                      </label>
+                      <button class="btn btn-primary" type="submit" id="ballHoldSave">Hold</button>
+                    </form>
+                    <p class="admin-note">Leave &ldquo;hold until&rdquo; empty to hold the seats until someone releases them by hand.</p>
+                    <p class="ty-status" id="ballHoldStatus" role="status" aria-live="polite"></p>
+                    <div id="ballHolds"></div>
+                  </div>
+                </details>
+
+                <details class="ball-setting">
+                  <summary><h3 class="ball-setting-name">Card fee</h3><span class="ball-setting-now" data-ball-now="fee"></span></summary>
+                  <div class="ball-setting-body">
+                    <p class="admin-note">What Stripe charges NBCC. The ticket page offers buyers the chance to cover it, so this must be the rate you are <em>actually</em> on. Check it against a real payment in the Stripe dashboard, not a price list. Stripe charges this <b>once per booking</b>, not per ticket.</p>
+                    <form id="ballFeeForm" class="ty-controls" autocomplete="off">
+                      <label class="ty-inline">Percentage
+                        <input id="ballCardFeePercent" type="number" min="0" max="10" step="0.01" style="width:90px" /> %
+                      </label>
+                      <label class="ty-inline">Plus, per booking
+                        <input id="ballCardFeeFixed" type="number" min="0" max="500" step="1" style="width:90px" /> p
+                      </label>
+                      <button class="btn btn-primary" type="submit" id="ballFeeSave">Save</button>
+                    </form>
+                    <p class="admin-note" id="ballFeeExample"></p>
+                    <p class="ty-status" id="ballFeeStatus" role="status" aria-live="polite"></p>
+                  </div>
+                </details>
+
+                <!-- TASK-484: the account bank transfer buyers pay into, and the switch that puts the
+                     choice on the ticket page. Admins only, enforced by the server. -->
+                <details class="ball-setting">
+                  <summary><h3 class="ball-setting-name">Bank transfer</h3><span class="ball-setting-now" data-ball-now="transfer"></span></summary>
+                  <div class="ball-setting-body">
+                    <p class="admin-note">The account buyers pay into when they choose bank transfer. They see these only after booking, never on the open page. Only an admin can change them.</p>
+                    <form id="ballTransferForm" class="ty-controls" autocomplete="off">
+                      <label class="ty-inline">Account name
+                        <input id="ballTransferAccountName" type="text" maxlength="70" style="width:260px" />
+                      </label>
+                      <label class="ty-inline">Sort code
+                        <input id="ballTransferSortCode" type="text" inputmode="numeric" maxlength="8" placeholder="12-34-56" style="width:110px" />
+                      </label>
+                      <label class="ty-inline">Account number
+                        <input id="ballTransferAccountNumber" type="text" inputmode="numeric" maxlength="8" style="width:120px" />
+                      </label>
+                      <!-- TASK-485: every booking's pay-by date shortens to fit this, and after it the
+                           ticket page offers card only. Empty means no last day. -->
+                      <label class="ty-inline">Last day for transfers to arrive
+                        <input id="ballTransferLastDay" type="date" />
+                      </label>
+                      <label class="ty-inline"><input id="ballTransferOn" type="checkbox" /> Offer bank transfer on the ticket page</label>
+                      <button class="btn btn-primary" type="submit" id="ballTransferSave">Save</button>
+                    </form>
+                    <p class="ty-status" id="ballTransferStatus" role="status" aria-live="polite"></p>
+                  </div>
+                </details>
+
+                <details class="ball-setting">
+                  <summary><h3 class="ball-setting-name">Details the venue confirms later</h3><span class="ball-setting-now" data-ball-now="details"></span></summary>
+                  <div class="ball-setting-body">
+                    <p class="admin-note">Leave these empty and the page says &ldquo;to be confirmed&rdquo; rather than guessing. Fill one in and it appears on the ticket page and in every booking email from then on.</p>
+                    <form id="ballDetailsForm" class="ty-controls admin-stack" autocomplete="off">
+                      <label class="ty-inline">Arrival time
+                        <input id="ballArrivalTime" type="text" maxlength="120" placeholder="e.g. 7pm for 7.30pm" style="width:240px" />
+                      </label>
+                      <label class="ty-inline">What else is included
+                        <input id="ballIncludedNote" type="text" maxlength="1000" placeholder="e.g. Arrival drink and a three-course dinner." style="width:420px" />
+                      </label>
+                      <label class="ty-inline">Line-up note
+                        <input id="ballLineUpNote" type="text" maxlength="1000" placeholder="e.g. Special guest announced soon." style="width:420px" />
+                      </label>
+                      <button class="btn btn-primary" type="submit" id="ballDetailsSave">Save details</button>
+                    </form>
+                    <p class="ty-status" id="ballDetailsStatus" role="status" aria-live="polite"></p>
+                  </div>
+                </details>
+
+                <details class="ball-setting">
+                  <summary><h3 class="ball-setting-name">The menu</h3><span class="ball-setting-now" data-ball-now="menu"></span></summary>
+                  <div class="ball-setting-body">
+                    <p class="admin-note">Paste what the venue sends, <b>one course per line</b>, options separated by a vertical bar. A line with no options is a course everybody gets. Leave this empty and guests see no menu section at all, which is how it ships, because the menu is not confirmed yet.</p>
+                    <p class="admin-note"><code>Starter: Cullen skink | Haggis bon bons | Melon</code><br /><code>Main: Steak pie | Salmon | Mushroom wellington</code><br /><code>Dessert: Cranachan | Cheesecake</code></p>
+                    <p class="admin-note">A course offering only one dish is <b>not a question</b>: write it as <code>To start: Soup</code> and guests are shown it as "served to everyone" rather than being asked to choose soup from a list containing soup.</p>
+                    <form id="ballMenuForm" class="ty-controls admin-stack" autocomplete="off">
+                      <label class="ty-inline" style="align-items:flex-start">Menu
+                        <textarea id="ballMenuOptions" rows="5" maxlength="4000" style="width:min(100%,520px)" placeholder="Leave empty until the venue confirms it"></textarea>
+                      </label>
+                      <label class="ty-inline" style="align-items:flex-start">Dietary key
+                        <textarea id="ballMenuNote" rows="2" maxlength="500" style="width:min(100%,520px)" placeholder="Paste the key exactly as the venue wrote it"></textarea>
+                      </label>
+                      <button class="btn btn-primary" type="submit">Save the menu</button>
+                      <span class="ty-status" id="ballMenuStatus" role="status" aria-live="polite"></span>
+                    </form>
+                  </div>
+                </details>
+
+                <details class="ball-setting">
+                  <summary><h3 class="ball-setting-name">When guest details close</h3><span class="ball-setting-now" data-ball-now="lock"></span></summary>
+                  <div class="ball-setting-body">
+                    <p class="admin-note">The date the venue needs final numbers by. <b>Nothing is chased until you set this.</b> An email asking for names with no date in it is just nagging, and it spends the one message people actually read. Once it is set, anyone still outstanding gets a reminder a fortnight before, and a last call on the day itself.</p>
+                    <form id="ballLockForm" class="ty-controls admin-stack" autocomplete="off">
+                      <label class="ty-inline">Guest details close
+                        <input id="ballLockAt" type="datetime-local" style="width:240px" />
+                      </label>
+                      <button class="btn btn-primary" type="submit">Save the date</button>
+                      <span class="ty-status" id="ballLockStatus" role="status" aria-live="polite"></span>
+                    </form>
+                  </div>
+                </details>
+              </div>
             </section>
 
             <!-- Audit trail (append-only governance log). -->
@@ -2135,7 +2333,7 @@
                  starts at the feature's deploy — nothing was recorded per-send before it. -->
             <section class="admin-view" id="view-email-audit" aria-labelledby="email-audit-heading" hidden>
               <h2 id="email-audit-heading">Email audit</h2>
-              <p class="admin-view-intro">Every email the system has tried to send, newest first, with what happened to it: sent, failed, and what the mailbox side reported back (delivered, bounced, marked as spam). Anything that went wrong in the last 14 days sits in the red band at the top. Records are kept for six years after the tax year they were sent in, then removed automatically.</p>
+              <p class="admin-view-intro">Every email the system has tried to send, newest first, with what happened to it: sent, failed, and what the mailbox side reported back (delivered, bounced, marked as spam). Anything that went wrong in the last 14 days sits in the red band at the top, until someone removes its address there. Removing an address deletes nothing: every email stays in the list below. Records are kept for six years after the tax year they were sent in, then removed automatically.</p>
               <form id="emailAuditFilters" class="ty-controls" autocomplete="off">
                 <label class="ty-inline">Search
                   <input id="emailAuditSearch" type="search" placeholder="Name, email or subject" style="width:220px" />
@@ -2156,6 +2354,9 @@
                 <button class="btn btn-primary" type="submit">Apply</button>
                 <button class="btn btn-ghost" type="button" id="emailAuditClear">Clear</button>
               </form>
+              <!-- TASK-562: what a press in the red band just did, with Put back. Here from the start,
+                   and a line tall while empty, so its words do not push the band down. -->
+              <p class="ty-status" id="emailAuditSaid" role="status" aria-live="polite" tabindex="-1"></p>
               <div id="emailAuditFailures" aria-live="polite"></div>
               <div class="admin-table-wrap" id="emailAuditTable" aria-live="polite"><p class="admin-loading">Loading…</p></div>
               <div class="ty-controls" id="emailAuditPager" hidden>
@@ -2278,7 +2479,7 @@
                  write controls for read-only users and the server enforces regardless. -->
             <section class="admin-view" id="view-site" aria-labelledby="site-heading" hidden>
               <h2 id="site-heading">Site pages</h2>
-              <p class="admin-view-intro">Spare addresses quietly send visitors to the right page, so a mistyped or shortened address still lands well. The search engine ticks decide which pages appear in the site's public listing for Google and friends. The <a href="/sitemap" target="_blank" rel="noopener">site map page</a> shows every page as visitors can reach it.</p>
+              <p class="admin-view-intro">Spare addresses quietly send visitors to the right page, so a mistyped or shortened address still lands well. A spare address can also send people on to an NBCC subdomain, so nbcc.scot/drop opens drop.nbcc.scot. The search engine ticks decide which pages appear in the site's public listing for Google and friends. The <a href="/sitemap" target="_blank" rel="noopener">site map page</a> shows every page as visitors can reach it.</p>
               <h3 class="admin-subhead">Every page</h3>
               <p class="admin-help">The whole website in one list, including the pages nobody can find by browsing. If a page is here, it is somebody&rsquo;s to keep up to date.</p>
               <div class="admin-table-wrap" id="siteAllTable" aria-live="polite"><p class="admin-loading">Loading&hellip;</p></div>
@@ -2291,10 +2492,15 @@
                 <label class="ty-inline">Sends people to
                   <select id="siteAliasTo"></select>
                 </label>
+                <!-- TASK-568: shown only when "An NBCC subdomain" is chosen above. -->
+                <label class="ty-inline" id="siteAliasHostWrap" hidden>Subdomain
+                  <input id="siteAliasHost" type="text" placeholder="drop.nbcc.scot" style="width:220px" autocapitalize="none" autocorrect="off" spellcheck="false" inputmode="url" aria-describedby="siteAliasHostHelp" />
+                </label>
                 <button class="btn btn-primary" type="submit" id="siteAliasAdd">Add</button>
               </form>
+              <p class="admin-help" id="siteAliasHostHelp" hidden>The address must end in <b>.nbcc.scot</b>, like drop.nbcc.scot or drop.nbcc.scot/collect. The subdomain has to exist already: this only sends people to it.</p>
               <p class="ty-status" id="siteStatus" role="status" aria-live="polite"></p>
-              <div class="admin-table-wrap" id="siteAliasTable" aria-live="polite"><p class="admin-loading">Loading…</p></div>
+              <div class="admin-table-wrap sa-list" id="siteAliasTable" aria-live="polite"><p class="admin-loading">Loading…</p></div>
               <h3 class="admin-subhead">Search engines</h3>
               <div class="admin-table-wrap" id="siteSeoTable" aria-live="polite"><p class="admin-loading">Loading…</p></div>
             </section>

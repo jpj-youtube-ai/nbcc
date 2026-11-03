@@ -5,6 +5,7 @@ import { buildDeclarationCancellation } from "../declarations/cancellation";
 import { computeRetentionExpiry } from "../declarations/retention";
 import { gasdsClaimDeadline } from "../gasds/deadline";
 import type { Scope } from "../declarations/wording";
+import { DONATION_SOURCES } from "./stripe-webhook-model";
 
 // Read access to admin/staff `users` (TASK-105/REQ-062). Read-only (pool.query, no transaction —
 // mirrors getDonorPortalSnapshot in src/db/portal.ts). The login endpoint looks a user up by email
@@ -675,6 +676,8 @@ export interface DonationSearchRow {
   claim_status: string;
   payment_channel: string;
   created_at: Date;
+  /** Where the gift was started: 'red_bag' for Fill a Red Bag, null for every other gift. */
+  source: string | null;
 }
 
 // Find donations by donor name/email, Stripe id, donation id or donor id (joins the donor for the
@@ -684,7 +687,7 @@ export async function searchDonations(q: string): Promise<DonationSearchRow[]> {
   const res = await pool.query<DonationSearchRow>(
     `SELECT d.id, d.donor_id, dn.full_name AS donor_name, dn.email AS donor_email,
             d.mode, d.plan, d.amount_pence, d.currency, d.gift_aid, d.claim_status,
-            d.payment_channel, d.created_at
+            d.payment_channel, d.created_at, d.source
        FROM donations d
        JOIN donors dn ON dn.id = d.donor_id
       WHERE dn.full_name ILIKE $1 OR dn.email ILIKE $1
@@ -733,6 +736,8 @@ export interface AdminDonationRow {
   refunded_amount_pence: number;
   declaration_status: string | null;
   created_at: Date;
+  /** Where the gift was started: 'red_bag' for Fill a Red Bag, null for every other gift. */
+  source: string | null;
 }
 
 // Browse ALL donations, newest first, optionally filtered by claim_status and/or payment_channel,
@@ -745,6 +750,8 @@ export async function listDonations(opts: {
   paymentStatus?: string;
   /** TASK-446: 'monthly' or 'once'. Anything else is ignored rather than returning nothing. */
   mode?: string;
+  /** 'red_bag': only gifts started on Fill a Red Bag. Anything else is ignored, as mode is. */
+  source?: string;
 }): Promise<{ results: AdminDonationRow[]; total: number }> {
   const { limit, offset } = clampPage(opts.limit, opts.offset);
   const where: string[] = [];
@@ -772,6 +779,12 @@ export async function listDonations(opts: {
     params.push(opts.mode);
     where.push(`d.mode = $${params.length}`);
   }
+  // Fill a Red Bag only. Checked against the one list of sources (DONATION_SOURCES), for the same
+  // reason as mode above: junk reads as "no filter", never as an empty list.
+  if (typeof opts.source === "string" && (DONATION_SOURCES as readonly string[]).includes(opts.source)) {
+    params.push(opts.source);
+    where.push(`d.source = $${params.length}`);
+  }
   const whereSql = where.length ? `WHERE ${where.join(" AND ")}` : "";
   const totalRes = await pool.query<{ count: number }>(
     `SELECT count(*)::int AS count FROM donations d ${whereSql}`,
@@ -780,7 +793,7 @@ export async function listDonations(opts: {
   const res = await pool.query<AdminDonationRow>(
     `SELECT d.id, d.donor_id, dn.full_name AS donor_name, dn.email AS donor_email,
             d.mode, d.plan, d.amount_pence, d.currency, d.gift_aid, d.claim_status,
-            d.payment_status, d.payment_channel, d.refunded_amount_pence, d.declaration_status, d.created_at
+            d.payment_status, d.payment_channel, d.refunded_amount_pence, d.declaration_status, d.created_at, d.source
        FROM donations d
        JOIN donors dn ON dn.id = d.donor_id
        ${whereSql}

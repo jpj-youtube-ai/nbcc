@@ -1,0 +1,69 @@
+// Fill a Red Bag against the Donate page: the pure rules behind the totals at the top of the
+// Donations screen and the Overview's line. The read is sumGiftsBySource in
+// src/db/overview-numbers.ts; the route is src/routes/admin-donation-sources.ts.
+
+import { giftsWords } from "./overview-numbers";
+
+// "£412 from 19 gifts": whole pounds, as the Overview's numbers are, and worded in one place.
+export { giftsWords };
+
+/** Money received, in pence, and how many gifts it came from. */
+export type GiftSum = { pence: number; gifts: number };
+/** This UK month so far, and all time. */
+export type SourceSums = { month: GiftSum; all: GiftSum };
+export type SourceTotals = { redBag: SourceSums; ball: SourceSums; ballBags: SourceSums; donatePage: SourceSums };
+
+/** One row of the grouped read. Postgres hands SUM and COUNT back as strings. */
+export interface SourceTotalsRow {
+  bucket: string;
+  month_pence: string | number;
+  month_gifts: string | number;
+  all_pence: string | number;
+  all_gifts: string | number;
+}
+
+// donations.source has only been written since TASK-555 went live. Earlier Fill a Red Bag gifts
+// were left unlabelled on purpose, so they sit in the Donate page's figures.
+export const RED_BAG_COUNTED_FROM_NOTE = "Fill a Red Bag gifts are counted from 5 October 2026.";
+// The Festive Ball's donate page (/ball/donate) labelled its gifts from the day it opened.
+export const BALL_GIFTS_NOTE = "Festive Ball gifts are those made on the Ball's own donate page.";
+// The red bag cards on the Festive Ball tables (/bag) are their own line, never part of the Ball's.
+export const BALL_BAGS_NOTE = "Red bags at the Ball are gifts from the table cards at the Festive Ball.";
+
+const none = (): SourceSums => ({ month: { pence: 0, gifts: 0 }, all: { pence: 0, gifts: 0 } });
+
+/** Every bucket, whatever came back: one with no gifts has no row, and is a real zero. */
+export function sourceTotalsFrom(rows: readonly SourceTotalsRow[]): SourceTotals {
+  const out: SourceTotals = { redBag: none(), ball: none(), ballBags: none(), donatePage: none() };
+  for (const r of rows) {
+    if (r.bucket !== "redBag" && r.bucket !== "ball" && r.bucket !== "ballBags" && r.bucket !== "donatePage") continue;
+    out[r.bucket] = {
+      month: { pence: Number(r.month_pence), gifts: Number(r.month_gifts) },
+      all: { pence: Number(r.all_pence), gifts: Number(r.all_gifts) },
+    };
+  }
+  return out;
+}
+
+export interface SourceLine {
+  key: keyof SourceTotals;
+  name: string;
+  month: string;
+  all: string;
+}
+
+/** The lines at the top of the Donations screen: Fill a Red Bag, the Festive Ball, the Ball's red bags, the Donate page. */
+export function sourceLines(t: SourceTotals): SourceLine[] {
+  const line = (key: keyof SourceTotals, name: string): SourceLine => ({
+    key,
+    name,
+    month: giftsWords(t[key].month),
+    all: giftsWords(t[key].all),
+  });
+  return [
+    line("redBag", "Fill a Red Bag"),
+    line("ball", "Festive Ball"),
+    line("ballBags", "Red bags at the Ball"),
+    line("donatePage", "Donate page"),
+  ];
+}

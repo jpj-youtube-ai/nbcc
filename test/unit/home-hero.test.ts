@@ -18,9 +18,9 @@ const doc = new DOMParser().parseFromString(html, "text/html");
 const norm = (s: string | null | undefined) => (s ?? "").replace(/\s+/g, " ").trim();
 
 describe("home hero (REQ-010)", () => {
-  it("shows the eyebrow naming the volunteer-run Scottish charity", () => {
+  it("shows the eyebrow naming the volunteer led Scottish charity", () => {
     const eyebrow = doc.querySelector("main .eyebrow");
-    expect(norm(eyebrow?.textContent)).toContain("Volunteer run Scottish charity");
+    expect(norm(eyebrow?.textContent)).toContain("Volunteer led Scottish charity");
   });
 
   it("has an emotive H1 with a dedicated emphasised element", () => {
@@ -46,7 +46,7 @@ describe("home hero (REQ-010)", () => {
 
   it("uses the logo lockup as the hero illustration with alt + dimensions", () => {
     const img = doc.querySelector(".hero-art img");
-    expect(img?.getAttribute("src")).toMatch(/nbcc-logo\.png/);
+    expect(img?.getAttribute("src")).toMatch(/nbcc-logo-full\.svg/);
     expect((img?.getAttribute("alt") ?? "").trim().length).toBeGreaterThan(0);
     expect(img?.getAttribute("width")).toBeTruthy();
     expect(img?.getAttribute("height")).toBeTruthy();

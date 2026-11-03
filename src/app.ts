@@ -9,6 +9,7 @@ import { adminEventsRouter } from "./routes/admin-events";
 import { adminFundraisingRouter } from "./routes/admin-fundraising";
 import { adminFundraisingCategoriesRouter } from "./routes/admin-fundraising-categories";
 import { adminImpactExamplesRouter } from "./routes/admin-impact-examples";
+import { adminRedBagListRouter } from "./routes/admin-red-bag-list";
 import { adminFundraisingTeamRouter } from "./routes/admin-fundraising-team";
 import { adminFundraisingRequestsRouter } from "./routes/admin-fundraising-requests";
 import { adminWelcomePacksRouter } from "./routes/admin-welcome-packs";
@@ -29,6 +30,7 @@ import { eventTicketsRouter } from "./routes/event-tickets";
 import { adminEventTicketsRouter } from "./routes/admin-event-tickets";
 import { pledgesRouter } from "./routes/pledges";
 import { adminBallReportRouter } from "./routes/admin-ball-report";
+import { adminBallChaseRouter } from "./routes/admin-ball-chase";
 import { adminAnalyticsRouter } from "./routes/admin-analytics";
 import { adminStoriesImportRouter, STORIES_IMPORT_BODY_LIMIT, STORIES_IMPORT_PATH } from "./routes/admin-stories-import";
 import { adminWhatsNewRouter } from "./routes/admin-whats-new";
@@ -50,6 +52,7 @@ import { ballTransferRouter } from "./routes/ball-transfer";
 import { adminBallTransferRouter } from "./routes/admin-ball-transfer";
 import { adminQrRouter } from "./routes/admin-qr";
 import { adminOverviewRouter } from "./routes/admin-overview";
+import { adminDonationSourcesRouter } from "./routes/admin-donation-sources";
 import { createSiteRouter } from "./routes/site";
 
 export function createApp() {
@@ -141,6 +144,8 @@ export function createApp() {
   app.use(adminFundraisingCategoriesRouter);
   // What gifts could do: the shared "could" examples on fundraiser, event and team pages; admins edit them.
   app.use(adminImpactExamplesRouter);
+  // Fill a Red Bag: the editor for the list on /fill (a shared draft, publish, history).
+  app.use(adminRedBagListRouter);
   // TASK-503: the fundraising team's tools (invite, calls, Get involved, the Monday summary), and
   // the sign up form's invite lookup.
   app.use(adminFundraisingTeamRouter);
@@ -166,6 +171,7 @@ export function createApp() {
   app.use(adminEventTicketsRouter);
   // The Festive Ball ticket report, set up from the Events page (TASK-464).
   app.use(adminBallReportRouter);
+  app.use(adminBallChaseRouter);
   // Admin > Analytics (TASK-482): the numbers and the collecting switch.
   app.use(adminAnalyticsRouter);
   // The admin side of paying for the Ball by bank transfer (TASK-484).
@@ -178,6 +184,8 @@ export function createApp() {
   app.use(adminQrRouter);
   // The admin Overview's "Needs you" (TASK-508).
   app.use(adminOverviewRouter);
+  // Fill a Red Bag against the Donate page, at the top of the admin's Donations screen.
+  app.use(adminDonationSourcesRouter);
   app.use(healthRouter);
   // Public newsletter unsubscribe (TASK-161/REQ-069). Must be mounted before the site
   // catch-all router below, otherwise its wildcard route would shadow /unsubscribe/:token.

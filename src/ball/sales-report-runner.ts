@@ -1,17 +1,23 @@
 import { config } from "../config";
 import { sendBallReport } from "../clients/email";
 import {
+  claimResend,
   claimScheduledSend,
+  countedToBefore,
   getReportSettings,
   lastCountedTo,
   markSendSent,
   readSalesInputs,
+  readTableBookings,
+  recordResendFailure,
   recordSendFailure,
   recordTestSend,
   releaseClaim,
+  resendDone,
   scheduledSendExists,
+  type ReportSettings,
 } from "../db/ball-report";
-import { londonDate, renderReport, reportDue } from "./sales-report";
+import { londonDate, renderReport, reportDue, tableBookers } from "./sales-report";
 import { BALL_EVENT_DATE } from "./run-up-runner";
 
 // TASK-464: the wiring for the twice-weekly Festive Ball ticket report. It rides the daily 8am task
@@ -49,7 +55,8 @@ export async function runBallSalesReport(now = new Date()): Promise<ReportRunRes
   try {
     // Counted up to `now`, on from exactly where the last report counted to.
     inputs = await readSalesInputs(now, await lastCountedTo());
-    const email = renderReport(inputs, { today, eventDate: BALL_DAY, test: false });
+    const tables = tableBookers(await readTableBookings(), now);
+    const email = renderReport(inputs, { today, eventDate: BALL_DAY, test: false, tables });
     await sendBallReport({ to, from: config.BALL_FROM_EMAIL, replyTo: config.BALL_FROM_EMAIL, ...email });
   } catch (err) {
     await releaseClaim(claim).catch(() => undefined);
@@ -77,7 +84,8 @@ export async function runBallSalesReport(now = new Date()): Promise<ReportRunRes
 export async function sendTestReport(o: { to: string; actor: string; now: Date }): Promise<void> {
   const today = londonDate(o.now);
   const inputs = await readSalesInputs(o.now, await lastCountedTo());
-  const email = renderReport(inputs, { today, eventDate: BALL_DAY, test: true });
+  const tables = tableBookers(await readTableBookings(), o.now);
+  const email = renderReport(inputs, { today, eventDate: BALL_DAY, test: true, tables });
   // Only ever to the person asking: a test must never reach the organiser or the sponsor.
   await sendBallReport({ to: [o.to], from: config.BALL_FROM_EMAIL, replyTo: config.BALL_FROM_EMAIL, ...email });
   try {
@@ -85,4 +93,54 @@ export async function sendTestReport(o: { to: string; actor: string; now: Date }
   } catch (err) {
     console.error("ball report test went, but could not be recorded:", err instanceof Error ? err.message : err);
   }
+}
+
+// ---- sending today's report again (Jaimie, 12 October 2026) ----
+// A member of staff can send the day's report to the whole list a second time, once, on a day when
+// the morning's has gone: the same email with the numbers as they stand now, saying at the top that
+// it is sent again. It is kept apart from the schedule's own record on purpose. Nothing is written
+// to ball_report_sends, so the next scheduled report still counts "since the last update" on from
+// this morning's; and this one counts as this morning's did, from the report before today's.
+
+/** Why today's report cannot be sent again, in words the admin can show. */
+export class ResendRefused extends Error {}
+
+type Sendable = Pick<ReportSettings, "reportOn" | "recipients" | "lastScheduled">;
+
+function whyNoResend(now: Date, settings: Sendable): string | null {
+  const today = londonDate(now);
+  if (!settings.reportOn || settings.recipients.length === 0) {
+    return "The report is switched off, or has nobody to go to.";
+  }
+  if (today > BALL_DAY) return "The Ball has been, so there are no more reports.";
+  if (settings.lastScheduled?.sentOn !== today) return "The report has not gone today, so there is nothing to send again.";
+  return null;
+}
+
+/** Whether the admin offers "Send today's report again": a day the report went, and not yet sent again. */
+export async function canResendToday(now: Date, settings: Sendable): Promise<boolean> {
+  return whyNoResend(now, settings) === null && !(await resendDone(londonDate(now)));
+}
+
+export async function resendTodaysReport(o: { actor: string; now: Date }): Promise<{ recipients: number }> {
+  const settings = await getReportSettings();
+  const why = whyNoResend(o.now, settings);
+  if (why) throw new ResendRefused(why);
+  const today = londonDate(o.now);
+  const to = settings.recipients.map((r) => r.email);
+  // Claimed before anything is sent, so two presses, or two people, can never send it twice.
+  if (!(await claimResend(today, o.actor, to.length))) {
+    throw new ResendRefused("Today's report has already been sent again. It can go again once a day.");
+  }
+  try {
+    const inputs = await readSalesInputs(o.now, await countedToBefore(today));
+    const tables = tableBookers(await readTableBookings(), o.now);
+    const email = renderReport(inputs, { today, eventDate: BALL_DAY, test: false, tables, resend: true });
+    await sendBallReport({ to, from: config.BALL_FROM_EMAIL, replyTo: config.BALL_FROM_EMAIL, ...email });
+  } catch (err) {
+    // It did not go: give the day's one go back, so it can be tried again.
+    await recordResendFailure(today, o.actor).catch(() => undefined);
+    throw err;
+  }
+  return { recipients: to.length };
 }

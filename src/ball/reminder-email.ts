@@ -1,6 +1,6 @@
 import { escapeHtml, lineUpSentence, TICKET_INCLUDES } from "./page";
 import { ballEmailShell, contactPanel, factsCard, BALL_TEXT_FOOTER } from "./email-shell";
-import { MAROON, SLATE, SLATE_SOFT, TAN_SOFT, HEAD, BODY_FONT, CRIMSON } from "../email/brand";
+import { MAROON, SLATE, SLATE_SOFT, TAN_SOFT, HEAD, BODY_FONT, CRIMSON, button } from "../email/brand";
 import type { GuestRow } from "./guest-page";
 
 // TASK-313 (plan 5): the "a week to go" reminder. Pure — no pool, no config, no clock — so it is
@@ -10,6 +10,12 @@ import type { GuestRow } from "./guest-page";
 // also reads back WHAT THE BOOKER TOLD US — the guest names, the allergies, the access needs — so
 // that a mistake is caught a week out rather than at the table. A guest whose coeliac note never
 // saved finds out now, while there is still time, instead of being handed a bread roll.
+
+// TASK-577: the hotel's own drinks pre-order sheet, hosted and linked (the site's emails carry no
+// attachments, on purpose: src/clients/email.ts). Orders close on Wednesday 4 November, three days
+// before the Ball, so a reminder sent later than that does not offer them.
+export const DRINKS_SHEET_URL = "https://nbcc.scot/assets/park-hotel-drinks-pre-order.pdf";
+const DRINKS_LAST_DAYS_TO_GO = 3;
 
 export interface ReminderBooking {
   reference: string;
@@ -31,6 +37,26 @@ export interface ReminderDetails {
   arrivalTime: string | null;
   includedNote: string | null;
   guestLink: string | null;
+  /**
+   * How many days it is to the Ball on the day this is sent, counted by the day in the UK
+   * (daysToBall in ./run-up.ts). 7, or not given, is the email exactly as it always was: "A week to
+   * go". Any other number says so truthfully (the charity, 2026-10-04): "4 days to go" and "In 4 days
+   * you'll be with us", "Tomorrow" the day before, and "Today" on the day itself (only the staff button
+   * can send it then). After the Ball the button refuses; a number below 0, or not a number, throws.
+   */
+  daysToGo?: number;
+}
+
+/** The three places the email says how long there is to go. A week is the wording it always had. */
+function timeToGo(daysToGo: number | undefined): { label: string; shout: string; lead: string } {
+  const n = daysToGo === undefined ? 7 : Math.round(daysToGo);
+  // After the Ball, or not a number at all: there is nothing true to say, so nothing is built (and
+  // so nothing false can be sent). The button refuses before it gets here; the daily run never asks.
+  if (!Number.isFinite(n) || n < 0) throw new Error(`The Ball reminder cannot be built for ${String(daysToGo)} days to go.`);
+  if (n === 1) return { label: "Tomorrow", shout: "TOMORROW", lead: "Tomorrow" };
+  if (n === 0) return { label: "Today", shout: "TODAY", lead: "Today" };
+  if (n === 7) return { label: "A week to go", shout: "A WEEK TO GO", lead: "A week on Saturday" };
+  return { label: `${n} days to go`, shout: `${n} DAYS TO GO`, lead: `In ${n} days` };
 }
 
 export interface ReminderEmail {
@@ -52,6 +78,7 @@ export function buildBallReminderEmail(
   const named = guests.filter((g) => g.fullName.trim().length > 0);
   const missing = Math.max(0, booking.seats - named.length);
   const arrival = details.arrivalTime ?? "We'll confirm the start time shortly";
+  const toGo = timeToGo(details.daysToGo);
 
   // The same sentence the website and the confirmation use, so a guest reading this a week out
   // is told exactly what they were told when they bought.
@@ -93,10 +120,37 @@ export function buildBallReminderEmail(
   <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;margin:0 0 16px;">${guestRowsHtml}</table>`
     : "";
 
-  const body = `<p style="margin:0 0 6px;font-family:${BODY_FONT};font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:${SLATE_SOFT};font-weight:700">A week to go</p>
+  const drinksOpen = (details.daysToGo ?? 7) >= DRINKS_LAST_DAYS_TO_GO;
+  const drinksHtml = drinksOpen
+    ? `<h2 ${H2}>Drinks on your table</h2>
+  <p ${P}>The Park Hotel is taking drinks pre-orders: wine, spirits, buckets of beer and soft drinks, brought to your table on the night. If you'd like one, fill in the hotel's form and send it straight to the hotel, not to us, at <a href="mailto:enquiries@theparkhotelayrshire.co.uk" ${LINK}>enquiries@theparkhotelayrshire.co.uk</a>.</p>
+  <p ${P}>Orders must reach them by Wednesday 4th November and be paid by 12pm on Friday 6th November. They'll email you a secure payment link. The minimum is 4 people per party, and spirit bottles include 8 mixers.</p>
+  ${button(DRINKS_SHEET_URL, "Download the hotel's drinks form")}`
+    : "";
+  const drinksText = drinksOpen
+    ? `\n\nDRINKS ON YOUR TABLE
+The Park Hotel is taking drinks pre-orders: wine, spirits, buckets of beer and
+soft drinks, brought to your table on the night. If you'd like one, fill in the
+hotel's form and send it straight to the hotel, not to us, at
+enquiries@theparkhotelayrshire.co.uk.
+Orders must reach them by Wednesday 4th November and be paid by 12pm on Friday
+6th November. They'll email you a secure payment link. The minimum is 4 people
+per party, and spirit bottles include 8 mixers.
+Download the hotel's drinks form:
+${DRINKS_SHEET_URL}`
+    : "";
+
+  const guestPage = details.guestLink
+    ? `<a href="${escapeHtml(details.guestLink)}" ${LINK}>your guest page</a>`
+    : "your guest page";
+  const mealsHtml = `<p ${P}><b>Everyone needs to submit their meals.</b> If anyone at your table is vegan or vegetarian, make sure that's on ${guestPage} so the kitchen has it.</p>`;
+  const mealsText = `\n\nEveryone needs to submit their meals. If anyone at your table is vegan or
+vegetarian, make sure that's on your guest page so the kitchen has it.${details.guestLink ? "\n" + details.guestLink : ""}`;
+
+  const body = `<p style="margin:0 0 6px;font-family:${BODY_FONT};font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:${SLATE_SOFT};font-weight:700">${toGo.label}</p>
   <h1 style="color:${CRIMSON};font-family:${HEAD};font-size:26px;font-weight:800;margin:0 0 14px;letter-spacing:-.01em">It's nearly here!</h1>
 
-  <p ${P}>Hello ${escapeHtml(greetingName(booking))}. A week on Saturday you'll be with us at The Park Hotel. Here's everything you need.</p>
+  <p ${P}>Hello ${escapeHtml(greetingName(booking))}. ${toGo.lead} you'll be with us at The Park Hotel. Here's everything you need.</p>
 
   ${factsCard(
     `<tr><td style="padding:14px 18px 4px;color:${SLATE_SOFT};font-family:${BODY_FONT};font-size:13px;">When</td></tr>
@@ -115,6 +169,9 @@ export function buildBallReminderEmail(
 
   ${guestsHtml}
   ${missingHtml}
+
+  ${drinksHtml}
+  ${mealsHtml}
 
   <h2 ${H2}>On the night</h2>
   <p ${P}>There'll be a charity auction and a raffle, with card machines on hand, so bring a little extra if you'd like to join in. Raffle tickets are sold on the night.</p>
@@ -140,9 +197,9 @@ export function buildBallReminderEmail(
       ? `\n\nThere ${missing === 1 ? "is" : "are"} still ${missing} ${missing === 1 ? "place" : "places"} without a name:\n${details.guestLink}`
       : "";
 
-  const text = `IT'S NEARLY HERE: A WEEK TO GO
+  const text = `IT'S NEARLY HERE: ${toGo.shout}
 
-Hello ${greetingName(booking)}. A week on Saturday you'll be with us at
+Hello ${greetingName(booking)}. ${toGo.lead} you'll be with us at
 The Park Hotel. Here's everything you need.
 
 WHEN   Saturday 7th November 2026
@@ -153,7 +210,7 @@ BOOKING ${booking.reference}${booking.tableName ? " · " + booking.tableName : "
 Give your name at the welcome desk when you arrive. There's no ticket to
 print. Dress to impress. Over 18s only.
 ${includesText}
-Entertainment: ${lineUpSentence()}${guestsText}${missingText}
+Entertainment: ${lineUpSentence()}${guestsText}${missingText}${drinksText}${mealsText}
 
 ON THE NIGHT
 There'll be a charity auction and a raffle, with card machines on hand, so
@@ -165,7 +222,7 @@ See you Saturday.
 ${BALL_TEXT_FOOTER}`;
 
   return {
-    subject: `A week to go: you're coming to the ball, ${booking.reference}`,
+    subject: `${toGo.label}: you're coming to the ball, ${booking.reference}`,
     html: ballEmailShell(body),
     text,
   };

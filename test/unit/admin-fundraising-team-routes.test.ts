@@ -435,17 +435,42 @@ describe("the Monday summary's list", () => {
   });
 
   it("is saved tidied, by an admin", async () => {
-    const res = await run(routes.putSummary, { token: tokenFor("admin"), body: { recipients: [" Rowan@Example.com", "fern@example.com"] } });
+    const res = await run(routes.putSummary, { token: tokenFor("admin"), body: { recipients: [" Rowan@NBCC.scot", "fern@nbcc.scot"] } });
     expect(res.statusCode).toBe(200);
-    expect(team.saveSummaryRecipients).toHaveBeenCalledWith(["fern@example.com", "rowan@example.com"], "admin:fern@example.com");
+    expect(team.saveSummaryRecipients).toHaveBeenCalledWith(["fern@nbcc.scot", "rowan@nbcc.scot"], "admin:fern@example.com");
   });
 
   it("refuses an address that is not whole, or one twice", async () => {
-    for (const recipients of [["fern@"], ["fern@example.com", "FERN@example.com"]]) {
+    for (const recipients of [["fern@"], ["fern@nbcc.scot", "FERN@nbcc.scot"]]) {
       const res = await run(routes.putSummary, { token: tokenFor("admin"), body: { recipients } });
       expect(res.statusCode).toBe(400);
     }
     expect((await run(routes.putSummary, { token: tokenFor("admin"), body: { recipients: [], extra: 1 } })).statusCode).toBe(400);
+    expect(team.saveSummaryRecipients).not.toHaveBeenCalled();
+  });
+
+  it("refuses an address that is not nbcc.scot, a subdomain included, and says why", async () => {
+    for (const outsider of ["rowan@example.org", "rowan@news.nbcc.scot", "rowan@nbcc.scot.example.org"]) {
+      const res = await run(routes.putSummary, { token: tokenFor("admin"), body: { recipients: ["fern@nbcc.scot", outsider] } });
+      expect(res.statusCode, outsider).toBe(400);
+      expect(res.body).toEqual({ error: "Only nbcc.scot addresses can get the weekly summary.", path: [1] });
+    }
+    expect(team.saveSummaryRecipients).not.toHaveBeenCalled();
+  });
+
+  it("lets an old address from elsewhere stay while the list is changed, and be removed", async () => {
+    // The stored list (from before the rule) is fern@example.com.
+    let res = await run(routes.putSummary, { token: tokenFor("admin"), body: { recipients: ["fern@example.com", "rowan@nbcc.scot"] } });
+    expect(res.statusCode).toBe(200);
+    expect(team.saveSummaryRecipients).toHaveBeenLastCalledWith(["fern@example.com", "rowan@nbcc.scot"], "admin:fern@example.com");
+    res = await run(routes.putSummary, { token: tokenFor("admin"), body: { recipients: ["rowan@nbcc.scot"] } });
+    expect(res.statusCode).toBe(200);
+  });
+
+  it("saves nothing when the list it has cannot be read", async () => {
+    team.getSummarySettings.mockRejectedValue(new Error("database away"));
+    const res = await run(routes.putSummary, { token: tokenFor("admin"), body: { recipients: ["fern@nbcc.scot"] } });
+    expect(res.statusCode).toBeGreaterThanOrEqual(500);
     expect(team.saveSummaryRecipients).not.toHaveBeenCalled();
   });
 
@@ -494,7 +519,7 @@ describe("saying what someone is invited to do", () => {
     sendFundraiseInvite.mockClear();
     typed("team");
     await run(routes.postInvite, { token: tokenFor("editor"), body: { ...GOOD_INVITE, type: "team" } });
-    expect(sendFundraiseInvite.mock.calls[0][1].text).toContain("You’ll get a team page with a meter for the whole team, and a page for everyone who joins");
+    expect(sendFundraiseInvite.mock.calls[0][1].text).toContain("You'll get a team page with a meter for the whole team, and a page for everyone who joins");
   });
 
   it("takes an invite with no type from a page loaded before the drop-down, and sends it as it always was", async () => {
@@ -530,10 +555,64 @@ describe("the in memory invite waits for sign off", () => {
     expect(team.createInvite.mock.calls[0][0].inviteType).toBe("memory");
     const mail = sendFundraiseInvite.mock.calls[0][1];
     expect(mail.subject).toBe("A page in memory of someone you love");
-    expect(mail).toMatchObject({ from: "events@nbcc.test", replyTo: "events@nbcc.test", cc: "rowan@example.com" });
+    // The readthrough (2026-10-04): an in memory invite comes from Jodie, replies go to Jodie, it
+    // is signed by Jodie, and the copy goes to Jodie and nobody else: not whoever was chosen under
+    // "Signed by" (Rowan), not whoever pressed send (Fern).
+    expect(mail).toMatchObject({ from: "Jodie at NBCC <jodie@nbcc.scot>", replyTo: "jodie@nbcc.scot", cc: "jodie@nbcc.scot" });
+    expect(mail.html + mail.text).not.toContain("events@");
     expect(mail.text).toContain("Dear Mary Jane,");
-    expect(mail.text).toContain("With warmest thoughts,\nRowan\nNBCC Team");
+    expect(mail.text).toContain("With warmest thoughts,\nJodie\nNBCC Team");
+    expect(mail.html + mail.text).not.toContain("Rowan");
     expect(mail.text).not.toContain("!");
+    // What is stored and recorded: signed Jodie, copied to Jodie; the actor is who pressed send.
+    expect(team.createInvite.mock.calls[0][0]).toMatchObject({ signedBy: "Jodie", cc: "jodie@nbcc.scot", inviteType: "memory" });
+    expect(team.createInvite.mock.calls[0][1]).toBe("admin:fern@example.com");
+    // The signer sent with it is ignored: not even looked up.
+    expect(team.getSigner).not.toHaveBeenCalled();
+  });
+
+  it("needs no Signed by, and ignores a made-up one", async () => {
+    touch.approvedWordingKeys.mockResolvedValue(new Set(["invite_memory"]));
+    typed("memory");
+    const noSigner: Record<string, unknown> = { ...GOOD_INVITE };
+    delete noSigner.signedBy;
+    for (const body of [{ ...noSigner, type: "memory" }, { ...noSigner, type: "memory", signedBy: 999 }]) {
+      sendFundraiseInvite.mockClear();
+      team.createInvite.mockClear();
+      const res = await run(routes.postInvite, { token: tokenFor("editor"), body });
+      expect(res.statusCode).toBe(201);
+      expect(team.createInvite.mock.calls[0][0]).toMatchObject({ signedBy: "Jodie", cc: "jodie@nbcc.scot" });
+      expect(sendFundraiseInvite.mock.calls[0][1].cc).toBe("jodie@nbcc.scot");
+    }
+    expect(team.getSigner).not.toHaveBeenCalled();
+  });
+
+  it("copies in nobody when Jodie herself is the person invited", async () => {
+    touch.approvedWordingKeys.mockResolvedValue(new Set(["invite_memory"]));
+    typed("memory");
+    await run(routes.postInvite, { token: tokenFor("editor"), body: { ...GOOD_INVITE, email: "Jodie@nbcc.scot", type: "memory" } });
+    expect(team.createInvite.mock.calls[0][0].cc).toBeNull();
+    expect(sendFundraiseInvite.mock.calls[0][1]).not.toHaveProperty("cc");
+  });
+
+  it.each(["raising", "team", "event"])("still needs Signed by for the %s invite", async (type) => {
+    const noSigner: Record<string, unknown> = { ...GOOD_INVITE };
+    delete noSigner.signedBy;
+    const res = await run(routes.postInvite, { token: tokenFor("editor"), body: { ...noSigner, type } });
+    expect(res.statusCode).toBe(400);
+    expect(res.body).toMatchObject({ fields: { signedBy: "Required" } });
+    expect(team.createInvite).not.toHaveBeenCalled();
+    expect(sendFundraiseInvite).not.toHaveBeenCalled();
+  });
+
+  it("signs a resend of an in memory invite Jodie too, whoever it was signed by when it was sent", async () => {
+    touch.approvedWordingKeys.mockResolvedValue(new Set(["invite_memory"]));
+    team.resendInvite.mockResolvedValue(invite({ type: "memory", signedBy: "Rowan", cc: "jodie@nbcc.scot" }));
+    await run(routes.postResendInvite, { token: tokenFor("editor"), params: { id: "4" } });
+    const mail = sendFundraiseInvite.mock.calls[0][1];
+    expect(mail).toMatchObject({ from: "Jodie at NBCC <jodie@nbcc.scot>", replyTo: "jodie@nbcc.scot", cc: "jodie@nbcc.scot" });
+    expect(mail.text).toContain("With warmest thoughts,\nJodie\nNBCC Team");
+    expect(mail.html + mail.text).not.toContain("Rowan");
   });
 
   it("does not ask about sign off for the other types", async () => {
@@ -617,7 +696,9 @@ describe("reading and signing off the invite wording", () => {
     expect(team.getSigner).toHaveBeenCalledWith(5);
     expect(chosen.text).toContain("Warmest wishes,\nRowan\nNBCC Team");
     const memory = (await run(routes.getInviteWording, { token: tokenFor("editor"), params: { type: "memory" }, query: { signedBy: "5" } })).body as Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
-    expect(memory.text).toContain("With warmest thoughts,\nRowan\nNBCC Team");
+    // The in memory invite is signed by Jodie, whoever is chosen (the charity, 2026-10-04).
+    expect(memory.text).toContain("With warmest thoughts,\nJodie\nNBCC Team");
+    expect(memory.text).not.toContain("Rowan");
   });
 
   it("signs it as whoever is reading when no signer is chosen yet", async () => {

@@ -59,7 +59,7 @@ describe("approving a team", () => {
       ["fundraiseTeamInvite", "parent@example.com"],
       ["fundraiseTeamLive", "robin@example.com"],
     ]);
-    expect(sent[1].text).toContain("(or Jack, if this is a parent or guardian’s email)");
+    expect(sent[1].text).toContain("(or Jack, if this is a parent or guardian's email)");
     expect(sent[0].text).toContain(`https://nbcc.scot/fundraise/ej/join?invite=${"t".repeat(43)}`);
     expect(sent[2].text).toContain("https://nbcc.scot/fundraise/ej/join");
     expect(sent[2].text).toContain("the 2 people you added");

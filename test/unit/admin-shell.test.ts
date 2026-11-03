@@ -73,6 +73,8 @@ describe("admin dashboard shell (REQ-066 · TASK-115)", () => {
       "overview",
       "search",
       "donations",
+      // Fill a Red Bag: the list's editor, under Giving after Donations.
+      "red-bag",
       "claims",
       "gasds",
       "subscriptions",
@@ -81,10 +83,8 @@ describe("admin dashboard shell (REQ-066 · TASK-115)", () => {
       "monthly",
       "stories",
       "ticker",
-      // TASK-453: the Events page's events and its switch, beside the other website content.
-      "events",
-      // TASK-495: community fundraising, beside the Events page it grows out of.
-      "fundraising",
+      // NBCC's own events (TASK-453) and community fundraising (TASK-495), one tab now.
+      "get-involved",
       "ball",
       "contact",
       "newsletter",

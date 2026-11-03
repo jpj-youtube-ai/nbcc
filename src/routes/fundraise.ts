@@ -466,7 +466,8 @@ export async function postManageRequest(req: Request, res: Response): Promise<Re
     const code = newSignInCode();
     await saveSignInCode(email, hashSignInCode(email, code, config.ADMIN_SESSION_SECRET), new Date(Date.now() + SIGN_IN_CODE_TTL_MS));
     // One code for the email, whichever of their fundraisers; greeted by the newest one's name.
-    await sendSignInCodeEmail(email, mine[0].name, code);
+    // Anyone with a page in memory of someone (a family or a funeral director) gets the gentle email.
+    await sendSignInCodeEmail(email, mine[0].name, code, { gentle: mine.some((f) => f.inMemory === true) });
   } catch (err) {
     console.error("fundraise sign in code request failed:", err instanceof Error ? err.message : err);
   }

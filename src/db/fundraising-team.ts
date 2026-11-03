@@ -9,7 +9,7 @@ import { countPendingThanks } from "./fundraiser-thanks";
 import { countHeldMessages } from "./fundraiser-memory";
 import { readPromptCounts } from "./fundraising-touch";
 import { summaryPackIds } from "./welcome-packs";
-import { INVITE_TTL_DAYS, inviteCc, inviteFullName, inviteNameParts, inviteTypeOf, inviteWordingKey, staffFirstName, type InviteType } from "../fundraising/invite";
+import { INVITE_TTL_DAYS, inviteCc, memoryInviteCc, inviteFullName, inviteNameParts, inviteTypeOf, inviteWordingKey, staffFirstName, type InviteType } from "../fundraising/invite";
 import { summaryRecipientsSchema, type SummaryInputs } from "../fundraising/summary";
 import type { CallRecord, CallWhich } from "../fundraising/follow-up";
 
@@ -187,7 +187,9 @@ export async function resendInvite(
     if (!r.rows[0]) throw new TeamError("not_found");
     const inv = toInvite(r.rows[0]);
     await requireSignOff(client, inv.type);
-    const cc = await resendCopy(client, id, inv.email, senderEmail);
+    // An in memory invite copies in Jodie and nobody else: the address kept when it was first sent
+    // (a signer, or whoever sent it, before 2026-10-04) is not read at all.
+    const cc = inv.type === "memory" ? memoryInviteCc(inv.email) : await resendCopy(client, id, inv.email, senderEmail);
     await insertAudit(client, {
       actor,
       action: "fundraiser_invite.resent",

@@ -32,6 +32,7 @@ import {
 import { WORDING_KEYS } from "../../src/fundraising/touch-rules";
 import { PLEDGE_WORDING_KEYS } from "../../src/pledges/model";
 import { INVITE_WORDING_KEYS } from "../../src/fundraising/invite";
+import { TEAM_WORDING_KEYS } from "../../src/fundraising/teams";
 
 const BASE = "https://nbcc.test";
 
@@ -139,7 +140,11 @@ describe("rendering", () => {
       for (const v of e.versions) {
         const mail = renderVersion(e, v, BASE);
         const found = (mail.html + " " + mail.subject).match(/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g) || [];
-        const strangers = found.filter((a) => !/@(example\.com|nbcc\.scot|nbcc\.test)$/i.test(a));
+        // TASK-577: one real address outside ours, the Park Hotel's published bookings inbox, which
+        // the week-to-go email gives for drinks orders. A business, not a person, and only this one.
+        const strangers = found.filter(
+          (a) => !/@(example\.com|nbcc\.scot|nbcc\.test)$/i.test(a) && a !== "enquiries@theparkhotelayrshire.co.uk",
+        );
         expect(strangers, `${e.id}/${v.id}`).toEqual([]);
       }
     }
@@ -173,8 +178,9 @@ describe("finding", () => {
 });
 
 describe("what is approval gated", () => {
-  it("is exactly what is gated today: the automatic wording keys, the two pledge emails and the in memory invite", () => {
-    const expected = [...WORDING_KEYS, ...PLEDGE_WORDING_KEYS, ...INVITE_WORDING_KEYS].sort();
+  // Jaimie, 2026-10-04: and the new email to a team organiser about a new member (team_joined).
+  it("is exactly what is gated today: the automatic wording keys, the two pledge emails, the in memory invite and the new team member email", () => {
+    const expected = [...WORDING_KEYS, ...PLEDGE_WORDING_KEYS, ...INVITE_WORDING_KEYS, ...TEAM_WORDING_KEYS].sort();
     expect(catalogueApprovalKeys().sort()).toEqual(expected);
   });
 

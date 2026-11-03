@@ -8,9 +8,9 @@ import {
   releaseSummaryWeek,
   type SummarySettings,
 } from "../db/fundraising-team";
-import { summaryCounts, summaryDue, summaryLines, type SummaryInputs } from "./summary";
+import { isSummaryAddress, summaryCounts, summaryDue, summaryLines, type SummaryInputs } from "./summary";
 import { buildSummaryEmail } from "./team-emails";
-import type { FundraiseEmailMessage } from "../clients/email";
+import type { FundraiseSummaryMessage } from "../clients/email";
 
 // TASK-503: the wiring for the Monday summary (email 11). It rides the daily 8am task (npm run
 // reminders, src/scripts/send-reminders.ts) like the Ball's ticket report, rather than having a
@@ -18,9 +18,17 @@ import type { FundraiseEmailMessage } from "../clients/email";
 //
 //   - Mondays only (UK), and never twice for the same Monday: the week is claimed under a lock
 //     before anything is sent, so a second run that morning sends nothing;
-//   - nobody on the list (Admin > Fundraising, Weekly summary): nothing happens, and nothing is claimed;
-//   - one email to each person, from and replying to the events inbox; a failed send is logged and
-//     the rest still go. If none went, the week is given back so a rerun can try again;
+//   - nobody on the list (Admin > Get involved, Settings, Weekly summary): nothing happens, and
+//     nothing is claimed;
+//   - ONE email with everyone on the To line, from and replying to the events inbox, so Reply all
+//     reaches the whole team (Jaimie, 2026-10-05). Reply all in a mail program goes to the Reply-To
+//     address and to everyone else on the To line, so the events inbox stays as Reply-To;
+//   - nbcc.scot addresses only: everyone on the To line sees everyone else and every reply, so an
+//     address from anywhere else is left off it (saving refuses a new one, but an old one may still
+//     be stored). How many were left off is logged, never which. If that leaves nobody, it is
+//     "nobody to send to", and nothing is claimed;
+//   - if it did not go, that is logged and the week is given back so a rerun can try again. `sent`
+//     is the number of people on the To line when it went, `failed` that number when it did not;
 //   - it never throws: every failure is logged, so it can never stop the passes after it.
 
 export interface SummaryDeps {
@@ -28,7 +36,7 @@ export interface SummaryDeps {
   claim: (week: string) => Promise<{ previous: string | null } | null>;
   release: (week: string, previous: string | null) => Promise<void>;
   readInputs: (now: Date) => Promise<SummaryInputs>;
-  send: (message: FundraiseEmailMessage) => Promise<void>;
+  send: (message: FundraiseSummaryMessage) => Promise<void>;
   record: (data: { week: string; sent: number; failed: number }) => Promise<void>;
 }
 
@@ -49,7 +57,13 @@ export interface SummaryRunResult {
 }
 
 const adminUrl = () => `${config.PORTAL_BASE_URL.replace(/\/+$/, "")}/admin`;
-const message = (to: string) => ({ email: to, from: config.BALL_FROM_EMAIL, replyTo: config.BALL_FROM_EMAIL });
+// `to` is never empty: the run stops before this with nobody to send to, and a test has one person.
+const message = ([first, ...rest]: string[]) => ({
+  email: first,
+  ...(rest.length ? { alsoTo: rest } : {}),
+  from: config.BALL_FROM_EMAIL,
+  replyTo: config.BALL_FROM_EMAIL,
+});
 const why = (err: unknown) => (err instanceof Error ? err.message : String(err));
 
 export async function runFundraisingSummary(now = new Date(), deps: SummaryDeps = realDeps): Promise<SummaryRunResult> {
@@ -62,7 +76,11 @@ export async function runFundraisingSummary(now = new Date(), deps: SummaryDeps 
   }
   const { due, week } = summaryDue(now, settings.lastWeek);
   if (!due) return { sent: 0, failed: 0, skipped: "not today" };
-  if (settings.recipients.length === 0) return { sent: 0, failed: 0, skipped: "nobody to send to" };
+  const to = settings.recipients.filter(isSummaryAddress);
+  const leftOut = settings.recipients.length - to.length;
+  // A count only: the addresses themselves are never logged.
+  if (leftOut > 0) console.log(`fundraising summary: ${leftOut} ${leftOut === 1 ? "address" : "addresses"} left out, not nbcc.scot`);
+  if (to.length === 0) return { sent: 0, failed: 0, skipped: "nobody to send to" };
 
   let claim: { previous: string | null } | null;
   try {
@@ -83,19 +101,18 @@ export async function runFundraisingSummary(now = new Date(), deps: SummaryDeps 
     return { sent: 0, failed: 0, skipped: "could not read" };
   }
 
+  // One message, so it went to everyone on it or to nobody.
   let sent = 0;
   let failed = 0;
-  for (const to of settings.recipients) {
-    try {
-      await deps.send({ ...message(to), ...mail });
-      sent += 1;
-    } catch (err) {
-      failed += 1;
-      // Logged without the address; the email log has the row for it.
-      console.error("fundraising summary: one email failed:", why(err));
-    }
+  try {
+    await deps.send({ ...message(to), ...mail });
+    sent = to.length;
+  } catch (err) {
+    failed = to.length;
+    // Logged without the addresses; the email log has a row for each of them.
+    console.error("fundraising summary: the email did not go:", why(err));
+    await giveBack();
   }
-  if (sent === 0) await giveBack();
   try {
     await deps.record({ week, sent, failed });
   } catch (err) {
@@ -110,5 +127,5 @@ export async function runFundraisingSummary(now = new Date(), deps: SummaryDeps 
  */
 export async function sendSummaryTest(to: string, now = new Date(), deps: SummaryDeps = realDeps): Promise<void> {
   const mail = buildSummaryEmail(summaryLines(summaryCounts(await deps.readInputs(now))), { adminUrl: adminUrl(), test: true });
-  await deps.send({ ...message(to), ...mail });
+  await deps.send({ ...message([to]), ...mail });
 }

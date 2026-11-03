@@ -99,7 +99,10 @@ async function openFundraising() {
   (el("adminPassword") as HTMLInputElement).value = "pw";
   el("loginForm").dispatchEvent(new Event("submit", { cancelable: true, bubbles: true }));
   await settle();
-  (q('.admin-nav-link[data-view="fundraising"]') as HTMLElement).click();
+  (q('.admin-nav-link[data-view="get-involved"]') as HTMLElement).click();
+  await settle();
+  // What gifts could do is in the Settings section of Get involved, and loads when that is shown.
+  (q('#giSections [data-gi-section="settings"]') as HTMLElement).click();
   await settle();
 }
 function asRole(r: "admin" | "editor" | "viewer") {

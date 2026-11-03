@@ -34,7 +34,7 @@
   var SECTIONS = [
     "overview", "search", "donations", "claims", "gasds", "subscriptions", "stories",
     "ticker", "ball", "events", "fundraising", "contact", "newsletter", "thank-you", "audit", "email-audit", "site", "outreach",
-    "business-supporters", "analytics", "team",
+    "business-supporters", "analytics", "red-bag", "team",
   ];
   // KEEP IN SYNC with OPERATIONAL_EDITOR_SECTIONS there as well. Not cosmetic either: Manage access
   // pre-fills from this copy and Save stores what it shows, so a section missing here is silently
@@ -43,6 +43,13 @@
     "donations", "claims", "gasds", "subscriptions", "stories", "ticker", "contact", "newsletter", "thank-you", "search",
     "outreach", "events", "fundraising",
   ];
+  // Get involved: one tab holding two of those sections. "events" and "fundraising" are still the
+  // permission sections, and the server's names for the two old tabs (the Overview's buttons, the
+  // New pills); here they are only where in the one tab each lands.
+  var GI_VIEW = "get-involved";
+  var GI_SECTIONS = ["signups", "events", "tickets", "emails", "settings"];
+  var GI_OLD_VIEWS = { events: "events", fundraising: "signups" }; // old tab -> the section it opens
+  var GI_AREA = { signups: "fundraising", events: "events" }; // section -> the New pill it is a visit to
   var LEVEL_RANK = { none: 0, view: 1, edit: 2 };
   // Mirrors can() in src/admin/permissions.ts: edit satisfies a view requirement; missing/none fails.
   function permCan(perms, section, level) {
@@ -76,7 +83,7 @@
     // email-audit mirrors team: donor-identifying send data never arrives with a role below
     // admin — it is granted per person (matches roleToPermissions in src/admin/permissions.ts).
     SECTIONS.forEach(function (s) {
-      perms[s] = s === "team" || s === "email-audit" || s === "business-supporters" || s === "analytics" ? "none" : "view";
+      perms[s] = s === "team" || s === "email-audit" || s === "business-supporters" || s === "analytics" || s === "red-bag" ? "none" : "view";
     });
     return perms;
   }
@@ -137,6 +144,8 @@
   function showLogin() {
     storiesImportReset("");
     brReset();
+    bcReset();
+    frKindReset();
     el("appView").hidden = true;
     el("loginView").hidden = false;
     var email = el("adminEmail");
@@ -197,7 +206,7 @@
       });
   }
 
-  // Hide every nav link (and the Team-only group label) for a section the signed-in user cannot even
+  // Hide every nav link (and any group left with none) for a section the signed-in user cannot even
   // view. Overview always stays visible - it has no gated route of its own; its widgets call section
   // routes that enforce their own gate. UX only: the server is the real enforcement on every route.
   function applyNavFiltering() {
@@ -215,12 +224,21 @@
       // donations (TASK-457). Everything else gates on view of its own section, as before.
       var editGate = b.getAttribute("data-edit-gate");
       var viewGate = b.getAttribute("data-view-gate");
+      // Or on VIEW of any one of several sections (data-view-gate-any): Get involved holds the Events
+      // and the Fundraising sections, and shows to anyone who may see either.
+      var anyGate = b.getAttribute("data-view-gate-any");
+      if (anyGate) {
+        b.hidden = !anyGate.split(" ").some(canView);
+        return;
+      }
       b.hidden = editGate ? !canEdit(editGate) : !canView(viewGate || section);
     });
-    var teamNavGroup = el("teamNavGroup");
-    // The Admin group's label shows over any link in it that is shown: Analytics (TASK-482) can be
-    // given to someone who cannot see Team.
-    if (teamNavGroup) teamNavGroup.hidden = !canView("team") && !canView("analytics");
+    // A group shows while any screen in it does: its label in the phone menu, its drop down on the
+    // banner (October 2026). It used to be the Admin label alone, shown for Team or Analytics
+    // (TASK-482), so Site pages and QR codes could sit under the group before.
+    Array.prototype.forEach.call(doc.querySelectorAll("#adminNavList .admin-nav-group"), function (g) {
+      g.hidden = !g.querySelector(".admin-nav-link:not([hidden])");
+    });
   }
 
   // Fetch an admin API path with the bearer token; a 401 means the session is gone -> back to login.
@@ -454,10 +472,32 @@
       var old = b.querySelector(".admin-new-pill");
       if (old) old.remove();
       var area = b.getAttribute("data-view");
-      var isNew = !!(whatsNew && whatsNew[area] && whatsNew[area].new) && area !== currentView && !b.hidden;
+      // Get involved is two of the server's areas, fundraising and events: either lights it.
+      var areas = area === GI_VIEW ? ["fundraising", "events"] : [area];
+      var isNew = !b.hidden && areas.some(function (a) {
+        return !!(whatsNew && whatsNew[a] && whatsNew[a].new) && a !== currentView;
+      });
       if (!isNew) return;
       b.insertAdjacentHTML("beforeend", NEW_PILL);
       any = true;
+    });
+    // On the banner (October 2026), a group's head says New when a screen shown in it does, so it
+    // can be seen without opening the drop down; the screen inside says it too.
+    Array.prototype.forEach.call(doc.querySelectorAll("#adminNavList .admin-nav-group"), function (g) {
+      var head = g.querySelector(".admin-nav-grouphead");
+      if (!head) return;
+      var old = head.querySelector(".admin-new-pill");
+      if (old) old.remove();
+      if (!g.hidden && g.querySelector(".admin-nav-link:not([hidden]) .admin-new-pill")) head.insertAdjacentHTML("beforeend", NEW_PILL);
+    });
+    // Inside Get involved, the section holding what is new says so too: Sign ups or Our events.
+    Array.prototype.forEach.call(doc.querySelectorAll("#giSections [data-gi-section]"), function (b) {
+      var old = b.querySelector(".admin-new-pill");
+      if (old) old.remove();
+      var area = GI_AREA[b.getAttribute("data-gi-section")];
+      if (area && !b.hidden && whatsNew && whatsNew[area] && whatsNew[area].new && area !== currentView) {
+        b.insertAdjacentHTML("beforeend", NEW_PILL);
+      }
     });
     var toggle = el("adminNavToggle");
     if (!toggle) return;
@@ -528,18 +568,35 @@
       return null;
     }
     if (!name) return null;
+    // "events" or "fundraising", left by a browser tab from before they became Get involved: only
+    // if this person may see that part of it.
+    if (GI_OLD_VIEWS[name]) return canView(name) ? name : null;
     var link = doc.querySelector('.admin-nav-link[data-view="' + name.replace(/"/g, "") + '"]');
     if (!link || link.hidden || link.offsetParent === null) return null;
     return name;
   }
 
   function selectView(name) {
+    // The old Events and Fundraising tabs are sections of Get involved now. Everything that still
+    // asks for them by name (the Overview's buttons, whose names come from the server, and a browser
+    // tab that remembers one) lands on the tab at the right section.
+    var wanted = null;
+    if (GI_OLD_VIEWS[name]) {
+      wanted = GI_OLD_VIEWS[name];
+      // Sent to the sign ups by name ("3 new sign ups" on the Overview): every kind shows, so a kind
+      // filter left on from earlier never makes that list look empty. By the menu, or after a
+      // refresh, the filter stays as it was left.
+      if (wanted === "signups") frKindReset();
+      name = GI_VIEW;
+    }
     rememberView(name);
     Array.prototype.forEach.call(doc.querySelectorAll(".admin-nav-link"), function (b) {
       b.classList.toggle("is-active", b.getAttribute("data-view") === name);
     });
     // TASK-454: choosing a section from the phone menu closes it, so what you chose is what you see.
     closeNav("chosen");
+    // And on the banner, the drop down it was chosen from.
+    navGroupsChosen();
     showOnly("view-" + name);
     refreshEnquiryNotice();
     // TASK-478: the section you open loses its pill at once; the rest are asked about afresh.
@@ -556,6 +613,7 @@
     } else if (name === "donations") {
       donationsOffset = 0;
       loadDonations();
+      loadDonationSources();
     } else if (name === "claims") loadClaims();
     else if (name === "gasds") loadGasds();
     else if (name === "subscriptions") loadSubs();
@@ -568,14 +626,12 @@
     else if (name === "outreach") loadOutreach();
     else if (name === "ticker") loadTicker();
     else if (name === "ball") loadBall();
-    else if (name === "events") {
-      loadEvents();
-      loadBallReport();
-    }
-    else if (name === "fundraising") loadFundraising();
+    else if (name === GI_VIEW) giOpen(wanted);
     else if (name === "audit") loadAudit();
     else if (name === "email-audit") loadEmailAudit();
     else if (name === "analytics") loadAnalytics();
+    // Fill a Red Bag: the list's editor is its own file (assets/js/admin/red-bag-list.js).
+    else if (name === "red-bag") { if (window.AdminRedBagList) window.AdminRedBagList.open(); }
     else if (name === "site") loadSite();
     else if (name === "qr") loadQr();
     else if (name === "team") loadTeam();
@@ -586,6 +642,152 @@
       selectView(b.getAttribute("data-view"));
     });
   });
+
+  // ---- Get involved: one tab, five sections ----
+  // Sign ups, Our events, Tickets and pledges, Emails and Settings: one shows at a time. The cards
+  // are the old Events and Fundraising tabs' own, with their ids and their code; this only decides
+  // which are on screen, and loads a section when it is shown, so opening the tab does not fetch
+  // all five at once. Who sees what is the same as before: Our events and the Get involved page
+  // switch follow the "events" permission section, everything else follows "fundraising". The
+  // server is the real gate on every route; this keeps the screen from offering what it would refuse.
+  var GI_SECTION_KEY = "nbccAdminGiSection";
+  var giSection = null; // the section on screen
+  var giVisited = {}; // New pill area -> its visit has been recorded since the tab was last opened
+
+  function giMaySee(section) {
+    if (section === "events") return canView("events");
+    if (section === "settings") return canView("events") || canView("fundraising");
+    return canView("fundraising");
+  }
+  function giButtons() {
+    return Array.prototype.slice.call(doc.querySelectorAll("#giSections [data-gi-section]"));
+  }
+  function giRemembered() {
+    try {
+      return sessionStorage.getItem(GI_SECTION_KEY);
+    } catch {
+      return null;
+    }
+  }
+  // Opening the tab: the section asked for (an old tab's name), else the one this browser tab was
+  // last on, else the first; always one this person may see.
+  function giOpen(wanted) {
+    el("view-events").hidden = !canView("events");
+    el("view-fundraising").hidden = !canView("fundraising");
+    giButtons().forEach(function (b) {
+      b.hidden = !giMaySee(b.getAttribute("data-gi-section"));
+    });
+    var section = [wanted, giRemembered()].concat(GI_SECTIONS).filter(function (s) {
+      return GI_SECTIONS.indexOf(s) !== -1 && giMaySee(s);
+    })[0];
+    if (section) giShow(section, true);
+  }
+  // fresh: the tab has just been opened, so the section is read again even if it was the one
+  // showing when the tab was left, as the old tabs read themselves again each time they opened.
+  function giShow(section, fresh) {
+    if (GI_SECTIONS.indexOf(section) === -1 || !giMaySee(section)) return;
+    if (!fresh && section === giSection) return;
+    giSection = section;
+    try {
+      sessionStorage.setItem(GI_SECTION_KEY, section);
+    } catch {
+      // Private mode: the section is not remembered through a refresh, and nothing else is lost.
+    }
+    giButtons().forEach(function (b) {
+      var on = b.getAttribute("data-gi-section") === section;
+      b.classList.toggle("is-active", on);
+      b.setAttribute("aria-pressed", on ? "true" : "false");
+    });
+    Array.prototype.forEach.call(doc.querySelectorAll("#view-get-involved [data-gi-intro]"), function (p) {
+      // Settings has two lines: one for someone who sees only the Get involved page switch
+      // (data-gi-only="events"), one for everyone who sees the fundraising settings.
+      var eventsOnly = p.getAttribute("data-gi-only") === "events";
+      p.hidden = p.getAttribute("data-gi-intro") !== section || eventsOnly === canView("fundraising");
+    });
+    // The card scripts (event-tickets.js, pledges.js, all-emails.js) watch their own part's hidden
+    // mark and load when it comes off. A fresh opening hides every part first, so the part showing
+    // is un-hidden again and its cards read themselves afresh.
+    var all = doc.querySelectorAll("#view-get-involved [data-gi-part]");
+    if (fresh) Array.prototype.forEach.call(all, function (p) { p.hidden = true; });
+    Array.prototype.forEach.call(all, function (p) {
+      // A part in a box this person may not see stays hidden with it, so nothing in it loads.
+      p.hidden = p.getAttribute("data-gi-part") !== section || p.parentNode.hidden;
+    });
+    giPlaceEventsStatus(section);
+    // The New pills: Sign ups is the visit the Fundraising tab recorded, Our events the Events tab's.
+    // The other sections are a visit to neither, so a pill waits until its list has been looked at.
+    // A visit is recorded once each time the tab is opened, as the old tabs did, not each time a
+    // section comes back: a second visit would take the New pills off the rows still being read.
+    var area = GI_AREA[section];
+    currentView = area || GI_VIEW;
+    if (fresh) giVisited = {};
+    if (area && !giVisited[area]) {
+      giVisited[area] = true;
+      beginVisit(area);
+    }
+    renderNewPills();
+    giLoad(section);
+  }
+  // One status line serves both the page switch and the events under it ("Deleted." is said there).
+  // It used to sit between the two; now they are in different sections, so it goes to whichever of
+  // them is on screen: under the switch in Settings, above the list in Our events.
+  function giPlaceEventsStatus(section) {
+    var line = el("evSwitchStatus");
+    var home = doc.querySelector('#view-events [data-gi-part="' + section + '"]');
+    if (!line || !home || line.parentNode === home) return;
+    // What it last said belongs to where it was ("Deleted." is not about the page switch).
+    line.textContent = "";
+    line.className = "ty-status";
+    if (section === "settings") home.appendChild(line);
+    else home.insertBefore(line, home.firstChild);
+  }
+  function giLoad(section) {
+    if (section === "signups") loadFundraising();
+    else if (section === "events") {
+      loadEvents();
+      loadBallReport();
+      // The previews are not fitted while this section is off screen (a hidden frame measures
+      // nothing), so an event already open is fitted again now that it can be measured.
+      evFitCard();
+      evFitPage();
+    } else if (section === "emails") frLoadEmailsSection();
+    else if (section === "settings") {
+      if (canView("events")) evLoadSwitch();
+      if (canView("fundraising")) frLoadSettingsSection();
+    }
+    // Tickets and pledges: its two cards load themselves when their part is shown.
+  }
+  (function giWire() {
+    var row = el("giSections");
+    var tab = el("view-get-involved");
+    if (!row || !tab) return;
+    row.addEventListener("click", function (e) {
+      var b = e.target && e.target.closest ? e.target.closest("[data-gi-section]") : null;
+      if (b) giShow(b.getAttribute("data-gi-section"));
+    });
+    // Arrow keys, Home and End move along the buttons that are offered, and show that section.
+    row.addEventListener("keydown", function (e) {
+      var keys = { ArrowRight: 1, ArrowDown: 1, ArrowLeft: -1, ArrowUp: -1, Home: "first", End: "last" };
+      var move = keys[e.key];
+      var from = e.target && e.target.closest ? e.target.closest("[data-gi-section]") : null;
+      if (!move || !from) return;
+      var offered = giButtons().filter(function (b) { return !b.hidden; });
+      var at = offered.indexOf(from);
+      if (at === -1) return;
+      e.preventDefault();
+      var next = move === "first" ? offered[0] : move === "last" ? offered[offered.length - 1]
+        : offered[(at + move + offered.length) % offered.length];
+      next.focus();
+      giShow(next.getAttribute("data-gi-section"));
+    });
+    // A link to the All emails card ("Read and approve these in All emails", "Read its automatic
+    // emails") can sit in another section. Caught on the way down, so Emails is on screen before
+    // all-emails.js opens the card and scrolls to it.
+    tab.addEventListener("click", function (e) {
+      var link = e.target && e.target.closest ? e.target.closest("[data-allemails-open]") : null;
+      if (link) giShow("emails");
+    }, true);
+  })();
 
   // TASK-454: below 860px the sections sit behind one Menu button, because the line of twenty that
   // used to scroll sideways broke the client's standing rule that nothing in the admin does. The
@@ -670,9 +872,152 @@
     if (phoneWidth && phoneWidth.addEventListener) {
       phoneWidth.addEventListener("change", function (e) {
         if (!e.matches) closeNav("passed");
+        // The other way, narrowed to a phone's width, the banner's heads are hidden (October 2026):
+        // nothing may be left open behind them.
+        else navGroupsClose();
       });
     }
   }
+
+  // ---- The banner's drop downs (October 2026) ----
+  // Wider than 860px the menu is one banner across the top with a drop down for each group
+  // (admin.css), so the screens get the width the side menu took and no one scrolls to reach it.
+  // A drop down opens on a click, from any device, and on hover for a mouse; one at a time. It closes
+  // on a second click, on Escape, on a click anywhere else, when the keyboard moves on out of it, and
+  // when a screen in it is chosen. At 860px and below the heads are hidden (the phone menu shows the
+  // groups' labels instead), so none of this is ever reached there.
+  var navGroups = Array.prototype.slice.call(doc.querySelectorAll("#adminNavList .admin-nav-group"));
+  // A finger has no hover: a tap fires mouseenter and then click, which would open and at once close.
+  var navMouse = window.matchMedia ? window.matchMedia("(hover: hover) and (pointer: fine)") : null;
+  // At a phone's width the heads are hidden and the groups are the Menu's labels.
+  var navNarrow = window.matchMedia ? window.matchMedia("(max-width:860px)") : null;
+  // A mouse that rests on a head opens it after a short pause, so one crossing the banner does not
+  // flash each group open on its way; one that leaves has a longer grace, so a mouse that strays off
+  // the edge on its way down does not lose it. Each group keeps its own leaving timer.
+  var navResting = null;
+  var NAV_REST_MS = 100;
+  var NAV_GRACE_MS = 300;
+  // Whether the screen being chosen was chosen from the keyboard: a click with no mouse in it (Enter
+  // or Space on a button) has detail 0. Set on the way down, before the link's own handler runs.
+  var navChosenByKeyboard = false;
+  function navGroupHead(g) {
+    return g.querySelector(".admin-nav-grouphead");
+  }
+  function navGroupLinks(g) {
+    return Array.prototype.filter.call(g.querySelectorAll(".admin-nav-link"), function (b) {
+      return !b.hidden;
+    });
+  }
+  // refocus: a keyboard on a screen in a drop down that is closing goes back to its head rather than
+  // to nowhere. Without it (a mouse's choice) the screen's button lets go of the focus, so the arrow
+  // keys scroll the screen just chosen instead of working the closed drop down.
+  function navGroupClose(g, refocus) {
+    clearTimeout(g.navLeaving);
+    if (!g.classList.contains("is-open")) return;
+    var head = navGroupHead(g);
+    var onAScreen = g.contains(doc.activeElement) && doc.activeElement !== head;
+    g.classList.remove("is-open");
+    g.removeAttribute("data-open-by");
+    if (head) head.setAttribute("aria-expanded", "false");
+    if (onAScreen) {
+      if (refocus && head) head.focus({ preventScroll: true });
+      else if (!refocus) doc.activeElement.blur();
+    }
+  }
+  function navGroupsClose(except, refocus) {
+    (navGroups || []).forEach(function (g) {
+      if (g !== except) navGroupClose(g, refocus);
+    });
+  }
+  // From selectView: a screen has been chosen, so whatever drop down it was in closes.
+  function navGroupsChosen() {
+    var byKeyboard = navChosenByKeyboard;
+    navChosenByKeyboard = false;
+    navGroupsClose(null, byKeyboard);
+  }
+  // how: "click" stays open until something closes it; "hover" closes again when the mouse leaves.
+  function navGroupOpen(g, how) {
+    clearTimeout(g.navLeaving);
+    navGroupsClose(g);
+    g.classList.add("is-open");
+    g.setAttribute("data-open-by", how);
+    var head = navGroupHead(g);
+    if (head) head.setAttribute("aria-expanded", "true");
+  }
+  navGroups.forEach(function (g) {
+    var head = navGroupHead(g);
+    if (!head) return;
+    head.addEventListener("click", function () {
+      if (!g.classList.contains("is-open")) navGroupOpen(g, "click");
+      // Opened by hovering, a click on its head keeps it open, rather than closing what was just seen.
+      else if (g.getAttribute("data-open-by") === "hover") g.setAttribute("data-open-by", "click");
+      else navGroupClose(g);
+    });
+    head.addEventListener("keydown", function (e) {
+      if (e.key !== "ArrowDown") return;
+      e.preventDefault();
+      navGroupOpen(g, "click");
+      var first = navGroupLinks(g)[0];
+      if (first) first.focus();
+    });
+    g.addEventListener("mouseenter", function () {
+      if (!navMouse || !navMouse.matches || (navNarrow && navNarrow.matches)) return;
+      clearTimeout(g.navLeaving);
+      if (g.classList.contains("is-open")) return;
+      clearTimeout(navResting);
+      navResting = setTimeout(function () {
+        navGroupOpen(g, "hover");
+      }, NAV_REST_MS);
+    });
+    g.addEventListener("mouseleave", function () {
+      // Only passing: it never opens.
+      clearTimeout(navResting);
+      if (g.getAttribute("data-open-by") !== "hover") return;
+      g.navLeaving = setTimeout(function () {
+        if (g.getAttribute("data-open-by") === "hover") navGroupClose(g);
+      }, NAV_GRACE_MS);
+    });
+    g.addEventListener("keydown", function (e) {
+      if (!g.classList.contains("is-open")) return;
+      if (e.key === "Escape") {
+        navGroupClose(g);
+        head.focus();
+        return;
+      }
+      // The up and down arrows move along its screens, and up from the first goes back to its head.
+      // On the head itself the down arrow is the head's own (above).
+      if (e.key !== "ArrowDown" && e.key !== "ArrowUp") return;
+      var links = navGroupLinks(g);
+      var at = links.indexOf(e.target);
+      if (at === -1) return;
+      e.preventDefault();
+      if (e.key === "ArrowDown") {
+        if (at < links.length - 1) links[at + 1].focus();
+      } else if (at > 0) links[at - 1].focus();
+      else head.focus();
+    });
+    g.addEventListener("focusout", function (e) {
+      var to = e.relatedTarget;
+      // Focus going to something that holds the whole nav (<main tabindex="-1">, after a click on a
+      // gap inside the drop down) is not the keyboard leaving it; a click outside is the document's.
+      if (to && !g.contains(to) && !to.contains(g)) navGroupClose(g);
+    });
+  });
+  var navList = el("adminNavList");
+  if (navList) {
+    navList.addEventListener("click", function (e) {
+      var chosen = e.target && e.target.closest ? e.target.closest(".admin-nav-link") : null;
+      navChosenByKeyboard = !!chosen && e.detail === 0;
+    }, true);
+  }
+  doc.addEventListener("click", function (e) {
+    var inside = e.target && e.target.closest ? e.target.closest("#adminNavList .admin-nav-group") : null;
+    navGroupsClose(inside);
+  });
+  // Escape closes an open drop down wherever the keyboard is: one a mouse opened has no focus in it.
+  doc.addEventListener("keydown", function (e) {
+    if (e.key === "Escape") navGroupsClose();
+  });
 
   // ---- overview ----
   function statCard(n, label, warn) {
@@ -689,10 +1034,16 @@
   // donor to the top by position, so admin-fits-a-phone.test.ts checks these columns and their order.
   function donationsTable(rows, opts) {
     opts = opts || {};
-    if (!rows.length) return '<p class="admin-empty">No donations yet.</p>';
+    if (!rows.length) return '<p class="admin-empty">' + H.escapeHtml(opts.empty || "No donations yet.") + "</p>";
     var body = rows
       .map(function (d) {
         var gift = d.plan ? H.escapeHtml(d.mode) + " · " + H.escapeHtml(d.plan) : H.escapeHtml(d.mode);
+        // A gift started on Fill a Red Bag (donations.source) says so beside the gift, in all three lists.
+        if (d.source === "red_bag") gift += ' <span class="admin-pill dn-source-pill">Red Bag</span>';
+        // And one from the Festive Ball's own donate page (/ball/donate).
+        if (d.source === "ball") gift += ' <span class="admin-pill dn-source-pill">Festive Ball</span>';
+        // And one from the red bag cards on the Ball's tables (/bag): its own label, not the Ball's.
+        if (d.source === "ball_bags") gift += ' <span class="admin-pill dn-source-pill">Red bags at the Ball</span>';
         // TASK-241: one Payment pill combining payment_status + any refund (see helpers.paymentLabel).
         var pay = H.paymentLabel(d);
         return (
@@ -719,6 +1070,12 @@
   // and words it (src/admin/overview.ts); this only draws it. The five Gift Aid figures that used to
   // sit here are lines in it now, in the slowest of the three groups.
   var NEED_LEVEL_WORDS = { 1: "Urgent: ", 2: "Waiting: ", 3: "Coming due: " };
+  // A button is named after the tab it opens, and the server names it. Events and Fundraising are
+  // sections of Get involved now, so a button to either says the tab it really opens; pressing it
+  // still lands on the right section (selectView).
+  function ovButtonWords(item) {
+    return GI_OLD_VIEWS[item.view] ? "Get involved" : item.button;
+  }
   function needsHtml(d) {
     var esc = H.escapeHtml;
     var needs = d.needs || [];
@@ -731,7 +1088,7 @@
               '<li class="ov-need" data-level="' + Number(n.level) + '">' +
               '<span class="ov-dot" aria-hidden="true"></span>' +
               '<span class="ov-text"><span class="sr-only">' + (NEED_LEVEL_WORDS[n.level] || "") + "</span>" + esc(n.text) + "</span>" +
-              '<button type="button" class="admin-btn admin-btn--small ov-go" data-ov-view="' + esc(n.view) + '">' + esc(n.button) + "</button>" +
+              '<button type="button" class="admin-btn admin-btn--small ov-go" data-ov-view="' + esc(n.view) + '" data-ov-key="' + esc(n.key) + '">' + esc(ovButtonWords(n)) + "</button>" +
               "</li>"
             );
           })
@@ -760,7 +1117,7 @@
             '<span class="ov-number-headline">' + esc(n.headline) + "</span>" +
             '<span class="ov-number-detail">' + esc(n.detail) + "</span>" +
             "</span>" +
-            '<button type="button" class="admin-btn admin-btn--small ov-go" data-ov-view="' + esc(n.view) + '">' + esc(n.button) + "</button>" +
+            '<button type="button" class="admin-btn admin-btn--small ov-go" data-ov-view="' + esc(n.view) + '">' + esc(ovButtonWords(n)) + "</button>" +
             "</li>"
           );
         })
@@ -789,7 +1146,7 @@
                 '<li class="ov-event">' +
                 '<span class="ov-event-when">' + esc(i.when) + "</span>" +
                 '<span class="ov-event-text">' + esc(i.text) + "</span>" +
-                '<button type="button" class="admin-btn admin-btn--small ov-go" data-ov-view="' + esc(i.view) + '">' + esc(i.button) + "</button>" +
+                '<button type="button" class="admin-btn admin-btn--small ov-go" data-ov-view="' + esc(i.view) + '">' + esc(ovButtonWords(i)) + "</button>" +
                 "</li>"
               );
             })
@@ -816,7 +1173,10 @@
       // Delegated, and attached once: the list is drawn again on every visit.
       var openView = function (e) {
         var btn = e.target.closest && e.target.closest("[data-ov-view]");
-        if (btn) selectView(btn.getAttribute("data-ov-view"));
+        if (!btn) return;
+        // A Festive Ball line opens the section of that screen that deals with it (ballAsk).
+        if (btn.getAttribute("data-ov-view") === "ball") ballAsk(BALL_NEED_SECTIONS[btn.getAttribute("data-ov-key")]);
+        selectView(btn.getAttribute("data-ov-view"));
       };
       el("overviewNeeds").addEventListener("click", openView);
       el("overviewNumbers").addEventListener("click", openView);
@@ -915,14 +1275,35 @@
     // question you can ask - which is the one worth asking when a standing order stops.
     var modeFilter = el("donationsModeFilter");
     var mode = modeFilter ? modeFilter.value : "";
+    // Fill a Red Bag only: the server narrows the list (it pages it), together with the two above.
+    var redBagFilter = el("donationsRedBagFilter");
+    var redBag = !!(redBagFilter && redBagFilter.checked);
+    // Festive Ball only, the same way. The sources never go together (oneSourceFilter).
+    var ballFilter = el("donationsBallFilter");
+    var ball = !redBag && !!(ballFilter && ballFilter.checked);
+    // Red bags at the Ball only (the table cards), the same again.
+    var ballBagsFilter = el("donationsBallBagsFilter");
+    var ballBags = !redBag && !ball && !!(ballBagsFilter && ballBagsFilter.checked);
     authFetch(
       "/api/admin/donations?limit=25&offset=" + donationsOffset +
         (pay ? "&paymentStatus=" + encodeURIComponent(pay) : "") +
-        (mode ? "&mode=" + encodeURIComponent(mode) : ""),
+        (mode ? "&mode=" + encodeURIComponent(mode) : "") +
+        (redBag ? "&source=red_bag" : "") +
+        (ball ? "&source=ball" : "") +
+        (ballBags ? "&source=ball_bags" : ""),
     )
       .then(okJson)
       .then(function (d) {
-        wrap.innerHTML = donationsTable(d.results || [], { newPills: true });
+        wrap.innerHTML = donationsTable(d.results || [], {
+          newPills: true,
+          empty: redBag
+            ? pay || mode ? "No Fill a Red Bag gifts match these filters." : "No Fill a Red Bag gifts yet."
+            : ball
+              ? pay || mode ? "No Festive Ball gifts match these filters." : "No Festive Ball gifts yet."
+              : ballBags
+                ? pay || mode ? "No red bag gifts at the Ball match these filters." : "No red bag gifts at the Ball yet."
+                : "",
+        });
         var total = d.total || 0;
         el("donationsPager").hidden = total <= 25;
         el("donationsInfo").textContent = total
@@ -938,9 +1319,59 @@
         donationsOffset = donationsShownOffset;
       });
   }
+  // Fill a Red Bag against the Donate page, at the top of the Donations screen: this month and in
+  // all, worded by the server (src/admin/gift-sources.ts). Read when the screen opens, on its own, so
+  // the list works whatever happens here. A failure, or an answer with no lines in it, says it could
+  // not load: never a zero, and never the last visit's figures.
+  function loadDonationSources() {
+    var box = el("donationsSources");
+    if (!box) return;
+    // Loading, as the list beside it says: the last visit's figures are never shown as current.
+    box.innerHTML = '<p class="admin-loading">Loading…</p>';
+    authFetch("/api/admin/donations/source-totals")
+      .then(okJson)
+      .then(function (d) {
+        var lines = d && Array.isArray(d.lines) ? d.lines : [];
+        if (!lines.length) throw new Error("no totals");
+        var esc = H.escapeHtml;
+        box.innerHTML =
+          '<dl class="dn-sources-list">' +
+          lines
+            .map(function (l) {
+              return (
+                '<div class="dn-source"><dt>' + esc(l.name) + "</dt><dd>" +
+                esc(l.month) + " this month, " + esc(l.all) + " in all</dd></div>"
+              );
+            })
+            .join("") +
+          "</dl>" +
+          (d.note ? '<p class="dn-sources-note">' + esc(d.note) + "</p>" : "");
+      })
+      .catch(function (err) {
+        if (err && err.message === "unauthorized") return;
+        box.innerHTML = unavailableHtml("The Fill a Red Bag and Donate page totals could not load.");
+      });
+  }
   // Both filters behave the same way: change it, go back to page one. Staying on page 4 of a
   // different list shows you an empty table and looks like the filter found nothing.
-  ["donationsPaymentFilter", "donationsModeFilter"].forEach(function (id) {
+  // A gift has one source, so "Fill a Red Bag only", "Festive Ball only" and "Red bags at the Ball
+  // only" never go together: ticking one unticks the others.
+  function oneSourceFilter(id) {
+    var self = el(id);
+    if (!self || !self.checked) return;
+    ["donationsRedBagFilter", "donationsBallFilter", "donationsBallBagsFilter"].forEach(function (otherId) {
+      var other = el(otherId);
+      if (otherId !== id && other) other.checked = false;
+    });
+  }
+  ["donationsRedBagFilter", "donationsBallFilter", "donationsBallBagsFilter"].forEach(function (id) {
+    var control = el(id);
+    if (control)
+      control.addEventListener("change", function () {
+        oneSourceFilter(id);
+      });
+  });
+  ["donationsPaymentFilter", "donationsModeFilter", "donationsRedBagFilter", "donationsBallFilter", "donationsBallBagsFilter"].forEach(function (id) {
     var control = el(id);
     if (control)
       control.addEventListener("change", function () {
@@ -1988,6 +2419,114 @@
       loadStories();
     });
   });
+  // TASK-560: one listener on the list's box, which stays while the table inside it is drawn again
+  // on every load. A tick saves at once and the row stays where it is, so the next story does not
+  // move under the pointer and the tick can come straight back off.
+  if (el("storiesTable")) {
+    el("storiesTable").addEventListener("change", function (e) {
+      var box = e.target;
+      if (box && box.hasAttribute && box.hasAttribute("data-story-read")) setStoryRead(box);
+    });
+  }
+  var storiesSaving = {}; // story id -> true while its read or new is on its way to the server
+  var STORY_NOT_SAVED = "Could not save. Please try again.";
+  var STORY_GONE = "This story is no longer here.";
+  var STORY_NOT_YOURS = "You can no longer change stories.";
+  // The one request behind the list's tick and the open story's button: make this story `want`,
+  // but only while it is still `was`, which is what the screen showed. A screen left open cannot
+  // then undo what somebody else did in the meantime (Withdrawn above all: it records that consent
+  // was taken back). Answers what to show: the server's word for what the story is now (status)
+  // when it gave one; a sentence for the three answers that need one (note); whether the story can
+  // no longer be changed from here (lock); or simply that it was not saved (unsaved), which the
+  // person can put right by pressing again. Null when the session has ended, and the sign in
+  // screen is already up.
+  function saveStoryRead(id, want, was) {
+    storiesSaving[id] = true;
+    return authFetch("/api/admin/stories/" + id, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ status: want, ifStatus: was }),
+    })
+      .then(function (res) {
+        if (res.ok) {
+          return res.json().then(function (story) {
+            return { status: story.status, note: "" };
+          });
+        }
+        if (res.status === 409) {
+          return res.json().then(function (b) {
+            var now = b && b.story && b.story.status;
+            if (!now) return { unsaved: true };
+            // Somebody else got there first. If they made it what was asked for, there is nothing to say.
+            if (now === want) return { status: now, note: "" };
+            return { status: now, note: "Someone else changed this story. It is now " + H.storyLabel("status", now) + "." };
+          });
+        }
+        if (res.status === 404) return { note: STORY_GONE, lock: STORY_GONE };
+        if (res.status === 403) return { note: STORY_NOT_YOURS, lock: STORY_NOT_YOURS };
+        return { unsaved: true };
+      })
+      .catch(function (err) {
+        return err && err.message === "unauthorized" ? null : { unsaved: true };
+      })
+      .then(function (out) {
+        delete storiesSaving[id];
+        return out;
+      });
+  }
+  function setStoryRead(box) {
+    var id = box.getAttribute("data-story-read");
+    // A second press while the first is on its way is put back, not sent: the first answer decides
+    // what the row shows. The box is never disabled for the wait, which would drop the keyboard's
+    // place in the list.
+    if (storiesSaving[id]) {
+      box.checked = !box.checked;
+      return;
+    }
+    var want = box.checked ? "reviewed" : "new";
+    var was = want === "reviewed" ? "new" : "reviewed";
+    box.setAttribute("aria-busy", "true");
+    storyRowShows(id, {}); // a new try: whatever the last one left in the row is cleared
+    saveStoryRead(id, want, was).then(function (out) {
+      box.removeAttribute("aria-busy");
+      if (!out) return;
+      // A list drawn again since the press already shows what the story is. "Not saved" belongs to
+      // the list that was pressed, which is gone.
+      if (out.unsaved && !box.isConnected) return;
+      // No word on what the story is now, so the box that was pressed goes back to what it showed.
+      if (!out.status && box.isConnected) box.checked = storyIsRead(was);
+      storyRowShows(id, out);
+    });
+  }
+  // What this story's row shows now, found by the story's id at the moment of asking: an answer
+  // that arrives after the list was drawn again lands on the row that is on screen, or nowhere.
+  function storyRowShows(id, out) {
+    var boxes = doc.querySelectorAll("#storiesTable [data-story-read]");
+    var box = null;
+    for (var i = 0; i < boxes.length; i++) if (boxes[i].getAttribute("data-story-read") === String(id)) box = boxes[i];
+    if (!box) return;
+    var row = box.closest("tr");
+    var label = box.closest("label");
+    var pill = row.querySelector("[data-story-status]");
+    if (out.status) {
+      box.checked = storyIsRead(out.status);
+      pill.textContent = H.storyLabel("status", out.status);
+    }
+    var why = out.lock || (out.status ? storyTickLocked(out.status) : "");
+    if (why && !box.disabled) {
+      // A locked box cannot hold the keyboard, so it is handed to the row's View, not dropped.
+      var view = row.querySelector("[data-story]");
+      if (doc.activeElement === box && view) view.focus({ preventScroll: true });
+      box.disabled = true;
+      label.classList.add("is-locked");
+      label.title = box.title = why;
+    }
+    // A save that failed is two words in a pill, in the status pill's place for as long as it
+    // stands, so the row keeps its height and no row beneath it moves under the next press.
+    row.querySelector("[data-story-unsaved]").hidden = !out.unsaved;
+    pill.hidden = !!out.unsaved;
+    row.querySelector("[data-story-note]").textContent = out.note || "";
+  }
   function scopeConsentBadges(r) {
     var scopeClass = r.use_scope === "public" ? "is-public" : "is-internal";
     var badges = '<span class="admin-pill ' + scopeClass + '">' + H.escapeHtml(H.storyLabel("useScope", r.use_scope)) + "</span>";
@@ -1996,23 +2535,65 @@
     if (r.third_party_consent) badges += ' <span class="admin-pill">3rd-party OK</span>';
     return badges;
   }
+  // TASK-560: "read" is the status that already says so. New is unread. Reviewed is read and can be
+  // unticked. Used and Withdrawn say more than read, so their tick is locked: a stray click must
+  // never undo them. The attribute is data-story-read, never data-story, which opens the story.
+  function storyIsRead(status) {
+    return status !== "new";
+  }
+  // Why a story's tick cannot be pressed. Empty when it can. On the label for whoever hovers over
+  // it, and on the box, where a screen reader reads it as the box's description.
+  function storyTickLocked(status) {
+    if (!canEdit("stories")) return "You can view stories but not change them.";
+    if (status === "used") return "Used stories count as read.";
+    if (status === "withdrawn") return "Withdrawn stories count as read.";
+    return "";
+  }
+  function storyReadTick(r) {
+    var why = storyTickLocked(r.status);
+    var title = why ? ' title="' + H.escapeHtml(why) + '"' : "";
+    return (
+      '<label class="admin-read-tick' + (why ? " is-locked" : "") + '"' + title + ">" +
+      '<input type="checkbox" data-story-read="' + r.id + '"' +
+      (storyIsRead(r.status) ? " checked" : "") + (why ? " disabled" : "") + title +
+      ' aria-label="Story ' + r.id + ' read" /></label>'
+    );
+  }
   function storiesTable(rows) {
     if (!rows.length) return '<p class="admin-empty">No stories yet.</p>';
+    // Beside each status, hidden until it is needed, the pill that takes its place when a save
+    // fails: "Not saved" to the eye, the whole of it to a screen reader, the sentence on hover.
+    // Under it, room for the three answers that need a sentence (somebody else changed the story,
+    // it has been erased, this person may no longer change stories). All in the story's own row,
+    // beside the tick that was pressed however long the list is.
+    //
+    // TASK-561: where the list is narrow each story is a labelled card (admin.css, .st-list), as
+    // a donation is. So every cell carries its column's name, and the wrapper is what the
+    // stylesheet measures. The cards put the ID at the top and fit the tick by position, so
+    // admin-fits-a-phone.test.ts checks these columns and their order. A card's line is a row, a
+    // label then a value: the two cells that hold more than one thing keep it in one box
+    // (.st-value), so pills wrap together and the sentence sits under the status, not beside it.
     var body = rows
       .map(function (r) {
         return (
-          "<tr><td>" + r.id + "</td><td>" + H.escapeHtml(H.storyLabel("submitterRole", r.submitter_role)) +
-          "</td><td>" + scopeConsentBadges(r) + '</td><td><span class="admin-pill">' +
-          H.escapeHtml(H.storyLabel("status", r.status)) + "</span></td><td>" +
-          H.escapeHtml(H.consentAge(r.consent_captured_at)) + "</td><td>" + H.fmtDate(r.created_at) +
-          '</td><td><button class="admin-link" type="button" data-story="' + r.id + '">View</button></td></tr>'
+          '<tr><td data-label="Read">' + storyReadTick(r) + '</td><td data-label="ID">' + r.id + '</td><td data-label="Role">' +
+          H.escapeHtml(H.storyLabel("submitterRole", r.submitter_role)) +
+          '</td><td data-label="Scope / consent"><div class="st-value">' + scopeConsentBadges(r) + "</div></td>" +
+          '<td data-label="Status"><div class="st-value"><span class="admin-pill" data-story-status>' +
+          H.escapeHtml(H.storyLabel("status", r.status)) + "</span>" +
+          '<span class="admin-pill admin-read-unsaved" data-story-unsaved hidden title="' + STORY_NOT_SAVED + '">' +
+          '<span class="sr-only">Story ' + r.id + ": </span>Not saved" +
+          '<span class="sr-only">. Please try again.</span></span>' +
+          '<span class="admin-read-note" data-story-note></span></div></td><td data-label="Consent age">' +
+          H.escapeHtml(H.consentAge(r.consent_captured_at)) + '</td><td data-label="Submitted">' + H.fmtDate(r.created_at) +
+          '</td><td data-label=""><button class="admin-link" type="button" data-story="' + r.id + '">View</button></td></tr>'
         );
       })
       .join("");
     return (
-      '<table class="admin-table"><thead><tr><th>ID</th><th>Role</th><th>Scope / consent</th>' +
+      '<div class="st-list"><table class="admin-table stories-table"><thead><tr><th>Read</th><th>ID</th><th>Role</th><th>Scope / consent</th>' +
       "<th>Status</th><th>Consent age</th><th>Submitted</th><th></th></tr></thead><tbody>" +
-      body + "</tbody></table>"
+      body + "</tbody></table></div>"
     );
   }
   function loadStories() {
@@ -2278,7 +2859,8 @@
       dl("Share town", s.consent_share_town ? "Yes" : "No") +
       dl("Third-party consent", s.third_party_consent ? "Yes" : "No") +
       dl("Contact for more", s.contact_for_more ? "Yes" : "No") +
-      dl("Status", H.storyLabel("status", s.status)) +
+      // Named, so Mark as read can change this line without drawing the story again.
+      '<dt>Status</dt><dd id="storyStatusNow">' + H.escapeHtml(H.storyLabel("status", s.status)) + "</dd>" +
       dl("Consent captured", H.fmtDate(s.consent_captured_at) + " (" + H.consentAge(s.consent_captured_at) + ")") +
       dl("Submitted", H.fmtDate(s.created_at)) +
       dl("First name", s.submitter_first_name || "Not given") +
@@ -2293,6 +2875,9 @@
       "</dl>" +
       '<h3 class="admin-subhead">Story</h3><p class="admin-story-text">' + H.escapeHtml(s.story_text || "") + "</p>" +
       (s.short_quote ? '<h3 class="admin-subhead">Short quote</h3><p class="admin-story-text">' + H.escapeHtml(s.short_quote) + "</p>" : "");
+    // TASK-560: where reading ends, under the story's words. Its own box, so pressing its button
+    // draws this box again and nothing else: see showStoryReadBar.
+    var readBar = canWrite ? '<div id="storyReadBar"></div>' : "";
     var actions = "";
     if (canWrite) {
       var statusOptions = ["new", "reviewed", "used", "withdrawn"]
@@ -2329,8 +2914,68 @@
             '<button class="btn" type="button" id="archiveStoryBtn">Archive</button>' +
             "</div>");
     }
-    el("storyDetail").innerHTML = info + actions;
-    if (canWrite) wireStoryActions(s);
+    el("storyDetail").innerHTML = info + readBar + actions;
+    if (canWrite) {
+      showStoryReadBar(s, "");
+      wireStoryActions(s);
+    }
+  }
+  // TASK-560: Mark as read while the story is New, and the way back while it is Reviewed. Used and
+  // Withdrawn say more than read, so they get no button. The admin's small button and its text
+  // link: Save changes, below, stays the one loud button. Under them, room for what could not be
+  // saved, right where the button was pressed and not at the foot of the page past the whole form.
+  // No button either once the story can no longer be changed from here (gone): it has been erased,
+  // or this person may no longer change stories, and pressing again could only say so again.
+  function showStoryReadBar(s, note, gone) {
+    var bar = el("storyReadBar");
+    if (!bar) return;
+    var controls = "";
+    if (!gone && s.status === "new") {
+      controls = '<p class="admin-read-bar"><button class="admin-btn" type="button" id="storyReadBtn">Mark as read</button></p>';
+    } else if (!gone && s.status === "reviewed") {
+      controls =
+        '<p class="admin-read-bar"><span class="admin-read-done">Marked as read.</span> ' +
+        '<button class="admin-link" type="button" id="storyUnreadBtn">Mark as new</button></p>';
+    }
+    bar.innerHTML = controls + '<p class="admin-read-note" id="storyReadNote" tabindex="-1">' + H.escapeHtml(note || "") + "</p>";
+    bindClick("storyReadBtn", function () { markStoryRead(s, "reviewed"); });
+    bindClick("storyUnreadBtn", function () { markStoryRead(s, "new"); });
+  }
+  // The same request as the list's tick. Only what the status changes is drawn again (the Status
+  // line, this bar, and the form's Status when it had not been touched), so anything typed in Tags
+  // or Notes and not yet saved stays exactly as it was, with the cursor where it was.
+  function markStoryRead(s, want) {
+    var id = s.id;
+    if (storiesSaving[id]) return; // a double press sends one request
+    var btn = el("storyReadBtn") || el("storyUnreadBtn");
+    btn.setAttribute("aria-busy", "true");
+    el("storyReadNote").textContent = "";
+    saveStoryRead(id, want, s.status).then(function (out) {
+      btn.removeAttribute("aria-busy");
+      // Not this story's answer any more: a different story has been opened since.
+      if (!out || String(currentStoryId) !== String(id) || !el("storyReadBar")) return;
+      // Not saved, and it can be tried again: say so under the button, which stays. Here there is
+      // room for the whole sentence, and nothing under the pointer moves when it appears.
+      if (out.unsaved) {
+        el("storyReadNote").textContent = STORY_NOT_SAVED;
+        return;
+      }
+      if (out.status) {
+        var now = el("storyStatusNow");
+        if (now) now.textContent = H.storyLabel("status", out.status);
+        // Save changes sends the form's Status too. Left on the old one it would quietly put the
+        // story back the next time a note was saved; one the person picked themselves is theirs.
+        var pick = el("edit-storyStatus");
+        if (pick && pick.value === s.status) pick.value = out.status;
+      }
+      // The button that was pressed is about to go. The keyboard follows to what takes its place,
+      // or to the words that say why there is nothing; never when the person has moved on to type.
+      // Without scrolling: someone who has wheeled down to the form is not pulled back up.
+      var active = doc.activeElement;
+      var elsewhere = active && active !== doc.body && !el("storyReadBar").contains(active);
+      showStoryReadBar(Object.assign({}, s, { status: out.status || s.status }), out.note, !!out.lock);
+      if (!elsewhere) (el("storyUnreadBtn") || el("storyReadBtn") || el("storyReadNote")).focus({ preventScroll: true });
+    });
   }
   function patchStory(body, okMsg, errMsg) {
     return authFetch("/api/admin/stories/" + currentStoryId, {
@@ -2518,6 +3163,8 @@
       '<dl class="admin-dl">' +
       dl("Name", ((c.first_name || "") + " " + (c.last_name || "")).trim()) +
       dl("Email", c.email) +
+      // Optional on the form, so only a line when the sender gave one.
+      (c.phone ? dl("Phone", c.phone) : "") +
       dl("Received", window.formatReceived(c.created_at)) +
       dl("Status", c.status === "replied" ? "Replied" : "New") +
       (c.status === "replied"
@@ -2669,6 +3316,8 @@
     ["ballReminder", "Ball reminder"], ["ballRunUp", "Ball run-up"], ["ballReport", "Ball ticket report"],
     // TASK-487: every kind the server sends has a name here (test/unit/admin-email-kinds.test.ts).
     ["ballTransfer", "Ball bank transfer"], ["ballTransferStaff", "Ball bank transfer (to events@)"],
+    // TASK-576: the volunteers' list of bookings to chase for guest names and meals.
+    ["ballChaseList", "Ball chase list"],
     ["outreach", "Business outreach"], ["backupAlert", "Backup alert"],
     // TASK-493: community fundraising.
     ["fundraiseThanks", "Fundraiser sign up thanks"], ["fundraiseStaff", "Fundraiser sign up (to events@)"],
@@ -2697,6 +3346,7 @@
     ["fundraiseTeamInviteReminder", "Team invite reminder"], ["fundraiseTeamNudge", "Team automatic: did you send the invite?"],
     ["fundraiseTeamJoined", "Team member joined (thank you)"], ["fundraiseTeamJoinStaff", "Team member to approve (to events@)"],
     ["fundraiseTeamMemberRemoved", "Team member taken off (to events@)"], ["fundraiseTeamHandoverCode", "Team organiser handover code"],
+    ["fundraiseTeamMemberJoined", "Team member approved (to the team organiser)"],
     // Event tickets: the buyer's tickets and refund, and the two to events@.
     ["eventTickets", "Event tickets (to the buyer)"], ["eventTicketsRefund", "Event tickets refund (to the buyer)"],
     ["eventTicketsRefundAsked", "Event tickets refund asked for (to events@)"], ["eventTicketsToApprove", "Event tickets to approve (to events@)"],
@@ -2726,9 +3376,206 @@
     var who = H.escapeHtml(r.recipient) + (r.recipientName ? "<br><small>" + H.escapeHtml(r.recipientName) + "</small>" : "");
     var detail = r.error || r.deliveryDetail;
     var status = emailStatusPill(r) + (detail ? "<br><small>" + H.escapeHtml(String(detail)) + "</small>" : "");
+    // TASK-562: nothing leaves this list. A problem staff removed from the red band says so here,
+    // with who and when, and the way to undo it for someone who may edit.
+    if (r.removedAt) {
+      status +=
+        "<br><small>" +
+        H.escapeHtml((r.removedKind === "stop" ? "Removed, emails stopped, by " : "Tidied away by ") + (r.removedBy || "staff") + " on " + H.fmtDate(r.removedAt)) +
+        "</small>" +
+        (canEdit("email-audit")
+          ? ' <button class="admin-link" type="button" data-audit-putback="' + H.escapeHtml(r.recipient) +
+            '" data-audit-kind="' + (r.removedKind === "stop" ? "stop" : "tidy") + '">Put back</button>'
+          : "");
+    }
     return (
       "<tr><td>" + H.fmtDate(r.createdAt) + "</td><td>" + H.escapeHtml(emailKindLabel(r.kind)) +
       "</td><td>" + who + "</td><td>" + H.escapeHtml(r.subject) + "</td><td>" + status + "</td></tr>"
+    );
+  }
+  // TASK-562: the red band, one block an address. What staff decide here is about an address (is
+  // it dead?), not about one email, so its problems are listed under it and it is dealt with once:
+  // "Remove and stop emails" (its problems leave the band and the address is blocked) or "Just tidy
+  // away" (they leave the band and nothing else changes). One of the charity's own addresses can
+  // only be tidied: blocking events@ would stop the charity's own notes to itself. So can a row
+  // that no longer has an address (a cleared team invite reads "deleted team invitee"): there is
+  // nothing there to block. The server refuses both too. What counts as an address is the loose
+  // shape the site lets addresses in by, not a strict one: the log holds addresses with a trailing
+  // full stop or two dots, and those, which fail every time, are the ones most in need of
+  // removing. Blocks, not a table, so the band wraps to fit a phone.
+  function emailIsCharitys(email) {
+    return /@([a-z0-9-]+\.)*nbcc\.scot$/i.test(String(email || "").trim());
+  }
+  function emailLooksLikeAddress(email) {
+    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(email || "").trim());
+  }
+  function emailFailBandHtml(failures) {
+    if (!failures.length) return "";
+    var canWrite = canEdit("email-audit");
+    var groups = [];
+    var at = {};
+    failures.forEach(function (r) {
+      if (!Object.prototype.hasOwnProperty.call(at, r.recipient)) {
+        at[r.recipient] = groups.length;
+        groups.push({ email: r.recipient, name: r.recipientName, rows: [] });
+      }
+      groups[at[r.recipient]].rows.push(r);
+    });
+    var items = groups
+      .map(function (g) {
+        var email = H.escapeHtml(g.email);
+        var isAddress = emailLooksLikeAddress(g.email);
+        var own = isAddress && emailIsCharitys(g.email);
+        var canStop = isAddress && !own;
+        var whyNot = own
+          ? "One of the charity's own addresses, so it is never blocked."
+          : !isAddress
+            ? "Not an email address, so there is nothing to block."
+            : "";
+        var actions = "";
+        if (canWrite) {
+          actions =
+            '<p class="email-fail-actions">' +
+            (canStop ? '<button class="admin-btn" type="button" data-audit-stop="' + email + '">Remove and stop emails</button>' : "") +
+            '<button class="admin-link" type="button" data-audit-tidy="' + email + '">' + (canStop ? "Just tidy away" : "Tidy away") + "</button></p>";
+        }
+        var problems = g.rows
+          .map(function (r) {
+            var detail = r.error || r.deliveryDetail;
+            return (
+              "<li>" + emailStatusPill(r) + " " + H.escapeHtml(emailKindLabel(r.kind)) + ": " + H.escapeHtml(r.subject) +
+              ", " + H.fmtDate(r.createdAt) + (detail ? "<small>" + H.escapeHtml(String(detail)) + "</small>" : "") + "</li>"
+            );
+          })
+          .join("");
+        return (
+          '<li class="email-fail-item" data-audit-address="' + email + '"><div class="email-fail-who">' +
+          '<p class="email-fail-address">' + email + (g.name ? " <small>" + H.escapeHtml(g.name) + "</small>" : "") + "</p>" +
+          actions + "</div>" +
+          (whyNot ? '<p class="email-fail-own">' + H.escapeHtml(whyNot) + "</p>" : "") +
+          '<ul class="email-fail-problems">' + problems + "</ul></li>"
+        );
+      })
+      .join("");
+    return (
+      '<div class="email-fail-band"><h3>Needs a look: ' + failures.length + " problem" + (failures.length === 1 ? "" : "s") +
+      ' in the last 14 days</h3><ul class="email-fail-list">' + items + "</ul></div>"
+    );
+  }
+  // What was just done, said on one line above the band, with Put back beside it when the thing
+  // done can be undone (or when a Put back failed and can be tried again). The line is in the page
+  // from the start and is as tall empty as full, so its words do not push the band down under the
+  // pointer.
+  function emailAuditSay(text, cls, undo) {
+    var line = el("emailAuditSaid");
+    if (!line) return;
+    line.className = "ty-status" + (cls ? " " + cls : "");
+    line.textContent = text || "";
+    if (undo) {
+      var btn = doc.createElement("button");
+      btn.type = "button";
+      btn.className = "admin-link";
+      btn.setAttribute("data-audit-putback", undo.email);
+      btn.setAttribute("data-audit-kind", undo.kind);
+      btn.textContent = "Put back";
+      line.appendChild(doc.createTextNode(" "));
+      line.appendChild(btn);
+    }
+  }
+  var emailAuditSaving = false;
+  // One press at a time: until the answer is in and the list drawn again, a second press (a double
+  // click, or the next address, which is about to move up under the pointer) does nothing.
+  // `retry` is given for a Put back: if it fails, the line that says so keeps a Put back to try
+  // again with, since the one that was pressed may have been the only one on the screen.
+  function emailAuditPost(path, body, done, retry) {
+    if (emailAuditSaving) return;
+    emailAuditSaving = true;
+    var view = el("view-email-audit");
+    var said = el("emailAuditSaid");
+    view.setAttribute("aria-busy", "true");
+    authFetch(path, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    })
+      .then(okJsonOrSaid)
+      .then(function (d) {
+        done(d);
+        // The button that was pressed goes with the list. The keyboard goes to the line that says
+        // what happened, which has Put back in it, without moving the page.
+        said.focus({ preventScroll: true });
+        return loadEmailAudit(true);
+      })
+      .catch(function (err) {
+        if (err && err.message === "unauthorized") return;
+        var status = (err && err.status) || 0;
+        // "Please try again" only where trying again could work. A refusal says what it is.
+        if (status === 403) return emailAuditSay("You can no longer change the Email audit.", "is-error");
+        if (status === 404) {
+          // The screen was out of date: somebody else got there first, or the emails have gone.
+          // What was pressed goes when the list is drawn again, so the keyboard goes to the line.
+          emailAuditSay(retry ? "That address had already been put back." : (err.said || "That address has nothing left to remove") + ".", "is-error");
+          said.focus({ preventScroll: true });
+          return loadEmailAudit(true);
+        }
+        if (status >= 400 && status < 500 && err.said) return emailAuditSay(err.said + ".", "is-error");
+        emailAuditSay("Could not do that. Please try again.", "is-error", retry);
+        if (retry) said.focus({ preventScroll: true });
+      })
+      .then(function () {
+        emailAuditSaving = false;
+        view.removeAttribute("aria-busy");
+      });
+  }
+  function emailAuditRemove(email, stop, problems) {
+    // Not while another press is being saved: a question asked and answered, with nothing then
+    // happening and nothing said, is worse than not asking.
+    if (emailAuditSaving) return;
+    if (stop) {
+      var asked = window.confirm(
+        "Stop emailing " + email + "?\n\nNewsletters and fundraising emails will no longer go to this address. " +
+          "Receipts, booking confirmations and sign in codes still will.\n\nIts " + problems + " problem" +
+          (problems === 1 ? " leaves" : "s leave") + " this list. You can put it back from the full list below.",
+      );
+      if (!asked) return;
+    }
+    emailAuditPost("/api/admin/email-log/remove", { email: email, stop: stop }, function (d) {
+      var words = !stop
+        ? "Tidied away " + email + "."
+        : d.blockedNow
+          ? "Removed " + email + " and stopped emails to it."
+          : "Removed " + email + ". Emails to it were already stopped.";
+      emailAuditSay(words, "is-ok", { email: email, kind: stop ? "stop" : "tidy" });
+    });
+  }
+  // Putting back a stop can start emails to the address again, so it asks, as stopping did.
+  // Putting back a tidy changes nothing but the band. The band holds 14 days, so the question
+  // promises no more than that: nothing comes back from a removal older than it.
+  function emailAuditPutBack(email, kind) {
+    if (emailAuditSaving) return;
+    if (kind === "stop") {
+      var asked = window.confirm(
+        "Put " + email + " back?\n\nAny problems it had in the last 14 days return to the list at the top. If removing " +
+          "it is what stopped emails to it, newsletters and fundraising emails will go to it again.",
+      );
+      if (!asked) return;
+    }
+    emailAuditPost(
+      "/api/admin/email-log/put-back",
+      { email: email },
+      function (d) {
+        var words = "Put back " + email + ".";
+        if (d.unblocked) words += " Emails to it are no longer stopped.";
+        else if (d.blockedBecause) {
+          var why =
+            d.blockedBecause === "bounced" ? ", because its mail bounced"
+            : d.blockedBecause === "complained" ? ", because it marked us as spam"
+            : " by staff";
+          words += " It is still blocked" + why + ". To unblock it, go to Newsletter, Blocked addresses.";
+        }
+        emailAuditSay(words, "is-ok");
+      },
+      { email: email, kind: kind === "stop" ? "stop" : "tidy" },
     );
   }
   function emailAuditTableHtml(rows) {
@@ -2770,9 +3617,28 @@
       emailAuditOffset += EMAIL_AUDIT_PAGE;
       loadEmailAudit();
     });
+    // TASK-562: one listener for the band's two controls and every Put back, on the screen's own
+    // box, which stays while the band and the list inside it are drawn again.
+    el("view-email-audit").addEventListener("click", function (e) {
+      var t = e.target && e.target.closest && e.target.closest("[data-audit-stop],[data-audit-tidy],[data-audit-putback]");
+      if (!t) return;
+      if (t.hasAttribute("data-audit-putback")) {
+        return emailAuditPutBack(t.getAttribute("data-audit-putback"), t.getAttribute("data-audit-kind"));
+      }
+      var stop = t.hasAttribute("data-audit-stop");
+      var block = t.closest(".email-fail-item");
+      emailAuditRemove(
+        t.getAttribute(stop ? "data-audit-stop" : "data-audit-tidy"),
+        stop,
+        block ? block.querySelectorAll(".email-fail-problems > li").length : 0,
+      );
+    });
   }
-  function loadEmailAudit() {
+  // keepSaid: the list is being drawn again because of a press here, so the line that says what
+  // that press did stays. Any other load (opening the screen, a filter, a page) clears it.
+  function loadEmailAudit(keepSaid) {
     wireEmailAudit();
+    if (!keepSaid) emailAuditSay("");
     var wrap = el("emailAuditTable");
     var band = el("emailAuditFailures");
     wrap.innerHTML = '<p class="admin-loading">Loading…</p>';
@@ -2783,15 +3649,10 @@
     if (q) params += "&q=" + encodeURIComponent(q);
     if (type) params += "&type=" + encodeURIComponent(type);
     if (status) params += "&status=" + encodeURIComponent(status);
-    authFetch("/api/admin/email-log" + params)
+    return authFetch("/api/admin/email-log" + params)
       .then(okJson)
       .then(function (d) {
-        var failures = d.failures || [];
-        band.innerHTML = failures.length
-          ? '<div class="email-fail-band"><h3>Needs a look: ' + failures.length +
-            " problem" + (failures.length === 1 ? "" : "s") + ' in the last 14 days</h3><div class="admin-table-wrap">' +
-            emailAuditTableHtml(failures) + "</div></div>"
-          : "";
+        band.innerHTML = emailFailBandHtml(d.failures || []);
         var rows = d.results || [];
         wrap.innerHTML = rows.length
           ? emailAuditTableHtml(rows)
@@ -2821,7 +3682,10 @@
   function siteStatus(msg, cls) {
     var s = el("siteStatus");
     if (!s) return;
-    s.className = "ty-status" + (cls ? " " + cls : "");
+    // TASK-568: .ty-status has is-ok and is-error. This line used the bare classes "ok" and "err",
+    // and the public stylesheet hides .err (a form's field error until it is needed), so since
+    // 1 September no refusal on this screen had ever been seen.
+    s.className = "ty-status" + (cls === "err" ? " is-error" : cls === "ok" ? " is-ok" : "");
     s.textContent = msg || "";
   }
   function renderSiteAliases(aliases, canWrite) {
@@ -2835,14 +3699,24 @@
         var remove = canWrite
           ? '<button class="admin-link" type="button" data-site-alias-remove="' + a.id + '">Remove</button>'
           : "";
+        // TASK-568: a forward that leaves the main site for one of our subdomains says so. Shown
+        // without its https://, the way staff typed it.
+        var away = a.toPath.indexOf("https://") === 0;
+        var to = away
+          ? H.escapeHtml(a.toPath.slice(8)) + ' <span class="admin-pill">Subdomain</span>'
+          : H.escapeHtml(a.toPath);
+        // Each cell carries its heading, so the list can be labelled cards on a phone (.sa-table in
+        // admin.css), as Donations and Stories are.
         return (
-          "<tr><td>" + H.escapeHtml(a.fromPath) + "</td><td>" + H.escapeHtml(a.toPath) +
-          "</td><td>" + H.escapeHtml(a.createdBy) + "</td><td>" + remove + "</td></tr>"
+          '<tr><td data-label="Spare address">' + H.escapeHtml(a.fromPath) +
+          '</td><td data-label="Sends people to"><span class="sa-to">' + to +
+          '</span></td><td data-label="Added by"><span class="sa-to">' + H.escapeHtml(a.createdBy) +
+          '</span></td><td data-label="">' + remove + "</td></tr>"
         );
       })
       .join("");
     wrap.innerHTML =
-      '<table class="admin-table"><thead><tr><th>Spare address</th><th>Sends people to</th><th>Added by</th><th></th></tr></thead><tbody>' +
+      '<table class="admin-table sa-table"><thead><tr><th>Spare address</th><th>Sends people to</th><th>Added by</th><th></th></tr></thead><tbody>' +
       body + "</tbody></table>";
     if (canWrite) {
       Array.prototype.forEach.call(wrap.querySelectorAll("[data-site-alias-remove]"), function (b) {
@@ -2933,17 +3807,32 @@
       });
     }
   }
+  // TASK-568: "Sends people to" ends with one choice that is not a page: an NBCC subdomain, typed in
+  // a box that only shows (and is only required) while that choice is picked. The server decides
+  // what is allowed (forwardTarget in src/site/pages.ts); this only shows and hides the box.
+  var SITE_SUBDOMAIN = "subdomain";
+  function siteSyncHost() {
+    var on = el("siteAliasTo").value === SITE_SUBDOMAIN;
+    el("siteAliasHostWrap").hidden = !on;
+    el("siteAliasHostHelp").hidden = !on;
+    el("siteAliasHost").required = on;
+  }
   function wireSite() {
     if (siteWired) return;
     siteWired = true;
     var form = el("siteAliasForm");
+    el("siteAliasTo").addEventListener("change", siteSyncHost);
     if (form) form.addEventListener("submit", function (e) {
       e.preventDefault();
       siteStatus("");
+      var toSubdomain = el("siteAliasTo").value === SITE_SUBDOMAIN;
       authFetch("/api/admin/site-aliases", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ from: el("siteAliasFrom").value.trim(), to: el("siteAliasTo").value }),
+        body: JSON.stringify({
+          from: el("siteAliasFrom").value.trim(),
+          to: toSubdomain ? el("siteAliasHost").value.trim() : el("siteAliasTo").value,
+        }),
       })
         .then(function (res) {
           return res.json().then(function (b) { return { ok: res.ok, body: b }; });
@@ -2951,6 +3840,7 @@
         .then(function (r) {
           if (!r.ok) { siteStatus(r.body.error || "Could not add that address.", "err"); return; }
           el("siteAliasFrom").value = "";
+          el("siteAliasHost").value = "";
           siteStatus("Spare address added. It works right away.", "ok");
           loadSite();
         })
@@ -3081,11 +3971,15 @@
       .then(okJson)
       .then(function (d) {
         var sel = el("siteAliasTo");
+        var keep = sel.value;
         sel.innerHTML = (d.pages || [])
           .map(function (p) {
             return '<option value="' + H.escapeHtml(p.path) + '">' + H.escapeHtml(p.title) + " (" + H.escapeHtml(p.path) + ")</option>";
           })
-          .join("");
+          .join("") + '<option value="' + SITE_SUBDOMAIN + '">An NBCC subdomain…</option>';
+        // A reload after adding or removing redraws the list: keep the choice the person had made.
+        if (keep === SITE_SUBDOMAIN) sel.value = keep;
+        siteSyncHost();
         renderSiteAll(d.pages || [], d.privatePages || []);
         renderSiteAliases(d.aliases || [], canWrite);
         renderSiteSeo(d.pages || [], canWrite);
@@ -5739,7 +6633,7 @@
       '<div class="nl-reach-big">' + a.memberCount + "</div>" +
       '<p class="nl-reach-who">people on <b>' + H.escapeHtml(a.name) + "</b></p>" +
       "<ul><li><span>On the audience</span><b>" + a.memberCount + "</b></li>" +
-      "<li><span>Blocked (bounced or spam)</span><b>" + blocked + "</b></li></ul>" +
+      "<li><span>Blocked (bounced, spam or by staff)</span><b>" + blocked + "</b></li></ul>" +
       '<p class="nl-reach-note">Anyone who unsubscribed, bounced permanently or reported us as spam is left ' +
       "out automatically. Emailing them is what gets NBCC sent to junk.</p>";
   }
@@ -5768,17 +6662,26 @@
           html += "<tr><td>" + H.escapeHtml(s.email) + "</td><td>" + H.escapeHtml(why[s.reason] || s.reason) +
             (s.detail ? '<span class="admin-sub">' + H.escapeHtml(s.detail) + "</span>" : "") +
             "</td><td>" + H.fmtDate(s.createdAt) + "</td><td>" +
-            (canWrite ? '<button class="admin-link" type="button" data-unblock="' + H.escapeHtml(s.email) + '">Unblock</button>' : "") +
+            (canWrite
+              ? '<button class="admin-link" type="button" data-unblock="' + H.escapeHtml(s.email) + '" data-reason="' + H.escapeHtml(s.reason) + '">Unblock</button>'
+              : "") +
             "</td></tr>";
         });
         host.innerHTML = html + "</tbody></table>";
         Array.prototype.forEach.call(host.querySelectorAll("[data-unblock]"), function (b) {
           b.addEventListener("click", function () {
             var email = b.getAttribute("data-unblock");
+            // TASK-562: a block staff made from the Email audit is not a bounce or a spam report,
+            // and the question says which it is.
+            var byStaff = b.getAttribute("data-reason") === "manual";
             if (!window.confirm(
-              "Start emailing " + email + " again?\n\nWe stopped because their mail bounced permanently or they " +
-              "marked us as spam. Only do this if you know the address works and they want to hear from us — " +
-              "emailing dead or complaining addresses is what sends our emails to junk.",
+              byStaff
+                ? "Start emailing " + email + " again?\n\nA member of staff stopped emails to this address from the " +
+                  "Email audit. Only do this if you know the address works and they want to hear from us. " +
+                  "Emailing dead addresses is what sends our emails to junk."
+                : "Start emailing " + email + " again?\n\nWe stopped because their mail bounced permanently or they " +
+                  "marked us as spam. Only do this if you know the address works and they want to hear from us — " +
+                  "emailing dead or complaining addresses is what sends our emails to junk.",
             )) return;
             authFetch("/api/admin/newsletters/suppressions/lift", {
               method: "POST",
@@ -9078,6 +9981,43 @@
   var frData = null; // the last GET /api/admin/fundraisers
   var frSettings = null; // the last GET /api/admin/fundraising/settings
   var frFilter = ""; // "" is every status
+  // The kind filter: "" is every kind, else raising, team, event or memory. Kept for the visit, in
+  // the browser tab's own storage beside the session, so a refresh keeps it and signing out forgets it.
+  var FR_KIND_KEY = "nbccAdminFrKind";
+  var FR_KIND_NAMES = ["raising", "team", "event", "memory"];
+  var frKind = "";
+  try {
+    frKind = sessionStorage.getItem(FR_KIND_KEY) || "";
+  } catch {
+    frKind = "";
+  }
+  if (FR_KIND_NAMES.indexOf(frKind) === -1) frKind = "";
+  function frSetKind(kind) {
+    frKind = FR_KIND_NAMES.indexOf(kind) === -1 ? "" : kind;
+    try {
+      if (frKind) sessionStorage.setItem(FR_KIND_KEY, frKind);
+      else sessionStorage.removeItem(FR_KIND_KEY);
+    } catch {
+      // Private mode: it lasts until the page is refreshed.
+    }
+  }
+  function frKindReset() {
+    frSetKind("");
+  }
+  // What kind of sign up it is, from what the list already says about it: a page in memory of
+  // someone; a team, or a member's own page while they are on one; an event; else raising money.
+  // In memory comes first, as it changes how everything about the page is worded.
+  function frKindOf(f) {
+    if (f.inMemory) return "memory";
+    if (f.isTeam || (f.teamId && !f.teamLeftAt)) return "team";
+    return f.path === "event" ? "event" : "raising";
+  }
+  // The large pill on each row. The words are always on it (the invite types' own), so the colour
+  // is never the only thing saying which kind it is.
+  function frKindPill(f) {
+    var kind = frKindOf(f);
+    return '<span class="fr-kind" data-kind="' + kind + '">' + H.escapeHtml(FR_INVITE_TYPES[kind].label) + "</span>";
+  }
   var frOpenId = null; // the sign up open below its row
   var frDetail = null; // GET /api/admin/fundraisers/:id for the open one
   var frDetailFailed = false;
@@ -9156,7 +10096,7 @@
     return '<span class="admin-pill fr-status' + (s.cls ? " " + s.cls : "") + '">' + H.escapeHtml(s.label) + "</span>";
   }
   function frPathWords(path) {
-    return path === "event" ? "Holding an event" : "Raising money";
+    return path === "event" ? "Hosting an event" : "Raising money";
   }
   // A message belongs to the sign up it is about (id), and only shows while that one is open.
   function frSay(key, msg, error, id) {
@@ -9201,17 +10141,17 @@
   }
 
   // ---- loading ----
+  // Sign ups: the list, the open sign up, and everything a row or an open sign up says or asks.
+  // The other sections' own cards load when they are shown (giLoad).
   function loadFundraising() {
     frWire();
-    frLoadSettings();
+    frLoadSettings(); // approving a page asks differently while fundraising is switched off
     frLoadList();
     if (frOpenId != null) frLoadDetail(frOpenId);
-    // TASK-503: the team's tools. Each loads on its own, so the rest of the screen never waits on it.
-    frRenderInvitePanel();
+    // TASK-503: the calls due and the prompts on the list. Each loads on its own, so the rest of
+    // the screen never waits on it.
     frLoadTeam();
-    frLoadSummary();
-    frLoadCategories(); // the Categories card, and the sign up editor's list
-    frLoadImpact(); // What gifts could do
+    frLoadCategories(); // the sign up editor's list
     // TASK-505: the requests, likewise on their own.
     frLoadRequests();
     frLoadNewsCounts(); // TASK-506
@@ -9220,6 +10160,25 @@
     frTouchLoad(); // TASK-515
     frMemoryLoadCounts(); // In memory
     frLoadPacks(); // welcome packs
+  }
+  // Emails: Invite someone with the invites not taken up, and the Automatic emails card. The All
+  // emails card counts what is waiting by itself when its part is shown (all-emails.js).
+  function frLoadEmailsSection() {
+    frWire();
+    // All emails offers the real fundraisers under "Show it for" (AdminFundraising.raisingPages).
+    // Arriving here first, after a refresh, Sign ups has not loaded them, so they are asked for now.
+    if (!frData) frLoadList();
+    frRenderInvitePanel();
+    frLoadTeam();
+    frTouchLoad(); // TASK-515
+  }
+  // Settings: the Fundraising switch, Categories, What gifts could do and the Weekly summary.
+  function frLoadSettingsSection() {
+    frWire();
+    frLoadSettings();
+    frLoadCategories();
+    frLoadImpact();
+    frLoadSummary();
   }
 
   function frLoadSettings() {
@@ -9246,6 +10205,9 @@
       .then(function (d) {
         frData = d;
         frRenderList();
+        // All emails fills "Show it for" from this list: tell it, in case an email is already open.
+        var view = el("view-fundraising");
+        if (view && window.CustomEvent) view.dispatchEvent(new window.CustomEvent("nbcc:fundraisers-loaded"));
       })
       .catch(function (err) {
         if (err && err.message === "unauthorized") return;
@@ -9434,6 +10396,15 @@
     if (notBack) notBack.textContent = list.filter(frReqNotBack).length;
     var packs = doc.querySelector('[data-frcount="packs"]'); // welcome packs
     if (packs) packs.textContent = list.filter(frPackToSend).length;
+    // How many of each kind, of every sign up, whichever filters are pressed.
+    var kinds = { all: list.length, raising: 0, team: 0, event: 0, memory: 0 };
+    list.forEach(function (f) {
+      kinds[frKindOf(f)] += 1;
+    });
+    Object.keys(kinds).forEach(function (k) {
+      var c = doc.querySelector('[data-frkindcount="' + k + '"]');
+      if (c) c.textContent = kinds[k];
+    });
   }
 
   function frRaisedCell(f) {
@@ -9448,7 +10419,8 @@
 
   function frSummaryRow(f) {
     var open = frOpenId === f.id;
-    var sub = [f.name, frPathWords(f.path), f.eventDate ? H.fmtDate(f.eventDate) : "No date"];
+    // No kind here: the large pill above the title says it, in the same words as the filter.
+    var sub = [f.name, f.eventDate ? H.fmtDate(f.eventDate) : "No date"];
     var pills = (f.editWaiting ? '<span class="admin-pill admin-pill--pending fr-changes-pill">Changes to check</span>' : "") +
       // TASK-506: news updates the organiser posted, waiting for staff.
       frNewsPill(f) +
@@ -9471,7 +10443,7 @@
     return (
       '<tr class="fx-summary' + (open ? " is-open" : "") + '" data-frtoggle="' + f.id +
       '" tabindex="0" role="button" aria-expanded="' + (open ? "true" : "false") + '">' +
-        '<td><span class="fx-caret" aria-hidden="true"></span><span class="fr-title">' + H.escapeHtml(f.title) + "</span>" +
+        "<td>" + frKindPill(f) + '<span class="fx-caret" aria-hidden="true"></span><span class="fr-title">' + H.escapeHtml(f.title) + "</span>" +
           '<span class="fr-sub">' + sub.map(function (s) { return H.escapeHtml(s); }).join(" · ") + "</span>" +
           (pills ? '<span class="fr-pills">' + pills + "</span>" : "") + "</td>" +
         "<td>" + frStatusPill(f.status) + "</td>" +
@@ -9521,11 +10493,17 @@
       b.classList.toggle("is-active", on);
       b.setAttribute("aria-pressed", on ? "true" : "false");
     });
+    Array.prototype.forEach.call(doc.querySelectorAll("[data-frkind]"), function (b) {
+      var on = b.getAttribute("data-frkind") === frKind;
+      b.classList.toggle("is-active", on);
+      b.setAttribute("aria-pressed", on ? "true" : "false");
+    });
     if (!all.length) {
       wrap.innerHTML = '<p class="fx-empty fr-empty">Nobody has signed up yet. Sign ups from the Fundraise for us form arrive here, with a New pill.</p>';
       return;
     }
     var rows = all.filter(function (f) {
+      if (frKind && frKindOf(f) !== frKind) return false; // the kind filter, alongside the one below
       if (!frFilter) return true;
       if (frFilter === "calls") return frCallDue(f);
       // TASK-505
@@ -9539,7 +10517,8 @@
         new: "No new sign ups are waiting.", approved: "None approved yet.", declined: "None declined.", finished: "None finished yet.",
         calls: "No calls due.", requests: "No requests to do.", notback: "No buckets or tins are out.", packs: "No packs to send.",
       };
-      wrap.innerHTML = '<p class="fx-empty fr-empty">' + H.escapeHtml(none[frFilter] || "None here.") + "</p>";
+      // With a kind chosen as well, the status filter's own words could be untrue of the whole list.
+      wrap.innerHTML = '<p class="fx-empty fr-empty">' + H.escapeHtml((!frKind && none[frFilter]) || "None here.") + "</p>";
       return;
     }
     var openAt = -1;
@@ -9639,7 +10618,7 @@
     }
     if (!f.public) return "Approved. They only wanted to let us know, or wanted materials, so it is not on the website.";
     // Event pages: an approved public event has its own page as well as its card.
-    if (f.path === "event") return "Approved. Its page is on the website, and it is listed on Get involved as an event, while fundraising is switched on.";
+    if (f.path === "event") return "Approved. Its page is on the website, and it is listed on What’s on as an event, while fundraising is switched on.";
     return "Approved. Its page is on the website while fundraising is switched on.";
   }
 
@@ -10188,7 +11167,7 @@
         // TASK-511 review: always there, shown as soon as Other is chosen (keepTyping).
         box("kindOther", "kindOther", "What it is, in their words (optional)", "text", 'maxlength="80" autocomplete="off"', "For Other. Up to 80 characters.")
           .replace('<div class="fr-field">', '<div class="fr-field" data-frkindother' + (v.kind === "other" || v.kindOther ? "" : " hidden") + ">") +
-        pick("path", "They are", [["raising", "Raising money"], ["event", "Holding an event"]]) +
+        pick("path", "They are", [["raising", "Raising money"], ["event", "Hosting an event"]]) +
         area("description", "description", "About it", 4, 1000) +
         box("eventDate", "eventDate", "Date (optional)", "date", "") +
         box("startTime", "startTime", "Start time (optional)", "time", "") +
@@ -10297,8 +11276,8 @@
 
   function frMemoryPills(f) {
     if (!f.inMemory) return "";
-    return '<span class="admin-pill fr-memory-pill">In memory</span>' +
-      (frMemoryCounts[f.id] ? '<span class="admin-pill admin-pill--pending fr-memory-msgs-pill">Messages to check</span>' : "") +
+    // The row's large kind pill says In memory; these are only what is waiting on it.
+    return (frMemoryCounts[f.id] ? '<span class="admin-pill admin-pill--pending fr-memory-msgs-pill">Messages to check</span>' : "") +
       (f.memoryYearOnDue ? '<span class="admin-pill admin-pill--pending fr-memory-yearon-pill">A year on</span>' : "");
   }
 
@@ -10937,6 +11916,12 @@
       var chip = t.closest("[data-frfilter]");
       if (chip) {
         frFilter = chip.getAttribute("data-frfilter") || "";
+        frRenderList();
+        return;
+      }
+      var kindChip = t.closest("[data-frkind]");
+      if (kindChip) {
+        frSetKind(kindChip.getAttribute("data-frkind") || "");
         frRenderList();
         return;
       }
@@ -11604,7 +12589,7 @@
   }
 
   function frGroupPills(f) {
-    if (f.isTeam) return '<span class="admin-pill fr-team-pill">Team</span>';
+    // A team's own row says so on its large kind pill; a member's row says which team.
     if (f.teamId && !f.teamLeftAt) {
       var title = frGroupTitleOf(f.teamId);
       // Waiting for staff: joining; approved since: on the team.
@@ -12805,6 +13790,14 @@
 
   // The Send button, the note beside it and the sign off line, from what is chosen and approved.
   function frInviteSync() {
+    // An in memory invite comes from Jodie, is signed by her and copies her (the server sees to all
+    // three), so "Signed by" does nothing for it: the box goes, and one line says what is true.
+    var memory = frInviteType() === "memory";
+    var signer = el("frInviteSigner");
+    var signerField = signer && signer.closest ? signer.closest(".fr-field") : null;
+    if (signerField) signerField.hidden = memory;
+    var memoryNote = el("frInviteMemoryNote");
+    if (memoryNote) memoryNote.hidden = !memory;
     var held = frInviteHeld();
     var send = el("frInviteSend");
     if (send) send.disabled = held || frTeamBusy;
@@ -12855,7 +13848,8 @@
     if (!type || !box) return;
     if (!keepOpen) frTeamSay("frInviteStatus", "", false);
     // Signed as the signer chosen in the form, so the example reads as theirs will.
-    var signedBy = Number((el("frInviteSigner") || {}).value);
+    // The in memory one is signed by Jodie whoever is chosen, so no signer is asked for.
+    var signedBy = type === "memory" ? 0 : Number((el("frInviteSigner") || {}).value);
     return authFetch("/api/admin/fundraising/invite-wording/" + encodeURIComponent(type) + (signedBy ? "?signedBy=" + encodeURIComponent(signedBy) : ""))
       .then(okJson)
       .then(function (d) {
@@ -12910,7 +13904,8 @@
       return '<li data-frinvite="' + id + '"><span class="fr-people-who"><b>' + H.escapeHtml(i.name) + "</b> <span>" + H.escapeHtml(i.email) + "</span>" +
         (FR_INVITE_TYPES[i.type] ? ' <span class="admin-pill fr-invite-type">' + H.escapeHtml(FR_INVITE_TYPES[i.type].label) + "</span>" : "") +
         (expired ? ' <span class="admin-pill fr-invite-expired">Expired</span>' : "") +
-        '<span class="fr-people-when">Invited by ' + H.escapeHtml(i.signedBy) + " on " + H.escapeHtml(H.fmtDate(i.createdAt)) +
+        // An in memory invite is signed by Jodie, whoever sent it: it does not say "Invited by".
+        '<span class="fr-people-when">' + (i.type === "memory" ? "Invited" : "Invited by " + H.escapeHtml(i.signedBy)) + " on " + H.escapeHtml(H.fmtDate(i.createdAt)) +
         (i.resentAt ? ", sent again on " + H.escapeHtml(H.fmtDate(i.resentAt)) : "") +
         (expired ? ". The link has expired. Resend to send a new one." : "") + "</span></span>" +
         '<span class="fr-people-actions">' +
@@ -12970,11 +13965,15 @@
     if (!lastName) return frTeamSay("frInviteStatus", "Add their surname.", true);
     if (!FR_EMAIL.test(email)) return frTeamSay("frInviteStatus", "That isn't a whole email address.", true);
     if (note.length > 5000) return frTeamSay("frInviteStatus", "Keep the note to 5,000 characters or fewer.", true);
-    if (!signedBy) return frTeamSay("frInviteStatus", "Choose who it is from.", true);
+    // An in memory invite comes from Jodie: no signer is chosen, asked about or sent.
+    var memory = type === "memory";
+    if (!memory && !signedBy) return frTeamSay("frInviteStatus", "Choose who it is from.", true);
     var signer = select.options[select.selectedIndex] ? select.options[select.selectedIndex].textContent : "";
     // Names everything: the type in plain words, the full name, the email and the signer.
-    if (!window.confirm("Send " + FR_INVITE_TYPES[type].phrase + " to " + name + " at " + email + ", signed by " + signer + "?")) return;
-    var body = { firstName: firstName, lastName: lastName, email: email, signedBy: signedBy, type: type };
+    var ask = "Send " + FR_INVITE_TYPES[type].phrase + " to " + name + " at " + email + (memory ? "? It comes from Jodie." : ", signed by " + signer + "?");
+    if (!window.confirm(ask)) return;
+    var body = { firstName: firstName, lastName: lastName, email: email, type: type };
+    if (!memory) body.signedBy = signedBy;
     if (note) body.note = note;
     frTeamSay("frInviteStatus", "Sending…", false);
     return frInviteRun(function () {
@@ -13046,17 +14045,28 @@
       });
   }
 
+  // The summary is one email with everyone on the To line, so only nbcc.scot addresses get it
+  // (the rule itself: isSummaryAddress in src/fundraising/summary.ts, which the server goes by).
+  function frSummaryGets(email) {
+    return /^[^@]+@nbcc\.scot$/i.test(String(email || "").trim());
+  }
+
   function frRenderSummary() {
     var d = frSummaryData;
-    var n = d.recipients.length;
+    var all = d.recipients.length;
+    // An address from elsewhere, on the list from before the rule, is left off the email.
+    var n = d.recipients.filter(frSummaryGets).length;
     el("frSummary").classList.toggle("is-on", n > 0);
     el("frSummaryState").innerHTML = n
       ? "<b>On.</b> It goes to " + (n === 1 ? "1 person" : n + " people") + " at 8am on Mondays." +
         (d.lastWeek ? " The last one went on " + H.escapeHtml(H.fmtDate(d.lastWeek)) + "." : "")
-      : "<b>Off.</b> Nobody is on the list, so no summary goes.";
-    el("frSummaryList").innerHTML = n
+      : all
+        ? "<b>Off.</b> Nobody on the list has an nbcc.scot address, so no summary goes."
+        : "<b>Off.</b> Nobody is on the list, so no summary goes.";
+    el("frSummaryList").innerHTML = all
       ? d.recipients.map(function (e) {
-          return '<li><span class="fr-people-who">' + H.escapeHtml(e) + "</span>" +
+          return '<li><span class="fr-people-who">' + H.escapeHtml(e) +
+            (frSummaryGets(e) ? "" : '<span class="fr-people-when">Not an nbcc.scot address, so it is left off the email.</span>') + "</span>" +
             '<button class="fr-link-btn" type="button" data-frsummaryremove="' + H.escapeHtml(e) + '" aria-label="' + H.escapeHtml("Remove " + e) + '">Remove</button></li>';
         }).join("")
       : '<li class="fr-people-empty">Nobody on the list yet.</li>';
@@ -13093,6 +14103,7 @@
     var email = String(box.value || "").trim().toLowerCase();
     var list = frSummaryData.recipients.slice();
     if (!FR_EMAIL.test(email)) return frTeamSay("frSummaryStatus", "That isn't a whole email address.", true);
+    if (!frSummaryGets(email)) return frTeamSay("frSummaryStatus", "Only nbcc.scot addresses can get the weekly summary.", true);
     if (list.indexOf(email) !== -1) return frTeamSay("frSummaryStatus", "That address is already on the list.", true);
     if (list.length >= 10) return frTeamSay("frSummaryStatus", "The summary can go to up to 10 people. Remove someone to add another.", true);
     return frSummarySave(list.concat([email]).sort(), "Saved. " + email + " gets the next one.").then(function (ok) {
@@ -13368,7 +14379,7 @@
     if (!f.public) return "Not on the website";
     if (f.offListBy === "organiser") return "A page of its own, but not on Get involved: only people they send the link to";
     // An event's card needs a date: until it has one it has its page, but is not on the list.
-    if (f.path === "event" && !f.eventDate) return "Not listed yet: no date. Its page is up; its card joins Get involved once it has a date";
+    if (f.path === "event" && !f.eventDate) return "Not listed yet: no date. Its page is up; its card joins What’s on once it has a date";
     return "Show it on our website";
   }
   // The new answers, in What they told us. A sign up from before has none, and shows nothing.
@@ -14121,6 +15132,334 @@
   var ballWired = false;
   var ballSettings = null;
 
+  // ---- Festive Ball: six sections (October 2026) ----
+  // Jaimie asked for this screen to read like a website and stop being "one big list of
+  // everything", and, twice, for nothing it does to change. So this part only decides what is on
+  // screen: which of the six sections shows, the band's two facts, the numbers at a glance, Needs
+  // you, the counts on the section buttons, and what each Set up drop down says on its closed line.
+  // It asks the server for nothing. Everything it draws comes from the answers loadBall already
+  // fetches, as they arrive, and it draws inside its own try: a summary going wrong must never stop
+  // the forms and lists it sits beside, which say all of it themselves.
+  var BALL_SECTIONS = ["overview", "bookings", "transfers", "guests", "emails", "setup"];
+  var BALL_SECTION_KEY = "nbccAdminBallSection";
+  var ballSection = null; // the section on screen
+  var ballAsked = null; // the section the main Overview's button asked for, for the next opening
+  // The main Overview's Festive Ball lines (src/admin/overview.ts), by key, and the section of this
+  // screen that deals with each. Its other Ball buttons open the screen where it was left.
+  var BALL_NEED_SECTIONS = { transfersOverdue: "transfers", transfersWaiting: "transfers", ballGuestsMissing: "guests" };
+
+  function ballAsk(section) {
+    if (BALL_SECTIONS.indexOf(section) !== -1) ballAsked = section;
+  }
+  function ballSectionButtons() {
+    return Array.prototype.slice.call(document.querySelectorAll("#ballSections [data-ball-section]"));
+  }
+  function ballShow(section) {
+    if (BALL_SECTIONS.indexOf(section) === -1) return;
+    ballSection = section;
+    try {
+      sessionStorage.setItem(BALL_SECTION_KEY, section);
+    } catch {
+      // Private mode: the section is not remembered through a refresh, and nothing else is lost.
+    }
+    ballSectionButtons().forEach(function (b) {
+      var on = b.getAttribute("data-ball-section") === section;
+      b.classList.toggle("is-active", on);
+      b.setAttribute("aria-pressed", on ? "true" : "false");
+    });
+    Array.prototype.forEach.call(document.querySelectorAll("#view-ball [data-ball-part]"), function (p) {
+      p.hidden = p.getAttribute("data-ball-part") !== section;
+    });
+  }
+  // Every time the screen loads: the section the Overview asked for, else the one on screen (a save
+  // or a send reloads the screen and must not move you), else the one this browser tab was last on.
+  function ballOpenSection() {
+    var remembered = null;
+    try {
+      remembered = sessionStorage.getItem(BALL_SECTION_KEY);
+    } catch {
+      remembered = null;
+    }
+    var section = [ballAsked, ballSection, remembered, "overview"].filter(function (s) {
+      return BALL_SECTIONS.indexOf(s) !== -1;
+    })[0];
+    ballAsked = null;
+    ballShow(section);
+  }
+  function ballWireSections() {
+    var row = el("ballSections");
+    if (!row) return;
+    row.addEventListener("click", function (e) {
+      var b = e.target && e.target.closest ? e.target.closest("[data-ball-section]") : null;
+      if (b) ballShow(b.getAttribute("data-ball-section"));
+    });
+    // Arrow keys, Home and End move along the buttons and show that section, as in Get involved.
+    row.addEventListener("keydown", function (e) {
+      var keys = { ArrowRight: 1, ArrowDown: 1, ArrowLeft: -1, ArrowUp: -1, Home: "first", End: "last" };
+      var move = keys[e.key];
+      var from = e.target && e.target.closest ? e.target.closest("[data-ball-section]") : null;
+      if (!move || !from) return;
+      var all = ballSectionButtons();
+      var at = all.indexOf(from);
+      if (at === -1) return;
+      e.preventDefault();
+      var next = move === "first" ? all[0] : move === "last" ? all[all.length - 1]
+        : all[(at + move + all.length) % all.length];
+      next.focus();
+      ballShow(next.getAttribute("data-ball-section"));
+    });
+    // Needs you's buttons, and any other button on the screen that names a section. Focus moves to
+    // that section's own button, since the one pressed has just been hidden with its section. From
+    // further down the page you are taken up to where the section starts: just under the bar where
+    // it is pinned (a laptop), or to the bar itself where it is not (a phone).
+    el("view-ball").addEventListener("click", function (e) {
+      var go = e.target && e.target.closest ? e.target.closest("[data-ball-go]") : null;
+      if (!go) return;
+      var key = go.getAttribute("data-ball-go");
+      if (BALL_SECTIONS.indexOf(key) === -1) return;
+      ballShow(key);
+      var button = ballSectionButtons().filter(function (b) { return b.getAttribute("data-ball-section") === key; })[0];
+      if (button) button.focus({ preventScroll: true });
+      var part = document.querySelector('#view-ball [data-ball-part="' + key + '"]');
+      if (!part || !part.scrollIntoView) return;
+      var pinned = window.getComputedStyle(row).position === "sticky";
+      if (pinned && part.getBoundingClientRect().top < row.getBoundingClientRect().bottom) part.scrollIntoView({ block: "start" });
+      else if (!pinned && row.getBoundingClientRect().top < 0) row.scrollIntoView({ block: "start" });
+    });
+    // TASK-571: Awaiting transfer's "Show all" turns off Bookings' no phone number filter, which
+    // covers both lists (filterBallNoPhone), as unticking the box there does.
+    var showAll = el("ballShowAllTransfers");
+    if (showAll) {
+      showAll.addEventListener("click", function () {
+        var only = el("ballNoPhoneOnly");
+        if (only) only.checked = false;
+        filterBallNoPhone();
+      });
+    }
+  }
+
+  // What Needs you and the counts are drawn from: one answer each, null until it arrives and false
+  // if it could not be had. Never "nothing needs you" while one is missing (TASK-476).
+  var ballGlance = { transfers: null, noPhone: null, guests: null, menu: null };
+  function ballGlanceReset() {
+    ballGlance = { transfers: null, noPhone: null, guests: null, menu: null };
+    ballGlanceDraw();
+  }
+  function ballGlanceSet(key, value) {
+    ballGlance[key] = value;
+    ballGlanceDraw();
+  }
+  function ballGlanceDraw() {
+    try {
+      ballNeedsDraw();
+      ballCountsDraw();
+    } catch {
+      // The sections hold every one of these numbers themselves.
+    }
+  }
+  function ballPlural(n, one, many) {
+    return n + " " + (n === 1 ? one : many);
+  }
+  // "£31,245", or "£1,240.50" when there are pence: a number this size wants its commas.
+  function ballMoney(pence) {
+    var p = pence || 0;
+    return "£" + (p / 100).toLocaleString("en-GB", { minimumFractionDigits: p % 100 ? 2 : 0, maximumFractionDigits: 2 });
+  }
+  function ballAnd(list) {
+    return list.length < 2 ? list.join("") : list.slice(0, -1).join(", ") + " and " + list[list.length - 1];
+  }
+  function ballNeedsDraw() {
+    var box = el("ballNeeds");
+    if (!box) return;
+    var g = ballGlance;
+    var lines = [];
+    var unknown = [];
+    if (g.transfers === false) unknown.push("the bank transfers");
+    else if (g.transfers && g.transfers.length) {
+      var waiting = g.transfers.length;
+      var overdue = g.transfers.filter(function (t) { return t.overdue; }).length;
+      lines.push({
+        level: overdue ? 1 : 2,
+        go: "transfers",
+        button: "Awaiting transfer",
+        text: (waiting === 1 ? "1 bank transfer is waiting for its money" : waiting + " bank transfers are waiting for their money") +
+          (overdue ? ", " + overdue + (overdue === 1 ? " is past its" : " are past their") + " pay by date" : ""),
+      });
+    }
+    if (g.noPhone === false) unknown.push("the phone numbers");
+    else if (g.noPhone > 0) {
+      lines.push({
+        level: 2,
+        go: "bookings",
+        button: "Bookings",
+        text: g.noPhone === 1 ? "1 booking has no phone number yet" : g.noPhone + " bookings have no phone number yet",
+      });
+    }
+    if (g.guests === false) unknown.push("the guest details");
+    else if (g.guests && g.guests.guestsMissing > 0) {
+      lines.push({
+        level: 3,
+        go: "guests",
+        button: "Guests and menu",
+        text: ballPlural(g.guests.guestsMissing, "guest", "guests") + " still to be named, across " +
+          ballPlural(g.guests.bookingsOutstanding || 0, "booking", "bookings"),
+      });
+    }
+    if (g.menu === false) unknown.push("the dinner choices");
+    else if (g.menu && g.menu.asking && g.menu.outstanding > 0) {
+      lines.push({
+        level: 3,
+        go: "guests",
+        button: "Guests and menu",
+        text: ballPlural(g.menu.outstanding, "guest", "guests") + " still to choose their dinner",
+      });
+    }
+    var esc = H.escapeHtml;
+    var html = lines.length
+      ? '<ul class="ov-needs">' +
+        lines
+          .map(function (n) {
+            return (
+              '<li class="ov-need" data-level="' + n.level + '">' +
+              '<span class="ov-dot" aria-hidden="true"></span>' +
+              '<span class="ov-text"><span class="sr-only">' + (NEED_LEVEL_WORDS[n.level] || "") + "</span>" + esc(n.text) + "</span>" +
+              '<button type="button" class="admin-btn admin-btn--small ov-go" data-ball-go="' + n.go + '">' + esc(n.button) + "</button>" +
+              "</li>"
+            );
+          })
+          .join("") +
+        "</ul>"
+      : "";
+    var stillComing = g.transfers === null || g.noPhone === null || g.guests === null || g.menu === null;
+    if (unknown.length) {
+      html += '<p class="ov-failed">Could not check ' + esc(ballAnd(unknown)) + ". Open Festive Ball again in a moment.</p>";
+    } else if (!lines.length) {
+      html += stillComing ? '<p class="admin-loading">Loading…</p>' : '<p class="ov-clear">Nothing needs you right now.</p>';
+    }
+    box.innerHTML = html;
+  }
+  // The section buttons carry the two counts worth knowing before you open them, and New where the
+  // list inside holds a booking made since this person last opened Festive Ball (TASK-487's pill).
+  // Those rows are behind these buttons now, as Get involved's are behind its own, so without it a
+  // visit spent on Overview would use up the New without anyone seeing it.
+  function ballCountsDraw() {
+    var counts = {
+      transfers: ballGlance.transfers ? ballGlance.transfers.length : 0,
+      guests: ballGlance.guests ? ballGlance.guests.bookingsOutstanding || 0 : 0,
+    };
+    var fresh = {
+      bookings: !!document.querySelector("#ballBookings .admin-new-pill"),
+      transfers: !!document.querySelector("#ballTransfers .admin-new-pill"),
+    };
+    ballSectionButtons().forEach(function (b) {
+      Array.prototype.forEach.call(b.querySelectorAll(".ball-seg-n, .admin-new-pill"), function (old) { old.remove(); });
+      var key = b.getAttribute("data-ball-section");
+      var n = counts[key];
+      // The comma is for a screen reader, so the button reads as "Awaiting transfer, 3".
+      if (n > 0) b.insertAdjacentHTML("beforeend", '<span class="ball-seg-n"><span class="sr-only">, </span>' + n + "</span>");
+      if (fresh[key]) b.insertAdjacentHTML("beforeend", NEW_PILL);
+    });
+  }
+
+  // The band: whether the ticket page is public, and how long is left. Each draws inside its own
+  // try: the band only repeats what the screen says below it, so a slip in its markup must never
+  // stop the screen loading or blank the numbers.
+  function ballHeroDraw(gateOpen) {
+    try {
+      var page = el("ballHeroPage");
+      var b = page && page.querySelector("b");
+      if (!b) return;
+      page.classList.toggle("is-public", gateOpen === true);
+      b.textContent = gateOpen === true ? "Public" : gateOpen === false ? "Private" : "Could not check";
+    } catch {
+      // Set up says whether the page is public, in words.
+    }
+  }
+  // Whole days on the calendar, so the evening before says "Tomorrow" whatever the time of day.
+  function ballCountdownDraw() {
+    try {
+      var box = el("ballHeroCountdown");
+      var b = box && box.querySelector("b");
+      if (!b) return;
+      var p = String(box.getAttribute("data-ball-date") || "").split("-").map(Number);
+      if (p.length !== 3 || p.some(isNaN)) return;
+      var today = new Date();
+      var days = Math.round(
+        (Date.UTC(p[0], p[1] - 1, p[2]) - Date.UTC(today.getFullYear(), today.getMonth(), today.getDate())) / 86400000,
+      );
+      // "Been and gone": the server's own words for it, when it refuses a reminder afterwards.
+      b.textContent = days > 1 ? days + " days to go" : days === 1 ? "Tomorrow" : days === 0 ? "Tonight" : "Been and gone";
+    } catch {
+      // The date is in the band's own words beside it.
+    }
+  }
+
+  // What each Set up drop down says on its closed line: what it is set to now.
+  function ballWhen(iso) {
+    var d = new Date(iso);
+    if (isNaN(d.getTime())) return "";
+    return d.toLocaleString("en-GB", { weekday: "short", day: "numeric", month: "short", hour: "numeric", minute: "2-digit" });
+  }
+  function ballNow(key, text) {
+    var n = document.querySelector('[data-ball-now="' + key + '"]');
+    if (n) n.textContent = text;
+  }
+  // A time that has been and gone reads in the past tense: "sales closed", not "sales close".
+  function ballPast(iso) {
+    var t = new Date(iso).getTime();
+    return !isNaN(t) && t <= Date.now();
+  }
+  // The named holds still standing, from loadBallHolds: null until they are known.
+  var ballHoldRows = null;
+  // Seats and sales. Held back is the Held back number plus every named hold still standing, as the
+  // seats on sale count it (src/db/ball.ts, readCapacityState); until the holds are known, at least.
+  function ballSeatsNow() {
+    try {
+      var st = ballSettings;
+      if (!st) return;
+      var named = ballHoldRows
+        ? ballHoldRows.reduce(function (n, h) { return n + (h.seats || 0); }, 0)
+        : null;
+      var held = named === null
+        ? (st.heldSeats ? ", at least " + ballPlural(st.heldSeats, "seat", "seats") + " held back" : "")
+        : ", " + ballPlural((st.heldSeats || 0) + named, "seat", "seats") + " held back";
+      var sales = st.salesClosed
+        ? ", sales closed"
+        : st.salesCloseAt
+          ? (ballPast(st.salesCloseAt) ? ", sales closed " : ", sales close ") + ballWhen(st.salesCloseAt)
+          : "";
+      ballNow("seats", ballPlural(st.totalTables, "table", "tables") + " of " + st.seatsPerTable + held + sales);
+    } catch {
+      // The forms inside the drop down say all of this themselves.
+    }
+  }
+  function ballSetupNow(gateOpen) {
+    try {
+      var st = ballSettings || {};
+      ballNow("page", gateOpen ? "Public" : st.gateOpensAt ? "Private, opens " + ballWhen(st.gateOpensAt) : "Private");
+      ballSeatsNow();
+      ballNow("fee", (st.cardFeePercentBp / 100).toFixed(2) + "% plus " + st.cardFeeFixedPence + "p a booking");
+      ballNow("details", st.arrivalTime ? "Arrival " + st.arrivalTime : "Arrival time to be confirmed");
+      var courses = String(st.menuOptions || "").split("\n").filter(function (l) { return l.trim(); }).length;
+      ballNow("menu", courses ? "Set, " + ballPlural(courses, "course", "courses") : "Not set yet");
+      ballNow(
+        "lock",
+        st.guestDetailsLockAt
+          ? (ballPast(st.guestDetailsLockAt) ? "Closed " : "Close ") + ballWhen(st.guestDetailsLockAt)
+          : "Not set, so nobody is chased",
+      );
+    } catch {
+      // The forms inside the drop downs say all of this themselves.
+    }
+  }
+  function ballTransferNow(s) {
+    try {
+      ballNow("transfer", s.on ? (s.lastDay ? "On, last day " + shortDay(s.lastDay) : "On") : "Off");
+    } catch {
+      // As above: the form says it.
+    }
+  }
+
   function ballStatus(id, msg) {
     var n = el(id);
     if (n) n.textContent = msg || "";
@@ -14216,12 +15555,13 @@
               : "") +
             "</small>"
           : "") +
-        '</span></td><td data-label="Amount">' + exactMoney(t.totalPence) + "<br /><small>" + what +
-        '</small></td><td data-label="Pay by">' + H.escapeHtml(shortDay(t.payBy)) +
+        // One block each too, so on a phone the amount stays over what it bought and Overdue stays whole.
+        '</span></td><td data-label="Amount"><span class="ball-cell">' + exactMoney(t.totalPence) + "<br /><small>" + what +
+        '</small></span></td><td data-label="Pay by"><span class="ball-cell">' + H.escapeHtml(shortDay(t.payBy)) +
         // TASK-485: past its date, for staff to decide on; and whether the reminder has gone.
         (t.overdue ? ' <span class="admin-pill is-new">Overdue</span>' : "") +
         (t.reminded ? "<br /><small>Reminder sent</small>" : "") +
-        '</td><td data-label=""><span class="ball-transfer-actions">' + actions + "</span></td></tr>";
+        '</span></td><td data-label=""><span class="ball-transfer-actions">' + actions + "</span></td></tr>";
     }).join("");
     return '<div class="admin-table-wrap"><table class="admin-table ball-transfers-table"><thead><tr><th>Reference</th><th>Who</th><th>Amount</th>' +
       "<th>Pay by</th><th></th></tr></thead><tbody>" + body + "</tbody></table></div>";
@@ -14243,6 +15583,9 @@
       var byAmount = digits.length > 0 && String(t.totalPence).indexOf(digits) === 0;
       tr.hidden = phoneHidden || !(text.indexOf(q) !== -1 || byAmount);
     });
+    // TASK-571: that box is ticked in Bookings, another section now, so this list says when it is on.
+    var filtered = el("ballTransfersFiltered");
+    if (filtered) filtered.hidden = !ballNoPhoneOnly();
   }
 
   // TASK-488: staff add a bank transfer booking by hand, for a phone or email order. The server
@@ -14359,9 +15702,11 @@
         ballTransferRows = d.results || [];
         el("ballTransfers").innerHTML = ballTransfersTable(ballTransferRows);
         filterBallTransfers();
+        ballGlanceSet("transfers", ballTransferRows);
       })
       .catch(function () {
         el("ballTransfers").innerHTML = '<p class="admin-empty">Could not load the bookings awaiting a transfer.</p>';
+        ballGlanceSet("transfers", false);
       });
   }
 
@@ -14377,6 +15722,7 @@
         var admin = isAdmin();
         ["ballTransferAccountName", "ballTransferSortCode", "ballTransferAccountNumber", "ballTransferLastDay", "ballTransferOn", "ballTransferSave"]
           .forEach(function (id) { el(id).disabled = !admin; });
+        ballTransferNow(s);
       })
       .catch(function () {
         ballStatus("ballTransferStatus", "Could not load the bank details.");
@@ -14454,11 +15800,14 @@
       var release = canEdit("ball")
         ? '<button type="button" class="btn btn-small" data-release-hold="' + h.id + '">Release</button>'
         : "";
-      return "<tr><td>" + H.escapeHtml(h.name) + (h.note ? "<br /><small>" + H.escapeHtml(h.note) + "</small>" : "") +
-        "</td><td>" + what + " (" + h.seats + " seats)</td><td>" + until +
-        "</td><td>" + H.escapeHtml(h.createdBy) + "</td><td>" + release + "</td></tr>";
+      // Labelled cells, so a narrow list is cards (admin.css, bhlist), and the name and its note one
+      // block, so the card's flex cell keeps them stacked.
+      return '<tr><td data-label="For"><span class="ball-who">' + H.escapeHtml(h.name) +
+        (h.note ? "<br /><small>" + H.escapeHtml(h.note) + "</small>" : "") +
+        '</span></td><td data-label="Held">' + what + " (" + h.seats + ' seats)</td><td data-label="Until">' + until +
+        '</td><td data-label="Placed by">' + H.escapeHtml(h.createdBy) + '</td><td data-label="">' + release + "</td></tr>";
     }).join("");
-    return '<table class="admin-table"><thead><tr><th>For</th><th>Held</th><th>Until</th>' +
+    return '<table class="admin-table ball-holds-table"><thead><tr><th>For</th><th>Held</th><th>Until</th>' +
       "<th>Placed by</th><th></th></tr></thead><tbody>" + body + "</tbody></table>";
   }
 
@@ -14467,9 +15816,14 @@
       .then(okJson)
       .then(function (d) {
         el("ballHolds").innerHTML = ballHoldsTable(d.results || []);
+        // Set up's closed line counts them in the seats held back (ballSeatsNow).
+        ballHoldRows = d.results || [];
+        ballSeatsNow();
       })
       .catch(function () {
         el("ballHolds").innerHTML = '<p class="admin-empty">Could not load holds.</p>';
+        ballHoldRows = null;
+        ballSeatsNow();
       });
   }
 
@@ -14615,13 +15969,15 @@
       var link = b.guestLink
         ? '<a href="' + H.escapeHtml(b.guestLink) + '" target="_blank" rel="noopener">Their link</a>'
         : "<small>No link yet</small>";
-      return "<tr><td>" + H.escapeHtml(b.reference) + "</td><td>" + H.escapeHtml(b.buyerName) +
+      // Labelled cells, so a narrow list is cards, as the payments are (admin.css, bclist).
+      return '<tr><td data-label="Reference">' + H.escapeHtml(b.reference) +
+        '</td><td data-label="Who booked"><span class="ball-who">' + H.escapeHtml(b.buyerName) +
         '<br /><small><a href="mailto:' + H.escapeHtml(b.buyerEmail) + '">' +
-        H.escapeHtml(b.buyerEmail) + "</a></small></td>" +
-        '<td class="admin-num">' + b.guestsNamed + " of " + b.seats +
-        '</td><td class="admin-num">' + b.missing + "</td><td>" + link + "</td></tr>";
+        H.escapeHtml(b.buyerEmail) + "</a></small></span></td>" +
+        '<td class="admin-num" data-label="Named">' + b.guestsNamed + " of " + b.seats +
+        '</td><td class="admin-num" data-label="Still missing">' + b.missing + '</td><td data-label="">' + link + "</td></tr>";
     }).join("");
-    return '<table class="admin-table"><thead><tr><th>Reference</th><th>Who booked</th>' +
+    return '<table class="admin-table ball-chase-table"><thead><tr><th>Reference</th><th>Who booked</th>' +
       "<th>Named</th><th>Still missing</th><th></th></tr></thead><tbody>" + body + "</tbody></table>";
   }
 
@@ -14635,6 +15991,7 @@
       statCard(s.bookingsOutstanding || 0, "Bookings to chase", s.bookingsOutstanding > 0) +
       statCard(s.needsGiven || 0, "Dietary or access needs");
     el("ballOutstanding").innerHTML = ballOutstandingTable(d.outstanding || []);
+    ballGlanceSet("guests", s);
   }
 
   // TASK-418: the same shape as the guest-details chase above it, because it answers the same
@@ -14647,18 +16004,20 @@
       var link = b.guestLink
         ? '<a href="' + H.escapeHtml(b.guestLink) + '" target="_blank" rel="noopener">Their link</a>'
         : "<small>No link yet</small>";
-      return "<tr><td>" + H.escapeHtml(b.reference) + "</td><td>" + H.escapeHtml(b.buyerName) +
+      return '<tr><td data-label="Reference">' + H.escapeHtml(b.reference) +
+        '</td><td data-label="Who booked"><span class="ball-who">' + H.escapeHtml(b.buyerName) +
         '<br /><small><a href="mailto:' + H.escapeHtml(b.buyerEmail) + '">' +
-        H.escapeHtml(b.buyerEmail) + "</a></small></td>" +
-        '<td class="admin-num">' + b.chosen + " of " + b.guestsNamed +
-        '</td><td class="admin-num">' + b.missing + "</td><td>" + link + "</td></tr>";
+        H.escapeHtml(b.buyerEmail) + "</a></small></span></td>" +
+        '<td class="admin-num" data-label="Chosen">' + b.chosen + " of " + b.guestsNamed +
+        '</td><td class="admin-num" data-label="Still to choose">' + b.missing + '</td><td data-label="">' + link + "</td></tr>";
     }).join("");
-    return '<table class="admin-table"><thead><tr><th>Reference</th><th>Who booked</th>' +
+    return '<table class="admin-table ball-chase-table"><thead><tr><th>Reference</th><th>Who booked</th>' +
       "<th>Chosen</th><th>Still to choose</th><th></th></tr></thead><tbody>" + body + "</tbody></table>";
   }
 
   function ballMenuProgressRender(d) {
     var s = d.summary || {};
+    ballGlanceSet("menu", s);
     // Before the venue confirms a menu there is nothing outstanding and nothing to chase. Say
     // that, rather than showing a confident "0%" against a menu that does not exist.
     if (!s.asking) {
@@ -14679,14 +16038,31 @@
     var a = d.availability || {};
     var s = d.dashboard || {};
 
+    // The numbers at a glance (Overview): the same seven figures the tiles here used to show, laid
+    // out so the one that matters most is the one you see first. The bar is the seats sold out of the
+    // whole room, as the main Overview counts them (src/admin/overview-numbers.ts), so a booking held
+    // for its bank transfer does not move it when nothing has been sold; it says so in words for a
+    // screen reader. Under each big number, the rest as one list per card, a line each.
+    var sold = s.seatsSold || 0;
+    var stillOn = a.seatsRemaining || 0;
+    var room = a.totalSeats || sold + stillOn;
+    var soldPercent = room > 0 ? Math.min(100, Math.round((sold / room) * 1000) / 10) : 0;
     el("ballStats").innerHTML =
-      statCard(s.seatsSold || 0, "Seats sold") +
-      statCard(a.seatsRemaining || 0, "Seats left") +
-      statCard(a.tablesRemaining || 0, "Whole tables left") +
-      statCard(H.formatPence(s.totalPence || 0), "Taken") +
-      statCard(H.formatPence(s.donationsPence || 0), "Donations") +
-      statCard(H.formatPence(s.giftAidablePence || 0), "Gift Aid eligible") +
-      statCard(s.newsletterOptIns || 0, "Newsletter opt-ins");
+      '<div class="ball-seats">' +
+      '<p class="ball-glance-head"><b class="ball-big">' + sold + "</b> of " + room + " seats sold</p>" +
+      '<div class="ball-meter" role="img" aria-label="' + sold + " of " + room + ' seats sold">' +
+      '<span style="width:' + soldPercent + '%"></span></div>' +
+      '<dl class="ball-glance-list">' +
+      "<div><dt>Seats still on sale</dt><dd>" + stillOn + "</dd></div>" +
+      "<div><dt>Whole tables still on sale</dt><dd>" + (a.tablesRemaining || 0) + "</dd></div>" +
+      "</dl></div>" +
+      '<div class="ball-money">' +
+      '<p class="ball-glance-head"><b class="ball-big">' + ballMoney(s.totalPence) + "</b> taken</p>" +
+      '<dl class="ball-glance-list">' +
+      "<div><dt>Donations</dt><dd>" + ballMoney(s.donationsPence) + "</dd></div>" +
+      "<div><dt>Gift Aid eligible</dt><dd>" + ballMoney(s.giftAidablePence) + "</dd></div>" +
+      "<div><dt>Newsletter sign ups</dt><dd>" + (s.newsletterOptIns || 0) + "</dd></div>" +
+      "</dl></div>";
 
     // Say what IS, then the button says what it will DO.
     el("ballGateState").textContent = d.gateOpen
@@ -14729,6 +16105,8 @@
       var n = el(id);
       if (n) n.hidden = !canWrite;
     });
+    ballHeroDraw(d.gateOpen);
+    ballSetupNow(d.gateOpen);
   }
 
   // Mirrors stripeFeePence in src/ball/pricing.ts, including the round-UP.
@@ -14768,6 +16146,9 @@
 
   function loadBall() {
     ballWire();
+    ballOpenSection();
+    ballGlanceReset();
+    ballCountdownDraw();
     el("ballBookings").innerHTML = '<p class="admin-loading">Loading…</p>';
     loadBallHolds();
     loadBallTransfers();
@@ -14777,8 +16158,11 @@
       .then(ballRender)
       .catch(function () {
         el("ballGateState").textContent = "Could not load the ball settings.";
-        // No seats sold and £0 taken would be a claim nobody could make (TASK-476).
-        el("ballStats").innerHTML = "";
+        // No seats sold and £0 taken would be a claim nobody could make (TASK-476), and a blank
+        // space says nothing at all: say what happened, in Needs you's words.
+        el("ballStats").innerHTML =
+          '<p class="admin-unavailable ov-failed">Could not load the numbers. Open Festive Ball again in a moment.</p>';
+        ballHeroDraw(null);
       });
     authFetch("/api/admin/ball/bookings")
       .then(okJson)
@@ -14802,10 +16186,12 @@
               "</details>"
             : "");
         ballNoPhoneRender(d.noPhone);
+        ballGlanceSet("noPhone", typeof d.noPhone === "number" ? d.noPhone : false);
       })
       .catch(function () {
         el("ballBookings").innerHTML = '<p class="admin-empty">Could not load bookings.</p>';
         ballNoPhoneRender(null);
+        ballGlanceSet("noPhone", false);
       });
     authFetch("/api/admin/ball/guest-progress")
       .then(okJson)
@@ -14814,6 +16200,7 @@
         el("ballGuestProgress").innerHTML =
           '<p class="admin-empty">Could not load guest details.</p>';
         el("ballOutstanding").innerHTML = "";
+        ballGlanceSet("guests", false);
       });
     authFetch("/api/admin/ball/menu-progress")
       .then(okJson)
@@ -14822,7 +16209,10 @@
         el("ballMenuProgress").innerHTML =
           '<p class="admin-empty">Could not load menu choices.</p>';
         el("ballMenuOutstanding").innerHTML = "";
+        ballGlanceSet("menu", false);
       });
+    // TASK-576: the chasing card in Emails. Last, after everything the screen already asked for.
+    loadBallChase();
   }
 
   // Cancelling hands the seats back to the public pool. It does NOT refund: money moves in
@@ -14868,6 +16258,7 @@
   function ballWire() {
     if (ballWired) return;
     ballWired = true;
+    ballWireSections();
 
     // Delegated, because the tables are re-rendered on every load, and attached HERE, once. They
     // used to be added inside each load, so every reload stacked another copy and a single click on
@@ -15046,7 +16437,7 @@
     if (menuBtn) {
       menuBtn.hidden = !canEdit("ball");
       menuBtn.addEventListener("click", function () {
-        if (!window.confirm("Email everyone who has paid to say the menu is confirmed? This emails real people, and each booking only gets it once.")) return;
+        if (!window.confirm("Email everyone who has paid and not already chosen, to say the menu is confirmed? This emails real people, and each booking only gets it once.")) return;
         menuBtn.disabled = true;
         ballStatus("ballMenuEmailStatus", "Sending…");
         authFetch("/api/admin/ball/menu-email", { method: "POST" })
@@ -15062,13 +16453,24 @@
               return;
             }
             var failed = (d.failed || []).length;
-            ballStatus(
-              "ballMenuEmailStatus",
-              d.sent === 0
-                ? "Nobody needed it: everyone who has paid has already been told."
-                : "Sent to " + d.sent + (d.sent === 1 ? " booking." : " bookings.") +
-                    (failed ? " " + failed + " could not be sent and will be retried next time." : "")
-            );
+            // Jaimie, 20 October 2026: a booking whose every seat is named and chosen is left out,
+            // and the screen says how many.
+            var chose = d.alreadyChosen || 0;
+            var choseHad = chose === 1 ? "1 booking had already chosen" : chose + " bookings had already chosen";
+            var choseWords = chose ? " " + choseHad + (chose === 1 ? ", so was not emailed." : ", so were not emailed.") : "";
+            var said;
+            if (d.sent > 0) {
+              said = "Sent to " + d.sent + (d.sent === 1 ? " booking." : " bookings.") + choseWords +
+                (failed ? " " + failed + " could not be sent and will be retried next time." : "");
+            } else if (failed) {
+              // Every send failing must never read as "Nobody needed it": nobody has been told.
+              said = "Could not send any of them: " + failed + " failed and will be retried next time." + choseWords;
+            } else {
+              said = chose
+                ? "Nobody needed it: " + choseHad + ", and everyone else who has paid has already been told."
+                : "Nobody needed it: everyone who has paid has already been told.";
+            }
+            ballStatus("ballMenuEmailStatus", said);
             loadBall();
           })
           .catch(function () {
@@ -15084,11 +16486,11 @@
       remindBtn.addEventListener("click", function () {
         // Naming the number is the whole safety mechanism: "are you sure?" tells an operator
         // nothing, whereas "email 137 people" is a fact they can check against what they expect.
-        if (!window.confirm("Send the week-before reminder to everyone who has paid and not had it yet? This emails real people.")) return;
+        if (!window.confirm("Send the reminder to everyone who has paid and not had it yet? This emails real people.")) return;
         remindBtn.disabled = true;
         ballStatus("ballReminderStatus", "Sending…");
         authFetch("/api/admin/ball/reminders", { method: "POST" })
-          .then(okJson)
+          .then(okJsonOrSaid)
           .then(function (d) {
             remindBtn.disabled = false;
             var failed = (d.failed || []).length;
@@ -15099,9 +16501,11 @@
             );
             loadBall();
           })
-          .catch(function () {
+          .catch(function (err) {
             remindBtn.disabled = false;
-            ballStatus("ballReminderStatus", "Could not send. Nobody has been emailed twice — try again.");
+            // The server's own words when it refuses ("The Ball has been and gone, so the reminder
+            // was not sent."); otherwise a plain failure.
+            ballStatus("ballReminderStatus", (err && err.said) || "Could not send. Nobody has been emailed twice. Please try again.");
           });
       });
     }
@@ -15131,30 +16535,8 @@
       );
     });
 
-    el("ballChase").addEventListener("click", function () {
-      var btn = el("ballChase");
-      var status = el("ballChaseStatus");
-      btn.disabled = true;
-      status.textContent = "Sending…";
-      authFetch("/api/admin/ball/chase", { method: "POST" })
-        .then(okJson)
-        .then(function (r) {
-          // Count what was SENT, not what was outstanding: the two differ whenever somebody has
-          // already been chased at this stage, and reporting the larger number would claim we
-          // emailed people we deliberately skipped.
-          status.textContent =
-            r.sent === 0
-              ? "Nobody was due a reminder just now."
-              : "Sent " + r.sent + (r.sent === 1 ? " email." : " emails.") +
-                (r.failed ? " " + r.failed + " could not be sent." : "");
-          btn.disabled = false;
-          loadBall();
-        })
-        .catch(function () {
-          status.textContent = "Could not send the reminders.";
-          btn.disabled = false;
-        });
-    });
+    // TASK-576: there is no "Email everyone outstanding" button any more. The guest chase goes out
+    // by itself every other day in the last week, and the volunteers get the list.
 
     el("ballDetailsForm").addEventListener("submit", function (e) {
       e.preventDefault();
@@ -15283,6 +16665,32 @@
       });
   }
 
+  // Settings shows the page switch without the events under it, so it reads the switch alone: no
+  // event is opened and no preview is drawn while Our events is off screen. The same request the
+  // list makes, as that is where the server says whether the page is on.
+  function evLoadSwitch() {
+    evWire();
+    authFetch("/api/admin/events")
+      .then(function (res) {
+        if (!res.ok) throw new Error("status " + res.status);
+        return res.json();
+      })
+      .then(function (d) {
+        if (evData) {
+          evData.pageOn = d.pageOn;
+          evData.updatedAt = d.updatedAt;
+          evData.updatedBy = d.updatedBy;
+        } else {
+          evData = d;
+        }
+        evRenderSwitch();
+      })
+      .catch(function (err) {
+        if (err && err.message === "unauthorized") return;
+        el("evSwitchState").textContent = "Could not check.";
+      });
+  }
+
   function evSorted(list) {
     return (list || []).slice().sort(function (a, b) {
       if (a.date !== b.date) return a.date < b.date ? -1 : 1;
@@ -15297,8 +16705,8 @@
     var box = el("evSwitch");
     box.classList.toggle("is-on", on);
     el("evSwitchState").innerHTML = on
-      ? "<b>Yes.</b> The page is at nbcc.scot/get-involved, and every page’s menu offers it as Get involved. Visitors see every event marked “On the website”."
-      : "<b>No.</b> The page is switched off: nobody can see it and no menu mentions it. Build and check events here, then switch it on when you are ready.";
+      ? "<b>Yes.</b> This switch is for two pages, nbcc.scot/get-involved and nbcc.scot/whats-on, and every page’s menu offers Get involved. Visitors see every event marked “On the website”."
+      : "<b>No.</b> This switch is for two pages, Get involved and What’s on, and both are switched off: nobody can see them and no menu mentions them. Build and check events here, then switch them on when you are ready.";
     el("evSwitchWho").textContent = evData && evData.updatedBy && evData.updatedBy.indexOf("admin:") === 0
       ? "Last " + (on ? "switched on" : "switched off") + " by " + evData.updatedBy.slice(6) + " on " + H.fmtDate(evData.updatedAt) + "."
       : "";
@@ -15314,8 +16722,8 @@
   function evFlipSwitch() {
     var on = !!(evData && evData.pageOn);
     var question = on
-      ? "Take the Events page off the website? It will disappear from the site and from every page’s menu straight away."
-      : "Put the Events page on the website? Everyone will be able to see it, and every page’s menu will offer it, straight away.";
+      ? "Take the Get involved page off the website, and What’s on with it? Both will disappear from the site, and Get involved from every page’s menu, straight away."
+      : "Put the Get involved page on the website, and What’s on with it? Everyone will be able to see both, and every page’s menu will offer Get involved, straight away.";
     if (!window.confirm(question)) return;
     var btn = el("evSwitchBtn");
     var status = el("evSwitchStatus");
@@ -15341,7 +16749,7 @@
         evData.updatedAt = r.body.updatedAt;
         evData.updatedBy = r.body.updatedBy;
         status.className = "ty-status is-ok";
-        status.textContent = r.body.pageOn ? "The Events page is now on the website." : "The Events page is now off the website.";
+        status.textContent = r.body.pageOn ? "The Get involved page is now on the website, and What’s on with it." : "The Get involved page is now off the website, and What’s on with it.";
         evRenderSwitch();
         evSchedulePreview(0);
       })
@@ -15617,7 +17025,7 @@
         var where = saved.status === "draft"
           ? "Saved as a draft."
           : evIsOnPage(saved)
-            ? (evData && evData.pageOn ? "Saved, and on the website." : "Saved. It will show once the Events page is switched on.")
+            ? (evData && evData.pageOn ? "Saved, and on the website." : "Saved. It will show once the Get involved page is switched on.")
             : saved.status === "scheduled" ? "Saved. It goes up on " + evShortDate(saved.showFrom) + "." : "Saved.";
         evSetSaveState(where, "ok");
         var i = evData.events.findIndex(function (e) { return e.id === saved.id; });
@@ -15764,10 +17172,16 @@
     }
   }
 
+  // Our events is off screen while another section of Get involved shows. A frame cannot be measured
+  // then: fitting it would set it to nothing, and it would stay blank when the section came back.
+  function evOffScreen() {
+    var part = el("evEditor").closest("[data-gi-part]");
+    return !!(part && part.hidden);
+  }
   function evFitCard() {
     var frame = el("evCardPreview");
     var cdoc = evFrameDoc(frame);
-    if (!cdoc || !cdoc.body) return;
+    if (!cdoc || !cdoc.body || evOffScreen()) return;
     frame.style.height = "0px";
     frame.style.height = Math.max(cdoc.body.scrollHeight, cdoc.documentElement.scrollHeight) + "px";
   }
@@ -15779,7 +17193,7 @@
     var frame = el("evPagePreview");
     var box = el("evPageBox");
     var cdoc = evFrameDoc(frame);
-    if (!cdoc || !cdoc.body || !box.clientWidth) return;
+    if (!cdoc || !cdoc.body || !box.clientWidth || evOffScreen()) return;
     var mini = box.clientWidth >= 640;
     frame.style.width = (mini ? EV_PAGE_WIDTH : box.clientWidth) + "px";
     frame.style.height = "0px";
@@ -15805,7 +17219,7 @@
     var note = el("evPagePrevNote");
     if (!evCurrent || !where) return;
     var pageOff = !(evData && evData.pageOn);
-    var tail = pageOff ? " The Events page itself is switched off, so only staff can see this for now." : "";
+    var tail = pageOff ? " The Get involved page itself is switched off, so only staff can see this for now." : "";
     note.textContent = "Every event on the page in date order, with this one where its date puts it and the face down card last." + tail;
     var today = evToday();
     if (evCurrent.date && evCurrent.date < today) {
@@ -15978,7 +17392,8 @@
   }
 
   // ---- the Festive Ball ticket report (TASK-464) ----
-  // A card under the page switch. Counts only, on Monday and Thursday mornings, to the people running
+  // A card under the page switch. Counts, and who has booked a whole table, on Monday and Thursday
+  // mornings, to the people running
   // the Ball with us. The list is edited here and saved together with the switch; "Send a test to me"
   // sends the real email, marked as a test, to the signed-in person only. The preview frame is sized
   // to the email, and sized again when the window changes, so nothing scrolls inside the page.
@@ -16095,6 +17510,8 @@
       n.hidden = !canWrite;
     });
     if (!brDirty) el("evReportOn").checked = !!brData.reportOn;
+    // Only on a day the morning's report has gone, and only until it has been sent again.
+    el("evReportResend").hidden = !(canWrite && brData.canResend);
     brRenderState();
     brRenderList();
     brRenderLast();
@@ -16228,6 +17645,43 @@
         b.disabled = false;
       });
   }
+  // Today's report to the whole list a second time, with the numbers as they stand now. It asks
+  // first, since it goes outside the charity, and the server lets it go once a day.
+  function brResend() {
+    if (!brData) return;
+    var asked = window.confirm(
+      "Send today’s report again to all " + brPeople(brData.recipients.length) + " on the saved list?\n\n" +
+        "It goes now, with the latest numbers, and says at the top that it has been sent again. " +
+        "It can be sent again once a day.",
+    );
+    if (!asked) return;
+    var b = el("evReportResend");
+    b.disabled = true;
+    brSay("Sending today’s report again…");
+    authFetch("/api/admin/ball-report/resend", { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" })
+      .then(function (res) {
+        return brJson(res, "The report could not be sent again. Please try again.");
+      })
+      .then(function (d) {
+        // The card comes back with the answer; if it could not be read, the email still went.
+        if (d.preview) brTake(d);
+        else {
+          el("evReportResend").hidden = true;
+          loadBallReport();
+        }
+        brSay(
+          "Sent again to " + brPeople(d.resentTo) + "." + (brDirty ? " Your changes to the list are not saved yet." : ""),
+        );
+      })
+      .catch(function (err) {
+        brFailed(err);
+        // A refusal means the card is out of date (someone else sent it again): read it afresh.
+        loadBallReport();
+      })
+      .then(function () {
+        b.disabled = false;
+      });
+  }
   function brWire() {
     if (brWired) return;
     brWired = true;
@@ -16258,7 +17712,243 @@
     el("evReportOn").addEventListener("change", brMarkDirty);
     el("evReportSave").addEventListener("click", brSave);
     el("evReportTest").addEventListener("click", brTest);
+    el("evReportResend").addEventListener("click", brResend);
     window.addEventListener("resize", brFitPreview);
+  }
+  // ---- the Festive Ball chase card (TASK-576) ----
+  // First card in Festive Ball > Emails. The chasing itself is automatic (the 8am daily task); this
+  // shows when the next reminder goes, edits the volunteers' chase list, and sends the signed-in person
+  // a test of each email. The list is edited here and saved together with Save the list, as the ticket
+  // report's is (above), and shares its tidying (brSorted) and its address rule (BR_EMAIL, brJson).
+  // Anyone who can only view the Ball sees the card with none of its write controls, and a card that
+  // could not load hides them too, so nobody saves over a list they never saw.
+  var BC_MAX = 10;
+  var BC_ONLY_NBCC = "Only nbcc.scot addresses: this list carries people's phone numbers.";
+  var bcData = null;
+  var bcDraft = [];
+  var bcDirty = false;
+  var bcWired = false;
+  var BC_DAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+  var BC_MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+
+  // kind is "ok", "error", or nothing for a plain note: the classes the admin's status lines use.
+  function bcSay(msg, kind) {
+    var s = el("ballChaseMsg");
+    if (!s) return;
+    s.textContent = msg || "";
+    s.classList.toggle("is-ok", kind === "ok");
+    s.classList.toggle("is-error", kind === "error");
+  }
+  // "2026-10-28" as "Wednesday 28 October".
+  function bcDayWords(day) {
+    var d = new Date(day + "T12:00:00Z");
+    return BC_DAYS[d.getUTCDay()] + " " + d.getUTCDate() + " " + BC_MONTHS[d.getUTCMonth()];
+  }
+  function bcWriteControls(show) {
+    Array.prototype.forEach.call(doc.querySelectorAll("#ballChaseCard [data-chasewrite]"), function (n) {
+      n.hidden = !show;
+    });
+  }
+  function bcRenderNext() {
+    var next = bcData.nextRound;
+    var text;
+    if (!next) {
+      text = bcData.deadline
+        ? "There are no more reminders before the deadline."
+        : "Set the guest details deadline in Set up to start the reminders.";
+    } else if (!next.reminders) {
+      text = "Next reminder: " + bcDayWords(next.day) + ". Nobody needs one right now.";
+    } else {
+      text = "Next reminder: " + bcDayWords(next.day) + ", to " + next.reminders + (next.reminders === 1 ? " booker." : " bookers.");
+    }
+    el("ballChaseNext").textContent = text;
+  }
+  function bcRenderLast() {
+    var parts = (bcData.lastSends || []).map(function (s) {
+      return s.kind === "list"
+        ? "the chase list on " + bcDayWords(s.sentOn)
+        : s.count + (s.count === 1 ? " reminder" : " reminders") + " on " + bcDayWords(s.sentOn);
+    });
+    el("ballChaseLast").textContent = parts.length ? "Sent lately: " + parts.join("; ") + "." : "";
+  }
+  function bcRenderList() {
+    var canWrite = canEdit("ball");
+    var ul = el("ballChaseList");
+    if (!bcDraft.length) {
+      ul.innerHTML = '<li class="ball-chase-empty">Nobody on the list yet.</li>';
+      return;
+    }
+    ul.innerHTML = bcDraft
+      .map(function (r, i) {
+        return (
+          '<li><span class="ball-chase-who"><b>' + H.escapeHtml(r.name) + "</b> <span>" + H.escapeHtml(r.email) + "</span></span>" +
+          (canWrite
+            ? '<button class="btn btn-danger" type="button" data-chaseremove="' + i + '" aria-label="Remove ' + H.escapeHtml(r.name) + '">Remove</button>'
+            : "") +
+          "</li>"
+        );
+      })
+      .join("");
+  }
+  function bcRender() {
+    bcWriteControls(canEdit("ball"));
+    bcRenderNext();
+    bcRenderList();
+    bcRenderLast();
+  }
+  function bcTake(d) {
+    bcData = d;
+    // Loading the screen again reloads the card: changes nobody has saved yet are kept, not lost.
+    if (!bcDirty) bcDraft = brSorted(d.recipients || []);
+    bcRender();
+  }
+  // Signing out forgets the card, so the next person to sign in never sees someone else's edits.
+  function bcReset() {
+    bcData = null;
+    bcDraft = [];
+    bcDirty = false;
+  }
+  function loadBallChase() {
+    bcWire();
+    var failed = function () {
+      bcData = null;
+      bcWriteControls(false);
+      el("ballChaseNext").textContent = "Could not load the chasing settings. Open Festive Ball again in a moment.";
+      el("ballChaseList").innerHTML = "";
+      el("ballChaseLast").textContent = "";
+    };
+    authFetch("/api/admin/ball-chase")
+      .then(function (res) {
+        return res.ok ? res.json() : null;
+      })
+      .then(function (d) {
+        if (d && Array.isArray(d.recipients)) bcTake(d);
+        else failed();
+      })
+      .catch(function (err) {
+        if (err && err.message === "unauthorized") return;
+        failed();
+      });
+  }
+  function bcMarkDirty() {
+    bcDirty = true;
+    bcSay("Press Save the list to keep these changes.");
+  }
+  function bcAdd() {
+    var nameBox = el("ballChaseName");
+    var emailBox = el("ballChaseEmail");
+    var name = nameBox.value.trim();
+    var email = emailBox.value.trim().toLowerCase();
+    if (!name) {
+      bcSay("Add their name.", "error");
+      nameBox.focus();
+      return;
+    }
+    if (!BR_EMAIL.test(email)) {
+      bcSay("That isn't a whole email address.", "error");
+      emailBox.focus();
+      return;
+    }
+    if (!/@nbcc\.scot$/.test(email)) {
+      bcSay(BC_ONLY_NBCC, "error");
+      emailBox.focus();
+      return;
+    }
+    if (bcDraft.some(function (r) { return r.email === email; })) {
+      bcSay("That address is already on the list.", "error");
+      emailBox.focus();
+      return;
+    }
+    if (bcDraft.length >= BC_MAX) {
+      bcSay("The chase list can go to up to " + BC_MAX + " people. Remove someone to add another.", "error");
+      return;
+    }
+    bcDraft = brSorted(bcDraft.concat([{ name: name, email: email }]));
+    nameBox.value = "";
+    emailBox.value = "";
+    bcRenderList();
+    bcMarkDirty();
+    nameBox.focus();
+  }
+  function bcFailed(err) {
+    if (!err || err.message === "unauthorized") return;
+    // A refused list says which entry: name the person, so the fix is obvious.
+    var who = err.path && typeof err.path[0] === "number" ? bcDraft[err.path[0]] : null;
+    bcSay(who ? who.name + " (" + who.email + "): " + err.message : err.message, "error");
+  }
+  function bcSave() {
+    var b = el("ballChaseSave");
+    b.disabled = true;
+    bcSay("Saving…");
+    authFetch("/api/admin/ball-chase", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ recipients: bcDraft }),
+    })
+      .then(function (res) {
+        return brJson(res, "The list could not be saved. Please try again.");
+      })
+      .then(function (d) {
+        bcDirty = false;
+        bcTake(d);
+        bcSay("Saved.", "ok");
+      })
+      .catch(bcFailed)
+      .then(function () {
+        b.disabled = false;
+      });
+  }
+  // One example email to the signed-in person, from made up bookings: it never reaches a booker or a
+  // volunteer, and never counts as a send.
+  function bcTest(which, button) {
+    button.disabled = true;
+    bcSay("Sending a test to you…");
+    authFetch("/api/admin/ball-chase/test", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ which: which }),
+    })
+      .then(function (res) {
+        return brJson(res, "The test could not be sent. Please try again.");
+      })
+      .then(function (d) {
+        bcSay(
+          "Sent to " + (d.sentTo || []).join(", ") + ". Have a look in your inbox." +
+            (bcDirty ? " Your changes to the list are not saved yet." : ""),
+          "ok",
+        );
+      })
+      .catch(bcFailed)
+      .then(function () {
+        button.disabled = false;
+      });
+  }
+  function bcWire() {
+    if (bcWired) return;
+    bcWired = true;
+    el("ballChaseAdd").addEventListener("click", bcAdd);
+    ["ballChaseName", "ballChaseEmail"].forEach(function (id) {
+      el(id).addEventListener("keydown", function (e) {
+        if (e.key === "Enter") {
+          e.preventDefault();
+          bcAdd();
+        }
+      });
+    });
+    el("ballChaseList").addEventListener("click", function (e) {
+      var btn = e.target.closest ? e.target.closest("[data-chaseremove]") : null;
+      if (!btn) return;
+      bcDraft.splice(Number(btn.getAttribute("data-chaseremove")), 1);
+      bcRenderList();
+      bcMarkDirty();
+    });
+    el("ballChaseSave").addEventListener("click", bcSave);
+    el("ballChaseTestReminder").addEventListener("click", function () {
+      bcTest("reminder", this);
+    });
+    el("ballChaseTestList").addEventListener("click", function () {
+      bcTest("list", this);
+    });
   }
   // ---- Analytics (TASK-482) ----
   // Admin > Analytics: the collecting switch, then how many people visited, where they came from,

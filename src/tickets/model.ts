@@ -190,13 +190,17 @@ const CLOSE_WHEN = new Intl.DateTimeFormat("en-GB", { timeZone: "Europe/London",
 const CLOSE_TIME = new Intl.DateTimeFormat("en-GB", { timeZone: "Europe/London", hour: "numeric", minute: "2-digit", hourCycle: "h23" });
 
 /** When sales close, in words for the page and the private area. */
-export function closeWords(c: { mode?: string | null; at?: string | null } | null | undefined): string {
+export function closeWords(
+  c: { mode?: string | null; at?: string | null } | null | undefined,
+  /** How to write the day; an email passes its own style (src/email/dates.ts). */
+  day: (at: Date) => string = (at) => CLOSE_WHEN.format(at).replace(",", ""),
+): string {
   if (c?.mode === "day_before") return "Sales close at midnight the day before.";
   if (c?.mode === "custom" && c.at) {
     const d = new Date(c.at);
     const [h, min] = CLOSE_TIME.format(d).split(":").map(Number);
     const time = h === 12 && min === 0 ? "12 noon" : h === 0 && min === 0 ? "midnight" : `${h % 12 || 12}${min ? `.${String(min).padStart(2, "0")}` : ""}${h >= 12 ? "pm" : "am"}`;
-    return `Sales close on ${CLOSE_WHEN.format(d).replace(",", "")} at ${time}.`;
+    return `Sales close on ${day(d)} at ${time}.`;
   }
   return "Sales close when the event starts.";
 }

@@ -24,7 +24,9 @@
 /* flex-wrap (TASK-454): as one row that could not wrap, the email, role and both buttons came to
    459px on their own with a 26-character address, and took every screen of the admin 166px past
    the edge of a 390px phone, which zoomed the whole admin out to fit. */
-.admin-topbar{position:sticky;top:0;z-index:20;display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:10px 16px;
+/* Not pinned (October 2026): the nav below it is the one bar pinned at the top, at every width, so
+   the top bar scrolls away as it always has on a phone. */
+.admin-topbar{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:10px 16px;
   background:var(--maroon);color:var(--cream);padding:12px clamp(16px,3vw,28px)}
 .admin-brand{display:flex;align-items:center;gap:10px;text-decoration:none;color:var(--cream);font-family:var(--font-head);font-weight:700;font-size:1.1rem}
 /* Two groups, who is signed in and what they can do, so a narrow screen breaks between them rather
@@ -37,43 +39,76 @@
 .admin-logout{background:none;border:1.6px solid var(--cream-24);color:var(--cream);border-radius:999px;padding:7px 16px;font-family:var(--font-body);font-weight:600;font-size:.85rem;cursor:pointer;transition:background .2s}
 .admin-logout:hover{background:var(--cream-12)}
 
-.admin-body-grid{display:grid;grid-template-columns:210px 1fr;align-items:start;max-width:1280px;margin-inline:auto}
-.admin-nav{position:sticky;top:60px;padding:18px 12px}
-/* The phone menu's button (TASK-454). Wider than 860px the list is always open beside the content. */
+/* The nav is one bar pinned at the top at every width (October 2026): a banner of five drop downs
+   wider than 860px (the block below), the Menu button at 860px and below (TASK-454).
+   It used to be a 210px column beside the content, taller than a laptop's screen, so its last
+   groups came into reach only at the foot of the page. The content has the width now, to 1280px. */
+.admin-body-grid{display:block}
+.admin-nav{position:sticky;top:0;z-index:20;background:var(--cream);border-bottom:1px solid var(--line)}
+/* The phone menu's button (TASK-454). Wider than 860px the banner shows every group instead. */
 .admin-nav-toggle{display:none}
 .admin-nav ul{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:3px}
 .admin-nav-link{width:100%;text-align:left;background:none;border:0;border-radius:10px;padding:10px 14px;font-family:var(--font-body);font-weight:600;font-size:.93rem;color:var(--slate);cursor:pointer;transition:background .15s,color .15s}
 .admin-nav-link:hover{background:var(--card)}
 .admin-nav-link.is-active{background:var(--crimson);color:var(--cream)}
-/* Clearly separated, always-expanded groups: a hairline rule plus its own spacing sets
-   each labelled section apart, so the nav reads as distinct groups, not one long list. */
-.admin-nav-group{margin:20px 0 8px;padding:16px 14px 0;border-top:1px solid var(--line);font-family:var(--font-body);font-weight:700;font-size:.7rem;letter-spacing:.09em;text-transform:uppercase;color:var(--slate)}
-.admin-nav-group:first-child{margin-top:2px;padding-top:0;border-top:0}
-.admin-content{padding:clamp(20px,3vw,36px) clamp(16px,3vw,32px)}
+/* A group's name as the phone menu shows it, over its screens. On the banner its head says it. */
+.admin-nav-grouplabel{display:block;font-family:var(--font-body);font-weight:700;font-size:.7rem;letter-spacing:.09em;text-transform:uppercase;color:var(--slate)}
+.admin-content{max-width:1280px;margin-inline:auto;padding:clamp(20px,3vw,36px) clamp(16px,3vw,32px)}
+
+/* ---- The banner (October 2026) ----
+   Jaimie: "a banner across the top that has drop downs for each of the sections ... It frees up more
+   horizontal space, and it means that you don't have to keep scrolling down all the way". 60px tall
+   (59 and its rule), the height the top bar had when it was the bar pinned at the top, so everything
+   that pins under that (the Festive Ball's sections, the newsletter's composer bar) pins under this as
+   it was. app.js opens and closes the drop downs; a closed one is hidden with visibility, never
+   display:none, because restorableView (TASK-443) reads a link with no offsetParent as a screen your
+   permissions hide, and a refresh would land on the Overview.
+   "not all and (max-width:860px)" is exactly the phone menu's width turned round. As (min-width:861px)
+   a window 860.5px wide (a zoom, or Windows display scaling) matched neither block, and the whole menu
+   opened out over the page. */
+@media not all and (max-width:860px){
+  .admin-nav{position:sticky;top:0;padding:0;box-shadow:0 12px 24px -22px rgba(128,0,0,.5)}
+  /* The same width and side padding as the content below, and the first group's name pulled out by
+     its head's own padding, so the banner's words line up with the screen's heading. */
+  #adminNavList{flex-direction:row;flex-wrap:wrap;align-items:center;gap:4px;max-width:1280px;min-height:59px;margin-inline:auto;
+    padding-inline:clamp(16px,3vw,32px);box-sizing:border-box}
+  #adminNavList > .admin-nav-group:first-child .admin-nav-grouphead{margin-left:-14px}
+  .admin-nav-grouplabel{display:none}
+  .admin-nav-group{position:relative}
+  .admin-nav-grouphead{display:inline-flex;align-items:center;gap:8px;min-height:44px;padding:8px 14px;border:0;border-radius:10px;
+    background-color:transparent;font-family:var(--font-body);font-weight:600;font-size:.93rem;color:var(--slate);cursor:pointer;
+    transition:background-color .15s,color .15s}
+  /* Its chevron: down while closed, up while open. */
+  .admin-nav-grouphead::after{content:"";width:7px;height:7px;margin-left:2px;border-right:2px solid currentColor;border-bottom:2px solid currentColor;
+    transform:translateY(-2px) rotate(45deg);transition:transform .2s cubic-bezier(.25,1,.5,1)}
+  .admin-nav-group.is-open .admin-nav-grouphead::after{transform:translateY(2px) rotate(-135deg)}
+  .admin-nav-grouphead:hover,.admin-nav-group.is-open .admin-nav-grouphead{background-color:var(--card);color:var(--maroon)}
+  .admin-nav-grouphead:focus-visible{outline:3px solid var(--crimson);outline-offset:2px}
+  .admin-nav-grouphead .admin-new-pill{margin-left:0}
+  /* The group holding the screen on view: its name in crimson, underlined as a tab is. */
+  .admin-nav-group:has(.admin-nav-link.is-active) .admin-nav-grouphead{color:var(--crimson);
+    background-image:linear-gradient(var(--crimson),var(--crimson));background-size:calc(100% - 28px) 3px;
+    background-position:50% 100%;background-repeat:no-repeat}
+  /* #adminNavList, to outrank .admin-nav ul, which set the padding to 0 unseen. 260px, so a screen's
+     name and its New stay on one line ("Business supporters, New" wrapped at 240px). */
+  #adminNavList .admin-nav-panel{position:absolute;top:calc(100% + 6px);left:0;z-index:2;min-width:260px;flex-direction:column;gap:2px;padding:8px;
+    background:var(--card);border:1px solid var(--line);border-radius:14px;box-shadow:var(--shadow);
+    visibility:hidden;opacity:0;transform:translateY(-4px);
+    transition:opacity .15s ease-out,transform .15s ease-out,visibility 0s linear .15s}
+  #adminNavList .admin-nav-group.is-open .admin-nav-panel{visibility:visible;opacity:1;transform:none;transition:opacity .15s ease-out,transform .15s ease-out}
+  /* The first group's drop down under its name (pulled out with its head); the last group's opens to
+     its left, so with New on several heads it cannot hang off the screen, even closed. */
+  #adminNavList > .admin-nav-group:first-child .admin-nav-panel{left:-14px}
+  #adminNavList > .admin-nav-group:last-child .admin-nav-panel{left:auto;right:0}
+  .admin-nav-panel .admin-nav-link{display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:44px}
+  .admin-nav-panel .admin-nav-link:hover{background:var(--tan-soft)}
+  .admin-nav-panel .admin-nav-link.is-active:hover{background:var(--crimson)}
+}
+@media (prefers-reduced-motion:reduce){
+  .admin-nav-grouphead,.admin-nav-grouphead::after,#adminNavList .admin-nav-panel,#adminNavList .admin-nav-group.is-open .admin-nav-panel{transition:none}
+}
 .admin-view h2{font-size:clamp(1.5rem,1.3rem + 1vw,2rem);margin-bottom:18px}
 .admin-subhead{font-size:1.15rem;color:var(--maroon);margin:28px 0 12px}
-
-/* ---- long views: bands and a jump bar (TASK-422) ----
-   The Festive Ball view was thirteen sections in one scroll with settings, reports and
-   send-buttons interleaved, so you could not predict where anything lived. It is now three
-   bands: set up, where things stand, send something. These rules are what makes a band read
-   as a level ABOVE .admin-subhead rather than competing with it. */
-.admin-band{font-family:var(--font-head);font-size:1.4rem;font-weight:700;color:var(--crimson);
-  margin:44px 0 4px;padding-top:22px;border-top:2px solid var(--line);scroll-margin-top:126px}
-.admin-band:first-of-type{margin-top:8px}
-.admin-band-note{max-width:64ch;margin:0 0 4px}
-/* The first subhead inside a band does not need its usual 28px lead-in on top of the band's. */
-.admin-band-note + .admin-subhead{margin-top:18px}
-
-/* A sticky row of jump links, so a long view can be crossed without scrolling it. */
-.admin-jump{position:sticky;top:60px;z-index:15;display:flex;flex-wrap:wrap;gap:8px;
-  margin:0 0 6px;padding:10px 0;background:var(--cream)}
-.admin-jump a{text-decoration:none;border:1px solid var(--line);border-radius:999px;
-  background:var(--card);color:var(--slate);font-weight:600;font-size:.82rem;padding:6px 14px;
-  transition:background .2s,color .2s,border-color .2s,transform .1s}
-.admin-jump a:hover{background:var(--crimson);border-color:var(--crimson);color:var(--cream)}
-.admin-jump a:active{transform:translateY(1px)}
-.admin-jump a:focus-visible{outline:3px solid var(--crimson);outline-offset:2px}
 
 /* ---- enquiries waiting for a reply (TASK-425) ----
    A NOTICE, not an alarm. Somebody has written to the charity; nothing is broken. So this is the
@@ -207,6 +242,79 @@
 .admin-edit{max-width:480px;margin-top:22px;background:var(--card);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow-sm);padding:20px 24px}
 .admin-check{display:flex;align-items:center;gap:8px;font-size:.9rem;margin:10px 0;cursor:pointer}
 .admin-check input{width:18px;height:18px;accent-color:var(--crimson)}
+/* TASK-560: the Read tick on the Stories list, and Mark as read on an open story. The column is
+   narrow and fixed (60px, in rem so it grows with someone's larger text, as its heading does), so
+   the other seven keep their share of a fixed-layout table. The label is a 44px target: its
+   negative margins take that back out of the row's height, and line the box up under the heading.
+   Holly, the admin's colour for something settled (Replied, Public). */
+.stories-table th:first-child,.stories-table td:first-child{width:3.75rem;padding-right:0}
+.admin-read-tick{display:flex;align-items:center;justify-content:center;width:44px;min-height:44px;margin:-11px 0 -11px -12px;cursor:pointer}
+/* Named as the .admin-body tick box reset names them (it only needs to undo the public forms'
+   100% width, but it outranks a plain class), so the box is 20px and not the browser's 13px. */
+.admin-body .admin-read-tick input[type="checkbox"]{width:20px;height:20px;margin:0;accent-color:var(--holly);cursor:pointer}
+.admin-body .admin-read-tick input[type="checkbox"]:disabled{cursor:default}
+.admin-read-tick.is-locked{cursor:default}
+.admin-read-tick input:focus-visible{outline:3px solid var(--crimson);outline-offset:2px}
+/* While a save is on its way (aria-busy) the box dims and the pointer says wait, as the Get involved
+   screen's buttons do. Only once it has taken a third of a second: a save that answers at once
+   never flickers. It is not disabled, which would drop the keyboard's place in the list. */
+.admin-body .admin-read-tick input[type="checkbox"][aria-busy="true"]{opacity:.55;cursor:progress;transition:opacity .15s linear .3s}
+.admin-read-bar [aria-busy="true"]{opacity:.6;cursor:progress;transition:opacity .15s linear .3s}
+/* A save that failed: "Not saved", a pill in the status pill's place, so the row keeps its height
+   and no row beneath it moves under the next press. Two things were tried first, both measured in
+   Chrome. A line above the list pushed every row down 35px the moment it had words, so a second
+   press landed on the tick of the story above, and above a long list it was off the screen. A
+   sentence under the status left the pressed tick where it was but made its row 61px taller, so on
+   a quick run down the list the press after next could land on the wrong story. One line, never
+   wrapped. The failed pills' tint with maroon words (7.8 to 1; their crimson is 4.2 to 1). The two
+   pills take turns by the hidden attribute, which styles.css hides for the whole site. */
+.admin-read-unsaved{background:color-mix(in srgb,var(--crimson) 16%,var(--cream));color:var(--maroon);white-space:nowrap}
+/* The three answers that need a sentence (somebody else changed the story, it has been erased,
+   this person may no longer change stories): under the row's status, and under the button on an
+   open story. These do make the row taller. They are rare, each one changes what the row is, and
+   two words would not say them. Cells are top aligned, so the tick that was pressed stays put; an
+   empty note takes no room at all. */
+.admin-read-note{display:block;margin:0;font-size:.82rem;line-height:1.4;color:var(--crimson)}
+.admin-read-note:not(:empty){margin-top:6px}
+/* On an open story it speaks as that screen's own status line does (.admin-action-status), not at a
+   table's size, and keeps the bar's distance from the story's words when there is no bar above it. */
+#storyReadBar .admin-read-note{font-size:inherit;font-weight:600}
+#storyReadBar .admin-read-note:first-child:not(:empty){margin-top:16px}
+.admin-read-bar{display:flex;flex-wrap:wrap;align-items:center;gap:6px 14px;margin:16px 0 0}
+.admin-read-bar .admin-btn,.admin-read-bar .admin-link{min-height:44px}
+.admin-read-done{font-weight:600;color:var(--holly-dark)}
+/* TASK-561: where the list is narrow each story is a labelled card, as a donation is (TASK-483),
+   and by the same rule: the list measures itself (.st-list), and the cards start below 760px.
+   At 390px the table's eight columns were about 42px each, its rows 262 to 548px tall, and every
+   word stacked a letter or two a line. Measured, the table starts to split its dates at a list of
+   about 845px. It stays a table down to 760px so that Stories and Donations change together, and
+   because between the two it is cramped but can be read, as it always could.
+   The donations cards' rules, with what a story needs:
+   - the labels are 6.75rem (108px) wide, not 6rem: "Scope / consent" measures 102px and broke
+     onto two lines on every card. Not wider: at 320px this leaves a value 140px, which is what
+     "Public" and "First name" need side by side;
+   - its number heads the card, with the word in front ("Story 40"): a story has no name to do it;
+   - the Read line. On the table the first column is a fixed 3.75rem and the tick's label pulls
+     itself 11px up and down, both to fit a 44px target into a table row. Here the line takes the
+     card's width, and 10px each way leaves it the height of a line of text (44 less 20 is 24)
+     with the target still 44px. The box and the word Read line up by their middles;
+   - .st-value, the one box round a cell's pills or its status and sentence, takes the rest of the
+     line and wraps inside itself. */
+.st-list{container:stlist / inline-size}
+@container stlist (max-width:759px){
+  .stories-table,.stories-table tbody{display:block}
+  .stories-table thead{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+  .stories-table tr{display:flex;flex-direction:column;border-bottom:1px solid var(--line);padding:10px 0}
+  .stories-table tr:last-child{border-bottom:0}
+  .stories-table td{border-bottom:0;padding:3px 14px;display:flex;gap:10px;align-items:baseline;text-align:left}
+  .stories-table td::before{content:attr(data-label);flex:0 0 6.75rem;font-size:.78rem;color:var(--slate-soft)}
+  .stories-table td:first-child{width:auto;padding-right:14px;align-items:center}
+  .stories-table .admin-read-tick{margin:-10px 0 -10px -12px}
+  .stories-table td:nth-child(2){order:-1;display:block;font-weight:600;font-size:1rem;padding-bottom:6px}
+  .stories-table td:nth-child(2)::before{content:"Story ";font-size:inherit;color:inherit}
+  .stories-table .st-value{flex:1;min-width:0}
+  .stories-table [data-story]{min-height:44px;min-width:44px}
+}
 .admin-donor-actions{display:flex;flex-wrap:wrap;gap:12px;margin-top:18px}
 .admin-action-status{margin-top:14px;font-weight:600;color:var(--holly)}
 
@@ -226,8 +334,9 @@
 .btn-danger:hover{background:var(--maroon);border-color:var(--maroon)}
 
 /* ---- the shell on a phone or small tablet (TASK-454) ----
-   Below 860px the menu leaves its 210px column, which left too little room for the content beside
-   it, and becomes one pinned Menu button that opens the whole list. What it replaced below 760px was
+   At 860px and below the menu is one pinned Menu button that opens the whole list. (Wider, it was a
+   210px column beside the content until October 2026, and is the banner across the top since: the
+   block above.) What it replaced below 760px was
    one line of twenty buttons that scrolled sideways inside its own strip: 2247px of buttons in 366px
    at 390px wide. The client's standing rule for this admin is that nothing scrolls sideways, inside a
    box or otherwise, because a section you have to swipe to find is a section nobody opens. */
@@ -235,15 +344,16 @@
   /* display:block, not a one-column grid. As a grid the nav gets its OWN ROW, and a sticky
      element can only travel inside its containing block, so a row exactly as tall as the nav
      gives it nowhere to go and position:sticky silently does nothing. As blocks both children
-     share the parent's full height and the nav sticks as intended. (On desktop the two columns
-     are in the SAME row, which is why sticky has always worked there.) */
+     share the parent's full height and the nav sticks as intended. (The grid is a block at every
+     width since October 2026; this stays as the phone's own statement of it.) */
   .admin-body-grid{display:block}
-  /* The topbar stops competing for the top edge here. It wraps at this width, so pinned it would
-     either cover the menu or need a magic offset that breaks on a narrower phone. */
+  /* The topbar does not compete for the top edge. It wraps at this width, so pinned it would either
+     cover the menu or need a magic offset that breaks on a narrower phone. (Since October 2026 it is
+     not pinned at any width; this stays as the phone's own statement of it.) */
   .admin-topbar{position:static}
   /* Pinned rather than static. The complaint was that changing view meant scrolling back up
      through a long page to reach the nav at all. 61px tall: 8 + the 44px button + 8 + the 1px
-     rule, which is what .admin-jump's top below is measured against. */
+     rule, which is what the Festive Ball's sections bar pins under (#view-ball .ball-sections). */
   .admin-nav{position:sticky;top:0;z-index:20;padding:8px 12px;background:var(--cream);
     border-bottom:1px solid var(--line)}
   .admin-nav-toggle{display:flex;align-items:center;justify-content:space-between;gap:12px;width:100%;
@@ -267,16 +377,14 @@
   .admin-nav:not(.is-open) ul{height:0;overflow:hidden;visibility:hidden}
   .admin-nav-link{width:auto;min-height:44px}
   /* Each group starts its own line under its label, so the open menu reads as the same five
-     groups as the desktop column rather than one long run of buttons. */
-  .admin-nav-group{flex-basis:100%;margin:10px 0 0;padding:10px 2px 0}
-  /* The jump bar sits below the pinned menu, and wraps rather than swiping: at 390px its three
-     links came to 381px in 358px, and "Send something" ran off the edge of the screen. */
-  .admin-jump{top:61px}
-  /* Has to clear BOTH pinned bars: the menu's 61px, plus the jump bar at its tallest, which is two
-     rows and 101px at 390px, plus 15px so the heading does not sit flush against it. (At 110px,
-     back when the menu was 52px, the band heading you had just jumped to landed 41px behind the
-     jump bar, so the click appeared to overshoot.) */
-  .admin-band{scroll-margin-top:177px}
+     groups as the banner rather than one long run of buttons. A hairline sets each apart. */
+  .admin-nav-group{flex-basis:100%;margin:10px 0 0;padding:10px 0 0;border-top:1px solid var(--line)}
+  .admin-nav-group:first-child{margin-top:2px;padding-top:0;border-top:0}
+  /* The banner's heads are a laptop's; here each group's label names it (October 2026), 2px in and
+     6px over its screens, as the label was when it sat in the same list as them. */
+  .admin-nav-grouphead{display:none}
+  .admin-nav-grouplabel{padding:0 2px}
+  .admin-nav.is-open .admin-nav-panel{margin-top:6px}
 }
 
 @media (max-width:760px){
@@ -465,6 +573,10 @@
 .nl-sub-count { margin: 0 0 8px; font-size: .78rem; font-weight: 600; color: var(--slate-soft); }
 .nl-sub-remove { color: var(--maroon); }
 .nl-sub-remove:hover { color: var(--crimson); }
+/* Blocked addresses: why an address is blocked, then the detail of it, in one cell. The detail
+   takes a line of its own (TASK-562: measured in Chrome, "Blocked by staff" ran straight on into
+   who removed it). Only this list: .admin-sub is also used inside sentences elsewhere. */
+#suppressionList .admin-sub { display: block; font-size: .82rem; color: var(--slate-soft); }
 
 /* Delivery-outcome failure badge in the newsletter list. */
 .nl-fail-badge { display: inline-block; font-size: .72rem; font-weight: 600; padding: 1px 8px; border-radius: 999px; background: #fbe9e9; color: var(--crimson); margin-left: 6px; }
@@ -1245,8 +1357,9 @@ tr.nl-click:hover { background: var(--tint); }
 
 /* =================================================================
    TASK-286 — four layout faults, all from designing against the wrong
-   width. The real content column is ~1006px (1280 max-width minus the
-   210px nav and padding), and the overview's main column ~620px of that.
+   width. The real content column was ~1006px (1280 max-width minus the
+   210px nav and padding; up to 1280px since the banner, October 2026),
+   and the overview's main column ~620px of that.
    ================================================================= */
 
 /* ---- 1. Recent sends: FIT the card, never scroll inside it. Horizontal scroll in a box that
@@ -1464,6 +1577,30 @@ tr.nl-click:hover { background: var(--tint); }
 .email-fail-band { border: 1px solid var(--crimson, #C02238); border-radius: 10px; background: rgba(192, 34, 56, 0.06); padding: .75rem 1rem 1rem; margin: 0 0 1.2rem; }
 .email-fail-band h3 { color: var(--crimson, #C02238); margin: 0 0 .5rem; font-size: 1rem; }
 .email-fail-band .admin-table-wrap { margin: 0; }
+/* TASK-562: the band is one block an address, not a table: what staff decide here is about an
+   address (is it dead?), so its problems sit under it and it is dealt with once. A block is a row
+   that wraps: the address, then what can be pressed. On a phone the two sit one above the other,
+   a long address breaks rather than pushing the band wider, and both controls are 44px to press.
+   While a press is being saved the screen is aria-busy and its controls say wait: the answer
+   draws the band again, and the next address is about to move up under the pointer. */
+.email-fail-list { list-style: none; margin: 0; padding: 0; }
+.email-fail-item { padding: 10px 0; border-top: 1px solid color-mix(in srgb, var(--crimson) 22%, transparent); }
+.email-fail-item:first-child { border-top: 0; padding-top: 2px; }
+.email-fail-item:last-child { padding-bottom: 0; }
+.email-fail-who { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 2px 18px; }
+.email-fail-address { margin: 0; min-width: 0; font-weight: 600; color: var(--slate); overflow-wrap: anywhere; }
+.email-fail-address small { margin-left: 6px; font-weight: 400; color: var(--slate-soft); }
+.email-fail-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 18px; margin: 0; }
+.email-fail-actions .admin-btn, .email-fail-actions .admin-link { min-height: 44px; }
+.email-fail-own { margin: 0 0 4px; font-size: .82rem; color: var(--slate-soft); }
+.email-fail-problems { list-style: none; margin: 2px 0 0; padding: 0; font-size: .9rem; }
+.email-fail-problems li { padding: 3px 0; overflow-wrap: anywhere; }
+.email-fail-problems small { display: block; color: var(--slate-soft); }
+#view-email-audit[aria-busy="true"] [data-audit-stop], #view-email-audit[aria-busy="true"] [data-audit-tidy], #view-email-audit[aria-busy="true"] [data-audit-putback] { opacity: .6; cursor: progress; }
+/* The line above the band that says what a press did, with Put back in it. As tall empty as full:
+   measured in Chrome, .ty-status keeps 14px while empty and the line with words in it is 22px, so
+   the band moved down 8px at the first press. */
+#emailAuditSaid { line-height: 1.7; min-height: 1.7em; margin: 0 0 8px; }
 /* Fit the card: the shared .admin-table sets nowrap on every cell, so one long subject would
    scroll the whole card sideways (same fix the newsletter tables carry). Fixed layout, wrapping
    cells, and the date/type/status columns pinned so the subject takes what is left. */
@@ -1807,9 +1944,11 @@ textarea.fx-call-input{min-height:88px;line-height:1.5;resize:vertical;field-siz
 
 /* Narrow, each booking is a labelled card, as the donations table is (TASK-483): at 375px the five
    columns were 44-106px and the box scrolled 106px sideways to reach Mark as paid. Measured on the
-   list itself, since the side menu takes its share above 860px. */
+   list itself, whatever around it takes a share. Up to 819px, because Mark as paid
+   is 182px on one line and its 26% column only holds that from 808px: at 900px wide with the side
+   menu the list was 621px and scrolled 35px sideways (October 2026). */
 #ballTransfers{container:btlist / inline-size}
-@container btlist (max-width:599px){
+@container btlist (max-width:819px){
   .ball-transfers-table,.ball-transfers-table tbody{display:block}
   .ball-transfers-table thead{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
   .ball-transfers-table tr{display:flex;flex-direction:column;border-bottom:1px solid var(--line);padding:10px 0}
@@ -1822,14 +1961,58 @@ textarea.fx-call-input{min-height:88px;line-height:1.5;resize:vertical;field-siz
   .ball-transfers-table td:last-child::before{content:none}
   .ball-transfer-actions{flex-direction:row;flex-wrap:wrap;align-items:center;gap:4px 18px}
   .ball-transfer-actions .admin-link{min-height:44px}
+  /* Only on the card: in the table's narrow Pay by column an unbreakable pill would paint over the
+     next column (admin-no-sideways-scroll.test.ts). Here it has the card's width to wrap onto. */
+  .ball-cell .admin-pill{white-space:nowrap}
+}
+
+/* Set up's seats held back list: narrow, each hold is a labelled card too. As five columns in a
+   drop down on a phone, Release was squeezed into a button 39px wide and 154px tall. */
+#ballHolds{container:bhlist / inline-size}
+@container bhlist (max-width:599px){
+  .ball-holds-table,.ball-holds-table tbody{display:block}
+  .ball-holds-table thead{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+  .ball-holds-table tr{display:flex;flex-direction:column;border-bottom:1px solid var(--line);padding:10px 0}
+  .ball-holds-table tr:last-child{border-bottom:0}
+  .ball-holds-table td{border-bottom:0;padding:3px 0;display:flex;gap:10px;align-items:baseline;text-align:left}
+  .ball-holds-table td::before{content:attr(data-label);flex:0 0 5.5rem;font-size:.78rem;color:var(--slate-soft)}
+  .ball-holds-table td:last-child{padding-top:8px}
+  .ball-holds-table td:last-child::before{content:none}
+}
+
+/* The two chase lists in Guests and menu: who booked gets the room an email address needs. */
+.ball-chase-table th:nth-child(1),.ball-chase-table td:nth-child(1){width:17%}  /* Reference */
+.ball-chase-table th:nth-child(2),.ball-chase-table td:nth-child(2){width:39%}  /* Who booked */
+.ball-chase-table th:nth-child(3),.ball-chase-table td:nth-child(3){width:14%}  /* Named, Chosen */
+.ball-chase-table th:nth-child(4),.ball-chase-table td:nth-child(4){width:14%}  /* Still missing, Still to choose */
+.ball-chase-table th:nth-child(5),.ball-chase-table td:nth-child(5){width:16%}  /* Their link */
+/* Narrow, each booking is a labelled card, as a payment is: as five columns on a phone, the
+   headings and every name broke mid word. */
+#ballOutstanding,#ballMenuOutstanding{container:bclist / inline-size}
+@container bclist (max-width:599px){
+  .ball-chase-table,.ball-chase-table tbody{display:block}
+  .ball-chase-table thead{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+  .ball-chase-table tr{display:flex;flex-direction:column;border-bottom:1px solid var(--line);padding:10px 0}
+  .ball-chase-table tr:last-child{border-bottom:0}
+  /* Same specificity as the column widths above, declared later, so it wins. */
+  .ball-chase-table td:nth-child(n){width:auto}
+  .ball-chase-table td{border-bottom:0;padding:3px 14px;display:flex;gap:10px;align-items:baseline;text-align:left}
+  .ball-chase-table td::before{content:attr(data-label);flex:0 0 6.5rem;font-size:.78rem;color:var(--slate-soft)}
+  .ball-chase-table td:last-child::before{content:none}
+  .ball-chase-table td:last-child a{display:inline-flex;align-items:center;min-height:44px}
 }
 
 /* Jaimie 2026-10-03: the booker's phone number, or the "No phone number yet" flag, under their name
    and email, with Add phone / Change phone beside it. One block, so a flex cell cannot set the
    name, email and phone side by side; a long address wraps rather than pushing the card wider. */
 .ball-who{display:block;min-width:0;overflow-wrap:anywhere}
+/* The same for a payment's amount and pay by date: one block per cell, so on a phone card the amount
+   stays over what it bought, and Overdue stays whole (btlist) instead of being squeezed in half. */
+.ball-cell{display:block;min-width:0}
 .ball-phone{display:flex;flex-wrap:wrap;align-items:center;gap:2px 12px;margin-top:4px}
 .ball-phone .admin-link{white-space:nowrap}
+/* The phone line is a block, so the line break the company name follows it with only made an empty line. */
+.ball-phone + br{display:none}
 .ball-no-phone .admin-note{margin-bottom:6px}
 
 /* The bookings table: the Who column gets the room the phone line needs, and Cancel sits on one line. */
@@ -1846,7 +2029,7 @@ textarea.fx-call-input{min-height:88px;line-height:1.5;resize:vertical;field-siz
    (admin-no-sideways-scroll.test.ts). Instead Status and Paid take width from Who, so "cancelled"
    and the amount stay whole, and below the width that needs the list is cards (next rule). */
 
-/* Narrower than eight whole columns can sit in (1000px: a laptop with the side menu open), each
+/* Narrower than eight whole columns can sit in (1000px; it was a laptop with the old side menu), each
    booking is a labelled card, as the transfers above are on a phone. */
 #ballBookings{container:bblist / inline-size}
 @container bblist (max-width:999px){
@@ -1860,6 +2043,237 @@ textarea.fx-call-input{min-height:88px;line-height:1.5;resize:vertical;field-siz
   .ball-bookings-table td::before{content:attr(data-label);flex:0 0 5.5rem;font-size:.78rem;color:var(--slate-soft)}
   .ball-bookings-table td:last-child{padding-top:8px}
   .ball-bookings-table td:last-child::before{content:none}
+}
+
+/* ---- Festive Ball: the new look (October 2026) ----
+   Jaimie: "make it look almost like a website", "it's just one big list of everything". A band in
+   the public /ball page's own night blue and gold (assets/css/ball.css, the poster's colours), then
+   the admin's cream: six sections chosen from one bar, the numbers at a glance, Needs you, the
+   downloads and the two emails as cards, and Set up as drop downs that say what each is set to.
+   Gold only in the band, as on the public page. Nothing scrolls sideways; nothing has a scrollbar. */
+#view-ball{
+  --night:#0B1020;--night-2:#131A31;--night-line:rgba(233,210,150,.42);
+  --gold:#E4C87A;--on-night:#F2EEE4;--on-night-soft:rgba(242,238,228,.76);
+  --ease-quart:cubic-bezier(.25,1,.5,1);
+}
+#view-ball .ball-hero{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:end;gap:20px 40px;
+  margin:0 0 12px;padding:clamp(22px,3vw,34px) clamp(20px,3vw,38px);border-radius:var(--radius-lg);
+  background:radial-gradient(120% 160% at 88% -10%,var(--night-2) 0%,var(--night) 62%);color:var(--on-night);
+  border:1px solid var(--night-line);box-shadow:var(--shadow)}
+#view-ball .ball-hero h2{margin:0 0 8px;color:var(--on-night);font-size:clamp(2rem,1.6rem + 1.6vw,2.7rem);letter-spacing:-.01em;line-height:1.05}
+#view-ball .ball-hero-when{margin:0;max-width:44ch;color:var(--on-night-soft);line-height:1.55;text-wrap:pretty}
+#view-ball .ball-hero-facts{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(2,minmax(124px,auto));gap:14px 30px}
+#view-ball .ball-hero-facts li{display:flex;flex-direction:column;gap:3px;padding-top:10px;border-top:1px solid var(--night-line)}
+#view-ball .ball-hero-facts span{font-size:.72rem;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--on-night-soft)}
+#view-ball .ball-hero-facts b{font-family:var(--font-head);font-size:1.3rem;font-weight:700;color:var(--on-night);font-variant-numeric:tabular-nums}
+#view-ball .ball-hero-facts li:first-child b,#view-ball .ball-hero-facts li:nth-child(2) b,#view-ball #ballHeroPage.is-public b{color:var(--gold)}
+
+/* The six sections: one bar the width of the screen, pinned under the top bar while you scroll a
+   long list, so changing section never means scrolling back up. On a phone it is two by two and
+   not pinned: pinned, its three rows would sit on a third of the screen. */
+#view-ball .ball-sections{position:sticky;top:60px;z-index:15;display:flex;flex-wrap:wrap;width:100%;
+  margin:0 0 24px;border-radius:18px;box-shadow:0 0 0 10px var(--tint),0 12px 24px -18px rgba(128,0,0,.45);scroll-margin-top:72px}
+#view-ball .ball-sections .admin-seg{flex:1 1 auto;display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:40px;
+  white-space:nowrap;transition:background .2s,color .2s}
+#view-ball .ball-sections .admin-seg:hover:not(.is-active){color:var(--maroon)}
+#view-ball .ball-sections .admin-seg:focus-visible{outline:3px solid var(--crimson);outline-offset:2px}
+#view-ball .ball-sections .admin-seg:active{transform:translateY(1px)}
+#view-ball .ball-seg-n{min-width:22px;padding:1px 7px;border-radius:999px;background:var(--card);color:var(--crimson);
+  font-size:.74rem;font-weight:700;line-height:1.5;font-variant-numeric:tabular-nums}
+#view-ball .admin-seg.is-active .ball-seg-n{background:var(--cream);color:var(--crimson)}
+/* New, as Get involved's section buttons carry it; the button's gap spaces it. */
+#view-ball .ball-sections .admin-new-pill{margin-left:0}
+
+#view-ball .ball-part{scroll-margin-top:132px}
+#view-ball .ball-part-intro{margin:0 0 20px;max-width:66ch;color:var(--slate-soft)}
+#view-ball .ball-part > .admin-subhead:first-child{margin-top:0}
+@media (prefers-reduced-motion:no-preference){
+  #view-ball .ball-part:not([hidden]){animation:ballPartIn .26s var(--ease-quart)}
+}
+@keyframes ballPartIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+
+/* Overview: the seats, then the money. Two blocks, not seven equal tiles: the number that matters
+   most is the one you see first. */
+#view-ball .ball-glance{grid-template-columns:repeat(auto-fit,minmax(min(100%,300px),1fr));gap:16px;margin:0 0 6px}
+#view-ball .ball-seats,#view-ball .ball-money{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);
+  box-shadow:var(--shadow-sm);padding:22px 24px}
+#view-ball .ball-glance-head{margin:0 0 14px;font-size:1rem;color:var(--slate-soft)}
+#view-ball .ball-big{display:block;margin:0 0 2px;font-family:var(--font-head);font-size:clamp(2.3rem,1.9rem + 1.4vw,3rem);
+  font-weight:800;line-height:1;color:var(--crimson);font-variant-numeric:tabular-nums}
+#view-ball .ball-meter{height:10px;border-radius:999px;background:var(--tan-soft);overflow:hidden}
+#view-ball .ball-meter span{display:block;height:100%;border-radius:inherit;background:var(--holly)}
+#view-ball .ball-meter + .ball-glance-list{margin-top:16px}
+#view-ball .ball-glance-list{display:grid;gap:8px;margin:0}
+#view-ball .ball-glance-list div{display:flex;justify-content:space-between;gap:12px;padding-top:8px;border-top:1px solid var(--line)}
+#view-ball .ball-glance-list dt{color:var(--slate-soft)}
+#view-ball .ball-glance-list dd{margin:0;font-weight:600;font-variant-numeric:tabular-nums}
+
+/* Needs you: the main Overview's list, in a card of its own here. */
+#view-ball .ball-needs{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:6px 22px 14px}
+#view-ball .ball-needs .admin-loading{margin:12px 0 4px}
+#view-ball .ov-needs{list-style:none;margin:0;padding:0}
+#view-ball .ov-need{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px;padding:12px 0;border-bottom:1px solid var(--line)}
+#view-ball .ov-need:last-child{border-bottom:0}
+#view-ball .ov-dot{flex:none;width:10px;height:10px;border-radius:50%;background:var(--slate-soft)}
+#view-ball .ov-need[data-level="1"] .ov-dot{background:var(--crimson)}
+#view-ball .ov-need[data-level="2"] .ov-dot{background:var(--gold-ink)}
+#view-ball .ov-text{flex:1 1 260px;min-width:0;font-size:.95rem;color:var(--slate);overflow-wrap:anywhere}
+#view-ball .ov-need[data-level="1"] .ov-text{font-weight:600}
+#view-ball .ov-go{margin-left:auto}
+#view-ball .ov-go.admin-btn{background:transparent;color:var(--maroon);border:1.6px solid var(--line);transition:background .2s,border-color .2s}
+#view-ball .ov-go.admin-btn:hover{background:var(--tan-soft);border-color:var(--maroon)}
+#view-ball .ov-go.admin-btn:focus-visible{outline:3px solid var(--crimson);outline-offset:2px}
+#view-ball .ov-clear{margin:12px 0 4px;color:var(--holly);font-weight:600}
+#view-ball .ov-failed{margin:12px 0 4px;font-size:.88rem;color:var(--maroon);background:var(--tan-soft);border-radius:10px;padding:8px 12px}
+
+/* Bookings: the three downloads as three cards, each saying what the list is for. */
+#view-ball .ball-downloads{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,230px),1fr));gap:14px;margin:0 0 20px}
+#view-ball .ball-download{display:flex;flex-direction:column;gap:6px;padding:18px 20px;border-radius:var(--radius);
+  background:var(--card);border:1px solid var(--line);box-shadow:var(--shadow-sm);color:var(--slate);text-decoration:none;
+  transition:transform .2s var(--ease-quart),box-shadow .2s,border-color .2s}
+#view-ball .ball-download b{font-family:var(--font-head);font-size:1.12rem;color:var(--maroon)}
+#view-ball .ball-download span{font-size:.88rem;color:var(--slate-soft);line-height:1.45}
+#view-ball .ball-download em{margin-top:auto;padding-top:6px;font-style:normal;font-weight:600;font-size:.85rem;color:var(--crimson)}
+#view-ball .ball-download:hover{transform:translateY(-2px);box-shadow:var(--shadow);border-color:var(--tan)}
+#view-ball .ball-download:active{transform:translateY(0)}
+#view-ball .ball-download:focus-visible{outline:3px solid var(--crimson);outline-offset:3px}
+
+/* In the lists, the exception is a quiet outline button, not the loudest thing on the row: Cancel
+   on a booking, Release on a hold. Mark as paid, which is the job, keeps the full button. */
+#view-ball .ball-bookings-table .btn-danger,#view-ball #ballHolds .btn{min-height:44px;padding:6px 14px;font-size:.85rem;
+  background:transparent;color:var(--crimson);border:1.6px solid var(--line);box-shadow:none}
+#view-ball .ball-bookings-table .btn-danger::after,#view-ball #ballHolds .btn::after{content:none}
+#view-ball .ball-bookings-table .btn-danger:hover,#view-ball #ballHolds .btn:hover{background:var(--tan-soft);border-color:var(--crimson);color:var(--maroon);transform:none}
+
+/* Awaiting transfer: the search and Add a booking on one line above the list. */
+#view-ball .ball-toolbar{display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;gap:12px 20px;margin:6px 0 14px}
+#view-ball .ball-search{flex-direction:column;align-items:stretch;gap:6px;font-weight:600;font-size:.88rem}
+#view-ball .ball-search input{width:min(100%,320px)}
+/* When Bookings' no phone number box is ticked: what it hides here, and the way to show it all. */
+#view-ball .ball-filtered{display:flex;flex-wrap:wrap;align-items:center;gap:0 12px;margin:0 0 12px}
+#view-ball .ball-filtered .admin-link{min-height:44px}
+
+/* Guests and menu: two groups, the second under a rule. Not cards: the lists in them already are.
+   In each, the numbers, then room, then the list they come from. */
+#view-ball .ball-panel + .ball-panel{margin-top:36px;padding-top:6px;border-top:2px solid var(--line)}
+#view-ball #ballGuestProgress,#view-ball #ballMenuProgress{margin:0 0 16px}
+#view-ball .admin-stats > .admin-empty,#view-ball .admin-stats > .admin-loading{grid-column:1/-1}
+/* A list with nothing in it yet (before it loads, or the dinners before there is a menu) is no box
+   at all, rather than an empty card. */
+#view-ball .admin-table-wrap:empty{display:none}
+
+/* Tick boxes: 20px, not the browser's 13px, and the words beside one are part of a 44px target. */
+#view-ball label.ty-inline:has(> input[type="checkbox"]){min-height:44px;cursor:pointer}
+#view-ball label.ty-inline > input[type="checkbox"]{width:20px;height:20px;accent-color:var(--crimson);cursor:pointer}
+
+/* Emails: one card each, side by side when there is room. */
+#view-ball .ball-emails{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,320px),1fr));gap:16px}
+#view-ball .ball-email{display:flex;flex-direction:column;padding:22px 24px;border-radius:var(--radius);background:var(--card);
+  border:1px solid var(--line);box-shadow:var(--shadow-sm)}
+#view-ball .ball-email .admin-subhead{margin-top:0}
+#view-ball .ball-email .ty-controls{margin-top:auto}
+
+/* TASK-576: the chasing card. Its list and add form are the ticket report's (Events, ev-report-list),
+   which that page scopes to itself; everything wraps and the card grows, so nothing scrolls sideways
+   or inside itself, and every button is 44px tall. */
+#view-ball .ball-chase .ty-controls{margin-top:0}
+#view-ball .ball-chase .btn{min-height:44px;justify-content:center}
+#view-ball .ball-chase-next{margin:0 0 4px;font-weight:600;color:var(--maroon);overflow-wrap:anywhere}
+#view-ball .ball-chase-list{list-style:none;margin:12px 0;padding:0}
+#view-ball .ball-chase-list li{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:4px 16px;
+  padding:8px 0;border-top:1px solid var(--line)}
+#view-ball .ball-chase-list li:last-child{border-bottom:1px solid var(--line)}
+/* Remove: the same quiet outline button as Release on a hold, just above. */
+#view-ball .ball-chase-list .btn{padding:6px 14px;font-size:.85rem;background:transparent;color:var(--crimson);
+  border:1.6px solid var(--line);box-shadow:none}
+#view-ball .ball-chase-list .btn::after{content:none}
+#view-ball .ball-chase-who{min-width:0;overflow-wrap:anywhere}
+#view-ball .ball-chase-who span{margin-left:6px;color:var(--slate-soft)}
+#view-ball .ball-chase-empty{color:var(--slate-soft)}
+#view-ball .ball-chase-add{display:flex;flex-wrap:wrap;align-items:flex-end;gap:10px 12px;margin:4px 0 14px}
+#view-ball .ball-chase-f{flex:1 1 200px;min-width:0;display:grid;gap:6px}
+#view-ball .ball-chase-f label{font-weight:600;font-size:.9rem;color:var(--slate)}
+#view-ball .ball-chase-f input{width:100%;min-width:0;min-height:44px;box-sizing:border-box;font-family:var(--font-body);font-size:.97rem;
+  color:var(--slate);background:var(--cream);border:1.6px solid var(--line);border-radius:12px;padding:10px 12px}
+#view-ball .ball-chase-f input:focus{border-color:var(--holly);outline:none}
+#view-ball .ball-chase .ty-status,#view-ball .ball-chase-last{overflow-wrap:anywhere}
+#view-ball .ball-chase-last{margin:6px 0 0;font-size:.85rem;color:var(--slate-soft)}
+#view-ball .ball-chase-last:empty{display:none}
+
+/* Set up: one drop down each, saying on its closed line what it is set to now. */
+#view-ball .ball-setting{border:1px solid var(--line);border-radius:var(--radius);background:var(--card);margin:0 0 12px;
+  transition:box-shadow .2s,border-color .2s}
+#view-ball .ball-setting[open]{box-shadow:var(--shadow-sm);border-color:var(--tan)}
+#view-ball .ball-setting > summary{list-style:none;display:flex;flex-wrap:wrap;align-items:center;gap:4px 18px;min-height:58px;
+  padding:12px 52px 12px 22px;position:relative;cursor:pointer;border-radius:inherit}
+#view-ball .ball-setting > summary::-webkit-details-marker{display:none}
+#view-ball .ball-setting > summary::after{content:"";position:absolute;right:24px;top:50%;width:9px;height:9px;
+  border-right:2px solid var(--maroon);border-bottom:2px solid var(--maroon);transform:translateY(-70%) rotate(45deg);transition:transform .2s var(--ease-quart)}
+#view-ball .ball-setting[open] > summary::after{transform:translateY(-30%) rotate(-135deg)}
+#view-ball .ball-setting > summary:hover .ball-setting-name{color:var(--crimson)}
+#view-ball .ball-setting > summary:focus-visible{outline:3px solid var(--crimson);outline-offset:2px}
+#view-ball .ball-setting-name{margin:0;font-family:var(--font-head);font-size:1.12rem;color:var(--maroon);transition:color .2s}
+#view-ball .ball-setting-now{margin-left:auto;font-size:.9rem;color:var(--slate-soft);text-align:right;overflow-wrap:anywhere}
+#view-ball .ball-setting-body{padding:2px 22px 18px;border-top:1px solid var(--line)}
+#view-ball .ball-setting-body > .admin-note:first-child,#view-ball .ball-setting-body > .admin-subhead:first-child{margin-top:16px}
+/* The site wide form rule (styles.css) draws every form as a card. A drop down already is one, so
+   inside it a form is just its fields, as .fx-call-form is inside its panel. */
+#view-ball .ball-setting-body form{background:none;border:0;border-radius:0;padding:0;box-shadow:none;margin:14px 0 8px}
+/* The menu and its dietary key are pasted in whole: each box sits under its name, wide enough to
+   read, a row each, so Save the menu comes after them rather than floating beside the last. */
+#view-ball #ballMenuForm .ty-inline{display:flex;flex-direction:column;flex:1 1 100%}
+
+/* A date box as wide as a date. At the site wide 100% (styles.css) it took its whole label, and
+   squeezed the words beside it, such as "or open it automatically at", onto two lines. On a phone
+   it stays the full width, an easier target. */
+@media (min-width:761px){
+  #view-ball .ball-setting-body .ty-inline input[type="datetime-local"],
+  #view-ball .ball-setting-body .ty-inline input[type="date"]{width:auto}
+}
+
+/* A list, then room, then the button that acts on it. */
+#view-ball .admin-table-wrap + .ty-controls{margin-top:16px}
+
+/* Abandoned checkouts, under the bookings: the fold's line is as easy to press as the buttons. */
+#view-ball .admin-fold > summary{min-height:44px;padding:11px 0;box-sizing:border-box}
+
+@media (max-width:860px){
+  /* The menu is a pinned bar 61px tall here, so the sections bar pins under it. */
+  #view-ball .ball-sections{top:61px}
+}
+@media (max-width:760px){
+  /* The band says the same in less height, so the section buttons are on the first screen. */
+  #view-ball .ball-hero{grid-template-columns:1fr;gap:14px;padding:18px 18px 16px}
+  #view-ball .ball-hero h2{font-size:1.75rem;margin-bottom:4px}
+  #view-ball .ball-hero-when{font-size:.92rem;line-height:1.45}
+  /* At 320px the band has 250px across, too little for two columns of at least 124px. */
+  #view-ball .ball-hero-facts{grid-template-columns:repeat(2,minmax(0,auto));gap:10px 18px}
+  #view-ball .ball-hero-facts li{padding-top:8px}
+  #view-ball .ball-hero-facts b{font-size:1.1rem}
+  /* Two by two: three even rows of buttons the same width, rather than rows of one, two and three. */
+  #view-ball .ball-sections{position:static;display:grid;grid-template-columns:1fr 1fr;border-radius:22px}
+  #view-ball .ball-sections .admin-seg{min-height:44px;padding:8px 6px;gap:6px;white-space:normal;text-align:center;line-height:1.25}
+  /* The guest and dinner numbers two by two, so four of them are two rows, not four cards deep. */
+  #view-ball #ballGuestProgress,#view-ball #ballMenuProgress{grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+  #view-ball #ballGuestProgress .admin-stat,#view-ball #ballMenuProgress .admin-stat{padding:14px 16px}
+  #view-ball #ballGuestProgress .admin-stat .n,#view-ball #ballMenuProgress .admin-stat .n{font-size:1.55rem}
+  #view-ball .ball-part{scroll-margin-top:76px}
+  #view-ball .ball-seats,#view-ball .ball-money,#view-ball .ball-email{padding:18px}
+  #view-ball .ball-needs{padding:4px 16px 12px}
+  #view-ball .ov-need{align-items:flex-start}
+  #view-ball .ov-dot{margin-top:7px}
+  #view-ball .ov-text{flex-basis:calc(100% - 24px)}
+  #view-ball .ov-go{margin-left:24px}
+  #view-ball .ball-setting > summary{padding:12px 46px 12px 16px}
+  #view-ball .ball-setting > summary::after{right:20px}
+  #view-ball .ball-setting-now{flex-basis:100%;margin-left:0;text-align:left}
+  #view-ball .ball-setting-body{padding:2px 16px 16px}
+  #view-ball .ball-search input{width:100%}
+}
+@media (prefers-reduced-motion:reduce){
+  #view-ball .ball-sections .admin-seg,#view-ball .ball-download,#view-ball .ball-setting,
+  #view-ball .ball-setting > summary::after,#view-ball .ball-setting-name,#view-ball .ov-go.admin-btn{transition:none}
+  #view-ball .ball-download:hover{transform:none}
 }
 
 
@@ -2349,6 +2763,189 @@ textarea.fx-call-input{min-height:88px;line-height:1.5;resize:vertical;field-siz
    table. Nothing scrolls inside a box: long lists grow the page.
    ================================================================= */
 
+/* ---- the switch, as the Events page's ---- */
+#view-analytics .an-switch {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px 20px;
+  margin: 0 0 6px;
+  padding: 16px 20px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: var(--card);
+  box-shadow: var(--shadow-sm);
+}
+#view-analytics .an-switch.is-on { background: var(--holly-soft); border-color: color-mix(in srgb, var(--holly) 30%, var(--line)); }
+#view-analytics .an-switch-text { flex: 1 1 320px; min-width: 0; }
+#view-analytics .an-switch .admin-subhead { margin: 0 0 4px; }
+#view-analytics .an-switch-state { margin: 0; max-width: 68ch; font-size: 0.95rem; line-height: 1.5; text-wrap: pretty; }
+#view-analytics .an-switch-state b { color: var(--maroon); }
+#view-analytics .an-switch.is-on .an-switch-state b { color: var(--holly-dark); }
+#view-analytics .an-switch-state a { color: var(--maroon); font-weight: 600; text-underline-offset: 2px; }
+#view-analytics .an-switch-who { margin: 4px 0 0; font-size: 0.82rem; color: var(--slate-soft); overflow-wrap: anywhere; }
+#view-analytics .an-switch-who:empty { display: none; }
+#view-analytics .an-switch-note { margin: 0; font-size: 0.85rem; color: var(--slate-soft); }
+#view-analytics .an-switch .btn { flex: 0 1 auto; max-width: 100%; }
+
+/* ---- the days ---- */
+#view-analytics .an-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin: 24px 0 16px; }
+#view-analytics .an-bar-label { font-weight: 600; font-size: 0.9rem; }
+#view-analytics .admin-seg { transition: background .2s, color .2s; }
+#view-analytics .admin-seg:hover:not(.is-active) { color: var(--maroon); }
+#view-analytics .admin-seg:focus-visible { outline: 3px solid var(--crimson); outline-offset: 2px; }
+
+/* A new period: what is showing dims until its own numbers arrive (aria-busy says so to a reader). */
+#view-analytics .an-loading { font-size: 0.85rem; color: var(--slate-soft); }
+#view-analytics .an-loading:empty { display: none; }
+#view-analytics.is-loading .an-figures,
+#view-analytics.is-loading .an-card { opacity: 0.45; transition: opacity .2s; }
+#view-analytics .an-period-note { margin: -6px 0 16px; max-width: 72ch; font-size: 0.82rem; color: var(--slate-soft); text-wrap: pretty; }
+#view-analytics .an-period-note:empty { display: none; }
+
+/* ---- the figures: two across on a phone, four on a desktop ---- */
+#view-analytics .an-figures { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
+#view-analytics .an-stat .n { font-variant-numeric: tabular-nums; }
+#view-analytics .an-change { margin: 8px 0 0; font-size: 0.8rem; line-height: 1.35; color: var(--slate-soft); }
+
+/* ---- cards ---- */
+#view-analytics .an-card {
+  min-width: 0;
+  margin-top: 18px;
+  padding: 20px 22px 22px;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-sm);
+}
+#view-analytics .an-card-head { margin: 0 0 4px; font-size: 1.12rem; color: var(--maroon); }
+#view-analytics .an-card-note { margin: 0 0 14px; max-width: 64ch; font-size: 0.85rem; color: var(--slate-soft); }
+#view-analytics .an-card-head + div { margin-top: 12px; }
+#view-analytics .an-list-head { margin: 20px 0 10px; font-family: var(--font-body); font-size: 0.9rem; font-weight: 700; color: var(--slate); }
+#view-analytics .an-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 18px; align-items: start; }
+#view-analytics .an-wide { grid-column: 1 / -1; }
+#view-analytics .an-pair { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 32px; }
+#view-analytics .an-empty,
+#view-analytics .an-card .admin-unavailable { padding: 4px 0; margin: 0; }
+#view-analytics .an-credit { margin: 18px 0 0; font-size: 0.78rem; color: var(--slate-soft); }
+#view-analytics .an-credit a { color: var(--maroon); text-underline-offset: 2px; }
+
+/* ---- ranked bars ---- */
+#view-analytics .an-bars { list-style: none; margin: 0; padding: 0; display: grid; gap: 12px; }
+#view-analytics .an-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 5px 12px; align-items: baseline; }
+#view-analytics .an-row-label { min-width: 0; font-size: 0.92rem; overflow-wrap: anywhere; }
+#view-analytics .an-row-sub { display: block; font-size: 0.78rem; color: var(--slate-soft); }
+#view-analytics .an-row-n { font-weight: 700; font-variant-numeric: tabular-nums; text-align: right; white-space: nowrap; }
+#view-analytics .an-row-share { margin-left: 4px; font-weight: 500; font-size: 0.8rem; color: var(--slate-soft); }
+#view-analytics .an-track { grid-column: 1 / -1; display: block; height: 6px; border-radius: 999px; background: var(--tint); overflow: hidden; }
+#view-analytics .an-fill { display: block; height: 100%; border-radius: 999px; background: var(--crimson); }
+
+/* "Show all" and "Check again": quiet, but a real target a thumb can hit. */
+#view-analytics .an-more {
+  margin-top: 14px;
+  min-height: 36px;
+  padding: 6px 16px;
+  border: 1.6px solid var(--line);
+  border-radius: 999px;
+  background: var(--card);
+  color: var(--maroon);
+  font-family: var(--font-body);
+  font-weight: 600;
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: background .2s, border-color .2s, transform .1s;
+}
+#view-analytics .an-more:hover { background: var(--tint); border-color: var(--tan); }
+#view-analytics .an-more:active { transform: translateY(1px); }
+#view-analytics .an-more:focus-visible { outline: 3px solid var(--crimson); outline-offset: 2px; }
+
+/* ---- pages: a table on a desktop, one block per page on a phone ---- */
+#view-analytics .an-pages { font-size: 0.88rem; }
+#view-analytics .an-pages th:nth-child(1) { width: 27%; }
+#view-analytics .an-pages th:nth-child(2), #view-analytics .an-pages th:nth-child(3) { width: 12%; }
+#view-analytics .an-pages th:nth-child(4) { width: 18%; }
+#view-analytics .an-pages th:nth-child(5), #view-analytics .an-pages th:nth-child(6) { width: 15.5%; }
+#view-analytics .an-pages th { vertical-align: bottom; }
+#view-analytics .an-pages td { font-variant-numeric: tabular-nums; }
+#view-analytics .an-page { font-weight: 600; }
+
+/* ---- the line ---- */
+#view-analytics .an-legend { display: flex; flex-wrap: wrap; gap: 6px 18px; list-style: none; margin: 0 0 12px; padding: 0; font-size: 0.82rem; color: var(--slate-soft); }
+#view-analytics .an-legend li { display: flex; align-items: center; gap: 8px; }
+#view-analytics .an-key { display: inline-block; width: 20px; border-top: 2px solid var(--crimson); }
+#view-analytics .an-key.is-prev { border-top: 2px dashed var(--slate-soft); }
+#view-analytics .an-chart { display: grid; grid-template-columns: auto minmax(0, 1fr); column-gap: 10px; }
+#view-analytics .an-y { display: flex; flex-direction: column; justify-content: space-between; height: 180px; font-size: 0.75rem; color: var(--slate-soft); text-align: right; font-variant-numeric: tabular-nums; line-height: 1; }
+#view-analytics .an-plot { position: relative; height: 180px; touch-action: pan-y; }
+#view-analytics .an-svg { display: block; width: 100%; height: 100%; overflow: visible; }
+#view-analytics .an-gridline { stroke: var(--line); stroke-width: 1; vector-effect: non-scaling-stroke; }
+#view-analytics .an-gridline.is-base { stroke: color-mix(in srgb, var(--slate-soft) 40%, var(--line)); }
+#view-analytics .an-line { fill: none; stroke: var(--crimson); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; vector-effect: non-scaling-stroke; }
+#view-analytics .an-line.is-prev { stroke: var(--slate-soft); stroke-dasharray: 5 4; }
+#view-analytics .an-area { fill: color-mix(in srgb, var(--crimson) 8%, transparent); }
+#view-analytics .an-x { grid-column: 2; display: flex; justify-content: space-between; margin-top: 8px; font-size: 0.75rem; color: var(--slate-soft); }
+#view-analytics .an-dot { position: absolute; width: 10px; height: 10px; border-radius: 50%; background: var(--crimson); border: 2px solid var(--card); transform: translate(-50%, -50%); pointer-events: none; }
+#view-analytics .an-tip {
+  position: absolute;
+  top: 0;
+  transform: translate(-50%, -110%);
+  padding: 6px 10px;
+  border-radius: 8px;
+  background: var(--slate);
+  color: var(--cream);
+  font-size: 0.78rem;
+  line-height: 1.35;
+  white-space: nowrap;
+  pointer-events: none;
+  box-shadow: var(--shadow-sm);
+}
+#view-analytics .an-tip-prev { color: var(--cream-82); }
+
+/* ---- right now ---- */
+#view-analytics .an-now { margin: 0; font-size: 0.95rem; }
+#view-analytics .an-now-n { margin-right: 4px; font-family: var(--font-head); font-size: 2rem; font-weight: 800; line-height: 1; color: var(--crimson); font-variant-numeric: tabular-nums; }
+
+@media (max-width: 1000px) {
+  #view-analytics .an-grid { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 700px) {
+  #view-analytics .an-pair { grid-template-columns: minmax(0, 1fr); }
+  #view-analytics .an-card { padding: 16px 16px 18px; }
+  #view-analytics .an-more { min-height: 44px; }
+  #view-analytics .an-pages, #view-analytics .an-pages tbody, #view-analytics .an-pages tr, #view-analytics .an-pages td { display: block; width: auto; }
+  #view-analytics .an-pages thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+  #view-analytics .an-pages tr { padding: 10px 0; border-bottom: 1px solid var(--line); }
+  #view-analytics .an-pages tr:last-child { border-bottom: 0; }
+  #view-analytics .an-pages td { display: grid; grid-template-columns: minmax(0, 9rem) minmax(0, 1fr); gap: 10px; padding: 3px 0; border-bottom: 0; text-align: left; }
+  #view-analytics .an-pages td::before { content: attr(data-label); font-size: 0.78rem; color: var(--slate-soft); }
+  #view-analytics .an-pages td.an-page { display: block; padding-bottom: 6px; font-size: 0.95rem; }
+  #view-analytics .an-pages td.an-page::before { content: none; }
+  #view-analytics .an-y, #view-analytics .an-plot { height: 150px; }
+}
+
+/* TASK-492: QR codes. One card a page: the code on white (a code needs a light ground to scan),
+   the page's name and address, and the two downloads. Cards fill the width two or three across,
+   one across on a phone; on a narrow card the buttons wrap under the code. */
+#view-qr .qr-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,380px),1fr));gap:14px;margin:6px 0 22px}
+#view-qr .qr-grid:empty{margin:0}
+#view-qr .qr-card{display:flex;flex-wrap:wrap;align-items:center;gap:14px 18px;background:var(--white);border:1px solid var(--line);border-radius:14px;padding:14px 16px}
+#view-qr .qr-img{flex:none;width:132px;height:132px;background:var(--white);border-radius:6px}
+#view-qr .qr-body{flex:1 1 150px;min-width:0;display:flex;flex-direction:column;gap:6px}
+#view-qr .qr-title{margin:0;font-family:var(--font-head);font-size:1.05rem;color:var(--maroon)}
+#view-qr .qr-path{margin:0;font-size:.85rem;color:var(--slate-soft);overflow-wrap:anywhere}
+#view-qr .qr-note{margin:0;font-size:.8rem;color:var(--maroon);background:var(--tan-soft);border-radius:8px;padding:4px 8px;align-self:flex-start}
+#view-qr .qr-actions{margin:4px 0 0;display:flex;flex-wrap:wrap;gap:8px}
+/* Two equal choices, so neither is the loud one: the admin's small button, outlined. */
+#view-qr .qr-actions .admin-btn{background:transparent;color:var(--maroon);border:1.6px solid var(--line)}
+#view-qr .qr-actions .admin-btn:hover{background:var(--tan-soft);border-color:var(--maroon)}
+/* =================================================================
+   Admin > Fundraising (TASK-495). Built from the admin's own parts: the Events and Analytics
+   switch card, the status chips of the Events list, and Business supporters' expanding rows and
+   detail panels (.fx-*). Nothing scrolls inside a box: the list shows 25, the wall and History 10,
+   and "Show all" grows the page. Every rule here is scoped to the screen.
+   ================================================================= */
+
 /* ---- the switch: a slim bar (Jaimie: much smaller) ---- */
 #view-fundraising .fr-switch {
   display: flex;
@@ -2391,6 +2988,41 @@ textarea.fx-call-input{min-height:88px;line-height:1.5;resize:vertical;field-siz
 #view-fundraising .admin-seg { transition: background .2s, color .2s; font-variant-numeric: tabular-nums; }
 #view-fundraising .admin-seg:hover:not(.is-active) { color: var(--maroon); }
 #view-fundraising .admin-seg:focus-visible { outline: 3px solid var(--crimson); outline-offset: 2px; }
+
+/* ---- Get involved: one tab, five sections ----
+   The section buttons are the admin's own segmented control. They wrap onto a second line on a
+   narrow screen (no sideways scroll, no drop-down), and the page grows: nothing in the tab
+   scrolls inside a box. The old tabs' boxes, #view-events and #view-fundraising, sit inside
+   #view-get-involved, so every rule written for them still reaches their cards. */
+#giSections { display: flex; flex-wrap: wrap; width: fit-content; max-width: 100%; border-radius: 22px; margin: 0 0 16px; }
+#giSections .admin-seg { transition: background .2s, color .2s; }
+#giSections .admin-seg:hover:not(.is-active) { color: var(--maroon); }
+#giSections .admin-seg:focus-visible { outline: 3px solid var(--crimson); outline-offset: 2px; }
+#giSections .admin-seg .admin-new-pill { margin-left: 6px; }
+#view-get-involved > .admin-view-intro { margin-bottom: 20px; }
+@media (max-width: 720px) {
+  /* A finger's target: 44px tall, as the rest of the admin's buttons are on a phone. A little
+     less room either side, so the five sit on two lines at 375px rather than three. */
+  #giSections .admin-seg { min-height: 44px; padding: 8px 12px; }
+}
+@media (prefers-reduced-motion: reduce) { #giSections .admin-seg { transition: none; } }
+
+/* The kind filter sits over the status filter, each on its own line. */
+#view-fundraising .fr-bar--kind { margin: 0 0 10px; }
+#view-fundraising .fr-bar--kind + .fr-bar { margin-top: 0; }
+#frKindFilter .admin-seg { white-space: nowrap; }
+
+/* The kind of a sign up, large, on every row: the words are always on it, so the colour is never
+   the only thing saying which it is. Colours are the site's own tokens. In memory is the quietest. */
+#view-fundraising .fr-kind {
+  display: block; width: fit-content; max-width: 100%; margin: 0 0 8px 22px; padding: 6px 16px;
+  border: 1px solid transparent; border-radius: 999px;
+  font-size: .95rem; font-weight: 600; line-height: 1.3;
+}
+#view-fundraising .fr-kind[data-kind="raising"] { background: color-mix(in srgb, var(--tan) 45%, var(--cream)); color: var(--maroon); }
+#view-fundraising .fr-kind[data-kind="team"] { background: var(--holly-soft); color: var(--holly-dark); }
+#view-fundraising .fr-kind[data-kind="event"] { background: var(--maroon); color: var(--cream); }
+#view-fundraising .fr-kind[data-kind="memory"] { background: var(--cream); color: var(--slate-soft); border-color: var(--line); }
 
 /* ---- the list ---- */
 #view-fundraising .fr-table > thead > tr > th:nth-child(2),
@@ -2909,3 +3541,48 @@ textarea.fx-call-input{min-height:88px;line-height:1.5;resize:vertical;field-siz
   #view-fundraising .fr-emails-row, #view-fundraising .fr-emails-row-name::before { transition: none; }
 }
 /* end All emails */
+
+/* Fill a Red Bag against the Donate page, at the top of the Donations screen, and the tick box that
+   narrows the list. Quiet text above the filters, in the Overview's own sizes: a name, then its
+   line. Tokens only, nothing that scrolls: the lines wrap and the page grows. */
+.dn-sources{margin:0 0 18px}
+.dn-sources-list{margin:0;display:grid;gap:6px}
+.dn-source{display:grid;grid-template-columns:8.5rem minmax(0,1fr);gap:2px 16px;align-items:baseline}
+.dn-source dt{font-size:.82rem;font-weight:600;letter-spacing:.02em;color:var(--slate-soft)}
+.dn-source dd{margin:0;font-size:.95rem;color:var(--slate);overflow-wrap:anywhere}
+.dn-sources-note{margin:8px 0 0;font-size:.85rem;color:var(--slate-soft)}
+.dn-sources .admin-loading,.dn-sources .admin-unavailable{padding:0}
+@media (max-width:560px){
+  .dn-source{grid-template-columns:minmax(0,1fr)}
+}
+/* The tick box: as tall as the selects beside it, so it is as easy to press, in the admin's own
+   green (as the newsletter's tick boxes are). On the narrowest phones it wraps to a line of its
+   own, where a gap on its left would read as an indent. */
+.dn-redbag-filter{margin-left:8px;padding:7px 0;cursor:pointer}
+.dn-redbag-filter input{width:18px;height:18px;accent-color:var(--holly);cursor:pointer}
+@media (max-width:360px){
+  .dn-redbag-filter{margin-left:0}
+}
+/* end Fill a Red Bag */
+
+/* TASK-568: the Spare addresses list (Admin > Site pages). A forward to a subdomain is longer than a
+   page's path, and in four squeezed columns on a phone "drop.nbcc.scot" and the word Subdomain broke
+   in half. The pill never breaks, and a long address wraps inside its own box. When the list's own
+   box is narrow it is labelled cards, the same shape as Donations (.dn-table): the heading rides on
+   each cell (data-label), the spare address leads the card, and Remove is a 44px target. */
+.sa-table .admin-pill{white-space:nowrap}
+.sa-to{overflow-wrap:anywhere}
+.sa-list{container:salist / inline-size}
+@container salist (max-width:759px){
+  .sa-table,.sa-table tbody{display:block}
+  .sa-table thead{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+  .sa-table tr{display:flex;flex-direction:column;border-bottom:1px solid var(--line);padding:10px 0}
+  .sa-table tr:last-child{border-bottom:0}
+  .sa-table td{border-bottom:0;padding:3px 14px;display:flex;gap:10px;align-items:baseline;text-align:left}
+  .sa-table td::before{content:attr(data-label);flex:0 0 7.5rem;font-size:.78rem;color:var(--slate-soft)}
+  .sa-table td:empty{display:none}
+  .sa-table td:first-child{display:block;font-weight:600;font-size:1rem;padding-bottom:6px}
+  .sa-table td:first-child::before,.sa-table td:last-child::before{content:none}
+  .sa-table .sa-to{flex:1;min-width:0}
+  .sa-table [data-site-alias-remove]{min-height:44px;min-width:44px;text-align:left}
+}

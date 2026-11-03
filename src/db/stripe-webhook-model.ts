@@ -12,6 +12,7 @@ import { buildCompanyDonorRow, type CompanyFields } from "../donors/company";
 import { scopeFromDeclarationScope, type Scope, type DeclarationWording } from "../declarations/wording";
 import { isGasdsEligibleAmount } from "../gasds/caps";
 import type { DunningEvent } from "../subscriptions/dunning";
+import { BALL_BAGS_MAX } from "../ball/bags";
 
 // PURE event→record mapping for the single Stripe webhook handler (REQ-036). No
 // pool/config/network/clock — imports only the pure donation model, so it is
@@ -26,6 +27,40 @@ export interface DonationWrite {
 // The REQ-029 checkout endpoint stamps metadata.giftAid as the string "true"/"false".
 export function giftAidFromMetadata(metadata: Stripe.Metadata | null | undefined): boolean {
   return metadata?.giftAid === "true";
+}
+
+// Where a gift was started on the website (donations.source). The ONE list of allowed values, for
+// the webhook that writes it and for anything that later reads it. A gift with no source is an
+// ordinary one (the Donate page and every other route), or one recorded before sources were kept.
+// src/db/overview-numbers.ts picks each one out by its value, so the order here carries no meaning.
+// ball_bags is red bags at the Festive Ball (/bag), a line of its own, never added into the Ball's.
+export const DONATION_SOURCES = ["red_bag", "ball", "ball_bags"] as const;
+export type DonationSource = (typeof DONATION_SOURCES)[number];
+
+// A red bags mark as the checkout stamps it: the number of bags, 1 to 20, written the way String()
+// writes it ("3", never "03" or "3.0").
+function isBallBagsMark(mark: unknown): boolean {
+  if (typeof mark !== "string") return false;
+  const n = Number(mark);
+  return Number.isInteger(n) && n >= 1 && n <= BALL_BAGS_MAX && String(n) === mark;
+}
+
+// checkout.session.completed → where the gift was started, or null. The checkout stamps
+// metadata.redBag as the string "true" on a Fill a Red Bag session, metadata.ball on a gift from
+// the Festive Ball's donate page, and metadata.ballBags (the number of bags, "1" to "20" as
+// isBallBagsMark checks) on red bags at the Ball, which is ball_bags, and on no other (src/routes/api.ts). The checkout never stamps two. The bags are read before the
+// Ball's mark all the same, so they could never be counted as Festive Ball money. Anything else at
+// all is null. Never throws, whatever it is handed.
+export function sourceFromCheckoutSession(
+  session: Pick<Stripe.Checkout.Session, "metadata"> | null | undefined,
+): DonationSource | null {
+  const metadata: unknown = session?.metadata;
+  if (typeof metadata !== "object" || metadata === null) return null;
+  const marks = metadata as Record<string, unknown>;
+  if (isBallBagsMark(marks.ballBags)) return "ball_bags";
+  if (marks.redBag === "true") return "red_bag";
+  if (marks.ball === "true") return "ball";
+  return null;
 }
 
 const asString = (v: string | { id: string } | null | undefined): string | null =>

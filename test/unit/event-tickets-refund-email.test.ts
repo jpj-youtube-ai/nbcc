@@ -89,3 +89,16 @@ describe("asking Stripe for a payment's refunds", () => {
     expect(stripeRefunds.list).toHaveBeenCalledWith({ payment_intent: "pi_1", limit: 100 }, { timeout: 8000, maxNetworkRetries: 0 });
   });
 });
+
+// Jaimie, 2026-10-04: the notice to staff about a refund that failed at the bank must not say the
+// buyer has their tickets email (the booking may be cancelled). A booking paid late still does.
+describe("the staff notice about a failed refund", () => {
+  it("says the buyer has not been told, not that they have their tickets email", async () => {
+    await tellAfterReconcile(70, { refundedNowPence: 0, full: false, failedWords: ["Refund failed at the bank: the buyer has not been paid back. Refund again."] });
+    const sent = mail.sendEventTickets.mock.calls.find((c) => c[0] === "eventTicketsToCheck");
+    expect(sent).toBeTruthy();
+    const text = (sent as unknown[])[2] as { text: string };
+    expect(text.text).toContain("The refund did not go through, and the buyer has not been told. Please get in touch with them.");
+    expect(text.text).not.toContain("has their tickets email");
+  });
+});

@@ -131,7 +131,7 @@ export async function getPackPrint(req: Request, res: Response): Promise<Respons
     const view = packView(f, stored, sizes);
     if (!view) return notThere();
     const signer: Signer = view.signer ? { name: view.signer, role: view.signerRole } : await defaultSigner(actorOf(claims));
-    const facts = materialFacts(f, f.meter, { pageUrl: pageUrlFor(f), getInvolvedUrl: siteUrl("/get-involved") });
+    const facts = materialFacts(f, f.meter, { pageUrl: pageUrlFor(f), whatsOnUrl: siteUrl("/whats-on") });
     const p = dateParts(londonToday(new Date()));
     const page = renderWelcomePack({
       subject: f,

@@ -22,7 +22,7 @@ const OPERATIONAL_EDITOR_SECTIONS: Section[] = [
 ];
 
 describe("SECTIONS", () => {
-  it("lists exactly the 21 matrix sections", () => {
+  it("lists exactly the 22 matrix sections", () => {
     expect(SECTIONS).toEqual([
       "overview",
       "search",
@@ -44,9 +44,10 @@ describe("SECTIONS", () => {
       "outreach",
       "business-supporters",
       "analytics",
+      "red-bag",
       "team",
     ]);
-    expect(SECTIONS).toHaveLength(21);
+    expect(SECTIONS).toHaveLength(22);
   });
 });
 
@@ -202,10 +203,10 @@ describe("roleToPermissions", () => {
     expect(can(perms, "team", "view")).toBe(false);
   });
 
-  it("viewer gets view on all sections except team, email-audit, business-supporters and analytics", () => {
+  it("viewer gets view on all sections except team, email-audit, business-supporters, analytics and red-bag", () => {
     const perms = roleToPermissions("viewer");
     for (const section of SECTIONS) {
-      if (section === "team" || section === "email-audit" || section === "business-supporters" || section === "analytics") continue;
+      if (section === "team" || section === "email-audit" || section === "business-supporters" || section === "analytics" || section === "red-bag") continue;
       expect(perms[section]).toBe("view");
     }
   });

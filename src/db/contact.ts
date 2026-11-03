@@ -12,6 +12,7 @@ export interface ContactRow {
   first_name: string;
   last_name: string;
   email: string;
+  phone: string | null; // optional on the form; null when none was given
   message: string;
   status: string; // new | replied
   created_at: Date;
@@ -21,10 +22,10 @@ export interface ContactRow {
 
 export async function insertEnquiry(e: ContactEnquiry): Promise<{ id: number }> {
   const result = await contactPool.query<{ id: number }>(
-    `INSERT INTO contact_enquiries (first_name, last_name, email, message)
-     VALUES ($1, $2, $3, $4)
+    `INSERT INTO contact_enquiries (first_name, last_name, email, phone, message)
+     VALUES ($1, $2, $3, $4, $5)
      RETURNING id`,
-    [e.firstName, e.lastName, e.email, e.message],
+    [e.firstName, e.lastName, e.email, e.phone || null, e.message],
   );
   return { id: result.rows[0].id };
 }
@@ -44,7 +45,7 @@ export async function listEnquiries(status?: string, view: ArchiveView = "live")
   if (archived) conditions.push(archived);
   const where = conditions.length ? ` WHERE ${conditions.join(" AND ")}` : "";
   const result = await contactPool.query<ContactRow>(
-    `SELECT id, first_name, last_name, email, message, status, created_at, replied_at, replied_by
+    `SELECT id, first_name, last_name, email, phone, message, status, created_at, replied_at, replied_by
      FROM contact_enquiries${where}
      ORDER BY created_at DESC`,
     params,
@@ -71,7 +72,7 @@ export async function restoreEnquiry(id: number): Promise<boolean> {
 
 export async function getEnquiry(id: number): Promise<ContactRow | null> {
   const result = await contactPool.query<ContactRow>(
-    `SELECT id, first_name, last_name, email, message, status, created_at, replied_at, replied_by,
+    `SELECT id, first_name, last_name, email, phone, message, status, created_at, replied_at, replied_by,
             archived_at
      FROM contact_enquiries WHERE id = $1`,
     [id],
@@ -93,7 +94,7 @@ export async function markReplied(
          replied_at = ${replied ? "now()" : "NULL"},
          replied_by = $3
      WHERE id = $1
-     RETURNING id, first_name, last_name, email, message, status, created_at, replied_at, replied_by`,
+     RETURNING id, first_name, last_name, email, phone, message, status, created_at, replied_at, replied_by`,
     [id, replied ? "replied" : "new", replied ? repliedBy : null],
   );
   return result.rows[0] ?? null;

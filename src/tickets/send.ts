@@ -25,7 +25,7 @@ import {
   buildUnknownPaymentStaffEmail,
   type TicketEmailEvent,
 } from "./emails";
-import { closeWords, pounds, ticketsWords, type ProposedType } from "./model";
+import { pounds, ticketsWords, type ProposedType } from "./model";
 
 // Event tickets: sending the emails (built by ./emails.ts). Each is best effort and runs after its
 // write has committed, like every other email on the site: a paid order, a refund or a request
@@ -102,7 +102,7 @@ export async function deleteBuyerPhonesPastTheirTime(): Promise<number> {
 }
 
 /** To the events inbox: a booking that needs a look (paid late and over the limit, a wrong amount, a dispute). */
-export async function sendOrderFlagStaffEmail(orderId: number, flags: string[]): Promise<void> {
+export async function sendOrderFlagStaffEmail(orderId: number, flags: string[], about: { refundFailed?: boolean } = {}): Promise<void> {
   try {
     const order = await getOrder(pool, orderId);
     if (!order || flags.length === 0) return;
@@ -112,7 +112,7 @@ export async function sendOrderFlagStaffEmail(orderId: number, flags: string[]):
       { title: f.title },
       { reference: order.reference, buyerName: `${order.firstName} ${order.surname}`, tickets: ticketsWords(order.lines), paid: pounds(order.totalPence) },
       flags,
-      { adminUrl: adminUrl() },
+      { adminUrl: adminUrl(), refundFailed: about.refundFailed === true },
     );
     await sendEventTickets("eventTicketsToCheck", null, { email: config.BALL_FROM_EMAIL, ...events(), ...mail });
   } catch (err) {
@@ -177,7 +177,7 @@ export async function resendUnsentRefundEmails(): Promise<{ tried: number; sent:
  */
 export async function tellAfterReconcile(orderId: number, r: { refundedNowPence: number; full: boolean; failedWords: string[] }): Promise<void> {
   if (r.refundedNowPence > 0) await sendRefundRecordedEmail(orderId, r.refundedNowPence, r.full);
-  if (r.failedWords.length) await sendOrderFlagStaffEmail(orderId, r.failedWords);
+  if (r.failedWords.length) await sendOrderFlagStaffEmail(orderId, r.failedWords, { refundFailed: true });
 }
 
 /** The buyer's free booking was cancelled (by the organiser or staff): tell them. `order` is as it was before. */
@@ -236,7 +236,7 @@ export async function sendTicketsProposedStaffEmail(
   close?: { mode: string; at: string | null },
 ): Promise<void> {
   try {
-    const mail = buildTicketsProposedStaffEmail({ title: f.title, organiserName: f.name }, { types, salesLimit, closeWords: close ? closeWords(close) : undefined }, { adminUrl: adminUrl() });
+    const mail = buildTicketsProposedStaffEmail({ title: f.title, organiserName: f.name }, { types, salesLimit, close }, { adminUrl: adminUrl() });
     await sendEventTickets("eventTicketsToApprove", f.name, { email: config.BALL_FROM_EMAIL, from: config.BALL_FROM_EMAIL, replyTo: f.email, ...mail });
   } catch (err) {
     logFailure("tickets to approve", err);

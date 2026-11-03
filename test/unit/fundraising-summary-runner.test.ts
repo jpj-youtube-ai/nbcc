@@ -2,7 +2,8 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 
 // TASK-503: the Monday summary's runner, riding the daily 8am task. Mondays only, once a week,
 // nothing without anyone to send to, a failed send logged and never thrown, and the week given back
-// when nothing went. The database and the mail client are stood in for. Every address is invented.
+// when nothing went. It is ONE email with everyone on the To line, so Reply all reaches the team,
+// and only nbcc.scot addresses are ever put on it. The database and the mail client are stood in for. Every address is invented.
 
 vi.mock("../../src/config", () => ({
   config: { BALL_FROM_EMAIL: "events@nbcc.test", PORTAL_BASE_URL: "https://nbcc.test" },
@@ -15,12 +16,12 @@ const MONDAY = new Date("2026-12-07T08:00:00Z");
 const TUESDAY = new Date("2026-12-08T08:00:00Z");
 
 let deps: SummaryDeps & { [k: string]: ReturnType<typeof vi.fn> };
-let sent: Array<{ email: string; subject: string; from: string; replyTo: string; html: string }>;
+let sent: Array<{ email: string; alsoTo?: string[]; subject: string; from: string; replyTo: string; html: string }>;
 
 beforeEach(() => {
   sent = [];
   deps = {
-    getSettings: vi.fn().mockResolvedValue({ recipients: ["fern@example.com", "rowan@example.com"], lastWeek: "2026-11-30" }),
+    getSettings: vi.fn().mockResolvedValue({ recipients: ["fern@nbcc.scot", "rowan@nbcc.scot"], lastWeek: "2026-11-30" }),
     claim: vi.fn().mockResolvedValue({ previous: "2026-11-30" }),
     release: vi.fn().mockResolvedValue(undefined),
     readInputs: vi.fn().mockImplementation(async (now: Date) => ({ now, fundraisers: [], gifts: [], cash: [], calls: [], invites: [] })),
@@ -40,7 +41,7 @@ describe("the Monday summary run", () => {
   });
 
   it("does nothing when this Monday's has already gone", async () => {
-    deps.getSettings.mockResolvedValue({ recipients: ["fern@example.com"], lastWeek: "2026-12-07" });
+    deps.getSettings.mockResolvedValue({ recipients: ["fern@nbcc.scot"], lastWeek: "2026-12-07" });
     expect((await runFundraisingSummary(MONDAY, deps)).skipped).toBe("not today");
     expect(deps.claim).not.toHaveBeenCalled();
   });
@@ -57,33 +58,55 @@ describe("the Monday summary run", () => {
     expect(sent).toEqual([]);
   });
 
-  it("sends one email to each person, from and replying to the events inbox", async () => {
+  it("sends one email with everyone on the To line, from and replying to the events inbox", async () => {
     expect(await runFundraisingSummary(MONDAY, deps)).toEqual({ sent: 2, failed: 0 });
     expect(deps.claim).toHaveBeenCalledWith("2026-12-07");
-    expect(sent.map((m) => m.email)).toEqual(["fern@example.com", "rowan@example.com"]);
-    for (const m of sent) {
-      expect(m.from).toBe("events@nbcc.test");
-      expect(m.replyTo).toBe("events@nbcc.test");
-      expect(m.subject).toBe("Fundraising this week: £0 raised, nothing waiting");
-      expect(m.html).toContain("https://nbcc.test/admin");
-    }
+    expect(sent).toHaveLength(1);
+    const [m] = sent;
+    expect([m.email, ...(m.alsoTo ?? [])]).toEqual(["fern@nbcc.scot", "rowan@nbcc.scot"]);
+    expect(m.from).toBe("events@nbcc.test");
+    expect(m.replyTo).toBe("events@nbcc.test");
+    expect(m.subject).toBe("Fundraising this week: £0 raised, nothing waiting");
+    expect(m.html).toContain("https://nbcc.test/admin");
     expect(deps.record).toHaveBeenCalledWith({ week: "2026-12-07", sent: 2, failed: 0 });
     expect(deps.release).not.toHaveBeenCalled();
   });
 
-  it("goes on past a failed send, logs it, and keeps the week when any went", async () => {
-    deps.send.mockImplementationOnce(async () => {
-      throw new Error("SES said no");
-    });
-    expect(await runFundraisingSummary(MONDAY, deps)).toEqual({ sent: 1, failed: 1 });
-    expect(console.error).toHaveBeenCalled();
-    expect(deps.release).not.toHaveBeenCalled();
+  it("sends to one person alone when the list has one", async () => {
+    deps.getSettings.mockResolvedValue({ recipients: ["fern@nbcc.scot"], lastWeek: null });
+    expect(await runFundraisingSummary(MONDAY, deps)).toEqual({ sent: 1, failed: 0 });
+    expect(sent[0].email).toBe("fern@nbcc.scot");
+    expect(sent[0].alsoTo ?? []).toEqual([]);
   });
 
-  it("gives the week back when nothing went, so a rerun can try again", async () => {
+  it("leaves any address that is not nbcc.scot off the To line, and logs how many without naming them", async () => {
+    const log = vi.spyOn(console, "log").mockImplementation(() => undefined);
+    deps.getSettings.mockResolvedValue({
+      recipients: ["fern@nbcc.scot", "old@example.com", "rowan@news.nbcc.scot", "Rowan@NBCC.scot", "sly@nbcc.scot.example.com"],
+      lastWeek: null,
+    });
+    expect(await runFundraisingSummary(MONDAY, deps)).toEqual({ sent: 2, failed: 0 });
+    expect([sent[0].email, ...(sent[0].alsoTo ?? [])]).toEqual(["fern@nbcc.scot", "Rowan@NBCC.scot"]);
+    const said = [...log.mock.calls, ...(console.error as unknown as ReturnType<typeof vi.fn>).mock.calls].map((c) => c.join(" ")).join(" | ");
+    expect(said).toMatch(/3 address(es)? left out/);
+    expect(said).not.toMatch(/example\.com|news\.nbcc|@/);
+    log.mockRestore();
+  });
+
+  it("does nothing, and claims nothing, when nobody on the list has an nbcc.scot address", async () => {
+    deps.getSettings.mockResolvedValue({ recipients: ["old@example.com", "rowan@news.nbcc.scot"], lastWeek: null });
+    expect(await runFundraisingSummary(MONDAY, deps)).toEqual({ sent: 0, failed: 0, skipped: "nobody to send to" });
+    expect(deps.claim).not.toHaveBeenCalled();
+    expect(sent).toEqual([]);
+  });
+
+  it("gives the week back when it did not go, so a rerun can try again, and counts everyone as failed", async () => {
     deps.send.mockRejectedValue(new Error("SES is down"));
     expect(await runFundraisingSummary(MONDAY, deps)).toEqual({ sent: 0, failed: 2 });
+    expect(deps.send).toHaveBeenCalledTimes(1);
+    expect(console.error).toHaveBeenCalled();
     expect(deps.release).toHaveBeenCalledWith("2026-12-07", "2026-11-30");
+    expect(deps.record).toHaveBeenCalledWith({ week: "2026-12-07", sent: 0, failed: 2 });
   });
 
   it("never throws: a failed read is logged, and the week given back", async () => {
@@ -100,6 +123,7 @@ describe("a test of the summary", () => {
     await sendSummaryTest("fern@example.com", TUESDAY, deps);
     expect(sent).toHaveLength(1);
     expect(sent[0].email).toBe("fern@example.com");
+    expect(sent[0].alsoTo ?? []).toEqual([]);
     expect(sent[0].subject).toMatch(/^Test: Fundraising this week:/);
     expect(deps.claim).not.toHaveBeenCalled();
     expect(deps.getSettings).not.toHaveBeenCalled();

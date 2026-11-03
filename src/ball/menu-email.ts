@@ -34,6 +34,11 @@ export interface MenuReadyEmail {
 const P = `style="color:${SLATE};font-family:${BODY_FONT};font-size:14px;line-height:1.6;margin:0 0 12px"`;
 const SMALL = `style="color:${SLATE_SOFT};font-family:${BODY_FONT};font-size:13px;line-height:1.55;margin:0 0 10px"`;
 
+// TASK-574: the Park Hotel's own number for booking a room (Jaimie, 20 October 2026), checked
+// against the hotel's listings, and not Rugby Park's stadium line. ball.html gives the same one.
+const HOTEL_PHONE = "01563 545999";
+const HOTEL_TEL = "+441563545999";
+
 // The menu, laid out as a menu rather than as a list of form options. This email exists to be
 // READ: "the menu is ready, click here to see it" is a worse email than one containing it.
 function menuHtml(menu: MenuCourse[], note: string | null): string {
@@ -113,7 +118,7 @@ export function buildMenuReadyEmail(input: MenuReadyInput): MenuReadyEmail {
   <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;background:${TAN_SOFT};border-radius:10px;margin:22px 0">
     <tr><td style="padding:16px 20px">
       <div style="font-family:${HEAD};color:${MAROON};font-size:16px;font-weight:700;margin:0 0 6px">Staying over?</div>
-      <div style="font-family:${BODY_FONT};color:${SLATE};font-size:14px;line-height:1.6">The Park Hotel are offering ball guests a special rate of <b>£110 per room per night</b>. To book a room, please contact the hotel directly.</div>
+      <div style="font-family:${BODY_FONT};color:${SLATE};font-size:14px;line-height:1.6">The Park Hotel are offering ball guests a special rate of <b>£110 per room per night</b>. To book a room, please contact the hotel directly on <a href="tel:${HOTEL_TEL}" style="color:${MAROON};font-weight:700;text-decoration:none">${HOTEL_PHONE.replace(" ", "&nbsp;")}</a>.</div>
     </td></tr>
   </table>
 
@@ -138,7 +143,7 @@ have not finished that yet you can do both at once. Booking ${input.reference}.
 
 STAYING OVER?
 The Park Hotel are offering ball guests a special rate of £110 per room per
-night. To book a room, please contact the hotel directly.
+night. To book a room, please contact the hotel directly on ${HOTEL_PHONE}.
 
 ${BALL_TEXT_FOOTER}`;
 

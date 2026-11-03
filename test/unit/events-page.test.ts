@@ -19,9 +19,9 @@ import { SEED_EVENTS } from "./helpers/events-seed";
 
 const ROOT = resolve(__dirname, "../..");
 const require = createRequire(import.meta.url);
-// events.html is the TEMPLATE; the server fills its deck from the database. These tests run on the
+// whats-on.html is the TEMPLATE; the server fills its deck from the database. These tests run on the
 // page as production will first serve it: the template with the two seeded events.
-const template = readFileSync(resolve(ROOT, "events.html"), "utf8");
+const template = readFileSync(resolve(ROOT, "whats-on.html"), "utf8");
 const html = renderEventsPage(template, SEED_EVENTS);
 const css = readFileSync(resolve(ROOT, "assets/css/events.css"), "utf8");
 const { initDeck } = require(resolve(ROOT, "assets/js/events.js"));

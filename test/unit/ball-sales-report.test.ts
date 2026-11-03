@@ -10,9 +10,12 @@ import {
   renderReport,
   countSales,
   countAwaitingTransfers,
+  tableBookers,
   MAX_RECIPIENTS,
   type BookingRow,
   type SalesInputs,
+  type TableBooker,
+  type TableBookingRow,
 } from "../../src/ball/sales-report";
 import { BALL_TEXT_FOOTER } from "../../src/ball/email-shell";
 
@@ -37,7 +40,7 @@ const INPUTS: SalesInputs = {
   awaitingTransfers: 0,
   awaitingTransferSeats: 0,
 };
-const TUESDAY = { today: "2026-10-06", eventDate: EVENT, test: false };
+const TUESDAY = { today: "2026-10-06", eventDate: EVENT, test: false, tables: [] as TableBooker[] };
 
 // The words a reader sees, without the shell's own footer: the house style applies to what we wrote.
 const ourText = (text: string) => text.split(BALL_TEXT_FOOTER)[0];
@@ -357,5 +360,150 @@ describe("the email", () => {
     const { html, text } = renderReport(INPUTS, TUESDAY);
     expect(html).toContain("The Designer Rooms");
     expect(text).toContain(BALL_TEXT_FOOTER);
+  });
+});
+
+// Jaimie asked on 12 October 2026 for the report to name who has booked a whole table, and how many.
+// Every person and company here is invented.
+describe("who has booked a whole table", () => {
+  const NOW = new Date("2026-10-12T07:00:00Z");
+  const row = (o: Partial<TableBookingRow>): TableBookingRow => ({
+    firstName: "Sam",
+    surname: "Sample",
+    name: "Sam Sample",
+    email: "sam@example.com",
+    company: null,
+    quantity: 1,
+    status: "paid",
+    paidAt: new Date("2026-10-01T10:00:00Z"),
+    paymentMethod: "card",
+    ...o,
+  });
+
+  it("lists each person once, with their tables added together", () => {
+    const list = tableBookers([row({ quantity: 2 }), row({ quantity: 1, email: "SAM@example.com" })], NOW);
+    expect(list).toEqual([{ firstName: "Sam", surname: "Sample", company: "", tables: 3, awaiting: false }]);
+  });
+
+  it("is in surname order, then first name", () => {
+    const list = tableBookers(
+      [
+        row({ firstName: "Zed", surname: "Young", email: "z@example.com" }),
+        row({ firstName: "Bea", surname: "archer", email: "b@example.com" }),
+        row({ firstName: "Al", surname: "Archer", email: "a@example.com" }),
+      ],
+      NOW,
+    );
+    expect(list.map((b) => `${b.firstName} ${b.surname}`)).toEqual(["Al Archer", "Bea archer", "Zed Young"]);
+  });
+
+  it("gives the company an invoice was asked for", () => {
+    const [b] = tableBookers([row({ company: "  Sample Joinery Ltd " })], NOW);
+    expect(b.company).toBe("Sample Joinery Ltd");
+  });
+
+  it("marks a bank transfer still waiting for its money, on a line of its own", () => {
+    const list = tableBookers(
+      [row({ quantity: 2 }), row({ quantity: 1, status: "pending", paidAt: null, paymentMethod: "transfer" })],
+      NOW,
+    );
+    expect(list).toEqual([
+      { firstName: "Sam", surname: "Sample", company: "", tables: 2, awaiting: false },
+      { firstName: "Sam", surname: "Sample", company: "", tables: 1, awaiting: true },
+    ]);
+  });
+
+  it("leaves out a card checkout under way, a refund, a cancellation, and a sale after its own moment", () => {
+    const list = tableBookers(
+      [
+        row({ status: "pending", paidAt: null, paymentMethod: "card" }),
+        row({ status: "refunded" }),
+        row({ status: "cancelled", paymentMethod: "transfer", paidAt: null }),
+        row({ paidAt: new Date(NOW.getTime() + 1000) }),
+      ],
+      NOW,
+    );
+    expect(list).toEqual([]);
+  });
+
+  it("splits the one name an older booking has at its last space", () => {
+    const [b] = tableBookers([row({ firstName: null, surname: null, name: " Mary Jane Sample " })], NOW);
+    expect([b.firstName, b.surname]).toEqual(["Mary Jane", "Sample"]);
+    const [solo] = tableBookers([row({ firstName: null, surname: null, name: "Cher" })], NOW);
+    expect([solo.firstName, solo.surname]).toEqual(["Cher", ""]);
+  });
+});
+
+describe("the email's list of tables booked", () => {
+  const TABLES: TableBooker[] = [
+    { firstName: "Al", surname: "Archer", company: "Archer & Sons <Ltd>", tables: 2, awaiting: false },
+    { firstName: "Bea", surname: "Young", company: "", tables: 1, awaiting: true },
+  ];
+  const WITH = { ...TUESDAY, tables: TABLES };
+
+  it("names each person, their company and how many tables, in the email and its plain text", () => {
+    const { html, text } = renderReport(INPUTS, WITH);
+    expect(html).toContain("Tables booked");
+    for (const head of ["First name", "Surname", "Company", "Tables"]) expect(html).toContain(`>${head}</th>`);
+    expect(html).toContain(">Al</td>");
+    expect(html).toContain(">Archer</td>");
+    expect(html).toContain(">Bea</td>");
+    expect(text).toContain("TABLES BOOKED");
+    expect(text).toContain("Al Archer (Archer & Sons <Ltd>): 2 tables");
+    expect(text).toContain("Bea Young: 1 table, awaiting payment");
+  });
+
+  it("says which are still waiting for payment", () => {
+    const { html } = renderReport(INPUTS, WITH);
+    expect(html).toContain("awaiting payment");
+    expect(renderReport(INPUTS, { ...TUESDAY, tables: [TABLES[0]] }).html).not.toContain("awaiting payment");
+  });
+
+  it("never lets what someone typed act as HTML", () => {
+    const { html } = renderReport(INPUTS, WITH);
+    expect(html).toContain("Archer &amp; Sons &lt;Ltd&gt;");
+    expect(html).not.toContain("<Ltd>");
+  });
+
+  it("says so when no whole table is booked yet", () => {
+    const { html, text } = renderReport(INPUTS, TUESDAY);
+    for (const body of [html, text]) expect(body).toContain("No whole tables booked yet");
+  });
+
+  it("still carries no money and no address but our own", () => {
+    const { html, text } = renderReport(INPUTS, WITH);
+    for (const body of [html, text]) {
+      expect(body).not.toContain("£");
+      expect(new Set(body.match(/[\w.+-]+@[\w.-]+\.\w+/g) ?? [])).toEqual(new Set(["events@nbcc.scot"]));
+    }
+  });
+
+  it("keeps the house style in its own words", () => {
+    const words = ourText(renderReport(INPUTS, { ...TUESDAY, tables: [TABLES[1]], resend: true }).text);
+    expect(words).not.toMatch(/[A-Za-z]-[A-Za-z]/);
+    expect(words).not.toMatch(/[–—]/);
+  });
+});
+
+describe("the report sent again", () => {
+  it("says so at the top and in the subject, and is not a test", () => {
+    const { subject, html, text } = renderReport(INPUTS, { ...TUESDAY, resend: true });
+    expect(subject).toBe("Festive Ball tickets: Tuesday 6 October update, sent again");
+    const note = "This is today's update, sent again with the latest numbers and the names of everyone who has booked a table.";
+    expect(html).toContain(note);
+    expect(text).toContain(note);
+    expect(text.indexOf(note)).toBeLessThan(text.indexOf("Hello,"));
+    expect(text).not.toContain("This is a test");
+  });
+
+  it("does not say this morning, since it goes later in the day", () => {
+    const { text } = renderReport(INPUTS, { ...TUESDAY, resend: true });
+    expect(text).toContain("how Festive Ball ticket sales stand now.");
+    expect(text).not.toContain("this morning");
+    expect(renderReport(INPUTS, TUESDAY).text).toContain("stand this morning.");
+  });
+
+  it("is not mentioned in the usual report", () => {
+    expect(renderReport(INPUTS, TUESDAY).text).not.toContain("sent again");
   });
 });

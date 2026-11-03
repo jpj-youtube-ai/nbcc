@@ -1102,8 +1102,8 @@ export async function listGuestsForBooking(bookingId: number): Promise<GuestRow[
 // they answered every course that asks" and only the menu knows which those are. Counting in SQL
 // would hard-code an assumption the venue can change by editing a textarea.
 //
-// array_remove strips the NULLs a LEFT JOIN produces for a booking with no guests, so an empty
-// array means "nobody named yet" rather than "one guest who chose nothing".
+// FILTER (WHERE g.id IS NOT NULL) drops the row a LEFT JOIN produces for a booking with no guests,
+// so an empty array means "nobody named yet" rather than "one guest who chose nothing".
 export async function listMenuProgress(): Promise<MenuProgressRow[]> {
   const res = await pool.query(
     `SELECT b.reference, b.buyer_name, b.buyer_email, b.seats, b.guest_token,
@@ -1129,13 +1129,21 @@ export async function listMenuProgress(): Promise<MenuProgressRow[]> {
 
 // Everyone who has PAID and has not been told the menu exists. The WHERE clause is the whole
 // idempotency story, exactly as listBookingsNeedingReminder does it: pressing send twice finds
-// nobody the second time.
+// nobody the second time. Each booking's seats and its guests' choices come with it, read as
+// listMenuProgress reads them, so the route can leave out a booking whose every seat is named and
+// chosen (Jaimie, 20 October 2026: "skip the ones who have already chosen").
 export async function listBookingsNeedingMenuEmail(): Promise<MenuEmailTarget[]> {
   const res = await pool.query(
-    `SELECT id, reference, buyer_name, buyer_first_name, buyer_email, guest_token
-       FROM ball_bookings
-      WHERE status = 'paid' AND menu_email_sent_at IS NULL AND buyer_email <> ''
-      ORDER BY id ASC`,
+    `SELECT b.id, b.reference, b.buyer_name, b.buyer_first_name, b.buyer_email, b.guest_token, b.seats,
+            COALESCE(
+              array_agg(g.menu_choice) FILTER (WHERE g.id IS NOT NULL),
+              '{}'
+            ) AS choices
+       FROM ball_bookings b
+       LEFT JOIN ball_guests g ON g.booking_id = b.id
+      WHERE b.status = 'paid' AND b.menu_email_sent_at IS NULL AND b.buyer_email <> ''
+      GROUP BY b.id, b.reference, b.buyer_name, b.buyer_first_name, b.buyer_email, b.guest_token, b.seats
+      ORDER BY b.id ASC`,
   );
   return res.rows.map((r) => ({
     id: r.id,
@@ -1144,6 +1152,8 @@ export async function listBookingsNeedingMenuEmail(): Promise<MenuEmailTarget[]>
     buyerFirstName: r.buyer_first_name,
     buyerEmail: r.buyer_email,
     guestToken: r.guest_token,
+    seats: r.seats,
+    choices: (r.choices ?? []) as Array<string | null>,
   }));
 }
 
@@ -1241,6 +1251,11 @@ export interface MenuEmailTarget {
   buyerFirstName: string | null;
   buyerEmail: string;
   guestToken: string | null;
+  /** The seats paid for, and one entry per named guest as listMenuProgress reads them, so a
+   * booking whose every seat is named and chosen can be left out (hasChosenAlready,
+   * src/ball/menu-progress.ts). */
+  seats: number;
+  choices: Array<string | null>;
 }
 
 export interface ReminderTarget {

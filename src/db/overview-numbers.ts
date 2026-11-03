@@ -1,5 +1,7 @@
 import { pool } from "./pool";
 import type { NowAndBefore, SoFar } from "../admin/overview-numbers";
+import { sourceTotalsFrom, type SourceTotals, type SourceTotalsRow } from "../admin/gift-sources";
+import { DONATION_SOURCES, type DonationSource } from "./stripe-webhook-model";
 
 // TASK-509: the money behind the Overview's "Money in" line: this month so far and the same days
 // last month (src/admin/overview-numbers.ts monthSoFar), each part read on its own so each can carry
@@ -59,4 +61,39 @@ export async function sumBallTaken(p: Months): Promise<NowAndBefore> {
     params(p),
   );
   return pair(r.rows[0]);
+}
+
+// A source picked from the one list by its value, so the order of DONATION_SOURCES never matters here.
+const bySource = (s: DonationSource): DonationSource => DONATION_SOURCES.find((x) => x === s) as DonationSource;
+
+/**
+ * Fill a Red Bag against the Donate page, this UK month so far and all time, in one grouped read.
+ *
+ * Money is counted as sumDonations above counts it: paid gifts less refunds, the gift alone (the
+ * card fee top up is its own column, fee_cover_pence, and Gift Aid is never added in), with this
+ * month being IN_MONTH. Each payment of a monthly gift is a row, so each counts as a gift. A gift
+ * refunded in full is no longer a gift received, so it is not counted as one.
+ *
+ *   Fill a Red Bag   source = 'red_bag' (written by the Stripe webhook since TASK-555).
+ *   Festive Ball     source = 'ball' (the Ball's own donate page, /ball/donate).
+ *   Red bags at the Ball  source = 'ball_bags' (the table cards, /bag). Its own bucket, never in the Festive Ball's.
+ *   Donate page      no source, paid online (not a card reader), and not on a fundraiser's page.
+ *                    A gift started anywhere else that later gets a source of its own is in neither.
+ */
+export async function sumGiftsBySource(month: SoFar): Promise<SourceTotals> {
+  const kept = "GREATEST(amount_pence - refunded_amount_pence, 0)";
+  const r = await pool.query<SourceTotalsRow>(
+    `SELECT CASE WHEN source = $3 THEN 'redBag' WHEN source = $4 THEN 'ball' WHEN source = $5 THEN 'ballBags' ELSE 'donatePage' END AS bucket,
+            COALESCE(SUM(${kept}) FILTER (WHERE ${IN_MONTH("created_at")}), 0) AS month_pence,
+            COUNT(*) FILTER (WHERE ${IN_MONTH("created_at")}) AS month_gifts,
+            COALESCE(SUM(${kept}), 0) AS all_pence,
+            COUNT(*) AS all_gifts
+       FROM donations
+      WHERE payment_status = 'paid'
+        AND amount_pence > refunded_amount_pence
+        AND (source IN ($3, $4, $5) OR (source IS NULL AND payment_channel = 'online' AND fundraiser_id IS NULL))
+      GROUP BY 1`,
+    [month.from, month.until, bySource("red_bag"), bySource("ball"), bySource("ball_bags")],
+  );
+  return sourceTotalsFrom(r.rows);
 }

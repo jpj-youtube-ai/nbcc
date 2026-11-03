@@ -1,9 +1,9 @@
-// Contact form spam check (TASK-490): Cloudflare Turnstile, on the contact page only.
+// Contact form spam check (TASK-490): Cloudflare Turnstile, on the contact page and the Tell us forms.
 //
 // Asks the server whether the check is on (GET /api/contact/captcha). Only when it gets a site key,
 // and only once the visitor starts on the form (or presses Send), does it load Cloudflare's script
-// and draw the box: someone who only reads the contact page never contacts Cloudflare, and no other
-// page, and no page in development or CI, loads anything from it. It is its own file, not part of
+// and draw the box: someone who only reads the page never contacts Cloudflare, and no other page,
+// and no page in development or CI, loads anything from it. It is its own file, not part of
 // main.js, because main.js counts towards donate.html's page-weight budget, which has almost no room
 // left.
 //

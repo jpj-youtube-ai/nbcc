@@ -1,0 +1,107 @@
+/* Fill a Red Bag at night: /fill from the Ball's moment, or with ?at=after-ball. src/red-bag/render.ts
+   adds this file and the markup it dresses, and only then. It sits on top of assets/css/red-bag.css and
+   changes the look alone: the paper, the steppers, the panel's controls, the details step and the bottom
+   bar are all as they are there. A file of its own, carrying all it needs: /fill does not load the
+   stage's styles (assets/css/red-bag-stage.css), whose focus colour is for a different page. */
+
+.fn-night{--fn-gold:#F4C95D;--fn-hill:clamp(36px,6.5vw,92px);position:relative;isolation:isolate;overflow:hidden;overflow:clip;color:var(--cream);padding-bottom:clamp(70px,8vw,120px);
+  background:radial-gradient(70% 720px at 76% 420px,#2f8430 0,#1f6320 36%,var(--holly) 62%,var(--holly-dark) 100%)}
+/* the menu sits on this strip: until the page is scrolled it has no background of its own */
+.fn-night::before{content:"";position:absolute;left:0;right:0;top:0;height:var(--nav-h);background:var(--cream);z-index:1}
+.fn-sky{position:absolute;inset:0;width:100%;height:100%;z-index:-1;pointer-events:none}
+.fn-edge{position:absolute;left:0;right:0;top:calc(var(--nav-h) - 1px);height:var(--fn-hill);transform:scaleY(-1);z-index:1;pointer-events:none}
+.fn-edge .drift{position:absolute;inset:0;display:block;width:100%;height:100%;color:var(--cream)}
+.fn-night>.drift{position:absolute;left:0;right:0;bottom:-1px;display:block;width:100%;height:var(--fn-hill);color:var(--cream);z-index:0;pointer-events:none}
+.fn-ground{height:clamp(14px,2vw,28px);background:var(--cream)}
+.fn-still{position:relative;z-index:1;text-align:right;padding-top:10px}
+.fn-pause{min-height:44px;background:none;border:0;padding:8px 2px;color:var(--cream);font:500 .96rem var(--font-body);text-decoration:underline;text-underline-offset:3px;cursor:pointer}
+.fn-pause:hover{color:var(--fn-gold)}
+.fn-pause[hidden]{display:none}
+
+/* the lights: low enough that all ten hang clear of the snow, because each one counts */
+.fn-night .fb-lights{position:absolute;top:calc(var(--nav-h) + var(--fn-hill) * .55);right:clamp(-30px,-1vw,0px);width:clamp(420px,50vw,720px);height:auto;overflow:visible;z-index:0;pointer-events:none}
+.fn-night .wire{fill:none;stroke:#0d2b0d;stroke-width:2.4}
+.fn-night .cap{fill:#0d2b0d}
+.fn-night .glass{fill:#3a5c3a;stroke:#0d2b0d;stroke-width:1;transition:fill .35s}
+.fn-night .halo{opacity:0;transition:opacity .35s}
+.fn-night .bulb.on .glass{fill:var(--c)}
+.fn-night .bulb.on .halo{opacity:1}
+.fn-night.full .bulb.on .halo,.fn-night.full .bulb.on .glass{animation:fn-twinkle 1.1s ease-in-out infinite alternate;animation-delay:calc(var(--i) * -170ms)}
+.fn-night.held .fb-lights *{animation-play-state:paused!important}
+@keyframes fn-twinkle{from{opacity:1}to{opacity:.5}}
+
+/* the heading, as big as the home page's */
+.fn-night .rb-intro{position:relative;z-index:1;padding:calc(var(--nav-h) + clamp(50px,6vw,84px)) 0 clamp(18px,2.4vw,30px);background:none}
+.fn-night .intro-hero{text-align:left;max-width:640px;margin:0}
+.fn-night .intro-hero .eyebrow{color:var(--fn-gold)}
+.fn-night .intro-hero h1{font-size:clamp(3rem,1.5rem + 5.2vw,6rem);line-height:.98;letter-spacing:-.024em;color:var(--cream);margin:.14em 0 .3em}
+.fn-night .intro-hero .rule{display:none}
+.fn-night .intro-hero .lede{margin:0;color:var(--cream);max-width:54ch}
+.fn-under{position:relative;display:inline-block;white-space:nowrap}
+.fn-under svg{position:absolute;left:0;right:0;bottom:-.14em;width:100%;height:.2em;overflow:visible}
+.fn-under path{fill:none;stroke:#D9A93E;stroke-width:5;stroke-linecap:round;vector-effect:non-scaling-stroke}
+.fn-night .rb-builder{padding-bottom:0;background:none}
+
+/* the list: the same paper, lifted off the night sky */
+.fn-night .rb-paper{box-shadow:0 34px 56px -26px rgba(0,16,0,.85),0 2px 6px rgba(0,16,0,.25);color:var(--slate)}
+
+/* the bag stands in the snow on top of the panel */
+.fn-night .rb-panel{--bag-h:clamp(280px,27vw,360px);--bag-w:min(290px,76%);--bag-left:calc((100% - var(--bag-w)) / 2 - 7%);--elf-w:112px;--elf-left:calc(var(--bag-left) + var(--bag-w) * .78);position:relative;z-index:1;margin-top:calc(var(--bag-h) + 16px);padding-top:20px;background:var(--cream);color:var(--slate);border-radius:26px;box-shadow:0 34px 56px -26px rgba(0,16,0,.85)}
+.fn-night .rb-panel::before{content:"";position:absolute;z-index:2;left:-3%;right:-3%;top:-22px;height:52px;border-radius:50%;background:var(--cream);pointer-events:none}
+.fn-night .rb-bags{position:absolute;z-index:1;left:0;right:0;top:calc(var(--bag-h) * -1 + 10px);height:var(--bag-h);flex-wrap:nowrap}
+/* one bag stands a little left of the middle, leaving the elf room beside it */
+.fn-night .rb-bags[data-count="1"]{justify-content:flex-start}
+.fn-night .rb-bags[data-count="1"] .rb-bag{width:var(--bag-w);margin-left:var(--bag-left)}
+.fn-night .rb-bags[data-count="2"]{--rb-max:44%}
+.fn-night .rb-bags[data-count="3"]{--rb-max:30%}
+.fn-night .rb-bags[data-count="4"]{--rb-max:23%}
+.fn-night .rb-bags[data-count="5"]{--rb-max:18.5%}
+/* a red bag from the start, and the brighter red still rises inside it */
+.fn-night .rb-bag__paper{fill:#7f1322}
+.fn-night .rb-bag__outline{stroke:#a31a2e}
+/* The sum stands where the bag does, in a box of the bag's own height. Its place is padding because a
+   percentage in padding is always of the width, which is what the bag's own size is. */
+.fn-sum{position:absolute;z-index:2;left:0;right:0;top:calc(var(--bag-h) * -1 + 10px);height:var(--bag-h);box-sizing:border-box;padding:0 calc(100% - var(--bag-left) - var(--bag-w) * .766) calc(var(--bag-w) * .24) calc(var(--bag-left) + var(--bag-w) * .1);margin:0;display:flex;flex-direction:column;justify-content:flex-end;align-items:center;color:#FFF8EF;text-shadow:0 2px 0 rgba(90,0,14,.5);pointer-events:none}
+.fn-sum b{font-family:var(--font-head);font-weight:700;font-size:clamp(2.1rem,1.8rem + 2vw,3.7rem);line-height:1;letter-spacing:-.02em;font-variant-numeric:lining-nums}
+.fn-sum span{font-size:.98rem;font-weight:500}
+.fn-sum[hidden]{display:none}
+.fn-night .rb-more{position:relative;z-index:3;margin-top:22px}
+.fn-night .rb-status{position:relative;z-index:3;margin-top:24px}
+/* The elf, cut off above the logo's line, with a heap of snow of its own in front: however the panel's
+   curve falls at this width, the cut edge is always behind snow, and only the eyes and up show over it. */
+.fn-elf{position:absolute;z-index:0;left:var(--elf-left);top:calc(-14px - var(--elf-w) * .6533);width:var(--elf-w);height:auto;aspect-ratio:150/98;object-fit:cover;object-position:50% 0}
+.fn-night .rb-panel::after{content:"";position:absolute;z-index:2;left:calc(var(--elf-left) - 14px);width:calc(var(--elf-w) + 28px);top:-20px;height:34px;border-radius:50%;background:var(--cream);pointer-events:none}
+/* Several bags fill the width: the elf would be a stray ear behind them, and taller than the small ones. */
+.fn-night .rb-panel:has(.rb-bags:not([data-count="1"])) .fn-elf{display:none}
+.fn-night .rb-panel:has(.rb-bags:not([data-count="1"]))::after{display:none}
+
+/* the examples, on the night sky */
+.fn-night .rb-need__head h2,.fn-night .rb-theme h3{color:var(--cream)}
+.fn-night .rb-need__head p,.fn-night .rb-theme__sub{color:var(--cream)}
+.fn-night .rb-example{background:var(--cream);color:var(--slate);border-color:transparent}
+.fn-night .rb-example:hover{background:var(--card);color:var(--slate);border-color:var(--fn-gold)}
+.fn-night .rb-example[aria-pressed="true"],.fn-night .rb-example[aria-pressed="true"]:hover{background:var(--holly-dark);border-color:var(--fn-gold);color:var(--cream)}
+.fn-night .rb-example:focus-visible,.fn-night .rb-real a:focus-visible,.fn-pause:focus-visible{outline-color:var(--fn-gold)}
+.fn-night .rb-real{color:var(--cream);border-top-color:rgba(248,245,238,.28)}
+.fn-night .rb-real strong{color:var(--cream)}
+.fn-night .rb-real a{color:var(--fn-gold)}
+
+@media (max-width:860px){
+  /* stacked, the words are where the glow is brightest: a dimmer one keeps them readable */
+  .fn-night{background:radial-gradient(70% 720px at 76% 420px,#246d25 0,#1b5b1c 36%,var(--holly) 62%,var(--holly-dark) 100%)}
+  .fn-night .intro-hero{text-align:center;margin-inline:auto}
+  .fn-night .intro-hero .lede{margin-inline:auto}
+  .fn-night .fb-lights{top:calc(var(--nav-h) + var(--fn-hill) * .8);right:50%;width:min(100%,600px);margin-right:calc(min(100%,600px) / -2)}
+  .fn-night .rb-intro{padding-top:calc(var(--nav-h) + var(--fn-hill) * .8 + min(27vw,162px))}
+  .fn-night .rb-panel{--bag-h:clamp(250px,78vw,330px);--bag-w:min(270px,72%)}
+}
+
+@media (max-width:400px){
+  .fn-night .rb-panel{--elf-w:96px}
+  .fn-night .rb-panel::before{left:-5%;right:-5%}
+}
+
+@media (prefers-reduced-motion:reduce){
+  .fn-night .glass,.fn-night .halo{transition:none}
+  .fn-night.full .bulb.on .halo,.fn-night.full .bulb.on .glass{animation:none}
+}

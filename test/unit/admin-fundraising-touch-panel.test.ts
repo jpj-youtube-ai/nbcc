@@ -1,10 +1,14 @@
 // @vitest-environment jsdom
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, vi } from "vitest";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { createRequire } from "node:module";
 import { signAdminSession } from "../../src/admin/session";
 import { effectivePermissions, type PermissionMap } from "../../src/admin/permissions";
+
+// Each test loads the whole admin page afresh in jsdom: quick alone, but past the usual 5 seconds
+// under a full parallel run (as admin-fundraising-page.test.ts).
+vi.setConfig({ testTimeout: 20_000 });
 
 // TASK-515: Admin > Fundraising > Automatic emails and the smart call prompts, in the admin's jsdom
 // harness (as admin-fundraising-thanks-panel.test.ts). The card has the switch (admins only) and what
@@ -191,7 +195,7 @@ async function openFundraising() {
   (el("adminPassword") as HTMLInputElement).value = "pw";
   el("loginForm").dispatchEvent(new Event("submit", { cancelable: true, bubbles: true }));
   await settle();
-  (q('.admin-nav-link[data-view="fundraising"]') as HTMLElement).click();
+  (q('.admin-nav-link[data-view="get-involved"]') as HTMLElement).click();
   await settle();
 }
 async function openRow(id: number) {
@@ -444,7 +448,7 @@ describe("the call prompts", () => {
     // (the sign up stays open).
     touchOn = true;
     for (const k of ["finished", "finished_zero"]) approved[k] = { approvedAt: "2026-12-01T09:00:00.000Z", approvedBy: "admin:fern@example.com" };
-    (q('.admin-nav-link[data-view="fundraising"]') as HTMLElement).click();
+    (q('.admin-nav-link[data-view="get-involved"]') as HTMLElement).click();
     await settle();
     (q('[data-fraction="finish"]') as HTMLElement).click();
     expect(confirmed.pop()).toContain("Automatic emails are on, so we email Robin Example their thank you, with their certificate.");

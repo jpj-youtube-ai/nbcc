@@ -661,7 +661,13 @@
       e.preventDefault();
 
       // Highlight every missing/invalid field at once via the shared helper (TASK-225).
-      if (!validateForm(form).valid) {
+      // Optional, but one that is typed must pass the server's rule.
+      var phone = value("phone");
+      var bad = phone && (phone.length > 40 || !/^[0-9 +()-]+$/.test(phone) || phone.replace(/\D/g, "").length < 7);
+      var extra = function () {
+        return bad ? [{ control: doc.getElementById("phone"), message: "Please check your phone number. Use digits and spaces, for example 07700 900123." }] : [];
+      };
+      if (!validateForm(form, { extraChecks: extra }).valid) {
         if (status) {
           status.textContent = "";
           status.className = "form-status";
@@ -673,6 +679,7 @@
         firstName: value("firstName"),
         lastName: value("lastName"),
         email: value("email"),
+        phone: phone,
         message: value("message"),
         captchaToken: value("captchaToken"), // TASK-490: set by contact-captcha.js
       };
@@ -2133,7 +2140,7 @@
       '<input type="text" id="fsFirstName" name="firstName" placeholder="First name" autocomplete="given-name" required aria-label="First name" />' +
       '<input type="text" id="fsSurname" name="surname" placeholder="Surname" autocomplete="family-name" required aria-label="Surname" />' +
       '<input type="email" id="fsEmail" name="email" placeholder="Your email" autocomplete="email" required aria-label="Your email" />' +
-      '<input type="tel" id="fsPhone" name="phone" placeholder="Mobile (optional, for texts)" autocomplete="tel" aria-label="Mobile number, optional" />' +
+      '<input type="tel" id="fsPhone" name="phone" placeholder="Mobile (optional)" autocomplete="tel" aria-label="Mobile number, optional" />' +
       "</div>" +
       '<input type="text" id="fsWebsite" name="website" tabindex="-1" autocomplete="off" aria-hidden="true" />' +
       '<label class="foot-signup-consent" for="fsConsent">' +

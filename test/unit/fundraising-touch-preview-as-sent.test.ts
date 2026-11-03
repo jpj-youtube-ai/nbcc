@@ -139,6 +139,20 @@ describe("touchEmailAsSent", () => {
     expect(mail.html).toContain("Hi Sarah, this is about Jack&#39;s page.");
     expect(mail.text).toContain("Hi Sarah, this is about Jack's page.");
   });
+
+  // Jaimie, 2026-10-04: the builder now writes the whole email for the parent (the hello, the
+  // subject, the heading and every line), so this function adds nothing: the hello is there once,
+  // and the rest speaks to the parent too.
+  it("says hello to the parent once, and speaks to them throughout", () => {
+    const data = touchEmailData(fr({ guardianFirstName: "Sarah" }), "https://nbcc.test");
+    const mail = touchEmailAsSent("halfway", data);
+    expect(mail.text.match(/this is about/g)).toHaveLength(1);
+    expect(mail.html.match(/this is about/g)).toHaveLength(1);
+    expect(mail.subject).toBe("Jack is halfway there!");
+    expect(mail.text).toContain("Jack has got this!");
+    expect(mail.text).not.toMatch(/You're halfway there|your £/);
+    expect(mail).toEqual(buildTouchEmail("halfway", data));
+  });
 });
 
 describe("one path, so they cannot drift", () => {

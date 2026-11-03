@@ -39,6 +39,10 @@ import {
   verifyGateToken,
 } from "../ball/gate";
 import { renderBallPage } from "../ball/page";
+import { ballDonateOpen, renderBallDonatePage } from "../ball/donate-page";
+import { BALL_BAGS_PATH, BALL_BAGS_THANKS_PATH } from "../ball/bags";
+import { ballBagsOpen, bagsFromSession, renderBallBagsPage, renderBallBagsThanks } from "../ball/bags-page";
+import { RED_BAG_PATH } from "../red-bag/switch";
 import { renderBallLockPage } from "../ball/lock-page";
 import { guestSubmissionSchema, makeGuestToken, guestsFromForm } from "../ball/guests";
 import { renderGuestNotFound, renderGuestPage } from "../ball/guest-page";
@@ -386,6 +390,74 @@ ballRouter.get("/ball/terms", async (req, res, next) => {
   } catch (err) {
     next(err);
   }
+});
+
+// The Festive Ball's "Can't make it? Donate" page (Jaimie, 14 October 2026; src/ball/donate-page.ts).
+// Gated like the Ball page itself, and from the day after the Ball it sends people to the donate
+// page, so nobody reads "Can't make the Ball?" once it has happened. Served max-age=0, as /ball is.
+ballRouter.get("/ball/donate", async (req, res, next) => {
+  try {
+    if (!ballDonateOpen(new Date())) {
+      res.redirect(302, "/donate");
+      return;
+    }
+    const { allowed } = await canView(req);
+    if (!allowed) {
+      res.status(401).type("html").send(renderBallLockPage());
+      return;
+    }
+    const file = join(SITE_ROOT, "ball-donate.html");
+    if (!existsSync(file)) {
+      res.status(404).send("Not found");
+      return;
+    }
+    res.setHeader("Cache-Control", "public, max-age=0");
+    const page = renderBallDonatePage(readFileSync(file, "utf8"));
+    // While fundraising is on, the footer's "Fundraise for us" goes to the sign up, as on every page.
+    res
+      .type("html")
+      .send((await fundraisingIsOn()) ? decorateBallPage(page, { ballItem: false, eventsOn: false, fundraisingOn: true }) : page);
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Red bags at the Festive Ball (src/ball/bags-page.ts): the page each table card's QR code opens,
+// and the thank you Stripe brings a guest back to. NOT behind the launch gate: a guest at a table
+// never sees a password. Up until the end of Sunday 8 November 2026 in the UK, then both forward to
+// Fill a Red Bag. The page is served max-age=0, as /ball/donate is; the thank you is never cached.
+ballRouter.get(BALL_BAGS_PATH, (_req, res) => {
+  if (!ballBagsOpen(new Date())) {
+    res.redirect(302, RED_BAG_PATH);
+    return;
+  }
+  res.setHeader("Cache-Control", "public, max-age=0");
+  res.type("html").send(renderBallBagsPage());
+});
+
+// A Checkout Session id as Stripe writes it ("cs_test_..." or "cs_live_..."): anything else is not
+// sent to Stripe at all.
+const CHECKOUT_SESSION_ID = /^cs_[A-Za-z0-9_]{1,250}$/;
+
+ballRouter.get(BALL_BAGS_THANKS_PATH, async (req, res) => {
+  if (!ballBagsOpen(new Date())) {
+    res.redirect(302, RED_BAG_PATH);
+    return;
+  }
+  // How many bags, from the session the checkout stamped (metadata ballBags). Whatever goes wrong
+  // (no id, Stripe out of reach, a session that is not ours) the guest still gets a thank you.
+  let bags = 0;
+  const sessionId = req.query.session_id;
+  if (typeof sessionId === "string" && CHECKOUT_SESSION_ID.test(sessionId)) {
+    try {
+      bags = bagsFromSession(await stripe.checkout.sessions.retrieve(sessionId));
+    } catch (err) {
+      console.error("ball bags thank you: could not read the session:", err instanceof Error ? err.message : err);
+      bags = 0;
+    }
+  }
+  res.setHeader("Cache-Control", "private, no-store");
+  res.type("html").send(renderBallBagsThanks(bags));
 });
 
 // --- guest details (plan 5) --------------------------------------------------

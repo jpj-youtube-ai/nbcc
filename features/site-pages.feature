@@ -50,6 +50,32 @@ Feature: Site addressing (site-pages feature)
     When I add a spare address "/api/steal" pointing at "/donate"
     Then the site pages response status should be 400
 
+  # TASK-568: a spare address may forward to an NBCC subdomain, and only to one. It is a temporary
+  # forward, so staff can change it later, and it keeps the query a visitor arrived with.
+  Scenario: an admin forwards a spare address to an NBCC subdomain; other websites are refused
+    Given a newsletter admin "site.forward.bdd@example.com" with role "admin" and password "pw-sp3"
+    When I add a spare address "/parcels" pointing at "Parcels.nbcc.scot/in"
+    Then the site pages response status should be 201
+    When I request the site path "/parcels?utm_medium=qr"
+    Then the site response should redirect temporarily to "https://parcels.nbcc.scot/in?utm_medium=qr"
+    When I add a spare address "/elsewhere" pointing at "nbcc.scot.example.com"
+    Then the site pages response status should be 400
+    When I add a spare address "/round" pointing at "www.nbcc.scot/round"
+    Then the site pages response status should be 400
+    When I request the site path "/elsewhere"
+    Then the site response status should be 404
+    # The release itself made these (migration 1791200000290).
+    When I request the site path "/drop"
+    Then the site response should redirect temporarily to "https://drop.nbcc.scot"
+    When I request the site path "/referral"
+    Then the site response should redirect temporarily to "https://referrals.nbcc.scot"
+    When I request the site path "/referrals"
+    Then the site response should redirect temporarily to "https://referrals.nbcc.scot"
+    When I request the site path "/volunteer"
+    Then the site response should redirect temporarily to "https://vol.nbcc.scot"
+    When I request the site path "/Volunteers"
+    Then the site response should redirect temporarily to "https://vol.nbcc.scot"
+
   Scenario: editing site addressing needs the site permission at edit level
     Given a newsletter admin "site.editor.bdd@example.com" with role "editor" and password "pw-sp2"
     When I add a spare address "/blocked" pointing at "/donate"

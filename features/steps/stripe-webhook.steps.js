@@ -249,6 +249,32 @@ Then(
   },
 );
 
+// Where the gift was started on the website (donations.source): 'red_bag' for a Fill a Red Bag
+// gift, NULL for every other. Written by the webhook after the donation has committed.
+Then(
+  "the donation with payment intent {string} should have source {string}",
+  async function (paymentIntent, source) {
+    const r = await pool.query(
+      "SELECT source FROM donations WHERE stripe_payment_intent_id = $1",
+      [paymentIntent],
+    );
+    assert.ok(r.rows.length > 0, `no donation for payment intent ${paymentIntent}`);
+    assert.equal(r.rows[0].source, source);
+  },
+);
+
+Then(
+  "the donation with payment intent {string} should have no source",
+  async function (paymentIntent) {
+    const r = await pool.query(
+      "SELECT source FROM donations WHERE stripe_payment_intent_id = $1",
+      [paymentIntent],
+    );
+    assert.ok(r.rows.length > 0, `no donation for payment intent ${paymentIntent}`);
+    assert.equal(r.rows[0].source, null);
+  },
+);
+
 Then(
   "there should be exactly {int} donor for payment intent {string}",
   async function (count, paymentIntent) {

@@ -134,6 +134,20 @@ describe("enquiry form markup (REQ-027 / REQ-032)", () => {
     expect(field("email")?.hasAttribute("required")).toBe(true);
   });
 
+  // Jaimie, 5 October 2026: a phone number, optional, for anyone who would rather be called back.
+  it("has a labelled, optional Phone number field of type tel, after Email and before Message", () => {
+    expect(norm(labelFor("phone")?.textContent)).toBe("Phone number (optional)");
+    expect(field("phone")?.getAttribute("type")).toBe("tel");
+    expect(field("phone")?.getAttribute("name")).toBe("phone");
+    expect(field("phone")?.getAttribute("autocomplete")).toBe("tel");
+    expect(field("phone")?.hasAttribute("required")).toBe(false);
+    const order = [...(form?.querySelectorAll("input, textarea") ?? [])].map((c) => c.id);
+    expect(order.indexOf("phone")).toBe(order.indexOf("email") + 1);
+    expect(order.indexOf("message")).toBe(order.indexOf("phone") + 1);
+    const hint = form?.querySelector(`#${field("phone")?.getAttribute("aria-describedby")}`);
+    expect(norm(hint?.textContent)).toBe("Only if you would like us to call you back.");
+  });
+
   it("has a labelled, required Message textarea", () => {
     expect(norm(labelFor("message")?.textContent).toLowerCase()).toContain("message");
     expect(field("message")?.tagName).toBe("TEXTAREA");
@@ -238,6 +252,38 @@ describe("contact form behaviour (jsdom)", () => {
     submit();
     await flushPromises();
     expect(JSON.parse(fetchMock.mock.calls[0][1].body).captchaToken).toBe("tok-1");
+  });
+
+  it("sends the phone number when one is typed, and an empty one when not", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true });
+    (window as unknown as { fetch: unknown }).fetch = fetchMock;
+    set("firstName", "Ada");
+    set("email", "ada@example.com");
+    set("message", "Hello NBCC, I would love to help.");
+    submit();
+    await flushPromises();
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body).phone).toBe("");
+    set("firstName", "Ada");
+    set("email", "ada@example.com");
+    set("message", "Hello again.");
+    set("phone", " 07700 900123 ");
+    submit();
+    await flushPromises();
+    expect(JSON.parse(fetchMock.mock.calls[1][1].body).phone).toBe("07700 900123");
+  });
+
+  it.each(["call me", "12345", "07700 900123 ext four"])("a phone number of %s is flagged and nothing is sent", async (phone) => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true });
+    (window as unknown as { fetch: unknown }).fetch = fetchMock;
+    set("firstName", "Ada");
+    set("email", "ada@example.com");
+    set("message", "Hello NBCC.");
+    set("phone", phone);
+    submit();
+    await flushPromises();
+    expect(invalid("phone")).toBe("true");
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(document.getElementById("contactForm")!.textContent).toContain("Please check your phone number. Use digits and spaces, for example 07700 900123.");
   });
 
   it("a failed submit (res.ok false) shows an error, keeps the typed message, and re-enables the button", async () => {

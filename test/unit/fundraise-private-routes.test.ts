@@ -167,14 +167,25 @@ beforeEach(() => {
 });
 
 describe("asking for a sign in code", () => {
+  // Jaimie, 2026-10-04: a family or a funeral director with a page in memory of someone gets the
+  // gentle version, even when they have another fundraiser too.
+  it("asks for the gentle email when any of their pages is in memory of someone", async () => {
+    db.listForOrganiser.mockResolvedValue([record(), record({ id: 10, inMemory: true, memoryName: "Pat Example" })]);
+    await run(postManageRequest, { body: { email: "sam@example.com" } });
+    expect(send.sendSignInCodeEmail).toHaveBeenCalledTimes(1);
+    expect(send.sendSignInCodeEmail.mock.calls[0][3]).toEqual({ gentle: true });
+  });
+
   it("emails a code to an approved organiser, storing only its keyed hash", async () => {
     db.listForOrganiser.mockResolvedValue([record(), record({ id: 10, name: "Sam Other" })]);
     const res = await run(postManageRequest, { body: { email: "Sam@Example.com" } });
     expect(res.body).toEqual({ message: MANAGE_REQUEST_MESSAGE });
     expect(send.sendSignInCodeEmail).toHaveBeenCalledTimes(1);
-    const [to, name, code] = send.sendSignInCodeEmail.mock.calls[0];
+    const [to, name, code, how] = send.sendSignInCodeEmail.mock.calls[0];
     expect(to).toBe("sam@example.com");
     expect(name).toBe("Sam Sample");
+    // Nobody here has a page in memory of someone, so it is the usual email.
+    expect(how).toEqual({ gentle: false });
     expect(code).toMatch(/^\d{6}$/);
     const [email, hash, expires] = signIn.saveSignInCode.mock.calls[0];
     expect(email).toBe("sam@example.com");

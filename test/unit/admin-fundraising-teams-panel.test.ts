@@ -1,10 +1,14 @@
 // @vitest-environment jsdom
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, vi } from "vitest";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { createRequire } from "node:module";
 import { signAdminSession } from "../../src/admin/session";
 import { effectivePermissions, type PermissionMap } from "../../src/admin/permissions";
+
+// Each test loads the whole admin page afresh in jsdom: quick alone, but past the usual 5 seconds
+// under a full parallel run (as admin-fundraising-page.test.ts).
+vi.setConfig({ testTimeout: 20_000 });
 
 // Team pages (Jaimie, 2026-10-03): teams in Admin > Fundraising, in the admin's jsdom harness (as
 // admin-fundraising-news-panel.test.ts). A team page is marked Team; a member sign up says which team
@@ -113,7 +117,7 @@ async function openFundraising() {
   (el("adminPassword") as HTMLInputElement).value = "pw";
   el("loginForm").dispatchEvent(new Event("submit", { cancelable: true, bubbles: true }));
   await settle();
-  (q('.admin-nav-link[data-view="fundraising"]') as HTMLElement).click();
+  (q('.admin-nav-link[data-view="get-involved"]') as HTMLElement).click();
   await settle();
 }
 async function openRow(id: number) {
@@ -158,9 +162,12 @@ function asRole(r: "admin" | "editor" | "viewer") {
 describe("the list", () => {
   it("marks a team page as a team, and says which team a member sign up is joining", async () => {
     await openFundraising();
-    expect(text(row(40)?.querySelector(".fr-team-pill") ?? null)).toBe("Team");
+    // The large kind pill says A team; there is no second, small Team pill.
+    expect(text(row(40)?.querySelector(".fr-kind") ?? null)).toBe("A team");
+    expect(row(40)?.querySelector(".fr-team-pill")).toBeNull();
     expect(text(row(41)?.querySelector(".fr-joining-pill") ?? null)).toBe("Joining Exampleton Juniors");
     expect(row(50)?.querySelector(".fr-team-pill, .fr-joining-pill")).toBeNull();
+    expect(text(row(50)?.querySelector(".fr-kind") ?? null)).not.toBe("A team");
     expect(document.body.textContent).not.toMatch(/captain/i);
   });
 });

@@ -1,6 +1,7 @@
 import { renderNewsletter, type NewsletterDoc } from "./blocks";
 import { firstNameOf } from "./theme";
 import { htmlToPlainText } from "./plain-text";
+import { ABOUT_NBCC_SHORT } from "../email/brand";
 
 // TASK-276: the welcome email sent when someone signs up through the website footer.
 //
@@ -58,8 +59,9 @@ export function welcomeDoc(): NewsletterDoc {
         type: "text",
         variant: 0,
         data: {
+          // Who NBCC is, in the charity's own short description (src/email/brand.ts).
           text:
-            "We're a volunteer-run Scottish charity, and we're here all year — not just at Christmas. " +
+            `${ABOUT_NBCC_SHORT} ` +
             "We'll write occasionally to share what your support makes possible: the Red Bags Full of Joy " +
             "our volunteers deliver, the people they reach, and the ways you can help if you'd like to.",
         },

@@ -17,7 +17,7 @@ const norm = (s: string | null | undefined) => (s ?? "").replace(/\s+/g, " ").tr
 // Exact leaflet titles + one-line copy (as rendered in the redesigned pillar cards:
 // an <h3> title and a <p> line, each ending with a full stop).
 const PILLARS: Array<[string, string]> = [
-  ["Volunteer run", "Powered by kindness, driven by community."],
+  ["Volunteer led", "Powered by kindness, driven by community."],
   [
     "South West Scotland",
     "Supporting children, young people and vulnerable adults from Girvan to Largs.",

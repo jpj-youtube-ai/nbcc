@@ -45,6 +45,12 @@ export const SECTIONS = [
   // TASK-479: site analytics (Admin > Analytics). Admins only by role, as Jaimie asked; anyone else
   // is given it per person from the Team matrix. Editors and viewers get NONE, like "email-audit".
   "analytics",
+  // Fill a Red Bag (5 October 2026): the editor for the list on /fill (Admin > Fill a Red Bag). View
+  // sees the editor, the differences, the history and the draft preview; edit saves the draft,
+  // publishes, throws away and puts back. Publishing changes a LIVE giving page, so it is admins
+  // only by role, like "analytics": editors and viewers get NONE, and anyone else is given it per
+  // person from the Team matrix.
+  "red-bag",
   "team",
 ] as const;
 
@@ -103,7 +109,7 @@ export function roleToPermissions(role: string): PermissionMap {
   const perms: PermissionMap = {};
   for (const section of SECTIONS) {
     perms[section] =
-      section === "team" || section === "email-audit" || section === "business-supporters" || section === "analytics"
+      section === "team" || section === "email-audit" || section === "business-supporters" || section === "analytics" || section === "red-bag"
         ? "none"
         : "view";
   }

@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { londonToday } from "../events/model";
+import { emailDate } from "../email/dates";
 import { giftAidPence, giftNetPence, type FundraiserRecord, type Meter } from "./model";
 import { addDays, callStates, offListPrompt, type CallRecord } from "./follow-up";
 import { INVITE_NOT_TAKEN_DAYS, INVITE_TYPE_SUMMARY, inviteTypeOf, inviteVerdict, type InviteType } from "./invite";
@@ -362,21 +363,11 @@ export function summaryCounts(i: SummaryInputs): SummaryCounts {
 
 // --- the words -------------------------------------------------------------------------------------
 
-const SHORT_DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-const SHORT_MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
-
-const parts = (ymd: string) => ymd.split("-").map(Number);
-/** "Sat 6 Dec" */
-const shortDay = (ymd: string) => {
-  const [, m, d] = parts(ymd);
-  return `${SHORT_DAYS[weekday(ymd)]} ${d} ${SHORT_MONTHS[m - 1]}`;
-};
-/** "6 December" */
-const dayMonth = (ymd: string) => {
-  const [, m, d] = parts(ymd);
-  return `${d} ${MONTHS[m - 1]}`;
-};
+// Dates in the one style every email uses (src/email/dates.ts).
+/** "Saturday 6th December" */
+const shortDay = (ymd: string) => emailDate(ymd);
+/** "6th December" */
+const dayMonth = (ymd: string) => emailDate(ymd, { weekday: false });
 const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
 const andList = (items: string[]) =>
   items.length <= 1 ? items.join("") : `${items.slice(0, -1).join(", ")} and ${items[items.length - 1]}`;
@@ -465,7 +456,9 @@ export function summaryLines(c: SummaryCounts): SummaryLines {
   if (c.invitesNotTaken.length) {
     waiting.push(
       `${plural(c.invitesNotTaken.length, "invite", "invites")} not taken up after a week: ` +
-        c.invitesNotTaken.map((i) => `${i.name}${i.type ? ` (${INVITE_TYPE_SUMMARY[i.type]})` : ""}, invited by ${i.signedBy}`).join("; "),
+        // An in memory invite is signed by Jodie whoever sent it, so it names nobody as inviting them
+        // (as the admin's list of invites does).
+        c.invitesNotTaken.map((i) => `${i.name}${i.type ? ` (${INVITE_TYPE_SUMMARY[i.type]})` : ""}${i.type === "memory" ? "" : `, invited by ${i.signedBy}`}`).join("; "),
     );
   }
   // Sponsor pledges: promises still not paid a fortnight after the event.
@@ -479,7 +472,7 @@ export function summaryLines(c: SummaryCounts): SummaryLines {
     );
   }
   if (c.saysFinished) {
-    waiting.push(c.saysFinished === 1 ? "1 fundraiser says they’ve finished" : `${c.saysFinished} fundraisers say they’ve finished`);
+    waiting.push(c.saysFinished === 1 ? "1 fundraiser says they've finished" : `${c.saysFinished} fundraisers say they've finished`);
   }
 
   const things = c.waiting === 0 ? "nothing waiting" : plural(c.waiting, "thing waiting", "things waiting");
@@ -509,3 +502,34 @@ export const summaryRecipientsSchema = z
     });
   })
   .transform((list) => [...list].sort());
+
+// The summary is ONE email with everyone on the To line, so that Reply all reaches the whole team
+// (Jaimie, 2026-10-05). Everyone on it sees everyone else's address and every reply, so only the
+// charity's own addresses may be on it: nbcc.scot exactly, never a subdomain (news.nbcc.scot is the
+// newsletter's send only sender) and never anywhere else.
+//
+// The rule is kept apart from summaryRecipientsSchema on purpose. The stored list is READ through
+// that schema, and a list that fails it reads as nobody: with the rule in there, one old address
+// from elsewhere would silently switch the summary off for everyone. So:
+//   - saving refuses any address from elsewhere that is being ADDED (summaryOutsiderAdded); one
+//     already on the list from before the rule may stay until an admin removes it, so the rest of
+//     the list can still be changed, and the admin screen marks it as left off;
+//   - sending leaves every address from elsewhere off the To line (the runner, isSummaryAddress).
+export const SUMMARY_DOMAIN = "nbcc.scot";
+export const SUMMARY_DOMAIN_REFUSAL = "Only nbcc.scot addresses can get the weekly summary.";
+
+/** Is this an address at nbcc.scot itself? Capitals do not matter; a subdomain does not count. */
+export function isSummaryAddress(email: string): boolean {
+  const e = String(email ?? "").trim().toLowerCase();
+  const at = e.indexOf("@");
+  return at > 0 && at === e.lastIndexOf("@") && e.slice(at + 1) === SUMMARY_DOMAIN;
+}
+
+/**
+ * Where in the list being saved is the first address from elsewhere that is not already stored?
+ * -1 when there is none. Both lists are as the schema tidies them (trimmed, lower case).
+ */
+export function summaryOutsiderAdded(next: string[], stored: string[]): number {
+  const was = new Set(stored);
+  return next.findIndex((e) => !isSummaryAddress(e) && !was.has(e));
+}

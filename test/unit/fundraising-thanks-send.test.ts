@@ -22,7 +22,7 @@ vi.mock("../../src/db/fundraiser-thanks", () => db);
 vi.mock("../../src/db/email-suppressions", () => ({ suppressedAmong }));
 vi.mock("../../src/db/email-opt-outs", () => ({ optedOutAmong }));
 vi.mock("../../src/clients/email", () => ({ sendFundraiseSupporterThanks }));
-vi.mock("../../src/config", () => ({ config: { BALL_FROM_EMAIL: "events@nbcc.test", NODE_ENV: "test" } }));
+vi.mock("../../src/config", () => ({ config: { BALL_FROM_EMAIL: "events@nbcc.test", PORTAL_BASE_URL: "https://nbcc.test/", NODE_ENV: "test" } }));
 
 import { sendQueuedThanks } from "../../src/fundraising/thanks-send";
 import type { QueuedThanksGift } from "../../src/db/fundraiser-thanks";
@@ -65,6 +65,23 @@ beforeEach(() => {
 });
 
 describe("sending the approved thank yous", () => {
+  // The readthrough (2026-10-04): a thank you from a page in memory of someone comes from Jodie.
+  it("sends the in memory one from Jodie, replying to Jodie, with her address in it", async () => {
+    queue(queued({ inMemory: true }));
+    expect(await sendQueuedThanks()).toEqual({ sent: 1, skipped: 0, failed: 0 });
+    const msg = sendFundraiseSupporterThanks.mock.calls[0][1];
+    expect(msg).toMatchObject({ email: "alex@example.com", from: "Jodie at NBCC <jodie@nbcc.scot>", replyTo: "jodie@nbcc.scot" });
+    expect(msg.html + msg.text).not.toContain("events@");
+    expect(msg.html).toContain("mailto:jodie@nbcc.scot");
+  });
+
+  it("still checks the suppression and opt out lists before an in memory one", async () => {
+    suppressedAmong.mockResolvedValue(new Set(["alex@example.com"]));
+    queue(queued({ inMemory: true }));
+    expect(await sendQueuedThanks()).toEqual({ sent: 0, skipped: 1, failed: 0 });
+    expect(sendFundraiseSupporterThanks).not.toHaveBeenCalled();
+  });
+
   it("emails the giver email 20, from and replying to the events inbox, and records it sent", async () => {
     queue(queued());
     expect(await sendQueuedThanks()).toEqual({ sent: 1, skipped: 0, failed: 0 });
@@ -76,6 +93,28 @@ describe("sending the approved thank yous", () => {
     expect(msg.html).toContain("Sam&#39;s Walk");
     expect(db.finishThanksGift).toHaveBeenCalledWith(70, "sent", null);
     expect(db.markThanksDeliveredIfDone).toHaveBeenCalledWith(3);
+  });
+
+  // 2026-10-04: the keep in touch links are built on the public site address the other fundraising
+  // emails use, and are the same for every giver: nothing of theirs is in them.
+  it("invites the giver to keep in touch, with plain links to the site and nothing of theirs in them", async () => {
+    queue(queued());
+    await sendQueuedThanks();
+    const msg = sendFundraiseSupporterThanks.mock.calls[0][1];
+    expect(msg.html).toContain('href="https://nbcc.test/newsletter"');
+    expect(msg.html).toContain('href="https://nbcc.test/whats-on"');
+    expect(msg.text).toContain("Join our mailing list: https://nbcc.test/newsletter");
+    expect(msg.text).toContain("What's on page: https://nbcc.test/whats-on");
+    expect(msg.html + msg.text).not.toMatch(/nbcc\.test\/[^\s"<]*[?#&=]/);
+    expect(msg.html + msg.text).not.toMatch(/alex|token/i);
+  });
+
+  it("keeps the in memory one free of the keep in touch links", async () => {
+    queue(queued({ inMemory: true }));
+    await sendQueuedThanks();
+    const msg = sendFundraiseSupporterThanks.mock.calls[0][1];
+    expect(msg.html + msg.text).not.toContain("nbcc.test/");
+    expect(msg.html + msg.text).not.toContain("mailing list");
   });
 
   it("never puts the organiser's address anywhere, so a reply goes to NBCC", async () => {

@@ -34,13 +34,23 @@ const PAGES = [
   "404.html",
   "sitemap.html",
   // TASK-494
-  "events.html",
+  "whats-on.html",
+  "get-involved.html",
+  // The short pages under /get-involved/.
+  "get-involved-drop-off-points.html",
+  "get-involved-referrals.html",
+  "get-involved-volunteer.html",
+  "get-involved-business.html",
+  "get-involved-schools.html",
+  "get-involved-groups.html",
   "fundraise.html",
   "fundraise-manage.html",
   // TASK-498
   "fundraise-help.html",
   // TASK-504: the logo pack.
   "fundraise-logos.html",
+  // Joining the mailing list.
+  "newsletter.html",
 ].filter((f) => existsSync(resolve(ROOT, f)));
 
 // Tabbable = what the first Tab from page load can reach, in DOM order. A

@@ -48,7 +48,7 @@ function facts(over: Partial<FundraiserRecord> = {}) {
   } as FundraiserRecord;
   return materialFacts(f, meter({ onlinePence: 1000, cashPence: 0, targetPence: 50000 }), {
     pageUrl: "https://nbcc.test/fundraise/ssd",
-    getInvolvedUrl: "https://nbcc.test/get-involved",
+    whatsOnUrl: "https://nbcc.test/whats-on",
   });
 }
 
@@ -252,7 +252,7 @@ describe("a long page address on a poster", () => {
     const slug = "teadgcswsacfewmmwwmmwwabcdefghijklmnopqrstuvwxyzabmmwwmmwwmm".slice(0, n);
     const f = { id: 1, slug, path: "raising", kind: "walk", title: "Sam's Walk", description: "A walk.", eventDate: null, startTime: null, venue: "", town: "",
       targetPence: null, public: true, status: "approved", name: "Sam Example", cardLine: null } as unknown as FundraiserRecord;
-    return materialFacts(f, meter({ onlinePence: 0, cashPence: 0, targetPence: null }), { pageUrl: `https://nbcc.test/fundraise/${slug}`, getInvolvedUrl: "https://nbcc.test/get-involved" });
+    return materialFacts(f, meter({ onlinePence: 0, cashPence: 0, targetPence: null }), { pageUrl: `https://nbcc.test/fundraise/${slug}`, whatsOnUrl: "https://nbcc.test/whats-on" });
   };
 
   it("is the usual size for the short addresses pages are given", () => {
@@ -302,7 +302,7 @@ describe("a long page address on the sponsor form", () => {
       { id: 1, slug, path: "raising", kind: "walk", title: "Sam's Walk", description: "A walk.", eventDate: null, startTime: null, venue: "", town: "",
         targetPence: null, public: true, status: "approved", name: "Sam Example", cardLine: null } as unknown as FundraiserRecord,
       meter({ onlinePence: 0, cashPence: 0, targetPence: null }),
-      { pageUrl: `https://nbcc.test/fundraise/${slug}`, getInvolvedUrl: "https://nbcc.test/get-involved" },
+      { pageUrl: `https://nbcc.test/fundraise/${slug}`, whatsOnUrl: "https://nbcc.test/whats-on" },
     );
 
   const sharedParts = (over: Partial<FundraiserRecord>) => {

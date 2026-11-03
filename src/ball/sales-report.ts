@@ -6,8 +6,9 @@ import { CRIMSON, SLATE, SLATE_SOFT, HEAD, BODY_FONT } from "../email/brand";
 // running the Ball with us, the organiser and the sponsor among them, get one email with the numbers:
 // how many seats are sold, what sold lately, what is left, the waiting list and the days to go.
 //
-// Counts only. No names, no email addresses, no booking details, and no money: Jaimie chose that
-// line, and the email is built from numbers alone so nothing else can creep in.
+// Counts, and since 12 October 2026 (Jaimie's request) who has booked a whole table: first name,
+// surname, the company an invoice was asked for, and how many tables. Nothing else about anyone: no
+// email addresses, no phone numbers, no single seat buyers, and no money.
 //
 // Pure: no pool, no config, no clock. The runner (./sales-report-runner.ts) supplies the numbers
 // and the day; the admin's preview and test send use the same render, so what staff check is what
@@ -217,10 +218,83 @@ export function countSales(
   };
 }
 
+/** One whole table booking, as the list of who has booked needs it. */
+export interface TableBookingRow {
+  /** Null on a booking taken before the name was asked for in two parts (TASK-318). */
+  firstName: string | null;
+  surname: string | null;
+  /** The one name every booking has: "First Surname". */
+  name: string;
+  /** Only to tell one booker from another. It never reaches the email. */
+  email: string;
+  /** The company the invoice is made out to, when one was asked for. */
+  company: string | null;
+  quantity: number;
+  status: string;
+  paidAt: Date | null;
+  paymentMethod?: string;
+}
+
+/** One line of the list: a person, and the whole tables they have booked. */
+export interface TableBooker {
+  firstName: string;
+  surname: string;
+  /** Empty when no invoice was asked for. */
+  company: string;
+  tables: number;
+  /** Booked to pay by bank transfer, and the money has not arrived yet. */
+  awaiting: boolean;
+}
+
+const tidy = (v: string | null | undefined) => (v ?? "").trim().split(/\s+/).join(" ");
+
+function namesOf(b: TableBookingRow): { firstName: string; surname: string } {
+  const firstName = tidy(b.firstName);
+  const surname = tidy(b.surname);
+  if (firstName || surname) return { firstName, surname };
+  const whole = tidy(b.name);
+  const cut = whole.lastIndexOf(" ");
+  return cut < 0 ? { firstName: whole, surname: "" } : { firstName: whole.slice(0, cut), surname: whole.slice(cut + 1) };
+}
+
+/**
+ * Who has booked a whole table, as at `now`, by the same rules as the numbers: paid is booked, a
+ * bank transfer still waiting for its money is booked and marked as waiting, and a card checkout
+ * under way, a refund or a cancellation is not on the list. One line a person (told apart by their
+ * email address and company), with their tables added together; tables paid for and tables still
+ * waiting are separate lines, so the paid lines add up to the "whole tables" count above them.
+ * In surname order.
+ */
+export function tableBookers(bookings: readonly TableBookingRow[], now: Date): TableBooker[] {
+  const lines = new Map<string, TableBooker>();
+  for (const b of bookings) {
+    const paid = b.status === "paid" && (b.paidAt === null || b.paidAt.getTime() <= now.getTime());
+    const awaiting = b.status === "pending" && b.paymentMethod === "transfer";
+    if (!paid && !awaiting) continue;
+    const company = tidy(b.company);
+    const key = JSON.stringify([b.email.trim().toLowerCase(), company.toLowerCase(), awaiting]);
+    const line = lines.get(key);
+    if (line) line.tables += b.quantity;
+    else lines.set(key, { ...namesOf(b), company, tables: b.quantity, awaiting });
+  }
+  const order = (a: string, b: string) => a.localeCompare(b, "en-GB", { sensitivity: "base" });
+  return [...lines.values()].sort(
+    (a, b) =>
+      order(a.surname, b.surname) ||
+      order(a.firstName, b.firstName) ||
+      order(a.company, b.company) ||
+      Number(a.awaiting) - Number(b.awaiting),
+  );
+}
+
 export interface ReportContext {
   today: string;
   eventDate: string;
   test: boolean;
+  /** Who has booked a whole table. Read fresh for every report; never stored with its numbers. */
+  tables: readonly TableBooker[];
+  /** Today's report going to the whole list a second time, at a member of staff's asking. */
+  resend?: boolean;
 }
 
 export interface ReportEmail {
@@ -250,7 +324,8 @@ function reportLines(i: SalesInputs, ctx: ReportContext) {
       ? `This is the last update before the Ball on ${dayInWords(ctx.eventDate)}.`
       : "There are no more updates planned.";
   return {
-    opening: `Here's how Festive Ball ticket sales stand this morning. ${whatNext} Any questions in the meantime, call us on ${BALL_PHONE} or email ${BALL_EMAIL}.`,
+    // Sent again, it goes later in the day.
+    opening: `Here's how Festive Ball ticket sales stand ${ctx.resend ? "now" : "this morning"}. ${whatNext} Any questions in the meantime, call us on ${BALL_PHONE} or email ${BALL_EMAIL}.`,
     sold: [
       `${i.seatsSold} of ${i.totalSeats} seats (${percent}%)`,
       how,
@@ -297,24 +372,69 @@ function section(label: string, lines: string[], last = false): string {
   );
 }
 
+// What a booker typed goes into the email as words, never as HTML.
+const esc = (s: string) =>
+  s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+
+const NO_TABLES = "No whole tables booked yet";
+const AWAITING = "awaiting payment";
+const RULE = "#eadfce";
+
+// The list of who has booked a table: a real table, since it is one, kept narrow enough for a phone
+// (a long name wraps between its words; nothing scrolls sideways).
+function tablesBooked(tables: readonly TableBooker[]): string {
+  const label = `<p style="margin:0 0 8px;font-family:${BODY_FONT};font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:${SLATE_SOFT};font-weight:700">Tables booked</p>`;
+  if (tables.length === 0) return `${label}<p ${P}>${NO_TABLES}.</p>`;
+  const cell = `padding:8px 10px;font-family:${BODY_FONT};font-size:14px;line-height:1.4;color:${SLATE};vertical-align:top;border-bottom:1px solid ${RULE};overflow-wrap:break-word`;
+  const th = (words: string, align = "left") =>
+    `<th scope="col" style="${cell};font-size:12px;font-weight:700;color:${SLATE_SOFT};white-space:nowrap;text-align:${align}">${words}</th>`;
+  const td = (words: string) => `<td style="${cell};text-align:left">${words}</td>`;
+  const rows = tables
+    .map(
+      (t) =>
+        `<tr>${td(esc(t.firstName))}${td(esc(t.surname))}${td(esc(t.company))}` +
+        `<td style="${cell};text-align:right"><b>${t.tables}</b>${t.awaiting ? `<br /><span style="font-size:12px;color:${SLATE_SOFT};white-space:nowrap">${AWAITING}</span>` : ""}</td></tr>`,
+    )
+    .join("");
+  return (
+    label +
+    `<table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;margin:0 0 20px;border-top:1px solid ${RULE}">` +
+    `<thead><tr>${th("First name")}${th("Surname")}${th("Company")}${th("Tables", "right")}</tr></thead>` +
+    `<tbody>${rows}</tbody></table>`
+  );
+}
+
+function tablesBookedText(tables: readonly TableBooker[]): string[] {
+  if (tables.length === 0) return [`${NO_TABLES}.`];
+  return tables.map(
+    (t) =>
+      `${[t.firstName, t.surname].filter(Boolean).join(" ")}${t.company ? ` (${t.company})` : ""}: ` +
+      `${counted(t.tables, "table", "tables")}${t.awaiting ? `, ${AWAITING}` : ""}`,
+  );
+}
+
 /** The report, as it goes out: subject, HTML in the Ball's own frame, and the plain text part. */
 export function renderReport(inputs: SalesInputs, ctx: ReportContext): ReportEmail {
   const l = reportLines(inputs, ctx);
   const day = dayInWords(ctx.today);
-  const subject = `${ctx.test ? "[Test] " : ""}Festive Ball tickets: ${day} update`;
+  const subject = `${ctx.test ? "[Test] " : ""}Festive Ball tickets: ${day} update${ctx.resend ? ", sent again" : ""}`;
   const testNote = "This is a test, sent only to you.";
+  const againNote =
+    "This is today's update, sent again with the latest numbers and the names of everyone who has booked a table.";
 
-  const body = `${ctx.test ? `<p ${P}><b>${testNote}</b></p>` : ""}
+  const body = `${ctx.test ? `<p ${P}><b>${testNote}</b></p>` : ""}${ctx.resend ? `<p ${P}><b>${againNote}</b></p>` : ""}
   <p style="margin:0 0 6px;font-family:${BODY_FONT};font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:${SLATE_SOFT};font-weight:700">Ticket update</p>
   <h1 style="color:${CRIMSON};font-family:${HEAD};font-size:26px;font-weight:800;margin:0 0 14px;letter-spacing:-.01em">${day}</h1>
   <p ${P}>Hello,</p>
   <p ${P}>${l.opening}</p>
   ${factsCard(section("Sold", l.sold) + section("Lately", l.lately) + section("Still available", l.left) + section("The Ball", [l.countdown], true))}
+  ${tablesBooked(ctx.tables)}
   <p ${P}>Thank you for everything you're doing to make the night a success.</p>
   <p ${P}>The NBCC team</p>`;
 
   const text = [
     ...(ctx.test ? [testNote, ""] : []),
+    ...(ctx.resend ? [againNote, ""] : []),
     `Festive Ball tickets: ${day}`,
     "",
     "Hello,",
@@ -331,6 +451,9 @@ export function renderReport(inputs: SalesInputs, ctx: ReportContext): ReportEma
     ...l.left,
     "",
     `${l.countdown}.`,
+    "",
+    "TABLES BOOKED",
+    ...tablesBookedText(ctx.tables),
     "",
     "Thank you for everything you're doing to make the night a success.",
     "The NBCC team",

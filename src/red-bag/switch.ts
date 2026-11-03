@@ -1,0 +1,51 @@
+// Fill a Red Bag: THE SWITCH.
+//
+// One constant, and it is ON: the page is PUBLIC (Jaimie, 4 October 2026).
+//   - /fill is the page, for everyone (src/routes/red-bag.ts);
+//   - /fill/thank-you is where a donor lands after paying;
+//   - /fill-a-red-bag (the address it first had) and /fill-a-bag forward to /fill;
+//   - POST /api/checkout-session takes a Red Bag gift from anyone (src/routes/api.ts).
+//
+// Search engines may LIST the giving page from the day it is live (Jaimie: "once it's pushed and
+// live I don't mind if Google crawls it"): it is in SITE_PAGES (src/site/pages.ts), so on the site
+// map and in sitemap.xml, and carries a canonical address and a share card. The thank you page is
+// never indexed.
+//
+// It is still LINKED from nowhere in any page's file: not /donate, not the menu, not the footer.
+// test/unit/red-bag-page.test.ts holds all of that in place. From the Ball's moment
+// (src/site/after-ball.ts) the stage and the links in src/red-bag/fill-links.ts are added as pages go
+// out, and only while this switch is on.
+//
+// WHAT IS LEFT, when Jaimie says: add the link from /donate and the menu. Nothing else.
+//
+// TO TAKE IT DOWN AGAIN: set RED_BAG_LIVE to false. That one line is enough: the public gets the
+// site's ordinary 404 at /fill and /fill/thank-you (and at the two forwarding addresses, which stop
+// forwarding), the page leaves the site map, a signed in member of staff gets a preview under a
+// "Staff preview: not public yet" strip (never indexed), and the checkout refuses a Red Bag gift
+// from anyone but staff. That path is kept and tested for exactly this.
+//
+// Deliberately a constant in code and not a config value or a database row: nothing here needs
+// infrastructure, and switching it is a reviewed change like any other.
+export const RED_BAG_LIVE = true;
+
+/** The page's one address. */
+export const RED_BAG_PATH = "/fill";
+
+/** Where a donor lands after paying: the thank you, a page of its own. */
+export const RED_BAG_THANKS_PATH = "/fill/thank-you";
+
+/** Is the page public? Asked through a function so each caller reads it when it is needed. */
+export function redBagIsLive(): boolean {
+  return RED_BAG_LIVE;
+}
+
+/**
+ * What a visitor gets. "open": the page. "preview": the page with the "Staff preview" strip.
+ * "closed": the site's 404, exactly as if the page did not exist.
+ */
+export type RedBagAccess = "open" | "preview" | "closed";
+
+export function redBagAccess(live: boolean, staff: boolean): RedBagAccess {
+  if (live) return "open";
+  return staff ? "preview" : "closed";
+}

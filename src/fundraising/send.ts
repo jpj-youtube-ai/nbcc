@@ -12,7 +12,7 @@ import {
   sendFundraiseMemoryReceipt,
   sendFundraiseTshirtAsk,
 } from "../clients/email";
-import { claimNextWaitingLiveEmail, fundraisingIsOn, markLiveEmailWaiting } from "../db/fundraisers";
+import { claimNextWaitingLiveEmail, fundraisingIsOn, markLiveEmailWaiting, websiteChoiceChangedByStaff } from "../db/fundraisers";
 import {
   buildApprovedEmail,
   buildEditApprovedEmail,
@@ -23,6 +23,7 @@ import {
   buildSignInCodeEmail,
   buildSignUpStaffEmail,
   buildSignUpThanksEmail,
+  memorySender,
 } from "./emails";
 import { EVENT_PAGE_PREFIX, hasPage, type FundraiserRecord } from "./model";
 import type { TeamSignUp } from "./teams";
@@ -60,7 +61,7 @@ function pageOf(f: Pick<FundraiserRecord, "path" | "slug">): string {
   return f.path === "event" ? eventPageUrl(f.slug) : fundraiserPageUrl(f.slug);
 }
 
-/** Any address on the public site, from its path (TASK-504: Get involved, for an event's poster). */
+/** Any address on the public site, from its path (TASK-504: What's on, for an event's poster). */
 export function siteUrl(path: string): string {
   return `${base()}${path}`;
 }
@@ -73,8 +74,10 @@ export function manageUrl(): string {
 /** In memory: the short receipt (src/fundraising/signup-tidy-emails.ts). Best effort. */
 async function sendMemoryReceipt(f: FundraiserRecord): Promise<void> {
   try {
-    const mail = buildMemoryReceiptEmail();
-    await sendFundraiseMemoryReceipt(f.name, { email: f.email, from: config.BALL_FROM_EMAIL, replyTo: config.BALL_FROM_EMAIL, ...mail });
+    // Only a safe first name from what they typed goes in it ("Dear Sam,"), nothing else.
+    const mail = buildMemoryReceiptEmail(f.firstName ?? f.name);
+    // In memory: from Jodie, and replies go to Jodie (./emails.ts, MEMORY_EMAIL).
+    await sendFundraiseMemoryReceipt(f.name, { email: f.email, ...memorySender(), ...mail });
   } catch (err) {
     logFailure("in memory receipt", err);
   }
@@ -112,12 +115,30 @@ async function sendSignUpThanks(f: FundraiserRecord): Promise<void> {
 }
 
 /**
+ * "You're on our list" says "As you asked, we won't show it on our website." That is only true when
+ * the organiser chose it: if staff changed the website choice in the admin, the page is a team
+ * member's, or we cannot tell, the email leaves that sentence out.
+ */
+async function whoHidIt(f: Pick<FundraiserRecord, "id" | "teamId">): Promise<"them" | "staff"> {
+  // A team member's page (now or once) took the choice from its team (memberSignUp in ./teams.ts):
+  // the member was never asked, so they did not ask, whoever chose it for the team. A team's
+  // organiser never gets this email: a team has its own "your team page is live".
+  if (f.teamId) return "staff";
+  try {
+    return (await websiteChoiceChangedByStaff(f.id)) === false ? "them" : "staff";
+  } catch (err) {
+    logFailure("approved (reading who changed the website choice)", err);
+    return "staff";
+  }
+}
+
+/**
  * "Your page is live" with their page link (raising money and public), or "you're on our list" for
  * anyone else. The caller sends this only when there is nothing to wait for: a page holder approved
  * while fundraising is off is marked as waiting instead (moveFundraiser), and sendWaitingLiveEmails
  * sends theirs at the switch. True when the email went.
  */
-export async function sendApprovedEmail(f: FundraiserRecord): Promise<boolean> {
+export async function sendApprovedEmail(f: FundraiserRecord, o: { reapproved?: boolean } = {}): Promise<boolean> {
   // In memory: email 19, the gentle one, and only with a page to link to; otherwise staff write.
   if (isInMemory(f)) return sendInMemoryApprovedEmail(f);
   // Team pages: a team's own "your team page is live" (always with the join link), after inviting
@@ -132,14 +153,29 @@ export async function sendApprovedEmail(f: FundraiserRecord): Promise<boolean> {
     const built = buildApprovedEmail(f, {
       pageUrl: page ? pageOf(f) : null,
       manageUrl: page ? `${base()}/fundraise/manage` : null,
+      ...(page ? {} : { hiddenBy: await whoHidIt(f) }),
     });
     const mail = greetGuardian(built, f);
     await sendFundraiseApproved(f.name, { email: f.email, from: config.BALL_FROM_EMAIL, replyTo: config.BALL_FROM_EMAIL, ...mail });
-    return true;
   } catch (err) {
     logFailure("approved", err);
     return false;
   }
+  // Jaimie, 2026-10-04: a new team member's page is approved, so the team organiser is told
+  // ("[First name] has joined [team name]"). Only once the member's own email has gone, so a member
+  // tried again at the next switch on is never announced twice. Held until its wording is approved;
+  // every guard is sendTeamMemberJoined's own. Best effort: it never changes what is returned.
+  // `reapproved`: the page had been approved before (then declined, and now approved again), so the
+  // team organiser was told the first time and is not told again.
+  if (f.teamId && o.reapproved !== true) {
+    try {
+      const { sendTeamMemberJoined } = await import("./team-send");
+      await sendTeamMemberJoined(f);
+    } catch (err) {
+      logFailure("team organiser (a new member)", err);
+    }
+  }
+  return true;
 }
 
 /** Email 19 (src/fundraising/memory-emails.ts), the only automatic email an in memory page gets. */
@@ -147,7 +183,8 @@ async function sendInMemoryApprovedEmail(f: FundraiserRecord): Promise<boolean> 
   if (!hasPage(f) || !f.memoryName) return false;
   try {
     const mail = buildInMemoryApprovedEmail({ name: f.name, firstName: f.firstName ?? null, memoryName: f.memoryName, setupBy: f.memorySetupBy ?? null }, { pageUrl: fundraiserPageUrl(f.slug) });
-    await sendFundraiseApproved(f.name, { email: f.email, from: config.BALL_FROM_EMAIL, replyTo: config.BALL_FROM_EMAIL, ...mail });
+    // In memory: from Jodie, and replies go to Jodie (./emails.ts, MEMORY_EMAIL).
+    await sendFundraiseApproved(f.name, { email: f.email, ...memorySender(), ...mail });
     return true;
   } catch (err) {
     logFailure("in memory approved", err);
@@ -222,12 +259,16 @@ export async function sendEditDecisionEmail(f: FundraiserRecord, approved: boole
 /**
  * TASK-501: the sign in code for the private area (email 8), to the email it was asked for. The
  * caller has stored only its keyed hash. Greeted by a safe first name from `name`, the newest of
- * their fundraisers. Never throws, and a failure is logged without the code.
+ * their fundraisers. `gentle`: they have a page in memory of someone (a family or a funeral
+ * director), so it is the gentle version. Never throws, and a failure is logged without the code.
  */
-export async function sendSignInCodeEmail(email: string, name: string, code: string): Promise<void> {
+export async function sendSignInCodeEmail(email: string, name: string, code: string, o: { gentle?: boolean } = {}): Promise<void> {
   try {
-    const mail = buildSignInCodeEmail(name, code);
-    await sendFundraiseCode(name, { email, from: config.BALL_FROM_EMAIL, replyTo: config.BALL_FROM_EMAIL, ...mail });
+    const gentle = o.gentle === true;
+    const mail = buildSignInCodeEmail(name, code, { gentle });
+    // The gentle one is for someone with a page in memory of someone: from Jodie, replying to Jodie.
+    const sender = gentle ? memorySender() : { from: config.BALL_FROM_EMAIL, replyTo: config.BALL_FROM_EMAIL };
+    await sendFundraiseCode(name, { email, ...sender, ...mail });
   } catch (err) {
     logFailure("sign in code", err);
   }

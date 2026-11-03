@@ -10,6 +10,8 @@ export interface NumberCounts {
   monthly?: { giving: number; monthlyPence: number; joined: number; stopped: number };
   ball?: { seatsSold: number; totalSeats: number; takenPence: number; transferSeats: number; daysToGo: number };
   website?: { visitors: number; visitorsBefore: number; onNow: number; topChannel: string | null };
+  /** Fill a Red Bag against the Donate page, this month so far (Donations: view). */
+  redBag?: { redBag: { pence: number; gifts: number }; donatePage: { pence: number; gifts: number } };
 }
 
 export interface NumberLine {
@@ -26,6 +28,8 @@ export interface NumberLine {
 const wholePounds = (pence: number) => Math.round(Math.max(0, pence) / 100);
 const pounds = (pence: number) => "£" + wholePounds(pence).toLocaleString("en-GB");
 const n = (x: number) => x.toLocaleString("en-GB");
+/** "£412 from 19 gifts": money received and the gifts it came from. */
+export const giftsWords = (s: { pence: number; gifts: number }) => `${pounds(s.pence)} from ${n(s.gifts)} ${s.gifts === 1 ? "gift" : "gifts"}`;
 const people = (x: number) => `${n(x)} ${x === 1 ? "person" : "people"}`;
 
 // As the Analytics screen names its channels. The top one may bring well under half the visits, so
@@ -108,10 +112,24 @@ function websiteLine(w: NonNullable<NumberCounts["website"]>): NumberLine {
   };
 }
 
-/** One line each, in the order money, monthly givers, the Festive Ball, the website. */
+// Fill a Red Bag this month, with the Donate page beside it: the same figures and words as the top
+// of the Donations screen (src/admin/gift-sources.ts).
+function redBagLine(r: NonNullable<NumberCounts["redBag"]>): NumberLine {
+  return {
+    key: "redBag",
+    title: "Fill a Red Bag",
+    headline: `${giftsWords(r.redBag)} this month`,
+    detail: `Donate page: ${giftsWords(r.donatePage)} this month.`,
+    view: "donations",
+    button: "Donations",
+  };
+}
+
+/** One line each, in the order money, Fill a Red Bag, monthly givers, the Festive Ball, the website. */
 export function numbersLines(c: NumberCounts): NumberLine[] {
   const out: NumberLine[] = [];
   if (c.money && MONEY_PARTS.some(([k]) => c.money?.[k])) out.push(moneyLine(c.money));
+  if (c.redBag) out.push(redBagLine(c.redBag));
   if (c.monthly) out.push(monthlyLine(c.monthly));
   // Once the night has passed, the line has done its job.
   if (c.ball && c.ball.daysToGo >= 0) out.push(ballLine(c.ball));

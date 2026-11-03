@@ -36,7 +36,7 @@ function facts(over: Partial<FundraiserRecord> = {}) {
     ...over,
   } as FundraiserRecord;
   const m = meter({ onlinePence: 44000, cashPence: 10000, targetPence: f.targetPence });
-  return materialFacts(f, m, { pageUrl: "https://nbcc.test/fundraise/sams-santa-dash", getInvolvedUrl: "https://nbcc.test/get-involved" });
+  return materialFacts(f, m, { pageUrl: "https://nbcc.test/fundraise/sams-santa-dash", whatsOnUrl: "https://nbcc.test/whats-on" });
 }
 
 // A stand in 2D context: remembers every piece of text drawn on its canvas.
@@ -319,5 +319,26 @@ describe("the caption over the address", () => {
     await open({ path: "event", slug: "eqn", title: "Exampleton Quiz Night", targetPence: null });
     expect(textOn("story")).toContain("Find out more and give");
     expect(textOn("story")).not.toContain("Give on my page");
+  });
+});
+
+// A school, 2 November 2026: a long line was cut half way through a sentence. On the pictures too, a
+// line is drawn whole or not at all; a name still shortens as it did.
+describe("fitting words into a picture", () => {
+  const social = require("../../assets/js/fundraise-social.js");
+  const ctx = { font: "", measureText: (t: string) => ({ width: t.length * 10 }) };
+
+  it("returns the words whole when they fit", () => {
+    expect(social.fit(ctx, "one two three", "{s}px x", 200, 2, 40, 30, true).lines).toEqual(["one two three"]);
+  });
+
+  it("returns nothing for a line that cannot be drawn whole", () => {
+    expect(social.fit(ctx, "word ".repeat(40).trim(), "{s}px x", 200, 2, 40, 30, true)).toBeNull();
+  });
+
+  it("still shortens a name, as before", () => {
+    const out = social.fit(ctx, "word ".repeat(40).trim(), "{s}px x", 200, 2, 40, 30);
+    expect(out.lines).toHaveLength(2);
+    expect(out.lines[1].endsWith("…")).toBe(true);
   });
 });

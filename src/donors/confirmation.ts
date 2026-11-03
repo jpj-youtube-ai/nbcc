@@ -1,5 +1,8 @@
 import { z } from "zod";
 import { CHARITY_SHORT_NAME, FOOTER_TEXT, FOOTER_HTML } from "../legal/registration";
+import { ABOUT_NBCC_SHORT } from "../email/brand";
+// FOOTER_HTML is still used by the refund confirmation below; the donation receipt's statement is in
+// the email's footer bar (src/email/templates.ts, the "donation" kind).
 
 // Pure, DB-free content builder for the post-payment donation-confirmation email (REQ-060 · TASK-098,
 // extending TASK-070). Mirrors src/donors/receipt.ts (buildCorporationTaxReceipt): no
@@ -33,9 +36,9 @@ export const MANAGE_CANCEL_LINE =
 
 // A warm, non-definitive closing line (Code of Fundraising Practice: "helps", never "£X provides Y").
 // Woven into every confirmation so the receipt still reads clear but leaves the donor with the mission.
-export const DONATION_IMPACT_LINE =
-  "Kindness like yours helps NBCC bring comfort, dignity and a moment of joy to children, young " +
-  "people and vulnerable adults across South West Scotland, at Christmas and all year round.";
+// The readthrough (2026-10-04): the charity's own short description follows it as its own paragraph
+// (ABOUT_NBCC_SHORT), and that names who NBCC helps and where, so this line no longer does.
+export const DONATION_IMPACT_LINE = "Kindness like yours makes a real difference, at Christmas and all year round.";
 
 export const confirmationInputSchema = z.object({
   fullName: z.string().trim().min(1),
@@ -112,12 +115,16 @@ export function buildDonationConfirmation(input: ConfirmationInput): DonationCon
   }
   // A warm, non-definitive closing so every receipt still leaves the donor with the mission.
   paragraphs.push(DONATION_IMPACT_LINE);
+  // Who NBCC is, in the charity's own words, on every receipt (src/email/brand.ts).
+  paragraphs.push(ABOUT_NBCC_SHORT);
 
+  // The charity statement and the address: at the bottom of the plain text part here, and in the
+  // maroon footer bar of the HTML (added by the "donation" kind in src/email/templates.ts), where
+  // every other email has it. Never as a paragraph of the body.
   const text = paragraphs.join("\n\n") + "\n\n" + FOOTER_TEXT + "\n";
   const html =
     `<section class="donation-confirmation">` +
     paragraphs.map((p) => `<p>${escapeHtml(p)}</p>`).join("") +
-    FOOTER_HTML +
     `</section>`;
   return { text, html };
 }

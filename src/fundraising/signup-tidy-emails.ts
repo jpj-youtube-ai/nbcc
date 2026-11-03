@@ -1,13 +1,15 @@
-import { bodyP, button, emailShell, eyebrow, heading, note, questionsBox, questionsText, signOff, signOffText } from "../email/brand";
+import { bodyP, button, emailShell, eyebrow, heading, note, questionsBox, questionsText, signOff, signOffAs, signOffAsText, signOffText } from "../email/brand";
 import { FOOTER_TEXT, POSTAL_ADDRESS } from "../legal/registration";
-import { FUNDRAISING_EMAIL, safeFirstName, type BuiltEmail } from "./emails";
+import { raiseOrdinals } from "../email/dates";
+import { FUNDRAISING_EMAIL, MEMORY_EMAIL, MEMORY_EYEBROW, MEMORY_SIGNER, MEMORY_SIGN_OFF, dearGreeting, safeFirstName, type BuiltEmail } from "./emails";
 import { EMPLOYER_MATCH_LABELS, TSHIRT_LINK_DAYS, firstWord, tshirtLabel, type EmployerMatch } from "./signup-tidy";
 
 // The sign up tidy's emails (Jaimie and the appropriateness audit, 2026-10-03). Draft wording, for
 // Jaimie to approve. From and replying to the events inbox (src/fundraising/send.ts).
 //
-//   - buildMemoryReceiptEmail: a short receipt for a page in memory of someone. Fixed words with no
-//     name in it (anyone can type any address into the public form), and nothing upbeat.
+//   - buildMemoryReceiptEmail: a short receipt for a page in memory of someone. Fixed words, bar one
+//     safe first name in the greeting (anyone can type any address into the public form, so nothing
+//     else they typed goes in it), and nothing upbeat.
 //   - buildTshirtAskEmail: staff ask an organiser for their T-shirt size (Admin > Fundraising, never
 //     automatic), with the private link to choose it.
 //   - tidyStaffFacts: the new answers, for the summary to the events inbox.
@@ -15,11 +17,15 @@ import { EMPLOYER_MATCH_LABELS, TSHIRT_LINK_DAYS, firstWord, tshirtLabel, type E
 const escapeHtml = (s: string): string =>
   s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
 
-const shell = (body: string) => emailShell(body, { contactEmail: FUNDRAISING_EMAIL, registration: true, postalAddress: POSTAL_ADDRESS });
+// Every date in the body has its ending raised ("7th" as 7<sup>th</sup>): ../email/dates.ts.
+// `contact` is the address in the questions box and the footer bar: the events inbox, or Jodie's for
+// the in memory receipt (the readthrough, 2026-10-04).
+const shell = (body: string, contact: string) => emailShell(raiseOrdinals(body), { contactEmail: contact, registration: true, postalAddress: POSTAL_ADDRESS });
 
-function toOrganiser(subject: string, bodyHtml: string, textLines: string[], line: string): BuiltEmail {
-  const html = shell(bodyHtml + signOff(line) + questionsBox(FUNDRAISING_EMAIL));
-  const text = [...textLines, "", signOffText(line), "", questionsText(FUNDRAISING_EMAIL), "", FOOTER_TEXT].join("\n");
+// `signer`: a name above "NBCC Team" in the sign off (only ever Jodie, on the in memory receipt).
+function toOrganiser(subject: string, bodyHtml: string, textLines: string[], line: string, contact: string = FUNDRAISING_EMAIL, signer?: string): BuiltEmail {
+  const html = shell(bodyHtml + (signer ? signOffAs(line, signer) : signOff(line)) + questionsBox(contact), contact);
+  const text = [...textLines, "", signer ? signOffAsText(line, signer) : signOffText(line), "", questionsText(contact), "", FOOTER_TEXT].join("\n");
   return { subject, html, text };
 }
 
@@ -28,9 +34,14 @@ function toOrganiser(subject: string, bodyHtml: string, textLines: string[], lin
 export const MEMORY_RECEIPT_LINE = "We have your details for the page. Someone from NBCC will ring you in the next few days.";
 const MEMORY_RECEIPT_SMALL = "If this wasn't you, you can ignore this email.";
 
-export function buildMemoryReceiptEmail(): BuiltEmail {
-  const body = eyebrow("In memory") + heading("Thank you") + bodyP(MEMORY_RECEIPT_LINE) + note(MEMORY_RECEIPT_SMALL);
-  return toOrganiser("We have your details for the page", body, [MEMORY_RECEIPT_LINE, "", MEMORY_RECEIPT_SMALL], "With warmest thoughts,");
+/**
+ * "Dear Sam," (Jaimie, 2026-10-04), from a safe first name only (safeFirstName: one word of letters,
+ * like the thanks for signing up), so it can never carry a link or a message; otherwise "Hello,".
+ */
+export function buildMemoryReceiptEmail(typedName?: string | null): BuiltEmail {
+  const hi = dearGreeting(safeFirstName(typedName));
+  const body = eyebrow(MEMORY_EYEBROW) + heading("Thank you") + bodyP(escapeHtml(hi)) + bodyP(MEMORY_RECEIPT_LINE) + note(MEMORY_RECEIPT_SMALL);
+  return toOrganiser("We have your details for the page", body, [hi, "", MEMORY_RECEIPT_LINE, "", MEMORY_RECEIPT_SMALL], MEMORY_SIGN_OFF, MEMORY_EMAIL, MEMORY_SIGNER);
 }
 
 // --- asking for a T-shirt size --------------------------------------------------------------------
@@ -75,7 +86,9 @@ export function greetGuardian<T extends { html: string; text?: string }>(
   if (!child) return mail;
   // The greeting is built here from what is stored, and takes the place of the email's own opening
   // "Hi ...," whatever name and capitals that used.
-  const to = `Hi ${guardian}, this is about ${child}'s page.`;
+  // No awkward possessive after a name ending in s: "the page for James", as the automatic emails
+  // say it (./touch-emails.ts). Any other name is as it always was: "Jack's page".
+  const to = `Hi ${guardian}, this is about ${/s$/i.test(child) ? `the page for ${child}` : `${child}'s page`}.`;
   const opening = /Hi [^,<\n]{1,60},/;
   return {
     ...mail,
@@ -116,7 +129,7 @@ export function tidyStaffFacts(f: TidyFacts): Array<[string, string]> {
   }
   if (f.isSporting === true || f.isSporting === false) {
     facts.push(["Sporting event", f.isSporting ? "Yes" : "No"]);
-    if (f.isSporting) facts.push(["T-shirt size", f.tshirtSize ? tshirtLabel(f.tshirtSize) : "Not given yet. Ask them from Admin > Fundraising"]);
+    if (f.isSporting) facts.push(["T-shirt size", f.tshirtSize ? tshirtLabel(f.tshirtSize) : "Not given yet. Ask them from Admin > Get involved > Sign ups"]);
   }
   if (f.memoryDirectorBusiness) facts.push(["Funeral director", f.memoryDirectorBusiness]);
   const contact = [f.memoryFamilyContactName, f.memoryFamilyContactEmail].filter(Boolean).join(", ");

@@ -3,7 +3,7 @@ import { describe, it, expect, vi } from "vitest";
 import { readFileSync, readdirSync } from "node:fs";
 import { resolve } from "node:path";
 import { createRequire } from "node:module";
-import { renderGetInvolvedPage, renderFundraiserCard, renderFundraiserPage } from "../../src/fundraising/render";
+import { renderWhatsOnPage, renderFundraiserCard, renderFundraiserPage } from "../../src/fundraising/render";
 import { addFundraiseFooterLink } from "../../src/fundraising/footer-link";
 import { meter, type PublicCard, type PublicPage } from "../../src/fundraising/model";
 import { SEED_EVENTS } from "./helpers/events-seed";
@@ -23,7 +23,7 @@ const card = (over: Partial<PublicCard> = {}): PublicCard => ({
 });
 const page = (): PublicPage => ({ ...card(), wall: [], giving: { fundraiserId: 41, minimumPence: 200 } });
 const gi = (on: boolean, fundraisers: PublicCard[] = [card()]) =>
-  renderGetInvolvedPage(read("events.html"), { events: SEED_EVENTS, fundraisers, fundraisingOn: on, today: TODAY });
+  renderWhatsOnPage(read("whats-on.html"), { events: SEED_EVENTS, fundraisers, fundraisingOn: on, today: TODAY });
 
 describe("Get involved is exactly as before while fundraising is off", () => {
   it("does not load the fundraising stylesheet while off, and does while on", () => {

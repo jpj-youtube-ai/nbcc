@@ -105,10 +105,18 @@ describe("admin section list stays in sync", () => {
     expect(links.length).toBeGreaterThan(0);
     expect(links.length, "every admin-nav-link in admin.html was checked").toBe((html.match(/\badmin-nav-link\b/g) || []).length);
     const attr = (tag: string, name: string) => tag.match(new RegExp(`\\s${name}="([^"]*)"`))?.[1];
+    // Get involved gates on any one of several sections (data-view-gate-any, read first, as
+    // applyNavFiltering does): each of them must be one the server knows.
     const gatedOnNothing = links
-      .map((tag) => ({ view: attr(tag, "data-view"), gate: attr(tag, "data-edit-gate") ?? attr(tag, "data-view-gate") ?? attr(tag, "data-view") }))
+      .map((tag) => ({
+        view: attr(tag, "data-view"),
+        gates: attr(tag, "data-view-gate-any")?.split(" ") ?? [attr(tag, "data-edit-gate") ?? attr(tag, "data-view-gate") ?? attr(tag, "data-view")],
+      }))
+      .flatMap(({ view, gates }) => gates.map((gate) => ({ view, gate })))
       .filter(({ gate }) => !(SECTIONS as readonly string[]).includes(gate ?? ""))
       .map(({ view, gate }) => `${view} is gated on "${gate}"`);
     expect(gatedOnNothing).toEqual([]);
+    const any = links.filter((tag) => attr(tag, "data-view-gate-any") !== undefined);
+    expect(any.map((tag) => [attr(tag, "data-view"), attr(tag, "data-view-gate-any")])).toEqual([["get-involved", "events fundraising"]]);
   });
 });

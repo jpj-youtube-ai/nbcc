@@ -51,7 +51,8 @@ const BUDGET = {
   maxFontFiles: 2,
 };
 
-const PAGES = ["index.html", "about.html", "donate.html", "contact.html"];
+// newsletter.html (the mailing list sign up) is held to the same budget as the four main pages.
+const PAGES = ["index.html", "about.html", "donate.html", "contact.html", "newsletter.html"];
 
 const read = (rel: string) => readFileSync(resolve(ROOT, rel), "utf8");
 const localSize = (ref: string): number => {

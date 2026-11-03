@@ -8,6 +8,8 @@ import {
   materialFacts,
   renderCertificate,
   renderPoster,
+  posterLineSize,
+  POSTER_LINE_MAX,
   renderSocial,
   renderSponsorForm,
   type MaterialAssets,
@@ -24,7 +26,7 @@ const ASSETS: MaterialAssets = {
   logoOnDark: "data:image/png;base64,REFSSw==",
 };
 const PAGE = "https://nbcc.test/fundraise/sams-santa-dash";
-const INVOLVED = "https://nbcc.test/get-involved";
+const WHATS_ON = "https://nbcc.test/whats-on";
 
 function record(over: Partial<FundraiserRecord> = {}): FundraiserRecord & { meter: ReturnType<typeof meter> } {
   return {
@@ -80,7 +82,7 @@ function record(over: Partial<FundraiserRecord> = {}): FundraiserRecord & { mete
 
 const facts = (over: Partial<FundraiserRecord> = {}) => {
   const f = record(over);
-  return materialFacts(f, f.meter, { pageUrl: PAGE, getInvolvedUrl: INVOLVED });
+  return materialFacts(f, f.meter, { pageUrl: PAGE, whatsOnUrl: WHATS_ON });
 };
 
 const HOSTILE = '<img src=x onerror="alert(1)">&"\'';
@@ -105,10 +107,24 @@ describe("the facts a piece is drawn from", () => {
     expect(facts().line).toBe("Five kilometres round the North Inch in a red suit.");
   });
 
-  it("trim a long first sentence to whole words", () => {
-    const line = facts({ description: "word ".repeat(80).trim() }).line ?? "";
-    expect(line.length).toBeLessThanOrEqual(141);
-    expect(line.endsWith("…")).toBe(true);
+  // A school, 2 November 2026: its poster stopped half way through its first sentence. A sentence is
+  // shown whole, or not at all.
+  it("keep a long first sentence whole", () => {
+    const sentence = "We are raising money for children, young people and vulnerable adults in our town, " +
+      "with a bake sale on Friday, a non uniform day the week after and a big collection at the school gate.";
+    expect(sentence.length).toBeGreaterThan(141);
+    expect(facts({ description: `${sentence} Thank you for helping.` }).line).toBe(sentence);
+  });
+
+  it("leave the line off, rather than cut it, when the first sentence is too long for a poster", () => {
+    expect(facts({ description: "word ".repeat(POSTER_LINE_MAX).trim() }).line).toBeNull();
+    const fits = `${"word ".repeat(POSTER_LINE_MAX / 5).trim()}.`;
+    expect(fits.length).toBeLessThanOrEqual(POSTER_LINE_MAX);
+    expect(facts({ description: fits }).line).toBe(fits);
+  });
+
+  it("never end the line with an ellipsis", () => {
+    for (const n of [20, 40, 60, 80, 120]) expect(facts({ description: "word ".repeat(n).trim() }).line ?? "").not.toContain("…");
   });
 
   it("leave out what was not given", () => {
@@ -127,7 +143,7 @@ describe("the facts a piece is drawn from", () => {
   // Event pages: a public event has its own page now, and the caller gives its /event/ address.
   it("point a public event's code at its own page, as a fundraiser's", () => {
     const f = record({ path: "event" });
-    const d = materialFacts(f, f.meter, { pageUrl: "https://nbcc.test/event/sams-santa-dash", getInvolvedUrl: INVOLVED });
+    const d = materialFacts(f, f.meter, { pageUrl: "https://nbcc.test/event/sams-santa-dash", whatsOnUrl: WHATS_ON });
     expect(d.link).toBe("https://nbcc.test/event/sams-santa-dash");
     expect(d.linkKind).toBe("page");
     expect(d.linkWords).toBe("nbcc.test/event/sams-santa-dash");
@@ -299,7 +315,7 @@ describe("the thank you certificate", () => {
 
   it("says nothing about Gift Aid when there was none", () => {
     const f = record({ status: "finished", meter: meter({ onlinePence: 30000, cashPence: 0, targetPence: null }) });
-    const none = renderCertificate(materialFacts(f, f.meter, { pageUrl: PAGE, getInvolvedUrl: INVOLVED }), ASSETS, { date: "1 January 2027", preview: false });
+    const none = renderCertificate(materialFacts(f, f.meter, { pageUrl: PAGE, whatsOnUrl: WHATS_ON }), ASSETS, { date: "1 January 2027", preview: false });
     expect(none).toContain("£300");
     expect(none).not.toContain("Gift Aid");
   });
@@ -337,5 +353,21 @@ describe("everything a person typed is escaped, on every piece", () => {
     expect(html).not.toContain("</script><script>alert(1)");
     const json = /<script type="application\/json" id="socialData">([\s\S]*?)<\/script>/.exec(html)?.[1] ?? "";
     expect(JSON.parse(json).title).toBe("</script><script>alert(1)</script>");
+  });
+});
+
+describe("the poster's line", () => {
+  it("is drawn smaller as it grows, so a whole sentence fits", () => {
+    expect(posterLineSize("x".repeat(140))).toBe("15pt");
+    expect(posterLineSize("x".repeat(141))).toBe("13.5pt");
+    expect(posterLineSize("x".repeat(200))).toBe("13.5pt");
+    expect(posterLineSize("x".repeat(201))).toBe("12pt");
+    expect(posterLineSize("x".repeat(POSTER_LINE_MAX))).toBe("12pt");
+  });
+
+  it("carries its size into the poster", () => {
+    const sentence = `${"word ".repeat(36).trim()}.`;
+    const html = renderPoster({ ...facts({ description: sentence }) }, ASSETS);
+    expect(html).toContain(`<p class="p-line" style="font-size:${posterLineSize(sentence)}">${sentence}</p>`);
   });
 });

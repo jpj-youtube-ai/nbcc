@@ -11,6 +11,14 @@ file, the slot uses a clearly-labelled placeholder.
 | File | Source | Consent |
 |---|---|---|
 | `nbcc-logo.png` | NBCC brand logo | NBCC owns; in use across the site |
+| `nbcc-logo-full.svg` | NBCC brand logo: `nbcc-logo-white.svg` with its letters in the logo's maroon and its white outline removed, checked against the master | NBCC owns; the big logo at the top of the home page |
+| `nbcc-logo-192.webp` | NBCC brand logo: `nbcc-logo-full.svg` baked small (192 high) with sharp, for the red bags at the Ball page (/bag), which loads on a hotel's mobile signal | NBCC owns |
+
+## Illustrations
+
+| File | Source | Consent |
+|---|---|---|
+| `ball-bag-hero.webp` | Drawn for NBCC (2 November 2026): a red gift bag with a gold bow, presents peeking out and a "Packed with love" tag, in Fill a Red Bag's style; authored as SVG and baked to WebP. The bag on /bag, its row and its thank you | NBCC owns; no people shown |
 
 ## Team headshots (REQ-016 / REQ-034)
 
@@ -46,6 +54,7 @@ assets** — **CONTENT VERIFICATION**.
 | `story-tygan.jpg` | about.html "our story" founding headshot (REQ-015) | 640×800, 4:5, q82 progressive JPEG | placeholder | ❌ pending consented photo |
 | `why-packing.jpg` | (superseded, see below) | 900×600 q82 progressive JPEG | placeholder | ❌ pending consented photo |
 | `home-red-bags-handover.jpg` | index.html "why your donation matters" photo (REQ-012) | 1400×732 q80 progressive JPEG (source PNG in `assets/img/source/home-red-bags-handover.png`) | provided by NBCC | ✅ consented volunteer photo (NBCC team in maroon branded sweatshirts handing over red bags by the Christmas tree at the Elves' Workshop; no beneficiaries pictured) |
+| `crop-bags.jpg`, `crop-smile.jpg`, `crop-handover.jpg`, `crop-tree.jpg` | the short pages under `/get-involved/` | 360 to 620px wide, baseline JPEG, 18 to 69KB, no metadata. Crops of `home-red-bags-handover.jpg` | provided by NBCC | ✅ the same consented volunteer photo; no beneficiaries pictured |
 | `og-image.png` | SEO `og:image` / `twitter:image` on all four pages (REQ-034) | 1200×630 PNG branded card | placeholder | n/a (brand card, no people) — pending a designed share image |
 
 **Beneficiary/volunteer/packing/delivery imagery** (the founding headshot, the

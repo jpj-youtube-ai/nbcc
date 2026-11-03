@@ -60,6 +60,12 @@ export interface ShellOptions {
   /** Add the charity registration sentence under the contact line. */
   registration?: boolean;
   /**
+   * The mandated registration lines, word for word (REGISTRATION_LINES in ../legal/registration.ts),
+   * under the contact line in place of the shorter sentence above. For a donation receipt, whose
+   * statement must be the mandated one. Each line is escaped; they sit one above the other.
+   */
+  registrationLines?: readonly string[];
+  /**
    * Add the registered postal address under the registration line. Microsoft and the other big
    * filters look for a real address; its absence is a small but real spam signal.
    */
@@ -88,10 +94,13 @@ function sponsorBand(s: SponsorCredit): string {
 export function emailShell(bodyHtml: string, options: ShellOptions = {}): string {
   const contact = options.contactEmail ?? GIVING_EMAIL;
   const sponsor = options.sponsor ? sponsorBand(options.sponsor) : "";
-  const registration = options.registration
+  const registration = options.registrationLines?.length
     ? `
+      <div style="color:${CREAM_82};font-size:11px;margin-top:8px">${options.registrationLines.map(esc).join("<br />")}</div>`
+    : options.registration
+      ? `
       <div style="color:${CREAM_82};font-size:11px;margin-top:8px">${CHARITY_REGISTRATION}</div>`
-    : "";
+      : "";
   const address = options.postalAddress
     ? `
       <div style="color:${CREAM_82};font-size:11px;margin-top:4px">${esc(options.postalAddress)}</div>`
@@ -171,8 +180,21 @@ export const signOff = (line: string): string =>
 /** The sign off in a plain text part. */
 export const signOffText = (line: string): string => `${line}\nNBCC Team`;
 
+// --- who NBCC is, in the charity's own words (the readthrough, 2026-10-04) --------------------------
+// The exact sentences the charity uses to describe itself, word for word ("volunteer led" with no
+// hyphen, "South West Scotland"). ONE of them goes, as its own short paragraph near the end of the
+// body, in the emails whose reader may never have dealt with NBCC: the pledge confirmation, the team
+// invite and the ticket confirmation. The full one where the email is short enough to take it, the
+// short one otherwise, and never beside another sentence that says much the same. The donation
+// receipt has the short one too, after its closing line (src/donors/confirmation.ts), and the
+// giver's thank you from a fundraiser has the full one (src/fundraising/thanks-email.ts). Not in the in
+// memory emails, the Festive Ball's, staff notices, or the company and refund receipts.
+export const ABOUT_NBCC_FULL =
+  "NBCC is a volunteer led charity here all year for children, young people and vulnerable adults across South West Scotland, with school clothing and crisis support whenever it is needed, and every December a full red bag for those who would otherwise wake up on Christmas morning with nothing to open.";
+export const ABOUT_NBCC_SHORT = "NBCC is a volunteer led charity here all year for children, young people and vulnerable adults across South West Scotland.";
+
 export const QUESTIONS_HEADING = "Got any questions?";
-export const QUESTIONS_LINE = "We’d love to hear from you. Give us a ring or drop us a line, whichever suits you.";
+export const QUESTIONS_LINE = "We'd love to hear from you. Give us a ring or drop us a line, whichever suits you.";
 
 // One of the two equal tiles. A table cell, because a mail client's idea of a flex box is none at
 // all. The value wraps rather than overflows, so a long address still fits a phone.
@@ -219,7 +241,8 @@ export const signOffAsText = (line: string, name: string): string => `${line}\n$
 // approved them on 2026-10-02: the total large in the serif maroon, "raised of" the target, and a
 // tan bar filled in crimson. Additive; nothing else moves.
 
-const poundsOf = (pence: number): string => {
+/** £10, £10.50, £1,000: whole pounds without pence, and pence only when the amount is not whole. */
+export const pounds = (pence: number): string => {
   const whole = pence % 100 === 0;
   return `£${(pence / 100).toLocaleString("en-GB", { minimumFractionDigits: whole ? 0 : 2, maximumFractionDigits: 2 })}`;
 };
@@ -227,14 +250,14 @@ const poundsOf = (pence: number): string => {
 /** "£250 raised of £500" over a bar filled to the percentage (held at 100), or the total alone. */
 export const meterBar = (raisedPence: number, targetPence: number | null): string => {
   const raised = Math.max(0, Math.floor(raisedPence));
-  const total = `<b style="font-family:${HEAD};font-size:20px;color:${MAROON}">${poundsOf(raised)}</b>`;
+  const total = `<b style="font-family:${HEAD};font-size:20px;color:${MAROON}">${pounds(raised)}</b>`;
   if (!targetPence || targetPence <= 0) {
     return `<div style="margin:6px 0 18px;font-family:${BODY_FONT};font-size:14px;color:${SLATE}">${total} raised so far</div>`;
   }
   const pc = Math.min(100, Math.round((raised * 100) / targetPence));
   return (
     `<div style="margin:6px 0 18px"><div style="font-family:${BODY_FONT};font-size:14px;color:${SLATE};margin:0 0 6px">` +
-    `${total} raised of ${poundsOf(targetPence)}</div>` +
+    `${total} raised of ${pounds(targetPence)}</div>` +
     `<div style="background:${TAN_SOFT};border-radius:999px;height:12px;overflow:hidden"><div style="background:${CRIMSON};width:${pc}%;height:12px"></div></div></div>`
   );
 };

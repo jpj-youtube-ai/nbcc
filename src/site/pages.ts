@@ -2,6 +2,7 @@
 // sitemap.xml feed, the admin "Site pages" panel and the alias validators all read, so a page
 // added here appears everywhere at once and nothing can go stale independently. Pure — no DB,
 // no config, no fs — so every rule is unit-tested directly.
+import { RED_BAG_LIVE } from "../red-bag/switch";
 
 export interface SitePage {
   path: string;
@@ -20,6 +21,18 @@ export interface SitePage {
   children?: SitePage[];
 }
 
+// The short pages under /get-involved/, served by src/routes/get-involved-pages.ts. They are listed
+// beside Get involved, not as children of it, because the events switch does not govern them: a child
+// would drop off the /sitemap page along with its parent while the page itself stayed up.
+export const SHORT_PAGES: SitePage[] = [
+  { path: "/get-involved/drop-off-points", title: "Drop-off points", listedByDefault: true },
+  { path: "/get-involved/referrals", title: "Referrals", listedByDefault: true },
+  { path: "/get-involved/volunteer", title: "Volunteer", listedByDefault: true },
+  { path: "/get-involved/business", title: "Your business", listedByDefault: true },
+  { path: "/get-involved/schools", title: "Your school", listedByDefault: true },
+  { path: "/get-involved/groups", title: "Your club or group", listedByDefault: true },
+];
+
 // The tree the /sitemap page renders. Paths are the CANONICAL clean URLs from _redirects.
 // /donate/thank-you and /donor-portal are real public pages (so the tree shows them) but are
 // unlisted by default: one is a post-payment landing, the other a personal-access entry —
@@ -33,11 +46,18 @@ export const SITE_PAGES: SitePage[] = [
     listedByDefault: true,
     children: [{ path: "/donate/thank-you", title: "Thank you", listedByDefault: false }],
   },
+  // Fill a Red Bag: listed for search engines while its switch is on (src/red-bag/switch.ts), so it
+  // is on the site map; it is still linked from no menu, no footer and no page. Switched off the
+  // address is a 404, so it is on no map. Its thank you, /fill/thank-you, is never here.
+  ...(RED_BAG_LIVE ? [{ path: "/fill", title: "Fill a Red Bag", listedByDefault: true }] : []),
   { path: "/my-story", title: "Share your story", listedByDefault: true },
   { path: "/supporters", title: "Supporters", listedByDefault: true },
   { path: "/hub", title: "Hub", listedByDefault: true },
-  // TASK-494: the Events page renamed; /events redirects here.
+  // Every way to help, with the first six of What's on's cards. The events switch governs both.
   { path: "/get-involved", title: "Get involved", listedByDefault: true, eventsGated: true },
+  // The Events page, at its own address; /events redirects here.
+  { path: "/whats-on", title: "What's on", listedByDefault: true, eventsGated: true },
+  ...SHORT_PAGES,
   {
     path: "/fundraise",
     title: "Fundraise for us",
@@ -51,6 +71,8 @@ export const SITE_PAGES: SitePage[] = [
     ],
   },
   { path: "/contact", title: "Contact", listedByDefault: true },
+  // Joining the mailing list: the footer sign up form on a page of its own (newsletter.html).
+  { path: "/newsletter", title: "Join our mailing list", listedByDefault: true },
   { path: "/privacy", title: "Privacy notice", listedByDefault: true },
   { path: "/donor-portal", title: "Donor portal", listedByDefault: false },
   {
@@ -58,7 +80,12 @@ export const SITE_PAGES: SitePage[] = [
     title: "Festive Ball",
     listedByDefault: true,
     ballGated: true,
-    children: [{ path: "/ball/terms", title: "Ticket terms", listedByDefault: true, ballGated: true }],
+    children: [
+      { path: "/ball/terms", title: "Ticket terms", listedByDefault: true, ballGated: true },
+      // Jaimie, 14 October 2026: for anyone who cannot come (src/ball/donate-page.ts).
+      // Not offered to search engines: it says noindex, and redirects to /donate after the Ball.
+      { path: "/ball/donate", title: "Can't make it? Donate", listedByDefault: false, ballGated: true },
+    ],
   },
 ];
 
@@ -122,6 +149,24 @@ export const PRIVATE_PAGES: PrivatePage[] = [
     note: "Where a volunteer who has forgotten their password sets a new one.",
   },
   {
+    path: "/fill/thank-you",
+    title: "Fill a Red Bag: thank you",
+    reach: "link-only",
+    note: "Where a donor lands after giving on Fill a Red Bag. Nothing links to it and search engines are told to skip it.",
+  },
+  {
+    path: "/bag",
+    title: "Red bags at the Festive Ball",
+    reach: "unlisted",
+    note: "Where the QR code on each table card at the Festive Ball goes, to give £50 a red bag. Search engines are told to skip it, and from Monday 9 November 2026 it goes to Fill a Red Bag.",
+  },
+  {
+    path: "/bag/thank-you",
+    title: "Red bags at the Festive Ball: thank you",
+    reach: "link-only",
+    note: "Where a guest lands after giving red bags at the Festive Ball. Nothing links to it and search engines are told to skip it.",
+  },
+  {
     path: "/admin",
     title: "Admin",
     reach: "staff",
@@ -142,8 +187,10 @@ export const RESERVED_PREFIXES: string[] = [
   "/donate",
   "/donor-portal",
   // TASK-453: a real page (switched on and off from the admin), so no spare address may shadow it.
-  // TASK-494 renamed it /get-involved; the old address stays reserved because it redirects there.
+  // It lives at /whats-on now; the old address stays reserved because it redirects there.
   "/events",
+  "/whats-on",
+  // Get involved, and the short pages under it.
   "/get-involved",
   // TASK-496: the ways people type Get involved from a poster; both redirect there.
   "/getinvolved",
@@ -169,6 +216,16 @@ export const RESERVED_PREFIXES: string[] = [
   "/unsubscribe",
   "/about-us",
   "/contact",
+  // Fill a Red Bag: a real page at /fill, with its thank you under it (/fill/thank-you), so no
+  // spare address may shadow either. Reserving "/fill" takes /fill and what sits under it, not
+  // every address that begins "fill".
+  "/fill",
+  // The address it first had, and the other way people type it: both redirect to /fill
+  // (src/routes/red-bag.ts).
+  "/fill-a-red-bag",
+  "/fill-a-bag",
+  // Red bags at the Festive Ball: the table cards' QR code page and its thank you (src/ball/bags-page.ts).
+  "/bag",
   "/festive-ball",
   "/a-night-to-remember",
   "/set-password",
@@ -201,9 +258,58 @@ export function aliasFromProblem(from: string): string | null {
   return null;
 }
 
-/** May `to` be an alias destination? Only a canonical page from the registry. */
+// TASK-568: a spare address may also forward to one of NBCC's own subdomains (nbcc.scot/drop to
+// drop.nbcc.scot). Only ours: if a staff login were misused, an nbcc.scot link still could not be
+// pointed at somebody else's website. The host is read by the URL parser, never by a pattern on what
+// was typed, so a lookalike (nbcc.scot.example.com, drop.nbcc.scot@example.com) is seen for what it
+// is. www.nbcc.scot and bare nbcc.scot are THIS site: a forward to them could send a visitor round
+// in a circle, and the page list is the way to point at a page here.
+const FORWARD_HOST = /^(?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)+nbcc\.scot$/;
+const FORWARD_PATH = /^(?:\/[A-Za-z0-9._~-]+)*\/?$/;
+const LOOP_HOSTS = ["www.nbcc.scot"];
+export const FORWARD_HELP =
+  "Type an NBCC subdomain, like drop.nbcc.scot or drop.nbcc.scot/collect. It must end in .nbcc.scot.";
+
+/**
+ * What staff typed as a subdomain destination, in the form it is stored and sent: always https,
+ * host lowercased, no trailing slash. Null when it is not an NBCC subdomain, or carries a port, a
+ * user name, a query or a fragment.
+ */
+export function forwardTarget(typed: string): string | null {
+  const raw = typed.trim();
+  if (!raw || raw.length > 200 || /[\s\\<>"'?#]/.test(raw)) return null;
+  let address = raw;
+  if (!/^https?:\/\//i.test(raw)) {
+    if (raw.includes("://") || raw.startsWith("/")) return null;
+    address = `https://${raw}`;
+  }
+  // What is stored is what was typed: after the scheme, only plain letters, numbers and . / _ ~ -.
+  // That refuses every port and user name outright (the parser quietly drops a default port and an
+  // empty user name), and anything the parser would rewrite: %-codes, accents, lookalike letters.
+  if (!/^[A-Za-z0-9._~/-]+$/.test(address.replace(/^https?:\/\//i, ""))) return null;
+  let url: URL;
+  try {
+    url = new URL(address);
+  } catch {
+    return null;
+  }
+  if (url.username || url.password || url.port || url.search || url.hash) return null;
+  const host = url.hostname.toLowerCase();
+  if (!FORWARD_HOST.test(host) || LOOP_HOSTS.includes(host)) return null;
+  if (!FORWARD_PATH.test(url.pathname)) return null;
+  return `https://${host}${url.pathname.replace(/\/$/, "")}`;
+}
+
+/** Is this stored destination a forward to a subdomain (rather than one of the site's pages)? */
+export function isForward(to: string): boolean {
+  return to.startsWith("https://");
+}
+
+/** May `to` be an alias destination? A canonical page from the registry, or an NBCC subdomain in
+ *  its stored form (see forwardTarget). */
 export function aliasToProblem(to: string): string | null {
   if (to === "/") return null;
+  if (isForward(to)) return forwardTarget(to) === to ? null : FORWARD_HELP;
   if (!isKnownPage(to)) return "The destination must be one of the site's real pages.";
   return null;
 }

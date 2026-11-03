@@ -1,10 +1,14 @@
 // @vitest-environment jsdom
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, vi } from "vitest";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { createRequire } from "node:module";
 import { signAdminSession } from "../../src/admin/session";
 import { effectivePermissions, type PermissionMap } from "../../src/admin/permissions";
+
+// Each test loads the whole admin page afresh in jsdom: quick alone, but past the usual 5 seconds
+// under a full parallel run (as admin-fundraising-page.test.ts).
+vi.setConfig({ testTimeout: 20_000 });
 
 // TASK-503: the team's tools on Admin > Fundraising, in the admin's jsdom harness (as
 // admin-fundraising-page.test.ts): invite someone, the invites not taken up, Time to call and the
@@ -192,7 +196,13 @@ async function openFundraising() {
   (el("adminPassword") as HTMLInputElement).value = "pw";
   el("loginForm").dispatchEvent(new Event("submit", { cancelable: true, bubbles: true }));
   await settle();
-  (q('.admin-nav-link[data-view="fundraising"]') as HTMLElement).click();
+  (q('.admin-nav-link[data-view="get-involved"]') as HTMLElement).click();
+  await settle();
+}
+// The Weekly summary is in the Settings section of Get involved, and loads when that is shown.
+async function openSettings() {
+  await openFundraising();
+  (q('#giSections [data-gi-section="settings"]') as HTMLElement).click();
   await settle();
 }
 async function openRow(id: number) {
@@ -228,7 +238,7 @@ beforeEach(() => {
     signers: [{ id: 3, firstName: "Fern" }, { id: 5, firstName: "Rowan" }],
     inviteWording: { approvals: {}, unavailable: false },
   };
-  summary = { recipients: ["fern@example.com"], lastWeek: "2026-11-30" };
+  summary = { recipients: ["fern@nbcc.scot"], lastWeek: "2026-11-30" };
   asRole("admin");
   calls = [];
   answers = {};
@@ -457,7 +467,8 @@ describe("What are you inviting them to do?", () => {
       raising: "Send a raising money invite to Mary Smith at mary@example.com, signed by Fern?",
       team: "Send a team invite to Mary Smith at mary@example.com, signed by Fern?",
       event: "Send an event invite to Mary Smith at mary@example.com, signed by Fern?",
-      memory: "Send an in memory invite to Mary Smith at mary@example.com, signed by Fern?",
+      // The charity, 2026-10-04: an in memory invite comes from Jodie, whoever is signed in.
+      memory: "Send an in memory invite to Mary Smith at mary@example.com? It comes from Jodie.",
     };
     approveMemory();
     confirmAnswer = false;
@@ -560,9 +571,70 @@ describe("the in memory invite's sign off", () => {
     expect((el("frInviteType") as HTMLSelectElement).value).toBe("memory");
     submit("#frInviteForm");
     await settle();
-    expect(confirmed.pop()).toBe("Send an in memory invite to Mary Smith at mary@example.com, signed by Fern?");
+    expect(confirmed.pop()).toBe("Send an in memory invite to Mary Smith at mary@example.com? It comes from Jodie.");
     expect((sent("POST", "/api/admin/fundraising/invites")[0].body as Record<string, unknown>).type).toBe("memory");
+    // No signer is sent: the server signs it Jodie and copies Jodie, whatever a page sends.
+    expect(sent("POST", "/api/admin/fundraising/invites")[0].body as Record<string, unknown>).not.toHaveProperty("signedBy");
     expect(text(el("frInviteStatus"))).toBe("Invite sent to Mary Smith.");
+  });
+
+  // The charity, 2026-10-04: an in memory invite comes from Jodie, is signed by her and copies her
+  // and nobody else, so "Signed by" does nothing for it: the box goes and one line says what is true.
+  it("hides Signed by for an in memory invite, and says who it comes from instead", async () => {
+    approveMemory();
+    await openFundraising();
+    const field = el("frInviteSigner")!.closest(".fr-field") as HTMLElement;
+    const line = el("frInviteMemoryNote");
+    expect(field.hidden).toBe(false);
+    expect(line.hidden).toBe(true);
+    setValue("#frInviteType", "memory");
+    await settle();
+    expect(field.hidden).toBe(true);
+    expect(line.hidden).toBe(false);
+    expect(text(line)).toBe("In memory invites come from Jodie, are signed by her, and a copy goes to her.");
+    for (const type of ["raising", "team", "event"]) {
+      setValue("#frInviteType", type);
+      await settle();
+      expect(field.hidden).toBe(false);
+      expect(line.hidden).toBe(true);
+    }
+  });
+
+  // The signer chosen is not lost by a look at In memory: back on another type, it is still sent.
+  it("keeps the signer chosen through a switch to In memory and back", async () => {
+    approveMemory();
+    await openFundraising();
+    setValue("#frInviteSigner", "5");
+    fillInvite("memory");
+    await settle();
+    expect((el("frInviteSigner")!.closest(".fr-field") as HTMLElement).hidden).toBe(true);
+    setValue("#frInviteType", "team");
+    await settle();
+    expect((el("frInviteSigner")!.closest(".fr-field") as HTMLElement).hidden).toBe(false);
+    expect((el("frInviteSigner") as HTMLSelectElement).value).toBe("5");
+    submit("#frInviteForm");
+    await settle();
+    expect(confirmed.pop()).toBe("Send a team invite to Mary Smith at mary@example.com, signed by Rowan?");
+    expect(sent("POST", "/api/admin/fundraising/invites")[0].body).toMatchObject({ type: "team", signedBy: 5 });
+  });
+
+  it("reads the in memory email without a signer, as it is signed by Jodie", async () => {
+    approveMemory();
+    await openFundraising();
+    calls = [];
+    setValue("#frInviteType", "memory");
+    await settle();
+    const read = calls.filter((c) => c.path.includes("/invite-wording/memory"));
+    expect(read).toHaveLength(1);
+    expect(read[0].query ?? "").not.toContain("signedBy");
+  });
+
+  it("does not say an in memory invite was invited by someone it was not signed by", async () => {
+    team.invites = [{ ...team.invites[0], type: "memory" }];
+    await openFundraising();
+    const item = q('#frInvites [data-frinvite="7"]')!;
+    expect(text(item)).toContain("Invited on 01/10/2026");
+    expect(text(item)).not.toContain("Invited by");
   });
 
   it("never approves or withdraws anything itself", async () => {
@@ -847,52 +919,91 @@ describe("Take off Get involved?", () => {
 describe("the Weekly summary card", () => {
   it("is for admins only", async () => {
     asRole("editor");
-    await openFundraising();
+    await openSettings();
     expect(el("frSummary").hidden).toBe(true);
     expect(sent("GET", "/api/admin/fundraising/summary")).toHaveLength(0);
   });
 
   it("shows who gets it and when it last went", async () => {
-    await openFundraising();
+    await openSettings();
     expect(el("frSummary").hidden).toBe(false);
     expect(text(el("frSummaryState"))).toBe("On. It goes to 1 person at 8am on Mondays. The last one went on 30/11/2026.");
-    expect(text(el("frSummaryList"))).toContain("fern@example.com");
+    expect(text(el("frSummaryList"))).toContain("fern@nbcc.scot");
+  });
+
+  it("says it is one email to everyone, and nbcc.scot addresses only", async () => {
+    await openSettings();
+    const intro = text(q("#frSummary .fr-card-intro") as HTMLElement);
+    expect(intro).toContain("one email to everyone on this list");
+    expect(intro).toContain("Reply all");
+    expect(intro).toContain("Only nbcc.scot addresses can be on the list.");
+    expect(intro).not.toContain("each person");
+    expect(intro).not.toMatch(/—/);
   });
 
   it("adds an address and saves the list", async () => {
-    await openFundraising();
-    setValue("#frSummaryEmail", "Rowan@Example.com");
+    await openSettings();
+    setValue("#frSummaryEmail", "Rowan@NBCC.scot");
     (q("#frSummaryAdd") as HTMLElement).click();
     await settle();
-    expect(sent("PUT", "/api/admin/fundraising/summary")[0].body).toEqual({ recipients: ["fern@example.com", "rowan@example.com"] });
-    expect(text(el("frSummaryList"))).toContain("rowan@example.com");
-    expect(text(el("frSummaryStatus"))).toBe("Saved. rowan@example.com gets the next one.");
+    expect(sent("PUT", "/api/admin/fundraising/summary")[0].body).toEqual({ recipients: ["fern@nbcc.scot", "rowan@nbcc.scot"] });
+    expect(text(el("frSummaryList"))).toContain("rowan@nbcc.scot");
+    expect(text(el("frSummaryStatus"))).toBe("Saved. rowan@nbcc.scot gets the next one.");
   });
 
   it("refuses an address that is not whole, or already there", async () => {
-    await openFundraising();
+    await openSettings();
     setValue("#frSummaryEmail", "rowan@");
     (q("#frSummaryAdd") as HTMLElement).click();
     await settle();
     expect(text(el("frSummaryStatus"))).toBe("That isn't a whole email address.");
-    setValue("#frSummaryEmail", "fern@example.com");
+    setValue("#frSummaryEmail", "fern@nbcc.scot");
     (q("#frSummaryAdd") as HTMLElement).click();
     await settle();
     expect(text(el("frSummaryStatus"))).toBe("That address is already on the list.");
     expect(sent("PUT", "/api/admin/fundraising/summary")).toHaveLength(0);
   });
 
+  it("refuses an address that is not nbcc.scot, a subdomain included, and keeps what was typed", async () => {
+    await openSettings();
+    for (const outsider of ["rowan@example.com", "rowan@news.nbcc.scot"]) {
+      setValue("#frSummaryEmail", outsider);
+      (q("#frSummaryAdd") as HTMLElement).click();
+      await settle();
+      expect(text(el("frSummaryStatus")), outsider).toBe("Only nbcc.scot addresses can get the weekly summary.");
+      expect((q("#frSummaryEmail") as HTMLInputElement).value).toBe(outsider);
+    }
+    expect(sent("PUT", "/api/admin/fundraising/summary")).toHaveLength(0);
+  });
+
+  it("marks an old address from elsewhere as left off, and does not count it", async () => {
+    summary = { recipients: ["fern@nbcc.scot", "old@example.com"], lastWeek: null };
+    await openSettings();
+    expect(text(el("frSummaryState"))).toBe("On. It goes to 1 person at 8am on Mondays.");
+    const rows = qa("#frSummaryList li").map((li) => text(li as HTMLElement));
+    expect(rows[0]).not.toContain("left off");
+    expect(rows[1]).toContain("old@example.com");
+    expect(rows[1]).toContain("Not an nbcc.scot address, so it is left off the email.");
+  });
+
+  it("says it is off when nobody on the list has an nbcc.scot address", async () => {
+    summary = { recipients: ["old@example.com"], lastWeek: null };
+    await openSettings();
+    expect(text(el("frSummaryState"))).toBe("Off. Nobody on the list has an nbcc.scot address, so no summary goes.");
+    expect(el("frSummary").classList.contains("is-on")).toBe(false);
+  });
+
   it("removes an address after asking", async () => {
-    await openFundraising();
-    (q('[data-frsummaryremove="fern@example.com"]') as HTMLElement).click();
+    await openSettings();
+    (q('[data-frsummaryremove="fern@nbcc.scot"]') as HTMLElement).click();
     await settle();
-    expect(confirmed.pop()).toBe("Stop sending the Monday summary to fern@example.com?");
+    expect(confirmed.pop()).toBe("Stop sending the Monday summary to fern@nbcc.scot?");
     expect(sent("PUT", "/api/admin/fundraising/summary")[0].body).toEqual({ recipients: [] });
     expect(text(el("frSummaryState"))).toBe("Off. Nobody is on the list, so no summary goes.");
   });
 
   it("sends a test to the admin asking", async () => {
-    await openFundraising();
+    await openSettings();
     (q("#frSummaryTest") as HTMLElement).click();
     await settle();
     expect(sent("POST", "/api/admin/fundraising/summary/test")).toHaveLength(1);

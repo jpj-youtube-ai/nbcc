@@ -153,3 +153,98 @@ describe("a page in memory of someone", () => {
     expect(html).not.toContain("Red Bag");
   });
 });
+
+// The Ball's moment puts Fill a Red Bag in the footer of the pages the site router draws
+// (src/red-bag/fill-links.ts). The charity is very careful about pages in memory of someone, so they
+// stay quiet: the link never reaches one, either side of the moment. Through the real router again,
+// with the clock passed in.
+describe("the footer's Fill a Red Bag and a quiet page", () => {
+  const BEFORE = new Date("2026-11-07T19:59:59Z");
+  const THE_MOMENT = new Date("2026-11-07T20:00:00Z");
+  const CHRISTMAS_WEEK = new Date("2026-12-27T10:00:00Z");
+  const AFTER = [THE_MOMENT, CHRISTMAS_WEEK];
+  const LINK = 'href="/fill"';
+
+  let now = BEFORE;
+  let clocked: Server;
+  let clockedBase = "";
+  beforeAll(async () => {
+    const app = express();
+    app.use(createSiteRouter(ROOT, { now: () => now }));
+    clocked = app.listen(0);
+    await new Promise((r) => clocked.once("listening", r));
+    clockedBase = `http://127.0.0.1:${(clocked.address() as AddressInfo).port}`;
+  });
+  afterAll(() => clocked.close());
+
+  const at = async (when: Date, path: string) => {
+    now = when;
+    const res = await fetch(`${clockedBase}${path}`, { redirect: "manual" });
+    expect(res.status).toBe(200);
+    return res.text();
+  };
+
+  const QUIET: Array<[string, Partial<FundraiserRecord>]> = [
+    ["the in_memory flag", { inMemory: true, memoryName: "Sam Example" } as Partial<FundraiserRecord>],
+    ["a category that mentions memory", { kind: "in_memory", kindLabel: "In memory" } as Partial<FundraiserRecord>],
+  ];
+
+  it.each(QUIET)("a page known by %s never has it", async (_how, over) => {
+    state.fundraisers = [rec(over)];
+    for (const when of [BEFORE, ...AFTER]) {
+      const html = await at(when, "/fundraise/robins-dash");
+      expect(html).toContain("<footer");
+      expect(html).not.toContain(LINK);
+      expect(html).not.toContain("Red Bag");
+    }
+  });
+
+  it.each(QUIET)("nor does a giver's thank you on a page known by %s", async (_how, over) => {
+    state.fundraisers = [rec(over)];
+    for (const when of AFTER) {
+      const html = await at(when, "/fundraise/robins-dash?thanks=1");
+      expect(html).toContain("<footer");
+      expect(html).not.toContain("Red Bag");
+    }
+  });
+
+  it("an event page in a category that mentions memory never has it", async () => {
+    state.fundraisers = [rec({ path: "event", slug: "quiet-evening", eventDate: "2026-12-05", kind: "in_memory", kindLabel: "In memory" } as Partial<FundraiserRecord>)];
+    for (const when of AFTER) expect(await at(when, "/event/quiet-evening")).not.toContain("Red Bag");
+  });
+
+  it("the join page of a team in a category that mentions memory never has it", async () => {
+    state.fundraisers = [rec({ isTeam: true, kind: "in_memory", kindLabel: "In memory" } as Partial<FundraiserRecord>)];
+    for (const when of AFTER) {
+      const html = await at(when, "/fundraise/robins-dash/join");
+      expect(html).toContain("<footer");
+      expect(html).not.toContain(LINK);
+    }
+  });
+
+  // The sign up and the organiser's private area are one address for everyone, and the in memory path
+  // is only chosen, or the page only known, once they are open in the browser. A family may be on
+  // either, so as they are drawn they are treated as quiet.
+  it.each(["/fundraise", "/fundraise?invite=an-invented-token", "/fundraise?again=an-invented-token", "/fundraise/manage"])(
+    "%s, where a family may be, never has it",
+    async (path) => {
+      for (const when of [BEFORE, ...AFTER]) {
+        const html = await at(when, path);
+        expect(html).toContain("<footer");
+        expect(html).not.toContain(LINK);
+      }
+    },
+  );
+
+  it("an ordinary page has it after the moment and not before, so these tests can fail", async () => {
+    expect(await at(BEFORE, "/fundraise/robins-dash")).not.toContain(LINK);
+    for (const when of AFTER) expect(await at(when, "/fundraise/robins-dash")).toContain(LINK);
+  });
+
+  it("an ordinary event page and team join page have it after the moment", async () => {
+    state.fundraisers = [rec({ path: "event", slug: "quiz-night", eventDate: "2026-12-05" })];
+    expect(await at(THE_MOMENT, "/event/quiz-night")).toContain(LINK);
+    state.fundraisers = [rec({ isTeam: true })];
+    expect(await at(THE_MOMENT, "/fundraise/robins-dash/join")).toContain(LINK);
+  });
+});

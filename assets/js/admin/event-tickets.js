@@ -819,15 +819,17 @@
       });
     }
 
-    // Read afresh whenever the Fundraising section is shown (app.js shows it by taking off `hidden`).
-    if (view && card) {
+    // Read afresh whenever the card's part of Get involved is shown (app.js shows it by taking off
+    // `hidden`): Tickets and pledges. Without such a part round it, the whole box is watched.
+    var shown = (card && card.closest && card.closest("[data-gi-part]")) || view;
+    if (shown && card) {
       var Observer = win.MutationObserver || (typeof MutationObserver !== "undefined" ? MutationObserver : null);
       if (Observer) {
         new Observer(function () {
-          if (!view.hidden) load();
-        }).observe(view, { attributes: true, attributeFilter: ["hidden"] });
+          if (!shown.hidden) load();
+        }).observe(shown, { attributes: true, attributeFilter: ["hidden"] });
       }
-      if (!view.hidden && token()) load();
+      if (!shown.hidden && token()) load();
     }
     return { load: load };
   }

@@ -32,7 +32,7 @@ export async function getAccountCreatedAt(userId: number): Promise<Date | null> 
 
 // One "the latest thing to arrive after $1" query per section, each on the database that holds it.
 // These are the same times the row pills in the admin compare against.
-const LATEST: Record<Exclude<Area, "events" | "analytics" | "qr">, { db: "main" | "contact" | "stories"; sql: string }> = {
+const LATEST: Record<Exclude<Area, "events" | "analytics" | "qr" | "red-bag">, { db: "main" | "contact" | "stories"; sql: string }> = {
   contact: { db: "contact", sql: "SELECT max(created_at) AS at FROM contact_enquiries WHERE created_at > $1" },
   stories: { db: "stories", sql: "SELECT max(created_at) AS at FROM stories WHERE created_at > $1" },
   donations: {
@@ -76,7 +76,8 @@ const LATEST: Record<Exclude<Area, "events" | "analytics" | "qr">, { db: "main" 
 export async function latestArrival(area: Area, since: Date): Promise<Date | null> {
   // The Events page and Admin > Analytics have new features, not arrivals.
   // TASK-492: nor does QR codes.
-  if (area === "events" || area === "analytics" || area === "qr") return null;
+  // Nor does the Fill a Red Bag list's editor.
+  if (area === "events" || area === "analytics" || area === "qr" || area === "red-bag") return null;
   const q = LATEST[area];
   const db = q.db === "contact" ? contactPool : q.db === "stories" ? storiesPool : pool;
   const res = await db.query<{ at: Date | null }>(q.sql, [since]);

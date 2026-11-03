@@ -51,6 +51,6 @@ Feature: 18 or over, and sharing what is raised with another cause
     Then the fundraising answer is 200
     When "a3.split.fr.bdd@example.com" keeps the short name of "Shared Quiz Night (bdd-fr)"
     And "a3.split.fr.bdd@example.com" approves "Shared Quiz Night (bdd-fr)"
-    And a visitor opens "/get-involved"
+    And a visitor opens "/whats-on"
     Then the visitor gets status 200
     And the card for "Shared Quiz Night (bdd-fr)" shows "60% of what we raise goes to the Night Before Christmas Campaign, Scottish Charity SC047995. The rest goes to Kilmarnock Food Larder."

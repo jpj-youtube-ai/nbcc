@@ -144,7 +144,7 @@ export async function patchAdminEventsSettings(req: Request, res: Response): Pro
   const claims = await authorizeSection(req, res, "events", "edit");
   if (!claims) return;
   if (claims.role !== "admin") {
-    return res.status(403).json({ error: "Only an admin can switch the Events page on or off" });
+    return res.status(403).json({ error: "Only an admin can switch the Get involved page on or off" });
   }
   const parsed = settingsSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: "Say whether the page should be on or off" });

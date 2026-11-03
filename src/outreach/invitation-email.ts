@@ -127,7 +127,7 @@ export function buildOutreachEmailText(input: OutreachInvitation): string {
 I am writing from the Night Before Christmas Campaign, a volunteer led charity here
 in Ayrshire. We are here all year for children, young people and vulnerable adults
 across South West Scotland, with school clothing and crisis support whenever it is
-needed, and every December a full bag for those who would otherwise wake up on
+needed, and every December a full red bag for those who would otherwise wake up on
 Christmas morning with nothing to open.
 ${personal ? `\n${personal}\n` : ""}
 I wondered whether ${input.businessName} might consider becoming one of our business
@@ -208,7 +208,7 @@ export function buildOutreachEmailHtml(input: OutreachInvitation): string {
           I am writing from the <b>Night Before Christmas Campaign</b>, a volunteer led charity here in
           Ayrshire. We are here all year for children, young people and vulnerable adults across South
           West Scotland, with school clothing and crisis support whenever it is needed, and every
-          December a full bag for those who would otherwise wake up on Christmas morning with nothing
+          December a full red bag for those who would otherwise wake up on Christmas morning with nothing
           to open.
         </p>
       </td></tr>

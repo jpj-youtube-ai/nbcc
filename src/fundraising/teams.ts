@@ -417,6 +417,18 @@ export function teamMemberList(rows: TeamMemberRow[], photos: ReadonlyMap<number
     });
 }
 
+// --- "[First name] has joined [team name]" (Jaimie, 2026-10-04) ---------------------------------------
+//
+// The email to the team organiser when staff approve a new team member's page. NEW wording, so it is
+// only sent once an admin has approved it, with the same sign off as the other new wording
+// (touch_wording_approvals, key "team_joined"), read and approved in Admin > Fundraising > Automatic
+// emails. No row, not approved: nothing is sent and nothing is logged.
+export const TEAM_JOINED_KEY = "team_joined";
+export const TEAM_WORDING_KEYS = [TEAM_JOINED_KEY] as const;
+export type TeamWordingKey = (typeof TEAM_WORDING_KEYS)[number];
+export const TEAM_JOINED_LABEL = "A new member has joined your team";
+export const TEAM_JOINED_WHEN = "To the team organiser, when you approve a new team member's page. Never about their own page.";
+
 // --- the join link ---------------------------------------------------------------------------------
 
 export function joinUrl(base: string, slug: string): string {
@@ -454,8 +466,11 @@ export function teamInviteUrl(base: string, slug: string, token: string): string
  */
 export function forwardMessage(team: { title: string }, link: string): string {
   return (
-    `I've set up a team, ${team.title}, to raise money for the Night Before Christmas Campaign (NBCC), ` +
-    "a Scottish charity supporting children, young people and vulnerable adults. Would you like to join? " +
+    // Who NBCC is, in the words of the charity's own short description (ABOUT_NBCC_SHORT,
+    // src/email/brand.ts), run into the sentence so it reads as a chat message. The name is given in
+    // full first: this is pasted to people who may never have heard of NBCC.
+    `I've set up a team, ${team.title}, to raise money for the Night Before Christmas Campaign (NBCC), a volunteer led ` +
+    "charity here all year for children, young people and vulnerable adults across South West Scotland. Would you like to join? " +
     `You get your own page, and everything you raise counts towards our team total too. Join here: ${link}`
   );
 }

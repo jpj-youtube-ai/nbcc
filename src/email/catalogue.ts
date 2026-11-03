@@ -22,12 +22,13 @@ import {
   buildTeamInviteEmail,
   buildTeamInviteReminderEmail,
   buildTeamLiveEmail,
+  buildTeamMemberJoinedEmail,
   buildTeamNudgeEmail,
 } from "../fundraising/team-page-emails";
 import { sampleTouchData, touchEmailAsSent, type TouchEmailData } from "../fundraising/touch-emails";
 import { TOUCH_LABELS, wordingKey, type TouchKind } from "../fundraising/touch-rules";
 import { summaryLines, type SummaryCounts } from "../fundraising/summary";
-import { joinUrl } from "../fundraising/teams";
+import { joinUrl, TEAM_JOINED_KEY, TEAM_JOINED_LABEL } from "../fundraising/teams";
 import { inviteWordingKey, type InviteType } from "../fundraising/invite";
 import {
   buildPledgeConfirmEmail,
@@ -49,10 +50,12 @@ import {
   buildTicketsReleasedEmail,
   buildUnknownPaymentStaffEmail,
 } from "../tickets/emails";
-import { closeWords, flagWords } from "../tickets/model";
+import { flagWords } from "../tickets/model";
 import { buildBallConfirmationEmail } from "../ball/confirmation-email";
 import { buildBallReminderEmail } from "../ball/reminder-email";
-import { buildGuestChaseEmail, buildGuestSummaryEmail } from "../ball/run-up-email";
+import { buildGuestSummaryEmail } from "../ball/run-up-email";
+import { buildChaseListEmail, buildChaseReminderEmail, exampleChaseList, exampleReminderGroup } from "../ball/chase-email";
+import type { ReminderGroup } from "../ball/chase";
 import { buildMenuReadyEmail } from "../ball/menu-email";
 import { buildInvoicePaidEmail, buildTransferCancelledEmail, buildTransferDetailsEmail, buildTransferReminderEmail } from "../ball/transfer-email";
 import { buildTransferStaffEmail } from "../ball/transfer-staff-email";
@@ -173,7 +176,8 @@ const v = (id: string, label: string, render: (base: string) => Rendered, approv
 
 const pageLinks = (b: string) => ({ pageUrl: `${b}/fundraise/sams-santa-dash`, manageUrl: `${b}/fundraise/manage` });
 const pageLive = (f: typeof SAM | typeof ARMS | typeof JACK) => (b: string) => buildApprovedEmail({ ...f, title: PAGE, path: "raising" }, pageLinks(b));
-const onList = (f: typeof SAM | typeof ARMS) => () => buildApprovedEmail({ ...f, title: PAGE, path: "raising" }, { pageUrl: null, manageUrl: null });
+const onList = (f: typeof SAM | typeof ARMS, hiddenBy: "them" | "staff" = "them") => () =>
+  buildApprovedEmail({ ...f, title: PAGE, path: "raising" }, { pageUrl: null, manageUrl: null, hiddenBy });
 const titled = <T extends object>(f: T) => ({ ...f, title: PAGE });
 
 const SIGNUP: CatalogueEmail[] = [
@@ -203,10 +207,15 @@ const SIGNUP: CatalogueEmail[] = [
     id: "signup-on-list",
     group: "signup",
     name: "You're on our list",
-    who: "Goes to the fundraiser or event host when staff approve a sign up that has no public page.",
+    who: "Goes to the fundraiser or event host when staff approve a sign up that is not shown on the website.",
     audience: "public",
     logKinds: ["fundraiseApproved"],
-    versions: [v("usual", USUAL, onList(SAM)), v("group", GROUP_LABEL, onList(ARMS))],
+    versions: [
+      v("usual", "The usual one (they asked us not to show it on the website)", onList(SAM)),
+      v("group", GROUP_LABEL, onList(ARMS)),
+      // The readthrough (2026-10-04): "As you asked" is only said when they did ask.
+      v("staff-hid", "Staff took it off the website, or it is a team member's page: it does not say “As you asked”", onList(SAM, "staff")),
+    ],
   },
   {
     id: "sign-in-code",
@@ -215,7 +224,13 @@ const SIGNUP: CatalogueEmail[] = [
     who: "Goes to anyone with a fundraiser, when they ask for a code to open their private area.",
     audience: "public",
     logKinds: ["fundraiseCode"],
-    versions: [v("usual", USUAL, () => buildSignInCodeEmail(SAM.name, CODE)), v("no-name", NO_NAME_LABEL, () => buildSignInCodeEmail("4x4 Club", CODE))],
+    versions: [
+      v("usual", USUAL, () => buildSignInCodeEmail(SAM.name, CODE)),
+      v("no-name", NO_NAME_LABEL, () => buildSignInCodeEmail("4x4 Club", CODE)),
+      // Jaimie, 2026-10-04: a family or a funeral director with a page in memory of someone.
+      v("in-memory", "They have a page in memory of someone (the gentle one)", () => buildSignInCodeEmail(SAM.name, CODE, { gentle: true })),
+      v("in-memory-no-name", "In memory, with no first name we can safely use", () => buildSignInCodeEmail("4x4 Club", CODE, { gentle: true })),
+    ],
   },
   {
     id: "update-live",
@@ -335,6 +350,9 @@ const teamInvite = (b: string, o: Partial<InviteWordsIn> = {}): InviteWordsIn =>
 const nudge = (n: 1 | 2, f: typeof SAM | typeof ARMS = SAM) => (b: string) =>
   buildTeamNudgeEmail(n, { ...f, title: TEAM_TITLE, pageUrl: `${b}/fundraise/the-example-runners`, joinUrl: joinUrl(b, "the-example-runners") });
 
+const memberJoined = (b: string | null, o: Partial<Parameters<typeof buildTeamMemberJoinedEmail>[0]> = {}) =>
+  buildTeamMemberJoinedEmail({ organiser: SAM, memberFirstName: "Alex", teamTitle: TEAM_TITLE, teamUrl: b === null ? null : `${b}/fundraise/the-example-runners`, ...o });
+
 const TEAMS: CatalogueEmail[] = [
   {
     id: "team-live",
@@ -421,6 +439,22 @@ const TEAMS: CatalogueEmail[] = [
       v("under-18", "Joining for someone under 18 (goes to the parent or guardian)", () => greetGuardian(buildJoinThanksEmail("Jack", TEAM_TITLE), JACK)),
     ],
   },
+  // Jaimie, 2026-10-04: new wording, held until an admin approves it (key team_joined, signed off by
+  // the automatic emails' endpoint). Sent by sendTeamMemberJoined in src/fundraising/team-send.ts.
+  {
+    id: "team-member-joined",
+    group: "teams",
+    name: TEAM_JOINED_LABEL,
+    who: "Goes to the team organiser when staff approve a new team member's page. Never about their own page.",
+    audience: "public",
+    logKinds: ["fundraiseTeamMemberJoined"],
+    versions: [
+      v("usual", USUAL, (b) => memberJoined(b), touchApproval(TEAM_JOINED_KEY)),
+      v("under-18", "The new member is under 18 (their first name only, never the parent's)", (b) => memberJoined(b, { memberFirstName: "Jack" }), touchApproval(TEAM_JOINED_KEY)),
+      v("off-site", "The team is kept off the website (no team page to link to)", () => memberJoined(null), touchApproval(TEAM_JOINED_KEY)),
+      v("group", GROUP_LABEL, (b) => memberJoined(b, { organiser: ARMS }), touchApproval(TEAM_JOINED_KEY)),
+    ],
+  },
   {
     id: "team-handover",
     group: "teams",
@@ -434,9 +468,10 @@ const TEAMS: CatalogueEmail[] = [
 
 // --- keeping in touch (automatic), and the two that go after their date ------------------------------
 
-// As the daily run sends it (touchEmailAsSent, which src/fundraising/touch-runner.ts sends too): the
-// builder, then the parent's greeting on a page for someone under 18. The approval key is the
-// sender's own rule for this much raised.
+// As the daily run sends it (touchEmailAsSent, which src/fundraising/touch-runner.ts sends too). On a
+// page for someone under 18 the whole email is written for the parent or guardian (Jaimie,
+// 2026-10-04): the hello, the subject, the heading and every line. The approval key is the sender's
+// own rule for this much raised.
 function touchVersion(kind: TouchKind, id: string, label: string, over: Partial<TouchEmailData> = {}): CatalogueVersion {
   const data = (b: string): TouchEmailData => ({ ...sampleTouchData(kind, b), ...over });
   const raised = data("").raisedPence;
@@ -493,8 +528,9 @@ const receipt = (o: Partial<Parameters<typeof buildDonationConfirmation>[0]>) =>
   } as Parameters<typeof buildDonationConfirmation>[0]);
   return buildKindEmail("donation", { html: c.html, text: c.text });
 };
-const supporterThanks = (o: Partial<Parameters<typeof buildSupporterThanksEmail>[0]> = {}) => () =>
+const supporterThanks = (o: Partial<Parameters<typeof buildSupporterThanksEmail>[0]> = {}) => (b: string) =>
   buildSupporterThanksEmail({
+    baseUrl: b,
     organiserName: SAM.name,
     title: PAGE,
     message: "Thank you so much for sponsoring me. I made it round, in full Santa suit, and every pound will help a child this Christmas.",
@@ -528,7 +564,8 @@ const FINISHING: CatalogueEmail[] = [
     versions: [
       v("usual", USUAL, supporterThanks()),
       v("group", "From a group or business (no first name to use)", supporterThanks({ organiserName: "4x4 Club" })),
-      v("in-memory", "The page is in memory of someone", supporterThanks({ inMemory: true, message: "Thank you for your kind gift, and for remembering her with us." })),
+      v("in-memory", "The page is in memory of someone", supporterThanks({ inMemory: true, giverName: "Alex Example", message: "Thank you for your kind gift, and for remembering her with us." })),
+      v("in-memory-no-name", "In memory, and the giver has no first name we can safely use", supporterThanks({ inMemory: true, giverName: "4x4 Club", message: "Thank you for your kind gift, and for remembering her with us." })),
     ],
   },
 ];
@@ -547,7 +584,7 @@ const MEMORY: CatalogueEmail[] = [
     who: "Goes to the person who asked for a page in memory of someone, as soon as they sign up.",
     audience: "public",
     logKinds: ["fundraiseMemoryReceipt"],
-    versions: [v("usual", USUAL, () => buildMemoryReceiptEmail())],
+    versions: [v("usual", USUAL, () => buildMemoryReceiptEmail(SAM.name)), v("no-name", NO_NAME_LABEL, () => buildMemoryReceiptEmail("4x4 Club"))],
   },
   {
     id: "memory-live",
@@ -754,9 +791,23 @@ const LOCK = new Date("2026-10-23T12:00:00Z");
 type SummaryIn = Parameters<typeof buildGuestSummaryEmail>[0];
 const guestSummary = (o: Partial<SummaryIn> = {}) => (b: string) =>
   buildGuestSummaryEmail({ buyerFirstName: "Alex", reference: BALL_REF, seats: 2, guests: GUESTS, guestLink: guestLink(b), lockAt: LOCK, ...o } as SummaryIn);
-type ChaseIn = Parameters<typeof buildGuestChaseEmail>[0];
-const chase = (o: Partial<ChaseIn> = {}) => (b: string) =>
-  buildGuestChaseEmail({ buyerFirstName: "Alex", reference: BALL_REF, seats: 10, guestsNamed: 4, guestLink: guestLink(b), lockAt: LOCK, finalCall: false, ...o } as ChaseIn);
+// TASK-576: the last-week chase. The deadline is fixed, so the words do not move with the calendar.
+const CHASE_DEADLINE = new Date("2026-11-04T10:00:00Z");
+const CHASE_NOTE = "The people, numbers and links here are made up. The real one lists the bookings that are really still open.";
+const chaseGuestLink = (b: string) => (token: string) => `${b}/ball/guests/${token}`;
+const chaseReminder = (group: ReminderGroup = exampleReminderGroup(), days = 7) => (b: string) =>
+  buildChaseReminderEmail({ group, daysToDeadline: days, deadline: CHASE_DEADLINE, guestLink: chaseGuestLink(b) });
+const namesOnlyGroup = (): ReminderGroup => {
+  const g = exampleReminderGroup();
+  return { ...g, bookings: g.bookings.map((r) => ({ ...r, unchosen: 0 })) };
+};
+const twoBookingsGroup = (): ReminderGroup => {
+  const g = exampleReminderGroup();
+  const [first] = g.bookings;
+  return { ...g, bookings: [first, { ...first, id: first.id + 1, reference: "BALL-0002", guestToken: "example-2", seats: 4, choices: ["Main: Example roast"], unnamed: 3, unchosen: 0 }] };
+};
+const chaseListEmail = (days = 7, test = false) => (b: string) =>
+  buildChaseListEmail({ list: exampleChaseList(), daysToDeadline: days, deadline: CHASE_DEADLINE, guestLink: chaseGuestLink(b), test });
 type MenuIn = Parameters<typeof buildMenuReadyEmail>[0];
 const MENU = [
   { name: "Starter", options: ["Example soup (v)", "Example pâté"] },
@@ -788,8 +839,15 @@ const SALES = {
 };
 type SalesIn = Parameters<typeof renderReport>[0];
 type ReportCtx = Parameters<typeof renderReport>[1];
+// Made up people, for the report's list of who has booked a whole table.
+const REPORT_TABLES: ReportCtx["tables"] = [
+  { firstName: "Morag", surname: "Example", company: "Example Joinery Ltd", tables: 2, awaiting: false },
+  { firstName: "Callum", surname: "Madeup", company: "", tables: 1, awaiting: false },
+  { firstName: "Isla", surname: "Sample", company: "Sample and Co", tables: 1, awaiting: true },
+];
+const REPORT_NOTE = "The numbers and the names here are made up. The real one counts what has really happened, and names who has really booked a whole table.";
 const report = (i: Record<string, unknown> = {}, c: Partial<ReportCtx> = {}) => () =>
-  renderReport({ ...SALES, ...i } as unknown as SalesIn, { today: "2026-10-05", eventDate: "2026-11-07", test: false, ...c } as ReportCtx);
+  renderReport({ ...SALES, ...i } as unknown as SalesIn, { today: "2026-10-05", eventDate: "2026-11-07", test: false, tables: REPORT_TABLES, ...c });
 
 const STAFF_WORDS_NOTE = "The arrival time and the note about what is included are typed by staff. Pick that version to see them, with example words.";
 const BALL_KIND = ["ballTransfer"];
@@ -872,42 +930,49 @@ const BALL: CatalogueEmail[] = [
     ],
   },
   {
-    id: "ball-guest-chase",
-    group: "ball",
-    name: "We still need your guest list",
-    who: "Goes to the person who booked, from 14 days before the guest list closes, if places still have no name.",
-    audience: "public",
-    logKinds: ["ballRunUp"],
-    versions: [
-      v("usual", "Some guests named", chase()),
-      v("nobody", "They have not named anyone yet", chase({ guestsNamed: 0 })),
-      v("nobody-one-ticket", "They have not named anyone, and booked one ticket", chase({ guestsNamed: 0, seats: 1 })),
-    ],
-  },
-  {
-    id: "ball-guest-last-call",
-    group: "ball",
-    name: "Last call for your guest list",
-    who: "Goes to the person who booked, on the day the guest list closes, if places still have no name.",
-    audience: "public",
-    logKinds: ["ballRunUp"],
-    versions: [v("usual", "Some guests named", chase({ finalCall: true })), v("nobody", "They have not named anyone yet", chase({ finalCall: true, guestsNamed: 0 }))],
-  },
-  {
     id: "ball-menu",
     group: "ball",
     name: "The menu is here",
-    who: "Goes to everyone who has paid, when staff press “Send the menu email”.",
+    who: "Goes to everyone who has paid, when staff press “Send the menu email”, except a booking that has named every seat and whose guests have all chosen.",
     audience: "public",
     logKinds: ["ballRunUp"],
     note: "The menu and the note under it are typed by staff. The ones here are an example.",
     versions: [v("usual", "A menu with choices", menu()), v("fixed", "A menu with nothing to choose", menu([{ name: "Main", options: ["Example roast"] }], null))],
   },
   {
+    id: "ball-chase-reminder",
+    group: "ball",
+    name: "Your guests and meals",
+    who: "Goes to the person who booked, at 8am, 7, 5, 3 and 1 days before the guest details deadline, while a seat has no name or a named guest has not chosen.",
+    audience: "public",
+    logKinds: ["ballRunUp"],
+    note: CHASE_NOTE,
+    versions: [
+      v("usual", "7 days to go, some names and meals missing", chaseReminder()),
+      v("last-chance", "The last chance, the day before the deadline", chaseReminder(exampleReminderGroup(), 1)),
+      v("names-only", "Only names are missing", chaseReminder(namesOnlyGroup())),
+      v("two-bookings", "The same person has two bookings", chaseReminder(twoBookingsGroup())),
+    ],
+  },
+  {
+    id: "ball-chase-list",
+    group: "ball",
+    name: "Festive Ball chase list",
+    who: "Goes to the people on the chase list, at 8am on the same mornings and on the deadline morning.",
+    audience: "staff",
+    logKinds: ["ballChaseList"],
+    note: CHASE_NOTE,
+    versions: [
+      v("usual", USUAL, chaseListEmail()),
+      v("deadline-morning", "The deadline morning, the last list", chaseListEmail(0)),
+      v("test", "A test sent from the admin", chaseListEmail(7, true)),
+    ],
+  },
+  {
     id: "ball-week-to-go",
     group: "ball",
     name: "A week to go",
-    who: "Goes to everyone who has paid, 3 days before the Ball, or when staff press “Send the reminder”.",
+    who: "Goes to everyone who has paid, a week before the Ball (the morning after, for a booking paid in the last week), or when staff press “Send the reminder”.",
     audience: "public",
     logKinds: ["ballRunUp", "ballReminder"],
     note: "The arrival time and the table name are typed by staff. Pick that version to see them, with example words.",
@@ -917,6 +982,11 @@ const BALL: CatalogueEmail[] = [
       v("no-guests", "No guest names given at all", ballReminder({}, [])),
       v("staff-words", "With the arrival time and a table name (example words)", ballReminder({ tableName: "Table 4" }, GUESTS, { arrivalTime: "Arrival from 6.30pm" })),
       v("by-button", "Sent with the button in the admin (it uses their whole name)", ballReminder({ buyerFirstName: null })),
+      // The charity, 2026-10-04: it says the true time to go when it is not sent a week before.
+      v("days-to-go", "A few days to go (someone who booked in the last week)", ballReminder({}, GUESTS, { daysToGo: 4 })),
+      v("tomorrow", "Tomorrow (sent the day before the Ball)", ballReminder({}, GUESTS, { daysToGo: 1 })),
+      v("today", "Today (only if staff press the button on the day of the Ball)", ballReminder({}, GUESTS, { daysToGo: 0 })),
+      v("early", "More than a week to go (staff pressed the button early)", ballReminder({}, GUESTS, { daysToGo: 10 })),
     ],
   },
   {
@@ -926,12 +996,14 @@ const BALL: CatalogueEmail[] = [
     who: "Goes to the people on the report list, on Mondays and Thursdays at 8am.",
     audience: "staff",
     logKinds: ["ballReport"],
-    note: NUMBERS_NOTE,
+    note: REPORT_NOTE,
     versions: [
       v("usual", USUAL, report()),
       v("first", "The first report, with a waiting list", report({ soldSinceLast: null, awaitingTransfers: 0, awaitingTransferSeats: 0, waitingList: 3, waitingSeats: 8, tablesRemaining: 0, heldSeats: 0 })),
       v("sold-out", "Sold out, and the last report before the Ball", report({ seatsRemaining: 0, tablesRemaining: 0 }, { today: "2026-11-05" })),
       v("test", "A test sent from the admin", report({}, { test: true })),
+      v("sent-again", "Sent again on the same day (staff pressed the button)", report({}, { resend: true })),
+      v("no-tables", "Before any whole table is booked", report({ tablesSold: 0 }, { tables: [] })),
     ],
   },
 ];
@@ -1153,7 +1225,7 @@ const STAFF: CatalogueEmail[] = [
   ]),
   staff("staff-team-joined", "New team member", "when someone joins a team.", "fundraiseTeamJoinStaff", [
     v("usual", USUAL, joinNotice(20000, "No, all of it comes to NBCC")),
-    v("sharing", "No target, and sharing with another cause as the whole team does", joinNotice(null, "60% to NBCC, the rest to Example Hospice (the whole team’s split)")),
+    v("sharing", "No target, and sharing with another cause as the whole team does", joinNotice(null, "60% to NBCC, the rest to Example Hospice (the whole team's split)")),
   ]),
   staff("staff-team-removed", "Someone was taken off a team", "when a team organiser removes a member.", "fundraiseTeamMemberRemoved", [
     v("usual", USUAL, (b) => buildMemberRemovedStaffEmail({ memberName: "Alex Example", teamTitle: TEAM_TITLE, organiserName: SAM.name }, admin(b))),
@@ -1164,7 +1236,7 @@ const STAFF: CatalogueEmail[] = [
       v("quiet", "A quiet week with nothing waiting", summary(QUIET)),
       v("test", "A test sent from the admin", summary(COUNTS, true)),
     ], NUMBERS_NOTE),
-    who: "Goes to the people chosen in Weekly summary, on Mondays at 8am.",
+    who: "One email to everyone chosen in Weekly summary (nbcc.scot addresses only), on Mondays at 8am, so Reply all reaches the whole team.",
   },
   staff("staff-pledge-hidden", "A pledge was hidden by its organiser", "when a fundraiser hides a pledge from their page.", "fundraisePledgeStaff", [
     v("usual", USUAL, pledgeNote(pledgeHiddenNote({ title: PAGE, pledgeId: 42, amountPence: 1000 }))),
@@ -1174,9 +1246,9 @@ const STAFF: CatalogueEmail[] = [
     v("one", "Only one pledge", pledgeNote(pledgesPaidTwiceNote(TWICE.slice(0, 1)))),
   ]),
   staff("staff-tickets-to-approve", "Tickets to approve", "when a host proposes tickets.", "eventTicketsToApprove", [
-    v("usual", "A limit on tickets, closing the day before", proposed({ types: [{ name: "Adult", pricePence: 1300, quantity: 50 }, { name: "Child", pricePence: 0, quantity: null }], salesLimit: 80, closeWords: closeWords({ mode: "day_before" }) } as ProposedIn)),
-    v("no-limit", "No limit, closing when the event starts", proposed({ types: [{ name: "Adult", pricePence: 1300, quantity: 50 }], salesLimit: null, closeWords: closeWords({ mode: "start" }) } as ProposedIn)),
-    v("custom-close", "Sales close at a time the host chose", proposed({ types: [{ name: "Adult", pricePence: 1300, quantity: 50 }], salesLimit: 80, closeWords: closeWords({ mode: "custom", at: "2026-12-04T17:00:00Z" }) } as ProposedIn)),
+    v("usual", "A limit on tickets, closing the day before", proposed({ types: [{ name: "Adult", pricePence: 1300, quantity: 50 }, { name: "Child", pricePence: 0, quantity: null }], salesLimit: 80, close: { mode: "day_before", at: null } })),
+    v("no-limit", "No limit, closing when the event starts", proposed({ types: [{ name: "Adult", pricePence: 1300, quantity: 50 }], salesLimit: null, close: { mode: "start", at: null } })),
+    v("custom-close", "Sales close at a time the host chose", proposed({ types: [{ name: "Adult", pricePence: 1300, quantity: 50 }], salesLimit: 80, close: { mode: "custom", at: "2026-12-04T17:00:00Z" } })),
   ]),
   staff("staff-ticket-refund-asked", "A refund has been asked for", "when a host asks for a refund.", "eventTicketsRefundAsked", [
     v("usual", USUAL, (b) => buildRefundRequestStaffEmail(HOST, { reference: REF, buyerName: "Alex Example", tickets: "2 Adult", reason: "They can no longer come, and asked me for their money back." }, admin(b))),
@@ -1194,7 +1266,8 @@ const STAFF: CatalogueEmail[] = [
         { title: EVENT_TITLE },
         { reference: REF, buyerName: "Alex Example", tickets: "", paid: "£26" },
         flagWords({ refundFailed: { released: true, overBy: 2 } }),
-        admin(b),
+        // As ./send.ts sends it for a failed refund: it never says the buyer has their tickets email.
+        { ...admin(b), refundFailed: true },
       )),
   ]),
   staff("staff-ticket-unknown", "A ticket payment with no booking", "if a ticket payment arrives with no matching booking.", "eventTicketsToCheck", [

@@ -2,12 +2,19 @@ import { Router, type Request, type Response } from "express";
 import { z } from "zod";
 import { authorizeSections } from "./admin-authz";
 import { actorOf } from "./admin";
-import { londonDate, nextSendDay, recipientsSchema, renderReport } from "../ball/sales-report";
-import { BALL_DAY, sendTestReport } from "../ball/sales-report-runner";
+import { londonDate, nextSendDay, recipientsSchema, renderReport, tableBookers } from "../ball/sales-report";
+import {
+  BALL_DAY,
+  canResendToday,
+  resendTodaysReport,
+  ResendRefused,
+  sendTestReport,
+} from "../ball/sales-report-runner";
 import {
   getReportSettings,
   lastCountedTo,
   readSalesInputs,
+  readTableBookings,
   saveReportSettings,
   scheduledSendExists,
 } from "../db/ball-report";
@@ -17,11 +24,13 @@ import {
 //   GET  /api/admin/ball-report        the switch, who it goes to, what went, and a preview   events: view
 //   PUT  /api/admin/ball-report        { reportOn, recipients }                              events: edit
 //   POST /api/admin/ball-report/test   the real email, marked as a test, to the person asking events: edit
+//   POST /api/admin/ball-report/resend today's report to the whole list again, once a day     events: edit
 //
 // Every one also needs the Festive Ball at view or above: the numbers are the Ball's, and access
 // that leaves the Ball out must not see them by way of Events. Every role has that by default.
 //
-// The report itself is counts only (src/ball/sales-report.ts). The recipients are business
+// The report is counts, and who has booked a whole table (src/ball/sales-report.ts): the preview
+// here shows those names, as the email does, to anyone who may see the card. The recipients are business
 // contacts, and every change to them writes an audit row saying who was added or removed, and by
 // whom (src/db/ball-report.ts).
 
@@ -34,12 +43,18 @@ async function reportPayload(now = new Date()) {
   const settings = await getReportSettings();
   const today = londonDate(now);
   const inputs = await readSalesInputs(now, await lastCountedTo());
-  const preview = renderReport(inputs, { today, eventDate: BALL_DAY, test: false });
+  const tables = tableBookers(await readTableBookings(), now);
+  const preview = renderReport(inputs, { today, eventDate: BALL_DAY, test: false, tables });
   const next =
     settings.reportOn && settings.recipients.length > 0
       ? nextSendDay({ now, eventDate: BALL_DAY, sentToday: await scheduledSendExists(today) })
       : null;
-  return { ...settings, nextSend: next, preview: { subject: preview.subject, html: preview.html } };
+  return {
+    ...settings,
+    nextSend: next,
+    canResend: await canResendToday(now, settings),
+    preview: { subject: preview.subject, html: preview.html },
+  };
 }
 
 adminBallReportRouter.get("/api/admin/ball-report", async (req: Request, res: Response) => {
@@ -90,5 +105,29 @@ adminBallReportRouter.post("/api/admin/ball-report/test", async (req: Request, r
   } catch (err) {
     console.error("ball report test failed:", err instanceof Error ? err.message : err);
     res.status(500).json({ error: "The test could not be sent. Please try again." });
+  }
+});
+
+adminBallReportRouter.post("/api/admin/ball-report/resend", async (req: Request, res: Response) => {
+  const claims = await authorizeSections(req, res, EDIT);
+  if (!claims) return;
+  let recipients: number;
+  try {
+    ({ recipients } = await resendTodaysReport({ actor: actorOf(claims), now: new Date() }));
+  } catch (err) {
+    if (err instanceof ResendRefused) {
+      res.status(409).json({ error: err.message });
+      return;
+    }
+    console.error("ball report resend failed:", err instanceof Error ? err.message : err);
+    res.status(500).json({ error: "The report could not be sent again. Please try again." });
+    return;
+  }
+  // It went. If the card cannot be read back, say it went all the same: the admin reloads the card.
+  try {
+    res.json({ ...(await reportPayload()), resentTo: recipients });
+  } catch (err) {
+    console.error("ball report went again, but the card could not be read:", err instanceof Error ? err.message : err);
+    res.json({ resentTo: recipients });
   }
 });

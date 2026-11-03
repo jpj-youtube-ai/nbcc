@@ -1,0 +1,382 @@
+/* =================================================================
+   Red bags at the Festive Ball: /bag and /bag/thank-you
+   (src/ball/bags-page.ts draws both; assets/js/ball-bags.js runs them).
+
+   The page each table card's QR code opens, on a phone, often on a
+   hotel's mobile signal. So it is its own small stylesheet: it does
+   not load the site's styles.css, and carries only the tokens it
+   needs, with the site's own values, and only the site's two fonts
+   (Playfair Display and Poppins).
+
+   The look is NBCC's (Jaimie, 2 November 2026): the cream page, the
+   red NBCC logo on cream, the brand colours. The bag is one baked
+   picture (assets/img/ball-bag-hero.webp); what is in a bag is shown
+   with Fill a Red Bag's item drawings (their .rb-art colours, as in
+   red-bag.css), each in a soft tinted circle.
+
+   Motion, to feel good: the bag drops in with a springy bounce and a
+   small wiggle, gold sparkles twinkle round it, the four things in a
+   bag come in one after another, "Fill a bag" throws a burst of gold
+   sparkles, each bag added pops into the row with a sparkle, the give
+   button shimmers, and on the thank you the bags pop in one after
+   another under a fall of gold stars and hearts, then rest. Transform
+   and opacity only; nothing waits for it; none of it plays for
+   someone who asked for less motion.
+   ================================================================= */
+
+@font-face{font-family:"Playfair Display";font-style:normal;font-weight:400 800;font-display:swap;src:url(/assets/fonts/playfair-var.woff2) format("woff2")}
+@font-face{font-family:"Poppins";font-style:normal;font-weight:400;font-display:swap;src:url(/assets/fonts/poppins-400.woff2) format("woff2")}
+
+:root{
+  /* the site's own colours (assets/css/styles.css) */
+  --crimson:#C02238;
+  --maroon:#800000;
+  --cream:#F8F5EE;
+  --card:#FFFDFA;
+  --tint:#F3EEE3;
+  --line:#E9DFD2;
+  --tan:#D29C8A;
+  --tan-soft:#F3E4DD;
+  --slate:#333333;
+  --slate-soft:#6F6A66;
+  --white:#FFFFFF;
+  --holly:#1A531A;
+  --holly-soft:#EAF0E7;
+  --gold-ink:#B8862B;
+  /* tints for the soft circles and the glow, from the same colours */
+  --gold-soft:#F6EBD3;
+  --gold-bright:#E9C46A;
+  --crimson-soft:#F9E1E4;
+  --glow:rgba(233,196,106,.32);
+  --blush:rgba(192,34,56,.07);
+  --shine:rgba(255,255,255,.38);
+  --shadow:0 18px 36px -24px rgba(128,0,0,.45);
+  --shadow-sm:0 2px 10px rgba(128,0,0,.07);
+
+  --serif:"Playfair Display",Georgia,"Times New Roman",serif;
+  --sans:"Poppins",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+
+  --ease-out:cubic-bezier(.22,1,.36,1);
+  --spring:cubic-bezier(.34,1.4,.64,1);
+  --gutter:16px;
+}
+
+*,*::before,*::after{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%;text-size-adjust:100%}
+body{
+  margin:0;min-height:100vh;min-height:100svh;
+  font-family:var(--sans);font-size:16px;line-height:1.55;color:var(--slate);
+  background:
+    radial-gradient(120% 60% at 100% 0,var(--glow),transparent 60%),
+    radial-gradient(90% 50% at 0 10%,var(--blush),transparent 60%),
+    var(--cream);
+  background-repeat:no-repeat;
+  overflow-x:hidden;
+}
+[hidden]{display:none !important}
+a{color:var(--maroon)}
+a:focus-visible,button:focus-visible,input:focus-visible{outline:3px solid var(--gold-ink);outline-offset:3px}
+/* the focus lands on a screen's heading so a screen reader starts there; it is not something to
+   act on, so it shows no ring */
+.bb-title:focus,.bb-title:focus-visible{outline:none}
+.bb-shapes{position:absolute;width:0;height:0;overflow:hidden}
+
+/* ---- the frame ---- */
+.bb-main{position:relative;z-index:1;width:100%;max-width:480px;margin:0 auto;padding:0 var(--gutter) 28px}
+.bb-top{display:flex;flex-direction:column;align-items:center;gap:4px;padding:18px 0 6px}
+.bb-logo{display:block;width:66px;height:auto}
+.bb-eyebrow{
+  display:flex;align-items:center;gap:10px;margin:0;
+  font-size:12px;letter-spacing:.2em;text-transform:uppercase;color:var(--maroon);
+}
+.bb-eyebrow::before,.bb-eyebrow::after{content:"";width:22px;height:1.5px;background:var(--gold-ink);border-radius:2px}
+.bb-title{
+  margin:0 0 12px;font-family:var(--serif);font-weight:700;color:var(--maroon);text-align:center;
+  font-size:clamp(28px,8vw,36px);line-height:1.12;letter-spacing:-.01em;text-wrap:balance;
+}
+.bb-lede{margin:0 auto 20px;max-width:34em;font-size:17px;line-height:1.6;color:var(--slate);text-align:center;text-wrap:pretty}
+.bb-note{margin:12px 0 0;font-size:13px;color:var(--slate-soft);text-align:center}
+.bb-help{margin:4px 0 12px;font-size:13px;color:var(--slate-soft)}
+/* Playfair's figures are old style by default ("£5o"): prices, counts and headings use lining figures */
+.bb-price,.bb-count,.bb-tally__total,.bb-title{font-variant-numeric:lining-nums tabular-nums}
+
+/* ---- the bag, with its £50 and the sparkles round it ---- */
+.bb-hero{position:relative;width:min(280px,78vw);margin:4px auto 10px}
+.bb-hero__bag{display:block;width:100%;height:auto;transform-origin:50% 100%}
+.bb-price{
+  position:absolute;z-index:2;right:-6px;top:56%;width:70px;height:70px;border-radius:50%;
+  display:grid;place-items:center;
+  background:var(--crimson);color:var(--white);
+  box-shadow:0 0 0 3px var(--cream),0 0 0 5px var(--gold-ink),0 12px 20px -10px rgba(128,0,0,.6);
+  font-family:var(--serif);font-weight:800;font-size:24px;letter-spacing:-.01em;
+  transform:rotate(10deg);transform-origin:50% -24px;
+}
+.bb-twinkle{
+  position:absolute;left:var(--x);top:var(--y);width:var(--w);height:var(--w);margin:calc(var(--w) / -2) 0 0 calc(var(--w) / -2);
+  background:var(--gold-bright);pointer-events:none;
+  clip-path:polygon(50% 0,61% 39%,100% 50%,61% 61%,50% 100%,39% 61%,0 50%,39% 39%);
+  opacity:0;animation:bb-twinkle 2.6s ease-in-out var(--d) infinite;
+}
+
+/* ---- what is in a bag: Fill a Red Bag's drawings in soft circles ---- */
+.bb-inside{
+  list-style:none;margin:0 0 24px;padding:0;
+  display:grid;grid-template-columns:1fr 1fr;gap:10px;
+}
+.bb-inside li{
+  display:flex;flex-direction:column;align-items:center;gap:8px;padding:14px 10px 12px;
+  border-radius:16px;background:var(--card);border:1px solid var(--line);box-shadow:var(--shadow-sm);
+  text-align:center;font-size:14px;line-height:1.35;color:var(--slate);
+}
+.bb-inside__art{display:grid;place-items:center;width:54px;height:54px;border-radius:50%}
+.bb-tone--tan{background:var(--tan-soft)}
+.bb-tone--holly{background:var(--holly-soft)}
+.bb-tone--gold{background:var(--gold-soft)}
+.bb-tone--crimson{background:var(--crimson-soft)}
+.rb-art{display:block;overflow:visible;fill:none;stroke:var(--maroon);stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round}
+.rb-art .r{fill:var(--crimson)}
+.rb-art .d{fill:var(--maroon)}
+.rb-art .t{fill:var(--tan)}
+.rb-art .s{fill:var(--tan-soft)}
+.rb-art .c{fill:var(--cream)}
+.rb-art .w{fill:var(--white)}
+.rb-art .h{fill:var(--holly)}
+.rb-art .g{fill:var(--gold-ink)}
+.rb-art .e{fill:var(--slate)}
+.rb-art .n{stroke:none}
+.rb-art .l{stroke:var(--cream)}
+.rb-art .q{stroke:var(--crimson)}
+.rb-art .x{stroke-width:2.6}
+.rb-art .f{stroke-width:1.2}
+
+/* ---- buttons ---- */
+.bb-btn{
+  position:relative;overflow:hidden;
+  display:flex;align-items:center;justify-content:center;width:100%;min-height:56px;padding:14px 24px;
+  border:0;border-radius:999px;cursor:pointer;
+  background:var(--crimson);color:var(--white);
+  font-family:var(--sans);font-size:18px;font-weight:600;letter-spacing:.01em;
+  box-shadow:0 12px 24px -14px var(--crimson),inset 0 -2px 0 rgba(0,0,0,.14);
+  transition:transform .14s var(--ease-out),background-color .2s ease;
+  -webkit-tap-highlight-color:transparent;
+}
+.bb-btn:hover{background:var(--maroon)}
+.bb-btn:active{transform:scale(.97)}
+.bb-btn[aria-disabled="true"]{cursor:progress;opacity:.82}
+.bb-btn[aria-disabled="true"]:active{transform:none}
+.bb-btn.is-busy{animation:bb-breathe 1.2s ease-in-out infinite}
+/* a band of light that passes across the button now and then */
+.bb-btn--shimmer::after,.bb-welcome .bb-btn::after{
+  content:"";position:absolute;inset:0;pointer-events:none;
+  background:linear-gradient(105deg,transparent 35%,var(--shine) 50%,transparent 65%);
+  transform:translateX(-110%);animation:bb-shimmer 4s var(--ease-out) 1.6s infinite;
+}
+.bb-back{
+  display:inline-flex;align-items:center;min-height:44px;margin:0 0 2px -8px;padding:0 10px;
+  border:0;border-radius:999px;background:none;color:var(--maroon);cursor:pointer;
+  font-family:var(--sans);font-size:15px;
+}
+.bb-back::before{content:"";width:8px;height:8px;margin-right:8px;border-left:2px solid currentColor;border-bottom:2px solid currentColor;transform:rotate(45deg)}
+
+/* ---- how many: plus and minus round a big number, in a card ---- */
+.bb-card{background:var(--card);border:1px solid var(--line);border-radius:22px;box-shadow:var(--shadow);padding:18px 14px 6px;margin:0 0 22px}
+.bb-counter{display:flex;align-items:center;justify-content:center;gap:22px;margin:0 0 6px}
+.bb-step{
+  display:grid;place-items:center;width:48px;height:48px;flex:none;border-radius:50%;cursor:pointer;
+  border:2px solid var(--crimson);background:var(--white);color:var(--crimson);
+  transition:transform .14s var(--ease-out),background-color .2s ease,color .2s ease;
+  -webkit-tap-highlight-color:transparent;
+}
+.bb-step svg{fill:none;stroke:currentColor;stroke-width:2.6;stroke-linecap:round}
+.bb-step:hover{background:var(--crimson);color:var(--white)}
+.bb-step:active{transform:scale(.88)}
+.bb-step[aria-disabled="true"]{opacity:.38;cursor:default}
+.bb-step[aria-disabled="true"]:hover{background:var(--white);color:var(--crimson)}
+.bb-step.is-stuck{animation:bb-stuck .3s var(--ease-out)}
+.bb-count{
+  min-width:2.2ch;text-align:center;font-family:var(--serif);font-weight:800;line-height:1;
+  font-size:64px;color:var(--maroon);
+}
+.bb-count.is-bumped{animation:bb-bump .3s var(--spring)}
+
+/* the row of bags: wraps, never scrolls */
+.bb-row{
+  display:flex;flex-wrap:wrap;justify-content:center;align-items:flex-end;gap:6px 4px;
+  min-height:58px;margin:8px auto 4px;max-width:340px;
+}
+.bb-bag{position:relative;display:block;width:48px;flex:none}
+.bb-bag img{display:block;width:100%;height:auto}
+.bb-bag.is-new{animation:bb-pop .5s var(--spring) both}
+/* the sparkle a new bag arrives with */
+.bb-bag.is-new::after{
+  content:"";position:absolute;right:-6px;top:-6px;width:18px;height:18px;background:var(--gold-bright);
+  clip-path:polygon(50% 0,61% 39%,100% 50%,61% 61%,50% 100%,39% 61%,0 50%,39% 39%);
+  animation:bb-glint .7s var(--ease-out) .12s both;
+}
+.bb-row__more{
+  align-self:center;margin-left:6px;padding:4px 10px;border-radius:999px;
+  background:var(--maroon);color:var(--cream);font-weight:600;font-size:15px;
+}
+.bb-row__more.is-bumped{animation:bb-bump .3s var(--spring)}
+
+.bb-tally{text-align:center;margin:4px 0 12px}
+.bb-tally__words{margin:0;font-size:16px;color:var(--slate)}
+.bb-tally__total{margin:0;font-family:var(--serif);font-weight:700;font-size:28px;color:var(--crimson)}
+
+/* ---- the form ---- */
+.bb-form{margin:0}
+.bb-group{margin:0 0 16px;padding:0;border:0;min-width:0}
+.bb-group legend{padding:0;margin:0 0 8px;font-weight:600;color:var(--maroon)}
+.bb-names{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.bb-field{margin:0 0 10px;min-width:0}
+.bb-field label{display:block;margin:0 0 4px;font-size:14px;color:var(--slate)}
+.bb-field input{
+  display:block;width:100%;min-height:48px;padding:10px 14px;
+  font:inherit;font-size:16px;color:var(--slate);
+  background:var(--white);border:1.5px solid var(--tan);border-radius:12px;
+  transition:border-color .2s ease,box-shadow .2s ease;
+}
+.bb-field input:focus{border-color:var(--maroon);box-shadow:0 0 0 3px var(--gold-soft);outline:none}
+.bb-field input[aria-invalid="true"]{border-color:var(--crimson);background:var(--tan-soft)}
+.bb-field__error{margin:4px 0 0;font-size:13px;color:var(--crimson);font-weight:600}
+
+.bb-giftaid{
+  display:flex;gap:12px;align-items:flex-start;margin:4px 0 14px;padding:14px;
+  background:var(--card);border:1.5px solid var(--line);border-radius:14px;
+  transition:border-color .2s ease,background-color .2s ease;
+}
+.bb-giftaid:has(.bb-giftaid__box:checked){border-color:var(--gold-ink);background:var(--gold-soft)}
+.bb-giftaid__box,.bb-check input{flex:none;width:24px;height:24px;margin:0;accent-color:var(--maroon);cursor:pointer}
+.bb-giftaid__label{cursor:pointer;font-size:15px;color:var(--slate)}
+.bb-giftaid__label strong{display:block;color:var(--maroon);margin-bottom:4px}
+.bb-giftaid__statement{display:block;font-size:12.5px;line-height:1.5;color:var(--slate-soft)}
+.bb-declaration.is-entering{animation:bb-enter .3s var(--ease-out) both}
+.bb-check{display:flex;gap:10px;align-items:center;min-height:44px;font-size:14px;cursor:pointer}
+
+.bb-give{margin-top:8px}
+.bb-status{margin:10px 0 0;padding:10px 14px;border-radius:12px;font-size:15px;text-align:center}
+/* always in the page, so what goes in it is announced; empty, it takes no room */
+.bb-status:empty{padding:0;border:0;margin:0}
+.bb-status.is-error{background:var(--tan-soft);color:var(--maroon);border:1.5px solid var(--crimson);font-weight:600}
+.bb-status.is-entering{animation:bb-enter .26s var(--ease-out) both}
+
+/* ---- the thank you ---- */
+.bb-celebrate{
+  position:relative;padding:20px 0 14px;margin:0 0 6px;
+  background:radial-gradient(closest-side,var(--glow),transparent);
+}
+.bb-celebrate .bb-row{max-width:340px;gap:12px 8px}
+.bb-celebrate .bb-bag{width:76px;animation:bb-pop .55s var(--spring) both;animation-delay:calc(var(--i) * 160ms + 150ms)}
+.bb-celebrate .bb-row--many .bb-bag{width:56px}
+.bb-celebrate .bb-row--few .bb-bag{width:96px}
+.bb-celebrate .bb-row__more{animation:bb-pop .5s var(--spring) both;animation-delay:1.8s}
+.bb-thanks .bb-title{animation:bb-enter .6s var(--ease-out) .35s both}
+.bb-thanks .bb-lede{animation:bb-enter .6s var(--ease-out) .5s both}
+.bb-again{margin:20px 0 0;text-align:center}
+.bb-again a{display:inline-flex;align-items:center;min-height:44px;padding:0 12px;color:var(--maroon);font-weight:600}
+
+/* ---- the footer ---- */
+.bb-foot{
+  position:relative;z-index:1;padding:20px var(--gutter) 28px;text-align:center;
+  color:var(--slate-soft);font-size:12px;line-height:1.5;border-top:1px solid var(--line);
+}
+.bb-foot p{margin:0 auto 4px;max-width:440px}
+.bb-foot a{color:var(--maroon)}
+
+/* ---- falling pieces: behind everything on the welcome, over it on the thank you; no taps ---- */
+.bb-snow{position:fixed;inset:0;z-index:0;overflow:hidden;pointer-events:none;contain:strict}
+.bb-flake{
+  position:absolute;top:-40px;left:var(--x);width:var(--w);height:var(--w);margin-left:calc(var(--w) / -2);
+  will-change:transform;
+}
+.bb-flake svg{display:block;width:100%;height:100%}
+.bb-flake--snow svg{fill:var(--tan);opacity:.45}
+.bb-flake--star svg{fill:var(--gold-bright)}
+.bb-flake--heart svg{fill:var(--crimson)}
+.bb-snow--drift .bb-flake{animation:bb-drift var(--t) linear var(--d) infinite}
+.bb-snow--drift .bb-flake--star svg{opacity:.7}
+.bb-snow--burst .bb-flake{opacity:0;animation:bb-fall var(--t) cubic-bezier(.3,.3,.6,1) var(--d) both}
+.bb-snow--burst{z-index:3}
+/* the snow is the welcome's: past it, on the form, it stops */
+body[data-bb-at="how-many"] .bb-snow{display:none}
+
+/* the burst of sparkles from "Fill a bag" (assets/js/ball-bags.js) */
+.bb-burst{position:fixed;left:var(--bx);top:var(--by);z-index:4;width:0;height:0;pointer-events:none}
+.bb-burst span{
+  position:absolute;left:-8px;top:-8px;width:16px;height:16px;background:var(--gold-bright);
+  clip-path:polygon(50% 0,61% 39%,100% 50%,61% 61%,50% 100%,39% 61%,0 50%,39% 39%);
+  animation:bb-fly .8s var(--ease-out) var(--d) both;
+}
+.bb-burst span:nth-child(3n){background:var(--crimson)}
+
+/* ---- arrivals ---- */
+.bb-welcome .bb-hero__bag{animation:bb-drop 1.25s var(--ease-out) .1s both}
+.bb-welcome .bb-price{animation:bb-swing .8s var(--ease-out) 1s both}
+.bb-welcome .bb-title{animation:bb-enter .5s var(--ease-out) .35s both}
+.bb-welcome .bb-lede{animation:bb-enter .5s var(--ease-out) .45s both}
+.bb-welcome .bb-inside li{animation:bb-rise .5s var(--spring) both;animation-delay:calc(var(--i) * 90ms + 600ms)}
+.bb-welcome .bb-btn{animation:bb-enter .5s var(--ease-out) 1s both}
+.bb-screen.is-entering{animation:bb-enter .36s var(--ease-out) both}
+.bb-screen.is-entering *{animation-delay:0s !important}
+
+/* the bag falls in, lands with a squash, bounces, settles, then gives a small wiggle */
+@keyframes bb-drop{
+  0%{opacity:0;transform:translateY(-130px) rotate(-5deg)}
+  36%{opacity:1;transform:translateY(0) scale(1.05,.93) rotate(0)}
+  50%{transform:translateY(-18px) scale(.98,1.03)}
+  62%{transform:translateY(0) scale(1.02,.98)}
+  70%{transform:translateY(-5px)}
+  78%{transform:none}
+  86%{transform:rotate(-2.5deg)}
+  93%{transform:rotate(1.5deg)}
+  100%{opacity:1;transform:none}
+}
+@keyframes bb-swing{
+  0%{opacity:0;transform:rotate(-40deg) scale(.5)}
+  55%{opacity:1;transform:rotate(18deg) scale(1.06)}
+  78%{transform:rotate(5deg)}
+  100%{opacity:1;transform:rotate(10deg)}
+}
+@keyframes bb-twinkle{0%,100%{opacity:0;transform:scale(.2) rotate(0)}45%{opacity:1;transform:scale(1) rotate(45deg)}70%{opacity:0;transform:scale(.4) rotate(90deg)}}
+@keyframes bb-enter{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}
+@keyframes bb-rise{from{opacity:0;transform:translateY(16px) scale(.94)}to{opacity:1;transform:none}}
+@keyframes bb-pop{0%{opacity:0;transform:translateY(12px) scale(.3)}100%{opacity:1;transform:none}}
+@keyframes bb-glint{0%{opacity:0;transform:scale(0) rotate(0)}40%{opacity:1;transform:scale(1.2) rotate(45deg)}100%{opacity:0;transform:scale(.3) rotate(90deg)}}
+@keyframes bb-fly{
+  0%{opacity:1;transform:rotate(var(--a)) translateX(0) scale(.4)}
+  70%{opacity:1}
+  100%{opacity:0;transform:rotate(var(--a)) translateX(var(--far)) scale(.1)}
+}
+@keyframes bb-bump{0%{transform:none}40%{transform:scale(1.16)}100%{transform:none}}
+@keyframes bb-stuck{0%,100%{transform:none}30%{transform:translateX(-4px)}65%{transform:translateX(3px)}}
+@keyframes bb-shimmer{0%{transform:translateX(-110%)}35%,100%{transform:translateX(110%)}}
+@keyframes bb-breathe{0%,100%{opacity:1}50%{opacity:.78}}
+@keyframes bb-drift{
+  0%{transform:translate3d(0,0,0) rotate(0deg)}
+  100%{transform:translate3d(var(--s),calc(100vh + 80px),0) rotate(var(--r))}
+}
+@keyframes bb-fall{
+  0%{opacity:0;transform:translate3d(0,0,0) rotate(0deg)}
+  8%{opacity:1}
+  80%{opacity:1}
+  100%{opacity:0;transform:translate3d(var(--s),calc(100vh + 60px),0) rotate(var(--r))}
+}
+
+/* ---- a wider screen: the same column, a touch more room ---- */
+@media (min-width:600px){
+  .bb-main{padding-top:16px}
+}
+/* a very narrow phone: one column of names; two of what is in a bag still fit */
+@media (max-width:359px){
+  .bb-names{grid-template-columns:1fr;gap:0}
+  .bb-counter{gap:14px}
+  .bb-inside li{padding:12px 6px 10px}
+}
+
+/* ---- less motion: everything is shown at rest at once; nothing falls, moves or bursts ---- */
+@media (prefers-reduced-motion:reduce){
+  .bb-snow,.bb-burst,.bb-bag.is-new::after,.bb-btn::after{display:none}
+  *,*::before,*::after{animation:none !important;transition:none !important}
+  /* the sparkles stay, still, as decoration */
+  .bb-twinkle{opacity:.8;transform:rotate(45deg) scale(.8)}
+}

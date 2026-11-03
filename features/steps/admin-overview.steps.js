@@ -230,3 +230,25 @@ Then("it shows no numbers", function () {
   assert.deepEqual(this.ovBody.numbers, [], JSON.stringify(this.ovBody));
   assert.deepEqual(this.ovBody.failed, []);
 });
+
+// TASK-560: stories waiting to be read. Other scenarios may leave New stories of their own, so the
+// second reading is compared with the first, not with a number.
+const storiesWaiting = (world) => {
+  const line = (world.ovBody.needs || []).find((n) => n.key === "storiesNew");
+  return line ? Number(line.text.match(/^(\d+) /)[1]) : 0;
+};
+
+Then("it says new stories are waiting to be read, with a button to {string}", function (button) {
+  const line = (this.ovBody.needs || []).find((n) => n.key === "storiesNew");
+  assert.ok(line, JSON.stringify(this.ovBody));
+  assert.match(line.text, /^\d+ new (story is|stories are) waiting to be read$/);
+  assert.equal(line.button, button);
+  assert.equal(line.view, "stories");
+  assert.deepEqual(this.ovBody.failed, []);
+  this.storiesWaitingBefore = storiesWaiting(this);
+});
+
+Then("one fewer story is waiting to be read", function () {
+  assert.deepEqual(this.ovBody.failed, [], JSON.stringify(this.ovBody));
+  assert.equal(storiesWaiting(this), this.storiesWaitingBefore - 1);
+});

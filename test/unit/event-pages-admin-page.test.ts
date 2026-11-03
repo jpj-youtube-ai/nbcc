@@ -89,7 +89,7 @@ async function openEvent(id: number) {
   (el("adminPassword") as HTMLInputElement).value = "pw";
   el("loginForm").dispatchEvent(new Event("submit", { cancelable: true, bubbles: true }));
   await settle();
-  (q('.admin-nav-link[data-view="fundraising"]') as HTMLElement).click();
+  (q('.admin-nav-link[data-view="get-involved"]') as HTMLElement).click();
   await settle();
   (q(`#frList tr[data-frtoggle="${id}"]`) as HTMLElement).click();
   await settle();

@@ -42,12 +42,14 @@ describe("email 7, the invite", () => {
   it("says the approved words, greeting them by the first name staff typed", () => {
     for (const t of [mail.html, mail.text]) {
       expect(t).toContain("Fundraising for NBCC");
-      expect(t).toContain("We’d love you to fundraise with us!");
+      expect(t).toContain("We'd love you to fundraise with us!");
       expect(t).toContain("Hi Mary Jane,");
       expect(t).toContain("It was so lovely to chat with you about your plans to raise money for NBCC. Thank you, it honestly means the world to us.");
-      expect(t).toContain("We’ve given you a head start: press the button below and your page is already filled in with what we talked about. It only takes a couple of minutes.");
-      expect(t).toContain("You’ll get your very own fundraising page, with a meter that fills as gifts come in, a wall for your supporters’ messages and your own QR code for posters.");
-      expect(t).toContain("Need posters, leaflets, a collection bucket or a shout out on our social media? Just ask, we’re here to help.");
+      // The link only fills in their name and email, so it says the form is started (Jaimie, 2026-10-04).
+      expect(t).toContain("We've given you a head start: press the button below and the form is already started for you. It only takes a few minutes.");
+      expect(t).not.toContain("already filled in with what we talked about");
+      expect(t).toContain("You'll get your very own fundraising page, with a meter that fills as gifts come in, a wall for your supporters' messages and your own QR code for posters.");
+      expect(t).toContain("Need posters, leaflets, a collection bucket or a shout out on our social media? Just ask, we're here to help.");
     }
     expectPlainEnglish(mail.text);
   });
@@ -92,9 +94,9 @@ describe("email 11, the Monday summary", () => {
     subject: "Fundraising this week: £1,240 raised, 10 things waiting",
     headline: "£1,240 raised",
     money: "£1,050 online and £190 paid in, plus £210 Gift Aid to claim. 14 fundraisers live, £8,930 raised in total.",
-    newSignUps: ["Sam’s Santa Dash, raising money, Perth", "Coffee morning at <St Example’s>, holding an event"],
+    newSignUps: ["Sam's Santa Dash, raising money, Perth", "Coffee morning at <St Example's>, holding an event"],
     waiting: ["2 sign ups to approve", "1 change to check"],
-    comingUp: ["Sat 6 Dec: Sam’s Santa Dash, Perth"],
+    comingUp: ["Saturday 6th December: Sam's Santa Dash, Perth"],
   };
   const mail = buildSummaryEmail(lines, { adminUrl: "https://nbcc.test/admin", test: false });
 
@@ -106,31 +108,35 @@ describe("email 11, the Monday summary", () => {
     for (const t of [mail.html, mail.text]) {
       expect(t).toContain("For the team, Monday 8am");
       expect(t).toContain("Good morning, team!");
-      expect(t).toContain("Here’s how fundraising went last week.");
+      expect(t).toContain("Here's how fundraising went last week.");
       expect(t).toContain("£1,240 raised");
       expect(t).toContain(lines.money);
       expect(t).toMatch(/New sign ups/i);
       expect(t).toMatch(/Waiting on us/i);
       expect(t).toMatch(/Coming up/i);
       expect(t).toContain("2 sign ups to approve");
-      expect(t).toContain("Sat 6 Dec: Sam’s Santa Dash, Perth");
     }
+    // The date with its ending: plain in the text part, raised in the HTML.
+    expect(mail.text).toContain("Saturday 6th December: Sam's Santa Dash, Perth");
+    expect(mail.html).toContain("Saturday 6<sup>th</sup> December: Sam&#39;s Santa Dash, Perth");
     expectPlainEnglish(mail.text);
   });
 
   it("escapes the titles organisers typed", () => {
-    expect(mail.html).toContain("Coffee morning at &lt;St Example’s&gt;, holding an event");
+    expect(mail.html).toContain("Coffee morning at &lt;St Example&#39;s&gt;, holding an event");
     expect(mail.html).not.toContain("<St Example");
   });
 
   it("has the Open the admin button, then signs off, with no questions box", () => {
     expect(mail.html).toContain('href="https://nbcc.test/admin"');
     expect(mail.html).toContain(">Open the admin</a>");
-    expect(mail.html).toContain("Have a brilliant week,");
+    // Every staff notice signs off the same way (Jaimie, 2026-10-04).
+    expect(mail.html).toContain("Thank you!<br>");
     expect(mail.html).toContain("NBCC Team");
-    expect(mail.html.indexOf("Open the admin")).toBeLessThan(mail.html.indexOf("Have a brilliant week,"));
+    expect(mail.html.indexOf("Open the admin")).toBeLessThan(mail.html.indexOf("Thank you!<br>"));
     expect(mail.html).not.toContain("Got any questions?");
-    expect(mail.text).toContain("Have a brilliant week,\nNBCC Team");
+    expect(mail.html + mail.text).not.toContain("Have a brilliant week");
+    expect(mail.text).toContain("Thank you!\nNBCC Team");
     expect(mail.text).toContain("Open the admin: https://nbcc.test/admin");
   });
 

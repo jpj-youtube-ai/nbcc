@@ -1,0 +1,170 @@
+/* Fill a Red Bag, on its own stage (src/red-bag/stage.ts, assets/js/red-bag-stage.js). A file of its
+   own, loaded only by a page that draws the stage, so no budgeted page pays for it. It carries all it
+   needs itself: the home page does not load the Red Bag page's styles. */
+@font-face{font-family:"Caveat";font-style:normal;font-weight:400 700;font-display:swap;src:url(/assets/fonts/caveat-latin.woff2) format("woff2")}
+
+.fb{--f:0;--top:var(--cream);--hand:"Caveat","Bradley Hand","Segoe Print",cursive;--gold:#D9A93E;--ink-on-tan:#4A0F0F;--ease:cubic-bezier(.22,1,.36,1);position:relative;isolation:isolate}
+.fb .hand{font-family:var(--hand);font-weight:700;line-height:1.05}
+.fb a:focus-visible,.fb button:focus-visible{outline:3px solid var(--gold);outline-offset:3px;border-radius:6px}
+.fb-ground a:focus-visible,.fb-ground button:focus-visible{outline-color:var(--crimson)}
+
+/* the drawings from the Fill a Red Bag page */
+.fb .rb-art,.fb-fly .rb-art{display:block;overflow:visible;fill:none;stroke:var(--maroon);stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round}
+.fb .rb-art .r,.fb-fly .rb-art .r{fill:var(--crimson)}
+.fb .rb-art .d,.fb-fly .rb-art .d{fill:var(--maroon)}
+.fb .rb-art .t,.fb-fly .rb-art .t{fill:var(--tan)}
+.fb .rb-art .s,.fb-fly .rb-art .s{fill:var(--tan-soft)}
+.fb .rb-art .c,.fb-fly .rb-art .c{fill:var(--cream)}
+.fb .rb-art .w,.fb-fly .rb-art .w{fill:var(--white)}
+.fb .rb-art .h,.fb-fly .rb-art .h{fill:var(--holly)}
+.fb .rb-art .g,.fb-fly .rb-art .g{fill:var(--gold-ink)}
+.fb .rb-art .e,.fb-fly .rb-art .e{fill:var(--slate)}
+.fb .rb-art .n,.fb-fly .rb-art .n{stroke:none}
+.fb .rb-art .l,.fb-fly .rb-art .l{stroke:var(--cream)}
+.fb .rb-art .q,.fb-fly .rb-art .q{stroke:var(--crimson)}
+.fb .rb-art .x,.fb-fly .rb-art .x{stroke-width:2.6}
+.fb .rb-art .f,.fb-fly .rb-art .f{stroke-width:1.2}
+
+/* the night before Christmas, outside the Workshop */
+.fb-night{--pad:clamp(64px,6.6vw,92px);--hill:clamp(84px,9vw,124px);position:relative;isolation:isolate;overflow:hidden;color:var(--cream);padding:clamp(92px,8.8vw,118px) 0 var(--pad);
+  background:radial-gradient(58% 84% at 74% 74%,#2f8430 0,#1f6320 34%,var(--holly) 60%,var(--holly-dark) 100%)}
+.fb-sky{position:absolute;inset:0;width:100%;height:100%;z-index:-1;pointer-events:none}
+.fb .drift{position:absolute;left:0;right:0;bottom:-1px;width:100%;height:clamp(36px,6.5vw,92px);color:var(--cream);display:block;z-index:0;pointer-events:none}
+.fb-topedge{position:absolute;left:0;right:0;top:-1px;height:clamp(36px,6.5vw,92px);transform:scaleY(-1);z-index:1;pointer-events:none}
+.fb-topedge .drift{inset:0;height:100%;color:var(--top)}
+.fb-lights{position:absolute;top:calc(clamp(36px,6.5vw,92px) * .66);right:clamp(-30px,-1vw,0px);width:clamp(420px,50vw,720px);height:auto;overflow:visible;z-index:0;pointer-events:none}
+.fb-lights .wire{fill:none;stroke:#0d2b0d;stroke-width:2.4}
+.fb-lights .cap{fill:#0d2b0d}
+.fb-lights .glass{fill:#3a5c3a;stroke:#0d2b0d;stroke-width:1;transition:fill .35s}
+.fb-lights .halo{opacity:0;transition:opacity .35s}
+.fb-lights .bulb.on .glass{fill:var(--c)}
+.fb-lights .bulb.on .halo{opacity:1}
+.fb.full .fb-lights .bulb.on .halo,.fb.full .fb-lights .bulb.on .glass{animation:fb-twinkle 1.1s ease-in-out infinite alternate;animation-delay:calc(var(--i) * -170ms)}
+.fb.held .fb-lights *{animation-play-state:paused!important}
+@keyframes fb-twinkle{from{opacity:1}to{opacity:.5}}
+
+.fb-grid{position:relative;z-index:1;display:grid;grid-template-columns:minmax(0,1.05fr) minmax(0,.95fr);grid-template-areas:"head stage" "play stage";column-gap:clamp(24px,4vw,60px);grid-template-rows:auto 1fr;align-items:start}
+.fb-head{grid-area:head}
+.fb-head .eyebrow{color:#F4C95D}
+.fb-head h2{font-size:clamp(3.3rem,1.5rem + 5.2vw,6rem);line-height:.92;letter-spacing:-.024em;margin:.14em 0 .36em;color:var(--cream)}
+.fb-under{position:relative;display:inline-block;white-space:nowrap}
+.fb-under svg{position:absolute;left:0;right:0;bottom:-.14em;width:100%;height:.2em;overflow:visible}
+.fb-under path{fill:none;stroke:var(--gold);stroke-width:5;stroke-linecap:round;vector-effect:non-scaling-stroke;stroke-dasharray:1;stroke-dashoffset:1}
+.fb.seen .fb-under path{transition:stroke-dashoffset 1.1s var(--ease) .25s;stroke-dashoffset:0}
+.fb-lede{max-width:52ch;margin:0;font-size:1rem;line-height:1.55;color:var(--cream)}
+.fb-play{grid-area:play}
+.fb-try{margin:12px 0 6px;font-size:1.7rem;line-height:1.1;color:#F4C95D}
+
+.fb-tiles{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px 10px}
+.fb-tile{position:relative;display:flex;flex-direction:column;align-items:center;gap:2px;padding:8px 4px 8px;background:var(--cream);color:var(--maroon);border:0;border-radius:14px;cursor:pointer;font-family:var(--font-body);
+  box-shadow:0 5px 0 #0c2c0c,0 14px 18px -8px rgba(0,18,0,.65);transition:transform .2s var(--ease),box-shadow .2s var(--ease),opacity .3s}
+.fb-tile:hover{transform:translateY(-3px) rotate(-1deg);box-shadow:0 8px 0 #0c2c0c,0 18px 22px -8px rgba(0,18,0,.65)}
+.fb-tile:active,.fb-tile.press{transform:translateY(4px);box-shadow:0 1px 0 #0c2c0c,0 4px 8px -4px rgba(0,18,0,.65)}
+.fb .fb-tile:focus-visible{outline:3px solid #F4C95D;outline-offset:3px}
+.fb-tile-art{width:40px;height:40px}
+/* A word too long for the tile breaks at the tile's edge, so it cannot spill over the next one. The box may
+   use the tile's padding (max-width) and overflow-wrap is break-word, not anywhere, because anywhere would
+   also split a normal word that only fits by using that padding: Headphones, on a 320px phone. */
+.fb-tile-name{font-size:.76rem;line-height:1.18;font-weight:500;text-align:center;overflow-wrap:break-word;max-width:calc(100% + 8px)}
+.fb-tile-price{font-family:var(--font-head);font-size:1.12rem;line-height:1;color:var(--crimson)}
+.fb-count{position:absolute;top:-7px;right:-5px;min-width:24px;height:24px;padding:0 5px;border-radius:12px;display:grid;place-items:center;font:700 .8rem/1 var(--font-body);background:var(--gold);color:var(--ink-on-tan);transform:scale(0);transition:transform .3s var(--ease)}
+.fb-count.on{transform:scale(1)}
+
+.fb-ground{position:relative;z-index:2;background:var(--cream);color:var(--maroon);padding:6px 0 clamp(30px,3.6vw,48px)}
+.fb-ground-grid{display:grid;grid-template-columns:minmax(0,1.05fr) minmax(0,.95fr);column-gap:clamp(24px,4vw,60px);align-items:center}
+.fb-status{margin:0;font-family:var(--hand);font-weight:700;font-size:1.85rem;line-height:1.08;min-height:2.16em;display:flex;align-items:flex-end;color:var(--maroon)}
+.fb-elves{margin:8px 0 0;max-width:60ch;font-size:.86rem;line-height:1.5;color:var(--slate)}
+.fb-acts{display:flex;flex-wrap:wrap;align-items:center;justify-content:center;gap:8px 18px}
+.btn.fb-cta{font-size:1.14rem;padding:.92em 1.7em}
+.fb-link{background:none;border:0;padding:8px 2px;color:var(--maroon);font:500 .96rem var(--font-body);text-decoration:underline;text-underline-offset:3px;cursor:pointer}
+.fb-link:hover{color:var(--crimson)}
+.fb-link[hidden]{display:none}
+.fb.full .fb-cta{animation:fb-cta-glow 1.4s ease-in-out infinite alternate}
+.fb.held .fb-cta{animation-play-state:paused}
+@keyframes fb-cta-glow{from{box-shadow:0 0 0 0 rgba(192,34,56,.42)}to{box-shadow:0 0 0 13px rgba(192,34,56,0)}}
+
+/* the bag */
+.fb-stage{grid-area:stage;align-self:end;position:relative;display:flex;justify-content:center;margin-bottom:calc(var(--pad) * -.56)}
+.fb-glow{position:absolute;left:46%;top:18%;width:150%;aspect-ratio:1;margin-left:-75%;margin-top:-52%;border-radius:50%;pointer-events:none;
+  background:radial-gradient(closest-side,rgba(255,226,140,.92),rgba(244,201,93,.4) 42%,rgba(244,201,93,0) 72%);opacity:calc(var(--f) * var(--f) * .95);transform:scale(calc(.6 + var(--f) * .5));transition:opacity .6s,transform .8s var(--ease)}
+.fb.full .fb-glow{opacity:1;transform:scale(1.14)}
+.fb-bag{position:relative;z-index:1;width:min(92%,clamp(250px,31vw,430px));aspect-ratio:120/132;transform-origin:50% 100%;transform:scale(calc(1 + var(--f) * .04),calc(1 + var(--f) * .02));transition:transform .5s var(--ease)}
+.fb-wob{position:absolute;inset:0;transform-origin:50% 100%;will-change:transform;filter:drop-shadow(0 22px 20px rgba(0,22,0,.5))}
+.fb-back,.fb-front{position:absolute;inset:0;width:100%;height:100%;overflow:visible}
+.fb-back{z-index:1}.fb-peeks{position:absolute;inset:0;z-index:2}.fb-front{z-index:3}
+.fb-peek{position:absolute;left:var(--x);top:var(--y);width:36%;aspect-ratio:1;margin-left:-18%;z-index:var(--z);rotate:var(--r);transition:transform .5s var(--ease),opacity .4s}
+.fb-peek .rb-art{width:100%;height:100%;stroke-width:1.7}
+.fb.full .fb-peek{transform:translateY(58%);opacity:0}
+.fb-sum{position:absolute;z-index:4;left:10%;width:66.6%;top:48%;margin:0;display:flex;flex-direction:column;align-items:center;gap:.1em;color:#FFF8EF;text-shadow:0 2px 0 rgba(90,0,14,.5);transition:opacity .3s}
+.fb-sum b{font-family:var(--font-head);font-weight:700;font-size:clamp(2.8rem,1.8rem + 2.8vw,4.3rem);line-height:1;letter-spacing:-.02em;font-variant-numeric:lining-nums}
+.fb-sum span{font-size:clamp(.92rem,.8rem + .4vw,1.14rem);font-weight:500}
+.fb.full .fb-sum{opacity:0}
+.fb-tie{visibility:hidden}
+.fb.full .fb-tie{visibility:visible}
+.fb-bow{transform-box:fill-box;transform-origin:50% 50%}
+.fb.full .fb-bow{animation:fb-bow-in .7s var(--ease) .12s backwards}
+.fb-tag{transform-origin:60px 20px}
+.fb.full .fb-tag{animation:fb-tag-swing 1.8s ease-out .3s backwards}
+@keyframes fb-bow-in{from{opacity:0;transform:translateY(-26px) scale(.3) rotate(-30deg)}to{opacity:1;transform:none}}
+@keyframes fb-tag-swing{0%{opacity:0;transform:rotate(-34deg)}10%{opacity:1}30%{transform:rotate(13deg)}52%{transform:rotate(-7deg)}74%{transform:rotate(3.5deg)}100%{transform:none}}
+.fb-hill{position:absolute;z-index:2;right:0;bottom:-1px;width:58%;height:var(--hill);color:var(--cream);pointer-events:none}
+.fb-mound{display:none}
+/* Out past the column into the page's gutter, by no more than the gutter has: .wrap is 1180px at most, with 48px each side. */
+.fb-elf,.fb-note{--out:min(70px,max(36px,36px + (100vw - 1180px) / 2))}
+.fb-elf{position:absolute;z-index:2;right:calc(var(--out) * -1);bottom:calc(var(--hill) * .8 - var(--pad) * .44 - 15px);width:clamp(104px,10vw,132px);height:auto;aspect-ratio:150/98;object-fit:cover;object-position:50% 0}
+.fb-note{position:absolute;z-index:5;right:calc(var(--out) * -1);bottom:calc(var(--hill) * .8 - var(--pad) * .44 + clamp(58px,5.6vw,74px));max-width:184px;margin:0;padding:9px 14px 10px;background:var(--cream);color:var(--maroon);font-size:1.5rem;border-radius:5px;box-shadow:0 12px 20px -10px rgba(0,22,0,.7);rotate:2.5deg;opacity:0;transform:translateY(10px) scale(.92);transition:opacity .28s,transform .4s var(--ease);pointer-events:none}
+.fb-note::after{content:"";position:absolute;right:44px;bottom:-9px;border:10px solid transparent;border-bottom:0;border-top-color:var(--cream)}
+.fb-note.show{opacity:1;transform:none}
+.fb-fly{position:fixed;z-index:110;pointer-events:none}
+.fb-fly .rb-art{width:100%;height:100%;filter:drop-shadow(0 8px 8px rgba(0,22,0,.4))}
+
+@media (min-width:1240px){.fb-status{font-size:1.62rem;min-height:0}}
+/* Just wide enough to stand side by side: the bag is at its closest to the note here, so the note is narrower and clears the sum. */
+@media (min-width:1091px) and (max-width:1240px){.fb-note{max-width:146px;font-size:1.3rem}.fb-note::after{right:30px}}
+
+/* Stacked from here down, and not only on a phone: beside the words, the note would sit on the sum. */
+@media (max-width:1090px){
+  .fb-grid{grid-template-columns:minmax(0,1fr);grid-template-rows:none;grid-template-areas:"head" "stage" "play"}
+  .fb-ground-grid{grid-template-columns:minmax(0,1fr);row-gap:14px}
+  .fb-stage{align-self:auto;margin:10px 0 40px}
+  .fb-bag{width:clamp(220px,46vw,340px)}
+  .fb-lights{width:min(100%,600px);right:50%;margin-right:calc(min(100%,600px) / -2);opacity:.97}
+  .fb-head{padding-top:96px}
+  .fb-elf,.fb-note{right:max(0px,calc(50% - 330px))}
+  .fb-hill{display:none}
+  .fb-mound{display:block;position:absolute;z-index:3;left:50%;bottom:-16px;width:min(104%,640px);height:48px;transform:translateX(-50%);border-radius:50%;background:var(--cream)}
+  .fb-elf{bottom:12px}
+  .fb-note{bottom:92px}
+  .fb-play{padding-bottom:18px}
+}
+
+@media (max-width:600px){
+  .fb-night{padding-top:64px}
+  .fb-head{padding-top:44px;text-align:center}
+  .fb-head h2{font-size:clamp(3rem,15.5vw,4rem);margin:.12em 0 .22em}
+  .fb-lede{font-size:.96rem;line-height:1.5;margin-inline:auto}
+  .fb-stage{margin:18px 0 32px;justify-content:flex-start}
+  .fb-bag{width:clamp(176px,54vw,230px);margin-left:1%}
+  .fb-play{text-align:center}
+  .fb-try{margin-top:0}
+  .fb-tiles{gap:10px 7px}
+  .fb-tile-art{width:36px;height:36px}
+  .fb-tile{padding:8px 2px 7px;border-radius:12px}
+  .fb-tile-name{font-size:.68rem;min-height:2.36em;display:flex;flex-direction:column;justify-content:center;max-width:calc(100% + 4px)}
+  .fb-tile-price{font-size:1rem}
+  .fb-ground{text-align:center}
+  .fb-status{font-size:1.5rem;justify-content:center}
+  .fb-elves{font-size:.8rem;margin-inline:auto}
+  .fb-note{font-size:1.2rem;max-width:calc(46% - 2px);right:0;bottom:84px;padding:6px 9px 7px}
+  .fb-note::after{right:30px}
+  .fb-elf{width:88px;right:4%;bottom:6px}
+  .fb-mound{height:38px;bottom:-10px}
+}
+@media (max-width:360px){.fb-tile-name{font-size:.62rem}}
+
+@media (prefers-reduced-motion:reduce){
+  .fb-tile,.fb-count,.fb-peek,.fb-bag,.fb-glow,.fb-note,.fb-sum,.fb-lights .glass,.fb-lights .halo{transition:none}
+  .fb.full .fb-cta,.fb.full .fb-bow,.fb.full .fb-tag,.fb.full .fb-lights .bulb.on .halo,.fb.full .fb-lights .bulb.on .glass{animation:none}
+  .fb-under path{stroke-dashoffset:0}
+  .fb.seen .fb-under path{transition:none}
+}

@@ -44,7 +44,7 @@ describe("the Get involved item in the menu (TASK-494: Events renamed)", () => {
   });
 
   it("leaves the Get involved page alone, which already has its own item", () => {
-    const events = page("events.html");
+    const events = page("whats-on.html");
     expect(addEventsNavLink(events)).toBe(events);
   });
 

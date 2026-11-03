@@ -88,7 +88,8 @@ describe("GET /api/admin/whats-new", () => {
     const contact = areas.find((a) => a.area === "contact")!;
     expect(contact).toEqual({ area: "contact", new: true, since: "2026-10-05T09:00:00.000Z" });
     expect(latestArrivalMock).toHaveBeenCalledWith("contact", new Date("2026-10-05T09:00:00Z"));
-    expect(areas.find((a) => a.area === "donations")!.new).toBe(false);
+    // A section with no arrival and no new part: the Festive Ball (Donations has a new part now).
+    expect(areas.find((a) => a.area === "ball")!.new).toBe(false);
   });
 
   // The Events page, Monthly givers and old stories were all added today, after this account.

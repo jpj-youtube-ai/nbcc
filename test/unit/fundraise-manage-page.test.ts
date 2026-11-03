@@ -241,7 +241,7 @@ describe("signed in", () => {
   it("shows an event's own page and QR code, and says its page is live", async () => {
     await load("", signedIn(event({ pageUrl: "https://nbcc.test/event/kq", qrUrl: "/event/kq/qr.svg" })));
     const c = card(8);
-    expect($("[data-f-status]", c).textContent).toBe("Approved. Your event's page is live, and it is on our Get involved page.");
+    expect($("[data-f-status]", c).textContent).toBe("Approved. Your event's page is live, and it is on our What's on page.");
     expect($<HTMLAnchorElement>("a[data-f-page]", c).getAttribute("href")).toBe("https://nbcc.test/event/kq");
     expect($<HTMLImageElement>("img[data-f-qr-img]", c).getAttribute("src")).toBe("/event/kq/qr.svg");
   });

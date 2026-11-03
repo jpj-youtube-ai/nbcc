@@ -26,33 +26,34 @@ describe("the pay email", () => {
 
   it("greets the sponsor, says what they pledged and when, and has the pay button", () => {
     expect(mail.html).toContain("Hello Alex,");
-    expect(mail.html).toContain("On 1 November 2026 you pledged £10");
+    expect(mail.html).toContain("On 1<sup>st</sup> November 2026 you pledged £10");
+    expect(mail.text).toContain("On 1st November 2026 you pledged £10");
     expect(mail.html).toContain('href="https://nbcc.example/pledge/pay?t=12.abcdefghijklmnopqrstuvwxyz0123456789ABCDEFG"');
     expect(mail.html).toContain("Pay my £10 pledge");
     expect(mail.text).toContain("Pay my £10 pledge: https://nbcc.example/pledge/pay?t=12.");
   });
 
   it("explains why they are getting it, and that only one reminder follows", () => {
-    for (const part of [mail.html, mail.text]) {
-      expect(part).toContain("Why you’re getting this: you made a pledge on Robin’s fundraising page at nbcc.scot.");
-      expect(part).toContain("one reminder in a week, and nothing after that");
-    }
+    expect(mail.text).toContain("Why you're getting this: you made a pledge on Robin's fundraising page at nbcc.scot.");
+    expect(mail.html).toContain("Why you&#39;re getting this: you made a pledge on Robin&#39;s fundraising page at nbcc.scot.");
+    for (const part of [mail.html, mail.text]) expect(part).toContain("one reminder in a week, and nothing after that");
   });
 
   it("has a link to say they can't pay after all", () => {
-    expect(mail.html).toContain("Can’t pay this after all?");
+    expect(mail.html).toContain("Can&#39;t pay this after all?");
+    expect(mail.text).toContain("Can't pay this after all?");
     expect(mail.html).toContain('href="https://nbcc.example/pledge/cancel?t=12.');
     expect(mail.text).toContain("https://nbcc.example/pledge/cancel?t=12.");
   });
 
   it("says what to do if they already paid in cash", () => {
-    expect(mail.text).toContain("Already paid Robin in cash? You don’t need to pay again.");
+    expect(mail.text).toContain("Already paid Robin in cash? You don't need to pay again.");
   });
 
   it("mentions Gift Aid only when they declared it", () => {
     expect(mail.text).not.toContain("Gift Aid");
     const aided = buildPledgeEmail("pledge_pay", data({ giftAid: true }));
-    expect(aided.text).toContain("You asked us to add Gift Aid when you pledged. We’ll claim it once you’ve paid, at no cost to you.");
+    expect(aided.text).toContain("You asked us to add Gift Aid when you pledged. We'll claim it once you've paid, at no cost to you.");
   });
 
   it("escapes the title, and never puts an unsafe name in", () => {
@@ -63,10 +64,13 @@ describe("the pay email", () => {
     expect(odd.html).toContain("Hello,");
     expect(odd.subject).toBe("<b>Dash</b> & more has finished! Here's your link to pay your £10 pledge");
     expect(odd.text).toContain("the organiser");
+    // No capital letter mid sentence (Jaimie, 2026-10-04).
+    expect(odd.text).toContain("Great news: the organiser has finished");
+    expect(odd.html + odd.text).not.toContain("Great news: The organiser");
   });
 
   it("writes a name ending in s with just the apostrophe", () => {
-    expect(buildPledgeEmail("pledge_pay", data({ organiserName: "James Example" })).text).toContain("on James’ fundraising page");
+    expect(buildPledgeEmail("pledge_pay", data({ organiserName: "James Example" })).text).toContain("on James' fundraising page");
   });
 
   it("is a whole branded email from the events inbox, with the charity's registration", () => {
@@ -93,12 +97,12 @@ describe("the reminder", () => {
   });
 
   it("says it is the only one", () => {
-    expect(mail.text).toContain("This is the only reminder we’ll send.");
+    expect(mail.text).toContain("This is the only reminder we'll send.");
   });
 
   it("still has the way out, and why they are getting it", () => {
-    expect(mail.text).toContain("Can’t pay this after all?");
-    expect(mail.text).toContain("Why you’re getting this");
+    expect(mail.text).toContain("Can't pay this after all?");
+    expect(mail.text).toContain("Why you're getting this");
   });
 });
 

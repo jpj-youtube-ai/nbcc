@@ -56,6 +56,7 @@ Each page is served at a clean, canonical URL (no `.html`):
 | `/donor-portal` | `portal.html` |
 | `/business/thank-you` | `business-thank-you.html` |
 | `/privacy` | `privacy.html` |
+| `/newsletter` | `newsletter.html` (joining the mailing list) |
 | `/my-story` | `my-story.html` |
 
 `/donate/thank-you` is the post-payment confirmation page Stripe returns the
@@ -143,8 +144,14 @@ Every page mounts the same sticky top nav in its `<header class="nav">` slot
 (REQ-002, ported from the NBCC design): the logo lockup (50px) linking to `/`,
 links to `/`, `/about-us`, `/donate`, `/contact`, `/supporters`, a persistent
 Donate button, and a mobile burger. Two items are added by the server rather than written into
-the files: "Festive Ball" while the ball is published (TASK-326) and "Get involved" (called Events
-until TASK-494), after About, while the Events page is switched on (TASK-453).
+the files: "Festive Ball" while the ball is published (TASK-326), and "Get involved" (called Events
+until TASK-494) after About, while the events switch is on (TASK-453). What's on is not in the menu:
+Get involved shows the same cards, and adds "See everything that's on" when there are more than its
+six. Get involved goes out with a few lines of style (`MENU_FIT`, `src/events/menu-fit.ts`, not a part
+of `addEventsNavLink`, because Ball pages call that one and keep their old menu until after the Ball)
+that tighten the menu between the burger and 1040px, where it would otherwise wrap and, with the
+Ball's item up, push Donate off the screen. They
+are not in `styles.css` because donate.html has 147 bytes of its page weight left.
 Behaviour lives in the one shared `assets/js/main.js` (`initNav`): a passive +
 `requestAnimationFrame`-throttled scroll listener flips the bar from transparent
 to a cream/hairline/shadow state past 24px; the burger toggles the link panel
@@ -161,14 +168,17 @@ current page's link is marked `class="active" aria-current="page"`. Verified by
 ### Footer
 
 Every page mounts the same maroon footer in its `<footer class="site-footer">`
-slot (REQ-003, ported from the NBCC design), **identical across all five pages**:
-three columns — the logo lockup (74px) + social links (Instagram/Facebook/X),
-**Explore** (the clean URLs `/`, `/about-us`, `/donate`, `/contact`, `/supporters`), and
-**Ways to give** (`/donate`, `/contact`) — plus a legal strip carrying the exact,
-mandated charity-registration statement (TASK-126): *"Night Before Christmas
-Campaign, known as NBCC, is a Scottish Charitable Incorporated Organisation.
+slot (REQ-003, ported from the NBCC design), **identical on every page that has one**:
+three columns — the logo lockup (74px), the charity's short description, the social links
+(Instagram/Facebook/X) and "Find us at nbcc.scot"; **Explore** (the clean URLs `/`, `/about-us`,
+`/donate`, `/contact`, `/supporters`, `/my-story`); and **Ways to give** ("Donate money" to
+`/donate`, "Donate items" and "Fundraise for us" to `/contact`; while fundraising is switched on the
+server points "Fundraise for us" at `/fundraise`, `src/fundraising/footer-link.ts`) — plus a legal
+strip carrying the exact, mandated charity-registration statement (TASK-126): *"Night Before
+Christmas Campaign, known as NBCC, is a Scottish Charitable Incorporated Organisation.
 Scottish Charity Number SC047995. Regulated by the Scottish Charity Regulator,
-OSCR."* — the `SC047995` wrapping the OSCR register link. This exact wording is
+OSCR."* — the `SC047995` wrapping the OSCR register link — and the Elves' Workshop address. The
+registration wording is
 the single source of truth in `src/legal/registration.ts` and also appears in
 every donor-facing receipt and thank-you letter (the Corporation Tax receipt +
 refund notice in `src/donors/receipt.ts`, and the donation- and refund-
@@ -178,6 +188,115 @@ background, cream text, reuses `--maroon`/`--cream`/`--line`/`--maxw`; columns
 stack at ≤680px). The logo is the only `<img>` (social icons are inline SVG) and
 declares width/height + `loading="lazy"`, so the perf budget holds. Verified by
 `test/unit/footer.test.ts`.
+
+**One footer, kept in one place.** The footer's master copy is `partials/footer.html`. To change the
+footer, edit that file and run `node scripts/sync-footer.mjs`, which copies it into every page in
+the site's root that has a site footer (each page keeps its own indentation and line endings; only
+the `<footer>` element is replaced). `node scripts/sync-footer.mjs --check` changes nothing and
+lists any page out of step. `test/unit/footer-master.test.ts` fails when a page's footer differs
+from the master, so a footer edited by hand in one page, or a new page given an old footer, cannot
+ship. Every page now has the same full footer: the seven pages that once had a shorter one (no
+"Find us at" line, two "Ways to give" links) were brought into line, and the Get involved page lost
+its footer link to itself. The Festive Ball's server-built pages (guest details, thank you) carry
+only the legal strip and are not part of this.
+
+### Pages served below the top level use absolute asset addresses (TASK-564)
+
+Three pages are reached from an email at an address two or more levels deep: `portal.html` at
+`/portal/access`, `business-thank-you.html` at `/business/thank-you`, and `gift-aid.html` at
+`/api/gift-aid/<token>`. A relative `href="assets/css/styles.css"` there is asked for under
+`/portal/`, `/business/` or `/api/gift-aid/` and answers 404, so until 5 October 2026 all three
+opened with no styles and no scripts. They now ask for `/assets/...`, as `404.html` always has, and
+`test/unit/deep-pages-find-their-styles.test.ts` fails if any of them asks for anything by a
+relative address. A new page served at a deep address belongs in that test's list.
+
+The same test holds `.supporter-name{overflow-wrap:anywhere}` in `assets/css/styles.css`: a
+partner's name with no break point (place names joined by slashes) made the Supporters page 510px
+wide on a phone. `anywhere`, not `break-word`, because it also lets the card's grid column be
+narrower than the name.
+
+### The short pages under /get-involved/
+
+Six plain pages, each its own file, served by `src/routes/get-involved-pages.ts` with the menu items
+of the day added as they go out, and listed in `SHORT_PAGES` in `src/site/pages.ts`:
+
+| Address | File | Heading |
+|---|---|---|
+| `/get-involved/drop-off-points` | `get-involved-drop-off-points.html` | Drop-off points |
+| `/get-involved/referrals` | `get-involved-referrals.html` | Referrals |
+| `/get-involved/volunteer` | `get-involved-volunteer.html` | Volunteer |
+| `/get-involved/business` | `get-involved-business.html` | Let's make Christmas happen together. |
+| `/get-involved/schools` | `get-involved-schools.html` | Schools are at the heart of what we do. |
+| `/get-involved/groups` | `get-involved-groups.html` | Do something brilliant, together. |
+
+- **Not at `/volunteer` and `/referrals`.** Those are live forwards to `vol.nbcc.scot` and
+  `referrals.nbcc.scot` in the spare address table (migration `1791200000290`). A page there would
+  silently replace them, so neither is reserved and neither is a page.
+- **The events switch does not govern them.** They are about helping, not events. With it off they
+  stay, and the menu loses Get involved as every page does. That is also why they sit
+  beside Get involved in `SITE_PAGES` and not as its children: a child drops off `/sitemap` with its
+  parent. Get involved lights up in the menu on these pages (`aria-current="true"`: the section, not
+  the page).
+- **Styles.** Each page loads `styles.css`, then `get-involved.css` for the bands, the drift, the taped
+  photographs and the lined paper (`body.page-hub`), then `assets/css/short-pages.css` for what only
+  these six add. `short-pages.css` adds no movement of its own.
+- **Left out until Jaimie sends the details, each to go in as a small change:** what to bring and
+  what we can't take (Drop-off points); the Christmas referrals closing date (Referrals); a
+  volunteer's quote (Volunteer); payroll giving and its tick (Your business). The five films are not
+  in the repo and have no captions, so each "New to..." section is words and a picture.
+- **Nothing about Fill a Red Bag before the 8pm switch.** "Fill Red Bags as a team", "Fill a Red Bag as
+  a class" and "Fill Red Bags together" and their ticks are out until online group bags exist.
+  "Can't get to a drop-off point?" offers Donate alone until the Ball's moment, when Fill a Red Bag joins
+  it (see "The Ball's moment" below).
+  So that the word does not show at all, "Fill in the sign up" reads "Complete the sign up" and "helps
+  fill a Red Bag" reads "helps pack a Red Bag".
+- **Pictures** are the charity's one real handover photo (`home-red-bags-handover.jpg`) and four crops
+  of it (`assets/img/crop-*.jpg`). Your business, Your school and Your club or group use the elf on a
+  quilted card, where the plan was a photo nobody has yet: a picture of a volunteer there would read
+  as a business, a class or a club. Never `why-packing.jpg`, which is a drawing of a camera.
+- **The Tell us forms** on the last three send through the contact form's own path. The form is
+  `#contactForm`, so `main.js`'s `initContactForm` checks it, sends it to `POST /api/contact` and says
+  thank you, and `contact-captcha.js` does the spam check, unchanged. That path takes a name, an email,
+  a phone number and one message, so `assets/js/tell-us.js` writes the message into a hidden field on
+  submit, before `main.js` reads it: the page, the business or school, the role, the ticks and anything
+  else, one to a line, which is how the admin's inbox shows it. Each field that goes in the message
+  carries `data-tell` with its label. **The business's field is not called `company`:** that name is
+  the form's trap for robots, and the server quietly drops any message with it filled in.
+
+Tests: `test/unit/get-involved-short-pages.test.ts` (serving, the menu, the forwards, the site map),
+`test/unit/get-involved-short-pages-content.test.ts` (what is on each page and left off it, the
+links, the pictures, the forms with the real `main.js` and spam check) and
+`features/get-involved-short-pages.feature`.
+
+### How NBCC describes itself
+
+The charity's own words, used exactly (`test/unit/charity-description.test.ts`): "volunteer led"
+(never "volunteer run"), "South West Scotland", "a full red bag".
+
+- **Short:** "NBCC is a volunteer led charity here all year for children, young people and
+  vulnerable adults across South West Scotland." Used in every footer, as the home page's opening
+  line and share description, and (with "Scottish charity SC047995." after it) the home page's
+  search description. The About page's search and share description is the short version followed
+  by "Based in Annbank, Ayrshire."
+- **Full:** the short version, then ", with school clothing and crisis support whenever it is
+  needed, and every December a full red bag for those who would otherwise wake up on Christmas
+  morning with nothing to open." Used as the About page's opening line, followed by "We are based
+  in Annbank, Ayrshire, and reach from Girvan to Largs."
+- **"Fundraise for us" on three pages.** While fundraising is on, the server points the footer's
+  link at the sign up (`src/fundraising/footer-link.ts`) on every page it decorates, the sitemap
+  included. The 404 page and the Gift Aid declaration page go out undecorated (no extra database
+  read on a page not found, or in the middle of a declaration), so there the link stays on the
+  contact page, which is where it goes when fundraising is off.
+- **In emails and letters** (TASK-548, `test/unit/charity-description-emails.test.ts`): the two
+  versions are `ABOUT_NBCC_SHORT` and `ABOUT_NBCC_FULL` in `src/email/brand.ts`, which the emails
+  import. The newsletter welcome opens with the short one; the team invite people paste into a chat
+  gives the charity's full name and then the short one's words; the business invitation's own
+  sentence says "a full red bag"; the business supporter emails say "a small, volunteer led
+  charity"; the donor thank you letter (email, page and the admin's preview) says "We are volunteer
+  led"; the donate page says "NBCC is volunteer led". That test also reads every email, letter and
+  page as source and fails if "volunteer run", "run entirely by volunteers" or "a full bag for
+  those" comes back.
+- Still to follow: the Festive Ball page's "Who you're supporting" paragraph (after the Ball).
 
 ### Accessibility floor — skip link & landmarks (REQ-032)
 
@@ -370,9 +489,9 @@ components (REQ-009), the `.rule` divider + logo lockup (REQ-007), `.reveal`
 hero-specific layout (two-column grid stacking ≤680px, `.eyebrow`, the emphasised
 `em`/`.allyear` headline treatment, proof-card positioning) — token-only colours.
 
-Content: a crimson eyebrow ("Volunteer run Scottish charity · Annbank, Ayrshire"),
+Content: a crimson eyebrow ("Volunteer led Scottish charity · Annbank, Ayrshire"),
 an emotive H1 ("You know us at Christmas. We're here all year.") with an emphasised
-element, a lede on the volunteer run, year round mission, two CTAs (**Donate now**
+element, the charity's short description as the lede, two CTAs (**Donate now**
 `.btn-primary` → `/donate`, **What we do all year** `.btn-ghost` → `/about-us`), the
 logo lockup as the illustration, and a floating proof card (`.card`) reading "7,657
 Red Bags Full of Joy delivered in 2025". Honours the copy rules (REQ-031, no dashes)
@@ -384,6 +503,151 @@ and accessibility floor (REQ-032: alt text, keyboard-focusable CTAs). Verified b
 > italic is synthesised (only Playfair 700 normal is self-hosted). The hi-res hero
 > logo asset is REQ-034.
 
+### The top of the home page: the big logo and the four tags
+
+The hero (`.hero`) keeps its words and its two buttons, "Donate now" and "What we do all year". Its
+picture is now the full vector logo, `assets/img/nbcc-logo-full.svg` (`nbcc-logo-white.svg` with its
+letters in the logo's maroon and its white outline removed), on plain cream: the hero's tan glow and the
+logo's shadow are switched off on this page. Below 980px the hero stacks with the logo first and
+everything centred.
+
+Directly under it, "Where would you like to start?" (`section.home-lane`) hangs four gift tags from a
+gold ribbon on the site's quilted card back, and ends with the snow drift:
+
+| Tag | Main link | Small line |
+|---|---|---|
+| Donate | `/donate` | empty |
+| Drop-off points | `https://drop.nbcc.scot/` | `https://drop.nbcc.scot/sign-up`, `/get-involved/drop-off-points` |
+| Referrals | `https://referrals.nbcc.scot/` | `https://referrals.nbcc.scot/sign-in`, `/get-involved/referrals` |
+| Volunteer | `https://vol.nbcc.scot/sign-up` | `https://vol.nbcc.scot/sign-in`, `/get-involved/volunteer` |
+
+The styles are in `assets/css/home-top.css`, a file of its own because `index.html` is under the first
+paint budget and `styles.css` is shared with `donate.html`, which has almost nothing spare. The tags
+are in the page, so they need no script. Their entrance (`hang`) is CSS and holds nothing back if a
+script fails; it and the swing under the pointer are off for less motion.
+
+**What this must not disturb.** The Festive Ball's promotion (`src/ball/home-promo.ts`) finds two exact
+strings in `index.html`, `MAIN_ANCHOR` and `AFTER_HERO_ANCHOR` (the "What we do" section), and both stay
+byte for byte. The tags sit before the second, so until the promotion comes down the page reads: banner,
+hero, four tags, Ball feature, then the rest. The promotion's `.ball-banner + .hero` rule also needs the
+hero straight after the banner, and it is inline, so it comes after `home-top.css`: keep hero padding on
+`.home .hero` and no heavier, or the double gap under the nav comes back. The nav stays transparent
+until scrolled. The drift is the page's cream in both states: it runs into "What we do" with no join,
+and with the Ball's navy feature below it, it lies as a line of snow along the top of the night.
+`test/unit/home-top.test.ts` runs the real `renderHomePromo` on the real `index.html` to pin all of this.
+
+### The Ball's moment: 20:00 on Saturday 7 November 2026
+
+At 20:00 UK time on the night of the Ball (20:00 UTC, the clocks have gone back) the promotion comes
+down by itself, with no deploy and nobody at a computer. Every page in question is drawn per visit, so
+the check is one pure function, `afterBall(now)` in `src/site/after-ball.ts`, and the time is handed to
+it: `createSiteRouter(root, { now })` holds the only reading of the clock for it, which is how
+`test/unit/after-ball.test.ts` stands either side.
+
+| Comes down | Where the check is |
+|---|---|
+| The Festive Ball item in the menu, on every page but the Ball's own | `decorateNav`, and the loop over `_redirects`, in `src/routes/site.ts` |
+| The banner and the feature on the home page, and the page's preview for staff | the home route, before it asks anything of the Ball |
+| The Festive Ball's card (slug `festive-ball-2026`) on `/whats-on` and `/get-involved`, even though the 7th is still today | `deckInput` in `src/routes/fundraise-pages.ts` |
+
+| Goes up | Where it is added |
+|---|---|
+| The Fill a Red Bag stage on the home page, between the hero and the four tags | the home route, as the page goes out (`addFillStageToHome`): `index.html` does not change |
+| The same stage on Get involved, after What's on | `fillStage`, at the page's own marker |
+| "Fill a Red Bag" under "Ways to give" in the footer, on every page the site router draws (never a Ball page, and never a quiet page: see below) | `addFillFooterLink`, `src/red-bag/fill-links.ts`, like the fundraising link |
+| "You can still fill a Red Bag online, or make a donation." and a button, on Drop-off points | `addFillToDropOff`, the same file |
+| The night on `/fill`: the sky, the snow, the lights, the bag in the snow and the sum | `renderNight`, `src/red-bag/render.ts` |
+
+All of these stay down while Fill a Red Bag is switched off (`src/red-bag/switch.ts`), because `/fill` is
+then a 404.
+
+The charity is very careful about pages in memory of someone, so the footer's link stays off them, either
+side of the moment: a fundraiser's or an event's page that `isQuietFundraiser` recognises, with the thank you
+that is the same page, and a team's join page likewise. It also stays off `/fundraise` and `/fundraise/manage`,
+which are one address for everyone: the in memory path is chosen in the browser, and whose area it is is only
+known there, so as they are drawn a family may be on either (`QUIET_PAGE`, `src/red-bag/fill-links.ts`).
+
+**The stage** is `src/red-bag/stage.ts` (the band), `assets/js/red-bag-stage.js` and
+`assets/css/red-bag-stage.css`. The last two are new files that only a page drawing the stage loads, so no
+budgeted page pays for them. It reads the list `/fill` reads, through `loadPublishedRedBagList`, so a price
+here is the price on the real page: the band carries it in the same `rb-list-data` block, and with nothing
+published it has none and the catalogue's list stands, as on `/fill`. If the block cannot be used it shows
+no tiles and never the built-in prices. The script chooses up to eight tiles from what is on the list and
+has a drawing: the eight the design names first, then the rest in the list's order. So a hidden item
+leaves no gap, and the order is the same on every visit. If anything goes wrong drawing it, the stage is
+left out and the page goes on (`loadFillStage` never throws).
+
+It plays itself once it is on the screen and goes round until the bag is full, whatever the prices. The
+demonstration never carries. After a first tap the bag is the visitor's: the button reads "Carry on with
+this bag" and links to `/fill?bag=toy:2,socks:1` (an address, so it survives a new tab and blocked storage,
+and it holds nothing personal), "Start again" clears it, and a tap after a full bag starts another without
+losing what went before. Pause holds the demonstration, the snow and the twinkling; while it holds it
+reads "Play", and because its words change it carries no `aria-pressed`, so a screen reader does not hear
+both. With less motion asked for nothing moves by itself, there is no Pause, and taps work.
+
+**The carried bag** arrives in `assets/js/red-bag.js`, before or after the moment, because only the stage
+makes such an address. The value is read once, after the rows are wired: a key counts only if a row with
+that key was drawn on this page (so a staff draft's list decides, and `__proto__` or `constructor` is
+nothing), a number counts only if it is digits, and both go through `clampQuantity`, added up if a key
+comes twice. Anything else is ignored and never written anywhere. Each thing then goes in through that
+row's own plus, one at a time, 380ms apart, or all at once with less motion, so the notes, the drops and
+the snow come by themselves: while it pours a showing note keeps its whole moment, and the page's 20 second
+cooldown holds across every full bag rather than for each one, so a big bag does not snow on the screen
+over and over. `history.replaceState` takes `bag` out of the address at once and keeps the rest (utm tags,
+`preview`, `at`), so a refresh adds nothing. The moment the visitor reaches for a control, or presses
+Donate on the page or in the bottom bar, the rest goes in first, so a tap lands on top of it, a number is
+never rewritten under a finger and nobody pays for half a bag. A box counts as reached for when it takes
+focus, a button only when it is clicked: a mouse press focuses a button before the release, and finishing
+there moved the panel, so the release landed elsewhere and the press was lost. It touches nothing else:
+`test/unit/red-bag-carry.test.ts` shows a carried bag and a tapped bag post the same bytes to
+`/api/checkout-session`. A plain visit to `/fill?preview=draft&bag=...` in a tab signed in to the admin
+leaves the bag in the address for the draft that is about to replace the page, so the draft's rows decide.
+
+**The night on `/fill`** is a dressing and nothing more. `renderRedBagPage` adds it, with `night: true`,
+which the route passes only after the moment or for `?at=after-ball`; `renderNight` in
+`src/red-bag/render.ts` is the only code that adds anything, and if any place it needs is missing the page
+goes out plain rather than half dressed. Before the moment the page is byte for byte the render from
+commit `d17f9856`, headers included (`test/unit/red-bag-night.test.ts` holds hashes of that render: if the
+page is changed on purpose before the night, take the new hash from the failure). The list, the examples,
+the steppers, once or monthly, the round-up, the details step, the bottom bar and the template are the
+same bytes in every state, and `/fill/thank-you` is never dressed. A draft preview goes on working, drawn
+at night after the moment, with no-store and noindex.
+
+The dressing is `assets/css/fill-night.css` and `assets/js/fill-night.js`, loaded by the night page alone.
+The stylesheet carries all it needs and does not lean on the stage's. The wrapper, `#fnNight`, holds the
+heading and the list and stops before the details step, so the bottom bar and the details step are
+outside it. The ten lights (one for each £5 of the first £50) and the sum on the bag come from the page's
+own state: `assets/js/red-bag.js` says the total and how many bags are drawn in a small `rb:bag` event on
+the document, which goes nowhere with nobody listening, and which is the one thing added to that file for
+the night. The script comes before `red-bag.js` so that it hears the first word. The sum is hidden in the
+file and shown by the script, so a page whose script did not arrive never shows a wrong one; it is hidden
+for a full bag or several. The snow is on a canvas that stops off screen, is held by "Pause the snow"
+(which reads "Start the snow" while held, with no `aria-pressed`), is kept to five million pixels however
+long the page, and does not run with less motion or without a canvas.
+
+One bag stands a little left of the middle, with the elf beside it. The elf's picture is cut above the
+logo's line, and it has a small heap of snow of its own in front of it (`.rb-panel::after`), so wherever
+the panel's curve falls at a given width the cut edge is behind snow: measured every 7px from 320px to
+1720px. Several bags fill the width, so the elf and its heap go. Where the layout stacks, at 860px and
+under, the glow is dimmer, because the words are over it.
+
+The stacked layout starts at 1090px wide. Beside the words the note sits close to the sum on the bag, so
+from 1091px to 1240px the note is narrower, and the note and elf run out into the gutter only as far as
+`.wrap`'s real gutter allows. Measured every 3px from 320px to 1700px, the note never meets the sum.
+
+**What stays:** `/ball`, its terms, its donate page, guest links and thank you pages all keep working, and
+draw their own menu (`decorateBallPage`), so they keep the Festive Ball item. No file in `src/ball` knows
+about the moment, and the admin's Ball switch is read as it always was and never written. `/ball` stays on
+`/sitemap` and in `/sitemap.xml`, which follow the gate alone.
+
+**Checking it before the night:** `?at=after-ball` on `/`, `/whats-on`, `/get-involved`,
+`/get-involved/drop-off-points` or `/fill` shows that one view as it will be after the moment. Only that
+exact value counts (an array, or anything else, is an ordinary visit). The view answers `noindex` and
+`no-store`, and the next view is back to normal. Other pages ignore it.
+
+BDD runs against the real clock, so scenarios about the Ball's promotion are tagged `@until-the-ball` and
+are skipped from the moment on (`features/steps/after-ball.steps.js`).
+
 ### Home pillars (REQ-011)
 
 Below the hero, a tinted band (`HOME PILLARS` CSS block, `var(--holly-soft)`
@@ -391,7 +655,7 @@ background, `--radius-lg`) holds four `.card` pillars in a responsive grid
 (4-across → 2-col ≤900px → 1-col ≤680px). Each pillar is an `<article class="card
 pillar reveal">` with a decorative `aria-hidden` inline-SVG icon (crimson via
 `currentColor` — the contrast guard forbids holly text), an `<h2>` title and a
-one-line of leaflet copy: **Volunteer run**, **South West Scotland**, **Red Bags
+one-line of leaflet copy: **Volunteer led**, **South West Scotland**, **Red Bags
 Full of Joy**, **7,657 delivered in 2025**. Reuses `.card`/`.reveal`/tokens only —
 no `<img>`, no new fonts, token-only colours. Verified by
 `test/unit/home-pillars.test.ts`.
@@ -977,6 +1241,15 @@ contact points with the enquiry form:
   (REQ-032): required **First name**, optional **Last name**, required **Email**,
   required **Message** `<textarea>`; required fields carry `required` +
   `aria-required` and a `*` marker.
+- **Phone number (optional)** (TASK-565) — between Email and Message, with the line "Only if you
+  would like us to call you back." Left empty, the message is sent as before. One that is typed
+  must pass the site's one phone rule (`normalisePhone` in `src/business/call-due.ts`: digits,
+  spaces, `+ ( ) -`, at least 7 digits, up to 40 characters), checked in the browser and again by
+  `contactEnquirySchema`; otherwise "Please check your phone number. Use digits and spaces, for
+  example 07700 900123." It is stored in `contact_enquiries.phone` (nullable, added by
+  `migrations-contact/1791300000000_contact-phone.js`; no number is NULL, never an empty string)
+  and shown as a **Phone** line under Email when a message is opened in Admin > Contact, only when
+  one was given. The list of messages has no phone column, so it still fits a phone.
 
 `initContactForm()` in the shared `assets/js/main.js` (exported alongside
 `initNav`/`initReveal`/`initGiveToggle`) validates the required fields and the
@@ -1246,6 +1519,35 @@ future marketing sit inside the regulatory framework:
   monthly-gift or plan-change comms.
 Both lines are guarded by `test/unit/fundraising-governance.test.ts`.
 
+### Joining the mailing list (`/newsletter`)
+
+`newsletter.html` is a public page at the clean URL `/newsletter`: the footer's "Keep in touch" form
+(TASK-261) given a page of its own, so there is somewhere to send people who want to join. A short
+heading, two lines on what they will get (occasional news, a few emails a year, unsubscribe at any
+time), the form, and under it "Who we are": the charity's own sentence, word for word. It is on the
+site map, and not in the main menu.
+
+**Nothing on the server is new.** The form asks for exactly what the footer form asks for (first
+name, surname, email, an optional mobile number, and the same consent tick box, never ticked for
+them, in the same words), has the same hidden `website` box for robots, and sends the same payload
+to the same existing `POST /api/subscribe`. That endpoint and `subscribeSelf`
+(`src/newsletter/self-signup.ts`) are unchanged, so someone joining here is added to the newsletter's
+list at once with `consent_source` `footer` and gets the usual welcome email, exactly as from the
+footer. There is no confirm by email step, no new route, table, email or daily pass.
+
+What the page adds is only how it looks: visible labels (not placeholders), what is missing said
+beside each box and the tick box (never an alert box), and "You're signed up" in place of the form.
+A refusal from the server (its 400 and 429 messages) is shown in the server's own words. The short
+footer form is not added to this page as well (it is unchanged on every other page).
+
+Files: `newsletter.html`, `assets/js/newsletter-signup.js`, `assets/css/newsletter.css` (its own
+small script and stylesheet, so the shared bundle that `donate.html`'s weight budget counts does not
+grow). Tests: `test/unit/newsletter-signup-page.test.ts` (the page in jsdom: the boxes, the consent,
+what is sent, the signed up and error states, and its Dockerfile, clean URL and site map checks);
+the page is also in the sitewide SEO, accessibility, copy, footer, clean URL and pulse guards, is
+held to the same weight budget as the four main pages (`test/unit/perf-budget.test.ts`), and
+`features/site.feature` serves it. The privacy notice says what joining the mailing list uses.
+
 ### Checkout contract (REQ-028)
 
 Every amount control wires the one front-end → backend integration point. Each
@@ -1341,13 +1643,16 @@ hosted-Checkout redirect stays the default fallback and no-JS safety net.
 | `GET /media/fundraiser-profile/:photoId` | **implemented** | Profile pictures (public; an approved round photo on a page that is up, otherwise 404) |
 | `GET /api/admin/fundraising/pictures-waiting`, `GET /api/admin/fundraisers/:id/pictures`, `.../pictures/:pictureId/photo`, `POST .../pictures/:pictureId/approve` \| `decline` \| `remove` | **implemented** | Profile pictures (staff check the photos organisers send: fundraising view to look, edit to decide; audited) |
 | `POST /api/fundraisers/:slug/pledges` | **implemented** | Sponsor pledges (public; "Sponsor now, pay after" on a sponsorship fundraiser's page: a promise, never money, and unconfirmed until the sponsor confirms by email. See **Sponsor pledges**) |
+| `GET /fill` | **implemented, listed but unlinked** | Fill a Red Bag (a new way to give: fill a list of example items, watch a red bag fill, give the total. Public since 4 October 2026 and on the site map, so search engines may list it; still linked from no menu, footer or page. `POST /api/checkout-session` takes an optional `redBag: true` for it. See **Fill a Red Bag (listed, unlinked)**) |
+| `GET /fill/thank-you` | **implemented** | Fill a Red Bag's thank you, a page of its own, where Stripe returns a donor; `noindex`, on no site map, linked from nowhere |
+| `GET /fill-a-red-bag`, `GET /fill-a-bag` | **implemented** | The address the page first had, and the other way people type it: a permanent redirect (`301`) to `/fill`, query string kept (an old return from paying, `?thanks=1`, goes to `/fill/thank-you`), while the page is switched on; the 404 if it were switched off. Fixed in code, reserved, on no site map |
 | `GET` \| `POST /pledge/confirm`, `/pledge/pay`, `/pledge/cancel` | **implemented** | Sponsor pledges (the sponsor, by the signed link in an email: confirm the pledge, pay it through Stripe Checkout, or cancel it quietly. Each link only asks; a button does the thing) |
 | `GET /api/fundraise/manage/pledges`, `POST /api/fundraise/manage/fundraisers/:id/pledges/:pledgeId/cash` \| `hide` | **implemented** | Sponsor pledges (the signed in organiser: confirmed pledges by name, never emails; "Paid me in cash"; hide one from their page) |
-| `GET /api/admin/fundraising/emails/summary`, `GET /api/admin/fundraising/emails`, `GET /api/admin/fundraising/emails/:id/:version` | **implemented** | All emails (staff with fundraising view: every fundraising, pledge, ticket and Festive Ball email, listed from one catalogue and rendered with the real builders and invented sample data. Read only: approving stays with the three endpoints that already did it. See **All emails, in Admin > Fundraising**) |
+| `GET /api/admin/fundraising/emails/summary`, `GET /api/admin/fundraising/emails`, `GET /api/admin/fundraising/emails/:id/:version` | **implemented** | All emails (staff with fundraising view: every fundraising, pledge, ticket and Festive Ball email, listed from one catalogue and rendered with the real builders and invented sample data. Read only: approving stays with the three endpoints that already did it. See **All emails, in Admin > Get involved**) |
 | `GET /api/admin/fundraising/pledges`, `POST` \| `DELETE .../pledges/approvals/:key`, `POST .../pledges/send-pay-links`, `POST /api/admin/pledges/:id/send-pay-link` \| `cancel` \| `message` \| `checked` | **implemented** | Sponsor pledges (staff with fundraising: view to look, edit to act, admin to approve the two emails' wording and to send new pay links to everyone unpaid) |
 | `GET /api/fundraise/manage/fundraisers/:id/materials/:piece` | **implemented** | TASK-504 (the signed in organiser's poster, pictures to share, sponsor form or certificate, as a whole print page; only their own, approved or finished, and the certificate once finished; anyone else's is a 404, no session a `401` page, and a 404 while fundraising is off. See **Community fundraising, materials**) |
 | `GET /api/admin/fundraisers/:id/materials/:piece` | **implemented** | TASK-504 (the same pages for staff with fundraising: view, for any approved or finished fundraiser whether or not fundraising is on; the certificate as a marked preview before it is finished) |
-| `GET /api/fundraise/manage/fundraisers/:id/materials/qr-code` and `GET /api/admin/fundraisers/:id/materials/qr-code` | **implemented** | "Print the QR code": the page's own QR code on one clean A4 page, with the name (or "In memory of ..."), the code 120mm across, the web address in words under it and the charity statement (and the sharing statement, when shared). For a fundraiser or an event that has a page, approved or finished; a 404 for one with no page. From "Print your QR code" in the private area and "Print the QR code" beside the code in Admin > Fundraising (`renderQrSheet`, `src/fundraising/materials.ts`) |
+| `GET /api/fundraise/manage/fundraisers/:id/materials/qr-code` and `GET /api/admin/fundraisers/:id/materials/qr-code` | **implemented** | "Print the QR code": the page's own QR code on one clean A4 page, with the name (or "In memory of ..."), the code 120mm across, the web address in words under it and the charity statement (and the sharing statement, when shared). For a fundraiser or an event that has a page, approved or finished; a 404 for one with no page. From "Print your QR code" in the private area and "Print the QR code" beside the code in Admin > Get involved (`renderQrSheet`, `src/fundraising/materials.ts`) |
 | `GET /api/admin/fundraisers/:id/materials/everything` | **implemented** | TASK-512 (Download everything: every printed piece on one print page, each on its own paper size, plus every picture to share as a zip made in the browser; staff with fundraising: view; approved or finished; the certificate only once finished. See **Community fundraising, materials round two**) |
 | `GET /api/admin/fundraisers/:id/scans` | **implemented** | TASK-512 (each printed piece's QR code scans, `{ scans: [{ piece, code, label, scans, link }], total }`, counted once per person per day from the visit counter; staff with fundraising: view; `no-store`) |
 | `POST /api/fundraise/manage/fundraisers/:id/print-request` | **implemented** | TASK-512 (Ask us to print these: `{ kind: "posters", a4, a3 }` or `{ kind: "leaflets", a5 }`; the signed in organiser's own, from our own page, 10 an hour; makes the posters or leaflets request To send; `400` with `fields`, `401`, `403`, `404`, `409` too late, `429`) |
@@ -1382,6 +1687,14 @@ hosted-Checkout redirect stays the default fallback and no-JS safety net.
 | `GET /api/admin/queues/awaiting-declaration` | **implemented** | REQ-049 (awaiting-declaration queue) |
 | `GET /api/admin/queues/gasds-pool` | **implemented** | REQ-050 (annual GASDS pool report) |
 | `GET /api/admin/donations` | **implemented** | REQ-066 (browse all donations, paginated) |
+| `GET /api/admin/donations/source-totals` | **implemented** | Fill a Red Bag against the Donate page, this month and in all (Donations: view) |
+| `GET /api/admin/red-bag-list` | **implemented** | Fill a Red Bag: the list editor's state: the website's list, the shared draft, what differs, the history (Fill a Red Bag: view). See **Fill a Red Bag: staff edit the list** |
+| `GET /api/admin/red-bag-list/versions/:id` | **implemented** | one published list, or `original` for the built-in one (Fill a Red Bag: view) |
+| `PUT /api/admin/red-bag-list/draft` | **implemented** | save the shared draft, against its stamp (Fill a Red Bag: edit) |
+| `POST /api/admin/red-bag-list/publish` | **implemented** | the draft becomes the list on `/fill` (Fill a Red Bag: edit) |
+| `POST /api/admin/red-bag-list/discard` | **implemented** | throw the draft away (Fill a Red Bag: edit) |
+| `POST /api/admin/red-bag-list/restore` | **implemented** | put an earlier list, or the original one, back as the draft (Fill a Red Bag: edit) |
+| `GET /fill?preview=draft` | **implemented** | the draft preview: the published page to a plain visit; the draft, under a strip and with giving switched off, to staff with Fill a Red Bag: view |
 | `GET /api/admin/claim-batches` | **implemented** | REQ-066 (list claim batches) |
 | `GET /api/admin/claim-batches/:id/export` | **implemented** | REQ-052/REQ-066 (Charities Online CSV export) |
 | `GET /api/admin/audit` | **implemented** | REQ-066 (append-only audit trail) |
@@ -1413,8 +1726,10 @@ hosted-Checkout redirect stays the default fallback and no-JS safety net.
 | `GET /ball` | **implemented** | TASK-313 (the ticket page; password-gated until staff open the gate, then public and indexable) |
 | `POST /ball/unlock` | **implemented** | TASK-313 (checks the preview password, sets a signed 14-day cookie) |
 | `GET /ball/terms` | **implemented** | TASK-313 (ticket terms; gated alongside the page) |
-| `GET /get-involved` | **implemented** | TASK-453, renamed in TASK-494 (Get involved: the events from the `events` table, and while fundraising is switched on every approved public fundraiser too. Served only while an admin has the Events page switched on; otherwise falls through to the 404 / spare-address catch-all) |
-| `GET /events` | **implemented** | TASK-494 (301 to `/get-involved`, query string kept, whether or not the page is on) |
+| `GET /whats-on` | **implemented** | TASK-453, moved here from `/get-involved` (What's on: the events from the `events` table, and while fundraising is switched on every approved public fundraiser too. Served only while an admin has the events switch on; otherwise falls through to the 404 / spare-address catch-all) |
+| `GET /get-involved` | **implemented** | Every way to help: the Fundraise section and film (left out while fundraising is off), the first six of What's on's cards, the ways to help together and the rest. The events switch governs it too: off, it is the 404 |
+| `GET /get-involved/drop-off-points`, `/referrals`, `/volunteer`, `/business`, `/schools`, `/groups` | **implemented** | The short pages (`src/routes/get-involved-pages.ts`). The events switch does not govern them. See [The short pages](#the-short-pages-under-get-involved) |
+| `GET /events` | **implemented** | 301 to `/whats-on`, query string kept, whether or not the page is on. Not the page's address: this one has answered 301 since TASK-494, and a browser keeps a 301 for good |
 | `GET /getinvolved`, `GET /involved` | **implemented** | TASK-496 (301 to `/get-involved` too, query string kept: the ways people type it from a poster) |
 | `GET /fundraise` | **implemented** | TASK-494 (the fundraising sign up form; a gentle "not open yet" while fundraising is switched off) |
 | `GET /fundraise/manage` | **implemented** | TASK-501 (the organiser's private area, signed in with an emailed code; was TASK-494's `?token=` link page; `noindex`, `no-store`, `Referrer-Policy: no-referrer`; 404 while fundraising is switched off) |
@@ -1430,7 +1745,7 @@ hosted-Checkout redirect stays the default fallback and no-JS safety net.
 | `GET /api/admin/events` | **implemented** | TASK-453 (events: view; the page switch and every event) |
 | `POST /api/admin/events`, `PUT/DELETE /api/admin/events/:id` | **implemented** | TASK-453 (events: edit; drafts may be half finished, live or scheduled events must pass `publishProblems`. Audited as `events.created` / `events.updated` / `events.deleted`) |
 | `PATCH /api/admin/events/settings` | **implemented** | TASK-453 (events: edit **and** the admin role; `{pageOn}` switches the whole page. Audited as `events.page_switched`) |
-| `POST /api/admin/events/preview` | **implemented** | TASK-453 (events: view; the card and the whole page as HTML documents, from the same renderer as `/events`) |
+| `POST /api/admin/events/preview` | **implemented** | TASK-453 (events: view; the card and the whole page as HTML documents, from the same renderer as `/whats-on`) |
 | `POST /api/admin/event-images` | **implemented** | TASK-453 (events: edit; base64 upload, raster only, 2 MB, returns `/media/events/<uuid>`) |
 | `GET /api/admin/analytics?days=7\|30\|90` | **implemented** | TASK-482 (analytics: view; every panel of Admin > Analytics for the period and the one before, in one payload) |
 | `GET/PUT /api/admin/analytics/settings` | **implemented** | TASK-482 (analytics: view / edit; `{collecting}` switches counting on or off. Audited as `analytics.collecting_switched`) |
@@ -2109,6 +2424,55 @@ same person, sent at a different moment, is a different story and is not blocked
 `test/unit/erased-stories-migration.test.ts` and `test/unit/stories-old-site-import.test.ts`, and end
 to end in `features/stories-import.feature`.
 
+**A Read tick on Stories (TASK-560).** The Stories list has a **Read** column, one tick box a story,
+and an open story has **Mark as read** under its words. "Read" is the status that already existed,
+**Reviewed**: a tick asks `PATCH /api/admin/stories/:id` for `"reviewed"`, and unticking asks for
+`"new"`, so it counts for the whole team and nothing new is stored. Used and Withdrawn show as read
+with the tick locked (hover says why), because those statuses say more and a stray click must never
+undo them. It needs stories edit, like every other change to a story; someone who can only view sees
+the ticks locked.
+
+- **It cannot undo what somebody else did.** The request carries the status its screen showed:
+  `{ "status": "reviewed", "ifStatus": "new" }`. `updateStory` (`src/db/stories.ts`) puts that in
+  the `WHERE`, so the change happens only while the story is still that, in the one statement. If it
+  is not, nothing changes and the answer is **409** with the story as it is now (404 if it has been
+  erased). This is for the list left open on one desk while a story is withdrawn at another:
+  Withdrawn records that consent was taken back, and a tick must not put the story back to Reviewed.
+  The screen then shows what the story is now and says "Someone else changed this story. It is now
+  Withdrawn." If somebody else had already made it what was asked for, it says nothing. `ifStatus`
+  is a condition and never a field to save: on its own it is still "no fields to update". Save
+  changes and Withdraw on an open story do not send it, and behave as they always have.
+- **The row stays where it is.** The tick saves at once and nothing is drawn again (`setStoryRead`
+  in `assets/js/admin/app.js`), so the tick can come straight back off, even on a list filtered to
+  New. The box is never disabled while it saves, which would drop the keyboard's place in the list;
+  a second press in that time is put back, not sent. A save that takes more than a third of a
+  second dims the box (`aria-busy`), so a slow connection does not look like a tick that ignores
+  you.
+- **A save that fails moves nothing.** The tick goes back and the story's status pill gives way to a
+  pill that says **Not saved** (a screen reader hears "Story 12: Not saved. Please try again.", and
+  hovering shows the sentence). The row keeps its height, so no row beneath it moves under the next
+  press. Two other places were tried first and measured in Chrome. A line above the table pushed
+  every row down the moment it had words, and above a long list it was off the screen. A sentence
+  under the status left the pressed tick alone but made its row 61px taller, so on a quick run down
+  the list the press after next could land on the wrong story.
+- **Three rarer answers get a sentence under the status**, and their row does grow: somebody else
+  changed the story, it has been erased ("This story is no longer here."), or this person may no
+  longer change stories. The last two lock the tick.
+- **On an open story only the status is drawn again** (`markStoryRead`): the Status line, the
+  button, and the form's Status when it had not been touched. Anything typed in Tags or Notes and
+  not yet saved stays, cursor and all. What could not be saved is said right under the button. An
+  answer that arrives after a different story was opened is ignored, and the keyboard is moved
+  without scrolling the page.
+
+A story ticked here stops counting in the Overview's "new stories are waiting to be read", which
+counts the live stories still at New. Design:
+`docs/superpowers/specs/2026-10-05-stories-read-tick-design.md`. Tested in
+`test/unit/admin-stories-read-tick.test.ts` (the admin's jsdom harness: the four statuses, saving,
+every way a save can fail, somebody else getting there first, a viewer, the open story, and the
+styles), `test/unit/stories-admin-model.test.ts` and `test/unit/admin-stories-api.test.ts` (the
+condition), and end to end in `features/admin-stories.feature` and `features/admin-overview.feature`.
+On a phone the list is cards, not this table: see **The Stories list on a phone (TASK-561)**.
+
 **Public unsubscribe route (REQ-069 · TASK-161 · TASK-297).** `/unsubscribe/:token`
 (`src/routes/unsubscribe.ts`, mounted in `src/app.ts`) is the link every newsletter email carries.
 The token is a stateless HMAC of the donor id (`verifyUnsubscribeToken`, signed with
@@ -2357,6 +2721,35 @@ In the sponsor band the mark **replaces** the typed name rather than sitting bes
 wordmark next to the same words set in our own face reads as a mistake. It sits at 92% opacity,
 lifting on hover — present and legible, never louder than the ball's own lockup a few sections
 above. It is a guest's mark on NBCC's page.
+
+**The mark fits the screen it is on (TASK-553).** It is set 500px wide wherever it appears (the Ball
+page's hero and foot, the thank-you page, the home page's Ball promotion, where the paragraphs'
+46ch measure makes it a fraction under), each with
+`max-width: 100%`, and on a phone that cap did nothing: at 375px the Ball and thank-you pages
+measured 453px wide and the home page 504px, with the mark cut off at both edges. Two causes, both
+"a percentage of a box that is still being sized by its own content":
+
+- **Ball and thank-you pages.** The mark's wrapper (`.ball-credit`, `.ball-sponsor-name`) is an
+  item in a centred column, so it is as wide as its content asks, and the mark's percentage cap
+  counts as no cap while that is worked out. The wrappers now carry `max-width: 100%` themselves
+  (a percentage of the page column, which is a real width), and the mark's own cap then works.
+- **Home page.** At 820px and under, the promotion's grid was one `1fr` column, which may not be
+  narrower than its content, so the mark set the width of the whole text column. It is now
+  `minmax(0,1fr)`, as the two column layout already was, and the credit is capped at
+  `min(46ch,100%)`: the paragraphs' own measure, or its column where that is narrower. The second
+  part also cures the two column layout from 821px to about 1070px, where each column is narrower
+  than the mark and it ran off the screen (the comment beside the rule says about 1040px, an early
+  estimate).
+
+The mark's own rules are untouched, so TASK-337's "one size everywhere" still holds, and from
+1280px up nothing moves. `test/unit/sponsor-mark-fits-phones.test.ts` holds the rules; jsdom lays
+nothing out, so the widths were measured on the live pages with the rules applied (320 to 1600px),
+and an independent review laid the live pages out at every width from 240px to 2000px. That test
+reads rules with their comments taken out (TASK-556): its first version could be satisfied by a
+comment that mentioned `max-width: 100%`, so it passed with the hero's fix deleted. Each of its four
+guards has now been seen to fail with its rule removed.
+`assets/css/ball.css` is committed with mixed line endings: change it byte for byte (an editor that
+tidies them rewrites every line), and check `git diff --numstat` shows only your lines.
 
 ### A deploy proves what it shipped (TASK-332)
 
@@ -3008,14 +3401,18 @@ instead of leaving it to somebody remembering.
 **nothing is chased at all** — an email asking for names with no date in it is nagging, and it
 spends the one message people actually read before there is anything useful to say.
 
-Then, per paid booking:
+**The fortnight-out nudge and the last call are retired (TASK-576).** The every other day reminders
+in the last week replaced them; they have their own section, **The Festive Ball chase (TASK-576)**,
+straight after this one. This pass now sends only the read-back and the practical email below.
+`guestStageFor` is gone and `stagesFor` plans the practical email or nothing; the `chase` and
+`final-call` stage names and their two stamp columns stay, so old rows still read.
+
+Per paid booking, this pass sends:
 
 | When | What | To whom |
 |---|---|---|
 | On every guest-form save | A read-back of exactly what we now hold | That buyer |
-| 14 days before the lock date | "We still need your guest list", with the date | Anyone outstanding |
-| On the lock date | Last call | Anyone still outstanding |
-| 3 days before the ball | The practical email, with their guests read back | Everyone |
+| A week before the Ball (the morning of Saturday 31 October); the morning after, for a booking paid in the last week | The practical "A week to go" email, with their guests read back; it says the true days to go when it is not a week | Everyone |
 
 The schedule is pure (`src/ball/run-up.ts`) and unit-tested without a clock or a database; the
 wiring is `src/ball/run-up-runner.ts`. It rides the **existing** daily EventBridge task
@@ -3026,10 +3423,97 @@ in either pass cannot stop the other.
 Each stage stamps its own column **only after a successful send**, so a re-run never double-sends
 and a failed send is retried tomorrow rather than silently recorded as done. `POST
 /api/admin/ball/chase` (Editor+) runs the same pass on demand — anyone already emailed at that
-stage is skipped, so pressing the button twice is safe.
+stage is skipped, so pressing it twice is safe. It now sends only the week-to-go email, and the
+admin no longer has a button for it (the "Email everyone outstanding" button went with the old
+chase, TASK-576); the route stays.
 
-Past the lock date the chase stops entirely rather than running to the event: staff work the
-remaining stragglers by hand from the outstanding list.
+After the deadline day nothing is chased: staff work the remaining stragglers by hand from the
+outstanding list.
+
+### The Festive Ball chase (TASK-576)
+
+Jaimie, 26 October 2026: send reminders every other day to anyone who has not chosen meals and
+guests, with the deadline at 10am on Wednesday 4th November. The design is
+`docs/superpowers/specs/2026-10-26-ball-chase-reminders-design.md`. It replaced the old TASK-338
+chase and last call (see the run-up above), which asked for the same names and would have sent two
+emails on some mornings.
+
+**The rounds.** The daily 8am task (`npm run reminders`, `src/scripts/send-reminders.ts`) runs the
+chase straight after the run-up pass: the pure planner is `src/ball/chase.ts`, the wiring is
+`src/ball/chase-runner.ts`, the two emails are `src/ball/chase-email.ts`. The deadline is the
+existing guest details setting (Festive Ball → Set up → *When guest details close*), and days are
+counted by the date in the UK, never by subtracting hours. A booker is reminded on the days 7, 5, 3
+and 1 before the deadline day. The volunteers' list goes on those four days and also on the deadline
+morning itself (the last list before 10am). With the deadline at 10am on
+Wednesday 4 November that is Wednesday 28 and Friday 30 October, Sunday 1 and Tuesday 3 November,
+and the list again on the 4th. Nothing goes with no deadline set, after the deadline day, or on or
+after the Ball day (`BALL_DAY`). A round that is missed is not caught up the next morning. Moving
+the deadline moves every round with it.
+
+**Who is reminded.** A booking with status `paid`, a buyer email and a guest link that is still
+incomplete: fewer guests named than seats paid for, or a named guest who has not answered every
+course the menu asks (`hasChosen`, the test the *Who has chosen* list already uses; with no choosable
+course only names count). It is **one email per address**, not per booking: someone with a table and
+extra seats gets one reminder listing each booking's gaps and link. A booking that is complete drops
+out of every later round, and one that becomes incomplete again comes back in.
+
+**The week to go morning rule.** An address that was sent the practical "A week to go" email that
+morning (`reminder_sent_at` falls on today's date in the UK) is skipped for that whole day, every
+booking of theirs, because that email already carries their guest link. The next round reaches them
+if they are still incomplete.
+
+**What the reminder says.** The action comes first (Jaimie: "be clear there's an action at top of
+email"): the top of the email is a box saying what to do, by when, what is missing, and the button
+to their own guest page, with everything else below it. The countdown is worked out on the morning
+it is sent ("7 days to go", then "Last chance" on day 1), and the deadline is always given in words,
+"10am on Wednesday 4th November", with the time and date taken from the setting. The line about
+what happens after the deadline follows Jaimie's "say we'll choose for you": "If we haven't heard from you by 10am
+on Wednesday 4th November, we'll choose for you." It promises no phone call, because we might not
+have their number. Subjects carry the countdown: "7 days to go: your Festive Ball guests and
+meals", and on day 1 "Last chance: your Festive Ball guests and meals by 10am tomorrow". Nothing
+closes by itself and the site never picks a meal for anyone: the guest page keeps taking names and
+meals after the deadline, and staff do the choosing, at their discretion, through the booking's own
+link.
+
+**The volunteers' list.** Sent after that morning's reminders to the addresses typed into the admin
+(the card below). The repository is public, so no address is written into the code. Only
+`@nbcc.scot` addresses are accepted, at most ten, checked on save, because the email carries
+people's names and phone numbers. It shows the counts (complete, still to chase, seats unnamed,
+guests still to choose) and, for each booking still to chase with the most missing first, the booker,
+phone number or "no phone given", email, reference, seats named and meals chosen, and the guest
+link so a volunteer can enter choices after a call. Two extra sections cover people only a phone
+call reaches, and neither gets a reminder email: paid bookings we cannot email (no address, or no
+guest link yet), and bank transfers awaiting payment (their link starts working once they pay).
+
+**Never twice.** Each email is claimed before it is sent in `ball_chase_sends` (migration
+`1791200000300_ball-chase.js`, additive: the table and one `chase_recipients` column on the Ball
+settings). The table is unique on kind, day and address, so there is one claim per address per day
+for reminders and one per day for the list (`claimChaseSend` in `src/db/ball-chase.ts`). A second
+run of the daily task the same morning sends nothing more. The week-to-go and menu email buttons are
+separate: pressing either after 8am on a round morning would send chased bookers a second email that
+day, so leave them alone on those mornings. A failed send gives its
+claim back so a rerun can try again; a send that went keeps its claim even if recording it then
+fails. It holds the address each email went to and the booking ids it covered, nothing else.
+
+**The retired button.** The old TASK-338 chase and last call no longer exist, so the admin's "Email
+everyone outstanding" button is gone. `POST /api/admin/ball/chase` stays and now sends only the week
+to go email. The menu is here email and its button are unchanged.
+
+**The admin card** is the first card in Festive Ball → Emails, "Chasing guests and meals"
+(`src/routes/admin-ball-chase.ts`, `GET`/`PUT /api/admin/ball-chase`, `POST /api/admin/ball-chase/test`;
+view and edit follow the Ball section). It shows the next reminder day and how many bookers it would
+reach (`nextChaseRound` in `src/ball/chase.ts`: today counts only until the 8am run), edits the
+volunteers' list (every change audited), and lists what went lately (`ball_chase_sends`, sent rows
+only). *Send me a test reminder* and *Send me a test chase list* send the invented examples from
+`src/ball/chase-email.ts` to the signed-in person only. They use example data, never a real booking,
+because admin logins are not all nbcc.scot addresses and a test must never carry real names or phone
+numbers; they never write to `ball_chase_sends`, so a test cannot stop a real send. Both emails are
+also in the All emails section.
+
+**Release order.** The old chase window was already open for a 4 November deadline, so this release
+switches the old stages off first. Set the guest details deadline in Set up only once this is live,
+and by the evening before the first round (Tuesday 27 October for Wednesday 28th): nothing is sent
+until it is set.
 
 ### The ticket report (TASK-464)
 
@@ -3037,8 +3521,14 @@ Twice a week, on Monday and Thursday mornings (Tuesday until TASK-467), the peop
 the sponsor and our own staff) get one email with its ticket numbers: seats sold of 400 and how
 full, whole tables and single seats, what sold since the last update and in the last 7 days against
 the 7 before, what is still available and kept back for guests, the people still waiting (anyone
-already offered a place is not counted) and the seats they want, and the days to go. Counts only:
-no names, no booking details, no money. Sold means paid; seats booked to pay by bank transfer and
+already offered a place is not counted) and the seats they want, and the days to go. Under the
+numbers is **Tables booked** (Jaimie, 12 October 2026): a table of who has booked a whole table,
+with first name, surname, the company an invoice was asked for, and how many tables, in surname
+order. One line a person, their bookings added together; a bank transfer still waiting for its
+money is a line of its own marked "awaiting payment"; a card checkout under way, a refund or a
+cancellation is not listed, and nor is anyone who bought single seats (`tableBookers` in
+`src/ball/sales-report.ts`). The names are read fresh for every report and are never stored with
+its numbers. Nothing else about anyone: no email addresses, no phone numbers, no money. Sold means paid; seats booked to pay by bank transfer and
 still waiting for the money get a line of their own (TASK-487). It opens with when the next
 update comes and how to reach us (01292 811 015, events@nbcc.scot), comes From and Reply-To
 `BALL_FROM_EMAIL` in the Ball's own frame (`ballEmailShell`), and goes as ONE email with everyone
@@ -3047,8 +3537,14 @@ reaches beyond that group, send separately instead).
 
 It is set up on Admin → Events, in the **Festive Ball ticket report** card under the page switch:
 the list (a name and an address each, kept in alphabetical order, up to 10), the switch, **Send a
-test to me** (the real email marked "[Test]", to the signed-in person only) and a preview with
-today's numbers. Anyone who can edit Events can change it; viewers can look. Both also need at
+test to me** (the real email marked "[Test]", to the signed-in person only), **Send today's
+report again** and a preview with today's numbers and names. Send today's report again shows only
+on a day when the morning's report has gone; it asks first, then sends the report to the whole
+saved list with the numbers as they stand now, ", sent again" on the subject and a line at the top
+saying so. It goes once a day (`POST /api/admin/ball-report/resend`, 409 when refused). It writes
+nothing to `ball_report_sends`, so the next scheduled report still counts "since the last update"
+from the morning's; who pressed it is in the audit log (`ball_report.resent`, and
+`ball_report.resend_failed` when the email did not go, which gives the day's one go back). Anyone who can edit Events can change it; viewers can look. Both also need at
 least view on the Festive Ball, since the numbers are the Ball's (every role has that by default).
 It ships switched off, and saving it on with nobody to send to is refused. The routes:
 `GET /api/admin/ball-report` (`events:view`), `PUT /api/admin/ball-report` and
@@ -3082,7 +3578,46 @@ report off and remove everyone from it.
 
 `POST /api/admin/ball/reminders` (Editor+ with the ball section). The original staff-triggered
 button, kept because it is still the way to send this early or re-send it. Since TASK-338 the same
-email also goes out automatically three days before the ball, to anyone who has not had it.
+email also goes out automatically a week before the Ball, to anyone who has not had it. It went
+three days before until Jaimie changed it on 2026-10-04: the email says "A week to go", so it now
+goes when that is true. It is timed by the day in the UK (`daysToBall` in `src/ball/run-up.ts`), so
+the morning run on Saturday 31 October sends it. From then until the day before the Ball, each
+morning's run sends it to any paid booking that has not had it: a send that failed, or a booking
+paid in the last week (the morning after it is paid, as before). It is never sent on the day of the
+Ball or after, so a booking first seen by that morning's run (paid on 6 November after the run, or
+on the 7th) gets none: its confirmation, hours old, has the same details.
+
+**Drinks and meals in that email** (TASK-577; Jaimie, 31 October 2026). It tells everyone about the
+Park Hotel's drinks pre-order and that "Everyone needs to submit their meals", naming vegans and
+vegetarians. Guests send the hotel's form to the hotel, not to us. Its dates are the hotel's: orders
+in by Wednesday 4 November (72 hours before), paid by 12pm on Friday 6 November, by a secure link the
+hotel emails them. The form is `assets/park-hotel-drinks-pre-order.pdf`, a button in the email
+(`DRINKS_SHEET_URL` in `src/ball/reminder-email.ts`), because the site's emails carry no attachments
+on purpose. The drinks section drops out with fewer than 3 days to go, since orders have closed by
+then (a late booking, or the staff button); the meals line stays. The wording lives in the code and
+comes out in the tidy after the Ball.
+
+**It says the true time to go** (`daysToGo` in `buildBallReminderEmail`). Exactly a week before,
+or with no number given, it is word for word as it always was (a fixture of origin/main's output is
+compared byte for byte in `test/unit/ball-reminder-days-to-go.test.ts`). On any other day the three
+places that say "a week" say the real number instead: the subject and the small line above the
+heading read "4 days to go" (or "Tomorrow" the day before), and "A week on Saturday you'll be with
+us" reads "In 4 days you'll be with us" ("Tomorrow you'll be with us"). The staff button passes
+today's number too, so it is right when pressed early ("10 days to go") or late. Pressed ON the day
+of the Ball it says "Today" ("Today you'll be with us at The Park Hotel"), never "A week to go";
+pressed AFTER the Ball it is refused (409, "The Ball has been and gone, so the reminder was not
+sent.") and sends nothing. The automatic run still never sends on the day or after. Nobody gets it
+twice: both ways of sending write and check the one `reminder_sent_at` stamp. All emails shows each
+of these as a version of "A week to go". A number of days that cannot be said truthfully (below 0,
+or not a number) makes the builder throw, so nothing false can be sent.
+
+**The practical email goes once, whatever the deadline** (`stagesFor` in `src/ball/run-up.ts`). Until
+TASK-576 a booking could be due the last call for guest details and the practical email on the same
+morning, and the pass sent both, each with its own stamp. With the last call and the nudge retired
+there is one email left to plan. `test/unit/ball-run-up-both-stages.test.ts` simulates every morning
+from 20 October to 8 November for several closing dates and kinds of booking: the practical email
+goes once, on the morning it is due, a failed send is not stamped and is tried the next morning, and
+the closing date changes nothing about it. The retired stages never fire (`test/unit/ball-run-up.test.ts`).
 
 It carries the practical details **and reads back what the booker told us** — guest names,
 allergies, access needs. That is the point of it: a coeliac note that never saved is caught a week
@@ -3265,11 +3800,33 @@ carrying no menu would burn the single send each booking gets. `guestLinkFor` no
 `Pick<GuestProgressRow, "guestToken">` rather than the whole row, since that is the only field it
 reads and the menu chase needed the same link off a different shape.
 
+**It leaves out a booking that has already chosen** (TASK-573; Jaimie, 20 October 2026: "skip the
+ones who have already chosen"). The send query brings each booking's seats and its guests' choices
+with it, read as the menu progress reads them, and `hasChosenAlready` (`src/ball/menu-progress.ts`)
+leaves a booking out when the menu asks something, **every seat it paid for has a guest named**,
+and every guest has answered every course that asks (`hasChosen`, the same test the "Who has chosen"
+list uses). A table with seats nobody has named yet still gets it, even when everyone named has
+chosen: Jaimie chose that, since the email asks them to name and choose for the rest, and missing it
+costs them the one "come and choose" email. A booking with nobody named still gets it, and so does
+everyone when the menu asks nothing (that email is how they learn what is served). A booking left
+out is **not stamped**, so once someone in it has not chosen (a guest changed or added) the next
+press reaches it. The answer says how many it left out (`alreadyChosen`), the screen says so ("3
+bookings had already chosen, so were not emailed."), and the audit row records it. Every send
+failing says "Could not send any of them", never "Nobody needed it".
+
+The Park Hotel's £110 rate used to be only in this email, so a booking left out would never hear
+it: the Festive Ball page's Staying over line gives it too now (it said a rate might be arranged).
+Both say how to book it, with the hotel's own number, **01563 545999** (TASK-574; Jaimie, 20
+October 2026), checked against the hotel's listings and not Rugby Park's stadium line. It is a
+`tel:` link in the email and on the page, kept on one line with `&nbsp;`, and `HOTEL_PHONE` in
+`src/ball/menu-email.ts` is the email's one copy of it.
+
 ### The admin Festive Ball screen
 
 Under **Content → Festive Ball**. Stats (seats and tables sold, remaining, money taken,
 donations, Gift Aid eligible, newsletter opt-ins), the gate control, capacity and the sales
-window, the late-confirmed details, and the bookings list.
+window, the late-confirmed details, and the bookings list, in six sections chosen from one bar
+(see [The new look](#the-new-look-task-571)).
 
 The gate button says what it will DO rather than what state it is in, and confirms first, naming
 the consequence: publishing shows the ticket page to the whole internet **and** puts the ball on
@@ -3288,7 +3845,8 @@ reports and send-buttons interleaved, so there was no way to predict where anyth
 of those buttons email everyone who has paid and cannot be taken back, and they sat mid-page
 between harmless settings.
 
-It is now three bands, in the order the job is actually done:
+It became three bands, in the order the job is actually done (**replaced in TASK-571** by six
+sections chosen from one bar: see [The new look](#the-new-look-task-571)):
 
 | Band | `id` | What it holds |
 |---|---|---|
@@ -3318,14 +3876,98 @@ things had to be true for that to work, each of which failed first:
 - `.admin-band`'s `scroll-margin-top` must clear **both** sticky bars, not just the nav. At 110px
   the heading you jumped to landed 41px behind the jump bar, so the click read as an overshoot.
 
-That last one is an invariant with no natural guard, so the test asserts it from the CSS at both
-widths, and separately checks the comment and brace counts balance — one stray `*/` silently
-kills every rule after it, which is how that bug got in.
+That last one is an invariant with no natural guard, so the test asserted it from the CSS at both
+widths (the bands went in TASK-571, and that check with them), and separately checks the comment
+and brace counts balance — one stray `*/` silently kills every rule after it, which is how that
+bug got in. That check stays.
 
 Two pre-existing overflows were fixed in the same breakpoint, since they made every view scroll
 sideways on a phone: the `style="width:420px"` fields are capped (on the label as well as the
 field, or `max-width:100%` resolves against a label already sized to its 420px content), and
 `.admin-segmented` may wrap. Measured across all 24 views at 375px: no sideways scroll anywhere.
+
+#### The new look (TASK-571)
+
+Jaimie, 19 October 2026: "it's just one big list of everything ... really hard to scroll through
+and it's not very clear what anything does". She asked for it to feel like the website, with drop
+downs, and for nothing it does to change. TASK-422's three bands and jump bar became:
+
+- **A band** in the public /ball page's own night blue and gold (`.ball-hero`, gold only there, as
+  on the poster): the date and venue, the two advertised prices, how many days are left
+  (`#ballHeroCountdown`, counted in whole days from its `data-ball-date`), and whether the ticket
+  page is public (`#ballHeroPage`, from the same answer the gate button reads).
+- **Six sections, one on screen at a time**, chosen from one bar (`#ballSections`). It is the Get
+  involved tab's pattern: `.admin-segmented`, `aria-pressed`, the arrow keys, Home and End, and the
+  section kept in `sessionStorage` as `nbccAdminBallSection`, so a refresh, or a save that reloads
+  the screen, comes back to it. Pinned under the top bar on a laptop; two by two on a phone.
+
+| Section | What it holds |
+|---|---|
+| **Overview** | The numbers at a glance: seats sold against the seats that were on sale, with a bar, then money taken, donations, Gift Aid eligible and newsletter sign ups. Then **Needs you**: bank transfers waiting (and how many are past their pay by date), bookings with no phone number, guests still to be named, dinners still to choose. Each line's button opens the section that deals with it. |
+| **Bookings** | The three downloads as cards that say what each list is for, the no phone number filter, and the bookings list. |
+| **Awaiting transfer** | The search, Add a bank transfer booking, and the list. |
+| **Guests and menu** | The two chase lists together: guest details still to come, then who has chosen. The reminders and the volunteers' list go out by themselves (TASK-576), so there is no button here. |
+| **Emails** | The week before reminder and the menu is here email, on their own, after the sections that tell you whether to press them. |
+| **Set up** | Seven drop downs (`details.ball-setting`), each saying on its closed line what it is set to now (`data-ball-now`, filled by `ballSetupNow`), so most visits need none opened. |
+
+The bar's buttons carry counts (transfers waiting, bookings with guests to chase), and **New**
+where the list behind them holds a booking made since this person last opened Festive Ball
+(TASK-487's row pill, as Get involved's section buttons carry it): without it, a visit spent on
+Overview would use up the New without anyone seeing the rows. The main Overview's Festive Ball
+lines open the section that deals with them (`ballAsk`, `BALL_NEED_SECTIONS`) rather than the top
+of the screen, and so do Needs you's buttons here: focus moves to that section's button, and from
+far down a long list you land where the section starts, under the pinned bar.
+
+Three things the sections would otherwise have hidden are said where they are seen:
+
+- **Seats held back**, on Set up's closed line, is the Held back number plus every named hold
+  still standing (TASK-324), as the seats on sale count them (`readCapacityState`). Until the holds
+  have loaded, or if they could not be, it says "at least".
+- **Bookings' "Show only bookings with no phone number"** has always covered the bank transfer
+  list too. That list is in another section now, so Awaiting transfer says when the filter is on
+  (`#ballTransfersFiltered`), with **Show all** to turn it off.
+- **The bar of seats sold** is out of the whole room, as the main Overview counts it ("312 of 400
+  seats sold"), so a booking held for its bank transfer does not move it when nothing has sold.
+
+Dates that have passed read in the past tense ("sales closed", "Closed"), and if the numbers could
+not load the Overview says so rather than showing a blank or a made up zero.
+
+No section is hidden by the markup: the script shows the chosen one before the screen is first
+drawn (`selectView` then `loadBall`, in one go). So a browser that meets the new page with the old
+script, for the minutes a deploy takes to roll out, gets every section on one long page, as the
+screen used to be, rather than five it cannot reach.
+
+**Nothing it does changed.** Every control kept its id, its element and its type. The bar, the
+counts, the band and Needs you are drawn from the answers the screen already fetched; they ask the
+server for nothing of their own. Two section names stay because other text points at them: the
+server tells staff to "Enter the bank details under Set up first", and the email to events@ says an
+admin marks a booking paid "under Festive Ball, Awaiting transfer". Needs you never says "Nothing
+needs you right now" while one of its four parts could not be checked (TASK-476's rule).
+
+How the tests prove it:
+
+- `test/unit/admin-ball-layout.test.ts` holds the 100 ids the screen had beforehand, each control
+  with its tag and type, and fails by name if one goes missing or changes. It pins the ten forms,
+  the six sections in order and where each control lives, the seven drop downs, that only the
+  three band headings were retired, and that nothing on screen has a dash.
+- `test/unit/admin-ball-sections.test.ts` drives the real `app.js` in jsdom: switching, coming back
+  after a refresh or a save, the band, the numbers, Needs you (still loading, could not check, and
+  only then nothing), the counts and New, the closed line summaries with named holds, the no phone
+  number notice, the main Overview's links, the phone card cells, and that opening the screen asks
+  for exactly the seven things, in the same order, it asked for before, and nothing more when a
+  section is chosen.
+
+**Phones and smaller laptops.** Lists become labelled cards when they are narrow: the two chase
+lists and Set up's seats held back now too (`bclist` and `bhlist`, under 600px; as five columns,
+Release had been squeezed into a button 39px wide and 154px tall), and Awaiting transfer from
+819px rather than 599px, since
+"Mark as paid" is 182px on one line and its 26% column only holds that from 808px (at 900px wide
+with the side menu the list scrolled 35px sideways, and a 1024px laptop did the same). Tick boxes
+are 20px with a 44px target, Cancel and Release are 44px tall, a date box is as wide as a date
+rather than the site wide 100%, and
+the forms inside the drop downs are drawn flat, since the drop down is already the card. Verified
+in a real browser at 320, 390, 600, 768, 820, 861, 900, 960, 1024, 1100, 1280 and 1366px: nothing
+scrolls sideways and no box has a scrollbar of its own.
 
 ### Every page wears the same shell (TASK-402)
 
@@ -3832,7 +4474,7 @@ receipt. A failed send is logged, never thrown: the booking is already paid and 
 Stripe redeliver.
 
 **The five ball emails share the NBCC shell and the sponsor band.** The confirmation, the
-week-to-go reminder and the three run-up emails (guest-list read-back, chase, last call) all
+week-to-go reminder and the run-up emails (guest-list read-back; the nudge and last call are retired) all
 render through `ballEmailShell` (`src/ball/email-shell.ts`), which wraps `emailShell` from
 `src/email/brand.ts` with the ball's own settings: `events@nbcc.scot` in the footer bar rather
 than the giving inbox, the registered postal address (its absence is a small but real spam
@@ -4247,7 +4889,8 @@ off. `src/clients/turnstile.ts` asks Cloudflare's siteverify (5 second timeout) 
 or our secret rejected: the message is **kept** and a warning logged, so a genuine enquiry is never
 lost to the checker). Cloudflare's error codes decide whatever the HTTP status, because it sends a
 rejected secret as a 400 naming `invalid-input-secret`. The page learns the site key from
-`GET /api/contact/captcha`. `assets/js/contact-captcha.js`, loaded by `contact.html` only, fetches
+`GET /api/contact/captcha`. `assets/js/contact-captcha.js`, loaded by `contact.html` and the three
+Tell us forms ([The short pages](#the-short-pages-under-get-involved)), fetches
 Cloudflare's script once the visitor starts on the form (a tap or a key in a field) or presses
 Send, so someone who only reads the page never contacts Cloudflare. It draws the box (Flexible when
 the form is 300px wide or more, Compact below that, and again at the size that fits if the form gets
@@ -5185,6 +5828,12 @@ ONE transaction, **idempotent by event id** (a `stripe_webhook_events` ledger wi
   metadata rather than re-authoring it: in stub mode only, the checkout endpoint echoes
   the built session on its 200 body, and the step feeds that verbatim into the webhook —
   so a drift between what the checkout stamps and what the webhook reads fails the test.
+  **Where the gift was started** is recorded separately and afterwards: once the transaction has
+  committed and the emails have gone, a session whose metadata has `redBag: "true"` gets
+  `donations.source = 'red_bag'` by one best-effort `UPDATE` that never throws
+  (`tagDonationSource`; a monthly gift's later charges take it the same way). The donation's own
+  `INSERT` does not name the column. See **Recording where a gift came from** under **Fill a Red
+  Bag**.
 - **`invoice.paid` / `invoice.payment_succeeded`** → records each recurring
   monthly charge as a further donation against the SAME donor (found via the
   subscription id), carrying the Gift Aid flag + declaration from the original.
@@ -5561,7 +6210,7 @@ The 2025 NBCC donation leaflet is the **source of truth** for page content, and
 the marketing copy follows a small house style:
 
 - **No dashes in visible copy.** Reword rather than hyphenate — "one off",
-  "year round", "volunteer run", "post Christmas", "South West Scotland" — and use
+  "year round", "volunteer led", "post Christmas", "South West Scotland" — and use
   commas, parentheses or restructured sentences instead of en/em dashes.
 - **Write "NBCC"** in full (never a mistyped variant such as "NB4CC").
 - **Beneficiaries** are always the full phrase **"children, young people and
@@ -6127,7 +6776,7 @@ numbers, one line each, and **Coming up** the next 14 days. The design is in
      - contact messages;
      - fundraising sign ups, changes to check, fundraisers who say they've finished, requests to do,
        and fundraisers due a call;
-     - new stories;
+     - new stories (a story ticked Read on the Stories screen is Reviewed, so it leaves this count);
      - businesses due a thank you call;
      - your own business outreach to-dos;
      - generous donors not yet thanked who can be emailed (as the Thank you screen counts them);
@@ -6140,7 +6789,7 @@ numbers, one line each, and **Coming up** the next 14 days. The design is in
 
   Anything at zero is left out. A quiet day says "Nothing needs you right now."
 - **One request**, `GET /api/admin/overview` (any session), answers
-  `{ updatedAt, needs: [{ key, level, text, view, button }], numbers: [{ key, title, headline, detail, view, button }], failed: [screen names] }`
+  `{ updatedAt, needs: [{ key, level, text, view, button }], numbers: [{ key, title, headline, detail, view, button }], comingUp: [{ day, label, items: [{ text, when, view, button }] }], failed: [screen names] }`
   (`src/routes/admin-overview.ts`). Each item has the same gate as its own screen. A section the
   person cannot open is never asked for (`gather`, `src/admin/overview-sources.ts`). Each count
   uses the same database function and rule as that screen, so the two cannot disagree.
@@ -6167,6 +6816,12 @@ by `numbersLines` in `src/admin/overview-numbers.ts`:
   first of their screens. The parts are rounded and the headline is their sum, so they add up. If a
   part they may see cannot be read, Money in is left out (a short total would read as all of it) and
   "Could not check" names that part.
+- **Fill a Red Bag** (Donations: view): "£412 from 19 gifts this month", with the Donate page's
+  figure for the same month under it. The same read and the same words as the top of the Donations
+  screen (see
+  [Fill a Red Bag against the Donate page, in the admin](#fill-a-red-bag-against-the-donate-page-in-the-admin)).
+  A real zero shows as "£0 from 0 gifts this month". If it cannot be read the line is left out and
+  "Could not check" names Donations.
 - **Monthly givers** (Donations: view): how many give and what they give a month, as the Monthly
   givers screen counts them, and who joined and stopped this month. One read serves this and the
   Needs you line for failing gifts.
@@ -6238,6 +6893,9 @@ slides and social posts. The design is in `docs/superpowers/specs/2026-10-02-adm
   - Its "QR codes scanned" list names the page whose code was scanned (`labelQrScans`).
   - Migration `1791200000030_analytics-qr-channel.js` only widens the `analytics_views` channel
     check to allow `qr`.
+- **Its styles** (`#view-qr` in `assets/css/admin.css`) were deleted along with Analytics' on
+  3 October and put back in TASK-557; `test/unit/admin-screen-styles.test.ts` now guards both. See
+  **The styles came back** under Admin > Analytics.
 
 ## Monthly or one off, on the donations list (TASK-446)
 
@@ -6254,6 +6912,417 @@ than passed through. Passing it on would quietly return an empty list, which rea
 donations" — a much worse answer to give somebody looking at their own charity's income. Changing
 either filter returns to page one, because staying on page 4 of a different list shows an empty
 table and looks like the filter found nothing.
+
+## Fill a Red Bag: staff edit the list (Admin > Fill a Red Bag)
+
+Staff can change what the public page `/fill` lists, without a code change: the items and their
+prices, and the "Whenever the need comes" examples. Changes go to **one shared draft**; nothing
+changes for the public until someone presses **Publish**. Design:
+`docs/superpowers/specs/2026-10-04-fill-a-red-bag-design.md`, "Staff editing of the list".
+
+**What can be changed, and what cannot.**
+
+- **Items:** name, price, which of the four headings it sits under, its order under that heading,
+  its picture, and whether it shows. **New items** can be added (a name, a price, a heading and a
+  picture). An item on the website is never deleted, only hidden; one added and not yet published
+  can be removed.
+- **Examples** under each of the three themes: the amount, the words, the picture, the order,
+  whether it shows; and new examples. The page writes the amount and "could help" itself and staff
+  type only what follows, so an example always reads "£30 could help with fresh bedding for a child".
+- **Pictures** are chosen from the drawings the page already has (every key of `ART` in
+  `assets/js/red-bag-catalogue.js`) or the plain wrapped present, `present`, added for this.
+  Nothing is uploaded.
+- **Not editable, and not in a list at all:** the four headings (Home comforts, Play & downtime,
+  Books & creativity, Clothing), the three themes and their one-line descriptions, the £50 bag, the
+  £2 minimum, the elf's notes, the drawings themselves and every other word on the page.
+
+**A list** is `{ v: 1, items: [{ key, name, pence, group, art, hidden }], examples: [{ key, theme,
+pence, words, art, hidden }] }`. Order in the arrays is the order on the page, under each heading and
+theme. `group` is `home`, `play`, `books` or `clothing`; `theme` is `crisis`, `school` or `hand`;
+`art` is a key of `ART`; `words` begins "could help". Keys are stable for ever: a built-in item or
+example keeps the key it has in the catalogue, and a new one gets `n-<name>-<five characters>`
+(no built-in key, drawing or elf's note starts `n-`, and a test holds that).
+
+**The rules** live in ONE file, `assets/js/red-bag-list.js` (typed for the server by
+`src/red-bag/list.ts`). The admin screen runs them as staff type; the server runs the very same
+file on **every save and again on publish**, whatever the screen did:
+
+| Rule | Message |
+|---|---|
+| An item's price is whole pence, 10p to £500 | "A price must be between 10p and £500." |
+| An example's amount is whole pence, £1 to £1,000 | "An amount must be between £1 and £1,000." |
+| A name is 1 to 40 characters once trimmed | "Give this item a name." / "A name can be 40 characters at most." |
+| What follows "could help" is 1 to 90 characters | "Say what it could help with." / "This can be 90 characters at most." |
+| An example reads "could help ..." | 'An example must read "could help" and then what with.' |
+| Plain text only: no `<`, `>` or control characters | "Leave out < and > and anything that is not plain text." |
+| Never "will" | 'Say "could", never "will": these are examples, not promises.' |
+| Never "buy", "buys", "buying" or "bought" | 'Leave out "buy", "buys" and "bought": nothing is bought item by item.' |
+| No en or em dash | "Use a comma or a full stop, not a long dash." |
+| At least one item showing | "At least one item must be showing." |
+| No two items showing with the same name | "Two items showing cannot have the same name." |
+| 30 items at most; 6 examples in a theme at most | "The list can have 30 items at most." / "A theme can have 6 examples at most." |
+| Keys unique, every heading, theme and picture a real one | "Something in the list is not right. Reload the page and try again." |
+| Everything on the website is still in the draft, hidden or not (server, on save and on publish) | "An item that is on the website can be hidden, not removed." / "An example that is on the website can be hidden, not removed." |
+
+**Hidden, never removed.** That last rule is checked on the server (`refuseRemovals` in
+`src/db/red-bag-lists.ts`, with `removed` from the rules file), against the list published last, or
+the built-in list when none is. The one exception is **Put back**: a draft that was put back from an
+earlier list (its row says which, and a plain save keeps that note) may lack what that earlier list
+lacked, and nothing else, and its differences say "Removed: ...". Put back is the only way anything
+leaves the website's list.
+
+Names and words are tidied before they are stored (trimmed, runs of space made one), and every one
+is escaped wherever it is written. A heading with nothing showing is not drawn on the page, nor a
+theme; with no example showing at all, the whole "Whenever the need comes" part is put away.
+
+**Where it is kept.** One new table, `red_bag_lists` (migration `1791200000270_red-bag-lists.js`,
+additive). A row is a whole list in `data` (jsonb):
+
+- `status = 'draft'`: the one shared draft. A partial unique index allows one at most. `version` is
+  its stamp, one more with every save.
+- `status = 'published'`: a list that was published, kept for ever. The website's list is the one
+  with the latest `published_at`. `summary` and `changes` say, in plain words, what it changed;
+  `published_by` (the audit actor) and `published_by_name` say who.
+
+Publishing turns the draft's own row into a published one. **No row is seeded:** with nothing
+published the website uses the list written in the catalogue, exactly as before, so deploying this
+changes nothing on `/fill` until somebody publishes.
+
+**Which list the public page draws** (`src/routes/red-bag.ts`, `src/db/red-bag-lists.ts`):
+
+- `GET /fill` asks `loadPublishedRedBagList()`. That read is kept for a minute
+  (`RED_BAG_LIST_CACHE_MS`), is read again at once on this server after a publish (another server
+  sees it within the minute; the list as last read is kept, not forgotten, while that fresh read
+  runs, so a blip then shows the last good list; and reads are numbered as they start, so a slow
+  read begun before the publish can never put the earlier list back afterwards), and **never throws and never waits long**: it gives up after 1.5
+  seconds (`RED_BAG_LIST_READ_TIMEOUT_MS`), page views arriving together share one read, and after
+  a failure the database is left alone for 10 seconds (`RED_BAG_LIST_RETRY_MS`) rather than asked
+  again by every page view.
+- The fallbacks, in order: nothing published: the built-in list. The database down, slow or
+  erroring: the last good list read, or the built-in list before any was. A stored list that fails
+  the rules: the same. Each is said **once** in the log ("fill a red bag list read failed, using the
+  last good list"), and once more only after it has recovered and failed afresh. If the read were
+  somehow to throw anyway, the page handler catches it and draws the built-in list.
+- **With the built-in list the page is byte for byte what it was.** With a published list the
+  server draws that list's rows, and just before the catalogue script a block of data,
+  `<script type="application/json" id="rb-list-data">`, saying the same thing (what is showing,
+  under each heading and theme, with each picture). `assets/js/red-bag-catalogue.js` reads the
+  block as it starts (`useListFrom`), so its sums agree with the rows. The block is checked whole
+  before anything is changed; missing or wrong in any way, the catalogue keeps the list written in
+  the file. An older copy of the catalogue script simply never looks for the block; a newer one on
+  an older page finds none. Assets are served to be revalidated on every visit, so a browser does
+  not keep an old script against a new page.
+- The headings and theme names are never in the block: the catalogue keeps its own, by key.
+- The feel good layer keys drawings, peeks and notes by an item's key. A new item uses the picture
+  chosen for it (`artKey`), gets the general notes only and never a "several" note. A built-in item
+  staff have **renamed** also gets the general notes only, so "Ooh, a blanket" is never written
+  beside something no longer called a blanket.
+- The thank you page takes no list; it uses only the catalogue's constants.
+- **The checkout is not changed.** It still checks only the total (£2 at least) and never sees items.
+
+**The draft preview.** "Preview the page" opens `/fill?preview=draft` in a new tab. That ONE
+address answers two ways:
+
+- A plain visit (which is every visit a browser makes by itself: the admin's session is a token in
+  the tab, not a cookie) gets the ordinary published page, plus the small loader the switched-off
+  preview already used (`assets/js/red-bag-preview.js`). In a tab signed in to the admin, the loader
+  asks for the address again with the token. The new tab is opened from the admin, so it carries
+  the tab's session.
+- With a token that is a signed in member of staff holding **view** of the `red-bag` section
+  (`mayViewRedBagDraft` in `src/red-bag/staff.ts`: the account's row read fresh, failing closed),
+  the page is drawn from the draft under a strip, "Draft preview: not on the website yet". Anyone
+  else with a token gets the published page, and no loader, so the page can never fetch itself in
+  a loop. If the draft cannot be read or fails the rules, the answer is the published page.
+- Either way the address is never cached (`Cache-Control: private, no-store`, `Vary:
+  Authorization`) and never indexed (`X-Robots-Tag`, and the preview carries the robots line).
+- **Giving is switched off in the preview.** The details form is not drawn at all (in its place:
+  "This is a preview. Giving is switched off here."), the page is marked `data-rb-draft` and NOT
+  `data-rb-preview` (so the script never sends the staff session to the checkout), and Donate does
+  nothing but show the same words. A preview can never take money for a list the public cannot see.
+
+**The API** (`src/routes/admin-red-bag-list.ts`). The editor's state, which every write answers
+with afresh: `{ mayEdit, website, publishedId, draft: { data, version, updatedAt, updatedByName,
+restoredFrom } | null, changes: [plain words], history: [{ id, publishedAt, publishedByName,
+summary, changes, restoredFrom, restoredOriginal }] }`.
+
+| Route | Needs | Does |
+|---|---|---|
+| `GET /api/admin/red-bag-list` | red-bag view | the editor's state |
+| `GET /api/admin/red-bag-list/versions/:id` | red-bag view | one published version with its list; `original` for the built-in list |
+| `PUT /api/admin/red-bag-list/draft` `{ data, version, publishedId }` | red-bag edit | saves the draft |
+| `POST /api/admin/red-bag-list/publish` `{ version }` | red-bag edit | the draft becomes the website's list |
+| `POST /api/admin/red-bag-list/discard` `{ version }` | red-bag edit | throws the draft away |
+| `POST /api/admin/red-bag-list/restore` `{ from, version, publishedId }` | red-bag edit | copies a published version (its id) or `"original"` into the draft |
+
+`version` is the draft's stamp as the screen last saw it (0: it saw no draft) and `publishedId` the
+website's list it was looking at. **Two people at once:** every write runs in one transaction with
+the draft's row locked, and one sent against a stamp that has moved on is refused, `409 { error:
+"Someone else has changed the draft. Reload to see their changes.", code: "stale" }`, with nothing
+changed on the server. A draft is also never started from a website list that has since been
+replaced. Other answers: `400` with the rule's own words and `problems` when the list fails;
+`400` "There is nothing to publish: the draft says what the website already says."; `404` "That
+version is not there any more."; `401`/`403` as every admin route.
+
+**Audit.** A save of the draft is not audited. Each of these writes an `audit_log` row in the same
+transaction, against entity `red_bag_list`: `red_bag.list_published` (`{ summary, changes,
+replaced }`), `red_bag.draft_thrown_away` (`{ summary, changes }`) and `red_bag.list_put_back`
+(`{ from }`).
+
+**Who.** A new access section, `red-bag`, shown on Team > Manage access as "Fill a Red Bag". View:
+the editor, the differences, the history, any earlier list, and the draft preview. Edit: save,
+publish, throw away, put back. Admins hold it by role; **editors and viewers do not**, and it is
+given per person from Team > Manage access (the same shape as `analytics`). The migration also
+writes the section into the access already saved, the TASK-479 way: admin `edit`, anyone else
+`none`, only where the key is missing, with an `admin_user.permissions_backfilled` audit row each
+(by `migration:red-bag-lists`). Nobody's other access is read or changed, and people with no saved
+access are untouched. It is in the same migration as the table so the screen and the access to it
+arrive together.
+
+**The screen** (`assets/js/admin/red-bag-list.js`, `assets/css/admin-red-bag-list.css`; app.js only
+shows the view and calls `open()`). In the menu under Giving, after Donations, with a New pill
+(`src/admin/whats-new.ts`, area `red-bag`).
+
+- The four headings with their items as rows, then the three themes with their examples: a name (or
+  the words after "could help"), a price, the heading, Showing or Hidden, Move up and Move down (real
+  buttons), Change picture (a chooser that opens under the row), and Remove on anything not yet on
+  the website. "Add an item" under each heading and "Add an example" under each theme.
+- What is wrong is said beside the field as it is typed. A row just added is not scolded until it
+  is touched or a save is tried.
+- **Changes:** what differs between what is on screen and the website, in plain words, as it is
+  typed ("Toy £15 → £12", "New: Selection box £3", "Hidden: Hat & gloves", "Moved: Notebook, from
+  Books & creativity to Home comforts", "Example changed: ... → ..."), under a count ("2 changes
+  not yet on the website").
+- **Save draft** is one button in a bar that says which is true: "You have changes on this screen
+  that are not saved." (the bar then keeps to the foot of the screen), "Everything on this screen
+  is saved in the draft." or "This is the list the website shows. Nothing has been changed."
+  Leaving with unsaved changes asks first (another section, My account, Sign out, closing the tab).
+- **Preview the page**, **Publish** and **Throw away changes** work on the saved draft. Publish and
+  Throw away ask first, on the page, Publish repeating the list of changes.
+- **History:** every publish, newest first ("Jodie published 3 changes, 5 October 2026"), each with
+  Look at this list and Put back as a draft, and "The original list" always last.
+- View access only: every row as words, the differences, the history and the preview, with nothing
+  to type in and no button that changes anything.
+- If it cannot load: "The Fill a Red Bag list could not load. Open it again in a moment." Never an
+  empty editor.
+- Nothing scrolls inside a box. The rows answer to the editor's own width (a container query): one
+  line on a desktop, stacked cards on a phone, every target 44px.
+
+**Tests.** `test/unit/red-bag-list.test.ts` (every rule, the differences, the list as the page
+reads it), `red-bag-catalogue-list.test.ts` (the catalogue script with and without the block, with
+a wrong block, old beside new, an item it has never heard of), `red-bag-lists-db.test.ts` (the
+read that never throws and every fallback; save, stale stamps, publish, throw away, put back,
+audit rows), `red-bag-lists-migration.test.ts`, `red-bag-permissions.test.ts` (existing people's
+access untouched, Manage access, the menu, the New pill), `red-bag-page-list.test.ts` (the page
+from an edited list, the draft preview, giving switched off, who is given which list),
+`red-bag-draft-access.test.ts`, `admin-red-bag-list-routes.test.ts` (who may do what on every
+route) and `admin-red-bag-list-screen.test.ts` (the screen in jsdom). BDD:
+`features/red-bag-list.feature`, which puts the original list back through the API and empties the
+table before and after each scenario, so no other scenario meets a published list.
+
+## Fill a Red Bag against the Donate page, in the admin
+
+Staff can see how much is given through the Fill a Red Bag page compared with the ordinary Donate
+page. Four small things, all reading `donations.source` (written by the Stripe webhook since
+TASK-555; see **Recording where a gift came from** under **Fill a Red Bag**). No new permission:
+each is behind the gate of the screen it sits on, and nothing here changes the database, the
+checkout, the webhook or any public page.
+
+- **Totals at the top of the Donations screen.** Two lines, above the filters:
+  "Fill a Red Bag: £412 from 19 gifts this month, £1,960 from 87 gifts in all" and the same for
+  "Donate page", with the note "Fill a Red Bag gifts are counted from 5 October 2026." (earlier
+  Fill a Red Bag gifts were never labelled, so they sit in the Donate page's figures).
+  - `GET /api/admin/donations/source-totals` (Donations: view, as the list is;
+    `src/routes/admin-donation-sources.ts`) answers
+    `{ totals: { redBag, donatePage: { month: { pence, gifts }, all: { pence, gifts } } }, lines: [{ key, name, month, all }], note }`.
+    The words are the server's (`src/admin/gift-sources.ts`).
+  - **One grouped read**, `sumGiftsBySource` in `src/db/overview-numbers.ts`, beside the Overview's
+    money and counted the same way: `payment_status = 'paid'`, each gift less its refunds
+    (`GREATEST(amount_pence - refunded_amount_pence, 0)`), the gift alone (the card fee top up is
+    its own column and Gift Aid is never added in), no currency test (the Overview has none). This
+    month is the Overview's month: UK days from the 1st up to now (`monthSoFar`).
+  - **Fill a Red Bag** is `source = 'red_bag'`. **Donate page** is a gift with no source, paid
+    online (`payment_channel = 'online'`, so not a card reader) and not on a fundraiser's page
+    (`fundraiser_id IS NULL`, which also leaves out money an organiser paid in). Each payment of a
+    monthly gift is its own row, so each counts as a gift. A gift refunded in full is not counted
+    as a gift.
+  - Whole pounds with commas, as the Overview's numbers are. A real zero is "£0 from 0 gifts". If
+    the read fails the block says "The Fill a Red Bag and Donate page totals could not load.",
+    never a zero, and the list underneath still works. It is read when the screen opens, not on
+    every filter or page.
+- **A "Red Bag" label on each gift**, beside "once" or "monthly", wherever the donations table is
+  drawn: the Donations screen, the Overview's recent donations and donation search results, as a
+  table and as cards. `listDonations` and `searchDonations` (`src/db/admin.ts`) return `source`
+  for each row; nothing else about them changed.
+- **A "Fill a Red Bag only" tick box** beside the Payment status and Type filters. The list is
+  paged by the server, so the server narrows it: `GET /api/admin/donations?source=red_bag`,
+  together with the other filters, and back to page one when it changes. The value is checked
+  against `DONATION_SOURCES`; anything else is ignored and returns everything, as an unrecognised
+  `mode` does (TASK-446). With nothing to show it says "No Fill a Red Bag gifts yet.", or "No Fill
+  a Red Bag gifts match these filters." when another filter is also set. The Donations screen has
+  no export.
+- **A line on the Overview**, straight after Money in (see **How we are doing** above).
+
+The Donations menu item has a New pill for it (`FEATURES` in `src/admin/whats-new.ts`).
+
+**Tests:** `gift-sources.test.ts` (the buckets and the words), `gift-sources-db.test.ts` (the SQL of
+the read, the list's field and its filter), `admin-donation-sources-route.test.ts` (who may read
+it, what it answers, a failure), `admin-overview-route.test.ts` (the Overview's line) and
+`admin-red-bag.test.ts` (the real `admin.html` and `app.js` in jsdom). `features/admin-red-bag.feature`
+runs the read and the filter against a real database in CI.
+
+## The Festive Ball's donate page (/ball/donate)
+
+Jaimie asked on 14 October 2026 for a way for people who cannot come to the Ball to give instead,
+with the gift marked as coming from the Ball. Her choices: a page of its own in the Ball's look,
+once only, a button at the top of the Ball page, and the gifts shown in the admin as Fill a Red
+Bag's are.
+
+- **The button.** A third button in the Ball page's hero, after "Book tickets" and "What's the
+  night about?": **Can't make it? Donate**, to `/ball/donate`.
+- **The page.** `ball-donate.html`, served by `GET /ball/donate` in `src/routes/ball.ts`. Gated
+  exactly like `/ball` (the lock page while the gate is shut, unless the preview cookie is held),
+  `Cache-Control: public, max-age=0`, `noindex`. From Sunday 8 November 2026 (the day after the
+  Ball, UK time; `ballDonateOpen` in `src/ball/donate-page.ts`) it answers 302 to `/donate`.
+  The file itself is not served at any other address. Listed in the site's page tree
+  (`src/site/pages.ts`) under the Festive Ball, Ball gated, for the site map, QR codes and
+  Analytics, but not offered in `sitemap.xml` (it says noindex, and redirects after the Ball).
+- **The form.** Drawn by the server (`renderBallDonateForm`, `src/ball/donate-page.ts`) so the
+  Gift Aid declaration is word for word `SINGLE_DONATION_WORDING`. It is the fundraiser pages'
+  give form with its own ids (`bd...`) and their styles (`assets/css/fundraising.css`, plus the
+  small `assets/css/ball-donate.css`): £10, £25, £50, £100 or your own amount (£2 or more), name
+  and email, the newsletter tick, Gift Aid with the home address, and the card fee. Once only;
+  businesses are pointed to `/donate`, which takes company gifts. `assets/js/ball-donate.js`
+  makes it work: Stripe's own checkout opens on the page, or the giver goes to Stripe's page.
+- **The checkout.** The donate page's own, `POST /api/checkout-session`, with the optional marker
+  `ball: true` (`src/routes/api.ts`). With the marker: once only, £2 at least
+  (`BALL_GIFT_MIN_PENCE`), a person's gift (`donorType` individual), never with a fundraiser or a
+  Red Bag (400 otherwise), one metadata key
+  `ball: "true"`, and Back from Stripe's page returns to `/ball/donate`. The thank you page and the
+  receipt email are the donate page's own. A gift without the marker is exactly as it was.
+- **Recording it.** The Stripe webhook reads the key (`sourceFromCheckoutSession`,
+  `src/db/stripe-webhook-model.ts`) and writes `donations.source = 'ball'`. `DONATION_SOURCES` is
+  now `["red_bag", "ball"]`. No migration: the column has no check constraint, on purpose.
+- **In the admin.** A **Festive Ball** label on each gift in the donations tables, a **Festive Ball
+  only** filter beside Fill a Red Bag only (ticking one unticks the other; `?source=ball`), and a
+  **Festive Ball** line in the totals at the top of Donations, between Fill a Red Bag and Donate
+  page (`sumGiftsBySource` has a third bucket, `ball`). The Overview's Fill a Red Bag line is
+  unchanged.
+
+## Red bags at the Festive Ball (/bag, TASK-584)
+
+At the Ball (Saturday 7 November 2026) the event organisers asked for a QR code card on each table,
+next to the red bags, that guests scan to give a red bag. It is NOT Fill a Red Bag (nobody builds a
+bag). Jaimie, 2 November 2026: "it's just a one-off £50 donation. They can make as many of them as
+possible ... it's almost like a disposable thing that we use on the night." She approved the
+clickable mockup's flow and asked for it to be animated, in Fill a Red Bag's look, with Gift Aid
+optional and an email receipt. Design:
+`docs/superpowers/specs/2026-11-02-ball-table-bags-design.md`.
+
+- **In one go.** `/bag` is a public page of its own: a guest scans the card, sees the bag and its
+  £50, chooses 1 to 20 bags, gives their first name, surname and email, and pays on Stripe's own
+  page by card (Apple Pay and Google Pay included). Back on `/bag/thank-you` the bags pop in.
+  The gift is one off, £50 (5000 pence) a bag, and is recorded with the source `ball_bags`.
+- **The window.** Live from the day it ships (so the card can be printed and the page tested) until
+  the end of Sunday 8 November 2026, UK time. After that `/bag` and `/bag/thank-you` both answer 302
+  to `/fill`. It is a page of the Ball's folder (`src/ball`, `src/routes/ball.ts`), but NOT behind
+  the Ball's launch gate and untouched by the after the Ball switch (`src/site/after-ball.ts`), so
+  it works all evening.
+- **Wording.** NBCC's own phrase: "children, young people and vulnerable adults across South West
+  Scotland", never "a child" alone. Sentence case, no dashes, no new hyphenated words.
+
+- **The numbers.** `src/ball/bags.ts` (pure): `BALL_BAG_PENCE` 5000, `BALL_BAGS_MAX` 20,
+  `BALL_BAGS_PATH` `/bag`, `BALL_BAGS_THANKS_PATH` `/bag/thank-you`, and `ballBagsPence(bags)`.
+- **The checkout.** The donate page's own, `POST /api/checkout-session`, with the optional marker
+  `ballBags`, a whole number of bags from 1 to 20 (`src/routes/api.ts`). The server prices it in
+  ONE place, `priceBallBags`, before the body is checked: the amount becomes bags x 5000 pence,
+  whatever amount the browser sent or left out, and the gift is put on Stripe's own page (a
+  `uiMode: "embedded"` request is ignored, so the response is always `{ url }`). With the marker:
+  once only, a person's gift (`donorType` individual), never with `redBag`, `ball` or a
+  `fundraiserId` (400 otherwise); card only (`payment_method_types: ["card"]`, which brings Apple
+  Pay and Google Pay; no Direct Debit, which would record as pending and is not tap and pay); on
+  Stripe's hosted Checkout page and not the embedded form, because Apple Pay and Google Pay then
+  work without registering the site's domain with Stripe (so, if Apple Pay or Google Pay is
+  missing on the night, check they are switched on in the charity's Stripe account); one line, "Red bags at the Festive Ball", for the total;
+  one metadata key `ballBags` (the count as a string); success
+  `PORTAL_BASE_URL/bag/thank-you?session_id={CHECKOUT_SESSION_ID}`, Back to `PORTAL_BASE_URL/bag`.
+  Email, Gift Aid and the card fee work exactly as on any person's one off gift. The receipt is the
+  existing donor receipt for a one off gift, with Gift Aid when declared, unchanged (it does not say
+  how many bags: adding that would thread new data through the shared webhook in Ball week). The
+  page asks for first name, surname and email itself, because the webhook reads the receipt email
+  from our own metadata, never from Stripe.
+- **Recording it.** `sourceFromCheckoutSession` reads a `ballBags` mark of "1" to "20" (checked
+  before the Ball's own mark) and the webhook writes `donations.source = 'ball_bags'`.
+  `DONATION_SOURCES` is now `["red_bag", "ball", "ball_bags"]` (`sumGiftsBySource` picks each
+  source by value, so the order does not matter to it). Never added into the Festive Ball line.
+  No migration.
+- **In the admin.** A **Red bags at the Ball** label on each such gift in the donations tables, a
+  **Red bags at the Ball only** filter after Festive Ball only (the three source filters untick one
+  another; `?source=ball_bags`, already accepted because `DONATION_SOURCES` lists it), and a **Red
+  bags at the Ball** line in the totals at the top of Donations, straight after Festive Ball, with
+  the note "Red bags at the Ball are gifts from the table cards at the Festive Ball." (`sumGiftsBySource` has a fourth
+  bucket, `ballBags`, in `src/db/overview-numbers.ts` and `src/admin/gift-sources.ts`). Never
+  folded into the Festive Ball's figures. The Overview is unchanged.
+- **Unchanged.** A donate page gift, a Ball donate page gift and a Fill a Red Bag gift make
+  exactly the session they made before: `test/unit/ball-bags-leaves-others.test.ts` pins them,
+  field for field, from snapshots taken before the marker existed.
+- **The page, `/bag`.** Drawn whole by `renderBallBagsPage()` (`src/ball/bags-page.ts`), served by
+  `src/routes/ball.ts` with `Cache-Control: public, max-age=0`. Public: NOT behind the Ball's launch
+  gate (a guest at a table never sees a password). noindex; in `PRIVATE_PAGES`, and `/bag` is in
+  `RESERVED_PREFIXES`. Open while `ballBagsOpen(now)`: the UK date is on or before Sunday 8 November
+  2026; after that `/bag` and `/bag/thank-you` both 302 to `/fill`. Two screens under NBCC's logo
+  on cream: the welcome (the bag drops in with a springy bounce and its £50, gold sparkles
+  twinkle, what is in a bag with Fill a Red Bag's item drawings, "Fill a bag" throws a burst of
+  sparkles),
+  then how many (plus and minus, 1 to 20, a row of bags that grows with a pop, ten drawn then "+N",
+  the total, first name, surname and email, optional Gift Aid with the Ball donate page's
+  declaration and address fields, "Give £150"). The script (`assets/js/ball-bags.js`) posts only
+  `ballBags`, never an amount, and goes to the `url` the checkout returns; a refusal or an outage
+  shows a plain message beside the button (`is-error`, as an alert in a line that is always in the
+  page; an error sets `role="alert"` and `aria-live="assertive"`, anything else `status` and `polite`)
+  and keeps everything typed. While it waits the button says it is busy with `aria-disabled`,
+  never `disabled`, so the focus stays on it. The snow stops once the guest is past the welcome.
+- **The thank you, `/bag/thank-you`.** `private, no-store`. Reads the bag count from the Stripe
+  session (`bagsFromSession`: only a `payment_status` "paid" session counts; then the `ballBags`
+  metadata, else `amount_total` / 5000); with no session id, an id not shaped like one, an unpaid
+  session, or Stripe out of reach, it is a plain thank you, never an error. The
+  bags pop in one after another under a fall of gold stars and hearts; "Fill another" goes back to `/bag`.
+  The heading is "Your £150 could fill 3 red bags" (or "Your £50 could fill a red bag"); one bag, or a
+  count it could not read, is thanked with "It could mean someone who would otherwise have nothing to
+  open has a red bag to open on Christmas morning"; two or more with "It could mean N people ..."
+  (N a numeral).
+- **Never a promise (TASK-585).** Jaimie, 2 November 2026: "we can't legally say that it's going to
+  fill a bag". So the page, the thank you and the printed card say "£50 could fill a full red bag",
+  never "fills" or "you've filled"; `test/unit/ball-bags-page.test.ts` pins it. "Fill a bag" and
+  "Fill another" stay as buttons: they invite, they do not promise.
+  The script takes `session_id` out of the address bar.
+- **Light on a hotel's signal.** No site header, menu, `styles.css` or `main.js`: its own
+  stylesheet (`assets/css/ball-bags.css`, with the site's colour tokens and only Playfair Display
+  and Poppins) and script, plus the visit counter. The bag is ONE baked picture,
+  `assets/img/ball-bag-hero.webp` (28KB; the bag, the gold bow, presents peeking out and the
+  "Packed with love" tag, drawn as SVG with Caveat and baked to WebP, so the phone needs no
+  handwriting font); the same picture, small, is each bag in the row and on the thank you. The
+  logo is `assets/img/nbcc-logo-192.webp` (9KB, baked from `nbcc-logo-full.svg`). The look is NBCC's
+  own, on cream (the site's colour tokens), with Fill a Red Bag's bag, ribbon, tag, snow and stars
+  as the model. The hero's source is the SVG drawing in `hero.html` and the baking script
+  `bake.cjs` (sharp: Chrome's 3x screenshot of the drawing, cropped and baked to WebP, plus the
+  logo). They are in the repo, outside anything served or built, in `tools/ball-bags/` (with the
+  table card and QR code makers and a README on re-baking the picture and re-making the A6 and A4
+  card PDFs; credit line in `assets/img/CREDITS.md`). To change
+  the picture, redraw it, bake a new WebP, copy it over `ball-bag-hero.webp` and keep it under about 30KB. The four item
+  drawings are Fill a Red Bag's own, read on the server from `assets/js/red-bag-catalogue.js`
+  (`redBag().art`), so that script is not loaded. The first visit is about 87KB (53KB gzipped
+  where it applies) plus the site's two fonts. Every animation is transform and opacity only and
+  stops under `prefers-reduced-motion` (the sparkles stay, still).
+- **The table card.** An A6 portrait card with the QR code for https://nbcc.scot/bag, a red bag
+  drawing, "Fill a red bag this Christmas", "£50 a bag", "Scan with your phone camera" and NBCC's
+  name and charity number, as a print ready PDF (one card a page, plus four to an A4 sheet). It was
+  made with a one off script outside the app (Chrome printed it to PDF); nothing for it is in the
+  app or the repo, and the QR must point at exactly that address. Check the page and a card scan
+  before printing.
+- **Tests.** `test/unit/ball-bags-checkout.test.ts`, `test/unit/donation-source.test.ts`,
+  `test/unit/ball-bags-page.test.ts`, `test/unit/ball-bags-script.test.ts` (jsdom),
+  `test/unit/ball-bags-routes.test.ts`, and `features/ball-bags.feature` (the page scenarios are
+  tagged `@while-bags-open` and skip themselves after 8 November 2026).
 
 ## Nothing in the admin scrolls sideways (TASK-442)
 
@@ -6287,6 +7356,61 @@ report `scrollWidth === clientWidth`, and the page itself has no horizontal scro
 `test/unit/admin-no-sideways-scroll.test.ts` guards it, because the next person to add a table will
 copy whatever the base rule says.
 
+## The banner across the top (October 2026)
+
+TASK-572. Jaimie, 19 October 2026: "a banner across the top that has drop downs for each of the sections ...
+It frees up more horizontal space, and it means that you don't have to keep scrolling down all the
+way". Wider than 860px the menu was a 210px column beside every screen, pinned, but taller than a
+laptop's screen, so its last groups came into reach only at the foot of the page.
+
+Now, wider than 860px:
+
+- **One banner across the top**, pinned, 60px tall (59 and its rule): the height the top bar had
+  when it was the bar pinned at the top, so everything already pinned under 60px (the Festive Ball's
+  sections, the newsletter's composer bar) pins under the banner as it was. The top bar (the logo,
+  who is signed in, My account, Sign out) scrolls away, as it always has on a phone.
+- **A drop down for each of the five groups**, Monitor, Giving, Content, Governance and Admin, each
+  screen in its group as before. It opens on a click from any device, and on hover for a mouse only
+  (`(hover: hover) and (pointer: fine)`: a finger's tap fires mouseenter and then click, which would
+  open it and close it at once), one at a time. A mouse opens it after resting 100ms (so one crossing
+  the banner does not flash each group open) and closes it 300ms after leaving (so one that strays
+  off the edge does not lose it). A click on the head of one that hover opened keeps it open. It
+  closes on a second click, on Escape wherever the keyboard is, on a click anywhere else, when the
+  keyboard moves on out of it (but not when the focus goes to `<main>`, which holds the nav: that is a
+  click on a gap inside it), and when a screen in it is chosen. The down arrow on a head opens it on
+  its first screen, and the up and down arrows move along its screens.
+- **Choosing a screen** with the mouse lets go of the focus, so the arrow keys scroll the new screen
+  (Chrome gives a clicked button the focus, and left on the group's head the down arrow opened the
+  drop down again). Chosen from the keyboard (a click with `detail` 0), the focus goes back to the
+  group's head.
+- **New** on a group's head when any screen shown in it is new (TASK-478), and beside that screen
+  inside, as before.
+- **The group holding the screen on view** is marked: its name in crimson, underlined as a tab is
+  (`:has(.admin-nav-link.is-active)`, so the detail screens that clear the active link clear it too).
+- **The content takes the width**, up to 1280px, the banner's words lined up with its heading. Lists
+  that become cards measure their own width (container queries), so each simply has 210px more
+  before it does.
+
+The banner's block is `@media not all and (max-width:860px)`, exactly the phone menu's width turned
+round. As `(min-width:861px)` a window 860.5px wide (a zoom, or Windows display scaling) matched
+neither block, and the whole menu opened out over the page (found by the independent review). The
+last group's drop down opens to its left, so with New on several heads it cannot hang off an 861px
+screen even closed.
+
+A group shows while any screen in it does, its label in the phone menu and its drop down on the
+banner. It used to be the Admin label alone, shown for Team or Analytics (TASK-482), so Site pages
+and QR codes could sit under no label. A closed drop down is hidden with `visibility`, never
+`display:none`: restorableView (TASK-443) reads a link with no offsetParent as a screen your
+permissions hide, and a refresh would land on the Overview.
+
+At 860px and below nothing changed: the Menu button opens the same five groups. Each group's label
+is a `span.admin-nav-grouplabel` now, and the banner's `button.admin-nav-grouphead` is hidden there.
+Every screen's link kept its `data-view`, its gate and its words. `test/unit/admin-top-banner.test.ts`
+holds the list of links as they were and drives the drop downs in jsdom; the phone menu's tests did
+not change. Verified in headless Chrome at 1280, 1024, 900 and 390px: the banner 60px and pinned,
+each drop down inside the screen, the Festive Ball's sections pinned under the banner, nothing
+sideways, no inner scrollbars, every target at least 44px.
+
 ## The admin fits a phone (TASK-454)
 
 At 390px every screen of the admin was wider than the phone (535px as reported, 556px when measured
@@ -6301,9 +7425,12 @@ admin scrolls sideways, inside a box or otherwise:
 - **The menu was a line of twenty buttons that scrolled sideways** below 760px: 2,247px of buttons
   in a 366px strip.
 - **So was the Festive Ball's jump bar**: 381px in 358px, with "Send something" off the edge.
+  (The jump bar went in TASK-571: see [The new look](#the-new-look-task-571).)
 
 Below **860px** (it was 760px) the menu leaves its 210px column and becomes one pinned **Menu**
 button that opens the whole list, wrapped into its five groups, every button at least 44px tall.
+(Wider than 860px there is no column since October 2026: the menu is the banner across the top, see
+[The banner across the top](#the-banner-across-the-top-october-2026).)
 Pinned, because the complaint that pinned it in TASK-422 still stands: changing section should
 never mean scrolling back up a long page. Where closing leaves you depends on why it closed:
 
@@ -6328,6 +7455,8 @@ Two details are deliberate, and each was found by measuring:
 
 The jump bar wraps (two rows, 101px, at 390px) and sits at `top:61px` under the menu, and
 `.admin-band`'s `scroll-margin-top` is 177px there, so a jumped-to heading clears both bars.
+(Both went in TASK-571. The Festive Ball's section bar pins at `top:61px` from 761 to 860px;
+narrower it is not pinned, since its three rows would cover a third of a phone's screen.)
 
 Verified in a real browser on all 21 screens at 320, 360, 375, 390, 768, 860, 861 and 1280px, and
 again in headless Chrome emulating a 390px phone (the ticket's own method): `scrollWidth` equals the
@@ -6378,6 +7507,59 @@ screen, the Overview's recent donations and donation search results, so all thre
   equalled the viewport at every phone and tablet width, and no box scrolled.
 - **Tests:** `admin-fits-a-phone.test.ts` pins the CSS. `admin-app.test.ts` checks every cell's label
   on all three lists.
+
+## The Stories list on a phone (TASK-561)
+
+At 390px the Stories table could not be read. Its seven columns were about 51px each before the Read
+tick (TASK-560) and about 42px with it, rows were 262 to 548px tall, and every word was stacked a
+letter or two a line. Where the list is narrower than 760px, each story is now a card, as a donation
+is:
+- **"Story 40"** heads the card: the ID, with the word in front of it;
+- **every other fact** is on its own labelled line: Read (the tick), Role, Scope / consent, Status,
+  Consent age and Submitted;
+- **the View button** comes last, at least 44px each way;
+- **the tick** keeps its 44px target and behaves as on the table. A failed save still shows "Not
+  saved" in the status's place and moves no card.
+
+This was the client's choice ("Yes, cards on a phone"). Wide, the table is unchanged: measured at
+1040 and 1280px, every row is the height it was, to a tenth of a pixel.
+
+**760px, the same as donations.** Measured, the stories table starts to break sooner than that: its
+dates begin to split at a list of about 845px, and all of them are split at 805px. It stays a table
+down to 760px so that the two lists change together, and because between the two it is cramped but
+every cell can still be read. Cards there would make twelve stories about three times as long to
+scroll. Because the change measures the list, not the screen, a screen up to about 1025px wide with
+the side menu showing also gets cards.
+
+**How it works:**
+- **It measures the list itself:** `storiesTable` in `assets/js/admin/app.js` wraps its table in
+  `.st-list`, a container (`stlist`).
+- **Every cell carries a `data-label`.** The cards show it with `::before`, and the headings are
+  hidden in a way screen readers still read.
+- **Three differences from the donations cards:**
+  - The labels are 6.75rem wide, not 6rem. "Scope / consent" measures 102px and broke onto two
+    lines on every card at 6rem. At 320px that still leaves a value 140px.
+  - The heading is the ID with a word in front (`content:"Story "`), because a story has no name.
+    The cards depend on the column order for this, and for the tick: `admin-fits-a-phone.test.ts`
+    checks the headings `app.js` draws.
+  - The Scope / consent and Status cells keep what they hold in one box (`.st-value`). A card's
+    line is a row, a label then a value. Without the box each pill would be its own piece of the
+    row and could not wrap with the others, and the sentence would sit beside the status, not
+    under it. On the table the box changes nothing.
+- **The Read line.** On the table the first column is a fixed 3.75rem and the tick's label pulls
+  itself up and down by 11px, both to fit a 44px target into a table row. In a card the line takes
+  the card's width and the label pulls itself 10px each way, which leaves the line the height of a
+  line of text with the target still 44px.
+- **"Not saved" no longer needs to wrap on a phone.** That rule existed because the table's columns
+  there were narrower than the pill; it is gone.
+
+**Checked:**
+- **Browser:** 320, 375, 390, 768 and 1024px (cards; the list is 751px at 1024) and 1040 and 1280px
+  (the table). `scrollWidth` equalled the viewport at every width and no box scrolled. On a phone,
+  with real presses: a tick saved and no card moved; a failed save showed "Not saved" and no card
+  moved or grew; View opened the story.
+- **Tests:** `admin-fits-a-phone.test.ts` pins the CSS. `admin-stories-read-tick.test.ts` checks the
+  wrapper, every cell's label and the two value boxes, and presses the tick on the new markup.
 
 ## The Events switch fits the smallest phones (TASK-455)
 
@@ -7056,9 +8238,9 @@ a name we supplied ourselves — and "no such table" is reported as exactly that
 
 ## The Events page (TASK-453)
 
-**Renamed Get involved in TASK-494**, at `/get-involved`, with community fundraisers alongside the
-events: see **Community fundraising, the public pages (TASK-494)**. `/events` is now a permanent
-redirect there. What follows describes the events part, which is unchanged.
+**Widened in TASK-494** with community fundraisers alongside the events: see **Community fundraising,
+the public pages (TASK-494)**. It lives at `/whats-on` now, and `/events` is a permanent redirect
+there. What follows describes the events part, which is unchanged.
 
 A public page at **`/events`**: every upcoming event as a card in a deck, soonest first, with a face
 down "more on the way" card last. The front of a card is the picture and the gist, with the date in
@@ -7094,14 +8276,14 @@ layer and the page:
   link (unless there is nothing to book) and, for someone else's event, their name;
 - an event is on the page up to and including its own day (UK time), then moves to Past.
 
-**One renderer**, `src/events/render.ts`, fills `events.html` (the template's deck holds a
+**One renderer**, `src/events/render.ts`, fills `whats-on.html` (the template's deck holds a
 `<!-- events:deck -->` marker) and produces the admin's previews, so staff see exactly what the
 public will. Everything typed is escaped; `*stars*` become bold only after escaping.
 
 **Data.** Three new tables (additive): `events_settings` (one row, the switch, off by default),
 `events` (a column per form field, with CHECK constraints matching the validation) and
 `event_images`. Every change writes its `audit_log` row in the same transaction. The seed migration
-adds EmpowHer '26 and the Festive Ball as live events, with the switch still off. `events.html` is
+adds EmpowHer '26 and the Festive Ball as live events, with the switch still off. `whats-on.html` is
 in the Dockerfile's explicit page list.
 
 **EmpowHer's leaflet (TASK-456, taken off in TASK-472).** `1789100000003_events-empowher-leaflet.js` puts the organiser's
@@ -7201,6 +8383,86 @@ the place seam, the handler, the SQL, the route's 204s, pulse.js itself in jsdom
 carry it, the retention wiring and the privacy section). BDD: `features/analytics-pulse.feature`
 against Postgres, and the backfill scenarios in `features/admin-permissions.feature`.
 
+## Admin > Get involved: NBCC's own events and fundraising in one tab
+
+The admin's **Events** and **Fundraising** tabs are one tab, **Get involved**, named after the public
+page they both feed (`/get-involved`). It was a move, not a rewrite: every card kept its id, its code,
+its routes and its permissions. The **Festive Ball** tab is untouched.
+
+**Five sections**, one showing at a time, chosen with a row of buttons under the heading (the
+admin's own segmented control, `#giSections`; real buttons with `aria-pressed`; arrow keys, Home and
+End move along them; on a phone the row wraps onto two lines, and nothing scrolls sideways or
+inside a box). Each starts with one line saying what it is for.
+
+| Section | What is in it | Permission section |
+|---|---|---|
+| **Sign ups** (opens first) | The list of supporters' sign ups and each one's panel, with the kind filter and the status filter | `fundraising` |
+| **Our events** | NBCC's own events: the Festive Ball ticket report card, the list, the editor and the page preview | `events` |
+| **Tickets and pledges** | Event tickets, Sponsor pledges | `fundraising` |
+| **Emails** | Invite someone, Automatic emails, All emails | `fundraising` |
+| **Settings** | "Is the Get involved page on the website?" (`events`), then Fundraising on the website, Categories, What gifts could do, Weekly summary (`fundraising`) | either |
+
+**Who sees what** is exactly as it was when they were two tabs. The menu entry shows to anyone who
+may view `events` or `fundraising` (`data-view-gate-any="events fundraising"`, read by
+`applyNavFiltering`). Inside, `giOpen` hides the section buttons a person may not see and opens on
+the first they can: someone with only `events` gets Our events and Settings (with the page switch
+alone); someone with only `fundraising` gets the other four (Settings without the page switch);
+someone with neither does not get the tab. View against edit, and the controls only an admin has,
+are decided by the same code as before. The server is still the real gate on every route.
+
+**Markup.** `#view-get-involved` is the tab. Inside it two boxes keep the old tabs' ids,
+`#view-events` and `#view-fundraising`, because `admin.css` and the card scripts are written against
+them and because they are still the two permission sections. Inside those, each `[data-gi-part]`
+belongs to one section button (`data-gi-section`); Settings has a part in both boxes.
+
+**Every old way in still works** (`selectView` in `app.js`): the names `events` and `fundraising`
+still mean something, as the server uses them for the Overview's buttons and the New pills.
+
+| Old way in | Where it lands now |
+|---|---|
+| Overview button with `view: "fundraising"` (Needs you, How we are doing, Coming up) | Get involved, Sign ups. The button reads "Get involved" |
+| Overview button with `view: "events"` (an event coming up; "The Festive Ball ticket report goes out") | Get involved, Our events. The button reads "Get involved" |
+| A browser tab that remembered `events` or `fundraising` before this change (`nbccAdminView`) | The same two sections, if the person may still see them |
+| "Read and approve these in All emails" (Automatic emails, Sponsor pledges), "Approve it in All emails" (Invite someone), "Read its automatic emails" (an open sign up): any `[data-allemails-open]` | Emails, with the All emails card open at that group or email |
+| New pill for area `fundraising` or `events` | On the Get involved menu entry, and on the Sign ups or Our events button. Showing Sign ups records the visit to `fundraising`, and showing Our events the visit to `events`, once each time the tab is opened: coming back to a section does not record another, so the rows' New pills stay while you work |
+
+The section you were on is kept for the browser tab (`nbccAdminGiSection` in `sessionStorage`), so a
+refresh returns to it, as it returns to the tab.
+
+**A section loads when it is shown**, not when the tab opens, and again each time you come back to
+it. Opening the tab reads Sign ups only (the list and what its rows and panels need). Our events
+reads the events and the Ball ticket report; Tickets and pledges its two cards
+(`event-tickets.js` and `pledges.js` watch their own part); Emails the invites, the automatic
+emails and the All emails count (`all-emails.js`; the emails themselves still wait for the card to
+be opened); Settings the two switches, Categories, What gifts could do and the Weekly summary.
+Nothing of the tab is asked for at sign in. Emails, shown first (a refresh while on it), also asks
+for the sign ups, as All emails offers them under "Show it for"; `app.js` says
+`nbcc:fundraisers-loaded` on `#view-fundraising` when they arrive and `all-emails.js` fills any
+open picker again. The event previews are never fitted while Our events is off screen (a hidden
+frame measures nothing) and are fitted again when it comes back.
+
+**The kind of each sign up.** Sign ups stay one list. Each row has a large pill saying its kind, in
+words as well as colour: **Raising money**, **A team**, **Hosting an event** or **In memory** (the
+invite types' own words). `frKindOf` works it out from what the list already holds: `inMemory`
+first; then a team (`isTeam`) or a member's own page while they are on one (`teamId` and no
+`teamLeftAt`); then `path === "event"`; else raising money. Above the list, **All, Raising money,
+A team, Hosting an event, In memory** (the pills' own words), each with its count of every sign up.
+The line under a row's title is the organiser and the date only, and there is no small Team or In
+memory pill: the kind is said once. A member's row still says "Joining" or "On the team" and which. It works alongside the status
+filter (a row must pass both), and is kept for the visit: through a refresh (`nbccAdminFrKind` in
+`sessionStorage`), not past signing out, and it is cleared when you are sent to the sign ups by name (an Overview button),
+so "3 new sign ups" never lands on a filtered list. Colours are the site's tokens, all past WCAG AA for their
+text: maroon on a tan tint (7.3 to 1), dark holly on the holly tint (10.8 to 1), cream on maroon
+(10.1 to 1), and for In memory, the quietest, soft slate on cream with a hairline (4.9 to 1).
+
+**Wording.** The page has been Get involved since TASK-494, and the screen now says so: "Is the Get
+involved page on the website?", its questions and answers, and "NBCC's own events on the Get involved
+page".
+
+Tests: `test/unit/admin-get-involved-tab.test.ts` (the sections, the pills and filter, each
+permission combination, each old way in, what each section fetches and when, the wording, and the
+Ball ticket report in its new place) and `features/admin-get-involved.feature`.
+
 ## Admin > Analytics (TASK-482)
 
 Part 4 of site analytics: the page that shows the numbers TASK-479 counts. Admin > Analytics, in the
@@ -7265,10 +8527,22 @@ analytics area). BDD: `features/analytics-admin.feature` against Postgres (the p
 audited switch, and the figures from seeded page views, including a gap of over 30 minutes that
 splits a visit and one of exactly 30 that does not).
 
+**The styles came back (TASK-557).** From 3 to 5 October 2026 this screen and **QR codes** drew as
+unstyled text: no cards, no bars, the visitors line a black shape. TASK-513 restyled the Fundraising
+switch by replacing everything between two copies of one comment in `assets/css/admin.css`
+(`/* ---- the switch, as the Events page's ---- */`, once above the Analytics switch and once above
+the Fundraising one), and the 183 lines between them went with it: every `#view-analytics` rule,
+every `#view-qr` rule and the Fundraising section's heading. No check failed, because no test read
+the stylesheet. The lines are back exactly as they were (107 selectors, each scoped to one of the two
+screens, so no other screen changed), and `test/unit/admin-screen-styles.test.ts` now reads it: every
+`an-` and `qr-` class the page or `app.js` uses must have a rule scoped to its screen, and across the
+whole admin no family of five or more classes (`an-`, `qr-`, `fr-`, `nl-`, `fx-`…) may be left with
+most of its names unstyled, which is what a deleted block looks like on any screen.
+
 ## Community fundraising (TASK-493)
 
 People sign up at `/fundraise` to raise money for NBCC or to hold an event (a bake sale, a quiz).
-Staff approve every one in **Admin > Fundraising** before anything about it is public. An approved,
+Staff approve every one in **Admin > Get involved** before anything about it is public. An approved,
 public, raising money fundraiser gets its own page at `/fundraise/<slug>` with a meter and a
 supporter wall, and giving on it goes through the donate page's checkout. Organisers change their
 page by an emailed link, and every change waits for staff. Design:
@@ -7388,7 +8662,7 @@ Two more yes or no questions on the sign up form, on both paths, with nothing ch
 - **The lock.** Organisers can never change the split: the private area's changes (`editSchema`)
   and staff's ordinary edit (`adminPatchSchema`) do not take it, and an approved change can only
   write the columns in `COLUMNS`. Only an admin may correct it, with
-  `PUT /api/admin/fundraisers/:id/split` (Admin > Fundraising, "Sharing with another cause"), and
+  `PUT /api/admin/fundraisers/:id/split` (Admin > Get involved, "Sharing with another cause"), and
   only while the fundraiser has no gifts: `setFundraiserSplit` counts its donations and cash paid in
   under the row's lock, and refuses with `409` once there is any. Every correction is audited
   (`fundraiser.split_changed`, with the split before and after).
@@ -7569,15 +8843,19 @@ waiting one first. `cash` rows are `{ id, amountPence, paidInOn, note, createdBy
 showAmount, amountPence, refundedPence, message, hidden, createdAt }`. Refusals are
 `{ error }` in plain English: `400` (with `fields`), `403`, `404`, `409`.
 
-Admin > Fundraising has a **New pill** (area `fundraising`, lit by each new sign up). Its line in the
+Admin > Get involved has a **New pill** (area `fundraising`, lit by each new sign up). Its line in the
 admin's new features list arrives with the screen itself (TASK-495, below).
 
-### The admin screen: Admin > Fundraising (TASK-495)
+### The admin screen: Admin > Get involved (TASK-495)
 
-In Content, after Events. The menu link shows to anyone with `fundraising` view; changing anything
-needs edit; the switch needs an admin as well. Markup `#view-fundraising` in `admin.html`, code the
-`fr` block in `assets/js/admin/app.js` (`loadFundraising`), styles at the end of
-`assets/css/admin.css`. It is built from the admin's own parts: the Events switch card, the Events
+Fundraising is four of the five sections of the **Get involved** tab (see
+[Admin > Get involved](#admin--get-involved-nbccs-own-events-and-fundraising-in-one-tab)): Sign ups,
+Tickets and pledges, Emails and Settings. They show to anyone with `fundraising` view; changing
+anything needs edit; the switch needs an admin as well. Markup `#view-fundraising` (a box inside
+`#view-get-involved`) in `admin.html`, code the `fr` block in `assets/js/admin/app.js`
+(`loadFundraising` loads Sign ups; `frLoadEmailsSection` and `frLoadSettingsSection` the cards in
+those sections; Emails also loads the sign ups if nothing has yet, for All emails' "Show it for"),
+styles at the end of `assets/css/admin.css`. It is built from the admin's own parts: the Events switch card, the Events
 status chips and Business supporters' rows that open in place.
 
 - **The switch**, as on Events: an admin can switch fundraising on or off after a question; everyone
@@ -7641,17 +8919,17 @@ and email) and the sign off. Plain English, no dashes, every stored value escape
 | `fundraiseThanks` | the address typed in the form | they sign up | "Thank you, you've made our day!", what happens next. Greets "Hi there <first name>," only with a safe first name (`safeFirstName`: put together first (NFC), then the first word, Latin letters only, accents included, with apostrophes or hyphens inside, at most 20 characters; another script, a lookalike or an invisible letter is refused), otherwise "Hi there,". No other typed words, since anyone can type any address |
 | `fundraiseStaff` | `events@` (Reply-To the organiser) | they sign up | "Exciting news: a new fundraiser!", everything they told us and asked for, Next steps. Staff only, so its links are never tagged |
 | `fundraiseApproved` | the organiser | approved with a page (raising money and public) while fundraising is on, or at the switch on (below) | "Your page is live!", the page link and three things to do today |
-| `fundraiseApproved` | the organiser | approved with no page (private, or an event) | "You're on our list!" |
+| `fundraiseApproved` | the organiser | approved with no page: one that is not shown on the website | "You're on our list!", which says "As you asked, we won't show it on our website." (left out when staff changed the website choice in the admin, or when that cannot be read) |
 | `fundraiseManage` | the organiser | (retired by TASK-501) | the 24 hour link; no longer sent, still named on the Email audit for the rows already there |
 | `fundraiseCode` | the email asked for | they ask for a sign in code (TASK-501, email 8) | "Here's your code": the 6 digit code in its box, works for 10 minutes, what is inside the private area, "Didn't ask for this?", "Happy fundraising!". Subject "Your NBCC sign in code: 482 915"; the Email audit keeps the subject without the code |
 | `fundraiseFinishedStaff` | `events@` (Reply-To the organiser) | the organiser presses "I've finished" (TASK-501), once | "A fundraiser says they've finished": who, what it has raised, next steps. Staff only, so never link tagged |
 | `fundraiseEditApproved` | the organiser | staff approve their waiting change | "Your update is live!" with the page link while their page is up (raising money, public, approved and fundraising on); otherwise "Your update is saved!", with no page link |
 | `fundraiseEditRejected` | the organiser | staff reject their waiting change | "About your update": not used yet, we'll give you a ring; "your page is still live" only while it is up, otherwise "everything stays just as it was" |
-| `fundraiseInvite` | the person invited | staff send or resend an invite from Admin > Fundraising (TASK-503, email 7) | "We'd love you to fundraise with us!", the personal note in a quote box, **Make my page** to the form filled in with their name and email, signed "Warmest wishes," with the first name chosen under Signed by, then "NBCC Team", and the questions box. Subject "We'd love you to fundraise with us" |
+| `fundraiseInvite` | the person invited | staff send or resend an invite from Admin > Get involved (TASK-503, email 7) | "We'd love you to fundraise with us!", the personal note in a quote box, **Make my page** to the form filled in with their name and email, signed "Warmest wishes," with the first name chosen under Signed by, then "NBCC Team", and the questions box. Subject "We'd love you to fundraise with us" |
 | `fundraiseNewsApproved` | the organiser | staff approve a news update they posted (TASK-506) | "Your news update is live!" with the page link while their page is up; otherwise "Your news update is saved!". "Thanks so much," and the questions box |
 | `fundraiseNewsRejected` | the organiser | staff do not use a news update (TASK-506) | "About your news update": not on the page, we'll give you a ring; never the internal reason. "Speak soon," and the questions box |
-| `fundraiseSummary` | each address on the Weekly summary list | Mondays at 8am (TASK-503, email 11), or Send a test now (to the admin pressing it, marked as a test) | "Good morning, team!": last week's money, new sign ups, Waiting on us, Coming up, Open the admin, "Have a brilliant week,". Staff only: no questions box, never link tagged. Subject like "Fundraising this week: £1,240 raised, 10 things waiting" |
-| `fundraiseSupporterThanks` | a giver the organiser picked, who can be emailed | staff approve the organiser's thank you (TASK-507, email 20), in the background, one at a time | "A thank you from Sam": the organiser's message in a quote box, "And from all of us: thank you too.", "Thanks so much,", the questions box. From and Reply-To the events inbox. See **Thank your supporters (TASK-507)** |
+| `fundraiseSummary` | everyone on the Weekly summary list, in one email with all of them on the To line (nbcc.scot addresses only) | Mondays at 8am (TASK-503, email 11), or Send a test now (to the admin pressing it, marked as a test) | "Good morning, team!": last week's money, new sign ups, Waiting on us, Coming up, Open the admin, "Have a brilliant week,". Staff only: no questions box, never link tagged. Subject like "Fundraising this week: £1,240 raised, 10 things waiting" |
+| `fundraiseSupporterThanks` | a giver the organiser picked, who can be emailed | staff approve the organiser's thank you (TASK-507, email 20), in the background, one at a time | "A thank you from Sam": the organiser's message in a quote box, "And from all of us: thank you too.", the charity's description, "We'd love to keep in touch" with a "Join our mailing list" button (`/newsletter`) and a link to `/whats-on`, "Thanks so much,", the questions box (in memory: the one closing line, no keep in touch). From and Reply-To the events inbox. See **Thank your supporters (TASK-507)** |
 
 **Approved while fundraising is off.** The old "you're approved, your page will appear when our pages
 open" email is retired. A page holder approved while fundraising is off gets no email then: the
@@ -7663,7 +8941,7 @@ statement, so a restart part way loses at most the one in flight and a second sw
 nobody twice), reads the switch again before each, and stops if fundraising has been switched off
 meanwhile. A send that fails is logged and that fundraiser marked as waiting again, for the next
 switch on; nothing about the emails can fail the switch. Declining or finishing clears the mark.
-Admin > Fundraising says all this in its questions: approving a page holder while fundraising is off
+Admin > Get involved says all this in its questions: approving a page holder while fundraising is off
 says nothing is emailed yet, switching on says "Your page is live" goes to the waiting fundraisers
 (with how many), and rejecting a change says the organiser is emailed a short, kind note.
 Every email goes after its write has committed, best effort: a failed send never fails the answer.
@@ -7701,6 +8979,61 @@ sign off in both parts), `fundraising-send`, `fundraisers-db`, `admin-fundraisin
 
 What the public sees of community fundraising (stage 1), built on the API above. Design:
 `docs/superpowers/specs/2026-10-02-community-fundraising-design.md`.
+
+**The one minute film on Get involved.** While fundraising is switched on, the page carries NBCC's
+one minute film, "Got an idea?", in the Fundraise section (`src/fundraising/film.ts` holds the markup;
+`renderNewGetInvolvedPage` puts it in that section, and a few lines of script where `get-involved.html`
+has `<!-- getinvolved:film-head -->`). With fundraising off, neither is in the page. It plays on that
+page only, so it never starts by itself in two places: What's on has no film.
+
+- **A first visit:** the film is full size and plays by itself with the sound off (no browser allows
+  anything else) once at least half of it is on screen, with captions showing and a **Play with
+  sound** button on it. That button starts it again from the beginning with sound and the browser's
+  own controls. Beside it is a quieter **Pause** button (it reads **Play** once paused), and a click
+  on the film does the same: anything that moves by itself must be stoppable (WCAG 2.2.2). A pause
+  the visitor asked for sticks. While it is playing by itself it also pauses when scrolled well away
+  or when the tab is hidden, and it does not start again once it has played to the end. Scrolling
+  past before it has started is not a refusal (the `AbortError` from our own pause is ignored): it
+  still starts when they scroll back, and nothing is noted.
+- **Any later visit:** a slim strip in the same place, a small picture and **Watch our one minute
+  film**, so the events are seen straight away. Pressing it opens the film there and plays it from
+  the start with sound and controls, scrolled into view clear of the fixed menu bar; **Close the
+  film** folds it away again.
+- **Which of the two** is decided before the page is drawn: the script in the head, ahead of the
+  stylesheets, puts
+  `film-first` or `film-later` on `<html>`, and `events.css` shows the film or the strip from that
+  class alone, so the film never appears and then folds away. `initFilm` in `assets/js/events.js`
+  reads the class once and never changes it, so the film stays full size for the whole of a first
+  visit. Without JavaScript the film is a plain player with the browser's controls.
+- **"Seen"** is one note in the visitor's own browser: local storage, key `nbcc-film-seen`, written
+  when the film is really playing, or when play is pressed, or when it is offered as a still. It is not a cookie and it is never sent to the server
+  (`privacy.html` says so, under What we collect). A browser with storage switched off gets the strip.
+- **Less motion, data saving or a slow connection** (`prefers-reduced-motion`,
+  `navigator.connection.saveData`, or an `effectiveType` of `slow-2g`, `2g` or `3g`), or a browser
+  that refuses to play: a first visit shows the still with a **Play the film** button
+  instead, nothing plays by itself, and it counts as seen.
+- **Nothing of the film is downloaded until it plays.** The video is `preload="none"` with no
+  `poster` of its own (the still is a background of the frame, so a folded away film asks for no big
+  picture; `initFilm` gives the video its poster when the film is shown). The frame keeps its 16:9
+  room, so nothing below it jumps.
+- **Captions and the words.** `assets/video/get-involved-film.en.vtt` is the voice-over script as
+  NBCC supplied it, each caption timed to its speech in the film's own sound. The same words are
+  under the film as a folded away **Read what the film says**. `FILM_LINES` in
+  `src/fundraising/film.ts` and the captions file must say the same thing;
+  `test/unit/get-involved-film.test.ts` holds both to the script.
+- **The files** are in `assets/video/`: `get-involved-film.mp4` (13.3 MB, 1920 by 1080, H.264, its
+  index at the front so it plays as it arrives), `get-involved-film-poster.jpg` (the frame at 4
+  seconds, 1280 wide), `get-involved-film-thumb.jpg` (the strip's picture) and the captions. The
+  Dockerfile's `COPY assets ./assets` takes them into the image. `express.static` serves them with
+  byte ranges; `assetHeaders` in `src/routes/site.ts` lets a browser keep anything in
+  `/assets/video` for a week (every other asset is still checked on each visit), so **a changed
+  film, captions file, poster or small picture must ship under a new file name** (and the new name
+  put in `src/fundraising/film.ts` and `events.css`), or returning visitors keep the old one for up
+  to a week. `test/unit/get-involved-film-served.test.ts` checks the
+  type, the ranges, the cache header and the image.
+- **Not counted.** The visit counter (`assets/js/pulse.js`) only records the kinds of click in
+  `CLICK_KINDS` (`src/analytics/payload.ts`); counting "film played" would need a new kind there, so
+  it is left out for now.
 
 **Get involved (`/get-involved`).** The Events page, renamed and widened. The menu item reads "Get
 involved" everywhere it is added (`src/events/nav-link.ts`), and `/events` redirects for good,
@@ -7819,13 +9152,13 @@ site maps under `/fundraise` while fundraising is on.
 
 **Where it lives.** Drawing: `src/fundraising/render.ts` (pure, unit tested). Routes:
 `src/routes/fundraise-pages.ts`, added to the site router before its catch-all. Templates:
-`events.html` (Get involved), `fundraise.html`, `fundraiser.html`, `fundraise-manage.html`, `fundraise-help.html` (all in
+`whats-on.html` (What's on), `get-involved.html` (Get involved, drawn by `src/fundraising/get-involved-page.ts`, styles `assets/css/get-involved.css`), `fundraise.html`, `fundraiser.html`, `fundraise-manage.html`, `fundraise-help.html` (all in
 the Dockerfile's page list). Scripts: `assets/js/fundraise.js`, `fundraiser.js`,
-`fundraise-manage.js`; styles: `assets/css/fundraising.css` and the Get involved part of
+`fundraise-manage.js`; styles: `assets/css/fundraising.css` and the What's on part of
 `events.css`. None of it touches `main.js` or `styles.css`, so donate.html's page weight budget is
 unchanged. Text boxes grow with what is typed rather than scroll.
 
-**Tests.** `fundraising-render`, `fundraise-pages-routes`, `get-involved-page`,
+**Tests.** `fundraising-render`, `fundraise-pages-routes`, `whats-on-page`, `whats-on-chips`, `get-involved-page`,
 `fundraise-signup-page`, `fundraiser-page`, `fundraise-manage-page`, `fundraise-help-page` and
 `fundraiser-checkout-contract` (unit, jsdom), and `features/fundraising-pages.feature` (the
 redirect, Get involved with fundraising on and off, a fundraiser's page (no QR code since TASK-501,
@@ -7896,7 +9229,7 @@ change; "Pay in what you collected"; and "I've finished".
 - **I've finished.** Records `fundraisers.finished_requested_at` (the first press is kept), emails
   the events inbox once (`fundraiseFinishedStaff`, staff only so never link tagged, Reply-To the
   organiser), and says "Thank you, we'll be in touch." It finishes and hides nothing: staff still
-  press Mark finished. Admin > Fundraising shows a **Says they've finished** pill on the row and the
+  press Mark finished. Admin > Get involved shows a **Says they've finished** pill on the row and the
   date in the detail while it is approved.
 
 **Security.**
@@ -8073,7 +9406,7 @@ Tests: `fundraising-giving.test.ts` (the sums, the rules, the drawn page), `fund
 
 ## Community fundraising, the team's tools (TASK-503)
 
-Four tools for the staff who look after fundraisers, all in **Admin > Fundraising** (section 5 of
+Four tools for the staff who look after fundraisers, all in **Admin > Get involved** (section 5 of
 `docs/superpowers/specs/2026-10-02-fundraising-stage-1b-part-1-design.md`). Nothing here adds a
 config value: who gets the Monday summary is chosen in the admin and kept in the database.
 
@@ -8126,7 +9459,7 @@ The in memory wording is **held for sign off** like new automatic email wording,
 its email to read under "Read the email they will get" (an example, never a real link, signed by the
 signer chosen in the form and read again when that changes); for In memory
 it opens by itself and says whether it is approved. It is approved, and its approval withdrawn, in
-the **All emails** card (admins only; see **All emails, in Admin > Fundraising**), not in the form.
+the **All emails** card (admins only; see **All emails, in Admin > Get involved**), not in the form.
 Until it is approved the Send button rests with "The in memory invite wording is waiting for sign
 off, so this invite cannot be sent yet." and a link, **Approve it in All emails** (**Read it in All
 emails** for an editor, who is told only an admin can approve it), which opens that card at the in
@@ -8190,7 +9523,27 @@ before.
 (after a question) and **Send a test now**, which sends this week's real summary marked as a test
 to the admin pressing it, and nobody else. Editors and viewers do not see the card. At 8am UK time
 on a Monday, the daily task (`npm run reminders`, the same scheduled run as the reminders) sends
-email 11 (`fundraiseSummary`), one email to each address, from and replying to the events inbox:
+email 11 (`fundraiseSummary`) as **one email with everyone on the To line**, from and replying to
+the events inbox, so **Reply all** reaches the whole team (it goes to the events inbox and to
+everyone else on the To line).
+
+**nbcc.scot addresses only.** Everyone on that email sees everyone else's address and every reply,
+so only the charity's own addresses may be on it: `nbcc.scot` exactly, whatever the capitals, never
+a subdomain (`news.nbcc.scot`) and never anywhere else (`isSummaryAddress` in
+`src/fundraising/summary.ts`). It is kept in two places:
+
+- **Saving.** Adding any other address is refused, on the screen and by the server (`400`), with
+  "Only nbcc.scot addresses can get the weekly summary." An address from elsewhere that was on the
+  list before this rule may stay until an admin removes it, so the rest of the list can still be
+  changed; the card marks it "Not an nbcc.scot address, so it is left off the email." and does not
+  count it in "It goes to N people". With only such addresses on the list the card says "Off.
+  Nobody on the list has an nbcc.scot address, so no summary goes." No stored list was changed.
+- **Sending.** Any stored address from elsewhere is left off the To line. The daily task logs how
+  many were left off, never which. If that leaves nobody it is "nobody to send to", and the week is
+  not claimed.
+
+The email log has one row for each person on the To line, all carrying the one SES message id, so
+each person can still be found under Email audit and a bounce finds its own row. The email says:
 
 - last week's money (Monday to Sunday): online gifts less refunds, what organisers paid in and the
   cash staff recorded, the Gift Aid to claim on last week's gifts (a quarter of each gift after any
@@ -8213,9 +9566,11 @@ email 11 (`fundraiseSummary`), one email to each address, from and replying to t
 - **Coming up**: approved fundraisers dated in the next four weeks.
 
 It goes on Mondays only, and never twice for the same Monday: the week is claimed under a row lock
-before anything is sent (`fundraising_settings.summary_last_week`), and given back if no email
-went, so a rerun can try again. With nobody on the list nothing happens. A failed email is logged
-and the rest still go; nothing in it can stop the passes after it in the daily task.
+before anything is sent (`fundraising_settings.summary_last_week`), and given back if the email
+did not go, so a rerun can try again. With nobody on the list nothing happens. As it is one email,
+it goes to everyone on it or to nobody: the audit row (`fundraising.summary_sent`) keeps its shape,
+with `sent` the number of people on the To line when it went and `failed` that number when it did
+not. A failure is logged; nothing in it can stop the passes after it in the daily task.
 
 ### Routes
 
@@ -8235,7 +9590,7 @@ list against entity `fundraiser`, so it shows in that fundraiser's History).
 | `POST /api/admin/fundraisers/:id/calls` | edit | `{ which: "before" \| "after", note? }` | `{ call }`; `404` with no date |
 | `POST /api/admin/fundraisers/:id/off-list` and `/on-list` | edit | | `{ offListAt }`; `409` unless approved |
 | `GET /api/admin/fundraising/summary` | admin | | `{ recipients, lastWeek }` |
-| `PUT /api/admin/fundraising/summary` | admin | `{ recipients: [emails] }` | `{ recipients, lastWeek }`; `400` naming the address that needs another look |
+| `PUT /api/admin/fundraising/summary` | admin | `{ recipients: [emails] }` | `{ recipients, lastWeek }`; `400` naming the address that needs another look, and `400` "Only nbcc.scot addresses can get the weekly summary." for an address from elsewhere being added |
 | `POST /api/admin/fundraising/summary/test` | admin | | `{ sentTo }`, always the admin asking; `502` if it did not go |
 | `POST /api/fundraise/invite` | anyone | `{ token }` | `200 { name, firstName, lastName, email, path?, team? }` (`path` and `team` only for an invite with a type: where the form opens; `name` is the two joined, for a page loaded before the two boxes; an invite from before them has its one name split at the first space); `404` for any token that does not work |
 
@@ -8266,12 +9621,13 @@ Routes: `src/routes/admin-fundraising-team.ts` and `src/routes/fundraise-invite.
 the end of `assets/css/admin.css`; the form's lookup is in `assets/js/fundraise.js`. Unit tests:
 `fundraising-invite`, `fundraise-invite-routes`, `fundraise-invite-form`, `fundraising-follow-up`
 (including the clocks changing), `fundraising-summary` and `fundraising-summary-runner` (fixed
-clocks: Mondays only, once a week, nobody to send to, failures), `fundraising-team-emails` (emails 7
+clocks: Mondays only, once a week, nobody to send to, one email to everyone, nbcc.scot only,
+failures), `fundraising-summary-send` (one message, a log row each), `fundraising-team-emails` (emails 7
 and 11, html and text), `fundraising-team-db`, `admin-fundraising-team-routes` (admin, editor and
 viewer), `admin-fundraising-team-page` (the jsdom admin harness), `fundraising-team-migration` and
 `backup-plan`. BDD: `features/fundraising-team.feature` (an invite fills in the form and the sign up
 uses it up; taking a fundraiser off Get involved keeps its page; a viewer cannot record a call; only
-an admin chooses who gets the summary).
+an admin chooses who gets the summary, and only nbcc.scot addresses).
 
 ## Community fundraising, requests tracked to done (TASK-505)
 
@@ -8373,7 +9729,7 @@ and so the tab order, stays A to Z; on a phone it is one column. To start with:
 Bake sale, Birthday, Coffee morning, Party, Quiz, Run, Santa dash, School collection, Walk, Workplace
 collection, and Other.
 
-**Admins add more** in Admin > Fundraising, on the **Categories** card: type a name and Add to the
+**Admins add more** in Admin > Get involved, on the **Categories** card: type a name and Add to the
 form, and it is on the sign up form at once, in its place A to Z. They can **rename** one (the new
 name shows everywhere, on sign ups already made too) and **hide** one from the form (and put it back);
 Other is always on the form. Nothing is ever deleted, so every sign up keeps its category
@@ -8624,7 +9980,7 @@ fundraiser, counted in the database under the fundraiser's lock. Every update wa
 updates are listed below the form, newest first, each saying where it is up to: "Waiting for us to
 check", "On your page" or "Not used". A finished fundraiser keeps its list, with no form.
 
-In **Admin > Fundraising**, a sign up with updates waiting shows **Updates to check** on its row, and
+In **Admin > Get involved**, a sign up with updates waiting shows **Updates to check** on its row, and
 the open sign up has a **News updates** panel: each update with its words and its photo (fetched
 with the admin's own sign in, as a waiting photo has no public address, and shown small), and
 **Approve update** or **Don't use it**, with an optional reason that stays in the admin, for staff
@@ -8703,7 +10059,7 @@ library.
 
 | Piece | What it is |
 |---|---|
-| `poster` | A4 portrait: the logo, "Fundraising for NBCC", the title, date, time and place, a short line (the card line, or the description's first sentence, trimmed), the target, a big QR code and the address in words, and "Every pound helps the children, young people and vulnerable adults we support, all year round." The code is the public page's (`src/fundraising/qr.ts`, the same encoder as the SVG download); a public event's points at Get involved; one not on the website has no code and says nbcc.scot |
+| `poster` | A4 portrait: the logo, "Fundraising for NBCC", the title, date, time and place, a short line (the card line, or the description's first sentence whole: up to 240 characters, set smaller past 140 and 200, and left off rather than cut when longer, as on the social pictures), the target, a big QR code and the address in words, and "Every pound helps the children, young people and vulnerable adults we support, all year round." The code is the public page's (`src/fundraising/qr.ts`, the same encoder as the SVG download); a public event's points at Get involved; one not on the website has no code and says nbcc.scot |
 | `social` | Pictures to share: a square (1080 x 1080) and a story (1080 x 1920), drawn in the browser on a canvas by `assets/js/fundraise-social.js` (inlined into the page) and saved as PNGs by a Download button each. Title, "Fundraising for NBCC", the meter (optional, a tick box), the page address and the logo with white lettering |
 | `sponsor-form` | A4 landscape, two pages (12 rows, then 11 more and the totals): HMRC's sponsorship and Gift Aid declaration word for word at the head of each page (from HMRC's model "Sponsorship and Gift Aid declaration form", gov.uk), the charity name and number, the fundraiser's title, the columns HMRC asks for (full name, home address, postcode, amount, date paid, Gift Aid tick), totals, and "Please send this form back to us once you have paid the money in, so we can claim Gift Aid." With a page to give on, the heading of each page also says "Sponsoring online instead? Give on the page at <address>, and please don't add your name here as well." (never on the blank form or one in memory of someone). Shared with another cause: the split's lines end "NBCC can claim Gift Aid only on the part of each gift that comes to NBCC.", the foot says "Pay NBCC's <N>% in from your private area...", and the pages have 10 rows each (9 on page 1 when the event's name is over 60 characters or the other cause's name over 38; 9 on page 2 when the page address is over 52 characters, which is also drawn smaller in the heading), `sponsorRowCounts`. A blank one for anyone is at `/fundraise/sponsor-form` |
 | `certificate` | A4 landscape certificate of thanks: the organiser's name as they gave it, the title, the final total raised (Gift Aid apart, "+ £X Gift Aid" when there is some), today's date and "NBCC Team". The organiser's once the fundraiser is finished; staff can preview it at any time once approved |
@@ -8756,7 +10112,7 @@ one fundraiser. Below the form, **Your thank yous**, each with where it is up to
 check**, **Sending now**, **Sent to N supporters** (counts only, never who), or **Not sent**.
 Added by its own script, `assets/js/fundraise-thanks.js`, from a `<template data-thanks-pattern>`.
 
-**Admin > Fundraising.** A **Thank yous to check** pill on a sign up with any waiting, and a
+**Admin > Get involved.** A **Thank yous to check** pill on a sign up with any waiting, and a
 **Thank yous to supporters** panel in the open sign up: the organiser's words, the gifts it picked
 (each giver's name and amount, and later what happened to each), **Approve and send** and **Don't
 send** (with an optional reason that stays with staff), each after a question. A viewer sees it all
@@ -8778,7 +10134,7 @@ thank you once (`duplicate`), even with two senders at work: an earlier claim fo
 still sending counts as sent. A failed send is recorded and the run goes on;
 nothing throws. A gift left "sending" for 15 minutes (a restart part way) is marked failed rather
 than sent twice; gifts left queued (or sending, or a thank you left unmarked) are picked up the next
-time anyone opens Admin > Fundraising. When the last gift of a thank you is dealt with, it is marked
+time anyone opens Admin > Get involved. When the last gift of a thank you is dealt with, it is marked
 delivered and the counts are written to `audit_log` once; every run also ends by marking any
 approved thank you with nothing left to send (its mark failed, or its gifts all went with their
 donations), so none says "Sending now" for good.
@@ -8787,9 +10143,21 @@ donations), so none says "Sending now" for good.
 audit), in the approved words: "A thank you from Sam" (the organiser's first name only, and only if
 it is one plain word of letters; otherwise "A thank you for your gift"), "Hello,", "Sam asked us to
 pass this on to you, for your gift to **title**:", the message in a quote box, "And from all of us:
-thank you too. Your gift helps the children, young people and vulnerable adults we support, all year round.", "Thanks so much, NBCC
-Team", and the "Got any questions?" box with the events inbox. Nothing about any other giver, and
-never the organiser's address.
+thank you too.", then (2026-10-04) the charity's own description as its own paragraph
+(`ABOUT_NBCC_FULL` in `src/email/brand.ts`, once), a small heading "We'd love to keep in touch", "If
+you'd like to hear how your gift helps, join our mailing list. It's a few emails a year, and you can
+unsubscribe at any time.", the standard button "Join our mailing list" to `/newsletter`, and
+"There's lots going on, too. See what's coming up, and support the people fundraising for NBCC, on
+our What's on page." linked to `/whats-on`. Then "Thanks so much, NBCC Team", and the "Got
+any questions?" box with the events inbox. Nothing about any other giver, and never the organiser's
+address.
+
+The keep in touch part is an invitation only: the email adds nobody to any list, and the two links
+are the plain public pages built on `PORTAL_BASE_URL` (passed in as `baseUrl`), the same for every
+giver, with no token, no query string and nothing about the person. It is the same for an event
+page or a team page. A page in memory of someone has none of it: that version, from Jodie, keeps
+the single closing line "And from all of us: thank you too. Your gift helps the children, young
+people and vulnerable adults we support across South West Scotland, all year round."
 
 **The Monday summary** adds "N thank yous to check" to Waiting on us (one thing waiting each). If
 they cannot be counted, the summary still goes, without that line.
@@ -8916,14 +10284,14 @@ line the forms allow.
 `https://nbcc.scot/q/<fundraiser id>-<a4|a3|a5>` (`src/fundraising/material-codes.ts`), about 26
 characters, so the code stays small and easy to scan. `GET /q/:code` answers with a `302` to wherever
 the fundraiser is now, found by its **id**, never its address, so a printed code keeps working for
-good whatever its page's address becomes: its page, or Get involved for a listed event, with
+good whatever its page's address becomes: its page, or What's on for a listed event, with
 `utm_medium=qr&utm_campaign=f<id>-<size>`. It is `no-store` (an address change is followed at once)
 and `noindex`. Anything else (not one of ours, no such fundraiser, one that is new, declined or not on
 the website, fundraising switched off) falls through to the site's own 404; the target is always a
 path on our own site, so it can never send anyone elsewhere. The scan is counted the way every QR code
 is (TASK-492): the visit counter on the page it lands on records channel `qr` with the tag. So it
 shows in Admin > Analytics, "QR codes", named "Sam's Santa Dash, A4 poster" (`labelQrScans` with the
-fundraisers' titles), and per piece in Admin > Fundraising (`GET /api/admin/fundraisers/:id/scans`,
+fundraisers' titles), and per piece in Admin > Get involved (`GET /api/admin/fundraisers/:id/scans`,
 counted once per person per day from `analytics_views`). Nothing new is stored: like every visit, a
 scan is not counted for a browser that asks not to be tracked, and it is kept 13 months.
 
@@ -8940,7 +10308,7 @@ and square pictures stack down the middle; the two wide ones put the logo on the
 or a different size? Give us a call on 01292 811 015 or email events@nbcc.scot and we'll make it for
 you. Please don't make your own versions of our logo or materials."
 
-**Download everything (staff).** Admin > Fundraising has a "Download everything" button on an
+**Download everything (staff).** Admin > Get involved has a "Download everything" button on an
 approved or finished sign up: `GET /api/admin/fundraisers/:id/materials/everything` (fundraising:
 view) is every printed piece on one page, one after another, each on its own paper (named `@page`
 rules: A4 poster, A3 poster, A5 leaflet, the two sponsor form pages, and the certificate once
@@ -8973,6 +10341,74 @@ where each is up to (`print` in `GET /api/fundraise/manage/me`: `{ canAsk, poste
 | Naming the scans in Analytics | `src/db/analytics-report.ts`, `src/site/qr.ts` (`labelQrScans`) |
 | The five pictures and the zip | `assets/js/fundraise-social.js` |
 | Tests | `test/unit/materials-statement.test.ts`, `fundraising-material-codes.test.ts`, `fundraising-materials-v2.test.ts`, `fundraise-materials-v2-routes.test.ts`, `fundraising-print-requests.test.ts`, `fundraiser-materials-db.test.ts`, and additions to the TASK-504 tests, the private area, admin, logo pack, Analytics label and social picture tests; BDD `features/fundraising-materials-v2.feature` |
+
+## The fundraising and events emails: one style, and the agreed wording changes (2026-10-04)
+
+Jaimie read all 69 fundraising and events emails and agreed a set of changes. They cover the
+fundraising, team, in memory, pledge, event page and ticket emails, and the staff notices about
+them. **The Festive Ball emails (46 to 56) and the Ball's staff notice (69) are deliberately left
+exactly as they were until after the Ball on 7 November 2026**, apart from the "A week to go"
+reminder (55): when it is sent, and that it says the true time to go when it is not a week (see
+"The week-before reminder" under the Festive Ball). The newsletter, donation
+receipts, Gift Aid emails and business outreach are not touched.
+
+**One style** (guarded by `test/unit/email-one-style.test.ts`, which builds every email in scope):
+
+- **Apostrophes are straight (`'`) everywhere**: subjects, HTML and plain text. The names and titles
+  people type, the footer's postal address and the ready-made team message are always straight, so
+  this is the one rule under which a whole email is one kind, and it is the safest in a subject and a
+  plain text part.
+- **Money**: whole pounds with no pence (£10), pence only when the amount is not whole (£10.50).
+- **Dates** are written by ONE helper, `src/email/dates.ts`: `emailDate()` gives "Saturday 7th
+  November" (with the year where one is shown), plain, for a subject, a plain text part and anything
+  else that cannot carry markup; each email's shell passes its body through `raiseOrdinals()`, which
+  raises the st, nd, rd or th (`7<sup>th</sup>`) wherever a day is followed by its month, and never
+  inside a tag. A staff notice that showed a stored date ("2026-12-05 at 10:00") uses it too.
+- **Staff notices (57 to 68)** sign off "Thank you!" then "NBCC Team" (`STAFF_SIGN_OFF`), except 58,
+  the notice about a new page in memory of someone, which stays deliberately quiet: "Thank you."
+
+**In memory emails** (the invite, the receipt, the two "page is live" emails, the thank you to a
+giver on an in memory page, and the sign in code): open "Dear [first name]," (`dearGreeting`;
+"Hello," when there is no first name we can use), have "In memory" above the heading, sign off
+"With warmest thoughts,", and have no exclamation marks. The **sign in code** has a gentle version
+for anyone with a page in memory of someone (`buildSignInCodeEmail(..., { gentle: true })`, asked
+for by `postManageRequest` when any of their pages is in memory); everyone else's is unchanged.
+
+**A page for someone under 18**: the automatic emails go to the parent or guardian, and
+`buildTouchEmail` now writes them for the parent throughout ("Jack's page", "Jack has raised",
+"Jack is doing great!"; "the page for James" for a name ending in s, which `greetGuardian` now
+says in the other under-18 emails too). The child's name is only ever a safe first name (one word of
+letters, as their page shows it); anything else reads "your child", and the subject drops the name. It builds the greeting itself
+("Hi Sarah, this is about Jack's page."). `touchEmailAsSent` is still the ONE function the daily
+run, Mark finished, the admin preview and All emails call; it no longer adds the greeting itself
+(the builder has written it), so it can never be put on twice. An adult's emails are byte for byte
+as they were.
+
+**A new email, "[First name] has joined [team name]"** (`buildTeamMemberJoinedEmail`, sent by
+`sendTeamMemberJoined` in `src/fundraising/team-send.ts`, logged as `fundraiseTeamMemberJoined`):
+to the team organiser when staff approve a new team member's page, once the member's own "Your page
+is live" has gone. It is new wording, so it is **held until an admin approves it**: key
+`team_joined` in `touch_wording_approvals`, read and approved in Admin > Get involved > **All emails**
+with the others (the catalogue entry `team-member-joined`, in Teams; it counts in the "waiting for
+sign off" number until approved). `GET /api/admin/fundraising/touch` also lists it as a tenth kind, `team_joined`;
+`GET .../touch/preview/team_joined` is always the invented example; `POST` and `DELETE
+.../touch/approvals/team_joined` approve and withdraw, admins only, in History as the other
+wordings are). It is an automatic email, so it also waits for the Automatic emails switch and for
+fundraising to be on. It goes on a page's FIRST approval only: a page approved, declined and
+approved again does not tell the team organiser twice (a page keeps its approved date through a
+decline, which is how the route tells; a page waiting for fundraising to be switched on counts as a
+first approval). While it is held nothing is sent and nothing is logged, and it is not sent
+later. Never to the team organiser about their own page, never for a page in memory of someone,
+never to an address that asked us to stop. A member under 18 is named by the child's first name as
+their page shows it; the parent's name and email are never in it. No migration: the approvals
+table takes any key, and no row means not approved.
+
+**Approvals are by key, not by wording**, so rewording an approved email leaves it approved. The
+approved or approvable emails whose words changed here, which the charity should read again:
+`invite_memory` (13), `target` (25), `on_track` (26), `need_a_hand` (27), `year_on_zero` (29),
+`week_after_zero` (30), `finished` and `finished_zero` (31), `pledge_pay` (38) and
+`pledge_reminder` (39). For most the only change is straight apostrophes; the parent versions of 25
+to 31 are new words under the same keys.
 
 ## Community fundraising, keeping in touch (TASK-515)
 
@@ -9038,7 +10474,7 @@ for sign off), or why it did nothing
 (`switched off`, `fundraising off`, `could not read`). Each email sent adds "An automatic email went
 to the organiser" to the fundraiser's History.
 
-**Admin > Fundraising > Automatic emails.** Jaimie's rule: every automatic email is readable in the
+**Admin > Get involved > Automatic emails.** Jaimie's rule: every automatic email is readable in the
 admin before any is sent. A card under the Weekly summary says whether they are on, with **Switch
 automatic emails on/off** for admins (after a warning). It also says what the next 8am run would
 send (were it on), so the first morning after switching on is no surprise: anyone already past
@@ -9205,7 +10641,7 @@ own page. The Get involved card links to it ("See the event page and give", on t
   to the page on the day, and reply for help; no sponsorship tips. The change and news emails link
   the event's page. News photos show on an event's page as on a fundraiser's.
 - **QR codes on printed pieces** (`/q/<id>-<size>`) go to the event's page; an event whose stored
-  address cannot be linked goes to Get involved, as before.
+  address cannot be linked goes to What's on.
 - **Switched off**, an event's page is the site's 404, like every fundraising page. `/event` is in
   `RESERVED_PREFIXES`. Fundraiser pages are not in the sitemap, so event pages are not either.
 - **Data:** `migrations/1791200000185_event-pages.js`, additive: one nullable column,
@@ -9277,7 +10713,7 @@ Everything below is off while fundraising is switched off, like the rest of fund
   team's card: the join link and the message to forward (each to copy), who has joined (live and
   waiting), and Remove (the member page carries on as their own, no longer counting; the events
   inbox is told, `fundraiseTeamMemberRemoved`). Team news is the team page's own News updates.
-- **Handover, staff only.** Admin > Fundraising hands the team organiser role to a member or someone
+- **Handover, staff only.** Admin > Get involved hands the team organiser role to a member or someone
   new (with their phone). We email them a 6 digit code (`fundraiseTeamHandoverCode`), kept only as a
   keyed hash bound to the team and their email, working for 3 days and 5 tries; they put it in under
   "Taking over a team?" on `/fundraise/manage`, and only then do the team's organiser name, email and
@@ -9293,7 +10729,7 @@ Everything below is off while fundraising is switched off, like the rest of fund
 - **The split lock** holds for a whole team split: only an admin corrects it, on the team, and only
   while neither the team nor any current member has a gift; it changes on every member page with it.
   A member page of a whole team split refuses a correction of its own (`team_split`).
-- **Admin > Fundraising**: a team is marked Team and a member sign up "Joining <team>"; an open team
+- **Admin > Get involved**: a team is marked Team and a member sign up "Joining <team>"; an open team
   shows its split, join link, whole meter, members (every status) and its invites (held, invited,
   reminded, joined, name and email deleted), and the handover. Staff (editors and admins) can take
   a member off the team there too, with the same effect as the team organiser's remove; History says
@@ -9433,11 +10869,11 @@ page ("Your page in memory of <name>", `fundraiseApproved`, the words Jaimie app
 will call instead), no emails about changes or news updates, none of the keep in touch emails
 (`isQuietFundraiser` now asks `isInMemory` first), and no smart call prompts. The sign in code still
 goes when they ask for it. The events inbox summary says who it remembers and who set it up. **No
-automatic anniversary email**: a year after the page went live, Admin > Fundraising shows **A year
+automatic anniversary email**: a year after the page went live, Admin > Get involved shows **A year
 on** and the Monday summary says "N in memory pages a year on: decide whether to get in touch";
 staff press **Done** (with an optional note) when they have.
 
-**Admin > Fundraising.** An in memory page has an **In memory** pill, **Messages to check** while any
+**Admin > Get involved.** An in memory page has an **In memory** pill, **Messages to check** while any
 wait, and **A year on** when due. Open, its **In memory** panel shows who it remembers, who set it
 up with the family's permission, the target choice, the envelopes, and the year on reminder. On its
 wall each waiting message has **Approve for the page**; **Hide from the page** still says no. An
@@ -9478,7 +10914,7 @@ envelope for a page sharing with another cause carries the split statement too.
 **Rolling back.** The migration is additive, but rolling the CODE back to before in memory pages
 would show their held messages and their hidden targets, and send them the upbeat emails. If a code
 rollback is ever needed once in memory pages exist, first make those pages not public (or switch
-the automatic emails off) in Admin > Fundraising.
+the automatic emails off) in Admin > Get involved.
 
 | Route | Who | What |
 |---|---|---|
@@ -9530,7 +10966,7 @@ On a page (`src/fundraising/impact-render.ts`, placed by `renderFundraiserPage`)
 The pages read the list as last read, kept for a minute (`loadImpactExamples`, never throws: on a
 failure the page simply shows none).
 
-### Admin > Fundraising, What gifts could do
+### Admin > Get involved, What gifts could do
 
 A card after Categories. Everyone who can see Fundraising sees the list, read only ("Only an admin
 can change these."); admins get the controls. Each example switched on, in the list's order, with
@@ -9585,6 +11021,30 @@ setting up a page in memory of someone. It replaces the "one question after anot
 (stages, not questions, because the questions branch). The stage they are on is marked
 `aria-current="step"` and says "Step 2 of 5: Your fundraiser" in words, never by colour alone; the
 ones done are ticked; near the end the words lift ("Nearly there!" on stage 4, "Last step!" on 5).
+
+**The bar moves with every question (Jaimie, 2026-10-06).** The five stages and their names stay, and
+inside a stage the bar now moves too, so a long stage no longer looks stuck. The line from the stage
+they are in to the next one (`.fr-progress__fill`, holly green, `aria-hidden`) fills by the share of
+that stage's questions already answered: `fundraise-steps.js` sets `--fill` (0 to 1) on it and the
+CSS scales it, gliding only under `prefers-reduced-motion: no-preference`. The dots are kept from one
+question to the next (rebuilt only when the stage names change), so the glide has something to glide
+from. The words add where they are in the stage: "Step 1 of 5: Your fundraiser, question 3 of 10",
+and with a lift "..., question 2 of 3. Nearly there!". A stage with one question says nothing more
+than it always did ("Step 5 of 5: Check and send Last step!"). On a phone (560px and under) the
+place sits on a short line of its own under the stage ("Question 3 of 10"), so nothing wraps badly.
+The questions counted are the steps **in play now** in that stage, the same list Next walks, so the
+total can grow when an answer brings a question in (a sporting fundraiser adds the T-shirt size: 4 of
+10 becomes 4 of 11). The step showing is always in that list, so the number is never more than the
+total. The bar never goes back on Next or when an answer changes: if the sums would drop it, it is
+held where it was until Next passes that point. Only Back (or a jump back to a problem on Send) moves
+it back. The live region says the place once per step ("Step 1 of 5, Your fundraiser, question 2 of
+10: Are you 18 or over?"), never while typing. Proven by `test/unit/fundraise-signup-progress.test.ts`.
+
+**The thank you lands under the menu bar.** After Send the form is replaced in place by the
+`.fr-thanks` card and scrolled to. The card now has `scroll-margin-top: calc(var(--nav-h) + 1rem)`,
+the same offset the page's other jumps use, and takes the focus with `preventScroll`, so its label
+and heading are in view below the fixed menu bar on a phone and on a desktop.
+
 Nothing goes red while someone types. On Next, anything missing or wrong on that step gets its own
 short warm prompt ("Almost! Just add your first name.", from `data-invalid-message`, through
 `main.js`'s shared highlighting) and the focus moves to it. Back keeps every answer. Each new step is
@@ -9615,14 +11075,14 @@ What is asked, and why:
 - **"Is it a sporting event?"** (raising money only, never in memory, asked before the category). A
   Yes offers only the sporting categories and asks a **T-shirt size** (Kids 3 to 4 up to 13 to 14,
   Adult XS to XXL; nothing chosen for them). A No offers the rest. Other is in both. Each category has
-  a `sporty` mark; admins tick **Sporting** in Admin > Fundraising, Categories.
+  a `sporty` mark; admins tick **Sporting** in Admin > Get involved, Categories.
 - **The split check.** After the sharing details, a step shows the split as the page and posters
   will say it, with a required tick "Yes, that's right". Changing the split asks for the tick again.
 - **A child.** "Who is doing the fundraising?" Me, or my child or a young person I look after: their
   first name (shown on the page) and the parent's or guardian's tick.
 - **A business, school or group**: its name (the page says "Organised by" it) and, optionally,
   whether the employer will match what is raised.
-- **Get involved.** "Shall we list it on our Get involved page?" Every sign up now gets a page
+- **What's on.** "Shall we list it on our What's on page?" Every sign up now gets a page
   (`public` is always true); a No keeps it off the list (`off_list_at`, `off_list_by = 'organiser'`,
   the mechanism staff already use). A team is always listed.
 - **Social media** is one question: a shout out, a mention, or no thanks (`socialOk` and
@@ -9690,7 +11150,7 @@ category. Sport and the T-shirt are refused for an event, a page in memory, and 
 | `POST /api/fundraise/tshirt` `{ token, tshirtSize }` | the organiser | saves the size, once; audit `fundraiser.tshirt_chosen` |
 
 The link is `/fundraise/t-shirt#<token>`: the token rides after the `#`, so it never reaches a server
-in an address, and only its sha256 is stored. Admin > Fundraising shows the new answers in **What
+in an address, and only its sha256 is stored. Admin > Get involved shows the new answers in **What
 they told us**, and a **Sport and the T-shirt** panel: "Waiting for T-shirt size" and the button "Ask
 them for their T-shirt size". The summary to the events inbox carries the new answers; for a page in
 memory of someone it is headed "A new page in memory of ...", with a plain sign off.
@@ -9739,7 +11199,7 @@ send**: exactly what they asked for (collection envelopes, QR cards for the orde
 posters) with a gentle covering note, and no panel at all when they asked for nothing. **A team
 member's page** has none: it gave no address.
 
-### Admin > Fundraising
+### Admin > Get involved
 
 Each approved sign up has a **Welcome pack** panel: a tick box for each thing (who ticked it, and
 when), **Leave out** with a reason, the address ready to copy (their name, each line, the town and
@@ -9914,7 +11374,7 @@ rule: staff approve all public content, pictures included).
 - **Who is in the photo.** The private area says: "Only send photos of people who are happy to be on
   the page. For anyone under 18, you need their parent or guardian's OK." Staff have a checklist line
   above the photos.
-- **Admin > Fundraising**: "Photos to check" on a sign up with any waiting, and "Photos from the
+- **Admin > Get involved**: "Photos to check" on a sign up with any waiting, and "Photos from the
   organiser" in the open sign up: each photo as the page will show it (a round one beside "Organised
   by", a main one big), Approve photo, Don't use it (with an optional note the organiser sees in their
   private area), Take it off the page for one in use (round or main), and, for admins, Delete for
@@ -10092,7 +11552,7 @@ check the address". **A refund email that did not go** marks its order with what
 
 **Refunds.** In the private area the organiser picks a booking and gives a reason
 (`event_ticket_refund_requests`, one open request a booking); the events inbox is emailed
-(`eventTicketsRefundAsked`, Reply-To the organiser). In Admin > Fundraising > Event tickets an admin
+(`eventTicketsRefundAsked`, Reply-To the organiser). In Admin > Get involved > Event tickets an admin
 chooses the tickets to refund: the amount is their price as sold, or all that is left of the payment
 (card fee cover included) when no ticket is left standing.
 
@@ -10161,7 +11621,7 @@ money. Staff can also download every booking as a **CSV** with the money, and (f
 admins only) the buyer's email and phone: someone who may only look sees names and tickets, in the
 admin and in the CSV.
 
-**Admin > Fundraising > Event tickets** (its own card): every ticketed event with what is waiting;
+**Admin > Get involved > Event tickets** (its own card): every ticketed event with what is waiting;
 opened, an event's types (approve, change, take off sale, add), the limit (and the organiser's
 proposed one), close or open sales, the money apart from gifts, the guest list and CSV, the refunds
 asked for, the bookings and the refunds made.
@@ -10236,7 +11696,7 @@ says to shred or bin it after the event.
 
 Tests: `test/unit/event-tickets-*.test.ts`, `admin-event-tickets-*.test.ts`,
 `stripe-webhook-tickets.test.ts`; BDD `features/event-tickets.feature`.
-## All emails, in Admin > Fundraising
+## All emails, in Admin > Get involved
 
 One folded card, **All emails**, where every email the website sends about community fundraising,
 sponsor pledges, event tickets and the Festive Ball can be read exactly as it would arrive, and
@@ -10364,6 +11824,88 @@ Tests: `test/unit/email-catalogue.test.ts`, `test/unit/email-catalogue-guard.tes
 `test/unit/admin-fundraising-emails-routes.test.ts`, `test/unit/admin-all-emails-panel.test.ts`, and
 `features/fundraising-all-emails.feature`.
 
+## The email read-through (2026-10-04)
+
+The charity's operator read every email in **All emails** and decided these changes. Tests:
+`test/unit/receipt-footer.test.ts`, `in-memory-from-jodie.test.ts`, `in-memory-from-jodie-send.test.ts`,
+`get-involved-tab-wording.test.ts`, `readthrough-who-we-help.test.ts`, and the last scenario of
+`features/fundraising-all-emails.feature`. No migration, no new config, nothing under `src/ball`.
+
+**"You're on our list"** (`buildApprovedEmail`, the branch with no page) only ever goes to an approved
+sign up that is not shown on the website: every sign up is raising money or an event, and a public
+one of either has a page (`hasPage`), whether or not fundraising is switched on (a page holder
+approved while it is off waits for "Your page is live"). So the stale "If you asked us to show it,
+you'll find it on our Get involved page" became **"As you asked, we won't show it on our website."**
+One case where that would be untrue: staff unticked the website choice in the admin
+(`PATCH /api/admin/fundraisers/:id` with `public`). `websiteChoiceChangedByStaff`
+(`src/db/fundraisers.ts`) reads the history (`audit_log`, `fundraiser.updated` whose `changed` lists
+`public`); if staff ever changed it, or the history cannot be read, the sentence is left out
+(`hiddenBy: "staff"`). It is also left out for a team member's page (`teamId`), which takes the
+choice from its team, so the member was never asked. A team's organiser never gets this email (a
+team has its own "your team page is live"). All emails shows that as its own version.
+
+**Donation receipts carry the charity statement in the footer bar.** The receipt (`donation` kind:
+an ordinary gift, money a fundraiser pays in, a paid pledge) had the two registration lines and the
+postal address as a paragraph in its body. It is now in the maroon footer bar like every other
+email. The footer bar's usual sentence (`CHARITY_REGISTRATION` in `src/email/brand.ts`) is shorter
+than the wording TASK-126 mandates, so the receipt's footer carries the two mandated
+`REGISTRATION_LINES` word for word (`emailShell`'s `registrationLines` option, used by `receiptBody`
+in `src/email/templates.ts`), then the address. The name, "Scottish Charitable Incorporated
+Organisation" in full and the charity number are all still on every receipt, once. The plain text
+part is unchanged: it ends with the statement and the address, then the contacts. Sender, subject,
+amounts and Gift Aid wording are untouched. **Left as they were**, with the statement in their body:
+the refund confirmation, the Corporation Tax receipt for a company and its void or correction
+notice, and the two business outreach emails.
+
+**In memory emails come from Jodie.** Every email on the in memory path that goes to a family, a
+funeral director or a giver (the in memory invite, "We have your details", "Your page in memory" in
+both versions, the giver's thank you from an in memory page, and the gentle sign in code) is sent
+From `Jodie at NBCC <jodie@nbcc.scot>`, Reply-To `jodie@nbcc.scot`, and shows that address in the
+questions box and the footer bar. None of them says `events@`. The address and the name are in ONE
+place: `MEMORY_EMAIL`, `MEMORY_FROM_NAME`, `MEMORY_FROM`, `MEMORY_SIGNER` and `memorySender()` beside
+`FUNDRAISING_EMAIL` in `src/fundraising/emails.ts`. Each is **signed by Jodie**: "With warmest
+thoughts," then "Jodie" then "NBCC Team" (`signOffAs`, the helper the staff invite uses for a named
+signer). None of them copies anyone in, bar the invite. **The in memory invite** is always signed
+Jodie and copies in Jodie and nobody else (`memoryInviteCc` in `src/fundraising/invite.ts`; nobody
+when Jodie herself is invited), on a send and on a resend, where the address kept from the first
+send is not read (`resendInvite`). "Signed by" is therefore not asked for it: the form hides the box
+and says "In memory invites come from Jodie, are signed by her, and a copy goes to her.", the
+confirm question ends "It comes from Jodie.", and the server neither needs nor reads `signedBy` for
+type `memory` (`inviteSchema`), storing "Jodie" as who signed it. The other three invite types are
+exactly as before: `signedBy` required and checked, signed by and copied to that person. The audit
+row records who was copied and, as its actor, who pressed the button. The admin's list of invites and
+the Monday summary's "not taken up" line name nobody as inviting an in memory invitee. Staff notices are unchanged,
+and every other email is byte for byte as it was. **Why this is safe to send:** the SES identity is the whole domain
+`nbcc.scot` (`aws_sesv2_email_identity.apex`), not a single address, so any address at it is signed
+with the same Easy DKIM keys (`d=nbcc.scot`, aligned for DMARC) and leaves on the same
+`bounce.nbcc.scot` return path; the task role's `ses:SendEmail` is scoped to that identity with no
+condition on the From address; and nothing in config or code lists allowed senders. It goes on the
+same transactional configuration set, so the email log, bounces, complaints and the suppression list
+work as before. **Ops prerequisite:** `jodie@nbcc.scot` must be a mailbox that is read (the charity
+has confirmed it is). Never move it to `news.nbcc.scot`, which cannot receive.
+
+**"across South West Scotland"** was added after "children, young people and vulnerable adults"
+in the thank you for signing up, the giver's thank you, and the target, finished, need a hand and on
+track emails (once per email).
+
+**The charity's description of itself** is two constants in `src/email/brand.ts`, word for word as
+the charity gave them: `ABOUT_NBCC_FULL` and `ABOUT_NBCC_SHORT`. One goes, as its own paragraph
+near the end, in the three emails whose reader may never have dealt with NBCC: the pledge
+confirmation (the full one), the team invite and its parent or guardian version (the short one, in
+place of its own "a Scottish charity supporting..." line), and the ticket confirmation (the short
+one; its "where the money goes" line no longer repeats who NBCC helps). The donation receipt has
+the short one too, on every variant (one builder, `buildDonationConfirmation`): its closing line is
+now "Kindness like yours makes a real difference, at Christmas and all year round.", then the
+description as its own paragraph, so the people NBCC helps are named once. The Corporation Tax
+receipt and the refund email are untouched. The giver's thank you from a fundraiser has the full one
+(in place of its old "Your gift helps..." sentence), followed by an invitation to keep in touch:
+see **Thank your supporters (TASK-507)**. Its in memory version does not.
+
+**Staff notices name the Get involved tab** and its section: "Admin > Get involved > Sign ups",
+"Admin > Get involved > Tickets and pledges > Event tickets", "Open Admin, Get involved", "Admin,
+Get involved, Tickets and pledges, Sponsor pledges"; and the switch's refusal reads "Only an admin
+can switch the Get involved page on or off".
+
 ## Sponsor pledges: "Sponsor now, pay after" (Jaimie, 2026-10-03)
 
 On a sponsorship fundraiser's page, next to "give now", a sponsor can **pledge**: promise an amount
@@ -10471,7 +12013,7 @@ Both say why the sponsor is getting the email and carry a link to say "I can't p
 They are **automatic emails**, sent by the daily 8am task (`runPledgeEmails`,
 `src/pledges/runner.ts`) only when every guard says yes:
 
-- the **Automatic emails** switch in Admin > Fundraising is on, and fundraising is on;
+- the **Automatic emails** switch in Admin > Get involved is on, and fundraising is on;
 - the email's **wording is approved** by an admin. Both keys (`pledge_pay`, `pledge_reminder`) ship
   **unapproved**, in the same `touch_wording_approvals` table as the automatic emails to organisers.
   One waiting is skipped and not claimed, so it still goes once approved while it is due;
@@ -10484,7 +12026,7 @@ They are **automatic emails**, sent by the daily 8am task (`runPledgeEmails`,
 The pay email can still go up to 60 days after it was due (a missed run, or wording waiting); the
 reminder up to 3 weeks after it was due.
 
-**Staff sending the pay link by hand** (Admin > Fundraising > Sponsor pledges) obeys **every** rule
+**Staff sending the pay link by hand** (Admin > Get involved > Sponsor pledges) obeys **every** rule
 above except the daily task's time window (the first send takes the same claim the daily task
 takes, so the two can never both send it): the pledge is open, its page still has pledges on it, the
 link is **due** (never early: "Their link goes the day after the event. To send it early, mark the
@@ -10503,7 +12045,7 @@ cash", so the links already sent for it stop working.
 
 **Rotating `ADMIN_SESSION_SECRET` makes every pay, cancel and confirm link already emailed stop
 working.** After rotating it, an admin presses **"Send new pay links to everyone unpaid"** in
-Admin > Fundraising > Sponsor pledges: one new link to each open pledge that has already had one,
+Admin > Get involved > Sponsor pledges: one new link to each open pledge that has already had one,
 under the same rules as sending one by hand. (Unconfirmed pledges whose confirm link broke simply
 lapse after 7 days; the sponsor can pledge again.)
 
@@ -10542,7 +12084,7 @@ check and refund"), and the events inbox is emailed (`fundraisePledgeStaff`).
   part of the cash they pay in, and its home address is dropped at once: cash has no Gift Aid online,
   and the page says to use the paper sponsor form for it. "Hide from my page" takes a pledge off
   the page.
-- **Admin > Fundraising > Sponsor pledges** (`assets/js/admin/pledges.js`, its own file beside
+- **Admin > Get involved > Sponsor pledges** (`assets/js/admin/pledges.js`, its own file beside
   `app.js`): every fundraiser's pledges with the sponsor's email, send or resend the pay link, cancel
   a pledge, hide a message, mark one paid twice as checked, new pay links for everyone unpaid
   (admins), and a line saying whether the two automatic emails are going (and how many are waiting
@@ -10668,7 +12210,7 @@ lives in; the Drive copy is not immutable.
 
 ### There are THREE databases, not one
 
-This is the trap this feature was built around. `DATABASE_URL` holds 85 tables
+This is the trap this feature was built around. `DATABASE_URL` holds 88 tables
 (42 when this was built; the Events page added three in TASK-453, the Festive Ball ticket
 report one in TASK-464, the admin's New pills one, `admin_seen`, in TASK-478, site analytics
 four in TASK-479, the business supporter call log in TASK-491, community fundraising five
@@ -10680,11 +12222,14 @@ fundraiser has had and the Do it again links two in TASK-515, the team invites a
 organiser handovers two for team pages, the approved automatic email wordings one, the impact
 examples one for what gifts could do, and the photos organisers send one for profile pictures, six
 for event tickets: the ticket types, each event's limit and sales switch, the orders and their
-lines (with buyers' names, emails and phones), the refunds and the refund requests, and two for
-welcome packs: each page's pack and the things ticked in it),
+lines (with buyers' names, emails and phones), the refunds and the refund requests, two for
+welcome packs: each page's pack and the things ticked in it, one, in TASK-563, for the Fill a
+Red Bag list's versions, and one, in TASK-562, for the addresses staff have removed from the
+Email audit's red band, and one, in TASK-576, for which Festive Ball reminders and chase lists
+have gone, per address and day),
 but `STORIES_DATABASE_URL` and `CONTACT_DATABASE_URL` are separate databases
 (deliberately, so the public story and contact forms can never reach donor
-data). A `pg_dump $DATABASE_URL` captures 85 of **88** tables and silently
+data). A `pg_dump $DATABASE_URL` captures 88 of **91** tables and silently
 drops every My Story submission (and, since TASK-475, the fingerprints in
 `erased_stories` that keep erased stories from coming back) and every contact
 enquiry, while producing a
@@ -11789,6 +13334,94 @@ covers recipient, name and subject; dropdowns filter by kind and status; paginat
   (a real send appearing in the list, a failure in the red band, search + type filter, and the
   editor-gets-403 gate).
 
+**Email audit: removing an address that is dead (TASK-562).** The red band could only be looked at.
+A dead address sat in it for two weeks and came back whenever something was sent to it, so the
+band, and the Overview's "N emails failed or bounced in the last 2 weeks", never reached nought.
+The band is now one block an address, its problems under it, and someone who may **edit** the Email
+audit has two things to press on each:
+
+- **Remove and stop emails.** The address's problems leave the band and the Overview's count, and
+  the address is blocked: newsletters and fundraising emails no longer go to it, and it shows under
+  Newsletter > Blocked addresses as "Blocked by staff". Its later failures stay out of the band for
+  as long as it is blocked. It asks first.
+- **Just tidy away.** The problems leave the band and the count. Nothing else changes, and the
+  address comes back if it fails again.
+
+One of the charity's own addresses (`isCharityAddress`, `src/email/audit-removals.ts`: nbcc.scot or
+a subdomain) can be tidied away and is never blocked, on the screen or by the route: blocking
+events@ would stop the charity's own notes to itself. Nor can a row that no longer has an address
+(a cleared team invite reads "deleted team invitee"): it can be tidied, and there is nothing there
+to block. Everything else the log holds as an address can be blocked, however badly formed
+(`looksLikeAddress`, the same loose shape addresses are let into the site by). An address with a
+trailing full stop or two dots is refused by the email provider on every send, never gets a bounce
+that would block it by itself, and so is the one most in need of removing.
+
+**Nothing is deleted.** The full list keeps every row for its six years. A problem that was removed
+says so under its status, with who and when, and **Put back**, which undoes it. Put back also
+unblocks the address, but only when Remove and stop emails is what blocked it and that block is
+still the one there, so for a removal that stopped emails it asks first, as stopping did. An
+address that was already blocked for its own reason (its mail bounced, or it marked us as spam)
+stays blocked, and the screen says which reason and where to unblock it.
+
+How it works:
+
+- **One new table, `email_audit_removals`, and no change to any other.** `email_log` is written by
+  every email the site sends, the Festive Ball's included, and `email_suppressions` is read by
+  every newsletter send, so neither is altered. A removal is a row (`email`, `kind` `stop` or
+  `tidy`, `blocked`, who and when); putting it back stamps it and deletes nothing.
+- **Hiding is decided when the band is read, never when an email is sent.**
+  `listRecentEmailFailures` (`src/db/email-log.ts`) leaves out a problem whose address has a
+  removal still in force, when the problem is older than the removal, or the removal is a `stop`
+  and the address is still blocked. So unblocking an address under Newsletter brings its later
+  failures back, with no code there knowing about this. The Overview counts through the same
+  function, and `listEmailLog` marks the rows the same rule hides, so the three cannot disagree.
+  Two details of the rule (`REMOVAL_HIDES`):
+  - **A problem is dated by when it went wrong, not when the email was sent.** A bounce or a spam
+    report is stamped on its row later, with its own time (`delivery_at`), sometimes days after the
+    send. A newsletter sent on Tuesday and marked as spam on Thursday is not something staff
+    tidied away on Wednesday: it shows. A send that failed on our side has no later event, so its
+    own time counts.
+  - **"Still blocked" means by the block of that time**: the one staff made by pressing stop, or
+    an older bounce that was already there. An address unblocked under Newsletter and blocked
+    again weeks later by a new bounce has a block made after the removal, and what follows shows.
+- **What still goes to a blocked address:** receipts, booking confirmations and sign in codes, as
+  for an address blocked for bouncing. Those do not consult the block list, and this does not
+  change the path any email takes when it is sent.
+- **The block list allows one block an address and keeps the first reason.** Remove and stop
+  emails on an address already blocked for a bounce adds no "Blocked by staff" row: the removal
+  itself is the record of what staff decided, with `blocked` false.
+- **Routes**, both needing email-audit edit: `POST /api/admin/email-log/remove` `{ email, stop }`
+  and `POST /api/admin/email-log/put-back` `{ email }`. Remove takes only an address with a problem
+  that nobody has removed yet (`hasProblemToRemove`, the band's own rule; 404 otherwise). So it is
+  not a way to block anyone at all, and a screen that is out of date cannot remove an address a
+  second time: a tidy on top of a colleague's stop would leave a Put back that undoes both and
+  asks about neither. It refuses `stop` for one of the charity's own addresses or for something
+  that is not an address (400). Put back answers
+  `blockedBecause` (`bounced`, `complained`, `manual` or null) so the screen can say why an
+  address is still blocked. The screen says what a refusal is ("You can no longer change the
+  Email audit", "That address had already been put back") and keeps "Please try again" for what
+  trying again could fix; a Put back that fails keeps its Put back.
+- **Newsletter > Blocked addresses** lists a staff block as "Blocked by staff", with who removed
+  it on the line under, and its Unblock asks about staff rather than a bounce.
+  `POST /api/admin/newsletters/suppressions/lift` now takes any address on the block list, not
+  only a well formed one, so a badly formed address that staff blocked can come off it there.
+- **Retention and erasure** follow the log's: removals made on or before the log's cutoff go with
+  it (`pruneEmailLog`), and `eraseEmailLogFor(email)` takes an address's removals with its rows.
+  The same daily run also clears any removal whose address no longer has a single row in the log.
+  That covers the two older paths that forget a person in the log directly (a sponsor's unpaid
+  pledge, `src/db/pledges.ts`; a cleared team invite, `src/db/fundraising-teams.ts`), so a removal
+  is never the last place an address is kept for more than a day.
+- **Backups:** the new table is in the main database, so the nightly backup's count goes from 89
+  tables to 90 (`test/unit/backup-plan.test.ts`). As with any new table, if the code were rolled
+  back after a backup that included it, the older image's backup would refuse to upload ("tables
+  missing") until the code rolled forward again; the last good archive stays untouched.
+
+Design: `docs/superpowers/specs/2026-10-05-email-audit-remove-design.md`. Tested in
+`test/unit/email-audit-removals-rules.test.ts`, `email-audit-removals-migration.test.ts`,
+`email-audit-removals.test.ts`, `email-log.test.ts` (the band's rule, the mark, retention, erasure),
+`admin-email-audit-remove.test.ts` (the routes) and `admin-email-audit-remove-ui.test.ts` (the
+screen, in jsdom), and end to end in `features/email-audit.feature`.
+
 **Site addressing: branded 404, /sitemap, sitemap.xml, spare addresses (site-pages feature,
 2026-09-01).** Four related pieces, one page registry (`src/site/pages.ts`) behind all of them:
 
@@ -11801,6 +13434,26 @@ covers recipient, name and subject; dropdowns filter by kind and status; paginat
   `/mystory`, `/contact-us`, `/donations`, `/give`, `/portal`, `/privacy-policy`, `/supporter`,
   `/story`, `/stories`. Managed live in the new **Site pages** admin view; validation refuses a
   spare address that would shadow a real page or system route (`aliasFromProblem`).
+- **A spare address can forward to an NBCC subdomain (TASK-568).** In Site pages, "Sends people
+  to" ends with **An NBCC subdomain**, which shows a box to type one in, so staff can make
+  nbcc.scot/drop open drop.nbcc.scot themselves. `forwardTarget` (`src/site/pages.ts`) turns
+  what was typed into the one form that is stored and sent: `https://`, the host lowercased, no
+  trailing slash, an optional path. It refuses anything that is not `<name>.nbcc.scot`: the host
+  is read by the URL parser, so a lookalike such as `nbcc.scot.example.com` or
+  `drop.nbcc.scot@example.com` is refused, and so are a port, a user name, a query and a
+  fragment. A misused staff login therefore cannot point an nbcc.scot link at somebody else's
+  website. `www.nbcc.scot` is refused too: it is this site, and a forward to it could loop.
+  A subdomain forward is a **302**, not the 301 a page gets (`forwardStatus`,
+  `src/site/redirect.ts`), because a browser keeps a 301 for good and staff must be able to change
+  or remove these. The arriving query is carried across as before. The site does not check that the
+  subdomain exists; making one is a DNS job. Five are seeded by migration `1791200000290` (each only
+  if that address is not already taken): `/drop` to `drop.nbcc.scot`, `/referrals` and `/referral`
+  to `referrals.nbcc.scot`, `/volunteer` and `/volunteers` to `vol.nbcc.scot`. They show in the list
+  with a "Subdomain" pill. When its own box is narrow the list is labelled cards (`.sa-table`, a container query, the
+  shape Donations uses): in four squeezed columns a subdomain address and its pill broke in half.
+  The screen's status line now takes `.ty-status`'s own `is-ok` / `is-error`. It used bare `ok` /
+  `err`, and the public stylesheet hides `.err`, so from 1 September until this change no refusal
+  on this screen ("That address is already in use") had ever been shown.
 - **`/sitemap`.** A branded, server-rendered tree of every public page (the `/supporters`
   pattern over `sitemap.html`), deliberately unlisted: nothing links to it, and it carries
   noindex in both the file and an `X-Robots-Tag` header. Ball pages appear only while the gate
@@ -11815,3 +13468,365 @@ covers recipient, name and subject; dropdowns filter by kind and status; paginat
   `features/site-pages.feature` (404 status + brand, JSON API 404, seeded + admin-added alias
   301s, shadow refusal, editor-gets-403 on writes, /sitemap noindex, sitemap.xml honouring the
   visibility ticks).
+
+### Fill a Red Bag (listed, unlinked)
+
+A new, playful way to give money, at `/fill`. The donor fills a list of example items on a
+sheet of lined paper, a red bag fills towards £50, and they give the total. Nothing is bought item
+by item: the items are examples of what a donation **could** do, and every donation goes to general
+funds. Design: `docs/superpowers/specs/2026-10-04-fill-a-red-bag-design.md`. This is half 1, the
+public pages. Of half 2, staff editing the list in the admin is built (see
+[Fill a Red Bag: staff edit the list](#fill-a-red-bag-staff-edit-the-list-admin--fill-a-red-bag));
+a Red Bag receipt email is not. What a report figure will need is already being kept: each donation records that it
+came from here (**Recording where a gift came from**, below).
+
+**It is public, search engines may list it, and it is linked from nowhere until the Ball's moment**
+(Jaimie, 4 October 2026: "make it public but don't link anywhere to it right now", then "once it's pushed and live I
+don't mind if Google crawls it"). The switch is one constant, `RED_BAG_LIVE` in
+`src/red-bag/switch.ts` (no config value, no database row, no infrastructure), and it is **on**:
+
+- `GET /fill` is the giving page, for anyone. It is in `SITE_PAGES` (`src/site/pages.ts`), so it is
+  on `/sitemap` and in `sitemap.xml`, in Admin > Site pages with the usual search visibility
+  choice, and offered where staff make QR codes for site pages. It carries what a listed page here
+  carries: a title ("Fill a Red Bag | Night Before Christmas Campaign"), a meta description ("Pop a
+  few things in a Red Bag and watch it fill. A new way to give to NBCC, showing what your donation
+  could do for children, young people and vulnerable adults, all year round."), a canonical link to
+  `https://nbcc.scot/fill`, and the Open
+  Graph and Twitter share card with the site's one share picture (`assets/img/og-image.png`). It
+  has no `noindex` line and the route sends no `X-Robots-Tag`.
+- `GET /fill/thank-you` is the thank you, a page of its own (`fill-thank-you.html`), where Stripe
+  returns a donor. It is never indexed (`noindex, nofollow` in the page and in the header), in no
+  site map, and linked from nowhere. It is in Admin > Site pages > Every page as "Link only".
+- `GET /fill-a-red-bag` (the address the page first had) and `GET /fill-a-bag` forward to `/fill`
+  for good (`301`), keeping any query string, in any case and with or without a trailing slash, and
+  only exactly. An old return from paying, `/fill-a-red-bag?thanks=1&session_id=...`, goes to
+  `/fill/thank-you` instead, query kept, so that donor still lands on a thank you. Fixed in code in
+  `src/routes/red-bag.ts` (`RED_BAG_FORWARDS`), like `/getinvolved` and `/involved`: not rows in the
+  spare address table. `/fill` itself is exact too: it takes nothing else that begins "fill".
+  `/fill`, `/fill-a-red-bag` and `/fill-a-bag` are in `RESERVED_PREFIXES`, so a spare address
+  cannot take them or anything under `/fill`.
+- `POST /api/checkout-session` takes a Red Bag donation from anyone.
+- Until the Ball's moment nothing on the site links to it: not `/donate`, not the menu, not the
+  footer, not any other page. The page files never do; from the moment the links go in as a page
+  goes out (`src/red-bag/fill-links.ts`). Tests hold all of this in place
+  (`test/unit/red-bag-page.test.ts`, "listed for search engines, but linked from nowhere").
+
+**What is left, when Jaimie says:** add the link from `/donate` and the menu. Nothing else.
+
+**To take it down again:** set `RED_BAG_LIVE` to `false`. That one line is enough, and the path is
+kept and tested for it. Switched off:
+
+- `GET /fill` and `GET /fill/thank-you` are the site's ordinary page not found page, with a real
+  `404` and `noindex`, to the public. Nothing of the pages is in what they are sent. The two
+  forwarding addresses stop forwarding and are the 404 too. `/fill` leaves `SITE_PAGES`, so it is
+  on no site map.
+- A **signed in member of staff** sees either page under a plain strip, "Staff preview: not public
+  yet", never indexed (the header, and a robots line added to the page as it is drawn). The admin
+  keeps its session in the browser tab (not in a cookie), so: sign in at `/admin`,
+  then type `/fill` into the address bar of **the same tab**. (The 404 served at these addresses
+  carries a small script, `assets/js/red-bag-preview.js`; when the tab holds an admin
+  session it asks for the page again with the session and shows it. With no session it does nothing.
+  The server checks the session against the user's live row, so a disabled account is refused.)
+- `POST /api/checkout-session` refuses a Red Bag donation (`403`) from anyone but signed in staff.
+
+**The one list.** `assets/js/red-bag-catalogue.js` holds the items and their prices (the printed
+sheet's four headings: Home comforts, Play & downtime, Books & creativity, Clothing), the three
+themes and their examples (After a crisis; Clothing & school; A hand at rock bottom), the £50 bag
+value, the £2 minimum, and the pure sums: the total in whole pence, how many bags to draw and how
+full (five at most, then "and N more"), the status line, and the round-up (`nextMilestone`,
+`roundUpOffer`, `roundUpPence`). It also holds the feel good layer's drawings, notes and pure
+functions (below).
+The page loads that file; the server reads the same file to draw the list into the page
+(`src/red-bag/catalogue.ts`, `src/red-bag/render.ts`), so the list is in the HTML without
+JavaScript; and the tests read it too. To change a price or a word, change it there.
+
+**The page** (`fill-a-red-bag.html`, `assets/css/red-bag.css`, `assets/js/red-bag.js`): the list
+with a minus button, a number box and a plus button for each item (0 to 99; typing counts at once);
+"Whenever the need comes", three themes of three examples that go into the same bag when tapped;
+the bag panel: the bags, the status line, the total, the round-up button, "How often?" with two
+buttons ("Give once", chosen to begin with, and "Give monthly", following the donate page's once or
+monthly buttons) and one Donate button, which reads "Donate £31" or "Donate £31 every month"; and
+"Prefer to give the real thing? We would love that. Find a drop-off point near you." (the last
+sentence links to `DROP_OFF_URL`, https://drop.nbcc.scot, in `src/red-bag/render.ts`, in a new tab;
+`DROP_OFF_LIVE` is `true` since Jaimie confirmed the address on 4 October 2026, and set to `false`
+the note shows the phone number and no link). **Where things sit:** the page's own order is the
+phone's (the list, the themes, the bag panel, the real items note); from 861px the stylesheet places
+the bag panel at the top of a right hand column with the themes under it, beside the paper. Nothing
+is moved by script, nothing sticks, and a keyboard goes list, themes, bag panel in both layouts.
+**The round-up** is ONE button under the total offering the next milestone only, with what it adds:
+"+ £7 Round up to half a bag" under £25, "Round up to a full bag" from £25, then "Round up to 2
+full bags" and so on from £50 (always the next whole bag; no button at £0). Pressed, it adds "A
+little extra to round up" with its amount and a Remove under "Also in your bag". It keeps its
+target, not an amount: the extra shrinks as things go in and grows back as they come out, the line
+goes once the donor's own items reach or pass the target, and the target is then FORGOTTEN (the
+button offers the next step, and taking things out later does not bring the old line back), pressing
+the button again replaces the round-up and never stacks two, and Remove clears it. It never stands
+alone: when the donor's own choices come to £0 it is cleared, the total is £0, and it does not come
+back. Both of those happen on a FINISHED change only (a plus or minus, an arrow key, a number box
+left, an example, Remove), never while a number is still being typed: a box emptied on the way to a
+new number does not throw the round-up away. A monthly amount is worded "£31 every month" everywhere on the page (the total, Donate, the
+details step and its pay button, the thank you page), never "a month". It is simply
+extra money and is never described as buying anything. The bags, the status line, the phone bar and
+the amount sent to the checkout all follow the total including it.
+**The bottom bar:** the total and Donate scroll out of sight down a long list, so a slim
+bar fixed to the foot of the screen shows "Your bag £18" and a Donate button, at every width,
+computers included: it hides once the real total and Donate are on screen, over the footer, on the
+details step and the thank you, and while the total is £0; its Donate does what the main one does;
+what is in it stays within the page's width (on a computer the total sits beside its button, under
+the bag's column); while it shows the page is longer by its height; the stylesheet's
+`scroll-padding-bottom` keeps a control that takes the focus clear of it for a keyboard; its Donate
+under £2 hands the focus to the real Donate button beside the nudge; and it is not a live region. Under £2 the Donate
+button stays enabled and shows a friendly nudge. Donate opens a details step with the same asks as
+the give form on a fundraiser's page (name, email, the newsletter tick, Gift Aid, covering the card
+fee for a one off; a monthly donation asks for the 18 or over tick instead, as `/donate` does), then
+Stripe. No list of items is ever sent or shown after paying.
+
+**The thank you page** (`/fill/thank-you`: `fill-thank-you.html`, drawn by `renderRedBagThanksPage`,
+with its own small script `assets/js/red-bag-thanks.js`; the giving page no longer has a thank you
+step). Under the eyebrow "Thank you" its one big heading is "Thank you for filling a Red Bag", and
+the focus lands there on arrival. Then, in a calm centred column: the tied red bag; "Your donation
+of £54.10 is on its way to NBCC." ("£31 every month" for a monthly donation; the total is what the
+browser tab remembered before leaving for Stripe, for show only, and missing or odd it is the plain
+"Your donation is on its way to NBCC.", which is also what the page says opened without paying or
+with JavaScript off); the Gift Aid line when Gift Aid was added; the elves line word for word; "Your
+receipt is on its way to your inbox. Thank you for being part of this."; "Share: I filled a Red
+Bag", a picture that names no amount, with Share, Save, Copy the link, Facebook and WhatsApp, all
+pointing at https://nbcc.scot/fill; and a quieter "Fill another bag" button back to `/fill`. The
+payment's id is taken out of the address bar at once. No list, no bag panel, no themes, and the
+bottom bar is never here.
+
+**The thank you's feel good pieces** (5 October 2026; design in the spec under "The thank you's feel
+good pieces"). Three additions, all the script's, each behind a guard (`safe()` in
+`assets/js/red-bag-thanks.js`) so that none can stop the thank you above from working. Their styles
+are in a stylesheet of the page's own, `assets/css/red-bag-thanks.css`, which no other page loads.
+
+- **Watch it leave the Workshop.** In place of the still bag, one inline drawing of the Elves'
+  Workshop (`assets/js/red-bag-workshop.js`, loaded by this page alone), the page's centrepiece:
+  as wide as the column (620px at most, 16 to 10). The Workshop the night before, well stocked
+  (Jaimie, 5 October 2026: "bigger and richer"; no clock): three wooden shelves of tied Red Bags and
+  gifts (the catalogue's own teddy, folded tartan blanket and toy train where the catalogue is there
+  to lend them, with a present or a plain blanket in their place where it is not; books; wrapped
+  presents), a window with the night outside (the one colour that is not a
+  site token, `--rbw-night: #26355C`, named once in the stylesheet) and snow that drifts down once
+  and settles, a Christmas tree whose fairy lights stay softly lit when the lamp goes down, a
+  hanging lamp, the donor's bag with its gold ribbon and "Packed with love" tag, and a small elf
+  seen from behind. On a small screen the finer things are left out (`.rbw-extra`) so it stays
+  clear. On arrival after a gift it plays ONCE, about four seconds: the
+  elf lifts the bag into the gap on the shelf and steps back down, the lamp goes down to a glow (the
+  fairy lights twinkle once; the tree and the window are the warm points in the dusk), and
+  the line under it fades in, in the paper's hand: "Bag packed. The elves will take it from here."
+  (Jaimie's words; the page's only "will", and it is about the elves, not about what the money
+  buys.) Then it rests. Transform and opacity only, nothing loops, and for anyone who asked for less
+  motion, or opened without a remembered gift, it is simply shown at rest. The drawing is hidden
+  from screen readers; the line is ordinary text, in the page from the start, read once. One of the
+  donor's bags is on the shelf for each full £50 of the total the tab remembered (the bag's total,
+  before any card fee), one at least and five at most, side by side on the reaching shelf (the
+  middle one is the one lifted in). Without the script, or if the scene's file
+  is missing or throws, the still bag stays.
+- **A name on the picture.** Above the picture, "Add a name to your picture (optional)", 30
+  characters at most, counted as whole characters (letters in any script with the marks they are
+  built from, numbers, spaces and plain punctuation; anything else is dropped, with the caret left
+  where it was, and a letter still being composed is left alone until it is whole). As
+  it is typed the picture reads "Fern filled a Red Bag", or "Fern filled 2 Red Bags" on the same
+  £50 rule; a long name takes a line of its own and shrinks to fit; no name, the plain "I filled a
+  Red Bag". Never an amount. **The name never leaves the browser**: the box belongs to no form, has
+  no `name`, and nothing in either script makes a request or stores anything. "Save the picture"
+  points at a blob (an address that is only a random id), made when Save is reached or pressed and
+  not for every letter: the picture's own bytes are never in a link's address, because the site's
+  visit counter (`assets/js/pulse.js`) reports the last part of a download link's address, and a
+  `data:` address would hand it a trace of the name (a test runs the real `pulse.js` to hold this).
+  A file is only used if the picture has not been redrawn since it was asked for; a press on a
+  stale Save makes the file and saves it through a link that is never in the page (one click
+  counted, not two); if no file can be made the status line says "Sorry, that didn't work. Please
+  try again."
+  The sentence above the picture says what it shows: "It shows no amount, only that you filled a
+  Red Bag.", or, only while the picture itself counts the bags (a name, and two bags or more), "It
+  shows no amount, only how many bags you filled." Because
+  the picture
+  carries NBCC's name, the name is screened against the supporter wall's own list
+  (`src/donors/display-name-filter.ts`, now exporting `BLOCKED_NAME_LISTS`), which the server draws
+  into the page as base64 of its JSON, so the words are not in plain sight in the page's source
+  (`renderNameFilter` in `src/red-bag/render.ts`, at the `<!-- red-bag:name-filter -->` mark); the
+  script decodes it and applies the same two passes as
+  `containsBlockedWord` with no new endpoint. A refused name shows "Please choose a different name."
+  (it joins the box's description only while a name is refused)
+  and the picture stays plain. If the list is not in the page, or cannot be read, the box and the
+  certificate button stay put away: closed, not open.
+- **A certificate to print.** "Print your certificate" fills in the page's own hidden certificate
+  (the name from the box; "for filling a Red Bag Full of Joy", or "for filling 2 Red Bags Full of
+  Joy"; "Thank you for being part of this." in the handwriting; two signatures in the same hand,
+  "The Elves" over "The Elves' Workshop" and "NBCC Team" over "Night Before Christmas Campaign";
+  today's date as "5 October 2026" centred under them; a name over 16 characters is set smaller, and
+  over 24 smaller again, so two lines of the widest letters still leave room; and the statement every printed piece carries, `MATERIALS_STATEMENT`, drawn in by
+  the server at `<!-- red-bag:statement -->`) and opens the browser's own print window. No amount on
+  it, no new route and no PDF library: while `<html>` carries `rb-print-cert` the print rules show
+  the certificate alone on one upright sheet. The script asks for A4 with no margin by putting an
+  ordinary `@page{size:A4 portrait;margin:0}` rule in the page only while the certificate prints
+  (so the browser has no room for its own header and footer; the white edge is in the drawing), but
+  the certificate does not depend on it: every size on it is a share of the printable page (`--u`,
+  a millimetre on A4 with no margin), so where that rule is ignored, or on other paper or with the
+  browser's own margins, the same certificate prints a little smaller, whole, on ONE page (no named
+  page: Safari does not know them). With no name it asks for
+  one ("Add a name above first, and it goes on your certificate.") with the box in hand. Printing the
+  page any other way prints the page as before: the mark and the paper rule come off when the
+  browser says printing is over, when the window is looked at again, and when an ordinary print
+  starts (a "before print" that is not the button's own, for browsers inside apps where the
+  button's print did nothing). No clock takes the mark away, because on a phone `print()` comes
+  straight back while the donor is still looking at the preview.
+
+Tests: `test/unit/red-bag-thanks-extras.test.ts` (the scene, the name, the picture's words, the
+certificate, nothing sent anywhere, and that a broken piece never stops the thank you) and
+`test/unit/red-bag-thanks-page.test.ts` (the page as drawn, and the stylesheet's rules).
+
+**The feel good layer** (4 October 2026; decoration only, agreed idea by idea, design in the spec
+under "The feel good layer"). When a quantity goes up a small drawing of the item drops into the
+bag (one drop for a typed jump; three in the air at most; into the bottom bar's total while the bag
+is off screen), up to three things that are in the bag peek out of its top, the bag gives a small
+wobble and its handles tighten when nearly full, a full bag is tied with a gold ribbon and a tag
+reading "Packed with love", paper snow and gold stars fall across the whole screen when half a bag
+or a full bag is newly reached, and an elf scribbles a short note on the paper beside the row just
+changed. **The peeks are the latest things added** (5 October 2026): the newest in the front
+(left hand) place and drawn on top, then the one before it, then the one before that; adding more
+of an item makes it the latest again, taking the last one out brings back the next most recent,
+and a new bag after a full one shows the latest too. A new peek pops up, the others slide along one
+place and the oldest sinks (under 300ms). The peeks are drawn about a third bigger than they first
+were and stand higher out of the bag, with a heavier outline so the pale drawings show against the
+pale panel; the newest is the biggest and tallest (`PEEK_SIZE`, `PEEK_RISE` and `PEEK_AT` in
+`assets/js/red-bag.js`). They stay inside the bag's own picture, so they never reach a neighbouring
+bag, the words below or the panel's edge, and never change the panel's height. The blanket drawing
+was redrawn the same day: a folded blanket in a check with a fringe. **The snow and stars are a whole screen moment** (5
+October 2026): one layer fixed to the screen, above the header and the bottom bar, that takes no
+tap and is taken out of the page when it ends. A full bag (and each further one) is the big moment,
+56 pieces over about 2.9 seconds (34 on a screen under 600px wide); half a bag is a lighter one, 24
+pieces over about 2 seconds (16 on a small screen). The same milestone cannot snow again within 20
+seconds; a different one can. Those numbers are `FLURRIES` and `FLURRY_COOLDOWN_MS` in the
+catalogue. Each example button carries a small icon, drawn in by the server, shown
+again on its line under "Also in your bag". **To read or change the elf's notes, edit `NOTES` in
+`assets/js/red-bag-catalogue.js`**: one list, and `test/unit/red-bag-delight.test.ts` holds every
+note to the rules (never "will", nothing bought, nobody receiving, no pressure, no dashes or
+hyphens, British, 32 characters at most). The 22 drawings are `ART` in the same file (inline SVG,
+coloured by `.rb-art` in the stylesheet from the site's tokens), and the choices are its pure
+functions (`peekOrder`, `latestPeeks`, `milestoneCrossed`, `flurryKind`, `flurryDue`,
+`flurryPlan`, `strains`, `noteFor`); `assets/js/red-bag.js` only applies them. **The elf's note never lies over a name, a price, a heading or a control**
+(5 October 2026): the script measures where the note's words would fall (their real ink, and the
+boxes of the buttons and number boxes, with 2px to spare) and tries each place in the catalogue's
+`notePlacements` in turn (across the rule above the row, the one below, then smaller, then
+smallest and level); if nowhere is clear it writes no note that time, leaves any note still
+showing on another row to finish, and does not measure that row again until the usual 900ms hold
+is up. Measurements are only remembered once the page's fonts have loaded. It changes no price, total,
+wording or checkout field, makes no network request, and adds no file to load. Everything decorative is `aria-hidden`, out of the tab order and removed by a
+timer; the one live region is untouched; motion is transform and opacity only and is off under
+`prefers-reduced-motion` (the peeks, ribbon, tag and note still appear, at once; there is no snow
+at all). **It can never
+stop the page working:** the whole layer is off unless the catalogue has every part of it (a donor
+can be handed the new script with the old catalogue while a version is going out), and every way
+into it is wrapped, so a failure in it is swallowed and said once in the console while the sums,
+Donate and the checkout carry on. Nothing plays on
+the details step or the thank you page. Tests: `test/unit/red-bag-delight.test.ts` and
+`test/unit/red-bag-delight-script.test.ts`.
+
+**The handwriting is only on the paper, and on the gift tag of a full bag:
+Caveat (SIL Open Font License), self hosted as `assets/fonts/caveat-latin.woff2` (the Latin subset,
+weights 400 to 700 in one file) with its licence beside it (`assets/fonts/caveat-OFL.txt`). It is
+declared in `assets/css/red-bag.css` (which the giving page and its thank you alone load) and
+preloaded by `fill-a-red-bag.html`, so only the giving page ever
+loads it and the two font budget of the shared stylesheet is untouched; if it cannot load, the
+device's own handwriting faces stand in. Nothing scrolls inside a box.
+
+**The checkout change.** `POST /api/checkout-session` gains one optional marker, `redBag: true`.
+Only with it: the amount is at least 200 pence; it may not come with `fundraiserId`; the session's
+metadata gains `redBag: "true"`; and the return addresses are worked out by the server
+(`<site>/fill/thank-you?session_id={CHECKOUT_SESSION_ID}`, the thank you page; cancel back to
+`<site>/fill`; the embedded checkout gets the thank you page as its `return_url`), never taken from the browser. Without the
+marker nothing changes: a `/donate` session gains no keys (`test/unit/red-bag-checkout.test.ts` and
+`test/unit/donate-checkout-pinned.test.ts` hold that). The webhook records the donation exactly as
+a normal one and sends the normal receipt, and afterwards marks where it came from (below).
+
+**Recording where a gift came from.** So Fill a Red Bag gifts can be compared with gifts on the
+ordinary Donate page later, each donation can carry where it was started: `donations.source`, a
+nullable text column (migration `1791200000250_donation-source.js`, with a small index over the
+rows that have one). `'red_bag'` is a gift started on Fill a Red Bag; empty (`NULL`) is every other
+gift, and every gift recorded before this. The allowed values are one list, `DONATION_SOURCES` in
+`src/db/stripe-webhook-model.ts`. The admin reads it, and nothing else does: no report, no email
+(see [Fill a Red Bag against the Donate page, in the admin](#fill-a-red-bag-against-the-donate-page-in-the-admin)).
+
+- **How it is written.** The webhook saves the donation exactly as it always has: the donation's
+  own `INSERT`, its transaction, the idempotency ledger, Gift Aid and the emails do not know the
+  column exists. Then, **after** that has committed and after every email has been sent, and only
+  when the session's metadata has `redBag: "true"` (`sourceFromCheckoutSession`), one separate
+  statement marks the row: `UPDATE donations SET source = $2 WHERE stripe_session_id = $1 AND
+  source IS NULL` (`tagDonationSource` in `src/db/stripe-webhook.ts`).
+- **It can never cost a donation.** Anything that goes wrong writing the source (the column not
+  there yet, the database unreachable) is caught, logged once as "donation source not recorded"
+  with the Stripe event id and the database's error code (no message text, no session id, nothing
+  about the donor), and goes no further: Stripe is answered exactly as it would have been, nothing
+  is retried, and the donation stays as saved. The gift is then simply left without a source.
+- **It can never hold the answer up for long.** The statement is given 2 seconds
+  (`SOURCE_TAG_TIMEOUT_MS`). If it is still waiting then (on a lock, say), the webhook stops
+  waiting, logs "donation source not recorded ... gave up after 2000 ms" once, and answers Stripe
+  as normal. The `pg` driver cannot take back a statement already sent, so that one database
+  connection is not reused: it is released with an error (`client.release(err)`), which makes the
+  pool close it and open a fresh one when next needed. The abandoned statement either finishes
+  anyway (harmless, it only fills in an empty source) or ends with the connection. No other query
+  has a time limit, and the donation's transaction is untouched.
+- **A redelivered event** saves nothing twice (the ledger sees to that) and tries the source once
+  more, in case the first delivery stopped between saving the donation and marking it. The
+  statement only fills in a source that is still empty, so on a donation already marked it changes
+  nothing.
+- **Monthly gifts.** The first donation is recorded from the checkout and marked as above. Each
+  later charge is its own donation row with the subscription id on it; once one is recorded, every
+  row of that subscription still without a source takes `'red_bag'`, but only when the
+  subscription's first donation has it (one `UPDATE`, also after commit, also best effort). Should
+  one ever be missed, a report can still reach it by joining on `stripe_subscription_id`.
+- **Rolling the code back is safe**: older code neither reads nor writes the column.
+- **Gifts made before this** (from 4 October 2026) are not marked. Stripe's event payloads are not
+  kept in the database, so they can only be found from Stripe: list the Checkout Sessions created
+  since 4 October 2026 whose metadata has `redBag` = `true` and that completed (the Stripe
+  dashboard's export of Checkout Sessions with their metadata, or the read only command
+  `stripe checkout sessions list --limit 100 -d "created[gte]=1791072000"` (1791072000 is 4 October 2026, 00:00 UTC), page by page, keeping the
+  ones with `metadata.redBag == "true"` and `status == "complete"`), then run this once with each
+  session id: `UPDATE donations SET source = 'red_bag' WHERE stripe_session_id = $1 AND source IS
+  NULL`. Their later monthly charges, if any: `UPDATE donations d SET source = 'red_bag' FROM
+  donations f WHERE f.stripe_session_id = $1 AND f.stripe_subscription_id IS NOT NULL AND
+  d.stripe_subscription_id = f.stripe_subscription_id AND d.source IS NULL`. Both are safe to run
+  twice. Not done by this change, and nothing here reads Stripe.
+- Tests: `test/unit/donation-source.test.ts` (the reading of the mark, and the migration: additive,
+  and sorting after everything production had already run), `test/unit/stripe-webhook-source.test.ts` (the donation is saved by the very
+  same statements with and without the mark; the source is written after the commit and the thank
+  you; every failure is swallowed; a statement that hangs is given up at 2 seconds and its
+  connection closed; redelivery; monthly charges), and four scenarios in
+  `features/stripe-webhook.feature`.
+
+| Method + path | Who | Answers |
+|---|---|---|
+| `GET /fill` | anyone, switched on (as it is now) | the giving page, `200`, no `X-Robots-Tag`: search engines may list it |
+| `GET /fill/thank-you` | anyone, switched on (as it is now) | the thank you page, `200`, `X-Robots-Tag: noindex, nofollow` |
+| `GET /fill-a-red-bag`, `GET /fill-a-bag` | anyone, switched on (as it is now) | `301` to `/fill`, query string kept; with `?thanks=1`, `301` to `/fill/thank-you` |
+| `POST /api/checkout-session` with `redBag: true` | anyone, switched on (as it is now) | `200`, as any donation; `400` under £2 or with `fundraiserId` |
+| `GET /fill`, `GET /fill/thank-you` | the public, if switched off | the site's 404 page, `404`, `noindex` |
+| `GET /fill-a-red-bag`, `GET /fill-a-bag` | anyone, if switched off | the site's 404 page, `404` |
+| `GET /fill`, `GET /fill/thank-you` | signed in staff (`Authorization: Bearer`), if switched off | the page with the preview strip; `Cache-Control: private, no-store`; `noindex` |
+| `POST /api/checkout-session` with `redBag: true` | the public, if switched off | `403 { error: "Fill a Red Bag is not open yet" }` |
+
+- Code: `src/red-bag/` (`switch.ts`, `staff.ts`, `catalogue.ts`, `render.ts`), `src/routes/red-bag.ts`
+  (added to the site router in `src/routes/site.ts`), the marker in `src/routes/api.ts`, the page
+  list in `src/site/pages.ts`, and `fill-a-red-bag.html` (the giving page; the file keeps its first
+  name) and `fill-thank-you.html` in the `Dockerfile`'s COPY line.
+- The pages themselves needed no migration, table or column. The one column there is,
+  `donations.source`, came later (**Recording where a gift came from**, above). No config value, no
+  email, nothing in the admin's files.
+- If the page's file, the 404's file or the catalogue cannot be read, the handler logs it and hands
+  the request on to the site's ordinary 404; it never hangs. A `403` from the checkout (a staff
+  session that has run out during a preview) tells staff to sign in again at `/admin`.
+- The Gift Aid postcode box uses the server's own rule (`UK_POSTCODE_RE` in
+  `src/declarations/fields.ts`, turned into an HTML `pattern` by `postcodePattern()`), so the page
+  refuses exactly what the checkout would.
+- Accessibility: the status line and the total share ONE polite live region, read whole, so each
+  change is announced once; a plus or minus button at its end says it is off (`aria-disabled`) and
+  keeps the focus.
+- Unit tests: `test/unit/red-bag-*.test.ts` (the catalogue and sums, the switch, the checkout, the
+  pages as drawn and who is given them, the addresses through the real router, the giving page's
+  script, the thank you page's script, the preview script). BDD:
+  `features/fill-a-red-bag.feature` (the giving page for anyone and listable, the thank you page,
+  the old addresses forwarding, on the site map and not linked from `/donate`; a Red Bag donation
+  from the public taken; under £2 refused).

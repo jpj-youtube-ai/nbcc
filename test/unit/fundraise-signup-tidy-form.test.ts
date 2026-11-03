@@ -248,7 +248,7 @@ describe("Next and Back", () => {
   it("says each new step for screen readers, and moves the focus to it", () => {
     tick("pathRaising");
     next();
-    expect($("[data-step-news]").textContent).toBe("Step 1 of 5, Your fundraiser: Are you 18 or over?");
+    expect($("[data-step-news]").textContent).toBe("Step 1 of 5, Your fundraiser, question 2 of 10: Are you 18 or over?");
     expect(document.activeElement).toBe(current());
   });
 
@@ -690,7 +690,7 @@ describe("a team", () => {
     tick("pathRaising");
     tick("teamYes");
     expect($("#listedGroup").closest("[data-step]")!.hidden).toBe(true);
-    expect($("[data-team-fields]").textContent).toContain("Team pages always go on our Get involved page, so your team can find it and join.");
+    expect($("[data-team-fields]").textContent).toContain("Team pages always go on our What’s on page, so your team can find it and join.");
     expect($("label[for=description]").textContent).toContain("A few words about what your team is doing");
   });
 });
@@ -798,7 +798,7 @@ describe("after review", () => {
     tick("attendNo");
     goTo("newsletterOk");
     await submit();
-    expect($("[data-thanks-listed]").textContent).toBe("We’ll list it on Get involved once you’ve told us the date.");
+    expect($("[data-thanks-listed]").textContent).toBe("We’ll list it on What’s on once you’ve told us the date.");
     expect($("[data-thanks-listed]").hidden).toBe(false);
   });
 

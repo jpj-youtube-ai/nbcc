@@ -69,7 +69,7 @@ interface StageCopy {
 // Shared, stage-independent copy. GRATITUDE explains WHY they are being thanked (a monthly business
 // supporter); IMPACT is deliberately non-definitive ("could help provide").
 const GRATITUDE =
-  "Thank you once again for being a monthly business supporter of the Night Before Christmas Campaign. Your steady support means so much to a small, volunteer run charity, and to the children, young people and vulnerable adults we are here for across South West Scotland.";
+  "Thank you once again for being a monthly business supporter of the Night Before Christmas Campaign. Your steady support means so much to a small, volunteer led charity, and to the children, young people and vulnerable adults we are here for across South West Scotland.";
 const IMPACT =
   "Your monthly support could help provide Red Bags Full of Joy, thoughtful presents that carry comfort, dignity and a moment of real joy at Christmas.";
 const CTA_LABEL = "Choose how we thank you";

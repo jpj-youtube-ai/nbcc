@@ -31,6 +31,8 @@ import {
   type TouchSent,
 } from "../fundraising/touch-rules";
 import { followUpToday } from "../fundraising/follow-up";
+import { sampleTeamMemberJoinedEmail } from "../fundraising/team-page-emails";
+import { TEAM_JOINED_KEY, TEAM_JOINED_LABEL, TEAM_JOINED_WHEN, TEAM_WORDING_KEYS } from "../fundraising/teams";
 
 // TASK-515: keeping in touch, in Admin > Fundraising. Section "fundraising": viewers look, editors
 // and admins record calls, and the Automatic emails switch is for admins only (like the
@@ -44,12 +46,18 @@ import { followUpToday } from "../fundraising/follow-up";
 //        ?sample=zero                                  (with nothing raised yet)
 //        ?fundraiserId=N                               or for that fundraiser                      view
 //   PUT  /api/admin/fundraising/touch/settings         { on: true | false }                        admin
-//   POST   /api/admin/fundraising/touch/approvals/:key approve one new wording (WORDING_KEYS)      admin
+//   POST   /api/admin/fundraising/touch/approvals/:key approve one new wording (WORDING_KEYS, and
+//                                                      "team_joined")                              admin
 //   DELETE /api/admin/fundraising/touch/approvals/:key withdraw that approval                      admin
 //   POST /api/admin/fundraisers/:id/prompt-calls       { prompt, note? }                           edit
 //
 // Jaimie's rule: every automatic email is readable here before any is sent. The switch ships OFF.
 // And (2026-10-03) new wording only sends once an admin has approved it here.
+//
+// Jaimie, 2026-10-04: the email to a team organiser when staff approve a new team member's page
+// ("[First name] has joined [team name]", src/fundraising/team-send.ts) is listed here too, after the
+// nine to an organiser, as the kind "team_joined". It is new wording, read and approved here like the
+// others (key "team_joined"), and it obeys the same switch. Its preview is always the invented example.
 // Request and response shapes: README.md, "Community fundraising", keeping in touch.
 
 export const adminFundraisingTouchRouter = Router();
@@ -63,7 +71,8 @@ function failed(res: Response, what: string, err: unknown): Response {
 }
 
 const isKind = (k: unknown): k is TouchKind => typeof k === "string" && (TOUCH_KINDS as readonly string[]).includes(k);
-const isWordingKey = (k: unknown): k is string => typeof k === "string" && (WORDING_KEYS as readonly string[]).includes(k);
+const isWordingKey = (k: unknown): k is string =>
+  typeof k === "string" && ((WORDING_KEYS as readonly string[]).includes(k) || (TEAM_WORDING_KEYS as readonly string[]).includes(k));
 // The approvals; when they cannot be read, none (so new wording reads as held, as the sender treats
 // it) and the card says so, rather than failing whole.
 async function readApprovals(): Promise<{ list: WordingApproval[]; unavailable: boolean }> {
@@ -114,9 +123,17 @@ export async function getTouch(req: Request, res: Response): Promise<Response | 
       // The versions of it still waiting for sign off (its usual one, and the one with nothing raised).
       waiting: wordingKeysOf(kind).filter((k) => !approved.has(k)),
     }));
+    // The email to a team organiser about a new member: new wording, signed off here with the rest.
+    const teamJoined = {
+      kind: TEAM_JOINED_KEY,
+      label: TEAM_JOINED_LABEL,
+      when: TEAM_JOINED_WHEN,
+      newWording: true,
+      waiting: approved.has(TEAM_JOINED_KEY) ? [] : [TEAM_JOINED_KEY],
+    };
     return res
       .status(200)
-      .json({ today, settings, kinds, approvals, approvalsUnavailable: read.unavailable, sent, prompts, promptCalls, due, held });
+      .json({ today, settings, kinds: [...kinds, teamJoined], approvals, approvalsUnavailable: read.unavailable, sent, prompts, promptCalls, due, held });
   } catch (err) {
     return failed(res, "keep in touch read", err);
   }
@@ -127,6 +144,7 @@ export async function getTouch(req: Request, res: Response): Promise<Response | 
 export async function getTouchPreview(req: Request, res: Response): Promise<Response | void> {
   if (!(await authorizeSection(req, res, "fundraising", "view"))) return;
   const kind = req.params.kind;
+  if (kind === TEAM_JOINED_KEY) return teamJoinedPreview(res);
   if (!isKind(kind)) return res.status(404).json({ error: "There is no automatic email of that kind" });
   const raw = (req.query ?? {}).fundraiserId;
   try {
@@ -161,6 +179,27 @@ export async function getTouchPreview(req: Request, res: Response): Promise<Resp
     });
   } catch (err) {
     return failed(res, "automatic email preview", err);
+  }
+}
+
+// The email to a team organiser about a new member: always the invented example (it is about two
+// people, so "Show it for" one fundraiser does not apply), with its sign off.
+async function teamJoinedPreview(res: Response): Promise<Response> {
+  try {
+    const read = await readApprovals();
+    return res.status(200).json({
+      kind: TEAM_JOINED_KEY,
+      label: TEAM_JOINED_LABEL,
+      newWording: true,
+      wordingKey: TEAM_JOINED_KEY,
+      approval: approvalMap(read.list)[TEAM_JOINED_KEY] ?? null,
+      approvalsUnavailable: read.unavailable,
+      sample: true,
+      title: "Team Tinsel",
+      ...sampleTeamMemberJoinedEmail(base()),
+    });
+  } catch (err) {
+    return failed(res, "new team member email preview", err);
   }
 }
 

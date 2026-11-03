@@ -1,0 +1,206 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <!-- Fill a Red Bag, /fill (4 October 2026; src/red-bag/switch.ts). Search engines may list it,
+         so it carries what the site's other listed pages carry: a canonical address and a share
+         card, and no robots line. (A staff preview has one added as it is drawn.) It is still
+         LINKED from nowhere on the site: not the Donate page, the menu or the footer. -->
+    <title>Fill a Red Bag | Night Before Christmas Campaign</title>
+    <meta name="description" content="Pop a few things in a Red Bag and watch it fill. A new way to give to NBCC, showing what your donation could do for children, young people and vulnerable adults, all year round." />
+    <!-- Canonical/og:url use the production domain (https://nbcc.scot). -->
+    <link rel="canonical" href="https://nbcc.scot/fill" />
+    <!-- Open Graph -->
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Night Before Christmas Campaign" />
+    <meta property="og:title" content="Fill a Red Bag | Night Before Christmas Campaign" />
+    <meta property="og:description" content="Pop a few things in a Red Bag and watch it fill. A new way to give to NBCC, showing what your donation could do for children, young people and vulnerable adults, all year round." />
+    <meta property="og:url" content="https://nbcc.scot/fill" />
+    <!-- The site's one share picture, as on the donate page. -->
+    <meta property="og:image" content="https://nbcc.scot/assets/img/og-image.png" />
+    <!-- Twitter -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Fill a Red Bag | Night Before Christmas Campaign" />
+    <meta name="twitter:description" content="Pop a few things in a Red Bag and watch it fill. A new way to give to NBCC, showing what your donation could do for children, young people and vulnerable adults, all year round." />
+    <meta name="twitter:image" content="https://nbcc.scot/assets/img/og-image.png" />
+
+    <link rel="stylesheet" href="/assets/css/styles.css" />
+    <!-- Its OWN stylesheet and scripts rather than growing the shared bundle, which donate.html's
+         page weight budget counts. -->
+    <link rel="stylesheet" href="/assets/css/red-bag.css" />
+    <link rel="preload" href="/assets/fonts/playfair-var.woff2" as="font" type="font/woff2" crossorigin />
+    <link rel="preload" href="/assets/fonts/poppins-400.woff2" as="font" type="font/woff2" crossorigin />
+    <!-- The handwriting on the lined paper (Caveat, declared in red-bag.css): this page only. -->
+    <link rel="preload" href="/assets/fonts/caveat-latin.woff2" as="font" type="font/woff2" crossorigin />
+    <script defer src="/assets/js/main.js"></script>
+    <script defer src="/assets/js/red-bag-catalogue.js"></script>
+    <script defer src="/assets/js/red-bag.js"></script>
+    <script defer src="/assets/js/pulse.js"></script>
+  </head>
+  <body>
+    <a class="skip-link" href="#main">Skip to content</a>
+    <header class="nav" id="nav" data-region="nav">
+      <div class="wrap">
+        <a class="brand" href="/"><img src="/assets/img/nbcc-logo.png" alt="Night Before Christmas Campaign" width="50" height="50" loading="lazy" /></a>
+        <nav aria-label="Primary">
+          <ul class="nav-links" id="navLinks">
+            <li><a href="/">Home</a></li>
+            <li><a href="/about-us">About</a></li>
+            <li><a href="/donate">Donate</a></li>
+            <li><a href="/contact">Contact</a></li>
+            <li><a href="/supporters">Supporters</a></li>
+          </ul>
+        </nav>
+        <a class="nav-cta" href="/donate">Donate</a>
+        <button class="burger" id="burger" aria-label="Open menu" aria-expanded="false" aria-controls="navLinks"><span></span><span></span><span></span></button>
+      </div>
+    </header>
+
+
+    <main class="site-main" id="main" tabindex="-1">
+      <!-- Fill a Red Bag. The server draws the list, the themes, the bag and the details step in
+           where the markers are (src/red-bag/render.ts), from the one catalogue
+           (assets/js/red-bag-catalogue.js), so the list reads without JavaScript;
+           assets/js/red-bag.js makes it work. The items are EXAMPLES of what a donation could do:
+           every line says "could", never "will", and nothing is bought item by item.
+
+           The order here is the PHONE's: the list, then "Whenever the need comes", then the bag
+           with the total and Donate, then the real items note. On a desktop the stylesheet
+           (assets/css/red-bag.css) puts the bag at the top of the right hand column and the themes
+           under it, beside the long paper; nothing is moved by script. -->
+      <section class="page-top rb-intro" aria-labelledby="rb-title">
+        <div class="wrap">
+          <!-- red-bag:preview -->
+          <div class="intro-hero">
+            <span class="eyebrow">A new way to give</span>
+            <h1 id="rb-title">Fill a Red Bag</h1>
+            <div class="rule center"><i></i></div>
+            <p class="lede">Pop a few things in the bag and watch it fill. Your donation could help NBCC bring comfort, dignity and joy to children, young people and vulnerable adults, all year round.</p>
+          </div>
+        </div>
+      </section>
+
+      <section class="section flush-top rb-builder" data-rb-builder aria-labelledby="rb-list-title">
+        <div class="wrap rb-layout">
+          <div class="rb-paper">
+            <span class="rb-tape" aria-hidden="true"></span>
+            <h2 class="rb-paper__title" id="rb-list-title">Pop these in the bag</h2>
+            <!-- red-bag:list -->
+            <div class="rb-also" data-rb-also hidden>
+              <h3 class="rb-group__title" id="rb-also-title">Also in your bag</h3>
+              <ul class="rb-items rb-also__list" data-rb-also-list aria-labelledby="rb-also-title"></ul>
+            </div>
+          </div>
+
+          <div class="rb-need" data-rb-need role="region" aria-labelledby="rb-themes-title">
+            <div class="rb-need__head">
+              <h2 id="rb-themes-title">Whenever the need comes</h2>
+              <p>Christmas is our big night, and the need comes all year round. Tap an example to add it to your bag, and tap it again to take it out.</p>
+            </div>
+            <!-- red-bag:themes -->
+          </div>
+
+          <div class="rb-panel" role="region" aria-labelledby="rb-panel-title">
+            <h2 class="sr-only" id="rb-panel-title">Your bag</h2>
+            <div class="rb-bags" data-rb-bags data-count="1" aria-hidden="true"><!-- red-bag:bag --></div>
+            <p class="rb-more" data-rb-more hidden></p>
+            <!-- The bottom bar (below) shows only while this block, the real total and Donate, is off screen. -->
+            <div data-rb-watch>
+            <!-- ONE polite region, read whole: a tap is announced once, the status and the total together. -->
+            <div class="rb-said" role="status" aria-live="polite" aria-atomic="true">
+              <p class="rb-status" data-rb-status>Your bag is empty. Pop something in.</p>
+              <p class="rb-total"><span class="rb-total__label">Your total</span> <strong class="rb-total__sum"><span data-rb-total>£0</span><span class="rb-total__per" data-rb-per-month hidden> every month</span></strong></p>
+            </div>
+            <p class="rb-nojs" data-nojs>Filling a bag needs JavaScript switched on. You can still donate on our <a href="/donate">donate page</a>.</p>
+            <div class="rb-give" data-needs-js hidden>
+              <!-- The round-up: ONE button, offering the next milestone only (half a bag, a full bag,
+                   then the next whole bag). The script writes its words and shows it once there is
+                   something to round up. It is simply extra money: it buys nothing. -->
+              <button class="rb-round" type="button" data-rb-round hidden><span class="rb-round__amount" data-rb-round-amount></span> <span class="rb-round__words" data-rb-round-words>Round up</span></button>
+              <!-- Once or monthly: two buttons, as on the donate page (its .give-toggle). -->
+              <div class="rb-often">
+                <p class="rb-often__label" id="rbOftenLabel">How often?</p>
+                <div class="rb-toggle" role="group" aria-labelledby="rbOftenLabel">
+                  <button class="rb-mode" type="button" data-rb-mode="once" aria-pressed="true">Give once</button>
+                  <button class="rb-mode" type="button" data-rb-mode="monthly" aria-pressed="false">Give monthly</button>
+                </div>
+              </div>
+              <button class="btn btn-primary rb-donate" type="button" data-rb-donate aria-describedby="rbNudge">Donate</button>
+              <p class="rb-nudge" id="rbNudge" data-rb-nudge role="alert" hidden>Add a little more to reach £2. Maybe some socks?</p>
+            </div>
+            </div>
+            <p class="rb-elves">Our elves use your gift wherever it's needed most, so the items are a taste of what it could do, not a shopping list.</p>
+          </div>
+          <!-- red-bag:real -->
+        </div>
+      </section>
+
+      <!-- After Donate: the same asks as the give form on a fundraiser's page. Shown by the script. -->
+      <section class="section flush-top rb-details-step" data-rb-details aria-labelledby="rb-details-title" hidden>
+        <div class="wrap"><!-- red-bag:details --></div>
+      </section>
+
+      <!-- At every width: a slim bar at the foot of the screen with the total and a Donate button,
+           shown by the script while the real ones above are out of sight, so nothing is ever shown
+           twice. Not a live region: the status line already says each change. -->
+      <div class="rb-bar" data-rb-bar hidden>
+        <p class="rb-bar__total">Your bag <strong data-rb-bar-total>£0</strong></p>
+        <button class="btn btn-primary rb-bar__donate" type="button" data-rb-bar-donate>Donate</button>
+      </div>
+
+      <template id="rbBagTemplate"><!-- red-bag:bag --></template>
+    </main>
+
+    <!-- Stripe's own checkout opens on the page in this panel, as on the donate page; if it cannot,
+         the giver goes to Stripe's page instead. -->
+    <div class="give-embedded-modal" id="rbCheckoutModal" role="dialog" aria-modal="true" aria-label="Secure payment" aria-hidden="true" hidden>
+      <div class="give-embedded-panel">
+        <div class="give-embedded-bar"><button class="give-embedded-close" id="rbCheckoutClose" type="button">Close</button></div>
+        <div class="give-embedded-mount" id="rbEmbeddedCheckout"></div>
+      </div>
+    </div>
+
+    <footer class="site-footer" data-region="footer">
+      <div class="wrap">
+        <div class="foot-brand">
+          <img src="/assets/img/nbcc-logo-white.svg" alt="Night Before Christmas Campaign" width="74" height="74" loading="lazy" />
+          <p>NBCC is a volunteer led charity here all year for children, young people and vulnerable adults across South West Scotland.</p>
+          <div class="socials">
+            <a href="https://www.instagram.com/nbcc.scot" target="_blank" rel="noopener" aria-label="Instagram"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#F8F5EE" stroke-width="1.8" aria-hidden="true"><rect x="2" y="2" width="20" height="20" rx="5"/><circle cx="12" cy="12" r="4"/><circle cx="17.5" cy="6.5" r="1.2" fill="#F8F5EE" stroke="none"/></svg></a>
+            <a href="https://www.facebook.com/nbcc.scot" target="_blank" rel="noopener" aria-label="Facebook"><svg width="20" height="20" viewBox="0 0 24 24" fill="#F8F5EE" aria-hidden="true"><path d="M14 9h3V6h-3c-2.2 0-4 1.8-4 4v2H7v3h3v6h3v-6h3l1-3h-4v-2c0-.6.4-1 1-1z"/></svg></a>
+            <a href="https://x.com/Nightbeforechr1" target="_blank" rel="noopener" aria-label="X"><svg width="18" height="18" viewBox="0 0 24 24" fill="#F8F5EE" aria-hidden="true"><path d="M18 2h3l-7 8 8 12h-6l-5-7-5 7H3l8-9L3 2h6l4 6z"/></svg></a>
+          </div>
+          <p class="handle">Find us at <b>nbcc.scot</b></p>
+        </div>
+        <div class="foot-col">
+          <h4>Explore</h4>
+          <ul>
+            <li><a href="/">Home</a></li>
+            <li><a href="/about-us">About us</a></li>
+            <li><a href="/donate">Donate</a></li>
+            <li><a href="/contact">Contact</a></li>
+            <li><a href="/supporters">Supporters</a></li>
+            <li><a href="/my-story">Share your story</a></li>
+          </ul>
+        </div>
+        <div class="foot-col">
+          <h4>Ways to give</h4>
+          <ul>
+            <li><a href="/donate">Donate money</a></li>
+            <li><a href="/contact">Donate items</a></li>
+            <li><a href="/contact">Fundraise for us</a></li>
+          </ul>
+        </div>
+      </div>
+      <div class="legal">
+        <div class="wrap">
+          <span>Night Before Christmas Campaign, known as NBCC, is a Scottish Charitable Incorporated Organisation.</span>
+          <span>Scottish Charity Number <a href="https://www.oscr.org.uk/about-charities/search-the-register/charity-details?number=SC047995" target="_blank" rel="noopener">SC047995</a>. Regulated by the Scottish Charity Regulator, OSCR.</span>
+          <span>The Elves' Workshop, Annbank Village Hall, Weston Avenue, Annbank, KA6 5EE</span>
+        </div>
+      </div>
+    </footer>
+  </body>
+</html>

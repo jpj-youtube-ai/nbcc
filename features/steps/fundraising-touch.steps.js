@@ -161,7 +161,8 @@ When("{string} records a call about {string} for {string}", async function (emai
 
 Then("the automatic emails are said to be off", function () {
   assert.equal(this.frBody.settings.on, false);
-  assert.equal(this.frBody.kinds.length, 9);
+  // The nine to an organiser, and the one to a team organiser about a new member (team_joined).
+  assert.equal(this.frBody.kinds.length, 10);
 });
 
 Then("the {string} automatic email wording is approved by {string}", async function (key, email) {

@@ -87,7 +87,7 @@ describe("the other printed pieces of an in memory page", () => {
     const { materialFacts } = await import("../../src/fundraising/materials");
     const { meter } = await import("../../src/fundraising/model");
     const m = meter({ onlinePence: 0, cashPence: 0, targetPence: 50000 });
-    const u = { pageUrl: "https://nbcc.test/fundraise/ime", getInvolvedUrl: "https://nbcc.test/get-involved" };
+    const u = { pageUrl: "https://nbcc.test/fundraise/ime", whatsOnUrl: "https://nbcc.test/whats-on" };
     expect(materialFacts(record({ targetPence: 50000, memoryShowTarget: false }), m, u).targetPence).toBeNull();
     expect(materialFacts(record({ targetPence: 50000, memoryShowTarget: true }), m, u).targetPence).toBe(50000);
     expect(materialFacts(record({ targetPence: 50000, inMemory: false }), m, u).targetPence).toBe(50000);
@@ -124,7 +124,7 @@ describe("review: no certificate of thanks for an in memory page", () => {
     const { materialFacts, renderEverything } = await import("../../src/fundraising/materials");
     const { meter } = await import("../../src/fundraising/model");
     const m = meter({ onlinePence: 1000, cashPence: 0, targetPence: null });
-    const u = { pageUrl: "https://nbcc.test/fundraise/ime", getInvolvedUrl: "https://nbcc.test/get-involved" };
+    const u = { pageUrl: "https://nbcc.test/fundraise/ime", whatsOnUrl: "https://nbcc.test/whats-on" };
     const html = renderEverything(materialFacts(record({ status: "finished" }), m, u), materialAssets(), { date: "3 October 2026", script: "" });
     expect(html).not.toContain("Certificate of thanks");
     expect(html).not.toMatch(/class="page[^"]*cert/);

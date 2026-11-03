@@ -286,8 +286,10 @@
       if ((id = t.getAttribute("data-pledge-show"))) return act("POST", "/api/admin/pledges/" + encodeURIComponent(id) + "/message", { hidden: false }, "Message showing on the page again.");
     });
 
-    // Load whenever the Fundraising section is shown (app.js un-hides it), and now if it already is.
+    // Load whenever the card's part of Get involved is shown (app.js un-hides it): Tickets and
+    // pledges. Without such a part round it, the whole box is watched.
     var view = doc.getElementById("view-fundraising");
+    var shown = (card && card.closest && card.closest("[data-gi-part]")) || view;
     // A sign off changed in All emails: say again whether the two emails are going.
     if (view) {
       view.addEventListener("nbcc:wording-changed", function () {
@@ -295,19 +297,18 @@
       });
     }
     var Observer = win.MutationObserver;
-    if (view && Observer) {
+    if (shown && Observer) {
       new Observer(function () {
-        if (!view.hidden) load();
-      }).observe(view, { attributes: true, attributeFilter: ["hidden"] });
+        if (!shown.hidden) load();
+      }).observe(shown, { attributes: true, attributeFilter: ["hidden"] });
     }
-    return { load: load };
+    return { load: load, shown: shown };
   }
 
   if (typeof module !== "undefined" && module.exports) {
     module.exports = { initAdminPledges: initAdminPledges };
   } else if (typeof document !== "undefined") {
     var api = initAdminPledges(document, window);
-    var view = document.getElementById("view-fundraising");
-    if (api && view && !view.hidden) api.load();
+    if (api && api.shown && !api.shown.hidden) api.load();
   }
 })();

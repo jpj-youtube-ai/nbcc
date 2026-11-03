@@ -94,7 +94,9 @@
 
   /* The biggest size from `big` down to `small` at which the text fits in maxLines; at the smallest,
      anything left over is cut with an ellipsis. */
-  function fit(ctx, text, font, maxWidth, maxLines, big, small) {
+  /* The biggest size at which the words fit. A name that never fits is shortened with an ellipsis; with
+     whole set (a line from the description), it is drawn whole or not at all, so null. */
+  function fit(ctx, text, font, maxWidth, maxLines, big, small, whole) {
     for (var size = big; size >= small; size -= 2) {
       ctx.font = font.replace("{s}", size);
       var lines = wrap(ctx, text, maxWidth);
@@ -102,6 +104,7 @@
         return { size: size, lines: lines };
       }
     }
+    if (whole) return null;
     ctx.font = font.replace("{s}", small);
     var all = wrap(ctx, text, maxWidth);
     var kept = all.slice(0, maxLines);
@@ -177,7 +180,7 @@
     var lineLines = data.memory ? Math.max(1, L.lineLines) : L.lineLines;
     m.title = fit(ctx, title, "800 {s}px " + HEAD, width, L.titleLines, L.titleBig, L.titleSmall);
     m.titleStep = Math.round(m.title.size * 1.12);
-    m.line = lineLines && lineText ? fit(ctx, lineText, "italic 400 {s}px " + HEAD, width, lineLines, Math.round(L.titleBig * 0.4), Math.round(L.titleBig * 0.3)) : null;
+    m.line = lineLines && lineText ? fit(ctx, lineText, "italic 400 {s}px " + HEAD, width, lineLines, Math.round(L.titleBig * 0.4), Math.round(L.titleBig * 0.3), true) : null;
     m.lineStep = m.line ? Math.round(m.line.size * 1.3) : 0;
     m.when = L.when && data.when ? data.when : null;
     m.meter = showMeter && data.raisedPence > 0;
@@ -627,7 +630,7 @@
   }
 
   if (typeof module !== "undefined" && module.exports) {
-    module.exports = { initSocial: initSocial, wrap: wrap, money: money, crc32: crc32, makeZip: makeZip, SIZES: SIZES };
+    module.exports = { initSocial: initSocial, wrap: wrap, fit: fit, money: money, crc32: crc32, makeZip: makeZip, SIZES: SIZES };
   } else {
     initSocial(document, window);
   }

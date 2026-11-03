@@ -23,7 +23,7 @@ import { getDashboard, getSettings, listGuestProgress } from "../db/ball";
 import { getReportSettings, readSalesInputs, scheduledSendExists } from "../db/ball-report";
 import { BALL_EVENT_DATE } from "../ball/run-up-runner";
 import { daysToGo } from "../ball/sales-report";
-import { sumBallTaken, sumDonations, sumFundraisingCash } from "../db/overview-numbers";
+import { sumBallTaken, sumDonations, sumFundraisingCash, sumGiftsBySource } from "../db/overview-numbers";
 import { readWebsiteGlance } from "../db/analytics-report";
 import { summariseGuestProgress } from "../ball/guest-progress";
 import { listMonthlySupporters } from "../db/monthly-supporters";
@@ -70,6 +70,7 @@ type NumberReads = {
   givers?: NumberCounts["monthly"];
   ballSales?: NumberCounts["ball"];
   website?: NumberCounts["website"];
+  redBag?: NumberCounts["redBag"];
 };
 // TASK-510: Coming up, a list from each screen that has dates.
 type ComingReads = {
@@ -240,6 +241,17 @@ function sources(email: string, now: Date): Source<OverviewCounts>[] {
         return { moneyFundraising: { now: online.now + cash.now, before: online.before + cash.before } };
       },
     },
+    {
+      // Fill a Red Bag against the Donate page this month: the read behind the top of the Donations
+      // screen, behind that screen's gate.
+      name: "Donations",
+      section: "donations",
+      level: "view",
+      read: async () => {
+        const t = await sumGiftsBySource(months.current);
+        return { redBag: { redBag: t.redBag.month, donatePage: t.donatePage.month } };
+      },
+    },
     { name: "Monthly givers", section: "donations", level: "view", read: async () => ({ givers: giversFrom(await monthlyGivers(), now) }) },
     {
       name: "Festive Ball",
@@ -346,6 +358,7 @@ export async function getAdminOverview(req: Request, res: Response): Promise<Res
     const numbers = numbersLines({
       money: moneyWhole ? { donations: c.moneyDonations, ball: c.moneyBall, fundraising: c.moneyFundraising } : undefined,
       monthly: c.givers,
+      redBag: c.redBag,
       ball: c.ballSales,
       website: c.website,
     });

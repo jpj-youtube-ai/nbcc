@@ -2,7 +2,7 @@
 import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { fundraiserEventRecord, renderFundraiserPage, renderGetInvolvedPage } from "../../src/fundraising/render";
+import { fundraiserEventRecord, renderFundraiserPage, renderWhatsOnPage } from "../../src/fundraising/render";
 import { renderCard } from "../../src/events/render";
 import { meter, type PublicCard, type PublicPage } from "../../src/fundraising/model";
 
@@ -164,7 +164,7 @@ describe("the Get involved card for an event", () => {
   });
 
   it("is on Get involved with the link while fundraising is on", () => {
-    const html = renderGetInvolvedPage(readFileSync(resolve(ROOT, "events.html"), "utf8"), {
+    const html = renderWhatsOnPage(readFileSync(resolve(ROOT, "whats-on.html"), "utf8"), {
       events: [],
       fundraisers: [eventCard()],
       fundraisingOn: true,

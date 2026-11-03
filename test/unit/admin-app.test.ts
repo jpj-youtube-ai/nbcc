@@ -964,9 +964,11 @@ describe("admin app integration (jsdom, TASK-118)", () => {
     });
 
     // Arriving opens the soonest event by itself: Carols at the Cross, on 20 Oct.
+    // Our events is a section of the Get involved tab now: the menu entry, then the section.
     async function openEvents() {
       await signIn();
-      (document.querySelector('.admin-nav-link[data-view="events"]') as HTMLElement).click();
+      (document.querySelector('.admin-nav-link[data-view="get-involved"]') as HTMLElement).click();
+      (document.querySelector('#giSections [data-gi-section="events"]') as HTMLElement).click();
       await flush();
       await flush();
       await flush();
@@ -1082,10 +1084,12 @@ describe("admin app integration (jsdom, TASK-118)", () => {
       expect(labels).toContain("Edit EmpowHer ’26, 18 Nov");
     });
 
-    // Arrives the way a keyboard user does: focus on the menu's Events link, which must keep it.
+    // Arrives the way a keyboard user does: from the menu to Get involved, then focus on the Our
+    // events button, which must keep it.
     async function arriveFromMenu() {
       await signIn();
-      const link = document.querySelector('.admin-nav-link[data-view="events"]') as HTMLElement;
+      (document.querySelector('.admin-nav-link[data-view="get-involved"]') as HTMLElement).click();
+      const link = document.querySelector('#giSections [data-gi-section="events"]') as HTMLElement;
       link.focus();
       link.click();
       await flush();
@@ -1381,7 +1385,8 @@ describe("admin app integration (jsdom, TASK-118)", () => {
       const items = Array.from(days()[1].querySelectorAll(".ov-event")) as HTMLElement[];
       expect(items.map((i) => i.querySelector(".ov-event-when")?.textContent)).toEqual(["7:30pm", ""]);
       expect(items.map((i) => i.querySelector(".ov-event-text")?.textContent)).toEqual(["Quiz night", "Bake sale (a fundraiser)"]);
-      expect(items.map((i) => (i.querySelector("button") as HTMLElement).textContent)).toEqual(["Events", "Fundraising"]);
+      // The server still names the two old tabs; both are in Get involved now, and the button says so.
+      expect(items.map((i) => (i.querySelector("button") as HTMLElement).textContent)).toEqual(["Get involved", "Get involved"]);
     });
 
     it("opens the screen behind a thing coming up", async () => {

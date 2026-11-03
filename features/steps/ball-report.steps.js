@@ -60,6 +60,15 @@ async function reset() {
 }
 
 Before({ tags: "@ball-report" }, reset);
+
+// The day in the UK, as the server reads it (the report's days are the charity's, not UTC's).
+const UK_DAY = new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/London", year: "numeric", month: "2-digit", day: "2-digit" });
+const ukDay = (at) => UK_DAY.format(at);
+// The Festive Ball is on Saturday 7 November 2026 (BALL_EVENT_DATE): reports stop after it.
+Before({ tags: "@until-the-ball" }, function () {
+  if (ukDay(new Date()) > "2026-11-07") return "skipped";
+  return undefined;
+});
 After({ tags: "@ball-report" }, reset);
 AfterAll(async function () {
   await pool.end();
@@ -146,7 +155,7 @@ Then("the report records a test sent by {string}", async function (email) {
   assert.deepEqual(r.rows[0].recipients, [email]);
 });
 
-Then("the preview is the Festive Ball ticket report, with no money and no one's details in it", function () {
+Then("the preview is the Festive Ball ticket report, with no money and no contact details in it", function () {
   const preview = this.reportBody.preview;
   assert.match(preview.subject, /^Festive Ball tickets: .+ update$/);
   assert.ok(preview.html.includes("seats"), "the preview has no numbers");
@@ -201,7 +210,7 @@ Given("the last ticket report counted up to {int} days ago", async function (day
   await pool.query(
     `INSERT INTO ball_report_sends (sent_on, kind, status, recipients, figures, counted_to, sent_at, sent_by)
      VALUES ($1::date, 'scheduled', 'sent', '{}', '{}'::jsonb, $2, $2, 'system:schedule.report.admin.bdd@example.com')`,
-    [at.toISOString().slice(0, 10), at],
+    [ukDay(at), at],
   );
 });
 
@@ -249,3 +258,109 @@ Then("the card says the report of {int} day(s) ago could not be sent", function 
 Then("the card shows no failed report", function () {
   assert.equal(this.reportBody.lastFailure, null);
 });
+
+// ---- who has booked a whole table, and sending the day's report again (12 October 2026) ----
+
+// Invented bookers of whole tables, one row per line. Two lines with the same first name and surname
+// are the same person (the same address), as two bookings by one buyer are.
+Given("these whole tables are booked for the Festive Ball:", async function (table) {
+  let n = 0;
+  for (const row of table.hashes()) {
+    n += 1;
+    const first = row["first name"];
+    const paid = row.status === "paid" || row.status === "refunded";
+    await pool.query(
+      `INSERT INTO ball_bookings
+         (reference, kind, quantity, seats, buyer_name, buyer_first_name, buyer_surname, buyer_email,
+          invoice_company, tickets_pence, total_pence, status, paid_at, payment_method)
+       VALUES ($1, 'table', $2, $3, $4, $5, $6, $7, $8, 0, 0, $9, $10, $11)`,
+      [
+        `BALL-TBL${String(n).padStart(3, "0")}`,
+        Number(row.quantity),
+        Number(row.quantity) * 10,
+        `${first} ${row.surname}`,
+        first,
+        row.surname,
+        `${first}.${row.surname}.report.bdd@example.com`.toLowerCase(),
+        row.company || null,
+        row.status,
+        paid ? new Date(Date.now() - DAY_MS) : null,
+        row.payment === "transfer" ? "transfer" : "card",
+      ],
+    );
+  }
+});
+
+// One row of the email's table: the three names in their cells, then the count.
+function tableRow(html, first, surname, company) {
+  const cell = (words) => `>${words}</td>`;
+  const start = html.indexOf(cell(first) + "<td");
+  assert.ok(start >= 0, `the preview has no row for ${first} ${surname}`);
+  const row = html.slice(start, html.indexOf("</tr>", start));
+  assert.ok(row.includes(cell(surname)), `${first}'s row does not give the surname ${surname}`);
+  assert.ok(row.includes(cell(company)), `${first}'s row does not give the company "${company}"`);
+  return row;
+}
+
+Then(
+  "the preview lists {string}, {string}, {string} with {int} table(s)",
+  function (first, surname, company, tables) {
+    const row = tableRow(this.reportBody.preview.html, first, surname, company);
+    assert.ok(row.includes(`<b>${tables}</b>`), `${first}'s row does not say ${tables}`);
+    assert.ok(!row.includes("awaiting payment"), `${first}'s row says awaiting payment`);
+  },
+);
+
+Then(
+  "the preview lists {string}, {string}, {string} with {int} table(s), awaiting payment",
+  function (first, surname, company, tables) {
+    const row = tableRow(this.reportBody.preview.html, first, surname, company);
+    assert.ok(row.includes(`<b>${tables}</b>`), `${first}'s row does not say ${tables}`);
+    assert.ok(row.includes("awaiting payment"), `${first}'s row does not say awaiting payment`);
+  },
+);
+
+Then("the preview does not say {string}", function (words) {
+  assert.ok(!this.reportBody.preview.html.includes(words), `the preview says "${words}"`);
+});
+
+When("{string} sends today's ticket report again", async function (email) {
+  await call(this, await login(email), "POST", "/api/admin/ball-report/resend", {});
+});
+
+Then("the card offers to send the report again", function () {
+  assert.equal(this.reportBody.canResend, true);
+});
+
+Then("the card does not offer to send the report again", function () {
+  assert.equal(this.reportBody.canResend, false);
+});
+
+Then("the report was sent again to {int} people", function (count) {
+  assert.equal(this.reportBody.resentTo, count);
+});
+
+Then(
+  "the email log shows a ticket report sent again to {string} and {string}",
+  async function (one, two) {
+    const r = await pool.query(
+      `SELECT recipient FROM email_log
+        WHERE kind = 'ballReport' AND subject LIKE '%, sent again' AND recipient IN ($1, $2)`,
+      [one, two],
+    );
+    assert.deepEqual([...new Set(r.rows.map((row) => row.recipient))].sort(), [one, two].sort());
+  },
+);
+
+// audit_log is append-only, so this row stays after the scenario; only this scenario sends again.
+Then(
+  "the audit log records the report sent again by {string} to {int} people",
+  async function (email, count) {
+    const r = await pool.query(
+      `SELECT actor, data FROM audit_log WHERE action = 'ball_report.resent' ORDER BY id DESC LIMIT 1`,
+    );
+    assert.equal(r.rows.length, 1, "no audit row for sending the report again");
+    assert.equal(r.rows[0].actor, `admin:${email}`);
+    assert.equal(r.rows[0].data.recipients, count);
+  },
+);

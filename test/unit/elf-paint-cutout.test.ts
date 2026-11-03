@@ -118,9 +118,8 @@ describe("lifting a piece off", () => {
     expect(solid(layer)).toBe(40 * 30);
     expect(alphaAt(layer, 41, 11)).toBe(255);
     expect(alphaAt(layer, 41, 9)).toBe(0);
-    expect(cover).not.toBeNull();
-    expect(solid(cover!)).toBe(10 * 12);
-    expect(alphaAt(cover!, 85, 85)).toBe(255);
+    // The mitten is far from the hat, so the hat hides none of it (a piece hides only what is near it).
+    expect(cover === null || alphaAt(cover, 85, 85) === 0).toBe(true);
   });
 
   it("keeps only what the piece changed, even when the painting on its own spills over the face", () => {
@@ -193,20 +192,29 @@ describe("lifting a piece off", () => {
     expect(alphaAt(layer, 60, 63)).toBe(255); // costume just below it
   });
 
-  it("keeps a piece solid where it is painted the elf's own colour, but never the elf's skin", () => {
-    // The final review, 3 November 2026: a red hat over red hair came out full of holes, because
-    // only pixels that changed were kept; and a collar painted a little over the face must still
-    // not bring the base elf's skin with it.
+  it("keeps a hat whole, as painted on its own, though it matches the hair under it", () => {
+    // A red hat over red hair came out full of holes (final review, 3 November 2026).
     const master = elf();
     rect(master, 40, 10, 80, 40, [190, 60, 40]); // red hair
-    rect(master, 50, 42, 70, 58, [251, 216, 165]); // the face, in the master's skin
     const worn = rect(elf(), 40, 10, 80, 40, [195, 62, 44]); // a red hat, almost the hair's colour
-    rect(worn, 50, 42, 70, 58, [251, 216, 165]);
     const alone = rect(blank(), 40, 10, 80, 40, [195, 62, 44]);
-    rect(alone, 48, 40, 72, 60, [195, 62, 44]); // on its own it spills over the face
-    const { layer } = isolate(alone, worn, master, { still: [40, 100, 80, 150] });
-    expect(alphaAt(layer, 60, 25)).toBe(255); // the hat, though it matches the hair
-    expect(alphaAt(layer, 60, 50)).toBe(0); // never the face's skin
+    const { layer } = isolate(alone, worn, master, { still: [40, 100, 80, 150], whole: true });
+    expect(alphaAt(layer, 60, 25)).toBe(255);
+  });
+
+  it("draws a piece from its own painting, outline and all, even where the outline sits on the elf's", () => {
+    // Pale and doubled lines round the pieces (Jaimie, 3 November 2026): the layer was cut from the
+    // elf wearing the piece, and lost the piece's outline wherever it matched the elf's own.
+    const master = elf(); // body 40..80 x 40..100
+    rect(master, 40, 60, 42, 100, LINE); // the elf's own outline down its side
+    const worn = rect(elf(), 40, 60, 80, 100, [30, 90, 160]); // a blue top over the body
+    rect(worn, 40, 60, 42, 100, LINE); // its outline, just where the elf's was
+    const alone = rect(blank(), 40, 60, 80, 100, [30, 90, 160]);
+    rect(alone, 40, 60, 42, 100, LINE);
+    const { layer } = isolate(alone, worn, master, { still: [40, 110, 80, 150] });
+    expect(alphaAt(layer, 41, 80)).toBe(255); // the top's own outline is part of it
+    const got = [...layer.data.subarray((80 * W + 41) * 4, (80 * W + 41) * 4 + 3)];
+    expect(Math.hypot(...got.map((v, k) => v - LINE[k]))).toBeLessThan(4);
   });
 
   it("hides the soft edge of what a piece takes away, not just its solid middle", () => {
@@ -224,6 +232,17 @@ describe("lifting a piece off", () => {
     const { cover } = isolate(alone, worn, master, { still: [40, 100, 80, 150] });
     expect(alphaAt(cover!, 85, 85)).toBe(255);
     expect(alphaAt(cover!, 81, 85)).toBe(255); // the soft outline too
+  });
+
+  it("hides only what is near the piece, never stray bits of the elf far from it", () => {
+    // White arcs cut through a puffer jacket (3 November 2026): the scarf's painting showed the elf's
+    // sleeve edges a pixel off, and those far away pixels were taken out of every layer behind it.
+    const master = elf();
+    const worn = rect(elf(), 50, 10, 70, 20, [40, 120, 40]); // a scarf at the neck
+    rect(worn, 82, 80, 92, 92, BG); // and, far away, the mitten a little off in this painting
+    const alone = rect(blank(), 50, 10, 70, 20, [40, 120, 40]);
+    const { cover } = isolate(alone, worn, master, { still: [40, 100, 80, 150] });
+    expect(cover === null || alphaAt(cover, 85, 85) === 0).toBe(true);
   });
 
   it("marks nothing when the piece hides none of the elf", () => {

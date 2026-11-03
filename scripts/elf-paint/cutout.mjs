@@ -143,40 +143,10 @@ function shiftAt(ref, mov, points, span) {
 const CHANGED_BY = 40;
 const MASK_GROW = 6;
 
-/** How far inside a piece's own painting a pixel must be to count as the piece, unchanged or not. */
-const INSIDE_BY = 6;
-const SAME_WITHIN = 60;
-
-/** Where a picture is solid, shrunk by `r` pixels each way: solid only if every pixel within `r` is. */
-function shrink(img, r) {
-  const clear = { data: new Uint8ClampedArray(img.data.length), width: img.width, height: img.height };
-  for (let i = 3; i < img.data.length; i += 4) clear.data[i] = img.data[i] >= 128 ? 0 : 255;
-  const near = grow(clear, r);
-  const out = new Uint8Array(img.width * img.height);
-  for (let p = 0; p < out.length; p++) out[p] = near[p] ? 0 : 1;
-  return out;
-}
-
-/** The base elf's skin colour: the commonest light, warm, solid colour (faces and ears). */
-function skinOf(master, cut) {
-  const counts = new Map();
-  for (let i = 0; i < master.data.length; i += 4) {
-    const r = master.data[i];
-    const g = master.data[i + 1];
-    const b = master.data[i + 2];
-    if (cut.data[i + 3] < 200 || r < 200 || r - b < 50 || g < 150) continue;
-    const k = ((r >> 3) << 10) | ((g >> 3) << 5) | (b >> 3);
-    counts.set(k, (counts.get(k) || 0) + 1);
-  }
-  let best = -1;
-  let most = 0;
-  for (const [k, n] of counts) if (n > most) [best, most] = [k, n];
-  return best < 0 ? null : [(best >> 10) * 8 + 4, ((best >> 5) & 31) * 8 + 4, (best & 31) * 8 + 4];
-}
-
-function isSkin(data, i, skin) {
-  return !!skin && Math.hypot(data[i] - skin[0], data[i + 1] - skin[1], data[i + 2] - skin[2]) < 45;
-}
+/** How near to where the elf changed a piece's own painting is kept, so its outline stays whole. */
+const NEAR_BY = 8;
+/** How far from a piece what it hides can be (an open mitten beside a held torch). */
+const HIDES_WITHIN = 40;
 
 /** Where a picture is solid, grown by `r` pixels each way (a square reach). */
 function grow(img, r) {
@@ -315,29 +285,27 @@ export function isolate(alone, worn, master, opts = {}) {
   const a = shiftAt(wornBack, alone, points, span);
   const aloneBack = keyOut(moveBy(alone, -a.dx, -a.dy));
 
-  // The layer is the worn painting itself, kept only where the piece is (the painting on its own,
-  // grown a little to allow for lining up) AND where wearing it changed the elf. The painting on its
-  // own can come out a little bigger than the piece as worn (collars over the mouth, 3 November
-  // 2026), and the elf's face, mittens and hair are never part of a piece, so they can't slip in.
+  // The layer is the piece's own painting, which has its whole outline and its own colours (cutting
+  // it from the elf wearing it lost the outline wherever it sat on the elf's, and picked up bits of
+  // that elf's hair: pale, doubled lines, Jaimie, 3 November 2026). It is kept only within NEAR_BY of
+  // where wearing it changed the elf, because the painting on its own can come out a little bigger
+  // than the piece as worn (collars over the mouth). A hat (`opts.whole`) is kept whole: it sits on
+  // hair it may match in colour, and what it hides is taken away by its cover.
   const masterCut = keyOut(master);
   const wornCut = keyOut(wornBack);
-  const where = grow(aloneBack, MASK_GROW);
-  // A pixel that did not change is still the piece where the piece's own painting is solid well
-  // inside its edge (a red hat over red hair came out full of holes: final review, 3 November 2026),
-  // unless it is the base elf's skin: that is never part of a piece, whatever the painting says.
-  const inside = shrink(aloneBack, INSIDE_BY);
-  const skin = skinOf(master, masterCut);
-  const layerData = new Uint8ClampedArray(wornCut.data);
-  for (let p = 0, i = 0; p < where.length; p++, i += 4) {
-    const added = masterCut.data[i + 3] < 128 && wornCut.data[i + 3] >= 128;
-    const changed = Math.max(Math.abs(wornBack.data[i] - master.data[i]), Math.abs(wornBack.data[i + 1] - master.data[i + 1]), Math.abs(wornBack.data[i + 2] - master.data[i + 2])) > CHANGED_BY;
-    // ...and where the piece on its own is the same colour as worn there, so it truly is the piece
-    // and not the elf showing beside a painting that came out a little big.
-    const same = Math.hypot(aloneBack.data[i] - wornBack.data[i], aloneBack.data[i + 1] - wornBack.data[i + 1], aloneBack.data[i + 2] - wornBack.data[i + 2]) < SAME_WITHIN;
-    const covered = inside[p] && same && !isSkin(wornBack.data, i, skin);
-    if (!where[p] || !(added || changed || covered)) layerData[i + 3] = 0;
+  let layer = aloneBack;
+  if (!opts.whole) {
+    const changedMap = { data: new Uint8ClampedArray(master.data.length), width: master.width, height: master.height };
+    for (let i = 0; i < master.data.length; i += 4) {
+      const added = masterCut.data[i + 3] < 128 && wornCut.data[i + 3] >= 128;
+      const changed = Math.max(Math.abs(wornBack.data[i] - master.data[i]), Math.abs(wornBack.data[i + 1] - master.data[i + 1]), Math.abs(wornBack.data[i + 2] - master.data[i + 2])) > CHANGED_BY;
+      if (added || changed) changedMap.data[i + 3] = 255;
+    }
+    const near = grow(changedMap, NEAR_BY);
+    const layerData = new Uint8ClampedArray(aloneBack.data);
+    for (let q = 0; q < near.length; q++) if (!near[q]) layerData[q * 4 + 3] = 0;
+    layer = { data: layerData, width: master.width, height: master.height };
   }
-  const layer = { data: layerData, width: master.width, height: master.height };
 
   // A whole outfit is kept as painted on its own (a reindeer's red nose over red hair is still
   // the costume), and hides ALL of the elf except where the elf shows through it: solid in the
@@ -382,10 +350,13 @@ export function isolate(alone, worn, master, opts = {}) {
 
   // What of the elf the piece hides: painted in the master, even faintly (the soft edge of an
   // outline: final review, 3 November 2026), and clear once the piece is worn.
+  // Only what is near the piece: a painting can show the elf's edges a pixel off far away, and those
+  // must not be taken out of the layers behind (white arcs through a puffer, 3 November 2026).
+  const nearPiece = grow(aloneBack, opts.reach || HIDES_WITHIN);
   const cover = new Uint8ClampedArray(master.data.length);
   let hidden = 0;
   for (let i = 3; i < cover.length; i += 4) {
-    if (masterCut.data[i] > 0 && wornCut.data[i] < 128) {
+    if (nearPiece[(i - 3) / 4] && masterCut.data[i] > 0 && wornCut.data[i] < 128) {
       cover[i] = 255;
       hidden += 1;
     }

@@ -159,7 +159,7 @@ function outfitJobs() {
       still: FACE,
       layer: layerName("outfit", outfit.id),
       prompt:
-        "Keep only the costume exactly as it is, in exactly the same place and size, with its outline and shading, and every part of it, including any hat, hood, headband, bow or prop. " +
+        "Keep only the costume exactly as it is, in exactly the same place and size, with its outline and shading, and every part of it, including any hat, hood, headband, bow or prop, and the arms, sleeves and red mittens. " +
         "Paint the elf's face, skin and hair (including any bunches or hair poking out of a hood), and the background, one flat plain magenta (#FF00FF), so only the costume is left, with a hole where the face is.",
     });
   }

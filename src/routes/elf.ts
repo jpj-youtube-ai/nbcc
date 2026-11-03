@@ -13,6 +13,7 @@ import {
   createPendingJoin,
   deleteElfSession,
   deleteElfSignInCode,
+  endOtherElfSessions,
   findElfSession,
   familyWithDetectives,
   getElfSettings,
@@ -166,7 +167,12 @@ export async function postJoin(req: Request, res: Response): Promise<Response | 
     ...(family ? { familyId: family.id } : {}),
   });
   if (pending === "sign-in-first") {
-    return refuse(409, ["This email already has detectives enrolled. Please sign in to add more."]);
+    // Never say whether an email has detectives enrolled (the sign in page does not either): the
+    // family is sent a code, as if they had asked to sign in, and asked to check their email.
+    const email = String(sent.email ?? "").trim().toLowerCase();
+    if (isLoopbackRequest(req) || codeEmailLimiter.allow(email, Date.now())) await sendSignInCodeTo(email);
+    if (json) return res.status(200).json({ status: "check-email", message: JOIN_CHECK_EMAIL });
+    return sendSignInPage(res, 200, { stage: "code", email, message: JOIN_CHECK_EMAIL });
   }
 
   try {
@@ -204,6 +210,8 @@ elfRouter.post("/api/elf/join", express.urlencoded({ extended: false, limit: "32
 
 export const ELF_REQUEST_MESSAGE =
   "If that email has detectives enrolled, we have sent a sign in code to it. It works for 10 minutes.";
+export const JOIN_CHECK_EMAIL =
+  "Check your email to carry on. If you have enrolled with us before, we have sent you a code: sign in with it, then add your detectives from Detective HQ.";
 export const ELF_WRONG_CODE = "That code does not work. Check it, or ask for a new one.";
 const ELF_TOO_MANY = "Too many tries. Please wait a few minutes and try again.";
 const ELF_NOT_OURS = "Please use the form on our website.";
@@ -239,13 +247,15 @@ export async function signedInFamily(req: Request): Promise<{ familyId: number; 
   return found ? { familyId: found.familyId, sessionHash } : null;
 }
 
-async function startSession(req: Request, res: Response, familyId: number): Promise<void> {
+async function startSession(req: Request, res: Response, familyId: number): Promise<string> {
   // A NEW session, always: one the browser already holds (perhaps planted by someone else) is ended.
   const old = sessionIdOf(req);
   if (old) await deleteElfSession(hashSessionId(old));
   const id = newSessionId();
-  await createElfSession(hashSessionId(id), familyId, new Date(Date.now() + ELF_SESSION_DAYS * 24 * 60 * 60_000));
+  const hash = hashSessionId(id);
+  await createElfSession(hash, familyId, new Date(Date.now() + ELF_SESSION_DAYS * 24 * 60 * 60_000));
   res.cookie(ELF_SESSION_COOKIE, id, elfSessionCookieOptions(production()));
+  return hash;
 }
 
 function sendSignInPage(res: Response, status: number, view: Parameters<typeof renderSignInPage>[0]): void {
@@ -278,8 +288,13 @@ export async function postSignInRequest(req: Request, res: Response): Promise<Re
   if (json) res.status(200).json({ message: ELF_REQUEST_MESSAGE });
   else sendSignInPage(res, 200, { stage: "code", email, message: ELF_REQUEST_MESSAGE });
   if (!allowed) return;
+  if (!(await getElfSettings()).schoolOn) return;
+  await sendSignInCodeTo(email);
+}
+
+/** Email a sign in code, but only to a family that has paid for detectives. Never throws. */
+async function sendSignInCodeTo(email: string): Promise<void> {
   try {
-    if (!(await getElfSettings()).schoolOn) return;
     const family = await activeFamilyByEmail(email);
     if (!family) return;
     const code = newSignInCode();
@@ -317,7 +332,8 @@ export async function postSignIn(req: Request, res: Response): Promise<Response 
     await deleteElfSignInCode(email.data); // one use only
     const family = await activeFamilyByEmail(email.data);
     if (!family) return back(401, ELF_WRONG_CODE);
-    await startSession(req, res, family.id);
+    // The email is proven now: any session made by a browser that only paid ends here.
+    await endOtherElfSessions(family.id, await startSession(req, res, family.id));
     return json ? res.status(200).json({ status: "signed_in" }) : res.redirect(303, "/elf/hq");
   } catch (err) {
     console.error("elf sign in failed:", err instanceof Error ? err.message : err);

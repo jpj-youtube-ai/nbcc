@@ -83,17 +83,35 @@ function poundsWords(p: number): string {
 
 export type JoinResult = { ok: true; body: JoinBody } | { ok: false; errors: string[] };
 
+const FIELD_WORDS: Record<string, string> = {
+  entryPence: "Please give the entry in pounds and pence, like 5 or 5.50.",
+  donationPence: "Please give the gift in pounds and pence, like 5 or 5.50.",
+  detectives: "Please check each detective's first name and surname.",
+  agreed: "Please agree to the rules to enrol.",
+  website: "Something went wrong. Please try again.",
+};
+
+const DECLARATION_WORDS: Record<string, string> = {
+  firstName: "For Gift Aid, please give your first and last name.",
+  lastName: "For Gift Aid, please give your first and last name.",
+  houseNameNumber: "For Gift Aid, please give your house name or number.",
+  address: "For Gift Aid, please give the rest of your home address.",
+  postcode: "For Gift Aid, please give a UK postcode, or tick that your home is outside the UK.",
+};
+
+/** One shape problem in plain words: never a field's name, never zod's own words. */
+function issueWords(i: z.ZodIssue): string {
+  const [field, part] = i.path.map(String);
+  if (field === "declaration") return DECLARATION_WORDS[part ?? ""] ?? "Please check your Gift Aid declaration: each line needs filling in.";
+  if (i.message.startsWith("Please")) return i.message;
+  return FIELD_WORDS[field ?? ""] ?? "Something on the form needs another look. Please check it and try again.";
+}
+
 /** Check an enrolment against every rule. Names are cleaned, and every refusal is in plain words. */
 export function parseJoin(settings: ElfSettings, sent: unknown): JoinResult {
   const shaped = joinBodySchema().safeParse(sent);
   if (!shaped.success) {
-    const messages = shaped.error.issues.map((i) =>
-      i.path[0] === "website"
-        ? "Something went wrong. Please try again."
-        : i.message.startsWith("Please")
-          ? i.message
-          : `Please check ${String(i.path[0] ?? "the form")}.`,
-    );
+    const messages = shaped.error.issues.map(issueWords);
     return { ok: false, errors: [...new Set(messages)] };
   }
   const body = shaped.data;

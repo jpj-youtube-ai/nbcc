@@ -148,3 +148,11 @@ describe("settling an Elf Detective School payment", () => {
     expect(subscribeSelf).not.toHaveBeenCalled();
   });
 });
+
+describe("the review's findings", () => {
+  it("never joins the newsletter again from a later payment, so someone who left the list stays off it", async () => {
+    const later = fakeClient({ status: "pending", newsletter: true, familyActive: true });
+    await (await handleElfEvent(later.client, completed()))!.afterCommit!();
+    expect(subscribeSelf).not.toHaveBeenCalled();
+  });
+});

@@ -175,3 +175,22 @@ describe("the Stripe checkout", () => {
     expect(p.expires_at! - before).toBeLessThanOrEqual(31 * 60 + 2);
   });
 });
+
+describe("the review's findings: plain words for every refusal", () => {
+  it("says how to type an amount, never a field's name", () => {
+    for (const entryPence of [Number.NaN, null]) {
+      const words = refusal({ entryPence });
+      expect(words).toContain("in pounds and pence, like 5 or 5.50");
+      expect(words).not.toMatch(/entryPence|Please check/);
+    }
+    expect(refusal({ donationPence: Number.NaN })).toContain("in pounds and pence");
+  });
+
+  it("says which part of the Gift Aid declaration needs another look", () => {
+    const decl = { firstName: "Sam", lastName: "Example", houseNameNumber: "12", address: "Holly Lane, Troon", postcode: "KA10 6AA" };
+    expect(refusal({ giftAid: true, donationPence: 500, declaration: { ...decl, postcode: "NOT A CODE" } })).toContain("postcode");
+    expect(refusal({ giftAid: true, donationPence: 500, declaration: { ...decl, houseNameNumber: undefined } })).toContain("house name or number");
+    expect(refusal({ giftAid: true, donationPence: 500, declaration: { ...decl, firstName: "" } })).toContain("first and last name");
+    for (const words of [refusal({ giftAid: true, donationPence: 500, declaration: { ...decl, postcode: "X" } })]) expect(words).not.toMatch(/declaration\b.*check|Please check/);
+  });
+});

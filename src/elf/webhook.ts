@@ -75,7 +75,9 @@ export async function handleElfEvent(client: Querier, event: Stripe.Event): Prom
       } catch (err) {
         console.error("elf school welcome email failed:", err instanceof Error ? err.message : err);
       }
-      if (settled.newsletter) {
+      // Only from the payment that opened the account: the box is asked once, and a later payment
+      // (adding a detective) must never put back someone who has since left the list.
+      if (settled.newsletter && settled.openedFamily) {
         try {
           await subscribeSelf({ name: settled.grownUpName, email: settled.email, phone: null }, "elf");
         } catch (err) {

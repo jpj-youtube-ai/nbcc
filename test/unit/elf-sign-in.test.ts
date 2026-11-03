@@ -16,6 +16,7 @@ const db = vi.hoisted(() => ({
   attachStripeSession: vi.fn(),
   createPendingJoin: vi.fn(),
   familyWithDetectives: vi.fn(),
+  endOtherElfSessions: vi.fn(),
 }));
 const mail = vi.hoisted(() => ({ sendElfSignInCode: vi.fn(), sendElfWelcome: vi.fn() }));
 vi.mock("../../src/db/elf", () => db);
@@ -218,5 +219,29 @@ describe("adding a detective, signed in", () => {
     expect(call.familyId).toBe(3);
     expect(call.body.email).toBe("sam@example.com");
     expect(call.body.grownUpName).toBe("Sam Example");
+  });
+});
+
+describe("the review's findings: signing in", () => {
+  it("ends every other session of the family when someone signs in with the emailed code", async () => {
+    const email = "sam@example.com";
+    db.countElfCodeTry.mockResolvedValue({ codeHash: hashSignInCode(email, "123456", "test-secret"), expiresAt: new Date(Date.now() + 60_000), attempts: 1 });
+    db.activeFamilyByEmail.mockResolvedValue({ id: 3, grownUpName: "Sam Example" });
+    const res = fakeRes();
+    await postSignIn(req({ json: true, body: { email, code: "123456" } }), res as never);
+    expect(db.endOtherElfSessions).toHaveBeenCalledWith(3, db.createElfSession.mock.calls[0][0]);
+  });
+
+  it("does not say whether an email has detectives enrolled: it emails a code and asks them to check their email", async () => {
+    const { postJoin } = await import("../../src/routes/elf");
+    db.createPendingJoin.mockResolvedValue("sign-in-first");
+    db.activeFamilyByEmail.mockResolvedValue({ id: 3, grownUpName: "Sam Example" });
+    const res = fakeRes();
+    res.locals = { elfSettings: ON };
+    await postJoin(req({ json: true, body: { grownUpName: "Sam Example", email: "sam@example.com", detectives: [{ firstName: "Ivy", surname: "Snowsleuth" }], entryPence: 500, agreed: true } }), res as never);
+    expect(res.statusCode).toBe(200);
+    expect(JSON.stringify(res.body)).toContain("Check your email");
+    expect(JSON.stringify(res.body)).not.toMatch(/already has detectives/);
+    expect(mail.sendElfSignInCode).toHaveBeenCalledTimes(1);
   });
 });

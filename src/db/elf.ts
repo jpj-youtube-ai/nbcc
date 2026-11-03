@@ -191,6 +191,8 @@ export interface SettledOrder {
   email: string;
   grownUpName: string;
   newsletter: boolean;
+  /** This payment opened the family's account (it had no paid order before). */
+  openedFamily: boolean;
   detectives: { id: number; firstName: string; surname: string; badgeNumber: number }[];
 }
 
@@ -253,6 +255,7 @@ export async function settleElfOrder(
     email: row.email,
     grownUpName: row.grown_up_name,
     newsletter: row.newsletter,
+    openedFamily: !row.family_active,
     detectives: detectives.rows
       .map((d) => ({ id: d.id, firstName: d.first_name, surname: d.surname, badgeNumber: d.badge_number }))
       .sort((a, b) => a.id - b.id),
@@ -311,6 +314,12 @@ export async function findElfSession(sessionHash: string): Promise<{ familyId: n
     [sessionHash],
   );
   return r.rows[0] ? { familyId: r.rows[0].family_id } : null;
+}
+
+/** End every session of a family but one: when someone proves the email with a code, a session
+ *  made earlier by a browser that only paid (and never proved the email) stops working. */
+export async function endOtherElfSessions(familyId: number, keepHash: string): Promise<void> {
+  await pool.query("DELETE FROM elf_sessions WHERE family_id = $1 AND session_hash <> $2", [familyId, keepHash]);
 }
 
 export async function deleteElfSession(sessionHash: string): Promise<void> {

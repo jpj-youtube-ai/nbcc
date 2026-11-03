@@ -33,9 +33,10 @@ Feature: Elf Detective School, wave 1: enrolling, paying, signing in and dressin
     When Stripe says the enrolment was paid
     Then 1 "elfWelcome" email went to "sam.elf.bdd@example.com"
 
-  Scenario: an email that already has detectives must sign in to add more
+  Scenario: an email that already has detectives must sign in to add more, and is never told so outright
     Given the Elf Detective School is switched "on"
     And "jo.elf.bdd@example.com" has already enrolled "Ivy Snowsleuth" and paid
     When "jo.elf.bdd@example.com" enrols "Max Jinglesnoop" and "Ada Twinkletoes" paying 400 pence
-    Then the elf response status should be 409
-    And the elf response should contain "Please sign in to add more"
+    Then the elf response status should be 200
+    And the elf response should contain "Check your email to carry on"
+    And 1 "elfSignInCode" email went to "jo.elf.bdd@example.com"

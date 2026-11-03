@@ -79,7 +79,7 @@ hat, gadget. An outfit replaces all of the clothes.
   the bunches poking out of the reindeer hood) left open, so one painting of an outfit works for
   every skin tone and hairstyle.
 
-24 styles in 3 colours (72 pieces, each painted about twice) plus 11 outfits plus 75 elves comes to
+25 styles in 3 colours (75 pieces, each painted about twice) plus 11 outfits plus 75 elves comes to
 roughly 250 to 300 paintings, including retries.
 
 ### On the site

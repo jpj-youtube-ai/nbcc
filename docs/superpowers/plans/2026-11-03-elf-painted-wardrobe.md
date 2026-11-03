@@ -36,7 +36,7 @@ changing comes from `docs/superpowers/specs/2026-10-04-elf-detective-school-desi
 - Every elf wears red mittens. Gadgets and outfit props are painted once and fit every elf.
 - Layer order, bottom to top: elf, feet, top, extra, face, neck, hat, hand. An outfit replaces all
   pieces.
-- Catalogue unchanged: 5 skin tones, 5 hair colours, 3 hairstyles, 24 styles in 3 colours, 11
+- Catalogue unchanged: 5 skin tones, 5 hair colours, 3 hairstyles, 25 styles in 3 colours (75 pieces), 11
   outfits, every unlock door, every word. `normaliseLook` and the unlock functions are not touched.
 - The repo is public: no real names or data in prompts, pictures, fixtures or the manifest.
 - Raw paintings never get committed (`.elf-paint/` is git-ignored). Only finished WebP layers and
@@ -54,7 +54,7 @@ changing comes from `docs/superpowers/specs/2026-10-04-elf-detective-school-desi
    than the cheek, measured in pixels, on s5).
 3. **A gadget or outfit that replaces part of the elf:** the elf's own open right mitten, or a hand
    the reindeer paws should cover, must not peek out. Test in Task 6.
-4. **The wardrobe page on a phone:** 72 piece tiles and 11 outfit tiles must not load the big
+4. **The wardrobe page on a phone:** 75 piece tiles and 11 outfit tiles must not load the big
    layers. Test in Task 7 (the tiles' total bytes are capped).
 5. **Several elves on one page** (HQ with three detectives, the certificate): each drawing's
    mask ids stay its own. Test in Task 5.
@@ -209,7 +209,7 @@ Job rules:
 ```ts
 it("needs 75 elves, one for each skin, hairstyle and hair colour", () => { expect(jobs("elf")).toHaveLength(75); });
 it("asks for the deeper browny red on s4 and s5 only", () => { /* prompt includes "deeper" exactly for s4/s5 */ });
-it("has a worn and an alone painting for every colour of every style, and every outfit", () => { /* 72 * 2 + 11 * 2 */ });
+it("has a worn and an alone painting for every colour of every style, and every outfit", () => { /* 75 * 2 + 11 * 2 */ });
 it("fits hats on curly hair", () => { expect(job("worn", "piece-elf-red").from).toBe("elf-s2-curly-brown"); });
 it("has a fresh design for every style and outfit, and no real names", () => { /* designs.json keys = STYLES ids + OUTFITS ids */ });
 it("puts the starter kit and the Workshop outfit in the starter batch", () => { /* elf red, tunic green, curly maroon, workshop */ });

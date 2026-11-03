@@ -309,7 +309,8 @@ export function isolate(alone, worn, master, opts = {}) {
     let hole = null;
     if (opts.face) {
       const found = holeOf(aloneBack, opts.face);
-      const face = faceCentre(master, masterCut, opts.face);
+      // The face's middle is measured above the chin only (`opts.faceOnly`), or the neck pulls it down.
+      const face = faceCentre(master, masterCut, opts.faceOnly || opts.face);
       if (found && face) {
         const dx = Math.round(face[0] - found.x);
         const dy = Math.round(face[1] - found.y);

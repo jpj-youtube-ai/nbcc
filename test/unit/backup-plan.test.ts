@@ -64,9 +64,10 @@ describe("knowing how many tables to expect", () => {
   // page's pack and the things in it that staff have ticked; 89 with the Fill a Red Bag list's
   // versions (the draft and every list published); 90 since TASK-562 added the addresses staff
   // have removed from the Email audit's red band; 91 since the Festive Ball chase added which
-  // reminders and chase lists have gone, per address and day.
-  it("counts 91 across the three databases", () => {
-    expect(expectedTableCount(ROOT)).toBe(91);
+  // reminders and chase lists have gone, per address and day; 97 since Elf Detective School added
+  // its settings, families, detectives, orders, sign in codes and sessions.
+  it("counts 97 across the three databases", () => {
+    expect(expectedTableCount(ROOT)).toBe(97);
   });
 
   it("finds the three tables that live outside the main database", () => {
@@ -157,7 +158,12 @@ describe("knowing how many tables to expect", () => {
     expect(main).toContain("email_audit_removals");
     // The Festive Ball chase: which reminders and chase lists went, so none goes twice.
     expect(main).toContain("ball_chase_sends");
-    expect(main.length).toBe(88);
+    // Elf Detective School: families, detectives and their badges, and the orders that carry the
+    // Gift Aid declarations kept on the school's own records.
+    expect(main).toContain("elf_families");
+    expect(main).toContain("elf_detectives");
+    expect(main).toContain("elf_orders");
+    expect(main.length).toBe(94);
   });
 
   it("returns nothing for a directory that does not exist, rather than throwing", () => {

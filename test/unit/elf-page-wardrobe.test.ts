@@ -1,10 +1,11 @@
 // @vitest-environment jsdom
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { renderWardrobePage } from "../../src/elf/pages/wardrobe";
 import type { WardrobeView } from "../../src/elf/pages/types";
-import { OUTFITS, SLOTS, STYLES } from "../../src/elf/wardrobe";
+import { OUTFITS, SLOTS, STYLES, usePaint } from "../../src/elf/wardrobe";
+import { PAINT_FIXTURE } from "./elf-paint-fixture";
 import { wardrobeView } from "./elf-fixtures";
 
 // NBCC Elf Detective School: the wardrobe screen. Every family and detective here is invented (see
@@ -21,6 +22,10 @@ function said(doc: Document, input: HTMLInputElement): string {
   label.querySelectorAll('[aria-hidden="true"]').forEach((el) => el.remove());
   return words(label);
 }
+
+
+beforeEach(() => usePaint(PAINT_FIXTURE));
+afterEach(() => usePaint(null));
 
 describe("the wardrobe page", () => {
   it("is a private page that loads the wardrobe before the script that uses it", () => {
@@ -179,7 +184,9 @@ describe("the pieces", () => {
   it("draws each piece as a small picture that a screen reader skips", () => {
     const doc = page();
     const label = doc.querySelector(`label[for="${choice(doc, "elf:red").id}"]`)!;
-    expect(label.querySelector("svg")!.getAttribute("aria-hidden")).toBe("true");
+    const art = label.querySelector("img")!;
+    expect(art.getAttribute("alt")).toBe("");
+    expect(art.getAttribute("src")).toBe("/assets/img/elf/tile/piece-elf-red.webp");
   });
 
   it("locks what has not been earned: it cannot be picked, wears a padlock and says how many doors earn it", () => {
@@ -303,7 +310,8 @@ describe("what comes from data", () => {
     const view = wardrobeView();
     view.detective = { ...view.detective, id: '"><script>x</script>', name: '<img src=x onerror="alert(1)">', badgeNumber: "<i>1</i>" };
     const doc = page(view);
-    expect(doc.querySelector("script:not([src]), main img, main i, [onerror]")).toBeNull();
+    // The only pictures are the painted tiles (the injected <img> must not be one of them).
+    expect(doc.querySelector('script:not([src]), main img:not([src^="/assets/img/elf/tile/"]), main i, [onerror]')).toBeNull();
     expect(doc.querySelector<HTMLInputElement>('input[name="detective"]')!.value).toBe('"><script>x</script>');
     expect(words(doc.querySelector(".elf-wd-preview h2"))).toBe('<img src=x onerror="alert(1)">');
   });

@@ -1,11 +1,12 @@
 // @vitest-environment jsdom
-import { describe, it, expect, vi, afterEach } from "vitest";
+import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
 import { resolve } from "node:path";
 import { createRequire } from "node:module";
 import { renderWardrobePage } from "../../src/elf/pages/wardrobe";
 import type { WardrobeView } from "../../src/elf/pages/types";
 import { drawElf, drawOutfit } from "../../src/elf/wardrobe";
 import { wardrobeView } from "./elf-fixtures";
+import { PAINT_FIXTURE } from "./elf-paint-fixture";
 
 // NBCC Elf Detective School: the script on the wardrobe page. It shows the elf changing as things
 // are tried on, saves the look without leaving the page, and turns the sections into tabs. It runs
@@ -70,6 +71,10 @@ afterEach(() => {
   vi.useRealTimers();
   window.location.hash = "";
 });
+
+
+beforeEach(() => elf.usePaint(PAINT_FIXTURE));
+afterEach(() => elf.usePaint(null));
 
 describe("trying things on", () => {
   it("changes the elf in the mirror the moment something is picked", () => {

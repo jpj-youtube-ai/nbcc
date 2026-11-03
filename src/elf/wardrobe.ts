@@ -110,8 +110,31 @@ export interface DrawOptions {
   /** The words a screen reader says, such as whose elf it is. False for an elf that is decoration. */
   label?: string | false;
   /** A short name that is this drawing's alone on the page. Give one whenever several elves are put
-   *  into one page as SVG, so that their stripes and tartans keep apart. */
+   *  into one page, so that their masks keep apart. */
   key?: string;
+  /** Which painted pictures: "sm" for screens (the default), "lg" for print. */
+  set?: "sm" | "lg";
+}
+
+/** A place on the painted canvas (1024 by 1536). */
+export interface PaintBox {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
+/** One painted layer of a drawing: its name (the file is assets/img/elf/<size>/<name>.webp), its
+ *  place, and the part of the elf it hides, if any. */
+export interface PaintLayer extends PaintBox {
+  name: string;
+  cover: PaintBox | null;
+}
+
+/** The list of painted layers, as assets/js/elf-paint.js holds it. */
+export interface PaintManifest {
+  canvas: { w: number; h: number; view: number[] };
+  layers: Record<string, PaintBox & { cover?: PaintBox }>;
 }
 
 interface WardrobeApi {
@@ -135,6 +158,8 @@ interface WardrobeApi {
   drawElf(look: unknown, state: WardrobeState, opts?: DrawOptions): string;
   drawPiece(styleId: string, colourId: string, size?: number): string;
   drawOutfit(outfitId: string, look: unknown, size?: number): string;
+  layersFor(look: unknown, state: WardrobeState): PaintLayer[];
+  usePaint(manifest: PaintManifest | null): void;
 }
 
 const SCRIPT = resolve(__dirname, "../../assets/js/elf-wardrobe.js");
@@ -172,6 +197,10 @@ export const drawElf = api.drawElf;
 export const drawPiece = api.drawPiece;
 /** One outfit on a plain elf, for a wardrobe tile. */
 export const drawOutfit = api.drawOutfit;
+/** The painted layers a look is drawn from, bottom to top: the browser and the server stack the same ones. */
+export const layersFor = api.layersFor;
+/** For tests only: draw from another list of layers, or null to go back to the real one. */
+export const usePaint = api.usePaint;
 
 /**
  * What a detective has earned, built from their progress. Always build a WardrobeState here.

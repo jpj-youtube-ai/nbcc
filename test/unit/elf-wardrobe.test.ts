@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import {
   HAIR_COLOURS,
   HAIR_STYLES,
@@ -12,6 +12,7 @@ import {
   drawOutfit,
   drawPiece,
   inSentence,
+  layersFor,
   lookWords,
   newlyUnlocked,
   normaliseLook,
@@ -19,9 +20,14 @@ import {
   outfitWords,
   pieceUnlocked,
   pieceWords,
+  usePaint,
   wardrobeState,
 } from "../../src/elf/wardrobe";
+import { createRequire } from "node:module";
 import { progressOf } from "../../src/elf/progress";
+import { PAINT_FIXTURE, paintWithout } from "./elf-paint-fixture";
+
+const PAINT = createRequire(import.meta.url)("../../assets/js/elf-paint.js") as { layers: Record<string, unknown> };
 
 // NBCC Elf Detective School: the elf wardrobe. These tests read the one file the browser also loads
 // (assets/js/elf-wardrobe.js) through src/elf/wardrobe.ts, so they hold the real thing: what there
@@ -336,49 +342,84 @@ describe("a look", () => {
   });
 });
 
-describe("drawing", () => {
-  it("draws the elf as one svg", () => {
-    const svg = drawElf(defaultLook(), { doorsDone: 0 });
+// The elf and every piece are paintings, stacked as layers (docs/superpowers/specs/2026-11-03-elf-painted-wardrobe-design.md).
+// These tests stack a made up list of layers, one for everything in the catalogue, so they hold
+// the drawing whatever has been painted so far. The real list is checked for completeness below.
+const hrefs = (svg: string) => [...svg.matchAll(/<image href="([^"]+)"/g)].map((m) => m[1]).filter((h) => !h.endsWith(".cover.webp"));
+const ids = (svg: string) => [...svg.matchAll(/ id="([^"]+)"/g)].map((m) => m[1]);
+const without = paintWithout;
+const sm = (name: string) => `/assets/img/elf/sm/${name}.webp`;
+
+describe("drawing from the painted layers", () => {
+  beforeEach(() => usePaint(PAINT_FIXTURE));
+  afterEach(() => usePaint(null));
+
+  it("draws the elf as one svg of the canvas, 1.3 times as tall as it is wide", () => {
+    const svg = drawElf(defaultLook(), { doorsDone: 0 }, { size: 100 });
     expect(svg.startsWith("<svg ")).toBe(true);
     expect(svg.endsWith("</svg>")).toBe(true);
-    expect(svg).toContain('viewBox="0 0 200 260"');
-    expect(svg).toContain('xmlns="http://www.w3.org/2000/svg"');
+    expect(svg).toContain('viewBox="-79 0 1182 1536"');
+    expect(svg).toContain('width="100" height="130"');
     expect(svg.match(/<svg/g)?.length).toBe(1);
   });
 
-  it("draws every piece in every colour without a gap", () => {
-    for (const style of STYLES) {
-      for (const colour of style.colours) {
-        const look = defaultLook();
-        look.pieces[style.slot] = [style.id, colour.id];
-        const worn = drawElf(look, EVERYTHING);
-        const tile = drawPiece(style.id, colour.id, 40);
-        expect(worn, `${style.id} ${colour.id}`).not.toMatch(/undefined|NaN|null/);
-        expect(worn.length, `${style.id} ${colour.id}`).toBeGreaterThan(drawElf(defaultLook(), EVERYTHING).length - 1200);
-        expect(tile.startsWith("<svg "), `${style.id} ${colour.id}`).toBe(true);
-        expect(tile, `${style.id} ${colour.id}`).not.toMatch(/undefined|NaN|null/);
-      }
-    }
+  it("stacks one picture for each thing worn, in layer order", () => {
+    const look = { ...defaultLook(), pieces: { hat: ["bobble", "red"], face: ["specs", "black"], neck: ["stripe", "red"], top: ["jumper", "red"], feet: ["boots", "brown"], hand: ["mag", "brass"], extra: ["badge", "gold"] } };
+    const order = ["elf-sister-s2-short-brown", "piece-boots-brown", "piece-jumper-red", "piece-badge-gold", "piece-specs-black", "piece-stripe-red", "piece-bobble-red", "piece-mag-brass"];
+    expect(hrefs(drawElf(look, EVERYTHING))).toEqual(order.map(sm));
+    expect(layersFor(look, EVERYTHING).map((l: { name: string }) => l.name)).toEqual(order);
   });
 
-  it("draws every outfit, worn and as a tile", () => {
-    for (const outfit of OUTFITS) {
-      const worn = drawElf({ ...defaultLook(), outfit: outfit.id }, EVERYTHING);
-      expect(worn, outfit.id).not.toMatch(/undefined|NaN|null/);
-      expect(worn, outfit.id).not.toBe(drawElf(defaultLook(), EVERYTHING));
-      expect(drawOutfit(outfit.id, null, 58).startsWith("<svg "), outfit.id).toBe(true);
-    }
+  it("draws only the elf and the outfit when an outfit is on", () => {
+    expect(hrefs(drawElf({ ...defaultLook(), outfit: "tree" }, EVERYTHING))).toEqual([sm("elf-sister-s2-short-brown"), sm("outfit-tree")]);
   });
 
-  it("changes the drawing with the skin tone, the hair colour and the hair style", () => {
-    const base = drawElf(defaultLook(), EVERYTHING);
-    expect(drawElf({ ...defaultLook(), skin: "s5" }, EVERYTHING)).not.toBe(base);
-    expect(drawElf({ ...defaultLook(), hair: "ginger" }, EVERYTHING)).not.toBe(base);
-    expect(drawElf({ ...defaultLook(), hairStyle: "bunches" }, EVERYTHING)).not.toBe(base);
+  it("uses the large pictures for print, and the small ones for screens", () => {
+    expect(hrefs(drawElf(defaultLook(), EVERYTHING, { set: "lg" }))[0]).toBe("/assets/img/elf/lg/elf-sister-s2-short-brown.webp");
+    expect(hrefs(drawElf(defaultLook(), EVERYTHING, { set: "nonsense" as "sm" }))[0]).toBe(sm("elf-sister-s2-short-brown"));
+  });
+
+  it("paints the elf chosen: brother or sister, skin, hair colour and hairstyle", () => {
+    const look = { ...defaultLook(), sibling: "brother", skin: "s5", hair: "black", hairStyle: "curly" };
+    expect(hrefs(drawElf(look, EVERYTHING))[0]).toBe(sm("elf-brother-s5-curly-black"));
+  });
+
+  it("hides the elf's own mitten under a gadget, and nothing without one", () => {
+    const holding = drawElf({ ...defaultLook(), pieces: { ...defaultLook().pieces, hand: ["mag", "brass"] } }, EVERYTHING, { key: "a" });
+    expect(holding).toContain('<mask id="m-a"');
+    expect(holding).toContain('href="/assets/img/elf/sm/piece-mag-brass.cover.webp"');
+    expect(holding).toMatch(/<image href="\/assets\/img\/elf\/sm\/elf-[^"]+" [^>]*mask="url\(#m-a\)"/);
+    expect(drawElf(defaultLook(), EVERYTHING, { key: "a" })).not.toContain("<mask");
+  });
+
+  it("keeps each drawing's mask its own when several share a page, and its key plain", () => {
+    const look = { ...defaultLook(), pieces: { ...defaultLook().pieces, hand: ["mag", "brass"] } };
+    expect(ids(drawElf(look, EVERYTHING, { key: "a" }))).toEqual(["m-a"]);
+    expect(ids(drawElf(look, EVERYTHING, { key: "b" }))).toEqual(["m-b"]);
+    const odd = drawElf(look, EVERYTHING, { key: '"><script>x' });
+    expect(odd).not.toContain("<script");
+    expect(ids(odd).every((id) => /^m-[A-Za-z0-9_-]+$/.test(id))).toBe(true);
+    expect(ids(drawElf(look, EVERYTHING))[0]).toMatch(/^m-e[0-9a-z]+$/);
+  });
+
+  it("leaves out a piece that has not been painted, and still draws the elf", () => {
+    usePaint(without("piece-bobble-red"));
+    const svg = drawElf({ ...defaultLook(), pieces: { ...defaultLook().pieces, hat: ["bobble", "red"] } }, EVERYTHING);
+    expect(hrefs(svg)).toEqual([sm("elf-sister-s2-short-brown"), sm("piece-curly-maroon"), sm("piece-tunic-green")]);
+  });
+
+  it("falls back to the first elf when the one chosen has not been painted, and draws no broken picture when none has", () => {
+    usePaint(without("elf-brother-s5-curly-black"));
+    expect(hrefs(drawElf({ ...defaultLook(), sibling: "brother", skin: "s5", hair: "black", hairStyle: "curly" }, EVERYTHING))[0]).toBe(sm("elf-sister-s2-short-brown"));
+    usePaint({ canvas: PAINT_FIXTURE.canvas, layers: {} });
+    const empty = drawElf(defaultLook(), EVERYTHING);
+    expect(hrefs(empty)).toEqual([]);
+    expect(empty.startsWith("<svg ")).toBe(true);
   });
 
   it("never lets markup in through a look", () => {
     const evil = {
+      sibling: "<i>",
       skin: '"><script>alert(1)</script>',
       hair: "x' onload='alert(1)",
       hairStyle: "<b>",
@@ -386,7 +427,7 @@ describe("drawing", () => {
       pieces: { hat: ["elf", 'red"><script>'], top: ["<img>", "tan"], feet: "boots", hand: ["mag", { toString: () => "brass" }] },
     };
     const svg = drawElf(evil, EVERYTHING);
-    expect(svg).not.toMatch(/<script|onload|<b>|<img/);
+    expect(svg).not.toMatch(/<script|onload|<b>|<img|<i>/);
     expect(svg).toBe(drawElf(defaultLook(), EVERYTHING));
   });
 
@@ -405,37 +446,49 @@ describe("drawing", () => {
   });
 
   it("does not draw what has not been earned", () => {
-    const look = { ...defaultLook(), outfit: "nessie" };
-    expect(drawElf(look, { doorsDone: 24 })).toBe(drawElf(defaultLook(), { doorsDone: 24 }));
+    expect(drawElf({ ...defaultLook(), outfit: "nessie" }, { doorsDone: 24 })).toBe(drawElf(defaultLook(), { doorsDone: 24 }));
   });
 
   it("keeps the size sensible and can leave out the backdrop and the label", () => {
-    expect(drawElf(defaultLook(), EVERYTHING, { size: 100 })).toContain('width="100" height="130"');
     expect(drawElf(defaultLook(), EVERYTHING, { size: 1 })).toContain('width="16"');
     expect(drawElf(defaultLook(), EVERYTHING, { size: 99999 })).toContain('width="2000"');
     expect(drawElf(defaultLook(), EVERYTHING)).toContain('role="img"');
     expect(drawElf(defaultLook(), EVERYTHING, { label: false })).toContain('aria-hidden="true"');
-    const plain = drawElf(defaultLook(), EVERYTHING, { backdrop: false });
-    expect(plain.length).toBeLessThan(drawElf(defaultLook(), EVERYTHING).length);
+    expect(drawElf(defaultLook(), EVERYTHING, { backdrop: false }).length).toBeLessThan(drawElf(defaultLook(), EVERYTHING).length);
   });
 
-  it("draws nothing for a piece or an outfit that does not exist", () => {
+  it("can say whose elf it is, in words that are made safe", () => {
+    expect(drawElf(defaultLook(), EVERYTHING, { label: "Detective Ruby Tinselfoot's elf" })).toContain('aria-label="Detective Ruby Tinselfoot&#39;s elf"');
+    const nasty = drawElf(defaultLook(), EVERYTHING, { label: '"><script>alert(1)</script>' });
+    expect(nasty).not.toContain("<script");
+    expect(nasty.match(/<svg/g)?.length).toBe(1);
+  });
+
+  it("shows a piece's tile as one small picture that loads only when it is near", () => {
+    expect(drawPiece("bobble", "red", 56)).toBe('<img src="/assets/img/elf/tile/piece-bobble-red.webp" width="56" height="42" alt="" loading="lazy" decoding="async" />');
     expect(drawPiece("cape", "red", 40)).toBe("");
     expect(drawPiece("elf", "purple", 40)).toBe("");
+    usePaint(without("piece-bobble-red"));
+    expect(drawPiece("bobble", "red", 56)).toBe("");
+  });
+
+  it("shows an outfit's tile on this elf, from the tile pictures", () => {
+    const tile = drawOutfit("reindeer", { ...defaultLook(), skin: "s4" }, 72);
+    expect(hrefs(tile)).toEqual(["/assets/img/elf/tile/elf-sister-s4-short-brown.webp", "/assets/img/elf/tile/outfit-reindeer.webp"]);
+    expect(tile).toContain('width="72" height="94"');
+    expect(tile).toContain('aria-hidden="true"');
     expect(drawOutfit("robot", null, 58)).toBe("");
   });
 
-  it("draws whatever is worn in every slot, so nothing in the catalogue can go undrawn", () => {
+  it("draws every piece in every colour differently from every other, and from wearing nothing", () => {
     for (const slot of SLOTS) {
-      const styles = STYLES.filter((s) => s.slot === slot.id);
-      const drawings = styles.flatMap((style) =>
+      const drawings = STYLES.filter((s) => s.slot === slot.id).flatMap((style) =>
         style.colours.map((colour) => {
           const look = defaultLook();
           look.pieces[slot.id] = [style.id, colour.id];
           return drawElf(look, EVERYTHING);
         }),
       );
-      // Every style in every colour draws differently from every other, and from wearing nothing.
       const bare = defaultLook();
       if (slot.optional) (bare.pieces as Record<string, unknown>)[slot.id] = null;
       const all = slot.optional ? [...drawings, drawElf(bare, EVERYTHING)] : drawings;
@@ -443,57 +496,16 @@ describe("drawing", () => {
     }
   });
 
-  it("can say whose elf it is, in words that are made safe", () => {
-    const named = drawElf(defaultLook(), EVERYTHING, { label: "Detective Ruby Tinselfoot's elf" });
-    expect(named).toContain('aria-label="Detective Ruby Tinselfoot&#39;s elf"');
-    const nasty = drawElf(defaultLook(), EVERYTHING, { label: '"><script>alert(1)</script>' });
-    expect(nasty).not.toContain("<script");
-    expect(nasty.match(/<svg/g)?.length).toBe(1);
+  it("draws the same elf the same way every time", () => {
+    expect(drawElf(defaultLook(), EVERYTHING)).toBe(drawElf(defaultLook(), EVERYTHING));
   });
 });
 
-describe("patterns: the stripes, checks and tartans", () => {
-  const ids = (svg: string) => [...svg.matchAll(/ id="([^"]+)"/g)].map((m) => m[1]);
-  const refs = (svg: string) => [...svg.matchAll(/url\(#([^)]+)\)/g)].map((m) => m[1]);
-  const pieceTiles = () => STYLES.flatMap((s) => s.colours.map((c) => drawPiece(s.id, c.id, 40)));
-  const outfitTiles = () => OUTFITS.map((o) => drawOutfit(o.id, null, 58));
-  const worn = () =>
-    STYLES.flatMap((s) =>
-      s.colours.map((c) => {
-        const look = defaultLook();
-        look.pieces[s.slot] = [s.id, c.id];
-        return drawElf(look, EVERYTHING);
-      }),
-    );
-
-  it("defines every pattern a drawing uses, and none that it does not", () => {
-    for (const svg of [...pieceTiles(), ...outfitTiles(), ...worn()]) {
-      expect(new Set(ids(svg))).toEqual(new Set(refs(svg)));
-    }
-  });
-
-  it("gives every tile ids of its own, so a whole wardrobe can sit on one page", () => {
-    const all = [...pieceTiles(), ...outfitTiles()].flatMap(ids);
-    expect(all.length).toBeGreaterThan(10);
-    expect(new Set(all).size).toBe(all.length);
-  });
-
-  it("gives an elf ids from its key, so several elves can sit on one page", () => {
-    const ruby = drawElf(defaultLook(), EVERYTHING, { key: "ruby" });
-    const sam = drawElf(defaultLook(), EVERYTHING, { key: "sam" });
-    expect(ids(ruby).length).toBeGreaterThan(0);
-    expect(ids(ruby).every((id) => id.endsWith("-ruby"))).toBe(true);
-    expect(ids(ruby).filter((id) => ids(sam).includes(id))).toEqual([]);
-  });
-
-  it("keeps a key to plain characters", () => {
-    const svg = drawElf(defaultLook(), EVERYTHING, { key: '"><script>x' });
-    expect(svg).not.toContain("<script");
-    expect(ids(svg).every((id) => /^[A-Za-z0-9_-]+$/.test(id))).toBe(true);
-  });
-
-  it("draws the same elf the same way every time", () => {
-    expect(drawElf(defaultLook(), EVERYTHING)).toBe(drawElf(defaultLook(), EVERYTHING));
+describe("the painted layers on the site", () => {
+  // Switched on at the end of the painting (plan Task 8), when every elf, piece and outfit is painted.
+  it.skip("has a picture for every sibling, skin, hairstyle, hair colour, style colour and outfit", () => {
+    const missing = Object.keys(PAINT_FIXTURE.layers).filter((name) => !(name in PAINT.layers));
+    expect(missing).toEqual([]);
   });
 });
 
@@ -502,19 +514,10 @@ describe("hair that can be seen", () => {
   const distance = (a: string, b: string) => Math.hypot(...rgb(a).map((v, i) => v - rgb(b)[i]));
 
   it("gives every hair colour an edge that stands out from every skin tone", () => {
-    // Brown hair on a brown face is nearly one colour. The edge is what shows the hair is there.
+    // Kept for the hair swatches on the wardrobe page, which are drawn with this edge.
     for (const hair of HAIR_COLOURS) {
       for (const skin of SKIN_TONES) {
         expect(distance(hair.dark, skin.hex), `${hair.id} hair on ${skin.id}`).toBeGreaterThanOrEqual(40);
-      }
-    }
-  });
-
-  it("draws that edge round the hair, in every style", () => {
-    for (const hair of HAIR_COLOURS) {
-      for (const style of HAIR_STYLES) {
-        const svg = drawElf({ ...defaultLook(), hair: hair.id, hairStyle: style.id }, EVERYTHING);
-        expect(svg, `${style.id} ${hair.id}`).toContain(`stroke="${hair.dark}"`);
       }
     }
   });

@@ -2939,6 +2939,33 @@ textarea.fx-call-input{min-height:88px;line-height:1.5;resize:vertical;field-siz
 /* Two equal choices, so neither is the loud one: the admin's small button, outlined. */
 #view-qr .qr-actions .admin-btn{background:transparent;color:var(--maroon);border:1.6px solid var(--line)}
 #view-qr .qr-actions .admin-btn:hover{background:var(--tan-soft);border-color:var(--maroon)}
+/* TASK-588: named QR codes. The make-one form is a card of its own above the list; each named card
+   adds where it goes and its scans, and two quiet links (rename or move, hide) under the downloads.
+   Editing swaps the card's words for a small form in the same place. */
+#view-qr .qr-new{display:grid;gap:8px;max-width:640px;background:var(--white);border:1px solid var(--line);border-radius:14px;padding:16px 18px;margin:8px 0 22px}
+#view-qr .qr-new[hidden]{display:none}
+#view-qr .qr-new-title{margin:0 0 4px;font-family:var(--font-head);font-size:1.1rem;color:var(--maroon)}
+#view-qr .qr-field{display:grid;gap:4px;font-weight:600;font-size:.92rem;margin-top:6px}
+#view-qr .qr-hint{display:block;margin:0;font-weight:400;font-size:.84rem;color:var(--slate-soft)}
+#view-qr .qr-new input,#view-qr .qr-new select,#view-qr .qr-edit input,#view-qr .qr-edit select{width:100%;max-width:100%;font:inherit;font-weight:400;color:var(--slate);background:var(--cream);border:1.6px solid var(--line);border-radius:12px;padding:10px 12px}
+#view-qr .qr-new input:focus,#view-qr .qr-new select:focus,#view-qr .qr-edit input:focus,#view-qr .qr-edit select:focus{border-color:var(--holly);outline:none}
+#view-qr .qr-new-actions{margin:8px 0 0}
+#view-qr .qr-card .ty-status{margin:0}
+#view-qr .qr-goes{margin:0;font-size:.9rem;color:var(--slate)}
+#view-qr .qr-count{margin:0;font-size:.9rem;color:var(--slate)}
+#view-qr .qr-count b{font-family:var(--font-head);font-size:1.3rem;color:var(--holly)}
+#view-qr .qr-quiet-row{margin:0;display:flex;flex-wrap:wrap;gap:4px 16px}
+#view-qr .qr-quiet{background:transparent;border:0;padding:4px 0;font:inherit;font-size:.85rem;text-align:left;color:var(--maroon);text-decoration:underline;text-underline-offset:2px;cursor:pointer}
+#view-qr .qr-quiet:hover{color:var(--holly)}
+/* While a code is being changed its picture steps aside, so the form has the card's whole width. */
+#view-qr .qr-card.is-editing .qr-img{display:none}
+#view-qr .qr-card.is-editing .qr-body{flex-basis:100%}
+#view-qr .qr-edit{display:grid;gap:6px;width:100%;margin:0;padding:0;background:none;border:0;box-shadow:none}
+#view-qr .qr-edit .qr-actions{align-items:center;gap:14px}
+#view-qr .qr-hidden{margin:0 0 22px}
+#view-qr .qr-hidden[hidden]{display:none}
+#view-qr .qr-hidden summary{cursor:pointer;font-weight:600;color:var(--maroon);padding:6px 0}
+#view-qr .qr-hidden .qr-card{background:var(--tint)}
 /* =================================================================
    Admin > Fundraising (TASK-495). Built from the admin's own parts: the Events and Analytics
    switch card, the status chips of the Events list, and Business supporters' expanding rows and

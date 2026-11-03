@@ -10,6 +10,8 @@ import { getCollecting } from "./analytics";
 import { labelQrScans } from "../site/qr";
 import { fundraiserTitles } from "./fundraiser-materials";
 import { labelScanCampaigns, parseScanCampaign } from "../fundraising/material-codes";
+import { labelNamedScans, parseNamedCode } from "../site/qr-named";
+import { qrCodeNames } from "./qr-codes";
 import { SITE_PAGES } from "../site/pages";
 import {
   countriesFrom,
@@ -163,6 +165,19 @@ async function fundraiserScanNames(rows: { campaign: string | null }[]): Promise
   }
 }
 
+// TASK-588: the named QR codes' tags ("c12") by the names staff gave them. A failed lookup shows
+// "QR code 12" rather than losing the whole report.
+async function namedScanNames(rows: { campaign: string | null }[]): Promise<Map<string, string>> {
+  const ids = rows.map((r) => parseNamedCode(r.campaign)).filter((id): id is number => id !== null);
+  if (!ids.length) return new Map();
+  try {
+    return labelNamedScans(rows.map((r) => r.campaign), await qrCodeNames(ids));
+  } catch (err) {
+    console.error("analytics: named qr code names failed:", err instanceof Error ? err.message : err);
+    return labelNamedScans(rows.map((r) => r.campaign), new Map());
+  }
+}
+
 async function panels(p: Period): Promise<Panels> {
   const head = await headline(p);
   const qrRows = await visitsBy<{ campaign: string | null; visits: number }>(p, "campaign", "channel = 'qr'");
@@ -172,7 +187,7 @@ async function panels(p: Period): Promise<Panels> {
     daily: await daily(p),
     channels: await visitsBy<Panels["channels"][number]>(p, "channel", "true"),
     otherWebsites: await visitsBy<Panels["otherWebsites"][number]>(p, "source", "channel = 'other_websites' AND source IS NOT NULL"),
-    qrCodes: labelQrScans(qrRows, SITE_PAGES, await fundraiserScanNames(qrRows)),
+    qrCodes: labelQrScans(qrRows, SITE_PAGES, new Map([...(await fundraiserScanNames(qrRows)), ...(await namedScanNames(qrRows))])),
     newsletters: labelNewsletters(campaigns, await newsletterSubjects(newsletterIds(campaigns))),
     cities: await visitorsBy<Panels["cities"][number]>(p, "city, region, country", "city IS NOT NULL"),
     countries: countriesFrom(await visitorsBy<{ country: string; visitors: number }>(p, "upper(country) AS country", "country IS NOT NULL", 300)),

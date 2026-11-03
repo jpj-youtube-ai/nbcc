@@ -3851,9 +3851,6 @@
   // A code for every page, from GET /api/admin/qr-codes (site: view), which sends each page's code
   // as an SVG for its preview. The downloads come from /api/admin/qr-codes/image, fetched with the
   // session and handed to the browser to save, as the Festive Ball's CSVs are.
-  var QR_BAD_PATH = "Give an address on nbcc.scot, starting with /";
-  // The same rule as qrPath in src/site/qr.ts, so a bad address is refused before asking.
-  var QR_PATH = /^\/(?:[A-Za-z0-9_-]+(?:\/[A-Za-z0-9_-]+)*\/?)?$/;
   var qrWired = false;
 
   // "/ball/terms" as "ball-terms", "/" as "home": the name of the file, as the server names it.
@@ -3882,14 +3879,14 @@
     return "/api/admin/qr-codes/image?path=" + encodeURIComponent(path) + "&format=" + format;
   }
 
-  function qrDownload(path, format) {
-    authFetch(qrImageUrl(path, format))
+  function qrDownload(url, fileName) {
+    authFetch(url)
       .then(function (r) { return r.ok ? r.blob() : Promise.reject(new Error("failed")); })
       .then(function (blob) {
         var url = URL.createObjectURL(blob);
         var a = document.createElement("a");
         a.href = url;
-        a.download = "nbcc-qr-" + qrSlug(path) + "." + format;
+        a.download = fileName;
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);
@@ -3904,52 +3901,250 @@
   function wireQr() {
     if (qrWired) return;
     qrWired = true;
-    // Delegated, and attached once: the list is drawn again on every visit.
+    // Delegated, and attached once: the lists are drawn again on every visit.
     el("view-qr").addEventListener("click", function (e) {
-      var btn = e.target.closest && e.target.closest("[data-qr-format]");
-      if (!btn) return;
-      qrDownload(btn.getAttribute("data-qr-path"), btn.getAttribute("data-qr-format"));
-    });
-    el("qrOtherForm").addEventListener("submit", function (e) {
-      e.preventDefault();
-      // A whole nbcc.scot address pasted from the browser becomes its path.
-      var typed = (el("qrOtherPath").value || "").trim();
-      var path = typed.replace(/^(https?:\/\/)?(www\.)?nbcc\.scot(?=\/|$)/i, "");
-      if (typed && !path) path = "/"; // "nbcc.scot" alone is the home page; an empty box stays empty
-      el("qrOther").innerHTML = "";
-      if (!QR_PATH.test(path) || path.length > 200) {
-        el("qrStatus").textContent = QR_BAD_PATH;
+      var t = e.target && e.target.closest ? e.target : null;
+      if (!t) return;
+      var btn = t.closest("[data-qr-format]");
+      if (btn) {
+        var format = btn.getAttribute("data-qr-format");
+        var named = btn.getAttribute("data-qr-named");
+        if (named) {
+          qrDownload(
+            "/api/admin/qr-codes/named/" + named + "/image?format=" + format,
+            "nbcc-qr-" + qrNameSlug(qrNamedById(Number(named)), named) + "." + format,
+          );
+        } else {
+          var path = btn.getAttribute("data-qr-path");
+          qrDownload(qrImageUrl(path, format), "nbcc-qr-" + qrSlug(path) + "." + format);
+        }
         return;
       }
-      el("qrStatus").textContent = "Making the code…";
-      authFetch(qrImageUrl(path, "svg"))
-        .then(okJsonOrSaidText)
-        .then(function (svg) {
-          el("qrStatus").textContent = "";
-          el("qrOther").innerHTML = qrCard({ path: path, title: "Another address", live: true, svg: svg });
+      var edit = t.closest("[data-qr-edit]");
+      if (edit) return qrOpenEdit(Number(edit.getAttribute("data-qr-edit")));
+      if (t.closest("[data-qr-cancel]")) return drawQrNamed();
+      var hide = t.closest("[data-qr-hide]");
+      if (hide) qrChange(Number(hide.getAttribute("data-qr-hide")), { hidden: hide.getAttribute("data-qr-to") === "hide" }, null);
+    });
+    el("view-qr").addEventListener("submit", function (e) {
+      var form = e.target && e.target.closest && e.target.closest("[data-qr-edit-form]");
+      if (!form) return;
+      e.preventDefault();
+      var status = form.querySelector("[data-qr-edit-status]");
+      var name = form.querySelector("[data-qr-edit-name]").value;
+      if (!name.trim()) return qrSay(status, QR_BAD_NAME, true);
+      qrChange(Number(form.getAttribute("data-qr-edit-form")), { name: name, target: form.querySelector("[data-qr-edit-target]").value }, status);
+    });
+    el("qrNewForm").addEventListener("submit", function (e) {
+      e.preventDefault();
+      var status = el("qrNewStatus");
+      var name = el("qrNewName").value;
+      var target = el("qrNewTarget").value;
+      if (!name.trim()) return qrSay(status, QR_BAD_NAME, true);
+      if (!target) return qrSay(status, "Choose where the code goes from the list.", true);
+      el("qrNewBtn").disabled = true;
+      qrSay(status, "Making the code…", false);
+      authFetch("/api/admin/qr-codes/named", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: name, target: target }),
+      })
+        .then(okJsonOrSaid)
+        .then(function () {
+          el("qrNewName").value = "";
+          return loadQrNamed().then(function () {
+            qrSay(status, "Made. It is first in your named codes, ready to download.", false, true);
+          });
         })
         .catch(function (err) {
           if (err && err.message === "unauthorized") return;
-          el("qrStatus").textContent = (err && err.said) || "Could not make that QR code. Try again.";
-        });
+          qrSay(status, (err && err.said) || "Could not make that QR code. Please try again.", true);
+        })
+        .then(function () { el("qrNewBtn").disabled = false; });
     });
   }
 
-  // The SVG's text, or the server's own reason when it refuses.
-  function okJsonOrSaidText(res) {
-    if (res.ok) return res.text();
-    return res.json().then(
-      function (b) {
-        var err = new Error("status " + res.status);
-        err.said = b && typeof b.error === "string" ? b.error : "";
-        throw err;
-      },
-      function () { throw new Error("status " + res.status); },
+  // ---- Named QR codes (TASK-588) ----
+  // One code for each place a code is printed or shown, named by staff, each counting its own
+  // scans. GET /api/admin/qr-codes/named (site: view) sends the codes, their scans and the Goes to
+  // list; making, renaming, moving and hiding need site: edit. Goes to is only ever chosen from the
+  // list, never typed, so a typo can never break a printed code.
+  var QR_BAD_NAME = "Give the code a name, so you know which one it is.";
+  var qrNamed = { codes: [], destinations: [] };
+  var QR_MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+
+  function qrNamedById(id) {
+    return qrNamed.codes.filter(function (c) { return c.id === id; })[0] || null;
+  }
+
+  // "Donate billboard, High Street" as "donate-billboard-high-street": the downloaded file's name.
+  function qrNameSlug(code, id) {
+    var slug = code ? code.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 50).replace(/-+$/, "") : "";
+    return slug || "c" + id;
+  }
+
+  // The UK date, "2026-11-03".
+  function qrUkDay(d) {
+    try {
+      return new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/London" }).format(d);
+    } catch (e) {
+      return d.toISOString().slice(0, 10);
+    }
+  }
+
+  // "2026-11-03" as "3 November", or "today" or "yesterday" against the UK date today.
+  function qrDay(day, today) {
+    if (!day) return "";
+    if (day === today) return "today";
+    if (day === new Date(Date.parse(today + "T12:00:00Z") - 86400000).toISOString().slice(0, 10)) return "yesterday";
+    var p = day.split("-");
+    return Number(p[2]) + " " + QR_MONTHS[Number(p[1]) - 1];
+  }
+
+  function qrSay(node, msg, isError, isOk) {
+    if (!node) return;
+    node.textContent = msg || "";
+    node.classList.toggle("is-error", !!isError);
+    node.classList.toggle("is-ok", !!isOk);
+  }
+
+  // The Goes to list, the pages first and then our sign up sites, with `chosen` selected.
+  function qrOptions(chosen) {
+    var esc = H.escapeHtml;
+    var groups = [
+      { key: "page", label: "Pages of nbcc.scot" },
+      { key: "signup", label: "Our sign up sites" },
+    ];
+    var known = qrNamed.destinations.some(function (d) { return d.value === chosen; });
+    return (
+      (chosen ? "" : '<option value="" selected>Choose where it goes</option>') +
+      // A code whose page has left the site keeps it until staff choose another.
+      (chosen && !known ? '<option value="' + esc(chosen) + '" selected>' + esc(chosen) + "</option>" : "") +
+      groups
+        .map(function (g) {
+          var opts = qrNamed.destinations.filter(function (d) { return d.group === g.key; });
+          if (!opts.length) return "";
+          return (
+            '<optgroup label="' + esc(g.label) + '">' +
+            opts
+              .map(function (d) {
+                return '<option value="' + esc(d.value) + '"' + (d.value === chosen ? " selected" : "") + ">" +
+                  esc(d.title + (d.live ? "" : " (not live yet)")) + "</option>";
+              })
+              .join("") +
+            "</optgroup>"
+          );
+        })
+        .join("")
     );
+  }
+
+  function qrScansLine(s) {
+    if (!s || !s.total) return '<p class="qr-count">No scans yet</p>';
+    return '<p class="qr-count"><b>' + s.total + "</b> " + (s.total === 1 ? "scan" : "scans") +
+      " &middot; " + s.week + " in the last 7 days</p>";
+  }
+
+  function qrNamedCard(code, today) {
+    var esc = H.escapeHtml;
+    var src = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(code.svg);
+    var made = code.createdAt ? qrDay(qrUkDay(new Date(code.createdAt)), today) : "";
+    var last = code.scans && code.scans.lastDay ? " &middot; last scanned " + esc(qrDay(code.scans.lastDay, today)) : "";
+    return (
+      '<article class="qr-card" data-qr-id="' + code.id + '">' +
+      '<img class="qr-img" src="' + src + '" alt="QR code: ' + esc(code.name) + '" width="132" height="132" />' +
+      '<div class="qr-body">' +
+      '<h3 class="qr-title">' + esc(code.name) + "</h3>" +
+      '<p class="qr-goes">Goes to <b>' + esc(code.targetTitle) + "</b></p>" +
+      (code.targetLive ? "" : '<p class="qr-note">Not live yet: that page is switched off for now.</p>') +
+      qrScansLine(code.scans) +
+      '<p class="qr-path">' + esc(code.link.replace(/^https:\/\//, "")) + (made ? " &middot; made " + esc(made) : "") + last + "</p>" +
+      '<p class="qr-actions">' +
+      '<button type="button" class="admin-btn admin-btn--small" data-qr-named="' + code.id + '" data-qr-format="svg">Download SVG</button>' +
+      '<button type="button" class="admin-btn admin-btn--small" data-qr-named="' + code.id + '" data-qr-format="png">Download PNG</button>' +
+      "</p>" +
+      (canEdit("site")
+        ? '<p class="qr-quiet-row">' +
+          '<button type="button" class="qr-quiet" data-qr-edit="' + code.id + '">Rename or change where it goes</button>' +
+          '<button type="button" class="qr-quiet" data-qr-hide="' + code.id + '" data-qr-to="' + (code.hidden ? "show" : "hide") + '">' +
+          (code.hidden ? "Show it again" : "Hide it") + "</button></p>" +
+          '<p class="ty-status" data-qr-card-status="' + code.id + '" role="status" aria-live="polite"></p>'
+        : "") +
+      "</div></article>"
+    );
+  }
+
+  function drawQrNamed() {
+    var today = qrUkDay(new Date());
+    var shown = qrNamed.codes.filter(function (c) { return !c.hidden; });
+    var hidden = qrNamed.codes.filter(function (c) { return c.hidden; });
+    el("qrNamedList").innerHTML = shown.length
+      ? shown.map(function (c) { return qrNamedCard(c, today); }).join("")
+      : '<p class="admin-empty">' +
+        (canEdit("site") ? "No named codes yet. Make one above: name it, choose where it goes, and download it." : "No named codes yet.") +
+        "</p>";
+    el("qrHidden").hidden = hidden.length === 0;
+    el("qrHiddenSummary").textContent = "Hidden codes (" + hidden.length + ")";
+    el("qrHiddenList").innerHTML = hidden.map(function (c) { return qrNamedCard(c, today); }).join("");
+  }
+
+  function qrOpenEdit(id) {
+    var code = qrNamedById(id);
+    var body = document.querySelector('#view-qr [data-qr-id="' + id + '"] .qr-body');
+    if (!code || !body) return;
+    var esc = H.escapeHtml;
+    body.parentElement.classList.add("is-editing");
+    body.innerHTML =
+      '<form class="qr-edit" data-qr-edit-form="' + id + '" autocomplete="off">' +
+      '<label class="qr-field">Name<input type="text" maxlength="80" data-qr-edit-name value="' + esc(code.name) + '" /></label>' +
+      '<label class="qr-field">Goes to<select data-qr-edit-target>' + qrOptions(code.target) + "</select></label>" +
+      '<p class="qr-hint">Every copy already printed goes to the new choice from the moment you save.</p>' +
+      '<p class="qr-actions"><button type="submit" class="btn btn-primary">Save</button>' +
+      '<button type="button" class="qr-quiet" data-qr-cancel>Cancel</button></p>' +
+      '<p class="ty-status" data-qr-edit-status role="status" aria-live="polite"></p>' +
+      "</form>";
+    body.querySelector("[data-qr-edit-name]").focus();
+  }
+
+  function qrChange(id, change, statusNode) {
+    var node = statusNode || document.querySelector('[data-qr-card-status="' + id + '"]');
+    qrSay(node, "Saving…", false);
+    return authFetch("/api/admin/qr-codes/named/" + id, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(change),
+    })
+      .then(okJsonOrSaid)
+      .then(function () { return loadQrNamed(); })
+      .catch(function (err) {
+        if (err && err.message === "unauthorized") return;
+        qrSay(node, (err && err.said) || "Could not save that. Please try again.", true);
+      });
+  }
+
+  function loadQrNamed() {
+    var form = el("qrNewForm");
+    form.hidden = !canEdit("site");
+    return authFetch("/api/admin/qr-codes/named")
+      .then(okJson)
+      .then(function (d) {
+        qrNamed = { codes: d.codes || [], destinations: d.destinations || [] };
+        var sel = el("qrNewTarget");
+        var keep = sel.value;
+        sel.innerHTML = qrOptions("");
+        if (keep) sel.value = keep;
+        drawQrNamed();
+      })
+      .catch(function (err) {
+        if (err && err.message === "unauthorized") return;
+        form.hidden = true;
+        el("qrNamedList").innerHTML = unavailableHtml("The named QR codes could not load.");
+      });
   }
 
   function loadQr() {
     wireQr();
+    loadQrNamed();
     authFetch("/api/admin/qr-codes")
       .then(okJson)
       .then(function (d) {

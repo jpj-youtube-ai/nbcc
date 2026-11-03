@@ -30,9 +30,9 @@
     "tammy": "a Scottish tam o' shanter: a flat round tartan bonnet, a dark band round its brim and a pom pom on top",
     "crown": "a paper Christmas cracker crown with zigzag points, a little crumpled, sitting on top of the head",
     "specs": "round wire framed spectacles, like a wise old detective's",
-    "stars": "fun star shaped party glasses with lightly tinted lenses",
+    "stars": "fun star shaped party glasses with clear lenses, so the eyes show plainly through them",
     "stripe": "a long cosy knitted scarf with cream stripes, wrapped once round the neck, one fringed end hanging down the front",
-    "tartan": "a soft woollen tartan scarf wrapped round the neck, its fringed ends hanging down the front",
+    "tartan": "a soft woollen scarf in a bold Scottish tartan, with a clear check pattern of crossing stripes in two or three colours, wrapped round the neck, its fringed ends hanging down the front",
     "tinsel": "a fluffy, sparkly strand of Christmas tinsel draped round the neck",
     "bow": "a smart little bow tie at the collar",
     "tunic": "a classic elf tunic with a pointed zigzag collar and a pointed zigzag hem, a dark brown belt with a gold buckle, and long sleeves down to the mittens",
@@ -42,8 +42,8 @@
     "curly": "classic elf shoes with long pointed toes that curl up into a loop, each with a little gold bell on the tip",
     "boots": "chunky snow boots with fluffy cream fur cuffs and thick grippy soles",
     "wellies": "shiny wellington boots up to the knees",
-    "mag": "a detective's magnifying glass with a metal rim and handle, its glass shining",
-    "torch": "a chunky torch, switched on, with a soft beam of warm light",
+    "mag": "a detective's magnifying glass with a metal rim and handle; its glass is clear and empty, with just a pale blue shine, magnifying nothing",
+    "torch": "a chunky battery torch (an electric flashlight), switched on, with a soft cone of warm light from its glass end; no fire and no flame",
     "notebook": "a small detective's notebook with a pencil tucked into its spiral",
     "lantern": "an old fashioned lantern with a warm glowing candle inside, held by its handle",
     "satchel": "a little leather clue satchel worn across the body on a strap, the bag at the hip with a buckled flap",
@@ -61,5 +61,9 @@
     "grad": "graduation robes: a long black gown with gold trim, a black mortar board cap with a gold tassel, and a rolled certificate tied with a red ribbon in the right mitten",
     "golden": "a golden detective outfit: a shining gold trench coat, a gold checked deerstalker hat, golden boots, a gold star badge, and a gold magnifying glass in the right mitten",
     "nessie": "a friendly Loch Ness monster costume: a green onesie with a long neck hood topped with friendly eyes, little spikes down the back, a pale green tummy, a tail, and a blue tartan scarf"
+  },
+  "colourHints": {
+    "tinsel:silver": "bright shiny silver with blue grey shading, clearly brighter and shinier than the cream top",
+    "torch:green": "green (about #2E7D32), its glass end just glowing yellow, with NO beam of light and nothing above it"
   }
 }

@@ -67,8 +67,9 @@ export function layerName(kind, ...ids) {
   return [kind, ...ids].join("-");
 }
 
-function colourWords(c) {
-  return `${c.name.toLowerCase()} (about ${c.fill})`;
+function colourWords(c, styleId) {
+  const hint = D.colourHints && D.colourHints[`${styleId}:${c.id}`];
+  return hint || `${c.name.toLowerCase()} (about ${c.fill})`;
 }
 
 function alonePrompt(what) {
@@ -116,13 +117,13 @@ function pieceJobs() {
       const first = `worn-${style.id}-${style.colours[0].id}`;
       out.push(
         i === 0
-          ? { id: worn, batch, kind: "worn", from: base, prompt: `${KEEP} ${WEARS[style.slot](`${D.styles[style.id]}, in ${colourWords(c)}`)} ${STYLE_IT}` }
+          ? { id: worn, batch, kind: "worn", from: base, prompt: `${KEEP} ${WEARS[style.slot](`${D.styles[style.id]}, in ${colourWords(c, style.id)}`)} ${STYLE_IT}` }
           : {
               id: worn,
               batch,
               kind: "recolour",
               from: first,
-              prompt: `Keep this picture exactly the same, everything identical. Change only the colour of the ${name}: it is now ${colourWords(c)}. Keep its design, shape, shading and outline exactly. The elf's mittens stay red, and the face, hair, skin and everything else stay exactly as they are.`,
+              prompt: `Keep this picture exactly the same, everything identical. Change only the colour of the ${name}: it is now ${colourWords(c, style.id)}. Keep its design, shape, shading and outline exactly. The elf's mittens stay red, and the face, hair, skin and everything else stay exactly as they are.`,
             },
       );
       out.push({ id: `alone-${style.id}-${c.id}`, batch, kind: "alone", slot: style.slot, from: worn, base, still, layer: layerName("piece", style.id, c.id), prompt: alonePrompt(ALONE_WHAT[style.slot](name)) });

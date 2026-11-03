@@ -1,11 +1,16 @@
-import { drawElf, type WardrobeState } from "./wardrobe";
+import { existsSync } from "node:fs";
+import { resolve } from "node:path";
+import { layersFor, type PaintLayer, type WardrobeState } from "./wardrobe";
 
 // NBCC Elf Detective School: a detective's elf as a PNG. The design is
 // docs/superpowers/specs/2026-10-04-elf-detective-school-design.md (decision 14).
 //
-// When a detective unlocks an outfit, the next email shows their own elf wearing it. Mail apps do not
-// show SVG, so the drawing is turned into a PNG here, at twice the size it is shown so it stays sharp
-// on a phone. The look is made safe by drawElf first, so only what the detective has earned is drawn.
+// When a detective unlocks an outfit, the next email shows their own elf wearing it, and Detective HQ
+// shows each detective's elf. Mail apps do not show SVG, and an SVG in an <img> cannot load the
+// painted layers it names, so the elf is stacked into a PNG here from the large painted layers
+// (assets/img/elf/lg/, design docs/superpowers/specs/2026-11-03-elf-painted-wardrobe-design.md), in
+// the same order and with the same covers as the browser. The look is made safe by layersFor first,
+// so only what the detective has earned is drawn.
 //
 // The site runs as one small task, and sharp can use a lot of memory, so this is as careful with it
 // as src/fundraising/picture-process.ts is:
@@ -29,6 +34,13 @@ export const ELF_PNG_QUEUE_MAX = 8;
 
 /** The page colour of the site, for a picture that must not be see through. */
 const CREAM = "#F8F5EE";
+
+/** The large painted layers, and the part of the canvas every picture shows (1.3 times as tall as wide). */
+const LAYER_DIR = resolve(__dirname, "../../assets/img/elf/lg");
+const VIEW = { left: -79, width: 1182, height: 1536 };
+const BACKDROP =
+  `<svg xmlns="http://www.w3.org/2000/svg" width="${VIEW.width}" height="${VIEW.height}">` +
+  `<circle cx="${512 - VIEW.left}" cy="820" r="560" fill="#EAF0E7"/><ellipse cx="${512 - VIEW.left}" cy="1345" rx="330" ry="34" fill="#DCCFB9"/></svg>`;
 
 type SharpFn = typeof import("sharp")["default"];
 let loaded: Promise<SharpFn> | null = null;
@@ -92,10 +104,39 @@ export function elfPng(
   background: "clear" | "cream" = "clear",
 ): Promise<Buffer | null> {
   const px = elfPngWidth(width);
-  const svg = drawElf(look, state, { size: px, label: false });
-  return inTurn<Buffer | null>(async () => {
-    const sharp = await loadSharp();
-    const picture = sharp(Buffer.from(svg));
-    return (background === "cream" ? picture.flatten({ background: CREAM }) : picture).png().toBuffer();
-  }, null);
+  const layers = layersFor(look, state);
+  return inTurn<Buffer | null>(() => stackPng(layers, px, background, true), null);
+}
+
+/**
+ * Stacks painted layers into a PNG `width` pixels wide and 1.3 times as tall: the backdrop (unless
+ * false), the elf with what its pieces hide taken away, then each piece. A layer whose picture cannot
+ * be found is left out, never a failed picture. `dir` is the folder of layer files, for tests.
+ */
+export async function stackPng(layers: PaintLayer[], width: number, background: "clear" | "cream", backdrop: boolean, dir = LAYER_DIR): Promise<Buffer> {
+  const sharp = await loadSharp();
+  const file = (name: string) => resolve(dir, `${name}.webp`);
+  const found = layers.filter((l) => existsSync(file(l.name)));
+  const place = (box: { x: number; y: number }) => ({ left: box.x - VIEW.left, top: box.y });
+  const blank = () => sharp({ create: { width: VIEW.width, height: VIEW.height, channels: 4, background: { r: 0, g: 0, b: 0, alpha: 0 } } });
+
+  // The elf first, on its own, with every cover taken out of it.
+  const [first, ...rest] = found;
+  const isElf = !!first && first.name.startsWith("elf-");
+  const pieces = isElf ? rest : found;
+  const under: import("sharp").OverlayOptions[] = [];
+  if (isElf) {
+    under.push({ input: file(first.name), ...place(first) });
+    for (const l of pieces) if (l.cover && existsSync(file(`${l.name}.cover`))) under.push({ input: file(`${l.name}.cover`), ...place(l.cover), blend: "dest-out" });
+  }
+  const elf = await blank().composite(under).png().toBuffer();
+
+  const over: import("sharp").OverlayOptions[] = [];
+  if (backdrop) over.push({ input: Buffer.from(BACKDROP), left: 0, top: 0 });
+  over.push({ input: elf, left: 0, top: 0 });
+  for (const l of pieces) over.push({ input: file(l.name), ...place(l) });
+  const stacked = await blank().composite(over).png().toBuffer();
+
+  const sized = sharp(stacked).resize(width, Math.round(width * 1.3));
+  return (background === "cream" ? sized.flatten({ background: CREAM }) : sized).png().toBuffer();
 }

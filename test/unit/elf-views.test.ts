@@ -40,7 +40,7 @@ describe("Detective HQ before school starts", () => {
   });
 
   it("points at each detective's own elf and wardrobe", () => {
-    expect(view.detectives[0].elfUrl).toBe("/elf/hq/elf/100.svg");
+    expect(view.detectives[0].elfUrl).toBe("/elf/hq/elf/100.png");
     expect(view.detectives[0].wardrobeUrl).toBe("/elf/hq/wardrobe/100");
     expect(view.detectives[1].newThings).toBe(1);
   });

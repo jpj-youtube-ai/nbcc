@@ -52,7 +52,7 @@ export function detectiveViewFor(d: DetectiveRow): DetectiveView {
     next: progress.next ? { rank: progress.next.rank, toGo: progress.next.toGo } : null,
     graduate: progress.graduate,
     goldSeal: progress.goldSeal,
-    elfUrl: `/elf/hq/elf/${d.id}.svg`,
+    elfUrl: `/elf/hq/elf/${d.id}.png`,
     newThings: d.fresh.length,
     wardrobeUrl: `/elf/hq/wardrobe/${d.id}`,
   };

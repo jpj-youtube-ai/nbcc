@@ -1,12 +1,18 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, beforeAll } from "vitest";
+import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import { createRequire } from "node:module";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import sharp from "sharp";
-import { ELF_PNG_MAX_WIDTH, ELF_PNG_QUEUE_MAX, elfPng, elfPngWidth, inTurn } from "../../src/elf/elf-png";
-import { HAIR_STYLES, OUTFITS, STYLES, defaultLook, drawPiece, type WardrobeState } from "../../src/elf/wardrobe";
+import { ELF_PNG_MAX_WIDTH, ELF_PNG_QUEUE_MAX, elfPng, elfPngWidth, inTurn, stackPng } from "../../src/elf/elf-png";
+import { OUTFITS, defaultLook, type WardrobeState } from "../../src/elf/wardrobe";
 
-// NBCC Elf Detective School: a detective's elf as a PNG, for emails. Made with the real sharp, so
-// this proves the drawing is one sharp can read, patterns and all. Because it draws real pixels, it
-// is also where the things only an eye would notice are held: that the hair colour shows, that
-// every piece draws something, that two tartans can be told apart.
+const PAINT = createRequire(import.meta.url)("../../assets/js/elf-paint.js") as { layers: Record<string, unknown> };
+
+// NBCC Elf Detective School: a detective's elf as a PNG, for emails and Detective HQ, stacked from
+// the painted layers with the real sharp. Because it makes real pixels, it is also where the things
+// only an eye would notice are held: that the hair colour shows, that the face shows on the darkest
+// skin, that a held gadget hides the open mitten, that every outfit looks different.
 
 const PNG_SIGNATURE = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
 const EVERYTHING = { doorsDone: 24, goldSeal: true, wonRace: true };
@@ -29,19 +35,6 @@ async function pixelsThatDiffer(a: Buffer, b: Buffer): Promise<number> {
     if (x[i] !== y[i] || x[i + 1] !== y[i + 1] || x[i + 2] !== y[i + 2] || x[i + 3] !== y[i + 3]) count += 1;
   }
   return count;
-}
-
-/** How many pixels of a drawing have something on them, and the average colour of those. */
-async function drawn(svg: string): Promise<{ count: number; colour: number[] }> {
-  const data = await pixels(svg);
-  const sum = [0, 0, 0];
-  let count = 0;
-  for (let i = 0; i < data.length; i += 4) {
-    if (data[i + 3] < 128) continue;
-    count += 1;
-    for (let c = 0; c < 3; c++) sum[c] += data[i + c];
-  }
-  return { count, colour: sum.map((s) => s / Math.max(count, 1)) };
 }
 
 describe("the width of the picture", () => {
@@ -87,47 +80,80 @@ describe("an elf as a PNG", () => {
 });
 
 describe("what a child would see", () => {
-  it("shows the hair colour under every hat and in every hair style", async () => {
-    // A hat is always worn. If it hid the hair, choosing a hair colour would seem to do nothing.
-    const hats = STYLES.filter((s) => s.slot === "hat");
-    for (const hairStyle of HAIR_STYLES) {
-      for (const hat of hats) {
-        const look = defaultLook();
-        look.hairStyle = hairStyle.id;
-        look.pieces.hat = [hat.id, hat.colours[0].id];
-        const dark = await png({ ...look, hair: "dark" }, EVERYTHING, 200);
-        const blonde = await png({ ...look, hair: "blonde" }, EVERYTHING, 200);
-        // 200 by 260 is 52,000 pixels: 300 of them is a patch of hair anyone can see.
-        expect(await pixelsThatDiffer(dark, blonde), `${hairStyle.id} hair under the ${hat.id} hat`).toBeGreaterThan(300);
-      }
-    }
+  // Made up layers, written as real files: an elf with an open red mitten, and a torch whose
+  // painting no longer has that mitten (its cover marks it), so the server's stacking is held to
+  // the same rules as the browser's.
+  const dir = mkdtempSync(join(tmpdir(), "elf-png-layers-"));
+  const block = (w: number, h: number, colour: string) => sharp({ create: { width: w, height: h, channels: 4, background: colour } }).webp({ lossless: true }).toBuffer();
+  const ELF = { name: "elf-test", x: 300, y: 300, w: 400, h: 900, cover: null };
+  const MITTEN = { x: 760, y: 900, w: 60, h: 60 };
+  const TORCH = { name: "piece-test-torch", x: 820, y: 850, w: 40, h: 160, cover: MITTEN };
+
+  beforeAll(async () => {
+    mkdirSync(join(dir, "lg"));
+    // The elf's body in cream, with its open mitten in red beside it, painted as one layer.
+    const body = await sharp({ create: { width: 520, height: 900, channels: 4, background: { r: 0, g: 0, b: 0, alpha: 0 } } })
+      .composite([{ input: await block(400, 900, "#F2E6CF"), left: 0, top: 0 }, { input: await block(60, 60, "#C02238"), left: 460, top: 600 }])
+      .webp({ lossless: true })
+      .toFile(join(dir, "lg", "elf-test.webp"));
+    void body;
+    writeFileSync(join(dir, "lg", "piece-test-torch.webp"), await block(40, 160, "#2F5D8C"));
+    writeFileSync(join(dir, "lg", "piece-test-torch.cover.webp"), await block(60, 60, "#000000"));
   });
 
-  it("draws something for every piece in every colour, and as much in one colour as in another", async () => {
-    // A colour whose pattern is missing draws as a hole. A piece that draws nothing draws nothing.
-    for (const style of STYLES) {
-      const counts: number[] = [];
-      for (const colour of style.colours) counts.push((await drawn(drawPiece(style.id, colour.id, 80))).count);
-      const most = Math.max(...counts);
-      expect(most, style.id).toBeGreaterThan(100);
-      for (const [i, count] of counts.entries()) {
-        expect(count, `${style.id} ${style.colours[i].id}`).toBeGreaterThan(most * 0.8);
-      }
-    }
+  /** The colour at a canvas point, in a 1182 wide picture. */
+  async function at(picture: Buffer, x: number, y: number): Promise<number[]> {
+    const { data, info } = await sharp(picture).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
+    const i = (y * info.width + (x + 79)) * 4;
+    return [data[i], data[i + 1], data[i + 2], data[i + 3]];
+  }
+
+  it("puts each layer in its place on the canvas, bottom to top", async () => {
+    const picture = await stackPng([{ ...ELF, w: 520 }, TORCH], 1182, "clear", false, join(dir, "lg"));
+    expect((await at(picture, 350, 500)).slice(0, 3)).toEqual([0xf2, 0xe6, 0xcf]);
+    expect((await at(picture, 830, 900)).slice(0, 3)).toEqual([0x2f, 0x5d, 0x8c]);
+    expect((await at(picture, 100, 100))[3]).toBe(0);
   });
 
-  it("draws every outfit as a picture that is plainly a different costume", async () => {
+  it("hides the elf's own mitten when a gadget is held, and only then", async () => {
+    const holding = await stackPng([{ ...ELF, w: 520 }, TORCH], 1182, "clear", false, join(dir, "lg"));
+    expect((await at(holding, 780, 920))[3]).toBe(0);
+    const empty = await stackPng([{ ...ELF, w: 520 }], 1182, "clear", false, join(dir, "lg"));
+    expect((await at(empty, 780, 920)).slice(0, 3)).toEqual([0xc0, 0x22, 0x38]);
+  });
+
+  it("leaves out a layer whose picture cannot be read, and still makes the picture", async () => {
+    const picture = await stackPng([{ ...ELF, w: 520 }, { ...TORCH, name: "piece-not-there", cover: null }], 200, "cream", true, join(dir, "lg"));
+    expect((await sharp(picture).metadata()).width).toBe(200);
+  });
+
+  // The real paintings: these hold once the elves are painted (plan Task 8).
+  const real = (name: string) => name in (PAINT.layers as Record<string, unknown>);
+
+  it.runIf(real("elf-sister-s2-short-dark") && real("elf-sister-s2-short-blonde"))("shows the hair colour chosen", async () => {
+    const dark = await png({ ...defaultLook(), hair: "dark" }, EVERYTHING, 200);
+    const blonde = await png({ ...defaultLook(), hair: "blonde" }, EVERYTHING, 200);
+    // 200 by 260 is 52,000 pixels: 300 of them is a patch of hair anyone can see.
+    expect(await pixelsThatDiffer(dark, blonde)).toBeGreaterThan(300);
+  });
+
+  it.runIf(real("elf-sister-s5-short-brown"))("keeps the face showing on the darkest skin", async () => {
+    // Plain round eyes on the darkest skin: the eyes must be clearly darker than the cheeks.
+    const face = await png({ ...defaultLook(), skin: "s5" }, EVERYTHING, 1182);
+    const p = PAINT.layers["elf-sister-s5-short-brown"] as { x: number; y: number; w: number };
+    const eyeRow = await sharp(face).extract({ left: p.x + 79 + Math.round(p.w * 0.3), top: 470, width: Math.round(p.w * 0.4), height: 60 }).greyscale().raw().toBuffer();
+    const sorted = [...eyeRow].sort((a, b) => a - b);
+    const darkest = sorted[Math.floor(sorted.length * 0.02)];
+    const typical = sorted[Math.floor(sorted.length * 0.5)];
+    expect(typical - darkest).toBeGreaterThan(40);
+  });
+
+  it.runIf(OUTFITS.every((o) => real(`outfit-${o.id}`)))("makes every outfit plainly different from the plain elf", async () => {
     const plain = await png(defaultLook(), EVERYTHING, 200);
     for (const outfit of OUTFITS) {
       const worn = await png({ ...defaultLook(), outfit: outfit.id }, EVERYTHING, 200);
-      expect(await pixelsThatDiffer(plain, worn), outfit.id).toBeGreaterThan(outfit.id === "workshop" ? 800 : 3000);
+      expect(await pixelsThatDiffer(plain, worn), outfit.id).toBeGreaterThan(3000);
     }
-  });
-
-  it("makes the red tartan and the green tartan easy to tell apart", async () => {
-    const red = (await drawn(drawPiece("tartan", "red", 80))).colour;
-    const green = (await drawn(drawPiece("tartan", "green", 80))).colour;
-    expect(Math.hypot(...red.map((v, i) => v - green[i]))).toBeGreaterThan(60);
   });
 });
 

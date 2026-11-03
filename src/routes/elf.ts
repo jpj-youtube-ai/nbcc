@@ -28,7 +28,7 @@ import { renderHqPage } from "../elf/pages/hq";
 import { renderRulesPage } from "../elf/pages/rules";
 import { renderWardrobePage } from "../elf/pages/wardrobe";
 import { calendarViewFor, hqViewFor, lookFromForm, wardrobeStateNow, wardrobeViewFor, type FamilyRow } from "../elf/views";
-import { drawElf } from "../elf/wardrobe";
+import { elfPng } from "../elf/elf-png";
 import { buildElfSignInCodeEmail } from "../elf/emails";
 import { buildElfSessionParams, feeCoverPence, joinBodyFromForm, parseJoin } from "../elf/join";
 import { FESTIVE_SURNAMES } from "../elf/names";
@@ -403,7 +403,7 @@ elfRouter.get("/elf/welcome", schoolOn, getWelcome);
 //
 //   GET  /elf/hq                       the family's page (signed in; otherwise to the sign in page)
 //   GET  /elf/hq/wardrobe/:detective   dress a detective's elf
-//   GET  /elf/hq/elf/:detective.svg    a detective's elf, as a picture, for their own family only
+//   GET  /elf/hq/elf/:detective.png    a detective's elf, as a picture, for their own family only
 //   POST /api/elf/look                 save a look: JSON { detectiveId, look, tried } from the page's
 //                                      script, or the plain form (detective, skin, hair, hairStyle,
 //                                      outfit, piece-<slot>="style:colour")
@@ -442,13 +442,19 @@ elfRouter.get("/elf/hq/wardrobe/:detective", schoolOn, async (req, res) => {
 
 elfRouter.get("/elf/hq/elf/:file", schoolOn, async (req, res) => {
   res.setHeader("Cache-Control", "private, no-store");
-  const m = /^(\d{1,10})\.svg$/.exec(String(req.params.file));
+  const m = /^(\d{1,10})\.png$/.exec(String(req.params.file));
   const s = await signedInFamily(req);
   const family = s ? await familyWithDetectives(s.familyId) : null;
   const detective = m && family ? family.detectives.find((d) => d.id === Number(m[1])) : undefined;
   if (!detective) return res.status(404).type("text/plain").send("Not found");
+  // Stacked from the painted layers, which an SVG in an <img> could not load (src/elf/elf-png.ts).
+  const picture = await elfPng(detective.look, wardrobeStateNow(), 240, "clear");
+  if (!picture) {
+    res.setHeader("Retry-After", "2");
+    return res.status(503).type("text/plain").send("Busy. Please try again in a moment.");
+  }
   res.setHeader("X-Content-Type-Options", "nosniff");
-  res.type("image/svg+xml").send(drawElf(detective.look, wardrobeStateNow(), { size: 240, key: `d${detective.id}`, label: "Elf detective" }));
+  res.type("image/png").send(picture);
 });
 
 export async function postLook(req: Request, res: Response): Promise<Response | void> {

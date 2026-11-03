@@ -261,3 +261,68 @@ export async function settleElfOrder(
 export async function expireElfOrder(client: Querier, reference: string): Promise<void> {
   await client.query("UPDATE elf_orders SET status = 'expired' WHERE reference = $1 AND status = 'pending'", [reference]);
 }
+
+// --- signing in --------------------------------------------------------------------------------------
+
+/** The family for an email, only once it has paid for detectives. */
+export async function activeFamilyByEmail(email: string): Promise<{ id: number; grownUpName: string } | null> {
+  const r = await pool.query<{ id: number; grown_up_name: string }>(
+    "SELECT id, grown_up_name FROM elf_families WHERE email = $1 AND active",
+    [email.trim().toLowerCase()],
+  );
+  return r.rows[0] ? { id: r.rows[0].id, grownUpName: r.rows[0].grown_up_name } : null;
+}
+
+export async function saveElfSignInCode(email: string, codeHash: string, expiresAt: Date): Promise<void> {
+  await pool.query(
+    `INSERT INTO elf_sign_in_codes (email, code_hash, expires_at, attempts) VALUES ($1, $2, $3, 0)
+     ON CONFLICT (email) DO UPDATE SET code_hash = EXCLUDED.code_hash, expires_at = EXCLUDED.expires_at, attempts = 0, created_at = now()`,
+    [email.trim().toLowerCase(), codeHash, expiresAt],
+  );
+}
+
+/** Count a try at the code BEFORE it is compared, so tries sent at once each use one up. */
+export async function countElfCodeTry(email: string): Promise<{ codeHash: string; expiresAt: Date; attempts: number } | null> {
+  const r = await pool.query<{ code_hash: string; expires_at: Date | string; attempts: number }>(
+    "UPDATE elf_sign_in_codes SET attempts = attempts + 1 WHERE email = $1 RETURNING code_hash, expires_at, attempts",
+    [email.trim().toLowerCase()],
+  );
+  const row = r.rows[0];
+  return row ? { codeHash: row.code_hash, expiresAt: new Date(row.expires_at), attempts: row.attempts } : null;
+}
+
+export async function deleteElfSignInCode(email: string): Promise<void> {
+  await pool.query("DELETE FROM elf_sign_in_codes WHERE email = $1", [email.trim().toLowerCase()]);
+}
+
+/** Start a session. Sessions and codes long past their time are tidied away on the way. */
+export async function createElfSession(sessionHash: string, familyId: number, expiresAt: Date): Promise<void> {
+  await pool.query("DELETE FROM elf_sessions WHERE expires_at < now() - interval '1 day'");
+  await pool.query("DELETE FROM elf_sign_in_codes WHERE expires_at < now() - interval '1 day'");
+  await pool.query("INSERT INTO elf_sessions (session_hash, family_id, expires_at) VALUES ($1, $2, $3)", [sessionHash, familyId, expiresAt]);
+}
+
+export async function findElfSession(sessionHash: string): Promise<{ familyId: number } | null> {
+  const r = await pool.query<{ family_id: number }>(
+    `SELECT s.family_id FROM elf_sessions s JOIN elf_families f ON f.id = s.family_id
+      WHERE s.session_hash = $1 AND s.expires_at > now() AND f.active`,
+    [sessionHash],
+  );
+  return r.rows[0] ? { familyId: r.rows[0].family_id } : null;
+}
+
+export async function deleteElfSession(sessionHash: string): Promise<void> {
+  await pool.query("DELETE FROM elf_sessions WHERE session_hash = $1", [sessionHash]);
+}
+
+/** What the page Stripe sends people back to needs to know about the order it paid for. */
+export async function orderForWelcome(
+  stripeSessionId: string,
+): Promise<{ familyId: number; status: "pending" | "paid" | "expired"; openedFamily: boolean; browserTokenHash: string | null } | null> {
+  const r = await pool.query<{ family_id: number; status: "pending" | "paid" | "expired"; opened_family: boolean; browser_token_hash: string | null }>(
+    "SELECT family_id, status, opened_family, browser_token_hash FROM elf_orders WHERE stripe_session_id = $1",
+    [stripeSessionId],
+  );
+  const row = r.rows[0];
+  return row ? { familyId: row.family_id, status: row.status, openedFamily: row.opened_family, browserTokenHash: row.browser_token_hash } : null;
+}

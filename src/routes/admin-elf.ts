@@ -2,7 +2,16 @@ import { Router, type Request, type Response } from "express";
 import { z } from "zod";
 import { authorizeSection, authorizeSectionAsAdmin } from "./admin-authz";
 import { actorOf } from "./admin";
-import { getElfSettings, listElfSignups, setElfSettings } from "../db/elf";
+import { config } from "../config";
+import { getElfSettings, listElfSignups, setElfPreview, setElfSettings, type ElfSettings } from "../db/elf";
+import { hashElfToken, newElfToken } from "../elf/session";
+
+/** The settings as the admin sees them: whether there is a preview link, never its code's hash. */
+function forAdmin(s: ElfSettings) {
+  const rest: Partial<ElfSettings> = { ...s };
+  delete rest.previewHash;
+  return { ...rest, previewOn: !!s.previewHash };
+}
 
 // NBCC Elf Detective School in the admin (wave 1 plan, Task 9), in Admin > Get involved > Settings:
 //
@@ -31,7 +40,7 @@ export async function getAdminElfSettings(req: Request, res: Response): Promise<
   res.setHeader("Cache-Control", "no-store");
   if (!(await authorizeSection(req, res, "fundraising", "view"))) return;
   try {
-    return res.status(200).json({ settings: await getElfSettings() });
+    return res.status(200).json({ settings: forAdmin(await getElfSettings()) });
   } catch (err) {
     console.error("admin elf settings failed:", err instanceof Error ? err.message : err);
     return res.status(500).json(UNAVAILABLE);
@@ -53,7 +62,7 @@ export async function patchAdminElfSettings(req: Request, res: Response): Promis
     const from = parsed.data.entryFromPence ?? now.entryFromPence;
     const suggested = parsed.data.entrySuggestedPence ?? now.entrySuggestedPence;
     if (suggested < from) return res.status(400).json({ error: "The suggested amount cannot be less than the least a family pays." });
-    return res.status(200).json({ settings: await setElfSettings(parsed.data, actorOf(claims)) });
+    return res.status(200).json({ settings: forAdmin(await setElfSettings(parsed.data, actorOf(claims))) });
   } catch (err) {
     console.error("admin elf settings change failed:", err instanceof Error ? err.message : err);
     return res.status(500).json(UNAVAILABLE);
@@ -71,6 +80,38 @@ export async function getAdminElfSignups(req: Request, res: Response): Promise<R
   }
 }
 
+/** A new private preview link (admins only). Any earlier link stops working. The code is shown
+ *  once, here; only its sha256 is kept. */
+export async function postAdminElfPreview(req: Request, res: Response): Promise<Response | void> {
+  res.setHeader("Cache-Control", "no-store");
+  const claims = await authorizeSectionAsAdmin(req, res, "fundraising");
+  if (!claims) return;
+  try {
+    const token = newElfToken();
+    await setElfPreview(hashElfToken(token), actorOf(claims));
+    return res.status(200).json({ url: `${String(config.PORTAL_BASE_URL ?? "").replace(/\/+$/, "")}/elf/preview/${token}` });
+  } catch (err) {
+    console.error("admin elf preview failed:", err instanceof Error ? err.message : err);
+    return res.status(500).json(UNAVAILABLE);
+  }
+}
+
+/** End the private preview link (admins only). */
+export async function deleteAdminElfPreview(req: Request, res: Response): Promise<Response | void> {
+  res.setHeader("Cache-Control", "no-store");
+  const claims = await authorizeSectionAsAdmin(req, res, "fundraising");
+  if (!claims) return;
+  try {
+    await setElfPreview(null, actorOf(claims));
+    return res.status(200).json({ ok: true });
+  } catch (err) {
+    console.error("admin elf preview end failed:", err instanceof Error ? err.message : err);
+    return res.status(500).json(UNAVAILABLE);
+  }
+}
+
+adminElfRouter.post("/api/admin/elf/preview", postAdminElfPreview);
+adminElfRouter.delete("/api/admin/elf/preview", deleteAdminElfPreview);
 adminElfRouter.get("/api/admin/elf/settings", getAdminElfSettings);
 adminElfRouter.patch("/api/admin/elf/settings", patchAdminElfSettings);
 adminElfRouter.get("/api/admin/elf/signups", getAdminElfSignups);

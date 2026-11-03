@@ -85,6 +85,51 @@
       });
       parts.appendChild(btn);
 
+      // The private preview link (Jaimie, 3 November 2026): click through the real pages while the
+      // school is switched off. Making a new link ends the old one.
+      if (!on) {
+        var preview = el("div", { class: "elf-admin-preview" });
+        preview.appendChild(el("h4", {}, "Private preview"));
+        preview.appendChild(
+          el("p", {}, settings.previewOn
+            ? "A preview link is open. Anyone who has it can see the school. Payments in the preview are real."
+            : "Make a link to click through the real pages while the school is switched off. Payments in the preview are real.")
+        );
+        var make = el("button", { class: "btn", type: "button", id: "elfAdminPreview" }, settings.previewOn ? "Make a new preview link" : "Make a preview link");
+        make.addEventListener("click", function () {
+          make.disabled = true;
+          ask("POST", "/api/admin/elf/preview")
+            .then(function (d) {
+              settings.previewOn = true;
+              draw(signups);
+              var row = el("p", {});
+              row.appendChild(el("label", { for: "elfAdminPreviewLink" }, "Your preview link (shown once: copy it now)"));
+              var link = el("input", { id: "elfAdminPreviewLink", type: "text", readonly: "readonly" });
+              link.value = d.url;
+              row.appendChild(link);
+              var box2 = doc.querySelector(".elf-admin-preview");
+              if (box2) box2.appendChild(row);
+              say("Preview link made. Making another ends this one.", true);
+            })
+            .catch(function (e) { say(e.message, false); make.disabled = false; });
+        });
+        preview.appendChild(make);
+        if (settings.previewOn) {
+          var end = el("button", { class: "btn", type: "button", id: "elfAdminPreviewEnd" }, "End the preview link");
+          end.addEventListener("click", function () {
+            ask("DELETE", "/api/admin/elf/preview")
+              .then(function () {
+                settings.previewOn = false;
+                say("Preview link ended.", true);
+                draw(signups);
+              })
+              .catch(function (e) { say(e.message, false); });
+          });
+          preview.appendChild(end);
+        }
+        parts.appendChild(preview);
+      }
+
       var form = el("form", { id: "elfAdminPrices", class: "elf-admin-prices" });
       form.appendChild(el("h4", {}, "Pay what you can, for each detective"));
       [["elfAdminFrom", "The least a family pays", settings.entryFromPence], ["elfAdminSuggested", "What we suggest", settings.entrySuggestedPence]].forEach(function (f) {

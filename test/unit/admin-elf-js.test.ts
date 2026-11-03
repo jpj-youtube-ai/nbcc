@@ -67,3 +67,23 @@ describe("the admin's Elf Detective School card", () => {
     expect(calls.find((c) => c.method === "PATCH")!.body).toEqual({ entryFromPence: 200, entrySuggestedPence: 650 });
   });
 });
+
+describe("the private preview link in the admin card", () => {
+  it("makes a link and shows it, ready to copy", async () => {
+    const { admin, calls } = load();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const before = (window as any).fetch;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (window as any).fetch = vi.fn((url: string, init: RequestInit = {}) =>
+      url.endsWith("/preview") && init.method === "POST"
+        ? (calls.push({ method: "POST", url, body: null }), Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve({ url: "https://nbcc.scot/elf/preview/" + "a".repeat(64) }) }))
+        : before(url, init),
+    );
+    await admin.load();
+    await flush();
+    (document.querySelector("#elfAdminPreview") as HTMLButtonElement).click();
+    await flush();
+    expect(calls.some((c) => c.method === "POST" && c.url === "/api/admin/elf/preview")).toBe(true);
+    expect((document.querySelector("#elfAdminPreviewLink") as HTMLInputElement).value).toBe("https://nbcc.scot/elf/preview/" + "a".repeat(64));
+  });
+});

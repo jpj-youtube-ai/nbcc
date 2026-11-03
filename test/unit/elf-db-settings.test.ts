@@ -24,12 +24,12 @@ beforeEach(() => {
 describe("the school's settings", () => {
   it("reads the row", async () => {
     query.mockResolvedValueOnce({ rows: [ROW] });
-    expect(await getElfSettings()).toEqual({ schoolOn: true, year: 2026, entryFromPence: 100, entrySuggestedPence: 500 });
+    expect(await getElfSettings()).toEqual({ schoolOn: true, year: 2026, entryFromPence: 100, entrySuggestedPence: 500, previewHash: null });
   });
 
   it("reads as switched off, at £1 and £5, when anything goes wrong", async () => {
     query.mockRejectedValueOnce(new Error("no database"));
-    expect(await getElfSettings()).toEqual({ schoolOn: false, year: 2026, entryFromPence: 100, entrySuggestedPence: 500 });
+    expect(await getElfSettings()).toEqual({ schoolOn: false, year: 2026, entryFromPence: 100, entrySuggestedPence: 500, previewHash: null });
     query.mockResolvedValueOnce({ rows: [] });
     expect(await getElfSettings()).toEqual(ELF_DEFAULTS);
     expect(ELF_DEFAULTS.schoolOn).toBe(false);

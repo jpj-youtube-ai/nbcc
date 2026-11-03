@@ -34,3 +34,19 @@ export function newElfToken(): string {
 export function hashElfToken(token: string): string {
   return createHash("sha256").update(`elf:${token}`).digest("hex");
 }
+
+// --- the private preview link (Jaimie, 3 November 2026) ---------------------------------------------
+// /elf/preview/<code> puts the code in this cookie; while the school is switched off, a browser
+// holding the code whose sha256 matches elf_settings.preview_hash sees it anyway.
+
+export const ELF_PREVIEW_COOKIE = "nbcc_elf_preview";
+
+export function elfPreviewCookieOptions(production: boolean): CookieOptions {
+  return { httpOnly: true, secure: production, sameSite: "lax", path: "/", maxAge: 14 * 24 * 60 * 60_000 };
+}
+
+/** May this browser see the school while it is switched off? */
+export function previewAllowed(settings: { previewHash?: string | null }, token: string | null | undefined): boolean {
+  if (!settings.previewHash || !token || !/^[0-9a-f]{64}$/.test(token)) return false;
+  return hashElfToken(token) === settings.previewHash;
+}

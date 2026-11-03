@@ -1014,3 +1014,6 @@ form.elf-wd { display: grid; gap: 16px; padding: 0; background: none; border: 0;
 .elf-page .section.elf-join-body { padding-top: clamp(8px, 2vw, 16px); }
 .elf-join-top .elf-gift { margin-top: clamp(12px, 3vw, 24px); }
 .elf-page .page-top.elf-join-top { padding-bottom: clamp(8px, 2vw, 16px); }
+
+/* The private preview (Jaimie, 3 November 2026): every page says so across the top. */
+.elf-preview-strip { margin: 0; padding: 10px 16px; background: var(--maroon); color: var(--cream); font-size: .9rem; text-align: center; }

@@ -36,6 +36,9 @@ import { renderJoinPage } from "../elf/pages/join";
 import { renderSignInPage, renderWelcomePage } from "../elf/pages/sign-in";
 import {
   ELF_PENDING_COOKIE,
+  ELF_PREVIEW_COOKIE,
+  elfPreviewCookieOptions,
+  previewAllowed,
   ELF_SESSION_COOKIE,
   ELF_SESSION_DAYS,
   elfPendingCookieOptions,
@@ -81,13 +84,38 @@ const wantsJson = (req: Request) => (req.headers["content-type"] ?? "").includes
 /** The switch: everything here is 404 while the school is off. The settings ride along. */
 async function schoolOn(req: Request, res: Response, next: NextFunction): Promise<void> {
   const settings = await getElfSettings();
-  if (!settings.schoolOn) {
+  const cookie = req.headers.cookie;
+  const preview = !settings.schoolOn && previewAllowed(settings, readCookie(Array.isArray(cookie) ? cookie[0] : cookie, ELF_PREVIEW_COOKIE));
+  if (!settings.schoolOn && !preview) {
     res.status(404).type("text/plain").send("Not found");
     return;
   }
   res.locals.elfSettings = settings;
+  if (preview) {
+    res.locals.elfPreview = true;
+    // A private preview: never listed, never cached, and every page says so across the top.
+    res.setHeader("X-Robots-Tag", "noindex, nofollow");
+    res.setHeader("Cache-Control", "private, no-store");
+    const send = res.send.bind(res);
+    res.send = ((body?: unknown) =>
+      send(typeof body === "string" && body.startsWith("<!doctype html>") ? body.replace("<main", PREVIEW_STRIP + "<main") : body)) as Response["send"];
+  }
   next();
 }
+
+const PREVIEW_STRIP =
+  '<p class="elf-preview-strip" role="status">Private preview: Elf Detective School is switched off, and only people with the preview link can see this. Payments here are real.</p>';
+
+// The private preview link (Jaimie, 3 November 2026): made in the admin, it puts its code in a
+// cookie and opens the calendar. A wrong or old code is simply not found.
+elfRouter.get("/elf/preview/:token", async (req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+  res.setHeader("X-Robots-Tag", "noindex, nofollow");
+  const token = String(req.params.token);
+  if (!previewAllowed(await getElfSettings(), token)) return res.status(404).type("text/plain").send("Not found");
+  res.cookie(ELF_PREVIEW_COOKIE, token, elfPreviewCookieOptions(production()));
+  return res.redirect(303, "/elf");
+});
 
 const settingsOf = (res: Response): ElfSettings => res.locals.elfSettings as ElfSettings;
 
@@ -452,18 +480,24 @@ elfRouter.post("/api/elf/look", express.urlencoded({ extended: false, limit: "16
 
 const PUBLIC_SHORT_CACHE = "public, max-age=15";
 
+/** Cache a public page briefly, but never a private preview of it (a shared cache would hand the
+ *  hidden page to someone without the link). */
+function publicCache(res: Response): void {
+  res.setHeader("Cache-Control", res.locals.elfPreview ? "private, no-store" : PUBLIC_SHORT_CACHE);
+}
+
 elfRouter.get("/elf", schoolOn, (_req, res) => {
-  res.setHeader("Cache-Control", PUBLIC_SHORT_CACHE);
+  publicCache(res);
   res.type("html").send(renderCalendarPage(calendarViewFor({ settings: settingsOf(res), now: new Date() })));
 });
 
 elfRouter.get("/elf/rules", schoolOn, (_req, res) => {
-  res.setHeader("Cache-Control", PUBLIC_SHORT_CACHE);
+  publicCache(res);
   res.type("html").send(renderRulesPage({ settings: settingsOf(res) }));
 });
 
 elfRouter.get("/api/elf/calendar", schoolOn, (_req, res) => {
-  res.setHeader("Cache-Control", PUBLIC_SHORT_CACHE);
+  publicCache(res);
   const view = calendarViewFor({ settings: settingsOf(res), now: new Date() });
   res.json({
     now: view.now.toISOString(),
@@ -474,7 +508,7 @@ elfRouter.get("/api/elf/calendar", schoolOn, (_req, res) => {
 });
 
 elfRouter.get("/api/elf/door/:n", schoolOn, (req, res) => {
-  res.setHeader("Cache-Control", PUBLIC_SHORT_CACHE);
+  publicCache(res);
   const view = calendarViewFor({ settings: settingsOf(res), now: new Date() });
   const raw = String(req.params.n);
   const door = /^\d{1,2}$/.test(raw) ? view.doors.find((d) => d.door === Number(raw)) : undefined;

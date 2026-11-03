@@ -9,6 +9,8 @@ export interface ElfSettings {
   entryFromPence: number;
   /** What is suggested for each detective. */
   entrySuggestedPence: number;
+  /** The sha256 of the private preview link's code, or null when there is no preview link. */
+  previewHash?: string | null;
 }
 
 /** What the school reads as when its row cannot be read: switched off, from £1, £5 suggested. */
@@ -17,4 +19,5 @@ export const ELF_DEFAULTS: Readonly<ElfSettings> = Object.freeze({
   year: 2026,
   entryFromPence: 100,
   entrySuggestedPence: 500,
+  previewHash: null,
 });

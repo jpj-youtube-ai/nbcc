@@ -5,7 +5,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 
 const { getUserAuthRowMock, db } = vi.hoisted(() => ({
   getUserAuthRowMock: vi.fn(),
-  db: { getElfSettings: vi.fn(), setElfSettings: vi.fn(), listElfSignups: vi.fn() },
+  db: { getElfSettings: vi.fn(), setElfSettings: vi.fn(), listElfSignups: vi.fn(), setElfPreview: vi.fn() },
 }));
 vi.mock("../../src/db/admin-users", () => ({ getUserAuthRow: getUserAuthRowMock }));
 vi.mock("../../src/db/elf", () => db);
@@ -80,5 +80,16 @@ describe("the sign ups in the admin", () => {
     const res = await run(getAdminElfSignups, req("viewer"));
     expect(res.statusCode).toBe(200);
     expect(res.body).toEqual(summary);
+  });
+});
+
+describe("the private preview link", () => {
+  it("is made by an admin only, and hands back a link with a long random code", async () => {
+    const { postAdminElfPreview } = await import("../../src/routes/admin-elf");
+    expect((await run(postAdminElfPreview, req("editor"))).statusCode).toBe(403);
+    const res = await run(postAdminElfPreview, req("admin"));
+    expect(res.statusCode).toBe(200);
+    const url = String((res.body as { url: string }).url);
+    expect(url).toMatch(/\/elf\/preview\/[0-9a-f]{64}$/);
   });
 });

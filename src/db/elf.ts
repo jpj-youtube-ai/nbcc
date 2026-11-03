@@ -18,9 +18,10 @@ interface SettingsRow {
   year: number;
   entry_from_pence: number;
   entry_suggested_pence: number;
+  preview_hash?: string | null;
 }
 
-const SETTINGS_SQL = "SELECT school_on, year, entry_from_pence, entry_suggested_pence FROM elf_settings WHERE id = 1";
+const SETTINGS_SQL = "SELECT school_on, year, entry_from_pence, entry_suggested_pence, preview_hash FROM elf_settings WHERE id = 1";
 
 function settingsFrom(row: SettingsRow | undefined): ElfSettings {
   if (!row) return { ...ELF_DEFAULTS };
@@ -29,6 +30,7 @@ function settingsFrom(row: SettingsRow | undefined): ElfSettings {
     year: row.year,
     entryFromPence: row.entry_from_pence,
     entrySuggestedPence: row.entry_suggested_pence,
+    previewHash: row.preview_hash ?? null,
   };
 }
 
@@ -90,6 +92,14 @@ export async function setElfSettings(
     }
     const after = await client.query<SettingsRow>(SETTINGS_SQL);
     return settingsFrom(after.rows[0]);
+  });
+}
+
+/** Set or clear the private preview link (the sha256 of its code), and say so in the audit log. */
+export async function setElfPreview(previewHash: string | null, actor: string): Promise<void> {
+  await inTransaction(async (client) => {
+    await client.query("UPDATE elf_settings SET preview_hash = $1, updated_at = now(), updated_by = $2 WHERE id = 1", [previewHash, actor]);
+    await insertAudit(client, { actor, action: previewHash ? "elf.preview.made" : "elf.preview.ended", entity: "elf_settings", entityId: 1, data: {} });
   });
 }
 

@@ -32,6 +32,9 @@ exports.up = (pgm) => {
       year: { type: "integer", notNull: true, default: 2026 },
       entry_from_pence: { type: "integer", notNull: true, default: 100, check: "entry_from_pence BETWEEN 100 AND 1000" },
       entry_suggested_pence: { type: "integer", notNull: true, default: 500, check: "entry_suggested_pence BETWEEN 100 AND 5000" },
+      // The private preview link (Jaimie, 3 November): the sha256 of its code, or null when there is
+      // none. A browser holding the code sees the school while it is switched off.
+      preview_hash: { type: "text" },
       updated_at: { type: "timestamptz", notNull: true, default: pgm.func("now()") },
       updated_by: { type: "text" },
     },

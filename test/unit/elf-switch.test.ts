@@ -59,3 +59,20 @@ describe("while the school is switched off", () => {
     },
   );
 });
+
+describe("the private preview", () => {
+  it("lets a browser with the preview cookie see the school while it is switched off", async () => {
+    const { previewAllowed } = await import("../../src/elf/session");
+    const { hashElfToken } = await import("../../src/elf/session");
+    const token = "a".repeat(64);
+    expect(previewAllowed({ previewHash: hashElfToken(token) }, token)).toBe(true);
+    expect(previewAllowed({ previewHash: hashElfToken(token) }, "b".repeat(64))).toBe(false);
+    expect(previewAllowed({ previewHash: null }, token)).toBe(false);
+    expect(previewAllowed({ previewHash: hashElfToken(token) }, null)).toBe(false);
+  });
+
+  it("has a route that opens the preview from the link", () => {
+    const routes = (elfRouter.stack as Layer[]).filter((l) => l.route).map((l) => l.route!.path);
+    expect(routes).toContain("/elf/preview/:token");
+  });
+});

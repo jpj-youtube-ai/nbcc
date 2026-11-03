@@ -35,7 +35,7 @@ const FACE = [400, 400, 620, 560];
 
 /** The batches, in the order they are painted and shown to Jaimie. */
 export const BATCHES = ["elves", "starter", "hat", "top", "feet", "neck", "face", "hand", "extra", "outfits"];
-const BROTHER_BASED = new Set(["ginger"]);
+const BROTHER_BASED = new Set(["ginger", "tree", "nessie"]);
 const STARTER = new Set(["elf:red", "tunic:green", "curly:maroon", "outfit:workshop"]);
 
 const KEEP =

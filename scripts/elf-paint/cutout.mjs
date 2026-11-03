@@ -175,6 +175,84 @@ function grow(img, r) {
   return out;
 }
 
+/** The clear hole in a costume inside box [x0, y0, x1, y1] (clear pixels that cannot reach the
+ *  box's edge without crossing the costume): its middle and its pixels, or null when there is none. */
+function holeOf(img, box) {
+  const [x0, y0, x1, y1] = box;
+  const w = x1 - x0;
+  const h = y1 - y0;
+  const clear = (x, y) => img.data[at(img, x0 + x, y0 + y) + 3] < 128;
+  const outside = new Uint8Array(w * h);
+  const queue = [];
+  const seed = (x, y) => {
+    if (clear(x, y) && !outside[y * w + x]) {
+      outside[y * w + x] = 1;
+      queue.push(x, y);
+    }
+  };
+  for (let x = 0; x < w; x++) {
+    seed(x, 0);
+    seed(x, h - 1);
+  }
+  for (let y = 0; y < h; y++) {
+    seed(0, y);
+    seed(w - 1, y);
+  }
+  while (queue.length) {
+    const y = queue.pop();
+    const x = queue.pop();
+    if (x + 1 < w) seed(x + 1, y);
+    if (x > 0) seed(x - 1, y);
+    if (y + 1 < h) seed(x, y + 1);
+    if (y > 0) seed(x, y - 1);
+  }
+  let sx = 0;
+  let sy = 0;
+  const pixels = [];
+  for (let y = 0; y < h; y++)
+    for (let x = 0; x < w; x++)
+      if (clear(x, y) && !outside[y * w + x]) {
+        sx += x;
+        sy += y;
+        pixels.push([x0 + x, y0 + y]);
+      }
+  return pixels.length > 20 ? { x: x0 + sx / pixels.length, y: y0 + sy / pixels.length, pixels } : null;
+}
+
+/** The middle of the master's face inside the box: its skin, the commonest light solid colour there. */
+function faceCentre(master, cut, box) {
+  const [x0, y0, x1, y1] = box;
+  const counts = new Map();
+  for (let y = y0; y < y1; y++)
+    for (let x = x0; x < x1; x++) {
+      const i = at(master, x, y);
+      const r = master.data[i];
+      const g = master.data[i + 1];
+      const b = master.data[i + 2];
+      if (cut.data[i + 3] < 200 || r + g + b < 450) continue;
+      const k = ((r >> 4) << 8) | ((g >> 4) << 4) | (b >> 4);
+      counts.set(k, (counts.get(k) || 0) + 1);
+    }
+  let skin = -1;
+  let most = 0;
+  for (const [k, n] of counts) if (n > most) [skin, most] = [k, n];
+  if (skin < 0) return null;
+  const tone = [(skin >> 8) * 16 + 8, ((skin >> 4) & 15) * 16 + 8, (skin & 15) * 16 + 8];
+  let sx = 0;
+  let sy = 0;
+  let n = 0;
+  for (let y = y0; y < y1; y++)
+    for (let x = x0; x < x1; x++) {
+      const i = at(master, x, y);
+      if (cut.data[i + 3] >= 200 && Math.hypot(master.data[i] - tone[0], master.data[i + 1] - tone[1], master.data[i + 2] - tone[2]) < 40) {
+        sx += x;
+        sy += y;
+        n++;
+      }
+    }
+  return n > 20 ? [sx / n, sy / n] : null;
+}
+
 /** How far `b` is moved from `a`, judged inside box [x0, y0, x1, y1]. */
 export function bestShift(a, b, box, span = 24) {
   const points = [];
@@ -222,12 +300,36 @@ export function isolate(alone, worn, master, opts = {}) {
   // worn painting but not part of the costume (its face hole, bare legs). That also hides bigger
   // hair poking out round a hood (3 November 2026).
   if (opts.outfit) {
-    const hide = new Uint8ClampedArray(master.data.length);
-    for (let p = 0, i = 0; p < master.width * master.height; p++, i += 4) {
-      const showsElf = wornCut.data[i + 3] >= 128 && aloneBack.data[i + 3] < 128;
-      if (!showsElf) hide[i + 3] = 255;
+    // OpenAI moves the head about inside a hood (the tree and Nessie, 3 November 2026), so a costume
+    // with a face hole is moved until the hole's middle sits on the middle of the master's face.
+    // `opts.face` is the box the face is in. Inside that box the elf then shows only through the
+    // hole; outside it, wherever the worn painting showed the elf and the costume, before and after
+    // moving, leaves it bare (legs, mittens). Everything else of the elf is hidden.
+    let layer = aloneBack;
+    let hole = null;
+    if (opts.face) {
+      const found = holeOf(aloneBack, opts.face);
+      const face = faceCentre(master, masterCut, opts.face);
+      if (found && face) {
+        const dx = Math.round(face[0] - found.x);
+        const dy = Math.round(face[1] - found.y);
+        if (Math.abs(dx) <= 120 && Math.abs(dy) <= 120 && (dx || dy)) layer = keyOut(moveBy(alone, -a.dx + dx, -a.dy + dy));
+        hole = holeOf(layer, opts.face);
+      }
     }
-    return { layer: aloneBack, cover: { data: hide, width: master.width, height: master.height } };
+    const width = master.width;
+    const inHole = new Uint8Array(width * master.height);
+    if (hole) for (const [x, y] of hole.pixels) inHole[y * width + x] = 1;
+    const [fx0, fy0, fx1, fy1] = opts.face || [0, 0, 0, 0];
+    const hide = new Uint8ClampedArray(master.data.length);
+    for (let p = 0, i = 0; p < width * master.height; p++, i += 4) {
+      const x = p % width;
+      const y = (p - x) / width;
+      const inFace = !!hole && x >= fx0 && x < fx1 && y >= fy0 && y < fy1;
+      const bare = wornCut.data[i + 3] >= 128 && aloneBack.data[i + 3] < 128 && layer.data[i + 3] < 128;
+      if (!(inFace ? inHole[p] === 1 : bare)) hide[i + 3] = 255;
+    }
+    return { layer, cover: { data: hide, width, height: master.height } };
   }
 
   // What of the elf the piece hides: solid in the master, clear once the piece is worn.

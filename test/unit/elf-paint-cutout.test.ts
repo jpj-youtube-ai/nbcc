@@ -158,6 +158,26 @@ describe("lifting a piece off", () => {
     expect(alphaAt(cover!, 5, 5)).toBe(255); // and any hair beyond it
   });
 
+  it("lines an outfit's face hole up with the elf's own face, and shows the elf only through it", () => {
+    // The tree and Nessie's holes came out to one side of the face (3 November 2026).
+    const master = elf();
+    rect(master, 52, 46, 68, 62, [250, 214, 183]); // the face, in the master's skin
+    rect(master, 20, 10, 100, 30, [200, 120, 60]); // and big hair, above it
+    const worn = rect(blank(), 30, 20, 90, 100, [40, 120, 40]);
+    rect(worn, 60, 42, 80, 62, [250, 214, 183]); // OpenAI painted the face (and hole) 10 to the right
+    rect(worn, 45, 100, 55, 150, [200, 40, 40]);
+    rect(worn, 65, 100, 75, 150, [200, 40, 40]); // the elf's own legs, where the master has them
+    const alone = rect(blank(), 30, 20, 90, 100, [40, 120, 40]);
+    rect(alone, 60, 42, 80, 62, BG); // the hole, 10 to the right of the master's face
+    const { layer, cover } = isolate(alone, worn, master, { still: [40, 130, 80, 150], outfit: true, face: [40, 30, 90, 80] });
+    expect(alphaAt(layer, 55, 52)).toBe(0); // the hole is now over the face
+    expect(alphaAt(layer, 75, 52)).toBe(255); // and costume where the hole was
+    expect(alphaAt(cover!, 55, 52)).toBe(0); // the face shows
+    expect(alphaAt(cover!, 75, 52)).toBe(255); // nothing of the elf beside it
+    expect(alphaAt(cover!, 25, 15)).toBe(255); // nor its hair beyond the costume
+    expect(alphaAt(cover!, 50, 120)).toBe(0); // its legs still show
+  });
+
   it("marks nothing when the piece hides none of the elf", () => {
     const master = elf();
     const worn = rect(elf(), 40, 10, 80, 40, [30, 90, 160]);

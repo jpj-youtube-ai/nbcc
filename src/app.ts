@@ -55,6 +55,7 @@ import { adminOverviewRouter } from "./routes/admin-overview";
 import { adminDonationSourcesRouter } from "./routes/admin-donation-sources";
 import { createSiteRouter } from "./routes/site";
 import { elfRouter } from "./routes/elf";
+import { adminElfRouter } from "./routes/admin-elf";
 
 export function createApp() {
   const app = express();
@@ -172,6 +173,7 @@ export function createApp() {
   // NBCC Elf Detective School (wave 1): enrolling, paying, signing in, Detective HQ and the
   // wardrobe. Every route answers 404 while the school is switched off in the admin.
   app.use(elfRouter);
+  app.use(adminElfRouter);
   app.use(adminEventTicketsRouter);
   // The Festive Ball ticket report, set up from the Events page (TASK-464).
   app.use(adminBallReportRouter);

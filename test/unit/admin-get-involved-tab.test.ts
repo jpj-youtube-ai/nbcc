@@ -252,14 +252,14 @@ describe("the five sections", () => {
       events: ["evReport", "evList", "evAdd", "evEditor", "evPagePreviewBox"],
       tickets: ["etAdmin", "frPledges"],
       emails: ["frInvite", "frTouch", "frAllEmails"],
-      settings: ["evSwitch", "evSwitchStatus", "frSwitch", "frSwitchStatus", "frCats", "frImpact", "frSummary"],
+      settings: ["evSwitch", "evSwitchStatus", "elfAdmin", "frSwitch", "frSwitchStatus", "frCats", "frImpact", "frSummary"],
     };
     for (const s of SECTIONS) for (const id of want[s]) expect(inPart(id), id).toBe(s);
     // Each card once, and the order they are read in.
     const order = (s: Section) => qa(`[data-gi-part="${s}"] > [id]`).map((n) => n.id);
     expect(order("tickets")).toEqual(["etAdmin", "frPledges"]);
     expect(order("emails")).toEqual(["frInvite", "frTouch", "frAllEmails"]);
-    expect(order("settings").filter((id) => !/Status$/.test(id))).toEqual(["evSwitch", "frSwitch", "frCats", "frImpact", "frSummary"]);
+    expect(order("settings").filter((id) => !/Status$/.test(id))).toEqual(["evSwitch", "elfAdmin", "frSwitch", "frCats", "frImpact", "frSummary"]);
     for (const id of Object.values(want).flat()) expect(qa(`[id="${id}"]`), id).toHaveLength(1);
   });
 

@@ -5,8 +5,9 @@ import type { Progress } from "./progress";
 // NBCC Elf Detective School: the elf wardrobe, as the server sees it. The design is
 // docs/superpowers/specs/2026-10-04-elf-detective-school-design.md (decisions 14 and 15).
 //
-// The wardrobe itself (what there is to wear, how many doors unlock each thing, and how every piece
-// and outfit is drawn) lives in ONE file that the browser also loads: assets/js/elf-wardrobe.js. The
+// The wardrobe itself (what there is to wear, how many doors unlock each thing, and which painted
+// layers draw a look: docs/superpowers/specs/2026-11-03-elf-painted-wardrobe-design.md) lives in ONE
+// file that the browser also loads: assets/js/elf-wardrobe.js. The
 // server reads that same file, the way src/fundraising/signers.ts reads the admin's list of signers,
 // so the two can never disagree about what a detective may wear or how their elf looks. It ships
 // with the app, next to the pages. It is read when this module is first loaded: if the file were

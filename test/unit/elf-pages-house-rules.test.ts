@@ -5,6 +5,8 @@ import { resolve } from "node:path";
 import { renderCalendarPage } from "../../src/elf/pages/calendar";
 import { renderHqPage } from "../../src/elf/pages/hq";
 import { renderJoinPage } from "../../src/elf/pages/join";
+import { renderRulesPage } from "../../src/elf/pages/rules";
+import { calendarViewFor } from "../../src/elf/views";
 import { renderSignInPage, renderWelcomePage } from "../../src/elf/pages/sign-in";
 import { FESTIVE_SURNAMES } from "../../src/elf/names";
 import { ELF_DEFAULTS } from "../../src/elf/settings";
@@ -44,6 +46,8 @@ const PAGES: [string, string][] = [
   ["HQ, all over", renderHqPage(hqView({ now: at("2026-12-26T10:00:00.000Z"), today: null, nextClueAt: null }))],
   ["join", renderJoinPage({ settings: { ...ELF_DEFAULTS, schoolOn: true }, captchaSiteKey: null, surnames: FESTIVE_SURNAMES })],
   ["join, refused", renderJoinPage({ settings: { ...ELF_DEFAULTS, schoolOn: true }, captchaSiteKey: "1x00000000000000000000AA", surnames: FESTIVE_SURNAMES, errors: ["Please pick a surname from the list for each detective."], values: { grownUpName: "Sam Example" } })],
+  ["rules", renderRulesPage({ settings: { ...ELF_DEFAULTS, schoolOn: true } })],
+  ["calendar, live before December", renderCalendarPage(calendarViewFor({ settings: { ...ELF_DEFAULTS, schoolOn: true }, now: at("2026-11-13T09:00:00.000Z") }))],
   ["sign in, the email", renderSignInPage({ stage: "email" })],
   ["sign in, the code", renderSignInPage({ stage: "code", email: "sam@example.com", message: "If that email has detectives enrolled, we have sent a sign in code to it." })],
   ["sign in, a wrong code", renderSignInPage({ stage: "code", email: "sam@example.com", message: "That code does not work. Check it, or ask for a new one.", error: true })],

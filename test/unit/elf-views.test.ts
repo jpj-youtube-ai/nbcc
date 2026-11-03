@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { hqViewFor, lookFromForm, wardrobeViewFor, type FamilyRow } from "../../src/elf/views";
+import { calendarViewFor, hqViewFor, lookFromForm, wardrobeViewFor, type FamilyRow } from "../../src/elf/views";
 import { ELF_DEFAULTS } from "../../src/elf/settings";
 import { defaultLook } from "../../src/elf/wardrobe";
 
@@ -61,5 +61,30 @@ describe("a look from the plain form", () => {
     expect(look).toMatchObject({ skin: "s2", hair: "ginger", hairStyle: "bunches", outfit: null });
     expect((look.pieces as Record<string, unknown>).hat).toEqual(["elf", "red"]);
     expect((look.pieces as Record<string, unknown>).face).toBeNull();
+  });
+});
+
+describe("the public calendar before December", () => {
+  const view = calendarViewFor({ settings: SETTINGS, now: new Date("2026-11-20T10:00:00.000Z") });
+
+  it("has 24 doors, every one shut, with nothing about where any elf hides", () => {
+    expect(view.doors.length).toBe(24);
+    for (const d of view.doors) {
+      expect(d.state).toBe("shut");
+      expect(d.place).toBeNull();
+      expect(d.found).toBeNull();
+    }
+  });
+
+  it("counts down to door 1's first clue, at 5:30pm on Tuesday 1 December, and weekend doors at 10am", () => {
+    expect(view.doors[0].clueAt.toISOString()).toBe("2026-12-01T17:30:00.000Z");
+    // Saturday 5 December
+    expect(view.doors[4].clueAt.toISOString()).toBe("2026-12-05T10:00:00.000Z");
+  });
+
+  it("shows the price the admin set, as words", () => {
+    expect(view.price).toEqual({ from: "£1", suggested: "£5" });
+    expect(view.joinUrl).toBe("/elf/join");
+    expect(view.hqUrl).toBe("/elf/hq");
   });
 });

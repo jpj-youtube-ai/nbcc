@@ -21,9 +21,12 @@ import {
   saveLook,
   type ElfSettings,
 } from "../db/elf";
+import { calendarStatus, renderCalendarPage } from "../elf/pages/calendar";
+import { doorDetail, doorTile, doorVersion } from "../elf/pages/door";
 import { renderHqPage } from "../elf/pages/hq";
+import { renderRulesPage } from "../elf/pages/rules";
 import { renderWardrobePage } from "../elf/pages/wardrobe";
-import { hqViewFor, lookFromForm, wardrobeStateNow, wardrobeViewFor, type FamilyRow } from "../elf/views";
+import { calendarViewFor, hqViewFor, lookFromForm, wardrobeStateNow, wardrobeViewFor, type FamilyRow } from "../elf/views";
 import { drawElf } from "../elf/wardrobe";
 import { buildElfSignInCodeEmail } from "../elf/emails";
 import { buildElfSessionParams, feeCoverPence, joinBodyFromForm, parseJoin } from "../elf/join";
@@ -393,3 +396,54 @@ export async function postLook(req: Request, res: Response): Promise<Response | 
 }
 
 elfRouter.post("/api/elf/look", express.urlencoded({ extended: false, limit: "16kb" }), schoolOn, postLook);
+
+// --- the public calendar and the rules -----------------------------------------------------------------
+//
+//   GET /elf                 the calendar: 24 doors, counting down to the first clue
+//   GET /elf/rules           the rules a grown up agrees to when enrolling
+//   GET /api/elf/calendar    the small feed the calendar's script polls: { now, found, status, doors: [{ door, v }] }
+//   GET /api/elf/door/:n     one door's tile and detail, drawn by the same functions as the page
+//   GET /api/elf/me          the signed in family's marks on the calendar, or 401
+//
+// The calendar is the same for every visitor, so it is cached briefly; nothing on it is private.
+
+const PUBLIC_SHORT_CACHE = "public, max-age=15";
+
+elfRouter.get("/elf", schoolOn, (_req, res) => {
+  res.setHeader("Cache-Control", PUBLIC_SHORT_CACHE);
+  res.type("html").send(renderCalendarPage(calendarViewFor({ settings: settingsOf(res), now: new Date() })));
+});
+
+elfRouter.get("/elf/rules", schoolOn, (_req, res) => {
+  res.setHeader("Cache-Control", PUBLIC_SHORT_CACHE);
+  res.type("html").send(renderRulesPage({ settings: settingsOf(res) }));
+});
+
+elfRouter.get("/api/elf/calendar", schoolOn, (_req, res) => {
+  res.setHeader("Cache-Control", PUBLIC_SHORT_CACHE);
+  const view = calendarViewFor({ settings: settingsOf(res), now: new Date() });
+  res.json({
+    now: view.now.toISOString(),
+    found: view.doors.filter((d) => d.state === "found").length,
+    status: calendarStatus(view),
+    doors: view.doors.map((d) => ({ door: d.door, v: doorVersion(d, view.now) })),
+  });
+});
+
+elfRouter.get("/api/elf/door/:n", schoolOn, (req, res) => {
+  res.setHeader("Cache-Control", PUBLIC_SHORT_CACHE);
+  const view = calendarViewFor({ settings: settingsOf(res), now: new Date() });
+  const raw = String(req.params.n);
+  const door = /^\d{1,2}$/.test(raw) ? view.doors.find((d) => d.door === Number(raw)) : undefined;
+  if (!door) return res.status(404).json({ error: "Not found" });
+  const ctx = { now: view.now, joinUrl: view.joinUrl, hqUrl: view.hqUrl };
+  return res.json({ tile: doorTile(door, view.now), detail: doorDetail(door, ctx) });
+});
+
+elfRouter.get("/api/elf/me", schoolOn, async (req, res) => {
+  res.setHeader("Cache-Control", "private, no-store");
+  const s = await signedInFamily(req);
+  if (!s) return res.status(401).json({ error: "Not signed in" });
+  // Wave 1: no door has opened, so there are no marks yet.
+  return res.json({ doors: [] });
+});

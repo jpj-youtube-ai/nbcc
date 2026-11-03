@@ -1,10 +1,10 @@
-import { doorInstant } from "./calendar";
+import { DEFAULT_MORNING_CLUE_TIME, DEFAULT_SCHOOL_CLUE_TIME, DOOR_COUNT, clueTimeFor, doorInstant, type Door } from "./calendar";
 import { badgeWords } from "./emails";
-import { familyDetectiveName } from "./names";
+import { ELF_NAMES, familyDetectiveName } from "./names";
 import { progressOf } from "./progress";
 import type { ElfSettings } from "./settings";
 import { SLOTS, defaultLook, wardrobeState, type ElfLook } from "./wardrobe";
-import type { DetectiveView, HqView, WardrobeView } from "./pages/types";
+import type { CalendarView, DetectiveView, DoorView, HqView, WardrobeView } from "./pages/types";
 
 // NBCC Elf Detective School: what the database holds, turned into what the screens show (wave 1
 // plan, Tasks 7 and 8). Pure: the rows come in, the views go out. In wave 1 no door has opened, so
@@ -103,4 +103,44 @@ export function lookFromForm(form: Record<string, unknown>): Record<string, unkn
     pieces[slot.id] = style && colour ? [style, colour] : null;
   }
   return { skin: text(form.skin), hair: text(form.hair), hairStyle: text(form.hairStyle), outfit: text(form.outfit) || null, pieces };
+}
+
+function poundsWords(p: number): string {
+  return p % 100 === 0 ? `£${p / 100}` : `£${(p / 100).toFixed(2)}`;
+}
+
+/**
+ * The public calendar. In wave 1 every door is shut (nothing has opened yet): a carved shape, the
+ * Big prize ribbon and the place all come with wave 2's admin, so a door shows the mystery star, its
+ * elf's name and its countdown. The same for every visitor, so it can be cached. A place is never
+ * listed: a door shows its place only once it is open (docs/superpowers/specs/2026-11-03-elf-
+ * detective-secret-places-design.md).
+ */
+export function calendarViewFor(o: { settings: ElfSettings; now: Date }): CalendarView {
+  const season = { year: o.settings.year, holidayDoors: [], schoolClueTime: DEFAULT_SCHOOL_CLUE_TIME, morningClueTime: DEFAULT_MORNING_CLUE_TIME };
+  const doors: DoorView[] = [];
+  for (let n = 1; n <= DOOR_COUNT; n += 1) {
+    const door = n as Door;
+    doors.push({
+      door,
+      state: "shut",
+      clueAt: doorInstant(season, door, clueTimeFor(season, door, null)) ?? new Date(Date.UTC(o.settings.year, 11, n, 17, 30)),
+      shapeUrl: null,
+      bigPrize: false,
+      teaser: null,
+      elfName: ELF_NAMES[n - 1] ?? "Elf",
+      place: null,
+      found: null,
+      counts: null,
+      factLine: null,
+    });
+  }
+  return {
+    year: o.settings.year,
+    now: o.now,
+    doors,
+    price: { from: poundsWords(o.settings.entryFromPence), suggested: poundsWords(o.settings.entrySuggestedPence) },
+    joinUrl: "/elf/join",
+    hqUrl: "/elf/hq",
+  };
 }

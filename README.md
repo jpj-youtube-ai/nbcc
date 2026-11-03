@@ -1646,6 +1646,13 @@ hosted-Checkout redirect stays the default fallback and no-JS safety net.
 | `GET /fill` | **implemented, listed but unlinked** | Fill a Red Bag (a new way to give: fill a list of example items, watch a red bag fill, give the total. Public since 4 October 2026 and on the site map, so search engines may list it; still linked from no menu, footer or page. `POST /api/checkout-session` takes an optional `redBag: true` for it. See **Fill a Red Bag (listed, unlinked)**) |
 | `GET /fill/thank-you` | **implemented** | Fill a Red Bag's thank you, a page of its own, where Stripe returns a donor; `noindex`, on no site map, linked from nowhere |
 | `GET /fill-a-red-bag`, `GET /fill-a-bag` | **implemented** | The address the page first had, and the other way people type it: a permanent redirect (`301`) to `/fill`, query string kept (an old return from paying, `?thanks=1`, goes to `/fill/thank-you`), while the page is switched on; the 404 if it were switched off. Fixed in code, reserved, on no site map |
+| `GET /elf`, `GET /elf/rules` | **implemented, switched off** | NBCC Elf Detective School: the public calendar of 24 doors counting down to the first clue, and the rules. Every `/elf` page and `/api/elf/*` route answers 404 until an admin switches the school on. See **Elf Detective School** |
+| `GET /elf/join`, `POST /api/elf/join` | **implemented, switched off** | Enrol detectives (first name and a festive surname only) and pay what you can (from £1, £5 suggested, per detective; an optional gift can carry Gift Aid); goes on to Stripe Checkout tagged `product: elf_school` |
+| `GET /elf/welcome` | **implemented, switched off** | Where Stripe returns a family; signs the paying browser in only when its payment opened the account |
+| `GET /elf/sign-in`, `POST /api/elf/sign-in/request`, `POST /api/elf/sign-in`, `POST /api/elf/sign-out` | **implemented, switched off** | Signing in to Detective HQ with an emailed 6 digit code (cookie `nbcc_elf_session`, 30 days) |
+| `GET /elf/hq`, `GET /elf/hq/wardrobe/:detective`, `GET /elf/hq/elf/:detective.svg`, `POST /api/elf/look` | **implemented, switched off** | Detective HQ, the wardrobe, a detective's elf picture, and saving a look (made safe against what the detective has earned) |
+| `GET /api/elf/calendar`, `GET /api/elf/door/:n`, `GET /api/elf/me` | **implemented, switched off** | The calendar's small feed, one door's HTML, and the signed in family's marks |
+| `GET /api/admin/elf/settings`, `PATCH /api/admin/elf/settings`, `GET /api/admin/elf/signups` | **implemented** | Admin > Get involved > Elf Detective School: the switch and the price (admin only to change), and the sign ups (Get involved: view) |
 | `GET` \| `POST /pledge/confirm`, `/pledge/pay`, `/pledge/cancel` | **implemented** | Sponsor pledges (the sponsor, by the signed link in an email: confirm the pledge, pay it through Stripe Checkout, or cancel it quietly. Each link only asks; a button does the thing) |
 | `GET /api/fundraise/manage/pledges`, `POST /api/fundraise/manage/fundraisers/:id/pledges/:pledgeId/cash` \| `hide` | **implemented** | Sponsor pledges (the signed in organiser: confirmed pledges by name, never emails; "Paid me in cash"; hide one from their page) |
 | `GET /api/admin/fundraising/emails/summary`, `GET /api/admin/fundraising/emails`, `GET /api/admin/fundraising/emails/:id/:version` | **implemented** | All emails (staff with fundraising view: every fundraising, pledge, ticket and Festive Ball email, listed from one catalogue and rendered with the real builders and invented sample data. Read only: approving stays with the three endpoints that already did it. See **All emails, in Admin > Get involved**) |
@@ -11431,6 +11438,49 @@ pictures, made with sharp), `fundraiser-pictures-db`, `fundraiser-pictures-route
 shows; an approved main photo becomes the page's photo; one not used never shows and the organiser
 sees our note; a team page shows each approved round photo and the elf until then; a round or main
 photo taken off, and a main photo replaced, answers 404).
+
+## Elf Detective School (wave 1: sign up, paying, accounts)
+
+An advent elf hunt for December 2026. Designs: `docs/superpowers/specs/2026-10-04-elf-detective-school-design.md`
+and its amendment `2026-11-03-elf-detective-secret-places-design.md` (the places are secret; three clues a
+day). Wave 1 plan: `docs/superpowers/plans/2026-11-03-elf-detective-wave1-sign-up.md`.
+
+**The switch.** `elf_settings.school_on`, off by default. While it is off every `/elf` page and
+`/api/elf/*` route answers 404; the Stripe webhook still settles payments already made. An admin
+switches it on, and sets the pay what you can amounts per detective (from £1, £5 suggested), in
+Admin > Get involved > Elf Detective School.
+
+### Routes
+
+See the table under **API endpoints**: `/elf`, `/elf/rules`, `/elf/join`, `/elf/welcome`,
+`/elf/sign-in`, `/elf/hq` and the wardrobe, and `/api/elf/*`, all in `src/routes/elf.ts`.
+
+### Data (`migrations/1791200000310_elf-school.js`, additive only)
+
+`elf_settings` (one row), `elf_families` (one per grown up's email), `elf_detectives` (first name
+and festive surname only; a badge number once paid), `elf_orders` (entry, optional gift with its Gift
+Aid declaration, card fee cover, Stripe session, the paying browser's token hash, whether the payment
+opened the account), `elf_sign_in_codes`, `elf_sessions`, and the `elf_badge_seq` sequence. The
+newsletter's `consent_source` check also allows `elf`.
+
+### Paying
+
+`POST /api/elf/join` saves a pending order and opens a Stripe Checkout Session tagged
+`product: elf_school`. `src/db/stripe-webhook.ts` hands every event to `handleElfEvent`
+(`src/elf/webhook.ts`) first, so an entry is never recorded as a gift: a completed checkout settles
+the order once (badges `EDS 0001` upwards), then the welcome email goes after COMMIT, and the grown
+up joins the newsletter only if they ticked the box. The entry is never Gift Aided; the optional gift
+and its declaration stay on the order (as the Festive Ball keeps its gift on the booking). An email
+whose family has already paid must sign in to add detectives, so nobody can add children to someone
+else's family by typing their email.
+
+### Where it lives, and tests
+
+Pure rules in `src/elf/` (`join.ts`, `session.ts`, `views.ts`, `emails.ts`, `settings.ts`, and
+Stage A's game rules), screens in `src/elf/pages/`, the data layer in `src/db/elf.ts`, routes in
+`src/routes/elf.ts` and `src/routes/admin-elf.ts`, the enrol page's script in
+`assets/js/elf-join.js`. Unit tests are `test/unit/elf-*.test.ts`; BDD is `features/elf-join.feature`.
+Both emails are in Admin > Get involved > All emails, under Elf Detective School.
 
 ## Event tickets: NBCC sells an event's tickets
 

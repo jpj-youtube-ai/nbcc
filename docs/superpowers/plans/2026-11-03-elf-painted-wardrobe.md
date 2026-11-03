@@ -81,7 +81,7 @@ changing comes from `docs/superpowers/specs/2026-10-04-elf-detective-school-desi
 
 ```ts
 it("prices a painting from its reported tokens", () => {
-  expect(costOf({ input_tokens_details: { image_tokens: 1536, text_tokens: 70 }, output_tokens_details: { image_tokens: 158 } }, "gpt-image-2")).toBeCloseTo(0.01723, 4);
+  expect(costOf({ input_tokens_details: { image_tokens: 1536, text_tokens: 70 }, output_tokens_details: { image_tokens: 158 } }, "gpt-image-2")).toBeCloseTo(0.01738, 4);
 });
 it("asks for gpt-image-2 at low quality on a 1024x1536 canvas by default", async () => {
   /* fake fetch records the FormData */

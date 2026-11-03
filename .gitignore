@@ -34,3 +34,6 @@ crash.log
 
 # The DB-IP location database (TASK-481): fetched by the Docker build, never committed.
 /geo/
+
+# Elf Detective School painting tool: raw paintings, sheets and the spend ledger (never committed).
+/.elf-paint/

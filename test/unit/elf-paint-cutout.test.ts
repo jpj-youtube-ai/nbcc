@@ -75,6 +75,17 @@ describe("cutting out the background", () => {
     expect(alphaAt(out, 55, 55)).toBe(255);
   });
 
+  it("leaves no purple rim round the outline, and keeps the reds red", () => {
+    // Measured on the real elves, 3 November 2026: the outermost outline pixels came out purple
+    // (#5A0B41), a ring that shows on a dark email. The outline is a browny red, so its edge must be too.
+    const out = keyOut(rect(rect(blank([214, 22, 185]), 50, 50, 51, 60, [90, 11, 65]), 60, 50, 70, 60, [192, 34, 56]));
+    const rim = (50 * W + 50) * 4;
+    expect(out.data[rim + 2] - out.data[rim + 1]).toBeLessThan(15);
+    const red = (55 * W + 65) * 4;
+    expect(out.data[red]).toBeGreaterThan(150);
+    expect(out.data[red + 2]).toBeLessThan(60);
+  });
+
   it("takes the pink off a half covered edge pixel", () => {
     // Half way between the outline and the background: pink, and too red and blue for its green.
     const mix: [number, number, number] = [Math.round((LINE[0] + BG[0]) / 2), Math.round((LINE[1] + BG[1]) / 2), Math.round((LINE[2] + BG[2]) / 2)];

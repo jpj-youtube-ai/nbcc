@@ -71,6 +71,14 @@ export function keyOut(img) {
         b -= spill * (1 - alpha);
       }
     }
+    // Blue above green, with red above both, is magenta's cast, solid or not: the outline's
+    // outermost pixels come out purple (#5A0B41 on 3 November 2026). Nothing in the wardrobe is
+    // purple, and its blues have more green than red, so taking that blue away turns the rim back
+    // into the outline's browny red and leaves every real colour alone.
+    if (alpha > 0 && b > g && r > b) {
+      const cast = Math.min(r, b) - g;
+      if (cast > 0) b -= cast * 0.85;
+    }
     out[i] = r;
     out[i + 1] = g;
     out[i + 2] = b;

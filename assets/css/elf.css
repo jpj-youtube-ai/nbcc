@@ -367,15 +367,6 @@
 /* The one safety line, set apart so it is read. */
 .elf-grown-up { margin: clamp(20px, 3vw, 30px) 0 0; padding: 12px 16px; max-width: 760px; border-radius: 12px; background: var(--tan-soft); color: var(--elf-ink); }
 
-/* ---------- the hiding places ---------- */
-.elf-where .lede { margin-top: 12px; }
-.elf-places { list-style: none; margin: clamp(18px, 3vw, 28px) 0 0; padding: 0; columns: 1; column-gap: 40px; }
-.elf-places li { break-inside: avoid; padding: 9px 0; border-bottom: 1px solid var(--line); }
-.elf-places li.is-found { color: var(--slate-soft); }
-.elf-places .elf-pill { margin-left: 6px; }
-@media (min-width: 640px) { .elf-places { columns: 2; } }
-@media (min-width: 981px) { .elf-places { columns: 3; } }
-
 /* ---------- the ask at the foot ---------- */
 .elf-join { background: var(--maroon); color: var(--cream); }
 .elf-join h2 { color: var(--cream); }

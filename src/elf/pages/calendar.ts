@@ -122,13 +122,6 @@ export function renderCalendarPage(view: CalendarView): string {
 
   const steps = STEPS.map((s) => `<li><h3>${s.title}</h3><p>${s.words}</p></li>`).join("");
 
-  const places = view.places
-    .map(
-      (p) =>
-        `<li${p.found ? ' class="is-found"' : ""}>${escapeHtml(`${p.name}, ${p.town}`)}` +
-        `${p.found ? ' <span class="elf-pill elf-pill--found">Found</span>' : ""}</li>`,
-    )
-    .join("");
 
   const main = `  <section class="page-top elf-top" aria-labelledby="elf-heading">
     <div class="wrap elf-top__grid">
@@ -171,14 +164,6 @@ ${board}
       <h2 id="elf-how-heading" class="h-lg">How it works</h2>
       <ol class="elf-steps">${steps}</ol>
       <p class="elf-grown-up">Under 16? Bring a grown up with you to every hiding place.</p>
-    </div>
-  </section>
-
-  <section class="section elf-where" aria-labelledby="elf-where-heading">
-    <div class="wrap">
-      <h2 id="elf-where-heading" class="h-lg">Where could they be hiding?</h2>
-      <p class="lede">These are this year's hiding places. Which elf is where, and on which day, is for you to work out.</p>
-      <ul class="elf-places">${places}</ul>
     </div>
   </section>
 

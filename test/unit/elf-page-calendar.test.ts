@@ -72,11 +72,13 @@ describe("the calendar page", () => {
     expect(words(page(view(at("2026-12-01T09:00:00.000Z"))).querySelector(".elf-tally"))).toBe("0 of 24 elves found");
   });
 
-  it("lists every hiding place with its town, never its day, and marks the ones found", () => {
-    const list = page(view(AFTERNOON)).querySelector(".elf-places")!;
-    const items = [...list.querySelectorAll("li")].map(words);
-    expect(items).toEqual(["Shop number 1, Ayr Found", "The Toy Shop, Troon", "The Corner Bakery, Kilmarnock"]);
-    expect(words(list)).not.toMatch(/\bDec\b|\bDoor\b/);
+  // The places are secret (docs/superpowers/specs/2026-11-03-elf-detective-secret-places-design.md):
+  // a place shows only on its own door once that door is open, so the page never lists them.
+  it("never lists this year's hiding places", () => {
+    const doc = page(view(AFTERNOON));
+    expect(doc.querySelector(".elf-places")).toBeNull();
+    expect(doc.querySelector(".elf-where")).toBeNull();
+    expect(words(doc.body)).not.toContain("hiding places. Which elf is where");
   });
 
   it("asks people to join, with the price in the words the admin set", () => {

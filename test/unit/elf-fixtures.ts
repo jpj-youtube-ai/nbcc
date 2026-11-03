@@ -142,11 +142,6 @@ export function calendarView(now: Date, today: Partial<DoorView> = {}, over: Par
     year: 2026,
     now,
     doors,
-    places: [
-      { name: "Shop number 1", town: "Ayr", found: true },
-      { name: "The Toy Shop", town: "Troon", found: false },
-      { name: "The Corner Bakery", town: "Kilmarnock", found: false },
-    ],
     price: { from: "£1", suggested: "£5" },
     joinUrl: "/elf/join",
     hqUrl: "/elf/hq",

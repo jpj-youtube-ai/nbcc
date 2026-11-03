@@ -49,8 +49,6 @@ export interface CalendarView {
   now: Date;
   /** All 24, door 1 first. */
   doors: DoorView[];
-  /** Every hiding place, public from the start, without its day. */
-  places: { name: string; town: string; found: boolean }[];
   /** The price as words, set in the admin: from "£1", suggested "£5". */
   price: { from: string; suggested: string };
   joinUrl: string;

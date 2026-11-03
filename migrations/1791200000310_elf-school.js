@@ -18,7 +18,8 @@
 //   elf_sessions       signed in families, kept only as sha256 hashes of the cookie's random id.
 //   elf_badge_seq      badge numbers, EDS 0001 upwards.
 //
-// Additive only: new tables and a sequence, nothing existing changes (golden rule 2).
+// Additive only: new tables and a sequence, and one check widened to allow the newsletter source
+// 'elf' (golden rule 2).
 
 exports.shorthands = undefined;
 
@@ -120,9 +121,21 @@ exports.up = (pgm) => {
   pgm.createIndex("elf_sessions", "expires_at");
 
   pgm.sql("CREATE SEQUENCE IF NOT EXISTS elf_badge_seq START 1");
+
+  // A grown up who ticks the newsletter box when enrolling joins the newsletter with consent_source
+  // 'elf' (src/newsletter/self-signup.ts). Widening the check is additive: older code never writes it.
+  pgm.dropConstraint("list_subscribers", "list_subscribers_consent_source_check");
+  pgm.addConstraint("list_subscribers", "list_subscribers_consent_source_check", {
+    check: "consent_source IN ('footer', 'import', 'admin', 'fundraise', 'elf')",
+  });
 };
 
 exports.down = (pgm) => {
+  // Back to the narrower set: only safe while no row says 'elf' (down is never run on production).
+  pgm.dropConstraint("list_subscribers", "list_subscribers_consent_source_check");
+  pgm.addConstraint("list_subscribers", "list_subscribers_consent_source_check", {
+    check: "consent_source IN ('footer', 'import', 'admin', 'fundraise')",
+  });
   pgm.sql("DROP SEQUENCE IF EXISTS elf_badge_seq");
   pgm.dropTable("elf_sessions");
   pgm.dropTable("elf_sign_in_codes");

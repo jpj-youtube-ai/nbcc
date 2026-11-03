@@ -178,3 +178,86 @@ export async function createPendingJoin(o: {
 export async function attachStripeSession(orderId: number, sessionId: string): Promise<void> {
   await pool.query("UPDATE elf_orders SET stripe_session_id = $2 WHERE id = $1 AND status = 'pending'", [orderId, sessionId]);
 }
+
+// --- settling a payment (called from the Stripe webhook, inside its transaction) -------------------
+
+type Querier = Pick<PoolClient, "query">;
+
+export interface SettledOrder {
+  orderId: number;
+  familyId: number;
+  email: string;
+  grownUpName: string;
+  newsletter: boolean;
+  detectives: { id: number; firstName: string; surname: string; badgeNumber: number }[];
+}
+
+/**
+ * A paid checkout: pending to paid, once. The family and the order's detectives become active, each
+ * detective gets the next badge number (a detective that already has one keeps it), and the order
+ * remembers whether it opened the family's account (the family had no paid order before). A gift
+ * with Gift Aid keeps the declaration wording it was given under. "already" when the order was not
+ * pending (Stripe sends an event again), "unknown" when no order has that reference.
+ */
+export async function settleElfOrder(
+  client: Querier,
+  o: { reference: string; sessionId: string; paidAt: Date; wording: { wording_version: string; wording_snapshot: string } },
+): Promise<SettledOrder | "already" | "unknown"> {
+  const found = await client.query<{
+    id: number;
+    family_id: number;
+    detective_ids: number[];
+    status: string;
+    gift_aid: boolean;
+    family_active: boolean;
+    email: string;
+    grown_up_name: string;
+    newsletter: boolean;
+  }>(
+    `SELECT o.id, o.family_id, o.detective_ids, o.status, o.gift_aid, f.active AS family_active, f.email, f.grown_up_name, f.newsletter
+       FROM elf_orders o
+       JOIN elf_families f ON f.id = o.family_id
+      WHERE o.reference = $1
+        FOR UPDATE OF o, f`,
+    [o.reference],
+  );
+  const row = found.rows[0];
+  if (!row) return "unknown";
+  if (row.status !== "pending") return "already";
+  const wording = row.gift_aid ? JSON.stringify({ ...o.wording, declared_at: o.paidAt.toISOString() }) : null;
+  await client.query(
+    `UPDATE elf_orders SET status = 'paid', paid_at = $2, stripe_session_id = COALESCE(stripe_session_id, $3), opened_family = $4,
+            declaration = CASE WHEN $5::jsonb IS NULL THEN declaration ELSE COALESCE(declaration, '{}'::jsonb) || $5::jsonb END
+      WHERE id = $1`,
+    [row.id, o.paidAt, o.sessionId, !row.family_active, wording],
+  );
+  await client.query("UPDATE elf_families SET active = true WHERE id = $1", [row.family_id]);
+  const detectives = await client.query<{ id: number; first_name: string; surname: string; badge_number: number }>(
+    `UPDATE elf_detectives SET active = true, badge_number = COALESCE(badge_number, nextval('elf_badge_seq'))
+      WHERE id = ANY($1::int[]) AND family_id = $2
+      RETURNING id, first_name, surname, badge_number`,
+    [row.detective_ids, row.family_id],
+  );
+  await insertAudit(client as PoolClient, {
+    actor: "stripe",
+    action: "elf.paid",
+    entity: "elf_order",
+    entityId: row.id,
+    data: { reference: o.reference, sessionId: o.sessionId, detectives: row.detective_ids.length, openedFamily: !row.family_active },
+  });
+  return {
+    orderId: row.id,
+    familyId: row.family_id,
+    email: row.email,
+    grownUpName: row.grown_up_name,
+    newsletter: row.newsletter,
+    detectives: detectives.rows
+      .map((d) => ({ id: d.id, firstName: d.first_name, surname: d.surname, badgeNumber: d.badge_number }))
+      .sort((a, b) => a.id - b.id),
+  };
+}
+
+/** An abandoned checkout: pending to expired. A paid order is never touched. */
+export async function expireElfOrder(client: Querier, reference: string): Promise<void> {
+  await client.query("UPDATE elf_orders SET status = 'expired' WHERE reference = $1 AND status = 'pending'", [reference]);
+}

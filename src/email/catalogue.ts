@@ -10,6 +10,7 @@ import {
   buildSignUpThanksEmail,
   type StaffSummary,
 } from "../fundraising/emails";
+import { badgeWords, buildElfSignInCodeEmail, buildElfWelcomeEmail } from "../elf/emails";
 import { buildMemoryReceiptEmail, buildTshirtAskEmail, greetGuardian } from "../fundraising/signup-tidy-emails";
 import { buildInMemoryApprovedEmail } from "../fundraising/memory-emails";
 import { buildSupporterThanksEmail } from "../fundraising/thanks-email";
@@ -80,7 +81,7 @@ import { buildKindEmail } from "./templates";
 //
 // The order of CATALOGUE is the order on screen: by group, then the order they would be sent.
 
-export type GroupId = "signup" | "invites" | "teams" | "touch" | "finishing" | "memory" | "pledges" | "events" | "ball" | "staff";
+export type GroupId = "signup" | "invites" | "teams" | "touch" | "finishing" | "memory" | "pledges" | "events" | "ball" | "elf" | "staff";
 
 export const CATALOGUE_GROUPS: ReadonlyArray<{ id: GroupId; name: string }> = [
   { id: "signup", name: "Signing up and approval" },
@@ -92,6 +93,7 @@ export const CATALOGUE_GROUPS: ReadonlyArray<{ id: GroupId; name: string }> = [
   { id: "pledges", name: "Sponsor pledges" },
   { id: "events", name: "Event pages and tickets" },
   { id: "ball", name: "The Festive Ball" },
+  { id: "elf", name: "Elf Detective School" },
   { id: "staff", name: "Staff notices" },
 ];
 
@@ -1181,6 +1183,37 @@ const staff = (id: string, name: string, when: string, logKind: string, versions
   versions,
 });
 
+// NBCC Elf Detective School (wave 1). The families and badges here are invented.
+const ELF_SCHOOL_STARTS = new Date("2026-12-01T17:30:00.000Z");
+const elfWelcome = (detectives: { name: string; badge: string }[]) => (b: string) =>
+  buildElfWelcomeEmail({ grownUpName: "Sam Example", detectives, hqUrl: `${b}/elf/hq`, signInUrl: `${b}/elf/sign-in`, firstClueAt: ELF_SCHOOL_STARTS });
+const ELF: CatalogueEmail[] = [
+  {
+    id: "elf-welcome",
+    group: "elf",
+    name: "Welcome to Elf Detective School",
+    who: "Goes to the grown up when their payment for enrolling goes through.",
+    audience: "public",
+    logKinds: ["elfWelcome"],
+    versions: [
+      v("one", "One detective", elfWelcome([{ name: "Detective Ruby Tinselfoot", badge: badgeWords(42) }])),
+      v("two", "Two detectives", elfWelcome([
+        { name: "Detective Ruby Tinselfoot", badge: badgeWords(42) },
+        { name: "Detective Leo Frostwhistle", badge: badgeWords(43) },
+      ])),
+    ],
+  },
+  {
+    id: "elf-sign-in-code",
+    group: "elf",
+    name: "Your Elf Detective School sign in code",
+    who: "Goes to a grown up with detectives enrolled, when they ask for a code to sign in to Detective HQ.",
+    audience: "public",
+    logKinds: ["elfSignInCode"],
+    versions: [v("usual", USUAL, () => buildElfSignInCodeEmail(CODE))],
+  },
+];
+
 const STAFF: CatalogueEmail[] = [
   staff("staff-signup", "New fundraiser", "when someone signs up.", "fundraiseStaff", [
     v("usual", "Someone raising money", signUpNotice()),
@@ -1282,7 +1315,7 @@ const STAFF: CatalogueEmail[] = [
 ];
 
 /** Every email, in the order it is shown. */
-export const CATALOGUE: ReadonlyArray<CatalogueEmail> = [...SIGNUP, ...INVITES, ...TEAMS, ...TOUCH, ...FINISHING, ...MEMORY, ...PLEDGES, ...EVENTS, ...BALL, ...STAFF];
+export const CATALOGUE: ReadonlyArray<CatalogueEmail> = [...SIGNUP, ...INVITES, ...TEAMS, ...TOUCH, ...FINISHING, ...MEMORY, ...PLEDGES, ...EVENTS, ...BALL, ...ELF, ...STAFF];
 
 // --- reading it ------------------------------------------------------------------------------------
 

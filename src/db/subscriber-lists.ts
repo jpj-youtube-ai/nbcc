@@ -203,7 +203,7 @@ export async function createSubscriberList(name: string): Promise<{ id: number; 
 
 // How consent arrived. 'fundraise' (TASK-493): the person ticked the newsletter box on the
 // fundraising sign up, joining themselves exactly as from the footer form.
-export type ConsentSource = "footer" | "import" | "admin" | "fundraise";
+export type ConsentSource = "footer" | "import" | "admin" | "fundraise" | "elf";
 
 export type AddSubscriberOutcome = "added" | "exists" | "resubscribed" | "previously_unsubscribed";
 

@@ -28,7 +28,9 @@
     "reconcile:stripe": "node dist/scripts/reconcile-stripe.js",
     "import:unrecorded": "node dist/scripts/import-unrecorded.js",
     "catchup:individuals": "node dist/scripts/catchup-individuals.js",
-    "verify:restore": "node dist/scripts/verify-restore.js"
+    "verify:restore": "node dist/scripts/verify-restore.js",
+    "elf:paint": "node scripts/elf-paint/run.mjs",
+    "elf:sheet": "node scripts/elf-paint/sheet.mjs"
   },
   "dependencies": {
     "exceljs": "^4.4.0",

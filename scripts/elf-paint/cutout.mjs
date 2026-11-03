@@ -68,7 +68,7 @@ export function keyOut(img) {
 }
 
 /** The picture moved by (dx, dy), with background colour filling what is uncovered. */
-function moveBy(img, dx, dy) {
+export function moveBy(img, dx, dy) {
   const bg = backgroundOf(img);
   const out = new Uint8ClampedArray(img.data.length);
   for (let y = 0; y < img.height; y++)

@@ -137,6 +137,27 @@ describe("lifting a piece off", () => {
     expect([...layer.data.subarray((80 * W + 60) * 4, (80 * W + 60) * 4 + 3)]).toEqual([30, 90, 160]);
   });
 
+  it("keeps a whole outfit as painted, and hides all of the elf except where it shows through", () => {
+    // A reindeer's red nose on the hood came out see through where it sat over red hair, and bigger
+    // hair poked out round the tree (3 November 2026). An outfit is kept whole, and only its face
+    // hole and what the costume leaves bare (legs here) show the elf.
+    const master = elf(); // body 40..80 x 40..100, legs below
+    const worn = rect(rect(blank(), 30, 20, 90, 100, [120, 70, 40]), 50, 40, 70, 60, [240, 220, 190]); // a suit with a face hole
+    rect(worn, 45, 100, 55, 150, [200, 40, 40]);
+    rect(worn, 65, 100, 75, 150, [200, 40, 40]); // the legs, still the elf's
+    rect(worn, 58, 25, 62, 29, [240, 220, 190]); // a nose the colour of the elf
+    const alone = rect(blank(), 30, 20, 90, 100, [120, 70, 40]);
+    rect(alone, 50, 40, 70, 60, BG); // its face hole
+    rect(alone, 58, 25, 62, 29, [240, 220, 190]);
+    const { layer, cover } = isolate(alone, worn, master, { still: [40, 130, 80, 150], outfit: true });
+    expect(alphaAt(layer, 60, 27)).toBe(255); // the nose stays, though it matches the elf
+    expect(alphaAt(layer, 60, 50)).toBe(0); // the face hole
+    expect(alphaAt(cover!, 60, 50)).toBe(0); // the face shows
+    expect(alphaAt(cover!, 50, 120)).toBe(0); // so do the legs
+    expect(alphaAt(cover!, 35, 30)).toBe(255); // the elf under the suit is hidden
+    expect(alphaAt(cover!, 5, 5)).toBe(255); // and any hair beyond it
+  });
+
   it("marks nothing when the piece hides none of the elf", () => {
     const master = elf();
     const worn = rect(elf(), 40, 10, 80, 40, [30, 90, 160]);

@@ -65,8 +65,11 @@ async function cut(jobs) {
       await writeSizes(LAYER_DIR, j.layer, keepMainParts(dropLooseEdges(keyOut(back))));
     } else if (j.kind === "alone") {
       const base = await load(raw(j.base));
-      const { layer, cover } = isolate(await load(raw(j.id)), await load(raw(j.from)), base, { still: j.still });
-      const clean = keepMainParts(dropLooseEdges(layer));
+      const { layer, cover } = isolate(await load(raw(j.id)), await load(raw(j.from)), base, { still: j.still, outfit: j.layer.startsWith("outfit-") });
+      // An outfit's hat or prop can stand apart from the costume (the snowman's hat), so only loose
+      // faint paint is dropped from an outfit, never a whole patch.
+      const isOutfit = j.layer.startsWith("outfit-");
+      const clean = isOutfit ? dropLooseEdges(layer) : keepMainParts(dropLooseEdges(layer));
       // A hat also hides whatever of any elf is above its brim, so no hairstyle pokes out of it. Not
       // a paper crown: it sits on top of the hair, and hair between its points looks right.
       const pulledOn = j.slot === "hat" && !j.layer.startsWith("piece-crown-");

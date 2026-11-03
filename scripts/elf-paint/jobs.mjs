@@ -35,6 +35,7 @@ const FACE = [400, 400, 620, 560];
 
 /** The batches, in the order they are painted and shown to Jaimie. */
 export const BATCHES = ["elves", "starter", "hat", "top", "feet", "neck", "face", "hand", "extra", "outfits"];
+const BROTHER_BASED = new Set(["ginger"]);
 const STARTER = new Set(["elf:red", "tunic:green", "curly:maroon", "outfit:workshop"]);
 
 const KEEP =
@@ -136,12 +137,15 @@ function outfitJobs() {
   const out = [];
   for (const outfit of W.OUTFITS) {
     const batch = STARTER.has(`outfit:${outfit.id}`) ? "starter" : "outfits";
+    // A close hood is painted on the brother, whose short hair cannot poke out of it the way the
+    // sister's bunches did (gingerbread, 3 November 2026). Their bodies are the same.
+    const elf = BROTHER_BASED.has(outfit.id) ? "master-brother" : "master";
     const worn = `worn-outfit-${outfit.id}`;
     out.push({
       id: worn,
       batch,
       kind: "worn",
-      from: "master",
+      from: elf,
       prompt:
         "Keep the elf's face, eyes, eyebrows, smile, skin, size, position and pose exactly the same, in exactly the same art style with the same browny red outlines, on the same flat magenta background. " +
         `Dress the elf in ${D.outfits[outfit.id]}. The face shows. ${STYLE_IT}`,
@@ -151,12 +155,12 @@ function outfitJobs() {
       batch,
       kind: "alone",
       from: worn,
-      base: "master",
+      base: elf,
       still: FACE,
       layer: layerName("outfit", outfit.id),
       prompt:
-        "Keep only the costume exactly as it is, in exactly the same place and size, with its outline and shading. " +
-        "Paint the elf's face, skin and hair, and the background, one flat plain magenta (#FF00FF), so only the costume is left, with a hole where the face is.",
+        "Keep only the costume exactly as it is, in exactly the same place and size, with its outline and shading, and every part of it, including any hat, hood, headband, bow or prop. " +
+        "Paint the elf's face, skin and hair (including any bunches or hair poking out of a hood), and the background, one flat plain magenta (#FF00FF), so only the costume is left, with a hole where the face is.",
     });
   }
   return out;

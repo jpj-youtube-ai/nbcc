@@ -217,6 +217,19 @@ export function isolate(alone, worn, master, opts = {}) {
   }
   const layer = { data: layerData, width: master.width, height: master.height };
 
+  // A whole outfit is kept as painted on its own (a reindeer's red nose over red hair is still
+  // the costume), and hides ALL of the elf except where the elf shows through it: solid in the
+  // worn painting but not part of the costume (its face hole, bare legs). That also hides bigger
+  // hair poking out round a hood (3 November 2026).
+  if (opts.outfit) {
+    const hide = new Uint8ClampedArray(master.data.length);
+    for (let p = 0, i = 0; p < master.width * master.height; p++, i += 4) {
+      const showsElf = wornCut.data[i + 3] >= 128 && aloneBack.data[i + 3] < 128;
+      if (!showsElf) hide[i + 3] = 255;
+    }
+    return { layer: aloneBack, cover: { data: hide, width: master.width, height: master.height } };
+  }
+
   // What of the elf the piece hides: solid in the master, clear once the piece is worn.
   const cover = new Uint8ClampedArray(master.data.length);
   let hidden = 0;

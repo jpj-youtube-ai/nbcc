@@ -1,4 +1,5 @@
 import { DOOR_COUNT } from "../calendar";
+import { twinkles } from "./gift";
 import { SCHOOL_NAME, schoolLogo } from "../logo";
 import { clockWords, countdownWords, dayWords, longDayWords, sameDay, sleepsUntil, things } from "../words";
 import { doorDetail, doorTile } from "./door";
@@ -126,6 +127,7 @@ export function renderCalendarPage(view: CalendarView): string {
   const main = `  <section class="page-top elf-top" aria-labelledby="elf-heading">
     <div class="wrap elf-top__grid">
       <div class="elf-top__words">
+        ${twinkles([[2, 6, 16, 0], [78, 2, 12, -0.9], [92, 30, 18, -1.7], [60, 58, 10, -0.4], [4, 70, 11, -2.1]])}
         <h1 id="elf-heading">${schoolLogo(260, SCHOOL_NAME, "elf-top__logo")}</h1>
         <span class="eyebrow">Class of ${view.year}</span>
         <p class="lede">24 cheeky elves have escaped from the Elves' Workshop. Find them all by the Night Before Christmas.</p>

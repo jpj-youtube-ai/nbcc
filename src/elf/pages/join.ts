@@ -1,5 +1,6 @@
 import { SINGLE_DONATION_WORDING } from "../../declarations/wording";
 import { FORM_ROWS } from "../join";
+import { giftHero } from "./gift";
 import { elfPage, escapeHtml } from "./shell";
 import type { JoinView } from "./types";
 
@@ -56,13 +57,16 @@ export function renderJoinPage(view: JoinView): string {
 
   const main = `
   <section class="section page-top elf-join-top" aria-labelledby="elf-join-heading">
-    <div class="wrap">
+    <div class="wrap elf-join-top__grid">
+      ${giftHero()}
+      <div class="elf-join-top__words">
       <h1 id="elf-join-heading" class="h-xl">${view.signedIn ? "Add a detective" : "Enrol your detectives"}</h1>
       <p class="lede">${
         view.signedIn
           ? "Add another detective to your family. They pick a festive surname too, so online they are only ever Detective Ruby Tinselfoot, never their real name."
           : "One grown up enrols the whole family. Each detective picks a festive surname, so online they are only ever Detective Ruby Tinselfoot, never their real name."
       }</p>
+      </div>
     </div>
   </section>
 
@@ -70,6 +74,7 @@ export function renderJoinPage(view: JoinView): string {
     <div class="wrap">
       ${errors}
       <form class="elf-join-form" method="post" action="/api/elf/join" data-api="/api/elf/join" data-suggested-pence="${entrySuggestedPence}" novalidate>
+        <span class="elf-join-tape" aria-hidden="true"></span>
         ${
           view.signedIn
             ? `<div class="elf-join-you"><p>Enrolling for <b>${escapeHtml(view.signedIn.grownUpName)}</b> (${escapeHtml(view.signedIn.email)}). Your welcome email for them goes there too.</p></div>`

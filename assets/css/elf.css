@@ -905,3 +905,111 @@ form.elf-wd { display: grid; gap: 16px; padding: 0; background: none; border: 0;
 .elf-join-errors ul { margin: 8px 0 0; padding-left: 20px; }
 .elf-trap { position: absolute; left: -10000px; width: 1px; height: 1px; overflow: hidden; }
 @media (max-width: 520px) { .elf-join-detective { grid-template-columns: minmax(0, 1fr); } }
+
+/* the handwriting of the gift tags and the paper, as /fill: Caveat (SIL Open Font License, beside the
+   file in assets/fonts/caveat-OFL.txt), Latin subset, weights 400 to 700 in one file. */
+@font-face {
+  font-family: "Caveat"; font-style: normal; font-weight: 400 700; font-display: swap;
+  src: url(/assets/fonts/caveat-latin.woff2) format("woff2");
+}
+
+/* ---------- the look of nbcc.scot/bag and /fill (wave 1, Task 11) ----------
+   From the walkthrough Jaimie liked on 3 November 2026: NBCC's cream with a gold glow top right and a
+   blush top left, gold sparkles, the drawn red present with the school's elf peeking out, gift tags
+   in handwriting, and the enrol form on taped, ruled paper. The values are the site's own (the
+   gold and the soft tints are the ones assets/css/ball-bags.css uses). Every movement is in the
+   prefers-reduced-motion: no-preference block below. */
+.elf-page {
+  --elf-glow: rgba(233, 196, 106, .32);
+  --elf-blush: rgba(192, 34, 56, .07);
+  --elf-gold-bright: #E9C46A;
+  --elf-gold-soft: #F6EBD3;
+  --elf-crimson-soft: #F9E1E4;
+  --elf-shine: rgba(255, 255, 255, .38);
+  --elf-hand: "Caveat", "Bradley Hand", "Segoe Print", "Noteworthy", "Chalkboard SE", "Ink Free", "Comic Sans MS", cursive;
+  background:
+    radial-gradient(120% 60% at 100% 0, var(--elf-glow), transparent 60%),
+    radial-gradient(90% 50% at 0 10%, var(--elf-blush), transparent 60%),
+    var(--cream);
+  background-repeat: no-repeat;
+}
+
+/* gold sparkles, placed by the page (twinkles() in src/elf/pages/gift.ts) */
+.elf-top__words, .elf-gift { position: relative; }
+.elf-twk {
+  position: absolute; width: var(--w, 14px); height: var(--w, 14px); pointer-events: none;
+  background: var(--elf-gold-bright);
+  clip-path: polygon(50% 0, 61% 39%, 100% 50%, 61% 61%, 50% 100%, 39% 61%, 0 50%, 39% 39%);
+  opacity: .55;
+}
+
+/* the present */
+.elf-join-top__grid { display: grid; gap: clamp(12px, 3vw, 32px); align-items: center; }
+@media (min-width: 760px) { .elf-join-top__grid { grid-template-columns: minmax(0, 300px) minmax(0, 1fr); } }
+.elf-gift { width: min(300px, 82vw); margin: 0 auto; }
+.elf-gift__art { display: block; width: 100%; height: auto; overflow: visible; transform-origin: 50% 100%; }
+.elf-gift__lid { transform-box: fill-box; transform-origin: 0 100%; transform: rotate(-38deg); }
+.elf-gift__peek { transform-box: view-box; transform-origin: 50% 60%; transform: translateY(-12px); }
+.elf-gift__tag {
+  position: absolute; z-index: 2; left: -4px; top: 50%;
+  padding: 9px 12px 10px 24px; border-radius: 6px; background: var(--card); color: var(--maroon);
+  font-family: var(--elf-hand); font-weight: 700; font-size: 1.3rem; line-height: 1;
+  box-shadow: 0 0 0 1.5px var(--gold-ink, #B8862B), 0 10px 14px -8px rgba(128, 0, 0, .45);
+  transform: rotate(-14deg); transform-origin: 100% 0;
+}
+.elf-gift__tag::before { content: ""; position: absolute; left: 8px; top: 50%; width: 8px; height: 8px; margin-top: -4px; border-radius: 50%; box-shadow: inset 0 0 0 2px #B8862B; }
+.elf-gift__tag::after { content: ""; position: absolute; inset: 3px 3px 3px 19px; border: 1.3px dashed rgba(184, 134, 43, .6); border-radius: 3px; }
+.elf-gift__seal {
+  position: absolute; z-index: 2; right: -2px; top: 54%; width: 72px; height: 72px; border-radius: 50%;
+  display: grid; place-content: center; text-align: center; background: var(--crimson); color: #FFFFFF;
+  box-shadow: 0 0 0 3px var(--cream), 0 0 0 5px #B8862B, 0 12px 20px -10px rgba(128, 0, 0, .6);
+  font-family: var(--font-head); font-weight: 800; transform: rotate(10deg); transform-origin: 50% -24px;
+}
+.elf-gift__seal b { display: block; font-size: 26px; line-height: .9; font-variant-numeric: lining-nums; }
+.elf-gift__seal small { display: block; font-family: var(--font-body); font-weight: 600; font-size: 9px; letter-spacing: .12em; text-transform: uppercase; }
+
+/* the enrol form on taped, ruled paper, like the list on /fill */
+.elf-join-form {
+  position: relative; background: var(--card); border: 1px solid var(--line); border-radius: 3px;
+  box-shadow: 0 18px 36px -24px rgba(128, 0, 0, .45);
+  padding: clamp(36px, 4vw, 48px) clamp(16px, 3vw, 32px) clamp(24px, 3vw, 32px) clamp(30px, 5vw, 56px);
+}
+.elf-join-form::before { content: ""; position: absolute; top: 0; bottom: 0; left: clamp(14px, 3vw, 36px); width: 1px; background: rgba(192, 34, 56, .45); }
+.elf-join-tape { position: absolute; top: -13px; left: 50%; width: 112px; height: 30px; margin-left: -56px; background: rgba(210, 156, 138, .62); box-shadow: 0 2px 10px rgba(128, 0, 0, .07); transform: rotate(-2.5deg); }
+.elf-join-pay h2, .elf-join-gift h2 { font-family: var(--elf-hand); font-weight: 700; font-size: clamp(1.9rem, 1.6rem + 1vw, 2.4rem); color: var(--maroon); line-height: 1.05; }
+.elf-join-pay { background: var(--elf-gold-soft); }
+.elf-join-gift { background: var(--elf-crimson-soft); }
+
+/* the gold band that passes across a main button now and then */
+.elf-page .btn-primary { position: relative; overflow: hidden; }
+.elf-page .btn-primary::after {
+  content: ""; position: absolute; inset: 0; pointer-events: none;
+  background: linear-gradient(105deg, transparent 35%, var(--elf-shine) 50%, transparent 65%);
+  transform: translateX(-110%);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .elf-twk { opacity: 0; animation: elf-twinkle 2.6s ease-in-out var(--d, 0s) infinite; }
+  .elf-gift__art { animation: elf-drop 1.25s var(--elf-ease) .1s both; }
+  .elf-gift__peek { animation: elf-peek 4.6s var(--elf-ease) 1.3s infinite; }
+  .elf-gift__tag { animation: elf-swing-in 1s var(--elf-ease) 1.3s both; }
+  .elf-gift__seal { animation: elf-swing-in .9s var(--elf-ease) 1.1s both; }
+  .elf-page .btn-primary::after { animation: elf-shimmer 4s var(--elf-ease) 1.6s infinite; }
+
+  @keyframes elf-twinkle { 0%, 100% { opacity: 0; transform: scale(.2) rotate(0); } 45% { opacity: 1; transform: scale(1) rotate(45deg); } 70% { opacity: 0; transform: scale(.4) rotate(90deg); } }
+  @keyframes elf-drop {
+    0% { opacity: 0; transform: translateY(-130px) rotate(-5deg); }
+    36% { opacity: 1; transform: translateY(0) scale(1.05, .93) rotate(0); }
+    52% { transform: translateY(-16px) scale(.98, 1.03) rotate(2deg); }
+    68% { transform: translateY(0) scale(1.02, .98) rotate(-1.5deg); }
+    100% { opacity: 1; transform: none; }
+  }
+  @keyframes elf-peek { 0%, 100% { transform: translateY(4px) rotate(-2deg); } 30%, 70% { transform: translateY(-16px) rotate(2deg); } }
+  @keyframes elf-swing-in { 0% { opacity: 0; transform: rotate(-40deg) scale(.5); } 55% { opacity: 1; transform: rotate(18deg) scale(1.06); } 100% { opacity: 1; } }
+  @keyframes elf-shimmer { 0% { transform: translateX(-110%); } 40%, 100% { transform: translateX(110%); } }
+}
+
+/* The enrol form follows its top section closely: one page, not two. */
+.elf-page .section.elf-join-body { padding-top: clamp(8px, 2vw, 16px); }
+.elf-join-top .elf-gift { margin-top: clamp(12px, 3vw, 24px); }
+.elf-page .page-top.elf-join-top { padding-bottom: clamp(8px, 2vw, 16px); }

@@ -74,3 +74,28 @@ describe("the stylesheet", () => {
     expect(css).toMatch(/\.elf-join-tape\s*\{/);
   });
 });
+
+describe("the elf in the present (Jaimie, 3 November: the line under the elf showed above the box)", () => {
+  const doc = parse(renderJoinPage({ settings: SETTINGS, captchaSiteKey: null, surnames: FESTIVE_SURNAMES }));
+
+  it("keeps the elf inside a box edge that does not move with it, so it never rises clear of the box", () => {
+    const peek = doc.querySelector(".elf-gift__peek")!;
+    const edge = peek.parentElement!;
+    expect(edge.tagName.toLowerCase()).toBe("g");
+    expect(edge.getAttribute("clip-path")).toBe("url(#elfGiftEdge)");
+    expect(doc.querySelector("#elfGiftEdge rect")!.getAttribute("height")).toBe("180");
+    expect(doc.querySelector("#elfGiftEdge rect")!.getAttribute("y")).toBe("-60");
+  });
+
+  it("cuts the logo above the line under the elf's hands", () => {
+    // The logo's line sits at 59 to 60% of its height: 10 + 0.59 x 180 = 116.2 in the drawing.
+    const cut = doc.querySelector("#elfGiftClip rect")!;
+    expect(Number(cut.getAttribute("y")) + Number(cut.getAttribute("height"))).toBeLessThanOrEqual(115);
+  });
+
+  it("only lets the elf rise a little, so its cut edge stays down inside the box", () => {
+    const rise = /@keyframes elf-peek\s*\{[^}]*translateY\((-?\d+)px\)[^}]*\}\s*30%, 70%\s*\{\s*transform:\s*translateY\((-?\d+)px\)/.exec(css);
+    expect(rise).not.toBeNull();
+    expect(Number(rise![2])).toBeGreaterThanOrEqual(-7);
+  });
+});

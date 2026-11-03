@@ -949,7 +949,8 @@ form.elf-wd { display: grid; gap: 16px; padding: 0; background: none; border: 0;
 .elf-gift { width: min(300px, 82vw); margin: 0 auto; }
 .elf-gift__art { display: block; width: 100%; height: auto; overflow: visible; transform-origin: 50% 100%; }
 .elf-gift__lid { transform-box: fill-box; transform-origin: 0 100%; transform: rotate(-38deg); }
-.elf-gift__peek { transform-box: view-box; transform-origin: 50% 60%; transform: translateY(-12px); }
+/* The elf rises only a little: its cut edge must stay down inside the box. */
+.elf-gift__peek { transform-box: view-box; transform-origin: 50% 60%; transform: translateY(-4px); }
 .elf-gift__tag {
   position: absolute; z-index: 2; left: -4px; top: 50%;
   padding: 9px 12px 10px 24px; border-radius: 6px; background: var(--card); color: var(--maroon);
@@ -1004,7 +1005,7 @@ form.elf-wd { display: grid; gap: 16px; padding: 0; background: none; border: 0;
     68% { transform: translateY(0) scale(1.02, .98) rotate(-1.5deg); }
     100% { opacity: 1; transform: none; }
   }
-  @keyframes elf-peek { 0%, 100% { transform: translateY(4px) rotate(-2deg); } 30%, 70% { transform: translateY(-16px) rotate(2deg); } }
+  @keyframes elf-peek { 0%, 100% { transform: translateY(6px) rotate(-1deg); } 30%, 70% { transform: translateY(-6px) rotate(1.5deg); } }
   @keyframes elf-swing-in { 0% { opacity: 0; transform: rotate(-40deg) scale(.5); } 55% { opacity: 1; transform: rotate(18deg) scale(1.06); } 100% { opacity: 1; } }
   @keyframes elf-shimmer { 0% { transform: translateX(-110%); } 40%, 100% { transform: translateX(110%); } }
 }

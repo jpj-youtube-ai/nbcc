@@ -20,14 +20,17 @@ const STAR4 = "M0-7L1.8-1.8 7 0 1.8 1.8 0 7-1.8 1.8-7 0-1.8-1.8z";
 export function giftHero(): string {
   const svg =
     `<svg class="elf-gift__art" viewBox="0 0 300 270" role="img" aria-label="The school's elf peeking out of a red present">` +
-    `<defs><clipPath id="elfGiftClip"><rect x="0" y="-60" width="300" height="180"/></clipPath>` +
+    `<defs><clipPath id="elfGiftClip"><rect x="0" y="-60" width="300" height="175"/></clipPath><clipPath id="elfGiftEdge"><rect x="0" y="-60" width="300" height="180"/></clipPath>` +
     `<linearGradient id="elfGiftRed" x1="0" x2="1"><stop offset="0" stop-color="#D3344B"/><stop offset=".55" stop-color="#C02238"/><stop offset="1" stop-color="#A81B30"/></linearGradient>` +
     `<linearGradient id="elfGiftGold" x1="0" x2="1"><stop offset="0" stop-color="#F4D27A"/><stop offset=".5" stop-color="#E2B04A"/><stop offset="1" stop-color="#C89234"/></linearGradient>` +
     `<linearGradient id="elfGiftLid" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#DA4258"/><stop offset="1" stop-color="#B51E34"/></linearGradient></defs>` +
     `<ellipse cx="150" cy="258" rx="128" ry="9" fill="#800000" opacity=".1"/>` +
     `<polygon points="46,120 222,120 254,104 78,104" fill="#6E0F1E"/>` +
     `<g class="elf-gift__lid"><rect x="40" y="86" width="196" height="34" rx="6" fill="url(#elfGiftLid)"/><rect x="126" y="86" width="24" height="34" fill="url(#elfGiftGold)"/><rect x="40" y="112" width="196" height="8" rx="3" fill="#800000" opacity=".18"/></g>` +
-    `<g class="elf-gift__peek"><image clip-path="url(#elfGiftClip)" href="${SCHOOL_LOGO_SRC}" x="48" y="10" width="180" height="180"/></g>` +
+    // The elf moves inside a box edge that stays still (elfGiftEdge, the top of the box front), and
+    // the logo itself is cut just above the line under its hands (elfGiftClip), so neither that line
+    // nor a cut edge ever shows above the box.
+    `<g clip-path="url(#elfGiftEdge)"><g class="elf-gift__peek"><image clip-path="url(#elfGiftClip)" href="${SCHOOL_LOGO_SRC}" x="48" y="10" width="180" height="180"/></g></g>` +
     `<rect x="46" y="120" width="176" height="128" rx="5" fill="url(#elfGiftRed)"/>` +
     `<polygon points="222,120 254,104 254,232 222,248" fill="#8E1428"/>` +
     `<polygon points="234,114 242,110 242,238 234,242" fill="#B98A2E"/>` +

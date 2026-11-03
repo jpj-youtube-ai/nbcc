@@ -40,16 +40,28 @@ export function backgroundOf(img) {
   return values.map((v) => v.sort((a, b) => a - b)[v.length >> 1]);
 }
 
+/** How magenta a colour is: what it has of both red and blue beyond its green. */
+const magentaOf = (r, g, b) => Math.min(r, b) - g;
+
 /** The background made clear, with soft edges, and the pink spill taken off the edges. */
 export function keyOut(img) {
   const bg = backgroundOf(img);
+  const bgMagenta = Math.max(1, magentaOf(bg[0], bg[1], bg[2]));
   const out = new Uint8ClampedArray(img.data.length);
   for (let i = 0; i < img.data.length; i += 4) {
     let r = img.data[i];
     const g = img.data[i + 1];
     let b = img.data[i + 2];
+    // A pixel is solid when it is far from the background colour OR plainly not magenta. At low
+    // quality the background is a reddish magenta (#D616B9 on 3 November 2026) close enough to the
+    // elf's own reds for distance alone to make red tights and hats partly see through; red has
+    // almost no blue beyond its green, so how magenta a pixel is tells them apart.
     const dist = Math.hypot(r - bg[0], g - bg[1], b - bg[2]);
-    const alpha = Math.min(1, Math.max(0, (dist - CLEAR_WITHIN) / (SOLID_BEYOND - CLEAR_WITHIN)));
+    const byDistance = (dist - CLEAR_WITHIN) / (SOLID_BEYOND - CLEAR_WITHIN);
+    const byMagenta = (0.7 - magentaOf(r, g, b) / bgMagenta) / 0.5;
+    let alpha = Math.min(1, Math.max(0, byDistance, byMagenta));
+    // A speck that is nearly clear is noise in the background, not the edge of anything.
+    if (alpha < 0.1) alpha = 0;
     if (alpha > 0 && alpha < 1) {
       // Magenta is red and blue with no green: what an edge pixel has of red and blue beyond its
       // green is the background showing through. Take that share off.

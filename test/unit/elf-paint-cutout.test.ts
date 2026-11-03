@@ -68,6 +68,13 @@ describe("cutting out the background", () => {
     expect(alphaAt(out, 55, 55)).toBe(255);
   });
 
+  it("keeps the elf's red solid on the reddish magenta OpenAI paints at low quality", () => {
+    // Measured on a real painting, 3 November 2026: background #D616B9, the tights' red #C02238.
+    const out = keyOut(rect(blank([214, 22, 185]), 50, 50, 60, 60, [192, 34, 56]));
+    expect(alphaAt(out, 2, 2)).toBe(0);
+    expect(alphaAt(out, 55, 55)).toBe(255);
+  });
+
   it("takes the pink off a half covered edge pixel", () => {
     // Half way between the outline and the background: pink, and too red and blue for its green.
     const mix: [number, number, number] = [Math.round((LINE[0] + BG[0]) / 2), Math.round((LINE[1] + BG[1]) / 2), Math.round((LINE[2] + BG[2]) / 2)];

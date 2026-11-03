@@ -27,6 +27,8 @@ const LEGS = [380, 1050, 640, 1350];
 const FACE_BOX = [300, 340, 724, 780];
 // The face itself, above the chin: its middle is where a face hole is centred.
 const FACE_ONLY = [330, 370, 700, 665];
+// The bottom of the chin's outline on the master (row 682, checked by eye on a ruled copy).
+const CHIN = 682;
 
 const raw = (id) => join(RAW, `${id}.png`);
 
@@ -69,7 +71,7 @@ async function cut(jobs) {
       await writeSizes(LAYER_DIR, j.layer, keepMainParts(dropLooseEdges(keyOut(back))));
     } else if (j.kind === "alone") {
       const base = await load(raw(j.base));
-      const { layer, cover } = isolate(await load(raw(j.id)), await load(raw(j.from)), base, { still: j.still, outfit: j.layer.startsWith("outfit-"), face: FACE_BOX, faceOnly: FACE_ONLY });
+      const { layer, cover } = isolate(await load(raw(j.id)), await load(raw(j.from)), base, { still: j.still, outfit: j.layer.startsWith("outfit-"), face: FACE_BOX, faceOnly: FACE_ONLY, chin: CHIN });
       // An outfit's hat or prop can stand apart from the costume (the snowman's hat), so only loose
       // faint paint is dropped from an outfit, never a whole patch.
       const isOutfit = j.layer.startsWith("outfit-");

@@ -313,7 +313,10 @@ export function isolate(alone, worn, master, opts = {}) {
       const face = faceCentre(master, masterCut, opts.faceOnly || opts.face);
       if (found && face) {
         const dx = Math.round(face[0] - found.x);
-        const dy = Math.round(face[1] - found.y);
+        // Across, the hole is centred on the face. Down, its lowest point sits on the chin when the
+        // chin is known (a hole centred on the face still showed the neck: Jaimie, 3 November 2026).
+        const lowest = Math.max(...found.pixels.map((q) => q[1]));
+        const dy = opts.chin ? Math.round(opts.chin - lowest) : Math.round(face[1] - found.y);
         if (Math.abs(dx) <= 120 && Math.abs(dy) <= 120 && (dx || dy)) layer = keyOut(moveBy(alone, -a.dx + dx, -a.dy + dy));
         hole = holeOf(layer, opts.face);
       }

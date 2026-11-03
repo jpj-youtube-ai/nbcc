@@ -178,6 +178,21 @@ describe("lifting a piece off", () => {
     expect(alphaAt(cover!, 50, 120)).toBe(0); // its legs still show
   });
 
+  it("sits a face hole's bottom on the chin, so no neck shows below the face", () => {
+    // Holes still sat a little low (Jaimie, 3 November 2026): a hole is placed by its lowest point.
+    const master = elf();
+    rect(master, 52, 46, 68, 62, [250, 214, 183]); // the face, chin at 61
+    const worn = rect(blank(), 30, 20, 90, 100, [40, 120, 40]);
+    rect(worn, 50, 48, 70, 70, [250, 214, 183]);
+    rect(worn, 45, 100, 55, 150, [200, 40, 40]);
+    rect(worn, 65, 100, 75, 150, [200, 40, 40]);
+    const alone = rect(blank(), 30, 20, 90, 100, [40, 120, 40]);
+    rect(alone, 50, 48, 70, 70, BG); // a hole from 48 to 69: lower than the face
+    const { layer } = isolate(alone, worn, master, { still: [40, 130, 80, 150], outfit: true, face: [40, 30, 90, 85], chin: 61 });
+    expect(alphaAt(layer, 60, 61)).toBe(0); // the chin shows
+    expect(alphaAt(layer, 60, 63)).toBe(255); // costume just below it
+  });
+
   it("marks nothing when the piece hides none of the elf", () => {
     const master = elf();
     const worn = rect(elf(), 40, 10, 80, 40, [30, 90, 160]);

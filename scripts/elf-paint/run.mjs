@@ -67,8 +67,10 @@ async function cut(jobs) {
       const base = await load(raw(j.base));
       const { layer, cover } = isolate(await load(raw(j.id)), await load(raw(j.from)), base, { still: j.still });
       const clean = keepMainParts(dropLooseEdges(layer));
-      // A hat also hides whatever of any elf is above its brim, so no hairstyle pokes out of it.
-      const hides = j.slot === "hat" ? joinCovers(cover && keepMainParts(cover), hatCover(clean)) : cover && keepMainParts(cover);
+      // A hat also hides whatever of any elf is above its brim, so no hairstyle pokes out of it. Not
+      // a paper crown: it sits on top of the hair, and hair between its points looks right.
+      const pulledOn = j.slot === "hat" && !j.layer.startsWith("piece-crown-");
+      const hides = pulledOn ? joinCovers(cover && keepMainParts(cover), hatCover(clean)) : cover && keepMainParts(cover);
       await writeSizes(LAYER_DIR, j.layer, clean, hides);
     } else continue;
     console.log(`cut ${j.layer}`);

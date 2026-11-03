@@ -177,7 +177,17 @@ describe("a hat hides the hair above its brim", () => {
     expect(at(30, 2)).toBe(255); // hair above the hat
     expect(at(30, 39)).toBe(255);
     expect(at(30, 45)).toBe(0); // the face below the brim
-    expect(at(90, 2)).toBe(0); // beside the tip: an ear may be there
+  });
+
+  it("covers a narrow strip beside the hat above the brim, where hair flicks out, but not the ears below", () => {
+    // Flicks of short hair beside the bobble hat and the crown, 3 November 2026.
+    const hat = keyOut(blank());
+    for (let y = 10; y < 40; y++) for (let x = 60; x < 80; x++) hat.data.set([192, 34, 56, 255], (y * W + x) * 4);
+    const cover = hatCover(hat);
+    const at = (x: number, y: number) => cover.data[(y * W + x) * 4 + 3];
+    expect(at(50, 15)).toBe(255); // ten pixels to the left, high up: hair
+    expect(at(50, 38)).toBe(0); // ten pixels to the left, at the brim: an ear
+    expect(at(5, 15)).toBe(0); // far to the side: left alone
   });
 });
 

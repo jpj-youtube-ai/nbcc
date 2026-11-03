@@ -266,6 +266,9 @@ export function dropLooseEdges(img, reach = 3, solid = 153) {
  * out above it (found 3 November 2026). Only the brim's columns are covered (where the hat comes
  * down to its lowest), so an ear beside a floppy tip still shows.
  */
+const SIDE_STRIP = 40;
+const SIDE_CLEAR = 8;
+
 export function hatCover(layer) {
   const { width, height } = layer;
   const bottom = new Int32Array(width).fill(-1);
@@ -281,9 +284,21 @@ export function hatCover(layer) {
   const out = new Uint8ClampedArray(layer.data.length);
   if (lowest < 0) return { data: out, width, height };
   const brimFrom = top + 0.7 * (lowest - top);
+  let left = width;
+  let right = -1;
   for (let x = 0; x < width; x++) {
     if (bottom[x] < brimFrom) continue;
+    if (x < left) left = x;
+    if (x > right) right = x;
     for (let y = 0; y <= bottom[x]; y++) out[(y * width + x) * 4 + 3] = 255;
+  }
+  // A narrow strip each side, where short hair flicks out, down to a little above the lowest point
+  // of the brim beside it; the ears sit lower, so they still show.
+  for (let x = Math.max(0, left - SIDE_STRIP); x <= Math.min(width - 1, right + SIDE_STRIP); x++) {
+    if (x >= left && x <= right) continue;
+    const edge = x < left ? bottom[left] : bottom[right];
+    const until = Math.max(brimFrom, edge - SIDE_CLEAR);
+    for (let y = 0; y < until; y++) out[(y * width + x) * 4 + 3] = 255;
   }
   return { data: out, width, height };
 }

@@ -388,7 +388,13 @@ describe("drawing from the painted layers", () => {
     const holding = drawElf({ ...defaultLook(), pieces: { ...defaultLook().pieces, hand: ["mag", "brass"] } }, EVERYTHING, { key: "a" });
     expect(holding).toContain('<mask id="m-a"');
     expect(holding).toContain('href="/assets/img/elf/sm/piece-mag-brass.cover.webp"');
-    expect(holding).toMatch(/<image href="\/assets\/img\/elf\/sm\/elf-[^"]+" [^>]*mask="url\(#m-a\)"/);
+    // Everything drawn before the gadget is behind it: the elf AND its clothes (the coat's cuff
+    // showed the mitten: final review, 3 November 2026). The gadget itself is not.
+    const masked = holding.slice(holding.indexOf('<g mask="url(#m-a)">'), holding.indexOf("</g>"));
+    expect(masked).toContain("elf-sister-s2-short-brown.webp");
+    expect(masked).toContain("piece-tunic-green.webp");
+    expect(masked).not.toContain("piece-mag-brass.webp");
+    expect(holding.indexOf("</g>")).toBeLessThan(holding.indexOf('href="/assets/img/elf/sm/piece-mag-brass.webp"'));
     expect(drawElf(defaultLook(), EVERYTHING, { key: "a" })).not.toContain("<mask");
   });
 

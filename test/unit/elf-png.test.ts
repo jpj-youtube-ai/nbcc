@@ -4,7 +4,7 @@ import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import sharp from "sharp";
-import { ELF_PNG_MAX_WIDTH, ELF_PNG_QUEUE_MAX, elfPng, elfPngWidth, inTurn, stackPng } from "../../src/elf/elf-png";
+import { ELF_PNG_MAX_WIDTH, ELF_PNG_QUEUE_MAX, elfPng, elfPngKey, elfPngWidth, inTurn, stackPng } from "../../src/elf/elf-png";
 import { OUTFITS, defaultLook, type WardrobeState } from "../../src/elf/wardrobe";
 
 const PAINT = createRequire(import.meta.url)("../../assets/js/elf-paint.js") as { layers: Record<string, unknown> };
@@ -70,6 +70,14 @@ describe("an elf as a PNG", () => {
     expect(cheeky.equals(honest)).toBe(true);
   });
 
+  it("makes a picture once and keeps it, since the same look always gives the same picture", async () => {
+    const first = await png({ ...defaultLook(), skin: "s4" }, EVERYTHING, 90);
+    const again = await png({ ...defaultLook(), skin: "s4" }, EVERYTHING, 90);
+    expect(again).toBe(first);
+    expect(elfPngKey({ ...defaultLook(), skin: "s4" }, EVERYTHING, 90, "clear")).toBe(elfPngKey({ ...defaultLook(), skin: "s4" }, EVERYTHING, 90, "clear"));
+    expect(elfPngKey({ ...defaultLook(), skin: "s4" }, EVERYTHING, 90, "clear")).not.toBe(elfPngKey({ ...defaultLook(), skin: "s5" }, EVERYTHING, 90, "clear"));
+  });
+
   it("gives the same pictures when several are asked for at once", async () => {
     const looks = ["s1", "s3", "s5"].map((skin) => ({ ...defaultLook(), skin }));
     const together = await Promise.all(looks.map((look) => png(look, EVERYTHING, 80)));
@@ -120,6 +128,21 @@ describe("what a child would see", () => {
     expect((await at(holding, 780, 920))[3]).toBe(0);
     const empty = await stackPng([{ ...ELF, w: 520 }], 1182, "clear", false, join(dir, "lg"));
     expect((await at(empty, 780, 920)).slice(0, 3)).toEqual([0xc0, 0x22, 0x38]);
+  });
+
+  it("hides it on the clothes too: a gadget's cover cuts every layer drawn before it", async () => {
+    // A coat carried a smear of the open mitten at its cuff (final review, 3 November 2026).
+    writeFileSync(join(dir, "lg", "piece-test-coat.webp"), await block(60, 60, "#C02238"));
+    const COAT = { name: "piece-test-coat", x: 760, y: 900, w: 60, h: 60, cover: null };
+    const holding = await stackPng([{ ...ELF, w: 520 }, COAT, TORCH], 1182, "clear", false, join(dir, "lg"));
+    expect((await at(holding, 780, 920))[3]).toBe(0);
+  });
+
+  it("makes no picture rather than failing when a layer file is broken", async () => {
+    // The review: a corrupt file or a sharp problem must never stop the site.
+    writeFileSync(join(dir, "lg", "piece-test-broken.webp"), "not a picture");
+    const broken = { name: "piece-test-broken", x: 0, y: 0, w: 10, h: 10, cover: null };
+    await expect(stackPng([{ ...ELF, w: 520 }, broken], 200, "clear", false, join(dir, "lg"))).resolves.toBeInstanceOf(Buffer);
   });
 
   it("leaves out a layer whose picture cannot be read, and still makes the picture", async () => {

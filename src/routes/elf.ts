@@ -28,7 +28,7 @@ import { renderHqPage } from "../elf/pages/hq";
 import { renderRulesPage } from "../elf/pages/rules";
 import { renderWardrobePage } from "../elf/pages/wardrobe";
 import { calendarViewFor, hqViewFor, lookFromForm, wardrobeStateNow, wardrobeViewFor, type FamilyRow } from "../elf/views";
-import { elfPng } from "../elf/elf-png";
+import { elfPng, elfPngKey } from "../elf/elf-png";
 import { buildElfSignInCodeEmail } from "../elf/emails";
 import { buildElfSessionParams, feeCoverPence, joinBodyFromForm, parseJoin } from "../elf/join";
 import { FESTIVE_SURNAMES } from "../elf/names";
@@ -448,7 +448,19 @@ elfRouter.get("/elf/hq/elf/:file", schoolOn, async (req, res) => {
   const detective = m && family ? family.detectives.find((d) => d.id === Number(m[1])) : undefined;
   if (!detective) return res.status(404).type("text/plain").send("Not found");
   // Stacked from the painted layers, which an SVG in an <img> could not load (src/elf/elf-png.ts).
-  const picture = await elfPng(detective.look, wardrobeStateNow(), 240, "clear");
+  // The browser keeps it but asks first (its ETag names the look), so a new look shows at once and
+  // an unchanged one is never made again.
+  res.setHeader("Cache-Control", "private, no-cache");
+  const etag = `"${elfPngKey(detective.look, wardrobeStateNow(), 240, "clear")}"`;
+  res.setHeader("ETag", etag);
+  if (String(req.headers["if-none-match"] ?? "") === etag) return res.status(304).send();
+  let picture: Buffer | null;
+  try {
+    picture = await elfPng(detective.look, wardrobeStateNow(), 240, "clear");
+  } catch (err) {
+    console.error("elf hq picture failed:", err instanceof Error ? err.message : err);
+    return res.status(500).type("text/plain").send("The picture could not be made.");
+  }
   if (!picture) {
     res.setHeader("Retry-After", "2");
     return res.status(503).type("text/plain").send("Busy. Please try again in a moment.");

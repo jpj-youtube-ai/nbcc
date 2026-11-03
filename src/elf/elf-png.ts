@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { existsSync } from "node:fs";
 import { resolve } from "node:path";
 import { layersFor, type PaintLayer, type WardrobeState } from "./wardrobe";
@@ -20,8 +21,8 @@ import { layersFor, type PaintLayer, type WardrobeState } from "./wardrobe";
 //   - pictures are made one at a time, and when too many are already waiting the answer is "busy"
 //     (null) at once, not a queue that grows until the task runs out of memory.
 // The two files each keep their own queue, so one photo and one elf can still be made at the same
-// moment. Whoever first serves these pictures should give the two a single queue, and keep each
-// picture once it is made: the same look always gives the same picture, and there are not many.
+// moment. Each finished picture is kept (the most recent ELF_PNG_KEEP), since the same look always
+// gives the same picture: a family reloading Detective HQ costs nothing.
 //
 // Unit tested in test/unit/elf-png.test.ts.
 
@@ -105,7 +106,41 @@ export function elfPng(
 ): Promise<Buffer | null> {
   const px = elfPngWidth(width);
   const layers = layersFor(look, state);
-  return inTurn<Buffer | null>(() => stackPng(layers, px, background, true), null);
+  const key = keyOf(layers, px, background);
+  const kept = made.get(key);
+  if (kept) {
+    // Kept most recently used last, so the oldest is the one let go.
+    made.delete(key);
+    made.set(key, kept);
+    return Promise.resolve(kept);
+  }
+  return inTurn<Buffer | null>(async () => {
+    try {
+      const picture = await stackPng(layers, px, background, true);
+      made.set(key, picture);
+      if (made.size > ELF_PNG_KEEP) made.delete(made.keys().next().value as string);
+      return picture;
+    } catch (err) {
+      // A sharp problem fails this one picture, never the site (final review, 3 November 2026).
+      console.error("elf picture failed:", err instanceof Error ? err.message : err);
+      return null;
+    }
+  }, null);
+}
+
+/** How many finished pictures are kept, the most recently used. A picture of 240 pixels is about
+ *  60 KB, so this is a few megabytes at most. */
+export const ELF_PNG_KEEP = 300;
+const made = new Map<string, Buffer>();
+
+function keyOf(layers: PaintLayer[], width: number, background: string): string {
+  return createHash("sha256").update(JSON.stringify([layers.map((l) => l.name), width, background])).digest("base64url").slice(0, 22);
+}
+
+/** A short name for the picture a look makes: the same look always has the same name, a different
+ *  one a different name. Detective HQ sends it as the picture's ETag. */
+export function elfPngKey(look: unknown, state: WardrobeState, width = 320, background: "clear" | "cream" = "clear"): string {
+  return keyOf(layersFor(look, state), elfPngWidth(width), background);
 }
 
 /**
@@ -116,26 +151,31 @@ export function elfPng(
 export async function stackPng(layers: PaintLayer[], width: number, background: "clear" | "cream", backdrop: boolean, dir = LAYER_DIR): Promise<Buffer> {
   const sharp = await loadSharp();
   const file = (name: string) => resolve(dir, `${name}.webp`);
-  const found = layers.filter((l) => existsSync(file(l.name)));
+  // A layer whose file is missing or cannot be read is left out, so one bad file can only cost
+  // that piece, never the picture or the site (final review, 3 November 2026).
+  const readable = async (name: string): Promise<boolean> => {
+    if (!existsSync(file(name))) return false;
+    try {
+      await sharp(file(name)).metadata();
+      return true;
+    } catch {
+      return false;
+    }
+  };
   const place = (box: { x: number; y: number }) => ({ left: box.x - VIEW.left, top: box.y });
   const blank = () => sharp({ create: { width: VIEW.width, height: VIEW.height, channels: 4, background: { r: 0, g: 0, b: 0, alpha: 0 } } });
 
-  // The elf first, on its own, with every cover taken out of it.
-  const [first, ...rest] = found;
-  const isElf = !!first && first.name.startsWith("elf-");
-  const pieces = isElf ? rest : found;
-  const under: import("sharp").OverlayOptions[] = [];
-  if (isElf) {
-    under.push({ input: file(first.name), ...place(first) });
-    for (const l of pieces) if (l.cover && existsSync(file(`${l.name}.cover`))) under.push({ input: file(`${l.name}.cover`), ...place(l.cover), blend: "dest-out" });
+  // Bottom to top. A piece that hides part of what is behind it (an open mitten under a held torch)
+  // first takes that part out of everything already drawn, the elf and its clothes alike, then is
+  // drawn itself: sharp composites in order, so a dest-out acts on what is below it only.
+  const parts: import("sharp").OverlayOptions[] = [];
+  for (const l of layers) {
+    if (!(await readable(l.name))) continue;
+    if (l.cover && parts.length && (await readable(`${l.name}.cover`))) parts.push({ input: file(`${l.name}.cover`), ...place(l.cover), blend: "dest-out" });
+    parts.push({ input: file(l.name), ...place(l) });
   }
-  const elf = await blank().composite(under).png().toBuffer();
-
-  const over: import("sharp").OverlayOptions[] = [];
-  if (backdrop) over.push({ input: Buffer.from(BACKDROP), left: 0, top: 0 });
-  over.push({ input: elf, left: 0, top: 0 });
-  for (const l of pieces) over.push({ input: file(l.name), ...place(l) });
-  const stacked = await blank().composite(over).png().toBuffer();
+  const elf = await blank().composite(parts).png().toBuffer();
+  const stacked = backdrop ? await blank().composite([{ input: Buffer.from(BACKDROP), left: 0, top: 0 }, { input: elf, left: 0, top: 0 }]).png().toBuffer() : elf;
 
   const sized = sharp(stacked).resize(width, Math.round(width * 1.3));
   return (background === "cream" ? sized.flatten({ background: CREAM }) : sized).png().toBuffer();

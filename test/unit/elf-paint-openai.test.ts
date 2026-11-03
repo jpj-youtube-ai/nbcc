@@ -70,6 +70,15 @@ describe("asking for a painting", () => {
     expect(seen[0].get("quality")).toBe("high");
   });
 
+  it("counts a painting OpenAI gives no cost for as a high quality one, so the budget never under counts", async () => {
+    const fake = vi.fn(async () => {
+      const png = await sharp({ create: { width: 4, height: 4, channels: 4, background: "#E000E0" } }).png().toBuffer();
+      return new Response(JSON.stringify({ data: [{ b64_json: png.toString("base64") }] }), { status: 200 });
+    });
+    await paint(job, { fetch: fake, ledger });
+    expect(spent(ledger)).toBeGreaterThanOrEqual(0.2);
+  });
+
   it("writes what each painting cost to the ledger", async () => {
     const { fake } = pretend();
     await paint(job, { fetch: fake, ledger });

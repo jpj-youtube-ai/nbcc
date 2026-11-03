@@ -21,6 +21,7 @@ const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 export const BUDGET_USD = 19;
 
 export const MODEL = "gpt-image-2";
+const NO_USAGE_USD = 0.2;
 const ENDPOINT = "https://api.openai.com/v1/images/edits";
 const DEFAULT_LEDGER = resolve(ROOT, ".elf-paint/spend.json");
 
@@ -86,7 +87,8 @@ export async function paint(job, deps = {}) {
 
   mkdirSync(dirname(job.out), { recursive: true });
   writeFileSync(job.out, Buffer.from(data.data[0].b64_json, "base64"));
-  const usd = costOf(data.usage, MODEL);
+  // No cost given counts as a high quality painting, so the budget can only over count.
+  const usd = data.usage ? costOf(data.usage, MODEL) : NO_USAGE_USD;
   mkdirSync(dirname(ledger), { recursive: true });
   writeFileSync(ledger, JSON.stringify([...readLedger(ledger), { at: new Date().toISOString(), out: basename(job.out), usd }], null, 1));
   return { out: job.out, usd };

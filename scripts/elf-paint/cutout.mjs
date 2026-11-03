@@ -143,6 +143,41 @@ function shiftAt(ref, mov, points, span) {
 const CHANGED_BY = 40;
 const MASK_GROW = 6;
 
+/** How far inside a piece's own painting a pixel must be to count as the piece, unchanged or not. */
+const INSIDE_BY = 6;
+const SAME_WITHIN = 60;
+
+/** Where a picture is solid, shrunk by `r` pixels each way: solid only if every pixel within `r` is. */
+function shrink(img, r) {
+  const clear = { data: new Uint8ClampedArray(img.data.length), width: img.width, height: img.height };
+  for (let i = 3; i < img.data.length; i += 4) clear.data[i] = img.data[i] >= 128 ? 0 : 255;
+  const near = grow(clear, r);
+  const out = new Uint8Array(img.width * img.height);
+  for (let p = 0; p < out.length; p++) out[p] = near[p] ? 0 : 1;
+  return out;
+}
+
+/** The base elf's skin colour: the commonest light, warm, solid colour (faces and ears). */
+function skinOf(master, cut) {
+  const counts = new Map();
+  for (let i = 0; i < master.data.length; i += 4) {
+    const r = master.data[i];
+    const g = master.data[i + 1];
+    const b = master.data[i + 2];
+    if (cut.data[i + 3] < 200 || r < 200 || r - b < 50 || g < 150) continue;
+    const k = ((r >> 3) << 10) | ((g >> 3) << 5) | (b >> 3);
+    counts.set(k, (counts.get(k) || 0) + 1);
+  }
+  let best = -1;
+  let most = 0;
+  for (const [k, n] of counts) if (n > most) [best, most] = [k, n];
+  return best < 0 ? null : [(best >> 10) * 8 + 4, ((best >> 5) & 31) * 8 + 4, (best & 31) * 8 + 4];
+}
+
+function isSkin(data, i, skin) {
+  return !!skin && Math.hypot(data[i] - skin[0], data[i + 1] - skin[1], data[i + 2] - skin[2]) < 45;
+}
+
 /** Where a picture is solid, grown by `r` pixels each way (a square reach). */
 function grow(img, r) {
   const { width, height } = img;
@@ -287,11 +322,20 @@ export function isolate(alone, worn, master, opts = {}) {
   const masterCut = keyOut(master);
   const wornCut = keyOut(wornBack);
   const where = grow(aloneBack, MASK_GROW);
+  // A pixel that did not change is still the piece where the piece's own painting is solid well
+  // inside its edge (a red hat over red hair came out full of holes: final review, 3 November 2026),
+  // unless it is the base elf's skin: that is never part of a piece, whatever the painting says.
+  const inside = shrink(aloneBack, INSIDE_BY);
+  const skin = skinOf(master, masterCut);
   const layerData = new Uint8ClampedArray(wornCut.data);
   for (let p = 0, i = 0; p < where.length; p++, i += 4) {
     const added = masterCut.data[i + 3] < 128 && wornCut.data[i + 3] >= 128;
     const changed = Math.max(Math.abs(wornBack.data[i] - master.data[i]), Math.abs(wornBack.data[i + 1] - master.data[i + 1]), Math.abs(wornBack.data[i + 2] - master.data[i + 2])) > CHANGED_BY;
-    if (!where[p] || !(added || changed)) layerData[i + 3] = 0;
+    // ...and where the piece on its own is the same colour as worn there, so it truly is the piece
+    // and not the elf showing beside a painting that came out a little big.
+    const same = Math.hypot(aloneBack.data[i] - wornBack.data[i], aloneBack.data[i + 1] - wornBack.data[i + 1], aloneBack.data[i + 2] - wornBack.data[i + 2]) < SAME_WITHIN;
+    const covered = inside[p] && same && !isSkin(wornBack.data, i, skin);
+    if (!where[p] || !(added || changed || covered)) layerData[i + 3] = 0;
   }
   const layer = { data: layerData, width: master.width, height: master.height };
 
@@ -336,11 +380,12 @@ export function isolate(alone, worn, master, opts = {}) {
     return { layer, cover: { data: hide, width, height: master.height } };
   }
 
-  // What of the elf the piece hides: solid in the master, clear once the piece is worn.
+  // What of the elf the piece hides: painted in the master, even faintly (the soft edge of an
+  // outline: final review, 3 November 2026), and clear once the piece is worn.
   const cover = new Uint8ClampedArray(master.data.length);
   let hidden = 0;
   for (let i = 3; i < cover.length; i += 4) {
-    if (masterCut.data[i] > 128 && wornCut.data[i] < 128) {
+    if (masterCut.data[i] > 0 && wornCut.data[i] < 128) {
       cover[i] = 255;
       hidden += 1;
     }
@@ -471,6 +516,20 @@ export function hatCover(layer) {
   return { data: out, width, height };
 }
 
+/**
+ * A cover with the elf kept under the piece's own soft edge (and `reach` pixels beyond it), so the
+ * edge, being half see through, shows the elf behind it rather than the background: a pale line ran
+ * along hat brims and round the puffer jacket (3 November 2026).
+ */
+export function spareSoftEdges(cover, layer, reach = 2) {
+  const soft = { data: new Uint8ClampedArray(layer.data.length), width: layer.width, height: layer.height };
+  for (let i = 3; i < layer.data.length; i += 4) if (layer.data[i] > 0 && layer.data[i] < 255) soft.data[i] = 255;
+  const near = grow(soft, reach);
+  const out = new Uint8ClampedArray(cover.data);
+  for (let p = 0; p < near.length; p++) if (near[p] && layer.data[p * 4 + 3] < 255) out[p * 4 + 3] = 0;
+  return { data: out, width: cover.width, height: cover.height };
+}
+
 /** Two covers as one: hidden where either hides. */
 export function joinCovers(a, b) {
   if (!a) return b;
@@ -502,8 +561,15 @@ export function cropToContent(img) {
   return { img: { data, width, height }, x: x0, y: y0 };
 }
 
+/** The longest side of a piece's wardrobe tile: twice the 56 pixels it is shown at. */
+export const TILE_PIECE = 112;
+
 async function writeOne(dir, file, img) {
-  for (const [size, scale] of Object.entries(SIZES)) {
+  for (const [size, fixed] of Object.entries(SIZES)) {
+    // A piece's tile is shown on its own, fitted to a square, so it is made to that size (never
+    // bigger than painted) rather than at a share of the canvas: a small badge was a blur.
+    const pieceTile = size === "tile" && file.startsWith("piece-") && !file.endsWith(".cover");
+    const scale = pieceTile ? Math.min(1, TILE_PIECE / Math.max(img.width, img.height)) : fixed;
     mkdirSync(join(dir, size), { recursive: true });
     await sharp(Buffer.from(img.data.buffer, img.data.byteOffset, img.data.byteLength), { raw: { width: img.width, height: img.height, channels: 4 } })
       .resize(Math.max(1, Math.round(img.width * scale)), Math.max(1, Math.round(img.height * scale)))

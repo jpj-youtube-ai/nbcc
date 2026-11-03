@@ -394,25 +394,31 @@
     return '<image href="/assets/img/elf/' + set + "/" + file + '.webp" x="' + box.x + '" y="' + box.y + '" width="' + box.w + '" height="' + box.h + '" preserveAspectRatio="none"' + (extra || "") + "/>";
   }
 
-  // The layers as an SVG. Where a piece hides part of the elf (an open mitten under a held torch),
-  // the elf is drawn through a mask with those parts taken away. The mask's id ends in the
-  // drawing's own key, so several elves can share one page.
+  // The layers as an SVG. Where a piece hides part of what is behind it (an open mitten under a
+  // held torch), everything drawn before that piece (the elf and its other clothes: the coat's cuff
+  // showed the mitten, final review of 3 November 2026) goes in a group drawn through a mask with
+  // those parts taken away. Mask ids end in the drawing's own key, so several elves can share a page.
   function stack(layers, set, width, label, key, backdrop) {
     var v = paint.canvas.view;
     var own = String(key || "").replace(/[^A-Za-z0-9_-]/g, "") || codeOf(set + layers.map(function (l) { return l.name; }).join(","));
-    var covers = layers.filter(function (l) { return l.cover; });
     var defs = "";
-    if (covers.length) {
-      defs = '<defs><mask id="m-' + own + '" maskUnits="userSpaceOnUse" x="' + v[0] + '" y="' + v[1] + '" width="' + v[2] + '" height="' + v[3] + '">' +
-        '<rect x="' + v[0] + '" y="' + v[1] + '" width="' + v[2] + '" height="' + v[3] + '" fill="#fff"/>' +
-        covers.map(function (l) { return picture(set, l.name + ".cover", l.cover); }).join("") + "</mask></defs>";
+    var body = "";
+    var masks = 0;
+    for (var i = 0; i < layers.length; i++) {
+      var l = layers[i];
+      if (l.cover && body) {
+        masks += 1;
+        var id = "m-" + own + (masks > 1 ? "-" + masks : "");
+        defs += '<mask id="' + id + '" maskUnits="userSpaceOnUse" x="' + v[0] + '" y="' + v[1] + '" width="' + v[2] + '" height="' + v[3] + '">' +
+          '<rect x="' + v[0] + '" y="' + v[1] + '" width="' + v[2] + '" height="' + v[3] + '" fill="#fff"/>' +
+          picture(set, l.name + ".cover", l.cover) + "</mask>";
+        body = '<g mask="url(#' + id + ')">' + body + "</g>";
+      }
+      body += picture(set, l.name, l);
     }
-    var body = layers.map(function (l, i) {
-      return picture(set, l.name, l, i === 0 && covers.length && /^elf-/.test(l.name) ? ' mask="url(#m-' + own + ')"' : "");
-    }).join("");
     return '<svg xmlns="http://www.w3.org/2000/svg" width="' + width + '" height="' + Math.round(width * 1.3) + '" viewBox="' + v.join(" ") + '"' +
       (label ? ' role="img" aria-label="' + escapeText(label) + '"' : ' aria-hidden="true"') + ">" +
-      defs + (backdrop ? BACKDROP : "") + body + "</svg>";
+      (defs ? "<defs>" + defs + "</defs>" : "") + (backdrop ? BACKDROP : "") + body + "</svg>";
   }
 
   /** The whole elf as an SVG string. `state` is what the detective has unlocked. `opts` is:

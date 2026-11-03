@@ -10,13 +10,13 @@
 // cuts out what is already painted without asking OpenAI for anything.
 //
 // The design is docs/superpowers/specs/2026-11-03-elf-painted-wardrobe-design.md.
-import { existsSync, mkdirSync, rmSync } from "node:fs";
+import { existsSync, mkdirSync, renameSync, rmSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import sharp from "sharp";
 import { BATCHES, allJobs } from "./jobs.mjs";
 import { paint, spent } from "./openai.mjs";
-import { bestShift, dropLooseEdges, hatCover, isolate, joinCovers, keepMainParts, keyOut, moveBy, writeSizes } from "./cutout.mjs";
+import { bestShift, dropLooseEdges, hatCover, isolate, joinCovers, keepMainParts, keyOut, moveBy, spareSoftEdges, writeSizes } from "./cutout.mjs";
 import { LAYER_DIR, buildManifest } from "./manifest.mjs";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
@@ -80,7 +80,9 @@ async function cut(jobs) {
       // a paper crown: it sits on top of the hair, and hair between its points looks right.
       const pulledOn = j.slot === "hat" && !j.layer.startsWith("piece-crown-");
       const hides = pulledOn ? joinCovers(cover && keepMainParts(cover), hatCover(clean)) : cover && keepMainParts(cover);
-      await writeSizes(LAYER_DIR, j.layer, clean, hides);
+      // Never for a whole outfit: it hides the elf on purpose, soft edges and all.
+      const spared = hides && !isOutfit ? spareSoftEdges(hides, clean) : hides;
+      await writeSizes(LAYER_DIR, j.layer, clean, spared);
     } else continue;
     console.log(`cut ${j.layer}`);
   }
@@ -107,9 +109,23 @@ async function main() {
   let jobs = allJobs().filter((j) => j.batch === batch);
   if (typeof only === "string") {
     jobs = jobs.filter((j) => j.id === only);
-    if (existsSync(raw(only))) rmSync(raw(only));
+    // Only a real job of this batch is painted again; the master is never one.
+    if (!jobs.length) {
+      console.error(`There is no painting called ${only} in the ${batch} batch.`);
+      process.exit(2);
+    }
+    // The old painting is kept aside, and put back if the new one fails.
+    if (existsSync(raw(only))) renameSync(raw(only), raw(`${only}.old`));
   }
-  if (!flag("--cut-only")) await paintAll(jobs, flag("--quality") === "high" ? "high" : "low");
+  if (!flag("--cut-only")) {
+    try {
+      await paintAll(jobs, flag("--quality") === "high" ? "high" : "low");
+    } catch (err) {
+      if (typeof only === "string" && existsSync(raw(`${only}.old`)) && !existsSync(raw(only))) renameSync(raw(`${only}.old`), raw(only));
+      throw err;
+    }
+    if (typeof only === "string" && existsSync(raw(`${only}.old`))) rmSync(raw(`${only}.old`));
+  }
   await cut(jobs);
   console.log(`done: ${batch}. Spent so far $${spent().toFixed(2)}.`);
 }

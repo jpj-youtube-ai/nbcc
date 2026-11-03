@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import sharp from "sharp";
 // @ts-expect-error a plain JavaScript tool, with no type declarations
-import { backgroundOf, bestShift, cropToContent, dropLooseEdges, hatCover, isolate, keepMainParts, keyOut, writeSizes } from "../../scripts/elf-paint/cutout.mjs";
+import { backgroundOf, bestShift, cropToContent, dropLooseEdges, hatCover, isolate, keepMainParts, keyOut, spareSoftEdges, writeSizes } from "../../scripts/elf-paint/cutout.mjs";
 
 // NBCC Elf Detective School: the painted dress-up elf (plan Task 2). Turning a painting on flat
 // magenta into a layer that lines up with every other: the background cut out with soft edges, the
@@ -193,6 +193,39 @@ describe("lifting a piece off", () => {
     expect(alphaAt(layer, 60, 63)).toBe(255); // costume just below it
   });
 
+  it("keeps a piece solid where it is painted the elf's own colour, but never the elf's skin", () => {
+    // The final review, 3 November 2026: a red hat over red hair came out full of holes, because
+    // only pixels that changed were kept; and a collar painted a little over the face must still
+    // not bring the base elf's skin with it.
+    const master = elf();
+    rect(master, 40, 10, 80, 40, [190, 60, 40]); // red hair
+    rect(master, 50, 42, 70, 58, [251, 216, 165]); // the face, in the master's skin
+    const worn = rect(elf(), 40, 10, 80, 40, [195, 62, 44]); // a red hat, almost the hair's colour
+    rect(worn, 50, 42, 70, 58, [251, 216, 165]);
+    const alone = rect(blank(), 40, 10, 80, 40, [195, 62, 44]);
+    rect(alone, 48, 40, 72, 60, [195, 62, 44]); // on its own it spills over the face
+    const { layer } = isolate(alone, worn, master, { still: [40, 100, 80, 150] });
+    expect(alphaAt(layer, 60, 25)).toBe(255); // the hat, though it matches the hair
+    expect(alphaAt(layer, 60, 50)).toBe(0); // never the face's skin
+  });
+
+  it("hides the soft edge of what a piece takes away, not just its solid middle", () => {
+    // Faint arcs of the open mitten's outline stayed under a held torch (final review, 3 November 2026).
+    const master = elf();
+    const soft = [214 * 0.7 + 107 * 0.3, 22 * 0.7 + 25 * 0.3, 185 * 0.7 + 26 * 0.3].map(Math.round) as [number, number, number];
+    const edge = keyOut(rect(blank(), 0, 0, 1, 1, soft)).data[3];
+    expect(edge).toBeGreaterThan(0); // the outline is faint...
+    expect(edge).toBeLessThan(128); // ...but there
+    rect(master, 81, 80, 82, 92, soft); // the mitten's soft outline, half see through
+    const worn = rect(elf(), 82, 80, 92, 92, BG); // the mitten gone
+    rect(worn, 81, 80, 82, 92, BG);
+    rect(worn, 95, 60, 100, 100, [30, 90, 160]); // a torch beside it
+    const alone = rect(blank(), 95, 60, 100, 100, [30, 90, 160]);
+    const { cover } = isolate(alone, worn, master, { still: [40, 100, 80, 150] });
+    expect(alphaAt(cover!, 85, 85)).toBe(255);
+    expect(alphaAt(cover!, 81, 85)).toBe(255); // the soft outline too
+  });
+
   it("marks nothing when the piece hides none of the elf", () => {
     const master = elf();
     const worn = rect(elf(), 40, 10, 80, 40, [30, 90, 160]);
@@ -261,6 +294,24 @@ describe("a hat hides the hair above its brim", () => {
   });
 });
 
+describe("soft edges over a cover", () => {
+  it("keeps the elf under a piece's soft edge, so no pale line shows round it", () => {
+    // A pale line along hat brims and round the puffer (3 November 2026): the elf was taken away
+    // right under the piece's soft, half see through edge, so the background showed through it.
+    const layer = keyOut(blank());
+    for (let y = 10; y < 40; y++) for (let x = 40; x < 80; x++) layer.data.set([192, 34, 56, 255], (y * W + x) * 4);
+    for (let x = 40; x < 80; x++) layer.data.set([192, 34, 56, 120], (40 * W + x) * 4); // the brim's soft edge
+    const cover = keyOut(blank());
+    for (let y = 0; y < 45; y++) for (let x = 30; x < 90; x++) cover.data[(y * W + x) * 4 + 3] = 255;
+    const spared = spareSoftEdges(cover, layer);
+    const at = (x: number, y: number) => spared.data[(y * W + x) * 4 + 3];
+    expect(at(60, 20)).toBe(255); // under the solid hat: still hidden
+    expect(at(60, 40)).toBe(0); // under the soft edge: the elf shows through
+    expect(at(60, 41)).toBe(0); // and just beyond it
+    expect(at(35, 20)).toBe(255); // beside the hat, above the brim: still hidden
+  });
+});
+
 describe("cropping and saving", () => {
   it("crops to what is painted and says where it was", () => {
     const { img, x, y } = cropToContent(keyOut(rect(blank(), 30, 20, 50, 60, LINE)));
@@ -272,10 +323,27 @@ describe("cropping and saving", () => {
     const layer = keyOut(rect(blank(), 20, 20, 120, 120, LINE));
     const cover = keyOut(rect(blank(), 0, 0, 50, 50, LINE));
     await writeSizes(dir, "piece-test-red", layer, cover);
-    const widths = await Promise.all(["tile", "sm", "lg"].map(async (s) => (await sharp(join(dir, s, "piece-test-red.webp")).metadata()).width));
+    await writeSizes(dir, "elf-test", layer);
+    const widths = await Promise.all(["tile", "sm", "lg"].map(async (s) => (await sharp(join(dir, s, "elf-test.webp")).metadata()).width));
     expect(widths).toEqual([12, 50, 100]);
     expect((await sharp(join(dir, "lg", "piece-test-red.cover.webp")).metadata()).width).toBe(50);
     const places = JSON.parse(readFileSync(join(dir, "places.json"), "utf8"));
     expect(places["piece-test-red"]).toEqual({ x: 20, y: 20, w: 100, h: 100, cover: { x: 0, y: 0, w: 50, h: 50 } });
+  });
+
+  it("makes a piece's tile twice the size it is shown, however small the piece is on the canvas", async () => {
+    // A star badge's tile was 11 by 12 pixels, shown at 56: a blur (final review, 3 November 2026).
+    const dir = mkdtempSync(join(tmpdir(), "elf-cut-"));
+    await writeSizes(dir, "piece-test-badge", keyOut(rect(blank(), 10, 10, 30, 26, LINE)));
+    const tile = await sharp(join(dir, "tile", "piece-test-badge.webp")).metadata();
+    expect(Math.max(tile.width!, tile.height!)).toBe(20); // never made bigger than it was painted
+    const S = 400;
+    const data = new Uint8ClampedArray(S * S * 4);
+    for (let i = 0; i < S * S; i++) data.set([...BG, 255], i * 4);
+    for (let y = 40; y < 360; y++) for (let x = 60; x < 300; x++) data.set([...LINE, 255], (y * S + x) * 4);
+    const big = keyOut({ data, width: S, height: S }); // a coat 240 by 320 on the canvas
+    await writeSizes(dir, "piece-test-coat", big);
+    const coat = await sharp(join(dir, "tile", "piece-test-coat.webp")).metadata();
+    expect(Math.max(coat.width!, coat.height!)).toBe(112);
   });
 });

@@ -139,6 +139,42 @@ function shiftAt(ref, mov, points, span) {
   return { dx: best.dx, dy: best.dy };
 }
 
+/** How much a pixel must change to count as part of a piece, and how far the piece's own painting is grown. */
+const CHANGED_BY = 40;
+const MASK_GROW = 6;
+
+/** Where a picture is solid, grown by `r` pixels each way (a square reach). */
+function grow(img, r) {
+  const { width, height } = img;
+  const across = new Uint8Array(width * height);
+  for (let y = 0; y < height; y++) {
+    let last = -Infinity;
+    for (let x = 0; x < width; x++) {
+      if (img.data[(y * width + x) * 4 + 3] >= 128) last = x;
+      if (x - last <= r) across[y * width + x] = 1;
+    }
+    last = Infinity;
+    for (let x = width - 1; x >= 0; x--) {
+      if (img.data[(y * width + x) * 4 + 3] >= 128) last = x;
+      if (last - x <= r) across[y * width + x] = 1;
+    }
+  }
+  const out = new Uint8Array(width * height);
+  for (let x = 0; x < width; x++) {
+    let last = -Infinity;
+    for (let y = 0; y < height; y++) {
+      if (across[y * width + x]) last = y;
+      if (y - last <= r) out[y * width + x] = 1;
+    }
+    last = Infinity;
+    for (let y = height - 1; y >= 0; y--) {
+      if (across[y * width + x]) last = y;
+      if (last - y <= r) out[y * width + x] = 1;
+    }
+  }
+  return out;
+}
+
 /** How far `b` is moved from `a`, judged inside box [x0, y0, x1, y1]. */
 export function bestShift(a, b, box, span = 24) {
   const points = [];
@@ -164,11 +200,24 @@ export function isolate(alone, worn, master, opts = {}) {
   const points = [];
   for (let y = 0; y < alone.height; y++) for (let x = 0; x < alone.width; x++) if (aloneCut.data[at(alone, x, y) + 3] === 255) points.push([x, y]);
   const a = shiftAt(wornBack, alone, points, span);
-  const layer = keyOut(moveBy(alone, -a.dx, -a.dy));
+  const aloneBack = keyOut(moveBy(alone, -a.dx, -a.dy));
 
-  // What of the elf the piece hides: solid in the master, clear once the piece is worn.
+  // The layer is the worn painting itself, kept only where the piece is (the painting on its own,
+  // grown a little to allow for lining up) AND where wearing it changed the elf. The painting on its
+  // own can come out a little bigger than the piece as worn (collars over the mouth, 3 November
+  // 2026), and the elf's face, mittens and hair are never part of a piece, so they can't slip in.
   const masterCut = keyOut(master);
   const wornCut = keyOut(wornBack);
+  const where = grow(aloneBack, MASK_GROW);
+  const layerData = new Uint8ClampedArray(wornCut.data);
+  for (let p = 0, i = 0; p < where.length; p++, i += 4) {
+    const added = masterCut.data[i + 3] < 128 && wornCut.data[i + 3] >= 128;
+    const changed = Math.max(Math.abs(wornBack.data[i] - master.data[i]), Math.abs(wornBack.data[i + 1] - master.data[i + 1]), Math.abs(wornBack.data[i + 2] - master.data[i + 2])) > CHANGED_BY;
+    if (!where[p] || !(added || changed)) layerData[i + 3] = 0;
+  }
+  const layer = { data: layerData, width: master.width, height: master.height };
+
+  // What of the elf the piece hides: solid in the master, clear once the piece is worn.
   const cover = new Uint8ClampedArray(master.data.length);
   let hidden = 0;
   for (let i = 3; i < cover.length; i += 4) {

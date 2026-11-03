@@ -56,7 +56,7 @@ const ALONE_WHAT = {
   hat: (n) => `the ${n}`,
   face: (n) => `the ${n}`,
   neck: (n) => `the ${n}`,
-  top: (n) => `the ${n}, sleeves and all`,
+  top: (n) => `the ${n}, sleeves and all, but NOT the red mittens (paint the mittens magenta too)`,
   feet: (n) => `the ${n}, both of them`,
   hand: (n) => `the ${n} and the red mitten holding it`,
   extra: (n) => `the ${n}`,
@@ -122,7 +122,7 @@ function pieceJobs() {
               batch,
               kind: "recolour",
               from: first,
-              prompt: `Keep this picture exactly the same, everything identical. Change only the colour of the ${name}: it is now ${colourWords(c)}. Keep its design, shape, shading and outline exactly.`,
+              prompt: `Keep this picture exactly the same, everything identical. Change only the colour of the ${name}: it is now ${colourWords(c)}. Keep its design, shape, shading and outline exactly. The elf's mittens stay red, and the face, hair, skin and everything else stay exactly as they are.`,
             },
       );
       out.push({ id: `alone-${style.id}-${c.id}`, batch, kind: "alone", slot: style.slot, from: worn, base, still, layer: layerName("piece", style.id, c.id), prompt: alonePrompt(ALONE_WHAT[style.slot](name)) });

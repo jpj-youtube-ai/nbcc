@@ -123,6 +123,20 @@ describe("lifting a piece off", () => {
     expect(alphaAt(cover!, 85, 85)).toBe(255);
   });
 
+  it("keeps only what the piece changed, even when the painting on its own spills over the face", () => {
+    // Collars that came out over the mouth, 3 November 2026: the painting of the top on its own was
+    // a little bigger than the top as worn.
+    const master = elf();
+    const worn = rect(elf(), 40, 60, 80, 100, [30, 90, 160]); // a blue top over the body's lower part
+    // On its own it reaches up over the face and down over the legs, so no sliding can make it fit.
+    const alone = rect(blank(), 38, 40, 82, 125, [30, 90, 160]);
+    const { layer } = isolate(alone, worn, master, { still: [40, 130, 80, 150] });
+    expect(alphaAt(layer, 60, 80)).toBe(255); // the top
+    expect(alphaAt(layer, 60, 50)).toBe(0); // the face above it, unchanged by the top
+    expect(alphaAt(layer, 50, 115)).toBe(0); // a leg below it, unchanged by the top
+    expect([...layer.data.subarray((80 * W + 60) * 4, (80 * W + 60) * 4 + 3)]).toEqual([30, 90, 160]);
+  });
+
   it("marks nothing when the piece hides none of the elf", () => {
     const master = elf();
     const worn = rect(elf(), 40, 10, 80, 40, [30, 90, 160]);

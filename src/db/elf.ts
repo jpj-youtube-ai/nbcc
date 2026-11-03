@@ -333,7 +333,7 @@ export async function orderForWelcome(
 
 /** A signed in family and its active detectives, oldest first. */
 export async function familyWithDetectives(familyId: number): Promise<FamilyRow | null> {
-  const f = await pool.query<{ id: number; grown_up_name: string }>("SELECT id, grown_up_name FROM elf_families WHERE id = $1 AND active", [familyId]);
+  const f = await pool.query<{ id: number; grown_up_name: string; email: string }>("SELECT id, grown_up_name, email FROM elf_families WHERE id = $1 AND active", [familyId]);
   if (!f.rows[0]) return null;
   const d = await pool.query<{ id: number; first_name: string; surname: string; name_approved: boolean; badge_number: number | null; look: unknown; fresh: string[] }>(
     `SELECT id, first_name, surname, name_approved, badge_number, look, fresh FROM elf_detectives
@@ -343,6 +343,7 @@ export async function familyWithDetectives(familyId: number): Promise<FamilyRow 
   return {
     id: f.rows[0].id,
     grownUpName: f.rows[0].grown_up_name,
+    email: f.rows[0].email,
     detectives: d.rows.map((r) => ({
       id: r.id,
       firstName: r.first_name,

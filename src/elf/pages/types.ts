@@ -111,6 +111,8 @@ export interface HqView {
   calendarUrl: string;
   /** Where the guess form posts when there is no script. */
   guessUrl: string;
+  /** Where a signed in family adds another detective (wave 1). Left out, no link is shown. */
+  addDetectiveUrl?: string;
 }
 
 export interface WardrobeView {
@@ -199,4 +201,7 @@ export interface JoinView {
   surnames: readonly string[];
   errors?: string[];
   values?: Record<string, string>;
+  /** A signed in family adding a detective: the grown up is known, so only the detectives and the
+   *  payment are asked for. */
+  signedIn?: { grownUpName: string; email: string };
 }

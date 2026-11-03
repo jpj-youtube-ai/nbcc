@@ -125,3 +125,20 @@ describe("reading the plain form", () => {
     });
   });
 });
+
+describe("adding a detective, signed in", () => {
+  const signedIn = { grownUpName: "Sam Example", email: "sam@example.com" };
+
+  it("asks only for the detectives and the payment, never the email again", () => {
+    const doc = page({ signedIn });
+    expect(doc.querySelector('input[name="email"]')).toBeNull();
+    expect(doc.querySelector('input[name="grownUpName"]')).toBeNull();
+    expect(words(doc.querySelector("h1"))).toBe("Add a detective");
+    expect(words(doc.querySelector(".elf-join-you"))).toContain("sam@example.com");
+  });
+
+  it("still reads the plain form without the grown up's fields", () => {
+    const body = joinBodyFromForm({ "detective-1-first": "Ivy", "detective-1-surname": "Snowsleuth", entry: "5", agreed: "on" });
+    expect(body.detectives).toEqual([{ firstName: "Ivy", surname: "Snowsleuth" }]);
+  });
+});

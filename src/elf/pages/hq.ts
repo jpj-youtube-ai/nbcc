@@ -199,6 +199,7 @@ export function renderHqPage(view: HqView): string {
     <div class="wrap">
       <h2 id="elf-team-heading" class="h-lg">Your detectives</h2>
       <div class="elf-detectives">${view.detectives.map(detectiveCard).join("")}</div>
+      ${sitePath(view.addDetectiveUrl) ? `<p class="elf-add-detective"><a class="btn btn-ghost" href="${sitePath(view.addDetectiveUrl)}">Add a detective</a></p>` : ""}
     </div>
   </section>
 

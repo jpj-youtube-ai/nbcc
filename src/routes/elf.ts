@@ -90,7 +90,11 @@ async function schoolOn(req: Request, res: Response, next: NextFunction): Promis
 
 const settingsOf = (res: Response): ElfSettings => res.locals.elfSettings as ElfSettings;
 
-function sendJoinPage(res: Response, status: number, extra: { errors?: string[]; values?: Record<string, string> } = {}): void {
+function sendJoinPage(
+  res: Response,
+  status: number,
+  extra: { errors?: string[]; values?: Record<string, string>; signedIn?: { grownUpName: string; email: string } } = {},
+): void {
   res.status(status).setHeader("Cache-Control", "no-store");
   res.type("html").send(
     renderJoinPage({
@@ -110,16 +114,34 @@ function typedValues(form: Record<string, unknown>): Record<string, string> {
   return out;
 }
 
-elfRouter.get("/elf/join", schoolOn, (_req, res) => sendJoinPage(res, 200));
+/** The signed in family, if any, for the enrol page: it then adds detectives to itself. */
+async function joiningFamily(req: Request): Promise<FamilyRow | null> {
+  const s = await signedInFamily(req);
+  return s ? await familyWithDetectives(s.familyId) : null;
+}
+
+elfRouter.get("/elf/join", schoolOn, async (req, res) => {
+  const family = await joiningFamily(req);
+  sendJoinPage(res, 200, family ? { signedIn: { grownUpName: family.grownUpName, email: family.email } } : {});
+});
 
 const joinLimiter = createRateLimiter({ max: 10, windowMs: 60 * 60_000 });
 
 export async function postJoin(req: Request, res: Response): Promise<Response | void> {
   res.setHeader("Cache-Control", "no-store");
   const json = wantsJson(req);
-  const sent: Record<string, unknown> = json ? (req.body ?? {}) : joinBodyFromForm(req.body ?? {});
+  const sent: Record<string, unknown> = { ...(json ? (req.body ?? {}) : joinBodyFromForm(req.body ?? {})) };
+  // A signed in family adds detectives to itself: its own name and email are used, and whatever
+  // email was sent is ignored.
+  const family = await joiningFamily(req);
+  if (family) {
+    sent.email = family.email;
+    sent.grownUpName = family.grownUpName;
+    sent.newsletter = false;
+  }
+  const signedIn = family ? { grownUpName: family.grownUpName, email: family.email } : undefined;
   const refuse = (status: number, errors: string[]) =>
-    json ? res.status(status).json({ errors }) : sendJoinPage(res, status, { errors, values: typedValues(req.body ?? {}) });
+    json ? res.status(status).json({ errors }) : sendJoinPage(res, status, { errors, values: typedValues(req.body ?? {}), signedIn });
 
   if (typeof sent.website === "string" && sent.website !== "") return refuse(400, ["Something went wrong. Please try again."]);
   if (!isLoopbackRequest(req) && !joinLimiter.allow(req.ip ?? "unknown", Date.now())) {
@@ -137,7 +159,12 @@ export async function postJoin(req: Request, res: Response): Promise<Response | 
 
   const fee = feeCoverPence(parsed.body, await currentCardFee());
   const token = newElfToken();
-  const pending = await createPendingJoin({ body: parsed.body, browserTokenHash: hashElfToken(token), feeCoverPence: fee });
+  const pending = await createPendingJoin({
+    body: parsed.body,
+    browserTokenHash: hashElfToken(token),
+    feeCoverPence: fee,
+    ...(family ? { familyId: family.id } : {}),
+  });
   if (pending === "sign-in-first") {
     return refuse(409, ["This email already has detectives enrolled. Please sign in to add more."]);
   }

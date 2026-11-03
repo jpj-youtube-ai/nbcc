@@ -15,6 +15,7 @@ const db = vi.hoisted(() => ({
   orderForWelcome: vi.fn(),
   attachStripeSession: vi.fn(),
   createPendingJoin: vi.fn(),
+  familyWithDetectives: vi.fn(),
 }));
 const mail = vi.hoisted(() => ({ sendElfSignInCode: vi.fn(), sendElfWelcome: vi.fn() }));
 vi.mock("../../src/db/elf", () => db);
@@ -193,5 +194,29 @@ describe("coming back from paying", () => {
     expect(res.html).toContain("We are just checking your payment");
     expect(res.html).toMatch(/<meta http-equiv="refresh" content="3"/);
     expect(db.createElfSession).not.toHaveBeenCalled();
+  });
+});
+
+describe("adding a detective, signed in", () => {
+  it("joins the signed in family whatever email is sent, and never asks it to sign in first", async () => {
+    const { postJoin } = await import("../../src/routes/elf");
+    db.findElfSession.mockResolvedValue({ familyId: 3 });
+    const family = { id: 3, grownUpName: "Sam Example", email: "sam@example.com", detectives: [] };
+    db.familyWithDetectives.mockResolvedValue(family);
+    db.createPendingJoin.mockResolvedValue({ familyId: 3, orderId: 9, reference: "EDS-K4F9Q2", detectiveIds: [102] });
+    const res = fakeRes();
+    res.locals = { elfSettings: ON };
+    await postJoin(
+      req({
+        json: true,
+        cookie: `${ELF_SESSION_COOKIE}=abcDEF123_-xyz`,
+        body: { email: "someone@else.example", grownUpName: "Someone Else", detectives: [{ firstName: "Ivy", surname: "Snowsleuth" }], entryPence: 500, agreed: true },
+      }),
+      res as never,
+    );
+    const call = db.createPendingJoin.mock.calls[0][0];
+    expect(call.familyId).toBe(3);
+    expect(call.body.email).toBe("sam@example.com");
+    expect(call.body.grownUpName).toBe("Sam Example");
   });
 });

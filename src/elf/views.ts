@@ -24,6 +24,7 @@ export interface DetectiveRow {
 export interface FamilyRow {
   id: number;
   grownUpName: string;
+  email: string;
   detectives: DetectiveRow[];
 }
 
@@ -72,6 +73,7 @@ export function hqViewFor(o: { family: FamilyRow; settings: ElfSettings; now: Da
     marks: { doors: [] },
     calendarUrl: "/elf",
     guessUrl: "/api/elf/guess",
+    addDetectiveUrl: "/elf/join",
   };
 }
 

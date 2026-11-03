@@ -10,6 +10,7 @@ const SETTINGS = { ...ELF_DEFAULTS, schoolOn: true };
 const FAMILY: FamilyRow = {
   id: 3,
   grownUpName: "Sam Example",
+  email: "sam@example.com",
   detectives: [
     { id: 100, firstName: "Ruby", surname: "Tinselfoot", nameApproved: false, badgeNumber: 1, look: null, fresh: [] },
     { id: 101, firstName: "Leo", surname: "Frostwhistle", nameApproved: true, badgeNumber: 42, look: null, fresh: ["bow:gold"] },

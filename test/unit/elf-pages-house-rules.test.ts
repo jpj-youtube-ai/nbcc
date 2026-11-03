@@ -46,6 +46,7 @@ const PAGES: [string, string][] = [
   ["HQ, all over", renderHqPage(hqView({ now: at("2026-12-26T10:00:00.000Z"), today: null, nextClueAt: null }))],
   ["join", renderJoinPage({ settings: { ...ELF_DEFAULTS, schoolOn: true }, captchaSiteKey: null, surnames: FESTIVE_SURNAMES })],
   ["join, refused", renderJoinPage({ settings: { ...ELF_DEFAULTS, schoolOn: true }, captchaSiteKey: "1x00000000000000000000AA", surnames: FESTIVE_SURNAMES, errors: ["Please pick a surname from the list for each detective."], values: { grownUpName: "Sam Example" } })],
+  ["join, adding a detective", renderJoinPage({ settings: { ...ELF_DEFAULTS, schoolOn: true }, captchaSiteKey: null, surnames: FESTIVE_SURNAMES, signedIn: { grownUpName: "Sam Example", email: "sam@example.com" } })],
   ["rules", renderRulesPage({ settings: { ...ELF_DEFAULTS, schoolOn: true } })],
   ["calendar, live before December", renderCalendarPage(calendarViewFor({ settings: { ...ELF_DEFAULTS, schoolOn: true }, now: at("2026-11-13T09:00:00.000Z") }))],
   ["sign in, the email", renderSignInPage({ stage: "email" })],

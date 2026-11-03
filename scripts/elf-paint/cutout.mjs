@@ -301,11 +301,22 @@ export function isolate(alone, worn, master, opts = {}) {
       const changed = Math.max(Math.abs(wornBack.data[i] - master.data[i]), Math.abs(wornBack.data[i + 1] - master.data[i + 1]), Math.abs(wornBack.data[i + 2] - master.data[i + 2])) > CHANGED_BY;
       if (added || changed) changedMap.data[i + 3] = 255;
     }
+    // Glasses (`opts.clearLenses`) keep only what the piece itself painted: their lenses are clear,
+    // so the painting on its own shows the base elf's skin and eyes through them, and those must
+    // never be laid over another elf (Jaimie, 3 November 2026). Only the frames differ from the face.
     const near = grow(changedMap, NEAR_BY);
     const layerData = new Uint8ClampedArray(aloneBack.data);
-    for (let q = 0; q < near.length; q++) if (!near[q]) layerData[q * 4 + 3] = 0;
+    for (let q = 0; q < near.length; q++) {
+      const i = q * 4;
+      const sameAsFace = opts.clearLenses && Math.max(Math.abs(aloneBack.data[i] - master.data[i]), Math.abs(aloneBack.data[i + 1] - master.data[i + 1]), Math.abs(aloneBack.data[i + 2] - master.data[i + 2])) <= CHANGED_BY;
+      // For glasses the frames' own painting alone decides, so a frame is never broken where the
+      // painting of the elf wearing them sits a pixel off.
+      if ((opts.clearLenses ? false : !near[q]) || sameAsFace) layerData[i + 3] = 0;
+    }
     layer = { data: layerData, width: master.width, height: master.height };
   }
+  // Glasses hide nothing: the elf's own eyes show through the lenses.
+  if (opts.clearLenses) return { layer, cover: null };
 
   // A whole outfit is kept as painted on its own (a reindeer's red nose over red hair is still
   // the costume), and hides ALL of the elf except where the elf shows through it: solid in the

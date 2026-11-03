@@ -245,6 +245,22 @@ describe("lifting a piece off", () => {
     expect(cover === null || alphaAt(cover, 85, 85) === 0).toBe(true);
   });
 
+  it("keeps only the frames of glasses, never the face seen through the lenses, and hides nothing", () => {
+    // Glasses looked bad (Jaimie, 3 November 2026): the lenses carried the base elf's skin and eyes.
+    const master = elf();
+    rect(master, 50, 42, 70, 58, [251, 216, 165]); // the face
+    rect(master, 56, 48, 60, 52, [70, 30, 20]); // an eye
+    const worn = rect(elf(), 50, 42, 70, 58, [251, 216, 165]);
+    rect(worn, 55, 47, 61, 53, [251, 216, 165]); // the eye, a little off in this painting
+    rect(worn, 50, 42, 70, 44, LINE); // the frame's top bar
+    const alone = rect(blank(), 50, 42, 70, 58, [251, 216, 165]); // on its own: frame AND the face in the lens
+    rect(alone, 50, 42, 70, 44, LINE);
+    const { layer, cover } = isolate(alone, worn, master, { still: [40, 100, 80, 150], clearLenses: true });
+    expect(alphaAt(layer, 60, 43)).toBe(255); // the frame
+    expect(alphaAt(layer, 60, 55)).toBe(0); // not the face through the lens
+    expect(cover).toBeNull(); // and the elf's own eyes stay
+  });
+
   it("marks nothing when the piece hides none of the elf", () => {
     const master = elf();
     const worn = rect(elf(), 40, 10, 80, 40, [30, 90, 160]);

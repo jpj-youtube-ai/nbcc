@@ -73,7 +73,7 @@ async function cut(jobs) {
       await writeSizes(LAYER_DIR, j.layer, keepMainParts(dropLooseEdges(keyOut(back))));
     } else if (j.kind === "alone") {
       const base = await load(raw(j.base));
-      const { layer, cover } = isolate(await load(raw(j.id)), await load(raw(j.from)), base, { still: j.still, outfit: j.layer.startsWith("outfit-"), whole: j.slot === "hat", reach: j.slot === "hand" ? GADGET_REACH : undefined, face: FACE_BOX, faceOnly: FACE_ONLY, chin: CHIN });
+      const { layer, cover } = isolate(await load(raw(j.id)), await load(raw(j.from)), base, { still: j.still, outfit: j.layer.startsWith("outfit-"), whole: j.slot === "hat", clearLenses: j.slot === "face", reach: j.slot === "hand" ? GADGET_REACH : undefined, face: FACE_BOX, faceOnly: FACE_ONLY, chin: CHIN });
       // An outfit's hat or prop can stand apart from the costume (the snowman's hat), so only loose
       // faint paint is dropped from an outfit, never a whole patch.
       const isOutfit = j.layer.startsWith("outfit-");

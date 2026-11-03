@@ -138,10 +138,11 @@ describe("what a child would see", () => {
   });
 
   it.runIf(real("elf-sister-s5-short-brown"))("keeps the face showing on the darkest skin", async () => {
-    // Plain round eyes on the darkest skin: the eyes must be clearly darker than the cheeks.
+    // Plain round eyes on the darkest skin: the eyes must be clearly darker than the skin round them.
+    // The strip is the row of the eyes on the painted canvas (checked by eye, 3 November 2026).
     const face = await png({ ...defaultLook(), skin: "s5" }, EVERYTHING, 1182);
     const p = PAINT.layers["elf-sister-s5-short-brown"] as { x: number; y: number; w: number };
-    const eyeRow = await sharp(face).extract({ left: p.x + 79 + Math.round(p.w * 0.3), top: 470, width: Math.round(p.w * 0.4), height: 60 }).greyscale().raw().toBuffer();
+    const eyeRow = await sharp(face).extract({ left: p.x + 79 + Math.round(p.w * 0.3), top: 525, width: Math.round(p.w * 0.4), height: 60 }).greyscale().raw().toBuffer();
     const sorted = [...eyeRow].sort((a, b) => a - b);
     const darkest = sorted[Math.floor(sorted.length * 0.02)];
     const typical = sorted[Math.floor(sorted.length * 0.5)];

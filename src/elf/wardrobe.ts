@@ -59,7 +59,7 @@ export interface WardrobeOutfit {
 /** A hair colour: its fill, and the darker edge drawn round it so it shows against any skin. */
 export interface HairColour {
   readonly id: string;
-  /** The word people read: "Ginger". */
+  /** The word people read: "Red" (Jaimie, 3 November 2026: "use the word red or auburn"; the id stays "ginger" so saved looks keep it). */
   readonly name: string;
   readonly hex: string;
   readonly dark: string;

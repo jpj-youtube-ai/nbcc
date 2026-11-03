@@ -38,7 +38,7 @@
   var HAIR_COLOURS = [
     { id: "dark", name: "Dark brown", hex: "#3A2416", dark: "#1E110A" },
     { id: "brown", name: "Brown", hex: "#7A4B2E", dark: "#4A2C1A" },
-    { id: "ginger", name: "Ginger", hex: "#C9772F", dark: "#8E4F1C" },
+    { id: "ginger", name: "Red", hex: "#C9772F", dark: "#8E4F1C" },
     { id: "blonde", name: "Blonde", hex: "#E8C46A", dark: "#A67C1F" },
     { id: "black", name: "Black", hex: "#2B2A33", dark: "#111016" }
   ];

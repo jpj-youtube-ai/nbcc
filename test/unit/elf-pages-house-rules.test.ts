@@ -342,8 +342,8 @@ describe("the scripts for the elf screens", () => {
   const dir = resolve(ROOT, "assets/js");
   const scripts = readdirSync(dir).filter((name) => /^elf-.*\.js$/.test(name));
 
-  it("are the six expected", () => {
-    expect(scripts.sort()).toEqual(["elf-calendar.js", "elf-hq.js", "elf-join.js", "elf-poster.js", "elf-wardrobe-ui.js", "elf-wardrobe.js"]);
+  it("are the seven expected", () => {
+    expect(scripts.sort()).toEqual(["elf-calendar.js", "elf-hq.js", "elf-join.js", "elf-paint.js", "elf-poster.js", "elf-wardrobe-ui.js", "elf-wardrobe.js"]);
   });
 
   it.each(scripts)("%s is written the way the site's other scripts are, so it runs with no build step", (name) => {

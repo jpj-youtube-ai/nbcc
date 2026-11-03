@@ -73,6 +73,7 @@ export function wardrobeView(over: Partial<WardrobeView> = {}): WardrobeView {
       wardrobeUrl: "/elf/hq/wardrobe/d1",
     },
     look: {
+      sibling: "sister",
       skin: "s3",
       hair: "ginger",
       hairStyle: "bunches",

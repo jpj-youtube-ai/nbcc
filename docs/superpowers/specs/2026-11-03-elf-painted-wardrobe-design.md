@@ -40,6 +40,13 @@ the elf and every piece are now **painted by OpenAI** and layered.
    the hand (torch, magnifying glass, notebook, lantern) and an outfit's props (mallet, bagpipes,
    scroll) are painted once and fit every elf. The master is repainted with mittens before anything
    else, and Jaimie sees it first.
+8. **A brother or a sister, chosen separately** (Jaimie, 3 November 2026, after seeing that short hair
+   alone reads as a brother: "Add brother or sister"). The wardrobe gains a new choice, `sibling`,
+   `sister` or `brother`, and every hairstyle is open to both. The brother is painted from the
+   sister (only his face and hair changed; Jaimie chose "Brother B", whose body differs from hers by
+   under 1%), so every piece painted on her fits him. That makes **150 elves**: 2 by 5 skin tones by
+   3 hairstyles by 5 hair colours. A new detective starts as a sister (my call: she is the master).
+   The words on the page ("Brother or sister", "Sister", "Brother") are drafts for Jaimie's yes.
 
 The approved base picture is the red haired sister in a cream top, red and cream striped tights and
 cream socks, on flat magenta. It is kept, with the test pictures, in
@@ -64,9 +71,8 @@ current model (`gpt-image-2`) cannot paint on a transparent background itself.
 Drawn bottom to top, in the order the code uses today: the elf, shoes, top, extra, glasses, neck,
 hat, gadget. An outfit replaces all of the clothes.
 
-- **The elf: one painting for each skin tone and hairstyle and hair colour**: 5 skin tones by 3
-  hairstyles by 5 hair colours, 75 paintings, each made from the master by changing only skin and
-  hair. Builder's call whether hair is instead a layer of its own (fewer paintings), as long as it
+- **The elf: one painting for each sibling, skin tone, hairstyle and hair colour**: 2 by 5 by 3 by
+  5, 150 paintings, each made from the sister or the brother master by changing only skin and hair. Builder's call whether hair is instead a layer of its own (fewer paintings), as long as it
   passes the same eye test as the rest.
 - **Every piece, in every colour, painted by OpenAI.** The test showed that recolouring a painting
   in code comes out muddy. Each piece is painted onto the master elf, then painted again **on its own**
@@ -79,7 +85,7 @@ hat, gadget. An outfit replaces all of the clothes.
   the bunches poking out of the reindeer hood) left open, so one painting of an outfit works for
   every skin tone and hairstyle.
 
-25 styles in 3 colours (75 pieces, each painted about twice) plus 11 outfits plus 75 elves comes to
+25 styles in 3 colours (75 pieces, each painted about twice) plus 11 outfits plus 150 elves comes to
 roughly 250 to 300 paintings, including retries.
 
 ### On the site
@@ -146,7 +152,7 @@ spend on OpenAI's Usage page. About $2.50 was spent on the test.
 
 - **Goal:** an elf a child is proud of, that looks like it belongs next to the logo, in every
   combination of skin, hair and clothes.
-- **Not changing:** what there is to wear, what unlocks at which door, the slots, the outfit list,
+- **Not changing (except the new brother or sister choice):** what there is to wear, what unlocks at which door, the slots, the outfit list,
   the words for each piece, how a look is saved and checked.
 - **Not doing:** no AI on the live site, no animated elf, no new pieces or outfits.
 - **Anti-goals:** looking cheap or clip art; anything that does not look like the logo's family;

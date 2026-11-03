@@ -51,6 +51,13 @@
     { id: "black", name: "Black", hex: "#2B2A33", dark: "#111016" }
   ];
 
+  // A brother or a sister of the school's logo elf (Jaimie, 3 November 2026). Every hairstyle is
+  // open to both.
+  var SIBLINGS = [
+    { id: "sister", name: "Sister" },
+    { id: "brother", name: "Brother" }
+  ];
+
   var HAIR_STYLES = [
     { id: "short", name: "Short" },
     { id: "bunches", name: "Bunches" },
@@ -258,6 +265,7 @@
   /** What a brand new detective's elf wears. */
   function defaultLook() {
     return {
+      sibling: "sister",
       skin: "s2",
       hair: "brown",
       hairStyle: "short",
@@ -273,11 +281,13 @@
     var given = look && typeof look === "object" ? look : {};
     // Each part is read ONCE into a variable and only that is checked and kept, so a look that
     // answers differently the second time it is asked cannot slip something past the check.
+    var sibling = given.sibling;
     var skin = given.skin;
     var hair = given.hair;
     var hairStyle = given.hairStyle;
     var outfit = given.outfit;
     var worn = given.pieces;
+    if (typeof sibling === "string" && find(SIBLINGS, sibling)) out.sibling = sibling;
     if (typeof skin === "string" && find(SKIN_TONES, skin)) out.skin = skin;
     if (typeof hair === "string" && find(HAIR_COLOURS, hair)) out.hair = hair;
     if (typeof hairStyle === "string" && find(HAIR_STYLES, hairStyle)) out.hairStyle = hairStyle;
@@ -775,10 +785,11 @@
     }
     return value;
   }
-  [SKIN_TONES, HAIR_COLOURS, HAIR_STYLES, SLOTS, STYLES, OUTFITS, STARTER, PATTERNS].forEach(freeze);
+  [SIBLINGS, SKIN_TONES, HAIR_COLOURS, HAIR_STYLES, SLOTS, STYLES, OUTFITS, STARTER, PATTERNS].forEach(freeze);
 
   var api = {
     DOORS: DOORS,
+    SIBLINGS: SIBLINGS,
     SKIN_TONES: SKIN_TONES,
     HAIR_COLOURS: HAIR_COLOURS,
     HAIR_STYLES: HAIR_STYLES,

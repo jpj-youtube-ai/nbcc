@@ -3,6 +3,7 @@ import {
   HAIR_COLOURS,
   HAIR_STYLES,
   OUTFITS,
+  SIBLINGS,
   SKIN_TONES,
   SLOTS,
   STYLES,
@@ -264,9 +265,31 @@ describe("what an elf is wearing, in words", () => {
   });
 });
 
+describe("brother or sister (Jaimie, 3 November 2026)", () => {
+  it("offers a sister and a brother", () => {
+    expect(SIBLINGS.map((s) => [s.id, s.name])).toEqual([
+      ["sister", "Sister"],
+      ["brother", "Brother"],
+    ]);
+  });
+
+  it("keeps the one chosen, and makes anything else a sister", () => {
+    expect(normaliseLook({ sibling: "brother" }, { doorsDone: 0 }).sibling).toBe("brother");
+    expect(normaliseLook({ sibling: "uncle" }, { doorsDone: 0 }).sibling).toBe("sister");
+    expect(normaliseLook({ sibling: ["brother"] }, { doorsDone: 0 }).sibling).toBe("sister");
+    expect(normaliseLook({}, { doorsDone: 0 }).sibling).toBe("sister");
+  });
+
+  it("opens every hairstyle to both", () => {
+    for (const sibling of ["sister", "brother"])
+      for (const style of HAIR_STYLES) expect(normaliseLook({ sibling, hairStyle: style.id }, { doorsDone: 0 }).hairStyle).toBe(style.id);
+  });
+});
+
 describe("a look", () => {
   it("starts with the starter kit and nothing optional", () => {
     expect(defaultLook()).toEqual({
+      sibling: "sister",
       skin: "s2",
       hair: "brown",
       hairStyle: "short",
@@ -277,6 +300,7 @@ describe("a look", () => {
 
   it("keeps everything that is unlocked", () => {
     const look = {
+      sibling: "brother",
       skin: "s5",
       hair: "black",
       hairStyle: "curly",

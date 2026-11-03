@@ -34,9 +34,13 @@ changing comes from `docs/superpowers/specs/2026-10-04-elf-detective-school-desi
 - Outline, eyes, eyebrows and smile are the approved browny red. On skin tones **s4 and s5** they
   are a deeper shade of the same browny red.
 - Every elf wears red mittens. Gadgets and outfit props are painted once and fit every elf.
+- **Brother or sister** (decision 8): a new `SIBLINGS` list (`sister`, `brother`) and `look.sibling`,
+  default `sister`; 150 elves named `elf-<sibling>-<skin>-<hairstyle>-<hair>`, painted from
+  `.elf-paint/raw/master.png` (sister) and `.elf-paint/raw/master-brother.png`. Pieces are painted on the
+  sister only. Built in Task 3b below.
 - Layer order, bottom to top: elf, feet, top, extra, face, neck, hat, hand. An outfit replaces all
   pieces.
-- Catalogue unchanged: 5 skin tones, 5 hair colours, 3 hairstyles, 25 styles in 3 colours (75 pieces), 11
+- Catalogue unchanged apart from `SIBLINGS`: 5 skin tones, 5 hair colours, 3 hairstyles, 25 styles in 3 colours (75 pieces), 11
   outfits, every unlock door, every word. `normaliseLook` and the unlock functions are not touched.
 - The repo is public: no real names or data in prompts, pictures, fixtures or the manifest.
 - Raw paintings never get committed (`.elf-paint/` is git-ignored). Only finished WebP layers and
@@ -228,6 +232,25 @@ Run: `npx vitest run test/unit/elf-paint-jobs.test.ts`
 Expected: PASS.
 
 - [ ] **Step 5: Commit.**
+
+### Task 3b: Brother or sister
+
+**Files:**
+- Modify: `assets/js/elf-wardrobe.js`: `SIBLINGS`, `defaultLook().sibling = "sister"`, and
+  `normaliseLook` keeps a known sibling.
+- Modify: `src/elf/wardrobe.ts` (`ElfLook.sibling`, `SIBLINGS`), `src/elf/views.ts` (`lookFromForm`
+  reads `sibling`), `src/elf/pages/wardrobe.ts` (a "Brother or sister" choice first in the look
+  panel), `assets/js/elf-wardrobe-ui.js` (reads it and redraws).
+- Modify: `scripts/elf-paint/jobs.mjs` (150 elf jobs, from `master` or `master-brother`;
+  `FITTING_ELF = "elf-sister-s2-curly-brown"`) and `scripts/elf-paint/sheet.mjs` (elf sheets by
+  sibling and skin; pieces shown on `elf-sister-s1-bunches-ginger`, `elf-brother-s5-curly-black`
+  and `elf-sister-s3-short-blonde`).
+- Tests:
+  - `test/unit/elf-wardrobe.test.ts`: sibling kept, unknown becomes sister, and the default is sister.
+  - `test/unit/elf-views.test.ts`: the form's sibling is read.
+  - `test/unit/elf-page-wardrobe.test.ts`: two radios named `sibling`, and the worn one is checked.
+  - `test/unit/elf-js-wardrobe.test.ts`: the script sends the sibling.
+  - `test/unit/elf-paint-jobs.test.ts`: 150 elves; brothers come from `master-brother`.
 
 ### Task 4: The runner, the manifest writer and the sheets for Jaimie
 

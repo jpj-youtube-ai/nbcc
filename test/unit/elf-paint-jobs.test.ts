@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { HAIR_COLOURS, HAIR_STYLES, OUTFITS, SKIN_TONES, STYLES } from "../../src/elf/wardrobe";
+import { HAIR_COLOURS, HAIR_STYLES, OUTFITS, SIBLINGS, SKIN_TONES, STYLES } from "../../src/elf/wardrobe";
 // @ts-expect-error a plain JavaScript tool, with no type declarations
 import { FITTING_ELF, allJobs, layerName } from "../../scripts/elf-paint/jobs.mjs";
 
@@ -16,19 +16,23 @@ const designs = JSON.parse(readFileSync(resolve(__dirname, "../../scripts/elf-pa
 const PIECES = STYLES.reduce((n, s) => n + s.colours.length, 0);
 
 describe("the elves", () => {
-  it("are 75, one for each skin tone, hairstyle and hair colour", () => {
-    expect(ofKind("elf")).toHaveLength(SKIN_TONES.length * HAIR_STYLES.length * HAIR_COLOURS.length);
-    expect(ofKind("elf")).toHaveLength(75);
-    expect(ofKind("elf").every((j) => j.from === "master")).toBe(true);
+  it("are 150, one for each sibling, skin tone, hairstyle and hair colour", () => {
+    expect(ofKind("elf")).toHaveLength(SIBLINGS.length * SKIN_TONES.length * HAIR_STYLES.length * HAIR_COLOURS.length);
+    expect(ofKind("elf")).toHaveLength(150);
+  });
+
+  it("paint sisters from the sister and brothers from the brother", () => {
+    expect(byId("elf-sister-s3-short-blonde").from).toBe("master");
+    expect(byId("elf-brother-s3-bunches-blonde").from).toBe("master-brother");
   });
 
   it("ask for the deeper browny red on the two darkest skin tones only", () => {
-    for (const j of ofKind("elf")) expect(/deeper/.test(j.prompt), j.id).toBe(/^elf-s[45]-/.test(j.id));
+    for (const j of ofKind("elf")) expect(/deeper/.test(j.prompt), j.id).toBe(/^elf-(sister|brother)-s[45]-/.test(j.id));
   });
 
   it("change only the skin and the hair", () => {
-    expect(byId("elf-s3-bunches-blonde").prompt).toContain("golden blonde");
-    expect(byId("elf-s3-bunches-blonde").prompt).toContain("Keep this picture exactly the same");
+    expect(byId("elf-sister-s3-bunches-blonde").prompt).toContain("golden blonde");
+    expect(byId("elf-sister-s3-bunches-blonde").prompt).toContain("Keep this picture exactly the same");
   });
 });
 
@@ -55,7 +59,7 @@ describe("the pieces and outfits", () => {
   });
 
   it("fit hats on curly hair, the biggest", () => {
-    expect(FITTING_ELF).toBe("elf-s2-curly-brown");
+    expect(FITTING_ELF).toBe("elf-sister-s2-curly-brown");
     expect(byId("worn-elf-red").from).toBe(FITTING_ELF);
     expect(byId("alone-elf-red").base).toBe(FITTING_ELF);
     expect(byId("worn-specs-black").from).toBe("master");

@@ -7,7 +7,8 @@
 //
 // A job is one painting. Each edits another painting (`from`): the master elf (the approved sister
 // with red mittens), an elf made from it, or an earlier job.
-//   elf       one of the 75 elves: the master with only its skin and hair changed;
+//   elf       one of the 150 elves: the sister or the brother master (Jaimie chose a separate
+//             brother or sister, 3 November 2026) with only its skin and hair changed;
 //   worn      the first colour of a piece (or an outfit) painted onto an elf;
 //   recolour  another colour of that piece, painted from the first so the design matches;
 //   alone     the piece on its own, in the same place, everything else magenta: the layer.
@@ -26,7 +27,7 @@ const W = require(resolve(HERE, "../../assets/js/elf-wardrobe.js"));
 const D = JSON.parse(readFileSync(resolve(HERE, "designs.json"), "utf8"));
 
 /** Hats are fitted on the biggest hair, so they sit right on every hairstyle. */
-export const FITTING_ELF = "elf-s2-curly-brown";
+export const FITTING_ELF = "elf-sister-s2-curly-brown";
 
 /** Boxes on the 1024 by 1536 canvas that a piece leaves alone. Checked on the real master in Task 8. */
 const LEGS = [380, 1050, 640, 1350];
@@ -61,7 +62,7 @@ const ALONE_WHAT = {
   extra: (n) => `the ${n}`,
 };
 
-/** A layer's name: "elf-s2-curly-brown", "piece-bobble-red", "outfit-reindeer". */
+/** A layer's name: "elf-sister-s2-curly-brown", "piece-bobble-red", "outfit-reindeer". */
 export function layerName(kind, ...ids) {
   return [kind, ...ids].join("-");
 }
@@ -79,18 +80,20 @@ function alonePrompt(what) {
 
 function elfJobs() {
   const out = [];
+  for (const sibling of W.SIBLINGS)
   for (const skin of W.SKIN_TONES)
     for (const style of W.HAIR_STYLES)
       for (const hair of W.HAIR_COLOURS) {
         const deeper = D.deeper.includes(skin.id)
           ? " Because the skin is dark, make every outline, and the eyes, eyebrows and smile, a deeper, darker shade of the same browny red, so the face shows clearly."
           : "";
+        const name = layerName("elf", sibling.id, skin.id, style.id, hair.id);
         out.push({
-          id: layerName("elf", skin.id, style.id, hair.id),
+          id: name,
           batch: "elves",
           kind: "elf",
-          from: "master",
-          layer: layerName("elf", skin.id, style.id, hair.id),
+          from: sibling.id === "brother" ? "master-brother" : "master",
+          layer: name,
           prompt:
             KEEP.replace("the same face, eyes", "the same face shape, eyes") +
             " Keep the red mittens, the cream top, the red and cream striped tights and the cream socks." +

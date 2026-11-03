@@ -95,7 +95,7 @@ export function wardrobeStateNow() {
   return earned().state;
 }
 
-/** A look as the plain wardrobe form sends it (no script): skin, hair, hairStyle, outfit, and one
+/** A look as the plain wardrobe form sends it (no script): sibling, skin, hair, hairStyle, outfit, and one
  *  piece-<slot> field of "style:colour" for each slot. normaliseLook makes it safe afterwards. */
 export function lookFromForm(form: Record<string, unknown>): Record<string, unknown> {
   const text = (v: unknown) => (typeof v === "string" ? v : "");
@@ -104,7 +104,7 @@ export function lookFromForm(form: Record<string, unknown>): Record<string, unkn
     const [style, colour] = text(form[`piece-${slot.id}`]).split(":");
     pieces[slot.id] = style && colour ? [style, colour] : null;
   }
-  return { skin: text(form.skin), hair: text(form.hair), hairStyle: text(form.hairStyle), outfit: text(form.outfit) || null, pieces };
+  return { sibling: text(form.sibling), skin: text(form.skin), hair: text(form.hair), hairStyle: text(form.hairStyle), outfit: text(form.outfit) || null, pieces };
 }
 
 function poundsWords(p: number): string {

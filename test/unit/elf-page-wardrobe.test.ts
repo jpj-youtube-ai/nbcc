@@ -103,6 +103,17 @@ describe("the form of choices", () => {
     expect(radios(doc, "hairStyle").find((r) => r.checked)!.value).toBe("bunches");
   });
 
+  it("asks first whether the elf is a sister or a brother, with the saved one picked", () => {
+    const doc = page();
+    expect(radios(doc, "sibling").map((r) => [r.value, said(doc, r)])).toEqual([
+      ["sister", "Sister"],
+      ["brother", "Brother"],
+    ]);
+    expect(radios(doc, "sibling").find((r) => r.checked)!.value).toBe("sister");
+    const first = doc.querySelector("form.elf-wd input[type=\"radio\"]") as HTMLInputElement;
+    expect(first.name).toBe("sibling");
+  });
+
   it("gives every choice a label, and exactly one picked in every group", () => {
     const doc = page();
     const all = [...doc.querySelectorAll<HTMLInputElement>('form.elf-wd input[type="radio"]')];

@@ -79,6 +79,8 @@ export interface ElfPieces {
 }
 
 export interface ElfLook {
+  /** "sister" or "brother": which of the logo elf's family this is. */
+  sibling: string;
   skin: string;
   hair: string;
   hairStyle: string;
@@ -114,6 +116,7 @@ export interface DrawOptions {
 
 interface WardrobeApi {
   DOORS: number;
+  SIBLINGS: readonly { readonly id: string; readonly name: string }[];
   SKIN_TONES: readonly { readonly id: string; readonly hex: string }[];
   HAIR_COLOURS: readonly HairColour[];
   HAIR_STYLES: readonly { readonly id: string; readonly name: string }[];
@@ -137,6 +140,7 @@ interface WardrobeApi {
 const SCRIPT = resolve(__dirname, "../../assets/js/elf-wardrobe.js");
 const api = createRequire(SCRIPT)(SCRIPT) as WardrobeApi;
 
+export const SIBLINGS = api.SIBLINGS;
 export const SKIN_TONES = api.SKIN_TONES;
 export const HAIR_COLOURS = api.HAIR_COLOURS;
 export const HAIR_STYLES = api.HAIR_STYLES;

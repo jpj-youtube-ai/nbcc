@@ -57,7 +57,7 @@
         var value = picked("piece-" + elf.SLOTS[i].id);
         pieces[elf.SLOTS[i].id] = value ? value.split(":") : null;
       }
-      return { skin: picked("skin"), hair: picked("hair"), hairStyle: picked("hairStyle"), outfit: picked("outfit") || null, pieces: pieces };
+      return { sibling: picked("sibling"), skin: picked("skin"), hair: picked("hair"), hairStyle: picked("hairStyle"), outfit: picked("outfit") || null, pieces: pieces };
     }
 
     // ---- the mirror ------------------------------------------------------------------------
@@ -304,7 +304,7 @@
       }
       triedOn(input);
       draw();
-      if (input.name === "skin" || input.name === "hair" || input.name === "hairStyle") drawOutfits();
+      if (input.name === "sibling" || input.name === "skin" || input.name === "hair" || input.name === "hairStyle") drawOutfits();
       saveSoon();
     }
 

@@ -28,7 +28,7 @@ const CELL_W = 300;
 const CELL_H = Math.round(CELL_W * 1.3);
 const LABEL = 34;
 const CREAM = "#F8F5EE";
-const SHOWN_ON = ["elf-s1-bunches-ginger", "elf-s5-curly-black", "elf-s3-short-blonde"];
+const SHOWN_ON = ["elf-sister-s1-bunches-ginger", "elf-brother-s5-curly-black", "elf-sister-s3-short-blonde"];
 
 const places = () => JSON.parse(require("node:fs").readFileSync(join(LAYER_DIR, "places.json"), "utf8"));
 
@@ -71,16 +71,17 @@ async function main() {
   }
   mkdirSync(OUT, { recursive: true });
   if (batch === "elves") {
-    for (const skin of W.SKIN_TONES) {
-      const cells = [];
-      for (const style of W.HAIR_STYLES) for (const hair of W.HAIR_COLOURS) cells.push(await cell(`elf-${skin.id}-${style.id}-${hair.id}`, [], `${skin.id}, ${style.name}, ${hair.name}`));
-      await grid(cells, W.HAIR_COLOURS.length, join(OUT, `elves-${skin.id}.png`));
-    }
+    for (const sibling of W.SIBLINGS)
+      for (const skin of W.SKIN_TONES) {
+        const cells = [];
+        for (const style of W.HAIR_STYLES) for (const hair of W.HAIR_COLOURS) cells.push(await cell(`elf-${sibling.id}-${skin.id}-${style.id}-${hair.id}`, [], `${sibling.name}, ${skin.id}, ${style.name}, ${hair.name}`));
+        await grid(cells, W.HAIR_COLOURS.length, join(OUT, `elves-${sibling.id}-${skin.id}.png`));
+      }
     return;
   }
   const layers = allJobs().filter((j) => j.batch === batch && j.kind === "alone").map((j) => j.layer);
   const cells = [];
-  for (const layer of layers) for (const elf of SHOWN_ON) cells.push(await cell(elf, [layer], `${layer.replace(/^(piece|outfit)-/, "")} on ${elf.slice(4)}`));
+  for (const layer of layers) for (const elf of SHOWN_ON) cells.push(await cell(elf, [layer], `${layer.replace(/^(piece|outfit)-/, "")} on ${elf.replace(/^elf-/, "")}`));
   // Long batches are split so each sheet stays readable on a phone: four pieces to a sheet.
   for (let i = 0, n = 1; i < cells.length; i += 12, n++) await grid(cells.slice(i, i + 12), SHOWN_ON.length, join(OUT, `${batch}-${n}.png`));
 }

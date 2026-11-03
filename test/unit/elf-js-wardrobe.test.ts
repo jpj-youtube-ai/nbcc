@@ -102,6 +102,14 @@ describe("trying things on", () => {
     expect(wd!.look()).toEqual(look);
   });
 
+  it("changes a sister to a brother", () => {
+    load();
+    choice("brother").click();
+    const look = { ...wardrobeView().look, sibling: "brother" };
+    expect($(".elf-wd-mirror").innerHTML).toBe(drawn(look));
+    expect(wd!.look()).toEqual(look);
+  });
+
   it("puts a whole outfit on, and takes it off again when a piece is picked", () => {
     load();
     outfit("present").click();

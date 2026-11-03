@@ -58,8 +58,8 @@ describe("the wardrobe", () => {
 
 describe("a look from the plain form", () => {
   it("reads the skin, hair, outfit and each piece as style and colour", () => {
-    const look = lookFromForm({ skin: "s2", hair: "ginger", hairStyle: "bunches", outfit: "", "piece-hat": "elf:red", "piece-face": "" });
-    expect(look).toMatchObject({ skin: "s2", hair: "ginger", hairStyle: "bunches", outfit: null });
+    const look = lookFromForm({ sibling: "brother", skin: "s2", hair: "ginger", hairStyle: "bunches", outfit: "", "piece-hat": "elf:red", "piece-face": "" });
+    expect(look).toMatchObject({ sibling: "brother", skin: "s2", hair: "ginger", hairStyle: "bunches", outfit: null });
     expect((look.pieces as Record<string, unknown>).hat).toEqual(["elf", "red"]);
     expect((look.pieces as Record<string, unknown>).face).toBeNull();
   });

@@ -11532,8 +11532,7 @@ pieces never fitted every elf). The elf is a brother or a sister of the school's
 costumes, each painted on one elf in every skin so it always fits, with scenes, friends, frames,
 glasses and bow ties as extras. `assets/js/elf-wardrobe.js` names the pictures a look is drawn from
 (`lookPictures`); the wardrobe page lays them on its stage and `src/elf/elf-png.ts` stacks the same ones
-into a PNG for Detective HQ, emails, the certificate and the share card. The old layered pictures
-(`assets/img/elf/{lg,sm,tile}/`, listed in `assets/js/elf-paint.js`) are no longer read by anything.
+into a PNG for Detective HQ, emails, the certificate and the share card.
 
 - **Painting.** It runs only on your own computer, with `OPENAI_API_KEY` in your own environment (never
   in the repo, CI or the site), uses `gpt-image-2` at low quality (about $0.017 a painting), and stops

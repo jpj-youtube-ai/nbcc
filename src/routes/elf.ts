@@ -211,8 +211,9 @@ export async function postJoin(req: Request, res: Response): Promise<Response | 
     res.cookie(ELF_PENDING_COOKIE, token, elfPendingCookieOptions(production()));
     if (json) {
       // Outside production the offline Stripe stub is in use: hand back the session, so the BDD
-      // suite can replay its metadata into the webhook, as the donate checkout does.
-      const stub = production() ? {} : { session: { id: session.id, metadata: session.metadata } };
+      // suite can replay its metadata into the webhook, as the donate checkout does. The metadata
+      // is what was sent: the stub's session does not carry it back.
+      const stub = production() ? {} : { session: { id: session.id, metadata: params.metadata } };
       return res.status(200).json({ url: session.url, ...stub });
     }
     return res.redirect(303, session.url ?? "/elf/join");

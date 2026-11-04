@@ -17,7 +17,7 @@ import { fileURLToPath } from "node:url";
 import sharp from "sharp";
 import { paint, spent } from "./openai.mjs";
 import { hatCover, joinCovers, writeSizes } from "./cutout.mjs";
-import { alignBlob, CANVAS_H, CANVAS_W, contentBox, fillBox, fitBottomWidth, fitCentred, fitContain, fitHoleOnFloor, holeBox, isMitten, regionCover } from "./fit.mjs";
+import { alignBlob, CANVAS_H, CANVAS_W, contentBox, fillBox, fitBottomWidth, fitCentred, fitContain, fitHoleOnFloor, heldBehind, holeBox, isMitten, regionCover } from "./fit.mjs";
 import { LAYER_DIR, buildManifest } from "./manifest.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -30,6 +30,7 @@ const I = JSON.parse(readFileSync(resolve(HERE, "items.json"), "utf8"));
 
 export const BATCHES = ["hat", "face", "neck", "top", "feet", "hand", "extra", "outfits"];
 const AT_ONCE = 4;
+const PAINT_EACH = new Set(["mag"]);
 
 // Where things are on the master elf (measured on a ruled copy, 3 November 2026).
 const HEAD_X = 528;
@@ -44,15 +45,15 @@ const STYLE =
   "Paint the item ONLY, on its own: no elf, no person, no face, no skin, no hair, no body, no shadow, no floor, no text. The background is completely transparent. The item fills most of the picture.";
 
 const SLOT_WORDS = {
-  hat: "seen straight from the front at eye level as if worn on a head, so only its outside shows and never the inside of it; its brim or bottom edge is level and straight across, with nothing hanging below the brim (any tip or bobble is above it or to the side, higher than the brim)",
+  hat: "seen straight from the front at exactly eye level as if worn on a head: we see only the front of the hat, the brim is a flat band facing us, and the opening, the lining and the inside of the hat are completely hidden behind the brim (there is NO dark or red inside showing anywhere, and nothing curves under the brim); its brim or bottom edge is level and straight across, with nothing hanging below the brim (any tip or bobble is above it or to the side, higher than the brim)",
   face: "seen straight from the front as if worn, with completely clear, see through lenses (the lenses are transparent, showing nothing)",
   neck: "seen from the front as if worn round a neck, the gap where the neck goes left transparent",
   top: "seen from the front exactly as the reference elf wears her top: the same shape and size, sleeves angled down and out like her arms, the neck opening empty, ending at the wrists with no hands or mittens",
   feet: "a pair, seen from the front exactly where the reference elf's feet are, standing with feet together, their tops open and empty",
-  hand: "held upright by its handle in ONE red knitted mitten exactly like the reference elf's mittens, the mitten at the very bottom of the picture with its thumb wrapped round the handle and its cream cuff showing; paint the mitten too and nothing else",
+  hand: "on its own, upright, with NO hand and NO mitten: just the object, its handle at the bottom (for a lantern, its carrying ring at the top), as if about to be held",
   extra: "seen from the front as if worn by the reference elf",
 };
-const EXTRA_WORDS = { satchel: "worn across the body: its strap runs from one shoulder down to the other hip, and the bag sits at that hip" };
+const EXTRA_WORDS = { satchel: "worn across the front of the body: only the front of its strap shows, running from the bag at one hip up to the opposite shoulder, where it stops as it goes behind the shoulder; no strap round the neck or the back, no loop" };
 
 function colourWords(c, styleId) {
   const hint = D.colourHints && D.colourHints[`${styleId}:${c.id}`];
@@ -64,7 +65,10 @@ export function itemJobs() {
   const jobs = [];
   for (const style of W.STYLES) {
     const first = style.colours[0];
-    style.colours.forEach((c, i) => {
+    style.colours.forEach((c, idx) => {
+      // OpenAI's safety check refused the magnifying glass's colour changes (4 November 2026), so
+      // each of its colours is painted fresh.
+      const i = PAINT_EACH.has(style.id) ? 0 : idx;
       const what = `${D.styles[style.id]}, in ${colourWords(c, style.id)}`;
       jobs.push({
         id: `item-${style.id}-${c.id}`,
@@ -156,8 +160,15 @@ export async function fitItem(job, img, master) {
     return { layer, cover };
   }
   if (job.slot === "hand") {
-    const layer = await alignBlob(img, { centreX: MITTEN.x, centreY: MITTEN.y, height: MITTEN.h, band: 0.3 });
-    return { layer, cover: regionCover(master, MITTEN.box, isMitten, 3) };
+    // Painted without a mitten, scaled by its height, its handle (a lantern's ring) slid into the elf's
+    // own mitten, and taken away inside it: the elf's mitten stays on its arm and grips it (Jaimie,
+    // 4 November 2026: the painted mittens did not line up with the arms).
+    const r = I.fit.hand[job.style];
+    const b = contentBox(img);
+    const w = b.w * (r.height / b.h);
+    const held = job.style === "lantern" ? "top" : "bottom";
+    const placed = await fitCentred(img, { width: w, centreX: MITTEN.x + (r.dx || 0), centreY: held === "top" ? MITTEN.y + r.height / 2 - 20 : MITTEN.y - r.height / 2 + 30 });
+    return { layer: heldBehind(placed, regionCover(master, MITTEN.box, isMitten, 0)), cover: null };
   }
   if (job.slot === "extra") {
     const r = f.extra[job.style];

@@ -101,7 +101,7 @@ export function isMitten(r, g, b) {
 
 /** A gadget: scaled so the mitten holding it is `height` tall, with that mitten's middle put on
  *  (centreX, centreY), where the elf's own open mitten is. */
-export async function alignBlob(img, { centreX, centreY, height, pick = isMitten, band = 1 }) {
+export async function alignBlob(img, { centreX, centreY, height, pick = isMitten, band = 1, from = "bottom" }) {
   const b = contentBox(img);
   let n = 0;
   let sx = 0;
@@ -110,7 +110,10 @@ export async function alignBlob(img, { centreX, centreY, height, pick = isMitten
   let bottom = -Infinity;
   // Only the bottom `band` of the item is looked at: a gadget is held at its bottom, and may itself
   // be red (a red torch, 4 November 2026).
-  for (let y = Math.floor(b.y + b.h * (1 - band)); y < b.y + b.h; y++)
+  // A lantern hangs from the mitten, so its mitten is at the top (`from`).
+  const y0 = from === "top" ? b.y : Math.floor(b.y + b.h * (1 - band));
+  const y1 = from === "top" ? Math.ceil(b.y + b.h * band) : b.y + b.h;
+  for (let y = y0; y < y1; y++)
     for (let x = b.x; x < b.x + b.w; x++) {
       const i = at(img, x, y);
       if (img.data[i + 3] > 200 && pick(img.data[i], img.data[i + 1], img.data[i + 2])) {
@@ -264,4 +267,13 @@ export function regionCover(master, box, pick, by = 0) {
       if (master.data[i + 3] > 0 && pick(master.data[i], master.data[i + 1], master.data[i + 2])) set[y * master.width + x] = 1;
     }
   return asCover(grow(set, master.width, master.height, by), master.width, master.height);
+}
+
+/** A gadget with whatever falls inside the elf's own mitten (`mitten`, solid where the mitten is)
+ *  taken away, so the gadget is held: its handle goes into the mitten and the mitten shows over it.
+ *  The elf's own mitten always sits on its own arm (Jaimie, 4 November 2026). */
+export function heldBehind(gadget, mitten) {
+  const out = new Uint8ClampedArray(gadget.data);
+  for (let i = 3; i < out.length; i += 4) if (mitten.data[i] >= 128) out[i] = 0;
+  return { data: out, width: gadget.width, height: gadget.height };
 }

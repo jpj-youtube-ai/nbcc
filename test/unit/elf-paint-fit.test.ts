@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 // @ts-expect-error a plain JavaScript tool, with no type declarations
-import { alignBlob, contentBox, coverOutside, fillBox, fitBottomWidth, fitCentred, fitContain, fitHole, fitHoleOnFloor, regionCover } from "../../scripts/elf-paint/fit.mjs";
+import { alignBlob, contentBox, coverOutside, fillBox, fitBottomWidth, fitCentred, fitContain, fitHole, fitHoleOnFloor, heldBehind, regionCover } from "../../scripts/elf-paint/fit.mjs";
 
 // NBCC Elf Detective School: the painted dress-up elf, second way (Jaimie, 3 November 2026: "you
 // should have been rendering these things as separate items that are on transparent backgrounds").
@@ -89,6 +89,14 @@ describe("fitting an item onto the canvas", () => {
     expect(Math.abs(box.h - 354)).toBeLessThan(5); // the whole, scaled by 100 / 79
   });
 
+  it("finds the mitten at the top of a gadget held from above, like a lantern", async () => {
+    // A gold lantern hanging from a red mitten (4 November 2026).
+    const item = paint(paint(clear(400, 400), 130, 50, 210, 130, [190, 40, 40]), 140, 130, 200, 330, [200, 160, 60]);
+    const placed = await alignBlob(item, { centreX: 315, centreY: 1000, height: 100, band: 0.3, from: "top" });
+    const box = contentBox(placed);
+    expect(Math.abs(box.y - 950)).toBeLessThan(5); // the mitten's top, 50 above its middle
+  });
+
   it("fits within a width and a height, whichever is tighter (a long scarf)", async () => {
     const placed = await fitContain(paint(clear(200, 400), 50, 0, 150, 400, [200, 0, 0]), { width: 330, height: 330, centreX: 528, top: 672 });
     expect(contentBox(placed)).toEqual({ x: 528 - 41, y: 672, w: 83, h: 330 });
@@ -131,3 +139,16 @@ describe("what an item hides of the elf", () => {
     expect(alphaAt(cover, 600, 800)).toBe(0); // not the top
   });
 });
+
+describe("a gadget held in the elf's own mitten", () => {
+  it("is taken away where the elf's mitten is, so the mitten shows gripping it", () => {
+    // The hands holding the gadgets did not line up with the arms (Jaimie, 4 November 2026): the
+    // gadget is painted without a mitten and slides under the elf's own.
+    const gadget = paint(clear(CW, CH), 300, 800, 330, 1040, [40, 80, 200]);
+    const mitten = paint(clear(CW, CH), 270, 960, 360, 1050, [0, 0, 0]);
+    const held = heldBehind(gadget, mitten);
+    expect(alphaAt(held, 315, 850)).toBe(255); // above the mitten: the gadget
+    expect(alphaAt(held, 315, 1000)).toBe(0); // inside the mitten: the elf's own mitten shows
+  });
+});
+

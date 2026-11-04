@@ -44,7 +44,7 @@ function earned() {
 }
 
 export function detectiveViewFor(d: DetectiveRow): DetectiveView {
-  const { progress } = earned();
+  const { progress, state } = earned();
   return {
     id: String(d.id),
     // A family always sees its own detectives' names in full.
@@ -57,6 +57,7 @@ export function detectiveViewFor(d: DetectiveRow): DetectiveView {
     graduate: progress.graduate,
     goldSeal: progress.goldSeal,
     elfUrl: `/elf/hq/elf/${d.id}.png`,
+    frame: normaliseLook(d.look, state).frame,
     newThings: d.fresh.length,
     wardrobeUrl: `/elf/hq/wardrobe/${d.id}`,
   };

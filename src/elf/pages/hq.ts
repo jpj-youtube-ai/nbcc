@@ -1,15 +1,19 @@
 import { DOOR_COUNT } from "../calendar";
+import { FRAMES } from "../wardrobe";
 import { clockWords, countdownWords, longDayWords, sleepsUntil, things } from "../words";
 import { candyCane, icon } from "./icons";
+import { headingStrip, titleStrip } from "./paper";
 import { elfPage, escapeHtml, sitePath } from "./shell";
 import type { DetectiveView, FamilyMarks, HqView, TodayView } from "./types";
 
 // NBCC Elf Detective School: Detective HQ, a family's own page. The plan is
-// docs/superpowers/plans/2026-10-04-elf-detective-a3-screens.md.
+// docs/superpowers/plans/2026-10-04-elf-detective-a3-screens.md; its paper look is
+// docs/superpowers/specs/2026-11-04-elf-paper-design.md.
 //
-// Three things, in the order a family wants them: today's case (the clue and their guess), their
-// detectives (each one's elf, rank and progress), and the marks they have collected. It is private,
-// so it shows first names in full and is never listed by search engines.
+// Three things, in the order a family wants them: today's case (the clue and their guess, on a taped
+// note), their detectives (each on a card sheet: their elf in its frame, rank and progress), and the
+// marks they have collected. It is private, so it shows first names in full and is never listed by
+// search engines.
 //
 // The guess is an ordinary form that posts to the server, so it works with no script. The page's
 // script only saves the guess without leaving the page.
@@ -54,7 +58,7 @@ function guessForm(today: TodayView, guessUrl: string): string {
     `<input type="hidden" name="door" value="${count(today.door)}" />` +
     `<fieldset><legend>Where is ${escapeHtml(today.elfName)} hiding?</legend><ul class="elf-guess__choices">${choices}</ul></fieldset>` +
     `<p class="elf-guess__status" role="status">${status}</p>` +
-    `<button class="btn btn-primary" type="submit">${today.guess ? "Change my guess" : "Lock in my guess"}</button>` +
+    `<button class="elf-btn elf-btn--crimson" type="submit">${today.guess ? "Change my guess" : "Lock in my guess"}</button>` +
     `</form>`
   );
 }
@@ -89,7 +93,7 @@ function caseCard(view: HqView): string {
     return (
       `<h2 id="elf-case-heading">${first ? "The hunt starts soon" : "No clue today"}</h2>` +
       line(`The ${first ? "first" : "next"} clue comes out on ${longDayWords(view.nextClueAt)} at ${clockWords(view.nextClueAt)}.`) +
-      line(`${things(sleepsUntil(view.now, view.nextClueAt), "sleep")} to go`, "elf-case__count")
+      line(`${things(sleepsUntil(view.now, view.nextClueAt), "sleep")} to go`, "elf-case__count elf-cane-strip")
     );
   }
   const head = `<p class="elf-case__door">Door ${count(today.door)}</p>`;
@@ -103,7 +107,7 @@ function caseCard(view: HqView): string {
       head +
       `<h2 id="elf-case-heading">Today's clue is on its way</h2>` +
       line(`Clue out at ${clockWords(today.clueAt)}`) +
-      `<p class="elf-case__count"><span class="elf-cd" data-until="${today.clueAt.toISOString()}">${countdownWords(left)}</span></p>` +
+      `<p class="elf-case__count elf-cane-strip"><span class="elf-cd" data-until="${today.clueAt.toISOString()}">${countdownWords(left)}</span></p>` +
       line("Come back then to read it and lock in your guess.")
     );
   }
@@ -122,30 +126,42 @@ function caseCard(view: HqView): string {
   );
 }
 
-function detectiveCard(d: DetectiveView): string {
+/** The costumes waiting in the wardrobe, as presents (draft words for Jaimie). */
+function presentsWords(n: number): string {
+  return n === 1 ? "A present to open" : n === 2 ? "Two presents to open" : `${n} presents to open`;
+}
+
+/** The card sheets' backing colours, in turn down the family. */
+const SHEETS = ["crimson", "holly", "gold", "tan"] as const;
+
+function detectiveCard(d: DetectiveView, i: number): string {
   const name = escapeHtml(d.name);
   const elf = sitePath(d.elfUrl);
   const wardrobe = sitePath(d.wardrobeUrl) ?? "/";
   const doors = Math.min(DOOR_COUNT, count(d.doorsDone));
   const done = d.graduate ? `All ${DOOR_COUNT} doors done` : `${things(doors, "door")} done`;
   const next = d.next ? `${count(d.next.toGo)} more to ${escapeHtml(d.next.rank)}` : "";
+  // The elf in the frame the detective chose, or a plain paper mount. Only a frame the wardrobe has.
+  const frame = FRAMES.some((f) => f.id === d.frame) ? ` elf-frame--${d.frame}` : "";
   const picture = elf
-    ? `<img class="elf-detective__elf" src="${elf}" alt="${name}'s elf" width="96" height="125" loading="lazy" decoding="async" />`
+    ? `<div class="elf-frame${frame} elf-detective__frame"><img class="elf-detective__elf" src="${elf}" alt="${name}'s elf" width="96" height="144" loading="lazy" decoding="async" /></div>`
     : "";
+  const presents = count(d.newThings);
   return (
-    `<article class="elf-detective">` +
+    `<article class="elf-detective elf-card elf-card--${SHEETS[i % SHEETS.length]}">` +
     picture +
     `<div class="elf-detective__body">` +
     `<h3>${name}</h3>` +
-    `<p class="elf-detective__rank">Badge ${escapeHtml(d.badgeNumber)} &middot; <b>${escapeHtml(d.rank)}</b>` +
-    `${d.goldSeal ? ' <span class="elf-pill elf-pill--big">Gold seal</span>' : ""}</p>` +
-    `<progress max="${DOOR_COUNT}" value="${doors}" aria-label="${done}">${doors} of ${DOOR_COUNT}</progress>` +
+    `<p class="elf-detective__rank">Badge ${escapeHtml(d.badgeNumber)} <span class="elf-chip elf-chip--done">${escapeHtml(d.rank)}</span>` +
+    `${d.goldSeal ? ' <span class="elf-chip elf-chip--today">Gold seal</span>' : ""}</p>` +
+    // The doors done, on the candy cane strip: still a progress bar to a screen reader.
+    `<progress class="elf-cane-progress" max="${DOOR_COUNT}" value="${doors}" aria-label="${done}">${doors} of ${DOOR_COUNT}</progress>` +
     `<p class="elf-detective__progress">${done}${next ? `. ${next}.` : "."}</p>` +
     (d.nameApproved
       ? ""
       : line("On the public calendar this name shows as its first letter until our team has checked it.", "elf-detective__note")) +
-    `<p class="elf-detective__actions"><a class="btn btn-ghost" href="${wardrobe}">Dress the elf</a>` +
-    `${count(d.newThings) > 0 ? ` <span class="elf-new">${count(d.newThings)} new</span>` : ""}</p>` +
+    `<p class="elf-detective__actions"><a class="elf-btn elf-btn--holly elf-btn--s" href="${wardrobe}">Dress the elf</a>` +
+    `${presents > 0 ? ` <span class="elf-chip elf-chip--new elf-new">${presentsWords(presents)}</span>` : ""}</p>` +
     `</div></article>`
   );
 }
@@ -179,17 +195,18 @@ function marksBoard(marks: FamilyMarks): string {
 /** The whole of Detective HQ. */
 export function renderHqPage(view: HqView): string {
   const calendar = sitePath(view.calendarUrl) ?? "/";
-  const main = `  <section class="page-top elf-top" aria-labelledby="elf-hq-heading">
+  const main = `  <section class="page-top elf-top elf-hq-top" aria-labelledby="elf-hq-heading">
     <div class="wrap">
-      <span class="eyebrow">Elf Detective School</span>
-      <h1 id="elf-hq-heading">Detective HQ</h1>
+      <p class="elf-label">Elf Detective School</p>
+      ${titleStrip({ text: "Detective HQ", tag: "h1", id: "elf-hq-heading" })}
       <p class="lede elf-hq__hello">Hello ${escapeHtml(view.familyName)}. Here is today's case, and how your detectives are getting on.</p>
     </div>
   </section>
 
   <section class="elf-hq-case" aria-labelledby="elf-case-heading">
     <div class="wrap">
-      <div class="elf-case elf-case--${view.today ? view.today.state : "none"}" data-now="${real(view.now) ? view.now.toISOString() : ""}">
+      <div class="elf-case elf-case--${view.today ? view.today.state : "none"} elf-note" data-now="${real(view.now) ? view.now.toISOString() : ""}">
+        <span class="elf-tape" aria-hidden="true"></span>
         ${caseCard(view)}
       </div>
     </div>
@@ -197,18 +214,18 @@ export function renderHqPage(view: HqView): string {
 
   <section class="section elf-hq-team" aria-labelledby="elf-team-heading">
     <div class="wrap">
-      <h2 id="elf-team-heading" class="h-lg">Your detectives</h2>
+      ${headingStrip({ text: "Your detectives", tag: "h2", back: "holly", id: "elf-team-heading" })}
       <div class="elf-detectives">${view.detectives.map(detectiveCard).join("")}</div>
-      ${sitePath(view.addDetectiveUrl) ? `<p class="elf-add-detective"><a class="btn btn-ghost" href="${sitePath(view.addDetectiveUrl)}">Add a detective</a></p>` : ""}
+      ${sitePath(view.addDetectiveUrl) ? `<p class="elf-add-detective"><a class="elf-btn" href="${sitePath(view.addDetectiveUrl)}">Add a detective</a></p>` : ""}
     </div>
   </section>
 
   <section class="section elf-hq-marks" aria-labelledby="elf-marks-heading">
     <div class="wrap">
-      <h2 id="elf-marks-heading" class="h-lg">Your marks</h2>
+      ${headingStrip({ text: "Your marks", tag: "h2", back: "crimson", id: "elf-marks-heading" })}
       <p class="lede">A magnifying glass for every case you crack, and a candy cane for every hiding place you visit.</p>
       ${marksBoard(view.marks)}
-      <p><a class="btn btn-ghost" href="${calendar}">See the calendar</a></p>
+      <p><a class="elf-btn" href="${calendar}">See the calendar</a></p>
     </div>
   </section>`;
 

@@ -44,6 +44,22 @@ describe("Detective HQ before school starts", () => {
     expect(view.detectives[0].wardrobeUrl).toBe("/elf/hq/wardrobe/100");
     expect(view.detectives[1].newThings).toBe(1);
   });
+
+  it("hands HQ each detective's chosen frame, made safe, so their picture sits in it", () => {
+    const framed = hqViewFor({
+      family: {
+        ...FAMILY,
+        detectives: [
+          { ...FAMILY.detectives[0], look: { frame: "gold" } },
+          { ...FAMILY.detectives[1], look: { frame: "no-such-frame" } },
+        ],
+      },
+      settings: SETTINGS,
+      now: new Date("2026-11-13T09:00:00.000Z"),
+    });
+    expect(framed.detectives.map((d) => d.frame)).toEqual(["gold", null]);
+    expect(view.detectives.map((d) => d.frame)).toEqual([null, null]);
+  });
 });
 
 describe("the wardrobe", () => {

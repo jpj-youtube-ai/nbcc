@@ -1,5 +1,7 @@
 // @vitest-environment jsdom
 import { describe, it, expect } from "vitest";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { renderHqPage } from "../../src/elf/pages/hq";
 import type { HqView, TodayView } from "../../src/elf/pages/types";
 import { at, hqView } from "./elf-fixtures";
@@ -147,11 +149,18 @@ describe("the family's detectives", () => {
     expect(words(page(one).querySelector(".elf-detective"))).toContain("1 door done");
   });
 
-  it("points to the wardrobe, and says when there is something new to try on", () => {
+  it("points to the wardrobe, and says when there are presents to open in it", () => {
     const [ruby, leo] = [...page().querySelectorAll(".elf-detective")];
     expect(ruby.querySelector('a[href="/elf/hq/wardrobe/d1"]')).not.toBeNull();
-    expect(words(ruby.querySelector(".elf-new"))).toBe("3 new");
+    expect(words(ruby.querySelector(".elf-new"))).toBe("3 presents to open");
     expect(leo.querySelector(".elf-new")).toBeNull();
+    const presents = (n: number) => {
+      const view = hqView();
+      view.detectives[0] = { ...view.detectives[0], newThings: n };
+      return words(page(view).querySelector(".elf-detective .elf-new"));
+    };
+    expect(presents(1)).toBe("A present to open");
+    expect(presents(2)).toBe("Two presents to open");
   });
 
   it("tells the family when a first name is still waiting to be checked", () => {
@@ -236,6 +245,79 @@ describe("what comes from data", () => {
     expect(doc.querySelector("script:not([src])")).toBeNull();
     expect(doc.querySelector("main u, main i, [onerror]")).toBeNull();
     expect([...doc.querySelectorAll("main b")].map((b) => b.textContent)).not.toContain("Sam");
-    expect(doc.querySelectorAll("main img").length).toBe(2);
+    // The two elves' pictures, and only the page's own painted decorations besides.
+    expect(doc.querySelectorAll("main img:not(.elf-deco)").length).toBe(2);
+  });
+});
+
+// The paper look (docs/superpowers/specs/2026-11-04-elf-paper-design.md): Detective HQ in paper.
+describe("Detective HQ, in paper", () => {
+  const css = readFileSync(resolve(__dirname, "../../assets/css/elf.css"), "utf8");
+
+  it("has its title on a torn strip, under the school's name on a torn label", () => {
+    const doc = page();
+    expect(words(doc.querySelector(".elf-top .elf-label"))).toBe("Elf Detective School");
+    expect(words(doc.querySelector(".elf-title h1#elf-hq-heading"))).toBe("Detective HQ");
+    expect(doc.querySelector(".elf-top .eyebrow")).toBeNull();
+  });
+
+  it("puts the day's case on a taped note, in every state", () => {
+    const states: HqView[] = [
+      hqView(),
+      today({ state: "shut", clue: null, options: [] }),
+      today({ state: "found", outcome: { place: "The Toy Shop, Troon", by: "Detective Orla Snowsleuth", at: at("2026-12-07T17:47:00.000Z"), cracked: true } }),
+      hqView({ today: null }),
+    ];
+    for (const v of states) {
+      const card = page(v).querySelector(".elf-case")!;
+      expect(card.classList.contains("elf-note")).toBe(true);
+      expect(card.querySelector(":scope > .elf-tape")!.getAttribute("aria-hidden")).toBe("true");
+    }
+  });
+
+  it("counts down on the candy cane strip, to the clue and to the next day's", () => {
+    expect(page(today({ state: "shut", clue: null, options: [] })).querySelector(".elf-case .elf-cane-strip .elf-cd")).not.toBeNull();
+    expect(words(page(hqView({ today: null })).querySelector(".elf-case .elf-cane-strip"))).toBe("1 sleep to go");
+  });
+
+  it("locks in a guess with a crimson torn paper button, and uses none of the site's own buttons", () => {
+    const doc = page(hqView({ addDetectiveUrl: "/elf/join" }));
+    expect(doc.querySelector('form.elf-guess button[type="submit"]')!.className).toBe("elf-btn elf-btn--crimson");
+    expect(doc.querySelector(".site-main .btn")).toBeNull();
+    expect(doc.querySelector('.elf-add-detective a[href="/elf/join"]')!.className).toBe("elf-btn");
+    expect(doc.querySelector('.elf-hq-marks a[href="/elf"]')!.className).toBe("elf-btn");
+  });
+
+  it("sets each detective on a card sheet, with their elf in its chosen frame or a plain paper mount", () => {
+    const view = hqView();
+    view.detectives[0] = { ...view.detectives[0], frame: "candy" };
+    const [ruby, leo] = [...page(view).querySelectorAll(".elf-detective")];
+    expect(ruby.classList.contains("elf-card")).toBe(true);
+    expect(leo.classList.contains("elf-card")).toBe(true);
+    const frame = ruby.querySelector(".elf-frame")!;
+    expect([...frame.classList]).toContain("elf-frame--candy");
+    const img = frame.querySelector("img")!;
+    expect([img.getAttribute("width"), img.getAttribute("height")]).toEqual(["96", "144"]);
+    expect([...leo.querySelector(".elf-frame")!.classList].filter((c) => c.startsWith("elf-frame--"))).toEqual([]);
+  });
+
+  it("keeps an unknown frame off the page", () => {
+    const view = hqView();
+    view.detectives[0] = { ...view.detectives[0], frame: 'x" onclick="alert(1)' };
+    const frame = page(view).querySelector(".elf-detective .elf-frame")!;
+    expect([...frame.classList].filter((c) => c.startsWith("elf-frame--"))).toEqual([]);
+    expect(frame.getAttribute("onclick")).toBeNull();
+  });
+
+  it("shows each detective's rank, and the gold seal, on paper chips, and the doors done on the candy cane strip", () => {
+    const view = hqView();
+    view.detectives[0] = { ...view.detectives[0], goldSeal: true };
+    const ruby = page(view).querySelector(".elf-detective")!;
+    expect(words(ruby.querySelector(".elf-detective__rank .elf-chip"))).toBe("Trainee");
+    expect(words(ruby.querySelector(".elf-chip.elf-chip--today"))).toBe("Gold seal");
+    expect(ruby.querySelector(".elf-pill")).toBeNull();
+    expect(ruby.querySelector("progress")!.classList.contains("elf-cane-progress")).toBe(true);
+    expect(css).toMatch(/\.elf-cane-progress::-webkit-progress-value \{[^}]*repeating-linear-gradient\(45deg, var\(--crimson\)/);
+    expect(css).toMatch(/\.elf-cane-progress::-moz-progress-bar \{[^}]*repeating-linear-gradient\(45deg, var\(--crimson\)/);
   });
 });

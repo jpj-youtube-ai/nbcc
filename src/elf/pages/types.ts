@@ -74,7 +74,9 @@ export interface DetectiveView {
   graduate: boolean;
   goldSeal: boolean;
   elfUrl: string;
-  /** How many things in the wardrobe have not been tried on yet. */
+  /** The frame the detective chose for their elf's picture (a FRAMES id), or null for a plain mount. */
+  frame: string | null;
+  /** How many costumes are waiting in the wardrobe as presents to open. */
   newThings: number;
   wardrobeUrl: string;
 }

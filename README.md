@@ -11615,6 +11615,15 @@ heading on a torn strip and each rule marked with a small paper circle. Signing 
 fall of paper stars, which lie still for a visitor who asked for less motion. Every page's top section
 clears the bar and the torn bands under it.
 
+**Detective HQ** (`hq.ts`) has its title strip under the school's name on a torn label; the day's case
+on a taped note (a holly sheet under it while its elf is hunted, the clue on a slip of paper, each
+place to guess on a slip of its own, the countdown on the candy cane strip); and each detective on a
+card sheet, their elf's picture (96 by 144) in the frame they chose (`DetectiveView.frame`, from their
+look made safe; a plain paper mount with none), their rank on a chip, the doors done on the candy cane
+strip (still the page's own `<progress>`), "Dress the elf" as a torn button, and the costumes waiting
+for them as "A present to open", "Two presents to open" or "3 presents to open". The family's marks are
+24 small squares of paper.
+
 The torn paper shapes are files too, in `assets/img/elf/paper/ui/`: the torn edge strips the stylesheet
 tiles round cards, tiles and notes (`tear-*`), and the torn buttons, chips, label, notes, tag and tape.
 `node scripts/elf-paper/shapes.mjs` draws them with mockup 6's own code and seeded numbers, so each tear

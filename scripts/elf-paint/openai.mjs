@@ -6,7 +6,7 @@
 // painting, tested against high, medium and gpt-image-1-mini on 3 November 2026.
 //
 // What each painting cost is written to a ledger (.elf-paint/spend.json, never committed), and the
-// tool refuses to paint once that passes BUDGET_USD, so it stops and asks before Jaimie's £15.
+// tool refuses to paint once that passes BUDGET_USD, so it stops and asks before Jaimie's cap.
 //
 // The key is read from OPENAI_API_KEY in the environment of whoever runs the tool, and is never
 // printed, logged or written anywhere. This runs on a person's own computer only: never on the
@@ -17,8 +17,9 @@ import { fileURLToPath } from "node:url";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 
-/** Stop before about £15 (Jaimie, 3 November 2026). */
-export const BUDGET_USD = 19;
+/** Stop a little under £23 in all (Jaimie raised the cap for the paper elves, 4 November 2026; it was
+ *  £15 on 3 November). The $2.50 of early tests sit outside the ledger: $27.50 here is $30 in all. */
+export const BUDGET_USD = 27.5;
 
 export const MODEL = "gpt-image-2";
 const NO_USAGE_USD = 0.2;

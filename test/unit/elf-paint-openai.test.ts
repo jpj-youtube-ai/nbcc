@@ -8,7 +8,7 @@ import { BUDGET_USD, costOf, paint, spent } from "../../scripts/elf-paint/openai
 
 // NBCC Elf Detective School: the painted dress-up elf (docs/superpowers/plans/2026-11-03-elf-painted-wardrobe.md,
 // Task 1). The one place the painting tool talks to OpenAI: what it asks for, what each painting
-// costs, and the guard that stops it before Jaimie's £15. It never runs on the site or in CI; these
+// costs, and the guard that stops it before Jaimie's cap. It never runs on the site or in CI; these
 // tests use a pretend OpenAI and never the network.
 
 const USAGE = { input_tokens_details: { image_tokens: 1536, text_tokens: 70 }, output_tokens_details: { image_tokens: 158 } };
@@ -49,8 +49,10 @@ describe("what a painting costs", () => {
     expect(costOf(USAGE, "gpt-image-2")).toBeCloseTo(0.01738, 4);
   });
 
-  it("stops at about £15", () => {
-    expect(BUDGET_USD).toBe(19);
+  // Jaimie raised the cap to £23 in all on 4 November 2026 (for the paper elves). The $2.50 of early
+  // tests sit outside the ledger, so the ledger stops at $27.50: $30 in all, a little under £23.
+  it("stops a little under £23 in all", () => {
+    expect(BUDGET_USD).toBe(27.5);
   });
 });
 
@@ -104,7 +106,8 @@ describe("asking for a painting", () => {
 
 describe("the guards", () => {
   it("refuses to paint once the ledger has passed the budget, without asking OpenAI", async () => {
-    writeFileSync(ledger, JSON.stringify([{ at: "2026-11-04T09:00:00Z", out: "x.png", usd: 19.01 }]));
+    // A cent past the budget, whatever the budget is.
+    writeFileSync(ledger, JSON.stringify([{ at: "2026-11-04T09:00:00Z", out: "x.png", usd: BUDGET_USD + 0.01 }]));
     const { fake } = pretend();
     await expect(paint(job, { fetch: fake, ledger })).rejects.toThrow(/budget/i);
     expect(fake).not.toHaveBeenCalled();

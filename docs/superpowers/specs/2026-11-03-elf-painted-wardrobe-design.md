@@ -142,7 +142,8 @@ rates (image input $8, image output $30 per million tokens for `gpt-image-2`; $2
 
 So **everything is painted on `gpt-image-2` at low quality**: 250 to 300 paintings with retries
 comes to roughly **$5 (about £4)**. High quality only for a single painting that comes out wrong
-at low and right at high, and never in bulk. Stop and ask Jaimie before the total passes £15.
+at low and right at high, and never in bulk. Stop and ask Jaimie before the total passes £23 (raised
+from £15 on 4 November 2026, for repainting the wardrobe in paper).
 (OpenAI's Batch API halves the price again but answers within a day, too slow for daily batches.)
 Low and medium paint the magenta slightly off pure (nearer `#E000E0`), so the cut out samples the
 background colour from the picture's corners rather than assuming `#FF00FF`. Jaimie can watch the

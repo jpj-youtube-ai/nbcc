@@ -11502,8 +11502,9 @@ hairstyles, 5 hair colours), every piece in every colour, and 11 outfits.
   `npm run elf:sheet -- <batch>` makes the sheets Jaimie approves. Batches: elves, starter, hat, top,
   feet, neck, face, hand, extra, outfits. It runs only on your own computer, with `OPENAI_API_KEY`
   in your own environment (never in the repo, CI or the site), uses `gpt-image-2` at low quality
-  (about $0.017 a painting), and stops itself before the spend in `.elf-paint/spend.json` passes $19
-  (about £15). Raw paintings, sheets and the ledger stay in `.elf-paint/` (git ignored); the master
+  (about $0.017 a painting), and stops itself before the spend in `.elf-paint/spend.json` passes
+  $27.50 (with the $2.50 of early tests outside the ledger, a little under Jaimie's £23 cap, raised from
+  £15 on 4 November 2026). Raw paintings, sheets and the ledger stay in `.elf-paint/` (git ignored); the master
   pictures are `.elf-paint/raw/master.png` (the sister) and `master-brother.png`. The tool is
   `scripts/elf-paint/` (`openai.mjs`, `cutout.mjs`, `jobs.mjs` with every piece's fresh design in
   `designs.json`, `manifest.mjs`, `run.mjs`, `sheet.mjs`), tested in `test/unit/elf-paint-*.test.ts`.

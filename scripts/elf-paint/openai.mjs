@@ -28,7 +28,12 @@ const DEFAULT_LEDGER = resolve(ROOT, ".elf-paint/spend.json");
 // OpenAI's published prices, US dollars per million tokens (read 3 November 2026).
 const RATES = {
   "gpt-image-2": { imageIn: 8, textIn: 5, imageOut: 30 },
+  "gpt-image-1.5": { imageIn: 8, textIn: 5, imageOut: 32 },
 };
+
+/** Items (pieces and outfits on their own) are painted on a clear background, which gpt-image-2
+ *  cannot do (Jaimie chose separate items, 3 November 2026). */
+export const ITEM_MODEL = "gpt-image-1.5";
 
 /** What one painting cost, in US dollars, from the tokens OpenAI reported for it. */
 export function costOf(usage, model = MODEL) {
@@ -68,12 +73,17 @@ export async function paint(job, deps = {}) {
     throw new Error(`Stopped: $${sofar.toFixed(2)} has been spent, which is past the budget of $${BUDGET_USD}. Ask Jaimie before painting more.`);
   }
 
+  const model = job.item ? ITEM_MODEL : MODEL;
   const form = new FormData();
-  form.append("model", MODEL);
+  form.append("model", model);
   form.append("prompt", job.prompt);
-  form.append("size", "1024x1536");
+  form.append("size", job.size || "1024x1536");
   form.append("quality", job.quality === "high" ? "high" : "low");
-  form.append("background", "opaque");
+  if (job.item) {
+    form.append("background", "transparent");
+    form.append("output_format", "png");
+    form.append("input_fidelity", "high");
+  } else form.append("background", "opaque");
   for (const path of job.images) form.append("image[]", new Blob([readFileSync(path)], { type: "image/png" }), basename(path));
   if (job.mask) form.append("mask", new Blob([readFileSync(job.mask)], { type: "image/png" }), basename(job.mask));
 
@@ -88,7 +98,7 @@ export async function paint(job, deps = {}) {
   mkdirSync(dirname(job.out), { recursive: true });
   writeFileSync(job.out, Buffer.from(data.data[0].b64_json, "base64"));
   // No cost given counts as a high quality painting, so the budget can only over count.
-  const usd = data.usage ? costOf(data.usage, MODEL) : NO_USAGE_USD;
+  const usd = data.usage ? costOf(data.usage, model) : NO_USAGE_USD;
   mkdirSync(dirname(ledger), { recursive: true });
   writeFileSync(ledger, JSON.stringify([...readLedger(ledger), { at: new Date().toISOString(), out: basename(job.out), usd }], null, 1));
   return { out: job.out, usd };

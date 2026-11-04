@@ -64,6 +64,21 @@ describe("asking for a painting", () => {
     expect(existsSync(job.out)).toBe(true);
   });
 
+  it("paints an item on its own on a clear background with gpt-image-1.5", async () => {
+    const { fake, seen } = pretend();
+    await paint({ ...job, item: true }, { fetch: fake, ledger });
+    expect(seen[0].get("model")).toBe("gpt-image-1.5");
+    expect(seen[0].get("background")).toBe("transparent");
+    expect(seen[0].get("output_format")).toBe("png");
+    expect(seen[0].get("input_fidelity")).toBe("high");
+    expect(seen[0].get("quality")).toBe("low");
+  });
+
+  it("prices gpt-image-1.5 at its own rates", () => {
+    // 323 x $8 + 92 x $5 + 402 x $32, all per million.
+    expect(costOf({ input_tokens_details: { image_tokens: 323, text_tokens: 92 }, output_tokens_details: { image_tokens: 402 } }, "gpt-image-1.5")).toBeCloseTo(0.015908, 5);
+  });
+
   it("can ask for high quality for one painting", async () => {
     const { fake, seen } = pretend();
     await paint({ ...job, quality: "high" }, { fetch: fake, ledger });

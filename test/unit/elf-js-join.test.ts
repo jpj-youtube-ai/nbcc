@@ -66,6 +66,14 @@ describe("the enrol page's script", () => {
     expect(select.value).toBe(FESTIVE_SURNAMES[Math.floor(0.5 * FESTIVE_SURNAMES.length)]);
   });
 
+  it("makes its buttons of torn paper, as the page's own", () => {
+    load();
+    for (const sel of ["button.elf-join-spin", "button.elf-join-add"]) {
+      expect($(sel).classList.contains("elf-btn"), sel).toBe(true);
+      expect($(sel).classList.contains("btn"), sel).toBe(false);
+    }
+  });
+
   it("shows the Gift Aid declaration only when Gift Aid is ticked", () => {
     load();
     expect($(".elf-join-declaration").hidden).toBe(true);

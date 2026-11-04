@@ -1,5 +1,7 @@
 // @vitest-environment jsdom
 import { describe, it, expect } from "vitest";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { renderJoinPage } from "../../src/elf/pages/join";
 import { joinBodyFromForm, parseJoin } from "../../src/elf/join";
 import { FESTIVE_SURNAMES } from "../../src/elf/names";
@@ -123,6 +125,29 @@ describe("reading the plain form", () => {
       postcode: "KA10 6AA",
       nonUk: false,
     });
+  });
+});
+
+// The paper look (docs/superpowers/specs/2026-11-04-elf-paper-design.md): the enrol page in paper.
+describe("the enrol page, in paper", () => {
+  const css = readFileSync(resolve(__dirname, "../../assets/css/elf.css"), "utf8");
+
+  it("has its title on a torn strip", () => {
+    const title = page().querySelector(".elf-title h1#elf-join-heading")!;
+    expect(words(title)).toBe("Enrol your detectives");
+  });
+
+  it("sends people to pay with a crimson torn paper button, and uses none of the site's own buttons", () => {
+    const doc = page();
+    expect(doc.querySelector('form.elf-join-form button[type="submit"]')!.className).toBe("elf-btn elf-btn--crimson elf-btn--l");
+    expect(doc.querySelector(".site-main .btn")).toBeNull();
+  });
+
+  it("ticks its boxes on little squares of paper, still real tick boxes", () => {
+    for (const tick of page().querySelectorAll(".elf-tick input")) expect(tick.getAttribute("type")).toBe("checkbox");
+    expect(css).toMatch(/\.elf-tick input \{[^}]*appearance:\s*none/);
+    expect(css).toMatch(/\.elf-tick input:checked \{[^}]*background/);
+    expect(css).toMatch(/\.elf-tick input:focus-visible \{[^}]*outline/);
   });
 });
 

@@ -1,6 +1,7 @@
 import { SINGLE_DONATION_WORDING } from "../../declarations/wording";
 import { FORM_ROWS } from "../join";
 import { giftHero } from "./gift";
+import { titleStrip } from "./paper";
 import { elfPage, escapeHtml } from "./shell";
 import type { JoinView } from "./types";
 
@@ -60,7 +61,7 @@ export function renderJoinPage(view: JoinView): string {
     <div class="wrap elf-join-top__grid">
       ${giftHero()}
       <div class="elf-join-top__words">
-      <h1 id="elf-join-heading" class="h-xl">${view.signedIn ? "Add a detective" : "Enrol your detectives"}</h1>
+      ${titleStrip({ text: view.signedIn ? "Add a detective" : "Enrol your detectives", tag: "h1", id: "elf-join-heading" })}
       <p class="lede">${
         view.signedIn
           ? "Add another detective to your family. They pick a festive surname too, so online they are only ever Detective Ruby Tinselfoot, never their real name."
@@ -73,8 +74,8 @@ export function renderJoinPage(view: JoinView): string {
   <section class="section elf-join-body" aria-label="The enrol form">
     <div class="wrap">
       ${errors}
-      <form class="elf-join-form" method="post" action="/api/elf/join" data-api="/api/elf/join" data-suggested-pence="${entrySuggestedPence}" novalidate>
-        <span class="elf-join-tape" aria-hidden="true"></span>
+      <form class="elf-join-form elf-card elf-card--holly" method="post" action="/api/elf/join" data-api="/api/elf/join" data-suggested-pence="${entrySuggestedPence}" novalidate>
+        <span class="elf-tape" aria-hidden="true"></span>
         ${
           view.signedIn
             ? `<div class="elf-join-you"><p>Enrolling for <b>${escapeHtml(view.signedIn.grownUpName)}</b> (${escapeHtml(view.signedIn.email)}). Your welcome email for them goes there too.</p></div>`
@@ -125,7 +126,7 @@ export function renderJoinPage(view: JoinView): string {
           <p class="elf-tick"><input id="elf-agreed" name="agreed" type="checkbox" required /><label for="elf-agreed">I have read <a href="/elf/rules">the rules</a> and agree to them</label></p>
           <div class="elf-trap" aria-hidden="true"><label for="elf-website">Leave this empty</label><input id="elf-website" name="website" type="text" tabindex="-1" autocomplete="off" /></div>
           ${captcha}
-          <p><button class="btn btn-primary" type="submit">Go to payment</button></p>
+          <p><button class="elf-btn elf-btn--crimson elf-btn--l" type="submit">Go to payment</button></p>
           <p class="elf-hint">You pay securely by card with Stripe. You come straight back here afterwards.</p>
         </div>
       </form>

@@ -11603,6 +11603,18 @@ motion. The page's script gives a signed in family's done doors (cracked or visi
 (`is-done`) beside their marks. A door's detail is a note taped across the board; the countdown at the
 top is on a candy cane strip.
 
+**Enrolling, the rules and signing in** are in paper too, each page's title on a torn title strip. The
+enrol page (`join.ts`) opens with the painted red present and the school's elf peeking out from behind
+it over the bow (`gift.ts`: the logo cut above the line under its hands, inside an edge that never
+moves, with the present laid over it, so the cut never shows), a paper gift tag ("Top secret") and a
+paper rosette ("24 prizes"); the form is a taped card sheet, each detective, the payment and the gift
+on slips of paper, its tick boxes squares of card (still real tick boxes), and its buttons torn paper,
+the ones `elf-join.js` adds too. The rules (`rules.ts`) are one taped sheet torn off a pad, each part's
+heading on a torn strip and each rule marked with a small paper circle. Signing in and the welcome
+(`sign-in.ts`) are on card sheets with torn buttons; the welcome has the three painted presents and a
+fall of paper stars, which lie still for a visitor who asked for less motion. Every page's top section
+clears the bar and the torn bands under it.
+
 The torn paper shapes are files too, in `assets/img/elf/paper/ui/`: the torn edge strips the stylesheet
 tiles round cards, tiles and notes (`tear-*`), and the torn buttons, chips, label, notes, tag and tape.
 `node scripts/elf-paper/shapes.mjs` draws them with mockup 6's own code and seeded numbers, so each tear

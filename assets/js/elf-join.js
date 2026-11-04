@@ -49,7 +49,7 @@
       if (!select) return;
       var spin = doc.createElement("button");
       spin.type = "button";
-      spin.className = "btn btn-ghost elf-join-spin";
+      spin.className = "elf-btn elf-btn--s elf-join-spin";
       spin.textContent = "Spin";
       spin.setAttribute("aria-label", "Spin a festive surname for detective " + (i + 1));
       spin.addEventListener("click", function () {
@@ -61,7 +61,7 @@
 
     var add = doc.createElement("button");
     add.type = "button";
-    add.className = "btn btn-ghost elf-join-add";
+    add.className = "elf-btn elf-btn--s elf-join-add";
     add.textContent = "Add another detective";
     add.addEventListener("click", function () {
       var next = rows.filter(function (r) { return r.hidden; })[0];

@@ -51,6 +51,7 @@ import { ballRouter } from "./routes/ball";
 import { ballTransferRouter } from "./routes/ball-transfer";
 import { adminBallTransferRouter } from "./routes/admin-ball-transfer";
 import { adminQrRouter } from "./routes/admin-qr";
+import { qrCodesRouter } from "./routes/qr-codes";
 import { adminOverviewRouter } from "./routes/admin-overview";
 import { adminDonationSourcesRouter } from "./routes/admin-donation-sources";
 import { createSiteRouter } from "./routes/site";
@@ -188,6 +189,8 @@ export function createApp() {
   app.use(adminWhatsNewRouter);
   // QR codes for every page of the site, in the admin (TASK-492).
   app.use(adminQrRouter);
+  // TASK-588: named QR codes, each counting its own scans, and their short links, /q/c<id>.
+  app.use(qrCodesRouter);
   // The admin Overview's "Needs you" (TASK-508).
   app.use(adminOverviewRouter);
   // Fill a Red Bag against the Donate page, at the top of the admin's Donations screen.

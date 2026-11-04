@@ -55,6 +55,7 @@ export const FEATURES: ReadonlyArray<{ area: Area; added: Date; what: string }> 
   { area: "fundraising", added: new Date("2026-10-02T12:00:00Z"), what: "Admin > Fundraising: approve sign ups, check changes, record cash and look after the supporter wall (TASK-495)" },
   { area: "donations", added: new Date("2026-10-05T10:00:00Z"), what: "Donations: Fill a Red Bag against the Donate page, a Red Bag label on each gift and a Fill a Red Bag only filter" },
   { area: "red-bag", added: new Date("2026-10-05T13:00:00Z"), what: "Fill a Red Bag: change the items, prices and examples on the page, preview them, and publish" },
+  { area: "qr", added: new Date("2026-11-03T18:00:00Z"), what: "Named QR codes: one for each billboard or card, each counting its own scans (TASK-588)" },
 ];
 
 // When the pills went live. Someone who has never opened a section is counted as having seen it

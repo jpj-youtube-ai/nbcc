@@ -11510,6 +11510,28 @@ hairstyles, 5 hair colours), every piece in every colour, and 11 outfits.
   `designs.json`, `manifest.mjs`, `run.mjs`, `sheet.mjs`), tested in `test/unit/elf-paint-*.test.ts`.
   Nothing on the site ever calls OpenAI.
 
+### The paper pictures
+
+Design: `docs/superpowers/specs/2026-11-04-elf-paper-design.md`; plan:
+`docs/superpowers/plans/2026-11-04-elf-paper.md`. Every picture the paper wardrobe and the paper pages
+draw lives in `assets/img/elf/paper/`, all WebP:
+
+- `elves/elf-<sibling>-<skin>-<style>-<hair>.webp` (150) and `costumes/<id>-<skin>.webp` (51 costumes in
+  5 skins), each the whole 640 by 960 canvas, so every picture lines up on the stage;
+- `pieces/<id>.webp` (6 glasses, 3 bow ties) on the same canvas, and `pieces/<glasses>--<costume>.webp`,
+  each pair of glasses fitted to one costume's eyes (no two costume faces sit in quite the same place;
+  `scripts/elf-paper/glasses-fit.json` says where each costume's eyes are);
+- `scenes/<id>.webp` (16, 640 by 960), `friends/<id>.webp` (6), `deco/` (the painted presents, holly,
+  candy cane, bauble and gold bow), `icons/` (10) and `ui/` (the paper grain);
+- `tiles/costumes/` and `tiles/scenes/`, the small wardrobe tiles (one skin's 51 costume tiles come to
+  about 400 KB).
+
+`node scripts/elf-paper/copy-art.mjs` makes them all from the approved cut outs in the git ignored
+preview folder (`.superpowers/sdd/2026-11-03-elf-detective-wave1-sign-up/preview/paper/`), copying byte
+for byte whatever is already its size, so it runs only on the computer that has them, never in CI.
+`test/unit/elf-paper-pictures.test.ts` checks every picture is there, on the right canvas and within
+its weight, and that nothing else is.
+
 ## Event tickets: NBCC sells an event's tickets
 
 Jaimie, points 23 and 24. An organiser holding an event can ask NBCC to sell the tickets, when ALL

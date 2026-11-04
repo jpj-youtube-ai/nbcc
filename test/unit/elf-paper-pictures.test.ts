@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { join, relative, resolve } from "node:path";
 import sharp from "sharp";
+import { BOWS, COSTUMES, FRIENDS, GLASSES, HAIR_COLOURS, HAIR_STYLES, SCENES, SIBLINGS, SKIN_TONES } from "../../src/elf/wardrobe";
 
 // The approved paper pictures (Jaimie, 4 November 2026) as the site serves them. Everything the
 // wardrobe, the elf's PNG and the pages draw comes from this one folder: a picture missing here is a
@@ -9,30 +10,22 @@ import sharp from "sharp";
 const ROOT = resolve(__dirname, "../..");
 const PAPER = resolve(ROOT, "assets/img/elf/paper");
 
-// The catalogue's ids, written out here until the catalogue itself exists.
-const SIBLINGS = ["sister", "brother"];
-const SKINS = ["s1", "s2", "s3", "s4", "s5"];
-const STYLES = ["short", "bunches", "curly"];
-const HAIRS = ["dark", "brown", "ginger", "blonde", "black"];
-const COSTUME_IDS = [
-  "workshop", "reindeer", "snowman", "advent", "robin", "tree", "polarbear", "ginger", "highlandcow", "present",
-  "arcticfox", "pudding", "squirrel", "snowglobe", "puffin", "cracker", "owl", "candycane", "haggis", "bauble",
-  "husky", "stocking", "unicorn", "star", "scottie", "snowflake", "hedgehog", "nutcracker", "seal", "wreath",
-  "stag", "cocoa", "otter", "teddy", "thistle", "sprout", "pony", "detective", "penguin", "lights",
-  "sheep", "yulelog", "eagle", "postbox", "nessie", "bell", "mouse", "mincepie", "magnifier", "graduation", "santa",
-];
-const SCENE_IDS = [
-  "village", "workshop", "forest", "loch", "fireside", "rooftops",
-  "ayr", "prestwick", "girvan", "largs", "cumnock", "culzean", "alloway", "troon", "millport", "kilmarnock",
-];
-const FRIEND_IDS = ["robin", "reindeercalf", "penguinchick", "scottiepuppy", "highlandcalf", "snowman"];
-const GLASSES_IDS = ["specs-black", "specs-gold", "specs-red", "stars-gold", "stars-red", "stars-blue"];
-const BOW_IDS = ["bow-red", "bow-green", "bow-gold"];
+// The catalogue's ids.
+const ids = (list: readonly { id: string }[]): string[] => list.map((item) => item.id);
+const SIBLING_IDS = ids(SIBLINGS);
+const SKINS = ids(SKIN_TONES);
+const STYLES = ids(HAIR_STYLES);
+const HAIRS = ids(HAIR_COLOURS);
+const COSTUME_IDS = ids(COSTUMES);
+const SCENE_IDS = ids(SCENES);
+const FRIEND_IDS = ids(FRIENDS);
+const GLASSES_IDS = ids(GLASSES);
+const BOW_IDS = ids(BOWS);
 const DECO = ["present-crimson", "present-holly", "present-cream", "candy-cane", "holly", "bauble", "bow-gold"];
 const ICONS = ["costume", "scene", "friend", "frame", "glasses", "paint", "lock", "surprise", "camera", "bell"];
 
 const elves = (): string[] =>
-  SIBLINGS.flatMap((sib) => SKINS.flatMap((skin) => STYLES.flatMap((style) => HAIRS.map((hair) => `elves/elf-${sib}-${skin}-${style}-${hair}.webp`))));
+  SIBLING_IDS.flatMap((sib) => SKINS.flatMap((skin) => STYLES.flatMap((style) => HAIRS.map((hair) => `elves/elf-${sib}-${skin}-${style}-${hair}.webp`))));
 const costumes = (): string[] => COSTUME_IDS.flatMap((id) => SKINS.map((skin) => `costumes/${id}-${skin}.webp`));
 const costumeTiles = (): string[] => COSTUME_IDS.flatMap((id) => SKINS.map((skin) => `tiles/costumes/${id}-${skin}.webp`));
 const scenes = (): string[] => SCENE_IDS.map((id) => `scenes/${id}.webp`);

@@ -1,6 +1,7 @@
 import { createRequire } from "node:module";
 import { resolve } from "node:path";
-import type { Progress } from "./progress";
+import { isDoor } from "./calendar";
+import type { DoorsDone, Progress } from "./progress";
 
 // NBCC Elf Detective School: the elf wardrobe, as the server sees it. The design is
 // docs/superpowers/specs/2026-10-04-elf-detective-school-design.md (decisions 14 and 15).
@@ -138,6 +139,49 @@ export interface PaintManifest {
   layers: Record<string, PaintBox & { cover?: PaintBox }>;
 }
 
+// ---- the paper wardrobe (docs/superpowers/specs/2026-11-04-elf-paper-design.md) ----
+
+/** A scene, friend, frame, pair of glasses or bow tie: all there from sign up. */
+export interface WardrobeItem {
+  readonly id: string;
+  /** The words people read: "River Ayr". */
+  readonly name: string;
+}
+
+/** A whole hooded costume. Door 0 is from the start; any other unlocks once that door is done. */
+export interface Costume extends WardrobeItem {
+  readonly door: number;
+}
+
+/** A look in the paper wardrobe. Under a costume only the skin shows; the rest is kept for later. */
+export interface CostumeLook {
+  /** "sister" or "brother": which of the logo elf's family this is. */
+  sibling: string;
+  skin: string;
+  hair: string;
+  hairStyle: string;
+  costume: string | null;
+  scene: string;
+  friend: string | null;
+  frame: string | null;
+  glasses: string | null;
+  bow: string | null;
+}
+
+/** The doors a detective has done, as the paper wardrobe needs them. Build it with doorState. */
+export interface DoorState {
+  doors: number[];
+}
+
+/** The pictures a look is drawn from, under assets/img/elf/paper/, in the order they go on the stage. */
+export interface LookPictures {
+  scene: string;
+  body: string;
+  glasses: string | null;
+  bow: string | null;
+  friend: string | null;
+}
+
 interface WardrobeApi {
   DOORS: number;
   SIBLINGS: readonly { readonly id: string; readonly name: string }[];
@@ -161,6 +205,17 @@ interface WardrobeApi {
   drawOutfit(outfitId: string, look: unknown, size?: number): string;
   layersFor(look: unknown, state: WardrobeState): PaintLayer[];
   usePaint(manifest: PaintManifest | null): void;
+  COSTUMES: readonly Costume[];
+  SCENES: readonly WardrobeItem[];
+  FRIENDS: readonly WardrobeItem[];
+  FRAMES: readonly WardrobeItem[];
+  GLASSES: readonly WardrobeItem[];
+  BOWS: readonly WardrobeItem[];
+  costumeUnlocked(costumeId: string, state: DoorState): boolean;
+  defaultCostumeLook(): CostumeLook;
+  normaliseCostumeLook(look: unknown, state: DoorState): CostumeLook;
+  lookPictures(look: unknown, state: DoorState): LookPictures;
+  costumeLookWords(look: unknown, state: DoorState): string;
 }
 
 const SCRIPT = resolve(__dirname, "../../assets/js/elf-wardrobe.js");
@@ -202,6 +257,30 @@ export const drawOutfit = api.drawOutfit;
 export const layersFor = api.layersFor;
 /** For tests only: draw from another list of layers, or null to go back to the real one. */
 export const usePaint = api.usePaint;
+
+export const COSTUMES = api.COSTUMES;
+export const SCENES = api.SCENES;
+export const FRIENDS = api.FRIENDS;
+export const FRAMES = api.FRAMES;
+export const GLASSES = api.GLASSES;
+export const BOWS = api.BOWS;
+/** Can this detective wear this costume? From the start, or once its door is done. */
+export const costumeUnlocked = api.costumeUnlocked;
+/** What a brand new detective's elf looks like. */
+export const defaultCostumeLook = api.defaultCostumeLook;
+/** A look made safe to keep and to draw: anything unknown or still locked goes back to the start. */
+export const normaliseCostumeLook = api.normaliseCostumeLook;
+/** The pictures a look is drawn from, in the order they go on the stage. The look is made safe first. */
+export const lookPictures = api.lookPictures;
+/** A look in words, for anyone who cannot see the picture. */
+export const costumeLookWords = api.costumeLookWords;
+
+/** The doors a detective has done: the family's cracked doors and the detective's own visits, each
+ *  door once, real doors only (1 to 24), in order. Always build a DoorState here. */
+export function doorState(doors: DoorsDone): DoorState {
+  const done = new Set([...(doors.cracked ?? []), ...(doors.visited ?? [])].filter(isDoor));
+  return { doors: [...done].sort((a, b) => a - b) };
+}
 
 /**
  * What a detective has earned, built from their progress. Always build a WardrobeState here.

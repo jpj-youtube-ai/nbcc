@@ -11526,6 +11526,14 @@ draw lives in `assets/img/elf/paper/`, all WebP:
 - `tiles/costumes/` and `tiles/scenes/`, the small wardrobe tiles (one skin's 51 costume tiles come to
   about 400 KB).
 
+The paper wardrobe's catalogue is in `assets/js/elf-wardrobe.js`, shared by the browser and the server:
+`COSTUMES` (51, three from the start with door 0, then two for each door), `SCENES`, `FRIENDS`, `FRAMES`,
+`GLASSES` and `BOWS`. A costume is unlocked when its door is 0 or one this detective has done
+(`costumeUnlocked`; `doorState` in `src/elf/wardrobe.ts` builds the done doors from the family's cracked
+doors and the detective's visits); every extra is there from sign up. `normaliseCostumeLook` makes any
+look safe (anything unknown or locked goes back to the start), `lookPictures` names the pictures a look
+is drawn from in stage order, and `costumeLookWords` says it in words.
+
 `node scripts/elf-paper/copy-art.mjs` makes them all from the approved cut outs in the git ignored
 preview folder (`.superpowers/sdd/2026-11-03-elf-detective-wave1-sign-up/preview/paper/`), copying byte
 for byte whatever is already its size, so it runs only on the computer that has them, never in CI.

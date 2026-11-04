@@ -5,7 +5,7 @@ import { insertAudit } from "./donations";
 import { ELF_DEFAULTS, type ElfSettings } from "../elf/settings";
 import type { JoinBody } from "../elf/join";
 import { wardrobeStateNow, type FamilyRow } from "../elf/views";
-import { normaliseLook, type ElfLook } from "../elf/wardrobe";
+import { normaliseFavourites, normaliseLook, type ElfLook } from "../elf/wardrobe";
 
 // NBCC Elf Detective School: the data layer (tables in migrations/1791200000310_elf-school.js).
 // Designs: docs/superpowers/specs/2026-10-04-elf-detective-school-design.md and
@@ -354,8 +354,8 @@ export async function orderForWelcome(
 export async function familyWithDetectives(familyId: number): Promise<FamilyRow | null> {
   const f = await pool.query<{ id: number; grown_up_name: string; email: string }>("SELECT id, grown_up_name, email FROM elf_families WHERE id = $1 AND active", [familyId]);
   if (!f.rows[0]) return null;
-  const d = await pool.query<{ id: number; first_name: string; surname: string; name_approved: boolean; badge_number: number | null; look: unknown; fresh: string[] }>(
-    `SELECT id, first_name, surname, name_approved, badge_number, look, fresh FROM elf_detectives
+  const d = await pool.query<{ id: number; first_name: string; surname: string; name_approved: boolean; badge_number: number | null; look: unknown; fresh: string[]; favourites: unknown }>(
+    `SELECT id, first_name, surname, name_approved, badge_number, look, fresh, favourites FROM elf_detectives
       WHERE family_id = $1 AND active ORDER BY id`,
     [familyId],
   );
@@ -371,34 +371,51 @@ export async function familyWithDetectives(familyId: number): Promise<FamilyRow 
       badgeNumber: r.badge_number,
       look: r.look,
       fresh: r.fresh ?? [],
+      favourites: r.favourites ?? [],
     })),
   };
 }
 
 /**
- * Save a detective's look, for their own family only. What the detective has earned is worked out
- * here, never taken from the page, and the look is made safe against it (normaliseLook). What was
- * tried on loses its New tag; a key sent twice, or not a string, does no harm. "not-found" for a
- * detective that is not this family's.
+ * Save a detective's look, for their own family only. The doors the detective has done are worked out
+ * here, never taken from the page, and the look is made safe against them (normaliseLook), so a locked
+ * costume is stored as none. A present opened (its costume id in `tried`) is taken off `fresh`; an id
+ * sent twice, not a string, or not one of this detective's presents does no harm. With `favourites`,
+ * those are made safe (normaliseFavourites) and stored; without, the stored ones stay. "not-found" for
+ * a detective that is not this family's.
  */
-export async function saveLook(o: { detectiveId: number; familyId: number; look: unknown; tried: unknown[] }): Promise<ElfLook | "not-found"> {
+export async function saveLook(o: {
+  detectiveId: number;
+  familyId: number;
+  look: unknown;
+  tried: unknown[];
+  favourites?: unknown[];
+}): Promise<{ look: ElfLook; favourites: ElfLook[] } | "not-found"> {
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
-    const r = await client.query<{ id: number; fresh: string[] }>(
-      "SELECT id, fresh FROM elf_detectives WHERE id = $1 AND family_id = $2 AND active FOR UPDATE",
+    const r = await client.query<{ id: number; fresh: string[]; favourites: unknown }>(
+      "SELECT id, fresh, favourites FROM elf_detectives WHERE id = $1 AND family_id = $2 AND active FOR UPDATE",
       [o.detectiveId, o.familyId],
     );
     if (!r.rows[0]) {
       await client.query("ROLLBACK");
       return "not-found";
     }
-    const kept = normaliseLook(o.look, wardrobeStateNow());
+    const state = wardrobeStateNow();
+    const look = normaliseLook(o.look, state);
     const tried = new Set(o.tried.filter((t): t is string => typeof t === "string"));
     const fresh = (r.rows[0].fresh ?? []).filter((k) => !tried.has(k));
-    await client.query("UPDATE elf_detectives SET look = $2, fresh = $3 WHERE id = $1", [o.detectiveId, JSON.stringify(kept), fresh]);
+    let favourites: ElfLook[];
+    if (o.favourites) {
+      favourites = normaliseFavourites(o.favourites, state);
+      await client.query("UPDATE elf_detectives SET look = $2, fresh = $3, favourites = $4 WHERE id = $1", [o.detectiveId, JSON.stringify(look), fresh, JSON.stringify(favourites)]);
+    } else {
+      favourites = normaliseFavourites(r.rows[0].favourites, state);
+      await client.query("UPDATE elf_detectives SET look = $2, fresh = $3 WHERE id = $1", [o.detectiveId, JSON.stringify(look), fresh]);
+    }
     await client.query("COMMIT");
-    return kept;
+    return { look, favourites };
   } catch (err) {
     await client.query("ROLLBACK");
     throw err;

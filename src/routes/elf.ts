@@ -447,16 +447,16 @@ elfRouter.get("/elf/hq/elf/:file", schoolOn, async (req, res) => {
   const family = s ? await familyWithDetectives(s.familyId) : null;
   const detective = m && family ? family.detectives.find((d) => d.id === Number(m[1])) : undefined;
   if (!detective) return res.status(404).type("text/plain").send("Not found");
-  // Stacked from the painted layers, which an SVG in an <img> could not load (src/elf/elf-png.ts).
-  // The browser keeps it but asks first (its ETag names the look), so a new look shows at once and
-  // an unchanged one is never made again.
+  // The elf on its stage, stacked from the paper pictures (src/elf/elf-png.ts). The browser keeps it
+  // but asks first (its ETag names the look), so a new look shows at once and an unchanged one is
+  // never made again.
   res.setHeader("Cache-Control", "private, no-cache");
-  const etag = `"${elfPngKey(detective.look, wardrobeStateNow(), 240, "clear")}"`;
+  const etag = `"${elfPngKey(detective.look, wardrobeStateNow(), 240)}"`;
   res.setHeader("ETag", etag);
   if (String(req.headers["if-none-match"] ?? "") === etag) return res.status(304).send();
   let picture: Buffer | null;
   try {
-    picture = await elfPng(detective.look, wardrobeStateNow(), 240, "clear");
+    picture = await elfPng(detective.look, wardrobeStateNow(), 240);
   } catch (err) {
     console.error("elf hq picture failed:", err instanceof Error ? err.message : err);
     return res.status(500).type("text/plain").send("The picture could not be made.");
@@ -479,9 +479,11 @@ export async function postLook(req: Request, res: Response): Promise<Response | 
   const detectiveId = detectiveIdOf(json ? body.detectiveId : body.detective);
   const look = json ? body.look : lookFromForm(body);
   const tried = json && Array.isArray(body.tried) ? body.tried.slice(0, 200) : [];
-  const kept = detectiveId === null ? "not-found" : await saveLook({ detectiveId, familyId: s.familyId, look, tried });
+  // Favourite looks come only from the script, and only as a list; anything else leaves them as they are.
+  const favourites = json && Array.isArray(body.favourites) ? (body.favourites as unknown[]) : undefined;
+  const kept = detectiveId === null ? "not-found" : await saveLook({ detectiveId, familyId: s.familyId, look, tried, favourites });
   if (kept === "not-found") return json ? res.status(404).json({ error: "Not found" }) : res.status(404).type("text/plain").send("Not found");
-  return json ? res.status(200).json({ ok: true, look: kept }) : res.redirect(303, `/elf/hq/wardrobe/${detectiveId}`);
+  return json ? res.status(200).json({ ok: true, look: kept.look, favourites: kept.favourites }) : res.redirect(303, `/elf/hq/wardrobe/${detectiveId}`);
 }
 
 elfRouter.post("/api/elf/look", express.urlencoded({ extended: false, limit: "16kb" }), schoolOn, postLook);

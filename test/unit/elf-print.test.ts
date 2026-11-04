@@ -4,7 +4,7 @@ import { renderElfCertificate, renderElfPoster, renderElfTag, renderStaffCard, s
 import type { CertificatePrint, PlacePrint, ShareCardPrint, StaffCardPrint } from "../../src/elf/print";
 import { MATERIALS_STATEMENT } from "../../src/legal/registration";
 import { schoolLogoData } from "../../src/elf/logo";
-import { defaultLook } from "../../src/elf/wardrobe";
+
 
 // NBCC Elf Detective School: the things NBCC prints or a family shares. Every shop, elf, word and
 // detective here is invented, and the phone number is a made up one that cannot be dialled.
@@ -16,11 +16,11 @@ const paper = (html: string) => words(parse(html).querySelector(".page"));
 
 const PLACE: PlacePrint = { placeName: "The Toy Shop", placeTown: "Troon", siteOrigin: "https://nbcc.scot", posterUrl: "https://nbcc.scot/elf/p/toy-shop-k4f9" };
 const CARD: StaffCardPrint = { placeName: "The Toy Shop", door: 7, elfName: "Bauble", clueAt: new Date("2026-12-07T17:30:00.000Z"), phone: "01632 960 123" };
-const SIX = { doorsDone: 24, goldSeal: true, wonRace: false };
-const LOOK = { ...defaultLook(), outfit: "grad" };
-const CERT: CertificatePrint = { name: "Detective Ruby Tinselfoot", badgeNumber: "0427", year: 2026, look: LOOK, state: SIX, awardedOn: new Date("2026-12-24T18:00:00.000Z") };
+/** A one pixel PNG, standing in for the elf picture the server makes with elfPng. */
+const ELF_PNG = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8/5+hHgAHggJ/PchI7wAAAABJRU5ErkJggg==";
+const CERT: CertificatePrint = { name: "Detective Ruby Tinselfoot", badgeNumber: "0427", year: 2026, doorsDone: 24, goldSeal: true, elfPicture: ELF_PNG, awardedOn: new Date("2026-12-24T18:00:00.000Z") };
 const RUBY = { firstName: "Ruby", surname: "Tinselfoot", approved: false };
-const SHARE: ShareCardPrint = { detective: RUBY, rank: "Junior Detective", doorsDone: 6, look: defaultLook(), state: { doorsDone: 6 }, year: 2026 };
+const SHARE: ShareCardPrint = { detective: RUBY, rank: "Junior Detective", doorsDone: 6, year: 2026 };
 
 describe("the poster for a hiding place", () => {
   const html = renderElfPoster(PLACE);
@@ -176,26 +176,31 @@ describe("the graduate's certificate", () => {
     expect(text).toContain("all 24 doors");
   });
 
-  it("draws the detective's own elf, made safe first", () => {
-    const svg = parse(html).querySelector(".page .cert-elf svg")!;
-    expect(svg.getAttribute("aria-label")).toBe("Detective Ruby Tinselfoot's elf");
-    // Printed, so drawn from the large paintings.
-    expect(parse(html).querySelector(".cert-elf")!.innerHTML).not.toContain("/assets/img/elf/sm/");
-    const cheat = renderElfCertificate({ ...CERT, look: { ...defaultLook(), outfit: "nessie" } });
-    expect(parse(cheat).querySelector(".cert-elf")!.innerHTML).toBe(parse(renderElfCertificate({ ...CERT, look: defaultLook() })).querySelector(".cert-elf")!.innerHTML);
+  it("shows the detective's own elf, the picture the server made, and names whose it is", () => {
+    const img = parse(html).querySelector(".page .cert-elf img")!;
+    expect(img.getAttribute("src")).toBe(ELF_PNG);
+    expect(img.getAttribute("alt")).toBe("Detective Ruby Tinselfoot's elf");
+  });
+
+  it("takes only a PNG picture for the elf, never an address or markup", () => {
+    for (const bad of ["/elf/hq/elf/100.png", "https://example.com/elf.png", 'data:image/png;base64,AAAA" onerror="alert(1)', ""]) {
+      const page = renderElfCertificate({ ...CERT, elfPicture: bad });
+      expect(parse(page).querySelector(".cert-elf img"), bad).toBeNull();
+      expect(page).not.toContain("onerror");
+    }
   });
 
   it("shows the gold seal only when it has been earned", () => {
     expect(text).toContain("Gold seal");
-    expect(paper(renderElfCertificate({ ...CERT, state: { doorsDone: 24, goldSeal: false } }))).not.toContain("Gold seal");
+    expect(paper(renderElfCertificate({ ...CERT, goldSeal: false }))).not.toContain("Gold seal");
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    expect(paper(renderElfCertificate({ ...CERT, state: { doorsDone: 24, goldSeal: "true" as any } }))).not.toContain("Gold seal");
+    expect(paper(renderElfCertificate({ ...CERT, goldSeal: "true" as any }))).not.toContain("Gold seal");
   });
 
   it("is not drawn for a detective who has not done all 24 doors", () => {
-    expect(() => renderElfCertificate({ ...CERT, state: { doorsDone: 23, goldSeal: true } })).toThrow();
+    expect(() => renderElfCertificate({ ...CERT, doorsDone: 23 })).toThrow();
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    expect(() => renderElfCertificate({ ...CERT, state: { doorsDone: "24" as any } })).toThrow();
+    expect(() => renderElfCertificate({ ...CERT, doorsDone: "24" as any })).toThrow();
   });
 
   it("takes the year of the date from the date itself", () => {
@@ -207,8 +212,6 @@ describe("the graduate's certificate", () => {
     expect(text).toContain(MATERIALS_STATEMENT);
   });
 });
-
-const ELF_PNG = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8/5+hHgAHggJ/PchI7wAAAABJRU5ErkJggg==";
 
 describe("the share card", () => {
   const svg = shareCardSvg(SHARE, ELF_PNG);
@@ -248,11 +251,13 @@ describe("the share card", () => {
   });
 
   it("shows the elf, never a photo", () => {
-    // Two pictures: the school's logo, and the elf as the PNG the server stacked from its paintings.
+    // Two pictures: the school's logo, and the elf on its stage as the PNG the server stacked, in a
+    // box the shape of the stage (2 by 3).
     const card = shareCardSvg(SHARE, ELF_PNG);
     const pictures = card.match(/<image\b[^>]*>/g) ?? [];
     expect(pictures.length).toBe(2);
     expect(pictures[0]).toContain(ELF_PNG);
+    expect(pictures[0]).toContain('width="340" height="510"');
     expect(pictures[1]).toContain(schoolLogoData("card"));
   });
 

@@ -9,7 +9,7 @@ import { renderHqPage } from "../../src/elf/pages/hq";
 import { renderPosterPage } from "../../src/elf/pages/poster";
 import { renderWardrobePage } from "../../src/elf/pages/wardrobe";
 import { renderElfCertificate, renderElfPoster, renderElfTag, renderStaffCard, shareCardSvg } from "../../src/elf/print";
-import { defaultLook } from "../../src/elf/wardrobe";
+
 import { AFTERNOON, calendarView, hqView, posterView, wardrobeView } from "./elf-fixtures";
 
 // NBCC Elf Detective School: the school's logo, and where it goes. Every shop and detective here
@@ -105,8 +105,8 @@ describe("the logo on a screen", () => {
 
 describe("the logo on paper and on the share card", () => {
   const place = { placeName: "The Toy Shop", placeTown: "Troon", siteOrigin: "https://nbcc.scot", posterUrl: "https://nbcc.scot/elf/p/toy-shop-k4f9" };
-  const cert = { name: "Ruby Tinselfoot", badgeNumber: "EDS 0042", year: 2026, look: defaultLook(), state: { doorsDone: 24 }, awardedOn: new Date("2026-12-24T12:00:00.000Z") };
-  const share = { detective: { firstName: "Ruby", surname: "Tinselfoot", approved: false }, rank: "Junior Detective" as const, doorsDone: 6, look: defaultLook(), state: { doorsDone: 6 }, year: 2026 };
+  const cert = { name: "Ruby Tinselfoot", badgeNumber: "EDS 0042", year: 2026, doorsDone: 24, goldSeal: false, elfPicture: "", awardedOn: new Date("2026-12-24T12:00:00.000Z") };
+  const share = { detective: { firstName: "Ruby", surname: "Tinselfoot", approved: false }, rank: "Junior Detective" as const, doorsDone: 6, year: 2026 };
 
   it("holds the whole picture, so nothing is left to fetch", () => {
     expect(schoolLogoData("print")).toMatch(/^data:image\/webp;base64,[A-Za-z0-9+/]+=*$/);

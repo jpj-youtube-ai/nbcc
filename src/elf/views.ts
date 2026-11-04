@@ -3,7 +3,7 @@ import { badgeWords } from "./emails";
 import { ELF_NAMES, familyDetectiveName } from "./names";
 import { progressOf } from "./progress";
 import type { ElfSettings } from "./settings";
-import { SLOTS, defaultLook, wardrobeState, type ElfLook } from "./wardrobe";
+import { normaliseFavourites, normaliseLook, wardrobeState } from "./wardrobe";
 import type { CalendarView, DetectiveView, DoorView, HqView, WardrobeView } from "./pages/types";
 
 // NBCC Elf Detective School: what the database holds, turned into what the screens show (wave 1
@@ -18,7 +18,10 @@ export interface DetectiveRow {
   nameApproved: boolean;
   badgeNumber: number | null;
   look: unknown;
+  /** The costumes unlocked and not opened yet, by id: wrapped presents on the wardrobe. */
   fresh: string[];
+  /** The favourite looks, as stored. They are made safe before they are shown. */
+  favourites: unknown;
 }
 
 export interface FamilyRow {
@@ -33,10 +36,11 @@ export function firstClueAt(year: number): Date {
   return doorInstant({ year }, 1, "17:30") ?? new Date(Date.UTC(year, 11, 1, 17, 30));
 }
 
-/** What a detective has earned so far. Wave 1: nothing yet. */
+/** What a detective has done so far. Wave 1: nothing yet, as no door has a table to be cracked or
+ *  visited; wave 2 passes the family's cracked doors and the detective's own visits here. */
 function earned() {
-  const progress = progressOf({ cracked: [], visited: [] });
-  return { progress, state: wardrobeState(progress, false) };
+  const doors = { cracked: [], visited: [] };
+  return { progress: progressOf(doors), state: wardrobeState(doors) };
 }
 
 export function detectiveViewFor(d: DetectiveRow): DetectiveView {
@@ -81,9 +85,10 @@ export function wardrobeViewFor(o: { detective: DetectiveRow; settings: ElfSetti
   const { state } = earned();
   return {
     detective: detectiveViewFor(o.detective),
-    look: (o.detective.look as ElfLook | null) ?? defaultLook(),
+    look: normaliseLook(o.detective.look, state),
     state,
     fresh: o.detective.fresh,
+    favourites: normaliseFavourites(o.detective.favourites, state),
     hqUrl: "/elf/hq",
     calendarUrl: "/elf",
     saveUrl: "/api/elf/look",
@@ -95,16 +100,23 @@ export function wardrobeStateNow() {
   return earned().state;
 }
 
-/** A look as the plain wardrobe form sends it (no script): sibling, skin, hair, hairStyle, outfit, and one
- *  piece-<slot> field of "style:colour" for each slot. normaliseLook makes it safe afterwards. */
+/** A look as the plain wardrobe form sends it (no script): one field for each part, with an empty choice
+ *  meaning none. Only words are read. normaliseLook makes it safe afterwards. */
 export function lookFromForm(form: Record<string, unknown>): Record<string, unknown> {
   const text = (v: unknown) => (typeof v === "string" ? v : "");
-  const pieces: Record<string, [string, string] | null> = {};
-  for (const slot of SLOTS) {
-    const [style, colour] = text(form[`piece-${slot.id}`]).split(":");
-    pieces[slot.id] = style && colour ? [style, colour] : null;
-  }
-  return { sibling: text(form.sibling), skin: text(form.skin), hair: text(form.hair), hairStyle: text(form.hairStyle), outfit: text(form.outfit) || null, pieces };
+  const chosen = (v: unknown) => text(v) || null;
+  return {
+    sibling: text(form.sibling),
+    skin: text(form.skin),
+    hair: text(form.hair),
+    hairStyle: text(form.hairStyle),
+    costume: chosen(form.costume),
+    scene: text(form.scene),
+    friend: chosen(form.friend),
+    frame: chosen(form.frame),
+    glasses: chosen(form.glasses),
+    bow: chosen(form.bow),
+  };
 }
 
 function poundsWords(p: number): string {

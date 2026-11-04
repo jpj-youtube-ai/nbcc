@@ -1,17 +1,17 @@
 // @vitest-environment jsdom
-import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
+import { describe, it, expect, vi, afterEach } from "vitest";
 import { resolve } from "node:path";
 import { createRequire } from "node:module";
 import { renderWardrobePage } from "../../src/elf/pages/wardrobe";
 import type { WardrobeView } from "../../src/elf/pages/types";
-import { drawElf, drawOutfit } from "../../src/elf/wardrobe";
 import { wardrobeView } from "./elf-fixtures";
-import { PAINT_FIXTURE } from "./elf-paint-fixture";
 
-// NBCC Elf Detective School: the script on the wardrobe page. It shows the elf changing as things
-// are tried on, saves the look without leaving the page, and turns the sections into tabs. It runs
-// here against the real page and the real wardrobe file, with a pretend server. Every family and
-// detective is invented (see elf-fixtures.ts).
+// NBCC Elf Detective School: the script on the wardrobe page. It changes the elf on the stage as
+// things are tried on, saves the look without leaving the page, and turns the sections into tabs. It
+// runs here against the real page and the real wardrobe file, with a pretend server. Every family and
+// detective is invented (see elf-fixtures.ts): Ruby has done doors 1 to 6, wears the reindeer costume
+// and gold glasses with a robin at Largs in a candy cane frame, and door 6's snow globe and puffin
+// have just arrived.
 
 const ROOT = resolve(__dirname, "../..");
 const require = createRequire(import.meta.url);
@@ -29,29 +29,25 @@ let wd: Wardrobe | null = null;
 let calls: { url: string; body: Record<string, unknown>; keepalive: unknown }[] = [];
 let answer: { status: number; body: unknown } | "offline" = { status: 200, body: { ok: true } };
 
-const SIX = { doorsDone: 6, goldSeal: false, wonRace: false };
-const LABEL = "Detective Ruby Tinselfoot's elf";
+const PAPER = "/assets/img/elf/paper/";
+const NOT_SAVED = "We could not save this look. Check your signal and try again.";
 const $ = <T extends HTMLElement = HTMLElement>(sel: string) => document.querySelector<T>(sel)!;
 const $$ = <T extends HTMLElement = HTMLElement>(sel: string) => [...document.querySelectorAll<T>(sel)];
 const words = (el: Element | null) => (el?.textContent ?? "").replace(/\s+/g, " ").trim();
-const choice = (value: string) => $<HTMLInputElement>(`input[type="radio"][value="${value}"]`);
-const outfit = (id: string) => $<HTMLInputElement>(`input[name="outfit"][value="${id}"]`);
+const pick = (name: string, value: string) => $<HTMLInputElement>(`input[type="radio"][name="${name}"][value="${value}"]`);
 const tab = (name: string) => $$<HTMLAnchorElement>(".elf-wd-tab").find((a) => words(a).startsWith(name))!;
 const shown = () => $$(".elf-wd-panel").filter((p) => !p.hidden).map((p) => p.id);
+/** The pictures on the stage, in order, as part and file. */
+const onStage = () => $$<HTMLImageElement>(".elf-wd-stage img").map((i) => [i.getAttribute("data-picture"), (i.getAttribute("src") ?? "").replace(PAPER, "")]);
+const picture = (part: string) => ($(`.elf-wd-stage img[data-picture="${part}"]`) as HTMLImageElement | null)?.getAttribute("src")?.replace(PAPER, "") ?? null;
 const flush = async () => {
   for (let i = 0; i < 8; i++) await Promise.resolve();
 };
-/** Markup as a page holds it: a browser writes <rect/> back as <rect></rect>. */
-function asPage(html: string): string {
-  const box = document.createElement("div");
-  box.innerHTML = html;
-  return box.innerHTML;
-}
-/** The elf as the page should now be drawing it. */
-const drawn = (look: unknown, state = SIX) => asPage(drawElf(look, state, { size: 260, backdrop: false, key: "preview", label: LABEL }));
 
-function load(view: WardrobeView = wardrobeView(), opts: Record<string, unknown> = {}): Wardrobe | null {
+/** The real page with the script started on it. `before` changes the page before the script starts. */
+function load(view: WardrobeView = wardrobeView(), opts: Record<string, unknown> = {}, before?: () => void): Wardrobe | null {
   document.documentElement.innerHTML = new DOMParser().parseFromString(renderWardrobePage(view), "text/html").documentElement.innerHTML;
+  before?.();
   calls = [];
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   (window as any).fetch = vi.fn((url: string, init?: RequestInit) => {
@@ -72,75 +68,75 @@ afterEach(() => {
   window.location.hash = "";
 });
 
-
-beforeEach(() => elf.usePaint(PAINT_FIXTURE));
-afterEach(() => elf.usePaint(null));
-
 describe("trying things on", () => {
-  it("changes the elf in the mirror the moment something is picked", () => {
+  it("changes the elf on the stage the moment a costume is picked, glasses fitted to it", () => {
     load();
-    const before = wardrobeView().look;
-    expect($(".elf-wd-mirror").innerHTML).toBe(drawn(before));
-    choice("elf:green").click();
-    const after = { ...before, pieces: { ...before.pieces, hat: ["elf", "green"] } };
-    expect($(".elf-wd-mirror").innerHTML).toBe(drawn(after));
-    expect($(".elf-wd-mirror").innerHTML).not.toBe(drawn(before));
-    expect($(".elf-wd-mirror svg").getAttribute("aria-label")).toBe(LABEL);
+    expect(picture("body")).toBe("costumes/reindeer-s3.webp");
+    pick("costume", "tree").click();
+    expect(picture("body")).toBe("costumes/tree-s3.webp");
+    expect(picture("glasses")).toBe("pieces/specs-gold--tree.webp");
+    expect($(".elf-wd-stage").getAttribute("aria-label")).toBe("Detective Ruby Tinselfoot's elf");
   });
 
-  it("keeps the words about what the elf is wearing in step with the picture", () => {
+  it("keeps the words about the look in step with the picture", () => {
     load();
-    choice("elf:green").click();
-    $<HTMLInputElement>('input[name="piece-face"][value=""]').click();
-    expect(words($(".elf-wd-wearing"))).toBe(
-      "Wearing: Green elf hat, red striped scarf, red elf tunic, brown snow boots and brass magnifying glass.",
-    );
+    pick("scene", "loch").click();
+    expect(picture("scene")).toBe("scenes/loch.webp");
+    expect(words($(".elf-wd-wearing"))).toBe("Reindeer costume and gold glasses, with a robin. Highland loch, in a candy cane frame.");
   });
 
-  it("changes the skin and the hair too", () => {
+  it("changes the skin and the hair too, once the costume is off", () => {
     load();
-    choice("s5").click();
-    choice("black").click();
-    choice("curly").click();
-    const look = { ...wardrobeView().look, skin: "s5", hair: "black", hairStyle: "curly" };
-    expect($(".elf-wd-mirror").innerHTML).toBe(drawn(look));
-    expect(wd!.look()).toEqual(look);
+    pick("costume", "").click();
+    pick("skin", "s5").click();
+    pick("hair", "black").click();
+    pick("hairStyle", "curly").click();
+    expect(picture("body")).toBe("elves/elf-sister-s5-curly-black.webp");
+    expect(wd!.look()).toEqual({ ...wardrobeView().look, costume: null, skin: "s5", hair: "black", hairStyle: "curly" });
   });
 
-  it("changes a sister to a brother", () => {
+  it("changes a girl to a boy", () => {
     load();
-    choice("brother").click();
-    const look = { ...wardrobeView().look, sibling: "brother" };
-    expect($(".elf-wd-mirror").innerHTML).toBe(drawn(look));
-    expect(wd!.look()).toEqual(look);
+    pick("costume", "").click();
+    pick("sibling", "brother").click();
+    expect(picture("body")).toBe("elves/elf-brother-s3-bunches-ginger.webp");
   });
 
-  it("puts a whole outfit on, and takes it off again when a piece is picked", () => {
+  it("adds and takes away the pictures a look needs, keeping them in stage order", () => {
     load();
-    outfit("present").click();
-    expect(words($(".elf-wd-wearing"))).toBe("Wearing: The present outfit.");
-    expect($(".elf-wd-mirror").innerHTML).toBe(drawn({ ...wardrobeView().look, outfit: "present" }));
-    choice("elf:green").click();
-    expect(outfit("").checked).toBe(true);
-    expect(words($(".elf-wd-wearing"))).toContain("Green elf hat");
+    pick("friend", "").click();
+    pick("glasses", "").click();
+    pick("costume", "").click();
+    pick("bow", "bow-red").click();
+    expect(onStage()).toEqual([["scene", "scenes/largs.webp"], ["body", "elves/elf-sister-s3-bunches-ginger.webp"], ["bow", "pieces/bow-red.webp"]]);
+    pick("glasses", "stars-blue").click();
+    pick("friend", "snowman").click();
+    expect(onStage().map((p) => p[0])).toEqual(["scene", "body", "glasses", "bow", "friend"]);
   });
 
-  it("leaves the outfit on when a slot is only emptied, or the skin is changed", () => {
+  it("draws no bow tie under a costume", () => {
     load();
-    outfit("present").click();
-    $<HTMLInputElement>('input[name="piece-face"][value=""]').click();
-    choice("s1").click();
-    expect(outfit("present").checked).toBe(true);
-    expect(words($(".elf-wd-wearing"))).toBe("Wearing: The present outfit.");
+    pick("bow", "bow-red").click();
+    expect(picture("bow")).toBeNull();
+    pick("costume", "").click();
+    expect(picture("bow")).toBe("pieces/bow-red.webp");
   });
 
-  it("draws the outfits on the elf's own face, so their tiles change with the skin and hair", () => {
+  it("puts the frame chosen round the stage, and none when none is chosen", () => {
     load();
-    const tile = () => outfit("tree").closest(".elf-wd-tile")!.querySelector(".elf-wd-art")!.innerHTML;
-    expect(tile()).toBe(asPage(drawOutfit("tree", wardrobeView().look, 72)));
-    choice("s5").click();
-    expect(tile()).toBe(asPage(drawOutfit("tree", { ...wardrobeView().look, skin: "s5" }, 72)));
-    expect(tile()).not.toBe(asPage(drawOutfit("tree", wardrobeView().look, 72)));
+    pick("frame", "gold").click();
+    expect($(".elf-wd-stage").classList.contains("elf-frame--gold")).toBe(true);
+    expect($(".elf-wd-stage").classList.contains("elf-frame--candy")).toBe(false);
+    pick("frame", "").click();
+    expect([...$(".elf-wd-stage").classList].filter((c) => c.startsWith("elf-frame--"))).toEqual([]);
+  });
+
+  it("shows the costume tiles in the skin chosen", () => {
+    load();
+    pick("skin", "s5").click();
+    const tiles = $$<HTMLImageElement>("img[data-costume]");
+    expect(tiles.length).toBe(51);
+    for (const t of tiles) expect(t.getAttribute("src")).toBe(`${PAPER}tiles/costumes/${t.getAttribute("data-costume")}-s5.webp`);
   });
 });
 
@@ -148,39 +144,43 @@ describe("what is locked", () => {
   it("stays locked: the script never makes a locked thing pickable", () => {
     load();
     const before = $$<HTMLInputElement>('form.elf-wd input[type="radio"]:disabled').map((i) => i.value);
-    expect(before.length).toBeGreaterThan(40);
-    choice("elf:green").click();
-    wd!.show("wd-slot-hat");
+    expect(before.length).toBe(36);
+    pick("costume", "tree").click();
+    wd!.show("wd-scenes");
     expect($$<HTMLInputElement>('form.elf-wd input[type="radio"]:disabled').map((i) => i.value)).toEqual(before);
   });
 
-  it("says why when a locked thing is tapped, and changes nothing", () => {
+  it("says why when a locked costume is tapped, and changes nothing", () => {
     load();
-    const before = $(".elf-wd-mirror").innerHTML;
-    const bobble = choice("bobble:red");
-    document.querySelector<HTMLElement>(`label[for="${bobble.id}"]`)!.click();
-    expect(bobble.checked).toBe(false);
-    expect($(".elf-wd-mirror").innerHTML).toBe(before);
-    expect(words($(".elf-wd-status"))).toBe("Red bobble hat, locked until you have done 7 doors.");
-    expect(bobble.closest(".elf-wd-tile")!.classList.contains("is-rattled")).toBe(true);
+    const before = onStage();
+    const santa = pick("costume", "santa");
+    document.querySelector<HTMLElement>(`label[for="${santa.id}"]`)!.click();
+    expect(santa.checked).toBe(false);
+    expect(onStage()).toEqual(before);
+    expect(words($(".elf-wd-status"))).toBe("Santa suit, opens with door 24.");
+    expect(santa.closest(".elf-wd-tile")!.classList.contains("is-rattled")).toBe(true);
     expect(calls).toEqual([]);
   });
 
   it("is never drawn, even if the page is meddled with", () => {
     load();
-    const bobble = choice("bobble:red");
-    bobble.disabled = false;
-    bobble.click();
-    expect($(".elf-wd-mirror").innerHTML).toBe(drawn({ ...wardrobeView().look, pieces: { ...wardrobeView().look.pieces, hat: ["elf", "red"] } }));
-    expect(words($(".elf-wd-wearing"))).toContain("Red elf hat");
+    const santa = pick("costume", "santa");
+    santa.disabled = false;
+    santa.click();
+    expect(picture("body")).toBe("elves/elf-sister-s3-bunches-ginger.webp");
+    expect(words($(".elf-wd-wearing"))).toMatch(/^No costume/);
   });
 
-  it("reads what has been earned as numbers, so a gold seal outfit can be worn once it is earned", () => {
-    load(wardrobeView({ state: { doorsDone: 24, goldSeal: true, wonRace: true } }));
-    outfit("golden").click();
-    expect(words($(".elf-wd-wearing"))).toBe("Wearing: The golden detective outfit.");
-    outfit("nessie").click();
-    expect(words($(".elf-wd-wearing"))).toBe("Wearing: The Nessie outfit.");
+  it("reads the doors done from the page, so a costume opens once its door is done", () => {
+    load(wardrobeView({ state: { doors: [24] } }));
+    pick("costume", "santa").click();
+    expect(picture("body")).toBe("costumes/santa-s3.webp");
+  });
+
+  it("counts nothing but whole door numbers in what the page says is done", () => {
+    load(wardrobeView({ state: { doors: [24] } }), {}, () => $("form.elf-wd").setAttribute("data-doors", "x, 99,24.5,"));
+    pick("costume", "santa").click();
+    expect(picture("body")).toBe("elves/elf-sister-s3-bunches-ginger.webp");
   });
 });
 
@@ -188,17 +188,16 @@ describe("saving", () => {
   it("saves the look by itself once the changes settle, in one go", async () => {
     vi.useFakeTimers();
     load();
-    choice("elf:green").click();
-    choice("s5").click();
+    pick("scene", "loch").click();
+    pick("skin", "s5").click();
     vi.advanceTimersByTime(300);
-    choice("black").click();
+    pick("hair", "black").click();
     expect(calls).toEqual([]);
     vi.advanceTimersByTime(900);
     await flush();
     expect(calls.length).toBe(1);
     expect(calls[0].url).toBe("/api/elf/look");
-    const look = { ...wardrobeView().look, skin: "s5", hair: "black", pieces: { ...wardrobeView().look.pieces, hat: ["elf", "green"] } };
-    expect(calls[0].body).toEqual({ detectiveId: "d1", look, tried: [] });
+    expect(calls[0].body).toEqual({ detectiveId: "d1", look: { ...wardrobeView().look, scene: "loch", skin: "s5", hair: "black" }, tried: [] });
     expect(words($(".elf-wd-status"))).toBe("Saved");
     expect($(".elf-wd-status").classList.contains("is-error")).toBe(false);
   });
@@ -211,10 +210,10 @@ describe("saving", () => {
   it("says plainly when the look could not be saved, and offers the Save button", async () => {
     answer = { status: 500, body: { ok: false } };
     load();
-    choice("elf:green").click();
+    pick("scene", "loch").click();
     wd!.save();
     await flush();
-    expect(words($(".elf-wd-status"))).toBe("We could not save this look. Check your signal and try again.");
+    expect(words($(".elf-wd-status"))).toBe(NOT_SAVED);
     expect($(".elf-wd-status").classList.contains("is-error")).toBe(true);
     const button = $<HTMLButtonElement>('form.elf-wd button[type="submit"]');
     expect(button.hidden).toBe(false);
@@ -232,10 +231,10 @@ describe("saving", () => {
   it("says the same when there is no signal at all, or the server answers no", async () => {
     answer = "offline";
     load();
-    choice("elf:green").click();
+    pick("scene", "loch").click();
     wd!.save();
     await flush();
-    expect(words($(".elf-wd-status"))).toBe("We could not save this look. Check your signal and try again.");
+    expect(words($(".elf-wd-status"))).toBe(NOT_SAVED);
     answer = { status: 200, body: { ok: false, reason: "unknown-detective" } };
     wd!.save();
     await flush();
@@ -244,21 +243,21 @@ describe("saving", () => {
 
   it("sends a change made while a save is on its way, straight after", async () => {
     load();
-    choice("elf:green").click();
+    pick("scene", "loch").click();
     wd!.save();
-    choice("elf:blue").click();
+    pick("scene", "forest").click();
     wd!.save();
     expect(calls.length).toBe(1);
     await flush();
     await flush();
     expect(calls.length).toBe(2);
-    expect((calls[1].body.look as { pieces: { hat: string[] } }).pieces.hat).toEqual(["elf", "blue"]);
+    expect((calls[1].body.look as { scene: string }).scene).toBe("forest");
   });
 
   it("saves a change that is still waiting when the page is left", () => {
     vi.useFakeTimers();
     load();
-    choice("elf:green").click();
+    pick("scene", "loch").click();
     expect(calls).toEqual([]);
     window.dispatchEvent(new Event("pagehide"));
     expect(calls.length).toBe(1);
@@ -269,21 +268,21 @@ describe("saving", () => {
 
   it("sends the latest change straight away when the page is left while an earlier save is on its way", () => {
     load();
-    choice("elf:green").click();
+    pick("scene", "loch").click();
     wd!.save();
-    choice("elf:blue").click();
+    pick("scene", "forest").click();
     wd!.save();
     expect(calls.length).toBe(1);
     window.dispatchEvent(new Event("pagehide"));
     expect(calls.length).toBe(2);
-    expect((calls[1].body.look as { pieces: { hat: string[] } }).pieces.hat).toEqual(["elf", "blue"]);
+    expect((calls[1].body.look as { scene: string }).scene).toBe("forest");
     expect(calls[1].keepalive).toBe(true);
   });
 
   it("saves when the page is hidden too, which is all a phone says when an app is swiped away", () => {
     vi.useFakeTimers();
     load();
-    choice("elf:green").click();
+    pick("scene", "loch").click();
     Object.defineProperty(document, "visibilityState", { value: "hidden", configurable: true });
     document.dispatchEvent(new Event("visibilitychange"));
     Object.defineProperty(document, "visibilityState", { value: "visible", configurable: true });
@@ -294,27 +293,26 @@ describe("saving", () => {
     load();
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (window as any).fetch = vi.fn(() => Promise.resolve({ ok: true, status: 200, json: () => Promise.reject(new Error("not json")) }));
-    choice("elf:green").click();
+    pick("scene", "loch").click();
     wd!.save();
     await flush();
     expect($(".elf-wd-status").classList.contains("is-error")).toBe(true);
   });
 
-  it("keeps the warning about a failed save when a locked thing is tapped", async () => {
+  it("keeps the warning about a failed save when a locked costume is tapped", async () => {
     answer = { status: 500, body: {} };
     load();
-    choice("elf:green").click();
+    pick("scene", "loch").click();
     wd!.save();
     await flush();
-    document.querySelector<HTMLElement>(`label[for="${choice("bobble:red").id}"]`)!.click();
-    expect(words($(".elf-wd-status"))).toBe("We could not save this look. Check your signal and try again.");
+    document.querySelector<HTMLElement>(`label[for="${pick("costume", "santa").id}"]`)!.click();
+    expect(words($(".elf-wd-status"))).toBe(NOT_SAVED);
   });
 
-  it("draws and saves choices the browser put back that the mirror does not show", () => {
+  it("draws and saves choices the browser put back that the stage does not show", () => {
     vi.useFakeTimers();
-    const html = renderWardrobePage(wardrobeView());
-    document.documentElement.innerHTML = new DOMParser().parseFromString(html, "text/html").documentElement.innerHTML;
-    choice("elf:green").checked = true;
+    document.documentElement.innerHTML = new DOMParser().parseFromString(renderWardrobePage(wardrobeView()), "text/html").documentElement.innerHTML;
+    pick("scene", "loch").checked = true;
     calls = [];
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (window as any).fetch = vi.fn((url: string, init?: RequestInit) => {
@@ -322,7 +320,8 @@ describe("saving", () => {
       return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve({ ok: true }) });
     });
     wd = initWardrobe(document, window, { elf }) as Wardrobe;
-    expect(words($(".elf-wd-wearing"))).toContain("Green elf hat");
+    expect(words($(".elf-wd-wearing"))).toContain("Highland loch");
+    expect(picture("scene")).toBe("scenes/loch.webp");
     vi.advanceTimersByTime(1000);
     expect(calls.length).toBe(1);
   });
@@ -337,49 +336,48 @@ describe("saving", () => {
 describe("what is new", () => {
   it("loses its New tag once it is tried on, and the server is told", async () => {
     load();
-    const jumper = choice("jumper:red");
-    const tile = jumper.closest(".elf-wd-tile")!;
-    jumper.click();
+    const globe = pick("costume", "snowglobe");
+    const tile = globe.closest(".elf-wd-tile")!;
+    globe.click();
     expect(tile.classList.contains("is-new")).toBe(false);
     expect(tile.querySelector(".elf-wd-new")).toBeNull();
-    expect(words(tile.querySelector(".sr-only"))).toBe("Red Christmas jumper");
+    expect(words(tile.querySelector(".sr-only"))).toBe("Snow globe");
     wd!.save();
     await flush();
-    expect(calls[0].body.tried).toEqual(["jumper:red"]);
+    expect(calls[0].body.tried).toEqual(["snowglobe"]);
   });
 
   it("tells the server once: a thing already told is not sent again", async () => {
     load();
-    choice("jumper:red").click();
+    pick("costume", "snowglobe").click();
     wd!.save();
     await flush();
-    outfit("tree").click();
+    pick("costume", "puffin").click();
     wd!.save();
     await flush();
-    expect(calls[1].body.tried).toEqual(["tree"]);
+    expect(calls[1].body.tried).toEqual(["puffin"]);
   });
 
   it("keeps what was tried for the next save when a save fails", async () => {
     answer = { status: 500, body: {} };
     load();
-    choice("jumper:red").click();
+    pick("costume", "snowglobe").click();
     wd!.save();
     await flush();
     answer = { status: 200, body: { ok: true } };
     wd!.save();
     await flush();
-    expect(calls[1].body.tried).toEqual(["jumper:red"]);
+    expect(calls[1].body.tried).toEqual(["snowglobe"]);
   });
 
   it("takes the mark off a section once nothing in it is new", () => {
     load();
-    expect(tab("Tops").querySelector(".elf-wd-tab__new")).not.toBeNull();
-    choice("jumper:red").click();
-    expect(tab("Tops").querySelector(".elf-wd-tab__new")).not.toBeNull();
-    choice("jumper:green").click();
-    expect(tab("Tops").querySelector(".elf-wd-tab__new")).toBeNull();
-    expect(words(tab("Tops"))).toBe("Tops");
-    expect(tab("Shoes").querySelector(".elf-wd-tab__new")).not.toBeNull();
+    expect(tab("Costumes").querySelector(".elf-wd-tab__new")).not.toBeNull();
+    pick("costume", "snowglobe").click();
+    expect(tab("Costumes").querySelector(".elf-wd-tab__new")).not.toBeNull();
+    pick("costume", "puffin").click();
+    expect(tab("Costumes").querySelector(".elf-wd-tab__new")).toBeNull();
+    expect(words(tab("Costumes"))).toBe("Costumes");
   });
 });
 
@@ -387,25 +385,25 @@ describe("the sections as tabs", () => {
   it("shows one section at a time, starting with the first that holds something new", () => {
     load();
     expect($(".elf-wd-tabs").getAttribute("role")).toBe("tablist");
-    expect(shown()).toEqual(["wd-outfits"]);
-    expect(tab("Outfits").getAttribute("aria-selected")).toBe("true");
+    expect(shown()).toEqual(["wd-costumes"]);
+    expect(tab("Costumes").getAttribute("aria-selected")).toBe("true");
     expect($$(".elf-wd-tab").filter((t) => t.getAttribute("aria-selected") === "true").length).toBe(1);
     expect($("form.elf-wd").classList.contains("is-live")).toBe(true);
   });
 
   it("starts at the first section when nothing is new", () => {
     load(wardrobeView({ fresh: [] }));
-    expect(shown()).toEqual(["wd-look"]);
+    expect(shown()).toEqual(["wd-elf"]);
   });
 
   it("opens a section when its tab is pressed, without jumping down the page", () => {
     load();
     const event = new MouseEvent("click", { bubbles: true, cancelable: true });
-    tab("Hats").dispatchEvent(event);
+    tab("Scenes").dispatchEvent(event);
     expect(event.defaultPrevented).toBe(true);
-    expect(shown()).toEqual(["wd-slot-hat"]);
-    expect(tab("Hats").getAttribute("aria-selected")).toBe("true");
-    expect(tab("Outfits").getAttribute("aria-selected")).toBe("false");
+    expect(shown()).toEqual(["wd-scenes"]);
+    expect(tab("Scenes").getAttribute("aria-selected")).toBe("true");
+    expect(tab("Costumes").getAttribute("aria-selected")).toBe("false");
   });
 
   it("is a real set of tabs to a screen reader and a keyboard", () => {
@@ -419,29 +417,29 @@ describe("the sections as tabs", () => {
       expect(t.parentElement!.getAttribute("role")).toBe("presentation");
     }
     expect(tabs.filter((t) => t.getAttribute("tabindex") === "0").length).toBe(1);
-    expect(tab("Outfits").getAttribute("tabindex")).toBe("0");
+    expect(tab("Costumes").getAttribute("tabindex")).toBe("0");
 
-    tab("Outfits").dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true, cancelable: true }));
-    expect(shown()).toEqual(["wd-slot-hat"]);
-    expect(document.activeElement).toBe(tab("Hats"));
-    tab("Hats").dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowLeft", bubbles: true, cancelable: true }));
-    tab("Outfits").dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowLeft", bubbles: true, cancelable: true }));
-    expect(shown()).toEqual(["wd-look"]);
-    tab("Skin and hair").dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowLeft", bubbles: true, cancelable: true }));
-    expect(shown()).toEqual(["wd-slot-extra"]);
-    tab("Extras").dispatchEvent(new KeyboardEvent("keydown", { key: "Home", bubbles: true, cancelable: true }));
-    expect(shown()).toEqual(["wd-look"]);
-    tab("Skin and hair").dispatchEvent(new KeyboardEvent("keydown", { key: "End", bubbles: true, cancelable: true }));
-    expect(shown()).toEqual(["wd-slot-extra"]);
+    tab("Costumes").dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true, cancelable: true }));
+    expect(shown()).toEqual(["wd-scenes"]);
+    expect(document.activeElement).toBe(tab("Scenes"));
+    tab("Scenes").dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowLeft", bubbles: true, cancelable: true }));
+    tab("Costumes").dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowLeft", bubbles: true, cancelable: true }));
+    expect(shown()).toEqual(["wd-elf"]);
+    tab("Your elf").dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowLeft", bubbles: true, cancelable: true }));
+    expect(shown()).toEqual(["wd-glasses"]);
+    tab("Glasses and bow ties").dispatchEvent(new KeyboardEvent("keydown", { key: "Home", bubbles: true, cancelable: true }));
+    expect(shown()).toEqual(["wd-elf"]);
+    tab("Your elf").dispatchEvent(new KeyboardEvent("keydown", { key: "End", bubbles: true, cancelable: true }));
+    expect(shown()).toEqual(["wd-glasses"]);
   });
 
   it("opens the section named in the address, if there is one", () => {
-    window.location.hash = "#wd-slot-feet";
+    window.location.hash = "#wd-frames";
     load();
-    expect(shown()).toEqual(["wd-slot-feet"]);
+    expect(shown()).toEqual(["wd-frames"]);
     window.location.hash = "#somewhere-else";
     load();
-    expect(shown()).toEqual(["wd-outfits"]);
+    expect(shown()).toEqual(["wd-costumes"]);
   });
 });
 
@@ -449,7 +447,7 @@ describe("without the wardrobe file", () => {
   it("leaves the page as it was: every section showing and the Save button there", () => {
     const got = load(wardrobeView(), { elf: null });
     expect(got).toBeNull();
-    expect(shown().length).toBe(9);
+    expect(shown().length).toBe(6);
     expect($<HTMLButtonElement>('form.elf-wd button[type="submit"]').hidden).toBe(false);
     expect($(".elf-wd-tabs").getAttribute("role")).toBeNull();
   });

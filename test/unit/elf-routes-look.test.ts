@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-// NBCC Elf Detective School: saving how a detective's elf looks. The server decides what the
-// detective has earned; whatever the page sends is made safe against that. Every family is invented.
+// NBCC Elf Detective School: saving how a detective's elf looks. The server decides which doors the
+// detective has done; whatever the page sends is made safe against that. Every family is invented.
 
 const { clientQuery, poolQuery } = vi.hoisted(() => ({ clientQuery: vi.fn(), poolQuery: vi.fn() }));
 vi.mock("../../src/db/pool", () => ({
@@ -11,7 +11,8 @@ vi.mock("../../src/db/pool", () => ({
 import { saveLook } from "../../src/db/elf";
 import { defaultLook } from "../../src/elf/wardrobe";
 
-const ROW = { id: 100, family_id: 3, look: null, fresh: ["bow:gold", "hat:elf:red"] };
+const STORED = [{ ...defaultLook(), scene: "loch" }];
+const ROW = { id: 100, fresh: ["tree", "polarbear"], favourites: STORED };
 
 beforeEach(() => {
   clientQuery.mockReset();
@@ -19,24 +20,24 @@ beforeEach(() => {
 });
 
 function db(row: typeof ROW | null) {
-  const saved: unknown[][] = [];
+  const saved: { sql: string; params: unknown[] }[] = [];
   clientQuery.mockImplementation(async (sql: string, params: unknown[] = []) => {
     if (/SELECT[\s\S]*FROM elf_detectives[\s\S]*FOR UPDATE/.test(sql)) return { rows: row ? [row] : [] };
-    if (/UPDATE elf_detectives SET look/.test(sql)) saved.push(params);
+    if (/UPDATE elf_detectives SET/.test(sql)) saved.push({ sql, params });
     return { rows: [] };
   });
   return saved;
 }
 
 describe("saving a look", () => {
-  it("keeps the look made safe against what the detective has earned, never what the page claims", async () => {
+  it("stores a locked costume as none: the doors done are the server's, never the page's", async () => {
     const saved = db(ROW);
-    // A jumper unlocks at 6 doors; this detective has none, so the starter top is kept.
-    const sent = { ...defaultLook(), pieces: { ...defaultLook().pieces, top: ["jumper", "red"] } };
-    const kept = await saveLook({ detectiveId: 100, familyId: 3, look: sent, tried: [] });
+    // The Christmas tree comes with door 2, and in wave 1 no door is done.
+    const kept = await saveLook({ detectiveId: 100, familyId: 3, look: { ...defaultLook(), costume: "tree", scene: "ayr" }, tried: [] });
     expect(kept).not.toBe("not-found");
-    if (kept !== "not-found") expect(kept.pieces.top).toEqual(defaultLook().pieces.top);
+    if (kept !== "not-found") expect(kept.look).toEqual({ ...defaultLook(), scene: "ayr" });
     expect(saved.length).toBe(1);
+    expect(JSON.parse(saved[0].params[1] as string)).toEqual({ ...defaultLook(), scene: "ayr" });
   });
 
   it("refuses another family's detective, and saves nothing", async () => {
@@ -47,10 +48,30 @@ describe("saving a look", () => {
     expect(select[1]).toEqual([100, 99]);
   });
 
-  it("clears the New tag of what was tried on, once, however many times it is sent", async () => {
+  it("takes off fresh only the presents it had, once, however many times they are sent", async () => {
     const saved = db(ROW);
-    await saveLook({ detectiveId: 100, familyId: 3, look: defaultLook(), tried: ["bow:gold", "bow:gold", 42 as unknown as string] });
-    const fresh = saved[0].find((p) => Array.isArray(p)) as string[];
-    expect(fresh).toEqual(["hat:elf:red"]);
+    await saveLook({ detectiveId: 100, familyId: 3, look: defaultLook(), tried: ["tree", "nessie", 7, "tree"] });
+    expect(saved[0].params[2]).toEqual(["polarbear"]);
+  });
+
+  it("keeps three favourites at most, made safe, each once", async () => {
+    const saved = db(ROW);
+    const a = { ...defaultLook(), scene: "largs" };
+    const b = { ...defaultLook(), costume: "tree", friend: "robin" };
+    const c = { ...defaultLook(), glasses: "specs-gold" };
+    const d = { ...defaultLook(), bow: "bow-red" };
+    const kept = await saveLook({ detectiveId: 100, familyId: 3, look: defaultLook(), tried: [], favourites: [a, 7, a, b, c, d] });
+    const want = [a, { ...defaultLook(), friend: "robin" }, c];
+    if (kept !== "not-found") expect(kept.favourites).toEqual(want);
+    expect(saved[0].sql).toMatch(/favourites = \$4/);
+    expect(JSON.parse(saved[0].params[3] as string)).toEqual(want);
+  });
+
+  it("leaves favourites alone when a save does not send them", async () => {
+    const saved = db(ROW);
+    const kept = await saveLook({ detectiveId: 100, familyId: 3, look: defaultLook(), tried: [] });
+    expect(saved[0].sql).not.toMatch(/favourites/);
+    expect(saved[0].params.length).toBe(3);
+    if (kept !== "not-found") expect(kept.favourites).toEqual(STORED);
   });
 });

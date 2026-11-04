@@ -1,38 +1,41 @@
 import { describe, it, expect, beforeAll } from "vitest";
 import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
-import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import sharp from "sharp";
 import { ELF_PNG_MAX_WIDTH, ELF_PNG_QUEUE_MAX, elfPng, elfPngKey, elfPngWidth, inTurn, stackPng } from "../../src/elf/elf-png";
-import { OUTFITS, defaultLook, type WardrobeState } from "../../src/elf/wardrobe";
+import { defaultLook, type WardrobeState } from "../../src/elf/wardrobe";
 
-const PAINT = createRequire(import.meta.url)("../../assets/js/elf-paint.js") as { layers: Record<string, unknown> };
-
-// NBCC Elf Detective School: a detective's elf as a PNG, for emails and Detective HQ, stacked from
-// the painted layers with the real sharp. Because it makes real pixels, it is also where the things
-// only an eye would notice are held: that the hair colour shows, that the face shows on the darkest
-// skin, that a held gadget hides the open mitten, that every outfit looks different.
+// NBCC Elf Detective School: a detective's elf as a PNG, for emails and Detective HQ, stacked from the
+// paper pictures with the real sharp, the way the wardrobe's stage lays them: the scene, the elf or its
+// costume, glasses, a bow tie and a friend. Because it makes real pixels, it is also where the places
+// on the stage are held.
 
 const PNG_SIGNATURE = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
-const EVERYTHING = { doorsDone: 24, goldSeal: true, wonRace: true };
+const NONE: WardrobeState = { doors: [] };
+const ALL: WardrobeState = { doors: Array.from({ length: 24 }, (_, i) => i + 1) };
 
 /** An elf picture, or a failed test if the queue said it was busy. */
-async function png(look: unknown, state: WardrobeState, width?: number, background?: "clear" | "cream"): Promise<Buffer> {
-  const made = await elfPng(look, state, width, background);
+async function png(look: unknown, state: WardrobeState, width?: number): Promise<Buffer> {
+  const made = await elfPng(look, state, width);
   if (!made) throw new Error("the picture queue was busy");
   return made;
 }
 
-const pixels = (picture: Buffer | string): Promise<Buffer> =>
-  sharp(typeof picture === "string" ? Buffer.from(picture) : picture).ensureAlpha().raw().toBuffer();
+/** The colour at a point given as fractions of the picture's width and height. */
+async function at(picture: Buffer, fx: number, fy: number): Promise<number[]> {
+  const { data, info } = await sharp(picture).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
+  const x = Math.round(fx * (info.width - 1)), y = Math.round(fy * (info.height - 1));
+  const i = (y * info.width + x) * 4;
+  return [data[i], data[i + 1], data[i + 2], data[i + 3]];
+}
 
 /** How many pixels are not the same in two pictures of one size. */
 async function pixelsThatDiffer(a: Buffer, b: Buffer): Promise<number> {
-  const [x, y] = await Promise.all([pixels(a), pixels(b)]);
+  const [x, y] = await Promise.all([a, b].map((p) => sharp(p).ensureAlpha().raw().toBuffer()));
   let count = 0;
   for (let i = 0; i < x.length; i += 4) {
-    if (x[i] !== y[i] || x[i + 1] !== y[i + 1] || x[i + 2] !== y[i + 2] || x[i + 3] !== y[i + 3]) count += 1;
+    if (x[i] !== y[i] || x[i + 1] !== y[i + 1] || x[i + 2] !== y[i + 2]) count += 1;
   }
   return count;
 }
@@ -48,136 +51,114 @@ describe("the width of the picture", () => {
 });
 
 describe("an elf as a PNG", () => {
-  it("is a real PNG of the size asked for, 1.3 times as tall as it is wide", async () => {
-    const picture = await png(defaultLook(), { doorsDone: 0 }, 200);
+  it("is a real PNG of the width asked for, 2 by 3 like the stage", async () => {
+    const picture = await png(defaultLook(), NONE, 240);
     expect(picture.subarray(0, 8).equals(PNG_SIGNATURE)).toBe(true);
     const meta = await sharp(picture).metadata();
-    expect(meta.format).toBe("png");
-    expect(meta.width).toBe(200);
-    expect(meta.height).toBe(260);
+    expect([meta.format, meta.width, meta.height]).toEqual(["png", 240, 360]);
   });
 
-  it("has a see through background unless it is asked for cream", async () => {
-    const clear = await pixels(await png(defaultLook(), { doorsDone: 0 }, 100));
-    expect(clear[3]).toBe(0); // the top left corner is outside the backdrop circle
-    const cream = await pixels(await png(defaultLook(), { doorsDone: 0 }, 100, "cream"));
-    expect([cream[0], cream[1], cream[2], cream[3]]).toEqual([0xf8, 0xf5, 0xee, 255]);
+  it("is never see through: the scene fills it, so no mail app can lose the elf against a dark page", async () => {
+    const picture = await png(defaultLook(), NONE, 100);
+    for (const [fx, fy] of [[0, 0], [1, 0], [0, 1], [1, 1]]) expect((await at(picture, fx, fy))[3]).toBe(255);
   });
 
-  it("draws only what has been earned", async () => {
-    const cheeky = await png({ ...defaultLook(), outfit: "nessie" }, { doorsDone: 24 }, 120);
-    const honest = await png(defaultLook(), { doorsDone: 24 }, 120);
+  it("draws only what has been unlocked", async () => {
+    const cheeky = await png({ ...defaultLook(), costume: "santa" }, NONE, 120);
+    const honest = await png(defaultLook(), NONE, 120);
     expect(cheeky.equals(honest)).toBe(true);
   });
 
+  it("draws the costume chosen, plainly different from the plain elf", async () => {
+    const plain = await png(defaultLook(), ALL, 160);
+    const tree = await png({ ...defaultLook(), costume: "tree" }, ALL, 160);
+    // 160 by 240 is 38,400 pixels: a costume changes far more than a thousand of them.
+    expect(await pixelsThatDiffer(plain, tree)).toBeGreaterThan(1000);
+  });
+
+  it("stacks the scene, the costume and the friend where the stage puts them", async () => {
+    const scene = await png({ ...defaultLook(), scene: "largs" }, ALL, 160);
+    const dressed = await png({ ...defaultLook(), scene: "largs", costume: "reindeer", friend: "robin" }, ALL, 160);
+    // The elf's middle, and the friend's body just above its feet on the front of the plinth (the
+    // places themselves are held exactly below, with made up pictures).
+    for (const [fx, fy] of [[0.5, 0.6], [0.63, 0.76]]) expect(await at(dressed, fx, fy), `${fx}, ${fy}`).not.toEqual(await at(scene, fx, fy));
+  });
+
   it("makes a picture once and keeps it, since the same look always gives the same picture", async () => {
-    const first = await png({ ...defaultLook(), skin: "s4" }, EVERYTHING, 90);
-    const again = await png({ ...defaultLook(), skin: "s4" }, EVERYTHING, 90);
+    const first = await png({ ...defaultLook(), skin: "s4" }, ALL, 90);
+    const again = await png({ ...defaultLook(), skin: "s4" }, ALL, 90);
     expect(again).toBe(first);
-    expect(elfPngKey({ ...defaultLook(), skin: "s4" }, EVERYTHING, 90, "clear")).toBe(elfPngKey({ ...defaultLook(), skin: "s4" }, EVERYTHING, 90, "clear"));
-    expect(elfPngKey({ ...defaultLook(), skin: "s4" }, EVERYTHING, 90, "clear")).not.toBe(elfPngKey({ ...defaultLook(), skin: "s5" }, EVERYTHING, 90, "clear"));
+    expect(elfPngKey({ ...defaultLook(), skin: "s4" }, ALL, 90)).toBe(elfPngKey({ ...defaultLook(), skin: "s4" }, ALL, 90));
+    expect(elfPngKey({ ...defaultLook(), skin: "s4" }, ALL, 90)).not.toBe(elfPngKey({ ...defaultLook(), skin: "s5" }, ALL, 90));
+    expect(elfPngKey({ ...defaultLook(), skin: "s4" }, ALL, 90)).not.toBe(elfPngKey({ ...defaultLook(), skin: "s4" }, ALL, 91));
   });
 
   it("gives the same pictures when several are asked for at once", async () => {
     const looks = ["s1", "s3", "s5"].map((skin) => ({ ...defaultLook(), skin }));
-    const together = await Promise.all(looks.map((look) => png(look, EVERYTHING, 80)));
+    const together = await Promise.all(looks.map((look) => png(look, ALL, 80)));
     for (const [i, look] of looks.entries()) {
-      expect(together[i].equals(await png(look, EVERYTHING, 80)), look.skin).toBe(true);
+      expect(together[i].equals(await png(look, ALL, 80)), look.skin).toBe(true);
     }
   });
 });
 
-describe("what a child would see", () => {
-  // Made up layers, written as real files: an elf with an open red mitten, and a torch whose
-  // painting no longer has that mitten (its cover marks it), so the server's stacking is held to
-  // the same rules as the browser's.
-  const dir = mkdtempSync(join(tmpdir(), "elf-png-layers-"));
-  const block = (w: number, h: number, colour: string) => sharp({ create: { width: w, height: h, channels: 4, background: colour } }).webp({ lossless: true }).toBuffer();
-  const ELF = { name: "elf-test", x: 300, y: 300, w: 400, h: 900, cover: null };
-  const MITTEN = { x: 760, y: 900, w: 60, h: 60 };
-  const TORCH = { name: "piece-test-torch", x: 820, y: 850, w: 40, h: 160, cover: MITTEN };
+describe("the places on the stage", () => {
+  // Made up pictures, written as real files: a holly scene, an elf that fills its whole canvas in
+  // cream, glasses as a blue band across the eyes, a bow tie as a gold square at the collar, and a
+  // purple friend, so each one's place on the stage can be read back from the pixels.
+  const dir = mkdtempSync(join(tmpdir(), "elf-png-paper-"));
+  const solid = (w: number, h: number, colour: string) => sharp({ create: { width: w, height: h, channels: 4, background: colour } }).webp({ lossless: true }).toBuffer();
+  const onCanvas = async (box: { left: number; top: number; width: number; height: number }, colour: string) =>
+    sharp({ create: { width: 640, height: 960, channels: 4, background: { r: 0, g: 0, b: 0, alpha: 0 } } })
+      .composite([{ input: await solid(box.width, box.height, colour), left: box.left, top: box.top }])
+      .webp({ lossless: true })
+      .toBuffer();
+  const PICTURES = { scene: "scene.webp", body: "body.webp", glasses: "glasses.webp", bow: "bow.webp", friend: "friend.webp" };
 
   beforeAll(async () => {
-    mkdirSync(join(dir, "lg"));
-    // The elf's body in cream, with its open mitten in red beside it, painted as one layer.
-    const body = await sharp({ create: { width: 520, height: 900, channels: 4, background: { r: 0, g: 0, b: 0, alpha: 0 } } })
-      .composite([{ input: await block(400, 900, "#F2E6CF"), left: 0, top: 0 }, { input: await block(60, 60, "#C02238"), left: 460, top: 600 }])
-      .webp({ lossless: true })
-      .toFile(join(dir, "lg", "elf-test.webp"));
-    void body;
-    writeFileSync(join(dir, "lg", "piece-test-torch.webp"), await block(40, 160, "#2F5D8C"));
-    writeFileSync(join(dir, "lg", "piece-test-torch.cover.webp"), await block(60, 60, "#000000"));
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(join(dir, "scene.webp"), await solid(640, 960, "#1A531A"));
+    writeFileSync(join(dir, "body.webp"), await solid(640, 960, "#F2E6CF"));
+    writeFileSync(join(dir, "glasses.webp"), await onCanvas({ left: 240, top: 320, width: 160, height: 30 }, "#2F5D8C"));
+    writeFileSync(join(dir, "bow.webp"), await onCanvas({ left: 290, top: 480, width: 60, height: 40 }, "#D9A93E"));
+    writeFileSync(join(dir, "friend.webp"), await solid(200, 200, "#7A3E8C"));
   });
 
-  /** The colour at a canvas point, in a 1182 wide picture. */
-  async function at(picture: Buffer, x: number, y: number): Promise<number[]> {
-    const { data, info } = await sharp(picture).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
-    const i = (y * info.width + (x + 79)) * 4;
-    return [data[i], data[i + 1], data[i + 2], data[i + 3]];
-  }
-
-  it("puts each layer in its place on the canvas, bottom to top", async () => {
-    const picture = await stackPng([{ ...ELF, w: 520 }, TORCH], 1182, "clear", false, join(dir, "lg"));
-    expect((await at(picture, 350, 500)).slice(0, 3)).toEqual([0xf2, 0xe6, 0xcf]);
-    expect((await at(picture, 830, 900)).slice(0, 3)).toEqual([0x2f, 0x5d, 0x8c]);
-    expect((await at(picture, 100, 100))[3]).toBe(0);
+  it("lays the elf 53.7% of the stage wide, 23.1% in and 33% down, over the scene", async () => {
+    const picture = await stackPng({ ...PICTURES, glasses: null, bow: null, friend: null }, 400, dir);
+    expect((await at(picture, 0.1, 0.1)).slice(0, 3)).toEqual([0x1a, 0x53, 0x1a]);
+    expect((await at(picture, 0.5, 0.6)).slice(0, 3)).toEqual([0xf2, 0xe6, 0xcf]);
+    // Just inside and just outside each edge of the elf's place.
+    expect((await at(picture, 0.24, 0.6)).slice(0, 3)).toEqual([0xf2, 0xe6, 0xcf]);
+    expect((await at(picture, 0.22, 0.6)).slice(0, 3)).toEqual([0x1a, 0x53, 0x1a]);
+    expect((await at(picture, 0.5, 0.34)).slice(0, 3)).toEqual([0xf2, 0xe6, 0xcf]);
+    expect((await at(picture, 0.5, 0.32)).slice(0, 3)).toEqual([0x1a, 0x53, 0x1a]);
   });
 
-  it("hides the elf's own mitten when a gadget is held, and only then", async () => {
-    const holding = await stackPng([{ ...ELF, w: 520 }, TORCH], 1182, "clear", false, join(dir, "lg"));
-    expect((await at(holding, 780, 920))[3]).toBe(0);
-    const empty = await stackPng([{ ...ELF, w: 520 }], 1182, "clear", false, join(dir, "lg"));
-    expect((await at(empty, 780, 920)).slice(0, 3)).toEqual([0xc0, 0x22, 0x38]);
+  it("puts the glasses and the bow tie on the elf's own canvas, so they line up with it", async () => {
+    const picture = await stackPng({ ...PICTURES, friend: null }, 400, dir);
+    // The middle of the glasses band (canvas 320, 335) and of the bow tie (canvas 320, 500).
+    const onStage = (x: number, y: number) => [0.231 + (x / 640) * 0.537, 0.33 + (y / 960) * 0.537] as const;
+    expect((await at(picture, ...onStage(320, 335))).slice(0, 3)).toEqual([0x2f, 0x5d, 0x8c]);
+    expect((await at(picture, ...onStage(320, 500))).slice(0, 3)).toEqual([0xd9, 0xa9, 0x3e]);
   });
 
-  it("hides it on the clothes too: a gadget's cover cuts every layer drawn before it", async () => {
-    // A coat carried a smear of the open mitten at its cuff (final review, 3 November 2026).
-    writeFileSync(join(dir, "lg", "piece-test-coat.webp"), await block(60, 60, "#C02238"));
-    const COAT = { name: "piece-test-coat", x: 760, y: 900, w: 60, h: 60, cover: null };
-    const holding = await stackPng([{ ...ELF, w: 520 }, COAT, TORCH], 1182, "clear", false, join(dir, "lg"));
-    expect((await at(holding, 780, 920))[3]).toBe(0);
+  it("sits the friend in a square 21% of the stage wide, centred 63% in, its feet at 82% down, over the elf", async () => {
+    const picture = await stackPng(PICTURES, 400, dir);
+    expect((await at(picture, 0.63, 0.81)).slice(0, 3)).toEqual([0x7a, 0x3e, 0x8c]);
+    expect((await at(picture, 0.63, 0.83)).slice(0, 3)).toEqual([0xf2, 0xe6, 0xcf]);
+    expect((await at(picture, 0.53, 0.7)).slice(0, 3)).toEqual([0x7a, 0x3e, 0x8c]);
+    expect((await at(picture, 0.51, 0.7)).slice(0, 3)).toEqual([0xf2, 0xe6, 0xcf]);
   });
 
-  it("makes no picture rather than failing when a layer file is broken", async () => {
-    // The review: a corrupt file or a sharp problem must never stop the site.
-    writeFileSync(join(dir, "lg", "piece-test-broken.webp"), "not a picture");
-    const broken = { name: "piece-test-broken", x: 0, y: 0, w: 10, h: 10, cover: null };
-    await expect(stackPng([{ ...ELF, w: 520 }, broken], 200, "clear", false, join(dir, "lg"))).resolves.toBeInstanceOf(Buffer);
-  });
-
-  it("leaves out a layer whose picture cannot be read, and still makes the picture", async () => {
-    const picture = await stackPng([{ ...ELF, w: 520 }, { ...TORCH, name: "piece-not-there", cover: null }], 200, "cream", true, join(dir, "lg"));
+  it("leaves out a picture that is not there, and still makes the picture", async () => {
+    const picture = await stackPng({ ...PICTURES, friend: "not-there.webp" }, 200, dir);
     expect((await sharp(picture).metadata()).width).toBe(200);
   });
 
-  // The real paintings: these hold once the elves are painted (plan Task 8).
-  const real = (name: string) => name in (PAINT.layers as Record<string, unknown>);
-
-  it.runIf(real("elf-sister-s2-short-dark") && real("elf-sister-s2-short-blonde"))("shows the hair colour chosen", async () => {
-    const dark = await png({ ...defaultLook(), hair: "dark" }, EVERYTHING, 200);
-    const blonde = await png({ ...defaultLook(), hair: "blonde" }, EVERYTHING, 200);
-    // 200 by 260 is 52,000 pixels: 300 of them is a patch of hair anyone can see.
-    expect(await pixelsThatDiffer(dark, blonde)).toBeGreaterThan(300);
-  });
-
-  it.runIf(real("elf-sister-s5-short-brown"))("keeps the face showing on the darkest skin", async () => {
-    // Plain round eyes on the darkest skin: the eyes must be clearly darker than the skin round them.
-    // The strip is the row of the eyes on the painted canvas (checked by eye, 3 November 2026).
-    const face = await png({ ...defaultLook(), skin: "s5" }, EVERYTHING, 1182);
-    const p = PAINT.layers["elf-sister-s5-short-brown"] as { x: number; y: number; w: number };
-    const eyeRow = await sharp(face).extract({ left: p.x + 79 + Math.round(p.w * 0.3), top: 525, width: Math.round(p.w * 0.4), height: 60 }).greyscale().raw().toBuffer();
-    const sorted = [...eyeRow].sort((a, b) => a - b);
-    const darkest = sorted[Math.floor(sorted.length * 0.02)];
-    const typical = sorted[Math.floor(sorted.length * 0.5)];
-    expect(typical - darkest).toBeGreaterThan(40);
-  });
-
-  it.runIf(OUTFITS.every((o) => real(`outfit-${o.id}`)))("makes every outfit plainly different from the plain elf", async () => {
-    const plain = await png(defaultLook(), EVERYTHING, 200);
-    for (const outfit of OUTFITS) {
-      const worn = await png({ ...defaultLook(), outfit: outfit.id }, EVERYTHING, 200);
-      expect(await pixelsThatDiffer(plain, worn), outfit.id).toBeGreaterThan(3000);
-    }
+  it("makes a picture rather than failing when a picture file is broken", async () => {
+    writeFileSync(join(dir, "broken.webp"), "not a picture");
+    await expect(stackPng({ ...PICTURES, body: "broken.webp" }, 200, dir)).resolves.toBeInstanceOf(Buffer);
   });
 });
 

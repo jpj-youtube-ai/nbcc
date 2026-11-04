@@ -55,8 +55,8 @@ const PAGES: [string, string][] = [
   ["welcome, checking the payment", renderWelcomePage({ state: "checking" })],
   ["welcome, done", renderWelcomePage({ state: "done" })],
   ["wardrobe", renderWardrobePage(wardrobeView())],
-  ["wardrobe, everything earned", renderWardrobePage(wardrobeView({ state: { doorsDone: 24, goldSeal: true, wonRace: true }, fresh: ["golden", "nessie", "bow:gold"] }))],
-  ["wardrobe, nothing earned", renderWardrobePage(wardrobeView({ state: { doorsDone: 0 }, fresh: [] }))],
+  ["wardrobe, every door done", renderWardrobePage(wardrobeView({ state: { doors: Array.from({ length: 24 }, (_, i) => i + 1) }, fresh: ["tree", "nessie"] }))],
+  ["wardrobe, no door done", renderWardrobePage(wardrobeView({ state: { doors: [] }, fresh: [] }))],
   ["poster, not signed in", renderPosterPage(posterView({ signedIn: false, detectives: [] }))],
   ["poster, door not open", renderPosterPage(posterView())],
   ["poster, place shown and elf waiting", renderPosterPage(posterView({ open: true, claimable: true }))],
@@ -226,7 +226,7 @@ describe.each(PAGES)("%s", (_name, html) => {
 
 const POISON = `<img src=x onerror="alert(1)"><script>alert(2)</script>"'&`;
 // Fields that choose between fixed answers. They are looked up or switched on, never written out.
-const CHOICES = new Set(["state", "skin", "hair", "hairStyle", "outfit", "pieces", "form", "reason", "fresh"]);
+const CHOICES = new Set(["state", "skin", "hair", "hairStyle", "form", "reason", "fresh"]);
 
 /** The same view with every word swapped for markup, and every address pointed off the site. */
 function poisoned<T>(value: T, key = ""): T {

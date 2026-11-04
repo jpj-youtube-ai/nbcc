@@ -28,8 +28,9 @@ Feature: Elf Detective School, wave 1: enrolling, paying, signing in and dressin
     When I open Detective HQ
     Then the elf response should contain "Detective Ruby Tinselfoot"
     And the elf response should contain "Detective Leo Frostwhistle"
-    When I save a look for "Ruby" wearing a top that is not earned yet
-    Then the look kept for "Ruby" has the starter top
+    When I save a look for "Ruby" in a costume that is not unlocked yet, with a favourite
+    Then the look kept for "Ruby" has no costume, and keeps its scene and friend
+    And the favourite kept for "Ruby" is made safe too
     When Stripe says the enrolment was paid
     Then 1 "elfWelcome" email went to "sam.elf.bdd@example.com"
 

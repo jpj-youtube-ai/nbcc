@@ -1,75 +1,53 @@
-import { DOOR_COUNT } from "../calendar";
+import { DOOR_COUNT, isDoor } from "../calendar";
 import {
+  BOWS,
+  COSTUMES,
+  FRAMES,
+  FRIENDS,
+  GLASSES,
   HAIR_COLOURS,
   HAIR_STYLES,
+  SCENES,
   SIBLINGS,
-  OUTFITS,
   SKIN_TONES,
-  SLOTS,
-  STYLES,
-  drawElf,
-  drawOutfit,
-  drawPiece,
-  inSentence,
+  costumeUnlocked,
+  lookPictures,
   lookWords,
   normaliseLook,
-  outfitUnlocked,
-  outfitWords,
-  pieceUnlocked,
-  pieceWords,
 } from "../wardrobe";
-import type { ElfLook, WardrobeOutfit, WardrobeSlot, WardrobeState, WardrobeStyle } from "../wardrobe";
-import { listWords, things } from "../words";
-import { gift, icon } from "./icons";
+import type { Costume, ElfLook, WardrobeItem, WardrobeState } from "../wardrobe";
+import { icon } from "./icons";
 import { elfPage, escapeHtml, sitePath } from "./shell";
 import type { WardrobeView } from "./types";
 
-// NBCC Elf Detective School: the wardrobe, where a detective dresses their elf. The plan is
-// docs/superpowers/plans/2026-10-04-elf-detective-a3-screens.md.
+// NBCC Elf Detective School: the wardrobe, where a detective dresses their elf in paper
+// (docs/superpowers/specs/2026-11-04-elf-paper-design.md).
 //
-// The page is ONE form of choices: skin and hair, a whole outfit, and a piece for each slot. Every
-// choice is a radio button with a small drawing for a label, so it works with no script: pick, press
-// Save, and the server keeps the look. The page's script (assets/js/elf-wardrobe-ui.js) only shows
-// the elf changing as things are tried on, and saves without leaving the page.
+// The page is ONE form of choices: who the elf is, a whole costume, and the extras (a scene, a friend,
+// a frame, glasses, a bow tie). Every choice is a radio button, so it works with no script: pick,
+// press Save, and the server keeps the look. The page's script (assets/js/elf-wardrobe-ui.js) changes
+// the stage as things are tried on, and saves without leaving the page.
 //
-// Everything in the wardrobe is shown, earned or not. What is still locked cannot be picked: it is
-// drawn faint, wears a padlock and says how many doors earn it. The saved look is made safe before it
-// is drawn, so the elf never wears what it has not earned, whatever was stored.
+// Every costume is shown, unlocked or not. One that is still locked cannot be picked: it is faint,
+// wears a padlock and says which door opens it. The saved look is made safe before it is drawn, so the
+// elf never wears what it has not unlocked, whatever was stored.
 //
-// Every drawing and every rule comes from the one wardrobe file the browser also loads
+// Every picture and every rule comes from the one wardrobe file the browser also loads
 // (src/elf/wardrobe.ts), so the page and its script cannot disagree.
 //
 // Pure: no pool, no config, no clock. Unit tested in test/unit/elf-page-wardrobe.test.ts.
 
-/** How many new things the news names before it counts the rest. */
-const NEWS_NAMED = 6;
+const PAPER = "/assets/img/elf/paper/";
 
-/** What is still new: the pieces as "style:colour" and the outfits by id. Only real things that the
- *  detective can already wear count. */
-interface Fresh {
-  pieces: Set<string>;
-  outfits: Set<string>;
+/** The doors done, as real door numbers only, so a state that is not what it should be opens nothing. */
+function safeState(state: WardrobeState | undefined): WardrobeState {
+  const doors = state && Array.isArray(state.doors) ? state.doors.filter(isDoor) : [];
+  return { doors: [...new Set(doors)].sort((a, b) => a - b) };
 }
 
-function freshThings(listed: unknown, state: WardrobeState): Fresh {
-  const pieces = new Set<string>();
-  const outfits = new Set<string>();
-  for (const entry of Array.isArray(listed) ? listed : []) {
-    if (typeof entry !== "string") continue;
-    const [style, colour, more] = entry.split(":");
-    if (colour === undefined) {
-      if (outfitUnlocked(entry, state)) outfits.add(entry);
-    } else if (more === undefined && pieceUnlocked(style, colour, state)) {
-      pieces.add(`${style}:${colour}`);
-    }
-  }
-  return { pieces, outfits };
-}
-
-/** Whole doors from none to 24, the way the wardrobe itself counts them. */
-function doorsOf(state: WardrobeState): number {
-  const n = state && typeof state.doorsDone === "number" && Number.isFinite(state.doorsDone) ? Math.floor(state.doorsDone) : 0;
-  return Math.max(0, Math.min(DOOR_COUNT, n));
+/** The costumes that have arrived and are not opened yet. Only real costumes the detective can wear count. */
+function freshCostumes(listed: unknown, state: WardrobeState): Set<string> {
+  return new Set((Array.isArray(listed) ? listed : []).filter((id): id is string => typeof id === "string" && costumeUnlocked(id, state)));
 }
 
 // ---- one choice ----------------------------------------------------------------------------
@@ -79,9 +57,9 @@ interface Tile {
   name: string;
   value: string;
   id: string;
-  /** The drawing, already safe SVG. */
+  /** The picture, already safe markup, or nothing for a choice that is only words. */
   art: string;
-  /** The words under the drawing. */
+  /** The words under the picture. */
   caption: string;
   /** The whole choice in words, for a screen reader. */
   words: string;
@@ -112,7 +90,7 @@ function tile(t: Tile): string {
   );
 }
 
-/** A choice that is only words: "None", "Bunches". */
+/** A choice that is only words: "No costume", "Bunches". */
 function wordTile(name: string, id: string, value: string, label: string, checked: boolean): string {
   return (
     `<div class="elf-wd-tile elf-wd-tile--word">` +
@@ -124,9 +102,33 @@ function wordTile(name: string, id: string, value: string, label: string, checke
 const swatch = (fill: string, edge: string): string =>
   `<svg width="40" height="40" viewBox="0 0 40 40" focusable="false"><circle cx="20" cy="20" r="17" fill="${fill}" stroke="${edge}" stroke-width="2"/></svg>`;
 
-// ---- the sections ---------------------------------------------------------------------------
+const picture = (src: string, w: number, h: number, extra = ""): string =>
+  `<img src="${PAPER}${src}" width="${w}" height="${h}" alt="" loading="lazy" decoding="async"${extra} />`;
 
-function lookPanel(look: ElfLook): string {
+/** A group of choices, with none on offer first where the thing can be left off. */
+function group(legend: string, body: string, kind = ""): string {
+  return `<fieldset class="elf-wd-group${kind ? ` elf-wd-group--${kind}` : ""}"><legend>${escapeHtml(legend)}</legend>${body}</fieldset>`;
+}
+
+// ---- the stage -------------------------------------------------------------------------------
+
+/** The elf on its stage: the look's pictures laid in order, inside its frame. The pictures are the
+ *  ones lookPictures names, so the page, its script and the server's PNG all lay the same ones. */
+function stage(look: ElfLook, state: WardrobeState, label: string): string {
+  const pictures = lookPictures(look, state);
+  const parts = (["scene", "body", "glasses", "bow", "friend"] as const)
+    .filter((part) => pictures[part])
+    // The elf, glasses, bow tie and scene are each the whole 640 by 960 canvas; a friend is fitted in a square.
+    .map((part) => `<img class="elf-wd-pic" data-picture="${part}" src="${PAPER}${pictures[part]}" width="${part === "friend" ? 240 : 640}" height="${part === "friend" ? 240 : 960}" alt="" decoding="async" />`)
+    .join("");
+  const frame = look.frame ? ` elf-frame--${look.frame}` : "";
+  return `<div class="elf-wd-stage${frame}" role="img" aria-label="${escapeHtml(label)}">${parts}</div>`;
+}
+
+// ---- the sections ----------------------------------------------------------------------------
+
+function elfPanel(look: ElfLook): string {
+  const siblings = SIBLINGS.map((s) => wordTile("sibling", `wd-sib-${s.id}`, s.id, s.name, look.sibling === s.id)).join("");
   const skins = SKIN_TONES.map((s, i) =>
     tile({ name: "skin", value: s.id, id: `wd-skin-${s.id}`, art: swatch(s.hex, "#B39A82"), caption: "", words: `Skin tone ${i + 1}`, checked: look.skin === s.id, kind: "swatch" }),
   ).join("");
@@ -134,117 +136,84 @@ function lookPanel(look: ElfLook): string {
     tile({ name: "hair", value: h.id, id: `wd-hair-${h.id}`, art: swatch(h.hex, h.dark), caption: h.name, words: `${h.name} hair`, checked: look.hair === h.id, kind: "swatch" }),
   ).join("");
   const cuts = HAIR_STYLES.map((h) => wordTile("hairStyle", `wd-cut-${h.id}`, h.id, h.name, look.hairStyle === h.id)).join("");
-  const siblings = SIBLINGS.map((s) => wordTile("sibling", `wd-sib-${s.id}`, s.id, s.name, look.sibling === s.id)).join("");
   return (
-    `<fieldset class="elf-wd-group"><legend>Boy or girl</legend><div class="elf-wd-row elf-wd-row--words">${siblings}</div></fieldset>` +
-    `<fieldset class="elf-wd-group"><legend>Skin</legend><div class="elf-wd-row elf-wd-row--swatches">${skins}</div></fieldset>` +
-    `<fieldset class="elf-wd-group"><legend>Hair colour</legend><div class="elf-wd-row elf-wd-row--swatches">${hairs}</div></fieldset>` +
-    `<fieldset class="elf-wd-group"><legend>Hair style</legend><div class="elf-wd-row elf-wd-row--words">${cuts}</div></fieldset>`
+    group("Boy or girl", `<div class="elf-wd-row elf-wd-row--words">${siblings}</div>`) +
+    group("Skin", `<div class="elf-wd-row elf-wd-row--swatches">${skins}</div>`) +
+    group("Hair colour", `<div class="elf-wd-row elf-wd-row--swatches">${hairs}</div>`) +
+    group("Hair style", `<div class="elf-wd-row elf-wd-row--words">${cuts}</div>`)
   );
 }
 
-/** A thing unlocks at a number of doors DONE, cracked or visited, not when a door of that number
- *  opens on the calendar: a late joiner can see door 12 open and still be short of 12 doors. */
-function doorsLock(doors: number): { short: string; full: string } {
-  return { short: things(doors, "door"), full: `locked until you have done ${things(doors, "door")}` };
+function costumeTile(c: Costume, look: ElfLook, state: WardrobeState, fresh: Set<string>): string {
+  const open = costumeUnlocked(c.id, state);
+  return tile({
+    name: "costume",
+    value: c.id,
+    id: `wd-costume-${c.id}`,
+    // The detective's own skin; the script swaps the tiles when the skin is changed.
+    art: picture(`tiles/costumes/${c.id}-${look.skin}.webp`, 178, 300, ` data-costume="${c.id}"`),
+    caption: c.name,
+    words: c.name,
+    checked: look.costume === c.id,
+    lock: open ? undefined : { short: `Door ${c.door}`, full: `opens with door ${c.door}` },
+    fresh: open && fresh.has(c.id),
+    kind: "costume",
+  });
 }
 
-function outfitLock(outfit: WardrobeOutfit): { short: string; full: string } {
-  if (outfit.special === "gold-seal") return { short: `Visit all ${DOOR_COUNT} places`, full: `locked until you have visited all ${DOOR_COUNT} places` };
-  if (outfit.special === "race-win") return { short: "Win a race", full: "locked until you win a race" };
-  return doorsLock(outfit.doors ?? 0);
+function costumesPanel(look: ElfLook, state: WardrobeState, fresh: Set<string>): string {
+  const doors: string[] = [];
+  for (let door = 0; door <= DOOR_COUNT; door += 1) {
+    const tiles = COSTUMES.filter((c) => c.door === door).map((c) => costumeTile(c, look, state, fresh)).join("");
+    doors.push(`<div class="elf-wd-door"><p class="elf-wd-door__name">${door === 0 ? "From the start" : `Door ${door}`}</p><div class="elf-wd-row">${tiles}</div></div>`);
+  }
+  return group("Costumes", wordTile("costume", "wd-costume-none", "", "No costume", !look.costume) + `<div class="elf-wd-doors">${doors.join("")}</div>`, "named");
 }
 
-function outfitsPanel(look: ElfLook, state: WardrobeState, fresh: Fresh): string {
-  const none =
-    `<div class="elf-wd-tile elf-wd-tile--word elf-wd-tile--none">` +
-    `<input type="radio" name="outfit" id="wd-outfit-none" value=""${look.outfit ? "" : " checked"} />` +
-    `<label for="wd-outfit-none"><span class="elf-wd-name">No outfit: wear my own pieces</span></label></div>`;
-  const tiles = OUTFITS.map((o) =>
-    tile({
-      name: "outfit",
-      value: o.id,
-      id: `wd-outfit-${o.id}`,
-      art: drawOutfit(o.id, look, 72),
-      caption: o.name,
-      words: outfitWords(o.id),
-      checked: look.outfit === o.id,
-      lock: outfitUnlocked(o.id, state) ? undefined : outfitLock(o),
-      fresh: fresh.outfits.has(o.id),
-      kind: "outfit",
-    }),
+function scenesPanel(look: ElfLook): string {
+  const tiles = SCENES.map((s) =>
+    tile({ name: "scene", value: s.id, id: `wd-scene-${s.id}`, art: picture(`tiles/scenes/${s.id}.webp`, 160, 240), caption: s.name, words: s.name, checked: look.scene === s.id, kind: "scene" }),
   ).join("");
-  return (
-    `<fieldset class="elf-wd-group elf-wd-group--named elf-wd-outfits"><legend>Outfits</legend>` +
-    `<p class="elf-wd-note">A whole outfit covers everything else. A new one arrives with every third door.</p>` +
-    none +
-    `<div class="elf-wd-row elf-wd-row--outfits">${tiles}</div></fieldset>`
-  );
+  return group("Scenes", `<div class="elf-wd-row">${tiles}</div>`, "named");
 }
 
-function styleRow(style: WardrobeStyle, slot: WardrobeSlot, look: ElfLook, state: WardrobeState, fresh: Fresh): string {
-  const worn = look.pieces[slot.id];
-  const tiles = style.colours
-    .map((c) =>
-      tile({
-        name: `piece-${slot.id}`,
-        value: `${style.id}:${c.id}`,
-        id: `wd-p-${style.id}-${c.id}`,
-        art: drawPiece(style.id, c.id, 56),
-        caption: c.name,
-        words: pieceWords(style.id, c.id),
-        checked: !!worn && worn[0] === style.id && worn[1] === c.id,
-        lock: pieceUnlocked(style.id, c.id, state) ? undefined : doorsLock(c.door),
-        fresh: fresh.pieces.has(`${style.id}:${c.id}`),
-      }),
-    )
-    .join("");
-  return `<div class="elf-wd-style"><p class="elf-wd-style__name">${escapeHtml(style.name)}</p><div class="elf-wd-row">${tiles}</div></div>`;
+function friendsPanel(look: ElfLook): string {
+  const tiles = FRIENDS.map((f) =>
+    tile({ name: "friend", value: f.id, id: `wd-friend-${f.id}`, art: picture(`friends/${f.id}.webp`, 120, 120), caption: f.name, words: f.name, checked: look.friend === f.id, kind: "friend" }),
+  ).join("");
+  return group("Friends", wordTile("friend", "wd-friend-none", "", "No friend", !look.friend) + `<div class="elf-wd-row">${tiles}</div>`, "named");
 }
 
-function slotPanel(slot: WardrobeSlot, look: ElfLook, state: WardrobeState, fresh: Fresh): string {
-  const none = slot.optional ? wordTile(`piece-${slot.id}`, `wd-none-${slot.id}`, "", "None", !look.pieces[slot.id]) : "";
-  const rows = STYLES.filter((s) => s.slot === slot.id)
-    .map((s) => styleRow(s, slot, look, state, fresh))
-    .join("");
-  return `<fieldset class="elf-wd-group elf-wd-group--named elf-wd-slot"><legend>${escapeHtml(slot.name)}</legend>${none}<div class="elf-wd-styles">${rows}</div></fieldset>`;
-}
-
-/** The news that things have arrived, or nothing when nothing has. */
-function newsHtml(fresh: Fresh): string {
-  const things = [
-    ...OUTFITS.filter((o) => fresh.outfits.has(o.id)).map((o) => `the ${inSentence(outfitWords(o.id))}`),
-    ...STYLES.flatMap((s) => s.colours.filter((c) => fresh.pieces.has(`${s.id}:${c.id}`)).map((c) => inSentence(pieceWords(s.id, c.id)))),
-  ];
-  if (things.length === 0) return "";
-  const named = things.length > NEWS_NAMED ? [...things.slice(0, NEWS_NAMED - 1), `${things.length - (NEWS_NAMED - 1)} more`] : things;
-  const sentence = listWords(named);
-  return (
-    `<div class="elf-wd-news">${gift(44)}<div>` +
-    `<p class="elf-wd-news__title">${things.length} new ${things.length === 1 ? "thing has" : "things have"} arrived</p>` +
-    `<p>${escapeHtml(sentence.charAt(0).toUpperCase() + sentence.slice(1))}.</p>` +
-    `</div></div>`
-  );
+/** Choices that are only words, with none first. */
+function wordsGroup(legend: string, name: string, items: readonly WardrobeItem[], worn: string | null, none: string): string {
+  const tiles = items.map((item) => wordTile(name, `wd-${name}-${item.id}`, item.id, item.name, worn === item.id)).join("");
+  return group(legend, `<div class="elf-wd-row elf-wd-row--words">${wordTile(name, `wd-${name}-none`, "", none, !worn)}${tiles}</div>`, "named");
 }
 
 /** The whole wardrobe page. */
 export function renderWardrobePage(view: WardrobeView): string {
   const d = view.detective;
-  const state: WardrobeState = { doorsDone: doorsOf(view.state), goldSeal: view.state?.goldSeal === true, wonRace: view.state?.wonRace === true };
+  const state = safeState(view.state);
   const look = normaliseLook(view.look, state);
-  const fresh = freshThings(view.fresh, state);
+  const fresh = freshCostumes(view.fresh, state);
   const name = escapeHtml(d.name);
   const hq = sitePath(view.hqUrl) ?? "/";
 
   const sections: { id: string; name: string; isNew: boolean; html: string }[] = [
-    { id: "wd-look", name: "Skin and hair", isNew: false, html: lookPanel(look) },
-    { id: "wd-outfits", name: "Outfits", isNew: fresh.outfits.size > 0, html: outfitsPanel(look, state, fresh) },
-    ...SLOTS.map((slot) => ({
-      id: `wd-slot-${slot.id}`,
-      name: slot.name,
-      isNew: STYLES.some((s) => s.slot === slot.id && s.colours.some((c) => fresh.pieces.has(`${s.id}:${c.id}`))),
-      html: slotPanel(slot, look, state, fresh),
-    })),
+    { id: "wd-elf", name: "Your elf", isNew: false, html: elfPanel(look) },
+    { id: "wd-costumes", name: "Costumes", isNew: fresh.size > 0, html: costumesPanel(look, state, fresh) },
+    { id: "wd-scenes", name: "Scenes", isNew: false, html: scenesPanel(look) },
+    { id: "wd-friends", name: "Friends", isNew: false, html: friendsPanel(look) },
+    { id: "wd-frames", name: "Frames", isNew: false, html: wordsGroup("Frames", "frame", FRAMES, look.frame, "No frame") },
+    {
+      id: "wd-glasses",
+      name: "Glasses and bow ties",
+      isNew: false,
+      html:
+        wordsGroup("Glasses", "glasses", GLASSES, look.glasses, "No glasses") +
+        wordsGroup("Bow ties", "bow", BOWS, look.bow, "No bow tie") +
+        `<p class="elf-wd-note">A bow tie shows when there is no costume on.</p>`,
+    },
   ];
   const tabs = sections
     .map(
@@ -259,21 +228,20 @@ export function renderWardrobePage(view: WardrobeView): string {
     <div class="wrap">
       <span class="eyebrow">Elf Detective School</span>
       <h1 id="elf-wd-heading">The wardrobe</h1>
-      <p class="lede">Three new things arrive with every door, and a whole new outfit with every third door.</p>
+      <p class="lede">Two new costumes arrive with every door you do.</p>
     </div>
   </section>
 
   <section class="elf-wd-section" aria-label="Dress the elf">
     <div class="wrap">
-      ${newsHtml(fresh)}
-      <form class="elf-wd" method="post" action="${sitePath(view.saveUrl) ?? "/"}" data-api="/api/elf/look" data-doors="${state.doorsDone}" data-gold="${state.goldSeal ? 1 : 0}" data-race="${state.wonRace ? 1 : 0}">
+      <form class="elf-wd" method="post" action="${sitePath(view.saveUrl) ?? "/"}" data-api="/api/elf/look" data-doors="${state.doors.join(",")}">
         <input type="hidden" name="detective" value="${escapeHtml(d.id)}" />
         <div class="elf-wd-preview">
-          <div class="elf-wd-mirror">${drawElf(look, state, { size: 260, backdrop: false, key: "preview", label: `${d.name}'s elf` })}</div>
+          ${stage(look, state, `${d.name}'s elf`)}
           <div class="elf-wd-preview__body">
             <h2>${name}</h2>
             <p class="elf-wd-preview__rank">Badge ${escapeHtml(d.badgeNumber)} &middot; <b>${escapeHtml(d.rank)}</b></p>
-            <p class="elf-wd-wearing">Wearing: <span>${escapeHtml(lookWords(look, state))}</span>.</p>
+            <p class="elf-wd-wearing">${escapeHtml(lookWords(look, state))}</p>
             <p class="elf-wd-status" role="status"></p>
             <button class="btn btn-primary" type="submit">Save this look</button>
           </div>
@@ -289,10 +257,10 @@ export function renderWardrobePage(view: WardrobeView): string {
 
   return elfPage({
     title: "The wardrobe",
-    description: "Dress your elf detective: hats, scarves, gadgets and whole outfits that unlock as the doors open.",
+    description: "Dress your elf detective in costumes that unlock as you do the doors, with scenes, friends, frames, glasses and bow ties.",
     cta: { href: view.hqUrl, label: "Detective HQ" },
     home: view.calendarUrl,
     main,
-    scripts: ["elf-paint.js", "elf-wardrobe.js", "elf-wardrobe-ui.js"],
+    scripts: ["elf-wardrobe.js", "elf-wardrobe-ui.js"],
   });
 }

@@ -7,7 +7,6 @@ import { isUsableSecretWord } from "./claim";
 import { SCHOOL_NAME, schoolLogoData } from "./logo";
 import { detectiveName, type DetectiveNameParts } from "./names";
 import type { Rank } from "./progress";
-import { drawElf, type WardrobeState } from "./wardrobe";
 import { clockWords, longDayWords } from "./words";
 
 // NBCC Elf Detective School: the things that are printed or shared. The plan is
@@ -57,10 +56,14 @@ export interface CertificatePrint {
   badgeNumber: string;
   /** The campaign year, for "Class of 2026". */
   year: number;
-  look: unknown;
-  /** What the detective has earned, built with wardrobeState. The certificate is only drawn for
-   *  all 24 doors done, and the gold seal comes from here and nowhere else. */
-  state: WardrobeState;
+  /** The doors done, from the detective's progress (progressOf). The certificate is only drawn for
+   *  all 24, and only a NUMBER counts. */
+  doorsDone: number;
+  /** All 24 places visited, from the same progress. Only a plain true prints the seal. */
+  goldSeal: boolean;
+  /** The elf on its stage as a PNG data address, made with elfPng (src/elf/elf-png.ts). Anything
+   *  else is left out. */
+  elfPicture: string;
   awardedOn: Date;
 }
 
@@ -70,8 +73,6 @@ export interface ShareCardPrint {
   detective: DetectiveNameParts;
   rank: Rank;
   doorsDone: number;
-  look: unknown;
-  state: WardrobeState;
   year: number;
 }
 
@@ -247,7 +248,7 @@ ${statement}
 /** The certificate for a detective who has done all 24 doors. */
 export function renderElfCertificate(c: CertificatePrint): string {
   // It says "has done all 24 doors". It must not be printed for anyone who has not.
-  if (!(c.state && typeof c.state.doorsDone === "number" && c.state.doorsDone >= DOOR_COUNT)) {
+  if (!(typeof c.doorsDone === "number" && c.doorsDone >= DOOR_COUNT)) {
     throw new Error("A certificate is only for a detective who has done all 24 doors");
   }
   const assets = materialAssets();
@@ -255,7 +256,7 @@ export function renderElfCertificate(c: CertificatePrint): string {
   const year = count(c.year);
   const when = real(c.awardedOn) ? `${longDayWords(c.awardedOn)} ${londonYear(c.awardedOn)}` : "";
   const seal =
-    c.state.goldSeal === true
+    c.goldSeal === true
       ? `<div class="cert-seal"><b>Gold seal</b><span>Visited all ${DOOR_COUNT} hiding places</span></div>`
       : "";
   const css = `
@@ -270,7 +271,7 @@ export function renderElfCertificate(c: CertificatePrint): string {
   .cert .who{font-family:var(--head);font-weight:800;font-size:42pt;line-height:1.1;color:var(--maroon);margin:2mm 0 5mm;overflow-wrap:anywhere}
   .cert .small{font-size:11.5pt;color:var(--muted)}
   .cert-elf{background:var(--tan-soft);border-radius:5mm;padding:4mm}
-  .cert-elf svg{display:block;width:100%;height:auto}
+  .cert-elf img{display:block;width:100%;height:auto;border-radius:3mm}
   .cert-seal{margin-top:4mm;background:var(--gold);color:#2A1C05;border-radius:4mm;padding:3mm 4mm;text-align:center}
   .cert-seal b{display:block;font-family:var(--head);font-weight:800;font-size:15pt}
   .cert-seal span{font-size:9.5pt}
@@ -287,7 +288,7 @@ export function renderElfCertificate(c: CertificatePrint): string {
     <p class="small">With thanks from everyone at the Elves' Workshop, Annbank.</p>
   </div>
   <div>
-    <div class="cert-elf">${drawElf(c.look, c.state, { size: 220, backdrop: false, key: "cert", label: `${c.name}'s elf`, set: "lg" })}</div>
+    <div class="cert-elf">${PNG_DATA.test(c.elfPicture) ? `<img src="${c.elfPicture}" alt="${name}'s elf" width="340" height="510">` : ""}</div>
     ${seal}
   </div>
 </div>
@@ -301,14 +302,14 @@ const PNG_DATA = /^data:image\/png;base64,[A-Za-z0-9+/]+={0,2}$/;
 
 /** The card a family can share: the school's logo, the elf and the rank, never a photo, and the public form of the
  *  name. One SVG of 1200 by 630; Stage B turns it into a PNG. It uses fonts every computer has,
- *  because a picture made on the server cannot fetch the site's own. `elfPicture` is the elf as a
- *  PNG data address, made with elfPng (src/elf/elf-png.ts) at 380 wide: a picture made on the server
- *  cannot fetch the painted layers either. Anything else is left out. */
+ *  because a picture made on the server cannot fetch the site's own. `elfPicture` is the elf on its
+ *  stage as a PNG data address, made with elfPng (src/elf/elf-png.ts) at 340 wide: a picture made on
+ *  the server cannot fetch the paper pictures either. Anything else is left out. */
 export function shareCardSvg(s: ShareCardPrint, elfPicture: string): string {
   const serif = "Georgia, 'Times New Roman', serif";
   const sans = "Verdana, Arial, sans-serif";
   const publicName = detectiveName(s.detective);
-  const elf = PNG_DATA.test(elfPicture) ? `<image href="${elfPicture}" x="0" y="0" width="380" height="494"/>` : "";
+  const elf = PNG_DATA.test(elfPicture) ? `<image href="${elfPicture}" x="0" y="0" width="340" height="510"/>` : "";
   // A picture cannot wrap its words, so a long name or rank is set smaller until it fits the
   // 620 units beside the elf. A bold serif letter is a little over half as wide as it is tall.
   const fit = (words: string, biggest: number): number => Math.max(24, Math.min(biggest, Math.floor(620 / (Math.max(1, words.length) * 0.56))));
@@ -316,7 +317,7 @@ export function shareCardSvg(s: ShareCardPrint, elfPicture: string): string {
     `<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630" role="img" aria-label="${escapeHtml(`${SCHOOL_NAME}: ${publicName}, ${s.rank}`)}">` +
     `<rect width="1200" height="630" fill="#F8F5EE"/>` +
     `<rect x="24" y="24" width="1152" height="582" rx="28" fill="none" stroke="#C02238" stroke-width="6"/>` +
-    `<g transform="translate(70 68)">${elf}</g>` +
+    `<g transform="translate(70 60)">${elf}</g>` +
     `<image href="${schoolLogoData("card")}" x="500" y="50" width="200" height="200"/>` +
     `<text x="730" y="165" font-family="${sans}" font-size="30" letter-spacing="5" fill="#1A531A">Class of ${count(s.year)}</text>` +
     `<text x="510" y="335" font-family="${serif}" font-weight="700" font-size="${fit(publicName, 58)}" fill="#800000">${escapeHtml(publicName)}</text>` +

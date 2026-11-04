@@ -55,7 +55,8 @@ export function stampWin(over: Partial<StampWin> = {}): StampWin {
   };
 }
 
-/** Ruby's wardrobe with six doors done: the Christmas jumper and the tree outfit have just arrived. */
+/** Ruby's wardrobe with doors 1 to 6 done: door 6's snow globe and puffin have just arrived, still
+ *  wrapped. Ruby is in the reindeer costume and gold glasses, with a robin, at Largs, in a candy cane frame. */
 export function wardrobeView(over: Partial<WardrobeView> = {}): WardrobeView {
   return {
     detective: {
@@ -69,27 +70,13 @@ export function wardrobeView(over: Partial<WardrobeView> = {}): WardrobeView {
       graduate: false,
       goldSeal: false,
       elfUrl: "/elf/pic/d1.svg",
-      newThings: 4,
+      newThings: 2,
       wardrobeUrl: "/elf/hq/wardrobe/d1",
     },
-    look: {
-      sibling: "sister",
-      skin: "s3",
-      hair: "ginger",
-      hairStyle: "bunches",
-      outfit: null,
-      pieces: {
-        hat: ["deer", "tan"],
-        face: ["specs", "black"],
-        neck: ["stripe", "red"],
-        top: ["tunic", "red"],
-        feet: ["boots", "brown"],
-        hand: ["mag", "brass"],
-        extra: null,
-      },
-    },
-    state: { doorsDone: 6, goldSeal: false, wonRace: false },
-    fresh: ["jumper:red", "jumper:green", "boots:red", "tree"],
+    look: { sibling: "sister", skin: "s3", hair: "ginger", hairStyle: "bunches", costume: "reindeer", scene: "largs", friend: "robin", frame: "candy", glasses: "specs-gold", bow: null },
+    state: { doors: [1, 2, 3, 4, 5, 6] },
+    fresh: ["snowglobe", "puffin"],
+    favourites: [],
     hqUrl: "/elf/hq",
     calendarUrl: "/elf",
     saveUrl: "/elf/hq/wardrobe/d1",

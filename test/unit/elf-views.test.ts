@@ -12,8 +12,8 @@ const FAMILY: FamilyRow = {
   grownUpName: "Sam Example",
   email: "sam@example.com",
   detectives: [
-    { id: 100, firstName: "Ruby", surname: "Tinselfoot", nameApproved: false, badgeNumber: 1, look: null, fresh: [] },
-    { id: 101, firstName: "Leo", surname: "Frostwhistle", nameApproved: true, badgeNumber: 42, look: null, fresh: ["bow:gold"] },
+    { id: 100, firstName: "Ruby", surname: "Tinselfoot", nameApproved: false, badgeNumber: 1, look: null, fresh: [], favourites: [] },
+    { id: 101, firstName: "Leo", surname: "Frostwhistle", nameApproved: true, badgeNumber: 42, look: null, fresh: ["tree"], favourites: [] },
   ],
 };
 
@@ -47,21 +47,37 @@ describe("Detective HQ before school starts", () => {
 });
 
 describe("the wardrobe", () => {
-  it("is built from what the detective has earned on the server, and a missing look is the starter elf", () => {
+  it("is built from the doors the detective has done on the server, and a missing look is the starting elf", () => {
     const view = wardrobeViewFor({ detective: FAMILY.detectives[0], settings: SETTINGS });
-    expect(view.state).toEqual({ doorsDone: 0, goldSeal: false, wonRace: false });
+    expect(view.state).toEqual({ doors: [] });
     expect(view.look).toEqual(defaultLook());
+    expect(view.favourites).toEqual([]);
     expect(view.saveUrl).toBe("/api/elf/look");
     expect(view.calendarUrl).toBe("/elf");
+  });
+
+  it("makes the saved look safe, so an old layered look shows as the start with its own skin and hair", () => {
+    const old = { sibling: "brother", skin: "s4", hair: "black", hairStyle: "curly", outfit: "tree", pieces: { hat: ["bobble", "red"] } };
+    const view = wardrobeViewFor({ detective: { ...FAMILY.detectives[0], look: old }, settings: SETTINGS });
+    expect(view.look).toEqual({ ...defaultLook(), sibling: "brother", skin: "s4", hair: "black", hairStyle: "curly" });
+  });
+
+  it("shows the saved favourite looks, made safe", () => {
+    const favourites = [{ ...defaultLook(), scene: "largs" }, "junk", { ...defaultLook(), costume: "santa" }];
+    const view = wardrobeViewFor({ detective: { ...FAMILY.detectives[0], favourites }, settings: SETTINGS });
+    expect(view.favourites).toEqual([{ ...defaultLook(), scene: "largs" }, defaultLook()]);
   });
 });
 
 describe("a look from the plain form", () => {
-  it("reads the skin, hair, outfit and each piece as style and colour", () => {
-    const look = lookFromForm({ sibling: "brother", skin: "s2", hair: "ginger", hairStyle: "bunches", outfit: "", "piece-hat": "elf:red", "piece-face": "" });
-    expect(look).toMatchObject({ sibling: "brother", skin: "s2", hair: "ginger", hairStyle: "bunches", outfit: null });
-    expect((look.pieces as Record<string, unknown>).hat).toEqual(["elf", "red"]);
-    expect((look.pieces as Record<string, unknown>).face).toBeNull();
+  it("reads who the elf is, the costume and every extra, with an empty choice as none", () => {
+    const look = lookFromForm({ sibling: "brother", skin: "s2", hair: "ginger", hairStyle: "bunches", costume: "", scene: "ayr", friend: "robin", frame: "", glasses: "specs-gold", bow: "" });
+    expect(look).toEqual({ sibling: "brother", skin: "s2", hair: "ginger", hairStyle: "bunches", costume: null, scene: "ayr", friend: "robin", frame: null, glasses: "specs-gold", bow: null });
+  });
+
+  it("reads only words, never anything else the form sends", () => {
+    const look = lookFromForm({ costume: ["tree"], scene: { x: 1 }, friend: 7 });
+    expect(look).toMatchObject({ costume: null, scene: "", friend: null });
   });
 });
 

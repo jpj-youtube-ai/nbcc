@@ -152,30 +152,40 @@ async function detectiveId(first) {
   return r.rows[0].id;
 }
 
-When("I save a look for {string} wearing a top that is not earned yet", async function (first) {
+When("I save a look for {string} in a costume that is not unlocked yet, with a favourite", async function (first) {
   const id = await detectiveId(first);
-  const look = {
-    skin: "s2",
-    hair: "ginger",
-    hairStyle: "bunches",
-    outfit: null,
-    pieces: { hat: ["elf", "red"], face: null, neck: null, top: ["jumper", "red"], feet: ["curly", "maroon"], hand: null, extra: null },
-  };
+  // The Santa suit comes with door 24, and no door has been done yet.
+  const look = { sibling: "brother", skin: "s2", hair: "ginger", hairStyle: "bunches", costume: "santa", scene: "ayr", friend: "robin", frame: null, glasses: "specs-gold", bow: null };
+  const favourites = [{ ...look, costume: "tree", scene: "loch" }];
   await keep(
     this,
     await fetch(`${BASE_URL}/api/elf/look`, {
       method: "POST",
       headers: { "Content-Type": "application/json", Cookie: `nbcc_elf_session=${this.elfSignedIn}` },
-      body: JSON.stringify({ detectiveId: id, look, tried: [] }),
+      body: JSON.stringify({ detectiveId: id, look, tried: [], favourites }),
     }),
   );
   assert.equal(this.elfStatus, 200, this.elfText);
 });
 
-Then("the look kept for {string} has the starter top", async function (first) {
+Then("the look kept for {string} has no costume, and keeps its scene and friend", async function (first) {
   const r = await pool.query("SELECT look FROM elf_detectives WHERE id = $1", [await detectiveId(first)]);
-  assert.deepEqual(r.rows[0].look.pieces.top, ["tunic", "green"]);
-  assert.deepEqual(this.elfBody.look.pieces.top, ["tunic", "green"]);
+  for (const kept of [r.rows[0].look, this.elfBody.look]) {
+    assert.equal(kept.costume, null);
+    assert.equal(kept.scene, "ayr");
+    assert.equal(kept.friend, "robin");
+    assert.equal(kept.sibling, "brother");
+    assert.equal(kept.glasses, "specs-gold");
+  }
+});
+
+Then("the favourite kept for {string} is made safe too", async function (first) {
+  const r = await pool.query("SELECT favourites FROM elf_detectives WHERE id = $1", [await detectiveId(first)]);
+  for (const kept of [r.rows[0].favourites, this.elfBody.favourites]) {
+    assert.equal(kept.length, 1);
+    assert.equal(kept[0].costume, null);
+    assert.equal(kept[0].scene, "loch");
+  }
 });
 
 Given("{string} has already enrolled {string} and paid", async function (email, name) {

@@ -1650,7 +1650,7 @@ hosted-Checkout redirect stays the default fallback and no-JS safety net.
 | `GET /elf/join`, `POST /api/elf/join` | **implemented, switched off** | Enrol detectives (first name and a festive surname only) and pay what you can (from £1, £5 suggested, per detective; an optional gift can carry Gift Aid); goes on to Stripe Checkout tagged `product: elf_school` |
 | `GET /elf/welcome` | **implemented, switched off** | Where Stripe returns a family; signs the paying browser in only when its payment opened the account |
 | `GET /elf/sign-in`, `POST /api/elf/sign-in/request`, `POST /api/elf/sign-in`, `POST /api/elf/sign-out` | **implemented, switched off** | Signing in to Detective HQ with an emailed 6 digit code (cookie `nbcc_elf_session`, 30 days) |
-| `GET /elf/hq`, `GET /elf/hq/wardrobe/:detective`, `GET /elf/hq/elf/:detective.png`, `POST /api/elf/look` | **implemented, switched off** | Detective HQ, the wardrobe, a detective's elf picture (a PNG stacked from the painted layers; 503 with `Retry-After` when the picture maker is busy), and saving a look (made safe against what the detective has earned) |
+| `GET /elf/hq`, `GET /elf/hq/wardrobe/:detective`, `GET /elf/hq/elf/:detective.png`, `POST /api/elf/look` | **implemented, switched off** | Detective HQ, the wardrobe, a detective's elf picture (a PNG of the elf on its stage, stacked from the paper pictures; 503 with `Retry-After` when the picture maker is busy), and saving a look and up to three favourite looks, each made safe against the doors the detective has done (`{ ok, look, favourites }`) |
 | `GET /api/elf/calendar`, `GET /api/elf/door/:n`, `GET /api/elf/me` | **implemented, switched off** | The calendar's small feed, one door's HTML, and the signed in family's marks |
 | `GET /api/admin/elf/settings`, `PATCH /api/admin/elf/settings`, `GET /api/admin/elf/signups` | **implemented** | Admin > Get involved > Elf Detective School: the switch and the price (admin only to change), and the sign ups (Get involved: view) |
 | `GET /elf/preview/:code`, `POST /api/admin/elf/preview`, `DELETE /api/admin/elf/preview` | **implemented** | The private preview link: an admin makes it (any earlier one stops working; only its sha256 is kept), and a browser that opens it sees every `/elf` page while the school is switched off, each marked Private preview, `noindex` and never cached publicly. Payments in the preview are real |
@@ -11464,6 +11464,10 @@ Aid declaration, card fee cover, Stripe session, the paying browser's token hash
 opened the account), `elf_sign_in_codes`, `elf_sessions`, and the `elf_badge_seq` sequence. The
 newsletter's `consent_source` check also allows `elf`.
 
+`migrations/1791200000320_elf-favourites.js` (additive) adds `elf_detectives.favourites` (jsonb, default
+`[]`): up to three favourite looks from the wardrobe's Snap a photo. A detective's `look` is a costume
+look, and `fresh` holds the ids of costumes unlocked and not opened yet.
+
 ### Paying
 
 `POST /api/elf/join` saves a pending order and opens a Stripe Checkout Session tagged
@@ -11483,32 +11487,26 @@ Stage A's game rules), screens in `src/elf/pages/`, the data layer in `src/db/el
 `assets/js/elf-join.js`. Unit tests are `test/unit/elf-*.test.ts`; BDD is `features/elf-join.feature`.
 Both emails are in Admin > Get involved > All emails, under Elf Detective School.
 
-### The painted dress-up elf
+### The dress-up elf
 
-Design: `docs/superpowers/specs/2026-11-03-elf-painted-wardrobe-design.md`; plan:
-`docs/superpowers/plans/2026-11-03-elf-painted-wardrobe.md`. The elf is a brother or a sister of the
-school's logo elf, painted by OpenAI in the logo's style and cut into layers on one 1024 by 1536
-canvas, so any elf can wear any piece. There are 150 elves (brother or sister, 5 skin tones, 3
-hairstyles, 5 hair colours), every piece in every colour, and 11 outfits.
+Design: `docs/superpowers/specs/2026-11-04-elf-paper-design.md` (it replaced the painted, layered
+wardrobe of `docs/superpowers/specs/2026-11-03-elf-painted-wardrobe-design.md`, whose separately painted
+pieces never fitted every elf). The elf is a brother or a sister of the school's logo elf, in paper:
+150 elves (brother or sister, 5 skin tones, 3 hairstyles, 5 hair colours) and 51 whole hooded
+costumes, each painted on one elf in every skin so it always fits, with scenes, friends, frames,
+glasses and bow ties as extras. `assets/js/elf-wardrobe.js` names the pictures a look is drawn from
+(`lookPictures`); the wardrobe page lays them on its stage and `src/elf/elf-png.ts` stacks the same ones
+into a PNG for Detective HQ, emails, the certificate and the share card. The old layered pictures
+(`assets/img/elf/{lg,sm,tile}/`, listed in `assets/js/elf-paint.js`) are no longer read by anything.
 
-- **On the site.** `assets/js/elf-paint.js` lists every painted layer and where it sits (it is
-  written by the tool: never edit it by hand). `assets/js/elf-wardrobe.js` stacks the layers a look
-  wears (`layersFor`), as `<image>`s in an SVG for the browser and print, and `src/elf/elf-png.ts`
-  stacks the large files into a PNG for emails and Detective HQ. Layers live in
-  `assets/img/elf/tile/` (wardrobe tiles), `sm/` (screens) and `lg/` (the server's emails, the
-  certificate and the share card). A piece that hides part of the elf (a held torch hides the open
-  mitten) has a `.cover` file. A layer not painted yet is left out, never a broken picture.
-- **Painting.** `npm run elf:paint -- <batch>` paints a batch, cuts it out and rewrites the list;
-  `npm run elf:sheet -- <batch>` makes the sheets Jaimie approves. Batches: elves, starter, hat, top,
-  feet, neck, face, hand, extra, outfits. It runs only on your own computer, with `OPENAI_API_KEY`
-  in your own environment (never in the repo, CI or the site), uses `gpt-image-2` at low quality
-  (about $0.017 a painting), and stops itself before the spend in `.elf-paint/spend.json` passes
-  $27.50 (with the $2.50 of early tests outside the ledger, a little under Jaimie's £23 cap, raised from
-  £15 on 4 November 2026). Raw paintings, sheets and the ledger stay in `.elf-paint/` (git ignored); the master
-  pictures are `.elf-paint/raw/master.png` (the sister) and `master-brother.png`. The tool is
-  `scripts/elf-paint/` (`openai.mjs`, `cutout.mjs`, `jobs.mjs` with every piece's fresh design in
-  `designs.json`, `manifest.mjs`, `run.mjs`, `sheet.mjs`), tested in `test/unit/elf-paint-*.test.ts`.
-  Nothing on the site ever calls OpenAI.
+- **Painting.** It runs only on your own computer, with `OPENAI_API_KEY` in your own environment (never
+  in the repo, CI or the site), uses `gpt-image-2` at low quality (about $0.017 a painting), and stops
+  itself before the spend in `.elf-paint/spend.json` passes $27.50 (with the $2.50 of early tests
+  outside the ledger, a little under Jaimie's £23 cap, raised from £15 on 4 November 2026). Raw
+  paintings, sheets and the ledger stay in `.elf-paint/` (git ignored). What is left of the tool in the
+  repo is `scripts/elf-paint/openai.mjs` (the paint call and the spend guard) and `cutout.mjs` (keying
+  and cutting out), tested in `test/unit/elf-paint-*.test.ts`; the paper paintings' own scripts are
+  kept with the paintings. Nothing on the site ever calls OpenAI.
 
 ### The paper pictures
 

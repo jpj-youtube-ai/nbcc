@@ -1,17 +1,16 @@
 import { createHash } from "node:crypto";
 import { existsSync } from "node:fs";
 import { resolve } from "node:path";
-import { layersFor, type PaintLayer, type WardrobeState } from "./wardrobe";
+import { lookPictures, type LookPictures, type WardrobeState } from "./wardrobe";
 
 // NBCC Elf Detective School: a detective's elf as a PNG. The design is
-// docs/superpowers/specs/2026-10-04-elf-detective-school-design.md (decision 14).
+// docs/superpowers/specs/2026-11-04-elf-paper-design.md ("Pictures outside the wardrobe").
 //
-// When a detective unlocks an outfit, the next email shows their own elf wearing it, and Detective HQ
-// shows each detective's elf. Mail apps do not show SVG, and an SVG in an <img> cannot load the
-// painted layers it names, so the elf is stacked into a PNG here from the large painted layers
-// (assets/img/elf/lg/, design docs/superpowers/specs/2026-11-03-elf-painted-wardrobe-design.md), in
-// the same order and with the same covers as the browser. The look is made safe by layersFor first,
-// so only what the detective has earned is drawn.
+// Detective HQ shows each detective's elf, and emails and the share card can too. Mail apps do not show
+// SVG, so the elf is stacked into a PNG here from the same paper pictures the wardrobe's stage lays
+// (assets/img/elf/paper/), in the same places: the scene, the elf or its costume, glasses, a bow tie and
+// a friend, like a photo of the stage without its frame. The look is made safe by lookPictures first,
+// so only what the detective has unlocked is drawn.
 //
 // The site runs as one small task, and sharp can use a lot of memory, so this is as careful with it
 // as src/fundraising/picture-process.ts is:
@@ -33,15 +32,14 @@ const ELF_PNG_MIN_WIDTH = 40;
 /** How many pictures may wait behind the one being made. One more is told "busy". */
 export const ELF_PNG_QUEUE_MAX = 8;
 
-/** The page colour of the site, for a picture that must not be see through. */
+/** The paper pictures, and where each goes on the stage, as fractions of a stage 2 by 3 (the wardrobe
+ *  page lays them the same way). The elf's picture is its whole canvas, and so are the glasses and the
+ *  bow tie, so all three line up. The friend is fitted in a square and stands on the front of the plinth. */
+const PAPER_DIR = resolve(__dirname, "../../assets/img/elf/paper");
+const ELF_BOX = { width: 0.537, left: 0.231, top: 0.33 };
+const FRIEND_BOX = { width: 0.21, centre: 0.63, feet: 0.82 };
+/** The page colour of the site, behind a scene that cannot be read. */
 const CREAM = "#F8F5EE";
-
-/** The large painted layers, and the part of the canvas every picture shows (1.3 times as tall as wide). */
-const LAYER_DIR = resolve(__dirname, "../../assets/img/elf/lg");
-const VIEW = { left: -79, width: 1182, height: 1536 };
-const BACKDROP =
-  `<svg xmlns="http://www.w3.org/2000/svg" width="${VIEW.width}" height="${VIEW.height}">` +
-  `<circle cx="${512 - VIEW.left}" cy="820" r="560" fill="#EAF0E7"/><ellipse cx="${512 - VIEW.left}" cy="1345" rx="330" ry="34" fill="#DCCFB9"/></svg>`;
 
 type SharpFn = typeof import("sharp")["default"];
 let loaded: Promise<SharpFn> | null = null;
@@ -91,22 +89,13 @@ export function elfPngWidth(asked: number): number {
 }
 
 /**
- * The elf as a PNG, `width` pixels wide and 1.3 times as tall. Null means busy: too many pictures
- * are already waiting, so ask again shortly.
- *
- * The background is see through unless `background` is "cream". Ask for cream in an email: some mail
- * apps turn the page dark, and a see through picture then loses anything dark in it, such as the
- * snowman's hat.
+ * The elf on its stage as a PNG, `width` pixels wide and half as tall again. Null means busy: too many
+ * pictures are already waiting, so ask again shortly. The scene fills it, so it is never see through.
  */
-export function elfPng(
-  look: unknown,
-  state: WardrobeState,
-  width = 320,
-  background: "clear" | "cream" = "clear",
-): Promise<Buffer | null> {
+export function elfPng(look: unknown, state: WardrobeState, width = 320): Promise<Buffer | null> {
   const px = elfPngWidth(width);
-  const layers = layersFor(look, state);
-  const key = keyOf(layers, px, background);
+  const pictures = lookPictures(look, state);
+  const key = keyOf(pictures, px);
   const kept = made.get(key);
   if (kept) {
     // Kept most recently used last, so the oldest is the one let go.
@@ -116,7 +105,7 @@ export function elfPng(
   }
   return inTurn<Buffer | null>(async () => {
     try {
-      const picture = await stackPng(layers, px, background, true);
+      const picture = await stackPng(pictures, px);
       made.set(key, picture);
       if (made.size > ELF_PNG_KEEP) made.delete(made.keys().next().value as string);
       return picture;
@@ -129,32 +118,33 @@ export function elfPng(
 }
 
 /** How many finished pictures are kept, the most recently used. A picture of 240 pixels is about
- *  60 KB, so this is a few megabytes at most. */
+ *  100 KB, so this is a few tens of megabytes at most. */
 export const ELF_PNG_KEEP = 300;
 const made = new Map<string, Buffer>();
 
-function keyOf(layers: PaintLayer[], width: number, background: string): string {
-  return createHash("sha256").update(JSON.stringify([layers.map((l) => l.name), width, background])).digest("base64url").slice(0, 22);
+function keyOf(pictures: LookPictures, width: number): string {
+  return createHash("sha256").update(JSON.stringify([pictures, width])).digest("base64url").slice(0, 22);
 }
 
 /** A short name for the picture a look makes: the same look always has the same name, a different
  *  one a different name. Detective HQ sends it as the picture's ETag. */
-export function elfPngKey(look: unknown, state: WardrobeState, width = 320, background: "clear" | "cream" = "clear"): string {
-  return keyOf(layersFor(look, state), elfPngWidth(width), background);
+export function elfPngKey(look: unknown, state: WardrobeState, width = 320): string {
+  return keyOf(lookPictures(look, state), elfPngWidth(width));
 }
 
 /**
- * Stacks painted layers into a PNG `width` pixels wide and 1.3 times as tall: the backdrop (unless
- * false), the elf with what its pieces hide taken away, then each piece. A layer whose picture cannot
- * be found is left out, never a failed picture. `dir` is the folder of layer files, for tests.
+ * Lays the pictures on a stage `width` pixels wide and half as tall again: the scene, then the elf or
+ * costume, the glasses, the bow tie and the friend, each in its place. A picture that cannot be found
+ * or read is left out, never a failed picture. `dir` is the folder the pictures are in, for tests.
  */
-export async function stackPng(layers: PaintLayer[], width: number, background: "clear" | "cream", backdrop: boolean, dir = LAYER_DIR): Promise<Buffer> {
+export async function stackPng(pictures: LookPictures, width: number, dir = PAPER_DIR): Promise<Buffer> {
   const sharp = await loadSharp();
-  const file = (name: string) => resolve(dir, `${name}.webp`);
-  // A layer whose file is missing or cannot be read is left out, so one bad file can only cost
-  // that piece, never the picture or the site (final review, 3 November 2026).
-  const readable = async (name: string): Promise<boolean> => {
-    if (!existsSync(file(name))) return false;
+  const height = Math.round(width * 1.5);
+  const file = (name: string) => resolve(dir, name);
+  // A picture whose file is missing or cannot be read is left out, so one bad file can only cost
+  // that picture, never the elf or the site (final review, 3 November 2026).
+  const readable = async (name: string | null): Promise<boolean> => {
+    if (!name || !existsSync(file(name))) return false;
     try {
       await sharp(file(name)).metadata();
       return true;
@@ -162,21 +152,18 @@ export async function stackPng(layers: PaintLayer[], width: number, background: 
       return false;
     }
   };
-  const place = (box: { x: number; y: number }) => ({ left: box.x - VIEW.left, top: box.y });
-  const blank = () => sharp({ create: { width: VIEW.width, height: VIEW.height, channels: 4, background: { r: 0, g: 0, b: 0, alpha: 0 } } });
 
-  // Bottom to top. A piece that hides part of what is behind it (an open mitten under a held torch)
-  // first takes that part out of everything already drawn, the elf and its clothes alike, then is
-  // drawn itself: sharp composites in order, so a dest-out acts on what is below it only.
   const parts: import("sharp").OverlayOptions[] = [];
-  for (const l of layers) {
-    if (!(await readable(l.name))) continue;
-    if (l.cover && parts.length && (await readable(`${l.name}.cover`))) parts.push({ input: file(`${l.name}.cover`), ...place(l.cover), blend: "dest-out" });
-    parts.push({ input: file(l.name), ...place(l) });
+  if (await readable(pictures.scene)) parts.push({ input: await sharp(file(pictures.scene)).resize(width, height).png().toBuffer(), left: 0, top: 0 });
+  const elfWidth = Math.round(width * ELF_BOX.width);
+  const elfPlace = { left: Math.round(width * ELF_BOX.left), top: Math.round(height * ELF_BOX.top) };
+  for (const name of [pictures.body, pictures.glasses, pictures.bow]) {
+    if (await readable(name)) parts.push({ input: await sharp(file(name as string)).resize(elfWidth, Math.round(elfWidth * 1.5)).png().toBuffer(), ...elfPlace });
   }
-  const elf = await blank().composite(parts).png().toBuffer();
-  const stacked = backdrop ? await blank().composite([{ input: Buffer.from(BACKDROP), left: 0, top: 0 }, { input: elf, left: 0, top: 0 }]).png().toBuffer() : elf;
-
-  const sized = sharp(stacked).resize(width, Math.round(width * 1.3));
-  return (background === "cream" ? sized.flatten({ background: CREAM }) : sized).png().toBuffer();
+  if (await readable(pictures.friend)) {
+    const box = Math.round(width * FRIEND_BOX.width);
+    const { data, info } = await sharp(file(pictures.friend as string)).resize({ width: box, height: box, fit: "inside" }).png().toBuffer({ resolveWithObject: true });
+    parts.push({ input: data, left: Math.round(width * FRIEND_BOX.centre - info.width / 2), top: Math.round(height * FRIEND_BOX.feet - info.height) });
+  }
+  return sharp({ create: { width, height, channels: 4, background: CREAM }}).composite(parts).flatten({ background: CREAM }).png().toBuffer();
 }

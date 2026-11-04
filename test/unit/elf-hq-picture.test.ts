@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 // NBCC Elf Detective School: each detective's elf on Detective HQ, as a picture for their own family
-// only. It is a PNG stacked from the painted layers (an SVG in an <img> cannot load them), private,
+// only. It is a PNG of the elf on its stage, stacked from the paper pictures (mail apps cannot show SVG), private,
 // checked with the site before the browser reuses it, and a problem never stops the site.
 // Every family is invented.
 
@@ -69,7 +69,8 @@ describe("a detective's elf on Detective HQ", () => {
     // shows at once (final review, 3 November 2026: every reload used to make it again).
     expect(r.headers["Cache-Control"]).toBe("private, no-cache");
     expect(r.headers["ETag"]).toBe('"k1"');
-    expect(elfPng).toHaveBeenCalledWith(null, expect.anything(), 240, "clear");
+    // The doors done are the server's own (in wave 1, none), never anything the browser says.
+    expect(elfPng).toHaveBeenCalledWith(null, { doors: [] }, 240);
   });
 
   it("is not found for another family's detective, or any other name", async () => {

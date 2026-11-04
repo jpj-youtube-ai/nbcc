@@ -3,17 +3,17 @@
  * The page (src/elf/pages/wardrobe.ts) already works with no script: it is one form of choices and
  * a Save button. This makes it a wardrobe:
  *
- *   1. The elf in the mirror changes the moment something is picked. It is drawn by the same
- *      wardrobe file the server uses (window.NBCCElf, assets/js/elf-wardrobe.js), so the picture
- *      here is the picture everywhere.
+ *   1. The elf on the stage changes the moment something is picked. Its pictures are the ones the
+ *      wardrobe file the server uses names (window.NBCCElf.lookPictures, assets/js/elf-wardrobe.js),
+ *      so the picture here is the picture everywhere. The costume tiles follow the skin chosen.
  *   2. The look saves itself once the changes settle, without leaving the page. If it cannot, the
  *      page says so plainly and offers the Save button.
  *   3. The sections become tabs, so one shows at a time under the mirror.
  *   4. "New" comes off a thing once it has been tried on, and the server is told.
  *
- * Nothing here decides what may be worn. A locked choice cannot be picked in the page, the drawing
- * leaves out anything that has not been earned, and the server checks the look again when it is
- * saved (normaliseLook in the wardrobe file does all three).
+ * Nothing here decides what may be worn. A locked choice cannot be picked in the page, the stage
+ * leaves out anything not unlocked, and the server checks the look again when it is saved
+ * (normaliseLook in the wardrobe file does all three).
  *
  * Tested in test/unit/elf-js-wardrobe.test.ts against the real page.
  */
@@ -23,6 +23,21 @@
   var NOT_SAVED = "We could not save this look. Check your signal and try again.";
   // How long the choices must sit still before the look is saved, in milliseconds.
   var SETTLE = 700;
+  // The pictures on the stage, bottom to top, and where the paper pictures are.
+  var PARTS = ["scene", "body", "glasses", "bow", "friend"];
+  var PAPER = "/assets/img/elf/paper/";
+
+  // The doors this detective has done, as whole numbers from 1 to 24: the wardrobe counts anything
+  // else as no door at all, so nothing in the page can open a costume.
+  function doorsOf(text) {
+    var out = [];
+    var parts = String(text || "").split(",");
+    for (var i = 0; i < parts.length; i++) {
+      var n = Number(parts[i]);
+      if (parts[i] !== "" && n % 1 === 0 && n >= 1 && n <= 24) out.push(n);
+    }
+    return out;
+  }
 
   function initWardrobe(doc, win, opts) {
     var elf = (opts && opts.elf) || win.NBCCElf;
@@ -30,19 +45,12 @@
     // With no wardrobe file or no fetch the page is left as it is: a form with a Save button.
     if (!form || !elf || typeof win.fetch !== "function") return null;
 
-    var mirror = form.querySelector(".elf-wd-mirror");
-    var wearing = form.querySelector(".elf-wd-wearing span");
+    var stage = form.querySelector(".elf-wd-stage");
+    var wearing = form.querySelector(".elf-wd-wearing");
     var status = form.querySelector(".elf-wd-status");
     var button = form.querySelector('button[type="submit"]');
     var detective = form.querySelector('input[name="detective"]');
-    var drawing = mirror ? mirror.querySelector("svg") : null;
-    var label = (drawing && drawing.getAttribute("aria-label")) || "";
-    // What the detective has earned. A NUMBER of doors: the wardrobe counts text as no doors.
-    var state = {
-      doorsDone: Number(form.getAttribute("data-doors")) || 0,
-      goldSeal: form.getAttribute("data-gold") === "1",
-      wonRace: form.getAttribute("data-race") === "1"
-    };
+    var state = { doors: doorsOf(form.getAttribute("data-doors")) };
 
     // ---- reading the choices ---------------------------------------------------------------
 
@@ -52,37 +60,94 @@
     }
 
     function readLook() {
-      var pieces = {};
-      for (var i = 0; i < elf.SLOTS.length; i++) {
-        var value = picked("piece-" + elf.SLOTS[i].id);
-        pieces[elf.SLOTS[i].id] = value ? value.split(":") : null;
-      }
-      return { sibling: picked("sibling"), skin: picked("skin"), hair: picked("hair"), hairStyle: picked("hairStyle"), outfit: picked("outfit") || null, pieces: pieces };
+      return {
+        sibling: picked("sibling"),
+        skin: picked("skin"),
+        hair: picked("hair"),
+        hairStyle: picked("hairStyle"),
+        costume: picked("costume") || null,
+        scene: picked("scene"),
+        friend: picked("friend") || null,
+        frame: picked("frame") || null,
+        glasses: picked("glasses") || null,
+        bow: picked("bow") || null
+      };
     }
 
-    // ---- the mirror ------------------------------------------------------------------------
+    // ---- the stage -------------------------------------------------------------------------
 
-    // The drawing comes from the wardrobe file, which looks every id up in its own lists and makes
-    // the label safe, so nothing from the page reaches the markup it writes.
+    // The first picture already on the stage that goes above the part at `i`, so a picture put back
+    // keeps its place in the order.
+    function above(i) {
+      for (var j = i + 1; j < PARTS.length; j++) {
+        var img = stage.querySelector('img[data-picture="' + PARTS[j] + '"]');
+        if (img) return img;
+      }
+      return null;
+    }
+
+    // The pictures come from the wardrobe file, which looks every id up in its own lists, so nothing
+    // from the page reaches an address it writes.
+    function place(pictures) {
+      for (var i = 0; i < PARTS.length; i++) {
+        var part = PARTS[i];
+        var img = stage.querySelector('img[data-picture="' + part + '"]');
+        if (!pictures[part]) {
+          if (img) img.parentNode.removeChild(img);
+          continue;
+        }
+        if (!img) {
+          img = doc.createElement("img");
+          img.className = "elf-wd-pic";
+          img.setAttribute("data-picture", part);
+          // The elf, glasses, bow tie and scene are each the whole canvas; a friend is fitted in a square.
+          img.setAttribute("width", part === "friend" ? "240" : "640");
+          img.setAttribute("height", part === "friend" ? "240" : "960");
+          img.setAttribute("alt", "");
+          img.setAttribute("decoding", "async");
+          stage.insertBefore(img, above(i));
+        }
+        if (img.getAttribute("src") !== PAPER + pictures[part]) img.setAttribute("src", PAPER + pictures[part]);
+      }
+    }
+
+    function frame(id) {
+      var old = [];
+      for (var i = 0; i < stage.classList.length; i++) {
+        if (stage.classList[i].indexOf("elf-frame--") === 0) old.push(stage.classList[i]);
+      }
+      for (var j = 0; j < old.length; j++) stage.classList.remove(old[j]);
+      if (id) stage.classList.add("elf-frame--" + id);
+    }
+
     function draw() {
-      var look = readLook();
-      if (mirror) {
-        mirror.innerHTML = elf.drawElf(look, state, { size: 260, backdrop: false, key: "preview", label: label });
-        // Start the small change of clothes again, even if the last one is still running.
-        mirror.classList.remove("is-changed");
-        void mirror.offsetWidth;
-        mirror.classList.add("is-changed");
+      var look = elf.normaliseLook(readLook(), state);
+      if (stage) {
+        place(elf.lookPictures(look, state));
+        frame(look.frame);
+        // Start the small change again, even if the last one is still running.
+        stage.classList.remove("is-changed");
+        void stage.offsetWidth;
+        stage.classList.add("is-changed");
       }
       if (wearing) wearing.textContent = elf.lookWords(look, state);
     }
 
-    // The outfit tiles show the outfit on this elf's own face, so they follow the skin and hair.
-    function drawOutfits() {
-      var look = readLook();
-      var list = form.querySelectorAll('input[name="outfit"]');
+    function known(list, id) {
       for (var i = 0; i < list.length; i++) {
-        var art = list[i].value ? list[i].parentNode.querySelector(".elf-wd-art") : null;
-        if (art) art.innerHTML = elf.drawOutfit(list[i].value, look, 72);
+        if (list[i].id === id) return true;
+      }
+      return false;
+    }
+
+    // The costume tiles show each costume in the detective's own skin, so they follow the skin.
+    function drawTiles() {
+      var skin = elf.normaliseLook(readLook(), state).skin;
+      var tiles = form.querySelectorAll("img[data-costume]");
+      for (var i = 0; i < tiles.length; i++) {
+        var id = tiles[i].getAttribute("data-costume");
+        var src = PAPER + "tiles/costumes/" + id + "-" + skin + ".webp";
+        if (known(elf.COSTUMES, id) && tiles[i].getAttribute("src") !== src) tiles[i].setAttribute("src", src);
       }
     }
 
@@ -180,9 +245,12 @@
       if (doc.visibilityState === "hidden") leaving();
     }
 
-    // A page brought back by the Back button may hold choices the mirror has not drawn.
+    // A page brought back by the Back button may hold choices the stage has not shown.
     function shown(event) {
-      if (event && event.persisted) draw();
+      if (event && event.persisted) {
+        draw();
+        drawTiles();
+      }
     }
 
     // ---- the sections, as tabs ---------------------------------------------------------------
@@ -297,14 +365,9 @@
     function changed(event) {
       var input = event.target;
       if (!input || input.type !== "radio") return;
-      // A piece picked while a whole outfit is on would not show: the outfit comes off.
-      if (input.name.indexOf("piece-") === 0 && input.value) {
-        var none = form.querySelector('input[name="outfit"][value=""]');
-        if (none) none.checked = true;
-      }
       triedOn(input);
       draw();
-      if (input.name === "sibling" || input.name === "skin" || input.name === "hair" || input.name === "hairStyle") drawOutfits();
+      if (input.name === "skin") drawTiles();
       saveSoon();
     }
 
@@ -332,11 +395,11 @@
     win.addEventListener("pageshow", shown);
     doc.addEventListener("visibilitychange", hidden);
 
-    // A browser can put back the choices from before a reload. If they are not what the mirror
-    // shows, draw them and save them, so the picture, the choices and the server agree.
+    // A browser can put back the choices from before a reload. If they are not what the stage
+    // shows, show them and save them, so the picture, the choices and the server agree.
     if (wearing && wearing.textContent !== elf.lookWords(readLook(), state)) {
       draw();
-      drawOutfits();
+      drawTiles();
       saveSoon();
     }
 

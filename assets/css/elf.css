@@ -571,19 +571,23 @@ form.elf-wd { display: grid; gap: 16px; padding: 0; background: none; border: 0;
   border-radius: var(--radius);
   box-shadow: var(--shadow);
 }
-/* A dressing mirror in a walnut frame: the same wood as the calendar. */
-.elf-wd-mirror {
+/* The stage: the look's paper pictures, each in its place, as fractions of a stage 2 by 3 (the same
+   places the elf's PNG uses, src/elf/elf-png.ts). The elf's picture is its whole canvas, and so are
+   the glasses and the bow tie, so the three line up; the friend is fitted in a square and stands on
+   the front of the plinth. */
+.elf-wd-stage {
+  position: relative;
   width: 108px;
-  padding: 12px 6px 0;
-  border: 5px solid var(--elf-walnut);
-  border-radius: 999px 999px 12px 12px;
-  background:
-    radial-gradient(ellipse 58% 5% at 50% 97%, rgba(110, 68, 41, 0.28), transparent 72%),
-    linear-gradient(180deg, var(--white) 0%, var(--elf-paper) 55%, var(--elf-paper-deep) 100%);
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.5), inset 0 3px 8px rgba(58, 36, 22, 0.22), 0 2px 0 var(--elf-walnut-deep);
+  aspect-ratio: 2 / 3;
+  border-radius: 10px;
   overflow: hidden;
+  background: var(--elf-paper);
+  box-shadow: 0 2px 0 var(--elf-walnut-deep), 0 6px 14px rgba(58, 36, 22, 0.22);
 }
-.elf-wd-mirror svg { display: block; width: 100%; height: auto; }
+.elf-wd-pic { position: absolute; display: block; }
+.elf-wd-pic[data-picture="scene"] { inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.elf-wd-pic[data-picture="body"], .elf-wd-pic[data-picture="glasses"], .elf-wd-pic[data-picture="bow"] { left: 23.1%; top: 33%; width: 53.7%; height: auto; }
+.elf-wd-pic[data-picture="friend"] { left: 52.5%; bottom: 18%; width: 21%; aspect-ratio: 1; object-fit: contain; object-position: 50% 100%; }
 .elf-wd-preview h2 { font-size: 1.15rem; color: var(--maroon); overflow-wrap: anywhere; text-wrap: balance; }
 .elf-wd-preview p { margin: 4px 0 0; }
 .elf-wd-preview__rank { font-size: 0.86rem; color: var(--slate-soft); }

@@ -117,12 +117,14 @@ export interface HqView {
 
 export interface WardrobeView {
   detective: DetectiveView;
-  /** The look as saved. It is made safe again before it is drawn. */
+  /** The look as saved, made safe. */
   look: ElfLook;
-  /** What the detective has earned. Build it with wardrobeState in src/elf/wardrobe.ts. */
+  /** The doors the detective has done. Build it with wardrobeState in src/elf/wardrobe.ts. */
   state: WardrobeState;
-  /** What has not been tried on yet: "style:colour" for a piece, the id for an outfit. */
+  /** The costumes unlocked and not opened yet, by id: wrapped presents to tap open. */
   fresh: string[];
+  /** Up to three favourite looks (Snap a photo), newest first, made safe. */
+  favourites: ElfLook[];
   hqUrl: string;
   /** The calendar: where the school's logo in the bar leads. */
   calendarUrl: string;

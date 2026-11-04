@@ -11532,6 +11532,13 @@ for byte whatever is already its size, so it runs only on the computer that has 
 `test/unit/elf-paper-pictures.test.ts` checks every picture is there, on the right canvas and within
 its weight, and that nothing else is.
 
+The torn paper shapes are files too, in `assets/img/elf/paper/ui/`: the torn edge strips the stylesheet
+tiles round cards, tiles and notes (`tear-*`), and the torn buttons, chips, label, notes, tag and tape.
+`node scripts/elf-paper/shapes.mjs` draws them with mockup 6's own code and seeded numbers, so each tear
+is the approved one and the same on every visit; `ui/shapes.json` lists them and how each edge strip
+tiles. `test/unit/elf-paper-shapes.test.ts` checks they are small, plain pictures and exactly what the
+script draws.
+
 ## Event tickets: NBCC sells an event's tickets
 
 Jaimie, points 23 and 24. An organiser holding an event can ask NBCC to sell the tickets, when ALL

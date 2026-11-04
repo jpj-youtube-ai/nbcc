@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 // @ts-expect-error a plain JavaScript tool, with no type declarations
-import { alignBlob, contentBox, coverOutside, fillBox, fitBottomWidth, fitCentred, fitContain, fitHole, fitHoleOnFloor, heldBehind, regionCover } from "../../scripts/elf-paint/fit.mjs";
+import { alignBlob, contentBox, coverOutside, fillBox, fitBottomWidth, fitCentred, fitContain, fitHole, fitHoleOnFloor, heldBehind, openFaceHole, regionCover } from "../../scripts/elf-paint/fit.mjs";
 
 // NBCC Elf Detective School: the painted dress-up elf, second way (Jaimie, 3 November 2026: "you
 // should have been rendering these things as separate items that are on transparent backgrounds").
@@ -149,6 +149,23 @@ describe("a gadget held in the elf's own mitten", () => {
     const held = heldBehind(gadget, mitten);
     expect(alphaAt(held, 315, 850)).toBe(255); // above the mitten: the gadget
     expect(alphaAt(held, 315, 1000)).toBe(0); // inside the mitten: the elf's own mitten shows
+  });
+});
+
+describe("a hooded costume's face opening", () => {
+  it("is cut the size of the elf's face, centred on it, with a rim in the costume's own colour", () => {
+    // Faces did not fit the costumes' holes, which were too small (Jaimie, 4 November 2026).
+    const hood = paint(clear(CW, CH), 200, 200, 860, 1340, [60, 140, 60]);
+    for (let y = 500; y < 560; y++) for (let x = 500; x < 560; x++) hood.data[(y * CW + x) * 4 + 3] = 0; // a hole far too small
+    const { layer, cover } = openFaceHole(hood, { cx: 527, cy: 535, rx: 195, ry: 155, rim: 16 });
+    expect(alphaAt(layer, 527, 535)).toBe(0); // the middle of the face shows
+    expect(alphaAt(layer, 527 - 180, 535)).toBe(0); // and out to its sides
+    expect(alphaAt(layer, 527, 535 + 150)).toBe(0); // and down to its chin
+    expect(alphaAt(layer, 527 - 205, 535)).toBe(255); // the rim, just outside the opening
+    const i = ((535 * CW) + 527 - 205) * 4;
+    expect(layer.data[i + 1]).toBeGreaterThan(layer.data[i]); // in the costume's own green
+    expect(alphaAt(cover, 527, 535)).toBe(0); // the elf shows only in the opening
+    expect(alphaAt(cover, 527, 300)).toBe(255);
   });
 });
 

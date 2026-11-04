@@ -47,9 +47,10 @@
       "body": "a Highland piper's outfit: a black jacket with silver buttons, a red tartan kilt with a white sporran, white kilt socks and black shoes, red mittens, and a set of bagpipes held under one arm",
       "head": "a small black Scottish glengarry bonnet, a little boat shaped cap seen from the front, with a red and white diced band; short ribbons, nothing big",
       "headFit": {
-        "width": 330,
-        "bottom": 410,
-        "pulledOn": false
+        "width": 420,
+        "bottom": 430,
+        "pulledOn": true,
+        "byWidth": true
       }
     },
     "grad": {
@@ -57,9 +58,10 @@
       "body": "graduation robes: a long black gown with gold trim down the front, red mittens, a rolled certificate tied with a red ribbon held in the right mitten, and cream socks at the bottom",
       "head": "a black square mortar board graduation cap seen from the front: a flat black board on top of a black skull cap, with a gold tassel hanging at one side",
       "headFit": {
-        "width": 520,
-        "bottom": 430,
-        "pulledOn": true
+        "width": 600,
+        "bottom": 440,
+        "pulledOn": true,
+        "byWidth": true
       }
     },
     "golden": {
@@ -104,8 +106,10 @@
         "bottom": 450
       },
       "santa": {
-        "width": 520,
-        "bottom": 450
+        "width": 640,
+        "bottom": 450,
+        "brimAt": true,
+        "dx": 50
       },
       "tammy": {
         "width": 500,

@@ -277,3 +277,45 @@ export function heldBehind(gadget, mitten) {
   for (let i = 3; i < out.length; i += 4) if (mitten.data[i] >= 128) out[i] = 0;
   return { data: out, width: gadget.width, height: gadget.height };
 }
+
+/**
+ * A hooded costume with its face opening cut the size of the elf's face and centred on it, an
+ * ellipse at (cx, cy) of radii rx, ry: inside it is clear, and just outside it is a rim `rim` wide in
+ * the costume's own colour (its middle colour round the opening), edged with the outline colour on
+ * both sides. Faces did not fit the openings OpenAI painted, which were too small (Jaimie,
+ * 4 November 2026). The cover hides the elf everywhere but the opening.
+ */
+export function openFaceHole(layer, { cx, cy, rx, ry, rim = 16, outline = [74, 30, 24] }) {
+  const { width, height } = layer;
+  const out = new Uint8ClampedArray(layer.data);
+  const ring = (x, y) => Math.hypot((x - cx) / rx, (y - cy) / ry);
+  // The costume's colour round the opening: the middle value of what is painted just beyond the rim.
+  const seen = [[], [], []];
+  for (let y = Math.max(0, Math.floor(cy - ry * 1.4)); y < Math.min(height, cy + ry * 1.4); y += 2)
+    for (let x = Math.max(0, Math.floor(cx - rx * 1.4)); x < Math.min(width, cx + rx * 1.4); x += 2) {
+      const d = ring(x, y);
+      const i = (y * width + x) * 4;
+      if (d > 1 + (rim + 6) / rx && d < 1 + (rim + 40) / rx && layer.data[i + 3] > 200) for (let c = 0; c < 3; c++) seen[c].push(layer.data[i + c]);
+    }
+  const mid = seen.map((v) => (v.length ? v.sort((a, b) => a - b)[v.length >> 1] : 120));
+  const band = mid.map((v) => Math.round(v * 0.9));
+  const cover = { data: new Uint8ClampedArray(width * height * 4), width, height };
+  const edge = 4 / Math.min(rx, ry);
+  const rimTo = 1 + rim / Math.min(rx, ry);
+  for (let y = 0; y < height; y++)
+    for (let x = 0; x < width; x++) {
+      const i = (y * width + x) * 4;
+      const d = ring(x, y);
+      if (d < 1) {
+        out[i + 3] = 0;
+        continue;
+      }
+      cover.data[i + 3] = 255;
+      if (d < rimTo) {
+        const onEdge = d < 1 + edge || d > rimTo - edge;
+        out.set(onEdge ? outline : band, i);
+        out[i + 3] = 255;
+      }
+    }
+  return { layer: { data: out, width, height }, cover };
+}

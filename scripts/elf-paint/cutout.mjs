@@ -464,7 +464,7 @@ export function dropLooseEdges(img, reach = 3, solid = 153) {
 const SIDE_STRIP = 40;
 const SIDE_CLEAR = 8;
 
-export function hatCover(layer) {
+export function hatCover(layer, brimLine) {
   const { width, height } = layer;
   const bottom = new Int32Array(width).fill(-1);
   let top = height;
@@ -478,14 +478,17 @@ export function hatCover(layer) {
       }
   const out = new Uint8ClampedArray(layer.data.length);
   if (lowest < 0) return { data: out, width, height };
-  const brimFrom = top + 0.7 * (lowest - top);
+  // `brimLine`, when given, is where the brim sits: a Santa hat's pom pom hangs lower than its brim,
+  // and measured from the pom pom the brim was too high to count, so hair showed over it.
+  const base = brimLine ?? lowest;
+  const brimFrom = top + 0.7 * (base - top);
   let left = width;
   let right = -1;
   for (let x = 0; x < width; x++) {
     if (bottom[x] < brimFrom) continue;
     if (x < left) left = x;
     if (x > right) right = x;
-    for (let y = 0; y <= bottom[x]; y++) out[(y * width + x) * 4 + 3] = 255;
+    for (let y = 0; y <= Math.min(bottom[x], base); y++) out[(y * width + x) * 4 + 3] = 255;
   }
   // A narrow strip each side, where short hair flicks out, down to a little above the lowest point
   // of the brim beside it; the ears sit lower, so they still show.

@@ -11556,6 +11556,8 @@ draw lives in `assets/img/elf/paper/`, all WebP:
   `scripts/elf-paper/glasses-fit.json` says where each costume's eyes are);
 - `scenes/<id>.webp` (16, 640 by 960), `friends/<id>.webp` (6), `deco/` (the painted presents, holly,
   candy cane, bauble and gold bow), `icons/` (10) and `ui/` (the paper grain);
+- `board/rooftops.webp`, the advent calendar's board: the approved rooftops painting at its full width
+  (720 by 750), cut off above the stage the wardrobe's elf stands on;
 - `tiles/costumes/` and `tiles/scenes/`, the small wardrobe tiles (one skin's 51 costume tiles come to
   about 400 KB).
 
@@ -11584,6 +11586,22 @@ of `assets/css/elf.css` has the rest as classes: `.elf-card` (a card sheet on a 
 `.elf-paper` (a sheet torn off a pad), `.elf-label`, `.elf-cane-bar`, `.elf-tags` and the five
 `.elf-frame--*` frames. `test/unit/elf-paper.test.ts` checks the pieces and that the stylesheet uses
 only the paper files.
+
+**The advent calendar** (`/elf`; Jaimie: "when you say calendar, it looks like an advent calendar").
+One torn crimson card board on a holly sheet, with the rooftops painting across its face and the 24
+doors cut into it in order, 1 to 24 (`src/elf/pages/door.ts` draws a door, `calendar.ts` the page).
+Each door is a card door on a hinge with a little paper pull tab and its number printed large, and it
+carries its own piece of the painting: a door's tile says only its place (`style="--i:<n>"`, counting
+from nought) and the stylesheet works out its piece from the board's width (`.elf-advent` is a size
+container), its columns (4, 6 or 8) and the doors' shape, the same sums the board itself uses, so the
+picture runs on across every door. Door 23 is two doors wide and door 24 is the big double doors, a
+row of their own, so the doors fill every row at every width. A shut door is bright, with its day on a
+paper chip and the prize's shape (or the mystery star) cut out of card; today's door, and the one being
+hunted, glow gold with the painted bow; an open door (found or revealed) stands open on its hinge with
+the finder's elf or the prize's shape in gold behind it, swinging open only for a visitor happy with
+motion. The page's script gives a signed in family's done doors (cracked or visited) the painted holly
+(`is-done`) beside their marks. A door's detail is a note taped across the board; the countdown at the
+top is on a candy cane strip.
 
 The torn paper shapes are files too, in `assets/img/elf/paper/ui/`: the torn edge strips the stylesheet
 tiles round cards, tiles and notes (`tear-*`), and the torn buttons, chips, label, notes, tag and tape.

@@ -79,6 +79,9 @@ for (const [id, from] of [["village", "stage.webp"], ...SCENES.map((s) => [s, `s
   await write(sharp(join(FROM, from)).resize(W, H).webp({ quality: 80 }), `scenes/${id}.webp`);
   await write(sharp(join(FROM, from)).resize(160, 240).webp({ quality: 75 }), `tiles/scenes/${id}.webp`);
 }
+// The advent calendar's board: the rooftops painting at its full width, cut off above the stage the
+// wardrobe's elf stands on, so the 24 doors are cut into the night sky and the roofs.
+await write(sharp(join(FROM, "scene-rooftops.webp")).extract({ left: 0, top: 0, width: 720, height: 750 }).webp({ quality: 80 }), "board/rooftops.webp");
 for (const id of [...GLASSES, ...BOWS]) copy(`pieces/${id}.webp`, `pieces/${id}.webp`);
 for (const g of GLASSES) {
   const layer = readFileSync(join(FROM, `pieces/${g}.webp`));

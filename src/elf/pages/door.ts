@@ -1,3 +1,4 @@
+import { DOOR_COUNT } from "../calendar";
 import { isOpen } from "../doors";
 import { clockWords, countdownWords, dayWords, sleepsUntil } from "../words";
 import { candyCane, icon } from "./icons";
@@ -11,6 +12,12 @@ import type { DoorView } from "./types";
 // only makes it nicer: it opens the detail in place, ticks the countdown and fetches a door again
 // when the live feed says it has changed. Both the page and that fetch draw a door with the
 // functions here, so the two can never show a door differently.
+//
+// It is an advent calendar door (docs/superpowers/specs/2026-11-04-elf-paper-design.md, decision
+// 13): a card door cut into the board's painted picture, on a hinge, with a little paper pull tab and
+// its number printed on it. While it is shut, everything on it is printed on the door itself; once it
+// is open, the door has swung away and what was behind it shows. Its place in the picture comes from
+// its number (--i); the stylesheet works out which piece of the picture that is.
 //
 // One rule is kept here whatever a caller passes in: where an elf is hiding is never written while
 // its door is shut or the elf is being hunted. Not in the door, not in its detail, not in the words
@@ -27,7 +34,10 @@ export interface DoorContext {
   hqUrl: string;
 }
 
-const CARVING_LINE = "Look at the carving. Can you guess the prize?";
+const CARVING_LINE = "Look at the shape cut out of the door. Can you guess the prize?";
+
+/** The painted gold bow on today's door, as on a present. */
+const BOW = "/assets/img/elf/paper/deco/bow-gold.webp";
 
 /** What kind of door it is at this moment. A shut door is today's, tomorrow's or a later one, by the
  *  day in London. */
@@ -57,8 +67,8 @@ export function doorLabel(d: DoorView, now: Date): string {
   return `Door ${d.door}, shut. Clue out ${dayWords(d.clueAt)} at ${clockWords(d.clueAt)}.${big}`;
 }
 
-/** The prize shape carved into the wood. With no shape of its own, a door carves the mystery star,
- *  which the stylesheet supplies. */
+/** The prize's shape, cut out of card and laid on the door. With no shape of its own, a door has the
+ *  mystery star, which the stylesheet supplies. */
 function carving(d: DoorView): string {
   const shape = sitePath(d.shapeUrl);
   const style = shape ? ` style="--shape:url('${shape}')"` : "";
@@ -87,19 +97,20 @@ function countdown(d: DoorView, now: Date): string {
   return `<span class="elf-cd" data-until="${d.clueAt.toISOString()}">${countdownWords(left)}</span>`;
 }
 
-function pill(kind: DoorKind, d: DoorView): string {
-  const words: Record<DoorKind, string | null> = {
-    found: "Found",
-    revealed: "Still here",
-    hunting: "Hunt on",
-    today: "Today",
-    tomorrow: "Tomorrow",
-    later: d.bigPrize ? "Big prize" : null,
-  };
-  const text = words[kind];
-  if (!text) return "";
-  const look = kind === "later" ? "big" : kind;
-  return `<span class="elf-pill elf-pill--${look}">${text}</span>`;
+/** A paper chip (src/elf/pages/paper.ts's pieces), in the look for what it says. */
+const paperChip = (look: "done" | "missed" | "today" | "soon" | "new", cls: string, html: string): string =>
+  `<span class="elf-chip elf-chip--${look} ${cls}">${html}</span>`;
+
+/** A big prize's chip, on a door and in its detail. */
+const bigPrizeChip = (cls: string): string => paperChip("today", cls, "Big prize");
+
+function chip(kind: DoorKind, d: DoorView): string {
+  if (kind === "found") return paperChip("done", "elf-door__chip", "Found");
+  if (kind === "revealed") return paperChip("missed", "elf-door__chip", "Still here");
+  if (kind === "hunting") return paperChip("new", "elf-door__chip", "Hunt on");
+  if (kind === "today") return paperChip("today", "elf-door__chip", "Today");
+  if (kind === "tomorrow") return paperChip("soon", "elf-door__chip", "Tomorrow");
+  return d.bigPrize ? bigPrizeChip("elf-door__chip") : "";
 }
 
 /** The foot of a door: when its clue comes out, how long is left, or where the elf was. */
@@ -107,12 +118,12 @@ function foot(kind: DoorKind, d: DoorView, now: Date): string {
   if (kind === "found" || kind === "revealed") {
     return `<span class="elf-door__foot elf-door__place">${escapeHtml(d.place?.name ?? "")}</span>`;
   }
-  if (kind === "hunting") return `<span class="elf-door__foot">Find ${escapeHtml(d.elfName)}!</span>`;
+  if (kind === "hunting") return paperChip("soon", "elf-door__foot", `Find ${escapeHtml(d.elfName)}!`);
   if (kind === "today") {
-    return `<span class="elf-door__foot"><span class="elf-door__more">Clue in </span>${countdown(d, now)}</span>`;
+    return paperChip("today", "elf-door__foot", `<span class="elf-door__more">Clue in </span>${countdown(d, now)}`);
   }
   const weekday = dayWords(d.clueAt).split(" ")[0];
-  return `<span class="elf-door__foot">${weekday}<span class="elf-door__more"> ${clockWords(d.clueAt)}</span></span>`;
+  return paperChip("soon", "elf-door__foot elf-door__date", `${weekday}<span class="elf-door__more"> ${clockWords(d.clueAt)}</span>`);
 }
 
 /** A short code that changes whenever the door would be drawn differently. The live feed carries it,
@@ -142,17 +153,31 @@ export function doorVersion(d: DoorView, now: Date): string {
 export function doorTile(d: DoorView, now: Date): string {
   const kind = doorKind(d, now);
   const open = kind === "found" || kind === "revealed";
+  // Today's door, and the one being hunted, glow gold with the bow.
+  const gold = kind === "today" || kind === "hunting";
+  const double = d.door === DOOR_COUNT;
+  const worn = chip(kind, d);
   const face = kind === "found" ? winnerPicture(d, 46) : carving(d);
-  const worn = pill(kind, d);
-  const classes = `elf-door elf-door--${kind}${open ? " is-open" : ""}${worn ? " has-pill" : ""}`;
-  return (
-    `<a class="${classes}" id="door-${d.door}" href="#case-${d.door}" ` +
-    `data-door="${d.door}" data-kind="${kind}" data-v="${doorVersion(d, now)}" aria-label="${escapeHtml(doorLabel(d, now))}">` +
-    `<span class="elf-door__num" aria-hidden="true">${d.door}</span>` +
+  const print =
     worn +
     // The family's own marks sit on the corner of the picture. The page's script fills them in.
     `<span class="elf-door__face">${face}<span class="elf-door__marks" aria-hidden="true"></span></span>` +
-    foot(kind, d, now) +
+    foot(kind, d, now);
+  const tab = `<span class="elf-door__tab"></span>`;
+  // Shut, the door carries everything printed on it; open, only its number swings away with it.
+  const bow = gold ? `<img class="elf-door__bow" src="${BOW}" width="480" height="361" alt="" decoding="async" />` : "";
+  const onDoor = `<span class="elf-door__num">${d.door}</span>` + (open ? "" : bow + print);
+  const flaps = double
+    ? `<span class="elf-door__flap elf-door__flap--left" aria-hidden="true">${onDoor}${tab}</span>` +
+      `<span class="elf-door__flap elf-door__flap--right" aria-hidden="true">${tab}</span>`
+    : `<span class="elf-door__flap" aria-hidden="true">${onDoor}${tab}</span>`;
+  const shape = double ? " elf-door--double" : d.door === DOOR_COUNT - 1 ? " elf-door--wide" : "";
+  const classes = `elf-door elf-door--${kind}${shape}${gold ? " elf-door--gold" : ""}${open ? " is-open" : ""}${worn ? " has-chip" : ""}`;
+  return (
+    `<a class="${classes}" id="door-${d.door}" href="#case-${d.door}" style="--i:${d.door - 1}" ` +
+    `data-door="${d.door}" data-kind="${kind}" data-v="${doorVersion(d, now)}" aria-label="${escapeHtml(doorLabel(d, now))}">` +
+    flaps +
+    (open ? print : "") +
     `</a>`
   );
 }
@@ -185,9 +210,9 @@ function detailParts(d: DoorView, ctx: DoorContext): { meta: string; title: stri
   const hq = sitePath(ctx.hqUrl) ?? "/";
   const join = sitePath(ctx.joinUrl) ?? "/";
   const when = (words: string): string => line(`${icon("clock", 16)} ${words}`, "elf-detail__when");
-  const bigCarving = `<span class="elf-detail__wood">${carving(d)}</span>`;
-  // A prize staff chose to show off keeps its ribbon and its teaser on its own day too.
-  const bigPrize = d.bigPrize ? line(`<span class="elf-pill elf-pill--big">Big prize</span>${d.teaser ? `: ${escapeHtml(d.teaser)}` : ""}`) : "";
+  const bigCarving = `<span class="elf-detail__shape">${carving(d)}</span>`;
+  // A prize staff chose to show off keeps its chip and its teaser on its own day too.
+  const bigPrize = d.bigPrize ? line(`${bigPrizeChip("elf-detail__big")}${d.teaser ? `: ${escapeHtml(d.teaser)}` : ""}`) : "";
 
   if (kind === "found") {
     const foundAt = d.found ? ` &middot; found at ${clockWords(d.found.at)}` : "";
@@ -225,7 +250,7 @@ function detailParts(d: DoorView, ctx: DoorContext): { meta: string; title: stri
         line(`${elf}'s clue came out at ${clock}. ${elf} is hiding somewhere in NBCC's area.`) +
         bigPrize +
         line("The first detective to find the elf and read its secret word wins it.") +
-        `<p class="elf-detail__actions"><a class="btn btn-primary" href="${hq}">See the clue</a> ` +
+        `<p class="elf-detail__actions"><a class="elf-btn elf-btn--crimson elf-btn--s" href="${hq}">See the clue</a> ` +
         `<a class="elf-link" href="${join}">Not a detective yet? Join in</a></p>`,
     };
   }
@@ -239,7 +264,7 @@ function detailParts(d: DoorView, ctx: DoorContext): { meta: string; title: stri
         bigPrize +
         line("Then the race is on. The first detective to find the elf and read its secret word wins it.") +
         line("Lock in your guess before anyone finds it to crack the case.") +
-        `<p class="elf-detail__actions"><a class="btn btn-primary" href="${hq}">Detective HQ</a> ` +
+        `<p class="elf-detail__actions"><a class="elf-btn elf-btn--crimson elf-btn--s" href="${hq}">Detective HQ</a> ` +
         `<a class="elf-link" href="${join}">Not a detective yet? Join in</a></p>`,
     };
   }
@@ -252,12 +277,13 @@ function detailParts(d: DoorView, ctx: DoorContext): { meta: string; title: stri
   };
 }
 
-/** The detail that opens out beneath a door. */
+/** The detail that opens out beneath a door: a note taped across the calendar. */
 export function doorDetail(d: DoorView, ctx: DoorContext): string {
   const kind = doorKind(d, ctx.now);
   const parts = detailParts(d, ctx);
   return (
-    `<section class="elf-detail elf-detail--${kind}" id="case-${d.door}" data-door="${d.door}" aria-labelledby="case-${d.door}-h">` +
+    `<section class="elf-detail elf-detail--${kind} elf-note" id="case-${d.door}" data-door="${d.door}" aria-labelledby="case-${d.door}-h">` +
+    `<span class="elf-tape" aria-hidden="true"></span>` +
     `<div class="elf-detail__media">${parts.media}</div>` +
     `<div class="elf-detail__body">` +
     `<p class="elf-detail__meta">${parts.meta}</p>` +

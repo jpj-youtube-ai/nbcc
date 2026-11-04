@@ -131,8 +131,10 @@ describe("opening a door", () => {
 
   it("opens from a tap on anything inside the door", () => {
     load();
-    click(door(4).querySelector(".elf-pill")!);
+    click(door(4).querySelector(".elf-door__chip")!);
     expect(detail(4).classList.contains("is-open")).toBe(true);
+    click(door(9).querySelector(".elf-door__flap .elf-door__num")!);
+    expect(detail(9).classList.contains("is-open")).toBe(true);
   });
 
   it("opens with the space bar and with Enter, as a button should", () => {
@@ -203,6 +205,8 @@ describe("news from the live feed", () => {
     expect(words($(".elf-status__body"))).toContain("Detective Sam Snowsleuth");
     expect($(".elf-status").classList.contains("elf-status--found")).toBe(true);
     expect($(".elf-status").classList.contains("elf-status--today")).toBe(false);
+    // Still the paper card sheet it was drawn as.
+    expect($(".elf-status").classList.contains("elf-card")).toBe(true);
   });
 
   it("keeps the door a button, and keeps its detail open, when it is drawn again", async () => {
@@ -263,6 +267,24 @@ describe("a family's own marks", () => {
     expect(door(9).querySelectorAll(".elf-door__marks .elf-mark").length).toBe(0);
   });
 
+  it("give each door the family has done, cracked or visited, the painted holly", async () => {
+    me = {
+      status: 200,
+      body: {
+        doors: [
+          { door: 1, cracked: true, visited: true },
+          { door: 2, cracked: true, visited: false },
+          { door: 4, cracked: false, visited: true },
+          { door: 5, cracked: false, visited: false },
+        ],
+      },
+    };
+    const calendar = load();
+    await calendar.ready;
+    expect([1, 2, 4].map((n) => door(n).classList.contains("is-done"))).toEqual([true, true, true]);
+    expect([3, 5, 9].map((n) => door(n).classList.contains("is-done"))).toEqual([false, false, false]);
+  });
+
   it("are read out with the door", async () => {
     me = { status: 200, body: { doors: [{ door: 1, cracked: true, visited: true }, { door: 2, cracked: true, visited: false }] } };
     const calendar = load();
@@ -296,6 +318,7 @@ describe("a family's own marks", () => {
     findDoorSeven();
     await calendar.poll();
     expect(door(7).querySelectorAll(".elf-door__marks .elf-mark").length).toBe(1);
+    expect(door(7).classList.contains("is-done")).toBe(true);
     expect(words(detail(7).querySelector(".elf-detail__mine"))).toContain("Your family cracked this case.");
   });
 
@@ -303,6 +326,7 @@ describe("a family's own marks", () => {
     const calendar = load();
     await calendar.ready;
     expect(document.querySelectorAll(".elf-door__marks .elf-mark").length).toBe(0);
+    expect(document.querySelectorAll(".elf-door.is-done").length).toBe(0);
     expect([...document.querySelectorAll<HTMLElement>(".elf-detail__mine")].every((p) => p.hidden)).toBe(true);
   });
 });

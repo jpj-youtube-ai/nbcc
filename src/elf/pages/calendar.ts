@@ -1,18 +1,20 @@
 import { DOOR_COUNT } from "../calendar";
-import { twinkles } from "./gift";
 import { SCHOOL_NAME, schoolLogo } from "../logo";
 import { clockWords, countdownWords, dayWords, longDayWords, sameDay, sleepsUntil, things } from "../words";
 import { doorDetail, doorTile } from "./door";
 import { candyCane, icon } from "./icons";
+import { headingStrip, rosette } from "./paper";
 import { elfPage, escapeHtml, sitePath } from "./shell";
 import type { CalendarView, DoorView } from "./types";
 
 // NBCC Elf Detective School: the public calendar. The plan is
-// docs/superpowers/plans/2026-10-04-elf-detective-a3-screens.md.
+// docs/superpowers/plans/2026-10-04-elf-detective-a3-screens.md; its paper look is
+// docs/superpowers/specs/2026-11-04-elf-paper-design.md.
 //
-// A walnut board of 24 oak doors, the look Jaimie signed off. Everything on this page is the same
-// for every visitor, so it can be kept and served again without asking the database: a family's own
-// marks are laid over it afterwards by the page's script, from a small private answer.
+// An advent calendar: one torn card board with a painted picture across its face (the rooftops at
+// night) and the 24 doors cut into it, in order. Everything on this page is the same for every
+// visitor, so it can be kept and served again without asking the database: a family's own marks are
+// laid over it afterwards by the page's script, from a small private answer.
 //
 // Each door is followed in the page by its own detail. With no script, a door is a link to its
 // detail and the stylesheet shows the one that was asked for. The script only makes that nicer.
@@ -54,7 +56,7 @@ export function calendarStatus(view: CalendarView): CalendarStatus {
       title: `Door ${today.door} opens today`,
       html:
         `<p>Clue out at ${clockWords(today.clueAt)}</p>` +
-        `<p class="elf-status__count"><span class="elf-cd" data-until="${today.clueAt.toISOString()}">${countdownWords(left)}</span></p>`,
+        `<p class="elf-status__count elf-cane-strip"><span class="elf-cd" data-until="${today.clueAt.toISOString()}">${countdownWords(left)}</span></p>`,
     };
   }
   if (today && today.state === "found" && today.found) {
@@ -86,7 +88,7 @@ export function calendarStatus(view: CalendarView): CalendarStatus {
   return {
     kind: first ? "before" : "between",
     title: first ? `The hunt starts on ${longDayWords(next.clueAt)}` : `Door ${next.door} opens on ${longDayWords(next.clueAt)}`,
-    html: `<p class="elf-status__count">${things(sleeps, "sleep")} to go</p><p>The first clue comes out at ${clockWords(next.clueAt)}.</p>`,
+    html: `<p class="elf-status__count elf-cane-strip">${things(sleeps, "sleep")} to go</p><p>The first clue comes out at ${clockWords(next.clueAt)}.</p>`,
   };
 }
 
@@ -121,23 +123,26 @@ export function renderCalendarPage(view: CalendarView): string {
 
   const board = view.doors.map((d) => doorTile(d, view.now) + doorDetail(d, ctx)).join("\n");
 
-  const steps = STEPS.map((s) => `<li><h3>${s.title}</h3><p>${s.words}</p></li>`).join("");
-
+  // Each step's number on a paper rosette, as the doors' numbers are in the wardrobe.
+  const steps = STEPS.map(
+    (s, i) =>
+      `<li><span class="elf-steps__n" aria-hidden="true">${rosette({ className: "elf-steps__rosette", petals: 14 })}<b>${i + 1}</b></span>` +
+      `<h3>${s.title}</h3><p>${s.words}</p></li>`,
+  ).join("");
 
   const main = `  <section class="page-top elf-top" aria-labelledby="elf-heading">
     <div class="wrap elf-top__grid">
       <div class="elf-top__words">
-        ${twinkles([[2, 6, 16, 0], [78, 2, 12, -0.9], [92, 30, 18, -1.7], [60, 58, 10, -0.4], [4, 70, 11, -2.1]])}
         <h1 id="elf-heading">${schoolLogo(260, SCHOOL_NAME, "elf-top__logo")}</h1>
-        <span class="eyebrow">Class of ${view.year}</span>
+        <p class="elf-label elf-top__class">Class of ${view.year}</p>
         <p class="lede">24 cheeky elves have escaped from the Elves' Workshop. Find them all by the Night Before Christmas.</p>
         <p class="elf-top__actions">
-          <a class="btn btn-primary" href="${join}">Join the school</a>
-          <a class="btn btn-ghost" href="${hq}">Detective HQ</a>
+          <a class="elf-btn elf-btn--crimson" href="${join}">Join the school</a>
+          <a class="elf-btn" href="${hq}">Detective HQ</a>
         </p>
       </div>
-      <div class="elf-status elf-status--${status.kind}" aria-live="polite">
-        <p class="elf-status__eyebrow">Today</p>
+      <div class="elf-status elf-card elf-status--${status.kind}" aria-live="polite">
+        <p class="elf-label elf-status__eyebrow">Today</p>
         <h2 class="elf-status__title">${status.title}</h2>
         <div class="elf-status__body">${status.html}</div>
       </div>
@@ -147,34 +152,39 @@ export function renderCalendarPage(view: CalendarView): string {
   <section class="elf-calendar" aria-labelledby="elf-calendar-heading">
     <div class="wrap">
       <div class="elf-calendar__head">
-        <h2 id="elf-calendar-heading">The calendar</h2>
+        ${headingStrip({ text: "The calendar", tag: "h2", back: "crimson", id: "elf-calendar-heading" })}
         <p class="elf-tally"><b>${found}</b> of ${DOOR_COUNT} elves found</p>
       </div>
-      <div class="elf-board" id="elf-board" role="group" aria-label="Advent calendar of ${DOOR_COUNT} doors" data-now="${view.now.toISOString()}" data-feed="/api/elf/calendar" data-door-api="/api/elf/door/" data-me="/api/elf/me">
+      <div class="elf-advent">
+        <span class="elf-advent__card" aria-hidden="true"></span>
+        <div class="elf-board" id="elf-board" role="group" aria-label="Advent calendar of ${DOOR_COUNT} doors" data-now="${view.now.toISOString()}" data-feed="/api/elf/calendar" data-door-api="/api/elf/door/" data-me="/api/elf/me">
 ${board}
+        </div>
       </div>
       <ul class="elf-legend" aria-label="What the marks mean">
         <li><span class="elf-mark elf-mark--cracked">${icon("cracked", 16)}</span> You cracked it</li>
         <li><span class="elf-mark">${candyCane(16)}</span> You have been there</li>
-        <li><span class="elf-pill elf-pill--big">Big prize</span> One of our biggest prizes</li>
+        <li><span class="elf-chip elf-chip--today">Big prize</span> One of our biggest prizes</li>
       </ul>
     </div>
   </section>
 
   <section class="section elf-how" aria-labelledby="elf-how-heading">
     <div class="wrap">
-      <h2 id="elf-how-heading" class="h-lg">How it works</h2>
+      ${headingStrip({ text: "How it works", tag: "h2", back: "holly", id: "elf-how-heading" })}
       <ol class="elf-steps">${steps}</ol>
-      <p class="elf-grown-up">Under 16? Bring a grown up with you to every hiding place.</p>
+      <p class="elf-grown-up elf-note elf-note--kraft"><span class="elf-tape" aria-hidden="true"></span>Under 16? Bring a grown up with you to every hiding place.</p>
     </div>
   </section>
 
   <section class="section elf-join" aria-labelledby="elf-join-heading">
     <div class="wrap">
-      <h2 id="elf-join-heading" class="h-lg">Join Elf Detective School</h2>
-      <p class="lede">Pay what you can. We suggest ${escapeHtml(view.price.suggested)} for each detective, and you can join from ${escapeHtml(view.price.from)}. A grown up joins and adds their detectives.</p>
-      <p>Every pound could help remind someone that they have not been forgotten.</p>
-      <p><a class="btn btn-primary" href="${join}">Join the school</a></p>
+      <div class="elf-card elf-card--crimson elf-join__card">
+        ${headingStrip({ text: "Join Elf Detective School", tag: "h2", back: "gold", id: "elf-join-heading" })}
+        <p class="lede">Pay what you can. We suggest ${escapeHtml(view.price.suggested)} for each detective, and you can join from ${escapeHtml(view.price.from)}. A grown up joins and adds their detectives.</p>
+        <p>Every pound could help remind someone that they have not been forgotten.</p>
+        <p><a class="elf-btn elf-btn--crimson elf-btn--l" href="${join}">Join the school</a></p>
+      </div>
     </div>
   </section>`;
 

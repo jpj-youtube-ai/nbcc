@@ -37,12 +37,14 @@ function outsideMotionBlocks(source: string): string {
   return out + source.slice(i);
 }
 
+// The paper look (Jaimie, 4 November 2026) took over the calendar's top: the drifting paper stars
+// behind every page replace the gold sparkles, and a torn label sits under the school's name.
 describe("the calendar's top", () => {
-  it("has gold sparkles round the school's name, hidden from screen readers", () => {
+  it("is paper: the school's name with a torn label under it, and no gold sparkles", () => {
     const doc = parse(renderCalendarPage(calendarViewFor({ settings: SETTINGS, now: new Date("2026-11-13T09:00:00.000Z") })));
-    const sparkles = doc.querySelectorAll(".elf-top .elf-twk");
-    expect(sparkles.length).toBeGreaterThanOrEqual(4);
-    for (const s of sparkles) expect(s.getAttribute("aria-hidden")).toBe("true");
+    expect(doc.querySelectorAll(".elf-top .elf-twk").length).toBe(0);
+    expect(doc.querySelector(".elf-top h1 + .elf-label")).not.toBeNull();
+    expect(doc.querySelectorAll(".elf-sky i").length).toBeGreaterThanOrEqual(10);
   });
 });
 

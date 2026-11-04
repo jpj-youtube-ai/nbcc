@@ -105,12 +105,75 @@ describe("a door on the board", () => {
     expect(a.dataset.kind).toBe("later");
   });
 
-  it("shows its number, the carved shape and its day while it is shut", () => {
+  it("shows its number, the shape cut out of it and its day while it is shut", () => {
     const tile = dom(doorTile(door(), NOW));
     expect(tile.querySelector(".elf-door__num")!.textContent).toBe("9");
     expect(tile.querySelector(".elf-carve")).not.toBeNull();
-    expect(tile.querySelector(".elf-pill")).toBeNull();
+    expect(tile.querySelector(".elf-door__chip")).toBeNull();
     expect(text(doorTile(door(), NOW))).toContain("Wed");
+  });
+
+  // The advent calendar (Jaimie, 4 November 2026: "when you say calendar, it looks like an advent
+  // calendar"): every door is cut into the one painted board, as a card door on a hinge.
+  it("is a card door on a hinge, with a paper pull tab and its number printed on it", () => {
+    for (const d of [door(), TODAY, HUNTING, TOMORROW, FOUND, REVEALED]) {
+      const a = dom(doorTile(d, NOW)).querySelector("a")!;
+      const flaps = a.querySelectorAll(":scope > .elf-door__flap");
+      expect(flaps.length, `door ${d.door}`).toBe(1);
+      expect(flaps[0].getAttribute("aria-hidden")).toBe("true");
+      expect(flaps[0].querySelectorAll(".elf-door__tab").length).toBe(1);
+      expect(flaps[0].querySelector(".elf-door__num")!.textContent).toBe(String(d.door));
+    }
+  });
+
+  it("knows its place in the board's picture, counting from nought", () => {
+    expect(dom(doorTile(door(), NOW)).querySelector("a")!.getAttribute("style")).toBe("--i:8");
+    expect(dom(doorTile(door({ door: 1 }), NOW)).querySelector("a")!.getAttribute("style")).toBe("--i:0");
+  });
+
+  it("is bright while it is shut, never faint, with its day on a paper chip", () => {
+    for (const d of [door(), TOMORROW]) {
+      const a = dom(doorTile(d, NOW)).querySelector("a")!;
+      expect(a.className).not.toMatch(/faint|dim|muted|locked/);
+      expect(a.querySelector(".elf-door__date")!.classList.contains("elf-chip")).toBe(true);
+    }
+    expect(dom(doorTile(door(), NOW)).querySelector(".elf-door__date")!.textContent).toBe("Wed 5:30pm");
+  });
+
+  it("stands open on its hinge once its elf is found or its place shown, and is shut before", () => {
+    const open = (d: DoorView) => dom(doorTile(d, NOW)).querySelector("a")!.classList.contains("is-open");
+    expect([FOUND, REVEALED].map(open)).toEqual([true, true]);
+    expect([door(), TODAY, HUNTING, TOMORROW].map(open)).toEqual([false, false, false, false]);
+  });
+
+  it("glows gold with the painted bow on today's door, and while its elf is being hunted", () => {
+    for (const d of [TODAY, HUNTING]) {
+      const a = dom(doorTile(d, NOW)).querySelector("a")!;
+      expect(a.classList.contains("elf-door--gold")).toBe(true);
+      const bow = a.querySelector("img.elf-door__bow")!;
+      expect(bow.getAttribute("src")).toBe("/assets/img/elf/paper/deco/bow-gold.webp");
+      expect(bow.getAttribute("alt")).toBe("");
+      expect([bow.getAttribute("width"), bow.getAttribute("height")]).toEqual(["480", "361"]);
+    }
+    for (const d of [door(), TOMORROW, FOUND, REVEALED]) {
+      const a = dom(doorTile(d, NOW)).querySelector("a")!;
+      expect(a.classList.contains("elf-door--gold")).toBe(false);
+      expect(a.querySelector(".elf-door__bow")).toBeNull();
+    }
+  });
+
+  it("makes door 24 the big double doors and door 23 a wide door, and every other door a single one", () => {
+    const big = dom(doorTile(door({ door: 24, clueAt: at("2026-12-24T10:00:00.000Z") }), NOW)).querySelector("a")!;
+    expect(big.classList.contains("elf-door--double")).toBe(true);
+    const flaps = [...big.querySelectorAll(":scope > .elf-door__flap")];
+    expect(flaps.map((f) => [...f.classList].filter((c) => c.startsWith("elf-door__flap--")))).toEqual([["elf-door__flap--left"], ["elf-door__flap--right"]]);
+    for (const f of flaps) expect(f.querySelectorAll(".elf-door__tab").length).toBe(1);
+    expect(big.querySelectorAll(".elf-door__num").length).toBe(1);
+    expect(dom(doorTile(door({ door: 23 }), NOW)).querySelector("a")!.classList.contains("elf-door--wide")).toBe(true);
+    for (const n of [1, 9, 22]) {
+      const a = dom(doorTile(door({ door: n }), NOW)).querySelector("a")!;
+      expect(a.classList.contains("elf-door--wide") || a.classList.contains("elf-door--double"), `door ${n}`).toBe(false);
+    }
   });
 
   it("carves the mystery star when no shape has been uploaded, and the shape when one has", () => {
@@ -125,13 +188,16 @@ describe("a door on the board", () => {
     }
   });
 
-  it("wears a pill for today, tomorrow, the hunt and a big prize", () => {
-    const pill = (d: DoorView) => dom(doorTile(d, NOW)).querySelector(".elf-pill")?.textContent ?? null;
-    expect(pill(TODAY)).toBe("Today");
-    expect(pill(TOMORROW)).toBe("Tomorrow");
-    expect(pill(HUNTING)).toBe("Hunt on");
-    expect(pill(door({ bigPrize: true }))).toBe("Big prize");
-    expect(pill(door({ door: 8, clueAt: TOMORROW.clueAt, bigPrize: true }))).toBe("Tomorrow");
+  it("wears a paper chip for today, tomorrow, the hunt and a big prize", () => {
+    const chip = (d: DoorView) => dom(doorTile(d, NOW)).querySelector(".elf-door__chip");
+    const said = (d: DoorView) => chip(d)?.textContent ?? null;
+    expect(said(TODAY)).toBe("Today");
+    expect(said(TOMORROW)).toBe("Tomorrow");
+    expect(said(HUNTING)).toBe("Hunt on");
+    expect(said(door({ bigPrize: true }))).toBe("Big prize");
+    expect(said(door({ door: 8, clueAt: TOMORROW.clueAt, bigPrize: true }))).toBe("Tomorrow");
+    for (const d of [TODAY, TOMORROW, HUNTING, FOUND, REVEALED]) expect(chip(d)!.classList.contains("elf-chip")).toBe(true);
+    for (const d of [TODAY, HUNTING, FOUND]) expect(dom(doorTile(d, NOW)).querySelector(".elf-pill")).toBeNull();
   });
 
   it("counts down to today's clue", () => {
@@ -140,11 +206,13 @@ describe("a door on the board", () => {
     expect(cd.getAttribute("data-until")).toBe("2026-12-07T17:30:00.000Z");
   });
 
-  it("opens to the winner's elf, the place and a Found pill", () => {
+  it("opens to the winner's elf, the place and a Found chip", () => {
     const tile = dom(doorTile(FOUND, NOW));
     const a = tile.querySelector("a")!;
     expect(a.classList.contains("is-open")).toBe(true);
-    expect(tile.querySelector(".elf-pill")!.textContent).toBe("Found");
+    expect(tile.querySelector(".elf-door__chip")!.textContent).toBe("Found");
+    // Behind the door, not on it: the door has swung away.
+    expect(tile.querySelector(".elf-door__flap .elf-shot, .elf-door__flap .elf-door__chip")).toBeNull();
     const img = tile.querySelector("img")!;
     expect(img.getAttribute("src")).toBe("/elf/pic/d-41.svg");
     expect(img.getAttribute("alt")).toBe("");
@@ -162,7 +230,7 @@ describe("a door on the board", () => {
   it("opens a revealed door too, with the place and the elf still to find", () => {
     const tile = dom(doorTile(REVEALED, NOW));
     expect(tile.querySelector("a")!.classList.contains("is-open")).toBe(true);
-    expect(tile.querySelector(".elf-pill")!.textContent).toBe("Still here");
+    expect(tile.querySelector(".elf-door__chip")!.textContent).toBe("Still here");
     expect(text(doorTile(REVEALED, NOW))).toContain("The Seaside Cafe");
   });
 
@@ -206,12 +274,28 @@ describe("a door's detail", () => {
     expect(section.getAttribute("aria-labelledby")).toBe(heading.id);
   });
 
-  it("tells a shut door's day and time, and invites a guess at the carving", () => {
+  it("is a taped note", () => {
+    for (const d of [door(), TODAY, HUNTING, FOUND, REVEALED]) {
+      const section = dom(doorDetail(d, CTX)).querySelector("section")!;
+      expect(section.classList.contains("elf-note"), `door ${d.door}`).toBe(true);
+      expect(section.querySelector(":scope > .elf-tape")!.getAttribute("aria-hidden")).toBe("true");
+    }
+  });
+
+  it("tells a shut door's day and time, and invites a guess at the shape cut out of the door", () => {
     const words = text(doorDetail(door(), CTX));
     expect(words).toContain("Door 9");
     expect(words).toContain("Still shut");
     expect(words).toContain("Clue out Wed 9 Dec at 5:30pm");
-    expect(words).toContain("Can you guess the prize?");
+    expect(words).toContain("Look at the shape cut out of the door. Can you guess the prize?");
+  });
+
+  it("shows a big prize on a paper chip, and its way to the clue on a torn paper button", () => {
+    const big = dom(doorDetail({ ...HUNTING, bigPrize: true, teaser: "Something with two wheels" }, CTX));
+    expect(big.querySelector(".elf-pill")).toBeNull();
+    expect(big.querySelector(".elf-chip")!.textContent).toBe("Big prize");
+    expect(big.querySelector('a[href="/elf/hq"]')!.className).toBe("elf-btn elf-btn--crimson elf-btn--s");
+    expect(big.querySelector(".btn")).toBeNull();
   });
 
   it("teases tomorrow's prize and a big prize in the staff's own words", () => {

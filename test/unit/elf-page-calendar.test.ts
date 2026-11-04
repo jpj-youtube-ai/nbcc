@@ -20,8 +20,92 @@ describe("what Jaimie asked for on 4 October", () => {
 
   it("shows the countdown on today's door on a phone, in place of the word Today", () => {
     const css = readFileSync(resolve(__dirname, "../../assets/css/elf.css"), "utf8");
-    expect(css).toMatch(/\.elf-door--today\.has-pill \.elf-door__foot \{[^}]*display:\s*block/);
-    expect(css).toMatch(/\.elf-door--today \.elf-pill \{[^}]*display:\s*none/);
+    expect(css).toMatch(/\.elf-door--today\.has-chip \.elf-door__foot \{[^}]*display:\s*inline-flex/);
+    expect(css).toMatch(/\.elf-door--today \.elf-door__chip \{[^}]*display:\s*none/);
+  });
+});
+
+/** The stylesheet with every "prefers-reduced-motion: no-preference" block taken out. */
+function stillParts(source: string): string {
+  let out = "";
+  let from = 0;
+  const marker = /@media[^{]*prefers-reduced-motion:\s*no-preference[^{]*\{/g;
+  for (let m = marker.exec(source); m; m = marker.exec(source)) {
+    out += source.slice(from, m.index);
+    let depth = 1;
+    let j = m.index + m[0].length;
+    for (; j < source.length && depth > 0; j++) depth += source[j] === "{" ? 1 : source[j] === "}" ? -1 : 0;
+    from = j;
+    marker.lastIndex = j;
+  }
+  return out + source.slice(from);
+}
+
+// Jaimie, approving the paper plan on 4 November 2026: "when you say calendar, it looks like an
+// advent calendar." Spec decision 13: one board, the doors cut into it, not a grid of cards.
+describe("the advent calendar", () => {
+  const css = readFileSync(resolve(__dirname, "../../assets/css/elf.css"), "utf8");
+
+  it("sets all 24 doors into one board, with the painted rooftops across its face and its doors", () => {
+    const board = page(view(AFTERNOON)).querySelector(".elf-advent > #elf-board")!;
+    expect(board).not.toBeNull();
+    expect(board.querySelectorAll("a.elf-door").length).toBe(24);
+    expect(css).toMatch(/--elf-scene:\s*url\(\/assets\/img\/elf\/paper\/board\/rooftops\.webp\)/);
+    expect(css).toMatch(/\.elf-board \{[^}]*var\(--elf-scene\)/);
+    expect(css).toMatch(/\.elf-door__flap \{[^}]*var\(--elf-scene\)/);
+  });
+
+  it("ends with the big double doors in a row of their own", () => {
+    const doors = [...page(view(AFTERNOON)).querySelectorAll("#elf-board a.elf-door")];
+    expect(doors.map((a) => a.classList.contains("elf-door--double"))).toEqual(doors.map((_, i) => i === 23));
+    expect(doors[22].classList.contains("elf-door--wide")).toBe(true);
+    expect(css).toMatch(/\.elf-door--double \{[^}]*grid-column:\s*1 \/ -1/);
+    expect(css).toMatch(/\.elf-door--wide \{[^}]*grid-column:\s*span 2/);
+  });
+
+  it("shows an open door standing open on its hinge, and swings it only for someone happy with motion", () => {
+    const still = stillParts(css);
+    expect(still).toMatch(/\.elf-door\.is-open \.elf-door__flap \{[^}]*rotateY\(-\d+deg\)/);
+    expect(still).not.toMatch(/elf-swing/);
+    expect(css).toMatch(/\.elf-door\.is-opening \.elf-door__flap \{[^}]*animation:\s*elf-swing/);
+  });
+
+  it("gives a family's own done doors the painted holly", () => {
+    expect(css).toMatch(/\.elf-door\.is-done::after \{[^}]*\/assets\/img\/elf\/paper\/deco\/holly\.webp/);
+  });
+});
+
+describe("the top of the calendar, in paper", () => {
+  it("keeps the school's logo as the heading, with a torn label under it for the year's class", () => {
+    const doc = page(view(AFTERNOON));
+    expect(words(doc.querySelector("h1 + .elf-label"))).toBe("Class of 2026");
+    expect(doc.querySelector(".elf-top .eyebrow")).toBeNull();
+  });
+
+  it("counts down on the candy cane strip, to the clue and to the first day", () => {
+    const strip = page(view(AFTERNOON)).querySelector(".elf-status .elf-cane-strip")!;
+    expect(strip.querySelector(".elf-cd")).not.toBeNull();
+    expect(words(page(view(at("2026-11-08T09:00:00.000Z"))).querySelector(".elf-status .elf-cane-strip"))).toBe("23 sleeps to go");
+  });
+
+  it("puts today's news on a card sheet, and every way in on torn paper buttons", () => {
+    const doc = page(view(AFTERNOON));
+    expect(doc.querySelector(".elf-status")!.classList.contains("elf-card")).toBe(true);
+    expect([...doc.querySelectorAll(".elf-top__actions a")].map((a) => a.className)).toEqual(["elf-btn elf-btn--crimson", "elf-btn"]);
+    expect(doc.querySelector('.elf-join a[href="/elf/join"]')!.classList.contains("elf-btn")).toBe(true);
+    expect(doc.querySelector(".site-main .btn")).toBeNull();
+  });
+
+  it("wears no old pills: the key's big prize is a paper chip", () => {
+    const doc = page(view(AFTERNOON));
+    expect(doc.querySelector(".elf-pill")).toBeNull();
+    expect(words(doc.querySelector(".elf-legend .elf-chip"))).toBe("Big prize");
+  });
+
+  it("sets the one safety line on a taped kraft note", () => {
+    const line = page(view(AFTERNOON)).querySelector(".elf-grown-up")!;
+    expect([...line.classList]).toEqual(["elf-grown-up", "elf-note", "elf-note--kraft"]);
+    expect(line.querySelector(".elf-tape")).not.toBeNull();
   });
 });
 

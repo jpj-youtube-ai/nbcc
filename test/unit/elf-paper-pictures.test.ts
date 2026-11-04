@@ -47,8 +47,13 @@ function everyExpectedFile(): string[] {
     ...ICONS.map((name) => `icons/icon-${name}.webp`),
     "ui/grain.webp",
     "ui/grain-light.webp",
+    BOARD,
   ];
 }
+
+// The advent calendar's board: the approved rooftops painting, cut off above its stage (the round
+// platform the wardrobe's elf stands on), so the 24 doors are cut into the night sky and the roofs.
+const BOARD = "board/rooftops.webp";
 
 function listAll(dir: string): string[] {
   if (!existsSync(dir)) return [];
@@ -92,6 +97,12 @@ describe("the paper pictures", () => {
   it("keeps every elf, costume and scene picture under 150 KB and every tile under 20 KB", () => {
     for (const name of [...elves(), ...costumes(), ...scenes()]) expect(sizeOf(name), name).toBeLessThan(150 * 1024);
     for (const name of [...costumeTiles(), ...sceneTiles()]) expect(sizeOf(name), name).toBeLessThan(20 * 1024);
+  });
+
+  it("has the calendar's board: the rooftops painting above its stage, at its full width, under 150 KB", async () => {
+    const meta = await sharp(resolve(PAPER, BOARD)).metadata();
+    expect([meta.format, meta.width, meta.height]).toEqual(["webp", 720, 750]);
+    expect(sizeOf(BOARD)).toBeLessThan(150 * 1024);
   });
 
   it("holds no other pictures", () => {

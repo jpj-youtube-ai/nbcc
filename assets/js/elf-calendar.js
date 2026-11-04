@@ -174,6 +174,8 @@
       var detail = detailOf(n);
       if (!door || !detail) return;
       var mark = marks[n] || { cracked: false, visited: false };
+      // A door the family has done, cracked or visited, wears the painted holly.
+      door.classList.toggle("is-done", mark.cracked || mark.visited);
       var holder = door.querySelector(".elf-door__marks");
       if (holder) {
         holder.textContent = "";
@@ -238,7 +240,7 @@
       var body = card.querySelector(".elf-status__body");
       if (!title || !body) return;
       card.setAttribute("data-v", stamp);
-      card.className = "elf-status elf-status--" + String(status.kind).replace(/[^a-z]/g, "");
+      card.className = "elf-status elf-card elf-status--" + String(status.kind).replace(/[^a-z]/g, "");
       title.innerHTML = status.title;
       body.innerHTML = status.html;
     }

@@ -1,6 +1,7 @@
 import { escapeHtml } from "../../events/render";
 import { CHARITY_NAME, REGISTRATION_LINES } from "../../legal/registration";
 import { schoolLogo } from "../logo";
+import { paperHills, paperSky, paperSprite, tornBands } from "./paper";
 
 // NBCC Elf Detective School: the page every elf screen sits in. The plan is
 // docs/superpowers/plans/2026-10-04-elf-detective-a3-screens.md.
@@ -12,6 +13,9 @@ import { schoolLogo } from "../logo";
 // logo in the bar is the charity's and leads to the site; the calendar wears the school's own logo
 // as its heading. On every other screen the school's logo takes that place in the bar and leads
 // back to the calendar: the two logos are the same peeping elf, and one of them is enough.
+//
+// Every page is in paper (docs/superpowers/specs/2026-11-04-elf-paper-design.md): torn bands under the
+// bar, a few paper stars drifting down, and cut paper hills running into the footer (src/elf/pages/paper.ts).
 //
 // Scripts are files, never text in the page, and each one only improves a page that already works
 // without it.
@@ -67,6 +71,8 @@ export function elfPage(o: ElfPageOptions): string {
 </head>
 <body class="elf-page">
 <a class="skip-link" href="#main">Skip to content</a>
+${paperSprite()}
+${paperSky()}
 <header class="nav" id="nav" data-region="nav">
   <div class="wrap">
     ${brand}
@@ -75,9 +81,10 @@ export function elfPage(o: ElfPageOptions): string {
 </header>
 
 <main class="site-main" id="main" tabindex="-1">
+${tornBands()}
 ${o.main}
 </main>
-
+${paperHills()}
 <footer class="site-footer" data-region="footer">
   <div class="legal">
     <div class="wrap">

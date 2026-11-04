@@ -11573,6 +11573,18 @@ for byte whatever is already its size, so it runs only on the computer that has 
 `test/unit/elf-paper-pictures.test.ts` checks every picture is there, on the right canvas and within
 its weight, and that nothing else is.
 
+**The paper look.** Every elf page is cut from paper. The page shell (`src/elf/pages/shell.ts`) lays
+torn holly and crimson bands under the bar, a few paper stars and snowflakes drifting behind the page
+(still for a visitor who asked for less motion) and cut paper hills running into the footer.
+`src/elf/pages/paper.ts` draws the pieces that carry words or the page's colours, each from a fixed seed
+so it is the same on every visit: `tornBands`, `paperHills`, `paperSky`, `paperSprite` (the one shared
+shadow), `titleStrip`, `headingStrip`, `scrap`, `rosette`, `giftTag` and `paperCircle`. The paper section
+of `assets/css/elf.css` has the rest as classes: `.elf-card` (a card sheet on a coloured backing sheet),
+`.elf-btn` (torn buttons in three sizes and four colours), `.elf-chip`, `.elf-note` with `.elf-tape`,
+`.elf-paper` (a sheet torn off a pad), `.elf-label`, `.elf-cane-bar`, `.elf-tags` and the five
+`.elf-frame--*` frames. `test/unit/elf-paper.test.ts` checks the pieces and that the stylesheet uses
+only the paper files.
+
 The torn paper shapes are files too, in `assets/img/elf/paper/ui/`: the torn edge strips the stylesheet
 tiles round cards, tiles and notes (`tear-*`), and the torn buttons, chips, label, notes, tag and tape.
 `node scripts/elf-paper/shapes.mjs` draws them with mockup 6's own code and seeded numbers, so each tear

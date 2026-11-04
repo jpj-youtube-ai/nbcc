@@ -934,11 +934,6 @@ form.elf-wd { display: grid; gap: 16px; padding: 0; background: none; border: 0;
   --elf-crimson-soft: #F9E1E4;
   --elf-shine: rgba(255, 255, 255, .38);
   --elf-hand: "Caveat", "Bradley Hand", "Segoe Print", "Noteworthy", "Chalkboard SE", "Ink Free", "Comic Sans MS", cursive;
-  background:
-    radial-gradient(120% 60% at 100% 0, var(--elf-glow), transparent 60%),
-    radial-gradient(90% 50% at 0 10%, var(--elf-blush), transparent 60%),
-    var(--cream);
-  background-repeat: no-repeat;
 }
 
 /* gold sparkles, placed by the page (twinkles() in src/elf/pages/gift.ts) */
@@ -1024,3 +1019,238 @@ form.elf-wd { display: grid; gap: 16px; padding: 0; background: none; border: 0;
 
 /* The private preview (Jaimie, 3 November 2026): every page says so across the top. */
 .elf-preview-strip { margin: 0; padding: 10px 16px; background: var(--maroon); color: var(--cream); font-size: .9rem; text-align: center; }
+
+/* =================================================================
+   The paper look (docs/superpowers/specs/2026-11-04-elf-paper-design.md; mockup 6, approved by Jaimie
+   on 4 November 2026: "Yes, this is it"). Everything looks cut from coloured card: torn edges that
+   show the white core of the tear, sheets laid on sheets, a soft shadow under each layer, the light
+   from the top left so every shadow falls down the page. The torn shapes are files drawn by
+   scripts/elf-paper/shapes.mjs (assets/img/elf/paper/ui/, sizes in its shapes.json); the pieces with
+   words or the page's colours are drawn by src/elf/pages/paper.ts.
+   ================================================================= */
+.elf-page {
+  --elf-grain: url(/assets/img/elf/paper/ui/grain.webp);
+  --elf-grain-light: url(/assets/img/elf/paper/ui/grain-light.webp);
+  /* The paper's own gold (mockup 6), and the inks that read on tan and on gold. */
+  --elf-paper-gold: #D9A93E;
+  --elf-maroon-deep: #5E0000;
+  --elf-ink-on-tan: #4A0F0F;
+  --elf-on-dark: #FFF8EF;
+  --elf-edge: color-mix(in srgb, var(--tan) 30%, var(--cream));
+  --elf-edge-dark: color-mix(in srgb, var(--tan) 58%, var(--cream));
+  --elf-drop-small: drop-shadow(0 2px 1px rgba(94, 0, 0, 0.24)) drop-shadow(0 5px 5px rgba(94, 0, 0, 0.16));
+  --elf-drop: drop-shadow(0 2px 1.5px rgba(94, 0, 0, 0.22)) drop-shadow(0 10px 12px rgba(94, 0, 0, 0.22));
+  --elf-drop-big: drop-shadow(0 3px 2px rgba(94, 0, 0, 0.2)) drop-shadow(0 18px 20px rgba(94, 0, 0, 0.26));
+  /* Masks that tear all four edges of a box of any size: a torn strip repeated along each side, the
+     middle filled in. Each side's strip is a different length, so no two sides line up. */
+  --elf-tear-card-a: url(/assets/img/elf/paper/ui/tear-card-a-top.svg) left top / 263px 12px repeat-x, url(/assets/img/elf/paper/ui/tear-card-a-bottom.svg) left bottom / 241px 12px repeat-x, url(/assets/img/elf/paper/ui/tear-card-a-left.svg) left top / 12px 227px repeat-y, url(/assets/img/elf/paper/ui/tear-card-a-right.svg) right top / 12px 251px repeat-y, linear-gradient(#000 0 0) center / calc(100% - 22px) calc(100% - 22px) no-repeat;
+  --elf-tear-card-b: url(/assets/img/elf/paper/ui/tear-card-b-top.svg) left top / 251px 12px repeat-x, url(/assets/img/elf/paper/ui/tear-card-b-bottom.svg) left bottom / 233px 12px repeat-x, url(/assets/img/elf/paper/ui/tear-card-b-left.svg) left top / 12px 239px repeat-y, url(/assets/img/elf/paper/ui/tear-card-b-right.svg) right top / 12px 229px repeat-y, linear-gradient(#000 0 0) center / calc(100% - 22px) calc(100% - 22px) no-repeat;
+  --elf-tear-card-c: url(/assets/img/elf/paper/ui/tear-card-c-top.svg) left top / 241px 11px repeat-x, url(/assets/img/elf/paper/ui/tear-card-c-bottom.svg) left bottom / 257px 11px repeat-x, url(/assets/img/elf/paper/ui/tear-card-c-left.svg) left top / 11px 233px repeat-y, url(/assets/img/elf/paper/ui/tear-card-c-right.svg) right top / 11px 247px repeat-y, linear-gradient(#000 0 0) center / calc(100% - 20px) calc(100% - 20px) no-repeat;
+  --elf-tear-tile-a: url(/assets/img/elf/paper/ui/tear-tile-a-top.svg) left top / 173px 8px repeat-x, url(/assets/img/elf/paper/ui/tear-tile-a-bottom.svg) left bottom / 191px 8px repeat-x, url(/assets/img/elf/paper/ui/tear-tile-a-left.svg) left top / 8px 157px repeat-y, url(/assets/img/elf/paper/ui/tear-tile-a-right.svg) right top / 8px 181px repeat-y, linear-gradient(#000 0 0) center / calc(100% - 14px) calc(100% - 14px) no-repeat;
+  --elf-tear-tile-b: url(/assets/img/elf/paper/ui/tear-tile-b-top.svg) left top / 181px 8px repeat-x, url(/assets/img/elf/paper/ui/tear-tile-b-bottom.svg) left bottom / 167px 8px repeat-x, url(/assets/img/elf/paper/ui/tear-tile-b-left.svg) left top / 8px 163px repeat-y, url(/assets/img/elf/paper/ui/tear-tile-b-right.svg) right top / 8px 177px repeat-y, linear-gradient(#000 0 0) center / calc(100% - 14px) calc(100% - 14px) no-repeat;
+  --elf-tear-fine-a: url(/assets/img/elf/paper/ui/tear-fine-a-top.svg) left top / 131px 6px repeat-x, url(/assets/img/elf/paper/ui/tear-fine-a-bottom.svg) left bottom / 149px 6px repeat-x, url(/assets/img/elf/paper/ui/tear-fine-a-left.svg) left top / 6px 127px repeat-y, url(/assets/img/elf/paper/ui/tear-fine-a-right.svg) right top / 6px 139px repeat-y, linear-gradient(#000 0 0) center / calc(100% - 10px) calc(100% - 10px) no-repeat;
+  --elf-tear-fine-b: url(/assets/img/elf/paper/ui/tear-fine-b-top.svg) left top / 139px 6px repeat-x, url(/assets/img/elf/paper/ui/tear-fine-b-bottom.svg) left bottom / 127px 6px repeat-x, url(/assets/img/elf/paper/ui/tear-fine-b-left.svg) left top / 6px 143px repeat-y, url(/assets/img/elf/paper/ui/tear-fine-b-right.svg) right top / 6px 133px repeat-y, linear-gradient(#000 0 0) center / calc(100% - 10px) calc(100% - 10px) no-repeat;
+  /* Only the top edge torn, as a sheet torn off a pad. */
+  --elf-tear-top: url(/assets/img/elf/paper/ui/tear-top.svg) left top / 233px 14px repeat-x, linear-gradient(#000 0 0) left 13px / 100% calc(100% - 13px) no-repeat;
+
+  /* The page itself: cream with a fine paper grain all over. */
+  background-color: var(--cream);
+  background-image: var(--elf-grain-light);
+  background-size: 384px;
+  background-repeat: repeat;
+  background-blend-mode: multiply;
+}
+/* Paper that hangs over the edge of the screen (a holly sprig, a scrap) is cut there, never widening it. */
+.elf-page .site-main { position: relative; z-index: 1; overflow-x: clip; }
+.elf-page .site-footer { position: relative; z-index: 1; background-image: var(--elf-grain); background-size: 384px; background-blend-mode: soft-light; }
+.elf-sprite { position: absolute; width: 0; height: 0; overflow: hidden; }
+
+/* The colours of the pieces drawn into the page. */
+.elf-fill-crimson { fill: var(--crimson); }
+.elf-fill-holly { fill: var(--holly); }
+.elf-fill-gold { fill: var(--elf-paper-gold); }
+.elf-fill-tan { fill: var(--tan); }
+.elf-fill-maroon { fill: var(--maroon); }
+
+/* The torn bands under the bar: holly over crimson, cut to the screen's width. */
+.elf-bands { position: absolute; left: 0; right: 0; top: var(--nav-h); z-index: 2; height: 40px; pointer-events: none; filter: drop-shadow(0 4px 3px rgba(94, 0, 0, 0.22)); }
+.elf-bands svg { display: block; width: 100%; height: 100%; }
+
+/* The cut paper hills, as wide as the screen and in proportion, running into the footer. */
+/* Exactly the screen's width: on a phone the least height keeps the hills tall and the picture is cut
+   to its middle, rather than the least height widening the page past the screen. */
+.elf-hills { position: relative; z-index: 1; width: 100%; aspect-ratio: 1600 / 260; min-height: 130px; margin: -18px 0 -2px; overflow: hidden; pointer-events: none; }
+.elf-hills svg { position: absolute; inset: 0; display: block; width: 100%; height: 100%; }
+.elf-hills__grain { mix-blend-mode: soft-light; }
+
+/* A few paper stars and snowflakes behind the page. Still for anyone who asked for less motion. */
+.elf-sky { position: fixed; inset: 0; z-index: 0; overflow: hidden; pointer-events: none; }
+.elf-sky i { position: absolute; top: var(--y); left: var(--x); width: var(--s); height: var(--s); border-radius: 50%; background: var(--tan); opacity: 0.38; }
+.elf-sky .elf-sky__star { border-radius: 0; background: var(--elf-gold-bright); opacity: 0.7; clip-path: polygon(50% 0, 61% 39%, 100% 50%, 61% 61%, 50% 100%, 39% 61%, 0 50%, 39% 39%); }
+.elf-sky i:nth-child(1) { --x: 0.0%; --y: 44.7%; --s: 10.9px; --d: 14.5s; --delay: -20.7s; --drift: -6px; }
+.elf-sky i:nth-child(2) { --x: 51.7%; --y: 46.8%; --s: 6.4px; --d: 17.4s; --delay: -5.2s; --drift: 15px; }
+.elf-sky i:nth-child(3) { --x: 14.1%; --y: 38.0%; --s: 6.9px; --d: 23.9s; --delay: -9.2s; --drift: -29px; }
+.elf-sky i:nth-child(4) { --x: 21.8%; --y: 73.5%; --s: 7.0px; --d: 20.7s; --delay: -11.5s; --drift: -19px; }
+.elf-sky i:nth-child(5) { --x: 30.8%; --y: 79.6%; --s: 9.1px; --d: 16.3s; --delay: -13.8s; --drift: 15px; }
+.elf-sky i:nth-child(6) { --x: 1.4%; --y: 38.4%; --s: 8.4px; --d: 20.3s; --delay: -2.3s; --drift: 8px; }
+.elf-sky i:nth-child(7) { --x: 95.9%; --y: 32.1%; --s: 8.5px; --d: 14.2s; --delay: -17.2s; --drift: 22px; }
+.elf-sky i:nth-child(8) { --x: 94.9%; --y: 28.7%; --s: 4.8px; --d: 23.6s; --delay: -22.8s; --drift: 16px; }
+.elf-sky i:nth-child(9) { --x: 97.0%; --y: 80.1%; --s: 11.6px; --d: 17.1s; --delay: -14.8s; --drift: -33px; }
+.elf-sky i:nth-child(10) { --x: 95.2%; --y: 83.2%; --s: 5.8px; --d: 24.5s; --delay: -0.4s; --drift: 12px; }
+.elf-sky i:nth-child(11) { --x: 95.1%; --y: 55.0%; --s: 7.4px; --d: 20.1s; --delay: -20.5s; --drift: -5px; }
+.elf-sky i:nth-child(12) { --x: 92.8%; --y: 96.8%; --s: 6.1px; --d: 23.7s; --delay: -12.2s; --drift: -19px; }
+.elf-sky i:nth-child(13) { --x: 4.8%; --y: 5.2%; --s: 14.0px; --d: 15.3s; --delay: -8.4s; --drift: 4px; }
+.elf-sky i:nth-child(14) { --x: 37.7%; --y: 47.2%; --s: 4.5px; --d: 18.5s; --delay: -4.2s; --drift: 5px; }
+.elf-sky i:nth-child(15) { --x: 55.1%; --y: 92.5%; --s: 4.5px; --d: 25.8s; --delay: -23.9s; --drift: 19px; }
+.elf-sky i:nth-child(16) { --x: 56.5%; --y: 37.0%; --s: 8.3px; --d: 21.8s; --delay: -12.1s; --drift: -14px; }
+.elf-sky i:nth-child(17) { --x: 53.3%; --y: 25.7%; --s: 14.8px; --d: 20.8s; --delay: -21.8s; --drift: -25px; }
+.elf-sky i:nth-child(18) { --x: 15.9%; --y: 96.2%; --s: 7.5px; --d: 17.5s; --delay: -19.8s; --drift: -10px; }
+
+/* The painted paper decorations: presents, holly, candy cane, bauble, gold bow. */
+.elf-deco { position: absolute; z-index: 2; display: block; height: auto; pointer-events: none; filter: drop-shadow(0 3px 0 rgba(94, 0, 0, 0.16)) drop-shadow(0 8px 7px rgba(94, 0, 0, 0.22)); }
+
+/* A page's title: a torn strip of card on a torn strip of colour, scraps behind, cane and holly. */
+.elf-title { position: relative; display: inline-block; max-width: 100%; margin: 14px auto 6px; padding: 20px clamp(26px, 6vw, 46px); isolation: isolate; }
+.elf-title > svg { position: absolute; inset: 0; z-index: -1; width: 100%; height: 100%; overflow: visible; }
+.elf-title__back { transform: rotate(-2.4deg) scale(1.02, 1.08); filter: drop-shadow(0 6px 6px rgba(94, 0, 0, 0.25)); }
+.elf-title__front { transform: rotate(0.8deg); filter: drop-shadow(0 3px 0 var(--elf-edge-dark)) drop-shadow(0 10px 10px rgba(94, 0, 0, 0.22)); }
+.elf-title__text { position: relative; margin: 0; color: var(--crimson); font-family: var(--font-head); font-size: clamp(2.3rem, 1.7rem + 3.4vw, 4rem); line-height: 1.05; text-shadow: 0 1.5px 0 var(--elf-maroon-deep), 0 6px 9px rgba(94, 0, 0, 0.22); text-wrap: balance; overflow-wrap: anywhere; }
+.elf-title .elf-deco--cane { left: -20px; bottom: -18px; width: clamp(42px, 7vw, 60px); transform: rotate(-14deg); transform-origin: 50% 100%; }
+.elf-title .elf-deco--holly { right: -50px; top: -38px; width: clamp(56px, 10vw, 88px); transform: rotate(16deg); }
+.elf-title .elf-scrap--title-a { left: -6%; bottom: -16px; width: 120px; height: 56px; transform: rotate(-8deg); }
+.elf-title .elf-scrap--title-b { right: 14%; top: -20px; width: 110px; height: 50px; transform: rotate(6deg); }
+@media (max-width: 600px) {
+  .elf-title .elf-deco--cane { left: -8px; bottom: -16px; }
+  .elf-title .elf-deco--holly { right: -8px; top: -28px; }
+  .elf-title .elf-scrap--title-a { left: 2%; width: 90px; }
+  .elf-title .elf-scrap--title-b { right: 18%; width: 84px; }
+}
+
+/* The small line above a title ("Elf Detective School") on a torn holly label, tucked over the title. */
+.elf-label { position: relative; z-index: 3; isolation: isolate; display: flex; width: fit-content; margin: 0 auto -12px; padding: 8px 20px 10px; color: var(--elf-on-dark); font-size: 0.78rem; font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase; transform: rotate(-2.5deg); filter: var(--elf-drop-small); }
+.elf-label::before { content: ""; position: absolute; inset: 0; z-index: -1; background: url(/assets/img/elf/paper/ui/label-holly.svg) 0 0 / 100% 100% no-repeat; }
+
+/* A section's heading on a smaller torn strip, laid the same way. */
+.elf-strip { position: relative; display: inline-block; max-width: 100%; margin: 6px 0 18px; padding: 10px 28px 13px; isolation: isolate; color: var(--maroon); }
+.elf-strip > svg { position: absolute; inset: 0; z-index: -1; width: 100%; height: 100%; overflow: visible; }
+.elf-strip__back { transform: rotate(-2deg) scale(1.03, 1.14); filter: drop-shadow(0 4px 4px rgba(94, 0, 0, 0.25)); }
+.elf-strip__front { transform: rotate(0.9deg); filter: drop-shadow(0 2px 0 var(--elf-edge-dark)) drop-shadow(0 7px 7px rgba(94, 0, 0, 0.2)); }
+.elf-strip__text { position: relative; }
+.elf-strip__colour { fill: var(--elf-strip-back, var(--holly)); }
+.elf-strip__card { fill: var(--card); }
+.elf-strip--crimson { --elf-strip-back: var(--crimson); }
+.elf-strip--holly { --elf-strip-back: var(--holly); }
+.elf-strip--gold { --elf-strip-back: var(--elf-paper-gold); }
+.elf-strip--tan { --elf-strip-back: var(--tan); }
+
+/* A scrap of torn coloured paper, tucked behind something; where it sits is the page's business. */
+.elf-scrap { position: absolute; z-index: -1; display: block; pointer-events: none; filter: drop-shadow(0 2px 1px rgba(94, 0, 0, 0.22)) drop-shadow(0 6px 6px rgba(94, 0, 0, 0.16)); }
+.elf-scrap svg { display: block; width: 100%; height: 100%; overflow: visible; }
+.elf-scrap--s { width: 84px; height: 46px; }
+.elf-scrap--m { width: 110px; height: 58px; }
+
+/* A card sheet: a torn sheet of card on a torn coloured backing sheet, with a shadow under both. */
+.elf-card { position: relative; isolation: isolate; filter: var(--elf-drop-big); }
+.elf-card::before { content: ""; position: absolute; inset: 0; z-index: -1; border-radius: 16px; background-color: var(--card); background-image: var(--elf-grain-light); background-size: 384px; background-blend-mode: multiply; -webkit-mask: var(--elf-tear-card-a); mask: var(--elf-tear-card-a); transform: rotate(var(--elf-tilt, 0deg)); pointer-events: none; }
+.elf-card::after { content: ""; position: absolute; inset: 8px -7px -8px 7px; z-index: -2; border-radius: 16px; background-color: var(--elf-layer, var(--tan)); background-image: var(--elf-grain); background-size: 384px; background-blend-mode: soft-light; -webkit-mask: var(--elf-tear-card-b); mask: var(--elf-tear-card-b); transform: rotate(var(--elf-layer-tilt, 1.4deg)); pointer-events: none; }
+.elf-card--crimson { --elf-layer: var(--crimson); }
+.elf-card--holly { --elf-layer: var(--holly); --elf-layer-tilt: -1.3deg; }
+.elf-card--gold { --elf-layer: var(--elf-paper-gold); }
+.elf-card--tan { --elf-layer: var(--tan); --elf-layer-tilt: -1.5deg; }
+
+/* A torn button: torn paper standing on its own darker torn edge; pressed, it goes down onto it. */
+.elf-btn { position: relative; isolation: isolate; display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 48px; padding: 10px 26px 12px; border: 0; background: none; color: var(--maroon); font: 600 1rem/1.2 var(--font-body); text-align: center; text-decoration: none; cursor: pointer; filter: var(--elf-drop-small); -webkit-tap-highlight-color: transparent; --elf-btn-face: url(/assets/img/elf/paper/ui/btn-m-cream.svg); --elf-btn-edge: url(/assets/img/elf/paper/ui/btn-m-tan.svg); }
+.elf-btn::before { content: ""; position: absolute; inset: 0; z-index: -1; background: var(--elf-btn-face) 0 0 / 100% 100% no-repeat; }
+.elf-btn::after { content: ""; position: absolute; inset: 4px 1px -4px 2px; z-index: -2; background: var(--elf-btn-edge) 0 0 / 100% 100% no-repeat; }
+.elf-btn--s { --elf-btn-face: url(/assets/img/elf/paper/ui/btn-s-cream.svg); --elf-btn-edge: url(/assets/img/elf/paper/ui/btn-s-tan.svg); min-height: 44px; padding: 8px 20px 10px; font-size: 0.95rem; }
+.elf-btn--l { --elf-btn-face: url(/assets/img/elf/paper/ui/btn-l-cream.svg); --elf-btn-edge: url(/assets/img/elf/paper/ui/btn-l-tan.svg); min-height: 56px; padding: 12px 32px 14px; font-size: 1.08rem; }
+.elf-btn--crimson { --elf-btn-face: url(/assets/img/elf/paper/ui/btn-m-crimson.svg); --elf-btn-edge: url(/assets/img/elf/paper/ui/btn-m-maroon.svg); color: var(--elf-on-dark); }
+.elf-btn--crimson.elf-btn--s { --elf-btn-face: url(/assets/img/elf/paper/ui/btn-s-crimson.svg); --elf-btn-edge: url(/assets/img/elf/paper/ui/btn-s-maroon.svg); }
+.elf-btn--crimson.elf-btn--l { --elf-btn-face: url(/assets/img/elf/paper/ui/btn-l-crimson.svg); --elf-btn-edge: url(/assets/img/elf/paper/ui/btn-l-maroon.svg); }
+.elf-btn--holly { --elf-btn-face: url(/assets/img/elf/paper/ui/btn-m-holly.svg); --elf-btn-edge: url(/assets/img/elf/paper/ui/btn-m-hollydark.svg); color: var(--elf-on-dark); }
+.elf-btn--holly.elf-btn--s { --elf-btn-face: url(/assets/img/elf/paper/ui/btn-s-holly.svg); --elf-btn-edge: url(/assets/img/elf/paper/ui/btn-s-hollydark.svg); }
+.elf-btn--holly.elf-btn--l { --elf-btn-face: url(/assets/img/elf/paper/ui/btn-l-holly.svg); --elf-btn-edge: url(/assets/img/elf/paper/ui/btn-l-hollydark.svg); }
+.elf-btn--cream { color: var(--maroon); }
+.elf-btn--cane { --elf-btn-face: url(/assets/img/elf/paper/ui/btn-m-cream.svg); --elf-btn-edge: url(/assets/img/elf/paper/ui/btn-m-cane.svg); color: var(--maroon); }
+.elf-btn--cane::after { inset: -6px -9px -8px -8px; transform: rotate(-2.5deg); }
+.elf-btn:hover { transform: translateY(-1px); }
+.elf-btn:hover::after { transform: translateY(1px); }
+.elf-btn--cane:hover::after { transform: rotate(-2.5deg) translateY(1px); }
+.elf-btn:active { transform: translateY(3px); filter: drop-shadow(0 1px 1px rgba(94, 0, 0, 0.28)); }
+.elf-btn:active::after { transform: translateY(-3px); }
+.elf-btn--cane:active::after { transform: rotate(-2.5deg) translateY(-3px); }
+.elf-btn:focus-visible { outline: 3px solid var(--gold-ink); outline-offset: 5px; }
+.elf-btn[hidden] { display: none; }
+
+/* A chip: a small torn label (Done, Today, Missed, a date, Two presents). */
+.elf-chip { position: relative; isolation: isolate; display: inline-flex; align-items: center; gap: 4px; padding: 5px 14px 7px; color: var(--slate); font-size: 0.8rem; font-weight: 600; line-height: 1.2; white-space: nowrap; filter: var(--elf-drop-small); transform: rotate(var(--elf-chip-tilt, -2deg)); }
+.elf-chip::before { content: ""; position: absolute; inset: 0; z-index: -1; background: var(--elf-chip-face, url(/assets/img/elf/paper/ui/chip-cream.svg)) 0 0 / 100% 100% no-repeat; }
+.elf-chip--done { --elf-chip-face: url(/assets/img/elf/paper/ui/chip-holly.svg); color: var(--elf-on-dark); }
+.elf-chip--missed { --elf-chip-face: url(/assets/img/elf/paper/ui/chip-tan.svg); color: var(--elf-ink-on-tan); }
+.elf-chip--today { --elf-chip-face: url(/assets/img/elf/paper/ui/chip-gold.svg); color: var(--elf-maroon-deep); }
+.elf-chip--soon { --elf-chip-face: url(/assets/img/elf/paper/ui/chip-cream.svg); color: var(--slate); }
+.elf-chip--new { --elf-chip-face: url(/assets/img/elf/paper/ui/chip-crimson.svg); color: var(--elf-on-dark); }
+
+/* A note: torn cream or kraft paper, most with a strip of tape across the top. */
+.elf-note { position: relative; isolation: isolate; padding: 18px 22px 14px; color: var(--maroon); filter: var(--elf-drop-small); }
+.elf-note::before { content: ""; position: absolute; inset: 0; z-index: -1; background: var(--elf-note-face, url(/assets/img/elf/paper/ui/note-cream.svg)) 0 0 / 100% 100% no-repeat; }
+.elf-note--kraft { --elf-note-face: url(/assets/img/elf/paper/ui/note-kraft.svg); }
+.elf-note--holly { --elf-note-face: url(/assets/img/elf/paper/ui/note-holly.svg); color: var(--elf-on-dark); }
+.elf-tape { position: absolute; left: 50%; top: -10px; z-index: 1; display: block; width: 66px; height: 20px; margin-left: -33px; background: url(/assets/img/elf/paper/ui/tape.svg) 0 0 / 100% 100% no-repeat; transform: rotate(-3deg); pointer-events: none; }
+
+/* A sheet torn off a notepad: torn along its top, a red margin line down its left. */
+.elf-paper { position: relative; isolation: isolate; padding: 34px 18px 24px 38px; filter: var(--elf-drop); }
+.elf-paper::after { content: ""; position: absolute; inset: 0; z-index: -2; background-color: var(--card); background-image: var(--elf-grain-light); background-size: 384px; background-blend-mode: multiply; -webkit-mask: var(--elf-tear-top); mask: var(--elf-tear-top); }
+.elf-paper::before { content: ""; position: absolute; top: 14px; bottom: 0; left: 20px; z-index: -1; width: 1px; background: color-mix(in srgb, var(--crimson) 45%, transparent); }
+
+/* A paper rosette, for a number or a count. Its colours can be set by what holds it. */
+.elf-rosette { display: block; overflow: visible; }
+.elf-rosette__under { fill: var(--elf-rosette-under, var(--maroon)); }
+.elf-rosette__ring { fill: var(--elf-rosette-ring, var(--elf-paper-gold)); }
+.elf-rosette__disc { fill: var(--elf-rosette-disc, var(--crimson)); }
+
+/* A gift tag: two sheets, the stitched line, the eyelet and the paper grain. */
+.elf-tag__card { display: block; width: 100%; height: auto; overflow: visible; }
+.elf-tag__fill { fill: var(--elf-tag-face, var(--card)); }
+.elf-tag__back { fill: var(--elf-tag-back, var(--card)); }
+.elf-tag__grain { mix-blend-mode: soft-light; }
+.elf-tag__grain--light { mix-blend-mode: multiply; }
+.elf-tag__stitch { fill: none; stroke: color-mix(in srgb, var(--maroon) 55%, transparent); stroke-width: 1.6; stroke-dasharray: 4 3; vector-effect: non-scaling-stroke; }
+.elf-tag__ring { fill: var(--elf-paper-gold); }
+.elf-tag__hole { fill: var(--cream); }
+.elf-tag--crimson { --elf-tag-face: var(--crimson); --elf-tag-back: var(--elf-paper-gold); }
+.elf-tag--holly { --elf-tag-face: var(--holly); --elf-tag-back: var(--crimson); }
+.elf-tag--tan { --elf-tag-face: var(--tan); --elf-tag-back: var(--holly); }
+.elf-tag--card { --elf-tag-face: var(--card); --elf-tag-back: var(--crimson); }
+.elf-tag--gold { --elf-tag-face: var(--elf-paper-gold); --elf-tag-back: var(--holly); }
+.elf-tags { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px; align-items: start; justify-items: center; }
+.elf-tag { position: relative; display: block; width: 100%; max-width: 150px; padding: 0; border: 0; background: none; color: var(--maroon); cursor: pointer; filter: drop-shadow(0 3px 0 rgba(94, 0, 0, 0.22)) drop-shadow(0 12px 12px rgba(90, 0, 0, 0.24)); -webkit-tap-highlight-color: transparent; }
+
+/* The candy cane strip: a torn candy cane in a torn paper slot, as far along as done. */
+.elf-cane-bar { position: relative; height: 22px; border-radius: 6px; background-color: color-mix(in srgb, var(--tan) 55%, var(--cream)); background-image: var(--elf-grain); background-size: 384px; background-blend-mode: soft-light; box-shadow: inset 0 2px 4px rgba(94, 0, 0, 0.3); -webkit-mask: var(--elf-tear-fine-a); mask: var(--elf-tear-fine-a); overflow: hidden; }
+.elf-cane-bar > span { position: absolute; inset: 0 auto 0 0; width: var(--elf-cane-done, 0%); border-radius: 4px; background: var(--elf-grain) 0 0 / 384px, repeating-linear-gradient(45deg, var(--crimson) 0 9px, var(--card) 9px 18px); background-blend-mode: soft-light, normal; box-shadow: inset 0 -2px 0 rgba(94, 0, 0, 0.22); }
+
+/* The frames round an elf's picture: the pattern on torn card, laid on a torn coloured sheet. With no
+   frame chosen, a plain paper mount. */
+.elf-frame { position: relative; isolation: isolate; padding: 14px; filter: var(--elf-drop-big); --elf-frame-paint: var(--elf-grain-light) 0 0 / 384px, var(--card); --elf-frame-blend: multiply, normal; --elf-frame-back: var(--tan); }
+.elf-frame::before { content: ""; position: absolute; inset: 0; z-index: -1; border-radius: 24px; background: var(--elf-frame-paint); background-blend-mode: var(--elf-frame-blend); -webkit-mask: var(--elf-tear-card-c); mask: var(--elf-tear-card-c); }
+.elf-frame::after { content: ""; position: absolute; inset: -10px -9px -13px -10px; z-index: -2; border-radius: 28px; background-color: var(--elf-frame-back); background-image: var(--elf-grain); background-size: 384px; background-blend-mode: soft-light; -webkit-mask: var(--elf-tear-card-a); mask: var(--elf-tear-card-a); transform: rotate(-1.5deg); }
+.elf-frame--candy { --elf-frame-paint: var(--elf-grain) 0 0 / 384px, repeating-linear-gradient(45deg, var(--crimson) 0 14px, var(--card) 14px 28px); --elf-frame-blend: soft-light, normal; --elf-frame-back: var(--holly); }
+.elf-frame--gold { --elf-frame-paint: var(--elf-grain) 0 0 / 384px, var(--elf-paper-gold); --elf-frame-blend: soft-light, normal; --elf-frame-back: var(--crimson); }
+.elf-frame--holly { --elf-frame-paint: var(--elf-grain) 0 0 / 384px, radial-gradient(circle at 8px 8px, var(--crimson) 0 3.6px, transparent 4.6px) 0 0 / 22px 22px, radial-gradient(circle at 15px 6px, var(--crimson) 0 3px, transparent 4px) 0 0 / 22px 22px, var(--holly); --elf-frame-blend: soft-light, normal, normal, normal; --elf-frame-back: var(--elf-paper-gold); }
+.elf-frame--tartan { --elf-frame-paint: var(--elf-grain) 0 0 / 384px, repeating-linear-gradient(0deg, rgba(26, 83, 26, 0.8) 0 6px, transparent 6px 18px), repeating-linear-gradient(90deg, rgba(26, 83, 26, 0.8) 0 6px, transparent 6px 18px), repeating-linear-gradient(0deg, rgba(233, 196, 106, 0.7) 0 1.5px, transparent 1.5px 9px), repeating-linear-gradient(90deg, rgba(233, 196, 106, 0.7) 0 1.5px, transparent 1.5px 9px), var(--crimson); --elf-frame-blend: soft-light, normal, normal, normal, normal, normal; --elf-frame-back: var(--holly); }
+.elf-frame--starry { --elf-frame-paint: var(--elf-grain) 0 0 / 384px, radial-gradient(circle, var(--elf-gold-bright) 0 1.6px, transparent 2.2px) 0 0 / 15px 15px, radial-gradient(circle, rgba(248, 245, 238, 0.85) 0 1px, transparent 1.6px) 7px 8px / 15px 15px, var(--maroon); --elf-frame-blend: soft-light, normal, normal, normal; --elf-frame-back: var(--elf-paper-gold); }
+
+/* A colour choice cut as a circle of paper: a crimson mat shows under the one picked (the page says
+   which, by putting .is-picked on what holds it or by the picked radio). */
+.elf-circle { display: block; width: 100%; height: auto; overflow: visible; filter: drop-shadow(0 2px 1px rgba(94, 0, 0, 0.26)) drop-shadow(0 4px 4px rgba(94, 0, 0, 0.14)); }
+.elf-circle__mat { fill: var(--crimson); opacity: 0; }
+.elf-circle__rim { fill: var(--card); }
+
+@media (prefers-reduced-motion: no-preference) {
+  .elf-sky i { top: -20px; animation: elf-drift var(--d) linear var(--delay) infinite; }
+  .elf-btn { transition: transform 0.12s var(--elf-ease), filter 0.12s var(--elf-ease); }
+  .elf-btn::after { transition: transform 0.12s var(--elf-ease); }
+  .elf-circle__mat { transition: opacity 0.2s var(--elf-ease); }
+  @keyframes elf-drift { to { transform: translate3d(var(--drift), calc(100vh + 40px), 0) rotate(160deg); } }
+}

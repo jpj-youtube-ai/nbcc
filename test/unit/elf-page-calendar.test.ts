@@ -279,4 +279,16 @@ describe("the advent calendar at every width", () => {
     expect(Number(swung?.[1])).toBeGreaterThanOrEqual(76);
     expect(css).toMatch(/\.elf-door\.is-open \.elf-shot \{[^}]*object-fit:\s*contain/);
   });
+
+  // Seen on the pictures: in the wide door 23 and the double doors the picture grew taller than its door.
+  it("lays the picture over the whole hole, so it can never make a door taller, however wide the door", () => {
+    expect(css).toMatch(/\.elf-door\.is-open \.elf-shot \{[^}]*position:\s*absolute;\s*inset:\s*0/);
+  });
+
+  // Seen on the pictures: with 3 or more doors to a row, door 24 alone in the middle left bare maroon
+  // either side of it, as if doors were missing.
+  it("makes the double doors the whole last row at every width", () => {
+    expect(css).toMatch(/\.elf-door--double \{[^}]*grid-column:\s*1 \/ -1;\s*justify-self:\s*stretch/);
+    expect(css).not.toMatch(/\.elf-door--double \{[^}]*\bwidth:/);
+  });
 });

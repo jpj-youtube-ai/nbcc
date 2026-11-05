@@ -1,4 +1,4 @@
-import { DEFAULT_MORNING_CLUE_TIME, DEFAULT_SCHOOL_CLUE_TIME, DOOR_COUNT, clueTimeFor, doorInstant, type Door } from "./calendar";
+import { DEFAULT_MORNING_CLUE_TIME, DEFAULT_SCHOOL_CLUE_TIME, DOOR_COUNT, clueTimeFor, doorDate, doorInstant, type Door } from "./calendar";
 import { badgeWords } from "./emails";
 import { ELF_NAMES, familyDetectiveName } from "./names";
 import { progressOf } from "./progress";
@@ -82,14 +82,19 @@ export function hqViewFor(o: { family: FamilyRow; settings: ElfSettings; now: Da
   };
 }
 
-export function wardrobeViewFor(o: { detective: DetectiveRow; settings: ElfSettings }): WardrobeView {
+export function wardrobeViewFor(o: { detective: DetectiveRow; settings: ElfSettings; now: Date }): WardrobeView {
   const { state } = earned();
+  const doorDays = [];
+  for (let n = 1; n <= DOOR_COUNT; n += 1) doorDays.push({ door: n, clueAt: clueAtOf(o.settings, n as Door), date: doorDate(o.settings, n as Door) });
   return {
     detective: detectiveViewFor(o.detective),
     look: normaliseLook(o.detective.look, state),
     state,
     fresh: o.detective.fresh,
     favourites: normaliseFavourites(o.detective.favourites, state),
+    made: o.detective.look !== null && o.detective.look !== undefined,
+    now: o.now,
+    doorDays,
     hqUrl: "/elf/hq",
     calendarUrl: "/elf",
     saveUrl: "/api/elf/look",
@@ -131,15 +136,20 @@ function poundsWords(p: number): string {
  * listed: a door shows its place only once it is open (docs/superpowers/specs/2026-11-03-elf-
  * detective-secret-places-design.md).
  */
+/** When a door's clue comes out this season, as the calendar shows it. */
+function clueAtOf(settings: ElfSettings, door: Door): Date {
+  const season = { year: settings.year, holidayDoors: [], schoolClueTime: DEFAULT_SCHOOL_CLUE_TIME, morningClueTime: DEFAULT_MORNING_CLUE_TIME };
+  return doorInstant(season, door, clueTimeFor(season, door, null)) ?? new Date(Date.UTC(settings.year, 11, door, 17, 30));
+}
+
 export function calendarViewFor(o: { settings: ElfSettings; now: Date }): CalendarView {
-  const season = { year: o.settings.year, holidayDoors: [], schoolClueTime: DEFAULT_SCHOOL_CLUE_TIME, morningClueTime: DEFAULT_MORNING_CLUE_TIME };
   const doors: DoorView[] = [];
   for (let n = 1; n <= DOOR_COUNT; n += 1) {
     const door = n as Door;
     doors.push({
       door,
       state: "shut",
-      clueAt: doorInstant(season, door, clueTimeFor(season, door, null)) ?? new Date(Date.UTC(o.settings.year, 11, n, 17, 30)),
+      clueAt: clueAtOf(o.settings, door),
       shapeUrl: null,
       bigPrize: false,
       teaser: null,

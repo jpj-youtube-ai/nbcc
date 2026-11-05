@@ -2,7 +2,7 @@
 import { describe, it, expect } from "vitest";
 import { existsSync, readFileSync, statSync } from "node:fs";
 import { resolve } from "node:path";
-import { renderWardrobePage } from "../../src/elf/pages/wardrobe";
+import { doorChip, renderWardrobePage } from "../../src/elf/pages/wardrobe";
 import type { WardrobeView } from "../../src/elf/pages/types";
 import { BOWS, COSTUMES, FRAMES, FRIENDS, GLASSES, SCENES } from "../../src/elf/wardrobe";
 import { wardrobeView } from "./elf-fixtures";
@@ -49,7 +49,10 @@ describe("the elf on the stage", () => {
       ["glasses", "/assets/img/elf/paper/pieces/specs-gold--reindeer.webp"],
       ["friend", "/assets/img/elf/paper/friends/robin.webp"],
     ]);
-    expect(stage.classList.contains("elf-frame--candy")).toBe(true);
+    // The frame is a paper frame round the stage, not a class on it.
+    expect(stage.parentElement!.classList.contains("elf-wd-frame")).toBe(true);
+    expect(stage.parentElement!.classList.contains("elf-frame--candy")).toBe(true);
+    expect([...stage.classList].filter((c) => c.startsWith("elf-frame"))).toEqual([]);
     expect(stage.getAttribute("role")).toBe("img");
     expect(stage.getAttribute("aria-label")).toBe("Detective Ruby Tinselfoot's elf");
     for (const img of stage.querySelectorAll("img")) expect(img.getAttribute("alt")).toBe("");
@@ -116,18 +119,20 @@ describe("the form of choices", () => {
     const santa = choice(doc, "costume", "santa");
     expect(santa.disabled).toBe(true);
     expect(santa.closest(".elf-wd-tile")!.classList.contains("is-locked")).toBe(true);
-    expect(santa.closest(".elf-wd-tile")!.querySelector(".elf-wd-lock svg")).not.toBeNull();
+    expect(santa.closest(".elf-wd-tile")!.querySelector('.elf-wd-lock img[src="/assets/img/elf/paper/icons/icon-lock.webp"]')).not.toBeNull();
     expect(said(doc, santa)).toBe("Santa suit, opens with door 24");
     expect(choice(doc, "costume", "tree").disabled).toBe(false);
     // Doors 7 to 24 hold 36 costumes; the three from the start and doors 1 to 6 are open.
     expect(radios(doc, "costume").filter((r) => r.disabled).length).toBe(36);
   });
 
-  it("marks the costumes that have just arrived as new", () => {
+  it("wraps the costumes that have just arrived as presents to open", () => {
     const doc = page();
     for (const id of ["snowglobe", "puffin"]) {
-      expect(choice(doc, "costume", id).closest(".elf-wd-tile")!.classList.contains("is-new"), id).toBe(true);
-      expect(said(doc, choice(doc, "costume", id))).toMatch(/, new$/);
+      const tile = choice(doc, "costume", id).closest(".elf-wd-tile")!;
+      expect(tile.classList.contains("is-new"), id).toBe(true);
+      expect(tile.querySelector(".elf-wd-present img")!.getAttribute("src")).toMatch(/^\/assets\/img\/elf\/paper\/deco\/present-(crimson|holly|cream)\.webp$/);
+      expect(said(doc, choice(doc, "costume", id))).toMatch(/, a present to open$/);
     }
     expect(choice(doc, "costume", "tree").closest(".elf-wd-tile")!.classList.contains("is-new")).toBe(false);
   });
@@ -142,13 +147,14 @@ describe("the form of choices", () => {
     expect(names).toEqual(["From the start", ...Array.from({ length: 24 }, (_, i) => `Door ${i + 1}`)]);
   });
 
-  it("shows each costume's tile in the detective's own skin, loaded only when it comes near", () => {
+  it("shows each costume's tile in the detective's own skin, loaded only when it comes near but the first row", () => {
     const tiles = [...page(wardrobeView({ look: { ...wardrobeView().look, skin: "s5" } })).querySelectorAll("img[data-costume]")];
     expect(tiles.length).toBe(51);
     for (const t of tiles) {
       expect(t.getAttribute("src")).toBe(`/assets/img/elf/paper/tiles/costumes/${t.getAttribute("data-costume")}-s5.webp`);
-      expect(t.getAttribute("loading")).toBe("lazy");
     }
+    // The open tab's first row, the three from the start, comes at once; the rest when near.
+    expect(tiles.filter((t) => t.getAttribute("loading") !== "lazy").map((t) => t.getAttribute("data-costume"))).toEqual(["workshop", "reindeer", "snowman"]);
   });
 });
 
@@ -157,7 +163,7 @@ describe("the sections", () => {
     const doc = page();
     const tabs = [...doc.querySelectorAll(".elf-wd-tab")];
     // The words of each tab, without the mark a tab holding something new carries for a screen reader.
-    expect(tabs.map((a) => words(a).replace(/, new things$/, ""))).toEqual(["Your elf", "Costumes", "Scenes", "Friends", "Frames", "Glasses and bow ties"]);
+    expect(tabs.map((a) => words(a).replace(/, new things$/, ""))).toEqual(["Costumes", "Scenes", "Friends", "Frames", "Glasses and bow ties"]);
     expect(tabs.map((a) => a.getAttribute("href"))).toEqual([...doc.querySelectorAll(".elf-wd-panel")].map((p) => `#${p.id}`));
   });
 
@@ -211,5 +217,118 @@ describe("what comes from data", () => {
     expect(doc.querySelector("form.elf-wd")!.getAttribute("action")).toBe("/");
     for (const a of doc.querySelectorAll("main a")) expect(a.getAttribute("href")).toMatch(/^[/#]/);
     expect(doc.querySelector(".nav-cta")!.getAttribute("href")).toBe("/");
+  });
+});
+
+// The paper wardrobe (docs/superpowers/specs/2026-11-04-elf-paper-design.md, mockup 6).
+describe("the paper wardrobe", () => {
+  const at = (iso: string) => new Date(iso);
+  const chips = (v: WardrobeView, doors: number[]) => doors.map((n) => doorChip(n, v));
+
+  it("gives each door's costumes the right chip", () => {
+    // 2 December: doors 1 and 2 done, door 2's Christmas tree still wrapped.
+    const v = wardrobeView({ now: at("2026-12-02T10:00:00.000Z"), state: { doors: [1, 2] }, fresh: ["tree"] });
+    expect(chips(v, [0, 1, 2, 3])).toEqual([
+      { kind: "start", words: "From the start" },
+      { kind: "done", words: "Done" },
+      { kind: "presents", words: "A present" },
+      { kind: "soon", words: "Thu 3 Dec" },
+    ]);
+    expect(doorChip(2, wardrobeView({ now: at("2026-12-02T10:00:00.000Z"), state: { doors: [1, 2] }, fresh: ["tree", "polarbear"] }))).toEqual({ kind: "presents", words: "Two presents" });
+    expect(doorChip(3, wardrobeView({ ...v, now: at("2026-12-03T09:00:00.000Z") })).kind).toBe("today");
+    expect(doorChip(3, wardrobeView({ ...v, now: at("2026-12-05T09:00:00.000Z") })).kind).toBe("missed");
+  });
+
+  it("says why a locked costume is locked, on its note", () => {
+    const note = (v: WardrobeView, id: string) => words(page(v).querySelector(`#wd-costume-${id}`)!.closest(".elf-wd-tile")!.querySelector(".elf-wd-why"));
+    expect(note(wardrobeView(), "cracker")).toBe("Crack today's door to open it");
+    expect(note(wardrobeView(), "santa")).toBe("Opens with door 24");
+    expect(note(wardrobeView({ now: at("2026-12-09T09:00:00.000Z") }), "cracker")).toBe("Visit the place to catch up");
+    expect(page().querySelector("#wd-costume-tree")!.closest(".elf-wd-tile")!.querySelector(".elf-wd-why")).toBeNull();
+  });
+
+  it("puts each door's costumes on a card sheet, its number on a rosette, with its chip", () => {
+    const doc = page();
+    const doors = [...doc.querySelectorAll("#wd-costumes .elf-wd-door")];
+    expect(doors.length).toBe(25);
+    for (const d of doors) expect(d.classList.contains("elf-card")).toBe(true);
+    const door = (n: number) => doors[n];
+    expect(door(7).querySelector(".elf-wd-door__num svg.elf-rosette")).not.toBeNull();
+    expect(words(door(7).querySelector(".elf-wd-door__num"))).toBe("7");
+    expect(words(door(7).querySelector(".elf-wd-door__chip"))).toBe("Today");
+    expect(words(door(6).querySelector(".elf-wd-door__chip"))).toBe("Two presents");
+    expect(words(door(1).querySelector(".elf-wd-door__chip"))).toBe("Done");
+    expect(words(door(8).querySelector(".elf-wd-door__chip"))).toBe("Tue 8 Dec");
+    expect(door(0).querySelector(".elf-wd-door__chip")).toBeNull();
+    expect(words(doc.querySelector("#wd-costumes .elf-wd-haul"))).toBe("13 of 51 costumes are yours");
+  });
+
+  it("has its title on a torn strip under the school's name", () => {
+    const doc = page();
+    expect(words(doc.querySelector(".elf-wd-top .elf-label"))).toBe("Elf Detective School");
+    expect(words(doc.querySelector(".elf-title h1#elf-wd-heading"))).toBe("The wardrobe");
+  });
+
+  it("dresses the stage for Christmas: a paper frame, fairy lights, baubles and the count on a rosette", () => {
+    const doc = page();
+    expect(doc.querySelectorAll(".elf-wd-stage .elf-wd-glows span").length).toBe(13);
+    expect(doc.querySelector(".elf-wd-stage")!.getAttribute("data-scene")).toBe("largs");
+    expect(doc.querySelectorAll('img.elf-wd-hang[src="/assets/img/elf/paper/deco/bauble.webp"]').length).toBe(2);
+    const seal = doc.querySelector(".elf-wd-seal")!;
+    expect(seal.getAttribute("aria-hidden")).toBe("true");
+    expect(seal.querySelector("svg.elf-rosette")).not.toBeNull();
+    expect(words(seal)).toBe("13 of 51");
+  });
+
+  it("makes step 1 a sheet torn off a pad, with paper circles for the colours, ready to fold away", () => {
+    const doc = page();
+    expect(words(doc.querySelector(".elf-wd-step--elf h2#wd-step1"))).toBe("Your elf");
+    const fold = doc.querySelector(".elf-wd-fold#wd-elf")!;
+    expect(fold.querySelector(".elf-paper .elf-tape")).not.toBeNull();
+    for (const name of ["skin", "hair"]) {
+      for (const r of radios(doc, name)) expect(r.closest(".elf-wd-tile")!.querySelector("svg.elf-circle"), `${name} ${r.value}`).not.toBeNull();
+    }
+    const change = doc.querySelector<HTMLButtonElement>("button.elf-wd-change")!;
+    expect(change.getAttribute("aria-controls")).toBe("wd-elf");
+    expect(change.getAttribute("aria-expanded")).toBe("true");
+    expect(change.hidden).toBe(true);
+    expect(doc.querySelector("form.elf-wd")!.getAttribute("data-made")).toBe("true");
+    expect(page(wardrobeView({ made: false })).querySelector("form.elf-wd")!.getAttribute("data-made")).toBe("false");
+  });
+
+  it("names step 2's sections on gift tags, each with its painted icon", () => {
+    const tags = [...page().querySelectorAll(".elf-wd-tab")];
+    expect(tags.length).toBe(5);
+    for (const t of tags) {
+      expect(t.querySelector("svg.elf-tag__card")).not.toBeNull();
+      expect(t.querySelector("img")!.getAttribute("src")).toMatch(/^\/assets\/img\/elf\/paper\/icons\/icon-[a-z]+\.webp$/);
+    }
+  });
+
+  it("keeps the tools the script brings to life hidden until it does", () => {
+    const doc = page();
+    const tools = doc.querySelector<HTMLElement>(".elf-wd-tools")!;
+    expect(tools.hidden).toBe(true);
+    expect(words(tools.querySelector(".elf-wd-surprise"))).toBe("Surprise me");
+    expect(words(tools.querySelector(".elf-wd-snap"))).toBe("Snap a photo");
+    const sound = doc.querySelector<HTMLButtonElement>(".elf-wd-sound")!;
+    expect([sound.hidden, sound.getAttribute("aria-pressed"), words(sound)]).toEqual([true, "false", "Sounds off"]);
+    expect(doc.querySelector<HTMLButtonElement>(".elf-wd-peek")!.hidden).toBe(true);
+  });
+
+  it("pegs the favourite looks on a string, each a button that wears it again", () => {
+    const look = wardrobeView().look;
+    const doc = page(wardrobeView({ favourites: [{ ...look, costume: "snowman" }, { ...look, costume: null }] }));
+    const photos = [...doc.querySelectorAll<HTMLButtonElement>(".elf-wd-looks .elf-wd-polaroid")];
+    expect(photos.map((p) => p.getAttribute("aria-label"))).toEqual(["Wear this look again: Snowman", "Wear this look again: My elf"]);
+    expect(doc.querySelector(".elf-wd-looks__empty")).toBeNull();
+    expect(words(page().querySelector(".elf-wd-looks__empty"))).toBe("Snap a photo to peg your look here");
+  });
+
+  it("asks for under 1 MB of pictures before anything is tapped", () => {
+    const eager = [...page().querySelectorAll("img")].filter((img) => img.getAttribute("loading") !== "lazy").map((img) => img.getAttribute("src")!);
+    const bytes = [...new Set(eager)].reduce((sum, src) => sum + (existsSync(resolve(ROOT, src.slice(1))) ? statSync(resolve(ROOT, src.slice(1))).size : 0), 0);
+    expect(eager.length).toBeGreaterThan(10);
+    expect(bytes).toBeLessThan(1024 * 1024);
   });
 });

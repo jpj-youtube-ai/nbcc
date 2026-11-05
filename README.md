@@ -11624,6 +11624,23 @@ strip (still the page's own `<progress>`), "Dress the elf" as a torn button, and
 for them as "A present to open", "Two presents to open" or "3 presents to open". The family's marks are
 24 small squares of paper.
 
+**The wardrobe** (`wardrobe.ts`, `assets/js/elf-wardrobe-ui.js`) is mockup 6 with real data, still one
+form of radio buttons that works with no script. The stage stands in its paper frame with baubles, the
+village window's fairy lights and the count of costumes out of their presents on a rosette; the name
+plate holds Surprise me, Snap a photo (up to three favourite looks pegged on a string, saved with the
+detective as `favourites`; tap one to wear it again) and the sounds switch, off until pressed. Step 1,
+Your elf, is a sheet torn off a pad (paper circles for skin and hair, torn buttons for boy or girl and
+hair style) that folds away once the elf is made (`WardrobeView.made`). Step 2's five sections hang as
+gift tags on a gold string and work as tabs. The costumes are on card sheets by door, each with its
+number on a rosette and a chip from `doorChip` (From the start, Done, A present or Two presents,
+Today, Missed, or the door's day, from `WardrobeView.now` and `doorDays`); a locked costume is faint
+with the painted padlock and says on its note why ("Opens with door 7", "Crack today's door to open
+it", "Visit the place to catch up"); one that has just arrived is a wrapped present that opens when it
+is picked and is sent to the server in `tried`. The elf talks back, it snows when the stage is tapped,
+and bursts and snow are only for a visitor happy with motion; on a phone a round bubble brings the
+stage back. Before anything is tapped the page asks for under 1 MB of pictures: the stage, the open
+tab's first row of tiles (the detective's own skin) and the decorations, every other tile lazily.
+
 The torn paper shapes are files too, in `assets/img/elf/paper/ui/`: the torn edge strips the stylesheet
 tiles round cards, tiles and notes (`tear-*`), and the torn buttons, chips, label, notes, tag and tape.
 `node scripts/elf-paper/shapes.mjs` draws them with mockup 6's own code and seeded numbers, so each tear

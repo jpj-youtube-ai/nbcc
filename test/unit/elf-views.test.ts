@@ -7,6 +7,7 @@ import { defaultLook } from "../../src/elf/wardrobe";
 // family here is invented.
 
 const SETTINGS = { ...ELF_DEFAULTS, schoolOn: true };
+const NOW = new Date("2026-12-07T15:00:00.000Z");
 const FAMILY: FamilyRow = {
   id: 3,
   grownUpName: "Sam Example",
@@ -64,7 +65,7 @@ describe("Detective HQ before school starts", () => {
 
 describe("the wardrobe", () => {
   it("is built from the doors the detective has done on the server, and a missing look is the starting elf", () => {
-    const view = wardrobeViewFor({ detective: FAMILY.detectives[0], settings: SETTINGS });
+    const view = wardrobeViewFor({ detective: FAMILY.detectives[0], settings: SETTINGS, now: NOW });
     expect(view.state).toEqual({ doors: [] });
     expect(view.look).toEqual(defaultLook());
     expect(view.favourites).toEqual([]);
@@ -74,14 +75,30 @@ describe("the wardrobe", () => {
 
   it("makes the saved look safe, so an old layered look shows as the start with its own skin and hair", () => {
     const old = { sibling: "brother", skin: "s4", hair: "black", hairStyle: "curly", outfit: "tree", pieces: { hat: ["bobble", "red"] } };
-    const view = wardrobeViewFor({ detective: { ...FAMILY.detectives[0], look: old }, settings: SETTINGS });
+    const view = wardrobeViewFor({ detective: { ...FAMILY.detectives[0], look: old }, settings: SETTINGS, now: NOW });
     expect(view.look).toEqual({ ...defaultLook(), sibling: "brother", skin: "s4", hair: "black", hairStyle: "curly" });
   });
 
   it("shows the saved favourite looks, made safe", () => {
     const favourites = [{ ...defaultLook(), scene: "largs" }, "junk", { ...defaultLook(), costume: "santa" }];
-    const view = wardrobeViewFor({ detective: { ...FAMILY.detectives[0], favourites }, settings: SETTINGS });
+    const view = wardrobeViewFor({ detective: { ...FAMILY.detectives[0], favourites }, settings: SETTINGS, now: NOW });
     expect(view.favourites).toEqual([{ ...defaultLook(), scene: "largs" }, defaultLook()]);
+  });
+});
+
+describe("the wardrobe's days", () => {
+  it("knows the time, and each door's day and clue time, as the calendar does", () => {
+    const view = wardrobeViewFor({ detective: FAMILY.detectives[0], settings: SETTINGS, now: NOW });
+    expect(view.now).toBe(NOW);
+    expect(view.doorDays.map((d) => d.door)).toEqual(Array.from({ length: 24 }, (_, i) => i + 1));
+    const calendar = calendarViewFor({ settings: SETTINGS, now: NOW });
+    expect(view.doorDays.map((d) => d.clueAt.toISOString())).toEqual(calendar.doors.map((d) => d.clueAt.toISOString()));
+    expect(view.doorDays[6].date).toBe("2026-12-07");
+  });
+
+  it("folds step 1 away only for an elf that has been made", () => {
+    expect(wardrobeViewFor({ detective: FAMILY.detectives[0], settings: SETTINGS, now: NOW }).made).toBe(false);
+    expect(wardrobeViewFor({ detective: { ...FAMILY.detectives[0], look: defaultLook() }, settings: SETTINGS, now: NOW }).made).toBe(true);
   });
 });
 

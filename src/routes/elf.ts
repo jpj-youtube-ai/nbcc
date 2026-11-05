@@ -438,7 +438,7 @@ elfRouter.get("/elf/hq/wardrobe/:detective", schoolOn, async (req, res) => {
   const id = detectiveIdOf(req.params.detective);
   const detective = family.detectives.find((d) => d.id === id);
   if (!detective) return res.status(404).type("text/plain").send("Not found");
-  res.type("html").send(renderWardrobePage(wardrobeViewFor({ detective, settings: settingsOf(res) })));
+  res.type("html").send(renderWardrobePage(wardrobeViewFor({ detective, settings: settingsOf(res), now: new Date() })));
 });
 
 elfRouter.get("/elf/hq/elf/:file", schoolOn, async (req, res) => {

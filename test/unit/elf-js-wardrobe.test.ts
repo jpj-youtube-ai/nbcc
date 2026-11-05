@@ -125,10 +125,11 @@ describe("trying things on", () => {
   it("puts the frame chosen round the stage, and none when none is chosen", () => {
     load();
     pick("frame", "gold").click();
-    expect($(".elf-wd-stage").classList.contains("elf-frame--gold")).toBe(true);
-    expect($(".elf-wd-stage").classList.contains("elf-frame--candy")).toBe(false);
+    expect($(".elf-wd-frame").classList.contains("elf-frame--gold")).toBe(true);
+    expect($(".elf-wd-frame").classList.contains("elf-frame--candy")).toBe(false);
     pick("frame", "").click();
-    expect([...$(".elf-wd-stage").classList].filter((c) => c.startsWith("elf-frame--"))).toEqual([]);
+    expect([...$(".elf-wd-frame").classList].filter((c) => c.startsWith("elf-frame--"))).toEqual([]);
+    expect($(".elf-wd-frame").classList.contains("elf-frame")).toBe(true);
   });
 
   it("shows the costume tiles in the skin chosen", () => {
@@ -334,14 +335,16 @@ describe("saving", () => {
 });
 
 describe("what is new", () => {
-  it("loses its New tag once it is tried on, and the server is told", async () => {
+  it("opens a present when it is picked: the wrapping comes off, the costume goes on, and the server is told", async () => {
     load();
     const globe = pick("costume", "snowglobe");
     const tile = globe.closest(".elf-wd-tile")!;
+    expect(tile.classList.contains("is-wrapped")).toBe(true);
     globe.click();
     expect(tile.classList.contains("is-new")).toBe(false);
-    expect(tile.querySelector(".elf-wd-new")).toBeNull();
+    expect(tile.classList.contains("is-wrapped")).toBe(false);
     expect(words(tile.querySelector(".sr-only"))).toBe("Snow globe");
+    expect(picture("body")).toBe("costumes/snowglobe-s3.webp");
     wd!.save();
     await flush();
     expect(calls[0].body.tried).toEqual(["snowglobe"]);
@@ -393,7 +396,7 @@ describe("the sections as tabs", () => {
 
   it("starts at the first section when nothing is new", () => {
     load(wardrobeView({ fresh: [] }));
-    expect(shown()).toEqual(["wd-elf"]);
+    expect(shown()).toEqual(["wd-costumes"]);
   });
 
   it("opens a section when its tab is pressed, without jumping down the page", () => {
@@ -423,13 +426,12 @@ describe("the sections as tabs", () => {
     expect(shown()).toEqual(["wd-scenes"]);
     expect(document.activeElement).toBe(tab("Scenes"));
     tab("Scenes").dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowLeft", bubbles: true, cancelable: true }));
+    expect(shown()).toEqual(["wd-costumes"]);
     tab("Costumes").dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowLeft", bubbles: true, cancelable: true }));
-    expect(shown()).toEqual(["wd-elf"]);
-    tab("Your elf").dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowLeft", bubbles: true, cancelable: true }));
     expect(shown()).toEqual(["wd-glasses"]);
     tab("Glasses and bow ties").dispatchEvent(new KeyboardEvent("keydown", { key: "Home", bubbles: true, cancelable: true }));
-    expect(shown()).toEqual(["wd-elf"]);
-    tab("Your elf").dispatchEvent(new KeyboardEvent("keydown", { key: "End", bubbles: true, cancelable: true }));
+    expect(shown()).toEqual(["wd-costumes"]);
+    tab("Costumes").dispatchEvent(new KeyboardEvent("keydown", { key: "End", bubbles: true, cancelable: true }));
     expect(shown()).toEqual(["wd-glasses"]);
   });
 
@@ -447,8 +449,161 @@ describe("without the wardrobe file", () => {
   it("leaves the page as it was: every section showing and the Save button there", () => {
     const got = load(wardrobeView(), { elf: null });
     expect(got).toBeNull();
-    expect(shown().length).toBe(6);
+    expect(shown().length).toBe(5);
+    expect($(".elf-wd-fold").classList.contains("is-folded")).toBe(false);
     expect($<HTMLButtonElement>('form.elf-wd button[type="submit"]').hidden).toBe(false);
     expect($(".elf-wd-tabs").getAttribute("role")).toBeNull();
+  });
+});
+
+// The paper wardrobe's moves (mockup 6, docs/superpowers/specs/2026-11-04-elf-paper-design.md).
+describe("the paper wardrobe", () => {
+  /** The window, to put in what jsdom does not have: a media query and a sound maker. */
+  const host = window as unknown as Record<string, unknown>;
+
+  /** Ask for less motion, as a visitor's settings would, for the length of `run`. */
+  function lessMotion<T>(run: () => T): T {
+    const before = host.matchMedia;
+    host.matchMedia = (q: string) => ({ matches: /reduce/.test(q), media: q, addEventListener() {}, removeEventListener() {} });
+    try {
+      return run();
+    } finally {
+      host.matchMedia = before;
+    }
+  }
+
+  it("folds step 1 away once the elf is made, and opens it on Change", () => {
+    load();
+    const fold = $(".elf-wd-fold");
+    const change = $<HTMLButtonElement>("button.elf-wd-change");
+    expect(change.hidden).toBe(false);
+    expect(fold.classList.contains("is-folded")).toBe(true);
+    expect(change.getAttribute("aria-expanded")).toBe("false");
+    change.click();
+    expect(fold.classList.contains("is-folded")).toBe(false);
+    expect(change.getAttribute("aria-expanded")).toBe("true");
+    $<HTMLButtonElement>("button.elf-wd-done").click();
+    expect(fold.classList.contains("is-folded")).toBe(true);
+    expect(change.getAttribute("aria-expanded")).toBe("false");
+  });
+
+  it("opens step 1 for an elf that has never been made", () => {
+    load(wardrobeView({ made: false }));
+    expect($(".elf-wd-fold").classList.contains("is-folded")).toBe(false);
+    expect($("button.elf-wd-change").getAttribute("aria-expanded")).toBe("true");
+  });
+
+  it("says why a locked costume is locked on its note, and does not wear it", () => {
+    load();
+    const cracker = pick("costume", "cracker");
+    document.querySelector<HTMLElement>(`label[for="${cracker.id}"]`)!.click();
+    const tile = cracker.closest(".elf-wd-tile")!;
+    expect(tile.classList.contains("is-telling")).toBe(true);
+    expect(words(tile.querySelector(".elf-wd-why"))).toBe("Crack today's door to open it");
+    expect(words($(".elf-wd-status"))).toBe("Christmas cracker, crack today's door to open it.");
+    expect(cracker.checked).toBe(false);
+    expect(picture("body")).toBe("costumes/reindeer-s3.webp");
+  });
+
+  it("keeps at most three favourite looks, newest first, and wears one again when tapped", async () => {
+    load();
+    for (const id of ["snowman", "workshop", "tree", "advent"]) {
+      pick("costume", id).click();
+      $<HTMLButtonElement>(".elf-wd-snap").click();
+    }
+    const photos = $$<HTMLButtonElement>(".elf-wd-looks .elf-wd-polaroid");
+    expect(photos.map((p) => p.getAttribute("aria-label"))).toEqual([
+      "Wear this look again: Advent calendar",
+      "Wear this look again: Christmas tree",
+      "Wear this look again: Workshop elf",
+    ]);
+    wd!.save();
+    await flush();
+    const sent = calls[calls.length - 1].body.favourites as { costume: string }[];
+    expect(sent.map((f) => f.costume)).toEqual(["advent", "tree", "workshop"]);
+    photos[2].click();
+    expect(pick("costume", "workshop").checked).toBe(true);
+    expect(picture("body")).toBe("costumes/workshop-s3.webp");
+  });
+
+  it("plays no sound until the sounds switch is on", () => {
+    const made: unknown[] = [];
+    host.AudioContext = class {
+      currentTime = 0;
+      sampleRate = 8000;
+      destination = {};
+      constructor() {
+        made.push(this);
+      }
+      createOscillator() {
+        return { type: "", frequency: { setValueAtTime() {} }, connect() {}, start() {}, stop() {} };
+      }
+      createGain() {
+        return { gain: { value: 0, setValueAtTime() {}, exponentialRampToValueAtTime() {} }, connect() {} };
+      }
+      createBuffer() {
+        return { getChannelData: () => new Float32Array(8) };
+      }
+      createBufferSource() {
+        return { buffer: null, connect() {}, start() {} };
+      }
+    };
+    try {
+      load();
+      pick("costume", "snowman").click();
+      pick("scene", "village").click();
+      expect(made.length).toBe(0);
+      const sound = $<HTMLButtonElement>(".elf-wd-sound");
+      expect(sound.hidden).toBe(false);
+      sound.click();
+      expect(made.length).toBe(1);
+      expect(sound.getAttribute("aria-pressed")).toBe("true");
+      expect(words(sound)).toBe("Sounds on");
+    } finally {
+      delete host.AudioContext;
+    }
+  });
+
+  it("lands Surprise me on a costume that is unlocked, and saves it", async () => {
+    lessMotion(() => load());
+    const before = pick("costume", "reindeer").checked;
+    lessMotion(() => $<HTMLButtonElement>(".elf-wd-surprise").click());
+    const worn = $<HTMLInputElement>('input[name="costume"]:checked');
+    expect(before).toBe(true);
+    expect(worn.disabled).toBe(false);
+    expect(worn.value).not.toBe("");
+    wd!.save();
+    await flush();
+    expect((calls[calls.length - 1].body.look as { costume: string }).costume).toBe(worn.value);
+  });
+
+  it("talks back when a costume goes on, and says hello to a friend", () => {
+    load();
+    pick("costume", "snowman").click();
+    expect(["So cosy", "I love it", "Ho ho ho", "Look at me", "Snug as a bug", "Ta da", "Just my size", "Jingle jingle"]).toContain(words($(".elf-wd-say")));
+    pick("friend", "penguinchick").click();
+    expect(words($(".elf-wd-say"))).toBe("Hello penguin chick");
+  });
+
+  it("makes no bursts or snow for a visitor who asked for less motion", () => {
+    lessMotion(() => load());
+    lessMotion(() => {
+      pick("costume", "snowman").click();
+      $(".elf-wd-stage").click();
+    });
+    expect(document.querySelectorAll(".elf-wd-spark, .elf-wd-snow .is-flurry").length).toBe(0);
+  });
+
+  it("makes it snow on the stage, and bursts a picked tile, for everyone else", () => {
+    load();
+    pick("costume", "snowman").click();
+    $(".elf-wd-stage").click();
+    expect(document.querySelectorAll(".elf-wd-spark").length).toBeGreaterThan(0);
+    expect(document.querySelectorAll(".elf-wd-snow .is-flurry").length).toBeGreaterThan(0);
+  });
+
+  it("shows the tools it brings to life", () => {
+    load();
+    expect($(".elf-wd-tools").hidden).toBe(false);
   });
 });

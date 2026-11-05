@@ -70,6 +70,7 @@ export function wardrobeView(over: Partial<WardrobeView> = {}): WardrobeView {
       graduate: false,
       goldSeal: false,
       elfUrl: "/elf/pic/d1.svg",
+      frame: "candy",
       newThings: 2,
       wardrobeUrl: "/elf/hq/wardrobe/d1",
     },
@@ -77,6 +78,10 @@ export function wardrobeView(over: Partial<WardrobeView> = {}): WardrobeView {
     state: { doors: [1, 2, 3, 4, 5, 6] },
     fresh: ["snowglobe", "puffin"],
     favourites: [],
+    made: true,
+    // Monday 7 December 2026 at 3pm: door 7's clue is out at 5:30pm.
+    now: at("2026-12-07T15:00:00.000Z"),
+    doorDays: Array.from({ length: 24 }, (_, i) => ({ door: i + 1, clueAt: at(`2026-12-${pad(i + 1)}T17:30:00.000Z`), date: `2026-12-${pad(i + 1)}` })),
     hqUrl: "/elf/hq",
     calendarUrl: "/elf",
     saveUrl: "/elf/hq/wardrobe/d1",

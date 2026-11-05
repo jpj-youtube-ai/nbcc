@@ -127,6 +127,12 @@ export interface WardrobeView {
   fresh: string[];
   /** Up to three favourite looks (Snap a photo), newest first, made safe. */
   favourites: ElfLook[];
+  /** Has this elf been made (a look saved) yet? Step 1 folds away once it has. */
+  made: boolean;
+  /** The moment the page is drawn, so each door's chip says Today, Missed or its day. */
+  now: Date;
+  /** Doors 1 to 24: each one's clue time (as the calendar has it) and its date, YYYY-MM-DD. */
+  doorDays: { door: number; clueAt: Date; date: string }[];
   hqUrl: string;
   /** The calendar: where the school's logo in the bar leads. */
   calendarUrl: string;

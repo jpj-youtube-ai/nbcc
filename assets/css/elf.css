@@ -576,109 +576,148 @@
 @media (min-width: 981px) { .elf-marks { grid-template-columns: repeat(12, minmax(0, 1fr)); } }
 
 /* =================================================================
-   THE WARDROBE: dressing an elf
-   The loud thing here is the elf in its mirror. Everything else is a
-   quiet white tile.
+   THE WARDROBE: dressing an elf, in paper (mockup 6, approved by Jaimie on 4 November 2026)
+   The loud thing here is the elf on its stage, in its paper frame. Everything else is cut from card:
+   the name plate, step 1's sheet torn off a pad, the gift tags on a gold string, and each door's
+   costumes on a card sheet of their own.
    ================================================================= */
 
-.elf-wd-top { padding-bottom: clamp(14px, 2vw, 24px); }
-.elf-wd-section { padding-bottom: clamp(48px, 7vw, 88px); }
-
-/* The news that things have arrived. */
-.elf-wd-news {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  margin-bottom: 16px;
-  padding: 14px 16px;
-  border-radius: var(--radius);
-  background: var(--holly-soft);
-  color: var(--holly-dark);
-}
-.elf-wd-news p { margin: 0; font-size: 0.96rem; line-height: 1.5; }
-.elf-wd-news .elf-wd-news__title { font-family: var(--font-head); font-weight: 800; font-size: 1.2rem; line-height: 1.25; }
-.elf-gift { flex: none; }
-
+.elf-wd-top .wrap { text-align: center; }
+.elf-wd-top .lede { max-width: 54ch; margin-inline: auto; }
+.elf-wd-top { padding-bottom: clamp(10px, 2vw, 20px); }
+.elf-wd-section { padding-bottom: clamp(36px, 6vw, 72px); }
 /* The site gives every form a card of its own. This form is the whole page. */
-form.elf-wd { display: grid; gap: 16px; padding: 0; background: none; border: 0; border-radius: 0; box-shadow: none; }
+form.elf-wd { display: grid; gap: clamp(26px, 4vw, 44px); padding: 0; background: none; border: 0; border-radius: 0; box-shadow: none; }
+.elf-wd-tools[hidden], .elf-wd-taphint[hidden], .elf-wd-peek[hidden] { display: none; }
 
-/* The elf in the mirror. It stays in view while the choices below it are tried on. */
-.elf-wd-preview {
-  position: sticky;
-  top: calc(var(--nav-h) + 8px);
-  z-index: 5;
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
-  gap: 14px;
-  align-items: center;
-  padding: 12px;
-  background: var(--card);
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
-  box-shadow: var(--shadow);
-}
+/* ---- the stage, in its paper frame, with baubles, its fairy lights and the count on a rosette ---- */
+.elf-wd-preview { display: grid; justify-items: center; gap: 14px; min-width: 0; }
+.elf-wd-show { position: relative; width: min(100%, 360px); padding-top: 12px; }
+.elf-wd-frame { padding: 12px; }
 /* The stage: the look's paper pictures, each in its place, as fractions of a stage 2 by 3 (the same
    places the elf's PNG uses, src/elf/elf-png.ts). The elf's picture is its whole canvas, and so are
    the glasses and the bow tie, so the three line up; the friend is fitted in a square and stands on
    the front of the plinth. */
-.elf-wd-stage {
-  position: relative;
-  width: 108px;
-  aspect-ratio: 2 / 3;
-  border-radius: 10px;
-  overflow: hidden;
-  background: var(--elf-paper);
-  box-shadow: 0 2px 0 var(--elf-walnut-deep), 0 6px 14px rgba(58, 36, 22, 0.22);
-}
+.elf-wd-stage { position: relative; width: 100%; aspect-ratio: 2 / 3; border-radius: 6px; overflow: hidden; container-type: inline-size; background: var(--elf-paper); cursor: pointer; }
 .elf-wd-pic { position: absolute; display: block; }
 .elf-wd-pic[data-picture="scene"] { inset: 0; width: 100%; height: 100%; object-fit: cover; }
 .elf-wd-pic[data-picture="body"], .elf-wd-pic[data-picture="glasses"], .elf-wd-pic[data-picture="bow"] { left: 23.1%; top: 33%; width: 53.7%; height: auto; }
+.elf-wd-pic[data-picture="body"] { filter: drop-shadow(0 8px 8px rgba(40, 10, 0, 0.4)); }
 .elf-wd-pic[data-picture="friend"] { left: 52.5%; bottom: 18%; width: 21%; aspect-ratio: 1; object-fit: contain; object-position: 50% 100%; }
-.elf-wd-preview h2 { font-size: 1.15rem; color: var(--maroon); overflow-wrap: anywhere; text-wrap: balance; }
-.elf-wd-preview p { margin: 4px 0 0; }
-.elf-wd-preview__rank { font-size: 0.86rem; color: var(--slate-soft); }
-.elf-wd-preview__rank b { color: var(--holly-dark); }
-/* What the elf is wearing, in words. On a phone the picture says it and the card has to stay short,
-   so the words are kept for a screen reader; beside the choices there is room to show them. */
-.elf-wd-preview .elf-wd-wearing { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; }
-.elf-wd-preview .elf-wd-status { min-height: 1.4em; font-size: 0.86rem; color: var(--holly-dark); }
-.elf-wd-preview .elf-wd-status.is-error { color: var(--crimson); }
-.elf-wd-preview .btn { margin-top: 6px; padding: 9px 18px; }
-.elf-wd-preview .btn[hidden] { display: none; }
+/* The village window's painted fairy lights, each with a soft warm glow; other scenes keep their own. */
+.elf-wd-glows { position: absolute; inset: 0; pointer-events: none; }
+.elf-wd-stage:not([data-scene="village"]) .elf-wd-glows { display: none; }
+.elf-wd-glows span { position: absolute; width: calc(var(--d) * 2.8cqw); height: calc(var(--d) * 2.8cqw); margin: calc(var(--d) * -1.4cqw) 0 0 calc(var(--d) * -1.4cqw); border-radius: 50%; background: radial-gradient(circle, rgba(255, 240, 190, 0.9) 0 16%, rgba(233, 196, 106, 0.45) 36%, transparent 68%); mix-blend-mode: screen; opacity: 0.7; }
+.elf-wd-snow { position: absolute; inset: 0; overflow: hidden; pointer-events: none; }
+.elf-wd-snow .is-flurry { position: absolute; top: -10px; left: var(--x); width: var(--s); height: var(--s); border-radius: 50%; background: #FFFDF8; opacity: 0.9; }
+.elf-wd-flash { position: absolute; inset: 0; background: #FFFDF8; opacity: 0; pointer-events: none; }
+.elf-wd-hang { position: absolute; z-index: 3; top: -2px; width: 30px; height: auto; transform-origin: 50% 0; filter: drop-shadow(0 4px 3px rgba(94, 0, 0, 0.3)); pointer-events: none; }
+.elf-wd-hang--a { left: 11%; }
+.elf-wd-hang--b { left: 23%; width: 24px; }
+.elf-wd-seal { position: absolute; z-index: 4; top: -6px; right: -16px; display: grid; justify-items: center; align-content: start; width: 74px; height: 80px; padding-top: 18px; color: var(--elf-on-dark); font-family: var(--font-head); font-weight: 800; text-align: center; filter: drop-shadow(0 5px 5px rgba(90, 0, 0, 0.25)); transform: rotate(8deg); }
+.elf-wd-seal__rosette { position: absolute; inset: 0; width: 100%; height: 100%; }
+.elf-wd-seal b { position: relative; font-size: 1.45rem; line-height: 0.9; font-variant-numeric: lining-nums; }
+.elf-wd-seal small { position: relative; font-family: var(--font-body); font-size: 0.6rem; font-weight: 600; }
+/* What the elf says, in a speech bubble of paper over the stage. */
+.elf-wd-say { position: absolute; z-index: 5; left: 50%; top: 20%; margin: 0; padding: 8px 16px 10px; border-radius: 18px; background-color: var(--card); background-image: var(--elf-grain-light); background-size: 384px; background-blend-mode: multiply; color: var(--maroon); font-family: var(--elf-hand); font-weight: 700; font-size: 1.45rem; line-height: 1; white-space: nowrap; box-shadow: 0 3px 0 var(--elf-edge-dark), 0 10px 14px rgba(94, 0, 0, 0.22); opacity: 0; transform: translateX(-50%) scale(0.7); pointer-events: none; }
+.elf-wd-say:empty { display: none; }
+.elf-wd-say.is-on { opacity: 1; transform: translateX(-50%) scale(1); }
+.elf-wd-taphint { margin: 0; color: var(--maroon); font-family: var(--elf-hand); font-size: 1.15rem; }
 
-/* The sections. With no script they are links down the page; the script turns them into tabs. */
-.elf-wd-tabs { list-style: none; margin: 0 0 18px; padding: 0; display: flex; flex-wrap: wrap; gap: 6px; }
-.elf-wd-tab {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  min-height: 44px;
-  padding: 8px 13px;
-  border: 1.6px solid var(--line);
-  border-radius: var(--radius-pill);
-  background: var(--white);
-  color: var(--slate);
-  font-size: 0.88rem;
-  text-decoration: none;
-}
-.elf-wd-tab[aria-selected="true"] { background: var(--holly); border-color: var(--holly); color: var(--cream); }
-.elf-wd-tab:focus-visible { outline: 3px solid var(--holly); outline-offset: 2px; }
-.elf-wd-tab__new { width: 9px; height: 9px; border-radius: 50%; background: var(--crimson); box-shadow: 0 0 0 2px var(--white); }
-.elf-wd-panel { scroll-margin-top: calc(var(--nav-h) + 190px); }
-.elf-wd-panel + .elf-wd-panel { margin-top: 26px; }
-.elf-wd-back { margin: 26px 0 0; }
+/* ---- the name plate: a card sheet with the name on a torn strip, the tools and the favourite looks ---- */
+.elf-wd-plate { display: grid; justify-items: center; gap: 12px; width: min(100%, 380px); margin-right: 8px; padding: 26px 18px 22px; text-align: center; }
+.elf-wd-plate .elf-strip { margin: 0; font-size: clamp(1.25rem, 1.1rem + 0.8vw, 1.6rem); }
+.elf-wd-plate p { margin: 0; }
+.elf-wd-preview__rank { display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 8px; color: var(--slate-soft); }
+.elf-wd-wearing { color: var(--slate); font-size: 0.95rem; line-height: 1.5; }
+.elf-wd-status { min-height: 1.4em; font-size: 0.9rem; color: var(--holly-dark); }
+.elf-wd-status.is-error { color: var(--crimson); }
+.elf-wd-tools { display: flex; flex-wrap: wrap; justify-content: center; gap: 14px; }
+.elf-wd-tools img, .elf-wd-sound img { width: 26px; height: auto; }
+.elf-wd-looks { display: grid; justify-items: center; gap: 4px; width: 100%; }
+.elf-wd-looks .elf-strip { margin: 4px 0 0; font-family: var(--elf-hand); font-size: 1.6rem; }
+.elf-wd-looks__line { position: relative; width: 100%; min-height: 70px; }
+.elf-wd-looks__string { position: absolute; left: 6%; right: 6%; top: 0; height: 20px; border-bottom: 2px solid var(--elf-paper-gold); border-radius: 0 0 50% 50%; }
+.elf-wd-looks__row { position: relative; display: flex; justify-content: center; gap: 10px; padding-top: 12px; }
+.elf-wd-looks__empty { padding-top: 16px; color: var(--slate-soft); font-family: var(--elf-hand); font-size: 1.2rem; }
+.elf-wd-polaroid { position: relative; display: grid; gap: 4px; width: 86px; padding: 6px 6px 8px; border: 0; border-radius: 3px; background-color: var(--card); background-image: var(--elf-grain-light); background-size: 384px; background-blend-mode: multiply; box-shadow: 0 2px 2px rgba(94, 0, 0, 0.2), 0 8px 10px rgba(94, 0, 0, 0.18); cursor: pointer; transform: rotate(-4deg); }
+.elf-wd-polaroid:nth-child(2) { transform: rotate(3deg); }
+.elf-wd-polaroid:nth-child(3) { transform: rotate(-2deg); }
+.elf-wd-polaroid::before { content: ""; position: absolute; left: 50%; top: -9px; width: 10px; height: 18px; margin-left: -5px; border-radius: 2px; background: color-mix(in srgb, var(--tan) 60%, var(--card)); box-shadow: 0 1px 1px rgba(94, 0, 0, 0.3); }
+.elf-wd-polaroid:focus-visible { outline: 3px solid var(--gold-ink); outline-offset: 3px; }
+.elf-wd-polaroid__pic { position: relative; display: block; aspect-ratio: 2 / 3; overflow: hidden; border-radius: 2px; background: var(--elf-paper); }
+.elf-wd-polaroid__pic img { position: absolute; display: block; }
+.elf-wd-polaroid__scene { inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.elf-wd-polaroid__elf { left: 23.1%; top: 33%; width: 53.7%; height: auto; }
+.elf-wd-polaroid__cap { color: var(--maroon); font-family: var(--elf-hand); font-weight: 700; font-size: 1rem; line-height: 1; overflow-wrap: anywhere; }
+.elf-wd-sound.is-on { color: var(--holly-dark); }
 
+/* ---- step 1: your elf, on a holly card strip, folding open onto a sheet torn off a pad ---- */
+.elf-wd-dress { display: grid; gap: clamp(26px, 4vw, 40px); min-width: 0; }
+.elf-wd-step { min-width: 0; }
+.elf-wd-me { display: flex; align-items: center; gap: 14px; margin-right: 8px; padding: 14px 16px; }
+.elf-wd-me .elf-wd-me__bow { top: -20px; left: -16px; width: 54px; transform: rotate(-12deg); }
+.elf-wd-me__badge { position: relative; display: grid; place-items: center; flex: none; width: 66px; height: 66px; }
+.elf-wd-me__rosette { position: absolute; inset: 0; width: 100%; height: 100%; --elf-rosette-disc: var(--tan-soft); }
+.elf-wd-me__face { position: relative; width: 42px; height: 42px; border-radius: 50%; object-fit: cover; object-position: 50% 30%; transform: scale(1); }
+.elf-wd-me__words { flex: 1; min-width: 0; }
+.elf-wd-me h2 { font-size: 1.3rem; color: var(--maroon); }
+.elf-wd-me__said { margin: 2px 0 0; color: var(--slate-soft); font-size: 0.92rem; }
+.elf-wd-fold { display: grid; grid-template-rows: 1fr; }
+.elf-wd-fold__in { min-height: 0; }
+.elf-wd-fold.is-folded { grid-template-rows: 0fr; }
+.elf-wd-fold.is-folded .elf-wd-fold__in { overflow: hidden; visibility: hidden; }
+.elf-wd-maker { margin: 18px 6px 4px; }
+.elf-wd-maker__title { margin: 0 0 6px; color: var(--crimson); font-family: var(--elf-hand); font-weight: 700; font-size: 2.2rem; line-height: 1; }
+.elf-wd-maker .elf-wd-group legend { width: 100%; padding: 0 0 4px; margin-bottom: 12px; border-bottom: 1px solid color-mix(in srgb, var(--maroon) 18%, transparent); color: var(--holly); font-family: var(--elf-hand); font-weight: 700; font-size: 1.55rem; line-height: 1.1; }
+.elf-wd-done { margin-top: 8px; }
+
+/* ---- step 2: dress up, its sections named on gift tags hung from a gold string ---- */
+.elf-wd-step--dress > .elf-strip { margin: 0 0 8px; font-size: clamp(1.8rem, 1.5rem + 1.4vw, 2.6rem); }
+.elf-wd-tabs { position: relative; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; margin: 0 0 22px; padding: 34px 10px 0; list-style: none; }
+.elf-wd-tabs::before { content: ""; position: absolute; left: 0; right: 26px; top: 8px; height: 9px; border-radius: 5px; background-color: var(--elf-paper-gold); background-image: var(--elf-grain); background-size: 384px; background-blend-mode: soft-light; box-shadow: 0 2px 2px rgba(94, 0, 0, 0.25); }
+.elf-wd-tabs::after { content: ""; position: absolute; right: -8px; top: -10px; width: 52px; height: 40px; background: url(/assets/img/elf/paper/deco/bow-gold.webp) center / contain no-repeat; filter: drop-shadow(0 3px 2px rgba(94, 0, 0, 0.3)); }
+.elf-wd-tabs li { position: relative; display: flex; justify-content: center; min-width: 0; }
+.elf-wd-tabs li::before { content: ""; position: absolute; left: 50%; top: -18px; width: 2px; height: 30px; margin-left: -1px; background: var(--elf-paper-gold); }
+.elf-wd-tab.elf-tag { position: relative; display: block; width: 100%; max-width: 132px; text-decoration: none; transform-origin: 50% 0; }
+.elf-wd-tab__label { position: absolute; inset: 32% 6% 9%; display: grid; justify-items: center; align-content: start; gap: 4px; color: var(--maroon); font-family: var(--font-head); font-weight: 800; font-size: 0.72rem; line-height: 1.1; text-align: center; overflow-wrap: anywhere; }
+.elf-wd-tabs li:nth-child(1) .elf-wd-tab__label, .elf-wd-tabs li:nth-child(2) .elf-wd-tab__label { color: var(--elf-on-dark); }
+.elf-wd-tab__label img { width: 30px; height: 30px; padding: 3px; border-radius: 50%; background: var(--card); object-fit: contain; box-shadow: 0 1px 2px rgba(94, 0, 0, 0.3); }
+.elf-wd-tab[aria-selected="true"] { transform: translateY(5px); }
+.elf-wd-tab[aria-selected="true"] .elf-wd-tab__label::after { content: ""; display: block; width: 60%; height: 3px; margin: 2px auto 0; border-radius: 2px; background: var(--elf-paper-gold); }
+.elf-wd-tab:focus-visible { outline: 3px solid var(--gold-ink); outline-offset: 3px; }
+.elf-wd-tab__new { position: absolute; top: 26%; right: 10%; width: 12px; height: 12px; border-radius: 50%; background: var(--elf-paper-gold); box-shadow: 0 0 0 2px var(--card), 0 1px 2px rgba(94, 0, 0, 0.4); }
+.elf-wd-panel { scroll-margin-top: calc(var(--nav-h) + 60px); }
+.elf-wd-panel + .elf-wd-panel { margin-top: 28px; }
 .elf-wd-group { min-width: 0; margin: 0 0 20px; padding: 0; border: 0; }
 .elf-wd-group legend { padding: 0; margin-bottom: 10px; font-family: var(--font-head); font-weight: 800; font-size: 1.35rem; color: var(--maroon); }
 /* As a tab, a section already has its name on show: the heading stays for a screen reader only. */
 .elf-wd.is-live .elf-wd-group--named > legend { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; }
-.elf-wd-note { margin: 0 0 12px; font-size: 0.94rem; color: var(--slate-soft); }
-.elf-wd-styles { display: grid; gap: 16px; }
-.elf-wd-style__name { margin: 0 0 6px; font-size: 0.92rem; color: var(--slate); }
-.elf-wd-row { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
-.elf-wd-row--swatches { grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px; }
+.elf-wd-note { margin: 0 0 14px; color: var(--slate-soft); font-size: 0.94rem; }
+.elf-wd-haul { margin: 0 0 6px; color: var(--crimson); font-family: var(--elf-hand); font-weight: 700; font-size: 1.6rem; line-height: 1.1; }
+.elf-wd-haul b { font-size: 1.15em; }
+.elf-wd-haul__bar { max-width: 360px; margin: 0 0 18px; }
+.elf-wd-back { margin: 0; }
 
-/* One choice. The radio button itself is invisible and covers the tile; the label is what is seen. */
+/* Each door's costumes on a card sheet: its number on a rosette, its chip, its two costumes. */
+.elf-wd-doors { display: grid; gap: 28px 26px; margin-top: 18px; }
+.elf-wd-door { margin-right: 8px; padding: 16px 16px 18px; }
+.elf-wd-door__head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin-bottom: 12px; }
+.elf-wd-door__num { position: relative; display: grid; place-items: center; flex: none; width: 46px; height: 46px; color: var(--elf-on-dark); }
+.elf-wd-door__rosette { position: absolute; inset: 0; width: 100%; height: 100%; }
+.elf-wd-door__num b { position: relative; font: 800 1.05rem/1 var(--font-head); font-variant-numeric: lining-nums; }
+.elf-wd-door__star { position: relative; width: 18px; height: 18px; fill: var(--elf-on-dark); }
+.elf-wd-door__name { margin: 0; color: var(--maroon); font-family: var(--font-head); font-weight: 800; font-size: 1.15rem; }
+.elf-wd-door__chip { margin-left: auto; }
+@media (min-width: 1180px) {
+  .elf-wd-doors { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .elf-wd-doors > .elf-wd-door:first-child { grid-column: 1 / -1; }
+}
+
+/* ---- one choice. The radio button itself is invisible and covers the tile; the label is what is seen ---- */
+.elf-wd-row { display: grid; grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); gap: 12px; }
+.elf-wd-row--words { grid-template-columns: repeat(auto-fill, minmax(118px, 1fr)); gap: 12px 14px; }
+.elf-wd-row--circles { grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; }
 .elf-wd-tile { position: relative; }
 /* z-index keeps the button on top of its label at every moment. Without it, a label that moves
    under a thumb (it has a transform while pressed) rises above the button halfway through the tap:
@@ -686,86 +725,121 @@ form.elf-wd { display: grid; gap: 16px; padding: 0; background: none; border: 0;
 .elf-wd-tile input { position: absolute; inset: 0; z-index: 1; width: 100%; height: 100%; margin: 0; opacity: 0; cursor: pointer; }
 /* A locked choice takes no taps itself, so that a tap reaches the tile and it can rattle. */
 .elf-wd-tile input:disabled { pointer-events: none; }
-.elf-wd-tile label {
-  display: grid;
-  justify-items: center;
-  align-content: start;
-  gap: 4px;
-  height: 100%;
-  min-height: 98px;
-  margin: 0;
-  padding: 10px 4px 8px;
-  border: 1.6px solid var(--line);
-  border-radius: 12px;
-  background: var(--white);
-  color: var(--slate);
-  font-size: 0.8rem;
-  font-weight: 400;
-  line-height: 1.25;
-  text-align: center;
-  overflow-wrap: anywhere;
-}
-.elf-wd-art svg, .elf-wd-art img { display: block; }
-.elf-wd-art img { max-width: 100%; height: auto; }
-/* A painted piece keeps its own shape, centred in a square, so the captions line up. */
-.elf-wd-art:has(> img) { display: grid; place-items: center; width: 56px; height: 56px; }
-.elf-wd-tile input:checked + label { border-color: var(--holly); background: var(--holly-soft); box-shadow: inset 0 0 0 1.4px var(--holly); color: var(--holly-dark); }
-/* The tick on what is being worn. */
-.elf-wd-tile input:checked + label::before {
-  content: "";
-  position: absolute;
-  top: 6px;
-  left: 6px;
-  width: 18px;
-  height: 18px;
-  border-radius: 50%;
-  background: var(--holly) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23F8F5EE' stroke-width='3.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 12.5 4 4L18 8'/%3E%3C/svg%3E") center / 12px no-repeat;
-}
-.elf-wd-tile input:focus-visible + label { outline: 3px solid var(--holly); outline-offset: 2px; }
-.elf-wd-tile.is-locked label { border-style: dashed; background: var(--tint); color: var(--slate-soft); cursor: not-allowed; }
-.elf-wd-tile.is-locked .elf-wd-art { opacity: 0.4; filter: grayscale(0.7); }
-.elf-wd-lock { display: inline-flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 2px 4px; }
-.elf-wd-new {
-  position: absolute;
-  top: -7px;
-  right: -3px;
-  padding: 2px 8px;
-  border-radius: var(--radius-pill);
-  background: var(--crimson);
-  color: var(--cream);
-  font-size: 0.75rem;
-  font-weight: 600;
-  line-height: 1.4;
-}
-/* A choice that is only words: None, Short, Bunches. */
-.elf-wd-tile--word label { align-content: center; min-height: 48px; padding: 10px 12px 10px 30px; font-size: 0.92rem; }
-.elf-wd-tile--word input:checked + label::before { top: 50%; margin-top: -9px; }
-.elf-wd-tile--none { margin-bottom: 10px; }
-.elf-wd-slot > .elf-wd-tile--word { margin-bottom: 14px; max-width: 220px; }
-.elf-wd-tile--swatch label { min-height: 64px; padding: 10px 2px 6px; }
-.elf-wd-tile--swatch .elf-wd-art svg { width: 36px; height: 36px; }
-.elf-wd-tile--outfit label { min-height: 150px; }
+.elf-wd-tile label { position: relative; isolation: isolate; display: grid; justify-items: center; align-content: start; gap: 4px; height: 100%; min-height: 96px; margin: 0; padding: 10px 6px 10px; color: var(--maroon); font-size: 0.82rem; font-weight: 600; line-height: 1.2; text-align: center; overflow-wrap: anywhere; filter: drop-shadow(0 2px 1px rgba(94, 0, 0, 0.2)) drop-shadow(0 5px 5px rgba(94, 0, 0, 0.12)); }
+.elf-wd-tile label::before { content: ""; position: absolute; inset: 0; z-index: -1; background-color: var(--card); background-image: var(--elf-grain-light); background-size: 384px; background-blend-mode: multiply; -webkit-mask: var(--elf-tear-tile-a); mask: var(--elf-tear-tile-a); }
+.elf-wd-tile:nth-child(even) label::before { -webkit-mask: var(--elf-tear-tile-b); mask: var(--elf-tear-tile-b); }
+.elf-wd-art { display: block; }
+.elf-wd-art img { display: block; max-width: 100%; height: auto; }
+.elf-wd-tile--costume .elf-wd-art img { width: 74px; }
+.elf-wd-tile--scene .elf-wd-art img { width: 70px; border-radius: 3px; }
+.elf-wd-tile--friend .elf-wd-art img { width: 62px; }
+.elf-wd-swatch { display: block; width: 58px; height: 58px; padding: 0; }
+/* Worn: a holly sheet, and the tick on a crimson circle of paper. */
+.elf-wd-tile input:checked + label { color: var(--holly-dark); }
+.elf-wd-tile input:checked + label::before { background-color: var(--holly-soft); background-image: var(--elf-grain-light); }
+.elf-wd-tile input:checked + label::after { content: ""; position: absolute; top: -6px; left: -6px; width: 24px; height: 24px; border-radius: 50%; background: var(--crimson) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23FFF8EF' stroke-width='3.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m5 12.5 4.5 4.5L19 7.5'/%3E%3C/svg%3E") center / 15px no-repeat; box-shadow: 0 2px 2px rgba(94, 0, 0, 0.3); }
+.elf-wd-tile input:focus-visible + label { outline: 3px solid var(--gold-ink); outline-offset: 2px; }
+/* Locked: faint, with the painted padlock; tapped, it says why on a note. */
+.elf-wd-tile.is-locked label { color: var(--slate-soft); cursor: not-allowed; }
+.elf-wd-tile.is-locked .elf-wd-art { opacity: 0.42; filter: grayscale(0.45); }
+.elf-wd-lock { position: absolute; z-index: 1; top: -8px; right: -5px; width: 26px; transform: rotate(10deg); }
+.elf-wd-lock img { display: block; width: 100%; height: auto; filter: drop-shadow(0 2px 2px rgba(58, 0, 0, 0.35)); }
+.elf-wd-why { position: absolute; z-index: 2; left: 2px; right: 2px; bottom: 6px; padding: 7px 8px 8px; color: var(--maroon); font-family: var(--elf-hand); font-weight: 700; font-size: 1.05rem; line-height: 1; background: url(/assets/img/elf/paper/ui/note-cream.svg) 0 0 / 100% 100% no-repeat; filter: drop-shadow(0 2px 2px rgba(94, 0, 0, 0.3)); opacity: 0; pointer-events: none; }
+.elf-wd-tile.is-telling .elf-wd-why { opacity: 1; }
+/* A present: the costume is wrapped up until it is picked. */
+.elf-wd-present { position: absolute; inset: 4px; z-index: 1; display: grid; place-items: center; align-content: center; gap: 2px; }
+.elf-wd-present img { width: 78%; max-width: 92px; height: auto; filter: drop-shadow(0 4px 3px rgba(94, 0, 0, 0.3)); }
+.elf-wd-present span { color: var(--crimson); font-family: var(--elf-hand); font-weight: 700; font-size: 1.05rem; line-height: 1; }
+.elf-wd-tile.is-new .elf-wd-art { visibility: hidden; }
+.elf-wd-tile.is-opened .elf-wd-art { visibility: visible; }
+.elf-wd-tile.is-opened .elf-wd-present { opacity: 0; pointer-events: none; }
+/* Paper circles for the skin and hair colours; picked, the crimson mat shows under it. */
+.elf-wd-tile--circle label { min-height: 0; padding: 4px 0 2px; filter: none; }
+.elf-wd-tile--circle label::before { display: none; }
+.elf-wd-tile--circle .elf-wd-art { width: min(100%, 50px); }
+.elf-wd-tile--circle input:checked + label .elf-circle__mat { opacity: 1; }
+.elf-wd-tile--circle input:checked + label::before { display: none; }
+.elf-wd-tile--circle input:checked + label::after { top: -4px; left: auto; right: 0; width: 20px; height: 20px; background-size: 12px; }
+.elf-wd-tile--circle input:checked + label { color: var(--crimson); }
+.elf-wd-tile--circle .elf-wd-name { font-family: var(--elf-hand); font-size: 1.1rem; font-weight: 700; color: var(--holly-dark); }
+.elf-wd-tile--circle input:checked + label .elf-wd-name { color: var(--crimson); }
+/* A choice that is only words, on a torn paper button: crimson once it is picked. */
+.elf-wd-tile--word label { align-content: center; min-height: 48px; padding: 9px 12px 11px; font-size: 0.92rem; filter: drop-shadow(0 2px 1px rgba(94, 0, 0, 0.22)); }
+.elf-wd-tile--word label::before { background: url(/assets/img/elf/paper/ui/btn-m-cream.svg) 0 0 / 100% 100% no-repeat; -webkit-mask: none; mask: none; }
+.elf-wd-tile--word label::after { content: ""; position: absolute; inset: 4px 1px -4px 2px; z-index: -2; background: url(/assets/img/elf/paper/ui/btn-m-tan.svg) 0 0 / 100% 100% no-repeat; }
+.elf-wd-tile--word input:checked + label { color: var(--elf-on-dark); }
+.elf-wd-tile--word input:checked + label::before { background: url(/assets/img/elf/paper/ui/btn-m-crimson.svg) 0 0 / 100% 100% no-repeat; }
+.elf-wd-tile--word input:checked + label::after { top: 4px; left: 2px; width: auto; height: auto; border-radius: 0; inset: 4px 1px -4px 2px; background: url(/assets/img/elf/paper/ui/btn-m-maroon.svg) 0 0 / 100% 100% no-repeat; box-shadow: none; }
+.elf-wd-group > .elf-wd-tile--word { max-width: 220px; margin-bottom: 16px; }
 
-/* A phone on its side has no height to spare: the mirror scrolls away with the page there. */
+/* ---- on a phone, the round bubble that brings the elf back into view ---- */
+.elf-wd-peek { position: fixed; z-index: 40; right: 14px; bottom: 18px; width: 62px; height: 62px; border: 0; border-radius: 50%; background: var(--card) url(/assets/img/elf/paper/icons/icon-costume.webp) center / 58% no-repeat; box-shadow: 0 0 0 4px var(--crimson), 0 8px 16px rgba(94, 0, 0, 0.35); opacity: 0; pointer-events: none; cursor: pointer; }
+.elf-wd-peek.is-on { opacity: 1; pointer-events: auto; }
+.elf-wd-peek:focus-visible { outline: 3px solid var(--gold-ink); outline-offset: 4px; }
+.elf-wd-bursts { position: fixed; inset: 0; z-index: 60; pointer-events: none; }
+.elf-wd-spark { position: fixed; width: var(--z); height: var(--z); margin: calc(var(--z) / -2) 0 0 calc(var(--z) / -2); color: var(--c); opacity: 0; }
+.elf-wd-spark svg { display: block; width: 100%; height: 100%; fill: currentColor; }
+
+/* On a phone the tags hang three over two, as mockup 6 has them. */
+@media (max-width: 559px) {
+  .elf-wd-tabs { grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 16px 10px; }
+  .elf-wd-tabs li { grid-column: span 2; }
+  .elf-wd-tabs li:nth-child(4) { grid-column: 2 / span 2; }
+  .elf-wd-tabs li:nth-child(5) { grid-column: 4 / span 2; }
+  .elf-wd-tabs li:nth-child(n + 4)::before { display: none; }
+}
+@media (min-width: 560px) {
+  .elf-wd-tab__label { font-size: 0.82rem; }
+  .elf-wd-tab__label img { width: 38px; height: 38px; }
+}
+@media (min-width: 900px) {
+  form.elf-wd { grid-template-columns: minmax(300px, 380px) minmax(0, 1fr); align-items: start; }
+  /* Beside the choices the stage and its plate stay in view. */
+  .elf-wd-preview { position: sticky; top: calc(var(--nav-h) + 50px); }
+  .elf-wd-peek { display: none; }
+}
+/* A phone on its side has no height to spare: nothing stays put there. */
 @media (max-height: 520px) {
   .elf-wd-preview { position: static; }
 }
-@media (min-width: 560px) {
-  .elf-wd-tabs { gap: 8px; }
-  .elf-wd-tab { padding: 8px 16px; font-size: 0.92rem; }
-  .elf-wd-row--outfits { grid-template-columns: repeat(4, minmax(0, 1fr)); }
-  .elf-wd-mirror { width: 132px; }
-  .elf-wd-preview h2 { font-size: 1.35rem; }
-}
-@media (min-width: 900px) {
-  form.elf-wd { grid-template-columns: minmax(260px, 320px) minmax(0, 1fr); gap: clamp(24px, 4vw, 52px); align-items: start; }
-  /* Beside the choices the card stands upright, like the badge it is. */
-  .elf-wd-preview { top: calc(var(--nav-h) + 20px); grid-template-columns: minmax(0, 1fr); justify-items: center; gap: 16px; padding: 22px 20px 24px; text-align: center; border-radius: var(--radius-lg); }
-  .elf-wd-mirror { width: min(100%, 230px); padding: 22px 10px 0; border-width: 8px; border-radius: 999px 999px 16px 16px; }
-  .elf-wd-preview h2 { font-size: 1.5rem; }
-  .elf-wd-preview .elf-wd-wearing { position: static; width: auto; height: auto; margin: 8px 0 0; overflow: visible; clip: auto; white-space: normal; font-size: 0.88rem; line-height: 1.45; color: var(--slate-soft); }
-  .elf-wd-panel { scroll-margin-top: calc(var(--nav-h) + 20px); }
-  .elf-wd-styles { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px 22px; }
+
+@media (prefers-reduced-motion: no-preference) {
+  .elf-wd-glows span { animation: elf-bulb 2.8s ease-in-out var(--t) infinite alternate; }
+  @keyframes elf-bulb { from { opacity: 0.25; transform: scale(0.85); } to { opacity: 1; transform: scale(1.1); } }
+  .elf-wd-hang { animation: elf-sway 4.2s ease-in-out infinite alternate; }
+  .elf-wd-hang--b { animation-duration: 3.6s; animation-delay: -1.2s; }
+  @keyframes elf-sway { from { transform: rotate(-7deg); } to { transform: rotate(7deg); } }
+  .elf-wd-say { transition: opacity 0.2s var(--elf-ease), transform 0.3s var(--elf-ease); }
+  .elf-wd-stage.is-hop .elf-wd-pic[data-picture="body"] { animation: elf-hop 0.55s var(--elf-ease-expo); }
+  @keyframes elf-hop { 35% { transform: translateY(-7%); } }
+  .elf-wd-stage.is-wiggle .elf-wd-pic[data-picture="body"] { animation: elf-wiggle 0.6s var(--elf-ease); }
+  @keyframes elf-wiggle { 30% { transform: rotate(-4deg); } 65% { transform: rotate(3deg); } }
+  .elf-wd-snow .is-flurry { animation: elf-flurry var(--d) linear var(--delay) both; }
+  @keyframes elf-flurry { to { transform: translate3d(var(--drift), 156cqw, 0); opacity: 0.3; } }
+  .elf-wd-flash.is-on { animation: elf-flash 0.5s var(--elf-ease); }
+  @keyframes elf-flash { 10% { opacity: 0.85; } }
+  .elf-wd-seal.is-bump { animation: elf-bump 0.5s var(--elf-ease-expo); }
+  @keyframes elf-bump { 40% { transform: rotate(8deg) scale(1.18); } }
+  .elf-wd-fold { transition: grid-template-rows 0.45s var(--elf-ease); }
+  .elf-wd-fold .elf-wd-fold__in { transition: visibility 0s linear 0.45s; }
+  .elf-wd-fold:not(.is-folded) .elf-wd-fold__in { transition-delay: 0s; }
+  .elf-wd-tab.is-swing { animation: elf-tag-swing 0.7s var(--elf-ease); }
+  @keyframes elf-tag-swing { 25% { transform: translateY(5px) rotate(-6deg); } 60% { transform: translateY(5px) rotate(4deg); } }
+  .elf-wd-tile label { transition: transform 0.15s var(--elf-ease); }
+  .elf-wd-tile input:active + label { transform: scale(0.96); }
+  .elf-wd-tile.is-pop label { animation: elf-pop 0.32s var(--elf-ease); }
+  @keyframes elf-pop { 40% { transform: scale(1.06); } }
+  .elf-wd-tile.is-rattled label { animation: elf-rattle 0.45s var(--elf-ease-expo); }
+  .elf-wd-why { transition: opacity 0.2s var(--elf-ease); }
+  .elf-wd-tile.is-wrapped .elf-wd-present img { animation: elf-wobble 2.4s ease-in-out infinite; }
+  @keyframes elf-wobble { 0%, 70%, 100% { transform: rotate(0deg); } 78% { transform: rotate(-6deg); } 86% { transform: rotate(5deg); } 94% { transform: rotate(-3deg); } }
+  .elf-wd-tile.is-opened .elf-wd-present { animation: elf-unwrap 0.6s var(--elf-ease) both; }
+  @keyframes elf-unwrap { from { opacity: 1; transform: scale(1); } to { opacity: 0; transform: scale(1.35) rotate(8deg); } }
+  .elf-wd-spark { animation: elf-spark 0.85s var(--elf-ease) forwards; }
+  @keyframes elf-spark { 0% { opacity: 1; transform: translate(0, 0) scale(0.4) rotate(0deg); } 100% { opacity: 0; transform: translate(var(--dx), var(--dy)) scale(1) rotate(var(--r)); } }
+  .elf-wd-peek { transition: opacity 0.25s var(--elf-ease); }
+  .elf-wd-surprise.is-spinning img { animation: elf-spin 0.6s linear infinite; }
+  @keyframes elf-spin { to { transform: rotate(360deg); } }
 }
 
 /* =================================================================
@@ -895,23 +969,9 @@ form.elf-wd { display: grid; gap: 16px; padding: 0; background: none; border: 0;
   .elf-door--hunting .elf-door__chip { animation: elf-breathe 1.8s ease-in-out infinite; }
   @keyframes elf-breathe { 50% { opacity: 0.72; } }
 
-  /* The wardrobe. A tile gives under a thumb. */
-  .elf-wd-tile label { transition: transform 0.15s var(--elf-ease), border-color 0.15s, background-color 0.15s; }
-  .elf-wd-tile input:active + label { transform: scale(0.96); }
-
-  /* The elf has changed its clothes. */
-  .elf-wd-mirror.is-changed svg { animation: elf-pop 0.32s var(--elf-ease); }
-  @keyframes elf-pop { from { transform: scale(0.94); opacity: 0.55; } }
-
-  /* A locked thing, tapped: it rattles, and stays locked. */
-  .elf-wd-tile.is-rattled label { animation: elf-rattle 0.45s var(--elf-ease-expo); }
-
   /* Something has arrived: the present's lid lifts when the page opens. */
   .elf-gift__lid { transform-box: fill-box; transform-origin: 12% 100%; animation: elf-lid 1.1s var(--elf-ease-expo) 0.4s backwards; }
   @keyframes elf-lid { 35% { transform: translateY(-3px) rotate(-16deg); } }
-
-  /* A section of the wardrobe opens. */
-  .elf-wd.is-live .elf-wd-panel { animation: elf-drawer 0.25s var(--elf-ease); }
 
   /* First to the elf: the gold card arrives, and light fans out behind the words once. */
   .elf-win { animation: elf-first 0.6s var(--elf-ease-expo); }

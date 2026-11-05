@@ -632,6 +632,8 @@
     else if (name === "analytics") loadAnalytics();
     // Fill a Red Bag: the list's editor is its own file (assets/js/admin/red-bag-list.js).
     else if (name === "red-bag") { if (window.AdminRedBagList) window.AdminRedBagList.open(); }
+    // Head Elf HQ draws itself (assets/js/admin/elf-hq.js); it is read afresh each time it is opened.
+    else if (name === "elf") { if (window.AdminElfHq) window.AdminElfHq.open(); }
     else if (name === "site") loadSite();
     else if (name === "qr") loadQr();
     else if (name === "team") loadTeam();

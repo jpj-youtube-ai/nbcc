@@ -1,0 +1,117 @@
+/* NBCC Elf Detective School: Head Elf HQ, its own admin section (Admin > Content > Elf Detective School,
+ * #view-elf in admin.html, drawn by assets/js/admin/elf-hq.js). Design:
+ * docs/superpowers/specs/2026-11-05-elf-admin-design.md, decision 11: a game's menu screen in NBCC's own
+ * colours and fonts, chunky panels and buttons with a deep maroon ink edge and a hard shadow that
+ * presses in when clicked, the paper grain, and the elf school's own pictures as the game's art.
+ *
+ * House rules (test/unit/admin-elf-hq-css.test.ts): every selector starts .hq- (or is #view-elf), no
+ * !important, nothing scrolls inside a box, and motion only for someone happy with it, moving only
+ * transform and opacity. Headings are named through .hq-root, because the admin gives every
+ * .admin-view h2 its own size. */
+
+@font-face { font-family: "Caveat"; font-style: normal; font-weight: 400 700; font-display: swap; src: url(/assets/fonts/caveat-latin.woff2) format("woff2"); }
+
+.hq-root {
+  --hq-ink: #3A0B0B;
+  --hq-maroon: #800000;
+  --hq-crimson: #C02238;
+  --hq-holly: #1A531A;
+  --hq-holly-dark: #123C12;
+  --hq-holly-soft: #E3EEDC;
+  --hq-gold: #D9A93E;
+  --hq-gold-soft: #F6E7BF;
+  --hq-gold-ink: #7E5A12;
+  --hq-cream: #F8F5EE;
+  --hq-card: #FFFDFA;
+  --hq-blush: #FBE3E6;
+  --hq-text: #2E2422;
+  --hq-soft: #6B5F5B;
+  --hq-on-dark: #FFF8EF;
+  --hq-line: 2.5px solid var(--hq-ink);
+  --hq-pop: 3px 4px 0 var(--hq-ink);
+  --hq-pop-lg: 5px 6px 0 var(--hq-ink);
+  --hq-pressed: 1px 1px 0 var(--hq-ink);
+  --hq-grain: url(/assets/img/elf/paper/ui/grain-light.webp);
+  --hq-hand: "Caveat", "Segoe Print", cursive;
+  --hq-head: "Playfair Display", Georgia, serif;
+  --hq-space-xs: 4px;
+  --hq-space-sm: 8px;
+  --hq-space-md: 12px;
+  --hq-space-lg: 16px;
+  --hq-space-xl: 24px;
+  --hq-space-2xl: 32px;
+  --hq-space-3xl: 48px;
+  --hq-ease: cubic-bezier(0.22, 1, 0.36, 1);
+  container-type: inline-size;
+  display: grid;
+  gap: var(--hq-space-xl);
+  color: var(--hq-text);
+}
+.hq-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap; }
+.hq-root :focus-visible { outline: 3px solid var(--hq-gold-ink); outline-offset: 3px; }
+.hq-root img { display: block; }
+
+/* ---- the title: the school's badge, its name, and whether it is live ---- */
+.hq-title { display: flex; flex-wrap: wrap; align-items: center; gap: var(--hq-space-md) var(--hq-space-lg); }
+.hq-title img { width: 72px; height: 72px; filter: drop-shadow(2px 3px 0 rgba(58, 11, 11, 0.25)); }
+.hq-root .hq-title h1 { margin: 0; font-family: var(--hq-head); font-weight: 800; font-size: clamp(1.7rem, 1.3rem + 1.6vw, 2.4rem); line-height: 1.05; color: var(--hq-maroon); }
+.hq-title p { margin: 2px 0 0; font-family: var(--hq-hand); font-size: 1.35rem; font-weight: 700; color: var(--hq-crimson); line-height: 1; }
+.hq-state { margin-left: auto; display: inline-flex; align-items: center; gap: 8px; padding: 6px 14px 6px 10px; border: var(--hq-line); border-radius: 999px; background: var(--hq-blush); box-shadow: var(--hq-pop); font-family: var(--hq-head); font-weight: 700; color: var(--hq-maroon); }
+.hq-state::before { content: ""; width: 12px; height: 12px; border-radius: 50%; background: var(--hq-crimson); box-shadow: 0 0 0 2px var(--hq-ink); }
+.hq-state.is-live { background: var(--hq-holly-soft); color: var(--hq-holly); }
+.hq-state.is-live::before { background: #3C9A3C; }
+.hq-state:empty { display: none; }
+.hq-status { margin: 0; min-height: 1.4em; font-size: 0.95rem; }
+.hq-status.is-ok { color: var(--hq-holly); }
+.hq-status.is-error { color: var(--hq-crimson); font-weight: 700; }
+
+/* ---- the menu: big tiles, as a game's menu screen ---- */
+.hq-menu { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--hq-space-md); margin: 0; padding: 0; list-style: none; }
+.hq-menu li { display: grid; }
+.hq-tab { position: relative; display: grid; justify-items: center; align-content: start; gap: 6px; width: 100%; height: 100%; padding: 14px 8px 12px; border: var(--hq-line); border-radius: 18px; background: var(--hq-card); box-shadow: var(--hq-pop); cursor: pointer; font-family: var(--hq-head); font-weight: 700; font-size: 1rem; line-height: 1.2; color: var(--hq-maroon); }
+.hq-tab img { width: 40px; height: 40px; object-fit: contain; }
+.hq-coin { display: grid; place-items: center; width: 40px; height: 40px; border-radius: 50%; background: var(--hq-gold); box-shadow: inset 0 0 0 3px #B8862B, 0 0 0 2px var(--hq-ink); font-family: var(--hq-head); font-weight: 800; font-size: 1.3rem; color: var(--hq-ink); }
+.hq-coin::before { content: "\00a3"; }
+.hq-tab:hover { background: #FFF6E4; }
+.hq-tab:active { transform: translate(2px, 3px); box-shadow: var(--hq-pressed); }
+.hq-tab[aria-selected="true"] { background: var(--hq-maroon); color: var(--hq-on-dark); transform: translate(2px, 3px); box-shadow: var(--hq-pressed); }
+.hq-tab[aria-selected="true"] .hq-coin { box-shadow: inset 0 0 0 3px #B8862B, 0 0 0 2px var(--hq-on-dark); }
+.hq-count { position: absolute; top: -10px; right: -8px; display: grid; place-items: center; min-width: 30px; height: 30px; padding: 0 7px; border: 2px solid var(--hq-ink); border-radius: 999px; background: var(--hq-crimson); color: var(--hq-on-dark); font-family: var(--hq-head); font-weight: 800; font-size: 0.95rem; line-height: 1; }
+.hq-count[hidden] { display: none; }
+@container (min-width: 560px) {
+  .hq-menu { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+}
+
+/* ---- the parts, and the paper they sit on ---- */
+.hq-part { display: grid; gap: var(--hq-space-xl); }
+.hq-part[hidden] { display: none; }
+.hq-panel { border: var(--hq-line); border-radius: 22px; background-color: var(--hq-card); background-image: var(--hq-grain); background-size: 384px; background-blend-mode: multiply; box-shadow: var(--hq-pop-lg); padding: clamp(16px, 2.4vw, 26px); min-width: 0; }
+.hq-root .hq-h2 { margin: 0 0 var(--hq-space-md); font-family: var(--hq-head); font-weight: 800; font-size: 1.35rem; line-height: 1.15; color: var(--hq-maroon); }
+.hq-root .hq-h3 { margin: 0; font-family: var(--hq-head); font-weight: 700; font-size: 1.05rem; line-height: 1.2; color: var(--hq-ink); }
+.hq-note { font-family: var(--hq-hand); font-weight: 700; font-size: 1.2rem; line-height: 1.1; color: var(--hq-crimson); }
+.hq-soft { color: var(--hq-soft); font-size: 0.92rem; }
+.hq-words { margin: 0; max-width: 65ch; }
+.hq-loading { color: var(--hq-soft); }
+
+/* ---- buttons ---- */
+.hq-btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 44px; padding: 8px 18px; border: var(--hq-line); border-radius: 14px; background: var(--hq-card); box-shadow: var(--hq-pop); cursor: pointer; font-family: var(--hq-head); font-weight: 700; font-size: 1rem; line-height: 1.2; color: var(--hq-maroon); text-decoration: none; text-align: center; }
+.hq-btn:hover { background: #FFF6E4; }
+.hq-btn:active { transform: translate(2px, 3px); box-shadow: var(--hq-pressed); }
+.hq-btn:disabled { cursor: not-allowed; opacity: 0.55; transform: none; box-shadow: var(--hq-pop); }
+.hq-btn--go { background: var(--hq-holly); color: var(--hq-on-dark); }
+.hq-btn--go:hover { background: var(--hq-holly-dark); }
+.hq-btn--danger { background: var(--hq-blush); color: var(--hq-crimson); }
+.hq-btn--danger:hover { background: #F7D3D8; }
+.hq-btn--small { min-height: 38px; padding: 4px 14px; font-size: 0.92rem; border-radius: 12px; }
+.hq-actions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--hq-space-md); }
+
+/* ---- chips ---- */
+.hq-chip { display: inline-flex; align-items: center; gap: 6px; padding: 2px 10px; border: 2px solid var(--hq-ink); border-radius: 999px; background: var(--hq-gold-soft); font-size: 0.78rem; line-height: 1.5; color: var(--hq-ink); white-space: nowrap; }
+.hq-chip--holly { background: var(--hq-holly-soft); color: var(--hq-holly); border-color: var(--hq-holly); }
+.hq-chip--crimson { background: var(--hq-blush); color: var(--hq-crimson); border-color: var(--hq-crimson); }
+
+@media (prefers-reduced-motion: no-preference) {
+  .hq-tab, .hq-btn { transition: transform 0.12s var(--hq-ease), box-shadow 0.12s var(--hq-ease), background-color 0.2s; }
+  .hq-part:not([hidden]) { animation: hq-in 0.32s var(--hq-ease); }
+  @keyframes hq-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+}

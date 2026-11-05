@@ -28,7 +28,7 @@ describe("the totals: one grouped read", () => {
     queryMock.mockResolvedValue({ rows: [] });
     await sumGiftsBySource(MONTH);
     expect(queryMock).toHaveBeenCalledTimes(1);
-    expect(call().params).toEqual(["2026-10-01", "2026-10-05T09:30:00.000Z", "red_bag", "ball", "ball_bags"]);
+    expect(call().params).toEqual(["2026-10-01", "2026-10-05T09:30:00.000Z", "red_bag", "ball", "ball_bags", "invoice"]);
     expect(call().sql).toMatch(/GROUP BY 1/);
     // The source is a parameter, never written into the SQL itself.
     expect(call().sql).not.toMatch(/red_bag/);
@@ -57,8 +57,8 @@ describe("the totals: one grouped read", () => {
     queryMock.mockResolvedValue({ rows: [] });
     await sumGiftsBySource(MONTH);
     const { sql } = call();
-    expect(sql).toContain("CASE WHEN source = $3 THEN 'redBag' WHEN source = $4 THEN 'ball' WHEN source = $5 THEN 'ballBags' ELSE 'donatePage' END");
-    expect(sql).toContain("(source IN ($3, $4, $5) OR (source IS NULL AND payment_channel = 'online' AND fundraiser_id IS NULL))");
+    expect(sql).toContain("CASE WHEN source = $3 THEN 'redBag' WHEN source = $4 THEN 'ball' WHEN source = $5 THEN 'ballBags' WHEN source = $6 THEN 'invoices' ELSE 'donatePage' END");
+    expect(sql).toContain("(source IN ($3, $4, $5, $6) OR (source IS NULL AND payment_channel = 'online' AND fundraiser_id IS NULL))");
   });
 
   it("counts a table bag gift in its own bucket, not the Festive Ball's or the Donate page's", async () => {
@@ -69,6 +69,7 @@ describe("the totals: one grouped read", () => {
       redBag: { month: { pence: 0, gifts: 0 }, all: { pence: 0, gifts: 0 } },
       ball: { month: { pence: 0, gifts: 0 }, all: { pence: 0, gifts: 0 } },
       ballBags: { month: { pence: 10_000, gifts: 2 }, all: { pence: 15_000, gifts: 3 } },
+      invoices: { month: { pence: 0, gifts: 0 }, all: { pence: 0, gifts: 0 } },
       donatePage: { month: { pence: 0, gifts: 0 }, all: { pence: 0, gifts: 0 } },
     });
   });
@@ -87,6 +88,7 @@ describe("the totals: one grouped read", () => {
       redBag: { month: { pence: 2500, gifts: 2 }, all: { pence: 4000, gifts: 3 } },
       ball: { month: { pence: 0, gifts: 0 }, all: { pence: 0, gifts: 0 } },
       ballBags: { month: { pence: 0, gifts: 0 }, all: { pence: 0, gifts: 0 } },
+      invoices: { month: { pence: 0, gifts: 0 }, all: { pence: 0, gifts: 0 } },
       donatePage: { month: { pence: 0, gifts: 0 }, all: { pence: 0, gifts: 0 } },
     });
   });
@@ -101,14 +103,14 @@ describe("the donations list says where each gift was started", () => {
   it("selects the source for each row, and changes nothing else about the page", async () => {
     await listDonations({});
     const { sql } = call(1);
-    expect(sql).toMatch(/d\.declaration_status, d\.created_at, d\.source FROM donations d/);
+    expect(sql).toMatch(/d\.declaration_status, d\.created_at, d\.source, d\.invoice_id FROM donations d/);
     expect(sql).toMatch(/ORDER BY d\.id DESC LIMIT 50 OFFSET 0/);
   });
 
   it("selects the source in donation search results too", async () => {
     queryMock.mockResolvedValue({ rows: [] });
     await searchDonations("ada");
-    expect(call().sql).toMatch(/d\.payment_channel, d\.created_at, d\.source FROM donations d/);
+    expect(call().sql).toMatch(/d\.payment_channel, d\.created_at, d\.source, d\.invoice_id FROM donations d/);
   });
 });
 

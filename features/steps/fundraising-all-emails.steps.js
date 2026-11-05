@@ -26,6 +26,7 @@ const GROUPS = [
   "Event pages and tickets",
   "The Festive Ball",
   "Elf Detective School",
+  "Invoices for donations",
   "Staff notices",
 ];
 
@@ -117,7 +118,7 @@ When("{string} approves the All emails email {string} where the list says to", a
 
 // ---- checking ----
 
-Then("the All emails list has its eleven groups in order", function () {
+Then("the All emails list has its twelve groups in order", function () {
   assert.deepEqual(this.frBody.groups.map((g) => g.name), GROUPS);
   for (const g of this.frBody.groups) assert.ok(g.emails.length > 0, `${g.name} is empty`);
 });

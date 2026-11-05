@@ -17,6 +17,7 @@ import { sendBallConfirmation } from "../clients/email";
 import { markBookingExpired, markBookingPaid } from "./ball";
 import { handleTicketEvent } from "../tickets/webhook";
 import { handleElfEvent } from "../elf/webhook";
+import { handleInvoiceEvent } from "../invoices/webhook";
 import { ensureFulfilmentRecord, markFulfilmentInvited } from "./fulfilment";
 import { fulfilmentBandFor, type SupporterBand } from "../donors/fulfilment";
 import { buildBusinessSupporterInviteEmail } from "../business/invite-email";
@@ -590,6 +591,10 @@ async function dispatch(client: PoolClient, event: Stripe.Event): Promise<Dispat
   // anything else looks at it, so ticket money can never be recorded as a gift (src/tickets/webhook.ts).
   // NBCC Elf Detective School: an entry is a payment to take part, never a gift, so it is taken
   // first too (src/elf/webhook.ts). Only sessions tagged product "elf_school" are its.
+  // Invoices for donations: an invoice paid by card is settled against its invoice (src/invoices/webhook.ts)
+  // before anything else sees it, so it becomes exactly one donation, labelled with its invoice.
+  const invoice = await handleInvoiceEvent(client, event);
+  if (invoice) return { action: invoice.action, email: null, afterCommit: invoice.afterCommit };
   const elf = await handleElfEvent(client, event);
   if (elf) return { action: elf.action, email: null, afterCommit: elf.afterCommit ?? null };
   const ticket = await handleTicketEvent(client, event);

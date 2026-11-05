@@ -29,8 +29,8 @@ const session = (metadata: unknown): Stripe.Checkout.Session =>
 const base = { mode: "once", plan: "", giftAid: "false", donorType: "individual", fullName: "Robin Example", email: "robin@example.com" };
 
 describe("the allowed sources", () => {
-  it("is one list, holding red_bag, ball (the Festive Ball's donate page) and ball_bags (red bags at the Ball)", () => {
-    expect(DONATION_SOURCES).toEqual(["red_bag", "ball", "ball_bags"]);
+  it("is one list, holding red_bag, ball (the Festive Ball's donate page), ball_bags (red bags at the Ball) and invoice (a paid invoice)", () => {
+    expect(DONATION_SOURCES).toEqual(["red_bag", "ball", "ball_bags", "invoice"]);
   });
 });
 

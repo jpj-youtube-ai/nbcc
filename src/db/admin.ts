@@ -678,6 +678,8 @@ export interface DonationSearchRow {
   created_at: Date;
   /** Where the gift was started: 'red_bag' for Fill a Red Bag, null for every other gift. */
   source: string | null;
+  /** The invoice this gift paid (Admin > Giving > Invoices), so the list can say "Invoice INV-0012". */
+  invoice_id: number | null;
 }
 
 // Find donations by donor name/email, Stripe id, donation id or donor id (joins the donor for the
@@ -687,7 +689,7 @@ export async function searchDonations(q: string): Promise<DonationSearchRow[]> {
   const res = await pool.query<DonationSearchRow>(
     `SELECT d.id, d.donor_id, dn.full_name AS donor_name, dn.email AS donor_email,
             d.mode, d.plan, d.amount_pence, d.currency, d.gift_aid, d.claim_status,
-            d.payment_channel, d.created_at, d.source
+            d.payment_channel, d.created_at, d.source, d.invoice_id
        FROM donations d
        JOIN donors dn ON dn.id = d.donor_id
       WHERE dn.full_name ILIKE $1 OR dn.email ILIKE $1
@@ -738,6 +740,8 @@ export interface AdminDonationRow {
   created_at: Date;
   /** Where the gift was started: 'red_bag' for Fill a Red Bag, null for every other gift. */
   source: string | null;
+  /** The invoice this gift paid (Admin > Giving > Invoices), so the list can say "Invoice INV-0012". */
+  invoice_id: number | null;
 }
 
 // Browse ALL donations, newest first, optionally filtered by claim_status and/or payment_channel,
@@ -793,7 +797,7 @@ export async function listDonations(opts: {
   const res = await pool.query<AdminDonationRow>(
     `SELECT d.id, d.donor_id, dn.full_name AS donor_name, dn.email AS donor_email,
             d.mode, d.plan, d.amount_pence, d.currency, d.gift_aid, d.claim_status,
-            d.payment_status, d.payment_channel, d.refunded_amount_pence, d.declaration_status, d.created_at, d.source
+            d.payment_status, d.payment_channel, d.refunded_amount_pence, d.declaration_status, d.created_at, d.source, d.invoice_id
        FROM donations d
        JOIN donors dn ON dn.id = d.donor_id
        ${whereSql}

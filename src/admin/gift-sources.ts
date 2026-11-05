@@ -11,7 +11,7 @@ export { giftsWords };
 export type GiftSum = { pence: number; gifts: number };
 /** This UK month so far, and all time. */
 export type SourceSums = { month: GiftSum; all: GiftSum };
-export type SourceTotals = { redBag: SourceSums; ball: SourceSums; ballBags: SourceSums; donatePage: SourceSums };
+export type SourceTotals = { redBag: SourceSums; ball: SourceSums; ballBags: SourceSums; invoices: SourceSums; donatePage: SourceSums };
 
 /** One row of the grouped read. Postgres hands SUM and COUNT back as strings. */
 export interface SourceTotalsRow {
@@ -34,9 +34,9 @@ const none = (): SourceSums => ({ month: { pence: 0, gifts: 0 }, all: { pence: 0
 
 /** Every bucket, whatever came back: one with no gifts has no row, and is a real zero. */
 export function sourceTotalsFrom(rows: readonly SourceTotalsRow[]): SourceTotals {
-  const out: SourceTotals = { redBag: none(), ball: none(), ballBags: none(), donatePage: none() };
+  const out: SourceTotals = { redBag: none(), ball: none(), ballBags: none(), invoices: none(), donatePage: none() };
   for (const r of rows) {
-    if (r.bucket !== "redBag" && r.bucket !== "ball" && r.bucket !== "ballBags" && r.bucket !== "donatePage") continue;
+    if (r.bucket !== "redBag" && r.bucket !== "ball" && r.bucket !== "ballBags" && r.bucket !== "invoices" && r.bucket !== "donatePage") continue;
     out[r.bucket] = {
       month: { pence: Number(r.month_pence), gifts: Number(r.month_gifts) },
       all: { pence: Number(r.all_pence), gifts: Number(r.all_gifts) },
@@ -64,6 +64,8 @@ export function sourceLines(t: SourceTotals): SourceLine[] {
     line("redBag", "Fill a Red Bag"),
     line("ball", "Festive Ball"),
     line("ballBags", "Red bags at the Ball"),
+    // Invoices for donations: gifts that paid an invoice sent from Admin > Giving > Invoices.
+    line("invoices", "Invoices"),
     line("donatePage", "Donate page"),
   ];
 }

@@ -16,7 +16,8 @@ export type Area =
   | "analytics"
   | "qr"
   | "fundraising"
-  | "red-bag";
+  | "red-bag"
+  | "invoices";
 
 // Each is the menu section (its data-view) and the gate its menu link uses in admin.html, so a pill
 // never sits on a section the person cannot open. Every one except events and analytics also has
@@ -38,6 +39,8 @@ export const AREAS: ReadonlyArray<{ area: Area; section: Section; level: "view" 
   { area: "fundraising", section: "fundraising", level: "view" },
   // Fill a Red Bag: the list's editor. New as a screen only: nothing arrives in it.
   { area: "red-bag", section: "red-bag", level: "view" },
+  // Invoices for donations: Admin > Giving > Invoices. New as a screen only: staff make the invoices.
+  { area: "invoices", section: "donations", level: "view" },
 ];
 
 export function isArea(value: unknown): value is Area {
@@ -56,6 +59,7 @@ export const FEATURES: ReadonlyArray<{ area: Area; added: Date; what: string }> 
   { area: "donations", added: new Date("2026-10-05T10:00:00Z"), what: "Donations: Fill a Red Bag against the Donate page, a Red Bag label on each gift and a Fill a Red Bag only filter" },
   { area: "red-bag", added: new Date("2026-10-05T13:00:00Z"), what: "Fill a Red Bag: change the items, prices and examples on the page, preview them, and publish" },
   { area: "qr", added: new Date("2026-11-03T18:00:00Z"), what: "Named QR codes: one for each billboard or card, each counting its own scans (TASK-588)" },
+  { area: "invoices", added: new Date("2026-11-05T21:00:00Z"), what: "Invoices: send an invoice that, once paid by card or bank transfer, comes through into Donations" },
 ];
 
 // When the pills went live. Someone who has never opened a section is counted as having seen it

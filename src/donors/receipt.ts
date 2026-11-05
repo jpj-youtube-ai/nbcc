@@ -42,6 +42,9 @@ export const receiptInputSchema = z.object({
   amountPence: z.number().int().positive(),
   currency: z.string().trim().min(1).default("GBP"),
   donationDate: z.union([z.date(), z.string().min(1)]),
+  // Invoices for donations: the receipt for a gift that paid an invoice starts with "This pays invoice
+  // INV-0012. Thank you." and links to the invoice, now marked Paid.
+  invoice: z.object({ number: z.string().trim().min(1), url: z.string().url() }).optional(),
 });
 
 export type ReceiptInput = z.input<typeof receiptInputSchema>;
@@ -82,12 +85,14 @@ function escapeHtml(s: string): string {
 // eligibility re-derivation; the caller (via classifyCompanyGift) ensures nothing of value was
 // given in return before issuing a receipt.
 export function buildCorporationTaxReceipt(input: ReceiptInput): CorporationTaxReceipt {
-  const { legalName, amountPence, currency, donationDate } = receiptInputSchema.parse(input);
+  const { legalName, amountPence, currency, donationDate, invoice } = receiptInputSchema.parse(input);
   const amount = formatAmount(amountPence, currency);
   const date = formatDate(donationDate);
   const title = `${CHARITY_SHORT_NAME} donation receipt for Corporation Tax purposes`;
+  const pays = invoice ? `This pays invoice ${invoice.number}. Thank you.` : "";
 
   const text =
+    (invoice ? `${pays}\nView or print your invoice: ${invoice.url}\n\n` : "") +
     `${title}\n\n` +
     `${CHARITY_NAME} (${CHARITY_SHORT_NAME})\n\n` +
     `Received with thanks from ${legalName}: a donation of ${amount} on ${date}.\n\n` +
@@ -99,6 +104,9 @@ export function buildCorporationTaxReceipt(input: ReceiptInput): CorporationTaxR
 
   const html =
     `<section class="ct-receipt">` +
+    (invoice
+      ? `<p><strong>${escapeHtml(pays)}</strong> <a href="${escapeHtml(invoice.url)}">View or print your invoice</a></p>`
+      : "") +
     `<h1 style="color:#C02238;font-family:'Playfair Display',Georgia,'Times New Roman',serif;font-size:22px;font-weight:800;margin:0 0 12px;letter-spacing:-.01em">${escapeHtml(title)}</h1>` +
     `<p><strong>${escapeHtml(CHARITY_NAME)} (${CHARITY_SHORT_NAME})</strong></p>` +
     `<p>Received with thanks from ${escapeHtml(legalName)}: a donation of ${escapeHtml(amount)} on ${date}.</p>` +

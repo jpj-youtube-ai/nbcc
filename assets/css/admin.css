@@ -3613,3 +3613,64 @@ textarea.fx-call-input{min-height:88px;line-height:1.5;resize:vertical;field-siz
   .sa-table .sa-to{flex:1;min-width:0}
   .sa-table [data-site-alias-remove]{min-height:44px;min-width:44px;text-align:left}
 }
+
+/* ---- Invoices for donations (Admin > Giving > Invoices) ----
+   The same family as the QR codes screen: a white form panel, white cards on the tint, quiet text
+   buttons for the less common actions, and every confirm inside its own card (no modal). The state
+   pills keep their words dark on a pale tint, so each reads at 4.5 to 1 or better. */
+#view-invoices .inv-new{display:grid;gap:4px;max-width:640px;background:var(--white);border:1px solid var(--line);border-radius:14px;padding:16px 18px;margin:8px 0 22px}
+#view-invoices .inv-new[hidden]{display:none}
+#view-invoices .inv-new-title{margin:0 0 4px;font-family:var(--font-head);font-size:1.1rem;color:var(--maroon)}
+#view-invoices .inv-row{display:grid;gap:4px;margin-top:8px}
+#view-invoices .inv-row[hidden]{display:none}
+#view-invoices .inv-short{max-width:240px}
+#view-invoices .inv-field{display:grid;gap:4px;font-weight:600;font-size:.92rem;color:var(--slate)}
+#view-invoices .inv-hint{display:block;margin:0;font-weight:400;font-size:.84rem;color:var(--slate-soft)}
+#view-invoices .inv-kind .inv-hint{display:inline}
+#view-invoices .inv-optional{font-weight:400;color:var(--slate-soft)}
+#view-invoices .inv-kind{border:0;margin:8px 0 0;padding:0;display:flex;flex-wrap:wrap;gap:6px 18px}
+#view-invoices .inv-kind[hidden]{display:none}
+#view-invoices .inv-kind legend{padding:0;margin:0 0 6px;width:100%}
+#view-invoices .inv-kind label{display:inline-flex;align-items:center;gap:8px;min-height:40px;font-size:.95rem;cursor:pointer}
+#view-invoices .inv-kind input{width:18px;height:18px;accent-color:var(--crimson)}
+#view-invoices .inv-new input[type="text"],#view-invoices .inv-new input[type="email"],#view-invoices .inv-new input[type="date"],#view-invoices .inv-new textarea,
+#view-invoices .inv-bank-form input,#view-invoices .inv-confirm input{width:100%;max-width:100%;font:inherit;font-weight:400;color:var(--slate);background:var(--cream);border:1.6px solid var(--line);border-radius:12px;padding:10px 12px}
+#view-invoices .inv-new textarea{resize:vertical;min-height:3.2em}
+#view-invoices .inv-new input:focus,#view-invoices .inv-new textarea:focus,#view-invoices .inv-bank-form input:focus,#view-invoices .inv-confirm input:focus{border-color:var(--holly);outline:none}
+#view-invoices [aria-invalid="true"]{border-color:var(--crimson)}
+#view-invoices .inv-money{display:flex;align-items:center;gap:6px;font-weight:600;color:var(--maroon)}
+#view-invoices .inv-error{margin:0}
+#view-invoices .inv-error:empty{display:none}
+#view-invoices .inv-actions{margin:10px 0 0;display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px}
+#view-invoices .inv-bank{max-width:640px;margin:0 0 22px;background:var(--white);border:1px solid var(--line);border-radius:14px;padding:4px 18px}
+#view-invoices .inv-bank[hidden]{display:none}
+#view-invoices .inv-bank summary{cursor:pointer;font-weight:600;color:var(--maroon);padding:10px 0}
+#view-invoices .inv-bank-state{font-weight:400;color:var(--slate-soft);margin-left:6px}
+#view-invoices .inv-bank-form{display:grid;gap:6px;padding:0 0 14px;max-width:360px}
+#view-invoices .inv-head{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:10px}
+#view-invoices .inv-head .admin-subhead{margin:0}
+#view-invoices .inv-list{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,340px),1fr));gap:14px;margin:12px 0 22px}
+#view-invoices .inv-card{display:flex;flex-direction:column;gap:6px;min-width:0;background:var(--white);border:1px solid var(--line);border-radius:14px;padding:14px 16px}
+#view-invoices .inv-card.is-cancelled{background:var(--tint)}
+#view-invoices .inv-card-top{display:flex;align-items:center;justify-content:space-between;gap:8px}
+#view-invoices .inv-num{font-size:.85rem;font-weight:600;letter-spacing:.04em;color:var(--slate-soft);font-variant-numeric:tabular-nums}
+#view-invoices .inv-pill{display:inline-block;font-size:.75rem;font-weight:700;padding:3px 10px;border-radius:999px;background:var(--tan-soft);color:var(--maroon)}
+#view-invoices .inv-pill--overdue{background:color-mix(in srgb,var(--crimson) 12%,var(--cream));color:var(--maroon)}
+#view-invoices .inv-pill--paid,#view-invoices .inv-pill--paid-after-cancel{background:var(--holly-soft);color:var(--holly-dark)}
+#view-invoices .inv-pill--cancelled{background:color-mix(in srgb,var(--slate-soft) 18%,var(--cream));color:var(--slate)}
+#view-invoices .inv-who{margin:0;font-family:var(--font-head);font-size:1.08rem;color:var(--maroon);overflow-wrap:anywhere}
+#view-invoices .inv-sub{margin:-4px 0 0;font-size:.85rem;color:var(--slate-soft);overflow-wrap:anywhere}
+#view-invoices .inv-amount{margin:0;font-size:.9rem;color:var(--slate);overflow-wrap:anywhere}
+#view-invoices .inv-amount b{font-family:var(--font-head);font-size:1.3rem;color:var(--holly);margin-right:6px}
+#view-invoices .inv-dates{margin:0;font-size:.85rem;color:var(--slate-soft)}
+#view-invoices .inv-warn{margin:0;font-size:.85rem;font-weight:600;color:var(--maroon);background:color-mix(in srgb,var(--crimson) 12%,var(--cream));border-radius:8px;padding:6px 10px}
+#view-invoices .inv-card .inv-actions{margin:4px 0 0}
+#view-invoices .inv-card .admin-btn{display:inline-flex;align-items:center;background:transparent;color:var(--maroon);border:1.6px solid var(--line);text-decoration:none}
+#view-invoices .inv-card .admin-btn:hover{background:var(--tan-soft);border-color:var(--maroon)}
+#view-invoices .inv-quiet-row{margin:0;display:flex;flex-wrap:wrap;gap:4px 16px}
+#view-invoices .inv-quiet{background:transparent;border:0;padding:6px 0;font:inherit;font-size:.86rem;text-align:left;color:var(--maroon);text-decoration:underline;text-underline-offset:2px;cursor:pointer}
+#view-invoices .inv-quiet:hover{color:var(--holly)}
+#view-invoices .inv-confirm{display:grid;gap:6px;margin:4px 0 0;padding:10px 12px;background:var(--tan-soft);border-radius:10px}
+#view-invoices .inv-confirm p{margin:0;font-size:.9rem}
+#view-invoices .inv-card .ty-status{margin:0}
+#view-invoices .inv-card .ty-status:empty{display:none}

@@ -21,6 +21,7 @@ describe("the two buckets", () => {
       redBag: { month: { pence: 41_200, gifts: 19 }, all: { pence: 196_000, gifts: 87 } },
       ball: { month: { pence: 0, gifts: 0 }, all: { pence: 0, gifts: 0 } },
       ballBags: { month: { pence: 0, gifts: 0 }, all: { pence: 0, gifts: 0 } },
+      invoices: { month: { pence: 0, gifts: 0 }, all: { pence: 0, gifts: 0 } },
       donatePage: { month: { pence: 213_000, gifts: 64 }, all: { pence: 3_140_000, gifts: 902 } },
     });
   });
@@ -68,6 +69,7 @@ describe("the words", () => {
       ["redBag", "Fill a Red Bag"],
       ["ball", "Festive Ball"],
       ["ballBags", "Red bags at the Ball"],
+      ["invoices", "Invoices"],
       ["donatePage", "Donate page"],
     ]);
     expect(sourceLines(t)[1]).toMatchObject({ month: "£75 from 3 gifts", all: "£120 from 5 gifts" });
@@ -79,8 +81,15 @@ describe("the words", () => {
       { key: "redBag", name: "Fill a Red Bag", month: "£412 from 19 gifts", all: "£1,960 from 87 gifts" },
       { key: "ball", name: "Festive Ball", month: "£0 from 0 gifts", all: "£0 from 0 gifts" },
       { key: "ballBags", name: "Red bags at the Ball", month: "£0 from 0 gifts", all: "£0 from 0 gifts" },
+      { key: "invoices", name: "Invoices", month: "£0 from 0 gifts", all: "£0 from 0 gifts" },
       { key: "donatePage", name: "Donate page", month: "£2,130 from 64 gifts", all: "£31,400 from 902 gifts" },
     ]);
+  });
+
+  it("counts gifts that paid an invoice on their own line, after the Ball's table bags", () => {
+    const t = sourceTotalsFrom([row("invoices", [50_000, 2], [75_000, 3])]);
+    expect(t.invoices).toEqual({ month: { pence: 50_000, gifts: 2 }, all: { pence: 75_000, gifts: 3 } });
+    expect(sourceLines(t)[3]).toEqual({ key: "invoices", name: "Invoices", month: "£500 from 2 gifts", all: "£750 from 3 gifts" });
   });
 
   it("words the table bags line from its own figures, and explains where they come from", () => {

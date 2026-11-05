@@ -242,3 +242,24 @@ describe("the Stripe webhook's invoice step", () => {
     expect(r?.action).toBe("invoice.paid_twice");
   });
 });
+
+// Final review, Critical 1: Mark paid pressed twice must never record one transfer twice.
+describe("Mark paid pressed twice", () => {
+  it("refuses, inside the lock, an invoice that is already paid when asked to", async () => {
+    const c = fakeClient(invoiceRow({ status: "paid", paid_by: "transfer", donation_id: 300 }));
+    const out = await settleInvoice(c as never, 12, { ...card, by: "transfer", sessionId: null, paymentIntentId: null, refuseIfPaid: true });
+    expect(out?.outcome).toBe("refused");
+    expect(h.insertDonorAndDonation).not.toHaveBeenCalled();
+  });
+});
+
+// Final review, Important 3: a second payment is usually a mistake to refund, so it is never Gift Aided.
+describe("a second payment and Gift Aid", () => {
+  it("records a second payment without Gift Aid, even for a person who saved a declaration", async () => {
+    const c = fakeClient(invoiceRow({ status: "paid", donation_id: 300, gift_aid: ga }));
+    await settleInvoice(c as never, 12, card);
+    const [, , donation, declaration] = h.insertDonorAndDonation.mock.calls[0];
+    expect(donation.giftAid).toBe(false);
+    expect(declaration).toBeUndefined();
+  });
+});

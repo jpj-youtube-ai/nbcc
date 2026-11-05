@@ -12,7 +12,8 @@ import type { InvoiceStatus, PayerKind } from "./model";
 //     payment: money taken is always recorded, so it becomes its own donation and staff are told. A
 //     payment on a cancelled invoice is recorded too, and the invoice shows it was paid after cancelling.
 //   - A person is an individual donor, and their saved Gift Aid declaration (if it is complete) goes
-//     with the gift. A business or a group is a company donor, so the gift is never claimed for Gift Aid,
+//     with the gift, but never with a second payment, which is usually a mistake to refund (as a pledge
+//     paid twice carries no Gift Aid, src/db/stripe-webhook.ts). A business or a group is a company donor, so the gift is never claimed for Gift Aid,
 //     whatever was stored.
 //   - The receipt: a person the usual donation receipt; a business the usual Corporation Tax receipt,
 //     or, when we give them something in return, a flag for the trustees instead; a group a plain one.
@@ -47,9 +48,10 @@ export function giftAidFrom(inv: Pick<InvoiceForDonation, "payerKind" | "giftAid
 export function donationWrite(
   inv: InvoiceForDonation,
   pay: { sessionId: string | null; paymentIntentId: string | null },
+  kind: SettleKind = "paid",
 ): { donor: DonorInput; donation: DonationInput; declaration: DeclarationWrite | undefined } {
   const person = inv.payerKind === "person";
-  const fields = giftAidFrom(inv);
+  const fields = kind === "paid-twice" ? null : giftAidFrom(inv);
   const donor: DonorInput = person
     ? { fullName: inv.contactName, email: inv.email, emailConsent: false }
     : {

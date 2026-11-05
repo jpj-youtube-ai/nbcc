@@ -139,10 +139,17 @@ export async function postMarkInvoicePaid(req: Request, res: Response): Promise<
   if (!inv) return res.status(404).json({ error: NOT_FOUND });
   // A double press must never record one transfer twice. A real second payment by card is recorded by
   // the webhook; a second transfer is rare enough for staff to add by hand.
-  if (inv.status === "paid") return res.status(409).json({ error: "This invoice is already paid. Reload the page to see it." });
+  const ALREADY_PAID = "This invoice is already paid. Reload the page to see it.";
+  if (inv.status === "paid") return res.status(409).json({ error: ALREADY_PAID });
+  // A typo in the year would move the gift into an earlier tax year or Gift Aid claim.
+  if (paidOn < inv.issuedOn) {
+    return res.status(400).json({ error: "The money cannot have arrived before the invoice was sent. Check the date.", field: "paidOn" });
+  }
   try {
     const out = await markInvoicePaidByTransfer(inv.id, paidOn, actorOf(claims));
     if (!out) return res.status(404).json({ error: NOT_FOUND });
+    // Paid between the look above and the lock, by another press or a card payment.
+    if (out.outcome === "refused") return res.status(409).json({ error: ALREADY_PAID });
     return res.status(200).json({ id: inv.id, outcome: out.outcome, donationId: out.donationId });
   } catch (err) {
     console.error("admin invoices: marking paid failed:", err instanceof Error ? err.message : err);

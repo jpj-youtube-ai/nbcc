@@ -185,6 +185,19 @@ describe("the card payment", () => {
     expect(p.payment_intent_data?.metadata).toEqual({ product: "donation_invoice", invoiceId: "12" });
     expect(p.success_url).toBe("https://nbcc.scot/invoice/12.abc?paid=1");
     expect(p.cancel_url).toBe("https://nbcc.scot/invoice/12.abc");
-    expect(p.expires_at).toBe(Math.floor(new Date("2026-11-05T12:31:00Z").getTime() / 1000));
+    expect(p.expires_at).toBe(Math.floor(new Date("2026-11-05T12:32:00Z").getTime() / 1000));
+  });
+});
+
+// Final review, Important 2: pressing Pay twice in one minute must ask Stripe for exactly the same thing,
+// or Stripe refuses the reused idempotency key and the person is told card payments are not working.
+describe("pressing Pay twice in one minute", () => {
+  it("builds identical session details within the same minute", () => {
+    const o = { invoiceId: 12, number: "INV-0012", amountPence: 500, description: "Donation to NBCC", email: "a@example.com", baseUrl: "https://nbcc.scot", token: "12.abc" };
+    const a = buildInvoiceSessionParams({ ...o, now: new Date("2026-11-05T12:00:05Z") });
+    const b = buildInvoiceSessionParams({ ...o, now: new Date("2026-11-05T12:00:45Z") });
+    expect(b).toEqual(a);
+    // Still more than Stripe's 30 minute minimum from the last second of the minute.
+    expect(a.expires_at! - Math.floor(new Date("2026-11-05T12:00:59Z").getTime() / 1000)).toBeGreaterThan(30 * 60);
   });
 });

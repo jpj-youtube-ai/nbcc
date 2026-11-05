@@ -211,6 +211,18 @@ describe("marking an invoice paid by bank transfer", () => {
     expect(res.statusCode).toBe(409);
     expect(m.markInvoicePaidByTransfer).not.toHaveBeenCalled();
   });
+  // Final review, Critical 1: two presses at once both pass the first look; the second is refused in the lock.
+  it("answers 409 when the invoice was paid between the first look and the lock", async () => {
+    m.markInvoicePaidByTransfer.mockResolvedValue({ outcome: "refused", donationId: null, invoice: { ...INV, status: "paid" } });
+    const res = await call(postMarkInvoicePaid, { token: tokenFor("admin"), params: { id: "12" }, body: { paidOn: "2026-11-05" } });
+    expect(res.statusCode).toBe(409);
+  });
+  it("refuses a date before the invoice was sent, so a typo cannot move a gift into an earlier tax year", async () => {
+    m.getInvoice.mockResolvedValue({ ...INV, issuedOn: "2026-11-05" });
+    const res = await call(postMarkInvoicePaid, { token: tokenFor("admin"), params: { id: "12" }, body: { paidOn: "2025-11-05" } });
+    expect(res.statusCode).toBe(400);
+    expect(m.markInvoicePaidByTransfer).not.toHaveBeenCalled();
+  });
   it("allows a cancelled invoice, when a transfer turns up anyway", async () => {
     m.getInvoice.mockResolvedValue({ ...INV, status: "cancelled", cancelledAt: "2026-11-04T10:00:00Z" });
     m.markInvoicePaidByTransfer.mockResolvedValue({ outcome: "paid-after-cancel", donationId: 322, invoice: INV });

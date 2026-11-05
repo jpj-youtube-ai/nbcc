@@ -232,7 +232,7 @@ export function linkFor(id: number): string {
 }
 
 export interface SettleOutcome {
-  outcome: SettleKind | "already-recorded";
+  outcome: SettleKind | "already-recorded" | "refused";
   donationId: number | null;
   invoice: InvoiceRow;
   /** The receipt, to send AFTER the transaction commits. Never throws. */
@@ -250,11 +250,20 @@ const nothing = async (): Promise<void> => {};
 export async function settleInvoice(
   client: PoolClient,
   id: number,
-  pay: { by: "card" | "transfer"; paidOn: string; sessionId: string | null; paymentIntentId: string | null; actor: string },
+  pay: {
+    by: "card" | "transfer";
+    paidOn: string;
+    sessionId: string | null;
+    paymentIntentId: string | null;
+    actor: string;
+    /** Mark paid: an invoice already paid is refused here, inside the lock, so two presses never record one transfer twice. */
+    refuseIfPaid?: boolean;
+  },
 ): Promise<SettleOutcome | null> {
   const cur = await client.query(`SELECT ${COLUMNS} FROM donation_invoices WHERE id = $1 FOR UPDATE`, [id]);
   if (!cur.rows[0]) return null;
   const inv = rowFrom(cur.rows[0]);
+  if (pay.refuseIfPaid && inv.status === "paid") return { outcome: "refused", donationId: null, invoice: inv, receipt: nothing };
 
   if (pay.sessionId) {
     const seen = await client.query(`SELECT id FROM donations WHERE invoice_id = $1 AND stripe_session_id = $2 LIMIT 1`, [id, pay.sessionId]);
@@ -262,7 +271,7 @@ export async function settleInvoice(
   }
 
   const kind = settleKind(inv.status);
-  const write = donationWrite(inv, { sessionId: pay.sessionId, paymentIntentId: pay.paymentIntentId });
+  const write = donationWrite(inv, { sessionId: pay.sessionId, paymentIntentId: pay.paymentIntentId }, kind);
   const made = await insertDonorAndDonation(client, write.donor, write.donation, write.declaration);
   // The payment's own date, and where it came from, on the donation itself.
   await client.query(
@@ -365,7 +374,7 @@ export async function markInvoicePaidByTransfer(id: number, paidOn: string, acto
   let out: SettleOutcome | null;
   try {
     await client.query("BEGIN");
-    out = await settleInvoice(client, id, { by: "transfer", paidOn, sessionId: null, paymentIntentId: null, actor });
+    out = await settleInvoice(client, id, { by: "transfer", paidOn, sessionId: null, paymentIntentId: null, actor, refuseIfPaid: true });
     await client.query("COMMIT");
   } catch (err) {
     await client.query("ROLLBACK");

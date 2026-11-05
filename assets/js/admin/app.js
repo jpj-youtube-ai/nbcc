@@ -4181,6 +4181,9 @@
 
   var invState = { invoices: [], bank: null, today: "", filter: "all" };
   var invWired = false;
+  // An invoice with a change on its way: a second press waits for the first, so a double click on Mark paid
+  // or Email it again sends one request (the server refuses a second Mark paid too).
+  var invBusy = {};
   var INV_FIELDS = {
     orgName: "invOrgName",
     contactName: "invContactName",
@@ -4401,6 +4404,8 @@
 
   // Do something to one invoice, then draw the list again and say how it went on that card.
   function invAct(id, path, body, done) {
+    if (invBusy[id]) return;
+    invBusy[id] = true;
     invCardSay(id, "Saving…", false);
     return invPost(path, body)
       .then(function (d) {
@@ -4409,7 +4414,8 @@
       .catch(function (err) {
         if (err && err.message === "unauthorized") return;
         invCardSay(id, (err && err.said) || "That could not be saved. Please try again.", true);
-      });
+      })
+      .then(function () { delete invBusy[id]; });
   }
 
   function invById(id) {
@@ -4459,13 +4465,16 @@
       if (resend) {
         var rid = Number(resend.getAttribute("data-inv-resend"));
         var rinv = invById(rid);
+        if (invBusy[rid]) return;
+        invBusy[rid] = true;
         invCardSay(rid, "Sending…", false);
         return invPost("/api/admin/invoices/" + rid + "/resend", {})
           .then(function () { invCardSay(rid, "Sent again to " + (rinv ? rinv.email : "them") + ".", false, true); })
           .catch(function (err) {
             if (err && err.message === "unauthorized") return;
             invCardSay(rid, (err && err.said) || "The email did not go. Please try again.", true);
-          });
+          })
+          .then(function () { delete invBusy[rid]; });
       }
       var mark = t.closest("[data-inv-markpaid]");
       if (mark) {

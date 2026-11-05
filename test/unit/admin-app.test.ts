@@ -2691,6 +2691,19 @@ describe("admin app integration (jsdom, TASK-118)", () => {
       expect(invCalls).toEqual([{ url: "/api/admin/invoices/12/mark-paid", method: "POST", body: { paidOn: "2026-11-04" } }]);
     });
 
+    // Final review, Critical 1: a double click on Mark paid sends one request, not two.
+    it("sends Mark paid once, however fast it is pressed twice", async () => {
+      loginToken = tokenFor("admin");
+      list([INV()]);
+      await open();
+      (view().querySelector('[data-inv-markpaid="12"]') as HTMLElement).click();
+      const form = view().querySelector('[data-inv-paid-form="12"]') as HTMLFormElement;
+      submit(form);
+      submit(form);
+      await settle();
+      expect(invCalls.filter((c) => c.url.endsWith("/mark-paid"))).toHaveLength(1);
+    });
+
     it("asks before cancelling, and cancels only on the second press", async () => {
       loginToken = tokenFor("admin");
       list([INV()]);

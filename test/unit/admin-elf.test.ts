@@ -43,6 +43,7 @@ import {
   postAdminElfSignInCode,
 } from "../../src/routes/admin-elf";
 import { signAdminSession } from "../../src/admin/session";
+import { FESTIVE_SURNAMES } from "../../src/elf/names";
 
 const ON = { schoolOn: true, year: 2026, entryFromPence: 100, entrySuggestedPence: 500 };
 
@@ -261,6 +262,8 @@ describe("the families in the admin", () => {
         detectives: [{ id: 7, firstName: "Ruby", surname: "Tinselfoot", badge: "EDS 0427", approved: false, tile: "/assets/img/elf/paper/tiles/costumes/detective-s1.webp" }],
         payments: [{ reference: "EDS-K4F9Q2", status: "paid", paidAt: PAID_AT.toISOString(), entryPence: 1000, giftPence: 500, giftAid: true }],
       },
+      // The festive surnames, for the rename form.
+      surnames: [...FESTIVE_SURNAMES],
     });
     dbAdmin.elfFamilySheet.mockResolvedValue(null);
     const missing = await run(getAdminElfFamily, ask("admin", { params: { id: "99" } }));

@@ -163,6 +163,7 @@
         parts[t.id].hidden = t.id !== id;
       });
       remember(TAB_KEY, id);
+      if (id === "families" && data) loadFamilies();
     }
 
     // Arrow keys move along the tiles, as a tab list's keys do.
@@ -386,6 +387,373 @@
       part.appendChild(recruits);
     }
 
+    // ---- Families: pick a family from the list, and its sheet opens beside it ----
+    var FAMILY_KEY = "nbcc_elf_hq_family";
+    var FILTER_NAMES = [["all", "All"], ["check", "Names to check"], ["week", "This week"], ["removed", "Removed"]];
+    var fam = { list: null, total: 0, counts: null, sheet: null, surnames: [], q: "", timer: null, built: false, asked: 0 };
+    var famBox, famSearch, famChips, famList, famMore, famSheet;
+
+    function shortDay(iso) {
+      var d = new Date(iso);
+      return isNaN(d.getTime()) ? "" : new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short", timeZone: "Europe/London" }).format(d);
+    }
+    function longDay(iso) {
+      var d = new Date(iso);
+      return isNaN(d.getTime()) ? "" : new Intl.DateTimeFormat("en-GB", { weekday: "long", day: "numeric", month: "long", timeZone: "Europe/London" }).format(d).replace(/,/g, "");
+    }
+    /** "admin:sam@example.org" as the person it names. */
+    function who(actor) {
+      return String(actor || "").replace(/^admin:/, "");
+    }
+
+    function buildFamilies() {
+      if (fam.built) return;
+      fam.built = true;
+      var part = parts.families;
+      part.textContent = "";
+      famSearch = el("input", { type: "search", id: "hqFind", class: "hq-find", placeholder: "A name, an email or a badge number", autocomplete: "off" });
+      famSearch.addEventListener("input", function () {
+        if (fam.timer) win.clearTimeout(fam.timer);
+        fam.timer = win.setTimeout(function () {
+          fam.timer = null;
+          fam.q = famSearch.value.trim();
+          loadFamilies();
+        }, 300);
+      });
+      famChips = el("div", { class: "hq-filters", role: "group", "aria-label": "Show" });
+      famList = el("ul", { class: "hq-flist", "aria-label": "Families" });
+      famMore = el("button", { class: "hq-btn hq-btn--small hq-more", type: "button", text: "Show more families", hidden: true });
+      famMore.addEventListener("click", function () {
+        loadFamilies(true);
+      });
+      famSheet = el("section", { class: "hq-panel hq-sheet", "aria-label": "The family", "aria-live": "polite" }, [el("p", { class: "hq-words hq-soft", text: "Pick a family to see its detectives and payments here." })]);
+      famBox = el("div", { class: "hq-families" }, [
+        el("div", { class: "hq-search" }, [el("label", { class: "hq-sr", for: "hqFind", text: "Find a family" }), famSearch, famChips, famList, famMore]),
+        famSheet,
+      ]);
+      part.appendChild(famBox);
+    }
+
+    function familiesUrl(offset) {
+      return "/api/admin/elf/families?filter=" + familyFilter + (fam.q ? "&q=" + encodeURIComponent(fam.q) : "") + (offset ? "&offset=" + offset : "");
+    }
+
+    /** Reads the list for the filter and search, or the next page of it. */
+    function loadFamilies(more) {
+      buildFamilies();
+      var asked = ++fam.asked;
+      return ask("GET", familiesUrl(more && fam.list ? fam.list.length : 0))
+        .then(function (d) {
+          if (asked !== fam.asked) return; // a later search has gone out since
+          fam.list = more && fam.list ? fam.list.concat(d.families || []) : d.families || [];
+          fam.total = d.total || 0;
+          fam.counts = d.counts || null;
+          drawChips();
+          drawList();
+        })
+        .catch(function (e) {
+          say(status, e.message, false);
+        });
+    }
+
+    function drawChips() {
+      famChips.textContent = "";
+      FILTER_NAMES.forEach(function (f) {
+        var count = fam.counts ? fam.counts[f[0]] || 0 : "";
+        var chip = el("button", { class: "hq-filter", type: "button", "aria-pressed": String(familyFilter === f[0]) }, [f[1] + " ", el("span", { text: String(count) })]);
+        chip.addEventListener("click", function () {
+          familyFilter = f[0];
+          loadFamilies();
+        });
+        famChips.appendChild(chip);
+      });
+    }
+
+    function drawList() {
+      famList.textContent = "";
+      if (!fam.list.length) {
+        famList.appendChild(el("li", { class: "hq-words hq-soft", text: fam.q ? "No family matches that." : familyFilter === "removed" ? "No family has been removed." : familyFilter === "check" ? "Every name has been ticked." : "No families yet." }));
+      }
+      fam.list.forEach(function (f) {
+        var waiting = f.namesToCheck || 0;
+        var chip = f.removed
+          ? el("span", { class: "hq-chip hq-chip--crimson", text: "Removed" })
+          : waiting
+            ? el("span", { class: "hq-chip", text: waiting + plural(waiting, " name to check", " names to check") })
+            : el("span", { class: "hq-chip hq-chip--holly", text: "All names ticked" });
+        var faces = el("span", { class: "hq-stack", "aria-hidden": "true" });
+        f.detectives.slice(0, 4).forEach(function (d) {
+          faces.appendChild(el("img", { src: d.tile, alt: "", width: 46, height: 46, loading: "lazy" }));
+        });
+        var names = f.detectives.map(function (d) { return d.firstName; }).join(", ");
+        var badges = f.detectives.map(function (d) { return d.badge; }).filter(Boolean).join(", ");
+        var card = el("button", { class: "hq-fam", type: "button", "data-family": f.id, "aria-current": String(!!(fam.sheet && fam.sheet.id === f.id)) }, [
+          faces,
+          el("span", { class: "hq-fam__words" }, [el("b", { text: f.grownUpName }), el("small", { text: names + (badges ? " · " + badges : "") }), chip]),
+        ]);
+        card.addEventListener("click", function () {
+          openFamily(f.id);
+        });
+        famList.appendChild(el("li", {}, [card]));
+      });
+      famMore.hidden = !(fam.list.length < fam.total);
+    }
+
+    /** Opens a family's sheet beside the list (in its place on a phone). */
+    function openFamily(id) {
+      buildFamilies();
+      return ask("GET", "/api/admin/elf/families/" + id)
+        .then(function (d) {
+          fam.sheet = d.family;
+          if (d.surnames) fam.surnames = d.surnames;
+          drawSheet();
+          if (fam.list) drawList();
+          famBox.classList.add("is-open");
+        })
+        .catch(function (e) {
+          say(status, e.message, false);
+        });
+    }
+
+    /** One change to the open family, then the sheet and the list drawn again from the answer. */
+    function changeFamily(method, url, body, done) {
+      return ask(method, url, body).then(function (d) {
+        if (d.family) fam.sheet = d.family;
+        drawSheet();
+        if (done) done(d);
+        loadFamilies();
+        return d;
+      });
+    }
+
+    function drawSheet() {
+      var f = fam.sheet;
+      famSheet.textContent = "";
+      if (!f) return;
+      var said = el("p", { class: "hq-status", role: "status" });
+      var back = el("button", { class: "hq-btn hq-btn--small hq-back", type: "button", text: "Back to families" });
+      back.addEventListener("click", function () {
+        famBox.classList.remove("is-open");
+        var card = famList.querySelector('[data-family="' + f.id + '"]');
+        if (card) card.focus();
+      });
+      famSheet.appendChild(back);
+
+      // The grown up, and what can be done for them.
+      var details = el("div", { class: "hq-sheet__details" });
+      var facts = [f.email, "enrolled " + longDay(f.enrolledAt)];
+      if (f.newsletter) facts.push("gets the newsletter");
+      details.appendChild(el("h2", { class: "hq-h2", text: f.grownUpName }));
+      details.appendChild(el("p", { class: "hq-words hq-soft", text: facts.join(" · ") }));
+      if (f.removedAt) details.appendChild(el("p", { class: "hq-words hq-removed", text: "Removed on " + longDay(f.removedAt) + (f.removedBy ? " by " + who(f.removedBy) : "") + ". They cannot sign in, and they are left out of the counts and the money." }));
+      var actions = el("div", { class: "hq-actions" });
+      if (!f.removedAt) {
+        var code = el("button", { class: "hq-btn hq-btn--small", type: "button", text: "Send a sign in code" });
+        code.addEventListener("click", function () {
+          code.disabled = true;
+          ask("POST", "/api/admin/elf/families/" + f.id + "/sign-in-code")
+            .then(function (d) {
+              say(said, "We sent a sign in code to " + d.email + ".", true);
+            })
+            .catch(function (e) {
+              say(said, e.message, false);
+            })
+            .then(function () {
+              code.disabled = false;
+            });
+        });
+        actions.appendChild(code);
+      }
+      var change = el("button", { class: "hq-btn hq-btn--small", type: "button", text: "Change details" });
+      actions.appendChild(change);
+      details.appendChild(actions);
+      var detailsSaid = el("p", { class: "hq-status", role: "status" });
+      details.appendChild(detailsSaid);
+      change.addEventListener("click", function () {
+        if (details.querySelector("form")) return;
+        var name = el("input", { name: "grownUpName", id: "hqGrownUp", type: "text", maxlength: 80, autocomplete: "off" });
+        name.value = f.grownUpName;
+        var email = el("input", { name: "email", id: "hqEmail", type: "email", maxlength: 200, autocomplete: "off" });
+        email.value = f.email;
+        var cancel = el("button", { class: "hq-btn hq-btn--small", type: "button", text: "Cancel" });
+        var form = el("form", { class: "hq-form" }, [
+          el("label", { class: "hq-field", for: "hqGrownUp" }, [el("span", { text: "The grown up's name" }), name]),
+          el("label", { class: "hq-field", for: "hqEmail" }, [el("span", { text: "Their email" }), email]),
+          el("p", { class: "hq-words hq-soft", text: "A new email signs the family out everywhere: they sign in again with a code sent to the new one." }),
+          el("div", { class: "hq-actions" }, [el("button", { class: "hq-btn hq-btn--small hq-btn--go", type: "submit", text: "Save" }), cancel]),
+        ]);
+        cancel.addEventListener("click", function () {
+          form.remove();
+          change.focus();
+        });
+        form.addEventListener("submit", function (e) {
+          e.preventDefault();
+          var sent = {};
+          if (name.value.trim() !== f.grownUpName) sent.grownUpName = name.value;
+          if (email.value.trim().toLowerCase() !== f.email) sent.email = email.value;
+          if (!sent.grownUpName && !sent.email) {
+            form.remove();
+            return;
+          }
+          changeFamily("PATCH", "/api/admin/elf/families/" + f.id, sent, function () {
+            var now = famSheet.querySelector(".hq-sheet__details .hq-status");
+            if (now) say(now, "Saved.", true);
+          }).catch(function (err) {
+            say(detailsSaid, err.message, false);
+          });
+        });
+        details.insertBefore(form, detailsSaid);
+        name.focus();
+      });
+      famSheet.appendChild(details);
+      famSheet.appendChild(said);
+
+      // The detectives, as character cards with their name switch.
+      var dets = el("div", { class: "hq-dets" });
+      f.detectives.forEach(function (d) {
+        dets.appendChild(detectiveCard(f, d));
+      });
+      famSheet.appendChild(dets);
+
+      // Every payment the family started.
+      famSheet.appendChild(el("h3", { class: "hq-h3", text: "Payments" }));
+      var paid = el("ul", { class: "hq-paid" });
+      if (!f.payments.length) paid.appendChild(el("li", { class: "hq-soft", text: "No payments." }));
+      f.payments.forEach(function (p) {
+        var bits = [el("b", { text: pounds(p.entryPence + p.giftPence) }), el("span", { text: "entry " + pounds(p.entryPence) + (p.giftPence ? ", gift " + pounds(p.giftPence) : "") })];
+        if (p.giftAid && p.giftPence) bits.push(el("span", { class: "hq-chip hq-chip--holly", text: "Gift Aid on the gift" }));
+        if (p.status === "pending") bits.push(el("span", { class: "hq-chip", text: "Not finished" }));
+        if (p.status === "expired") bits.push(el("span", { class: "hq-chip hq-chip--crimson", text: "Never paid" }));
+        bits.push(el("span", { class: "hq-soft", text: (p.paidAt ? shortDay(p.paidAt) + " · " : "") + p.reference }));
+        paid.appendChild(el("li", {}, bits));
+      });
+      famSheet.appendChild(paid);
+
+      // Removing (asked twice) or putting back.
+      var end = el("div", { class: "hq-actions hq-sheet__end" });
+      if (f.removedAt) {
+        var restore = el("button", { class: "hq-btn hq-btn--small hq-btn--go", type: "button", text: "Put back" });
+        restore.addEventListener("click", function () {
+          restore.disabled = true;
+          changeFamily("POST", "/api/admin/elf/families/" + f.id + "/restore").catch(function (e) {
+            say(said, e.message, false);
+            restore.disabled = false;
+          });
+        });
+        end.appendChild(restore);
+      } else {
+        var remove = el("button", { class: "hq-btn hq-btn--small hq-btn--danger", type: "button", text: "Remove this family" });
+        remove.addEventListener("click", function () {
+          if (end.querySelector(".hq-confirm")) return;
+          var yes = el("button", { class: "hq-btn hq-btn--small hq-btn--danger", type: "button", text: "Yes, remove them" });
+          var no = el("button", { class: "hq-btn hq-btn--small", type: "button", text: "Keep them" });
+          var sure = el("div", { class: "hq-confirm", role: "group", "aria-label": "Are you sure?" }, [
+            el("p", { class: "hq-words", text: "Remove " + f.grownUpName + "'s family? They cannot sign in, and they leave the counts and the money. If they paid, refund them in Stripe first." }),
+            yes,
+            no,
+          ]);
+          no.addEventListener("click", function () {
+            sure.remove();
+            remove.focus();
+          });
+          yes.addEventListener("click", function () {
+            yes.disabled = true;
+            changeFamily("POST", "/api/admin/elf/families/" + f.id + "/remove").catch(function (e) {
+              sure.remove();
+              say(said, e.message, false);
+            });
+          });
+          end.appendChild(sure);
+          yes.focus();
+        });
+        end.appendChild(remove);
+      }
+      famSheet.appendChild(end);
+    }
+
+    function detectiveCard(f, d) {
+      var card = el("div", { class: "hq-det", "data-detective": d.id });
+      var said = el("p", { class: "hq-status", role: "status" });
+      card.appendChild(
+        el("div", { class: "hq-det__top" }, [
+          el("span", { class: "hq-avatar" }, [el("img", { src: d.tile, alt: "", width: 84, height: 84, loading: "lazy" })]),
+          el("div", {}, [el("b", { text: "Detective " + d.firstName + " " + d.surname }), d.badge ? el("small", { class: "hq-soft", text: d.badge }) : null]),
+        ]),
+      );
+      var toggle = el("button", { class: "hq-toggle", type: "button", role: "switch", "aria-checked": String(!!d.approved), "data-detective": d.id, disabled: !!f.removedAt }, [
+        el("span", { text: d.approved ? d.firstName + " shows in public" : "Show " + d.firstName + " in public? Until then it is " + d.firstName.charAt(0) + "." }),
+        el("i", { "aria-hidden": "true" }),
+      ]);
+      toggle.addEventListener("click", function () {
+        toggle.disabled = true;
+        ask("PATCH", "/api/admin/elf/detectives/" + d.id, { approved: !d.approved })
+          .then(function (r) {
+            var was = d.approved;
+            d.approved = r.detective.approved;
+            if (was !== d.approved && data && data.numbers) {
+              data.numbers.namesToCheck = Math.max(0, (data.numbers.namesToCheck || 0) + (d.approved ? -1 : 1));
+              tileCount("families", data.numbers.namesToCheck);
+            }
+            card.replaceWith(detectiveCard(f, d));
+            loadFamilies();
+          })
+          .catch(function (e) {
+            say(said, e.message, false);
+            toggle.disabled = false;
+          });
+      });
+      card.appendChild(toggle);
+      var rename = el("button", { class: "hq-btn hq-btn--small hq-rename", type: "button", text: "Change name", disabled: !!f.removedAt });
+      rename.addEventListener("click", function () {
+        if (card.querySelector("form")) return;
+        var first = el("input", { name: "firstName", id: "hqFirst-" + d.id, type: "text", maxlength: 20, autocomplete: "off" });
+        first.value = d.firstName;
+        var surname = el("select", { name: "surname", id: "hqSurname-" + d.id });
+        (fam.surnames.length ? fam.surnames : [d.surname]).forEach(function (s) {
+          var o = el("option", { value: s, text: s });
+          if (s === d.surname) o.selected = true;
+          surname.appendChild(o);
+        });
+        var cancel = el("button", { class: "hq-btn hq-btn--small", type: "button", text: "Cancel" });
+        var form = el("form", { class: "hq-form" }, [
+          el("label", { class: "hq-field", for: "hqFirst-" + d.id }, [el("span", { text: "First name" }), first]),
+          el("label", { class: "hq-field", for: "hqSurname-" + d.id }, [el("span", { text: "Festive surname" }), surname]),
+          el("p", { class: "hq-words hq-soft", text: "A new name waits for a tick before it shows in public." }),
+          el("div", { class: "hq-actions" }, [el("button", { class: "hq-btn hq-btn--small hq-btn--go", type: "submit", text: "Save" }), cancel]),
+        ]);
+        cancel.addEventListener("click", function () {
+          form.remove();
+          rename.focus();
+        });
+        form.addEventListener("submit", function (e) {
+          e.preventDefault();
+          ask("PATCH", "/api/admin/elf/detectives/" + d.id, { firstName: first.value, surname: surname.value })
+            .then(function (r) {
+              var was = d.approved;
+              d.firstName = r.detective.firstName;
+              d.surname = r.detective.surname;
+              d.approved = r.detective.approved;
+              if (was && !d.approved && data && data.numbers) {
+                data.numbers.namesToCheck = (data.numbers.namesToCheck || 0) + 1;
+                tileCount("families", data.numbers.namesToCheck);
+              }
+              var fresh = detectiveCard(f, d);
+              card.replaceWith(fresh);
+              say(fresh.querySelector(".hq-status"), "Saved. The new name waits for a tick.", true);
+              loadFamilies();
+            })
+            .catch(function (err) {
+              say(said, err.message, false);
+            });
+        });
+        card.insertBefore(form, said);
+        first.focus();
+      });
+      card.appendChild(rename);
+      card.appendChild(said);
+      return card;
+    }
+
     /** Draws everything from the latest answer. Each part's drawing arrives with its task. */
     function draw() {
       if (!data) return;
@@ -404,6 +772,13 @@
           data = d;
           say(status, "", null);
           draw();
+          var asked = remembered(FAMILY_KEY);
+          if (asked && /^[1-9]d{0,9}$/.test(asked)) {
+            remember(FAMILY_KEY, null);
+            show("families");
+            return openFamily(asked);
+          }
+          if (!parts.families.hidden) return loadFamilies();
         })
         .catch(function (e) {
           say(status, e.message, false);

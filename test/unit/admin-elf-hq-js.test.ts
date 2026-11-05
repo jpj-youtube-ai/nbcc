@@ -215,3 +215,203 @@ describe("the HQ screen", () => {
     expect(detectives.className).toBe("is-long");
   });
 });
+
+// ---- the Families screen (Task 6) ----
+
+const T = "/assets/img/elf/paper/tiles/costumes/";
+const SAM = {
+  id: 3,
+  grownUpName: "Sam Example",
+  email: "sam@example.org",
+  enrolledAt: "2026-11-13T19:04:00.000Z",
+  removed: false,
+  namesToCheck: 1,
+  detectives: [
+    { id: 7, firstName: "Ruby", badge: "EDS 0427", approved: false, tile: `${T}reindeer-s2.webp` },
+    { id: 8, firstName: "Leo", badge: "EDS 0428", approved: true, tile: `${T}snowman-s2.webp` },
+  ],
+};
+const ALEX = { id: 4, grownUpName: "Alex Sample", email: "alex@example.org", enrolledAt: "2026-11-13T18:00:00.000Z", removed: false, namesToCheck: 0, detectives: [{ id: 9, firstName: "Isla", badge: "EDS 0429", approved: true, tile: `${T}puffin-s1.webp` }] };
+const LIST = { families: [SAM, ALEX], total: 2, counts: { all: 2, check: 1, week: 2, removed: 0 } };
+const SAM_SHEET = {
+  id: 3,
+  grownUpName: "Sam Example",
+  email: "sam@example.org",
+  newsletter: true,
+  enrolledAt: "2026-11-13T19:04:00.000Z",
+  removedAt: null,
+  removedBy: null,
+  detectives: [
+    { id: 7, firstName: "Ruby", surname: "Tinselfoot", badge: "EDS 0427", approved: false, tile: `${T}reindeer-s2.webp` },
+    { id: 8, firstName: "Leo", surname: "Frostwhistle", badge: "EDS 0428", approved: true, tile: `${T}snowman-s2.webp` },
+  ],
+  payments: [{ reference: "EDS-K4F9Q2", status: "paid", paidAt: "2026-11-13T19:04:00.000Z", entryPence: 1000, giftPence: 500, giftAid: true }],
+};
+const SHEET_ANSWER = { family: SAM_SHEET, surnames: ["Tinselfoot", "Frostwhistle", "Snowsleuth"] };
+const FAMILY_SERVER = {
+  "/api/admin/elf/hq": { ...HQ, numbers: { ...HQ.numbers, namesToCheck: 1 } },
+  "/api/admin/elf/families": LIST,
+  "/api/admin/elf/families/3": SHEET_ANSWER,
+};
+
+const familiesPart = () => panel("families");
+async function openFamilies(answers: Record<string, unknown> = FAMILY_SERVER) {
+  const env = page({ answers });
+  await env.hq.open();
+  tabs()[1].click();
+  await flush();
+  return env;
+}
+const cards = () => [...familiesPart().querySelectorAll<HTMLButtonElement>(".hq-fam")];
+const inFamilies = (words: string) => [...familiesPart().querySelectorAll<HTMLButtonElement>("button")].find((b) => b.textContent!.trim() === words);
+const urls = (calls: Call[]) => calls.map((c) => `${c.method} ${c.url}`);
+
+describe("the Families screen", () => {
+  it("lists families as cards with their elves, and the filters with their counts", async () => {
+    await openFamilies();
+    expect(cards()).toHaveLength(2);
+    expect(cards()[0].textContent).toContain("Sam Example");
+    expect(cards()[0].textContent).toContain("Ruby, Leo");
+    expect(cards()[0].textContent).toContain("EDS 0427");
+    expect(cards()[0].textContent).toContain("1 name to check");
+    expect(cards()[1].textContent).toContain("All names ticked");
+    expect([...cards()[0].querySelectorAll("img")].map((i) => i.getAttribute("src"))).toEqual([`${T}reindeer-s2.webp`, `${T}snowman-s2.webp`]);
+    const chips = [...familiesPart().querySelectorAll(".hq-filter")].map((c) => c.textContent!.replace(/\s+/g, " ").trim());
+    expect(chips).toEqual(["All 2", "Names to check 1", "This week 2", "Removed 0"]);
+  });
+
+  it("opens with the names to check when HQ's quest sent it there", async () => {
+    const { hq, calls } = page({ answers: { ...FAMILY_SERVER, "/api/admin/elf/hq": { ...HQ, quests: [{ id: "names", count: 1, title: "First names to check", words: "w", go: "families", button: "Check names", filter: "check" }] } } });
+    await hq.open();
+    [...document.querySelectorAll<HTMLButtonElement>("#elfHq button")].find((b) => b.textContent === "Check names")!.click();
+    await flush();
+    expect(urls(calls)).toContain("GET /api/admin/elf/families?filter=check");
+  });
+
+  it("searches as you type, after a short pause, and filters", async () => {
+    vi.useFakeTimers();
+    try {
+      const { calls } = await openFamilies();
+      const box = familiesPart().querySelector<HTMLInputElement>("input[type=search]")!;
+      box.value = "ruby";
+      box.dispatchEvent(new Event("input"));
+      box.value = "ruby t";
+      box.dispatchEvent(new Event("input"));
+      expect(urls(calls).filter((u) => u.includes("q="))).toHaveLength(0);
+      await vi.advanceTimersByTimeAsync(350);
+      expect(urls(calls).filter((u) => u.includes("q="))).toEqual(["GET /api/admin/elf/families?filter=all&q=ruby%20t"]);
+      [...familiesPart().querySelectorAll<HTMLButtonElement>(".hq-filter")][3].click();
+      await vi.advanceTimersByTimeAsync(10);
+      expect(urls(calls).at(-1)).toBe("GET /api/admin/elf/families?filter=removed&q=ruby%20t");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("opens a family's sheet, with Back to families for a phone", async () => {
+    const { calls } = await openFamilies();
+    cards()[0].click();
+    await flush();
+    expect(urls(calls)).toContain("GET /api/admin/elf/families/3");
+    const sheet = familiesPart().querySelector(".hq-sheet")!;
+    expect(sheet.textContent).toContain("Sam Example");
+    expect(sheet.textContent).toContain("sam@example.org");
+    expect(sheet.textContent).toContain("Detective Ruby Tinselfoot");
+    expect(sheet.textContent).toContain("£15");
+    expect(sheet.textContent).toContain("entry £10, gift £5");
+    expect(sheet.textContent).toContain("Gift Aid on the gift");
+    expect(familiesPart().querySelector(".hq-families")!.classList.contains("is-open")).toBe(true);
+    inFamilies("Back to families")!.click();
+    expect(familiesPart().querySelector(".hq-families")!.classList.contains("is-open")).toBe(false);
+  });
+
+  it("ticks a name in one press, and the Families tile counts one fewer", async () => {
+    const { calls } = await openFamilies({ ...FAMILY_SERVER, "/api/admin/elf/detectives/7": { detective: { ...SAM_SHEET.detectives[0], familyId: 3, approved: true } } });
+    cards()[0].click();
+    await flush();
+    const toggle = familiesPart().querySelector<HTMLButtonElement>('.hq-toggle[data-detective="7"]')!;
+    expect(toggle.getAttribute("aria-checked")).toBe("false");
+    expect(toggle.textContent).toContain("Show Ruby in public? Until then it is R.");
+    toggle.click();
+    await flush();
+    expect(calls.filter((c) => c.method === "PATCH")).toEqual([{ method: "PATCH", url: "/api/admin/elf/detectives/7", body: { approved: true } }]);
+    const now = familiesPart().querySelector<HTMLButtonElement>('.hq-toggle[data-detective="7"]')!;
+    expect(now.getAttribute("aria-checked")).toBe("true");
+    expect(now.textContent).toContain("Ruby shows in public");
+    expect(tabs()[1].querySelector(".hq-count")!.hidden).toBe(true);
+  });
+
+  it("changes a detective's names in place, and shows the server's refusal as an error", async () => {
+    const { calls } = await openFamilies({ ...FAMILY_SERVER, "/api/admin/elf/detectives/7": { error: "Please give just one first name: the festive surname comes from the list." } });
+    cards()[0].click();
+    await flush();
+    familiesPart().querySelector<HTMLButtonElement>('.hq-det[data-detective="7"] .hq-rename')!.click();
+    const form = familiesPart().querySelector<HTMLFormElement>('.hq-det[data-detective="7"] form')!;
+    expect([...form.querySelectorAll("option")].map((o) => o.textContent)).toEqual(["Tinselfoot", "Frostwhistle", "Snowsleuth"]);
+    form.querySelector<HTMLInputElement>("input[name=firstName]")!.value = "Ruby Mae";
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (window as any).fetch = vi.fn((url: string, init: RequestInit = {}) => {
+      calls.push({ method: init.method ?? "GET", url, body: init.body ? JSON.parse(String(init.body)) : null });
+      return Promise.resolve({ ok: false, status: 400, json: () => Promise.resolve({ error: "Please give just one first name: the festive surname comes from the list." }) });
+    });
+    form.requestSubmit();
+    await flush();
+    expect(calls.at(-1)).toEqual({ method: "PATCH", url: "/api/admin/elf/detectives/7", body: { firstName: "Ruby Mae", surname: "Tinselfoot" } });
+    const said = familiesPart().querySelector('.hq-det[data-detective="7"] .hq-status')!;
+    expect(said.textContent).toBe("Please give just one first name: the festive surname comes from the list.");
+    expect(said.classList.contains("is-error")).toBe(true);
+  });
+
+  it("changes the grown up's details, and says when another family has the email", async () => {
+    await openFamilies();
+    cards()[0].click();
+    await flush();
+    inFamilies("Change details")!.click();
+    const form = familiesPart().querySelector<HTMLFormElement>(".hq-sheet__details form")!;
+    expect(form.querySelector<HTMLInputElement>("input[name=grownUpName]")!.value).toBe("Sam Example");
+    form.querySelector<HTMLInputElement>("input[name=email]")!.value = "alex@example.org";
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (window as any).fetch = vi.fn(() => Promise.resolve({ ok: false, status: 409, json: () => Promise.resolve({ error: "Another family already uses that email." }) }));
+    form.requestSubmit();
+    await flush();
+    const said = familiesPart().querySelector(".hq-sheet__details .hq-status")!;
+    expect(said.textContent).toBe("Another family already uses that email.");
+    expect(said.classList.contains("is-error")).toBe(true);
+  });
+
+  it("sends a sign in code and says where it went", async () => {
+    const { calls } = await openFamilies({ ...FAMILY_SERVER, "/api/admin/elf/families/3/sign-in-code": { sent: true, email: "sam@example.org" } });
+    cards()[0].click();
+    await flush();
+    inFamilies("Send a sign in code")!.click();
+    await flush();
+    expect(urls(calls)).toContain("POST /api/admin/elf/families/3/sign-in-code");
+    expect(familiesPart().querySelector(".hq-sheet")!.textContent).toContain("We sent a sign in code to sam@example.org.");
+  });
+
+  it("asks before removing, then shows the family as removed, with Put back", async () => {
+    const removed = { family: { ...SAM_SHEET, removedAt: "2026-11-14T10:00:00.000Z", removedBy: "admin:boss@example.org" }, surnames: [] };
+    const { calls } = await openFamilies({ ...FAMILY_SERVER, "/api/admin/elf/families/3/remove": removed });
+    cards()[0].click();
+    await flush();
+    inFamilies("Remove this family")!.click();
+    expect(familiesPart().textContent).toContain("Remove Sam Example's family? They cannot sign in, and they leave the counts and the money. If they paid, refund them in Stripe first.");
+    expect(urls(calls)).not.toContain("POST /api/admin/elf/families/3/remove");
+    inFamilies("Yes, remove them")!.click();
+    await flush();
+    expect(urls(calls)).toContain("POST /api/admin/elf/families/3/remove");
+    expect(familiesPart().querySelector(".hq-sheet")!.textContent).toContain("Removed on Saturday 14 November");
+    expect(inFamilies("Put back")).toBeTruthy();
+    expect(inFamilies("Send a sign in code")).toBeFalsy();
+  });
+
+  it("opens the family the Donations link asked for", async () => {
+    window.sessionStorage.setItem("nbcc_elf_hq_family", "3");
+    const { hq, calls } = page({ answers: FAMILY_SERVER });
+    await hq.open();
+    await flush();
+    expect(panel("families").hidden).toBe(false);
+    expect(urls(calls)).toContain("GET /api/admin/elf/families/3");
+    expect(window.sessionStorage.getItem("nbcc_elf_hq_family")).toBeNull();
+  });
+});

@@ -21,6 +21,7 @@ import { familyFilter, parseDetectiveChange, parseFamilyChange } from "../elf/ad
 import { daysUntil, questsFor, tileFor } from "../elf/admin-hq";
 import { sendSignInCodeTo } from "../elf/sign-in-code";
 import { badgeWords } from "../elf/emails";
+import { FESTIVE_SURNAMES } from "../elf/names";
 import { hashElfToken, newElfToken } from "../elf/session";
 import { firstClueAt } from "../elf/views";
 
@@ -219,7 +220,8 @@ export async function getAdminElfFamily(req: Request, res: Response): Promise<Re
   if (id === null) return res.status(400).json(BAD_ID);
   try {
     const sheet = await elfFamilySheet(id);
-    return sheet ? res.status(200).json({ family: sheetForAdmin(sheet) }) : res.status(404).json(NO_FAMILY);
+    // The festive surnames come too, for the rename form: a surname must be one of them.
+    return sheet ? res.status(200).json({ family: sheetForAdmin(sheet), surnames: [...FESTIVE_SURNAMES] }) : res.status(404).json(NO_FAMILY);
   } catch (err) {
     console.error("admin elf family failed:", err instanceof Error ? err.message : err);
     return res.status(500).json(UNAVAILABLE);

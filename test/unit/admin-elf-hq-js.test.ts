@@ -415,6 +415,21 @@ describe("the Families screen", () => {
     expect(urls(calls)).toContain("GET /api/admin/elf/families/3");
     expect(window.sessionStorage.getItem("nbcc_elf_hq_family")).toBeNull();
   });
+
+  it("opens a family the Donations link asked for whatever its number, and ignores anything else", async () => {
+    window.sessionStorage.setItem("nbcc_elf_hq_family", "1234");
+    const first = page({ answers: FAMILY_SERVER });
+    await first.hq.open();
+    await flush();
+    expect(urls(first.calls)).toContain("GET /api/admin/elf/families/1234");
+    for (const junk of ["0", "12a", "-4", "1d"]) {
+      window.sessionStorage.setItem("nbcc_elf_hq_family", junk);
+      const { hq, calls } = page({ answers: FAMILY_SERVER });
+      await hq.open();
+      await flush();
+      expect(urls(calls).filter((u) => u.startsWith("GET /api/admin/elf/families/")), junk).toEqual([]);
+    }
+  });
 });
 
 // ---- the Money and Settings screens (Task 8) ----

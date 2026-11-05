@@ -926,7 +926,7 @@
           say(status, "", null);
           draw();
           var asked = remembered(FAMILY_KEY);
-          if (asked && /^[1-9]d{0,9}$/.test(asked)) {
+          if (asked && /^[1-9]\d{0,9}$/.test(asked)) {
             remember(FAMILY_KEY, null);
             show("families");
             return openFamily(asked);

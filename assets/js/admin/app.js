@@ -34,7 +34,7 @@
   var SECTIONS = [
     "overview", "search", "donations", "claims", "gasds", "subscriptions", "stories",
     "ticker", "ball", "events", "fundraising", "contact", "newsletter", "thank-you", "audit", "email-audit", "site", "outreach",
-    "business-supporters", "analytics", "red-bag", "team",
+    "business-supporters", "analytics", "red-bag", "elf", "team",
   ];
   // KEEP IN SYNC with OPERATIONAL_EDITOR_SECTIONS there as well. Not cosmetic either: Manage access
   // pre-fills from this copy and Save stores what it shows, so a section missing here is silently
@@ -83,7 +83,7 @@
     // email-audit mirrors team: donor-identifying send data never arrives with a role below
     // admin — it is granted per person (matches roleToPermissions in src/admin/permissions.ts).
     SECTIONS.forEach(function (s) {
-      perms[s] = s === "team" || s === "email-audit" || s === "business-supporters" || s === "analytics" || s === "red-bag" ? "none" : "view";
+      perms[s] = s === "team" || s === "email-audit" || s === "business-supporters" || s === "analytics" || s === "red-bag" || s === "elf" ? "none" : "view";
     });
     return perms;
   }

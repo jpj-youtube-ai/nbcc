@@ -13,15 +13,16 @@ function forAdmin(s: ElfSettings) {
   return { ...rest, previewOn: !!s.previewHash };
 }
 
-// NBCC Elf Detective School in the admin (wave 1 plan, Task 9), in Admin > Get involved > Settings:
+// NBCC Elf Detective School in the admin: Head Elf HQ, its own section (Admin > Content > Elf Detective
+// School; docs/superpowers/specs/2026-11-05-elf-admin-design.md):
 //
-//   GET   /api/admin/elf/settings   the switch and the pay what you can amounts (Get involved: view)
+//   GET   /api/admin/elf/settings   the switch and the pay what you can amounts (elf: view)
 //   PATCH /api/admin/elf/settings   change them (admins only: switching the school on puts it live)
 //   GET   /api/admin/elf/signups    paid sign ups: how many families and detectives, the money, and
-//                                   the newest 50 (Get involved: view)
+//                                   the newest 50 (elf: view)
 //
-// The school belongs to the "fundraising" permission section, like the rest of Get involved, so it
-// needs no permissions migration. The screen is assets/js/admin/elf.js. Unit tested in
+// The school has its own permission section, "elf" (src/admin/permissions.ts): admins by role, a head
+// elf given it from the Team matrix. The screen is assets/js/admin/elf-hq.js. Unit tested in
 // test/unit/admin-elf.test.ts.
 
 export const adminElfRouter = Router();
@@ -38,7 +39,7 @@ const patchSchema = z
 
 export async function getAdminElfSettings(req: Request, res: Response): Promise<Response | void> {
   res.setHeader("Cache-Control", "no-store");
-  if (!(await authorizeSection(req, res, "fundraising", "view"))) return;
+  if (!(await authorizeSection(req, res, "elf", "view"))) return;
   try {
     return res.status(200).json({ settings: forAdmin(await getElfSettings()) });
   } catch (err) {
@@ -49,7 +50,7 @@ export async function getAdminElfSettings(req: Request, res: Response): Promise<
 
 export async function patchAdminElfSettings(req: Request, res: Response): Promise<Response | void> {
   res.setHeader("Cache-Control", "no-store");
-  const claims = await authorizeSectionAsAdmin(req, res, "fundraising");
+  const claims = await authorizeSectionAsAdmin(req, res, "elf");
   if (!claims) return;
   const parsed = patchSchema.safeParse(req.body ?? {});
   if (!parsed.success) {
@@ -71,7 +72,7 @@ export async function patchAdminElfSettings(req: Request, res: Response): Promis
 
 export async function getAdminElfSignups(req: Request, res: Response): Promise<Response | void> {
   res.setHeader("Cache-Control", "no-store");
-  if (!(await authorizeSection(req, res, "fundraising", "view"))) return;
+  if (!(await authorizeSection(req, res, "elf", "view"))) return;
   try {
     return res.status(200).json(await listElfSignups());
   } catch (err) {
@@ -84,7 +85,7 @@ export async function getAdminElfSignups(req: Request, res: Response): Promise<R
  *  once, here; only its sha256 is kept. */
 export async function postAdminElfPreview(req: Request, res: Response): Promise<Response | void> {
   res.setHeader("Cache-Control", "no-store");
-  const claims = await authorizeSectionAsAdmin(req, res, "fundraising");
+  const claims = await authorizeSectionAsAdmin(req, res, "elf");
   if (!claims) return;
   try {
     const token = newElfToken();
@@ -99,7 +100,7 @@ export async function postAdminElfPreview(req: Request, res: Response): Promise<
 /** End the private preview link (admins only). */
 export async function deleteAdminElfPreview(req: Request, res: Response): Promise<Response | void> {
   res.setHeader("Cache-Control", "no-store");
-  const claims = await authorizeSectionAsAdmin(req, res, "fundraising");
+  const claims = await authorizeSectionAsAdmin(req, res, "elf");
   if (!claims) return;
   try {
     await setElfPreview(null, actorOf(claims));

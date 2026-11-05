@@ -45,9 +45,27 @@ describe("SECTIONS", () => {
       "business-supporters",
       "analytics",
       "red-bag",
+      "elf",
       "team",
     ]);
-    expect(SECTIONS).toHaveLength(22);
+    expect(SECTIONS).toHaveLength(23);
+  });
+});
+
+// Head Elf HQ (5 November 2026): the Elf Detective School holds children's first names and families'
+// emails, so admins hold it by role and anyone else, a head elf, is given it from Team > Manage access.
+describe("elf defaults", () => {
+  it("admins edit; editors and viewers get none", () => {
+    expect(roleToPermissions("admin").elf).toBe("edit");
+    expect(roleToPermissions("editor").elf ?? "none").toBe("none");
+    expect(roleToPermissions("viewer").elf).toBe("none");
+    expect(can(roleToPermissions("editor"), "elf", "view")).toBe(false);
+    expect(can(roleToPermissions("viewer"), "elf", "view")).toBe(false);
+  });
+
+  it("can still be given to anyone through a saved matrix", () => {
+    expect(can(effectivePermissions({ role: "viewer", permissions: { elf: "view" } }), "elf", "view")).toBe(true);
+    expect(can(effectivePermissions({ role: "editor", permissions: { elf: "edit" } }), "elf", "edit")).toBe(true);
   });
 });
 
@@ -203,10 +221,10 @@ describe("roleToPermissions", () => {
     expect(can(perms, "team", "view")).toBe(false);
   });
 
-  it("viewer gets view on all sections except team, email-audit, business-supporters, analytics and red-bag", () => {
+  it("viewer gets view on all sections except team, email-audit, business-supporters, analytics, red-bag and elf", () => {
     const perms = roleToPermissions("viewer");
     for (const section of SECTIONS) {
-      if (section === "team" || section === "email-audit" || section === "business-supporters" || section === "analytics" || section === "red-bag") continue;
+      if (section === "team" || section === "email-audit" || section === "business-supporters" || section === "analytics" || section === "red-bag" || section === "elf") continue;
       expect(perms[section]).toBe("view");
     }
   });

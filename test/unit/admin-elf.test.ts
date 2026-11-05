@@ -1,4 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 
 // NBCC Elf Detective School in the admin: the switch, the pay what you can amounts, and the sign ups.
 // Every family here is invented.
@@ -19,8 +21,9 @@ import { signAdminSession } from "../../src/admin/session";
 
 const ON = { schoolOn: true, year: 2026, entryFromPence: 100, entrySuggestedPence: 500 };
 
-const tokenFor = (role: string) => {
-  getUserAuthRowMock.mockResolvedValue({ id: 1, email: "staff@example.org", status: "active", role, permissions: {} });
+// `permissions` is a saved Team matrix: {} means the role's own defaults.
+const tokenFor = (role: string, permissions: object = {}) => {
+  getUserAuthRowMock.mockResolvedValue({ id: 1, email: "staff@example.org", status: "active", role, permissions });
   return signAdminSession({ sub: 1, email: "staff@example.org", role, now: new Date(), secret: "test-admin-secret" }).token;
 };
 
@@ -28,7 +31,9 @@ function mockRes() {
   const res = { statusCode: 200, body: undefined as unknown, status(c: number) { res.statusCode = c; return res; }, json(b: unknown) { res.body = b; return res; }, setHeader() { return res; } };
   return res;
 }
-const req = (role: string | null, body: unknown = {}) => ({ headers: role ? { authorization: `Bearer ${tokenFor(role)}` } : {}, body, params: {}, query: {} });
+const req = (role: string | null, body: unknown = {}, permissions: object = {}) => ({ headers: role ? { authorization: `Bearer ${tokenFor(role, permissions)}` } : {}, body, params: {}, query: {} });
+/** A head elf: a viewer whom an admin has given the Elf Detective School in the Team matrix. */
+const HEAD_ELF = { elf: "view" };
 /* eslint-disable @typescript-eslint/no-explicit-any */
 const run = async (h: (req: any, res: any) => Promise<unknown>, r: unknown) => {
   const res = mockRes();
@@ -45,11 +50,17 @@ beforeEach(() => {
 });
 
 describe("the school's settings in the admin", () => {
-  it("can be read by a viewer, but nobody signed out", async () => {
+  it("can be read by anyone given the Elf Detective School, but nobody signed out", async () => {
     expect((await run(getAdminElfSettings, req(null))).statusCode).toBe(401);
-    const res = await run(getAdminElfSettings, req("viewer"));
+    const res = await run(getAdminElfSettings, req("viewer", {}, HEAD_ELF));
     expect(res.statusCode).toBe(200);
     expect(res.body).toMatchObject({ settings: ON });
+  });
+
+  it("is not for an editor or a viewer who has not been given the section", async () => {
+    expect((await run(getAdminElfSettings, req("editor"))).statusCode).toBe(403);
+    expect((await run(getAdminElfSettings, req("viewer"))).statusCode).toBe(403);
+    expect((await run(getAdminElfSettings, req("editor", {}, { fundraising: "edit" }))).statusCode).toBe(403);
   });
 
   it("can only be changed by an admin", async () => {
@@ -74,12 +85,36 @@ describe("the school's settings in the admin", () => {
 });
 
 describe("the sign ups in the admin", () => {
-  it("shows a viewer the paid sign ups", async () => {
+  it("shows a head elf the paid sign ups, and nobody without the section", async () => {
     const summary = { families: 2, detectives: 3, entryPence: 1500, donationPence: 500, giftAidPence: 500, recent: [] };
     db.listElfSignups.mockResolvedValue(summary);
-    const res = await run(getAdminElfSignups, req("viewer"));
+    const res = await run(getAdminElfSignups, req("viewer", {}, HEAD_ELF));
     expect(res.statusCode).toBe(200);
     expect(res.body).toEqual(summary);
+    expect((await run(getAdminElfSignups, req("editor"))).statusCode).toBe(403);
+  });
+});
+
+// Head Elf HQ (5 November 2026): its own section under Content, after the Festive Ball; the old card
+// in Get involved > Settings, and its script, are gone.
+describe("the Elf Detective School in the admin's menu", () => {
+  const html = readFileSync(resolve(__dirname, "../../admin.html"), "utf8");
+  const content = html.slice(html.indexOf('id="adminNavContent"'), html.indexOf("</ul>", html.indexOf('id="adminNavContent"')));
+
+  it("is in Content, right after the Festive Ball", () => {
+    const views = [...content.matchAll(/data-view="([a-z-]+)"/g)].map((m) => m[1]);
+    expect(views.indexOf("elf")).toBe(views.indexOf("ball") + 1);
+    expect(content).toContain('data-view="elf">Elf Detective School</button>');
+  });
+
+  it("has a section of its own for Head Elf HQ to draw into", () => {
+    expect(html).toMatch(/<section class="admin-view" id="view-elf"[^>]*hidden>/);
+    expect(html).toContain('<div id="elfHq"></div>');
+  });
+
+  it("is no longer a card in Get involved", () => {
+    expect(html).not.toContain('id="elfAdmin"');
+    expect(html).not.toContain("/assets/js/admin/elf.js");
   });
 });
 

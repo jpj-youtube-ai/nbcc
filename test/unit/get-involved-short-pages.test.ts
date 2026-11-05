@@ -18,6 +18,8 @@ const state = vi.hoisted(() => ({
 vi.mock("../../src/db/ball", () => ({
   getSettings: async () => ({ gateOpen: state.gateOpen, gateOpensAt: null }),
   getPreviewPasswordHash: async () => null,
+  // Ticket sales open, as these tests have always assumed (5 November 2026).
+  ticketSalesClosed: async () => false,
 }));
 vi.mock("../../src/db/events", () => ({
   getEventsSettings: async () => ({ pageOn: state.eventsOn }),

@@ -348,6 +348,27 @@ describe("the paper wardrobe at every width", () => {
     expect(css).toMatch(/\.elf-wd-show \{[^}]*width:\s*min\(100%, 360px, calc\(\(100vh/);
   });
 
+  it("backs the stage and its two tools with the page's own paper, so the name plate never shows through them as it scrolls under", () => {
+    // Jaimie, 5 November 2026, on a laptop: scrolled, the plate's lines showed between "Tap the stage
+    // to make it snow", Surprise me and Snap a photo (measured at 1440 by 900 from 450px down).
+    expect(css).toMatch(/\.elf-wd-stick::before \{[^}]*background-color:\s*var\(--cream\)/);
+    expect(css).toMatch(/\.elf-wd-stick::before \{[^}]*background-image:\s*var\(--elf-grain-light\)/);
+    // Blended as the page blends it, or the backing shows as a whiter patch (measured: 244,244,242 on 244,241,234).
+    expect(css).toMatch(/\.elf-wd-stick::before \{[^}]*background-blend-mode:\s*multiply/);
+    // From the bar down, so nothing shows above the stage either, fading out in the gap below the tools,
+    // and 24px wider each side, over the plate's tilted crimson sheet and its shadow, which reach past
+    // the column; the sides fade too, so the backing has no edge to see (measured: a step of 5 at 1835).
+    expect(css).toMatch(/\.elf-wd-stick::before \{[^}]*inset:\s*-16px -24px -14px/);
+    expect(css).toMatch(/\.elf-wd-stick::before \{[^}]*mask:\s*linear-gradient\(90deg, transparent, #000 24px, #000 calc\(100% - 24px\), transparent\)/);
+    expect(css).toMatch(/\.elf-wd-stick::before \{[^}]*mask:[^;]*linear-gradient\(#000, transparent\) bottom/);
+    // A phone on its side has nothing staying put, so no backing either.
+    expect(css).toMatch(/@media \(max-height: 520px\) \{[^@]*\.elf-wd-stick::before \{ display: none; \}/);
+  });
+
+  it("lifts the name plate over the stage while a key has its focus, so a focused button is never hidden under it", () => {
+    expect(css).toMatch(/\.elf-wd-plate:has\(:focus-visible\) \{[^}]*z-index:\s*3/);
+  });
+
   it("hangs the gift tags three over two whenever the dress up column is narrow, not only on a phone", () => {
     // Measured at 920: "Glasses and bow ties" hung 30px below its tag.
     expect(css).toMatch(/\.elf-wd-step--dress \{[^}]*container-type:\s*inline-size/);

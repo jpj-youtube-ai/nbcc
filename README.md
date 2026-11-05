@@ -11698,9 +11698,12 @@ for them as "A present to open", "Two presents to open" or "3 presents to open".
 
 **The wardrobe** (`wardrobe.ts`, `assets/js/elf-wardrobe-ui.js`) is mockup 6 with real data, still one
 form of radio buttons that works with no script. The stage stands in its paper frame with baubles, the
-village window's fairy lights and the count of costumes out of their presents on a rosette; the name
-plate holds Surprise me, Snap a photo (up to three favourite looks pegged on a string, saved with the
-detective as `favourites`; tap one to wear it again) and the sounds switch, off until pressed. Step 1,
+village window's fairy lights and the count of costumes out of their presents on a rosette, with
+Surprise me and Snap a photo under it; the name plate holds the name, the badge, Save this look, the
+favourite looks Snap a photo makes (up to three, pegged on a string, saved with the detective as
+`favourites`; tap one to wear it again) and the sounds switch, off until pressed. On a laptop the stage
+and its two tools stay in view beside the choices, backed with the page's own paper so the name plate
+goes cleanly under them as the page scrolls; a key's focus in the plate lifts it over them. Step 1,
 Your elf, is a sheet torn off a pad (paper circles for skin and hair, torn buttons for boy or girl and
 hair style) that folds away once the elf is made (`WardrobeView.made`). Step 2's five sections hang as
 gift tags on a gold string and work as tabs. The costumes are on card sheets by door, each with its

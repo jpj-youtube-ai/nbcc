@@ -763,12 +763,21 @@ form.elf-wd { display: grid; gap: clamp(26px, 4vw, 44px); padding: 0; background
      a whole sticky plate put Snap a photo below the screen. */
   .elf-wd-preview { align-self: stretch; }
   .elf-wd-stick { position: sticky; top: calc(var(--nav-h) + 16px); z-index: 2; }
+  /* The plate goes under cleanly: the block is backed with the page's own paper, blended as the page
+     blends it, from the bar down to the gap below the tools, and 24px wider than the column each side,
+     over the plate's tilted crimson sheet and its shadow. Its sides and foot fade out, so it has no edge
+     to see. On Jaimie's laptop (5 November 2026) the plate's lines showed between the hint and the
+     tools as it scrolled under them. */
+  .elf-wd-stick::before { content: ""; position: absolute; inset: -16px -24px -14px; z-index: -1; background-color: var(--cream); background-image: var(--elf-grain-light); background-size: 384px; background-blend-mode: multiply; -webkit-mask: linear-gradient(90deg, transparent, #000 24px, #000 calc(100% - 24px), transparent) top / 100% calc(100% - 14px) no-repeat, linear-gradient(#000, transparent) bottom / calc(100% - 48px) 14px no-repeat; mask: linear-gradient(90deg, transparent, #000 24px, #000 calc(100% - 24px), transparent) top / 100% calc(100% - 14px) no-repeat, linear-gradient(#000, transparent) bottom / calc(100% - 48px) 14px no-repeat; }
+  /* A key's focus in the plate lifts it over the stage, so the focused button is never hidden. */
+  .elf-wd-plate:has(:focus-visible) { z-index: 3; }
   .elf-wd-show { width: min(100%, 360px, calc((100vh - var(--nav-h) - 210px) * 0.6)); }
   .elf-wd-peek { display: none; }
 }
 /* A phone on its side has no height to spare: nothing stays put there. */
 @media (max-height: 520px) {
   .elf-wd-stick { position: static; }
+  .elf-wd-stick::before { display: none; }
 }
 
 @media (prefers-reduced-motion: no-preference) {

@@ -54,6 +54,9 @@ export const confirmationInputSchema = z.object({
   // TASK-501: money a fundraiser collected and paid in from their private area. Not their own gift,
   // so it is thanked as paid in, and never with a Gift Aid line.
   paidIn: z.boolean().optional(),
+  // Invoices for donations: the receipt for a gift that paid an invoice starts with "This pays invoice
+  // INV-0012. Thank you." and links to the invoice, now marked Paid.
+  invoice: z.object({ number: z.string().trim().min(1), url: z.string().url() }).optional(),
 });
 export type ConfirmationInput = z.input<typeof confirmationInputSchema>;
 
@@ -86,7 +89,7 @@ export function donationReference(id: number): string {
 // Gift Aid was opted in (with the enduring clause for a monthly gift); the manage/cancel line only
 // for a monthly gift. A one-off / non-Gift-Aid gift simply omits the parts that don't apply.
 export function buildDonationConfirmation(input: ConfirmationInput): DonationConfirmationContent {
-  const { fullName, amountPence, currency, giftAid, mode, reference, donationDate, paidIn } =
+  const { fullName, amountPence, currency, giftAid, mode, reference, donationDate, paidIn, invoice } =
     confirmationInputSchema.parse(input);
   const amount = formatAmount(amountPence, currency);
   const monthly = mode === "monthly";
@@ -100,7 +103,7 @@ export function buildDonationConfirmation(input: ConfirmationInput): DonationCon
     : `Thank you, ${fullName}. Your donation of ${amount} to ${CHARITY_SHORT_NAME} has been received, ` +
       `and it truly matters.`;
 
-  const paragraphs: string[] = [thanks];
+  const paragraphs: string[] = invoice ? [`This pays invoice ${invoice.number}. Thank you.`, thanks] : [thanks];
   // Receipt details (TASK-203): reference and/or payment date, so our email doubles as the receipt
   // now that Stripe's own receipt email is off. Only the parts we were given are shown.
   const details: string[] = [];
@@ -121,10 +124,13 @@ export function buildDonationConfirmation(input: ConfirmationInput): DonationCon
   // The charity statement and the address: at the bottom of the plain text part here, and in the
   // maroon footer bar of the HTML (added by the "donation" kind in src/email/templates.ts), where
   // every other email has it. Never as a paragraph of the body.
-  const text = paragraphs.join("\n\n") + "\n\n" + FOOTER_TEXT + "\n";
+  const invoiceText = invoice ? `View or print your invoice: ${invoice.url}\n\n` : "";
+  const invoiceHtml = invoice ? `<p><a href="${escapeHtml(invoice.url)}">View or print your invoice</a></p>` : "";
+  const text = paragraphs.join("\n\n") + "\n\n" + invoiceText + FOOTER_TEXT + "\n";
   const html =
     `<section class="donation-confirmation">` +
     paragraphs.map((p) => `<p>${escapeHtml(p)}</p>`).join("") +
+    invoiceHtml +
     `</section>`;
   return { text, html };
 }

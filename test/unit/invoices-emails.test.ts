@@ -110,3 +110,41 @@ describe("the link", () => {
     expect(invoiceLink("12.sig", "https://nbcc.scot/")).toBe("https://nbcc.scot/invoice/12.sig");
   });
 });
+
+describe("the usual receipts, when they pay an invoice", () => {
+  it("a person's donation receipt starts with the invoice line and links to it", async () => {
+    const { buildDonationConfirmation } = await import("../../src/donors/confirmation");
+    const c = buildDonationConfirmation({
+      fullName: "Sam Example",
+      amountPence: 2500,
+      giftAid: true,
+      mode: "once",
+      reference: "NBCC-000321",
+      invoice: { number: "INV-0012", url: "https://nbcc.scot/invoice/12.sig" },
+    });
+    expect(c.text.startsWith("This pays invoice INV-0012. Thank you.")).toBe(true);
+    expect(c.text).toContain("View or print your invoice: https://nbcc.scot/invoice/12.sig");
+    expect(c.html).toContain('<a href="https://nbcc.scot/invoice/12.sig">View or print your invoice</a>');
+    expect(c.html.indexOf("This pays invoice INV-0012")).toBeLessThan(c.html.indexOf("Thank you, Sam Example"));
+  });
+
+  it("a person's ordinary receipt is unchanged without an invoice", async () => {
+    const { buildDonationConfirmation } = await import("../../src/donors/confirmation");
+    const c = buildDonationConfirmation({ fullName: "Sam Example", amountPence: 2500, giftAid: false, mode: "once" });
+    expect(c.text).not.toContain("invoice");
+  });
+
+  it("a business's Corporation Tax receipt starts with the invoice line and links to it", async () => {
+    const { buildCorporationTaxReceipt } = await import("../../src/donors/receipt");
+    const r = buildCorporationTaxReceipt({
+      legalName: "Example Joinery Ltd",
+      amountPence: 50000,
+      donationDate: new Date("2026-11-20T12:00:00Z"),
+      invoice: { number: "INV-0013", url: "https://nbcc.scot/invoice/13.sig" },
+    });
+    expect(r.text.startsWith("This pays invoice INV-0013. Thank you.")).toBe(true);
+    expect(r.html).toContain("This pays invoice INV-0013. Thank you.");
+    expect(r.html).toContain('href="https://nbcc.scot/invoice/13.sig"');
+    expect(r.text).toContain("Corporation Tax");
+  });
+});

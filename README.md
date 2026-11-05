@@ -11627,7 +11627,10 @@ preview link stay admins only, whoever holds the section.
 - **Families**: search by name, email or badge, and filter by all, names to check, this week or
   removed. A family's sheet has its detectives (tick a first name to show it in public; a changed
   name waits for a tick again), its payments, the grown up's name and email (a new email ends the
-  family's sessions), a sign in code sent for them, and taking the family out or putting it back.
+  family's sessions), a sign in code sent for them (if the email cannot go, the head elf is told so
+  and nothing is noted), and taking the family out or putting it back. Someone given only a look at
+  the section (view) sees each family as words, with nothing to change; HQ's answer says which
+  (`canEdit`, read from their access as it is now).
 - **Money**: raised so far, entries and gifts, the Gift Aid on the gifts, and a button to every
   payment in Donations.
 - **Settings**: the pay what you can amounts as steppers, and the private preview link.
@@ -11635,7 +11638,8 @@ preview link stay admins only, whoever holds the section.
 **Taking a family out.** `migrations/1791200000360_elf-families-removed.js` (additive) adds
 `elf_families.removed_at` and `removed_by`. A removed family gets no sign in code and no session (its
 sessions and codes are deleted), and is left out of HQ's counts, the money and Donations; putting it
-back clears both columns. Every change in Head Elf HQ goes in the audit log (`elf.detective.changed`,
+back clears both columns. Until it is put back nobody can enrol again with its email either (the
+enrol page asks that email to sign in, and no code comes), so the question before removing says so. Every change in Head Elf HQ goes in the audit log (`elf.detective.changed`,
 `elf.family.changed`, `elf.family.removed`, `elf.family.restored`, `elf.sign_in_code.sent`).
 
 **In Donations.** `listDonations` (`src/db/admin.ts`) lists the school's paid payments beside the

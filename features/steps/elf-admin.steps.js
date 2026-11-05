@@ -73,6 +73,41 @@ Then("Head Elf HQ answers {int}", function (status) {
   assert.equal(this.hqStatus, status, JSON.stringify(this.hqBody));
 });
 
+Then("Head Elf HQ says {string}", function (words) {
+  assert.equal(this.hqBody.error, words);
+});
+
+Then("Head Elf HQ counts no families and no detectives", function () {
+  assert.equal(this.hqStatus, 200, JSON.stringify(this.hqBody));
+  assert.equal(this.hqBody.numbers.families, 0);
+  assert.equal(this.hqBody.numbers.detectives, 0);
+});
+
+// The signed in browser from "the paying browser comes back from Stripe" (features/steps/elf-join.steps.js).
+Then("the family's held session goes to the sign in instead of Detective HQ", async function () {
+  assert.ok(this.elfSignedIn, "the family was signed in first");
+  const res = await fetch(`${BASE_URL}/elf/hq`, { redirect: "manual", headers: { Cookie: `nbcc_elf_session=${this.elfSignedIn}` } });
+  assert.equal(res.status, 303);
+  assert.equal(res.headers.get("location"), "/elf/sign-in");
+});
+
+// Not asHeadElf: this change is meant to be refused, and the answer is checked by the next steps.
+When("{string} with password {string} tries to give the family of {string} the email {string}", async function (email, password, family, newEmail) {
+  const token = await login(email, password);
+  const res = await fetch(`${BASE_URL}/api/admin/elf/families/${await familyOf(family)}`, {
+    method: "PATCH",
+    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ email: newEmail }),
+  });
+  this.hqStatus = res.status;
+  this.hqBody = await res.json().catch(() => ({}));
+});
+
+Then("the family of {string} still has its own email", async function (email) {
+  const r = await pool.query("SELECT count(*)::int AS n FROM elf_families WHERE email = $1", [email]);
+  assert.equal(r.rows[0].n, 1);
+});
+
 When("{string} with password {string} ticks {string} to show in public", async function (email, password, firstName) {
   const d = await detectiveCalled(firstName);
   await asHeadElf(this, email, password, "PATCH", `/api/admin/elf/detectives/${d.id}`, { approved: true });

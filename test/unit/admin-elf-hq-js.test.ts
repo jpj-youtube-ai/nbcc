@@ -16,6 +16,7 @@ const flush = async () => {
 const HQ = {
   settings: { schoolOn: false, year: 2026, entryFromPence: 100, entrySuggestedPence: 500, previewOn: false },
   canSwitch: true,
+  canEdit: true,
   numbers: { families: 0, detectives: 0, namesToCheck: 0, waitingPayments: 0, entryPence: 0, giftPence: 0, giftAidPence: 0 },
   quests: [],
   recruits: [],
@@ -208,6 +209,12 @@ describe("the HQ screen", () => {
     expect(clocks[1].textContent).toContain("detectives enrolled");
   });
 
+  it("says each number in its heading too, since to a screen reader the rosettes are only pictures", async () => {
+    const { hq } = page({ answers: { "/api/admin/elf/hq": BUSY } });
+    await hq.open();
+    expect([...hqPart().querySelectorAll(".hq-clock h3")].map((h) => h.textContent)).toEqual(["26 days to the first clue", "231 detectives enrolled"]);
+  });
+
   it("makes a long number smaller, so it fits inside its rosette", async () => {
     const { hq } = page({ answers: { "/api/admin/elf/hq": BUSY } });
     await hq.open();
@@ -396,14 +403,42 @@ describe("the Families screen", () => {
     cards()[0].click();
     await flush();
     inFamilies("Remove this family")!.click();
-    expect(familiesPart().textContent).toContain("Remove Sam Example's family? They cannot sign in, and they leave the counts and the money. If they paid, refund them in Stripe first.");
+    expect(familiesPart().textContent).toContain(
+      "Remove Sam Example's family? They cannot sign in or enrol again with this email until they are put back, and they leave the counts and the money. If they paid, refund them in Stripe first.",
+    );
     expect(urls(calls)).not.toContain("POST /api/admin/elf/families/3/remove");
     inFamilies("Yes, remove them")!.click();
     await flush();
     expect(urls(calls)).toContain("POST /api/admin/elf/families/3/remove");
     expect(familiesPart().querySelector(".hq-sheet")!.textContent).toContain("Removed on Saturday 14 November");
+    expect(familiesPart().querySelector(".hq-sheet")!.textContent).toContain(
+      "They cannot sign in or enrol again with this email until they are put back, and they are left out of the counts and the money.",
+    );
     expect(inFamilies("Put back")).toBeTruthy();
     expect(inFamilies("Send a sign in code")).toBeFalsy();
+  });
+
+  it("shows a head elf who may only look a family as words, with nothing to change", async () => {
+    await openFamilies({ ...FAMILY_SERVER, "/api/admin/elf/hq": { ...HQ, canEdit: false, numbers: { ...HQ.numbers, namesToCheck: 1 } } });
+    cards()[0].click();
+    await flush();
+    const sheet = familiesPart().querySelector(".hq-sheet")!;
+    expect([...sheet.querySelectorAll("button")].map((b) => b.textContent)).toEqual(["Back to families"]);
+    expect(sheet.textContent).toContain("You can look at this family. Changing it needs edit access to Head Elf HQ, which an admin can give in Team.");
+    expect(sheet.textContent).toContain("Ruby waits for a tick. Until then it is R.");
+    expect(sheet.textContent).toContain("Leo shows in public.");
+  });
+
+  it("puts a refusal for want of access in plain words", async () => {
+    await openFamilies();
+    cards()[0].click();
+    await flush();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (window as any).fetch = vi.fn(() => Promise.resolve({ ok: false, status: 403, json: () => Promise.resolve({ error: "forbidden" }) }));
+    inFamilies("Send a sign in code")!.click();
+    await flush();
+    expect(familiesPart().querySelector(".hq-sheet")!.textContent).toContain("You do not have access to do that. An admin can give it in Team.");
+    expect(familiesPart().querySelector(".hq-sheet")!.textContent).not.toContain("forbidden");
   });
 
   it("opens the family the Donations link asked for", async () => {

@@ -2,7 +2,6 @@ import express, { Router, type NextFunction, type Request, type Response } from 
 import { z } from "zod";
 import { config } from "../config";
 import { readCookie } from "../ball/gate";
-import { sendElfSignInCode } from "../clients/email";
 import { captchaEnabled, captchaSiteKey, verifyCaptcha } from "../clients/turnstile";
 import { createRateLimiter } from "../portal/request-limiter";
 import {
@@ -18,7 +17,6 @@ import {
   familyWithDetectives,
   getElfSettings,
   orderForWelcome,
-  saveElfSignInCode,
   saveLook,
   type ElfSettings,
 } from "../db/elf";
@@ -29,7 +27,7 @@ import { renderRulesPage } from "../elf/pages/rules";
 import { renderWardrobePage } from "../elf/pages/wardrobe";
 import { calendarViewFor, hqViewFor, lookFromForm, wardrobeStateNow, wardrobeViewFor, type FamilyRow } from "../elf/views";
 import { elfPng, elfPngKey } from "../elf/elf-png";
-import { buildElfSignInCodeEmail } from "../elf/emails";
+import { sendSignInCodeTo } from "../elf/sign-in-code";
 import { buildElfSessionParams, feeCoverPence, joinBodyFromForm, parseJoin } from "../elf/join";
 import { FESTIVE_SURNAMES } from "../elf/names";
 import { renderJoinPage } from "../elf/pages/join";
@@ -48,12 +46,9 @@ import {
 } from "../elf/session";
 import {
   MAX_CODE_ATTEMPTS,
-  SIGN_IN_CODE_TTL_MS,
   codeVerdict,
   hashSessionId,
-  hashSignInCode,
   newSessionId,
-  newSignInCode,
   readCode,
   sentFromOurOwnPage,
 } from "../fundraising/sign-in";
@@ -319,20 +314,6 @@ export async function postSignInRequest(req: Request, res: Response): Promise<Re
   if (!allowed) return;
   if (!(await getElfSettings()).schoolOn) return;
   await sendSignInCodeTo(email);
-}
-
-/** Email a sign in code, but only to a family that has paid for detectives. Never throws. */
-async function sendSignInCodeTo(email: string): Promise<void> {
-  try {
-    const family = await activeFamilyByEmail(email);
-    if (!family) return;
-    const code = newSignInCode();
-    await saveElfSignInCode(email, hashSignInCode(email, code, config.ADMIN_SESSION_SECRET), new Date(Date.now() + SIGN_IN_CODE_TTL_MS));
-    const mail = buildElfSignInCodeEmail(code);
-    await sendElfSignInCode(family.grownUpName, { email, from: config.BALL_FROM_EMAIL, replyTo: config.BALL_FROM_EMAIL, ...mail });
-  } catch (err) {
-    console.error("elf sign in code request failed:", err instanceof Error ? err.message : err);
-  }
 }
 
 export async function postSignIn(req: Request, res: Response): Promise<Response | void> {

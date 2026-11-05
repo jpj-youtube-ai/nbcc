@@ -178,6 +178,214 @@
       tabs[order[next]].focus();
     });
 
+    // ---- words for numbers, money and days ----
+    function pounds(pence) {
+      var p = Math.max(0, Math.round(Number(pence) || 0));
+      var whole = p % 100 === 0;
+      return "£" + (p / 100).toLocaleString("en-GB", { minimumFractionDigits: whole ? 0 : 2, maximumFractionDigits: whole ? 0 : 2 });
+    }
+    function plural(n, one, many) {
+      return n === 1 ? one : many;
+    }
+    function whenWords(iso) {
+      var d = new Date(iso);
+      if (isNaN(d.getTime())) return "";
+      var day = new Intl.DateTimeFormat("en-GB", { weekday: "long", day: "numeric", month: "long", timeZone: "Europe/London" }).format(d).replace(/,/g, "");
+      var time = new Intl.DateTimeFormat("en-GB", { hour: "numeric", minute: "2-digit", hour12: true, timeZone: "Europe/London" }).format(d).replace(/\s/g, "").toLowerCase();
+      return day + ", " + time;
+    }
+    /** A paper rosette with a number or a word on it: the scallops in `ring`, the middle in `disc`. */
+    function rosette(ring, disc, words) {
+      var r = el("span", { class: "hq-rosette", "aria-hidden": "true" });
+      r.innerHTML =
+        '<svg viewBox="0 0 100 100"><path fill="' + ring + '" stroke="#3A0B0B" stroke-width="2.5" d="M50 3l7 9 11-4 3 11 11 2-2 11 9 7-6 9 6 9-9 7 2 11-11 2-3 11-11-4-7 9-7-9-11 4-3-11-11-2 2-11-9-7 6-9-6-9 9-7-2-11 11-2 3-11 11 4z"/>' +
+        '<circle cx="50" cy="50" r="31" fill="' + disc + '" stroke="#FFF8EF" stroke-width="1.6" stroke-dasharray="3.2 2.6"/></svg>';
+      // Three figures (or a word) need a smaller size to sit inside the disc.
+      r.appendChild(el("b", { text: words, class: words.length >= 4 ? "is-longer" : words.length === 3 ? "is-long" : null }));
+      return r;
+    }
+
+    // ---- HQ ----
+    var QUEST_ICONS = { names: PAPER + "icons/icon-friend.webp", preview: PAPER + "icons/icon-lock.webp", waiting: PAPER + "icons/icon-bell.webp" };
+    var familyFilter = "all";
+    var confirming = null; // the lever's second ask, while it is showing
+
+    function drawSwitch(box) {
+      var s = data.settings || {};
+      var on = !!s.schoolOn;
+      var lever = el("button", { class: "hq-lever", type: "button", role: "switch", id: "hqLever", "aria-checked": String(on), "aria-label": "The school's switch", disabled: !data.canSwitch }, [
+        el("span", { class: "hq-lever__words", "aria-hidden": "true", text: on ? "ON" : "OFF" }),
+        el("span", { class: "hq-lever__knob" }, [el("img", { src: PAPER + "deco/bauble.webp", alt: "", width: 52, height: 52 })]),
+      ]);
+      var words = el("div", {}, [
+        el("h2", { class: "hq-h2", text: on ? "The school is live" : "The school is switched off" }),
+        el("p", { class: "hq-words hq-soft", text: on ? "Anyone can find it and enrol." : s.previewOn ? "Families cannot see it yet. Your private preview link can." : "Families cannot see it yet." }),
+      ]);
+      box.appendChild(lever);
+      box.appendChild(words);
+      if (!data.canSwitch) box.appendChild(el("p", { class: "hq-words hq-soft hq-switchbox__who", text: "Only an admin can switch the school on or off." }));
+      lever.addEventListener("click", function () {
+        if (confirming) return;
+        var turnOn = !on;
+        var yes = el("button", { class: "hq-btn hq-btn--small " + (turnOn ? "hq-btn--go" : "hq-btn--danger"), type: "button", text: turnOn ? "Yes, switch it on" : "Yes, switch it off" });
+        var no = el("button", { class: "hq-btn hq-btn--small", type: "button", text: turnOn ? "Not yet" : "Keep it on" });
+        confirming = el("div", { class: "hq-confirm", role: "group", "aria-label": "Are you sure?" }, [
+          el("p", { class: "hq-words", text: turnOn ? "Switch it on for everyone? Sign ups open straight away and anyone can find the school." : "Switch it off? Families cannot see the school or sign in while it is off." }),
+          yes,
+          no,
+        ]);
+        box.appendChild(confirming);
+        yes.focus();
+        no.addEventListener("click", function () {
+          confirming.remove();
+          confirming = null;
+          lever.focus();
+        });
+        yes.addEventListener("click", function () {
+          yes.disabled = true;
+          no.disabled = true;
+          ask("PATCH", "/api/admin/elf/settings", { schoolOn: turnOn })
+            .then(function (d) {
+              data.settings = d.settings;
+              confirming = null;
+              draw();
+              say(status, turnOn ? "The school is live." : "The school is switched off.", true);
+              var again = doc.getElementById("hqLever");
+              if (again) again.focus();
+            })
+            .catch(function (e) {
+              if (confirming) confirming.remove();
+              confirming = null;
+              say(status, e.message, false);
+            });
+        });
+      });
+    }
+
+    function drawQuests(box) {
+      box.appendChild(el("h2", { class: "hq-h2", text: "Needs you" }));
+      var quests = data.quests || [];
+      if (!quests.length) {
+        box.appendChild(el("p", { class: "hq-words hq-quiet" }, [el("span", { class: "hq-tick", "aria-hidden": "true" }), "Nothing needs you. The school is running itself."]));
+        return;
+      }
+      var list = el("ul", { class: "hq-quests" });
+      quests.forEach(function (q) {
+        var icon = el("span", { class: "hq-quest__icon" }, [el("img", { src: QUEST_ICONS[q.id] || QUEST_ICONS.waiting, alt: "", width: 38, height: 38 })]);
+        if (q.count) icon.appendChild(el("span", { class: "hq-count", text: String(q.count) }));
+        var item = el("li", { class: "hq-quest" }, [icon, el("div", {}, [el("h3", { class: "hq-h3", text: q.title }), el("p", { class: "hq-words hq-soft", text: q.words })])]);
+        if (q.button && q.go) {
+          var go = el("button", { class: "hq-btn hq-btn--small", type: "button", text: q.button });
+          go.addEventListener("click", function () {
+            if (q.filter) familyFilter = q.filter;
+            show(q.go);
+            if (tabs[q.go]) tabs[q.go].focus();
+          });
+          item.appendChild(go);
+        }
+        list.appendChild(item);
+      });
+      box.appendChild(list);
+    }
+
+    function drawMoney(box, withLink) {
+      var n = data.numbers || {};
+      var total = (n.entryPence || 0) + (n.giftPence || 0);
+      box.appendChild(el("h2", { class: "hq-h2", text: "Raised so far" }));
+      if (!total) {
+        box.appendChild(el("p", { class: "hq-words hq-soft", text: "No payments yet." }));
+        return;
+      }
+      box.appendChild(el("p", { class: "hq-money__total" }, [el("b", { text: pounds(total) }), el("span", { class: "hq-note", text: "and counting" })]));
+      var bar = el("div", { class: "hq-bar", role: "img", "aria-label": pounds(n.entryPence) + " from entries and " + pounds(n.giftPence) + " in gifts" });
+      [["is-entries", n.entryPence], ["is-gifts", n.giftPence]].forEach(function (p) {
+        if (!(p[1] > 0)) return;
+        var part = el("span", { class: p[0] });
+        part.style.flexGrow = String(p[1]);
+        bar.appendChild(part);
+      });
+      box.appendChild(bar);
+      box.appendChild(el("p", { class: "hq-legend" }, [el("span", { class: "hq-chip hq-chip--crimson", text: "Entries " + pounds(n.entryPence) }), " ", el("span", { class: "hq-chip hq-chip--holly", text: "Gifts " + pounds(n.giftPence) })]));
+      if (n.giftAidPence > 0) {
+        box.appendChild(el("p", { class: "hq-words", text: pounds(n.giftAidPence) + " of the gifts came with Gift Aid, which could add about " + pounds(Math.round(n.giftAidPence / 4)) + " when we claim it." }));
+      }
+      if (withLink) {
+        var more = el("button", { class: "hq-link", type: "button", text: "See the money" });
+        more.addEventListener("click", function () {
+          show("money");
+          tabs.money.focus();
+        });
+        box.appendChild(el("p", {}, [more]));
+      }
+    }
+
+    function drawRecruits(box) {
+      var n = data.numbers || {};
+      box.appendChild(el("h2", { class: "hq-h2", text: "Newest recruits" }));
+      var recruits = data.recruits || [];
+      if (!recruits.length) {
+        box.appendChild(el("p", { class: "hq-words hq-soft", text: "No detectives yet. The first ones appear here as soon as a family pays." }));
+        return;
+      }
+      box.appendChild(el("p", { class: "hq-words hq-soft", text: (n.families || 0) + " " + plural(n.families, "family", "families") + " and " + (n.detectives || 0) + " " + plural(n.detectives, "detective", "detectives") + " so far." }));
+      var list = el("ul", { class: "hq-recruits" });
+      recruits.forEach(function (r) {
+        list.appendChild(
+          el("li", { class: "hq-char" }, [
+            el("span", { class: "hq-avatar" }, [el("img", { src: r.tile, alt: "", width: 84, height: 84, loading: "lazy" })]),
+            el("b", { text: r.name }),
+            r.badge ? el("small", { text: r.badge }) : null,
+            r.approved ? null : el("span", { class: "hq-chip", text: "Name to check" }),
+          ]),
+        );
+      });
+      box.appendChild(list);
+    }
+
+    function drawClocks(row) {
+      var days = Number(data.daysToFirstClue) || 0;
+      var clue = el("div", { class: "hq-panel hq-clock" });
+      if (days > 0) {
+        clue.appendChild(rosette("#C02238", "#800000", String(days)));
+        clue.appendChild(el("h3", { class: "hq-h3", text: plural(days, "day to the first clue", "days to the first clue") }));
+      } else {
+        var before = Date.now() < new Date(data.firstClueAt).getTime();
+        clue.appendChild(rosette("#C02238", "#800000", before ? "Today" : "Open"));
+        clue.appendChild(el("h3", { class: "hq-h3", text: before ? "The first clue is today" : "The doors are open" }));
+      }
+      clue.appendChild(el("p", { class: "hq-soft", text: whenWords(data.firstClueAt) }));
+      var n = data.numbers || {};
+      var who = el("div", { class: "hq-panel hq-clock" }, [
+        rosette("#D9A93E", "#1A531A", String(n.detectives || 0)),
+        el("h3", { class: "hq-h3", text: plural(n.detectives, "detective enrolled", "detectives enrolled") }),
+        el("p", { class: "hq-soft", text: (n.families || 0) + " " + plural(n.families, "family", "families") }),
+      ]);
+      row.appendChild(clue);
+      row.appendChild(who);
+    }
+
+    function drawHq() {
+      var part = parts.hq;
+      part.textContent = "";
+      var row = el("div", { class: "hq-status-row" });
+      var switchBox = el("div", { class: "hq-panel hq-switchbox" });
+      drawSwitch(switchBox);
+      row.appendChild(switchBox);
+      drawClocks(row);
+      part.appendChild(row);
+      var pair = el("div", { class: "hq-pair" });
+      var quests = el("section", { class: "hq-panel", "aria-label": "Needs you" });
+      drawQuests(quests);
+      var money = el("section", { class: "hq-panel hq-money", "aria-label": "Raised so far" });
+      drawMoney(money, true);
+      pair.appendChild(quests);
+      pair.appendChild(money);
+      part.appendChild(pair);
+      var recruits = el("section", { class: "hq-panel", "aria-label": "Newest recruits" });
+      drawRecruits(recruits);
+      part.appendChild(recruits);
+    }
+
     /** Draws everything from the latest answer. Each part's drawing arrives with its task. */
     function draw() {
       if (!data) return;
@@ -185,6 +393,7 @@
       stateChip.textContent = on ? "Live" : "Switched off";
       stateChip.classList.toggle("is-live", on);
       tileCount("families", data.numbers ? data.numbers.namesToCheck : 0);
+      drawHq();
     }
 
     /** Reads HQ afresh: called by app.js whenever the section is opened. */

@@ -91,3 +91,127 @@ describe("Head Elf HQ's menu", () => {
     expect(status.classList.contains("is-error")).toBe(true);
   });
 });
+
+// ---- the HQ screen (Task 4) ----
+
+const BUSY = {
+  ...HQ,
+  numbers: { families: 128, detectives: 231, namesToCheck: 6, waitingPayments: 2, entryPence: 115500, giftPence: 33100, giftAidPence: 21000 },
+  quests: [
+    { id: "names", count: 6, title: "First names to check", words: "Until you tick a name, the public sees only its first letter.", go: "families", button: "Check names", filter: "check" },
+    { id: "waiting", count: 2, title: "Payments not finished", words: "Started over an hour ago and never paid: usually someone who changed their mind. Nothing to do.", go: null, button: null, filter: null },
+  ],
+  recruits: [
+    { detectiveId: 7, familyId: 3, name: "Ruby Tinselfoot", badge: "EDS 0427", approved: false, tile: "/assets/img/elf/paper/tiles/costumes/reindeer-s3.webp" },
+    { detectiveId: 8, familyId: 3, name: "Leo Frostwhistle", badge: "EDS 0428", approved: true, tile: "/assets/img/elf/paper/tiles/costumes/snowman-s3.webp" },
+  ],
+};
+
+const hqPart = () => panel("hq");
+const lever = () => document.getElementById("hqLever") as HTMLButtonElement;
+const buttonCalled = (words: string) => [...document.querySelectorAll<HTMLButtonElement>("#elfHq button")].find((b) => b.textContent!.trim() === words);
+
+describe("the HQ screen", () => {
+  it("asks a second time before switching the school on, and only then sends it", async () => {
+    const { hq, calls } = page({ answers: { "/api/admin/elf/hq": BUSY, "/api/admin/elf/settings": { settings: { ...BUSY.settings, schoolOn: true } } } });
+    await hq.open();
+    expect(lever().getAttribute("aria-checked")).toBe("false");
+    lever().click();
+    expect(hqPart().textContent).toContain("Switch it on for everyone?");
+    expect(calls.filter((c) => c.method === "PATCH")).toHaveLength(0);
+    buttonCalled("Yes, switch it on")!.click();
+    await flush();
+    expect(calls.filter((c) => c.method === "PATCH")).toEqual([{ method: "PATCH", url: "/api/admin/elf/settings", body: { schoolOn: true } }]);
+    expect(lever().getAttribute("aria-checked")).toBe("true");
+    expect(document.querySelector("#elfHq .hq-state")!.textContent).toBe("Live");
+  });
+
+  it("asks before switching it off too, and Not yet changes nothing", async () => {
+    const { hq, calls } = page({ answers: { "/api/admin/elf/hq": { ...BUSY, settings: { ...BUSY.settings, schoolOn: true } } } });
+    await hq.open();
+    lever().click();
+    expect(hqPart().textContent).toContain("Switch it off? Families cannot see the school or sign in while it is off.");
+    buttonCalled("Keep it on")!.click();
+    expect(hqPart().textContent).not.toContain("Switch it off?");
+    expect(calls.filter((c) => c.method === "PATCH")).toHaveLength(0);
+  });
+
+  it("lets only an admin pull the lever", async () => {
+    const { hq } = page({ answers: { "/api/admin/elf/hq": { ...BUSY, canSwitch: false } } });
+    await hq.open();
+    expect(lever().disabled).toBe(true);
+    expect(hqPart().textContent).toContain("Only an admin can switch the school on or off.");
+  });
+
+  it("draws the quests with their counts, and a quest's button opens its part", async () => {
+    const { hq } = page({ answers: { "/api/admin/elf/hq": BUSY } });
+    await hq.open();
+    const quests = [...hqPart().querySelectorAll(".hq-quest")];
+    expect(quests).toHaveLength(2);
+    expect(quests[0].textContent).toContain("First names to check");
+    expect(quests[0].querySelector(".hq-count")!.textContent).toBe("6");
+    expect(quests[1].querySelector("button")).toBeNull();
+    buttonCalled("Check names")!.click();
+    expect(panel("families").hidden).toBe(false);
+    expect(tabs()[1].getAttribute("aria-selected")).toBe("true");
+  });
+
+  it("says when nothing needs anyone", async () => {
+    const { hq } = page();
+    await hq.open();
+    expect(hqPart().querySelectorAll(".hq-quest")).toHaveLength(0);
+    expect(hqPart().textContent).toContain("Nothing needs you. The school is running itself.");
+  });
+
+  it("shows the money as one bar, with the Gift Aid it could add", async () => {
+    const { hq } = page({ answers: { "/api/admin/elf/hq": BUSY } });
+    await hq.open();
+    expect(hqPart().textContent).toContain("£1,486");
+    const parts = [...hqPart().querySelectorAll<HTMLElement>(".hq-bar span")];
+    expect(parts.map((p) => p.style.flexGrow)).toEqual(["115500", "33100"]);
+    expect(hqPart().textContent).toContain("Entries £1,155");
+    expect(hqPart().textContent).toContain("Gifts £331");
+    expect(hqPart().textContent).toContain("£210 of the gifts came with Gift Aid, which could add about £52.50 when we claim it.");
+  });
+
+  it("says when there is no money yet, with no bar", async () => {
+    const { hq } = page();
+    await hq.open();
+    expect(hqPart().textContent).toContain("No payments yet.");
+    expect(hqPart().querySelector(".hq-bar")).toBeNull();
+  });
+
+  it("draws the newest recruits as cards, and counts the names to check on the Families tile", async () => {
+    const { hq } = page({ answers: { "/api/admin/elf/hq": BUSY } });
+    await hq.open();
+    const cards = [...hqPart().querySelectorAll(".hq-char")];
+    expect(cards).toHaveLength(2);
+    expect(cards[0].querySelector("img")!.getAttribute("src")).toBe("/assets/img/elf/paper/tiles/costumes/reindeer-s3.webp");
+    expect(cards[0].textContent).toContain("Ruby Tinselfoot");
+    expect(cards[0].textContent).toContain("EDS 0427");
+    expect(cards[0].textContent).toContain("Name to check");
+    expect(cards[1].textContent).not.toContain("Name to check");
+    const count = tabs()[1].querySelector(".hq-count")!;
+    expect(count.hidden).toBe(false);
+    expect(count.textContent).toBe("6");
+  });
+
+  it("counts down to the first clue on a rosette, beside the detectives enrolled", async () => {
+    const { hq } = page({ answers: { "/api/admin/elf/hq": BUSY } });
+    await hq.open();
+    const clocks = [...hqPart().querySelectorAll(".hq-clock")];
+    expect(clocks[0].textContent).toContain("26");
+    expect(clocks[0].textContent).toContain("days to the first clue");
+    expect(clocks[0].textContent).toContain("Tuesday 1 December, 5:30pm");
+    expect(clocks[1].textContent).toContain("231");
+    expect(clocks[1].textContent).toContain("detectives enrolled");
+  });
+
+  it("makes a long number smaller, so it fits inside its rosette", async () => {
+    const { hq } = page({ answers: { "/api/admin/elf/hq": BUSY } });
+    await hq.open();
+    const [days, detectives] = [...hqPart().querySelectorAll(".hq-rosette b")];
+    expect(days.className).toBe("");
+    expect(detectives.className).toBe("is-long");
+  });
+});

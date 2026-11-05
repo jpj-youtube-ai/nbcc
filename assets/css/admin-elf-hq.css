@@ -62,6 +62,9 @@
 .hq-state.is-live::before { background: #3C9A3C; }
 .hq-state:empty { display: none; }
 .hq-status { margin: 0; min-height: 1.4em; font-size: 0.95rem; }
+/* Empty, it stays on the page (so what it later says is still announced) but leaves the layout: a
+   grid item with a negative margin would stretch to fill the room instead. */
+.hq-status:empty { position: absolute; width: 1px; height: 1px; min-height: 0; overflow: hidden; clip-path: inset(50%); }
 .hq-status.is-ok { color: var(--hq-holly); }
 .hq-status.is-error { color: var(--hq-crimson); font-weight: 700; }
 
@@ -110,7 +113,82 @@
 .hq-chip--holly { background: var(--hq-holly-soft); color: var(--hq-holly); border-color: var(--hq-holly); }
 .hq-chip--crimson { background: var(--hq-blush); color: var(--hq-crimson); border-color: var(--hq-crimson); }
 
+.hq-link { padding: 0; border: 0; background: none; cursor: pointer; font: inherit; color: var(--hq-maroon); text-decoration: underline; text-underline-offset: 4px; }
+.hq-link:hover { color: var(--hq-crimson); }
+
+/* ---- HQ: the switch and the two rosettes ---- */
+.hq-status-row { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--hq-space-xl); }
+.hq-switchbox { grid-column: 1 / -1; display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: var(--hq-space-lg) var(--hq-space-xl); }
+.hq-root .hq-switchbox .hq-h2 { margin: 0; }
+.hq-switchbox p { margin: 4px 0 0; }
+.hq-switchbox__who { grid-column: 1 / -1; }
+.hq-lever { position: relative; width: 132px; height: 62px; padding: 0; border: var(--hq-line); border-radius: 999px; background: #F2D3D7; box-shadow: var(--hq-pop); cursor: pointer; }
+.hq-lever:disabled { cursor: not-allowed; opacity: 0.6; }
+.hq-lever__words { position: absolute; inset: 0; display: flex; justify-content: flex-end; align-items: center; padding: 0 18px; font-family: var(--hq-head); font-weight: 800; font-size: 0.85rem; color: var(--hq-maroon); }
+.hq-lever__knob { position: absolute; top: 3px; left: 4px; width: 52px; height: 52px; }
+.hq-lever__knob img { width: 52px; height: 52px; object-fit: contain; filter: drop-shadow(1px 2px 0 rgba(58, 11, 11, 0.45)); }
+.hq-lever[aria-checked="true"] { background: #CFE5C8; }
+.hq-lever[aria-checked="true"] .hq-lever__words { justify-content: flex-start; color: var(--hq-holly); }
+.hq-lever[aria-checked="true"] .hq-lever__knob { transform: translateX(68px); }
+.hq-confirm { grid-column: 1 / -1; display: flex; flex-wrap: wrap; align-items: center; gap: var(--hq-space-md); padding: 12px 14px; border: 2px dashed var(--hq-crimson); border-radius: 14px; background: #FFF3F4; }
+.hq-confirm p { flex: 1 1 220px; }
+.hq-clock { display: grid; justify-items: center; align-content: center; gap: 4px; text-align: center; }
+.hq-clock p { margin: 0; }
+.hq-rosette { position: relative; display: grid; place-items: center; width: 108px; height: 108px; }
+.hq-rosette svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+.hq-rosette b { position: relative; font-family: var(--hq-head); font-weight: 800; font-size: 2.2rem; line-height: 1; color: var(--hq-on-dark); font-variant-numeric: lining-nums; }
+.hq-rosette b.is-long { font-size: 1.65rem; }
+.hq-rosette b.is-longer { font-size: 1.2rem; }
+.hq-root .hq-clock .hq-h3 { margin-top: 6px; color: var(--hq-maroon); }
+@container (min-width: 900px) {
+  .hq-status-row { grid-template-columns: minmax(0, 1.6fr) repeat(2, minmax(0, 1fr)); }
+  .hq-switchbox { grid-column: auto; }
+}
+
+/* ---- HQ: Needs you, as a quest log, and the money ---- */
+.hq-pair { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--hq-space-xl); align-items: start; }
+@container (min-width: 900px) {
+  .hq-pair { grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr); }
+}
+.hq-quests { display: grid; gap: var(--hq-space-md); margin: 0; padding: 0; list-style: none; }
+.hq-quest { display: grid; grid-template-columns: 56px minmax(0, 1fr) auto; align-items: center; gap: var(--hq-space-md) var(--hq-space-lg); padding: 12px 14px; border: 2px solid var(--hq-ink); border-radius: 16px; background: #FFF8EA; }
+.hq-quest p { margin: 2px 0 0; font-size: 0.88rem; line-height: 1.4; }
+.hq-quest__icon { position: relative; display: grid; place-items: center; width: 56px; height: 56px; border: 2px solid var(--hq-ink); border-radius: 14px; background: var(--hq-card); }
+.hq-quest__icon img { width: 38px; height: 38px; object-fit: contain; }
+.hq-quest__icon .hq-count { top: -9px; right: -10px; min-width: 26px; height: 26px; font-size: 0.85rem; }
+.hq-quiet { display: flex; align-items: center; gap: var(--hq-space-md); padding: 12px 14px; border: 2px dashed var(--hq-holly); border-radius: 16px; background: var(--hq-holly-soft); color: var(--hq-holly); }
+.hq-tick { flex: none; width: 32px; height: 32px; border: 2px solid var(--hq-holly); border-radius: 50%; background: var(--hq-card); }
+.hq-tick::before { content: "\2713"; display: grid; place-items: center; height: 100%; font-family: var(--hq-head); font-weight: 800; color: var(--hq-holly); }
+.hq-money__total { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--hq-space-sm); margin: 0 0 var(--hq-space-md); font-family: var(--hq-head); }
+.hq-money__total b { font-weight: 800; font-size: 2.2rem; line-height: 1; color: var(--hq-ink); font-variant-numeric: lining-nums; }
+.hq-bar { display: flex; width: 100%; height: 34px; border: var(--hq-line); border-radius: 14px; overflow: hidden; background: var(--hq-cream); }
+.hq-bar span { min-width: 6px; }
+.hq-bar .is-entries { background: var(--hq-crimson); }
+.hq-bar .is-gifts { background: var(--hq-holly); }
+.hq-bar .is-entries + .is-gifts { border-left: 2.5px solid var(--hq-ink); }
+.hq-legend { display: flex; flex-wrap: wrap; gap: var(--hq-space-sm); margin: var(--hq-space-md) 0; }
+.hq-money p.hq-words { margin-top: var(--hq-space-md); }
+
+/* ---- the detectives, as character cards ---- */
+.hq-recruits { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: var(--hq-space-lg); margin: var(--hq-space-md) 0 0; padding: 0; list-style: none; }
+.hq-char { display: grid; justify-items: center; align-content: start; gap: 4px; padding: 12px 10px 14px; border: 2px solid var(--hq-ink); border-radius: 18px; background: var(--hq-card); text-align: center; }
+.hq-char b { font-family: var(--hq-head); font-weight: 700; font-size: 0.98rem; line-height: 1.2; color: var(--hq-ink); overflow-wrap: anywhere; }
+.hq-char small { color: var(--hq-soft); font-size: 0.8rem; }
+.hq-avatar { display: block; width: 84px; height: 84px; border: 2.5px solid var(--hq-ink); border-radius: 22px; background: #FFF1D9; overflow: hidden; }
+.hq-avatar img { width: 100%; height: 100%; object-fit: cover; object-position: 50% 18%; }
+@container (max-width: 459px) {
+  .hq-switchbox { grid-template-columns: minmax(0, 1fr); justify-items: start; }
+  .hq-quest { grid-template-columns: 48px minmax(0, 1fr); }
+  .hq-quest .hq-btn { grid-column: 1 / -1; justify-self: start; }
+  .hq-quest__icon { width: 48px; height: 48px; }
+  .hq-rosette { width: 92px; height: 92px; }
+  .hq-rosette b { font-size: 1.8rem; }
+  .hq-rosette b.is-long { font-size: 1.4rem; }
+  .hq-rosette b.is-longer { font-size: 1.05rem; }
+}
+
 @media (prefers-reduced-motion: no-preference) {
+  .hq-lever__knob { transition: transform 0.28s var(--hq-ease); }
   .hq-tab, .hq-btn { transition: transform 0.12s var(--hq-ease), box-shadow 0.12s var(--hq-ease), background-color 0.2s; }
   .hq-part:not([hidden]) { animation: hq-in 0.32s var(--hq-ease); }
   @keyframes hq-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }

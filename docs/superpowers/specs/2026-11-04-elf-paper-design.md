@@ -73,6 +73,9 @@ All on 4 November 2026 unless dated otherwise.
     build (wave 1 and this work, one pull request, PR #711) merges switched off, around Tuesday 10 November and never
     before Sunday 8 November. Then Jaimie clicks through it on the live site with the hidden preview link
     (`/elf/preview/:token`, made in the admin) before staff switch it on. Small fixes go in as further merges.
+    Jaimie, 5 November 2026: merge it switched off that day instead, ahead of the Ball, so the click through has a
+    week. The elf check in the shared Stripe webhook steps aside for every payment that is not the school's before
+    any database work, so the Ball's payments run as before.
 13. **The calendar looks like an advent calendar.** Jaimie, approving the plan: "when you say calendar, it looks like an
     advent calendar." So the 24 doors are set into one calendar board, as little doors that open, not laid out as a
     grid of separate cards.
@@ -287,7 +290,7 @@ that covers a child's face; words that have not had Jaimie's yes; a look that br
 ## Constraints
 
 Everything in the wave 1 plan's Global Constraints still holds (switched off until Friday 13 November, nothing merged
-before Sunday 8 November because of the Ball, no dashes or hyphenated words in public copy, "could" for money,
+before Sunday 8 November because of the Ball until Jaimie moved the merge to 5 November in decision 12, no dashes or hyphenated words in public copy, "could" for money,
 "Elves' Workshop", never "Elf on the Shelf", no inner scrollbars, 390px wide works, the public repo rules, the
 worktree rules). Also:
 

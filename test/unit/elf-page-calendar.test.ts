@@ -249,3 +249,15 @@ describe("today's news at the top of the calendar", () => {
     expect(calendarStatus(done).title).toBe("Every elf is home");
   });
 });
+
+// The final review (5 November 2026), measured at 768 and 1024: beside the number, Tomorrow and Big
+// prize covered it, and today's "Clue in" chip ran past the door.
+describe("the advent calendar at every width", () => {
+  const css = readFileSync(resolve(__dirname, "../../assets/css/elf.css"), "utf8");
+
+  it("keeps a door's chip at its foot until the board is wide enough to put it beside the number", () => {
+    expect(css).toMatch(/@media \(min-width: 1180px\) \{[^@]*\.elf-door__chip \{ grid-row: 1;/);
+    expect(css).not.toMatch(/@media \(min-width: 640px\) \{[^@]*\.elf-door__chip \{ grid-row: 1;/);
+    expect(css).toMatch(/\.elf-door__flap \{[^}]*grid-template-columns:\s*minmax\(0, 1fr\)/);
+  });
+});

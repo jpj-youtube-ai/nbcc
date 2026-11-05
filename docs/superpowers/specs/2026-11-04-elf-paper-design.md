@@ -20,7 +20,7 @@ switch goes on.
 The dress up elf was to be built from painted layers: a painted elf, and painted hats, tops, shoes and gadgets laid on
 top. Three ways of painting those layers failed Jaimie's checks (2 to 4 November 2026: edges that did not meet, backs of
 hats and scarves showing, jumpers not over the arms). A research report (`reports/Dress up elf layering methods.md`,
-outside the repo, in `C:\Users\jomcfarl\Downloads\nbcc-scot\`) found the root cause: separately painted pictures never
+outside the repo, in the folder that holds it) found the root cause: separately painted pictures never
 share outlines, so no piece fits every elf. Games that do layering draw every piece on one locked body. The practical
 route this year is whole costumes, each painted on one elf, plus extras that never touch the elf.
 
@@ -79,7 +79,7 @@ All on 4 November 2026 unless dated otherwise.
 ## What is already made
 
 Every picture is in git ignored folders of the worktree and backed up to
-`C:\Users\jomcfarl\Downloads\nbcc-scot\elf-paintings-backup-2026-11-03\paper-2026-11-04\` (the paid for paintings, the
+the folder `elf-paintings-backup-2026-11-03/paper-2026-11-04` beside the repository (the paid for paintings, the
 scripts and a README). Nothing below is in the repo yet. Sizes are of the preview cut outs.
 
 | What | Where (preview cut outs) | Count | Notes |

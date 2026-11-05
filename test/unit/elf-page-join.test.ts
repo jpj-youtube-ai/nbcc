@@ -167,3 +167,19 @@ describe("adding a detective, signed in", () => {
     expect(body.detectives).toEqual([{ firstName: "Ivy", surname: "Snowsleuth" }]);
   });
 });
+
+// The final review (5 November 2026): the edges of the tick boxes (about 2.8 to 1) and of the boxes
+// to write in (about 1.6 to 1) were too faint to see for some grown ups; 3 to 1 is the least.
+describe("the enrol form's boxes", () => {
+  const css = readFileSync(resolve(__dirname, "../../assets/css/elf.css"), "utf8");
+
+  it("draws the edges of its tick boxes and of its boxes to write in dark enough to see", () => {
+    const tick = /\.elf-tick input \{[^}]*inset 0 0 0 1\.5px color-mix\(in srgb, var\(--maroon\) (\d+)%/.exec(css);
+    const field = /\.elf-sign-in input\[type="email"\] \{[^}]*inset 0 0 0 1\.5px color-mix\(in srgb, var\(--maroon\) (\d+)%/.exec(css);
+    expect(tick).not.toBeNull();
+    expect(field).not.toBeNull();
+    // Maroon at 55% on the card is about 3.5 to 1.
+    expect(Number(tick![1])).toBeGreaterThanOrEqual(55);
+    expect(Number(field![1])).toBeGreaterThanOrEqual(55);
+  });
+});

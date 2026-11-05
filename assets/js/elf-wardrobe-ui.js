@@ -496,6 +496,10 @@
         elfSays("Hello");
         var next = form.querySelector(".elf-wd-step--dress");
         if (next && next.scrollIntoView) next.scrollIntoView({ behavior: calm() ? "auto" : "smooth", block: "start" });
+        // The button has just folded away with step 1: the keyboard goes on to the open gift tag, so
+        // nobody is left on a button that is no longer there.
+        var open = form.querySelector('.elf-wd-tab[aria-selected="true"]') || form.querySelector(".elf-wd-tab");
+        if (open && open.focus) open.focus({ preventScroll: true });
       });
     }
 

@@ -607,3 +607,15 @@ describe("the paper wardrobe", () => {
     expect($(".elf-wd-tools").hidden).toBe(false);
   });
 });
+
+// The final review (5 November 2026): "Done, dress me up" folded itself away while it had the
+// keyboard, leaving a screen reader user nowhere.
+describe("after step 1 is done", () => {
+  it("puts the keyboard on the open gift tag", () => {
+    load(wardrobeView({ made: false }));
+    const done = $<HTMLButtonElement>("button.elf-wd-done");
+    done.focus();
+    done.click();
+    expect(document.activeElement).toBe($('.elf-wd-tab[aria-selected="true"]'));
+  });
+});

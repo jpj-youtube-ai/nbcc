@@ -332,3 +332,25 @@ describe("the paper wardrobe", () => {
     expect(bytes).toBeLessThan(1024 * 1024);
   });
 });
+
+// The final review (5 November 2026): what a person at a laptop, or in a narrow column, would meet.
+describe("the paper wardrobe at every width", () => {
+  const css = readFileSync(resolve(ROOT, "assets/css/elf.css"), "utf8");
+
+  it("keeps the stage and its two tools in view together on a laptop, the stage sized to the screen's height", () => {
+    // Measured at 1366 by 657: the whole sticky plate was 1205px tall, so Snap a photo sat below the screen.
+    const stick = page().querySelector(".elf-wd-stick")!;
+    expect(stick.querySelector(".elf-wd-stage")).not.toBeNull();
+    expect(stick.querySelector(".elf-wd-surprise")).not.toBeNull();
+    expect(stick.querySelector(".elf-wd-snap")).not.toBeNull();
+    expect(css).toMatch(/\.elf-wd-stick \{[^}]*position:\s*sticky/);
+    expect(css).not.toMatch(/\.elf-wd-preview \{[^}]*position:\s*sticky/);
+    expect(css).toMatch(/\.elf-wd-show \{[^}]*width:\s*min\(100%, 360px, calc\(\(100vh/);
+  });
+
+  it("hangs the gift tags three over two whenever the dress up column is narrow, not only on a phone", () => {
+    // Measured at 920: "Glasses and bow ties" hung 30px below its tag.
+    expect(css).toMatch(/\.elf-wd-step--dress \{[^}]*container-type:\s*inline-size/);
+    expect(css).toMatch(/@container \(max-width: 640px\) \{[^@]*\.elf-wd-tabs li:nth-child\(4\) \{ grid-column: 2 \/ span 2; \}/);
+  });
+});

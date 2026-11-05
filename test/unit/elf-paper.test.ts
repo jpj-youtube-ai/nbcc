@@ -99,3 +99,22 @@ describe("the stylesheet", () => {
     for (const address of new Set(used)) expect(existsSync(resolve(ROOT, address.slice(1))), address).toBe(true);
   });
 });
+
+// The final review (5 November 2026): in the private preview the strip sat under the bar, and the
+// torn bands dropped below it, leaving a gap.
+describe("the private preview's strip", () => {
+  it("sits under the bar, with the torn bands and the page's top moved down after it", () => {
+    expect(CSS).toMatch(/\.elf-preview-strip \{[^}]*margin:\s*var\(--nav-h\) 0 0/);
+    expect(CSS).toMatch(/\.elf-preview-strip \+ \.site-main \.elf-bands \{[^}]*top:\s*0/);
+    expect(CSS).toMatch(/\.elf-preview-strip \+ \.site-main \.page-top \{[^}]*padding-top:\s*calc\(40px/);
+  });
+});
+
+// The repository is public, so the paper build's design and plan name no folder on anyone's computer.
+describe("the paper build's documents", () => {
+  it("name no user folder on a computer", () => {
+    for (const doc of ["docs/superpowers/specs/2026-11-04-elf-paper-design.md", "docs/superpowers/plans/2026-11-04-elf-paper.md"]) {
+      expect(readFileSync(resolve(ROOT, doc), "utf8"), doc).not.toMatch(/[A-Z]:[\\/]+Users[\\/]+/i);
+    }
+  });
+});

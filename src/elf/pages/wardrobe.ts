@@ -349,24 +349,26 @@ export function renderWardrobePage(view: WardrobeView): string {
       <form class="elf-wd" method="post" action="${sitePath(view.saveUrl) ?? "/"}" data-api="/api/elf/look" data-doors="${state.doors.join(",")}" data-made="${view.made ? "true" : "false"}">
         <input type="hidden" name="detective" value="${escapeHtml(d.id)}" />
         <aside class="elf-wd-preview" aria-label="${name}'s elf">
-          <div class="elf-wd-show">
-            <img class="elf-wd-hang elf-wd-hang--a" src="${PAPER}deco/bauble.webp" width="393" height="480" alt="" decoding="async" />
-            <img class="elf-wd-hang elf-wd-hang--b" src="${PAPER}deco/bauble.webp" width="393" height="480" alt="" decoding="async" />
-            ${stage(look, state, `${d.name}'s elf`)}
-            <p class="elf-wd-say" aria-live="polite"></p>
-            <span class="elf-wd-seal" aria-hidden="true">${rosette({ className: "elf-wd-seal__rosette", petals: 18, tails: true })}<b>${opened}</b> <small>of ${COSTUMES.length}</small></span>
+          <div class="elf-wd-stick">
+            <div class="elf-wd-show">
+              <img class="elf-wd-hang elf-wd-hang--a" src="${PAPER}deco/bauble.webp" width="393" height="480" alt="" decoding="async" />
+              <img class="elf-wd-hang elf-wd-hang--b" src="${PAPER}deco/bauble.webp" width="393" height="480" alt="" decoding="async" />
+              ${stage(look, state, `${d.name}'s elf`)}
+              <p class="elf-wd-say" aria-live="polite"></p>
+              <span class="elf-wd-seal" aria-hidden="true">${rosette({ className: "elf-wd-seal__rosette", petals: 18, tails: true })}<b>${opened}</b> <small>of ${COSTUMES.length}</small></span>
+            </div>
+            <p class="elf-wd-taphint" aria-hidden="true" hidden>Tap the stage to make it snow</p>
+            <div class="elf-wd-tools" hidden>
+              <button type="button" class="elf-btn elf-btn--cane elf-wd-surprise">${icon("surprise")}<span>Surprise me</span></button>
+              <button type="button" class="elf-btn elf-btn--holly elf-wd-snap">${icon("camera")}<span>Snap a photo</span></button>
+            </div>
           </div>
-          <p class="elf-wd-taphint" aria-hidden="true" hidden>Tap the stage to make it snow</p>
           <div class="elf-wd-plate elf-card elf-card--crimson">
             ${headingStrip({ text: d.name, tag: "h2", back: "holly" })}
             <p class="elf-wd-preview__rank">Badge ${escapeHtml(d.badgeNumber)} <span class="elf-chip elf-chip--done">${escapeHtml(d.rank)}</span></p>
             <p class="elf-wd-wearing">${escapeHtml(lookWords(look, state))}</p>
             <p class="elf-wd-status" role="status"></p>
             <button class="elf-btn elf-btn--crimson" type="submit">Save this look</button>
-            <div class="elf-wd-tools" hidden>
-              <button type="button" class="elf-btn elf-btn--cane elf-wd-surprise">${icon("surprise")}<span>Surprise me</span></button>
-              <button type="button" class="elf-btn elf-btn--holly elf-wd-snap">${icon("camera")}<span>Snap a photo</span></button>
-            </div>
             <section class="elf-wd-looks" aria-labelledby="wd-looks-h">
               ${headingStrip({ text: "My favourite looks", tag: "h3", back: "tan", id: "wd-looks-h" })}
               <div class="elf-wd-looks__line"><span class="elf-wd-looks__string" aria-hidden="true"></span><div class="elf-wd-looks__row">${looks}</div></div>

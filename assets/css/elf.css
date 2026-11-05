@@ -199,6 +199,8 @@
   inset: 0;
   z-index: 1;
   display: grid;
+  /* One column as wide as the door, so a chip can never widen it. */
+  grid-template-columns: minmax(0, 1fr);
   grid-template-rows: auto minmax(0, 1fr) auto;
   justify-items: center;
   align-items: center;
@@ -289,23 +291,30 @@
   .elf-door__flap { padding: 7px 7px 8px; }
   .elf-door__num { font-size: 2rem; }
   .elf-door .elf-chip { font-size: 0.7rem; }
-  .elf-door__chip { grid-row: 1; justify-self: end; align-self: start; }
-  .elf-door--today .elf-door__chip { display: inline-flex; }
-  .elf-door.has-chip .elf-door__foot { display: inline-flex; }
+  /* The time on a later door's day, but not "Clue in" on today's: it would run past the door. */
   .elf-door__more { display: inline; }
-  .elf-door__place { display: block; }
+  .elf-door--today .elf-door__more { display: none; }
   .elf-door__tab { right: -5px; width: 9px; height: 19px; margin-top: -9.5px; }
   .elf-door--double .elf-door__flap--left .elf-door__tab { right: 5px; }
   .elf-door--double .elf-door__flap--right .elf-door__tab { left: 5px; }
-  /* From 640 pixels the bow sits on top of the door, as on a present, and the door's chip steps
-     down below it. */
+  /* From 640 pixels the bow sits on top of the door, as on a present. */
   .elf-door__bow { top: -24px; right: auto; left: 50%; width: 60px; margin-left: -30px; transform: none; }
   .elf-door--double .elf-door__bow { margin-left: -30px; }
+  .elf-door.is-done::after { top: -13px; right: -11px; width: 40px; height: 38px; }
+  .elf-carve { width: 46px; height: 46px; }
+}
+/* Only a board this wide has room for a chip beside the door's number (measured at 768 and 1024,
+   Tomorrow and Big prize covered the number): narrower, the chip stays at the door's foot. */
+@media (min-width: 1180px) {
+  .elf-door__chip { grid-row: 1; justify-self: end; align-self: start; }
+  .elf-door--today .elf-door__chip { display: inline-flex; }
+  .elf-door.has-chip .elf-door__foot { display: inline-flex; }
+  .elf-door--today .elf-door__more { display: inline; }
+  .elf-door__place { display: block; }
+  /* The chip steps down below today's bow. */
   .elf-door--gold .elf-door__chip { margin-top: 17px; }
   /* Open, its chip sits beside the door, clear of the holly on the corner. */
   .elf-door.is-open .elf-door__chip { position: static; justify-self: start; transform: rotate(var(--elf-chip-tilt, -2deg)); }
-  .elf-door.is-done::after { top: -13px; right: -11px; width: 40px; height: 38px; }
-  .elf-carve { width: 46px; height: 46px; }
 }
 
 /* The winner behind an open door: their dressed elf, or their photo once it has been checked. */
@@ -591,7 +600,9 @@ form.elf-wd { display: grid; gap: clamp(26px, 4vw, 44px); padding: 0; background
 .elf-wd-tools[hidden], .elf-wd-taphint[hidden], .elf-wd-peek[hidden] { display: none; }
 
 /* ---- the stage, in its paper frame, with baubles, its fairy lights and the count on a rosette ---- */
-.elf-wd-preview { display: grid; justify-items: center; gap: 14px; min-width: 0; }
+.elf-wd-preview { display: grid; justify-items: center; align-content: start; gap: 14px; min-width: 0; }
+/* The stage, its hint and its two tools, kept together: beside the choices this block stays in view. */
+.elf-wd-stick { display: grid; justify-items: center; gap: 12px; width: 100%; }
 .elf-wd-show { position: relative; width: min(100%, 360px); padding-top: 12px; }
 .elf-wd-frame { padding: 12px; }
 /* The stage: the look's paper pictures, each in its place, as fractions of a stage 2 by 3 (the same
@@ -780,8 +791,10 @@ form.elf-wd { display: grid; gap: clamp(26px, 4vw, 44px); padding: 0; background
 .elf-wd-spark { position: fixed; width: var(--z); height: var(--z); margin: calc(var(--z) / -2) 0 0 calc(var(--z) / -2); color: var(--c); opacity: 0; }
 .elf-wd-spark svg { display: block; width: 100%; height: 100%; fill: currentColor; }
 
-/* On a phone the tags hang three over two, as mockup 6 has them. */
-@media (max-width: 559px) {
+/* In a narrow column (a phone, or beside the stage on a small laptop) the tags hang three over two, as
+   mockup 6 has them on a phone: five in a row there leaves no room for their names. */
+.elf-wd-step--dress { container-type: inline-size; }
+@container (max-width: 640px) {
   .elf-wd-tabs { grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 16px 10px; }
   .elf-wd-tabs li { grid-column: span 2; }
   .elf-wd-tabs li:nth-child(4) { grid-column: 2 / span 2; }
@@ -794,13 +807,17 @@ form.elf-wd { display: grid; gap: clamp(26px, 4vw, 44px); padding: 0; background
 }
 @media (min-width: 900px) {
   form.elf-wd { grid-template-columns: minmax(300px, 380px) minmax(0, 1fr); align-items: start; }
-  /* Beside the choices the stage and its plate stay in view. */
-  .elf-wd-preview { position: sticky; top: calc(var(--nav-h) + 50px); }
+  /* Beside the choices the stage and its two tools stay in view (the name plate and the photos scroll
+     away under them), the stage no taller than the screen leaves room for: measured at 1366 by 657,
+     a whole sticky plate put Snap a photo below the screen. */
+  .elf-wd-preview { align-self: stretch; }
+  .elf-wd-stick { position: sticky; top: calc(var(--nav-h) + 16px); z-index: 2; }
+  .elf-wd-show { width: min(100%, 360px, calc((100vh - var(--nav-h) - 210px) * 0.6)); }
   .elf-wd-peek { display: none; }
 }
 /* A phone on its side has no height to spare: nothing stays put there. */
 @media (max-height: 520px) {
-  .elf-wd-preview { position: static; }
+  .elf-wd-stick { position: static; }
 }
 
 @media (prefers-reduced-motion: no-preference) {
@@ -1018,7 +1035,8 @@ form.elf-wd { display: grid; gap: clamp(26px, 4vw, 44px); padding: 0; background
 .elf-sign-in input[type="email"] {
   width: 100%; min-height: 48px; padding: 10px 14px; border: 0; border-radius: 6px; color: var(--slate); font: inherit;
   background-color: var(--card); background-image: var(--elf-grain-light); background-size: 384px; background-blend-mode: multiply;
-  box-shadow: inset 0 2px 3px rgba(94, 0, 0, 0.2), inset 0 0 0 1.5px color-mix(in srgb, var(--tan) 60%, transparent);
+  /* The edge at maroon 55% on the card is about 3.5 to 1, so the box can be seen. */
+  box-shadow: inset 0 2px 3px rgba(94, 0, 0, 0.2), inset 0 0 0 1.5px color-mix(in srgb, var(--maroon) 55%, transparent);
 }
 .elf-join-form input:focus-visible,
 .elf-join-form select:focus-visible,
@@ -1045,7 +1063,7 @@ form.elf-wd { display: grid; gap: clamp(26px, 4vw, 44px); padding: 0; background
 /* A tick box: a little square of card, ticked in holly. Underneath it is still the page's own tick
    box, so it works, and reads, as one. */
 .elf-tick { display: flex; gap: 12px; align-items: flex-start; margin: 0; }
-.elf-tick input { -webkit-appearance: none; appearance: none; flex: none; width: 26px; height: 26px; margin: 0; border-radius: 4px; background-color: var(--card); background-image: var(--elf-grain-light); background-size: 384px; background-blend-mode: multiply; box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--maroon) 45%, transparent), 0 2px 2px rgba(94, 0, 0, 0.2); transform: rotate(-2deg); cursor: pointer; }
+.elf-tick input { -webkit-appearance: none; appearance: none; flex: none; width: 26px; height: 26px; margin: 0; border-radius: 4px; background-color: var(--card); background-image: var(--elf-grain-light); background-size: 384px; background-blend-mode: multiply; box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--maroon) 55%, transparent), 0 2px 2px rgba(94, 0, 0, 0.2); transform: rotate(-2deg); cursor: pointer; }
 .elf-tick input:checked { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M5 12.5l4.2 4.3L19 7' fill='none' stroke='%231A531A' stroke-width='3.4' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E"), var(--elf-grain-light); background-size: 20px, 384px; background-position: center, 0 0; background-repeat: no-repeat, repeat; }
 .elf-tick input:focus-visible { outline: 3px solid var(--gold-ink); outline-offset: 2px; }
 .elf-tick label { padding-top: 2px; }
@@ -1186,7 +1204,11 @@ form.elf-wd { display: grid; gap: clamp(26px, 4vw, 44px); padding: 0; background
 .elf-page .page-top.elf-join-top { padding-bottom: clamp(8px, 2vw, 16px); }
 
 /* The private preview (Jaimie, 3 November 2026): every page says so across the top. */
-.elf-preview-strip { margin: 0; padding: 10px 16px; background: var(--maroon); color: var(--cream); font-size: .9rem; text-align: center; }
+/* It sits under the bar (which stays fixed at the top), and the page moves down after it: the torn
+   bands start at the strip's foot, and the page's top no longer leaves room for the bar again. */
+.elf-preview-strip { position: relative; z-index: 3; margin: var(--nav-h) 0 0; padding: 10px 16px; background: var(--maroon); color: var(--cream); font-size: .9rem; text-align: center; }
+.elf-preview-strip + .site-main .elf-bands { top: 0; }
+.elf-preview-strip + .site-main .page-top { padding-top: calc(40px + clamp(14px, 3vw, 40px)); }
 
 /* =================================================================
    The paper look (docs/superpowers/specs/2026-11-04-elf-paper-design.md; mockup 6, approved by Jaimie

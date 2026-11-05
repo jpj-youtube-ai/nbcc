@@ -24,6 +24,7 @@ const ROOT = resolve(__dirname, "../..");
 const html = readFileSync(resolve(ROOT, "admin.html"), "utf8");
 const appSrc = readFileSync(resolve(ROOT, "assets/js/admin/app.js"), "utf8");
 const helpers = require(resolve(ROOT, "assets/js/admin/helpers.js"));
+const GiftLog = require(resolve(ROOT, "assets/js/admin/gift-log.js"));
 const bodyHtml = (html.match(/<body[^>]*>([\s\S]*)<\/body>/i) || ["", ""])[1];
 
 const adminToken = signAdminSession({ sub: 3, email: "admin@nbcc", role: "admin", now: new Date(), secret: "s" }).token;
@@ -82,6 +83,8 @@ beforeEach(() => {
   window.sessionStorage.clear();
   document.body.innerHTML = bodyHtml;
   (window as unknown as { AdminHelpers: unknown }).AdminHelpers = helpers;
+  // admin.html loads the Donations gift log before app.js, which hands it the screen to draw.
+  (window as unknown as { AdminGiftLog: unknown }).AdminGiftLog = GiftLog.createGiftLog(document, window);
   window.confirm = () => true;
   window.prompt = () => "";
   window.alert = () => undefined;
@@ -343,6 +346,7 @@ describe("search, and the detail screens, say when they could not load (TASK-476
     failing["/api/admin/donors/5"] = SERVER_DOWN;
     await signIn();
     await open("donations");
+    (document.querySelector("#donationsTable .gl-gift__face") as HTMLElement).click(); // the gift's click down
     (document.querySelector("#donationsTable [data-donor]") as HTMLElement).click();
     await settle();
     expect(el("donorDetail").textContent).toContain("Could not load this donor. Please try again.");
@@ -353,6 +357,7 @@ describe("search, and the detail screens, say when they could not load (TASK-476
     failing["/api/admin/donors/5"] = { status: 404, body: { error: "not found" } };
     await signIn();
     await open("donations");
+    (document.querySelector("#donationsTable .gl-gift__face") as HTMLElement).click(); // the gift's click down
     (document.querySelector("#donationsTable [data-donor]") as HTMLElement).click();
     await settle();
     expect(el("donorDetail").textContent).toContain("Donor not found.");

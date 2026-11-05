@@ -813,8 +813,8 @@ export async function sendBackupAlert(message: BackupAlertEmail): Promise<void> 
 }
 
 // Invoices for donations (src/invoices/emails.ts): the invoice to the person, and the plain receipt when
-// a group's invoice is paid, from MAIL_FROM with replies going to the giving inbox; and the note to the
-// giving inbox when an invoice is paid twice (staff only). A person's and a business's receipts go as the
+// a group's invoice is paid, both from and replying to the giving inbox (Jaimie, 2026-11-05: "comes from
+// Giving rather than noreply"); and the note to the giving inbox when an invoice is paid twice (staff only). A person's and a business's receipts go as the
 // usual "donation" and "receipt" kinds.
 export interface InvoiceEmailMessage {
   email: string;
@@ -827,7 +827,7 @@ export interface InvoiceEmailMessage {
 export async function sendInvoiceEmail(m: InvoiceEmailMessage): Promise<void> {
   await sendVerbatim("invoice", m.name ?? null, {
     email: m.email,
-    from: config.MAIL_FROM,
+    from: config.GIVING_FROM_EMAIL,
     replyTo: config.GIVING_FROM_EMAIL,
     subject: m.subject,
     html: m.html,
@@ -838,7 +838,7 @@ export async function sendInvoiceEmail(m: InvoiceEmailMessage): Promise<void> {
 export async function sendInvoiceReceipt(m: InvoiceEmailMessage): Promise<void> {
   await sendVerbatim("invoiceReceipt", m.name ?? null, {
     email: m.email,
-    from: config.MAIL_FROM,
+    from: config.GIVING_FROM_EMAIL,
     replyTo: config.GIVING_FROM_EMAIL,
     subject: m.subject,
     html: m.html,

@@ -6988,7 +6988,8 @@ paid it comes through into Donations by itself. Design:
   becomes one donation (`source = 'invoice'`, `invoice_id` set) through the usual donation writer, and
   the receipt goes after the commit. A person gets the usual donation receipt (with Gift Aid when they
   saved a declaration), a business the usual Corporation Tax receipt, each starting "This pays invoice
-  INV-0012. Thank you.", and a group a plain thank you (`invoiceReceipt`). A business or group is stored
+  INV-0012. Thank you.", and a group a plain thank you (`invoiceReceipt`). The invoice and the group's
+  thank you come from, and reply to, giving@ (`GIVING_FROM_EMAIL`). A business or group is stored
   as a company donor, so it is never claimed for Gift Aid. A Stripe session already recorded against the
   invoice records nothing again. Money that really arrives twice is recorded twice, the invoice shows
   **Paid twice: refund one?** and the giving inbox is emailed (`invoiceStaff`); nothing is refunded by

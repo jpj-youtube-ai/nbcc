@@ -173,23 +173,24 @@
     var NOTE_MS = 3200;
     var NOTE_HOLD_MS = 900; // a note on one row is left alone this long before the next replaces it
     var PEEK_OUT_MS = 240; // a peek that is leaving sinks for this long (as in the stylesheet), then goes
-    // Where the three peeks sit along the bag's top, their tilt and their size: [across, down,
-    // degrees, scale], in the bag's own picture (120 wide, its rim at 36). The first is the FRONT
-    // place, for the newest thing: the biggest, and standing tallest. A peek is drawn PEEK_SIZE
-    // across (5 October 2026: about a third bigger than the 28 it was, and higher out of the bag),
-    // with PEEK_RISE of it above the place it is seated. They stay inside the bag's own picture, so
-    // they can never reach a neighbouring bag, the words below, or change the panel's height.
-    var PEEK_SIZE = 38;
+    // Where the three peeks sit in the bag's open top, their tilt and their size: [across, down,
+    // degrees, scale], in the bag's own picture (120 wide; the painted bag's front edge runs from
+    // (25, 44) to (78, 48), 5 November 2026). The first is the FRONT place, for the newest thing:
+    // the biggest, and standing tallest. A peek is drawn PEEK_SIZE across with PEEK_RISE of it
+    // above the place it is seated; the rest is behind the bag's front, so it sits INSIDE the bag
+    // (Jaimie). They stay inside the bag's opening, so they never poke out past its sides.
+    var PEEK_SIZE = 34;
     var PEEK_RISE = 24;
     var PEEK_AT = [
-      [31, 33, -8, 1.05],
-      [60, 36, 3, 0.97],
-      [92, 37, 11, 0.95],
+      [44.5, 46.5, -8, 1.05],
+      [60, 48, 3, 0.97],
+      [75, 49, 10, 0.95],
     ];
+    var PICTURES = "/assets/img/red-bag/";
     var SNOW =
-      '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path class="rb-flake__snow" d="M12 1.5l2.6 6 6.5-.75-3.9 5.25 3.9 5.25-6.5-.75-2.6 6-2.6-6-6.5.75L6.8 12 2.9 6.75l6.5.75z"/></svg>';
+      '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><image class="rb-flake__snow" href="' + PICTURES + 'snowflake.webp" width="24" height="24"/></svg>';
     var STAR =
-      '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path class="rb-flake__star" d="M12 2.5l2.8 6 6.5.8-4.8 4.5 1.3 6.5L12 17l-5.8 3.3 1.3-6.5-4.8-4.5 6.5-.8z"/></svg>';
+      '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><image class="rb-flake__star" href="' + PICTURES + 'star.webp" width="24" height="24"/></svg>';
 
     var ready = false; // nothing plays while the page is being set up
     var order = []; // the items in the bag, the newest first
@@ -246,8 +247,8 @@
       return holder.firstChild.firstChild;
     }
 
-    // Every bag carries a place for the peeks, BEHIND its own paper so they look inside it, and the
-    // ribbon and tag, which the stylesheet shows once the bag is full.
+    // Every bag carries a place for the peeks, BEHIND its own front so they sit inside it, and the
+    // painted bow and tag (the tag's words are real words), which the stylesheet shows once it is full.
     function dress(svg) {
       if (svg.querySelector(".rb-bag__peeks")) return;
       var paper = svg.querySelector(".rb-bag__paper");
@@ -257,17 +258,14 @@
       svg.appendChild(
         shapes(
           '<g class="rb-bag__tie">' +
-            '<g class="rb-bag__tag"><path class="rb-bag__string" d="M60 20c-3 9 3 21 0 31"/>' +
-            '<path class="rb-bag__card" d="M41 44h38l11 11v35a4 4 0 0 1-4 4H34a4 4 0 0 1-4-4V55z"/>' +
-            '<circle class="rb-bag__hole" cx="60" cy="51.5" r="2.6"/>' +
-            '<text class="rb-bag__tag-words"><tspan x="60" y="73">' +
+            '<g class="rb-bag__tag"><path class="rb-bag__string" d="M57 49c14-2 30 0 39 14"/>' +
+            '<image class="rb-bag__card" href="' + PICTURES + 'tag.webp" x="79" y="60" width="34" height="54.6"/>' +
+            '<text class="rb-bag__tag-words"><tspan x="96" y="91">' +
             rb.TAG_LINES[0] +
-            '</tspan> <tspan x="60" y="88">' +
+            '</tspan> <tspan x="96" y="101">' +
             rb.TAG_LINES[1] +
             "</tspan></text></g>" +
-            '<g class="rb-bag__bow"><path class="rb-bag__ribbon" d="M57.5 20l-8 12 5.5-.5 2 4.5 3.5-15zM62.5 20l8 12-5.5-.5-2 4.5-3.5-15z"/>' +
-            '<path class="rb-bag__ribbon" d="M60 18c-5-8-17-9-17-1s12 6 17 1zM60 18c5-8 17-9 17-1s-12 6-17 1z"/>' +
-            '<rect class="rb-bag__knot" x="56" y="14" width="8" height="8" rx="2.5"/></g>' +
+            '<image class="rb-bag__bow" href="' + PICTURES + 'bow.webp" x="41" y="40" width="30" height="21"/>' +
             "</g>",
         ),
       );

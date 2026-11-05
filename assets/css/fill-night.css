@@ -56,12 +56,13 @@
 .fn-night .rb-bags[data-count="3"]{--rb-max:30%}
 .fn-night .rb-bags[data-count="4"]{--rb-max:23%}
 .fn-night .rb-bags[data-count="5"]{--rb-max:18.5%}
-/* a red bag from the start, and the brighter red still rises inside it */
-.fn-night .rb-bag__paper{fill:#7f1322}
-.fn-night .rb-bag__outline{stroke:#a31a2e}
+/* a red bag from the start, and the brighter red still rises inside it: the painted bag, darkened */
+.fn-night .rb-bag__whole--red{opacity:1;filter:brightness(.5) saturate(1.15)}
+.fn-night .rb-bag__paper-night{display:inline;filter:brightness(.5) saturate(1.15)}
+.fn-night .rb-bag.is-full .rb-bag__whole--red{filter:none}
 /* The sum stands where the bag does, in a box of the bag's own height. Its place is padding because a
    percentage in padding is always of the width, which is what the bag's own size is. */
-.fn-sum{position:absolute;z-index:2;left:0;right:0;top:calc(var(--bag-h) * -1 + 10px);height:var(--bag-h);box-sizing:border-box;padding:0 calc(100% - var(--bag-left) - var(--bag-w) * .766) calc(var(--bag-w) * .24) calc(var(--bag-left) + var(--bag-w) * .1);margin:0;display:flex;flex-direction:column;justify-content:flex-end;align-items:center;color:#FFF8EF;text-shadow:0 2px 0 rgba(90,0,14,.5);pointer-events:none}
+.fn-sum{position:absolute;z-index:2;left:0;right:0;top:calc(var(--bag-h) * -1 + 10px);height:var(--bag-h);box-sizing:border-box;padding:0 calc(100% - var(--bag-left) - var(--bag-w) * .65) calc(var(--bag-w) * .22) calc(var(--bag-left) + var(--bag-w) * .208);margin:0;display:flex;flex-direction:column;justify-content:flex-end;align-items:center;color:#FFF8EF;text-shadow:0 2px 0 rgba(90,0,14,.5);pointer-events:none}
 .fn-sum b{font-family:var(--font-head);font-weight:700;font-size:clamp(2.1rem,1.8rem + 2vw,3.7rem);line-height:1;letter-spacing:-.02em;font-variant-numeric:lining-nums}
 .fn-sum span{font-size:.98rem;font-weight:500}
 .fn-sum[hidden]{display:none}

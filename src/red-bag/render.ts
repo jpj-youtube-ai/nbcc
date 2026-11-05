@@ -53,25 +53,34 @@ const escapeHtml = (s: string): string =>
 const MINUS_ICON = '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" aria-hidden="true"><path d="M6 12h12"/></svg>';
 const PLUS_ICON = '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" aria-hidden="true"><path d="M6 12h12M12 6v12"/></svg>';
 
+/** A rope handle: the logo's maroon-brown outline under a crimson rope, and a fine twist along it. */
+const cord = (cls: string, d: string) =>
+  `<g class="rb-bag__cord${cls}"><path class="rb-bag__rope-edge" d="${d}"/><path class="rb-bag__rope" d="${d}"/>` +
+  `<path class="rb-bag__twist" d="${d}"/></g>`;
+const PIC = "/assets/img/red-bag/";
+const BAG_AT = 'x="22" y="34" width="75.75" height="96"';
+
 /**
- * NBCC's Red Bag: a red paper gift bag, rectangular, with a folded top and two twisted cord handles
- * (assets/img/home-red-bags-handover.jpg). Not a sack. The bag starts as an outline on pale paper;
- * `.rb-bag__fill` is the red that rises inside it (the script scales it, transform only), and the
- * tissue shows at the top once it is full. For the eye only: the status line says it in words.
+ * NBCC's Red Bag: a red paper gift bag (assets/img/home-red-bags-handover.jpg), painted in the logo's
+ * style (5 November 2026), seen a little from above so its open top shows. Not a sack. Back to front:
+ * the back handle, fixed to the back rim; the whole bag (pale paper, or red once full); the tissue;
+ * the peeks the script adds, which sit INSIDE the bag; `.rb-bag__paper`, the front of the bag cut
+ * out above its front edge, so the edge always shows in front of them; `.rb-bag__fill`, the red front,
+ * which the stylesheet reveals from the bottom up as `--rb-fill` rises; then the front handle, the same
+ * span as the back one so the two never cross (Jaimie: one handle on each side, both red). For the eye
+ * only: the status line says it in words.
  */
 export const BAG_SVG =
   '<svg class="rb-bag" viewBox="0 0 120 132" width="120" height="132" aria-hidden="true" focusable="false">' +
-  '<path class="rb-bag__cord rb-bag__cord--back" d="M44 36C44 10 88 10 88 36"/>' +
-  '<path class="rb-bag__tissue" d="M22 38l9-13 8 9 9-14 9 13 9-12 8 11 9-9 7 15z"/>' +
-  '<path class="rb-bag__paper" d="M12 36h96v88a4 4 0 0 1-4 4H16a4 4 0 0 1-4-4z"/>' +
-  '<g class="rb-bag__clip"><rect class="rb-bag__fill" x="12" y="36" width="96" height="92"/></g>' +
-  '<path class="rb-bag__gusset" d="M92 36h16v88a4 4 0 0 1-4 4H92z"/>' +
-  '<path class="rb-bag__fold" d="M12 36h96v10H12z"/>' +
-  '<path class="rb-bag__outline" d="M12 36h96v88a4 4 0 0 1-4 4H16a4 4 0 0 1-4-4z"/>' +
-  '<path class="rb-bag__crease" d="M12 46h96M92 46v82"/>' +
-  '<path class="rb-bag__cord" d="M32 40C32 12 76 12 76 40"/>' +
-  '<path class="rb-bag__twist" d="M32 40C32 12 76 12 76 40"/>' +
-  '<circle class="rb-bag__eyelet" cx="32" cy="41" r="2.2"/><circle class="rb-bag__eyelet" cx="76" cy="41" r="2.2"/>' +
+  cord(" rb-bag__cord--back", "M41.8 36C41.8-1.8 70.5 .4 70.5 38.2") +
+  `<image class="rb-bag__whole" href="${PIC}bag-pale.webp" ${BAG_AT}/>` +
+  `<image class="rb-bag__whole rb-bag__whole--red" href="${PIC}bag-red.webp" ${BAG_AT}/>` +
+  `<image class="rb-bag__tissue" href="${PIC}tissue.webp" x="27" y="35.5" width="59" height="19.9"/>` +
+  `<image class="rb-bag__paper" href="${PIC}bag-front-pale.webp" ${BAG_AT}/>` +
+  `<image class="rb-bag__paper-night" href="${PIC}bag-front-red.webp" ${BAG_AT}/>` +
+  `<image class="rb-bag__fill" href="${PIC}bag-front-red.webp" ${BAG_AT}/>` +
+  cord("", "M41.8 49.7C41.8 1.7 70.5 3.9 70.5 51.9") +
+  '<circle class="rb-bag__eyelet" cx="41.8" cy="50.2" r="1.7"/><circle class="rb-bag__eyelet" cx="70.5" cy="52.4" r="1.7"/>' +
   "</svg>";
 
 /**
@@ -100,6 +109,7 @@ export function renderRedBagList(rb: RedBagListView = redBag()): string {
         const id = `rb-qty-${key}`;
         return (
           `<li class="rb-item" data-rb-item="${key}" data-pence="${i.pence}">` +
+          rb.art(i.key, "rb-item__pic", 44) +
           `<span class="rb-item__name">${name}</span>` +
           `<span class="rb-item__price">${rb.pounds(i.pence)}</span>` +
           '<span class="rb-stepper">' +
@@ -128,7 +138,7 @@ export function renderRedBagThemes(rb: RedBagListView = redBag()): string {
           `<li><button class="rb-example" type="button" data-rb-example="${escapeHtml(e.key)}" data-pence="${e.pence}" aria-pressed="false">` +
           // A small drawing for the eye only (the one catalogue's, as the list's are): the button's
           // name stays its words.
-          rb.art(e.key, "rb-example__icon", 30) +
+          rb.art(e.key, "rb-example__icon", 44) +
           `<span class="rb-example__amount">${rb.pounds(e.pence)}</span> <span class="rb-example__words">${escapeHtml(e.words)}</span></button></li>`,
       )
       .join("");

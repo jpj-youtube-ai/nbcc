@@ -40,6 +40,7 @@ import {
   type DonationSource,
   type DonationConfirmationEmail,
 } from "./stripe-webhook-model";
+import { payDetailsLater, type PayDetailsSource } from "./donation-pay-details";
 import { recalculateClaimOnRefund } from "../claims/refund";
 import { linkFundraiserGift } from "./fundraisers";
 import { guardPledgePaymentSafely, pledgeFromSession, settlePledgeSafely } from "./pledges";
@@ -103,7 +104,7 @@ export async function processWebhookEvent(event: Stripe.Event): Promise<WebhookR
       }
       return { processed: false, action: "duplicate" };
     }
-    const { action, email, declaration, receipt, lapse, refundNotice, refundConfirmation, businessInvite, ballConfirmation, afterCommit } =
+    const { action, email, declaration, receipt, lapse, refundNotice, refundConfirmation, businessInvite, ballConfirmation, afterCommit, payDetails } =
       await dispatch(client, event);
     await client.query("COMMIT");
     // Sponsor pledges: a pledge paid twice (or paid online after being marked as cash) is flagged in
@@ -161,6 +162,16 @@ export async function processWebhookEvent(event: Stripe.Event): Promise<WebhookR
     if (action === "donation.created" && !abandoned) {
       if (await tagDonationArrival(event, (sql, params) => client.query(sql, params))) {
         abandoned = new Error("donation arrival statement abandoned at its time limit");
+      }
+    }
+    // How the gift was paid (the Donations gift log): started LAST and never waited for, so Stripe's
+    // answer is not held up by it. It uses a pool connection of its own, never this transaction's, asks
+    // Stripe only when the event does not already hold the charge, and never throws.
+    if (payDetails) {
+      try {
+        payDetailsLater(payDetails.donationId, payDetails.from);
+      } catch (err) {
+        console.error("how a gift was paid not noted (the donation itself is saved and unaffected):", err instanceof Error ? err.name : "error");
       }
     }
     return { processed: true, action };
@@ -222,15 +233,6 @@ async function withinSourceLimit(run: () => unknown, limitMs: number): Promise<v
   }
 }
 
-// Post-commit and best effort, like the emails: ANY failure (the column not there yet because the
-// migration has not run, the database unreachable, an event with nothing in it) is caught here,
-// logged once, and goes no further, so it can never fail the webhook, make Stripe redeliver, or undo
-// a recorded gift. The log line carries the Stripe event id and the database's error code only: no
-// message text, no session id, nothing about the donor. Safe to run any number of times.
-//
-// Answers true ONLY when the statement was abandoned at its time limit and may still be running on
-// the connection it was sent on; the caller must then not reuse that connection. False otherwise.
-// Exported so it is unit-testable with a stand-in query function.
 // What brought the giver (src/donations/arrival.ts), copied from the session the checkout stamped onto
 // that checkout's donation row. Like the source: one separate statement after COMMIT that can only fill
 // in a donation where nothing is noted yet. $1 = session id, $2..$5 = channel, source, campaign, page.
@@ -268,6 +270,15 @@ export async function tagDonationArrival(event: Stripe.Event, query: SourceQuery
   }
 }
 
+// Post-commit and best effort, like the emails: ANY failure (the column not there yet because the
+// migration has not run, the database unreachable, an event with nothing in it) is caught here,
+// logged once, and goes no further, so it can never fail the webhook, make Stripe redeliver, or undo
+// a recorded gift. The log line carries the Stripe event id and the database's error code only: no
+// message text, no session id, nothing about the donor. Safe to run any number of times.
+//
+// Answers true ONLY when the statement was abandoned at its time limit and may still be running on
+// the connection it was sent on; the caller must then not reuse that connection. False otherwise.
+// Exported so it is unit-testable with a stand-in query function.
 export async function tagDonationSource(event: Stripe.Event, query: SourceQuery): Promise<boolean> {
   try {
     if (event.type === "checkout.session.completed") {
@@ -332,6 +343,9 @@ interface DispatchResult {
   businessInvite?: BusinessInviteSend | null;
   // Event tickets (src/tickets/webhook.ts): what to do once this event has committed, or null.
   afterCommit?: (() => Promise<void>) | null;
+  // The Donations gift log: the gift this event just recorded, to note how it was paid after the
+  // commit (src/db/donation-pay-details.ts), and where to read that from. Null/absent: no new gift.
+  payDetails?: { donationId: number; from: PayDetailsSource } | null;
 }
 
 // Post-commit, best-effort: a failed send never fails the webhook (the write is already committed).
@@ -864,6 +878,8 @@ async function handleCheckoutCompleted(
       : confirmationEmailFor(donor, donation, { reference: donationReference(donationId), donationDate, ...(paidIn ? { paidIn } : {}) }),
     receipt,
     businessInvite,
+    // A one off gift through its payment intent; a monthly gift's first through its session's invoice.
+    payDetails: { donationId, from: {} },
   };
 }
 
@@ -920,7 +936,8 @@ async function handleChargeSucceeded(
         currency: donation.currency,
       }
     : null;
-  return { action: "donation.created", email: null, declaration };
+  // The tap's card is in this very event, so how it was paid needs no call to Stripe.
+  return { action: "donation.created", email: null, declaration, payDetails: { donationId, from: { charge: event.data.object } } };
 }
 
 interface ParentDonation {
@@ -993,6 +1010,9 @@ async function handleRecurring(
       { amountPence: rec.amountPence, currency: rec.currency, giftAid: parent.gift_aid, mode: "monthly" },
       { reference: donationReference(donationId), donationDate: new Date((event.created ?? 0) * 1000) },
     ),
+    // A renewal's row often has no charge or payment intent of its own (this API version keeps them
+    // on the invoice's payments), so the invoice is named for the look up.
+    payDetails: { donationId, from: { invoiceId: event.data.object.id ?? null } },
   };
 }
 

@@ -20,6 +20,10 @@ import { config } from "../config";
 const REAL_KEY = /^(sk|rk)_(test|live)_[A-Za-z0-9]{20,}$/;
 export const stripeConfigured = REAL_KEY.test(config.STRIPE_SECRET_KEY);
 const useStub = !stripeConfigured && config.NODE_ENV !== "production";
+// True when `stripe` below is the offline stand-in. The stand-in has no payments to look up, and some
+// routes rely on it having no checkout.sessions.retrieve, so a caller that only reads Stripe for record
+// keeping (the Donations gift log's "how they paid") asks nothing at all instead.
+export const stripeIsOfflineStub = useStub;
 
 // Pin the Stripe API version explicitly rather than relying on the SDK's implicit
 // default, which silently shifts whenever the `stripe` package is bumped. Pinning

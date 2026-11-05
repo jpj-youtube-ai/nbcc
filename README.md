@@ -11509,7 +11509,8 @@ look, and `fresh` holds the ids of costumes unlocked and not opened yet.
 `POST /api/elf/join` saves a pending order and opens a Stripe Checkout Session tagged
 `product: elf_school`. `src/db/stripe-webhook.ts` hands every event to `handleElfEvent`
 (`src/elf/webhook.ts`) first, so an entry is never recorded as a gift: a completed checkout settles
-the order once (badges `EDS 0001` upwards), then the welcome email goes after COMMIT, and the grown
+the order once (badges `EDS 0001` upwards), then the welcome email goes after COMMIT (it lists each
+detective's badge and says more costumes unlock as they crack doors in December), and the grown
 up joins the newsletter only if they ticked the box. The entry is never Gift Aided; the optional gift
 and its declaration stay on the order (as the Festive Ball keeps its gift on the booking). An email
 whose family has already paid must sign in to add detectives, so nobody can add children to someone

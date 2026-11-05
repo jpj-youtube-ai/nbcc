@@ -36,6 +36,15 @@ describe("the welcome email", () => {
     expect(welcome().text.startsWith("Hi Sam,")).toBe(true);
   });
 
+  // The paper wardrobe (docs/superpowers/specs/2026-11-04-elf-paper-design.md): two costumes unlock
+  // with every door done, so the email says costumes and doors, not clothes and finding elves.
+  it("says that more costumes unlock as the detectives crack doors", () => {
+    const e = welcome();
+    expect(e.text).toContain("More costumes unlock as they crack doors in December.");
+    expect(e.html).toContain("More costumes unlock as they crack doors in December.");
+    expect(e.text).not.toContain("clothes");
+  });
+
   it("uses no dashes, and says what money could do", () => {
     const e = welcome();
     const words = `${e.subject}\n${e.text}`;

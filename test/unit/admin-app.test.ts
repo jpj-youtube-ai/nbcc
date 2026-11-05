@@ -2576,6 +2576,15 @@ describe("admin app integration (jsdom, TASK-118)", () => {
       expect(org.textContent).toContain("Group name");
     });
 
+    // Jaimie, 2026-11-05: "is that our address and postcode or their address?" Theirs, so it says so.
+    it("labels the address and postcode as theirs, not ours", async () => {
+      loginToken = tokenFor("admin");
+      await open();
+      const label = (id: string) => (view().querySelector(`label[for="${id}"]`) as HTMLElement).textContent || "";
+      expect(label("invAddress")).toContain("Their address");
+      expect(label("invPostcode")).toContain("Their postcode");
+    });
+
     it("starts with the usual line and a due date 30 days on", async () => {
       loginToken = tokenFor("admin");
       await open();

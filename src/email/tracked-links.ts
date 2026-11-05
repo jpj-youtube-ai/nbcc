@@ -57,6 +57,8 @@ export const STAFF_ONLY_KINDS: ReadonlySet<string> = new Set([
   "eventTicketsToCheck",
   // Sponsor pledges: a pledge paid twice, or hidden by its organiser, to events@.
   "fundraisePledgeStaff",
+  // Invoices for donations: an invoice paid twice, to giving@.
+  "invoiceStaff",
   "backupAlert",
 ]);
 

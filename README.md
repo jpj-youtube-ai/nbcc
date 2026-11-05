@@ -6960,6 +6960,59 @@ billboard or a business card, so staff can see which ones work. The design is in
   this merges first. Production refuses a migration that sorts before one it has already run, so
   if that one lands first, this is renumbered above it before merging.
 
+## Invoices for donations (Admin > Giving > Invoices)
+
+Some givers, often businesses, schools, churches and clubs and sometimes people, will only pay a gift
+once they have a proper invoice. Staff now send one from **Admin > Giving > Invoices**, and once it is
+paid it comes through into Donations by itself. Design:
+`docs/superpowers/specs/2026-11-05-donation-invoices-design.md`; plan:
+`docs/superpowers/plans/2026-11-05-donation-invoices.md`.
+
+- **Sending.** Choose a person, a business or a group (a school, church, club and so on), their name
+  and email, an address (needed for a business or group), the amount (£1 to £50,000), one line saying
+  what it is for (it starts as "Donation to NBCC"), an optional note and the due date (30 days on to
+  start with). **Send invoice** saves it and emails it at once. A business is also asked whether we
+  give them anything in return; a yes flags the gift for the trustees, as the Donate page does.
+- **The invoice.** Numbered `INV-0012` (the row's id, which is also the bank transfer reference), at a
+  long signed private link, `/invoice/<token>` (`src/invoices/token.ts`, purpose
+  `donation-invoice:<id>`, so a Festive Ball invoice link can never open one). Printable, in the Ball
+  invoice's look, with no VAT line ("NBCC is not registered for VAT. This is a donation"). Plain forms,
+  no script. While it waits: **Pay by card** (Stripe Checkout, card only, so Apple Pay and Google Pay
+  come with it), our bank details when they are set, and for a person only a Gift Aid box with HMRC's
+  single donation words. Once paid it shows a Paid stamp; once cancelled it says so. Neither shows any
+  way to pay.
+- **Paid by card.** The session is tagged `product: "donation_invoice"`, and the webhook's first step,
+  `handleInvoiceEvent` (`src/invoices/webhook.ts`), settles it before anything else sees it.
+- **Paid by bank transfer.** Staff press **Mark paid** on its card and give the date the money arrived.
+- **One path for both** (`settleInvoice`, `src/db/invoices.ts`): the invoice row is locked, the payment
+  becomes one donation (`source = 'invoice'`, `invoice_id` set) through the usual donation writer, and
+  the receipt goes after the commit. A person gets the usual donation receipt (with Gift Aid when they
+  saved a declaration), a business the usual Corporation Tax receipt, each starting "This pays invoice
+  INV-0012. Thank you.", and a group a plain thank you (`invoiceReceipt`). A business or group is stored
+  as a company donor, so it is never claimed for Gift Aid. A Stripe session already recorded against the
+  invoice records nothing again. Money that really arrives twice is recorded twice, the invoice shows
+  **Paid twice: refund one?** and the giving inbox is emailed (`invoiceStaff`); nothing is refunded by
+  itself. A card payment that lands just after cancelling is recorded too, and the card says so.
+- **No reminders** are sent. A waiting invoice past its due date shows as **Overdue**; staff chase it.
+- **Never deleted, never edited.** To change one, cancel it and send a new one.
+- **Who can do what.** Anyone who can view Donations sees the screen and opens invoices. Sending, Email it
+  again, Mark paid, Cancel and the bank details need Donations edit. Every change is audited
+  (`invoice.created`, `invoice.sent`, `invoice.paid`, `invoice.paid_twice`, `invoice.cancelled`,
+  `invoice.gift_aid_saved`, `invoice_settings.updated`).
+- **Bank details on invoices** are their own setting (`donation_invoice_settings`), never the Festive
+  Ball's, so the Ball's tidy can never change them. Until they are set, invoices offer card only.
+- **In Donations** a gift that paid an invoice is labelled **Invoice INV-0012**, there is an **Invoices
+  only** filter, and the totals at the top gain an **Invoices** line.
+- **The emails** (the invoice, the group receipt and the paid twice note) are in Admin > Get involved >
+  Emails, under **Invoices for donations** and Staff notices.
+
+Routes (`src/routes/invoices.ts`): `GET/POST /api/admin/invoices`, `PUT /api/admin/invoices/bank`,
+`POST /api/admin/invoices/:id/resend|mark-paid|cancel`, and the public `GET /invoice/:token`,
+`POST /invoice/:token/pay` and `POST /invoice/:token/gift-aid` (20 posts an hour per address). Tables:
+`donation_invoices`, `donation_invoice_settings` and the new `donations.invoice_id`
+(`migrations/1791200000330_donation-invoices.js`). Tests: `test/unit/invoices-*.test.ts`, the
+Invoices block in `test/unit/admin-app.test.ts`, and `features/admin-invoices.feature`.
+
 ## Monthly or one off, on the donations list (TASK-446)
 
 The list could already be narrowed by payment status, which answers *what failed*. It could not
@@ -12445,7 +12498,7 @@ lives in; the Drive copy is not immutable.
 
 ### There are THREE databases, not one
 
-This is the trap this feature was built around. `DATABASE_URL` holds 90 tables
+This is the trap this feature was built around. `DATABASE_URL` holds 98 tables
 (42 when this was built; the Events page added three in TASK-453, the Festive Ball ticket
 report one in TASK-464, the admin's New pills one, `admin_seen`, in TASK-478, site analytics
 four in TASK-479, the business supporter call log in TASK-491, community fundraising five
@@ -12461,11 +12514,12 @@ lines (with buyers' names, emails and phones), the refunds and the refund reques
 welcome packs: each page's pack and the things ticked in it, one, in TASK-563, for the Fill a
 Red Bag list's versions, and one, in TASK-562, for the addresses staff have removed from the
 Email audit's red band, one, in TASK-576, for which Festive Ball reminders and chase lists
-have gone, per address and day, and two, in TASK-588, for the named QR codes and their scans per
-day),
+have gone, per address and day, two, in TASK-588, for the named QR codes and their scans per
+day, six for Elf Detective School, and two for invoices for donations: the invoices and the bank
+details printed on them),
 but `STORIES_DATABASE_URL` and `CONTACT_DATABASE_URL` are separate databases
 (deliberately, so the public story and contact forms can never reach donor
-data). A `pg_dump $DATABASE_URL` captures 90 of **93** tables and silently
+data). A `pg_dump $DATABASE_URL` captures 98 of **101** tables and silently
 drops every My Story submission (and, since TASK-475, the fingerprints in
 `erased_stories` that keep erased stories from coming back) and every contact
 enquiry, while producing a

@@ -12,7 +12,6 @@ import {
   emailShell,
   eyebrow,
   heading,
-  note as noteP,
   pounds,
   questionsBox,
   questionsText,
@@ -159,7 +158,7 @@ export function buildGroupReceiptEmail(d: GroupReceiptData): BuiltEmail {
           row("Receipt reference", esc(d.reference)),
       ) +
       button(d.link, "View your invoice") +
-      noteP(`Please keep this email as your receipt.`) +
+      bodyP("Please keep this email as your receipt.") +
       bodyP(esc(ABOUT_NBCC_SHORT)) +
       questionsBox(GIVING_EMAIL) +
       signOff("With heartfelt thanks,"),

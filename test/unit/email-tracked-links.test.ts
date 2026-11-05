@@ -317,7 +317,9 @@ describe("staff only emails are never tagged", () => {
       // Event tickets: a refund an organiser asked for, and tickets to approve, both to events@.
       // Sponsor pledges: fundraisePledgeStaff, the events@ note about a pledge paid twice or hidden.
       // TASK-576: ballChaseList, the volunteers' list of who to phone about guest names and meals.
+      // Invoices for donations: invoiceStaff, the giving@ note about an invoice paid twice.
       [
+        "invoiceStaff",
         "adminInvite", "adminReset", "backupAlert", "ballChaseList", "ballReport", "ballTransferStaff", "fundraiseFinishedStaff", "fundraisePledgeStaff", "fundraiseStaff", "fundraiseSummary",
         "fundraiseTeamJoinStaff", "fundraiseTeamMemberRemoved", "lapsedAdmin", "loginCode",
         "eventTicketsRefundAsked", "eventTicketsToApprove", "eventTicketsToCheck",

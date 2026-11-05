@@ -118,6 +118,8 @@
                 <button class="admin-nav-grouphead" type="button" aria-expanded="false" aria-controls="adminNavGiving">Giving</button>
                 <ul class="admin-nav-panel" id="adminNavGiving">
                   <li><button class="admin-nav-link" type="button" data-view="donations">Donations</button></li>
+                  <!-- Invoices for donations: no permission of its own. View of Donations sees it; edit sends. -->
+                  <li><button class="admin-nav-link" type="button" data-view="invoices" data-view-gate="donations">Invoices</button></li>
                   <!-- Fill a Red Bag: the editor for the list on /fill. Its own permission, "red-bag". -->
                   <li><button class="admin-nav-link" type="button" data-view="red-bag">Fill a Red Bag</button></li>
                   <li><button class="admin-nav-link" type="button" data-view="claims">Claims</button></li>
@@ -279,6 +281,9 @@
               </label>
               <label class="admin-inline-filter dn-redbag-filter" for="donationsBallBagsFilter">
                 <input type="checkbox" id="donationsBallBagsFilter"> Red bags at the Ball only
+              </label>
+              <label class="admin-inline-filter dn-redbag-filter" for="donationsInvoiceFilter">
+                <input type="checkbox" id="donationsInvoiceFilter"> Invoices only
               </label>
               <div class="admin-table-wrap" id="donationsTable" aria-live="polite"><p class="admin-loading">Loading…</p></div>
               <div class="admin-pager" id="donationsPager" hidden>
@@ -2516,6 +2521,120 @@
 
             <!-- TASK-492: a QR code for every page, from the site's one page list (src/site/pages.ts),
                  so a new page appears here by itself. Drawn by the server (src/routes/admin-qr.ts). -->
+            <!-- Invoices for donations (docs/superpowers/specs/2026-11-05-donation-invoices-design.md). Anyone
+                 who can view Donations sees the list; the form, the bank details and every button that
+                 changes something are for Donations edit only. -->
+            <section class="admin-view" id="view-invoices" aria-labelledby="invoices-heading" hidden>
+              <h2 id="invoices-heading">Invoices</h2>
+              <p class="admin-view-intro">Send an invoice to a person, a business or a group. They pay it by card from the link in their email, or by bank transfer, and once it is paid it comes through into Donations by itself, labelled with its invoice number. When a bank transfer arrives, press <b>Mark paid</b>.</p>
+
+              <form id="invNewForm" class="inv-new" autocomplete="off" novalidate hidden>
+                <h3 class="inv-new-title">Send an invoice</h3>
+                <fieldset class="inv-kind">
+                  <legend class="inv-field">Who is it for?</legend>
+                  <label><input type="radio" name="invKind" value="person" checked /> A person</label>
+                  <label><input type="radio" name="invKind" value="business" /> A business</label>
+                  <label><input type="radio" name="invKind" value="group" /> A group <span class="inv-hint">a school, church, club and so on</span></label>
+                </fieldset>
+
+                <div class="inv-row" data-inv-org hidden>
+                  <label class="inv-field" for="invOrgName"><span data-inv-org-label>Business name</span></label>
+                  <input id="invOrgName" type="text" maxlength="120" />
+                  <p class="inv-error ty-status" data-inv-error="orgName" role="status"></p>
+                </div>
+                <div class="inv-row">
+                  <label class="inv-field" for="invContactName"><span data-inv-name-label>Their name</span></label>
+                  <input id="invContactName" type="text" maxlength="120" autocomplete="off" />
+                  <p class="inv-error ty-status" data-inv-error="contactName" role="status"></p>
+                </div>
+                <div class="inv-row">
+                  <label class="inv-field" for="invEmail">Email address
+                    <span class="inv-hint">The invoice goes here.</span>
+                  </label>
+                  <input id="invEmail" type="email" maxlength="254" />
+                  <p class="inv-error ty-status" data-inv-error="email" role="status"></p>
+                </div>
+                <div class="inv-row">
+                  <label class="inv-field" for="invAddress">Address
+                    <span class="inv-hint" data-inv-address-hint>Optional for a person.</span>
+                  </label>
+                  <textarea id="invAddress" rows="3" maxlength="300"></textarea>
+                  <p class="inv-error ty-status" data-inv-error="address" role="status"></p>
+                </div>
+                <div class="inv-row inv-short">
+                  <label class="inv-field" for="invPostcode">Postcode</label>
+                  <input id="invPostcode" type="text" maxlength="10" />
+                  <p class="inv-error ty-status" data-inv-error="postcode" role="status"></p>
+                </div>
+
+                <fieldset class="inv-kind inv-ask" data-inv-consideration hidden>
+                  <legend class="inv-field">Are we giving them anything in return, such as advertising or their logo on something?
+                    <span class="inv-hint">If we are, the gift is flagged for the trustees instead of getting the usual business receipt.</span>
+                  </legend>
+                  <label><input type="radio" name="invConsideration" value="no" /> No</label>
+                  <label><input type="radio" name="invConsideration" value="yes" /> Yes</label>
+                  <p class="inv-error ty-status" data-inv-error="considerationGiven" role="status"></p>
+                </fieldset>
+
+                <div class="inv-row inv-short">
+                  <label class="inv-field" for="invAmount">Amount
+                    <span class="inv-hint">From £1 to £50,000.</span>
+                  </label>
+                  <span class="inv-money"><span aria-hidden="true">£</span><input id="invAmount" type="text" inputmode="decimal" maxlength="12" /></span>
+                  <p class="inv-error ty-status" data-inv-error="amount" role="status"></p>
+                </div>
+                <div class="inv-row">
+                  <label class="inv-field" for="invDescription">What it's for
+                    <span class="inv-hint">One line, shown on the invoice.</span>
+                  </label>
+                  <input id="invDescription" type="text" maxlength="120" value="Donation to NBCC" />
+                  <p class="inv-error ty-status" data-inv-error="description" role="status"></p>
+                </div>
+                <div class="inv-row">
+                  <label class="inv-field" for="invNote"><span>A note <span class="inv-optional">(optional)</span></span>
+                    <span class="inv-hint">Shown on the invoice and in the email, for example "Thank you for your Christmas jumper day".</span>
+                  </label>
+                  <textarea id="invNote" rows="2" maxlength="500"></textarea>
+                  <p class="inv-error ty-status" data-inv-error="note" role="status"></p>
+                </div>
+                <div class="inv-row inv-short">
+                  <label class="inv-field" for="invDueOn">Pay by</label>
+                  <input id="invDueOn" type="date" />
+                  <p class="inv-error ty-status" data-inv-error="dueOn" role="status"></p>
+                </div>
+
+                <p class="inv-actions"><button class="btn btn-primary" type="submit" id="invNewBtn">Send invoice</button></p>
+                <p class="ty-status" id="invNewStatus" role="status" aria-live="polite"></p>
+              </form>
+
+              <details id="invBank" class="inv-bank" hidden>
+                <summary>Bank details on invoices <span id="invBankState" class="inv-bank-state"></span></summary>
+                <form id="invBankForm" class="inv-bank-form" autocomplete="off" novalidate>
+                  <p class="admin-help">Printed on every invoice that is still waiting, so people can pay by bank transfer. Until these are filled in, invoices offer card only.</p>
+                  <label class="inv-field" for="invBankName">Account name</label>
+                  <input id="invBankName" type="text" maxlength="70" />
+                  <label class="inv-field" for="invBankSort">Sort code</label>
+                  <input id="invBankSort" type="text" inputmode="numeric" maxlength="8" />
+                  <label class="inv-field" for="invBankNumber">Account number</label>
+                  <input id="invBankNumber" type="text" inputmode="numeric" maxlength="10" />
+                  <p class="inv-actions"><button class="btn btn-primary" type="submit">Save bank details</button>
+                    <button class="inv-quiet" type="button" id="invBankClear">Remove them</button></p>
+                  <p class="ty-status" id="invBankStatus" role="status" aria-live="polite"></p>
+                </form>
+              </details>
+
+              <div class="inv-head">
+                <h3 class="admin-subhead">Your invoices</h3>
+                <div class="admin-segmented inv-filter" role="group" aria-label="Show">
+                  <button type="button" class="admin-seg is-active" data-inv-filter="all" aria-pressed="true">All</button>
+                  <button type="button" class="admin-seg" data-inv-filter="waiting" aria-pressed="false">Waiting</button>
+                  <button type="button" class="admin-seg" data-inv-filter="paid" aria-pressed="false">Paid</button>
+                  <button type="button" class="admin-seg" data-inv-filter="cancelled" aria-pressed="false">Cancelled</button>
+                </div>
+              </div>
+              <div id="invList" class="inv-list" aria-live="polite"><p class="admin-loading">Loading&hellip;</p></div>
+            </section>
+
             <section class="admin-view" id="view-qr" aria-labelledby="qr-heading" hidden>
               <h2 id="qr-heading">QR codes</h2>
               <p class="admin-view-intro">Make a QR code for each place you print or show one, such as a billboard, a business card or a table card, and give it a name. Each code counts its own scans, so you can see which ones work. You can change where a code goes at any time, even after it is printed. Use the <b>SVG</b> for anything a printer or designer makes: it stays sharp at any size. Use the <b>PNG</b> for slides, social posts and documents.</p>

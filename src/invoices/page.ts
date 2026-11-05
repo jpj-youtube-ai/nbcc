@@ -1,4 +1,4 @@
-import { CHARITY_NAME, OSCR_NUMBER, POSTAL_ADDRESS_LINES, REGISTRATION_LINES } from "../legal/registration";
+import { CHARITY_NAME, POSTAL_ADDRESS_LINES, REGISTRATION_LINES } from "../legal/registration";
 import { SINGLE_DONATION_WORDING } from "../declarations/wording";
 import type { DeclarationFields } from "../declarations/fields";
 import type { BankDetails } from "../ball/transfer";
@@ -157,9 +157,10 @@ export function renderDonationInvoicePage(inv: InvoicePageData): string {
     .pay h3{font-family:var(--font-head);color:var(--maroon);font-size:11pt;margin:0 0 2mm}
     .pay p{margin:0;font-size:9.5pt}
     .msg{background:#fffdf8;border:1px solid var(--crimson);border-radius:8px;padding:2.5mm 4mm;margin:0 0 4mm !important;color:var(--crimson);font-weight:600}
+    .pay form{background:none;border:0;box-shadow:none;border-radius:0;padding:0;margin:0;max-width:none}
     .ga{border:0;margin:0 0 4mm;padding:0}
     .ga legend{font-family:var(--font-head);color:var(--maroon);font-weight:700;font-size:11pt;padding:0;margin:0 0 1mm}
-    .ga-tick{display:flex;gap:3mm;align-items:flex-start;margin:2mm 0;font-size:9.5pt}
+    .ga-tick{display:flex;gap:3mm;align-items:flex-start;margin:2mm 0;font-size:9.5pt;font-weight:400}
     .ga-tick input{margin-top:1mm;width:18px;height:18px;flex:none;accent-color:var(--crimson)}
     .ga-saved{color:var(--holly-dark);font-weight:600;margin:0 0 2mm !important}
     .ga-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:2mm 4mm}
@@ -215,7 +216,7 @@ export function renderDonationInvoicePage(inv: InvoicePageData): string {
 
     ${payBox(inv)}
 
-    <div class="legal"><p>${REGISTRATION_LINES.map(esc).join(" ")}</p><p>Scottish Charity Number ${OSCR_NUMBER}.</p></div>
+    <div class="legal"><p>${REGISTRATION_LINES.map(esc).join(" ")}</p></div>
   </main>
 </body>
 </html>`;

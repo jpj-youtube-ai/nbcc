@@ -242,11 +242,26 @@
 .hq-paid li { display: flex; flex-wrap: wrap; align-items: center; gap: var(--hq-space-sm) var(--hq-space-md); padding: 10px 12px; border: 2px solid var(--hq-ink); border-radius: 14px; background: var(--hq-card); }
 .hq-paid b { font-family: var(--hq-head); font-weight: 800; color: var(--hq-ink); }
 
+/* ---- Money ---- */
+.hq-money .hq-actions { margin-top: var(--hq-space-lg); }
+
+/* ---- Settings: the prices as steppers, and the private preview ---- */
+.hq-settings { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(300px, 100%), 1fr)); gap: var(--hq-space-xl); align-items: start; }
+.hq-prices, .hq-preview { display: grid; gap: var(--hq-space-md); align-content: start; }
+.hq-root .hq-prices .hq-h2, .hq-root .hq-preview .hq-h2 { margin: 0; }
+.hq-stepper { display: grid; grid-template-columns: 48px minmax(0, 1fr) 48px; align-items: center; gap: var(--hq-space-sm); max-width: 260px; }
+.hq-step { display: grid; place-items: center; width: 48px; height: 48px; padding: 0; border: var(--hq-line); border-radius: 14px; background: var(--hq-card); box-shadow: var(--hq-pop); cursor: pointer; font-family: inherit; font-weight: 700; font-size: 1.6rem; line-height: 1; color: var(--hq-maroon); }
+.hq-step:hover { background: #FFF6E4; }
+.hq-step:active { transform: translate(2px, 3px); box-shadow: var(--hq-pressed); }
+.hq-stepper output { text-align: center; font-family: var(--hq-head); font-weight: 800; font-size: 1.8rem; line-height: 1; color: var(--hq-ink); font-variant-numeric: lining-nums; }
+.hq-field > label { font-family: var(--hq-head); font-weight: 700; color: var(--hq-ink); }
+.hq-preview .hq-field input { background: var(--hq-cream); font-size: 0.95rem; }
+
 @media (prefers-reduced-motion: no-preference) {
   .hq-lever__knob { transition: transform 0.28s var(--hq-ease); }
   .hq-toggle i::after { transition: transform 0.22s var(--hq-ease); }
   .hq-fam { transition: transform 0.12s var(--hq-ease), box-shadow 0.12s var(--hq-ease); }
-  .hq-tab, .hq-btn { transition: transform 0.12s var(--hq-ease), box-shadow 0.12s var(--hq-ease), background-color 0.2s; }
+  .hq-tab, .hq-btn, .hq-step { transition: transform 0.12s var(--hq-ease), box-shadow 0.12s var(--hq-ease), background-color 0.2s; }
   .hq-part:not([hidden]) { animation: hq-in 0.32s var(--hq-ease); }
   @keyframes hq-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
 }

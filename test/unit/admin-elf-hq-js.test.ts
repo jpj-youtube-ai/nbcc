@@ -35,7 +35,8 @@ function page(o: { answers?: Record<string, unknown>; status?: number; shown?: b
     calls.push({ method, url, body: init.body ? JSON.parse(String(init.body)) : null });
     const status = o.status ?? 200;
     const body = (o.answers ?? {})[url.split("?")[0]] ?? (status >= 400 ? { error: "Admin is temporarily unavailable" } : HQ);
-    return Promise.resolve({ ok: status < 400, status, json: () => Promise.resolve(body) });
+    // A fresh copy each time, as a real answer is: the screen may change what it was given.
+    return Promise.resolve({ ok: status < 400, status, json: () => Promise.resolve(JSON.parse(JSON.stringify(body))) });
   });
   window.sessionStorage.setItem("nbcc_admin_token", "t");
   const hq = initElfHq(document, window, { confirm: () => true });
@@ -413,5 +414,121 @@ describe("the Families screen", () => {
     expect(panel("families").hidden).toBe(false);
     expect(urls(calls)).toContain("GET /api/admin/elf/families/3");
     expect(window.sessionStorage.getItem("nbcc_elf_hq_family")).toBeNull();
+  });
+});
+
+// ---- the Money and Settings screens (Task 8) ----
+
+const moneyPart = () => panel("money");
+const settingsPart = () => panel("settings");
+const inPart = (part: HTMLElement, words: string) => [...part.querySelectorAll<HTMLButtonElement>("button")].find((b) => b.textContent!.trim() === words);
+
+describe("the Money screen", () => {
+  it("shows the money as HQ does, with what entries are, and a button to Donations showing only the school", async () => {
+    const { hq } = page({ answers: { "/api/admin/elf/hq": BUSY } });
+    document.body.insertAdjacentHTML("beforeend", '<button class="admin-nav-link" data-view="donations">Donations</button><input type="checkbox" id="donationsElfFilter">');
+    await hq.open();
+    tabs()[2].click();
+    expect(moneyPart().textContent).toContain("£1,486");
+    expect(moneyPart().textContent).toContain("from 128 families");
+    expect(moneyPart().textContent).toContain("Entries are a payment to take part, so they are never claimed for Gift Aid.");
+    const nav = document.querySelector<HTMLButtonElement>('.admin-nav-link[data-view="donations"]')!;
+    const clicked = vi.fn();
+    nav.addEventListener("click", clicked);
+    const filter = document.getElementById("donationsElfFilter") as HTMLInputElement;
+    const changed = vi.fn();
+    filter.addEventListener("change", changed);
+    inPart(moneyPart(), "Every payment, in Donations")!.click();
+    expect(filter.checked).toBe(true);
+    expect(changed).toHaveBeenCalled();
+    expect(clicked).toHaveBeenCalled();
+  });
+
+  it("says when there is no money yet", async () => {
+    const { hq } = page();
+    await hq.open();
+    tabs()[2].click();
+    expect(moneyPart().textContent).toContain("No payments yet.");
+  });
+});
+
+describe("the Settings screen", () => {
+  it("steps the prices in pounds within their limits, and saves both in pence", async () => {
+    const { hq, calls } = page({ answers: { "/api/admin/elf/hq": BUSY, "/api/admin/elf/settings": { settings: { ...BUSY.settings, entryFromPence: 200, entrySuggestedPence: 600 } } } });
+    await hq.open();
+    tabs()[3].click();
+    const [least, suggested] = [...settingsPart().querySelectorAll<HTMLElement>(".hq-stepper")];
+    const out = (s: HTMLElement) => s.querySelector("output")!.textContent;
+    const press = (s: HTMLElement, which: "less" | "more", times = 1) => {
+      for (let i = 0; i < times; i++) s.querySelector<HTMLButtonElement>(`[data-step="${which}"]`)!.click();
+    };
+    expect([out(least), out(suggested)]).toEqual(["£1", "£5"]);
+    press(least, "less");
+    expect(out(least)).toBe("£1");
+    press(least, "more", 20);
+    expect(out(least)).toBe("£10");
+    expect(out(suggested)).toBe("£10");
+    press(suggested, "less");
+    expect(out(suggested)).toBe("£10");
+    press(suggested, "more", 60);
+    expect(out(suggested)).toBe("£50");
+    press(least, "less", 8);
+    press(suggested, "less", 44);
+    expect([out(least), out(suggested)]).toEqual(["£2", "£6"]);
+    inPart(settingsPart(), "Save the prices")!.click();
+    await flush();
+    expect(calls.filter((c) => c.method === "PATCH")).toEqual([{ method: "PATCH", url: "/api/admin/elf/settings", body: { entryFromPence: 200, entrySuggestedPence: 600 } }]);
+    expect(settingsPart().textContent).toContain("Saved.");
+  });
+
+  it("shows the server's refusal as an error", async () => {
+    const { hq } = page({ answers: { "/api/admin/elf/hq": BUSY } });
+    await hq.open();
+    tabs()[3].click();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (window as any).fetch = vi.fn(() => Promise.resolve({ ok: false, status: 400, json: () => Promise.resolve({ error: "The suggested amount cannot be less than the least a family pays." }) }));
+    inPart(settingsPart(), "Save the prices")!.click();
+    await flush();
+    const said = settingsPart().querySelector(".hq-prices .hq-status")!;
+    expect(said.textContent).toBe("The suggested amount cannot be less than the least a family pays.");
+    expect(said.classList.contains("is-error")).toBe(true);
+  });
+
+  it("makes a preview link and shows it once, to copy", async () => {
+    const url = "https://nbcc.scot/elf/preview/" + "a".repeat(64);
+    const { hq, calls } = page({ answers: { "/api/admin/elf/hq": BUSY, "/api/admin/elf/preview": { url } } });
+    await hq.open();
+    tabs()[3].click();
+    expect(settingsPart().textContent).toContain("There is no preview link.");
+    inPart(settingsPart(), "Make a preview link")!.click();
+    await flush();
+    expect(calls.filter((c) => c.method === "POST").map((c) => c.url)).toEqual(["/api/admin/elf/preview"]);
+    const box = settingsPart().querySelector<HTMLInputElement>("#hqPreviewLink")!;
+    expect(box.value).toBe(url);
+    expect(box.readOnly).toBe(true);
+    expect(settingsPart().querySelector('label[for="hqPreviewLink"]')!.textContent).toBe("Copy it now: it is shown only once");
+    expect(settingsPart().textContent).toContain("A preview link is open. Anyone who has it can see the school.");
+    expect(inPart(settingsPart(), "End the link")).toBeTruthy();
+  });
+
+  it("ends the preview link", async () => {
+    const { hq, calls } = page({ answers: { "/api/admin/elf/hq": { ...BUSY, settings: { ...BUSY.settings, previewOn: true } }, "/api/admin/elf/preview": { ok: true } } });
+    await hq.open();
+    tabs()[3].click();
+    inPart(settingsPart(), "End the link")!.click();
+    await flush();
+    expect(calls.filter((c) => c.method === "DELETE").map((c) => c.url)).toEqual(["/api/admin/elf/preview"]);
+    expect(settingsPart().textContent).toContain("There is no preview link.");
+    expect(settingsPart().textContent).toContain("Preview link ended.");
+  });
+
+  it("shows someone who is not an admin the prices and the link as words, with nothing to press", async () => {
+    const { hq } = page({ answers: { "/api/admin/elf/hq": { ...BUSY, canSwitch: false, settings: { ...BUSY.settings, previewOn: true } } } });
+    await hq.open();
+    tabs()[3].click();
+    expect(settingsPart().textContent).toContain("The least anyone pays is £1 for each detective, and we suggest £5.");
+    expect(settingsPart().textContent).toContain("A preview link is open. Anyone who has it can see the school.");
+    expect(settingsPart().textContent).toContain("Only an admin can change these.");
+    expect(settingsPart().querySelectorAll("button")).toHaveLength(0);
   });
 });

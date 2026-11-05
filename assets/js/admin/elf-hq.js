@@ -289,7 +289,7 @@
       box.appendChild(list);
     }
 
-    function drawMoney(box, withLink) {
+    function drawMoney(box, withLink, note) {
       var n = data.numbers || {};
       var total = (n.entryPence || 0) + (n.giftPence || 0);
       box.appendChild(el("h2", { class: "hq-h2", text: "Raised so far" }));
@@ -297,7 +297,7 @@
         box.appendChild(el("p", { class: "hq-words hq-soft", text: "No payments yet." }));
         return;
       }
-      box.appendChild(el("p", { class: "hq-money__total" }, [el("b", { text: pounds(total) }), el("span", { class: "hq-note", text: "and counting" })]));
+      box.appendChild(el("p", { class: "hq-money__total" }, [el("b", { text: pounds(total) }), el("span", { class: "hq-note", text: note || "and counting" })]));
       var bar = el("div", { class: "hq-bar", role: "img", "aria-label": pounds(n.entryPence) + " from entries and " + pounds(n.giftPence) + " in gifts" });
       [["is-entries", n.entryPence], ["is-gifts", n.giftPence]].forEach(function (p) {
         if (!(p[1] > 0)) return;
@@ -754,6 +754,157 @@
       return card;
     }
 
+    // ---- Money: what the school has made, and the way to every payment in Donations ----
+    function drawMoneyPart() {
+      var part = parts.money;
+      part.textContent = "";
+      var n = data.numbers || {};
+      var box = el("section", { class: "hq-panel hq-money", "aria-label": "Raised so far" });
+      drawMoney(box, false, "from " + (n.families || 0) + " " + plural(n.families, "family", "families"));
+      box.appendChild(el("p", { class: "hq-words", text: "Entries are a payment to take part, so they are never claimed for Gift Aid. A gift on top can be, when the grown up says yes." }));
+      var go = el("button", { class: "hq-btn hq-btn--go", type: "button", text: "Every payment, in Donations" });
+      go.addEventListener("click", function () {
+        // Donations, showing only the school's payments: its own filter (Admin > Donations) is ticked
+        // the way a person would tick it, so app.js reads the list for it as it always does.
+        var filter = doc.getElementById("donationsElfFilter");
+        if (filter && !filter.checked) {
+          filter.checked = true;
+          filter.dispatchEvent(new win.Event("change", { bubbles: true }));
+        }
+        var nav = doc.querySelector('.admin-nav-link[data-view="donations"]');
+        if (nav) nav.click();
+      });
+      box.appendChild(el("div", { class: "hq-actions" }, [go]));
+      part.appendChild(box);
+    }
+
+    // ---- Settings: the pay what you can amounts and the private preview link ----
+    var PRICE_LIMITS = { from: [1, 10], suggested: [1, 50] };
+    var shownLink = null; // a preview link just made, shown once
+
+    function stepper(label, value, onStep) {
+      var out = el("output", { text: pounds(value * 100) });
+      var less = el("button", { type: "button", class: "hq-step", "data-step": "less", "aria-label": "Less for " + label, text: "−" });
+      var more = el("button", { type: "button", class: "hq-step", "data-step": "more", "aria-label": "More for " + label, text: "+" });
+      less.addEventListener("click", function () {
+        onStep(-1);
+      });
+      more.addEventListener("click", function () {
+        onStep(1);
+      });
+      return { box: el("div", { class: "hq-stepper", role: "group", "aria-label": label }, [less, out, more]), out: out };
+    }
+
+    function drawSettingsPart() {
+      var part = parts.settings;
+      part.textContent = "";
+      var s = data.settings || {};
+      var admin = !!data.canSwitch;
+      var grid = el("div", { class: "hq-settings" });
+
+      // The prices.
+      var prices = el("section", { class: "hq-panel hq-prices", "aria-label": "Pay what you can" });
+      prices.appendChild(el("h2", { class: "hq-h2", text: "Pay what you can" }));
+      var from = Math.round((s.entryFromPence || 100) / 100);
+      var suggested = Math.round((s.entrySuggestedPence || 500) / 100);
+      if (!admin) {
+        prices.appendChild(el("p", { class: "hq-words", text: "The least anyone pays is " + pounds(from * 100) + " for each detective, and we suggest " + pounds(suggested * 100) + "." }));
+      } else {
+        prices.appendChild(el("p", { class: "hq-words hq-soft", text: "For each detective, when a grown up enrols." }));
+        var least, hint;
+        var draw = function () {
+          least.out.textContent = pounds(from * 100);
+          hint.out.textContent = pounds(suggested * 100);
+        };
+        least = stepper("the least anyone pays", from, function (by) {
+          from = Math.min(PRICE_LIMITS.from[1], Math.max(PRICE_LIMITS.from[0], from + by));
+          if (suggested < from) suggested = from;
+          draw();
+        });
+        hint = stepper("what we suggest", suggested, function (by) {
+          suggested = Math.min(PRICE_LIMITS.suggested[1], Math.max(from, PRICE_LIMITS.suggested[0], suggested + by));
+          draw();
+        });
+        prices.appendChild(el("div", { class: "hq-field" }, [el("span", { text: "The least anyone pays" }), least.box]));
+        prices.appendChild(el("div", { class: "hq-field" }, [el("span", { text: "What we suggest" }), hint.box]));
+        var said = el("p", { class: "hq-status", role: "status" });
+        var save = el("button", { class: "hq-btn hq-btn--go", type: "button", text: "Save the prices" });
+        save.addEventListener("click", function () {
+          save.disabled = true;
+          ask("PATCH", "/api/admin/elf/settings", { entryFromPence: from * 100, entrySuggestedPence: suggested * 100 })
+            .then(function (d) {
+              data.settings = d.settings;
+              drawSettingsPart();
+              var now = parts.settings.querySelector(".hq-prices .hq-status");
+              if (now) say(now, "Saved.", true);
+            })
+            .catch(function (e) {
+              say(said, e.message, false);
+              save.disabled = false;
+            });
+        });
+        prices.appendChild(el("div", { class: "hq-actions" }, [save]));
+        prices.appendChild(said);
+      }
+      grid.appendChild(prices);
+
+      // The private preview link.
+      var preview = el("section", { class: "hq-panel hq-preview", "aria-label": "Your private preview" });
+      preview.appendChild(el("h2", { class: "hq-h2", text: "Your private preview" }));
+      preview.appendChild(el("p", { class: "hq-words", text: s.previewOn ? "A preview link is open. Anyone who has it can see the school." : "There is no preview link." }));
+      preview.appendChild(el("p", { class: "hq-words hq-soft", text: "A preview link shows every page of the school while it is switched off, in the browser that opens it. Payments in the preview are real." }));
+      if (shownLink) {
+        var link = el("input", { id: "hqPreviewLink", class: "hq-find", type: "text", readonly: true });
+        link.value = shownLink;
+        preview.appendChild(el("div", { class: "hq-field" }, [el("label", { for: "hqPreviewLink", text: "Copy it now: it is shown only once" }), link]));
+      }
+      var linkSaid = el("p", { class: "hq-status", role: "status" });
+      if (admin) {
+        var actions = el("div", { class: "hq-actions" });
+        var make = el("button", { class: "hq-btn hq-btn--go", type: "button", text: s.previewOn ? "Make a new link" : "Make a preview link" });
+        make.addEventListener("click", function () {
+          make.disabled = true;
+          ask("POST", "/api/admin/elf/preview")
+            .then(function (d) {
+              shownLink = d.url;
+              data.settings.previewOn = true;
+              drawSettingsPart();
+              var box = doc.getElementById("hqPreviewLink");
+              if (box) box.select();
+            })
+            .catch(function (e) {
+              say(linkSaid, e.message, false);
+              make.disabled = false;
+            });
+        });
+        actions.appendChild(make);
+        if (s.previewOn) {
+          var end = el("button", { class: "hq-btn hq-btn--danger", type: "button", text: "End the link" });
+          end.addEventListener("click", function () {
+            end.disabled = true;
+            ask("DELETE", "/api/admin/elf/preview")
+              .then(function () {
+                shownLink = null;
+                data.settings.previewOn = false;
+                drawSettingsPart();
+                var now = parts.settings.querySelector(".hq-preview .hq-status");
+                if (now) say(now, "Preview link ended.", true);
+              })
+              .catch(function (e) {
+                say(linkSaid, e.message, false);
+                end.disabled = false;
+              });
+          });
+          actions.appendChild(end);
+        }
+        preview.appendChild(actions);
+      }
+      preview.appendChild(linkSaid);
+      grid.appendChild(preview);
+      part.appendChild(grid);
+      if (!admin) part.appendChild(el("p", { class: "hq-words hq-soft", text: "Only an admin can change these." }));
+    }
+
     /** Draws everything from the latest answer. Each part's drawing arrives with its task. */
     function draw() {
       if (!data) return;
@@ -762,6 +913,8 @@
       stateChip.classList.toggle("is-live", on);
       tileCount("families", data.numbers ? data.numbers.namesToCheck : 0);
       drawHq();
+      drawMoneyPart();
+      drawSettingsPart();
     }
 
     /** Reads HQ afresh: called by app.js whenever the section is opened. */

@@ -55,6 +55,7 @@ import { qrCodesRouter } from "./routes/qr-codes";
 import { invoicesRouter } from "./routes/invoices";
 import { adminOverviewRouter } from "./routes/admin-overview";
 import { adminDonationSourcesRouter } from "./routes/admin-donation-sources";
+import { adminDonationDetailsRouter } from "./routes/admin-donation-details";
 import { createSiteRouter } from "./routes/site";
 import { elfRouter } from "./routes/elf";
 import { adminElfRouter } from "./routes/admin-elf";
@@ -198,6 +199,8 @@ export function createApp() {
   app.use(adminOverviewRouter);
   // Fill a Red Bag against the Donate page, at the top of the admin's Donations screen.
   app.use(adminDonationSourcesRouter);
+  // A gift's details, for the click down in the Donations gift log.
+  app.use(adminDonationDetailsRouter);
   app.use(healthRouter);
   // Public newsletter unsubscribe (TASK-161/REQ-069). Must be mounted before the site
   // catch-all router below, otherwise its wildcard route would shadow /unsubscribe/:token.

@@ -7,6 +7,8 @@ import { gasdsClaimDeadline } from "../gasds/deadline";
 import type { Scope } from "../declarations/wording";
 import { DONATION_SOURCES } from "./stripe-webhook-model";
 import { ELF_SOURCE } from "../admin/gift-sources";
+import { ARRIVAL_CHANNELS } from "../donations/arrival";
+import { givenOnLabel, paidByLabel } from "../donations/labels";
 
 // Read access to admin/staff `users` (TASK-105/REQ-062). Read-only (pool.query, no transaction —
 // mirrors getDonorPortalSnapshot in src/db/portal.ts). The login endpoint looks a user up by email
@@ -753,6 +755,30 @@ export interface AdminDonationRow {
   elf_family_id: number | null;
   entry_pence: number | null;
   gift_pence: number | null;
+  // The Donations gift log (docs/superpowers/plans/2026-11-05-donations-screen.md, Task 3). On an elf
+  // payment these are null, but for its card fee cover.
+  fee_cover_pence: number | null;
+  /** What brought the giver (src/donations/arrival.ts); null when not noted. */
+  arrival_channel: string | null;
+  arrival_source: string | null;
+  arrival_campaign: string | null;
+  /** The giving page's path, e.g. /donate. */
+  given_on: string | null;
+  /** How it was paid (src/donations/pay-details.ts); null until checked with Stripe. */
+  pay_method: string | null;
+  pay_wallet: string | null;
+  card_brand: string | null;
+  card_last4: string | null;
+  fundraiser_title: string | null;
+  fundraiser_slug: string | null;
+  /** The sponsor pledge this gift paid, if any. */
+  pledge_id: number | null;
+  donor_type: string | null;
+  business_name: string | null;
+  /** Plain words for the cards (src/donations/labels.ts): "Fill a Red Bag", "Invoice INV-0012" ... */
+  given_on_label: string;
+  /** "Apple Pay (Visa ending 4242)", "Direct Debit" ...; null when not known. */
+  paid_by_label: string | null;
 }
 
 // The Elf Detective School's paid payments, the rows Head Elf HQ counts: a family a head elf removed
@@ -761,15 +787,46 @@ const ELF_PAID = `FROM elf_orders o JOIN elf_families f ON f.id = o.family_id
       WHERE o.status = 'paid' AND f.active AND f.removed_at IS NULL`;
 // Each as a row of the list, column for column with the gifts': the grown up as the name, entry plus
 // gift as the amount, paid online, one off, and never in a claim (an entry is never Gift Aided; the
-// gift alone can carry it).
+// gift alone can carry it). What only a gift has is a typed empty, so the UNION ALL lines up.
 const ELF_ROWS = `SELECT 'elf' AS kind, o.reference AS elf_reference, o.family_id AS elf_family_id,
             o.entry_pence AS entry_pence, o.donation_pence AS gift_pence,
+            o.fee_cover_pence AS fee_cover_pence, NULL::text AS arrival_channel, NULL::text AS arrival_source,
+            NULL::text AS arrival_campaign, NULL::text AS given_on, NULL::text AS pay_method, NULL::text AS pay_wallet,
+            NULL::text AS card_brand, NULL::text AS card_last4, NULL::text AS fundraiser_title, NULL::text AS fundraiser_slug,
+            NULL::int AS pledge_id, NULL::text AS donor_type, NULL::text AS business_name,
             o.id, NULL::int AS donor_id, f.grown_up_name AS donor_name, f.email AS donor_email,
             'once' AS mode, NULL::text AS plan, o.entry_pence + o.donation_pence AS amount_pence, 'GBP' AS currency,
             (o.gift_aid AND o.donation_pence > 0) AS gift_aid, 'not_eligible' AS claim_status,
             'paid' AS payment_status, 'online' AS payment_channel, 0 AS refunded_amount_pence,
             NULL::text AS declaration_status, COALESCE(o.paid_at, o.created_at) AS created_at, 'elf_school' AS source, NULL::int AS invoice_id
        ${ELF_PAID}`;
+
+/** The gift log's "Paid by" filter values. */
+export const PAY_FILTERS = ["card", "apple_pay", "google_pay", "bacs_debit", "bank_transfer", "card_present"] as const;
+/** Places a gift can be given that are not a donations.source: the Donate page, a fundraiser's page, the card reader. */
+export const PLACE_FILTERS = ["donate_page", "fundraiser", "card_reader"] as const;
+const PLACE_WHERE: Record<(typeof PLACE_FILTERS)[number], string> = {
+  // As the Donate page's line in the totals (sumGiftsBySource), and never an invoice.
+  donate_page: "d.source IS NULL AND d.payment_channel = 'online' AND d.fundraiser_id IS NULL AND d.invoice_id IS NULL",
+  fundraiser: "d.fundraiser_id IS NOT NULL",
+  card_reader: "d.payment_channel = 'in_person'",
+};
+const SEARCH_MAX = 100;
+
+// A real calendar day written YYYY-MM-DD, or null.
+function ukDateArg(raw: unknown): string | null {
+  if (typeof raw !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(raw)) return null;
+  const d = new Date(`${raw}T00:00:00Z`);
+  return !Number.isNaN(d.getTime()) && d.toISOString().slice(0, 10) === raw ? raw : null;
+}
+
+// Name or email as typed, trimmed and cut to 100 characters, with ILIKE's wild characters (and its
+// escape, the backslash) taken literally. Null when there is nothing to search for.
+function searchPattern(raw: unknown): string | null {
+  if (typeof raw !== "string") return null;
+  const q = raw.trim().slice(0, SEARCH_MAX);
+  return q ? `%${q.replace(/[\\%_]/g, (c) => `\\${c}`)}%` : null;
+}
 
 // Browse ALL donations, newest first, optionally filtered by claim_status and/or payment_channel,
 // with a bounded page window. Returns the page plus the total matching count (for pagination).
@@ -780,6 +837,11 @@ const ELF_ROWS = `SELECT 'elf' AS kind, o.reference AS elf_reference, o.family_i
 // person or another source leaves them out, and ?source=elf_school shows only them. Both kinds are
 // ordered by when each was given or paid, newest first: gifts before elf payments at the same moment,
 // then the newest record.
+//
+// The gift log (Task 3 of docs/superpowers/plans/2026-11-05-donations-screen.md) adds a search by name
+// or email and from/to UK dates, which elf payments meet as gifts do (by the grown up, and by when
+// each was paid), and Paid by, Came from and Gift Aid, which only a gift can meet: any of them leaves
+// elf payments out.
 export async function listDonations(opts: {
   limit?: number;
   offset?: number;
@@ -789,8 +851,20 @@ export async function listDonations(opts: {
   /** TASK-446: 'monthly' or 'once'. Anything else is ignored rather than returning nothing. */
   mode?: string;
   /** 'red_bag': only gifts started on Fill a Red Bag (and so on, DONATION_SOURCES); 'elf_school':
-   *  only the Elf Detective School's payments. Anything else is ignored, as mode is. */
+   *  only the Elf Detective School's payments; 'donate_page', 'fundraiser' or 'card_reader' (PLACE_FILTERS).
+   *  Anything else is ignored, as mode is. */
   source?: string;
+  /** Name or email, ILIKE. */
+  q?: string;
+  /** UK dates, YYYY-MM-DD, inclusive. */
+  from?: string;
+  to?: string;
+  /** One of PAY_FILTERS. */
+  method?: string;
+  /** An arrival channel (ARRIVAL_CHANNELS), or 'unknown' for none noted. */
+  came?: string;
+  /** 'yes' or 'no'. */
+  giftAid?: string;
 }): Promise<{ results: AdminDonationRow[]; total: number }> {
   const { limit, offset } = clampPage(opts.limit, opts.offset);
   const where: string[] = [];
@@ -825,40 +899,133 @@ export async function listDonations(opts: {
     params.push(opts.source);
     where.push(`d.source = $${params.length}`);
   }
+  // The Donate page, a fundraiser's page, the card reader: fixed conditions, no value to pass.
+  const place = PLACE_FILTERS.find((p) => p === opts.source);
+  if (place) where.push(PLACE_WHERE[place]);
+
+  // Search and dates: on gifts and elf payments alike, by the same placeholders when both are listed.
+  const pattern = searchPattern(opts.q);
+  const from = ukDateArg(opts.from);
+  const to = ukDateArg(opts.to);
+  const shared = (values: unknown[]) => {
+    const at = (v: unknown) => `$${values.push(v)}`;
+    return { q: pattern ? at(pattern) : null, from: from ? at(from) : null, to: to ? at(to) : null };
+  };
+  const giftShared = shared(params);
+  if (giftShared.q) where.push(`(dn.full_name ILIKE ${giftShared.q} OR dn.email ILIKE ${giftShared.q})`);
+  if (giftShared.from) where.push(`(d.created_at AT TIME ZONE 'Europe/London')::date >= ${giftShared.from}::date`);
+  if (giftShared.to) where.push(`(d.created_at AT TIME ZONE 'Europe/London')::date <= ${giftShared.to}::date`);
+
+  // Paid by. Apple Pay and Google Pay are online card payments by wallet; "card" is the rest of them.
+  // The card reader includes an in person gift not yet checked with Stripe (it can be nothing else).
+  const method = PAY_FILTERS.find((m) => m === opts.method);
+  if (method === "apple_pay" || method === "google_pay") {
+    params.push(method);
+    where.push(`d.pay_method = 'card' AND d.pay_wallet = $${params.length}`);
+  } else if (method === "card") {
+    params.push(method);
+    where.push(`d.pay_method = $${params.length} AND (d.pay_wallet IS NULL OR d.pay_wallet NOT IN ('apple_pay', 'google_pay'))`);
+  } else if (method === "card_present") {
+    params.push(method);
+    where.push(`(d.pay_method = $${params.length} OR (d.pay_method IS NULL AND d.payment_channel = 'in_person'))`);
+  } else if (method) {
+    params.push(method);
+    where.push(`d.pay_method = $${params.length}`);
+  }
+  // Came from: a channel, or 'unknown' for the gifts where nothing was noted.
+  const came = opts.came === "unknown" ? "unknown" : ARRIVAL_CHANNELS.find((c) => c === opts.came);
+  if (came === "unknown") {
+    where.push(`d.arrival_channel IS NULL`);
+  } else if (came) {
+    params.push(came);
+    where.push(`d.arrival_channel = $${params.length}`);
+  }
+  const giftAid = opts.giftAid === "yes" || opts.giftAid === "no" ? opts.giftAid : null;
+  if (giftAid) where.push(`d.gift_aid = ${giftAid === "yes" ? "true" : "false"}`);
+
   const onlyElf = opts.source === ELF_SOURCE;
   const elfFits =
-    !opts.status && (!opts.channel || opts.channel === "online") && (!opts.paymentStatus || opts.paymentStatus === "paid") && opts.mode !== "monthly";
+    !opts.status &&
+    (!opts.channel || opts.channel === "online") &&
+    (!opts.paymentStatus || opts.paymentStatus === "paid") &&
+    opts.mode !== "monthly" &&
+    !method &&
+    !came &&
+    !giftAid;
   const withGifts = !onlyElf;
-  const withElf = elfFits && !giftSource;
+  const withElf = elfFits && !giftSource && !place;
   // Elf Detective School only, with a filter no payment of it can meet: nothing to look up.
   if (!withGifts && !withElf) return { results: [], total: 0 };
 
   const whereSql = where.length ? `WHERE ${where.join(" AND ")}` : "";
-  // The filters' values belong to the gifts' WHERE; a list of elf payments alone has no place for them.
+  // The gifts' filters' values belong to the gifts' WHERE; a list of elf payments alone carries only
+  // its own search and dates.
   const values = withGifts ? params : [];
-  const giftCount = `SELECT count(*)::int FROM donations d ${whereSql}`;
-  const elfCount = `SELECT count(*)::int ${ELF_PAID}`;
+  const elfAt = withGifts ? giftShared : shared(values);
+  const elfWhere = [
+    ...(elfAt.q ? [`(f.grown_up_name ILIKE ${elfAt.q} OR f.email ILIKE ${elfAt.q})`] : []),
+    ...(elfAt.from ? [`(COALESCE(o.paid_at, o.created_at) AT TIME ZONE 'Europe/London')::date >= ${elfAt.from}::date`] : []),
+    ...(elfAt.to ? [`(COALESCE(o.paid_at, o.created_at) AT TIME ZONE 'Europe/London')::date <= ${elfAt.to}::date`] : []),
+  ]
+    .map((c) => ` AND ${c}`)
+    .join("");
+  // The donor's name is only needed to count when searching by it.
+  const giftFrom = `FROM donations d ${giftShared.q ? "JOIN donors dn ON dn.id = d.donor_id " : ""}${whereSql}`;
+  const giftCount = `SELECT count(*)::int ${giftFrom}`;
+  const elfCount = `SELECT count(*)::int ${ELF_PAID}${elfWhere}`;
   const countSql = withGifts && withElf
     ? `SELECT (${giftCount}) + (${elfCount}) AS count`
-    : `SELECT count(*)::int AS count ${withGifts ? `FROM donations d ${whereSql}` : ELF_PAID}`;
+    : `SELECT count(*)::int AS count ${withGifts ? giftFrom : `${ELF_PAID}${elfWhere}`}`;
   const totalRes = await pool.query<{ count: number }>(countSql, values);
 
+  // The new columns come before the old ones, so each half's tail reads as it always has. At most one
+  // sponsor pledge per gift, so a row is never doubled.
   const giftRows = `SELECT 'donation' AS kind, NULL::text AS elf_reference, NULL::int AS elf_family_id,
             NULL::int AS entry_pence, NULL::int AS gift_pence,
+            d.fee_cover_pence, d.arrival_channel, d.arrival_source,
+            d.arrival_campaign, d.given_on, d.pay_method, d.pay_wallet,
+            d.card_brand, d.card_last4, fr.title AS fundraiser_title, fr.slug AS fundraiser_slug,
+            (SELECT sp.id FROM sponsor_pledges sp WHERE sp.donation_id = d.id ORDER BY sp.id LIMIT 1) AS pledge_id,
+            dn.donor_type, dn.business_name,
             d.id, d.donor_id, dn.full_name AS donor_name, dn.email AS donor_email,
             d.mode, d.plan, d.amount_pence, d.currency, d.gift_aid, d.claim_status,
             d.payment_status, d.payment_channel, d.refunded_amount_pence, d.declaration_status, d.created_at, d.source, d.invoice_id
        FROM donations d
        JOIN donors dn ON dn.id = d.donor_id
+       LEFT JOIN fundraisers fr ON fr.id = d.fundraiser_id
        ${whereSql}`;
-  const parts = [...(withGifts ? [giftRows] : []), ...(withElf ? [ELF_ROWS] : [])];
-  const res = await pool.query<AdminDonationRow>(
+  const parts = [...(withGifts ? [giftRows] : []), ...(withElf ? [`${ELF_ROWS}${elfWhere}`] : [])];
+  const res = await pool.query<Omit<AdminDonationRow, "given_on_label" | "paid_by_label">>(
     `SELECT * FROM (${parts.join(" UNION ALL ")}) listed
       ORDER BY listed.created_at DESC, listed.kind = 'elf', listed.id DESC
       LIMIT ${limit} OFFSET ${offset}`,
     values,
   );
-  return { results: res.rows, total: totalRes.rows[0].count };
+  return { results: res.rows.map(withLabels), total: totalRes.rows[0].count };
+}
+
+// The plain words for a row's cards, by the one set of rules (src/donations/labels.ts).
+function withLabels(r: Omit<AdminDonationRow, "given_on_label" | "paid_by_label">): AdminDonationRow {
+  const kind = r.kind === "elf" ? "elf" : "donation";
+  return {
+    ...r,
+    given_on_label: givenOnLabel({
+      kind,
+      source: r.source ?? null,
+      paymentChannel: r.payment_channel,
+      invoiceId: r.invoice_id ?? null,
+      fundraiserTitle: r.fundraiser_title ?? null,
+      pledgeId: r.pledge_id ?? null,
+    }),
+    paid_by_label: paidByLabel({
+      kind,
+      paymentChannel: r.payment_channel,
+      payMethod: r.pay_method ?? null,
+      payWallet: r.pay_wallet ?? null,
+      cardBrand: r.card_brand ?? null,
+      cardLast4: r.card_last4 ?? null,
+    }),
+  };
 }
 
 export interface ClaimBatchRow {

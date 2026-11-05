@@ -1049,11 +1049,13 @@
         if (d.source === "ball_bags") gift += ' <span class="admin-pill dn-source-pill">Red bags at the Ball</span>';
         // And one that paid an invoice sent from Admin > Giving > Invoices, with its number.
         if (d.source === "invoice") gift += ' <span class="admin-pill dn-source-pill">Invoice' + (d.invoice_id ? " " + H.escapeHtml(invNumber(d.invoice_id)) : "") + "</span>";
-        // An Elf Detective School payment (Head Elf HQ): its own label, then its entry and any gift on top.
+        // An Elf Detective School payment (Head Elf HQ): its own label, then its entry and any gift on top,
+        // in one piece, so a phone's card (each cell a flex row) wraps it word by word, each amount kept
+        // with its word.
         var elfRow = d.kind === "elf";
         if (elfRow) {
-          gift += ' <span class="admin-pill dn-source-pill">Elf Detective School</span> entry ' + H.formatPence(d.entry_pence) +
-            (d.gift_pence > 0 ? ", gift " + H.formatPence(d.gift_pence) : "");
+          gift = "<span>" + gift + ' <span class="admin-pill dn-source-pill">Elf Detective School</span> entry&nbsp;' + H.formatPence(d.entry_pence) +
+            (d.gift_pence > 0 ? ", gift&nbsp;" + H.formatPence(d.gift_pence) : "") + "</span>";
         }
         // TASK-241: one Payment pill combining payment_status + any refund (see helpers.paymentLabel).
         var pay = H.paymentLabel(d);

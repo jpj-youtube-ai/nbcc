@@ -1259,6 +1259,8 @@
       var out = {};
       for (var k in body) if (Object.prototype.hasOwnProperty.call(body, k)) out[k] = body[k];
       if (uiMode) out.uiMode = uiMode;
+      // The page before this one, so the checkout can note what brought the giver (never kept here).
+      out.cameFrom = doc.referrer;
       var headers = { "Content-Type": "application/json" };
       // While the page is switched off, the checkout takes a Red Bag gift only from signed in staff.
       // The session goes with it ONLY on the preview the server marked, never on the public page.

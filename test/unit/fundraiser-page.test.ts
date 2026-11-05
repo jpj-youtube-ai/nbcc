@@ -190,6 +190,7 @@ describe("the checkout body", () => {
       email: "alex@example.com",
       emailConsent: true,
       fundraiserId: 41,
+      cameFrom: "",
     });
     expect(assigned).toBe("https://checkout.stripe.test/session");
   });

@@ -135,7 +135,7 @@ describe("what it sends", () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
     const [url, init] = fetchMock.mock.calls[0];
     expect(url).toBe("/api/checkout-session");
-    expect(JSON.parse(init.body)).toMatchObject({ ball: true, mode: "once", amount: 2500 });
+    expect(JSON.parse(init.body)).toMatchObject({ ball: true, mode: "once", amount: 2500, cameFrom: "" });
     expect(assign).toHaveBeenCalledWith("https://checkout.stripe.test/1");
   });
 

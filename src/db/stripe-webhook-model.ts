@@ -13,6 +13,7 @@ import { scopeFromDeclarationScope, type Scope, type DeclarationWording } from "
 import { isGasdsEligibleAmount } from "../gasds/caps";
 import type { DunningEvent } from "../subscriptions/dunning";
 import { BALL_BAGS_MAX } from "../ball/bags";
+import { ARRIVAL_CHANNELS, type GiftArrival } from "../donations/arrival";
 
 // PURE event→record mapping for the single Stripe webhook handler (REQ-036). No
 // pool/config/network/clock — imports only the pure donation model, so it is
@@ -63,7 +64,23 @@ export function sourceFromCheckoutSession(
   return null;
 }
 
-const asString = (v: string | { id: string } | null | undefined): string | null =>
+// checkout.session.completed → what brought the giver (src/donations/arrival.ts), as the checkout
+// stamped it: arrChannel, arrSource, arrCampaign and givenOn, each only when there was something to
+// say. Null without a known channel (Do Not Track, an older page, or a session from anywhere else).
+// Never throws, whatever it is handed.
+export function arrivalFromCheckoutSession(
+  session: Pick<Stripe.Checkout.Session, "metadata"> | null | undefined,
+): GiftArrival | null {
+  const metadata: unknown = session?.metadata;
+  if (typeof metadata !== "object" || metadata === null) return null;
+  const m = metadata as Record<string, unknown>;
+  const channel = ARRIVAL_CHANNELS.find((c) => c === m.arrChannel);
+  if (!channel) return null;
+  const text = (v: unknown): string | null => (typeof v === "string" && v !== "" ? v.slice(0, 100) : null);
+  return { channel, source: text(m.arrSource), campaign: text(m.arrCampaign), givenOn: text(m.givenOn) };
+}
+
+const asString =(v: string | { id: string } | null | undefined): string | null =>
   typeof v === "string" ? v : v && typeof v === "object" ? v.id : null;
 
 // checkout.session.completed → the donation record. Gift Aid is carried as a FLAG

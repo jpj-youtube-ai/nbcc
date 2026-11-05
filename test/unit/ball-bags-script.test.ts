@@ -198,6 +198,7 @@ describe("giving", () => {
     expect(fetchMock.mock.calls[0][0]).toBe("/api/checkout-session");
     const body = sent(fetchMock);
     expect(body.ballBags).toBe(3);
+    expect(body.cameFrom).toBe("");
     expect(body.mode).toBe("once");
     expect(body.donorType).toBe("individual");
     expect(body.fullName).toBe("Robin Example");

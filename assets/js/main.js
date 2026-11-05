@@ -995,21 +995,17 @@
       }
     }
 
-    // POST the checkout body, optionally requesting a specific Stripe UI mode. uiMode is added to a
+    // POST the checkout body, optionally requesting a specific Stripe UI mode. uiMode and cameFrom go on a
     // COPY so the returned/previewed `payload` stays the exact { mode, plan, amount, giftAid, ... }
     // contract (REQ-028) that callers and tests rely on — the wire body is the only thing that grows.
     function postCheckout(uiMode) {
       var out = { method: "POST", headers: { "Content-Type": "application/json" } };
-      if (uiMode) {
-        var withMode = {};
-        for (var k in payload) {
-          if (Object.prototype.hasOwnProperty.call(payload, k)) withMode[k] = payload[k];
-        }
-        withMode.uiMode = uiMode;
-        out.body = JSON.stringify(withMode);
-      } else {
-        out.body = JSON.stringify(payload);
+      var withMode = { cameFrom: doc.referrer };
+      for (var k in payload) {
+        if (Object.prototype.hasOwnProperty.call(payload, k)) withMode[k] = payload[k];
       }
+      if (uiMode) withMode.uiMode = uiMode;
+      out.body = JSON.stringify(withMode);
       return win.fetch("/api/checkout-session", out).then(function (res) {
         return res && res.ok ? res.json() : null;
       });

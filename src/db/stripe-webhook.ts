@@ -36,6 +36,7 @@ import {
   refundedPenceFromDispute,
   confirmationEmailFor,
   sourceFromCheckoutSession,
+  arrivalFromCheckoutSession,
   type DonationSource,
   type DonationConfirmationEmail,
 } from "./stripe-webhook-model";
@@ -154,6 +155,14 @@ export async function processWebhookEvent(event: Stripe.Event): Promise<WebhookR
         abandoned = new Error("donation source statement abandoned at its time limit");
       }
     }
+    // What brought the giver (the Donations gift log): the same way, after the source, and only for a
+    // checkout's first gift (a monthly gift's later charges copy nothing). Not tried on a connection
+    // the source statement was abandoned on, as that statement may still be running there.
+    if (action === "donation.created" && !abandoned) {
+      if (await tagDonationArrival(event, (sql, params) => client.query(sql, params))) {
+        abandoned = new Error("donation arrival statement abandoned at its time limit");
+      }
+    }
     return { processed: true, action };
   } catch (err) {
     await client.query("ROLLBACK");
@@ -222,6 +231,43 @@ async function withinSourceLimit(run: () => unknown, limitMs: number): Promise<v
 // Answers true ONLY when the statement was abandoned at its time limit and may still be running on
 // the connection it was sent on; the caller must then not reuse that connection. False otherwise.
 // Exported so it is unit-testable with a stand-in query function.
+// What brought the giver (src/donations/arrival.ts), copied from the session the checkout stamped onto
+// that checkout's donation row. Like the source: one separate statement after COMMIT that can only fill
+// in a donation where nothing is noted yet. $1 = session id, $2..$5 = channel, source, campaign, page.
+export const TAG_CHECKOUT_ARRIVAL_SQL = `UPDATE donations SET arrival_channel = $2, arrival_source = $3,
+  arrival_campaign = $4, given_on = $5
+  WHERE stripe_session_id = $1 AND arrival_channel IS NULL`;
+
+// Post-commit and best effort, exactly as tagDonationSource below, with the same time limit: any
+// failure is caught, logged once with the event id and the database's error code only, and goes no
+// further. Answers true ONLY when the statement was abandoned at its time limit (the caller must then
+// not reuse the connection). Only a checkout.session.completed carries anything to copy.
+export async function tagDonationArrival(event: Stripe.Event, query: SourceQuery): Promise<boolean> {
+  const say = (why: string): void =>
+    console.error(
+      "what brought the giver not recorded (the donation itself is saved and unaffected):",
+      `event ${typeof event?.id === "string" ? event.id : "unknown"},`,
+      why,
+    );
+  try {
+    if (event.type !== "checkout.session.completed") return false;
+    const session = event.data.object;
+    const arrival = arrivalFromCheckoutSession(session);
+    if (!arrival || typeof session.id !== "string" || session.id === "") return false;
+    const params = [session.id, arrival.channel, arrival.source, arrival.campaign, arrival.givenOn];
+    await withinSourceLimit(() => query(TAG_CHECKOUT_ARRIVAL_SQL, params), SOURCE_TAG_TIMEOUT_MS);
+    return false;
+  } catch (err) {
+    if (err instanceof SourceTagTimeout) {
+      say(`gave up after ${SOURCE_TAG_TIMEOUT_MS} ms`);
+      return true;
+    }
+    const code = (err as { code?: unknown } | null)?.code;
+    say(typeof code === "string" ? `database error code ${code}` : "no database error code");
+    return false;
+  }
+}
+
 export async function tagDonationSource(event: Stripe.Event, query: SourceQuery): Promise<boolean> {
   try {
     if (event.type === "checkout.session.completed") {

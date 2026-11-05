@@ -30,7 +30,7 @@ Feature: Head Elf HQ, the Elf Detective School's own admin section
     Given "sam.gone.elf.bdd@example.com" has already enrolled "Ivy Snowsleuth" and paid
     When "boss.elfhq.admin.bdd@example.com" with password "Elf-Hq-Admin-1" removes the family of "sam.gone.elf.bdd@example.com"
     And a sign in code is asked for "sam.gone.elf.bdd@example.com"
-    Then 0 "elfSignInCode" email went to "sam.gone.elf.bdd@example.com"
+    Then once the request has finished, 0 "elfSignInCode" emails went to "sam.gone.elf.bdd@example.com"
     When "boss.elfhq.admin.bdd@example.com" with password "Elf-Hq-Admin-1" puts back the family of "sam.gone.elf.bdd@example.com"
     And a sign in code is asked for "sam.gone.elf.bdd@example.com"
-    Then 1 "elfSignInCode" email went to "sam.gone.elf.bdd@example.com"
+    Then once the request has finished, 1 "elfSignInCode" email went to "sam.gone.elf.bdd@example.com"

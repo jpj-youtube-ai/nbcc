@@ -105,7 +105,18 @@ When("a sign in code is asked for {string}", async function (email) {
     headers: { "Content-Type": "application/x-www-form-urlencoded", Accept: "application/json" },
     body: new URLSearchParams({ email }).toString(),
   });
-  assert.ok(res.status < 500, `the sign in request answered ${res.status}`);
+  assert.equal(res.status, 200, `the sign in request answered ${res.status}`);
+});
+
+// The sign in request answers before it looks anyone up, so the answer never tells who is enrolled,
+// and sends any code just after. So count once that has had time to finish: wait for the emails
+// expected, then a moment more for any still on their way, and only then count.
+Then("once the request has finished, {int} {string} email(s) went to {string}", async function (n, kind, email) {
+  const count = async () =>
+    (await pool.query("SELECT count(*)::int AS n FROM email_log WHERE kind = $1 AND lower(recipient) = lower($2)", [kind, email])).rows[0].n;
+  for (let i = 0; i < 30 && (await count()) < n; i++) await new Promise((r) => setTimeout(r, 100));
+  await new Promise((r) => setTimeout(r, 750));
+  assert.equal(await count(), n);
 });
 
 Then("Head Elf HQ counts {int} family and {int} name to check", function (families, names) {

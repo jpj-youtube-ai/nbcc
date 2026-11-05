@@ -1652,7 +1652,10 @@ hosted-Checkout redirect stays the default fallback and no-JS safety net.
 | `GET /elf/sign-in`, `POST /api/elf/sign-in/request`, `POST /api/elf/sign-in`, `POST /api/elf/sign-out` | **implemented, switched off** | Signing in to Detective HQ with an emailed 6 digit code (cookie `nbcc_elf_session`, 30 days) |
 | `GET /elf/hq`, `GET /elf/hq/wardrobe/:detective`, `GET /elf/hq/elf/:detective.png`, `POST /api/elf/look` | **implemented, switched off** | Detective HQ, the wardrobe, a detective's elf picture (a PNG of the elf on its stage, stacked from the paper pictures; 503 with `Retry-After` when the picture maker is busy), and saving a look and up to three favourite looks, each made safe against the doors the detective has done (`{ ok, look, favourites }`) |
 | `GET /api/elf/calendar`, `GET /api/elf/door/:n`, `GET /api/elf/me` | **implemented, switched off** | The calendar's small feed, one door's HTML, and the signed in family's marks |
-| `GET /api/admin/elf/settings`, `PATCH /api/admin/elf/settings`, `GET /api/admin/elf/signups` | **implemented** | Admin > Get involved > Elf Detective School: the switch and the price (admin only to change), and the sign ups (Get involved: view) |
+| `GET /api/admin/elf/settings`, `PATCH /api/admin/elf/settings` | **implemented** | Head Elf HQ (Admin > Content > Elf Detective School): the switch and the prices (section `elf`: view to read, admin only to change) |
+| `GET /api/admin/elf/hq` | **implemented** | Head Elf HQ's front screen: the settings, who may switch, the numbers, what needs a head elf, the newest detectives and the days to the first clue (section `elf`: view) |
+| `GET /api/admin/elf/families`, `GET /api/admin/elf/families/:id` | **implemented** | Head Elf HQ's families: searched (`q`, a name, email or badge), filtered (`all`, `check`, `week`, `removed`) and paged 50 at a time, and one family's sheet with its detectives and payments (section `elf`: view) |
+| `PATCH /api/admin/elf/families/:id`, `POST /api/admin/elf/families/:id/sign-in-code` \| `remove` \| `restore`, `PATCH /api/admin/elf/detectives/:id` | **implemented** | Head Elf HQ's changes, each written to the audit log: a grown up's name or email, a sign in code sent for them, a family taken out or put back, a detective's name ticked, unticked or changed (section `elf`: edit) |
 | `GET /elf/preview/:code`, `POST /api/admin/elf/preview`, `DELETE /api/admin/elf/preview` | **implemented** | The private preview link: an admin makes it (any earlier one stops working; only its sha256 is kept), and a browser that opens it sees every `/elf` page while the school is switched off, each marked Private preview, `noindex` and never cached publicly. Payments in the preview are real |
 | `GET` \| `POST /pledge/confirm`, `/pledge/pay`, `/pledge/cancel` | **implemented** | Sponsor pledges (the sponsor, by the signed link in an email: confirm the pledge, pay it through Stripe Checkout, or cancel it quietly. Each link only asks; a button does the thing) |
 | `GET /api/fundraise/manage/pledges`, `POST /api/fundraise/manage/fundraisers/:id/pledges/:pledgeId/cash` \| `hide` | **implemented** | Sponsor pledges (the signed in organiser: confirmed pledges by name, never emails; "Paid me in cash"; hide one from their page) |
@@ -1694,7 +1697,7 @@ hosted-Checkout redirect stays the default fallback and no-JS safety net.
 | `GET /api/admin/queues/retention-expiry` | **implemented** | REQ-046 (retention-expiry queue) |
 | `GET /api/admin/queues/awaiting-declaration` | **implemented** | REQ-049 (awaiting-declaration queue) |
 | `GET /api/admin/queues/gasds-pool` | **implemented** | REQ-050 (annual GASDS pool report) |
-| `GET /api/admin/donations` | **implemented** | REQ-066 (browse all donations, paginated) |
+| `GET /api/admin/donations` | **implemented** | REQ-066 (browse all donations, paginated; with the Elf Detective School's payments beside the gifts, and `?source=elf_school` for only them: see **Head Elf HQ**) |
 | `GET /api/admin/donations/source-totals` | **implemented** | Fill a Red Bag against the Donate page, this month and in all (Donations: view) |
 | `GET /api/admin/red-bag-list` | **implemented** | Fill a Red Bag: the list editor's state: the website's list, the shared draft, what differs, the history (Fill a Red Bag: view). See **Fill a Red Bag: staff edit the list** |
 | `GET /api/admin/red-bag-list/versions/:id` | **implemented** | one published list, or `original` for the built-in one (Fill a Red Bag: view) |
@@ -7276,6 +7279,9 @@ checkout, the webhook or any public page.
   `mode` does (TASK-446). With nothing to show it says "No Fill a Red Bag gifts yet.", or "No Fill
   a Red Bag gifts match these filters." when another filter is also set. The Donations screen has
   no export.
+- **The Elf Detective School's payments** sit in the same list, with a tick box and a totals line of
+  their own, though they are entries rather than gifts: see **Head Elf HQ** under **Elf Detective
+  School**.
 - **A line on the Overview**, straight after Money in (see **How we are doing** above).
 
 The Donations menu item has a New pill for it (`FEATURES` in `src/admin/whats-new.ts`).
@@ -11557,7 +11563,7 @@ day). Wave 1 plan: `docs/superpowers/plans/2026-11-03-elf-detective-wave1-sign-u
 **The switch.** `elf_settings.school_on`, off by default. While it is off every `/elf` page and
 `/api/elf/*` route answers 404; the Stripe webhook still settles payments already made. An admin
 switches it on, and sets the pay what you can amounts per detective (from £1, £5 suggested), in
-Admin > Get involved > Elf Detective School.
+Head Elf HQ (Admin > Content > Elf Detective School; see **Head Elf HQ** below).
 
 ### Routes
 
@@ -11597,6 +11603,56 @@ Stage A's game rules), screens in `src/elf/pages/`, the data layer in `src/db/el
 `src/routes/elf.ts` and `src/routes/admin-elf.ts`, the enrol page's script in
 `assets/js/elf-join.js`. Unit tests are `test/unit/elf-*.test.ts`; BDD is `features/elf-join.feature`.
 Both emails are in Admin > Get involved > All emails, under Elf Detective School.
+
+### Head Elf HQ (Admin > Content > Elf Detective School)
+
+The school's own admin section, after the Festive Ball in the Content menu (design
+`docs/superpowers/specs/2026-11-05-elf-admin-design.md`, plan
+`docs/superpowers/plans/2026-11-05-elf-admin-phase-1.md`). The school runs itself; head elves come in
+to see that it is going right and to step in where a person has to. It replaced the Elf Detective
+School card in Admin > Get involved > Settings.
+
+**Who may use it.** Its own permission section, `elf`: admins hold it by role, editors and viewers
+have none until someone gives it to them in the Team matrix. `migrations/1791200000350_permissions-elf.js`
+writes `elf` into every saved matrix (edit for an admin, none for anyone else), so a saved matrix
+never falls back to a role default for it. Switching the school on or off, the prices and the
+preview link stay admins only, whoever holds the section.
+
+**The screens** (`assets/js/admin/elf-hq.js`, styled by `assets/css/admin-elf-hq.css`, every class
+`hq-`). `app.js` opens it when the view is chosen; the open tab is kept for the browser tab's session
+(`nbcc_elf_hq_tab`).
+- **HQ**: the switch as a lever (asked twice, both ways), the days to the first clue and the
+  detectives enrolled, what needs a head elf (first names to check, an open preview link, payments
+  started and never finished), the money raised, and the newest detectives.
+- **Families**: search by name, email or badge, and filter by all, names to check, this week or
+  removed. A family's sheet has its detectives (tick a first name to show it in public; a changed
+  name waits for a tick again), its payments, the grown up's name and email (a new email ends the
+  family's sessions), a sign in code sent for them, and taking the family out or putting it back.
+- **Money**: raised so far, entries and gifts, the Gift Aid on the gifts, and a button to every
+  payment in Donations.
+- **Settings**: the pay what you can amounts as steppers, and the private preview link.
+
+**Taking a family out.** `migrations/1791200000360_elf-families-removed.js` (additive) adds
+`elf_families.removed_at` and `removed_by`. A removed family gets no sign in code and no session (its
+sessions and codes are deleted), and is left out of HQ's counts, the money and Donations; putting it
+back clears both columns. Every change in Head Elf HQ goes in the audit log (`elf.detective.changed`,
+`elf.family.changed`, `elf.family.removed`, `elf.family.restored`, `elf.sign_in_code.sent`).
+
+**In Donations.** `listDonations` (`src/db/admin.ts`) lists the school's paid payments beside the
+gifts, one row each (`kind: 'elf'`): the grown up as the name, entry plus gift as the amount (the card
+fee top up left out), its reference in place of an ID, paid online, one off, `claim_status`
+`not_eligible`, and Gift Aid shown only for a gift that carries it. The filters apply where they mean
+anything: a claim status, Monthly, Refunded, Pending, Failed, in person or another source leaves elf
+payments out, and the **Elf Detective School only** tick box (`?source=elf_school`) shows only them.
+The list is now ordered by when each was given or paid, newest first (a gift before an elf payment
+at the same moment, then the newest record), so the two kinds interleave; it used to be by record
+number. An elf row opens its family in Head Elf HQ for someone who may open the section. The totals
+at the top gain an **Elf Detective School** line before Donate page ("£1,486 from 128 payments"),
+read by a second query in `sumGiftsBySource`, and the note adds that entries are never claimed for
+Gift Aid.
+
+Tests: `test/unit/admin-elf*.test.ts`, `test/unit/elf-admin-*.test.ts` and
+`test/unit/admin-donations-elf.test.ts`; BDD is `features/elf-admin.feature`.
 
 ### The dress-up elf
 

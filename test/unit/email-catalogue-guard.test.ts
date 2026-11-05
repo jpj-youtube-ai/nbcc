@@ -52,7 +52,7 @@ function tsFiles(dir: string): string[] {
   return out;
 }
 
-const EMAIL_FOLDERS = ["src/fundraising", "src/pledges", "src/tickets", "src/ball"];
+const EMAIL_FOLDERS = ["src/fundraising", "src/pledges", "src/tickets", "src/ball", "src/elf"];
 const emailFiles = EMAIL_FOLDERS.flatMap(tsFiles);
 const catalogue = read("src/email/catalogue.ts");
 

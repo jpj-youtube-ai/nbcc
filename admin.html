@@ -25,6 +25,7 @@
     <script defer src="/assets/js/red-bag-catalogue.js"></script>
     <script defer src="/assets/js/red-bag-list.js"></script>
     <script defer src="/assets/js/admin/red-bag-list.js"></script>
+    <script defer src="/assets/js/admin/elf.js"></script>
     <!-- app.js is a classic script; bridge the ES-module gmail-reply.js helpers onto window
          so app.js (Contact form tab) can call them (2026-07-10 contact-inbox spec, Task 8). -->
     <script type="module">
@@ -1661,6 +1662,14 @@
                   </div>
                 </details>
               </section>
+                </div>
+                <!-- NBCC Elf Detective School (wave 1): the switch, the pay what you can amounts and the
+                     sign ups. Drawn by assets/js/admin/elf.js from /api/admin/elf/*. -->
+                <div class="gi-part" data-gi-part="settings" role="group" aria-label="Elf Detective School" hidden>
+                  <section class="card elf-admin" id="elfAdmin" aria-labelledby="elfAdminHeading">
+                    <h3 id="elfAdminHeading">Elf Detective School</h3>
+                    <p class="elf-admin-state" id="elfAdminState" aria-live="polite">Checking&hellip;</p>
+                  </section>
                 </div>
                 <div class="gi-part" data-gi-part="settings" role="group" aria-label="Fundraising settings" hidden>
               <div class="fr-switch" id="frSwitch">

@@ -186,6 +186,8 @@ export const RESERVED_PREFIXES: string[] = [
   "/business",
   "/donate",
   "/donor-portal",
+  // NBCC Elf Detective School: the calendar, enrolling, signing in and Detective HQ.
+  "/elf",
   // TASK-453: a real page (switched on and off from the admin), so no spare address may shadow it.
   // It lives at /whats-on now; the old address stays reserved because it redirects there.
   "/events",

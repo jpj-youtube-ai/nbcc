@@ -1,0 +1,181 @@
+{
+ "_about": "The torn paper shapes, drawn by scripts/elf-paper/shapes.mjs. masks: the torn edge strips, each side's strip tiled along that side of a box (width by height: length by band across, band by length down); the stylesheet fills the middle.",
+ "masks": {
+  "tear-card-a": {
+   "band": 12,
+   "lengths": [
+    263,
+    241,
+    227,
+    251
+   ],
+   "sides": [
+    "top",
+    "bottom",
+    "left",
+    "right"
+   ]
+  },
+  "tear-card-b": {
+   "band": 12,
+   "lengths": [
+    251,
+    233,
+    239,
+    229
+   ],
+   "sides": [
+    "top",
+    "bottom",
+    "left",
+    "right"
+   ]
+  },
+  "tear-card-c": {
+   "band": 11,
+   "lengths": [
+    241,
+    257,
+    233,
+    247
+   ],
+   "sides": [
+    "top",
+    "bottom",
+    "left",
+    "right"
+   ]
+  },
+  "tear-tile-a": {
+   "band": 8,
+   "lengths": [
+    173,
+    191,
+    157,
+    181
+   ],
+   "sides": [
+    "top",
+    "bottom",
+    "left",
+    "right"
+   ]
+  },
+  "tear-tile-b": {
+   "band": 8,
+   "lengths": [
+    181,
+    167,
+    163,
+    177
+   ],
+   "sides": [
+    "top",
+    "bottom",
+    "left",
+    "right"
+   ]
+  },
+  "tear-fine-a": {
+   "band": 6,
+   "lengths": [
+    131,
+    149,
+    127,
+    139
+   ],
+   "sides": [
+    "top",
+    "bottom",
+    "left",
+    "right"
+   ]
+  },
+  "tear-fine-b": {
+   "band": 6,
+   "lengths": [
+    139,
+    127,
+    143,
+    133
+   ],
+   "sides": [
+    "top",
+    "bottom",
+    "left",
+    "right"
+   ]
+  },
+  "tear-top": {
+   "band": 14,
+   "lengths": [
+    233
+   ],
+   "sides": [
+    "top"
+   ]
+  }
+ },
+ "files": [
+  "tear-card-a-top.svg",
+  "tear-card-a-bottom.svg",
+  "tear-card-a-left.svg",
+  "tear-card-a-right.svg",
+  "tear-card-b-top.svg",
+  "tear-card-b-bottom.svg",
+  "tear-card-b-left.svg",
+  "tear-card-b-right.svg",
+  "tear-card-c-top.svg",
+  "tear-card-c-bottom.svg",
+  "tear-card-c-left.svg",
+  "tear-card-c-right.svg",
+  "tear-tile-a-top.svg",
+  "tear-tile-a-bottom.svg",
+  "tear-tile-a-left.svg",
+  "tear-tile-a-right.svg",
+  "tear-tile-b-top.svg",
+  "tear-tile-b-bottom.svg",
+  "tear-tile-b-left.svg",
+  "tear-tile-b-right.svg",
+  "tear-fine-a-top.svg",
+  "tear-fine-a-bottom.svg",
+  "tear-fine-a-left.svg",
+  "tear-fine-a-right.svg",
+  "tear-fine-b-top.svg",
+  "tear-fine-b-bottom.svg",
+  "tear-fine-b-left.svg",
+  "tear-fine-b-right.svg",
+  "tear-top.svg",
+  "blob-a.svg",
+  "btn-s-crimson.svg",
+  "btn-s-holly.svg",
+  "btn-s-cream.svg",
+  "btn-s-maroon.svg",
+  "btn-s-hollydark.svg",
+  "btn-s-tan.svg",
+  "btn-m-crimson.svg",
+  "btn-m-holly.svg",
+  "btn-m-cream.svg",
+  "btn-m-maroon.svg",
+  "btn-m-hollydark.svg",
+  "btn-m-tan.svg",
+  "btn-l-crimson.svg",
+  "btn-l-holly.svg",
+  "btn-l-cream.svg",
+  "btn-l-maroon.svg",
+  "btn-l-hollydark.svg",
+  "btn-l-tan.svg",
+  "btn-m-cane.svg",
+  "chip-holly.svg",
+  "chip-tan.svg",
+  "chip-gold.svg",
+  "chip-crimson.svg",
+  "chip-cream.svg",
+  "label-holly.svg",
+  "note-cream.svg",
+  "note-kraft.svg",
+  "note-holly.svg",
+  "tag-cream.svg",
+  "tape.svg"
+ ]
+}

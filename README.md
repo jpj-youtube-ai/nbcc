@@ -1646,6 +1646,14 @@ hosted-Checkout redirect stays the default fallback and no-JS safety net.
 | `GET /fill` | **implemented, listed but unlinked** | Fill a Red Bag (a new way to give: fill a list of example items, watch a red bag fill, give the total. Public since 4 October 2026 and on the site map, so search engines may list it; still linked from no menu, footer or page. `POST /api/checkout-session` takes an optional `redBag: true` for it. See **Fill a Red Bag (listed, unlinked)**) |
 | `GET /fill/thank-you` | **implemented** | Fill a Red Bag's thank you, a page of its own, where Stripe returns a donor; `noindex`, on no site map, linked from nowhere |
 | `GET /fill-a-red-bag`, `GET /fill-a-bag` | **implemented** | The address the page first had, and the other way people type it: a permanent redirect (`301`) to `/fill`, query string kept (an old return from paying, `?thanks=1`, goes to `/fill/thank-you`), while the page is switched on; the 404 if it were switched off. Fixed in code, reserved, on no site map |
+| `GET /elf`, `GET /elf/rules` | **implemented, switched off** | NBCC Elf Detective School: the public calendar of 24 doors counting down to the first clue, and the rules. Every `/elf` page and `/api/elf/*` route answers 404 until an admin switches the school on. See **Elf Detective School** |
+| `GET /elf/join`, `POST /api/elf/join` | **implemented, switched off** | Enrol detectives (first name and a festive surname only) and pay what you can (from £1, £5 suggested, per detective; an optional gift can carry Gift Aid); goes on to Stripe Checkout tagged `product: elf_school` |
+| `GET /elf/welcome` | **implemented, switched off** | Where Stripe returns a family; signs the paying browser in only when its payment opened the account |
+| `GET /elf/sign-in`, `POST /api/elf/sign-in/request`, `POST /api/elf/sign-in`, `POST /api/elf/sign-out` | **implemented, switched off** | Signing in to Detective HQ with an emailed 6 digit code (cookie `nbcc_elf_session`, 30 days) |
+| `GET /elf/hq`, `GET /elf/hq/wardrobe/:detective`, `GET /elf/hq/elf/:detective.png`, `POST /api/elf/look` | **implemented, switched off** | Detective HQ, the wardrobe, a detective's elf picture (a PNG of the elf on its stage, stacked from the paper pictures; 503 with `Retry-After` when the picture maker is busy), and saving a look and up to three favourite looks, each made safe against the doors the detective has done (`{ ok, look, favourites }`) |
+| `GET /api/elf/calendar`, `GET /api/elf/door/:n`, `GET /api/elf/me` | **implemented, switched off** | The calendar's small feed, one door's HTML, and the signed in family's marks |
+| `GET /api/admin/elf/settings`, `PATCH /api/admin/elf/settings`, `GET /api/admin/elf/signups` | **implemented** | Admin > Get involved > Elf Detective School: the switch and the price (admin only to change), and the sign ups (Get involved: view) |
+| `GET /elf/preview/:code`, `POST /api/admin/elf/preview`, `DELETE /api/admin/elf/preview` | **implemented** | The private preview link: an admin makes it (any earlier one stops working; only its sha256 is kept), and a browser that opens it sees every `/elf` page while the school is switched off, each marked Private preview, `noindex` and never cached publicly. Payments in the preview are real |
 | `GET` \| `POST /pledge/confirm`, `/pledge/pay`, `/pledge/cancel` | **implemented** | Sponsor pledges (the sponsor, by the signed link in an email: confirm the pledge, pay it through Stripe Checkout, or cancel it quietly. Each link only asks; a button does the thing) |
 | `GET /api/fundraise/manage/pledges`, `POST /api/fundraise/manage/fundraisers/:id/pledges/:pledgeId/cash` \| `hide` | **implemented** | Sponsor pledges (the signed in organiser: confirmed pledges by name, never emails; "Paid me in cash"; hide one from their page) |
 | `GET /api/admin/fundraising/emails/summary`, `GET /api/admin/fundraising/emails`, `GET /api/admin/fundraising/emails/:id/:version` | **implemented** | All emails (staff with fundraising view: every fundraising, pledge, ticket and Festive Ball email, listed from one catalogue and rendered with the real builders and invented sample data. Read only: approving stays with the three endpoints that already did it. See **All emails, in Admin > Get involved**) |
@@ -11486,6 +11494,178 @@ pictures, made with sharp), `fundraiser-pictures-db`, `fundraiser-pictures-route
 shows; an approved main photo becomes the page's photo; one not used never shows and the organiser
 sees our note; a team page shows each approved round photo and the elf until then; a round or main
 photo taken off, and a main photo replaced, answers 404).
+
+## Elf Detective School (wave 1: sign up, paying, accounts)
+
+An advent elf hunt for December 2026. Designs: `docs/superpowers/specs/2026-10-04-elf-detective-school-design.md`
+and its amendment `2026-11-03-elf-detective-secret-places-design.md` (the places are secret; three clues a
+day). Wave 1 plan: `docs/superpowers/plans/2026-11-03-elf-detective-wave1-sign-up.md`.
+
+**The switch.** `elf_settings.school_on`, off by default. While it is off every `/elf` page and
+`/api/elf/*` route answers 404; the Stripe webhook still settles payments already made. An admin
+switches it on, and sets the pay what you can amounts per detective (from £1, £5 suggested), in
+Admin > Get involved > Elf Detective School.
+
+### Routes
+
+See the table under **API endpoints**: `/elf`, `/elf/rules`, `/elf/join`, `/elf/welcome`,
+`/elf/sign-in`, `/elf/hq` and the wardrobe, and `/api/elf/*`, all in `src/routes/elf.ts`.
+
+### Data (`migrations/1791200000310_elf-school.js`, additive only)
+
+`elf_settings` (one row), `elf_families` (one per grown up's email), `elf_detectives` (first name
+and festive surname only; a badge number once paid), `elf_orders` (entry, optional gift with its Gift
+Aid declaration, card fee cover, Stripe session, the paying browser's token hash, whether the payment
+opened the account), `elf_sign_in_codes`, `elf_sessions`, and the `elf_badge_seq` sequence. The
+newsletter's `consent_source` check also allows `elf`.
+
+`migrations/1791200000320_elf-favourites.js` (additive) adds `elf_detectives.favourites` (jsonb, default
+`[]`): up to three favourite looks from the wardrobe's Snap a photo. A detective's `look` is a costume
+look, and `fresh` holds the ids of costumes unlocked and not opened yet.
+
+### Paying
+
+`POST /api/elf/join` saves a pending order and opens a Stripe Checkout Session tagged
+`product: elf_school`. `src/db/stripe-webhook.ts` hands every event to `handleElfEvent`
+(`src/elf/webhook.ts`) first, so an entry is never recorded as a gift: a completed checkout settles
+the order once (badges `EDS 0001` upwards), then the welcome email goes after COMMIT (it lists each
+detective's badge and says more costumes unlock as they crack doors in December), and the grown
+up joins the newsletter only if they ticked the box. The entry is never Gift Aided; the optional gift
+and its declaration stay on the order (as the Festive Ball keeps its gift on the booking). An email
+whose family has already paid must sign in to add detectives, so nobody can add children to someone
+else's family by typing their email.
+
+### Where it lives, and tests
+
+Pure rules in `src/elf/` (`join.ts`, `session.ts`, `views.ts`, `emails.ts`, `settings.ts`, and
+Stage A's game rules), screens in `src/elf/pages/`, the data layer in `src/db/elf.ts`, routes in
+`src/routes/elf.ts` and `src/routes/admin-elf.ts`, the enrol page's script in
+`assets/js/elf-join.js`. Unit tests are `test/unit/elf-*.test.ts`; BDD is `features/elf-join.feature`.
+Both emails are in Admin > Get involved > All emails, under Elf Detective School.
+
+### The dress-up elf
+
+Design: `docs/superpowers/specs/2026-11-04-elf-paper-design.md` (it replaced the painted, layered
+wardrobe of `docs/superpowers/specs/2026-11-03-elf-painted-wardrobe-design.md`, whose separately painted
+pieces never fitted every elf). The elf is a brother or a sister of the school's logo elf, in paper:
+150 elves (brother or sister, 5 skin tones, 3 hairstyles, 5 hair colours) and 51 whole hooded
+costumes, each painted on one elf in every skin so it always fits, with scenes, friends, frames,
+glasses and bow ties as extras. `assets/js/elf-wardrobe.js` names the pictures a look is drawn from
+(`lookPictures`); the wardrobe page lays them on its stage and `src/elf/elf-png.ts` stacks the same ones
+into a PNG for Detective HQ, emails, the certificate and the share card.
+
+- **Painting.** It runs only on your own computer, with `OPENAI_API_KEY` in your own environment (never
+  in the repo, CI or the site), uses `gpt-image-2` at low quality (about $0.017 a painting), and stops
+  itself before the spend in `.elf-paint/spend.json` passes $27.50 (with the $2.50 of early tests
+  outside the ledger, a little under Jaimie's £23 cap, raised from £15 on 4 November 2026). Raw
+  paintings, sheets and the ledger stay in `.elf-paint/` (git ignored). What is left of the tool in the
+  repo is `scripts/elf-paint/openai.mjs` (the paint call and the spend guard) and `cutout.mjs` (keying
+  and cutting out), tested in `test/unit/elf-paint-*.test.ts`; the paper paintings' own scripts are
+  kept with the paintings. Nothing on the site ever calls OpenAI.
+
+### The paper pictures
+
+Design: `docs/superpowers/specs/2026-11-04-elf-paper-design.md`; plan:
+`docs/superpowers/plans/2026-11-04-elf-paper.md`. Every picture the paper wardrobe and the paper pages
+draw lives in `assets/img/elf/paper/`, all WebP:
+
+- `elves/elf-<sibling>-<skin>-<style>-<hair>.webp` (150) and `costumes/<id>-<skin>.webp` (51 costumes in
+  5 skins), each the whole 640 by 960 canvas, so every picture lines up on the stage;
+- `pieces/<id>.webp` (6 glasses, 3 bow ties) on the same canvas, and `pieces/<glasses>--<costume>.webp`,
+  each pair of glasses fitted to one costume's eyes (no two costume faces sit in quite the same place;
+  `scripts/elf-paper/glasses-fit.json` says where each costume's eyes are);
+- `scenes/<id>.webp` (16, 640 by 960), `friends/<id>.webp` (6), `deco/` (the painted presents, holly,
+  candy cane, bauble and gold bow), `icons/` (10) and `ui/` (the paper grain);
+- `tiles/costumes/` and `tiles/scenes/`, the small wardrobe tiles (one skin's 51 costume tiles come to
+  about 400 KB).
+
+The paper wardrobe's catalogue is in `assets/js/elf-wardrobe.js`, shared by the browser and the server:
+`COSTUMES` (51, three from the start with door 0, then two for each door), `SCENES`, `FRIENDS`, `FRAMES`,
+`GLASSES` and `BOWS`. A costume is unlocked when its door is 0 or one this detective has done
+(`costumeUnlocked`; `doorState` in `src/elf/wardrobe.ts` builds the done doors from the family's cracked
+doors and the detective's visits); every extra is there from sign up. `normaliseCostumeLook` makes any
+look safe (anything unknown or locked goes back to the start), `lookPictures` names the pictures a look
+is drawn from in stage order, and `costumeLookWords` says it in words.
+
+`node scripts/elf-paper/copy-art.mjs` makes them all from the approved cut outs in the git ignored
+preview folder (`.superpowers/sdd/2026-11-03-elf-detective-wave1-sign-up/preview/paper/`), copying byte
+for byte whatever is already its size, so it runs only on the computer that has them, never in CI.
+`test/unit/elf-paper-pictures.test.ts` checks every picture is there, on the right canvas and within
+its weight, and that nothing else is.
+
+**The paper look.** Every elf page is cut from paper. The page shell (`src/elf/pages/shell.ts`) lays
+torn holly and crimson bands under the bar, a few paper stars and snowflakes drifting behind the page
+(still for a visitor who asked for less motion) and cut paper hills running into the footer.
+`src/elf/pages/paper.ts` draws the pieces that carry words or the page's colours, each from a fixed seed
+so it is the same on every visit: `tornBands`, `paperHills`, `paperSky`, `paperSprite` (the one shared
+shadow), `titleStrip`, `headingStrip`, `scrap`, `rosette`, `giftTag` and `paperCircle`. The paper section
+of `assets/css/elf.css` has the rest as classes: `.elf-card` (a card sheet on a coloured backing sheet),
+`.elf-btn` (torn buttons in three sizes and four colours), `.elf-chip`, `.elf-note` with `.elf-tape`,
+`.elf-paper` (a sheet torn off a pad), `.elf-label`, `.elf-cane-bar`, `.elf-tags` and the five
+`.elf-frame--*` frames. `test/unit/elf-paper.test.ts` checks the pieces and that the stylesheet uses
+only the paper files.
+
+**The advent calendar** (`/elf`; Jaimie: "when you say calendar, it looks like an advent calendar").
+One torn board of NBCC's solid rich maroon on a holly sheet, with the 24 doors cut into it in order,
+1 to 24 (`src/elf/pages/door.ts` draws a door, `calendar.ts` the page). Jaimie, on the paper pictures
+(5 November 2026): the painting that used to run across the doors looked messy, and the doors were too
+small on a phone to see the picture behind one. So the board is one solid colour, and it is mobile
+first: two doors to a row on a phone, like the wardrobe's door cards, then 3, 4 and 6 to a row as the
+board itself widens (`.elf-advent` is a size container, and `@container` sets `--cols`), so every
+door stays about 135 to 235 pixels wide. Each door is a maroon card door on a hinge with a little
+paper pull tab, its number printed large in cream and its chip beside it. Door 23 is two doors wide
+and door 24 is the big double doors, a row of their own, so the doors fill every row at every width.
+A shut door is bright, with its day on a paper chip and the prize's shape (or the mystery star) cut
+out of card; today's door, and the one being hunted, glow gold with the painted bow; an open door
+(found or revealed) stands open on its hinge, swung almost flat, with the finder's picture filling the
+door (or the prize's shape in gold), swinging open only for a visitor happy with motion. The page's script gives a signed in family's done doors (cracked or visited) the painted holly
+(`is-done`) beside their marks. A door's detail is a note taped across the board; the countdown at the
+top is on a candy cane strip.
+
+**Enrolling, the rules and signing in** are in paper too, each page's title on a torn title strip. The
+enrol page (`join.ts`) opens with the painted red present and the school's elf peeking out from behind
+it over the bow (`gift.ts`: the logo cut above the line under its hands, inside an edge that never
+moves, with the present laid over it, so the cut never shows), a paper gift tag ("Top secret") and a
+paper rosette ("24 prizes"); the form is a taped card sheet, each detective, the payment and the gift
+on slips of paper, its tick boxes squares of card (still real tick boxes), and its buttons torn paper,
+the ones `elf-join.js` adds too. The rules (`rules.ts`) are one taped sheet torn off a pad, each part's
+heading on a torn strip and each rule marked with a small paper circle. Signing in and the welcome
+(`sign-in.ts`) are on card sheets with torn buttons; the welcome has the three painted presents and a
+fall of paper stars, which lie still for a visitor who asked for less motion. Every page's top section
+clears the bar and the torn bands under it.
+
+**Detective HQ** (`hq.ts`) has its title strip under the school's name on a torn label; the day's case
+on a taped note (a holly sheet under it while its elf is hunted, the clue on a slip of paper, each
+place to guess on a slip of its own, the countdown on the candy cane strip); and each detective on a
+card sheet, their elf's picture (96 by 144) in the frame they chose (`DetectiveView.frame`, from their
+look made safe; a plain paper mount with none), their rank on a chip, the doors done on the candy cane
+strip (still the page's own `<progress>`), "Dress the elf" as a torn button, and the costumes waiting
+for them as "A present to open", "Two presents to open" or "3 presents to open". The family's marks are
+24 small squares of paper.
+
+**The wardrobe** (`wardrobe.ts`, `assets/js/elf-wardrobe-ui.js`) is mockup 6 with real data, still one
+form of radio buttons that works with no script. The stage stands in its paper frame with baubles, the
+village window's fairy lights and the count of costumes out of their presents on a rosette; the name
+plate holds Surprise me, Snap a photo (up to three favourite looks pegged on a string, saved with the
+detective as `favourites`; tap one to wear it again) and the sounds switch, off until pressed. Step 1,
+Your elf, is a sheet torn off a pad (paper circles for skin and hair, torn buttons for boy or girl and
+hair style) that folds away once the elf is made (`WardrobeView.made`). Step 2's five sections hang as
+gift tags on a gold string and work as tabs. The costumes are on card sheets by door, each with its
+number on a rosette and a chip from `doorChip` (From the start, Done, A present or Two presents,
+Today, Missed, or the door's day, from `WardrobeView.now` and `doorDays`); a locked costume is faint
+with the painted padlock and says on its note why ("Opens with door 7", "Crack today's door to open
+it", "Visit the place to catch up"); one that has just arrived is a wrapped present that opens when it
+is picked and is sent to the server in `tried`. The elf talks back, it snows when the stage is tapped,
+and bursts and snow are only for a visitor happy with motion; on a phone a round bubble brings the
+stage back. Before anything is tapped the page asks for under 1 MB of pictures: the stage, the open
+tab's first row of tiles (the detective's own skin) and the decorations, every other tile lazily.
+
+The torn paper shapes are files too, in `assets/img/elf/paper/ui/`: the torn edge strips the stylesheet
+tiles round cards, tiles and notes (`tear-*`), and the torn buttons, chips, label, notes, tag and tape.
+`node scripts/elf-paper/shapes.mjs` draws them with mockup 6's own code and seeded numbers, so each tear
+is the approved one and the same on every visit; `ui/shapes.json` lists them and how each edge strip
+tiles. `test/unit/elf-paper-shapes.test.ts` checks they are small, plain pictures and exactly what the
+script draws.
 
 ## Event tickets: NBCC sells an event's tickets
 

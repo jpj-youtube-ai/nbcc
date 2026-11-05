@@ -37,7 +37,7 @@ import { TEAM_WORDING_KEYS } from "../../src/fundraising/teams";
 const BASE = "https://nbcc.test";
 
 describe("the groups", () => {
-  it("are the ten agreed, in the agreed order", () => {
+  it("are the eleven agreed, in the agreed order", () => {
     expect(CATALOGUE_GROUPS.map((g) => g.name)).toEqual([
       "Signing up and approval",
       "Invites from staff",
@@ -48,6 +48,7 @@ describe("the groups", () => {
       "Sponsor pledges",
       "Event pages and tickets",
       "The Festive Ball",
+      "Elf Detective School",
       "Staff notices",
     ]);
   });

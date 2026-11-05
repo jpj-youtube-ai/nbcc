@@ -2,6 +2,7 @@ import { config } from "../config";
 import { sendSesEmail, type SesMessage } from "./ses";
 import { buildKindEmail } from "../email/templates";
 import { recordEmailSend } from "../db/email-log";
+import { ELF_CODE_LOG_SUBJECT } from "../elf/emails";
 import { linkTagsForKind, ownSiteHosts, tagLinksInHtml, tagLinksInText, type LinkTags } from "../email/tracked-links";
 
 // Transactional email client (TASK-070; Resend→SES migration). Sends every app email straight
@@ -587,6 +588,16 @@ export const FUNDRAISE_CODE_LOG_SUBJECT = "Your NBCC sign in code";
 
 export async function sendFundraiseCode(name: string, message: FundraiseEmailMessage): Promise<void> {
   await sendVerbatim("fundraiseCode", name, message, FUNDRAISE_CODE_LOG_SUBJECT);
+}
+
+// NBCC Elf Detective School (src/elf/emails.ts): the welcome when a payment goes through, and the
+// sign in code, whose subject carries the code, so the log keeps a safe one.
+export async function sendElfWelcome(name: string, message: FundraiseEmailMessage): Promise<void> {
+  await sendVerbatim("elfWelcome", name, message);
+}
+
+export async function sendElfSignInCode(name: string | null, message: FundraiseEmailMessage): Promise<void> {
+  await sendVerbatim("elfSignInCode", name, message, ELF_CODE_LOG_SUBJECT);
 }
 
 // TASK-501: to events@ when an organiser presses "I've finished". Staff only, so never tagged.

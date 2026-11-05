@@ -1,0 +1,270 @@
+{
+ "_about": "Where each costume's eyes sit, measured 4 November 2026 on the 640 by 960 canvas, so the glasses can be fitted to every costume. eyes: the plain elf's eye centres (where the glasses layers were cut to sit), the same for both masters and every skin. fit: for each costume, x and y are how far its eye midpoint is from the plain elf's (328.5, 336.5), and scale is its eye spacing against the plain elf's 111. A fitted layer is the glasses layer scaled by scale about (328.5, 336.5) and then moved by (x, y). The five skins of a costume share one painting, so one fit serves all five.",
+ "eyes": [
+  [
+   273,
+   337
+  ],
+  [
+   384,
+   336
+  ]
+ ],
+ "fit": {
+  "workshop": {
+   "x": -2.2,
+   "y": 0.3,
+   "scale": 1.008
+  },
+  "reindeer": {
+   "x": 0.2,
+   "y": 15.1,
+   "scale": 1.023
+  },
+  "snowman": {
+   "x": -0.5,
+   "y": 0.3,
+   "scale": 1.006
+  },
+  "advent": {
+   "x": -10,
+   "y": -13.7,
+   "scale": 0.966
+  },
+  "robin": {
+   "x": -9.9,
+   "y": 6.8,
+   "scale": 0.96
+  },
+  "tree": {
+   "x": -12.8,
+   "y": 25.8,
+   "scale": 0.883
+  },
+  "polarbear": {
+   "x": -6.3,
+   "y": -5.2,
+   "scale": 1.054
+  },
+  "ginger": {
+   "x": -5.4,
+   "y": -3.4,
+   "scale": 1.008
+  },
+  "highlandcow": {
+   "x": -3.4,
+   "y": 1.7,
+   "scale": 0.987
+  },
+  "present": {
+   "x": -6.5,
+   "y": 4.2,
+   "scale": 0.962
+  },
+  "arcticfox": {
+   "x": -2.1,
+   "y": 8.3,
+   "scale": 1.017
+  },
+  "pudding": {
+   "x": -6,
+   "y": 26.7,
+   "scale": 0.921
+  },
+  "squirrel": {
+   "x": -4.2,
+   "y": 11.2,
+   "scale": 1
+  },
+  "snowglobe": {
+   "x": -1.8,
+   "y": 2.6,
+   "scale": 1.009
+  },
+  "puffin": {
+   "x": -4.7,
+   "y": 0.3,
+   "scale": 1.017
+  },
+  "cracker": {
+   "x": -7.5,
+   "y": -0.7,
+   "scale": 0.93
+  },
+  "owl": {
+   "x": -7.7,
+   "y": 6.8,
+   "scale": 1.025
+  },
+  "candycane": {
+   "x": -7.2,
+   "y": 14.8,
+   "scale": 0.984
+  },
+  "haggis": {
+   "x": -2,
+   "y": 0.8,
+   "scale": 1.001
+  },
+  "bauble": {
+   "x": -5.7,
+   "y": 7.3,
+   "scale": 0.994
+  },
+  "husky": {
+   "x": -3.6,
+   "y": 1.5,
+   "scale": 1.011
+  },
+  "stocking": {
+   "x": -5.4,
+   "y": 40.1,
+   "scale": 1.013
+  },
+  "unicorn": {
+   "x": -2.7,
+   "y": 5.9,
+   "scale": 1.001
+  },
+  "star": {
+   "x": -4.4,
+   "y": 21.9,
+   "scale": 0.946
+  },
+  "scottie": {
+   "x": -3.8,
+   "y": -0.1,
+   "scale": 1.011
+  },
+  "snowflake": {
+   "x": -3.8,
+   "y": 0.4,
+   "scale": 1.003
+  },
+  "hedgehog": {
+   "x": -4,
+   "y": 5.1,
+   "scale": 1.003
+  },
+  "nutcracker": {
+   "x": -2.3,
+   "y": -0.3,
+   "scale": 1.004
+  },
+  "seal": {
+   "x": -3.7,
+   "y": 7.1,
+   "scale": 0.995
+  },
+  "wreath": {
+   "x": -3.9,
+   "y": -2.8,
+   "scale": 1.001
+  },
+  "stag": {
+   "x": -4.4,
+   "y": 5.8,
+   "scale": 0.982
+  },
+  "cocoa": {
+   "x": -8.3,
+   "y": 23.2,
+   "scale": 0.998
+  },
+  "otter": {
+   "x": -5.6,
+   "y": -0.6,
+   "scale": 1.015
+  },
+  "teddy": {
+   "x": -2.5,
+   "y": 0.4,
+   "scale": 1.018
+  },
+  "thistle": {
+   "x": -5.6,
+   "y": 1.2,
+   "scale": 0.97
+  },
+  "sprout": {
+   "x": -0.4,
+   "y": 0.2,
+   "scale": 1.005
+  },
+  "pony": {
+   "x": -0.9,
+   "y": -0.1,
+   "scale": 1.005
+  },
+  "detective": {
+   "x": -1.2,
+   "y": 0.2,
+   "scale": 1.004
+  },
+  "penguin": {
+   "x": 0.1,
+   "y": 3,
+   "scale": 1.001
+  },
+  "lights": {
+   "x": -3.5,
+   "y": 2.8,
+   "scale": 0.996
+  },
+  "sheep": {
+   "x": -2.4,
+   "y": 6.6,
+   "scale": 0.993
+  },
+  "yulelog": {
+   "x": -0.4,
+   "y": -0.1,
+   "scale": 1.004
+  },
+  "eagle": {
+   "x": -3.1,
+   "y": 2.5,
+   "scale": 0.985
+  },
+  "postbox": {
+   "x": -4,
+   "y": 0.2,
+   "scale": 0.96
+  },
+  "nessie": {
+   "x": -13.3,
+   "y": 10.8,
+   "scale": 0.989
+  },
+  "bell": {
+   "x": -5.3,
+   "y": 0.2,
+   "scale": 1.002
+  },
+  "mouse": {
+   "x": -5,
+   "y": 8.5,
+   "scale": 0.974
+  },
+  "mincepie": {
+   "x": -5.5,
+   "y": -0.2,
+   "scale": 1.012
+  },
+  "magnifier": {
+   "x": -3.7,
+   "y": -6.3,
+   "scale": 1.005
+  },
+  "graduation": {
+   "x": -3.8,
+   "y": 7.6,
+   "scale": 1.002
+  },
+  "santa": {
+   "x": -4.7,
+   "y": 0.3,
+   "scale": 1.005
+  }
+ }
+}

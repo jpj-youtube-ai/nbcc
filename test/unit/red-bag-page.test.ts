@@ -1141,8 +1141,9 @@ describe("the page's own stylesheet", () => {
     // Get involved's own stylesheet has the same hand, from the same file (the design of 31 October
     // 2026): a page of its own, so the shared stylesheet and every other page still know nothing of it.
     // So has the Fill a Red Bag stage's, which only a page drawing the stage loads (src/red-bag/stage.ts),
-    // and Elf Detective School's, which only the elf pages load (src/elf/pages/).
-    for (const f of readdirSync(resolve(ROOT, "assets/css")).filter((x) => !["red-bag.css", "red-bag-thanks.css", "get-involved.css", "red-bag-stage.css", "elf.css"].includes(x))) {
+    // and Elf Detective School's, which only the elf pages load (src/elf/pages/), and Head Elf HQ's, which
+    // only the admin loads, for the Elf Detective School's own section (5 November 2026).
+    for (const f of readdirSync(resolve(ROOT, "assets/css")).filter((x) => !["red-bag.css", "red-bag-thanks.css", "get-involved.css", "red-bag-stage.css", "elf.css", "admin-elf-hq.css"].includes(x))) {
       expect(read(`assets/css/${f}`), f).not.toMatch(/caveat-latin|"Caveat"/i);
     }
     // Asked for early here, so the list is not drawn twice.

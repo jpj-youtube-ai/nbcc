@@ -2784,6 +2784,75 @@ describe("admin app integration (jsdom, TASK-118)", () => {
       expect(after.some((u) => u.includes("/api/admin/donations?") && u.includes("&source=invoice"))).toBe(true);
     });
   });
+
+  // Head Elf HQ: Elf Detective School payments come through Donations beside the gifts, with their
+  // own filter, and each opens its family in Head Elf HQ (invoiceDonations is what the list answers).
+  describe("Elf Detective School payments in Donations", () => {
+    const settle = async () => { for (let i = 0; i < 8; i++) await flush(); };
+    const ELF_ROW = {
+      kind: "elf", id: 41, donor_id: null, donor_name: "Sam Example", donor_email: "sam@example.org", mode: "once", plan: null,
+      amount_pence: 1500, currency: "GBP", gift_aid: true, claim_status: "not_eligible", payment_status: "paid", payment_channel: "online",
+      refunded_amount_pence: 0, declaration_status: null, created_at: "2026-11-13T19:04:00Z", source: "elf_school", invoice_id: null,
+      elf_reference: "EDS-K4F9Q2", elf_family_id: 1234, entry_pence: 1000, gift_pence: 500,
+    };
+    const fetched = () => (globalThis.fetch as unknown as { mock: { calls: unknown[][] } }).mock.calls.map((c) => String(c[0]));
+    const tick = (id: string) => {
+      (el(id) as HTMLInputElement).checked = true;
+      el(id).dispatchEvent(new Event("change", { bubbles: true }));
+    };
+    const openDonations = async () => {
+      await signIn();
+      (document.querySelector('.admin-nav-link[data-view="donations"]') as HTMLElement).click();
+      await settle();
+    };
+
+    it("ticking Elf Detective School only asks for source=elf_school and unticks the other four", async () => {
+      loginToken = tokenFor("admin");
+      await openDonations();
+      tick("donationsInvoiceFilter");
+      await settle();
+      const before = fetched().length;
+      tick("donationsElfFilter");
+      await settle();
+      for (const id of ["donationsRedBagFilter", "donationsBallFilter", "donationsBallBagsFilter", "donationsInvoiceFilter"]) {
+        expect((el(id) as HTMLInputElement).checked, id).toBe(false);
+      }
+      const asked = fetched().slice(before).filter((u) => u.includes("/api/admin/donations?"));
+      expect(asked.length).toBeGreaterThan(0);
+      expect(asked.every((u) => u.includes("&source=elf_school")), asked.join(" ")).toBe(true);
+      tick("donationsRedBagFilter");
+      expect((el("donationsElfFilter") as HTMLInputElement).checked).toBe(false);
+    });
+
+    it("draws an elf payment with its reference, pill, entry and gift, no donor link, and Open in Head Elf HQ on that family", async () => {
+      loginToken = tokenFor("admin");
+      invoiceDonations = [ELF_ROW, { ...ELF_ROW, id: 42, elf_reference: "EDS-P9M4X1", elf_family_id: 7, amount_pence: 500, entry_pence: 500, gift_pence: 0, gift_aid: false }];
+      await openDonations();
+      const table = el("donationsTable");
+      expect(table.textContent).toContain("EDS-K4F9Q2");
+      expect(table.textContent).toContain("Elf Detective School");
+      expect(table.textContent).toContain("entry £10, gift £5");
+      expect(table.textContent).toContain("entry £5");
+      expect(table.textContent).not.toContain("gift £0");
+      expect(table.textContent).toContain("Sam Example");
+      expect(table.querySelector("[data-donor]")).toBeNull();
+      const go = table.querySelector<HTMLButtonElement>("[data-elf-family]")!;
+      expect(go.textContent).toBe("Open in Head Elf HQ");
+      go.click();
+      await settle();
+      expect(window.sessionStorage.getItem("nbcc_elf_hq_family")).toBe("1234");
+      expect(el("view-elf").hidden).toBe(false);
+      expect(el("view-donations").hidden).toBe(true);
+    });
+
+    it("offers no way into Head Elf HQ to someone who may not open it", async () => {
+      loginToken = tokenFor("viewer");
+      invoiceDonations = [ELF_ROW];
+      await openDonations();
+      expect(el("donationsTable").textContent).toContain("EDS-K4F9Q2");
+      expect(el("donationsTable").querySelector("[data-elf-family]")).toBeNull();
+    });
+  });
 });
 
 // TASK-251: the thank-you letter's signer picker is now built from AdminHelpers.SIGNERS instead of

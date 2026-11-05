@@ -27,7 +27,7 @@ describe("Admin > Donations and the Festive Ball", () => {
 
   it("goes back to page one when it changes, as the other filters do", () => {
     expect(js).toContain(
-      '["donationsPaymentFilter", "donationsModeFilter", "donationsRedBagFilter", "donationsBallFilter", "donationsBallBagsFilter", "donationsInvoiceFilter"]',
+      '["donationsPaymentFilter", "donationsModeFilter", "donationsRedBagFilter", "donationsBallFilter", "donationsBallBagsFilter", "donationsInvoiceFilter", "donationsElfFilter"]',
     );
   });
 

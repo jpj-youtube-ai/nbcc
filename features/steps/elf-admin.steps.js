@@ -119,6 +119,37 @@ Then("once the request has finished, {int} {string} email(s) went to {string}", 
   assert.equal(await count(), n);
 });
 
+// Elf payments in Admin > Donations, beside the gifts (decision 8 of the design).
+When("{string} with password {string} reads the donations list", async function (email, password) {
+  await asHeadElf(this, email, password, "GET", "/api/admin/donations?limit=100");
+});
+
+When("{string} with password {string} reads the donations list with source {string}", async function (email, password, source) {
+  await asHeadElf(this, email, password, "GET", `/api/admin/donations?limit=100&source=${encodeURIComponent(source)}`);
+});
+
+const elfPaymentFrom = (world, email) => (world.hqBody.results || []).find((r) => r.source === "elf_school" && r.donor_email === email);
+
+Then("it lists an Elf Detective School payment from {string}", function (email) {
+  const row = elfPaymentFrom(this, email);
+  assert.ok(row, JSON.stringify((this.hqBody.results || []).slice(0, 3)));
+  assert.equal(row.kind, "elf");
+  assert.equal(row.payment_status, "paid");
+  assert.equal(row.donor_id, null);
+  assert.equal(row.amount_pence, row.entry_pence + row.gift_pence);
+  assert.ok(String(row.elf_reference).startsWith("EDS-"), row.elf_reference);
+});
+
+Then("it lists no Elf Detective School payment from {string}", function (email) {
+  assert.equal(elfPaymentFrom(this, email), undefined);
+});
+
+Then("every row it lists is an Elf Detective School payment", function () {
+  const rows = this.hqBody.results || [];
+  assert.ok(rows.length > 0, "the list is empty");
+  for (const r of rows) assert.equal(r.source, "elf_school", JSON.stringify(r));
+});
+
 Then("Head Elf HQ counts {int} family and {int} name to check", function (families, names) {
   assert.equal(this.hqStatus, 200, JSON.stringify(this.hqBody));
   assert.equal(this.hqBody.numbers.families, families);

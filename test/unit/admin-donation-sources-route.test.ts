@@ -43,6 +43,7 @@ const TOTALS = {
   ball: { month: { pence: 7_500, gifts: 3 }, all: { pence: 7_500, gifts: 3 } },
   ballBags: { month: { pence: 10_000, gifts: 2 }, all: { pence: 15_000, gifts: 3 } },
   invoices: { month: { pence: 50_000, gifts: 2 }, all: { pence: 75_000, gifts: 3 } },
+  elfSchool: { month: { pence: 148_600, gifts: 128 }, all: { pence: 148_600, gifts: 128 } },
   donatePage: { month: { pence: 213_000, gifts: 64 }, all: { pence: 3_140_000, gifts: 902 } },
 };
 
@@ -80,9 +81,10 @@ describe("what the totals answer", () => {
         { key: "ball", name: "Festive Ball", month: "£75 from 3 gifts", all: "£75 from 3 gifts" },
         { key: "ballBags", name: "Red bags at the Ball", month: "£100 from 2 gifts", all: "£150 from 3 gifts" },
         { key: "invoices", name: "Invoices", month: "£500 from 2 gifts", all: "£750 from 3 gifts" },
+        { key: "elfSchool", name: "Elf Detective School", month: "£1,486 from 128 payments", all: "£1,486 from 128 payments" },
         { key: "donatePage", name: "Donate page", month: "£2,130 from 64 gifts", all: "£31,400 from 902 gifts" },
       ],
-      note: "Fill a Red Bag gifts are counted from 5 October 2026. Festive Ball gifts are those made on the Ball's own donate page. Red bags at the Ball are gifts from the table cards at the Festive Ball.",
+      note: "Fill a Red Bag gifts are counted from 5 October 2026. Festive Ball gifts are those made on the Ball's own donate page. Red bags at the Ball are gifts from the table cards at the Festive Ball. Elf Detective School payments are entries to take part, with any gift on top. Entries are never claimed for Gift Aid.",
     });
   });
 

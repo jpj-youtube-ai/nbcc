@@ -24,10 +24,11 @@ const call = (i = 0) => {
 const MONTH = { from: "2026-10-01", until: "2026-10-05T09:30:00.000Z" };
 
 describe("the totals: one grouped read", () => {
-  it("asks once, with the month and the source as parameters", async () => {
+  it("reads the gifts in one grouped read, with the month and the source as parameters", async () => {
     queryMock.mockResolvedValue({ rows: [] });
     await sumGiftsBySource(MONTH);
-    expect(queryMock).toHaveBeenCalledTimes(1);
+    // The second read is the Elf Detective School's payments (below).
+    expect(queryMock).toHaveBeenCalledTimes(2);
     expect(call().params).toEqual(["2026-10-01", "2026-10-05T09:30:00.000Z", "red_bag", "ball", "ball_bags", "invoice"]);
     expect(call().sql).toMatch(/GROUP BY 1/);
     // The source is a parameter, never written into the SQL itself.
@@ -70,6 +71,7 @@ describe("the totals: one grouped read", () => {
       ball: { month: { pence: 0, gifts: 0 }, all: { pence: 0, gifts: 0 } },
       ballBags: { month: { pence: 10_000, gifts: 2 }, all: { pence: 15_000, gifts: 3 } },
       invoices: { month: { pence: 0, gifts: 0 }, all: { pence: 0, gifts: 0 } },
+      elfSchool: { month: { pence: 0, gifts: 0 }, all: { pence: 0, gifts: 0 } },
       donatePage: { month: { pence: 0, gifts: 0 }, all: { pence: 0, gifts: 0 } },
     });
   });
@@ -89,6 +91,7 @@ describe("the totals: one grouped read", () => {
       ball: { month: { pence: 0, gifts: 0 }, all: { pence: 0, gifts: 0 } },
       ballBags: { month: { pence: 0, gifts: 0 }, all: { pence: 0, gifts: 0 } },
       invoices: { month: { pence: 0, gifts: 0 }, all: { pence: 0, gifts: 0 } },
+      elfSchool: { month: { pence: 0, gifts: 0 }, all: { pence: 0, gifts: 0 } },
       donatePage: { month: { pence: 0, gifts: 0 }, all: { pence: 0, gifts: 0 } },
     });
   });
@@ -97,6 +100,34 @@ describe("the totals: one grouped read", () => {
     queryMock.mockRejectedValue(new Error("down"));
     await expect(sumGiftsBySource(MONTH)).rejects.toThrow("down");
   });
+
+  it("reads the Elf Detective School's payments beside the gifts: paid orders of families not removed, entry plus gift, by when each was paid", async () => {
+    queryMock.mockResolvedValue({ rows: [] });
+    await sumGiftsBySource(MONTH);
+    const { sql, params } = call(1);
+    expect(params).toEqual(["2026-10-01", "2026-10-05T09:30:00.000Z"]);
+    expect(sql).toContain("SELECT 'elfSchool' AS bucket");
+    expect(sql).toContain("FROM elf_orders o JOIN elf_families f ON f.id = o.family_id");
+    expect(sql).toContain("o.status = 'paid' AND f.active AND f.removed_at IS NULL");
+    expect(sql).toContain("SUM(o.entry_pence + o.donation_pence)");
+    expect(sql).toContain("(COALESCE(o.paid_at, o.created_at) AT TIME ZONE 'Europe/London')::date >= $1::date");
+    // The card fee top up is not money raised.
+    expect(sql).not.toMatch(/fee_cover_pence/);
+  });
+
+  it("puts the Elf Detective School's payments in a bucket of their own", async () => {
+    queryMock.mockResolvedValueOnce({ rows: [] }).mockResolvedValueOnce({
+      rows: [{ bucket: "elfSchool", month_pence: "148600", month_gifts: "128", all_pence: "148600", all_gifts: "128" }],
+    });
+    const t = await sumGiftsBySource(MONTH);
+    expect(t.elfSchool).toEqual({ month: { pence: 148_600, gifts: 128 }, all: { pence: 148_600, gifts: 128 } });
+    expect(t.donatePage).toEqual({ month: { pence: 0, gifts: 0 }, all: { pence: 0, gifts: 0 } });
+  });
+
+  it("fails as a whole when the Elf Detective School's read fails", async () => {
+    queryMock.mockResolvedValueOnce({ rows: [] }).mockRejectedValueOnce(new Error("elf down"));
+    await expect(sumGiftsBySource(MONTH)).rejects.toThrow("elf down");
+  });
 });
 
 describe("the donations list says where each gift was started", () => {
@@ -104,7 +135,8 @@ describe("the donations list says where each gift was started", () => {
     await listDonations({});
     const { sql } = call(1);
     expect(sql).toMatch(/d\.declaration_status, d\.created_at, d\.source, d\.invoice_id FROM donations d/);
-    expect(sql).toMatch(/ORDER BY d\.id DESC LIMIT 50 OFFSET 0/);
+    // Newest first by when each was given, now that Elf Detective School payments sit among the gifts.
+    expect(sql).toMatch(/ORDER BY listed\.created_at DESC, listed\.kind = 'elf', listed\.id DESC LIMIT 50 OFFSET 0/);
   });
 
   it("selects the source in donation search results too", async () => {

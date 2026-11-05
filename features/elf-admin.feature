@@ -34,3 +34,14 @@ Feature: Head Elf HQ, the Elf Detective School's own admin section
     When "boss.elfhq.admin.bdd@example.com" with password "Elf-Hq-Admin-1" puts back the family of "sam.gone.elf.bdd@example.com"
     And a sign in code is asked for "sam.gone.elf.bdd@example.com"
     Then once the request has finished, 1 "elfSignInCode" email went to "sam.gone.elf.bdd@example.com"
+
+  Scenario: An elf payment comes through Donations, under its own filter too, until its family is removed
+    Given "pat.paid.elf.bdd@example.com" has already enrolled "Ivy Snowsleuth" and paid
+    When "boss.elfhq.admin.bdd@example.com" with password "Elf-Hq-Admin-1" reads the donations list
+    Then it lists an Elf Detective School payment from "pat.paid.elf.bdd@example.com"
+    When "boss.elfhq.admin.bdd@example.com" with password "Elf-Hq-Admin-1" reads the donations list with source "elf_school"
+    Then it lists an Elf Detective School payment from "pat.paid.elf.bdd@example.com"
+    And every row it lists is an Elf Detective School payment
+    When "boss.elfhq.admin.bdd@example.com" with password "Elf-Hq-Admin-1" removes the family of "pat.paid.elf.bdd@example.com"
+    And "boss.elfhq.admin.bdd@example.com" with password "Elf-Hq-Admin-1" reads the donations list with source "elf_school"
+    Then it lists no Elf Detective School payment from "pat.paid.elf.bdd@example.com"

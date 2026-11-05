@@ -46,13 +46,15 @@ function stillParts(source: string): string {
 describe("the advent calendar", () => {
   const css = readFileSync(resolve(__dirname, "../../assets/css/elf.css"), "utf8");
 
-  it("sets all 24 doors into one board, with the painted rooftops across its face and its doors", () => {
+  // Jaimie, on the paper pictures (5 November 2026): the painting across the doors looked messy; the
+  // calendar is NBCC's rich maroon, one solid colour.
+  it("sets all 24 doors into one board of NBCC's solid rich maroon, with no painting across it", () => {
     const board = page(view(AFTERNOON)).querySelector(".elf-advent > #elf-board")!;
     expect(board).not.toBeNull();
     expect(board.querySelectorAll("a.elf-door").length).toBe(24);
-    expect(css).toMatch(/--elf-scene:\s*url\(\/assets\/img\/elf\/paper\/board\/rooftops\.webp\)/);
-    expect(css).toMatch(/\.elf-board \{[^}]*var\(--elf-scene\)/);
-    expect(css).toMatch(/\.elf-door__flap \{[^}]*var\(--elf-scene\)/);
+    expect(css).not.toMatch(/rooftops|--elf-scene/);
+    expect(css).toMatch(/\.elf-advent__card::before \{[^}]*background-color:\s*var\(--maroon\)/);
+    expect(css).toMatch(/\.elf-door__flap \{[^}]*background-color:\s*var\(--maroon\)/);
   });
 
   it("ends with the big double doors in a row of their own", () => {
@@ -250,14 +252,31 @@ describe("today's news at the top of the calendar", () => {
   });
 });
 
-// The final review (5 November 2026), measured at 768 and 1024: beside the number, Tomorrow and Big
-// prize covered it, and today's "Clue in" chip ran past the door.
+// Jaimie, on the paper pictures (5 November 2026): on a phone the doors were so small you had to zoom
+// to see the picture behind one. Mobile first: big doors, like the wardrobe's door cards.
 describe("the advent calendar at every width", () => {
   const css = readFileSync(resolve(__dirname, "../../assets/css/elf.css"), "utf8");
 
-  it("keeps a door's chip at its foot until the board is wide enough to put it beside the number", () => {
-    expect(css).toMatch(/@media \(min-width: 1180px\) \{[^@]*\.elf-door__chip \{ grid-row: 1;/);
-    expect(css).not.toMatch(/@media \(min-width: 640px\) \{[^@]*\.elf-door__chip \{ grid-row: 1;/);
+  it("hangs two doors to a row on a phone, and more only as the board itself widens", () => {
+    expect(css).toMatch(/\.elf-board \{[^}]*--cols:\s*2;/);
+    expect(css).toMatch(/\.elf-board \{[^}]*grid-template-columns:\s*repeat\(var\(--cols\), minmax\(0, 1fr\)\)/);
+    expect(css).toMatch(/@container \(min-width: 480px\) \{\s*\.elf-board \{[^}]*--cols:\s*3;/);
+    expect(css).toMatch(/@container \(min-width: 640px\) \{\s*\.elf-board \{[^}]*--cols:\s*4;/);
+    expect(css).toMatch(/@container \(min-width: 900px\) \{\s*\.elf-board \{[^}]*--cols:\s*6;/);
+    expect(css).not.toMatch(/--cols:\s*8/);
+  });
+
+  // The final review (5 November 2026) measured chips covering numbers on the old small doors. Every
+  // door is now at least about 140 pixels wide, so its chip has room beside the number at every width.
+  it("puts a door's chip beside its number at every width", () => {
+    expect(css).not.toMatch(/@media \(min-width: 1180px\) \{[^@]*\.elf-door__chip/);
+    expect(css).toMatch(/\n\.elf-door__chip \{[^}]*grid-row: 1;/);
     expect(css).toMatch(/\.elf-door__flap \{[^}]*grid-template-columns:\s*minmax\(0, 1fr\)/);
+  });
+
+  it("swings an open door almost flat, so the picture behind it fills the door", () => {
+    const swung = stillParts(css).match(/\.elf-door\.is-open \.elf-door__flap \{[^}]*rotateY\(-(\d+)deg\)/);
+    expect(Number(swung?.[1])).toBeGreaterThanOrEqual(76);
+    expect(css).toMatch(/\.elf-door\.is-open \.elf-shot \{[^}]*object-fit:\s*contain/);
   });
 });

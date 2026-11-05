@@ -104,11 +104,12 @@
 .elf-status .elf-cane-strip { margin: 16px 0 10px 10px; }
 
 /* ---------- the calendar: an advent calendar ----------
-   One board (Jaimie, 4 November 2026: "when you say calendar, it looks like an advent calendar"):
-   the rooftops painting across its face, mounted on a torn crimson card on a holly sheet, and the
-   24 doors cut into the picture in order. Each door carries its own piece of the painting: the
-   board, the doors and the big double doors all place the one painting by the same sums, from the
-   board's width (.elf-advent is a container), its columns and the doors' shape. */
+   One board (Jaimie, 4 November 2026: "when you say calendar, it looks like an advent calendar") of
+   NBCC's solid rich maroon (Jaimie, 5 November 2026: the painting across the doors looked messy),
+   torn and laid on a holly sheet, with the 24 doors cut into it in order. Mobile first: two doors
+   to a row on a phone, as big as the wardrobe's door cards, so the picture behind an open door can
+   be seen without zooming; more to a row only as the board itself widens (.elf-advent is a
+   container). */
 .elf-calendar { padding-block: clamp(18px, 3vw, 36px) clamp(24px, 4vw, 44px); }
 .elf-calendar__head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 20px; margin-bottom: 14px; }
 .elf-calendar__head .elf-strip { margin: 0; font-size: clamp(1.6rem, 1.35rem + 1.2vw, 2.2rem); }
@@ -116,69 +117,51 @@
 .elf-tally b { font-family: var(--font-head); font-weight: 800; font-size: 1.35em; color: var(--maroon); font-variant-numeric: lining-nums; }
 
 .elf-advent {
-  --elf-scene: url(/assets/img/elf/paper/board/rooftops.webp);
-  /* The painting's width over its height (720 by 750), and where it sits when it is taller than the
-     doors: 0 its top, 1 its foot. */
-  --elf-scene-ratio: 0.96;
-  --elf-scene-y: 0.5;
-  /* The painting's night sky, behind the doors until it arrives. */
-  --elf-night: #1E2F4A;
   position: relative;
   isolation: isolate;
   container-type: inline-size;
   margin: 10px 8px 0 0;
-  padding: clamp(12px, 2.4vw, 22px);
+  padding: clamp(16px, 2.8vw, 26px);
 }
 .elf-advent__card { position: absolute; inset: 0; z-index: -1; filter: var(--elf-drop-big); pointer-events: none; }
-.elf-advent__card::before { content: ""; position: absolute; inset: 0; background-color: var(--crimson); background-image: var(--elf-grain); background-size: 384px; background-blend-mode: soft-light; -webkit-mask: var(--elf-tear-card-a); mask: var(--elf-tear-card-a); }
-.elf-advent__card::after { content: ""; position: absolute; inset: 10px -9px -12px 8px; z-index: -1; background-color: var(--holly); background-image: var(--elf-grain); background-size: 384px; background-blend-mode: soft-light; -webkit-mask: var(--elf-tear-card-b); mask: var(--elf-tear-card-b); transform: rotate(1.1deg); }
+.elf-advent__card::before { content: ""; position: absolute; inset: 0; background-color: var(--maroon); background-image: var(--elf-grain); background-size: 384px; background-blend-mode: soft-light; -webkit-mask: var(--elf-tear-card-a); mask: var(--elf-tear-card-a); }
+.elf-advent__card::after { content: ""; position: absolute; inset: 10px -9px -12px 8px; z-index: -1; background-color: var(--holly); background-image: var(--elf-grain); background-size: 384px; background-blend-mode: soft-light; -webkit-mask: var(--elf-tear-card-b); mask: var(--elf-tear-card-b); transform: rotate(0.4deg); }
 
 .elf-board {
-  --cols: 4;
-  --rows: 7;
-  --gap: 6px;
-  --tall: 1.22;
-  /* A door's width and height, the double doors' size, all the doors' height together, and the
-     painting covering them (its size, and where its top left corner falls). */
-  --w: calc((100cqw - (var(--cols) - 1) * var(--gap)) / var(--cols));
-  --h: calc(var(--w) * var(--tall));
-  --h24: calc(var(--h) * 1.25);
-  --w24: min(100cqw, 26rem);
-  --hh: calc((var(--rows) - 1) * (var(--h) + var(--gap)) + var(--h24));
-  --pw: max(100cqw, var(--hh) * var(--elf-scene-ratio));
-  --ph: calc(var(--pw) / var(--elf-scene-ratio));
-  --px: calc((100cqw - var(--pw)) / 2);
-  --py: calc((var(--hh) - var(--ph)) * var(--elf-scene-y));
+  --cols: 2;
+  --gap: 10px;
   display: grid;
   grid-template-columns: repeat(var(--cols), minmax(0, 1fr));
   /* dense: an opened detail takes a whole row, and the doors after it fill the row above it, so the
      detail sits directly under its own door's row with no script working anything out. */
   grid-auto-flow: row dense;
   gap: var(--gap);
-  border-radius: 3px;
-  background: var(--elf-scene) center / cover no-repeat, var(--elf-night);
-  box-shadow: 0 0 0 1.5px rgba(58, 0, 0, 0.55), 0 1px 0 2.5px rgba(255, 248, 239, 0.22);
 }
-@media (min-width: 640px) {
-  .elf-board { --cols: 6; --rows: 5; --gap: 8px; --tall: 1.16; }
+/* Every door stays between about 135 and 235 pixels wide, so the doors keep their size as the board
+   widens and the rows multiply instead. 22 doors and the wide door 23 fill every row of 2, 3, 4 or
+   6; door 24 has a row of its own. A browser with no container queries keeps two to a row. */
+@container (min-width: 480px) {
+  .elf-board { --cols: 3; }
 }
-@media (min-width: 981px) {
-  .elf-board { --cols: 8; --rows: 4; --gap: 10px; --tall: 1.16; --elf-scene-y: 0.42; }
+@container (min-width: 640px) {
+  .elf-board { --cols: 4; --gap: 12px; }
+}
+@container (min-width: 900px) {
+  .elf-board { --cols: 6; --gap: 14px; }
 }
 
 /* One door: the hole cut in the board (plain card, shaded under its top and left edges) and the door
-   in it. --i is the door's place, counting from nought. Without the sums below (an old browser) every
-   door shows the middle of the painting, and still opens. */
+   in it, a little taller than it is wide. --elf-depth is how deep the room behind it looks as the
+   door turns: about eight of its own widths, so every door opens the same way. */
 .elf-door {
-  --c: mod(var(--i, 0), var(--cols));
-  --r: round(down, var(--i, 0) / var(--cols), 1);
+  --elf-depth: 1300px;
   position: relative;
   display: grid;
   grid-template-rows: auto minmax(0, 1fr) auto;
   justify-items: center;
   align-items: center;
-  min-height: 96px;
-  padding: 6px 5px 7px;
+  aspect-ratio: 1 / 1.12;
+  padding: 8px 8px 9px;
   border-radius: 3px;
   background-color: color-mix(in srgb, var(--tan) 32%, var(--card));
   background-image: var(--elf-grain-light);
@@ -187,13 +170,13 @@
   box-shadow: inset 3px 4px 8px rgba(58, 0, 0, 0.5), inset 0 0 0 1px rgba(58, 0, 0, 0.55);
   color: var(--maroon);
   text-decoration: none;
-  font-size: 0.7rem;
+  font-size: 0.75rem;
   line-height: 1.2;
   text-align: center;
   -webkit-tap-highlight-color: transparent;
 }
-/* The door itself: its piece of the painting, a dark cut round it with the light on its top and left
-   edges, and its shadow on the board. It turns on its left edge. */
+/* The door itself: card of the board's own maroon, a dark cut round it with the light on its top and
+   left edges, and its shadow on the board. It turns on its left edge. */
 .elf-door__flap {
   position: absolute;
   inset: 0;
@@ -204,48 +187,40 @@
   grid-template-rows: auto minmax(0, 1fr) auto;
   justify-items: center;
   align-items: center;
-  padding: 5px 5px 6px;
+  padding: 8px 8px 9px;
   border-radius: 3px;
-  background: var(--elf-scene) center / cover no-repeat, var(--elf-night);
-  box-shadow: inset 0 0 0 1px rgba(30, 0, 0, 0.6), inset 1.5px 1.5px 0 1px rgba(255, 248, 239, 0.38), 0 2px 3px rgba(20, 0, 0, 0.5);
+  background-color: var(--maroon);
+  background-image: var(--elf-grain);
+  background-size: 384px;
+  background-blend-mode: soft-light;
+  box-shadow: inset 0 0 0 1px rgba(30, 0, 0, 0.7), inset 1.5px 1.5px 0 1px rgba(255, 248, 239, 0.24), 0 2px 4px rgba(20, 0, 0, 0.55);
   transform-origin: left center;
 }
-@supports (width: calc(1cqw + mod(5px, 3px) + round(down, 1.5px, 1px))) {
-  .elf-board { background: var(--elf-scene) var(--px) var(--py) / var(--pw) var(--ph) no-repeat, var(--elf-night); }
-  /* How deep the room behind a door looks as it turns: eight of its own widths, so every door, the
-     double doors' halves too, opens the same way and stays on the board. */
-  .elf-door { --elf-depth: calc(var(--w) * 8); min-height: 0; height: var(--h); }
-  .elf-door__flap { background-size: var(--pw) var(--ph); background-position: calc(var(--px) - var(--c) * (var(--w) + var(--gap))) calc(var(--py) - var(--r) * (var(--h) + var(--gap))); }
-  .elf-door--wide { --elf-depth: calc(var(--w) * 16); }
-  .elf-door--double { --elf-depth: calc(var(--w24) * 4); height: var(--h24); }
-  .elf-door--double .elf-door__flap--left { background-position: calc(var(--px) - (100cqw - var(--w24)) / 2) calc(var(--py) - (var(--rows) - 1) * (var(--h) + var(--gap))); }
-  .elf-door--double .elf-door__flap--right { background-position: calc(var(--px) - (100cqw - var(--w24)) / 2 - var(--w24) / 2) calc(var(--py) - (var(--rows) - 1) * (var(--h) + var(--gap))); }
-}
 
-/* Its number, printed large on the painting. */
-.elf-door__num { grid-row: 1; grid-column: 1; justify-self: start; align-self: start; font-family: var(--font-head); font-weight: 800; font-size: 1.55rem; line-height: 0.9; color: var(--elf-on-dark); text-shadow: 0 1.5px 0 var(--elf-maroon-deep), 0 0 7px rgba(20, 0, 0, 0.65); font-variant-numeric: lining-nums; }
+/* Its number, printed large on the door in cream. */
+.elf-door__num { grid-row: 1; grid-column: 1; justify-self: start; align-self: start; font-family: var(--font-head); font-weight: 800; font-size: 2.1rem; line-height: 0.9; color: var(--elf-on-dark); text-shadow: 0 1.5px 0 var(--elf-maroon-deep); font-variant-numeric: lining-nums; }
 /* The little paper pull tab, on the edge the door opens from. */
-.elf-door__tab { position: absolute; top: 50%; right: -4px; width: 7px; height: 15px; margin-top: -7.5px; border-radius: 0 8px 8px 0; background-color: var(--elf-edge); background-image: var(--elf-grain-light); background-size: 384px; background-blend-mode: multiply; box-shadow: 1px 1.5px 2px rgba(30, 0, 0, 0.45), inset -1px 0 0 rgba(94, 0, 0, 0.22); }
+.elf-door__tab { position: absolute; top: 50%; right: -5px; width: 9px; height: 19px; margin-top: -9.5px; border-radius: 0 8px 8px 0; background-color: var(--elf-edge); background-image: var(--elf-grain-light); background-size: 384px; background-blend-mode: multiply; box-shadow: 1px 1.5px 2px rgba(30, 0, 0, 0.45), inset -1px 0 0 rgba(94, 0, 0, 0.22); }
 .elf-door__face { position: relative; grid-row: 2; grid-column: 1; display: grid; place-items: center; }
 
 /* The prize's shape cut out of card and laid on the door: the card, its darker cut edge and a soft
    shadow. Staff upload the shape in one colour; until they do, it is the mystery star. */
-.elf-carve { --shape: var(--elf-star); position: relative; display: block; width: 34px; height: 34px; filter: drop-shadow(0 2px 2px rgba(20, 0, 0, 0.5)); }
+.elf-carve { --shape: var(--elf-star); position: relative; display: block; width: 58px; height: 58px; filter: drop-shadow(0 2px 2px rgba(20, 0, 0, 0.5)); }
 .elf-carve__hi,
 .elf-carve__lo { position: absolute; inset: 0; -webkit-mask: var(--shape) center / contain no-repeat; mask: var(--shape) center / contain no-repeat; }
 .elf-carve__lo { background: var(--elf-edge-dark); transform: translate(0.8px, 1.6px); }
 .elf-carve__hi { background-color: var(--card); background-image: var(--elf-grain-light); background-size: 384px; background-blend-mode: multiply; }
 
-/* Chips. On a phone a door shows one at its foot: what it says if it says anything, its day if not. */
-.elf-door .elf-chip { padding: 3px 9px 5px; font-size: 0.66rem; }
-.elf-door__chip,
+/* Chips: what a door says, beside its number, and its day or its countdown at its foot. Every door is
+   big enough for both at every width. */
+.elf-door .elf-chip { padding: 3px 9px 5px; font-size: 0.72rem; }
+.elf-door__chip { grid-row: 1; grid-column: 1; justify-self: end; align-self: start; }
 .elf-door__foot { grid-row: 3; grid-column: 1; }
-.elf-door.has-chip .elf-door__foot { display: none; }
-/* Today's door on a phone shows its countdown in place of the word Today (Jaimie's choice). Its gold
-   still says which door is today's. */
+/* Today's door shows its countdown in place of the word Today (Jaimie's choice for a phone, now the
+   same everywhere). Its gold and its bow still say which door is today's. */
 .elf-door--today.has-chip .elf-door__foot { display: inline-flex; font-variant-numeric: tabular-nums; }
 .elf-door--today .elf-door__chip { display: none; }
-.elf-door__more { display: none; }
+/* Where an open door's elf was is in its detail, so the picture can have the whole door. */
 .elf-door__place { display: none; }
 
 /* Today's door, and the one being hunted: gold card round the door, a gold glow on the board round
@@ -253,82 +228,56 @@
 .elf-door--gold .elf-door__flap { box-shadow: inset 0 0 0 2.5px var(--elf-paper-gold), inset 0 0 0 3.5px rgba(94, 0, 0, 0.4), 0 0 0 1px rgba(58, 0, 0, 0.5), 0 2px 3px rgba(20, 0, 0, 0.5); }
 .elf-door--gold .elf-door__flap::after { content: ""; position: absolute; inset: -2px; z-index: -1; border-radius: 4px; box-shadow: 0 0 16px 5px rgba(240, 200, 100, 0.75); pointer-events: none; }
 .elf-door--gold .elf-carve__hi { background-color: var(--elf-paper-gold); }
-/* On a phone the bow sits on the door's top right corner, clear of its number. */
-.elf-door__bow { position: absolute; top: -13px; right: -8px; z-index: 2; width: 42px; height: auto; transform: rotate(14deg); filter: drop-shadow(0 2px 1px rgba(58, 0, 0, 0.35)); pointer-events: none; }
+/* The bow sits on top of the door, as on a present: a little right of the middle, clear of a two
+   figure number, and only just over the door above. The chip steps down below it. */
+.elf-door__bow { position: absolute; top: -16px; left: 57%; z-index: 2; width: 60px; height: auto; margin-left: -30px; filter: drop-shadow(0 2px 1px rgba(58, 0, 0, 0.35)); pointer-events: none; }
+.elf-door--gold .elf-door__chip { margin-top: 22px; }
 
-/* An open door stands open on its hinge: shown open here, swung open only for a visitor happy with
-   motion (below). Behind it, in the hole, the finder's elf or the prize's shape in gold. */
-.elf-door.is-open { padding-left: 34%; }
-.elf-door.is-open .elf-door__flap { transform: perspective(var(--elf-depth, 600px)) rotateY(-72deg); }
+/* An open door stands open on its hinge, swung almost flat, so what was behind it fills the door
+   (Jaimie, 5 November 2026: the picture must be big enough to see on a phone). Shown open here,
+   swung open only for a visitor happy with motion (below). Behind it, in the hole, the finder's
+   picture, or the prize's shape in gold; its chip is stuck on at the foot. */
+.elf-door.is-open { padding-left: 25%; }
+.elf-door.is-open .elf-door__flap { transform: perspective(var(--elf-depth, 1300px)) rotateY(-78deg); }
 .elf-door.is-open .elf-carve__hi { background-color: var(--elf-paper-gold); }
-.elf-door.is-open .elf-door__chip { position: absolute; left: 50%; bottom: 5px; z-index: 2; transform: translateX(-50%) rotate(var(--elf-chip-tilt, -2deg)); }
+.elf-door.is-open .elf-door__face { grid-row: 1 / -1; align-self: stretch; justify-self: stretch; min-height: 0; }
+.elf-door.is-open .elf-shot { width: 100%; height: 100%; object-fit: contain; filter: drop-shadow(0 2px 3px rgba(58, 0, 0, 0.3)); }
+.elf-door.is-open .elf-door__chip { position: absolute; left: 62.5%; bottom: 6px; z-index: 2; transform: translateX(-50%) rotate(var(--elf-chip-tilt, -2deg)); }
 
 /* Door 23 is two doors wide, so the 24 fill every row at every width. */
-.elf-door--wide { grid-column: span 2; }
-/* Door 24: the big double doors, a row of their own, opening from the middle. */
-.elf-door--double { grid-column: 1 / -1; justify-self: center; width: var(--w24); }
+.elf-door--wide { --elf-depth: 2600px; grid-column: span 2; aspect-ratio: 2.065 / 1.12; }
+/* Door 24: the big double doors, a row of their own, two doors wide and a little taller, opening from
+   the middle. */
+.elf-door--double { grid-column: 1 / -1; justify-self: center; width: calc((100% - (var(--cols) - 1) * var(--gap)) * 2 / var(--cols) + var(--gap)); aspect-ratio: 2.065 / 1.4; }
 .elf-door--double .elf-door__flap--left { inset: 0 50% 0 0; z-index: 2; grid-template-columns: 200%; }
 .elf-door--double .elf-door__flap--right { inset: 0 0 0 50%; transform-origin: right center; }
+.elf-door--double .elf-door__num { font-size: 2.6rem; }
+.elf-door--double .elf-carve { width: 84px; height: 84px; }
 /* Its two tabs meet at the middle, above the prize's shape. */
 .elf-door--double .elf-door__tab { top: 30%; border-radius: 8px; }
-.elf-door--double .elf-door__flap--left .elf-door__tab { right: 4px; }
-.elf-door--double .elf-door__flap--right .elf-door__tab { right: auto; left: 4px; }
-.elf-door--double .elf-door__bow { right: auto; left: 100%; margin-left: -21px; transform: none; }
-.elf-door--double.is-open { padding-inline: 24%; }
-.elf-door--double.is-open .elf-door__flap--right { transform: perspective(var(--elf-depth, 600px)) rotateY(72deg); }
+.elf-door--double .elf-door__flap--left .elf-door__tab { right: 5px; }
+.elf-door--double .elf-door__flap--right .elf-door__tab { right: auto; left: 5px; }
+.elf-door--double .elf-door__bow { left: 100%; }
+.elf-door--double.is-open { padding-inline: 13%; }
+.elf-door--double.is-open .elf-door__flap--right { transform: perspective(var(--elf-depth, 1300px)) rotateY(78deg); }
+.elf-door--double.is-open .elf-door__chip { left: 50%; }
 
 /* A door the signed in family has done, cracked or visited: the painted holly, put on by the page's
    script. */
-.elf-door.is-done::after { content: ""; position: absolute; top: -11px; right: -9px; z-index: 3; width: 36px; height: 35px; background: url(/assets/img/elf/paper/deco/holly.webp) center / contain no-repeat; filter: drop-shadow(0 2px 1px rgba(58, 0, 0, 0.3)); pointer-events: none; }
+.elf-door.is-done::after { content: ""; position: absolute; top: -13px; right: -11px; z-index: 3; width: 40px; height: 38px; background: url(/assets/img/elf/paper/deco/holly.webp) center / contain no-repeat; filter: drop-shadow(0 2px 1px rgba(58, 0, 0, 0.3)); pointer-events: none; }
 
 .elf-door:focus-visible { outline: 3px solid var(--elf-paper-gold); outline-offset: 2px; }
 /* The door whose detail is open. */
 .elf-door[aria-expanded="true"],
 .elf-door:has(+ .elf-detail:target) { outline: 3px solid var(--card); outline-offset: 2px; }
 
-@media (min-width: 640px) {
-  .elf-door { padding: 8px 7px 9px; font-size: 0.75rem; }
-  .elf-door__flap { padding: 7px 7px 8px; }
-  .elf-door__num { font-size: 2rem; }
-  .elf-door .elf-chip { font-size: 0.7rem; }
-  /* The time on a later door's day, but not "Clue in" on today's: it would run past the door. */
-  .elf-door__more { display: inline; }
-  .elf-door--today .elf-door__more { display: none; }
-  .elf-door__tab { right: -5px; width: 9px; height: 19px; margin-top: -9.5px; }
-  .elf-door--double .elf-door__flap--left .elf-door__tab { right: 5px; }
-  .elf-door--double .elf-door__flap--right .elf-door__tab { left: 5px; }
-  /* From 640 pixels the bow sits on top of the door, as on a present. */
-  .elf-door__bow { top: -24px; right: auto; left: 50%; width: 60px; margin-left: -30px; transform: none; }
-  .elf-door--double .elf-door__bow { margin-left: -30px; }
-  .elf-door.is-done::after { top: -13px; right: -11px; width: 40px; height: 38px; }
-  .elf-carve { width: 46px; height: 46px; }
-}
-/* Only a board this wide has room for a chip beside the door's number (measured at 768 and 1024,
-   Tomorrow and Big prize covered the number): narrower, the chip stays at the door's foot. */
-@media (min-width: 1180px) {
-  .elf-door__chip { grid-row: 1; justify-self: end; align-self: start; }
-  .elf-door--today .elf-door__chip { display: inline-flex; }
-  .elf-door.has-chip .elf-door__foot { display: inline-flex; }
-  .elf-door--today .elf-door__more { display: inline; }
-  .elf-door__place { display: block; }
-  /* The chip steps down below today's bow. */
-  .elf-door--gold .elf-door__chip { margin-top: 17px; }
-  /* Open, its chip sits beside the door, clear of the holly on the corner. */
-  .elf-door.is-open .elf-door__chip { position: static; justify-self: start; transform: rotate(var(--elf-chip-tilt, -2deg)); }
-}
-
-/* The winner behind an open door: their dressed elf, or their photo once it has been checked. */
+/* The winner's picture: their dressed elf, or their photo once it has been checked. Behind an open
+   door it fills the door (above); in a door's detail it sits on a paper mount (below). */
 .elf-shot { display: block; height: auto; }
-.elf-door .elf-shot--elf { width: 38px; }
-.elf-door .elf-shot--photo { width: 44px; height: 44px; object-fit: cover; border-radius: 4px; box-shadow: 0 2px 3px rgba(58, 0, 0, 0.3); }
-@media (min-width: 640px) {
-  .elf-door .elf-shot--elf { width: 50px; }
-  .elf-door .elf-shot--photo { width: 60px; height: 60px; }
-}
 
 /* A family's own marks, laid on by the page's script. Marks are only ever earned at an open door,
    so they sit down the edge of what is behind it, like stickers. */
-.elf-door__marks { position: absolute; right: -10px; top: 50%; transform: translateY(-50%); display: grid; gap: 2px; }
+.elf-door__marks { position: absolute; right: 2px; top: 50%; transform: translateY(-50%); display: grid; gap: 3px; }
 .elf-door__marks:empty { display: none; }
 .elf-mark {
   display: inline-grid;
@@ -344,13 +293,8 @@
   vertical-align: -0.3em;
 }
 .elf-mark--cracked { color: var(--holly); }
-.elf-door__marks .elf-mark { width: 17px; height: 17px; }
-.elf-door__marks .elf-icon { width: 12px; height: 12px; }
-@media (min-width: 640px) {
-  .elf-door__marks { right: -14px; gap: 3px; }
-  .elf-door__marks .elf-mark { width: 22px; height: 22px; }
-  .elf-door__marks .elf-icon { width: 15px; height: 15px; }
-}
+.elf-door__marks .elf-mark { width: 22px; height: 22px; }
+.elf-door__marks .elf-icon { width: 15px; height: 15px; }
 
 /* ---------- pills: Detective HQ's gold seal, until HQ is in paper ---------- */
 .elf-pill {
@@ -382,8 +326,8 @@
 .elf-detail__media { justify-self: center; }
 .elf-detail__shape,
 .elf-detail__paper { display: grid; place-items: center; width: 150px; min-height: 150px; padding: 12px; border-radius: 3px; }
-/* The prize's shape on a square of the painted night, as it is on its door. */
-.elf-detail__shape { background: var(--elf-scene) center / cover no-repeat, var(--elf-night); box-shadow: inset 0 0 0 1px rgba(30, 0, 0, 0.6), 0 3px 6px rgba(58, 0, 0, 0.3); }
+/* The prize's shape on a square of the doors' maroon, as it is on its door. */
+.elf-detail__shape { background-color: var(--maroon); background-image: var(--elf-grain); background-size: 384px; background-blend-mode: soft-light; box-shadow: inset 0 0 0 1px rgba(30, 0, 0, 0.6), 0 3px 6px rgba(58, 0, 0, 0.3); }
 .elf-detail__shape .elf-carve { width: 96px; height: 96px; }
 .elf-detail--today .elf-detail__shape,
 .elf-detail--hunting .elf-detail__shape { box-shadow: inset 0 0 0 3px var(--elf-paper-gold), 0 0 14px 3px rgba(240, 200, 100, 0.6); }

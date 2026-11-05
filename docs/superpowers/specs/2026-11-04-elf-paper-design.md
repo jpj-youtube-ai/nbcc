@@ -40,7 +40,8 @@ All on 4 November 2026 unless dated otherwise.
    the elf: a scene behind, a friend beside, a frame round the picture.
 2. **51 costumes:** 3 from the start, then 2 new costumes for each of the 24 doors. All hooded: the hood covers the
    hair and ears, so only the face shows.
-3. **Costumes are not prizes.** Winning a race and visiting all 24 places win physical prizes only. Every child who
+3. **Costumes are not prizes.** Winning a race and the grand prize (open to every detective who does all 24 doors,
+   decision 15) are physical prizes only. Every child who
    takes part in a door gets that door's two costumes.
 4. **A door's two costumes unlock for a right answer** to that door, whichever clue it came after, **or for visiting
    the place later** (catching up). A wrong answer alone unlocks nothing. Jaimie's words: "Everyone gets a costume when
@@ -75,6 +76,17 @@ All on 4 November 2026 unless dated otherwise.
 13. **The calendar looks like an advent calendar.** Jaimie, approving the plan: "when you say calendar, it looks like an
     advent calendar." So the 24 doors are set into one calendar board, as little doors that open, not laid out as a
     grid of separate cards.
+14. **The calendar is solid maroon, with big doors on a phone** (Jaimie, on the pictures, 5 November 2026). The
+    painted scene across the doors looked messy, so the board and its doors are NBCC's solid rich maroon (paper grain,
+    cut lines, cream numbers; gold for today). Mobile first: two doors to a row on a phone, like the wardrobe's door
+    cards, so the picture behind an open door can be seen without zooming; more to a row only as the board widens (3,
+    4, then 6). An open door swings almost flat and the picture behind it fills the door. Decision 13 still stands:
+    one board, hinged doors in order, door 24 the double doors.
+15. **The grand prize is for every detective who does all 24 doors** (Jaimie, on the pictures, 5 November 2026). A
+    door is done when it is cracked with a right guess or its place is visited, so nobody has to visit every place;
+    a family who joins late visits the places from before they joined. This is the Graduate finish
+    (`src/elf/progress.ts`). The gold seal for visiting all 24 places stays, as an honour on the certificate, but no
+    longer decides who can enter.
 
 ## What is already made
 
@@ -161,7 +173,7 @@ Wave 1 pages (switch on Friday 13 November):
 | Page | Route, renderer | Paper pieces |
 |---|---|---|
 | Every page (shell) | `src/elf/pages/shell.ts` | paper page, torn bands under the nav, cut paper hills above the footer, a few drifting paper stars and snow |
-| Calendar | `GET /elf`, `src/elf/pages/calendar.ts`, `door.ts` | the school logo heading stays (Stage A rule) with a torn strip under it; the countdown on a candy cane strip; an advent calendar (decision 13): one big card board with a painted paper scene across its face and the 24 doors cut into it as hinged card doors, each with a cut line round it, a shadow under it, a little paper pull tab and its number printed large, door 24 the big double doors; an open door stands open on its hinge. A shut door is closed but bright, never faint (the padlock is only for locked costumes), with its date on a chip and its prize shape (main design decision 12, kept by the secret places design) as a paper cut out of the same shape, or the mystery star as a paper star until staff add a shape. Today's door glows gold with the painted bow. Open doors (found or revealed) show for everyone; the signed in family's own done doors (cracked or visited, added by the calendar's script from `/api/elf/me`, as now) get the painted holly. The door detail is a taped note; status pills are chips. In wave 1 every door is shut and shows the mystery star |
+| Calendar | `GET /elf`, `src/elf/pages/calendar.ts`, `door.ts` | the school logo heading stays (Stage A rule) with a torn strip under it; the countdown on a candy cane strip; an advent calendar (decision 13): one big card board (since decision 14, solid maroon, two doors to a row on a phone) and the 24 doors cut into it as hinged card doors, each with a cut line round it, a shadow under it, a little paper pull tab and its number printed large, door 24 the big double doors; an open door stands open on its hinge. A shut door is closed but bright, never faint (the padlock is only for locked costumes), with its date on a chip and its prize shape (main design decision 12, kept by the secret places design) as a paper cut out of the same shape, or the mystery star as a paper star until staff add a shape. Today's door glows gold with the painted bow. Open doors (found or revealed) show for everyone; the signed in family's own done doors (cracked or visited, added by the calendar's script from `/api/elf/me`, as now) get the painted holly. The door detail is a taped note; status pills are chips. In wave 1 every door is shut and shows the mystery star |
 | Rules | `GET /elf/rules`, `rules.ts` | a sheet torn off a notepad with tape; headings on heading strips; list bullets as small paper circles |
 | Enrol and pay what you can | `GET /elf/join`, `join.ts`, `gift.ts` | the present hero becomes the painted paper present with a paper gift tag ("Top secret") and a rosette ("24 prizes"); the form on a card sheet; amount choices as torn buttons; the pay button a crimson torn button; ticks as paper boxes |
 | Sign in, welcome | `sign-in.ts` | the form on a card sheet, torn buttons; the welcome with the painted presents and a fall of paper stars |

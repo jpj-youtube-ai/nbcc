@@ -11,8 +11,8 @@ import type { CalendarView, DoorView } from "./types";
 // docs/superpowers/plans/2026-10-04-elf-detective-a3-screens.md; its paper look is
 // docs/superpowers/specs/2026-11-04-elf-paper-design.md.
 //
-// An advent calendar: one torn card board with a painted picture across its face (the rooftops at
-// night) and the 24 doors cut into it, in order. Everything on this page is the same for every
+// An advent calendar: one torn card board in NBCC's solid rich maroon (Jaimie, 5 November 2026) and
+// the 24 doors cut into it, in order, two to a row on a phone. Everything on this page is the same for every
 // visitor, so it can be kept and served again without asking the database: a family's own marks are
 // laid over it afterwards by the page's script, from a small private answer.
 //

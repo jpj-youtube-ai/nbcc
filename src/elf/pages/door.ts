@@ -13,11 +13,11 @@ import type { DoorView } from "./types";
 // when the live feed says it has changed. Both the page and that fetch draw a door with the
 // functions here, so the two can never show a door differently.
 //
-// It is an advent calendar door (docs/superpowers/specs/2026-11-04-elf-paper-design.md, decision
-// 13): a card door cut into the board's painted picture, on a hinge, with a little paper pull tab and
-// its number printed on it. While it is shut, everything on it is printed on the door itself; once it
-// is open, the door has swung away and what was behind it shows. Its place in the picture comes from
-// its number (--i); the stylesheet works out which piece of the picture that is.
+// It is an advent calendar door (docs/superpowers/specs/2026-11-04-elf-paper-design.md, decisions
+// 13 and 14): a card door cut into the board's solid rich maroon, on a hinge, with a little paper pull
+// tab and its number printed on it. While it is shut, everything on it is printed on the door itself;
+// once it is open, the door has swung almost flat and what was behind it fills the door, big enough
+// to see on a phone.
 //
 // One rule is kept here whatever a caller passes in: where an elf is hiding is never written while
 // its door is shut or the elf is being hunted. Not in the door, not in its detail, not in the words
@@ -157,7 +157,8 @@ export function doorTile(d: DoorView, now: Date): string {
   const gold = kind === "today" || kind === "hunting";
   const double = d.door === DOOR_COUNT;
   const worn = chip(kind, d);
-  const face = kind === "found" ? winnerPicture(d, 46) : carving(d);
+  // The picture fills the open door; the stylesheet fits it in, so this is only its size hint.
+  const face = kind === "found" ? winnerPicture(d, 160) : carving(d);
   const print =
     worn +
     // The family's own marks sit on the corner of the picture. The page's script fills them in.
@@ -174,7 +175,7 @@ export function doorTile(d: DoorView, now: Date): string {
   const shape = double ? " elf-door--double" : d.door === DOOR_COUNT - 1 ? " elf-door--wide" : "";
   const classes = `elf-door elf-door--${kind}${shape}${gold ? " elf-door--gold" : ""}${open ? " is-open" : ""}${worn ? " has-chip" : ""}`;
   return (
-    `<a class="${classes}" id="door-${d.door}" href="#case-${d.door}" style="--i:${d.door - 1}" ` +
+    `<a class="${classes}" id="door-${d.door}" href="#case-${d.door}" ` +
     `data-door="${d.door}" data-kind="${kind}" data-v="${doorVersion(d, now)}" aria-label="${escapeHtml(doorLabel(d, now))}">` +
     flaps +
     (open ? print : "") +

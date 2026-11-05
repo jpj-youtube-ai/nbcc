@@ -126,9 +126,16 @@ describe("a door on the board", () => {
     }
   });
 
-  it("knows its place in the board's picture, counting from nought", () => {
-    expect(dom(doorTile(door(), NOW)).querySelector("a")!.getAttribute("style")).toBe("--i:8");
-    expect(dom(doorTile(door({ door: 1 }), NOW)).querySelector("a")!.getAttribute("style")).toBe("--i:0");
+  // Jaimie, 5 November 2026: the board is solid maroon now, so a door no longer carries a piece of a
+  // painting, and needs no place in one.
+  it("carries no piece of a painting", () => {
+    expect(dom(doorTile(door(), NOW)).querySelector("a")!.hasAttribute("style")).toBe(false);
+  });
+
+  // Jaimie, 5 November 2026: the picture behind an open door was too small to see on a phone.
+  it("draws the winner's picture behind an open door big enough to see", () => {
+    const img = dom(doorTile(FOUND, NOW)).querySelector(".elf-door__face img")!;
+    expect(Number(img.getAttribute("width"))).toBeGreaterThanOrEqual(150);
   });
 
   it("is bright while it is shut, never faint, with its day on a paper chip", () => {

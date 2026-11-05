@@ -47,13 +47,11 @@ function everyExpectedFile(): string[] {
     ...ICONS.map((name) => `icons/icon-${name}.webp`),
     "ui/grain.webp",
     "ui/grain-light.webp",
-    BOARD,
   ];
 }
 
-// The advent calendar's board: the approved rooftops painting, cut off above its stage (the round
-// platform the wardrobe's elf stands on), so the 24 doors are cut into the night sky and the roofs.
-const BOARD = "board/rooftops.webp";
+// The advent calendar has no painting of its own: Jaimie (5 November 2026) asked for NBCC's solid
+// rich maroon in place of the rooftops across its doors, so board/rooftops.webp is gone.
 
 function listAll(dir: string): string[] {
   if (!existsSync(dir)) return [];
@@ -83,12 +81,14 @@ describe("the paper pictures", () => {
     for (const g of GLASSES_IDS) for (const c of COSTUME_IDS) expect(existsSync(resolve(PAPER, `pieces/${g}--${c}.webp`)), `${g}--${c}`).toBe(true);
   });
 
+  // It reads about 750 pictures' headers, which takes some seconds on a busy machine, so it has a
+  // longer time limit of its own.
   it("puts every elf, costume, scene and glasses or bow tie layer on the same 640 by 960 canvas, so they line up", async () => {
     for (const name of [...elves(), ...costumes(), ...scenes(), ...pieces(), ...fitted()]) {
       const { width, height } = await sharp(resolve(PAPER, name)).metadata();
       expect(`${width} by ${height}`, name).toBe("640 by 960");
     }
-  });
+  }, 30_000);
 
   it("keeps one skin's 51 costume tiles under 600 KB, as the old tile budget did", () => {
     for (const skin of SKINS) expect(sum(COSTUME_IDS.map((id) => sizeOf(`tiles/costumes/${id}-${skin}.webp`))), skin).toBeLessThan(600 * 1024);
@@ -97,12 +97,6 @@ describe("the paper pictures", () => {
   it("keeps every elf, costume and scene picture under 150 KB and every tile under 20 KB", () => {
     for (const name of [...elves(), ...costumes(), ...scenes()]) expect(sizeOf(name), name).toBeLessThan(150 * 1024);
     for (const name of [...costumeTiles(), ...sceneTiles()]) expect(sizeOf(name), name).toBeLessThan(20 * 1024);
-  });
-
-  it("has the calendar's board: the rooftops painting above its stage, at its full width, under 150 KB", async () => {
-    const meta = await sharp(resolve(PAPER, BOARD)).metadata();
-    expect([meta.format, meta.width, meta.height]).toEqual(["webp", 720, 750]);
-    expect(sizeOf(BOARD)).toBeLessThan(150 * 1024);
   });
 
   it("holds no other pictures", () => {

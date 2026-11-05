@@ -183,6 +183,21 @@ export async function getCapacityState(): Promise<CapacityState> {
   return readCapacityState(pool);
 }
 
+/**
+ * Ticket sales have closed and the Ball is not sold out: the Ball page and the home page take
+ * their ticket buttons down (Jaimie, 5 November 2026). A read that fails says "not closed", so
+ * the pages look as they always have; the checkout still refuses on its own check.
+ */
+export async function ticketSalesClosed(): Promise<boolean> {
+  try {
+    const a = await getAvailability();
+    return !a.salesOpen && !a.soldOut;
+  } catch (err) {
+    console.error("ball sales state read failed:", err instanceof Error ? err.message : err);
+    return false;
+  }
+}
+
 export async function getAvailability(): Promise<
   Availability & { salesOpen: boolean; closedByDate: boolean; cardFee: CardFeeRate }
 > {

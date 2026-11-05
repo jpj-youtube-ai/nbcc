@@ -3523,6 +3523,25 @@ switches the old stages off first. Set the guest details deadline in Set up only
 and by the evening before the first round (Tuesday 27 October for Wednesday 28th): nothing is sent
 until it is set.
 
+### Once ticket sales close (5 November 2026)
+
+Jaimie closed ticket sales on Thursday 5 November 2026 and asked for the ways to buy to come down
+while the page stays up with every detail. Closing is still the admin's own setting (Admin >
+Festive Ball, **Sales close** or **Close sales now**); the server already refuses card and bank
+transfer bookings once it is set. What changes on the pages, only while sales are closed and the
+Ball is not sold out (`ticketSalesClosed` in `src/db/ball.ts`; a failed read means "not closed"):
+
+- **`/ball`** (`renderBallPage`, `salesClosed`): the hero's and the closing band's **Book tickets**
+  buttons come off, the tickets heading reads "Ticket sales have now closed.", the booking form is
+  hidden, the "Booking bigger, or paying by invoice?" box is left out, and the closed note
+  (`#ballClosed` in `ball.html`) shows in their place: thanks to everyone who booked, "Can't make it?
+  You can still donate" (`/ball/donate`), and the phone and email. `ball.js` then adds nothing.
+  Sold out is unchanged: the waiting list still takes the form's place.
+- **The home page's Ball band** (`renderHomePromo`, `salesClosed`): no **Book tickets** button, and
+  the banner says "Ticket sales have now closed" instead of "Tickets now on sale".
+- The Ball's card on What's on and Get involved is an Events row; its button is changed in Admin >
+  Events, not in code.
+
 ### The ticket report (TASK-464)
 
 Twice a week, on Monday and Thursday mornings (Tuesday until TASK-467), the people running the Ball with us (the organiser,

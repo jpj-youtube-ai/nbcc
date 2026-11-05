@@ -28,6 +28,7 @@ import {
   getCapacityState,
   getSettings,
   releaseReservation,
+  ticketSalesClosed,
 } from "../db/ball";
 import {
   GATE_COOKIE,
@@ -247,7 +248,7 @@ function servePage(res: express.Response, gateOpen: boolean, settings: {
   arrivalTime: string | null;
   includedNote: string | null;
   lineUpNote: string | null;
-}, eventsOn = false, fundraisingOn = false): void {
+}, eventsOn = false, fundraisingOn = false, salesClosed = false): void {
   const file = join(SITE_ROOT, "ball.html");
   if (!existsSync(file)) {
     res.status(404).send("Not found");
@@ -281,7 +282,7 @@ function servePage(res: express.Response, gateOpen: boolean, settings: {
   // TASK-453: and the Events item while that page is switched on, like every other page. The two
   // insertions are independent (one goes after About, the other at the end), so order is free.
   // TASK-494: and the footer's "Fundraise for us" to the sign up while fundraising is on.
-  const page = renderBallPage(template, { settings, gateOpen });
+  const page = renderBallPage(template, { settings, gateOpen, salesClosed });
   res.type("html").send(decorateBallPage(page, { ballItem: true, eventsOn, fundraisingOn }));
 }
 
@@ -334,8 +335,8 @@ ballRouter.get("/ball", async (req, res, next) => {
         return;
       }
     }
-    const [eventsOn, fundraisingOn] = await Promise.all([eventsPageIsOn(), fundraisingIsOn()]);
-    servePage(res, gateOpen, settings, eventsOn, fundraisingOn);
+    const [eventsOn, fundraisingOn, salesClosed] = await Promise.all([eventsPageIsOn(), fundraisingIsOn(), ticketSalesClosed()]);
+    servePage(res, gateOpen, settings, eventsOn, fundraisingOn, salesClosed);
   } catch (err) {
     next(err);
   }

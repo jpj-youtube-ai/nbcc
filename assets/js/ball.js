@@ -276,6 +276,10 @@
         if (invoiceSelf) invoiceSelf.hidden = !(data.salesOpen && data.transferOpen);
         recalculate();
         if (!data.salesOpen) {
+          // Closed (not sold out) and the server already shows its note in the form's place
+          // (src/ball/page.ts): nothing more to say here.
+          var closedNote = document.getElementById("ballClosed");
+          if (!data.soldOut && closedNote && !closedNote.hidden) return;
           availability.textContent = data.soldOut
             ? "The ball is sold out."
             : "Ticket sales are now closed.";

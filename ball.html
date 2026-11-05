@@ -196,6 +196,15 @@
             <p data-region="availability" class="ball-availability" hidden></p>
           </div>
 
+          <!-- Jaimie, 5 November 2026: once ticket sales close (and the Ball is not sold out), the
+               server shows this in the booking form's place and takes the ticket buttons off
+               (src/ball/page.ts, salesClosed). The booking box's own card style. -->
+          <div class="ball-closed ball-form ball-transfer-done" id="ballClosed" hidden>
+            <p>Thank you to everyone who has booked. We can't wait to see you on Saturday.</p>
+            <p>Can't make it? <a href="/ball/donate">You can still donate</a>.</p>
+            <p>Any questions? Call <a href="tel:+441292811015">01292 811 015</a> or email <a href="mailto:events@nbcc.scot">events@nbcc.scot</a>.</p>
+          </div>
+
           <form class="ball-form reveal" id="ballForm" novalidate>
             <fieldset class="ball-choice">
               <legend>What would you like?</legend>

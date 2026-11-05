@@ -29,6 +29,19 @@ Feature: Festive Ball availability (TASK-313)
     When I request the ball availability
     Then the ball availability should say sales are closed
 
+  # Jaimie, 5 November 2026: once sales close, the details stay and the ways to buy come down.
+  Scenario: once sales close, the Ball page keeps its details and loses its ticket buttons
+    Given the ball gate is open
+    And the ball is reset to 40 tables of 10 with 0 held back
+    When I request the ball page
+    Then the ball page should contain "Book tickets"
+    Given ball sales are closed by hand
+    When I request the ball page
+    Then the ball page status should be 200
+    And the ball page should contain "Ticket sales have now closed."
+    And the ball page should contain "What's the night about?"
+    And the ball page should not contain "Book tickets"
+
   Scenario: the page is told the live card rate, so it quotes what NBCC is really charged
     Given the ball is reset to 40 tables of 10 with 0 held back
     When I request the ball availability

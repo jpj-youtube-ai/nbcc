@@ -39,6 +39,32 @@ export const TICKET_INCLUDES =
 export interface BallPageInput {
   settings: BallPageSettings;
   gateOpen: boolean;
+  /**
+   * Ticket sales have closed (by the admin's switch or its closing time) and the Ball is not sold
+   * out. The booking form gives way to the closed note and the Book tickets buttons come off
+   * (Jaimie, 5 November 2026). Sold out keeps the waiting list, as ball.js shows it.
+   */
+  salesClosed?: boolean;
+}
+
+// The page's two Book tickets buttons, word for word, and the pieces the closed page changes.
+const HERO_BOOK = '<a class="btn btn-gold" href="#tickets">Book tickets</a>';
+const CLOSING_BOOK = '<a class="btn btn-primary" href="#tickets">Book tickets</a>';
+const TICKETS_HEADING = '<h2 id="tickets-heading">Book your seat, or take a table for ten.</h2>';
+const BOOKING_FORM = '<form class="ball-form reveal" id="ballForm" novalidate>';
+const CLOSED_NOTE = 'id="ballClosed" hidden>';
+const INVOICE_BOX = '<aside class="ball-invoice reveal" aria-labelledby="ball-invoice-heading">';
+
+/** The page once ticket sales have closed: the details stay, the ways to buy come down. */
+function closeSales(html: string): string {
+  return html
+    .replace(new RegExp(`[ \\t]*${HERO_BOOK}\\r?\\n`), "")
+    .replace(new RegExp(`[ \\t]*${CLOSING_BOOK}\\r?\\n`), "")
+    .replace(TICKETS_HEADING, '<h2 id="tickets-heading">Ticket sales have now closed.</h2>')
+    .replace(BOOKING_FORM, '<form class="ball-form reveal" id="ballForm" novalidate hidden>')
+    // Left out rather than hidden: the Ball stylesheet gives the box a display of its own.
+    .replace(new RegExp(`${INVOICE_BOX}[\\s\\S]*?</aside>\\s*`), "")
+    .replace(CLOSED_NOTE, 'id="ballClosed">');
 }
 
 // Staff-entered free text goes into HTML, so it is escaped here. Nothing on this page needs
@@ -100,6 +126,8 @@ export function renderBallPage(template: string, input: BallPageInput): string {
   if (settings.lineUpNote) {
     html = fillRegion(html, "lineup", escapeHtml(settings.lineUpNote));
   }
+
+  if (input.salesClosed) html = closeSales(html);
 
   return html;
 }

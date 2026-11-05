@@ -136,6 +136,12 @@ let qrImageUrls: string[] = [];
 let qrNamedAnswer: { status: number; body: unknown } = { status: 200, body: { codes: [], destinations: [] } };
 let qrNamedCalls: Array<{ url: string; method: string; body: unknown }> = [];
 let qrNamedWriteAnswer: { status: number; body: unknown } = { status: 200, body: { id: 1 } };
+// Invoices for donations: what the Invoices screen is sent, every change it asks for, and what a change
+// answers. invoiceDonations, when set, is what the Donations list answers.
+let invAnswer: { status: number; body: unknown } = { status: 200, body: { invoices: [], bank: null, today: "2026-11-05" } };
+let invCalls: Array<{ url: string; method: string; body: unknown }> = [];
+let invWriteAnswer: { status: number; body: unknown } = { status: 200, body: { id: 12 } };
+let invoiceDonations: unknown[] | null = null;
 
 function respond(url: string, init?: { method?: string; body?: string; headers?: Record<string, string> }) {
   const j = (body: unknown, status = 200) => ({
@@ -158,6 +164,7 @@ function respond(url: string, init?: { method?: string; body?: string; headers?:
   }
   if (url.includes("/api/admin/donors/")) return j(snapshot);
   if (url.includes("/api/admin/search/donations")) return j({ results: [donation] }); // TASK-483
+  if (invoiceDonations && url.includes("/api/admin/donations?")) return j({ results: invoiceDonations, total: invoiceDonations.length });
   if (url.includes("/api/admin/donations")) return j({ results: [donation], total: 1 });
   if (/\/api\/admin\/stories\/\d+/.test(url) && init?.method === "PATCH") {
     const patch = JSON.parse(init.body || "{}");
@@ -234,6 +241,12 @@ function respond(url: string, init?: { method?: string; body?: string; headers?:
     qrImageUrls.push(url);
     return { ...j({}), text: () => Promise.resolve(QR_SVG), blob: () => Promise.resolve(new Blob([QR_SVG])) };
   }
+  if (url.includes("/api/admin/invoices")) {
+    const method = init?.method || "GET";
+    if (method === "GET") return j(invAnswer.body, invAnswer.status);
+    invCalls.push({ url, method, body: JSON.parse(init?.body || "{}") });
+    return j(invWriteAnswer.body, invWriteAnswer.status);
+  }
   if (url.includes("/api/admin/qr-codes/named")) {
     const method = init?.method || "GET";
     if (method === "GET") return j(qrNamedAnswer.body, qrNamedAnswer.status);
@@ -297,6 +310,10 @@ describe("admin app integration (jsdom, TASK-118)", () => {
     qrNamedAnswer = { status: 200, body: { codes: [], destinations: [] } };
     qrNamedCalls = [];
     qrNamedWriteAnswer = { status: 200, body: { id: 1 } };
+    invAnswer = { status: 200, body: { invoices: [], bank: null, today: "2026-11-05" } };
+    invCalls = [];
+    invWriteAnswer = { status: 200, body: { id: 12 } };
+    invoiceDonations = null;
     window.sessionStorage.clear();
     document.body.innerHTML = bodyHtml;
     (window as unknown as { AdminHelpers: unknown }).AdminHelpers = helpers;
@@ -2476,6 +2493,295 @@ describe("admin app integration (jsdom, TASK-118)", () => {
       const app = readFileSync(resolve(ROOT, "assets/js/admin/app.js"), "utf8");
       expect(app).not.toContain("no seats are held");
       expect(app).toContain("Their seats are kept for up to an hour in case they are still paying, then go back on sale.");
+    });
+  });
+
+  // Invoices for donations (docs/superpowers/specs/2026-11-05-donation-invoices-design.md). Invented names.
+  describe("Invoices", () => {
+    const settle = async () => { for (let i = 0; i < 8; i++) await flush(); };
+    const nav = () => document.querySelector('.admin-nav-link[data-view="invoices"]') as HTMLElement;
+    const open = async () => {
+      await signIn();
+      nav().click();
+      await settle();
+    };
+    const view = () => el("view-invoices");
+    const INV = (o: Record<string, unknown> = {}) => ({
+      id: 12,
+      number: "INV-0012",
+      payerKind: "person",
+      contactName: "Sam Example",
+      orgName: null,
+      email: "sam@example.com",
+      description: "Donation to NBCC",
+      note: null,
+      amountPence: 25000,
+      issuedOn: "2026-11-01",
+      dueOn: "2026-12-01",
+      status: "waiting",
+      state: "waiting",
+      paidOn: null,
+      paidBy: null,
+      donationId: null,
+      cancelledAt: null,
+      paidTwiceAt: null,
+      link: "https://nbcc.scot/invoice/12.sig",
+      ...o,
+    });
+    const list = (invoices: unknown[], bank: unknown = null) => {
+      invAnswer = { status: 200, body: { invoices, bank, today: "2026-11-05" } };
+    };
+    const kind = (k: string) => {
+      const r = view().querySelector(`input[name="invKind"][value="${k}"]`) as HTMLInputElement;
+      r.checked = true;
+      r.dispatchEvent(new Event("change", { bubbles: true }));
+    };
+    const set = (id: string, value: string) => {
+      (el(id) as HTMLInputElement).value = value;
+    };
+    const submit = (form: Element) => form.dispatchEvent(new Event("submit", { cancelable: true, bubbles: true }));
+
+    it("is in the Giving menu for anyone who can view Donations, after Donations", async () => {
+      loginToken = tokenFor("viewer");
+      await signIn();
+      expect(nav().hidden).toBe(false);
+      const giving = [...document.querySelectorAll("#adminNavGiving .admin-nav-link")].map((b) => b.getAttribute("data-view"));
+      expect(giving.indexOf("invoices")).toBe(giving.indexOf("donations") + 1);
+    });
+
+    it("shows a viewer the list but not the form, the bank details or any button that changes something", async () => {
+      loginToken = tokenFor("viewer");
+      list([INV()]);
+      await open();
+      expect((el("invNewForm") as HTMLFormElement).hidden).toBe(true);
+      expect(el("invBank").hidden).toBe(true);
+      expect(view().querySelector("[data-inv-open]")).toBeTruthy();
+      expect(view().querySelector("[data-inv-markpaid]")).toBeNull();
+      expect(view().querySelector("[data-inv-cancel]")).toBeNull();
+    });
+
+    it("asks for the business or group name only when it is one, and the something in return question only for a business", async () => {
+      loginToken = tokenFor("admin");
+      await open();
+      const org = view().querySelector("[data-inv-org]") as HTMLElement;
+      const ask = view().querySelector("[data-inv-consideration]") as HTMLElement;
+      expect(org.hidden).toBe(true);
+      expect(ask.hidden).toBe(true);
+      kind("business");
+      expect(org.hidden).toBe(false);
+      expect(ask.hidden).toBe(false);
+      kind("group");
+      expect(org.hidden).toBe(false);
+      expect(ask.hidden).toBe(true);
+      expect(org.textContent).toContain("Group name");
+    });
+
+    it("starts with the usual line and a due date 30 days on", async () => {
+      loginToken = tokenFor("admin");
+      await open();
+      expect((el("invDescription") as HTMLInputElement).value).toBe("Donation to NBCC");
+      const due = (el("invDueOn") as HTMLInputElement).value;
+      expect(due).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+      const days = Math.round((Date.parse(due) - Date.parse(new Date().toISOString().slice(0, 10))) / 86400000);
+      expect(days).toBeGreaterThanOrEqual(29);
+      expect(days).toBeLessThanOrEqual(31);
+    });
+
+    it("sends a business invoice with everything typed, then shows it in the list", async () => {
+      loginToken = tokenFor("admin");
+      await open();
+      kind("business");
+      set("invOrgName", "Example Joinery Ltd");
+      set("invContactName", "Alex Sample");
+      set("invEmail", "accounts@example.com");
+      set("invAddress", "1 Made Up Street\nExampletown");
+      set("invPostcode", "KA1 1AA");
+      (view().querySelector('input[name="invConsideration"][value="no"]') as HTMLInputElement).checked = true;
+      set("invAmount", "500");
+      set("invNote", "Thank you for your support");
+      set("invDueOn", "2026-12-05");
+      invWriteAnswer = { status: 201, body: { id: 13, number: "INV-0013", link: "https://nbcc.scot/invoice/13.sig", sent: true } };
+      list([INV({ id: 13, number: "INV-0013", payerKind: "business", orgName: "Example Joinery Ltd", contactName: "Alex Sample" })]);
+      submit(el("invNewForm"));
+      await settle();
+      expect(invCalls[0]).toEqual({
+        url: "/api/admin/invoices",
+        method: "POST",
+        body: {
+          payerKind: "business",
+          orgName: "Example Joinery Ltd",
+          contactName: "Alex Sample",
+          email: "accounts@example.com",
+          address: "1 Made Up Street\nExampletown",
+          postcode: "KA1 1AA",
+          considerationGiven: false,
+          amount: "500",
+          description: "Donation to NBCC",
+          note: "Thank you for your support",
+          dueOn: "2026-12-05",
+        },
+      });
+      expect(el("invNewStatus").textContent).toContain("INV-0013 is on its way to accounts@example.com");
+      expect(el("invNewStatus").classList.contains("is-ok")).toBe(true);
+      expect(el("invList").textContent).toContain("Example Joinery Ltd");
+      expect((el("invContactName") as HTMLInputElement).value).toBe("");
+    });
+
+    it("says so when the invoice was saved but the email did not go", async () => {
+      loginToken = tokenFor("admin");
+      await open();
+      set("invContactName", "Sam Example");
+      set("invEmail", "sam@example.com");
+      set("invAmount", "25");
+      invWriteAnswer = { status: 201, body: { id: 12, number: "INV-0012", link: "x", sent: false } };
+      submit(el("invNewForm"));
+      await settle();
+      expect(el("invNewStatus").textContent).toContain("the email did not go");
+      expect(el("invNewStatus").classList.contains("is-error")).toBe(true);
+    });
+
+    it("puts what is wrong beside its field", async () => {
+      loginToken = tokenFor("admin");
+      await open();
+      set("invContactName", "Sam Example");
+      set("invEmail", "sam@example.com");
+      set("invAmount", "abc");
+      invWriteAnswer = { status: 400, body: { error: "Give an amount from £1 to £50,000.", field: "amount" } };
+      submit(el("invNewForm"));
+      await settle();
+      const where = view().querySelector('[data-inv-error="amount"]') as HTMLElement;
+      expect(where.textContent).toBe("Give an amount from £1 to £50,000.");
+      expect(where.classList.contains("is-error")).toBe(true);
+      expect(el("invAmount").getAttribute("aria-invalid")).toBe("true");
+    });
+
+    it("shows each invoice's state in words, and warns about one paid twice or after cancelling", async () => {
+      loginToken = tokenFor("admin");
+      list([
+        INV({ id: 1, number: "INV-0001", state: "overdue" }),
+        INV({ id: 2, number: "INV-0002", status: "paid", state: "paid", paidOn: "2026-11-03", paidBy: "card", donationId: 321 }),
+        INV({ id: 3, number: "INV-0003", status: "paid", state: "paid", paidOn: "2026-11-03", paidBy: "transfer", donationId: 322, paidTwiceAt: "2026-11-04T10:00:00Z" }),
+        INV({ id: 4, number: "INV-0004", status: "cancelled", state: "cancelled", cancelledAt: "2026-11-02T10:00:00Z" }),
+        INV({ id: 5, number: "INV-0005", status: "paid", state: "paid-after-cancel", paidOn: "2026-11-03", paidBy: "card", donationId: 323 }),
+      ]);
+      await open();
+      const card = (id: number) => view().querySelector(`[data-inv-id="${id}"]`) as HTMLElement;
+      expect(card(1).textContent).toContain("Overdue");
+      expect(card(2).textContent).toContain("Paid 3 November by card");
+      expect(card(2).textContent).toContain("NBCC-000321");
+      expect(card(2).querySelector("[data-inv-markpaid]")).toBeNull();
+      expect(card(3).textContent).toContain("Paid twice: refund one?");
+      expect(card(4).textContent).toContain("Cancelled");
+      expect(card(4).querySelector("[data-inv-markpaid]")).toBeTruthy();
+      expect(card(4).querySelector("[data-inv-resend]")).toBeNull();
+      expect(card(5).textContent).toContain("Paid after it was cancelled");
+    });
+
+    it("marks an invoice paid on the day the money arrived", async () => {
+      loginToken = tokenFor("admin");
+      list([INV()]);
+      await open();
+      (view().querySelector('[data-inv-markpaid="12"]') as HTMLElement).click();
+      const form = view().querySelector('[data-inv-paid-form="12"]') as HTMLFormElement;
+      expect(form).toBeTruthy();
+      expect(form.textContent).toContain("When did the money arrive?");
+      (form.querySelector("input") as HTMLInputElement).value = "2026-11-04";
+      submit(form);
+      await settle();
+      expect(invCalls).toEqual([{ url: "/api/admin/invoices/12/mark-paid", method: "POST", body: { paidOn: "2026-11-04" } }]);
+    });
+
+    // Final review, Critical 1: a double click on Mark paid sends one request, not two.
+    it("sends Mark paid once, however fast it is pressed twice", async () => {
+      loginToken = tokenFor("admin");
+      list([INV()]);
+      await open();
+      (view().querySelector('[data-inv-markpaid="12"]') as HTMLElement).click();
+      const form = view().querySelector('[data-inv-paid-form="12"]') as HTMLFormElement;
+      submit(form);
+      submit(form);
+      await settle();
+      expect(invCalls.filter((c) => c.url.endsWith("/mark-paid"))).toHaveLength(1);
+    });
+
+    it("asks before cancelling, and cancels only on the second press", async () => {
+      loginToken = tokenFor("admin");
+      list([INV()]);
+      await open();
+      (view().querySelector('[data-inv-cancel="12"]') as HTMLElement).click();
+      expect(view().textContent).toContain("Cancel INV-0012? The link will say it is cancelled and can no longer be paid.");
+      expect(invCalls).toEqual([]);
+      (view().querySelector('[data-inv-cancel-yes="12"]') as HTMLElement).click();
+      await settle();
+      expect(invCalls).toEqual([{ url: "/api/admin/invoices/12/cancel", method: "POST", body: {} }]);
+    });
+
+    it("emails an invoice again", async () => {
+      loginToken = tokenFor("admin");
+      list([INV()]);
+      await open();
+      (view().querySelector('[data-inv-resend="12"]') as HTMLElement).click();
+      await settle();
+      expect(invCalls).toEqual([{ url: "/api/admin/invoices/12/resend", method: "POST", body: {} }]);
+      expect(view().querySelector('[data-inv-status="12"]')?.textContent).toContain("Sent again to sam@example.com");
+    });
+
+    it("filters to waiting, paid or cancelled, with overdue counted as waiting", async () => {
+      loginToken = tokenFor("admin");
+      list([
+        INV({ id: 1, number: "INV-0001", state: "overdue" }),
+        INV({ id: 2, number: "INV-0002", status: "paid", state: "paid", paidOn: "2026-11-03", paidBy: "card" }),
+        INV({ id: 4, number: "INV-0004", status: "cancelled", state: "cancelled" }),
+      ]);
+      await open();
+      const shown = () => [...view().querySelectorAll("[data-inv-id]")].map((c) => c.getAttribute("data-inv-id"));
+      expect(shown()).toEqual(["1", "2", "4"]);
+      (view().querySelector('[data-inv-filter="waiting"]') as HTMLElement).click();
+      expect(shown()).toEqual(["1"]);
+      (view().querySelector('[data-inv-filter="paid"]') as HTMLElement).click();
+      expect(shown()).toEqual(["2"]);
+      (view().querySelector('[data-inv-filter="cancelled"]') as HTMLElement).click();
+      expect(shown()).toEqual(["4"]);
+    });
+
+    it("says how to start when there are none yet", async () => {
+      loginToken = tokenFor("admin");
+      await open();
+      expect(el("invList").textContent).toContain("No invoices yet");
+    });
+
+    it("saves the bank details on invoices", async () => {
+      loginToken = tokenFor("admin");
+      await open();
+      expect(el("invBankState").textContent).toContain("Not set: invoices offer card only");
+      set("invBankName", "Example Account");
+      set("invBankSort", "12-34-56");
+      set("invBankNumber", "12345678");
+      invWriteAnswer = { status: 200, body: { bank: { accountName: "Example Account", sortCode: "12-34-56", accountNumber: "12345678" } } };
+      submit(el("invBankForm"));
+      await settle();
+      expect(invCalls[0]).toEqual({
+        url: "/api/admin/invoices/bank",
+        method: "PUT",
+        body: { accountName: "Example Account", sortCode: "12-34-56", accountNumber: "12345678" },
+      });
+    });
+
+    it("labels a gift that paid an invoice in Donations, and filters to them", async () => {
+      loginToken = tokenFor("admin");
+      invoiceDonations = [
+        { id: 321, donor_id: 5, donor_name: "Sam Example", donor_email: "sam@example.com", mode: "once", plan: null, amount_pence: 25000, currency: "GBP", gift_aid: true, claim_status: "eligible", payment_status: "paid", payment_channel: "online", refunded_amount_pence: 0, created_at: "2026-11-03T10:00:00Z", source: "invoice", invoice_id: 12 },
+      ];
+      await signIn();
+      (document.querySelector('.admin-nav-link[data-view="donations"]') as HTMLElement).click();
+      await settle();
+      expect(el("donationsTable").textContent).toContain("Invoice INV-0012");
+      const urls = (globalThis.fetch as unknown as { mock: { calls: unknown[][] } }).mock.calls.map((c) => String(c[0]));
+      (el("donationsInvoiceFilter") as HTMLInputElement).checked = true;
+      el("donationsInvoiceFilter").dispatchEvent(new Event("change", { bubbles: true }));
+      await settle();
+      const after = (globalThis.fetch as unknown as { mock: { calls: unknown[][] } }).mock.calls.map((c) => String(c[0])).slice(urls.length);
+      expect(after.some((u) => u.includes("/api/admin/donations?") && u.includes("&source=invoice"))).toBe(true);
     });
   });
 });

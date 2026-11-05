@@ -131,7 +131,7 @@ Then("the Donate page has gone up by £{int} from {int} gift(s), this month and 
 
 Then("the totals say when Fill a Red Bag gifts are counted from", function () {
   // The Festive Ball's donate page (14 October 2026) added its own line and a sentence to the note;
-  // red bags at the Ball (TASK-584) added another of each.
+  // red bags at the Ball (TASK-584) added another of each; invoices for donations added a line.
   assert.equal(
     this.rbBody.note,
     "Fill a Red Bag gifts are counted from 5 October 2026. Festive Ball gifts are those made on the Ball's own donate page. Red bags at the Ball are gifts from the table cards at the Festive Ball.",
@@ -140,6 +140,7 @@ Then("the totals say when Fill a Red Bag gifts are counted from", function () {
     "Fill a Red Bag",
     "Festive Ball",
     "Red bags at the Ball",
+    "Invoices",
     "Donate page",
   ]);
 });

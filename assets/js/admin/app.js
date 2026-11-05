@@ -636,6 +636,7 @@
     else if (name === "elf") { if (window.AdminElfHq) window.AdminElfHq.open(); }
     else if (name === "site") loadSite();
     else if (name === "qr") loadQr();
+    else if (name === "invoices") loadInvoices();
     else if (name === "team") loadTeam();
     else if (name === "account") loadAccount();
   }
@@ -1046,6 +1047,8 @@
         if (d.source === "ball") gift += ' <span class="admin-pill dn-source-pill">Festive Ball</span>';
         // And one from the red bag cards on the Ball's tables (/bag): its own label, not the Ball's.
         if (d.source === "ball_bags") gift += ' <span class="admin-pill dn-source-pill">Red bags at the Ball</span>';
+        // And one that paid an invoice sent from Admin > Giving > Invoices, with its number.
+        if (d.source === "invoice") gift += ' <span class="admin-pill dn-source-pill">Invoice' + (d.invoice_id ? " " + H.escapeHtml(invNumber(d.invoice_id)) : "") + "</span>";
         // TASK-241: one Payment pill combining payment_status + any refund (see helpers.paymentLabel).
         var pay = H.paymentLabel(d);
         return (
@@ -1286,13 +1289,17 @@
     // Red bags at the Ball only (the table cards), the same again.
     var ballBagsFilter = el("donationsBallBagsFilter");
     var ballBags = !redBag && !ball && !!(ballBagsFilter && ballBagsFilter.checked);
+    // Invoices only (gifts that paid an invoice), the same again.
+    var invoiceFilter = el("donationsInvoiceFilter");
+    var invoice = !redBag && !ball && !ballBags && !!(invoiceFilter && invoiceFilter.checked);
     authFetch(
       "/api/admin/donations?limit=25&offset=" + donationsOffset +
         (pay ? "&paymentStatus=" + encodeURIComponent(pay) : "") +
         (mode ? "&mode=" + encodeURIComponent(mode) : "") +
         (redBag ? "&source=red_bag" : "") +
         (ball ? "&source=ball" : "") +
-        (ballBags ? "&source=ball_bags" : ""),
+        (ballBags ? "&source=ball_bags" : "") +
+        (invoice ? "&source=invoice" : ""),
     )
       .then(okJson)
       .then(function (d) {
@@ -1304,7 +1311,9 @@
               ? pay || mode ? "No Festive Ball gifts match these filters." : "No Festive Ball gifts yet."
               : ballBags
                 ? pay || mode ? "No red bag gifts at the Ball match these filters." : "No red bag gifts at the Ball yet."
-                : "",
+                : invoice
+                  ? pay || mode ? "No paid invoices match these filters." : "No invoices have been paid yet."
+                  : "",
         });
         var total = d.total || 0;
         el("donationsPager").hidden = total <= 25;
@@ -1361,19 +1370,19 @@
   function oneSourceFilter(id) {
     var self = el(id);
     if (!self || !self.checked) return;
-    ["donationsRedBagFilter", "donationsBallFilter", "donationsBallBagsFilter"].forEach(function (otherId) {
+    ["donationsRedBagFilter", "donationsBallFilter", "donationsBallBagsFilter", "donationsInvoiceFilter"].forEach(function (otherId) {
       var other = el(otherId);
       if (otherId !== id && other) other.checked = false;
     });
   }
-  ["donationsRedBagFilter", "donationsBallFilter", "donationsBallBagsFilter"].forEach(function (id) {
+  ["donationsRedBagFilter", "donationsBallFilter", "donationsBallBagsFilter", "donationsInvoiceFilter"].forEach(function (id) {
     var control = el(id);
     if (control)
       control.addEventListener("change", function () {
         oneSourceFilter(id);
       });
   });
-  ["donationsPaymentFilter", "donationsModeFilter", "donationsRedBagFilter", "donationsBallFilter", "donationsBallBagsFilter"].forEach(function (id) {
+  ["donationsPaymentFilter", "donationsModeFilter", "donationsRedBagFilter", "donationsBallFilter", "donationsBallBagsFilter", "donationsInvoiceFilter"].forEach(function (id) {
     var control = el(id);
     if (control)
       control.addEventListener("change", function () {
@@ -3357,6 +3366,7 @@
     // Sponsor pledges: the pay link and its one reminder, to a sponsor.
     ["fundraisePledgeConfirm", "Sponsor pledge: please confirm"], ["fundraisePledgePay", "Sponsor pledge: link to pay"],
     ["fundraisePledgeReminder", "Sponsor pledge: reminder"], ["fundraisePledgeStaff", "Sponsor pledge: note to events@"],
+    ["invoice", "Invoice"], ["invoiceReceipt", "Invoice paid: group receipt"], ["invoiceStaff", "Invoice paid twice: note to giving@"],
   ];
   function emailKindLabel(kind) {
     for (var i = 0; i < EMAIL_KINDS.length; i++) if (EMAIL_KINDS[i][0] === kind) return EMAIL_KINDS[i][1];
@@ -4164,6 +4174,415 @@
       .catch(function () {
         el("qrList").innerHTML = unavailableHtml("The QR codes could not load.");
       });
+  }
+
+  // ---- Invoices for donations (docs/superpowers/specs/2026-11-05-donation-invoices-design.md) ----
+  // Admin > Giving > Invoices. Anyone who can view Donations sees the list; sending, Email it again,
+  // Mark paid, Cancel and the bank details are for Donations edit only (the server checks too). No
+  // modals: Mark paid and Cancel each open a short confirm inside their card.
+
+  var invState = { invoices: [], bank: null, today: "", filter: "all" };
+  var invWired = false;
+  // An invoice with a change on its way: a second press waits for the first, so a double click on Mark paid
+  // or Email it again sends one request (the server refuses a second Mark paid too).
+  var invBusy = {};
+  var INV_FIELDS = {
+    orgName: "invOrgName",
+    contactName: "invContactName",
+    email: "invEmail",
+    address: "invAddress",
+    postcode: "invPostcode",
+    amount: "invAmount",
+    description: "invDescription",
+    note: "invNote",
+    dueOn: "invDueOn",
+  };
+  var INV_STATES = {
+    waiting: "Waiting",
+    overdue: "Overdue",
+    paid: "Paid",
+    cancelled: "Cancelled",
+    "paid-after-cancel": "Paid",
+  };
+
+  function invNumber(id) {
+    return "INV-" + String(id).padStart(4, "0");
+  }
+
+  // £320.50, £500, £1,000: pence only when the amount is not whole, as the emails write it.
+  function invMoney(pence) {
+    var whole = pence % 100 === 0;
+    return "£" + (pence / 100).toLocaleString("en-GB", { minimumFractionDigits: whole ? 0 : 2, maximumFractionDigits: 2 });
+  }
+
+  function invAddDays(day, n) {
+    return new Date(Date.parse(day + "T12:00:00Z") + n * 86400000).toISOString().slice(0, 10);
+  }
+
+  // Like okJsonOrSaid, keeping the field the server named, so its words go beside that field.
+  function invOkOrSaid(res) {
+    if (res.ok || res.status >= 500) return okJson(res);
+    return res.json().then(
+      function (b) {
+        var err = new Error("status " + res.status);
+        err.status = res.status;
+        err.said = b && typeof b.error === "string" ? b.error : "";
+        err.field = b && typeof b.field === "string" ? b.field : "";
+        throw err;
+      },
+      function () { return okJson(res); },
+    );
+  }
+
+  function invPost(path, body, method) {
+    return authFetch(path, {
+      method: method || "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body || {}),
+    }).then(invOkOrSaid);
+  }
+
+  function invKind() {
+    var on = document.querySelector('#view-invoices input[name="invKind"]:checked');
+    return on ? on.value : "person";
+  }
+
+  // Who it is for decides what is asked: a business or group's name, and the something in return
+  // question for a business only (the same one the Donate page asks businesses).
+  function invShowKind() {
+    var kind = invKind();
+    var view = el("view-invoices");
+    var org = view.querySelector("[data-inv-org]");
+    org.hidden = kind === "person";
+    view.querySelector("[data-inv-org-label]").textContent = kind === "group" ? "Group name" : "Business name";
+    view.querySelector("[data-inv-consideration]").hidden = kind !== "business";
+    view.querySelector("[data-inv-name-label]").textContent = kind === "person" ? "Their name" : "Who it is for the attention of";
+    view.querySelector("[data-inv-address-hint]").textContent =
+      kind === "person" ? "Optional for a person." : "Needed: their accounts team will expect it on the invoice.";
+  }
+
+  function invClearErrors() {
+    var view = el("view-invoices");
+    view.querySelectorAll("[data-inv-error]").forEach(function (p) { qrSay(p, "", false); });
+    view.querySelectorAll("#invNewForm [aria-invalid]").forEach(function (i) { i.removeAttribute("aria-invalid"); });
+  }
+
+  function invSayField(field, msg) {
+    var where = document.querySelector('#view-invoices [data-inv-error="' + field + '"]');
+    if (!where) return false;
+    qrSay(where, msg, true);
+    var input = INV_FIELDS[field] ? el(INV_FIELDS[field]) : null;
+    if (input) {
+      input.setAttribute("aria-invalid", "true");
+      input.focus();
+    }
+    return true;
+  }
+
+  function invResetForm() {
+    var form = el("invNewForm");
+    ["invOrgName", "invContactName", "invEmail", "invAddress", "invPostcode", "invAmount", "invNote"].forEach(function (id) {
+      el(id).value = "";
+    });
+    el("invDescription").value = "Donation to NBCC";
+    el("invDueOn").value = invAddDays(qrUkDay(new Date()), 30);
+    form.querySelectorAll('input[name="invConsideration"]').forEach(function (r) { r.checked = false; });
+    form.querySelector('input[name="invKind"][value="person"]').checked = true;
+    invShowKind();
+  }
+
+  function invSend() {
+    var status = el("invNewStatus");
+    var kind = invKind();
+    invClearErrors();
+    var body = {
+      payerKind: kind,
+      contactName: el("invContactName").value,
+      email: el("invEmail").value,
+      address: el("invAddress").value,
+      postcode: el("invPostcode").value,
+      amount: el("invAmount").value,
+      description: el("invDescription").value,
+      note: el("invNote").value,
+      dueOn: el("invDueOn").value,
+    };
+    if (kind !== "person") body.orgName = el("invOrgName").value;
+    if (kind === "business") {
+      var c = document.querySelector('#view-invoices input[name="invConsideration"]:checked');
+      if (c) body.considerationGiven = c.value === "yes";
+    }
+    var btn = el("invNewBtn");
+    btn.disabled = true;
+    qrSay(status, "Sending…", false);
+    return invPost("/api/admin/invoices", body)
+      .then(function (d) {
+        if (d.sent) qrSay(status, d.number + " is on its way to " + body.email.trim() + ".", false, true);
+        else qrSay(status, d.number + " is saved, but the email did not go. Press Email it again on its card.", true);
+        invResetForm();
+        return loadInvoiceList();
+      })
+      .catch(function (err) {
+        if (err && err.message === "unauthorized") return;
+        var said = (err && err.said) || "That invoice could not be sent. Please try again.";
+        if (err && err.field && invSayField(err.field, said)) qrSay(status, "Check the box marked above.", true);
+        else qrSay(status, said, true);
+      })
+      .then(function () { btn.disabled = false; });
+  }
+
+  function invCard(inv) {
+    var esc = H.escapeHtml;
+    var today = invState.today;
+    var number = inv.number || invNumber(inv.id);
+    var state = inv.state || "waiting";
+    var edit = canEdit("donations");
+    var who = inv.orgName || inv.contactName;
+    var paid = state === "paid" || state === "paid-after-cancel";
+    var lines = [];
+    if (paid) {
+      lines.push(
+        "Paid " + esc(qrDay(inv.paidOn, today)) + (inv.paidBy === "card" ? " by card" : " by bank transfer") +
+          (inv.donationId ? " &middot; in Donations as NBCC-" + String(inv.donationId).padStart(6, "0") : ""),
+      );
+    } else {
+      lines.push("Sent " + esc(qrDay(inv.issuedOn, today)) + " &middot; " + (state === "cancelled" ? "was due " : "due ") + esc(qrDay(inv.dueOn, today)));
+    }
+    var warn = "";
+    if (inv.paidTwiceAt) warn += '<p class="inv-warn">Paid twice: refund one? Both payments are in Donations.</p>';
+    if (state === "paid-after-cancel") warn += '<p class="inv-warn">Paid after it was cancelled. Refund it if it should not have been paid.</p>';
+    var quiet = [];
+    if (edit && (state === "waiting" || state === "overdue")) {
+      quiet.push('<button type="button" class="inv-quiet" data-inv-resend="' + inv.id + '">Email it again</button>');
+    }
+    if (edit && state !== "paid" && state !== "paid-after-cancel") {
+      quiet.push('<button type="button" class="inv-quiet" data-inv-markpaid="' + inv.id + '">Mark paid</button>');
+    }
+    if (edit && (state === "waiting" || state === "overdue")) {
+      quiet.push('<button type="button" class="inv-quiet" data-inv-cancel="' + inv.id + '">Cancel</button>');
+    }
+    return (
+      '<article class="inv-card is-' + esc(state) + '" data-inv-id="' + inv.id + '">' +
+      '<div class="inv-card-top"><span class="inv-num">' + esc(number) + "</span>" +
+      '<span class="inv-pill inv-pill--' + esc(state) + '">' + esc(INV_STATES[state] || state) + "</span></div>" +
+      '<h4 class="inv-who">' + esc(who) + "</h4>" +
+      (inv.orgName ? '<p class="inv-sub">For the attention of ' + esc(inv.contactName) + "</p>" : "") +
+      '<p class="inv-amount"><b>' + esc(invMoney(inv.amountPence)) + "</b> " + esc(inv.description) + "</p>" +
+      '<p class="inv-dates">' + lines.join("") + "</p>" +
+      warn +
+      '<p class="inv-actions">' +
+      '<a class="admin-btn admin-btn--small" data-inv-open href="' + esc(inv.link) + '" target="_blank" rel="noopener">Open the invoice</a>' +
+      '<button type="button" class="admin-btn admin-btn--small" data-inv-copy="' + inv.id + '">Copy link</button>' +
+      "</p>" +
+      (quiet.length ? '<p class="inv-quiet-row">' + quiet.join("") + "</p>" : "") +
+      '<div data-inv-confirm="' + inv.id + '"></div>' +
+      '<p class="ty-status" data-inv-status="' + inv.id + '" role="status" aria-live="polite"></p>' +
+      "</article>"
+    );
+  }
+
+  function invShown(inv) {
+    var f = invState.filter;
+    var s = inv.state || "waiting";
+    if (f === "waiting") return s === "waiting" || s === "overdue";
+    if (f === "paid") return s === "paid" || s === "paid-after-cancel";
+    if (f === "cancelled") return s === "cancelled";
+    return true;
+  }
+
+  function drawInvoices() {
+    var all = invState.invoices;
+    var shown = all.filter(invShown);
+    var empty = all.length === 0
+      ? canEdit("donations")
+        ? "No invoices yet. Send your first one above: choose who it is for, the amount and the due date."
+        : "No invoices yet."
+      : "None here. Choose All to see every invoice.";
+    el("invList").innerHTML = shown.length ? shown.map(invCard).join("") : '<p class="admin-empty">' + H.escapeHtml(empty) + "</p>";
+  }
+
+  function invCardSay(id, msg, isError, isOk) {
+    qrSay(document.querySelector('#view-invoices [data-inv-status="' + id + '"]'), msg, isError, isOk);
+  }
+
+  // Do something to one invoice, then draw the list again and say how it went on that card.
+  function invAct(id, path, body, done) {
+    if (invBusy[id]) return;
+    invBusy[id] = true;
+    invCardSay(id, "Saving…", false);
+    return invPost(path, body)
+      .then(function (d) {
+        return loadInvoiceList().then(function () { invCardSay(id, done(d), false, true); });
+      })
+      .catch(function (err) {
+        if (err && err.message === "unauthorized") return;
+        invCardSay(id, (err && err.said) || "That could not be saved. Please try again.", true);
+      })
+      .then(function () { delete invBusy[id]; });
+  }
+
+  function invById(id) {
+    for (var i = 0; i < invState.invoices.length; i++) if (invState.invoices[i].id === id) return invState.invoices[i];
+    return null;
+  }
+
+  function invConfirm(id, html) {
+    var box = document.querySelector('#view-invoices [data-inv-confirm="' + id + '"]');
+    if (box) box.innerHTML = html;
+    var first = box && box.querySelector("input, button");
+    if (first) first.focus();
+  }
+
+  function wireInvoices() {
+    if (invWired) return;
+    invWired = true;
+    var view = el("view-invoices");
+    view.addEventListener("change", function (e) {
+      if (e.target && e.target.name === "invKind") invShowKind();
+    });
+    view.addEventListener("click", function (e) {
+      var t = e.target && e.target.closest ? e.target : null;
+      if (!t) return;
+      var f = t.closest("[data-inv-filter]");
+      if (f) {
+        invState.filter = f.getAttribute("data-inv-filter");
+        view.querySelectorAll("[data-inv-filter]").forEach(function (b) {
+          var on = b === f;
+          b.classList.toggle("is-active", on);
+          b.setAttribute("aria-pressed", on ? "true" : "false");
+        });
+        return drawInvoices();
+      }
+      var copy = t.closest("[data-inv-copy]");
+      if (copy) {
+        var cid = Number(copy.getAttribute("data-inv-copy"));
+        var inv = invById(cid);
+        if (!inv) return;
+        var said = function () { invCardSay(cid, "Copy this link: " + inv.link, false); };
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(inv.link).then(function () { invCardSay(cid, "Link copied.", false, true); }, said);
+        } else said();
+        return;
+      }
+      var resend = t.closest("[data-inv-resend]");
+      if (resend) {
+        var rid = Number(resend.getAttribute("data-inv-resend"));
+        var rinv = invById(rid);
+        if (invBusy[rid]) return;
+        invBusy[rid] = true;
+        invCardSay(rid, "Sending…", false);
+        return invPost("/api/admin/invoices/" + rid + "/resend", {})
+          .then(function () { invCardSay(rid, "Sent again to " + (rinv ? rinv.email : "them") + ".", false, true); })
+          .catch(function (err) {
+            if (err && err.message === "unauthorized") return;
+            invCardSay(rid, (err && err.said) || "The email did not go. Please try again.", true);
+          })
+          .then(function () { delete invBusy[rid]; });
+      }
+      var mark = t.closest("[data-inv-markpaid]");
+      if (mark) {
+        var mid = Number(mark.getAttribute("data-inv-markpaid"));
+        var day = qrUkDay(new Date());
+        return invConfirm(
+          mid,
+          '<form class="inv-confirm" data-inv-paid-form="' + mid + '">' +
+            '<label class="inv-field">When did the money arrive?<input type="date" max="' + day + '" value="' + day + '" /></label>' +
+            '<p class="inv-actions"><button type="submit" class="btn btn-primary">Mark paid</button>' +
+            '<button type="button" class="inv-quiet" data-inv-confirm-close="' + mid + '">Not yet</button></p></form>',
+        );
+      }
+      var cancel = t.closest("[data-inv-cancel]");
+      if (cancel) {
+        var xid = Number(cancel.getAttribute("data-inv-cancel"));
+        return invConfirm(
+          xid,
+          '<div class="inv-confirm"><p>Cancel ' + H.escapeHtml(invNumber(xid)) + "? The link will say it is cancelled and can no longer be paid.</p>" +
+            '<p class="inv-actions"><button type="button" class="btn btn-primary" data-inv-cancel-yes="' + xid + '">Cancel the invoice</button>' +
+            '<button type="button" class="inv-quiet" data-inv-confirm-close="' + xid + '">Keep it</button></p></div>',
+        );
+      }
+      var yes = t.closest("[data-inv-cancel-yes]");
+      if (yes) {
+        var yid = Number(yes.getAttribute("data-inv-cancel-yes"));
+        return invAct(yid, "/api/admin/invoices/" + yid + "/cancel", {}, function () { return "Cancelled. Its link now says so."; });
+      }
+      var close = t.closest("[data-inv-confirm-close]");
+      if (close) invConfirm(Number(close.getAttribute("data-inv-confirm-close")), "");
+    });
+    view.addEventListener("submit", function (e) {
+      var form = e.target;
+      if (!form || !form.getAttribute) return;
+      if (form.id === "invNewForm") {
+        e.preventDefault();
+        return invSend();
+      }
+      if (form.id === "invBankForm") {
+        e.preventDefault();
+        return invSaveBank({ accountName: el("invBankName").value, sortCode: el("invBankSort").value, accountNumber: el("invBankNumber").value });
+      }
+      var paidId = form.getAttribute("data-inv-paid-form");
+      if (paidId) {
+        e.preventDefault();
+        var pid = Number(paidId);
+        var paidOn = form.querySelector("input").value;
+        return invAct(pid, "/api/admin/invoices/" + pid + "/mark-paid", { paidOn: paidOn }, function (d) {
+          return d && d.outcome === "paid-after-cancel"
+            ? "Marked paid. It is in Donations, and shows it was paid after cancelling."
+            : "Marked paid. It is now in Donations, and the receipt is on its way.";
+        });
+      }
+    });
+    el("invBankClear").addEventListener("click", function () { invSaveBank({ clear: true }); });
+  }
+
+  function invDrawBank() {
+    var b = invState.bank;
+    el("invBankState").textContent = b
+      ? "Set: " + b.accountName + ", sort code " + b.sortCode
+      : "Not set: invoices offer card only";
+    el("invBankName").value = b ? b.accountName : "";
+    el("invBankSort").value = b ? b.sortCode : "";
+    el("invBankNumber").value = b ? b.accountNumber : "";
+  }
+
+  function invSaveBank(body) {
+    var status = el("invBankStatus");
+    qrSay(status, "Saving…", false);
+    return invPost("/api/admin/invoices/bank", body, "PUT")
+      .then(function (d) {
+        invState.bank = d && d.bank ? d.bank : null;
+        invDrawBank();
+        qrSay(status, invState.bank ? "Saved. Invoices now show these bank details." : "Removed. Invoices now offer card only.", false, true);
+      })
+      .catch(function (err) {
+        if (err && err.message === "unauthorized") return;
+        qrSay(status, (err && err.said) || "The bank details could not be saved. Please try again.", true);
+      });
+  }
+
+  function loadInvoiceList() {
+    return authFetch("/api/admin/invoices")
+      .then(okJson)
+      .then(function (d) {
+        invState.invoices = d.invoices || [];
+        invState.bank = d.bank || null;
+        invState.today = d.today || qrUkDay(new Date());
+        drawInvoices();
+        invDrawBank();
+      })
+      .catch(function (err) {
+        if (err && err.message === "unauthorized") return;
+        el("invList").innerHTML = unavailableHtml("The invoices could not load.");
+      });
+  }
+
+  function loadInvoices() {
+    wireInvoices();
+    var edit = canEdit("donations");
+    el("invNewForm").hidden = !edit;
+    el("invBank").hidden = !edit;
+    if (!el("invDueOn").value) el("invDueOn").value = invAddDays(qrUkDay(new Date()), 30);
+    invShowKind();
+    return loadInvoiceList();
   }
 
   function loadSite() {

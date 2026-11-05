@@ -66,9 +66,10 @@ describe("knowing how many tables to expect", () => {
   // have removed from the Email audit's red band; 91 since the Festive Ball chase added which
   // reminders and chase lists have gone, per address and day; 93 since TASK-588 added the named QR codes
   // and their scans per day; 99 since Elf Detective School added its settings, families, detectives,
-  // orders, sign in codes and sessions.
-  it("counts 99 across the three databases", () => {
-    expect(expectedTableCount(ROOT)).toBe(99);
+  // orders, sign in codes and sessions; 101 since invoices for donations added the invoices and
+  // the bank details printed on them.
+  it("counts 101 across the three databases", () => {
+    expect(expectedTableCount(ROOT)).toBe(101);
   });
 
   it("finds the three tables that live outside the main database", () => {
@@ -167,7 +168,11 @@ describe("knowing how many tables to expect", () => {
     expect(main).toContain("elf_families");
     expect(main).toContain("elf_detectives");
     expect(main).toContain("elf_orders");
-    expect(main.length).toBe(96);
+    // Invoices for donations: the invoices, which hold names, addresses and Gift Aid details while they
+    // wait, and the bank details printed on them.
+    expect(main).toContain("donation_invoices");
+    expect(main).toContain("donation_invoice_settings");
+    expect(main.length).toBe(98);
   });
 
   it("returns nothing for a directory that does not exist, rather than throwing", () => {

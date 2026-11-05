@@ -148,12 +148,13 @@ describe("saving somebody's access on Team > Manage access", () => {
 describe("the menu and its New pill", () => {
   const html = readFileSync(resolve(ROOT, "admin.html"), "utf8");
 
-  it("is under Giving, straight after Donations", () => {
+  it("is under Giving, straight after Donations and its Invoices", () => {
     // The Giving group, as the banner groups the menu (October 2026).
     const giving = html.slice(html.indexOf('data-nav-group="giving"'), html.indexOf('data-nav-group="content"'));
     expect(giving.length).toBeGreaterThan(0);
     const views = [...giving.matchAll(/data-view="([^"]+)"/g)].map((m) => m[1]);
-    expect(views.slice(0, 2)).toEqual(["donations", "red-bag"]);
+    // Invoices for donations sits right under Donations, the screen it sends gifts into.
+    expect(views.slice(0, 3)).toEqual(["donations", "invoices", "red-bag"]);
   });
 
   it("is gated on its own section, so it shows only to people who have it", () => {

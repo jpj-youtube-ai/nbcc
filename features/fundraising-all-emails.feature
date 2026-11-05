@@ -10,11 +10,11 @@ Feature: All emails, in Admin > Fundraising
     When someone who is not signed in asks for the All emails list
     Then the fundraising answer is 401
 
-  Scenario: a viewer reads the whole list, in its eleven groups
+  Scenario: a viewer reads the whole list, in its twelve groups
     Given a fundraising staff member "v1.allemails.fr.bdd@example.com" with role "viewer"
     When "v1.allemails.fr.bdd@example.com" reads the All emails list
     Then the fundraising answer is 200
-    And the All emails list has its eleven groups in order
+    And the All emails list has its twelve groups in order
     And the All emails list has as many emails as it says, each with a name, a subject and who gets it
     And the All emails list carries no email itself
     When "v1.allemails.fr.bdd@example.com" reads the All emails count

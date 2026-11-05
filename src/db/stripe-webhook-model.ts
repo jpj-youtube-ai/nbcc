@@ -34,7 +34,7 @@ export function giftAidFromMetadata(metadata: Stripe.Metadata | null | undefined
 // ordinary one (the Donate page and every other route), or one recorded before sources were kept.
 // src/db/overview-numbers.ts picks each one out by its value, so the order here carries no meaning.
 // ball_bags is red bags at the Festive Ball (/bag), a line of its own, never added into the Ball's.
-export const DONATION_SOURCES = ["red_bag", "ball", "ball_bags"] as const;
+export const DONATION_SOURCES = ["red_bag", "ball", "ball_bags", "invoice"] as const;
 export type DonationSource = (typeof DONATION_SOURCES)[number];
 
 // A red bags mark as the checkout stamps it: the number of bags, 1 to 20, written the way String()

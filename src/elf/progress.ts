@@ -5,8 +5,9 @@ import { DOOR_COUNT, isDoor } from "./calendar";
 //
 // The hiding places are spread across the whole area, so only very keen families will visit all 24.
 // A door therefore counts when it is cracked OR visited, and promotions come along the way, so every
-// child has something to aim for. Two finishes: Graduate for all 24 doors done either way, and the
-// gold seal for visiting all 24 places, which is what leads to the grand prize.
+// child has something to aim for. Two finishes: Graduate for all 24 doors done either way, which is
+// what leads to the grand prize (Jaimie, 5 November 2026: a family need not visit every place), and
+// the gold seal for visiting all 24 places, an honour on the certificate.
 //
 // Pure: no pool, no config, no clock. Unit tested in test/unit/elf-progress.test.ts.
 

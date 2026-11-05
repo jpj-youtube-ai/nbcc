@@ -68,7 +68,8 @@ export function renderRulesPage(view: { settings: ElfSettings }): string {
     "elf-rules-prize",
     "The grand prize",
     "holly",
-    `<p>Every detective who visits all 24 places can send in a drawing or a photo of their naughtiest elf at home. The grand prize is judged by Jodie, Head Elf, taking age into account. It is never drawn at random. We phone the winner's grown up on Christmas Eve and deliver the prize on Christmas Day.</p>`,
+    `<p>Every detective who does all 24 doors can send in a drawing or a photo of their naughtiest elf at home. A door is done when you crack its case with a right guess, or when you visit its hiding place and collect the candy cane stamp, so you do not have to visit every place. Joined late? Visit the places from before you joined to do their doors.</p>
+     <p>The grand prize is judged by Jodie, Head Elf, taking age into account. It is never drawn at random. We phone the winner's grown up on Christmas Eve and deliver the prize on Christmas Day.</p>`,
   )}
   ${section(
     "elf-rules-contact",

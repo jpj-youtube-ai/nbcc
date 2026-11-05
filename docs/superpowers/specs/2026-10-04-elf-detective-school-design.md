@@ -53,8 +53,10 @@ the grand prize, delivered on Christmas Day. The deadline is the Night Before Ch
 8. **Ranks and finishes:** a door is done when it is cracked or visited. Trainee at sign-up, Junior
    Detective at 6 doors, Detective at 12, Senior Detective at 18. **Graduate** = all 24 doors done:
    a certificate and a link to the police officer's video. **Gold seal** = all 24 places visited:
-   a place in the grand prize judging.
-9. **Grand prize:** judged, never drawn at random. Gold seal detectives send a photo of their
+   a place in the grand prize judging. (Changed by Jaimie, 5 November 2026: every Graduate has a
+   place in the grand prize judging, so nobody has to visit every place; the gold seal stays as an
+   honour on the certificate. See docs/superpowers/specs/2026-11-04-elf-paper-design.md, decision 15.)
+9. **Grand prize:** judged, never drawn at random. Gold seal detectives (since 5 November 2026: Graduates) send a photo of their
    naughtiest elf at home, or a drawing. A judge NBCC chooses picks the winner on Christmas Eve,
    taking age into account. NBCC phones the grown-up and delivers on Christmas Day. (A paid entry
    plus a random draw is a lottery, and under-16s may not take part in a society lottery; a prize

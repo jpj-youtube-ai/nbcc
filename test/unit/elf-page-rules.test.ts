@@ -10,6 +10,24 @@ import { ELF_DEFAULTS } from "../../src/elf/settings";
 const doc = new DOMParser().parseFromString(renderRulesPage({ settings: { ...ELF_DEFAULTS, schoolOn: true } }), "text/html");
 const words = (doc.querySelector("main")?.textContent ?? "").replace(/\s+/g, " ");
 
+// Jaimie, on the paper pictures (5 November 2026): entering the grand prize must not need a visit to
+// every place; every door done is enough, each one cracked with a right guess or visited.
+describe("the grand prize, as Jaimie set it on 5 November 2026", () => {
+  const prize = (doc.querySelector('[aria-labelledby="elf-rules-prize"]')?.textContent ?? "").replace(/\s+/g, " ");
+
+  it("is for every detective who does all 24 doors, each one cracked or visited", () => {
+    expect(prize).toContain("Every detective who does all 24 doors");
+    expect(prize).toContain("crack its case with a right guess");
+    expect(prize).toContain("visit its hiding place");
+    expect(prize).toContain("you do not have to visit every place");
+    expect(prize).not.toContain("visits all 24 places");
+  });
+
+  it("tells a family who joined late how to catch up", () => {
+    expect(prize).toContain("Joined late? Visit the places from before you joined to do their doors.");
+  });
+});
+
 describe("the rules page", () => {
   it("says the main prize is judged, never drawn at random", () => {
     expect(words).toContain("judged");

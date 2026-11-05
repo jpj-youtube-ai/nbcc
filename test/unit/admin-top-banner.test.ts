@@ -39,6 +39,7 @@ const BEFORE: ReadonlyArray<readonly [string, string, string]> = [
   ["ticker", "", "Partners"],
   ["get-involved", "any:events fundraising", "Get involved"],
   ["ball", "", "Festive Ball"],
+  ["elf", "", "Elf Detective School"],
   ["contact", "", "Contact form"],
   ["newsletter", "", "Newsletter"],
   ["thank-you", "", "Thank you"],
@@ -53,7 +54,7 @@ const BEFORE: ReadonlyArray<readonly [string, string, string]> = [
 const GROUPS: ReadonlyArray<readonly [string, string, string, readonly string[]]> = [
   ["monitor", "Monitor", "adminNavMonitor", ["overview", "search"]],
   ["giving", "Giving", "adminNavGiving", ["donations", "red-bag", "claims", "gasds", "subscriptions", "fulfilments", "monthly"]],
-  ["content", "Content", "adminNavContent", ["stories", "ticker", "get-involved", "ball", "contact", "newsletter", "thank-you", "outreach"]],
+  ["content", "Content", "adminNavContent", ["stories", "ticker", "get-involved", "ball", "elf", "contact", "newsletter", "thank-you", "outreach"]],
   ["governance", "Governance", "adminNavGovernance", ["audit", "email-audit"]],
   ["admin", "Admin", "adminNavAdmin", ["analytics", "site", "qr", "team"]],
 ];

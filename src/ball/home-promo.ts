@@ -15,6 +15,8 @@ import { addBallNavLink } from "./nav-link";
 
 export interface HomePromoInput {
   gateOpen: boolean;
+  /** Ticket sales have closed (Jaimie, 5 November 2026): the band still tells people about the night. */
+  salesClosed?: boolean;
 }
 
 // Styles ride along inline rather than joining assets/css/styles.css: donate.html sits about
@@ -131,12 +133,15 @@ export function renderHomePromo(template: string, input: HomePromoInput): string
   html = addBallNavLink(html);
 
   html = html.replace("</head>", PROMO_STYLES + "\n  </head>");
-  html = html.replace(MAIN_ANCHOR, MAIN_ANCHOR + "\n" + BANNER);
+  const closed = input.salesClosed === true;
+  const banner = closed ? BANNER.replace("<em>Tickets now on sale &rarr;</em>", "<em>Ticket sales have now closed</em>") : BANNER;
+  html = html.replace(MAIN_ANCHOR, MAIN_ANCHOR + "\n" + banner);
 
   // Below the hero, not instead of it: the hero is doing a different job, and replacing its
   // call to action would trade donations for ticket clicks.
   const indented = "      " + AFTER_HERO_ANCHOR;
-  html = html.replace(indented, FEATURE + indented);
+  const feature = closed ? FEATURE.replace('            <a class="btn" href="/ball">Book tickets</a>\n', "") : FEATURE;
+  html = html.replace(indented, feature + indented);
 
   return html;
 }

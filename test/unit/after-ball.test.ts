@@ -52,6 +52,8 @@ vi.mock("../../src/db/ball", async (original) => {
       return { gateOpen: state.gateOpen, gateOpensAt: null };
     },
     getPreviewPasswordHash: async () => null,
+    // A read: are ticket sales closed (5 November 2026)? Not in these tests.
+    ticketSalesClosed: async () => false,
     getBookingByGuestToken: async () => null,
     getBookingBySessionId: async () => null,
   };

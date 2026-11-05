@@ -147,6 +147,13 @@ describe("HQ in the admin", () => {
     expect((res.body as { canSwitch: boolean }).canSwitch).toBe(false);
   });
 
+  it("tells the screen whether this person may change families, from their access as it is now", async () => {
+    const canEdit = async (role: string, permissions: object) => ((await run(getAdminElfHq, req(role, {}, permissions))).body as { canEdit: boolean }).canEdit;
+    expect(await canEdit("admin", {})).toBe(true);
+    expect(await canEdit("viewer", { elf: "edit" })).toBe(true);
+    expect(await canEdit("viewer", HEAD_ELF)).toBe(false);
+  });
+
   it("is not for an editor", async () => {
     expect((await run(getAdminElfHq, req("editor"))).statusCode).toBe(403);
   });
@@ -321,11 +328,21 @@ describe("a head elf changing a family", () => {
 
   it("sends a sign in code to the family's own email, and notes who asked", async () => {
     dbAdmin.elfFamilySheet.mockResolvedValue(SHEET_ROW);
+    signIn.sendSignInCodeTo.mockResolvedValueOnce(true);
     const res = await run(postAdminElfSignInCode, ask("viewer", { permissions: { elf: "edit" }, params: { id: "3" } }));
     expect(res.statusCode).toBe(200);
     expect(res.body).toEqual({ sent: true, email: "sam@example.org" });
     expect(signIn.sendSignInCodeTo).toHaveBeenCalledWith("sam@example.org");
     expect(dbAdmin.noteSignInCodeSent).toHaveBeenCalledWith(3, "admin:staff@example.org");
+  });
+
+  it("says so when the code could not be sent, and notes nothing", async () => {
+    dbAdmin.elfFamilySheet.mockResolvedValue(SHEET_ROW);
+    signIn.sendSignInCodeTo.mockResolvedValueOnce(false);
+    const res = await run(postAdminElfSignInCode, ask("admin", { params: { id: "3" } }));
+    expect(res.statusCode).toBe(502);
+    expect(res.body).toEqual({ error: "We could not send the code just now. Please try again in a minute." });
+    expect(dbAdmin.noteSignInCodeSent).not.toHaveBeenCalled();
   });
 
   it("will not send a code to a removed family", async () => {

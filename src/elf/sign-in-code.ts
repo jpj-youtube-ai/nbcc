@@ -9,16 +9,19 @@ import { buildElfSignInCodeEmail } from "./emails";
 // src/routes/admin-elf.ts). Moved here from src/routes/elf.ts so both use the one sender.
 
 /** Email a sign in code, but only to a family that has paid for detectives and has not been removed.
- *  Never throws. */
-export async function sendSignInCodeTo(email: string): Promise<void> {
+ *  Never throws. True only once the email was handed to the sender: the public sign in page ignores
+ *  it (it must never tell anyone who is enrolled), and a head elf is told when it did not go. */
+export async function sendSignInCodeTo(email: string): Promise<boolean> {
   try {
     const family = await activeFamilyByEmail(email);
-    if (!family) return;
+    if (!family) return false;
     const code = newSignInCode();
     await saveElfSignInCode(email, hashSignInCode(email, code, config.ADMIN_SESSION_SECRET), new Date(Date.now() + SIGN_IN_CODE_TTL_MS));
     const mail = buildElfSignInCodeEmail(code);
     await sendElfSignInCode(family.grownUpName, { email, from: config.BALL_FROM_EMAIL, replyTo: config.BALL_FROM_EMAIL, ...mail });
+    return true;
   } catch (err) {
     console.error("elf sign in code request failed:", err instanceof Error ? err.message : err);
+    return false;
   }
 }

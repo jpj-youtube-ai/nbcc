@@ -31,6 +31,7 @@
     loading: "Loading…",
     didNotWork: "That did not work. Please try again.",
     signedOut: "Your session has ended. Please sign in again.",
+    notAllowed: "You do not have access to do that. An admin can give it in Team.",
   };
 
   function initElfHq(doc, win, opts) {
@@ -96,6 +97,8 @@
             return {};
           })
           .then(function (d) {
+            // The section gate answers a bare "forbidden"; a person is told it in words.
+            if (res.status === 403 && d && d.error === "forbidden") throw new Error(WORDS.notAllowed);
             if (!res.ok) throw new Error((d && d.error) || WORDS.didNotWork);
             return d || {};
           });
@@ -346,9 +349,10 @@
     function drawClocks(row) {
       var days = Number(data.daysToFirstClue) || 0;
       var clue = el("div", { class: "hq-panel hq-clock" });
+      // A rosette is only a picture to a screen reader, so each heading says its number too, unseen.
       if (days > 0) {
         clue.appendChild(rosette("#C02238", "#800000", String(days)));
-        clue.appendChild(el("h3", { class: "hq-h3", text: plural(days, "day to the first clue", "days to the first clue") }));
+        clue.appendChild(el("h3", { class: "hq-h3" }, [el("span", { class: "hq-sr", text: days + " " }), plural(days, "day to the first clue", "days to the first clue")]));
       } else {
         var before = Date.now() < new Date(data.firstClueAt).getTime();
         clue.appendChild(rosette("#C02238", "#800000", before ? "Today" : "Open"));
@@ -358,7 +362,7 @@
       var n = data.numbers || {};
       var who = el("div", { class: "hq-panel hq-clock" }, [
         rosette("#D9A93E", "#1A531A", String(n.detectives || 0)),
-        el("h3", { class: "hq-h3", text: plural(n.detectives, "detective enrolled", "detectives enrolled") }),
+        el("h3", { class: "hq-h3" }, [el("span", { class: "hq-sr", text: (n.detectives || 0) + " " }), plural(n.detectives, "detective enrolled", "detectives enrolled")]),
         el("p", { class: "hq-soft", text: (n.families || 0) + " " + plural(n.families, "family", "families") }),
       ]);
       row.appendChild(clue);
@@ -545,7 +549,23 @@
       if (f.newsletter) facts.push("gets the newsletter");
       details.appendChild(el("h2", { class: "hq-h2", text: f.grownUpName }));
       details.appendChild(el("p", { class: "hq-words hq-soft", text: facts.join(" · ") }));
-      if (f.removedAt) details.appendChild(el("p", { class: "hq-words hq-removed", text: "Removed on " + longDay(f.removedAt) + (f.removedBy ? " by " + who(f.removedBy) : "") + ". They cannot sign in, and they are left out of the counts and the money." }));
+      if (f.removedAt) {
+        details.appendChild(
+          el("p", {
+            class: "hq-words hq-removed",
+            text: "Removed on " + longDay(f.removedAt) + (f.removedBy ? " by " + who(f.removedBy) : "") + ". They cannot sign in or enrol again with this email until they are put back, and they are left out of the counts and the money.",
+          }),
+        );
+      }
+      // Someone who may only look (Head Elf HQ at view, from Team) is shown the family, with nothing to press.
+      var mayChange = !!(data && data.canEdit);
+      if (!mayChange) {
+        details.appendChild(el("p", { class: "hq-words hq-soft", text: "You can look at this family. Changing it needs edit access to Head Elf HQ, which an admin can give in Team." }));
+        famSheet.appendChild(details);
+        famSheet.appendChild(said);
+        drawSheetRest(f, false);
+        return;
+      }
       var actions = el("div", { class: "hq-actions" });
       if (!f.removedAt) {
         var code = el("button", { class: "hq-btn hq-btn--small", type: "button", text: "Send a sign in code" });
@@ -607,27 +627,7 @@
       });
       famSheet.appendChild(details);
       famSheet.appendChild(said);
-
-      // The detectives, as character cards with their name switch.
-      var dets = el("div", { class: "hq-dets" });
-      f.detectives.forEach(function (d) {
-        dets.appendChild(detectiveCard(f, d));
-      });
-      famSheet.appendChild(dets);
-
-      // Every payment the family started.
-      famSheet.appendChild(el("h3", { class: "hq-h3", text: "Payments" }));
-      var paid = el("ul", { class: "hq-paid" });
-      if (!f.payments.length) paid.appendChild(el("li", { class: "hq-soft", text: "No payments." }));
-      f.payments.forEach(function (p) {
-        var bits = [el("b", { text: pounds(p.entryPence + p.giftPence) }), el("span", { text: "entry " + pounds(p.entryPence) + (p.giftPence ? ", gift " + pounds(p.giftPence) : "") })];
-        if (p.giftAid && p.giftPence) bits.push(el("span", { class: "hq-chip hq-chip--holly", text: "Gift Aid on the gift" }));
-        if (p.status === "pending") bits.push(el("span", { class: "hq-chip", text: "Not finished" }));
-        if (p.status === "expired") bits.push(el("span", { class: "hq-chip hq-chip--crimson", text: "Never paid" }));
-        bits.push(el("span", { class: "hq-soft", text: (p.paidAt ? shortDay(p.paidAt) + " · " : "") + p.reference }));
-        paid.appendChild(el("li", {}, bits));
-      });
-      famSheet.appendChild(paid);
+      drawSheetRest(f, true);
 
       // Removing (asked twice) or putting back.
       var end = el("div", { class: "hq-actions hq-sheet__end" });
@@ -648,7 +648,10 @@
           var yes = el("button", { class: "hq-btn hq-btn--small hq-btn--danger", type: "button", text: "Yes, remove them" });
           var no = el("button", { class: "hq-btn hq-btn--small", type: "button", text: "Keep them" });
           var sure = el("div", { class: "hq-confirm", role: "group", "aria-label": "Are you sure?" }, [
-            el("p", { class: "hq-words", text: "Remove " + f.grownUpName + "'s family? They cannot sign in, and they leave the counts and the money. If they paid, refund them in Stripe first." }),
+            el("p", {
+              class: "hq-words",
+              text: "Remove " + f.grownUpName + "'s family? They cannot sign in or enrol again with this email until they are put back, and they leave the counts and the money. If they paid, refund them in Stripe first.",
+            }),
             yes,
             no,
           ]);
@@ -671,7 +674,31 @@
       famSheet.appendChild(end);
     }
 
-    function detectiveCard(f, d) {
+    // The detectives and the payments, for a head elf who may change the family and one who may only look.
+    function drawSheetRest(f, mayChange) {
+      // The detectives, as character cards with their name switch.
+      var dets = el("div", { class: "hq-dets" });
+      f.detectives.forEach(function (d) {
+        dets.appendChild(detectiveCard(f, d, mayChange));
+      });
+      famSheet.appendChild(dets);
+
+      // Every payment the family started.
+      famSheet.appendChild(el("h3", { class: "hq-h3", text: "Payments" }));
+      var paid = el("ul", { class: "hq-paid" });
+      if (!f.payments.length) paid.appendChild(el("li", { class: "hq-soft", text: "No payments." }));
+      f.payments.forEach(function (p) {
+        var bits = [el("b", { text: pounds(p.entryPence + p.giftPence) }), el("span", { text: "entry " + pounds(p.entryPence) + (p.giftPence ? ", gift " + pounds(p.giftPence) : "") })];
+        if (p.giftAid && p.giftPence) bits.push(el("span", { class: "hq-chip hq-chip--holly", text: "Gift Aid on the gift" }));
+        if (p.status === "pending") bits.push(el("span", { class: "hq-chip", text: "Not finished" }));
+        if (p.status === "expired") bits.push(el("span", { class: "hq-chip hq-chip--crimson", text: "Never paid" }));
+        bits.push(el("span", { class: "hq-soft", text: (p.paidAt ? shortDay(p.paidAt) + " · " : "") + p.reference }));
+        paid.appendChild(el("li", {}, bits));
+      });
+      famSheet.appendChild(paid);
+    }
+
+    function detectiveCard(f, d, mayChange) {
       var card = el("div", { class: "hq-det", "data-detective": d.id });
       var said = el("p", { class: "hq-status", role: "status" });
       card.appendChild(
@@ -680,6 +707,11 @@
           el("div", {}, [el("b", { text: "Detective " + d.firstName + " " + d.surname }), d.badge ? el("small", { class: "hq-soft", text: d.badge }) : null]),
         ]),
       );
+      // Someone who may only look sees the name's state as words, with no switch and no Change name.
+      if (mayChange === false) {
+        card.appendChild(el("p", { class: "hq-words", text: d.approved ? d.firstName + " shows in public." : d.firstName + " waits for a tick. Until then it is " + d.firstName.charAt(0) + "." }));
+        return card;
+      }
       var toggle = el("button", { class: "hq-toggle", type: "button", role: "switch", "aria-checked": String(!!d.approved), "data-detective": d.id, disabled: !!f.removedAt }, [
         el("span", { text: d.approved ? d.firstName + " shows in public" : "Show " + d.firstName + " in public? Until then it is " + d.firstName.charAt(0) + "." }),
         el("i", { "aria-hidden": "true" }),
@@ -925,6 +957,8 @@
           data = d;
           say(status, "", null);
           draw();
+          // A sheet already open was drawn before anyone knew whether this person may change it.
+          if (fam.sheet) drawSheet();
           var asked = remembered(FAMILY_KEY);
           if (asked && /^[1-9]\d{0,9}$/.test(asked)) {
             remember(FAMILY_KEY, null);

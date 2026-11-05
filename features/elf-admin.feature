@@ -45,3 +45,20 @@ Feature: Head Elf HQ, the Elf Detective School's own admin section
     When "boss.elfhq.admin.bdd@example.com" with password "Elf-Hq-Admin-1" removes the family of "pat.paid.elf.bdd@example.com"
     And "boss.elfhq.admin.bdd@example.com" with password "Elf-Hq-Admin-1" reads the donations list with source "elf_school"
     Then it lists no Elf Detective School payment from "pat.paid.elf.bdd@example.com"
+
+  Scenario: A removed family's session stops working, and Head Elf HQ stops counting it
+    Given "sam.held.elf.bdd@example.com" has already enrolled "Ivy Snowsleuth" and paid
+    When the paying browser comes back from Stripe
+    Then it is sent to Detective HQ, signed in
+    When "boss.elfhq.admin.bdd@example.com" with password "Elf-Hq-Admin-1" removes the family of "sam.held.elf.bdd@example.com"
+    Then the family's held session goes to the sign in instead of Detective HQ
+    When "boss.elfhq.admin.bdd@example.com" with password "Elf-Hq-Admin-1" reads Head Elf HQ
+    Then Head Elf HQ counts no families and no detectives
+
+  Scenario: A head elf cannot give one family another family's email
+    Given "sam.first.elf.bdd@example.com" has already enrolled "Ruby Tinselfoot" and paid
+    And "alex.second.elf.bdd@example.com" has already enrolled "Ivy Snowsleuth" and paid
+    When "boss.elfhq.admin.bdd@example.com" with password "Elf-Hq-Admin-1" tries to give the family of "sam.first.elf.bdd@example.com" the email "alex.second.elf.bdd@example.com"
+    Then Head Elf HQ answers 409
+    And Head Elf HQ says "Another family already uses that email."
+    And the family of "sam.first.elf.bdd@example.com" still has its own email

@@ -2576,6 +2576,15 @@ describe("admin app integration (jsdom, TASK-118)", () => {
       expect(org.textContent).toContain("Group name");
     });
 
+    // Jaimie, 2026-11-05: "is that our address and postcode or their address?" Theirs, so it says so.
+    it("labels the address and postcode as theirs, not ours", async () => {
+      loginToken = tokenFor("admin");
+      await open();
+      const label = (id: string) => (view().querySelector(`label[for="${id}"]`) as HTMLElement).textContent || "";
+      expect(label("invAddress")).toContain("Their address");
+      expect(label("invPostcode")).toContain("Their postcode");
+    });
+
     it("starts with the usual line and a due date 30 days on", async () => {
       loginToken = tokenFor("admin");
       await open();
@@ -2831,9 +2840,12 @@ describe("admin app integration (jsdom, TASK-118)", () => {
       const table = el("donationsTable");
       expect(table.textContent).toContain("EDS-K4F9Q2");
       expect(table.textContent).toContain("Elf Detective School");
-      expect(table.textContent).toContain("entry £10, gift £5");
-      expect(table.textContent).toContain("entry £5");
-      expect(table.textContent).not.toContain("gift £0");
+      // Each amount kept with its word (a no break space), so a narrow card never ends a line on "entry".
+      expect(table.textContent).toContain("entry £10, gift £5");
+      expect(table.textContent).toContain("entry £5");
+      expect(table.textContent).not.toContain("gift £0");
+      // One piece, so a phone's card (each cell a flex row) wraps it word by word, never inside "once".
+      expect(table.querySelector('td[data-label="Donation"]')!.childNodes).toHaveLength(1);
       expect(table.textContent).toContain("Sam Example");
       expect(table.querySelector("[data-donor]")).toBeNull();
       const go = table.querySelector<HTMLButtonElement>("[data-elf-family]")!;

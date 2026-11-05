@@ -24,8 +24,8 @@ import { FOOTER_TEXT, POSTAL_ADDRESS } from "../legal/registration";
 import { DONATION_IMPACT_LINE } from "../donors/confirmation";
 
 // The emails for invoices for donations (src/invoices/model.ts). Pure, in the same branded shell as
-// the other giving emails, with the giving inbox as the contact; sent by src/clients/email.ts from
-// MAIL_FROM with replies going to the giving inbox.
+// the other giving emails, with the giving inbox as the contact; sent by src/clients/email.ts from and
+// replying to the giving inbox.
 //
 //   buildInvoiceEmail          the invoice itself, with a button to the private invoice page
 //   buildGroupReceiptEmail     the thank you when a group's invoice is paid. A person gets the usual

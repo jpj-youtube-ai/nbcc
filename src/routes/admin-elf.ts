@@ -1,7 +1,8 @@
 import { Router, type Request, type Response } from "express";
 import { z } from "zod";
-import { authorizeSection, authorizeSectionAsAdmin } from "./admin-authz";
+import { authorizeSection, authorizeSectionAsAdmin, loadEffectivePermissions } from "./admin-authz";
 import { actorOf } from "./admin";
+import { can } from "../admin/permissions";
 import { config } from "../config";
 import { getElfSettings, setElfPreview, setElfSettings, type ElfSettings } from "../db/elf";
 import {
@@ -99,13 +100,21 @@ export async function getAdminElfHq(req: Request, res: Response): Promise<Respon
   if (!claims) return;
   try {
     const now = new Date();
-    const [settings, numbers, recruits] = await Promise.all([getElfSettings(), elfHqNumbers(now), elfRecruits(RECRUITS)]);
+    const [settings, numbers, recruits, perms] = await Promise.all([
+      getElfSettings(),
+      elfHqNumbers(now),
+      elfRecruits(RECRUITS),
+      loadEffectivePermissions(claims.sub),
+    ]);
     const clue = firstClueAt(settings.year);
     return res.status(200).json({
       settings: forAdmin(settings),
       // Whether the lever is drawn to be pulled. The token's role is enough for that: the switch
       // itself is PATCH /api/admin/elf/settings, which checks the role in the database.
       canSwitch: claims.role === "admin",
+      // Whether Families draws its changes or just words: edit on the section, read as the gate
+      // reads it, so someone given only a look is never shown buttons that answer "forbidden".
+      canEdit: !!perms && can(perms, "elf", "edit"),
       numbers,
       quests: questsFor(numbers, !!settings.previewHash),
       recruits: recruits.map((d) => ({
@@ -277,7 +286,10 @@ export async function postAdminElfSignInCode(req: Request, res: Response): Promi
     const f = await elfFamilySheet(id);
     if (!f) return res.status(404).json(NO_FAMILY);
     if (f.removedAt) return res.status(409).json({ error: "This family is removed. Put it back first." });
-    await sendSignInCodeTo(f.email);
+    // The email refused (or the address suppressed) is the very family this button is for: say so.
+    if (!(await sendSignInCodeTo(f.email))) {
+      return res.status(502).json({ error: "We could not send the code just now. Please try again in a minute." });
+    }
     await noteSignInCodeSent(f.id, actorOf(claims));
     return res.status(200).json({ sent: true, email: f.email });
   } catch (err) {

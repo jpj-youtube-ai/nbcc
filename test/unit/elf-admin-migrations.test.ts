@@ -35,7 +35,8 @@ describe("the Elf Detective School's permission migration", () => {
   });
 
   it("sorts after the newest migration main held before it", () => {
-    expect(sorted().indexOf(FILE)).toBeGreaterThan(sorted().indexOf("1791200000320_elf-favourites.js"));
+    expect(sorted().indexOf("1791200000330_donation-invoices.js")).toBeGreaterThan(-1);
+    expect(sorted().indexOf(FILE)).toBeGreaterThan(sorted().indexOf("1791200000330_donation-invoices.js"));
   });
 });
 

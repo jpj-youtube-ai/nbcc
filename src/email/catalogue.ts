@@ -63,6 +63,7 @@ import { buildTransferStaffEmail } from "../ball/transfer-staff-email";
 import { renderReport } from "../ball/sales-report";
 import { buildDonationConfirmation } from "../donors/confirmation";
 import { buildKindEmail } from "./templates";
+import { buildGroupReceiptEmail, buildInvoiceEmail, buildInvoiceStaffEmail, buildInvoicesPaidTwiceNote } from "../invoices/emails";
 
 // All emails (Admin > Fundraising): the one list of every email the community fundraising, sponsor
 // pledge, event ticket and Festive Ball code can send. The admin's "All emails" card is drawn from
@@ -81,7 +82,7 @@ import { buildKindEmail } from "./templates";
 //
 // The order of CATALOGUE is the order on screen: by group, then the order they would be sent.
 
-export type GroupId = "signup" | "invites" | "teams" | "touch" | "finishing" | "memory" | "pledges" | "events" | "ball" | "elf" | "staff";
+export type GroupId = "signup" | "invites" | "teams" | "touch" | "finishing" | "memory" | "pledges" | "events" | "ball" | "elf" | "invoices" | "staff";
 
 export const CATALOGUE_GROUPS: ReadonlyArray<{ id: GroupId; name: string }> = [
   { id: "signup", name: "Signing up and approval" },
@@ -94,6 +95,7 @@ export const CATALOGUE_GROUPS: ReadonlyArray<{ id: GroupId; name: string }> = [
   { id: "events", name: "Event pages and tickets" },
   { id: "ball", name: "The Festive Ball" },
   { id: "elf", name: "Elf Detective School" },
+  { id: "invoices", name: "Invoices for donations" },
   { id: "staff", name: "Staff notices" },
 ];
 
@@ -1214,6 +1216,44 @@ const ELF: CatalogueEmail[] = [
   },
 ];
 
+// --- invoices for donations ------------------------------------------------------------------------
+// Sent from Admin > Giving > Invoices (src/invoices/emails.ts). A person who pays one gets the usual
+// donation receipt and a business the usual Corporation Tax receipt, each starting "This pays invoice";
+// a group gets the plain one here.
+
+const INVOICE_LINK = (b: string) => `${b}/invoice/12.example`;
+const invoiceEmail = (o: { orgName: string | null; contactName: string; note: string | null; bankTransfer: boolean; amountPence: number }) => (b: string) =>
+  buildInvoiceEmail({ number: "INV-0012", description: "Donation to NBCC", dueOn: "2026-12-05", link: INVOICE_LINK(b), ...o });
+
+const INVOICES: CatalogueEmail[] = [
+  {
+    id: "invoice",
+    group: "invoices",
+    name: "Your invoice from NBCC",
+    who: "Goes to the person, business or group an invoice is for, when staff send it from Admin, Giving, Invoices, and again if they press Email it again.",
+    audience: "public",
+    logKinds: ["invoice"],
+    note: "The name, amount, what it is for and the note are typed by staff. The ones here are examples.",
+    versions: [
+      v("usual", "A person, with a note", invoiceEmail({ orgName: null, contactName: SAM.name, note: "Thank you for your Christmas jumper day", bankTransfer: true, amountPence: 25000 })),
+      v("business", "A business", invoiceEmail({ orgName: "Example Joinery Ltd", contactName: "Alex Example", note: null, bankTransfer: true, amountPence: 50000 })),
+      v("card-only", "No bank details set, so card only", invoiceEmail({ orgName: null, contactName: SAM.name, note: null, bankTransfer: false, amountPence: 25000 })),
+    ],
+  },
+  {
+    id: "invoice-group-receipt",
+    group: "invoices",
+    name: "Thank you: invoice paid (a group)",
+    who: "Goes to a school, church, club or other group when their invoice is paid, by card or bank transfer. A person or a business gets the usual receipt instead.",
+    audience: "public",
+    logKinds: ["invoiceReceipt"],
+    versions: [
+      v("usual", USUAL, (b) =>
+        buildGroupReceiptEmail({ number: "INV-0012", orgName: "Example Primary School", contactName: SAM.name, amountPence: 32050, paidOn: "2026-11-20", link: INVOICE_LINK(b), reference: "NBCC-000321" })),
+    ],
+  },
+];
+
 const STAFF: CatalogueEmail[] = [
   staff("staff-signup", "New fundraiser", "when someone signs up.", "fundraiseStaff", [
     v("usual", "Someone raising money", signUpNotice()),
@@ -1278,6 +1318,25 @@ const STAFF: CatalogueEmail[] = [
     v("usual", "Two pledges", pledgeNote(pledgesPaidTwiceNote(TWICE))),
     v("one", "Only one pledge", pledgeNote(pledgesPaidTwiceNote(TWICE.slice(0, 1)))),
   ]),
+  {
+    id: "staff-invoice-twice",
+    group: "staff",
+    name: "Invoices paid twice: check and refund",
+    who: "Goes to NBCC staff, at the giving inbox, when an invoice is paid twice.",
+    audience: "staff",
+    logKinds: ["invoiceStaff"],
+    note: STAFF_NOTE,
+    versions: [
+      v("usual", "Two invoices", (b) =>
+        buildInvoiceStaffEmail({
+          ...buildInvoicesPaidTwiceNote([
+            { number: "INV-0012", orgOrName: "Example Joinery Ltd", amountPence: 50000 },
+            { number: "INV-0015", orgOrName: SAM.name, amountPence: 2500 },
+          ]),
+          adminUrl: `${b}/admin`,
+        })),
+    ],
+  },
   staff("staff-tickets-to-approve", "Tickets to approve", "when a host proposes tickets.", "eventTicketsToApprove", [
     v("usual", "A limit on tickets, closing the day before", proposed({ types: [{ name: "Adult", pricePence: 1300, quantity: 50 }, { name: "Child", pricePence: 0, quantity: null }], salesLimit: 80, close: { mode: "day_before", at: null } })),
     v("no-limit", "No limit, closing when the event starts", proposed({ types: [{ name: "Adult", pricePence: 1300, quantity: 50 }], salesLimit: null, close: { mode: "start", at: null } })),
@@ -1315,7 +1374,7 @@ const STAFF: CatalogueEmail[] = [
 ];
 
 /** Every email, in the order it is shown. */
-export const CATALOGUE: ReadonlyArray<CatalogueEmail> = [...SIGNUP, ...INVITES, ...TEAMS, ...TOUCH, ...FINISHING, ...MEMORY, ...PLEDGES, ...EVENTS, ...BALL, ...ELF, ...STAFF];
+export const CATALOGUE: ReadonlyArray<CatalogueEmail> = [...SIGNUP, ...INVITES, ...TEAMS, ...TOUCH, ...FINISHING, ...MEMORY, ...PLEDGES, ...EVENTS, ...BALL, ...ELF, ...INVOICES, ...STAFF];
 
 // --- reading it ------------------------------------------------------------------------------------
 

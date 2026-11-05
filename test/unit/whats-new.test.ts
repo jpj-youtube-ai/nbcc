@@ -10,7 +10,7 @@ const at = (iso: string) => new Date(iso);
 describe("the sections that can carry a New pill", () => {
   it("covers every kind of arrival the client asked for, and the Events page", () => {
     expect(AREAS.map((a) => a.area)).toEqual([
-      "contact", "stories", "donations", "monthly", "fulfilments", "ball", "newsletter", "events", "analytics", "qr", "fundraising", "red-bag",
+      "contact", "stories", "donations", "monthly", "fulfilments", "ball", "newsletter", "events", "analytics", "qr", "fundraising", "red-bag", "invoices",
     ]);
   });
 
@@ -26,6 +26,8 @@ describe("the sections that can carry a New pill", () => {
       fundraising: "fundraising:view",
       // Fill a Red Bag: the list's editor, its own permission.
       "red-bag": "red-bag:view",
+      // Invoices for donations: no permission of its own; its menu link gates on Donations.
+      invoices: "donations:view",
     });
     for (const a of AREAS) expect(SECTIONS).toContain(a.section);
   });

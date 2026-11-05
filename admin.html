@@ -22,10 +22,12 @@
          (assets/js/admin/red-bag-list.js), beside the page's catalogue and the list's rules, which
          the server checks with too. -->
     <link rel="stylesheet" href="/assets/css/admin-red-bag-list.css" />
+    <!-- Head Elf HQ, the Elf Detective School's own section (assets/js/admin/elf-hq.js). -->
+    <link rel="stylesheet" href="/assets/css/admin-elf-hq.css" />
     <script defer src="/assets/js/red-bag-catalogue.js"></script>
     <script defer src="/assets/js/red-bag-list.js"></script>
     <script defer src="/assets/js/admin/red-bag-list.js"></script>
-    <script defer src="/assets/js/admin/elf.js"></script>
+    <script defer src="/assets/js/admin/elf-hq.js"></script>
     <!-- app.js is a classic script; bridge the ES-module gmail-reply.js helpers onto window
          so app.js (Contact form tab) can call them (2026-07-10 contact-inbox spec, Task 8). -->
     <script type="module">
@@ -143,6 +145,9 @@
                        the sections that person may see. -->
                   <li><button class="admin-nav-link" type="button" data-view="get-involved" data-view-gate-any="events fundraising">Get involved</button></li>
                   <li><button class="admin-nav-link" type="button" data-view="ball">Festive Ball</button></li>
+                  <!-- Head Elf HQ: the Elf Detective School's own section, gated on the "elf" section
+                       (docs/superpowers/specs/2026-11-05-elf-admin-design.md). -->
+                  <li><button class="admin-nav-link" type="button" data-view="elf">Elf Detective School</button></li>
                   <li><button class="admin-nav-link" type="button" data-view="contact">Contact form</button></li>
                   <li><button class="admin-nav-link" type="button" data-view="newsletter">Newsletter</button></li>
                   <li><button class="admin-nav-link" type="button" data-view="thank-you">Thank you</button></li>
@@ -284,6 +289,10 @@
               </label>
               <label class="admin-inline-filter dn-redbag-filter" for="donationsInvoiceFilter">
                 <input type="checkbox" id="donationsInvoiceFilter"> Invoices only
+              </label>
+              <!-- Head Elf HQ: the Elf Detective School's payments, listed beside the gifts. -->
+              <label class="admin-inline-filter dn-redbag-filter" for="donationsElfFilter">
+                <input type="checkbox" id="donationsElfFilter"> Elf Detective School only
               </label>
               <div class="admin-table-wrap" id="donationsTable" aria-live="polite"><p class="admin-loading">Loading…</p></div>
               <div class="admin-pager" id="donationsPager" hidden>
@@ -1668,14 +1677,6 @@
                 </details>
               </section>
                 </div>
-                <!-- NBCC Elf Detective School (wave 1): the switch, the pay what you can amounts and the
-                     sign ups. Drawn by assets/js/admin/elf.js from /api/admin/elf/*. -->
-                <div class="gi-part" data-gi-part="settings" role="group" aria-label="Elf Detective School" hidden>
-                  <section class="card elf-admin" id="elfAdmin" aria-labelledby="elfAdminHeading">
-                    <h3 id="elfAdminHeading">Elf Detective School</h3>
-                    <p class="elf-admin-state" id="elfAdminState" aria-live="polite">Checking&hellip;</p>
-                  </section>
-                </div>
                 <div class="gi-part" data-gi-part="settings" role="group" aria-label="Fundraising settings" hidden>
               <div class="fr-switch" id="frSwitch">
                 <div class="fr-switch-text">
@@ -1759,6 +1760,12 @@
                  all). Two names stay as they are because other words point at them: the server says
                  "Enter the bank details under Set up first", and the email to events@ says an admin
                  "marks it paid under Festive Ball, Awaiting transfer". -->
+            <!-- Head Elf HQ: drawn into #elfHq by assets/js/admin/elf-hq.js from /api/admin/elf/*. -->
+            <section class="admin-view" id="view-elf" aria-labelledby="elf-heading" hidden>
+              <h2 id="elf-heading" class="hq-sr">Elf Detective School</h2>
+              <div id="elfHq"></div>
+            </section>
+
             <section class="admin-view" id="view-ball" aria-labelledby="ball-heading" hidden>
               <header class="ball-hero">
                 <div class="ball-hero-main">

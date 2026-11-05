@@ -13,10 +13,11 @@ const src = readFileSync(resolve(DIR, FILE), "utf8");
 const up = src.slice(src.indexOf("exports.up"), src.indexOf("exports.down"));
 
 describe("the invoices migration", () => {
-  it("sorts last, after the newest migration production had run before it", () => {
+  // After, not last: later migrations (Head Elf HQ's 350 and 360) sort after this one, as they must.
+  it("sorts after the newest migration production had run before it", () => {
     const names = readdirSync(DIR).filter((n) => n.endsWith(".js")).sort();
     expect(names.indexOf("1791200000320_elf-favourites.js")).toBeGreaterThan(-1);
-    expect(names[names.length - 1]).toBe(FILE);
+    expect(names.indexOf(FILE)).toBeGreaterThan(names.indexOf("1791200000320_elf-favourites.js"));
   });
 
   it("only adds: two tables and one nullable column, nothing dropped or changed", () => {

@@ -1,26 +1,55 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 
-// NBCC Elf Detective School in the admin: the switch, the pay what you can amounts, and the sign ups.
-// Every family here is invented.
+// NBCC Elf Detective School in the admin, Head Elf HQ: the switch, the pay what you can amounts, HQ's
+// numbers and the families. Every family here is invented.
 
-const { getUserAuthRowMock, db } = vi.hoisted(() => ({
+const { getUserAuthRowMock, db, dbAdmin, signIn } = vi.hoisted(() => ({
   getUserAuthRowMock: vi.fn(),
-  db: { getElfSettings: vi.fn(), setElfSettings: vi.fn(), listElfSignups: vi.fn(), setElfPreview: vi.fn() },
+  db: { getElfSettings: vi.fn(), setElfSettings: vi.fn(), setElfPreview: vi.fn() },
+  dbAdmin: {
+    elfHqNumbers: vi.fn(),
+    elfRecruits: vi.fn(),
+    listElfFamilies: vi.fn(),
+    elfFamilySheet: vi.fn(),
+    changeElfDetective: vi.fn(),
+    changeElfFamily: vi.fn(),
+    removeElfFamily: vi.fn(),
+    restoreElfFamily: vi.fn(),
+    noteSignInCodeSent: vi.fn(),
+  },
+  signIn: { sendSignInCodeTo: vi.fn() },
 }));
 vi.mock("../../src/db/admin-users", () => ({ getUserAuthRow: getUserAuthRowMock }));
 vi.mock("../../src/db/elf", () => db);
+vi.mock("../../src/db/elf-admin", () => dbAdmin);
+vi.mock("../../src/elf/sign-in-code", () => signIn);
 vi.mock("../../src/db/pool", () => ({ pool: { query: vi.fn(), connect: vi.fn() } }));
 vi.mock("../../src/config", () => ({
   config: { NODE_ENV: "development", ADMIN_SESSION_SECRET: "test-admin-secret", STRIPE_SECRET_KEY: "sk_test_aaaaaaaaaaaaaaaaaaaa", STRIPE_WEBHOOK_SECRET: "whsec_x" },
 }));
 
-import { getAdminElfSettings, getAdminElfSignups, patchAdminElfSettings } from "../../src/routes/admin-elf";
+import {
+  getAdminElfFamilies,
+  getAdminElfFamily,
+  getAdminElfHq,
+  getAdminElfSettings,
+  patchAdminElfDetective,
+  patchAdminElfFamily,
+  patchAdminElfSettings,
+  postAdminElfFamilyRemove,
+  postAdminElfFamilyRestore,
+  postAdminElfSignInCode,
+} from "../../src/routes/admin-elf";
 import { signAdminSession } from "../../src/admin/session";
+import { FESTIVE_SURNAMES } from "../../src/elf/names";
 
 const ON = { schoolOn: true, year: 2026, entryFromPence: 100, entrySuggestedPence: 500 };
 
-const tokenFor = (role: string) => {
-  getUserAuthRowMock.mockResolvedValue({ id: 1, email: "staff@example.org", status: "active", role, permissions: {} });
+// `permissions` is a saved Team matrix: {} means the role's own defaults.
+const tokenFor = (role: string, permissions: object = {}) => {
+  getUserAuthRowMock.mockResolvedValue({ id: 1, email: "staff@example.org", status: "active", role, permissions });
   return signAdminSession({ sub: 1, email: "staff@example.org", role, now: new Date(), secret: "test-admin-secret" }).token;
 };
 
@@ -28,7 +57,16 @@ function mockRes() {
   const res = { statusCode: 200, body: undefined as unknown, status(c: number) { res.statusCode = c; return res; }, json(b: unknown) { res.body = b; return res; }, setHeader() { return res; } };
   return res;
 }
-const req = (role: string | null, body: unknown = {}) => ({ headers: role ? { authorization: `Bearer ${tokenFor(role)}` } : {}, body, params: {}, query: {} });
+const req = (role: string | null, body: unknown = {}, permissions: object = {}) => ({ headers: role ? { authorization: `Bearer ${tokenFor(role, permissions)}` } : {}, body, params: {}, query: {} });
+/** A head elf: a viewer whom an admin has given the Elf Detective School in the Team matrix. */
+const HEAD_ELF = { elf: "view" };
+/** A request with its params and query, for the families routes. */
+const ask = (role: string, o: { body?: unknown; params?: object; query?: object; permissions?: object } = {}) => ({
+  headers: { authorization: `Bearer ${tokenFor(role, o.permissions ?? {})}` },
+  body: o.body ?? {},
+  params: o.params ?? {},
+  query: o.query ?? {},
+});
 /* eslint-disable @typescript-eslint/no-explicit-any */
 const run = async (h: (req: any, res: any) => Promise<unknown>, r: unknown) => {
   const res = mockRes();
@@ -39,17 +77,23 @@ const run = async (h: (req: any, res: any) => Promise<unknown>, r: unknown) => {
 
 beforeEach(() => {
   getUserAuthRowMock.mockReset();
-  for (const f of Object.values(db)) f.mockReset();
+  for (const f of [...Object.values(db), ...Object.values(dbAdmin), ...Object.values(signIn)]) f.mockReset();
   db.getElfSettings.mockResolvedValue(ON);
   db.setElfSettings.mockImplementation(async (patch: object) => ({ ...ON, ...patch }));
 });
 
 describe("the school's settings in the admin", () => {
-  it("can be read by a viewer, but nobody signed out", async () => {
+  it("can be read by anyone given the Elf Detective School, but nobody signed out", async () => {
     expect((await run(getAdminElfSettings, req(null))).statusCode).toBe(401);
-    const res = await run(getAdminElfSettings, req("viewer"));
+    const res = await run(getAdminElfSettings, req("viewer", {}, HEAD_ELF));
     expect(res.statusCode).toBe(200);
     expect(res.body).toMatchObject({ settings: ON });
+  });
+
+  it("is not for an editor or a viewer who has not been given the section", async () => {
+    expect((await run(getAdminElfSettings, req("editor"))).statusCode).toBe(403);
+    expect((await run(getAdminElfSettings, req("viewer"))).statusCode).toBe(403);
+    expect((await run(getAdminElfSettings, req("editor", {}, { fundraising: "edit" }))).statusCode).toBe(403);
   });
 
   it("can only be changed by an admin", async () => {
@@ -73,13 +117,75 @@ describe("the school's settings in the admin", () => {
   });
 });
 
-describe("the sign ups in the admin", () => {
-  it("shows a viewer the paid sign ups", async () => {
-    const summary = { families: 2, detectives: 3, entryPence: 1500, donationPence: 500, giftAidPence: 500, recent: [] };
-    db.listElfSignups.mockResolvedValue(summary);
-    const res = await run(getAdminElfSignups, req("viewer"));
+describe("HQ in the admin", () => {
+  const NUMBERS = { families: 2, detectives: 3, namesToCheck: 1, waitingPayments: 0, entryPence: 1500, giftPence: 500, giftAidPence: 500 };
+  const RUBY = { detectiveId: 7, familyId: 3, firstName: "Ruby", surname: "Tinselfoot", badgeNumber: 427, approved: false, look: { costume: "reindeer", skin: "s3" } };
+  beforeEach(() => {
+    dbAdmin.elfHqNumbers.mockResolvedValue(NUMBERS);
+    dbAdmin.elfRecruits.mockResolvedValue([RUBY]);
+  });
+
+  it("answers with its numbers, quests and newest recruits", async () => {
+    const res = await run(getAdminElfHq, req("admin"));
     expect(res.statusCode).toBe(200);
-    expect(res.body).toEqual(summary);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const body = res.body as any;
+    expect(body.numbers).toEqual(NUMBERS);
+    expect(body.quests.map((q: { id: string }) => q.id)).toEqual(["names"]);
+    expect(body.recruits).toEqual([{ detectiveId: 7, familyId: 3, name: "Ruby Tinselfoot", badge: "EDS 0427", approved: false, tile: "/assets/img/elf/paper/tiles/costumes/reindeer-s3.webp" }]);
+    expect(body.settings).toMatchObject({ schoolOn: true, previewOn: false });
+    expect(body.settings.previewHash).toBeUndefined();
+    expect(body.firstClueAt).toBe("2026-12-01T17:30:00.000Z");
+    expect(typeof body.daysToFirstClue).toBe("number");
+    expect(body.canSwitch).toBe(true);
+    expect(dbAdmin.elfRecruits).toHaveBeenCalledWith(8);
+  });
+
+  it("lets a head elf look, but only an admin may pull the switch", async () => {
+    const res = await run(getAdminElfHq, req("viewer", {}, HEAD_ELF));
+    expect(res.statusCode).toBe(200);
+    expect((res.body as { canSwitch: boolean }).canSwitch).toBe(false);
+  });
+
+  it("tells the screen whether this person may change families, from their access as it is now", async () => {
+    const canEdit = async (role: string, permissions: object) => ((await run(getAdminElfHq, req(role, {}, permissions))).body as { canEdit: boolean }).canEdit;
+    expect(await canEdit("admin", {})).toBe(true);
+    expect(await canEdit("viewer", { elf: "edit" })).toBe(true);
+    expect(await canEdit("viewer", HEAD_ELF)).toBe(false);
+  });
+
+  it("is not for an editor", async () => {
+    expect((await run(getAdminElfHq, req("editor"))).statusCode).toBe(403);
+  });
+
+  it("says so in words when the numbers cannot be read", async () => {
+    dbAdmin.elfHqNumbers.mockRejectedValue(new Error("down"));
+    const res = await run(getAdminElfHq, req("admin"));
+    expect(res.statusCode).toBe(500);
+    expect(res.body).toEqual({ error: "Admin is temporarily unavailable" });
+  });
+});
+
+// Head Elf HQ (5 November 2026): its own section under Content, after the Festive Ball; the old card
+// in Get involved > Settings, and its script, are gone.
+describe("the Elf Detective School in the admin's menu", () => {
+  const html = readFileSync(resolve(__dirname, "../../admin.html"), "utf8");
+  const content = html.slice(html.indexOf('id="adminNavContent"'), html.indexOf("</ul>", html.indexOf('id="adminNavContent"')));
+
+  it("is in Content, right after the Festive Ball", () => {
+    const views = [...content.matchAll(/data-view="([a-z-]+)"/g)].map((m) => m[1]);
+    expect(views.indexOf("elf")).toBe(views.indexOf("ball") + 1);
+    expect(content).toContain('data-view="elf">Elf Detective School</button>');
+  });
+
+  it("has a section of its own for Head Elf HQ to draw into", () => {
+    expect(html).toMatch(/<section class="admin-view" id="view-elf"[^>]*hidden>/);
+    expect(html).toContain('<div id="elfHq"></div>');
+  });
+
+  it("is no longer a card in Get involved", () => {
+    expect(html).not.toContain('id="elfAdmin"');
+    expect(html).not.toContain("/assets/js/admin/elf.js");
   });
 });
 
@@ -91,5 +197,174 @@ describe("the private preview link", () => {
     expect(res.statusCode).toBe(200);
     const url = String((res.body as { url: string }).url);
     expect(url).toMatch(/\/elf\/preview\/[0-9a-f]{64}$/);
+  });
+});
+
+// ---- Families (Task 5) ----
+
+const PAID_AT = new Date("2026-11-13T19:04:00.000Z");
+const FAMILY_ROW = {
+  id: 3,
+  grownUpName: "Sam Example",
+  email: "sam@example.org",
+  enrolledAt: PAID_AT,
+  removed: false,
+  detectives: [{ id: 7, firstName: "Ruby", badgeNumber: 427, approved: false, look: { costume: "reindeer", skin: "s3" } }],
+};
+const SHEET_ROW = {
+  id: 3,
+  grownUpName: "Sam Example",
+  email: "sam@example.org",
+  newsletter: true,
+  enrolledAt: PAID_AT,
+  removedAt: null,
+  removedBy: null,
+  detectives: [{ id: 7, firstName: "Ruby", surname: "Tinselfoot", badgeNumber: 427, approved: false, look: null }],
+  payments: [{ reference: "EDS-K4F9Q2", status: "paid", paidAt: PAID_AT, entryPence: 1000, giftPence: 500, giftAid: true }],
+};
+
+describe("the families in the admin", () => {
+  it("lists families for someone with the section, and keeps an editor out", async () => {
+    dbAdmin.listElfFamilies.mockResolvedValue({ rows: [FAMILY_ROW], total: 1, counts: { all: 1, check: 1, week: 1, removed: 0 } });
+    const res = await run(getAdminElfFamilies, ask("viewer", { permissions: HEAD_ELF, query: { q: " ruby ", filter: "check", offset: "50" } }));
+    expect(res.statusCode).toBe(200);
+    expect(dbAdmin.listElfFamilies).toHaveBeenCalledWith({ q: "ruby", filter: "check", offset: 50, limit: 50, now: expect.any(Date) });
+    expect(res.body).toEqual({
+      families: [
+        {
+          id: 3,
+          grownUpName: "Sam Example",
+          email: "sam@example.org",
+          enrolledAt: PAID_AT.toISOString(),
+          removed: false,
+          namesToCheck: 1,
+          detectives: [{ id: 7, firstName: "Ruby", badge: "EDS 0427", approved: false, tile: "/assets/img/elf/paper/tiles/costumes/reindeer-s3.webp" }],
+        },
+      ],
+      total: 1,
+      counts: { all: 1, check: 1, week: 1, removed: 0 },
+    });
+    expect((await run(getAdminElfFamilies, ask("editor"))).statusCode).toBe(403);
+  });
+
+  it("reads a junk filter as all and a junk page as the first", async () => {
+    dbAdmin.listElfFamilies.mockResolvedValue({ rows: [], total: 0, counts: { all: 0, check: 0, week: 0, removed: 0 } });
+    await run(getAdminElfFamilies, ask("admin", { query: { filter: "everything", offset: "-9" } }));
+    expect(dbAdmin.listElfFamilies).toHaveBeenCalledWith(expect.objectContaining({ q: "", filter: "all", offset: 0 }));
+  });
+
+  it("opens a family's sheet, and says so when there is no such family", async () => {
+    dbAdmin.elfFamilySheet.mockResolvedValue(SHEET_ROW);
+    const res = await run(getAdminElfFamily, ask("viewer", { permissions: HEAD_ELF, params: { id: "3" } }));
+    expect(res.statusCode).toBe(200);
+    expect(res.body).toEqual({
+      family: {
+        id: 3,
+        grownUpName: "Sam Example",
+        email: "sam@example.org",
+        newsletter: true,
+        enrolledAt: PAID_AT.toISOString(),
+        removedAt: null,
+        removedBy: null,
+        detectives: [{ id: 7, firstName: "Ruby", surname: "Tinselfoot", badge: "EDS 0427", approved: false, tile: "/assets/img/elf/paper/tiles/costumes/detective-s1.webp" }],
+        payments: [{ reference: "EDS-K4F9Q2", status: "paid", paidAt: PAID_AT.toISOString(), entryPence: 1000, giftPence: 500, giftAid: true }],
+      },
+      // The festive surnames, for the rename form.
+      surnames: [...FESTIVE_SURNAMES],
+    });
+    dbAdmin.elfFamilySheet.mockResolvedValue(null);
+    const missing = await run(getAdminElfFamily, ask("admin", { params: { id: "99" } }));
+    expect(missing.statusCode).toBe(404);
+    expect(missing.body).toEqual({ error: "We could not find that family." });
+  });
+
+  it("refuses an id that is not a whole number above 0", async () => {
+    for (const id of ["abc", "0", "-3", "3.5", "1e3"]) {
+      const res = await run(getAdminElfFamily, ask("admin", { params: { id } }));
+      expect(res.statusCode, id).toBe(400);
+    }
+    expect(dbAdmin.elfFamilySheet).not.toHaveBeenCalled();
+  });
+});
+
+describe("a head elf changing a family", () => {
+  const RUBY = { id: 7, familyId: 3, firstName: "Ruby", surname: "Tinselfoot", badgeNumber: 427, approved: true, look: null };
+
+  it("ticks a detective's name for someone who may edit, and not for someone who may only look", async () => {
+    dbAdmin.changeElfDetective.mockResolvedValue(RUBY);
+    const res = await run(patchAdminElfDetective, ask("admin", { params: { id: "7" }, body: { approved: true } }));
+    expect(res.statusCode).toBe(200);
+    expect(dbAdmin.changeElfDetective).toHaveBeenCalledWith(7, { approved: true }, "admin:staff@example.org");
+    expect((res.body as { detective: { badge: string; approved: boolean } }).detective).toMatchObject({ id: 7, badge: "EDS 0427", approved: true });
+    expect((await run(patchAdminElfDetective, ask("viewer", { permissions: HEAD_ELF, params: { id: "7" }, body: { approved: true } }))).statusCode).toBe(403);
+    expect((await run(patchAdminElfDetective, ask("viewer", { permissions: { elf: "edit" }, params: { id: "7" }, body: { approved: true } }))).statusCode).toBe(200);
+  });
+
+  it("refuses a name enrolling refuses, and saves nothing", async () => {
+    const res = await run(patchAdminElfDetective, ask("admin", { params: { id: "7" }, body: { firstName: "Ruby Mae" } }));
+    expect(res.statusCode).toBe(400);
+    expect(res.body).toEqual({ error: "Please give just one first name: the festive surname comes from the list." });
+    expect(dbAdmin.changeElfDetective).not.toHaveBeenCalled();
+  });
+
+  it("answers 404 for a detective that is not there", async () => {
+    dbAdmin.changeElfDetective.mockResolvedValue(null);
+    const res = await run(patchAdminElfDetective, ask("admin", { params: { id: "70" }, body: { approved: true } }));
+    expect(res.statusCode).toBe(404);
+    expect(res.body).toEqual({ error: "We could not find that detective." });
+  });
+
+  it("changes the grown up's details, and says when another family has the email", async () => {
+    dbAdmin.changeElfFamily.mockResolvedValue({ ...SHEET_ROW, email: "sam.new@example.org" });
+    const res = await run(patchAdminElfFamily, ask("admin", { params: { id: "3" }, body: { email: " Sam.New@Example.org" } }));
+    expect(res.statusCode).toBe(200);
+    expect(dbAdmin.changeElfFamily).toHaveBeenCalledWith(3, { email: "sam.new@example.org" }, "admin:staff@example.org");
+    expect((res.body as { family: { email: string } }).family.email).toBe("sam.new@example.org");
+    dbAdmin.changeElfFamily.mockResolvedValue("email-taken");
+    const taken = await run(patchAdminElfFamily, ask("admin", { params: { id: "3" }, body: { email: "alex@example.org" } }));
+    expect(taken.statusCode).toBe(409);
+    expect(taken.body).toEqual({ error: "Another family already uses that email." });
+  });
+
+  it("sends a sign in code to the family's own email, and notes who asked", async () => {
+    dbAdmin.elfFamilySheet.mockResolvedValue(SHEET_ROW);
+    signIn.sendSignInCodeTo.mockResolvedValueOnce(true);
+    const res = await run(postAdminElfSignInCode, ask("viewer", { permissions: { elf: "edit" }, params: { id: "3" } }));
+    expect(res.statusCode).toBe(200);
+    expect(res.body).toEqual({ sent: true, email: "sam@example.org" });
+    expect(signIn.sendSignInCodeTo).toHaveBeenCalledWith("sam@example.org");
+    expect(dbAdmin.noteSignInCodeSent).toHaveBeenCalledWith(3, "admin:staff@example.org");
+  });
+
+  it("says so when the code could not be sent, and notes nothing", async () => {
+    dbAdmin.elfFamilySheet.mockResolvedValue(SHEET_ROW);
+    signIn.sendSignInCodeTo.mockResolvedValueOnce(false);
+    const res = await run(postAdminElfSignInCode, ask("admin", { params: { id: "3" } }));
+    expect(res.statusCode).toBe(502);
+    expect(res.body).toEqual({ error: "We could not send the code just now. Please try again in a minute." });
+    expect(dbAdmin.noteSignInCodeSent).not.toHaveBeenCalled();
+  });
+
+  it("will not send a code to a removed family", async () => {
+    dbAdmin.elfFamilySheet.mockResolvedValue({ ...SHEET_ROW, removedAt: PAID_AT, removedBy: "admin:boss@example.org" });
+    const res = await run(postAdminElfSignInCode, ask("admin", { params: { id: "3" } }));
+    expect(res.statusCode).toBe(409);
+    expect(res.body).toEqual({ error: "This family is removed. Put it back first." });
+    expect(signIn.sendSignInCodeTo).not.toHaveBeenCalled();
+  });
+
+  it("removes a family and puts it back, as the person who did it", async () => {
+    dbAdmin.removeElfFamily.mockResolvedValue({ ...SHEET_ROW, removedAt: PAID_AT, removedBy: "admin:staff@example.org" });
+    const gone = await run(postAdminElfFamilyRemove, ask("admin", { params: { id: "3" } }));
+    expect(gone.statusCode).toBe(200);
+    expect(dbAdmin.removeElfFamily).toHaveBeenCalledWith(3, "admin:staff@example.org");
+    expect((gone.body as { family: { removedAt: string } }).family.removedAt).toBe(PAID_AT.toISOString());
+    dbAdmin.restoreElfFamily.mockResolvedValue(SHEET_ROW);
+    const back = await run(postAdminElfFamilyRestore, ask("admin", { params: { id: "3" } }));
+    expect(back.statusCode).toBe(200);
+    expect(dbAdmin.restoreElfFamily).toHaveBeenCalledWith(3, "admin:staff@example.org");
+    dbAdmin.removeElfFamily.mockResolvedValue(null);
+    expect((await run(postAdminElfFamilyRemove, ask("admin", { params: { id: "9" } }))).statusCode).toBe(404);
+    expect((await run(postAdminElfFamilyRemove, ask("viewer", { permissions: HEAD_ELF, params: { id: "3" } }))).statusCode).toBe(403);
   });
 });

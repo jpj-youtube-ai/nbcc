@@ -88,6 +88,8 @@ describe("admin dashboard shell (REQ-066 · TASK-115)", () => {
       // NBCC's own events (TASK-453) and community fundraising (TASK-495), one tab now.
       "get-involved",
       "ball",
+      // Head Elf HQ: the Elf Detective School's own section (5 November 2026).
+      "elf",
       "contact",
       "newsletter",
       "thank-you",

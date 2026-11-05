@@ -34,7 +34,7 @@
   var SECTIONS = [
     "overview", "search", "donations", "claims", "gasds", "subscriptions", "stories",
     "ticker", "ball", "events", "fundraising", "contact", "newsletter", "thank-you", "audit", "email-audit", "site", "outreach",
-    "business-supporters", "analytics", "red-bag", "team",
+    "business-supporters", "analytics", "red-bag", "elf", "team",
   ];
   // KEEP IN SYNC with OPERATIONAL_EDITOR_SECTIONS there as well. Not cosmetic either: Manage access
   // pre-fills from this copy and Save stores what it shows, so a section missing here is silently
@@ -83,7 +83,7 @@
     // email-audit mirrors team: donor-identifying send data never arrives with a role below
     // admin — it is granted per person (matches roleToPermissions in src/admin/permissions.ts).
     SECTIONS.forEach(function (s) {
-      perms[s] = s === "team" || s === "email-audit" || s === "business-supporters" || s === "analytics" || s === "red-bag" ? "none" : "view";
+      perms[s] = s === "team" || s === "email-audit" || s === "business-supporters" || s === "analytics" || s === "red-bag" || s === "elf" ? "none" : "view";
     });
     return perms;
   }
@@ -632,6 +632,8 @@
     else if (name === "analytics") loadAnalytics();
     // Fill a Red Bag: the list's editor is its own file (assets/js/admin/red-bag-list.js).
     else if (name === "red-bag") { if (window.AdminRedBagList) window.AdminRedBagList.open(); }
+    // Head Elf HQ draws itself (assets/js/admin/elf-hq.js); it is read afresh each time it is opened.
+    else if (name === "elf") { if (window.AdminElfHq) window.AdminElfHq.open(); }
     else if (name === "site") loadSite();
     else if (name === "qr") loadQr();
     else if (name === "invoices") loadInvoices();
@@ -1047,10 +1049,23 @@
         if (d.source === "ball_bags") gift += ' <span class="admin-pill dn-source-pill">Red bags at the Ball</span>';
         // And one that paid an invoice sent from Admin > Giving > Invoices, with its number.
         if (d.source === "invoice") gift += ' <span class="admin-pill dn-source-pill">Invoice' + (d.invoice_id ? " " + H.escapeHtml(invNumber(d.invoice_id)) : "") + "</span>";
+        // An Elf Detective School payment (Head Elf HQ): its own label, then its entry and any gift on top,
+        // in one piece, so a phone's card (each cell a flex row) wraps it word by word, each amount kept
+        // with its word.
+        var elfRow = d.kind === "elf";
+        if (elfRow) {
+          gift = "<span>" + gift + ' <span class="admin-pill dn-source-pill">Elf Detective School</span> entry&nbsp;' + H.formatPence(d.entry_pence) +
+            (d.gift_pence > 0 ? ", gift&nbsp;" + H.formatPence(d.gift_pence) : "") + "</span>";
+        }
         // TASK-241: one Payment pill combining payment_status + any refund (see helpers.paymentLabel).
         var pay = H.paymentLabel(d);
+        // A gift opens its donor; an elf payment has a family instead, which opens in Head Elf HQ for
+        // someone who may open it.
+        var open = elfRow
+          ? canView("elf") ? '<button class="admin-link" type="button" data-elf-family="' + Number(d.elf_family_id) + '">Open in Head Elf HQ</button>' : ""
+          : '<button class="admin-link" type="button" data-donor="' + d.donor_id + '">View</button>';
         return (
-          '<tr><td data-label="ID">' + d.id + '</td><td data-label="Donor">' + H.escapeHtml(d.donor_name) +
+          '<tr><td data-label="ID">' + (elfRow ? H.escapeHtml(d.elf_reference) : d.id) + '</td><td data-label="Donor">' + H.escapeHtml(d.donor_name) +
           '</td><td data-label="Donation">' + gift +
           '</td><td class="admin-num" data-label="Amount">' + H.formatPence(d.amount_pence) +
           '</td><td data-label="Gift Aid">' +
@@ -1058,8 +1073,7 @@
           H.escapeHtml(d.claim_status) + '</td><td data-label="Payment"><span class="admin-pill admin-pill--' +
           pay.state + '">' + H.escapeHtml(pay.label) + '</span></td><td data-label="Date">' + H.fmtDate(d.created_at) +
           (opts.newPills ? rowNewPill("donations", d.payment_status === "paid" ? d.created_at : null) : "") +
-          '</td><td data-label=""><button class="admin-link" type="button" data-donor="' + d.donor_id +
-          '">View</button></td></tr>'
+          '</td><td data-label="">' + open + "</td></tr>"
         );
       })
       .join("");
@@ -1290,6 +1304,9 @@
     // Invoices only (gifts that paid an invoice), the same again.
     var invoiceFilter = el("donationsInvoiceFilter");
     var invoice = !redBag && !ball && !ballBags && !!(invoiceFilter && invoiceFilter.checked);
+    // Elf Detective School only (its payments, listed beside the gifts; Head Elf HQ), the same again.
+    var elfFilter = el("donationsElfFilter");
+    var elf = !redBag && !ball && !ballBags && !invoice && !!(elfFilter && elfFilter.checked);
     authFetch(
       "/api/admin/donations?limit=25&offset=" + donationsOffset +
         (pay ? "&paymentStatus=" + encodeURIComponent(pay) : "") +
@@ -1297,7 +1314,8 @@
         (redBag ? "&source=red_bag" : "") +
         (ball ? "&source=ball" : "") +
         (ballBags ? "&source=ball_bags" : "") +
-        (invoice ? "&source=invoice" : ""),
+        (invoice ? "&source=invoice" : "") +
+        (elf ? "&source=elf_school" : ""),
     )
       .then(okJson)
       .then(function (d) {
@@ -1311,7 +1329,9 @@
                 ? pay || mode ? "No red bag gifts at the Ball match these filters." : "No red bag gifts at the Ball yet."
                 : invoice
                   ? pay || mode ? "No paid invoices match these filters." : "No invoices have been paid yet."
-                  : "",
+                  : elf
+                    ? pay || mode ? "No Elf Detective School payments match these filters." : "No Elf Detective School payments yet."
+                    : "",
         });
         var total = d.total || 0;
         el("donationsPager").hidden = total <= 25;
@@ -1368,19 +1388,19 @@
   function oneSourceFilter(id) {
     var self = el(id);
     if (!self || !self.checked) return;
-    ["donationsRedBagFilter", "donationsBallFilter", "donationsBallBagsFilter", "donationsInvoiceFilter"].forEach(function (otherId) {
+    ["donationsRedBagFilter", "donationsBallFilter", "donationsBallBagsFilter", "donationsInvoiceFilter", "donationsElfFilter"].forEach(function (otherId) {
       var other = el(otherId);
       if (otherId !== id && other) other.checked = false;
     });
   }
-  ["donationsRedBagFilter", "donationsBallFilter", "donationsBallBagsFilter", "donationsInvoiceFilter"].forEach(function (id) {
+  ["donationsRedBagFilter", "donationsBallFilter", "donationsBallBagsFilter", "donationsInvoiceFilter", "donationsElfFilter"].forEach(function (id) {
     var control = el(id);
     if (control)
       control.addEventListener("change", function () {
         oneSourceFilter(id);
       });
   });
-  ["donationsPaymentFilter", "donationsModeFilter", "donationsRedBagFilter", "donationsBallFilter", "donationsBallBagsFilter", "donationsInvoiceFilter"].forEach(function (id) {
+  ["donationsPaymentFilter", "donationsModeFilter", "donationsRedBagFilter", "donationsBallFilter", "donationsBallBagsFilter", "donationsInvoiceFilter", "donationsElfFilter"].forEach(function (id) {
     var control = el(id);
     if (control)
       control.addEventListener("change", function () {
@@ -8829,6 +8849,17 @@
     content.addEventListener("click", function (e) {
       var t = e.target;
       if (!t || !t.closest) return;
+      // An Elf Detective School payment in Donations: Head Elf HQ opens on its family (elf-hq.js reads
+      // the family it was asked for when it opens, then forgets it).
+      var elfFamily = t.closest("[data-elf-family]");
+      if (elfFamily) {
+        try {
+          sessionStorage.setItem("nbcc_elf_hq_family", elfFamily.getAttribute("data-elf-family"));
+        } catch (err) {
+          // Storage refused: Head Elf HQ still opens, on HQ.
+        }
+        return selectView("elf");
+      }
       var donor = t.closest("[data-donor]");
       if (donor) return openDonor(donor.getAttribute("data-donor"));
       var story = t.closest("[data-story]");

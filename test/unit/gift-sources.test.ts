@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { giftsWords, sourceLines, sourceTotalsFrom, BALL_BAGS_NOTE, RED_BAG_COUNTED_FROM_NOTE } from "../../src/admin/gift-sources";
+import { giftsWords, paymentsWords, sourceLines, sourceTotalsFrom, BALL_BAGS_NOTE, ELF_PAYMENTS_NOTE, RED_BAG_COUNTED_FROM_NOTE } from "../../src/admin/gift-sources";
 import { numbersLines } from "../../src/admin/overview-numbers";
 
 // Fill a Red Bag against the Donate page: the pure rules that turn the one grouped read into the
@@ -22,6 +22,7 @@ describe("the two buckets", () => {
       ball: { month: { pence: 0, gifts: 0 }, all: { pence: 0, gifts: 0 } },
       ballBags: { month: { pence: 0, gifts: 0 }, all: { pence: 0, gifts: 0 } },
       invoices: { month: { pence: 0, gifts: 0 }, all: { pence: 0, gifts: 0 } },
+      elfSchool: { month: { pence: 0, gifts: 0 }, all: { pence: 0, gifts: 0 } },
       donatePage: { month: { pence: 213_000, gifts: 64 }, all: { pence: 3_140_000, gifts: 902 } },
     });
   });
@@ -70,6 +71,7 @@ describe("the words", () => {
       ["ball", "Festive Ball"],
       ["ballBags", "Red bags at the Ball"],
       ["invoices", "Invoices"],
+      ["elfSchool", "Elf Detective School"],
       ["donatePage", "Donate page"],
     ]);
     expect(sourceLines(t)[1]).toMatchObject({ month: "£75 from 3 gifts", all: "£120 from 5 gifts" });
@@ -82,6 +84,7 @@ describe("the words", () => {
       { key: "ball", name: "Festive Ball", month: "£0 from 0 gifts", all: "£0 from 0 gifts" },
       { key: "ballBags", name: "Red bags at the Ball", month: "£0 from 0 gifts", all: "£0 from 0 gifts" },
       { key: "invoices", name: "Invoices", month: "£0 from 0 gifts", all: "£0 from 0 gifts" },
+      { key: "elfSchool", name: "Elf Detective School", month: "£0 from 0 payments", all: "£0 from 0 payments" },
       { key: "donatePage", name: "Donate page", month: "£2,130 from 64 gifts", all: "£31,400 from 902 gifts" },
     ]);
   });
@@ -90,6 +93,15 @@ describe("the words", () => {
     const t = sourceTotalsFrom([row("invoices", [50_000, 2], [75_000, 3])]);
     expect(t.invoices).toEqual({ month: { pence: 50_000, gifts: 2 }, all: { pence: 75_000, gifts: 3 } });
     expect(sourceLines(t)[3]).toEqual({ key: "invoices", name: "Invoices", month: "£500 from 2 gifts", all: "£750 from 3 gifts" });
+  });
+
+  it("counts the Elf Detective School's payments on their own line, as payments, before the Donate page", () => {
+    const t = sourceTotalsFrom([row("elfSchool", [148_600, 128], [148_600, 128])]);
+    expect(t.elfSchool).toEqual({ month: { pence: 148_600, gifts: 128 }, all: { pence: 148_600, gifts: 128 } });
+    expect(sourceLines(t)[4]).toEqual({ key: "elfSchool", name: "Elf Detective School", month: "£1,486 from 128 payments", all: "£1,486 from 128 payments" });
+    expect(paymentsWords({ pence: 500, gifts: 1 })).toBe("£5 from 1 payment");
+    expect(ELF_PAYMENTS_NOTE).toBe("Elf Detective School payments are entries to take part, with any gift on top. Entries are never claimed for Gift Aid.");
+    expect(ELF_PAYMENTS_NOTE).not.toMatch(/[–—-]/);
   });
 
   it("words the table bags line from its own figures, and explains where they come from", () => {

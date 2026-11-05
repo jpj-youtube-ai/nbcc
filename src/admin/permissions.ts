@@ -51,6 +51,12 @@ export const SECTIONS = [
   // only by role, like "analytics": editors and viewers get NONE, and anyone else is given it per
   // person from the Team matrix.
   "red-bag",
+  // Head Elf HQ (5 November 2026): the Elf Detective School's own section (Admin > Content > Elf
+  // Detective School). It holds children's first names and families' emails, so it is locked down like
+  // "email-audit": admins edit by role, editors and viewers get NONE, and a head elf is given it per
+  // person from the Team matrix. Switching the school on, its prices and its preview link are admin
+  // only in the route, whatever this matrix says.
+  "elf",
   "team",
 ] as const;
 
@@ -109,7 +115,7 @@ export function roleToPermissions(role: string): PermissionMap {
   const perms: PermissionMap = {};
   for (const section of SECTIONS) {
     perms[section] =
-      section === "team" || section === "email-audit" || section === "business-supporters" || section === "analytics" || section === "red-bag"
+      section === "team" || section === "email-audit" || section === "business-supporters" || section === "analytics" || section === "red-bag" || section === "elf"
         ? "none"
         : "view";
   }

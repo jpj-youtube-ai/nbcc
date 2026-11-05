@@ -72,7 +72,8 @@ describe("people whose access was saved before the section existed", () => {
     expect(editor.analytics ?? "none").toBe("none");
     const viewer = roleToPermissions("viewer");
     for (const s of others) {
-      const none = s === "team" || s === "email-audit" || s === "business-supporters" || s === "analytics";
+      // elf: Head Elf HQ (5 November 2026), locked down the same way.
+      const none = s === "team" || s === "email-audit" || s === "business-supporters" || s === "analytics" || s === "elf";
       expect(viewer[s], s).toBe(none ? "none" : "view");
     }
     for (const s of others) expect(roleToPermissions("admin")[s], s).toBe("edit");

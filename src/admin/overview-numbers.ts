@@ -30,6 +30,8 @@ const pounds = (pence: number) => "£" + wholePounds(pence).toLocaleString("en-G
 const n = (x: number) => x.toLocaleString("en-GB");
 /** "£412 from 19 gifts": money received and the gifts it came from. */
 export const giftsWords = (s: { pence: number; gifts: number }) => `${pounds(s.pence)} from ${n(s.gifts)} ${s.gifts === 1 ? "gift" : "gifts"}`;
+/** "£1,486 from 128 payments": the same, for the Elf Detective School, whose entries are payments, not gifts. */
+export const paymentsWords = (s: { pence: number; gifts: number }) => `${pounds(s.pence)} from ${n(s.gifts)} ${s.gifts === 1 ? "payment" : "payments"}`;
 const people = (x: number) => `${n(x)} ${x === 1 ? "person" : "people"}`;
 
 // As the Analytics screen names its channels. The top one may bring well under half the visits, so

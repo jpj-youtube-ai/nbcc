@@ -6,6 +6,7 @@ import { computeRetentionExpiry } from "../declarations/retention";
 import { gasdsClaimDeadline } from "../gasds/deadline";
 import type { Scope } from "../declarations/wording";
 import { DONATION_SOURCES } from "./stripe-webhook-model";
+import { ELF_SOURCE } from "../admin/gift-sources";
 
 // Read access to admin/staff `users` (TASK-105/REQ-062). Read-only (pool.query, no transaction —
 // mirrors getDonorPortalSnapshot in src/db/portal.ts). The login endpoint looks a user up by email
@@ -723,8 +724,12 @@ export function clampPage(limit?: number, offset?: number): { limit: number; off
 }
 
 export interface AdminDonationRow {
+  /** 'donation' for a gift; 'elf' for an Elf Detective School payment (an elf_orders row), which the
+   *  list shows beside the gifts (Head Elf HQ). */
+  kind: "donation" | "elf";
   id: number;
-  donor_id: number;
+  /** Null on an elf payment: it has a family in Head Elf HQ, not a donor. */
+  donor_id: number | null;
   donor_name: string;
   donor_email: string | null;
   mode: string;
@@ -738,14 +743,43 @@ export interface AdminDonationRow {
   refunded_amount_pence: number;
   declaration_status: string | null;
   created_at: Date;
-  /** Where the gift was started: 'red_bag' for Fill a Red Bag, null for every other gift. */
+  /** Where the gift was started: 'red_bag' for Fill a Red Bag, null for every other gift;
+   *  'elf_school' on an elf payment. */
   source: string | null;
   /** The invoice this gift paid (Admin > Giving > Invoices), so the list can say "Invoice INV-0012". */
   invoice_id: number | null;
+  /** An elf payment's reference (EDS-K4F9Q2), its family, and its entry and gift; null on a gift. */
+  elf_reference: string | null;
+  elf_family_id: number | null;
+  entry_pence: number | null;
+  gift_pence: number | null;
 }
+
+// The Elf Detective School's paid payments, the rows Head Elf HQ counts: a family a head elf removed
+// is left out, as it is there.
+const ELF_PAID = `FROM elf_orders o JOIN elf_families f ON f.id = o.family_id
+      WHERE o.status = 'paid' AND f.active AND f.removed_at IS NULL`;
+// Each as a row of the list, column for column with the gifts': the grown up as the name, entry plus
+// gift as the amount, paid online, one off, and never in a claim (an entry is never Gift Aided; the
+// gift alone can carry it).
+const ELF_ROWS = `SELECT 'elf' AS kind, o.reference AS elf_reference, o.family_id AS elf_family_id,
+            o.entry_pence AS entry_pence, o.donation_pence AS gift_pence,
+            o.id, NULL::int AS donor_id, f.grown_up_name AS donor_name, f.email AS donor_email,
+            'once' AS mode, NULL::text AS plan, o.entry_pence + o.donation_pence AS amount_pence, 'GBP' AS currency,
+            (o.gift_aid AND o.donation_pence > 0) AS gift_aid, 'not_eligible' AS claim_status,
+            'paid' AS payment_status, 'online' AS payment_channel, 0 AS refunded_amount_pence,
+            NULL::text AS declaration_status, COALESCE(o.paid_at, o.created_at) AS created_at, 'elf_school' AS source, NULL::int AS invoice_id
+       ${ELF_PAID}`;
 
 // Browse ALL donations, newest first, optionally filtered by claim_status and/or payment_channel,
 // with a bounded page window. Returns the page plus the total matching count (for pagination).
+//
+// The Elf Detective School's payments are listed beside the gifts (decision 8 of
+// docs/superpowers/specs/2026-11-05-elf-admin-design.md) wherever the filters fit them: they are paid,
+// one off, online and never in a claim, so a claim status, Monthly, Refunded, Pending or Failed, in
+// person or another source leaves them out, and ?source=elf_school shows only them. Both kinds are
+// ordered by when each was given or paid, newest first: gifts before elf payments at the same moment,
+// then the newest record.
 export async function listDonations(opts: {
   limit?: number;
   offset?: number;
@@ -754,7 +788,8 @@ export async function listDonations(opts: {
   paymentStatus?: string;
   /** TASK-446: 'monthly' or 'once'. Anything else is ignored rather than returning nothing. */
   mode?: string;
-  /** 'red_bag': only gifts started on Fill a Red Bag. Anything else is ignored, as mode is. */
+  /** 'red_bag': only gifts started on Fill a Red Bag (and so on, DONATION_SOURCES); 'elf_school':
+   *  only the Elf Detective School's payments. Anything else is ignored, as mode is. */
   source?: string;
 }): Promise<{ results: AdminDonationRow[]; total: number }> {
   const { limit, offset } = clampPage(opts.limit, opts.offset);
@@ -785,25 +820,43 @@ export async function listDonations(opts: {
   }
   // Fill a Red Bag only. Checked against the one list of sources (DONATION_SOURCES), for the same
   // reason as mode above: junk reads as "no filter", never as an empty list.
-  if (typeof opts.source === "string" && (DONATION_SOURCES as readonly string[]).includes(opts.source)) {
+  const giftSource = typeof opts.source === "string" && (DONATION_SOURCES as readonly string[]).includes(opts.source);
+  if (giftSource) {
     params.push(opts.source);
     where.push(`d.source = $${params.length}`);
   }
+  const onlyElf = opts.source === ELF_SOURCE;
+  const elfFits =
+    !opts.status && (!opts.channel || opts.channel === "online") && (!opts.paymentStatus || opts.paymentStatus === "paid") && opts.mode !== "monthly";
+  const withGifts = !onlyElf;
+  const withElf = elfFits && !giftSource;
+  // Elf Detective School only, with a filter no payment of it can meet: nothing to look up.
+  if (!withGifts && !withElf) return { results: [], total: 0 };
+
   const whereSql = where.length ? `WHERE ${where.join(" AND ")}` : "";
-  const totalRes = await pool.query<{ count: number }>(
-    `SELECT count(*)::int AS count FROM donations d ${whereSql}`,
-    params,
-  );
-  const res = await pool.query<AdminDonationRow>(
-    `SELECT d.id, d.donor_id, dn.full_name AS donor_name, dn.email AS donor_email,
+  // The filters' values belong to the gifts' WHERE; a list of elf payments alone has no place for them.
+  const values = withGifts ? params : [];
+  const giftCount = `SELECT count(*)::int FROM donations d ${whereSql}`;
+  const elfCount = `SELECT count(*)::int ${ELF_PAID}`;
+  const countSql = withGifts && withElf
+    ? `SELECT (${giftCount}) + (${elfCount}) AS count`
+    : `SELECT count(*)::int AS count ${withGifts ? `FROM donations d ${whereSql}` : ELF_PAID}`;
+  const totalRes = await pool.query<{ count: number }>(countSql, values);
+
+  const giftRows = `SELECT 'donation' AS kind, NULL::text AS elf_reference, NULL::int AS elf_family_id,
+            NULL::int AS entry_pence, NULL::int AS gift_pence,
+            d.id, d.donor_id, dn.full_name AS donor_name, dn.email AS donor_email,
             d.mode, d.plan, d.amount_pence, d.currency, d.gift_aid, d.claim_status,
             d.payment_status, d.payment_channel, d.refunded_amount_pence, d.declaration_status, d.created_at, d.source, d.invoice_id
        FROM donations d
        JOIN donors dn ON dn.id = d.donor_id
-       ${whereSql}
-      ORDER BY d.id DESC
+       ${whereSql}`;
+  const parts = [...(withGifts ? [giftRows] : []), ...(withElf ? [ELF_ROWS] : [])];
+  const res = await pool.query<AdminDonationRow>(
+    `SELECT * FROM (${parts.join(" UNION ALL ")}) listed
+      ORDER BY listed.created_at DESC, listed.kind = 'elf', listed.id DESC
       LIMIT ${limit} OFFSET ${offset}`,
-    params,
+    values,
   );
   return { results: res.rows, total: totalRes.rows[0].count };
 }

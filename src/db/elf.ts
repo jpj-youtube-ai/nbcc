@@ -282,7 +282,8 @@ export async function expireElfOrder(client: Querier, reference: string): Promis
 /** The family for an email, only once it has paid for detectives. */
 export async function activeFamilyByEmail(email: string): Promise<{ id: number; grownUpName: string } | null> {
   const r = await pool.query<{ id: number; grown_up_name: string }>(
-    "SELECT id, grown_up_name FROM elf_families WHERE email = $1 AND active",
+    // A family a head elf has removed is not found, so it gets no sign in code (Head Elf HQ).
+    "SELECT id, grown_up_name FROM elf_families WHERE email = $1 AND active AND removed_at IS NULL",
     [email.trim().toLowerCase()],
   );
   return r.rows[0] ? { id: r.rows[0].id, grownUpName: r.rows[0].grown_up_name } : null;
@@ -320,7 +321,7 @@ export async function createElfSession(sessionHash: string, familyId: number, ex
 export async function findElfSession(sessionHash: string): Promise<{ familyId: number } | null> {
   const r = await pool.query<{ family_id: number }>(
     `SELECT s.family_id FROM elf_sessions s JOIN elf_families f ON f.id = s.family_id
-      WHERE s.session_hash = $1 AND s.expires_at > now() AND f.active`,
+      WHERE s.session_hash = $1 AND s.expires_at > now() AND f.active AND f.removed_at IS NULL`,
     [sessionHash],
   );
   return r.rows[0] ? { familyId: r.rows[0].family_id } : null;
@@ -422,44 +423,4 @@ export async function saveLook(o: {
   } finally {
     client.release();
   }
-}
-
-// --- the admin -----------------------------------------------------------------------------------------
-
-export interface ElfSignups {
-  families: number;
-  detectives: number;
-  entryPence: number;
-  donationPence: number;
-  giftAidPence: number;
-  recent: { reference: string; grownUpName: string; detectives: string[]; paidAt: string }[];
-}
-
-/** Paid sign ups only: pending and expired orders are not counted. */
-export async function listElfSignups(): Promise<ElfSignups> {
-  const totals = await pool.query<{ families: string; detectives: string; entry: string; donation: string; gift_aid: string }>(
-    `SELECT COUNT(DISTINCT family_id) AS families,
-            COALESCE(SUM(cardinality(detective_ids)), 0) AS detectives,
-            COALESCE(SUM(entry_pence), 0) AS entry,
-            COALESCE(SUM(donation_pence), 0) AS donation,
-            COALESCE(SUM(donation_pence) FILTER (WHERE gift_aid), 0) AS gift_aid
-       FROM elf_orders WHERE status = 'paid'`,
-  );
-  const recent = await pool.query<{ reference: string; grown_up_name: string; names: string[] | null; paid_at: Date | string }>(
-    `SELECT o.reference, f.grown_up_name, o.paid_at,
-            ARRAY(SELECT d.first_name || ' ' || d.surname FROM elf_detectives d WHERE d.id = ANY(o.detective_ids) ORDER BY d.id) AS names
-       FROM elf_orders o JOIN elf_families f ON f.id = o.family_id
-      WHERE o.status = 'paid'
-      ORDER BY o.paid_at DESC
-      LIMIT 50`,
-  );
-  const t = totals.rows[0];
-  return {
-    families: Number(t?.families ?? 0),
-    detectives: Number(t?.detectives ?? 0),
-    entryPence: Number(t?.entry ?? 0),
-    donationPence: Number(t?.donation ?? 0),
-    giftAidPence: Number(t?.gift_aid ?? 0),
-    recent: recent.rows.map((r) => ({ reference: r.reference, grownUpName: r.grown_up_name, detectives: r.names ?? [], paidAt: new Date(r.paid_at).toISOString() })),
-  };
 }

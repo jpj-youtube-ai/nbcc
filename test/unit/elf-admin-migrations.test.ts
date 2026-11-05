@@ -38,3 +38,32 @@ describe("the Elf Detective School's permission migration", () => {
     expect(sorted().indexOf(FILE)).toBeGreaterThan(sorted().indexOf("1791200000320_elf-favourites.js"));
   });
 });
+
+describe("the migration that lets a head elf remove a family", () => {
+  const FILE = "1791200000340_elf-families-removed.js";
+
+  /** The columns a migration adds or drops, from a pretend pgm. */
+  function columnsOf(way: "up" | "down") {
+    const seen: { table: string; columns: unknown }[] = [];
+    const pgm = {
+      addColumns: (table: string, columns: unknown) => seen.push({ table, columns }),
+      dropColumns: (table: string, columns: unknown) => seen.push({ table, columns }),
+    };
+    require(resolve(DIR, FILE))[way](pgm);
+    return seen;
+  }
+
+  it("adds when and by whom a family was removed, both empty to start with", () => {
+    const [added] = columnsOf("up");
+    expect(added.table).toBe("elf_families");
+    expect(added.columns).toEqual({ removed_at: { type: "timestamptz" }, removed_by: { type: "text" } });
+  });
+
+  it("can be taken back", () => {
+    expect(columnsOf("down")).toEqual([{ table: "elf_families", columns: ["removed_at", "removed_by"] }]);
+  });
+
+  it("sorts after the permission migration", () => {
+    expect(sorted().indexOf(FILE)).toBeGreaterThan(sorted().indexOf("1791200000330_permissions-elf.js"));
+  });
+});

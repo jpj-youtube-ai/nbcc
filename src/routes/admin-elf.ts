@@ -3,8 +3,12 @@ import { z } from "zod";
 import { authorizeSection, authorizeSectionAsAdmin } from "./admin-authz";
 import { actorOf } from "./admin";
 import { config } from "../config";
-import { getElfSettings, listElfSignups, setElfPreview, setElfSettings, type ElfSettings } from "../db/elf";
+import { getElfSettings, setElfPreview, setElfSettings, type ElfSettings } from "../db/elf";
+import { elfHqNumbers, elfRecruits } from "../db/elf-admin";
+import { daysUntil, questsFor, tileFor } from "../elf/admin-hq";
+import { badgeWords } from "../elf/emails";
 import { hashElfToken, newElfToken } from "../elf/session";
+import { firstClueAt } from "../elf/views";
 
 /** The settings as the admin sees them: whether there is a preview link, never its code's hash. */
 function forAdmin(s: ElfSettings) {
@@ -18,8 +22,8 @@ function forAdmin(s: ElfSettings) {
 //
 //   GET   /api/admin/elf/settings   the switch and the pay what you can amounts (elf: view)
 //   PATCH /api/admin/elf/settings   change them (admins only: switching the school on puts it live)
-//   GET   /api/admin/elf/signups    paid sign ups: how many families and detectives, the money, and
-//                                   the newest 50 (elf: view)
+//   GET   /api/admin/elf/hq         HQ: the settings, the numbers, Needs you, the newest recruits and
+//                                   the days to the first clue (elf: view)
 //
 // The school has its own permission section, "elf" (src/admin/permissions.ts): admins by role, a head
 // elf given it from the Team matrix. The screen is assets/js/admin/elf-hq.js. Unit tested in
@@ -70,13 +74,38 @@ export async function patchAdminElfSettings(req: Request, res: Response): Promis
   }
 }
 
-export async function getAdminElfSignups(req: Request, res: Response): Promise<Response | void> {
+/** How many newest recruits HQ shows. */
+const RECRUITS = 8;
+
+/** HQ: everything its first screen draws, in one answer. */
+export async function getAdminElfHq(req: Request, res: Response): Promise<Response | void> {
   res.setHeader("Cache-Control", "no-store");
-  if (!(await authorizeSection(req, res, "elf", "view"))) return;
+  const claims = await authorizeSection(req, res, "elf", "view");
+  if (!claims) return;
   try {
-    return res.status(200).json(await listElfSignups());
+    const now = new Date();
+    const [settings, numbers, recruits] = await Promise.all([getElfSettings(), elfHqNumbers(now), elfRecruits(RECRUITS)]);
+    const clue = firstClueAt(settings.year);
+    return res.status(200).json({
+      settings: forAdmin(settings),
+      // Whether the lever is drawn to be pulled. The token's role is enough for that: the switch
+      // itself is PATCH /api/admin/elf/settings, which checks the role in the database.
+      canSwitch: claims.role === "admin",
+      numbers,
+      quests: questsFor(numbers, !!settings.previewHash),
+      recruits: recruits.map((d) => ({
+        detectiveId: d.detectiveId,
+        familyId: d.familyId,
+        name: `${d.firstName} ${d.surname}`,
+        badge: d.badgeNumber === null ? null : badgeWords(d.badgeNumber),
+        approved: d.approved,
+        tile: tileFor(d.look),
+      })),
+      firstClueAt: clue.toISOString(),
+      daysToFirstClue: daysUntil(now, clue),
+    });
   } catch (err) {
-    console.error("admin elf sign ups failed:", err instanceof Error ? err.message : err);
+    console.error("admin elf hq failed:", err instanceof Error ? err.message : err);
     return res.status(500).json(UNAVAILABLE);
   }
 }
@@ -115,4 +144,4 @@ adminElfRouter.post("/api/admin/elf/preview", postAdminElfPreview);
 adminElfRouter.delete("/api/admin/elf/preview", deleteAdminElfPreview);
 adminElfRouter.get("/api/admin/elf/settings", getAdminElfSettings);
 adminElfRouter.patch("/api/admin/elf/settings", patchAdminElfSettings);
-adminElfRouter.get("/api/admin/elf/signups", getAdminElfSignups);
+adminElfRouter.get("/api/admin/elf/hq", getAdminElfHq);

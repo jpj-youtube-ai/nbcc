@@ -2,21 +2,23 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
-// NBCC Elf Detective School in the admin: the switch, the pay what you can amounts, and the sign ups.
-// Every family here is invented.
+// NBCC Elf Detective School in the admin, Head Elf HQ: the switch, the pay what you can amounts, HQ's
+// numbers and the families. Every family here is invented.
 
-const { getUserAuthRowMock, db } = vi.hoisted(() => ({
+const { getUserAuthRowMock, db, dbAdmin } = vi.hoisted(() => ({
   getUserAuthRowMock: vi.fn(),
-  db: { getElfSettings: vi.fn(), setElfSettings: vi.fn(), listElfSignups: vi.fn(), setElfPreview: vi.fn() },
+  db: { getElfSettings: vi.fn(), setElfSettings: vi.fn(), setElfPreview: vi.fn() },
+  dbAdmin: { elfHqNumbers: vi.fn(), elfRecruits: vi.fn() },
 }));
 vi.mock("../../src/db/admin-users", () => ({ getUserAuthRow: getUserAuthRowMock }));
 vi.mock("../../src/db/elf", () => db);
+vi.mock("../../src/db/elf-admin", () => dbAdmin);
 vi.mock("../../src/db/pool", () => ({ pool: { query: vi.fn(), connect: vi.fn() } }));
 vi.mock("../../src/config", () => ({
   config: { NODE_ENV: "development", ADMIN_SESSION_SECRET: "test-admin-secret", STRIPE_SECRET_KEY: "sk_test_aaaaaaaaaaaaaaaaaaaa", STRIPE_WEBHOOK_SECRET: "whsec_x" },
 }));
 
-import { getAdminElfSettings, getAdminElfSignups, patchAdminElfSettings } from "../../src/routes/admin-elf";
+import { getAdminElfHq, getAdminElfSettings, patchAdminElfSettings } from "../../src/routes/admin-elf";
 import { signAdminSession } from "../../src/admin/session";
 
 const ON = { schoolOn: true, year: 2026, entryFromPence: 100, entrySuggestedPence: 500 };
@@ -44,7 +46,7 @@ const run = async (h: (req: any, res: any) => Promise<unknown>, r: unknown) => {
 
 beforeEach(() => {
   getUserAuthRowMock.mockReset();
-  for (const f of Object.values(db)) f.mockReset();
+  for (const f of [...Object.values(db), ...Object.values(dbAdmin)]) f.mockReset();
   db.getElfSettings.mockResolvedValue(ON);
   db.setElfSettings.mockImplementation(async (patch: object) => ({ ...ON, ...patch }));
 });
@@ -84,14 +86,45 @@ describe("the school's settings in the admin", () => {
   });
 });
 
-describe("the sign ups in the admin", () => {
-  it("shows a head elf the paid sign ups, and nobody without the section", async () => {
-    const summary = { families: 2, detectives: 3, entryPence: 1500, donationPence: 500, giftAidPence: 500, recent: [] };
-    db.listElfSignups.mockResolvedValue(summary);
-    const res = await run(getAdminElfSignups, req("viewer", {}, HEAD_ELF));
+describe("HQ in the admin", () => {
+  const NUMBERS = { families: 2, detectives: 3, namesToCheck: 1, waitingPayments: 0, entryPence: 1500, giftPence: 500, giftAidPence: 500 };
+  const RUBY = { detectiveId: 7, familyId: 3, firstName: "Ruby", surname: "Tinselfoot", badgeNumber: 427, approved: false, look: { costume: "reindeer", skin: "s3" } };
+  beforeEach(() => {
+    dbAdmin.elfHqNumbers.mockResolvedValue(NUMBERS);
+    dbAdmin.elfRecruits.mockResolvedValue([RUBY]);
+  });
+
+  it("answers with its numbers, quests and newest recruits", async () => {
+    const res = await run(getAdminElfHq, req("admin"));
     expect(res.statusCode).toBe(200);
-    expect(res.body).toEqual(summary);
-    expect((await run(getAdminElfSignups, req("editor"))).statusCode).toBe(403);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const body = res.body as any;
+    expect(body.numbers).toEqual(NUMBERS);
+    expect(body.quests.map((q: { id: string }) => q.id)).toEqual(["names"]);
+    expect(body.recruits).toEqual([{ detectiveId: 7, familyId: 3, name: "Ruby Tinselfoot", badge: "EDS 0427", approved: false, tile: "/assets/img/elf/paper/tiles/costumes/reindeer-s3.webp" }]);
+    expect(body.settings).toMatchObject({ schoolOn: true, previewOn: false });
+    expect(body.settings.previewHash).toBeUndefined();
+    expect(body.firstClueAt).toBe("2026-12-01T17:30:00.000Z");
+    expect(typeof body.daysToFirstClue).toBe("number");
+    expect(body.canSwitch).toBe(true);
+    expect(dbAdmin.elfRecruits).toHaveBeenCalledWith(8);
+  });
+
+  it("lets a head elf look, but only an admin may pull the switch", async () => {
+    const res = await run(getAdminElfHq, req("viewer", {}, HEAD_ELF));
+    expect(res.statusCode).toBe(200);
+    expect((res.body as { canSwitch: boolean }).canSwitch).toBe(false);
+  });
+
+  it("is not for an editor", async () => {
+    expect((await run(getAdminElfHq, req("editor"))).statusCode).toBe(403);
+  });
+
+  it("says so in words when the numbers cannot be read", async () => {
+    dbAdmin.elfHqNumbers.mockRejectedValue(new Error("down"));
+    const res = await run(getAdminElfHq, req("admin"));
+    expect(res.statusCode).toBe(500);
+    expect(res.body).toEqual({ error: "Admin is temporarily unavailable" });
   });
 });
 

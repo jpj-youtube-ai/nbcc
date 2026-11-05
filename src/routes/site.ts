@@ -296,7 +296,9 @@ export function createSiteRouter(siteRoot: string, opts: SiteRouterOptions = {})
       }
       const template = readFileSync(homeFile, "utf8");
       // renderHomePromo adds the Festive Ball item itself; Get involved and What's on are ours to add.
-      let html = renderHomePromo(template, { gateOpen: true });
+      // Jaimie, 5 November 2026: once ticket sales close, the band loses its Book tickets button.
+      const salesClosed = await (await import("../db/ball")).ticketSalesClosed();
+      let html = renderHomePromo(template, { gateOpen: true, salesClosed });
       if (await eventsPageIsOn()) html = await addEventsItems(html);
       if (await fundraisingIsOn()) html = (await import("../fundraising/footer-link")).addFundraiseFooterLink(html);
       res.type("html").send(html);

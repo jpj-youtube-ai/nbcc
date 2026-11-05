@@ -149,7 +149,10 @@ elfRouter.get("/elf/join", schoolOn, async (req, res) => {
   sendJoinPage(res, 200, family ? { signedIn: { grownUpName: family.grownUpName, email: family.email } } : {});
 });
 
-const joinLimiter = createRateLimiter({ max: 10, windowMs: 60 * 60_000 });
+/** Enrolments each address may make: loose enough for a family enrolling its children one at a time,
+ *  or a busy shared connection on the evening the school opens. */
+export const JOIN_LIMIT = { max: 10, windowMs: 10 * 60_000 } as const;
+const joinLimiter = createRateLimiter(JOIN_LIMIT);
 
 export async function postJoin(req: Request, res: Response): Promise<Response | void> {
   res.setHeader("Cache-Control", "no-store");

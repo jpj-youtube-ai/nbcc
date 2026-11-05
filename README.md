@@ -11533,7 +11533,9 @@ detective's badge and says more costumes unlock as they crack doors in December)
 up joins the newsletter only if they ticked the box. The entry is never Gift Aided; the optional gift
 and its declaration stay on the order (as the Festive Ball keeps its gift on the booking). An email
 whose family has already paid must sign in to add detectives, so nobody can add children to someone
-else's family by typing their email.
+else's family by typing their email. Each address may enrol 10 times every 10 minutes (`JOIN_LIMIT` in
+`src/routes/elf.ts`), loose enough for a family enrolling its children one at a time or a busy shared
+connection; a request made on the box itself skips the limit.
 
 ### Where it lives, and tests
 

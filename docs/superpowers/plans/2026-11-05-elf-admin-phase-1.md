@@ -38,7 +38,7 @@
 **Files:**
 - Modify: `src/admin/permissions.ts` (SECTIONS gets `"elf"` before `"team"`, with a comment; the viewer default list of sections given `"none"` gains `"elf"`; editors are not given it)
 - Modify: `assets/js/admin/app.js:34-37` (the client `SECTIONS` copy gains `"elf"` in the same place)
-- Create: `migrations/1791200000330_permissions-elf.js` (the `1788100000000_permissions-business-supporters.js` pattern: `elf` is `edit` for `role = 'admin'`, `none` otherwise, only on saved non-empty matrices lacking the key; `down` removes the key)
+- Create: `migrations/1791200000350_permissions-elf.js` (the `1788100000000_permissions-business-supporters.js` pattern: `elf` is `edit` for `role = 'admin'`, `none` otherwise, only on saved non-empty matrices lacking the key; `down` removes the key)
 - Modify: `src/routes/admin-elf.ts` (every `"fundraising"` becomes `"elf"`; the header comment says Admin > Content > Elf Detective School)
 - Modify: `admin.html` (Content menu: `<li><button class="admin-nav-link" type="button" data-view="elf">Elf Detective School</button></li>` right after Festive Ball; a new `<section class="admin-view" id="view-elf" aria-labelledby="elf-heading" hidden><h2 id="elf-heading" class="hq-sr">Elf Detective School</h2><div id="elfHq"></div></section>`; remove the Get involved Settings elf block (the comment starting "NBCC Elf Detective School (wave 1)" and its `gi-part` group holding `#elfAdmin`) and the `elf.js` script tag)
 - Delete: `assets/js/admin/elf.js`, `test/unit/admin-elf-js.test.ts` (their switch, prices, preview link and sign ups move to Tasks 4 and 8)
@@ -89,7 +89,7 @@
 ### Task 3: HQ's numbers, and removed families left out
 
 **Files:**
-- Create: `migrations/1791200000340_elf-families-removed.js` (`elf_families.removed_at timestamptz` null, `removed_by text` null; down drops both)
+- Create: `migrations/1791200000360_elf-families-removed.js` (`elf_families.removed_at timestamptz` null, `removed_by text` null; down drops both)
 - Create: `src/elf/admin-hq.ts` (pure)
 - Create: `src/db/elf-admin.ts`
 - Modify: `src/db/elf.ts` (`activeFamilyByEmail` and `findElfSession` leave out families with `removed_at` set; `listElfSignups` removed, HQ replaces it)
@@ -110,7 +110,7 @@
 - [ ] **Step 1: Write the failing tests**
   - `elf-admin-hq.test.ts`: "lists only the quests that apply, in order" (all three, then none when the numbers are zero and the preview is off); "gives the names quest the count and the Families filter"; "picks the tile of the costume the look wears, in its skin" (`{ costume: "reindeer", skin: "s3" }` gives `.../reindeer-s3.webp`; `null`, `{}`, `{ costume: "nope", skin: "s9" }` give `.../detective-s1.webp`); "counts whole days to the first clue, never below 0"; "says what Gift Aid could add" (`giftAidCouldAddPence(21000) === 5250`).
   - `admin-elf.test.ts`: "HQ answers with its numbers and quests" (mocked `elfHqNumbers`, `elfRecruits`, `getElfSettings`; checks `quests[0].id`, `recruits[0].tile`, `canSwitch` true for an admin and false for a viewer given `elf: "view"`); "HQ refuses an editor" (403).
-  - `elf-admin-migrations.test.ts`: the removed columns migration adds `removed_at` and `removed_by` and sorts after `1791200000330_permissions-elf.js`.
+  - `elf-admin-migrations.test.ts`: the removed columns migration adds `removed_at` and `removed_by` and sorts after `1791200000350_permissions-elf.js`.
   - BDD `features/elf-admin.feature`, scenario "Head Elf HQ counts a paid family and refuses an editor": using the elf join steps (`"{string} has already enrolled {string} and paid"`) and the admin user steps, an admin GET of `/api/admin/elf/hq` is 200 with `numbers.families` 1 and `numbers.namesToCheck` 1, and an editor's is 403.
 - [ ] **Step 2: Run the unit tests and watch them fail**
   Run: `npx vitest run test/unit/elf-admin-hq.test.ts test/unit/admin-elf.test.ts test/unit/elf-admin-migrations.test.ts`

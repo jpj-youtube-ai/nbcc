@@ -20,7 +20,7 @@ function sqlOf(file: string, way: "up" | "down"): string {
 const sorted = () => readdirSync(DIR).filter((f) => f.endsWith(".js")).sort();
 
 describe("the Elf Detective School's permission migration", () => {
-  const FILE = "1791200000330_permissions-elf.js";
+  const FILE = "1791200000350_permissions-elf.js";
 
   it("adds the elf section to every saved matrix that lacks it: admins edit, everyone else none", () => {
     const up = sqlOf(FILE, "up");
@@ -40,7 +40,7 @@ describe("the Elf Detective School's permission migration", () => {
 });
 
 describe("the migration that lets a head elf remove a family", () => {
-  const FILE = "1791200000340_elf-families-removed.js";
+  const FILE = "1791200000360_elf-families-removed.js";
 
   /** The columns a migration adds or drops, from a pretend pgm. */
   function columnsOf(way: "up" | "down") {
@@ -64,6 +64,6 @@ describe("the migration that lets a head elf remove a family", () => {
   });
 
   it("sorts after the permission migration", () => {
-    expect(sorted().indexOf(FILE)).toBeGreaterThan(sorted().indexOf("1791200000330_permissions-elf.js"));
+    expect(sorted().indexOf(FILE)).toBeGreaterThan(sorted().indexOf("1791200000350_permissions-elf.js"));
   });
 });

@@ -90,6 +90,36 @@ describe("a Red Bag gift's rules", () => {
   });
 });
 
+// A company's own Workshop (/fill/<slug>, 6 November 2026): the gift carries the link it was given
+// through, and the webhook puts it on that company's shelves. Only with the Red Bag marker.
+describe("a Red Bag gift given through a company's link", () => {
+  beforeEach(() => {
+    live.value = true;
+  });
+
+  it("carries the company's link as one more key", async () => {
+    expect((await run({ ...bag, redBagWorkshop: "brightwater-engineering" })).statusCode).toBe(200);
+    expect(params().metadata.redBag).toBe("true");
+    expect(params().metadata.redBagWorkshop).toBe("brightwater-engineering");
+  });
+
+  it("is otherwise exactly the plain Red Bag gift", async () => {
+    await run(bag);
+    const plain = params().metadata;
+    create.mockClear();
+    await run({ ...bag, redBagWorkshop: "brightwater-engineering" });
+    expect(params().metadata).toStrictEqual({ ...plain, redBagWorkshop: "brightwater-engineering" });
+  });
+
+  it("refuses a link of the wrong shape, and a link without the Red Bag marker", async () => {
+    for (const bad of ["Bright Water", "../admin", "x".repeat(61), ""]) {
+      expect((await run({ ...bag, redBagWorkshop: bad })).statusCode, bad).toBe(400);
+    }
+    expect((await run({ ...gift, redBagWorkshop: "brightwater-engineering" })).statusCode).toBe(400);
+    expect(create).not.toHaveBeenCalled();
+  });
+});
+
 describe("what a Red Bag gift's Stripe session carries", () => {
   beforeEach(() => {
     live.value = true;

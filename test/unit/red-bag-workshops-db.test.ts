@@ -41,8 +41,11 @@ describe("the totals", () => {
     expect(WORKSHOP_SEASON_FROM).toBe("2026-11-01T00:00:00Z");
     expect(WORKSHOP_TOTALS_SQL).toMatch(/payment_status = 'paid'/);
     expect(WORKSHOP_TOTALS_SQL).toMatch(/source = 'red_bag'/);
-    expect(WORKSHOP_TOTALS_SQL).toMatch(/GREATEST\(amount_pence - refunded_amount_pence, 0\)/);
-    expect(WORKSHOP_TOTALS_SQL).toMatch(/created_at >= \$1/);
+    expect(WORKSHOP_TOTALS_SQL).toContain("GREATEST(d.amount_pence - d.refunded_amount_pence, 0)");
+    expect(WORKSHOP_TOTALS_SQL).toContain("d.created_at >= $1");
+    // a monthly gift's later charges count for the company of its subscription's first donation
+    expect(WORKSHOP_TOTALS_SQL).toContain("f.stripe_subscription_id = d.stripe_subscription_id");
+    expect(WORKSHOP_TOTALS_SQL).toContain("ORDER BY f.id ASC LIMIT 1");
     expect(WORKSHOP_TOTALS_SQL).toMatch(/ROLLUP \(red_bag_workshop_id\)/);
   });
 

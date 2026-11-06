@@ -119,12 +119,22 @@ export interface WorkshopTotals {
   byWorkshopPence: Map<number, number>;
 }
 
-export const WORKSHOP_TOTALS_SQL = `SELECT red_bag_workshop_id AS workshop_id, COALESCE(SUM(GREATEST(amount_pence - refunded_amount_pence, 0)), 0) AS pence
-  FROM donations
- WHERE payment_status = 'paid'
-   AND source = 'red_bag'
-   AND amount_pence > refunded_amount_pence
-   AND created_at >= $1
+// A monthly gift's later charges carry no company of their own: they count for the company of their
+// subscription's first donation (the one its checkout recorded).
+export const WORKSHOP_TOTALS_SQL = `WITH gifts AS (
+  SELECT GREATEST(d.amount_pence - d.refunded_amount_pence, 0) AS pence,
+         COALESCE(d.red_bag_workshop_id,
+           (SELECT f.red_bag_workshop_id FROM donations f
+             WHERE d.stripe_subscription_id IS NOT NULL AND f.stripe_subscription_id = d.stripe_subscription_id
+             ORDER BY f.id ASC LIMIT 1)) AS red_bag_workshop_id
+    FROM donations d
+   WHERE d.payment_status = 'paid'
+     AND d.source = 'red_bag'
+     AND d.amount_pence > d.refunded_amount_pence
+     AND d.created_at >= $1
+)
+SELECT red_bag_workshop_id AS workshop_id, COALESCE(SUM(pence), 0) AS pence
+  FROM gifts
  GROUP BY ROLLUP (red_bag_workshop_id)`;
 
 /** The totals from the rows of WORKSHOP_TOTALS_SQL (the ROLLUP's grand total has no workshop and comes last). */

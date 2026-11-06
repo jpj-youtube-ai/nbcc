@@ -1645,6 +1645,7 @@ hosted-Checkout redirect stays the default fallback and no-JS safety net.
 | `POST /api/fundraisers/:slug/pledges` | **implemented** | Sponsor pledges (public; "Sponsor now, pay after" on a sponsorship fundraiser's page: a promise, never money, and unconfirmed until the sponsor confirms by email. See **Sponsor pledges**) |
 | `GET /fill` | **implemented, listed but unlinked** | Fill a Red Bag (a new way to give: fill a list of example items, watch a red bag fill, give the total. Public since 4 October 2026 and on the site map, so search engines may list it; still linked from no menu, footer or page. `POST /api/checkout-session` takes an optional `redBag: true` for it. See **Fill a Red Bag (listed, unlinked)**) |
 | `GET /fill/thank-you` | **implemented** | Fill a Red Bag's thank you, a page of its own, where Stripe returns a donor; `noindex`, on no site map, linked from nowhere |
+| `GET /fill/:slug` | **implemented** | A company's own Workshop (`/fill/<slug>`), made in Admin > Fill a Red Bag > Company Workshops: the night look with only that company's bags on the shelves and its name on the sign; a page only at night, `noindex`, and the 404 for a company nobody made. See **Fill a Red Bag: the paintings, the Workshop and companies' own links** |
 | `GET /fill-a-red-bag`, `GET /fill-a-bag` | **implemented** | The address the page first had, and the other way people type it: a permanent redirect (`301`) to `/fill`, query string kept (an old return from paying, `?thanks=1`, goes to `/fill/thank-you`), while the page is switched on; the 404 if it were switched off. Fixed in code, reserved, on no site map |
 | `GET /elf`, `GET /elf/rules` | **implemented, switched off** | NBCC Elf Detective School: the public calendar of 24 doors counting down to the first clue, and the rules. Every `/elf` page and `/api/elf/*` route answers 404 until an admin switches the school on. See **Elf Detective School** |
 | `GET /elf/join`, `POST /api/elf/join` | **implemented, switched off** | Enrol detectives (first name and a festive surname only) and pay what you can (from £1, £5 suggested, per detective; an optional gift can carry Gift Aid); goes on to Stripe Checkout tagged `product: elf_school` |
@@ -1705,6 +1706,10 @@ hosted-Checkout redirect stays the default fallback and no-JS safety net.
 | `POST /api/admin/red-bag-list/publish` | **implemented** | the draft becomes the list on `/fill` (Fill a Red Bag: edit) |
 | `POST /api/admin/red-bag-list/discard` | **implemented** | throw the draft away (Fill a Red Bag: edit) |
 | `POST /api/admin/red-bag-list/restore` | **implemented** | put an earlier list, or the original one, back as the draft (Fill a Red Bag: edit) |
+| `GET /api/admin/red-bag-workshops` | **implemented** | Company Workshops: every company, its link, bags, total and QR code, and everyone's (Fill a Red Bag: view) |
+| `POST /api/admin/red-bag-workshops` | **implemented** | add a company: `{ name, size }` (Fill a Red Bag: edit) |
+| `POST /api/admin/red-bag-workshops/:id/archive` | **implemented** | put a company away or bring it back: `{ archived }` (Fill a Red Bag: edit) |
+| `GET /api/admin/red-bag-workshops/:id/qr` | **implemented** | one company's QR code to download, `?format=png` or `svg` (Fill a Red Bag: view) |
 | `GET /fill?preview=draft` | **implemented** | the draft preview: the published page to a plain visit; the draft, under a strip and with giving switched off, to staff with Fill a Red Bag: view |
 | `GET /api/admin/claim-batches` | **implemented** | REQ-066 (list claim batches) |
 | `GET /api/admin/claim-batches/:id/export` | **implemented** | REQ-052/REQ-066 (Charities Online CSV export) |
@@ -7238,6 +7243,56 @@ from an edited list, the draft preview, giving switched off, who is given which 
 route) and `admin-red-bag-list-screen.test.ts` (the screen in jsdom). BDD:
 `features/red-bag-list.feature`, which puts the original list back through the API and empties the
 table before and after each scenario, so no other scenario meets a published list.
+
+## Fill a Red Bag: the paintings, the Workshop and companies' own links
+
+Since November 2026 Fill a Red Bag is painted in the logo's style (flat colour, bold maroon-brown
+outlines), with exactly the functionality it had.
+
+- **The pictures** are paintings, one a key of `ART` (`assets/js/red-bag-catalogue.js`), in
+  `assets/img/red-bag/<key>.webp`. `art()` draws each inside the same 40 by 40 picture as before, so every
+  place that shows one is unchanged; the list now shows each item's painting beside its name. The
+  Festive Ball's `/bag` page keeps the old hand drawings (`drawing()`, byte for byte), and
+  `test/unit/ball-bags-keeps-drawings.test.ts` holds it there.
+- **The bag** (`BAG_SVG`, `src/red-bag/render.ts`) is the painted bag seen a little from above: the
+  peeks sit inside its open top, behind its front (`.rb-bag__paper`); the red front is uncovered from the
+  bottom as `--rb-fill` rises; two drawn red rope handles, one on the back and one on the front, never
+  crossing. A full bag gets a painted bow and tag, its words real text. The buttons have the logo's
+  outline and a "sticker" edge; pressing + bursts gold twinkles, and more pop round the bag as an item
+  lands (none for reduced motion).
+- **The Workshop** is the night look's background: the elves' painted aisle in thirteen stages
+  (`assets/img/red-bag/workshop/s00` to `s12`), shelves filling with red bags. One bag on its shelves is
+  every £50 given through Fill a Red Bag since **1 November 2026** (paid, less refunds, the gift alone;
+  a monthly gift's later charges count with its first). It always opens stocked (stage 3); a wooden sign
+  gives the real count and "Just 2 more bags fill the next shelf". `src/red-bag/workshop.ts` holds the
+  ladders that pace the stages; the logo's own elf peeks over the workbench with a speech bubble that
+  changes with the stage.
+- **A company's own Workshop**: `GET /fill/<slug>` (for example `/fill/fern-and-thistle`), made in
+  Admin > Fill a Red Bag > Company Workshops (Fill a Red Bag: edit) from the company's name and a private
+  size (about 20, 100 or 500 people) that only paces its stages. Its Workshop counts only its gifts,
+  with its name on the sign; its gifts count for everyone's too. The page posts `redBagWorkshop: <slug>`
+  with the gift, the checkout stamps it in the session's metadata (only with `redBag`), and the Stripe
+  webhook's after-commit source statement is followed, inside the same time limit, by one more
+  fill-only-if-empty statement that sets `donations.red_bag_workshop_id` for a live company
+  (`TAG_CHECKOUT_WORKSHOP_SQL`): the donation's own INSERT is unchanged. A company link is a page only
+  at night, is never indexed, and is the site's 404 for a company nobody made, or one put away. Staff
+  can copy each link, download its QR code (PNG or SVG, carrying `utm_medium=qr`), and put a company
+  away (its link stops working; its gifts still count) or bring it back. Adding and putting away are in
+  `audit_log`.
+
+Table: `red_bag_workshops` (migration `1791200000390_red-bag-workshops.js`), and the nullable column
+`donations.red_bag_workshop_id`. The public page's two reads (a company by its link, and the totals) are
+cached for a minute and never throw (`src/db/red-bag-workshops.ts`).
+
+Routes: `GET /fill/:slug`; `GET /api/admin/red-bag-workshops` (Fill a Red Bag: view),
+`POST /api/admin/red-bag-workshops` and `POST /api/admin/red-bag-workshops/:id/archive` (edit),
+`GET /api/admin/red-bag-workshops/:id/qr?format=png|svg` (view).
+
+Tests: `red-bag-workshop.test.ts` (the ladders), `red-bag-workshops-db.test.ts` (links, totals, the
+cache, the audited writes, the migration), `red-bag-workshop-routes.test.ts`, the company mark in
+`red-bag-checkout.test.ts` and `stripe-webhook-source.test.ts`, `admin-red-bag-workshops-routes.test.ts`
+and `admin-red-bag-workshops-screen.test.ts`. BDD: an unknown company's link is the 404
+(`features/fill-a-red-bag.feature`).
 
 ## Fill a Red Bag against the Donate page, in the admin
 

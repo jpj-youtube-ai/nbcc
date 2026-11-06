@@ -148,7 +148,8 @@ describe("how it is wired into the admin", () => {
 
   it("is opened by app.js when its menu link is chosen", () => {
     const appJs = readFileSync(resolve(ROOT, "assets/js/admin/app.js"), "utf8");
-    expect(appJs).toContain('else if (name === "red-bag") { if (window.AdminRedBagList) window.AdminRedBagList.open(); }');
+    // and, since 6 November 2026, the Company Workshops under it (assets/js/admin/red-bag-workshops.js)
+    expect(appJs).toContain('else if (name === "red-bag") { if (window.AdminRedBagList) window.AdminRedBagList.open(); if (window.AdminRedBagWorkshops) window.AdminRedBagWorkshops.open(); }');
   });
 
   it("reads the list at once if app.js had already shown the section before this file ran", async () => {

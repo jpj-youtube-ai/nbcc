@@ -64,6 +64,18 @@ export function sourceFromCheckoutSession(
   return null;
 }
 
+/**
+ * The company's own Workshop a Fill a Red Bag gift was given through (/fill/<slug>), from the session's
+ * metadata: its link, only beside the Red Bag marker and only of a link's shape. Null otherwise.
+ */
+export function workshopFromCheckoutSession(session: Pick<Stripe.Checkout.Session, "metadata"> | null | undefined): string | null {
+  const metadata: unknown = session?.metadata;
+  if (typeof metadata !== "object" || metadata === null) return null;
+  const marks = metadata as Record<string, unknown>;
+  if (marks.redBag !== "true" || typeof marks.redBagWorkshop !== "string") return null;
+  return /^[a-z0-9]+(-[a-z0-9]+)*$/.test(marks.redBagWorkshop) && marks.redBagWorkshop.length <= 60 ? marks.redBagWorkshop : null;
+}
+
 // checkout.session.completed → what brought the giver (src/donations/arrival.ts), as the checkout
 // stamped it: arrChannel, arrSource, arrCampaign and givenOn, each only when there was something to
 // say. Null without a known channel (Do Not Track, an older page, or a session from anywhere else).

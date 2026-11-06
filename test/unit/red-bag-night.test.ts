@@ -87,12 +87,14 @@ const between = (html: string, from: string, to: string) => {
 // The renders of commit d17f9856, the page as it stood before any of Stage 2, line endings aside. If
 // the page is changed on purpose before the night, take the new hash from the failure, having checked
 // that the change is the one meant. After the night, and once the file below is tidied, this can go.
+// Re-pinned 6 November 2026 for the paintings (Jaimie): the pictures, the list's pictures and the painted
+// bag, checked against main by a tag by tag diff, with not one word of either page changed.
 const BASELINE = {
-  page: "1b78a4f3eb7513aea917760677a5420d5cdf216261c767f3ae6814b37744c97d",
-  list: "60fade97c5c1dba26ad865c35dbad9a38b5cc2a15c5fc098bfb7d11183bd532a",
-  draft: "7514f2c1b5fb3e9568f77b4f89dfa541bd6987f363fe53cb27e0b38815dc63d4",
-  preview: "1438acb71763712193f0259119a933f934edb56c47f0066e6d508780f60d66a0",
-  thanks: "a124ddf4ef8897a04d1c8d10a87d2a634c83f814eeaec31e294e0dc966b3c55f",
+  page: "a8d0aafadbfd7469abceec9098c006f51ec3965e8855ec729210ebf44e0d94d5",
+  list: "95b529ceab1b213d2ca3dd09f0ecc3a08a2848f6639624bb86fd4e8b6396a549",
+  draft: "6e4a452bd9b81335fb3d0d92270f635794a43c53e213c6633fde31172ce906f1",
+  preview: "7f933b771cd54e6f1fdfac80c9172cdc881f84a0948b4acbbc30208c1aed7a2b",
+  thanks: "45e899a9685acc205f6b92206829e128f62b6d1435e858a3a0d00a1dcc8883fe",
 };
 
 describe("the page as it was, byte for byte against the render from d17f9856", () => {
@@ -168,11 +170,17 @@ describe("what the night adds", () => {
     expect(night).not.toMatch(/id="fnPause"[^>]*aria-pressed/);
   });
 
-  it("gives the elf no words of its own, with its size set", () => {
+  // The logo's own elf peeking over the workbench (Jaimie, 6 November 2026): never a new painting.
+  it("gives the elf no words of its own, with its size set: the logo's own elf", () => {
     const elf = night.match(/<img class="fn-elf"[^>]*>/)![0];
     expect(elf).toContain('alt=""');
-    expect(elf).toContain('width="150"');
-    expect(elf).toContain('height="98"');
+    expect(elf).toContain('src="/assets/img/red-bag/elf-peek.webp"');
+    expect(elf).toContain('width="482"');
+    expect(elf).toContain('height="331"');
+  });
+
+  it("lets the elf speak for the eye only: its bubble is hidden from screen readers", () => {
+    expect(night).toMatch(/<p class="fn-says" aria-hidden="true">/);
   });
 
   it("underlines the heading without changing its words", () => {
@@ -196,7 +204,9 @@ describe("what the night adds", () => {
 describe("the money parts are the same in every state", () => {
   const plain = renderRedBagPage(template, { preview: false });
   const night = renderRedBagPage(template, { preview: false, night: true });
-  const bare = (html: string) => html.replace(/<img class="fn-elf"[^>]*>/, "").replace(/<p class="fn-sum"[\s\S]*?<\/p>/, "");
+  // the elf, what it says (6 November 2026) and the sum are the night's own
+  const bare = (html: string) =>
+    html.replace(/<img class="fn-elf"[^>]*>/, "").replace(/<p class="fn-says"[\s\S]*?<\/p>/, "").replace(/<p class="fn-sum"[\s\S]*?<\/p>/, "");
 
   it("the paper, the steppers and Also in your bag", () => {
     expect(between(night, '<div class="rb-paper">', '<div class="rb-need"')).toBe(between(plain, '<div class="rb-paper">', '<div class="rb-need"'));

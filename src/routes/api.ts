@@ -141,6 +141,10 @@ const checkoutBodySchema = z.preprocess(priceBallBags, z
     // Fill a Red Bag (/fill): an optional marker on an otherwise ordinary donation. Absent
     // (every donate page gift), nothing below applies and the session is exactly what it always was.
     redBag: z.boolean().optional(),
+    // Fill a Red Bag given through a company's own link (/fill/<slug>, 6 November 2026): the link, so
+    // the webhook can put the gift on that company's shelves. Only with redBag; the webhook links it
+    // only if it names a live company, otherwise the gift is a plain Red Bag gift.
+    redBagWorkshop: z.string().regex(/^[a-z0-9]+(-[a-z0-9]+)*$/).max(60).optional(),
     // The Festive Ball's donate page (/ball/donate): the same kind of optional marker. Absent, nothing
     // below applies.
     ball: z.boolean().optional(),
@@ -156,6 +160,10 @@ const checkoutBodySchema = z.preprocess(priceBallBags, z
   .refine((b) => b.redBag !== true || (b.amount ?? 0) >= RED_BAG_MIN_PENCE, {
     message: "the smallest Fill a Red Bag gift is £2",
     path: ["amount"],
+  })
+  .refine((b) => b.redBagWorkshop === undefined || b.redBag === true, {
+    message: "a company's link only goes with a Fill a Red Bag gift",
+    path: ["redBagWorkshop"],
   })
   .refine((b) => b.redBag !== true || b.fundraiserId === undefined, {
     message: "a Fill a Red Bag gift is not a gift on a fundraising page",
@@ -413,6 +421,8 @@ export function buildSessionParams(
   // Fill a Red Bag: one key, only for a gift made on that page, so a donate page session gains no
   // keys at all. The webhook records the gift as the ordinary donation it is.
   if (body.redBag === true) metadata.redBag = "true";
+  // and a company's link, one more key, only when the gift was given through one
+  if (body.redBag === true && body.redBagWorkshop !== undefined) metadata.redBagWorkshop = body.redBagWorkshop;
   // The Ball's donate page: likewise one key, only for a gift made there.
   if (body.ball === true) metadata.ball = "true";
   // Red bags at the Ball: one key, the number of bags, only for a gift made there. The webhook reads

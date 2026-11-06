@@ -325,3 +325,27 @@
   #view-red-bag .rbl-art-btn,
   #view-red-bag .rbl-quiet { transition: background-color 0.15s ease; }
 }
+
+/* ---- Company Workshops (assets/js/admin/red-bag-workshops.js, 6 November 2026): a company's own
+   link to Fill a Red Bag. Cards wrap and the page grows; nothing scrolls inside a box. ---- */
+.rbw{margin-top:40px;padding-top:28px;border-top:1px solid var(--line)}
+.rbw h3{margin:0 0 6px;font-size:1.3rem}
+.rbw-add{max-width:560px;margin:18px 0 8px;padding:18px;background:var(--card);border:1px solid var(--line);border-radius:14px}
+.rbw-sizes{margin:0 0 12px;padding:0;border:0}
+.rbw-sizes legend{font-weight:600;font-size:.9rem;margin-bottom:4px}
+.rbw-size{display:flex;align-items:center;gap:8px;min-height:44px;font-size:.95rem;cursor:pointer}
+.rbw-size input{width:20px;height:20px;accent-color:var(--holly)}
+.rbw-hint{margin:4px 0 12px;font-size:.88rem;color:var(--slate);overflow-wrap:anywhere}
+.rbw-status{min-height:1.4em;margin:10px 0}
+.rbw-list{list-style:none;margin:16px 0 0;padding:0;display:grid;gap:14px}
+.rbw-card{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:16px;padding:16px 18px;background:var(--card);border:1px solid var(--line);border-radius:14px}
+.rbw-card.is-archived{opacity:.7}
+.rbw-card__words{flex:1 1 300px;min-width:0}
+.rbw-card h4{margin:0 0 4px;font-size:1.08rem;overflow-wrap:anywhere}
+.rbw-tag{display:inline-block;margin-left:6px;padding:1px 8px;border-radius:6px;background:var(--tint);font-size:.78rem;font-weight:600;vertical-align:2px}
+.rbw-link{margin:0 0 4px;overflow-wrap:anywhere}
+.rbw-count{margin:0 0 10px;font-size:.94rem}
+.rbw-actions{display:flex;flex-wrap:wrap;gap:8px}
+.rbw-qr{flex:0 0 auto;width:120px;height:120px;padding:6px;background:var(--white);border:1px solid var(--line);border-radius:10px}
+.rbw-qr svg{display:block;width:100%;height:100%}
+.rbw-empty{margin:16px 0 0;color:var(--slate)}

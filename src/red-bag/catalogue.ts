@@ -78,6 +78,8 @@ export interface RedBagCatalogue {
   pounds(pence: number): string;
   /** A drawing for an item or an example, as an inline picture for the eye only; "" if there is none. */
   art(key: string, cls?: string, size?: number): string;
+  /** The hand drawings from before the paintings, for the Ball's /bag page only. */
+  drawing(key: string, cls?: string, size?: number): string;
   /** Every drawing, by key: one for each built-in item and example, and the plain present. */
   ART: Record<string, string>;
   /** The elf's notes (only what the list's rules need of them: which keys they are written for). */

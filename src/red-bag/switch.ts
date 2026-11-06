@@ -28,6 +28,19 @@
 // infrastructure, and switching it is a reviewed change like any other.
 export const RED_BAG_LIVE = true;
 
+/**
+ * /fill's night look (the Workshop behind it, the sign, companies' own links /fill/<slug>), on its own
+ * switch: ON from 6 November 2026, ahead of the rest of the site (Jaimie: "just the /fill ... and then just
+ * not push the rest of the site"). Everything else that waits for the Ball's moment (src/site/after-ball.ts)
+ * still waits for it: the Ball coming down, the home page's stage, the links in src/red-bag/fill-links.ts.
+ * The thank you page is never dressed. Set to false and /fill goes back to waiting for the moment too.
+ */
+export const FILL_NIGHT_NOW = true;
+
+export function fillNightNow(): boolean {
+  return FILL_NIGHT_NOW;
+}
+
 /** The page's one address. */
 export const RED_BAG_PATH = "/fill";
 

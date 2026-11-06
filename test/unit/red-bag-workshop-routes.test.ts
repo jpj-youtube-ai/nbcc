@@ -32,7 +32,7 @@ function fakeRes() {
   };
 }
 
-async function ask(o: { slug?: string; night?: boolean; workshop?: WorkshopFor }) {
+async function ask(o: { slug?: string; night?: boolean; nightAlways?: boolean; workshop?: WorkshopFor }) {
   const res = fakeRes();
   const next = vi.fn();
   const workshop: WorkshopFor =
@@ -50,6 +50,7 @@ async function ask(o: { slug?: string; night?: boolean; workshop?: WorkshopFor }
     indexable: true,
     list: async () => null,
     isAfterBall: () => o.night !== false,
+    ...(o.nightAlways !== undefined ? { nightAlways: () => o.nightAlways === true } : {}),
     workshop,
   });
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -106,5 +107,27 @@ describe("GET /fill before the Ball's moment", () => {
   it("draws no Workshop at all", async () => {
     const { doc } = await ask({ night: false });
     expect(doc.querySelector(".fn-workshop")).toBeNull();
+  });
+});
+
+// Jaimie, 6 November 2026: /fill goes out in its night look (the Workshop, company links) at once, ahead
+// of the rest of the site, whose changes still wait for the Ball's moment.
+describe("/fill's own night switch, before the Ball's moment", () => {
+  it("draws the night look and the Workshop on /fill when it is on", async () => {
+    const { doc, res } = await ask({ night: false, nightAlways: true });
+    expect(res.statusCode).toBe(200);
+    expect(doc.querySelector("#fnNight")).not.toBeNull();
+    expect(doc.querySelector(".fn-sign b")?.textContent).toBe("40 bags filled");
+  });
+
+  it("opens a company's own link when it is on", async () => {
+    const { doc, next } = await ask({ slug: "brightwater-engineering", night: false, nightAlways: true });
+    expect(next).not.toHaveBeenCalled();
+    expect(doc.querySelector(".fn-sign i")?.textContent).toBe("Brightwater Engineering");
+  });
+
+  it("leaves /fill as it was when it is off", async () => {
+    const { doc } = await ask({ night: false, nightAlways: false });
+    expect(doc.querySelector("#fnNight")).toBeNull();
   });
 });

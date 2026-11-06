@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { renderRedBagPage, renderRedBagThanksPage } from "../red-bag/render";
 import { isStaffRequest, mayViewRedBagDraft } from "../red-bag/staff";
 import { redBagList, type RedBagList } from "../red-bag/list";
-import { RED_BAG_PATH, RED_BAG_THANKS_PATH, redBagAccess, redBagIsLive } from "../red-bag/switch";
+import { RED_BAG_PATH, RED_BAG_THANKS_PATH, fillNightNow, redBagAccess, redBagIsLive } from "../red-bag/switch";
 import { markAfterBallCheck } from "../site/after-ball";
 import { workshopView, type WorkshopView } from "../red-bag/workshop";
 
@@ -103,6 +103,8 @@ export interface RedBagPageDeps {
    * the page is drawn at night. Left out (the thank you page, which stays as it is): never.
    */
   isAfterBall?: (query: unknown) => boolean;
+  /** The giving page only: is /fill at night whatever the moment (FILL_NIGHT_NOW, src/red-bag/switch.ts)? */
+  nightAlways?: () => boolean;
   /** The switch. Defaults to the constant in src/red-bag/switch.ts. */
   live?: () => boolean;
   /** Is this Authorization header a signed in member of staff? Defaults to the admin's own session. */
@@ -207,7 +209,7 @@ export function redBagPageHandler(deps: RedBagPageDeps) {
 
     // Drawn BEFORE anything is set on the response, for the same reason. With no list, no draft and
     // before the moment the options are exactly what they always were.
-    const night = deps.isAfterBall?.(req.query) === true;
+    const night = deps.nightAlways?.() === true || deps.isAfterBall?.(req.query) === true;
     // A company's own link (/fill/<slug>) is a page only at night, and only for a company that exists.
     const params = (req as { params?: Record<string, unknown> }).params;
     const slug = typeof params?.slug === "string" ? params.slug : undefined;
@@ -297,6 +299,7 @@ export function addRedBagPageRoutes(
     ...(page.mayViewDraft ? { mayViewDraft: page.mayViewDraft } : {}),
     ...(page.isAfterBall ? { isAfterBall: page.isAfterBall } : {}),
     workshop: page.workshop ?? defaultWorkshopFor,
+    nightAlways: fillNightNow,
   };
   router.get(RED_BAG_PATH, redBagPageHandler({ ...shared, ...lists, template: () => readFileSync(file, "utf8"), indexable: true }));
   router.get(

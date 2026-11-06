@@ -13,6 +13,9 @@ import { createRequire } from "node:module";
 // about what the night must leave alone. Every name and price here is invented.
 
 const state = vi.hoisted(() => ({
+  // /fill's own night switch (FILL_NIGHT_NOW, src/red-bag/switch.ts): off for the tests that show
+  // /fill waiting for the Ball's moment, as it does if the switch is ever turned off again.
+  fillNightNow: false,
   now: new Date("2026-11-01T12:00:00Z"),
   list: null as unknown,
   draft: null as unknown,
@@ -46,6 +49,10 @@ vi.mock("../../src/db/red-bag-lists", () => ({
   readRedBagDraft: async () => (state.draft ? { data: state.draft } : null),
 }));
 vi.mock("../../src/ball/preview-access", () => ({ holdsPreviewCookie: async () => false }));
+vi.mock("../../src/red-bag/switch", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../../src/red-bag/switch")>()),
+  fillNightNow: () => state.fillNightNow,
+}));
 vi.mock("../../src/red-bag/staff", () => ({
   isStaffRequest: async () => false,
   mayViewRedBagDraft: async () => state.mayView,
@@ -272,9 +279,40 @@ describe("through the real site router, either side of the moment", () => {
     state.list = null;
     state.draft = null;
     state.mayView = false;
+    state.fillNightNow = false;
   });
 
   const get = (path: string, headers: Record<string, string> = {}) => fetch(`${base}${path}`, { redirect: "manual", headers });
+
+  // Jaimie, 6 November 2026: /fill goes out at night (the Workshop, companies' own links) at once,
+  // ahead of the rest of the site, which still waits for the Ball's moment.
+  describe("with /fill's own night switch on, before the moment", () => {
+    beforeEach(() => {
+      state.fillNightNow = true;
+    });
+
+    it("/fill is the night, with the Workshop, and may still be listed", async () => {
+      const res = await get("/fill");
+      const html = await res.text();
+      expect(html).toContain('id="fnNight"');
+      expect(html).toContain('class="fn-workshop"');
+      expect(res.status).toBe(200);
+      expect(res.headers.get("x-robots-tag")).toBeNull();
+    });
+
+    it("leaves the rest of the site waiting: no Fill a Red Bag stage on the home page yet", async () => {
+      const home = await body("/");
+      state.fillNightNow = false;
+      expect(home).toBe(await body("/"));
+    });
+
+    it("leaves the thank you page as it is", async () => {
+      const on = await body("/fill/thank-you");
+      state.fillNightNow = false;
+      expect(on).toBe(await body("/fill/thank-you"));
+      expect(on).not.toContain("fnNight");
+    });
+  });
   const body = async (path: string, headers?: Record<string, string>) => (await get(path, headers)).text();
   const heads = (res: Response) => {
     const out: Record<string, string> = {};

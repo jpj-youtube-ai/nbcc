@@ -374,6 +374,39 @@
       );
     }
 
+    // Gold twinkles (5 November 2026): a little burst where something was pressed or landed, the
+    // painted twinkle, each its own angle, distance, size and wait. `at` is a point on the screen;
+    // they are drawn in the effects layer, which takes no tap and clips what leaves it.
+    var MAX_TWINKLES = 18;
+    var twinkling = 0;
+    function twinkle(at, n, reach, wait) {
+      if (calm() || !fx || twinkling >= MAX_TWINKLES) return;
+      var layer = fx.getBoundingClientRect();
+      for (var i = 0; i < n; i += 1) {
+        var turn = (i / n) * Math.PI * 2 + (Math.random() - 0.5) * 0.6;
+        var far = reach * (0.7 + Math.random() * 0.5);
+        var el = doc.createElement("span");
+        el.className = "rb-twinkle";
+        el.style.left = Math.round(at.x - layer.left) + "px";
+        el.style.top = Math.round(at.y - layer.top) + "px";
+        el.style.setProperty("--rb-tx", Math.round(Math.cos(turn) * far) + "px");
+        el.style.setProperty("--rb-ty", Math.round(Math.sin(turn) * far) + "px");
+        el.style.setProperty("--rb-ts", (0.6 + Math.random() * 0.6).toFixed(2));
+        el.style.setProperty("--rb-tw", ((wait || 0) + Math.random() * 0.08).toFixed(2) + "s");
+        fx.appendChild(el);
+        twinkling += 1;
+        later(
+          (function (one) {
+            return function () {
+              gone(one);
+              twinkling -= 1;
+            };
+          })(el),
+          ((wait || 0) + 0.8) * 1000,
+        );
+      }
+    }
+
     // One drawing of the item hops from its row and drops into the bag. With the bag off screen (a
     // phone, part way down the list) it drops into the bottom bar's total instead, and with neither
     // to hand it gives a small hop where it is. Says whether it went to the bag.
@@ -391,6 +424,8 @@
       if (box && box.width > 0 && box.bottom > NAV_HEIGHT && box.top < screen) {
         to = { x: box.left + box.width / 2, y: box.top + box.height * 0.3 };
         where = "bag";
+        // a ring of twinkles round the bag's open top as it lands
+        twinkle(to, 7, Math.max(36, box.width * 0.42), DROP_MS / 1000 - 0.05);
       } else if (bar && !bar.hidden && barTotal) {
         var sum = barTotal.getBoundingClientRect();
         to = { x: sum.left + sum.width / 2, y: sum.top + sum.height / 2 };
@@ -683,6 +718,11 @@
       if (!ready || step !== "bag" || after === before) return;
       if (after > before) {
         var price = Number(row.getAttribute("data-pence")) || 0;
+        var plusButton = row.querySelector("[data-rb-plus]");
+        if (plusButton) {
+          var pressed = plusButton.getBoundingClientRect();
+          twinkle({ x: pressed.left + pressed.width / 2, y: pressed.top + pressed.height / 2 }, 5, 30, 0);
+        }
         wobble(drop(key, row) ? 0.4 : 0);
         scribble(row, { kind: "in", key: key, quantity: after, step: after - before, first: rb.totalPence(quantities, tapped) - (after - before) * price <= 0 });
       } else scribble(row, { kind: "out", key: key, quantity: after, step: before - after });

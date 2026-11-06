@@ -422,6 +422,9 @@ body.rb-bar-on{padding-bottom:calc(64px + env(safe-area-inset-bottom))}
 .rb-bar__total strong{display:inline-block}
 .rb-bar__total strong.is-bumped{animation:rb-bump .3s cubic-bezier(.22,1,.36,1) .42s}
 @keyframes rb-bump{0%{transform:none}40%{transform:scale(1.12)}100%{transform:none}}
+/* the gold twinkles (5 November 2026): the painted twinkle bursts out, turns and fades */
+.rb-twinkle{position:absolute;z-index:2;width:22px;height:22px;margin:-11px 0 0 -11px;pointer-events:none;background:url(/assets/img/red-bag/twinkle.webp) center/contain no-repeat;opacity:0;animation:rb-twinkle .7s cubic-bezier(.2,.8,.3,1) var(--rb-tw,0s) both}
+@keyframes rb-twinkle{0%{opacity:0;transform:translate(0,0) scale(.2) rotate(0deg)}25%{opacity:1}100%{opacity:0;transform:translate(var(--rb-tx,0px),var(--rb-ty,0px)) scale(var(--rb-ts,1)) rotate(90deg)}}
 
 /* ---- the bag reacts: a small wobble as something goes in, and the handles pull a touch tighter
    when it is nearly full. A paper gift bag, not a cartoon. ---- */
@@ -513,7 +516,7 @@ body.rb-bar-on{padding-bottom:calc(64px + env(safe-area-inset-bottom))}
 /* ---- less motion: nothing moves. What changes still changes, at once: the peeks, the ribbon and
    the tag appear, and the note is simply there. ---- */
 @media (prefers-reduced-motion:reduce){
-  .rb-bag.is-new,.rb-drop,.rb-drop__y,.rb-drop__hop,.rb-drop .rb-art,.rb-flake,.rb-bag.is-wobbling,.rb-peek__in,.rb-bag.is-full .rb-bag__bow,.rb-bag.is-full .rb-bag__tag,.rb-bar__total strong.is-bumped{animation:none}
+  .rb-bag.is-new,.rb-drop,.rb-drop__y,.rb-drop__hop,.rb-drop .rb-art,.rb-flake,.rb-bag.is-wobbling,.rb-peek__in,.rb-bag.is-full .rb-bag__bow,.rb-bag.is-full .rb-bag__tag,.rb-bar__total strong.is-bumped,.rb-twinkle{animation:none}
   .rb-bag__fill,.rb-bag__tissue,.rb-step,.rb-example,.rb-remove,.rb-round,.rb-mode,.rb-paper .rb-note,.rb-bags .rb-bag__cord,.rb-bags .rb-bag__twist,.rb-bag__tie{transition:none}
   /* the peeks change places at once, and no snow falls at all (the script makes none either) */
   .rb-peek{transition:none}

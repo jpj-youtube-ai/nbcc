@@ -46,11 +46,11 @@ const SOCIAL: Site[] = [
 const NEWSLETTER_HOST = /(^|\.)news\.nbcc\.scot$/;
 
 // Paying: Stripe's checkout and card check pages. Coming back from them is part of the same visit.
-const PAYMENT_HOST = /(^|\.)stripe\.com$/;
+export const PAYMENT_HOST = /(^|\.)stripe\.com$/;
 
 // Where a payment returns the visitor. A bank's own card check page can send them here too, so any
 // website arriving on one of these is treated as the same visit coming back, not a new arrival.
-const PAYMENT_RETURN_PATHS = ["/donate/thank-you", "/business/thank-you", "/ball/thank-you"];
+export const PAYMENT_RETURN_PATHS = ["/donate/thank-you", "/business/thank-you", "/ball/thank-you"];
 
 const tidy = (s: string | undefined): string => (s ?? "").trim();
 

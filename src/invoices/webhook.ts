@@ -1,6 +1,7 @@
 import type Stripe from "stripe";
 import type { PoolClient } from "pg";
 import { settleInvoice, sendInvoicesPaidTwiceAlert } from "../db/invoices";
+import { payDetailsLater } from "../db/donation-pay-details";
 import { ukDay } from "../analytics/visitor";
 import { INVOICE_PRODUCT } from "./checkout";
 
@@ -34,9 +35,18 @@ export async function handleInvoiceEvent(client: PoolClient, event: Stripe.Event
   }
   if (out.outcome === "already-recorded") return { action: "invoice.already_recorded", afterCommit: null };
   const twice = out.outcome === "paid-twice";
+  const donationId = out.donationId;
   return {
     action: twice ? "invoice.paid_twice" : "invoice.paid",
     afterCommit: async () => {
+      // How it was paid, for the Donations gift log: asked of Stripe without waiting, never throwing.
+      if (donationId !== null) {
+        try {
+          payDetailsLater(donationId);
+        } catch (err) {
+          console.error("how an invoice was paid not noted (the donation itself is saved and unaffected):", err instanceof Error ? err.name : "error");
+        }
+      }
       await out.receipt();
       if (twice) await sendInvoicesPaidTwiceAlert();
     },

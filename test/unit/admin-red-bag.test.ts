@@ -15,19 +15,26 @@ const require = createRequire(import.meta.url);
 const ROOT = resolve(__dirname, "../..");
 const html = readFileSync(resolve(ROOT, "admin.html"), "utf8");
 const appSrc = readFileSync(resolve(ROOT, "assets/js/admin/app.js"), "utf8");
+const GiftLog = require(resolve(ROOT, "assets/js/admin/gift-log.js"));
 const css = readFileSync(resolve(ROOT, "assets/css/admin.css"), "utf8");
 const helpers = require(resolve(ROOT, "assets/js/admin/helpers.js"));
 const bodyHtml = (html.match(/<body[^>]*>([\s\S]*)<\/body>/i) || ["", ""])[1];
 
+// The gift log's words come ready made from the server (src/donations/labels.ts, via listDonations).
+const LABELS: Record<string, string> = { red_bag: "Fill a Red Bag", ball: "Festive Ball", ball_bags: "Red bags at the Ball" };
 const gift = (over: Record<string, unknown>) => ({
   id: 11, donor_id: 5, donor_name: "Ada Test", mode: "once", plan: null, amount_pence: 2500,
   currency: "GBP", gift_aid: false, claim_status: "not_eligible", payment_status: "paid",
-  refunded_amount_pence: 0, payment_channel: "online", created_at: "2026-10-05T10:00:00Z", source: null, ...over,
+  refunded_amount_pence: 0, payment_channel: "online", created_at: "2026-10-05T10:00:00Z", source: null,
+  given_on_label: LABELS[String(over.source)] ?? "Donate page", paid_by_label: null, ...over,
 });
 const RED = gift({ id: 21, donor_id: 8, donor_name: "Bea Sample", mode: "monthly", source: "red_bag" });
 const PLAIN = gift({ id: 20 });
 const TOTALS = {
-  totals: {},
+  totals: {
+    redBag: { month: { pence: 41200, gifts: 19 }, all: { pence: 196000, gifts: 87 } },
+    donatePage: { month: { pence: 213000, gifts: 64 }, all: { pence: 3140000, gifts: 902 } },
+  },
   lines: [
     { key: "redBag", name: "Fill a Red Bag", month: "£412 from 19 gifts", all: "£1,960 from 87 gifts" },
     { key: "donatePage", name: "Donate page", month: "£2,130 from 64 gifts", all: "£31,400 from 902 gifts" },
@@ -92,6 +99,12 @@ const tick = async (on: boolean) => {
 };
 const pillsIn = (host: string) =>
   Array.from(document.querySelectorAll(host + " .dn-table tbody tr")).map((tr) => tr.querySelector(".dn-source-pill")?.textContent ?? null);
+// The Donations screen is the gift log now (assets/js/admin/gift-log.js): each card's place badge,
+// and each scoreboard tile's figures.
+const placesIn = () => Array.from(document.querySelectorAll("#donationsTable .gl-gift")).map((c) => c.querySelector(".gl-badge--place")?.textContent ?? null);
+const cardsIn = () => document.querySelectorAll("#donationsTable .gl-gift");
+const score = (key: string) => document.querySelector(`#donationsSources [data-gl-score="${key}"]`) as HTMLElement;
+const scored = () => Array.from(document.querySelectorAll("#donationsSources [data-gl-score]")).filter((s) => s.textContent !== "").length;
 
 beforeEach(() => {
   rows = [RED, PLAIN];
@@ -101,6 +114,8 @@ beforeEach(() => {
   window.sessionStorage.clear();
   document.body.innerHTML = bodyHtml;
   (window as unknown as { AdminHelpers: unknown }).AdminHelpers = helpers;
+  // admin.html loads the gift log before app.js, which hands it the Donations screen to draw.
+  (window as unknown as { AdminGiftLog: unknown }).AdminGiftLog = GiftLog.createGiftLog(document, window);
   (globalThis as unknown as { fetch: unknown }).fetch = vi.fn((url: unknown, init?: unknown) =>
     Promise.resolve(respond(String(url), init as { headers?: Record<string, string> })),
   );
@@ -119,16 +134,12 @@ describe("the totals at the top of the Donations screen", () => {
     expect(before(box, el("donationsTable"))).toBe(true);
   });
 
+  // Each line is a scoreboard tile's figures now: this month large, all time beneath in the server's words.
   it("says each line in words: this month and in all", async () => {
     await openDonations();
-    const lines = Array.from(document.querySelectorAll("#donationsSources .dn-source")).map((d) => [
-      d.querySelector("dt")?.textContent,
-      d.querySelector("dd")?.textContent,
-    ]);
-    expect(lines).toEqual([
-      ["Fill a Red Bag", "£412 from 19 gifts this month, £1,960 from 87 gifts in all"],
-      ["Donate page", "£2,130 from 64 gifts this month, £31,400 from 902 gifts in all"],
-    ]);
+    expect(score("redBag").textContent).toBe("£41219 gifts this month£1,960 from 87 gifts in all");
+    expect(score("donatePage").textContent).toBe("£2,13064 gifts this month£31,400 from 902 gifts in all");
+    expect(scored()).toBe(2);
     // Text a screen reader can read: no pictures, and no dashes in the wording.
     expect(document.querySelector("#donationsSources img, #donationsSources svg")).toBeNull();
     expect(el("donationsSources").textContent).not.toMatch(/[–—]/);
@@ -136,60 +147,65 @@ describe("the totals at the top of the Donations screen", () => {
 
   it("says when Fill a Red Bag gifts are counted from", async () => {
     await openDonations();
-    expect(document.querySelector("#donationsSources .dn-sources-note")?.textContent).toBe(
+    // The note sits under the tiles now.
+    expect(el("donationsSourcesNote").textContent).toBe(
       "Fill a Red Bag gifts are counted from 5 October 2026.",
     );
   });
 
   it("shows a real zero as the server words it", async () => {
-    totalsAnswer.body = { ...TOTALS, lines: [{ ...TOTALS.lines[0], month: "£0 from 0 gifts", all: "£0 from 0 gifts" }, TOTALS.lines[1]] };
+    totalsAnswer.body = {
+      ...TOTALS,
+      totals: { ...TOTALS.totals, redBag: { month: { pence: 0, gifts: 0 }, all: { pence: 0, gifts: 0 } } },
+      lines: [{ ...TOTALS.lines[0], month: "£0 from 0 gifts", all: "£0 from 0 gifts" }, TOTALS.lines[1]],
+    };
     await openDonations();
-    expect(document.querySelector("#donationsSources .dn-source dd")?.textContent).toBe("£0 from 0 gifts this month, £0 from 0 gifts in all");
-    expect(document.querySelector("#donationsSources .admin-unavailable")).toBeNull();
+    expect(score("redBag").textContent).toBe("£00 gifts this month£0 from 0 gifts in all");
+    expect(el("donationsSourcesStatus").querySelector(".admin-unavailable")).toBeNull();
   });
 
   it("says it could not load when the read fails, never a zero, and the list still works", async () => {
     totalsAnswer = { status: 500, body: { error: "Admin is temporarily unavailable" } };
     await openDonations();
-    const box = el("donationsSources");
-    expect(box.querySelector(".admin-unavailable")?.textContent).toBe("The Fill a Red Bag and Donate page totals could not load.");
-    expect(box.textContent).not.toMatch(/£|0 gifts/);
-    expect(box.querySelector(".dn-source")).toBeNull();
-    expect(document.querySelectorAll("#donationsTable .dn-table tbody tr")).toHaveLength(2);
+    // The scoreboard holds every place now, so it names the totals, not only two of them.
+    expect(el("donationsSourcesStatus").querySelector(".admin-unavailable")?.textContent).toBe("The totals for each place could not load.");
+    expect(el("donationsSources").textContent).not.toMatch(/£|0 gifts/);
+    expect(scored()).toBe(0);
+    expect(cardsIn()).toHaveLength(2);
     await tick(true);
-    expect(document.querySelectorAll("#donationsTable .dn-table tbody tr")).toHaveLength(1);
+    expect(cardsIn()).toHaveLength(1);
   });
 
   it("treats an answer with no lines in it as a failure, not as nothing given", async () => {
     totalsAnswer.body = { results: [], total: 0 };
     await openDonations();
-    expect(el("donationsSources").querySelector(".admin-unavailable")).not.toBeNull();
+    expect(el("donationsSourcesStatus").querySelector(".admin-unavailable")).not.toBeNull();
   });
 
   it("does not keep old figures on show once they can no longer be read", async () => {
     await openDonations();
-    expect(document.querySelectorAll("#donationsSources .dn-source")).toHaveLength(2);
+    expect(scored()).toBe(2);
     totalsAnswer = { status: 500, body: { error: "Admin is temporarily unavailable" } };
     (document.querySelector('.admin-nav-link[data-view="overview"]') as HTMLElement).click();
     await settle();
     (document.querySelector('.admin-nav-link[data-view="donations"]') as HTMLElement).click();
     await settle();
-    expect(document.querySelectorAll("#donationsSources .dn-source")).toHaveLength(0);
-    expect(el("donationsSources").querySelector(".admin-unavailable")).not.toBeNull();
+    expect(scored()).toBe(0);
+    expect(el("donationsSourcesStatus").querySelector(".admin-unavailable")).not.toBeNull();
   });
 
   it("says Loading while it reads again, rather than leaving the last visit's figures on show", async () => {
     await openDonations();
-    expect(document.querySelectorAll("#donationsSources .dn-source")).toHaveLength(2);
+    expect(scored()).toBe(2);
     (document.querySelector('.admin-nav-link[data-view="overview"]') as HTMLElement).click();
     await settle();
     (document.querySelector('.admin-nav-link[data-view="donations"]') as HTMLElement).click();
     // Before the answer has come back.
-    expect(el("donationsSources").querySelector(".admin-loading")?.textContent).toBe("Loading…");
-    expect(document.querySelectorAll("#donationsSources .dn-source")).toHaveLength(0);
+    expect(el("donationsSourcesStatus").querySelector(".admin-loading")?.textContent).toBe("Loading…");
+    expect(scored()).toBe(0);
     await settle();
-    expect(document.querySelectorAll("#donationsSources .dn-source")).toHaveLength(2);
-    expect(el("donationsSources").querySelector(".admin-loading")).toBeNull();
+    expect(scored()).toBe(2);
+    expect(el("donationsSourcesStatus").querySelector(".admin-loading")).toBeNull();
   });
 
   it("is read when the screen opens, not again for every filter or page", async () => {
@@ -201,21 +217,29 @@ describe("the totals at the top of the Donations screen", () => {
   });
 
   it("escapes what it is given", async () => {
-    totalsAnswer.body = { ...TOTALS, lines: [{ ...TOTALS.lines[0], name: "<img src=x onerror=alert(1)>" }], note: "<b>note</b>" };
+    // The tiles keep their own names; the server's words go in as text.
+    totalsAnswer.body = { ...TOTALS, totals: {}, lines: [{ ...TOTALS.lines[0], month: "<img src=x onerror=alert(1)>" }], note: "<b>note</b>" };
     await openDonations();
-    expect(document.querySelector("#donationsSources img, #donationsSources b")).toBeNull();
+    expect(document.querySelector("#view-donations img, #view-donations b")).toBeNull();
+    expect(el("donationsSourcesNote").textContent).toBe("<b>note</b>");
   });
 });
 
 describe("the Red Bag label on a gift", () => {
+  // The Donations screen's cards say where every gift was given (the server's given_on_label), so the
+  // Fill a Red Bag gift says "Fill a Red Bag" and the other "Donate page".
   it("marks only the gift started on Fill a Red Bag, in the Donations list", async () => {
     await openDonations();
-    expect(pillsIn("#donationsTable")).toEqual(["Red Bag", null]);
+    expect(placesIn()).toEqual(["Fill a Red Bag", "Donate page"]);
   });
 
+  // The Overview keeps the old compact table, and its pill there.
   it("sits beside the gift, in the Donation cell, so it rides with it when the list becomes cards", async () => {
-    await openDonations();
-    const cell = document.querySelector('#donationsTable .dn-table tbody tr td[data-label="Donation"]') as HTMLElement;
+    (el("adminEmail") as HTMLInputElement).value = "viewer@nbcc";
+    (el("adminPassword") as HTMLInputElement).value = "pw";
+    el("loginForm").dispatchEvent(new Event("submit", { cancelable: true, bubbles: true }));
+    await settle();
+    const cell = document.querySelector('#overviewRecent .dn-table tbody tr td[data-label="Donation"]') as HTMLElement;
     expect(cell.textContent).toBe("monthly Red Bag");
     const pill = cell.querySelector(".dn-source-pill") as HTMLElement;
     // The admin's own pill, with no colours of its own.
@@ -244,18 +268,21 @@ describe("the Red Bag label on a gift", () => {
   it("is not shown for a source it does not know, or for none", async () => {
     rows = [gift({ id: 30, source: "something_else" }), gift({ id: 31, source: undefined })];
     await openDonations();
-    expect(pillsIn("#donationsTable")).toEqual([null, null]);
+    // The compact table shows no pill; the cards say "Donate page", as the server worded them.
+    expect(pillsIn("#overviewRecent")).toEqual([null, null]);
+    expect(placesIn()).toEqual(["Donate page", "Donate page"]);
   });
 });
 
 describe("the Fill a Red Bag only filter", () => {
+  // The tick box is the scoreboard's Fill a Red Bag tile now, beside the other places' tiles.
   it("is a real tick box with its own label, beside the other filters", async () => {
     await openDonations();
     expect(filter().type).toBe("checkbox");
     const label = document.querySelector('label[for="donationsRedBagFilter"]') as HTMLElement;
-    expect(label.textContent?.trim()).toBe("Fill a Red Bag only");
-    expect(label.classList.contains("admin-inline-filter")).toBe(true);
-    expect(label.parentElement).toBe((document.querySelector('label[for="donationsModeFilter"]') as HTMLElement).parentElement);
+    expect(label.querySelector(".gl-tile__name")?.textContent).toBe("Fill a Red Bag");
+    expect(label.classList.contains("gl-tile")).toBe(true);
+    expect(label.parentElement).toBe((document.querySelector('label[for="donationsBallFilter"]') as HTMLElement).parentElement);
     expect(filter().checked).toBe(false);
   });
 
@@ -264,7 +291,7 @@ describe("the Fill a Red Bag only filter", () => {
     expect(listUrls[listUrls.length - 1]).not.toContain("source=");
     await tick(true);
     expect(listUrls[listUrls.length - 1]).toContain("&source=red_bag");
-    expect(pillsIn("#donationsTable")).toEqual(["Red Bag"]);
+    expect(placesIn()).toEqual(["Fill a Red Bag"]);
   });
 
   it("works together with the payment status and type filters", async () => {
@@ -293,7 +320,19 @@ describe("the Fill a Red Bag only filter", () => {
     await tick(true);
     await tick(false);
     expect(listUrls[listUrls.length - 1]).not.toContain("source=");
-    expect(pillsIn("#donationsTable")).toEqual(["Red Bag", null]);
+    expect(placesIn()).toEqual(["Fill a Red Bag", "Donate page"]);
+  });
+
+  // The pager is hidden for a short list, so a screen reader hears how many each filter found here.
+  it("says how many it found, for someone who cannot see the list change", async () => {
+    await openDonations();
+    expect(el("donationsCount").textContent).toBe("2 gifts listed");
+    await tick(true);
+    expect(el("donationsCount").textContent).toBe("1 gift listed");
+    expect(el("donationsCount").getAttribute("role")).toBe("status");
+    rows = [];
+    await tick(false);
+    expect(el("donationsCount").textContent).toBe("No gifts listed");
   });
 
   it("says plainly when there are no Fill a Red Bag gifts yet", async () => {
@@ -324,16 +363,18 @@ describe("how it sits on the page", () => {
     return at < 0 ? "" : css.slice(at, css.indexOf("}", at) + 1);
   };
 
+  // The totals are the gift log's tiles now, in assets/css/admin-donations.css (whose own house rules
+  // are checked in admin-gift-log.test.ts): the old rules left admin.css with them, and the tiles' words
+  // wrap rather than scroll.
+  const giftCss = readFileSync(resolve(ROOT, "assets/css/admin-donations.css"), "utf8");
   it("lets the totals wrap rather than scroll: no box of its own to scroll inside", () => {
-    expect(rule(".dn-sources")).not.toBe("");
-    expect(css.slice(css.indexOf(".dn-sources{"), css.indexOf("/* end Fill a Red Bag */"))).not.toMatch(/overflow(-x|-y)?:\s*(auto|scroll)|white-space:\s*nowrap/);
-    expect(rule(".dn-source dd")).toMatch(/overflow-wrap:anywhere/);
+    expect(rule(".dn-sources")).toBe("");
+    expect(giftCss).not.toMatch(/overflow(-x|-y)?:\s*(auto|scroll)/);
+    expect(giftCss).toMatch(/\.gl-tile__all \{[^}]*overflow-wrap: anywhere/);
   });
 
-  it("adds no colours or fonts of its own: tokens only", () => {
-    const block = css.slice(css.indexOf(".dn-sources{"), css.indexOf("/* end Fill a Red Bag */"));
-    expect(block.length).toBeGreaterThan(0);
-    expect(block).not.toMatch(/#[0-9a-f]{3,8}\b|rgb\(|hsl\(|font-family/i);
+  it("adds no colours or fonts of its own to the admin's stylesheet", () => {
+    expect(css).not.toMatch(/\.dn-sources?\b|\.dn-redbag-filter/);
   });
 });
 
@@ -351,12 +392,13 @@ describe("the Red bags at the Ball filter and label", () => {
   it("labels a table card gift with its own words", async () => {
     rows = [BAGS, PLAIN];
     await openDonations();
-    expect(pillsIn("#donationsTable")).toEqual(["Red bags at the Ball", null]);
+    expect(placesIn()).toEqual(["Red bags at the Ball", "Donate page"]);
   });
 
+  // Its tile on the scoreboard now.
   it("is a real tick box with its own label", () => {
     const label = document.querySelector('label[for="donationsBallBagsFilter"]') as HTMLElement;
-    expect(label.textContent?.trim()).toBe("Red bags at the Ball only");
+    expect(label.querySelector(".gl-tile__name")?.textContent).toBe("Red bags at the Ball");
     expect(bagsFilter().type).toBe("checkbox");
   });
 

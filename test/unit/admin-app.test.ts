@@ -18,6 +18,7 @@ const ROOT = resolve(__dirname, "../..");
 const html = readFileSync(resolve(ROOT, "admin.html"), "utf8");
 const appSrc = readFileSync(resolve(ROOT, "assets/js/admin/app.js"), "utf8");
 const helpers = require(resolve(ROOT, "assets/js/admin/helpers.js"));
+const GiftLog = require(resolve(ROOT, "assets/js/admin/gift-log.js"));
 const bodyHtml = (html.match(/<body[^>]*>([\s\S]*)<\/body>/i) || ["", ""])[1];
 
 const tokenFor = (role: string) =>
@@ -317,6 +318,8 @@ describe("admin app integration (jsdom, TASK-118)", () => {
     window.sessionStorage.clear();
     document.body.innerHTML = bodyHtml;
     (window as unknown as { AdminHelpers: unknown }).AdminHelpers = helpers;
+    // admin.html loads the Donations gift log before app.js, which hands it the screen to draw.
+    (window as unknown as { AdminGiftLog: unknown }).AdminGiftLog = GiftLog.createGiftLog(document, window);
     (globalThis as unknown as { fetch: unknown }).fetch = vi.fn((url: unknown, init?: unknown) =>
       Promise.resolve(respond(String(url), init as { method?: string; body?: string; headers?: Record<string, string> })),
     );
@@ -339,14 +342,19 @@ describe("admin app integration (jsdom, TASK-118)", () => {
     await flush();
     expect(document.querySelector("#overviewRecent table")).not.toBeNull();
 
-    // Browse donations
+    // Browse donations: the gift log's cards now, not a table (Task 4 of
+    // docs/superpowers/plans/2026-11-05-donations-screen.md). A paid gift carries no Payment mark (only
+    // anything not plainly paid does); this one is monthly with Gift Aid. Its donor opens from the
+    // card's click down.
     (document.querySelector('.admin-nav-link[data-view="donations"]') as HTMLElement).click();
     await flush();
     await flush();
-    expect(document.querySelector("#donationsTable table")).not.toBeNull();
-    // TASK-241: the donations table has a Payment column rendering a state pill (paid here).
-    expect(document.querySelector("#donationsTable table")?.textContent).toContain("Payment");
-    expect(document.querySelector("#donationsTable .admin-pill--paid")?.textContent).toBe("Paid");
+    expect(document.querySelector("#donationsTable table")).toBeNull();
+    const card = document.querySelector("#donationsTable .gl-gift") as HTMLElement;
+    expect(card).not.toBeNull();
+    expect(Array.from(card.querySelectorAll(".gl-mark")).map((m) => m.textContent)).toEqual(["Monthly", "Gift Aid"]);
+    (card.querySelector(".gl-gift__face") as HTMLElement).click();
+    await flush();
     const view = document.querySelector("#donationsTable [data-donor]") as HTMLElement;
     expect(view).not.toBeNull();
 
@@ -362,13 +370,58 @@ describe("admin app integration (jsdom, TASK-118)", () => {
     expect(el("cancelGaBtn")).not.toBeNull();
   });
 
-  it("hides the write controls for a Viewer", async () => {
-    loginToken = tokenFor("viewer");
+  // Search as you type: two reads overlap, and the first (older) one answers last. The list must show
+  // the newer search's gifts, whether the older one answers with rows or fails.
+  it.each([["answers", true], ["fails", false]])("shows the latest search's gifts when an older search %s last", async (_how, ok) => {
     await signIn();
-    // Open a donor via search-free path: click Donations, then the View button.
     (document.querySelector('.admin-nav-link[data-view="donations"]') as HTMLElement).click();
     await flush();
     await flush();
+    const real = (globalThis as unknown as { fetch: (u: unknown, i?: unknown) => Promise<unknown> }).fetch;
+    const answer = (name: string) => ({
+      status: 200,
+      ok: true,
+      json: () => Promise.resolve({ results: [{ ...donation, id: name === "Older Example" ? 21 : 22, donor_name: name }], total: 1 }),
+      text: () => Promise.resolve(""),
+      headers: { get: () => "application/json" },
+    });
+    let older: { resolve: (v: unknown) => void; reject: (e: unknown) => void } | null = null;
+    (globalThis as unknown as { fetch: unknown }).fetch = vi.fn((url: unknown, init?: unknown) => {
+      const u = String(url);
+      if (u.includes("/api/admin/donations?") && u.includes("q=older"))
+        return new Promise((resolve, reject) => {
+          older = { resolve, reject };
+        });
+      if (u.includes("/api/admin/donations?") && u.includes("q=newer")) return Promise.resolve(answer("Newer Example"));
+      return real(url, init);
+    });
+    const box = el("donationsSearch") as HTMLInputElement;
+    box.value = "older";
+    box.dispatchEvent(new Event("change"));
+    box.value = "newer";
+    box.dispatchEvent(new Event("change"));
+    await flush();
+    await flush();
+    expect(el("donationsTable").textContent).toContain("Newer Example");
+    expect(older).not.toBeNull();
+    if (ok) older!.resolve(answer("Older Example"));
+    else older!.reject(new Error("network down"));
+    await flush();
+    await flush();
+    await flush();
+    expect(el("donationsTable").textContent).toContain("Newer Example");
+    expect(el("donationsTable").textContent).not.toContain("Older Example");
+    expect(el("donationsTable").textContent).not.toContain("unavailable");
+  });
+
+  it("hides the write controls for a Viewer", async () => {
+    loginToken = tokenFor("viewer");
+    await signIn();
+    // Open a donor via search-free path: click Donations, open the gift, then Open the donor.
+    (document.querySelector('.admin-nav-link[data-view="donations"]') as HTMLElement).click();
+    await flush();
+    await flush();
+    (document.querySelector("#donationsTable .gl-gift__face") as HTMLElement).click();
     (document.querySelector("#donationsTable [data-donor]") as HTMLElement).click();
     await flush();
     await flush();
@@ -1207,12 +1260,15 @@ describe("admin app integration (jsdom, TASK-118)", () => {
         td.getAttribute("data-label"),
       );
 
-    it("labels every cell on the Donations screen", async () => {
+    // The Donations screen draws the gift log's cards now (assets/js/admin/gift-log.js); the
+    // Overview and Search keep this table.
+    it("leaves the Donations screen to the gift log's cards", async () => {
       await signIn();
       (document.querySelector('.admin-nav-link[data-view="donations"]') as HTMLElement).click();
       await flush();
       await flush();
-      expect(labelsIn("#donationsTable")).toEqual(LABELS);
+      expect(document.querySelector("#donationsTable .dn-table")).toBeNull();
+      expect(document.querySelector("#donationsTable .gl-gift")).not.toBeNull();
     });
 
     it("labels every cell in the Overview's recent donations", async () => {
@@ -1763,7 +1819,7 @@ describe("admin app integration (jsdom, TASK-118)", () => {
       await settle();
       link("donations").click();
       await settle();
-      expect(pill(document.querySelector("#donationsTable tbody tr"))).not.toBeNull();
+      expect(pill(document.querySelector("#donationsTable .gl-gift"))).not.toBeNull(); // the gift log's card
     });
 
     // The server counts an arrival within the same millisecond as new (times reach us cut to
@@ -1774,7 +1830,7 @@ describe("admin app integration (jsdom, TASK-118)", () => {
       await settle();
       link("donations").click();
       await settle();
-      expect(pill(document.querySelector("#donationsTable tbody tr"))).not.toBeNull();
+      expect(pill(document.querySelector("#donationsTable .gl-gift"))).not.toBeNull(); // the gift log's card
     });
 
     it("leaves older rows alone", async () => {
@@ -1783,7 +1839,7 @@ describe("admin app integration (jsdom, TASK-118)", () => {
       await settle();
       link("donations").click();
       await settle();
-      expect(pill(document.querySelector("#donationsTable tbody tr"))).toBeNull();
+      expect(pill(document.querySelector("#donationsTable .gl-gift"))).toBeNull(); // the gift log's card
     });
 
     // The Overview shares the Donations table. Refreshing on Donations reopens it before the Overview
@@ -1841,7 +1897,7 @@ describe("admin app integration (jsdom, TASK-118)", () => {
       expect(el("overviewNeeds").textContent).toContain("Nothing needs you right now");
       link("donations").click();
       await settle();
-      expect(document.querySelector("#donationsTable table")).not.toBeNull();
+      expect(document.querySelector("#donationsTable .gl-gift")).not.toBeNull(); // the gift log's card
       expect(seenPosts()).toEqual([]);
     });
   });
@@ -2779,7 +2835,7 @@ describe("admin app integration (jsdom, TASK-118)", () => {
     it("labels a gift that paid an invoice in Donations, and filters to them", async () => {
       loginToken = tokenFor("admin");
       invoiceDonations = [
-        { id: 321, donor_id: 5, donor_name: "Sam Example", donor_email: "sam@example.com", mode: "once", plan: null, amount_pence: 25000, currency: "GBP", gift_aid: true, claim_status: "eligible", payment_status: "paid", payment_channel: "online", refunded_amount_pence: 0, created_at: "2026-11-03T10:00:00Z", source: "invoice", invoice_id: 12 },
+        { id: 321, donor_id: 5, donor_name: "Sam Example", donor_email: "sam@example.com", mode: "once", plan: null, amount_pence: 25000, currency: "GBP", gift_aid: true, claim_status: "eligible", payment_status: "paid", payment_channel: "online", refunded_amount_pence: 0, created_at: "2026-11-03T10:00:00Z", source: "invoice", invoice_id: 12, given_on_label: "Invoice INV-0012", paid_by_label: "Bank transfer" },
       ];
       await signIn();
       (document.querySelector('.admin-nav-link[data-view="donations"]') as HTMLElement).click();
@@ -2803,6 +2859,7 @@ describe("admin app integration (jsdom, TASK-118)", () => {
       amount_pence: 1500, currency: "GBP", gift_aid: true, claim_status: "not_eligible", payment_status: "paid", payment_channel: "online",
       refunded_amount_pence: 0, declaration_status: null, created_at: "2026-11-13T19:04:00Z", source: "elf_school", invoice_id: null,
       elf_reference: "EDS-K4F9Q2", elf_family_id: 1234, entry_pence: 1000, gift_pence: 500,
+      given_on_label: "Elf Detective School", paid_by_label: null,
     };
     const fetched = () => (globalThis.fetch as unknown as { mock: { calls: unknown[][] } }).mock.calls.map((c) => String(c[0]));
     const tick = (id: string) => {
@@ -2815,7 +2872,7 @@ describe("admin app integration (jsdom, TASK-118)", () => {
       await settle();
     };
 
-    it("ticking Elf Detective School only asks for source=elf_school and unticks the other four", async () => {
+    it("ticking Elf Detective School only asks for source=elf_school and unticks the other places", async () => {
       loginToken = tokenFor("admin");
       await openDonations();
       tick("donationsInvoiceFilter");
@@ -2823,7 +2880,8 @@ describe("admin app integration (jsdom, TASK-118)", () => {
       const before = fetched().length;
       tick("donationsElfFilter");
       await settle();
-      for (const id of ["donationsRedBagFilter", "donationsBallFilter", "donationsBallBagsFilter", "donationsInvoiceFilter"]) {
+      // Every other place on the gift log's scoreboard, the three new ones too.
+      for (const id of ["donationsRedBagFilter", "donationsBallFilter", "donationsBallBagsFilter", "donationsInvoiceFilter", "donationsDonatePageFilter", "donationsFundraiserFilter", "donationsCardReaderFilter"]) {
         expect((el(id) as HTMLInputElement).checked, id).toBe(false);
       }
       const asked = fetched().slice(before).filter((u) => u.includes("/api/admin/donations?"));
@@ -2833,20 +2891,21 @@ describe("admin app integration (jsdom, TASK-118)", () => {
       expect((el("donationsElfFilter") as HTMLInputElement).checked).toBe(false);
     });
 
+    // A card in the gift log now: its reference, place badge and entry and gift on its face, and
+    // Open in Head Elf HQ in its click down.
     it("draws an elf payment with its reference, pill, entry and gift, no donor link, and Open in Head Elf HQ on that family", async () => {
       loginToken = tokenFor("admin");
       invoiceDonations = [ELF_ROW, { ...ELF_ROW, id: 42, elf_reference: "EDS-P9M4X1", elf_family_id: 7, amount_pence: 500, entry_pence: 500, gift_pence: 0, gift_aid: false }];
       await openDonations();
       const table = el("donationsTable");
       expect(table.textContent).toContain("EDS-K4F9Q2");
-      expect(table.textContent).toContain("Elf Detective School");
-      // Each amount kept with its word (a no break space), so a narrow card never ends a line on "entry".
-      expect(table.textContent).toContain("entry £10, gift £5");
-      expect(table.textContent).toContain("entry £5");
-      expect(table.textContent).not.toContain("gift £0");
-      // One piece, so a phone's card (each cell a flex row) wraps it word by word, never inside "once".
-      expect(table.querySelector('td[data-label="Donation"]')!.childNodes).toHaveLength(1);
+      expect(table.querySelector(".gl-badge--place")?.textContent).toBe("Elf Detective School");
+      expect(table.textContent).toContain("Entry £10, gift £5");
+      expect(table.textContent).toContain("Entry £5");
+      expect(table.textContent).not.toContain("gift £0");
       expect(table.textContent).toContain("Sam Example");
+      (table.querySelector(".gl-gift__face") as HTMLElement).click();
+      await settle();
       expect(table.querySelector("[data-donor]")).toBeNull();
       const go = table.querySelector<HTMLButtonElement>("[data-elf-family]")!;
       expect(go.textContent).toBe("Open in Head Elf HQ");
@@ -2862,6 +2921,8 @@ describe("admin app integration (jsdom, TASK-118)", () => {
       invoiceDonations = [ELF_ROW];
       await openDonations();
       expect(el("donationsTable").textContent).toContain("EDS-K4F9Q2");
+      (el("donationsTable").querySelector(".gl-gift__face") as HTMLElement).click(); // its click down
+      await settle();
       expect(el("donationsTable").querySelector("[data-elf-family]")).toBeNull();
     });
   });

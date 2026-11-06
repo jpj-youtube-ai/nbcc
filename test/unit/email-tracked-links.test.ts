@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   STAFF_ONLY_KINDS,
   emailLinkTags,
+  isPersonalPath,
   linkTagsForKind,
   newsletterLinkTags,
   ownSiteHosts,
@@ -19,6 +20,27 @@ const NEWS = newsletterLinkTags(42);
 const BALL = emailLinkTags("ballConfirmation");
 const NEWS_QS = "utm_source=newsletter&utm_medium=email&utm_campaign=42";
 const BALL_QS = "utm_source=email&utm_medium=email&utm_campaign=ballConfirmation";
+
+describe("isPersonalPath: our pages that are personal or carry a token by name", () => {
+  it("knows the personal first parts, pairs and words anywhere", () => {
+    expect(isPersonalPath("/g/Zq7Lm2Xc9Vb4Nk8Pw3Rt")).toBe(true);
+    expect(isPersonalPath("/g")).toBe(true);
+    expect(isPersonalPath("/thank-you/letter/abc")).toBe(true);
+    expect(isPersonalPath("/gift-aid/declare/xyz")).toBe(true);
+    expect(isPersonalPath("/Business/Certificate/9")).toBe(true);
+    expect(isPersonalPath("/account/reset-password")).toBe(true);
+    expect(isPersonalPath("/unsubscribe")).toBe(true);
+  });
+
+  it("leaves ordinary pages alone", () => {
+    expect(isPersonalPath("/")).toBe(false);
+    expect(isPersonalPath("")).toBe(false);
+    expect(isPersonalPath("/thank-you")).toBe(false);
+    expect(isPersonalPath("/gift-aid")).toBe(false);
+    expect(isPersonalPath("/get-involved")).toBe(false);
+    expect(isPersonalPath("/fundraise/sams-santa-dash")).toBe(false);
+  });
+});
 
 describe("the words each kind of email adds", () => {
   it("names a newsletter by its id", () => {

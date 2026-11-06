@@ -67,7 +67,10 @@ describe("no screen loses its styles", () => {
   // a rule. A family of five or more where most have none has lost its block, whichever screen it is.
   it("styles at least half of every family of five or more classes", () => {
     const styledNames = new Set<string>();
-    for (const m of (adminCss + read("assets/css/styles.css")).matchAll(/\.(-?[a-z_][\w-]*)/gi)) styledNames.add(m[1]);
+    // The Donations gift log's classes (gl-) are in admin.html and live in its own stylesheet, as
+    // Head Elf HQ's do, so that stylesheet is read too.
+    const sheets = adminCss + read("assets/css/styles.css") + read("assets/css/admin-donations.css");
+    for (const m of sheets.matchAll(/\.(-?[a-z_][\w-]*)/gi)) styledNames.add(m[1]);
     const families = new Map<string, { used: number; styled: number }>();
     for (const name of new Set([...classNames(html), ...classNames(appSrc)])) {
       if (!name.includes("-")) continue;

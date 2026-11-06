@@ -1281,59 +1281,88 @@
     return s ? s.charAt(0).toUpperCase() + s.slice(1) : "";
   }
 
-  // ---- donations (browse all, paged) ----
+  // ---- donations: the gift log (browse all, paged) ----
+  // docs/superpowers/specs/2026-11-05-donations-screen-design.md. This reads the filters, pages the
+  // list and says when it cannot load; assets/js/admin/gift-log.js (window.AdminGiftLog, loaded
+  // before this file) draws the scoreboard's figures, the chips, the day by day cards and each card's
+  // click down. donationsTable above stays for the Overview's recent donations and Search.
+  //
+  // Each place a gift can be given: its scoreboard tile's tick box, the source the server filters
+  // by (listDonations), and what the list says when it has none. A gift has one place, so ticking one
+  // unticks the others (oneSourceFilter); Head Elf HQ ticks donationsElfFilter the same way.
+  var DONATION_SOURCES = [
+    { id: "donationsRedBagFilter", source: "red_bag", none: "No Fill a Red Bag gifts yet.", noneHere: "No Fill a Red Bag gifts match these filters." },
+    { id: "donationsBallFilter", source: "ball", none: "No Festive Ball gifts yet.", noneHere: "No Festive Ball gifts match these filters." },
+    { id: "donationsBallBagsFilter", source: "ball_bags", none: "No red bag gifts at the Ball yet.", noneHere: "No red bag gifts at the Ball match these filters." },
+    { id: "donationsInvoiceFilter", source: "invoice", none: "No invoices have been paid yet.", noneHere: "No paid invoices match these filters." },
+    { id: "donationsElfFilter", source: "elf_school", none: "No Elf Detective School payments yet.", noneHere: "No Elf Detective School payments match these filters." },
+    { id: "donationsDonatePageFilter", source: "donate_page", none: "No gifts from the Donate page yet.", noneHere: "No Donate page gifts match these filters." },
+    { id: "donationsFundraiserFilter", source: "fundraiser", none: "No gifts on fundraisers' pages yet.", noneHere: "No gifts on fundraisers' pages match these filters." },
+    { id: "donationsCardReaderFilter", source: "card_reader", none: "No card reader gifts yet.", noneHere: "No card reader gifts match these filters." },
+  ];
+  var DONATION_SOURCE_IDS = DONATION_SOURCES.map(function (s) {
+    return s.id;
+  });
+  // The filter bar: each control and the query value the server reads it as (getAdminDonations).
+  var DONATION_FILTERS = [
+    { id: "donationsPaymentFilter", param: "paymentStatus" },
+    { id: "donationsModeFilter", param: "mode" },
+    { id: "donationsSearch", param: "q" },
+    { id: "donationsFrom", param: "from" },
+    { id: "donationsTo", param: "to" },
+    { id: "donationsMethodFilter", param: "method" },
+    { id: "donationsCameFilter", param: "came" },
+    { id: "donationsGiftAidFilter", param: "giftAid" },
+    { id: "donationsClaimFilter", param: "status" },
+  ];
+  // The search the list was last read with, so the box's own change (on leaving it) reads nothing twice.
+  var donationsSearchSent = "";
+  // Reads overlap as someone types: only the latest one's answer (or failure) is drawn.
+  var donationsAsk = 0;
   function loadDonations() {
+    var ask = ++donationsAsk;
     var wrap = el("donationsTable");
+    var GL = window.AdminGiftLog;
     wrap.innerHTML = '<p class="admin-loading">Loading…</p>';
-    // TASK-241: optional payment-status filter (paid/pending/failed/refunded); empty = all.
-    var payFilter = el("donationsPaymentFilter");
-    var pay = payFilter ? payFilter.value : "";
-    // TASK-446: regular giving vs one-off. The two filters combine, so "monthly and failed" is a
-    // question you can ask - which is the one worth asking when a standing order stops.
-    var modeFilter = el("donationsModeFilter");
-    var mode = modeFilter ? modeFilter.value : "";
-    // Fill a Red Bag only: the server narrows the list (it pages it), together with the two above.
-    var redBagFilter = el("donationsRedBagFilter");
-    var redBag = !!(redBagFilter && redBagFilter.checked);
-    // Festive Ball only, the same way. The sources never go together (oneSourceFilter).
-    var ballFilter = el("donationsBallFilter");
-    var ball = !redBag && !!(ballFilter && ballFilter.checked);
-    // Red bags at the Ball only (the table cards), the same again.
-    var ballBagsFilter = el("donationsBallBagsFilter");
-    var ballBags = !redBag && !ball && !!(ballBagsFilter && ballBagsFilter.checked);
-    // Invoices only (gifts that paid an invoice), the same again.
-    var invoiceFilter = el("donationsInvoiceFilter");
-    var invoice = !redBag && !ball && !ballBags && !!(invoiceFilter && invoiceFilter.checked);
-    // Elf Detective School only (its payments, listed beside the gifts; Head Elf HQ), the same again.
-    var elfFilter = el("donationsElfFilter");
-    var elf = !redBag && !ball && !ballBags && !invoice && !!(elfFilter && elfFilter.checked);
-    authFetch(
-      "/api/admin/donations?limit=25&offset=" + donationsOffset +
-        (pay ? "&paymentStatus=" + encodeURIComponent(pay) : "") +
-        (mode ? "&mode=" + encodeURIComponent(mode) : "") +
-        (redBag ? "&source=red_bag" : "") +
-        (ball ? "&source=ball" : "") +
-        (ballBags ? "&source=ball_bags" : "") +
-        (invoice ? "&source=invoice" : "") +
-        (elf ? "&source=elf_school" : ""),
-    )
+    // TASK-241 payment state and TASK-446 type, then the gift log's own: every one combines with the
+    // rest, so "monthly and failed" is a question you can ask.
+    var query = "";
+    var filtered = false;
+    DONATION_FILTERS.forEach(function (f) {
+      var control = el(f.id);
+      var value = control ? String(control.value || "").trim() : "";
+      if (f.id === "donationsSearch") donationsSearchSent = value;
+      if (!value) return;
+      filtered = true;
+      query += "&" + f.param + "=" + encodeURIComponent(value);
+    });
+    var place = null;
+    DONATION_SOURCES.forEach(function (s) {
+      var box = el(s.id);
+      if (!place && box && box.checked) place = s;
+    });
+    if (place) query += "&source=" + place.source;
+    if (GL) GL.drawChips(el("donationsChips"));
+    authFetch("/api/admin/donations?limit=25&offset=" + donationsOffset + query)
       .then(okJson)
       .then(function (d) {
-        wrap.innerHTML = donationsTable(d.results || [], {
-          newPills: true,
-          empty: redBag
-            ? pay || mode ? "No Fill a Red Bag gifts match these filters." : "No Fill a Red Bag gifts yet."
-            : ball
-              ? pay || mode ? "No Festive Ball gifts match these filters." : "No Festive Ball gifts yet."
-              : ballBags
-                ? pay || mode ? "No red bag gifts at the Ball match these filters." : "No red bag gifts at the Ball yet."
-                : invoice
-                  ? pay || mode ? "No paid invoices match these filters." : "No invoices have been paid yet."
-                  : elf
-                    ? pay || mode ? "No Elf Detective School payments match these filters." : "No Elf Detective School payments yet."
-                    : "",
+        if (ask !== donationsAsk) return;
+        if (!GL) throw new Error("the gift log did not load");
+        GL.drawLog(wrap, d.results || [], {
+          empty: place ? (filtered ? place.noneHere : place.none) : filtered ? "No gifts match these filters." : "",
+          // TASK-478: a paid gift that arrived since this person's last visit.
+          isNew: function (row) {
+            return !!rowNewPill("donations", row.payment_status === "paid" ? row.created_at : null);
+          },
+          // An elf payment opens its family in Head Elf HQ, for someone who may open it.
+          canOpenElf: canView("elf"),
+          details: function (kind, id) {
+            return authFetch("/api/admin/donations/" + encodeURIComponent(kind) + "/" + encodeURIComponent(id) + "/details").then(okJson);
+          },
         });
         var total = d.total || 0;
+        var count = el("donationsCount");
+        if (count) count.textContent = total ? total + (total === 1 ? " gift" : " gifts") + " listed" : "No gifts listed";
         el("donationsPager").hidden = total <= 25;
         el("donationsInfo").textContent = total
           ? donationsOffset + 1 + "-" + Math.min(donationsOffset + 25, total) + " of " + total
@@ -1343,71 +1372,92 @@
         donationsShownOffset = donationsOffset;
       })
       .catch(function () {
+        if (ask !== donationsAsk) return;
         wrap.innerHTML = unavailableHtml("Donations are unavailable.");
         // The pager stays as it was, and so does its place: Previous and Next try that page again.
         donationsOffset = donationsShownOffset;
       });
   }
-  // Fill a Red Bag against the Donate page, at the top of the Donations screen: this month and in
-  // all, worded by the server (src/admin/gift-sources.ts). Read when the screen opens, on its own, so
-  // the list works whatever happens here. A failure, or an answer with no lines in it, says it could
-  // not load: never a zero, and never the last visit's figures.
+  // The scoreboard's figures: each place this month and in all, worded by the server
+  // (src/admin/gift-sources.ts). Read when the screen opens, on its own, so the list works whatever
+  // happens here. A failure, or an answer with no lines in it, says it could not load: never a zero,
+  // and never the last visit's figures.
   function loadDonationSources() {
-    var box = el("donationsSources");
-    if (!box) return;
+    var status = el("donationsSourcesStatus");
+    var note = el("donationsSourcesNote");
+    var GL = window.AdminGiftLog;
+    if (!status) return;
     // Loading, as the list beside it says: the last visit's figures are never shown as current.
-    box.innerHTML = '<p class="admin-loading">Loading…</p>';
+    if (GL) GL.clearScores();
+    if (note) note.textContent = "";
+    status.innerHTML = '<p class="admin-loading">Loading…</p>';
     authFetch("/api/admin/donations/source-totals")
       .then(okJson)
       .then(function (d) {
-        var lines = d && Array.isArray(d.lines) ? d.lines : [];
-        if (!lines.length) throw new Error("no totals");
-        var esc = H.escapeHtml;
-        box.innerHTML =
-          '<dl class="dn-sources-list">' +
-          lines
-            .map(function (l) {
-              return (
-                '<div class="dn-source"><dt>' + esc(l.name) + "</dt><dd>" +
-                esc(l.month) + " this month, " + esc(l.all) + " in all</dd></div>"
-              );
-            })
-            .join("") +
-          "</dl>" +
-          (d.note ? '<p class="dn-sources-note">' + esc(d.note) + "</p>" : "");
+        if (!GL || !GL.drawScores(d)) throw new Error("no totals");
+        status.innerHTML = "";
+        if (note) note.textContent = (d && d.note) || "";
       })
       .catch(function (err) {
         if (err && err.message === "unauthorized") return;
-        box.innerHTML = unavailableHtml("The Fill a Red Bag and Donate page totals could not load.");
+        if (GL) GL.clearScores();
+        status.innerHTML = unavailableHtml("The totals for each place could not load.");
       });
   }
-  // Both filters behave the same way: change it, go back to page one. Staying on page 4 of a
-  // different list shows you an empty table and looks like the filter found nothing.
-  // A gift has one source, so "Fill a Red Bag only", "Festive Ball only" and "Red bags at the Ball
-  // only" never go together: ticking one unticks the others.
+  // Every filter behaves the same way: change it, go back to page one. Staying on page 4 of a
+  // different list shows you an empty list and looks like the filter found nothing.
+  // A gift has one place, so the scoreboard's tiles never go together: ticking one unticks the others.
   function oneSourceFilter(id) {
     var self = el(id);
     if (!self || !self.checked) return;
-    ["donationsRedBagFilter", "donationsBallFilter", "donationsBallBagsFilter", "donationsInvoiceFilter", "donationsElfFilter"].forEach(function (otherId) {
+    DONATION_SOURCE_IDS.forEach(function (otherId) {
       var other = el(otherId);
       if (otherId !== id && other) other.checked = false;
     });
   }
-  ["donationsRedBagFilter", "donationsBallFilter", "donationsBallBagsFilter", "donationsInvoiceFilter", "donationsElfFilter"].forEach(function (id) {
+  DONATION_SOURCE_IDS.forEach(function (id) {
     var control = el(id);
     if (control)
       control.addEventListener("change", function () {
         oneSourceFilter(id);
       });
   });
-  ["donationsPaymentFilter", "donationsModeFilter", "donationsRedBagFilter", "donationsBallFilter", "donationsBallBagsFilter", "donationsInvoiceFilter", "donationsElfFilter"].forEach(function (id) {
-    var control = el(id);
-    if (control)
-      control.addEventListener("change", function () {
-        donationsOffset = 0;
-        loadDonations();
-      });
-  });
+  DONATION_FILTERS.map(function (f) {
+    return f.id;
+  })
+    .filter(function (id) {
+      return id !== "donationsSearch";
+    })
+    .concat(DONATION_SOURCE_IDS)
+    .forEach(function (id) {
+      var control = el(id);
+      if (control)
+        control.addEventListener("change", function () {
+          donationsOffset = 0;
+          loadDonations();
+        });
+    });
+  // The search reads as you type, once you pause; leaving the box, Enter, or its chip's cross read it
+  // at once. The same words are never asked for twice in a row.
+  (function () {
+    var box = el("donationsSearch");
+    if (!box) return;
+    var timer = null;
+    function searchNow() {
+      clearTimeout(timer);
+      if (String(box.value || "").trim() === donationsSearchSent) return;
+      donationsOffset = 0;
+      loadDonations();
+    }
+    box.addEventListener("input", function () {
+      clearTimeout(timer);
+      timer = setTimeout(searchNow, 350);
+    });
+    box.addEventListener("change", searchNow);
+    box.addEventListener("keydown", function (e) {
+      if (e.key === "Enter") searchNow();
+    });
+  })();
   bindClick("donationsPrev", function () {
     donationsOffset = Math.max(0, donationsOffset - 25);
     loadDonations();

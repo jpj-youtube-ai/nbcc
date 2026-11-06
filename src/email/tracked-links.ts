@@ -139,6 +139,19 @@ export function looksLikeToken(value: string): boolean {
   });
 }
 
+/**
+ * Whether one of our page paths is personal or carries a token by its name: a personal first part
+ * (/g/..., /unsubscribe), a personal first pair (/thank-you/letter/..., /gift-aid/declare/...), or a
+ * personal word anywhere (/.../reset-password). Pure. Says nothing about token shaped parts: check
+ * those with looksLikeToken.
+ */
+export function isPersonalPath(path: string): boolean {
+  const lower = path.split("?")[0].split("/").filter(Boolean).map(safeDecode).map((p) => p.toLowerCase());
+  if (lower.length && PERSONAL_FIRST.has(lower[0])) return true;
+  if (lower.length >= 2 && PERSONAL_PAIRS.has(`${lower[0]}/${lower[1]}`)) return true;
+  return lower.some((p) => PERSONAL_ANYWHERE.has(p));
+}
+
 function safeDecode(part: string): string {
   try {
     return decodeURIComponent(part);
@@ -179,12 +192,8 @@ function separatorFor(address: string, hosts: ReadonlySet<string>): "?" | "&" | 
     if (looksLikeToken(value)) return null;
   }
 
-  const parts = url.pathname.split("/").filter(Boolean).map(safeDecode);
-  const lower = parts.map((p) => p.toLowerCase());
-  if (lower.length && PERSONAL_FIRST.has(lower[0])) return null;
-  if (lower.length >= 2 && PERSONAL_PAIRS.has(`${lower[0]}/${lower[1]}`)) return null;
-  if (lower.some((p) => PERSONAL_ANYWHERE.has(p))) return null;
-  if (parts.some(looksLikeToken)) return null;
+  if (isPersonalPath(url.pathname)) return null;
+  if (url.pathname.split("/").filter(Boolean).map(safeDecode).some(looksLikeToken)) return null;
 
   const beforeFragment = address.split("#")[0];
   if (!beforeFragment.includes("?")) return "?";

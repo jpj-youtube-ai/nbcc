@@ -219,4 +219,36 @@ describe("startCheckout embedded checkout (jsdom, TASK-215)", () => {
     expect(hostedRequested).toBe(true);
     expect(win.location.href).toBe("https://checkout.stripe.com/c/pay/redirect_2");
   });
+
+  // The Donations gift log: the page before this one goes with the checkout, so the server can note
+  // what brought the giver. Only on the wire body; the returned payload stays the REQ-028 contract.
+  it("sends the page before this one as cameFrom, on the embedded and the hosted request alike", async () => {
+    setupDom();
+    Object.defineProperty(document, "referrer", { value: "https://www.example.org/news", configurable: true });
+    try {
+      const bodies: Array<Record<string, unknown>> = [];
+      const win = {
+        Stripe: () => ({ initEmbeddedCheckout: () => Promise.reject(new Error("init failed")) }),
+        fetch: (_url: string, opts: { body: string }) => {
+          const body = JSON.parse(opts.body);
+          bodies.push(body);
+          return Promise.resolve({
+            ok: true,
+            json: () => Promise.resolve(body.uiMode ? { clientSecret: "cs", publishableKey: "pk" } : { url: "https://checkout.stripe.com/c/pay/r" }),
+          });
+        },
+        location: { href: "" },
+      };
+      const payload = startCheckout(onceTier(0), win as unknown as Window);
+      await flush();
+      await flush();
+      expect(bodies).toHaveLength(2);
+      expect(bodies[0]).toMatchObject({ uiMode: "embedded", cameFrom: "https://www.example.org/news" });
+      expect(bodies[1].uiMode).toBeUndefined();
+      expect(bodies[1].cameFrom).toBe("https://www.example.org/news");
+      expect(payload).not.toHaveProperty("cameFrom");
+    } finally {
+      delete (document as unknown as { referrer?: string }).referrer;
+    }
+  });
 });

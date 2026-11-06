@@ -2275,18 +2275,23 @@ function pageArgs(req: Request): { limit?: number; offset?: number } {
   };
 }
 
-// GET /api/admin/donations?limit&offset&status&channel&source — browse all donations. Viewer and up.
+// GET /api/admin/donations?limit&offset&status&channel&source&q&from&to&method&came&giftAid — browse
+// all donations. Viewer and up. Each filter is taken only as a plain string; listDonations checks
+// each against its fixed list and ignores junk.
 export async function getAdminDonations(req: Request, res: Response): Promise<Response | void> {
   if (!(await authorizeSection(req, res, "donations", "view"))) return;
   try {
     const { limit, offset } = pageArgs(req);
-    const status = typeof req.query.status === "string" ? req.query.status : undefined;
-    const channel = typeof req.query.channel === "string" ? req.query.channel : undefined;
-    const paymentStatus = typeof req.query.paymentStatus === "string" ? req.query.paymentStatus : undefined;
-    const mode = typeof req.query.mode === "string" ? req.query.mode : undefined;
+    const text = (key: string): string | undefined => (typeof req.query[key] === "string" ? (req.query[key] as string) : undefined);
+    const status = text("status");
+    const channel = text("channel");
+    const paymentStatus = text("paymentStatus");
+    const mode = text("mode");
     // ?source=red_bag: Fill a Red Bag only. listDonations checks it against the list of sources.
-    const source = typeof req.query.source === "string" ? req.query.source : undefined;
-    return res.status(200).json(await listDonations({ limit, offset, status, channel, paymentStatus, mode, source }));
+    const source = text("source");
+    // The Donations gift log's filters: name or email, UK dates, paid by, came from, Gift Aid.
+    const filters = { q: text("q"), from: text("from"), to: text("to"), method: text("method"), came: text("came"), giftAid: text("giftAid") };
+    return res.status(200).json(await listDonations({ limit, offset, status, channel, paymentStatus, mode, source, ...filters }));
   } catch (err) {
     console.error("admin donations list failed:", err instanceof Error ? err.message : err);
     return res.status(500).json({ error: "Admin is temporarily unavailable" });

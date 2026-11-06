@@ -777,6 +777,7 @@ describe("the round-up", () => {
       email: "alex@example.com",
       emailConsent: false,
       redBag: true,
+      cameFrom: "",
     });
     expect(api!.payload().amount).toBe(api!.total());
     expect(JSON.parse(store.get("nbcc_red_bag_gift")!)).toEqual({ pence: 2500, giftAid: false, monthly: false });
@@ -954,6 +955,7 @@ describe("what is sent to the checkout", () => {
       email: "alex@example.com",
       emailConsent: true,
       redBag: true,
+      cameFrom: "",
     });
   });
 

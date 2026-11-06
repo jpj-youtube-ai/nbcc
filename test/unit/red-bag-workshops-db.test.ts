@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { readFileSync, readdirSync } from "node:fs";
 import { resolve } from "node:path";
 
-vi.mock("../../src/db/pool", () => ({ pool: { query: vi.fn() } }));
+vi.mock("../../src/db/pool", () => ({ pool: { query: vi.fn(), connect: vi.fn() } }));
 vi.mock("../../src/config", () => ({ config: { NODE_ENV: "test" } }));
 
 import { pool } from "../../src/db/pool";
@@ -121,8 +121,29 @@ describe("making a company's Workshop", () => {
     expect(await createRedBagWorkshop({ name: "  ", size: "small", by: "staff" })).toEqual({ ok: false, reason: "name" });
     expect(await createRedBagWorkshop({ name: "Fern & Thistle", size: "huge", by: "staff" })).toEqual({ ok: false, reason: "size" });
     expect(await createRedBagWorkshop({ name: "Fern & Thistle", slug: "thank-you", size: "small", by: "staff" })).toEqual({ ok: false, reason: "slug" });
-    query.mockResolvedValueOnce({ rows: [] });
+    const said: unknown[][] = [];
+    const client = { query: vi.fn(async (sql: string, params?: unknown[]) => (said.push([sql, params]), { rows: [] })), release: vi.fn() };
+    (pool.connect as unknown as ReturnType<typeof vi.fn>).mockResolvedValue(client);
     expect(await createRedBagWorkshop({ name: "Fern & Thistle", size: "small", by: "staff" })).toEqual({ ok: false, reason: "taken" });
-    expect(query.mock.calls[0][1]).toEqual(["fern-and-thistle", "Fern & Thistle", "small", "staff"]);
+    expect(said.find(([sql]) => /INSERT INTO red_bag_workshops/.test(String(sql)))?.[1]).toEqual(["fern-and-thistle", "Fern & Thistle", "small", "staff"]);
+    // taken: rolled back, and nothing written to the audit log
+    expect(said.some(([sql]) => /ROLLBACK/.test(String(sql)))).toBe(true);
+    expect(said.some(([sql]) => /audit_log/.test(String(sql)))).toBe(false);
+    expect(client.release).toHaveBeenCalledTimes(1);
+  });
+
+  it("records a new company in the audit log, in the same transaction", async () => {
+    const said: string[] = [];
+    const client = {
+      query: vi.fn(async (sql: string) => {
+        said.push(sql.trim().split(/\s+/)[0] + (/audit_log/.test(sql) ? " audit" : ""));
+        return /INSERT INTO red_bag_workshops/.test(sql) ? { rows: [{ id: 4, slug: "fern-and-thistle", name: "Fern & Thistle", size: "small", created_at: "2026-11-06T09:00:00Z", archived_at: null }] } : { rows: [] };
+      }),
+      release: vi.fn(),
+    };
+    (pool.connect as unknown as ReturnType<typeof vi.fn>).mockResolvedValue(client);
+    const made = await createRedBagWorkshop({ name: "Fern & Thistle", size: "small", by: "staff" });
+    expect(made.ok && made.workshop.slug).toBe("fern-and-thistle");
+    expect(said).toEqual(["BEGIN", "INSERT", "INSERT audit", "COMMIT"]);
   });
 });

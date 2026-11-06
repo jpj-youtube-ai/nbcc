@@ -1,4 +1,5 @@
 import { pool } from "./pool";
+import { writeWithAudit } from "./donations";
 import { WORKSHOP_SIZES, type WorkshopSize } from "../red-bag/workshop";
 
 // Fill a Red Bag: companies' own Workshops, in red_bag_workshops (migrations/1791200000390), and the
@@ -82,6 +83,10 @@ export async function listRedBagWorkshops(): Promise<RedBagWorkshop[]> {
 export type CreateResult = { ok: true; workshop: RedBagWorkshop } | { ok: false; reason: "name" | "slug" | "size" | "taken" };
 
 /** A new company Workshop. The link is taken for ever, so a taken one (even archived) is refused. */
+class Taken extends Error {}
+class Missing extends Error {}
+
+/** A new company Workshop, recorded in audit_log with it. The link is taken for ever, so a taken one (even archived) is refused. */
 export async function createRedBagWorkshop(input: { name: string; slug?: string; size: string; by: string }): Promise<CreateResult> {
   const name = String(input.name ?? "").trim().replace(/\s+/g, " ");
   if (!name || name.length > WORKSHOP_NAME_MAX) return { ok: false, reason: "name" };
@@ -89,24 +94,47 @@ export async function createRedBagWorkshop(input: { name: string; slug?: string;
   if (!slugAllowed(slug)) return { ok: false, reason: "slug" };
   const size = sizeOf(input.size);
   if (!size) return { ok: false, reason: "size" };
-  const r = await pool.query<Row>(
-    `INSERT INTO red_bag_workshops (slug, name, size, created_by) VALUES ($1, $2, $3, $4)
-     ON CONFLICT (slug) DO NOTHING RETURNING ${COLUMNS}`,
-    [slug, name, size, input.by],
-  );
-  if (!r.rows[0]) return { ok: false, reason: "taken" };
-  forgetRedBagWorkshops();
-  return { ok: true, workshop: toWorkshop(r.rows[0]) };
+  try {
+    const workshop = await writeWithAudit(
+      async (client) => {
+        const r = await client.query<Row>(
+          `INSERT INTO red_bag_workshops (slug, name, size, created_by) VALUES ($1, $2, $3, $4)
+           ON CONFLICT (slug) DO NOTHING RETURNING ${COLUMNS}`,
+          [slug, name, size, input.by],
+        );
+        if (!r.rows[0]) throw new Taken();
+        return toWorkshop(r.rows[0]);
+      },
+      (w) => ({ actor: input.by, action: "red_bag_workshop.created", entity: "red_bag_workshop", entityId: w.id, data: { slug: w.slug, name: w.name, size: w.size } }),
+    );
+    forgetRedBagWorkshops();
+    return { ok: true, workshop };
+  } catch (err) {
+    if (err instanceof Taken) return { ok: false, reason: "taken" };
+    throw err;
+  }
 }
 
 /** Put a Workshop away (its link stops working; its gifts still count), or bring it back. */
-export async function setRedBagWorkshopArchived(id: number, archived: boolean): Promise<RedBagWorkshop | null> {
-  const r = await pool.query<Row>(
-    `UPDATE red_bag_workshops SET archived_at = ${archived ? "COALESCE(archived_at, now())" : "NULL"} WHERE id = $1 RETURNING ${COLUMNS}`,
-    [id],
-  );
-  forgetRedBagWorkshops();
-  return r.rows[0] ? toWorkshop(r.rows[0]) : null;
+export async function setRedBagWorkshopArchived(id: number, archived: boolean, by: string): Promise<RedBagWorkshop | null> {
+  try {
+    const workshop = await writeWithAudit(
+      async (client) => {
+        const r = await client.query<Row>(
+          `UPDATE red_bag_workshops SET archived_at = ${archived ? "COALESCE(archived_at, now())" : "NULL"} WHERE id = $1 RETURNING ${COLUMNS}`,
+          [id],
+        );
+        if (!r.rows[0]) throw new Missing(); // no such workshop: nothing written, nothing audited
+        return toWorkshop(r.rows[0]);
+      },
+      (w) => ({ actor: by, action: archived ? "red_bag_workshop.archived" : "red_bag_workshop.restored", entity: "red_bag_workshop", entityId: w.id, data: { slug: w.slug } }),
+    );
+    forgetRedBagWorkshops();
+    return workshop;
+  } catch (err) {
+    if (err instanceof Missing) return null;
+    throw err;
+  }
 }
 
 // ------------------------------------------------------------------------------------------------

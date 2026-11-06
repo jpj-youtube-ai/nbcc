@@ -404,7 +404,7 @@ function renderWorkshop(w: WorkshopView | undefined): string {
   const count = bags === 0 ? "Let's fill the first bag" : `${bags.toLocaleString("en-GB")} ${bags === 1 ? "bag" : "bags"} filled`;
   const next = w && bags > 0 && w.nextIn > 0 ? `Just ${w.nextIn} more ${w.nextIn === 1 ? "bag fills" : "bags fill"} the next shelf` : "";
   return (
-    '<div class="fn-workshop">' +
+    (w?.slug ? `<div class="fn-workshop" data-rb-workshop="${escapeHtml(w.slug)}">` : '<div class="fn-workshop">') +
     `<img class="fn-workshop__room" src="${pic}" alt="" width="1600" height="1067" decoding="async" fetchpriority="high" />` +
     "</div>" +
     (w ? `<p class="fn-sign${whose ? " fn-sign--named" : ""}">${whose}<b>${count}</b>${next ? `<span>${next}</span>` : ""}</p>` : "")

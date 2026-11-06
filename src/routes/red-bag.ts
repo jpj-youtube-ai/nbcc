@@ -6,6 +6,14 @@ import { isStaffRequest, mayViewRedBagDraft } from "../red-bag/staff";
 import { redBagList, type RedBagList } from "../red-bag/list";
 import { RED_BAG_PATH, RED_BAG_THANKS_PATH, redBagAccess, redBagIsLive } from "../red-bag/switch";
 import { markAfterBallCheck } from "../site/after-ball";
+import { workshopView, type WorkshopView } from "../red-bag/workshop";
+
+/**
+ * The Workshop for a view of the giving page at night (6 November 2026): everyone's (no slug), or a
+ * company's own (/fill/<slug>), or null when there is no such company. It may throw: the handler
+ * catches it (everyone's page is then drawn without a count, a company's link is a 404).
+ */
+export type WorkshopFor = (slug: string | undefined) => Promise<{ view: WorkshopView } | null>;
 
 // Fill a Red Bag: its pages (docs/superpowers/specs/2026-10-04-fill-a-red-bag-design.md).
 //
@@ -109,6 +117,8 @@ export interface RedBagPageDeps {
   draft?: () => Promise<RedBagList | null>;
   /** May this Authorization header see the draft? Staff with view of the "red-bag" section. */
   mayViewDraft?: (authorization: string | undefined) => Promise<boolean>;
+  /** The giving page only: the Workshop behind the night look, and companies' own links. */
+  workshop?: WorkshopFor;
 }
 
 /** The query that asks for the draft preview: /fill?preview=draft. */
@@ -151,14 +161,15 @@ export function redBagPageHandler(deps: RedBagPageDeps) {
 
   return async function getRedBagPage(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
-      await answer(req, res);
+      if ((await answer(req, res)) === false) next();
     } catch (err) {
       console.error("fill a red bag page failed:", err instanceof Error ? err.message : err);
       next();
     }
   };
 
-  async function answer(req: Request, res: Response): Promise<void> {
+  /** Draws the page; false when it is not this handler's page after all (an unknown company's link). */
+  async function answer(req: Request, res: Response): Promise<boolean | void> {
     const on = live();
     let staff = false;
     if (!on) {
@@ -197,7 +208,28 @@ export function redBagPageHandler(deps: RedBagPageDeps) {
     // Drawn BEFORE anything is set on the response, for the same reason. With no list, no draft and
     // before the moment the options are exactly what they always were.
     const night = deps.isAfterBall?.(req.query) === true;
-    const opts = { preview: access === "preview", ...(list ? { list } : {}), ...(draft ? { draft: true } : {}), ...(night ? { night: true } : {}) };
+    // A company's own link (/fill/<slug>) is a page only at night, and only for a company that exists.
+    const params = (req as { params?: Record<string, unknown> }).params;
+    const slug = typeof params?.slug === "string" ? params.slug : undefined;
+    if (slug !== undefined && (!night || !deps.workshop)) return false;
+    let workshop: WorkshopView | undefined;
+    if (night && deps.workshop) {
+      try {
+        const found = await deps.workshop(slug);
+        if (found) workshop = found.view;
+        else if (slug !== undefined) return false;
+      } catch (err) {
+        console.error("fill a red bag workshop could not be read:", err instanceof Error ? err.message : err);
+        if (slug !== undefined) return false;
+      }
+    }
+    const opts = {
+      preview: access === "preview",
+      ...(list ? { list } : {}),
+      ...(draft ? { draft: true } : {}),
+      ...(night ? { night: true } : {}),
+      ...(workshop ? { workshop } : {}),
+    };
     let page = render(deps.template(), opts);
     // A plain visit to the draft preview's address: the published page, plus the loader that asks
     // again with the tab's admin session. Never on an answer to a request that carried a session,
@@ -217,7 +249,7 @@ export function redBagPageHandler(deps: RedBagPageDeps) {
     // Public, the giving page may be listed by search engines: no header (and no robots line in
     // its file). A staff preview is never indexed, nor is the draft preview's address, and neither
     // is a page not meant for listing (the thank you), whose file says the same.
-    if (access === "preview" || wantsDraft || deps.indexable !== true) res.setHeader("X-Robots-Tag", "noindex, nofollow");
+    if (access === "preview" || wantsDraft || slug !== undefined || deps.indexable !== true) res.setHeader("X-Robots-Tag", "noindex, nofollow");
     res.type("html").send(html);
   }
 }
@@ -245,7 +277,7 @@ export function redBagForwardHandler(live: () => boolean = redBagIsLive) {
 export function addRedBagPageRoutes(
   router: Router,
   siteRoot: string,
-  page: Pick<RedBagPageDeps, "decorate" | "live" | "isStaff" | "list" | "draft" | "mayViewDraft" | "isAfterBall">,
+  page: Pick<RedBagPageDeps, "decorate" | "live" | "isStaff" | "list" | "draft" | "mayViewDraft" | "isAfterBall" | "workshop">,
 ): void {
   const file = join(siteRoot, "fill-a-red-bag.html");
   const thanksFile = join(siteRoot, "fill-thank-you.html");
@@ -264,10 +296,23 @@ export function addRedBagPageRoutes(
     draft: page.draft ?? (async () => (await (await import("../db/red-bag-lists")).readRedBagDraft())?.data ?? null),
     ...(page.mayViewDraft ? { mayViewDraft: page.mayViewDraft } : {}),
     ...(page.isAfterBall ? { isAfterBall: page.isAfterBall } : {}),
+    workshop: page.workshop ?? defaultWorkshopFor,
   };
   router.get(RED_BAG_PATH, redBagPageHandler({ ...shared, ...lists, template: () => readFileSync(file, "utf8"), indexable: true }));
   router.get(
     RED_BAG_THANKS_PATH,
     redBagPageHandler({ ...shared, template: () => readFileSync(thanksFile, "utf8"), render: renderRedBagThanksPage, indexable: false }),
   );
+  // A company's own Workshop, after the thank you so it can never take that address.
+  router.get(`${RED_BAG_PATH}/:slug`, redBagPageHandler({ ...shared, ...lists, template: () => readFileSync(file, "utf8"), indexable: false }));
 }
+
+/** The Workshop from the database: the reads that cannot throw (src/db/red-bag-workshops.ts). */
+const defaultWorkshopFor: WorkshopFor = async (slug) => {
+  const db = await import("../db/red-bag-workshops");
+  if (slug === undefined) return { view: workshopView((await db.redBagWorkshopTotals()).everyonePence, "everyone") };
+  const company = await db.findRedBagWorkshop(slug);
+  if (!company) return null;
+  const pence = (await db.redBagWorkshopTotals()).byWorkshopPence.get(company.id) ?? 0;
+  return { view: { ...workshopView(pence, company.size, company.name), slug: company.slug } };
+};

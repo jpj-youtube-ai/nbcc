@@ -124,3 +124,12 @@ Feature: Fill a Red Bag, listed for search engines, and linked from the Ball's m
       """
     Then the response status should be 200
     And the response field "url" should start with "https://"
+
+  # A company's own Workshop (/fill/<slug>, 6 November 2026): only a company staff have made has one,
+  # so any other address under /fill is the site's own 404, and the thank you is still the thank you.
+  Scenario: a company link nobody has made is the site's 404
+    When I request the site path "/fill/no-such-company-bdd"
+    Then the site response status should be 404
+    When I request the site path "/fill/thank-you"
+    Then the site response status should be 200
+    And the site response should contain "Thank you for filling a Red Bag"

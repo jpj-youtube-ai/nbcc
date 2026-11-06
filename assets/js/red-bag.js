@@ -1250,6 +1250,10 @@
         if (!abroad) body.declaration.postcode = val("rbPostcode");
       }
       body.redBag = true;
+      // given on a company's own Workshop page (/fill/<slug>): its link, so it goes on their shelves
+      var company = doc.querySelector("[data-rb-workshop]");
+      var link = company ? company.getAttribute("data-rb-workshop") : "";
+      if (link && /^[a-z0-9]+(-[a-z0-9]+)*$/.test(link)) body.redBagWorkshop = link;
       return body;
     }
 

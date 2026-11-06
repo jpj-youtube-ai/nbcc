@@ -33,6 +33,8 @@ export interface WorkshopView {
   nextIn: number;
   /** A company's name, on its own link: the sign is theirs. */
   name?: string;
+  /** Its link, so a gift given on its page carries it (data-rb-workshop). */
+  slug?: string;
 }
 
 /** What the Workshop shows for `pence` given, on a company's ladder (or everyone's). */

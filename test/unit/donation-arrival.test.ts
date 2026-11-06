@@ -139,6 +139,27 @@ describe("giftArrival", () => {
     expect(arrive("https://nbcc.scot/fundraise/sams-santa-dash?x=1", "")?.givenOn).toBe("/fundraise/sams-santa-dash");
   });
 
+  // Invented tokens only.
+  const TOKEN = "Zq7Lm2Xc9Vb4Nk8Pw3Rt";
+
+  it("never keeps a token from one of our own page addresses as where they came from", () => {
+    expect(arrive("https://nbcc.scot/donate", `https://nbcc.scot/thank-you/letter/${TOKEN}`)?.source).toBe("/thank-you");
+    expect(arrive("https://nbcc.scot/donate", `https://nbcc.scot/gift-aid/declare/${TOKEN}`)?.source).toBe("/gift-aid");
+    expect(arrive("https://nbcc.scot/donate", `https://nbcc.scot/fundraise/${TOKEN}/news`)?.source).toBe("/fundraise");
+    expect(arrive("https://nbcc.scot/donate", "https://nbcc.scot/ball/7f3e2a1c-9b4d-4e8f-a6c2-1d5b9e0f3a7c")?.source).toBe("/ball");
+  });
+
+  it("keeps nothing of a came from page whose first part is itself personal", () => {
+    expect(arrive("https://nbcc.scot/donate", `https://nbcc.scot/g/${TOKEN}`)).toMatchObject({ channel: "site", source: null });
+    expect(arrive("https://nbcc.scot/donate", `https://nbcc.scot/${TOKEN}`)).toMatchObject({ channel: "site", source: null });
+  });
+
+  it("never keeps a token from the giving page's address", () => {
+    expect(arrive(`https://nbcc.scot/fundraise/${TOKEN}`, "")?.givenOn).toBe("/fundraise");
+    expect(arrive(`https://nbcc.scot/thank-you/letter/${TOKEN}`, "")?.givenOn).toBe("/thank-you");
+    expect(arrive(`https://nbcc.scot/g/${TOKEN}`, "")?.givenOn).toBeNull();
+  });
+
   it("knows our own address with a port, as on a local copy", () => {
     expect(arrive("http://localhost:3000/donate", "http://localhost:3000/get-involved", { ownHosts: ["localhost:3000"] })).toEqual({
       channel: "site",

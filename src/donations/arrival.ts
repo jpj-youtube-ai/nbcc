@@ -9,6 +9,7 @@
 // anything at all when the browser sends Do Not Track or Global Privacy Control.
 
 import { classifyArrival, referrerHost, PAYMENT_HOST, PAYMENT_RETURN_PATHS, type Channel, type Utm } from "../analytics/channel";
+import { isPersonalPath, looksLikeToken } from "../email/tracked-links";
 
 /** Every channel a gift can carry: the page view channels, plus "site" for another page of ours. */
 export const ARRIVAL_CHANNELS = ["qr", "email", "newsletter", "search", "social", "other_websites", "direct", "site"] as const;
@@ -38,6 +39,25 @@ function parse(address: string | null): URL | null {
 
 // A path as we show it: no query, no trailing slash (except the home page's own).
 const pathOf = (url: URL): string => url.pathname.replace(/\/+$/, "") || "/";
+
+const decode = (part: string): string => {
+  try {
+    return decodeURIComponent(part);
+  } catch {
+    return part;
+  }
+};
+
+// A path of ours as we keep it: whole, unless it is personal or carries a token (a thank you
+// letter's /thank-you/letter/<token>, /g/<token>), then only its first part ("/thank-you"), and
+// nothing at all when even that is personal.
+function keptPath(url: URL): string | null {
+  const path = pathOf(url);
+  const parts = path.split("/").filter(Boolean);
+  if (!isPersonalPath(path) && !parts.map(decode).some(looksLikeToken)) return path;
+  const first = `/${parts[0]}`;
+  return isPersonalPath(first) || looksLikeToken(decode(parts[0])) ? null : first;
+}
 
 function utmOf(url: URL | null): Utm | null {
   if (!url) return null;
@@ -87,13 +107,13 @@ export function giftArrival(o: {
   const arrival = classifyArrival({ referrer: before ? before.href : "", utm, ownHosts: own });
   const sorted: { channel: Channel | "site"; source: string | null; campaign: string | null } =
     arrival === "internal"
-      ? { channel: "site", source: before ? pathOf(before) : null, campaign: null }
+      ? { channel: "site", source: before ? keptPath(before) : null, campaign: null }
       : arrival;
 
   return {
     channel: sorted.channel,
     source: cut(sorted.source),
     campaign: cut(sorted.campaign),
-    givenOn: givingOurs ? cut(pathOf(givingOurs)) : null,
+    givenOn: givingOurs ? cut(keptPath(givingOurs)) : null,
   };
 }

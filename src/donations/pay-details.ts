@@ -7,7 +7,7 @@ import type Stripe from "stripe";
 // its brand, last four digits, issuing country and the wallet it was paid with. Nothing else Stripe
 // knows about the payment (a Direct Debit's bank details, a card's expiry, fingerprints) is read.
 
-export type PayMethod = "card" | "bacs_debit" | "card_present" | "other";
+export type PayMethod = "card" | "bacs_debit" | "card_present" | "bank_transfer" | "other";
 export type PayWallet = "apple_pay" | "google_pay" | "link" | "samsung_pay" | "other";
 
 export interface PayDetails {

@@ -42,7 +42,7 @@ const details = (over: Row = {}): Row => ({
   refunds: { refundedPence: 0, events: [] },
   donor: { id: 5, name: "Rowan Example", email: "rowan@example.com", emailConsent: true, donorType: "individual",
     businessName: null, billingAddress: null, billingPostcode: null, otherGifts: { count: 2, totalPence: 4000 } },
-  links: { fundraiser: { id: 4, title: "Sam's Santa Dash", slug: "sams-santa-dash", path: "/fundraise/sams-santa-dash" },
+  links: { fundraiser: { id: 4, title: "Sam's Santa Dash", slug: "sams-santa-dash", pagePath: "/fundraise/sams-santa-dash" },
     pledgeId: null, invoice: null, elfFamilyId: null },
   labels: { givenOnLabel: "Sam's Santa Dash", arrivalLabel: "QR code: Donate billboard, High Street", paidByLabel: "Apple Pay (Visa ending 4242)" },
   ...over,
@@ -224,6 +224,18 @@ describe("the click down", () => {
     expect(links).toContainEqual(["See it in Stripe", "https://dashboard.stripe.com/test/payments/pi_test_1"]);
     const stripe = Array.from(more.querySelectorAll("a")).find((a) => a.textContent === "See it in Stripe")!;
     expect(stripe.getAttribute("rel")).toContain("noopener");
+  });
+
+  it("offers no fundraiser's page link when the page is not public", async () => {
+    const d = details();
+    const links0 = d.links as Row;
+    log.drawLog(wrap(), [gift()], { now: NOW, details: () => Promise.resolve({ ...d, links: { ...links0, fundraiser: { id: 4, title: "Sam's Santa Dash", slug: "sams-santa-dash", pagePath: null } } }) });
+    face(cards()[0]).click();
+    await settle();
+    const more = cards()[0].querySelector(".gl-more") as HTMLElement;
+    const words = Array.from(more.querySelectorAll("a")).map((a) => a.textContent);
+    expect(words).not.toContain("The fundraiser's page");
+    expect(words).toContain("See it in Stripe");
   });
 
   it("lets you open the donor straight away, before the details have come", () => {
@@ -483,7 +495,8 @@ describe("its stylesheet", () => {
     for (const r of all.filter((x) => /(^|;|\s)(animation|transition)\s*:/.test(x.body))) {
       expect(r.at, r.selector).toMatch(/prefers-reduced-motion:\s*no-preference/);
       const moved = /(?:^|;|\s)transition\s*:\s*([^;]+)/.exec(r.body)?.[1];
-      if (moved) for (const part of moved.split(",")) expect(part.trim().split(/\s+/)[0], r.selector).toMatch(/^(transform|opacity|background-color|box-shadow)$/);
+      // A colour change is instant: background-color is never animated.
+      if (moved) for (const part of moved.split(",")) expect(part.trim().split(/\s+/)[0], r.selector).toMatch(/^(transform|opacity|box-shadow)$/);
     }
     for (const f of all.filter((r) => r.selector.startsWith("@keyframes"))) {
       expect(f.at).toMatch(/prefers-reduced-motion:\s*no-preference/);

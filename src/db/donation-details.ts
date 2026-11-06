@@ -22,7 +22,9 @@
 //     donor:    { id, name, email, emailConsent, donorType, businessName, billingAddress, billingPostcode,
 //                 otherGifts: { count, totalPence } | null },   (billing only for a company; other paid
 //                 gifts by the same email address, refunds taken off; null with no email)
-//     links:    { fundraiser: { id, title, slug, path } | null, pledgeId, invoice: { id, number, url } | null,
+//     links:    { fundraiser: { id, title, slug, pagePath } | null, pledgeId, invoice: { id, number, url } | null,
+//                 (pagePath is the page's address, /fundraise/<slug> or /event/<slug>, only while it has
+//                 a public page, as the public route decides (hasPage); null otherwise)
 //                 elfFamilyId: null },
 //     labels:   { givenOnLabel, arrivalLabel, paidByLabel } }   (src/donations/labels.ts; arrivalLabel and
 //                 paidByLabel are null when not noted)
@@ -48,6 +50,7 @@ import { donationReference } from "../donors/confirmation";
 import { parseNamedCode } from "../site/qr-named";
 import { labelScanCampaigns, parseScanCampaign } from "../fundraising/material-codes";
 import { arrivalLabel, givenOnLabel, paidByLabel, qrArrivalName } from "../donations/labels";
+import { hasPage, pagePath } from "../fundraising/model";
 
 /** The longest the details wait for Stripe to say how an older gift was paid. */
 export const PAY_FILL_LIMIT_MS = 3000;
@@ -113,7 +116,7 @@ export interface GiftDetails {
     otherGifts: { count: number; totalPence: number } | null;
   };
   links: {
-    fundraiser: { id: number; title: string; slug: string; path: string } | null;
+    fundraiser: { id: number; title: string; slug: string; pagePath: string | null } | null;
     pledgeId: number | null;
     invoice: { id: number; number: string; url: string } | null;
     elfFamilyId: null;
@@ -168,6 +171,7 @@ const GIFT_SQL = `SELECT d.id, d.donor_id, d.mode, d.plan, d.amount_pence, d.fee
        dn.full_name AS donor_name, dn.email AS donor_email, dn.email_consent, dn.donor_type, dn.business_name,
        dn.billing_address, dn.billing_postcode,
        fr.title AS fundraiser_title, fr.slug AS fundraiser_slug, fr.path AS fundraiser_path,
+       fr.status AS fundraiser_status, fr.public AS fundraiser_public,
        (SELECT sp.id FROM sponsor_pledges sp WHERE sp.donation_id = d.id ORDER BY sp.id LIMIT 1) AS pledge_id,
        dc.scope AS declaration_scope, dc.revoked_at AS declaration_revoked_at, dc.created_at AS declaration_made_at,
        cb.status AS batch_status, cb.submitted_at AS batch_submitted_at
@@ -202,6 +206,16 @@ const ELF_SQL = `SELECT o.id, o.reference, o.family_id, o.entry_pence, o.donatio
 type Row = Record<string, unknown>;
 const str = (v: unknown): string | null => (typeof v === "string" ? v : null);
 const num = (v: unknown): number | null => (v === null || v === undefined ? null : Number(v));
+
+/**
+ * The fundraiser's page address, only while it has a public page (the same rule as the public page
+ * route, hasPage); null otherwise. fundraisers.path is its KIND ('raising' | 'event'), not an address.
+ */
+function fundraiserPage(r: Record<string, unknown>): string | null {
+  const f = { path: r.fundraiser_path, slug: r.fundraiser_slug, status: r.fundraiser_status, public: r.fundraiser_public === true } as Parameters<typeof hasPage>[0] & Parameters<typeof pagePath>[0];
+  if (typeof f.slug !== "string" || f.slug === "" || !hasPage(f)) return null;
+  return pagePath(f);
+}
 const date = (v: unknown): Date | null => (v instanceof Date ? v : typeof v === "string" ? new Date(v) : null);
 
 function declarationOf(r: Row): DeclarationSummary | null {
@@ -343,7 +357,7 @@ async function giftDetails(id: number, payFillLimitMs: number): Promise<GiftDeta
       fundraiser:
         fundraiserId === null || fundraiserTitle === null
           ? null
-          : { id: fundraiserId, title: fundraiserTitle, slug: String(r.fundraiser_slug ?? ""), path: String(r.fundraiser_path ?? "") },
+          : { id: fundraiserId, title: fundraiserTitle, slug: String(r.fundraiser_slug ?? ""), pagePath: fundraiserPage(r) },
       pledgeId,
       invoice: invoiceId === null ? null : { id: invoiceId, number: invoiceNumber(invoiceId), url: linkFor(invoiceId) },
       elfFamilyId: null,

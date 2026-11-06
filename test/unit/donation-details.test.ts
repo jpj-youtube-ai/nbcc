@@ -68,6 +68,8 @@ const GIFT = {
   fundraiser_title: null,
   fundraiser_slug: null,
   fundraiser_path: null,
+  fundraiser_status: null,
+  fundraiser_public: null,
   pledge_id: null,
   declaration_scope: "all_donations",
   declaration_revoked_at: null,
@@ -240,12 +242,29 @@ describe("a gift's details", () => {
     expect(d?.kind === "donation" && d.links.invoice?.url).toMatch(/^https:\/\/nbcc\.example\.com\//);
   });
 
+  // fundraisers.path is the KIND ('raising' | 'event'), not an address (migration 1791200000000).
+  const FR = { fundraiser_id: 5, fundraiser_title: "Sam's Santa Dash", fundraiser_slug: "sams-santa-dash", fundraiser_path: "raising", fundraiser_status: "approved", fundraiser_public: true };
+
   it("links a fundraiser's page and a sponsor pledge", async () => {
-    answer({ gift: { ...GIFT, fundraiser_id: 5, fundraiser_title: "Sam's Santa Dash", fundraiser_slug: "sams-santa-dash", fundraiser_path: "/fundraise/sams-santa-dash", pledge_id: 8 } });
+    answer({ gift: { ...GIFT, ...FR, pledge_id: 8 } });
     expect(await getDonationDetails("donation", 321)).toMatchObject({
-      links: { fundraiser: { id: 5, title: "Sam's Santa Dash", slug: "sams-santa-dash", path: "/fundraise/sams-santa-dash" }, pledgeId: 8 },
+      links: { fundraiser: { id: 5, title: "Sam's Santa Dash", slug: "sams-santa-dash", pagePath: "/fundraise/sams-santa-dash" }, pledgeId: 8 },
       labels: { givenOnLabel: "Sponsor pledge for Sam's Santa Dash" },
     });
+  });
+
+  it("links an event's page at its event address", async () => {
+    answer({ gift: { ...GIFT, ...FR, fundraiser_path: "event", fundraiser_slug: "winter-quiz", fundraiser_status: "finished" } });
+    const d = await getDonationDetails("donation", 321);
+    expect(d?.kind === "donation" && d.links.fundraiser?.pagePath).toBe("/event/winter-quiz");
+  });
+
+  it("gives no page link for a fundraiser with no public page", async () => {
+    for (const over of [{ fundraiser_status: "pending" }, { fundraiser_status: "declined" }, { fundraiser_public: false }]) {
+      answer({ gift: { ...GIFT, ...FR, ...over } });
+      const d = await getDonationDetails("donation", 321);
+      expect(d?.kind === "donation" && d.links.fundraiser).toMatchObject({ id: 5, title: "Sam's Santa Dash", pagePath: null });
+    }
   });
 
   it("says a revoked declaration is revoked", async () => {

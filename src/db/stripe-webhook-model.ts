@@ -80,7 +80,7 @@ export function arrivalFromCheckoutSession(
   return { channel, source: text(m.arrSource), campaign: text(m.arrCampaign), givenOn: text(m.givenOn) };
 }
 
-const asString =(v: string | { id: string } | null | undefined): string | null =>
+const asString = (v: string | { id: string } | null | undefined): string | null =>
   typeof v === "string" ? v : v && typeof v === "object" ? v.id : null;
 
 // checkout.session.completed → the donation record. Gift Aid is carried as a FLAG

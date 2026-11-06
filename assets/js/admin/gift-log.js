@@ -502,7 +502,7 @@
       if (elf && opts.canOpenElf && row.elf_family_id) {
         kids.push(el("button", { class: "gl-btn gl-btn--go", type: "button", "data-elf-family": Number(row.elf_family_id), text: "Open in Head Elf HQ" }));
       }
-      if (ln.fundraiser) kids.push(link("The fundraiser's page", ln.fundraiser.path));
+      if (ln.fundraiser && ln.fundraiser.pagePath) kids.push(link("The fundraiser's page", ln.fundraiser.pagePath));
       if (ln.invoice) kids.push(link("The invoice", ln.invoice.url));
       kids.push(link("See it in Stripe", stripe.dashboardUrl));
       var shown = kids.filter(Boolean);

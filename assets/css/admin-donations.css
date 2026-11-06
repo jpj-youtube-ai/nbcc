@@ -191,8 +191,7 @@
 .gl-pager .admin-page-info { color: var(--gl-soft); font-variant-numeric: tabular-nums; }
 
 @media (prefers-reduced-motion: no-preference) {
-  .gl-tile, .gl-gift, .gl-btn, .gl-pager .admin-page-btn { transition: transform 0.12s var(--gl-ease), box-shadow 0.12s var(--gl-ease), background-color 0.2s; }
-  .gl-gift__face { transition: background-color 0.2s; }
+  .gl-tile, .gl-gift, .gl-btn, .gl-pager .admin-page-btn { transition: transform 0.12s var(--gl-ease), box-shadow 0.12s var(--gl-ease); }
   .gl-gift__chev::before { transition: transform 0.22s var(--gl-ease); }
   .gl-more:not([hidden]) { animation: gl-open 0.26s var(--gl-ease); }
   @keyframes gl-open { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: none; } }

@@ -1317,7 +1317,10 @@
   ];
   // The search the list was last read with, so the box's own change (on leaving it) reads nothing twice.
   var donationsSearchSent = "";
+  // Reads overlap as someone types: only the latest one's answer (or failure) is drawn.
+  var donationsAsk = 0;
   function loadDonations() {
+    var ask = ++donationsAsk;
     var wrap = el("donationsTable");
     var GL = window.AdminGiftLog;
     wrap.innerHTML = '<p class="admin-loading">Loading…</p>';
@@ -1343,6 +1346,7 @@
     authFetch("/api/admin/donations?limit=25&offset=" + donationsOffset + query)
       .then(okJson)
       .then(function (d) {
+        if (ask !== donationsAsk) return;
         if (!GL) throw new Error("the gift log did not load");
         GL.drawLog(wrap, d.results || [], {
           empty: place ? (filtered ? place.noneHere : place.none) : filtered ? "No gifts match these filters." : "",
@@ -1368,6 +1372,7 @@
         donationsShownOffset = donationsOffset;
       })
       .catch(function () {
+        if (ask !== donationsAsk) return;
         wrap.innerHTML = unavailableHtml("Donations are unavailable.");
         // The pager stays as it was, and so does its place: Previous and Next try that page again.
         donationsOffset = donationsShownOffset;

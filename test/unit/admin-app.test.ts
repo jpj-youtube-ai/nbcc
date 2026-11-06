@@ -370,6 +370,50 @@ describe("admin app integration (jsdom, TASK-118)", () => {
     expect(el("cancelGaBtn")).not.toBeNull();
   });
 
+  // Search as you type: two reads overlap, and the first (older) one answers last. The list must show
+  // the newer search's gifts, whether the older one answers with rows or fails.
+  it.each([["answers", true], ["fails", false]])("shows the latest search's gifts when an older search %s last", async (_how, ok) => {
+    await signIn();
+    (document.querySelector('.admin-nav-link[data-view="donations"]') as HTMLElement).click();
+    await flush();
+    await flush();
+    const real = (globalThis as unknown as { fetch: (u: unknown, i?: unknown) => Promise<unknown> }).fetch;
+    const answer = (name: string) => ({
+      status: 200,
+      ok: true,
+      json: () => Promise.resolve({ results: [{ ...donation, id: name === "Older Example" ? 21 : 22, donor_name: name }], total: 1 }),
+      text: () => Promise.resolve(""),
+      headers: { get: () => "application/json" },
+    });
+    let older: { resolve: (v: unknown) => void; reject: (e: unknown) => void } | null = null;
+    (globalThis as unknown as { fetch: unknown }).fetch = vi.fn((url: unknown, init?: unknown) => {
+      const u = String(url);
+      if (u.includes("/api/admin/donations?") && u.includes("q=older"))
+        return new Promise((resolve, reject) => {
+          older = { resolve, reject };
+        });
+      if (u.includes("/api/admin/donations?") && u.includes("q=newer")) return Promise.resolve(answer("Newer Example"));
+      return real(url, init);
+    });
+    const box = el("donationsSearch") as HTMLInputElement;
+    box.value = "older";
+    box.dispatchEvent(new Event("change"));
+    box.value = "newer";
+    box.dispatchEvent(new Event("change"));
+    await flush();
+    await flush();
+    expect(el("donationsTable").textContent).toContain("Newer Example");
+    expect(older).not.toBeNull();
+    if (ok) older!.resolve(answer("Older Example"));
+    else older!.reject(new Error("network down"));
+    await flush();
+    await flush();
+    await flush();
+    expect(el("donationsTable").textContent).toContain("Newer Example");
+    expect(el("donationsTable").textContent).not.toContain("Older Example");
+    expect(el("donationsTable").textContent).not.toContain("unavailable");
+  });
+
   it("hides the write controls for a Viewer", async () => {
     loginToken = tokenFor("viewer");
     await signIn();

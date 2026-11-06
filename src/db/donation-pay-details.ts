@@ -8,8 +8,10 @@ import { payDetailsFromCharge, type PayDetails } from "../donations/pay-details"
 //   - the webhook asks for a gift it has just recorded, after its commit, without waiting
 //     (payDetailsLater), so Stripe's answer is never held up;
 //   - an older gift is asked about the first time its details are opened in the admin.
-// Stripe is asked once: pay_checked_at is stamped even when Stripe has nothing to say. Nothing here
-// ever throws, and a failure only means the gift log says "Not noted".
+// Stripe is asked once: pay_checked_at is stamped even when Stripe has nothing to say, except while a
+// gift's invoice has no payment at all yet (a later look asks again). An older invoice gift with no
+// Stripe ids at all was paid by bank transfer, and is noted so. Nothing here ever throws, and a failure
+// only means the gift log says "Not noted".
 
 type Query = (sql: string, params: unknown[]) => Promise<{ rows: unknown[] }>;
 type PayStripe = Pick<Stripe, "charges" | "paymentIntents" | "checkout" | "invoicePayments">;
@@ -24,7 +26,7 @@ export interface PayDetailsHint {
   invoiceId?: string | null;
 }
 
-export const PAY_DETAILS_ROW_SQL = `SELECT stripe_charge_id, stripe_payment_intent_id, stripe_session_id, pay_method
+export const PAY_DETAILS_ROW_SQL = `SELECT stripe_charge_id, stripe_payment_intent_id, stripe_session_id, pay_method, source
   FROM donations WHERE id = $1`;
 
 // $1 = donation id, $2..$6 = method, wallet, brand, last four, country. Only fills in a gift where
@@ -38,7 +40,11 @@ interface IdsRow {
   stripe_payment_intent_id: string | null;
   stripe_session_id: string | null;
   pay_method: string | null;
+  source: string | null;
 }
+
+// An invoice with no payment at all yet: not "nothing found", so pay_checked_at is not stamped.
+const NOT_YET = Symbol("no payment yet");
 
 const defaultQuery: Query = (sql, params) => pool.query(sql, params);
 
@@ -73,11 +79,13 @@ async function chargeOfIntent(stripe: PayStripe, intent: unknown): Promise<Strip
   return chargeOf(pi?.latest_charge);
 }
 
-// An invoice's paid payment: a monthly gift's first (its checkout's invoice) or a renewal's.
-async function chargeOfInvoice(stripe: PayStripe, invoiceId: string): Promise<Stripe.Charge | null> {
-  const list = await stripe.invoicePayments.list({ invoice: invoiceId, status: "paid", limit: 1 });
+// An invoice's payment: a monthly gift's first (its checkout's invoice) or a renewal's. Paid or not
+// yet: a Direct Debit's first invoice is still open at checkout.session.completed, but its payment
+// intent's charge already carries the bacs_debit details while pending.
+async function chargeOfInvoice(stripe: PayStripe, invoiceId: string): Promise<Stripe.Charge | null | typeof NOT_YET> {
+  const list = await stripe.invoicePayments.list({ invoice: invoiceId, limit: 1 });
   const payment = list?.data?.[0]?.payment;
-  if (!payment) return null;
+  if (!payment) return NOT_YET;
   if (payment.payment_intent) return chargeOfIntent(stripe, payment.payment_intent);
   const chargeId = idOf(payment.charge);
   return chargeId ? chargeOf(await stripe.charges.retrieve(chargeId)) : null;
@@ -86,7 +94,7 @@ async function chargeOfInvoice(stripe: PayStripe, invoiceId: string): Promise<St
 // The charge that took the money: by its id, else the payment intent's latest charge, else through
 // the checkout session (its payment intent, or for a monthly gift its first invoice), else through an
 // invoice the caller names. Null when none of them leads to one.
-async function findCharge(stripe: PayStripe, row: IdsRow, hint: PayDetailsHint): Promise<Stripe.Charge | null> {
+async function findCharge(stripe: PayStripe, row: IdsRow, hint: PayDetailsHint): Promise<Stripe.Charge | null | typeof NOT_YET> {
   if (row.stripe_charge_id) return chargeOf(await stripe.charges.retrieve(row.stripe_charge_id));
   if (row.stripe_payment_intent_id) return chargeOfIntent(stripe, row.stripe_payment_intent_id);
   if (row.stripe_session_id) {
@@ -123,7 +131,8 @@ const paramsFor = (donationId: number, d: PayDetails | null): unknown[] => [
 
 /**
  * Ask Stripe how a gift was paid and keep it on the donation. Skips a gift already noted. Stamps
- * pay_checked_at even when nothing is found, so Stripe is asked once. Returns what was found, or null
+ * pay_checked_at even when nothing is found, so Stripe is asked once, but not while its invoice has
+ * no payment yet. An invoice gift with no Stripe ids at all is noted as a bank transfer. Returns what was found, or null
  * (nothing found, already noted, or a failure). Never throws; a failure leaves the gift unchecked so a
  * later look can ask again.
  */
@@ -134,9 +143,17 @@ export async function fillPayDetails(donationId: number, hint: PayDetailsHint = 
     if (!stripe) return null;
     const row = (await query(PAY_DETAILS_ROW_SQL, [donationId])).rows[0] as IdsRow | undefined;
     if (!row || row.pay_method !== null) return null;
+    const noStripeIds = !row.stripe_payment_intent_id && !row.stripe_charge_id && !row.stripe_session_id;
+    if (row.source === "invoice" && noStripeIds) {
+      const transfer: PayDetails = { method: "bank_transfer", wallet: null, brand: null, last4: null, country: null };
+      await query(WRITE_PAY_DETAILS_SQL, paramsFor(donationId, transfer));
+      return transfer;
+    }
     let details: PayDetails | null;
     try {
-      details = payDetailsFromCharge(await findCharge(stripe, row, hint));
+      const found = await findCharge(stripe, row, hint);
+      if (found === NOT_YET) return null;
+      details = payDetailsFromCharge(found);
     } catch (err) {
       if (!isNotThere(err)) throw err;
       details = null;

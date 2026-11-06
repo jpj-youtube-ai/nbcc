@@ -91,8 +91,14 @@ describe("payDetailsFromCharge", () => {
 
 // ---- fillPayDetails ------------------------------------------------------------------------------
 
-type Row = { stripe_charge_id: string | null; stripe_payment_intent_id: string | null; stripe_session_id: string | null; pay_method: string | null };
-const ROW: Row = { stripe_charge_id: null, stripe_payment_intent_id: null, stripe_session_id: null, pay_method: null };
+type Row = {
+  stripe_charge_id: string | null;
+  stripe_payment_intent_id: string | null;
+  stripe_session_id: string | null;
+  pay_method: string | null;
+  source: string | null;
+};
+const ROW: Row = { stripe_charge_id: null, stripe_payment_intent_id: null, stripe_session_id: null, pay_method: null, source: null };
 
 function fakeDb(row: Row | null) {
   const query = vi.fn(async (sql: string, params: unknown[]) => {
@@ -130,7 +136,7 @@ afterEach(() => {
 describe("the statements", () => {
   it("reads only the Stripe ids and whether it is noted already", () => {
     expect(PAY_DETAILS_ROW_SQL.replace(/\s+/g, " ").trim()).toBe(
-      "SELECT stripe_charge_id, stripe_payment_intent_id, stripe_session_id, pay_method FROM donations WHERE id = $1",
+      "SELECT stripe_charge_id, stripe_payment_intent_id, stripe_session_id, pay_method, source FROM donations WHERE id = $1",
     );
   });
   it("writes the five details and the time it asked, only where nothing is noted yet", () => {
@@ -178,7 +184,7 @@ describe("fillPayDetails", () => {
       checkout: { sessions: { retrieve: vi.fn(async () => ({ id: "cs_test_monthly", payment_intent: null, invoice: "in_test_first" })) } },
     });
     await fillPayDetails(44, {}, { query: db.query, stripe: s as never });
-    expect(s.invoicePayments.list).toHaveBeenCalledWith({ invoice: "in_test_first", status: "paid", limit: 1 });
+    expect(s.invoicePayments.list).toHaveBeenCalledWith({ invoice: "in_test_first", limit: 1 });
     expect(s.paymentIntents.retrieve).toHaveBeenCalledWith("pi_test_inv", { expand: ["latest_charge"] });
     expect(db.writes()).toEqual([withId(44, APPLE)]);
   });
@@ -189,9 +195,47 @@ describe("fillPayDetails", () => {
       invoicePayments: { list: vi.fn(async () => ({ data: [{ status: "paid", payment: { type: "charge", charge: "ch_test_inv" } }] })) },
     });
     await fillPayDetails(45, { invoiceId: "in_test_renewal" }, { query: db.query, stripe: s as never });
-    expect(s.invoicePayments.list).toHaveBeenCalledWith({ invoice: "in_test_renewal", status: "paid", limit: 1 });
+    expect(s.invoicePayments.list).toHaveBeenCalledWith({ invoice: "in_test_renewal", limit: 1 });
     expect(s.charges.retrieve).toHaveBeenCalledWith("ch_test_inv");
     expect(db.writes()).toEqual([withId(45, APPLE)]);
+  });
+
+  it("notes a monthly Direct Debit's first gift while its invoice is still open, from the pending charge", async () => {
+    // At checkout.session.completed the first BACS invoice is still open: its payment is not paid yet,
+    // but its payment intent's charge already says bacs_debit.
+    const db = fakeDb({ ...ROW, stripe_session_id: "cs_test_dd" });
+    const bacs = charge({ type: "bacs_debit", bacs_debit: { last4: "2345", sort_code: "108800" } });
+    const s = fakeStripe({
+      checkout: { sessions: { retrieve: vi.fn(async () => ({ id: "cs_test_dd", payment_intent: null, invoice: "in_test_dd_first" })) } },
+      invoicePayments: {
+        list: vi.fn(async (p: { status?: string }) =>
+          p.status === "paid" ? { data: [] } : { data: [{ status: "open", payment: { type: "payment_intent", payment_intent: "pi_test_dd" } }] },
+        ),
+      },
+      paymentIntents: { retrieve: vi.fn(async () => ({ id: "pi_test_dd", status: "processing", latest_charge: { ...bacs, status: "pending" } })) },
+    });
+    expect(await fillPayDetails(48, {}, { query: db.query, stripe: s as never })).toMatchObject({ method: "bacs_debit" });
+    expect(db.writes()).toEqual([[48, "bacs_debit", null, null, null, null]]);
+  });
+
+  it("does not stamp a gift whose invoice has no payment at all yet, so a later look asks again", async () => {
+    const db = fakeDb({ ...ROW, stripe_session_id: "cs_test_dd" });
+    const s = fakeStripe({
+      checkout: { sessions: { retrieve: vi.fn(async () => ({ id: "cs_test_dd", payment_intent: null, invoice: "in_test_dd_first" })) } },
+      invoicePayments: { list: vi.fn(async () => ({ data: [] })) },
+    });
+    expect(await fillPayDetails(49, {}, { query: db.query, stripe: s as never })).toBeNull();
+    expect(db.writes()).toEqual([]);
+  });
+
+  it("notes an older invoice gift with no Stripe ids at all as paid by bank transfer, without asking Stripe", async () => {
+    const db = fakeDb({ ...ROW, source: "invoice" });
+    const s = fakeStripe();
+    expect(await fillPayDetails(50, {}, { query: db.query, stripe: s as never })).toMatchObject({ method: "bank_transfer" });
+    expect(s.charges.retrieve).not.toHaveBeenCalled();
+    expect(s.checkout.sessions.retrieve).not.toHaveBeenCalled();
+    expect(s.invoicePayments.list).not.toHaveBeenCalled();
+    expect(db.writes()).toEqual([[50, "bank_transfer", null, null, null, null]]);
   });
 
   it("stamps a gift as checked when Stripe has nothing, so it is not asked again", async () => {
@@ -282,7 +326,7 @@ describe("payDetailsLater", () => {
     payDetailsLater(63, { invoiceId: "in_test_renewal" }, { query: db.query, stripe: s as never });
     expect(s.invoicePayments.list).not.toHaveBeenCalled();
     for (let i = 0; i < 5; i++) await nextTurn();
-    expect(s.invoicePayments.list).toHaveBeenCalledWith({ invoice: "in_test_renewal", status: "paid", limit: 1 });
+    expect(s.invoicePayments.list).toHaveBeenCalledWith({ invoice: "in_test_renewal", limit: 1 });
     expect(db.writes()).toEqual([withId(63, APPLE)]);
   });
 

@@ -1342,6 +1342,10 @@
       if (!place && box && box.checked) place = s;
     });
     if (place) query += "&source=" + place.source;
+    // The Monthly gifts tile shows the Type filter's state, whatever set it (the tile, the filter, Clear all).
+    var monthlyTile = el("donationsMonthlyFilter");
+    var modeControl = el("donationsModeFilter");
+    if (monthlyTile && modeControl) monthlyTile.checked = modeControl.value === "monthly";
     if (GL) GL.drawChips(el("donationsChips"));
     authFetch("/api/admin/donations?limit=25&offset=" + donationsOffset + query)
       .then(okJson)
@@ -1422,6 +1426,16 @@
         oneSourceFilter(id);
       });
   });
+  // Monthly gifts is a kind of gift, not a place (TASK-596): pressing its tile sets the Type filter to
+  // Monthly, and pressing it again to All. It goes with a place, so it unticks none of them.
+  var monthlyTileBox = el("donationsMonthlyFilter");
+  if (monthlyTileBox)
+    monthlyTileBox.addEventListener("change", function () {
+      var modeControl = el("donationsModeFilter");
+      if (modeControl) modeControl.value = monthlyTileBox.checked ? "monthly" : "";
+      donationsOffset = 0;
+      loadDonations();
+    });
   DONATION_FILTERS.map(function (f) {
     return f.id;
   })

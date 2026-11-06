@@ -294,6 +294,10 @@
                     <label class="gl-tile gl-tile--plain" for="donationsFundraiserFilter"><input class="gl-tile__box" type="checkbox" id="donationsFundraiserFilter"><span class="gl-tile__name">Fundraiser pages</span><span class="gl-tile__about">Gifts on a fundraiser's own page</span></label>
                     <label class="gl-tile gl-tile--plain" for="donationsCardReaderFilter"><input class="gl-tile__box" type="checkbox" id="donationsCardReaderFilter"><span class="gl-tile__name">Card reader</span><span class="gl-tile__about">Gifts taken in person at events</span></label>
                   </div>
+                  <!-- Every monthly payment, wherever it was set up. Not a place, so it presses the Type filter (app.js). -->
+                  <div class="gl-tiles gl-tiles--monthly">
+                    <label class="gl-tile gl-tile--wide" for="donationsMonthlyFilter"><input class="gl-tile__box" type="checkbox" id="donationsMonthlyFilter"><span class="gl-tile__name">Monthly gifts</span><span class="gl-tile__score" data-gl-score="monthly"></span></label>
+                  </div>
                   <div class="gl-board__status" id="donationsSourcesStatus" aria-live="polite"></div>
                   <p class="gl-board__note" id="donationsSourcesNote"></p>
                 </section>

@@ -83,6 +83,13 @@
 .gl-tile__all { font-size: 0.84rem; line-height: 1.35; color: var(--gl-soft); overflow-wrap: anywhere; }
 .gl-tile__about { font-size: 0.88rem; line-height: 1.35; color: var(--gl-soft); }
 .gl-tile--plain { background: var(--gl-warm); border-style: dashed; box-shadow: none; }
+/* Monthly gifts: a kind of gift, not a place, so a tile of its own across the whole board. On a wide
+   board its figures sit in a row beside its name. */
+.gl-tile--wide { grid-column: 1 / -1; }
+@container gl (min-width: 640px) {
+  .gl-tile--wide { grid-row: auto; grid-template-rows: none; grid-template-columns: minmax(9rem, 1fr) 3fr; column-gap: var(--gl-space-lg); align-items: center; }
+  .gl-tile--wide .gl-tile__score { grid-auto-flow: column; justify-content: start; align-items: baseline; column-gap: var(--gl-space-md); padding-right: 30px; }
+}
 .gl-tile:hover { background: var(--gl-hover); }
 .gl-tile:active { transform: translate(2px, 3px); box-shadow: var(--gl-pressed); }
 .gl-tile:has(.gl-tile__box:focus-visible) { outline: 3px solid var(--gl-gold-ink); outline-offset: 3px; }
@@ -138,6 +145,9 @@
 .gl-gift__who { grid-area: who; display: grid; gap: 3px; min-width: 0; }
 .gl-gift__name { font-family: var(--gl-head); font-weight: 700; font-size: 1.05rem; line-height: 1.2; color: var(--gl-ink); overflow-wrap: anywhere; }
 .gl-gift__meta { display: flex; flex-wrap: wrap; gap: 2px 6px; font-size: 0.9rem; line-height: 1.35; color: var(--gl-soft); font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+/* Stripe's reference is one unbroken word: kept whole on one line, and cut short with an ellipsis on a
+   narrow card. The click down gives it in full. */
+.gl-gift__ref { min-width: 0; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; overflow-wrap: normal; }
 .gl-dot { color: var(--gl-rule); }
 .gl-gift__tags { grid-area: tags; display: flex; flex-wrap: wrap; align-items: center; gap: 6px; min-width: 0; }
 .gl-gift__tags .admin-new-pill { margin-left: 0; }

@@ -14,7 +14,7 @@ vi.mock("../../src/config", () => ({
 vi.mock("../../src/db/pool", () => ({ pool: { connect: vi.fn() } }));
 
 import { payDetailsFromCharge } from "../../src/donations/pay-details";
-import { fillPayDetails, recordPayDetails, payDetailsLater, PAY_DETAILS_ROW_SQL, WRITE_PAY_DETAILS_SQL } from "../../src/db/donation-pay-details";
+import { fillPayDetails, recordPayDetails, payDetailsLater, PAY_DETAILS_ROW_SQL, WRITE_PAY_DETAILS_SQL, WRITE_STRIPE_IDS_SQL } from "../../src/db/donation-pay-details";
 import { stripeIsOfflineStub } from "../../src/clients/stripe";
 
 const charge = (details: Record<string, unknown> | null): Stripe.Charge =>
@@ -95,10 +95,11 @@ type Row = {
   stripe_charge_id: string | null;
   stripe_payment_intent_id: string | null;
   stripe_session_id: string | null;
+  stripe_invoice_id: string | null;
   pay_method: string | null;
   source: string | null;
 };
-const ROW: Row = { stripe_charge_id: null, stripe_payment_intent_id: null, stripe_session_id: null, pay_method: null, source: null };
+const ROW: Row = { stripe_charge_id: null, stripe_payment_intent_id: null, stripe_session_id: null, stripe_invoice_id: null, pay_method: null, source: null };
 
 function fakeDb(row: Row | null) {
   const query = vi.fn(async (sql: string, params: unknown[]) => {
@@ -107,7 +108,8 @@ function fakeDb(row: Row | null) {
     return { rows: [], rowCount: 1 };
   });
   const writes = () => query.mock.calls.filter(([sql]) => sql === WRITE_PAY_DETAILS_SQL).map(([, p]) => p);
-  return { query, writes };
+  const idWrites = () => query.mock.calls.filter(([sql]) => sql === WRITE_STRIPE_IDS_SQL).map(([, p]) => p);
+  return { query, writes, idWrites };
 }
 
 const visaCharge = charge({ type: "card", card: { ...visa, wallet: { type: "apple_pay" } } });
@@ -136,7 +138,13 @@ afterEach(() => {
 describe("the statements", () => {
   it("reads only the Stripe ids and whether it is noted already", () => {
     expect(PAY_DETAILS_ROW_SQL.replace(/\s+/g, " ").trim()).toBe(
-      "SELECT stripe_charge_id, stripe_payment_intent_id, stripe_session_id, pay_method, source FROM donations WHERE id = $1",
+      "SELECT stripe_charge_id, stripe_payment_intent_id, stripe_session_id, stripe_invoice_id, pay_method, source FROM donations WHERE id = $1",
+    );
+  });
+  it("keeps the charge and payment intent found, only where the gift has none of its own", () => {
+    expect(WRITE_STRIPE_IDS_SQL.replace(/\s+/g, " ").trim()).toBe(
+      "UPDATE donations SET stripe_charge_id = COALESCE(stripe_charge_id, $2), stripe_payment_intent_id = COALESCE(stripe_payment_intent_id, $3) " +
+        "WHERE id = $1 AND (stripe_charge_id IS NULL OR stripe_payment_intent_id IS NULL)",
     );
   });
   it("writes the five details and the time it asked, only where nothing is noted yet", () => {
@@ -198,6 +206,31 @@ describe("fillPayDetails", () => {
     expect(s.invoicePayments.list).toHaveBeenCalledWith({ invoice: "in_test_renewal", limit: 1 });
     expect(s.charges.retrieve).toHaveBeenCalledWith("ch_test_inv");
     expect(db.writes()).toEqual([withId(45, APPLE)]);
+  });
+
+  it("finds a renewal through the invoice kept on the gift, when opened later with nothing named", async () => {
+    const db = fakeDb({ ...ROW, stripe_invoice_id: "in_test_kept" });
+    const s = fakeStripe();
+    await fillPayDetails(64, {}, { query: db.query, stripe: s as never });
+    expect(s.invoicePayments.list).toHaveBeenCalledWith({ invoice: "in_test_kept", limit: 1 });
+    expect(db.writes()).toEqual([withId(64, APPLE)]);
+  });
+
+  it("keeps Stripe's charge and payment intent on a renewal that had neither, so it shows Stripe's reference", async () => {
+    const db = fakeDb(ROW);
+    const paid = { ...visaCharge, id: "ch_test_renew", payment_intent: "pi_test_renew" };
+    const s = fakeStripe({ paymentIntents: { retrieve: vi.fn(async () => ({ id: "pi_test_renew", latest_charge: paid })) } });
+    await fillPayDetails(65, { invoiceId: "in_test_renewal" }, { query: db.query, stripe: s as never });
+    expect(db.idWrites()).toEqual([[65, "ch_test_renew", "pi_test_renew"]]);
+  });
+
+  it("writes no Stripe ids for a gift that already has both, or when Stripe has nothing", async () => {
+    const both = fakeDb({ ...ROW, stripe_charge_id: "ch_test_1", stripe_payment_intent_id: "pi_test_1" });
+    await fillPayDetails(66, {}, { query: both.query, stripe: fakeStripe() as never });
+    expect(both.idWrites()).toEqual([]);
+    const none = fakeDb(ROW);
+    await fillPayDetails(67, {}, { query: none.query, stripe: fakeStripe() as never });
+    expect(none.idWrites()).toEqual([]);
   });
 
   it("notes a monthly Direct Debit's first gift while its invoice is still open, from the pending charge", async () => {

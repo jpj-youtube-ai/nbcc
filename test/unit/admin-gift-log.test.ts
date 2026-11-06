@@ -34,7 +34,8 @@ const details = (over: Row = {}): Row => ({
   kind: "donation", id: 11, reference: "NBCC-000011", createdAt: "2026-11-05T14:34:00Z",
   gift: { amountPence: 2500, feeCoverPence: 84, totalChargedPence: 2584, currency: "GBP", mode: "once", plan: null, paymentStatus: "paid", paymentChannel: "online", source: null },
   payment: { method: "card", wallet: "apple_pay", cardBrand: "visa", cardLast4: "4242", cardCountry: "GB", checkedAt: "2026-11-05T14:35:00Z",
-    stripe: { paymentIntentId: "pi_test_1", chargeId: "ch_test_1", sessionId: "cs_test_1", subscriptionId: null, dashboardUrl: "https://dashboard.stripe.com/test/payments/pi_test_1" } },
+    stripe: { reference: "pi_test_1", paymentIntentId: "pi_test_1", chargeId: "ch_test_1", sessionId: "cs_test_1", invoiceId: null, subscriptionId: null,
+      dashboardUrl: "https://dashboard.stripe.com/test/payments/pi_test_1", subscriptionUrl: null } },
   arrival: { channel: "qr", source: null, campaign: "c12", givenOn: "/donate" },
   giftAid: { giftAid: true, claimStatus: "batched", declarationStatus: "valid", gasdsEligible: false,
     declaration: { id: 3, scope: "all", madeAt: "2026-11-05T14:33:00Z", revoked: false, revokedAt: null },
@@ -134,6 +135,18 @@ describe("the log", () => {
     expect(b.textContent).not.toContain("gift £0");
   });
 
+  it("shows Stripe's reference for a gift under the donor, so it can be found in Stripe", () => {
+    log.drawLog(wrap(), [gift({ stripe_ref: "pi_test_9" }), elfRow()], { now: NOW });
+    const [a, b] = cards();
+    expect(a.querySelector(".gl-gift__meta .gl-gift__ref")?.textContent).toBe("pi_test_9");
+    expect(b.querySelector(".gl-gift__ref")).toBeNull();
+  });
+
+  it("shows no reference for a gift with none in Stripe, such as a bank transfer", () => {
+    log.drawLog(wrap(), [gift({ stripe_ref: null })], { now: NOW });
+    expect(cards()[0].querySelector(".gl-gift__ref")).toBeNull();
+  });
+
   it("names a business giver under the donor", () => {
     log.drawLog(wrap(), [gift({ business_name: "Bramble Cafe Ltd" })], { now: NOW });
     expect(cards()[0].querySelector(".gl-gift__meta")?.textContent).toContain("Bramble Cafe Ltd");
@@ -196,7 +209,8 @@ describe("the click down", () => {
     expect(fact("Total charged")).toBe("£25.84");
     expect(fact("Type")).toBe("One off");
     expect(fact("Recorded")).toBe("Thursday 5 November 2026 at 2:34pm");
-    expect(fact("Our reference")).toBe("NBCC-000011");
+    expect(fact("Stripe reference")).toBe("pi_test_1");
+    expect(fact("Our receipt number")).toBe("NBCC-000011, on their thank you email");
     expect(fact("Paid by")).toBe("Apple Pay (Visa ending 4242)");
     expect(fact("Card from")).toBe("United Kingdom");
     expect(fact("Given on")).toBe("Sam's Santa Dash");
@@ -224,6 +238,25 @@ describe("the click down", () => {
     expect(links).toContainEqual(["See it in Stripe", "https://dashboard.stripe.com/test/payments/pi_test_1"]);
     const stripe = Array.from(more.querySelectorAll("a")).find((a) => a.textContent === "See it in Stripe")!;
     expect(stripe.getAttribute("rel")).toContain("noopener");
+  });
+
+  it("names a monthly gift's plan in Stripe and links to it, where every payment of it is listed", async () => {
+    const d = details();
+    const stripe0 = (d.payment as Row).stripe as Row;
+    const monthly = {
+      ...d,
+      gift: { ...(d.gift as Row), mode: "monthly", plan: "silver" },
+      payment: { ...(d.payment as Row), stripe: { ...stripe0, subscriptionId: "sub_test_1", subscriptionUrl: "https://dashboard.stripe.com/test/subscriptions/sub_test_1" } },
+    };
+    log.drawLog(wrap(), [gift({ mode: "monthly" })], { now: NOW, details: () => Promise.resolve(monthly) });
+    face(cards()[0]).click();
+    await settle();
+    const more = cards()[0].querySelector(".gl-more") as HTMLElement;
+    const fact = (name: string) =>
+      Array.from(more.querySelectorAll(".gl-fact")).find((f) => f.querySelector("dt")?.textContent === name)?.querySelector("dd")?.textContent;
+    expect(fact("Monthly plan in Stripe")).toBe("sub_test_1");
+    const links = Array.from(more.querySelectorAll<HTMLAnchorElement>("a")).map((a) => [a.textContent, a.getAttribute("href")]);
+    expect(links).toContainEqual(["The monthly plan in Stripe", "https://dashboard.stripe.com/test/subscriptions/sub_test_1"]);
   });
 
   it("offers no fundraiser's page link when the page is not public", async () => {
@@ -329,11 +362,13 @@ describe("the scoreboard", () => {
     totals: {
       redBag: { month: { pence: 41240, gifts: 19 }, all: { pence: 196000, gifts: 87 } },
       elfSchool: { month: { pence: 148600, gifts: 1 }, all: { pence: 148600, gifts: 128 } },
+      monthly: { month: { pence: 12000, gifts: 8 }, all: { pence: 96000, gifts: 64 } },
     },
     lines: [
       { key: "redBag", name: "Fill a Red Bag", month: "£412 from 19 gifts", all: "£1,960 from 87 gifts" },
       { key: "elfSchool", name: "Elf Detective School", month: "£1,486 from 1 payment", all: "£1,486 from 128 payments" },
       { key: "donatePage", name: "Donate page", month: "£2,130 from 64 gifts", all: "£31,400 from 902 gifts" },
+      { key: "monthly", name: "Monthly gifts", month: "£120 from 8 payments", all: "£960 from 64 payments" },
       { key: "nothing", name: "Not a tile", month: "£1 from 1 gift", all: "£1 from 1 gift" },
     ],
   };
@@ -357,6 +392,9 @@ describe("the scoreboard", () => {
     expect(score("redBag").querySelector(".gl-tile__count")?.textContent).toBe("19 gifts this month");
     expect(score("redBag").querySelector(".gl-tile__all")?.textContent).toBe("£1,960 from 87 gifts in all");
     expect(score("elfSchool").querySelector(".gl-tile__count")?.textContent).toBe("1 payment this month");
+    expect(score("monthly").querySelector(".gl-tile__sum")?.textContent).toBe("£120");
+    expect(score("monthly").querySelector(".gl-tile__count")?.textContent).toBe("8 payments this month");
+    expect(score("monthly").querySelector(".gl-tile__all")?.textContent).toBe("£960 from 64 payments in all");
     // A line without its figures still says what the server said.
     expect(score("donatePage").textContent).toBe("£2,130 from 64 gifts this month£31,400 from 902 gifts in all");
     expect(score("ball").textContent).toBe("");

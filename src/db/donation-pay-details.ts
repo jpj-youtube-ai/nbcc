@@ -26,7 +26,7 @@ export interface PayDetailsHint {
   invoiceId?: string | null;
 }
 
-export const PAY_DETAILS_ROW_SQL = `SELECT stripe_charge_id, stripe_payment_intent_id, stripe_session_id, pay_method, source
+export const PAY_DETAILS_ROW_SQL = `SELECT stripe_charge_id, stripe_payment_intent_id, stripe_session_id, stripe_invoice_id, pay_method, source
   FROM donations WHERE id = $1`;
 
 // $1 = donation id, $2..$6 = method, wallet, brand, last four, country. Only fills in a gift where
@@ -35,10 +35,18 @@ export const WRITE_PAY_DETAILS_SQL = `UPDATE donations SET pay_method = $2, pay_
   card_last4 = $5, card_country = $6, pay_checked_at = now()
   WHERE id = $1 AND pay_method IS NULL`;
 
+// $1 = donation id, $2 = the charge found, $3 = its payment intent. A renewal is recorded from its
+// invoice, which on our pinned API version carries neither (TASK-596), so this is how it comes to have
+// Stripe's own payment reference, for the gift log and for a refund to find it by. Never overwrites one.
+export const WRITE_STRIPE_IDS_SQL = `UPDATE donations SET stripe_charge_id = COALESCE(stripe_charge_id, $2),
+  stripe_payment_intent_id = COALESCE(stripe_payment_intent_id, $3)
+  WHERE id = $1 AND (stripe_charge_id IS NULL OR stripe_payment_intent_id IS NULL)`;
+
 interface IdsRow {
   stripe_charge_id: string | null;
   stripe_payment_intent_id: string | null;
   stripe_session_id: string | null;
+  stripe_invoice_id: string | null;
   pay_method: string | null;
   source: string | null;
 }
@@ -92,8 +100,8 @@ async function chargeOfInvoice(stripe: PayStripe, invoiceId: string): Promise<St
 }
 
 // The charge that took the money: by its id, else the payment intent's latest charge, else through
-// the checkout session (its payment intent, or for a monthly gift its first invoice), else through an
-// invoice the caller names. Null when none of them leads to one.
+// the checkout session (its payment intent, or for a monthly gift its first invoice), else through a
+// renewal's invoice (kept on the gift since TASK-596, else named by the caller). Null when none leads to one.
 async function findCharge(stripe: PayStripe, row: IdsRow, hint: PayDetailsHint): Promise<Stripe.Charge | null | typeof NOT_YET> {
   if (row.stripe_charge_id) return chargeOf(await stripe.charges.retrieve(row.stripe_charge_id));
   if (row.stripe_payment_intent_id) return chargeOfIntent(stripe, row.stripe_payment_intent_id);
@@ -103,7 +111,8 @@ async function findCharge(stripe: PayStripe, row: IdsRow, hint: PayDetailsHint):
     const invoiceId = idOf(session?.invoice);
     if (invoiceId) return chargeOfInvoice(stripe, invoiceId);
   }
-  if (hint.invoiceId) return chargeOfInvoice(stripe, hint.invoiceId);
+  const invoiceId = row.stripe_invoice_id ?? hint.invoiceId;
+  if (invoiceId) return chargeOfInvoice(stripe, invoiceId);
   return null;
 }
 
@@ -154,6 +163,10 @@ export async function fillPayDetails(donationId: number, hint: PayDetailsHint = 
       const found = await findCharge(stripe, row, hint);
       if (found === NOT_YET) return null;
       details = payDetailsFromCharge(found);
+      const chargeId = idOf(found?.id);
+      if (chargeId && (!row.stripe_charge_id || !row.stripe_payment_intent_id)) {
+        await query(WRITE_STRIPE_IDS_SQL, [donationId, chargeId, idOf(found?.payment_intent)]);
+      }
     } catch (err) {
       if (!isNotThere(err)) throw err;
       details = null;

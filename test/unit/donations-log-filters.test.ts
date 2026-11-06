@@ -135,6 +135,29 @@ describe("search by name or email", () => {
     expect(count().sql).toContain("FROM donations d JOIN donors dn ON dn.id = d.donor_id");
   });
 
+  it("finds a gift by its Stripe reference too: its payment, charge, renewal invoice or monthly plan", async () => {
+    await listDonations({ q: "pi_test_abc" });
+    for (const q of [count(), page()]) {
+      expect(q.sql).toContain(
+        "(dn.full_name ILIKE $1 OR dn.email ILIKE $1 OR d.stripe_payment_intent_id ILIKE $1 OR d.stripe_charge_id ILIKE $1 OR d.stripe_invoice_id ILIKE $1 OR d.stripe_subscription_id ILIKE $1)",
+      );
+    }
+  });
+
+  it("looks in the Stripe ids only for words shaped like one, so pi or sub alone is not every gift", async () => {
+    for (const q of ["pi", "sub", "Sam"]) {
+      queryMock.mockClear();
+      await listDonations({ q });
+      expect(count().sql).not.toContain("stripe_payment_intent_id ILIKE");
+    }
+  });
+
+  it("lists each gift's Stripe reference: its payment, else its charge, else a renewal's invoice, else its checkout", async () => {
+    await listDonations({});
+    expect(page().sql).toContain("COALESCE(d.stripe_payment_intent_id, d.stripe_charge_id, d.stripe_invoice_id, d.stripe_session_id) AS stripe_ref");
+    expect(page().sql).toContain("NULL::text AS stripe_ref");
+  });
+
   it("takes the characters ILIKE treats as wild literally", async () => {
     await listDonations({ q: "50%_off\\now" });
     expect(count().params).toEqual(["%50\\%\\_off\\\\now%"]);

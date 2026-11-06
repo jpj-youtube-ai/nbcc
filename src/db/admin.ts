@@ -750,6 +750,9 @@ export interface AdminDonationRow {
   source: string | null;
   /** The invoice this gift paid (Admin > Giving > Invoices), so the list can say "Invoice INV-0012". */
   invoice_id: number | null;
+  /** Stripe's reference for a gift (TASK-596): its payment, else its charge, else a renewal's invoice,
+   *  else its checkout session. Null on an elf payment (it has its own reference) and a bank transfer. */
+  stripe_ref: string | null;
   /** An elf payment's reference (EDS-K4F9Q2), its family, and its entry and gift; null on a gift. */
   elf_reference: string | null;
   elf_family_id: number | null;
@@ -788,7 +791,7 @@ const ELF_PAID = `FROM elf_orders o JOIN elf_families f ON f.id = o.family_id
 // Each as a row of the list, column for column with the gifts': the grown up as the name, entry plus
 // gift as the amount, paid online, one off, and never in a claim (an entry is never Gift Aided; the
 // gift alone can carry it). What only a gift has is a typed empty, so the UNION ALL lines up.
-const ELF_ROWS = `SELECT 'elf' AS kind, o.reference AS elf_reference, o.family_id AS elf_family_id,
+const ELF_ROWS = `SELECT 'elf' AS kind, NULL::text AS stripe_ref, o.reference AS elf_reference, o.family_id AS elf_family_id,
             o.entry_pence AS entry_pence, o.donation_pence AS gift_pence,
             o.fee_cover_pence AS fee_cover_pence, NULL::text AS arrival_channel, NULL::text AS arrival_source,
             NULL::text AS arrival_campaign, NULL::text AS given_on, NULL::text AS pay_method, NULL::text AS pay_wallet,
@@ -912,7 +915,15 @@ export async function listDonations(opts: {
     return { q: pattern ? at(pattern) : null, from: from ? at(from) : null, to: to ? at(to) : null };
   };
   const giftShared = shared(params);
-  if (giftShared.q) where.push(`(dn.full_name ILIKE ${giftShared.q} OR dn.email ILIKE ${giftShared.q})`);
+  // A gift is found by its Stripe reference too (TASK-596): its payment, charge, renewal invoice or plan.
+  // Only for words shaped like a Stripe id (pi_..., sub_...), so "pi" or "sub" alone is not every gift.
+  if (giftShared.q) {
+    const stripeShaped = (opts.q ?? "").includes("_");
+    const byStripe = stripeShaped
+      ? ["stripe_payment_intent_id", "stripe_charge_id", "stripe_invoice_id", "stripe_subscription_id"].map((c) => ` OR d.${c} ILIKE ${giftShared.q}`).join("")
+      : "";
+    where.push(`(dn.full_name ILIKE ${giftShared.q} OR dn.email ILIKE ${giftShared.q}${byStripe})`);
+  }
   if (giftShared.from) where.push(`(d.created_at AT TIME ZONE 'Europe/London')::date >= ${giftShared.from}::date`);
   if (giftShared.to) where.push(`(d.created_at AT TIME ZONE 'Europe/London')::date <= ${giftShared.to}::date`);
 
@@ -980,7 +991,9 @@ export async function listDonations(opts: {
 
   // The new columns come before the old ones, so each half's tail reads as it always has. At most one
   // sponsor pledge per gift, so a row is never doubled.
-  const giftRows = `SELECT 'donation' AS kind, NULL::text AS elf_reference, NULL::int AS elf_family_id,
+  const giftRows = `SELECT 'donation' AS kind,
+            COALESCE(d.stripe_payment_intent_id, d.stripe_charge_id, d.stripe_invoice_id, d.stripe_session_id) AS stripe_ref,
+            NULL::text AS elf_reference, NULL::int AS elf_family_id,
             NULL::int AS entry_pence, NULL::int AS gift_pence,
             d.fee_cover_pence, d.arrival_channel, d.arrival_source,
             d.arrival_campaign, d.given_on, d.pay_method, d.pay_wallet,

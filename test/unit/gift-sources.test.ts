@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { giftsWords, paymentsWords, sourceLines, sourceTotalsFrom, BALL_BAGS_NOTE, ELF_PAYMENTS_NOTE, RED_BAG_COUNTED_FROM_NOTE } from "../../src/admin/gift-sources";
+import { giftsWords, paymentsWords, sourceLines, sourceTotalsFrom, BALL_BAGS_NOTE, ELF_PAYMENTS_NOTE, MONTHLY_NOTE, RED_BAG_COUNTED_FROM_NOTE } from "../../src/admin/gift-sources";
 import { numbersLines } from "../../src/admin/overview-numbers";
 
 // Fill a Red Bag against the Donate page: the pure rules that turn the one grouped read into the
@@ -24,6 +24,7 @@ describe("the two buckets", () => {
       invoices: { month: { pence: 0, gifts: 0 }, all: { pence: 0, gifts: 0 } },
       elfSchool: { month: { pence: 0, gifts: 0 }, all: { pence: 0, gifts: 0 } },
       donatePage: { month: { pence: 213_000, gifts: 64 }, all: { pence: 3_140_000, gifts: 902 } },
+      monthly: { month: { pence: 0, gifts: 0 }, all: { pence: 0, gifts: 0 } },
     });
   });
 
@@ -73,6 +74,7 @@ describe("the words", () => {
       ["invoices", "Invoices"],
       ["elfSchool", "Elf Detective School"],
       ["donatePage", "Donate page"],
+      ["monthly", "Monthly gifts"],
     ]);
     expect(sourceLines(t)[1]).toMatchObject({ month: "£75 from 3 gifts", all: "£120 from 5 gifts" });
   });
@@ -86,6 +88,7 @@ describe("the words", () => {
       { key: "invoices", name: "Invoices", month: "£0 from 0 gifts", all: "£0 from 0 gifts" },
       { key: "elfSchool", name: "Elf Detective School", month: "£0 from 0 payments", all: "£0 from 0 payments" },
       { key: "donatePage", name: "Donate page", month: "£2,130 from 64 gifts", all: "£31,400 from 902 gifts" },
+      { key: "monthly", name: "Monthly gifts", month: "£0 from 0 payments", all: "£0 from 0 payments" },
     ]);
   });
 
@@ -102,6 +105,14 @@ describe("the words", () => {
     expect(paymentsWords({ pence: 500, gifts: 1 })).toBe("£5 from 1 payment");
     expect(ELF_PAYMENTS_NOTE).toBe("Elf Detective School payments are entries to take part, with any gift on top. Entries are never claimed for Gift Aid.");
     expect(ELF_PAYMENTS_NOTE).not.toMatch(/[–—-]/);
+  });
+
+  it("counts every monthly payment on a line of its own, last, as payments, and says they are in their place's figures too", () => {
+    const t = sourceTotalsFrom([row("monthly", [12_000, 8], [96_000, 64])]);
+    expect(t.monthly).toEqual({ month: { pence: 12_000, gifts: 8 }, all: { pence: 96_000, gifts: 64 } });
+    expect(sourceLines(t)[6]).toEqual({ key: "monthly", name: "Monthly gifts", month: "£120 from 8 payments", all: "£960 from 64 payments" });
+    expect(MONTHLY_NOTE).toBe("Monthly gifts are every monthly payment, wherever it was set up, so each is in its place's figures too.");
+    expect(MONTHLY_NOTE).not.toMatch(/[–—]/);
   });
 
   it("words the table bags line from its own figures, and explains where they come from", () => {

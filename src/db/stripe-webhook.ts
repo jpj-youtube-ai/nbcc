@@ -989,6 +989,17 @@ async function handleRecurring(
   ).rows[0];
   if (!parent) return { action: "ignored.no_parent", email: null };
 
+  // Stripe sends invoice.paid AND invoice.payment_succeeded for every paid renewal, each its own event,
+  // and on our pinned API version the invoice carries no payment_intent or charge to tell them apart
+  // (TASK-596). So the renewal is known by its invoice: locked first, so two events arriving together
+  // wait for each other, then looked for; the gift recorded below keeps it.
+  const invoiceId = event.data.object.id ?? null;
+  if (invoiceId) {
+    await client.query(`SELECT pg_advisory_xact_lock(hashtext($1))`, [`donation-invoice:${invoiceId}`]);
+    const seen = await client.query(`SELECT id FROM donations WHERE stripe_invoice_id = $1`, [invoiceId]);
+    if (seen.rowCount && seen.rowCount > 0) return { action: "ignored.duplicate_invoice", email: null };
+  }
+
   if (rec.paymentIntentId) {
     const dup = await client.query(
       `SELECT 1 FROM donations WHERE stripe_payment_intent_id = $1`,
@@ -1007,6 +1018,7 @@ async function handleRecurring(
     declarationId: parent.declaration_id,
   });
   const donationId = await insertDonation(client, buildDonationRow(donation, parent.donor_id));
+  if (invoiceId) await client.query(`UPDATE donations SET stripe_invoice_id = $2 WHERE id = $1`, [donationId, invoiceId]);
   await insertAudit(client, {
     actor: "stripe",
     action: "donation.recurring",

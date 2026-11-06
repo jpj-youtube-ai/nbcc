@@ -9,9 +9,8 @@ import { WORKSHOP_SIZES, workshopView } from "../red-bag/workshop";
 import {
   WORKSHOP_NAME_MAX,
   createRedBagWorkshop,
-  forgetRedBagWorkshops,
   listRedBagWorkshops,
-  redBagWorkshopTotals,
+  readRedBagWorkshopTotalsNow,
   setRedBagWorkshopArchived,
 } from "../db/red-bag-workshops";
 
@@ -48,7 +47,7 @@ const createBody = z.object({
 const archiveBody = z.object({ archived: z.boolean() });
 
 async function state(sub: number): Promise<Record<string, unknown>> {
-  const [workshops, totals, perms] = await Promise.all([listRedBagWorkshops(), redBagWorkshopTotals(), loadEffectivePermissions(sub)]);
+  const [workshops, totals, perms] = await Promise.all([listRedBagWorkshops(), readRedBagWorkshopTotalsNow(), loadEffectivePermissions(sub)]);
   const rows = await Promise.all(
     workshops.map(async (w) => {
       const pence = totals.byWorkshopPence.get(w.id) ?? 0;
@@ -77,7 +76,6 @@ export async function getRedBagWorkshops(req: Request, res: Response): Promise<R
   const claims = await authorizeSection(req, res, "red-bag", "view");
   if (!claims) return;
   try {
-    forgetRedBagWorkshops(); // staff see the totals as they are now, not a minute ago
     return res.status(200).json(await state(claims.sub));
   } catch (err) {
     console.error("admin red bag workshops: listing failed:", err instanceof Error ? err.message : err);

@@ -6,7 +6,7 @@ vi.mock("../../src/db/pool", () => ({ pool: { query: vi.fn(), connect: vi.fn() }
 vi.mock("../../src/config", () => ({ config: { NODE_ENV: "test" } }));
 
 import { pool } from "../../src/db/pool";
-import { createRedBagWorkshop, findRedBagWorkshop, forgetRedBagWorkshops, redBagWorkshopTotals, RESERVED_WORKSHOP_SLUGS, WORKSHOP_SEASON_FROM, WORKSHOP_TOTALS_SQL, slugAllowed, slugFromName, sizeOf, totalsFromRows } from "../../src/db/red-bag-workshops";
+import { createRedBagWorkshop, findRedBagWorkshop, forgetRedBagWorkshops, readRedBagWorkshopTotalsNow, redBagWorkshopTotals, RESERVED_WORKSHOP_SLUGS, WORKSHOP_SEASON_FROM, WORKSHOP_TOTALS_SQL, slugAllowed, slugFromName, sizeOf, totalsFromRows } from "../../src/db/red-bag-workshops";
 
 // Companies' own Workshops (Jaimie, 6 November 2026): /fill/<slug>. The pure parts here; the queries
 // run against Postgres in the BDD suite. Every company name below is invented.
@@ -49,14 +49,20 @@ describe("the totals", () => {
     expect(WORKSHOP_TOTALS_SQL).toMatch(/ROLLUP \(red_bag_workshop_id\)/);
   });
 
-  it("reads the grand total from the last row, and each company's from its own", () => {
-    const t = totalsFromRows([
-      { workshop_id: 3, pence: "15000" },
-      { workshop_id: null, pence: "4000" },
-      { workshop_id: null, pence: "19000" },
-    ]);
-    expect(t.everyonePence).toBe(19000);
-    expect([...t.byWorkshopPence]).toEqual([[3, 15000]]);
+  // The grand total is the row GROUPING() marks, never a row by its place: without an ORDER BY a
+  // hashed plan can put it first (found in review, 6 November 2026).
+  it("reads the grand total from the row marked as the total, wherever it comes", () => {
+    expect(WORKSHOP_TOTALS_SQL).toContain("GROUPING(red_bag_workshop_id) AS is_total");
+    const rows = [
+      { is_total: 1, workshop_id: null, pence: "19000" },
+      { is_total: 0, workshop_id: 3, pence: "15000" },
+      { is_total: 0, workshop_id: null, pence: "4000" },
+    ];
+    for (const order of [rows, [...rows].reverse(), [rows[1], rows[0], rows[2]]]) {
+      const t = totalsFromRows(order);
+      expect(t.everyonePence).toBe(19000);
+      expect([...t.byWorkshopPence]).toEqual([[3, 15000]]);
+    }
     expect(totalsFromRows([]).everyonePence).toBe(0);
   });
 });
@@ -107,9 +113,47 @@ describe("the public page's reads", () => {
   });
 
   it("reads the totals from the season's start", async () => {
-    query.mockResolvedValueOnce({ rows: [{ workshop_id: null, pence: "25000" }] });
+    query.mockResolvedValueOnce({ rows: [{ is_total: 1, workshop_id: null, pence: "25000" }] });
     expect((await redBagWorkshopTotals()).everyonePence).toBe(25000);
     expect(query.mock.calls[0][1]).toEqual(["2026-11-01T00:00:00Z"]);
+  });
+
+  it("asks a failing database once a minute, not on every visit, even with nothing read before", async () => {
+    query.mockRejectedValue(new Error("the database is away"));
+    await findRedBagWorkshop("brightwater-engineering");
+    await findRedBagWorkshop("brightwater-engineering");
+    await findRedBagWorkshop("brightwater-engineering");
+    expect(query).toHaveBeenCalledTimes(1);
+  });
+
+  it("never keeps a read that was in flight when it was told to forget", async () => {
+    let answer!: (v: unknown) => void;
+    query.mockImplementationOnce(() => new Promise((r) => (answer = r)));
+    const old = findRedBagWorkshop("brightwater-engineering");
+    forgetRedBagWorkshops(); // staff put the company away while that read was out
+    query.mockResolvedValueOnce({ rows: [] });
+    expect(await findRedBagWorkshop("brightwater-engineering")).toBeNull();
+    answer({ rows: [row] }); // the old read comes back late, with the company still in it
+    await old;
+    expect(await findRedBagWorkshop("brightwater-engineering")).toBeNull();
+    expect(query).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe("the admin's totals", () => {
+  const query = pool.query as unknown as ReturnType<typeof vi.fn>;
+  beforeEach(() => {
+    query.mockReset();
+    forgetRedBagWorkshops();
+  });
+
+  it("are read afresh every time, and leave the public page's last good totals alone", async () => {
+    query.mockResolvedValueOnce({ rows: [{ is_total: 1, workshop_id: null, pence: "10000" }] });
+    expect((await redBagWorkshopTotals()).everyonePence).toBe(10000);
+    query.mockResolvedValueOnce({ rows: [{ is_total: 1, workshop_id: null, pence: "15000" }] });
+    expect((await readRedBagWorkshopTotalsNow()).everyonePence).toBe(15000);
+    expect((await redBagWorkshopTotals()).everyonePence).toBe(10000);
+    expect(query).toHaveBeenCalledTimes(2);
   });
 });
 

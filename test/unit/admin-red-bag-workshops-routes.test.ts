@@ -6,7 +6,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 
 const db = vi.hoisted(() => ({
   listRedBagWorkshops: vi.fn(),
-  redBagWorkshopTotals: vi.fn(),
+  readRedBagWorkshopTotalsNow: vi.fn(),
   createRedBagWorkshop: vi.fn(),
   setRedBagWorkshopArchived: vi.fn(),
   forgetRedBagWorkshops: vi.fn(),
@@ -62,7 +62,7 @@ const company = (over: Record<string, unknown> = {}) => ({ id: 4, slug: "fern-an
 beforeEach(() => {
   Object.values(db).forEach((f) => f.mockReset());
   db.listRedBagWorkshops.mockResolvedValue([company()]);
-  db.redBagWorkshopTotals.mockResolvedValue({ everyonePence: 60000, byWorkshopPence: new Map([[4, 15000]]) });
+  db.readRedBagWorkshopTotalsNow.mockResolvedValue({ everyonePence: 60000, byWorkshopPence: new Map([[4, 15000]]) });
 });
 
 describe("the list of companies", () => {
@@ -79,7 +79,9 @@ describe("the list of companies", () => {
     const [w] = res.body.workshops;
     expect(w).toMatchObject({ id: 4, name: "Fern & Thistle", link: "https://nbcc.scot/fill/fern-and-thistle", pence: 15000, bags: 3, archived: false });
     expect(w.qrSvg).toMatch(/^<svg/);
-    expect(db.forgetRedBagWorkshops).toHaveBeenCalled();
+    // read afresh for staff, leaving the public page's cache alone
+    expect(db.readRedBagWorkshopTotalsNow).toHaveBeenCalled();
+    expect(db.forgetRedBagWorkshops).not.toHaveBeenCalled();
   });
 
   it("draws no code for an archived company", async () => {

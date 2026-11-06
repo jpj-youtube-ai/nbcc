@@ -161,19 +161,24 @@ export const WORKSHOP_TOTALS_SQL = `WITH gifts AS (
      AND d.amount_pence > d.refunded_amount_pence
      AND d.created_at >= $1
 )
-SELECT red_bag_workshop_id AS workshop_id, COALESCE(SUM(pence), 0) AS pence
+SELECT GROUPING(red_bag_workshop_id) AS is_total, red_bag_workshop_id AS workshop_id, COALESCE(SUM(pence), 0) AS pence
   FROM gifts
  GROUP BY ROLLUP (red_bag_workshop_id)`;
 
-/** The totals from the rows of WORKSHOP_TOTALS_SQL (the ROLLUP's grand total has no workshop and comes last). */
-export function totalsFromRows(rows: { workshop_id: number | string | null; pence: number | string }[], grand = true): WorkshopTotals {
+type TotalsRow = { is_total?: number | string | boolean | null; workshop_id: number | string | null; pence: number | string };
+
+/**
+ * The totals from the rows of WORKSHOP_TOTALS_SQL. The grand total is the row GROUPING() marks
+ * (is_total 1), never a row by its place: with no ORDER BY, a hashed plan can put it anywhere.
+ */
+export function totalsFromRows(rows: TotalsRow[]): WorkshopTotals {
   const byWorkshopPence = new Map<number, number>();
   let everyonePence = 0;
-  rows.forEach((row, i) => {
+  for (const row of rows) {
     const pence = Math.max(0, Number(row.pence) || 0);
-    if (grand && i === rows.length - 1 && row.workshop_id == null) everyonePence = pence;
+    if (Number(row.is_total) === 1 || row.is_total === true) everyonePence = pence;
     else if (row.workshop_id != null) byWorkshopPence.set(Number(row.workshop_id), pence);
-  });
+  }
   return { everyonePence, byWorkshopPence };
 }
 
@@ -201,33 +206,46 @@ function within<T>(work: Promise<T>, ms: number): Promise<T> {
   });
 }
 
-/** One cached read: the last good value for a minute; on trouble the last good value, or `none`. */
+/**
+ * One cached read: the last good value for a minute; on trouble the last good value, or `none`, kept
+ * for a minute too, so a failing database is asked once a minute and not on every visit. Each read
+ * belongs to a generation: forget() starts a new one, and a read from an older generation that comes
+ * back late changes nothing (it would put back what staff have just changed, for a minute).
+ */
 function cachedRead<T>(read: () => Promise<T>, none: T) {
   let value: T | undefined;
   let at = 0;
   let pending: Promise<T> | null = null;
+  let generation = 0;
   return {
     get(): Promise<T> {
       if (value !== undefined && Date.now() - at < KEEP_MS) return Promise.resolve(value);
       if (!pending) {
-        pending = within(read(), WAIT_MS)
+        const mine = generation;
+        const current = within(read(), WAIT_MS)
           .then((v) => {
-            value = v;
-            at = Date.now();
+            if (mine === generation) {
+              value = v;
+              at = Date.now();
+            }
             return v;
           })
           .catch((e: unknown) => {
             console.error(`[red-bag-workshops] read failed: ${(e as Error)?.message ?? e}`);
-            at = Date.now(); // try again in a minute, not on every visit
-            return value ?? none;
+            if (mine !== generation) return value ?? none;
+            value = value ?? none; // try again in a minute, not on every visit
+            at = Date.now();
+            return value;
           })
           .finally(() => {
-            pending = null;
+            if (pending === current) pending = null;
           });
+        pending = current;
       }
       return pending;
     },
     forget(): void {
+      generation += 1;
       value = undefined;
       at = 0;
       pending = null;
@@ -240,10 +258,13 @@ const live = cachedRead(async () => {
   return new Map(r.rows.map((row) => [row.slug, toWorkshop(row)] as const));
 }, new Map<string, RedBagWorkshop>());
 
-const totals = cachedRead(async () => {
-  const r = await pool.query<{ workshop_id: number | null; pence: string }>(WORKSHOP_TOTALS_SQL, [WORKSHOP_SEASON_FROM]);
+/** The totals straight from the database, uncached (the admin's, which may throw). */
+export async function readRedBagWorkshopTotalsNow(): Promise<WorkshopTotals> {
+  const r = await pool.query<TotalsRow>(WORKSHOP_TOTALS_SQL, [WORKSHOP_SEASON_FROM]);
   return totalsFromRows(r.rows);
-}, { everyonePence: 0, byWorkshopPence: new Map<number, number>() } as WorkshopTotals);
+}
+
+const totals = cachedRead(readRedBagWorkshopTotalsNow, { everyonePence: 0, byWorkshopPence: new Map<number, number>() } as WorkshopTotals);
 
 /** A live (not archived) company Workshop by its link, or null. */
 export async function findRedBagWorkshop(slug: string): Promise<RedBagWorkshop | null> {

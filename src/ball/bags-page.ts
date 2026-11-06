@@ -72,7 +72,7 @@ export function bagsFromSession(
 /** One of Fill a Red Bag's item drawings, or "" if the catalogue cannot be read (the words stay). */
 function drawing(key: string): string {
   try {
-    return redBag().art(key, "bb-art", 34);
+    return redBag().drawing(key, "bb-art", 34);
   } catch {
     return "";
   }

@@ -280,12 +280,28 @@
   // a word the donor already reads, and none of it says anything is bought or goes to anyone.
   // ---------------------------------------------------------------------------------------------
 
-  // The drawings: one for every item on the list and every example, all in ONE place. Each is the
-  // inside of a 40 by 40 picture, drawn with simple shapes. They carry no colour of their own: the
-  // stylesheet (assets/css/red-bag.css, .rb-art) gives the classes the site's colours.
-  //   r crimson, d maroon, t tan, s pale tan, c cream, w white, h holly, g gold, e slate (fills);
-  //   n no outline; l a cream line; q a crimson line; x a thicker line.
-  var ART = {
+  // The pictures: one for every item on the list and every example, all in ONE place. Since
+  // 5 November 2026 each is a painting: one painting per item, example and the present, in the logo's own
+  // style (flat colour, bold maroon-brown outlines; Jaimie chose "look A"). Each is drawn inside the
+  // same 40 by 40 picture the hand drawings used, so everywhere that shows one is unchanged. The
+  // keys are what staff choose from in the admin; the files are assets/img/red-bag/<key>.webp.
+  var PICTURES = "/assets/img/red-bag/";
+  var ART = {};
+  [
+    "blanket", "insulated-cup", "toiletry-set", "toy", "soft-toy", "headphones", "book", "colouring-book",
+    "pencil", "notebook", "pyjamas", "socks", "hat-gloves",
+    "crisis-15", "crisis-30", "crisis-60", "school-25", "school-35", "school-40", "hand-20", "hand-75", "hand-150",
+    "present",
+  ].forEach(function (key) {
+    ART[key] = '<image href="' + PICTURES + key + '.webp" width="40" height="40"/>';
+  });
+
+  // The hand drawings that came before the paintings, kept word for word for the Ball's own page
+  // (/bag, src/ball/bags-page.ts), which stays exactly as it is (Jaimie, 5 November 2026). Each is the
+  // inside of a 40 by 40 picture, in simple shapes that carry no colour of their own: that page's
+  // stylesheet gives the classes the site's colours (r crimson, d maroon, t tan, s pale tan, c cream,
+  // w white, h holly, g gold, e slate; n no outline, l a cream line, q a crimson line, x thicker).
+  var DRAWN = {
     // --- the list ---
     // A neatly folded blanket (5 October 2026): three soft folds, their rounded edges down the left,
     // in a simple check (thin cream lines both ways and a gold one), a bound edge and its fringe
@@ -406,6 +422,18 @@
     var k = String(key);
     if (Object.prototype.hasOwnProperty.call(ART_OF, k) && Object.prototype.hasOwnProperty.call(ART, ART_OF[k])) return ART_OF[k];
     return Object.prototype.hasOwnProperty.call(ART, k) ? k : "";
+  }
+
+  /** One of the hand drawings, as art() drew it before the paintings: for the Ball's page only. */
+  function drawing(key, cls, size) {
+    var k = String(key);
+    if (!Object.prototype.hasOwnProperty.call(DRAWN, k)) return "";
+    var px = size || 40;
+    return (
+      '<svg class="rb-art' + (cls ? " " + cls : "") + '" viewBox="0 0 40 40" width="' + px + '" height="' + px + '" aria-hidden="true" focusable="false">' +
+      DRAWN[k] +
+      "</svg>"
+    );
   }
 
   /**
@@ -938,6 +966,7 @@
     artKey: artKey,
     ART: ART,
     art: art,
+    drawing: drawing,
     TAG_LINES: TAG_LINES,
     MAX_PEEKS: MAX_PEEKS,
     peekCount: peekCount,

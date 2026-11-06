@@ -2,7 +2,6 @@
 import { describe, it, expect } from "vitest";
 import { createRequire } from "node:module";
 import { readFileSync } from "node:fs";
-import { createHash } from "node:crypto";
 import { resolve } from "node:path";
 import { renderRedBagPage, renderRedBagThanksPage } from "../../src/red-bag/render";
 
@@ -33,8 +32,11 @@ describe("the drawings", () => {
     expect(exampleKeys.length).toBe(9);
   });
 
-  it("draws each as one inline picture, for the eye only, never in the tab order", () => {
-    for (const key of [...itemKeys, ...exampleKeys]) {
+  // Since 5 November 2026 every one is a painting in the logo's own style (flat colour, bold
+  // maroon-brown outlines: Jaimie chose "look A"), one file per key, drawn inside the same little
+  // picture as before so every place that shows one is unchanged.
+  it("draws each as one picture of its own painting, for the eye only, never in the tab order", () => {
+    for (const key of Object.keys(rb.ART)) {
       const svg = rb.art(key);
       const d = new DOMParser().parseFromString(svg, "text/html");
       expect(d.body.children.length, key).toBe(1);
@@ -44,14 +46,28 @@ describe("the drawings", () => {
       expect(el.getAttribute("focusable")).toBe("false");
       expect(el.getAttribute("viewBox")).toBe("0 0 40 40");
       expect(el.classList.contains("rb-art")).toBe(true);
-      expect(el.querySelectorAll("path, rect, circle, ellipse").length).toBeGreaterThan(2);
+      const images = el.querySelectorAll("image");
+      expect(images.length, key).toBe(1);
+      expect(el.children.length, key).toBe(1);
+      expect(images[0].getAttribute("href")).toBe(`/assets/img/red-bag/${key}.webp`);
+      expect(images[0].getAttribute("width")).toBe("40");
+      expect(images[0].getAttribute("height")).toBe("40");
     }
   });
 
-  it("is drawn in the page's own colours: no colour, picture, text or link of its own", () => {
+  it("has every painting on the site, small enough for a phone", () => {
+    for (const key of Object.keys(rb.ART)) {
+      const file = readFileSync(resolve(ROOT, `assets/img/red-bag/${key}.webp`));
+      expect(file.subarray(0, 4).toString("latin1"), key).toBe("RIFF");
+      expect(file.subarray(8, 12).toString("latin1"), key).toBe("WEBP");
+      expect(file.length, key).toBeLessThan(16 * 1024);
+    }
+  });
+
+  it("carries nothing but the picture: no colour, text, script or link off the site", () => {
     for (const key of Object.keys(rb.ART)) {
       const svg = rb.art(key);
-      expect(svg, key).not.toMatch(/#[0-9a-fA-F]{3,8}\b|rgb|url\(|href|<image|<text|<script|style=|fill=|stroke=/);
+      expect(svg, key).not.toMatch(/#[0-9a-fA-F]{3,8}\b|rgb|url\(|<text|<script|style=|on\w+=|https?:|\/\//);
     }
   });
 
@@ -61,50 +77,17 @@ describe("the drawings", () => {
   });
 });
 
-// The owner, 5 October 2026, did not like the first blanket (two rolled red shapes with a fringe):
-// it is now a neatly FOLDED blanket in a simple check, its fringe down one side.
-describe("the blanket drawing", () => {
-  const blanket = new DOMParser().parseFromString(rb.art("blanket"), "text/html").body.firstElementChild!;
-  const all = (sel: string) => [...blanket.querySelectorAll(sel)];
-  const cls = (el: Element) => (el.getAttribute("class") ?? "").split(/\s+/);
-
-  it("is one soft folded stack: a red body with rounded folds, not two rolls", () => {
-    const red = all("path, rect").filter((el) => cls(el).includes("r"));
-    expect(red.length).toBe(1);
-    // The folds are curves down one side of the one body (arcs or curves in its outline).
-    expect((red[0].getAttribute("d") ?? "").match(/[aAcCqQ]/g)?.length ?? 0).toBeGreaterThanOrEqual(3);
-    // No rounded red rectangles (that was the pair of drums).
-    expect(all("rect").filter((el) => cls(el).includes("r")).length).toBe(0);
-    // The lines between one fold and the next.
-    expect(rb.ART.blanket).toMatch(/<path d="[^"]*"\/>/);
-  });
-
-  it("has a simple check: cream both ways, and a little gold or green", () => {
-    const cream = all("*").filter((el) => cls(el).includes("c") || cls(el).includes("l"));
-    expect(cream.length).toBeGreaterThanOrEqual(2);
-    expect(all("*").filter((el) => cls(el).includes("g") || cls(el).includes("h")).length).toBeGreaterThanOrEqual(1);
-  });
-
-  it("has a fringe down one side, high enough to show when the blanket peeks out of the bag", () => {
-    const fringe = all("path").find((el) => cls(el).includes("f"));
-    expect(fringe, "the fringe").toBeTruthy();
-    const strands = (fringe!.getAttribute("d") ?? "").match(/M/g)?.length ?? 0;
-    expect(strands).toBeGreaterThanOrEqual(6);
-    // Some of it is in the top half of the picture: the part that shows above the bag's rim.
-    const ys = [...(fringe!.getAttribute("d") ?? "").matchAll(/M[\d.]+[ ,]([\d.]+)/g)].map((m) => Number(m[1]));
-    expect(ys.filter((y) => y < 20).length).toBeGreaterThanOrEqual(3);
-  });
-
-  it("stays inside its 40 by 40 picture, in the page's colours", () => {
-    const nums = [...rb.ART.blanket.matchAll(/(?:x|y|cx|cy)="([\d.]+)"/g)].map((m: RegExpMatchArray) => Number(m[1]));
-    for (const n of nums) expect(n).toBeLessThanOrEqual(40);
-    expect(rb.ART.blanket).not.toMatch(/#[0-9a-fA-F]{3,8}\b|rgb|url\(|style=|fill=|stroke=/);
-  });
-
-  it("is the ONLY drawing that changed", () => {
-    const rest: Record<string, string> = {};
-    for (const key of Object.keys(rb.ART).sort()) if (key !== "blanket" && key !== "present") rest[key] = rb.ART[key];
-    expect(createHash("sha256").update(JSON.stringify(rest)).digest("hex")).toBe("2597528e1117e0003e25b73472be30e4e8e733a2f67ec78f676f037b2f55855a");
+describe("the list", () => {
+  // Jaimie chose a painting beside every item on the list (5 November 2026), before its name.
+  it("shows each item's painting beside its name, for the eye only", () => {
+    for (const key of itemKeys) {
+      const row = doc.querySelector(`[data-rb-item="${key}"]`)!;
+      expect(row, key).toBeTruthy();
+      const pics = row.querySelectorAll("svg.rb-item__pic");
+      expect(pics.length, key).toBe(1);
+      expect(pics[0].getAttribute("aria-hidden")).toBe("true");
+      expect(pics[0].querySelector("image")!.getAttribute("href")).toBe(`/assets/img/red-bag/${key}.webp`);
+    }
   });
 });
 
@@ -140,10 +123,11 @@ describe("the icon beside each example", () => {
     }
   });
 
-  it("keeps its size when the words wrap, sits in the middle, and turns light on the pressed green", () => {
+  // The paintings are 44px since 5 November 2026 (Jaimie approved the bigger cards).
+  it("keeps its size when the words wrap, and sits in the middle", () => {
     expect(css).toMatch(/\.rb-example__icon\{[^}]*flex:0 0 auto/);
     expect(css).toMatch(/\.rb-example__icon\{[^}]*align-self:center/);
-    expect(css).toMatch(/\.rb-example\[aria-pressed="true"\] \.rb-art\{[^}]*stroke:var\(--cream\)/);
+    expect(css).toMatch(/\.rb-example__icon\{[^}]*width:44px;height:44px/);
   });
 
   it("is not on the thank you page", () => {
@@ -617,12 +601,8 @@ describe("the stylesheet for the feel good layer", () => {
     expect(reduced).toMatch(/\.rb-flurry\{display:none\}/);
   });
 
-  it("makes the peeks stand out: a heavier outline than the drawings have elsewhere, and no glow or gradient", () => {
-    const base = Number(/\.rb-art\{[^}]*stroke-width:([\d.]+)/.exec(css)?.[1]);
-    const peek = Number(/\.rb-peek \.rb-art\{[^}]*stroke-width:([\d.]+)/.exec(css)?.[1]);
-    expect(base).toBe(1.5);
-    expect(peek).toBeGreaterThan(base + 0.3);
-    expect(peek).toBeLessThanOrEqual(2.4);
+  // The paintings carry their own bold outline (5 November 2026), so a peek needs nothing added.
+  it("gives the peeks no glow or gradient", () => {
     const rules = [...css.matchAll(/\.rb-peek[^{]*\{([^}]*)\}/g)].map((m) => m[1]).join(";");
     expect(rules).not.toMatch(/gradient|filter|blur|box-shadow|text-shadow/);
   });

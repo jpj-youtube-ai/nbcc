@@ -5,6 +5,8 @@ import { MATERIALS_STATEMENT } from "../legal/registration";
 import { redBag, type RedBagCatalogue } from "./catalogue";
 import { redBagList, type RedBagList, type RedBagListForPage } from "./list";
 import { DRIFT, renderLights } from "./scene";
+import { WORKSHOP_FIRST_STAGE, WORKSHOP_LAST_STAGE, type WorkshopView } from "./workshop";
+export { WORKSHOP_FIRST_STAGE, type WorkshopView };
 
 // Fill a Red Bag: the parts of the page the server draws into fill-a-red-bag.html, where its
 // markers are. The list and the themes come from the one catalogue (./catalogue.ts), so they are in
@@ -53,25 +55,34 @@ const escapeHtml = (s: string): string =>
 const MINUS_ICON = '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" aria-hidden="true"><path d="M6 12h12"/></svg>';
 const PLUS_ICON = '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" aria-hidden="true"><path d="M6 12h12M12 6v12"/></svg>';
 
+/** A rope handle: the logo's maroon-brown outline under a crimson rope, and a fine twist along it. */
+const cord = (cls: string, d: string) =>
+  `<g class="rb-bag__cord${cls}"><path class="rb-bag__rope-edge" d="${d}"/><path class="rb-bag__rope" d="${d}"/>` +
+  `<path class="rb-bag__twist" d="${d}"/></g>`;
+const PIC = "/assets/img/red-bag/";
+const BAG_AT = 'x="22" y="34" width="75.75" height="96"';
+
 /**
- * NBCC's Red Bag: a red paper gift bag, rectangular, with a folded top and two twisted cord handles
- * (assets/img/home-red-bags-handover.jpg). Not a sack. The bag starts as an outline on pale paper;
- * `.rb-bag__fill` is the red that rises inside it (the script scales it, transform only), and the
- * tissue shows at the top once it is full. For the eye only: the status line says it in words.
+ * NBCC's Red Bag: a red paper gift bag (assets/img/home-red-bags-handover.jpg), painted in the logo's
+ * style (5 November 2026), seen a little from above so its open top shows. Not a sack. Back to front:
+ * the back handle, fixed to the back rim; the whole bag (pale paper, or red once full); the tissue;
+ * the peeks the script adds, which sit INSIDE the bag; `.rb-bag__paper`, the front of the bag cut
+ * out above its front edge, so the edge always shows in front of them; `.rb-bag__fill`, the red front,
+ * which the stylesheet reveals from the bottom up as `--rb-fill` rises; then the front handle, the same
+ * span as the back one so the two never cross (Jaimie: one handle on each side, both red). For the eye
+ * only: the status line says it in words.
  */
 export const BAG_SVG =
   '<svg class="rb-bag" viewBox="0 0 120 132" width="120" height="132" aria-hidden="true" focusable="false">' +
-  '<path class="rb-bag__cord rb-bag__cord--back" d="M44 36C44 10 88 10 88 36"/>' +
-  '<path class="rb-bag__tissue" d="M22 38l9-13 8 9 9-14 9 13 9-12 8 11 9-9 7 15z"/>' +
-  '<path class="rb-bag__paper" d="M12 36h96v88a4 4 0 0 1-4 4H16a4 4 0 0 1-4-4z"/>' +
-  '<g class="rb-bag__clip"><rect class="rb-bag__fill" x="12" y="36" width="96" height="92"/></g>' +
-  '<path class="rb-bag__gusset" d="M92 36h16v88a4 4 0 0 1-4 4H92z"/>' +
-  '<path class="rb-bag__fold" d="M12 36h96v10H12z"/>' +
-  '<path class="rb-bag__outline" d="M12 36h96v88a4 4 0 0 1-4 4H16a4 4 0 0 1-4-4z"/>' +
-  '<path class="rb-bag__crease" d="M12 46h96M92 46v82"/>' +
-  '<path class="rb-bag__cord" d="M32 40C32 12 76 12 76 40"/>' +
-  '<path class="rb-bag__twist" d="M32 40C32 12 76 12 76 40"/>' +
-  '<circle class="rb-bag__eyelet" cx="32" cy="41" r="2.2"/><circle class="rb-bag__eyelet" cx="76" cy="41" r="2.2"/>' +
+  cord(" rb-bag__cord--back", "M41.8 36C41.8-1.8 70.5 .4 70.5 38.2") +
+  `<image class="rb-bag__whole" href="${PIC}bag-pale.webp" ${BAG_AT}/>` +
+  `<image class="rb-bag__whole rb-bag__whole--red" href="${PIC}bag-red.webp" ${BAG_AT}/>` +
+  `<image class="rb-bag__tissue" href="${PIC}tissue.webp" x="27" y="35.5" width="59" height="19.9"/>` +
+  `<image class="rb-bag__paper" href="${PIC}bag-front-pale.webp" ${BAG_AT}/>` +
+  `<image class="rb-bag__paper-night" href="${PIC}bag-front-red.webp" ${BAG_AT}/>` +
+  `<image class="rb-bag__fill" href="${PIC}bag-front-red.webp" ${BAG_AT}/>` +
+  cord("", "M41.8 49.7C41.8 1.7 70.5 3.9 70.5 51.9") +
+  '<circle class="rb-bag__eyelet" cx="41.8" cy="50.2" r="1.7"/><circle class="rb-bag__eyelet" cx="70.5" cy="52.4" r="1.7"/>' +
   "</svg>";
 
 /**
@@ -100,6 +111,7 @@ export function renderRedBagList(rb: RedBagListView = redBag()): string {
         const id = `rb-qty-${key}`;
         return (
           `<li class="rb-item" data-rb-item="${key}" data-pence="${i.pence}">` +
+          rb.art(i.key, "rb-item__pic", 44) +
           `<span class="rb-item__name">${name}</span>` +
           `<span class="rb-item__price">${rb.pounds(i.pence)}</span>` +
           '<span class="rb-stepper">' +
@@ -128,7 +140,7 @@ export function renderRedBagThemes(rb: RedBagListView = redBag()): string {
           `<li><button class="rb-example" type="button" data-rb-example="${escapeHtml(e.key)}" data-pence="${e.pence}" aria-pressed="false">` +
           // A small drawing for the eye only (the one catalogue's, as the list's are): the button's
           // name stays its words.
-          rb.art(e.key, "rb-example__icon", 30) +
+          rb.art(e.key, "rb-example__icon", 44) +
           `<span class="rb-example__amount">${rb.pounds(e.pence)}</span> <span class="rb-example__words">${escapeHtml(e.words)}</span></button></li>`,
       )
       .join("");
@@ -245,6 +257,11 @@ export interface RedBagPageOptions {
    * before it, and the page is byte for byte what it was.
    */
   night?: boolean;
+  /**
+   * The Workshop behind the night look (5 November 2026): how many bags are on its shelves and, for a
+   * company's own link, whose they are. Left out: the empty Workshop with no sign.
+   */
+  workshop?: WorkshopView;
   /**
    * The draft preview (Admin > Fill a Red Bag > Preview the page): the strip, never indexed, and
    * GIVING SWITCHED OFF. The details form is not drawn at all, so there is nothing to send a gift
@@ -372,18 +389,45 @@ const DETAILS_STEP = '<section class="section flush-top rb-details-step"';
 const UNDERLINE =
   '<svg viewBox="0 0 300 18" preserveAspectRatio="none" aria-hidden="true" focusable="false"><path pathLength="1" d="M4 12C60 3 120 15 176 8s86-3 120 2"/></svg>';
 
+
+// What the elf on the workbench says, happier as the Workshop fills. The elf is the logo's own, always
+// (Jaimie, 6 November 2026: one elf, the same every time, mittens and all).
+const ELF_SAYS = ["", "", "", "Let's get these bags packed!", "Ooh, the shelves are filling up!", "Ooh, the shelves are filling up!", "You're doing great!", "You're doing great!", "Look at all these bags!", "Look at all these bags!", "We're running out of shelves!", "We're running out of shelves!", "Thank you for all your support!"];
+
+/** The Workshop: the painted stage, an elf, and the sign with the count in words anyone can read. */
+function renderWorkshop(w: WorkshopView | undefined): string {
+  const stage = Math.max(WORKSHOP_FIRST_STAGE, Math.min(WORKSHOP_LAST_STAGE, Math.floor(w?.stage ?? 0)));
+  const pic = `/assets/img/red-bag/workshop/s${String(stage).padStart(2, "0")}.webp`;
+  const bags = Math.max(0, Math.floor(w?.bags ?? 0));
+  const whose = w?.name ? `<i>${escapeHtml(w.name)}</i>` : "";
+  // a brand new Workshop opens with a welcome, not a zero
+  const count = bags === 0 ? "Let's fill the first bag" : `${bags.toLocaleString("en-GB")} ${bags === 1 ? "bag" : "bags"} filled`;
+  const next = w && bags > 0 && w.nextIn > 0 ? `Just ${w.nextIn} more ${w.nextIn === 1 ? "bag fills" : "bags fill"} the next shelf` : "";
+  return (
+    (w?.slug ? `<div class="fn-workshop" data-rb-workshop="${escapeHtml(w.slug)}">` : '<div class="fn-workshop">') +
+    `<img class="fn-workshop__room" src="${pic}" alt="" width="1600" height="1067" decoding="async" fetchpriority="high" />` +
+    "</div>" +
+    (w ? `<p class="fn-sign${whose ? " fn-sign--named" : ""}">${whose}<b>${count}</b>${next ? `<span>${next}</span>` : ""}</p>` : "")
+  );
+}
+
 /** The page dressed for the night. If any place it needs is missing: the page as it came, not half dressed. */
-function renderNight(html: string, rb: RedBagCatalogue): string {
+function renderNight(html: string, rb: RedBagCatalogue, workshop?: WorkshopView): string {
   if (![PAGE_STYLES, PAGE_SCRIPT, INTRO, HEADING, PANEL, DETAILS_STEP].every((place) => html.includes(place))) return html;
   const open =
     '<div class="fn-night" id="fnNight">' +
+    renderWorkshop(workshop) +
     '<canvas class="fn-sky" aria-hidden="true"></canvas>' +
     renderLights() +
     `<div class="fn-edge">${DRIFT}</div>`;
   const close = `<div class="wrap fn-still"><button class="fn-pause" id="fnPause" type="button" hidden>Pause the snow</button></div>${DRIFT}</div><div class="fn-ground"></div>`;
   // The sum is the script's to show, so a page whose script did not arrive never shows a wrong one.
   const sum = `<p class="fn-sum" id="fnSum" aria-hidden="true" hidden><b>${rb.pounds(0)}</b><span>of ${rb.pounds(rb.BAG_VALUE_PENCE)}</span></p>`;
-  const elf = '<img class="fn-elf" src="/assets/img/nbcc-elf.png" alt="" width="150" height="98" loading="lazy" decoding="async" />';
+  // the logo elf peeking over the back of the workbench, mittens on it, and what it says
+  const says = ELF_SAYS[Math.max(WORKSHOP_FIRST_STAGE, Math.min(WORKSHOP_LAST_STAGE, Math.floor(workshop?.stage ?? 0)))];
+  const elf =
+    `<img class="fn-elf" src="/assets/img/red-bag/elf-peek.webp" alt="" width="482" height="331" loading="lazy" decoding="async" />` +
+    `<p class="fn-says" aria-hidden="true">${says}</p>`;
   // Functions, not strings: nothing drawn in is ever read as a replacement pattern ("$&").
   return html
     .replace(PAGE_STYLES, () => `${PAGE_STYLES}\n    ${NIGHT_STYLES}`)
@@ -420,6 +464,6 @@ export function renderRedBagPage(template: string, opts: RedBagPageOptions): str
     // a heading over nothing.
     if (rb.THEMES.length === 0) html = html.replace('<div class="rb-need" data-rb-need ', '<div class="rb-need" data-rb-need hidden ');
   }
-  if (opts.night === true) html = renderNight(html, catalogue);
+  if (opts.night === true) html = renderNight(html, catalogue, opts.workshop);
   return opts.preview || draft ? markPreview(html, { preview: opts.preview, draft }) : html;
 }

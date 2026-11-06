@@ -37,6 +37,7 @@ import {
   tagDonationSource,
   SOURCE_TAG_TIMEOUT_MS,
   TAG_CHECKOUT_SOURCE_SQL,
+  TAG_CHECKOUT_WORKSHOP_SQL,
   TAG_RENEWAL_SOURCE_SQL,
 } from "../../src/db/stripe-webhook";
 
@@ -182,6 +183,32 @@ describe("the statements that record the source", () => {
       "UPDATE donations SET source = $2 WHERE stripe_subscription_id = $1 AND source IS NULL AND " +
         "(SELECT first.source FROM donations first WHERE first.stripe_subscription_id = $1 ORDER BY first.id ASC LIMIT 1) = $2",
     );
+  });
+});
+
+// A company's own Workshop (6 November 2026): a second fill-only-if-empty statement, run straight
+// after the source one inside the same time limit, and ONLY for a gift carrying a company's link.
+describe("a completed Fill a Red Bag checkout given through a company's link", () => {
+  const isWorkshop = (sql: string) => /update donations\s+set red_bag_workshop_id/i.test(sql);
+
+  it("puts it on that company's shelves, after the source, by the link of a live company only", async () => {
+    const result = await processWebhookEvent(checkout({ redBag: "true", redBagWorkshop: "brightwater-engineering" }));
+    expect(result).toEqual({ processed: true, action: "donation.created" });
+    expect(tagCalls()).toEqual([[TAG_CHECKOUT_SOURCE_SQL, [SESSION_ID, "red_bag"]]]);
+    const marks = calls().filter(([sql]) => isWorkshop(sql));
+    expect(marks).toEqual([[TAG_CHECKOUT_WORKSHOP_SQL, [SESSION_ID, "brightwater-engineering"]]]);
+    expect(calls().findIndex(([sql]) => isWorkshop(sql))).toBeGreaterThan(calls().findIndex(([sql]) => isTag(sql)));
+    expect(TAG_CHECKOUT_WORKSHOP_SQL).toMatch(/red_bag_workshop_id IS NULL/);
+    expect(TAG_CHECKOUT_WORKSHOP_SQL).toMatch(/archived_at IS NULL/);
+    expect(TAG_CHECKOUT_WORKSHOP_SQL).toMatch(/source = 'red_bag'/);
+    expect(errorLog).not.toHaveBeenCalled();
+  });
+
+  it("runs no company statement for a plain Red Bag gift, nor for a link without the marker or of the wrong shape", async () => {
+    await processWebhookEvent(checkout({ redBag: "true" }));
+    await processWebhookEvent(checkout({ redBagWorkshop: "brightwater-engineering" }));
+    await processWebhookEvent(checkout({ redBag: "true", redBagWorkshop: "DROP TABLE" }));
+    expect(calls().some(([sql]) => isWorkshop(sql))).toBe(false);
   });
 });
 

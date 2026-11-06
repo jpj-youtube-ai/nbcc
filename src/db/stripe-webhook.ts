@@ -36,6 +36,7 @@ import {
   refundedPenceFromDispute,
   confirmationEmailFor,
   sourceFromCheckoutSession,
+  workshopFromCheckoutSession,
   arrivalFromCheckoutSession,
   type DonationSource,
   type DonationConfirmationEmail,
@@ -194,6 +195,15 @@ export async function processWebhookEvent(event: Stripe.Event): Promise<WebhookR
 // A checkout's own donation row, found by its session id. $1 = session id, $2 = the source.
 export const TAG_CHECKOUT_SOURCE_SQL = `UPDATE donations SET source = $2 WHERE stripe_session_id = $1 AND source IS NULL`;
 
+// A Fill a Red Bag gift given through a company's own link (6 November 2026): that company's Workshop,
+// found by its link, only if it is live, and only on a Red Bag donation with none yet. Its later monthly
+// charges are counted for the company from their first donation (src/db/red-bag-workshops.ts), so
+// nothing is written for them. $1 = session id, $2 = the company's link.
+export const TAG_CHECKOUT_WORKSHOP_SQL = `UPDATE donations SET red_bag_workshop_id = w.id
+  FROM red_bag_workshops w
+  WHERE donations.stripe_session_id = $1 AND donations.red_bag_workshop_id IS NULL AND donations.source = 'red_bag'
+    AND w.slug = $2 AND w.archived_at IS NULL`;
+
 // A monthly gift's later charges. Each is its own donation row with the subscription id on it
 // (handleRecurring), so once one is recorded, every row of that subscription still without a source
 // takes it, but only when the subscription's FIRST donation (the one its checkout recorded) has that
@@ -286,7 +296,12 @@ export async function tagDonationSource(event: Stripe.Event, query: SourceQuery)
       const source = sourceFromCheckoutSession(session);
       if (!source || typeof session.id !== "string" || session.id === "") return false;
       const sessionId = session.id;
-      await withinSourceLimit(() => query(TAG_CHECKOUT_SOURCE_SQL, [sessionId, source]), SOURCE_TAG_TIMEOUT_MS);
+      const workshop = workshopFromCheckoutSession(session);
+      await withinSourceLimit(async () => {
+        await query(TAG_CHECKOUT_SOURCE_SQL, [sessionId, source]);
+        // the company's shelves, straight after, inside the same limit (only for a gift with a link)
+        if (workshop) await query(TAG_CHECKOUT_WORKSHOP_SQL, [sessionId, workshop]);
+      }, SOURCE_TAG_TIMEOUT_MS);
     } else if (event.type === "invoice.paid" || event.type === "invoice.payment_succeeded") {
       const charge = recurringChargeFromInvoice(event.data.object);
       if (!charge) return false;

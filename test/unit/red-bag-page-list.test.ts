@@ -67,10 +67,11 @@ describe("with nothing published", () => {
   // code under test), with line endings as the repository stores them (LF). Pinned by length and
   // SHA-256, so any change to the no-list path, however small, is caught here.
   // IF THIS FAILS because the page's template, the built-in list or the fixed wording was changed
-  // on purpose: check that nothing else moved, then re-pin both from the new output.
+  // on purpose: check that nothing else moved, then re-pin both from the new output. Re-pinned on
+  // 6 November 2026 for the paintings: pictures and the bag only, not a word changed (diffed against main).
   const AS_IT_WAS = {
-    public: { bytes: 42784, sha256: "1b78a4f3eb7513aea917760677a5420d5cdf216261c767f3ae6814b37744c97d" },
-    staffPreview: { bytes: 42931, sha256: "1438acb71763712193f0259119a933f934edb56c47f0066e6d508780f60d66a0" },
+    public: { bytes: 43203, sha256: "a8d0aafadbfd7469abceec9098c006f51ec3965e8855ec729210ebf44e0d94d5" },
+    staffPreview: { bytes: 43350, sha256: "7f933b771cd54e6f1fdfac80c9172cdc881f84a0948b4acbbc30208c1aed7a2b" },
   };
   const measure = (html: string) => ({ bytes: Buffer.byteLength(html, "utf8"), sha256: createHash("sha256").update(html, "utf8").digest("hex") });
   const stored = template.replace(/\r\n/g, "\n");

@@ -207,13 +207,8 @@ describe("old and new, side by side, while a new version goes out", () => {
     expect(inBrowser().items().length).toBe(13);
   });
 
-  it("has the present among its drawings, in the same hand as the rest: shapes and the site's classes only", () => {
+  it("has the present among its pictures, painted like the rest", () => {
     const rb = inBrowser();
-    expect(rb.ART.present).toBeTruthy();
-    expect(rb.ART.present).not.toMatch(/#[0-9a-fA-F]{3,8}\b|rgb|url\(|style=|fill=|stroke=|<script|on\w+=/);
-    expect(rb.ART.present).toMatch(/class="r"/);
-    expect(rb.ART.present).toMatch(/class="g/);
-    const nums = [...rb.ART.present.matchAll(/(?:x|y|cx|cy)="([\d.]+)"/g)].map((m: RegExpMatchArray) => Number(m[1]));
-    for (const n of nums) expect(n).toBeGreaterThanOrEqual(0), expect(n).toBeLessThanOrEqual(40);
+    expect(rb.ART.present).toBe('<image href="/assets/img/red-bag/present.webp" width="40" height="40"/>');
   });
 });

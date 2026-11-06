@@ -437,40 +437,45 @@ describe("what peeks out of the bag", () => {
     expect(bags()[0].querySelectorAll(".rb-peek").length).toBe(3);
   });
 
-  // The owner, 5 October 2026: "make items a bit bigger and stand out a bit more".
-  it("draws them clearly bigger (about a third or more), the newest the biggest and standing tallest", () => {
+  // The owner, 5 October 2026: "make items a bit bigger and stand out a bit more". And 5 November
+  // 2026, with the painted bag (76 wide, from 22 to 98, its front edge from (25, 44) to (78, 48)):
+  // the toys sit INSIDE it, never poking out past its sides.
+  it("draws them big, the newest the biggest and standing tallest, inside the bag's opening", () => {
     type("pyjamas", "5");
     leave("pyjamas");
     plus("socks");
     plus("book");
     const els = peekEls(bags()[0]) as HTMLElement[];
     expect(peeks(bags()[0])).toEqual(["book", "socks", "pyjamas"]);
-    const was = 28;
+    const bagWidth = 75.75;
+    const frontEdge = (x: number) => 44.3 + (4.1 * (x - 24.9)) / 53.2;
     const shape = els.map((g) => {
       const art = g.querySelector("svg.rb-art")!;
       const t = g.style.transform;
       const scale = Number(/scale\(([\d.]+)\)/.exec(t)?.[1] ?? 1);
       const [, x, y] = /translate\(([\d.]+)px,\s*([\d.]+)px\)/.exec(t)!.map(Number);
       const size = Number(art.getAttribute("width")) * scale;
-      // How far its top stands above the bag's rim (y = 36 in the bag's own picture).
-      const rise = 36 - (y + Number(art.getAttribute("y")) * scale);
-      return { x, y, size, rise, left: x - size / 2, right: x + size / 2 };
+      // How far its top stands above the bag's front edge, where it is.
+      const top = y + Number(art.getAttribute("y")) * scale;
+      const rise = frontEdge(x) - top;
+      return { x, y, size, top, rise, left: x - size / 2, right: x + size / 2 };
     });
     for (const p of shape) {
-      expect(p.size / was).toBeGreaterThanOrEqual(1.28);
-      expect(p.size / was).toBeLessThanOrEqual(1.45);
-      // Higher out of the bag than before (16), and never out of the top of the bag's own picture.
-      expect(p.rise).toBeGreaterThan(20);
-      expect(p.rise).toBeLessThanOrEqual(34);
-      // Inside the bag's width (12 to 108), give or take its tilt: it must look INSIDE the bag.
-      expect(p.left).toBeGreaterThanOrEqual(6);
-      expect(p.right).toBeLessThanOrEqual(114);
+      // About two fifths of the bag across, as the drawings were.
+      expect(p.size / bagWidth).toBeGreaterThanOrEqual(0.36);
+      expect(p.size / bagWidth).toBeLessThanOrEqual(0.48);
+      // Well out of the bag, and never out of the top of the bag's own picture.
+      expect(p.rise).toBeGreaterThan(15);
+      expect(p.top).toBeGreaterThanOrEqual(0);
+      // Inside the bag's sides: it must look INSIDE the bag.
+      expect(p.left).toBeGreaterThanOrEqual(22);
+      expect(p.right).toBeLessThanOrEqual(98);
     }
     expect(shape[0].size).toBeGreaterThan(shape[1].size);
     expect(shape[0].size).toBeGreaterThan(shape[2].size);
     expect(shape[0].rise).toBeGreaterThan(shape[1].rise);
     expect(shape[0].rise).toBeGreaterThan(shape[2].rise);
-    // Still behind the bag's own paper, so the bag's front edge covers their lower part.
+    // Still behind the bag's front (its paper), so the bag's front edge covers their lower part.
     const holder = bags()[0].querySelector(".rb-bag__peeks")!;
     expect(holder.compareDocumentPosition(bags()[0].querySelector(".rb-bag__paper")!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     // And nothing about them sizes the bag or the panel: they are drawn inside the bag's own picture.

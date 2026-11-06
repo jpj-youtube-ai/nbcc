@@ -1098,7 +1098,8 @@ describe("the page's own stylesheet", () => {
     expect(face).toMatch(/font-display:\s*swap/);
     // The Latin subset, as Google publishes it: it has the pound sign (U+00A3) and the ampersand (U+0026).
     expect(face).toMatch(/unicode-range:\s*U\+0000-00FF,/);
-    expect(rules.match(/url\(/g)?.length).toBe(1);
+    // Since 5 November 2026 the painted twinkle is in here too: every file it names is our own.
+    for (const m of rules.matchAll(/url\(([^)]*)\)/g)) expect(m[1], m[0]).toMatch(/^\/assets\/(fonts|img\/red-bag)\//);
     expect(rules).not.toMatch(/@import|https?:/);
   });
 
@@ -1208,10 +1209,14 @@ describe("the page's own stylesheet", () => {
     expect(rules).toMatch(/\.rb-remove\{[^}]*min-height:44px/);
   });
 
+  // One exception since 5 November 2026: the painted bag's red rises by uncovering its red front
+  // from the bottom (a clip, on that one small picture only), as a transform would squash the paint.
   it("moves with transform and opacity only, and not at all for someone who asked for less motion", () => {
     for (const m of rules.matchAll(/transition\s*:\s*([^;}]+)/g)) {
-      for (const part of m[1].replace(/\([^)]*\)/g, "").split(",")) expect(part.trim(), m[0]).toMatch(/^(transform|opacity|background-color|color|border-color|box-shadow)\b|^none$/);
+      for (const part of m[1].replace(/\([^)]*\)/g, "").split(",")) expect(part.trim(), m[0]).toMatch(/^(transform|opacity|background-color|color|border-color|box-shadow)\b|^none$|^clip-path\b/);
     }
+    const clipped = [...rules.matchAll(/([^{}]+)\{[^}]*transition:[^;}]*clip-path/g)].map((m) => m[1].trim());
+    expect(clipped).toEqual([".rb-bag__fill"]);
     for (const frames of rules.matchAll(/@keyframes[^{]+\{((?:[^{}]*\{[^{}]*\})+)\s*\}/g)) {
       for (const d of frames[1].matchAll(/([a-z-]+)\s*:/g)) expect(["transform", "opacity"], frames[0]).toContain(d[1]);
     }

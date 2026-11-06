@@ -38,7 +38,7 @@
    min-width block near the end) the bag is placed at the top of a right hand column, with the
    themes under it, beside the long paper. ---- */
 .rb-layout{
-  /* the paper's hand: for the paper, and for the gift tag on a full bag */
+  /* the paper's hand: for the paper and for the gift tag on a full bag */
   --rb-hand:"Caveat","Bradley Hand","Segoe Print","Noteworthy","Chalkboard SE","Ink Free","Comic Sans MS",cursive;
   display:grid;grid-template-columns:minmax(0,1fr);
   gap:clamp(32px,6vw,48px);align-items:start;
@@ -86,28 +86,39 @@
 .rb-item__name{font-size:1.7rem;line-height:1.1;color:var(--slate);overflow-wrap:anywhere}
 .rb-item__price{font-size:1.6rem;line-height:1.1;color:var(--maroon);font-variant-numeric:tabular-nums;white-space:nowrap}
 .rb-item.is-in .rb-item__name{color:var(--maroon);font-weight:700}
+/* each item's painting beside its name (Jaimie, 5 November 2026) */
+.rb-item:has(> .rb-item__pic){grid-template-columns:44px minmax(0,1fr) auto auto}
+.rb-item__pic{display:block;width:44px;height:44px}
 
+/* ---- the buttons (5 November 2026): the logo's bold maroon-brown outline, and a chunky "sticker"
+   edge underneath that the button sinks onto when it is pressed. Same buttons, same states. ---- */
+/* the paper's hand for the whole page, so the night look's Workshop sign and elf can write in it too */
+:root{--rb-hand:"Caveat","Bradley Hand","Segoe Print","Noteworthy","Chalkboard SE","Ink Free","Comic Sans MS",cursive}
+:root{--rb-ink:color-mix(in srgb,var(--maroon) 53%,var(--slate))}
 .rb-stepper{display:inline-flex;align-items:center;gap:6px}
 .rb-step{
   min-width:44px;min-height:44px;padding:0;display:inline-grid;place-items:center;
-  border:1.6px solid var(--maroon);border-radius:50%;background:var(--card);color:var(--maroon);
-  cursor:pointer;transition:transform .15s ease,background-color .15s ease,color .15s ease;
+  border:2.6px solid var(--rb-ink);border-radius:50%;background:var(--card);color:var(--rb-ink);
+  box-shadow:0 3px 0 var(--rb-ink);
+  cursor:pointer;transition:transform .12s ease,box-shadow .12s ease,background-color .15s ease,color .15s ease;
 }
+.rb-step[data-rb-plus]{background:var(--crimson);color:var(--white)}
 .rb-step:hover{background:var(--maroon);color:var(--cream)}
-.rb-step:active{transform:scale(.92)}
+.rb-step:active{transform:translateY(3px);box-shadow:0 0 0 var(--rb-ink)}
 /* at 0 and at 99 a button SAYS it is off (aria-disabled) and stays focusable, so a keyboard user
    who has just pressed it is not dropped out of the list */
-.rb-step[aria-disabled="true"]{opacity:.35;cursor:default}
-.rb-step[aria-disabled="true"]:hover{background:var(--card);color:var(--maroon)}
+.rb-step[aria-disabled="true"]{opacity:.35;cursor:default;box-shadow:none}
+.rb-step[aria-disabled="true"]:hover{background:var(--card);color:var(--rb-ink)}
+.rb-step[data-rb-plus][aria-disabled="true"]:hover{background:var(--crimson);color:var(--white)}
 .rb-step[aria-disabled="true"]:active{transform:none}
 .rb-step svg{display:block}
 .rb-qty{
   min-height:44px;width:50px;padding:0 4px;text-align:center;
-  font-family:var(--font-body);font-size:1.05rem;font-weight:600;font-variant-numeric:tabular-nums;
-  color:var(--slate);background:var(--white);
-  border:1.6px solid color-mix(in srgb,var(--slate) 45%,transparent);border-radius:10px;
+  font-family:var(--font-body);font-size:1.05rem;font-weight:700;font-variant-numeric:tabular-nums;
+  color:var(--rb-ink);background:var(--white);
+  border:2.6px solid var(--rb-ink);border-radius:12px;
 }
-.rb-item.is-in .rb-qty{border-color:var(--holly);background:var(--holly-soft)}
+.rb-item.is-in .rb-qty{border-color:var(--holly);background:var(--holly-soft);color:var(--holly)}
 
 /* "Also in your bag": the examples tapped, and the round-up, each with its own way out */
 .rb-also{margin-top:clamp(18px,2.4vw,28px)}
@@ -116,7 +127,7 @@
 .rb-also__list .rb-item--round{grid-template-columns:minmax(0,1fr) auto auto}
 .rb-also__words{font-size:1.55rem;line-height:1.15;color:var(--slate);overflow-wrap:anywhere}
 .rb-remove{
-  min-height:44px;padding:0 16px;border:1.6px solid var(--maroon);border-radius:var(--radius-pill);
+  min-height:44px;padding:0 16px;border:2.6px solid var(--rb-ink);border-radius:var(--radius-pill);
   background:transparent;color:var(--maroon);font-family:var(--font-body);font-size:.88rem;font-weight:600;
   cursor:pointer;transition:background-color .15s ease,color .15s ease;
 }
@@ -127,13 +138,13 @@
   padding:clamp(22px,3vw,34px);background:var(--tint);border-radius:var(--radius-lg);
 }
 .rb-bags{
-  --rb-n:1;--rb-max:150px;
+  --rb-n:1;--rb-max:184px;
   display:flex;flex-wrap:wrap;justify-content:center;align-items:flex-end;gap:10px;
 }
-.rb-bags[data-count="2"]{--rb-n:2;--rb-max:118px}
-.rb-bags[data-count="3"]{--rb-n:3;--rb-max:96px}
-.rb-bags[data-count="4"]{--rb-n:4;--rb-max:80px}
-.rb-bags[data-count="5"]{--rb-n:5;--rb-max:70px}
+.rb-bags[data-count="2"]{--rb-n:2;--rb-max:140px}
+.rb-bags[data-count="3"]{--rb-n:3;--rb-max:112px}
+.rb-bags[data-count="4"]{--rb-n:4;--rb-max:94px}
+.rb-bags[data-count="5"]{--rb-n:5;--rb-max:82px}
 .rb-bag{
   display:block;height:auto;
   width:min(var(--rb-max),calc((100% - (var(--rb-n) - 1) * 10px) / var(--rb-n)));
@@ -141,22 +152,24 @@
 .rb-bag.is-new{animation:rb-arrive .45s cubic-bezier(.22,1,.36,1)}
 @keyframes rb-arrive{from{opacity:0;transform:translateY(10px) scale(.92)}to{opacity:1;transform:none}}
 
-/* the bag itself: an outline on pale paper that the red rises inside */
-.rb-bag__paper{fill:var(--tan-soft)}
+/* the bag itself (painted, 5 November 2026): pale paper that the red rises inside. The red front is
+   uncovered from the bottom up, to the front edge (15% down the painting), as --rb-fill rises; a full
+   bag is red all over. */
+.rb-bag__whole--red{opacity:0;transition:opacity .3s ease}
+/* the night look's dark red front (assets/css/fill-night.css); by day it is not drawn */
+.rb-bag__paper-night{display:none}
+.rb-bag.is-full .rb-bag__whole--red{opacity:1}
 .rb-bag__fill{
-  fill:var(--crimson);transform-box:fill-box;transform-origin:50% 100%;
-  transform:scaleY(var(--rb-fill,0));transition:transform .6s cubic-bezier(.22,1,.36,1);
+  clip-path:inset(calc(15% + (1 - var(--rb-fill,0)) * 85%) 0 0 0);
+  transition:clip-path .6s cubic-bezier(.22,1,.36,1);
 }
-.rb-bag__gusset{fill:var(--maroon);opacity:.16}
-.rb-bag__fold{fill:var(--maroon);opacity:.12}
-.rb-bag__outline{fill:none;stroke:var(--crimson);stroke-width:2.2;stroke-linejoin:round}
-.rb-bag__crease{fill:none;stroke:var(--maroon);stroke-width:1;opacity:.4}
-.rb-bag__cord{fill:none;stroke:var(--crimson);stroke-width:3.4;stroke-linecap:round}
-.rb-bag__cord--back{stroke:var(--maroon);opacity:.5}
-.rb-bag__twist{fill:none;stroke:var(--maroon);stroke-width:3.4;stroke-dasharray:1.6 3.6;opacity:.5}
-.rb-bag__eyelet{fill:var(--maroon)}
+.rb-bag.is-full .rb-bag__fill{clip-path:inset(0)}
+/* the handles: a crimson rope inside the logo's maroon-brown outline, with a fine twist */
+.rb-bag__rope-edge{fill:none;stroke:var(--rb-ink);stroke-width:4.4;stroke-linecap:round}
+.rb-bag__rope{fill:none;stroke:var(--crimson);stroke-width:2.4;stroke-linecap:round}
+.rb-bag__twist{fill:none;stroke:color-mix(in srgb,var(--crimson) 70%,var(--white));stroke-width:.7;stroke-linecap:round;stroke-dasharray:1 2.4}
+.rb-bag__eyelet{fill:var(--gold);stroke:var(--rb-ink);stroke-width:.9}
 .rb-bag__tissue{
-  fill:var(--cream);stroke:var(--tan);stroke-width:1.2;stroke-linejoin:round;
   opacity:0;transform:translateY(9px);transition:opacity .35s ease,transform .5s cubic-bezier(.22,1,.36,1);
 }
 .rb-bag.is-full .rb-bag__tissue{opacity:1;transform:none}
@@ -182,31 +195,33 @@
 .rb-round{
   display:flex;flex-wrap:wrap;align-items:baseline;justify-content:center;gap:2px 10px;
   width:100%;min-height:44px;margin:0 0 16px;padding:10px 15px;
-  background:var(--card);color:var(--slate);border:1.6px solid var(--maroon);border-radius:14px;
+  background:var(--card);color:var(--slate);border:2.6px solid var(--rb-ink);border-radius:14px;box-shadow:0 3px 0 var(--rb-ink);
   font-family:var(--font-body);font-size:.94rem;font-weight:600;line-height:1.35;text-align:center;cursor:pointer;
-  transition:transform .15s ease,background-color .18s ease,color .18s ease;
+  transition:transform .12s ease,box-shadow .12s ease,background-color .18s ease,color .18s ease;
 }
 .rb-round__amount{font-weight:700;color:var(--maroon);font-variant-numeric:tabular-nums;white-space:nowrap}
 .rb-round:hover{background:var(--maroon);color:var(--cream)}
 .rb-round:hover .rb-round__amount{color:var(--cream)}
-.rb-round:active{transform:scale(.985)}
+.rb-round:active{transform:translateY(3px);box-shadow:0 0 0 var(--rb-ink)}
 /* once or monthly: the donate page's two buttons (.give-toggle), in this page's own stylesheet */
 .rb-often__label{margin:0 0 6px;font-size:.92rem;font-weight:600;line-height:1.3;color:var(--slate)}
 .rb-toggle{
   display:grid;grid-template-columns:1fr 1fr;gap:6px;margin:0 0 14px;padding:5px;
-  background:var(--card);border:1px solid var(--line);border-radius:var(--radius-pill);
+  background:var(--card);border:2.6px solid var(--rb-ink);border-radius:var(--radius-pill);
 }
 .rb-mode{
   min-height:44px;padding:8px 10px;border:0;border-radius:var(--radius-pill);
-  background:transparent;color:var(--slate);
-  font-family:var(--font-body);font-size:.95rem;font-weight:600;line-height:1.2;text-align:center;cursor:pointer;
+  background:transparent;color:var(--rb-ink);
+  font-family:var(--font-body);font-size:.95rem;font-weight:700;line-height:1.2;text-align:center;cursor:pointer;
   transition:background-color .2s ease,color .2s ease;
 }
 .rb-mode:hover{background:var(--holly-soft)}
-.rb-mode[aria-pressed="true"]{background:var(--holly);color:var(--cream);box-shadow:var(--shadow-sm)}
+.rb-mode[aria-pressed="true"]{background:var(--holly);color:var(--cream);box-shadow:inset 0 -3px 0 color-mix(in srgb,var(--holly) 60%,var(--slate))}
 /* chosen is never colour alone: a tick as well */
 .rb-mode[aria-pressed="true"]::before{content:"\2713";margin-right:6px;font-weight:700}
-.rb-donate{width:100%;justify-content:center;font-size:1.08rem;padding:16px 22px;text-align:center}
+.rb-donate{width:100%;justify-content:center;font-size:1.12rem;font-weight:700;padding:16px 22px;text-align:center;
+  border:2.6px solid var(--rb-ink);box-shadow:0 5px 0 var(--rb-ink);transition:transform .12s ease,box-shadow .12s ease}
+.rb-donate:active{transform:translateY(5px);box-shadow:0 0 0 var(--rb-ink)}
 .rb-nudge{
   margin:12px 0 0;padding:11px 15px;background:var(--tan-soft);border:1px solid var(--maroon);border-radius:12px;
   color:var(--maroon);font-size:.95rem;font-weight:600;line-height:1.45;
@@ -222,17 +237,17 @@
 .rb-theme__sub{margin:4px 0 12px;font-size:.92rem;line-height:1.45;color:var(--slate)}
 .rb-examples{list-style:none;margin:0;padding:0;display:grid;gap:10px}
 .rb-example{
-  display:flex;align-items:baseline;gap:10px;width:100%;min-height:44px;padding:11px 15px;text-align:left;
+  display:flex;align-items:center;gap:12px;width:100%;min-height:44px;padding:10px 14px;text-align:left;
   background:var(--card);color:var(--slate);
-  border:1.6px solid color-mix(in srgb,var(--holly) 60%,transparent);border-radius:14px;
+  border:2.6px solid var(--rb-ink);border-radius:16px;box-shadow:0 4px 0 var(--rb-ink);
   font-family:var(--font-body);font-size:.94rem;line-height:1.4;cursor:pointer;
-  transition:transform .15s ease,background-color .18s ease,color .18s ease,border-color .18s ease;
+  transition:transform .12s ease,box-shadow .12s ease,background-color .18s ease,color .18s ease;
 }
-.rb-example:hover{border-color:var(--holly);background:var(--holly-soft)}
-.rb-example:active{transform:scale(.985)}
-.rb-example__amount{flex:0 0 auto;font-weight:700;color:var(--maroon);font-variant-numeric:tabular-nums}
+.rb-example:hover{background:var(--holly-soft)}
+.rb-example:active{transform:translateY(4px);box-shadow:0 0 0 var(--rb-ink)}
+.rb-example__amount{flex:0 0 auto;font-size:1.02rem;font-weight:700;color:var(--maroon);font-variant-numeric:tabular-nums}
 .rb-example__words{flex:1 1 auto;min-width:0}
-.rb-example[aria-pressed="true"]{background:var(--holly);border-color:var(--holly);color:var(--cream)}
+.rb-example[aria-pressed="true"]{background:var(--holly);color:var(--cream)}
 .rb-example[aria-pressed="true"] .rb-example__amount{color:var(--cream)}
 /* pressed is never colour alone: a tick as well */
 .rb-example[aria-pressed="true"]::after{content:"\2713";flex:0 0 auto;font-weight:700}
@@ -343,6 +358,12 @@ body.rb-bar-on{padding-bottom:calc(64px + env(safe-area-inset-bottom))}
   .rb-paper .rb-group__title{font-size:1.7rem}
   .rb-also__words{font-size:1.45rem}
   .rb-item .rb-stepper{grid-column:2;grid-row:1 / span 2}
+  /* with its painting: the name keeps the whole width, and the picture sits beside the price under it */
+  .rb-item:has(> .rb-item__pic){grid-template-columns:auto minmax(0,1fr) auto;column-gap:8px}
+  .rb-item:has(> .rb-item__pic) .rb-item__name{grid-column:1 / span 2;grid-row:1}
+  .rb-item__pic{grid-column:1;grid-row:2;width:32px;height:32px}
+  .rb-item:has(> .rb-item__pic) .rb-item__price{grid-column:2;grid-row:2}
+  .rb-item:has(> .rb-item__pic) .rb-stepper{grid-column:3;grid-row:1 / span 2}
   .rb-stepper{gap:4px}
   .rb-qty{width:44px}
   .rb-also__list .rb-item,.rb-also__list .rb-item--round{grid-template-columns:minmax(0,1fr)}
@@ -375,34 +396,12 @@ body.rb-bar-on{padding-bottom:calc(64px + env(safe-area-inset-bottom))}
    for anyone who has asked for less motion (the last block).
    ================================================================= */
 
-/* ---- the drawings (assets/js/red-bag-catalogue.js, ART): simple shapes that carry no colour of
-   their own; these classes give them the site's ---- */
-.rb-art{display:block;overflow:visible;fill:none;stroke:var(--maroon);stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round}
-.rb-art .r{fill:var(--crimson)}
-.rb-art .d{fill:var(--maroon)}
-.rb-art .t{fill:var(--tan)}
-.rb-art .s{fill:var(--tan-soft)}
-.rb-art .c{fill:var(--cream)}
-.rb-art .w{fill:var(--white)}
-.rb-art .h{fill:var(--holly)}
-.rb-art .g{fill:var(--gold-ink)}
-.rb-art .e{fill:var(--slate)}
-.rb-art .n{stroke:none}
-.rb-art .l{stroke:var(--cream)}
-.rb-art .q{stroke:var(--crimson)}
-.rb-art .x{stroke-width:2.6}
-.rb-art .f{stroke-width:1.2}
+/* ---- the pictures (assets/js/red-bag-catalogue.js, ART): paintings, each in its 40 by 40 picture ---- */
+.rb-art{display:block;overflow:visible}
 
-/* ---- the icon in each example's button: it keeps its size when the words wrap, and sits in the
-   middle of them. Pressed, its lines turn light so it still reads on the green. ---- */
-.rb-example__icon{flex:0 0 auto;align-self:center;width:30px;height:30px;margin:-4px 0}
-.rb-example[aria-pressed="true"] .rb-art{stroke:var(--cream)}
-.rb-example[aria-pressed="true"] .rb-art .h{fill:color-mix(in srgb,var(--holly) 45%,var(--cream))}
-.rb-example[aria-pressed="true"] .rb-art .c,
-.rb-example[aria-pressed="true"] .rb-art .w,
-.rb-example[aria-pressed="true"] .rb-art .s{fill:color-mix(in srgb,var(--holly) 72%,var(--cream))}
-.rb-example[aria-pressed="true"] .rb-art .e,
-.rb-example[aria-pressed="true"] .rb-art .d{fill:color-mix(in srgb,var(--maroon) 70%,var(--cream))}
+/* ---- the painting in each example's button: it keeps its size when the words wrap, and sits in the
+   middle of them ---- */
+.rb-example__icon{flex:0 0 auto;align-self:center;width:44px;height:44px;margin:-6px 0}
 /* and the same small icon at the start of its line under "Also in your bag" */
 .rb-also__icon{display:inline-block;width:26px;height:26px;margin-right:8px;vertical-align:-6px}
 
@@ -423,14 +422,17 @@ body.rb-bar-on{padding-bottom:calc(64px + env(safe-area-inset-bottom))}
 .rb-bar__total strong{display:inline-block}
 .rb-bar__total strong.is-bumped{animation:rb-bump .3s cubic-bezier(.22,1,.36,1) .42s}
 @keyframes rb-bump{0%{transform:none}40%{transform:scale(1.12)}100%{transform:none}}
+/* the gold twinkles (5 November 2026): the painted twinkle bursts out, turns and fades */
+.rb-twinkle{position:absolute;z-index:2;width:22px;height:22px;margin:-11px 0 0 -11px;pointer-events:none;background:url(/assets/img/red-bag/twinkle.webp) center/contain no-repeat;opacity:0;animation:rb-twinkle .7s cubic-bezier(.2,.8,.3,1) var(--rb-tw,0s) both}
+@keyframes rb-twinkle{0%{opacity:0;transform:translate(0,0) scale(.2) rotate(0deg)}25%{opacity:1}100%{opacity:0;transform:translate(var(--rb-tx,0px),var(--rb-ty,0px)) scale(var(--rb-ts,1)) rotate(90deg)}}
 
 /* ---- the bag reacts: a small wobble as something goes in, and the handles pull a touch tighter
    when it is nearly full. A paper gift bag, not a cartoon. ---- */
 .rb-bags .rb-bag{overflow:visible;transform-origin:50% 100%}
 .rb-bag.is-wobbling{animation:rb-wobble .38s cubic-bezier(.22,1,.36,1) var(--rb-wait,0s)}
 @keyframes rb-wobble{0%{transform:none}28%{transform:rotate(-1.8deg) scale(1.03,.975)}62%{transform:rotate(1deg) scale(.995,1.01)}100%{transform:none}}
-.rb-bags .rb-bag__cord,.rb-bags .rb-bag__twist{transform-box:fill-box;transform-origin:50% 100%;transition:transform .35s cubic-bezier(.22,1,.36,1)}
-.rb-bag.is-heavy .rb-bag__cord,.rb-bag.is-heavy .rb-bag__twist{transform:scale(.95,1.09)}
+.rb-bags .rb-bag__cord{transform-box:fill-box;transform-origin:50% 100%;transition:transform .35s cubic-bezier(.22,1,.36,1)}
+.rb-bag.is-heavy .rb-bag__cord{transform:scale(.95,1.09)}
 
 /* ---- what peeks out of the top: drawn behind the bag's front, so it looks inside it ---- */
 .rb-peek__in{transform-box:fill-box;transform-origin:50% 100%;animation:rb-peek .4s cubic-bezier(.22,1,.36,1) both}
@@ -441,31 +443,24 @@ body.rb-bar-on{padding-bottom:calc(64px + env(safe-area-inset-bottom))}
    oldest sinks back into the bag and is cleared away. A peek's place is a transform the script
    sets, so the slide is a transform and nothing else. ---- */
 .rb-peek{transition:transform .26s cubic-bezier(.22,1,.36,1)}
-/* bigger, and standing out (5 October 2026): a heavier outline than the drawings have elsewhere, so
-   the pale ones (cream pyjamas, a white page) still read against the pale panel. The size and the
-   place of each peek are the script's (PEEK_AT): the newest is the biggest and stands tallest. */
-.rb-peek .rb-art{stroke-width:2}
-.rb-peek .rb-art .x{stroke-width:3}
+/* The size and the place of each peek are the script's (PEEK_AT): the newest is the biggest and
+   stands tallest. */
 .rb-peek.is-leaving .rb-peek__in{animation:rb-peek-out .2s cubic-bezier(.5,0,.75,.4) both}
 @keyframes rb-peek-out{from{opacity:1;transform:none}to{opacity:0;transform:translateY(14px)}}
 
-/* ---- a full bag: a gold ribbon ties the handles and a gift tag swings out ---- */
+/* ---- a full bag: a painted gold bow on the front and a gift tag swings out on its string ---- */
 .rb-bag__tie{opacity:0;transition:opacity .2s ease-out}
 .rb-bag.is-full .rb-bag__tie{opacity:1}
 .rb-bag__bow{transform-box:fill-box;transform-origin:50% 50%}
 .rb-bag.is-full .rb-bag__bow{animation:rb-tie .45s cubic-bezier(.22,1,.36,1) both}
 @keyframes rb-tie{from{opacity:0;transform:scale(.3)}to{opacity:1;transform:none}}
-.rb-bag__ribbon{fill:var(--gold-ink);stroke:color-mix(in srgb,var(--gold-ink) 60%,var(--maroon));stroke-width:1.1;stroke-linejoin:round}
-.rb-bag__knot{fill:color-mix(in srgb,var(--gold-ink) 80%,var(--white));stroke:color-mix(in srgb,var(--gold-ink) 60%,var(--maroon));stroke-width:1.1}
-/* the tag hangs from the knot, and swings about it */
-.rb-bag__tag{transform-origin:60px 20px;transform:rotate(4deg)}
+/* the tag hangs from the bow, and swings about where its string meets the tag */
+.rb-bag__tag{transform-origin:96px 63px;transform:rotate(4deg)}
 .rb-bag.is-full .rb-bag__tag{animation:rb-swing .6s cubic-bezier(.22,1,.36,1) .12s both}
 @keyframes rb-swing{from{opacity:0;transform:rotate(-38deg)}to{opacity:1;transform:rotate(4deg)}}
-.rb-bag__string{fill:none;stroke:color-mix(in srgb,var(--gold-ink) 60%,var(--maroon));stroke-width:1.1;stroke-linecap:round}
-.rb-bag__card{fill:var(--card);stroke:var(--tan);stroke-width:1.3;stroke-linejoin:round}
-.rb-bag__hole{fill:var(--tint);stroke:var(--tan);stroke-width:1.1}
+.rb-bag__string{fill:none;stroke:var(--gold-ink);stroke-width:1.1;stroke-linecap:round}
 /* the words are on the newest full bag only, while the bags are big enough to read them */
-.rb-bag__tag-words{font-family:var(--rb-hand);font-size:15px;font-weight:700;fill:var(--maroon);text-anchor:middle;opacity:0}
+.rb-bag__tag-words{font-family:var(--rb-hand);font-size:9.5px;font-weight:700;fill:var(--maroon);text-anchor:middle;opacity:0}
 .rb-bag.is-latest .rb-bag__tag-words{opacity:1}
 
 /* ---- the snow and stars (5 October 2026): a moment across the WHOLE screen. One layer, fixed to
@@ -480,9 +475,6 @@ body.rb-bar-on{padding-bottom:calc(64px + env(safe-area-inset-bottom))}
 .rb-flurry{position:fixed;inset:0;z-index:1050;overflow:hidden;pointer-events:none;contain:strict}
 .rb-flake{position:absolute;top:-44px;left:var(--rb-x,50%);width:var(--rb-w,18px);height:var(--rb-w,18px);margin-left:calc(var(--rb-w,18px) / -2);pointer-events:none;will-change:transform;animation:rb-fall var(--rb-t,1.8s) cubic-bezier(.3,.3,.6,1) var(--rb-d,0s) both}
 .rb-flake svg{display:block;width:100%;height:100%;overflow:visible}
-.rb-flake__snow{fill:var(--white);stroke:var(--tan);stroke-width:1.2;stroke-linejoin:round}
-.rb-flake__star{fill:var(--gold-ink);stroke:color-mix(in srgb,var(--gold-ink) 60%,var(--maroon));stroke-width:1;stroke-linejoin:round}
-.rb-flake--big .rb-flake__star{stroke-width:.8}
 @keyframes rb-fall{0%{opacity:0;transform:translate3d(0,0,0) rotate(0deg)}8%{opacity:1}78%{opacity:1}100%{opacity:0;transform:translate3d(var(--rb-s,0px),calc(100vh + 60px),0) rotate(var(--rb-r,90deg))}}
 
 /* ---- the elf's note: a line in the paper's hand, written on the rule above the row just changed
@@ -524,7 +516,7 @@ body.rb-bar-on{padding-bottom:calc(64px + env(safe-area-inset-bottom))}
 /* ---- less motion: nothing moves. What changes still changes, at once: the peeks, the ribbon and
    the tag appear, and the note is simply there. ---- */
 @media (prefers-reduced-motion:reduce){
-  .rb-bag.is-new,.rb-drop,.rb-drop__y,.rb-drop__hop,.rb-drop .rb-art,.rb-flake,.rb-bag.is-wobbling,.rb-peek__in,.rb-bag.is-full .rb-bag__bow,.rb-bag.is-full .rb-bag__tag,.rb-bar__total strong.is-bumped{animation:none}
+  .rb-bag.is-new,.rb-drop,.rb-drop__y,.rb-drop__hop,.rb-drop .rb-art,.rb-flake,.rb-bag.is-wobbling,.rb-peek__in,.rb-bag.is-full .rb-bag__bow,.rb-bag.is-full .rb-bag__tag,.rb-bar__total strong.is-bumped,.rb-twinkle{animation:none}
   .rb-bag__fill,.rb-bag__tissue,.rb-step,.rb-example,.rb-remove,.rb-round,.rb-mode,.rb-paper .rb-note,.rb-bags .rb-bag__cord,.rb-bags .rb-bag__twist,.rb-bag__tie{transition:none}
   /* the peeks change places at once, and no snow falls at all (the script makes none either) */
   .rb-peek{transition:none}

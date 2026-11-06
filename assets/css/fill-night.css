@@ -56,12 +56,13 @@
 .fn-night .rb-bags[data-count="3"]{--rb-max:30%}
 .fn-night .rb-bags[data-count="4"]{--rb-max:23%}
 .fn-night .rb-bags[data-count="5"]{--rb-max:18.5%}
-/* a red bag from the start, and the brighter red still rises inside it */
-.fn-night .rb-bag__paper{fill:#7f1322}
-.fn-night .rb-bag__outline{stroke:#a31a2e}
+/* a red bag from the start, and the brighter red still rises inside it: the painted bag, darkened */
+.fn-night .rb-bag__whole--red{opacity:1;filter:brightness(.5) saturate(1.15)}
+.fn-night .rb-bag__paper-night{display:inline;filter:brightness(.5) saturate(1.15)}
+.fn-night .rb-bag.is-full .rb-bag__whole--red{filter:none}
 /* The sum stands where the bag does, in a box of the bag's own height. Its place is padding because a
    percentage in padding is always of the width, which is what the bag's own size is. */
-.fn-sum{position:absolute;z-index:2;left:0;right:0;top:calc(var(--bag-h) * -1 + 10px);height:var(--bag-h);box-sizing:border-box;padding:0 calc(100% - var(--bag-left) - var(--bag-w) * .766) calc(var(--bag-w) * .24) calc(var(--bag-left) + var(--bag-w) * .1);margin:0;display:flex;flex-direction:column;justify-content:flex-end;align-items:center;color:#FFF8EF;text-shadow:0 2px 0 rgba(90,0,14,.5);pointer-events:none}
+.fn-sum{position:absolute;z-index:2;left:0;right:0;top:calc(var(--bag-h) * -1 + 10px);height:var(--bag-h);box-sizing:border-box;padding:0 calc(100% - var(--bag-left) - var(--bag-w) * .65) calc(var(--bag-w) * .22) calc(var(--bag-left) + var(--bag-w) * .208);margin:0;display:flex;flex-direction:column;justify-content:flex-end;align-items:center;color:#FFF8EF;text-shadow:0 2px 0 rgba(90,0,14,.5);pointer-events:none}
 .fn-sum b{font-family:var(--font-head);font-weight:700;font-size:clamp(2.1rem,1.8rem + 2vw,3.7rem);line-height:1;letter-spacing:-.02em;font-variant-numeric:lining-nums}
 .fn-sum span{font-size:.98rem;font-weight:500}
 .fn-sum[hidden]{display:none}
@@ -101,7 +102,56 @@
   .fn-night .rb-panel::before{left:-5%;right:-5%}
 }
 
+/* ---- the Workshop (5 November 2026): the elves' painted aisle behind the night look, its shelves
+   filling as bags are filled (one of twelve stages, chosen by the server). Dimmed behind the heading
+   and towards the foot, so every word stays readable on it. ---- */
+.fn-night{background:#14301a}
+.fn-workshop{position:absolute;left:0;right:0;top:0;height:clamp(720px,68vw,1120px);z-index:-2;pointer-events:none}
+.fn-workshop__room{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:50% 38%}
+.fn-workshop::after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,rgba(20,48,26,0) 62%,#14301a 98%),linear-gradient(90deg,rgba(12,30,14,.9) 0,rgba(12,30,14,.62) 34%,rgba(12,30,14,.16) 60%,rgba(12,30,14,.05) 100%),linear-gradient(180deg,rgba(12,30,14,.3) 0,rgba(12,30,14,0) 22%)}
+/* the sign: the count in real words, on a painted board hanging in the aisle */
+/* It hangs from behind the cream banner at the top, so its ropes are fixed to something (Jaimie): the
+   banner and its wavy edge are drawn over the sign, the sign over the lights. */
+.fn-night::before,.fn-edge{z-index:2}
+.fn-sign{--sw:clamp(250px,23vw,330px);position:absolute;z-index:1;right:clamp(16px,6vw,110px);top:calc(var(--nav-h) + var(--fn-hill) * .15 - var(--sw) * .1);width:var(--sw);aspect-ratio:520/413;margin:0;padding:calc(var(--sw) * .3) calc(var(--sw) * .09) calc(var(--sw) * .07);box-sizing:border-box;display:flex;flex-direction:column;justify-content:center;align-items:center;gap:4px;text-align:center;background:url(/assets/img/red-bag/sign.webp) center/100% 100% no-repeat;color:#5C2626;filter:drop-shadow(0 10px 14px rgba(0,0,0,.35))}
+.fn-sign--named{--sw:clamp(270px,25vw,350px)}
+.fn-sign i{font-style:normal;font-family:var(--font-body);font-weight:700;font-size:clamp(.78rem,.7rem + .3vw,.92rem);letter-spacing:.06em;text-transform:uppercase;line-height:1.15;text-wrap:balance}
+.fn-sign--named b{font-size:clamp(.98rem,.78rem + .7vw,1.3rem)}
+.fn-sign--named span{font-size:clamp(1.05rem,.9rem + .4vw,1.25rem)}
+.fn-sign b{font-family:var(--font-head);font-weight:800;font-size:clamp(1.05rem,.8rem + .8vw,1.4rem);line-height:1.1;text-wrap:balance}
+.fn-sign span{font-family:var(--rb-hand);font-weight:700;font-size:clamp(1.2rem,1rem + .5vw,1.45rem);line-height:1.05;color:var(--maroon);text-wrap:balance}
+
+/* the bag stands big, ON the Workshop's workbench (in front of it, its foot on the bench top), and
+   the logo's own elf peeks over the back of the bench beside it, mittens on the bench, as in the logo */
+.fn-night .rb-panel{--bag-h:clamp(360px,31vw,470px);--bag-w:min(430px,104%);--bag-left:calc((100% - var(--bag-w)) / 2 - 9%);--elf-w:clamp(110px,10vw,140px);--elf-left:calc(var(--bag-left) + var(--bag-w) * .74);
+  box-shadow:0 0 0 2.6px var(--rb-ink),0 8px 0 2.6px var(--rb-ink),0 34px 56px -26px rgba(0,16,0,.85)}
+.fn-night .rb-panel::before{left:-5%;right:-5%;top:-26px;height:62px;border-radius:0;background:url(/assets/img/red-bag/bench.webp) center/100% 100% no-repeat}
+.fn-night .rb-bags{z-index:3;top:calc(var(--bag-h) * -1 + 14px)}
+.fn-night .fn-sum{z-index:4;top:calc(var(--bag-h) * -1 + 14px)}
+.fn-night .rb-panel::after{display:none}
+/* the elf's line is the bench's back edge: it sits just on it, behind the bag */
+.fn-elf{z-index:2;top:calc(-22px - var(--elf-w) * .687);width:var(--elf-w);height:auto;aspect-ratio:482/331;object-fit:contain;object-position:50% 100%;transform-origin:50% 100%}
+.fn-night.full .fn-elf{animation:fn-hop .6s cubic-bezier(.3,1.5,.5,1)}
+@keyframes fn-hop{0%{transform:none}35%{transform:translateY(-16px)}70%{transform:translateY(2px)}100%{transform:none}}
+/* what the elf says, in a speech bubble above it: happier as the Workshop fills */
+.fn-says{position:absolute;z-index:4;left:calc(var(--elf-left) - 40px);top:calc(-30px - var(--elf-w) * .687 - 64px);max-width:200px;margin:0;padding:8px 14px 9px;background:var(--card);color:var(--maroon);border:2.6px solid var(--rb-ink);border-radius:18px;
+  font-family:var(--rb-hand);font-weight:700;font-size:1.3rem;line-height:1.05;text-align:center;text-wrap:balance;pointer-events:none}
+.fn-says:empty{display:none}
+.fn-says::after{content:"";position:absolute;left:58%;bottom:-11px;width:16px;height:16px;background:var(--card);border-right:2.6px solid var(--rb-ink);border-bottom:2.6px solid var(--rb-ink);transform:rotate(45deg)}
+.fn-night .rb-panel:has(.rb-bags:not([data-count="1"])) .fn-says{display:none}
+/* the list: the same paper, outlined in the logo's maroon-brown, standing proud of the Workshop */
+.fn-night .rb-paper{box-shadow:0 0 0 2.6px var(--rb-ink),0 8px 0 2.6px var(--rb-ink),0 34px 56px -26px rgba(0,16,0,.85)}
+
+@media (max-width:860px){
+  .fn-workshop{height:clamp(620px,150vw,900px)}
+  .fn-workshop__room{object-position:50% 30%}
+  .fn-workshop::after{background:linear-gradient(180deg,rgba(12,30,14,.55) 0,rgba(12,30,14,.5) 45%,#14301a 100%)}
+  .fn-sign{--sw:min(270px,74vw);right:auto;left:50%;transform:translateX(-50%);top:calc(var(--nav-h) + var(--fn-hill) * .8 + min(22vw,132px))}
+  .fn-night .rb-intro{padding-top:calc(var(--nav-h) + var(--fn-hill) * .8 + min(22vw,132px) + min(56vw,210px))}
+  .fn-night .rb-panel{--bag-h:clamp(330px,94vw,440px);--bag-w:min(400px,100%);--elf-w:clamp(96px,26vw,120px)}
+}
+
 @media (prefers-reduced-motion:reduce){
   .fn-night .glass,.fn-night .halo{transition:none}
-  .fn-night.full .bulb.on .halo,.fn-night.full .bulb.on .glass{animation:none}
+  .fn-night.full .bulb.on .halo,.fn-night.full .bulb.on .glass,.fn-night.full .fn-elf{animation:none}
 }

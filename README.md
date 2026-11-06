@@ -1645,7 +1645,7 @@ hosted-Checkout redirect stays the default fallback and no-JS safety net.
 | `POST /api/fundraisers/:slug/pledges` | **implemented** | Sponsor pledges (public; "Sponsor now, pay after" on a sponsorship fundraiser's page: a promise, never money, and unconfirmed until the sponsor confirms by email. See **Sponsor pledges**) |
 | `GET /fill` | **implemented, listed but unlinked** | Fill a Red Bag (a new way to give: fill a list of example items, watch a red bag fill, give the total. Public since 4 October 2026 and on the site map, so search engines may list it; still linked from no menu, footer or page. `POST /api/checkout-session` takes an optional `redBag: true` for it. See **Fill a Red Bag (listed, unlinked)**) |
 | `GET /fill/thank-you` | **implemented** | Fill a Red Bag's thank you, a page of its own, where Stripe returns a donor; `noindex`, on no site map, linked from nowhere |
-| `GET /fill/:slug` | **implemented** | A company's own Workshop (`/fill/<slug>`), made in Admin > Fill a Red Bag > Company Workshops: the night look with only that company's bags on the shelves and its name on the sign; a page only at night, `noindex`, and the 404 for a company nobody made. See **Fill a Red Bag: the paintings, the Workshop and companies' own links** |
+| `GET /fill/:slug` | **implemented** | A company's own Workshop (`/fill/<slug>`), made in Admin > Fill a Red Bag > Company Workshops: the night look with only that company's bags on the shelves and its name on the sign; a page only while /fill is at night (now: `FILL_NIGHT_NOW`), `noindex`, and the 404 for a company nobody made. See **Fill a Red Bag: the paintings, the Workshop and companies' own links** |
 | `GET /fill-a-red-bag`, `GET /fill-a-bag` | **implemented** | The address the page first had, and the other way people type it: a permanent redirect (`301`) to `/fill`, query string kept (an old return from paying, `?thanks=1`, goes to `/fill/thank-you`), while the page is switched on; the 404 if it were switched off. Fixed in code, reserved, on no site map |
 | `GET /elf`, `GET /elf/rules` | **implemented, switched off** | NBCC Elf Detective School: the public calendar of 24 doors counting down to the first clue, and the rules. Every `/elf` page and `/api/elf/*` route answers 404 until an admin switches the school on. See **Elf Detective School** |
 | `GET /elf/join`, `POST /api/elf/join` | **implemented, switched off** | Enrol detectives (first name and a festive surname only) and pay what you can (from £1, £5 suggested, per detective; an optional gift can carry Gift Aid); goes on to Stripe Checkout tagged `product: elf_school` |
@@ -7354,6 +7354,10 @@ outlines), with exactly the functionality it had.
   crossing. A full bag gets a painted bow and tag, its words real text. The buttons have the logo's
   outline and a "sticker" edge; pressing + bursts gold twinkles, and more pop round the bag as an item
   lands (none for reduced motion).
+- **/fill's night look is on its own switch**, `FILL_NIGHT_NOW` in `src/red-bag/switch.ts`, ON from 6 November
+  2026 (Jaimie): /fill and the company links are at night now, while the rest of the site (the Ball coming
+  down, the home page's stage, the Fill a Red Bag links) still waits for the Ball's moment. Set it to false
+  and /fill waits for the moment too.
 - **The Workshop** is the night look's background: the elves' painted aisle in thirteen stages
   (`assets/img/red-bag/workshop/s00` to `s12`), shelves filling with red bags. One bag on its shelves is
   every £50 given through Fill a Red Bag since **1 November 2026** (paid, less refunds, the gift alone;

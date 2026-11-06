@@ -42,12 +42,14 @@ Feature: The Ball's moment
     And the ball page should not contain "fnNight"
     And the ball page should not contain "fill-night"
 
-  @until-the-ball
-  Scenario: an ordinary view of /fill is the page as it was
+  # /fill is at night from 6 November 2026, on its own switch (FILL_NIGHT_NOW, src/red-bag/switch.ts),
+  # ahead of the rest of the site: the home page below still waits for the moment.
+  Scenario: an ordinary view of /fill is already the night, with the Workshop
     When I request "/fill"
     Then the ball page status should be 200
-    And the ball page should not contain "fnNight"
-    And the ball page should not contain "fill-night"
+    And the ball page should contain "id=\"fnNight\""
+    And the ball page should contain "class=\"fn-workshop\""
+    And the ball page should contain "data-rb-donate"
 
   @until-the-ball
   Scenario: nothing of the stage reaches an ordinary view

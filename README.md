@@ -7076,15 +7076,23 @@ own stylesheet `assets/css/admin-donations.css` (every class `.gl-`):
 
 **Monthly renewals recorded twice (TASK-596).** `migrations/1791200000400_donation-renewal-invoice.js`
 adds `donations.stripe_invoice_id` (above) and takes the doubles already recorded out of `donations`,
-so totals, Gift Aid claims and a donor's gifts count each payment once. A double is a renewal (a
-monthly gift with no checkout session, payment intent or charge) recorded within ten minutes after
-another renewal of the same subscription for the same amount; one refunded, in a claim batch,
-claimed, or pointed at by anything else is left alone. Nothing is lost: each double's whole row is
-kept in `donations_removed_duplicates` beside the gift it repeated, with a
-`donation.duplicate_removed` audit line, and the migration's down puts them back. A renewal's
+so totals, Gift Aid claims and a donor's gifts count each payment once. A double is known from what
+was recorded with it, not guessed from times: each renewal's `donation.recurring` audit line names
+the event that made it, and `stripe_webhook_events` says its type. Renewals of one subscription and
+amount are put into bursts (each within ten minutes of the one before), and in a burst the
+`invoice.payment_succeeded` copies pair one to one with the `invoice.paid` copies; each pair is one
+payment. So two invoices paid seconds apart stay two payments, and a copy with no partner is never
+touched. The payment_succeeded copy goes, unless it is refunded, in a claim batch, claimed or pointed
+at by anything else and its twin is not (then the twin goes); a pair held on both sides stays and is
+named in a `donation.duplicates_left` audit line, so staff can see a Gift Aid claim may need
+adjusting. Nothing is lost: each double's whole row is kept in `donations_removed_duplicates` beside
+the gift it repeated, with a `donation.duplicate_removed` audit line, and the migration's down puts
+them back. A renewal's Stripe ids now let a refund of it find it, so a refunded monthly payment is
+marked refunded (and its claim adjusted) as a one off's always was. Name or email searches the Stripe
+ids only for words shaped like one (with an underscore, such as `pi_...`). A renewal's
 Stripe payment and charge are filled in when Stripe is asked how it was paid
 (`WRITE_STRIPE_IDS_SQL`, `src/db/donation-pay-details.ts`, found through the kept invoice), so it
-gets Stripe's reference and a refund of it can find it. Renewals recorded before this have no
+gets Stripe's reference. Renewals recorded before this have no
 invoice id, so their reference is their monthly plan.
 
 The Overview's recent donations and Search keep their compact list (`assets/js/admin/app.js`).

@@ -916,8 +916,12 @@ export async function listDonations(opts: {
   };
   const giftShared = shared(params);
   // A gift is found by its Stripe reference too (TASK-596): its payment, charge, renewal invoice or plan.
+  // Only for words shaped like a Stripe id (pi_..., sub_...), so "pi" or "sub" alone is not every gift.
   if (giftShared.q) {
-    const byStripe = ["stripe_payment_intent_id", "stripe_charge_id", "stripe_invoice_id", "stripe_subscription_id"].map((c) => ` OR d.${c} ILIKE ${giftShared.q}`).join("");
+    const stripeShaped = (opts.q ?? "").includes("_");
+    const byStripe = stripeShaped
+      ? ["stripe_payment_intent_id", "stripe_charge_id", "stripe_invoice_id", "stripe_subscription_id"].map((c) => ` OR d.${c} ILIKE ${giftShared.q}`).join("")
+      : "";
     where.push(`(dn.full_name ILIKE ${giftShared.q} OR dn.email ILIKE ${giftShared.q}${byStripe})`);
   }
   if (giftShared.from) where.push(`(d.created_at AT TIME ZONE 'Europe/London')::date >= ${giftShared.from}::date`);

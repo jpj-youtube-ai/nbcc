@@ -128,7 +128,7 @@ describe("search by name or email", () => {
     await listDonations({ q: "Sam" });
     for (const q of [count(), page()]) {
       expect(q.params).toEqual(["%Sam%"]);
-      expect(q.sql).toContain("(dn.full_name ILIKE $1 OR dn.email ILIKE $1 OR ");
+      expect(q.sql).toContain("(dn.full_name ILIKE $1 OR dn.email ILIKE $1)");
       expect(q.sql).toContain("(f.grown_up_name ILIKE $1 OR f.email ILIKE $1)");
     }
     // The count has to reach the donor's name too.
@@ -141,6 +141,14 @@ describe("search by name or email", () => {
       expect(q.sql).toContain(
         "(dn.full_name ILIKE $1 OR dn.email ILIKE $1 OR d.stripe_payment_intent_id ILIKE $1 OR d.stripe_charge_id ILIKE $1 OR d.stripe_invoice_id ILIKE $1 OR d.stripe_subscription_id ILIKE $1)",
       );
+    }
+  });
+
+  it("looks in the Stripe ids only for words shaped like one, so pi or sub alone is not every gift", async () => {
+    for (const q of ["pi", "sub", "Sam"]) {
+      queryMock.mockClear();
+      await listDonations({ q });
+      expect(count().sql).not.toContain("stripe_payment_intent_id ILIKE");
     }
   });
 

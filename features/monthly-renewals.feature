@@ -49,12 +49,19 @@ Feature: A monthly gift's renewal is recorded once
     And the renewal for subscription "sub_bdd_renew_once" keeps the invoice "in_bdd_renew_once"
 
   Scenario: renewals recorded twice before are taken out and kept aside, and nothing else is touched
+    # Each double was recorded once from invoice.paid and once from invoice.payment_succeeded; the
+    # audit line of each gift names the event that made it, and the webhook ledger says its type.
     Given a monthly giver whose renewal was recorded twice, a minute apart
+    And a renewal recorded twice whose two events were handled together, the repeat stamped first
+    And two different invoices paid seconds apart, each recorded twice
+    And a renewal recorded twice whose repeat is in a Gift Aid claim
+    And a renewal recorded twice where both are in a Gift Aid claim
     And their next renewal, a month later, was recorded once
-    And a later renewal recorded twice whose repeat was refunded
     When the renewals recorded twice are tidied
-    Then the repeat is taken out of donations and kept aside beside the gift it repeated
-    And an audit line says the repeat was taken out
-    And the first gift, both renewals, next month's renewal and the refunded repeat are all still in donations
+    Then each repeat is taken out of donations and kept aside beside the gift it repeated
+    And an audit line says each repeat was taken out
+    And the gift in the claim is kept and its twin is taken out instead
+    And the pair both in a claim is left, and an audit line names it
+    And one gift for each payment is still in donations
     When the renewals recorded twice are tidied
     Then nothing more is taken out

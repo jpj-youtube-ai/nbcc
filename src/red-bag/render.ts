@@ -5,6 +5,8 @@ import { MATERIALS_STATEMENT } from "../legal/registration";
 import { redBag, type RedBagCatalogue } from "./catalogue";
 import { redBagList, type RedBagList, type RedBagListForPage } from "./list";
 import { DRIFT, renderLights } from "./scene";
+import { WORKSHOP_FIRST_STAGE, WORKSHOP_LAST_STAGE, type WorkshopView } from "./workshop";
+export { WORKSHOP_FIRST_STAGE, type WorkshopView };
 
 // Fill a Red Bag: the parts of the page the server draws into fill-a-red-bag.html, where its
 // markers are. The list and the themes come from the one catalogue (./catalogue.ts), so they are in
@@ -387,26 +389,14 @@ const DETAILS_STEP = '<section class="section flush-top rb-details-step"';
 const UNDERLINE =
   '<svg viewBox="0 0 300 18" preserveAspectRatio="none" aria-hidden="true" focusable="false"><path pathLength="1" d="M4 12C60 3 120 15 176 8s86-3 120 2"/></svg>';
 
-/** What the Workshop shows: its stage (0 empty to 12 overflowing), the bags, and how many more fill the next shelf. */
-export interface WorkshopView {
-  stage: number;
-  bags: number;
-  /** Bags still to come before the next stage; 0 once the last is reached. */
-  nextIn: number;
-  /** A company's name, on its own link: the sign is theirs. */
-  name?: string;
-}
 
 // What the elf on the workbench says, happier as the Workshop fills. The elf is the logo's own, always
 // (Jaimie, 6 November 2026: one elf, the same every time, mittens and all).
 const ELF_SAYS = ["", "", "", "Let's get these bags packed!", "Ooh, the shelves are filling up!", "Ooh, the shelves are filling up!", "You're doing great!", "You're doing great!", "Look at all these bags!", "Look at all these bags!", "We're running out of shelves!", "We're running out of shelves!", "Thank you for all your support!"];
-// The Workshop never looks empty (Jaimie, 6 November 2026): it opens with its nearest shelves already
-// stocked. The sign always gives the real count.
-export const WORKSHOP_FIRST_STAGE = 3;
 
 /** The Workshop: the painted stage, an elf, and the sign with the count in words anyone can read. */
 function renderWorkshop(w: WorkshopView | undefined): string {
-  const stage = Math.max(WORKSHOP_FIRST_STAGE, Math.min(12, Math.floor(w?.stage ?? 0)));
+  const stage = Math.max(WORKSHOP_FIRST_STAGE, Math.min(WORKSHOP_LAST_STAGE, Math.floor(w?.stage ?? 0)));
   const pic = `/assets/img/red-bag/workshop/s${String(stage).padStart(2, "0")}.webp`;
   const bags = Math.max(0, Math.floor(w?.bags ?? 0));
   const whose = w?.name ? `<i>${escapeHtml(w.name)}</i>` : "";
@@ -434,7 +424,7 @@ function renderNight(html: string, rb: RedBagCatalogue, workshop?: WorkshopView)
   // The sum is the script's to show, so a page whose script did not arrive never shows a wrong one.
   const sum = `<p class="fn-sum" id="fnSum" aria-hidden="true" hidden><b>${rb.pounds(0)}</b><span>of ${rb.pounds(rb.BAG_VALUE_PENCE)}</span></p>`;
   // the logo elf peeking over the back of the workbench, mittens on it, and what it says
-  const says = ELF_SAYS[Math.max(WORKSHOP_FIRST_STAGE, Math.min(12, Math.floor(workshop?.stage ?? 0)))];
+  const says = ELF_SAYS[Math.max(WORKSHOP_FIRST_STAGE, Math.min(WORKSHOP_LAST_STAGE, Math.floor(workshop?.stage ?? 0)))];
   const elf =
     `<img class="fn-elf" src="/assets/img/red-bag/elf-peek.webp" alt="" width="482" height="331" loading="lazy" decoding="async" />` +
     `<p class="fn-says" aria-hidden="true">${says}</p>`;

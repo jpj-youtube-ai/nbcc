@@ -357,6 +357,56 @@ describe("the Fill a Red Bag only filter", () => {
   });
 });
 
+describe("the Monthly gifts tile", () => {
+  const monthlyBox = () => el("donationsMonthlyFilter") as HTMLInputElement;
+  const mode = () => el("donationsModeFilter") as HTMLSelectElement;
+  const press = async (on: boolean) => {
+    monthlyBox().checked = on;
+    monthlyBox().dispatchEvent(new Event("change", { bubbles: true }));
+    await settle();
+  };
+
+  it("is a tick box tile of its own, beside the places but not one of them", () => {
+    const label = document.querySelector('label[for="donationsMonthlyFilter"]') as HTMLElement;
+    expect(label.querySelector(".gl-tile__name")?.textContent).toBe("Monthly gifts");
+    expect(label.querySelector('[data-gl-score="monthly"]')).not.toBeNull();
+    expect(monthlyBox().type).toBe("checkbox");
+    expect(el("donationsSources").contains(label)).toBe(false);
+  });
+
+  it("shows only monthly gifts when pressed, by the Type filter, and all of them again when pressed again", async () => {
+    await openDonations();
+    await press(true);
+    expect(mode().value).toBe("monthly");
+    expect(listUrls[listUrls.length - 1]).toContain("mode=monthly");
+    await press(false);
+    expect(mode().value).toBe("");
+    expect(listUrls[listUrls.length - 1]).not.toContain("mode=");
+  });
+
+  it("goes with a place: monthly Fill a Red Bag gifts", async () => {
+    await openDonations();
+    await tick(true);
+    await press(true);
+    expect(filter().checked).toBe(true);
+    const url = listUrls[listUrls.length - 1];
+    expect(url).toContain("source=red_bag");
+    expect(url).toContain("mode=monthly");
+  });
+
+  it("follows the Type filter: pressed for Monthly, not for One off or All", async () => {
+    await openDonations();
+    mode().value = "monthly";
+    mode().dispatchEvent(new Event("change", { bubbles: true }));
+    await settle();
+    expect(monthlyBox().checked).toBe(true);
+    mode().value = "once";
+    mode().dispatchEvent(new Event("change", { bubbles: true }));
+    await settle();
+    expect(monthlyBox().checked).toBe(false);
+  });
+});
+
 describe("how it sits on the page", () => {
   const rule = (selector: string) => {
     const at = css.indexOf(selector + "{");

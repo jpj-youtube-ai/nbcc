@@ -81,6 +81,9 @@ const bySource = (s: DonationSource): DonationSource => DONATION_SOURCES.find((x
  *   Donate page      no source, paid online (not a card reader), and not on a fundraiser's page.
  *                    A gift started anywhere else that later gets a source of its own is in neither.
  *
+ * Monthly gifts are a third read: every paid monthly payment, wherever it was set up, counted as above.
+ * It is not a place, so each payment is in its place's figures as well (TASK-596).
+ *
  * The Elf Detective School is a second read, of elf_orders (they are not donations): paid orders of
  * families a head elf has not removed, entry plus gift (the card fee top up is not added in), this
  * month by when each was paid, each order one payment. Head Elf HQ's Raised so far counts the same.
@@ -88,7 +91,7 @@ const bySource = (s: DonationSource): DonationSource => DONATION_SOURCES.find((x
 export async function sumGiftsBySource(month: SoFar): Promise<SourceTotals> {
   const kept = "GREATEST(amount_pence - refunded_amount_pence, 0)";
   const paidAt = "COALESCE(o.paid_at, o.created_at)";
-  const [gifts, elf] = await Promise.all([
+  const [gifts, elf, monthly] = await Promise.all([
     pool.query<SourceTotalsRow>(
       `SELECT CASE WHEN source = $3 THEN 'redBag' WHEN source = $4 THEN 'ball' WHEN source = $5 THEN 'ballBags' WHEN source = $6 THEN 'invoices' ELSE 'donatePage' END AS bucket,
               COALESCE(SUM(${kept}) FILTER (WHERE ${IN_MONTH("created_at")}), 0) AS month_pence,
@@ -112,6 +115,16 @@ export async function sumGiftsBySource(month: SoFar): Promise<SourceTotals> {
         WHERE o.status = 'paid' AND f.active AND f.removed_at IS NULL`,
       [month.from, month.until],
     ),
+    pool.query<SourceTotalsRow>(
+      `SELECT 'monthly' AS bucket,
+              COALESCE(SUM(${kept}) FILTER (WHERE ${IN_MONTH("created_at")}), 0) AS month_pence,
+              COUNT(*) FILTER (WHERE ${IN_MONTH("created_at")}) AS month_gifts,
+              COALESCE(SUM(${kept}), 0) AS all_pence,
+              COUNT(*) AS all_gifts
+         FROM donations
+        WHERE payment_status = 'paid' AND amount_pence > refunded_amount_pence AND mode = 'monthly'`,
+      [month.from, month.until],
+    ),
   ]);
-  return sourceTotalsFrom([...gifts.rows, ...elf.rows]);
+  return sourceTotalsFrom([...gifts.rows, ...elf.rows, ...monthly.rows]);
 }

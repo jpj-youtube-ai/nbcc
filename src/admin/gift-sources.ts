@@ -22,6 +22,8 @@ export type SourceTotals = {
   invoices: SourceSums;
   elfSchool: SourceSums;
   donatePage: SourceSums;
+  /** Every monthly payment, wherever it was set up (TASK-596): not a place, so each is in its place's too. */
+  monthly: SourceSums;
 };
 
 /** One row of the grouped read. Postgres hands SUM and COUNT back as strings. */
@@ -41,15 +43,17 @@ export const BALL_GIFTS_NOTE = "Festive Ball gifts are those made on the Ball's 
 // The red bag cards on the Festive Ball tables (/bag) are their own line, never part of the Ball's.
 export const BALL_BAGS_NOTE = "Red bags at the Ball are gifts from the table cards at the Festive Ball.";
 // The Elf Detective School's payments are entries, with any gift on top (Head Elf HQ).
+// Monthly gifts are a kind of gift, not a place: each payment is in its own place's figures as well.
+export const MONTHLY_NOTE = "Monthly gifts are every monthly payment, wherever it was set up, so each is in its place's figures too.";
 export const ELF_PAYMENTS_NOTE = "Elf Detective School payments are entries to take part, with any gift on top. Entries are never claimed for Gift Aid.";
 
 const none = (): SourceSums => ({ month: { pence: 0, gifts: 0 }, all: { pence: 0, gifts: 0 } });
-const BUCKETS = ["redBag", "ball", "ballBags", "invoices", "elfSchool", "donatePage"] as const;
+const BUCKETS = ["redBag", "ball", "ballBags", "invoices", "elfSchool", "donatePage", "monthly"] as const;
 const isBucket = (b: string): b is keyof SourceTotals => (BUCKETS as readonly string[]).includes(b);
 
 /** Every bucket, whatever came back: one with no gifts has no row, and is a real zero. */
 export function sourceTotalsFrom(rows: readonly SourceTotalsRow[]): SourceTotals {
-  const out: SourceTotals = { redBag: none(), ball: none(), ballBags: none(), invoices: none(), elfSchool: none(), donatePage: none() };
+  const out: SourceTotals = { redBag: none(), ball: none(), ballBags: none(), invoices: none(), elfSchool: none(), donatePage: none(), monthly: none() };
   for (const r of rows) {
     if (!isBucket(r.bucket)) continue;
     out[r.bucket] = {
@@ -68,7 +72,7 @@ export interface SourceLine {
 }
 
 /** The lines at the top of the Donations screen: Fill a Red Bag, the Festive Ball, the Ball's red bags,
- *  invoices, the Elf Detective School, the Donate page. */
+ *  invoices, the Elf Detective School, the Donate page, and then every monthly payment. */
 export function sourceLines(t: SourceTotals): SourceLine[] {
   const line = (key: keyof SourceTotals, name: string, words: (s: GiftSum) => string = giftsWords): SourceLine => ({
     key,
@@ -85,5 +89,7 @@ export function sourceLines(t: SourceTotals): SourceLine[] {
     // Head Elf HQ: paid entries with any gift on top, counted as payments.
     line("elfSchool", "Elf Detective School", paymentsWords),
     line("donatePage", "Donate page"),
+    // Every monthly payment, wherever it was set up, counted as payments (TASK-596).
+    line("monthly", "Monthly gifts", paymentsWords),
   ];
 }

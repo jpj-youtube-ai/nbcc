@@ -12,7 +12,10 @@
 //     gift:     { amountPence, feeCoverPence, totalChargedPence, currency, mode: "once"|"monthly", plan,
 //                 paymentStatus, paymentChannel: "online"|"in_person", source },
 //     payment:  { method, wallet, cardBrand, cardLast4, cardCountry, checkedAt,
-//                 stripe: { paymentIntentId, chargeId, sessionId, subscriptionId, dashboardUrl } },
+//                 stripe: { reference, paymentIntentId, chargeId, sessionId, invoiceId, subscriptionId,
+//                           dashboardUrl, subscriptionUrl } },   (reference: Stripe's payment, else its
+//                 charge, else a renewal's invoice, else the checkout session; subscriptionUrl: a monthly
+//                 gift's plan in Stripe, which lists every payment of it)
 //     arrival:  { channel, source, campaign, givenOn },          (all null before 6 November 2026)
 //     giftAid:  { giftAid, claimStatus, declarationStatus, gasdsEligible,
 //                 declaration: { id, scope, madeAt, revoked, revokedAt } | null,
@@ -92,7 +95,16 @@ export interface GiftDetails {
     cardLast4: string | null;
     cardCountry: string | null;
     checkedAt: Date | null;
-    stripe: { paymentIntentId: string | null; chargeId: string | null; sessionId: string | null; subscriptionId: string | null; dashboardUrl: string | null };
+    stripe: {
+      reference: string | null;
+      paymentIntentId: string | null;
+      chargeId: string | null;
+      sessionId: string | null;
+      invoiceId: string | null;
+      subscriptionId: string | null;
+      dashboardUrl: string | null;
+      subscriptionUrl: string | null;
+    };
   };
   arrival: { channel: string | null; source: string | null; campaign: string | null; givenOn: string | null };
   giftAid: {
@@ -157,15 +169,21 @@ export function stripeDashboardUrl(ids: { paymentIntentId: string | null; charge
   return `https://dashboard.stripe.com/${testMode ? "test/" : ""}payments/${encodeURIComponent(id)}`;
 }
 
+/** A monthly gift's plan in Stripe, where every payment of it is listed; Stripe's test side with a test key. */
+export function stripeSubscriptionUrl(subscriptionId: string | null, testMode: boolean): string | null {
+  if (!subscriptionId) return null;
+  return `https://dashboard.stripe.com/${testMode ? "test/" : ""}subscriptions/${encodeURIComponent(subscriptionId)}`;
+}
+
 const stripeTestMode = (): boolean => /^(sk|rk)_test_/.test(config.STRIPE_SECRET_KEY ?? "");
 
 // --- SQL (read against migrations 1782923222001, 1782987698792, 1783068943728, 1783054395270,
-// 1791200000000, 1791200000220, 1791200000330, 1791200000370 and 1791200000310) ---------------------
+// 1791200000000, 1791200000220, 1791200000330, 1791200000370, 1791200000400 and 1791200000310) -------
 
 const GIFT_SQL = `SELECT d.id, d.donor_id, d.mode, d.plan, d.amount_pence, d.fee_cover_pence, d.currency, d.gift_aid,
        d.claim_status, d.payment_status, d.payment_channel, d.refunded_amount_pence, d.declaration_status,
        d.gasds_eligible, d.created_at, d.source, d.invoice_id, d.fundraiser_id, d.claim_batch_id, d.declaration_id,
-       d.stripe_session_id, d.stripe_payment_intent_id, d.stripe_subscription_id, d.stripe_charge_id,
+       d.stripe_session_id, d.stripe_payment_intent_id, d.stripe_subscription_id, d.stripe_charge_id, d.stripe_invoice_id,
        d.arrival_channel, d.arrival_source, d.arrival_campaign, d.given_on,
        d.pay_method, d.pay_wallet, d.card_brand, d.card_last4, d.card_country, d.pay_checked_at,
        dn.full_name AS donor_name, dn.email AS donor_email, dn.email_consent, dn.donor_type, dn.business_name,
@@ -181,7 +199,9 @@ const GIFT_SQL = `SELECT d.id, d.donor_id, d.mode, d.plan, d.amount_pence, d.fee
   LEFT JOIN claim_batches cb ON cb.id = d.claim_batch_id
  WHERE d.id = $1`;
 
-const PAY_SQL = `SELECT pay_method, pay_wallet, card_brand, card_last4, card_country, pay_checked_at
+// After a look up: how it was paid, and the Stripe payment it found for a gift that had none (a renewal).
+const PAY_SQL = `SELECT pay_method, pay_wallet, card_brand, card_last4, card_country, pay_checked_at,
+       stripe_payment_intent_id, stripe_charge_id
   FROM donations WHERE id = $1`;
 
 // Written by the webhook's refund handling (handleRefund in src/db/stripe-webhook.ts): data.refundedPence
@@ -282,8 +302,11 @@ async function giftDetails(id: number, payFillLimitMs: number): Promise<GiftDeta
 
   const amountPence = Number(r.amount_pence);
   const feeCoverPence = Number(r.fee_cover_pence ?? 0);
-  const paymentIntentId = str(r.stripe_payment_intent_id);
-  const chargeId = str(r.stripe_charge_id);
+  const paymentIntentId = str(pay.stripe_payment_intent_id);
+  const chargeId = str(pay.stripe_charge_id);
+  const sessionId = str(r.stripe_session_id);
+  const stripeInvoiceId = str(r.stripe_invoice_id);
+  const subscriptionId = str(r.stripe_subscription_id);
   const company = r.donor_type === "company";
   const invoiceId = num(r.invoice_id);
   const fundraiserId = num(r.fundraiser_id);
@@ -315,11 +338,14 @@ async function giftDetails(id: number, payFillLimitMs: number): Promise<GiftDeta
       cardCountry: str(pay.card_country),
       checkedAt: date(pay.pay_checked_at),
       stripe: {
+        reference: paymentIntentId ?? chargeId ?? stripeInvoiceId ?? sessionId,
         paymentIntentId,
         chargeId,
-        sessionId: str(r.stripe_session_id),
-        subscriptionId: str(r.stripe_subscription_id),
+        sessionId,
+        invoiceId: stripeInvoiceId,
+        subscriptionId,
         dashboardUrl: stripeDashboardUrl({ paymentIntentId, chargeId }, stripeTestMode()),
+        subscriptionUrl: stripeSubscriptionUrl(subscriptionId, stripeTestMode()),
       },
     },
     arrival: { channel, source: str(r.arrival_source), campaign, givenOn: str(r.given_on) },

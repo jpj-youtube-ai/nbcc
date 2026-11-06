@@ -199,7 +199,8 @@
         if (!slot) return;
         slot.textContent = "";
         var t = totals[key];
-        var payments = key === "elfSchool";
+        // The Elf Detective School's entries and every monthly gift's payments are counted as payments.
+        var payments = key === "elfSchool" || key === "monthly";
         if (t && t.month && typeof t.month.pence === "number") {
           slot.appendChild(el("b", { class: "gl-tile__sum", text: wholePounds(t.month.pence) }));
           slot.appendChild(el("span", { class: "gl-tile__count", text: plural(Number(t.month.gifts) || 0, payments ? "payment" : "gift", payments ? "payments" : "gifts") + " this month" }));
@@ -322,6 +323,8 @@
       var meta = [el("time", { datetime: row.created_at, text: timeLabel(row.created_at) })];
       if (elf && row.elf_reference) meta.push(dot(), el("span", { text: row.elf_reference }));
       if (!elf && row.business_name) meta.push(dot(), el("span", { text: row.business_name }));
+      // Stripe's own reference for the payment, to find it in Stripe (TASK-596).
+      if (!elf && row.stripe_ref) meta.push(dot(), el("span", { class: "gl-gift__ref", text: row.stripe_ref }));
       var tags = [badge("place", row.given_on_label), badge("pay", row.paid_by_label)].concat(marks(row, opts));
       var face = el("button", { class: "gl-gift__face", type: "button", "aria-expanded": "false", "aria-controls": moreId }, [
         el("span", { class: "gl-gift__amount", text: money(row.amount_pence) }),
@@ -425,13 +428,14 @@
           ["Type", (g.mode || row.mode) === "monthly" ? "Monthly" + (g.plan || row.plan ? ", " + cap(g.plan || row.plan) + " level" : "") : "One off"],
           ["Payment", payment(row).label],
           ["Recorded", momentWords(at)],
-          ["Our reference", d.reference],
+          ["Stripe reference", stripe.reference],
+          ["Our receipt number", d.reference ? d.reference + ", on their thank you email" : null],
         ]),
         group("How it was paid", [
           ["Paid by", paidBy],
           ["Card from", countryName(p.cardCountry)],
           ["Taken", (g.paymentChannel || row.payment_channel) === "in_person" ? "In person" : "Online"],
-          ["Stripe payment", stripe.paymentIntentId || stripe.chargeId],
+          ["Monthly plan in Stripe", stripe.subscriptionId],
         ]),
         group("Where it came from", [
           ["Given on", lb.givenOnLabel || row.given_on_label],
@@ -505,6 +509,7 @@
       if (ln.fundraiser && ln.fundraiser.pagePath) kids.push(link("The fundraiser's page", ln.fundraiser.pagePath));
       if (ln.invoice) kids.push(link("The invoice", ln.invoice.url));
       kids.push(link("See it in Stripe", stripe.dashboardUrl));
+      kids.push(link("The monthly plan in Stripe", stripe.subscriptionUrl));
       var shown = kids.filter(Boolean);
       return shown.length ? el("div", { class: "gl-actions" }, shown) : null;
     }

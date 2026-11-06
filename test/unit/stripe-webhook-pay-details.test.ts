@@ -58,6 +58,7 @@ function installQuery() {
       if (failInsert) throw new Error("insert failed");
       return { rows: [{ id: DONATION_ID }], rowCount: 1 };
     }
+    if (/from donations where stripe_invoice_id/i.test(sql)) return { rows: [], rowCount: 0 };
     if (/select 1 from donations where stripe_payment_intent_id/i.test(sql)) return { rows: [], rowCount: 0 };
     if (/^\s*select[\s\S]*from donations/i.test(sql)) {
       return {

@@ -27,8 +27,8 @@ describe("the totals: one grouped read", () => {
   it("reads the gifts in one grouped read, with the month and the source as parameters", async () => {
     queryMock.mockResolvedValue({ rows: [] });
     await sumGiftsBySource(MONTH);
-    // The second read is the Elf Detective School's payments (below).
-    expect(queryMock).toHaveBeenCalledTimes(2);
+    // The second read is the Elf Detective School's payments, the third every monthly payment (below).
+    expect(queryMock).toHaveBeenCalledTimes(3);
     expect(call().params).toEqual(["2026-10-01", "2026-10-05T09:30:00.000Z", "red_bag", "ball", "ball_bags", "invoice"]);
     expect(call().sql).toMatch(/GROUP BY 1/);
     // The source is a parameter, never written into the SQL itself.
@@ -73,6 +73,7 @@ describe("the totals: one grouped read", () => {
       invoices: { month: { pence: 0, gifts: 0 }, all: { pence: 0, gifts: 0 } },
       elfSchool: { month: { pence: 0, gifts: 0 }, all: { pence: 0, gifts: 0 } },
       donatePage: { month: { pence: 0, gifts: 0 }, all: { pence: 0, gifts: 0 } },
+      monthly: { month: { pence: 0, gifts: 0 }, all: { pence: 0, gifts: 0 } },
     });
   });
 
@@ -93,6 +94,7 @@ describe("the totals: one grouped read", () => {
       invoices: { month: { pence: 0, gifts: 0 }, all: { pence: 0, gifts: 0 } },
       elfSchool: { month: { pence: 0, gifts: 0 }, all: { pence: 0, gifts: 0 } },
       donatePage: { month: { pence: 0, gifts: 0 }, all: { pence: 0, gifts: 0 } },
+      monthly: { month: { pence: 0, gifts: 0 }, all: { pence: 0, gifts: 0 } },
     });
   });
 
@@ -122,6 +124,27 @@ describe("the totals: one grouped read", () => {
     const t = await sumGiftsBySource(MONTH);
     expect(t.elfSchool).toEqual({ month: { pence: 148_600, gifts: 128 }, all: { pence: 148_600, gifts: 128 } });
     expect(t.donatePage).toEqual({ month: { pence: 0, gifts: 0 }, all: { pence: 0, gifts: 0 } });
+  });
+
+  it("reads every paid monthly payment beside the places, wherever it was set up, less refunds, by this month", async () => {
+    queryMock.mockResolvedValue({ rows: [] });
+    await sumGiftsBySource(MONTH);
+    const { sql, params } = call(2);
+    expect(params).toEqual(["2026-10-01", "2026-10-05T09:30:00.000Z"]);
+    expect(sql).toContain("SELECT 'monthly' AS bucket");
+    expect(sql).toContain("SUM(GREATEST(amount_pence - refunded_amount_pence, 0)) FILTER (WHERE (created_at AT TIME ZONE 'Europe/London')::date >= $1::date AND created_at <= $2::timestamptz)");
+    expect(sql).toContain("WHERE payment_status = 'paid' AND amount_pence > refunded_amount_pence AND mode = 'monthly'");
+    expect(sql).not.toMatch(/source|fee_cover_pence|gift_aid/);
+  });
+
+  it("puts monthly payments in a bucket of their own, beside their places", async () => {
+    queryMock
+      .mockResolvedValueOnce({ rows: [{ bucket: "redBag", month_pence: "1000", month_gifts: "1", all_pence: "1000", all_gifts: "1" }] })
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [{ bucket: "monthly", month_pence: "1000", month_gifts: "1", all_pence: "5000", all_gifts: "5" }] });
+    const t = await sumGiftsBySource(MONTH);
+    expect(t.monthly).toEqual({ month: { pence: 1000, gifts: 1 }, all: { pence: 5000, gifts: 5 } });
+    expect(t.redBag).toEqual({ month: { pence: 1000, gifts: 1 }, all: { pence: 1000, gifts: 1 } });
   });
 
   it("fails as a whole when the Elf Detective School's read fails", async () => {

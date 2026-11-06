@@ -89,6 +89,7 @@ function installQuery() {
     if (/insert into donors/i.test(sql)) return { rows: [{ id: DONOR_ID }], rowCount: 1 };
     if (/insert into donations/i.test(sql)) return { rows: [{ id: DONATION_ID }], rowCount: 1 };
     if (/insert into audit_log/i.test(sql)) return { rowCount: 1, rows: [] };
+    if (/from donations where stripe_invoice_id/i.test(sql)) return { rows: [], rowCount: 0 };
     if (/select 1 from donations where stripe_payment_intent_id/i.test(sql)) return { rows: [], rowCount: 0 };
     if (/^\s*select[\s\S]*from donations/i.test(sql)) return { rows: parentRow ? [parentRow] : [], rowCount: parentRow ? 1 : 0 };
     return { rows: [], rowCount: 0 };

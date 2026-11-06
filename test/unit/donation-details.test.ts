@@ -19,7 +19,7 @@ vi.mock("../../src/config", () => ({
   },
 }));
 
-import { getDonationDetails, stripeDashboardUrl, PAY_FILL_LIMIT_MS } from "../../src/db/donation-details";
+import { getDonationDetails, stripeDashboardUrl, stripeSubscriptionUrl, PAY_FILL_LIMIT_MS } from "../../src/db/donation-details";
 import { getAdminDonationDetails } from "../../src/routes/admin-donation-details";
 import { signAdminSession } from "../../src/admin/session";
 
@@ -48,6 +48,7 @@ const GIFT = {
   stripe_payment_intent_id: "pi_test_a1",
   stripe_subscription_id: null,
   stripe_charge_id: null,
+  stripe_invoice_id: null,
   arrival_channel: "qr",
   arrival_source: null,
   arrival_campaign: "c12",
@@ -143,7 +144,16 @@ describe("a gift's details", () => {
         cardLast4: "4242",
         cardCountry: "GB",
         checkedAt: GIFT.pay_checked_at,
-        stripe: { paymentIntentId: "pi_test_a1", chargeId: null, sessionId: "cs_test_a1", subscriptionId: null, dashboardUrl: "https://dashboard.stripe.com/test/payments/pi_test_a1" },
+        stripe: {
+          reference: "pi_test_a1",
+          paymentIntentId: "pi_test_a1",
+          chargeId: null,
+          sessionId: "cs_test_a1",
+          invoiceId: null,
+          subscriptionId: null,
+          dashboardUrl: "https://dashboard.stripe.com/test/payments/pi_test_a1",
+          subscriptionUrl: null,
+        },
       },
       arrival: { channel: "qr", source: null, campaign: "c12", givenOn: "/donate" },
       giftAid: {
@@ -159,6 +169,26 @@ describe("a gift's details", () => {
       links: { fundraiser: null, pledgeId: null, invoice: null, elfFamilyId: null },
       labels: { givenOnLabel: "Donate page", arrivalLabel: "QR code: Donate billboard, High Street", paidByLabel: "Apple Pay (Visa ending 4242)" },
     });
+  });
+
+  it("gives a monthly renewal Stripe's payment as its reference, and links its monthly plan", async () => {
+    answer({ gift: { ...GIFT, mode: "monthly", stripe_session_id: null, stripe_payment_intent_id: "pi_test_r1", stripe_invoice_id: "in_test_r1", stripe_subscription_id: "sub_test_r1" } });
+    const d = await getDonationDetails("donation", 321);
+    expect(d).toMatchObject({
+      payment: {
+        stripe: {
+          reference: "pi_test_r1",
+          invoiceId: "in_test_r1",
+          subscriptionId: "sub_test_r1",
+          subscriptionUrl: "https://dashboard.stripe.com/test/subscriptions/sub_test_r1",
+        },
+      },
+    });
+  });
+
+  it("falls back to the renewal's Stripe invoice for its reference while its payment is not yet known", async () => {
+    answer({ gift: { ...GIFT, mode: "monthly", stripe_session_id: null, stripe_payment_intent_id: null, stripe_invoice_id: "in_test_r2", stripe_subscription_id: "sub_test_r2" } });
+    expect(await getDonationDetails("donation", 321)).toMatchObject({ payment: { stripe: { reference: "in_test_r2", dashboardUrl: null } } });
   });
 
   it("is null for an id that is no gift", async () => {
@@ -323,6 +353,16 @@ describe("asking Stripe how an older gift was paid, the first time it is opened"
     expect(sqlCalls().find((s) => s.includes("SELECT pay_method"))).toContain("FROM donations WHERE id = $1");
   });
 
+  it("gives the Stripe payment the look up found, as the reference and the link", async () => {
+    const renewal = { ...unchecked, stripe_session_id: null, stripe_payment_intent_id: null, stripe_invoice_id: "in_test_r3" };
+    answer({ gift: renewal, reread: { pay_method: "card", pay_checked_at: new Date(), stripe_payment_intent_id: "pi_test_found", stripe_charge_id: "ch_test_found" } });
+    const d = await getDonationDetails("donation", 321);
+    expect(d).toMatchObject({
+      payment: { stripe: { reference: "pi_test_found", paymentIntentId: "pi_test_found", chargeId: "ch_test_found", dashboardUrl: "https://dashboard.stripe.com/test/payments/pi_test_found" } },
+    });
+    expect(sqlCalls().find((s) => s.includes("SELECT pay_method"))).toContain("stripe_payment_intent_id, stripe_charge_id");
+  });
+
   it("does not ask for a gift already checked", async () => {
     await getDonationDetails("donation", 321);
     expect(m.fill).not.toHaveBeenCalled();
@@ -354,6 +394,12 @@ describe("the Stripe dashboard link", () => {
     expect(stripeDashboardUrl({ paymentIntentId: "pi_1", chargeId: "ch_1" }, false)).toBe("https://dashboard.stripe.com/payments/pi_1");
     expect(stripeDashboardUrl({ paymentIntentId: null, chargeId: "ch_1" }, false)).toBe("https://dashboard.stripe.com/payments/ch_1");
     expect(stripeDashboardUrl({ paymentIntentId: null, chargeId: null }, false)).toBeNull();
+  });
+
+  it("goes to a monthly gift's plan in Stripe, or nowhere without one", () => {
+    expect(stripeSubscriptionUrl("sub_1", false)).toBe("https://dashboard.stripe.com/subscriptions/sub_1");
+    expect(stripeSubscriptionUrl("sub_1", true)).toBe("https://dashboard.stripe.com/test/subscriptions/sub_1");
+    expect(stripeSubscriptionUrl(null, false)).toBeNull();
   });
 
   it("goes to Stripe's test side with a test key", () => {

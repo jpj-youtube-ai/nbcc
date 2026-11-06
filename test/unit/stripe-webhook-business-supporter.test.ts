@@ -273,6 +273,7 @@ describe("business supporter invite — a subsequent recurring charge does not r
           rowCount: 1,
         };
       }
+      if (/from donations where stripe_invoice_id/i.test(sql)) return { rows: [], rowCount: 0 };
       if (/select 1 from donations where stripe_payment_intent_id/i.test(sql)) return { rows: [], rowCount: 0 };
       if (/insert into donations/i.test(sql)) return { rows: [{ id: 123 }], rowCount: 1 };
       if (/insert into audit_log/i.test(sql)) return { rowCount: 1, rows: [] };

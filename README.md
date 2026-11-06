@@ -5874,7 +5874,14 @@ ONE transaction, **idempotent by event id** (a `stripe_webhook_events` ledger wi
   `subscription_create` invoice is skipped (already captured at checkout, so not
   double-counted); `subscription_update` / `subscription_cycle` invoices each
   become their own donation row. The pure `recurringDonationInput` mapping
-  (`src/db/stripe-webhook-model.ts`) is unit-tested DB-free.
+  (`src/db/stripe-webhook-model.ts`) is unit-tested DB-free. **Once per invoice (TASK-596):**
+  Stripe sends both events for every paid renewal, and on the pinned API version the invoice
+  carries no `payment_intent` or `charge`, so each renewal used to be recorded twice (two
+  donations, two NBCC references, two thank you emails). The renewal is now known by its invoice:
+  `handleRecurring` takes a transaction lock on the invoice id (`pg_advisory_xact_lock`), looks for
+  a donation with that `stripe_invoice_id` (`ignored.duplicate_invoice` when there is one), and
+  keeps the id on the gift it records (a unique index holds one gift per invoice). Proved by
+  `test/unit/stripe-webhook-renewal-once.test.ts` and `features/monthly-renewals.feature`.
 - **`charge.succeeded` (card-present only)** → records an **in-person** gift
   (Stripe Terminal / `payment_method_details.type === 'card_present'`, REQ-054/TASK-073).
   A card-present tap has no checkout session, so it is captured straight off the charge:
@@ -7042,14 +7049,38 @@ own stylesheet `assets/css/admin-donations.css` (every class `.gl-`):
   gift is a card: the amount, the giver, the time (2:34pm), where it was given (Donate page, Fill a Red
   Bag, a fundraiser's page title, Invoice INV-0012 ...), how it was paid (Apple Pay (Visa ending
   4242), Direct Debit, Bank transfer ...) and marks for Monthly, Gift Aid and any payment not plainly
-  paid. Elf Detective School payments are cards too, with their reference.
+  paid. Elf Detective School payments are cards too, with their reference. Under the giver's name, beside
+  the time, is **Stripe's reference** for the payment (`pi_...`, cut short with an ellipsis on a
+  narrow card), so it can be found in Stripe (TASK-596).
 - **The click down.** Pressing a card opens it in place (no pop up) and reads its details once: the
-  gift (amount, card fee cover, total charged, our reference NBCC-000321, recorded at), how it was
-  paid (method, card, country, a link to the payment in Stripe), where it came from (given on, came
+  gift (amount, card fee cover, total charged, recorded at, Stripe's reference, and our receipt number
+  NBCC-000321, which is the one on the giver's thank you email), how it was paid (method, card,
+  country, a link to the payment in Stripe, and for a monthly gift its plan in Stripe, `sub_...`,
+  with a link to it, where every payment of it is listed), where it came from (given on, came
   from, a QR code by its name from Admin > QR codes), Gift Aid (declaration, claim, batch), refunds,
   the giver (email consent, business, their other gifts by the same email address) and links to the
   donor, the fundraiser's page, the invoice and Head Elf HQ.
+- **Monthly gifts (TASK-596).** A wide tile under the places: every monthly payment this month and in
+  all, wherever it was set up (so each is in its place's figures too, and the note says so).
+  Pressing it sets Type to Monthly, and again to All; it goes with a place tile, and shows as pressed
+  whenever Type is Monthly (`assets/js/admin/app.js`).
+- **Stripe's reference.** Name or email also finds a gift by its Stripe payment, charge, renewal
+  invoice or monthly plan id (`listDonations`), and each row carries `stripe_ref`: the payment intent,
+  else the charge, else a renewal's invoice, else the checkout session.
 - **Phones.** The cards and the click down stack; nothing scrolls inside a box.
+
+**Monthly renewals recorded twice (TASK-596).** `migrations/1791200000400_donation-renewal-invoice.js`
+adds `donations.stripe_invoice_id` (above) and takes the doubles already recorded out of `donations`,
+so totals, Gift Aid claims and a donor's gifts count each payment once. A double is a renewal (a
+monthly gift with no checkout session, payment intent or charge) recorded within ten minutes after
+another renewal of the same subscription for the same amount; one refunded, in a claim batch,
+claimed, or pointed at by anything else is left alone. Nothing is lost: each double's whole row is
+kept in `donations_removed_duplicates` beside the gift it repeated, with a
+`donation.duplicate_removed` audit line, and the migration's down puts them back. A renewal's
+Stripe payment and charge are filled in when Stripe is asked how it was paid
+(`WRITE_STRIPE_IDS_SQL`, `src/db/donation-pay-details.ts`, found through the kept invoice), so it
+gets Stripe's reference and a refund of it can find it. Renewals recorded before this have no
+invoice id, so their reference is their monthly plan.
 
 The Overview's recent donations and Search keep their compact list (`assets/js/admin/app.js`).
 
@@ -7098,7 +7129,8 @@ November 2026)". How an older gift was paid is asked of Stripe the first time it
 - `GET /api/admin/donations/:kind/:id/details` (kind `donation` or `elf`): one gift's click down, its
   shape documented at the top of `src/db/donation-details.ts`. Never cached; 404 for an unknown kind
   or id. Served by `src/routes/admin-donation-details.ts`.
-- `GET /api/admin/donations/source-totals`: the scoreboard's figures, as before.
+- `GET /api/admin/donations/source-totals`: the scoreboard's figures, as before, and since TASK-596 a
+  `monthly` line (every paid monthly payment, counted as payments, `sumGiftsBySource`).
 
 **Files and tests.** The screen: `admin.html`, `assets/js/admin/gift-log.js` (draws the scoreboard,
 chips, cards and click down) and `assets/js/admin/app.js` (reads the filters and pages the list). The
@@ -12679,7 +12711,7 @@ day, six for Elf Detective School, and two for invoices for donations: the invoi
 details printed on them),
 but `STORIES_DATABASE_URL` and `CONTACT_DATABASE_URL` are separate databases
 (deliberately, so the public story and contact forms can never reach donor
-data). A `pg_dump $DATABASE_URL` captures 98 of **101** tables and silently
+data). A `pg_dump $DATABASE_URL` captures 99 of **102** tables and silently
 drops every My Story submission (and, since TASK-475, the fingerprints in
 `erased_stories` that keep erased stories from coming back) and every contact
 enquiry, while producing a

@@ -132,10 +132,11 @@ Then("the Donate page has gone up by £{int} from {int} gift(s), this month and 
 Then("the totals say when Fill a Red Bag gifts are counted from", function () {
   // The Festive Ball's donate page (14 October 2026) added its own line and a sentence to the note;
   // red bags at the Ball (TASK-584) added another of each; invoices for donations added a line; the
-  // Elf Detective School (Head Elf HQ) added a line and a sentence.
+  // Elf Detective School (Head Elf HQ) added a line and a sentence; Monthly gifts (TASK-596) added a
+  // line and a sentence.
   assert.equal(
     this.rbBody.note,
-    "Fill a Red Bag gifts are counted from 5 October 2026. Festive Ball gifts are those made on the Ball's own donate page. Red bags at the Ball are gifts from the table cards at the Festive Ball. Elf Detective School payments are entries to take part, with any gift on top. Entries are never claimed for Gift Aid.",
+    "Fill a Red Bag gifts are counted from 5 October 2026. Festive Ball gifts are those made on the Ball's own donate page. Red bags at the Ball are gifts from the table cards at the Festive Ball. Elf Detective School payments are entries to take part, with any gift on top. Entries are never claimed for Gift Aid. Monthly gifts are every monthly payment, wherever it was set up, so each is in its place's figures too.",
   );
   assert.deepEqual(this.rbBody.lines.map((l) => l.name), [
     "Fill a Red Bag",
@@ -144,6 +145,7 @@ Then("the totals say when Fill a Red Bag gifts are counted from", function () {
     "Invoices",
     "Elf Detective School",
     "Donate page",
+    "Monthly gifts",
   ]);
 });
 

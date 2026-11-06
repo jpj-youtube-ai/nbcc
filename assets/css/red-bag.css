@@ -38,7 +38,7 @@
    min-width block near the end) the bag is placed at the top of a right hand column, with the
    themes under it, beside the long paper. ---- */
 .rb-layout{
-  /* the paper's hand: for the paper, and for the gift tag on a full bag */
+  /* the paper's hand: for the paper and for the gift tag on a full bag */
   --rb-hand:"Caveat","Bradley Hand","Segoe Print","Noteworthy","Chalkboard SE","Ink Free","Comic Sans MS",cursive;
   display:grid;grid-template-columns:minmax(0,1fr);
   gap:clamp(32px,6vw,48px);align-items:start;
@@ -92,6 +92,8 @@
 
 /* ---- the buttons (5 November 2026): the logo's bold maroon-brown outline, and a chunky "sticker"
    edge underneath that the button sinks onto when it is pressed. Same buttons, same states. ---- */
+/* the paper's hand for the whole page, so the night look's Workshop sign and elf can write in it too */
+:root{--rb-hand:"Caveat","Bradley Hand","Segoe Print","Noteworthy","Chalkboard SE","Ink Free","Comic Sans MS",cursive}
 :root{--rb-ink:color-mix(in srgb,var(--maroon) 53%,var(--slate))}
 .rb-stepper{display:inline-flex;align-items:center;gap:6px}
 .rb-step{
@@ -214,7 +216,7 @@
   transition:background-color .2s ease,color .2s ease;
 }
 .rb-mode:hover{background:var(--holly-soft)}
-.rb-mode[aria-pressed="true"]{background:var(--holly);color:var(--cream);box-shadow:inset 0 -3px 0 rgba(0,0,0,.22)}
+.rb-mode[aria-pressed="true"]{background:var(--holly);color:var(--cream);box-shadow:inset 0 -3px 0 color-mix(in srgb,var(--holly) 60%,var(--slate))}
 /* chosen is never colour alone: a tick as well */
 .rb-mode[aria-pressed="true"]::before{content:"\2713";margin-right:6px;font-weight:700}
 .rb-donate{width:100%;justify-content:center;font-size:1.12rem;font-weight:700;padding:16px 22px;text-align:center;

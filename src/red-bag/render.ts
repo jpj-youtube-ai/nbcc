@@ -256,6 +256,11 @@ export interface RedBagPageOptions {
    */
   night?: boolean;
   /**
+   * The Workshop behind the night look (5 November 2026): how many bags are on its shelves and, for a
+   * company's own link, whose they are. Left out: the empty Workshop with no sign.
+   */
+  workshop?: WorkshopView;
+  /**
    * The draft preview (Admin > Fill a Red Bag > Preview the page): the strip, never indexed, and
    * GIVING SWITCHED OFF. The details form is not drawn at all, so there is nothing to send a gift
    * with, and the page's script makes Donate say so (assets/js/red-bag.js).
@@ -382,18 +387,57 @@ const DETAILS_STEP = '<section class="section flush-top rb-details-step"';
 const UNDERLINE =
   '<svg viewBox="0 0 300 18" preserveAspectRatio="none" aria-hidden="true" focusable="false"><path pathLength="1" d="M4 12C60 3 120 15 176 8s86-3 120 2"/></svg>';
 
+/** What the Workshop shows: its stage (0 empty to 12 overflowing), the bags, and how many more fill the next shelf. */
+export interface WorkshopView {
+  stage: number;
+  bags: number;
+  /** Bags still to come before the next stage; 0 once the last is reached. */
+  nextIn: number;
+  /** A company's name, on its own link: the sign is theirs. */
+  name?: string;
+}
+
+// What the elf on the workbench says, happier as the Workshop fills. The elf is the logo's own, always
+// (Jaimie, 6 November 2026: one elf, the same every time, mittens and all).
+const ELF_SAYS = ["", "", "", "Let's get these bags packed!", "Ooh, the shelves are filling up!", "Ooh, the shelves are filling up!", "You're doing great!", "You're doing great!", "Look at all these bags!", "Look at all these bags!", "We're running out of shelves!", "We're running out of shelves!", "Thank you for all your support!"];
+// The Workshop never looks empty (Jaimie, 6 November 2026): it opens with its nearest shelves already
+// stocked. The sign always gives the real count.
+export const WORKSHOP_FIRST_STAGE = 3;
+
+/** The Workshop: the painted stage, an elf, and the sign with the count in words anyone can read. */
+function renderWorkshop(w: WorkshopView | undefined): string {
+  const stage = Math.max(WORKSHOP_FIRST_STAGE, Math.min(12, Math.floor(w?.stage ?? 0)));
+  const pic = `/assets/img/red-bag/workshop/s${String(stage).padStart(2, "0")}.webp`;
+  const bags = Math.max(0, Math.floor(w?.bags ?? 0));
+  const whose = w?.name ? `<i>${escapeHtml(w.name)}</i>` : "";
+  // a brand new Workshop opens with a welcome, not a zero
+  const count = bags === 0 ? "Let's fill the first bag" : `${bags.toLocaleString("en-GB")} ${bags === 1 ? "bag" : "bags"} filled`;
+  const next = w && bags > 0 && w.nextIn > 0 ? `Just ${w.nextIn} more ${w.nextIn === 1 ? "bag fills" : "bags fill"} the next shelf` : "";
+  return (
+    '<div class="fn-workshop">' +
+    `<img class="fn-workshop__room" src="${pic}" alt="" width="1600" height="1067" decoding="async" fetchpriority="high" />` +
+    "</div>" +
+    (w ? `<p class="fn-sign${whose ? " fn-sign--named" : ""}">${whose}<b>${count}</b>${next ? `<span>${next}</span>` : ""}</p>` : "")
+  );
+}
+
 /** The page dressed for the night. If any place it needs is missing: the page as it came, not half dressed. */
-function renderNight(html: string, rb: RedBagCatalogue): string {
+function renderNight(html: string, rb: RedBagCatalogue, workshop?: WorkshopView): string {
   if (![PAGE_STYLES, PAGE_SCRIPT, INTRO, HEADING, PANEL, DETAILS_STEP].every((place) => html.includes(place))) return html;
   const open =
     '<div class="fn-night" id="fnNight">' +
+    renderWorkshop(workshop) +
     '<canvas class="fn-sky" aria-hidden="true"></canvas>' +
     renderLights() +
     `<div class="fn-edge">${DRIFT}</div>`;
   const close = `<div class="wrap fn-still"><button class="fn-pause" id="fnPause" type="button" hidden>Pause the snow</button></div>${DRIFT}</div><div class="fn-ground"></div>`;
   // The sum is the script's to show, so a page whose script did not arrive never shows a wrong one.
   const sum = `<p class="fn-sum" id="fnSum" aria-hidden="true" hidden><b>${rb.pounds(0)}</b><span>of ${rb.pounds(rb.BAG_VALUE_PENCE)}</span></p>`;
-  const elf = '<img class="fn-elf" src="/assets/img/nbcc-elf.png" alt="" width="150" height="98" loading="lazy" decoding="async" />';
+  // the logo elf peeking over the back of the workbench, mittens on it, and what it says
+  const says = ELF_SAYS[Math.max(WORKSHOP_FIRST_STAGE, Math.min(12, Math.floor(workshop?.stage ?? 0)))];
+  const elf =
+    `<img class="fn-elf" src="/assets/img/red-bag/elf-peek.webp" alt="" width="482" height="331" loading="lazy" decoding="async" />` +
+    `<p class="fn-says" aria-hidden="true">${says}</p>`;
   // Functions, not strings: nothing drawn in is ever read as a replacement pattern ("$&").
   return html
     .replace(PAGE_STYLES, () => `${PAGE_STYLES}\n    ${NIGHT_STYLES}`)
@@ -430,6 +474,6 @@ export function renderRedBagPage(template: string, opts: RedBagPageOptions): str
     // a heading over nothing.
     if (rb.THEMES.length === 0) html = html.replace('<div class="rb-need" data-rb-need ', '<div class="rb-need" data-rb-need hidden ');
   }
-  if (opts.night === true) html = renderNight(html, catalogue);
+  if (opts.night === true) html = renderNight(html, catalogue, opts.workshop);
   return opts.preview || draft ? markPreview(html, { preview: opts.preview, draft }) : html;
 }

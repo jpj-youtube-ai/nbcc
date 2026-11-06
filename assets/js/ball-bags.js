@@ -323,6 +323,8 @@
         donorType: "individual",
         fullName: (val("bbFirstName") + " " + val("bbSurname")).trim(),
         email: val("bbEmail"),
+        // The page before this one, so the checkout can note what brought the giver (never kept here).
+        cameFrom: doc.referrer,
       };
       if (body.giftAid) {
         var abroad = checked("bbNonUk");

@@ -7010,8 +7010,9 @@ paid it comes through into Donations by itself. Design:
   `invoice.gift_aid_saved`, `invoice_settings.updated`).
 - **Bank details on invoices** are their own setting (`donation_invoice_settings`), never the Festive
   Ball's, so the Ball's tidy can never change them. Until they are set, invoices offer card only.
-- **In Donations** a gift that paid an invoice is labelled **Invoice INV-0012**, there is an **Invoices
-  only** filter, and the totals at the top gain an **Invoices** line.
+- **In Donations** a gift that paid an invoice is labelled **Invoice INV-0012**, and the scoreboard at
+  the top has an **Invoices** tile with its totals, which also shows only the invoices' gifts when
+  pressed. A bank transfer is noted there as paid by **Bank transfer**.
 - **The emails** (the invoice, the group receipt and the paid twice note) are in Admin > Get involved >
   Emails, under **Invoices for donations** and Staff notices.
 
@@ -7021,6 +7022,99 @@ Routes (`src/routes/invoices.ts`): `GET/POST /api/admin/invoices`, `PUT /api/adm
 `donation_invoices`, `donation_invoice_settings` and the new `donations.invoice_id`
 (`migrations/1791200000330_donation-invoices.js`). Tests: `test/unit/invoices-*.test.ts`, the
 Invoices block in `test/unit/admin-app.test.ts`, and `features/admin-invoices.feature`.
+
+## The Donations log (Admin > Giving > Donations)
+
+Jaimie found the Donations screen "really messy" and asked for it to look like Head Elf HQ: clear,
+simple, showing where each gift came from and how it was paid, with the time as well as the date and
+a click down on every gift. Design: `docs/superpowers/specs/2026-11-05-donations-screen-design.md`;
+plan: `docs/superpowers/plans/2026-11-05-donations-screen.md`.
+
+**What staff see.** No table any more. In Head Elf HQ's look (chunky panels, NBCC's colours), in its
+own stylesheet `assets/css/admin-donations.css` (every class `.gl-`):
+
+- **The scoreboard.** One tile per place a gift is given: Fill a Red Bag, Festive Ball, Red bags at the
+  Ball, Invoices, Elf Detective School and Donate page, each with this month's total and count large
+  and all time beneath, plus Fundraiser pages and Card reader (no totals yet). Pressing a tile shows
+  only its gifts; pressing it again shows them all. Each tile is the old "only" tick box underneath
+  (the same ids), so Head Elf HQ's "Every payment, in Donations" still works.
+- **Find gifts.** One panel: name or email, from and to dates, Type (one off, monthly), Paid by (card,
+  Apple Pay, Google Pay, Direct Debit, bank transfer, card reader), Came from (QR code, email, the
+  newsletter, social media, search, another website, typed in or a bookmark, another page of ours, not
+  noted), Gift Aid, Payment and Claim. Each filter in use shows as a chip with a cross, with Clear
+  all. Any change goes back to page one.
+- **The log.** Newest first, under day headings in UK time (Today, Yesterday, Thursday 5 November). Each
+  gift is a card: the amount, the giver, the time (2:34pm), where it was given (Donate page, Fill a Red
+  Bag, a fundraiser's page title, Invoice INV-0012 ...), how it was paid (Apple Pay (Visa ending
+  4242), Direct Debit, Bank transfer ...) and marks for Monthly, Gift Aid and any payment not plainly
+  paid. Elf Detective School payments are cards too, with their reference.
+- **The click down.** Pressing a card opens it in place (no pop up) and reads its details once: the
+  gift (amount, card fee cover, total charged, our reference NBCC-000321, recorded at), how it was
+  paid (method, card, country, a link to the payment in Stripe), where it came from (given on, came
+  from, a QR code by its name from Admin > QR codes), Gift Aid (declaration, claim, batch), refunds,
+  the giver (email consent, business, their other gifts by the same email address) and links to the
+  donor, the fundraiser's page, the invoice and Head Elf HQ.
+- **Phones.** The cards and the click down stack; nothing scrolls inside a box.
+
+The Overview's recent donations and Search keep their compact list (`assets/js/admin/app.js`).
+
+**What is recorded from now on** (ten new nullable columns on `donations`, added by
+`migrations/1791200000370_donation-arrival-and-payment.js`, additive only):
+
+- **What brought the giver**: `arrival_channel` (qr, email, newsletter, search, social,
+  other_websites, direct, or site for another page of ours), `arrival_source` (a search engine or
+  social site by name, another website's host, or our page's path), `arrival_campaign` (the link's
+  `utm_campaign`, such as `c12` for named QR code 12) and `given_on` (the giving page's path, such as
+  `/donate`). The Donate, Fill a Red Bag, Festive Ball and fundraiser giving pages send the page before
+  them as `cameFrom` with the checkout; the giving page itself is the request's Referer. The checkout
+  sorts them with the page view rules (`giftArrival`, `src/donations/arrival.ts`, using
+  `classifyArrival`) and stamps up to four short keys on the Stripe session (`arrChannel`,
+  `arrSource`, `arrCampaign`, `givenOn`). Nothing is kept in the browser, and nothing is noted at all
+  when the browser sends Do Not Track or Global Privacy Control, as page counting does.
+- **How they paid**: `pay_method` (card, bacs_debit, card_present, bank_transfer or other),
+  `pay_wallet` (apple_pay, google_pay, link, samsung_pay), and for a card only `card_brand`,
+  `card_last4` and `card_country`, read from Stripe's charge (`src/db/donation-pay-details.ts`,
+  `src/donations/pay-details.ts`); `pay_checked_at` says when Stripe was asked, so it is asked once. An
+  invoice marked paid by bank transfer is noted as `bank_transfer` by `settleInvoice`.
+- **When.** Both are written **after the gift has been saved**, never in its way. The arrival is one
+  separate statement after the webhook's commit (`tagDonationArrival`, `src/db/stripe-webhook.ts`,
+  with the same two second limit as the source tag), only for a checkout's first gift. How it was paid
+  is started last and never waited for (`payDetailsLater`); a card reader's charge is in its own event.
+  Any failure is logged with the event id only and means the line says "Not noted". With the offline
+  Stripe stand in nothing is asked.
+- **Privacy.** The privacy notice's "What we collect" gains one line: where you came from when you
+  gave (a QR code, an email, another website) and how you paid (for a card, only its type, country and
+  last four digits, which our payment provider tells us).
+
+**Older gifts.** What brought the giver is not guessed for gifts before 6 November 2026 (the page view
+records cannot be tied to a gift); the click down says "Not noted (we started noting this on 6
+November 2026)". How an older gift was paid is asked of Stripe the first time its details are opened
+(at most three seconds, never failing the answer), then kept.
+
+**Routes.** All need Donations: view.
+
+- `GET /api/admin/donations` takes, beside `limit`, `offset`, `status`, `channel`, `paymentStatus`
+  and `mode`: `q` (name or email), `from` and `to` (UK dates, `YYYY-MM-DD`, inclusive), `method`
+  (card, apple_pay, google_pay, bacs_debit, bank_transfer, card_present), `came` (an arrival channel,
+  or `unknown` for none noted), `giftAid` (yes, no) and `source` (red_bag, ball, ball_bags, invoice,
+  elf_school, donate_page, fundraiser, card_reader). A value it does not know is ignored, never an
+  empty list. Each row carries the new columns and plain words for it (`given_on_label`,
+  `paid_by_label`, from `src/donations/labels.ts`).
+- `GET /api/admin/donations/:kind/:id/details` (kind `donation` or `elf`): one gift's click down, its
+  shape documented at the top of `src/db/donation-details.ts`. Never cached; 404 for an unknown kind
+  or id. Served by `src/routes/admin-donation-details.ts`.
+- `GET /api/admin/donations/source-totals`: the scoreboard's figures, as before.
+
+**Files and tests.** The screen: `admin.html`, `assets/js/admin/gift-log.js` (draws the scoreboard,
+chips, cards and click down) and `assets/js/admin/app.js` (reads the filters and pages the list). The
+server: `src/donations/arrival.ts`, `src/donations/labels.ts`, `src/donations/pay-details.ts`,
+`src/db/donation-pay-details.ts`, `src/db/donation-details.ts`, `listDonations` in `src/db/admin.ts`,
+and the checkout in `src/routes/api.ts`. Unit tests: `test/unit/donation-arrival.test.ts`,
+`checkout-arrival.test.ts`, `stripe-webhook-arrival.test.ts`, `donation-pay-details.test.ts`,
+`stripe-webhook-pay-details.test.ts`, `donations-log-filters.test.ts`, `donation-details.test.ts`,
+`donation-labels.test.ts` and `admin-gift-log.test.ts`. Behaviour: `features/admin-donations-log.feature`
+(a QR code gift noted and found by Came from, Do Not Track noting nothing, the details and who may
+open them, a bank transfer found by Paid by, and filters it does not know ignored).
 
 ## Monthly or one off, on the donations list (TASK-446)
 

@@ -1,0 +1,198 @@
+/* NBCC admin: the Donations gift log (Admin > Giving > Donations, #view-donations in admin.html, drawn
+ * by assets/js/admin/gift-log.js with app.js). Design: docs/superpowers/specs/2026-11-05-donations-screen-design.md.
+ *
+ * Head Elf HQ's look (assets/css/admin-elf-hq.css, decision 11 of
+ * docs/superpowers/specs/2026-11-05-elf-admin-design.md), borrowed by value and not by class: NBCC's own
+ * colours and fonts, chunky pieces with a deep maroon ink edge and a hard shadow that presses in when
+ * pressed, roomy, plain words. No elf art: this is the charity's money, not the game. The scoreboard is
+ * the game's menu (a tile per place, pressed when chosen), the log is a ledger of cards under day
+ * headings, and each card opens in place.
+ *
+ * House rules (test/unit/admin-gift-log.test.ts): every selector starts .gl- (or is #view-donations),
+ * no !important, nothing scrolls inside a box, no side stripes or gradient text, and motion only for
+ * someone happy with it, moving only transform and opacity. Headings are named through #view-donations,
+ * because the admin gives every .admin-view h2 its own size. */
+
+.gl-root {
+  --gl-ink: #3A0B0B;
+  --gl-maroon: #800000;
+  --gl-crimson: #C02238;
+  --gl-holly: #1A531A;
+  --gl-holly-dark: #123C12;
+  --gl-holly-soft: #E3EEDC;
+  --gl-gold: #D9A93E;
+  --gl-gold-soft: #F6E7BF;
+  --gl-gold-ink: #7E5A12;
+  --gl-cream: #F8F5EE;
+  --gl-card: #FFFDFA;
+  --gl-warm: #FFF8EA;
+  --gl-hover: #FFF3DD;
+  --gl-blush: #FBE3E6;
+  --gl-text: #2E2422;
+  --gl-soft: #6B5F5B;
+  --gl-on-dark: #FFF8EF;
+  --gl-on-dark-soft: #F3D5CC;
+  --gl-rule: rgba(58, 11, 11, 0.22);
+  --gl-line: 2.5px solid var(--gl-ink);
+  --gl-thin: 2px solid var(--gl-ink);
+  --gl-pop: 3px 4px 0 var(--gl-ink);
+  --gl-pop-lg: 5px 6px 0 var(--gl-ink);
+  --gl-pressed: 1px 1px 0 var(--gl-ink);
+  --gl-head: "Playfair Display", Georgia, serif;
+  --gl-space-xs: 4px;
+  --gl-space-sm: 8px;
+  --gl-space-md: 12px;
+  --gl-space-lg: 16px;
+  --gl-space-xl: 24px;
+  --gl-space-2xl: 32px;
+  --gl-ease: cubic-bezier(0.22, 1, 0.36, 1);
+  container-type: inline-size;
+  container-name: gl;
+  display: grid;
+  gap: var(--gl-space-2xl);
+  color: var(--gl-text);
+}
+.gl-root :focus-visible { outline: 3px solid var(--gl-gold-ink); outline-offset: 3px; }
+
+/* ---- the title ---- */
+.gl-title { display: grid; gap: var(--gl-space-xs); }
+#view-donations .gl-title h2 { margin: 0; font-family: var(--gl-head); font-weight: 800; font-size: clamp(1.7rem, 1.3rem + 1.6vw, 2.4rem); line-height: 1.05; letter-spacing: -0.01em; color: var(--gl-maroon); }
+.gl-lede { margin: 0; max-width: 62ch; color: var(--gl-soft); text-wrap: pretty; }
+#view-donations .gl-h3 { margin: 0; font-family: var(--gl-head); font-weight: 800; font-size: 1.3rem; line-height: 1.15; color: var(--gl-maroon); }
+.gl-hint { margin: 0; max-width: 65ch; font-size: 0.92rem; color: var(--gl-soft); text-wrap: pretty; }
+
+/* ---- the scoreboard: a tile per place, as a game's menu; the chosen one is pressed in ---- */
+.gl-board { display: grid; gap: var(--gl-space-lg); }
+.gl-board__head { display: grid; gap: var(--gl-space-xs); }
+.gl-tiles { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--gl-space-lg) var(--gl-space-md); }
+@container gl (min-width: 640px) {
+  .gl-tiles { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--gl-space-lg); }
+}
+/* Each tile spans two rows of the board and shares them (subgrid), so the names, and the big figures
+   under them, line up across a row even when one name takes two lines. */
+.gl-tile { position: relative; display: grid; grid-row: span 2; grid-template-rows: subgrid; row-gap: var(--gl-space-sm); align-content: start; min-width: 0; padding: 14px 14px 12px; border: var(--gl-line); border-radius: 18px; background: var(--gl-card); box-shadow: var(--gl-pop); cursor: pointer; color: var(--gl-text); }
+/* The tick box itself is the tile's state: kept in the page for the keyboard and screen readers, drawn by the tile. */
+.gl-tile__box { position: absolute; top: 0; left: 0; width: 1px; height: 1px; margin: 0; opacity: 0; pointer-events: none; }
+.gl-tile__name { padding-right: 30px; font-family: var(--gl-head); font-weight: 700; font-size: 1rem; line-height: 1.2; color: var(--gl-maroon); overflow-wrap: anywhere; }
+/* The lamp in the corner: empty, or gold with a tick when the tile is chosen. */
+.gl-tile::after { content: ""; position: absolute; top: 12px; right: 12px; display: grid; place-items: center; width: 22px; height: 22px; border: var(--gl-thin); border-radius: 50%; background: var(--gl-cream); font-family: var(--gl-head); font-weight: 800; font-size: 0.8rem; line-height: 1; color: var(--gl-ink); }
+.gl-tile__score, .gl-tile__about { display: grid; align-content: start; gap: 2px; text-wrap: pretty; }
+.gl-tile__score:empty { display: none; }
+.gl-tile__sum { font-family: var(--gl-head); font-weight: 800; font-size: 1.85rem; line-height: 1; color: var(--gl-ink); font-variant-numeric: lining-nums tabular-nums; overflow-wrap: anywhere; }
+.gl-tile__count { font-size: 0.88rem; line-height: 1.35; color: var(--gl-text); }
+.gl-tile__all { font-size: 0.84rem; line-height: 1.35; color: var(--gl-soft); overflow-wrap: anywhere; }
+.gl-tile__about { font-size: 0.88rem; line-height: 1.35; color: var(--gl-soft); }
+.gl-tile--plain { background: var(--gl-warm); border-style: dashed; box-shadow: none; }
+.gl-tile:hover { background: var(--gl-hover); }
+.gl-tile:active { transform: translate(2px, 3px); box-shadow: var(--gl-pressed); }
+.gl-tile:has(.gl-tile__box:focus-visible) { outline: 3px solid var(--gl-gold-ink); outline-offset: 3px; }
+.gl-tile:has(.gl-tile__box:checked) { border-style: solid; background: var(--gl-maroon); color: var(--gl-on-dark); transform: translate(2px, 3px); box-shadow: var(--gl-pressed); }
+.gl-tile:has(.gl-tile__box:checked) .gl-tile__name,
+.gl-tile:has(.gl-tile__box:checked) .gl-tile__sum,
+.gl-tile:has(.gl-tile__box:checked) .gl-tile__count { color: var(--gl-on-dark); }
+.gl-tile:has(.gl-tile__box:checked) .gl-tile__all,
+.gl-tile:has(.gl-tile__box:checked) .gl-tile__about { color: var(--gl-on-dark-soft); }
+.gl-tile:has(.gl-tile__box:checked)::after { content: "\2713"; background: var(--gl-gold); border-color: var(--gl-on-dark); }
+.gl-board__status:empty { display: none; }
+.gl-board__status .admin-loading, .gl-board__status .admin-empty { margin: 0; padding: 0; }
+.gl-board__note { margin: 0; max-width: 75ch; font-size: 0.85rem; line-height: 1.5; color: var(--gl-soft); text-wrap: pretty; }
+.gl-board__note:empty { display: none; }
+
+/* ---- the filters: one panel, every one a plain choice ---- */
+.gl-panel { display: grid; gap: var(--gl-space-lg); min-width: 0; padding: clamp(16px, 2.4vw, 26px); border: var(--gl-line); border-radius: 22px; background: var(--gl-card); box-shadow: var(--gl-pop-lg); }
+.gl-fields { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(136px, 100%), 1fr)); gap: var(--gl-space-md) var(--gl-space-lg); }
+.gl-field { display: grid; align-content: start; gap: 6px; min-width: 0; }
+.gl-field > span { font-family: var(--gl-head); font-weight: 700; font-size: 0.95rem; line-height: 1.2; color: var(--gl-ink); }
+.gl-field input, .gl-field select { width: 100%; min-width: 0; min-height: 46px; padding: 8px 12px; border: var(--gl-thin); border-radius: 12px; background: var(--gl-card); box-shadow: inset 2px 3px 0 rgba(58, 11, 11, 0.08); font: inherit; font-size: 1rem; color: var(--gl-text); }
+.gl-field select { cursor: pointer; }
+.gl-field--search { grid-column: 1 / -1; }
+@container gl (min-width: 720px) {
+  .gl-field--search { grid-column: span 2; }
+}
+.gl-chips { display: flex; flex-wrap: wrap; align-items: center; gap: var(--gl-space-sm) var(--gl-space-md); padding-top: var(--gl-space-md); border-top: 2px dashed var(--gl-rule); }
+.gl-chips[hidden] { display: none; }
+.gl-chips__list { display: flex; flex-wrap: wrap; gap: var(--gl-space-sm); margin: 0; padding: 0; list-style: none; }
+.gl-chip { display: inline-flex; align-items: center; gap: 2px; max-width: 100%; padding: 2px 2px 2px 12px; border: var(--gl-thin); border-radius: 999px; background: var(--gl-gold-soft); font-size: 0.88rem; line-height: 1.3; color: var(--gl-ink); }
+.gl-chip__words { overflow-wrap: anywhere; }
+.gl-chip__x { display: grid; place-items: center; flex: none; width: 44px; height: 44px; margin: -8px -4px -8px -6px; padding: 0; border: 0; border-radius: 50%; background: none; cursor: pointer; font: inherit; font-size: 1.25rem; line-height: 1; color: var(--gl-maroon); }
+.gl-chip__x:hover { background: rgba(128, 0, 0, 0.12); }
+.gl-clear { min-height: 44px; padding: 4px 6px; border: 0; background: none; cursor: pointer; font: inherit; font-weight: 600; color: var(--gl-maroon); text-decoration: underline; text-underline-offset: 4px; }
+.gl-clear:hover { color: var(--gl-crimson); }
+
+/* ---- the log: a ledger, day by day, one card per gift ---- */
+.gl-list { container-type: inline-size; container-name: gllog; display: grid; min-width: 0; }
+.gl-list > .admin-empty, .gl-list > .admin-loading, .gl-list > .admin-unavailable { margin: 0; padding: 28px 20px; border: 2.5px dashed var(--gl-rule); border-radius: 18px; background: var(--gl-warm); text-align: center; font-size: 0.98rem; color: var(--gl-soft); }
+.gl-log { display: grid; gap: var(--gl-space-2xl); }
+.gl-day { display: grid; gap: var(--gl-space-md); }
+#view-donations .gl-day__head { display: flex; align-items: center; gap: var(--gl-space-md); margin: 0; font-family: var(--gl-head); font-weight: 800; font-size: 1.15rem; line-height: 1.2; color: var(--gl-maroon); }
+.gl-day__head::after { content: ""; flex: 1; min-width: 24px; border-top: 2px dashed var(--gl-rule); }
+.gl-gifts { display: grid; gap: var(--gl-space-md); margin: 0; padding: 0; list-style: none; }
+.gl-gift { min-width: 0; border: var(--gl-line); border-radius: 18px; background: var(--gl-card); box-shadow: var(--gl-pop); }
+.gl-gift:has(> .gl-gift__face:active) { transform: translate(2px, 3px); box-shadow: var(--gl-pressed); }
+.gl-gift.is-open { box-shadow: var(--gl-pop-lg); }
+.gl-gift__face { display: grid; grid-template-columns: minmax(5.5rem, auto) minmax(0, 1fr) 30px; grid-template-areas: "amount who chev" "tags tags tags"; align-items: center; gap: 10px 14px; width: 100%; padding: 14px 14px 14px 16px; border: 0; border-radius: 15px; background: none; cursor: pointer; font: inherit; color: inherit; text-align: left; }
+.gl-gift__face:hover { background: var(--gl-hover); }
+.gl-gift.is-open .gl-gift__face { border-radius: 15px 15px 0 0; }
+.gl-gift__face:focus-visible { outline-offset: -5px; }
+.gl-gift__amount { grid-area: amount;font-family: var(--gl-head); font-weight: 800; font-size: 1.6rem; line-height: 1; letter-spacing: -0.01em; color: var(--gl-ink); font-variant-numeric: lining-nums tabular-nums; }
+.gl-gift__who { grid-area: who; display: grid; gap: 3px; min-width: 0; }
+.gl-gift__name { font-family: var(--gl-head); font-weight: 700; font-size: 1.05rem; line-height: 1.2; color: var(--gl-ink); overflow-wrap: anywhere; }
+.gl-gift__meta { display: flex; flex-wrap: wrap; gap: 2px 6px; font-size: 0.9rem; line-height: 1.35; color: var(--gl-soft); font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.gl-dot { color: var(--gl-rule); }
+.gl-gift__tags { grid-area: tags; display: flex; flex-wrap: wrap; align-items: center; gap: 6px; min-width: 0; }
+.gl-gift__tags .admin-new-pill { margin-left: 0; }
+.gl-gift__chev { grid-area: chev; position: relative; justify-self: end; width: 30px; height: 30px; border: var(--gl-thin); border-radius: 50%; background: var(--gl-card); }
+.gl-gift__chev::before { content: ""; position: absolute; top: 50%; left: 50%; width: 8px; height: 8px; border: solid var(--gl-maroon); border-width: 0 2.5px 2.5px 0; transform: translate(-50%, -70%) rotate(45deg); }
+.gl-gift__face[aria-expanded="true"] .gl-gift__chev { background: var(--gl-maroon); }
+.gl-gift__face[aria-expanded="true"] .gl-gift__chev::before { border-color: var(--gl-on-dark); transform: translate(-50%, -30%) rotate(225deg); }
+@container gllog (min-width: 660px) {
+  .gl-gift__face { grid-template-columns: 7rem minmax(9rem, 1fr) minmax(0, 1.5fr) 30px; grid-template-areas: "amount who tags chev"; padding: 16px 16px 16px 20px; }
+  .gl-gift__tags { justify-content: flex-end; }
+}
+
+/* Badges say where and how; marks say what is unusual about a gift. */
+.gl-badge, .gl-mark, .gl-note { display: inline-flex; align-items: center; max-width: 100%; padding: 2px 10px; border: var(--gl-thin); border-radius: 999px; font-size: 0.86rem; line-height: 1.45; color: var(--gl-ink); overflow-wrap: anywhere; }
+.gl-badge--place { background: var(--gl-gold-soft); }
+.gl-badge--pay { background: var(--gl-card); }
+.gl-mark--monthly { border-color: var(--gl-maroon); background: var(--gl-card); color: var(--gl-maroon); }
+.gl-mark--aid { border-color: var(--gl-holly); background: var(--gl-holly-soft); color: var(--gl-holly); }
+.gl-mark.is-waiting { border-style: dashed; border-color: var(--gl-gold-ink); background: var(--gl-warm); color: var(--gl-gold-ink); font-weight: 600; }
+.gl-mark.is-error { border-color: var(--gl-crimson); background: var(--gl-blush); color: var(--gl-crimson); font-weight: 700; }
+.gl-note { border-style: dashed; border-color: var(--gl-rule); background: none; color: var(--gl-soft); }
+
+/* ---- the click down: everything we know, in plain groups, inside the card ---- */
+.gl-more { display: grid; gap: var(--gl-space-xl); padding: var(--gl-space-lg) var(--gl-space-lg) var(--gl-space-xl); border-top: 2px dashed var(--gl-rule); border-radius: 0 0 15px 15px; background: var(--gl-warm); }
+.gl-more[hidden] { display: none; }
+.gl-more__body:empty { display: none; }
+.gl-groups { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(270px, 100%), 1fr)); gap: var(--gl-space-xl) var(--gl-space-2xl); align-items: start; }
+.gl-group { display: grid; gap: var(--gl-space-sm); min-width: 0; }
+#view-donations .gl-group__head { margin: 0; padding-bottom: 6px; border-bottom: 2px solid var(--gl-rule); font-family: var(--gl-head); font-weight: 700; font-size: 1rem; line-height: 1.2; color: var(--gl-maroon); }
+.gl-facts { display: grid; gap: 8px; margin: 0; }
+.gl-fact { display: grid; grid-template-columns: 7rem minmax(0, 1fr); gap: 2px 12px; align-items: baseline; }
+.gl-fact dt { font-size: 0.86rem; line-height: 1.35; color: var(--gl-soft); }
+.gl-fact dd { margin: 0; font-size: 0.95rem; line-height: 1.4; color: var(--gl-text); overflow-wrap: anywhere; text-wrap: pretty; }
+.gl-actions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--gl-space-md); }
+.gl-btn { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; padding: 8px 18px; border: var(--gl-line); border-radius: 14px; background: var(--gl-card); box-shadow: var(--gl-pop); cursor: pointer; font-family: var(--gl-head); font-weight: 700; font-size: 1rem; line-height: 1.2; color: var(--gl-maroon); text-align: center; text-decoration: none; }
+.gl-btn:hover { background: var(--gl-hover); }
+.gl-btn:active { transform: translate(2px, 3px); box-shadow: var(--gl-pressed); }
+.gl-btn--go { background: var(--gl-holly); color: var(--gl-on-dark); }
+.gl-btn--go:hover { background: var(--gl-holly-dark); }
+.gl-loading { margin: 0; color: var(--gl-soft); }
+.gl-status { margin: 0; }
+.gl-status.is-ok { color: var(--gl-holly); }
+.gl-status.is-error { color: var(--gl-crimson); font-weight: 700; }
+
+/* ---- the pager, in the same pieces ---- */
+.gl-pager { flex-wrap: wrap; justify-content: center; gap: var(--gl-space-lg); margin-top: 0; }
+.gl-pager .admin-page-btn { min-height: 44px; padding: 8px 18px; border: var(--gl-line); border-radius: 14px; background: var(--gl-card); box-shadow: var(--gl-pop); font-family: var(--gl-head); font-weight: 700; font-size: 1rem; color: var(--gl-maroon); }
+.gl-pager .admin-page-btn:hover:not(:disabled) { background: var(--gl-hover); }
+.gl-pager .admin-page-btn:active:not(:disabled) { transform: translate(2px, 3px); box-shadow: var(--gl-pressed); }
+.gl-pager .admin-page-btn:disabled { box-shadow: none; }
+.gl-pager .admin-page-info { color: var(--gl-soft); font-variant-numeric: tabular-nums; }
+
+@media (prefers-reduced-motion: no-preference) {
+  .gl-tile, .gl-gift, .gl-btn, .gl-pager .admin-page-btn { transition: transform 0.12s var(--gl-ease), box-shadow 0.12s var(--gl-ease); }
+  .gl-gift__chev::before { transition: transform 0.22s var(--gl-ease); }
+  .gl-more:not([hidden]) { animation: gl-open 0.26s var(--gl-ease); }
+  @keyframes gl-open { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: none; } }
+}

@@ -27,6 +27,8 @@ import { GIFT_MIN_PENCE, MESSAGE_MAX } from "../fundraising/model";
 import { RED_BAG_PATH, RED_BAG_THANKS_PATH } from "../red-bag/switch";
 import { redBagOpenTo } from "../red-bag/staff";
 import { BALL_BAGS_MAX, BALL_BAGS_PATH, BALL_BAGS_THANKS_PATH, ballBagsPence } from "../ball/bags";
+import { giftArrival, type GiftArrival } from "../donations/arrival";
+import { ownSiteHosts } from "../email/tracked-links";
 
 // Marketing-site API endpoints, both implemented.
 // - POST /api/checkout-session (REQ-029): turns the REQ-028 front-end payload into
@@ -149,6 +151,10 @@ const checkoutBodySchema = z.preprocess(priceBallBags, z
     // Red bags at the Festive Ball (/bag): the number of £50 bags. Absent, nothing below applies. Its
     // amount is set by priceBallBags above, never taken from the browser.
     ballBags: z.number().int().min(1).max(BALL_BAGS_MAX).optional(),
+    // The Donations gift log: the page before the giving page (document.referrer), sent by the giving
+    // pages so the checkout can note what brought the giver (src/donations/arrival.ts). Never kept as
+    // sent, and never a reason to refuse a gift: anything not a string is dropped, and a long one cut.
+    cameFrom: z.preprocess((v) => (typeof v === "string" ? v.slice(0, 2000) : undefined), z.string().optional()),
   })
   // Fill a Red Bag: £2 at least, and never also a gift on a fundraiser's page. Only with the marker.
   .refine((b) => b.redBag !== true || (b.amount ?? 0) >= RED_BAG_MIN_PENCE, {
@@ -365,6 +371,9 @@ export function buildSessionParams(
   // comes back to that page with a thank you; absent (every donate page gift, and any fundraiser
   // without a public page), the session is exactly what it always was.
   fundraiserPage: string | null = null,
+  // The Donations gift log: what brought the giver, worked out by postCheckoutSession (giftArrival).
+  // Absent or null (Do Not Track, an older page, any other caller), the session gains no keys at all.
+  arrival: GiftArrival | null = null,
 ): StripeNS.Checkout.SessionCreateParams {
   // Capture the Gift Aid declaration (and the gift context) on the session so the
   // 25% claim can be reconciled later. NOTE: durable storage of the declaration
@@ -419,6 +428,15 @@ export function buildSessionParams(
   // Red bags at the Ball: one key, the number of bags, only for a gift made there. The webhook reads
   // it as the gift's source (ball_bags) and /bag/thank-you reads it back from the session.
   if (body.ballBags !== undefined) metadata.ballBags = String(body.ballBags);
+  // What brought the giver: up to four short keys (each at most 100 characters, well inside Stripe's
+  // 500), only those with something in them. The webhook copies them onto the donation after it is
+  // saved (arrivalFromCheckoutSession); they play no part in the gift itself.
+  if (arrival) {
+    metadata.arrChannel = arrival.channel;
+    if (arrival.source) metadata.arrSource = arrival.source;
+    if (arrival.campaign) metadata.arrCampaign = arrival.campaign;
+    if (arrival.givenOn) metadata.givenOn = arrival.givenOn;
+  }
 
   // The declaration scope defaults from the gift's frequency (REQ-041): monthly is
   // enduring — one declaration covers all the donor's gifts — while a one-off covers just
@@ -736,6 +754,29 @@ export async function currentCardFee(): Promise<CardFeeRate> {
   }
 }
 
+// What brought the giver (src/donations/arrival.ts), from this request: its Referer is the giving page,
+// cameFrom the page before it. Our own addresses are the ones our emails already count as ours, plus
+// the address this request came in on. Do Not Track and Global Privacy Control are honoured, as page
+// counting honours them. Any failure here means only that nothing is noted, never a refused gift.
+function checkoutArrival(req: Request, cameFrom: string | undefined): GiftArrival | null {
+  try {
+    const header = (name: string): string | null => {
+      const v = req.headers?.[name];
+      return typeof v === "string" ? v : null;
+    };
+    const ownHosts = [...ownSiteHosts([config.PORTAL_BASE_URL, config.BALL_BASE_URL])];
+    if (typeof req.hostname === "string" && req.hostname) ownHosts.push(req.hostname);
+    return giftArrival({
+      givingPage: header("referer"),
+      cameFrom: cameFrom ?? null,
+      ownHosts,
+      doNotTrack: header("dnt") === "1" || header("sec-gpc") === "1",
+    });
+  } catch {
+    return null;
+  }
+}
+
 export async function postCheckoutSession(req: Request, res: Response): Promise<Response> {
   const parsed = checkoutBodySchema.safeParse(req.body);
   if (!parsed.success) {
@@ -762,7 +803,12 @@ export async function postCheckoutSession(req: Request, res: Response): Promise<
     } catch (err) {
       console.error("card fee rate read failed, using default:", err instanceof Error ? err.message : err);
     }
-    const params = buildSessionParams(parsed.data, cardFee, await fundraiserReturnPage(parsed.data.fundraiserId));
+    const params = buildSessionParams(
+      parsed.data,
+      cardFee,
+      await fundraiserReturnPage(parsed.data.fundraiserId),
+      checkoutArrival(req, parsed.data.cameFrom),
+    );
     const session = await stripe.checkout.sessions.create(params);
     // Embedded (inline) returns a { clientSecret } the browser mounts on nbcc.scot, plus the PUBLIC
     // publishable key it needs to construct Stripe.js (TASK-215) — but ONLY when a key is configured

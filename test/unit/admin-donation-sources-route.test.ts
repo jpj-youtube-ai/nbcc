@@ -114,6 +114,21 @@ describe("the donations list takes ?source", () => {
     );
   });
 
+  // The Donations gift log (docs/superpowers/plans/2026-11-05-donations-screen.md, Task 3): its filters
+  // are handed on as typed; listDonations checks each against its fixed list.
+  it("hands on the gift log's search, dates, paid by, came from and Gift Aid", async () => {
+    await list({ q: "sam", from: "2026-11-01", to: "2026-11-05", method: "apple_pay", came: "qr", giftAid: "yes" });
+    expect(m.listDonations).toHaveBeenCalledWith(
+      expect.objectContaining({ q: "sam", from: "2026-11-01", to: "2026-11-05", method: "apple_pay", came: "qr", giftAid: "yes" }),
+    );
+  });
+
+  it("takes none of the gift log's filters unless each is a plain string", async () => {
+    await list({ q: ["a", "b"], from: { x: 1 }, method: ["card"], came: ["qr"], giftAid: ["yes"] });
+    const args = m.listDonations.mock.calls[0][0];
+    for (const k of ["q", "from", "to", "method", "came", "giftAid"]) expect(args[k], k).toBeUndefined();
+  });
+
   it("takes only a plain string: a repeated or nested parameter is no filter", async () => {
     await list({ source: ["red_bag", "red_bag"] });
     expect(m.listDonations.mock.calls[0][0].source).toBeUndefined();

@@ -244,6 +244,8 @@
       var out = {};
       for (var k in body) if (Object.prototype.hasOwnProperty.call(body, k)) out[k] = body[k];
       if (uiMode) out.uiMode = uiMode;
+      // The page before this one, so the checkout can note what brought the giver (never kept here).
+      out.cameFrom = doc.referrer;
       return win
         .fetch("/api/checkout-session", {
           method: "POST",

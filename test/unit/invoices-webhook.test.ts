@@ -7,6 +7,7 @@ const h = vi.hoisted(() => ({
   insertDonorAndDonation: vi.fn(),
   insertAudit: vi.fn(),
   sends: [] as string[],
+  payDetailsLater: vi.fn(),
 }));
 
 vi.mock("../../src/config", () => ({
@@ -24,6 +25,8 @@ vi.mock("../../src/db/donations", () => ({
   insertAudit: h.insertAudit,
   writeWithAudit: vi.fn(),
 }));
+// The Donations gift log's "how they paid" look up (proved in donation-pay-details.test.ts).
+vi.mock("../../src/db/donation-pay-details", () => ({ payDetailsLater: h.payDetailsLater }));
 vi.mock("../../src/clients/email", () => ({
   sendDonationConfirmation: vi.fn(async (m: { html?: string }) => void h.sends.push(`donation:${m.html?.includes("This pays invoice") ? "invoice" : "plain"}`)),
   sendCompanyReceipt: vi.fn(async () => void h.sends.push("receipt")),
@@ -97,6 +100,7 @@ beforeEach(() => {
   h.insertDonorAndDonation.mockReset().mockResolvedValue({ donorId: 5, donationId: 321, declarationId: null, partnerShareIds: [] });
   h.insertAudit.mockReset().mockResolvedValue(undefined);
   h.sends.length = 0;
+  h.payDetailsLater.mockReset();
 });
 
 describe("settling an invoice", () => {
@@ -240,6 +244,54 @@ describe("the Stripe webhook's invoice step", () => {
   it("tells the giving inbox after a second payment", async () => {
     const r = await handleInvoiceEvent(fakeClient(invoiceRow({ status: "paid", donation_id: 300 })) as never, completed({ product: "donation_invoice", invoiceId: "12" }));
     expect(r?.action).toBe("invoice.paid_twice");
+  });
+});
+
+// The Donations gift log: how an invoice was paid.
+describe("how an invoice was paid, for the gift log", () => {
+  const donationUpdate = (c: ReturnType<typeof fakeClient>) =>
+    c.query.mock.calls.find(([text]) => /UPDATE donations SET source = 'invoice'/.test(text));
+
+  it("a bank transfer is noted as one on its donation, in the same statement that labels it, and marked as checked", async () => {
+    const c = fakeClient(invoiceRow());
+    await settleInvoice(c as never, 12, { ...card, by: "transfer", sessionId: null, paymentIntentId: null });
+    const [text, params] = donationUpdate(c) ?? [];
+    const flat = String(text).replace(/\s+/g, " ");
+    expect(flat).toContain("pay_method = CASE WHEN $3 = 'transfer' THEN 'bank_transfer' ELSE pay_method END");
+    expect(flat).toContain("pay_checked_at = CASE WHEN $3 = 'transfer' THEN now() ELSE pay_checked_at END");
+    expect(params).toEqual([321, 12, "transfer", "2026-11-20"]);
+  });
+
+  it("a card payment is left for Stripe to tell, after the commit and without waiting", async () => {
+    const c = fakeClient(invoiceRow());
+    const r = await handleInvoiceEvent(c as never, completed({ product: "donation_invoice", invoiceId: "12" }));
+    expect(h.payDetailsLater).not.toHaveBeenCalled();
+    await r?.afterCommit?.();
+    expect(h.payDetailsLater.mock.calls).toEqual([[321]]);
+    const [, params] = donationUpdate(c) ?? [];
+    expect((params as unknown[])[2]).toBe("card");
+  });
+
+  it("a second card payment is looked up too, and a redelivery is not", async () => {
+    const twice = await handleInvoiceEvent(fakeClient(invoiceRow({ status: "paid", donation_id: 300 })) as never, completed({ product: "donation_invoice", invoiceId: "12" }));
+    await twice?.afterCommit?.();
+    expect(h.payDetailsLater.mock.calls).toEqual([[321]]);
+    h.payDetailsLater.mockReset();
+    const again = await handleInvoiceEvent(fakeClient(invoiceRow({ status: "paid" }), true) as never, completed({ product: "donation_invoice", invoiceId: "12" }));
+    expect(again?.afterCommit).toBeNull();
+    expect(h.payDetailsLater).not.toHaveBeenCalled();
+  });
+
+  it("the receipt still goes when the look up cannot even start", async () => {
+    h.payDetailsLater.mockImplementation(() => {
+      throw new Error("could not start");
+    });
+    const errorLog = vi.spyOn(console, "error").mockImplementation(() => {});
+    const r = await handleInvoiceEvent(fakeClient(invoiceRow()) as never, completed({ product: "donation_invoice", invoiceId: "12" }));
+    await expect(r?.afterCommit?.()).resolves.toBeUndefined();
+    expect(h.sends).toContain("donation:invoice");
+    expect(errorLog).toHaveBeenCalledTimes(1);
+    errorLog.mockRestore();
   });
 });
 

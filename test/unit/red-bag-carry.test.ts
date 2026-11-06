@@ -411,7 +411,8 @@ describe("the checkout sees no difference at all", () => {
 
   it("sends nothing about the bag: only the total goes, as ever", async () => {
     const carried = JSON.parse(await carriedBody(() => undefined));
-    expect(Object.keys(carried).sort()).toEqual(["amount", "coverFee", "donorType", "email", "emailConsent", "fullName", "giftAid", "mode", "plan", "redBag"]);
+    // The Donations log: the page before this one goes too (cameFrom), so staff can see what brought the giver.
+    expect(Object.keys(carried).sort()).toEqual(["amount", "cameFrom", "coverFee", "donorType", "email", "emailConsent", "fullName", "giftAid", "mode", "plan", "redBag"]);
     expect(JSON.stringify(carried)).not.toContain("toy");
   });
 

@@ -8,7 +8,11 @@
     <title>Admin | Night Before Christmas Campaign</title>
     <link rel="stylesheet" href="/assets/css/styles.css" />
     <link rel="stylesheet" href="/assets/css/admin.css" />
+    <!-- Admin > Giving > Donations, the gift log: its own stylesheet (.gl-) and script, which draws
+         the cards app.js asks for, so it loads before app.js. -->
+    <link rel="stylesheet" href="/assets/css/admin-donations.css" />
     <script defer src="/assets/js/admin/helpers.js"></script>
+    <script defer src="/assets/js/admin/gift-log.js"></script>
     <script defer src="/assets/js/admin/paste-prose.js"></script>
     <script defer src="/assets/js/admin/app.js"></script>
     <!-- Event tickets: the Event tickets card in Fundraising, its own script and styles. -->
@@ -261,48 +265,114 @@
               <div id="rbwRoot"></div>
             </section>
 
-            <!-- Browse all donations (paginated). -->
+            <!-- Admin > Giving > Donations: the gift log (docs/superpowers/specs/2026-11-05-donations-screen-design.md),
+                 in Head Elf HQ's look (assets/css/admin-donations.css, every class .gl-). Each scoreboard tile is a
+                 place's own tick box, one at a time (app.js, oneSourceFilter), so Head Elf HQ's "Every payment, in
+                 Donations" still ticks #donationsElfFilter. app.js reads the filters and pages the list;
+                 assets/js/admin/gift-log.js draws the figures, the chips, the cards and each card's click down. -->
             <section class="admin-view" id="view-donations" aria-labelledby="donations-heading" hidden>
-              <h2 id="donations-heading">Donations</h2>
-              <!-- Fill a Red Bag against the Donate page, this month and in all (loadDonationSources). -->
-              <div class="dn-sources" id="donationsSources" aria-live="polite"><p class="admin-loading">Loading…</p></div>
-              <label class="admin-inline-filter" for="donationsPaymentFilter">Payment status
-                <select id="donationsPaymentFilter">
-                  <option value="">All</option>
-                  <option value="paid">Paid</option>
-                  <option value="pending">Pending</option>
-                  <option value="failed">Failed</option>
-                  <option value="refunded">Refunded</option>
-                </select>
-              </label>
-              <label class="admin-inline-filter" for="donationsModeFilter">Type
-                <select id="donationsModeFilter">
-                  <option value="">All</option>
-                  <option value="monthly">Monthly</option>
-                  <option value="once">One off</option>
-                </select>
-              </label>
-              <label class="admin-inline-filter dn-redbag-filter" for="donationsRedBagFilter">
-                <input type="checkbox" id="donationsRedBagFilter"> Fill a Red Bag only
-              </label>
-              <label class="admin-inline-filter dn-redbag-filter" for="donationsBallFilter">
-                <input type="checkbox" id="donationsBallFilter"> Festive Ball only
-              </label>
-              <label class="admin-inline-filter dn-redbag-filter" for="donationsBallBagsFilter">
-                <input type="checkbox" id="donationsBallBagsFilter"> Red bags at the Ball only
-              </label>
-              <label class="admin-inline-filter dn-redbag-filter" for="donationsInvoiceFilter">
-                <input type="checkbox" id="donationsInvoiceFilter"> Invoices only
-              </label>
-              <!-- Head Elf HQ: the Elf Detective School's payments, listed beside the gifts. -->
-              <label class="admin-inline-filter dn-redbag-filter" for="donationsElfFilter">
-                <input type="checkbox" id="donationsElfFilter"> Elf Detective School only
-              </label>
-              <div class="admin-table-wrap" id="donationsTable" aria-live="polite"><p class="admin-loading">Loading…</p></div>
-              <div class="admin-pager" id="donationsPager" hidden>
-                <button class="admin-page-btn" id="donationsPrev" type="button">Previous</button>
-                <span class="admin-page-info" id="donationsInfo"></span>
-                <button class="admin-page-btn" id="donationsNext" type="button">Next</button>
+              <div class="gl-root">
+                <header class="gl-title">
+                  <h2 id="donations-heading">Donations</h2>
+                  <p class="gl-lede">Every gift, newest first. Press a gift to see everything we know about it.</p>
+                </header>
+
+                <section class="gl-board" aria-labelledby="gl-board-heading">
+                  <div class="gl-board__head">
+                    <h3 class="gl-h3" id="gl-board-heading">Where gifts were given</h3>
+                    <p class="gl-hint">This month in big numbers. Press a place to see only its gifts, and press it again to see them all.</p>
+                  </div>
+                  <div class="gl-tiles" id="donationsSources">
+                    <label class="gl-tile" for="donationsRedBagFilter"><input class="gl-tile__box" type="checkbox" id="donationsRedBagFilter"><span class="gl-tile__name">Fill a Red Bag</span><span class="gl-tile__score" data-gl-score="redBag"></span></label>
+                    <label class="gl-tile" for="donationsBallFilter"><input class="gl-tile__box" type="checkbox" id="donationsBallFilter"><span class="gl-tile__name">Festive Ball</span><span class="gl-tile__score" data-gl-score="ball"></span></label>
+                    <label class="gl-tile" for="donationsBallBagsFilter"><input class="gl-tile__box" type="checkbox" id="donationsBallBagsFilter"><span class="gl-tile__name">Red bags at the Ball</span><span class="gl-tile__score" data-gl-score="ballBags"></span></label>
+                    <label class="gl-tile" for="donationsInvoiceFilter"><input class="gl-tile__box" type="checkbox" id="donationsInvoiceFilter"><span class="gl-tile__name">Invoices</span><span class="gl-tile__score" data-gl-score="invoices"></span></label>
+                    <!-- Head Elf HQ: the Elf Detective School's payments, listed beside the gifts. -->
+                    <label class="gl-tile" for="donationsElfFilter"><input class="gl-tile__box" type="checkbox" id="donationsElfFilter"><span class="gl-tile__name">Elf Detective School</span><span class="gl-tile__score" data-gl-score="elfSchool"></span></label>
+                    <label class="gl-tile" for="donationsDonatePageFilter"><input class="gl-tile__box" type="checkbox" id="donationsDonatePageFilter"><span class="gl-tile__name">Donate page</span><span class="gl-tile__score" data-gl-score="donatePage"></span></label>
+                    <!-- No running totals for these two yet: they filter the log, and say what they hold. -->
+                    <label class="gl-tile gl-tile--plain" for="donationsFundraiserFilter"><input class="gl-tile__box" type="checkbox" id="donationsFundraiserFilter"><span class="gl-tile__name">Fundraiser pages</span><span class="gl-tile__about">Gifts on a fundraiser's own page</span></label>
+                    <label class="gl-tile gl-tile--plain" for="donationsCardReaderFilter"><input class="gl-tile__box" type="checkbox" id="donationsCardReaderFilter"><span class="gl-tile__name">Card reader</span><span class="gl-tile__about">Gifts taken in person at events</span></label>
+                  </div>
+                  <div class="gl-board__status" id="donationsSourcesStatus" aria-live="polite"></div>
+                  <p class="gl-board__note" id="donationsSourcesNote"></p>
+                </section>
+
+                <section class="gl-panel gl-filters" aria-labelledby="gl-filters-heading">
+                  <h3 class="gl-h3" id="gl-filters-heading">Find gifts</h3>
+                  <div class="gl-fields">
+                    <label class="gl-field gl-field--search" for="donationsSearch"><span>Name or email</span><input type="search" id="donationsSearch" maxlength="100" autocomplete="off" spellcheck="false"></label>
+                    <label class="gl-field" for="donationsFrom"><span>From</span><input type="date" id="donationsFrom"></label>
+                    <label class="gl-field" for="donationsTo"><span>To</span><input type="date" id="donationsTo"></label>
+                    <label class="gl-field" for="donationsModeFilter"><span>Type</span>
+                      <select id="donationsModeFilter">
+                        <option value="">All</option>
+                        <option value="once">One off</option>
+                        <option value="monthly">Monthly</option>
+                      </select>
+                    </label>
+                    <label class="gl-field" for="donationsMethodFilter"><span>Paid by</span>
+                      <select id="donationsMethodFilter">
+                        <option value="">All</option>
+                        <option value="card">Card</option>
+                        <option value="apple_pay">Apple Pay</option>
+                        <option value="google_pay">Google Pay</option>
+                        <option value="bacs_debit">Direct Debit</option>
+                        <option value="bank_transfer">Bank transfer</option>
+                        <option value="card_present">Card reader</option>
+                      </select>
+                    </label>
+                    <label class="gl-field" for="donationsCameFilter"><span>Came from</span>
+                      <select id="donationsCameFilter">
+                        <option value="">All</option>
+                        <option value="qr">QR code</option>
+                        <option value="email">Email</option>
+                        <option value="newsletter">The newsletter</option>
+                        <option value="social">Social media</option>
+                        <option value="search">Search</option>
+                        <option value="other_websites">Another website</option>
+                        <option value="direct">Typed in or a bookmark</option>
+                        <option value="site">Another page of ours</option>
+                        <option value="unknown">Not noted</option>
+                      </select>
+                    </label>
+                    <label class="gl-field" for="donationsGiftAidFilter"><span>Gift Aid</span>
+                      <select id="donationsGiftAidFilter">
+                        <option value="">All</option>
+                        <option value="yes">Yes</option>
+                        <option value="no">No</option>
+                      </select>
+                    </label>
+                    <label class="gl-field" for="donationsPaymentFilter"><span>Payment</span>
+                      <select id="donationsPaymentFilter">
+                        <option value="">All</option>
+                        <option value="paid">Paid</option>
+                        <option value="pending">Pending</option>
+                        <option value="failed">Failed</option>
+                        <option value="refunded">Refunded</option>
+                      </select>
+                    </label>
+                    <label class="gl-field" for="donationsClaimFilter"><span>Claim</span>
+                      <select id="donationsClaimFilter">
+                        <option value="">All</option>
+                        <option value="eligible">Ready to claim</option>
+                        <option value="batched">In a claim batch</option>
+                        <option value="claimed">Claimed</option>
+                        <option value="not_eligible">Not eligible</option>
+                      </select>
+                    </label>
+                  </div>
+                  <div class="gl-chips" id="donationsChips" hidden></div>
+                </section>
+
+                <!-- How many each filter found, said to a screen reader (the pager is hidden for a short list). -->
+                <p class="sr-only" id="donationsCount" role="status" aria-live="polite"></p>
+                <div class="gl-list" id="donationsTable"><p class="admin-loading">Loading…</p></div>
+                <div class="admin-pager gl-pager" id="donationsPager" hidden>
+                  <button class="admin-page-btn" id="donationsPrev" type="button">Previous</button>
+                  <span class="admin-page-info" id="donationsInfo"></span>
+                  <button class="admin-page-btn" id="donationsNext" type="button">Next</button>
+                </div>
               </div>
             </section>
 

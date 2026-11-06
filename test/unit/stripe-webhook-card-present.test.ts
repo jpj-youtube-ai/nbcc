@@ -16,6 +16,9 @@ const { queryMock, connect } = vi.hoisted(() => {
 });
 
 vi.mock("../../src/db/pool", () => ({ pool: { connect } }));
+// How the tap was paid is noted after the commit (the Donations gift log), proved in
+// stripe-webhook-pay-details.test.ts; a stand-in here so it does not reach for the pool's query.
+vi.mock("../../src/db/donation-pay-details", () => ({ payDetailsLater: vi.fn() }));
 // The processor sends post-commit confirmation + declaration emails; mock the client.
 vi.mock("../../src/clients/email", () => ({
   sendDonationConfirmation: vi.fn(),

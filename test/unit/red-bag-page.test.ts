@@ -1098,7 +1098,8 @@ describe("the page's own stylesheet", () => {
     expect(face).toMatch(/font-display:\s*swap/);
     // The Latin subset, as Google publishes it: it has the pound sign (U+00A3) and the ampersand (U+0026).
     expect(face).toMatch(/unicode-range:\s*U\+0000-00FF,/);
-    expect(rules.match(/url\(/g)?.length).toBe(1);
+    // Since 5 November 2026 the painted twinkle is in here too: every file it names is our own.
+    for (const m of rules.matchAll(/url\(([^)]*)\)/g)) expect(m[1], m[0]).toMatch(/^\/assets\/(fonts|img\/red-bag)\//);
     expect(rules).not.toMatch(/@import|https?:/);
   });
 

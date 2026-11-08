@@ -2,6 +2,7 @@ const { Given, When, Then, Before, After, AfterAll } = require("@cucumber/cucumb
 const assert = require("node:assert/strict");
 const { randomBytes } = require("node:crypto");
 const { Pool } = require("pg");
+const { ballIsOver } = require("./ball-night");
 
 // Steps for admin-overview.feature (TASK-508). Drives GET /api/admin/overview over HTTP against the
 // real database. The staff come from the shared @admin steps (addresses ending admin.bdd@example.com,
@@ -144,7 +145,9 @@ Then("this month's money from fundraising pages is at least £{int}", function (
 });
 
 Then("it says how the Festive Ball and the monthly givers are doing", function () {
-  assert.match(number(this, "ball")?.headline || "", /^[\d,]+ of [\d,]+ seats sold$/, JSON.stringify(this.ovBody));
+  // The Ball's seats until its night; after it the Overview leaves the line out (overview-numbers.ts).
+  if (ballIsOver()) assert.equal(number(this, "ball"), undefined, JSON.stringify(this.ovBody));
+  else assert.match(number(this, "ball")?.headline || "", /^[\d,]+ of [\d,]+ seats sold$/, JSON.stringify(this.ovBody));
   assert.match(number(this, "monthly")?.headline || "", /^[\d,]+ (person gives|people give) £[\d,]+ a month$/, JSON.stringify(this.ovBody));
 });
 

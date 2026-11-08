@@ -76,13 +76,11 @@
 .gl-tile__name { padding-right: 30px; font-family: var(--gl-head); font-weight: 700; font-size: 1rem; line-height: 1.2; color: var(--gl-maroon); overflow-wrap: anywhere; }
 /* The lamp in the corner: empty, or gold with a tick when the tile is chosen. */
 .gl-tile::after { content: ""; position: absolute; top: 12px; right: 12px; display: grid; place-items: center; width: 22px; height: 22px; border: var(--gl-thin); border-radius: 50%; background: var(--gl-cream); font-family: var(--gl-head); font-weight: 800; font-size: 0.8rem; line-height: 1; color: var(--gl-ink); }
-.gl-tile__score, .gl-tile__about { display: grid; align-content: start; gap: 2px; text-wrap: pretty; }
+.gl-tile__score { display: grid; align-content: start; gap: 2px; text-wrap: pretty; }
 .gl-tile__score:empty { display: none; }
 .gl-tile__sum { font-family: var(--gl-head); font-weight: 800; font-size: 1.85rem; line-height: 1; color: var(--gl-ink); font-variant-numeric: lining-nums tabular-nums; overflow-wrap: anywhere; }
 .gl-tile__count { font-size: 0.88rem; line-height: 1.35; color: var(--gl-text); }
 .gl-tile__all { font-size: 0.84rem; line-height: 1.35; color: var(--gl-soft); overflow-wrap: anywhere; }
-.gl-tile__about { font-size: 0.88rem; line-height: 1.35; color: var(--gl-soft); }
-.gl-tile--plain { background: var(--gl-warm); border-style: dashed; box-shadow: none; }
 /* Monthly gifts: a kind of gift, not a place, so a tile of its own across the whole board. On a wide
    board its figures sit in a row beside its name. */
 .gl-tile--wide { grid-column: 1 / -1; }
@@ -97,8 +95,7 @@
 .gl-tile:has(.gl-tile__box:checked) .gl-tile__name,
 .gl-tile:has(.gl-tile__box:checked) .gl-tile__sum,
 .gl-tile:has(.gl-tile__box:checked) .gl-tile__count { color: var(--gl-on-dark); }
-.gl-tile:has(.gl-tile__box:checked) .gl-tile__all,
-.gl-tile:has(.gl-tile__box:checked) .gl-tile__about { color: var(--gl-on-dark-soft); }
+.gl-tile:has(.gl-tile__box:checked) .gl-tile__all { color: var(--gl-on-dark-soft); }
 .gl-tile:has(.gl-tile__box:checked)::after { content: "\2713"; background: var(--gl-gold); border-color: var(--gl-on-dark); }
 .gl-board__status:empty { display: none; }
 .gl-board__status .admin-loading, .gl-board__status .admin-empty { margin: 0; padding: 0; }

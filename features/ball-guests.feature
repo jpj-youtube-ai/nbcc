@@ -95,22 +95,23 @@ Feature: Festive Ball guest details (TASK-313)
     When I download the ball "door-list" list without a token
     Then the ball export status should be 401
 
+  # Before the Ball's night the reminder goes out once; after it, the button refuses and sends nothing
+  # (the charity, 2026-10-04). The night is the app's own BALL_EVENT_DATE (features/steps/ball-night.js).
   Scenario: the reminder goes out once, and pressing send again reaches nobody
     Given a ball admin "ball10.admin.bdd@example.com" with role "admin" and password "pw-ball10"
     And the ball is reset to 40 tables of 10 with 0 held back
     And a paid ball booking for 1 table with guest token "guest-tok-8"
     When I send the ball reminders as "ball10.admin.bdd@example.com" with password "pw-ball10"
-    Then the ball reminder status should be 200
-    And the ball reminder should report 1 sent
+    Then the reminder reaches 1 booking, or is refused once the Ball is over
     When I send the ball reminders as "ball10.admin.bdd@example.com" with password "pw-ball10"
-    Then the ball reminder should report 0 sent
+    Then the reminder reaches nobody
 
   Scenario: an unpaid booking is never reminded
     Given a ball admin "ball11.admin.bdd@example.com" with role "admin" and password "pw-ball11"
     And the ball is reset to 40 tables of 10 with 0 held back
     And a pending ball booking with guest token "guest-tok-9"
     When I send the ball reminders as "ball11.admin.bdd@example.com" with password "pw-ball11"
-    Then the ball reminder should report 0 sent
+    Then the reminder reaches nobody
 
   Scenario: the menu email refuses to go out with no menu in it
     Given a ball admin "ball13.admin.bdd@example.com" with role "admin" and password "pw-ball13"

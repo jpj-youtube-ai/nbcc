@@ -7,6 +7,7 @@ const { randomBytes, scryptSync } = require("node:crypto");
 // Signed-webhook helpers, mirroring features/steps/donation-journey.steps.js: the app verifies
 // against STRIPE_WEBHOOK_SECRET and generateTestHeaderString is pure HMAC, so the whole path
 // runs offline with no Stripe account.
+const { ballIsOver } = require("./ball-night");
 const WEBHOOK_SECRET = process.env.STRIPE_WEBHOOK_SECRET || "whsec_dummy";
 const stripeSigner = new Stripe("sk_test_bdd");
 let ballSeq = 0;
@@ -976,6 +977,25 @@ Then("the ball reminder status should be {int}", function (expected) {
 
 Then("the ball reminder should report {int} sent", function (n) {
   assert.strictEqual(this.ballReminderBody.sent, n);
+});
+
+// After the Ball's night the button refuses with this, and sends nothing (postAdminBallReminders).
+function assertRefusedAfterTheBall(world) {
+  assert.strictEqual(world.ballReminderStatus, 409);
+  assert.match(String(world.ballReminderBody.error), /been and gone/);
+  assert.strictEqual(world.ballReminderBody.sent, undefined);
+}
+
+Then("the reminder reaches {int} booking(s), or is refused once the Ball is over", function (n) {
+  if (ballIsOver()) return assertRefusedAfterTheBall(this);
+  assert.strictEqual(this.ballReminderStatus, 200);
+  assert.strictEqual(this.ballReminderBody.sent, n);
+});
+
+Then("the reminder reaches nobody", function () {
+  if (ballIsOver()) return assertRefusedAfterTheBall(this);
+  assert.strictEqual(this.ballReminderStatus, 200);
+  assert.strictEqual(this.ballReminderBody.sent, 0);
 });
 
 // --- TASK-418: the menu email, and who has chosen ---------------------------

@@ -7042,7 +7042,8 @@ own stylesheet `assets/css/admin-donations.css` (every class `.gl-`):
 
 - **The scoreboard.** One tile per place a gift is given: Fill a Red Bag, Festive Ball, Red bags at the
   Ball, Invoices, Elf Detective School and Donate page, each with this month's total and count large
-  and all time beneath, plus Fundraiser pages and Card reader (no totals yet). Pressing a tile shows
+  and all time beneath, then Fundraiser pages and Card reader (gifts tapped in person at events),
+  with their own totals since TASK-598. Pressing a tile shows
   only its gifts; pressing it again shows them all. Each tile is the old "only" tick box underneath
   (the same ids), so Head Elf HQ's "Every payment, in Donations" still works.
 - **Find gifts.** One panel: name or email, from and to dates, Type (one off, monthly), Paid by (card,
@@ -7143,7 +7144,10 @@ November 2026)". How an older gift was paid is asked of Stripe the first time it
   shape documented at the top of `src/db/donation-details.ts`. Never cached; 404 for an unknown kind
   or id. Served by `src/routes/admin-donation-details.ts`.
 - `GET /api/admin/donations/source-totals`: the scoreboard's figures, as before, and since TASK-596 a
-  `monthly` line (every paid monthly payment, counted as payments, `sumGiftsBySource`).
+  `monthly` line (every paid monthly payment, counted as payments, `sumGiftsBySource`). Since TASK-598
+  also `fundraiser` (gifts on a fundraiser's own page) and `cardReader` (gifts with `payment_channel`
+  `in_person`, recorded from Stripe's `charge.succeeded` for a card present tap), from one more grouped
+  read.
 
 **Files and tests.** The screen: `admin.html`, `assets/js/admin/gift-log.js` (draws the scoreboard,
 chips, cards and click down) and `assets/js/admin/app.js` (reads the filters and pages the list). The

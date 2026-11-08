@@ -145,6 +145,8 @@ Then("the totals say when Fill a Red Bag gifts are counted from", function () {
     "Invoices",
     "Elf Detective School",
     "Donate page",
+    "Fundraiser pages",
+    "Card reader",
     "Monthly gifts",
   ]);
 });

@@ -362,12 +362,16 @@ describe("the scoreboard", () => {
     totals: {
       redBag: { month: { pence: 41240, gifts: 19 }, all: { pence: 196000, gifts: 87 } },
       elfSchool: { month: { pence: 148600, gifts: 1 }, all: { pence: 148600, gifts: 128 } },
+      fundraiser: { month: { pence: 5000, gifts: 2 }, all: { pence: 60000, gifts: 30 } },
+      cardReader: { month: { pence: 30000, gifts: 12 }, all: { pence: 1774420, gifts: 27 } },
       monthly: { month: { pence: 12000, gifts: 8 }, all: { pence: 96000, gifts: 64 } },
     },
     lines: [
       { key: "redBag", name: "Fill a Red Bag", month: "£412 from 19 gifts", all: "£1,960 from 87 gifts" },
       { key: "elfSchool", name: "Elf Detective School", month: "£1,486 from 1 payment", all: "£1,486 from 128 payments" },
       { key: "donatePage", name: "Donate page", month: "£2,130 from 64 gifts", all: "£31,400 from 902 gifts" },
+      { key: "fundraiser", name: "Fundraiser pages", month: "£50 from 2 gifts", all: "£600 from 30 gifts" },
+      { key: "cardReader", name: "Card reader", month: "£300 from 12 gifts", all: "£17,744 from 27 gifts" },
       { key: "monthly", name: "Monthly gifts", month: "£120 from 8 payments", all: "£960 from 64 payments" },
       { key: "nothing", name: "Not a tile", month: "£1 from 1 gift", all: "£1 from 1 gift" },
     ],
@@ -392,6 +396,10 @@ describe("the scoreboard", () => {
     expect(score("redBag").querySelector(".gl-tile__count")?.textContent).toBe("19 gifts this month");
     expect(score("redBag").querySelector(".gl-tile__all")?.textContent).toBe("£1,960 from 87 gifts in all");
     expect(score("elfSchool").querySelector(".gl-tile__count")?.textContent).toBe("1 payment this month");
+    expect(score("cardReader").querySelector(".gl-tile__sum")?.textContent).toBe("£300");
+    expect(score("cardReader").querySelector(".gl-tile__count")?.textContent).toBe("12 gifts this month");
+    expect(score("cardReader").querySelector(".gl-tile__all")?.textContent).toBe("£17,744 from 27 gifts in all");
+    expect(score("fundraiser").querySelector(".gl-tile__sum")?.textContent).toBe("£50");
     expect(score("monthly").querySelector(".gl-tile__sum")?.textContent).toBe("£120");
     expect(score("monthly").querySelector(".gl-tile__count")?.textContent).toBe("8 payments this month");
     expect(score("monthly").querySelector(".gl-tile__all")?.textContent).toBe("£960 from 64 payments in all");

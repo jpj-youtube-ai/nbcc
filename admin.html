@@ -290,9 +290,9 @@
                     <!-- Head Elf HQ: the Elf Detective School's payments, listed beside the gifts. -->
                     <label class="gl-tile" for="donationsElfFilter"><input class="gl-tile__box" type="checkbox" id="donationsElfFilter"><span class="gl-tile__name">Elf Detective School</span><span class="gl-tile__score" data-gl-score="elfSchool"></span></label>
                     <label class="gl-tile" for="donationsDonatePageFilter"><input class="gl-tile__box" type="checkbox" id="donationsDonatePageFilter"><span class="gl-tile__name">Donate page</span><span class="gl-tile__score" data-gl-score="donatePage"></span></label>
-                    <!-- No running totals for these two yet: they filter the log, and say what they hold. -->
-                    <label class="gl-tile gl-tile--plain" for="donationsFundraiserFilter"><input class="gl-tile__box" type="checkbox" id="donationsFundraiserFilter"><span class="gl-tile__name">Fundraiser pages</span><span class="gl-tile__about">Gifts on a fundraiser's own page</span></label>
-                    <label class="gl-tile gl-tile--plain" for="donationsCardReaderFilter"><input class="gl-tile__box" type="checkbox" id="donationsCardReaderFilter"><span class="gl-tile__name">Card reader</span><span class="gl-tile__about">Gifts taken in person at events</span></label>
+                    <!-- Gifts on a fundraiser's own page, and gifts tapped on the card reader at events (TASK-598). -->
+                    <label class="gl-tile" for="donationsFundraiserFilter"><input class="gl-tile__box" type="checkbox" id="donationsFundraiserFilter"><span class="gl-tile__name">Fundraiser pages</span><span class="gl-tile__score" data-gl-score="fundraiser"></span></label>
+                    <label class="gl-tile" for="donationsCardReaderFilter"><input class="gl-tile__box" type="checkbox" id="donationsCardReaderFilter"><span class="gl-tile__name">Card reader</span><span class="gl-tile__score" data-gl-score="cardReader"></span></label>
                   </div>
                   <!-- Every monthly payment, wherever it was set up. Not a place, so it presses the Type filter (app.js). -->
                   <div class="gl-tiles gl-tiles--monthly">

@@ -24,6 +24,8 @@ describe("the two buckets", () => {
       invoices: { month: { pence: 0, gifts: 0 }, all: { pence: 0, gifts: 0 } },
       elfSchool: { month: { pence: 0, gifts: 0 }, all: { pence: 0, gifts: 0 } },
       donatePage: { month: { pence: 213_000, gifts: 64 }, all: { pence: 3_140_000, gifts: 902 } },
+      fundraiser: { month: { pence: 0, gifts: 0 }, all: { pence: 0, gifts: 0 } },
+      cardReader: { month: { pence: 0, gifts: 0 }, all: { pence: 0, gifts: 0 } },
       monthly: { month: { pence: 0, gifts: 0 }, all: { pence: 0, gifts: 0 } },
     });
   });
@@ -74,6 +76,8 @@ describe("the words", () => {
       ["invoices", "Invoices"],
       ["elfSchool", "Elf Detective School"],
       ["donatePage", "Donate page"],
+      ["fundraiser", "Fundraiser pages"],
+      ["cardReader", "Card reader"],
       ["monthly", "Monthly gifts"],
     ]);
     expect(sourceLines(t)[1]).toMatchObject({ month: "£75 from 3 gifts", all: "£120 from 5 gifts" });
@@ -88,6 +92,8 @@ describe("the words", () => {
       { key: "invoices", name: "Invoices", month: "£0 from 0 gifts", all: "£0 from 0 gifts" },
       { key: "elfSchool", name: "Elf Detective School", month: "£0 from 0 payments", all: "£0 from 0 payments" },
       { key: "donatePage", name: "Donate page", month: "£2,130 from 64 gifts", all: "£31,400 from 902 gifts" },
+      { key: "fundraiser", name: "Fundraiser pages", month: "£0 from 0 gifts", all: "£0 from 0 gifts" },
+      { key: "cardReader", name: "Card reader", month: "£0 from 0 gifts", all: "£0 from 0 gifts" },
       { key: "monthly", name: "Monthly gifts", month: "£0 from 0 payments", all: "£0 from 0 payments" },
     ]);
   });
@@ -110,9 +116,16 @@ describe("the words", () => {
   it("counts every monthly payment on a line of its own, last, as payments, and says they are in their place's figures too", () => {
     const t = sourceTotalsFrom([row("monthly", [12_000, 8], [96_000, 64])]);
     expect(t.monthly).toEqual({ month: { pence: 12_000, gifts: 8 }, all: { pence: 96_000, gifts: 64 } });
-    expect(sourceLines(t)[6]).toEqual({ key: "monthly", name: "Monthly gifts", month: "£120 from 8 payments", all: "£960 from 64 payments" });
+    expect(sourceLines(t)[8]).toEqual({ key: "monthly", name: "Monthly gifts", month: "£120 from 8 payments", all: "£960 from 64 payments" });
     expect(MONTHLY_NOTE).toBe("Monthly gifts are every monthly payment, wherever it was set up, so each is in its place's figures too.");
     expect(MONTHLY_NOTE).not.toMatch(/[–—]/);
+  });
+
+  it("counts card reader gifts and fundraiser page gifts on lines of their own, after the Donate page", () => {
+    const t = sourceTotalsFrom([row("cardReader", [17_744_20, 27], [17_744_20, 27]), row("fundraiser", [5_000, 2], [60_000, 30])]);
+    expect(t.cardReader).toEqual({ month: { pence: 17_744_20, gifts: 27 }, all: { pence: 17_744_20, gifts: 27 } });
+    expect(sourceLines(t)[6]).toEqual({ key: "fundraiser", name: "Fundraiser pages", month: "£50 from 2 gifts", all: "£600 from 30 gifts" });
+    expect(sourceLines(t)[7]).toEqual({ key: "cardReader", name: "Card reader", month: "£17,744 from 27 gifts", all: "£17,744 from 27 gifts" });
   });
 
   it("words the table bags line from its own figures, and explains where they come from", () => {

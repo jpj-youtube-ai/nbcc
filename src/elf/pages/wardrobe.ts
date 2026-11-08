@@ -363,19 +363,21 @@ export function renderWardrobePage(view: WardrobeView): string {
               <button type="button" class="elf-btn elf-btn--holly elf-wd-snap">${icon("camera")}<span>Snap a photo</span></button>
             </div>
           </div>
-          <div class="elf-wd-plate elf-card elf-card--crimson">
-            ${headingStrip({ text: d.name, tag: "h2", back: "holly" })}
-            <p class="elf-wd-preview__rank">Badge ${escapeHtml(d.badgeNumber)} <span class="elf-chip elf-chip--done">${escapeHtml(d.rank)}</span></p>
-            <p class="elf-wd-wearing">${escapeHtml(lookWords(look, state))}</p>
-            <p class="elf-wd-status" role="status"></p>
-            <button class="elf-btn elf-btn--crimson" type="submit">Save this look</button>
-            <section class="elf-wd-looks" aria-labelledby="wd-looks-h">
-              ${headingStrip({ text: "My favourite looks", tag: "h3", back: "tan", id: "wd-looks-h" })}
-              <div class="elf-wd-looks__line"><span class="elf-wd-looks__string" aria-hidden="true"></span><div class="elf-wd-looks__row">${looks}</div></div>
-            </section>
-            <button type="button" class="elf-btn elf-btn--s elf-wd-sound" aria-pressed="false" hidden>${icon("bell")}<span>Sounds off</span></button>
-          </div>
         </aside>
+        <!-- The name plate is not in the stage's column: beside the choices the stage stays in view, and
+             anything under it in its column would be hidden as the page scrolls (Jaimie, 8 November 2026). -->
+        <div class="elf-wd-plate elf-card elf-card--crimson">
+          ${headingStrip({ text: d.name, tag: "h2", back: "holly" })}
+          <p class="elf-wd-preview__rank">Badge ${escapeHtml(d.badgeNumber)} <span class="elf-chip elf-chip--done">${escapeHtml(d.rank)}</span></p>
+          <p class="elf-wd-wearing">${escapeHtml(lookWords(look, state))}</p>
+          <p class="elf-wd-status" role="status"></p>
+          <button class="elf-btn elf-btn--crimson" type="submit">Save this look</button>
+          <section class="elf-wd-looks" aria-labelledby="wd-looks-h">
+            ${headingStrip({ text: "My favourite looks", tag: "h3", back: "tan", id: "wd-looks-h" })}
+            <div class="elf-wd-looks__line"><span class="elf-wd-looks__string" aria-hidden="true"></span><div class="elf-wd-looks__row">${looks}</div></div>
+          </section>
+          <button type="button" class="elf-btn elf-btn--s elf-wd-sound" aria-pressed="false" hidden>${icon("bell")}<span>Sounds off</span></button>
+        </div>
 
         <div class="elf-wd-dress">
           <section class="elf-wd-step elf-wd-step--elf" aria-labelledby="wd-step1">

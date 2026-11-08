@@ -223,6 +223,24 @@ describe("the item drops into the bag", () => {
     expect(d.style.getPropertyValue("--rb-dx")).toBe("350px");
     expect(Number.parseFloat(d.style.getPropertyValue("--rb-dy"))).toBeLessThan(0);
   });
+
+  // A bag only partly on screen: its open top, where things land, is up under the site's header.
+  // Flying there sends the picture off the top of the screen (seen live while scrolling during a pour).
+  it("heads for the bottom bar, not off the top of the screen, when the bag's open top is under the header", () => {
+    watchers[0].say(false);
+    const bag = bags()[0];
+    bag.getBoundingClientRect = () => ({ left: 600, top: -120, right: 900, bottom: 180, width: 300, height: 300, x: 600, y: -120, toJSON: () => ({}) });
+    plus("socks");
+    expect(drops()[0].classList.contains("rb-drop--bar")).toBe(true);
+  });
+
+  it("heads for the bottom bar when the bag's open top is below the bottom of the screen", () => {
+    watchers[0].say(false);
+    const bag = bags()[0];
+    bag.getBoundingClientRect = () => ({ left: 600, top: 740, right: 900, bottom: 1040, width: 300, height: 300, x: 600, y: 740, toJSON: () => ({}) });
+    plus("socks");
+    expect(drops()[0].classList.contains("rb-drop--bar")).toBe(true);
+  });
 });
 
 describe("the bag reacts", () => {

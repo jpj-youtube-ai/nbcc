@@ -581,7 +581,17 @@ It plays itself once it is on the screen and goes round until the bag is full, w
 demonstration never carries. After a first tap the bag is the visitor's: the button reads "Carry on with
 this bag" and links to `/fill?bag=toy:2,socks:1` (an address, so it survives a new tab and blocked storage,
 and it holds nothing personal), "Start again" clears it, and a tap after a full bag starts another without
-losing what went before. Pause holds the demonstration, the snow and the twinkling; while it holds it
+losing what went before. Once a bag has been filled, the number on the bag is still the bag it is on, so
+under it, in place of "of £50", goes the whole amount going to `/fill` ("£68.50 in all", worked out from
+exactly what the link carries, quantities held at the most the real page takes), and the button reads
+"Carry on with these bags": `/fill` never shows more than the stage said (fixed 8 November 2026, when a
+visitor's two earlier full bags arrived on `/fill` unannounced and looked like £100 added by itself).
+A tapped thing flies into the bag only when the place it lands, the bag's open top, is on the screen
+below the site's header; otherwise it just lands. It flies on the page, not the screen
+(`.fb-fly{position:absolute}`), so scrolling while it is in the air never leaves it behind. The elf is
+the logo's own peeking elf (`/assets/img/red-bag/elf-peek.webp`), shown whole with its mittens on the
+snow line at every width; the earlier picture was cut to the top of the head and the snow covered its
+face. Pause holds the demonstration, the snow and the twinkling; while it holds it
 reads "Play", and because its words change it carries no `aria-pressed`, so a screen reader does not hear
 both. With less motion asked for nothing moves by itself, there is no Pause, and taps work.
 
@@ -14234,7 +14244,9 @@ certificate, nothing sent anywhere, and that a broken piece never stops the than
 **The feel good layer** (4 October 2026; decoration only, agreed idea by idea, design in the spec
 under "The feel good layer"). When a quantity goes up a small drawing of the item drops into the
 bag (one drop for a typed jump; three in the air at most; into the bottom bar's total while the bag
-is off screen), up to three things that are in the bag peek out of its top, the bag gives a small
+is off screen; the bag counts as on screen only while its open top, where things land, is below the
+site's header and above the bottom of the screen, so a carried bag pouring in while the visitor scrolls
+down never sends things off the top, as it did until 8 November 2026), up to three things that are in the bag peek out of its top, the bag gives a small
 wobble and its handles tighten when nearly full, a full bag is tied with a gold ribbon and a tag
 reading "Packed with love", paper snow and gold stars fall across the whole screen when half a bag
 or a full bag is newly reached, and an elf scribbles a short note on the paper beside the row just

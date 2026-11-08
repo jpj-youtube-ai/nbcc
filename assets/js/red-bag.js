@@ -167,6 +167,7 @@
       };
     }
     var NAV_HEIGHT = 80; // the site's fixed header: a bag under it is not "on screen"
+    var LAND_MARGIN = 24; // room round a landing, so a picture is seen to land and not clipped at an edge
     var MAX_DROPS = 3; // in the air at once; a tap beyond that simply plays no drop
     var DROP_MS = 600; // as in the stylesheet
     var TYPING_MS = 450; // a typed number is finished when the typing stops this long
@@ -421,8 +422,11 @@
       var bag = bagsBox ? bagsBox.lastElementChild : null;
       var box = bag ? bag.getBoundingClientRect() : null;
       var screen = win.innerHeight || (doc.documentElement && doc.documentElement.clientHeight) || 0;
-      if (box && box.width > 0 && box.bottom > NAV_HEIGHT && box.top < screen) {
-        to = { x: box.left + box.width / 2, y: box.top + box.height * 0.3 };
+      // The bag counts as on screen only when the place things land in, its open top, is: a bag up
+      // under the header, or below the bottom of the screen, would send the picture off the screen.
+      var landing = box ? box.top + box.height * 0.3 : 0;
+      if (box && box.width > 0 && landing > NAV_HEIGHT + LAND_MARGIN && landing < screen - LAND_MARGIN) {
+        to = { x: box.left + box.width / 2, y: landing };
         where = "bag";
         // a ring of twinkles round the bag's open top as it lands
         twinkle(to, 7, Math.max(36, box.width * 0.42), DROP_MS / 1000 - 0.05);

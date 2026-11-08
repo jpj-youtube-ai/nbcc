@@ -79,7 +79,7 @@ export function renderFillStage(list: RedBagList | null): string {
     BAG_FRONT +
     `<p class="fb-sum" aria-hidden="true"><b id="fbSum">${rb.pounds(0)}</b><span>of ${rb.pounds(rb.BAG_VALUE_PENCE)}</span></p>` +
     "</div></div>" +
-    '<img class="fb-elf" id="fbElf" src="/assets/img/nbcc-elf.png" alt="" width="150" height="98" loading="lazy" decoding="async" />' +
+    '<img class="fb-elf" id="fbElf" src="/assets/img/red-bag/elf-peek.webp" alt="" width="482" height="331" loading="lazy" decoding="async" />' +
     '<p class="fb-note hand" id="fbNote" aria-hidden="true"></p>' +
     '<div class="fb-mound" aria-hidden="true"></div>' +
     "</div>" +

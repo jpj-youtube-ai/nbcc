@@ -36,6 +36,12 @@ function ukDayPlus(days) {
   return d.toISOString().slice(0, 10);
 }
 
+// Midday UK time on a UK day, as SQL for a "$n" date parameter. The daily pass counts UK days, so a
+// step that dates something "so many days ago" sets midday on that UK day. now() minus whole days
+// crossed into the day after when run between 11pm and midnight in winter with summer time 90 days
+// back, and the pledge looked a day younger than meant (TASK-601).
+const ukNoon = (param) => `((${param}::date + time '12:00') AT TIME ZONE 'Europe/London')`;
+
 async function fundraiser(title) {
   const r = await pool.query("SELECT id, slug FROM fundraisers WHERE title = $1 ORDER BY id DESC LIMIT 1", [title]);
   assert.ok(r.rows[0], `no fundraiser called ${title}`);
@@ -130,22 +136,22 @@ Given("the event for {string} was {int} days ago, and the pay email to {string} 
   await pool.query("UPDATE fundraisers SET event_date = $2::date WHERE id = $1", [f.id, ukDayPlus(-eventDays)]);
   const p = await pledgeOf(this, email, title);
   await pool.query(
-    "UPDATE sponsor_pledges SET pay_email_claimed_at = now() - make_interval(days => $2::int), pay_email_sent_at = now() - make_interval(days => $2::int) WHERE id = $1",
-    [p.id, sentDays],
+    `UPDATE sponsor_pledges SET pay_email_claimed_at = ${ukNoon("$2")}, pay_email_sent_at = ${ukNoon("$2")} WHERE id = $1`,
+    [p.id, ukDayPlus(-sentDays)],
   );
 });
 
 Given("the pay email for the pledge by {string} on {string} went {int} days ago", async function (email, title, days) {
   const p = await pledgeOf(this, email, title);
   await pool.query(
-    "UPDATE sponsor_pledges SET pay_email_claimed_at = now() - make_interval(days => $2::int), pay_email_sent_at = now() - make_interval(days => $2::int) WHERE id = $1",
-    [p.id, days],
+    `UPDATE sponsor_pledges SET pay_email_claimed_at = ${ukNoon("$2")}, pay_email_sent_at = ${ukNoon("$2")} WHERE id = $1`,
+    [p.id, ukDayPlus(-days)],
   );
 });
 
 Given("the pledge by {string} on {string} was made {int} days ago", async function (email, title, days) {
   const p = await pledgeOf(this, email, title);
-  await pool.query("UPDATE sponsor_pledges SET created_at = now() - make_interval(days => $2::int) WHERE id = $1", [p.id, days]);
+  await pool.query(`UPDATE sponsor_pledges SET created_at = ${ukNoon("$2")} WHERE id = $1`, [p.id, ukDayPlus(-days)]);
 });
 
 // ---- pledging and confirming ----

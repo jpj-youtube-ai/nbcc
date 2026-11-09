@@ -122,6 +122,8 @@ describe("what the server draws", () => {
     expect(norm(d.querySelector("#fbAgain")?.textContent)).toBe("Start again");
     expect(norm(d.querySelector("#fbPause")?.textContent)).toBe("Pause");
     expect(STAGE_JS).toContain("Carry on with this bag");
+    expect(STAGE_JS).toContain("Carry on with these bags");
+    expect(STAGE_JS).toContain(" in all");
     expect(STAGE_JS).toContain("'Play'");
   });
 
@@ -132,17 +134,20 @@ describe("what the server draws", () => {
     expect(words).not.toMatch(/\bbuys?\b/i);
   });
 
-  it("has the elf peeping over the snow, with no alt text: it says nothing", () => {
+  it("has the logo's elf peeping over the snow, mittens and all, with no alt text: it says nothing", () => {
     const img = doc().querySelector<HTMLImageElement>("img.fb-elf")!;
-    expect(img.getAttribute("src")).toBe("/assets/img/nbcc-elf.png");
+    expect(img.getAttribute("src")).toBe("/assets/img/red-bag/elf-peek.webp");
     expect(img.getAttribute("alt")).toBe("");
-    expect(img.getAttribute("width")).toBeTruthy();
-    expect(img.getAttribute("height")).toBeTruthy();
+    expect(img.getAttribute("width")).toBe("482");
+    expect(img.getAttribute("height")).toBe("331");
   });
 
-  it("hides the logo's line under the elf by showing only the top of the picture", () => {
-    expect(STAGE_CSS).toMatch(/\.fb-elf\{[^}]*object-fit:cover/);
-    expect(STAGE_CSS).toMatch(/\.fb-elf\{[^}]*object-position:50% 0/);
+  // Live, the old picture was cut down to the top of the elf's head and sat low, so the snow covered
+  // his face. The whole peeking elf shows now, never cropped.
+  it("shows the whole elf, never cropped to the top of his head", () => {
+    expect(STAGE_CSS).toMatch(/\.fb-elf\{[^}]*aspect-ratio:482\/331/);
+    expect(STAGE_CSS).toMatch(/\.fb-elf\{[^}]*object-fit:contain/);
+    expect(STAGE_CSS).not.toMatch(/\.fb-elf\{[^}]*object-fit:cover/);
   });
 
   it("carries nothing of the prototype's", () => {
@@ -447,6 +452,31 @@ describe("after a tap, the bag is the visitor's", () => {
     expect(go().getAttribute("href")).toBe("/fill?bag=toy:2,socks:1");
   });
 
+  // Live, the bag showed only the bag it was on (£5) while the link took everything (£65) to /fill,
+  // which looked like /fill adding money by itself. The whole amount is said wherever it is carried.
+  it("says the whole amount going to /fill once a bag has been filled, never just the bag it is on", () => {
+    start({ list: published((l) => only(l, { toy: 3000, socks: 500 })) });
+    const under = () => norm($(".fb-sum span").textContent);
+    tile("Toy").click();
+    expect(under()).toBe("of £50");
+    expect(norm(go().textContent)).toBe("Carry on with this bag");
+    tile("Toy").click();
+    tile("Socks").click();
+    expect(sum()).toBe("£5");
+    expect(under()).toBe("£65 in all");
+    expect(norm(go().textContent)).toBe("Carry on with these bags");
+    $("#fbAgain").click();
+    expect(under()).toBe("of £50");
+    expect(norm(go().textContent)).toBe("Fill a Red Bag");
+  });
+
+  it("says the same in all as /fill adds up, even when a thing is held at the most the real page takes", () => {
+    start({ list: published((l) => only(l, { socks: 1000 })) });
+    for (let i = 0; i < catalogue.MAX_QUANTITY + 7; i += 1) tile("Socks").click();
+    expect(go().getAttribute("href")).toBe(`/fill?bag=socks:${catalogue.MAX_QUANTITY}`);
+    expect(norm($(".fb-sum span").textContent)).toBe(`${catalogue.pounds(catalogue.MAX_QUANTITY * 1000)} in all`);
+  });
+
   it("never sends more of a thing than the real page takes", () => {
     start({ list: published((l) => only(l, { socks: 10 })) });
     for (let i = 0; i < 120; i += 1) tile("Socks").click();
@@ -468,6 +498,59 @@ describe("after a tap, the bag is the visitor's", () => {
     expect(sum()).toBe("£16");
     expect(go().getAttribute("href")).toBe("/fill?bag=toy:1");
     expect($("#fbPause").hidden).toBe(false);
+  });
+});
+
+// What flies from a tile into the bag. jsdom draws nothing, so where things are on the screen is set by
+// hand: the tile's picture, the bag, the screen's height and how far down the page has scrolled.
+describe("what flies into the bag", () => {
+  type Rect = { left: number; top: number; width: number; height: number };
+  const rect = (r: Rect) => () => ({ ...r, right: r.left + r.width, bottom: r.top + r.height, x: r.left, y: r.top, toJSON: () => ({}) }) as DOMRect;
+  let animate: ReturnType<typeof vi.fn>;
+  const flying = () => document.querySelector<HTMLElement>(".fb-fly");
+
+  function place(bag: Rect, scrolled = 0) {
+    Object.defineProperty(window, "innerHeight", { value: 800, configurable: true });
+    Object.defineProperty(window, "scrollX", { value: 0, configurable: true });
+    Object.defineProperty(window, "scrollY", { value: scrolled, configurable: true });
+    $(".fb-bag").getBoundingClientRect = rect(bag);
+    tile("Toy").querySelector<HTMLElement>(".rb-art")!.getBoundingClientRect = rect({ left: 200, top: 600, width: 44, height: 44 });
+  }
+
+  beforeEach(() => {
+    animate = vi.fn(() => ({ onfinish: null }));
+    (Element.prototype as unknown as { animate: unknown }).animate = animate;
+  });
+  afterEach(() => {
+    delete (Element.prototype as unknown as { animate?: unknown }).animate;
+  });
+
+  it("flies with the page, so scrolling while it is in the air never leaves it behind", () => {
+    start();
+    place({ left: 700, top: 200, width: 300, height: 300 }, 1500);
+    tile("Toy").click();
+    const c = flying()!;
+    expect(c).not.toBeNull();
+    expect(c.style.left).toBe("200px");
+    expect(c.style.top).toBe("2100px");
+    expect(STAGE_CSS).toMatch(/\.fb-fly\{position:absolute/);
+  });
+
+  // Live: with the bag up under the header, things flew off the top of the screen.
+  it("does not fly off the top of the screen when the bag's open top is under the header: it just lands", () => {
+    start();
+    place({ left: 700, top: -150, width: 300, height: 300 });
+    tile("Toy").click();
+    expect(flying()).toBeNull();
+    expect(sum()).toBe("£16");
+  });
+
+  it("does not fly off the bottom of the screen either", () => {
+    start();
+    place({ left: 700, top: 760, width: 300, height: 300 });
+    tile("Toy").click();
+    expect(flying()).toBeNull();
+    expect(sum()).toBe("£16");
   });
 });
 

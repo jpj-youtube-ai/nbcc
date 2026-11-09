@@ -21,6 +21,7 @@
   // Where things sit in the bag: across, down, tilt. Lowest and nearest first, then piling up.
   var SLOTS = [[50, 7, -3], [28, 8, -13], [72, 7, 12], [39, -3, -7], [62, -4, 8], [50, -13, 2], [25, -5, -19], [77, -6, 17]];
   var STEP_MS = 1000, FLY_MS = 620, HOLD_FULL_MS = 5600, HOLD_EMPTY_MS = 1300, NOTE_MS = 1700;
+  var NAV_HEIGHT = 80, LAND_MARGIN = 24; // the site's fixed header, and room round a landing
 
   // Plain maps: a key on a list is staff's, and must never meet anything a normal object already has.
   var items = Object.create(null);
@@ -39,6 +40,8 @@
   var wob = document.getElementById('fbWob');
   var peeks = document.getElementById('fbPeeks');
   var sum = document.getElementById('fbSum');
+  var under = sum.nextElementSibling || document.createElement('span'); // "of £50", under the number
+  var bagOf = under.textContent;
   var status = document.getElementById('fbStatus');
   var note = document.getElementById('fbNote');
   var elf = document.getElementById('fbElf');
@@ -166,11 +169,16 @@
     var size = from.width;
     var gx = to.left + to.width * .46, gy = to.top + to.height * .26;
     var dx = gx - (from.left + size / 2), dy = gy - (from.top + size / 2);
-    var inScreen = from.top < window.innerHeight && from.bottom > 0 && to.top < window.innerHeight && to.bottom > 0;
+    // It flies only when where it starts AND where it lands are on the screen: a bag up under the
+    // header, or below the bottom, would send it off the screen. Otherwise it just lands.
+    var screen = window.innerHeight;
+    var inScreen = from.top < screen && from.bottom > 0 && gy > NAV_HEIGHT + LAND_MARGIN && gy < screen - LAND_MARGIN;
     if (still || !document.body.animate || !inScreen) { land(key); return; }
     var c = document.createElement('div');
     c.className = 'fb-fly';
-    c.style.cssText = 'left:' + from.left + 'px;top:' + from.top + 'px;width:' + size + 'px;height:' + size + 'px';
+    // Placed on the page, not the screen, so it scrolls with the bag while it is in the air.
+    var left = from.left + (window.scrollX || 0), top = from.top + (window.scrollY || 0);
+    c.style.cssText = 'left:' + left + 'px;top:' + top + 'px;width:' + size + 'px;height:' + size + 'px';
     c.innerHTML = rb.art(key, '', size);
     document.body.appendChild(c);
     var lift = Math.min(190, 70 + Math.abs(dx) * .24);
@@ -199,7 +207,17 @@
   function carryOn() {
     var bits = Object.keys(carry).map(function (k) { return k + ':' + carry[k]; });
     go.href = bits.length ? fillPage + '?bag=' + bits.join(',') : fillPage;
-    go.textContent = bits.length ? 'Carry on with this bag' : 'Fill a Red Bag';
+    go.textContent = !bits.length ? 'Fill a Red Bag' : earlier > 0 ? 'Carry on with these bags' : 'Carry on with this bag';
+    sayInAll();
+  }
+
+  // Once a bag has been filled, the number on the bag is only the bag it is on: under it goes the whole
+  // amount going to /fill, worked out from exactly what the link carries, so /fill never shows more.
+  function sayInAll() {
+    if (earlier <= 0) { under.textContent = bagOf; return; }
+    var pence = 0;
+    Object.keys(carry).forEach(function (k) { pence += carry[k] * items[k].pence; });
+    under.textContent = rb.pounds(pence) + ' in all';
   }
 
   function clearBag(another) {

@@ -12729,6 +12729,9 @@ count (86).
   `fundraise-manage.html`, `admin.html`, `Dockerfile`. `test/unit/sponsor-pledges-wiring.test.ts`
   reads the source for each, so one lost in a merge is caught.
 - Unit tests: `test/unit/sponsor-pledges-*.test.ts`. BDD: `features/sponsor-pledges.feature`.
+  Its "so many days ago" steps set midday UK time on that UK day (TASK-601), as the daily pass counts
+  UK days; now() minus whole days failed the 90 day scenario when run between 11pm and midnight in
+  winter.
 
 ## A QR code encoder for fundraiser pages (TASK-493)
 

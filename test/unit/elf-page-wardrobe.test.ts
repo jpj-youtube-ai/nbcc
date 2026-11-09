@@ -72,9 +72,9 @@ describe("the elf on the stage", () => {
 
   it("names the detective, with the badge and the rank", () => {
     const doc = page();
-    expect(words(doc.querySelector(".elf-wd-preview h2"))).toBe("Detective Ruby Tinselfoot");
-    expect(words(doc.querySelector(".elf-wd-preview"))).toContain("Badge 0427");
-    expect(words(doc.querySelector(".elf-wd-preview"))).toContain("Junior Detective");
+    expect(words(doc.querySelector(".elf-wd-plate h2"))).toBe("Detective Ruby Tinselfoot");
+    expect(words(doc.querySelector(".elf-wd-plate"))).toContain("Badge 0427");
+    expect(words(doc.querySelector(".elf-wd-plate"))).toContain("Junior Detective");
   });
 });
 
@@ -209,7 +209,7 @@ describe("what comes from data", () => {
     // The only pictures are the paper ones (the injected <img> must not be one of them).
     expect(doc.querySelector('script:not([src]), main img:not([src^="/assets/img/elf/paper/"]), main i, [onerror]')).toBeNull();
     expect(doc.querySelector<HTMLInputElement>('input[name="detective"]')!.value).toBe('"><script>x</script>');
-    expect(words(doc.querySelector(".elf-wd-preview h2"))).toBe('<img src=x onerror="alert(1)">');
+    expect(words(doc.querySelector(".elf-wd-plate h2"))).toBe('<img src=x onerror="alert(1)">');
   });
 
   it("keeps the form and its links on this site", () => {
@@ -348,25 +348,28 @@ describe("the paper wardrobe at every width", () => {
     expect(css).toMatch(/\.elf-wd-show \{[^}]*width:\s*min\(100%, 360px, calc\(\(100vh/);
   });
 
-  it("backs the stage and its two tools with the page's own paper, so the name plate never shows through them as it scrolls under", () => {
-    // Jaimie, 5 November 2026, on a laptop: scrolled, the plate's lines showed between "Tap the stage
-    // to make it snow", Surprise me and Snap a photo (measured at 1440 by 900 from 450px down).
-    expect(css).toMatch(/\.elf-wd-stick::before \{[^}]*background-color:\s*var\(--cream\)/);
-    expect(css).toMatch(/\.elf-wd-stick::before \{[^}]*background-image:\s*var\(--elf-grain-light\)/);
-    // Blended as the page blends it, or the backing shows as a whiter patch (measured: 244,244,242 on 244,241,234).
-    expect(css).toMatch(/\.elf-wd-stick::before \{[^}]*background-blend-mode:\s*multiply/);
-    // From the bar down, so nothing shows above the stage either, fading out in the gap below the tools,
-    // and 24px wider each side, over the plate's tilted crimson sheet and its shadow, which reach past
-    // the column; the sides fade too, so the backing has no edge to see (measured: a step of 5 at 1835).
-    expect(css).toMatch(/\.elf-wd-stick::before \{[^}]*inset:\s*-16px -24px -14px/);
-    expect(css).toMatch(/\.elf-wd-stick::before \{[^}]*mask:\s*linear-gradient\(90deg, transparent, #000 24px, #000 calc\(100% - 24px\), transparent\)/);
-    expect(css).toMatch(/\.elf-wd-stick::before \{[^}]*mask:[^;]*linear-gradient\(#000, transparent\) bottom/);
-    // A phone on its side has nothing staying put, so no backing either.
-    expect(css).toMatch(/@media \(max-height: 520px\) \{[^@]*\.elf-wd-stick::before \{ display: none; \}/);
+  it("keeps nothing under the stage in its column, so the name plate and its photos are never hidden as the page scrolls", () => {
+    // Jaimie, 8 November 2026, on a laptop: scrolled, the stage covered the plate (the photos, and Save)
+    // completely, so nothing below the stage could be reached; at 1366 by 657 the plate never showed
+    // whole at all. Beside the choices the plate heads them instead, and the stage stands alone.
+    const form = page().querySelector("form.elf-wd")!;
+    expect(form.querySelector(".elf-wd-preview .elf-wd-plate")).toBeNull();
+    const parts = [...form.children].map((c) => c.className.split(" ")[0]).filter((c) => c.startsWith("elf-wd-"));
+    expect(parts).toEqual(["elf-wd-preview", "elf-wd-plate", "elf-wd-dress"]);
+    expect(css).toMatch(/grid-template-areas:\s*"preview plate"\s*"preview dress"/);
+    expect(css).toMatch(/\.elf-wd-preview \{[^}]*grid-area:\s*preview/);
+    expect(css).toMatch(/\.elf-wd-plate \{[^}]*grid-area:\s*plate/);
+    expect(css).toMatch(/\.elf-wd-dress \{[^}]*grid-area:\s*dress/);
+    // Nothing passes under the stage now, so it needs no paper behind it and nothing to lift over it.
+    expect(css).not.toMatch(/\.elf-wd-stick::before/);
+    expect(css).not.toMatch(/\.elf-wd-plate:has\(:focus-visible\)/);
   });
 
-  it("lifts the name plate over the stage while a key has its focus, so a focused button is never hidden under it", () => {
-    expect(css).toMatch(/\.elf-wd-plate:has\(:focus-visible\) \{[^}]*z-index:\s*3/);
+  it("keeps the name plate just under the stage on a phone, as before", () => {
+    // Out of the preview column, so the form's gap is between them: drawn back to the column's own 14px.
+    expect(css).toMatch(/\.elf-wd-plate \{[^}]*justify-self:\s*center/);
+    expect(css).toMatch(/\.elf-wd-plate \{[^}]*margin-top:\s*calc\(14px - clamp\(26px, 4vw, 44px\)\)/);
+    expect(css).toMatch(/form\.elf-wd \{[^}]*gap:\s*clamp\(26px, 4vw, 44px\)/);
   });
 
   it("hangs the gift tags three over two whenever the dress up column is narrow, not only on a phone", () => {

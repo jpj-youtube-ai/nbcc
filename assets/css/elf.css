@@ -587,7 +587,9 @@ form.elf-wd { display: grid; gap: clamp(26px, 4vw, 44px); padding: 0; background
 .elf-wd-taphint { margin: 0; color: var(--maroon); font-family: var(--elf-hand); font-size: 1.15rem; }
 
 /* ---- the name plate: a card sheet with the name on a torn strip, the tools and the favourite looks ---- */
-.elf-wd-plate { display: grid; justify-items: center; gap: 12px; width: min(100%, 380px); margin-right: 8px; padding: 26px 18px 22px; text-align: center; }
+/* On a phone the plate sits just under the stage, 14px below as the stage's own column spaces things; it is
+   the form's next part, so the form's gap is drawn back to that. */
+.elf-wd-plate { display: grid; justify-items: center; justify-self: center; gap: 12px; width: min(100%, 380px); margin-top: calc(14px - clamp(26px, 4vw, 44px)); margin-right: 8px; padding: 26px 18px 22px; text-align: center; }
 .elf-wd-plate .elf-strip { margin: 0; font-size: clamp(1.25rem, 1.1rem + 0.8vw, 1.6rem); }
 .elf-wd-plate p { margin: 0; }
 .elf-wd-preview__rank { display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 8px; color: var(--slate-soft); }
@@ -757,27 +759,21 @@ form.elf-wd { display: grid; gap: clamp(26px, 4vw, 44px); padding: 0; background
   .elf-wd-tab__label img { width: 38px; height: 38px; }
 }
 @media (min-width: 900px) {
-  form.elf-wd { grid-template-columns: minmax(300px, 380px) minmax(0, 1fr); align-items: start; }
-  /* Beside the choices the stage and its two tools stay in view (the name plate and the photos scroll
-     away under them), the stage no taller than the screen leaves room for: measured at 1366 by 657,
-     a whole sticky plate put Snap a photo below the screen. */
-  .elf-wd-preview { align-self: stretch; }
+  /* Beside the choices the stage and its two tools stand alone in their column and stay in view, the
+     stage no taller than the screen leaves room for (measured at 1366 by 657: a whole sticky plate put
+     Snap a photo below the screen). The name plate and its photos head the choices instead: under the
+     stage in its column they were hidden as the page scrolled (Jaimie, 8 November 2026). */
+  form.elf-wd { grid-template-columns: minmax(300px, 380px) minmax(0, 1fr); grid-template-areas: "preview plate" "preview dress"; align-items: start; }
+  .elf-wd-preview { grid-area: preview; align-self: stretch; }
   .elf-wd-stick { position: sticky; top: calc(var(--nav-h) + 16px); z-index: 2; }
-  /* The plate goes under cleanly: the block is backed with the page's own paper, blended as the page
-     blends it, from the bar down to the gap below the tools, and 24px wider than the column each side,
-     over the plate's tilted crimson sheet and its shadow. Its sides and foot fade out, so it has no edge
-     to see. On Jaimie's laptop (5 November 2026) the plate's lines showed between the hint and the
-     tools as it scrolled under them. */
-  .elf-wd-stick::before { content: ""; position: absolute; inset: -16px -24px -14px; z-index: -1; background-color: var(--cream); background-image: var(--elf-grain-light); background-size: 384px; background-blend-mode: multiply; -webkit-mask: linear-gradient(90deg, transparent, #000 24px, #000 calc(100% - 24px), transparent) top / 100% calc(100% - 14px) no-repeat, linear-gradient(#000, transparent) bottom / calc(100% - 48px) 14px no-repeat; mask: linear-gradient(90deg, transparent, #000 24px, #000 calc(100% - 24px), transparent) top / 100% calc(100% - 14px) no-repeat, linear-gradient(#000, transparent) bottom / calc(100% - 48px) 14px no-repeat; }
-  /* A key's focus in the plate lifts it over the stage, so the focused button is never hidden. */
-  .elf-wd-plate:has(:focus-visible) { z-index: 3; }
+  .elf-wd-plate { grid-area: plate; justify-self: start; margin-top: 0; }
+  .elf-wd-dress { grid-area: dress; }
   .elf-wd-show { width: min(100%, 360px, calc((100vh - var(--nav-h) - 210px) * 0.6)); }
   .elf-wd-peek { display: none; }
 }
 /* A phone on its side has no height to spare: nothing stays put there. */
 @media (max-height: 520px) {
   .elf-wd-stick { position: static; }
-  .elf-wd-stick::before { display: none; }
 }
 
 @media (prefers-reduced-motion: no-preference) {

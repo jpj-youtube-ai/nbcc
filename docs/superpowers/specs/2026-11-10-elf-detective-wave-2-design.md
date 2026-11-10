@@ -246,8 +246,8 @@ Match `photo-check.html`.
   and the time in the log.
 - A photo sent before its door's place is shown waits until then, even once approved, so it can
   never give the place away.
-- Whoever gets to a photo first decides. Anyone else who opens it sees "Approved by Jodie at
-  6:13pm" in place of the buttons.
+- Whoever gets to a photo first decides. Anyone else who opens it sees "Approved by Alex at
+  6:13pm" (the head elf's name; Alex is invented) in place of the buttons.
 - **The photo log**, newest first: every photo's steps, each with who and when: sent; approved or
   declined, with the reason; taken down by the family or by a head elf. Photos that are up have
   **Take it down**.

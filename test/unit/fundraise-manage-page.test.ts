@@ -535,6 +535,28 @@ describe("End campaign", () => {
     expect(posts()).toEqual([]);
   });
 
+  it("cannot be backed out of while it is sending, and Keep going clears an old error", async () => {
+    await load("", (url, method) => (method === "POST" ? { status: 500, body: { error: "Something went wrong." } } : signedIn(raising())(url, method)));
+    $("[data-f-finished]", card(7)).click();
+    $("[data-f-finished-yes]", card(7)).click();
+    expect($<HTMLButtonElement>("[data-f-finished-no]", card(7)).disabled).toBe(true);
+    await flush();
+    expect($<HTMLButtonElement>("[data-f-finished-no]", card(7)).disabled).toBe(false);
+    expect($("[data-f-finished-status]", card(7)).textContent).toContain("Something went wrong.");
+    $("[data-f-finished-no]", card(7)).click();
+    expect($("[data-f-finished-status]", card(7)).textContent).toBe("");
+  });
+
+  it("moves to the thank you once it has gone, so a keyboard is not left at the top", async () => {
+    await load("", (url, method) =>
+      method === "POST" ? { status: 200, body: { status: "thanks", finishedRequestedAt: "2026-10-02T12:00:00.000Z" } } : signedIn(raising())(url, method),
+    );
+    $("[data-f-finished]", card(7)).click();
+    $("[data-f-finished-yes]", card(7)).click();
+    await flush();
+    expect(document.activeElement).toBe($("[data-f-finished-thanks]", card(7)));
+  });
+
   it("tells us once they say yes, then says thank you", async () => {
     await load("", (url, method) =>
       method === "POST" ? { status: 200, body: { status: "thanks", finishedRequestedAt: "2026-10-02T12:00:00.000Z" } } : signedIn(raising())(url, method),

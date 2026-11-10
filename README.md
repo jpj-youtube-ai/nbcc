@@ -9560,7 +9560,7 @@ fundraising, giving (TASK-502)**.
 only for a page); what it has raised; the latest gifts and messages exactly as the wall shows them
 (a short name or Anonymous, the amount unless hidden, the message unless staff hid it, the date,
 first ten then Show all; never a giver's email, full name or anything else); their details to
-change; "Pay in what you collected"; and "I've finished".
+change; "Pay in what you collected"; and "End campaign".
 
 - **Changing the details.** Everything editable before (story, target, date, start time, where,
   town, social link) plus the event details TASK-499 added, for an event: the line for the front of

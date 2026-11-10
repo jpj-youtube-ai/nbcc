@@ -143,6 +143,152 @@ describe("the migration for the 24 doors, their names that count and their clues
     expect(callsOf("down")[0].args[1]).toEqual(["place_phone"]);
   });
 
+  it("sorts after 1791200000410", () => {
+    const before = "1791200000410_uniform-payments.js";
+    expect(sorted().indexOf(before)).toBeGreaterThan(-1);
+    expect(sorted().indexOf(FILE)).toBeGreaterThan(sorted().indexOf(before));
+  });
+});
+
+describe("the migration for the game's tables", () => {
+  const FILE = "1791200000430_elf-game.js";
+
+  type Call = { fn: string; args: Any[] };
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  type Any = any;
+  function callsOf(way: "up" | "down"): Call[] {
+    const calls: Call[] = [];
+    const pgm: Any = new Proxy(
+      { func: (s: string) => ({ func: s }) },
+      { get: (t: Any, fn: string) => t[fn] ?? ((...args: Any[]) => calls.push({ fn, args })) },
+    );
+    require(resolve(DIR, FILE))[way](pgm);
+    return calls;
+  }
+  const table = (name: string) => callsOf("up").find((c) => c.fn === "createTable" && c.args[0] === name)!;
+  const cols = (name: string) => Object.keys(table(name).args[1]).sort();
+  const gameKey = ["year", "door", "family_id"];
+
+  it("creates exactly the six game tables, with the agreed columns", () => {
+    const made = callsOf("up").filter((c) => c.fn === "createTable").map((c) => c.args[0]);
+    expect(made).toEqual(["elf_guesses", "elf_word_tries", "elf_visits", "elf_photos", "elf_photo_files", "elf_practice"]);
+    expect(cols("elf_guesses")).toEqual([...gameKey, "text", "norm", "saved_at"].sort());
+    expect(cols("elf_word_tries")).toEqual([...gameKey, "wrong", "updated_at"].sort());
+    expect(cols("elf_visits")).toEqual(
+      ["id", "year", "door", "family_id", "detective_id", "typed_at", "counts_from", "found", "look"].sort(),
+    );
+    expect(cols("elf_photos")).toEqual(
+      [
+        "id", "token", "year", "door", "family_id", "status", "mime", "width", "height", "sent_at",
+        "decided_at", "decided_by", "decline_reason", "taken_down_at", "taken_down_by", "deleted_at",
+      ].sort(),
+    );
+    expect(cols("elf_photo_files")).toEqual(["bytes", "photo_id"]);
+    expect(cols("elf_practice")).toEqual(
+      [
+        "id", "started_at", "started_by", "place_name", "place_town", "elf_name", "tag_word", "poster_code",
+        "clue1_at", "clue2_at", "clue3_at", "reveal_at", "found_at", "found_family_id",
+      ].sort(),
+    );
+  });
+
+  it("allows door 0 (the practice door) and keeps no foreign key to elf_doors", () => {
+    for (const t of ["elf_guesses", "elf_word_tries", "elf_visits", "elf_photos"]) {
+      const c = table(t).args[1];
+      expect(c.year).toMatchObject({ type: "integer", notNull: true });
+      expect(c.door).toMatchObject({ type: "integer", notNull: true, check: "door BETWEEN 0 AND 24" });
+      expect(JSON.stringify(table(t).args[2] ?? {})).not.toContain("elf_doors");
+      expect(c.family_id).toMatchObject({ notNull: true, references: "elf_families", onDelete: "CASCADE" });
+    }
+  });
+
+  it("keys a family's guess and tries by year, door and family", () => {
+    for (const t of ["elf_guesses", "elf_word_tries"]) {
+      expect(table(t).args[2].constraints).toMatchObject({ primaryKey: gameKey });
+    }
+    expect(table("elf_guesses").args[1].text.check).toBe("char_length(text) BETWEEN 1 AND 80");
+    expect(table("elf_word_tries").args[1].wrong).toMatchObject({ notNull: true, default: 0 });
+  });
+
+  it("makes a visit unique per detective per door, indexed by when it counts from", () => {
+    expect(table("elf_visits").args[2].constraints).toMatchObject({ unique: ["year", "door", "detective_id"] });
+    expect(table("elf_visits").args[1].detective_id).toMatchObject({ references: "elf_detectives", onDelete: "CASCADE" });
+    expect(table("elf_visits").args[1].found).toMatchObject({ type: "boolean", notNull: true, default: false });
+    const idx = callsOf("up").filter((c) => c.fn === "createIndex");
+    expect(idx.map((c) => [c.args[0], c.args[1]])).toEqual(
+      expect.arrayContaining([
+        ["elf_visits", ["year", "door", "counts_from"]],
+        ["elf_photos", ["year", "door", "status"]],
+        ["elf_photos", ["status", "sent_at"]],
+      ]),
+    );
+  });
+
+  it("gives a photo a unique token and a fixed list of statuses, its bytes kept apart", () => {
+    const p = table("elf_photos").args[1];
+    expect(p.token).toMatchObject({ type: "text", notNull: true, unique: true });
+    for (const s of ["waiting", "approved", "declined", "replaced", "taken-down", "deleted"]) {
+      expect(p.status.check).toContain(`'${s}'`);
+    }
+    expect(p.status).toMatchObject({ notNull: true, default: "waiting" });
+    expect(p.decline_reason.check).toBe("decline_reason IS NULL OR char_length(decline_reason) <= 200");
+    const f = table("elf_photo_files");
+    expect(f.args[1].photo_id).toMatchObject({ type: "integer", primaryKey: true, references: "elf_photos", onDelete: "CASCADE" });
+    expect(f.args[1].bytes).toMatchObject({ type: "bytea", notNull: true });
+    expect(f.args[2].comment).toContain("backup");
+  });
+
+  it("keeps the practice door to one row", () => {
+    const c = table("elf_practice").args[1];
+    expect(c.id).toMatchObject({ type: "integer", primaryKey: true, check: "id = 1" });
+    expect(c.found_family_id).toMatchObject({ references: "elf_families", onDelete: "SET NULL" });
+    for (const k of ["clue1_at", "clue2_at", "clue3_at", "reveal_at"]) {
+      expect(c[k]).toMatchObject({ type: "timestamptz", notNull: true });
+    }
+  });
+
+  it("adds the doors switch, the door columns and the clue picture columns", () => {
+    const adds = callsOf("up").filter((c) => c.fn === "addColumns");
+    const of = (t: string) => adds.find((c) => c.args[0] === t)!.args[1];
+    expect(of("elf_settings")).toEqual({ doors_on: { type: "boolean", notNull: true, default: false } });
+    expect(Object.keys(of("elf_doors")).sort()).toEqual(
+      ["found_at", "found_family_id", "snow_day_at", "snow_day_by", "gone_home_at", "gone_home_by"].sort(),
+    );
+    expect(of("elf_doors").found_family_id).toMatchObject({ references: "elf_families", onDelete: "SET NULL" });
+    expect(Object.keys(of("elf_clues")).sort()).toEqual(
+      ["picture", "picture_mime", "picture_width", "picture_height", "picture_alt"].sort(),
+    );
+    expect(of("elf_clues").picture_alt.check).toBe("picture_alt IS NULL OR char_length(picture_alt) <= 200");
+  });
+
+  it("lets a clue be words or a picture: words only loses its NOT NULL", () => {
+    const up = callsOf("up");
+    const alter = up.filter((c) => c.fn === "alterColumn");
+    expect(alter.map((c) => c.args)).toEqual([["elf_clues", "words", { notNull: false }]]);
+    const cons = up.find((c) => c.fn === "addConstraint")!;
+    expect(cons.args[0]).toBe("elf_clues");
+    expect(cons.args[1]).toBe("elf_clues_has_something");
+    expect(cons.args[2]).toEqual({ check: "words IS NOT NULL OR picture IS NOT NULL" });
+  });
+
+  it("can be taken back in reverse", () => {
+    const down = callsOf("down").map((c) => [c.fn, c.args[0]]);
+    expect(down.slice(0, 6)).toEqual([
+      ["dropTable", "elf_practice"],
+      ["dropTable", "elf_photo_files"],
+      ["dropTable", "elf_photos"],
+      ["dropTable", "elf_visits"],
+      ["dropTable", "elf_word_tries"],
+      ["dropTable", "elf_guesses"],
+    ]);
+    expect(callsOf("down").map((c) => c.fn)).toEqual(
+      expect.arrayContaining(["dropConstraint", "dropColumns", "alterColumn"]),
+    );
+    expect(callsOf("down").filter((c) => c.fn === "dropColumns").map((c) => c.args[0]).sort()).toEqual(
+      ["elf_clues", "elf_doors", "elf_settings"],
+    );
+  });
+
   it("sorts last in migrations", () => {
     expect(sorted().at(-1)).toBe(FILE);
   });

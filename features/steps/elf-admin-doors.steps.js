@@ -11,6 +11,7 @@ const BASE_URL = process.env.BASE_URL || "http://localhost:3000";
 const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 
 let yearBefore = null;
+let phoneBefore = null;
 const testYear = () => new Date().getFullYear() + 1;
 
 /** Takes the test year's doors away (their names and clues go with them). */
@@ -18,14 +19,15 @@ async function clearDoors() {
   await pool.query("DELETE FROM elf_doors WHERE year = $1", [testYear()]);
 }
 Before({ tags: "@elf-doors" }, async function () {
-  const r = await pool.query("SELECT year FROM elf_settings WHERE id = 1");
+  const r = await pool.query("SELECT year, place_phone FROM elf_settings WHERE id = 1");
   yearBefore = r.rows[0] ? r.rows[0].year : null;
+  phoneBefore = r.rows[0] ? r.rows[0].place_phone : null;
   await pool.query("UPDATE elf_settings SET year = $1 WHERE id = 1", [testYear()]);
   await clearDoors();
 });
 After({ tags: "@elf-doors" }, async function () {
   await clearDoors();
-  if (yearBefore !== null) await pool.query("UPDATE elf_settings SET year = $1 WHERE id = 1", [yearBefore]);
+  if (yearBefore !== null) await pool.query("UPDATE elf_settings SET year = $1, place_phone = $2 WHERE id = 1", [yearBefore, phoneBefore]);
 });
 AfterAll(async () => {
   await pool.end();
@@ -62,7 +64,13 @@ async function send(world, email, password, method, path, json) {
     body: json !== undefined ? JSON.stringify(json) : undefined,
   });
   world.doorsStatus = res.status;
-  world.doorsBody = await res.json().catch(() => ({}));
+  world.doorsHeaders = res.headers;
+  world.doorsText = await res.text();
+  try {
+    world.doorsBody = JSON.parse(world.doorsText);
+  } catch {
+    world.doorsBody = {};
+  }
   if (world.doorsBody && world.doorsBody.door) {
     world.previousDoor = world.lastDoor;
     world.lastDoor = world.doorsBody.door;
@@ -160,4 +168,24 @@ Then("the door's {string} is ticked", function (field) {
 Then("the door's {string} is not ticked", function (field) {
   assert.equal(this.doorsStatus, 200, JSON.stringify(this.doorsBody));
   assert.equal(this.lastDoor[field], null);
+});
+
+// The prints answer whole HTML pages, so their words are read from the text of the answer.
+Given("NBCC's phone number for places is set", async function () {
+  await pool.query("UPDATE elf_settings SET place_phone = $1 WHERE id = 1", ["01632 960 123"]);
+});
+
+Then("the doors answer is a page that is never cached", function () {
+  assert.match(this.doorsHeaders.get("content-type") || "", /text\/html/);
+  assert.equal(this.doorsHeaders.get("cache-control"), "no-store");
+  assert.equal(this.doorsHeaders.get("x-robots-tag"), "noindex, nofollow");
+  assert.equal(this.doorsHeaders.get("referrer-policy"), "no-referrer");
+});
+
+Then("the doors answer page says {string}", function (words) {
+  assert.ok(this.doorsText.includes(words), `the page does not say "${words}"`);
+});
+
+Then("the doors answer says the tag was printed", function () {
+  assert.equal(this.doorsBody.printed, true, JSON.stringify(this.doorsBody));
 });

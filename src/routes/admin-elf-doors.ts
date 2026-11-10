@@ -5,6 +5,9 @@ import { actorOf } from "./admin";
 import { phoneSchema } from "./admin-elf";
 import { can } from "../admin/permissions";
 import { config } from "../config";
+import { isUsableSecretWord } from "../elf/claim";
+import { renderElfPoster, renderElfTag, renderPlacesList, renderStaffCard } from "../elf/print";
+import { materialsMessagePage } from "../fundraising/materials";
 import { getElfSettings } from "../db/elf";
 import {
   addElfDoorName,
@@ -12,6 +15,7 @@ import {
   ensureElfDoors,
   getElfDoor,
   listElfDoors,
+  markElfTagPrinted,
   removeElfDoorName,
   saveElfClue,
   savePastedClues,
@@ -49,6 +53,8 @@ import { longDayWords } from "../elf/words";
 //   POST|DELETE  .../dropped-off and .../thanked          the ticks (edit)
 //   PUT    /api/admin/elf/doors/:door/clues/:n            one clue (edit)
 //   POST   /api/admin/elf/clues/check and /save           every clue pasted at once (edit)
+//   GET    /api/admin/elf/doors/:door/poster|staff-card|tag, and /api/admin/elf/places-list
+//                                                         the prints: whole secret HTML pages (view)
 //
 // Once a door's clue 1 is out its times, word, clues and the removal of names are fixed (the game has
 // started); its place details, prize, new names and ticks still change. Unit tested in
@@ -371,6 +377,98 @@ export const postAdminElfCluesSave = guarded("clues save", "edit", async ({ req,
   return res.status(200).json(await savePastedClues(year, checked.pasted, actor));
 }, false);
 
+// ---- the prints ------------------------------------------------------------------------------------
+
+/** The prints name secret places and words, so they are never cached, indexed or passed on by referrer. */
+function privatePage(res: Response): void {
+  res.setHeader("Cache-Control", "no-store");
+  res.setHeader("X-Robots-Tag", "noindex, nofollow");
+  res.setHeader("Referrer-Policy", "no-referrer");
+}
+
+const sendPage = (res: Response, status: number, page: string): Response => res.status(status).type("html").send(page);
+const notReady = (res: Response, words: string): Response => sendPage(res, 409, materialsMessagePage("Not ready to print", words));
+const has = (v: string | null | undefined): v is string => typeof v === "string" && v.trim() !== "";
+
+/** A print: the gate first (the usual JSON refusal), then every answer is a secret HTML page. */
+function printing(what: string, work: (c: Ctx) => Promise<Response>, needsDoor = true) {
+  return async (req: Request, res: Response): Promise<Response | void> => {
+    res.setHeader("Cache-Control", "no-store");
+    const claims = await authorizeSection(req, res, "elf", "view");
+    if (!claims) return;
+    let door: Door = 1;
+    if (needsDoor) {
+      const raw = String((req.params as Record<string, unknown> | undefined)?.door ?? "");
+      const n = /^[1-9]\d?$/.test(raw) ? Number(raw) : NaN;
+      if (!isDoor(n)) return res.status(400).json(NO_SUCH_DOOR);
+      door = n;
+    }
+    privatePage(res);
+    try {
+      const settings = await getElfSettings();
+      return await work({ req, res, actor: actorOf(claims), year: settings.year, now: new Date(), door });
+    } catch (err) {
+      console.error(`admin elf doors ${what} failed:`, err instanceof Error ? err.message : err);
+      return sendPage(res, 500, materialsMessagePage("Something went wrong", "That could not be printed just now. Try again in a minute."));
+    }
+  };
+}
+
+const firstClueAt = (year: number, d: DoorSetup): Date | null =>
+  doorInstant(doorSeason(year), d.door, eveningFor(doorSeason(year), d.door, staffEveningOf(d)).clue1);
+
+const noSuchDoorPage = (res: Response, door: number): Response => sendPage(res, 404, materialsMessagePage("Not ready to print", `There is no door ${door}.`));
+
+export const getAdminElfDoorPoster = printing("poster", async ({ res, year, door }) => {
+  const d = await getElfDoor(year, door);
+  if (!d) return noSuchDoorPage(res, door);
+  if (!has(d.placeName) || !has(d.placeTown)) return notReady(res, `Door ${door} needs its place's name and town before its poster can be printed.`);
+  const siteOrigin = String(config.PORTAL_BASE_URL ?? "").replace(/\/+$/, "");
+  let page: string;
+  try {
+    page = renderElfPoster({ placeName: d.placeName, placeTown: d.placeTown, siteOrigin, posterUrl: `${siteOrigin}/elf/p/${d.posterCode}` });
+  } catch (err) {
+    if (!/^https:\/\//.test(siteOrigin)) return notReady(res, "The poster can only be printed on the live site.");
+    throw err;
+  }
+  return sendPage(res, 200, page);
+});
+
+export const getAdminElfDoorStaffCard = printing("staff card", async ({ res, year, door }) => {
+  const d = await getElfDoor(year, door);
+  if (!d) return noSuchDoorPage(res, door);
+  if (!has(d.placeName) || !has(d.elfName)) return notReady(res, `Door ${door} needs its place and its elf's name before its staff card can be printed.`);
+  const { placePhone } = await getElfSettings();
+  if (!has(placePhone)) return notReady(res, "Add NBCC's phone number for places in Settings before printing a staff card.");
+  const clueAt = firstClueAt(year, d);
+  if (!clueAt) throw new Error("no time for clue 1");
+  return sendPage(res, 200, renderStaffCard({ placeName: d.placeName, door, elfName: d.elfName, clueAt, phone: placePhone }));
+});
+
+export const getAdminElfDoorTag = printing("tag", async ({ res, actor, year, door }) => {
+  const d = await getElfDoor(year, door);
+  if (!d) return noSuchDoorPage(res, door);
+  if (!has(d.elfName) || !has(d.tagWord) || !isUsableSecretWord(d.tagWord)) return notReady(res, `Door ${door} needs its elf's name before its tag can be printed.`);
+  const page = renderElfTag({ elfName: d.elfName, secretWord: d.tagWord });
+  await markElfTagPrinted(year, door, actor);
+  return sendPage(res, 200, page);
+});
+
+export const getAdminElfPlacesList = printing(
+  "places list",
+  async ({ res, year }) => {
+    const rows = await listElfDoors(year);
+    const entries = rows.flatMap((d) => {
+      const clueAt = firstClueAt(year, d);
+      return clueAt
+        ? [{ door: d.door, clueAt, placeName: d.placeName, placeTown: d.placeTown, placeAddress: d.placeAddress, contactName: d.contactName, contactPhone: d.contactPhone }]
+        : [];
+    });
+    return sendPage(res, 200, renderPlacesList(year, entries));
+  },
+  false,
+);
+
 adminElfDoorsRouter.get("/api/admin/elf/doors", getAdminElfDoors);
 adminElfDoorsRouter.get("/api/admin/elf/doors/:door", getAdminElfDoor);
 adminElfDoorsRouter.patch("/api/admin/elf/doors/:door", patchAdminElfDoor);
@@ -384,3 +482,7 @@ adminElfDoorsRouter.delete("/api/admin/elf/doors/:door/thanked", deleteAdminElfD
 adminElfDoorsRouter.put("/api/admin/elf/doors/:door/clues/:n", putAdminElfDoorClue);
 adminElfDoorsRouter.post("/api/admin/elf/clues/check", postAdminElfCluesCheck);
 adminElfDoorsRouter.post("/api/admin/elf/clues/save", postAdminElfCluesSave);
+adminElfDoorsRouter.get("/api/admin/elf/doors/:door/poster", getAdminElfDoorPoster);
+adminElfDoorsRouter.get("/api/admin/elf/doors/:door/staff-card", getAdminElfDoorStaffCard);
+adminElfDoorsRouter.get("/api/admin/elf/doors/:door/tag", getAdminElfDoorTag);
+adminElfDoorsRouter.get("/api/admin/elf/places-list", getAdminElfPlacesList);

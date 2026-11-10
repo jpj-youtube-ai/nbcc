@@ -123,3 +123,45 @@ Feature: Head Elf HQ, Doors: setting up the 24 doors
       """
     Then the doors answer is 200
     And clue 2 of the door has no words
+
+  Scenario: The staff card names the place and is never cached
+    Given NBCC's phone number for places is set
+    When "boss.doors.admin.bdd@example.com" with password "Elf-Doors-Editor-1" sends PATCH to "/api/admin/elf/doors/7" with:
+      """
+      { "placeName": "Pine Cone Café", "placeTown": "Ayr", "elfName": "Pip" }
+      """
+    Then the doors answer is 200
+    When "look.doors.admin.bdd@example.com" with password "Elf-Doors-Viewer-1" sends GET to "/api/admin/elf/doors/7/staff-card"
+    Then the doors answer is 200
+    And the doors answer is a page that is never cached
+    And the doors answer page says "Pine Cone Caf"
+
+  Scenario: A staff card for a door with no place says what is missing
+    Given NBCC's phone number for places is set
+    When "look.doors.admin.bdd@example.com" with password "Elf-Doors-Viewer-1" sends GET to "/api/admin/elf/doors/8/staff-card"
+    Then the doors answer is 409
+    And the doors answer page says "needs its place"
+
+  Scenario: The list of places is for staff only
+    When "look.doors.admin.bdd@example.com" with password "Elf-Doors-Viewer-1" sends GET to "/api/admin/elf/places-list"
+    Then the doors answer is 200
+    And the doors answer is a page that is never cached
+    And the doors answer page says "For staff only"
+
+  Scenario: A printed tag makes a new word ask first
+    When "boss.doors.admin.bdd@example.com" with password "Elf-Doors-Editor-1" sends PATCH to "/api/admin/elf/doors/7" with:
+      """
+      { "elfName": "Pip" }
+      """
+    Then the doors answer is 200
+    When "boss.doors.admin.bdd@example.com" with password "Elf-Doors-Editor-1" sends GET to "/api/admin/elf/doors/7/tag"
+    Then the doors answer is 200
+    And the doors answer is a page that is never cached
+    When "boss.doors.admin.bdd@example.com" with password "Elf-Doors-Editor-1" sends POST to "/api/admin/elf/doors/7/word"
+    Then the doors answer is 409
+    And the doors answer says the tag was printed
+    When "boss.doors.admin.bdd@example.com" with password "Elf-Doors-Editor-1" sends POST to "/api/admin/elf/doors/7/word" with:
+      """
+      { "confirm": true }
+      """
+    Then the doors answer is 200

@@ -292,8 +292,15 @@ describe("the share card", () => {
   });
 });
 
+const listRow = (door: number, extra: object = {}) => ({
+  door: door as never,
+  clueAt: new Date(`2026-12-${String(door).padStart(2, "0")}T17:30:00.000Z`),
+  placeName: null, placeTown: null, placeAddress: null, contactName: null, contactPhone: null, ...extra,
+});
+
 describe("house rules for everything printed", () => {
   const pages: [string, string][] = [
+    ["list of places", renderPlacesList(2026, [listRow(7, { placeName: "The Toy Shop", placeTown: "Troon", placeAddress: "1 High Street", contactName: "Sam", contactPhone: "01632 960 123" }), listRow(8)])],
     ["poster", renderElfPoster(PLACE)],
     ["staff card", renderStaffCard(CARD)],
     ["tag", renderElfTag({ elfName: "Bauble", secretWord: "Snowball 472" })],
@@ -351,6 +358,31 @@ describe("the list of hiding places", () => {
 
   it("says No place yet for an empty door", () => {
     expect(text).toContain("No place yet");
+  });
+
+  it("spreads 24 full doors over three sheets of at most 8, each door once and in order", () => {
+    const long = "An Invented Emporium of Toys, Games and Christmas Curiosities";
+    const all = Array.from({ length: 24 }, (_v, i) => listRow(i + 1, { placeName: long, placeTown: "Troon", placeAddress: `${i + 1} The Long Invented Street, Troon, Ayrshire`, contactName: "Sam Invented", contactPhone: "01632 960 123" }));
+    const doc = parse(renderPlacesList(2026, all));
+    const sheets = [...doc.querySelectorAll(".page")];
+    expect(sheets).toHaveLength(3);
+    const doors: number[] = [];
+    for (const sheet of sheets) {
+      const entries = [...sheet.querySelectorAll(".entry")];
+      expect(entries.length).toBeLessThanOrEqual(8);
+      expect(sheet.textContent).toContain(MATERIALS_STATEMENT);
+      for (const e of entries) doors.push(Number(/Door (\d+)/.exec(e.textContent ?? "")![1]));
+    }
+    expect(doors).toEqual(Array.from({ length: 24 }, (_v, i) => i + 1));
+    expect(doc.querySelectorAll("h1")).toHaveLength(1);
+    expect(sheets[0].querySelector("h1")).not.toBeNull();
+  });
+
+  it("puts doors in door order whatever order they come in", () => {
+    const doc = parse(renderPlacesList(2026, [listRow(8), listRow(7)]));
+    const order = [...doc.querySelectorAll(".entry .top")].map((e) => e.textContent ?? "");
+    expect(order[0]).toContain("Door 7");
+    expect(order[1]).toContain("Door 8");
   });
 
   it("escapes what staff typed", () => {

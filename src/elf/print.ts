@@ -286,14 +286,23 @@ export function renderPlacesList(year: number, rows: PlacesListRow[]): string {
     ${who === "" ? "" : `<p>Talk to: ${who}</p>`}
   </div>`;
   };
-  const body = `<div class="page portrait places">
+  // A page is a fixed A4 sheet that clips what does not fit, so the doors go across several sheets.
+  const sorted = [...rows].sort((a, b) => count(a.door) - count(b.door));
+  const sheets: PlacesListRow[][] = [];
+  for (let i = 0; i < sorted.length; i += 8) sheets.push(sorted.slice(i, i + 8));
+  if (sheets.length === 0) sheets.push([]);
+  const body = sheets
+    .map(
+      (sheet, n) => `<div class="page portrait places">
 ${slimBand(assets.logoOnDark)}
 <div class="elf-body">
-  <h1>The hiding places, December ${count(year)}</h1>
-  ${[...rows].sort((a, b) => count(a.door) - count(b.door)).map(entry).join("")}
+  ${n === 0 ? `<h1>The hiding places, December ${count(year)}</h1>
+  ` : ""}${sheet.map(entry).join("")}
 </div>
 ${statement}
-</div>`;
+</div>`,
+    )
+    .join("");
   return shell({
     title: `Elf Detective School: the hiding places for December ${count(year)}`,
     paper: "A4 portrait",

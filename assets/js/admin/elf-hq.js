@@ -895,7 +895,7 @@
         b.appendChild(el("span", { class: "hq-door__where", text: t.placeName || "No place yet" }));
         if (t.placeName) b.appendChild(el("span", { class: "hq-door__st", text: t.ready ? "Ready" : t.toDo + " to do" }));
       });
-      tileCount("doors", doors.list.filter(function (t) { return !t.ready; }).length);
+      tileCount("doors", doors.list.filter(function (t) { return !t.ready && !t.started; }).length);
     }
 
     /** Opens a door's sheet beside the level select (below it on a narrow screen). */
@@ -1187,6 +1187,9 @@
         say(target, "Your browser stopped the new tab. Let this site open new tabs, then try again.", false);
         return Promise.resolve();
       }
+      try {
+        tab.opener = null; // the blob page is this site's own, so it must not reach back into this tab
+      } catch (e) { /* a tab that will not let go still opens */ }
       try {
         tab.document.title = "Opening";
         tab.document.body.textContent = "Opening, one moment.";
@@ -1493,7 +1496,7 @@
         placeTown: doorInput("placeTown", d.placeTown, 60),
         placeAddress: doorInput("placeAddress", d.placeAddress, 200, "area"),
         contactName: doorInput("contactName", d.contactName, 80),
-        contactPhone: doorInput("contactPhone", d.contactPhone, 30),
+        contactPhone: doorInput("contactPhone", d.contactPhone, 40),
         contactEmail: doorInput("contactEmail", d.contactEmail, 254, "email"),
         elfSpot: doorInput("elfSpot", d.elfSpot, 200, "area"),
         agreedBy: doorInput("agreedBy", d.agreedBy, 80),

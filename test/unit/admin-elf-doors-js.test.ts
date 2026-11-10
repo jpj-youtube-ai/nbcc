@@ -195,6 +195,15 @@ describe("the 24 doors", () => {
     expect(document.querySelector("#hqTab-doors .hq-count")!.textContent).toBe("23");
   });
 
+  it("counts only the not ready doors still to come, not the ones whose day has passed", async () => {
+    const doors = tiles().map((t) => ({ ...t, started: t.door <= 7 }));
+    page({ "GET /api/admin/elf/doors": { body: { ...LIST, doors } } });
+    document.querySelector<HTMLButtonElement>("#hqTab-doors")!.click();
+    await flush();
+    // Doors 8 to 24 are still to come and none is ready: 17. Door 3 is ready and doors 1 to 7 have started.
+    expect(document.querySelector("#hqTab-doors .hq-count")!.textContent).toBe("17");
+  });
+
   it("says a failure as an error", async () => {
     page({ "GET /api/admin/elf/doors": { status: 500, body: { error: "Admin is temporarily unavailable" } } });
     document.querySelector<HTMLButtonElement>("#hqTab-doors")!.click();

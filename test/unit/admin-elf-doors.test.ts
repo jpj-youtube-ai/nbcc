@@ -117,6 +117,16 @@ describe("the doors list", () => {
     expect(b.canEdit).toBe(false);
   });
 
+  it("says for each tile whether its first clue is out yet", async () => {
+    vi.setSystemTime(new Date("2026-12-08T12:00:00Z")); // noon in London on Tuesday 8 December
+    const res = await run(routes.getAdminElfDoors, ask("viewer", { permissions: VIEW }));
+    const b = body(res);
+    expect(b.doors[6]).toMatchObject({ door: 7, started: true });
+    expect(b.doors[7]).toMatchObject({ door: 8, started: false });
+    expect(b.doors[23]).toMatchObject({ door: 24, started: false });
+    expect(b.doors[0]).toMatchObject({ door: 1, started: true });
+  });
+
   it("says canEdit to a head elf who can edit", async () => {
     const res = await run(routes.getAdminElfDoors, ask("viewer", { permissions: EDIT }));
     expect(body(res).canEdit).toBe(true);

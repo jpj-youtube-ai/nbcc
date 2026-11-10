@@ -74,6 +74,8 @@ export interface DoorTile {
   placeName: string | null;
   ready: boolean;
   toDo: number;
+  /** True once this door's first clue is out. */
+  started: boolean;
 }
 
 export interface DoorSheet extends DoorSetup {
@@ -162,12 +164,14 @@ export const getAdminElfDoors = async (req: Request, res: Response): Promise<Res
   if (!claims) return;
   try {
     const { year } = await getElfSettings();
+    const now = new Date();
     await ensureElfDoors(year);
     const [rows, perms] = await Promise.all([listElfDoors(year), loadEffectivePermissions(claims.sub)]);
     const withPicture = rows.map((setup) => ({ setup, hasPicture: doorPicture(year, setup.door) !== null }));
     const tiles: DoorTile[] = withPicture.map(({ setup, hasPicture }) => {
       const r = readinessOf(setup, hasPicture);
-      return { door: setup.door, weekday: doorWeekday(year, setup.door), placeName: setup.placeName, ready: r.ready, toDo: r.toDo };
+      const started = eveningState(year, setup, now).clueOut[0];
+      return { door: setup.door, weekday: doorWeekday(year, setup.door), placeName: setup.placeName, ready: r.ready, toDo: r.toDo, started };
     });
     return res.status(200).json({
       year,

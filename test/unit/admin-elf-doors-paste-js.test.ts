@@ -205,7 +205,7 @@ describe("the three clues", () => {
 
 describe("the prints", () => {
   function fakeTab() {
-    const tab = { closed: false, location: { href: "" }, document: { title: "", body: { textContent: "" } }, close: vi.fn() };
+    const tab = { opener: window as unknown, closed: false, location: { href: "" }, document: { title: "", body: { textContent: "" } }, close: vi.fn() };
     const open = vi.fn(() => tab);
     window.open = open as unknown as typeof window.open;
     return { tab, open };
@@ -224,6 +224,7 @@ describe("the prints", () => {
     expect(get.headers.Authorization).toBe("Bearer tok");
     expect(created).toHaveLength(1);
     expect(tab.location.href).toBe("blob:card");
+    expect(tab.opener).toBeNull();
   });
 
   it("shows a JSON error answer in the sheet and closes the tab", async () => {
@@ -366,7 +367,7 @@ describe("paste all the clues", () => {
 
 describe("fixes after the first review", () => {
   const fakeOpen = () => {
-    const tab = { closed: false, location: { href: "" }, document: { title: "", body: { textContent: "" } }, close: vi.fn() };
+    const tab = { opener: window as unknown, closed: false, location: { href: "" }, document: { title: "", body: { textContent: "" } }, close: vi.fn() };
     window.open = vi.fn(() => tab) as unknown as typeof window.open;
     URL.createObjectURL = vi.fn(() => "blob:x");
     URL.revokeObjectURL = vi.fn();

@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { createRequire } from "node:module";
 
@@ -23,7 +24,7 @@ const HQ = {
   daysToFirstClue: 26,
 };
 
-const LONG_NAME = "The Very Long Named Pine Cone Café and Gift Emporium of the Old Harbour Road No 8".slice(0, 80);
+const LONG_NAME = "The Very Long Named Pine Cone Café and Gift Emporium of the Old Example Road No 8".slice(0, 80);
 const WEEKDAYS = ["Tue", "Wed", "Thu", "Fri", "Sat", "Sun", "Mon"];
 
 function tiles() {
@@ -52,14 +53,14 @@ function sheet(over: Record<string, unknown> = {}) {
   return {
     door: 7,
     placeName: "Corner Bakehouse",
-    placeTown: "Girvan",
-    placeAddress: "12 Harbour Street",
-    contactName: "Morag",
+    placeTown: "Exampleton",
+    placeAddress: "1 Example Street",
+    contactName: "Sam Example",
     contactPhone: "01632 960 123",
     contactEmail: "hello@example.org",
     closesAt: "20:00",
     elfSpot: "On the shelf",
-    agreedBy: "Jodie",
+    agreedBy: "Alex Example",
     prize: "A wooden sledge",
     prizeShowOff: false,
     elfName: "Twinkle",
@@ -76,7 +77,7 @@ function sheet(over: Record<string, unknown> = {}) {
     thankedBy: null,
     names: [
       { id: 11, name: "The Bakehouse" },
-      { id: 12, name: "Bakehouse Girvan" },
+      { id: 12, name: "Bakehouse Exampleton" },
     ],
     clues: [
       { n: 1, words: null },
@@ -326,7 +327,7 @@ describe("a door's sheet", () => {
   });
 
   it("adds and removes a name that counts", async () => {
-    const more = sheet({ names: [{ id: 11, name: "The Bakehouse" }, { id: 12, name: "Bakehouse Girvan" }, { id: 13, name: "Corner Bakery" }] });
+    const more = sheet({ names: [{ id: 11, name: "The Bakehouse" }, { id: 12, name: "Bakehouse Exampleton" }, { id: 13, name: "Corner Bakehouse Two" }] });
     const { calls } = page({
       "POST /api/admin/elf/doors/7/names": { status: 201, body: { door: more } },
       "DELETE /api/admin/elf/doors/7/names/13": { body: { door: sheet() } },
@@ -335,12 +336,12 @@ describe("a door's sheet", () => {
     await flush();
     tile(7).click();
     await flush();
-    type(field("newName"), "Corner Bakery");
+    type(field("newName"), "Corner Bakehouse Two");
     button(partOf("place"), "Add a name")!.click();
     await flush();
-    expect(calls.find((c) => c.method === "POST")!.body).toEqual({ name: "Corner Bakery" });
-    expect(partOf("place").textContent).toContain("Corner Bakery");
-    partOf("place").querySelector<HTMLButtonElement>('button[aria-label="Remove Corner Bakery"]')!.click();
+    expect(calls.find((c) => c.method === "POST")!.body).toEqual({ name: "Corner Bakehouse Two" });
+    expect(partOf("place").textContent).toContain("Corner Bakehouse Two");
+    partOf("place").querySelector<HTMLButtonElement>('button[aria-label="Remove Corner Bakehouse Two"]')!.click();
     await flush();
     expect(calls.some((c) => c.method === "DELETE" && c.url === "/api/admin/elf/doors/7/names/13")).toBe(true);
   });
@@ -419,5 +420,146 @@ describe("Make a new word", () => {
     button(partOf("elf"), "No")!.click();
     expect(partOf("elf").textContent).not.toContain("has been printed");
     expect(calls.filter((c) => c.url.endsWith("/word"))).toHaveLength(1);
+  });
+});
+
+async function openSeven(answers: Record<string, Answer | Answer[]> = {}) {
+  const ctx = page(answers);
+  document.querySelector<HTMLButtonElement>("#hqTab-doors")!.click();
+  await flush();
+  tile(7).focus();
+  tile(7).click();
+  await flush();
+  return ctx;
+}
+
+describe("keeping what was typed, and the focus", () => {
+  it("keeps a typed prize when The place is saved", async () => {
+    await openSeven({ "PATCH /api/admin/elf/doors/7": { body: { door: sheet() } } });
+    type(field("prize"), "A different prize, typed but not saved");
+    type(field("placeTown"), "Exampleton Quay");
+    button(partOf("place"), "Save")!.click();
+    await flush();
+    expect(field("prize").value).toBe("A different prize, typed but not saved");
+    expect(field("placeTown").value).toBe("Exampleton");
+  });
+
+  it("keeps a typed place name and town when a name is added, and clears only the new name", async () => {
+    const more = sheet({ names: [{ id: 11, name: "The Bakehouse" }, { id: 12, name: "Bakehouse Exampleton" }, { id: 13, name: "Corner Bakehouse Two" }] });
+    await openSeven({ "POST /api/admin/elf/doors/7/names": { status: 201, body: { door: more } } });
+    type(field("placeName"), "Typed Name");
+    type(field("placeTown"), "Typed Town");
+    type(field("newName"), "Corner Bakehouse Two");
+    button(partOf("place"), "Add a name")!.click();
+    await flush();
+    expect(field("placeName").value).toBe("Typed Name");
+    expect(field("placeTown").value).toBe("Typed Town");
+    expect(field("newName").value).toBe("");
+    expect(partOf("place").textContent).toContain("Corner Bakehouse Two");
+    expect(document.activeElement).toBe(field("newName"));
+  });
+
+  it("keeps the elf's typed name when a new word is made", async () => {
+    await openSeven({ "POST /api/admin/elf/doors/7/word": { body: { door: sheet({ tagWord: "MISTLETOE 108" }) } } });
+    type(field("elfName"), "Typed Elf");
+    button(partOf("elf"), "Make a new word")!.click();
+    await flush();
+    expect(field("elfName").value).toBe("Typed Elf");
+    expect(partOf("elf").textContent).toContain("MISTLETOE 108");
+  });
+
+  it("keeps focus on the chosen tile, and moves it to the saved part's Save button after a save", async () => {
+    await openSeven({ "PATCH /api/admin/elf/doors/7": { body: { door: sheet() } } });
+    expect(document.activeElement).toBe(tile(7));
+    expect(tile(7).getAttribute("aria-pressed")).toBe("true");
+    type(field("prize"), "Another prize");
+    button(partOf("prize"), "Save")!.click();
+    await flush();
+    expect(document.activeElement).toBe(button(partOf("prize"), "Save"));
+  });
+
+  it("does not let a late save flip the sheet back to the door left", async () => {
+    const eight = sheet({ door: 8, day: "Tuesday 8 December", placeName: "Sweet Example Shop" });
+    const saved = sheet({ placeName: "Corner Bakehouse Renamed" });
+    const { calls } = page({
+      "GET /api/admin/elf/doors/8": { body: { door: eight, canEdit: true } },
+      "PATCH /api/admin/elf/doors/7": { body: { door: saved } },
+    });
+    document.querySelector<HTMLButtonElement>("#hqTab-doors")!.click();
+    await flush();
+    tile(7).click();
+    await flush();
+    const real = window.fetch;
+    let release = () => {};
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (window as any).fetch = vi.fn((url: string, init: RequestInit = {}) =>
+      init.method === "PATCH" ? new Promise((res) => { release = () => res(real(url, init)); }) : real(url, init),
+    );
+    button(partOf("place"), "Save")!.click();
+    await flush();
+    tile(8).click();
+    await flush();
+    release();
+    await flush();
+    expect(tile(8).getAttribute("aria-pressed")).toBe("true");
+    expect(tile(7).getAttribute("aria-pressed")).toBe("false");
+    expect(sheetEl().querySelector("h2")!.textContent).toBe("Door 8 · Tuesday 8 December");
+    expect(tile(7).textContent).toContain("Corner Bakehouse Renamed");
+    expect(calls.length).toBeGreaterThan(0);
+  });
+});
+
+describe("long words", () => {
+  it("shows a 200 character prize whole, in a field that grows rather than scrolls", async () => {
+    const long = "p".repeat(200);
+    await openSeven({ "GET /api/admin/elf/doors/7": { body: { door: sheet({ prize: long, placeAddress: long, elfSpot: long }), canEdit: true } } });
+    for (const k of ["prize", "placeAddress", "elfSpot"]) {
+      const f = field(k) as unknown as HTMLTextAreaElement;
+      expect(f.tagName, k).toBe("TEXTAREA");
+      expect(f.value, k).toHaveLength(200);
+      expect(f.getAttribute("rows"), k).toBeNull();
+    }
+  });
+
+  it("shows the whole prize in a disabled field too", async () => {
+    const long = "q".repeat(200);
+    page({ "GET /api/admin/elf/doors/7": { body: { door: sheet({ prize: long }), canEdit: false } } });
+    document.querySelector<HTMLButtonElement>("#hqTab-doors")!.click();
+    await flush();
+    tile(7).click();
+    await flush();
+    const f = field("prize") as unknown as HTMLTextAreaElement;
+    expect(f.disabled).toBe(true);
+    expect(f.value).toBe(long);
+  });
+});
+
+describe("the stylesheet's Doors rules", () => {
+  const NEWLINE = /\r?\n/;
+  const css = readFileSync(resolve(__dirname, "../../assets/css/admin-elf-hq.css"), "utf8");
+  it("never hyphenates a place name, and lets a long other name wrap", () => {
+    expect(css).not.toMatch(/hyphens\s*:\s*auto/);
+    const chip = css.split(NEWLINE).find((l) => l.startsWith(".hq-names .hq-chip"))!;
+    expect(chip).toContain("white-space: normal");
+    expect(chip).toContain("max-width: 100%");
+  });
+  it("keeps four columns beside the sheet, and three only when the level select is really narrow", () => {
+    const m = /@container \(max-width: (\d+)px\) \{\s*\.hq-door-grid/.exec(css)!;
+    expect(Number(m[1])).toBeLessThan(360);
+  });
+});
+
+describe("Make a new word, one question at a time", () => {
+  it("shows one question however often it is pressed, and disables Yes while it runs", async () => {
+    await openSeven({ "POST /api/admin/elf/doors/7/word": [{ status: 409, body: { error: "Printed.", printed: true } }, { status: 409, body: { error: "Printed.", printed: true } }] });
+    button(partOf("elf"), "Make a new word")!.click();
+    await flush();
+    button(partOf("elf"), "Make a new word")!.click();
+    await flush();
+    expect(partOf("elf").querySelectorAll(".hq-confirm")).toHaveLength(1);
+    const yes = button(partOf("elf"), "Yes")!;
+    yes.click();
+    expect(yes.disabled).toBe(true);
+    await flush();
   });
 });

@@ -40,11 +40,19 @@ describe("sendText", () => {
   it("answers stubbed and never calls fetch with the stub outside production", async () => {
     const { sendText, smsConfigured } = await load({ SMS_PROVIDER: "stub", NODE_ENV: "development" });
     const fetchImpl = vi.fn();
-    expect(smsConfigured).toBe(false);
-    await expect(
-      sendText({ to: GOOD, text: "hi", senderId: "NBCC" }, { fetchImpl: fetchImpl as never }),
-    ).resolves.toBe("stubbed");
-    expect(fetchImpl).not.toHaveBeenCalled();
+    const globalFetch = vi.fn();
+    vi.stubGlobal("fetch", globalFetch);
+    try {
+      expect(smsConfigured).toBe(false);
+      await expect(
+        sendText({ to: GOOD, text: "hi", senderId: "NBCC" }, { fetchImpl: fetchImpl as never }),
+      ).resolves.toBe("stubbed");
+      await expect(sendText({ to: GOOD, text: "hi", senderId: "NBCC" })).resolves.toBe("stubbed");
+      expect(fetchImpl).not.toHaveBeenCalled();
+      expect(globalFetch).not.toHaveBeenCalled();
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 
   it("posts one signed form to SNS and answers sent", async () => {
@@ -81,7 +89,28 @@ describe("sendText", () => {
     const fetchImpl = vi.fn().mockResolvedValue(new Response("InvalidParameter", { status: 400 }));
     await expect(
       sendText({ to: GOOD, text: "hi", senderId: "NBCC" }, { fetchImpl: fetchImpl as never }),
-    ).rejects.toThrow(/400/);
+    ).rejects.toThrow("SNS publish responded 400");
+  });
+
+  it("throws with the status on a 5xx too", async () => {
+    const { sendText } = await load({ SMS_PROVIDER: "sns" });
+    const fetchImpl = vi.fn().mockResolvedValue(new Response("ServiceUnavailable", { status: 503 }));
+    await expect(
+      sendText({ to: GOOD, text: "hi", senderId: "NBCC" }, { fetchImpl: fetchImpl as never }),
+    ).rejects.toThrow("SNS publish responded 503");
+  });
+
+  it("keeps only the last three digits of a number Amazon echoes back in its refusal", async () => {
+    const { sendText } = await load({ SMS_PROVIDER: "sns" });
+    const fetchImpl = vi
+      .fn()
+      .mockResolvedValue(new Response("Invalid parameter: PhoneNumber Reason: +447700900123 is not valid", { status: 400 }));
+    const err = await sendText({ to: GOOD, text: "hi", senderId: "NBCC" }, { fetchImpl: fetchImpl as never }).catch(
+      (e: Error) => e,
+    );
+    expect((err as Error).message).toContain("400");
+    expect((err as Error).message).toContain("…123");
+    expect((err as Error).message).not.toContain("7700900");
   });
 
   it("never stubs in production", async () => {

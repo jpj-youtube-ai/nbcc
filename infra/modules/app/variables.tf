@@ -175,6 +175,11 @@ variable "sms_sender_id" {
   description = "Sender name on a text message: 3 to 11 letters and digits, no spaces"
   type        = string
   default     = "NBCC"
+
+  validation {
+    condition     = can(regex("^[A-Za-z0-9]{3,11}$", var.sms_sender_id))
+    error_message = "sms_sender_id must be 3 to 11 letters and digits, with no spaces."
+  }
 }
 
 # TASK-298: separate from the From above, because news.nbcc.scot is send-only — no MX, no A record,

@@ -23,6 +23,10 @@ const resolveCredentials = createCredentialProvider({
 // Never more than the last three digits of a number in a log line.
 const tail = (to: string) => `…${to.slice(-3)}`;
 
+// Amazon's refusal for a bad number echoes the number, so any run of six or more digits (with or
+// without a leading +) in an error is cut down to its last three.
+const redactDigits = (text: string) => text.replace(/\+?\d{6,}/g, (m) => `…${m.slice(-3)}`);
+
 /**
  * Send one text. Throws "not a UK mobile" for anything but +447 and nine digits, and throws with
  * the real HTTP status when Amazon refuses, so a caller can count a failed text and carry on.
@@ -49,7 +53,7 @@ export async function sendText(
   const res = await fetchImpl(url, { method: "POST", headers, body });
   if (!res.ok) {
     const detail = await res.text().catch(() => "");
-    throw new Error(`SNS publish responded ${res.status}: ${detail.slice(0, 300)}`);
+    throw new Error(`SNS publish responded ${res.status}: ${redactDigits(detail.slice(0, 300))}`);
   }
   console.log(`text sent to ${tail(msg.to)}`);
   return "sent";

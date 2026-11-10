@@ -140,7 +140,15 @@ describe("HQ in the admin", () => {
   });
 
   it("answers with its numbers, quests and newest recruits", async () => {
-    const res = await run(getAdminElfHq, req("admin"));
+    // Pinned: every door is still to come, so the doors quest is there whatever today's date is.
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-11-20T12:00:00Z"));
+    let res;
+    try {
+      res = await run(getAdminElfHq, req("admin"));
+    } finally {
+      vi.useRealTimers();
+    }
     expect(res.statusCode).toBe(200);
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const body = res.body as any;

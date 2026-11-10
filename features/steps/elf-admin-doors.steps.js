@@ -4,17 +4,29 @@ const { Pool } = require("pg");
 
 // Steps for features/elf-admin-doors.feature: Head Elf HQ > Doors. The staff come from "an admin user
 // {string} with role {string} and password {string}" (features/steps/admin-api.steps.js, whose @admin hooks
-// clear them). Door 24 is used wherever clues or times are saved: it is the last door to start, so these
-// scenarios keep passing for as long as the year is 2026. Every place and person here is invented.
+// clear them). The server uses the real clock, so a door whose clue 1 is out cannot change its times or
+// clues. The @elf-doors hook therefore moves the school to next year, whose December is still ahead
+// whenever the tests run, and puts the year back afterwards. Every place and person here is invented.
 const BASE_URL = process.env.BASE_URL || "http://localhost:3000";
 const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 
-/** Takes the 2026 doors away (their names and clues go with them). */
+let yearBefore = null;
+const testYear = () => new Date().getFullYear() + 1;
+
+/** Takes the test year's doors away (their names and clues go with them). */
 async function clearDoors() {
-  await pool.query("DELETE FROM elf_doors WHERE year = 2026");
+  await pool.query("DELETE FROM elf_doors WHERE year = $1", [testYear()]);
 }
-Before({ tags: "@elf-doors" }, clearDoors);
-After({ tags: "@elf-doors" }, clearDoors);
+Before({ tags: "@elf-doors" }, async function () {
+  const r = await pool.query("SELECT year FROM elf_settings WHERE id = 1");
+  yearBefore = r.rows[0] ? r.rows[0].year : null;
+  await pool.query("UPDATE elf_settings SET year = $1 WHERE id = 1", [testYear()]);
+  await clearDoors();
+});
+After({ tags: "@elf-doors" }, async function () {
+  await clearDoors();
+  if (yearBefore !== null) await pool.query("UPDATE elf_settings SET year = $1 WHERE id = 1", [yearBefore]);
+});
 AfterAll(async () => {
   await pool.end();
 });

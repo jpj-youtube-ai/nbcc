@@ -19,7 +19,7 @@ import {
   tickElfDoor,
   type DoorChange,
 } from "../db/elf-doors";
-import { doorInstant, eveningFor, EVENING_PROBLEM_WORDS, closesTooSoon, isClockTime, isDoor, type Door, type Evening } from "../elf/calendar";
+import { doorInstant, eveningFor, EVENING_PROBLEM_WORDS, closesTooSoon, DOOR_COUNT, isClockTime, isDoor, LAST_REVEAL_TIME, type Door, type Evening } from "../elf/calendar";
 import { CLUE_WORDS_MAX, parseCluePaste, pasteAgainstDoors, type ClueN, type PastedDoor, type PasteProblem } from "../elf/clue-paste";
 import { makeTagWord } from "../elf/door-codes";
 import {
@@ -118,7 +118,10 @@ function sheetOf(year: number, d: DoorSetup, now: Date): DoorSheet {
   };
 }
 
-const sentenceOr = (message: string | undefined): string => (message && /^[A-Z]/.test(message) ? message : BAD_REQUEST);
+/** The sentence for a zod failure: our own message, never zod's ("Required", "Unrecognized key(s) ..."). */
+const ZOD_OWN = new Set(["invalid_type", "unrecognized_keys", "invalid_union", "invalid_literal"]);
+const sentenceOr = (issue: { message?: string; code?: string } | undefined): string =>
+  issue?.message && !ZOD_OWN.has(issue.code ?? "") && issue.message !== "Required" && /^[A-Z]/.test(issue.message) ? issue.message : BAD_REQUEST;
 
 /** A handler for the elf section: the headers, the gate, the :door in the address, and the try/catch. */
 function guarded(what: string, level: "view" | "edit", work: (c: Ctx) => Promise<Response | void>, needsDoor = true) {
@@ -186,7 +189,7 @@ export const getAdminElfDoor = async (req: Request, res: Response): Promise<Resp
     if (!d) return noDoor(res, n);
     return res.status(200).json({ door: sheetOf(year, d, new Date()), canEdit: !!perms && can(perms, "elf", "edit") });
   } catch (err) {
-    console.error("admin elf door failed:", err instanceof Error ? err.message : err);
+    console.error("admin elf doors door failed:", err instanceof Error ? err.message : err);
     return res.status(500).json(UNAVAILABLE);
   }
 };
@@ -230,11 +233,12 @@ const doorSchema = z
   .strict();
 
 const TIME_KEYS = ["clue1Time", "clue2Time", "clue3Time", "revealTime"] as const;
+const minutesOf = (t: string): number => Number(t.slice(0, 2)) * 60 + Number(t.slice(3, 5));
 const clock5 = (t: string | null | undefined): string | null => (isClockTime(t) ? t.slice(0, 5) : null);
 
 export const patchAdminElfDoor = guarded("change", "edit", async ({ req, res, actor, year, now, door }) => {
   const parsed = doorSchema.safeParse(req.body ?? {});
-  if (!parsed.success) return res.status(400).json({ error: sentenceOr(parsed.error.issues[0]?.message) });
+  if (!parsed.success) return res.status(400).json({ error: sentenceOr(parsed.error.issues[0]) });
   const change: DoorChange = {};
   for (const [k, v] of Object.entries(parsed.data)) {
     if (v !== undefined) (change as Record<string, unknown>)[k] = v;
@@ -249,6 +253,9 @@ export const patchAdminElfDoor = guarded("change", "edit", async ({ req, res, ac
     const merged: DoorSetup = { ...stored, ...change };
     const first = eveningFor(doorSeason(year), door, staffEveningOf(merged)).problems[0];
     if (first) return res.status(400).json({ error: EVENING_PROBLEM_WORDS[first] });
+    if (door === DOOR_COUNT && minutesOf(eveningFor(doorSeason(year), door, staffEveningOf(merged)).reveal) > minutesOf(LAST_REVEAL_TIME)) {
+      return res.status(400).json({ error: "On Christmas Eve the place must be shown by 8pm." });
+    }
   }
   const d = await changeElfDoor(year, door, change, actor);
   return d ? res.status(200).json({ door: sheetOf(year, d, now) }) : noDoor(res, door);
@@ -260,7 +267,7 @@ const nameSchema = z.object({ name: z.string({ invalid_type_error: BAD_REQUEST }
 
 export const postAdminElfDoorName = guarded("name add", "edit", async ({ req, res, actor, year, now, door }) => {
   const parsed = nameSchema.safeParse(req.body ?? {});
-  if (!parsed.success) return res.status(400).json({ error: sentenceOr(parsed.error.issues[0]?.message) });
+  if (!parsed.success) return res.status(400).json({ error: sentenceOr(parsed.error.issues[0]) });
   if (normalisePlaceName(parsed.data.name) === "") return res.status(400).json({ error: "A name needs at least one letter or number." });
   const d = await addElfDoorName(year, door, parsed.data.name, actor);
   if (d === "taken") return res.status(409).json({ error: "That name already counts for this door." });
@@ -285,7 +292,7 @@ const wordSchema = z.object({ confirm: z.boolean({ invalid_type_error: BAD_REQUE
 
 export const postAdminElfDoorWord = guarded("word", "edit", async ({ req, res, actor, year, now, door }) => {
   const parsed = wordSchema.safeParse(req.body ?? {});
-  if (!parsed.success) return res.status(400).json({ error: sentenceOr(parsed.error.issues[0]?.message) });
+  if (!parsed.success) return res.status(400).json({ error: sentenceOr(parsed.error.issues[0]) });
   const stored = await getElfDoor(year, door);
   if (!stored) return noDoor(res, door);
   if (eveningState(year, stored, now).clueOut[0]) {
@@ -321,7 +328,7 @@ export const putAdminElfDoorClue = guarded("clue", "edit", async ({ req, res, ac
   if (rawN !== "1" && rawN !== "2" && rawN !== "3") return res.status(400).json({ error: BAD_REQUEST });
   const n = Number(rawN) as ClueN;
   const parsed = clueSchema.safeParse(req.body ?? {});
-  if (!parsed.success) return res.status(400).json({ error: sentenceOr(parsed.error.issues[0]?.message) });
+  if (!parsed.success) return res.status(400).json({ error: sentenceOr(parsed.error.issues[0]) });
   const trimmed = parsed.data.words === null ? null : parsed.data.words.trim();
   if (trimmed !== null && trimmed.length > CLUE_WORDS_MAX) return res.status(400).json({ error: "A clue can be up to 500 characters." });
   const stored = await getElfDoor(year, door);
@@ -350,14 +357,14 @@ async function checkPaste(year: number, input: string, now: Date): Promise<{ doo
 
 export const postAdminElfCluesCheck = guarded("clues check", "edit", async ({ req, res, year, now }) => {
   const parsed = pasteSchema.safeParse(req.body ?? {});
-  if (!parsed.success) return res.status(400).json({ error: sentenceOr(parsed.error.issues[0]?.message) });
+  if (!parsed.success) return res.status(400).json({ error: sentenceOr(parsed.error.issues[0]) });
   const checked = await checkPaste(year, parsed.data.text, now);
   return res.status(200).json({ doors: checked.doors, problems: checked.problems });
 }, false);
 
 export const postAdminElfCluesSave = guarded("clues save", "edit", async ({ req, res, actor, year, now }) => {
   const parsed = pasteSchema.safeParse(req.body ?? {});
-  if (!parsed.success) return res.status(400).json({ error: sentenceOr(parsed.error.issues[0]?.message) });
+  if (!parsed.success) return res.status(400).json({ error: sentenceOr(parsed.error.issues[0]) });
   await ensureElfDoors(year);
   const checked = await checkPaste(year, parsed.data.text, now);
   if (checked.problems.length > 0) return res.status(400).json({ error: "Fix the problems in the text first.", problems: checked.problems });

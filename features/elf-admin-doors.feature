@@ -20,11 +20,11 @@ Feature: Head Elf HQ, Doors: setting up the 24 doors
   Scenario: Typing in a place and a prize shows on the door's tile
     When "boss.doors.admin.bdd@example.com" with password "Elf-Doors-Editor-1" sends PATCH to "/api/admin/elf/doors/7" with:
       """
-      { "placeName": "Pine Cone Cafe", "placeTown": "Ayr", "placeAddress": "1 Example Street", "prize": "A cake for the family" }
+      { "placeName": "Pine Cone Café", "placeTown": "Ayr", "placeAddress": "1 Example Street", "prize": "A cake for the family" }
       """
     Then the doors answer is 200
     When "boss.doors.admin.bdd@example.com" with password "Elf-Doors-Editor-1" sends GET to "/api/admin/elf/doors"
-    Then the tile for door 7 shows the place "Pine Cone Cafe" and 4 to do
+    Then the tile for door 7 shows the place "Pine Cone Café" and 4 to do
 
   Scenario: Checking a text that names a door that does not exist
     When "boss.doors.admin.bdd@example.com" with password "Elf-Doors-Editor-1" sends POST to "/api/admin/elf/clues/check" with:
@@ -40,7 +40,7 @@ Feature: Head Elf HQ, Doors: setting up the 24 doors
       { "text": "Door 24\nClue 1: It is by the big window.\nClue 2: Look near the till.\nClue 3: It is under the clock." }
       """
     Then the doors answer is 200
-    When "boss.doors.admin.bdd@example.com" with password "Elf-Doors-Editor-1" sends GET to "/api/admin/elf/doors/24"
+    When "boss.doors.admin.bdd@example.com" with password "Elf-Doors-Editor-1" sends GET to "/api/admin/elf/doors/7"
     Then clue 1 of the door reads "It is by the big window."
     And clue 2 of the door reads "Look near the till."
     And clue 3 of the door reads "It is under the clock."
@@ -60,7 +60,7 @@ Feature: Head Elf HQ, Doors: setting up the 24 doors
       {
         "placeName": "Holly Berry Books", "placeTown": "Ayr", "placeAddress": "2 Example Street",
         "contactName": "Sam Example", "contactPhone": "01632 960 123", "contactEmail": "sam@example.org",
-        "closesAt": "21:00", "elfSpot": "On the top shelf by the window", "agreedBy": "Jodie",
+        "closesAt": "21:00", "elfSpot": "On the top shelf by the window", "agreedBy": "Alex Example",
         "prize": "A book token", "prizeShowOff": true, "elfName": "Twinkle",
         "clue1Time": "17:30", "clue2Time": "18:00", "clue3Time": "18:30", "revealTime": "19:00"
       }
@@ -72,7 +72,7 @@ Feature: Head Elf HQ, Doors: setting up the 24 doors
       {
         "placeName": "Holly Berry Books", "placeTown": "Ayr", "placeAddress": "2 Example Street",
         "contactName": "Sam Example", "contactPhone": "01632 960 123", "contactEmail": "sam@example.org",
-        "closesAt": "21:00", "elfSpot": "On the top shelf by the window", "agreedBy": "Jodie",
+        "closesAt": "21:00", "elfSpot": "On the top shelf by the window", "agreedBy": "Alex Example",
         "prize": "A book token", "prizeShowOff": true, "elfName": "Twinkle",
         "clue1Time": "17:30", "clue2Time": "18:00", "clue3Time": "18:30", "revealTime": "19:00"
       }

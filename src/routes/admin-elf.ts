@@ -49,7 +49,7 @@ export const adminElfRouter = Router();
 
 const UNAVAILABLE = { error: "Admin is temporarily unavailable" };
 
-const PHONE_WORDS = "A phone number can only have digits, spaces and + ( ) -, with at least 7 digits, and be up to 40 characters.";
+const PHONE_WORDS = "Use only numbers, spaces, brackets, plus signs and hyphens, with at least 7 numbers.";
 
 /** A phone number a person can ring: blank is nothing (null). Shared with the doors' contact phone. */
 export const phoneSchema = z.preprocess(

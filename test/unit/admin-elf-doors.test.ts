@@ -38,6 +38,7 @@ import * as routes from "../../src/routes/admin-elf-doors";
 import { patchAdminElfSettings } from "../../src/routes/admin-elf";
 import { signAdminSession } from "../../src/admin/session";
 import { emptyDoor, type DoorSetup } from "../../src/elf/door-setup";
+import { isUsableSecretWord } from "../../src/elf/claim";
 import type { Door } from "../../src/elf/calendar";
 
 const ON = { schoolOn: true, year: 2026, entryFromPence: 100, entrySuggestedPence: 500, previewHash: null, placePhone: null };
@@ -102,7 +103,7 @@ describe("the doors list", () => {
   });
 
   it("gives 24 tiles, the counts and the prize list to a head elf who can only look", async () => {
-    doors.listElfDoors.mockResolvedValue(all24().map((d) => (d.door === 7 ? { ...d, placeName: "Pine Cone Cafe", placeTown: "Ayr", placeAddress: "1 Example Street", prize: "A cake" } : d)));
+    doors.listElfDoors.mockResolvedValue(all24().map((d) => (d.door === 7 ? { ...d, placeName: "Pine Cone Café", placeTown: "Ayr", placeAddress: "1 Example Street", prize: "A cake" } : d)));
     const res = await run(routes.getAdminElfDoors, ask("viewer", { permissions: VIEW }));
     expect(res.statusCode).toBe(200);
     expect(res.headers["Cache-Control"]).toBe("no-store");
@@ -110,7 +111,7 @@ describe("the doors list", () => {
     const b = body(res);
     expect(b.year).toBe(2026);
     expect(b.doors).toHaveLength(24);
-    expect(b.doors[6]).toMatchObject({ door: 7, weekday: "Mon", placeName: "Pine Cone Cafe", ready: false, toDo: 4 });
+    expect(b.doors[6]).toMatchObject({ door: 7, weekday: "Mon", placeName: "Pine Cone Café", ready: false, toDo: 4 });
     expect(b.counts).toEqual({ placesAgreed: 1, prizesChosen: 1, ready: 0 });
     expect(b.prizeList.split("\n")[6]).toBe("Door 7: A cake");
     expect(b.canEdit).toBe(false);
@@ -171,14 +172,18 @@ describe("changing a door", () => {
   const patch = (door: string, b: unknown) => run(routes.patchAdminElfDoor, ask("viewer", { permissions: EDIT, params: { door }, body: b }));
 
   it("passes only the given keys, blank words as null, and answers the sheet", async () => {
-    const res = await patch("8", { placeName: " Pine Cone Cafe ", contactEmail: "", prizeShowOff: true });
+    const res = await patch("8", { placeName: " Pine Cone Café ", contactEmail: "", prizeShowOff: true });
     expect(res.statusCode).toBe(200);
-    expect(doors.changeElfDoor).toHaveBeenCalledWith(2026, 8, { placeName: "Pine Cone Cafe", contactEmail: null, prizeShowOff: true }, ACTOR);
+    expect(doors.changeElfDoor).toHaveBeenCalledWith(2026, 8, { placeName: "Pine Cone Café", contactEmail: null, prizeShowOff: true }, ACTOR);
     expect(body(res).door.door).toBe(8);
   });
 
   it("refuses an unknown key, a bad door and bad values", async () => {
-    expect((await patch("8", { colour: "red" })).statusCode).toBe(400);
+    const unknown = await patch("8", { colour: "red" });
+    expect(unknown.statusCode).toBe(400);
+    expect(body(unknown)).toEqual({ error: "That did not look right. Reload the page and try again." });
+    const missing = await run(routes.postAdminElfCluesCheck, ask("viewer", { permissions: EDIT, body: {} }));
+    expect(body(missing)).toEqual({ error: "That did not look right. Reload the page and try again." });
     expect((await patch("25", { prize: "x" })).statusCode).toBe(400);
     const bad = [{ contactPhone: "call me" }, { contactPhone: "123" }, { contactEmail: "nope" }, { placeName: "x".repeat(81) }, { prize: "x".repeat(201) }, { elfName: "x".repeat(31) }, { clue1Time: "25:00" }, { prizeShowOff: "yes" }];
     for (const b of bad) {
@@ -196,11 +201,19 @@ describe("changing a door", () => {
     expect(body(res)).toEqual({ error: "Clue 2 must come after clue 1." });
   });
 
+  it("refuses a time that would show door 24's place after 8pm on Christmas Eve", async () => {
+    const res = await patch("24", { revealTime: "20:30" });
+    expect(res.statusCode).toBe(400);
+    expect(body(res)).toEqual({ error: "On Christmas Eve the place must be shown by 8pm." });
+    expect((await patch("24", { revealTime: "20:00" })).statusCode).toBe(200);
+    expect((await patch("23", { revealTime: "20:30" })).statusCode).toBe(200);
+  });
+
   it("with clue 1 out, refuses new times but takes place details and the prize", async () => {
     const d7 = await patch("7", { clue3Time: "19:00" });
     expect(d7.statusCode).toBe(409);
     expect(body(d7)).toEqual({ error: "Door 7's evening has started, so its times cannot change." });
-    expect((await patch("7", { placeName: "Pine Cone Cafe", prize: "A cake" })).statusCode).toBe(200);
+    expect((await patch("7", { placeName: "Pine Cone Café", prize: "A cake" })).statusCode).toBe(200);
     // sending the time it already has is not a change
     doors.getElfDoor.mockResolvedValue(doorOf(7, { clue3Time: "19:00:00" }));
     expect((await patch("7", { clue3Time: "19:00" })).statusCode).toBe(200);
@@ -260,8 +273,14 @@ describe("the word", () => {
     const made = doors.setElfTagWord.mock.calls[0];
     expect(made[0]).toBe(2026);
     expect(made[1]).toBe(8);
-    expect(typeof made[2]).toBe("string");
-    expect(made[2].length).toBeGreaterThan(3);
+    expect(isUsableSecretWord(made[2])).toBe(true);
+  });
+
+  it("counts clue 1 as out at exactly 5:30pm", async () => {
+    vi.setSystemTime(new Date("2026-12-07T17:30:00Z"));
+    expect((await word("7")).statusCode).toBe(409);
+    vi.setSystemTime(new Date("2026-12-07T17:29:59Z"));
+    expect((await word("7")).statusCode).toBe(200);
   });
 
   it("is refused once the elf is out", async () => {
@@ -326,10 +345,10 @@ describe("the pasted clues", () => {
   const save = (text: unknown) => run(routes.postAdminElfCluesSave, ask("viewer", { permissions: EDIT, body: { text } }));
 
   it("check answers what it parsed, with the place names, and the problems", async () => {
-    doors.listElfDoors.mockResolvedValue(all24().map((d) => (d.door === 8 ? { ...d, placeName: "Pine Cone Cafe" } : d)));
+    doors.listElfDoors.mockResolvedValue(all24().map((d) => (d.door === 8 ? { ...d, placeName: "Pine Cone Café" } : d)));
     const res = await check(`${GOOD}\nDoor 25`);
     expect(res.statusCode).toBe(200);
-    expect(body(res).doors).toEqual([{ door: 8, line: 1, placeName: "Pine Cone Cafe", clues: [{ n: 1, words: "one" }, { n: 2, words: "two" }, { n: 3, words: "three" }] }]);
+    expect(body(res).doors).toEqual([{ door: 8, line: 1, placeName: "Pine Cone Café", clues: [{ n: 1, words: "one" }, { n: 2, words: "two" }, { n: 3, words: "three" }] }]);
     expect(body(res).problems.map((p: { message: string }) => p.message)).toEqual(["Line 5: there is no door 25. Doors go from 1 to 24."]);
   });
 

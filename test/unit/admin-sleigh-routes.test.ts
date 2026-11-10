@@ -200,6 +200,47 @@ describe("the QR code for hand-outs", () => {
   });
 });
 
+describe("downloading a poster", () => {
+  const poster = (query: Record<string, string>, token = tokenFor("view")) => run(routes.getSleighPoster, { token, query });
+
+  it("needs a session, and view of Donations", async () => {
+    expect((await run(routes.getSleighPoster, { query: { night: "all", size: "a4" } })).statusCode).toBe(401);
+    expect((await poster({ night: "all", size: "a4" }, tokenFor("none"))).statusCode).toBe(403);
+    expect(db.findOrCreateSleighCode).not.toHaveBeenCalled();
+  });
+
+  it("is the every night poster with its own named code, never kept by the browser", async () => {
+    db.findOrCreateSleighCode.mockResolvedValue(51);
+    const res = await poster({ night: "all", size: "a3" });
+    expect(res.statusCode).toBe(200);
+    expect(db.findOrCreateSleighCode).toHaveBeenCalledWith("Santa Sleigh poster: every night", `admin:${EMAIL}`);
+    expect(res.headers["content-type"]).toBe("html");
+    expect(res.headers["cache-control"]).toBe("private, no-store");
+    expect(res.body).toContain("@page{size:A3 portrait;margin:0}");
+    expect(res.body).toContain("New Farm");
+  });
+
+  it("is one night's poster with that night's own named code", async () => {
+    db.findOrCreateSleighCode.mockResolvedValue(52);
+    const res = await poster({ night: "1", size: "a4" });
+    expect(res.statusCode).toBe(200);
+    expect(db.findOrCreateSleighCode).toHaveBeenCalledWith("Santa Sleigh poster: New Farm", `admin:${EMAIL}`);
+    expect(res.body).toContain("@page{size:A4 portrait;margin:0}");
+  });
+
+  it("refuses a night or a size that is not there, in plain words", async () => {
+    expect((await poster({ night: "99", size: "a4" })).statusCode).toBe(404);
+    expect((await poster({ night: "all", size: "a2" })).statusCode).toBe(400);
+    expect((await poster({ night: "one", size: "a4" })).statusCode).toBe(400);
+    expect(db.findOrCreateSleighCode).not.toHaveBeenCalled();
+  });
+
+  it("answers 500 when the code cannot be found or made", async () => {
+    db.findOrCreateSleighCode.mockRejectedValue(new Error("down"));
+    expect((await poster({ night: "all", size: "a4" })).statusCode).toBe(500);
+  });
+});
+
 describe("the router", () => {
   it("serves the section, the two saves and the hand-out code at their addresses", () => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any

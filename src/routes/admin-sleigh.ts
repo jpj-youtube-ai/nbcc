@@ -5,6 +5,7 @@ import { actorOf } from "./admin";
 import { can } from "../admin/permissions";
 import { qrPng } from "../fundraising/qr-png";
 import { namedShortLink } from "../site/qr-named";
+import { posterCodeName, renderSleighPoster, sleighPosterAssets } from "../sleigh/posters";
 import {
   findOrCreateSleighCode,
   getSleighSettings,
@@ -22,6 +23,7 @@ import {
 //   PATCH /api/admin/sleigh/nights/:id      { areas?, startsAt?, endsAt?, bucketPence? }     donations edit
 //   PATCH /api/admin/sleigh/settings        { offOn }                                        donations edit
 //   GET   /api/admin/sleigh/qr-handout      the hand-out QR code, a PNG to save              donations view
+//   GET   /api/admin/sleigh/poster          ?night=all|<id>&size=a4|a3, a print-ready page   donations view
 //
 // Every save is in audit_log with the change, and a night's save re-sorts the card machine taps
 // (src/db/sleigh.ts).
@@ -37,6 +39,7 @@ export const SLEIGH_MESSAGES = {
   nothing: "There was nothing to save.",
   missing: "That night is not there any more. Reload the page.",
   offOn: "Choose the day the page switches off.",
+  poster: "Choose every night or one night, and A4 or A3.",
 } as const;
 
 /** The name of the code the hand-outs carry, in Admin > QR codes. */
@@ -132,7 +135,36 @@ export async function getSleighQrHandout(req: Request, res: Response): Promise<R
   }
 }
 
+/**
+ * A poster to print: every night, or one night's, on A4 or A3 (src/sleigh/posters.ts). Each kind
+ * carries its own named code (Jaimie, 10 November 2026: "use a named QR on the posters"), found or
+ * made here, so Admin > QR codes counts each poster's scans.
+ */
+export async function getSleighPoster(req: Request, res: Response): Promise<Response | void> {
+  const claims = await authorizeSection(req, res, "donations", "view");
+  if (!claims) return;
+  const nightQ = String(req.query.night ?? "");
+  const size = req.query.size;
+  if ((size !== "a4" && size !== "a3") || !(nightQ === "all" || /^[1-9]\d{0,8}$/.test(nightQ))) {
+    return res.status(400).json({ error: SLEIGH_MESSAGES.poster });
+  }
+  try {
+    const nights = await listNights();
+    const night = nightQ === "all" ? null : nights.find((n) => n.id === Number(nightQ)) ?? null;
+    if (nightQ !== "all" && !night) return res.status(404).json({ error: SLEIGH_MESSAGES.missing });
+    const id = await findOrCreateSleighCode(posterCodeName(night), actorOf(claims));
+    const page = renderSleighPoster({ nights, night, size, qrUrl: namedShortLink(id), assets: sleighPosterAssets() });
+    res.setHeader("Cache-Control", "private, no-store");
+    res.type("html");
+    return res.send(page);
+  } catch (err) {
+    console.error("admin sleigh: the poster failed:", err instanceof Error ? err.message : err);
+    return res.status(500).json(UNAVAILABLE);
+  }
+}
+
 adminSleighRouter.get("/api/admin/sleigh", getAdminSleigh);
 adminSleighRouter.patch("/api/admin/sleigh/nights/:id", patchSleighNight);
 adminSleighRouter.patch("/api/admin/sleigh/settings", patchSleighSettings);
 adminSleighRouter.get("/api/admin/sleigh/qr-handout", getSleighQrHandout);
+adminSleighRouter.get("/api/admin/sleigh/poster", getSleighPoster);

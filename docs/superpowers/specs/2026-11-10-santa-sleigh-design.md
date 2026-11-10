@@ -17,7 +17,7 @@ year total that includes the buckets, and a switch-off date.
 
 ## Goals (tonight)
 
-1. A standalone page at **`/santa-sleigh`** (`/sleigh` redirects there), fun, premium,
+1. A standalone page at **`/sleigh`** (Jaimie, on approval: the default for posters; `/santa-sleigh` redirects there), fun, premium,
    inviting, on NBCC brand, heavy on motion like Fill a Red Bag and Elf Detective School.
 2. Give online: £5 / £10 / £20 / £50 / own amount, through the existing Stripe checkout,
    each gift tagged Santa Sleigh. Anyone giving what they like (no business sponsorship).
@@ -160,8 +160,8 @@ are updated.
 - Switch-off default 31 Jan 2027. *Claude's call.*
 - Card machine gifts are tagged when stored (`source = 'santa_sleigh'`) and re-sorted when a
   night's times are saved, as in "How it is built". *Claude's call.*
-- Companies may give (the normal donate rules), unlike `/bag`. The card-fee top-up is left out
-  of the total, as existing totals do. *Claude's call.*
+- One-off gifts from a person, as `/bag` (the form asks a person's name; companies use /donate).
+  The card-fee top-up is left out of the total, as existing totals do. *Claude's call.*
 
 ## Layout
 
@@ -171,3 +171,12 @@ order: cream nav, night-sky hero with the picture, the total on the road, give, 
 sleigh?" nights, "Who's behind the sleigh?", other ways in, last give band, footer. Jaimie:
 "Functionally, this looks great"; the changes asked for were less, sharper wording, the real
 picture, and the motion turned up to premium.
+
+## Added on approval (Jaimie, 10 Nov)
+
+- `/sleigh` is the main address and the one on every poster and QR.
+- Posters downloadable from the Santa Sleigh admin view, A4 and A3: one with every night and
+  area, and one per night/area, each with the QR code for `nbcc.scot/sleigh`. "Bold, fun,
+  family, money", using the sleigh picture (ChatGPT for any further illustration).
+- A QR code for the page now (sent: `Downloads/santa-sleigh-qr.png` / `.svg`).
+- Show the page at the side while it is built (Browser pane preview).

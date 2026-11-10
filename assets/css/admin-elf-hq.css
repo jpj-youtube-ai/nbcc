@@ -326,15 +326,16 @@
 .hq-clue textarea { display: block; width: 100%; min-height: 44px; padding: 8px 12px; border: 2px solid var(--hq-ink); border-radius: 12px; background: var(--hq-card); font: inherit; line-height: 1.4; color: var(--hq-text); resize: none; overflow: hidden; overflow-wrap: break-word; }
 .hq-clue textarea:disabled, .hq-clue textarea:read-only { background: #FBF7F0; color: var(--hq-soft); }
 .hq-count-words { margin-left: auto; }
+.hq-count-words.is-error { color: var(--hq-crimson); font-weight: 700; }
 @container (max-width: 420px) {
   .hq-clue { grid-template-columns: minmax(0, 1fr); }
 }
 
 /* prints and the drop off ticks */
-.hq-prints .hq-btn { flex: 1 1 auto; }
 .hq-handover { display: grid; gap: var(--hq-space-sm); padding: var(--hq-space-md) var(--hq-space-lg); border: 2px solid var(--hq-ink); border-radius: 16px; background: #FFF8EA; }
-.hq-tick { display: grid; gap: 2px; min-width: 0; }
-.hq-tick .hq-tickbox span { overflow-wrap: break-word; min-width: 0; }
+.hq-dtick { display: grid; gap: 2px; min-width: 0; }
+.hq-dtick .hq-tickbox span { overflow-wrap: break-word; min-width: 0; }
+.hq-dtick .hq-hint { overflow-wrap: anywhere; }
 
 /* the tools under the level select, and paste all the clues */
 .hq-door-tools { display: grid; gap: var(--hq-space-md); min-width: 0; }

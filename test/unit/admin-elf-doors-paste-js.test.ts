@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { resolve } from "node:path";
 import { createRequire } from "node:module";
 
@@ -110,6 +110,7 @@ const doorsPart = () => document.querySelector<HTMLElement>('#elfHq [role=tabpan
 const sheetEl = () => doorsPart().querySelector<HTMLElement>(".hq-door-sheet")!;
 const button = (within: ParentNode, words: string) => [...within.querySelectorAll<HTMLButtonElement>("button")].find((b) => b.textContent!.trim() === words);
 const clueBox = (n: number) => sheetEl().querySelector<HTMLTextAreaElement>(`#hqDoor-clue${n}`)!;
+const partOf = (key: string) => sheetEl().querySelector<HTMLElement>(`[data-part="${key}"]`)!;
 const clueItem = (n: number) => sheetEl().querySelector<HTMLElement>(`[data-part="clue${n}"]`)!;
 const type = (input: HTMLTextAreaElement, value: string) => {
   input.value = value;
@@ -127,6 +128,13 @@ async function openDoor7(answers: Record<string, Answer | Answer[]> = {}) {
 
 beforeEach(() => {
   window.sessionStorage.clear();
+});
+
+// Stand-ins for the clipboard and the tab opener are put back after every test.
+afterEach(() => {
+  delete (navigator as unknown as Record<string, unknown>).clipboard;
+  delete (window as unknown as Record<string, unknown>).ClipboardItem;
+  vi.restoreAllMocks();
 });
 
 describe("the three clues", () => {
@@ -334,7 +342,7 @@ describe("paste all the clues", () => {
     expect(found).toContain("Door 7");
     expect(found).toContain("Pine Cone Café");
     expect(found).toContain("No place yet");
-    expect(found).toContain("d");
+    expect(found).toContain("Clue 1: d");
     button(doorsPart(), "Save these clues")!.click();
     await flush();
     expect(calls.find((c) => c.url === "/api/admin/elf/clues/save")!.body).toEqual({ text: TEXT });
@@ -353,5 +361,195 @@ describe("paste all the clues", () => {
     expect(p.textContent).toBe("Line 2: there is no door 40.");
     expect(p.classList.contains("is-error")).toBe(true);
     expect(button(doorsPart(), "Save these clues")).toBeUndefined();
+  });
+});
+
+describe("fixes after the first review", () => {
+  const fakeOpen = () => {
+    const tab = { closed: false, location: { href: "" }, document: { title: "", body: { textContent: "" } }, close: vi.fn() };
+    window.open = vi.fn(() => tab) as unknown as typeof window.open;
+    URL.createObjectURL = vi.fn(() => "blob:x");
+    URL.revokeObjectURL = vi.fn();
+    return tab;
+  };
+  const evening = (clue2: string) => ({ clue1: "17:30", clue2, clue3: "18:30", reveal: "19:00", problems: [] });
+  const pasteBox = () => doorsPart().querySelector<HTMLTextAreaElement>("#hqPasteText")!;
+  const withClipboardItem = (clipboard: Record<string, unknown>) => {
+    Object.defineProperty(navigator, "clipboard", { value: clipboard, configurable: true });
+    (window as unknown as Record<string, unknown>).ClipboardItem = class {
+      constructor(public data: Record<string, Promise<Blob>>) {}
+    };
+  };
+
+  it("gives the tick rows a class of their own, not the round tick badge", async () => {
+    await openDoor7();
+    const prints = sheetEl().querySelector('[data-part="prints"]')!;
+    expect(prints.querySelectorAll(".hq-tick")).toHaveLength(0);
+    expect(prints.querySelectorAll(".hq-dtick")).toHaveLength(2);
+  });
+
+  it("keeps typing on the open door when a paste is saved for another door only", async () => {
+    await openDoor7({
+      "POST /api/admin/elf/clues/check": { body: { doors: [{ door: 8, line: 1, placeName: null, clues: [{ n: 1, words: "a" }, { n: 2, words: "b" }, { n: 3, words: "c" }] }], problems: [] } },
+      "POST /api/admin/elf/clues/save": { body: { doors: 1, clues: 3 } },
+    });
+    type(clueBox(2), "Half written");
+    button(doorsPart(), "Paste all the clues")!.click();
+    type(pasteBox(), "Door 8: x");
+    button(doorsPart(), "Check these clues")!.click();
+    await flush();
+    button(doorsPart(), "Save these clues")!.click();
+    await flush();
+    expect(doorsPart().textContent).toContain("Saved 3 clues for 1 door.");
+    expect(clueBox(2).value).toBe("Half written");
+  });
+
+  it("refreshes the open door's clues when that door is in the paste", async () => {
+    const fresh = sheet({ clues: [{ n: 1, words: "From the paste" }, { n: 2, words: null }, { n: 3, words: null }] });
+    await openDoor7({
+      "POST /api/admin/elf/clues/check": { body: { doors: [{ door: 7, line: 1, placeName: "Pine Cone Café", clues: [{ n: 1, words: "From the paste" }] }], problems: [] } },
+      "POST /api/admin/elf/clues/save": { body: { doors: 1, clues: 1 } },
+      "GET /api/admin/elf/doors/7": [{ body: { door: sheet(), canEdit: true } }, { body: { door: fresh, canEdit: true } }],
+    });
+    button(doorsPart(), "Paste all the clues")!.click();
+    type(pasteBox(), "x");
+    button(doorsPart(), "Check these clues")!.click();
+    await flush();
+    button(doorsPart(), "Save these clues")!.click();
+    await flush();
+    expect(clueBox(1).value).toBe("From the paste");
+  });
+
+  it("updates the clue times and the place in the prints sentence after a save, keeping typing in the clue boxes", async () => {
+    const saved = sheet({ placeName: "Holly Bakehouse", evening: evening("18:15") });
+    await openDoor7({ "PATCH /api/admin/elf/doors/7": { body: { door: saved } } });
+    type(clueBox(2), "Unsaved second");
+    const t = sheetEl().querySelector<HTMLInputElement>("#hqDoor-clue2Time")!;
+    t.value = "18:15";
+    t.dispatchEvent(new Event("input", { bubbles: true }));
+    button(partOf("evening"), "Save")!.click();
+    await flush();
+    expect(clueItem(2).textContent).toContain("Clue 2 · 6:15pm");
+    expect(sheetEl().querySelector("[data-prints-place]")!.textContent).toContain("Holly Bakehouse only.");
+    expect(clueBox(2).value).toBe("Unsaved second");
+  });
+
+  it("says so when the browser stops the new tab, and fetches nothing", async () => {
+    const { calls } = await openDoor7();
+    window.open = vi.fn(() => null) as unknown as typeof window.open;
+    button(sheetEl(), "Print the tag")!.click();
+    await flush();
+    expect(calls.some((c) => c.url.endsWith("/tag"))).toBe(false);
+    const line = sheetEl().querySelector('[data-part="prints"] .hq-status')!;
+    expect(line.textContent).toBe("Your browser stopped the new tab. Let this site open new tabs, then try again.");
+    expect(line.classList.contains("is-error")).toBe(true);
+  });
+
+  it("opens one tab for a double click on a print button", async () => {
+    fakeOpen();
+    const { calls } = await openDoor7();
+    const b = button(sheetEl(), "Print the poster")!;
+    b.click();
+    b.click();
+    await flush();
+    expect(calls.filter((c) => c.url.endsWith("/poster"))).toHaveLength(1);
+    expect(window.open).toHaveBeenCalledTimes(1);
+  });
+
+  it("copies the prize list inside the click with a ClipboardItem where there is one", async () => {
+    const write = vi.fn((items: unknown) => (void items, Promise.resolve()));
+    const writeText = vi.fn(() => Promise.resolve());
+    withClipboardItem({ write, writeText });
+    await openDoor7();
+    button(doorsPart(), "Copy the prize list")!.click();
+    expect(write).toHaveBeenCalledTimes(1); // synchronously, inside the click
+    await flush();
+    const item = (write.mock.calls[0][0] as { data: Record<string, Promise<Blob>> }[])[0];
+    const blob = await item.data["text/plain"];
+    expect(blob.size).toBe("Door 7: A wooden sledge".length);
+    expect(writeText).not.toHaveBeenCalled();
+    expect(doorsPart().textContent).toContain("Copied. Send it to Claude for the door pictures.");
+  });
+
+  it("falls back to writeText when the ClipboardItem write is refused", async () => {
+    const write = vi.fn(() => Promise.reject(new Error("no")));
+    const writeText = vi.fn(() => Promise.resolve());
+    withClipboardItem({ write, writeText });
+    await openDoor7();
+    button(doorsPart(), "Copy the prize list")!.click();
+    await flush();
+    expect(writeText).toHaveBeenCalledWith("Door 7: A wooden sledge");
+  });
+
+  it("draws the problems of a refused save and hides Save", async () => {
+    await openDoor7({
+      "POST /api/admin/elf/clues/check": { body: { doors: [{ door: 7, line: 1, placeName: null, clues: [{ n: 1, words: "a" }] }], problems: [] } },
+      "POST /api/admin/elf/clues/save": { status: 400, body: { error: "Fix the problems in the text first.", problems: [{ kind: "clue-out", line: 3, door: 7, message: "Line 3: clue 1 of door 7 is already out." }] } },
+    });
+    button(doorsPart(), "Paste all the clues")!.click();
+    type(pasteBox(), "x");
+    button(doorsPart(), "Check these clues")!.click();
+    await flush();
+    button(doorsPart(), "Save these clues")!.click();
+    await flush();
+    expect(doorsPart().querySelector(".hq-paste-problems li")!.textContent).toBe("Line 3: clue 1 of door 7 is already out.");
+    expect(button(doorsPart(), "Save these clues")).toBeUndefined();
+  });
+
+  it("reopens the door when a clue went out while it was typed, so it shows read only", async () => {
+    const gone = sheet({ clueOut: [true, false, false] });
+    await openDoor7({
+      "PUT /api/admin/elf/doors/7/clues/1": { status: 409, body: { error: "Door 7, clue 1 is already out, so it cannot be changed." } },
+      "GET /api/admin/elf/doors/7": [{ body: { door: sheet(), canEdit: true } }, { body: { door: gone, canEdit: true } }],
+    });
+    type(clueBox(1), "Changed");
+    button(clueItem(1), "Save")!.click();
+    await flush();
+    expect(clueBox(1).hasAttribute("readonly")).toBe(true);
+    expect(clueItem(1).textContent).toContain("Out since 5:30pm.");
+    expect(clueItem(1).querySelector(".hq-status")!.textContent).toContain("already out");
+  });
+
+  it("puts focus on the first problem after a check, and on Save these clues when all is well", async () => {
+    await openDoor7({
+      "POST /api/admin/elf/clues/check": [
+        { body: { doors: [], problems: [{ kind: "bad-door", line: 1, door: null, message: "Line 1: no such door." }] } },
+        { body: { doors: [{ door: 7, line: 1, placeName: null, clues: [] }], problems: [] } },
+      ],
+    });
+    button(doorsPart(), "Paste all the clues")!.click();
+    type(pasteBox(), "x");
+    button(doorsPart(), "Check these clues")!.click();
+    await flush();
+    expect(document.activeElement).toBe(doorsPart().querySelector(".hq-paste-problems li"));
+    button(doorsPart(), "Check these clues")!.click();
+    await flush();
+    expect(document.activeElement).toBe(button(doorsPart(), "Save these clues"));
+  });
+
+  it("gives a head elf with view access only no Save on clues, no live ticks and no paste", async () => {
+    await openDoor7({
+      "GET /api/admin/elf/doors": { body: { ...LIST, canEdit: false } },
+      "GET /api/admin/elf/doors/7": { body: { door: sheet(), canEdit: false } },
+    });
+    [1, 2, 3].forEach((n) => expect(button(clueItem(n), "Save")).toBeUndefined());
+    expect(clueBox(1).hasAttribute("disabled")).toBe(true);
+    expect(sheetEl().querySelector<HTMLInputElement>("#hqDoor-droppedOff")!.disabled).toBe(true);
+    expect(sheetEl().querySelector<HTMLInputElement>("#hqDoor-thanked")!.disabled).toBe(true);
+    expect(button(doorsPart(), "Paste all the clues")).toBeUndefined();
+    expect(button(doorsPart(), "Print the list of places")).toBeDefined();
+    expect(button(sheetEl(), "Print the poster")).toBeDefined();
+  });
+
+  it("puts a tick back when its request fails", async () => {
+    await openDoor7({ "POST /api/admin/elf/doors/7/dropped-off": { status: 500, body: { error: "Admin is temporarily unavailable" } } });
+    const box = sheetEl().querySelector<HTMLInputElement>("#hqDoor-droppedOff")!;
+    box.click();
+    await flush();
+    expect(box.checked).toBe(false);
+    expect(box.disabled).toBe(false);
+    const line = sheetEl().querySelector('[data-part="prints"] .hq-status')!;
+    expect(line.textContent).toBe("Admin is temporarily unavailable");
+    expect(line.classList.contains("is-error")).toBe(true);
   });
 });

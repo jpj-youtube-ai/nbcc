@@ -217,24 +217,24 @@
     function drawSwitch(box) {
       var s = data.settings || {};
       var on = !!s.schoolOn;
-      var lever = el("button", { class: "hq-lever", type: "button", role: "switch", id: "hqLever", "aria-checked": String(on), "aria-label": "The school's switch", disabled: !data.canSwitch }, [
+      var lever = el("button", { class: "hq-lever", type: "button", role: "switch", id: "hqLever", "aria-checked": String(on), "aria-label": "Elf Detective School's switch", disabled: !data.canSwitch }, [
         el("span", { class: "hq-lever__words", "aria-hidden": "true", text: on ? "ON" : "OFF" }),
         el("span", { class: "hq-lever__knob" }, [el("img", { src: PAPER + "deco/bauble.webp", alt: "", width: 52, height: 52 })]),
       ]);
       var words = el("div", {}, [
-        el("h2", { class: "hq-h2", text: on ? "The school is live" : "The school is switched off" }),
+        el("h2", { class: "hq-h2", text: on ? "Elf Detective School is live" : "Elf Detective School is switched off" }),
         el("p", { class: "hq-words hq-soft", text: on ? "Anyone can find it and enrol." : s.previewOn ? "Families cannot see it yet. Your private preview link can." : "Families cannot see it yet." }),
       ]);
       box.appendChild(lever);
       box.appendChild(words);
-      if (!data.canSwitch) box.appendChild(el("p", { class: "hq-words hq-soft hq-switchbox__who", text: "Only an admin can switch the school on or off." }));
+      if (!data.canSwitch) box.appendChild(el("p", { class: "hq-words hq-soft hq-switchbox__who", text: "Only an admin can switch Elf Detective School on or off." }));
       lever.addEventListener("click", function () {
         if (confirming) return;
         var turnOn = !on;
         var yes = el("button", { class: "hq-btn hq-btn--small " + (turnOn ? "hq-btn--go" : "hq-btn--danger"), type: "button", text: turnOn ? "Yes, switch it on" : "Yes, switch it off" });
         var no = el("button", { class: "hq-btn hq-btn--small", type: "button", text: turnOn ? "Not yet" : "Keep it on" });
         confirming = el("div", { class: "hq-confirm", role: "group", "aria-label": "Are you sure?" }, [
-          el("p", { class: "hq-words", text: turnOn ? "Switch it on for everyone? Sign ups open straight away and anyone can find the school." : "Switch it off? Families cannot see the school or sign in while it is off." }),
+          el("p", { class: "hq-words", text: turnOn ? "Switch it on for everyone? Sign ups open straight away and anyone can find Elf Detective School." : "Switch it off? Families cannot see Elf Detective School or sign in while it is off." }),
           yes,
           no,
         ]);
@@ -253,7 +253,7 @@
               data.settings = d.settings;
               confirming = null;
               draw();
-              say(status, turnOn ? "The school is live." : "The school is switched off.", true);
+              say(status, turnOn ? "Elf Detective School is live." : "Elf Detective School is switched off.", true);
               var again = doc.getElementById("hqLever");
               if (again) again.focus();
             })
@@ -270,7 +270,7 @@
       box.appendChild(el("h2", { class: "hq-h2", text: "Needs you" }));
       var quests = data.quests || [];
       if (!quests.length) {
-        box.appendChild(el("p", { class: "hq-words hq-quiet" }, [el("span", { class: "hq-tick", "aria-hidden": "true" }), "Nothing needs you. The school is running itself."]));
+        box.appendChild(el("p", { class: "hq-words hq-quiet" }, [el("span", { class: "hq-tick", "aria-hidden": "true" }), "Nothing needs you. Elf Detective School is running itself."]));
         return;
       }
       var list = el("ul", { class: "hq-quests" });
@@ -883,8 +883,8 @@
       // The private preview link.
       var preview = el("section", { class: "hq-panel hq-preview", "aria-label": "Your private preview" });
       preview.appendChild(el("h2", { class: "hq-h2", text: "Your private preview" }));
-      preview.appendChild(el("p", { class: "hq-words", text: s.previewOn ? "A preview link is open. Anyone who has it can see the school." : "There is no preview link." }));
-      preview.appendChild(el("p", { class: "hq-words hq-soft", text: "A preview link shows every page of the school while it is switched off, in the browser that opens it. Payments in the preview are real." }));
+      preview.appendChild(el("p", { class: "hq-words", text: s.previewOn ? "A preview link is open. Anyone who has it can see Elf Detective School." : "There is no preview link." }));
+      preview.appendChild(el("p", { class: "hq-words hq-soft", text: "A preview link shows every page of Elf Detective School while it is switched off, in the browser that opens it. Payments in the preview are real." }));
       if (shownLink) {
         var link = el("input", { id: "hqPreviewLink", class: "hq-find", type: "text", readonly: true });
         link.value = shownLink;

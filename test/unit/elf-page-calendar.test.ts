@@ -175,6 +175,16 @@ describe("the calendar page", () => {
     expect(join.querySelector('a[href="/elf/join"]')).not.toBeNull();
   });
 
+  // Jaimie, 10 November 2026: "school" alone reads as a real school (NBCC takes referrals from
+  // schools), so a button names the game in full or not at all. The join card's own heading already
+  // says "Join Elf Detective School", so its button does not say it again.
+  it("names the game in full on its join buttons, never as the school", () => {
+    const doc = page(view(AFTERNOON));
+    expect(words(doc.querySelector('.elf-top__actions a[href="/elf/join"]')!)).toBe("Join Elf Detective School");
+    expect(words(doc.querySelector('.elf-join a[href="/elf/join"]')!)).toBe("Join now");
+    expect(renderCalendarPage(view(AFTERNOON))).not.toContain("Join the school");
+  });
+
   it("explains how it works in four steps", () => {
     const steps = page(view(AFTERNOON)).querySelectorAll(".elf-steps > li");
     expect(steps.length).toBe(4);

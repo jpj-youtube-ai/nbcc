@@ -132,7 +132,7 @@ describe("the HQ screen", () => {
     const { hq, calls } = page({ answers: { "/api/admin/elf/hq": { ...BUSY, settings: { ...BUSY.settings, schoolOn: true } } } });
     await hq.open();
     lever().click();
-    expect(hqPart().textContent).toContain("Switch it off? Families cannot see the school or sign in while it is off.");
+    expect(hqPart().textContent).toContain("Switch it off? Families cannot see Elf Detective School or sign in while it is off.");
     buttonCalled("Keep it on")!.click();
     expect(hqPart().textContent).not.toContain("Switch it off?");
     expect(calls.filter((c) => c.method === "PATCH")).toHaveLength(0);
@@ -142,7 +142,7 @@ describe("the HQ screen", () => {
     const { hq } = page({ answers: { "/api/admin/elf/hq": { ...BUSY, canSwitch: false } } });
     await hq.open();
     expect(lever().disabled).toBe(true);
-    expect(hqPart().textContent).toContain("Only an admin can switch the school on or off.");
+    expect(hqPart().textContent).toContain("Only an admin can switch Elf Detective School on or off.");
   });
 
   it("draws the quests with their counts, and a quest's button opens its part", async () => {
@@ -162,7 +162,7 @@ describe("the HQ screen", () => {
     const { hq } = page();
     await hq.open();
     expect(hqPart().querySelectorAll(".hq-quest")).toHaveLength(0);
-    expect(hqPart().textContent).toContain("Nothing needs you. The school is running itself.");
+    expect(hqPart().textContent).toContain("Nothing needs you. Elf Detective School is running itself.");
   });
 
   it("shows the money as one bar, with the Gift Aid it could add", async () => {
@@ -557,7 +557,7 @@ describe("the Settings screen", () => {
     expect(box.value).toBe(url);
     expect(box.readOnly).toBe(true);
     expect(settingsPart().querySelector('label[for="hqPreviewLink"]')!.textContent).toBe("Copy it now: it is shown only once");
-    expect(settingsPart().textContent).toContain("A preview link is open. Anyone who has it can see the school.");
+    expect(settingsPart().textContent).toContain("A preview link is open. Anyone who has it can see Elf Detective School.");
     expect(inPart(settingsPart(), "End the link")).toBeTruthy();
   });
 
@@ -577,7 +577,7 @@ describe("the Settings screen", () => {
     await hq.open();
     tabs()[3].click();
     expect(settingsPart().textContent).toContain("The least anyone pays is £1 for each detective, and we suggest £5.");
-    expect(settingsPart().textContent).toContain("A preview link is open. Anyone who has it can see the school.");
+    expect(settingsPart().textContent).toContain("A preview link is open. Anyone who has it can see Elf Detective School.");
     expect(settingsPart().textContent).toContain("Only an admin can change these.");
     expect(settingsPart().querySelectorAll("button")).toHaveLength(0);
   });

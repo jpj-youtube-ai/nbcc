@@ -51,6 +51,7 @@ with families' pictures through December; and none of the anti-goals below ever 
    was taken is taken out of it. A photo shows only after a head elf approves it, and the site keeps
    who approved it and when. Elves go up straight away, and a family's elves show until their photo
    is approved. Every photo comes down at the end of January. (Mockup: `door-scrapbook-v2.html`.)
+   Decision 11 changes how the photos and the elves sit together.
 3. **A visit is proved by typing the word on the elf's tag** (10 November; replaces October decision
    7's location check and photo proof). The site never asks for a location. A family who arrives
    after the find types the same word the finder typed. Accepted, and told to Jaimie: a word posted
@@ -78,6 +79,12 @@ with families' pictures through December; and none of the anti-goals below ever 
    "Head Elf HQ: the photo check" and "Alerts" below, including the parts that began as Claude's
    guesses. (Mockup: `photo-check.html`.)
 10. **On a door's evening, head elves see who found it and when** (10 November).
+11. **Photos in their own row** (10 November, after the builder check; replaces decision 2's choice
+    of a photo or the elves). Every visiting detective's elf goes on the door with its name, the
+    finder first. Photos go in a separate row with no names, in the order they were approved, so
+    nobody can match a face to a name. A family can add a photo as well as their elves. The mockup
+    `door-scrapbook-v2.html` still shows the earlier choice, with photos mixed in among the elves:
+    build to these words instead.
 
 ### Claude's calls (for Jaimie to check while reading)
 
@@ -105,6 +112,23 @@ with families' pictures through December; and none of the anti-goals below ever 
 - **C10. Two drops.** The Doors page live by Friday 20 November so head elves can start typing
   places in; everything else live, with December's doors still off, by Friday 27 November; a
   practice evening that weekend; December's doors switched on by Monday 30 November.
+- **C11. A snow day when a door cannot run.** If a door still has no place, no word or no first
+  clue when its first clue is due, or a head elf calls it off from Doors before then, the door does
+  not run: it says its elf got snowed in, and every detective gets that door done, so nobody misses
+  out on graduating. December's doors can only be switched on once door 1 is ready, and Head Elf
+  HQ warns about any door in the next three days that is not. A head elf can still change a door's
+  place at short notice and print a new poster.
+- **C12. Photos never go into the backups.** The nightly backups keep everything for seven years,
+  and copies go to Google Drive, so the photos are left out of them (out of the database copy and
+  the spreadsheet copies alike). Deleting a photo then really deletes it. A restore from a backup
+  comes back without photos, which is fine because they only stay up until January.
+- **C13. At most one alert every half hour.** On a busy evening a quick head elf could clear the
+  photos after every one, so each new photo would start a new alert. After an alert goes, the next
+  one waits at least 30 minutes.
+- **C14. The morning email's social posts are words and a door picture.** Two a day: tonight's door
+  (its number, the first clue's time and how to join) and yesterday's find (who found it, when, and
+  the place, now that it is shown, inviting visits), each with its door's picture. No new pictures
+  are drawn for them.
 
 ## Goals
 
@@ -112,7 +136,8 @@ with families' pictures through December; and none of the anti-goals below ever 
 2. Everything that runs each day in December works by itself: the clues, the daily clue email, the
    typed guesses, the claim, the stamps, the place being shown, the reminder to the place, and the
    other emails listed under "Emails in wave 2".
-3. Families who visit after the find get their stamp and can add a picture behind the door.
+3. Families who visit after the find get their stamp and their elves on the door, and can add a
+   photo.
 4. A head elf checks every photo before anyone else sees it, and the log shows who did what and when.
 5. Head elves hear about waiting photos by text and email without being flooded.
 6. Head elves can see who found each door's elf and when.
@@ -126,7 +151,8 @@ with families' pictures through December; and none of the anti-goals below ever 
 - Prizes and the Christmas Eve judging (C9); refunds and Gift Aid (separate pieces, fitted around
   the doors); the planning map (C5).
 - Deleting children's details at the end of January (October decision 11). That is built in
-  January as its own piece. This design deletes the photos.
+  January as its own piece, which also has to settle what the seven years of backups keep. This
+  design deletes the photos.
 
 ## Anti-goals: wave 2 has failed if
 
@@ -173,6 +199,16 @@ with families' pictures through December; and none of the anti-goals below ever 
   cannot be opened up yet.
 - **Head elves** see in Finds who found it and when, and get the find alert by email (C7).
 
+### When a door cannot run (C11)
+
+- At its first clue's time, a door with no place, no word or no first clue becomes a snow day by
+  itself. A head elf can also call one from Doors at any time before the first clue.
+- A snow day door shows that its elf got snowed in. No clue, guess, word or picture belongs to it,
+  and every detective gets it done, towards ranks, presents and graduating.
+- If a place stops hosting its elf after its day, a head elf ticks **Gone home** on its door. The
+  scrapbook stays, the door says its elf has gone home so nobody makes a wasted trip, and its word
+  stops giving stamps.
+
 ### After the find, all December
 
 - Any signed in family who types the right word gets a stamp for each detective they choose: one
@@ -181,20 +217,20 @@ with families' pictures through December; and none of the anti-goals below ever 
 - A word typed after the find but before the place is shown is saved, and counts as that family's
   visit from the moment the place is shown (secret places: candy cane visits count from then). The
   page tells them so.
-- Then comes **Add your picture to door 7**, with three choices: **A photo of us**, **Our elves**, or
-  **No picture this time**.
-- **Our elves:** each chosen detective's elf goes behind the door straight away, one polaroid each,
-  in the elf's look at that moment.
+- **Their elves go on the door** straight away (decision 11): each chosen detective's elf, one
+  polaroid each, with its detective name, in the elf's look at that moment.
+- Then the page offers **Add a photo to door 7**, or **Not this time**.
 - **A photo:** the grown up takes or picks one, ticks "Yes, show this photo on door 7" (unticked to
   start), and presses **Send it to the head elves**. The site makes the picture again, so nothing
-  from the camera survives: not where, not when, not the phone. The photo waits for a head elf, and
-  the family's elves stand in for it until then.
-- A family can take their photo down at any time from the door's page; their elves show instead.
-- A declined photo never shows. The door's page tells the family kindly, their elves stay, and they
-  can send another. No email about it.
+  from the camera survives: not where, not when, not the phone. The photo waits for a head elf.
+- A family can take their photo down at any time from the door's page. Their elves stay either way.
+- A declined photo never shows. The door's page tells the family kindly, and they can send another.
+  No email about it.
 - One photo per family per door at a time: a new photo replaces one that is still waiting.
-- The scrapbook shows the finder first, then everyone else in the order they visited. An open door on
-  the calendar shows the first few pictures behind it and how many there are.
+- **The scrapbook** has two parts. First the elves, each with its name: the finder's first with the
+  "Found first!" rosette, then everyone else's in the order they visited. Then the photos, with no
+  names, in the order they were approved. An open door on the calendar shows the first few pictures
+  behind it and how many there are.
 
 ### Head Elf HQ: the photo check (in Finds)
 
@@ -214,7 +250,7 @@ Match `photo-check.html`.
   declined, with the reason; taken down by the family or by a head elf. Photos that are up have
   **Take it down**.
 - On **Sunday 31 January 2027** every photo is deleted. The log keeps its lines without the
-  pictures.
+  pictures. Photos are never in the backups (C12), so deleted means gone.
 
 ### Alerts
 
@@ -222,8 +258,8 @@ Match `photo-check.html`.
   email, a mobile number if they have given one, and alerts on or off. With no mobile number, a head
   elf gets the emails only. **Send me a test alert** sends one of each to whoever presses it.
 - One text and one email go to everyone with alerts on when photos start waiting. No more go until
-  every waiting photo has been checked. Nothing goes between 9pm and 8am; at 8am, one alert goes if
-  any photos are waiting.
+  every waiting photo has been checked, and never sooner than 30 minutes after the last one (C13).
+  Nothing goes between 9pm and 8am; at 8am, one alert goes if any photos are waiting.
 - The text, from NBCC: "Elf Detective School: a photo is waiting for a head elf to check.
   nbcc.scot/admin". The email: "A photo is waiting to be checked", the door's number, and a button
   to Head Elf HQ. Neither shows the photo or the family's name.
@@ -288,8 +324,8 @@ From October and the secret places design unless said otherwise:
 - the daily clue email to families at clue 1 (secret places decision 6);
 - the place's reminder at 9am on its day (October decision 6, secret places decision 10);
 - the morning Elf HQ email to everyone with alerts on, at 8am (October decision 18): today's door
-  and whether it is ready, yesterday's finder, any photos waiting, and the day's social posts ready
-  to copy, which never name a place before it is shown;
+  and whether it is ready, yesterday's finder, any photos waiting, and the day's two social posts
+  ready to copy (C14), which never name a place before it is shown;
 - the find alert (October decision 18, C7);
 - the photo alert (decision 8);
 - the proud moments (October decision 16): a thank you with a gentle ask when a family wins a prize,
@@ -367,7 +403,10 @@ can clear it at any time, and it clears itself when December's doors are switche
   `assets/css/admin-elf-hq.css`, and the elf permission in `src/admin/permissions.ts`.
 - **Pictures:** `src/fundraising/picture-process.ts` already makes every uploaded picture again with
   sharp: turned upright, made smaller, nothing from the camera kept, size limits, one at a time.
-  Use it for photos and clue pictures.
+  Use it for photos and clue pictures. Fundraiser pictures are stored in the database
+  (`src/db/fundraiser-pictures.ts`), and the nightly backups copy the whole database
+  (`infra/modules/app/backups.tf`, `src/scripts/run-backup.ts`), so photos need leaving out of
+  them (C12).
 - **Emails:** `src/email/catalogue.ts` has an "elf" group; every new email goes in it.
 - **Timed work:** there is an in-app worker that ticks (`src/newsletter/send-worker.ts`, started
   from `src/app.ts`, safe across tasks with `FOR UPDATE SKIP LOCKED`) and a daily scheduled one-off

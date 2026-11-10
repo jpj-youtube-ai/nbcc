@@ -7184,7 +7184,8 @@ is a purchase, never a gift, so it is kept apart from donations entirely.
   `checkout.session.async_payment_succeeded` when the money comes later) is kept once, by its checkout
   session, in `uniform_payments` with an audit line (`uniform.paid`). It never writes a donor, donation
   or declaration, and the site sends no email (Stripe's own receipt goes if switched on in Stripe).
-  `charge.refunded` on a uniform's payment sets its `refunded_amount_pence` to Stripe's total.
+  `charge.refunded` on a uniform's payment sets its `refunded_amount_pence` to Stripe's total, and a
+  dispute (`charge.dispute.*`) counts the disputed amount as gone, as a donation's does.
   The rules that read a session are pure, in `src/uniform/model.ts`.
 - **Admin > Donations.** A wide **Uniform** tile below Monthly gifts shows this month and all time,
   counted as payments, less refunds (`uniform` in `GET /api/admin/donations/source-totals`, the fifth

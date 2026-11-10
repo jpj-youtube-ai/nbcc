@@ -13,6 +13,7 @@ import { isUniformSession, uniformPaymentFromSession } from "./model";
 //   checkout.session.expired / checkout.session.async_payment_failed
 //                         nothing to keep, and never a gift
 //   charge.refunded       Stripe's total refunded so far comes off the uniform payment
+//   charge.dispute.*      a dispute counts its money as gone, as a donation's does
 //
 // Null means "not a uniform event": the caller carries on as before.
 
@@ -42,6 +43,15 @@ export async function handleUniformEvent(client: Querier, event: Stripe.Event): 
       const intent = idOf(charge.payment_intent);
       if (!intent) return null;
       return (await setUniformRefund(client, intent, charge.amount_refunded ?? 0)) ? { action: "uniform.refunded" } : null;
+    }
+    // A dispute: its money counts as gone, as a donation's does (handleRefund with the dispute's amount).
+    case "charge.dispute.created":
+    case "charge.dispute.closed":
+    case "charge.dispute.funds_withdrawn": {
+      const dispute = event.data.object as Stripe.Dispute;
+      const intent = idOf(dispute.payment_intent);
+      if (!intent) return null;
+      return (await setUniformRefund(client, intent, dispute.amount ?? 0)) ? { action: "uniform.refunded" } : null;
     }
     default:
       return null;

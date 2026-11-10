@@ -64,8 +64,11 @@ export async function moveUniformSale(
   opts: { apply: boolean },
 ): Promise<{ outcome: UniformMoveOutcome; amountPence: number }> {
   const done = (outcome: UniformMoveOutcome) => ({ outcome, amountPence: w.amountPence });
-  const kept = await client.query("SELECT id FROM uniform_payments WHERE stripe_session_id = $1", [w.sessionId]);
-  if ((kept.rowCount ?? 0) > 0) return done("already_uniform");
+  // A uniform payment kept already may still have a donation left beside it: a late paying uniform
+  // (a bank payment) half recorded as a pending donation before the Uniform tile, and kept as a
+  // uniform payment when its money came in after. That donation is moved against it.
+  const kept = await client.query<{ id: number }>("SELECT id FROM uniform_payments WHERE stripe_session_id = $1", [w.sessionId]);
+  const keptId = kept.rows[0]?.id;
   const found = await client.query<{ id: number; created_at: Date; refunded_amount_pence: number; held: boolean }>(
     `SELECT d.id, d.created_at, d.refunded_amount_pence, ${HELD} AS held
        FROM donations d
@@ -76,9 +79,31 @@ export async function moveUniformSale(
     [w.sessionId, w.paymentIntentId],
   );
   const d = found.rows[0];
+  if (keptId !== undefined && !d) return done("already_uniform");
   if (d?.held) return done("held");
   const outcome: UniformMoveOutcome = d ? "moved" : "recorded";
   if (!opts.apply) return done(outcome);
+  if (keptId !== undefined && d) {
+    await client.query("UPDATE uniform_payments SET moved_from_donation_id = $2 WHERE id = $1 AND moved_from_donation_id IS NULL", [keptId, d.id]);
+    await client.query(
+      `INSERT INTO donations_moved_to_uniform (donation_id, uniform_payment_id, donation_row)
+       SELECT d.id, $2, to_jsonb(d) FROM donations d WHERE d.id = $1`,
+      [d.id, keptId],
+    );
+    await client.query(
+      `INSERT INTO audit_log (actor, action, entity, entity_id, data)
+       VALUES ($1, $2, $3, $4, $5)`,
+      [
+        "script:move-uniform-payments",
+        "uniform.moved_from_donation",
+        "uniform_payment",
+        keptId,
+        { sessionId: w.sessionId, donationId: d.id, reason: "a school uniform, not a donation (TASK-604)" },
+      ],
+    );
+    await client.query("DELETE FROM donations WHERE id = $1", [d.id]);
+    return done("moved");
+  }
   const made = await client.query<{ id: number }>(
     `INSERT INTO uniform_payments
        (stripe_session_id, stripe_payment_intent_id, stripe_payment_link_id, amount_pence, currency, buyer_name, buyer_email, details,

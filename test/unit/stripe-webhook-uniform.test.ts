@@ -171,6 +171,18 @@ describe("a refund of a uniform payment, on the webhook", () => {
     expect(anyEmail()).toBe(false);
   });
 
+  it("counts a dispute's money as gone, as a donation's is, and never touches donations", async () => {
+    await processWebhookEvent(completed("evt_u_13"));
+    for (const [i, type] of ["charge.dispute.created", "charge.dispute.closed", "charge.dispute.funds_withdrawn"].entries()) {
+      queryMock.mockClear();
+      /* eslint-disable-next-line @typescript-eslint/no-explicit-any */
+      const r = await processWebhookEvent({ id: `evt_u_d${i}`, type, data: { object: { id: "dp_1", object: "dispute", payment_intent: "pi_uniform_1", amount: 4000 } } } as any);
+      expect(r).toEqual({ processed: true, action: "uniform.refunded" });
+      expect(callFor(/update uniform_payments/i)?.[1]).toEqual(["pi_uniform_1", 4000]);
+      expect(sqls().some((s) => /donations|claim_adjust/i.test(s))).toBe(false);
+    }
+  });
+
   it("is left to the donations' refund when the payment is not a uniform's, its amount never handed to uniforms", async () => {
     const r = await processWebhookEvent(refunded("evt_u_12", "pi_some_gift", 1500));
     expect(r.action).not.toBe("uniform.refunded");

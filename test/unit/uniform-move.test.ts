@@ -84,6 +84,19 @@ describe("moving an earlier uniform payment out of donations", () => {
     expect(writes().some((s) => /donations/i.test(s.replace(/uniform_payments/g, "")) && !/audit_log/i.test(s))).toBe(false);
   });
 
+  it("still moves a donation left behind beside a uniform payment kept since, against that payment", async () => {
+    // A late paying uniform (bank payment) half recorded as a pending donation before the Uniform tile,
+    // and kept as a uniform payment when its money came in after.
+    uniformExists = true;
+    expect(await moveUniformSale(client, sale, PAID_AT, { apply: true })).toEqual({ outcome: "moved", amountPence: 4000 });
+    const w = writes();
+    expect(w.some((s) => /INSERT INTO uniform_payments/i.test(s))).toBe(false);
+    expect(w[0]).toContain("UPDATE uniform_payments SET moved_from_donation_id = $2 WHERE id = $1 AND moved_from_donation_id IS NULL");
+    expect(query.mock.calls.find((c) => /UPDATE uniform_payments/i.test(String(c[0])))![1]).toEqual([31, 77]);
+    expect(w[1]).toContain("INSERT INTO donations_moved_to_uniform");
+    expect(w[3]).toContain("DELETE FROM donations WHERE id = $1");
+  });
+
   it("does nothing to one already kept as a uniform payment, so it can be run again", async () => {
     uniformExists = true;
     donation = null;

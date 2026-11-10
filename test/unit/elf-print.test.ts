@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect } from "vitest";
-import { renderElfCertificate, renderElfPoster, renderElfTag, renderStaffCard, shareCardSvg } from "../../src/elf/print";
+import { renderPlacesList, renderElfCertificate, renderElfPoster, renderElfTag, renderStaffCard, shareCardSvg } from "../../src/elf/print";
 import type { CertificatePrint, PlacePrint, ShareCardPrint, StaffCardPrint } from "../../src/elf/print";
 import { MATERIALS_STATEMENT } from "../../src/legal/registration";
 import { schoolLogoData } from "../../src/elf/logo";
@@ -44,7 +44,8 @@ describe("the poster for a hiding place", () => {
 
   it("says how to claim an elf and how to collect a candy cane", () => {
     expect(paper(html)).toContain("Found the elf? Scan, then type the secret word on its tag.");
-    expect(paper(html)).toContain("Here for a candy cane? Scan to check in once this place's door has opened.");
+    expect(paper(html)).toContain("Here for a candy cane? Once this place's door has opened, scan and type the word on the elf's tag, then add your picture to the door.");
+    expect(paper(html)).not.toContain("check in");
     expect(paper(html)).toContain("Under 16? Bring a grown up with you to every hiding place.");
   });
 
@@ -97,7 +98,8 @@ describe("the card for a hiding place's staff", () => {
     expect(text).toContain("Your elf is Bauble");
     expect(text).toContain("Monday 7 December");
     expect(text).toContain("door 7");
-    expect(text).toContain("The clue comes out at 5:30pm");
+    expect(text).toContain("Your elf is Bauble. Your day is Monday 7 December: door 7.");
+    expect(text).toContain("The first clue comes out at 5:30pm. Please put Bauble and the poster out together then, with Bauble wearing its tag. Until then, keep them both out of sight.");
   });
 
   it("asks the shop to keep its day a secret", () => {
@@ -109,12 +111,20 @@ describe("the card for a hiding place's staff", () => {
     expect(text).toContain("It names The Toy Shop");
     expect(text).toContain("It shows the right date");
     expect(text).toContain("Its clock is ticking");
-    expect(text).toContain("hand over Bauble and the prize");
+    expect(text).toContain("Then give them the prize. Bauble stays here with the poster for the rest of December. Thank you!");
+    expect(text).not.toContain("hand over");
+    expect(text).not.toContain("stays up all month");
   });
 
   it("gives NBCC's number for a family that has typed too many wrong words", () => {
     expect(text).toContain("too many wrong words");
     expect(text).toContain("01632 960 123");
+    expect(text).toContain("Someone has mistyped the word six times. Please phone NBCC and we will sort it out.");
+    expect(text).not.toContain("Someone holding");
+  });
+
+  it("says families keep calling all December and need nothing from the shop", () => {
+    expect(text).toContain("Families will keep calling in all December to find Bauble. They scan the poster and type the word on the tag themselves: there is nothing you need to do.");
   });
 
   it("says what happens if nobody finds the elf", () => {
@@ -147,6 +157,12 @@ describe("the tag an elf wears", () => {
 
   it("tidies the spaces round and inside the word", () => {
     expect(paper(renderElfTag({ elfName: "Bauble", secretWord: "  Snowball    472 " }))).toContain("word: SNOWBALL 472 The first");
+  });
+
+  it("says the first detective wins the door's prize and everyone after gets a stamp", () => {
+    const text = paper(renderElfTag({ elfName: "Bauble", secretWord: "Snowball 472" }));
+    expect(text).toContain("The first detective to type it wins this door's prize. Everyone after gets a candy cane stamp.");
+    expect(text).not.toContain("wins me");
   });
 
   it("carries the charity's statement", () => {
@@ -276,8 +292,15 @@ describe("the share card", () => {
   });
 });
 
+const listRow = (door: number, extra: object = {}) => ({
+  door: door as never,
+  clueAt: new Date(`2026-12-${String(door).padStart(2, "0")}T17:30:00.000Z`),
+  placeName: null, placeTown: null, placeAddress: null, contactName: null, contactPhone: null, ...extra,
+});
+
 describe("house rules for everything printed", () => {
   const pages: [string, string][] = [
+    ["list of places", renderPlacesList(2026, [listRow(7, { placeName: "The Toy Shop", placeTown: "Troon", placeAddress: "1 High Street", contactName: "Sam", contactPhone: "01632 960 123" }), listRow(8)])],
     ["poster", renderElfPoster(PLACE)],
     ["staff card", renderStaffCard(CARD)],
     ["tag", renderElfTag({ elfName: "Bauble", secretWord: "Snowball 472" })],
@@ -304,5 +327,67 @@ describe("house rules for everything printed", () => {
   it("has no dashes or hyphenated words on the share card either", () => {
     const text = words(new DOMParser().parseFromString(shareCardSvg(SHARE), "image/svg+xml").documentElement);
     expect(text).not.toMatch(/[–—]|[A-Za-z0-9]-[A-Za-z0-9]/);
+  });
+});
+
+describe("the list of hiding places", () => {
+  const row = (door: number, extra: object = {}) => ({
+    door: door as never,
+    clueAt: new Date(`2026-12-${String(door).padStart(2, "0")}T17:30:00.000Z`),
+    placeName: null, placeTown: null, placeAddress: null, contactName: null, contactPhone: null, ...extra,
+  });
+  const html = renderPlacesList(2026, [
+    row(7, { placeName: "The Toy Shop", placeTown: "Troon", placeAddress: "1 High Street", contactName: "Sam", contactPhone: "01632 960 123" }),
+    row(8),
+  ]);
+  const text = paper(html);
+
+  it("is for staff only and titled with the year", () => {
+    expect(html).toContain("Elf Detective School: the hiding places for December 2026");
+    expect(html).toContain("<span>The hiding places. For staff only: it names every place and its day.</span>");
+  });
+
+  it("gives each door its day, first clue time, place, address and contact", () => {
+    expect(text).toContain("Monday 7 December");
+    expect(text).toContain("First clue at 5:30pm");
+    expect(text).toContain("The Toy Shop, Troon");
+    expect(text).toContain("1 High Street");
+    expect(text).toContain("Sam");
+    expect(text).toContain("01632 960 123");
+  });
+
+  it("says No place yet for an empty door", () => {
+    expect(text).toContain("No place yet");
+  });
+
+  it("spreads 24 full doors over three sheets of at most 8, each door once and in order", () => {
+    const long = "An Invented Emporium of Toys, Games and Christmas Curiosities";
+    const all = Array.from({ length: 24 }, (_v, i) => listRow(i + 1, { placeName: long, placeTown: "Troon", placeAddress: `${i + 1} The Long Invented Street, Troon, Ayrshire`, contactName: "Sam Invented", contactPhone: "01632 960 123" }));
+    const doc = parse(renderPlacesList(2026, all));
+    const sheets = [...doc.querySelectorAll(".page")];
+    expect(sheets).toHaveLength(3);
+    const doors: number[] = [];
+    for (const sheet of sheets) {
+      const entries = [...sheet.querySelectorAll(".entry")];
+      expect(entries.length).toBeLessThanOrEqual(8);
+      expect(sheet.textContent).toContain(MATERIALS_STATEMENT);
+      for (const e of entries) doors.push(Number(/Door (\d+)/.exec(e.textContent ?? "")![1]));
+    }
+    expect(doors).toEqual(Array.from({ length: 24 }, (_v, i) => i + 1));
+    expect(doc.querySelectorAll("h1")).toHaveLength(1);
+    expect(sheets[0].querySelector("h1")).not.toBeNull();
+  });
+
+  it("puts doors in door order whatever order they come in", () => {
+    const doc = parse(renderPlacesList(2026, [listRow(8), listRow(7)]));
+    const order = [...doc.querySelectorAll(".entry .top")].map((e) => e.textContent ?? "");
+    expect(order[0]).toContain("Door 7");
+    expect(order[1]).toContain("Door 8");
+  });
+
+  it("escapes what staff typed", () => {
+    const bad = renderPlacesList(2026, [row(7, { placeName: "<b>Bold</b>", placeTown: "T" })]);
+    expect(bad).not.toContain("<b>Bold</b>");
+    expect(bad).toContain("&lt;b&gt;Bold&lt;/b&gt;");
   });
 });

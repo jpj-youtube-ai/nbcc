@@ -69,9 +69,10 @@ describe("knowing how many tables to expect", () => {
   // orders, sign in codes and sessions; 101 since invoices for donations added the invoices and
   // the bank details printed on them; 102 since Fill a Red Bag added companies' own Workshops; 103
   // since TASK-596 kept aside the monthly renewals that were recorded twice; 105 since TASK-604 kept
-  // uniform payments apart from donations, and the donations moved out to them.
-  it("counts 105 across the three databases", () => {
-    expect(expectedTableCount(ROOT)).toBe(105);
+  // uniform payments apart from donations, and the donations moved out to them; 108 since Elf
+  // Detective School's Doors added the hiding places, the other names that count for each, and their clues.
+  it("counts 108 across the three databases", () => {
+    expect(expectedTableCount(ROOT)).toBe(108);
   });
 
   it("finds the three tables that live outside the main database", () => {
@@ -181,7 +182,12 @@ describe("knowing how many tables to expect", () => {
     // TASK-604: uniform payments, which hold buyers' names and addresses, and the donations moved to them.
     expect(main).toContain("uniform_payments");
     expect(main).toContain("donations_moved_to_uniform");
-    expect(main.length).toBe(102);
+    // Elf Detective School's Doors: the hiding places (staff only, they name secret places), the
+    // other names that count, and the clues.
+    expect(main).toContain("elf_doors");
+    expect(main).toContain("elf_door_names");
+    expect(main).toContain("elf_clues");
+    expect(main.length).toBe(105);
   });
 
   it("returns nothing for a directory that does not exist, rather than throwing", () => {

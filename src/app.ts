@@ -60,6 +60,7 @@ import { adminDonationDetailsRouter } from "./routes/admin-donation-details";
 import { createSiteRouter } from "./routes/site";
 import { elfRouter } from "./routes/elf";
 import { adminElfRouter } from "./routes/admin-elf";
+import { adminElfDoorsRouter } from "./routes/admin-elf-doors";
 
 export function createApp() {
   const app = express();
@@ -179,6 +180,7 @@ export function createApp() {
   // wardrobe. Every route answers 404 while the school is switched off in the admin.
   app.use(elfRouter);
   app.use(adminElfRouter);
+  app.use(adminElfDoorsRouter);
   app.use(adminEventTicketsRouter);
   // The Festive Ball ticket report, set up from the Events page (TASK-464).
   app.use(adminBallReportRouter);

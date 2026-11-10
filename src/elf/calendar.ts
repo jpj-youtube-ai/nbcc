@@ -135,3 +135,75 @@ export function closingInstant(
   const capped = Math.min(close, last.getTime());
   return capped > clue.getTime() ? new Date(capped) : null;
 }
+
+// A door's evening: the four times of the hunt on its own day. Clue 1 follows the kind of day (or the
+// time staff set). Each later time is the one staff set, or half an hour after the one before.
+
+export interface StaffEvening {
+  clue1?: string | null;
+  clue2?: string | null;
+  clue3?: string | null;
+  reveal?: string | null;
+}
+
+export type EveningProblem =
+  | "clue2-not-after-clue1"
+  | "clue3-not-after-clue2"
+  | "reveal-not-after-clue3"
+  | "past-midnight";
+
+export interface Evening {
+  clue1: string;
+  clue2: string;
+  clue3: string;
+  reveal: string;
+  problems: EveningProblem[];
+}
+
+export const EVENING_PROBLEM_WORDS: Record<EveningProblem, string> = {
+  "clue2-not-after-clue1": "Clue 2 must come after clue 1.",
+  "clue3-not-after-clue2": "Clue 3 must come after clue 2.",
+  "reveal-not-after-clue3": "The place must be shown after clue 3.",
+  "past-midnight": "Every time must be on the door's own day, before midnight.",
+};
+
+const EVENING_GAP_MINUTES = 30;
+const LAST_MINUTE_OF_DAY = 23 * 60 + 59;
+
+function minutesOf(time: string): number {
+  return Number(time.slice(0, 2)) * 60 + Number(time.slice(3, 5));
+}
+
+function clockOfMinutes(total: number): string {
+  return `${String(Math.floor(total / 60)).padStart(2, "0")}:${String(total % 60).padStart(2, "0")}`;
+}
+
+/** The four times of a door's evening, and anything wrong with their order. */
+export function eveningFor(season: ElfSeason, door: Door, staff: StaffEvening): Evening {
+  const problems: EveningProblem[] = [];
+  let pastMidnight = false;
+  const clue1 = clueTimeFor(season, door, staff.clue1);
+  const next = (staffTime: string | null | undefined, before: string): string => {
+    if (isClockTime(staffTime)) return staffTime.slice(0, 5);
+    const wanted = minutesOf(before) + EVENING_GAP_MINUTES;
+    if (wanted > LAST_MINUTE_OF_DAY) {
+      pastMidnight = true;
+      return clockOfMinutes(LAST_MINUTE_OF_DAY);
+    }
+    return clockOfMinutes(wanted);
+  };
+  const clue2 = next(staff.clue2, clue1);
+  const clue3 = next(staff.clue3, clue2);
+  const reveal = next(staff.reveal, clue3);
+  if (minutesOf(clue2) <= minutesOf(clue1)) problems.push("clue2-not-after-clue1");
+  if (minutesOf(clue3) <= minutesOf(clue2)) problems.push("clue3-not-after-clue2");
+  if (minutesOf(reveal) <= minutesOf(clue3)) problems.push("reveal-not-after-clue3");
+  if (pastMidnight) problems.push("past-midnight");
+  return { clue1, clue2, clue3, reveal, problems };
+}
+
+/** Does the place close less than an hour after clue 3? Both are clock times on the same day. */
+export function closesTooSoon(closesAt: string | null, clue3: string): boolean {
+  if (!isClockTime(clue3)) return false;
+  return minutesOf(clockOr(closesAt, DEFAULT_CLOSING_TIME)) - minutesOf(clue3) < 60;
+}

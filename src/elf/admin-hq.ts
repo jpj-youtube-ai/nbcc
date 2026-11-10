@@ -1,3 +1,4 @@
+import type { Door } from "./calendar";
 import { COSTUMES, SKIN_TONES } from "./wardrobe";
 
 // NBCC Elf Detective School: Head Elf HQ's numbers, its quests and a detective's picture, worked out
@@ -5,7 +6,7 @@ import { COSTUMES, SKIN_TONES } from "./wardrobe";
 // (decisions 4 and 5). Pure: no pool, no clock. Unit tested in test/unit/elf-admin-hq.test.ts.
 
 /** A part of Head Elf HQ, as its menu tile names it. */
-export type HqTab = "hq" | "families" | "money" | "settings";
+export type HqTab = "hq" | "families" | "doors" | "money" | "settings";
 
 /** What HQ counts: active families that have not been removed, and their paid orders. */
 export interface HqNumbers {
@@ -23,7 +24,7 @@ export interface HqNumbers {
 
 /** One line of Needs you: something waiting for a person, and where to sort it. */
 export interface Quest {
-  id: "names" | "preview" | "waiting";
+  id: "names" | "doors" | "preview" | "waiting";
   count: number | null;
   title: string;
   words: string;
@@ -34,7 +35,7 @@ export interface Quest {
 }
 
 /** Needs you, in order, each only when it applies. */
-export function questsFor(n: HqNumbers, previewOn: boolean): Quest[] {
+export function questsFor(n: HqNumbers, previewOn: boolean, notReady: { door: Door; toDo: number }[]): Quest[] {
   const quests: Quest[] = [];
   if (n.namesToCheck > 0) {
     quests.push({
@@ -45,6 +46,18 @@ export function questsFor(n: HqNumbers, previewOn: boolean): Quest[] {
       go: "families",
       button: "Check names",
       filter: "check",
+    });
+  }
+  if (notReady.length > 0) {
+    const first = notReady[0];
+    quests.push({
+      id: "doors",
+      count: null,
+      title: notReady.length === 1 ? "1 door to get ready" : `${notReady.length} doors to get ready`,
+      words: `Door ${first.door} is next: ${first.toDo} to do.`,
+      go: "doors",
+      button: "Open Doors",
+      filter: null,
     });
   }
   if (previewOn) {

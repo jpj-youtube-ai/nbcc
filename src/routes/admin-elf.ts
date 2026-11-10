@@ -18,6 +18,9 @@ import {
   type FamilySheetRow,
   type FamilySummaryRow,
 } from "../db/elf-admin";
+import { listElfDoors } from "../db/elf-doors";
+import { doorInstant, eveningFor, DOOR_COUNT, type Door } from "../elf/calendar";
+import { doorPicture, doorSeason, emptyDoor, type DoorSetup, readinessOf, staffEveningOf } from "../elf/door-setup";
 import { familyFilter, parseDetectiveChange, parseFamilyChange } from "../elf/admin-families";
 import { daysUntil, questsFor, tileFor } from "../elf/admin-hq";
 import { sendSignInCodeTo } from "../elf/sign-in-code";
@@ -49,11 +52,25 @@ export const adminElfRouter = Router();
 
 const UNAVAILABLE = { error: "Admin is temporarily unavailable" };
 
+const PHONE_WORDS = "Use only numbers, spaces, brackets, plus signs and hyphens, with at least 7 numbers.";
+
+/** A phone number a person can ring: blank is nothing (null). Shared with the doors' contact phone. */
+export const phoneSchema = z.preprocess(
+  (v) => (typeof v === "string" && v.trim() === "" ? null : v),
+  z
+    .string({ invalid_type_error: PHONE_WORDS })
+    .trim()
+    .max(40, PHONE_WORDS)
+    .refine((s) => /^[0-9 +()-]+$/.test(s) && (s.match(/\d/g) ?? []).length >= 7, PHONE_WORDS)
+    .nullable(),
+);
+
 const patchSchema = z
   .object({
     schoolOn: z.boolean().optional(),
     entryFromPence: z.number().int().min(100, "The least a family pays must be at least £1 for each detective.").max(1000, "The least a family pays can be at most £10 for each detective.").optional(),
     entrySuggestedPence: z.number().int().min(100, "The suggested amount must be at least £1 for each detective.").max(5000, "The suggested amount can be at most £50 for each detective.").optional(),
+    placePhone: phoneSchema.optional(),
   })
   .strict();
 
@@ -90,6 +107,30 @@ export async function patchAdminElfSettings(req: Request, res: Response): Promis
   }
 }
 
+/** The doors whose clue 1 is still to come and that are not ready, soonest first. Read only: a door
+ *  with no row yet counts as an empty one. If the doors cannot be read, HQ simply has none to point at. */
+async function doorsNotReadyAt(year: number, now: Date): Promise<{ door: Door; toDo: number }[]> {
+  try {
+    const rows = await listElfDoors(year);
+    const season = doorSeason(year);
+    const doors: DoorSetup[] = [];
+    for (let n = 1; n <= DOOR_COUNT; n++) {
+      doors.push(rows.find((r) => r.door === n) ?? emptyDoor(n as Door, ""));
+    }
+    return doors
+      .map((d) => {
+        const at = doorInstant(season, d.door, eveningFor(season, d.door, staffEveningOf(d)).clue1);
+        return { door: d.door, at, toDo: readinessOf(d, doorPicture(year, d.door) !== null).toDo };
+      })
+      .filter((d) => d.toDo > 0 && d.at !== null && d.at.getTime() > now.getTime())
+      .sort((a, b) => a.at!.getTime() - b.at!.getTime())
+      .map(({ door, toDo }) => ({ door, toDo }));
+  } catch (err) {
+    console.error("admin elf doors failed:", err instanceof Error ? err.message : err);
+    return [];
+  }
+}
+
 /** How many newest recruits HQ shows. */
 const RECRUITS = 8;
 
@@ -107,6 +148,7 @@ export async function getAdminElfHq(req: Request, res: Response): Promise<Respon
       loadEffectivePermissions(claims.sub),
     ]);
     const clue = firstClueAt(settings.year);
+    const notReady = await doorsNotReadyAt(settings.year, now);
     return res.status(200).json({
       settings: forAdmin(settings),
       // Whether the lever is drawn to be pulled. The token's role is enough for that: the switch
@@ -116,7 +158,8 @@ export async function getAdminElfHq(req: Request, res: Response): Promise<Respon
       // reads it, so someone given only a look is never shown buttons that answer "forbidden".
       canEdit: !!perms && can(perms, "elf", "edit"),
       numbers,
-      quests: questsFor(numbers, !!settings.previewHash),
+      quests: questsFor(numbers, !!settings.previewHash, notReady),
+      doorsNotReady: notReady.length,
       recruits: recruits.map((d) => ({
         detectiveId: d.detectiveId,
         familyId: d.familyId,

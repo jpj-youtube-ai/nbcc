@@ -24,6 +24,7 @@
   var TABS = [
     { id: "hq", name: "HQ", icon: PAPER + "icons/icon-bell.webp" },
     { id: "families", name: "Families", icon: PAPER + "icons/icon-friend.webp" },
+    { id: "doors", name: "Doors", icon: PAPER + "icons/icon-frame.webp" },
     { id: "money", name: "Money", coin: true },
     { id: "settings", name: "Settings", icon: PAPER + "icons/icon-paint.webp" },
   ];
@@ -99,7 +100,13 @@
           .then(function (d) {
             // The section gate answers a bare "forbidden"; a person is told it in words.
             if (res.status === 403 && d && d.error === "forbidden") throw new Error(WORDS.notAllowed);
-            if (!res.ok) throw new Error((d && d.error) || WORDS.didNotWork);
+            if (!res.ok) {
+              var failure = new Error((d && d.error) || WORDS.didNotWork);
+              failure.status = res.status;
+              failure.problems = (d && d.problems) || null; // a paste that has problems says which
+              failure.printed = !!(d && d.printed); // a tag word asked for again after its tag was printed
+              throw failure;
+            }
             return d || {};
           });
       });
@@ -167,6 +174,7 @@
       });
       remember(TAB_KEY, id);
       if (id === "families" && data) loadFamilies();
+      if (id === "doors" && !doors.list && !doors.asking) loadDoors();
     }
 
     // Arrow keys move along the tiles, as a tab list's keys do.
@@ -210,7 +218,7 @@
     }
 
     // ---- HQ ----
-    var QUEST_ICONS = { names: PAPER + "icons/icon-friend.webp", preview: PAPER + "icons/icon-lock.webp", waiting: PAPER + "icons/icon-bell.webp" };
+    var QUEST_ICONS = { names: PAPER + "icons/icon-friend.webp", doors: PAPER + "icons/icon-frame.webp", preview: PAPER + "icons/icon-lock.webp", waiting: PAPER + "icons/icon-bell.webp" };
     var familyFilter = "all";
     var confirming = null; // the lever's second ask, while it is showing
 
@@ -786,6 +794,920 @@
       return card;
     }
 
+    // ---- Doors: the 24 doors as a level select, and the open door's sheet beside it ----
+    var READY_WORDS = { place: "The place", prize: "The prize", picture: "The door picture", elf: "The elf and its tag", clues: "The three clues", droppedOff: "Dropped off" };
+    var doors = { list: null, counts: null, canEdit: false, open: null, sheet: null, known: {}, asking: false, asked: 0 };
+    var doorsGrid, doorsChips, doorsTools, doorsSheet, doorTiles = {}, sheetHead, sheetReady;
+
+    /** "17:30" as "5:30pm", and "19:00" as "7pm". */
+    function clockWords(hhmm) {
+      var m = /^(\d{1,2}):(\d{2})/.exec(String(hhmm || ""));
+      if (!m) return "";
+      var h = Number(m[1]);
+      var h12 = h % 12 === 0 ? 12 : h % 12;
+      return h12 + (m[2] === "00" ? "" : ":" + m[2]) + (h >= 12 ? "pm" : "am");
+    }
+    /** The time an hour after "18:30", in words: "7:30pm". */
+    function hourAfter(hhmm) {
+      var m = /^(\d{1,2}):(\d{2})/.exec(String(hhmm || ""));
+      if (!m) return "";
+      return clockWords(String((Number(m[1]) + 1) % 24).padStart(2, "0") + ":" + m[2]);
+    }
+    function clock5(v) {
+      return typeof v === "string" && /^\d{2}:\d{2}/.test(v) ? v.slice(0, 5) : "";
+    }
+    /** A long field grows to fit its words, so nothing ever scrolls inside it. */
+    function fitField(t) {
+      t.style.height = "auto";
+      var h = t.scrollHeight;
+      if (h) t.style.height = h + (t.offsetHeight - t.clientHeight) + "px";
+    }
+    function fitFields() {
+      [doorsSheet, doorsTools].forEach(function (root) {
+        if (root) Array.prototype.forEach.call(root.querySelectorAll("textarea"), fitField);
+      });
+    }
+    win.addEventListener("resize", fitFields);
+
+    function buildDoors() {
+      if (doorsGrid) return;
+      var part = parts.doors;
+      part.textContent = "";
+      doorsChips = el("div", { class: "hq-sums" });
+      doorsGrid = el("ul", { class: "hq-door-grid", "aria-label": "The 24 doors" });
+      doorsTools = el("div", { class: "hq-door-tools" });
+      doorsSheet = el("section", { class: "hq-panel hq-door-sheet", "aria-label": "The door", "aria-live": "polite" }, [el("p", { class: "hq-words hq-soft", text: "Pick a door to see what it has and what it still needs." })]);
+      part.appendChild(
+        el("div", { class: "hq-doors" }, [
+          el("section", { class: "hq-panel hq-level", "aria-label": "The 24 doors" }, [el("h2", { class: "hq-h2", text: "The 24 doors" }), doorsChips, doorsGrid, doorsTools]),
+          doorsSheet,
+        ]),
+      );
+    }
+
+    /** Reads the 24 doors, once: the first time the tab opens (and again if that failed). */
+    function loadDoors() {
+      buildDoors();
+      doors.asking = true;
+      return ask("GET", "/api/admin/elf/doors")
+        .then(function (d) {
+          doors.list = d.doors || [];
+          doors.counts = d.counts || { placesAgreed: 0, prizesChosen: 0, ready: 0 };
+          doors.canEdit = !!d.canEdit;
+          drawDoorList();
+          if (doors.sheet) drawDoorSheet();
+        })
+        .catch(function (e) {
+          say(status, e.message, false);
+        })
+        .then(function () {
+          doors.asking = false;
+        });
+    }
+
+    /** The tiles are built once and then updated where they stand, so a tapped tile keeps its focus. */
+    function drawDoorList() {
+      var c = doors.counts || {};
+      if (doors.toolsEdit !== doors.canEdit) {
+        doors.toolsEdit = doors.canEdit;
+        drawDoorTools();
+      }
+      doorsChips.textContent = "";
+      doorsChips.appendChild(el("span", { class: "hq-chip", text: (c.placesAgreed || 0) + " places agreed" }));
+      doorsChips.appendChild(el("span", { class: "hq-chip", text: (c.prizesChosen || 0) + " prizes chosen" }));
+      doorsChips.appendChild(el("span", { class: "hq-chip hq-chip--holly", text: (c.ready || 0) + " ready for their day" }));
+      doors.list.forEach(function (t) {
+        var b = doorTiles[t.door];
+        if (!b) {
+          b = el("button", { type: "button", "data-door": t.door });
+          b.addEventListener("click", function () {
+            openDoor(t.door, true);
+          });
+          doorTiles[t.door] = b;
+          doorsGrid.appendChild(el("li", {}, [b]));
+        }
+        var on = doors.open === t.door;
+        b.className = "hq-door " + (!t.placeName ? "is-empty" : t.ready ? "is-ready" : "is-needs") + (on ? " is-on" : "");
+        b.setAttribute("aria-pressed", String(on));
+        b.textContent = "";
+        b.appendChild(el("b", { class: "hq-door__n", text: String(t.door) }));
+        b.appendChild(el("span", { class: "hq-door__day", text: t.weekday }));
+        b.appendChild(el("span", { class: "hq-door__where", text: t.placeName || "No place yet" }));
+        if (t.placeName) b.appendChild(el("span", { class: "hq-door__st", text: t.ready ? "Ready" : t.toDo + " to do" }));
+      });
+      tileCount("doors", doors.list.filter(function (t) { return !t.ready && !t.started; }).length);
+    }
+
+    /** Opens a door's sheet beside the level select (below it on a narrow screen). */
+    function openDoor(n, scroll) {
+      buildDoors();
+      var asked = ++doors.asked;
+      return ask("GET", "/api/admin/elf/doors/" + n)
+        .then(function (d) {
+          if (asked !== doors.asked) return; // a later door has been asked for since
+          doors.open = n;
+          doors.sheet = d.door;
+          doors.known[n] = d.door.readiness;
+          if (typeof d.canEdit === "boolean") doors.canEdit = d.canEdit;
+          if (doors.list) drawDoorList();
+          drawDoorSheet();
+          if (scroll && doorsSheet.scrollIntoView) doorsSheet.scrollIntoView({ block: "nearest" });
+        })
+        .catch(function (e) {
+          say(status, e.message, false);
+        });
+    }
+
+    /**
+     * A saved door. Its tile and the sums always move on; the sheet is touched only when that door is
+     * still the open one, and then only the head, the ready list and the parts named in `o.rebuild`, so
+     * what was typed in the other parts stays. `o` can also say: names (the list of names changed),
+     * say (a part and its words) and focus (a part whose Save button takes focus, or an id).
+     */
+    function takeDoor(door, o) {
+      o = o || {};
+      var prev = doors.known[door.door];
+      doors.known[door.door] = door.readiness;
+      if (prev && doors.counts) {
+        var was = {};
+        prev.items.forEach(function (i) { was[i.key] = i.done; });
+        var c = doors.counts;
+        door.readiness.items.forEach(function (i) {
+          if (i.key === "place" && i.done !== was.place) c.placesAgreed += i.done ? 1 : -1;
+          if (i.key === "prize" && i.done !== was.prize) c.prizesChosen += i.done ? 1 : -1;
+        });
+        if (door.readiness.ready !== prev.ready) c.ready += door.readiness.ready ? 1 : -1;
+      }
+      (doors.list || []).forEach(function (t) {
+        if (t.door !== door.door) return;
+        t.placeName = door.placeName || null;
+        t.ready = door.readiness.ready;
+        t.toDo = door.readiness.toDo;
+      });
+      if (doors.list) drawDoorList();
+      if (doors.open !== door.door || !doors.sheet || doors.sheet.door !== door.door) return false;
+      doors.sheet = door;
+      fillSheetHead();
+      fillSheetReady();
+      (o.rebuild || []).forEach(function (key) {
+        var old = doorsSheet.querySelector('[data-part="' + key + '"]');
+        if (old) old.replaceWith(buildPart(key));
+      });
+      if (o.names) fillNames(doorsSheet.querySelector(".hq-names"));
+      var word = doorsSheet.querySelector(".hq-tagword b");
+      if (word) word.textContent = door.tagWord || "No word yet";
+      [1, 2, 3].forEach(function (n) {
+        var name = doorsSheet.querySelector('label[for="hqDoor-clue' + n + '"]');
+        if (name) name.textContent = clueName(n, door);
+      });
+      var where = doorsSheet.querySelector("[data-prints-place]");
+      if (where) where.textContent = printsWords(door);
+      updateCloseHint();
+      fitFields();
+      if (o.say) say(partLine(o.say[0]), o.say[1], true);
+      var target = o.focusId ? doorsSheet.querySelector("#" + o.focusId) : o.focus ? doorsSheet.querySelector('[data-part="' + o.focus + '"] .hq-btn--go') || partLine(o.focus) : null;
+      if (target && target.focus) target.focus();
+      return true;
+    }
+    function partLine(key) {
+      return doorsSheet.querySelector('[data-part="' + key + '"] .hq-status');
+    }
+
+    function doorField(key, label, input, hint, wide) {
+      return el("div", { class: "hq-field" + (wide ? " is-wide" : "") }, [el("label", { for: "hqDoor-" + key, text: label }), input, hint || null]);
+    }
+    /** A box for one line, a time, or (kind "area") words that can run long. */
+    function doorInput(key, value, max, kind, readonly) {
+      var edit = doors.canEdit;
+      var i =
+        kind === "area"
+          ? el("textarea", { id: "hqDoor-" + key, name: key, maxlength: max || null, class: "hq-grow", disabled: !edit, readonly: !!readonly })
+          : el("input", { type: kind || "text", id: "hqDoor-" + key, name: key, maxlength: max || null, autocomplete: "off", disabled: !edit, readonly: !!readonly });
+      i.value = value || "";
+      if (kind === "area") i.addEventListener("input", function () { fitField(i); });
+      return i;
+    }
+
+    function fillSheetHead() {
+      var d = doors.sheet;
+      var place = [d.placeName, d.placeTown].filter(Boolean).join(", ");
+      sheetHead.textContent = "";
+      sheetHead.appendChild(el("span", { class: "hq-mini-door", "aria-hidden": "true", text: String(d.door) }));
+      sheetHead.appendChild(
+        el("div", {}, [
+          el("h2", { class: "hq-h2", text: "Door " + d.door + " · " + d.day }),
+          el("p", { class: "hq-note", text: place || "No place yet" }),
+          el("div", { class: "hq-sums" }, [el("span", { class: "hq-chip" + (d.readiness.ready ? " hq-chip--holly" : ""), text: d.readiness.ready ? "Ready" : d.readiness.toDo + " to do" })]),
+        ]),
+      );
+    }
+    function fillSheetReady() {
+      var d = doors.sheet;
+      var list = el("ul", { class: "hq-ready-list" });
+      d.readiness.items.forEach(function (i) {
+        list.appendChild(el("li", { class: i.done ? "is-done" : "" }, [READY_WORDS[i.key] || i.key, el("span", { class: "hq-sr", text: i.done ? " done" : " to do" })]));
+      });
+      sheetReady.textContent = "";
+      sheetReady.appendChild(el("h3", { class: "hq-h3", text: "Ready for its day when all of these are done" }));
+      sheetReady.appendChild(list);
+    }
+    function updateCloseHint() {
+      var h = doorsSheet.querySelector("[data-close]");
+      if (!h) return;
+      var d = doors.sheet;
+      h.className = "hq-hint " + (d.closesTooSoon ? "is-error" : "is-ok");
+      h.textContent = d.closesTooSoon ? "It closes less than an hour after the last clue." : "Open past " + hourAfter(d.evening.clue3) + ", an hour after the last clue.";
+    }
+
+    /** The names that also count, as chips, each with its remove button (for someone who may edit). */
+    function fillNames(box) {
+      var d = doors.sheet;
+      box.textContent = "";
+      d.names.forEach(function (nm) {
+        var chip = el("span", { class: "hq-chip" }, [nm.name]);
+        if (doors.canEdit) {
+          var x = el("button", { class: "hq-chip__x", type: "button", "aria-label": "Remove " + nm.name, text: "×" });
+          x.addEventListener("click", function () {
+            x.disabled = true;
+            ask("DELETE", "/api/admin/elf/doors/" + d.door + "/names/" + nm.id)
+              .then(function (r) {
+                takeDoor(r.door, { names: true, say: ["place", "Name taken off."], focusId: "hqDoor-newName" });
+              })
+              .catch(function (e) {
+                say(partLine("place"), e.message, false);
+                x.disabled = false;
+              });
+          });
+          chip.appendChild(x);
+        }
+        box.appendChild(chip);
+      });
+    }
+
+    /** One part: a heading, its fields, its own Save and its own status line. `send` gives only this
+     *  part's own fields (null when nothing changed), and is left out when there is nothing to save. */
+    function makePart(key, title, soft, body, send) {
+      var d = doors.sheet;
+      var said = el("p", { class: "hq-status", role: "status", tabindex: "-1" });
+      var kids = [el("header", {}, [el("h3", { class: "hq-h3", text: title }), soft ? el("span", { class: "hq-soft", text: soft }) : null])].concat(body);
+      if (doors.canEdit && send) {
+        var save = el("button", { class: "hq-btn hq-btn--small hq-btn--go", type: "button", text: "Save", "aria-label": "Save " + title.toLowerCase() });
+        save.addEventListener("click", function () {
+          var sent = send();
+          if (!sent) {
+            say(said, "Nothing has changed.", null);
+            return;
+          }
+          save.disabled = true;
+          ask("PATCH", "/api/admin/elf/doors/" + d.door, sent)
+            .then(function (r) {
+              takeDoor(r.door, { rebuild: [key], say: [key, "Saved."], focus: key });
+            })
+            .catch(function (e) {
+              say(said, e.message, false);
+              save.disabled = false;
+            });
+        });
+        kids.push(el("div", { class: "hq-actions" }, [save]));
+      }
+      kids.push(said);
+      return el("section", { class: "hq-dpart", "data-part": key }, kids);
+    }
+
+    function buildPart(key) {
+      if (/^clue[123]$/.test(key)) return clueItem(Number(key.slice(4)));
+      return { place: placePart, evening: eveningPart, prize: prizePart, elf: elfPart, clues: cluesPart, prints: printsPart }[key]();
+    }
+
+    // ---- the three clues ----
+    var CLUE_MAX = 500;
+    var CLUE_LEVEL = ["Hardest", "Easier", "Nearly a giveaway"];
+
+    /** The three clues. Each has its own Save and its own status line, so saving one touches only it. */
+    function cluesPart() {
+      var list = el("ol", { class: "hq-clues" });
+      [1, 2, 3].forEach(function (n) {
+        list.appendChild(clueItem(n));
+      });
+      return el("section", { class: "hq-dpart", "data-part": "clues" }, [
+        el("header", {}, [el("h3", { class: "hq-h3", text: "The three clues" }), el("span", { class: "hq-soft", text: "From hardest to nearly a giveaway" })]),
+        list,
+      ]);
+    }
+
+    function clueName(n, d) {
+      var time = clockWords(d.evening && d.evening["clue" + n]);
+      return "Clue " + n + (time ? " · " + time : "");
+    }
+    function printsWords(d) {
+      return "The staff card names the day and the tag carries the word, so both are for " + (d.placeName || "this place") + " only.";
+    }
+
+    function clueItem(n) {
+      var d = doors.sheet;
+      var key = "clue" + n;
+      var out = !!(d.clueOut && d.clueOut[n - 1]);
+      var time = clockWords(d.evening && d.evening[key]);
+      var stored = (d.clues || []).filter(function (c) { return c.n === n; })[0];
+      var was = stored && stored.words ? stored.words : "";
+      var box = doorInput(key, was, null, "area", out);
+      box.setAttribute("placeholder", "Not written yet");
+      var count = el("span", { class: "hq-hint hq-count-words" });
+      var said = el("p", { class: "hq-status", role: "status", tabindex: "-1" });
+      var drawCount = function () {
+        var len = box.value.length;
+        count.textContent = len + " of " + CLUE_MAX;
+        count.classList.toggle("is-error", len > CLUE_MAX);
+      };
+      drawCount();
+      box.addEventListener("input", drawCount);
+      var kids = [
+        el("header", {}, [el("label", { class: "hq-clue__name", for: "hqDoor-" + key, text: clueName(n, d) }), el("span", { class: "hq-soft", text: CLUE_LEVEL[n - 1] })]),
+        box,
+      ];
+      if (out) {
+        kids.push(el("p", { class: "hq-words hq-soft", text: "Out since " + time + "." }));
+      } else {
+        var row = el("div", { class: "hq-actions" }, [count]);
+        if (doors.canEdit) {
+          var save = el("button", { class: "hq-btn hq-btn--small hq-btn--go", type: "button", text: "Save", "aria-label": "Save clue " + n });
+          save.addEventListener("click", function () {
+            if (box.value.length > CLUE_MAX) {
+              say(said, "A clue can be up to " + CLUE_MAX + " characters.", false);
+              return;
+            }
+            var words = box.value.trim() === "" ? null : box.value;
+            if (words === (was || null)) {
+              say(said, "Nothing has changed.", null);
+              return;
+            }
+            save.disabled = true;
+            ask("PUT", "/api/admin/elf/doors/" + d.door + "/clues/" + n, { words: words })
+              .then(function (r) {
+                takeDoor(r.door, { rebuild: [key], say: [key, "Saved."], focus: key });
+              })
+              .catch(function (e) {
+                say(said, e.message, false);
+                save.disabled = false;
+                if (e.status === 409) {
+                  // The clue went out while it was being typed: the door is read again, so it shows read only.
+                  openDoor(d.door, false).then(function () {
+                    if (doors.open === d.door && partLine(key)) say(partLine(key), e.message, false);
+                  });
+                }
+              });
+          });
+          row.insertBefore(save, count);
+        }
+        kids.push(row);
+      }
+      kids.push(said);
+      return el("li", { class: "hq-clue hq-clue--" + n, "data-part": key }, [el("span", { class: "hq-clue__n", "aria-hidden": "true", text: String(n) }), el("div", { class: "hq-clue__body" }, kids)]);
+    }
+
+    // ---- prints and the drop off ticks ----
+    /** "2026-11-20T10:00:00Z" as "20 November", on the London calendar. */
+    function dayWords(iso) {
+      try {
+        return new Date(iso).toLocaleDateString("en-GB", { day: "numeric", month: "long", timeZone: "Europe/London" });
+      } catch (e) {
+        return "";
+      }
+    }
+
+    /**
+     * A print, in a new tab. The tab opens on the click itself (so no pop up blocker stops it), the page
+     * is fetched with the bearer token, and shown from memory through a Blob address that is let go of
+     * after two minutes. A JSON error answer is shown in `target` instead; a whole HTML page, even one
+     * saying what a door still needs, is shown in the tab.
+     */
+    function openPrint(url, target) {
+      var tab = win.open("", "_blank");
+      if (!tab) {
+        say(target, "Your browser stopped the new tab. Let this site open new tabs, then try again.", false);
+        return Promise.resolve();
+      }
+      try {
+        tab.opener = null; // the blob page is this site's own, so it must not reach back into this tab
+      } catch (e) { /* a tab that will not let go still opens */ }
+      try {
+        tab.document.title = "Opening";
+        tab.document.body.textContent = "Opening, one moment.";
+      } catch (e) { /* a tab we cannot write to still navigates */ }
+      var fail = function (words) {
+        if (tab && !tab.closed) tab.close();
+        say(target, words, false);
+      };
+      return win
+        .fetch(url, { headers: { Authorization: "Bearer " + token() } })
+        .then(function (res) {
+          return Promise.resolve(res.text()).then(function (page) {
+            var asJson = null;
+            try {
+              asJson = JSON.parse(page);
+            } catch (e) { /* an HTML page */ }
+            if (res.status === 401) return fail(WORDS.signedOut);
+            if (asJson && typeof asJson === "object") {
+              if (res.status === 403 && asJson.error === "forbidden") return fail(WORDS.notAllowed);
+              if (!res.ok) return fail(asJson.error || WORDS.didNotWork);
+            }
+            var blob = win.URL.createObjectURL(new win.Blob([page], { type: "text/html" }));
+            if (tab && !tab.closed) tab.location.href = blob;
+            else win.open(blob, "_blank");
+            win.setTimeout(function () {
+              win.URL.revokeObjectURL(blob);
+            }, 120000);
+            say(target, "", null);
+          });
+        })
+        .catch(function () {
+          fail(WORDS.didNotWork);
+        });
+    }
+
+    function printsPart() {
+      var d = doors.sheet;
+      var said = el("p", { class: "hq-status", role: "status", tabindex: "-1" });
+      var row = el("div", { class: "hq-actions hq-prints" });
+      [["Print the poster", "poster"], ["Print the staff card", "staff-card"], ["Print the tag", "tag"]].forEach(function (p) {
+        var b = el("button", { class: "hq-btn", type: "button", text: p[0] });
+        b.addEventListener("click", function () {
+          if (b.disabled) return;
+          b.disabled = true; // one tab for one click
+          openPrint("/api/admin/elf/doors/" + d.door + "/" + p[1], said).then(function () {
+            b.disabled = false;
+          });
+        });
+        row.appendChild(b);
+      });
+      var tickRow = function (path, id, words, at, by) {
+        var box = el("input", { type: "checkbox", id: id, name: id, disabled: !doors.canEdit });
+        box.checked = !!at;
+        box.addEventListener("change", function () {
+          var on = box.checked;
+          box.disabled = true;
+          ask(on ? "POST" : "DELETE", "/api/admin/elf/doors/" + d.door + "/" + path)
+            .then(function (r) {
+              takeDoor(r.door, { rebuild: ["prints"], say: ["prints", "Saved."], focusId: id });
+            })
+            .catch(function (e) {
+              box.checked = !on;
+              box.disabled = false;
+              say(said, e.message, false);
+            });
+        });
+        var who = at ? "Ticked by " + (by || "staff") + " on " + dayWords(at) : "";
+        return el("div", { class: "hq-dtick" }, [el("label", { class: "hq-tickbox", for: id }, [box, el("span", { text: words })]), who ? el("span", { class: "hq-hint", text: who }) : null]);
+      };
+      return el("section", { class: "hq-dpart", "data-part": "prints" }, [
+        el("header", {}, [el("h3", { class: "hq-h3", text: "Print and drop off" })]),
+        row,
+        el("p", { class: "hq-words hq-soft", "data-prints-place": "", text: printsWords(d) }),
+        el("div", { class: "hq-handover" }, [
+          tickRow("dropped-off", "hqDoor-droppedOff", "Elf, poster, prize and staff card dropped off", d.droppedOffAt, d.droppedOffBy),
+          el("p", { class: "hq-words hq-soft", text: "Ticking it keeps who did it and when." }),
+          tickRow("thanked", "hqDoor-thanked", "Thank you sent", d.thankedAt, d.thankedBy),
+        ]),
+        said,
+      ]);
+    }
+
+    // ---- the tools under the level select: the list of places, the prize list, paste all the clues ----
+    var PASTE_EXAMPLE = [
+      "Door 7: anything after the number is a note for people and is ignored",
+      "Clue 1: the words of clue 1",
+      "Clue 2: the words of clue 2,",
+      "which can run on to more lines",
+      "Clue 3: the words of clue 3",
+    ].join("\n");
+
+    function drawDoorTools() {
+      doorsTools.textContent = "";
+      var line = el("p", { class: "hq-status", role: "status", tabindex: "-1" });
+      var slot = el("div", { class: "hq-tool-slot" });
+      var places = el("button", { class: "hq-btn hq-btn--small", type: "button", text: "Print the list of places" });
+      places.addEventListener("click", function () {
+        if (places.disabled) return;
+        places.disabled = true;
+        openPrint("/api/admin/elf/places-list", line).then(function () {
+          places.disabled = false;
+        });
+      });
+      var copy = el("button", { class: "hq-btn hq-btn--small", type: "button", text: "Copy the prize list" });
+      copy.addEventListener("click", function () {
+        copy.disabled = true;
+        var copied = function () {
+          slot.textContent = "";
+          say(line, "Copied. Send it to Claude for the door pictures.", true);
+        };
+        var byHand = function (text) {
+          say(line, "Your browser would not copy it. Copy it from the box.", false);
+          slot.textContent = "";
+          var box = el("textarea", { id: "hqPrizeList", class: "hq-grow hq-find", readonly: true, "aria-label": "The prize list" });
+          box.value = text;
+          slot.appendChild(box);
+          fitField(box);
+          box.focus();
+          box.select();
+        };
+        var viaText = function (text) {
+          var clip = win.navigator && win.navigator.clipboard;
+          if (!clip || !clip.writeText) return byHand(text);
+          return Promise.resolve()
+            .then(function () {
+              return clip.writeText(text);
+            })
+            .then(copied, function () {
+              byHand(text);
+            });
+        };
+        var list = ask("GET", "/api/admin/elf/doors").then(function (d) {
+          return d.prizeList || "";
+        });
+        var run;
+        var clip = win.navigator && win.navigator.clipboard;
+        if (clip && clip.write && win.ClipboardItem) {
+          // Safari allows a clipboard write only inside the click itself, so it is made now, with the
+          // words still on their way: the item takes a promise for them.
+          try {
+            var item = new win.ClipboardItem({
+              "text/plain": list.then(function (text) {
+                return new win.Blob([text], { type: "text/plain" });
+              }),
+            });
+            run = Promise.resolve(clip.write([item])).then(copied, function () {
+              return list.then(viaText);
+            });
+          } catch (e) {
+            run = list.then(viaText);
+          }
+        } else {
+          run = list.then(viaText);
+        }
+        run
+          .catch(function (e) {
+            say(line, e.message, false);
+          })
+          .then(function () {
+            copy.disabled = false;
+          });
+      });
+      var kids = [places, copy];
+      if (doors.canEdit) {
+        var paste = el("button", { class: "hq-btn hq-btn--small", type: "button", text: "Paste all the clues", "aria-expanded": "false" });
+        paste.addEventListener("click", function () {
+          var open = !!doorsTools.querySelector(".hq-paste");
+          paste.setAttribute("aria-expanded", String(!open));
+          if (open) {
+            doorsTools.querySelector(".hq-paste").remove();
+            return;
+          }
+          doorsTools.appendChild(pastePanel());
+          var box = doorsTools.querySelector("#hqPasteText");
+          if (box) box.focus();
+        });
+        kids.push(paste);
+      }
+      doorsTools.appendChild(el("div", { class: "hq-actions" }, kids));
+      doorsTools.appendChild(line);
+      doorsTools.appendChild(slot);
+      doorsTools.appendChild(el("p", { class: "hq-hint", text: "The prize list is the one you send to Claude for the door pictures. The list of places is for staff only: it names every place and its day." }));
+    }
+
+    function pastePanel() {
+      var box = el("textarea", { id: "hqPasteText", class: "hq-grow", name: "pasted", "aria-describedby": "hqPasteHelp" });
+      box.addEventListener("input", function () {
+        fitField(box);
+        result.textContent = ""; // what was checked is no longer what is in the box
+      });
+      var result = el("div", { class: "hq-paste-result" });
+      var said = el("p", { class: "hq-status", role: "status", tabindex: "-1" });
+      var check = el("button", { class: "hq-btn hq-btn--go", type: "button", text: "Check these clues" });
+      check.addEventListener("click", function () {
+        var text = box.value;
+        check.disabled = true;
+        say(said, "", null);
+        ask("POST", "/api/admin/elf/clues/check", { text: text })
+          .then(function (r) {
+            drawPasteResult(result, r, function () {
+              return savePaste(text, result, said, (r.doors || []).map(function (p) { return p.door; }));
+            });
+          })
+          .catch(function (e) {
+            result.textContent = "";
+            say(said, e.message, false);
+          })
+          .then(function () {
+            check.disabled = false;
+          });
+      });
+      return el("section", { class: "hq-paste", "aria-label": "Paste all the clues" }, [
+        el("h3", { class: "hq-h3", text: "Paste all the clues" }),
+        el("p", { class: "hq-words", id: "hqPasteHelp", text: "Paste every clue in one go. Each door starts with its number, then its three clues, like this:" }),
+        el("pre", { class: "hq-example", text: PASTE_EXAMPLE }),
+        el("div", { class: "hq-field" }, [el("label", { for: "hqPasteText", text: "The clues" }), box]),
+        el("div", { class: "hq-actions" }, [check]),
+        said,
+        result,
+      ]);
+    }
+
+    function drawPasteResult(result, r, onSave) {
+      result.textContent = "";
+      var found = el("ul", { class: "hq-paste-found" });
+      (r.doors || []).forEach(function (p) {
+        var clues = el("ol", { class: "hq-paste-clues" });
+        (p.clues || []).forEach(function (c) {
+          clues.appendChild(el("li", { text: "Clue " + c.n + ": " + c.words }));
+        });
+        found.appendChild(el("li", {}, [el("b", { text: "Door " + p.door + " · " + (p.placeName || "No place yet") }), clues]));
+      });
+      if (found.children.length) result.appendChild(found);
+      var problems = r.problems || [];
+      if (problems.length) {
+        var bad = el("ul", { class: "hq-paste-problems" });
+        problems.forEach(function (p, i) {
+          bad.appendChild(el("li", { class: "is-error", tabindex: i === 0 ? "-1" : null, text: p.message }));
+        });
+        result.appendChild(bad);
+        bad.firstChild.focus();
+        return;
+      }
+      var save = el("button", { class: "hq-btn hq-btn--go", type: "button", text: "Save these clues" });
+      save.addEventListener("click", function () {
+        save.disabled = true;
+        onSave().then(function (ok) {
+          if (!ok) save.disabled = false;
+        });
+      });
+      result.appendChild(el("div", { class: "hq-actions" }, [save]));
+      save.focus();
+    }
+
+    /**
+     * Saves the checked text, then brings the tiles up to date, and the open door's clues too when that
+     * door was one of `pasted`. Any other open door keeps whatever is typed in it.
+     */
+    function savePaste(text, result, said, pasted) {
+      return ask("POST", "/api/admin/elf/clues/save", { text: text })
+        .then(function (r) {
+          result.textContent = "";
+          say(said, "Saved " + r.clues + " " + plural(r.clues, "clue", "clues") + " for " + r.doors + " " + plural(r.doors, "door", "doors") + ".", true);
+          said.focus();
+          var open = doors.open;
+          var refresh = open && pasted.indexOf(open) >= 0;
+          return ask("GET", "/api/admin/elf/doors")
+            .then(function (d) {
+              doors.list = d.doors || doors.list;
+              doors.counts = d.counts || doors.counts;
+              // The counts are new, so no door's old readiness may be compared with them again.
+              var keep = open ? doors.known[open] : null;
+              doors.known = {};
+              if (keep) doors.known[open] = keep;
+              drawDoorList();
+              return refresh ? ask("GET", "/api/admin/elf/doors/" + open) : null;
+            })
+            .then(function (d) {
+              if (!d || !d.door) return;
+              doors.known[d.door.door] = d.door.readiness;
+              takeDoor(d.door, { rebuild: ["clue1", "clue2", "clue3"] });
+            })
+            .catch(function () { /* the clues are saved; the tiles stay as they were until the page is loaded again */ })
+            .then(function () {
+              return true;
+            });
+        })
+        .catch(function (e) {
+          if (e.problems && e.problems.length) {
+            drawPasteResult(result, { doors: [], problems: e.problems }, null);
+            say(said, e.message, false);
+            return true; // nothing to save again until the text is fixed and checked
+          }
+          say(said, e.message, false);
+          return false;
+        });
+    }
+
+    function placePart() {
+      var d = doors.sheet;
+      var edit = doors.canEdit;
+      var placeIn = {
+        placeName: doorInput("placeName", d.placeName, 80),
+        placeTown: doorInput("placeTown", d.placeTown, 60),
+        placeAddress: doorInput("placeAddress", d.placeAddress, 200, "area"),
+        contactName: doorInput("contactName", d.contactName, 80),
+        contactPhone: doorInput("contactPhone", d.contactPhone, 40),
+        contactEmail: doorInput("contactEmail", d.contactEmail, 254, "email"),
+        elfSpot: doorInput("elfSpot", d.elfSpot, 200, "area"),
+        agreedBy: doorInput("agreedBy", d.agreedBy, 80),
+      };
+      var names = el("div", { class: "hq-names" });
+      fillNames(names);
+      var newName = doorInput("newName", "", 80);
+      var nameRow = el("div", { class: "hq-addname" }, [newName]);
+      if (edit) {
+        var add = el("button", { class: "hq-btn hq-btn--small", type: "button", text: "Add a name" });
+        add.addEventListener("click", function () {
+          if (!newName.value.trim()) return;
+          add.disabled = true;
+          ask("POST", "/api/admin/elf/doors/" + d.door + "/names", { name: newName.value })
+            .then(function (r) {
+              add.disabled = false;
+              newName.value = "";
+              takeDoor(r.door, { names: true, say: ["place", "Name added."], focusId: "hqDoor-newName" });
+            })
+            .catch(function (e) {
+              say(partLine("place"), e.message, false);
+              add.disabled = false;
+            });
+        });
+        nameRow.appendChild(add);
+      }
+      var closes = doorInput("closesAt", clock5(d.closesAt), null, "time");
+      var closeHint = el("span", { "data-close": "" });
+      return makePart(
+        "place",
+        "The place",
+        "Typed in once the place says yes",
+        [
+          el("div", { class: "hq-dfields" }, [
+            doorField("placeName", "Name of the place", placeIn.placeName),
+            doorField("placeTown", "Town", placeIn.placeTown),
+            el("div", { class: "hq-field is-wide" }, [
+              el("label", { for: "hqDoor-newName", text: "Other names that also count" }),
+              names,
+              nameRow,
+              el("span", { class: "hq-hint", text: "Families type where they think the elf is. Any of these names counts as right." }),
+            ]),
+            doorField("placeAddress", "Address", placeIn.placeAddress, null, true),
+            doorField("contactName", "Who to talk to", placeIn.contactName),
+            doorField("contactPhone", "Phone", placeIn.contactPhone),
+            doorField("contactEmail", "Email", placeIn.contactEmail, el("span", { class: "hq-hint", text: "The reminder on its day goes here." })),
+            doorField("closesAt", "Open on its day until", closes, closeHint),
+            doorField("elfSpot", "Where the elf sits", placeIn.elfSpot, null, true),
+            doorField("agreedBy", "Agreed by", placeIn.agreedBy),
+          ]),
+        ],
+        function () {
+          // The place's own fields, and never a time of the evening.
+          var sent = {};
+          Object.keys(placeIn).forEach(function (k) {
+            sent[k] = placeIn[k].value;
+          });
+          sent.closesAt = closes.value;
+          return sent;
+        },
+      );
+    }
+
+    function eveningPart() {
+      var d = doors.sheet;
+      var TIMES = [["clue1Time", "clue1", "Elf and poster out, clue 1"], ["clue2Time", "clue2", "Clue 2"], ["clue3Time", "clue3", "Clue 3"], ["revealTime", "reveal", "Place shown on the door"]];
+      var timeIn = {};
+      var timeBox = el("div", { class: "hq-times" });
+      TIMES.forEach(function (t) {
+        timeIn[t[0]] = doorInput(t[0], clock5(d.evening[t[1]]), null, "time", d.started);
+        timeBox.appendChild(el("div", { class: "hq-field hq-time" }, [el("label", { for: "hqDoor-" + t[0], text: t[2] }), timeIn[t[0]]]));
+      });
+      return makePart(
+        "evening",
+        "Its evening",
+        "Usual weekday times. Staff can change any of them.",
+        [
+          timeBox,
+          d.started ? el("p", { class: "hq-words hq-soft", text: "This door's evening has started." }) : null,
+          el("p", { class: "hq-words hq-soft", text: "The place gets its reminder email at 9am." }),
+          el("p", { class: "hq-words hq-soft", text: "On a school holiday, set clue 1 to the morning." }),
+        ],
+        d.started
+          ? null
+          : function () {
+              // Only the times the head elf changed: the server's lock after clue 1 compares what is stored.
+              var sent = null;
+              TIMES.forEach(function (t) {
+                if (timeIn[t[0]].value !== clock5(d.evening[t[1]])) {
+                  sent = sent || {};
+                  sent[t[0]] = timeIn[t[0]].value;
+                }
+              });
+              return sent;
+            },
+      );
+    }
+
+    function prizePart() {
+      var d = doors.sheet;
+      var prize = doorInput("prize", d.prize, 200, "area");
+      var showOff = el("input", { type: "checkbox", id: "hqDoor-prizeShowOff", name: "prizeShowOff", disabled: !doors.canEdit });
+      showOff.checked = !!d.prizeShowOff;
+      var pic = d.picture
+        ? el("div", { class: "hq-door-pic" }, [el("img", { src: d.picture, alt: "The picture for door " + d.door, width: 112, height: 140 })])
+        : el("div", { class: "hq-door-pic" }, [el("span", { class: "hq-door-pic__frame", "aria-hidden": "true", text: String(d.door) }), el("p", { class: "hq-soft", text: "Not made yet. It is made from the prize list." })]);
+      return makePart(
+        "prize",
+        "The prize",
+        "NBCC provides it. The finder gets it.",
+        [
+          el("div", { class: "hq-prize" }, [
+            el("div", { class: "hq-dfields" }, [
+              doorField("prize", "What the prize is", prize, el("span", { class: "hq-hint", text: "A prize must not point at the place giving it." }), true),
+              el("label", { class: "hq-tickbox is-wide", for: "hqDoor-prizeShowOff" }, [showOff, el("span", { text: "Show it off on the calendar (a Big prize ribbon)" })]),
+            ]),
+            pic,
+          ]),
+        ],
+        function () {
+          return { prize: prize.value, prizeShowOff: showOff.checked };
+        },
+      );
+    }
+
+    function elfPart() {
+      var d = doors.sheet;
+      var n = d.door;
+      var elfName = doorInput("elfName", d.elfName, 30);
+      var tag = el("div", { class: "hq-tagword" }, [el("span", { text: "Word on " + (d.elfName || "the elf") + "'s tag" }), el("b", { text: d.tagWord || "No word yet" })]);
+      var wordBox = el("div", { class: "hq-field" });
+      var box = makePart(
+        "elf",
+        "The elf and its tag",
+        null,
+        [
+          el("div", { class: "hq-delf" }, [doorField("elfName", "The elf's name", elfName), el("div", { class: "hq-field" }, [tag]), wordBox]),
+          el("p", { class: "hq-words hq-soft", text: "The finder types this word to win the prize. Every family after types it for their candy cane stamp and to add their picture to door " + n + "." }),
+        ],
+        function () {
+          return { elfName: elfName.value };
+        },
+      );
+      if (doors.canEdit) {
+        var fresh = el("button", { class: "hq-btn hq-btn--small", type: "button", text: "Make a new word" });
+        var line = function () {
+          return box.querySelector(".hq-status");
+        };
+        var makeWord = function (confirm, sure) {
+          fresh.disabled = true;
+          return ask("POST", "/api/admin/elf/doors/" + n + "/word", confirm ? { confirm: true } : {})
+            .then(function (r) {
+              if (sure) sure.remove();
+              fresh.disabled = false;
+              if (!takeDoor(r.door, { say: ["elf", "A new word is ready."] }) || !box.isConnected) return;
+              fresh.focus();
+            })
+            .catch(function (e) {
+              fresh.disabled = false;
+              if (sure) sure.remove();
+              if (!e.printed) {
+                say(line(), e.message, false);
+                return;
+              }
+              if (wordBox.querySelector(".hq-confirm")) return; // one question at a time
+              var yes = el("button", { class: "hq-btn hq-btn--small hq-btn--danger", type: "button", text: "Yes" });
+              var no = el("button", { class: "hq-btn hq-btn--small", type: "button", text: "No" });
+              var ask2 = el("div", { class: "hq-confirm", role: "group", "aria-label": "Are you sure?" }, [el("p", { class: "hq-words", text: "This door's tag has been printed. Make a new word anyway?" }), yes, no]);
+              no.addEventListener("click", function () {
+                ask2.remove();
+                fresh.focus();
+              });
+              yes.addEventListener("click", function () {
+                if (yes.disabled) return;
+                yes.disabled = true;
+                no.disabled = true;
+                makeWord(true, ask2);
+              });
+              wordBox.appendChild(ask2);
+              yes.focus();
+            });
+        };
+        fresh.addEventListener("click", function () {
+          makeWord(false, null);
+        });
+        wordBox.appendChild(fresh);
+      }
+      return box;
+    }
+
+    /** The whole sheet, drawn when a door is opened. */
+    function drawDoorSheet() {
+      var d = doors.sheet;
+      doorsSheet.textContent = "";
+      if (!d) return;
+      sheetHead = el("div", { class: "hq-door-head" });
+      sheetReady = el("div", { class: "hq-todo" });
+      doorsSheet.appendChild(sheetHead);
+      doorsSheet.appendChild(sheetReady);
+      fillSheetHead();
+      fillSheetReady();
+      if (!doors.canEdit) doorsSheet.appendChild(el("p", { class: "hq-words hq-soft", text: "You can look at this door. Changing it needs edit access to Head Elf HQ, which an admin can give in Team." }));
+      ["place", "evening", "prize", "elf"].forEach(function (key) {
+        doorsSheet.appendChild(buildPart(key));
+      });
+      doorsSheet.appendChild(buildPart("clues"));
+      doorsSheet.appendChild(buildPart("prints"));
+      updateCloseHint();
+      fitFields();
+    }
+
     // ---- Money: what the school has made, and the way to every payment in Donations ----
     function drawMoneyPart() {
       var part = parts.money;
@@ -880,6 +1802,37 @@
       }
       grid.appendChild(prices);
 
+      // The phone number that goes on every staff card.
+      var phone = el("section", { class: "hq-panel hq-place-phone", "aria-label": "NBCC's phone number for places" });
+      phone.appendChild(el("h2", { class: "hq-h2", text: "Phone number for places" }));
+      if (!admin) {
+        phone.appendChild(el("p", { class: "hq-words", text: "NBCC's phone number for places: " + (s.placePhone || "not set yet") }));
+      } else {
+        var phoneBox = el("input", { id: "hqPlacePhone", class: "hq-find", type: "tel", autocomplete: "off", maxlength: 40 });
+        phoneBox.value = s.placePhone || "";
+        phone.appendChild(el("div", { class: "hq-field" }, [el("label", { for: "hqPlacePhone", text: "NBCC's phone number for places" }), phoneBox]));
+        phone.appendChild(el("p", { class: "hq-words hq-soft", text: "It goes on every staff card." }));
+        var phoneSaid = el("p", { class: "hq-status", role: "status" });
+        var phoneSave = el("button", { class: "hq-btn hq-btn--go", type: "button", text: "Save the number" });
+        phoneSave.addEventListener("click", function () {
+          phoneSave.disabled = true;
+          ask("PATCH", "/api/admin/elf/settings", { placePhone: phoneBox.value.trim() })
+            .then(function (d) {
+              data.settings = d.settings;
+              drawSettingsPart();
+              var now = parts.settings.querySelector(".hq-place-phone .hq-status");
+              if (now) say(now, "Saved.", true);
+            })
+            .catch(function (e) {
+              say(phoneSaid, e.message, false);
+              phoneSave.disabled = false;
+            });
+        });
+        phone.appendChild(el("div", { class: "hq-actions" }, [phoneSave]));
+        phone.appendChild(phoneSaid);
+      }
+      grid.appendChild(phone);
+
       // The private preview link.
       var preview = el("section", { class: "hq-panel hq-preview", "aria-label": "Your private preview" });
       preview.appendChild(el("h2", { class: "hq-h2", text: "Your private preview" }));
@@ -944,6 +1897,7 @@
       stateChip.textContent = on ? "Live" : "Switched off";
       stateChip.classList.toggle("is-live", on);
       tileCount("families", data.numbers ? data.numbers.namesToCheck : 0);
+      tileCount("doors", data.doorsNotReady || 0);
       drawHq();
       drawMoneyPart();
       drawSettingsPart();

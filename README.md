@@ -11915,9 +11915,22 @@ preview link stay admins only, whoever holds the section.
   and nothing is noted), and taking the family out or putting it back. Someone given only a look at
   the section (view) sees each family as words, with nothing to change; HQ's answer says which
   (`canEdit`, read from their access as it is now).
+- **Doors**: where head elves set up the 24 doors before December. Each door's sheet holds the place
+  (its name, town, address, who to ring there and when it closes), the prize, the elf's name and its tag
+  word, the three clues and the times they come out, and ticks for dropped off and thanked. Each door shows
+  what it still needs; HQ's tile counts the doors not ready that are still to come, and Needs you names the next one and how
+  much is left to do. **Paste all the clues** takes every clue at once: a line `Door 7:` starts a door
+  (anything after the number is a note and is ignored), then `Clue 1:`, `Clue 2:` and `Clue 3:` each
+  start a clue, and the lines under one run on as part of it. Capitals, Windows line endings and a stray
+  mark at the start of the file make no difference, and nothing is saved until the head elf has seen
+  what it found. The prints are each door's poster, staff card and elf tag, and the list of places and
+  prizes. The poster, staff card and elf tag open as pages for head elves, never cached or indexed; the
+  prize list is copied to the clipboard. Each clue locks as it goes out, so clues 2 and 3 can still be
+  saved after clue 1 is out. Once a door's first clue is out, its times and tag word are locked. Nothing in Doors is ever seen by families.
 - **Money**: raised so far, entries and gifts, the Gift Aid on the gifts, and a button to every
   payment in Donations.
-- **Settings**: the pay what you can amounts as steppers, and the private preview link.
+- **Settings**: the pay what you can amounts as steppers, NBCC's phone number for places (it goes on
+  every staff card; an admin changes it and other head elves see it as words), and the private preview link.
 
 **Taking a family out.** `migrations/1791200000360_elf-families-removed.js` (additive) adds
 `elf_families.removed_at` and `removed_by`. A removed family gets no sign in code and no session (its

@@ -890,34 +890,69 @@
       });
     }
 
+    // "End campaign" (Jaimie, 10 November 2026; it was "I've finished"). It asks first, on the page,
+    // and sends only on "End campaign" in the question; "Keep going" puts the button back.
     function wireFinished(card, f) {
       var button = card.querySelector("[data-f-finished]");
+      var ask = card.querySelector("[data-f-finished-confirm]");
+      var yes = card.querySelector("[data-f-finished-yes]");
+      var no = card.querySelector("[data-f-finished-no]");
       var thanks = card.querySelector("[data-f-finished-thanks]");
       var status = card.querySelector("[data-f-finished-status]");
-      function done() {
+      function asking(on) {
+        if (ask) ask.hidden = !on;
+        if (button) button.hidden = on;
+        var to = on ? yes : button;
+        if (to && typeof to.focus === "function") to.focus();
+      }
+      function done(moveFocus) {
+        if (ask) ask.hidden = true;
         if (button) button.hidden = true;
         if (thanks) thanks.hidden = false;
+        // Just sent: the button that had focus is gone, so the thank you takes it.
+        if (moveFocus && thanks && typeof thanks.focus === "function") thanks.focus();
       }
-      if (f.finishedRequestedAt) done();
+      if (f.finishedRequestedAt) done(false);
       if (!button) return;
+      // Without the question on the page (an old copy of it), the button sends as it always did.
       button.addEventListener("click", function () {
-        button.disabled = true;
+        if (ask && yes) return asking(true);
+        send(button);
+      });
+      if (no) {
+        no.addEventListener("click", function () {
+          say(status, "", null);
+          asking(false);
+        });
+      }
+      if (yes) {
+        yes.addEventListener("click", function () {
+          send(yes);
+        });
+      }
+      // Keep going waits too while it is sending, so the answer always lands under the question.
+      function busy(on, control) {
+        control.disabled = on;
+        if (no) no.disabled = on;
+      }
+      function send(control) {
+        busy(true, control);
         say(status, MSG.sending, "pending");
         post(API + "/fundraisers/" + encodeURIComponent(f.id) + "/finished")
           .then(function (r) {
-            button.disabled = false;
+            busy(false, control);
             if (r.status === 200) {
               say(status, "", null);
-              return done();
+              return done(true);
             }
             if (r.status === 401) return sessionOver();
             say(status, r.data.error || MSG.finishFailed, "error");
           })
           .catch(function () {
-            button.disabled = false;
+            busy(false, control);
             say(status, MSG.finishFailed, "error");
           });
-      });
+      }
     }
 
     // --- signing out --------------------------------------------------------------------------------

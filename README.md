@@ -9560,7 +9560,7 @@ fundraising, giving (TASK-502)**.
 only for a page); what it has raised; the latest gifts and messages exactly as the wall shows them
 (a short name or Anonymous, the amount unless hidden, the message unless staff hid it, the date,
 first ten then Show all; never a giver's email, full name or anything else); their details to
-change; "Pay in what you collected"; and "I've finished".
+change; "Pay in what you collected"; and "End campaign".
 
 - **Changing the details.** Everything editable before (story, target, date, start time, where,
   town, social link) plus the event details TASK-499 added, for an event: the line for the front of
@@ -9595,7 +9595,10 @@ change; "Pay in what you collected"; and "I've finished".
   business donor picker. The donor portal never takes a donor row whose only donations are pay ins as
   their main record (`findNewestDonorByEmail` passes over it for the newest row that is not, and only
   falls back to it when every row is like that).
-- **I've finished.** Records `fundraisers.finished_requested_at` (the first press is kept), emails
+- **End campaign** (called "I've finished" until 10 November 2026, when an organiser pressed it
+  thinking it saved their words). It asks first, on the page: "End your campaign? This tells our
+  team your fundraiser is over. To change your page's words, use Send my changes instead.", with
+  **End campaign** and **Keep going**; only the first sends. It records `fundraisers.finished_requested_at` (the first press is kept), emails
   the events inbox once (`fundraiseFinishedStaff`, staff only so never link tagged, Reply-To the
   organiser), and says "Thank you, we'll be in touch." It finishes and hides nothing: staff still
   press Mark finished. Admin > Get involved shows a **Says they've finished** pill on the row and the

@@ -114,3 +114,18 @@ describe("promotions between two counts", () => {
     expect(promotionsBetween(5, Number.NaN)).toEqual([]);
   });
 });
+
+describe("snow days", () => {
+  it("count as done every way, so nobody loses an honour to the weather", () => {
+    const p = progressOf({ cracked: [1], visited: [2], snow: [3] });
+    expect(p.doorsDone).toBe(3);
+    expect(p.cracked).toBe(2);
+    expect(p.visited).toBe(2);
+  });
+
+  it("let 24 snow doors graduate with the gold seal", () => {
+    const p = progressOf({ cracked: [], visited: [], snow: doors(1, 24) });
+    expect(p.graduate).toBe(true);
+    expect(p.goldSeal).toBe(true);
+  });
+});

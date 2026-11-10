@@ -42,6 +42,8 @@ export interface DoorsDone {
   cracked: readonly number[] | null | undefined;
   /** The doors whose place the detective has a stamp for. */
   visited: readonly number[] | null | undefined;
+  /** The doors that were snowed in: done every way, so nobody loses an honour to the weather. */
+  snow?: readonly number[] | null;
 }
 
 const doorSet = (doors: readonly number[] | null | undefined): Set<number> => new Set((doors ?? []).filter(isDoor));
@@ -59,8 +61,9 @@ export function rankAt(doorsDone: number): Rank {
 /** Everything about a detective's progress. The two lists are named, not passed in order, so they
  *  cannot be swapped by mistake: swapped, 24 cracked doors would look like the gold seal. */
 export function progressOf(doors: DoorsDone): Progress {
-  const cracked = doorSet(doors.cracked);
-  const visited = doorSet(doors.visited);
+  const snow = doorSet(doors.snow);
+  const cracked = new Set([...doorSet(doors.cracked), ...snow]);
+  const visited = new Set([...doorSet(doors.visited), ...snow]);
   const doorsDone = new Set([...cracked, ...visited]).size;
   const upcoming = RANKS.find((r) => r.at > doorsDone) ?? null;
   return {

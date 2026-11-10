@@ -151,6 +151,6 @@ export function normaliseFavourites(list: unknown, state: WardrobeState): ElfLoo
  * a saved costume quietly comes off. Building the state in one typed place is what stops that.
  */
 export function wardrobeState(doors: DoorsDone): WardrobeState {
-  const done = new Set([...(doors.cracked ?? []), ...(doors.visited ?? [])].filter(isDoor));
+  const done = new Set([...(doors.cracked ?? []), ...(doors.visited ?? []), ...(doors.snow ?? [])].filter(isDoor));
   return { doors: [...done].sort((a, b) => a - b) };
 }

@@ -20,9 +20,14 @@ import { clockWords, longDayWords } from "./words";
 // The school's own logo is on the poster, the certificate and the share card, always on cream:
 // its lettering is dark red, so it never goes on the dark red band (src/elf/logo.ts).
 //
-// Two of them hold secrets. The staff card names the place's day, and the tag carries the elf's
-// secret word: both are for staff to print, never for a public address. The poster is the opposite:
-// it stays in a shop window all month, so it says nothing about when the elf is there.
+// The poster goes up with the elf at the first clue, and both stay out for the rest of December.
+// The first detective to type the word on the elf's tag wins the door's prize; everyone after gets a
+// candy cane stamp.
+//
+// Three of them hold secrets. The staff card names the place's day, the tag carries the elf's
+// word, and the list of places names every place and its day: all for staff to print, never for a
+// public address. The poster is the opposite: it stays in a shop window all month, so it says
+// nothing about when the elf is there.
 //
 // Pure: no pool, no config, no clock. Unit tested in test/unit/elf-print.test.ts.
 
@@ -160,7 +165,7 @@ ${slimBand(assets.logoOnDark)}
   </div>
   <div class="how">
     <p>Found the elf? Scan, then type the secret word on its tag.</p>
-    <p>Here for a candy cane? Scan to check in once this place's door has opened.</p>
+    <p>Here for a candy cane? Once this place's door has opened, scan and type the word on the elf's tag, then add your picture to the door.</p>
     <p>Not a detective yet? Scan to join the hunt.</p>
   </div>
   <p class="elf-grown">${GROWN_UP}</p>
@@ -194,23 +199,23 @@ ${band(assets.logoOnDark)}
   <h1>For the team at ${place}</h1>
   <div class="day">
     <p>Your elf is ${elf}. Your day is ${longDayWords(c.clueAt)}: door ${count(c.door)}.</p>
-    <p>The clue comes out at ${clockWords(c.clueAt)}. Please put ${elf} out, wearing its tag, before then.</p>
+    <p>The first clue comes out at ${clockWords(c.clueAt)}. Please put ${elf} and the poster out together then, with ${elf} wearing its tag. Until then, keep them both out of sight.</p>
   </div>
   <h2>Keep it a secret</h2>
-  <p>Please do not tell anyone which day is yours. The poster stays up all month, so nobody can tell from the window.</p>
+  <p>Please do not tell anyone which day is yours.</p>
   <h2>When a detective finds ${elf}</h2>
   <ol>
     <li>They scan your poster and type the secret word on the tag.</li>
     <li>The first to do it sees a gold screen that says You're first! Check three things. It names ${place}. It shows the right date. Its clock is ticking: a picture of the screen does not tick.</li>
-    <li>Then hand over ${elf} and the prize. Thank you!</li>
+    <li>Then give them the prize. ${elf} stays here with the poster for the rest of December. Thank you!</li>
   </ol>
   <h2>If a screen says too many wrong words</h2>
-  <p>Someone holding ${elf} has mistyped the word six times. Please phone NBCC and we will sort it out.</p>
+  <p>Someone has mistyped the word six times. Please phone NBCC and we will sort it out.</p>
   <p class="ring">${escapeHtml(c.phone)}</p>
   <h2>If nobody finds ${elf} before you close</h2>
   <p>Leave ${elf} out when you next open. The first detective to type the word still wins.</p>
   <h2>After that</h2>
-  <p>Families will keep calling in for their candy cane. They scan the poster themselves: there is nothing you need to do.</p>
+  <p>Families will keep calling in all December to find ${elf}. They scan the poster and type the word on the tag themselves: there is nothing you need to do.</p>
 </div>
 ${statement}
 </div>`;
@@ -237,12 +242,66 @@ ${band(assets.logoOnDark)}
     <p class="hello">You found me! I am ${elf}.</p>
     <p>Scan the poster here and type my secret word:</p>
     <p class="word">${escapeHtml(t.secretWord.trim().replace(/\s+/g, " ").toUpperCase())}</p>
-    <p>The first detective to type it wins me.</p>
+    <p>The first detective to type it wins this door's prize. Everyone after gets a candy cane stamp.</p>
   </div>
 </div>
 ${statement}
 </div>`;
   return shell({ title: `Elf Detective School tag for ${elf}`, paper: "A4 portrait", fontCss: assets.fontCss, css, toolbar: `<span>Tag for ${elf}. It carries the secret word: keep it private.</span>`, body });
+}
+
+/** One door of the list of hiding places. Empty place fields mean the door has no place yet. */
+export interface PlacesListRow {
+  door: Door;
+  clueAt: Date;
+  placeName: string | null;
+  placeTown: string | null;
+  placeAddress: string | null;
+  contactName: string | null;
+  contactPhone: string | null;
+}
+
+/** Every hiding place, a door each. It names every place and its day: for staff only. */
+export function renderPlacesList(year: number, rows: PlacesListRow[]): string {
+  const assets = materialAssets();
+  const css = `${BASE_CSS}
+  .places h1{font-size:24pt}
+  .places .elf-body{padding-top:6mm}
+  .places .entry{border-top:.3mm solid var(--line);padding:2mm 0;break-inside:avoid;overflow-wrap:anywhere}
+  .places .entry p{margin:0;font-size:10pt;line-height:1.35}
+  .places .entry .top{font-family:var(--head);font-weight:800;color:var(--maroon);font-size:11pt}
+  .places .entry .none{color:var(--muted)}`;
+  const text = (v: string | null): string => (typeof v === "string" ? v.trim() : "");
+  const entry = (r: PlacesListRow): string => {
+    const name = escapeHtml(text(r.placeName));
+    const town = escapeHtml(text(r.placeTown));
+    const where = [name, town].filter((x) => x !== "").join(", ");
+    const address = escapeHtml(text(r.placeAddress));
+    const who = [escapeHtml(text(r.contactName)), escapeHtml(text(r.contactPhone))].filter((x) => x !== "").join(", ");
+    const when = real(r.clueAt) ? `${longDayWords(r.clueAt)}. First clue at ${clockWords(r.clueAt)}` : "";
+    return `<div class="entry">
+    <p class="top">Door ${count(r.door)}${when ? `: ${when}` : ""}</p>
+    ${where === "" ? `<p class="none">No place yet</p>` : `<p>${where}</p>`}
+    ${address === "" ? "" : `<p>${address}</p>`}
+    ${who === "" ? "" : `<p>Talk to: ${who}</p>`}
+  </div>`;
+  };
+  const body = `<div class="page portrait places">
+${slimBand(assets.logoOnDark)}
+<div class="elf-body">
+  <h1>The hiding places, December ${count(year)}</h1>
+  ${[...rows].sort((a, b) => count(a.door) - count(b.door)).map(entry).join("")}
+</div>
+${statement}
+</div>`;
+  return shell({
+    title: `Elf Detective School: the hiding places for December ${count(year)}`,
+    paper: "A4 portrait",
+    fontCss: assets.fontCss,
+    css,
+    toolbar: `<span>The hiding places. For staff only: it names every place and its day.</span>`,
+    body,
+  });
 }
 
 /** The certificate for a detective who has done all 24 doors. */

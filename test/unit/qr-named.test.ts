@@ -18,7 +18,7 @@ import { SITE_PAGES } from "../../src/site/pages";
 // TASK-588: named QR codes. The pure rules: what the "Goes to" list offers, what a code's link is,
 // where a scan goes, and how its scans add up. Invented names only.
 
-const CLOSED = { ballOpen: false, eventsOn: false, fundraisingOn: false };
+const CLOSED = { ballOpen: false, eventsOn: false, fundraisingOn: false, elfOn: false };
 
 describe("the Goes to list", () => {
   it("offers every page of the site, children included, then the three sign up sites", () => {
@@ -36,8 +36,19 @@ describe("the Goes to list", () => {
   it("marks a page that is switched off, and never a sign up site", () => {
     const ball = qrDestinations(SITE_PAGES, CLOSED).find((d) => d.value === "/ball");
     expect(ball?.live).toBe(false);
-    expect(qrDestinations(SITE_PAGES, { ballOpen: true, eventsOn: true, fundraisingOn: true }).find((d) => d.value === "/ball")?.live).toBe(true);
+    expect(qrDestinations(SITE_PAGES, { ballOpen: true, eventsOn: true, fundraisingOn: true, elfOn: true }).find((d) => d.value === "/ball")?.live).toBe(true);
     expect(qrDestinations(SITE_PAGES, CLOSED).filter((d) => d.group === "signup").every((d) => d.live)).toBe(true);
+  });
+
+  // For letters home from schools (9 November 2026): chosen before the school opens, marked not live.
+  it("offers the Elf Detective School, and accepts it, before and after the school is switched on", () => {
+    const shut = qrDestinations(SITE_PAGES, CLOSED).find((d) => d.value === "/elf");
+    expect(shut).toEqual({ value: "/elf", title: "Elf Detective School", group: "page", live: false });
+    expect(qrDestinations(SITE_PAGES, { ...CLOSED, elfOn: true }).find((d) => d.value === "/elf")?.live).toBe(true);
+    expect(isDestination("/elf", SITE_PAGES)).toBe(true);
+    expect(isDestination("/elf/join", SITE_PAGES)).toBe(false);
+    expect(destinationTitle("/elf", SITE_PAGES)).toBe("Elf Detective School");
+    expect(namedTarget("/elf", 12)).toBe("https://nbcc.scot/elf?utm_medium=qr&utm_campaign=c12");
   });
 
   it("accepts only the list's own values, exactly", () => {

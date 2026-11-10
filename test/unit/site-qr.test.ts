@@ -118,30 +118,46 @@ describe("naming the codes that were scanned", () => {
 const allPaths = (pages: SitePage[]): string[] => pages.flatMap((p) => [p.path, ...allPaths(p.children ?? [])]);
 
 describe("the pages that get a code", () => {
+  const OPEN = { ballOpen: true, eventsOn: true, fundraisingOn: true, elfOn: true };
+  const SHUT = { ballOpen: false, eventsOn: false, fundraisingOn: false, elfOn: false };
+
   it("is every page in the site's page list, children included, so a new page is never missed", () => {
-    const rows = qrRows(SITE_PAGES, { ballOpen: true, eventsOn: true, fundraisingOn: true });
+    const rows = qrRows(SITE_PAGES, OPEN);
     expect(rows.map((r) => r.path)).toEqual(allPaths(SITE_PAGES));
   });
 
   it("gives each its title and the link its code carries", () => {
-    const home = qrRows(SITE_PAGES, { ballOpen: true, eventsOn: true, fundraisingOn: true })[0];
+    const home = qrRows(SITE_PAGES, OPEN)[0];
     expect(home).toEqual({ path: "/", title: "Home", live: true, link: "https://nbcc.scot/?utm_medium=qr&utm_campaign=home" });
   });
 
   // Posters can be made before launch, but staff should know the page is not up yet.
-  it("marks the Festive Ball, Get involved and Fundraising pages not live while they are switched off", () => {
-    const live = (open: { ballOpen: boolean; eventsOn: boolean; fundraisingOn: boolean }) =>
-      Object.fromEntries(qrRows(SITE_PAGES, open).map((r) => [r.path, r.live]));
-    const off = live({ ballOpen: false, eventsOn: false, fundraisingOn: false });
+  it("marks the Festive Ball, Get involved, Fundraising and Elf Detective School pages not live while they are switched off", () => {
+    const live = (open: typeof OPEN) => Object.fromEntries(qrRows(SITE_PAGES, open).map((r) => [r.path, r.live]));
+    const off = live(SHUT);
     expect(off["/ball"]).toBe(false);
     expect(off["/ball/terms"]).toBe(false);
     expect(off["/get-involved"]).toBe(false);
     expect(off["/fundraise"]).toBe(false);
     expect(off["/fundraise/help"]).toBe(false);
+    expect(off["/elf"]).toBe(false);
     expect(off["/donate"]).toBe(true);
-    const on = live({ ballOpen: true, eventsOn: true, fundraisingOn: true });
+    const on = live(OPEN);
     expect(on["/ball"]).toBe(true);
     expect(on["/get-involved"]).toBe(true);
     expect(on["/fundraise"]).toBe(true);
+    expect(on["/elf"]).toBe(true);
+  });
+
+  // For letters home from schools (9 November 2026): the code can be made before the school opens.
+  it("offers the Elf Detective School, whose code goes to /elf and is counted as elf", () => {
+    const elf = qrRows(SITE_PAGES, SHUT).find((r) => r.path === "/elf");
+    expect(elf).toEqual({
+      path: "/elf",
+      title: "Elf Detective School",
+      live: false,
+      link: "https://nbcc.scot/elf?utm_medium=qr&utm_campaign=elf",
+    });
+    expect(labelQrScans([{ campaign: "elf", visits: 3 }], SITE_PAGES)).toEqual([{ label: "Elf Detective School", visits: 3 }]);
   });
 });

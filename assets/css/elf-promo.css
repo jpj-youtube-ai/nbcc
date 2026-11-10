@@ -1,0 +1,29 @@
+/* NBCC Elf Detective School: the card on the home page, Get involved and Your school, drawn only while
+   the school is switched on (src/elf/promo.ts). A sheet of the site's own paper, taped down like the
+   notes on Get involved, with the school's logo on cream (its lettering is dark red and green, so it
+   never sits on the dark red band). Loaded only by a page that draws the card.
+
+   Phone first: logo, words, button, one under the other. From 640 pixels the logo stands beside the
+   words; from 1000, the button joins them on the same line. */
+
+.elfp{padding:clamp(34px,5vw,64px) 0 clamp(44px,6vw,84px)}
+.elfp-note{position:relative;display:grid;grid-template-columns:minmax(0,1fr);grid-template-areas:"logo" "words" "go";gap:16px clamp(22px,3.4vw,40px);align-items:center;background:var(--card);padding:clamp(32px,3.8vw,46px) clamp(22px,3.6vw,46px) clamp(28px,3.4vw,42px);border-radius:3px;box-shadow:0 26px 50px -28px rgba(70,0,0,.5),0 1px 3px rgba(70,0,0,.12);transform:rotate(-.5deg)}
+.elfp-tape{position:absolute;top:-13px;left:50%;width:120px;height:30px;margin-left:-60px;background:rgba(232,196,180,.85);transform:rotate(-2deg);box-shadow:0 1px 3px rgba(70,0,0,.14)}
+.elfp-logo{grid-area:logo;width:132px;height:auto;margin:0 0 -4px -6px}
+.elfp-words{grid-area:words;max-width:58ch}
+.elfp-words .eyebrow{margin-bottom:10px}
+.elfp h2{color:var(--maroon);font-size:clamp(1.55rem,1.25rem + 1.5vw,2.35rem);line-height:1.1;margin:0 0 12px;text-wrap:balance}
+.elfp-text{margin:0;text-wrap:pretty}
+.elfp-small{margin:14px 0 0;font-size:.95rem;color:var(--slate)}
+.elfp-small b{color:var(--maroon);font-weight:600;white-space:nowrap}
+.elfp-go{grid-area:go;margin:6px 0 0}
+
+@media (min-width:640px){
+  .elfp-note{grid-template-columns:auto minmax(0,1fr);grid-template-areas:"logo words" "logo go";align-items:start}
+  .elfp-logo{width:clamp(150px,20vw,190px);margin:0;align-self:center}
+}
+
+@media (min-width:1000px){
+  .elfp-note{grid-template-columns:auto minmax(0,1fr) auto;grid-template-areas:"logo words go";align-items:center}
+  .elfp-go{margin:0;padding-right:4px}
+}

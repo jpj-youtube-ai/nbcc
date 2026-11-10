@@ -11,12 +11,14 @@ const m = vi.hoisted(() => ({
   isGateOpen: vi.fn(),
   getEventsSettings: vi.fn(),
   fundraisingIsOn: vi.fn(),
+  getElfSettings: vi.fn(),
 }));
 vi.mock("../../src/db/admin-users", () => ({ getUserAuthRow: m.getUserAuthRow }));
 vi.mock("../../src/db/ball", () => ({ getSettings: m.getSettings }));
 vi.mock("../../src/ball/gate", () => ({ isGateOpen: m.isGateOpen }));
 vi.mock("../../src/db/events", () => ({ getEventsSettings: m.getEventsSettings }));
 vi.mock("../../src/db/fundraisers", () => ({ fundraisingIsOn: m.fundraisingIsOn }));
+vi.mock("../../src/db/elf", () => ({ getElfSettings: m.getElfSettings }));
 vi.mock("../../src/config", () => ({ config: { NODE_ENV: "development", ADMIN_SESSION_SECRET: "test-admin-secret" } }));
 
 import { getQrCodes, getQrImage } from "../../src/routes/admin-qr";
@@ -65,6 +67,7 @@ beforeEach(() => {
   m.isGateOpen.mockReturnValue(false);
   m.getEventsSettings.mockResolvedValue({ pageOn: true });
   m.fundraisingIsOn.mockResolvedValue(false);
+  m.getElfSettings.mockResolvedValue({ schoolOn: false });
 });
 
 describe("GET /api/admin/qr-codes", () => {
@@ -94,6 +97,19 @@ describe("GET /api/admin/qr-codes", () => {
     const res = await call(getQrCodes, tokenFor("viewer"));
     const pages = (res.body as { pages: Array<{ path: string; live: boolean }> }).pages;
     expect(pages.find((p) => p.path === "/get-involved")?.live).toBe(false);
+  });
+
+  // For letters home from schools (9 November 2026): offered before the school opens, marked not live.
+  it("offers the Elf Detective School, live only while the school is switched on", async () => {
+    const elf = async () =>
+      ((await call(getQrCodes, tokenFor("viewer"))).body as { pages: Array<{ path: string; live: boolean; link: string }> }).pages.find(
+        (p) => p.path === "/elf",
+      );
+    expect(await elf()).toMatchObject({ title: "Elf Detective School", live: false, link: "https://nbcc.scot/elf?utm_medium=qr&utm_campaign=elf" });
+    m.getElfSettings.mockResolvedValue({ schoolOn: true });
+    expect((await elf())?.live).toBe(true);
+    m.getElfSettings.mockRejectedValue(new Error("down"));
+    expect((await elf())?.live).toBe(false);
   });
 });
 

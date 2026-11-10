@@ -478,7 +478,7 @@ describe("the Money screen", () => {
     const { hq } = page({ answers: { "/api/admin/elf/hq": BUSY } });
     document.body.insertAdjacentHTML("beforeend", '<button class="admin-nav-link" data-view="donations">Donations</button><input type="checkbox" id="donationsElfFilter">');
     await hq.open();
-    tabs()[2].click();
+    tabs()[3].click();
     expect(moneyPart().textContent).toContain("£1,486");
     expect(moneyPart().textContent).toContain("from 128 families");
     expect(moneyPart().textContent).toContain("Entries are a payment to take part, so they are never claimed for Gift Aid.");
@@ -497,7 +497,7 @@ describe("the Money screen", () => {
   it("says when there is no money yet", async () => {
     const { hq } = page();
     await hq.open();
-    tabs()[2].click();
+    tabs()[3].click();
     expect(moneyPart().textContent).toContain("No payments yet.");
   });
 });
@@ -506,7 +506,7 @@ describe("the Settings screen", () => {
   it("steps the prices in pounds within their limits, and saves both in pence", async () => {
     const { hq, calls } = page({ answers: { "/api/admin/elf/hq": BUSY, "/api/admin/elf/settings": { settings: { ...BUSY.settings, entryFromPence: 200, entrySuggestedPence: 600 } } } });
     await hq.open();
-    tabs()[3].click();
+    tabs()[4].click();
     const [least, suggested] = [...settingsPart().querySelectorAll<HTMLElement>(".hq-stepper")];
     const out = (s: HTMLElement) => s.querySelector("output")!.textContent;
     const press = (s: HTMLElement, which: "less" | "more", times = 1) => {
@@ -534,7 +534,7 @@ describe("the Settings screen", () => {
   it("shows the server's refusal as an error", async () => {
     const { hq } = page({ answers: { "/api/admin/elf/hq": BUSY } });
     await hq.open();
-    tabs()[3].click();
+    tabs()[4].click();
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (window as any).fetch = vi.fn(() => Promise.resolve({ ok: false, status: 400, json: () => Promise.resolve({ error: "The suggested amount cannot be less than the least a family pays." }) }));
     inPart(settingsPart(), "Save the prices")!.click();
@@ -548,7 +548,7 @@ describe("the Settings screen", () => {
     const url = "https://nbcc.scot/elf/preview/" + "a".repeat(64);
     const { hq, calls } = page({ answers: { "/api/admin/elf/hq": BUSY, "/api/admin/elf/preview": { url } } });
     await hq.open();
-    tabs()[3].click();
+    tabs()[4].click();
     expect(settingsPart().textContent).toContain("There is no preview link.");
     inPart(settingsPart(), "Make a preview link")!.click();
     await flush();
@@ -564,7 +564,7 @@ describe("the Settings screen", () => {
   it("ends the preview link", async () => {
     const { hq, calls } = page({ answers: { "/api/admin/elf/hq": { ...BUSY, settings: { ...BUSY.settings, previewOn: true } }, "/api/admin/elf/preview": { ok: true } } });
     await hq.open();
-    tabs()[3].click();
+    tabs()[4].click();
     inPart(settingsPart(), "End the link")!.click();
     await flush();
     expect(calls.filter((c) => c.method === "DELETE").map((c) => c.url)).toEqual(["/api/admin/elf/preview"]);
@@ -575,10 +575,56 @@ describe("the Settings screen", () => {
   it("shows someone who is not an admin the prices and the link as words, with nothing to press", async () => {
     const { hq } = page({ answers: { "/api/admin/elf/hq": { ...BUSY, canSwitch: false, settings: { ...BUSY.settings, previewOn: true } } } });
     await hq.open();
-    tabs()[3].click();
+    tabs()[4].click();
     expect(settingsPart().textContent).toContain("The least anyone pays is £1 for each detective, and we suggest £5.");
     expect(settingsPart().textContent).toContain("A preview link is open. Anyone who has it can see Elf Detective School.");
     expect(settingsPart().textContent).toContain("Only an admin can change these.");
     expect(settingsPart().querySelectorAll("button")).toHaveLength(0);
+  });
+});
+
+// ---- HQ points at the doors, and Settings holds the place phone (Task 10) ----
+
+describe("HQ and the doors", () => {
+  const DOORS_QUEST = { id: "doors", count: null, title: "2 doors to get ready", words: "Door 1 is next: 2 to do.", go: "doors", button: "Open Doors", filter: null };
+
+  it("shows the Doors tile's count from HQ's own answer, before the Doors tab is opened", async () => {
+    const { hq, calls } = page({ answers: { "/api/admin/elf/hq": { ...BUSY, doorsNotReady: 24, quests: [DOORS_QUEST] } } });
+    await hq.open();
+    expect(tabs()[2].querySelector(".hq-count")!.textContent).toBe("24");
+    expect(calls.map((c) => c.url)).not.toContain("/api/admin/elf/doors");
+  });
+
+  it("opens the Doors tab from the quest's button", async () => {
+    const { hq } = page({ answers: { "/api/admin/elf/hq": { ...BUSY, doorsNotReady: 2, quests: [DOORS_QUEST] }, "/api/admin/elf/doors": { doors: [], counts: {}, canEdit: true } } });
+    await hq.open();
+    const go = [...panel("hq").querySelectorAll<HTMLButtonElement>("button")].find((b) => b.textContent!.trim() === "Open Doors")!;
+    go.click();
+    expect(tabs()[2].getAttribute("aria-selected")).toBe("true");
+    expect(panel("doors").hidden).toBe(false);
+  });
+});
+
+describe("the place phone in Settings", () => {
+  it("lets an admin save it", async () => {
+    const { hq, calls } = page({ answers: { "/api/admin/elf/hq": BUSY, "/api/admin/elf/settings": { settings: { ...BUSY.settings, placePhone: "01632 960 123" } } } });
+    await hq.open();
+    tabs()[4].click();
+    expect(settingsPart().querySelector('label[for="hqPlacePhone"]')!.textContent).toBe("NBCC's phone number for places");
+    expect(settingsPart().textContent).toContain("It goes on every staff card.");
+    const box = settingsPart().querySelector<HTMLInputElement>("#hqPlacePhone")!;
+    box.value = "01632 960 123";
+    inPart(settingsPart(), "Save the number")!.click();
+    await flush();
+    expect(calls.filter((c) => c.method === "PATCH")).toEqual([{ method: "PATCH", url: "/api/admin/elf/settings", body: { placePhone: "01632 960 123" } }]);
+    expect(settingsPart().textContent).toContain("Saved.");
+  });
+
+  it("shows a head elf who is not an admin the number as words", async () => {
+    const { hq } = page({ answers: { "/api/admin/elf/hq": { ...BUSY, canSwitch: false, settings: { ...BUSY.settings, placePhone: "01632 960 123" } } } });
+    await hq.open();
+    tabs()[4].click();
+    expect(settingsPart().textContent).toContain("NBCC's phone number for places: 01632 960 123");
+    expect(settingsPart().querySelector("#hqPlacePhone")).toBeNull();
   });
 });

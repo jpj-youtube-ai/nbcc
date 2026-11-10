@@ -18,6 +18,9 @@ import {
   type FamilySheetRow,
   type FamilySummaryRow,
 } from "../db/elf-admin";
+import { ensureElfDoors, listElfDoors } from "../db/elf-doors";
+import { doorInstant, eveningFor } from "../elf/calendar";
+import { doorPicture, doorSeason, readinessOf, staffEveningOf } from "../elf/door-setup";
 import { familyFilter, parseDetectiveChange, parseFamilyChange } from "../elf/admin-families";
 import { daysUntil, questsFor, tileFor } from "../elf/admin-hq";
 import { sendSignInCodeTo } from "../elf/sign-in-code";
@@ -121,6 +124,17 @@ export async function getAdminElfHq(req: Request, res: Response): Promise<Respon
       loadEffectivePermissions(claims.sub),
     ]);
     const clue = firstClueAt(settings.year);
+    // The doors whose clue 1 is still to come and that are not ready, soonest first.
+    await ensureElfDoors(settings.year);
+    const season = doorSeason(settings.year);
+    const notReady = (await listElfDoors(settings.year))
+      .map((d) => {
+        const at = doorInstant(season, d.door, eveningFor(season, d.door, staffEveningOf(d)).clue1);
+        return { door: d.door, at, toDo: readinessOf(d, doorPicture(settings.year, d.door) !== null).toDo };
+      })
+      .filter((d) => d.toDo > 0 && d.at !== null && d.at.getTime() > now.getTime())
+      .sort((a, b) => a.at!.getTime() - b.at!.getTime())
+      .map(({ door, toDo }) => ({ door, toDo }));
     return res.status(200).json({
       settings: forAdmin(settings),
       // Whether the lever is drawn to be pulled. The token's role is enough for that: the switch
@@ -130,7 +144,8 @@ export async function getAdminElfHq(req: Request, res: Response): Promise<Respon
       // reads it, so someone given only a look is never shown buttons that answer "forbidden".
       canEdit: !!perms && can(perms, "elf", "edit"),
       numbers,
-      quests: questsFor(numbers, !!settings.previewHash),
+      quests: questsFor(numbers, !!settings.previewHash, notReady),
+      doorsNotReady: notReady.length,
       recruits: recruits.map((d) => ({
         detectiveId: d.detectiveId,
         familyId: d.familyId,

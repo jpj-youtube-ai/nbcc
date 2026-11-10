@@ -5,7 +5,7 @@ import { resolve } from "node:path";
 // NBCC Elf Detective School in the admin, Head Elf HQ: the switch, the pay what you can amounts, HQ's
 // numbers and the families. Every family here is invented.
 
-const { getUserAuthRowMock, db, dbAdmin, signIn } = vi.hoisted(() => ({
+const { getUserAuthRowMock, db, dbAdmin, signIn, dbDoors } = vi.hoisted(() => ({
   getUserAuthRowMock: vi.fn(),
   db: { getElfSettings: vi.fn(), setElfSettings: vi.fn(), setElfPreview: vi.fn() },
   dbAdmin: {
@@ -20,11 +20,13 @@ const { getUserAuthRowMock, db, dbAdmin, signIn } = vi.hoisted(() => ({
     noteSignInCodeSent: vi.fn(),
   },
   signIn: { sendSignInCodeTo: vi.fn() },
+  dbDoors: { ensureElfDoors: vi.fn(), listElfDoors: vi.fn() },
 }));
 vi.mock("../../src/db/admin-users", () => ({ getUserAuthRow: getUserAuthRowMock }));
 vi.mock("../../src/db/elf", () => db);
 vi.mock("../../src/db/elf-admin", () => dbAdmin);
 vi.mock("../../src/elf/sign-in-code", () => signIn);
+vi.mock("../../src/db/elf-doors", () => dbDoors);
 vi.mock("../../src/db/pool", () => ({ pool: { query: vi.fn(), connect: vi.fn() } }));
 vi.mock("../../src/config", () => ({
   config: { NODE_ENV: "development", ADMIN_SESSION_SECRET: "test-admin-secret", STRIPE_SECRET_KEY: "sk_test_aaaaaaaaaaaaaaaaaaaa", STRIPE_WEBHOOK_SECRET: "whsec_x" },
@@ -77,8 +79,10 @@ const run = async (h: (req: any, res: any) => Promise<unknown>, r: unknown) => {
 
 beforeEach(() => {
   getUserAuthRowMock.mockReset();
-  for (const f of [...Object.values(db), ...Object.values(dbAdmin), ...Object.values(signIn)]) f.mockReset();
+  for (const f of [...Object.values(db), ...Object.values(dbAdmin), ...Object.values(signIn), ...Object.values(dbDoors)]) f.mockReset();
   db.getElfSettings.mockResolvedValue(ON);
+  dbDoors.ensureElfDoors.mockResolvedValue(undefined);
+  dbDoors.listElfDoors.mockResolvedValue([]);
   db.setElfSettings.mockImplementation(async (patch: object) => ({ ...ON, ...patch }));
 });
 
@@ -149,6 +153,25 @@ describe("HQ in the admin", () => {
     expect(typeof body.daysToFirstClue).toBe("number");
     expect(body.canSwitch).toBe(true);
     expect(dbAdmin.elfRecruits).toHaveBeenCalledWith(8);
+  });
+
+  it("counts the doors still to come that are not ready, from the clock", async () => {
+    const { emptyDoor } = await import("../../src/elf/door-setup");
+    const all = Array.from({ length: 24 }, (_, i) => emptyDoor((i + 1) as never, `code${i + 1}`));
+    dbDoors.listElfDoors.mockResolvedValue(all);
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(new Date("2026-11-30T12:00:00Z"));
+      let body = (await run(getAdminElfHq, req("admin"))).body as { doorsNotReady: number; quests: { id: string; words: string }[] };
+      expect(body.doorsNotReady).toBe(24);
+      expect(body.quests.find((q) => q.id === "doors")!.words).toBe("Door 1 is next: 6 to do.");
+      vi.setSystemTime(new Date("2026-12-08T12:00:00Z"));
+      body = (await run(getAdminElfHq, req("admin"))).body as typeof body;
+      expect(body.doorsNotReady).toBe(17);
+      expect(body.quests.find((q) => q.id === "doors")!.words).toContain("Door 8 is next");
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("lets a head elf look, but only an admin may pull the switch", async () => {

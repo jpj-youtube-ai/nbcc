@@ -218,7 +218,7 @@
     }
 
     // ---- HQ ----
-    var QUEST_ICONS = { names: PAPER + "icons/icon-friend.webp", preview: PAPER + "icons/icon-lock.webp", waiting: PAPER + "icons/icon-bell.webp" };
+    var QUEST_ICONS = { names: PAPER + "icons/icon-friend.webp", doors: PAPER + "icons/icon-frame.webp", preview: PAPER + "icons/icon-lock.webp", waiting: PAPER + "icons/icon-bell.webp" };
     var familyFilter = "all";
     var confirming = null; // the lever's second ask, while it is showing
 
@@ -1799,6 +1799,38 @@
       }
       grid.appendChild(prices);
 
+      // The phone number that goes on every staff card.
+      var phone = el("section", { class: "hq-panel hq-place-phone", "aria-label": "NBCC's phone number for places" });
+      if (!admin) {
+        phone.appendChild(el("h2", { class: "hq-h2", text: "Phone number for places" }));
+        phone.appendChild(el("p", { class: "hq-words", text: "NBCC's phone number for places: " + (s.placePhone || "not set yet") }));
+      } else {
+        phone.appendChild(el("h2", { class: "hq-h2", text: "Phone number for places" }));
+        var phoneBox = el("input", { id: "hqPlacePhone", class: "hq-find", type: "tel", autocomplete: "off", maxlength: 40 });
+        phoneBox.value = s.placePhone || "";
+        phone.appendChild(el("div", { class: "hq-field" }, [el("label", { for: "hqPlacePhone", text: "NBCC's phone number for places" }), phoneBox]));
+        phone.appendChild(el("p", { class: "hq-words hq-soft", text: "It goes on every staff card." }));
+        var phoneSaid = el("p", { class: "hq-status", role: "status" });
+        var phoneSave = el("button", { class: "hq-btn hq-btn--go", type: "button", text: "Save the number" });
+        phoneSave.addEventListener("click", function () {
+          phoneSave.disabled = true;
+          ask("PATCH", "/api/admin/elf/settings", { placePhone: phoneBox.value.trim() })
+            .then(function (d) {
+              data.settings = d.settings;
+              drawSettingsPart();
+              var now = parts.settings.querySelector(".hq-place-phone .hq-status");
+              if (now) say(now, "Saved.", true);
+            })
+            .catch(function (e) {
+              say(phoneSaid, e.message, false);
+              phoneSave.disabled = false;
+            });
+        });
+        phone.appendChild(el("div", { class: "hq-actions" }, [phoneSave]));
+        phone.appendChild(phoneSaid);
+      }
+      grid.appendChild(phone);
+
       // The private preview link.
       var preview = el("section", { class: "hq-panel hq-preview", "aria-label": "Your private preview" });
       preview.appendChild(el("h2", { class: "hq-h2", text: "Your private preview" }));
@@ -1863,6 +1895,7 @@
       stateChip.textContent = on ? "Live" : "Switched off";
       stateChip.classList.toggle("is-live", on);
       tileCount("families", data.numbers ? data.numbers.namesToCheck : 0);
+      tileCount("doors", data.doorsNotReady || 0);
       drawHq();
       drawMoneyPart();
       drawSettingsPart();

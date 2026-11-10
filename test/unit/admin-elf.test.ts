@@ -104,6 +104,16 @@ describe("the school's settings in the admin", () => {
     expect(db.setElfSettings).toHaveBeenCalledWith({ schoolOn: true }, "admin:staff@example.org");
   });
 
+  it("takes the phone number printed on the list of places from an admin, or nothing, and refuses words", async () => {
+    expect((await run(patchAdminElfSettings, req("editor", { placePhone: "01632 960 123" }))).statusCode).toBe(403);
+    const res = await run(patchAdminElfSettings, req("admin", { placePhone: "01632 960 123" }));
+    expect(res.statusCode).toBe(200);
+    expect(db.setElfSettings).toHaveBeenCalledWith({ placePhone: "01632 960 123" }, "admin:staff@example.org");
+    expect((await run(patchAdminElfSettings, req("admin", { placePhone: "" }))).statusCode).toBe(200);
+    expect(db.setElfSettings).toHaveBeenLastCalledWith({ placePhone: null }, "admin:staff@example.org");
+    expect((await run(patchAdminElfSettings, req("admin", { placePhone: "call me" }))).statusCode).toBe(400);
+  });
+
   it("refuses amounts that do not make sense, in plain words, and saves nothing", async () => {
     for (const body of [{ entryFromPence: 50 }, { entryFromPence: 1100 }, { entrySuggestedPence: 99 }, { entrySuggestedPence: 6000 }, { entryFromPence: 300, entrySuggestedPence: 200 }, { schoolOn: "yes" }]) {
       const res = await run(patchAdminElfSettings, req("admin", body));

@@ -49,11 +49,25 @@ export const adminElfRouter = Router();
 
 const UNAVAILABLE = { error: "Admin is temporarily unavailable" };
 
+const PHONE_WORDS = "A phone number can only have digits, spaces and + ( ) -, with at least 7 digits, and be up to 40 characters.";
+
+/** A phone number a person can ring: blank is nothing (null). Shared with the doors' contact phone. */
+export const phoneSchema = z.preprocess(
+  (v) => (typeof v === "string" && v.trim() === "" ? null : v),
+  z
+    .string({ invalid_type_error: PHONE_WORDS })
+    .trim()
+    .max(40, PHONE_WORDS)
+    .refine((s) => /^[0-9 +()-]+$/.test(s) && (s.match(/\d/g) ?? []).length >= 7, PHONE_WORDS)
+    .nullable(),
+);
+
 const patchSchema = z
   .object({
     schoolOn: z.boolean().optional(),
     entryFromPence: z.number().int().min(100, "The least a family pays must be at least £1 for each detective.").max(1000, "The least a family pays can be at most £10 for each detective.").optional(),
     entrySuggestedPence: z.number().int().min(100, "The suggested amount must be at least £1 for each detective.").max(5000, "The suggested amount can be at most £50 for each detective.").optional(),
+    placePhone: phoneSchema.optional(),
   })
   .strict();
 

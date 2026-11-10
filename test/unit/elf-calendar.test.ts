@@ -196,3 +196,39 @@ describe("the moment a door's place closes", () => {
     expect(closingInstant(SEASON, 7, "teatime", "21:00")).toBeNull();
   });
 });
+
+import { eveningFor, closesTooSoon, EVENING_PROBLEM_WORDS } from "../../src/elf/calendar";
+
+describe("a door's evening", () => {
+  const evSeason = { year: 2026, holidayDoors: [], schoolClueTime: "17:30", morningClueTime: "10:00" };
+
+  it("fills the evening from the clue time", () => {
+    expect(eveningFor(evSeason, 7, {})).toEqual({ clue1: "17:30", clue2: "18:00", clue3: "18:30", reveal: "19:00", problems: [] });
+    expect(eveningFor(evSeason, 5, {})).toMatchObject({ clue1: "10:00", clue2: "10:30", clue3: "11:00", reveal: "11:30" });
+    expect(eveningFor(evSeason, 7, { clue1: "17:00" })).toMatchObject({ clue2: "17:30", clue3: "18:00", reveal: "18:30" });
+    expect(eveningFor(evSeason, 7, { clue2: "17:45" })).toMatchObject({ clue3: "18:15", reveal: "18:45", problems: [] });
+  });
+
+  it("reports times out of order", () => {
+    expect(eveningFor(evSeason, 7, { clue2: "17:00" }).problems).toEqual(["clue2-not-after-clue1"]);
+    expect(eveningFor(evSeason, 7, { reveal: "18:30" }).problems).toEqual(["reveal-not-after-clue3"]);
+    expect(eveningFor(evSeason, 7, { clue3: "17:45" }).problems).toContain("clue3-not-after-clue2");
+  });
+
+  it("stops defaults at 23:59 and says so once", () => {
+    const e = eveningFor(evSeason, 7, { clue1: "23:40" });
+    expect(e.problems.filter((p) => p === "past-midnight")).toHaveLength(1);
+    expect(e.reveal).toBe("23:59");
+  });
+
+  it("has a sentence for every problem", () => {
+    expect(EVENING_PROBLEM_WORDS["past-midnight"]).toBe("Every time must be on the door's own day, before midnight.");
+  });
+
+  it("knows when a place closes too soon after clue 3", () => {
+    expect(closesTooSoon("19:30", "18:30")).toBe(false);
+    expect(closesTooSoon("19:29", "18:30")).toBe(true);
+    expect(closesTooSoon(null, "18:30")).toBe(false);
+    expect(closesTooSoon("17:00", "18:30")).toBe(true);
+  });
+});

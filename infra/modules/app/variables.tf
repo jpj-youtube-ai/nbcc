@@ -171,6 +171,12 @@ variable "newsletter_from_email" {
   default     = "newsletter@news.nbcc.scot"
 }
 
+variable "sms_sender_id" {
+  description = "Sender name on a text message: 3 to 11 letters and digits, no spaces"
+  type        = string
+  default     = "NBCC"
+}
+
 # TASK-298: separate from the From above, because news.nbcc.scot is send-only — no MX, no A record,
 # so a reply addressed there bounces. This must stay a mailbox that actually receives.
 variable "newsletter_reply_to_email" {

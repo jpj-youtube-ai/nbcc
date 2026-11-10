@@ -13094,6 +13094,43 @@ blocked on the owner's machine). The keys, all defaulted so boot never blocks:
   every send a no-op (the old `.example`-placeholder behaviour); production's task definition sets
   `ses` and production never stubs regardless.
 - `SES_REGION` (default `eu-west-2`) — plain task-def env, matching the stack's region.
+
+**Text message keys (Elf Detective School wave 2).** The website can send a text from "NBCC" to a UK
+mobile (`src/clients/sms.ts`, with the pure request building in `src/clients/sms-request.ts`). It
+calls Amazon SNS `Publish`, signed with the app task's own role exactly as the SES client is, so
+there is no key for anyone to type in. **Nothing sends a text yet**: the Elf Detective School photo
+alerts to head elves (a later plan) are the first caller. The keys:
+
+- `SMS_PROVIDER` (`stub`|`sns`, default `stub`) — `stub` sends nothing and touches no network
+  outside production, which is what local runs and CI use. Production's task definition sets `sns`,
+  and production never stubs.
+- `SMS_SENDER_ID` (default `NBCC`) — the name a phone shows, 3 to 11 letters and digits with no
+  spaces. UK carriers accept a name like this without registration today. An SSM `String`
+  (`/<project>/<environment>/SMS_SENDER_ID`) injected with `valueFrom`, so it is also in the
+  `exec_secrets` list. Not a secret.
+- `SMS_REGION` (default `eu-west-2`) — plain task-def env, the stack's region.
+
+`sendText` accepts only a UK mobile written as `+447` and nine digits, so a number with spaces or a
+leading 0 never reaches Amazon. A refusal from Amazon is thrown with its status in the message. A
+log line shows no more than the last three digits of a number. Tests use `07700 900 123`
+(`+447700900123`), Ofcom's reserved drama number.
+
+**Infra for texts.** `infra/modules/app/ecs.tf` adds an IAM policy, `task_sms`, to the task role. It
+lets the role send a text to a phone number (`sns:Publish` on `*`, because a text to a number has no
+topic) and denies `sns:Publish` on every topic, so the role can text a number and never post to a
+topic. Like `task_ses` it exists only where the stack owns the domain. The SSM parameter
+`SMS_SENDER_ID` is in `infra/modules/app/main.tf`, with the `sms_sender_id` variable set in
+`infra/envs/production/main.tf`. All of it goes live through the Infra workflow (plan on the pull
+request, apply on dispatch), never by hand.
+
+**What NBCC must do in the Amazon console by Friday 20 November.** Two steps, both in the SNS
+console for the London region (eu-west-2), under Text messaging (SMS):
+
+1. Leave the SMS sandbox, so texts can reach any number and not only ones verified by hand.
+2. Set a monthly text spend limit, so a mistake can never run up a bill.
+
+Until the sandbox is left, a text to an unverified number is refused. No text goes out until the
+photo alerts are built.
 - `SES_NEWSLETTER_CONFIGURATION_SET` / `SES_TRANSACTIONAL_CONFIGURATION_SET` — the two SES
   configuration sets Terraform creates (`ses.tf`): the newsletter one carries click tracking on
   `click.news.nbcc.scot` (`links.news` before TASK-466), the transactional one deliberately none.

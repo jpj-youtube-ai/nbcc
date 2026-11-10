@@ -243,6 +243,14 @@ resource "aws_ssm_parameter" "newsletter_from_email" {
   value = var.newsletter_from_email
 }
 
+# The sender name on a text message (Elf Detective School wave 2). Not a secret, but SSM-held and
+# injected like newsletter_from_email. A plain String.
+resource "aws_ssm_parameter" "sms_sender_id" {
+  name  = "/${var.project}/${var.environment}/SMS_SENDER_ID"
+  type  = "String"
+  value = var.sms_sender_id
+}
+
 # Reply-To for the admin newsletter (TASK-298). Deliberately NOT the same as the From: the sending
 # subdomain has no MX, so a reply addressed there would bounce. This one points at the real inbox.
 resource "aws_ssm_parameter" "newsletter_reply_to_email" {

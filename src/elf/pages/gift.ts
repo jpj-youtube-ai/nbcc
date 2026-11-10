@@ -16,7 +16,7 @@ const PRESENT = "/assets/img/elf/paper/deco/present-crimson.webp";
 export function giftHero(): string {
   return (
     `<div class="elf-gift">` +
-    `<div class="elf-gift__art" role="img" aria-label="The school's elf peeking out of a red present">` +
+    `<div class="elf-gift__art" role="img" aria-label="The Elf Detective School elf peeking out of a red present">` +
     `<span class="elf-gift__edge"><img class="elf-gift__peek" src="${SCHOOL_LOGO_SRC}" width="640" height="640" alt="" decoding="async" /></span>` +
     `<img class="elf-gift__box" src="${PRESENT}" width="479" height="480" alt="" decoding="async" />` +
     `</div>` +

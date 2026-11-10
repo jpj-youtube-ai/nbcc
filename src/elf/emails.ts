@@ -54,7 +54,7 @@ export function buildElfWelcomeEmail(o: {
   const hi = first ? `Hi ${first},` : "Hi there,";
   const many = o.detectives.length > 1;
   const enrolled = `Thank you for enrolling ${many ? "your detectives" : "your detective"} in NBCC Elf Detective School.`;
-  const when = `School starts on ${longDayWords(o.firstClueAt)} at ${clockWords(o.firstClueAt)}, when the first clue comes out.`;
+  const when = `Elf Detective School starts on ${longDayWords(o.firstClueAt)} at ${clockWords(o.firstClueAt)}, when the first clue comes out.`;
   const until = `Until then, ${many ? "each detective can" : "your detective can"} dress their elf in Detective HQ. More costumes unlock as they crack doors in December.`;
   const signIn = `To get back in, sign in at ${o.signInUrl} with your email. We send a 6 digit code each time.`;
   const thanks = "Every pound you paid could help a child wake up to a Red Bag Full of Joy on Christmas morning.";

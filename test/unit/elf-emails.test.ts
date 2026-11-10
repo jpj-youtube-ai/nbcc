@@ -25,9 +25,10 @@ describe("the welcome email", () => {
     expect(e.subject).toContain("Welcome to NBCC Elf Detective School");
   });
 
-  it("says when school starts and how to sign in", () => {
+  it("says when Elf Detective School starts, by its full name, and how to sign in", () => {
     const e = welcome();
-    expect(e.text).toContain("Tuesday 1 December at 5:30pm");
+    expect(e.text).toContain("Elf Detective School starts on Tuesday 1 December at 5:30pm");
+    expect(e.html).toContain("Elf Detective School starts on Tuesday 1 December at 5:30pm");
     expect(e.text).toContain("https://nbcc.scot/elf/sign-in");
     expect(e.html).toContain('href="https://nbcc.scot/elf/hq');
   });

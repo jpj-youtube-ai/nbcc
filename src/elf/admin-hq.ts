@@ -52,7 +52,7 @@ export function questsFor(n: HqNumbers, previewOn: boolean): Quest[] {
       id: "preview",
       count: null,
       title: "Your preview link is open",
-      words: "Anyone holding it can see the school. End it when you have finished looking.",
+      words: "Anyone holding it can see Elf Detective School. End it when you have finished looking.",
       go: "settings",
       button: "End it",
       filter: null,

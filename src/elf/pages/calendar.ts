@@ -137,7 +137,7 @@ export function renderCalendarPage(view: CalendarView): string {
         <p class="elf-label elf-top__class">Class of ${view.year}</p>
         <p class="lede">24 cheeky elves have escaped from the Elves' Workshop. Find them all by the Night Before Christmas.</p>
         <p class="elf-top__actions">
-          <a class="elf-btn elf-btn--crimson" href="${join}">Join the school</a>
+          <a class="elf-btn elf-btn--crimson" href="${join}">Join Elf Detective School</a>
           <a class="elf-btn" href="${hq}">Detective HQ</a>
         </p>
       </div>
@@ -183,7 +183,7 @@ ${board}
         ${headingStrip({ text: "Join Elf Detective School", tag: "h2", back: "gold", id: "elf-join-heading" })}
         <p class="lede">Pay what you can. We suggest ${escapeHtml(view.price.suggested)} for each detective, and you can join from ${escapeHtml(view.price.from)}. A grown up joins and adds their detectives.</p>
         <p>Every pound could help remind someone that they have not been forgotten.</p>
-        <p><a class="elf-btn elf-btn--crimson elf-btn--l" href="${join}">Join the school</a></p>
+        <p><a class="elf-btn elf-btn--crimson elf-btn--l" href="${join}">Join now</a></p>
       </div>
     </div>
   </section>`;

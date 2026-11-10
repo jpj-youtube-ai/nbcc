@@ -29,14 +29,28 @@ const session = (metadata: unknown): Stripe.Checkout.Session =>
 const base = { mode: "once", plan: "", giftAid: "false", donorType: "individual", fullName: "Robin Example", email: "robin@example.com" };
 
 describe("the allowed sources", () => {
-  it("is one list, holding red_bag, ball (the Festive Ball's donate page), ball_bags (red bags at the Ball) and invoice (a paid invoice)", () => {
-    expect(DONATION_SOURCES).toEqual(["red_bag", "ball", "ball_bags", "invoice"]);
+  it("is one list, holding red_bag, ball (the Festive Ball's donate page), ball_bags (red bags at the Ball), invoice (a paid invoice) and santa_sleigh (the Santa Sleigh)", () => {
+    expect(DONATION_SOURCES).toEqual(["red_bag", "ball", "ball_bags", "invoice", "santa_sleigh"]);
   });
 });
 
 describe("where a checkout session's gift came from", () => {
   it('is red_bag when the checkout marked it "true"', () => {
     expect(sourceFromCheckoutSession(session({ ...base, redBag: "true" }))).toBe("red_bag");
+  });
+
+  // The Santa Sleigh page (/sleigh): the checkout stamps metadata.sleigh = "true".
+  it('is santa_sleigh when the sleigh page marked it "true"', () => {
+    expect(sourceFromCheckoutSession(session({ ...base, sleigh: "true" }))).toBe("santa_sleigh");
+  });
+
+  it.each([
+    ['"false"', "false"],
+    ['"TRUE"', "TRUE"],
+    ["an empty mark", ""],
+    ["a real boolean", true],
+  ])("is not santa_sleigh for a sleigh mark of %s", (_what, mark) => {
+    expect(sourceFromCheckoutSession(session({ ...base, sleigh: mark }))).toBeNull();
   });
 
   it('is ball when the Ball\'s donate page marked it "true"', () => {

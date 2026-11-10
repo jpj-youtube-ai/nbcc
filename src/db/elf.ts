@@ -19,9 +19,10 @@ interface SettingsRow {
   entry_from_pence: number;
   entry_suggested_pence: number;
   preview_hash?: string | null;
+  place_phone?: string | null;
 }
 
-const SETTINGS_SQL = "SELECT school_on, year, entry_from_pence, entry_suggested_pence, preview_hash FROM elf_settings WHERE id = 1";
+const SETTINGS_SQL = "SELECT school_on, year, entry_from_pence, entry_suggested_pence, preview_hash, place_phone FROM elf_settings WHERE id = 1";
 
 function settingsFrom(row: SettingsRow | undefined): ElfSettings {
   if (!row) return { ...ELF_DEFAULTS };
@@ -31,6 +32,7 @@ function settingsFrom(row: SettingsRow | undefined): ElfSettings {
     entryFromPence: row.entry_from_pence,
     entrySuggestedPence: row.entry_suggested_pence,
     previewHash: row.preview_hash ?? null,
+    placePhone: row.place_phone ?? null,
   };
 }
 
@@ -65,6 +67,7 @@ const SETTING_COLUMNS = {
   schoolOn: "school_on",
   entryFromPence: "entry_from_pence",
   entrySuggestedPence: "entry_suggested_pence",
+  placePhone: "place_phone",
 } as const;
 
 /** Change some settings, with the row locked, and say so in the audit log. The admin route checks

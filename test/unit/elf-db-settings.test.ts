@@ -24,12 +24,26 @@ beforeEach(() => {
 describe("the school's settings", () => {
   it("reads the row", async () => {
     query.mockResolvedValueOnce({ rows: [ROW] });
-    expect(await getElfSettings()).toEqual({ schoolOn: true, year: 2026, entryFromPence: 100, entrySuggestedPence: 500, previewHash: null });
+    expect(await getElfSettings()).toEqual({ schoolOn: true, year: 2026, entryFromPence: 100, entrySuggestedPence: 500, previewHash: null, placePhone: null });
+  });
+
+  it("reads the place phone", async () => {
+    query.mockResolvedValueOnce({ rows: [{ ...ROW, place_phone: "01632 960 123" }] });
+    expect((await getElfSettings()).placePhone).toBe("01632 960 123");
+    expect(String(query.mock.calls[0][0])).toContain("place_phone");
+  });
+
+  it("writes the place phone through the same map", async () => {
+    clientQuery.mockImplementation(async () => ({ rows: [ROW] }));
+    await setElfSettings({ placePhone: "01632 960 123" }, "staff@example.org");
+    const update = clientQuery.mock.calls.find((c) => /UPDATE elf_settings/.test(String(c[0])))!;
+    expect(String(update[0])).toContain("place_phone = $1");
+    expect(update[1]).toEqual(["01632 960 123", "staff@example.org"]);
   });
 
   it("reads as switched off, at £1 and £5, when anything goes wrong", async () => {
     query.mockRejectedValueOnce(new Error("no database"));
-    expect(await getElfSettings()).toEqual({ schoolOn: false, year: 2026, entryFromPence: 100, entrySuggestedPence: 500, previewHash: null });
+    expect(await getElfSettings()).toEqual({ schoolOn: false, year: 2026, entryFromPence: 100, entrySuggestedPence: 500, previewHash: null, placePhone: null });
     query.mockResolvedValueOnce({ rows: [] });
     expect(await getElfSettings()).toEqual(ELF_DEFAULTS);
     expect(ELF_DEFAULTS.schoolOn).toBe(false);

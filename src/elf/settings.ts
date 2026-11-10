@@ -11,6 +11,8 @@ export interface ElfSettings {
   entrySuggestedPence: number;
   /** The sha256 of the private preview link's code, or null when there is no preview link. */
   previewHash?: string | null;
+  /** The number shown on the staff card for a place to ring, or null when none is set. */
+  placePhone: string | null;
 }
 
 /** What the school reads as when its row cannot be read: switched off, from £1, £5 suggested. */
@@ -20,4 +22,5 @@ export const ELF_DEFAULTS: Readonly<ElfSettings> = Object.freeze({
   entryFromPence: 100,
   entrySuggestedPence: 500,
   previewHash: null,
+  placePhone: null,
 });

@@ -1299,6 +1299,8 @@
     { id: "donationsDonatePageFilter", source: "donate_page", none: "No gifts from the Donate page yet.", noneHere: "No Donate page gifts match these filters." },
     { id: "donationsFundraiserFilter", source: "fundraiser", none: "No gifts on fundraisers' pages yet.", noneHere: "No gifts on fundraisers' pages match these filters." },
     { id: "donationsCardReaderFilter", source: "card_reader", none: "No card reader gifts yet.", noneHere: "No card reader gifts match these filters." },
+    // School uniforms (TASK-604): purchases, not gifts, listed only under their own tile.
+    { id: "donationsUniformFilter", source: "uniform", none: "No uniform payments yet.", noneHere: "No uniform payments match these filters.", payments: true },
   ];
   var DONATION_SOURCE_IDS = DONATION_SOURCES.map(function (s) {
     return s.id;
@@ -1366,7 +1368,8 @@
         });
         var total = d.total || 0;
         var count = el("donationsCount");
-        if (count) count.textContent = total ? total + (total === 1 ? " gift" : " gifts") + " listed" : "No gifts listed";
+        var one = place && place.payments ? " payment" : " gift";
+        if (count) count.textContent = total ? total + (total === 1 ? one : one + "s") + " listed" : "No" + one + "s listed";
         el("donationsPager").hidden = total <= 25;
         el("donationsInfo").textContent = total
           ? donationsOffset + 1 + "-" + Math.min(donationsOffset + 25, total) + " of " + total

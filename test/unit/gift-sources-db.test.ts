@@ -28,8 +28,8 @@ describe("the totals: one grouped read", () => {
     queryMock.mockResolvedValue({ rows: [] });
     await sumGiftsBySource(MONTH);
     // The second read is the Elf Detective School's payments, the third every monthly payment, the
-    // fourth fundraiser pages and the card reader (below).
-    expect(queryMock).toHaveBeenCalledTimes(4);
+    // fourth fundraiser pages and the card reader, the fifth uniform payments (below).
+    expect(queryMock).toHaveBeenCalledTimes(5);
     expect(call().params).toEqual(["2026-10-01", "2026-10-05T09:30:00.000Z", "red_bag", "ball", "ball_bags", "invoice"]);
     expect(call().sql).toMatch(/GROUP BY 1/);
     // The source is a parameter, never written into the SQL itself.
@@ -77,6 +77,7 @@ describe("the totals: one grouped read", () => {
       fundraiser: { month: { pence: 0, gifts: 0 }, all: { pence: 0, gifts: 0 } },
       cardReader: { month: { pence: 0, gifts: 0 }, all: { pence: 0, gifts: 0 } },
       monthly: { month: { pence: 0, gifts: 0 }, all: { pence: 0, gifts: 0 } },
+      uniform: { month: { pence: 0, gifts: 0 }, all: { pence: 0, gifts: 0 } },
     });
   });
 
@@ -100,6 +101,7 @@ describe("the totals: one grouped read", () => {
       fundraiser: { month: { pence: 0, gifts: 0 }, all: { pence: 0, gifts: 0 } },
       cardReader: { month: { pence: 0, gifts: 0 }, all: { pence: 0, gifts: 0 } },
       monthly: { month: { pence: 0, gifts: 0 }, all: { pence: 0, gifts: 0 } },
+      uniform: { month: { pence: 0, gifts: 0 }, all: { pence: 0, gifts: 0 } },
     });
   });
 
@@ -161,6 +163,29 @@ describe("the totals: one grouped read", () => {
     expect(sql).toContain("SUM(GREATEST(amount_pence - refunded_amount_pence, 0)) FILTER (WHERE (created_at AT TIME ZONE 'Europe/London')::date >= $1::date AND created_at <= $2::timestamptz)");
     expect(sql).toContain("WHERE payment_status = 'paid' AND amount_pence > refunded_amount_pence AND (payment_channel = 'in_person' OR fundraiser_id IS NOT NULL)");
     expect(sql).toContain("GROUP BY 1");
+  });
+
+  it("reads uniform payments from their own table, never donations: paid, less refunds, by this month", async () => {
+    queryMock.mockResolvedValue({ rows: [] });
+    await sumGiftsBySource(MONTH);
+    const { sql, params } = call(4);
+    expect(params).toEqual(["2026-10-01", "2026-10-05T09:30:00.000Z"]);
+    expect(sql).toContain("'uniform' AS bucket");
+    expect(sql).toContain("SUM(GREATEST(amount_pence - refunded_amount_pence, 0)) FILTER (WHERE (paid_at AT TIME ZONE 'Europe/London')::date >= $1::date AND paid_at <= $2::timestamptz)");
+    expect(sql).toContain("FROM uniform_payments WHERE amount_pence > refunded_amount_pence");
+    expect(sql).not.toMatch(/donations/);
+  });
+
+  it("puts uniform payments in a bucket of their own", async () => {
+    queryMock
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [{ bucket: "uniform", month_pence: "8000", month_gifts: "2", all_pence: "24000", all_gifts: "6" }] });
+    const t = await sumGiftsBySource(MONTH);
+    expect(t.uniform).toEqual({ month: { pence: 8000, gifts: 2 }, all: { pence: 24000, gifts: 6 } });
+    expect(t.donatePage).toEqual({ month: { pence: 0, gifts: 0 }, all: { pence: 0, gifts: 0 } });
   });
 
   it("puts card reader gifts in a bucket of their own", async () => {

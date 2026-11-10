@@ -68,9 +68,10 @@ describe("knowing how many tables to expect", () => {
   // and their scans per day; 99 since Elf Detective School added its settings, families, detectives,
   // orders, sign in codes and sessions; 101 since invoices for donations added the invoices and
   // the bank details printed on them; 102 since Fill a Red Bag added companies' own Workshops; 103
-  // since TASK-596 kept aside the monthly renewals that were recorded twice.
-  it("counts 103 across the three databases", () => {
-    expect(expectedTableCount(ROOT)).toBe(103);
+  // since TASK-596 kept aside the monthly renewals that were recorded twice; 105 since TASK-604 kept
+  // uniform payments apart from donations, and the donations moved out to them.
+  it("counts 105 across the three databases", () => {
+    expect(expectedTableCount(ROOT)).toBe(105);
   });
 
   it("finds the three tables that live outside the main database", () => {
@@ -177,7 +178,10 @@ describe("knowing how many tables to expect", () => {
     expect(main).toContain("red_bag_workshops");
     // TASK-596: the monthly renewals recorded twice, taken out of donations and kept aside.
     expect(main).toContain("donations_removed_duplicates");
-    expect(main.length).toBe(100);
+    // TASK-604: uniform payments, which hold buyers' names and addresses, and the donations moved to them.
+    expect(main).toContain("uniform_payments");
+    expect(main).toContain("donations_moved_to_uniform");
+    expect(main.length).toBe(102);
   });
 
   it("returns nothing for a directory that does not exist, rather than throwing", () => {

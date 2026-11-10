@@ -27,6 +27,8 @@ export type SourceTotals = {
   cardReader: SourceSums;
   /** Every monthly payment, wherever it was set up (TASK-596): not a place, so each is in its place's too. */
   monthly: SourceSums;
+  /** School uniforms bought through the uniform payment link (TASK-604): purchases, never donations. */
+  uniform: SourceSums;
 };
 
 /** One row of the grouped read. Postgres hands SUM and COUNT back as strings. */
@@ -48,15 +50,17 @@ export const BALL_BAGS_NOTE = "Red bags at the Ball are gifts from the table car
 // The Elf Detective School's payments are entries, with any gift on top (Head Elf HQ).
 // Monthly gifts are a kind of gift, not a place: each payment is in its own place's figures as well.
 export const MONTHLY_NOTE = "Monthly gifts are every monthly payment, wherever it was set up, so each is in its place's figures too.";
+// Uniforms are bought, not given (TASK-604): their own table, in no other figure.
+export const UNIFORM_NOTE = "Uniform is payments for school uniforms. They are not donations, so they are in no other figure.";
 export const ELF_PAYMENTS_NOTE = "Elf Detective School payments are entries to take part, with any gift on top. Entries are never claimed for Gift Aid.";
 
 const none = (): SourceSums => ({ month: { pence: 0, gifts: 0 }, all: { pence: 0, gifts: 0 } });
-const BUCKETS = ["redBag", "ball", "ballBags", "invoices", "elfSchool", "donatePage", "fundraiser", "cardReader", "monthly"] as const;
+const BUCKETS = ["redBag", "ball", "ballBags", "invoices", "elfSchool", "donatePage", "fundraiser", "cardReader", "monthly", "uniform"] as const;
 const isBucket = (b: string): b is keyof SourceTotals => (BUCKETS as readonly string[]).includes(b);
 
 /** Every bucket, whatever came back: one with no gifts has no row, and is a real zero. */
 export function sourceTotalsFrom(rows: readonly SourceTotalsRow[]): SourceTotals {
-  const out: SourceTotals = { redBag: none(), ball: none(), ballBags: none(), invoices: none(), elfSchool: none(), donatePage: none(), fundraiser: none(), cardReader: none(), monthly: none() };
+  const out: SourceTotals = { redBag: none(), ball: none(), ballBags: none(), invoices: none(), elfSchool: none(), donatePage: none(), fundraiser: none(), cardReader: none(), monthly: none(), uniform: none() };
   for (const r of rows) {
     if (!isBucket(r.bucket)) continue;
     out[r.bucket] = {
@@ -75,8 +79,8 @@ export interface SourceLine {
 }
 
 /** The lines at the top of the Donations screen: Fill a Red Bag, the Festive Ball, the Ball's red bags,
- *  invoices, the Elf Detective School, the Donate page, fundraiser pages, the card reader, and then
- *  every monthly payment. */
+ *  invoices, the Elf Detective School, the Donate page, fundraiser pages, the card reader, every
+ *  monthly payment, and last the uniform payments, which are not donations. */
 export function sourceLines(t: SourceTotals): SourceLine[] {
   const line = (key: keyof SourceTotals, name: string, words: (s: GiftSum) => string = giftsWords): SourceLine => ({
     key,
@@ -98,5 +102,7 @@ export function sourceLines(t: SourceTotals): SourceLine[] {
     line("cardReader", "Card reader"),
     // Every monthly payment, wherever it was set up, counted as payments (TASK-596).
     line("monthly", "Monthly gifts", paymentsWords),
+    // School uniforms bought through the uniform payment link, counted as payments (TASK-604).
+    line("uniform", "Uniform", paymentsWords),
   ];
 }

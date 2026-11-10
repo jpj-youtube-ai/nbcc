@@ -7,6 +7,7 @@ import { gasdsClaimDeadline } from "../gasds/deadline";
 import type { Scope } from "../declarations/wording";
 import { DONATION_SOURCES } from "./stripe-webhook-model";
 import { ELF_SOURCE } from "../admin/gift-sources";
+import { UNIFORM_SOURCE } from "../uniform/model";
 import { ARRIVAL_CHANNELS } from "../donations/arrival";
 import { givenOnLabel, paidByLabel } from "../donations/labels";
 
@@ -728,7 +729,7 @@ export function clampPage(limit?: number, offset?: number): { limit: number; off
 export interface AdminDonationRow {
   /** 'donation' for a gift; 'elf' for an Elf Detective School payment (an elf_orders row), which the
    *  list shows beside the gifts (Head Elf HQ). */
-  kind: "donation" | "elf";
+  kind: "donation" | "elf" | "uniform";
   id: number;
   /** Null on an elf payment: it has a family in Head Elf HQ, not a donor. */
   donor_id: number | null;
@@ -782,6 +783,8 @@ export interface AdminDonationRow {
   given_on_label: string;
   /** "Apple Pay (Visa ending 4242)", "Direct Debit" ...; null when not known. */
   paid_by_label: string | null;
+  /** On a uniform payment only (TASK-604): what the buyer filled in on the payment link, [{label, value}]. */
+  uniform_details?: unknown;
 }
 
 // The Elf Detective School's paid payments, the rows Head Elf HQ counts: a family a head elf removed
@@ -870,6 +873,8 @@ export async function listDonations(opts: {
   giftAid?: string;
 }): Promise<{ results: AdminDonationRow[]; total: number }> {
   const { limit, offset } = clampPage(opts.limit, opts.offset);
+  // Uniforms are bought, never given (TASK-604): only the Uniform tile lists them, on their own.
+  if (opts.source === UNIFORM_SOURCE) return listUniformPayments(opts, limit, offset);
   const where: string[] = [];
   const params: unknown[] = [];
   if (opts.status) {
@@ -1017,9 +1022,66 @@ export async function listDonations(opts: {
   return { results: res.rows.map(withLabels), total: totalRes.rows[0].count };
 }
 
+// The Uniform tile's list (TASK-604): uniform payments alone, newest first, each a row shaped as a
+// gift's so the log draws it the same way. Found by the buyer's name or email (and Stripe reference,
+// for words shaped like one) and by UK dates; Refunded shows the refunded ones. A filter only a gift
+// can meet (a claim, Monthly, Gift Aid, a way of paying, where they came from, in person, Pending or
+// Failed) finds none, without asking the database.
+async function listUniformPayments(
+  opts: Parameters<typeof listDonations>[0],
+  limit: number,
+  offset: number,
+): Promise<{ results: AdminDonationRow[]; total: number }> {
+  const giftOnly =
+    !!opts.status ||
+    (!!opts.channel && opts.channel !== "online") ||
+    (!!opts.paymentStatus && opts.paymentStatus !== "paid" && opts.paymentStatus !== "refunded") ||
+    opts.mode === "monthly" ||
+    !!PAY_FILTERS.find((m) => m === opts.method) ||
+    opts.came === "unknown" ||
+    !!ARRIVAL_CHANNELS.find((c) => c === opts.came) ||
+    opts.giftAid === "yes" ||
+    opts.giftAid === "no";
+  if (giftOnly) return { results: [], total: 0 };
+  const values: unknown[] = [];
+  const at = (v: unknown) => "$" + values.push(v);
+  const where: string[] = [];
+  const pattern = searchPattern(opts.q);
+  if (pattern) {
+    const p = at(pattern);
+    const byStripe = (opts.q ?? "").includes("_") ? ` OR u.stripe_payment_intent_id ILIKE ${p} OR u.stripe_session_id ILIKE ${p}` : "";
+    where.push(`(u.buyer_name ILIKE ${p} OR u.buyer_email ILIKE ${p}${byStripe})`);
+  }
+  const from = ukDateArg(opts.from);
+  const to = ukDateArg(opts.to);
+  if (from) where.push(`(u.paid_at AT TIME ZONE 'Europe/London')::date >= ${at(from)}::date`);
+  if (to) where.push(`(u.paid_at AT TIME ZONE 'Europe/London')::date <= ${at(to)}::date`);
+  if (opts.paymentStatus === "refunded") where.push("u.refunded_amount_pence > 0");
+  const whereSql = where.length ? `WHERE ${where.join(" AND ")}` : "";
+  const totalRes = await pool.query<{ count: number }>(`SELECT count(*)::int AS count FROM uniform_payments u ${whereSql}`, values);
+  const res = await pool.query<Omit<AdminDonationRow, "given_on_label" | "paid_by_label">>(
+    `SELECT 'uniform' AS kind, COALESCE(u.stripe_payment_intent_id, u.stripe_session_id) AS stripe_ref,
+            NULL::text AS elf_reference, NULL::int AS elf_family_id, NULL::int AS entry_pence, NULL::int AS gift_pence,
+            NULL::int AS fee_cover_pence, NULL::text AS arrival_channel, NULL::text AS arrival_source,
+            NULL::text AS arrival_campaign, NULL::text AS given_on, NULL::text AS pay_method, NULL::text AS pay_wallet,
+            NULL::text AS card_brand, NULL::text AS card_last4, NULL::text AS fundraiser_title, NULL::text AS fundraiser_slug,
+            NULL::int AS pledge_id, NULL::text AS donor_type, NULL::text AS business_name,
+            u.id, NULL::int AS donor_id, u.buyer_name AS donor_name, u.buyer_email AS donor_email,
+            'once' AS mode, NULL::text AS plan, u.amount_pence, u.currency, false AS gift_aid, 'not_eligible' AS claim_status,
+            'paid' AS payment_status, 'online' AS payment_channel, u.refunded_amount_pence,
+            NULL::text AS declaration_status, u.paid_at AS created_at, 'uniform' AS source, NULL::int AS invoice_id,
+            u.details AS uniform_details
+       FROM uniform_payments u
+       ${whereSql}
+      ORDER BY u.paid_at DESC, u.id DESC LIMIT ${limit} OFFSET ${offset}`,
+    values,
+  );
+  return { results: res.rows.map(withLabels), total: totalRes.rows[0].count };
+}
+
 // The plain words for a row's cards, by the one set of rules (src/donations/labels.ts).
 function withLabels(r: Omit<AdminDonationRow, "given_on_label" | "paid_by_label">): AdminDonationRow {
-  const kind = r.kind === "elf" ? "elf" : "donation";
+  const kind = r.kind === "elf" ? "elf" : r.kind === "uniform" ? "uniform" : "donation";
   return {
     ...r,
     given_on_label: givenOnLabel({

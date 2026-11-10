@@ -8,7 +8,8 @@ import { labelQrScans } from "../site/qr";
 import { ALL_PAGES, SITE_PAGES } from "../site/pages";
 
 export interface GivenOnFacts {
-  kind: "donation" | "elf";
+  /** 'uniform': a school uniform bought through the uniform payment link (TASK-604), never a gift. */
+  kind: "donation" | "elf" | "uniform";
   source: string | null;
   paymentChannel: string;
   invoiceId: number | null;
@@ -19,6 +20,7 @@ export interface GivenOnFacts {
 /** Where on the site (or off it) the gift was given: "Donate page", "Fill a Red Bag", "Invoice INV-0012" ... */
 export function givenOnLabel(g: GivenOnFacts): string {
   if (g.kind === "elf") return "Elf Detective School";
+  if (g.kind === "uniform") return "Uniform";
   // An invoice first: one can be paid by card, and it is the invoice staff look for.
   if (g.invoiceId !== null && g.invoiceId !== undefined) return `Invoice ${invoiceNumber(g.invoiceId)}`;
   if (g.source === "invoice") return "Invoice";
@@ -31,7 +33,7 @@ export function givenOnLabel(g: GivenOnFacts): string {
 }
 
 export interface PaidByFacts {
-  kind: "donation" | "elf";
+  kind: "donation" | "elf" | "uniform";
   paymentChannel: string;
   payMethod: string | null;
   payWallet: string | null;
@@ -75,7 +77,7 @@ function cardWords(brand: string | null, last4: string | null): string | null {
 
 /** How it was paid: "Apple Pay (Visa ending 4242)", "Direct Debit", "Bank transfer" ...; null when not known. */
 export function paidByLabel(p: PaidByFacts): string | null {
-  if (p.kind === "elf") return null;
+  if (p.kind === "elf" || p.kind === "uniform") return null;
   const cardPart = cardWords(p.cardBrand, p.cardLast4);
   switch (p.payMethod) {
     case "bank_transfer":

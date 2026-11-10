@@ -8,7 +8,7 @@
  *   - the scoreboard's figures, into the tiles admin.html already holds (each tile is a source tick
  *     box, so Head Elf HQ's "Every payment, in Donations" still ticks #donationsElfFilter);
  *   - a chip for each filter that is on, with a cross, and Clear all;
- *   - the log, day by day, one card per gift or Elf Detective School payment;
+ *   - the log, day by day, one card per gift, Elf Detective School payment or uniform payment;
  *   - each card's click down, which asks for the gift's details once
  *     (GET /api/admin/donations/:kind/:id/details, src/db/donation-details.ts documents the shape).
  * The words for where a gift was given and how it was paid come ready made from the server
@@ -46,7 +46,10 @@
   var PLACES = [
     "donationsRedBagFilter", "donationsBallFilter", "donationsBallBagsFilter", "donationsInvoiceFilter",
     "donationsElfFilter", "donationsDonatePageFilter", "donationsFundraiserFilter", "donationsCardReaderFilter",
+    "donationsUniformFilter",
   ];
+  // Uniform payments (TASK-604) are purchases, not gifts: their chip and their words say so.
+  var UNIFORM_TILE = "donationsUniformFilter";
   var CLAIM_WORDS = {
     eligible: "Ready to claim",
     batched: "In a claim batch",
@@ -199,8 +202,8 @@
         if (!slot) return;
         slot.textContent = "";
         var t = totals[key];
-        // The Elf Detective School's entries and every monthly gift's payments are counted as payments.
-        var payments = key === "elfSchool" || key === "monthly";
+        // The Elf Detective School's entries, every monthly gift's payments and uniforms are counted as payments.
+        var payments = key === "elfSchool" || key === "monthly" || key === "uniform";
         if (t && t.month && typeof t.month.pence === "number") {
           slot.appendChild(el("b", { class: "gl-tile__sum", text: wholePounds(t.month.pence) }));
           slot.appendChild(el("span", { class: "gl-tile__count", text: plural(Number(t.month.gifts) || 0, payments ? "payment" : "gift", payments ? "payments" : "gifts") + " this month" }));
@@ -230,7 +233,8 @@
         if (!box || !box.checked) return;
         var tile = box.closest ? box.closest(".gl-tile") : null;
         var name = tile && tile.querySelector(".gl-tile__name");
-        out.push({ id: id, words: "Given on: " + (name ? name.textContent : "one place") });
+        if (id === UNIFORM_TILE) out.push({ id: id, words: "Uniform payments only" });
+        else out.push({ id: id, words: "Given on: " + (name ? name.textContent : "one place") });
       });
       FILTERS.forEach(function (f) {
         var c = control(f.id);
@@ -295,6 +299,12 @@
 
     // ---- the log ----
 
+    // What the buyer filled in on the uniform payment link, [{label, value}], kept to what reads as words.
+    function uniformDetails(row) {
+      return (Array.isArray(row.uniform_details) ? row.uniform_details : []).filter(function (d) {
+        return d && typeof d.label === "string" && typeof d.value === "string" && d.value;
+      });
+    }
     function badge(kind, words) {
       return words ? el("span", { class: "gl-badge gl-badge--" + kind, text: words }) : null;
     }
@@ -304,6 +314,14 @@
       if (elf) {
         var entry = "Entry " + money(row.entry_pence) + (row.gift_pence > 0 ? ", gift " + money(row.gift_pence) : "");
         out.push(el("span", { class: "gl-note", text: entry }));
+      }
+      if (row.kind === "uniform") {
+        var filled = uniformDetails(row)
+          .map(function (d) {
+            return d.label + ": " + d.value;
+          })
+          .join(", ");
+        if (filled) out.push(el("span", { class: "gl-note", text: filled }));
       }
       if (row.mode === "monthly") out.push(el("span", { class: "gl-mark gl-mark--monthly", text: "Monthly" }));
       if (row.gift_aid) out.push(el("span", { class: "gl-mark gl-mark--aid", text: "Gift Aid" }));
@@ -336,7 +354,8 @@
         el("span", { class: "gl-gift__chev", "aria-hidden": "true" }),
       ]);
       var more = el("div", { class: "gl-more", id: moreId, hidden: true });
-      var li = el("li", { class: "gl-gift" + (elf ? " gl-gift--elf" : ""), "data-kind": elf ? "elf" : "donation", "data-id": row.id }, [face, more]);
+      var kindName = elf ? "elf" : row.kind === "uniform" ? "uniform" : "donation";
+      var li = el("li", { class: "gl-gift" + (kindName === "donation" ? "" : " gl-gift--" + kindName), "data-kind": kindName, "data-id": row.id }, [face, more]);
       var state = { loaded: false, loading: false };
       face.addEventListener("click", function () {
         var open = face.getAttribute("aria-expanded") !== "true";
@@ -488,6 +507,35 @@
         ]),
       ];
     }
+    // A uniform payment's click down: all of it is on the row, so nothing more is asked for (TASK-604).
+    function uniformGroups(row) {
+      var refunded = Number(row.refunded_amount_pence) || 0;
+      return [
+        group("The payment", [
+          ["Amount", money(row.amount_pence)],
+          ["Payment", payment(row).label],
+          ["Paid", momentWords(row.created_at)],
+          ["Stripe reference", row.stripe_ref],
+          ["Bought through", "The uniform payment link"],
+          ["Gift Aid", "Never: a uniform is bought, not given"],
+        ]),
+        group(
+          "What they filled in",
+          uniformDetails(row).map(function (d) {
+            return [d.label, d.value];
+          }),
+        ),
+        refunded > 0 ? group("Refunds", [["Refunded", money(refunded) + " of " + money(row.amount_pence)]]) : null,
+        group("The buyer", [
+          ["Name", row.donor_name],
+          ["Email", row.donor_email],
+        ]),
+      ];
+    }
+    function uniformStripeUrl(row) {
+      var ref = String(row.stripe_ref || "");
+      return /^pi_\w+$/.test(ref) ? "https://dashboard.stripe.com/payments/" + ref : null;
+    }
     function link(words, href) {
       var safe = safeHref(href);
       if (!safe) return null;
@@ -515,6 +563,13 @@
     }
     function loadMore(row, more, state, opts) {
       more.textContent = "";
+      if (row.kind === "uniform") {
+        state.loaded = true;
+        more.appendChild(el("div", { class: "gl-groups" }, uniformGroups(row).filter(Boolean)));
+        var go = link("See it in Stripe", uniformStripeUrl(row));
+        if (go) more.appendChild(el("div", { class: "gl-actions" }, [go]));
+        return;
+      }
       var body = el("div", { class: "gl-more__body" }, [el("p", { class: "gl-loading", role: "status", text: "Loading…" })]);
       more.appendChild(body);
       var first = actions(row, opts, null);

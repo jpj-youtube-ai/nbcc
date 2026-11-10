@@ -14,8 +14,9 @@ import { drawQr, qrLink, qrPath, qrRows, qrSlug, type QrGates } from "../site/qr
 
 const BAD_PATH = "Give an address on nbcc.scot, starting with /";
 
-// Whether the Festive Ball, Get involved and Fundraising pages are up. A switch that cannot be read
-// counts as off: better "not live yet" on a row than a poster pointing at a page that is not there.
+// Whether the Festive Ball, Get involved, Fundraising and Elf Detective School pages are up. A switch
+// that cannot be read counts as off: better "not live yet" on a row than a poster pointing at a page
+// that is not there.
 export async function qrGates(): Promise<QrGates> {
   const ballOpen = (async () => {
     const [{ getSettings }, { isGateOpen }] = await Promise.all([import("../db/ball"), import("../ball/gate")]);
@@ -26,7 +27,9 @@ export async function qrGates(): Promise<QrGates> {
     return (await getEventsSettings()).pageOn;
   })().catch(() => false);
   const fundraisingOn = (async () => (await import("../db/fundraisers")).fundraisingIsOn())().catch(() => false);
-  return { ballOpen: await ballOpen, eventsOn: await eventsOn, fundraisingOn: await fundraisingOn };
+  // Reads as off on any failure itself (src/elf/promo.ts).
+  const elfOn = (async () => (await import("../elf/promo")).elfSchoolIsOn())().catch(() => false);
+  return { ballOpen: await ballOpen, eventsOn: await eventsOn, fundraisingOn: await fundraisingOn, elfOn: await elfOn };
 }
 
 export async function getQrCodes(req: Request, res: Response): Promise<Response | void> {

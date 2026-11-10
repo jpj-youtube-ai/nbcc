@@ -18,6 +18,9 @@ export interface SitePage {
   eventsGated?: boolean;
   // TASK-494: the fundraising sign up, listed only while fundraising is switched on.
   fundraisingGated?: boolean;
+  // The Elf Detective School, listed only while the school is switched on (elf_settings.school_on).
+  // Off, every /elf page is a 404. Its QR code can still be made before then, marked not live yet.
+  elfGated?: boolean;
   children?: SitePage[];
 }
 
@@ -50,6 +53,11 @@ export const SITE_PAGES: SitePage[] = [
   // is on the site map; it is still linked from no menu, no footer and no page. Switched off the
   // address is a 404, so it is on no map. Its thank you, /fill/thank-you, is never here.
   ...(RED_BAG_LIVE ? [{ path: "/fill", title: "Fill a Red Bag", listedByDefault: true }] : []),
+  // NBCC Elf Detective School: its front page, the advent calendar (src/routes/elf.ts). Gated, so it
+  // is on the maps only while the school is switched on; being here also puts it in Admin > QR codes,
+  // for letters home from schools. "/elf" stays reserved below: no spare address may take it or
+  // anything under it, but a spare address may point to it.
+  { path: "/elf", title: "Elf Detective School", listedByDefault: true, elfGated: true },
   { path: "/my-story", title: "Share your story", listedByDefault: true },
   { path: "/supporters", title: "Supporters", listedByDefault: true },
   { path: "/hub", title: "Hub", listedByDefault: true },
@@ -320,15 +328,22 @@ const escapeHtml = (s: string): string =>
   s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
 
 // The /sitemap page's tree: nested lists of links, filtered by the ball gate, the Get involved page
-// switch and the fundraising switch. Pure so the shape is testable; the route drops this into sitemap.html's .sitemap-tree
-// placeholder.
-export function renderSitemapTree(pages: SitePage[], ballOpen: boolean, eventsOn = false, fundraisingOn = false): string {
+// switch, the fundraising switch and the elf school's switch. Pure so the shape is testable; the route
+// drops this into sitemap.html's .sitemap-tree placeholder.
+export function renderSitemapTree(
+  pages: SitePage[],
+  ballOpen: boolean,
+  eventsOn = false,
+  fundraisingOn = false,
+  elfOn = false,
+): string {
   const items = pages
     .filter((p) => !p.ballGated || ballOpen)
     .filter((p) => !p.eventsGated || eventsOn)
     .filter((p) => !p.fundraisingGated || fundraisingOn)
+    .filter((p) => !p.elfGated || elfOn)
     .map((p) => {
-      const kids = p.children ? renderSitemapTree(p.children, ballOpen, eventsOn, fundraisingOn) : "";
+      const kids = p.children ? renderSitemapTree(p.children, ballOpen, eventsOn, fundraisingOn, elfOn) : "";
       return `<li><a href="${escapeHtml(p.path)}">${escapeHtml(p.title)}</a>${kids}</li>`;
     })
     .join("");
@@ -336,8 +351,9 @@ export function renderSitemapTree(pages: SitePage[], ballOpen: boolean, eventsOn
 }
 
 // sitemap.xml: the registry, minus ball-gated pages while the gate is shut, minus the Events page
-// while it is switched off, minus anything the admin unticked (overrides) or that is unlisted by
-// default without an admin tick. Absolute URLs on the production origin, as the protocol requires.
+// while it is switched off (and likewise fundraising and the elf school), minus anything the admin
+// unticked (overrides) or that is unlisted by default without an admin tick. Absolute URLs on the
+// production origin, as the protocol requires.
 export function renderSitemapXml(
   pages: SitePage[],
   origin: string,
@@ -345,11 +361,13 @@ export function renderSitemapXml(
   ballOpen: boolean,
   eventsOn = false,
   fundraisingOn = false,
+  elfOn = false,
 ): string {
   const urls = flatten(pages)
     .filter((p) => !p.ballGated || ballOpen)
     .filter((p) => !p.eventsGated || eventsOn)
     .filter((p) => !p.fundraisingGated || fundraisingOn)
+    .filter((p) => !p.elfGated || elfOn)
     .filter((p) => overrides.get(p.path) ?? p.listedByDefault)
     .map((p) => `  <url><loc>${origin}${p.path === "/" ? "/" : escapeHtml(p.path)}</loc></url>`)
     .join("\n");

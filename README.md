@@ -240,6 +240,9 @@ of the day added as they go out, and listed in `SHORT_PAGES` in `src/site/pages.
 - **Styles.** Each page loads `styles.css`, then `get-involved.css` for the bands, the drift, the taped
   photographs and the lined paper (`body.page-hub`), then `assets/css/short-pages.css` for what only
   these six add. `short-pages.css` adds no movement of its own.
+- **Your school carries the Elf Detective School's card** while the school is switched on, before the
+  form, with the short address for a letter home. See **Finding the school** under **Elf Detective
+  School**.
 - **Left out until Jaimie sends the details, each to go in as a small change:** what to bring and
   what we can't take (Drop-off points); the Christmas referrals closing date (Referrals); a
   volunteer's quote (Volunteer); payroll giving and its tick (Your business). The five films are not
@@ -6917,9 +6920,9 @@ slides and social posts. The design is in `docs/superpowers/specs/2026-10-02-adm
 
 - **Every page, automatically.** The list comes from the site's one page list (`SITE_PAGES` in
   `src/site/pages.ts`), which also feeds /sitemap, sitemap.xml and Admin → Site pages. A page
-  added there gets its QR code with no more work. The Festive Ball, Get involved and Fundraising
-  pages are listed even while switched off, marked "Not live yet", so posters can be made before
-  launch.
+  added there gets its QR code with no more work. The Festive Ball, Get involved, Fundraising and
+  Elf Detective School (`/elf`) pages are listed even while switched off, marked "Not live yet", so
+  posters, and schools' letters home, can be made before launch.
 - **Two downloads per code**, named after the page (`nbcc-qr-donate.svg`):
   - **SVG** for printers and designers: it stays sharp at any size;
   - **PNG**, 1200 pixels square, for slides, social posts and documents.
@@ -11777,6 +11780,31 @@ Head Elf HQ (Admin > Content > Elf Detective School; see **Head Elf HQ** below).
 
 See the table under **API endpoints**: `/elf`, `/elf/rules`, `/elf/join`, `/elf/welcome`,
 `/elf/sign-in`, `/elf/hq` and the wardrobe, and `/api/elf/*`, all in `src/routes/elf.ts`.
+
+### Finding the school: the card, the site maps and QR codes
+
+Jaimie, 9 November 2026: nothing on the site linked to the school. Now, only while the school is
+switched on:
+
+- **A card** on the home page (after Fill a Red Bag's stage, before the four ways to start), Get
+  involved (after the events and Fill a Red Bag, before "Coming as a business, school or group?") and
+  Your school (before the form, with "Telling families at your school? Send them to nbcc.scot/elf").
+  The school's logo on a taped sheet of paper, a heading, one line and **Find out more**, which goes to
+  `/elf`. `src/elf/promo.ts` draws it and puts it in place as each page goes out (`addElfCard`), so the
+  files do not change; its styles are `assets/css/elf-promo.css`, linked only by a page that draws it.
+  The switch is read on every page view (`elfSchoolIsOn`; anything that goes wrong reads as off), and
+  none of these pages is cached, so the lever in Head Elf HQ shows or hides the card on the next view,
+  with no deploy. The private preview link does not show it.
+- **The site maps.** `/elf` is in `SITE_PAGES` as "Elf Detective School", `elfGated`, so `/sitemap`
+  and `sitemap.xml` list it only while the school is on. It stays in `RESERVED_PREFIXES`: no spare
+  address may take `/elf` or anything under it (one may point to it).
+- **Admin → QR codes**, page codes and named codes alike: "Elf Detective School" is offered at once,
+  marked "Not live yet" until the school is on, so a code for a letter home can be made before then.
+  Its page code carries `utm_campaign=elf`.
+
+Tests: `test/unit/elf-promo.test.ts` (the card and where it goes) and
+`test/unit/elf-promo-routes.test.ts` (the three pages and the site maps through the real router, the
+switch flipped between visits).
 
 ### Data (`migrations/1791200000310_elf-school.js`, additive only)
 

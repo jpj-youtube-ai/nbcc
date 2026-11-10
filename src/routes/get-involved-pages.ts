@@ -1,6 +1,7 @@
 import type { Router } from "express";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
+import { addElfCard } from "../elf/promo";
 import { EVENTS_NAV_ITEM } from "../events/nav-link";
 import { addFillToDropOff } from "../red-bag/fill-links";
 import { markAfterBallCheck } from "../site/after-ball";
@@ -22,10 +23,16 @@ export interface ShortPageDeps {
   decorate: (html: string, cookieHeader: string | undefined, query?: unknown) => Promise<string>;
   /** Is this view after the Ball's moment? Left out: no. */
   isAfterBall?: (query?: unknown) => boolean;
+  /** Is the Elf Detective School switched on? Your school carries its card then (src/elf/promo.ts).
+   *  Left out: no card. */
+  elfSchoolIsOn?: () => Promise<boolean>;
 }
 
 /** The one short page the spec names for checking the moment: the others take no ?at=after-ball. */
 const DROP_OFF_PATH = "/get-involved/drop-off-points";
+
+/** The one short page with the Elf Detective School's card, for a school writing to its families. */
+const SCHOOLS_PATH = "/get-involved/schools";
 
 // In the Get involved section, though not on the page itself, so "true" and not "page".
 const IN_SECTION = '<li><a href="/get-involved" class="active" aria-current="true">Get involved</a></li>';
@@ -42,7 +49,12 @@ export function addShortPageRoutes(router: Router, siteRoot: string, deps: Short
       try {
         const query = path === DROP_OFF_PATH ? req.query : undefined;
         const source = readFileSync(file, "utf8");
-        const page = path === DROP_OFF_PATH && deps.isAfterBall?.(query) ? addFillToDropOff(source) : source;
+        const elfOn = path === SCHOOLS_PATH && deps.elfSchoolIsOn ? await deps.elfSchoolIsOn() : false;
+        const page = addElfCard(
+          path === DROP_OFF_PATH && deps.isAfterBall?.(query) ? addFillToDropOff(source) : source,
+          "schools",
+          elfOn,
+        );
         // The menu items depend on the database, and the page does not: it goes out without them
         // rather than not at all, as the plain pages do.
         const html = await deps.decorate(page, req.headers.cookie, query).then(markSection, (err: unknown) => {

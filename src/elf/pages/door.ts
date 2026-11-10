@@ -42,9 +42,9 @@ const BOW = "/assets/img/elf/paper/deco/bow-gold.webp";
 /** What kind of door it is at this moment. A shut door is today's, tomorrow's or a later one, by the
  *  day in London. */
 export function doorKind(d: DoorView, now: Date): DoorKind {
-  // Tasks 5 and 6 draw the new states properly: for now a hidden find reads as found, a snow day as hunting.
-  if (d.state === "found-hidden") return "found";
-  if (d.state === "snow") return "hunting";
+  // Stop gap: Tasks 5 and 6 draw the new states properly. Until then a found door whose place is still
+  // hidden and a snow day both read as hunting (not open, nothing revealed).
+  if (d.state === "found-hidden" || d.state === "snow") return "hunting";
   if (d.state !== "shut") return d.state;
   const sleeps = sleepsUntil(now, d.clueAt);
   return sleeps === 0 ? "today" : sleeps === 1 ? "tomorrow" : "later";

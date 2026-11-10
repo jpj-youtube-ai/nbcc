@@ -135,6 +135,14 @@ describe("the clues out", () => {
   });
 });
 
+describe("a clue 1 that is not a real date", () => {
+  it("gives no clues out and no next clue, as doorState says shut", () => {
+    const broken = door({ clue1At: new Date(Number.NaN) });
+    expect(cluesOut(broken, day7("18:45"))).toBe(0);
+    expect(nextClueAt(broken, day7("17:45"))).toBeNull();
+  });
+});
+
 describe("what a door's state allows", () => {
   it("shows the place once the door is found or revealed", () => {
     expect(isOpen("shut")).toBe(false);

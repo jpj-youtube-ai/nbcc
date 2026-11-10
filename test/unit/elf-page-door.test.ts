@@ -58,6 +58,9 @@ describe("what kind of door it is today", () => {
     expect(doorKind(FOUND, NOW)).toBe("found");
     expect(doorKind(REVEALED, NOW)).toBe("revealed");
     expect(doorKind(HUNTING, NOW)).toBe("hunting");
+    const hidden = doorKind({ ...FOUND, state: "found-hidden" }, NOW);
+    expect(hidden).not.toBe("found");
+    expect(hidden).not.toBe("revealed");
   });
 
   it("is today, tomorrow or later for a door that is still shut, by the day in London", () => {

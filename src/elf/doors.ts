@@ -67,16 +67,17 @@ export function openedAt(door: DoorFacts, now: Date): Date | null {
 export function cluesOut(door: DoorFacts, now: Date): 0 | 1 | 2 | 3 {
   if (door.snowDay) return 0;
   const t = now.getTime();
+  if (!(t >= door.clue1At.getTime())) return 0;
   if (t >= door.clue3At.getTime()) return 3;
   if (t >= door.clue2At.getTime()) return 2;
-  if (t >= door.clue1At.getTime()) return 1;
-  return 0;
+  return 1;
 }
 
 /** The next of the three clues still to come, or null once all are out or on a snow day. */
 export function nextClueAt(door: DoorFacts, now: Date): Date | null {
   if (door.snowDay) return null;
   const t = now.getTime();
+  if (Number.isNaN(door.clue1At.getTime())) return null;
   return [door.clue1At, door.clue2At, door.clue3At].find((c) => c.getTime() > t) ?? null;
 }
 

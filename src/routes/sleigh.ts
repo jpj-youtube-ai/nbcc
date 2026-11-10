@@ -37,8 +37,10 @@ export function createSleighRouter(overrides: Partial<SleighRouterDeps> = {}): R
   const d: SleighRouterDeps = { ...defaults, ...overrides };
   const router = Router();
 
-  router.get(SLEIGH_OLD_PATH, (_req, res) => {
-    res.redirect(301, SLEIGH_PATH);
+  // The query string goes along, so a QR code's tags still reach the page.
+  router.get(SLEIGH_OLD_PATH, (req, res) => {
+    const q = req.originalUrl.indexOf("?");
+    res.redirect(301, q === -1 ? SLEIGH_PATH : `${SLEIGH_PATH}${req.originalUrl.slice(q)}`);
   });
 
   router.get(SLEIGH_PATH, async (req, res) => {

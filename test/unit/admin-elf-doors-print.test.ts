@@ -182,6 +182,37 @@ describe("the print routes", () => {
     spy.mockRestore();
   });
 
+  it("makes the year's door rows before reading a door, and before listing the places", async () => {
+    await run(routes.getAdminElfDoorTag, seeing(params7));
+    expect(doors.ensureElfDoors).toHaveBeenCalledWith(2026);
+    expect(doors.ensureElfDoors.mock.invocationCallOrder[0]).toBeLessThan(doors.getElfDoor.mock.invocationCallOrder[0]);
+    doors.ensureElfDoors.mockClear();
+    await run(routes.getAdminElfPlacesList, seeing({}));
+    expect(doors.ensureElfDoors).toHaveBeenCalledWith(2026);
+    expect(doors.ensureElfDoors.mock.invocationCallOrder[0]).toBeLessThan(doors.listElfDoors.mock.invocationCallOrder[0]);
+  });
+
+  it("a door with no place, once the rows are made, gets the needs-its-place page and not a 404", async () => {
+    let made = false;
+    doors.ensureElfDoors.mockImplementation(async () => {
+      made = true;
+    });
+    doors.getElfDoor.mockImplementation(async (_y: number, n: number) => (made ? doorOf(n) : null));
+    const res = await run(routes.getAdminElfDoorStaffCard, seeing({ params: { door: "8" } }));
+    expect(res.statusCode).toBe(409);
+    expect(page(res)).toContain("needs its place");
+  });
+
+  it("still sends the tag when noting it as printed fails", async () => {
+    const spy = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    doors.markElfTagPrinted.mockRejectedValue(new Error("db down"));
+    const res = await run(routes.getAdminElfDoorTag, seeing(params7));
+    expect(res.statusCode).toBe(200);
+    expect(page(res)).toContain("SNOWBALL 472");
+    expect(spy).toHaveBeenCalledWith("admin elf doors tag printed note failed:", "db down");
+    spy.mockRestore();
+  });
+
   it("the places list has 24 entries and says it is for staff only", async () => {
     const res = await run(routes.getAdminElfPlacesList, seeing({}));
     expect(page(res)).toContain("For staff only");

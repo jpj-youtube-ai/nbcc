@@ -406,6 +406,8 @@ function printing(what: string, work: (c: Ctx) => Promise<Response>, needsDoor =
     privatePage(res);
     try {
       const settings = await getElfSettings();
+      // The year's door rows may not exist yet (Doors not opened): make them, so a print says what to add.
+      await ensureElfDoors(settings.year);
       return await work({ req, res, actor: actorOf(claims), year: settings.year, now: new Date(), door });
     } catch (err) {
       console.error(`admin elf doors ${what} failed:`, err instanceof Error ? err.message : err);
@@ -450,7 +452,12 @@ export const getAdminElfDoorTag = printing("tag", async ({ res, actor, year, doo
   if (!d) return noSuchDoorPage(res, door);
   if (!has(d.elfName) || !has(d.tagWord) || !isUsableSecretWord(d.tagWord)) return notReady(res, `Door ${door} needs its elf's name before its tag can be printed.`);
   const page = renderElfTag({ elfName: d.elfName, secretWord: d.tagWord });
-  await markElfTagPrinted(year, door, actor);
+  try {
+    await markElfTagPrinted(year, door, actor);
+  } catch (err) {
+    // The tag was made; failing to note it as printed must not turn a good print into an error.
+    console.error("admin elf doors tag printed note failed:", err instanceof Error ? err.message : err);
+  }
   return sendPage(res, 200, page);
 });
 

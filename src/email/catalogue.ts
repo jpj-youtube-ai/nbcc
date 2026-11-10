@@ -1293,7 +1293,7 @@ const STAFF: CatalogueEmail[] = [
     v("usual", "Set up by family or a friend", signUpNotice({ ...MEMORY_SIGN_UP, memoryDates: "1950 to 2026", memorySetupBy: "family", memoryFamilyContactName: "Alex Example", memoryFamilyContactEmail: "alex@example.com" })),
     v("director", "Set up by a funeral director", signUpNotice({ ...MEMORY_SIGN_UP, memoryDates: null, memorySetupBy: "funeral_director", memoryDirectorBusiness: "Example Funeral Directors", targetPence: null })),
   ]),
-  staff("staff-finished", "A fundraiser says they've finished", "when a fundraiser presses “I've finished”.", "fundraiseFinishedStaff", [
+  staff("staff-finished", "A fundraiser says they've finished", "when a fundraiser presses “End campaign”.", "fundraiseFinishedStaff", [
     v("usual", USUAL, (b) => buildFinishedStaffEmail({ id: 1, name: SAM.name, title: PAGE, email: "sam@example.com", raisedPence: 61200 }, admin(b))),
   ]),
   staff("staff-team-joined", "New team member", "when someone joins a team.", "fundraiseTeamJoinStaff", [

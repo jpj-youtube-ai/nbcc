@@ -890,22 +890,49 @@
       });
     }
 
+    // "End campaign" (Jaimie, 10 November 2026; it was "I've finished"). It asks first, on the page,
+    // and sends only on "End campaign" in the question; "Keep going" puts the button back.
     function wireFinished(card, f) {
       var button = card.querySelector("[data-f-finished]");
+      var ask = card.querySelector("[data-f-finished-confirm]");
+      var yes = card.querySelector("[data-f-finished-yes]");
+      var no = card.querySelector("[data-f-finished-no]");
       var thanks = card.querySelector("[data-f-finished-thanks]");
       var status = card.querySelector("[data-f-finished-status]");
+      function asking(on) {
+        if (ask) ask.hidden = !on;
+        if (button) button.hidden = on;
+        var to = on ? yes : button;
+        if (to && typeof to.focus === "function") to.focus();
+      }
       function done() {
+        if (ask) ask.hidden = true;
         if (button) button.hidden = true;
         if (thanks) thanks.hidden = false;
       }
       if (f.finishedRequestedAt) done();
       if (!button) return;
+      // Without the question on the page (an old copy of it), the button sends as it always did.
       button.addEventListener("click", function () {
-        button.disabled = true;
+        if (ask && yes) return asking(true);
+        send(button);
+      });
+      if (no) {
+        no.addEventListener("click", function () {
+          asking(false);
+        });
+      }
+      if (yes) {
+        yes.addEventListener("click", function () {
+          send(yes);
+        });
+      }
+      function send(control) {
+        control.disabled = true;
         say(status, MSG.sending, "pending");
         post(API + "/fundraisers/" + encodeURIComponent(f.id) + "/finished")
           .then(function (r) {
-            button.disabled = false;
+            control.disabled = false;
             if (r.status === 200) {
               say(status, "", null);
               return done();
@@ -914,10 +941,10 @@
             say(status, r.data.error || MSG.finishFailed, "error");
           })
           .catch(function () {
-            button.disabled = false;
+            control.disabled = false;
             say(status, MSG.finishFailed, "error");
           });
-      });
+      }
     }
 
     // --- signing out --------------------------------------------------------------------------------

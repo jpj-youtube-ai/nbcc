@@ -502,13 +502,47 @@ describe("paying in", () => {
   });
 });
 
-describe("I've finished", () => {
-  it("tells us, then says thank you", async () => {
+// Jaimie, 10 November 2026: an organiser pressed "I've finished" thinking it saved their words. It
+// is "End campaign" now, and it asks first, pointing at Send my changes.
+describe("End campaign", () => {
+  it("is called End campaign", async () => {
+    await load("", signedIn(raising()));
+    expect($("[data-f-finished]", card(7)).textContent).toBe("End campaign");
+  });
+
+  it("asks first, says what it does, and points at Send my changes, sending nothing yet", async () => {
+    await load("", signedIn(raising()));
+    $("[data-f-finished]", card(7)).click();
+    await flush();
+    const ask = $<HTMLElement>("[data-f-finished-confirm]", card(7));
+    expect(ask.hidden).toBe(false);
+    expect(ask.textContent).toContain("End your campaign?");
+    expect(ask.textContent).toContain("This tells our team your fundraiser is over.");
+    expect(ask.textContent).toContain("Send my changes");
+    expect($("[data-f-finished-yes]", card(7)).textContent).toBe("End campaign");
+    expect($("[data-f-finished-no]", card(7)).textContent).toBe("Keep going");
+    expect($("[data-f-finished]", card(7)).hidden).toBe(true);
+    expect(posts()).toEqual([]);
+  });
+
+  it("Keep going puts it back as it was, and sends nothing", async () => {
+    await load("", signedIn(raising()));
+    $("[data-f-finished]", card(7)).click();
+    $("[data-f-finished-no]", card(7)).click();
+    await flush();
+    expect($<HTMLElement>("[data-f-finished-confirm]", card(7)).hidden).toBe(true);
+    expect($("[data-f-finished]", card(7)).hidden).toBe(false);
+    expect(posts()).toEqual([]);
+  });
+
+  it("tells us once they say yes, then says thank you", async () => {
     await load("", (url, method) =>
       method === "POST" ? { status: 200, body: { status: "thanks", finishedRequestedAt: "2026-10-02T12:00:00.000Z" } } : signedIn(raising())(url, method),
     );
     $("[data-f-finished]", card(7)).click();
+    $("[data-f-finished-yes]", card(7)).click();
     await flush();
+    expect($<HTMLElement>("[data-f-finished-confirm]", card(7)).hidden).toBe(true);
     expect(posts()).toEqual([{ url: "/api/fundraise/manage/fundraisers/7/finished", method: "POST", body: undefined }]);
     expect($("[data-f-finished-thanks]", card(7)).hidden).toBe(false);
     expect($("[data-f-finished-thanks]", card(7)).textContent).toContain("Thank you, we’ll be in touch.");

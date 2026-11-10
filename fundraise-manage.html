@@ -451,7 +451,16 @@
               <section class="fr-mine__part" data-f-done-part aria-labelledby="mineDoneHeading">
                 <h3 id="mineDoneHeading">All done?</h3>
                 <p>When your fundraiser is over, let us know. Nothing changes on your page straight away: we will be in touch to say thank you and tie up any loose ends.</p>
-                <button class="btn btn-ghost" type="button" data-f-finished>I&rsquo;ve finished</button>
+                <!-- Jaimie, 10 November 2026: "End campaign", and it asks first. An organiser had pressed
+                     "I've finished" thinking it saved their words (fundraise-manage.js wireFinished). -->
+                <button class="btn btn-ghost" type="button" data-f-finished>End campaign</button>
+                <div class="fr-mine__confirm" data-f-finished-confirm hidden>
+                  <p><strong>End your campaign?</strong> This tells our team your fundraiser is over. To change your page&rsquo;s words, use <b>Send my changes</b> instead.</p>
+                  <p class="fr-mine__confirm-actions">
+                    <button class="btn btn-primary" type="button" data-f-finished-yes>End campaign</button>
+                    <button class="btn btn-ghost" type="button" data-f-finished-no>Keep going</button>
+                  </p>
+                </div>
                 <p class="fr-mine__done" data-f-finished-thanks role="status" hidden>Thank you, we&rsquo;ll be in touch.</p>
                 <p class="form-status" role="status" aria-live="polite" data-f-finished-status></p>
               </section>

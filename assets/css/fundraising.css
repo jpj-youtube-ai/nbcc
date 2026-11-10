@@ -522,6 +522,10 @@ body.has-ticker .fr-thanks { scroll-margin-top: calc(var(--nav-h) + var(--ticker
 .fr-mine .fr-thanks-panel { margin: 0 0 18px; }
 .fr-mine .fr-thanks-panel h4 { margin: 0; font-size: 1.15rem; color: var(--holly-dark); }
 .fr-mine__done { margin: 12px 0 0; padding: 14px 16px; border-radius: 12px; background: var(--holly-soft); color: var(--holly-dark); font-weight: 600; }
+/* End campaign asks first (10 November 2026): the question, then its two buttons, which wrap on a phone. */
+.fr-mine__confirm { margin: 12px 0 0; padding: 14px 16px; border: 1px solid var(--line); border-radius: 12px; background: var(--cream); }
+.fr-mine__confirm p { margin: 0; }
+.fr-mine__confirm-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 12px !important; }
 .fr-form__title { font-size: clamp(1.5rem, 1.25rem + 1vw, 1.95rem); color: var(--maroon); margin-bottom: 6px; overflow-wrap: anywhere; }
 .fr-form__lead { margin: 0 0 18px; }
 .fr-form__lead a { font-weight: 600; }

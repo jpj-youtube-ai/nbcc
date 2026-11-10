@@ -81,6 +81,9 @@ data "aws_iam_policy_document" "exec_secrets" {
       # Newsletter From address (TASK-161): non-secret String injected via valueFrom, so
       # the exec role must be able to read it.
       aws_ssm_parameter.newsletter_from_email.arn,
+      # Text sender name (Elf Detective School wave 2): non-secret String injected via valueFrom,
+      # so the exec role must be able to read it.
+      aws_ssm_parameter.sms_sender_id.arn,
       # Thank-you From/Reply-To address (TASK-165): non-secret String injected via valueFrom, so
       # the exec role must be able to read it.
       aws_ssm_parameter.giving_from_email.arn,
@@ -133,6 +136,30 @@ resource "aws_iam_role_policy" "task_ses" {
   policy = data.aws_iam_policy_document.task_ses[0].json
 }
 
+# Text messages (Elf Detective School wave 2): the app calls SNS Publish directly
+# (src/clients/sms.ts) with these task-role credentials. A text to a phone number has no topic
+# ARN, so the allow has to be "*"; the deny on every topic is what keeps the role to texting a
+# number and never posting to a topic. Gated like task_ses on apex mode.
+data "aws_iam_policy_document" "task_sms" {
+  count = local.create_zone ? 1 : 0
+  statement {
+    effect    = "Allow"
+    actions   = ["sns:Publish"]
+    resources = ["*"]
+  }
+  statement {
+    effect    = "Deny"
+    actions   = ["sns:Publish"]
+    resources = ["arn:aws:sns:*:*:*"]
+  }
+}
+
+resource "aws_iam_role_policy" "task_sms" {
+  count  = local.create_zone ? 1 : 0
+  role   = aws_iam_role.task.id
+  policy = data.aws_iam_policy_document.task_sms[0].json
+}
+
 # --- ECS ----------------------------------------------------------------------
 resource "aws_ecs_cluster" "app" {
   name = local.name
@@ -174,6 +201,9 @@ resource "aws_ecs_task_definition" "app" {
       # schema's "stub" default semantics (and production never stubs regardless).
       { name = "EMAIL_PROVIDER", value = local.create_zone ? "ses" : "stub" },
       { name = "SES_REGION", value = var.region },
+      # Text messages through SNS: "sns" wherever the task role holds the grant, else the stub.
+      { name = "SMS_PROVIDER", value = local.create_zone ? "sns" : "stub" },
+      { name = "SMS_REGION", value = var.region },
       { name = "SES_NEWSLETTER_CONFIGURATION_SET", value = local.create_zone ? aws_sesv2_configuration_set.newsletter[0].configuration_set_name : "" },
       { name = "SES_TRANSACTIONAL_CONFIGURATION_SET", value = local.create_zone ? aws_sesv2_configuration_set.transactional[0].configuration_set_name : "" },
       # From address for app-branded transactional email (the relay's old MAIL_FROM role).
@@ -244,6 +274,9 @@ resource "aws_ecs_task_definition" "app" {
       # Newsletter From address (TASK-161/REQ-069, TASK-298): non-secret SSM String, injected via
       # valueFrom like PORTAL_BASE_URL — so its ARN must also appear in exec_secrets below.
       { name = "NEWSLETTER_FROM_EMAIL", valueFrom = aws_ssm_parameter.newsletter_from_email.arn },
+      # Text sender name: non-secret SSM String, injected via valueFrom like NEWSLETTER_FROM_EMAIL,
+      # so its ARN must also appear in exec_secrets above.
+      { name = "SMS_SENDER_ID", valueFrom = aws_ssm_parameter.sms_sender_id.arn },
       # Newsletter Reply-To (TASK-298): must differ from the From — the sending subdomain cannot
       # receive. Its ARN must also appear in exec_secrets above.
       { name = "NEWSLETTER_REPLY_TO_EMAIL", valueFrom = aws_ssm_parameter.newsletter_reply_to_email.arn },

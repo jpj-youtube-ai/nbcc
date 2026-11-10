@@ -159,6 +159,19 @@ export const configSchema = z.object({
   // stack's own region — eu-west-2); the default keeps local/CI boot working.
   SES_REGION: z.string().min(1).default("eu-west-2"),
 
+  // Text messages (Elf Detective School wave 2), sent through Amazon SNS with the task role.
+  // "stub" (the default) sends nothing and touches no network outside production; production
+  // never stubs. Nothing sends a text yet.
+  SMS_PROVIDER: z.enum(["stub", "sns"]).default("stub"),
+
+  // The sender name a phone shows. Alphanumeric (3 to 11 letters and digits) because UK carriers
+  // accept one without registration today. The AWS account must leave the SNS text sandbox and
+  // carry a monthly spend limit before December. An SSM String injected like NEWSLETTER_FROM_EMAIL.
+  SMS_SENDER_ID: z.string().regex(/^[A-Za-z0-9]{3,11}$/).default("NBCC"),
+
+  // The region texts are sent from. Plain task-def env, the stack's own region.
+  SMS_REGION: z.string().min(1).default("eu-west-2"),
+
   // SES configuration sets: they route delivery/bounce/complaint events to the SNS topic behind
   // POST /api/webhooks/ses. Two sets on purpose — the NEWSLETTER one has click tracking (links
   // rewritten via click.news.nbcc.scot since TASK-466), the TRANSACTIONAL one does not (a receipt from

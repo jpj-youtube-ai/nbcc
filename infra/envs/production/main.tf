@@ -83,6 +83,7 @@ module "app" {
   # reset the cap to 70 and made a newsletter take a week to go out, with nothing to connect the
   # symptom to the cause. Recording the real value here is what stops that.
   newsletter_daily_send_cap = 500
+  sms_sender_id             = "NBCC"
 
   # Nightly off-site backup (TASK-423). The Google side is keyless: the organisation forbids
   # downloadable service-account keys, so Google is told to trust the ECS task role directly and

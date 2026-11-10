@@ -28,7 +28,7 @@ describe("Needs you", () => {
   it("sends the preview quest to Settings, and gives the waiting one nothing to press", () => {
     const [preview, waiting] = questsFor({ ...NONE, waitingPayments: 3 }, true);
     expect(preview).toMatchObject({ id: "preview", count: null, title: "Your preview link is open", go: "settings", button: "End it", filter: null });
-    expect(preview.words).toBe("Anyone holding it can see the school. End it when you have finished looking.");
+    expect(preview.words).toBe("Anyone holding it can see Elf Detective School. End it when you have finished looking.");
     expect(waiting).toMatchObject({ id: "waiting", count: 3, title: "Payments not finished", go: null, button: null, filter: null });
     expect(waiting.words).toBe("Started over an hour ago and never paid: usually someone who changed their mind. Nothing to do.");
   });

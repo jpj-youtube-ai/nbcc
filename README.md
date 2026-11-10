@@ -11811,6 +11811,15 @@ day). Wave 1 plan: `docs/superpowers/plans/2026-11-03-elf-detective-wave1-sign-u
 switches it on, and sets the pay what you can amounts per detective (from £1, £5 suggested), in
 Head Elf HQ (Admin > Content > Elf Detective School; see **Head Elf HQ** below).
 
+**Its name.** The game is always called Elf Detective School in full, on every page, email and button
+and in Head Elf HQ: never "the school", because NBCC takes referrals from real schools and "school" on
+its own reads as one (Jaimie, 10 November 2026). A real school is still just a school ("never a real
+surname, school or age"). So the calendar's top button says "Join Elf Detective School", the join
+card's says "Join now" (its heading already names the game), and the welcome email says "Elf
+Detective School starts on Tuesday 1 December". `test/unit/elf-full-name.test.ts` reads every file of
+the game, with the code comments taken out, and fails on "the school", "school's", "school is" or
+"school starts" without "Elf Detective" just before.
+
 ### Routes
 
 See the table under **API endpoints**: `/elf`, `/elf/rules`, `/elf/join`, `/elf/welcome`,

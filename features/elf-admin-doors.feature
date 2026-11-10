@@ -37,7 +37,7 @@ Feature: Head Elf HQ, Doors: setting up the 24 doors
   Scenario: A good text saves all three clues
     When "boss.doors.admin.bdd@example.com" with password "Elf-Doors-Editor-1" sends POST to "/api/admin/elf/clues/save" with:
       """
-      { "text": "Door 24\nClue 1: It is by the big window.\nClue 2: Look near the till.\nClue 3: It is under the clock." }
+      { "text": "Door 7\nClue 1: It is by the big window.\nClue 2: Look near the till.\nClue 3: It is under the clock." }
       """
     Then the doors answer is 200
     When "boss.doors.admin.bdd@example.com" with password "Elf-Doors-Editor-1" sends GET to "/api/admin/elf/doors/7"

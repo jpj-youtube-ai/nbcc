@@ -200,6 +200,24 @@ describe("the QR code for hand-outs", () => {
   });
 });
 
+describe("a night's times go in together", () => {
+  const save = (body: unknown) => run(routes.patchSleighNight, { token: tokenFor("edit"), body, params: { id: "1" } });
+
+  it("refuses a start without a finish, or a finish without a start, in plain words", async () => {
+    for (const body of [{ startsAt: "18:00" }, { endsAt: "20:00" }, { startsAt: "18:00", endsAt: null }, { startsAt: null, endsAt: "20:00" }]) {
+      const res = await save(body);
+      expect(res.statusCode).toBe(400);
+      expect(res.body).toEqual({ error: routes.SLEIGH_MESSAGES.both });
+    }
+    expect(db.saveNight).not.toHaveBeenCalled();
+  });
+
+  it("takes both times, or both cleared back to Timings TBC", async () => {
+    expect((await save({ startsAt: "18:00", endsAt: "20:30" })).statusCode).toBe(200);
+    expect((await save({ startsAt: null, endsAt: null })).statusCode).toBe(200);
+  });
+});
+
 describe("downloading a poster", () => {
   const poster = (query: Record<string, string>, token = tokenFor("view")) => run(routes.getSleighPoster, { token, query });
 

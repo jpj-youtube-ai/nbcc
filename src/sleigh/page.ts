@@ -159,7 +159,7 @@ function giveForm(): string {
   );
 }
 
-function frame(o: { title: string; description: string; body: string; bodyClass: string; index: boolean }): string {
+function frame(o: { title: string; description: string; body: string; bodyClass: string; index: boolean; giveHref?: string }): string {
   return (
     "<!doctype html>\n" +
     '<html lang="en">\n<head>\n' +
@@ -181,7 +181,7 @@ function frame(o: { title: string; description: string; body: string; bodyClass:
     `<body class="sl-page ${o.bodyClass}">\n` +
     '<a class="sl-skip" href="#main">Skip to the page</a>\n' +
     SHAPES +
-    `<header class="sl-top"><a class="sl-top__home" href="/">${LOGO}</a><a class="sl-top__give" href="#give">Give</a></header>\n` +
+    `<header class="sl-top"><a class="sl-top__home" href="/">${LOGO}</a><a class="sl-top__give" href="${o.giveHref ?? "#give"}">Give</a></header>\n` +
     o.body +
     '\n<footer class="sl-foot">' +
     "<p>Night Before Christmas Campaign, known as NBCC, is a Scottish Charitable Incorporated Organisation.</p>" +
@@ -196,7 +196,8 @@ export function renderSleighPage(o: SleighPageInput): string {
   const after = o.phase === "after";
   const sorted = [...o.nights].sort((a, b) => a.nightOn.localeCompare(b.nightOn));
   const total =
-    o.totalPence === null
+    // Nothing raised yet (until the first night): no number, rather than "£0" on a giving page.
+    o.totalPence === null || o.totalPence <= 0
       ? ""
       : `<p class="sl-total" data-total="${o.totalPence}"><span class="sl-total__num" id="slTotal">${pounds(o.totalPence)}</span>` +
         `<span class="sl-total__words">${after ? "raised by the sleigh this year. Thank you." : "raised by the sleigh so far this year"}</span></p>`;
@@ -311,6 +312,7 @@ export function renderSleighThanks(amountPence: number | null): string {
     description: "Thank you for giving to NBCC's Kilmarnock Santa Sleigh.",
     bodyClass: "sl-page--thanks",
     index: false,
+    giveHref: `${SLEIGH_PATH}#give`,
     body,
   });
 }

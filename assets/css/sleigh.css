@@ -167,6 +167,8 @@ a{color:inherit}
 .sl-field label{font-size:15px;font-weight:600;color:var(--slate)}
 .sl-field input{width:100%;font:400 17px var(--sans);color:var(--slate);padding:13px 14px;border:2px solid var(--line);border-radius:14px;background:var(--cream);transition:border-color .2s}
 .sl-field input:focus{outline:none;border-color:var(--ink)}
+.sl-field input:focus-visible,.sl-other__box:focus-within{outline:3px solid var(--gold);outline-offset:2px}
+.sl-other .sl-other__box input:focus-visible{outline:none}
 .sl-other .sl-other__box input{border:0;padding-left:6px}
 .sl-field input[aria-invalid="true"]{border-color:var(--crimson)}
 .sl-field__error{margin:0;font-size:14px;color:var(--crimson);font-weight:600}

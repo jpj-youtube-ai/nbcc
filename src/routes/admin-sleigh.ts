@@ -36,6 +36,7 @@ export const SLEIGH_MESSAGES = {
   time: "Write each time as hours and minutes, like 18:00, or leave it empty.",
   bucket: "Write the bucket cash in pounds and pence, like 152.40.",
   order: "The finish time must be after the start time.",
+  both: "Give a night both its start and finish times, or clear both for Timings TBC.",
   nothing: "There was nothing to save.",
   missing: "That night is not there any more. Reload the page.",
   offOn: "Choose the day the page switches off.",
@@ -62,6 +63,9 @@ const nightBody = z
   })
   .strict(SLEIGH_MESSAGES.nothing)
   .refine((b) => Object.keys(b).length > 0, SLEIGH_MESSAGES.nothing)
+  // Both or neither (final review, 10 November 2026): one time alone would make an odd card machine
+  // window while the page still said Timings TBC.
+  .refine((b) => (b.startsAt === undefined && b.endsAt === undefined) || (!b.startsAt === !b.endsAt && b.startsAt !== undefined && b.endsAt !== undefined), SLEIGH_MESSAGES.both)
   .refine((b) => !b.startsAt || !b.endsAt || b.endsAt > b.startsAt, SLEIGH_MESSAGES.order);
 
 /** A real calendar day written YYYY-MM-DD. */

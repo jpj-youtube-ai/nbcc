@@ -76,6 +76,12 @@ describe("the page, /sleigh", () => {
     expect(blind).toContain('id="slGive"');
   });
 
+  it("leaves the number out while nothing has been raised yet, rather than saying £0", () => {
+    const none = renderSleighPage({ nights: NIGHTS, phase: "before", stop: 0, totalPence: 0 });
+    expect(none).not.toMatch(/data-total=/);
+    expect(words(none)).not.toContain("£0 raised");
+  });
+
   it("offers £5, £10, £20 and £50, an amount of your own, and Gift Aid in the site's own words", () => {
     for (const p of [500, 1000, 2000, 5000]) expect(page).toMatch(new RegExp(`data-amount="${p}"`));
     expect(page).toMatch(/id="slOther"[^>]*inputmode="decimal"/);
@@ -111,6 +117,10 @@ describe("the stylesheet and the script", () => {
     }
   });
 
+  it("shows a clear outline on a box chosen from the keyboard, not only a border colour", () => {
+    expect(css).toMatch(/\.sl-field input:focus-visible,\.sl-other__box:focus-within\{outline:3px solid var\(--gold\)/);
+  });
+
   it("stops every movement for anyone who asks for less motion", () => {
     expect(css).toMatch(/@media \(prefers-reduced-motion: reduce\)/);
     expect(js).toMatch(/prefers-reduced-motion: reduce/);
@@ -129,6 +139,10 @@ describe("the thank you, /sleigh/thank-you", () => {
     expect(words(t)).toContain("Thank you for your £20");
     expect(t).not.toMatch(DASHES);
     expect(t).toMatch(/<meta name="robots" content="noindex"/);
+  });
+  it("points the Give button at the top back at the page's give form", () => {
+    expect(renderSleighThanks(2000)).toContain('class="sl-top__give" href="/sleigh#give"');
+    expect(page).toContain('class="sl-top__give" href="#give"');
   });
   it("is a plain thank you when the amount is not known", () => {
     expect(words(renderSleighThanks(null))).toContain("Thank you");

@@ -307,7 +307,7 @@ function cachedRead<T>(read: () => Promise<T>, none: T) {
             return v;
           })
           .catch((e: unknown) => {
-            console.error(`[sleigh] total read failed: ${(e as Error)?.message ?? e}`);
+            console.error(`[sleigh] page read failed: ${(e as Error)?.message ?? e}`);
             if (mine !== generation) return value ?? none;
             value = value ?? none; // try again in a minute, not on every visit
             at = Date.now();
@@ -331,6 +331,34 @@ function cachedRead<T>(read: () => Promise<T>, none: T) {
 
 const totals = cachedRead<SleighTotals | null>(readSleighTotalsNow, null);
 
+// The public page's nights and settings (final review, 10 November 2026): a QR scan on a sleigh night
+// must never wait on a slow or unreachable database, so they are cached a minute and given up on after
+// a moment like the total. The nights are read without the donations join the admin's list needs.
+// On trouble with nothing read yet: no houses drawn, and the settings' defaults, so a failure can
+// never switch the page off.
+export const PUBLIC_NIGHTS_SQL = `SELECT id, to_char(night_on, 'YYYY-MM-DD') AS night_on, areas,
+       to_char(starts_at, 'HH24:MI') AS starts_at, to_char(ends_at, 'HH24:MI') AS ends_at, bucket_pence
+  FROM sleigh_nights ORDER BY night_on`;
+
+const nightsForPage = cachedRead<SleighNight[]>(async () => {
+  const r = await pool.query<NightRow>(PUBLIC_NIGHTS_SQL);
+  return r.rows.map((row) => {
+    const n = toNight(row);
+    return { id: n.id, nightOn: n.nightOn, areas: n.areas, startsAt: n.startsAt, endsAt: n.endsAt };
+  });
+}, []);
+const settingsForPage = cachedRead<SleighSettings>(getSleighSettings, { ...SETTINGS_DEFAULT });
+
+/** The nights for the public page: cached a minute, never a throw, never a long wait. */
+export function publicNights(): Promise<SleighNight[]> {
+  return nightsForPage.get();
+}
+
+/** The settings for the public page: cached a minute, never a throw, never a long wait. */
+export function publicSettings(): Promise<SleighSettings> {
+  return settingsForPage.get();
+}
+
 /** The year's total for the page: cached a minute, the last good value on trouble, null if never read. */
 export function sleighTotals(): Promise<SleighTotals | null> {
   return totals.get();
@@ -339,4 +367,6 @@ export function sleighTotals(): Promise<SleighTotals | null> {
 /** Forget the cached total, so the next visit reads afresh (after an admin change, and for tests). */
 export function forgetSleighTotals(): void {
   totals.forget();
+  nightsForPage.forget();
+  settingsForPage.forget();
 }

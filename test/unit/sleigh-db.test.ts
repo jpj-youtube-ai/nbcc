@@ -21,6 +21,9 @@ import {
   readSleighTotalsNow,
   forgetSleighTotals,
   findOrCreateSleighCode,
+  PUBLIC_NIGHTS_SQL,
+  publicNights,
+  publicSettings,
 } from "../../src/db/sleigh";
 import type { SleighNight } from "../../src/sleigh/model";
 
@@ -276,6 +279,58 @@ describe("the year's total", () => {
     expect((await sleighTotals())?.totalPence).toBe(100);
     query.mockRejectedValueOnce(new Error("the database is away"));
     await expect(readSleighTotalsNow()).rejects.toThrow();
+  });
+});
+
+// The public page's nights and settings: a QR scan on a sleigh night must never wait on a slow or
+// unreachable database (final review, 10 November 2026). A light read, cached a minute, given up on
+// after a moment, the last good value kept.
+describe("the public page's reads", () => {
+  beforeEach(() => {
+    query.mockReset();
+    forgetSleighTotals();
+    vi.spyOn(console, "error").mockImplementation(() => {});
+  });
+
+  it("reads the nights without the donations join the admin needs", () => {
+    const sql = flat(PUBLIC_NIGHTS_SQL);
+    expect(sql).not.toMatch(/donations/i);
+    expect(sql).toContain("ORDER BY night_on");
+  });
+
+  it("reads the nights and the settings once a minute, not on every visit", async () => {
+    query.mockImplementation(async (sql: string) =>
+      /sleigh_settings/.test(sql)
+        ? { rows: [{ season_from: "2026-11-01", off_on: "2027-01-31" }] }
+        : { rows: [{ id: 1, night_on: "2026-12-15", areas: "New Farm", starts_at: null, ends_at: null, bucket_pence: 0 }] },
+    );
+    expect(await publicNights()).toEqual([{ id: 1, nightOn: "2026-12-15", areas: "New Farm", startsAt: null, endsAt: null }]);
+    await publicNights();
+    expect(await publicSettings()).toEqual({ seasonFrom: "2026-11-01", offOn: "2027-01-31" });
+    await publicSettings();
+    expect(query).toHaveBeenCalledTimes(2);
+  });
+
+  it("gives up after a moment on a database that does not answer: no nights, and the page never switched off", async () => {
+    vi.useFakeTimers();
+    try {
+      query.mockImplementation(() => new Promise(() => {}));
+      const nights = publicNights();
+      const settings = publicSettings();
+      await vi.advanceTimersByTimeAsync(1600);
+      expect(await nights).toEqual([]);
+      expect(await settings).toEqual({ seasonFrom: "2026-11-01", offOn: "2027-01-31" });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("is read afresh after a save", async () => {
+    query.mockResolvedValue({ rows: [] });
+    await publicNights();
+    forgetSleighTotals();
+    await publicNights();
+    expect(query).toHaveBeenCalledTimes(2);
   });
 });
 

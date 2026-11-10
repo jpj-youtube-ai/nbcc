@@ -9,8 +9,8 @@ import type { SleighNight } from "../../src/sleigh/model";
 
 vi.mock("../../src/clients/stripe", () => ({ stripe: { checkout: { sessions: { retrieve: async () => null } } } }));
 vi.mock("../../src/db/sleigh", () => ({
-  listNights: async () => [],
-  getSleighSettings: async () => ({ seasonFrom: "2026-11-01", offOn: "2027-01-31" }),
+  publicNights: async () => [],
+  publicSettings: async () => ({ seasonFrom: "2026-11-01", offOn: "2027-01-31" }),
   sleighTotals: async () => null,
 }));
 

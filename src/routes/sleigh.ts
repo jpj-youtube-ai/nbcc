@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { stripe } from "../clients/stripe";
 import { londonDate } from "../ball/sales-report";
-import { getSleighSettings, listNights, sleighTotals } from "../db/sleigh";
+import { publicNights, publicSettings, sleighTotals } from "../db/sleigh";
 import { SLEIGH_OLD_PATH, SLEIGH_PATH, SLEIGH_THANKS_PATH, roadStop, sleighPhase, type SleighNight, type SleighSettings } from "../sleigh/model";
 import { amountFromSession, renderSleighPage, renderSleighThanks } from "../sleigh/page";
 
@@ -24,8 +24,9 @@ const FALLBACK_SETTINGS: SleighSettings = { seasonFrom: "2026-11-01", offOn: "20
 
 const defaults: SleighRouterDeps = {
   now: () => new Date(),
-  nights: listNights,
-  settings: getSleighSettings,
+  // Cached a minute and never a long wait (src/db/sleigh.ts): a QR scan never waits on the database.
+  nights: publicNights,
+  settings: publicSettings,
   total: async () => (await sleighTotals())?.totalPence ?? null,
   session: async (id) => (await stripe.checkout.sessions.retrieve(id)) as never,
 };

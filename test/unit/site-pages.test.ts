@@ -248,3 +248,33 @@ describe("the fundraising help page in the site maps", () => {
     );
   });
 });
+
+// The Elf Detective School (9 November 2026): on the maps and in Admin > QR codes only while the school
+// is switched on, because every /elf page is a 404 while it is off. Reserved all the same.
+describe("the Elf Detective School in the site maps", () => {
+  it("is a real page, and no spare address may take it or anything under it", () => {
+    expect(isKnownPage("/elf")).toBe(true);
+    expect(aliasFromProblem("/elf")).not.toBeNull();
+    expect(aliasFromProblem("/elf/join")).not.toBeNull();
+    expect(aliasFromProblem("/elf/hq")).not.toBeNull();
+  });
+
+  it("may be where a spare address points", () => {
+    expect(aliasToProblem("/elf")).toBeNull();
+  });
+
+  it("is left out of both maps while the school is switched off", () => {
+    expect(renderSitemapTree(SITE_PAGES, true, true, true)).not.toContain('href="/elf"');
+    expect(renderSitemapTree(SITE_PAGES, true, true, true, false)).not.toContain('href="/elf"');
+    expect(
+      renderSitemapXml(SITE_PAGES, "https://nbcc.scot", new Map([["/elf", true]]), true, true, true, false),
+    ).not.toContain("https://nbcc.scot/elf<");
+  });
+
+  it("is in both maps once the school is switched on, whatever else is off", () => {
+    expect(renderSitemapTree(SITE_PAGES, false, false, false, true)).toContain('<a href="/elf">Elf Detective School</a>');
+    expect(renderSitemapXml(SITE_PAGES, "https://nbcc.scot", new Map(), false, false, false, true)).toContain(
+      "<loc>https://nbcc.scot/elf</loc>",
+    );
+  });
+});

@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { EVENT_PAGE_PREFIX, pagePath, type FundraiserRecord } from "../fundraising/model";
 import { QUIET_PAGE, type FillLinkPage } from "../red-bag/fill-links";
 import { addFillStageStyles, loadFillStage } from "../red-bag/stage";
+import { addElfCard } from "../elf/promo";
 import { BALL_CARD_SLUG, markAfterBallCheck } from "../site/after-ball";
 
 // TASK-494: the public pages of community fundraising, What's on and Get involved.
@@ -51,6 +52,9 @@ export interface FundraisePageDeps {
   eventsPageIsOn: () => Promise<boolean>;
   /** Is this view after the Ball's moment? */
   isAfterBall: (query?: unknown) => boolean;
+  /** Is the Elf Detective School switched on? Get involved carries its card then (src/elf/promo.ts).
+   *  Left out: no card. */
+  elfSchoolIsOn?: () => Promise<boolean>;
 }
 
 async function fundraisingOn(): Promise<boolean> {
@@ -342,10 +346,13 @@ export function addFundraisePageRoutes(router: Router, siteRoot: string, deps: F
       const after = deps.isAfterBall(req.query);
       // Fill a Red Bag's stage, from the Ball's moment on. "" leaves it out, as before the moment.
       const fillStage = after ? await loadFillStage() : "";
-      const html = renderNewGetInvolvedPage(readFileSync(getInvolvedFile, "utf8"), { ...(await deckInput(after)), fillStage });
+      const elfOn = deps.elfSchoolIsOn ? await deps.elfSchoolIsOn() : false;
+      const drawn = renderNewGetInvolvedPage(readFileSync(getInvolvedFile, "utf8"), { ...(await deckInput(after)), fillStage });
+      // The Elf Detective School's card, after the events and Fill a Red Bag, while the school is on.
+      const html = addElfCard(fillStage ? addFillStageStyles(drawn) : drawn, "get-involved", elfOn);
       fresh(res);
       markAfterBallCheck(res, req.query);
-      res.type("html").send(await deps.decorate(fillStage ? addFillStageStyles(html) : html, req.headers.cookie, req.query));
+      res.type("html").send(await deps.decorate(html, req.headers.cookie, req.query));
     } catch (err) {
       console.error("get involved page failed:", err instanceof Error ? err.message : err);
       next();

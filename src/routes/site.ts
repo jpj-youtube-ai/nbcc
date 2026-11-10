@@ -9,6 +9,7 @@ import { addPledgePageRoutes } from "./pledges";
 import { addRedBagPageRoutes } from "./red-bag";
 import { addFillFooterLink, type FillLinkPage } from "../red-bag/fill-links";
 import { addFillStageToHome, loadFillStage } from "../red-bag/stage";
+import { addElfCard, elfSchoolIsOn } from "../elf/promo";
 import { markAfterBallCheck, showAfterBall } from "../site/after-ball";
 import {
   SUPPORTER_TIERS,
@@ -245,13 +246,19 @@ export function createSiteRouter(siteRoot: string, opts: SiteRouterOptions = {})
   // After the Ball's moment none of that is asked: there is no promotion for anyone, preview cookie or
   // not, and the page needs nothing of the Ball's, so a failed read of its settings costs nothing.
   // Fill a Red Bag's stage goes in instead, as the page goes out (left out if it cannot be drawn).
+  // So does the Elf Detective School's card, straight after the stage, while the school is switched
+  // on (src/elf/promo.ts). Only this branch draws it: the school opens after the Ball.
   const homeFile = join(siteRoot, "index.html");
   router.get("/", async (req, res) => {
     try {
       if (isAfterBall(req.query)) {
-        const [html, stage] = await Promise.all([decorateNav(readFileSync(homeFile, "utf8"), req.headers.cookie, true), loadFillStage()]);
+        const [html, stage, elfOn] = await Promise.all([
+          decorateNav(readFileSync(homeFile, "utf8"), req.headers.cookie, true),
+          loadFillStage(),
+          elfSchoolIsOn(),
+        ]);
         markAfterBallCheck(res, req.query);
-        res.type("html").send(addFillStageToHome(html, stage));
+        res.type("html").send(addElfCard(addFillStageToHome(html, stage), "home", elfOn));
         return;
       }
 
@@ -352,9 +359,11 @@ export function createSiteRouter(siteRoot: string, opts: SiteRouterOptions = {})
   // of every way to help. Both are served only while an admin has the events switch on; switched off
   // they fall through to the catch-all below exactly as if the routes were not here.
   // src/routes/fundraise-pages.ts.
-  addFundraisePageRoutes(router, siteRoot, { decorate, eventsPageIsOn, isAfterBall });
+  // Both carry the Elf Detective School's card while the school is switched on (src/elf/promo.ts):
+  // Get involved, and Your school among the short pages.
+  addFundraisePageRoutes(router, siteRoot, { decorate, eventsPageIsOn, isAfterBall, elfSchoolIsOn });
   // The short pages under /get-involved/ (src/routes/get-involved-pages.ts). No switch of their own.
-  addShortPageRoutes(router, siteRoot, { decorate, isAfterBall });
+  addShortPageRoutes(router, siteRoot, { decorate, isAfterBall, elfSchoolIsOn });
   // Team pages: the join form at /fundraise/<team>/join (src/routes/team-pages.ts).
   addTeamPageRoutes(router, siteRoot, { decorate });
   // Sponsor pledges: the pay and "can't pay after all" pages an emailed link opens (src/routes/pledges.ts).
@@ -420,15 +429,16 @@ export function createSiteRouter(siteRoot: string, opts: SiteRouterOptions = {})
     res.setHeader("X-Robots-Tag", "noindex, nofollow");
     try {
       const { SITE_PAGES, renderSitemapTree } = await import("../site/pages");
-      const [ballOpen, eventsOn, fundraisingOn] = await Promise.all([
+      const [ballOpen, eventsOn, fundraisingOn, elfOn] = await Promise.all([
         ballIsPublished(req.headers.cookie),
         eventsPageIsOn(),
         fundraisingIsOn(),
+        elfSchoolIsOn(),
       ]);
       const template = readFileSync(sitemapFile, "utf8");
       let html = template.replace(
         /<div class="sitemap-tree">[\s\S]*?<\/div>/,
-        `<div class="sitemap-tree">${renderSitemapTree(SITE_PAGES, ballOpen, eventsOn, fundraisingOn)}</div>`,
+        `<div class="sitemap-tree">${renderSitemapTree(SITE_PAGES, ballOpen, eventsOn, fundraisingOn, elfOn)}</div>`,
       );
       // The footer's "Fundraise for us", as on every other page (TASK-545: this page now has it).
       if (fundraisingOn) html = (await import("../fundraising/footer-link")).addFundraiseFooterLink(html);
@@ -446,15 +456,16 @@ export function createSiteRouter(siteRoot: string, opts: SiteRouterOptions = {})
     try {
       const { SITE_PAGES, renderSitemapXml } = await import("../site/pages");
       const { getSeoOverrides } = await import("../db/site-pages");
-      const [overrides, ballOpen, eventsOn, fundraisingOn] = await Promise.all([
+      const [overrides, ballOpen, eventsOn, fundraisingOn, elfOn] = await Promise.all([
         getSeoOverrides(),
         ballIsPublished(undefined), // never let a preview cookie leak the ball to a crawler
         eventsPageIsOn(),
         fundraisingIsOn(),
+        elfSchoolIsOn(),
       ]);
       res
         .type("application/xml")
-        .send(renderSitemapXml(SITE_PAGES, "https://nbcc.scot", overrides, ballOpen, eventsOn, fundraisingOn));
+        .send(renderSitemapXml(SITE_PAGES, "https://nbcc.scot", overrides, ballOpen, eventsOn, fundraisingOn, elfOn));
     } catch (err) {
       console.error("sitemap.xml failed:", err instanceof Error ? err.message : err);
       res.status(500).type("text/plain").send("sitemap unavailable");

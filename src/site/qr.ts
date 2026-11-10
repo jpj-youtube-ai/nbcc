@@ -40,7 +40,8 @@ export function qrPath(raw: unknown): string | null {
 export interface QrRow {
   path: string;
   title: string;
-  /** False for a page switched off (the Festive Ball before launch, Get involved or Fundraising while off). */
+  /** False for a page switched off (the Festive Ball before launch, Get involved, Fundraising or the
+   *  Elf Detective School while off). */
   live: boolean;
   link: string;
 }
@@ -49,7 +50,11 @@ export interface QrGates {
   ballOpen: boolean;
   eventsOn: boolean;
   fundraisingOn: boolean;
+  elfOn: boolean;
 }
+
+/** Every switch open: for questions about the whole list, whatever is live today. */
+export const ALL_GATES_OPEN: Readonly<QrGates> = Object.freeze({ ballOpen: true, eventsOn: true, fundraisingOn: true, elfOn: true });
 
 /** Every page in the list, children after their parent, in order. */
 export function qrRows(pages: readonly SitePage[], gates: QrGates, parentLive = true): QrRow[] {
@@ -58,7 +63,8 @@ export function qrRows(pages: readonly SitePage[], gates: QrGates, parentLive = 
       parentLive &&
       (!p.ballGated || gates.ballOpen) &&
       (!p.eventsGated || gates.eventsOn) &&
-      (!p.fundraisingGated || gates.fundraisingOn);
+      (!p.fundraisingGated || gates.fundraisingOn) &&
+      (!p.elfGated || gates.elfOn);
     return [
       { path: p.path, title: p.title, live, link: qrLink(p.path) },
       ...qrRows(p.children ?? [], gates, live),
@@ -77,9 +83,7 @@ export function labelQrScans(
   pages: readonly SitePage[],
   named: ReadonlyMap<string, string> = new Map(),
 ): { label: string; visits: number }[] {
-  const titles = new Map(
-    qrRows(pages, { ballOpen: true, eventsOn: true, fundraisingOn: true }).map((r) => [qrSlug(r.path), r.title]),
-  );
+  const titles = new Map(qrRows(pages, ALL_GATES_OPEN).map((r) => [qrSlug(r.path), r.title]));
   return rows.map((r) => ({
     label: r.campaign === null ? "Not named" : (named.get(r.campaign) ?? titles.get(r.campaign) ?? `/${r.campaign}`),
     visits: r.visits,

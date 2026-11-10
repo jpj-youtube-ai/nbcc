@@ -1,5 +1,5 @@
 import type { SitePage } from "./pages";
-import { QR_BASE, qrRows, type QrGates } from "./qr";
+import { ALL_GATES_OPEN, QR_BASE, qrRows, type QrGates } from "./qr";
 
 // TASK-588: named QR codes (Jaimie, 3 November 2026). Staff make a code for each place one is
 // printed or shown (a billboard, a business card, a table card), give it a name, and pick where it
@@ -42,7 +42,7 @@ export function qrDestinations(pages: readonly SitePage[], gates: QrGates): Dest
   ];
 }
 
-const ALL_OPEN: QrGates = { ballOpen: true, eventsOn: true, fundraisingOn: true };
+const ALL_OPEN: QrGates = ALL_GATES_OPEN;
 
 /** Whether a "Goes to" sent to the server is one of the list's own, exactly. Nothing typed gets in. */
 export function isDestination(value: unknown, pages: readonly SitePage[]): value is string {

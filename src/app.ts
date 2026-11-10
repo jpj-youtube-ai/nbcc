@@ -49,6 +49,7 @@ import { IMAGE_JSON_BODY_LIMIT } from "./newsletter/image-validation";
 import { newsletterDocumentsRouter } from "./routes/newsletter-documents";
 import { tickerRouter } from "./routes/ticker";
 import { ballRouter } from "./routes/ball";
+import { createSleighRouter } from "./routes/sleigh";
 import { ballTransferRouter } from "./routes/ball-transfer";
 import { adminBallTransferRouter } from "./routes/admin-ball-transfer";
 import { adminQrRouter } from "./routes/admin-qr";
@@ -114,6 +115,8 @@ export function createApp() {
   app.use(tickerRouter);
   // Public Festive Ball availability feed (TASK-313): GET /api/ball/availability.
   app.use(ballRouter);
+  // The Kilmarnock Santa Sleigh: /sleigh, its thank you, and /santa-sleigh forwarding to it.
+  app.use(createSleighRouter());
   // Booking the Festive Ball to pay by bank transfer (TASK-484). Refused until an admin switches it on.
   app.use(ballTransferRouter);
   app.use(portalRouter);

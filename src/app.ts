@@ -11,6 +11,7 @@ import { adminFundraisingCategoriesRouter } from "./routes/admin-fundraising-cat
 import { adminImpactExamplesRouter } from "./routes/admin-impact-examples";
 import { adminRedBagListRouter } from "./routes/admin-red-bag-list";
 import { adminRedBagWorkshopsRouter } from "./routes/admin-red-bag-workshops";
+import { adminSleighRouter } from "./routes/admin-sleigh";
 import { adminFundraisingTeamRouter } from "./routes/admin-fundraising-team";
 import { adminFundraisingRequestsRouter } from "./routes/admin-fundraising-requests";
 import { adminWelcomePacksRouter } from "./routes/admin-welcome-packs";
@@ -49,6 +50,7 @@ import { IMAGE_JSON_BODY_LIMIT } from "./newsletter/image-validation";
 import { newsletterDocumentsRouter } from "./routes/newsletter-documents";
 import { tickerRouter } from "./routes/ticker";
 import { ballRouter } from "./routes/ball";
+import { createSleighRouter } from "./routes/sleigh";
 import { ballTransferRouter } from "./routes/ball-transfer";
 import { adminBallTransferRouter } from "./routes/admin-ball-transfer";
 import { adminQrRouter } from "./routes/admin-qr";
@@ -114,6 +116,8 @@ export function createApp() {
   app.use(tickerRouter);
   // Public Festive Ball availability feed (TASK-313): GET /api/ball/availability.
   app.use(ballRouter);
+  // The Kilmarnock Santa Sleigh: /sleigh, its thank you, and /santa-sleigh forwarding to it.
+  app.use(createSleighRouter());
   // Booking the Festive Ball to pay by bank transfer (TASK-484). Refused until an admin switches it on.
   app.use(ballTransferRouter);
   app.use(portalRouter);
@@ -154,6 +158,8 @@ export function createApp() {
   // Fill a Red Bag: the editor for the list on /fill (a shared draft, publish, history).
   app.use(adminRedBagListRouter);
   app.use(adminRedBagWorkshopsRouter);
+  // Admin > Giving > Santa Sleigh: the nights, bucket cash, totals and switch off day (donations section).
+  app.use(adminSleighRouter);
   // TASK-503: the fundraising team's tools (invite, calls, Get involved, the Monday summary), and
   // the sign up form's invite lookup.
   app.use(adminFundraisingTeamRouter);

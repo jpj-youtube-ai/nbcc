@@ -12822,6 +12822,40 @@ count (86).
   UK days; now() minus whole days failed the 90 day scenario when run between 11pm and midnight in
   winter.
 
+## The Kilmarnock Santa Sleigh (/sleigh)
+
+Every December NBCC's sleigh goes round a different set of Kilmarnock streets each night. The page on
+every poster and QR card is **`/sleigh`** (`/santa-sleigh` forwards to it for good, query string kept).
+Design: `docs/superpowers/specs/2026-11-10-santa-sleigh-design.md`; plan:
+`docs/superpowers/plans/2026-11-10-santa-sleigh.md`.
+
+- **The page** is drawn whole in TS (`src/sleigh/page.ts`, routes `src/routes/sleigh.ts`), with its own
+  `assets/css/sleigh.css` and `assets/js/sleigh.js`, nothing added to `styles.css`. A night sky with the
+  sleigh picture (`assets/img/santa-sleigh-{240,720,1340}.webp`, made in ChatGPT, NBCC in the logo's own
+  letters on a Deep Crimson sleigh), the year's total over a road with one house per night (the little
+  sleigh drives to tonight's), the give form, who NBCC is, other ways in. Motion is transform and
+  opacity only and stops for reduced motion.
+- **The switch** (`src/sleigh/model.ts`, by UK date): before and during the nights the giving page;
+  after the last night "Thank you, Kilmarnock" with giving still open; from `sleigh_settings.off_on`
+  (31 January 2027 unless changed) a 302 to `/`. `?at=after` previews the thank you state (noindex,
+  no-store).
+- **Online gifts** carry the checkout marker `sleigh: true` (one off, from a person, £2 at least, Gift
+  Aid offered), stamped `metadata.sleigh = "true"` and recorded as `donations.source = 'santa_sleigh'`.
+  Stripe returns the giver to `/sleigh/thank-you`.
+- **Card machine taps** (Stripe Terminal, `card_present`) are tagged `santa_sleigh` after the gift is
+  saved when they fall inside a sleigh night's window: an hour either side of its times, or 16:00 to
+  22:00 UK time while the times are TBC. Saving a night's times re-sorts that night's taps both ways.
+  Sleigh taps are not also counted under "Card reader".
+- **Bucket cash** is typed per night in Admin > Santa Sleigh and is in the page total and that section
+  only, never in the Donations figures.
+- **Tables:** `sleigh_nights` (seeded with the seven 2026 nights) and `sleigh_settings` (one row).
+- **Posters:** Admin > Santa Sleigh downloads a print-ready poster with every night, or one per area, A4
+  or A3 (`src/sleigh/posters.ts`). Each carries a **named QR code** found or made on download ("Santa
+  Sleigh poster: every night", "Santa Sleigh poster: <areas>"), so Admin > QR codes counts each
+  poster's scans; the printed address stays `nbcc.scot/sleigh`. "QR code for hand-outs" gives a counted
+  code for the cards handed out on the night.
+- **Later, not built:** route maps with the streets drawn on, and live tracking of the sleigh.
+
 ## A QR code encoder for fundraiser pages (TASK-493)
 
 `src/fundraising/qr.ts` draws QR codes with no dependencies, written from the QR standard

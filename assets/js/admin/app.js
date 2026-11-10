@@ -634,6 +634,8 @@
     else if (name === "red-bag") { if (window.AdminRedBagList) window.AdminRedBagList.open(); if (window.AdminRedBagWorkshops) window.AdminRedBagWorkshops.open(); }
     // Head Elf HQ draws itself (assets/js/admin/elf-hq.js); it is read afresh each time it is opened.
     else if (name === "elf") { if (window.AdminElfHq) window.AdminElfHq.open(); }
+    // Santa Sleigh draws itself too (assets/js/admin/sleigh.js), read afresh each time it is opened.
+    else if (name === "sleigh") { if (window.AdminSleigh) window.AdminSleigh.open(); }
     else if (name === "site") loadSite();
     else if (name === "qr") loadQr();
     else if (name === "invoices") loadInvoices();
@@ -1047,6 +1049,8 @@
         if (d.source === "ball") gift += ' <span class="admin-pill dn-source-pill">Festive Ball</span>';
         // And one from the red bag cards on the Ball's tables (/bag): its own label, not the Ball's.
         if (d.source === "ball_bags") gift += ' <span class="admin-pill dn-source-pill">Red bags at the Ball</span>';
+        // And one from the Santa Sleigh: its page, or a card machine tap on a sleigh night.
+        if (d.source === "santa_sleigh") gift += ' <span class="admin-pill dn-source-pill">Santa Sleigh</span>';
         // And one that paid an invoice sent from Admin > Giving > Invoices, with its number.
         if (d.source === "invoice") gift += ' <span class="admin-pill dn-source-pill">Invoice' + (d.invoice_id ? " " + H.escapeHtml(invNumber(d.invoice_id)) : "") + "</span>";
         // An Elf Detective School payment (Head Elf HQ): its own label, then its entry and any gift on top,
@@ -1299,6 +1303,7 @@
     { id: "donationsDonatePageFilter", source: "donate_page", none: "No gifts from the Donate page yet.", noneHere: "No Donate page gifts match these filters." },
     { id: "donationsFundraiserFilter", source: "fundraiser", none: "No gifts on fundraisers' pages yet.", noneHere: "No gifts on fundraisers' pages match these filters." },
     { id: "donationsCardReaderFilter", source: "card_reader", none: "No card reader gifts yet.", noneHere: "No card reader gifts match these filters." },
+    { id: "donationsSleighFilter", source: "santa_sleigh", none: "No Santa Sleigh gifts yet.", noneHere: "No Santa Sleigh gifts match these filters." },
     // School uniforms (TASK-604): purchases, not gifts, listed only under their own tile.
     { id: "donationsUniformFilter", source: "uniform", none: "No uniform payments yet.", noneHere: "No uniform payments match these filters.", payments: true },
   ];

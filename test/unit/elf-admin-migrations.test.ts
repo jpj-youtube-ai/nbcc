@@ -143,7 +143,9 @@ describe("the migration for the 24 doors, their names that count and their clues
     expect(callsOf("down")[0].args[1]).toEqual(["place_phone"]);
   });
 
-  it("sorts last in migrations", () => {
-    expect(sorted().at(-1)).toBe(FILE);
+  // It sorted last when it was made; later migrations (the Santa Sleigh's, TASK-608) come after it, so
+  // what must hold is that it runs after every one merged before it.
+  it("sorts after the migrations merged before it", () => {
+    expect(sorted().indexOf(FILE)).toBeGreaterThan(sorted().indexOf("1791200000410_uniform-payments.js"));
   });
 });

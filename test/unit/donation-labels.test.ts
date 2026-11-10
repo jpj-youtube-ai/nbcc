@@ -23,6 +23,8 @@ describe("where a gift was given", () => {
     ["an invoice, by its number", { source: "invoice", invoiceId: 12 }, "Invoice INV-0012"],
     ["an invoice whose number is lost", { source: "invoice" }, "Invoice"],
     ["the card reader at an event", { paymentChannel: "in_person" }, "Card reader"],
+    ["a gift on the Santa Sleigh page", { source: "santa_sleigh" }, "Santa Sleigh"],
+    ["a card machine tap on a sleigh night", { source: "santa_sleigh", paymentChannel: "in_person" }, "Santa Sleigh"],
     ["a fundraiser's page, by its title", { fundraiserTitle: "Sam's Santa Dash" }, "Sam's Santa Dash"],
     ["a sponsor pledge, with its fundraiser", { fundraiserTitle: "Sam's Santa Dash", pledgeId: 4 }, "Sponsor pledge for Sam's Santa Dash"],
   ])("names %s", (_name, over, words) => {

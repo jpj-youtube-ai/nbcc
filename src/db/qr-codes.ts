@@ -48,6 +48,18 @@ export async function listScanDays(): Promise<ScanDay[]> {
   return rows.map((r) => ({ codeId: Number(r.code_id), day: String(r.day), scans: Number(r.scans) }));
 }
 
+/**
+ * The oldest code with this exact name (and, when given, going to this target), or null. For codes the
+ * site makes for itself by name, such as the Santa Sleigh's (src/db/sleigh.ts), found again each time.
+ */
+export async function findQrCodeByName(name: string, target?: string): Promise<QrCodeRecord | null> {
+  const { rows } =
+    target === undefined
+      ? await pool.query(`SELECT ${COLUMNS} FROM qr_codes WHERE name = $1 ORDER BY id ASC LIMIT 1`, [name])
+      : await pool.query(`SELECT ${COLUMNS} FROM qr_codes WHERE name = $1 AND target = $2 ORDER BY id ASC LIMIT 1`, [name, target]);
+  return rows[0] ? toRecord(rows[0]) : null;
+}
+
 /** The one read a scan makes: where code `id` goes now, or null when there is no such code. */
 export async function qrCodeTarget(id: number): Promise<string | null> {
   const { rows } = await pool.query(`SELECT target FROM qr_codes WHERE id = $1`, [id]);

@@ -27,6 +27,8 @@ export function givenOnLabel(g: GivenOnFacts): string {
   if (g.source === "red_bag") return "Fill a Red Bag";
   if (g.source === "ball") return "Festive Ball";
   if (g.source === "ball_bags") return "Red bags at the Ball";
+  // The sleigh's page, or a card machine tap on a sleigh night: before the card reader, as it is the sleigh's.
+  if (g.source === "santa_sleigh") return "Santa Sleigh";
   if (g.paymentChannel === "in_person") return "Card reader";
   if (g.fundraiserTitle) return g.pledgeId ? `Sponsor pledge for ${g.fundraiserTitle}` : g.fundraiserTitle;
   return "Donate page";

@@ -40,6 +40,7 @@ import {
   TAG_CHECKOUT_WORKSHOP_SQL,
   TAG_RENEWAL_SOURCE_SQL,
 } from "../../src/db/stripe-webhook";
+import { TAG_CARD_SLEIGH_SQL } from "../../src/db/sleigh";
 
 const DONOR_ID = 10;
 const DONATION_ID = 99;
@@ -552,4 +553,47 @@ describe("events that are not a gift being recorded", () => {
       expect(query).not.toHaveBeenCalled();
     },
   );
+});
+
+// The Kilmarnock Santa Sleigh: a card machine tap is a charge.succeeded for a card_present charge. Once
+// it is saved, one statement tags it santa_sleigh if it fell inside a sleigh night's window (the window
+// is in the SQL, src/db/sleigh.ts). An online card charge is never a sleigh tap and runs nothing.
+describe("a card machine tap", () => {
+  const tap = (type: string, over: Record<string, unknown> = {}): Stripe.Event =>
+    ({
+      id: "evt_test_tap",
+      type: "charge.succeeded",
+      data: { object: { id: "ch_test_tap", object: "charge", amount: 1000, currency: "gbp", payment_intent: "pi_test_tap", payment_method_details: { type }, ...over } },
+    }) as unknown as Stripe.Event;
+
+  it("runs the sleigh statement once, with the charge id", async () => {
+    const query = vi.fn();
+    expect(await tagDonationSource(tap("card_present"), query)).toBe(false);
+    expect(query.mock.calls).toEqual([[TAG_CARD_SLEIGH_SQL, ["ch_test_tap"]]]);
+  });
+
+  it("runs nothing for an online card charge, or a tap with no charge id", async () => {
+    const query = vi.fn();
+    await tagDonationSource(tap("card"), query);
+    await tagDonationSource(tap("card_present", { id: "" }), query);
+    await tagDonationSource(tap("card_present", { payment_method_details: null }), query);
+    expect(query).not.toHaveBeenCalled();
+  });
+
+  it("is tried after the tap is saved and committed, last of all", async () => {
+    const result = await processWebhookEvent(tap("card_present"));
+    expect(result).toEqual({ processed: true, action: "donation.created" });
+    const all = calls().map(([sql]) => sql);
+    const at = all.indexOf(TAG_CARD_SLEIGH_SQL);
+    expect(at).toBeGreaterThan(all.findIndex((sql) => /^\s*commit/i.test(sql)));
+    expect(calls()[at][1]).toEqual(["ch_test_tap"]);
+  });
+
+  it("answers exactly as it would have when the statement fails", async () => {
+    const query = vi.fn(async () => {
+      throw Object.assign(new Error("relation sleigh_nights does not exist"), { code: "42P01" });
+    });
+    expect(await tagDonationSource(tap("card_present"), query)).toBe(false);
+    expect(errorLog).toHaveBeenCalledTimes(1);
+  });
 });

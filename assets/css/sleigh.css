@@ -1,0 +1,314 @@
+/* =================================================================
+   The Kilmarnock Santa Sleigh: /sleigh and /sleigh/thank-you
+   (src/sleigh/page.ts draws both; assets/js/sleigh.js runs them).
+
+   Opened from a QR card on the night or the poster, on a phone, by
+   families who may never have heard of NBCC. Its own small sheet, as
+   /bag's is: the site's own colour values as tokens, the site's two
+   fonts, nothing from styles.css.
+
+   The look (Jaimie, 10 November 2026: "premium, fun, inviting, on
+   brand", bold thick outlines like the elf): a night sky in NBCC's
+   maroon over Kilmarnock's rooftops, the sleigh picture gliding in
+   and bobbing, snow at two depths, windows lighting up; the total on
+   a road of one house per night with the little sleigh driving to
+   tonight's; chunky outlined buttons that press in like real keys,
+   with a bell that rings on hover.
+
+   Transform and opacity only. Nothing waits for motion, and none of
+   it plays for anyone who asks for less.
+   ================================================================= */
+
+@font-face{font-family:"Playfair Display";font-style:normal;font-weight:400 800;font-display:swap;src:url(/assets/fonts/playfair-var.woff2) format("woff2")}
+@font-face{font-family:"Poppins";font-style:normal;font-weight:400;font-display:swap;src:url(/assets/fonts/poppins-400.woff2) format("woff2")}
+
+:root{
+  /* the site's own colours (assets/css/styles.css) */
+  --crimson:#C02238;
+  --maroon:#800000;
+  --cream:#F8F5EE;
+  --card:#FFFDFA;
+  --tint:#F3EEE3;
+  --line:#E9DFD2;
+  --tan:#D29C8A;
+  --tan-soft:#F3E4DD;
+  --slate:#333333;
+  --slate-soft:#6F6A66;
+  --holly:#1A531A;
+  --holly-soft:#EAF0E7;
+  /* the elf's outline, and the sleigh's gold */
+  --ink:#5E2427;
+  --gold:#E8B54A;
+  --gold-soft:#F6DDA0;
+  /* NBCC's maroon taken into the night */
+  --night-hi:#6E1420;
+  --night:#4A0B12;
+  --night-lo:#2C060B;
+  --cream-90:rgba(248,245,238,.9);
+  --cream-70:rgba(248,245,238,.72);
+  --ink-20:rgba(94,36,39,.2);
+
+  --serif:"Playfair Display",Georgia,"Times New Roman",serif;
+  --sans:"Poppins",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --ease-out:cubic-bezier(.22,1,.36,1);
+  --ease-expo:cubic-bezier(.16,1,.3,1);
+  --wrap:1120px;
+  --gutter:clamp(16px,4vw,32px);
+}
+
+*{box-sizing:border-box}
+html{scroll-behavior:smooth;-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--cream);color:var(--slate);font:400 17px/1.6 var(--sans);overflow-x:hidden}
+img,svg{display:block;max-width:100%}
+a{color:inherit}
+:focus-visible{outline:3px solid var(--gold);outline-offset:3px;border-radius:6px}
+.sl-shapes{position:absolute;width:0;height:0;overflow:hidden}
+.sl-skip{position:absolute;left:12px;top:-60px;z-index:20;background:var(--ink);color:var(--cream);padding:10px 14px;border-radius:10px;text-decoration:none}
+.sl-skip:focus{top:12px}
+
+/* ---- the top bar: the red logo on cream, always (brand rule) ---- */
+.sl-top{position:sticky;top:0;z-index:10;display:flex;align-items:center;justify-content:space-between;gap:16px;padding:8px var(--gutter);background:var(--cream);border-bottom:1px solid var(--line)}
+.sl-logo{width:52px;height:auto}
+.sl-top__give{font:600 15px var(--sans);color:var(--cream);background:var(--crimson);text-decoration:none;padding:9px 20px;border-radius:999px;border:2.5px solid var(--ink);box-shadow:0 3px 0 var(--ink);transition:transform .15s var(--ease-out),box-shadow .15s var(--ease-out)}
+.sl-top__give:hover{transform:translateY(-1px);box-shadow:0 4px 0 var(--ink)}
+.sl-top__give:active{transform:translateY(2px);box-shadow:0 1px 0 var(--ink)}
+
+/* ---- the night sky ---- */
+.sl-sky{position:relative;overflow:hidden;isolation:isolate;color:var(--cream);
+  background:radial-gradient(90% 70% at 82% 0%,var(--night-hi) 0%,transparent 60%),linear-gradient(180deg,var(--night) 0%,var(--night-lo) 100%);
+  padding:clamp(36px,6vw,72px) 0 0}
+.sl-moon{position:absolute;z-index:-1;right:7%;top:28px;width:clamp(64px,9vw,104px);aspect-ratio:1;border-radius:50%;background:#FBEFD6;
+  box-shadow:0 0 0 14px rgba(251,239,214,.06),0 0 0 36px rgba(251,239,214,.035),0 0 90px 30px rgba(251,239,214,.12);animation:sl-glow 6s ease-in-out infinite}
+.sl-hero{position:relative;max-width:var(--wrap);margin:0 auto;padding:0 var(--gutter);display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.1fr);gap:clamp(16px,3vw,40px);align-items:center}
+.sl-eyebrow{margin:0 0 14px;font:600 13px/1.2 var(--sans);letter-spacing:.14em;text-transform:uppercase;color:var(--gold)}
+.sl-title{margin:0;font:800 clamp(44px,7.2vw,88px)/.98 var(--serif);letter-spacing:-.015em;color:var(--cream);text-wrap:balance}
+.sl-title em{font-style:italic;font-weight:700;color:var(--gold)}
+.sl-lede{margin:18px 0 28px;max-width:30ch;font-size:clamp(18px,1.8vw,21px);line-height:1.5;color:var(--cream-90)}
+.sl-ctas{display:flex;flex-wrap:wrap;align-items:center;gap:14px 22px}
+.sl-link{font:600 16px var(--sans);color:var(--cream);text-underline-offset:5px;text-decoration-thickness:2px}
+.sl-link:hover{color:var(--gold)}
+.sl-link--dark{color:var(--crimson)}
+.sl-link--dark:hover{color:var(--maroon)}
+
+.sl-hero__words>*{animation:sl-rise .8s var(--ease-expo) both}
+.sl-hero__words>:nth-child(2){animation-delay:.08s}
+.sl-hero__words>:nth-child(3){animation-delay:.16s}
+.sl-hero__words>:nth-child(4){animation-delay:.24s}
+
+.sl-hero__art{position:relative;margin:0;animation:sl-glide 1.4s var(--ease-expo) .15s both}
+.sl-hero__img{width:100%;height:auto;filter:drop-shadow(0 18px 24px rgba(20,2,5,.45));animation:sl-bob 4.6s ease-in-out 1.6s infinite;transform-origin:50% 70%}
+.sl-trail{position:absolute;left:-28%;top:56%;width:38%;height:4px;border-radius:4px;background:radial-gradient(circle,var(--gold) 0 2px,transparent 2.5px) 0 0/16px 4px repeat-x;opacity:.0;animation:sl-trail 1.4s var(--ease-out) .15s both}
+
+/* snow, at two depths */
+.sl-snow{position:absolute;inset:0;pointer-events:none;overflow:hidden}
+.sl-snow--far{z-index:-1;opacity:.55}
+.sl-snow--near{z-index:2}
+.sl-flake{position:absolute;top:-30px;left:var(--x);width:var(--w);height:var(--w);color:#FFFDFA;animation:sl-fall var(--t) linear var(--d) infinite}
+.sl-flake svg{width:100%;height:100%;fill:currentColor}
+.sl-flake--star{color:var(--gold)}
+
+/* the rooftops, with windows lighting up */
+.sl-roofs{position:relative;z-index:1;width:100%;height:clamp(70px,11vw,150px);margin-top:clamp(-30px,-2vw,-10px)}
+.sl-roofs__back{fill:#64121D}
+.sl-roofs__front{fill:#3A0810}
+.sl-roofs__snow{fill:var(--cream)}
+.sl-window{fill:var(--gold);opacity:.25;animation:sl-light 5s ease-in-out calc(var(--i) * .7s) infinite}
+
+/* ---- the road: the total, then one house per night ---- */
+.sl-road{position:relative;z-index:3;max-width:var(--wrap);margin:clamp(-56px,-4vw,-24px) auto 0;padding:0 var(--gutter)}
+.sl-card{position:relative;background:var(--card);border:3px solid var(--ink);border-radius:26px;box-shadow:0 8px 0 var(--ink);padding:clamp(22px,3.4vw,38px)}
+.sl-total{margin:0 0 6px;display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 16px}
+.sl-total__num{font:800 clamp(46px,7vw,78px)/1 var(--serif);color:var(--crimson);font-variant-numeric:tabular-nums lining-nums;letter-spacing:-.01em}
+.sl-total__words{font-size:16px;color:var(--slate-soft)}
+.sl-h2{margin:0;font:800 clamp(30px,4.2vw,46px)/1.08 var(--serif);color:var(--maroon);text-wrap:balance}
+.sl-card .sl-h2{margin-top:18px;font-size:clamp(24px,3vw,32px)}
+
+.sl-houses{position:relative;list-style:none;margin:14px 0 0;padding:70px 0 0;display:grid;grid-template-columns:repeat(var(--n),minmax(0,1fr));gap:10px}
+/* the road under the houses: a snowy lane with a dashed middle line */
+.sl-houses::before{content:"";position:absolute;left:-6px;right:-6px;top:136px;height:18px;border-radius:999px;background:var(--tint);border:3px solid var(--ink)}
+.sl-houses::after{content:"";position:absolute;left:10px;right:10px;top:146px;height:3px;background:repeating-linear-gradient(90deg,var(--card) 0 14px,transparent 14px 26px)}
+.sl-house{position:relative;text-align:center;padding-bottom:4px;animation:sl-rise .7s var(--ease-expo) calc(.25s + var(--i) * .07s) both}
+.sl-house__art{width:58px;height:54px;margin:0 auto 34px;transition:transform .25s var(--ease-out)}
+.sl-house:hover .sl-house__art{transform:translateY(-4px) rotate(-3deg)}
+.sl-house__when{margin:0;font:700 14px/1.2 var(--sans);color:var(--crimson);letter-spacing:.02em}
+.sl-house__when span{display:inline-block;background:var(--tan-soft);border-radius:8px;padding:3px 8px}
+.sl-house__where{margin:6px 0 2px;font:700 16px/1.25 var(--serif);color:var(--ink);overflow-wrap:break-word}
+.sl-house__time{margin:0;font-size:13px;color:var(--slate-soft)}
+.sl-house__flag{display:inline-block;justify-self:start;margin:6px auto 0;font:600 12px var(--sans);letter-spacing:.06em;text-transform:uppercase;color:var(--cream);background:var(--holly);border-radius:999px;padding:2px 10px}
+.sl-house.is-gone{opacity:.55}
+.sl-house.is-tonight .sl-house__art{animation:sl-tonight 2.4s ease-in-out infinite}
+.sl-road__note{margin:20px 0 0;font-size:14px;color:var(--slate-soft)}
+
+/* the little sleigh on the road, placed by the script (hidden until then) */
+.sl-mini{position:absolute;left:0;top:0;width:86px;height:auto;opacity:0;pointer-events:none;will-change:transform;filter:drop-shadow(0 4px 0 var(--ink-20))}
+.sl-mini.is-ready{opacity:1;transition:transform 1.8s var(--ease-expo),opacity .4s var(--ease-out)}
+.sl-mini.is-ready.is-there{animation:sl-jiggle 2.8s ease-in-out 2s infinite}
+
+/* ---- give ---- */
+.sl-give{max-width:var(--wrap);margin:0 auto;padding:clamp(56px,8vw,96px) var(--gutter) 0;display:grid;grid-template-columns:minmax(0,.9fr) minmax(0,1.1fr);gap:clamp(24px,5vw,64px);align-items:start}
+.sl-give__words{position:sticky;top:96px}
+.sl-give__lede{margin:16px 0 0;max-width:34ch;font-size:18px;color:var(--slate)}
+.sl-form{background:var(--card);border:3px solid var(--ink);border-radius:24px;box-shadow:0 8px 0 var(--ink);padding:clamp(20px,3vw,32px);display:grid;gap:20px}
+.sl-form fieldset{border:0;margin:0;padding:0;min-width:0}
+.sl-label{padding:0;margin:0 0 10px;font:700 14px var(--sans);letter-spacing:.08em;text-transform:uppercase;color:var(--maroon)}
+.sl-keys{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
+.sl-key{font:800 clamp(20px,2.4vw,26px) var(--serif);color:var(--ink);background:var(--card);border:3px solid var(--ink);border-radius:16px;padding:14px 0 12px;cursor:pointer;box-shadow:0 5px 0 var(--ink);
+  transition:transform .12s var(--ease-out),box-shadow .12s var(--ease-out),background-color .2s,color .2s}
+.sl-key:hover{transform:translateY(-2px);box-shadow:0 7px 0 var(--ink)}
+.sl-key:active{transform:translateY(4px);box-shadow:0 1px 0 var(--ink)}
+.sl-key.is-on{background:var(--crimson);color:var(--cream)}
+.sl-key.is-on.is-pop{animation:sl-pop .35s var(--ease-out)}
+.sl-other{margin-top:14px}
+.sl-other__box{display:flex;align-items:center;border:2px solid var(--line);border-radius:14px;background:var(--cream);transition:border-color .2s}
+.sl-other__box:focus-within{border-color:var(--ink)}
+.sl-other__pound{padding:0 0 0 14px;font:700 19px var(--serif);color:var(--ink)}
+.sl-other input{border:0;background:transparent}
+.sl-field{display:grid;gap:6px}
+.sl-field label{font-size:15px;font-weight:600;color:var(--slate)}
+.sl-field input{width:100%;font:400 17px var(--sans);color:var(--slate);padding:13px 14px;border:2px solid var(--line);border-radius:14px;background:var(--cream);transition:border-color .2s}
+.sl-field input:focus{outline:none;border-color:var(--ink)}
+.sl-field input:focus-visible,.sl-other__box:focus-within{outline:3px solid var(--gold);outline-offset:2px}
+.sl-other .sl-other__box input:focus-visible{outline:none}
+.sl-other .sl-other__box input{border:0;padding-left:6px}
+.sl-field input[aria-invalid="true"]{border-color:var(--crimson)}
+.sl-field__error{margin:0;font-size:14px;color:var(--crimson);font-weight:600}
+.sl-names{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:12px;margin-bottom:12px}
+.sl-help{margin:6px 0 0;font-size:14px;color:var(--slate-soft)}
+.sl-giftaid{display:grid;grid-template-columns:auto minmax(0,1fr);gap:12px;align-items:start;background:var(--holly-soft);border-radius:16px;padding:14px 16px}
+.sl-giftaid__box,.sl-check input{width:22px;height:22px;margin:2px 0 0;accent-color:var(--holly)}
+.sl-giftaid__label strong{display:block;color:var(--holly);font-size:16px}
+.sl-giftaid__statement{display:block;margin-top:4px;font-size:13px;line-height:1.5;color:var(--slate-soft)}
+.sl-declaration{display:grid;gap:12px}
+.sl-declaration[hidden]{display:none}
+.sl-check{display:flex;gap:10px;align-items:center;font-size:15px}
+.sl-status{margin:0;font-weight:600;color:var(--holly)}
+.sl-status:empty{display:none}
+.sl-status.is-error{color:var(--crimson)}
+.sl-note{margin:0;font-size:13px;color:var(--slate-soft);text-align:center}
+
+/* the big buttons: chunky, outlined, press in; the bell rings on hover */
+.sl-btn{position:relative;overflow:hidden;display:inline-flex;align-items:center;justify-content:center;gap:10px;font:600 18px var(--sans);text-decoration:none;cursor:pointer;
+  border:3px solid var(--ink);border-radius:999px;padding:15px 28px;box-shadow:0 6px 0 var(--ink);transition:transform .14s var(--ease-out),box-shadow .14s var(--ease-out)}
+.sl-btn--give{color:var(--cream);background:var(--crimson)}
+.sl-btn--cream{color:var(--crimson);background:var(--cream)}
+.sl-form .sl-btn{width:100%;font-size:20px;padding:17px 28px}
+.sl-btn:hover{transform:translateY(-2px);box-shadow:0 8px 0 var(--ink)}
+.sl-btn:active{transform:translateY(5px);box-shadow:0 1px 0 var(--ink)}
+.sl-btn[aria-disabled="true"]{cursor:progress}
+.sl-btn::after{content:"";position:absolute;inset:0;background:linear-gradient(100deg,transparent 30%,rgba(255,253,250,.32) 50%,transparent 70%);transform:translateX(-120%);animation:sl-shine 4.5s var(--ease-out) 2s infinite}
+.sl-bell{width:22px;height:22px;flex:none;transform-origin:50% 10%;
+  background:no-repeat center/contain url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M12 3a1.6 1.6 0 0 1 1.6 1.6v.5A6 6 0 0 1 18 11v4l2 2.5H4L6 15v-4a6 6 0 0 1 4.4-5.9v-.5A1.6 1.6 0 0 1 12 3z' fill='%23E8B54A' stroke='%235E2427' stroke-width='1.6' stroke-linejoin='round'/%3E%3Ccircle cx='12' cy='19.8' r='2' fill='%23E8B54A' stroke='%235E2427' stroke-width='1.6'/%3E%3C/svg%3E")}
+.sl-btn:hover .sl-bell,.sl-btn:focus-visible .sl-bell{animation:sl-ring .9s ease-in-out}
+
+/* ---- who's behind the sleigh ---- */
+.sl-who{max-width:var(--wrap);margin:0 auto;padding:clamp(64px,9vw,112px) var(--gutter) 0;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:clamp(28px,5vw,64px);align-items:center}
+.sl-who__photo{margin:0;border:3px solid var(--ink);border-radius:24px;overflow:hidden;box-shadow:12px 12px 0 var(--crimson);transform:rotate(-1.5deg)}
+.sl-who__photo img{width:100%;height:100%;aspect-ratio:4/3;object-fit:cover}
+.sl-who__big{margin:16px 0 20px;font:500 clamp(20px,2.1vw,24px)/1.45 var(--serif);color:var(--slate)}
+.sl-facts{list-style:none;margin:0 0 24px;padding:0;display:flex;flex-wrap:wrap;gap:16px 32px}
+.sl-facts b{display:block;font:800 clamp(28px,3.4vw,38px)/1.05 var(--serif);color:var(--crimson)}
+.sl-facts span{font-size:14px;color:var(--slate-soft)}
+
+.sl-more{max-width:var(--wrap);margin:0 auto;padding:clamp(48px,7vw,80px) var(--gutter) 0;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px}
+.sl-more a{display:block;text-decoration:none;background:var(--card);border:2px solid var(--line);border-radius:20px;padding:20px 22px;transition:transform .2s var(--ease-out),border-color .2s}
+.sl-more a:hover{transform:translateY(-4px);border-color:var(--ink)}
+.sl-more b{display:block;font:800 21px/1.2 var(--serif);color:var(--maroon);margin-bottom:4px}
+.sl-more span{font-size:15px;color:var(--slate-soft)}
+
+.sl-last{margin-top:clamp(56px,8vw,96px);background:var(--crimson);color:var(--cream);text-align:center;padding:clamp(48px,7vw,80px) var(--gutter);display:grid;justify-items:center;gap:22px}
+.sl-last .sl-h2{color:var(--cream)}
+.sl-foot{background:var(--maroon);color:var(--cream-70);font-size:13px;text-align:center;padding:24px var(--gutter)}
+.sl-foot p{margin:4px 0}
+.sl-foot a{color:var(--cream)}
+
+/* ---- the thank you ---- */
+.sl-sky--thanks{min-height:calc(100dvh - 70px);display:grid;align-content:end}
+.sl-thanks__inner{position:relative;z-index:3;max-width:720px;margin:0 auto;padding:0 var(--gutter);text-align:center;display:grid;justify-items:center}
+.sl-thanks__img{width:min(420px,80vw);height:auto;animation:sl-glide 1.4s var(--ease-expo) both,sl-bob 4.6s ease-in-out 1.4s infinite}
+.sl-thanks .sl-lede{margin-inline:auto}
+.sl-thanks .sl-ctas{justify-content:center}
+
+/* ---- phones ---- */
+@media (max-width:860px){
+  .sl-hero,.sl-give,.sl-who{grid-template-columns:minmax(0,1fr)}
+  .sl-hero__art{max-width:520px;width:100%;justify-self:center;order:-1;margin-bottom:-8px}
+  .sl-give__words{position:static}
+  .sl-more{grid-template-columns:minmax(0,1fr)}
+  .sl-who__photo{transform:none;box-shadow:8px 8px 0 var(--crimson)}
+}
+/* on a phone the road runs down the page, the houses one under another */
+@media (max-width:700px){
+  .sl-houses{grid-template-columns:minmax(0,1fr);gap:14px;padding:30px 0 0 96px}
+  .sl-houses::before{left:30px;right:auto;top:-6px;bottom:-6px;width:18px;height:auto}
+  .sl-houses::after{left:40px;right:auto;top:8px;bottom:8px;width:3px;height:auto;background:repeating-linear-gradient(180deg,var(--card) 0 14px,transparent 14px 26px)}
+  .sl-house{display:grid;grid-template-columns:minmax(0,1fr);justify-items:start;text-align:left;min-height:72px;padding:6px 0 10px}
+  .sl-house__flag{margin-left:0}
+  .sl-house__art{position:absolute;left:-58px;top:4px;width:40px;height:38px;margin:0}
+  .sl-mini{width:58px}
+  .sl-names{grid-template-columns:minmax(0,1fr)}
+  .sl-keys{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
+
+/* ---- the motion ---- */
+@keyframes sl-rise{
+  from{opacity:0;transform:translateY(18px)}
+  to{opacity:1;transform:none}
+}
+@keyframes sl-glide{
+  from{opacity:0;transform:translate(-38%,14%) rotate(-7deg) scale(.86)}
+  60%{opacity:1}
+  to{opacity:1;transform:none}
+}
+@keyframes sl-trail{
+  0%{opacity:0;transform:scaleX(.2)}
+  40%{opacity:.9}
+  100%{opacity:0;transform:scaleX(1) translateX(-30%)}
+}
+@keyframes sl-bob{
+  0%,100%{transform:translateY(0) rotate(0)}
+  50%{transform:translateY(-12px) rotate(-1.2deg)}
+}
+@keyframes sl-fall{
+  from{transform:translate3d(0,-30px,0) rotate(0)}
+  to{transform:translate3d(var(--s),110vh,0) rotate(var(--r))}
+}
+@keyframes sl-glow{
+  0%,100%{opacity:1}
+  50%{opacity:.86}
+}
+@keyframes sl-light{
+  0%,100%{opacity:.25}
+  30%,70%{opacity:1}
+}
+@keyframes sl-tonight{
+  0%,100%{transform:translateY(0)}
+  50%{transform:translateY(-6px)}
+}
+@keyframes sl-jiggle{
+  0%,100%{transform:var(--at) rotate(0)}
+  25%{transform:var(--at) rotate(-3deg) translateY(-2px)}
+  75%{transform:var(--at) rotate(2deg)}
+}
+@keyframes sl-pop{
+  0%{transform:scale(1)}
+  40%{transform:scale(1.08)}
+  100%{transform:scale(1)}
+}
+@keyframes sl-shine{
+  0%{transform:translateX(-120%)}
+  30%,100%{transform:translateX(120%)}
+}
+@keyframes sl-ring{
+  0%,100%{transform:rotate(0)}
+  15%{transform:rotate(18deg)}
+  35%{transform:rotate(-16deg)}
+  55%{transform:rotate(10deg)}
+  75%{transform:rotate(-6deg)}
+}
+
+@media (prefers-reduced-motion: reduce){
+  html{scroll-behavior:auto}
+  *,*::before,*::after{animation:none !important;transition:none !important}
+  .sl-snow{display:none}
+  .sl-trail{display:none}
+}
